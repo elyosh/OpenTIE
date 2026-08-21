@@ -352,6 +352,8 @@ typedef struct TieFlightObjectState {
  * mesh of a craft. Sized for the LOD-controlled mesh count
  * (species-dependent; peak ~12). The rotation is normalized to the
  * visible convention of the selected classic engine. */
+#define TIE_FLIGHT_COMPONENT_TIE95_TRAINING_ROTATION 0x08u
+
 typedef struct TieFlightObjectComponent {
 	uint8_t mesh_idx;       /* index inside ship-model mesh table */
 	uint8_t state;          /* mirrors classic CraftData.mesh_state[mesh_idx]:
@@ -362,12 +364,16 @@ typedef struct TieFlightObjectComponent {
 	uint8_t flags;          /* bit 0 = visible (state == MESH_STATE_VISIBLE)
 							 * bit 1 = articulated (has rotation_offset)
 							 * bit 2 = component-highlight active (matches
-							 *         classic currenttargetcomp resolution) */
+							 *         classic currenttargetcomp resolution)
+							 * bit 3 = TIE95 training synthetic rotation */
 	uint8_t hp_remaining;   /* mirrors CraftData.mesh_component_hp[mesh_idx]:
 							 * 0 = destroyed, 0xFF = indestructible, else live
 							 * HP. Use with TieRecoveredData_MeshTypeInitialHp() to
 							 * derive a 0..1 damage ratio for the OPT
 							 * multi-state texture path. */
+	/* Exact pivot produced by TIE95 fview_componentrotation, in classic
+	 * transformed-coordinate units. Valid only when flags bit 3 is set. */
+	int16_t tie95_training_pivot_fwd;
 } TieFlightObjectComponent;
 
 /* Classic drawitems billboard captured for HD composition.

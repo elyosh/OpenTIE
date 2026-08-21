@@ -202,6 +202,7 @@ static uint16_t TieFlightSnapshot_EmitComponents(const FlightObject* obj, uint16
 		uint8_t state = obj->craft_ptr->mesh_state[mi];
 		uint8_t rot = obj->craft_ptr->mesh_rotation[mi];
 		uint8_t f = 0;
+		c->tie95_training_pivot_fwd = 0;
 		const bool tie98_gate = tie98 && obj->genus == GENUS_GATE;
 		const bool detailed_gate = tie98_gate && (obj_idx == gate_render_reference_object ||
 												  obj_idx == (uint16_t)(gate_render_reference_object + 1));
@@ -220,6 +221,12 @@ static uint16_t TieFlightSnapshot_EmitComponents(const FlightObject* obj, uint16
 		}
 		if (tie98 ? modelmesh_getrotscaledata(obj->ship_idx, mi) != NULL : m->rotation_offset != 0)
 			f |= 0x2u;
+		/* TIE95 fview_componentrotation ignores authored rotation metadata
+		 * during training and synthesizes this pivot from the mesh center. */
+		if (!tie98 && mission.train_craft_type && rot != 0) {
+			f |= TIE_FLIGHT_COMPONENT_TIE95_TRAINING_ROTATION;
+			c->tie95_training_pivot_fwd = (int16_t)-(m->center_fwd >> 1);
+		}
 		/* Bit 2 marks the focused component, including components with the
 		 * same target ID or TIE95 mesh role. Whole-craft highlighting does
 		 * not promote components; consumers apply their own blink/PIP gate. */

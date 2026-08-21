@@ -114,6 +114,18 @@ void TieFlightMesh_BuildmeshTable(const AeronMeshRot* mesh_rot, const TieFlightO
 	TieFlightRenderer_ApplyTie98BwingBridge(mesh_rot, fl, curr, mtu);
 }
 
+static void TieFlightMesh_BuildTie95TrainingRotation(float out[3][4], const TieFlightSpeciesMesh* mesh,
+													 const TieFlightObjectComponent* component) {
+	const float axis[3] = { 0.0f, 1.0f, 0.0f };
+	/* Component matrices act on raw model vertices. Convert the pivot from
+	 * TIE95's transformed-coordinate units back into that model space. */
+	const float model_to_classic = mesh->model_scale_shift == 2 ? 2.0f : 0.5f;
+	const float pivot[3] = { 0.0f, (float)component->tie95_training_pivot_fwd / model_to_classic, 0.0f };
+	const float angle =
+		(float)(uint16_t)component->rotation_angle * (2.0f * 3.14159265358979323846f / 65536.0f);
+	TieRenderMath_Mat3x4RotationAboutPivot(out, axis, pivot, angle);
+}
+
 void TieFlightMesh_BuildclassicMeshTable(const TieFlightSpeciesMesh* mesh, const TieFlightObjectState* flight,
 										 const TieSnapshot* snapshot, TieFlightMeshTablePurpose purpose,
 										 AeronSceneMeshTable* out) {
@@ -161,6 +173,10 @@ void TieFlightMesh_BuildclassicMeshTable(const TieFlightSpeciesMesh* mesh, const
 			if ((purpose == TIE_FLIGHT_MESH_TABLE_MAIN && flight->highlight == 3) ||
 				(purpose == TIE_FLIGHT_MESH_TABLE_PIP && snapshot->cockpit.pip_subsys_idx != 0xFFu))
 				out->highlight_packed[mesh_index >> 2][mesh_index & 3] = 2.0f;
+		}
+		if (component->flags & TIE_FLIGHT_COMPONENT_TIE95_TRAINING_ROTATION) {
+			TieFlightMesh_BuildTie95TrainingRotation(out->rows[mesh_index], mesh, component);
+			continue;
 		}
 		if (!(component->flags & 0x2u))
 			continue;
