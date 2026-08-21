@@ -18,7 +18,16 @@ static TieFramebuffer s_presented_vga_framebuffer;
 static uint32_t s_presented_vga_surface_generation;
 static bool s_presented_vga_valid;
 
-bool TieClassicFramebuffer_TakeDirty(void) { return lsurface_Take_Active_Video_Dirty(); }
+bool TieClassicFramebuffer_TakeDirty(void) {
+	if (TieClassicDisplay_FrontendActive())
+		return lsurface_Take_Active_Video_Dirty();
+
+	/* PORT: TIE95 flight owns vesa_buff_gbl independently of the Landru
+	 * surface set that the frontend last selected. */
+	const bool dirty = vesa_dirty_gbl;
+	vesa_dirty_gbl = false;
+	return dirty;
+}
 
 const TieFramebuffer* TieClassicFramebuffer_Current(void) {
 	LandruVideoTarget target;
