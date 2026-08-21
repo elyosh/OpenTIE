@@ -713,6 +713,44 @@ void gate_updatebonuspoints(void) {
 		panel_updatepanel();
 }
 
+/* Course progression is split from mesh animation so the unlocked-rate
+ * port can check the player's one-tick swept position on animation-skipped
+ * ticks. gate_updategateanimations still calls this in the recovered path. */
+void gate_updatecourseprogress(void) {
+	uint16_t next_gate = (currentgate == 12) ? 1 : (uint16_t)(currentgate + 1);
+
+	int crossed = gate_checkgateedge(next_gate);
+	if (!crossed)
+		return;
+
+	currentgate = next_gate;
+	++mission.train_gates_passed;
+	--mission.train_gates_remaining;
+
+	if (next_gate != 1)
+		return;
+
+	/* Level complete. Push the per-second reward count-down task and
+	 * return; the task runs one decrement step every 4 PIT ticks via
+	 * the flight loop's tick cadence (sim_clock advanced by TieRuntime_Tick),
+	 * so the HOST_DRIVEN clock keeps progressing. The countdown's end
+	 * step posts MSG_BONUS_AWARDED and bumps train_level. */
+	msg_messageprintf(MSG_LEVEL_COMPLETED);
+	mission.train_bonus = 0;
+	if (TieClassicDisplay_UsesDx5()) {
+		g_flightDrawToOffscreenSurface = 0;
+		FlightSurface_Lock();
+		gate_updatebonuspoints();
+		FlightSurface_Unlock();
+		g_flightDrawToOffscreenSurface = 1;
+		FrontendDisplay_PresentFrontSurface();
+		FrontendDisplay_PresentFrame();
+	} else {
+		gate_updatebonuspoints();
+	}
+	gate_Push_Bonus_Countdown_Task();
+}
+
 /* -------------------------------------------------------------------------
  * gate_updategateanimations  (0x28774)
  *
@@ -810,39 +848,8 @@ void gate_updategateanimations(void) {
 	}
 
 	/* Phase 3: check the next gate. */
-	uint16_t next_gate = (currentgate == 12) ? 1 : (uint16_t)(currentgate + 1);
 	craftptr = saved_craft;
-
-	int crossed = gate_checkgateedge(next_gate);
-	if (!crossed)
-		return;
-
-	currentgate = next_gate;
-	++mission.train_gates_passed;
-	--mission.train_gates_remaining;
-
-	if (next_gate != 1)
-		return;
-
-	/* Level complete. Push the per-second reward count-down task and
-	 * return; the task runs one decrement step every 4 PIT ticks via
-	 * the flight loop's tick cadence (sim_clock advanced by TieRuntime_Tick),
-	 * so the HOST_DRIVEN clock keeps progressing. The countdown's end
-	 * step posts MSG_BONUS_AWARDED and bumps train_level. */
-	msg_messageprintf(MSG_LEVEL_COMPLETED);
-	mission.train_bonus = 0;
-	if (TieClassicDisplay_UsesDx5()) {
-		g_flightDrawToOffscreenSurface = 0;
-		FlightSurface_Lock();
-		gate_updatebonuspoints();
-		FlightSurface_Unlock();
-		g_flightDrawToOffscreenSurface = 1;
-		FrontendDisplay_PresentFrontSurface();
-		FrontendDisplay_PresentFrame();
-	} else {
-		gate_updatebonuspoints();
-	}
-	gate_Push_Bonus_Countdown_Task();
+	gate_updatecourseprogress();
 }
 
 /* The host advances the simulation clock between runtime ticks, so the
@@ -867,7 +874,7 @@ static LandruTaskStepResult bonus_countdown_step(void* self) {
 		msg_messageprintf(MSG_BONUS_AWARDED);
 		if (TieClassicDisplay_UsesDx5())
 			FlightSurface_Lock();
-		gate_settraininglevel((uint16_t)(mission.train_level + 1));
+		gate_settraininglevel(++mission.train_level);
 		if (TieClassicDisplay_UsesDx5())
 			FlightSurface_Unlock();
 		bonus_countdown_active = 0;

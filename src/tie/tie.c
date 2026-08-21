@@ -1693,8 +1693,14 @@ static void tie_run_plane_ai(TieFlightCadence cadence) {
 }
 
 static void tie_run_animation(TieFlightCadence cadence) {
-	if (!cadence.due)
+	if (!cadence.due) {
+		/* PORT: Player movement still advances on unlocked ticks. Keep the
+		 * gate-plane check at that cadence while mesh animation remains on
+		 * the recovered compatibility cadence. */
+		if (TieFlightTiming_IsHighRate() && mission.train_craft_type)
+			gate_updatecourseprogress();
 		return;
+	}
 	if (!TieFlightTiming_IsHighRate()) {
 		anim_updateanimation();
 		return;
