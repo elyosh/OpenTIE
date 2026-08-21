@@ -182,6 +182,18 @@ bool landru_port_Select_Video_Backend(LandruPortVideoBackend backend, uint16_t m
 	return true;
 }
 
+bool landru_port_Uses_Platform_Video(void) {
+	return vesa_port_backend_gbl == LANDRU_PORT_VIDEO_PLATFORM;
+}
+
+bool landru_port_Present_Platform_Video(void) {
+	if (!landru_port_Uses_Platform_Video())
+		return false;
+	landru_host_video_copy_to_present_surface();
+	landru_host_video_present();
+	return true;
+}
+
 // FUNCTION: TIE98 0x4A1730
 int16_t lvesa_Set_VESA_Mode_Internal(uint16_t mode) {
 	if (vesa_port_backend_gbl == LANDRU_PORT_VIDEO_SOFTWARE)

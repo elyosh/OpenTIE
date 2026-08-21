@@ -13,6 +13,7 @@
 #include <landru/rect.h>
 #include <landru/task.h>
 #include <landru/timer.h>
+#include <landru/vesa.h>
 #include <landru/view.h>
 #include <landru/viewadd.h>
 
@@ -274,8 +275,7 @@ static LandruTaskStepResult dialog_task_step(void* self) {
 					dlg_update_gbl(t->frame_counter);
 				t->frame_counter++;
 			}
-			landru_host_video_copy_to_present_surface();
-			landru_host_video_present();
+			(void)landru_port_Present_Platform_Video();
 			t->phase = DIALOG_PHASE_AFTER_FRAME_PRESENT;
 			return LANDRU_TASK_STEP_FRAME_COMPLETE;
 

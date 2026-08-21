@@ -290,9 +290,7 @@ void lfade_Fade_To_Video_Palette(int32_t current_time, int32_t end_time) {
 					frac = 1;
 				lpal_Build_Fade_Palette(2, 0, 255, frac, r, g, b);
 			} else {
-				if (step == half && landru_host_has_platform_video()) {
-					landru_host_video_copy_to_present_surface();
-					landru_host_video_present();
+				if (step == half && landru_port_Present_Platform_Video()) {
 					fade_present_serial_gbl++;
 				}
 				frac = ((step - half) << 8) / (total - half);
@@ -353,9 +351,7 @@ void lfade_Fade_Copy_To_Video(Rect* bounds, FadeWipeMode mode, int16_t step, int
 			ldirty_Swap_Dirty_List(1);
 		} else {
 			lcanvas_Copy_Dirty_Screen_To_Video(&r);
-			if (landru_host_has_platform_video()) {
-				landru_host_video_copy_to_present_surface();
-				landru_host_video_present();
+			if (landru_port_Present_Platform_Video()) {
 				fade_present_serial_gbl++;
 			}
 		}
@@ -421,7 +417,7 @@ typedef struct FadeTask {
 
 static LandruTaskStepResult fade_task_step(void* self) {
 	FadeTask* t = (FadeTask*)self;
-	const bool platform_video = landru_host_has_platform_video();
+	const bool platform_video = landru_port_Uses_Platform_Video();
 
 	for (;;) {
 		if (t->phase == FADE_PHASE_VGA_WAIT) {

@@ -46,6 +46,9 @@ void lvesa_Destroy_VESA_Module(void);
  * host/software presentation while retaining the inactive software buffer. */
 bool landru_port_Set_Initial_Video_Backend(LandruPortVideoBackend backend);
 bool landru_port_Select_Video_Backend(LandruPortVideoBackend backend, uint16_t mode);
+bool landru_port_Uses_Platform_Video(void);
+/* Returns true after dispatching a frame for the active platform backend. */
+bool landru_port_Present_Platform_Video(void);
 void lvesa_Enter_VESA_Mode(uint16_t mode);
 int16_t lvesa_Set_VESA_Mode_Internal(uint16_t mode);
 void lvesa_Erase_Video(uint8_t color);

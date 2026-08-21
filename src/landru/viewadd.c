@@ -12,6 +12,7 @@
 #include <landru/sound.h>
 #include <landru/task.h>
 #include <landru/timer.h>
+#include <landru/vesa.h>
 #include <landru/view.h>
 #include <landru/viewadd.h>
 
@@ -93,10 +94,9 @@ static LandruTaskStepResult viewadd_task_step(void* self) {
 				view_gbl->update(view_gbl->time);
 			view_gbl->time++;
 		}
-		landru_host_video_copy_to_present_surface();
-		landru_host_video_present();
+		const bool platform_video = landru_port_Present_Platform_Video();
 		t->phase = VIEW_PHASE_AFTER_FRAME_PRESENT;
-		if (landru_host_has_platform_video())
+		if (platform_video)
 			return LANDRU_TASK_STEP_FRAME_COMPLETE;
 	}
 
