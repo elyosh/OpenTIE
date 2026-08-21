@@ -33,8 +33,9 @@ uint8_t TieCockpitText_RemapColor(uint8_t logical_color);
 bool TieCockpitText_Push(TieUIText* buf, int* cnt, int cap, int16_t x, int16_t y, const char* s,
 						 uint8_t color);
 
-/* Compose the message bar's text records (body line + time-warp "T:Nx"
- * readout). Returns the count of records appended.
+/* Compose the message bar's text records (body line, time-warp "T:Nx"
+ * readout, and active training timer/bonus values). Returns the count
+ * of records appended.
  *
  * `line_top` / `line_left` / `line_right` are the bar's top edge,
  * body-text x indent, and time-warp right edge — all in the cockpit

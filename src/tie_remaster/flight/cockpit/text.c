@@ -98,6 +98,8 @@ static const uint8_t k_fontcolorconvert[8] = { 0x42, 0x4A, 0x46, 0x4E, 0x52, 0x4
 static const uint8_t k_radiosidecolors[4] = { 0x4A, 0x52, 0x46, 0x56 };
 static const uint8_t k_eventsidecolors[6] = { 0x52, 0x4A, 0x46, 0x56, 0x4A, 0x56 };
 
+static int TieCockpitText_BuildTrainingBonusValues(const TieSnapshot* snap, TieUIText* out, int cap);
+
 /* msg_messagedisplay base-color picker. Returns the engine-logical
  * color and writes the starting body byte index so the type/side
  * prefix isn't drawn:
@@ -224,6 +226,10 @@ int TieCockpitText_BuildmsgBarText(const TieSnapshot* snap, int line_top, int li
 		if (TieCockpitText_Push(out, &n, cap, (int16_t)line_right, (int16_t)line_top, tbuf, c_label))
 			out[n - 1].font_id = 4;
 	}
+
+	/* Retail paints these changing values over the already-established
+	 * level-complete message bar, independently of the cockpit view. */
+	n += TieCockpitText_BuildTrainingBonusValues(snap, out + n, cap - n);
 	return n;
 }
 
@@ -675,10 +681,10 @@ static int TieCockpitText_BuildPanelTrainingCrt(const TieSnapshot* snap, const T
 	return n;
 }
 
-/* gate_updatebonuspoints (gate.c:634-665) — timer + bonus row painted
- * only while the per-section countdown task runs. Engine: setfontsize(1)
+/* gate_updatebonuspoints — timer + bonus values painted over the message
+ * bar while the per-section countdown task runs. Engine: setfontsize(1)
  * → TINY64, setbackcolor(0x2C), settextcolor(0x43). */
-static int TieCockpitText_BuildPanelBonusBar(const TieSnapshot* snap, TieUIText* out, int cap) {
+static int TieCockpitText_BuildTrainingBonusValues(const TieSnapshot* snap, TieUIText* out, int cap) {
 	const TieHudState* h = &snap->hud;
 	if (!h->training.active || !h->training.bonus_active)
 		return 0;
@@ -823,10 +829,9 @@ int TieCockpitText_BuildHudText(struct TieScene2dTextRenderer* text_renderer, co
 		n += TieCockpitText_BuildMissileAmmo(instruments, out + n, cap - n);
 		/* Training missions replace the CMD readout with the gate CRT
 		 * stats (mission.train_craft_type != 0 → gate_trainingupdatecrt
-		 * in classic, panel.c:1945-1949) and add a separate bonus row. */
+		 * in classic, panel.c:1945-1949). */
 		if (snap->hud.training.active) {
 			n += TieCockpitText_BuildPanelTrainingCrt(snap, instruments, out + n, cap - n);
-			n += TieCockpitText_BuildPanelBonusBar(snap, out + n, cap - n);
 		} else {
 			n += TieCockpitText_BuildPanelCmd(text_renderer, snap, instruments, layout, space, out + n,
 											  cap - n);

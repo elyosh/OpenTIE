@@ -2203,10 +2203,10 @@ static void TieCockpitRenderer_DrawClearwindows(TieCockpitRenderer* cg, AeronCom
 }
 
 /* Message banner (msg.c::msg_messagedisplay). Paints the backcolor
- * strip + 1-px separator at top-1; the text records (body + time-warp
- * readout) are composed by TieCockpitText_BuildmsgBarText. Engine's
- * invisible-drop (dropcolor remaps to backcolor) isn't reproduced —
- * the HD records carry no shadow. */
+ * strip + 1-px separator at top-1; the text records (body, time-warp,
+ * and training bonus readouts) are composed by
+ * TieCockpitText_BuildmsgBarText. Engine's invisible-drop (dropcolor
+ * remaps to backcolor) isn't reproduced — the HD records carry no shadow. */
 static void TieCockpitRenderer_DrawMessageBar(TieCockpitRenderer* cg, AeronCommandBuffer* cmd,
 											  AeronRenderPass* pass, const TieSnapshot* snap) {
 	(void)cmd;
@@ -2230,7 +2230,7 @@ static void TieCockpitRenderer_DrawMessageBar(TieCockpitRenderer* cg, AeronComma
 						  geometry.separator_h, separator_color, AERON_BLIT2D_BLEND_PMA, NULL);
 
 	/* Text retains the original body indent and time-warp column. */
-	TieUIText recs[2];
+	TieUIText recs[4];
 	int n_recs = TieCockpitText_BuildmsgBarText(snap, (int)snap->hud.msg_bar.line_top, 2,
 												(int)snap->hud.msg_bar.line_right, recs,
 												(int)(sizeof recs / sizeof recs[0]));

@@ -104,7 +104,12 @@ typedef struct TieRemasterFlight {
 	uint32_t render_generation;
 	uint32_t last_flight_frame;
 	uint32_t last_mission_generation;
+	int32_t last_training_score;
+	int32_t last_training_bonus;
 	uint8_t last_camera_valid;
+	uint8_t last_training_bonus_active;
+	uint8_t last_training_timer_min;
+	uint8_t last_training_timer_sec;
 	bool rendered;
 	bool force_render;
 	bool render_suspended;
@@ -792,11 +797,20 @@ static bool TieRemaster_FlightRenderDue(const TieSnapshot* snapshot) {
 	TieRemasterFlight* flight = &g_remaster.flight;
 	const TiePresentationLayout* presentation = TiePresentation_Layout();
 	const bool camera_valid = TieRemaster_FlightCameraValid(snapshot);
+	/* PORT: The bonus task suspends world motion, so flight_frame remains
+	 * fixed while the timer and score continue changing. */
+	const bool training_bonus_changed =
+		(flight->last_training_bonus_active || snapshot->hud.training.bonus_active) &&
+		(flight->last_training_bonus_active != snapshot->hud.training.bonus_active ||
+		 flight->last_training_timer_min != snapshot->hud.training.timer_min ||
+		 flight->last_training_timer_sec != snapshot->hud.training.timer_sec ||
+		 flight->last_training_score != snapshot->hud.training.score ||
+		 flight->last_training_bonus != snapshot->hud.training.bonus);
 	return !flight->rendered || flight->force_render || !presentation ||
 		   flight->render_generation != presentation->render_generation ||
 		   flight->last_flight_frame != snapshot->flight_frame ||
 		   flight->last_mission_generation != snapshot->mission_load_generation ||
-		   flight->last_camera_valid != (uint8_t)camera_valid;
+		   flight->last_camera_valid != (uint8_t)camera_valid || training_bonus_changed;
 }
 
 static void TieRemaster_FlightRenderCommitted(const TieSnapshot* snapshot) {
@@ -806,6 +820,11 @@ static void TieRemaster_FlightRenderCommitted(const TieSnapshot* snapshot) {
 	flight->last_flight_frame = snapshot->flight_frame;
 	flight->last_mission_generation = snapshot->mission_load_generation;
 	flight->last_camera_valid = (uint8_t)TieRemaster_FlightCameraValid(snapshot);
+	flight->last_training_bonus_active = snapshot->hud.training.bonus_active;
+	flight->last_training_timer_min = snapshot->hud.training.timer_min;
+	flight->last_training_timer_sec = snapshot->hud.training.timer_sec;
+	flight->last_training_score = snapshot->hud.training.score;
+	flight->last_training_bonus = snapshot->hud.training.bonus;
 }
 
 static void TieRemaster_SubmitFlightLayer(float alpha) {
