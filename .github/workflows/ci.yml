@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.build-type }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build-type: ${{ github.event_name == 'push' && fromJSON('["Release", "Debug"]') || fromJSON('["Release"]') }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Determine short commit hash
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build package
+        uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          file: packaging/linux/Dockerfile
+          platforms: linux/amd64
+          target: artifact
+          build-args: |
+            TIE_BUILD_TYPE=${{ matrix.build-type }}
+            TIE_VERSION=${{ steps.sha.outputs.short }}
+          outputs: type=local,dest=build/artifacts
+          cache-from: type=gha,scope=linux
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=linux' || '' }}
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: opentie-linux-x86_64-${{ matrix.build-type == 'Debug' && 'debug' || 'release' }}
+          path: build/artifacts/*.tar.xz
+          if-no-files-found: error
+
+  windows:
+    name: Windows ${{ matrix.build-type }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build-type: ${{ github.event_name == 'push' && fromJSON('["Release", "Debug"]') || fromJSON('["Release"]') }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Determine short commit hash
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build package
+        uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          file: packaging/windows/Dockerfile
+          platforms: linux/amd64
+          target: artifact
+          build-args: |
+            TIE_BUILD_TYPE=${{ matrix.build-type }}
+            TIE_VERSION=${{ steps.sha.outputs.short }}
+          outputs: type=local,dest=build/artifacts
+          cache-from: type=gha,scope=windows
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=windows' || '' }}
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: opentie-windows-x86_64-${{ matrix.build-type == 'Debug' && 'debug' || 'release' }}
+          path: build/artifacts/*.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.build-type }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        build-type: ${{ github.event_name == 'push' && fromJSON('["Release", "Debug"]') || fromJSON('["Release"]') }}
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Determine short commit hash
+        id: sha
+        run: echo "short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Install build tools
+        run: brew install autoconf automake cmake glib libtool ninja pkg-config
+
+      - name: Restore dependency caches
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/cache/macos-arm64/sources
+            build/cache/macos-arm64/dependencies
+            build/cache/macos-arm64/tools
+            build/cache/macos-arm64/build/sdl
+            build/cache/macos-arm64/build/zstd
+            build/cache/macos-arm64/build/ffmpeg
+            build/cache/macos-arm64/build/fluidsynth
+            build/cache/macos-arm64/build/speexdsp
+            build/cache/macos-arm64/build/shadercross
+          key: macos-arm64-deps-${{ hashFiles('packaging/macos/build-package.sh', 'packaging/common/shadercross-fsr3.patch') }}
+
+      - name: Build package
+        env:
+          TIE_BUILD_TYPE: ${{ matrix.build-type }}
+          TIE_VERSION: ${{ steps.sha.outputs.short }}
+        run: ./packaging/macos/build-package.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: opentie-macos-arm64-${{ matrix.build-type == 'Debug' && 'debug' || 'release' }}
+          path: build/artifacts/*.dmg
+          if-no-files-found: error

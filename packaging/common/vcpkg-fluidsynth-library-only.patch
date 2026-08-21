@@ -1,0 +1,27 @@
+diff --git a/ports/fluidsynth/portfile.cmake b/ports/fluidsynth/portfile.cmake
+--- a/ports/fluidsynth/portfile.cmake
++++ b/ports/fluidsynth/portfile.cmake
+@@ -7,6 +7,7 @@ vcpkg_from_github(
+     HEAD_REF master
+     PATCHES
+         cmake-config-glib.diff
++        fluidsynth-library-only.patch
+ )
+ # Do not use or install FindSndFileLegacy.cmake and its deps
+ file(REMOVE
+@@ -65,6 +66,7 @@ vcpkg_cmake_configure(
+         ${ENABLED_OPTIONS}
+         ${DISABLED_OPTIONS}
+         "-Dosal=cpp11" 
++        "-Dbuild-cli:BOOL=OFF"
+         "-DPKG_CONFIG_EXECUTABLE=${PKGCONFIG}"
+     MAYBE_UNUSED_VARIABLES
+         ${OPTIONS_TO_DISABLE}
+@@ -78,7 +80,5 @@ vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/fluidsynth)
+ vcpkg_fixup_pkgconfig()
+ 
+-vcpkg_copy_tools(TOOL_NAMES fluidsynth AUTO_CLEAN)
+-
+ file(REMOVE_RECURSE
+     "${CURRENT_PACKAGES_DIR}/debug/include"
+     "${CURRENT_PACKAGES_DIR}/debug/share"

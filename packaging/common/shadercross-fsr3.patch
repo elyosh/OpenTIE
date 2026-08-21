@@ -1,0 +1,130 @@
+diff --git a/include/SDL3_shadercross/SDL_shadercross.h b/include/SDL3_shadercross/SDL_shadercross.h
+index f3ea5c6..531e4be 100644
+--- a/include/SDL3_shadercross/SDL_shadercross.h
++++ b/include/SDL3_shadercross/SDL_shadercross.h
+@@ -114,6 +114,8 @@ typedef struct SDL_ShaderCross_SPIRV_Info
+ #define SDL_SHADERCROSS_PROP_SPIRV_PSSL_COMPATIBILITY_BOOLEAN "SDL_shadercross.spirv.pssl.compatibility"
+ #define SDL_SHADERCROSS_PROP_SPIRV_MSL_VERSION_STRING "SDL_shadercross.spirv.msl.version"
+ #define SDL_SHADERCROSS_PROP_HLSL_SKIP_SPIRV_ROUNDTRIP_BOOLEAN "SDL_shadercross.hlsl.skip_spirv_roundtrip"
++#define SDL_SHADERCROSS_PROP_HLSL_ENABLE_16BIT_TYPES_BOOLEAN "SDL_shadercross.hlsl.enable_16bit_types"
++#define SDL_SHADERCROSS_PROP_HLSL_SPIRV_TARGET_VULKAN_1_1_BOOLEAN "SDL_shadercross.hlsl.spirv.target_vulkan_1_1"
+ 
+ typedef struct SDL_ShaderCross_HLSL_Define
+ {
+@@ -316,6 +318,8 @@ extern SDL_DECLSPEC void * SDLCALL SDL_ShaderCross_CompileDXBCFromHLSL(
+  * - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
+  * - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN`: when true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
+  * - `SDL_SHADERCROSS_PROP_HLSL_SKIP_SPIRV_ROUNDTRIP_BOOLEAN`: when true, the SPIRV roundtrip is skipped. This behavior is disabled by default. Do not use this property if your shader uses Structured Buffers.
++ * - `SDL_SHADERCROSS_PROP_HLSL_ENABLE_16BIT_TYPES_BOOLEAN`: when true, enables native 16-bit HLSL types and targets Shader Model 6.2. SPIR-V output targets Vulkan 1.1. This behavior is disabled by default.
++ * - `SDL_SHADERCROSS_PROP_HLSL_SPIRV_TARGET_VULKAN_1_1_BOOLEAN`: when true, SPIR-V output targets Vulkan 1.1. This behavior is disabled by default unless native 16-bit HLSL types are enabled.
+  *
+  * \param info a struct describing the shader to transpile.
+  * \param size filled in with the bytecode buffer size.
+@@ -337,6 +341,8 @@ extern SDL_DECLSPEC void * SDLCALL SDL_ShaderCross_CompileDXILFromHLSL(
+  * - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_ENABLE_BOOLEAN`: allows debug info to be emitted when relevant. Should only be used with debugging tools like Renderdoc.
+  * - `SDL_SHADERCROSS_PROP_SHADER_DEBUG_NAME_STRING`: a UTF-8 name to be used with the shader. Relevant for use with debugging tools like Renderdoc.
+  * - `SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN`: when true, indicates that the compiler should cull unused shader resources. This behavior is disabled by default.
++ * - `SDL_SHADERCROSS_PROP_HLSL_ENABLE_16BIT_TYPES_BOOLEAN`: when true, enables native 16-bit HLSL types and targets Shader Model 6.2. SPIR-V output targets Vulkan 1.1. This behavior is disabled by default.
++ * - `SDL_SHADERCROSS_PROP_HLSL_SPIRV_TARGET_VULKAN_1_1_BOOLEAN`: when true, SPIR-V output targets Vulkan 1.1. This behavior is disabled by default unless native 16-bit HLSL types are enabled.
+  *
+  * \param info a struct describing the shader to transpile.
+  * \param size filled in with the bytecode buffer size.
+diff --git a/src/SDL_shadercross.c b/src/SDL_shadercross.c
+index a4b2e70..20eef87 100644
+--- a/src/SDL_shadercross.c
++++ b/src/SDL_shadercross.c
+@@ -400,7 +400,9 @@ static void *SDL_ShaderCross_INTERNAL_CompileUsingDXC(
+         defineStringsUtf16[i] = (wchar_t *)SDL_iconv_string("WCHAR_T", "UTF-8", defineString, MAX_DEFINE_STRING_LENGTH);
+     }
+ 
+-    LPCWSTR *args = SDL_malloc(sizeof(LPCWSTR) * (numDefineStrings + 13));
++    const bool enable16BitTypes = SDL_GetBooleanProperty(info->props, SDL_SHADERCROSS_PROP_HLSL_ENABLE_16BIT_TYPES_BOOLEAN, false);
++    const bool targetVulkan11 = enable16BitTypes || SDL_GetBooleanProperty(info->props, SDL_SHADERCROSS_PROP_HLSL_SPIRV_TARGET_VULKAN_1_1_BOOLEAN, false);
++    LPCWSTR *args = SDL_malloc(sizeof(LPCWSTR) * (numDefineStrings + 16));
+     Uint32 argCount = 0;
+ 
+     for (Uint32 i = 0; i < numDefineStrings; i += 1) {
+@@ -434,17 +436,24 @@ static void *SDL_ShaderCross_INTERNAL_CompileUsingDXC(
+ 
+     if (info->shader_stage == SDL_SHADERCROSS_SHADERSTAGE_VERTEX) {
+         args[argCount++] = (LPCWSTR)L"-T";
+-        args[argCount++] = (LPCWSTR)L"vs_6_0";
++        args[argCount++] = enable16BitTypes ? (LPCWSTR)L"vs_6_2" : (LPCWSTR)L"vs_6_0";
+     } else if (info->shader_stage == SDL_SHADERCROSS_SHADERSTAGE_FRAGMENT) {
+         args[argCount++] = (LPCWSTR)L"-T";
+-        args[argCount++] = (LPCWSTR)L"ps_6_0";
++        args[argCount++] = enable16BitTypes ? (LPCWSTR)L"ps_6_2" : (LPCWSTR)L"ps_6_0";
+     } else { // compute
+         args[argCount++] = (LPCWSTR)L"-T";
+-        args[argCount++] = (LPCWSTR)L"cs_6_0";
++        args[argCount++] = enable16BitTypes ? (LPCWSTR)L"cs_6_2" : (LPCWSTR)L"cs_6_0";
++    }
++
++    if (enable16BitTypes) {
++        args[argCount++] = (LPCWSTR)L"-enable-16bit-types";
+     }
+ 
+     if (spirv) {
+         args[argCount++] = (LPCWSTR)L"-spirv";
++        if (targetVulkan11) {
++            args[argCount++] = (LPCWSTR)L"-fspv-target-env=vulkan1.1";
++        }
+         args[argCount++] = (LPCWSTR)L"-fspv-flatten-resource-arrays";
+ 
+         if (!SDL_GetBooleanProperty(info->props, SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN, false))
+diff --git a/src/cli.c b/src/cli.c
+index a141cc5..0b60c76 100644
+--- a/src/cli.c
++++ b/src/cli.c
+@@ -53,6 +53,8 @@ void print_help(void)
+     SDL_Log("  %-*s %s", column_width, "-D<name>[=<value>]", "HLSL define. Only used with HLSL source. Can be repeated.");
+     SDL_Log("  %-*s %s", column_width, "", "If =<value> is omitted the define will be treated as equal to 1.");
+     SDL_Log("  %-*s %s", column_width, "--msl-version <value>", "Target MSL version. Only used when transpiling to MSL. The default is 1.2.0.");
++    SDL_Log("  %-*s %s", column_width, "--enable-16bit-types", "Enable native 16-bit HLSL types. Uses Shader Model 6.2 and Vulkan 1.1 SPIR-V.");
++    SDL_Log("  %-*s %s", column_width, "--spirv-vulkan1.1", "Target Vulkan 1.1 when compiling HLSL to SPIR-V.");
+     SDL_Log("  %-*s %s", column_width, "-c | --cull", "Allow the compiler to cull unused resource bindings. This may lead to surprising binding behavior so be careful when enabling this!");
+     SDL_Log("  %-*s %s", column_width, "-g | --debug", "Generate debug information when possible. Shaders are valid only when graphics debuggers are attached.");
+     SDL_Log("  %-*s %s", column_width, "-p | --pssl", "Generate PSSL-compatible shader. Destination format should be HLSL.");
+@@ -244,6 +246,8 @@ int main(int argc, char *argv[])
+ 
+     bool cullUnusedBindings = false;
+     bool enableDebug = false;
++    bool enable16BitTypes = false;
++    bool targetVulkan11 = false;
+     char *mslVersion = NULL;
+ 
+     bool psslCompat = false;
+@@ -380,6 +384,10 @@ int main(int argc, char *argv[])
+                 }
+                 i += 1;
+                 mslVersion = argv[i];
++            } else if (SDL_strcmp(arg, "--enable-16bit-types") == 0) {
++                enable16BitTypes = true;
++            } else if (SDL_strcmp(arg, "--spirv-vulkan1.1") == 0) {
++                targetVulkan11 = true;
+             } else if (SDL_strcmp(arg, "-c") == 0 || SDL_strcmp(arg, "--cull") == 0) {
+                 cullUnusedBindings = true;
+             }  else if (SDL_strcmp(arg, "-g") == 0 || SDL_strcmp(arg, "--debug") == 0) {
+@@ -500,6 +508,9 @@ int main(int argc, char *argv[])
+         if (cullUnusedBindings) {
+             SDL_SetBooleanProperty(spirvInfo.props, SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN, true);
+         }
++        if (enable16BitTypes) {
++            SDL_SetBooleanProperty(spirvInfo.props, SDL_SHADERCROSS_PROP_HLSL_ENABLE_16BIT_TYPES_BOOLEAN, true);
++        }
+         if (mslVersion) {
+             SDL_SetStringProperty(spirvInfo.props, SDL_SHADERCROSS_PROP_SPIRV_MSL_VERSION_STRING, mslVersion);
+         }
+@@ -622,6 +630,12 @@ int main(int argc, char *argv[])
+         if (cullUnusedBindings) {
+             SDL_SetBooleanProperty(hlslInfo.props, SDL_SHADERCROSS_PROP_SHADER_CULL_UNUSED_BINDINGS_BOOLEAN, true);
+         }
++        if (enable16BitTypes) {
++            SDL_SetBooleanProperty(hlslInfo.props, SDL_SHADERCROSS_PROP_HLSL_ENABLE_16BIT_TYPES_BOOLEAN, true);
++        }
++        if (targetVulkan11) {
++            SDL_SetBooleanProperty(hlslInfo.props, SDL_SHADERCROSS_PROP_HLSL_SPIRV_TARGET_VULKAN_1_1_BOOLEAN, true);
++        }
+ 
+         switch (destinationFormat) {
+             case SHADERFORMAT_DXBC: {

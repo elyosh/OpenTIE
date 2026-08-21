@@ -1,0 +1,138 @@
+--- a/src/gpu/d3d12/SDL_gpu_d3d12.c
++++ b/src/gpu/d3d12/SDL_gpu_d3d12.c
+@@ -6575,15 +6575,37 @@
+         SET_STRING_ERROR_AND_RETURN("Must claim window before querying swapchain composition support!", false);
+     }
+ 
+-    // Check the color space support if necessary
+-    if (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR) {
+-        IDXGISwapChain3_CheckColorSpaceSupport(
+-            windowData->swapchain,
+-            SwapchainCompositionToColorSpace[swapchainComposition],
+-            &colorSpaceSupport);
++    /* Check the color space support if necessary.
++     *
++     * IDXGISwapChain3::CheckColorSpaceSupport only reports a color space as
++     * presentable when it is compatible with the swapchain's current buffer
++     * format (scRGB requires FP16, HDR10 requires R10G10B10A2), so it can only
++     * answer for compositions that share the live swapchain's format. Windows
++     * are always claimed with the SDR composition, which means a query for one
++     * of the HDR compositions would always fail here and HDR output could never
++     * be enabled at all. Consult the HDR state SDL already tracks for the
++     * display in that case; the color space is verified against the real
++     * swapchain in D3D12_INTERNAL_CreateSwapchain.
++     */
++    if (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR) {
++        DXGI_COLOR_SPACE_TYPE colorSpace = SwapchainCompositionToColorSpace[swapchainComposition];
+ 
+-        if (!(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)) {
+-            return false;
++        if (format == SwapchainCompositionToTextureFormat[windowData->swapchainComposition]) {
++            res = IDXGISwapChain3_CheckColorSpaceSupport(
++                windowData->swapchain,
++                colorSpace,
++                &colorSpaceSupport);
++
++            if (FAILED(res) || !(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)) {
++                return false;
++            }
++        } else if (colorSpace != DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709) {
++            if (!SDL_GetBooleanProperty(
++                    SDL_GetDisplayProperties(SDL_GetDisplayForWindow(window)),
++                    SDL_PROP_DISPLAY_HDR_ENABLED_BOOLEAN,
++                    false)) {
++                return false;
++            }
+         }
+     }
+ #endif
+@@ -6919,6 +6941,7 @@
+     IDXGIFactory1 *pParent;
+     IDXGISwapChain1 *swapchain;
+     IDXGISwapChain3 *swapchain3;
++    Uint32 colorSpaceSupport;
+     HRESULT res;
+ 
+     // Get the DXGI handle
+@@ -6983,10 +7006,33 @@
+     CHECK_D3D12_ERROR_AND_RETURN("Could not create IDXGISwapChain3", false);
+ 
+     if (swapchainComposition != SDL_GPU_SWAPCHAINCOMPOSITION_SDR) {
+-        // Support already verified if we hit this block
+-        IDXGISwapChain3_SetColorSpace1(
++        DXGI_COLOR_SPACE_TYPE colorSpace = SwapchainCompositionToColorSpace[swapchainComposition];
++
++        /* The swapchain now has this composition's buffer format, so this is
++         * the point where DXGI can authoritatively report whether the color
++         * space can be presented.
++         */
++        res = IDXGISwapChain3_CheckColorSpaceSupport(
+             swapchain3,
+-            SwapchainCompositionToColorSpace[swapchainComposition]);
++            colorSpace,
++            &colorSpaceSupport);
++        if (FAILED(res)) {
++            IDXGISwapChain3_Release(swapchain3);
++            CHECK_D3D12_ERROR_AND_RETURN("Could not query swapchain color space support", false);
++        }
++
++        if (!(colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)) {
++            IDXGISwapChain3_Release(swapchain3);
++            SET_STRING_ERROR_AND_RETURN("Swapchain color space is not presentable!", false);
++        }
++
++        res = IDXGISwapChain3_SetColorSpace1(
++            swapchain3,
++            colorSpace);
++        if (FAILED(res)) {
++            IDXGISwapChain3_Release(swapchain3);
++            CHECK_D3D12_ERROR_AND_RETURN("Could not set swapchain color space", false);
++        }
+     }
+ 
+     /*
+@@ -7173,6 +7219,10 @@
+     if (
+         swapchainComposition != windowData->swapchainComposition ||
+         presentMode != windowData->present_mode) {
++        SDL_GPUSwapchainComposition previousComposition = windowData->swapchainComposition;
++        SDL_GPUPresentMode previousPresentMode = windowData->present_mode;
++        char error[256];
++
+         D3D12_Wait(driverData);
+ 
+         // Recreate the swapchain
+@@ -7180,11 +7230,28 @@
+             renderer,
+             windowData);
+ 
+-        return D3D12_INTERNAL_CreateSwapchain(
+-            renderer,
+-            windowData,
+-            swapchainComposition,
+-            presentMode);
++        if (D3D12_INTERNAL_CreateSwapchain(
++                renderer,
++                windowData,
++                swapchainComposition,
++                presentMode)) {
++            return true;
++        }
++
++        /* Creation can fail after the old swapchain is gone, so restore the
++         * previous parameters rather than leaving the window unpresentable.
++         */
++        SDL_strlcpy(error, SDL_GetError(), sizeof(error));
++
++        if (!D3D12_INTERNAL_CreateSwapchain(
++                renderer,
++                windowData,
++                previousComposition,
++                previousPresentMode)) {
++            SDL_LogError(SDL_LOG_CATEGORY_GPU, "Could not restore the previous swapchain!");
++        }
++
++        return SDL_SetError("%s", error);
+     }
+ 
+     return true;

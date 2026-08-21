@@ -1,0 +1,47 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -80,5 +80,6 @@ option ( enable-alsa "compile ALSA support (if it is available)" on )
+ option ( enable-aufile "compile support for sound file output" on )
+ option ( BUILD_SHARED_LIBS "Build a shared object or DLL" on )
++option ( build-cli "Build the FluidSynth command-line program" on )
+ option ( enable-dbus "compile DBUS support (if it is available)" on )
+ option ( enable-ipv6  "enable IPv6 support at the cost of disabling IPv4" on )
+ option ( enable-jack "compile JACK support (if it is available)" on )
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -502,6 +502,10 @@ add_executable ( fluidsynth
+     ${VersionFilesOutputVariable}
+ )
+ 
++if ( NOT build-cli )
++  set_target_properties ( fluidsynth PROPERTIES EXCLUDE_FROM_ALL TRUE )
++endif ( NOT build-cli )
++
+ set_target_properties ( fluidsynth
+     PROPERTIES IMPORT_PREFIX "" )
+ 
+@@ -554,15 +558,20 @@ if ( MINGW AND enable-unicode )
+     target_link_options( fluidsynth PRIVATE -municode )
+ endif()
+ 
++set ( fluidsynth_INSTALL_TARGETS libfluidsynth )
++if ( build-cli )
++  list ( PREPEND fluidsynth_INSTALL_TARGETS fluidsynth )
++endif ( build-cli )
++
+ if ( MACOSX_FRAMEWORK )
+-  install ( TARGETS fluidsynth libfluidsynth
++  install ( TARGETS ${fluidsynth_INSTALL_TARGETS}
+     EXPORT FluidSynthTargets
+     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+     FRAMEWORK DESTINATION "${FRAMEWORK_INSTALL_PREFIX}/${FRAMEWORK_INSTALL_DIR}"
+     ARCHIVE DESTINATION "${FRAMEWORK_INSTALL_PREFIX}/${FRAMEWORK_INSTALL_DIR}"
+ )
+ else ( MACOSX_FRAMEWORK )
+-  install ( TARGETS fluidsynth libfluidsynth
++  install ( TARGETS ${fluidsynth_INSTALL_TARGETS}
+     EXPORT FluidSynthTargets
+     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}

@@ -1,0 +1,160 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.build-type }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build-type: [Release]
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Determine release version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build package
+        uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          file: packaging/linux/Dockerfile
+          platforms: linux/amd64
+          target: artifact
+          build-args: |
+            TIE_BUILD_TYPE=${{ matrix.build-type }}
+            TIE_VERSION=${{ steps.version.outputs.version }}
+          outputs: type=local,dest=build/artifacts
+          cache-from: type=gha,scope=linux
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: opentie-linux-x86_64-${{ matrix.build-type == 'Debug' && 'debug' || 'release' }}
+          path: build/artifacts/*.tar.xz
+          if-no-files-found: error
+
+  windows:
+    name: Windows ${{ matrix.build-type }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        build-type: [Release]
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Determine release version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build package
+        uses: docker/build-push-action@v7
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: .
+          file: packaging/windows/Dockerfile
+          platforms: linux/amd64
+          target: artifact
+          build-args: |
+            TIE_BUILD_TYPE=${{ matrix.build-type }}
+            TIE_VERSION=${{ steps.version.outputs.version }}
+          outputs: type=local,dest=build/artifacts
+          cache-from: type=gha,scope=windows
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: opentie-windows-x86_64-${{ matrix.build-type == 'Debug' && 'debug' || 'release' }}
+          path: build/artifacts/*.zip
+          if-no-files-found: error
+
+  macos:
+    name: macOS ${{ matrix.build-type }}
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        build-type: [Release]
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Install build tools
+        run: brew install autoconf automake cmake glib libtool ninja pkg-config
+
+      - name: Restore dependency caches
+        uses: actions/cache@v6
+        with:
+          path: |
+            build/cache/macos-arm64/sources
+            build/cache/macos-arm64/dependencies
+            build/cache/macos-arm64/tools
+            build/cache/macos-arm64/build/sdl
+            build/cache/macos-arm64/build/zstd
+            build/cache/macos-arm64/build/ffmpeg
+            build/cache/macos-arm64/build/fluidsynth
+            build/cache/macos-arm64/build/speexdsp
+            build/cache/macos-arm64/build/shadercross
+          key: macos-arm64-deps-${{ hashFiles('packaging/macos/build-package.sh', 'packaging/common/shadercross-fsr3.patch') }}
+
+      - name: Build package
+        env:
+          TIE_BUILD_TYPE: ${{ matrix.build-type }}
+          TIE_MACOS_BUILD_VERSION: ${{ github.run_number }}
+        run: |
+          TIE_VERSION="${GITHUB_REF_NAME#v}" ./packaging/macos/build-package.sh
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: opentie-macos-arm64-${{ matrix.build-type == 'Debug' && 'debug' || 'release' }}
+          path: build/artifacts/*.dmg
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "OpenTIE ${GITHUB_REF_NAME}" \
+              --draft \
+              --generate-notes \
+              artifacts/*

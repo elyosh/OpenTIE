@@ -1,0 +1,26 @@
+---
+BasedOnStyle: LLVM
+UseTab: ForContinuationAndIndentation
+IndentWidth: 4
+TabWidth: 4
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+BreakBeforeBraces: Attach
+IndentCaseLabels: true
+ColumnLimit: 110
+AccessModifierOffset: -4
+NamespaceIndentation: None
+PointerAlignment: Left
+SpaceBeforeParens: ControlStatements
+SpaceAfterCStyleCast: false
+SpaceAfterTemplateKeyword: true
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeCpp11BracedList: true
+SpaceInEmptyParentheses: false
+SpacesInAngles: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+Cpp11BracedListStyle: false
+InsertNewlineAtEOF: true

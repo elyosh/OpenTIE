@@ -1,0 +1,28 @@
+@PACKAGE_INIT@
+
+# libimuse package config.
+#
+# Re-resolves the FluidSynth dependency on the consumer's side so the
+# install tree stays relocatable (no absolute paths baked in).
+#
+# Consumers use:
+#   find_package(imuse REQUIRED)
+#   target_link_libraries(myapp PRIVATE imuse::imuse)
+
+include(CMakeFindDependencyMacro)
+
+set(IMUSE_BUILT_WITH_FLUIDSYNTH @FLUIDSYNTH_FOUND@)
+if (IMUSE_BUILT_WITH_FLUIDSYNTH)
+    find_dependency(PkgConfig)
+    pkg_check_modules(FLUIDSYNTH REQUIRED IMPORTED_TARGET fluidsynth)
+endif()
+
+set(IMUSE_BUILT_WITH_NUKED_SC55 @IMUSE_NUKED_SC55_AVAILABLE@)
+if (IMUSE_BUILT_WITH_NUKED_SC55)
+    find_dependency(PkgConfig)
+    pkg_check_modules(SPEEXDSP REQUIRED IMPORTED_TARGET speexdsp)
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/imuseTargets.cmake")
+
+check_required_components(imuse)

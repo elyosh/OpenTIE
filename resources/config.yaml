@@ -1,0 +1,119 @@
+version: 4
+
+paths:
+  installations:
+    tie95: ""
+    tie98: ""
+
+audio:
+  midi_backend: fm4_opl3
+  music: imuse
+  sb16_filter: true
+  player_engine_sound_volume_percent: 30
+  fluidsynth:
+    soundfont_file: ""
+  sc55:
+    rom_directory: ""
+
+ui:
+  font: assets/fonts/menu
+
+frontend:
+  version: tie98
+  aspect_correct_legacy_scenes: true
+
+flight:
+  version: tie98
+  original_renderer: d3d
+  update_rate: unlocked
+  player_engine_sound: true
+  models:
+    source: original
+    smooth_angle_degrees: 90
+    opt_emissive_strength: 1.5
+    opt_projectile_emissive_strength: 5.0
+
+input:
+  device:
+    guid: ""
+    path: ""
+    ordinal: 0
+  gamepad:
+    axes:
+      yaw: {source: leftx, invert: false, deadzone: 0.08}
+      pitch: {source: lefty, invert: false, deadzone: 0.08}
+      roll: {source: rightx, invert: false, deadzone: 0.08}
+      throttle: {source: 'none', invert: false, deadzone: 0.08}
+    buttons:
+      fire_weapon:
+        - south
+        - {axis: righttrigger, direction: positive, threshold: 0.5}
+      target_roll_throttle_modifier:
+        - east
+        - {axis: lefttrigger, direction: positive, threshold: 0.5}
+      target_nearest_fighter_or_mine: north
+      target_next: west
+      target_my_attacker: leftshoulder
+      view_toggle_high_angle: rightshoulder
+      throttle_full: dpadup
+      throttle_down: dpaddown
+      match_speed: dpadright
+      target_clear: dpadleft
+      hyperspace: leftstick
+      pause: start
+      escape: back
+      view_return_to_cockpit: rightstick
+  joystick:
+    axes:
+      yaw: {source: 0, invert: false, deadzone: 0}
+      pitch: {source: 1, invert: false, deadzone: 0}
+      roll: {source: 2, invert: false, deadzone: 0}
+      throttle: {source: 3, invert: false, deadzone: 0}
+    buttons:
+      fire_weapon: {button: 0}
+      target_roll_throttle_modifier: {button: 1}
+      target_next: {hat: 0, direction: right}
+  keyboard: {}
+
+video:
+  fullscreen: false
+  hdr: true
+  sdr_content_gamma: auto
+  paper_white_nits: auto
+
+render:
+  anisotropy: 1
+  msaa_samples: 2
+  starfield_style: tie98
+  motion_blur:
+    quality: 2
+    shutter: 0.5
+  temporal_upscaling:
+    mode: "off"
+    sharpness: 0
+
+pbr:
+  light_intensity: 1
+  global_specular_multiplier: 3
+  light_wrap: 0
+  geometric_specular_adaptation: true
+  ambient_default:
+    pos_x: [0.054, 0.067, 0.098]
+    neg_x: [0.054, 0.067, 0.098]
+    pos_y: [0.054, 0.067, 0.098]
+    neg_y: [0.054, 0.067, 0.098]
+    pos_z: [0.054, 0.067, 0.098]
+    neg_z: [0.054, 0.067, 0.098]
+    sun_color: [1, 1, 1]
+
+point_lights:
+  enabled: true
+  clustered: true
+  cluster_depth_slices: 24
+  cluster_debug: false
+  scale: 1.0
+  range_scale: 1.0
+  min_distance: 64.0
+  spec_weight: 1.0
+  diffuse_wrap: 1.0
+  contrib_cap: 1.0

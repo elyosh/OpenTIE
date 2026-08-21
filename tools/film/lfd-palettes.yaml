@@ -1,0 +1,27 @@
+# Per-LFD filmextract overrides — used by tools/film/extract-all-lfds.sh.
+#
+# Some sprites are loaded dynamically by C code at runtime against a
+# palette that comes from a different LFD entirely (e.g. BATTLE4/b4gal
+# is drawn while TOURDESK.LFD's `toddesk` PLTT is the screen palette).
+# filmextract has no static path to discover those; the bulk extractor
+# applies the right --extra / --palette pair per LFD here.
+#
+# Schema:
+#   overrides:
+#     - glob:    <basename pattern, shell-style — first match wins>
+#       palette: <PLTT name to overlay on `standard`, or null/omit>
+#       extras:  [<extra LFD basename>, ...]   # added as --extra args
+#
+# Reference points where the runtime palette is established:
+#   - src/tie/shellext.c:75         "standard" from EMPIRE.LFD installed
+#                                   as the front-end default.
+#   - src/tie/tourdesk.c:495        TOURDESK.LFD's `tourdesk` FILM
+#                                   PALETTE_SETs `toddesk` at cel 0.
+#                                   shipext_Get_Battle_Galaxy_Image
+#                                   then loads BATTLE*.LFD's bN gal
+#                                   sprite under that palette.
+
+overrides:
+  - glob:    "BATTLE*.LFD"
+    palette: toddesk
+    extras:  [TOURDESK.LFD]
