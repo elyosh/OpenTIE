@@ -44,9 +44,9 @@ OpenTIE reimplements the adaptive iMUSE soundtrack from the 1995 Collector's
 CD-ROM. The music responds to mission events and moves seamlessly between
 themes during flight.
 
-OpenTIE can emulate Roland SC-55 Sound Canvas hardware, allowing iMUSE to use
-the Sound Canvas version of the soundtrack while preserving its dynamic
-transitions. This requires compatible SC-55 ROMs supplied by the user.
+OpenTIE can emulate Roland SC-55 Sound Canvas, the hardware for which the game’s
+music was originally composed. This requires compatible SC-55 ROMs supplied by
+the user.
 
 Built-in Sound Blaster-compatible OPL3 emulation is available for the classic
 FM-synth sound, while FluidSynth can play the soundtrack with a user-selected
@@ -115,6 +115,12 @@ Useful shortcuts:
 
 OpenTIE remains under active development. Bugs and differences from the
 original releases are still possible.
+
+## OpenXWA
+
+Fans of Totally Games’ space simulators may also be interested in
+[OpenXWA](https://github.com/elyosh/OpenXWA), an open-source reimplementation
+of *Star Wars: X-Wing Alliance* for Windows, macOS, and Linux.
 
 ## Community
 
