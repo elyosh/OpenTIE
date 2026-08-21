@@ -1,0 +1,6 @@
+[submodule "aeron"]
+	path = aeron
+	url = https://github.com/elyosh/aeron
+[submodule "src/third_party/nuked-sc55"]
+	path = src/third_party/nuked-sc55
+	url = https://github.com/jcmoyer/Nuked-SC55.git
