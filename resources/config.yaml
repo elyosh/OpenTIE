@@ -117,3 +117,9 @@ point_lights:
   spec_weight: 1.0
   diffuse_wrap: 1.0
   contrib_cap: 1.0
+  training_headlight:
+    enabled: true
+    color: [0.823, 0.913, 1.0]
+    intensity: 13333.0
+    range_m: 1200.0
+    nose_offset_m: 6.25

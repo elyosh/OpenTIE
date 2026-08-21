@@ -50,6 +50,16 @@ extern "C" void TiePointLightsEditor_Draw(bool* p_open) {
 	changed |= ImGui::SliderFloat("Contribution cap", &params.contrib_cap, 0.0f, 4.0f, "%.2f");
 	ImGui::TextDisabled("Hue-preserving per-light radiance cap; 0 disables the cap.");
 
+	ImGui::SeparatorText("Training headlight");
+	changed |= ImGui::Checkbox("Training headlight enabled", &params.training_headlight_enabled);
+	changed |= ImGui::ColorEdit3("Headlight color", params.training_headlight_color);
+	changed |= ImGui::SliderFloat("Headlight intensity", &params.training_headlight_intensity, 1.0f, 100000.0f,
+								  "%.0f", ImGuiSliderFlags_Logarithmic);
+	changed |= ImGui::SliderFloat("Headlight range (m)", &params.training_headlight_range_m, 12.5f, 1600.0f,
+								  "%.1f", ImGuiSliderFlags_Logarithmic);
+	changed |= ImGui::SliderFloat("Headlight nose offset (m)", &params.training_headlight_nose_offset_m, 0.0f,
+								  50.0f, "%.2f");
+
 	ImGui::Separator();
 	if (ImGui::Button("Reset to defaults")) {
 		TieFlightPointLights_GetDefaultParams(&params);

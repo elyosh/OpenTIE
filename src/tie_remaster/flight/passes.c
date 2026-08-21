@@ -779,7 +779,7 @@ bool TieFlightRenderer_PrepareFrame(TieFlightRenderer* g, AeronCommandBuffer* cm
 	AeronScene_RenderDims(g->scene, &render_w, &render_h);
 	TieFlightPointLightFrame point_frame = { 0 };
 	if (g->scene_model_backend)
-		TieFlightPointLights_Derive(&point_frame, curr, curr->camera.world_pos);
+		TieFlightPointLights_DerivePrimaryView(&point_frame, curr, curr->camera.world_pos);
 
 	/* The classic and XvT styles intentionally retain their original
 	 * unshadowed presentation. Full HD uses the snapshot's normalized

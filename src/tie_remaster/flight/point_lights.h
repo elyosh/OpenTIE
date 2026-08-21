@@ -25,6 +25,12 @@ typedef struct TieFlightPointLightParams {
 	float spec_weight;
 	float diffuse_wrap;
 	float contrib_cap;
+	/* Remaster-only navigation light for the enclosed training course. */
+	bool training_headlight_enabled;
+	float training_headlight_color[3];
+	float training_headlight_intensity;
+	float training_headlight_range_m;
+	float training_headlight_nose_offset_m;
 } TieFlightPointLightParams;
 
 typedef struct TieFlightPointLightFrame {
@@ -49,6 +55,11 @@ void TieFlightPointLights_GetDefaultParams(TieFlightPointLightParams* out);
 
 void TieFlightPointLights_Derive(TieFlightPointLightFrame* frame, const struct TieSnapshot* snapshot,
 								 const int32_t origin_world[3]);
+/* Primary-view derivation also inserts main-scene-only light sources before
+ * transient scene effects so they retain priority under candidate overflow. */
+void TieFlightPointLights_DerivePrimaryView(TieFlightPointLightFrame* frame,
+											const struct TieSnapshot* snapshot,
+											const int32_t origin_world[3]);
 uint32_t TieFlightPointLights_Submit(AeronScene3D* scene, TieFlightPointLightFrame* frame,
 									 bool publish_stats);
 bool TieFlightPointLights_ConfigureScene(AeronScene3D* scene);

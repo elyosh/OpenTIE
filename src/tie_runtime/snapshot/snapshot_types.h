@@ -961,6 +961,9 @@ typedef struct TieHudState {
 		 * emits exclusively when set; outside this window the
 		 * classic cockpit-bitmap paint leaves the region bare. */
 		uint8_t bonus_active;
+		/* FlightObject slot for the player craft. Remaster-only consumers
+		 * use the slot to resolve the coherent pose in flights[]. */
+		uint16_t player_object_slot;
 		uint16_t gates_remaining; /* mission.train_gates_remaining */
 		uint16_t gates_passed;    /* mission.train_gates_passed */
 		uint16_t targets_hit;     /* mission.train_targets */

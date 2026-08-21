@@ -1,6 +1,8 @@
 #include "tie_remaster/flight/point_lights.h"
 
+#include "aeron/asset/opt_model.h"
 #include "aeron/scene/world.h"
+#include "tie_remaster/flight/render_math.h"
 #include "tie_remaster/scene2d/srgb_math.h"
 #include "tie_runtime/snapshot/snapshot.h"
 
@@ -149,14 +151,51 @@ void TieFlightPointLights_GetDefaultParams(TieFlightPointLightParams* out) {
 		*out = g_point_lights.defaults;
 }
 
-void TieFlightPointLights_Derive(TieFlightPointLightFrame* frame, const TieSnapshot* snapshot,
-								 const int32_t origin_world[3]) {
-	if (!frame)
-		return;
-	memset(frame, 0, sizeof *frame);
-	if (!g_point_lights.live.enabled || !snapshot || !origin_world)
+static void TieFlightPointLights_AppendTrainingHeadlight(TieFlightPointLightFrame* frame,
+														 const TieSnapshot* snapshot,
+														 const int32_t origin_world[3]) {
+	if (!g_point_lights.live.training_headlight_enabled || !snapshot->hud.training.active)
 		return;
 
+	const uint16_t player_slot = snapshot->hud.training.player_object_slot;
+	const TieFlightObjectState* player = NULL;
+	for (uint16_t i = 0; i < snapshot->flight_count; ++i) {
+		if (snapshot->flights[i].slot == player_slot) {
+			player = &snapshot->flights[i];
+			break;
+		}
+	}
+	if (!player)
+		return;
+
+	float rotation[9];
+	TieRenderMath_QuaternionToMat3(player->ori, rotation);
+	const float forward[3] = { rotation[1], rotation[4], rotation[7] };
+	const TieFlightPointLightParams* params = &g_point_lights.live;
+	AeronSceneLight* light = &frame->candidates[frame->count++];
+	memset(light, 0, sizeof *light);
+	AeronWorld_LocalI32(origin_world, player->world_pos, light->pos);
+	for (int axis = 0; axis < 3; ++axis)
+		light->pos[axis] +=
+			forward[axis] * params->training_headlight_nose_offset_m * AERON_OPT_UNITS_PER_METER;
+	light->radius = params->training_headlight_range_m * AERON_OPT_UNITS_PER_METER;
+	for (int channel = 0; channel < 3; ++channel) {
+		light->color[channel] = TieScene2dSrgb_ToLinear(params->training_headlight_color[channel]) *
+								params->training_headlight_intensity;
+	}
+}
+
+static bool TieFlightPointLights_PrepareFrame(TieFlightPointLightFrame* frame, const TieSnapshot* snapshot,
+											  const int32_t origin_world[3]) {
+	if (!frame)
+		return false;
+	memset(frame, 0, sizeof *frame);
+	return g_point_lights.live.enabled && snapshot && origin_world;
+}
+
+static void TieFlightPointLights_AppendDynamicSources(TieFlightPointLightFrame* frame,
+													  const TieSnapshot* snapshot,
+													  const int32_t origin_world[3]) {
 	for (uint16_t i = 0; i < snapshot->flight_count; ++i) {
 		const TieFlightObjectState* flight = &snapshot->flights[i];
 		if (flight->genus == TIE_GENUS_EXPLOSION) {
@@ -174,6 +213,24 @@ void TieFlightPointLights_Derive(TieFlightPointLightFrame* frame, const TieSnaps
 		if (source)
 			TieFlightPointLights_AppendSource(frame, origin_world, flight, source->srgb, source->intensity);
 	}
+}
+
+void TieFlightPointLights_Derive(TieFlightPointLightFrame* frame, const TieSnapshot* snapshot,
+								 const int32_t origin_world[3]) {
+	if (!TieFlightPointLights_PrepareFrame(frame, snapshot, origin_world))
+		return;
+	TieFlightPointLights_AppendDynamicSources(frame, snapshot, origin_world);
+}
+
+void TieFlightPointLights_DerivePrimaryView(TieFlightPointLightFrame* frame, const TieSnapshot* snapshot,
+											const int32_t origin_world[3]) {
+	if (!TieFlightPointLights_PrepareFrame(frame, snapshot, origin_world))
+		return;
+
+	/* The remaster-only training aid is inserted first so scene-effect
+	 * overflow cannot discard the light needed to navigate the course. */
+	TieFlightPointLights_AppendTrainingHeadlight(frame, snapshot, origin_world);
+	TieFlightPointLights_AppendDynamicSources(frame, snapshot, origin_world);
 }
 
 uint32_t TieFlightPointLights_Submit(AeronScene3D* scene, TieFlightPointLightFrame* frame,

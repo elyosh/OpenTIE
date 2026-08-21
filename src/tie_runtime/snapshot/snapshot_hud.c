@@ -597,6 +597,7 @@ static void TieHudSnapshot_CaptureCockpit(void) {
 		hud->training.timer_min = mtimer_min;
 		hud->training.timer_sec = mtimer_sec;
 		hud->training.bonus_active = bonus_countdown_active;
+		hud->training.player_object_slot = pstate.object_idx < NUM_OBJECTS ? pstate.object_idx : UINT16_MAX;
 		hud->training.gates_remaining = (uint16_t)mission.train_gates_remaining;
 		hud->training.gates_passed = (uint16_t)mission.train_gates_passed;
 		hud->training.targets_hit = (uint16_t)mission.train_targets;
@@ -605,6 +606,7 @@ static void TieHudSnapshot_CaptureCockpit(void) {
 	} else {
 		hud->training.active = 0;
 		hud->training.bonus_active = 0;
+		hud->training.player_object_slot = UINT16_MAX;
 	}
 
 	hud->msg_bar.line_top = (uint16_t)msgLineTop;

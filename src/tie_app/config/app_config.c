@@ -214,7 +214,9 @@ static bool TieAppConfig_ValidateSchemaKeys(const AeronConfigFile* document, boo
 				  "sun_color");
 	VALIDATE_KEYS(document, "point_lights", warn, "enabled", "clustered", "cluster_depth_slices",
 				  "cluster_debug", "scale", "range_scale", "min_distance", "spec_weight", "diffuse_wrap",
-				  "contrib_cap");
+				  "contrib_cap", "training_headlight");
+	VALIDATE_KEYS(document, "point_lights.training_headlight", warn, "enabled", "color", "intensity",
+				  "range_m", "nose_offset_m");
 	return true;
 }
 
@@ -633,7 +635,17 @@ static bool TieAppConfig_ParsePointLights(const AeronConfigFile* document, TieFl
 		!TieAppConfig_ReadFloat(document, "point_lights.diffuse_wrap", 0, 1, &out->diffuse_wrap, error,
 								capacity) ||
 		!TieAppConfig_ReadFloat(document, "point_lights.contrib_cap", 0, FLT_MAX, &out->contrib_cap, error,
-								capacity))
+								capacity) ||
+		!TieAppConfig_ReadBool(document, "point_lights.training_headlight.enabled",
+							   &out->training_headlight_enabled, error, capacity) ||
+		!TieAppConfig_ReadVec3(document, "point_lights.training_headlight.color",
+							   out->training_headlight_color, error, capacity) ||
+		!TieAppConfig_ReadFloat(document, "point_lights.training_headlight.intensity", 0, FLT_MAX,
+								&out->training_headlight_intensity, error, capacity) ||
+		!TieAppConfig_ReadFloat(document, "point_lights.training_headlight.range_m", 0, FLT_MAX,
+								&out->training_headlight_range_m, error, capacity) ||
+		!TieAppConfig_ReadFloat(document, "point_lights.training_headlight.nose_offset_m", 0, FLT_MAX,
+								&out->training_headlight_nose_offset_m, error, capacity))
 		return false;
 	if (!(out->range_scale > 0.0f))
 		return TieAppConfig_ConfigError(error, capacity,
@@ -641,6 +653,9 @@ static bool TieAppConfig_ParsePointLights(const AeronConfigFile* document, TieFl
 	if (!(out->min_distance > 0.0f))
 		return TieAppConfig_ConfigError(error, capacity,
 										"setting 'point_lights.min_distance' must be greater than 0");
+	if (!(out->training_headlight_range_m > 0.0f))
+		return TieAppConfig_ConfigError(
+			error, capacity, "setting 'point_lights.training_headlight.range_m' must be greater than 0");
 	return true;
 }
 
