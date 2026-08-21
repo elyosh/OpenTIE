@@ -773,8 +773,8 @@ static void train_Draw_Train_Screen_Flyby(Rect* src) {
 				px = src->left + 2 * e->y_offset;
 				py = src->top + 2 * e->x_offset;
 			} else {
-				px = src->top + e->y_offset;
-				py = src->left + e->x_offset;
+				px = src->left + e->y_offset;
+				py = src->top + e->x_offset;
 			}
 			textext_Copy_Text(text, e->text_id);
 			lfont_Print_Clipped_Text(text, px, py, font_id, fade);
