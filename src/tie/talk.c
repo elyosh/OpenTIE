@@ -14,6 +14,7 @@
 #include "tie/textext.h"
 #include "tie/tie.h"
 #include "tie_runtime/audio/config.h"
+#include "tie_runtime/audio/voc_compat.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
@@ -1386,6 +1387,16 @@ void talk_Start_Speech_Stream(void) {
 	memset(talk_speech_sound->data, 0, TALK_SPEECH_BUF_SIZE);
 	size_t bytes_read = TieStorage_Read(talk_speech_sound->data, 1, TALK_SPEECH_BUF_SIZE, fp);
 	lfile_Close_File(fp);
+	uint32_t source_rate_hz = 0;
+	/* MODERN ADAPTATION: TIE98 ships VOC 1.20/type-9 PCM, while the
+	 * recovered TIE95 iMUSE dispatcher consumes VOC 1.10/type-1 blocks. */
+	const TieVocCompatResult voc_compat =
+		TieVocCompat_PrepareImuse(talk_speech_sound->data, &bytes_read, &source_rate_hz);
+	if (voc_compat == TIE_VOC_COMPAT_INVALID) {
+		TieDiagnostics_Log(TIE_LOG_WARN, "[talk-voice] unsupported VOC format in %s\n", path);
+		talk_speech_sound->size = 0;
+		return;
+	}
 
 	talk_speech_pos = (int32_t)bytes_read;
 	talk_speech_sound->size = (int32_t)bytes_read;
@@ -1395,6 +1406,9 @@ void talk_Start_Speech_Stream(void) {
 		return;
 
 	lsound_Start_Speech(talk_speech_sound);
+	if (voc_compat == TIE_VOC_COMPAT_CONVERTED)
+		(void)imuse_set_param(im, (intptr_t)talk_speech_sound, IMUSE_PARAM_SOUND_FREQUENCY,
+							  (int)source_rate_hz);
 	imuse_set_param(im, (intptr_t)talk_speech_sound, 0x500, 100);
 }
 
