@@ -4,7 +4,6 @@
 #include "tie_runtime/audio/player_engine.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/flight_assets/service.h"
-#include "tie_runtime/runtime/runtime.h"
 #include "tie_runtime/storage/storage.h"
 
 static const TieFrontendProfile profiles[] = {
@@ -104,8 +103,6 @@ bool TieProfile_RequestFlight(const TieFlightProfile* profile) {
 bool TieProfile_ApplyPendingFlight(void) {
 	if (!flight_profile_pending)
 		return true;
-	if (TieRuntime_FlightResourceReleaseRequested())
-		return false;
 	AeronVfs* flight_vfs = pending_flight_profile.version == TIE_GAME_VERSION_TIE98
 							   ? TieStorage_Tie98FlightVfs()
 							   : TieStorage_Tie95FlightVfs();
