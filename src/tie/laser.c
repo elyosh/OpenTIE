@@ -358,14 +358,19 @@ uint16_t laser_createprojectilefromstatic(uint16_t static_obj_idx, uint16_t shoo
 	uint16_t slot = create_findslot(7 /* GENUS_PROJECTILE_NPC */);
 	if (slot == 0xFFFF) {
 		/* Fallback: scan the upper half of the warhead slot range for a
-		 * non-warhead same-side projectile to evict. Retaliation
+		 * non-warhead same-side occupant to evict. Retaliation
 		 * pre-empts ordinary lasers of the same faction.
 		 * Demo: [44, 76); retail: [48, 80). = NUM_CRAFTS+16..WARHEAD_SLOT_END. */
 		uint8_t want_side = fg_array[fg_idx].side;
 		for (slot = NUM_CRAFTS + 16; slot < WARHEAD_SLOT_END; ++slot) {
-			uint16_t occ_ship = objects[slot].ship_idx;
-			uint8_t is_wh = projectile_is_warhead_type[laser_species_idx(occ_ship)];
-			if (!is_wh && objects[slot].side == want_side)
+			const uint16_t occupant_species = objects[slot].ship_idx;
+			const unsigned int occupant_projectile_type_idx =
+				(unsigned int)occupant_species - WEAPON_SPECIES_BASE;
+			/* Projectile slots can still contain in-place impact animations. */
+			const uint8_t occupant_is_warhead =
+				occupant_projectile_type_idx < WARHEAD_TYPE_COUNT &&
+				projectile_is_warhead_type[occupant_projectile_type_idx];
+			if (!occupant_is_warhead && objects[slot].side == want_side)
 				break;
 		}
 	}
