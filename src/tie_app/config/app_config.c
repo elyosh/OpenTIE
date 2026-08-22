@@ -171,6 +171,7 @@ static bool TieAppConfig_ValidateSchemaKeys(const AeronConfigFile* document, boo
 	VALIDATE_KEYS(document, "paths", warn, "installations");
 	VALIDATE_KEYS(document, "paths.installations", warn, "tie95", "tie98");
 	VALIDATE_KEYS(document, "audio", warn, "midi_backend", "music", "sb16_filter",
+				  "prefer_tie95_frontend_voices",
 				  "player_engine_sound_volume_percent", "fluidsynth", "sc55");
 	VALIDATE_KEYS(document, "audio.fluidsynth", warn, "soundfont_file");
 	VALIDATE_KEYS(document, "audio.sc55", warn, "rom_directory");
@@ -713,6 +714,9 @@ static bool TieAppConfig_ParseComplete(const AeronConfigFile* document,
 	else
 		return TieAppConfig_ConfigError(error, capacity, "invalid audio.music '%s'", music_source);
 	if (!TieAppConfig_ReadBool(document, "audio.sb16_filter", &out->sb16_filter_enabled, error, capacity))
+		return false;
+	if (!TieAppConfig_ReadBool(document, "audio.prefer_tie95_frontend_voices",
+							   &out->prefer_tie95_frontend_voices, error, capacity))
 		return false;
 	if (!TieAppConfig_ReadInt(document, "audio.player_engine_sound_volume_percent", 0, 100,
 							  &out->player_engine_sound_volume_percent, error, capacity))

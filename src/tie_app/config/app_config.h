@@ -71,6 +71,7 @@ typedef struct TieAppConfig {
 	TieVersionSelection flight_version;
 	TieMidiBackendKind midi_backend;
 	bool sb16_filter_enabled;
+	bool prefer_tie95_frontend_voices;
 	TieMusicSource music_source;
 	int player_engine_sound_volume_percent;
 	TieAppUiConfig ui;

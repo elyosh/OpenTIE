@@ -23,6 +23,7 @@ typedef struct TieMidiBackendConfig {
 typedef struct TieAudioConfig {
 	TieMidiBackendConfig midi_backend;
 	bool sb16_filter_enabled;
+	bool prefer_tie95_frontend_voices;
 	TieMusicSource music_source;
 } TieAudioConfig;
 

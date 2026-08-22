@@ -9,6 +9,7 @@ audio:
   midi_backend: fm4_opl3
   music: imuse
   sb16_filter: true
+  prefer_tie95_frontend_voices: true
   player_engine_sound_volume_percent: 30
   fluidsynth:
     soundfont_file: ""

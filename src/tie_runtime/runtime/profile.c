@@ -103,17 +103,15 @@ bool TieProfile_RequestFlight(const TieFlightProfile* profile) {
 bool TieProfile_ApplyPendingFlight(void) {
 	if (!flight_profile_pending)
 		return true;
-	AeronVfs* flight_vfs = pending_flight_profile.version == TIE_GAME_VERSION_TIE98
-							   ? TieStorage_Tie98FlightVfs()
-							   : TieStorage_Tie95FlightVfs();
-	if (!flight_vfs)
+	if (!TieStorage_HasInstallation(pending_flight_profile.version))
 		return false;
 	char error[512];
 	if (!TieFlightAssets_SelectProfile(&pending_flight_profile, error, sizeof error)) {
 		TieDiagnostics_Log(TIE_LOG_ERROR, "%s\n", error);
 		return false;
 	}
-	TieStorage_SelectFlightVfs(flight_vfs);
+	if (!TieStorage_SelectFlightVersion(pending_flight_profile.version))
+		return false;
 	if (!pending_flight_profile.player_engine_sound_enabled && g_playerEngineSoundUpdateEnabled)
 		TiePlayerEngineSound_StopActive();
 	selected_flight_profile = pending_flight_profile;

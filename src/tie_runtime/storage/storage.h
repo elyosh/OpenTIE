@@ -2,7 +2,9 @@
 #define TIE_STORAGE_H
 
 #include "aeron/vfs.h"
+#include "tie_runtime/runtime/profile_types.h"
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -37,19 +39,19 @@ typedef struct TieDirEntry {
 } TieDirEntry;
 
 typedef struct TieStorageConfig {
-	AeronVfs* application;
-	AeronVfs* frontend;
-	AeronVfs* flight;
-	AeronVfs* tie95_flight;
-	AeronVfs* tie98_flight;
-	AeronVfs* tie98_media;
+	/* Borrowed handles; their owner must outlive the runtime. */
+	AeronVfs* application_vfs;
+	AeronVfs* tie95_vfs;
+	AeronVfs* tie98_vfs;
+	TieGameVersion frontend_version;
+	TieGameVersion flight_version;
 } TieStorageConfig;
 
 void TieStorage_Init(const TieStorageConfig* config);
 void TieStorage_Shutdown(void);
-void TieStorage_SelectFlightVfs(AeronVfs* vfs);
-AeronVfs* TieStorage_Tie95FlightVfs(void);
-AeronVfs* TieStorage_Tie98FlightVfs(void);
+bool TieStorage_HasInstallation(TieGameVersion version);
+bool TieStorage_SelectFlightVersion(TieGameVersion version);
+TieFile* TieStorage_OpenTie95Voice(const char* path);
 
 TieFile* TieStorage_Open(TieFileRoot root, const char* path, const char* mode);
 size_t TieStorage_Read(void* buffer, size_t size, size_t count, TieFile* file);

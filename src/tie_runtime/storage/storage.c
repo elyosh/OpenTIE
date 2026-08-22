@@ -21,34 +21,59 @@ void TieStorage_Init(const TieStorageConfig* config) {
 
 void TieStorage_Shutdown(void) { memset(&s_storage, 0, sizeof s_storage); }
 
-void TieStorage_SelectFlightVfs(AeronVfs* vfs) { s_storage.flight = vfs; }
+static AeronVfs* TieStorage_InstallationVfs(TieGameVersion version) {
+	switch (version) {
+		case TIE_GAME_VERSION_TIE95:
+			return s_storage.tie95_vfs;
+		case TIE_GAME_VERSION_TIE98:
+			return s_storage.tie98_vfs;
+		default:
+			return NULL;
+	}
+}
 
-AeronVfs* TieStorage_Tie95FlightVfs(void) { return s_storage.tie95_flight; }
+bool TieStorage_HasInstallation(TieGameVersion version) {
+	return TieStorage_InstallationVfs(version) != NULL;
+}
 
-AeronVfs* TieStorage_Tie98FlightVfs(void) { return s_storage.tie98_flight; }
+bool TieStorage_SelectFlightVersion(TieGameVersion version) {
+	if (!TieStorage_HasInstallation(version))
+		return false;
+	s_storage.flight_version = version;
+	return true;
+}
+
+TieFile* TieStorage_OpenTie95Voice(const char* path) {
+	AeronFile* file = NULL;
+	if (!s_storage.tie95_vfs || !path)
+		return NULL;
+	return AeronVfs_Open(s_storage.tie95_vfs, AERON_VFS_ROOT_ASSET, path, AERON_VFS_READ, &file)
+			   ? (TieFile*)file
+			   : NULL;
+}
 
 static bool TieStorage_Location(TieFileRoot root, AeronVfs** out_vfs, AeronVfsRoot* out_root) {
 	if (!out_vfs || !out_root)
 		return false;
 	switch (root) {
 		case TIE_FILE_ROOT_FRONTEND_ASSET:
-			*out_vfs = s_storage.frontend;
+			*out_vfs = TieStorage_InstallationVfs(s_storage.frontend_version);
 			*out_root = AERON_VFS_ROOT_ASSET;
 			break;
 		case TIE_FILE_ROOT_FLIGHT_ASSET:
-			*out_vfs = s_storage.flight;
+			*out_vfs = TieStorage_InstallationVfs(s_storage.flight_version);
 			*out_root = AERON_VFS_ROOT_ASSET;
 			break;
 		case TIE_FILE_ROOT_TIE98_MEDIA:
-			*out_vfs = s_storage.tie98_media;
+			*out_vfs = s_storage.tie98_vfs;
 			*out_root = AERON_VFS_ROOT_ASSET;
 			break;
 		case TIE_FILE_ROOT_USER:
-			*out_vfs = s_storage.application;
+			*out_vfs = s_storage.application_vfs;
 			*out_root = AERON_VFS_ROOT_USER;
 			break;
 		case TIE_FILE_ROOT_TEMP:
-			*out_vfs = s_storage.application;
+			*out_vfs = s_storage.application_vfs;
 			*out_root = AERON_VFS_ROOT_TEMP;
 			break;
 		default:

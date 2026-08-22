@@ -388,6 +388,8 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/audio/music_policy.h
     src/tie_runtime/audio/flight_audio.c
     src/tie_runtime/audio/flight_audio.h
+    src/tie_runtime/audio/frontend_voice.c
+    src/tie_runtime/audio/frontend_voice.h
     src/tie_runtime/audio/player_engine.c
     src/tie_runtime/audio/player_engine.h
     src/tie_runtime/audio/voc_compat.c

@@ -297,12 +297,11 @@ int TieApplication_Run(const TieLaunchOptions* launch) {
 	}
 
 	TieStorageConfig storage_routes = {
-		.application = vfs,
-		.frontend = frontend_installation->vfs,
-		.flight = flight_installation->vfs,
-		.tie95_flight = installations.has_tie95 ? installations.tie95.vfs : NULL,
-		.tie98_flight = tie98_installation ? tie98_installation->vfs : NULL,
-		.tie98_media = tie98_installation ? tie98_installation->vfs : NULL,
+		.application_vfs = vfs,
+		.tie95_vfs = installations.has_tie95 ? installations.tie95.vfs : NULL,
+		.tie98_vfs = tie98_installation ? tie98_installation->vfs : NULL,
+		.frontend_version = launch_config.frontend_version,
+		.flight_version = launch_config.flight_profile.version,
 	};
 	if (app_config.requested.music_source == TIE_MUSIC_TIE98) {
 		if (tie98_installation &&
@@ -339,6 +338,7 @@ int TieApplication_Run(const TieLaunchOptions* launch) {
 				.sc55_romset = sc55_romset,
 			},
 			.sb16_filter_enabled = app_config.requested.sb16_filter_enabled,
+			.prefer_tie95_frontend_voices = app_config.requested.prefer_tie95_frontend_voices,
 			.music_source = app_config.requested.music_source,
 		},
 	};

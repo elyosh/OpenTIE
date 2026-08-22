@@ -14,6 +14,7 @@
 #include "tie/textext.h"
 #include "tie/tie.h"
 #include "tie_runtime/audio/config.h"
+#include "tie_runtime/audio/frontend_voice.h"
 #include "tie_runtime/audio/voc_compat.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
@@ -1377,16 +1378,18 @@ void talk_Start_Speech_Stream(void) {
 	talk_speech_streaming = 0;
 	talk_speech_pos = 0;
 
-	LandruFile* fp = lfile_Open_File(LANDRU_FILE_ROOT_ASSET, path, "rb");
+	TieFrontendVoiceSource voice_source;
+	TieFile* fp = TieFrontendVoice_Open(path, &voice_source);
 	if (!fp) {
 		TieDiagnostics_Log(TIE_LOG_INFO, "[talk-voice] missing %s\n", path);
 		return;
 	}
-	TieDiagnostics_Log(TIE_LOG_INFO, "[talk-voice] play %s\n", path);
+	TieDiagnostics_Log(TIE_LOG_INFO, "[talk-voice] play %s source=%s\n", path,
+					   TieFrontendVoice_SourceName(voice_source));
 
 	memset(talk_speech_sound->data, 0, TALK_SPEECH_BUF_SIZE);
 	size_t bytes_read = TieStorage_Read(talk_speech_sound->data, 1, TALK_SPEECH_BUF_SIZE, fp);
-	lfile_Close_File(fp);
+	TieStorage_Close(fp);
 	uint32_t source_rate_hz = 0;
 	/* MODERN ADAPTATION: TIE98 ships VOC 1.20/type-9 PCM, while the
 	 * recovered TIE95 iMUSE dispatcher consumes VOC 1.10/type-1 blocks. */
