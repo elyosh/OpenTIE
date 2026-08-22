@@ -52,7 +52,6 @@ typedef enum {
 	VIEW_PHASE_DRAW = 0,
 	VIEW_PHASE_WAIT,
 	VIEW_PHASE_AFTER_FRAME_FADE,
-	VIEW_PHASE_AFTER_FRAME_PRESENT,
 	VIEW_PHASE_AFTER_SUB, /* sub-dialog popped; invoke handler */
 } ViewAddPhase;
 
@@ -94,13 +93,9 @@ static LandruTaskStepResult viewadd_task_step(void* self) {
 				view_gbl->update(view_gbl->time);
 			view_gbl->time++;
 		}
-		const bool platform_video = landru_port_Present_Platform_Video();
-		t->phase = VIEW_PHASE_AFTER_FRAME_PRESENT;
-		if (platform_video)
-			return LANDRU_TASK_STEP_FRAME_COMPLETE;
-	}
-
-	if (t->phase == VIEW_PHASE_AFTER_FRAME_PRESENT) {
+		/* Copies the frame to the host surface; the application presents it
+		 * when this step returns FRAME_COMPLETE. */
+		(void)landru_port_Present_Platform_Video();
 		if (ldialog_Try_Push_Pending_Sub_Dialog(&t->sub_handler, &t->sub_ctx)) {
 			t->phase = VIEW_PHASE_AFTER_SUB;
 			return LANDRU_TASK_STEP_FRAME_COMPLETE;
@@ -190,8 +185,7 @@ static LandruTaskStepResult viewadd_task_step(void* self) {
 
 static uint64_t viewadd_task_next_wake_delay_us(const void* self) {
 	const ViewAddTask* t = (const ViewAddTask*)self;
-	if (t->phase == VIEW_PHASE_DRAW || t->phase == VIEW_PHASE_WAIT ||
-		t->phase == VIEW_PHASE_AFTER_FRAME_PRESENT)
+	if (t->phase == VIEW_PHASE_DRAW || t->phase == VIEW_PHASE_WAIT)
 		return ltimer_Next_Frame_Delay_Us();
 	return 0;
 }
