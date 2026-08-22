@@ -187,6 +187,24 @@ static int system_cursor_visible = -1;
 
 static float TieInput_Clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
+static bool TieInput_WarpHostCursorToFramebufferCell(int16_t x, int16_t y) {
+	if (capture_active || fb_w <= 0 || fb_h <= 0 || layout_classic_w <= 0 || layout_classic_h <= 0)
+		return false;
+
+	/* Target the cell center so the next inverse mapping resolves to the
+	 * same integer framebuffer coordinate despite presentation scaling. */
+	const int logical_x = layout_classic_x + (int)(((int64_t)x * 2 + 1) * layout_classic_w / (2 * fb_w));
+	const int logical_y = layout_classic_y + (int)(((int64_t)y * 2 + 1) * layout_classic_h / (2 * fb_h));
+	if (!Aeron_WarpMouseLogical(logical_x, logical_y))
+		return false;
+
+	/* Match the track to the position that the absolute mapper will observe
+	 * next frame, including the sub-cell offset introduced by scaling. */
+	cursor_fb_x = (logical_x - (float)layout_classic_x) * (float)fb_w / (float)layout_classic_w;
+	cursor_fb_y = (logical_y - (float)layout_classic_y) * (float)fb_h / (float)layout_classic_h;
+	return true;
+}
+
 void TieInput_GetMousePosition(int16_t* buttons, int16_t* x, int16_t* y) {
 	const AeronInputSnapshot* in = Aeron_InputSnapshot();
 	int16_t btn = 0;
@@ -256,16 +274,7 @@ void TieInput_SetMousePosition(int16_t x, int16_t y) {
 	mouse_dx_acc = 0;
 	mouse_dy_acc = 0;
 
-	if (capture_active || fb_w <= 0 || fb_h <= 0 || layout_classic_w <= 0 || layout_classic_h <= 0)
-		return;
-
-	/* Warp to the center of the requested classic cell so the inverse mapping
-	 * on the next host frame resolves to the same Landru integer coordinate. */
-	const int logical_x =
-		layout_classic_x + (int)(((int64_t)clamped_x * 2 + 1) * layout_classic_w / (2 * fb_w));
-	const int logical_y =
-		layout_classic_y + (int)(((int64_t)clamped_y * 2 + 1) * layout_classic_h / (2 * fb_h));
-	(void)Aeron_WarpMouseLogical(logical_x, logical_y);
+	(void)TieInput_WarpHostCursorToFramebufferCell(clamped_x, clamped_y);
 }
 
 void TieInput_ShowCursor(bool show) {
@@ -393,12 +402,29 @@ void TieInput_UpdateCursor(bool pillarbox_active, int16_t engine_x, int16_t engi
 		cursor_fb_x = TieInput_Clamp(cursor_fb_x, 0.0f, fb_w_max);
 		cursor_fb_y = TieInput_Clamp(cursor_fb_y, 0.0f, fb_h_max);
 	}
-	if (++frames_since_mouse_motion < 3)
+	if (frames_since_mouse_motion < 3)
+		++frames_since_mouse_motion;
+	if (frames_since_mouse_motion < 3)
 		return;
-	if (cursor_fb_x >= 0.0f && cursor_fb_x <= fb_w_max && (int16_t)cursor_fb_x != engine_x)
+	bool reanchored = false;
+	if (cursor_fb_x >= 0.0f && cursor_fb_x <= fb_w_max && (int16_t)cursor_fb_x != engine_x) {
 		cursor_fb_x = (float)engine_x;
-	if (cursor_fb_y >= 0.0f && cursor_fb_y <= fb_h_max && (int16_t)cursor_fb_y != engine_y)
+		reanchored = true;
+	}
+	if (cursor_fb_y >= 0.0f && cursor_fb_y <= fb_h_max && (int16_t)cursor_fb_y != engine_y) {
 		cursor_fb_y = (float)engine_y;
+		reanchored = true;
+	}
+
+	/* The absolute host pointer is the next frame's mouse target. Keep it in
+	 * sync when Landru moved the cursor through a controller or an internal
+	 * path, otherwise that stale target immediately undoes the engine move. */
+	if (reanchored && absolute_cursor_active && cursor_fb_x >= 0.0f && cursor_fb_x <= fb_w_max &&
+		cursor_fb_y >= 0.0f && cursor_fb_y <= fb_h_max) {
+		mouse_dx_acc = 0;
+		mouse_dy_acc = 0;
+		(void)TieInput_WarpHostCursorToFramebufferCell(engine_x, engine_y);
+	}
 }
 
 void TieInput_CursorFramebufferPosition(float* x, float* y) {
