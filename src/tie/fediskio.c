@@ -636,10 +636,8 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 	}
 
 write_and_exit:
-	/* Encode the mutated record into both disk slots (primary + backup
-	 * mirror, matching shipext_Save_Pilot_Data) before flushing. */
+	/* Preserve the pre-mission backup slot for automatic pilot restore. */
 	PilotRecord_encode((uint8_t*)loadbuffer, p);
-	PilotRecord_encode((uint8_t*)loadbuffer + PILOTRECORD_DISK_SIZE, p);
 
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, pilotname, "wb", 1))
 		return 0;
