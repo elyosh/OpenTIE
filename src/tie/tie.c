@@ -385,10 +385,6 @@ uint8_t acceleratedtimectr;
 // GLOBAL: TIE 0xEB736
 int16_t hyperspacedetail;
 
-/* --- Quicksave / quick-recall target-slot arrays; indexed by scan key. --- */
-uint16_t quickrecall_fold_base[256];
-uint16_t quicksave_fold_base[256];
-
 /* --- View-angle lookup table used by the 0..9 numpad view keys. Populated
  * at startup from a trig-derived formula; 512 entries in the binary. --- */
 // GLOBAL: TIE 0xCDB08

@@ -541,7 +541,7 @@ int16_t create_createmission(void) {
 	pstate.target_obj_idx = 0xFFFFu;
 	pstate.radar_target0 = pstate.radar_target1 = pstate.radar_target2 = -1;
 	for (int i = 0; i < 4; i++)
-		pstate.radar_subtargets[i] = -1;
+		pstate.target_presets[i] = 0xFFFFu;
 	pstate.radar_subtarget_state = 0;
 	pstate.radio_target = -1;
 

@@ -3468,7 +3468,7 @@ void user_inputforplane(void) {
 		case KEY_SHIFT_F6:
 		case KEY_SHIFT_F7:
 			if (pstate.target_obj_idx != 0xFFFF)
-				quicksave_fold_base[inputkey] = pstate.target_obj_idx;
+				pstate.target_presets[(uint16_t)inputkey - KEY_SHIFT_F5] = pstate.target_obj_idx;
 			ui_ack_beep();
 			break;
 		/* Shift+F10: xfer cannon -> shields (LABEL_354). */
@@ -3485,23 +3485,11 @@ void user_inputforplane(void) {
 		default:
 			/* F5..F7: quick-recall slot keys. Binary 0x5CBBC. */
 			if ((uint16_t)inputkey >= KEY_F5 && (uint16_t)inputkey <= KEY_F7) {
-				uint16_t tgt = quickrecall_fold_base[(uint16_t)inputkey];
+				uint16_t tgt = pstate.target_presets[(uint16_t)inputkey - KEY_F5];
 				if (tgt != 0xFFFFu) {
 					uint32_t idx = (tgt >= 0x3800u) ? (tgt - 14336) : tgt;
-					if (objects[idx].ship_idx) {
-						if (pstate.player_craft->status_flags & 4) {
-							fsfx_triggersfx(0x22u, 0xFFFF);
-							pstate.target_obj_idx = tgt;
-							if (!replayviewmode && camera.view_heading_offset)
-								camera.view_target_obj = tgt;
-							pstate.radar_subtarget_state = 0;
-							pstate.player_craft->missile_count_total = 0;
-						} else {
-							argtable[0] = 33;
-							argtable[1] = 25;
-							msg_messageprintf(MSG_SYSTEM_STATUS);
-						}
-					}
+					if (objects[idx].ship_idx)
+						user_setnewtarget(tgt);
 				}
 				break;
 			}

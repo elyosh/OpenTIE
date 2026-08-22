@@ -29,11 +29,6 @@
 #include "tie_runtime/runtime/profile.h"
 #include <landru/task.h>
 
-/* --- Cross-module externs not present in any .h --------------------------- */
-
-/* Quick-recall slots driven by F1..F4 / Shift-F1..F3 in the in-flight room
- * input handler — quickrecall/quicksave_fold_base declared in tie.h. */
-
 /* --- Tunables ------------------------------------------------------------- */
 
 /* Object-reference encoding boundaries used by the per-frame z-sort. The
@@ -1490,15 +1485,16 @@ static int maproom_poll_once(MaproomTask* t) {
 		}
 
 		default: {
-			/* Quick-recall (F1-F3 ext, scancodes 0xBF..0xC1). */
-			if (key >= 0xBFu && key <= 0xC1u) {
-				if (quickrecall_fold_base[key] != 0xFFFFu)
-					pstate.target_obj_idx = quickrecall_fold_base[key];
+			/* Quick-recall (F5-F7 ext, engine key codes 0xBF..0xC1). */
+			if (key >= KEY_F5 && key <= KEY_F7) {
+				uint16_t target = pstate.target_presets[key - KEY_F5];
+				if (target != 0xFFFFu)
+					pstate.target_obj_idx = target;
 				frame_dirty = 1;
-				/* Quick-save (Shift-F1..F3, scancodes 0xD8..0xDA). */
-			} else if (key >= 0xD8u && key <= 0xDAu) {
+				/* Quick-save (Shift-F5..F7, engine key codes 0xD8..0xDA). */
+			} else if (key >= KEY_SHIFT_F5 && key <= KEY_SHIFT_F7) {
 				if (pstate.target_obj_idx != 0xFFFFu)
-					quicksave_fold_base[key] = pstate.target_obj_idx;
+					pstate.target_presets[key - KEY_SHIFT_F5] = pstate.target_obj_idx;
 			}
 			break;
 		}

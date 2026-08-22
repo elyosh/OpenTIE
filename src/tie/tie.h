@@ -951,7 +951,7 @@ typedef struct PlayerInFlightState {
 	/* +0x011 */ uint8_t _pad_11;                /* 1 */
 	/* +0x012 */ uint16_t target_obj_idx;        /* 2 */
 	/* +0x014 */ int16_t radar_target0;          /* 2 */
-	/* +0x016 */ int16_t radar_subtargets[4];    /* 8 */
+	/* +0x016 */ uint16_t target_presets[4];     /* 8; three stored-target slots plus one reserved word */
 	/* +0x01E */ uint8_t radar_subtarget_state;  /* 1 */
 	/* +0x01F */ uint8_t player_weapon_group;    /* 1 */
 	/* +0x020 */ uint8_t player_weapon_mode;     /* 1 */
@@ -1649,10 +1649,6 @@ extern uint8_t deadflag_EB774;
 
 /* Mission-file flag: bit 0 forces eject-pod rescue (story gate). */
 extern uint8_t rescue_override_flag;
-
-/* Quicksave / quick-recall target-slot arrays; indexed by scan key. */
-extern uint16_t quickrecall_fold_base[256];
-extern uint16_t quicksave_fold_base[256];
 
 /* View-angle lookup table for the 0..9 numpad view keys. */
 extern int16_t squarerootable[512];
