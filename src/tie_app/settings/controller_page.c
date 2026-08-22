@@ -529,7 +529,8 @@ static void TieControllerSettings_ActionsPage(TieControllerSettings* settings, A
 											  const AeronControllerSnapshot* controller,
 											  float trailing_height_ref) {
 	static const char* const categories[TIE_INPUT_ACTION_CATEGORY_COUNT] = { "Weapons", "Targets", "Throttle",
-																			 "View",    "Info",    "System" };
+																			 "View",    "Info",    "System",
+																			 "Comms" };
 	if (AeronUi_SegmentedSelector(ui, "Action Category", &settings->category, categories,
 								  TIE_INPUT_ACTION_CATEGORY_COUNT)) {
 		settings->action_selected = SIZE_MAX;
