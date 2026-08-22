@@ -441,11 +441,11 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 	int16_t num_lines = shipext_Num_Combat_Mission_Text_Lines();
 
 	const uint16_t font_id = combat_svga ? 2 : 0;
-	const int16_t line_height = lfont_Get_FontID_Height(font_id);
+	const int16_t line_height = combat_svga ? (int16_t)lfont_Get_FontID_Height(font_id) : 10;
 	dst.top += (dst.bottom - dst.top - (line_height * num_lines + 18)) >> 1;
 
 	int16_t text_x = dst.left + (combat_svga ? 4 : 2);
-	int16_t text_y = dst.top + line_height;
+	int16_t text_y = dst.top + 10;
 	dst.bottom = dst.top + (combat_svga ? 9 + line_height : 18);
 
 	int16_t max_width = 0;

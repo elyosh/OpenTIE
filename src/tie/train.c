@@ -646,14 +646,18 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	if (svga) {
 		if (t >= 24) {
 			lpaint_Horiz_Clipped_Line(dst.left + 6, dst.top + 1, 390, 2);
+			lpaint_Horiz_Clipped_Line(dst.left + 6, dst.bottom - 1, 390, 2);
 		} else {
 			lpaint_Horiz_Clipped_Line(dst.left + 6 * (33 - t), dst.top + 1, 12 * t + 3, 2);
+			lpaint_Horiz_Clipped_Line(dst.left + 6 * (33 - t), dst.bottom - 1, 12 * t + 3, 2);
 		}
 	} else {
 		if (t >= 16) {
 			lpaint_Horiz_Clipped_Line(dst.left + 3, dst.top + 1, 195, 2);
+			lpaint_Horiz_Clipped_Line(dst.left + 3, dst.bottom - 1, 195, 2);
 		} else {
 			lpaint_Horiz_Clipped_Line(dst.left + 99 - 6 * t, dst.top + 1, 12 * t + 3, 2);
+			lpaint_Horiz_Clipped_Line(dst.left + 99 - 6 * t, dst.bottom - 1, 12 * t + 3, 2);
 		}
 	}
 
