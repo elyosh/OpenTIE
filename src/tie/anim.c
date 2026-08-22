@@ -707,23 +707,24 @@ void anim_updateanimation_tie98(void) {
 					}
 
 					const int32_t local_forward =
-						-((object->fwd_y * worldlocy >> 15) + (object->fwd_x * worldlocx >> 15) +
-						  (object->fwd_z * worldlocz >> 15));
-					const int32_t local_up = (object->up_x * worldlocy >> 15) +
-											 (object->side_z * worldlocx >> 15) +
-											 (object->up_y * worldlocz >> 15);
-					const int32_t local_side = (object->side_x * worldlocy >> 15) +
-											   (object->fwd_z * worldlocx >> 15) +
-											   (object->side_y * worldlocz >> 15);
+						-(((int64_t)object->fwd_y * worldlocy >> 15) +
+						  ((int64_t)object->fwd_x * worldlocx >> 15) +
+						  ((int64_t)object->fwd_z * worldlocz >> 15));
+					const int32_t local_up = ((int64_t)object->up_x * worldlocy >> 15) +
+										 ((int64_t)object->side_z * worldlocx >> 15) +
+										 ((int64_t)object->up_y * worldlocz >> 15);
+					const int32_t local_side = ((int64_t)object->side_x * worldlocy >> 15) +
+										   ((int64_t)object->fwd_z * worldlocx >> 15) +
+										   ((int64_t)object->side_y * worldlocz >> 15);
 					const int32_t x = local_side - (int32_t)rotation->pivot.x;
 					const int32_t y = local_forward - (int32_t)rotation->pivot.y;
 					const int32_t z = local_up - (int32_t)rotation->pivot.z;
-					const int32_t up = ((int32_t)rotation->up_axis.x * x >> 15) +
-									   ((int32_t)rotation->up_axis.y * y >> 15) +
-									   ((int32_t)rotation->up_axis.z * z >> 15);
-					const int32_t direction = ((int32_t)rotation->direction_axis.x * x >> 15) +
-											  ((int32_t)rotation->direction_axis.y * y >> 15) +
-											  ((int32_t)rotation->direction_axis.z * z >> 15);
+					const int32_t up = ((int64_t)rotation->up_axis.x * x >> 15) +
+										   ((int64_t)rotation->up_axis.y * y >> 15) +
+										   ((int64_t)rotation->up_axis.z * z >> 15);
+					const int32_t direction = ((int64_t)rotation->direction_axis.x * x >> 15) +
+										  ((int64_t)rotation->direction_axis.y * y >> 15) +
+										  ((int64_t)rotation->direction_axis.z * z >> 15);
 					craftptr->mesh_rotation[mesh_index] =
 						(uint8_t)((uint16_t)trig2_arctan(up, direction) >> 8);
 				}
@@ -912,11 +913,12 @@ void anim_updateanimation(void) {
 				int32_t up_y = parent->up_y;
 
 				int32_t rel_z_eye =
-					-((fwd_y * worldlocy >> 15) + (fwd_x * worldlocx >> 15) + (fwd_z * worldlocz >> 15));
-				int32_t eye_y =
-					(up_x * worldlocy >> 15) + (side_z * worldlocx >> 15) + (up_y * worldlocz >> 15);
-				worldlocx = (side_x * worldlocy >> 15) + (fwd_z * worldlocx >> 15) +
-							(side_y * worldlocz >> 15) - (rot->origin_x_q15 >> 1);
+					-(((int64_t)fwd_y * worldlocy >> 15) + ((int64_t)fwd_x * worldlocx >> 15) +
+					  ((int64_t)fwd_z * worldlocz >> 15));
+				int32_t eye_y = ((int64_t)up_x * worldlocy >> 15) + ((int64_t)side_z * worldlocx >> 15) +
+								((int64_t)up_y * worldlocz >> 15);
+				worldlocx = ((int64_t)side_x * worldlocy >> 15) + ((int64_t)fwd_z * worldlocx >> 15) +
+								((int64_t)side_y * worldlocz >> 15) - (rot->origin_x_q15 >> 1);
 
 				int32_t local_y = rel_z_eye - (rot->origin_y_q15 >> 1);
 				worldlocz = eye_y - (rot->origin_z_q15 >> 1);
@@ -924,10 +926,12 @@ void anim_updateanimation(void) {
 
 				/* 2x3 projection matrix at +0xC..+0x17 maps the turret-
 				 * local point to (aim_x, aim_y); trig2_arctan -> heading. */
-				int32_t aim_x = (rot->aim_x_ly * local_y >> 15) + (rot->aim_x_wx * worldlocx >> 15) +
-								(rot->aim_x_wz * worldlocz >> 15);
-				int32_t aim_y = (rot->aim_y_ly * local_y >> 15) + (rot->aim_y_wx * worldlocx >> 15) +
-								(rot->aim_y_wz * worldlocz >> 15);
+				int32_t aim_x = ((int64_t)rot->aim_x_ly * local_y >> 15) +
+								((int64_t)rot->aim_x_wx * worldlocx >> 15) +
+								((int64_t)rot->aim_x_wz * worldlocz >> 15);
+				int32_t aim_y = ((int64_t)rot->aim_y_ly * local_y >> 15) +
+								((int64_t)rot->aim_y_wx * worldlocx >> 15) +
+								((int64_t)rot->aim_y_wz * worldlocz >> 15);
 				craftptr->mesh_rotation[mesh_idx] = (uint8_t)((uint16_t)trig2_arctan(aim_y, aim_x) >> 8);
 			}
 		}

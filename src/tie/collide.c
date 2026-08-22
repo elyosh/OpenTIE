@@ -152,10 +152,12 @@ int32_t collide_roughdistance3d(int32_t dx, int32_t dy, int32_t dz) {
 CraftData* collide_updatehits(uint16_t projectile_obj_idx) {
 	uint16_t self_idx = objects[projectile_obj_idx].self_idx;
 	uint16_t ship_idx = objects[projectile_obj_idx].ship_idx;
-	CraftData* result = objects[self_idx].craft_ptr;
 
+	/* Static shooters use encoded references and have no craft hit counters. */
 	if (self_idx >= NUM_CRAFTS)
-		return result;
+		return NULL;
+
+	CraftData* result = objects[self_idx].craft_ptr;
 
 	if (ship_idx < 0x8Du) {
 		/* Laser projectile (ship_idx 0x89..0x8C). */
