@@ -501,34 +501,34 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 	int16_t lightVal = 0;
 	if (*(firstvertptr - 1) & 0x40) {
 		/* Compute lighting for negV if not cached */
-		if (*(int16_t*)&vertexlight[2 * negV] == -1) {
+		if ((int16_t)vertexlight[negV] == -1) {
 			PolyVert* norm = &firstvertnorm[negV];
 			int32_t dot = rotlightX * norm->x + rotlightY * norm->y + rotlightZ * norm->z;
 			if (dot >= 0x40000000)
 				dot = 0x3FFF0000;
 			if (dot <= -0x40000000)
 				dot = (int32_t)0xC0010000;
-			*(int16_t*)&vertexlight[2 * negV] = (int16_t)(dot >> 15);
-			if (*(int16_t*)&vertexlight[2 * negV] < 0 && *(firstvertptr - 1) != 0xC2)
-				*(int16_t*)&vertexlight[2 * negV] = 0;
+			vertexlight[negV] = (uint16_t)(dot >> 15);
+			if ((int16_t)vertexlight[negV] < 0 && *(firstvertptr - 1) != 0xC2)
+				vertexlight[negV] = 0;
 		}
 
 		/* Compute lighting for posV if not cached */
-		if (*(int16_t*)&vertexlight[2 * posV] == -1) {
+		if ((int16_t)vertexlight[posV] == -1) {
 			PolyVert* norm = &firstvertnorm[posV];
 			int32_t dot = rotlightX * norm->x + rotlightY * norm->y + rotlightZ * norm->z;
 			if (dot >= 0x40000000)
 				dot = 0x3FFF0000;
 			if (dot <= -0x40000000)
 				dot = (int32_t)0xC0010000;
-			*(int16_t*)&vertexlight[2 * posV] = (int16_t)(dot >> 15);
-			if (*(int16_t*)&vertexlight[2 * posV] < 0 && *(firstvertptr - 1) != 0xC2)
-				*(int16_t*)&vertexlight[2 * posV] = 0;
+			vertexlight[posV] = (uint16_t)(dot >> 15);
+			if ((int16_t)vertexlight[posV] < 0 && *(firstvertptr - 1) != 0xC2)
+				vertexlight[posV] = 0;
 		}
 
 		/* Interpolate lighting at clip point */
-		int16_t negLight = *(int16_t*)&vertexlight[2 * negV];
-		int16_t posLight = *(int16_t*)&vertexlight[2 * posV];
+		int16_t negLight = (int16_t)vertexlight[negV];
+		int16_t posLight = (int16_t)vertexlight[posV];
 		lightVal = negLight + (int16_t)(((int32_t)(zratio >> 1) * (posLight - negLight)) >> 15);
 	}
 
