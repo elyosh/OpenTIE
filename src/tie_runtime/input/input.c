@@ -184,6 +184,9 @@ static int16_t engine_cursor_x, engine_cursor_y;
 static int manual_release;
 static int eat_mouse_buttons;
 static int system_cursor_visible = -1;
+/* DOS-order press edges retained until the engine samples them. */
+static int16_t pending_mouse_presses;
+static int16_t observed_mouse_presses;
 
 static float TieInput_Clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -217,10 +220,15 @@ void TieInput_GetMousePosition(int16_t* buttons, int16_t* x, int16_t* y) {
 			btn |= 2;
 		if (in->mouse.buttons & AERON_MOUSE_BUTTON_MIDDLE)
 			btn |= 4;
+		/* A complete click can arrive between host samples and leave the
+		 * level state released. Expose its press until an engine read sees it. */
+		btn |= pending_mouse_presses;
 	}
 
-	if (buttons)
+	if (buttons) {
 		*buttons = btn;
+		observed_mouse_presses |= pending_mouse_presses;
+	}
 	if (x)
 		*x = (int16_t)TieInput_Clamp(cursor_fb_x, 0.0f, (float)(fb_w - 1));
 	if (y)
@@ -484,7 +492,27 @@ void TieInput_BeginFrame(int32_t delta_us) {
 
 	if (!in) {
 		memset(suppressed_keys, 0, sizeof suppressed_keys);
+		pending_mouse_presses = 0;
+		observed_mouse_presses = 0;
 		return;
+	}
+
+	/* Retire presses sampled during an earlier host frame, then retain new
+	 * edges until Landru or the flight input path reads the button state. */
+	pending_mouse_presses &= (int16_t)~observed_mouse_presses;
+	observed_mouse_presses = 0;
+	if (eat_mouse_buttons) {
+		/* The press that restored flight capture must not become a shot. */
+		pending_mouse_presses = 0;
+	} else if (in->has_focus) {
+		if (in->mouse.pressed_buttons & AERON_MOUSE_BUTTON_LEFT)
+			pending_mouse_presses |= 1;
+		if (in->mouse.pressed_buttons & AERON_MOUSE_BUTTON_RIGHT)
+			pending_mouse_presses |= 2;
+		if (in->mouse.pressed_buttons & AERON_MOUSE_BUTTON_MIDDLE)
+			pending_mouse_presses |= 4;
+	} else {
+		pending_mouse_presses = 0;
 	}
 	if (capture_active) {
 		if (!in->has_focus || delta_us <= 0 || delta_us > 250000) {
