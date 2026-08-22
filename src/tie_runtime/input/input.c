@@ -184,6 +184,11 @@ static int16_t engine_cursor_x, engine_cursor_y;
 static int manual_release;
 static int eat_mouse_buttons;
 static int system_cursor_visible = -1;
+/* Press edges waiting to be seen by TieInput_GetMousePosition, in DOS button
+ * order (bit 0 = left, bit 1 = right, bit 2 = middle), and the subset already
+ * reported during the current host frame. See TieInput_GetMousePosition. */
+static int16_t s_pending_click_buttons;
+static int16_t s_observed_click_buttons;
 
 static float TieInput_Clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
@@ -217,6 +222,16 @@ void TieInput_GetMousePosition(int16_t* buttons, int16_t* x, int16_t* y) {
 			btn |= 2;
 		if (in->mouse.buttons & AERON_MOUSE_BUTTON_MIDDLE)
 			btn |= 4;
+		/* Report press edges that the engine has not observed yet. A click
+		 * whose down and up events arrive within one event pump (trackpad
+		 * taps) never shows in the level state, and the engine does not
+		 * sample the mouse on every host frame (fade/present task phases
+		 * skip it), so a one-frame edge can vanish unseen. The latch keeps
+		 * the press visible until a sample reports it; the following
+		 * frame's level then supplies the release. */
+		const int16_t inject = s_pending_click_buttons & ~btn;
+		btn |= inject;
+		s_observed_click_buttons |= inject;
 	}
 
 	if (buttons)
@@ -484,7 +499,28 @@ void TieInput_BeginFrame(int32_t delta_us) {
 
 	if (!in) {
 		memset(suppressed_keys, 0, sizeof suppressed_keys);
+		s_pending_click_buttons = 0;
+		s_observed_click_buttons = 0;
 		return;
+	}
+
+	/* Retire press latches a sample reported in an earlier host frame, then
+	 * accumulate this frame's press edges. Focus loss drops pending presses
+	 * so a stale edge cannot replay as a phantom click on refocus. */
+	s_pending_click_buttons &= (int16_t)~s_observed_click_buttons;
+	s_observed_click_buttons = 0;
+	if (eat_mouse_buttons) {
+		/* This frame's press re-engaged capture; it must not surface later. */
+		s_pending_click_buttons = 0;
+	} else if (in->has_focus) {
+		if (in->mouse.pressed_buttons & AERON_MOUSE_BUTTON_LEFT)
+			s_pending_click_buttons |= 1;
+		if (in->mouse.pressed_buttons & AERON_MOUSE_BUTTON_RIGHT)
+			s_pending_click_buttons |= 2;
+		if (in->mouse.pressed_buttons & AERON_MOUSE_BUTTON_MIDDLE)
+			s_pending_click_buttons |= 4;
+	} else {
+		s_pending_click_buttons = 0;
 	}
 	if (capture_active) {
 		if (!in->has_focus || delta_us <= 0 || delta_us > 250000) {
