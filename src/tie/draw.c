@@ -1262,6 +1262,18 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 	} else if (b_cat_hi < 0x70u) {
 		if (b_cat_hi == 0x38u)
 			return obj_a;
+	} else if (b_cat_hi == 0x70u) {
+		/* The original routes category 0x70 through the same object-data
+		 * load as category 0 before continuing with its special scaling. */
+		uint16_t b_obj_byte = (uint8_t)b_parent_category;
+		b_world_x = objects[b_obj_byte].world_x;
+		b_world_y = objects[b_obj_byte].world_y;
+		b_world_z = objects[b_obj_byte].world_z;
+		uint16_t b_ship_idx = objects[b_obj_byte].ship_idx;
+		ship_idx = b_ship_idx;
+		if (b_ship_idx == 89)
+			ship_idx = objects[b_obj_byte].ship_type_override;
+		bound_hwidth = species_table[ship_idx].bound_hwidth;
 	} else if (b_cat_hi > 0x70u) {
 		if (b_cat_hi == 0x78u)
 			return obj_a;
@@ -1317,8 +1329,6 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 		owner_obj_id_field = b_obj_id_field;
 		uint16_t swap_tmp = obj_a;
 		owner_world_x = b_world_x;
-		v_eyex = obj_b; /* binary: a_eyex = obj_b -- treat obj_b as the X */
-		(void)v_eyex;
 		owner_world_z = b_world_z;
 		result_obj = swap_tmp;
 		mismatch_obj = obj_b; /* binary: v85 = a8 in B-wins */
