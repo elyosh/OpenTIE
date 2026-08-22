@@ -51,6 +51,10 @@ target_link_libraries(mission_dump PRIVATE tie_core)
 set_target_properties(mission_dump PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 tie_enable_warnings(mission_dump)
 
+add_executable(pilot_edit pilot_edit.c)
+set_target_properties(pilot_edit PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+tie_enable_warnings(pilot_edit)
+
 # Standalone PNG to BC7/RGBA KTX2 converter.
 add_executable(bc7enc bc7enc.c)
 target_include_directories(bc7enc PRIVATE
