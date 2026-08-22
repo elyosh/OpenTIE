@@ -230,26 +230,28 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 		return 1;
 
 	int16_t id = input->id;
+	/* TIE98 film actor indices are zero-based; combat input IDs are one-based. */
+	const int16_t tie98_button_index = id - 1;
 
 	if (id == 5) {
 		/* Start button */
 		if (mouseState == 3 || prevMouseState == 3) {
-			lactor_Set_Actor_State(button[combat_svga ? 5 : 1], combat_svga ? 0 : 2, 0);
+			lactor_Set_Actor_State(button[combat_svga ? tie98_button_index : 1], combat_svga ? 0 : 2, 0);
 			linpattr_Selected_Input(input);
 		} else {
 			if (mouseState == 1 || prevMouseState == 1)
 				soundext_Play_SFX(sfxButton, 80);
-			lactor_Set_Actor_State(button[combat_svga ? 5 : 1], combat_svga ? 1 : 3, 0);
+			lactor_Set_Actor_State(button[combat_svga ? tie98_button_index : 1], combat_svga ? 1 : 3, 0);
 		}
 	} else if (id == 6) {
 		/* Exit door */
 		if (mouseState == 3 || prevMouseState == 3) {
-			lactor_Set_Actor_State(button[combat_svga ? 6 : 0], 0, 0);
+			lactor_Set_Actor_State(button[combat_svga ? tie98_button_index : 0], 0, 0);
 			linpattr_Selected_Input(input);
 		} else {
 			if (mouseState == 1 || prevMouseState == 1)
 				soundext_Play_SFX(sfxButton, 80);
-			lactor_Set_Actor_State(button[combat_svga ? 6 : 0], 1, 0);
+			lactor_Set_Actor_State(button[combat_svga ? tie98_button_index : 0], 1, 0);
 		}
 	} else {
 		/* Nav buttons 1-4 */
@@ -257,7 +259,7 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 			linpattr_Clear_Input_Flag1(input);
 			linpattr_Selected_Input(input);
 			if (combat_svga)
-				lactor_Set_Actor_State(button[id], 0, 0);
+				lactor_Set_Actor_State(button[tie98_button_index], 0, 0);
 			else
 				lactor_Hide_Actor(arrow_actor);
 		}
@@ -265,7 +267,7 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 			soundext_Play_SFX(sfxButton, 80);
 			linpattr_Set_Input_Flag1(input);
 			if (combat_svga)
-				lactor_Set_Actor_State(button[id], 1, 0);
+				lactor_Set_Actor_State(button[tie98_button_index], 1, 0);
 			else {
 				lactor_Show_Actor(arrow_actor);
 				lactor_Set_Actor_State(arrow_actor, 2 * (input->id - 1) + 1, 0);
