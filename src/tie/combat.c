@@ -47,7 +47,9 @@
 #include "tie/shipext.h"
 #include "tie/soundext.h"
 #include "tie/textext.h"
+#include "tie_runtime/presentation/pilot_name.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/storage/score_tables.h"
 #include <landru/task.h>
 
 #include "tie/bpflight.h"
@@ -56,9 +58,7 @@ static const char combat_resource_str[] = "combat.lfd";
 static const char train_resource_str[] = "train.lfd";
 static const char combat_film_name[] = "combat";
 
-#include "tie/map.h" /* GameScoreHead / GameScoreEntry */
-
-#define COMBAT_MAX_SCORES 8
+#define COMBAT_MAX_MISSIONS 8
 
 /* Module state */
 static ResFile* combat_file;
@@ -123,26 +123,10 @@ static void combat_Load_Combat_High_Scores(void) {
 		free(combat_score_data);
 		combat_score_data = NULL;
 	}
-	combat_score_data = calloc(1, sizeof(GameScoreHead) * COMBAT_MAX_SCORES);
-
-	LandruFile* f = lfile_Open_File(LANDRU_FILE_ROOT_USER, filename, "rb");
-	if (f) {
-		int16_t count;
-		lfile_Read_Word_From_File(f, &count);
-		combat_num_scores = (count > COMBAT_MAX_SCORES) ? 0 : count;
-		if (combat_num_scores && combat_score_data) {
-			/* Read the on-disk image into a staging buffer, then decode
-			 * each 138-byte record into the natively-aligned runtime
-			 * struct. Max COMBAT_MAX_SCORES * 138 = 1104 bytes. */
-			uint8_t buf[COMBAT_MAX_SCORES * GAMESCOREHEAD_DISK_SIZE];
-			lres_Resource_Data_To_Buffer(f, buf, GAMESCOREHEAD_DISK_SIZE * combat_num_scores);
-			for (int16_t i = 0; i < combat_num_scores; ++i)
-				GameScoreHead_decode(&combat_score_data[i], buf + (size_t)i * GAMESCOREHEAD_DISK_SIZE);
-		}
-		lfile_Close_File(f);
-	} else {
-		combat_num_scores = 0;
-	}
+	combat_score_data = calloc(COMBAT_MAX_MISSIONS, sizeof(GameScoreHead));
+	combat_num_scores = 0;
+	if (combat_score_data)
+		TieScoreTables_LoadGame(filename, combat_score_data, COMBAT_MAX_MISSIONS, &combat_num_scores);
 
 	combat_score_id = ship;
 }
@@ -534,7 +518,7 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 /* Draw high score table on the combat monitor */
 // FUNCTION: TIE 0x6D888; TIE98 0x40B140
 static void combat_Draw_Combat_Screen_Score(Rect* src) {
-	char fmt[40], string[40], name_buf[16], str[12];
+	char fmt[40], string[40], name_buf[16];
 
 	combat_Load_Combat_High_Scores();
 	const char* mission_name = shipext_Get_Mission_Name();
@@ -569,12 +553,14 @@ static void combat_Draw_Combat_Screen_Score(Rect* src) {
 
 	GameScoreHead* rec = &combat_score_data[mi];
 
-	for (int16_t i = 0; i < COMBAT_MAX_SCORES && t >= 0; i++) {
+	const int16_t displayed_scores = combat_svga ? GAME_SCORE_ENTRY_COUNT : 8;
+	for (int16_t i = 0; i < displayed_scores && t >= 0; i++) {
 		int16_t fade = (t + 16 > 31) ? 31 : t + 16;
+		char display_name[GAME_SCORE_NAME_CAPACITY];
+		TiePilotName_CopyForDisplay(display_name, sizeof(display_name), rec->scores[i].name);
 
-		strcpy(str, rec->scores[i].name);
-		if (str[0]) {
-			lfont_Print_Clipped_Text(str, name_x, y, font_id, fade);
+		if (display_name[0]) {
+			lfont_Print_Clipped_Text(display_name, name_x, y, font_id, fade);
 			textext_Copy_Text(fmt, txtCombatScore);
 			snprintf(string, sizeof(string), fmt, rec->scores[i].score);
 			lfont_Print_Clipped_Text(string, score_x, y, font_id, fade);

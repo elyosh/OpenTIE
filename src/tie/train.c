@@ -48,7 +48,9 @@
 #include "tie/soundext.h"
 #include "tie/textext.h"
 #include "tie/train.h"
+#include "tie_runtime/presentation/pilot_name.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/storage/score_tables.h"
 #include <landru/task.h>
 
 #include "tie/bpflight.h"
@@ -56,8 +58,9 @@
 static const char train_film_b[] = "trainbrf";
 static const char train_score_filename[] = "train.hgh";
 
-#define NUM_SCORE_ENTRIES 8
-#define SCORE_NAME_LEN 10
+#define NUM_SCORE_ENTRIES TRAIN_SCORE_ENTRY_COUNT
+#define SCORE_NAME_LEN TRAIN_SCORE_NAME_CAPACITY
+#define VGA_SCORE_ENTRIES 8
 
 typedef struct TrainSpec {
 	LandruSurfaceSet surface_set;
@@ -111,7 +114,8 @@ static const TrainSpec train_specs[] = {
 
 static const TrainSpec* active_spec;
 
-/* TIE95 eight-entry score table used when train.hgh is absent. */
+/* The first eight defaults are shared by both originals; TIE98 adds two
+ * empty slots and displays all ten entries. */
 // GLOBAL: TIE95 0xCE5CA; TIE98 0x4F2F18
 static char train_score_name[NUM_SCORE_ENTRIES][SCORE_NAME_LEN] = {
 	"Luke", "Jon", "Larry", "Peter", "Bucky", "Jim", "Edward", "Wade",
@@ -731,11 +735,14 @@ static void train_Draw_Train_Screen_Score(Rect* src) {
 	int16_t level_x = name_x + (svga ? 280 : 140);
 	int16_t y = src->top + (svga ? 18 : 10);
 
-	for (int16_t i = 0; i < NUM_SCORE_ENTRIES && t >= 0; i++) {
+	const int16_t displayed_scores = svga ? NUM_SCORE_ENTRIES : VGA_SCORE_ENTRIES;
+	for (int16_t i = 0; i < displayed_scores && t >= 0; i++) {
 		int16_t fade = (t + 16 > 31) ? 31 : t + 16;
+		char display_name[SCORE_NAME_LEN];
+		TiePilotName_CopyForDisplay(display_name, sizeof(display_name), train_score_name[i]);
 
-		if (train_score_name[i][0]) {
-			lfont_Print_Clipped_Text(train_score_name[i], name_x, y, font_id, fade);
+		if (display_name[0]) {
+			lfont_Print_Clipped_Text(display_name, name_x, y, font_id, fade);
 			textext_Copy_Text(string, txtTrainScore);
 			snprintf(str, sizeof(str), string, train_score_points[i]);
 			lfont_Print_Clipped_Text(str, score_x, y, font_id, fade);
@@ -889,19 +896,14 @@ static LandruTaskStepResult train_task_step(void* self) {
 		bpflight_Open_Flight_Engine(1);
 		bpflight_Stop_Movie_Engine();
 
-		/* Load high scores from train.hgh */
-		LandruFile* score_file = lfile_Open_File(LANDRU_FILE_ROOT_USER, train_score_filename, "rb");
-		if (score_file) {
-			int32_t score_val;
-			int16_t level_val;
+		/* Load either legacy TIE95 scores or the shared canonical format. */
+		TrainingScoreEntry loaded_scores[TRAIN_SCORE_ENTRY_COUNT];
+		if (TieScoreTables_LoadTraining(train_score_filename, loaded_scores)) {
 			for (int16_t i = 0; i < NUM_SCORE_ENTRIES; i++) {
-				lfile_Read_Data_From_File(score_file, train_score_name[i], SCORE_NAME_LEN);
-				lfile_Read_Long_From_File(score_file, &score_val);
-				train_score_points[i] = score_val;
-				lfile_Read_Word_From_File(score_file, &level_val);
-				train_score_level[i] = level_val;
+				snprintf(train_score_name[i], sizeof(train_score_name[i]), "%s", loaded_scores[i].name);
+				train_score_points[i] = loaded_scores[i].score;
+				train_score_level[i] = loaded_scores[i].level;
 			}
-			lfile_Close_File(score_file);
 		}
 
 		/* Push the modal view task */

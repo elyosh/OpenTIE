@@ -7,6 +7,7 @@
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/storage/pilot_storage.h"
 #include "tie_runtime/storage/storage.h"
 
 #include "tie/bpflight.h"
@@ -344,7 +345,7 @@ void MissionFile_encode(uint8_t* dst, const MissionFile* src) {
  *   +0x01C cur_train_ship, train_level[12], reserved_29
  *   +0x02A train_score[12] (i32 x 12)
  *   +0x05A train_max_level[12]
- *   +0x066 cur_combat_ship, combat_course_cursor[12], reserved_73[21]
+ *   +0x066 cur_combat_ship, combat_course_cursor[32], reserved_87
  *   +0x088 combat_score[12][8] (i32 x 96)
  *   +0x208 combat_complete[12][8]
  *   +0x268 cur_battle, battle_status[20], battle_cursor[20]
@@ -380,8 +381,8 @@ void PilotRecord_decode(PilotRecord* dst, const uint8_t* src) {
 	memcpy(dst->train_max_level, src + 0x05A, NUM_SHIPS);
 
 	dst->cur_combat_ship = src[0x066];
-	memcpy(dst->combat_course_cursor, src + 0x067, NUM_SHIPS);
-	memcpy(dst->reserved_73, src + 0x073, 21);
+	memcpy(dst->combat_course_cursor, src + 0x067, SHIP_INFO_SIZE);
+	dst->reserved_87 = src[0x087];
 	for (int s = 0; s < NUM_SHIPS; ++s)
 		for (int c = 0; c < 8; ++c)
 			dst->combat_score[s][c] = br_i32le(src + 0x088 + (s * 8 + c) * 4);
@@ -439,8 +440,8 @@ void PilotRecord_encode(uint8_t* dst, const PilotRecord* src) {
 	memcpy(dst + 0x05A, src->train_max_level, NUM_SHIPS);
 
 	dst[0x066] = src->cur_combat_ship;
-	memcpy(dst + 0x067, src->combat_course_cursor, NUM_SHIPS);
-	memcpy(dst + 0x073, src->reserved_73, 21);
+	memcpy(dst + 0x067, src->combat_course_cursor, SHIP_INFO_SIZE);
+	dst[0x087] = src->reserved_87;
 	for (int s = 0; s < NUM_SHIPS; ++s)
 		for (int c = 0; c < 8; ++c)
 			bw_i32le(dst + 0x088 + (s * 8 + c) * 4, src->combat_score[s][c]);
@@ -599,7 +600,8 @@ bool shipext_Is_Ship_Available(int16_t ship_idx) {
 
 	/* Battle ships require completion prerequisites */
 	if (ship_idx >= NUM_SHIPS) {
-		if (!pilot_record.combat_complete[10][ship_idx + 5] || !pilot_record.battle_status[ship_idx + 8])
+		int16_t battle = ship_idx - NUM_SHIPS;
+		if (!pilot_record.battle_status[battle] || !pilot_record.battle_cursor[battle])
 			return false;
 	}
 
@@ -1977,8 +1979,7 @@ void shipext_Mission_Enter(int16_t mission_type) {
 
 	shipext_Get_Mission_Path(missionfilename);
 	strcpy(name_buf, pilot_name);
-	strcpy(pilotname, name_buf);
-	strcat(pilotname, ".tfr");
+	snprintf(pilotname, sizeof(pilotname), "%s.tfr", name_buf);
 }
 
 // FUNCTION: TIE 0x82434

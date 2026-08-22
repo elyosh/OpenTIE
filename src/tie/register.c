@@ -23,6 +23,7 @@ void register_set_copy_protection(int enabled) { copy_protection_enabled = enabl
 #include "tie_runtime/display/classic_framebuffer.h"
 #include "tie_runtime/flight_assets/model_types.h"
 #include "tie_runtime/input/input.h"
+#include "tie_runtime/presentation/pilot_name.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/snapshot/snapshot.h"
@@ -172,8 +173,8 @@ static const RegisterSpec register_specs[] = {
 		.edit_font = 0,
 		.info_label_font = 0,
 		.info_value_font = 1,
-		.filename_max_length = 8,
-		.directory_name_length = FILEDIR_DEFAULT_NAME_LENGTH,
+		.filename_max_length = TIE_PILOT_NAME_MAX,
+		.directory_name_length = FILEDIR_MAX_NAME_LENGTH,
 		.button_actor_count = 3,
 		.delete_dialog_width = 180,
 		.delete_dialog_height = 46,
@@ -218,7 +219,7 @@ static const RegisterSpec register_specs[] = {
 		.edit_font = 3,
 		.info_label_font = 2,
 		.info_value_font = 3,
-		.filename_max_length = 16,
+		.filename_max_length = TIE_PILOT_NAME_MAX,
 		.directory_name_length = FILEDIR_MAX_NAME_LENGTH,
 		.button_actor_count = 2,
 		.delete_dialog_width = 360,
@@ -878,6 +879,8 @@ static void idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int16_t refr
 		char dir_name[TIE_PILOT_NAME_CAPACITY];
 		if (!Find_Reg_Dir_Name(dir_name, sizeof(dir_name), slot))
 			break;
+		char display_name[TIE_PILOT_NAME_CAPACITY];
+		TiePilotName_CopyForDisplay(display_name, sizeof(display_name), dir_name);
 
 		FastPilotRecord fpr;
 		int16_t color = 15;
@@ -888,7 +891,7 @@ static void idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int16_t refr
 		if (pilot_active == wanted)
 			color = 14;
 
-		lfont_Print_Clipped_Text(dir_name, dst.left + 1, dst.top, active_spec->list_font, color);
+		lfont_Print_Clipped_Text(display_name, dst.left + 1, dst.top, active_spec->list_font, color);
 		lrect_Offset_Rect(&dst, 0, lfont_Get_FontID_Height(active_spec->list_font) + 1);
 	}
 
@@ -1090,9 +1093,11 @@ static void xuser_Pilot_Name(const char* search_name) {
 // FUNCTION: TIE95 0x7B3B0; TIE98 0x470D00
 static void idraw_Pilot_Name(Input* input, Rect* frame, Rect* clip, int16_t refresh) {
 	RegStringButton* btn = (RegStringButton*)input;
+	char display_name[TIE_PILOT_NAME_CAPACITY];
+	TiePilotName_CopyForDisplay(display_name, sizeof(display_name), btn->name);
 	int16_t saved_font = lfont_Get_Font();
 	lfont_Set_Font(active_spec->edit_font);
-	int16_t str_width = lfont_Get_String_Width(btn->name);
+	int16_t str_width = lfont_Get_String_Width(display_name);
 	lfont_Set_Font(saved_font);
 
 	if (refresh) {
@@ -1100,7 +1105,7 @@ static void idraw_Pilot_Name(Input* input, Rect* frame, Rect* clip, int16_t refr
 		int16_t color = lstyle_Get_Style_Down_Color();
 		int16_t x = frame->left + (active_spec->dynamic_info_layout ? 1 : 2);
 		int16_t y = frame->top + (active_spec->dynamic_info_layout ? 2 : 1);
-		lfont_Print_Clipped_Text(btn->name, x, y, active_spec->edit_font, color);
+		lfont_Print_Clipped_Text(display_name, x, y, active_spec->edit_font, color);
 	}
 
 	int16_t caret_color = 0;
@@ -1254,6 +1259,8 @@ static void Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 	}
 
 	if (phase >= 8) {
+		char display_name[TIE_PILOT_NAME_CAPACITY];
+		TiePilotName_CopyForDisplay(display_name, sizeof(display_name), typed);
 		int16_t ci = phase >= 15 ? 7 : phase - 8;
 		Rect tr;
 		lrect_Copy_Rect(&tr, frame);
@@ -1266,7 +1273,7 @@ static void Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 			tr.top = frame->top + 17;
 			tr.bottom = frame->top + 22;
 		}
-		lfont_Print_Centered_Text(typed, &tr, ci + 248, active_spec->info_value_font);
+		lfont_Print_Centered_Text(display_name, &tr, ci + 248, active_spec->info_value_font);
 
 		int16_t status_offset =
 			active_spec->dynamic_info_layout ? lfont_Get_FontID_Height(active_spec->info_value_font) : 6;
@@ -1487,13 +1494,14 @@ static void idraw_Delete_Input(Input* input, Rect* frame, Rect* clip, int16_t re
 	if (!refresh)
 		return;
 
-	char title[64], name_buf[TIE_PILOT_NAME_CAPACITY];
+	char title[64], name_buf[TIE_PILOT_NAME_CAPACITY], display_name[TIE_PILOT_NAME_CAPACITY];
 	Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
+	TiePilotName_CopyForDisplay(display_name, sizeof(display_name), name_buf);
 	Index_To_Pilot_Record(pilot_active, &shell_pilot);
 
 	strcpy(title, textext_Get_Text(txtRegBtnDeletePilot));
 	strcat(title, " ");
-	strcat(title, name_buf);
+	strcat(title, display_name);
 	strcat(title, "?");
 
 	Rect dst;

@@ -61,8 +61,9 @@ static const char* fatal_error_strings[] = { "Error! Not Enough Memory!\n",
 
 /* --- Globals --- */
 
-// GLOBAL: TIE 0xD4068
-char pilotname[16];
+// GLOBAL: TIE 0xD4068, TIE98 0x6267A0
+// PORT: shared storage includes the common 16-character name and ".tfr".
+char pilotname[TIE_PILOT_FILENAME_CAPACITY];
 // GLOBAL: TIE 0xD4078, TIE98 0x6267E0
 char openfilename[256];
 static TieFileRoot openfileroot;
@@ -401,10 +402,9 @@ void fediskio_createpilotrecord(void) {
 		 * 12 + battle, which the loader subtracts back out to reach
 		 * the battle digit. The course cursor is read at disk offset
 		 * 0x67+voice_id_a -- for voice_id_a < 12 this lines up with
-		 * combat_course_cursor[voice_id_a]; for voice_id_a >= 12 it
-		 * sits in the reserved-73 hole the retail binary repurposes
-		 * for tour-of-combat course tracking. Read via raw disk-byte
-		 * offset to capture both ranges uniformly. */
+		 * combat_course_cursor[voice_id_a]. Read via the raw disk-byte
+		 * offset because the retail function addresses this field from
+		 * the serialized pilot image. */
 		const uint8_t* raw = (const uint8_t*)loadbuffer;
 		voice_id_a = pilot.cur_combat_ship;
 		voice_id_b = raw[0x67 + voice_id_a];

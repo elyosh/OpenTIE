@@ -333,6 +333,8 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/presentation/presentation.h
     src/tie_runtime/presentation/classic_layer.c
     src/tie_runtime/presentation/classic_layer.h
+    src/tie_runtime/presentation/pilot_name.c
+    src/tie_runtime/presentation/pilot_name.h
     src/tie_runtime/input/actions.c
     src/tie_runtime/input/actions.h
     src/tie_runtime/input/input.c
@@ -343,6 +345,9 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/input/transform.h
     src/tie_runtime/storage/storage.c
     src/tie_runtime/storage/storage.h
+    src/tie_runtime/storage/pilot_storage.h
+    src/tie_runtime/storage/score_tables.c
+    src/tie_runtime/storage/score_tables.h
     src/tie_runtime/flight_assets/assets.c
     src/tie_runtime/flight_assets/assets.h
     src/tie_runtime/flight_assets/source.h

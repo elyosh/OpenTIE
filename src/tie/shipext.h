@@ -261,7 +261,7 @@ void MissionFile_encode(uint8_t* dst, const MissionFile* src);
  * i.e., they are preserved verbatim through save/load cycles but have no
  * runtime semantic. Two patterns explain them:
  *   - alignment padding (1- or 2-byte gaps before u16/i32 fields)
- *   - 10/21/29-byte holes likely intended as forward-compat reservation.
+ *   - 10/29-byte holes likely intended as forward-compat reservation.
  *
  * IN-MEMORY vs ON-DISK: this struct uses NATURAL alignment (sizeof = 1936),
  * which differs from the on-disk layout (PILOTRECORD_DISK_SIZE = 1928) by
@@ -288,9 +288,9 @@ typedef struct {
 												*         train_score; no readers. */
 	int32_t train_score[NUM_SHIPS];            /* +0x02A: per-ship training high score */
 	uint8_t train_max_level[NUM_SHIPS];        /* +0x05A: per-ship max training level reached */
-	uint8_t cur_combat_ship;                   /* +0x066: current combat sim ship index */
-	uint8_t combat_course_cursor[NUM_SHIPS];   /* +0x067: per-ship combat course cursor */
-	uint8_t reserved_73[21];                   /* +0x073..+0x087: 21-byte hole; no readers. */
+	uint8_t cur_combat_ship;                         /* +0x066: current combat sim ship index */
+	uint8_t combat_course_cursor[SHIP_INFO_SIZE];    /* +0x067: per-ship/battle course cursor */
+	uint8_t reserved_87;                             /* +0x087: alignment pad before combat_score */
 	int32_t combat_score[NUM_SHIPS][8];        /* +0x088: per-ship x course high scores */
 	uint8_t combat_complete[NUM_SHIPS][8];     /* +0x208: per-ship x course completion */
 	uint8_t cur_battle;                        /* +0x268: current battle index (0-19) */
@@ -353,9 +353,6 @@ void shipext_Get_Weapon_Select_Name(char* out);
 
 /* --- Pilot management --- */
 void shipext_Init_Pilot(void);
-/* PORT: runtime capacity large enough for the TIE98 registration name. */
-#define TIE_PILOT_NAME_CAPACITY 33
-
 void shipext_Set_Pilot_Name(const char* name);
 /* PORT: capacity parameter is absent from the recovered getter. */
 void shipext_Get_Pilot_Name(char* out, size_t capacity);

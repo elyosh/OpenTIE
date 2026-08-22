@@ -15,9 +15,9 @@
 #include "tie/tie.h"
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
+#include "tie_runtime/storage/pilot_storage.h"
+#include "tie_runtime/storage/score_tables.h"
 #include <landru/task.h>
-
-#include "../util/binio.h"
 
 #include "landru/actanim.h"
 #include "landru/actdelt.h"
@@ -87,10 +87,8 @@ static const Rect map_rect[10] = {
 	{ 175, 216, 196, 249 }, /* Brief Exit */
 };
 
-/* Training score file: 8 entries */
-static char debrief_score_name[8][10];
-static int32_t debrief_score_points[8];
-static uint16_t debrief_score_level[8];
+/* Training score file, kept in the shared TIE98-capable representation. */
+static TrainingScoreEntry debrief_train_scores[TRAIN_SCORE_ENTRY_COUNT];
 
 /* ======================================================================
  * Static BSS globals
@@ -127,41 +125,6 @@ static int16_t cur_talk_question;
 
 /* extern per watdbg */
 int16_t train_pilot_medal_status;
-
-/* ======================================================================
- * Combat score file codec
- *
- * On-disk layout (matches the original DOS Watcom #pragma pack(1) image):
- *   GameScoreEntry (16 bytes) = name[10] + score (i32) + status (i16)
- *   GameScoreHead (138 bytes) = name[10] + 8 x GameScoreEntry
- *
- * The runtime structs are naturally aligned (sizeof grows to 20 / 172
- * on the host) so all file I/O goes through the codec helpers below.
- * ====================================================================== */
-
-void GameScoreEntry_decode(GameScoreEntry* dst, const uint8_t* src) {
-	memcpy(dst->name, src + 0x00, 10);
-	dst->score = br_i32le(src + 0x0A);
-	dst->status = br_i16le(src + 0x0E);
-}
-
-void GameScoreEntry_encode(uint8_t* dst, const GameScoreEntry* src) {
-	memcpy(dst + 0x00, src->name, 10);
-	bw_i32le(dst + 0x0A, src->score);
-	bw_i16le(dst + 0x0E, src->status);
-}
-
-void GameScoreHead_decode(GameScoreHead* dst, const uint8_t* src) {
-	memcpy(dst->name, src + 0x00, 10);
-	for (int i = 0; i < 8; ++i)
-		GameScoreEntry_decode(&dst->scores[i], src + 0x0A + i * GAMESCOREENTRY_DISK_SIZE);
-}
-
-void GameScoreHead_encode(uint8_t* dst, const GameScoreHead* src) {
-	memcpy(dst + 0x00, src->name, 10);
-	for (int i = 0; i < 8; ++i)
-		GameScoreEntry_encode(dst + 0x0A + i * GAMESCOREENTRY_DISK_SIZE, &src->scores[i]);
-}
 
 /* Forward declarations — only for functions called before their definition */
 static int16_t Count_VR_Debrief_Pages(void);
@@ -952,57 +915,28 @@ static void Get_VR_Debrief_Line(char* string, int16_t line) {
  * ====================================================================== */
 
 static void Update_Debrief_Train_Scores(void) {
-	LandruFile* the_file = lfile_Open_File(LANDRU_FILE_ROOT_USER, "train.hgh", "rb");
-	int32_t points;
-	int16_t retval;
-
-	if (the_file) {
-		for (int16_t i = 0; i < 8; i++) {
-			lfile_Read_Data_From_File(the_file, debrief_score_name[i], 10);
-			lfile_Read_Long_From_File(the_file, &points);
-			debrief_score_points[i] = points;
-			lfile_Read_Word_From_File(the_file, &retval);
-			debrief_score_level[i] = retval;
-		}
-		lfile_Close_File(the_file);
-	} else {
-		for (int16_t i = 0; i < 8; i++) {
-			debrief_score_name[i][0] = '\0';
-			debrief_score_points[i] = 0;
-			debrief_score_level[i] = 0;
-		}
-	}
+	if (!TieScoreTables_LoadTraining("train.hgh", debrief_train_scores))
+		memset(debrief_train_scores, 0, sizeof(debrief_train_scores));
 
 	int16_t change = 0, index = 0;
-	char pilot_name[16];
+	char pilot_name[TIE_PILOT_NAME_CAPACITY];
 	shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
 
-	for (int16_t i = 0; i < 8 && !change; i++) {
-		if (debrief_score_points[i] < mission.mission_score) {
+	for (int16_t i = 0; i < TRAIN_SCORE_ENTRY_COUNT && !change; i++) {
+		if (debrief_train_scores[i].score < mission.mission_score) {
 			change = 1;
 			index = i;
 		}
 	}
 
 	if (change) {
-		for (int16_t i = 7; i > index; i--) {
-			strcpy(debrief_score_name[i], debrief_score_name[i - 1]);
-			debrief_score_points[i] = debrief_score_points[i - 1];
-			debrief_score_level[i] = debrief_score_level[i - 1];
-		}
-		strcpy(debrief_score_name[index], pilot_name);
-		debrief_score_points[index] = mission.mission_score;
-		debrief_score_level[index] = mission.train_level;
-
-		the_file = lfile_Open_File(LANDRU_FILE_ROOT_USER, "train.hgh", "wb");
-		if (the_file) {
-			for (int16_t i = 0; i < 8; i++) {
-				lfile_Write_Data_To_File(the_file, debrief_score_name[i], 10);
-				lfile_Write_Long_To_File(the_file, debrief_score_points[i]);
-				lfile_Write_Word_To_File(the_file, debrief_score_level[i]);
-			}
-			lfile_Close_File(the_file);
-		}
+		for (int16_t i = TRAIN_SCORE_ENTRY_COUNT - 1; i > index; i--)
+			debrief_train_scores[i] = debrief_train_scores[i - 1];
+		snprintf(debrief_train_scores[index].name, sizeof(debrief_train_scores[index].name), "%s",
+				 pilot_name);
+		debrief_train_scores[index].score = mission.mission_score;
+		debrief_train_scores[index].level = mission.train_level;
+		TieScoreTables_SaveTraining("train.hgh", debrief_train_scores);
 	}
 }
 
@@ -1024,45 +958,33 @@ static void Update_Debrief_Combat_Scores(void) {
 	}
 
 	GameScoreHead* scores = (GameScoreHead*)calloc(missions, sizeof(GameScoreHead));
+	if (!scores)
+		return;
 	int16_t num_scores = 0;
-
-	LandruFile* the_file = lfile_Open_File(LANDRU_FILE_ROOT_USER, file_name, "rb");
-	if (the_file) {
-		lfile_Read_Word_From_File(the_file, &num_scores);
-		if (num_scores > missions)
-			num_scores = 0;
-		if (num_scores) {
-			/* Max 20 missions x 138 = 2760-byte staging buffer. */
-			uint8_t buf[20 * GAMESCOREHEAD_DISK_SIZE];
-			lfile_Read_Data_From_File(the_file, buf, GAMESCOREHEAD_DISK_SIZE * num_scores);
-			for (int16_t i = 0; i < num_scores; ++i)
-				GameScoreHead_decode(&scores[i], buf + (size_t)i * GAMESCOREHEAD_DISK_SIZE);
-		}
-		lfile_Close_File(the_file);
-	}
+	TieScoreTables_LoadGame(file_name, scores, missions, &num_scores);
 
 	/* Count player kills */
 	int16_t kills = 0;
 	for (int16_t i = 0; i < (int16_t)NUM_SPEC; i++)
 		kills += pstate.player_kills_per_species[i];
 
-	char mission_name[16], pilot_name[16];
+	char mission_name[16], pilot_name[TIE_PILOT_NAME_CAPACITY];
 	strcpy(mission_name, shipext_Get_Mission_Name());
 	shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
 
 	/* Find or create mission slot */
 	int16_t index = 0;
-	while (strcmp(scores[index].name, mission_name) && scores[index].name[0] && index < missions)
+	while (index < missions && scores[index].name[0] && strcmp(scores[index].name, mission_name))
 		index++;
 
-	if (!scores[index].name[0]) {
-		strcpy(scores[index].name, mission_name);
+	if (index < missions && !scores[index].name[0]) {
+		snprintf(scores[index].name, sizeof(scores[index].name), "%s", mission_name);
 		num_scores++;
 	}
 
 	if (index < missions) {
 		int16_t change = 0, score_index = 0;
-		for (int16_t i = 0; i < 8 && !change; i++) {
+		for (int16_t i = 0; i < GAME_SCORE_ENTRY_COUNT && !change; i++) {
 			if (scores[index].scores[i].score < mission.mission_score) {
 				change = 1;
 				score_index = i;
@@ -1070,25 +992,13 @@ static void Update_Debrief_Combat_Scores(void) {
 		}
 
 		if (change) {
-			for (int16_t i = 7; i > score_index; i--) {
-				strcpy(scores[index].scores[i].name, scores[index].scores[i - 1].name);
-				scores[index].scores[i].score = scores[index].scores[i - 1].score;
-				scores[index].scores[i].status = scores[index].scores[i - 1].status;
-			}
-			strcpy(scores[index].scores[score_index].name, pilot_name);
+			for (int16_t i = GAME_SCORE_ENTRY_COUNT - 1; i > score_index; i--)
+				scores[index].scores[i] = scores[index].scores[i - 1];
+			snprintf(scores[index].scores[score_index].name,
+					 sizeof(scores[index].scores[score_index].name), "%s", pilot_name);
 			scores[index].scores[score_index].score = mission.mission_score;
 			scores[index].scores[score_index].status = kills;
-
-			the_file = lfile_Open_File(LANDRU_FILE_ROOT_USER, file_name, "wb");
-			if (the_file) {
-				lfile_Write_Word_To_File(the_file, num_scores);
-				uint8_t rec_buf[GAMESCOREHEAD_DISK_SIZE];
-				for (int16_t i = 0; i < num_scores; i++) {
-					GameScoreHead_encode(rec_buf, &scores[i]);
-					lfile_Write_Data_To_File(the_file, rec_buf, GAMESCOREHEAD_DISK_SIZE);
-				}
-				lfile_Close_File(the_file);
-			}
+			TieScoreTables_SaveGame(file_name, scores, num_scores);
 		}
 	}
 

@@ -16,6 +16,7 @@
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/storage/pilot_storage.h"
 #include "tie_runtime/storage/storage.h"
 
 #include "tie/shipext.h"
@@ -61,7 +62,7 @@ void fediskio_fatalerror(FatalErrId error_code) __attribute__((noreturn));
 
 /* --- FEDISKIO globals --- */
 
-extern char pilotname[16];
+extern char pilotname[TIE_PILOT_FILENAME_CAPACITY];
 extern char openfilename[256];
 extern TieFile* fileptr;
 extern uint8_t currentmission;

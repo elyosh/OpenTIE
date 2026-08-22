@@ -3,7 +3,7 @@
 
 #include "landru/input.h"
 #include "tie/shellext.h"
-#include "tie/shipext.h"
+#include "tie_runtime/storage/pilot_storage.h"
 #include <stdint.h>
 
 /* PORT: shared native representation of TIE95 REGISTER_Alloc_Input_Reg_
