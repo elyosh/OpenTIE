@@ -1078,7 +1078,7 @@ static int16_t iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key, uin
 			break;
 		case 4:
 			map_text =
-				(shellext_Get_Cur_Scene() == SCENE_COMBAT_MAP_A) ? txtMapEnterMission : txtMapDebriefOrder;
+				(shellext_Get_Cur_Scene() == SCENE_COMBAT_MAP_A) ? txtMapEnterMission : txtDebriefAgain;
 			break;
 		case 5:
 			map_text =
