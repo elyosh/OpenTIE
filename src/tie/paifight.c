@@ -542,101 +542,94 @@ uint16_t paifight_findgunnertargetingroup(uint8_t pri_type, uint8_t pri_id, int1
 	return best_obj;
 }
 
-/* =====================================================================
- *                   Two-phase probe wrappers (pri / gen)
- * ===================================================================== */
-
-/* Probe: first with the priority selector (pri_type/pri_id/pri_sec_op/
- * sec_type/sec_id at EAI offsets +0xC..+0x10), then fall back to the
- * general selector (target_type[0..1]/target_id[0..1]/target_op at +0x6..
- * +0xA). Factored out so every scanner + check-wrapper reads the same. */
-typedef int16_t (*paifight_finder_t)(uint8_t, uint8_t, int16_t, uint8_t, uint8_t);
-
-static int16_t two_phase_probe(uint16_t ai_entry, paifight_finder_t find) {
-	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
-
-	int16_t result =
-		find(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op, cur_ai->sec_type, cur_ai->sec_id);
-	if ((uint16_t)result != 0xFFFFu)
-		return result;
-
-	return find(cur_ai->target_type[0], cur_ai->target_id[0], cur_ai->target_op, cur_ai->target_type[1],
-				cur_ai->target_id[1]);
-}
-
 // FUNCTION: TIE 0x36B74
 int16_t paifight_checkfortargets(uint16_t ai_entry) {
-	return two_phase_probe(ai_entry, paifight_findtargetingroup);
+	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	int16_t result = paifight_findtargetingroup(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op,
+												cur_ai->sec_type, cur_ai->sec_id);
+	if ((uint16_t)result == 0xFFFFu) {
+		result = paifight_findtargetingroup(cur_ai->target_type[0], cur_ai->target_id[0], cur_ai->target_op,
+											cur_ai->target_type[1], cur_ai->target_id[1]);
+	}
+	return result;
 }
 
 // FUNCTION: TIE 0x36F1C
 int16_t paifight_checkforescortertargets(uint16_t ai_entry) {
-	return two_phase_probe(ai_entry, paifight_findescorterofgroup);
+	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	int16_t result = paifight_findescorterofgroup(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op,
+												  cur_ai->sec_type, cur_ai->sec_id);
+	if ((uint16_t)result == 0xFFFFu) {
+		result = paifight_findescorterofgroup(cur_ai->target_type[0], cur_ai->target_id[0], cur_ai->target_op,
+											  cur_ai->target_type[1], cur_ai->target_id[1]);
+	}
+	return result;
 }
 
 // FUNCTION: TIE 0x37148
 int16_t paifight_checkforattackedtargets(uint16_t ai_entry) {
-	return two_phase_probe(ai_entry, paifight_findattackedtargetingroup);
+	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	int16_t result = paifight_findattackedtargetingroup(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op,
+														cur_ai->sec_type, cur_ai->sec_id);
+	if ((uint16_t)result == 0xFFFFu) {
+		result = paifight_findattackedtargetingroup(cur_ai->target_type[0], cur_ai->target_id[0],
+													cur_ai->target_op, cur_ai->target_type[1],
+													cur_ai->target_id[1]);
+	}
+	return result;
 }
 
 // FUNCTION: TIE 0x3950C
 int16_t paifight_checkforfuturetargets(uint16_t ai_entry) {
-	return two_phase_probe(ai_entry, paifight_futuretargets);
-}
-
-/* =====================================================================
- *                   Scan dispatchers (order -> finder)
- * ===================================================================== */
-
-/* Classify the AI entry's order via ordersldr[] and route to the right
- * target finder. Returns 1 when a target exists, 0 otherwise. Used by
- * PAIORDER_orderswitchorder as a look-ahead and by scanfortargetsallgone
- * as a completion probe (same structure, different flag payload). */
-static int16_t scan_for_any_target(uint16_t ai_entry, int class8_is_escorter, int class9_is_attacked,
-								   uint8_t search_flags) {
 	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
-	uint8_t order_class = ordersldr[cur_ai->order];
+	if (paifight_futuretargets(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op, cur_ai->sec_type,
+							   cur_ai->sec_id)) {
+		return 1;
+	}
 
-	ai.live_target_only = (order_class == 19) ? 1 : 0;
-	ai.search_flags = search_flags;
-
-	int16_t found;
-	if (order_class == 8 && class8_is_escorter) {
-		return (uint16_t)paifight_checkforescortertargets(ai_entry) != 0xFFFFu;
-	}
-	if (order_class == 9 && class9_is_attacked) {
-		return (uint16_t)paifight_checkforattackedtargets(ai_entry) != 0xFFFFu;
-	}
-	if (order_class == 7 || order_class == 19) {
-		found = paifight_checkfortargets(ai_entry);
-	} else if (order_class == 8) {
-		/* Fall-through when class8_is_escorter==0: match scanfortargets-
-		 * allgone where class 8 still runs the escorter path. */
-		found = paifight_checkforescortertargets(ai_entry);
-	} else {
-		found = paifight_checkforattackedtargets(ai_entry);
-	}
-	return (uint16_t)found != 0xFFFFu;
+	int16_t result = paifight_futuretargets(cur_ai->target_type[0], cur_ai->target_id[0], cur_ai->target_op,
+											cur_ai->target_type[1], cur_ai->target_id[1]);
+	if (result)
+		return 1;
+	return result;
 }
 
 // FUNCTION: TIE 0x37570
 int16_t paifight_scanfortargetswitch(uint16_t ai_entry) {
-	/* search_flags = 7 (combatarea + countattackers + scan-marker). */
-	return scan_for_any_target(ai_entry,
-							   /*class8_is_escorter=*/1,
-							   /*class9_is_attacked=*/0,
-							   /*search_flags=*/7u);
+	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	uint8_t order_class = ordersldr[cur_ai->order];
+
+	ai.live_target_only = order_class == 19;
+	ai.search_flags = 7u;
+
+	int16_t result;
+	if (order_class == 7 || order_class == 19) {
+		result = paifight_checkfortargets(ai_entry);
+	} else {
+		if (order_class == 8)
+			return (uint16_t)paifight_checkforescortertargets(ai_entry) != 0xFFFFu;
+		result = paifight_checkforattackedtargets(ai_entry);
+	}
+	return (uint16_t)result != 0xFFFFu;
 }
 
 // FUNCTION: TIE 0x37624
 int16_t paifight_scanfortargetsallgone(uint16_t ai_entry) {
-	/* search_flags = 2 (scan-marker only; countattackers/combatarea off).
-	 * Ordering classes are remapped: 8 -> escorter, 9 -> attacked,
-	 * everything else -> normal targets (see binary at 0x35971..0x3598F). */
-	return scan_for_any_target(ai_entry,
-							   /*class8_is_escorter=*/1,
-							   /*class9_is_attacked=*/1,
-							   /*search_flags=*/2u);
+	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	uint8_t order_class = ordersldr[cur_ai->order];
+
+	ai.live_target_only = order_class == 19;
+	ai.search_flags = 2u;
+
+	int16_t result;
+	if (order_class == 8) {
+		result = paifight_checkforescortertargets(ai_entry);
+	} else {
+		if (order_class == 9)
+			return (uint16_t)paifight_checkforattackedtargets(ai_entry) != 0xFFFFu;
+		result = paifight_checkfortargets(ai_entry);
+	}
+	return (uint16_t)result != 0xFFFFu;
 }
 
 // FUNCTION: TIE 0x36A90

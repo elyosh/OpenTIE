@@ -61,9 +61,8 @@ int16_t paifight_searchforclosestingroup(uint8_t pri_type, uint8_t pri_id, int16
 int16_t paifight_futuretargets(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 							   uint8_t sec_id);
 
-/* -- Two-phase probe wrappers: priority selector first, fallback to the
- *    general (target_type[0..1] / target_id[0..1] + target_op) selector.
- *    ai_entry is the EAIStruct index (0..2) within the AI's FG.      --- */
+/* -- Priority-selector checks with fallback to the general selector.
+ *    ai_entry is the EAIStruct index (0..2) within the AI's FG. */
 
 int16_t paifight_checkfortargets(uint16_t ai_entry);
 int16_t paifight_checkforescortertargets(uint16_t ai_entry);
