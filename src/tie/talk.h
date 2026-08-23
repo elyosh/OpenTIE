@@ -40,19 +40,7 @@ void talk_Alloc_Speech_Sound(void);
 void talk_Free_Speech_Sound(void);
 void talk_Start_Speech_Stream(void);
 
-/* Set talk_voice_species + talk_voice_mission. Two flavors:
- *
- *   talk_Set_Voice_Species_Mission   — talk-screen path (TALK_Talk
- *     and SCENE_BRIEF_MAP). Uses pilot_record.cur_battle and
- *     battle_cursor; mood is patched to 'h' on objective failure.
- *
- *   talk_Set_Voice_Species_Mission_Combat — combat sim / training
- *     path. Uses pilot_record.cur_combat_ship and the per-ship
- *     course cursor. Ships 0..6 are encoded as char-coded species
- *     ('f','i','b','a','g','d','m'); ships 12+ are tour battles
- *     (numeric encoding).
- */
+/* Set talk_voice_species + talk_voice_mission for TALK_Talk. */
 void talk_Set_Voice_Species_Mission(void);
-void talk_Set_Voice_Species_Mission_Combat(void);
 
 #endif

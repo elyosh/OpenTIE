@@ -107,14 +107,14 @@ static Film* brief_film;
 static EFArrayStruct* talk_fgroup;
 static Palette* cmbtpal;
 static int16_t talk_win_status[5];
-// GLOBAL: TIE 0xF5744
+// GLOBAL: TIE 0xF6126
 static int16_t max_paragraph_size;
 static int16_t map_text;
 static int16_t map_text_count;
 static int16_t num_talk_paragraphs;
 static int16_t combat_pilot_medal_status;
 static int16_t center_line;
-// GLOBAL: TIE 0xF5752
+// GLOBAL: TIE 0xF6134
 static int16_t cur_talk_paragraph;
 static int16_t combat_pilot_medal_init;
 static int16_t talk_mode;
@@ -122,6 +122,10 @@ static int16_t num_talk_questions;
 static int16_t next_mode;
 static int16_t talk_person;
 static int16_t cur_talk_question;
+// GLOBAL: TIE 0xCFA78
+static uint8_t map_uses_battle_voice;
+// GLOBAL: TIE 0xF6144
+static uint8_t map_is_post_mission;
 
 /* extern per watdbg */
 int16_t train_pilot_medal_status;
@@ -1084,50 +1088,24 @@ static int16_t iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key, uin
 	return 1;
 }
 
-/* Set the officer/mood filename chars for the current talk_mode and
- * mission state. Mirrors retail MAP_iuser_Map case 3 / MAP_Map init:
- *
- *   talk_mode 0 (plain map) — officer = 'i' (info briefing); mood
- *   irrelevant since 'i' filenames omit the mood char.
- *
- *   talk_mode 1/2 (VR talk officer / priest) — officer = 'o' / 'p';
- *   mood = 'b' for briefing maps, 'd' (success) or 'h' (failure)
- *   for combat-sim debrief.
- */
-static void update_voice_chars(void) {
-	int16_t scene = shellext_Get_Cur_Scene();
-	int debrief = (scene == SCENE_COMBAT_MAP_B);
-	if (talk_mode == 0) {
-		talk_voice_officer = 'i';
-		talk_voice_mood = 0; /* unused — 'i' filenames have no mood */
+// FUNCTION: TIE 0x77C4C
+static void Set_Voice_Species_Mission(void) {
+	uint8_t mission_cursor;
+
+	last_voiced_paragraph = 0;
+	if (map_uses_battle_voice) {
+		uint8_t battle = pilot_record.cur_battle;
+		talk_voice_species = (int16_t)(battle + 1);
+		mission_cursor = pilot_record.battle_cursor[battle];
 	} else {
-		talk_voice_officer = (talk_mode == 2) ? 'p' : 'o';
-		if (debrief)
-			talk_voice_mood = shipext_Is_Combat_Mission_Success() ? 'd' : 'h';
+		uint8_t ship = pilot_record.cur_combat_ship;
+		if (ship >= NUM_SHIPS)
+			talk_voice_species = (int16_t)(ship - (NUM_SHIPS - 1));
 		else
-			talk_voice_mood = 'b';
+			talk_voice_species = (int16_t)(-(ship + 1));
+		mission_cursor = pilot_record.combat_course_cursor[ship];
 	}
-}
-
-/* Pick the right species/mission setter for the current scene.
- * Briefing maps use the tour-battle position (cur_battle); combat
- * sim and training use the combat-ship/course position. */
-static void update_voice_species_mission(void) {
-	int16_t scene = shellext_Get_Cur_Scene();
-	if (scene == SCENE_BRIEF_MAP)
-		talk_Set_Voice_Species_Mission();
-	else
-		talk_Set_Voice_Species_Mission_Combat();
-}
-
-/* Trigger the voice-over for the currently displayed VR talk
- * paragraph, then arm or disarm auto-advance based on the speech
- * preference. Called from each iuser_Map branch that mutates
- * cur_talk_question / cur_talk_paragraph. */
-static void retrigger_vr_voice(int32_t time) {
-	talk_voice_question = (int16_t)(cur_talk_question + 1);
-	talk_Start_Speech_Stream();
-	talk_paragraph_timer = options_gbl.speech_active ? (time + 264) : 0x7FFFFFFF;
+	talk_voice_mission = (int16_t)(mission_cursor + 1);
 }
 
 static void iuser_Map(Input* input, int32_t time) {
@@ -1164,7 +1142,10 @@ static void iuser_Map(Input* input, int32_t time) {
 					else
 						cur_talk_question = num_talk_questions - 1;
 					Set_VR_Talk_Paragraph();
-					retrigger_vr_voice(time);
+					if (options_gbl.speech_active)
+						talk_paragraph_timer = time + 264;
+					talk_voice_question = (int16_t)(cur_talk_question + 1);
+					talk_Start_Speech_Stream();
 				}
 			} else {
 				if (player_Is_Map_Playing())
@@ -1183,7 +1164,10 @@ static void iuser_Map(Input* input, int32_t time) {
 					else
 						cur_talk_question++;
 					Set_VR_Talk_Paragraph();
-					retrigger_vr_voice(time);
+					if (options_gbl.speech_active)
+						talk_paragraph_timer = time + 264;
+					talk_voice_question = (int16_t)(cur_talk_question + 1);
+					talk_Start_Speech_Stream();
 				}
 			} else {
 				if (player_Is_Map_Playing()) {
@@ -1237,30 +1221,36 @@ static void iuser_Map(Input* input, int32_t time) {
 			}
 
 			if (talk_mode == 0) {
-				player_Rewind_Page();
+				talk_voice_officer = 'i';
+				last_voiced_paragraph = 0;
+				player_Clear_Page_Commands();
 				linpattr_Show_Input(map_input);
 				linpattr_Hide_Input(talk_input);
 				talk_paragraph_timer = 0x7FFFFFFF;
-				update_voice_chars();
-				update_voice_species_mission();
-			} else {
+			} else if (talk_mode == 1) {
 				linpattr_Hide_Input(map_input);
 				linpattr_Show_Input(talk_input);
-				/* Officer/mood + voice question MUST be set before
-				 * Set_VR_Talk_To_Text — that helper now triggers the
-				 * voice itself (mirroring retail), so it reads the
-				 * already-staged talk_voice_* values. Retail seeds
-				 * talk_question_idx = 1 here, except for the combat
-				 * debrief (SCENE_COMBAT_MAP_B with byte_F6144 == 1)
-				 * which seeds 0 to point at the closing paragraph. */
-				update_voice_chars();
-				update_voice_species_mission();
-				talk_voice_question = (shellext_Get_Cur_Scene() == SCENE_COMBAT_MAP_B) ? 0 : 1;
-				Set_VR_Talk_To_Text(talk_mode == 2 ? 1 : 0);
+				talk_voice_officer = 'o';
+				talk_voice_question = 1;
+				if (map_is_post_mission) {
+					talk_voice_question = 0;
+					talk_voice_mood = (mission.primary_complete == 1) ? 'd' : 'h';
+				}
+				Set_VR_Talk_To_Text(0);
 				if (options_gbl.speech_active)
 					talk_paragraph_timer = time + 264;
-				else
-					talk_paragraph_timer = 0x7FFFFFFF;
+			} else if (talk_mode == 2) {
+				linpattr_Hide_Input(map_input);
+				linpattr_Show_Input(talk_input);
+				talk_voice_officer = 'p';
+				talk_voice_question = 1;
+				if (map_is_post_mission) {
+					talk_voice_question = 0;
+					talk_voice_mood = (mission.secondary_complete == 1) ? 'd' : 'h';
+				}
+				Set_VR_Talk_To_Text(1);
+				if (options_gbl.speech_active)
+					talk_paragraph_timer = time + 264;
 			}
 			lview_Refresh_View();
 			break;
@@ -1526,6 +1516,8 @@ static LandruTaskStepResult map_task_step(void* self) {
 		int16_t scene, index, i;
 
 		scene = shellext_Get_Cur_Scene();
+		map_uses_battle_voice = 0;
+		map_is_post_mission = 0;
 		map_text = -1;
 		map_text_count = 0;
 
@@ -1533,6 +1525,8 @@ static LandruTaskStepResult map_task_step(void* self) {
 		if (scene == SCENE_TRAIN_MAP) {
 			train_pilot_medal_status =
 				(train_pilot_medal_status < 4 && pilot_record.train_max_level[shipext_Get_Train_Ship()] >= 4);
+			talk_voice_mood = 'd';
+			map_is_post_mission = 1;
 			lio_Set_Mouse_Position(276, 180);
 		} else if (scene == SCENE_COMBAT_MAP_A) {
 			if (!shipext_Is_Combat_Ship_Tour()) {
@@ -1542,6 +1536,7 @@ static LandruTaskStepResult map_task_step(void* self) {
 						combat_pilot_medal_init++;
 				}
 			}
+			talk_voice_mood = 'b';
 			lio_Set_Mouse_Position(240, 180);
 		} else if (scene == SCENE_COMBAT_MAP_B) {
 			if (!shipext_Is_Combat_Ship_Tour()) {
@@ -1560,12 +1555,21 @@ static LandruTaskStepResult map_task_step(void* self) {
 			} else {
 				combat_pilot_medal_status = 0;
 			}
-			if (shipext_Is_Combat_Mission_Success())
+			map_is_post_mission = 1;
+			if (shipext_Is_Combat_Mission_Success()) {
+				talk_voice_mood = 'd';
 				lio_Set_Mouse_Position(112, 180);
-			else
+			} else {
+				talk_voice_mood = 'h';
 				lio_Set_Mouse_Position(250, 180);
+			}
 		} else if (scene == SCENE_BRIEF_MAP) {
 			lio_Set_Mouse_Position(240, 180);
+			last_voiced_paragraph = 0;
+			talk_voice_question = 0;
+			talk_voice_mood = 0;
+			talk_voice_officer = 'i';
+			map_uses_battle_voice = 1;
 			/* Tag the snapshot with (lfd, film) so the cutscene compositor
 			 * can resolve a remaster bundle for this screen. The bundle key
 			 * MAP/brief points at output/MAP/films/brief/manifest.yaml,
@@ -1714,51 +1718,39 @@ static LandruTaskStepResult map_task_step(void* self) {
 		if (scene == SCENE_COMBAT_MAP_B || scene == SCENE_TRAIN_MAP) {
 			linpattr_Hide_Input(map_input);
 			if (shipext_Get_Mission_Officer() == 2) {
-				talk_mode = 2;
 				next_mode = 2;
+				talk_voice_officer = 'p';
+				talk_voice_question = 1;
+				talk_mode = 2;
 			} else {
 				talk_mode = 1;
-				next_mode = (shipext_Get_Mission_Officer() == 1) ? 1 : 2;
+				talk_voice_question = 1;
+				talk_voice_officer = 'o';
+				if (shipext_Get_Mission_Officer() == 1)
+					next_mode = 1;
+				else
+					next_mode = 2;
 			}
 		} else {
 			linpattr_Hide_Input(talk_input);
 			talk_mode = 0;
+			last_voiced_paragraph = 0;
+			talk_voice_officer = 'i';
 			next_mode = (shipext_Get_Mission_Officer() == 2) ? 2 : 1;
 		}
-
-		/* Voice-over setup must straddle player_Init_Brief_Display:
-		 *   - SCENE_BRIEF_MAP uses end_View as its trigger; the
-		 *     reset-to-0 lets the briefing's time-0 BCMD_SHOW_PARA1
-		 *     stamp produce the mismatch end_View needs.
-		 *   - Combat-sim / training scenes (SCENE_COMBAT_MAP_A/B,
-		 *     SCENE_TRAIN_MAP) use Set_VR_Talk_To_Text as their trigger
-		 *     (officer != 'i'); retail seeds talk_question_idx = 1 in
-		 *     ALL three init paths. The 0 override for the debrief view
-		 *     happens later in iuser_Map case 3 (SCENE_COMBAT_MAP_B). */
-		if (scene == SCENE_COMBAT_MAP_A || scene == SCENE_COMBAT_MAP_B || scene == SCENE_TRAIN_MAP)
-			talk_voice_question = 1;
-		else
-			talk_voice_question = 0;
-		last_voiced_paragraph = 0;
 
 		player_Init_Brief_Display(map_input, NULL);
 		talk_brief = player_Fetch_Brief();
 		talk_fgroup = player_Fetch_FGroup();
-
-		/* Officer/mood + species/mission must be settled before
-		 * Set_VR_Talk_To_Text fires the speech trigger (added below). */
-		update_voice_chars();
-		update_voice_species_mission();
-		talk_Alloc_Speech_Sound();
-
 		Set_VR_Talk_To_Text(talk_mode == 2 ? 1 : 0);
-
-		talk_paragraph_timer = 0x7FFFFFFF;
 
 		/* Push the modal view task */
 		lview_Set_View_Update_Function(end_View);
 		lviewadd_Clear_View();
 		lview_Disable_All_View_Erase();
+		Set_Voice_Species_Mission();
+		talk_Alloc_Speech_Sound();
+		talk_paragraph_timer = 0x7FFFFFFF;
 		lviewadd_Push_Handle_View_Task();
 
 		mt->phase = MAP_PHASE_CLEANUP;

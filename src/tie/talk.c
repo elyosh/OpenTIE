@@ -1442,23 +1442,6 @@ void talk_Set_Voice_Species_Mission(void) {
 	}
 }
 
-/* Combat-sim / training variant. Mirrors retail
- * MAP_Set_Voice_Species_Mission (sub_77C4C): when not in briefing
- * map mode, species/mission come from pilot_record.cur_combat_ship
- * and combat_course_cursor[ship]. Ships 0..NUM_SHIPS-1 (12 ship
- * categories) are encoded as char-coded species (negative species
- * code → 'f','i','b','a','g','d','m' lookup). Ship indices >=
- * NUM_SHIPS denote tour battles and are encoded numerically. */
-void talk_Set_Voice_Species_Mission_Combat(void) {
-	uint8_t ship = pilot_record.cur_combat_ship;
-	if (ship >= NUM_SHIPS) {
-		talk_voice_species = (int16_t)(ship - (NUM_SHIPS - 1)); /* 1, 2, ... */
-	} else {
-		talk_voice_species = (int16_t)(-(ship + 1)); /* -1..-NUM_SHIPS */
-	}
-	talk_voice_mission = (int16_t)(pilot_record.combat_course_cursor[ship] + 1);
-}
-
 static void iuser_Answer(Input* input, int32_t time) {
 	/* Auto-advance: when armed (talk_paragraph_timer < INT32_MAX) the
 	 * paragraph advances each time the current time exceeds the
