@@ -869,11 +869,6 @@ extern uint8_t backcolor;
 extern uint8_t dropcolor;
 extern uint8_t dropflag;
 
-/* Per-subsystem state for the in-flight damage room (DAMAGE module).
- * Indexed by SystemStringId (0..9). Live inside pstate (below); written
- * by CREATE_createmission (init), TIE_updatetime (decrement/destroy),
- * and DAMAGE_damageroom (priority edits). See damage.h. */
-
 /* MSG module support (defined in tie.c, watdbg owner tie.c). */
 extern uint16_t messageside;
 extern uint16_t argtable[4];
@@ -986,9 +981,9 @@ typedef struct PlayerInFlightState {
 	/* +0x03D */ uint8_t player_warhead_hit;            /* 1 */
 	/* +0x03E */ uint16_t player_kills_per_species[69]; /* 138 */
 	/* +0x0C8 */ uint16_t player_total_kills;           /* 2 */
-	/* +0x0CA */ uint8_t rank_pilot_idx[12];            /* 12; indices 10..11 unused */
-	/* +0x0D6 */ uint16_t rank_pilot_score[11];         /* 22 */
-	/* +0x0EC */ uint16_t rank_pilot_kills[11];         /* 22 */
+	/* +0x0CA */ uint8_t subsystem_repair_priority[12]; /* 12; indices 10..11 unused */
+	/* +0x0D6 */ uint16_t subsystem_health_percent[11]; /* 22 */
+	/* +0x0EC */ uint16_t subsystem_repair_seconds[11]; /* 22 */
 	/* +0x102 */ int32_t laser_origin_dx;               /* 4 */
 	/* +0x106 */ int32_t laser_origin_dy;               /* 4 */
 	/* +0x10A */ int32_t laser_origin_dz;               /* 4 */
@@ -1612,11 +1607,6 @@ extern uint8_t timeleft[8];
  * opens a binary asset file. Watcom kept it as a single global to share
  * its address across translation units. */
 extern const char _readmode[3];
-
-/* Per-system damage state for the player. Each slot tracks one of the 10
- * cockpit subsystems (radar, lasers, shields, etc.). */
-extern uint16_t player_system_damage_hash[10];
-extern uint16_t player_system_repair_timer[10];
 
 /* iMUSE per-frame evaluation state. tie_updatemusic updates them each
  * frame; held as globals for .bss persistence so the replay state-dump

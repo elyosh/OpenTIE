@@ -443,14 +443,6 @@ EMissionGoal cut[4];
  * (byte 0xF8FAB). */
 uint8_t byte_F8FAB;
 
-/* Per-subsystem damage state inside _player.
- *   player_system_damage_hash  -- xor-of-craftptr-bits 'invalidate' marker
- *                                 (the misnamed _rank_pilot_score in IDA)
- *   player_system_repair_timer -- countdown ticks until the system comes
- *                                 back online (the misnamed _rank_pilot_kills) */
-uint16_t player_system_damage_hash[10];
-uint16_t player_system_repair_timer[10];
-
 /* Approximate distance scratch -- last collide_roughdistance3d result.
  * Owned by tie.c per watdbg (segment 2 offset 0x2899C). */
 int32_t approxdist;
@@ -1618,38 +1610,37 @@ void tie_updatetime(void) {
 	if (mission.train_craft_type && mtimer_min == 0 && mtimer_sec < 15u)
 		fsfx_triggersfx(0x20u, 0xFFFFu);
 
-	/* 5. Pilot-rank demotion: find the slot with score==0 + smallest
-	 * pilot idx; decrement its kills counter or, if that's already 0,
-	 * "destroy" the next subsystem (set score=100, apply systemmask
-	 * damage, queue a MSG_SYSTEM_STATUS message). */
+	/* 5. Repair the highest-priority offline subsystem. Zero health marks
+	 * a system under repair; its timer counts down once per mission second.
+	 * At zero, restore full health and re-enable the subsystem. */
 	{
-		uint16_t min_pilot_idx = 0xFFFFu;
-		int16_t demote_slot = -1;
+		uint16_t best_priority = 0xFFFFu;
+		int16_t repair_slot = -1;
 
 		for (uint16_t scan = 0; scan < 10; ++scan) {
-			if (pstate.rank_pilot_score[scan] == 0) {
-				int cur_idx = pstate.rank_pilot_idx[scan];
-				if ((uint16_t)cur_idx < min_pilot_idx) {
-					demote_slot = (int16_t)scan;
-					min_pilot_idx = (uint8_t)cur_idx;
+			if (pstate.subsystem_health_percent[scan] == 0) {
+				int priority = pstate.subsystem_repair_priority[scan];
+				if ((uint16_t)priority < best_priority) {
+					repair_slot = (int16_t)scan;
+					best_priority = (uint8_t)priority;
 				}
 			}
 		}
 
 		for (uint16_t slot = 0; slot < 10; ++slot) {
-			int16_t score = (int16_t)pstate.rank_pilot_score[slot];
-			if (score == 0 && (int16_t)slot == demote_slot) {
-				int16_t kills = (int16_t)pstate.rank_pilot_kills[slot];
-				if (kills) {
-					pstate.rank_pilot_kills[slot] = (uint16_t)(kills - 1);
+			int16_t health_percent = (int16_t)pstate.subsystem_health_percent[slot];
+			if (health_percent == 0 && (int16_t)slot == repair_slot) {
+				int16_t repair_seconds = (int16_t)pstate.subsystem_repair_seconds[slot];
+				if (repair_seconds) {
+					pstate.subsystem_repair_seconds[slot] = (uint16_t)(repair_seconds - 1);
 				} else {
-					pstate.rank_pilot_score[slot] = 100;
+					pstate.subsystem_health_percent[slot] = 100;
 					/* Apply the per-system damage bit and emit the message.
 					 * Binary dereferences player_craft unconditionally; if
 					 * the pointer is NULL here we have a bigger problem. */
 					pstate.player_craft->status_flags |= systemmask[slot];
 					argtable[0] = damagemsg[slot];
-					argtable[1] = 26; /* "destroyed" suffix template */
+					argtable[1] = 26; /* "repaired" suffix template */
 					msg_messageprintf(MSG_SYSTEM_STATUS);
 				}
 			}

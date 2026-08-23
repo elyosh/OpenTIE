@@ -968,12 +968,8 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 							}
 						}
 						if (target_obj_idx == pstate.object_idx) {
-							/* These two arrays live inside _player.
-							 * The names 'rank_pilot_score/kills' are
-							 * misleading -- they're system-damage hash +
-							 * repair-timer slots. */
-							player_system_damage_hash[i] = 0;
-							player_system_repair_timer[i] = (uint16_t)repairtime[i];
+							pstate.subsystem_health_percent[i] = 0;
+							pstate.subsystem_repair_seconds[i] = (uint16_t)repairtime[i];
 						}
 						damagea -= 200;
 					}
@@ -1037,13 +1033,8 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 							argtable[0] = (uint8_t)damagemsg[sys_pick];
 							argtable[1] = 25;
 							msg_messageprintf(MSG_SYSTEM_STATUS);
-							/* Binary stores 0 via `xor ebx, edi` where both
-							 * regs hold craftptr (collide.c @ 0x14D4B); the
-							 * field is read by DAMAGE_outputsystem etc. and
-							 * 0 means "newly damaged this frame". */
-
-							player_system_damage_hash[sys_pick] = 0;
-							player_system_repair_timer[sys_pick] = (uint16_t)repairtime[sys_pick];
+							pstate.subsystem_health_percent[sys_pick] = 0;
+							pstate.subsystem_repair_seconds[sys_pick] = (uint16_t)repairtime[sys_pick];
 						}
 					}
 				}

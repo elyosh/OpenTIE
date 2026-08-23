@@ -28,9 +28,9 @@ char** systemstrings;
 #define COLOR_BG_SELECTED 0x46  /* highlighted row background         */
 #define COLOR_TEXT_NAME 0x43    /* default name-column text color     */
 #define COLOR_TEXT_NA 0x41      /* "N/A" (subsystem not installed)    */
-#define COLOR_TEXT_TIME 0x4A    /* "MM:SS" countdown (undamaged)      */
-#define COLOR_TEXT_PARTIAL 0x4E /* partial damage percentage          */
-#define COLOR_TEXT_DEAD 0x52    /* "100%" (destroyed)                 */
+#define COLOR_TEXT_TIME 0x4A    /* "MM:SS" repair countdown          */
+#define COLOR_TEXT_PARTIAL 0x4E /* partial system health              */
+#define COLOR_TEXT_HEALTHY 0x52 /* "100%" (fully operational)        */
 
 /* Key codes observed in the binary for this room. */
 #define K_UP 0x01
@@ -48,10 +48,10 @@ char** systemstrings;
 #define K_F1 0xBB     /* F1 scancode + 0x80 offset */
 
 /* Output formatters: write an ASCII-decoded field to `dst` and terminate. */
-static void format_pct(char* dst, uint16_t score) {
-	/* "NN%\0": two digits, percent sign, nul. score guaranteed 1..99 here. */
-	dst[0] = (char)('0' + score / 10);
-	dst[1] = (char)('0' + score % 10);
+static void format_pct(char* dst, uint16_t health_percent) {
+	/* "NN%\0": two digits, percent sign, nul. */
+	dst[0] = (char)('0' + health_percent / 10);
+	dst[1] = (char)('0' + health_percent % 10);
 	dst[2] = '%';
 	dst[3] = '\0';
 }
@@ -68,24 +68,22 @@ static void format_time(char* dst, uint16_t ticks) {
 	dst[5] = '\0';
 }
 
-/* Build the rank-to-system inverse of pstate.rank_pilot_idx (which maps
- * system_id -> rank). rank_to_sys[rank] is the system at that rank. */
-static void build_rank_to_sys(uint8_t* rank_to_sys) {
+static void build_priority_to_system(uint8_t* priority_to_system) {
 	for (int i = 0; i < NUM_SYSTEMS; i++)
-		rank_to_sys[pstate.rank_pilot_idx[i]] = (uint8_t)i;
+		priority_to_system[pstate.subsystem_repair_priority[i]] = (uint8_t)i;
 }
 
-/* Promote `sel_sys` to rank 0: bump every system that was better-ranked
+/* Promote `sel_sys` to priority 0: bump every higher-priority system
  * down one slot, then set the selection to 0. Matches the binary's
  * Enter/Space/RMB code. */
 static void promote_to_top(uint16_t sel_sys) {
-	const uint8_t sel_rank = pstate.rank_pilot_idx[sel_sys];
+	const uint8_t selected_priority = pstate.subsystem_repair_priority[sel_sys];
 	for (int i = 0; i < NUM_SYSTEMS; i++) {
-		const uint8_t r = pstate.rank_pilot_idx[i];
-		if (sel_rank > r)
-			pstate.rank_pilot_idx[i] = (uint8_t)(r + 1);
+		const uint8_t priority = pstate.subsystem_repair_priority[i];
+		if (selected_priority > priority)
+			pstate.subsystem_repair_priority[i] = (uint8_t)(priority + 1);
 	}
-	pstate.rank_pilot_idx[sel_sys] = 0;
+	pstate.subsystem_repair_priority[sel_sys] = 0;
 }
 
 /* --- damage_outputsystem --- */
@@ -103,12 +101,12 @@ void damage_outputsystem(SystemStringId system_id, int16_t y) {
 		buf[2] = 'A';
 		buf[3] = '\0';
 	} else {
-		const int16_t score = (int16_t)pstate.rank_pilot_score[idx];
-		if (score == 0) {
+		const int16_t health_percent = (int16_t)pstate.subsystem_health_percent[idx];
+		if (health_percent == 0) {
 			festring_settextcolor(COLOR_TEXT_TIME);
-			format_time(buf, pstate.rank_pilot_kills[idx]);
-		} else if (score == 100) {
-			festring_settextcolor(COLOR_TEXT_DEAD);
+			format_time(buf, pstate.subsystem_repair_seconds[idx]);
+		} else if (health_percent == 100) {
+			festring_settextcolor(COLOR_TEXT_HEALTHY);
 			buf[0] = '1';
 			buf[1] = '0';
 			buf[2] = '0';
@@ -116,7 +114,7 @@ void damage_outputsystem(SystemStringId system_id, int16_t y) {
 			buf[4] = '\0';
 		} else {
 			festring_settextcolor(COLOR_TEXT_PARTIAL);
-			format_pct(buf, pstate.rank_pilot_score[idx]);
+			format_pct(buf, pstate.subsystem_health_percent[idx]);
 		}
 	}
 
@@ -130,110 +128,110 @@ void damage_outputsystem(SystemStringId system_id, int16_t y) {
 /* --- damage_nextsystem --- */
 
 /* Helper: does system `s` satisfy the "same group as cur_sys" predicate?
- * Group predicates: undamaged (score==0) vs damaged (score!=0). Kept inline
+ * Group predicates: under repair (health==0) vs operational (health!=0). Kept inline
  * for clarity; the binary doesn't factor this out but the structure is the
  * same.
  *
- * The algorithm walks the rank order twice:
- *   pass 1: undamaged systems (score == 0)
- *   pass 2: damaged   systems (score != 0)
+ * The algorithm walks the priority order twice:
+ *   pass 1: systems under repair (health == 0)
+ *   pass 2: operational systems  (health != 0)
  * cur_sys lives in exactly one of those passes. Once the matching pass
  * finds cur_sys, direction determines:
  *   +1: return the next system in the pass, falling through to the other
  *       pass if at the end, falling back to the first pass once more, and
  *       finally returning cur_sys itself if everything else failed.
- *   -1: return the previously-seen system in the same pass (last_undmg /
- *       last_dmg). If none seen yet (cur_sys was first), scan the other
- *       pass backward from rank 9; if still nothing, return rank_to_sys[9].
+ *   -1: return the previously-seen system in the same pass. If none was
+ *       seen (cur_sys was first), scan the other
+ *       pass backward from priority 9; if still nothing, return the final system.
  */
 
 // FUNCTION: TIE 0x1ABB4
 uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
-	uint8_t rank_to_sys[NUM_SYSTEMS];
-	build_rank_to_sys(rank_to_sys);
+	uint8_t priority_to_system[NUM_SYSTEMS];
+	build_priority_to_system(priority_to_system);
 
-	int16_t last_undmg = -1;
+	int16_t last_repair = -1;
 
-	/* -- Pass 1: undamaged systems (score == 0). --------------------- */
+	/* -- Pass 1: systems under repair (health == 0). ----------------- */
 	for (int j = 0; j < NUM_SYSTEMS; j++) {
-		const uint8_t sys = rank_to_sys[j];
-		if (pstate.rank_pilot_score[sys])
+		const uint8_t sys = priority_to_system[j];
+		if (pstate.subsystem_health_percent[sys])
 			continue;
 
 		if (sys != cur_sys) {
-			last_undmg = (int16_t)sys;
+			last_repair = (int16_t)sys;
 			continue;
 		}
 
 		/* Matched cur_sys inside pass 1. */
 		if ((uint16_t)direction == 0xFFFF) {
 			/* Backward. */
-			if (last_undmg != -1)
-				return (uint8_t)last_undmg;
-			/* No previous undamaged -- wrap into the damaged group from
-			 * rank 9 down. */
+			if (last_repair != -1)
+				return (uint8_t)last_repair;
+			/* No previous repair -- wrap into the operational group from
+			 * priority 9 down. */
 			for (int k = NUM_SYSTEMS - 1; k >= 0; k--) {
-				if (pstate.rank_pilot_score[rank_to_sys[k]])
-					return rank_to_sys[k];
+				if (pstate.subsystem_health_percent[priority_to_system[k]])
+					return priority_to_system[k];
 			}
-			return rank_to_sys[NUM_SYSTEMS - 1];
+			return priority_to_system[NUM_SYSTEMS - 1];
 		}
 
 		/* Forward. */
 		for (int k = j + 1; k < NUM_SYSTEMS; k++) {
-			if (!pstate.rank_pilot_score[rank_to_sys[k]])
-				return rank_to_sys[k];
+			if (!pstate.subsystem_health_percent[priority_to_system[k]])
+				return priority_to_system[k];
 		}
 		for (int k = 0; k < NUM_SYSTEMS; k++) {
-			if (pstate.rank_pilot_score[rank_to_sys[k]])
-				return rank_to_sys[k];
+			if (pstate.subsystem_health_percent[priority_to_system[k]])
+				return priority_to_system[k];
 		}
 		for (int k = 0; k < NUM_SYSTEMS; k++) {
-			if (!pstate.rank_pilot_score[rank_to_sys[k]])
-				return rank_to_sys[k];
+			if (!pstate.subsystem_health_percent[priority_to_system[k]])
+				return priority_to_system[k];
 		}
 		return (uint8_t)cur_sys;
 	}
 
-	/* -- Pass 2: damaged systems (score != 0). ---------------------- */
-	/* last_dmg is the most recent damaged sys seen before cur_sys. */
-	int16_t last_dmg = -1;
+	/* -- Pass 2: operational systems (health != 0). ----------------- */
+	/* Most recent operational system seen before cur_sys. */
+	int16_t last_operational = -1;
 	for (int j = 0; j < NUM_SYSTEMS; j++) {
-		const uint8_t sys = rank_to_sys[j];
-		if (!pstate.rank_pilot_score[sys])
+		const uint8_t sys = priority_to_system[j];
+		if (!pstate.subsystem_health_percent[sys])
 			continue;
 
 		if (sys != cur_sys) {
-			last_dmg = (int16_t)sys;
+			last_operational = (int16_t)sys;
 			continue;
 		}
 
 		/* Matched cur_sys inside pass 2. */
 		if ((uint16_t)direction == 0xFFFF) {
 			/* Backward. */
-			if (last_dmg != -1)
-				return (uint8_t)last_dmg;
-			return rank_to_sys[NUM_SYSTEMS - 1];
+			if (last_operational != -1)
+				return (uint8_t)last_operational;
+			return priority_to_system[NUM_SYSTEMS - 1];
 		}
 
 		/* Forward. */
 		for (int k = j + 1; k < NUM_SYSTEMS; k++) {
-			if (pstate.rank_pilot_score[rank_to_sys[k]])
-				return rank_to_sys[k];
+			if (pstate.subsystem_health_percent[priority_to_system[k]])
+				return priority_to_system[k];
 		}
 		for (int k = 0; k < NUM_SYSTEMS; k++) {
-			if (!pstate.rank_pilot_score[rank_to_sys[k]])
-				return rank_to_sys[k];
+			if (!pstate.subsystem_health_percent[priority_to_system[k]])
+				return priority_to_system[k];
 		}
 		for (int k = 0; k < NUM_SYSTEMS; k++) {
-			if (pstate.rank_pilot_score[rank_to_sys[k]])
-				return rank_to_sys[k];
+			if (pstate.subsystem_health_percent[priority_to_system[k]])
+				return priority_to_system[k];
 		}
 		return (uint8_t)cur_sys;
 	}
 
 	/* cur_sys matched neither pass -- should be unreachable since every
-	 * system has score in {0, !=0}. Binary falls through to a zero return. */
+	 * system has health in {0, !=0}. Binary falls through to a zero return. */
 	return 0;
 }
 
@@ -250,18 +248,18 @@ typedef struct DamageTask {
 } DamageTask;
 
 static void damage_render_page(int16_t* sel_sys) {
-	uint8_t rank_to_sys[NUM_SYSTEMS];
-	build_rank_to_sys(rank_to_sys);
+	uint8_t priority_to_system[NUM_SYSTEMS];
+	build_priority_to_system(priority_to_system);
 
 	/* 20-line layout in 320x200, 50-line in 640x480; line spacing
 	 * derived from remaining vertical space. */
 	int16_t y = tie_is_high_resolution_flight() ? 51 : 21;
 	const uint32_t line_step = (uint32_t)(screenYRes - 2 * y) / NUM_SYSTEMS;
 
-	/* -- Draw group A: present & undamaged (score == 0). --------- */
+	/* -- Draw group A: present and under repair (health == 0). ---- */
 	for (int i = 0; i < NUM_SYSTEMS; i++) {
-		const uint8_t sys = rank_to_sys[i];
-		if (pstate.rank_pilot_score[sys])
+		const uint8_t sys = priority_to_system[i];
+		if (pstate.subsystem_health_percent[sys])
 			continue;
 		if ((systemmask[sys] & pstate.player_craft->subsystem_active) == 0)
 			continue;
@@ -274,10 +272,10 @@ static void damage_render_page(int16_t* sel_sys) {
 		y = (int16_t)(y + line_step);
 	}
 
-	/* -- Draw group B: present & damaged (score != 0). ---------- */
+	/* -- Draw group B: present and operational (health != 0). ---- */
 	for (int i = 0; i < NUM_SYSTEMS; i++) {
-		const uint8_t sys = rank_to_sys[i];
-		if (!pstate.rank_pilot_score[sys])
+		const uint8_t sys = priority_to_system[i];
+		if (!pstate.subsystem_health_percent[sys])
 			continue;
 		if ((systemmask[sys] & pstate.player_craft->subsystem_active) == 0)
 			continue;
@@ -292,7 +290,7 @@ static void damage_render_page(int16_t* sel_sys) {
 
 	/* -- Draw group C: subsystem not installed. ----------------- */
 	for (int i = 0; i < NUM_SYSTEMS; i++) {
-		const uint8_t sys = rank_to_sys[i];
+		const uint8_t sys = priority_to_system[i];
 		if ((systemmask[sys] & pstate.player_craft->subsystem_active) != 0)
 			continue;
 

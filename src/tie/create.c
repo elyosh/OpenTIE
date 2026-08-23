@@ -546,9 +546,9 @@ int16_t create_createmission(void) {
 	pstate.radio_target = -1;
 
 	for (int i = 0; i < 10; i++) {
-		pstate.rank_pilot_idx[i] = (uint8_t)i;
-		pstate.rank_pilot_score[i] = 100;
-		pstate.rank_pilot_kills[i] = 0;
+		pstate.subsystem_repair_priority[i] = (uint8_t)i;
+		pstate.subsystem_health_percent[i] = 100;
+		pstate.subsystem_repair_seconds[i] = 0;
 	}
 	for (int i = 0; i < 20; i++)
 		timers[i] = 0;
