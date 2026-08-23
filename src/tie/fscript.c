@@ -255,7 +255,8 @@ static char sequenceData[18][10] = { "",         "s-win-lg", "        ", "s-los-
 
 /* Sequence priorities: indexed by seq_id */
 // GLOBAL: TIE 0xC51E4
-static int32_t sequencePriorities[18] = { 0, 10, 2, 9, 1, 15, 14, 13, 12 };
+static int32_t sequencePriorities[18] = { 0, 10, 2, 9, 1, 15, 14, 13, 12,
+										 11, 8, 5, 7, 4, 6, 3, 20, 20 };
 
 /* SmallWin SDP record: 4 random destinations */
 static SdpRecord smallWin = {
