@@ -25,11 +25,11 @@
  * 24.8 fixed-point max gunner engagement range for each of the three
  * ai.skill_tier buckets (0/1/2). Values transcribed from the binary at
  * dseg02:0x5170. */
-const uint32_t frwdgunnerranges[3] = { 0x0C000u, 0x10000u, 0x14000u };
+const uint32_t frwdgunnerranges[3] = { 0x06000u, 0x08000u, 0x0A000u };
 
 /* Burst-shot count per skill tier. The binary at dseg02:0x517C stores a
  * 4-byte LUT; only tiers 0..2 are consulted, the 4th entry is padding. */
-const uint8_t frwdgunnerbursts[4] = { 2, 3, 4, 0 };
+const uint8_t frwdgunnerbursts[4] = { 3, 4, 5, 0 };
 
 /* Public shooter-origin (24.8 world-space). Written by gunnerself/offense
  * handlers after computing turret hardpoint + pai_world; consumed by
@@ -1328,15 +1328,13 @@ int16_t paifight_followleadatkorder(void) {
 	/* Seed target: leader's current ai_target_ref (if leader is an AI), or
 	 * the LAST enemy scanned that attacks the player (binary picks the
 	 * last rather than the closest). */
-	uint16_t seed_target = 0xFFFFu;
+	uint16_t seed_target = 0x00FFu;
 	if (leader_idx == pstate.object_idx) {
 		for (uint16_t i = 0; i < NUM_CRAFTS; ++i) {
 			if (!objects[i].ship_idx)
 				continue;
 			CraftData* cp = objects[i].craft_ptr;
-			int wingman_skip = (i == (uint16_t)pstate.radio_target) &&
-							   (objects[ai.active_obj_idx].fg_idx == objects[pstate.object_idx].fg_idx);
-			if (wingman_skip)
+			if (i == (uint16_t)pstate.radio_target)
 				continue;
 			if (ai.live_target_only && !cp->status_flags)
 				continue;
@@ -1347,13 +1345,13 @@ int16_t paifight_followleadatkorder(void) {
 			seed_target = i;
 		}
 		/* Dropped here: the binary emits a dead `for j=0..0x3F; ;` loop
-		 * at 0x37201 after the scan. No side effects, no observable
+		 * at 0x39045 after the scan. No side effects, no observable
 		 * behaviour difference. */
 	} else {
 		seed_target = (uint16_t)ai.leader_craft->ai_target_ref;
 	}
 
-	if (seed_target == 0xFFFFu)
+	if (seed_target == 0x00FFu)
 		return 0;
 
 	/* Two scan paths: static (seed_target >= NUM_CRAFTS) and moving. */
