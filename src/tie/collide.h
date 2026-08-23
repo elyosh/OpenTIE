@@ -24,7 +24,7 @@ extern int16_t systemmask[10];
  * damagemsg[10] -- per-subsystem MSG template id for the
  * MSG_SYSTEM_STATUS broadcast.  Indexed in lockstep with systemmask[].
  */
-extern char damagemsg[10];
+extern uint8_t damagemsg[10];
 
 /*
  * repairtime[10] -- per-subsystem repair countdown duration

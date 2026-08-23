@@ -49,7 +49,7 @@ static int32_t targetcomputerflag = 0;
 int16_t systemmask[10] = { 0x002, 0x080, 0x010, 0x020, 0x040, 0x004, 0x001, 0x008, 0x100, 0x200 };
 
 /* MSG_SYSTEM_STATUS substring id per subsystem (from 0xD117C). */
-char damagemsg[10] = { 34, 36, (char)166, 28, 27, 33, 35, (char)165, (char)166, (char)166 };
+uint8_t damagemsg[10] = { 34, 36, 166, 28, 27, 33, 35, 165, 166, 166 };
 
 /* Repair countdown duration per subsystem in ticks (from 0xD1186). */
 int16_t repairtime[10] = { 180, 300, 45, 25, 100, 30, 50, 60, 60, 60 };
