@@ -95,6 +95,19 @@ static int16_t TieInput_DequeueKey(void) {
 
 /* Translate an Aeron key (SDL scancode value) to a packed DOS getch() value.
  * TieInput_EnqueueDosKey expands extended keys into the two reads expected by TIE. */
+static int16_t TieInput_TranslateAltAeronKey(int sc) {
+	switch (sc) {
+		case AERON_KEY_A + ('e' - 'a'):
+			return 0x1200;
+		case AERON_KEY_A + ('t' - 'a'):
+			return 0x1400;
+		case AERON_KEY_A + ('v' - 'a'):
+			return 0x2F00;
+		default:
+			return 0;
+	}
+}
+
 static int16_t TieInput_TranslateAeronKey(int sc, int shift) {
 	if (sc >= AERON_KEY_F1 && sc <= AERON_KEY_F1 + 9) {
 		const int scan = (shift ? 0x54 : 0x3B) + (sc - AERON_KEY_F1);
@@ -534,21 +547,32 @@ void TieInput_BeginFrame(int32_t delta_us) {
 	 * dispatch consumes it. Releases also dispatch so held BUTTON_BIT
 	 * actions clear. */
 	const int shift = in->key_down[AERON_KEY_LSHIFT] || in->key_down[AERON_KEY_RSHIFT];
+	int suppress_alt_text = 0;
 	for (sc = 0; sc < AERON_KEY_COUNT; ++sc) {
 		if (in->key_released[sc])
 			(void)TieInputActions_DispatchKeyboard(sc, false);
 		int n = suppressed_keys[sc] ? 0 : in->key_typed[sc];
+		int alt_n = suppressed_keys[sc] ? 0 : in->key_alt_typed[sc];
+		if (alt_n > n)
+			alt_n = n;
+		if (alt_n)
+			suppress_alt_text = 1;
 		if (n) {
-			if (TieInputActions_DispatchKeyboard(sc, true))
+			const bool action_consumed = TieInputActions_DispatchKeyboard(sc, true);
+			if (action_consumed)
 				continue;
-			int16_t key = TieInput_TranslateAeronKey(sc, shift);
+			int16_t key = TieInput_TranslateAltAeronKey(sc);
+			for (int repeat = 0; key && repeat < alt_n; ++repeat)
+				TieInput_EnqueueDosKey(key);
+			n -= alt_n;
+			key = TieInput_TranslateAeronKey(sc, shift);
 			if (key) {
 				while (n--)
 					TieInput_EnqueueDosKey(key);
 			}
 		}
 	}
-	if (in->has_focus) {
+	if (in->has_focus && !suppress_alt_text) {
 		for (uint32_t index = 0; index < in->text_length; ++index) {
 			const uint32_t codepoint = in->text[index];
 			if (codepoint >= 0x20u && codepoint <= 0x7Eu)
