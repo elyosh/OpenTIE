@@ -176,6 +176,7 @@ struct TieCockpitRenderer {
 	uint8_t original_vga_palette[576];
 	bool original_vga_palette_loaded;
 	uint16_t original_font_width;
+	uint8_t original_micro_zero_advance;
 	float original_font_atlas_scale;
 };
 
@@ -743,6 +744,12 @@ static bool TieCockpitRenderer_InstallOriginalFont(TieCockpitRenderer* cg, Aeron
 		return TIE_COCKPIT_ASSET_ERROR(path, codec_error.message);
 	}
 	free(bytes);
+	if (slot_id == TIE_SCENE2D_TEXT_RENDERER_FONT_SLOT_COCKPIT_MICRO) {
+		const uint16_t zero_index = (uint16_t)('0' - decoded.first_char);
+		cg->original_micro_zero_advance = 0;
+		if (zero_index < decoded.glyph_count)
+			cg->original_micro_zero_advance = (uint8_t)decoded.glyphs[zero_index].advance;
+	}
 	int scaled_width = 0, scaled_height = 0;
 	uint8_t* scaled = Aeron_ImageUpscaleNearestRgba8(decoded.rgba, decoded.width, decoded.height, 4,
 													 &scaled_width, &scaled_height);
@@ -820,6 +827,45 @@ static bool TieCockpitRenderer_EnsureOriginalFonts(TieCockpitRenderer* cg, Aeron
 	return true;
 }
 
+/* Classic treats these baked placeholders as mutable framebuffer pixels.
+ * Remove them before mip generation so linear filtering cannot retain a
+ * fringe after the live digit cells overwrite the field. */
+static void TieCockpitRenderer_ClearOriginalDigitFields(const TieCockpitRenderer* cg, TieRgbaFrame* base,
+														const TieSnapshot* snap, const uint8_t palette[768],
+														uint8_t view_idx, uint8_t background_color,
+														const int* fields, size_t field_count) {
+	if (!cg || !base || !base->rgba || !snap || !palette || !cg->original_micro_zero_advance ||
+		snap->cockpit.view_idx != view_idx || base->width != snap->cockpit.classic_w || !fields)
+		return;
+
+	const int font_h = TieCockpitCommon_IsSvga(snap) ? 9 : 5;
+	const uint8_t* color = &palette[background_color * 3];
+
+	for (size_t field = 0; field < field_count; ++field) {
+		const TieHudInstrument* instrument = &snap->hud.instruments[fields[field]];
+		if (instrument->param1 == 0)
+			continue;
+		int x0 = (int)instrument->x;
+		int y0 = (int)instrument->y;
+		int x1 = x0 + (int)instrument->param1 * cg->original_micro_zero_advance;
+		int y1 = y0 + font_h;
+		if (x1 > base->width)
+			x1 = base->width;
+		if (y1 > base->height)
+			y1 = base->height;
+
+		for (int y = y0; y < y1; ++y) {
+			uint8_t* pixel = base->rgba + ((size_t)y * base->width + (size_t)x0) * 4;
+			for (int x = x0; x < x1; ++x, pixel += 4) {
+				pixel[0] = color[0];
+				pixel[1] = color[1];
+				pixel[2] = color[2];
+				pixel[3] = 255;
+			}
+		}
+	}
+}
+
 static bool TieCockpitRenderer_PrepareOriginalBase(TieCockpitRenderer* cg, AeronCommandBuffer* cmd,
 												   TieCockpitRendererEntry* entry, const TieSnapshot* snap,
 												   uint8_t palette[768]) {
@@ -851,6 +897,10 @@ static bool TieCockpitRenderer_PrepareOriginalBase(TieCockpitRenderer* cg, Aeron
 							  palette, &complete_rows, &codec_error))
 		goto failed;
 	(void)complete_rows;
+	static const int threat_digit_fields[] = { TIE_HUDI_THREAT_SHIELD_PCT, TIE_HUDI_THREAT_HULL_PCT };
+	TieCockpitRenderer_ClearOriginalDigitFields(cg, &base, snap, palette, 20, COCKPIT_BG_THREAT,
+													 threat_digit_fields,
+													 sizeof threat_digit_fields / sizeof threat_digit_fields[0]);
 	if (!TieCockpitCoverage_Build(base.rgba, base.width, base.height, &coverage, &codec_error))
 		goto failed;
 	entry->base_tex = Aeron_ImageUploadRgba8(cmd, base.rgba, base.width, base.height, (size_t)base.width * 4,

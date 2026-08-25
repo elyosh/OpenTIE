@@ -941,7 +941,7 @@ typedef struct TieHudState {
 	/* Threat-view (pilotview 20) resolved text — engine paints these
 	 * strings into the threat-view text slots; the snapshot mirrors
 	 * what the engine wrote. Empty = no text (line not painted). */
-	char target_order_text[24];        /* idx 79 value */
+	char target_order_text[48];        /* idx 79 value */
 	char target_link_target_label[32]; /* idx 80 left col */
 	char target_link_name[24];         /* idx 80 right col */
 	char target_link_dist_label[32];   /* idx 81 left col */
