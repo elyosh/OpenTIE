@@ -20,6 +20,7 @@
 #include "tie/tie.h"
 #include "tie/trig2.h"
 #include "tie_runtime/timing/ai_lead.h"
+#include "tie_runtime/diagnostics/flight_trace.h"
 
 /* ---- External globals referenced by PAIMAN ------------------------- */
 
@@ -1472,7 +1473,11 @@ int16_t paiman_dropoffmaneuver(void) {
  */
 
 // FUNCTION: TIE 0x3B334
-void paiman_initboardmaneuver(void) { craftptr->mode_subbyte = 0; }
+void paiman_initboardmaneuver(void) {
+	craftptr->mode_subbyte = 0;
+	TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, (uint16_t)craftptr->ai_target_ref,
+						   TIE_TRACE_BOARD_APPROACH, craftptr->default_order_ldr);
+}
 
 /* Phase 0 — approach to dock point. */
 static int16_t board_phase0(CraftData* cd, uint16_t target_ref, uint8_t tgt_species) {
@@ -1524,6 +1529,8 @@ static int16_t board_phase0(CraftData* cd, uint16_t target_ref, uint8_t tgt_spec
 	if (trig2_polardistance <= 2048) {
 		cd->throttle_speed = 0;
 		cd->mode_subbyte = 1;
+		TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_ALIGNING,
+						   cd->default_order_ldr);
 	} else {
 		cd->throttle_speed = 0x4000;
 	}
@@ -1605,6 +1612,8 @@ static int16_t board_phase1(CraftData* cd, uint16_t target_ref, uint8_t tgt_spec
 	cd->mode_subbyte = 2;
 	cd->ai_plan_state = 236;
 	cd->maneuver_timer = 1180 * (int32_t)dock_delay_var0;
+	TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_DOCKED,
+						   cd->default_order_ldr);
 
 	msg_createobjectname(ai.active_obj_idx, 1, tempstring);
 	msg_addmessageptr(0, tempstring);
@@ -1725,6 +1734,8 @@ static void board_phase2_run_transfer(CraftData* cd, CraftData* tgt_cd, uint16_t
 				pai_initplan();
 				craftptr = cd_prev;
 				ai = saved_ai_ctx;
+				TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_CAPTURED,
+								   order_ldr);
 
 				msg_id = 101;
 				msg_cd = cd_prev;
@@ -1798,6 +1809,8 @@ static int16_t board_phase2(CraftData* cd, uint16_t target_ref, uint8_t tgt_spec
 	if (!cd->maneuver_timer) {
 		if (tgt_cd)
 			board_phase2_run_transfer(cd, tgt_cd, target_ref, tgt_fg_idx);
+		TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_TRANSFER,
+						   cd->default_order_ldr);
 
 		/* SFX + capture-list bookkeeping. */
 		if (target_ref < 0x3800u && tgt_cd) {
@@ -1856,6 +1869,8 @@ static int16_t board_phase2(CraftData* cd, uint16_t target_ref, uint8_t tgt_spec
 
 		cd->mode_subbyte = 3;
 		cd->maneuver_timer = 2360;
+		TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_DEPARTING,
+						   cd->default_order_ldr);
 		if (pstate.target_obj_idx == target_ref)
 			lasttargetnum = -3;
 		if (target_ref == pstate.object_idx)
@@ -1964,6 +1979,8 @@ static int16_t board_phase2(CraftData* cd, uint16_t target_ref, uint8_t tgt_spec
 /* Phase 3 — departure push and exit. */
 static int16_t board_phase3(CraftData* cd, uint16_t target_ref) {
 	if (!cd->maneuver_timer) {
+		TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_COMPLETE,
+						   cd->default_order_ldr);
 		/* Binary 0x3C6E5 clears ai_target_ref to 0xFFFF on timer expiry so
 		 * the next maneuver does not inherit the docking target. */
 		cd->ai_target_ref = (int16_t)0xFFFFu;

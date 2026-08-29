@@ -14,6 +14,7 @@
 #include "tie/trig2.h"
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
+#include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
 #include "tie_runtime/flight_assets/model_types.h"
@@ -976,8 +977,10 @@ void pai_updateplaneai(void) {
 			continue;
 
 		pai_setupcraftaivars(i);
-		pai_updatecraftplan();
+		TIE_FLIGHT_TRACE_AI_BEFORE(i);
+		const uint8_t transition_opcode = pai_updatecraftplan();
 		craftptr->ai_update_rate_copy += craftptr->ai_update_rate;
+		TIE_FLIGHT_TRACE_AI_AFTER(i, transition_opcode);
 	}
 }
 

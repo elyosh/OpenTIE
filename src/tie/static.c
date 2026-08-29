@@ -6,6 +6,7 @@
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 #include "tie_runtime/timing/flight_timing.h"
+#include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/timing/flight_timing_state.h"
 
 #include "anim.h"
@@ -407,6 +408,8 @@ int16_t static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
 	} else {
 		/* Conventional kill. */
 		uint8_t fg_idx = so->fg_idx;
+		TIE_FLIGHT_TRACE_FG_EXIT((uint16_t)(target_slot + OBJ_REF_STATIC_BASE),
+							 TIE_TRACE_EXIT_DESTROYED);
 		fgstatus[fg_idx].cond[1].count++;
 		explosion_ship_idx = 129;
 
@@ -426,6 +429,8 @@ int16_t static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
 		so->species = 0; /* free the slot */
 		collide_updatekills((uint16_t)objects[proj_idx].self_idx, 0xFFFFu);
 	}
+
+	TIE_FLIGHT_TRACE_EXPLOSION(proj_idx, (uint8_t)explosion_ship_idx);
 
 	/* Convert the projectile into an impact-effect sprite. Retail
 	 * STATIC_laserhitstatic leaves field_54 (craft_ptr) untouched —

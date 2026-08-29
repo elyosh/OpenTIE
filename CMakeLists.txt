@@ -310,6 +310,9 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/diagnostics/diagnostics.c
 
     src/tie_runtime/diagnostics/diagnostics.h
+    src/tie_runtime/diagnostics/flight_trace.c
+    src/tie_runtime/diagnostics/flight_trace.h
+    src/tie_runtime/diagnostics/flight_trace_format.h
     src/tie_runtime/integration/landru_adapter.c
     src/tie_runtime/integration/landru_adapter.h
     src/tie_runtime/flight_assets/native_opt.c
@@ -420,6 +423,9 @@ tie_enable_warnings(tie_formats)
 
 add_library(tie_core STATIC ${TIE_RECOVERED_SOURCES} ${TIE_RUNTIME_SOURCES})
 target_include_directories(tie_core PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(tie_core PRIVATE
+    TIE_VERSION_STRING="${TIE_VERSION}"
+    $<$<CONFIG:Debug>:TIE_ENABLE_FLIGHT_TRACE=1>)
 if(NOT MSVC)
     # Recovered code retains aliasing patterns that are unsafe to optimize.
     set_source_files_properties(${TIE_RECOVERED_SOURCES}

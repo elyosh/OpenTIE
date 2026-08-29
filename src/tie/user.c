@@ -18,6 +18,7 @@
 #include "tie_runtime/storage/storage.h"
 #include "tie_runtime/timing/flight_timing_state.h"
 #include "tie_runtime/timing/user_timing.h"
+#include "tie_runtime/diagnostics/flight_trace.h"
 
 #include <math.h>
 #include <stddef.h>
@@ -2365,6 +2366,8 @@ static void ui_eject_or_surrender(void) {
 	pstate.player_craft->flight_flag = 3;
 	uint16_t rnd = (uint16_t)math2_getrandom();
 	pstate.player->death_timer = (int16_t)(236 * ((rnd & 3) + 3));
+	TIE_FLIGHT_TRACE_DEATH(pstate.object_idx, 0xFFFFu, TIE_TRACE_DEATH_EJECTED,
+						   pstate.player->death_timer);
 }
 
 /*

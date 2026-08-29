@@ -14,6 +14,7 @@
 #include "tie/user.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/audio/music_policy.h"
+#include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/flight_assets/service.h"
 #include "tie_runtime/integration/landru_adapter.h"
@@ -97,6 +98,9 @@ bool TieRuntime_Init(const TieRuntimeConfig* config, char* error, size_t error_c
 }
 
 void TieRuntime_Shutdown(void) {
+	/* The application can close while the flight task is still active. Flush
+	 * diagnostics while mission state and storage are still available. */
+	TIE_FLIGHT_TRACE_SHUTDOWN();
 	landru_task_clear_all();
 	TieFlightScreen_Reset();
 	TieLandruAdapter_Shutdown();

@@ -51,6 +51,11 @@ target_link_libraries(mission_dump PRIVATE tie_core)
 set_target_properties(mission_dump PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 tie_enable_warnings(mission_dump)
 
+add_executable(flight_trace_dump flight_trace_dump.c)
+target_include_directories(flight_trace_dump PRIVATE ${CMAKE_SOURCE_DIR}/src)
+set_target_properties(flight_trace_dump PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+tie_enable_warnings(flight_trace_dump)
+
 add_executable(pilot_edit pilot_edit.c)
 set_target_properties(pilot_edit PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 tie_enable_warnings(pilot_edit)

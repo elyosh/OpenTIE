@@ -16,6 +16,7 @@
 #include "tie/user.h"
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
+#include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
 #include "tie_runtime/flight_assets/model_types.h"
@@ -340,6 +341,7 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 		};
 		TieSnapshotBuilder_PushEvent(&ev);
 	}
+	TIE_FLIGHT_TRACE_WEAPON_SPAWN(slot, shooter_obj_idx, 0xFFFFu);
 
 	return slot;
 }
@@ -413,6 +415,7 @@ uint16_t laser_createprojectilefromstatic(uint16_t static_obj_idx, uint16_t shoo
 	warheads[wh].target_obj = shooter_obj_idx;
 	p->craft_ptr = (CraftData*)&warheads[wh];
 
+	TIE_FLIGHT_TRACE_WEAPON_SPAWN(slot, (uint16_t)(static_obj_idx + OBJ_REF_STATIC_BASE), shooter_obj_idx);
 	laser_warnplayer(wh);
 	return slot;
 }
@@ -466,6 +469,7 @@ uint16_t laser_firemissile(uint16_t shooter_obj_idx, uint16_t weapon_slot_idx, u
 		warheads[wh].sub_obj_idx = (uint16_t)craftptr->link_target_2E;
 	}
 
+	TIE_FLIGHT_TRACE_TARGET_CHANGE(slot, 0xFFFFu, warheads[wh].target_obj);
 	laser_warnplayer(wh);
 	return wh;
 }

@@ -24,6 +24,7 @@
 #include "tie/tie.h"
 #include "tie/user.h"
 #include "tie_runtime/runtime/inflight_state.h"
+#include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 
@@ -88,6 +89,7 @@ int16_t instrumentdisable[17] = { 0x200, 0x040, 0x020, 0x006,  0x400, 0x180, 0x0
 // FUNCTION: TIE 0x15A24
 char collide_makeobjectexplosion(uint16_t obj_idx, uint8_t ship_variant) {
 	FlightObject* o = &objects[obj_idx];
+	TIE_FLIGHT_TRACE_EXPLOSION(obj_idx, ship_variant);
 
 	o->ship_idx = ship_variant;
 	o->anim_frame = 2;
@@ -868,6 +870,7 @@ char collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
 // FUNCTION: TIE 0x148F0
 char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_t weapon_group,
 						 uint16_t attacker_obj_idx) {
+	TIE_FLIGHT_TRACE_DAMAGE_BEFORE(target_obj_idx);
 	CraftData* tgt_craft = objects[target_obj_idx].craft_ptr;
 	uint16_t atk_species;
 	int32_t collision_radius;
@@ -998,6 +1001,8 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 							uint8_t ship_idx = objects[target_obj_idx].ship_idx;
 							if (ship_idx >= 5 && ship_idx <= 7) {
 								objects[target_obj_idx].death_timer = 60;
+								TIE_FLIGHT_TRACE_DEATH(target_obj_idx, attacker_obj_idx,
+												   TIE_TRACE_DEATH_SYSTEMS_DISABLED, 60);
 								collide_updatekills(objects[attacker_obj_idx].self_idx, target_obj_idx);
 								score_craftexitscoring(target_obj_idx, objects[target_obj_idx].fg_idx, 2);
 							}
@@ -1065,6 +1070,8 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 				panel_updatecockpitdamage();
 		}
 	}
+
+	TIE_FLIGHT_TRACE_DAMAGE_AFTER(target_obj_idx, attacker_obj_idx, component_idx, damage);
 
 	/* Step 5: death-or-survive decision. */
 	if (tgt_craft->flight_flag || tgt_craft->hull_damage < tgt_craft->hull_max)
@@ -1166,8 +1173,11 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 			if (target_obj_idx == pstate.object_idx && !(pstate.player_craft->status_flags & 2u)) {
 				/* Player non-rescued explosion. */
 				FlightObject* o = &objects[target_obj_idx];
+				const uint8_t explosion_variant = (uint8_t)((math2_getrandom() & 1) + 127);
+				TIE_FLIGHT_TRACE_DEATH(target_obj_idx, attacker_obj_idx, TIE_TRACE_DEATH_DAMAGE, 0);
+				TIE_FLIGHT_TRACE_EXPLOSION(target_obj_idx, explosion_variant);
 				o->anim_frame = 2;
-				o->ship_idx = (uint8_t)((math2_getrandom() & 1) + 127);
+				o->ship_idx = explosion_variant;
 				o->damage_state = 24;
 				o->genus = GENUS_EXPLOSION;
 				o->category = 5;
@@ -1186,6 +1196,7 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 				((uint16_t)math2_getrandom() < 0x4000u && target_obj_idx != pstate.object_idx)) {
 				/* Non-spinning instant death. */
 				objects[target_obj_idx].death_timer = 1;
+				TIE_FLIGHT_TRACE_DEATH(target_obj_idx, attacker_obj_idx, TIE_TRACE_DEATH_DAMAGE, 1);
 				fsfx_triggersfx(0x12, target_obj_idx);
 				tgt_craft->flight_flag = 4;
 				return 0;
@@ -1267,6 +1278,8 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 					objects[target_obj_idx].death_timer = (int16_t)(236 * ((math2_getrandom() & 0xF) + 1));
 					if (target_obj_idx == pstate.object_idx)
 						objects[target_obj_idx].death_timer = (int16_t)(236 * ((math2_getrandom() & 3) + 4));
+					TIE_FLIGHT_TRACE_DEATH(target_obj_idx, attacker_obj_idx, TIE_TRACE_DEATH_DAMAGE,
+									   objects[target_obj_idx].death_timer);
 					/* [num_meshes] is the overlaid lightning anim frame
 					 * counter, not a per-mesh state. 2 = jump the bolt
 					 * script to frame 2. */
@@ -1284,6 +1297,8 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 			objects[target_obj_idx].spin_rate = -(int16_t)spin_rng;
 			tgt_craft->flight_flag = 3;
 			objects[target_obj_idx].death_timer = (int16_t)(236 * ((math2_getrandom() & 7) + 8));
+			TIE_FLIGHT_TRACE_DEATH(target_obj_idx, attacker_obj_idx, TIE_TRACE_DEATH_DAMAGE,
+							   objects[target_obj_idx].death_timer);
 			return ret_no_panel_update;
 		}
 	}
@@ -1621,6 +1636,8 @@ void collide_collisions(void) {
 						if (inflight_collision || tgt_genus == GENUS_FREIGHTER ||
 							tgt_genus == GENUS_STARSHIP || tgt_genus == GENUS_PLATFORM) {
 							int32_t dot;
+							TIE_FLIGHT_TRACE_COLLISION(pstate.object_idx, target_idx,
+											   TIE_TRACE_COLLISION_CRAFT, hit_offset);
 							collide_damagecraft(target_idx, hit_offset, 0, pstate.object_idx);
 							if (pl->orient_dirty) {
 								fview_calcrotatemove(pl->heading, pl->pitch, pl);
@@ -1708,8 +1725,11 @@ void collide_collisions(void) {
 			uint16_t static_obj_off = 14336;
 			for (i = 0; i < 0x40u; i++) {
 				if (staticobjects[i].species) {
-					if (static_laserstaticcollide(pstate.object_idx, i))
+					if (static_laserstaticcollide(pstate.object_idx, i)) {
+						TIE_FLIGHT_TRACE_COLLISION(pstate.object_idx, static_obj_off,
+											   TIE_TRACE_COLLISION_STATIC, -1);
 						collide_damagecraft(pstate.object_idx, 0xFFFF, 0, static_obj_off);
+					}
 				}
 				static_obj_off++;
 			}
@@ -1782,6 +1802,8 @@ void collide_collisions(void) {
 					{
 						uint16_t hit = collide_lasercraftcollide(tgt_iter, projectile_idx);
 						if (hit) {
+							TIE_FLIGHT_TRACE_COLLISION(projectile_idx, tgt_iter, TIE_TRACE_COLLISION_CRAFT,
+											   (int16_t)hit);
 							collide_damagecraft(projectile_idx, (int16_t)hit, 0, tgt_iter);
 							collide_damagecraft(tgt_iter, 0xFFFF, 0, projectile_idx);
 						}
@@ -1857,6 +1879,8 @@ void collide_collisions(void) {
 					{
 						uint16_t hit = collide_lasercraftcollide(projectile_idx, i);
 						if (hit) {
+							TIE_FLIGHT_TRACE_COLLISION(projectile_idx, i, TIE_TRACE_COLLISION_PROJECTILE,
+											   (int16_t)hit);
 							collide_updatehits(projectile_idx);
 							if (i < NUM_CRAFTS) {
 								collide_laserhitcraft(projectile_idx, i, (int16_t)hit);
@@ -1876,6 +1900,9 @@ void collide_collisions(void) {
 					for (m = 0; m < 0x40u; m++) {
 						if (staticobjects[m].species) {
 							if (static_laserstaticcollide(projectile_idx, m)) {
+								TIE_FLIGHT_TRACE_COLLISION(projectile_idx,
+												   (uint16_t)(m + OBJ_REF_STATIC_BASE),
+												   TIE_TRACE_COLLISION_STATIC, -1);
 								static_laserhitstatic(projectile_idx, m);
 								collide_updatehits(projectile_idx);
 								break;

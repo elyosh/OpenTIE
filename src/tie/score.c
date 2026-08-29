@@ -13,6 +13,7 @@
 #include "tie/shipext.h" /* EFGStruct, EAIStruct */
 #include "tie/tie.h"
 #include "tie/user.h"
+#include "tie_runtime/diagnostics/flight_trace.h"
 
 /* --- Module-owned globals (watdbg: score.c) -------------------------- */
 
@@ -153,6 +154,7 @@ int8_t score_objectmemberofgroup(uint16_t obj_idx, uint8_t group_type, uint8_t g
 
 // FUNCTION: TIE 0x52A9C
 void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kind) {
+	TIE_FLIGHT_TRACE_FG_EXIT(obj_idx, exit_kind);
 	FGStatus* const fs = &fgstatus[fg_idx];
 	const EFGStruct* const f = &fg_array[fg_idx];
 	CraftData* const cd = objects[obj_idx].craft_ptr;

@@ -56,6 +56,7 @@
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/audio/music_policy.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
+#include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
 #include "tie_runtime/display/tie98_renderer.h"
@@ -2019,16 +2020,25 @@ static bool tie_doframe_tie98(void) {
 		return true;
 
 	TieFlightTiming_BeginAdvance(frameticks);
+	TIE_FLIGHT_TRACE_BEGIN_FRAME(frameticks, framerate);
 	TieAiLead_Advance(frameticks);
 	const TieFlightCadence ai_cadence = TieFlightTiming_AdvanceAi(frameticks);
 	const TieFlightCadence animation_cadence = TieFlightTiming_AdvanceAnimation(frameticks);
 	s_ai_timer_elapsed_ticks = ai_cadence.due ? ai_cadence.elapsed_ticks : 0;
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_TIME);
 	tie_updatetime();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	if (mission.train_craft_type == 0) {
+		TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_FG_STATUS);
 		create_updatefgstatus();
+		TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	}
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_AI);
 	tie_run_plane_ai(ai_cadence);
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_WEAPONS);
 	laser_weaponsfire();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_DYNAMICS);
 	dynamix_planedynamics();
 
 	int rendered = 0;
@@ -2081,13 +2091,23 @@ static bool tie_doframe_tie98(void) {
 		acceleratedtimectr = acceleratedtimesetting - 1;
 	}
 
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_RENDER);
 	if (drawdebrisflag && mission.train_craft_type == 0 && TieFlightTiming_LegacyDue())
 		create_checkdebris();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_COLLISION);
 	collide_collisions();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_MOVE);
 	move_moveobjects();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_ANIMATION);
 	tie_run_animation(animation_cadence);
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_OBJECTIVES);
 	score_checkobjective();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	msg_messageupdate();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	tie_update_selected_music();
 	if (blastflag) {
 		FrontendSound_FlushQueuedSounds();
@@ -2104,6 +2124,7 @@ static bool tie_doframe_tie98(void) {
 		else
 			FrontendDisplay_BlitOffscreenToRenderSurface();
 	}
+	TIE_FLIGHT_TRACE_END_FRAME();
 	return true;
 }
 
@@ -2156,16 +2177,25 @@ bool tie_doframe(void) {
 		return true;
 
 	TieFlightTiming_BeginAdvance(frameticks);
+	TIE_FLIGHT_TRACE_BEGIN_FRAME(frameticks, framerate);
 	TieAiLead_Advance(frameticks);
 	const TieFlightCadence ai_cadence = TieFlightTiming_AdvanceAi(frameticks);
 	const TieFlightCadence animation_cadence = TieFlightTiming_AdvanceAnimation(frameticks);
 	s_ai_timer_elapsed_ticks = ai_cadence.due ? ai_cadence.elapsed_ticks : 0;
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_TIME);
 	tie_updatetime();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	if (mission.train_craft_type == 0) {
+		TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_FG_STATUS);
 		create_updatefgstatus();
+		TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	}
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_AI);
 	tie_run_plane_ai(ai_cadence);
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_WEAPONS);
 	laser_weaponsfire();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_DYNAMICS);
 	dynamix_planedynamics();
 
 	/* Render gate (with accelerated-time skip): renders once every
@@ -2188,13 +2218,23 @@ bool tie_doframe(void) {
 	}
 
 	/* Post-render world updates. */
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_RENDER);
 	if (drawdebrisflag && mission.train_craft_type == 0 && TieFlightTiming_LegacyDue())
 		create_checkdebris();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_COLLISION);
 	collide_collisions();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_MOVE);
 	move_moveobjects();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_ANIMATION);
 	tie_run_animation(animation_cadence);
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_OBJECTIVES);
 	score_checkobjective();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	msg_messageupdate();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	tie_update_selected_music();
 
 	if (blastflag) {
@@ -2206,6 +2246,7 @@ bool tie_doframe(void) {
 		FrontendDisplay_PresentFrame();
 		FrontendDisplay_BlitOffscreenToRenderSurface();
 	}
+	TIE_FLIGHT_TRACE_END_FRAME();
 
 	/* The application uploads vesa_buff_gbl at the end of the tick. */
 	return true;
@@ -2837,6 +2878,7 @@ static void tie_simulator_setup_mission_and_push(void) {
 	const bool tie98_display = TieClassicDisplay_UsesDx5();
 	if (tie98_display)
 		FlightSurface_Lock();
+	TIE_FLIGHT_TRACE_BEGIN_MISSION(missionfilename);
 	create_createmission();
 	tie_reset_flight_timing_session_state();
 	if (tie98_display) {
@@ -2859,6 +2901,7 @@ static void tie_simulator_setup_mission_and_push(void) {
 		if (tie98_display)
 			FlightSurface_Unlock();
 	}
+	TIE_FLIGHT_TRACE_MISSION_CREATED();
 
 	if (pstate.player_fg_idx < 48 && !fg_array[pstate.player_fg_idx].start_fg_used &&
 		spec_data[pstate.player_spec_num].has_hyperdrive)
@@ -3113,6 +3156,7 @@ static LandruTaskStepResult tie_simulator_task_step(void* self) {
 
 		case TIE_SIM_PHASE_AFTER_MISSION:
 			/* End-of-mission state. */
+			TIE_FLIGHT_TRACE_END_MISSION();
 			if (TieMusicPolicy_UsesTie98())
 				CDAUDIO_Close_Device();
 			if (mission.player_status < 10u || mission.end_flag == 2) {
