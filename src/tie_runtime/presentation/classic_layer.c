@@ -4,7 +4,7 @@
 #include <string.h>
 
 #include "aeron/aeron.h"
-#include "aeron/dx5/compat.h"
+#include "aeron/compat/host.h"
 #include "tie_runtime/display/classic_framebuffer.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/presentation/presentation.h"

@@ -1,7 +1,7 @@
 #ifndef TIE_STD3D_TIE98_H
 #define TIE_STD3D_TIE98_H
 
-#include "aeron/dx5/d3d.h"
+#include "aeron/compat/d3d.h"
 
 #include <stdint.h>
 

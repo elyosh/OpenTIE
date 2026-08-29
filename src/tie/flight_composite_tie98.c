@@ -7,7 +7,7 @@
 #include "tie/tie.h"
 #include "tie/xtrans2.h"
 
-#include "aeron/dx5/compat.h"
+#include "aeron/compat/host.h"
 
 #include <stdint.h>
 #include <stdlib.h>

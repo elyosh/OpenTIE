@@ -10,8 +10,8 @@
 #include "tie_app/window_icon.h"
 
 #include "aeron/aeron.h"
-#include "aeron/dx5/compat.h"
-#include "aeron/winmm/compat.h"
+#include "aeron/compat/host.h"
+#include "aeron/compat/host.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
 #include "tie_runtime/runtime/runtime.h"

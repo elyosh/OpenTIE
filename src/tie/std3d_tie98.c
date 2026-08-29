@@ -1,6 +1,6 @@
 #include "tie/std3d_tie98.h"
 
-#include "aeron/dx5/compat.h"
+#include "aeron/compat/host.h"
 
 #include "tie/frontend_display_tie98.h"
 #include "tie/logbuf2.h"

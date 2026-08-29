@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "aeron/dx5/compat.h"
+#include "aeron/compat/host.h"
 #include "aeron/scene/blend_ramp.h"
 #include "aeron/scene/present.h"
 #include "tie_remaster/flight/cockpit/renderer.h"

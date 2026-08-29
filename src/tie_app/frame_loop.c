@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include "aeron/aeron.h"
-#include "aeron/dx5/compat.h"
+#include "aeron/compat/host.h"
 #include "tie_app/hotkeys.h"
 #include "tie_app/settings/flight_options.h"
 #include "tie_app/settings/settings.h"

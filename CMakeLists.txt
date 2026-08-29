@@ -122,7 +122,6 @@ set(TIE_RECOVERED_SOURCES
         src/tie/gamesnd.h
 		src/tie/frontend_sound_tie98.c
 		src/tie/frontend_sound_tie98.h
-		src/tie_runtime/integration/winmm_compat.h
 		src/tie/cdaudio_tie98.c
 		src/tie/cdaudio_tie98.h
 		src/tie/filestream_tie98.c
@@ -450,12 +449,10 @@ set(AERON_BUILD_TOOLS ${TIE_BUILD_TOOLS})
 # Cutscenes use TIE's FILM/DELT pipeline rather than Aeron video.
 set(AERON_ENABLE_VIDEO OFF)
 set(AERON_ENABLE_AUDIO_DECODE ON)
-set(AERON_ENABLE_WINMM_CD_AUDIO ON)
-set(AERON_ENABLE_DX5_COMPAT ON)
+set(AERON_ENABLE_COMPAT ON)
 add_subdirectory(aeron)
 target_link_libraries(tie_core PRIVATE
-    aeron_dx5
-    aeron_winmm
+    aeron_compat
     aeron_asset
     aeron_scene
     lucas_opt

@@ -1,7 +1,7 @@
 #include "tie/cdaudio_tie98.h"
 
 #include "tie/frontend_display_tie98.h"
-#include "tie_runtime/integration/winmm_compat.h"
+#include "aeron/compat/mmsystem.h"
 
 #include <limits.h>
 #include <string.h>

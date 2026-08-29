@@ -1,7 +1,7 @@
 #ifndef TIE_FRONTEND_DISPLAY_TIE98_H
 #define TIE_FRONTEND_DISPLAY_TIE98_H
 
-#include "aeron/dx5/ddraw.h"
+#include "aeron/compat/ddraw.h"
 
 #include <stdbool.h>
 #include <stdint.h>
