@@ -2279,8 +2279,10 @@ static void ui_cycle_warhead_view(void) {
 		scan = (uint16_t)(scan + 1);
 		if (scan >= WARHEAD_SLOT_END)
 			scan = NUM_CRAFTS;
-		if (objects[scan].genus == 6 &&
-			projectile_is_warhead_type[laser_species_idx(objects[scan].ship_idx)]) {
+		const unsigned int projectile_type_idx = laser_species_idx(objects[scan].ship_idx);
+		/* Freed projectile slots retain their genus after ship_idx is cleared. */
+		if (objects[scan].genus == GENUS_PROJECTILE_PLAYER && projectile_type_idx < WARHEAD_TYPE_COUNT &&
+			projectile_is_warhead_type[projectile_type_idx]) {
 			if (pstate.object_idx == (uint16_t)objects[scan].self_idx)
 				found = scan;
 			break;
