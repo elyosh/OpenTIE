@@ -2034,15 +2034,9 @@ LandruFile* shipext_Open_Mission_File(const char* filename) {
 
 // FUNCTION: TIE 0x82580
 void shipext_Set_Mission_Cutscenes(void) {
-	int16_t scene_id = 0;
-	int16_t promotion = 0;
+	int16_t promotion;
 
-	cur_battle_cutscene = 0;
-	num_battle_cutscenes = 0;
-
-	/* Seed the secret-medal state from the mission award computed during
-	 * debrief; retail does Set_Secret_Medal(mission.mission_secret_medal)
-	 * here before dispatching cutscene sequences. */
+	shipext_Clear_Battle_Cutscenes();
 	shipext_Set_Secret_Medal(mission.mission_secret_medal);
 
 	switch (mission.player_status) {
@@ -2055,7 +2049,7 @@ void shipext_Set_Mission_Cutscenes(void) {
 				shipext_Add_Battle_Cutscene(240);
 				shipext_Add_Battle_Cutscene(101);
 			}
-			break;
+			return;
 
 		case PLAYER_CAPTURED:
 			if (options_gbl.auto_backup && options_gbl.auto_restore) {
@@ -2066,101 +2060,53 @@ void shipext_Set_Mission_Cutscenes(void) {
 				shipext_Add_Battle_Cutscene(210);
 				shipext_Add_Battle_Cutscene(101);
 			}
+			return;
+
+		case 2:
+			if (!shipext_Get_Tour_Cutscene())
+				shipext_Add_Battle_Cutscene(280);
+			break;
+
+		case 3:
 			break;
 
 		default:
-			/* player_status 2 = rescued, 3 = mission ended.
-			 * For status 2 only: call Get_Tour_Cutscene inline; if it
-			 * returns 0 (no promotion/secret), add the default 280 cutscene.
-			 * For status 3: skip the initial dispatch — fall through to the
-			 * promotion/medal logic below. */
-			if (mission.player_status == 2) {
-				int16_t cur = pilot_record.cur_battle;
-				if (pilot_record.battle_status[cur] == 1) {
-					int16_t battle_size = shipext_Get_Tour_Battle_Size(cur);
-					int16_t cursor = pilot_record.battle_cursor[cur];
-					if (battle_size == cursor) {
-						scene_id = cur + 1;
-						if (cur + 1 >= 14)
-							scene_id = 0;
-						else
-							shipext_Set_TOD_Medal(cur + 1);
-					} else if (shipext_Is_Mission_Success()) {
-						int16_t secret_id = 21;
-						for (int16_t i = 0; i < 8; i++) {
-							if (cur == secret_battle_scene[i].battle &&
-								secret_battle_scene[i].mission == cursor - 1)
-								scene_id = secret_id;
-							secret_id++;
-						}
-					}
-				}
-				if (!scene_id)
-					shipext_Add_Battle_Cutscene(280);
-			}
-			scene_id = 1;
-			break;
+			return;
 	}
 
-	if (!scene_id)
-		return;
-
-	/* Compute promotion from battle state (same logic as Get_Tour_Cutscene) */
-	int16_t battle_idx = pilot_record.cur_battle;
-	if (pilot_record.battle_status[battle_idx] == 1) {
-		int16_t bsize = shipext_Get_Tour_Battle_Size(battle_idx);
-		int16_t bcursor = pilot_record.battle_cursor[battle_idx];
-		if (bsize == bcursor) {
-			promotion = battle_idx + 1;
-			if (battle_idx + 1 >= 14)
-				promotion = 0;
-			else
-				shipext_Set_TOD_Medal(battle_idx + 1);
-		} else if (shipext_Is_Mission_Success()) {
-			int16_t sid = 21;
-			for (int16_t j = 0; j < 8; j++) {
-				if (battle_idx == secret_battle_scene[j].battle &&
-					secret_battle_scene[j].mission == bcursor - 1)
-					promotion = sid;
-				sid++;
-			}
-		}
-	}
-
-	/* Build promotion cutscene sequence */
+	promotion = shipext_Get_Tour_Cutscene();
 	if (promotion == 7) {
 		shipext_Add_Battle_Cutscene(281);
 		shipext_Add_Battle_Cutscene(560);
 		shipext_Add_Battle_Cutscene(257);
-	} else if (promotion) {
-		if (promotion <= NUM_BATTLES) {
-			shipext_Add_Battle_Cutscene(10 * (promotion - 1) + 500);
-		} else {
-			shipext_Add_Battle_Cutscene(25);
-			shipext_Add_Battle_Cutscene(10 * (promotion - 21) + 700);
+	} else {
+		if (promotion) {
+			if (promotion <= NUM_BATTLES) {
+				shipext_Add_Battle_Cutscene(10 * (promotion - 1) + 500);
+			} else {
+				if (promotion != 25)
+					shipext_Add_Battle_Cutscene(25);
+				shipext_Add_Battle_Cutscene(10 * (promotion - 21) + 700);
+			}
+		}
+
+		if (battle_medal) {
+			shipext_Add_Battle_Cutscene(battle_secret_medal ? 285 : 283);
+			shipext_Add_Battle_Cutscene(250);
+			shipext_Add_Battle_Cutscene(battle_medal + 250);
+		} else if (battle_secret_medal) {
+			shipext_Add_Battle_Cutscene(284);
 		}
 	}
 
-	/* Medal ceremonies */
-	if (battle_medal) {
-		shipext_Add_Battle_Cutscene(battle_secret_medal ? 285 : 283);
-		shipext_Add_Battle_Cutscene(250);
-		shipext_Add_Battle_Cutscene(battle_medal + 250);
-	} else if (battle_secret_medal) {
-		shipext_Add_Battle_Cutscene(284);
-	}
-
-	/* Secret medal award */
 	if (battle_secret_medal) {
 		shipext_Add_Battle_Cutscene(390);
 		shipext_Add_Battle_Cutscene(battle_secret_medal + 399);
 	}
 
-	/* End of tour — final regular tour battle in retail is 13 (demo was 10) */
 	if (promotion == 13)
 		shipext_Add_Battle_Cutscene(91);
 
-	/* Final success/failure scene */
 	if (shipext_Is_Mission_Success()) {
 		if (mission_officer == 2)
 			shipext_Add_Battle_Cutscene(192);
