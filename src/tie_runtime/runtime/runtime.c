@@ -31,6 +31,7 @@
 #include "tie_runtime/timing/sim_clock.h"
 
 #include <landru/error.h>
+#include <landru/pal.h>
 #include <landru/surface.h>
 #include <landru/task.h>
 
@@ -40,6 +41,15 @@ static bool s_quit_requested;
 static bool s_tie98_display_initialized;
 static bool s_flight_resource_release_requested;
 static bool s_settings_menu_requested;
+static bool s_frontend_task_waiting;
+static bool s_frontend_present_pending;
+static uint64_t s_frontend_present_deadline_us;
+static uint64_t s_frontend_deferred_us;
+
+enum {
+	TIE_RUNTIME_MAX_ADVANCE_US = 64 * 1000,
+	TIE_RUNTIME_FRONTEND_PRESENT_US = LANDRU_VGA_RETRACE_PERIOD_US,
+};
 
 bool TieRuntime_Init(const TieRuntimeConfig* config, char* error, size_t error_capacity) {
 	if (!config) {
@@ -62,6 +72,10 @@ bool TieRuntime_Init(const TieRuntimeConfig* config, char* error, size_t error_c
 	TieMusicPolicy_ResetClock();
 	TieFlightScreen_Reset();
 	s_settings_menu_requested = false;
+	s_frontend_task_waiting = false;
+	s_frontend_present_pending = false;
+	s_frontend_present_deadline_us = 0;
+	s_frontend_deferred_us = 0;
 	g_quitRequested = 0;
 	/* The recovered Win32 global is only an opaque platform token. */
 	g_flightWindowHandle = (void*)(uintptr_t)1;
@@ -114,6 +128,10 @@ void TieRuntime_Shutdown(void) {
 	s_quit_requested = false;
 	s_flight_resource_release_requested = false;
 	s_settings_menu_requested = false;
+	s_frontend_task_waiting = false;
+	s_frontend_present_pending = false;
+	s_frontend_present_deadline_us = 0;
+	s_frontend_deferred_us = 0;
 	g_quitRequested = 0;
 	g_flightWindowHandle = NULL;
 	TieClassicDisplay_Reset();
@@ -154,17 +172,158 @@ void TieRuntime_SetWindowActive(bool active) {
 	}
 }
 
-void TieRuntime_Tick(int32_t delta_us) {
-	delta_us = TieReplayTiming_SelectEngineDeltaUs(delta_us);
-	TieSimClock_Advance(delta_us);
-	TieMusicPolicy_AdvanceTime(delta_us);
+static int32_t TieRuntime_ClampHostDeltaUs(int32_t delta_us) {
+	if (delta_us <= 0)
+		return 0;
+	return delta_us > TIE_RUNTIME_MAX_ADVANCE_US ? TIE_RUNTIME_MAX_ADVANCE_US : delta_us;
+}
 
-	gamesnd_AdvanceAudio(delta_us);
-	gamesnd_drive_palette_cycle();
+static void TieRuntime_AdvanceEngineTime(uint64_t delta_us) {
+	/* Deferred frontend time may span more than one catch-up quantum. Split it
+	 * so every clock receives the same accepted duration. */
+	while (delta_us > 0) {
+		const int32_t step_us =
+			(int32_t)(delta_us > TIE_RUNTIME_MAX_ADVANCE_US ? TIE_RUNTIME_MAX_ADVANCE_US : delta_us);
+		TieSimClock_Advance(step_us);
+		TieMusicPolicy_AdvanceTime(step_us);
+
+		gamesnd_AdvanceAudio(step_us);
+		gamesnd_drive_palette_cycle();
+		delta_us -= (uint32_t)step_us;
+	}
+}
+
+/* The original cannot continue its view loop until the completed frame has
+ * crossed the display boundary. TIE98 explicitly waits in its page flip;
+ * TIE95 spends the corresponding interval transferring the frame to VGA.
+ * Keep this on the VGA cadence used by both frontend timing profiles. */
+static uint64_t TieRuntime_FrontendPresentDelayUs(void) {
+	if (!s_frontend_present_pending)
+		return UINT64_MAX;
+
+	/* A palette update waits for its retrace before the subsequent frame
+	 * transfer. Preserve that ordering instead of overlapping both waits. */
+	uint64_t palette_delay_us = lpal_Next_VGA_Delay_Us();
+	if (palette_delay_us != UINT64_MAX)
+		return palette_delay_us;
+
+	uint64_t now_us = TieSimClock_NowUs();
+	if (!s_frontend_present_deadline_us)
+		s_frontend_present_deadline_us = now_us + TIE_RUNTIME_FRONTEND_PRESENT_US;
+	return s_frontend_present_deadline_us > now_us ? s_frontend_present_deadline_us - now_us : 0;
+}
+
+static void TieRuntime_ClearFrontendTiming(void) {
+	s_frontend_task_waiting = false;
+	s_frontend_present_pending = false;
+	s_frontend_present_deadline_us = 0;
+	s_frontend_deferred_us = 0;
+}
+
+/* Run a yielded frontend task at its synthetic deadline rather than at the
+ * next host presentation slot. CONTINUE and DONE remain immediate, matching
+ * the original synchronous call chain, while palette writes can insert their
+ * mandatory VGA-retrace wait between task phases. */
+static void TieRuntime_RunFrontendTasks(int32_t delta_us) {
+	uint64_t remaining_us = s_frontend_deferred_us + (uint32_t)delta_us;
+	bool runnable = !s_frontend_task_waiting;
+	int budget = 64;
+
+	s_frontend_deferred_us = 0;
+	if (runnable) {
+		TieRuntime_AdvanceEngineTime(remaining_us);
+		remaining_us = 0;
+	}
+
+	while (budget-- > 0 && !landru_task_stack_empty()) {
+		if (!runnable) {
+			uint64_t delay_us = s_frontend_present_pending ? TieRuntime_FrontendPresentDelayUs()
+														   : landru_task_next_wake_delay_us();
+			if (delay_us == UINT64_MAX) {
+				/* An untimed YIELD only defers work to the next host tick. Its
+				 * elapsed interval has now arrived, so resume at the interval's
+				 * end just as the unsplit runtime loop did. */
+				TieRuntime_AdvanceEngineTime(remaining_us);
+				remaining_us = 0;
+				runnable = true;
+				continue;
+			}
+			if (delay_us > remaining_us) {
+				TieRuntime_AdvanceEngineTime(remaining_us);
+				/* View and dialog waits historically serviced fast input on each
+				 * host invocation even when their frame budget had not elapsed. */
+				landru_task_service_wait();
+				return;
+			}
+			TieRuntime_AdvanceEngineTime(delay_us);
+			remaining_us -= delay_us;
+			if (s_frontend_present_pending) {
+				/* Completing a preceding palette wait starts the presentation
+				 * deadline; completing that deadline makes the task runnable. */
+				if (TieRuntime_FrontendPresentDelayUs() != 0)
+					continue;
+				s_frontend_present_pending = false;
+				s_frontend_present_deadline_us = 0;
+			}
+			runnable = true;
+		}
+
+		/* Advancing time can itself update a cycling palette. Its retrace
+		 * wait takes precedence over the task that was otherwise due. */
+		if (lpal_Next_VGA_Delay_Us() != UINT64_MAX) {
+			s_frontend_task_waiting = true;
+			runnable = false;
+			continue;
+		}
+
+		LandruTaskStepResult result = landru_task_step_once();
+		if (!TieClassicDisplay_FrontendActive()) {
+			TieRuntime_ClearFrontendTiming();
+			TieRuntime_AdvanceEngineTime(remaining_us);
+			landru_task_run_frame();
+			return;
+		}
+		if (result == LANDRU_TASK_STEP_FRAME_COMPLETE) {
+			s_frontend_task_waiting = true;
+			s_frontend_present_pending = true;
+			s_frontend_present_deadline_us = 0;
+			s_frontend_deferred_us = remaining_us;
+			return;
+		}
+		if (result == LANDRU_TASK_STEP_YIELD) {
+			s_frontend_task_waiting = true;
+			/* Timed yields remain on the synthetic timeline. Only input waits
+			 * and other untimed yields require another host invocation. */
+			if (landru_task_next_wake_delay_us() != UINT64_MAX) {
+				runnable = false;
+				continue;
+			}
+			TieRuntime_AdvanceEngineTime(remaining_us);
+			return;
+		}
+
+		s_frontend_task_waiting = false;
+		if (lpal_Next_VGA_Delay_Us() != UINT64_MAX) {
+			s_frontend_task_waiting = true;
+			runnable = false;
+		}
+	}
+
+	TieRuntime_AdvanceEngineTime(remaining_us);
+}
+
+void TieRuntime_Tick(int32_t delta_us) {
+	delta_us = TieRuntime_ClampHostDeltaUs(TieReplayTiming_SelectEngineDeltaUs(delta_us));
 
 	/* Imperative draw hooks require a writable snapshot before tasks run. */
 	TieSnapshotBuilder_BeginTick();
-	landru_task_run_frame();
+	if (TieClassicDisplay_FrontendActive()) {
+		TieRuntime_RunFrontendTasks(delta_us);
+	} else {
+		TieRuntime_ClearFrontendTiming();
+		TieRuntime_AdvanceEngineTime(delta_us);
+		landru_task_run_frame();
+	}
 
 	const TieSceneKind settled_scene = TieSnapshotBuilder_GetSceneKind();
 	const bool emit_flight = settled_scene == TIE_SCENE_FLIGHT_LOADING || settled_scene == TIE_SCENE_FLIGHT;
@@ -193,7 +352,10 @@ void TieRuntime_Tick(int32_t delta_us) {
 	TieSnapshotBuilder_FinalizeTick();
 }
 
-uint64_t TieRuntime_NextWakeDelayUs(void) { return landru_task_next_wake_delay_us(); }
+uint64_t TieRuntime_NextWakeDelayUs(void) {
+	return s_frontend_present_pending ? TieRuntime_FrontendPresentDelayUs()
+									  : landru_task_next_wake_delay_us();
+}
 
 void TieRuntime_RequestFlightResourceRelease(void) { s_flight_resource_release_requested = true; }
 

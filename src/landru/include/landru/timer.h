@@ -12,9 +12,9 @@ void ltimer_Destroy_Timer_Interrupt(void);
  * the per-scene budget has not yet elapsed since the last frame
  * commit. Tasks yield when 1 is reported; pending pixels remain buffered.
  *
- * ltimer_Commit_Frame: budget elapsed; advance the scheduled frame origin
- * by one period and consume accumulated PIT ticks into time_gbl. Tasks call
- * this once the gate returns 0 to mark the frame as begun. */
+ * ltimer_Commit_Frame: budget elapsed; consume accumulated PIT ticks and
+ * clear the entire frame-lock accumulator. Tasks call this once the gate
+ * returns 0 to mark the frame as begun. */
 int ltimer_Frame_Budget_Pending(void);
 void ltimer_Commit_Frame(void);
 /* Remaining synthetic-clock delay to the current scheduled frame deadline. */
@@ -30,7 +30,7 @@ void ltimer_Often(void);
 /* Live PIT-tick time (time_gbl + unconsumed ticks). */
 int32_t ltimer_Current_Time(void);
 
-/* Set the per-scene frame target in PIT ticks and anchor a new timeline. */
+/* Set the per-scene frame target in PIT ticks without resetting elapsed time. */
 void ltimer_Set_Frame_Rate(int16_t rate);
 
 /* Cel budget in microseconds (frame_rate_gbl × 4 × 1000). Returns

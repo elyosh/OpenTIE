@@ -4,11 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Monotonic count of lpal_Set_VGA_Palette calls. Used by
- * lfade_Fade_To_Video_Screen to measure actual palette writes during
- * its inner loop (so the post-fade wait pads only for the writes
- * that actually happened, not for every inner iter). */
-extern uint32_t lpal_vga_palette_write_count;
+#define LANDRU_VGA_RETRACE_PERIOD_US 14286u
 
 typedef struct {
 	int16_t dir;
@@ -42,6 +38,9 @@ struct Palette {
 };
 
 void lpal_Set_VGA_Palette(RGBStruct* pal, int16_t start, int16_t len);
+/* Delay until all changed VGA palette writes have crossed their original
+ * retrace waits. UINT64_MAX means that no wait is pending. */
+uint64_t lpal_Next_VGA_Delay_Us(void);
 void lpal_Create_Palette_Module(void);
 void lpal_Destroy_Palette_Module(void);
 Palette* lpal_Ask_Palette_List(void);

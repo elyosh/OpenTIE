@@ -14,7 +14,6 @@
 #include <landru/vesa.h>
 #include <landru/view.h>
 
-#include "host_internal.h"
 #include "render_internal.h"
 
 // GLOBAL: TIE 0xD2F54
@@ -358,26 +357,13 @@ void lfade_Fade_Copy_To_Video(Rect* bounds, FadeWipeMode mode, int16_t step, int
 	}
 }
 
-/* VGA mode 13h refreshes at ~70 Hz. Retail's XPAL_Set_VGA_Palette spins
- * on port 0x3DA before every palette write, blocking until the next
- * vblank — so each palette write costs ~14 ms wall-clock and is visible
- * on screen between writes (the VGA hardware reinterprets framebuffer
- * pixels with the new palette on each refresh, no flip needed).
- *
- * On modern hardware palette and framebuffer writes update CPU-side state;
- * the embedding application presents them after each task frame. Sustained
- * fades therefore run one iteration per WAIT-paced step. Pacing is anchored
- * to the absolute palette-write count so delayed iterations do not accumulate
- * unwanted waits. */
-#define VGA_VBLANK_PERIOD_NS 14286000ull /* 1/70 Hz, in nanoseconds */
-
 /* ------------------------------------------------------------------
  * Fade engine — fully task-driven.
  *
- * TIE98 runs successive calculations synchronously and yields only
- * after presentation calls present in the original loop. The VGA path
- * retains its per-palette-write vertical-retrace pacing. Cursor
- * restoration and Refresh_View run from the task's `end` callback;
+ * TIE98's explicit presentation calls remain yield points. Sustained fades
+ * in both frontend modes additionally use the palette module's emulated VGA
+ * retrace cadence.
+ * Cursor restoration and Refresh_View run from the task's `end` callback;
  * normal frame presentation remains owned by the calling view task.
  *
  * Pushed via lfade_Push_Fade_To_Video_Screen_Task (or the
@@ -399,8 +385,6 @@ typedef struct FadeTask {
 	 * pass at push time (caller-task yields immediately; the Rect
 	 * pointer would otherwise dangle). */
 	Rect clip;
-	uint64_t fade_t0_ns;
-	uint32_t pal_writes_at_entry;
 	int32_t start_time;
 	int32_t end_time;
 	int32_t k;
@@ -417,13 +401,10 @@ typedef struct FadeTask {
 
 static LandruTaskStepResult fade_task_step(void* self) {
 	FadeTask* t = (FadeTask*)self;
-	const bool platform_video = landru_port_Uses_Platform_Video();
 
 	for (;;) {
 		if (t->phase == FADE_PHASE_VGA_WAIT) {
-			uint32_t pal_writes_so_far = lpal_vga_palette_write_count - t->pal_writes_at_entry;
-			uint64_t target_ns = t->fade_t0_ns + (uint64_t)pal_writes_so_far * VGA_VBLANK_PERIOD_NS;
-			if (landru_host_now_us() * 1000u < target_ns)
+			if (lpal_Next_VGA_Delay_Us() != UINT64_MAX)
 				return LANDRU_TASK_STEP_YIELD;
 			t->phase = FADE_PHASE_PALETTE;
 		}
@@ -513,13 +494,20 @@ static LandruTaskStepResult fade_task_step(void* self) {
 
 		if (t->phase == FADE_PHASE_ADVANCE) {
 			t->k++;
-			if (!platform_video && t->sustained && t->k <= t->end_time) {
+			if (t->sustained && t->k <= t->end_time) {
 				t->phase = FADE_PHASE_VGA_WAIT;
 				return LANDRU_TASK_STEP_CONTINUE;
 			}
 			t->phase = FADE_PHASE_PALETTE;
 		}
 	}
+}
+
+static uint64_t fade_task_next_wake_delay_us(const void* self) {
+	const FadeTask* t = (const FadeTask*)self;
+	if (t->phase != FADE_PHASE_VGA_WAIT)
+		return UINT64_MAX;
+	return lpal_Next_VGA_Delay_Us();
 }
 
 static void fade_task_end(void* self) {
@@ -548,6 +536,7 @@ static void fade_task_end(void* self) {
 static const LandruTaskVtable fade_task_vt = {
 	.step = fade_task_step,
 	.end = fade_task_end,
+	.next_wake_delay_us = fade_task_next_wake_delay_us,
 };
 
 /* Push a FadeTask onto the tie_core task stack. Caller-task yields
@@ -592,8 +581,6 @@ int lfade_Push_Fade_To_Video_Screen_Task(const Rect* clip, int16_t is_dialog, Fa
 	if (!t)
 		return 0;
 	t->clip = *clip;
-	t->fade_t0_ns = landru_host_now_us() * 1000u;
-	t->pal_writes_at_entry = lpal_vga_palette_write_count;
 	t->start_time = start_time;
 	t->end_time = end_time;
 	t->k = start_time;

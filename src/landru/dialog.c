@@ -325,8 +325,15 @@ static uint64_t dialog_task_next_wake_delay_us(const void* self) {
 	return 0;
 }
 
+static void dialog_task_service_wait(void* self) {
+	const DialogTask* t = (const DialogTask*)self;
+	if (t->phase == DIALOG_PHASE_WAIT)
+		lio_Poll_Fast_Input();
+}
+
 static const LandruTaskVtable dialog_task_vt = {
 	.step = dialog_task_step,
+	.service_wait = dialog_task_service_wait,
 	.next_wake_delay_us = dialog_task_next_wake_delay_us,
 };
 

@@ -190,6 +190,12 @@ static uint64_t viewadd_task_next_wake_delay_us(const void* self) {
 	return 0;
 }
 
+static void viewadd_task_service_wait(void* self) {
+	const ViewAddTask* t = (const ViewAddTask*)self;
+	if (t->phase == VIEW_PHASE_WAIT)
+		lio_Poll_Fast_Input();
+}
+
 static void viewadd_task_end(void* self) {
 	(void)self;
 	lview_Free_All_From_View(view_gbl);
@@ -200,6 +206,7 @@ static void viewadd_task_end(void* self) {
 static const LandruTaskVtable viewadd_task_vt = {
 	.step = viewadd_task_step,
 	.end = viewadd_task_end,
+	.service_wait = viewadd_task_service_wait,
 	.next_wake_delay_us = viewadd_task_next_wake_delay_us,
 };
 

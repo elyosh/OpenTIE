@@ -20,6 +20,8 @@ typedef enum LandruTaskStepResult {
 typedef struct LandruTaskVtable {
 	LandruTaskStepResult (*step)(void* self);
 	void (*end)(void* self);
+	/* Optional host-frame work while a timed task deadline is still pending. */
+	void (*service_wait)(void* self);
 	uint64_t (*next_wake_delay_us)(const void* self);
 } LandruTaskVtable;
 
@@ -35,6 +37,7 @@ bool landru_task_stack_empty(void);
 int landru_task_depth(void);
 LandruTaskStepResult landru_task_step_once(void);
 void landru_task_run_frame(void);
+void landru_task_service_wait(void);
 uint64_t landru_task_next_wake_delay_us(void);
 void landru_task_clear_all(void);
 

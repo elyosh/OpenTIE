@@ -177,6 +177,8 @@ int TieInput_ModifierKeys(void) {
 static float cursor_fb_x = 160.0f, cursor_fb_y = 100.0f;
 static int fb_w = 320, fb_h = 200;
 static int16_t mouse_dx_acc, mouse_dy_acc;
+/* Prevent an idle re-anchor until Landru has consumed the absolute target. */
+static bool absolute_motion_pending;
 static int cursor_visible_for_engine = 1;
 static int pillarbox_cursor_active;
 static int frames_since_mouse_motion;
@@ -272,6 +274,7 @@ void TieInput_GetMouseMovement(int16_t* dx, int16_t* dy) {
 	}
 	mouse_dx_acc = 0;
 	mouse_dy_acc = 0;
+	absolute_motion_pending = false;
 	relative_motion_x = 0.0f;
 	relative_motion_y = 0.0f;
 	relative_motion_interval_us = 0;
@@ -294,6 +297,7 @@ void TieInput_SetMousePosition(int16_t x, int16_t y) {
 	frames_since_mouse_motion = 0;
 	mouse_dx_acc = 0;
 	mouse_dy_acc = 0;
+	absolute_motion_pending = false;
 
 	(void)TieInput_WarpHostCursorToFramebufferCell(clamped_x, clamped_y);
 }
@@ -373,6 +377,7 @@ void TieInput_UpdateCapture(const TieSnapshot* snapshot, bool settings_open) {
 	relative_motion_interval_us = 0;
 	mouse_dx_acc = 0;
 	mouse_dy_acc = 0;
+	absolute_motion_pending = false;
 	/* The snapshot that requests release was sampled while SDL was still
 	 * captured, so its absolute coordinates are not current until the next
 	 * host frame. */
@@ -423,6 +428,10 @@ void TieInput_UpdateCursor(bool pillarbox_active, int16_t engine_x, int16_t engi
 		cursor_fb_x = TieInput_Clamp(cursor_fb_x, 0.0f, fb_w_max);
 		cursor_fb_y = TieInput_Clamp(cursor_fb_y, 0.0f, fb_h_max);
 	}
+	if (absolute_motion_pending) {
+		frames_since_mouse_motion = 0;
+		return;
+	}
 	if (frames_since_mouse_motion < 3)
 		++frames_since_mouse_motion;
 	if (frames_since_mouse_motion < 3)
@@ -444,6 +453,7 @@ void TieInput_UpdateCursor(bool pillarbox_active, int16_t engine_x, int16_t engi
 		cursor_fb_y >= 0.0f && cursor_fb_y <= fb_h_max) {
 		mouse_dx_acc = 0;
 		mouse_dy_acc = 0;
+		absolute_motion_pending = false;
 		(void)TieInput_WarpHostCursorToFramebufferCell(engine_x, engine_y);
 	}
 }
@@ -632,6 +642,7 @@ void TieInput_BeginFrame(int32_t delta_us) {
 			skip_absolute_frame = 0;
 			mouse_dx_acc = 0;
 			mouse_dy_acc = 0;
+			absolute_motion_pending = false;
 		} else {
 			float new_x, new_y;
 			if (TieInput_MapAbsoluteCursor(in, &new_x, &new_y)) {
@@ -659,14 +670,19 @@ void TieInput_BeginFrame(int32_t delta_us) {
 					 * the latest snapshot is Landru's authoritative current pose. */
 					mouse_dx_acc = (int16_t)(target_x - engine_cursor_x);
 					mouse_dy_acc = (int16_t)(target_y - engine_cursor_y);
+					absolute_motion_pending = mouse_dx_acc != 0 || mouse_dy_acc != 0;
+				} else {
+					absolute_motion_pending = false;
 				}
 			} else {
 				mouse_dx_acc = 0;
 				mouse_dy_acc = 0;
+				absolute_motion_pending = false;
 			}
 		}
 	} else {
 		mouse_dx_acc = 0;
 		mouse_dy_acc = 0;
+		absolute_motion_pending = false;
 	}
 }

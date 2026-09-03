@@ -24,22 +24,37 @@ static Palette* video_pal_gbl = NULL;
 // GLOBAL: TIE 0xD2C44
 static Palette* first_palette_gbl = NULL;
 
-/* Count of palette writes since program start. lfade_Fade_To_Video_Screen
- * snapshots this before/after its inner loop and uses the delta to size
- * the post-fade pacing wait — matching retail's "vsync wait per actual
- * palette write" timing rather than "per inner iter". An inner iter
- * may skip the palette write when delay/sustain gating in
- * lfade_Fade_To_Video_Palette returns early. */
-uint32_t lpal_vga_palette_write_count = 0;
+/* XPAL_Set_VGA_Palette waits for a mode-13h retrace before every changed
+ * palette range. Queue those waits on one absolute 70 Hz timeline so host
+ * presentation frequency cannot alter their duration. */
+static uint64_t s_vga_next_retrace_us;
+static uint64_t s_vga_wait_until_us;
+
+static void lpal_schedule_vga_retrace(void) {
+	uint64_t now_us = landru_host_now_us();
+	if (s_vga_next_retrace_us <= now_us) {
+		uint64_t elapsed_periods = (now_us - s_vga_next_retrace_us) / LANDRU_VGA_RETRACE_PERIOD_US + 1u;
+		s_vga_next_retrace_us += elapsed_periods * LANDRU_VGA_RETRACE_PERIOD_US;
+	}
+	s_vga_wait_until_us = s_vga_next_retrace_us;
+	s_vga_next_retrace_us += LANDRU_VGA_RETRACE_PERIOD_US;
+}
 
 void lpal_Set_VGA_Palette(RGBStruct* pal, int16_t start, int16_t len) {
-	lpal_vga_palette_write_count++;
 	landru_host_palette_set((const uint8_t*)pal, (int)start, (int)len);
+	lpal_schedule_vga_retrace();
+}
+
+uint64_t lpal_Next_VGA_Delay_Us(void) {
+	uint64_t now_us = landru_host_now_us();
+	return s_vga_wait_until_us > now_us ? s_vga_wait_until_us - now_us : UINT64_MAX;
 }
 
 void lpal_Create_Palette_Module(void) {
 	int16_t ok = 1;
 	s_palette_module = true;
+	s_vga_next_retrace_us = landru_host_now_us() + LANDRU_VGA_RETRACE_PERIOD_US;
+	s_vga_wait_until_us = 0;
 
 	screen_pal_gbl = lpal_Alloc_Palette(0, 256);
 	if (screen_pal_gbl)
@@ -75,6 +90,8 @@ void lpal_Create_Palette_Module(void) {
 }
 
 void lpal_Destroy_Palette_Module(void) {
+	s_vga_next_retrace_us = 0;
+	s_vga_wait_until_us = 0;
 	if (screen_pal_gbl) {
 		lpal_Free_Palette(screen_pal_gbl);
 		screen_pal_gbl = NULL;

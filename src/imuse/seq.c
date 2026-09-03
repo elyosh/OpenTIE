@@ -101,7 +101,7 @@ int ImSeq_SetTempo(imuse_t* im, ImSeqData* seq, int tempo) {
 	 * computed carefully to avoid 32-bit overflow on very slow
 	 * tempi. Shift dividend+divisor in lockstep until both fit
 	 * in 16 bits, then shift-and-divide. */
-	unsigned int dividend = 480u * (unsigned int)IM_USEC_PER_INT;
+	unsigned int dividend = 480u * (unsigned int)IM_LOGICAL_TICK_US;
 	unsigned int divisor = (unsigned int)tempo;
 	seq->tempo = tempo;
 	while ((dividend & 0xFFFF0000u) || (divisor & 0xFFFF0000u)) {

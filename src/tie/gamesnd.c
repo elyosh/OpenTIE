@@ -155,11 +155,9 @@ int16_t gamesnd_Open_Pre_iMuse(void) {
 		.logUser = NULL,
 	};
 
-	/* Engine settings. The internal-tick period is fixed at
-	 * IM_USEC_PER_INT (8060 µs, ~124 Hz, matching retail Z_TIE__.EXE's
-	 * PIT reprogramming). The host's imuse_advance call rate is
-	 * decoupled from that — pick whatever cadence suits the
-	 * platform's audio thread. */
+	/* Engine settings. The original services iMUSE every 8 ms while each service
+	 * advances its logical clock by 8060 us. The host's imuse_advance call
+	 * rate is decoupled from that cadence. */
 	ImuseConfig cfg = {
 		.outputSampleRate = GAMESND_AUDIO_RATE,
 		.waveSpeed = 1,
@@ -202,7 +200,7 @@ void gamesnd_Close_Pre_iMuse(void) {
 
 /* Keep one large host delta from advancing the recovered engine through an
  * unbounded number of internal ticks. Time beyond this bound is dropped. */
-#define GAMESND_MAX_ADVANCE_US (8060 * 8)
+#define GAMESND_MAX_ADVANCE_US (8000 * 8)
 
 void gamesnd_AdvanceAudio(int32_t elapsed_us) {
 	if (!im || elapsed_us <= 0)

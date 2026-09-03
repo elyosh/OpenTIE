@@ -16,5 +16,5 @@ int ImTimer_Deinit(imuse_t* im) {
 
 int32_t ImTimer_GetUsecPerInt(imuse_t* im) {
 	(void)im;
-	return IM_USEC_PER_INT;
+	return IM_LOGICAL_TICK_US;
 }

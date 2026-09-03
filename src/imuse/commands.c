@@ -21,12 +21,12 @@
 
 /* ===== Module-private state ===== */
 
-/* Three host-tick accumulators (microseconds). Fed by imuse_advance;
- * drain at their respective tier rates. */
+/* Three tick accumulators (microseconds). The core accumulator consumes real
+ * host time; the secondary tiers consume logical time from serviced ticks. */
 
 /* Tier periods (microseconds). 16667 us = 60 Hz; 100000 us = 10 Hz.
- * The core tier's period is IM_USEC_PER_INT (internal/timer.h),
- * the same constant ImSeq_SetTempo calibrates `step` against. */
+ * The core tier's real period and logical duration are defined separately in
+ * internal/timer.h. */
 #define IM_TICK_60HZ_US 16667
 #define IM_TICK_10HZ_US 100000
 
@@ -90,7 +90,7 @@ int ImCommands_Init(imuse_t* im, const ImuseHost* host, const ImuseConfig* cfg, 
 	 * rolls back the ones that succeeded, leaving the engine uninitialized.
 	 *
 	 * Timer comes first for IDA-symbol parity with IMUSE.ENG; the
-	 * port is a no-op now that IM_USEC_PER_INT is a compile-time
+	 * port is a no-op now that the timer periods are compile-time
 	 * constant. */
 	if (ImTimer_Init(im) != 0)
 		goto fail_timer;
@@ -176,35 +176,35 @@ void imuse_advance(imuse_t* im, int32_t usecElapsed) {
 	if (!im->commands.initialized || usecElapsed <= 0)
 		return;
 
-	/* Catch-up cap. All three tiers see the same capped delta so
-	 * they stay phase-aligned across a stall. */
-	if (usecElapsed > IM_USEC_PER_INT * IM_MAX_CATCHUP_TICKS)
-		usecElapsed = IM_USEC_PER_INT * IM_MAX_CATCHUP_TICKS;
+	/* Bound the number of original service ticks dispatched after a stall. */
+	if (usecElapsed > IM_SERVICE_PERIOD_US * IM_MAX_CATCHUP_TICKS)
+		usecElapsed = IM_SERVICE_PERIOD_US * IM_MAX_CATCHUP_TICKS;
 
 	/* Core tier: MIDI sequencer step + wave frame pump.
 	 *
 	 * The DOS engine drove these from a fixed-rate PIT. Here we
-	 * accumulate host-elapsed time and fire one internal tick per
-	 * IM_USEC_PER_INT — same number of ticks the PIT would have
-	 * fired. That makes the engine's per-tick step (16.16 ticks-
-	 * per-PIT, baked in by ImSeq_SetTempo) tempo-correct under
-	 * any host cadence.
+	 * accumulate host-elapsed time and fire one service tick every
+	 * IM_SERVICE_PERIOD_US. The original advances the sequencer by the nominal
+	 * IM_LOGICAL_TICK_US on each service, which ImSeq_SetTempo bakes into
+	 * its 16.16 step.
 	 *
 	 * Both updates self-gate on internal pause flags, so the loop
 	 * runs unconditionally — debug refresh inside ImMidi_Update
 	 * keeps ticking while the engine is paused. */
+	int32_t logicalElapsed = 0;
 	im->commands.timerCoreAccum += usecElapsed;
-	while (im->commands.timerCoreAccum >= IM_USEC_PER_INT) {
-		im->commands.timerCoreAccum -= IM_USEC_PER_INT;
+	while (im->commands.timerCoreAccum >= IM_SERVICE_PERIOD_US) {
+		im->commands.timerCoreAccum -= IM_SERVICE_PERIOD_US;
 		ImMidi_Update(im);
 		ImWave_Update(im);
+		logicalElapsed += IM_LOGICAL_TICK_US;
 	}
 
-	if (im->commands.paused)
+	if (im->commands.paused || logicalElapsed == 0)
 		return;
 
 	/* 60 Hz tier: fades + triggers. */
-	im->commands.timer60HzAccum += usecElapsed;
+	im->commands.timer60HzAccum += logicalElapsed;
 	while (im->commands.timer60HzAccum >= IM_TICK_60HZ_US) {
 		im->commands.timer60HzAccum -= IM_TICK_60HZ_US;
 		ImFades_Update(im);
@@ -220,7 +220,7 @@ void imuse_advance(imuse_t* im, int32_t usecElapsed) {
 	 *     below  → +3 per tick (slow release, ~2.7 s full rise 0..127)
 	 *     above  → -18 per tick (fast duck, ~0.45 s full drop 127..0)
 	 */
-	im->commands.timer10HzAccum += usecElapsed;
+	im->commands.timer10HzAccum += logicalElapsed;
 	while (im->commands.timer10HzAccum >= IM_TICK_10HZ_US) {
 		im->commands.timer10HzAccum -= IM_TICK_10HZ_US;
 
