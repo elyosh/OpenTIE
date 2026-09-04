@@ -108,6 +108,10 @@ jobs:
       - name: Install build tools
         run: brew install autoconf automake cmake glib libtool ninja pkg-config
 
+      - name: Determine runner image version
+        id: runner-image
+        run: echo "version=${ImageVersion}" >> "$GITHUB_OUTPUT"
+
       - name: Restore dependency caches
         uses: actions/cache@v6
         with:
@@ -121,7 +125,7 @@ jobs:
             build/cache/macos-arm64/build/fluidsynth
             build/cache/macos-arm64/build/speexdsp
             build/cache/macos-arm64/build/shadercross
-          key: macos-arm64-deps-${{ hashFiles('packaging/macos/build-package.sh', 'packaging/common/shadercross-fsr3.patch') }}
+          key: macos-arm64-${{ steps.runner-image.outputs.version }}-deps-${{ hashFiles('packaging/macos/build-package.sh', 'packaging/common/shadercross-fsr3.patch') }}
 
       - name: Build package
         env:
