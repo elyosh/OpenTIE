@@ -1174,7 +1174,7 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 	(void)b_obj_id_field;
 
 	if (bpflightflag)
-		return 0;
+		return obj_a;
 
 	uint16_t result_obj = obj_b;
 	/* Object returned by the mismatch path. */
@@ -1232,8 +1232,9 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 					a_ship_idx = objects[a_obj_byte].ship_type_override;
 				a_bound_size = species_table[a_ship_idx].bound_hwidth;
 			}
-		} else if (a_cat_hi != 0x38u) {
-			/* fall through */
+		} else if (a_cat_hi == 0x38u) {
+			/* Static meshes do not participate in craft relationship sorting. */
+			return result_obj;
 		}
 	} else {
 		/* a_cat_hi == 0x30: neither wins. */
