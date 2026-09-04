@@ -48,10 +48,11 @@ typedef struct ImCommandsState {
 	ImuseConfig config; /* copy of host-supplied settings */
 	int initialized;    /* nonzero between Init and Terminate */
 	int paused;
+	int musicDuckingFactor; /* 0..128 multiplier; 47 matches the original */
 	int32_t timerCoreAccum; /* Real host time toward the next service. */
 	int32_t timer60HzAccum; /* Logical iMUSE time. */
 	int32_t timer10HzAccum; /* Logical iMUSE time. */
-	ImuseLogFunc logFunc; /* mirrors host logFunc */
+	ImuseLogFunc logFunc;   /* mirrors host logFunc */
 	void* logUser;
 } ImCommandsState;
 

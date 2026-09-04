@@ -1,6 +1,7 @@
 #ifndef __GAMESND_H__
 #define __GAMESND_H__
 
+#include <stdbool.h>
 #include <stdint.h>
 
 int16_t gamesnd_Open_Pre_iMuse(void);
@@ -10,6 +11,7 @@ void gamesnd_Close_Pre_iMuse(void);
  * independently paced by the host output worker. No-op before iMUSE opens. */
 void gamesnd_AdvanceAudio(int32_t elapsed_us);
 void gamesnd_Set_CD_Volume(int volume);
+bool gamesnd_SetMusicDuckingVolumePercent(int percent);
 
 /* Engine-glow palette cycle driver. Reproduces the second half of
  * retail GAMESND_Host_Int (0x88adc..0x88bcf): on its own PIT-tick

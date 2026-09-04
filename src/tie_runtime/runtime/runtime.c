@@ -155,6 +155,12 @@ bool TieRuntime_ConsumeSettingsMenuRequest(void) {
 	return requested;
 }
 
+bool TieRuntime_SetMusicDuckingVolumePercent(int percent) {
+	if (!gamesnd_SetMusicDuckingVolumePercent(percent))
+		return false;
+	return TieAudio_SetMusicDuckingVolumePercent(percent);
+}
+
 /* SDL focus events replace the recovered WM_ACTIVATEAPP delivery. */
 void TieRuntime_SetWindowActive(bool active) {
 	if (!TieProfile_UsesDx5())

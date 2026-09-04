@@ -9,6 +9,7 @@
 #include "aeron/scene/ui_file_picker.h"
 
 #include "tie_app/midi_resources.h"
+#include "tie_app/settings/audio_options.h"
 #include "tie_app/settings/controller_page.h"
 #include "tie_app/settings/flight_options.h"
 #include "tie_app/settings/inflight_options.h"
@@ -17,6 +18,7 @@
 #include "tie_app/setup/installation_ui.h"
 #include "tie_remaster/remaster.h"
 #include "tie_runtime/input/controller_mapping.h"
+#include "tie_runtime/runtime/runtime.h"
 
 typedef enum TiePathPickerTarget {
 	TIE_PATH_PICKER_TIE95,
@@ -169,6 +171,22 @@ static bool TieSettings_PersistFlightOptions(const TieAppLiveFlightOptions* opti
 	return TieAppConfig_SetLiveFlightOptions((TieAppConfigState*)user, options, error, error_capacity);
 }
 
+static bool TieSettings_ApplyAudioOptions(const TieAppLiveAudioOptions* previous,
+										  const TieAppLiveAudioOptions* requested, void* user, char* error,
+										  size_t error_capacity) {
+	(void)previous;
+	(void)user;
+	if (TieRuntime_SetMusicDuckingVolumePercent(requested->music_ducking_volume_percent))
+		return true;
+	snprintf(error, error_capacity, "could not apply the music ducking volume");
+	return false;
+}
+
+static bool TieSettings_PersistAudioOptions(const TieAppLiveAudioOptions* options, void* user, char* error,
+											size_t error_capacity) {
+	return TieAppConfig_SetLiveAudioOptions((TieAppConfigState*)user, options, error, error_capacity);
+}
+
 static bool TieSettings_PersistLaunchOptions(const TieAppLaunchOptions* options, void* user, char* error,
 											 size_t error_capacity) {
 	if (options->music_source == TIE_MUSIC_IMUSE) {
@@ -190,6 +208,7 @@ static void TieSettings_LaunchRestartNotice(AeronUiContext* ui) {
 bool TieSettings_Init(TieUi* ui, TieAppConfigState* config, bool has_tie95, bool has_tie98, char* error,
 					  size_t error_capacity) {
 	TieAppLiveFlightOptions flight;
+	TieAppLiveAudioOptions audio;
 	TieInflightOptions inflight;
 	TieAppLaunchOptions launch;
 	memset(&g_settings, 0, sizeof g_settings);
@@ -207,17 +226,21 @@ bool TieSettings_Init(TieUi* ui, TieAppConfigState* config, bool has_tie95, bool
 		return false;
 	}
 	TieAppConfig_GetLiveFlightOptions(&config->requested, &flight);
+	TieAppConfig_GetLiveAudioOptions(&config->requested, &audio);
 	TieInflightOptions_Get(&inflight);
 	TieAppConfig_GetLaunchOptions(&config->requested, &launch);
 	if (!TieVideoOptions_Configure(&config->defaults.video, &config->requested.video,
 								   TieSettings_ApplyVideoOptions, TieSettings_PersistVideoOptions, config) ||
 		!TieFlightOptions_Configure(&flight, TieSettings_ApplyFlightOptions, TieSettings_PersistFlightOptions,
 									config) ||
+		!TieAudioOptions_Configure(&audio, TieSettings_ApplyAudioOptions, TieSettings_PersistAudioOptions,
+								   config) ||
 		!TieInflightSettings_Configure(&inflight) ||
 		!TieLaunchOptions_Configure(&launch, TieSettings_PersistLaunchOptions, config)) {
 		snprintf(error, error_capacity, "could not configure modern settings state");
 		TieVideoOptions_Shutdown();
 		TieFlightOptions_Shutdown();
+		TieAudioOptions_Shutdown();
 		TieInflightSettings_Shutdown();
 		TieLaunchOptions_Shutdown();
 		AeronUiFilePicker_Destroy(g_settings.path_picker);
@@ -235,6 +258,7 @@ void TieSettings_Shutdown(void) {
 	}
 	TieVideoOptions_Shutdown();
 	TieFlightOptions_Shutdown();
+	TieAudioOptions_Shutdown();
 	TieInflightSettings_Shutdown();
 	TieLaunchOptions_Shutdown();
 	AeronUiFilePicker_Destroy(g_settings.path_picker);
@@ -247,7 +271,8 @@ bool TieSettings_CapturesController(void) { return g_settings.open && g_settings
 
 bool TieSettings_Flush(char* error, size_t error_capacity) {
 	if (!TieVideoOptions_Flush(error, error_capacity) || !TieFlightOptions_Flush(error, error_capacity) ||
-		!TieInflightSettings_Flush(error, error_capacity) || !TieLaunchOptions_Flush(error, error_capacity))
+		!TieAudioOptions_Flush(error, error_capacity) || !TieInflightSettings_Flush(error, error_capacity) ||
+		!TieLaunchOptions_Flush(error, error_capacity))
 		return false;
 	return !g_settings.open ||
 		   TieControllerSettings_Commit(&g_settings.controller, g_settings.config, error, error_capacity);
@@ -672,9 +697,11 @@ static void TieSettings_AudioPage(AeronUiContext* ui) {
 		{ "Roland SC-55", TIE_MIDI_BACKEND_SC55 },
 	};
 	TieAppLiveFlightOptions flight;
+	TieAppLiveAudioOptions audio;
 	TieInflightOptions inflight;
 	TieAppLaunchOptions launch;
 	TieFlightOptions_Get(&flight);
+	TieAudioOptions_Get(&audio);
 	TieInflightSettings_Get(&inflight);
 	TieLaunchOptions_Get(&launch);
 	bool launch_changed = false;
@@ -694,6 +721,13 @@ static void TieSettings_AudioPage(AeronUiContext* ui) {
 	if (AeronUi_SliderInt(ui, "Speech Volume", &speech_volume, 0, 16, 1, "%d / 16")) {
 		inflight.speech_volume = (uint8_t)speech_volume;
 		inflight_changed = true;
+	}
+	int ducking_volume = audio.music_ducking_volume_percent;
+	if (AeronUi_SliderInt(ui, "Music Volume During Speech", &ducking_volume, 0, 100, 1, "%d%%")) {
+		char error[512];
+		audio.music_ducking_volume_percent = ducking_volume;
+		if (!TieAudioOptions_Set(&audio, error, sizeof error))
+			TieSettings_SettingsReportError(error);
 	}
 	if (inflight_changed) {
 		char error[512];

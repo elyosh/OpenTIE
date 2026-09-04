@@ -48,6 +48,10 @@ typedef struct TieAppLiveFlightOptions {
 	int player_engine_sound_volume_percent;
 } TieAppLiveFlightOptions;
 
+typedef struct TieAppLiveAudioOptions {
+	int music_ducking_volume_percent;
+} TieAppLiveAudioOptions;
+
 typedef struct TieAppLaunchOptions {
 	char tie95_data[TIE_GAME_DATA_PATH_MAX];
 	char tie98_data[TIE_GAME_DATA_PATH_MAX];
@@ -73,6 +77,7 @@ typedef struct TieAppConfig {
 	bool sb16_filter_enabled;
 	bool prefer_tie95_frontend_voices;
 	TieMusicSource music_source;
+	int music_ducking_volume_percent;
 	int player_engine_sound_volume_percent;
 	TieAppUiConfig ui;
 	Tie98OriginalRenderer requested_tie98_original_renderer;
@@ -111,9 +116,12 @@ TieAppConfigState* TieAppConfig_Current(void);
 bool TieAppConfig_SetInstallation(TieAppConfigState* state, TieGameVersion version, const char* path,
 								  char* error, size_t error_capacity);
 void TieAppConfig_GetLiveFlightOptions(const TieAppConfig* config, TieAppLiveFlightOptions* out);
+void TieAppConfig_GetLiveAudioOptions(const TieAppConfig* config, TieAppLiveAudioOptions* out);
 void TieAppConfig_GetLaunchOptions(const TieAppConfig* config, TieAppLaunchOptions* out);
 bool TieAppConfig_SetLiveFlightOptions(TieAppConfigState* state, const TieAppLiveFlightOptions* options,
 									   char* error, size_t error_capacity);
+bool TieAppConfig_SetLiveAudioOptions(TieAppConfigState* state, const TieAppLiveAudioOptions* options,
+									  char* error, size_t error_capacity);
 bool TieAppConfig_SetLaunchOptions(TieAppConfigState* state, const TieAppLaunchOptions* options, char* error,
 								   size_t error_capacity);
 bool TieAppConfig_ResolveFlightProfile(const TieAppConfig* config, bool has_tie95, bool has_tie98,

@@ -10,6 +10,7 @@ add_executable(tie
     ui.c
     config/app_config.c
     settings/flight_options.c
+	settings/audio_options.c
     settings/inflight_options.c
     settings/launch_options.c
     settings/video_options.c

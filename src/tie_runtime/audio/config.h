@@ -25,10 +25,12 @@ typedef struct TieAudioConfig {
 	bool sb16_filter_enabled;
 	bool prefer_tie95_frontend_voices;
 	TieMusicSource music_source;
+	int music_ducking_volume_percent;
 } TieAudioConfig;
 
 bool TieMidiBackend_Available(TieMidiBackendKind kind);
 void TieAudio_Configure(const TieAudioConfig* config);
 const TieAudioConfig* TieAudio_Config(void);
+bool TieAudio_SetMusicDuckingVolumePercent(int percent);
 
 #endif

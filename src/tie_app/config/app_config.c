@@ -171,7 +171,7 @@ static bool TieAppConfig_ValidateSchemaKeys(const AeronConfigFile* document, boo
 	VALIDATE_KEYS(document, "paths", warn, "installations");
 	VALIDATE_KEYS(document, "paths.installations", warn, "tie95", "tie98");
 	VALIDATE_KEYS(document, "audio", warn, "midi_backend", "music", "sb16_filter",
-				  "prefer_tie95_frontend_voices",
+				  "prefer_tie95_frontend_voices", "music_ducking_volume_percent",
 				  "player_engine_sound_volume_percent", "fluidsynth", "sc55");
 	VALIDATE_KEYS(document, "audio.fluidsynth", warn, "soundfont_file");
 	VALIDATE_KEYS(document, "audio.sc55", warn, "rom_directory");
@@ -718,6 +718,9 @@ static bool TieAppConfig_ParseComplete(const AeronConfigFile* document,
 	if (!TieAppConfig_ReadBool(document, "audio.prefer_tie95_frontend_voices",
 							   &out->prefer_tie95_frontend_voices, error, capacity))
 		return false;
+	if (!TieAppConfig_ReadInt(document, "audio.music_ducking_volume_percent", 0, 100,
+							  &out->music_ducking_volume_percent, error, capacity))
+		return false;
 	if (!TieAppConfig_ReadInt(document, "audio.player_engine_sound_volume_percent", 0, 100,
 							  &out->player_engine_sound_volume_percent, error, capacity))
 		return false;
@@ -968,6 +971,14 @@ void TieAppConfig_GetLiveFlightOptions(const TieAppConfig* config, TieAppLiveFli
 	};
 }
 
+void TieAppConfig_GetLiveAudioOptions(const TieAppConfig* config, TieAppLiveAudioOptions* out) {
+	if (!config || !out)
+		return;
+	*out = (TieAppLiveAudioOptions) {
+		.music_ducking_volume_percent = config->music_ducking_volume_percent,
+	};
+}
+
 void TieAppConfig_GetLaunchOptions(const TieAppConfig* config, TieAppLaunchOptions* out) {
 	if (!config || !out)
 		return;
@@ -1013,6 +1024,25 @@ bool TieAppConfig_SetLiveFlightOptions(TieAppConfigState* state, const TieAppLiv
 								 options->player_engine_sound_enabled, &aeron_error) ||
 		!AeronConfigFile_SetInt(candidate, "audio.player_engine_sound_volume_percent",
 								options->player_engine_sound_volume_percent, &aeron_error)) {
+		AeronConfigFile_Destroy(candidate);
+		return TieAppConfig_LogAeronError(&aeron_error, error, capacity);
+	}
+	if (!TieAppConfig_ReplaceUserCandidate(state, candidate, error, capacity)) {
+		AeronConfigFile_Destroy(candidate);
+		return false;
+	}
+	return true;
+}
+
+bool TieAppConfig_SetLiveAudioOptions(TieAppConfigState* state, const TieAppLiveAudioOptions* options,
+									  char* error, size_t capacity) {
+	AeronConfigFile* candidate = NULL;
+	AeronConfigError aeron_error = { 0 };
+	if (!state || !options || (unsigned int)options->music_ducking_volume_percent > 100u)
+		return TieAppConfig_ConfigError(error, capacity, "invalid live audio settings");
+	if (!AeronConfigFile_Clone(state->user_document, &candidate, &aeron_error) ||
+		!AeronConfigFile_SetInt(candidate, "audio.music_ducking_volume_percent",
+								options->music_ducking_volume_percent, &aeron_error)) {
 		AeronConfigFile_Destroy(candidate);
 		return TieAppConfig_LogAeronError(&aeron_error, error, capacity);
 	}

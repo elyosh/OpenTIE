@@ -67,6 +67,7 @@ int ImCommands_Init(imuse_t* im, const ImuseHost* host, const ImuseConfig* cfg, 
 	im->commands.timerCoreAccum = 0;
 	im->commands.timer60HzAccum = 0;
 	im->commands.timer10HzAccum = 0;
+	im->commands.musicDuckingFactor = 47;
 
 	ImDebug_LogMsg(im, "Initializing...COMMANDS module...");
 
@@ -215,7 +216,7 @@ void imuse_advance(imuse_t* im, int32_t usecElapsed) {
 	 *
 	 * On each tick:
 	 *   targetVol = groupMusic volume
-	 *   if any live sound is in groupVoice: targetVol *= 47/128 (~0.367)
+	 *   if any live sound is in groupVoice: apply the configured /128 multiplier
 	 *   step the dipped-music group toward targetVol:
 	 *     below  → +3 per tick (slow release, ~2.7 s full rise 0..127)
 	 *     above  → -18 per tick (fast duck, ~0.45 s full drop 127..0)
@@ -227,7 +228,7 @@ void imuse_advance(imuse_t* im, int32_t usecElapsed) {
 		uint32_t targetVol = imuse_set_group_volume(im, IMUSE_GROUP_MUSIC, -1);
 		for (intptr_t id = imuse_next_sound(im, 0); id != 0; id = imuse_next_sound(im, id)) {
 			if (imuse_get_param(im, id, IMUSE_PARAM_SOUND_GROUP) == IMUSE_GROUP_VOICE) {
-				targetVol = (47u * targetVol) >> 7;
+				targetVol = ((uint32_t)im->commands.musicDuckingFactor * targetVol) >> 7;
 				break;
 			}
 		}
@@ -247,6 +248,13 @@ void imuse_advance(imuse_t* im, int32_t usecElapsed) {
 		}
 		imuse_set_group_volume(im, IMUSE_GROUP_DIPPED, (int)newVol);
 	}
+}
+
+int imuse_set_music_ducking_factor(imuse_t* im, int factor) {
+	if (!im || (unsigned int)factor > 128u)
+		return -5;
+	im->commands.musicDuckingFactor = factor;
+	return 0;
 }
 
 /* ===== Runtime control =====

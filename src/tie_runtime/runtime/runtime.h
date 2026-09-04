@@ -26,6 +26,7 @@ void TieRuntime_SetWindowActive(bool active);
 /* One-shot request from recovered UI tasks to the application overlay. */
 void TieRuntime_RequestSettingsMenu(void);
 bool TieRuntime_ConsumeSettingsMenuRequest(void);
+bool TieRuntime_SetMusicDuckingVolumePercent(int percent);
 
 /* Advances one host-visible tick using the supplied synthetic-clock delta. */
 void TieRuntime_Tick(int32_t delta_us);

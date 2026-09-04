@@ -10,6 +10,7 @@ audio:
   music: imuse
   sb16_filter: true
   prefer_tie95_frontend_voices: true
+  music_ducking_volume_percent: 37
   player_engine_sound_volume_percent: 30
   fluidsynth:
     soundfont_file: ""

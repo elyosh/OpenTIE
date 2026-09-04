@@ -248,6 +248,11 @@ int imuse_destroy(imuse_t* im);
  * call. */
 void imuse_advance(imuse_t* im, int32_t usec_elapsed);
 
+/* Set the fraction of music-group volume retained by dipped music while a
+ * voice is active. The factor is fixed-point /128: 0 mutes, 128 disables the
+ * reduction, and 47 matches the original. */
+int imuse_set_music_ducking_factor(imuse_t* im, int factor);
+
 /* ===== Audio mix =====
  *
  * Render `frames` stereo frames at the configured outputSampleRate

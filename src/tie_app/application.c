@@ -11,7 +11,6 @@
 
 #include "aeron/aeron.h"
 #include "aeron/compat/host.h"
-#include "aeron/compat/host.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
 #include "tie_runtime/runtime/runtime.h"
@@ -340,6 +339,7 @@ int TieApplication_Run(const TieLaunchOptions* launch) {
 			.sb16_filter_enabled = app_config.requested.sb16_filter_enabled,
 			.prefer_tie95_frontend_voices = app_config.requested.prefer_tie95_frontend_voices,
 			.music_source = app_config.requested.music_source,
+			.music_ducking_volume_percent = app_config.requested.music_ducking_volume_percent,
 		},
 	};
 	AeronDx5_Configure(&(AeronDx5Config) {

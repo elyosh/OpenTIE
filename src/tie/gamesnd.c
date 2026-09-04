@@ -175,6 +175,7 @@ int16_t gamesnd_Open_Pre_iMuse(void) {
 		TieDiagnostics_Log(TIE_LOG_INFO, "GAMESND: iMUSE init failed\n");
 		return 0;
 	}
+	(void)gamesnd_SetMusicDuckingVolumePercent(audio_config->music_ducking_volume_percent);
 
 	audio_output_started = false;
 	audio_output_started = TieAudioOutput_Start(GAMESND_AUDIO_RATE, 2, gamesnd_RenderAudio, im);
@@ -219,6 +220,16 @@ void gamesnd_Set_CD_Volume(int volume) {
 	if (volume > 16)
 		volume = 16;
 	CDAUDIO_Set_Volume((uint32_t)(0xFFFFu * (uint32_t)volume / 16u));
+}
+
+bool gamesnd_SetMusicDuckingVolumePercent(int percent) {
+	if ((unsigned int)percent > 100u)
+		return false;
+	if (!im)
+		return true;
+	/* iMUSE uses a /128 fixed-point multiplier. Rounded conversion keeps the
+	 * original 37% default at its exact factor of 47. */
+	return imuse_set_music_ducking_factor(im, (percent * 128 + 50) / 100) == 0;
 }
 
 /* Five-phase glow animation rewrites palette slots 0xF8..0xFA every 18 or
