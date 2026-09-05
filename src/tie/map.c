@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "tie/goals.h"
 #include "tie/map.h"
 #include "tie/mission.h"
 #include "tie/player.h"
@@ -586,26 +587,11 @@ static void Find_VR_Debrief_Header(char* string, int16_t line) {
 
 static void Get_VR_Debrief_Goals(char* string, int16_t line) {
 	char buf[80], fmt[40], count_str[40];
-	int16_t num_fgs = talk_fgroup->num_fgs;
 	int16_t done, fail;
 
 	if (line == 3) {
-		done = 0;
-		fail = 0;
-		for (int16_t fg = 0; fg < num_fgs; fg++) {
-			if (mission.primary_fg[fg]) {
-				if (mission.primary_fg[fg] == 1)
-					done++;
-				else
-					fail++;
-			}
-		}
-		if (mission.primary_global) {
-			if (mission.primary_global == 1)
-				done++;
-			else
-				fail++;
-		}
+		done = (uint16_t)goalsCompletedCount[0];
+		fail = (uint16_t)((uint16_t)goalsCount[0] - (uint16_t)goalsCompletedCount[0]);
 		if (!done && !fail) {
 			*string = '\0';
 			return;
@@ -623,22 +609,8 @@ static void Get_VR_Debrief_Goals(char* string, int16_t line) {
 			strcpy(string, buf);
 		}
 	} else if (line == 4) {
-		done = 0;
-		fail = 0;
-		for (int16_t fg = 0; fg < num_fgs; fg++) {
-			if (mission.secondary_fg[fg]) {
-				if (mission.secondary_fg[fg] == 1)
-					done++;
-				else
-					fail++;
-			}
-		}
-		if (mission.secondary_global) {
-			if (mission.secondary_global == 1)
-				done++;
-			else
-				fail++;
-		}
+		done = (uint16_t)goalsCompletedCount[1];
+		fail = (uint16_t)((uint16_t)goalsCount[1] - (uint16_t)goalsCompletedCount[1]);
 		if (!done && !fail) {
 			*string = '\0';
 			return;
@@ -656,22 +628,8 @@ static void Get_VR_Debrief_Goals(char* string, int16_t line) {
 			strcpy(string, buf);
 		}
 	} else if (line == 5) {
-		done = 0;
-		fail = 0;
-		for (int16_t fg = 0; fg < num_fgs; fg++) {
-			if (mission.bonus_fg[fg] && talk_fgroup->fg[fg].bonus_points >= 0) {
-				if (mission.bonus_fg[fg] == 1)
-					done++;
-				else
-					fail++;
-			}
-		}
-		if (mission.bonus_global) {
-			if (mission.bonus_global == 1)
-				done++;
-			else
-				fail++;
-		}
+		done = (uint16_t)goalsCompletedCount[2];
+		fail = (uint16_t)((uint16_t)goalsCount[2] - (uint16_t)goalsCompletedCount[2]);
 		if (!done && !fail) {
 			*string = '\0';
 			return;
@@ -1121,9 +1079,11 @@ static void iuser_Map(Input* input, int32_t time) {
 	 * Retail does this at the head of MAP_iuser_Map, gated by the
 	 * talk-mode flag (HIWORD(dword_F6136)). */
 	if (talk_mode && time > talk_paragraph_timer) {
-		talk_paragraph_timer += 264;
-		if (talk_paragraph_timer < 0)
+		uint32_t next_timer = (uint32_t)talk_paragraph_timer + 264u;
+		if (next_timer & 0x80000000u)
 			talk_paragraph_timer = 0x7FFFFFFF;
+		else
+			talk_paragraph_timer = (int32_t)next_timer;
 		if (++cur_talk_paragraph >= num_talk_paragraphs) {
 			talk_paragraph_timer = 0x7FFFFFFF;
 			cur_talk_paragraph = 0;
@@ -1189,9 +1149,11 @@ static void iuser_Map(Input* input, int32_t time) {
 						cur_talk_paragraph = num_talk_paragraphs - 1;
 				} else {
 					/* Left-click: bump auto-advance threshold (264 ms) */
-					talk_paragraph_timer += 264;
-					if (talk_paragraph_timer < 0)
+					uint32_t next_timer = (uint32_t)talk_paragraph_timer + 264u;
+					if (next_timer & 0x80000000u)
 						talk_paragraph_timer = 0x7FFFFFFF;
+					else
+						talk_paragraph_timer = (int32_t)next_timer;
 					if (++cur_talk_paragraph == num_talk_paragraphs) {
 						talk_paragraph_timer = 0x7FFFFFFF;
 						cur_talk_paragraph = 0;

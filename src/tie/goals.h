@@ -56,6 +56,11 @@ uint8_t goals_checkwrap(const uint8_t* s);
 extern int32_t goalsTop;
 extern int32_t goalsBottom;
 
+/* Total and completed goal counts for primary, secondary, and bonus goals.
+ * Rebuilt by every goals-room render and consumed by the debrief screens. */
+extern int32_t goalsCount[3];
+extern int32_t goalsCompletedCount[3];
+
 /* Zero suppresses the bonus-category section unless an FG has its bonus
  * already marked complete. Written per-room-entry from mission.mission_mode
  * (non-training). */

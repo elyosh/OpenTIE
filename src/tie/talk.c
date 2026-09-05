@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "tie/goals.h"
 #include "tie/mission.h"
 #include "tie/player.h"
 #include "tie/rand.h"
@@ -532,7 +533,6 @@ static void Get_Debrief_Header(char* string, int16_t line) { render_header_line(
 static void render_goals_line(char* string, int16_t line_idx) {
 	char buf[80], fmt[40], count_str[40];
 	int16_t cur_battle = pilot_record.cur_battle;
-	int16_t num_fgs = (talk_fgroup)->num_fgs;
 
 	switch (line_idx) {
 		case 0:
@@ -560,21 +560,8 @@ static void render_goals_line(char* string, int16_t line_idx) {
 			textext_Copy_Text(string, txtTalkDash);
 			break;
 		case 3: {
-			int16_t done = 0, fail = 0;
-			for (int16_t fg = 0; fg < num_fgs; fg++) {
-				if (mission.primary_fg[fg]) {
-					if (mission.primary_fg[fg] == 1)
-						done++;
-					else
-						fail++;
-				}
-			}
-			if (mission.primary_global) {
-				if (mission.primary_global == 1)
-					done++;
-				else
-					fail++;
-			}
+			int16_t done = (uint16_t)goalsCompletedCount[0];
+			int16_t fail = (uint16_t)((uint16_t)goalsCount[0] - (uint16_t)goalsCompletedCount[0]);
 			if (!done && !fail) {
 				*string = '\0';
 				break;
@@ -595,21 +582,8 @@ static void render_goals_line(char* string, int16_t line_idx) {
 			break;
 		}
 		case 4: {
-			int16_t done = 0, fail = 0;
-			for (int16_t fg = 0; fg < num_fgs; fg++) {
-				if (mission.secondary_fg[fg]) {
-					if (mission.secondary_fg[fg] == 1)
-						done++;
-					else
-						fail++;
-				}
-			}
-			if (mission.secondary_global) {
-				if (mission.secondary_global == 1)
-					done++;
-				else
-					fail++;
-			}
+			int16_t done = (uint16_t)goalsCompletedCount[1];
+			int16_t fail = (uint16_t)((uint16_t)goalsCount[1] - (uint16_t)goalsCompletedCount[1]);
 			if (!done && !fail) {
 				*string = '\0';
 				break;
@@ -630,21 +604,8 @@ static void render_goals_line(char* string, int16_t line_idx) {
 			break;
 		}
 		case 5: {
-			int16_t done = 0, fail = 0;
-			for (int16_t fg = 0; fg < num_fgs; fg++) {
-				if (mission.bonus_fg[fg] && (talk_fgroup)->fg[fg].bonus_points >= 0) {
-					if (mission.bonus_fg[fg] == 1)
-						done++;
-					else
-						fail++;
-				}
-			}
-			if (mission.bonus_global) {
-				if (mission.bonus_global == 1)
-					done++;
-				else
-					fail++;
-			}
+			int16_t done = (uint16_t)goalsCompletedCount[2];
+			int16_t fail = (uint16_t)((uint16_t)goalsCount[2] - (uint16_t)goalsCompletedCount[2]);
 			if (!done && !fail) {
 				*string = '\0';
 				break;
@@ -1464,10 +1425,12 @@ static void iuser_Answer(Input* input, int32_t time) {
 			}
 		} else {
 			/* Left-click: next page; push threshold forward 264 ms,
-			 * clamping on signed overflow. */
-			talk_paragraph_timer += 264;
-			if (talk_paragraph_timer < 0)
+			 * clamping when the retail 32-bit addition sets the sign bit. */
+			uint32_t next_timer = (uint32_t)talk_paragraph_timer + 264u;
+			if (next_timer & 0x80000000u)
 				talk_paragraph_timer = 0x7FFFFFFF;
+			else
+				talk_paragraph_timer = (int32_t)next_timer;
 			if (++cur_talk_paragraph >= num_talk_paragraphs) {
 				talk_paragraph_timer = 0x7FFFFFFF;
 				cur_talk_question = -1;
