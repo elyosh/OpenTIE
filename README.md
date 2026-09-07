@@ -1,7 +1,7 @@
 # OpenTIE
 
 [![GitHub Release](https://img.shields.io/github/v/release/elyosh/OpenTIE)](https://github.com/elyosh/OpenTIE/releases/latest)
-[![Visit our Discord server](https://img.shields.io/discord/1533001488391995442)](https://discord.gg/vfPVFxBA4)
+[![Visit our Discord server](https://img.shields.io/discord/1533001488391995442)](https://discord.gg/WBvYzczWfG)
 
 ![Screenshot of OpenTIE](assets/opentie-001.jpg)
 
@@ -124,7 +124,7 @@ of *Star Wars: X-Wing Alliance* for Windows, macOS, and Linux.
 
 ## Community
 
-Join the [TotallyOpen Discord server](https://discord.gg/vfPVFxBA4) to discuss
+Join the [TotallyOpen Discord server](https://discord.gg/WBvYzczWfG) to discuss
 OpenTIE, OpenXWA, development, and the Totally Games flight simulators.
 
 ## System requirements
