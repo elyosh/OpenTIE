@@ -956,8 +956,8 @@ static void Update_Debrief_Combat_Scores(void) {
 		if (change) {
 			for (int16_t i = GAME_SCORE_ENTRY_COUNT - 1; i > score_index; i--)
 				scores[index].scores[i] = scores[index].scores[i - 1];
-			snprintf(scores[index].scores[score_index].name,
-					 sizeof(scores[index].scores[score_index].name), "%s", pilot_name);
+			snprintf(scores[index].scores[score_index].name, sizeof(scores[index].scores[score_index].name),
+					 "%s", pilot_name);
 			scores[index].scores[score_index].score = mission.mission_score;
 			scores[index].scores[score_index].status = kills;
 			TieScoreTables_SaveGame(file_name, scores, num_scores);

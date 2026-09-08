@@ -415,6 +415,7 @@ add_library(tie_formats STATIC
 	 src/tie_formats/cockpit_masks.c
 	 src/tie_formats/cockpit_masks.h)
 target_include_directories(tie_formats PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(tie_formats PUBLIC aeron_asset)
 set_target_properties(tie_formats PROPERTIES
     C_STANDARD 11
     C_STANDARD_REQUIRED ON)

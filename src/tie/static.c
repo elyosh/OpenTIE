@@ -3,10 +3,10 @@
 #include <string.h>
 
 #include "tie/static.h"
+#include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 #include "tie_runtime/timing/flight_timing.h"
-#include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/timing/flight_timing_state.h"
 
 #include "anim.h"
@@ -408,8 +408,7 @@ int16_t static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
 	} else {
 		/* Conventional kill. */
 		uint8_t fg_idx = so->fg_idx;
-		TIE_FLIGHT_TRACE_FG_EXIT((uint16_t)(target_slot + OBJ_REF_STATIC_BASE),
-							 TIE_TRACE_EXIT_DESTROYED);
+		TIE_FLIGHT_TRACE_FG_EXIT((uint16_t)(target_slot + OBJ_REF_STATIC_BASE), TIE_TRACE_EXIT_DESTROYED);
 		fgstatus[fg_idx].cond[1].count++;
 		explosion_ship_idx = 129;
 

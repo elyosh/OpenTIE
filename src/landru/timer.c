@@ -136,9 +136,7 @@ int32_t ltimer_Current_Time(void) {
 
 /* --- Frame rate control --- */
 
-void ltimer_Set_Frame_Rate(int16_t rate) {
-	frame_rate_gbl = rate;
-}
+void ltimer_Set_Frame_Rate(int16_t rate) { frame_rate_gbl = rate; }
 
 /* Cel budget in microseconds at the active frame rate (rate × 4 ms).
  * Returns 0 when no rate is set so consumers can detect the

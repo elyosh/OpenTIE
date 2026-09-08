@@ -1,7 +1,7 @@
 #include "tie/cdaudio_tie98.h"
 
-#include "tie/frontend_display_tie98.h"
 #include "aeron/compat/mmsystem.h"
+#include "tie/frontend_display_tie98.h"
 
 #include <limits.h>
 #include <string.h>
@@ -45,23 +45,21 @@ int CDAUDIO_Open_Device(void) {
 		}
 	}
 	open_params.lpstrDeviceType = "cdaudio";
-	if (mciSendCommandA(0, MCI_OPEN, MCI_OPEN_TYPE, (MciDwordPtr)(uintptr_t)&open_params) != MMSYSERR_NOERROR)
+	if (mciSendCommandA(0, MCI_OPEN, MCI_OPEN_TYPE, &open_params) != MMSYSERR_NOERROR)
 		return 0;
 	cdaudio_device_id = open_params.wDeviceID;
 	set_params.dwTimeFormat = MCI_FORMAT_TMSF;
-	if (mciSendCommandA(cdaudio_device_id, MCI_SET, MCI_SET_TIME_FORMAT,
-						(MciDwordPtr)(uintptr_t)&set_params) != MMSYSERR_NOERROR)
+	if (mciSendCommandA(cdaudio_device_id, MCI_SET, MCI_SET_TIME_FORMAT, &set_params) != MMSYSERR_NOERROR)
 		goto fail;
 	status.dwItem = MCI_STATUS_NUMBER_OF_TRACKS;
-	if (mciSendCommandA(cdaudio_device_id, MCI_STATUS, MCI_STATUS_ITEM, (MciDwordPtr)(uintptr_t)&status) !=
-		MMSYSERR_NOERROR)
+	if (mciSendCommandA(cdaudio_device_id, MCI_STATUS, MCI_STATUS_ITEM, &status) != MMSYSERR_NOERROR)
 		goto fail;
 	cdaudio_track_count = status.dwReturn > 30 ? 30 : (int)status.dwReturn;
 	for (int track = 1; track <= cdaudio_track_count; ++track) {
 		status.dwItem = MCI_STATUS_LENGTH;
 		status.dwTrack = (uint32_t)track;
-		if (mciSendCommandA(cdaudio_device_id, MCI_STATUS, MCI_STATUS_ITEM | MCI_TRACK,
-							(MciDwordPtr)(uintptr_t)&status) != MMSYSERR_NOERROR)
+		if (mciSendCommandA(cdaudio_device_id, MCI_STATUS, MCI_STATUS_ITEM | MCI_TRACK, &status) !=
+			MMSYSERR_NOERROR)
 			goto fail;
 		cdaudio_track_lengths[track] = (uint32_t)status.dwReturn;
 	}
@@ -84,8 +82,8 @@ int CDAUDIO_Play_Track(int track, int start_minute, int start_second) {
 	play.dwCallback = (MciDwordPtr)(uintptr_t)g_flightWindowHandle;
 	play.dwFrom = MCI_MAKE_TMSF(track, start_minute, start_second, 0);
 	play.dwTo = MCI_MAKE_TMSF(track, MCI_MSF_MINUTE(length), MCI_MSF_SECOND(length), MCI_MSF_FRAME(length));
-	if (mciSendCommandA(cdaudio_device_id, MCI_PLAY, MCI_NOTIFY | MCI_FROM | MCI_TO,
-						(MciDwordPtr)(uintptr_t)&play) != MMSYSERR_NOERROR)
+	if (mciSendCommandA(cdaudio_device_id, MCI_PLAY, MCI_NOTIFY | MCI_FROM | MCI_TO, &play) !=
+		MMSYSERR_NOERROR)
 		return 0;
 	cdaudio_playing_track = track;
 	return 1;

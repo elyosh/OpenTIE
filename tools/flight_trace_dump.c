@@ -41,8 +41,7 @@ static uint16_t get_u16(const uint8_t* src) { return (uint16_t)(src[0] | ((uint1
 static int16_t get_i16(const uint8_t* src) { return (int16_t)get_u16(src); }
 
 static uint32_t get_u32(const uint8_t* src) {
-	return (uint32_t)src[0] | ((uint32_t)src[1] << 8) | ((uint32_t)src[2] << 16) |
-		   ((uint32_t)src[3] << 24);
+	return (uint32_t)src[0] | ((uint32_t)src[1] << 8) | ((uint32_t)src[2] << 16) | ((uint32_t)src[3] << 24);
 }
 
 static int32_t get_i32(const uint8_t* src) { return (int32_t)get_u32(src); }
@@ -52,32 +51,35 @@ static uint64_t get_u64(const uint8_t* src) {
 }
 
 static const char* record_name(uint16_t type) {
-	static const char* names[] = {"invalid", "fg_def", "frame", "spawn", "removed", "ai",
-								  "board", "weapon", "collision", "damage", "death", "explosion",
-								  "fg_state", "mission_state", "target_change", "overflow", "fg_exit"};
+	static const char* names[] = { "invalid",  "fg_def",    "frame",    "spawn",         "removed",
+								   "ai",       "board",     "weapon",   "collision",     "damage",
+								   "death",    "explosion", "fg_state", "mission_state", "target_change",
+								   "overflow", "fg_exit" };
 	return type < sizeof names / sizeof names[0] ? names[type] : "unknown";
 }
 
 static const char* phase_name(uint16_t phase) {
-	static const char* names[] = {"setup", "time", "fg_status", "ai", "weapons", "dynamics",
-								  "render", "collision", "move", "animation", "objectives", "end_frame"};
+	static const char* names[] = {
+		"setup",  "time",      "fg_status", "ai",        "weapons",    "dynamics",
+		"render", "collision", "move",      "animation", "objectives", "end_frame"
+	};
 	return phase < sizeof names / sizeof names[0] ? names[phase] : "unknown";
 }
 
 static const char* board_name(uint8_t kind) {
-	static const char* names[] = {"unknown", "approach", "aligning", "docked", "transfer",
-								  "captured", "departing", "complete"};
+	static const char* names[] = { "unknown",  "approach", "aligning",  "docked",
+								   "transfer", "captured", "departing", "complete" };
 	return kind < sizeof names / sizeof names[0] ? names[kind] : "unknown";
 }
 
 static const char* cause_name(uint8_t cause) {
-	static const char* names[] = {"unknown", "craft_collision", "projectile", "static_collision",
-								  "ejected", "scripted"};
+	static const char* names[] = { "unknown",          "craft_collision", "projectile",
+								   "static_collision", "ejected",         "scripted" };
 	return cause < sizeof names / sizeof names[0] ? names[cause] : "unknown";
 }
 
 static const char* collision_name(uint8_t kind) {
-	static const char* names[] = {"unknown", "craft", "projectile", "static"};
+	static const char* names[] = { "unknown", "craft", "projectile", "static" };
 	return kind < sizeof names / sizeof names[0] ? names[kind] : "unknown";
 }
 
@@ -174,8 +176,7 @@ static void load_fg_names(TraceFile* trace_file) {
 		const uint16_t size = get_u16(record + 2);
 		if (size < TIE_FLIGHT_TRACE_RECORD_HEADER_SIZE || size > trace_file->used - offset)
 			break;
-		if (get_u16(record) == TIE_TRACE_RECORD_FG_DEF &&
-			size >= TIE_FLIGHT_TRACE_RECORD_HEADER_SIZE + 16) {
+		if (get_u16(record) == TIE_TRACE_RECORD_FG_DEF && size >= TIE_FLIGHT_TRACE_RECORD_HEADER_SIZE + 16) {
 			const uint8_t* payload = record + TIE_FLIGHT_TRACE_RECORD_HEADER_SIZE;
 			if (payload[0] < 48) {
 				char* name = trace_file->fg_names[payload[0]];
@@ -200,7 +201,7 @@ static int parse_int(const char* text, int* value) {
 }
 
 static int parse_options(int argc, char** argv, Options* options) {
-	*options = (Options){0};
+	*options = (Options) { 0 };
 	options->object_filter = -1;
 	options->around_frame = -1;
 	options->radius = 5;
@@ -254,11 +255,11 @@ static int resolve_fg(const TraceFile* trace_file, const char* filter) {
 
 static int object_record(uint16_t type) {
 	return type == TIE_TRACE_RECORD_OBJECT_SPAWN || type == TIE_TRACE_RECORD_OBJECT_REMOVED ||
-		   type == TIE_TRACE_RECORD_FG_EXIT ||
-		   type == TIE_TRACE_RECORD_AI_CHANGE || type == TIE_TRACE_RECORD_BOARD ||
-		   type == TIE_TRACE_RECORD_WEAPON || type == TIE_TRACE_RECORD_COLLISION ||
-		   type == TIE_TRACE_RECORD_DAMAGE || type == TIE_TRACE_RECORD_DEATH ||
-		   type == TIE_TRACE_RECORD_EXPLOSION || type == TIE_TRACE_RECORD_TARGET_CHANGE;
+		   type == TIE_TRACE_RECORD_FG_EXIT || type == TIE_TRACE_RECORD_AI_CHANGE ||
+		   type == TIE_TRACE_RECORD_BOARD || type == TIE_TRACE_RECORD_WEAPON ||
+		   type == TIE_TRACE_RECORD_COLLISION || type == TIE_TRACE_RECORD_DAMAGE ||
+		   type == TIE_TRACE_RECORD_DEATH || type == TIE_TRACE_RECORD_EXPLOSION ||
+		   type == TIE_TRACE_RECORD_TARGET_CHANGE;
 }
 
 static int related_ref(uint16_t type, const uint8_t* payload, uint16_t payload_size, uint16_t ref) {
@@ -268,11 +269,11 @@ static int related_ref(uint16_t type, const uint8_t* payload, uint16_t payload_s
 		get_u16(payload + 48) == ref)
 		return 1;
 	if ((type == TIE_TRACE_RECORD_WEAPON || type == TIE_TRACE_RECORD_DAMAGE ||
-		 type == TIE_TRACE_RECORD_TARGET_CHANGE) && payload_size >= 72 &&
-		(get_u16(payload + 48) == ref || get_u16(payload + 60) == ref))
+		 type == TIE_TRACE_RECORD_TARGET_CHANGE) &&
+		payload_size >= 72 && (get_u16(payload + 48) == ref || get_u16(payload + 60) == ref))
 		return 1;
-	return (type == TIE_TRACE_RECORD_DEATH || type == TIE_TRACE_RECORD_EXPLOSION) &&
-		   payload_size >= 60 && get_u16(payload + 48) == ref;
+	return (type == TIE_TRACE_RECORD_DEATH || type == TIE_TRACE_RECORD_EXPLOSION) && payload_size >= 60 &&
+		   get_u16(payload + 48) == ref;
 }
 
 static int related_fg(uint16_t type, const uint8_t* payload, uint16_t payload_size, uint8_t fg) {
@@ -284,19 +285,18 @@ static int related_fg(uint16_t type, const uint8_t* payload, uint16_t payload_si
 		payload[56] == fg)
 		return 1;
 	if ((type == TIE_TRACE_RECORD_WEAPON || type == TIE_TRACE_RECORD_DAMAGE ||
-		 type == TIE_TRACE_RECORD_TARGET_CHANGE) && payload_size >= 72 &&
-		(payload[56] == fg || payload[68] == fg))
+		 type == TIE_TRACE_RECORD_TARGET_CHANGE) &&
+		payload_size >= 72 && (payload[56] == fg || payload[68] == fg))
 		return 1;
-	return (type == TIE_TRACE_RECORD_DEATH || type == TIE_TRACE_RECORD_EXPLOSION) &&
-		   payload_size >= 60 && payload[56] == fg;
+	return (type == TIE_TRACE_RECORD_DEATH || type == TIE_TRACE_RECORD_EXPLOSION) && payload_size >= 60 &&
+		   payload[56] == fg;
 }
 
 static int ai_scheduler_only(const uint8_t* payload, uint16_t payload_size) {
 	if (payload_size < 83 || get_u16(payload + 70) == get_u16(payload + 72))
 		return 0;
-	return payload[48] == payload[49] && payload[50] == payload[51] &&
-		   payload[52] == payload[53] && payload[54] == payload[55] &&
-		   payload[56] == payload[57] && payload[58] == payload[59] &&
+	return payload[48] == payload[49] && payload[50] == payload[51] && payload[52] == payload[53] &&
+		   payload[54] == payload[55] && payload[56] == payload[57] && payload[58] == payload[59] &&
 		   payload[60] == payload[61] && get_u16(payload + 62) == get_u16(payload + 64) &&
 		   get_u16(payload + 66) == get_u16(payload + 68);
 }
@@ -352,24 +352,21 @@ static void print_object(const TraceFile* trace_file, const uint8_t* p) {
 		   p[TIE_TRACE_OBJECT_FLIGHT_FLAG], p[TIE_TRACE_OBJECT_DOCK_FLAGS],
 		   get_i16(p + TIE_TRACE_OBJECT_COLLISION_RADIUS), get_u16(p + TIE_TRACE_OBJECT_TARGET),
 		   get_u16(p + TIE_TRACE_OBJECT_OWNER), get_i32(p + TIE_TRACE_OBJECT_X),
-		   get_i32(p + TIE_TRACE_OBJECT_Y), get_i32(p + TIE_TRACE_OBJECT_Z),
-		   get_i32(p + TIE_TRACE_OBJECT_VX), get_i32(p + TIE_TRACE_OBJECT_VY),
-		   get_i32(p + TIE_TRACE_OBJECT_VZ));
+		   get_i32(p + TIE_TRACE_OBJECT_Y), get_i32(p + TIE_TRACE_OBJECT_Z), get_i32(p + TIE_TRACE_OBJECT_VX),
+		   get_i32(p + TIE_TRACE_OBJECT_VY), get_i32(p + TIE_TRACE_OBJECT_VZ));
 }
 
 static void print_identity(const char* label, const uint8_t* p) {
-	printf(" %s=%u:%u(id=%u fg=%u species=%u craft=%u)", label,
-		   get_u16(p + TIE_TRACE_IDENTITY_REF), get_u32(p + TIE_TRACE_IDENTITY_GENERATION),
-		   get_u16(p + TIE_TRACE_IDENTITY_ID), p[TIE_TRACE_IDENTITY_FG],
-		   p[TIE_TRACE_IDENTITY_SPECIES], p[TIE_TRACE_IDENTITY_CRAFT_INDEX]);
+	printf(" %s=%u:%u(id=%u fg=%u species=%u craft=%u)", label, get_u16(p + TIE_TRACE_IDENTITY_REF),
+		   get_u32(p + TIE_TRACE_IDENTITY_GENERATION), get_u16(p + TIE_TRACE_IDENTITY_ID),
+		   p[TIE_TRACE_IDENTITY_FG], p[TIE_TRACE_IDENTITY_SPECIES], p[TIE_TRACE_IDENTITY_CRAFT_INDEX]);
 }
 
 static void print_fg_state(const TraceFile* trace_file, const uint8_t* p) {
-	printf("fg=%u(%s) active=%u waves=%u arrival=%u delay=%u primary=%u secondary=%u complete=%u cond=",
-		   p[0], fg_name(trace_file, p[0]), p[1], p[2], p[3], get_u16(p + 4), p[44], p[45], p[46]);
+	printf("fg=%u(%s) active=%u waves=%u arrival=%u delay=%u primary=%u secondary=%u complete=%u cond=", p[0],
+		   fg_name(trace_file, p[0]), p[1], p[2], p[3], get_u16(p + 4), p[44], p[45], p[46]);
 	for (int i = 0; i < 9; ++i)
-		printf("%s%u/%u:%u/%u", i ? "," : "", p[8 + i * 2], p[9 + i * 2], p[26 + i * 2],
-			   p[27 + i * 2]);
+		printf("%s%u/%u:%u/%u", i ? "," : "", p[8 + i * 2], p[9 + i * 2], p[26 + i * 2], p[27 + i * 2]);
 }
 
 static void print_object_event(const TraceFile* trace_file, uint16_t type, const uint8_t* p,
@@ -382,9 +379,9 @@ static void print_object_event(const TraceFile* trace_file, uint16_t type, const
 	} else if (type == TIE_TRACE_RECORD_AI_CHANGE && payload_size >= 83) {
 		printf(" order=%u->%u default=%u->%u mode=%u/%u->%u/%u flight=%u->%u dock=%02x->%02x "
 			   "entry=%u->%u target=%u->%u attacker=%u->%u plan=%u->%u timer=%d->%d opcode=%u",
-			   p[48], p[49], p[50], p[51], p[52], p[54], p[53], p[55], p[56], p[57], p[58], p[59],
-			   p[60], p[61], get_u16(p + 62), get_u16(p + 64), get_u16(p + 66), get_u16(p + 68),
-			   get_u16(p + 70), get_u16(p + 72), get_i32(p + 74), get_i32(p + 78), p[82]);
+			   p[48], p[49], p[50], p[51], p[52], p[54], p[53], p[55], p[56], p[57], p[58], p[59], p[60],
+			   p[61], get_u16(p + 62), get_u16(p + 64), get_u16(p + 66), get_u16(p + 68), get_u16(p + 70),
+			   get_u16(p + 72), get_i32(p + 74), get_i32(p + 78), p[82]);
 	} else if (type == TIE_TRACE_RECORD_BOARD && payload_size >= 110) {
 		printf(" target{");
 		print_object(trace_file, p + 48);
@@ -426,8 +423,8 @@ static void print_human_record(const TraceFile* trace_file, const uint8_t* recor
 	printf("f=%u seq=%u %-10s %-13s ", get_u32(record + 4), get_u32(record + 8),
 		   phase_name(get_u16(record + 12)), record_name(type));
 	if (type == TIE_TRACE_RECORD_FG_DEF && payload_size >= 16) {
-		printf("fg=%u name=%s species=%u side=%u count=%u", p[0], fg_name(trace_file, p[0]), p[1],
-			   p[2], p[3]);
+		printf("fg=%u name=%s species=%u side=%u count=%u", p[0], fg_name(trace_file, p[0]), p[1], p[2],
+			   p[3]);
 	} else if (type == TIE_TRACE_RECORD_FRAME && payload_size >= 20) {
 		printf("ticks=%u rate=%u time=%02u:%02u:%02u.%u rng=%u hash=%08x score=%d", get_u16(p),
 			   get_u16(p + 2), p[4], p[5], p[6], get_u16(p + 8), get_u16(p + 10), get_u32(p + 12),
@@ -454,14 +451,14 @@ static void print_json_object(const uint8_t* p) {
 		   "\"craft\":%u,\"genus\":%u,\"side\":%u,\"mode\":%u,\"submode\":%u,"
 		   "\"flight\":%u,\"dock_flags\":%u,\"radius\":%d,\"target\":%u,\"owner\":%u,"
 		   "\"position\":[%d,%d,%d],\"velocity\":[%d,%d,%d]}",
-		   get_u16(p), get_u32(p + 4), get_u16(p + 2), p[8], p[9], p[12], p[10], p[11], p[13],
-		   p[14], p[15], p[16], get_i16(p + 18), get_u16(p + 20), get_u16(p + 22), get_i32(p + 24),
-		   get_i32(p + 28), get_i32(p + 32), get_i32(p + 36), get_i32(p + 40), get_i32(p + 44));
+		   get_u16(p), get_u32(p + 4), get_u16(p + 2), p[8], p[9], p[12], p[10], p[11], p[13], p[14], p[15],
+		   p[16], get_i16(p + 18), get_u16(p + 20), get_u16(p + 22), get_i32(p + 24), get_i32(p + 28),
+		   get_i32(p + 32), get_i32(p + 36), get_i32(p + 40), get_i32(p + 44));
 }
 
 static void print_json_identity(const uint8_t* p) {
-	printf("{\"ref\":%u,\"generation\":%u,\"id\":%u,\"fg\":%u,\"species\":%u,\"craft\":%u}",
-		   get_u16(p), get_u32(p + 4), get_u16(p + 2), p[8], p[9], p[10]);
+	printf("{\"ref\":%u,\"generation\":%u,\"id\":%u,\"fg\":%u,\"species\":%u,\"craft\":%u}", get_u16(p),
+		   get_u32(p + 4), get_u16(p + 2), p[8], p[9], p[10]);
 }
 
 static void print_json_string(const uint8_t* text, size_t limit) {
@@ -480,25 +477,24 @@ static void print_json_string(const uint8_t* text, size_t limit) {
 
 static void print_json_details(uint16_t type, const uint8_t* p, uint16_t payload_size) {
 	if (type == TIE_TRACE_RECORD_FG_DEF && payload_size >= 16) {
-		printf(",\"fg\":%u,\"species\":%u,\"side\":%u,\"count\":%u,\"name\":", p[0], p[1],
-			   p[2], p[3]);
+		printf(",\"fg\":%u,\"species\":%u,\"side\":%u,\"count\":%u,\"name\":", p[0], p[1], p[2], p[3]);
 		print_json_string(p + 4, TIE_FLIGHT_TRACE_FG_NAME_SIZE);
 	} else if (type == TIE_TRACE_RECORD_FRAME && payload_size >= 20) {
 		printf(",\"ticks\":%u,\"rate\":%u,\"clock\":[%u,%u,%u,%u],\"rng\":%u,"
-			   "\"hash\":%u,\"score\":%d", get_u16(p), get_u16(p + 2), p[4], p[5], p[6],
-			   get_u16(p + 8), get_u16(p + 10), get_u32(p + 12), get_i32(p + 16));
+			   "\"hash\":%u,\"score\":%d",
+			   get_u16(p), get_u16(p + 2), p[4], p[5], p[6], get_u16(p + 8), get_u16(p + 10), get_u32(p + 12),
+			   get_i32(p + 16));
 	} else if (type == TIE_TRACE_RECORD_FG_STATE && payload_size >= 47) {
 		printf(",\"fg\":%u,\"active\":%u,\"waves\":%u,\"arrival\":%u,\"arrival_delay\":%u,"
 			   "\"world_position\":%u,\"primary\":%u,\"secondary\":%u,\"complete\":%u,"
-			   "\"conditions\":[", p[0], p[1], p[2], p[3], get_u16(p + 4), get_u16(p + 6), p[44],
-			   p[45], p[46]);
+			   "\"conditions\":[",
+			   p[0], p[1], p[2], p[3], get_u16(p + 4), get_u16(p + 6), p[44], p[45], p[46]);
 		for (int i = 0; i < 9; ++i)
-			printf("%s[%u,%u,%u,%u]", i ? "," : "", p[8 + i * 2], p[9 + i * 2],
-				   p[26 + i * 2], p[27 + i * 2]);
+			printf("%s[%u,%u,%u,%u]", i ? "," : "", p[8 + i * 2], p[9 + i * 2], p[26 + i * 2], p[27 + i * 2]);
 		putchar(']');
 	} else if (type == TIE_TRACE_RECORD_MISSION_STATE && payload_size >= 21) {
-		printf(",\"end\":%u,\"player_status\":%u,\"primary\":%u,\"secondary\":%u,\"bonus\":%u",
-			   p[0], p[1], p[2], p[3], p[4]);
+		printf(",\"end\":%u,\"player_status\":%u,\"primary\":%u,\"secondary\":%u,\"bonus\":%u", p[0], p[1],
+			   p[2], p[3], p[4]);
 		printf(",\"radio\":[");
 		for (int i = 0; i < 16; ++i)
 			printf("%s%u", i ? "," : "", p[5 + i]);
@@ -522,15 +518,15 @@ static void print_json_object_event(uint16_t type, const uint8_t* p, uint16_t pa
 			   "\"submode\":[%u,%u],\"flight\":[%u,%u],"
 			   "\"dock_flags\":[%u,%u],\"ai_entry\":[%u,%u],\"target\":[%u,%u],"
 			   "\"attacker\":[%u,%u],\"plan_state\":[%u,%u],\"timer\":[%d,%d],\"opcode\":%u",
-			   p[48], p[49], p[50], p[51], p[52], p[53], p[54], p[55], p[56], p[57], p[58], p[59],
-			   p[60], p[61], get_u16(p + 62), get_u16(p + 64), get_u16(p + 66), get_u16(p + 68),
-			   get_u16(p + 70), get_u16(p + 72), get_i32(p + 74), get_i32(p + 78), p[82]);
+			   p[48], p[49], p[50], p[51], p[52], p[53], p[54], p[55], p[56], p[57], p[58], p[59], p[60],
+			   p[61], get_u16(p + 62), get_u16(p + 64), get_u16(p + 66), get_u16(p + 68), get_u16(p + 70),
+			   get_u16(p + 72), get_i32(p + 74), get_i32(p + 78), p[82]);
 	else if ((type == TIE_TRACE_RECORD_BOARD || type == TIE_TRACE_RECORD_COLLISION) && payload_size >= 96) {
 		printf(",\"other\":");
 		print_json_object(p + 48);
 		if (type == TIE_TRACE_RECORD_BOARD && payload_size >= 110)
-			printf(",\"board_kind\":%u,\"order\":%u,\"push\":[%d,%d,%d]", p[96], p[97],
-				   get_i32(p + 98), get_i32(p + 102), get_i32(p + 106));
+			printf(",\"board_kind\":%u,\"order\":%u,\"push\":[%d,%d,%d]", p[96], p[97], get_i32(p + 98),
+				   get_i32(p + 102), get_i32(p + 106));
 		else if (payload_size >= 100)
 			printf(",\"collision_kind\":%u,\"component\":%d", p[96], get_i16(p + 98));
 	} else if ((type == TIE_TRACE_RECORD_WEAPON || type == TIE_TRACE_RECORD_TARGET_CHANGE) &&
@@ -546,12 +542,12 @@ static void print_json_object_event(uint16_t type, const uint8_t* p, uint16_t pa
 		print_json_identity(p + 60);
 		printf(",\"cause\":%u,\"component\":%d,\"raw_damage\":%d,\"hull\":[%u,%u,%u],"
 			   "\"shields\":[%d,%d,%d,%d],\"status\":[%u,%u],\"working\":[%u,%u],"
-			   "\"death_timer\":[%d,%d],\"flight\":[%u,%u]", p[72], get_i16(p + 74), get_i16(p + 76),
-			   get_u16(p + 86), get_u16(p + 88), get_u16(p + 90), get_i16(p + 78), get_i16(p + 80),
-			   get_i16(p + 82), get_i16(p + 84), get_u16(p + 92), get_u16(p + 94), get_u16(p + 96),
-			   get_u16(p + 98), get_i16(p + 100), get_i16(p + 102), p[104], p[105]);
-	} else if ((type == TIE_TRACE_RECORD_DEATH || type == TIE_TRACE_RECORD_EXPLOSION) &&
-			   payload_size >= 60) {
+			   "\"death_timer\":[%d,%d],\"flight\":[%u,%u]",
+			   p[72], get_i16(p + 74), get_i16(p + 76), get_u16(p + 86), get_u16(p + 88), get_u16(p + 90),
+			   get_i16(p + 78), get_i16(p + 80), get_i16(p + 82), get_i16(p + 84), get_u16(p + 92),
+			   get_u16(p + 94), get_u16(p + 96), get_u16(p + 98), get_i16(p + 100), get_i16(p + 102), p[104],
+			   p[105]);
+	} else if ((type == TIE_TRACE_RECORD_DEATH || type == TIE_TRACE_RECORD_EXPLOSION) && payload_size >= 60) {
 		printf(",\"responsible\":");
 		print_json_identity(p + 48);
 		if (type == TIE_TRACE_RECORD_DEATH && payload_size >= 64)
@@ -568,8 +564,8 @@ static void print_json_record(const uint8_t* record) {
 	const uint16_t payload_size = size - TIE_FLIGHT_TRACE_RECORD_HEADER_SIZE;
 	printf("{\"frame\":%u,\"sequence\":%u,\"phase\":\"%s\",\"event\":\"%s\",\"type\":%u,"
 		   "\"flags\":%u",
-		   get_u32(record + 4), get_u32(record + 8), phase_name(get_u16(record + 12)),
-		   record_name(type), type, get_u16(record + 14));
+		   get_u32(record + 4), get_u32(record + 8), phase_name(get_u16(record + 12)), record_name(type),
+		   type, get_u16(record + 14));
 	if (object_record(type) && payload_size >= TIE_FLIGHT_TRACE_OBJECT_SIZE)
 		print_json_object_event(type, p, payload_size);
 	else
@@ -585,19 +581,20 @@ static int dump_trace(TraceFile* trace_file, const Options* options) {
 		return 0;
 	}
 	if (!options->jsonl)
-		printf("mission=%s checksum=%08x build=%s termination=%s profile=%u timing=%u difficulty=%u records=%u "
-			   "dropped=%u critical_dropped=%u started=%llu\n",
-			   trace_file->data + TIE_TRACE_HDR_MISSION,
-			   get_u32(trace_file->data + TIE_TRACE_HDR_MISSION_CHECKSUM),
-			   trace_file->data + TIE_TRACE_HDR_BUILD,
-			   termination_name(get_u32(trace_file->data + TIE_TRACE_HDR_FLAGS)),
-			   get_u32(trace_file->data + TIE_TRACE_HDR_PROFILE),
-			   get_u32(trace_file->data + TIE_TRACE_HDR_TIMING_MODE),
-			   get_u32(trace_file->data + TIE_TRACE_HDR_DIFFICULTY),
-			   get_u32(trace_file->data + TIE_TRACE_HDR_RECORD_COUNT),
-			   get_u32(trace_file->data + TIE_TRACE_HDR_DROPPED),
-			   get_u32(trace_file->data + TIE_TRACE_HDR_DROPPED_CRITICAL),
-			   (unsigned long long)get_u64(trace_file->data + TIE_TRACE_HDR_START_TIME));
+		printf(
+			"mission=%s checksum=%08x build=%s termination=%s profile=%u timing=%u difficulty=%u records=%u "
+			"dropped=%u critical_dropped=%u started=%llu\n",
+			trace_file->data + TIE_TRACE_HDR_MISSION,
+			get_u32(trace_file->data + TIE_TRACE_HDR_MISSION_CHECKSUM),
+			trace_file->data + TIE_TRACE_HDR_BUILD,
+			termination_name(get_u32(trace_file->data + TIE_TRACE_HDR_FLAGS)),
+			get_u32(trace_file->data + TIE_TRACE_HDR_PROFILE),
+			get_u32(trace_file->data + TIE_TRACE_HDR_TIMING_MODE),
+			get_u32(trace_file->data + TIE_TRACE_HDR_DIFFICULTY),
+			get_u32(trace_file->data + TIE_TRACE_HDR_RECORD_COUNT),
+			get_u32(trace_file->data + TIE_TRACE_HDR_DROPPED),
+			get_u32(trace_file->data + TIE_TRACE_HDR_DROPPED_CRITICAL),
+			(unsigned long long)get_u64(trace_file->data + TIE_TRACE_HDR_START_TIME));
 	uint32_t offset = trace_file->header_size;
 	while (offset < trace_file->used) {
 		const uint8_t* record = trace_file->data + offset;
@@ -631,8 +628,7 @@ static int diff_traces(TraceFile* first, TraceFile* second) {
 		get_u32(first->data + TIE_TRACE_HDR_PROFILE) != get_u32(second->data + TIE_TRACE_HDR_PROFILE) ||
 		get_u32(first->data + TIE_TRACE_HDR_TIMING_MODE) !=
 			get_u32(second->data + TIE_TRACE_HDR_TIMING_MODE) ||
-		get_u32(first->data + TIE_TRACE_HDR_DIFFICULTY) !=
-			get_u32(second->data + TIE_TRACE_HDR_DIFFICULTY)) {
+		get_u32(first->data + TIE_TRACE_HDR_DIFFICULTY) != get_u32(second->data + TIE_TRACE_HDR_DIFFICULTY)) {
 		printf("trace metadata differs (mission checksum/profile/timing/difficulty)\n");
 		return 1;
 	}

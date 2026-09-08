@@ -294,7 +294,7 @@ static void encode_object(uint8_t* dst, uint16_t ref) {
 }
 
 static TraceIdentity capture_identity(uint16_t ref) {
-	TraceIdentity identity = {ref_generation(ref), ref, object_id(ref), 0xFFu, 0, 0xFFu};
+	TraceIdentity identity = { ref_generation(ref), ref, object_id(ref), 0xFFu, 0, 0xFFu };
 	if (ref < NUM_OBJECTS) {
 		identity.fg = objects[ref].fg_idx;
 		identity.species = objects[ref].ship_idx;
@@ -340,23 +340,27 @@ static TraceAiState capture_ai(uint16_t obj_idx) {
 
 static int ai_semantic_equal(const TraceAiState* a, const TraceAiState* b) {
 	return a->order == b->order && a->default_order == b->default_order && a->mode == b->mode &&
-		   a->submode == b->submode && a->flight_flag == b->flight_flag &&
-		   a->dock_flags == b->dock_flags && a->ai_entry == b->ai_entry &&
-		   (a->plan_state == 0) == (b->plan_state == 0) && a->target == b->target &&
-		   a->attacker == b->attacker;
+		   a->submode == b->submode && a->flight_flag == b->flight_flag && a->dock_flags == b->dock_flags &&
+		   a->ai_entry == b->ai_entry && (a->plan_state == 0) == (b->plan_state == 0) &&
+		   a->target == b->target && a->attacker == b->attacker;
 }
 
 static TraceDamageState capture_damage(uint16_t obj_idx) {
 	const CraftData* c = objects[obj_idx].craft_ptr;
-	TraceDamageState state = {c->forward_shield, c->rear_shield, c->hull_damage, c->hull_max,
-							  c->status_flags, c->working_subsystems, objects[obj_idx].death_timer,
-							  c->flight_flag};
+	TraceDamageState state = { c->forward_shield,
+							   c->rear_shield,
+							   c->hull_damage,
+							   c->hull_max,
+							   c->status_flags,
+							   c->working_subsystems,
+							   objects[obj_idx].death_timer,
+							   c->flight_flag };
 	return state;
 }
 
 static TraceMissionState capture_mission(void) {
-	TraceMissionState state = {mission.end_flag, mission.player_status, mission.primary_complete,
-							   mission.secondary_complete, mission.bonus_complete, {0}};
+	TraceMissionState state = { mission.end_flag,           mission.player_status,  mission.primary_complete,
+								mission.secondary_complete, mission.bonus_complete, { 0 } };
 	memcpy(state.radio, mission.radiomsg_triggered, sizeof state.radio);
 	return state;
 }
@@ -388,8 +392,7 @@ static void observe_flight_objects(void) {
 		TraceObjectShadow* old = &trace.objects[i];
 		const int replaced = object_was_replaced(old, &current);
 		if (old->occupied && (!current.occupied || replaced))
-			emit_object_removed(i, old,
-							replaced ? TIE_TRACE_REMOVAL_REPLACED : TIE_TRACE_REMOVAL_CLEARED);
+			emit_object_removed(i, old, replaced ? TIE_TRACE_REMOVAL_REPLACED : TIE_TRACE_REMOVAL_CLEARED);
 		if (current.occupied && (!old->occupied || replaced)) {
 			current.generation = ++trace.object_generation[i];
 			trace.pending_cause[i].valid = 0;
@@ -406,8 +409,7 @@ static void observe_static_objects(void) {
 		TraceObjectShadow* old = &trace.statics[i];
 		const int replaced = object_was_replaced(old, &current);
 		if (old->occupied && (!current.occupied || replaced))
-			emit_object_removed(ref, old,
-							replaced ? TIE_TRACE_REMOVAL_REPLACED : TIE_TRACE_REMOVAL_CLEARED);
+			emit_object_removed(ref, old, replaced ? TIE_TRACE_REMOVAL_REPLACED : TIE_TRACE_REMOVAL_CLEARED);
 		if (current.occupied && (!old->occupied || replaced)) {
 			current.generation = ++trace.static_generation[i];
 			emit_current_object(ref, TIE_TRACE_RECORD_OBJECT_SPAWN);
@@ -477,10 +479,9 @@ static uint32_t world_hash(void) {
 		hash_u32(&hash, o->ship_idx);
 		if (!o->ship_idx)
 			continue;
-		hash_u32(&hash, (uint32_t)o->idnumber | ((uint32_t)o->ship_idx << 16) |
-						 ((uint32_t)o->genus << 24));
-		hash_u32(&hash, (uint32_t)o->side | ((uint32_t)o->fg_idx << 8) |
-						 ((uint32_t)(uint16_t)o->death_timer << 16));
+		hash_u32(&hash, (uint32_t)o->idnumber | ((uint32_t)o->ship_idx << 16) | ((uint32_t)o->genus << 24));
+		hash_u32(&hash,
+				 (uint32_t)o->side | ((uint32_t)o->fg_idx << 8) | ((uint32_t)(uint16_t)o->death_timer << 16));
 		hash_u32(&hash, (uint32_t)o->world_x);
 		hash_u32(&hash, (uint32_t)o->world_y);
 		hash_u32(&hash, (uint32_t)o->world_z);
@@ -493,12 +494,11 @@ static uint32_t world_hash(void) {
 		if (i < NUM_CRAFTS && o->ship_idx && o->craft_ptr) {
 			const CraftData* c = o->craft_ptr;
 			hash_u32(&hash, (uint32_t)c->current_order | ((uint32_t)c->mode_byte << 8) |
-							 ((uint32_t)c->mode_subbyte << 16) | ((uint32_t)c->flight_flag << 24));
-			hash_u32(&hash, (uint32_t)(uint16_t)c->ai_target_ref |
-							 ((uint32_t)c->dock_state_flags << 16));
+								((uint32_t)c->mode_subbyte << 16) | ((uint32_t)c->flight_flag << 24));
+			hash_u32(&hash, (uint32_t)(uint16_t)c->ai_target_ref | ((uint32_t)c->dock_state_flags << 16));
 			hash_u32(&hash, (uint32_t)c->hull_damage | ((uint32_t)c->status_flags << 16));
-			hash_u32(&hash, (uint32_t)(uint16_t)c->forward_shield |
-							 ((uint32_t)(uint16_t)c->rear_shield << 16));
+			hash_u32(&hash,
+					 (uint32_t)(uint16_t)c->forward_shield | ((uint32_t)(uint16_t)c->rear_shield << 16));
 			hash_u32(&hash, (uint32_t)c->ai_plan_state | ((uint32_t)c->working_subsystems << 16));
 			hash_u32(&hash, (uint32_t)c->maneuver_timer);
 			hash_u32(&hash, (uint32_t)c->push_accum_x);
@@ -507,7 +507,7 @@ static uint32_t world_hash(void) {
 		} else if (i >= NUM_CRAFTS && i < WARHEAD_SLOT_END &&
 				   (o->genus == GENUS_PROJECTILE_PLAYER || o->genus == GENUS_PROJECTILE_NPC)) {
 			hash_u32(&hash, (uint32_t)warheads[i - NUM_CRAFTS].target_obj |
-							 ((uint32_t)warheads[i - NUM_CRAFTS].homing_tier << 16));
+								((uint32_t)warheads[i - NUM_CRAFTS].homing_tier << 16));
 		}
 	}
 	for (uint16_t i = 0; i < NUM_STATIC_OBJECTS; ++i) {
@@ -515,8 +515,8 @@ static uint32_t world_hash(void) {
 		hash_u32(&hash, o->species);
 		if (!o->species)
 			continue;
-		hash_u32(&hash, (uint32_t)o->idnumber | ((uint32_t)o->species << 16) |
-						 ((uint32_t)o->ship_class << 24));
+		hash_u32(&hash,
+				 (uint32_t)o->idnumber | ((uint32_t)o->species << 16) | ((uint32_t)o->ship_class << 24));
 		hash_u32(&hash, (uint32_t)(uint16_t)o->world_x | ((uint32_t)(uint16_t)o->world_y << 16));
 		hash_u32(&hash, (uint32_t)(uint16_t)o->world_z | ((uint32_t)o->fg_idx << 16));
 		hash_u32(&hash, o->status_flags);
@@ -524,14 +524,14 @@ static uint32_t world_hash(void) {
 	for (uint8_t i = 0; i < trace.num_fg; ++i) {
 		const FGStatus* fg = &fgstatus[i];
 		hash_u32(&hash, (uint32_t)fg->active | ((uint32_t)fg->waves_remaining << 8) |
-						 ((uint32_t)fg->arrival_triggered << 16));
+							((uint32_t)fg->arrival_triggered << 16));
 		hash_u32(&hash, (uint32_t)fg->arrival_delay | ((uint32_t)fg->world_position << 16));
 		for (unsigned int j = 0; j < 9; ++j)
 			hash_u32(&hash, (uint32_t)fg->cond[j].count | ((uint32_t)fg->cond[j].detail << 8) |
-							 ((uint32_t)fg->cond_id[j].count << 16) |
-							 ((uint32_t)fg->cond_id[j].detail << 24));
+								((uint32_t)fg->cond_id[j].count << 16) |
+								((uint32_t)fg->cond_id[j].detail << 24));
 		hash_u32(&hash, (uint32_t)fg->primary_status | ((uint32_t)fg->secondary_status << 8) |
-						 ((uint32_t)fg->fg_complete << 16));
+							((uint32_t)fg->fg_complete << 16));
 	}
 	const TraceMissionState state = capture_mission();
 	for (unsigned int i = 0; i < sizeof state; ++i) {
@@ -633,7 +633,7 @@ static void freeze_pending_cause(uint16_t victim_ref, TieFlightTraceCause cause,
 }
 
 static TieFlightTraceCause resolve_cause(uint16_t victim_ref, uint16_t attacker_ref,
-									 TraceIdentity* responsible) {
+										 TraceIdentity* responsible) {
 	*responsible = capture_identity(attacker_ref);
 	if (victim_ref < NUM_OBJECTS) {
 		const TracePendingCause* pending = &trace.pending_cause[victim_ref];
@@ -644,9 +644,8 @@ static TieFlightTraceCause resolve_cause(uint16_t victim_ref, uint16_t attacker_
 	}
 	if (attacker_ref >= OBJ_REF_STATIC_BASE && attacker_ref < OBJ_REF_STATIC_BASE + NUM_STATIC_OBJECTS)
 		return TIE_TRACE_CAUSE_STATIC_COLLISION;
-	if (attacker_ref < NUM_OBJECTS &&
-		(objects[attacker_ref].genus == GENUS_PROJECTILE_PLAYER ||
-		 objects[attacker_ref].genus == GENUS_PROJECTILE_NPC)) {
+	if (attacker_ref < NUM_OBJECTS && (objects[attacker_ref].genus == GENUS_PROJECTILE_PLAYER ||
+									   objects[attacker_ref].genus == GENUS_PROJECTILE_NPC)) {
 		*responsible = capture_identity((uint16_t)objects[attacker_ref].self_idx);
 		return TIE_TRACE_CAUSE_PROJECTILE;
 	}
@@ -657,8 +656,7 @@ static int parse_trace_filename(const char* name, uint64_t* timestamp) {
 	const size_t prefix_length = sizeof TRACE_FILE_PREFIX - 1;
 	const size_t suffix_length = sizeof TRACE_FILE_SUFFIX - 1;
 	const size_t name_length = name ? strlen(name) : 0;
-	if (name_length <= prefix_length + suffix_length ||
-		memcmp(name, TRACE_FILE_PREFIX, prefix_length) != 0 ||
+	if (name_length <= prefix_length + suffix_length || memcmp(name, TRACE_FILE_PREFIX, prefix_length) != 0 ||
 		memcmp(name + name_length - suffix_length, TRACE_FILE_SUFFIX, suffix_length) != 0)
 		return 0;
 
@@ -799,8 +797,8 @@ static void finish_trace(uint32_t header_flags) {
 	const int result = TieStorage_WriteAllAtomic(TIE_FILE_ROOT_USER, filename, trace.data, trace.used);
 	if (result == 0) {
 		TieDiagnostics_Log(TIE_LOG_INFO,
-					   "Flight trace saved as %s (%u records, %u dropped, %u critical dropped)\n",
-					   filename, trace.records, trace.dropped, trace.dropped_critical);
+						   "Flight trace saved as %s (%u records, %u dropped, %u critical dropped)\n",
+						   filename, trace.records, trace.dropped, trace.dropped_critical);
 		prune_old_traces(filename);
 	} else {
 		TieDiagnostics_Log(TIE_LOG_ERROR, "Could not save flight trace %s\n", filename);
@@ -919,7 +917,7 @@ void TieFlightTrace_TargetChange(uint16_t obj_ref, uint16_t old_target_ref, uint
 }
 
 void TieFlightTrace_Collision(uint16_t actor_ref, uint16_t target_ref, TieFlightTraceCollisionKind kind,
-						  int16_t component) {
+							  int16_t component) {
 	uint8_t* payload = begin_record(TIE_TRACE_RECORD_COLLISION, 100, 1);
 	if (payload) {
 		encode_object(payload, actor_ref);
@@ -950,7 +948,7 @@ void TieFlightTrace_DamageBefore(uint16_t target_ref) {
 }
 
 void TieFlightTrace_DamageAfter(uint16_t target_ref, uint16_t attacker_ref, int16_t component,
-							int16_t damage) {
+								int16_t damage) {
 	if (!trace.active || target_ref >= NUM_CRAFTS || !trace.damage_before_valid[target_ref])
 		return;
 	const TraceDamageState after = capture_damage(target_ref);

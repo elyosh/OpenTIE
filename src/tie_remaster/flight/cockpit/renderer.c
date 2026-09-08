@@ -899,8 +899,8 @@ static bool TieCockpitRenderer_PrepareOriginalBase(TieCockpitRenderer* cg, Aeron
 	(void)complete_rows;
 	static const int threat_digit_fields[] = { TIE_HUDI_THREAT_SHIELD_PCT, TIE_HUDI_THREAT_HULL_PCT };
 	TieCockpitRenderer_ClearOriginalDigitFields(cg, &base, snap, palette, 20, COCKPIT_BG_THREAT,
-													 threat_digit_fields,
-													 sizeof threat_digit_fields / sizeof threat_digit_fields[0]);
+												threat_digit_fields,
+												sizeof threat_digit_fields / sizeof threat_digit_fields[0]);
 	if (!TieCockpitCoverage_Build(base.rgba, base.width, base.height, &coverage, &codec_error))
 		goto failed;
 	entry->base_tex = Aeron_ImageUploadRgba8(cmd, base.rgba, base.width, base.height, (size_t)base.width * 4,
@@ -1240,8 +1240,8 @@ static void TieCockpitRenderer_DrawCockpitBase(TieCockpitRenderer* cg, AeronComm
 	const float ih = (float)entry->cover_img_h;
 	for (int i = 0; i < entry->cover_count; i++) {
 		const TieCockpitRendererCoverRect* r = &entry->cover_rects[i];
-		const float fu0 = r->x / iw, fu1 = (r->x + r->w) / iw;
-		const float fv0 = r->y / ih, fv1 = (r->y + r->h) / ih;
+		const float fu0 = r->x / iw, fu1 = (r->x + r->width) / iw;
+		const float fv0 = r->y / ih, fv1 = (r->y + r->height) / ih;
 		float dst_x, u0, u1;
 		if (mirrored) { /* flip horizontally, like the fullscreen path */
 			dst_x = (float)coord_w * (1.0f - fu1);

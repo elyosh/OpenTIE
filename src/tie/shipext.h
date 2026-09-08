@@ -270,63 +270,63 @@ void MissionFile_encode(uint8_t* dst, const MissionFile* src);
  * disk byte buffer as `PilotRecord *`; always go through PilotRecord_decode
  * / _encode at file boundaries. */
 typedef struct {
-	uint8_t version;                           /* +0x000: record version (always 1) */
-	uint8_t exit_status;                       /* +0x001: last mission exit code */
-	uint8_t rank;                              /* +0x002: pilot rank (0-5) */
-	uint8_t game_level;                        /* +0x003: difficulty (0=easy, 1=medium, 2=hard) */
-	int32_t score;                             /* +0x004: career total score */
-	uint16_t avg_score;                        /* +0x008: average score (capped 0xFFFF) */
-	uint8_t secret_order_rank;                 /* +0x00A: secret order rank (0-9) */
-	uint8_t reserved_0b;                       /* +0x00B: alignment pad before u16
-												*         secret_completions; no readers. */
-	uint16_t secret_completions;               /* +0x00C: secret mission completion count */
-	int32_t secret_score;                      /* +0x00E: secret total score */
-	uint8_t reserved_12[10];                   /* +0x012..+0x01B: 10-byte hole; no readers. */
-	uint8_t cur_train_ship;                    /* +0x01C: current training ship index */
-	uint8_t train_level[NUM_SHIPS];            /* +0x01D: per-ship training level */
-	uint8_t reserved_29;                       /* +0x029: alignment pad before i32
-												*         train_score; no readers. */
-	int32_t train_score[NUM_SHIPS];            /* +0x02A: per-ship training high score */
-	uint8_t train_max_level[NUM_SHIPS];        /* +0x05A: per-ship max training level reached */
-	uint8_t cur_combat_ship;                         /* +0x066: current combat sim ship index */
-	uint8_t combat_course_cursor[SHIP_INFO_SIZE];    /* +0x067: per-ship/battle course cursor */
-	uint8_t reserved_87;                             /* +0x087: alignment pad before combat_score */
-	int32_t combat_score[NUM_SHIPS][8];        /* +0x088: per-ship x course high scores */
-	uint8_t combat_complete[NUM_SHIPS][8];     /* +0x208: per-ship x course completion */
-	uint8_t cur_battle;                        /* +0x268: current battle index (0-19) */
-	uint8_t battle_status[NUM_BATTLES];        /* +0x269: per-battle progress (1=active, 2=failed) */
-	uint8_t battle_cursor[NUM_BATTLES];        /* +0x27D: per-battle current mission */
-	uint8_t linked_data[256];                  /* +0x291: mission linked data */
-	uint8_t secret_complete_bits[NUM_BATTLES]; /* +0x391: secret obj bitmask per battle */
-	uint8_t mission_bonus_bits[NUM_BATTLES];   /* +0x3A5: bonus obj bitmask per battle */
-	uint8_t reserved_3b9[29];                  /* +0x3B9..+0x3D5: 29-byte hole; no readers. */
-	uint8_t reserved_3d6[4];                   /* +0x3D6..+0x3D9: 4-byte hole. The only
-												*         apparent access is COMPUTER_Draw_
-												*         Computer_Battle_Info at 0x85607,
-												*         which uses &reserved_3d6 as the
-												*         array base for tour_score so that
-												*         `dword_FAF9E[battle*32 + mission*4]`
-												*         indexes tour_score[battle][mission-1]
-												*         (1-based mission indexing). The
-												*         dword's value itself is read once
-												*         when battle=0/mission=0 but never
-												*         drives any branch -- semantically
-												*         dead, just an indexing anchor. */
-	int32_t tour_score[NUM_BATTLES][8];        /* +0x3DA: per-battle x mission high scores */
-	uint16_t total_kills;                      /* +0x65A: career kill total */
-	uint16_t total_captures;                   /* +0x65C: career capture total */
-	uint8_t reserved_65e[2];                   /* +0x65E..+0x65F: alignment pad before
-												*         u16 kills_by_ship_type[]; no readers. */
-	uint16_t kills_by_ship_type[69];           /* +0x660: per-species kill counts */
-	uint16_t captures_by_ship_type[69];        /* +0x6EA: per-species capture counts */
-	int32_t laser_total;                       /* +0x774: lasers fired (career) */
-	int32_t laser_hits;                        /* +0x778: laser hits (career) */
-	uint8_t reserved_77c[4];                   /* +0x77C..+0x77F: 4-byte hole; no readers. */
-	uint16_t warhead_total;                    /* +0x780: warheads fired (career) */
-	uint16_t warhead_hits;                     /* +0x782: warhead hits (career) */
-	uint8_t reserved_784[2];                   /* +0x784..+0x785: alignment pad before
-												*         u16 ejection_count; no readers. */
-	uint16_t ejection_count;                   /* +0x786: times ejected */
+	uint8_t version;                              /* +0x000: record version (always 1) */
+	uint8_t exit_status;                          /* +0x001: last mission exit code */
+	uint8_t rank;                                 /* +0x002: pilot rank (0-5) */
+	uint8_t game_level;                           /* +0x003: difficulty (0=easy, 1=medium, 2=hard) */
+	int32_t score;                                /* +0x004: career total score */
+	uint16_t avg_score;                           /* +0x008: average score (capped 0xFFFF) */
+	uint8_t secret_order_rank;                    /* +0x00A: secret order rank (0-9) */
+	uint8_t reserved_0b;                          /* +0x00B: alignment pad before u16
+												   *         secret_completions; no readers. */
+	uint16_t secret_completions;                  /* +0x00C: secret mission completion count */
+	int32_t secret_score;                         /* +0x00E: secret total score */
+	uint8_t reserved_12[10];                      /* +0x012..+0x01B: 10-byte hole; no readers. */
+	uint8_t cur_train_ship;                       /* +0x01C: current training ship index */
+	uint8_t train_level[NUM_SHIPS];               /* +0x01D: per-ship training level */
+	uint8_t reserved_29;                          /* +0x029: alignment pad before i32
+												   *         train_score; no readers. */
+	int32_t train_score[NUM_SHIPS];               /* +0x02A: per-ship training high score */
+	uint8_t train_max_level[NUM_SHIPS];           /* +0x05A: per-ship max training level reached */
+	uint8_t cur_combat_ship;                      /* +0x066: current combat sim ship index */
+	uint8_t combat_course_cursor[SHIP_INFO_SIZE]; /* +0x067: per-ship/battle course cursor */
+	uint8_t reserved_87;                          /* +0x087: alignment pad before combat_score */
+	int32_t combat_score[NUM_SHIPS][8];           /* +0x088: per-ship x course high scores */
+	uint8_t combat_complete[NUM_SHIPS][8];        /* +0x208: per-ship x course completion */
+	uint8_t cur_battle;                           /* +0x268: current battle index (0-19) */
+	uint8_t battle_status[NUM_BATTLES];           /* +0x269: per-battle progress (1=active, 2=failed) */
+	uint8_t battle_cursor[NUM_BATTLES];           /* +0x27D: per-battle current mission */
+	uint8_t linked_data[256];                     /* +0x291: mission linked data */
+	uint8_t secret_complete_bits[NUM_BATTLES];    /* +0x391: secret obj bitmask per battle */
+	uint8_t mission_bonus_bits[NUM_BATTLES];      /* +0x3A5: bonus obj bitmask per battle */
+	uint8_t reserved_3b9[29];                     /* +0x3B9..+0x3D5: 29-byte hole; no readers. */
+	uint8_t reserved_3d6[4];                      /* +0x3D6..+0x3D9: 4-byte hole. The only
+												   *         apparent access is COMPUTER_Draw_
+												   *         Computer_Battle_Info at 0x85607,
+												   *         which uses &reserved_3d6 as the
+												   *         array base for tour_score so that
+												   *         `dword_FAF9E[battle*32 + mission*4]`
+												   *         indexes tour_score[battle][mission-1]
+												   *         (1-based mission indexing). The
+												   *         dword's value itself is read once
+												   *         when battle=0/mission=0 but never
+												   *         drives any branch -- semantically
+												   *         dead, just an indexing anchor. */
+	int32_t tour_score[NUM_BATTLES][8];           /* +0x3DA: per-battle x mission high scores */
+	uint16_t total_kills;                         /* +0x65A: career kill total */
+	uint16_t total_captures;                      /* +0x65C: career capture total */
+	uint8_t reserved_65e[2];                      /* +0x65E..+0x65F: alignment pad before
+												   *         u16 kills_by_ship_type[]; no readers. */
+	uint16_t kills_by_ship_type[69];              /* +0x660: per-species kill counts */
+	uint16_t captures_by_ship_type[69];           /* +0x6EA: per-species capture counts */
+	int32_t laser_total;                          /* +0x774: lasers fired (career) */
+	int32_t laser_hits;                           /* +0x778: laser hits (career) */
+	uint8_t reserved_77c[4];                      /* +0x77C..+0x77F: 4-byte hole; no readers. */
+	uint16_t warhead_total;                       /* +0x780: warheads fired (career) */
+	uint16_t warhead_hits;                        /* +0x782: warhead hits (career) */
+	uint8_t reserved_784[2];                      /* +0x784..+0x785: alignment pad before
+												   *         u16 ejection_count; no readers. */
+	uint16_t ejection_count;                      /* +0x786: times ejected */
 } PilotRecord;
 
 #define PILOTRECORD_DISK_SIZE 1928u

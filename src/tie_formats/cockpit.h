@@ -5,12 +5,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "aeron/image.h"
 #include "tie_formats/common.h"
 #include "tie_formats/shape.h"
 
-typedef struct TieCockpitCoverageRect {
-	int16_t x, y, w, h;
-} TieCockpitCoverageRect;
+typedef AeronImageCoverageRect TieCockpitCoverageRect;
 
 typedef struct TieCockpitCoverage {
 	TieCockpitCoverageRect* rects;

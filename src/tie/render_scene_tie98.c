@@ -371,8 +371,7 @@ static void RenderScene_InitHardwareFrame(void) {
 	/* Original TIE98 uses the two halves of its scene-span arena as
 	 * oversized staging buffers; the batch limits are flush thresholds. */
 	if (!g_flightVertexBuffer)
-		g_flightVertexBuffer =
-			malloc((size_t)TIE98_HARDWARE_VERTEX_CAPACITY * sizeof *g_flightVertexBuffer);
+		g_flightVertexBuffer = malloc((size_t)TIE98_HARDWARE_VERTEX_CAPACITY * sizeof *g_flightVertexBuffer);
 	if (!g_triBuffer)
 		g_triBuffer = malloc((size_t)TIE98_HARDWARE_TRIANGLE_CAPACITY * sizeof *g_triBuffer);
 	if (!g_flightVertexBuffer || !g_triBuffer) {
@@ -989,8 +988,8 @@ static void sw3d_ProjectMeshVerticesDistant(SceneMeshTIE98* mesh) {
 
 static int RenderScene_HardwareStagingHasCapacity(int vertex_count, int triangle_count) {
 	return vertex_count >= 0 && triangle_count >= 0 &&
-		g_d3dVertexCount <= TIE98_HARDWARE_VERTEX_CAPACITY - vertex_count &&
-		g_d3dIndexCount <= TIE98_HARDWARE_TRIANGLE_CAPACITY - triangle_count;
+		   g_d3dVertexCount <= TIE98_HARDWARE_VERTEX_CAPACITY - vertex_count &&
+		   g_d3dIndexCount <= TIE98_HARDWARE_TRIANGLE_CAPACITY - triangle_count;
 }
 
 // FUNCTION: TIE98 0x42B130

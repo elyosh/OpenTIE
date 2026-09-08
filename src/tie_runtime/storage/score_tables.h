@@ -15,10 +15,9 @@ typedef struct TrainingScoreEntry {
 	int16_t level;
 } TrainingScoreEntry;
 
-bool TieScoreTables_LoadTraining(const char* filename,
-								TrainingScoreEntry entries[TRAIN_SCORE_ENTRY_COUNT]);
+bool TieScoreTables_LoadTraining(const char* filename, TrainingScoreEntry entries[TRAIN_SCORE_ENTRY_COUNT]);
 bool TieScoreTables_SaveTraining(const char* filename,
-								const TrainingScoreEntry entries[TRAIN_SCORE_ENTRY_COUNT]);
+								 const TrainingScoreEntry entries[TRAIN_SCORE_ENTRY_COUNT]);
 
 #define GAME_SCORE_ENTRY_COUNT 10
 #define GAME_SCORE_MISSION_NAME_CAPACITY 11

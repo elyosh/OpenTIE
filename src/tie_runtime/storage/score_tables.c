@@ -12,8 +12,7 @@ enum {
 	TRAIN_SCORE_TIE95_ENTRY_COUNT = 8,
 	TRAIN_SCORE_TIE95_NAME_DISK_SIZE = 10,
 	TRAIN_SCORE_TIE95_ENTRY_DISK_SIZE = TRAIN_SCORE_TIE95_NAME_DISK_SIZE + 4 + 2,
-	TRAIN_SCORE_TIE95_FILE_DISK_SIZE =
-		TRAIN_SCORE_TIE95_ENTRY_COUNT * TRAIN_SCORE_TIE95_ENTRY_DISK_SIZE,
+	TRAIN_SCORE_TIE95_FILE_DISK_SIZE = TRAIN_SCORE_TIE95_ENTRY_COUNT * TRAIN_SCORE_TIE95_ENTRY_DISK_SIZE,
 	GAME_SCORE_MISSION_NAME_DISK_SIZE = 10,
 	GAME_SCORE_NAME_DISK_SIZE = 34,
 	GAME_SCORE_ENTRY_DISK_SIZE = GAME_SCORE_NAME_DISK_SIZE + 4 + 2,
@@ -71,8 +70,7 @@ static void encode_training_entry(uint8_t* dst, const TrainingScoreEntry* src) {
 	bw_i16le(dst + TRAIN_SCORE_NAME_DISK_SIZE + 4, src->level);
 }
 
-bool TieScoreTables_LoadTraining(const char* filename,
-								TrainingScoreEntry entries[TRAIN_SCORE_ENTRY_COUNT]) {
+bool TieScoreTables_LoadTraining(const char* filename, TrainingScoreEntry entries[TRAIN_SCORE_ENTRY_COUNT]) {
 	TieFile* file = TieStorage_Open(TIE_FILE_ROOT_USER, filename, "rb");
 	if (!file)
 		return false;
@@ -104,7 +102,7 @@ bool TieScoreTables_LoadTraining(const char* filename,
 }
 
 bool TieScoreTables_SaveTraining(const char* filename,
-								const TrainingScoreEntry entries[TRAIN_SCORE_ENTRY_COUNT]) {
+								 const TrainingScoreEntry entries[TRAIN_SCORE_ENTRY_COUNT]) {
 	uint8_t bytes[TRAIN_SCORE_FILE_DISK_SIZE];
 	for (int i = 0; i < TRAIN_SCORE_ENTRY_COUNT; i++)
 		encode_training_entry(bytes + i * TRAIN_SCORE_ENTRY_DISK_SIZE, &entries[i]);
@@ -127,7 +125,7 @@ static void decode_game_head(GameScoreHead* dst, const uint8_t* src) {
 	decode_fixed_string(dst->name, sizeof dst->name, src, GAME_SCORE_MISSION_NAME_DISK_SIZE);
 	for (int i = 0; i < GAME_SCORE_ENTRY_COUNT; i++)
 		decode_game_entry(&dst->scores[i],
-					  src + GAME_SCORE_MISSION_NAME_DISK_SIZE + i * GAME_SCORE_ENTRY_DISK_SIZE);
+						  src + GAME_SCORE_MISSION_NAME_DISK_SIZE + i * GAME_SCORE_ENTRY_DISK_SIZE);
 }
 
 static void encode_game_head(uint8_t* dst, const GameScoreHead* src) {
@@ -140,8 +138,7 @@ static void encode_game_head(uint8_t* dst, const GameScoreHead* src) {
 static void decode_tie95_game_head(GameScoreHead* dst, const uint8_t* src) {
 	decode_fixed_string(dst->name, sizeof dst->name, src, GAME_SCORE_MISSION_NAME_DISK_SIZE);
 	for (int i = 0; i < GAME_SCORE_TIE95_ENTRY_COUNT; i++) {
-		const uint8_t* entry =
-			src + GAME_SCORE_MISSION_NAME_DISK_SIZE + i * GAME_SCORE_TIE95_ENTRY_DISK_SIZE;
+		const uint8_t* entry = src + GAME_SCORE_MISSION_NAME_DISK_SIZE + i * GAME_SCORE_TIE95_ENTRY_DISK_SIZE;
 		decode_fixed_string(dst->scores[i].name, sizeof dst->scores[i].name, entry,
 							GAME_SCORE_TIE95_NAME_DISK_SIZE);
 		dst->scores[i].score = br_i32le(entry + GAME_SCORE_TIE95_NAME_DISK_SIZE);

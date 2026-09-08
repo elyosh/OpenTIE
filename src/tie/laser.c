@@ -369,9 +369,8 @@ uint16_t laser_createprojectilefromstatic(uint16_t static_obj_idx, uint16_t shoo
 			const unsigned int occupant_projectile_type_idx =
 				(unsigned int)occupant_species - WEAPON_SPECIES_BASE;
 			/* Projectile slots can still contain in-place impact animations. */
-			const uint8_t occupant_is_warhead =
-				occupant_projectile_type_idx < WARHEAD_TYPE_COUNT &&
-				projectile_is_warhead_type[occupant_projectile_type_idx];
+			const uint8_t occupant_is_warhead = occupant_projectile_type_idx < WARHEAD_TYPE_COUNT &&
+												projectile_is_warhead_type[occupant_projectile_type_idx];
 			if (!occupant_is_warhead && objects[slot].side == want_side)
 				break;
 		}

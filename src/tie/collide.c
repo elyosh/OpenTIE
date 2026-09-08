@@ -23,8 +23,8 @@
 #include "tie/static.h"
 #include "tie/tie.h"
 #include "tie/user.h"
-#include "tie_runtime/runtime/inflight_state.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
+#include "tie_runtime/runtime/inflight_state.h"
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 
@@ -1002,7 +1002,7 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 							if (ship_idx >= 5 && ship_idx <= 7) {
 								objects[target_obj_idx].death_timer = 60;
 								TIE_FLIGHT_TRACE_DEATH(target_obj_idx, attacker_obj_idx,
-												   TIE_TRACE_DEATH_SYSTEMS_DISABLED, 60);
+													   TIE_TRACE_DEATH_SYSTEMS_DISABLED, 60);
 								collide_updatekills(objects[attacker_obj_idx].self_idx, target_obj_idx);
 								score_craftexitscoring(target_obj_idx, objects[target_obj_idx].fg_idx, 2);
 							}
@@ -1279,7 +1279,7 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 					if (target_obj_idx == pstate.object_idx)
 						objects[target_obj_idx].death_timer = (int16_t)(236 * ((math2_getrandom() & 3) + 4));
 					TIE_FLIGHT_TRACE_DEATH(target_obj_idx, attacker_obj_idx, TIE_TRACE_DEATH_DAMAGE,
-									   objects[target_obj_idx].death_timer);
+										   objects[target_obj_idx].death_timer);
 					/* [num_meshes] is the overlaid lightning anim frame
 					 * counter, not a per-mesh state. 2 = jump the bolt
 					 * script to frame 2. */
@@ -1298,7 +1298,7 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 			tgt_craft->flight_flag = 3;
 			objects[target_obj_idx].death_timer = (int16_t)(236 * ((math2_getrandom() & 7) + 8));
 			TIE_FLIGHT_TRACE_DEATH(target_obj_idx, attacker_obj_idx, TIE_TRACE_DEATH_DAMAGE,
-							   objects[target_obj_idx].death_timer);
+								   objects[target_obj_idx].death_timer);
 			return ret_no_panel_update;
 		}
 	}
@@ -1637,7 +1637,7 @@ void collide_collisions(void) {
 							tgt_genus == GENUS_STARSHIP || tgt_genus == GENUS_PLATFORM) {
 							int32_t dot;
 							TIE_FLIGHT_TRACE_COLLISION(pstate.object_idx, target_idx,
-											   TIE_TRACE_COLLISION_CRAFT, hit_offset);
+													   TIE_TRACE_COLLISION_CRAFT, hit_offset);
 							collide_damagecraft(target_idx, hit_offset, 0, pstate.object_idx);
 							if (pl->orient_dirty) {
 								fview_calcrotatemove(pl->heading, pl->pitch, pl);
@@ -1727,7 +1727,7 @@ void collide_collisions(void) {
 				if (staticobjects[i].species) {
 					if (static_laserstaticcollide(pstate.object_idx, i)) {
 						TIE_FLIGHT_TRACE_COLLISION(pstate.object_idx, static_obj_off,
-											   TIE_TRACE_COLLISION_STATIC, -1);
+												   TIE_TRACE_COLLISION_STATIC, -1);
 						collide_damagecraft(pstate.object_idx, 0xFFFF, 0, static_obj_off);
 					}
 				}
@@ -1803,7 +1803,7 @@ void collide_collisions(void) {
 						uint16_t hit = collide_lasercraftcollide(tgt_iter, projectile_idx);
 						if (hit) {
 							TIE_FLIGHT_TRACE_COLLISION(projectile_idx, tgt_iter, TIE_TRACE_COLLISION_CRAFT,
-											   (int16_t)hit);
+													   (int16_t)hit);
 							collide_damagecraft(projectile_idx, (int16_t)hit, 0, tgt_iter);
 							collide_damagecraft(tgt_iter, 0xFFFF, 0, projectile_idx);
 						}
@@ -1880,7 +1880,7 @@ void collide_collisions(void) {
 						uint16_t hit = collide_lasercraftcollide(projectile_idx, i);
 						if (hit) {
 							TIE_FLIGHT_TRACE_COLLISION(projectile_idx, i, TIE_TRACE_COLLISION_PROJECTILE,
-											   (int16_t)hit);
+													   (int16_t)hit);
 							collide_updatehits(projectile_idx);
 							if (i < NUM_CRAFTS) {
 								collide_laserhitcraft(projectile_idx, i, (int16_t)hit);
@@ -1901,8 +1901,8 @@ void collide_collisions(void) {
 						if (staticobjects[m].species) {
 							if (static_laserstaticcollide(projectile_idx, m)) {
 								TIE_FLIGHT_TRACE_COLLISION(projectile_idx,
-												   (uint16_t)(m + OBJ_REF_STATIC_BASE),
-												   TIE_TRACE_COLLISION_STATIC, -1);
+														   (uint16_t)(m + OBJ_REF_STATIC_BASE),
+														   TIE_TRACE_COLLISION_STATIC, -1);
 								static_laserhitstatic(projectile_idx, m);
 								collide_updatehits(projectile_idx);
 								break;
