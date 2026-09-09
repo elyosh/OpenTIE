@@ -53,9 +53,11 @@ ADD --checksum=sha256:${DXC_LINUX_X64_SHA256} \
     https://github.com/microsoft/DirectXShaderCompiler/releases/download/v${DXC_VERSION}/${DXC_LINUX_X64_ARCHIVE} \
     /tmp/dxc.tar.gz
 
+#/deps/SDL_shadercross/include/SDL3_shadercross/SDL_shadercross.h
+
 RUN git clone https://github.com/libsdl-org/SDL_shadercross.git /deps/SDL_shadercross \
     && git -C /deps/SDL_shadercross checkout "${SHADERCROSS_COMMIT}" \
-    && git -C /deps/SDL_shadercross apply /tmp/shadercross-fsr3.patch \
+    && cd /deps/SDL_shadercross/ && patch -F 5 -p1 < /tmp/shadercross-fsr3.patch && cd ../.. \
     && git -C /deps/SDL_shadercross submodule update --init --depth 1 \
         external/SPIRV-Cross \
     && mkdir -p \
@@ -106,7 +108,7 @@ COPY packaging/common/sdl-gpu-d3d12-hdr.patch /tmp/sdl-gpu-d3d12-hdr.patch
 # has a D3D12 backend, so the host SDL above is left unpatched.
 RUN git clone --branch "release-${SDL_VERSION}" --depth 1 \
         https://github.com/libsdl-org/SDL.git /deps/SDL \
-    && git -C /deps/SDL apply /tmp/sdl-gpu-d3d12-hdr.patch \
+    && patch -F 3 /deps/SDL/src/gpu/d3d12/SDL_gpu_d3d12.c < /tmp/sdl-gpu-d3d12-hdr.patch \
     && cmake -S /deps/SDL -B /build/sdl-windows -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/opt/tie-windows \
@@ -175,7 +177,7 @@ RUN git clone --branch "${VCPKG_REF}" --depth 1 \
         https://github.com/microsoft/vcpkg.git /opt/vcpkg \
     && cp /tmp/fluidsynth-library-only.patch \
         /opt/vcpkg/ports/fluidsynth/fluidsynth-library-only.patch \
-    && git -C /opt/vcpkg apply /tmp/vcpkg-fluidsynth-library-only.patch \
+    && patch -F 3 /opt/vcpkg/ports/fluidsynth/portfile.cmake < /tmp/vcpkg-fluidsynth-library-only.patch \
     && /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics \
     && /opt/vcpkg/vcpkg install fluidsynth speexdsp \
         --triplet x64-mingw-dynamic \
