@@ -2201,7 +2201,7 @@ static void ui_toggle_beam(void) {
 	msg_messageprintf((pc->beam_state & 0x80) ? MSG_BEAM_ON : MSG_BEAM_OFF);
 }
 
-/* 'Reinforce' confirm on key 83 = 'S'. Binary 0x5D63B. */
+/* 'Reinforce' confirm on key 83 = 'S'. Binary 0x5D63B.  */
 static void ui_reinforce_request(void) {
 	if (pstate.space_confirm_action)
 		return;
@@ -2209,7 +2209,7 @@ static void ui_reinforce_request(void) {
 	for (uint16_t i = 0; i < (uint16_t)mission_file_header.num_fg; ++i) {
 		/* Watcom unaligned load on fg_array[i].link_code: the +3 byte is
 		 * start_cond[0].type (byte 0x4A), same byte both paths check. */
-		if (fg_array[i].link_code == 20 || fg_array[i].start_cond[0].type == 20) {
+		if (fg_array[i].link_code == 20 || fg_array[i].start_cond[0].cond == 20) {
 			reinforce_avail = 1;
 			break;
 		}
