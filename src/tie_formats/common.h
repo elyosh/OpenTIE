@@ -1,13 +1,11 @@
 #ifndef TIE_FORMATS_COMMON_H
 #define TIE_FORMATS_COMMON_H
 
+#include "aeron/asset/decode_types.h"
 #include <stddef.h>
 #include <stdint.h>
 
-typedef struct TieFormatError {
-	int code;
-	char message[256];
-} TieFormatError;
+typedef AeronDecodeError TieFormatError;
 
 typedef struct TieRgbaFrame {
 	uint8_t* rgba;

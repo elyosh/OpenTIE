@@ -7,10 +7,7 @@
 
 #include "tie_formats/common.h"
 
-typedef struct TieShape {
-	const uint8_t* data;
-	size_t size;
-} TieShape;
+typedef AeronByteSpan TieShape;
 
 typedef struct TieShapeList {
 	TieShape* shapes;

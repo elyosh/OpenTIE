@@ -5,14 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "aeron/asset/lfd.h"
 #include "tie_formats/common.h"
 
-typedef struct TiePanelSection {
-	uint32_t type;
-	char name[9];
-	const uint8_t* data;
-	size_t size;
-} TiePanelSection;
+typedef AeronLfdEntry TiePanelSection;
 
 typedef struct TiePanel {
 	TiePanelSection* sections;
