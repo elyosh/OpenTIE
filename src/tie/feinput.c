@@ -260,23 +260,17 @@ uint16_t feinput_getrawinput(void) {
 	joystickx = 0;
 	joysticky = 0;
 	joystickroll = 0;
-	joystickthrottle = 0;
 
 	joystickcount = ljoy_Joystick_Init();
 	joystickflag = (joystickcount != 0);
 	if (joystickflag) {
-		/* Sample the complete host axis range; the mapping picks any 4 as
-		 * logical yaw/pitch/roll/throttle. A negative axis index in
-		 * the mapping disables that channel. Hosts that publish
-		 * fewer physical axes leave the trailing slots at zero. */
-		int16_t raw[TIE_INPUT_AXIS_MAX] = { 0 };
-		joybuttons = ljoy_Joystick_Read_Axes(raw, TIE_INPUT_AXIS_MAX, 0);
+		/* The host combines physical models into yaw, pitch, and roll. */
+		int16_t raw[3] = { 0 };
+		joybuttons = ljoy_Joystick_Read_Axes(raw, 3, 0);
 		const TieInputMapping* mapping = TieInput_Mapping();
-		joystickx = TieInput_MapAxis(raw, TIE_INPUT_AXIS_MAX, mapping->axes[TIE_INPUT_AXIS_YAW]);
-		joysticky = TieInput_MapAxis(raw, TIE_INPUT_AXIS_MAX, mapping->axes[TIE_INPUT_AXIS_PITCH]);
-		joystickroll = TieInput_MapAxis(raw, TIE_INPUT_AXIS_MAX, mapping->axes[TIE_INPUT_AXIS_ROLL]);
-		joystickthrottle =
-			TieInput_MapAxis(raw, TIE_INPUT_AXIS_MAX, mapping->axes[TIE_INPUT_AXIS_THROTTLE_RATE]);
+		joystickx = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_YAW]);
+		joysticky = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_PITCH]);
+		joystickroll = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_ROLL]);
 	}
 
 	if (mouseflag) {

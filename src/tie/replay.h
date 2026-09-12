@@ -17,7 +17,7 @@
 #include <stdint.h>
 
 /* --------------------------------------------------------------------------
- * ReplayInputFrame -- 14-byte per-tick input packet (V5 wire format).
+ * ReplayInputFrame -- 18-byte per-tick input packet (V6 wire format).
  *
  * Written once per TIE_doframe iteration by user_userinterface (while
  * recordingreplay is set), read back during playback in the same path.
@@ -26,28 +26,27 @@
  * `frameticks` is restored as the engine's elapsed PIT-tick count. When
  * camera.view_pitch_offset != 0 (zoom-out strategic view) the deltax /
  * deltay / deltaroll / buttons fields are zeroed at write time so only
- * the key, delta_us, and tick count are effective.
+ * the key, delta_us, and tick count are effective; throttle carries no change.
  *
  * The same physical buffer is re-purposed by user_inflightinfo when
  * the player opens/closes the in-flight info room: each "slot" of
  * side-payload is padded out to one record so the stream stays a flat
  * sequence of fixed-size records. See user.c for the per-slot layout.
  *
- * Version 2 stores analog roll from a second-stick axis at +12.
- *
  * The runtime layout is naturally aligned. The on-disk layout is the
- * fixed 14-byte little-endian record produced by `ReplayInputFrame_encode`
+ * fixed 18-byte little-endian record produced by `ReplayInputFrame_encode`
  * and consumed by `ReplayInputFrame_decode`.
  * -------------------------------------------------------------------------- */
 
 typedef struct ReplayInputFrame {
-	uint32_t delta_us;  /* complete admitted interval in µs          (+0) */
-	uint16_t key;       /* inputkey                                   (+4) */
-	int16_t deltax;     /* inputdeltax (joystick/mouse yaw delta)     (+6) */
-	int16_t deltay;     /* inputdeltay (joystick/mouse pitch delta)   (+8) */
-	uint8_t buttons;    /* inputbuttons & 0xFF                       (+10) */
-	uint8_t frameticks; /* frameticks since previous frame (pacing)  (+11) */
-	int16_t deltaroll;  /* inputdeltaroll (second-stick roll axis)   (+12) */
+	uint32_t delta_us;         /* complete admitted interval in µs          (+0) */
+	uint16_t key;              /* inputkey                                   (+4) */
+	int16_t deltax;            /* inputdeltax (joystick/mouse yaw delta)     (+6) */
+	int16_t deltay;            /* inputdeltay (joystick/mouse pitch delta)   (+8) */
+	uint8_t buttons;           /* inputbuttons & 0xFF                       (+10) */
+	uint8_t frameticks;        /* frameticks since previous frame (pacing)  (+11) */
+	uint32_t throttle_command; /* absolute throttle or UINT32_MAX (+14 on wire) */
+	int16_t deltaroll;         /* inputdeltaroll (second-stick roll axis)   (+12) */
 } ReplayInputFrame;
 
 enum {
@@ -58,13 +57,14 @@ enum {
 	REPLAYINPUTFRAME_BUTTONS_OFFSET = 10,
 	REPLAYINPUTFRAME_FRAMETICKS_OFFSET = 11,
 	REPLAYINPUTFRAME_DELTAROLL_OFFSET = 12,
-	REPLAYINPUTFRAME_DISK_SIZE = 14,
+	REPLAYINPUTFRAME_THROTTLE_OFFSET = 14,
+	REPLAYINPUTFRAME_DISK_SIZE = 18,
 	REPLAY_INPUT_CHUNK_FRAMES = 0xBFF,
 	REPLAY_INPUT_BUFFER_BYTES = REPLAY_INPUT_CHUNK_FRAMES * REPLAYINPUTFRAME_DISK_SIZE,
 	REPLAY_MAX_TOTAL_RECORDS = 0x20000 * 7,
 };
 
-_Static_assert(REPLAYINPUTFRAME_DELTAROLL_OFFSET + 2 == REPLAYINPUTFRAME_DISK_SIZE,
+_Static_assert(REPLAYINPUTFRAME_THROTTLE_OFFSET + 4 == REPLAYINPUTFRAME_DISK_SIZE,
 			   "Replay input wire offsets must cover one complete record");
 
 void ReplayInputFrame_decode(ReplayInputFrame* dst, const uint8_t* src);

@@ -837,6 +837,8 @@ void TieSettings_Frame(const AeronInputSnapshot* input, float dt_seconds) {
 										  .input = input,
 										  .dt_seconds = dt_seconds,
 									  });
+	TieControllerSettings_Discover(&g_settings.controller, g_settings.ui, input,
+								   &g_settings.config->gamepad_defaults);
 	AeronUiWindowDesc window = { .width_ref = 980.0f, .height_ref = 1000.0f, .centered = 1 };
 	if (AeronUi_BeginWindow(g_settings.ui, "OpenTIE SETTINGS", &window)) {
 		AeronUi_BeginTabBar(g_settings.ui, "pages", pages, 4, &g_settings.page);

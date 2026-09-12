@@ -20,7 +20,8 @@ bool TieReplayTiming_DecodeCurrentInputFrame(ReplayInputFrame* destination) {
 	if (!destination || !TieReplayTiming_CurrentRecordAvailable())
 		return false;
 	ReplayInputFrame_decode(destination, (const uint8_t*)replayptr);
-	return destination->frameticks > 0 && destination->frameticks <= REPLAY_MAX_FRAME_DELTA_US / 4000u &&
+	return (destination->throttle_command <= UINT16_MAX || destination->throttle_command == UINT32_MAX) &&
+		   destination->frameticks > 0 && destination->frameticks <= REPLAY_MAX_FRAME_DELTA_US / 4000u &&
 		   destination->delta_us <= REPLAY_MAX_FRAME_DELTA_US;
 }
 
@@ -32,6 +33,7 @@ uint32_t TieReplayTiming_InputFrameDeltaUs(const ReplayInputFrame* frame) {
 }
 
 void TieReplayTiming_Reset(void) {
+	TieInput_ResetThrottle();
 	s_playback_wait_us = 0;
 	s_playback_frame_due = false;
 	s_playback_was_active = false;
@@ -41,7 +43,8 @@ int32_t TieReplayTiming_SelectEngineDeltaUs(int32_t host_delta_us) {
 	const bool active = replayviewmode && updateactionflag && replaytotalcnt > 0 &&
 						replaytotalcntdown < (uint32_t)replaytotalcnt;
 	if (!active) {
-		TieReplayTiming_Reset();
+		if (s_playback_was_active)
+			TieReplayTiming_Reset();
 		return host_delta_us;
 	}
 

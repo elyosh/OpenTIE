@@ -908,15 +908,11 @@ extern int16_t inputdeltay;
 extern int16_t inputdeltaroll;
 extern int16_t mouseflag;
 extern int16_t joystickflag;
-/* Logical joystick channels — already mapped by feinput_getrawinput
- * from raw HID axes through TieInputMapping. joystickx = yaw input,
- * joysticky = pitch input, joystickroll = roll input,
- * joystickthrottle = throttle-rate input (consumed by user.c's
- * ui_apply_throttle_axis as an incremental nudge). */
+/* Normalized flight axes after the host model mapping. */
 extern int16_t joystickx;
 extern int16_t joysticky;
 extern int16_t joystickroll;
-extern int16_t joystickthrottle;
+extern uint32_t inputthrottle; /* UINT32_MAX means no command this frame. */
 extern int16_t joybuttons;
 extern int16_t mousebuttons;
 extern int16_t keypress;

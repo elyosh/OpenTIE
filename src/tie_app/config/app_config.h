@@ -101,6 +101,8 @@ typedef struct TieLaunchConfig {
 } TieLaunchConfig;
 
 typedef struct TieAppConfigState {
+	TieControllerProfile gamepad_defaults;
+	bool controllers_reset;
 	/* Parsed YAML only. Runtime-resolved launch state is kept separately. */
 	TieAppConfig defaults;
 	TieAppConfig requested;
@@ -134,7 +136,7 @@ bool TieAppConfig_SetVideo(TieAppConfigState* state, const TieAppVideoConfig* vi
 bool TieAppConfig_RestoreVideo(TieAppConfigState* state, char* error, size_t error_capacity);
 bool TieAppConfig_SetController(TieAppConfigState* state, const TieControllerOptions* controller, char* error,
 								size_t error_capacity);
-bool TieAppConfig_RestoreController(TieAppConfigState* state, char* error, size_t error_capacity);
+
 bool TieAppConfig_SetShadows(TieAppConfigState* state, const AeronSceneShadowSettings* shadows, char* error,
 							 size_t error_capacity);
 bool TieAppConfig_RestoreShadows(TieAppConfigState* state, char* error, size_t error_capacity);

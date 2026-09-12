@@ -16,7 +16,7 @@
 
 enum {
 	TIE_FLIGHT_CHECKPOINT_HEADER_SIZE = 40,
-	TIE_FLIGHT_CHECKPOINT_VERSION = 3,
+	TIE_FLIGHT_CHECKPOINT_VERSION = 4,
 };
 
 static void TieCheckpoint_PutU16(uint8_t* out, uint16_t value) {

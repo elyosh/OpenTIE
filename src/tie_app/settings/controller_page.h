@@ -12,6 +12,12 @@
 typedef struct TieControllerSettings {
 	TieControllerOptions original;
 	TieControllerOptions draft;
+	TieControllerProfile unconfigured;
+	char selected_guid[33];
+	uint32_t selected_instance;
+	AeronControllerKind layout;
+	char conflict_text[512];
+	bool capacity_warned;
 	int page;
 	int axis;
 	int category;
@@ -32,6 +38,8 @@ typedef struct TieControllerSettings {
 	char error[TIE_CONTROLLER_SETTINGS_ERROR_CAPACITY];
 } TieControllerSettings;
 
+void TieControllerSettings_Discover(TieControllerSettings* settings, AeronUiContext* ui,
+									const AeronInputSnapshot* input, const TieControllerProfile* defaults);
 void TieControllerSettings_Open(TieControllerSettings* settings, const TieAppConfigState* config);
 void TieControllerSettings_Draw(TieControllerSettings* settings, AeronUiContext* ui,
 								const AeronInputSnapshot* input);

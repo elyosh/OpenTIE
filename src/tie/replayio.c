@@ -212,7 +212,7 @@ static const char kBufferTempFile[] = "rpybuff.tmp";
 
 enum {
 	REPLAY_BUFFER_TEMP_HEADER_SIZE = 8,
-	REPLAY_BUFFER_TEMP_VERSION = 1,
+	REPLAY_BUFFER_TEMP_VERSION = 2,
 };
 
 /* --------------------------------------------------------------------------
@@ -374,6 +374,8 @@ int16_t replayio_copyfromsave(const char* fname) {
 		TieStorage_Close(fileptr);
 		return 0;
 	}
+	TieInput_ResetThrottle();
+	inputthrottle = UINT32_MAX;
 	replayio_port_rebind_checkpoint_pointers();
 	msg_clearmessagequeue();
 	TieStorage_Close(fileptr);

@@ -9,11 +9,16 @@
 
 enum { TIE_INPUT_AXIS_MAX = 16 };
 
+/* Percent of full throttle travel (0.5f means 0.5%). Endpoint tolerance must
+ * remain below 50%; jitter tolerance is independent of endpoint saturation. */
+#define TIE_INPUT_THROTTLE_ENDPOINT_PERCENT 0.5f
+#define TIE_INPUT_THROTTLE_JITTER_PERCENT 0.1f
+
 typedef enum TieInputAxis {
 	TIE_INPUT_AXIS_YAW = 0,
 	TIE_INPUT_AXIS_PITCH,
 	TIE_INPUT_AXIS_ROLL,
-	TIE_INPUT_AXIS_THROTTLE_RATE,
+	TIE_INPUT_AXIS_THROTTLE,
 	TIE_INPUT_AXIS_COUNT
 } TieInputAxis;
 
@@ -29,8 +34,14 @@ typedef struct TieInputMapping {
 
 void TieInput_SetMapping(const TieInputMapping* mapping);
 const TieInputMapping* TieInput_Mapping(void);
+/* Total center deadzone, including the fixed Landru cutoff. */
+float TieInput_AxisDeadzonePercent(float configured_deadzone);
+float TieInput_AxisDeadzoneFromPercent(float total_percent);
 int16_t TieInput_MapAxis(const int16_t* raw, int count, TieInputAxisBinding binding);
 
+uint32_t TieInput_ReadThrottleCommand(bool eligible);
+void TieInput_ResetThrottle(void);
+void TieInput_EnqueueDosKey(int16_t key);
 void TieInput_EnqueueKey(int16_t key);
 int TieInput_KeyPending(void);
 int TieInput_ReadKey(void);

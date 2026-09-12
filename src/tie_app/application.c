@@ -159,6 +159,10 @@ int TieApplication_Run(const TieLaunchOptions* launch) {
 	if (!TieAppConfig_Load(vfs, &app_config, config_error, sizeof config_error)) {
 		Aeron_RequestFatalError("Configuration Error", config_error);
 	} else {
+		if (app_config.controllers_reset)
+			Aeron_LogWarn("tie.config",
+						  "Custom controller bindings were reset for configuration v5. Gamepads receive "
+						  "shipped defaults; configure HOTAS in Settings. Keyboard bindings are unchanged.");
 		TieInputActions_InstallKeyboard(&app_config.requested.keyboard);
 		TieControllerMapping_SetOptions(&app_config.requested.controller);
 		if (!Aeron_SetFullscreen(app_config.requested.video.fullscreen))

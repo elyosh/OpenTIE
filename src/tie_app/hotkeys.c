@@ -98,6 +98,7 @@ static void TieHotkeys_ProcessPause(TieHotkeys* hotkeys, const AeronInputSnapsho
 	if (!gui || !input->key_pressed[pause_key])
 		return;
 	hotkeys->paused = !hotkeys->paused;
+	TieInput_ResetThrottle();
 	TieInput_SuppressKey(pause_key);
 }
 

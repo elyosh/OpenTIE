@@ -1,7 +1,10 @@
 #include "tie_app/frame_loop.h"
 
+#include "tie_runtime/input/controller_mapping.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "aeron/aeron.h"
 #include "aeron/compat/host.h"
@@ -95,6 +98,29 @@ static void TieFrameLoop_SubmitGameLayers(TieClassicOutputKind* previous_output_
 	TieRemaster_Frame(snapshot, delta_us, paused);
 }
 
+static void TieFrameLoop_DiscoverControllers(const AeronInputSnapshot* input) {
+	static char previous_error[512];
+	TieAppConfigState* config = TieAppConfig_Current();
+	if (!config || TieSettings_Open())
+		return;
+	TieControllerOptions candidate = config->requested.controller;
+	char error[512] = { 0 };
+	bool ok = TieControllerMapping_InitializeGamepads(&candidate, &config->gamepad_defaults, input, error,
+													  sizeof error);
+	if (!TieControllerMapping_Optionsequal(&candidate, &config->requested.controller)) {
+		char save_error[512];
+		if (TieAppConfig_SetController(config, &candidate, save_error, sizeof save_error))
+			TieControllerMapping_SetOptions(&config->requested.controller);
+		else {
+			snprintf(error, sizeof error, "%s", save_error);
+			ok = false;
+		}
+	}
+	if (!ok && strcmp(error, previous_error))
+		Aeron_LogWarn("tie.input", "%s", error);
+	snprintf(previous_error, sizeof previous_error, "%s", ok ? "" : error);
+}
+
 void TieFrameLoop_Run(void) {
 	const TiePresentationLayout* presentation = TiePresentation_Layout();
 	if (presentation)
@@ -116,6 +142,7 @@ void TieFrameLoop_Run(void) {
 			TieRuntime_RequestExit();
 
 		const AeronInputSnapshot* input = Aeron_InputSnapshot();
+		TieFrameLoop_DiscoverControllers(input);
 		const bool focus_paused = TieFrameLoop_UpdateFocus(input, &ever_had_focus);
 		TieFrameLoop_UpdatePresentation(input, delta_us);
 		const TieHotkeysFrame hotkey_frame = TieHotkeys_Process(&hotkeys, input);

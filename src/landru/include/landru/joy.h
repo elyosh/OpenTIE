@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+/* Host-normalized axis range and the fixed subtractive input deadzone. */
+enum { LANDRU_JOYSTICK_AXIS_LIMIT = 127, LANDRU_JOYSTICK_DEADZONE = 12 };
+
 /* Set non-zero to force ljoy_Joystick_Read to return zeroed axes. */
 extern int16_t ngstickflag;
 

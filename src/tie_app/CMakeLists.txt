@@ -9,6 +9,7 @@ add_executable(tie
     midi_resources.c
     ui.c
     config/app_config.c
+    config/controller_config.c
     settings/flight_options.c
 	settings/audio_options.c
     settings/inflight_options.c

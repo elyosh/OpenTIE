@@ -476,7 +476,7 @@ int16_t joystickx;
 // GLOBAL: TIE 0xEB6F4
 int16_t joysticky;
 int16_t joystickroll;
-int16_t joystickthrottle;
+uint32_t inputthrottle = UINT32_MAX;
 // GLOBAL: TIE 0xEB6FC
 int16_t joybuttons;
 // GLOBAL: TIE 0xEB6D8
@@ -2868,6 +2868,8 @@ static void tie_prepare_star_surface_tie98(void) {
  * messages, waits for the first XTIMER tick, and pushes the main
  * flight task. */
 static void tie_reset_flight_timing_session_state(void) {
+	TieInput_ResetThrottle();
+	inputthrottle = UINT32_MAX;
 	TieFlightTiming_BeginSession(TieProfile_Flight());
 	TieFlightTimingState_Reset();
 	TieAiLead_Reset();

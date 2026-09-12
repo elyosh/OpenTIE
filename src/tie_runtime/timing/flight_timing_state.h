@@ -44,8 +44,8 @@ typedef struct TieUserTimingState {
 	uint16_t zoom_rate_remainder;
 	uint16_t slew_remainder[3];
 	int8_t slew_sign[3];
-	uint16_t throttle_remainder[2];
-	int8_t throttle_sign[2];
+	uint16_t throttle_remainder[1];
+	int8_t throttle_sign[1];
 } TieUserTimingState;
 
 typedef enum TieFlightTimingBlock {

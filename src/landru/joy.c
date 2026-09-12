@@ -21,8 +21,6 @@
  *     to lock the stick out of the input pipeline).
  */
 
-#define DEAD_ZONE 12
-
 int16_t ngstickflag;
 
 int16_t ljoy_Joystick_Init(void) {
@@ -36,11 +34,11 @@ int16_t ljoy_Joystick_Init(void) {
 
 static int16_t apply_dead_zone(int16_t v) {
 	if (v >= 0) {
-		v -= DEAD_ZONE;
+		v -= LANDRU_JOYSTICK_DEADZONE;
 		if (v < 0)
 			v = 0;
 	} else {
-		v += DEAD_ZONE;
+		v += LANDRU_JOYSTICK_DEADZONE;
 		if (v > 0)
 			v = 0;
 	}

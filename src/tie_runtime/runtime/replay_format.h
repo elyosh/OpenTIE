@@ -32,30 +32,31 @@
  *     offset 13:  compat_ticks  u8
  *     offset 14:  reserved[2]   = 0
  *
- * V5 wire format:
- *   - frame_size = 14 — every record in the stream is a fixed
- *     14-byte slot. The per-tick input frame is:
+ * V6 wire format:
+ *   - frame_size = 18 — every record in the stream is a fixed
+ *     18-byte slot. The per-tick input frame is:
  *       offset  0:  u32 delta_us   (complete admitted interval)
  *       offset  4:  u16 key        (inputkey)
- *       offset  6:  i16 deltax     (joystick/mouse pitch delta)
- *       offset  8:  i16 deltay     (joystick/mouse roll delta)
+ *       offset  6:  i16 deltax     (joystick/mouse yaw delta)
+ *       offset  8:  i16 deltay     (joystick/mouse pitch delta)
  *       offset 10:  u8  buttons    (inputbuttons & 0xFF)
  *       offset 11:  u8  frameticks (engine-counted PIT ticks since
  *                                   previous frame)
  *       offset 12:  i16 deltaroll   (second-stick roll delta)
- *     The same 14-byte slot also carries `user_inflightinfo`'s side-
+ *       offset 14:  u32 throttle_command (0..65535 or 0xffffffff for no change)
+ *
+ *     The same 18-byte slot also carries `user_inflightinfo`'s side-
  *     payload chunks (4 slots emitted per info-room open/close pair),
  *     each padded out to the fixed record size.
  *   - .clp file: header → u32 totalcnt → u16 randomseed → state blob
  *     (savearrayptrs/sizes + fg/radiomsg/cut/fgstatus/species/camera +
  *     modern timing checkpoint) →
- *     N x 14-byte records
- *   - .spl file: header → N x 14-byte records
+ *     N x 18-byte records
+ *   - .spl file: header → N x 18-byte records
  *
  * `delta_us` is the complete synthetic interval represented by this admitted
  * frame. Playback feeds it to every synthetic-clock consumer instead of the
- * host delta. V4 used the last host slice and is rejected because its
- * checkpoint and timing semantics cannot reproduce V5 deterministically.
+ * host delta. Only V6 records and the matching timing checkpoint are accepted.
  *
  * Files without this header are rejected.
  */
@@ -65,10 +66,10 @@
 #define REPLAY_FORMAT_MAGIC2 'E'
 #define REPLAY_FORMAT_MAGIC3 'R'
 
-#define REPLAY_FORMAT_VERSION 5u
-#define REPLAY_FORMAT_MIN_READ_VERSION 5u
+#define REPLAY_FORMAT_VERSION 6u
+#define REPLAY_FORMAT_MIN_READ_VERSION 6u
 #define REPLAY_FORMAT_HEADER_SIZE 16u
-#define REPLAY_FORMAT_FRAME_SIZE 14u
+#define REPLAY_FORMAT_FRAME_SIZE 18u
 
 #define REPLAY_FORMAT_FLIGHT_VERSION_MASK 0x0003u
 #define REPLAY_FORMAT_UPDATE_RATE_SHIFT 2u

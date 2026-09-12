@@ -344,8 +344,7 @@ static void TieActions_ApplyAction(TieInputAction action, bool pressed) {
 			break;
 		case TIE_INPUT_ACTION_KIND_KEYPRESS_SCAN:
 			if (pressed) {
-				TieInput_EnqueueKey(0);
-				TieInput_EnqueueKey((int16_t)(definition->param & 0xFF));
+				TieInput_EnqueueDosKey((int16_t)((definition->param & 0xFF) << 8));
 			}
 			break;
 		case TIE_INPUT_ACTION_KIND_NONE:

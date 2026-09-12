@@ -1251,6 +1251,7 @@ static PauseState s_pause_state;
 static int16_t s_pause_saved_vol;
 
 static void pause_enter(void) {
+	TieInput_ResetThrottle();
 	s_pause_saved_vol = imuse_get_master_vol(im);
 	imuse_set_master_vol(im, 0);
 	imuse_pause(im);
@@ -1263,6 +1264,7 @@ static void pause_enter(void) {
 }
 
 static void pause_exit(void) {
+	TieInput_ResetThrottle();
 	if (TieClassicDisplay_UsesDx5())
 		FrontendDisplay_PresentFrame();
 	msg_messageprintf(MSG_RESUMED);
@@ -1274,6 +1276,18 @@ static void pause_exit(void) {
 }
 
 int user_is_paused(void) { return s_pause_state == PAUSE_ACTIVE; }
+
+static bool ui_throttle_eligible(void) {
+	return !pstate.hyperin_state && !hyperspaceflag && pstate.player_craft &&
+		   (pstate.player_craft->status_flags & 0x20) && !camera.view_pitch_offset &&
+		   !TieReplayRecording_KeyStartsInfoPayload((uint16_t)inputkey);
+}
+
+static void ui_apply_absolute_throttle(void) {
+	if (inputthrottle <= UINT16_MAX && ui_throttle_eligible())
+		pstate.player_craft->throttle_speed = (uint16_t)inputthrottle;
+	inputthrottle = UINT32_MAX;
+}
 
 /*
  * user_userinterface -- top-of-frame dispatcher. Binary 0x5A6B0.
@@ -1288,6 +1302,7 @@ int user_is_paused(void) { return s_pause_state == PAUSE_ACTIVE; }
  */
 // FUNCTION: TIE 0x5C440, TIE98 0x493840
 void user_userinterface(void) {
+	inputthrottle = UINT32_MAX;
 	/* Phase 0: paused? Poll for any input; any key resumes. The
 	 * outer flight loop keeps iterating at the existing 62.5 Hz
 	 * floor in tie_doframe Step 1, so this samples input ~16 ms. */
@@ -1324,6 +1339,7 @@ void user_userinterface(void) {
 			replay_stopreplay();
 			return;
 		}
+		inputthrottle = frame.throttle_command;
 		inputkey = (int16_t)frame.key;
 		inputdeltax = frame.deltax;
 		inputdeltay = frame.deltay;
@@ -1447,6 +1463,11 @@ void user_userinterface(void) {
 			}
 		}
 
+		if (!ui_throttle_eligible())
+			(void)TieInput_ReadThrottleCommand(false);
+		else if (acceleratedtimesetting <= 1u || !acceleratedtimectr)
+			inputthrottle = TieInput_ReadThrottleCommand(true);
+
 		/* Phase 4: append to record tape. */
 		if (recordingreplay == 1) {
 			const bool records_info_payload = !pstate.hyperin_state && !hyperspaceflag &&
@@ -1454,7 +1475,8 @@ void user_userinterface(void) {
 			const uint16_t required_slots = records_info_payload ? 5 : 1;
 			if (TieReplayRecording_PrepareSlots(required_slots, records_info_payload)) {
 				uint8_t* rp = (uint8_t*)replayptr;
-				ReplayInputFrame frame;
+				ReplayInputFrame frame = { 0 };
+				frame.throttle_command = inputthrottle;
 				/* One record represents the complete admitted PIT interval, even
 				 * when it was accumulated from several shorter host calls. */
 				frame.delta_us = (uint32_t)frameticks * 4000u;
@@ -2591,49 +2613,6 @@ static void ui_match_speed(void) {
 	}
 }
 
-/*
- * Axis-driven throttle. The deflected stick steps
- * throttle by a fixed amount per frame, scaled by deflection
- * magnitude. Center-stick = no change (deflection is zero after the
- * ±12 dead zone applied at sampling time, so small jitter is
- * already filtered out).
- *
- * Full deflection changes the throttle by approximately 254 per frame.
- *
- * No interaction with `inputbuttons`-modifier throttle — both paths
- * are additive. Holding the modifier + pushing the axis stacks both
- * nudges in a single frame.
- */
-static void ui_apply_throttle_axis(void) {
-	TieUserTimingState* high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_User() : NULL;
-	if (!joystickthrottle) {
-		if (high_rate) {
-			high_rate->throttle_remainder[1] = 0;
-			high_rate->throttle_sign[1] = 0;
-		}
-		return;
-	}
-	if ((pstate.player_craft->status_flags & 0x20) == 0) {
-		if (high_rate) {
-			high_rate->throttle_remainder[1] = 0;
-			high_rate->throttle_sign[1] = 0;
-		}
-		return;
-	}
-
-	int32_t step = (int32_t)joystickthrottle * 2;
-	if (high_rate)
-		step = TieUserTiming_ScaleCompatibilityIncrement(step, &high_rate->throttle_remainder[1],
-														 &high_rate->throttle_sign[1]);
-	uint16_t cur = pstate.player_craft->throttle_speed;
-	int32_t nxt = (int32_t)cur + step;
-	if (nxt < 0)
-		nxt = 0;
-	if (nxt > 65535)
-		nxt = 65535;
-	pstate.player_craft->throttle_speed = (uint16_t)nxt;
-}
-
 /* Roll keys 1,2 (left/right). Binary 0x5D7DC. */
 static void ui_roll_input(int16_t direction_key) {
 	int roll_pct = math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1;
@@ -3501,6 +3480,6 @@ void user_inputforplane(void) {
 			break;
 	}
 
-	ui_apply_throttle_axis();
 	ui_apply_view_or_flight_input();
+	ui_apply_absolute_throttle();
 }

@@ -7,6 +7,7 @@
 #include "tie_runtime/snapshot/snapshot.h"
 
 #include "aeron/aeron.h"
+#include <landru/joy.h>
 
 #include <limits.h>
 #include <math.h>
@@ -29,7 +30,7 @@ static TieInputMapping s_input_mapping = {
 		[TIE_INPUT_AXIS_YAW] = {2, false, 0.0f},
 		[TIE_INPUT_AXIS_PITCH] = {3, false, 0.0f},
 		[TIE_INPUT_AXIS_ROLL] = {0, false, 0.0f},
-		[TIE_INPUT_AXIS_THROTTLE_RATE] = {-1, false, 0.0f},
+		[TIE_INPUT_AXIS_THROTTLE] = {-1, false, 0.0f},
 	},
 };
 
@@ -39,7 +40,7 @@ void TieInput_SetMapping(const TieInputMapping* mapping) {
 			[TIE_INPUT_AXIS_YAW] = {2, false, 0.0f},
 			[TIE_INPUT_AXIS_PITCH] = {3, false, 0.0f},
 			[TIE_INPUT_AXIS_ROLL] = {0, false, 0.0f},
-			[TIE_INPUT_AXIS_THROTTLE_RATE] = {-1, false, 0.0f},
+			[TIE_INPUT_AXIS_THROTTLE] = {-1, false, 0.0f},
 		},
 	};
 	s_input_mapping = mapping ? *mapping : default_mapping;
@@ -47,13 +48,28 @@ void TieInput_SetMapping(const TieInputMapping* mapping) {
 
 const TieInputMapping* TieInput_Mapping(void) { return &s_input_mapping; }
 
+static int TieInput_AxisDeadzoneCutoff(float deadzone) {
+	return (int)(deadzone * LANDRU_JOYSTICK_AXIS_LIMIT + 0.5f);
+}
+
+float TieInput_AxisDeadzonePercent(float configured_deadzone) {
+	const int cutoff = LANDRU_JOYSTICK_DEADZONE + TieInput_AxisDeadzoneCutoff(configured_deadzone);
+	return fminf(100.0f, 100.0f * cutoff / LANDRU_JOYSTICK_AXIS_LIMIT);
+}
+
+float TieInput_AxisDeadzoneFromPercent(float total_percent) {
+	const float total = fminf(fmaxf(total_percent, 0.0f), 100.0f) * LANDRU_JOYSTICK_AXIS_LIMIT / 100.0f;
+	const int cutoff = (int)(total + 0.5f) - LANDRU_JOYSTICK_DEADZONE;
+	return cutoff > 0 ? (float)cutoff / LANDRU_JOYSTICK_AXIS_LIMIT : 0.0f;
+}
+
 int16_t TieInput_MapAxis(const int16_t* raw, int count, TieInputAxisBinding binding) {
 	if (!raw || binding.source < 0 || binding.source >= count)
 		return 0;
 	int value = raw[binding.source];
 	if (binding.invert)
 		value = -value;
-	const int cutoff = (int)(binding.deadzone * 127.0f + 0.5f);
+	const int cutoff = TieInput_AxisDeadzoneCutoff(binding.deadzone);
 	return value >= -cutoff && value <= cutoff ? 0 : (int16_t)value;
 }
 
@@ -69,7 +85,7 @@ static int TieInput_FreeQueueSlots(void) {
 	return (key_queue_head - key_queue_tail - 1 + KEY_QUEUE_SIZE) % KEY_QUEUE_SIZE;
 }
 
-static void TieInput_EnqueueDosKey(int16_t key) {
+void TieInput_EnqueueDosKey(int16_t key) {
 	const uint16_t packed = (uint16_t)key;
 	if (packed & 0xFF00u) {
 		/* DOS getch() returns extended keys as two reads: zero, then scan.
@@ -685,4 +701,35 @@ void TieInput_BeginFrame(int32_t delta_us) {
 		mouse_dy_acc = 0;
 		absolute_motion_pending = false;
 	}
+}
+
+static struct {
+	bool valid;
+	uint16_t position;
+	uint32_t generation;
+} throttle_baseline;
+void TieInput_ResetThrottle(void) { throttle_baseline.valid = false; }
+uint32_t TieInput_ReadThrottleCommand(bool eligible) {
+	uint16_t position;
+	uint32_t generation;
+	if (!eligible || !TieControllerMapping_ThrottleSample(&position, &generation)) {
+		TieInput_ResetThrottle();
+		return UINT32_MAX;
+	}
+	if (!throttle_baseline.valid || throttle_baseline.generation != generation) {
+		throttle_baseline.valid = true;
+		throttle_baseline.position = position;
+		throttle_baseline.generation = generation;
+		return UINT32_MAX;
+	}
+	int delta = (int)position - (int)throttle_baseline.position;
+	if (delta < 0)
+		delta = -delta;
+	/* Compare with the last accepted position so deliberate small motions accumulate. */
+	const int jitter_tolerance = (int)ceilf(TIE_INPUT_THROTTLE_JITTER_PERCENT * UINT16_MAX / 100.0f);
+	if (delta && (delta >= jitter_tolerance || position == 0 || position == UINT16_MAX)) {
+		throttle_baseline.position = position;
+		return position;
+	}
+	return UINT32_MAX;
 }

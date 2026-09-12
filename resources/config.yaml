@@ -1,4 +1,4 @@
-version: 4
+version: 5
 
 paths:
   installations:
@@ -36,16 +36,13 @@ flight:
     opt_projectile_emissive_strength: 5.0
 
 input:
-  device:
-    guid: ""
-    path: ""
-    ordinal: 0
-  gamepad:
+  controllers: []
+  gamepad_defaults:
     axes:
       yaw: {source: leftx, invert: false, deadzone: 0.08}
       pitch: {source: lefty, invert: false, deadzone: 0.08}
       roll: {source: rightx, invert: false, deadzone: 0.08}
-      throttle: {source: 'none', invert: false, deadzone: 0.08}
+      throttle: {source: 'none', invert: false}
     buttons:
       fire_weapon:
         - south
@@ -65,16 +62,6 @@ input:
       pause: start
       escape: back
       view_return_to_cockpit: rightstick
-  joystick:
-    axes:
-      yaw: {source: 0, invert: false, deadzone: 0}
-      pitch: {source: 1, invert: false, deadzone: 0}
-      roll: {source: 2, invert: false, deadzone: 0}
-      throttle: {source: 3, invert: false, deadzone: 0}
-    buttons:
-      fire_weapon: {button: 0}
-      target_roll_throttle_modifier: {button: 1}
-      target_next: {hat: 0, direction: right}
   keyboard: {}
 
 video:

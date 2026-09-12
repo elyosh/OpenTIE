@@ -1,4 +1,5 @@
 #include "tie_app/config/app_config.h"
+#include "tie_app/config/controller_config.h"
 
 #include "aeron/log.h"
 
@@ -121,8 +122,8 @@ static bool TieAppConfig_CheckVersion(const AeronConfigFile* document, char* err
 	if (AeronConfigNode_Type(root) != AERON_CONFIG_MAP)
 		return TieAppConfig_ConfigError(error, capacity, "configuration root must be a mapping");
 	version = AeronConfigNode_MapGet(root, "version");
-	if (!version || AeronConfigNode_Type(version) != AERON_CONFIG_INT || AeronConfigNode_Int(version, 0) != 4)
-		return TieAppConfig_ConfigError(error, capacity, "configuration version must be integer 4");
+	if (!version || AeronConfigNode_Type(version) != AERON_CONFIG_INT || AeronConfigNode_Int(version, 0) != 5)
+		return TieAppConfig_ConfigError(error, capacity, "configuration version must be integer 5");
 	return true;
 }
 
@@ -181,20 +182,7 @@ static bool TieAppConfig_ValidateSchemaKeys(const AeronConfigFile* document, boo
 				  "player_engine_sound", "models");
 	VALIDATE_KEYS(document, "flight.models", warn, "source", "smooth_angle_degrees", "opt_emissive_strength",
 				  "opt_projectile_emissive_strength");
-	VALIDATE_KEYS(document, "input", warn, "device", "gamepad", "joystick", "keyboard");
-	VALIDATE_KEYS(document, "input.device", warn, "guid", "path", "ordinal");
-	VALIDATE_KEYS(document, "input.gamepad", warn, "axes", "buttons");
-	VALIDATE_KEYS(document, "input.joystick", warn, "axes", "buttons");
-	VALIDATE_KEYS(document, "input.gamepad.axes", warn, "yaw", "pitch", "roll", "throttle");
-	VALIDATE_KEYS(document, "input.joystick.axes", warn, "yaw", "pitch", "roll", "throttle");
-	VALIDATE_KEYS(document, "input.gamepad.axes.yaw", warn, "source", "invert", "deadzone");
-	VALIDATE_KEYS(document, "input.gamepad.axes.pitch", warn, "source", "invert", "deadzone");
-	VALIDATE_KEYS(document, "input.gamepad.axes.roll", warn, "source", "invert", "deadzone");
-	VALIDATE_KEYS(document, "input.gamepad.axes.throttle", warn, "source", "invert", "deadzone");
-	VALIDATE_KEYS(document, "input.joystick.axes.yaw", warn, "source", "invert", "deadzone");
-	VALIDATE_KEYS(document, "input.joystick.axes.pitch", warn, "source", "invert", "deadzone");
-	VALIDATE_KEYS(document, "input.joystick.axes.roll", warn, "source", "invert", "deadzone");
-	VALIDATE_KEYS(document, "input.joystick.axes.throttle", warn, "source", "invert", "deadzone");
+	VALIDATE_KEYS(document, "input", warn, "controllers", "gamepad_defaults", "keyboard");
 	VALIDATE_KEYS(document, "video", warn, "fullscreen", "hdr", "sdr_content_gamma", "paper_white_nits");
 	VALIDATE_KEYS(document, "render", warn, "anisotropy", "ssao", "temporal_upscaling", "shadows", "tonemap",
 				  "motion_blur", "msaa_samples", "starfield_style");
@@ -221,216 +209,9 @@ static bool TieAppConfig_ValidateSchemaKeys(const AeronConfigFile* document, boo
 	return true;
 }
 
-static bool TieAppConfig_ParseAxisMapping(const AeronConfigFile* document, const char* domain, bool gamepad,
-										  TieControllerProfile* profile, char* error, size_t capacity) {
-	static const char* const names[] = { "yaw", "pitch", "roll", "throttle" };
-	size_t index;
-	for (index = 0; index < TIE_INPUT_AXIS_COUNT; ++index) {
-		char path[128];
-		const AeronConfigNode* node;
-		TieInputAxisBinding* binding = &profile->mapping.axes[index];
-		int source;
-		snprintf(path, sizeof path, "input.%s.axes.%s", domain, names[index]);
-		node = TieAppConfig_RequiredNode(document, path, AERON_CONFIG_MAP, error, capacity);
-		if (!node)
-			return false;
-		snprintf(path, sizeof path, "input.%s.axes.%s.source", domain, names[index]);
-		node = AeronConfigFile_GetNode(document, path);
-		if (gamepad) {
-			const char* name = AeronConfigNode_String(node, NULL);
-			if (!name)
-				return TieAppConfig_ConfigError(error, capacity, "'%s' must be a gamepad axis name", path);
-			if (strcmp(name, "none") == 0)
-				source = -1;
-			else {
-				source = (int)Aeron_GamepadAxisFromName(name);
-				if (source >= AERON_GAMEPAD_AXIS_COUNT)
-					return TieAppConfig_ConfigError(error, capacity, "unknown gamepad axis '%s'", name);
-			}
-		} else if (AeronConfigNode_Type(node) == AERON_CONFIG_STRING &&
-				   strcmp(AeronConfigNode_String(node, ""), "none") == 0) {
-			source = -1;
-		} else if (AeronConfigNode_Type(node) == AERON_CONFIG_INT) {
-			int64_t value = AeronConfigNode_Int(node, -1);
-			if (value < 0 || value >= AERON_CONTROLLER_AXIS_MAX)
-				return TieAppConfig_ConfigError(error, capacity, "raw axis in '%s' is out of range", path);
-			source = (int)value;
-		} else {
-			return TieAppConfig_ConfigError(error, capacity, "'%s' must be an axis index or none", path);
-		}
-		binding->source = (int8_t)source;
-		snprintf(path, sizeof path, "input.%s.axes.%s.invert", domain, names[index]);
-		if (!TieAppConfig_ReadBool(document, path, &binding->invert, error, capacity))
-			return false;
-		snprintf(path, sizeof path, "input.%s.axes.%s.deadzone", domain, names[index]);
-		if (!TieAppConfig_ReadFloat(document, path, 0.0, 1.0, &binding->deadzone, error, capacity))
-			return false;
-	}
-	return true;
-}
-
-static bool TieAppConfig_SameSource(const AeronControllerDigitalSource* left,
-									const AeronControllerDigitalSource* right) {
-	return left->kind == right->kind && left->index == right->index &&
-		   (left->kind != AERON_CONTROLLER_DIGITAL_HAT || left->hat_direction == right->hat_direction);
-}
-
-static bool TieAppConfig_ParseDigitalSource(const AeronConfigNode* node, bool gamepad,
-											AeronControllerDigitalSource* out, char* error, size_t capacity) {
-	memset(out, 0, sizeof *out);
-	out->threshold = 0.5f;
-	if (gamepad && AeronConfigNode_Type(node) == AERON_CONFIG_STRING) {
-		AeronGamepadButton button = Aeron_GamepadButtonFromName(AeronConfigNode_String(node, ""));
-		if (button >= AERON_GAMEPAD_BUTTON_COUNT)
-			return TieAppConfig_ConfigError(error, capacity, "unknown gamepad button '%s'",
-											AeronConfigNode_String(node, ""));
-		out->kind = AERON_CONTROLLER_DIGITAL_BUTTON;
-		out->index = (uint8_t)button;
-		return true;
-	}
-	if (AeronConfigNode_Type(node) != AERON_CONFIG_MAP)
-		return TieAppConfig_ConfigError(error, capacity, "controller binding must be a source mapping");
-	{
-		const AeronConfigNode* button = AeronConfigNode_MapGet(node, "button");
-		const AeronConfigNode* axis = AeronConfigNode_MapGet(node, "axis");
-		const AeronConfigNode* hat = AeronConfigNode_MapGet(node, "hat");
-		const AeronConfigNode* direction = AeronConfigNode_MapGet(node, "direction");
-		const AeronConfigNode* threshold = AeronConfigNode_MapGet(node, "threshold");
-		const char* direction_name;
-		int64_t index;
-		if (button) {
-			if (gamepad || AeronConfigNode_MapCount(node) != 1 ||
-				AeronConfigNode_Type(button) != AERON_CONFIG_INT)
-				return TieAppConfig_ConfigError(error, capacity, "malformed raw button source");
-			index = AeronConfigNode_Int(button, -1);
-			if (index < 0 || index >= AERON_CONTROLLER_BUTTON_MAX)
-				return TieAppConfig_ConfigError(error, capacity, "raw button index is out of range");
-			out->kind = AERON_CONTROLLER_DIGITAL_BUTTON;
-			out->index = (uint8_t)index;
-			return true;
-		}
-		if (axis) {
-			if (!direction || (AeronConfigNode_MapCount(node) != 2 && AeronConfigNode_MapCount(node) != 3))
-				return TieAppConfig_ConfigError(error, capacity, "malformed digital axis source");
-			if (gamepad) {
-				AeronGamepadAxis gamepad_axis;
-				const char* name = AeronConfigNode_String(axis, NULL);
-				if (!name)
-					return TieAppConfig_ConfigError(error, capacity, "gamepad axis source must be named");
-				gamepad_axis = Aeron_GamepadAxisFromName(name);
-				if (gamepad_axis >= AERON_GAMEPAD_AXIS_COUNT)
-					return TieAppConfig_ConfigError(error, capacity, "unknown gamepad axis '%s'", name);
-				out->index = (uint8_t)gamepad_axis;
-			} else {
-				index = AeronConfigNode_Int(axis, -1);
-				if (AeronConfigNode_Type(axis) != AERON_CONFIG_INT || index < 0 ||
-					index >= AERON_CONTROLLER_AXIS_MAX)
-					return TieAppConfig_ConfigError(error, capacity, "raw axis index is out of range");
-				out->index = (uint8_t)index;
-			}
-			direction_name = AeronConfigNode_String(direction, NULL);
-			if (direction_name && strcmp(direction_name, "positive") == 0)
-				out->kind = AERON_CONTROLLER_DIGITAL_AXIS_POSITIVE;
-			else if (direction_name && strcmp(direction_name, "negative") == 0)
-				out->kind = AERON_CONTROLLER_DIGITAL_AXIS_NEGATIVE;
-			else
-				return TieAppConfig_ConfigError(error, capacity,
-												"axis direction must be positive or negative");
-			if (threshold) {
-				double value = AeronConfigNode_Float(threshold, NAN);
-				if (!isfinite(value) || value <= 0.0 || value > 1.0)
-					return TieAppConfig_ConfigError(error, capacity, "axis threshold must be in (0, 1]");
-				out->threshold = (float)value;
-			}
-			return true;
-		}
-		if (hat) {
-			if (gamepad || !direction || AeronConfigNode_MapCount(node) != 2 ||
-				AeronConfigNode_Type(hat) != AERON_CONFIG_INT)
-				return TieAppConfig_ConfigError(error, capacity, "malformed raw hat source");
-			index = AeronConfigNode_Int(hat, -1);
-			if (index < 0 || index >= AERON_CONTROLLER_HAT_MAX)
-				return TieAppConfig_ConfigError(error, capacity, "raw hat index is out of range");
-			direction_name = AeronConfigNode_String(direction, NULL);
-			if (direction_name && strcmp(direction_name, "up") == 0)
-				out->hat_direction = AERON_CONTROLLER_HAT_UP;
-			else if (direction_name && strcmp(direction_name, "right") == 0)
-				out->hat_direction = AERON_CONTROLLER_HAT_RIGHT;
-			else if (direction_name && strcmp(direction_name, "down") == 0)
-				out->hat_direction = AERON_CONTROLLER_HAT_DOWN;
-			else if (direction_name && strcmp(direction_name, "left") == 0)
-				out->hat_direction = AERON_CONTROLLER_HAT_LEFT;
-			else
-				return TieAppConfig_ConfigError(error, capacity, "hat direction must be up/right/down/left");
-			out->kind = AERON_CONTROLLER_DIGITAL_HAT;
-			out->index = (uint8_t)index;
-			return true;
-		}
-	}
-	return TieAppConfig_ConfigError(error, capacity, "unknown controller source form");
-}
-
-static bool TieAppConfig_AddBinding(TieInputActionBinding* bindings, size_t* count, size_t maximum,
-									TieInputAction action, const AeronControllerDigitalSource* source,
-									char* error, size_t capacity) {
-	size_t index;
-	for (index = 0; index < *count; ++index) {
-		if (TieAppConfig_SameSource(&bindings[index].source, source)) {
-			if (bindings[index].action == action)
-				return true;
-			return TieAppConfig_ConfigError(error, capacity, "physical source is bound to multiple actions");
-		}
-	}
-	if (*count >= maximum)
-		return TieAppConfig_ConfigError(error, capacity, "controller binding capacity exceeded");
-	bindings[*count].source = *source;
-	bindings[*count].action = action;
-	++*count;
-	return true;
-}
-
-static bool TieAppConfig_ParseBindingValue(const AeronConfigNode* node, bool gamepad, TieInputAction action,
-										   TieInputActionBinding* bindings, size_t* count, size_t maximum,
-										   char* error, size_t capacity) {
-	size_t index;
-	if (AeronConfigNode_Type(node) == AERON_CONFIG_SEQUENCE) {
-		for (index = 0; index < AeronConfigNode_SequenceCount(node); ++index)
-			if (!TieAppConfig_ParseBindingValue(AeronConfigNode_SequenceGet(node, index), gamepad, action,
-												bindings, count, maximum, error, capacity))
-				return false;
-		return true;
-	}
-	{
-		AeronControllerDigitalSource source;
-		return TieAppConfig_ParseDigitalSource(node, gamepad, &source, error, capacity) &&
-			   TieAppConfig_AddBinding(bindings, count, maximum, action, &source, error, capacity);
-	}
-}
-
-static bool TieAppConfig_ParseBindings(const AeronConfigFile* document, TieControllerOptions* controller,
-									   TieKeyboardBindings* keyboard, char* error, size_t capacity) {
-	const char* paths[] = { "input.gamepad.buttons", "input.joystick.buttons" };
-	size_t domain;
+static bool TieAppConfig_ParseBindings(const AeronConfigFile* document, TieKeyboardBindings* keyboard,
+									   char* error, size_t capacity) {
 	memset(keyboard, 0, sizeof *keyboard);
-	for (domain = 0; domain < 2; ++domain) {
-		TieControllerProfile* profile = domain == 0 ? &controller->gamepad : &controller->joystick;
-		const AeronConfigNode* map =
-			TieAppConfig_RequiredNode(document, paths[domain], AERON_CONFIG_MAP, error, capacity);
-		size_t index;
-		if (!map)
-			return false;
-		for (index = 0; index < AeronConfigNode_MapCount(map); ++index) {
-			const char* name = AeronConfigNode_MapKeyAt(map, index);
-			TieInputAction action = TieInputActions_FromName(name);
-			if (action == TIE_INPUT_ACTION_NONE)
-				return TieAppConfig_ConfigError(error, capacity, "unknown input action '%s'", name);
-			if (!TieAppConfig_ParseBindingValue(AeronConfigNode_MapValueAt(map, index), domain == 0, action,
-												profile->bindings, &profile->binding_count,
-												TIE_CONTROLLER_BINDING_CAP, error, capacity)) {
-				return false;
-			}
-		}
-	}
 	{
 		const AeronConfigNode* map =
 			TieAppConfig_RequiredNode(document, "input.keyboard", AERON_CONFIG_MAP, error, capacity);
@@ -451,10 +232,7 @@ static bool TieAppConfig_ParseBindings(const AeronConfigFile* document, TieContr
 			keyboard->keyboard[aeron_key] = action;
 		}
 	}
-	return TieControllerMapping_Profilevalidate(&controller->gamepad, AERON_CONTROLLER_KIND_GAMEPAD, error,
-												capacity) &&
-		   TieControllerMapping_Profilevalidate(&controller->joystick, AERON_CONTROLLER_KIND_JOYSTICK, error,
-												capacity);
+	return true;
 }
 
 static bool TieAppConfig_ReadVec3(const AeronConfigFile* document, const char* path, float out[3],
@@ -665,7 +443,6 @@ static bool TieAppConfig_ParseComplete(const AeronConfigFile* document,
 									   const AeronSceneShadowSettings* baseline_shadows,
 									   const AeronSceneTonemapSettings* baseline_tonemap, TieAppConfig* out,
 									   char* error, size_t capacity) {
-	int ordinal;
 	memset(out, 0, sizeof *out);
 	const char* frontend_version;
 	const char* flight_version;
@@ -683,13 +460,7 @@ static bool TieAppConfig_ParseComplete(const AeronConfigFile* document,
 								 sizeof out->fluidsynth_soundfont_file, error, capacity) ||
 		!TieAppConfig_ReadString(document, "audio.sc55.rom_directory", out->sc55_rom_directory,
 								 sizeof out->sc55_rom_directory, error, capacity) ||
-		!TieAppConfig_ReadString(document, "ui.font", out->ui.font, sizeof out->ui.font, error, capacity) ||
-		!TieAppConfig_ReadString(document, "input.device.guid", out->controller.selector.guid,
-								 sizeof out->controller.selector.guid, error, capacity) ||
-		!TieAppConfig_ReadString(document, "input.device.path", out->controller.selector.path,
-								 sizeof out->controller.selector.path, error, capacity) ||
-		!TieAppConfig_ReadInt(document, "input.device.ordinal", 0, AERON_CONTROLLER_MAX - 1, &ordinal, error,
-							  capacity))
+		!TieAppConfig_ReadString(document, "ui.font", out->ui.font, sizeof out->ui.font, error, capacity))
 		return false;
 	if (!TieAppConfig_ValidateResourcePath("ui.font", out->ui.font, error, capacity))
 		return false;
@@ -782,17 +553,13 @@ static bool TieAppConfig_ParseComplete(const AeronConfigFile* document,
 	if (!TieAppConfig_ReadBool(document, "flight.player_engine_sound", &out->player_engine_sound_enabled,
 							   error, capacity))
 		return false;
-	out->controller.selector.ordinal = ordinal;
-	const bool parsed =
-		TieAppConfig_ParseAxisMapping(document, "gamepad", true, &out->controller.gamepad, error, capacity) &&
-		TieAppConfig_ParseAxisMapping(document, "joystick", false, &out->controller.joystick, error,
-									  capacity) &&
-		TieAppConfig_ParseBindings(document, &out->controller, &out->keyboard, error, capacity) &&
-		TieAppConfig_ParseVideo(document, &out->video, error, capacity) &&
-		TieAppConfig_ParseRender(document, baseline_ssao, baseline_shadows, baseline_tonemap, &out->render,
-								 error, capacity) &&
-		TieAppConfig_ParsePbr(document, &out->pbr, error, capacity) &&
-		TieAppConfig_ParsePointLights(document, &out->point_lights, error, capacity);
+	const bool parsed = TieControllerConfig_Read(document, &out->controller, error, capacity) &&
+						TieAppConfig_ParseBindings(document, &out->keyboard, error, capacity) &&
+						TieAppConfig_ParseVideo(document, &out->video, error, capacity) &&
+						TieAppConfig_ParseRender(document, baseline_ssao, baseline_shadows, baseline_tonemap,
+												 &out->render, error, capacity) &&
+						TieAppConfig_ParsePbr(document, &out->pbr, error, capacity) &&
+						TieAppConfig_ParsePointLights(document, &out->point_lights, error, capacity);
 	if (parsed) {
 		out->video.output.ssao_quality = out->render.ssao.ssao_quality;
 		out->video.output.shadows_enabled = out->render.shadows.enabled;
@@ -824,6 +591,8 @@ bool TieAppConfig_Load(AeronVfs* vfs, TieAppConfigState* state, char* error, siz
 	TieAppConfig defaults_value;
 	TieAppConfig requested_value;
 	bool success = false;
+	bool reset_controllers = false;
+	TieControllerProfile gamepad_defaults;
 
 	if (!vfs || !state)
 		return TieAppConfig_ConfigError(error, capacity, "invalid configuration load arguments");
@@ -848,12 +617,31 @@ bool TieAppConfig_Load(AeronVfs* vfs, TieAppConfigState* state, char* error, siz
 			TieAppConfig_LogAeronError(&aeron_error, error, capacity);
 			goto done;
 		}
+		if (AeronConfigFile_GetInt(user, "version", 0) == 4) {
+			AeronConfigValue empty = { .type = AERON_CONFIG_SEQUENCE };
+			if (!AeronConfigFile_Remove(user, "input.device", &aeron_error) ||
+				!AeronConfigFile_Remove(user, "input.gamepad", &aeron_error) ||
+				!AeronConfigFile_Remove(user, "input.joystick", &aeron_error) ||
+				!AeronConfigFile_SetValue(user, "input.controllers", &empty, &aeron_error) ||
+				!AeronConfigFile_SetInt(user, "version", 5, &aeron_error)) {
+				TieAppConfig_LogAeronError(&aeron_error, error, capacity);
+				goto done;
+			}
+			reset_controllers = true;
+		}
+		if (AeronConfigFile_Has(user, "input.gamepad_defaults")) {
+			Aeron_LogWarn("tie.config", "input.gamepad_defaults is shipped-only; ignoring user override");
+			if (!AeronConfigFile_Remove(user, "input.gamepad_defaults", &aeron_error)) {
+				TieAppConfig_LogAeronError(&aeron_error, error, capacity);
+				goto done;
+			}
+		}
 		if (!TieAppConfig_CheckVersion(user, error, capacity) ||
 			!TieAppConfig_ValidateSchemaKeys(user, true, error, capacity))
 			goto done;
 	} else {
 		if (!AeronConfigFile_CreateMap(AERON_VFS_ROOT_USER, "config.yaml", &user, &aeron_error) ||
-			!AeronConfigFile_SetInt(user, "version", 4, &aeron_error)) {
+			!AeronConfigFile_SetInt(user, "version", 5, &aeron_error)) {
 			TieAppConfig_LogAeronError(&aeron_error, error, capacity);
 			goto done;
 		}
@@ -865,8 +653,14 @@ bool TieAppConfig_Load(AeronVfs* vfs, TieAppConfigState* state, char* error, siz
 	if (!TieAppConfig_ParseComplete(merged, &baseline_ssao, &baseline_shadows, &baseline_tonemap,
 									&requested_value, error, capacity))
 		goto done;
+	if (!TieControllerConfig_ReadProfile(shipped, "input.gamepad_defaults", AERON_CONTROLLER_KIND_GAMEPAD,
+										 &gamepad_defaults, error, capacity))
+		goto done;
 	TieAppConfig_Destroy(state);
 	state->defaults = defaults_value;
+	state->gamepad_defaults = gamepad_defaults;
+	state->controllers_reset = reset_controllers;
+	state->dirty = reset_controllers;
 	state->requested = requested_value;
 	state->shipped_document = shipped;
 	state->user_document = user;
@@ -1307,159 +1101,16 @@ bool TieAppConfig_RestoreVideo(TieAppConfigState* state, char* error, size_t cap
 	return true;
 }
 
-typedef struct TieAppConfigControllerYamlScratch {
-	AeronConfigValue sources[TIE_CONTROLLER_BINDING_CAP];
-	AeronConfigValue fields[TIE_CONTROLLER_BINDING_CAP][3];
-	AeronConfigMapValue source_maps[TIE_CONTROLLER_BINDING_CAP][3];
-	AeronConfigValue action_values[TIE_INPUT_ACTION_COUNT - 1];
-	AeronConfigMapValue action_map[TIE_INPUT_ACTION_COUNT - 1];
-} TieAppConfigControllerYamlScratch;
-
-static void TieAppConfig_ControllerSourceYaml(const AeronControllerDigitalSource* source, bool gamepad,
-											  TieAppConfigControllerYamlScratch* scratch, size_t slot) {
-	AeronConfigValue* value = &scratch->sources[slot];
-	AeronConfigValue* fields = scratch->fields[slot];
-	AeronConfigMapValue* map = scratch->source_maps[slot];
-	if (gamepad && source->kind == AERON_CONTROLLER_DIGITAL_BUTTON) {
-		value->type = AERON_CONFIG_STRING;
-		value->value.string_value = Aeron_GamepadButtonName((AeronGamepadButton)source->index);
-		return;
-	}
-	value->type = AERON_CONFIG_MAP;
-	value->value.map.entries = map;
-	if (source->kind == AERON_CONTROLLER_DIGITAL_BUTTON) {
-		fields[0].type = AERON_CONFIG_INT;
-		fields[0].value.int_value = source->index;
-		map[0] = (AeronConfigMapValue) { "button", &fields[0] };
-		value->value.map.count = 1;
-		return;
-	}
-	if (source->kind == AERON_CONTROLLER_DIGITAL_AXIS_POSITIVE ||
-		source->kind == AERON_CONTROLLER_DIGITAL_AXIS_NEGATIVE) {
-		fields[0].type = gamepad ? AERON_CONFIG_STRING : AERON_CONFIG_INT;
-		if (gamepad)
-			fields[0].value.string_value = Aeron_GamepadAxisName((AeronGamepadAxis)source->index);
-		else
-			fields[0].value.int_value = source->index;
-		fields[1].type = AERON_CONFIG_STRING;
-		fields[1].value.string_value =
-			source->kind == AERON_CONTROLLER_DIGITAL_AXIS_POSITIVE ? "positive" : "negative";
-		fields[2].type = AERON_CONFIG_FLOAT;
-		fields[2].value.float_value = source->threshold;
-		map[0] = (AeronConfigMapValue) { "axis", &fields[0] };
-		map[1] = (AeronConfigMapValue) { "direction", &fields[1] };
-		map[2] = (AeronConfigMapValue) { "threshold", &fields[2] };
-		value->value.map.count = 3;
-		return;
-	}
-	fields[0].type = AERON_CONFIG_INT;
-	fields[0].value.int_value = source->index;
-	fields[1].type = AERON_CONFIG_STRING;
-	switch (source->hat_direction) {
-		case AERON_CONTROLLER_HAT_UP:
-			fields[1].value.string_value = "up";
-			break;
-		case AERON_CONTROLLER_HAT_RIGHT:
-			fields[1].value.string_value = "right";
-			break;
-		case AERON_CONTROLLER_HAT_DOWN:
-			fields[1].value.string_value = "down";
-			break;
-		default:
-			fields[1].value.string_value = "left";
-			break;
-	}
-	map[0] = (AeronConfigMapValue) { "hat", &fields[0] };
-	map[1] = (AeronConfigMapValue) { "direction", &fields[1] };
-	value->value.map.count = 2;
-}
-
-static bool TieAppConfig_SetControllerButtons(AeronConfigFile* document, const char* path,
-											  const TieControllerProfile* profile, bool gamepad,
-											  AeronConfigError* error) {
-	TieAppConfigControllerYamlScratch scratch = { 0 };
-	AeronConfigValue root = { .type = AERON_CONFIG_MAP };
-	size_t source_count = 0;
-	for (int action = TIE_INPUT_ACTION_NONE + 1; action < TIE_INPUT_ACTION_COUNT; ++action) {
-		const size_t action_index = (size_t)(action - 1);
-		const size_t first = source_count;
-		for (size_t index = 0; index < profile->binding_count; ++index) {
-			if ((int)profile->bindings[index].action != action)
-				continue;
-			TieAppConfig_ControllerSourceYaml(&profile->bindings[index].source, gamepad, &scratch,
-											  source_count++);
-		}
-		scratch.action_values[action_index].type = AERON_CONFIG_SEQUENCE;
-		scratch.action_values[action_index].value.sequence.values = &scratch.sources[first];
-		scratch.action_values[action_index].value.sequence.count = source_count - first;
-		scratch.action_map[action_index].key = TieInputActions_ToName((TieInputAction)action);
-		scratch.action_map[action_index].value = &scratch.action_values[action_index];
-	}
-	root.value.map.entries = scratch.action_map;
-	root.value.map.count = TIE_INPUT_ACTION_COUNT - 1;
-	return AeronConfigFile_SetValue(document, path, &root, error) != 0;
-}
-
-static bool TieAppConfig_SetControllerAxes(AeronConfigFile* document, const char* domain,
-										   const TieControllerProfile* profile, bool gamepad,
-										   AeronConfigError* error) {
-	static const char* const names[TIE_INPUT_AXIS_COUNT] = { "yaw", "pitch", "roll", "throttle" };
-	for (int axis = 0; axis < TIE_INPUT_AXIS_COUNT; ++axis) {
-		const TieInputAxisBinding* binding = &profile->mapping.axes[axis];
-		char path[128];
-		snprintf(path, sizeof path, "input.%s.axes.%s.source", domain, names[axis]);
-		if (binding->source < 0) {
-			if (!AeronConfigFile_SetString(document, path, "none", error))
-				return false;
-		} else if (gamepad) {
-			if (!AeronConfigFile_SetString(document, path,
-										   Aeron_GamepadAxisName((AeronGamepadAxis)binding->source), error))
-				return false;
-		} else if (!AeronConfigFile_SetInt(document, path, binding->source, error)) {
-			return false;
-		}
-		snprintf(path, sizeof path, "input.%s.axes.%s.invert", domain, names[axis]);
-		if (!AeronConfigFile_SetBool(document, path, binding->invert, error))
-			return false;
-		snprintf(path, sizeof path, "input.%s.axes.%s.deadzone", domain, names[axis]);
-		if (!AeronConfigFile_SetFloat(document, path, binding->deadzone, error))
-			return false;
-	}
-	return true;
-}
-
-static bool TieAppConfig_ControllerOptionsValid(const TieControllerOptions* controller, char* error,
-												size_t capacity) {
-	if (!controller || controller->selector.ordinal < 0 ||
-		controller->selector.ordinal >= AERON_CONTROLLER_MAX ||
-		!memchr(controller->selector.guid, '\0', sizeof controller->selector.guid) ||
-		!memchr(controller->selector.path, '\0', sizeof controller->selector.path))
-		return TieAppConfig_ConfigError(error, capacity, "controller selector is invalid");
-	return TieControllerMapping_Profilevalidate(&controller->gamepad, AERON_CONTROLLER_KIND_GAMEPAD, error,
-												capacity) &&
-		   TieControllerMapping_Profilevalidate(&controller->joystick, AERON_CONTROLLER_KIND_JOYSTICK, error,
-												capacity);
-}
-
 bool TieAppConfig_SetController(TieAppConfigState* state, const TieControllerOptions* controller, char* error,
 								size_t capacity) {
 	AeronConfigFile* candidate = NULL;
 	AeronConfigError aeron_error = { 0 };
 	if (!state)
 		return TieAppConfig_ConfigError(error, capacity, "application configuration is unavailable");
-	if (!TieAppConfig_ControllerOptionsValid(controller, error, capacity))
+	if (!TieControllerMapping_OptionsValid(controller, error, capacity))
 		return false;
 	if (!AeronConfigFile_Clone(state->user_document, &candidate, &aeron_error) ||
-		!AeronConfigFile_SetString(candidate, "input.device.guid", controller->selector.guid, &aeron_error) ||
-		!AeronConfigFile_SetString(candidate, "input.device.path", controller->selector.path, &aeron_error) ||
-		!AeronConfigFile_SetInt(candidate, "input.device.ordinal", controller->selector.ordinal,
-								&aeron_error) ||
-		!TieAppConfig_SetControllerAxes(candidate, "gamepad", &controller->gamepad, true, &aeron_error) ||
-		!TieAppConfig_SetControllerAxes(candidate, "joystick", &controller->joystick, false, &aeron_error) ||
-		!TieAppConfig_SetControllerButtons(candidate, "input.gamepad.buttons", &controller->gamepad, true,
-										   &aeron_error) ||
-		!TieAppConfig_SetControllerButtons(candidate, "input.joystick.buttons", &controller->joystick, false,
-										   &aeron_error)) {
+		!TieControllerConfig_Write(candidate, controller, &aeron_error)) {
 		AeronConfigFile_Destroy(candidate);
 		return TieAppConfig_LogAeronError(&aeron_error, error, capacity);
 	}
@@ -1489,13 +1140,6 @@ static bool TieAppConfig_RestoreUserPaths(TieAppConfigState* state, const char* 
 		AeronConfigFile_Destroy(candidate);
 		return false;
 	}
-	return true;
-}
-
-bool TieAppConfig_RestoreController(TieAppConfigState* state, char* error, size_t capacity) {
-	static const char* const paths[] = { "input.device", "input.gamepad", "input.joystick" };
-	if (!TieAppConfig_RestoreUserPaths(state, paths, sizeof paths / sizeof paths[0], error, capacity))
-		return false;
 	return true;
 }
 

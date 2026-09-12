@@ -149,6 +149,7 @@ void ReplayInputFrame_decode(ReplayInputFrame* dst, const uint8_t* src) {
 	dst->buttons = br_u8(src + REPLAYINPUTFRAME_BUTTONS_OFFSET);
 	dst->frameticks = br_u8(src + REPLAYINPUTFRAME_FRAMETICKS_OFFSET);
 	dst->deltaroll = br_i16le(src + REPLAYINPUTFRAME_DELTAROLL_OFFSET);
+	dst->throttle_command = br_u32le(src + REPLAYINPUTFRAME_THROTTLE_OFFSET);
 }
 
 void ReplayInputFrame_encode(uint8_t* dst, const ReplayInputFrame* src) {
@@ -159,6 +160,7 @@ void ReplayInputFrame_encode(uint8_t* dst, const ReplayInputFrame* src) {
 	bw_u8(dst + REPLAYINPUTFRAME_BUTTONS_OFFSET, src->buttons);
 	bw_u8(dst + REPLAYINPUTFRAME_FRAMETICKS_OFFSET, src->frameticks);
 	bw_i16le(dst + REPLAYINPUTFRAME_DELTAROLL_OFFSET, src->deltaroll);
+	bw_u32le(dst + REPLAYINPUTFRAME_THROTTLE_OFFSET, src->throttle_command);
 }
 
 /* Compose "<clipname>.clp" from the module-global replayclipname into a
