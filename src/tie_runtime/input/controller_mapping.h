@@ -29,7 +29,7 @@ enum { TIE_CONTROLLER_MODEL_CAP = 8 };
 typedef struct TieControllerModel {
 	char guid[33];
 	char name[AERON_CONTROLLER_NAME_CAPACITY];
-	AeronControllerKind kind;
+	AeronControllerKind kind; /* Saved SDL device type; must match the connected snapshot. */
 	TieControllerProfile profile;
 } TieControllerModel;
 typedef struct TieControllerOptions {
@@ -41,7 +41,7 @@ void TieControllerMapping_ClearProfile(TieControllerProfile* profile, AeronContr
 int TieControllerMapping_FindModel(const TieControllerOptions* options, const char* guid);
 bool TieControllerMapping_OptionsValid(const TieControllerOptions* options, char* error, size_t capacity);
 bool TieControllerMapping_AddModel(TieControllerOptions* options, const AeronControllerSnapshot* device,
-								   AeronControllerKind kind, char* error, size_t capacity);
+								   char* error, size_t capacity);
 bool TieControllerMapping_InitializeGamepads(TieControllerOptions* options,
 											 const TieControllerProfile* defaults,
 											 const AeronInputSnapshot* input, char* error, size_t capacity);

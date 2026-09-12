@@ -15,7 +15,6 @@ typedef struct TieControllerSettings {
 	TieControllerProfile unconfigured;
 	char selected_guid[33];
 	uint32_t selected_instance;
-	AeronControllerKind layout;
 	char conflict_text[512];
 	bool capacity_warned;
 	int page;

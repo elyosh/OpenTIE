@@ -189,7 +189,7 @@ bool TieControllerMapping_OptionsValid(const TieControllerOptions* options, char
 }
 
 bool TieControllerMapping_AddModel(TieControllerOptions* options, const AeronControllerSnapshot* device,
-								   AeronControllerKind kind, char* error, size_t capacity) {
+								   char* error, size_t capacity) {
 	if (!device || !GuidValid(device->guid))
 		return TieControllerMapping_ValidationError(error, capacity, "controller has no usable model GUID");
 	if (TieControllerMapping_FindModel(options, device->guid) >= 0)
@@ -200,8 +200,8 @@ bool TieControllerMapping_AddModel(TieControllerOptions* options, const AeronCon
 	memset(m, 0, sizeof *m);
 	memcpy(m->guid, device->guid, sizeof m->guid);
 	snprintf(m->name, sizeof m->name, "%s", device->name);
-	m->kind = kind;
-	TieControllerMapping_ClearProfile(&m->profile, kind);
+	m->kind = device->kind;
+	TieControllerMapping_ClearProfile(&m->profile, device->kind);
 	return true;
 }
 
@@ -226,8 +226,7 @@ bool TieControllerMapping_InitializeGamepads(TieControllerOptions* options,
 	for (int i = 0; i < count; ++i) {
 		if (TieControllerMapping_FindModel(options, sorted[i]->guid) >= 0)
 			continue;
-		if (!TieControllerMapping_AddModel(options, sorted[i], AERON_CONTROLLER_KIND_GAMEPAD, error,
-										   capacity))
+		if (!TieControllerMapping_AddModel(options, sorted[i], error, capacity))
 			return false;
 		TieControllerProfile* p = &options->models[options->count - 1].profile;
 		*p = *defaults;
@@ -247,7 +246,7 @@ const AeronControllerSnapshot* TieControllerMapping_Resolve(const TieControllerM
 		return NULL;
 	for (int i = 0; i < AERON_CONTROLLER_MAX; ++i) {
 		const AeronControllerSnapshot* d = &input->controllers[i];
-		if (!d->connected || strcmp(model->guid, d->guid) || !Aeron_ControllerSupportsKind(d, model->kind))
+		if (!d->connected || strcmp(model->guid, d->guid) || d->kind != model->kind)
 			continue;
 		if (d->instance_id == preferred)
 			return d;
@@ -336,7 +335,7 @@ static void LogUnavailableControls(const TieControllerModel* model, const AeronC
 	int missing = 0;
 	for (int axis = 0; axis < TIE_INPUT_AXIS_COUNT; ++axis) {
 		int source = model->profile.mapping.axes[axis].source;
-		if (source >= 0 && !Aeron_ControllerAxisAvailable(device, model->kind, source))
+		if (source >= 0 && !Aeron_ControllerAxisAvailable(device, source))
 			++missing;
 	}
 	for (size_t i = 0; i < model->profile.binding_count; ++i) {
@@ -349,7 +348,7 @@ static void LogUnavailableControls(const TieControllerModel* model, const AeronC
 		else if (source->kind == AERON_CONTROLLER_DIGITAL_HAT)
 			available = source->index < device->hat_count;
 		else
-			available = Aeron_ControllerAxisAvailable(device, model->kind, source->index);
+			available = Aeron_ControllerAxisAvailable(device, source->index);
 		if (!available)
 			++missing;
 	}
@@ -364,8 +363,7 @@ static void SampleDigital(ControllerInstance* state, const AeronControllerSnapsh
 	if (!state->primed)
 		LogUnavailableControls(model, device);
 	for (size_t i = 0; i < profile->binding_count; ++i) {
-		bool down = Aeron_ControllerDigitalSourceDownForKind(device, model->kind,
-															 &profile->bindings[i].source, state->down[i]);
+		bool down = Aeron_ControllerDigitalSourceDown(device, &profile->bindings[i].source, state->down[i]);
 		if (!state->primed)
 			state->armed[i] = !down;
 		else if (!down) {
@@ -403,9 +401,9 @@ static void SampleAnalog(size_t index, const AeronControllerSnapshot* d, TieInpu
 	const TieControllerModel* model = &g_controller.options.models[index];
 	for (int axis = 0; axis < TIE_INPUT_AXIS_COUNT; ++axis) {
 		TieInputAxisBinding b = model->profile.mapping.axes[axis];
-		if (!Aeron_ControllerAxisAvailable(d, model->kind, b.source))
+		if (!Aeron_ControllerAxisAvailable(d, b.source))
 			continue;
-		int16_t raw = Aeron_ControllerAxisValue(d, model->kind, b.source);
+		int16_t raw = Aeron_ControllerAxisValue(d, b.source);
 		if (axis == TIE_INPUT_AXIS_THROTTLE) {
 			g_controller.throttle =
 				TieControllerMapping_ThrottlePosition(raw, model->kind, b.source, b.invert);
@@ -448,7 +446,7 @@ void TieControllerMapping_Update(const AeronInputSnapshot* input) {
 			const AeronControllerSnapshot* d = &input->controllers[j];
 			const TieControllerModel* m = &g_controller.options.models[state->model];
 			if (d->connected && d->instance_id == state->id && !strcmp(d->guid, m->guid) &&
-				Aeron_ControllerSupportsKind(d, m->kind))
+				d->kind == m->kind)
 				found = true;
 		}
 		if (!found)
@@ -472,7 +470,7 @@ void TieControllerMapping_Update(const AeronInputSnapshot* input) {
 				const AeronControllerSnapshot* candidate = &input->controllers[j];
 				if (candidate->connected && candidate->instance_id > previous &&
 					!strcmp(candidate->guid, g_controller.options.models[model].guid) &&
-					Aeron_ControllerSupportsKind(candidate, g_controller.options.models[model].kind) &&
+					candidate->kind == g_controller.options.models[model].kind &&
 					(!d || candidate->instance_id < d->instance_id))
 					d = candidate;
 			}

@@ -12,11 +12,6 @@ enum {
 
 static const char* const k_axis_names[TIE_INPUT_AXIS_COUNT] = { "Yaw", "Pitch", "Roll", "Throttle" };
 
-static AeronControllerKind TieControllerPage_Kind(const TieControllerSettings* settings,
-												  const AeronControllerSnapshot* controller) {
-	int i = TieControllerMapping_FindModel(&settings->draft, controller->guid);
-	return i >= 0 ? settings->draft.models[i].kind : settings->layout;
-}
 static TieControllerProfile* TieControllerPage_ActiveProfile(TieControllerSettings* settings,
 															 const AeronControllerSnapshot* controller) {
 	int i = TieControllerMapping_FindModel(&settings->draft, controller->guid);
@@ -41,13 +36,10 @@ static const AeronControllerSnapshot* TieControllerPage_SelectedController(TieCo
 static void TieControllerSettings_ApplyDraft(TieControllerSettings* settings) {
 	if (settings->selected_guid[0] &&
 		TieControllerMapping_FindModel(&settings->draft, settings->selected_guid) < 0) {
-		AeronControllerSnapshot identity = { 0 };
-		memcpy(identity.guid, settings->selected_guid, sizeof identity.guid);
-		const AeronInputSnapshot* input = Aeron_InputSnapshot();
-		const AeronControllerSnapshot* d = TieControllerPage_SelectedController(settings, input);
-		snprintf(identity.name, sizeof identity.name, "%s", d ? d->name : settings->selected_guid);
-		if (!TieControllerMapping_AddModel(&settings->draft, &identity, settings->layout, settings->error,
-										   sizeof settings->error))
+		const AeronControllerSnapshot* device =
+			TieControllerPage_SelectedController(settings, Aeron_InputSnapshot());
+		if (!device ||
+			!TieControllerMapping_AddModel(&settings->draft, device, settings->error, sizeof settings->error))
 			return;
 		settings->draft.models[settings->draft.count - 1].profile = settings->unconfigured;
 	}
@@ -82,9 +74,9 @@ static const char* TieControllerPage_GamepadButtonDisplay(int source) {
 }
 
 static bool TieControllerSettings_SourceAvailable(const AeronControllerSnapshot* controller,
-												  const AeronControllerDigitalSource* source,
-												  AeronControllerKind kind) {
-	if (!Aeron_ControllerSupportsKind(controller, kind))
+												  const AeronControllerDigitalSource* source) {
+	const AeronControllerKind kind = controller ? controller->kind : AERON_CONTROLLER_KIND_NONE;
+	if (!controller->connected)
 		return false;
 	if (source->kind == AERON_CONTROLLER_DIGITAL_BUTTON)
 		return kind == AERON_CONTROLLER_KIND_GAMEPAD
@@ -102,8 +94,8 @@ static bool TieControllerSettings_SourceAvailable(const AeronControllerSnapshot*
 }
 
 static void TieControllerSettings_FormatAxisSource(char* buffer, size_t capacity, int source,
-												   const AeronControllerSnapshot* controller,
-												   AeronControllerKind kind) {
+												   const AeronControllerSnapshot* controller) {
+	const AeronControllerKind kind = controller ? controller->kind : AERON_CONTROLLER_KIND_NONE;
 	if (source < 0) {
 		snprintf(buffer, capacity, "Not Bound");
 		return;
@@ -135,8 +127,8 @@ static const char* TieControllerPage_HatDirectionName(uint8_t direction) {
 
 static void TieControllerSettings_FormatDigitalSource(char* buffer, size_t capacity,
 													  const AeronControllerDigitalSource* source,
-													  const AeronControllerSnapshot* controller,
-													  AeronControllerKind kind) {
+													  const AeronControllerSnapshot* controller) {
+	const AeronControllerKind kind = controller ? controller->kind : AERON_CONTROLLER_KIND_NONE;
 	const char* name = NULL;
 	if (source->kind == AERON_CONTROLLER_DIGITAL_BUTTON) {
 		name = kind == AERON_CONTROLLER_KIND_GAMEPAD ? TieControllerPage_GamepadButtonDisplay(source->index)
@@ -159,7 +151,7 @@ static void TieControllerSettings_FormatDigitalSource(char* buffer, size_t capac
 		snprintf(buffer, capacity, "Hat %u %s", (unsigned)source->index,
 				 TieControllerPage_HatDirectionName(source->hat_direction));
 	}
-	if (!TieControllerSettings_SourceAvailable(controller, source, kind)) {
+	if (!TieControllerSettings_SourceAvailable(controller, source)) {
 		const size_t used = strlen(buffer);
 		if (used < capacity)
 			snprintf(buffer + used, capacity - used, " (Unavailable)");
@@ -175,15 +167,14 @@ static void TieControllerSettings_AppendText(char* buffer, size_t capacity, cons
 static void TieControllerSettings_DescribeActionBindings(char* buffer, size_t capacity,
 														 const TieControllerProfile* profile,
 														 TieInputAction action,
-														 const AeronControllerSnapshot* controller,
-														 AeronControllerKind kind) {
+														 const AeronControllerSnapshot* controller) {
 	buffer[0] = '\0';
 	for (size_t index = 0; index < profile->binding_count; ++index) {
 		if (profile->bindings[index].action != action)
 			continue;
 		char source[96];
 		TieControllerSettings_FormatDigitalSource(source, sizeof source, &profile->bindings[index].source,
-												  controller, kind);
+												  controller);
 		TieControllerSettings_AppendText(buffer, capacity, source);
 	}
 	if (!buffer[0])
@@ -200,8 +191,7 @@ void TieControllerSettings_Open(TieControllerSettings* settings, const TieAppCon
 	settings->binding_selected = SIZE_MAX;
 	settings->selected_action = TIE_INPUT_ACTION_NONE;
 	settings->pending_axis = TIE_INPUT_AXIS_YAW;
-	settings->layout = AERON_CONTROLLER_KIND_JOYSTICK;
-	TieControllerMapping_ClearProfile(&settings->unconfigured, settings->layout);
+	TieControllerMapping_ClearProfile(&settings->unconfigured, AERON_CONTROLLER_KIND_JOYSTICK);
 }
 
 void TieControllerSettings_CancelCapture(TieControllerSettings* settings, AeronUiContext* ui) {
@@ -249,7 +239,6 @@ static void TieControllerSettings_DeviceSelector(TieControllerSettings* settings
 	const char* options[CAP];
 	const char* guids[CAP];
 	uint32_t ids[CAP];
-	AeronControllerKind kinds[CAP];
 	int count = 0, selected = -1;
 	for (int i = 0; i < AERON_CONTROLLER_MAX; ++i) {
 		const AeronControllerSnapshot* d = &input->controllers[i];
@@ -268,7 +257,6 @@ static void TieControllerSettings_DeviceSelector(TieControllerSettings* settings
 		options[count] = labels[count];
 		guids[count] = d->guid;
 		ids[count] = d->instance_id;
-		kinds[count] = d->kind;
 		if (settings->selected_instance == d->instance_id)
 			selected = count;
 		++count;
@@ -289,8 +277,11 @@ static void TieControllerSettings_DeviceSelector(TieControllerSettings* settings
 		TieControllerSettings_ResetDeviceEditState(settings, ui);
 		snprintf(settings->selected_guid, sizeof settings->selected_guid, "%s", guids[selected]);
 		settings->selected_instance = ids[selected];
-		settings->layout = kinds[selected];
-		TieControllerMapping_ClearProfile(&settings->unconfigured, settings->layout);
+		const AeronControllerSnapshot* selected_device =
+			TieControllerPage_SelectedController(settings, input);
+		TieControllerMapping_ClearProfile(&settings->unconfigured, selected_device
+																	   ? selected_device->kind
+																	   : AERON_CONTROLLER_KIND_JOYSTICK);
 	}
 }
 
@@ -310,8 +301,8 @@ void TieControllerSettings_Discover(TieControllerSettings* settings, AeronUiCont
 }
 
 static int TieControllerSettings_ProfileMissingCount(const TieControllerProfile* profile,
-													 const AeronControllerSnapshot* controller,
-													 AeronControllerKind kind) {
+													 const AeronControllerSnapshot* controller) {
+	const AeronControllerKind kind = controller ? controller->kind : AERON_CONTROLLER_KIND_NONE;
 	int missing = 0;
 	for (int axis = 0; axis < TIE_INPUT_AXIS_COUNT; ++axis) {
 		const int source = profile->mapping.axes[axis].source;
@@ -325,23 +316,20 @@ static int TieControllerSettings_ProfileMissingCount(const TieControllerProfile*
 		}
 	}
 	for (size_t index = 0; index < profile->binding_count; ++index)
-		if (!TieControllerSettings_SourceAvailable(controller, &profile->bindings[index].source, kind))
+		if (!TieControllerSettings_SourceAvailable(controller, &profile->bindings[index].source))
 			++missing;
 	return missing;
 }
 
 static void TieControllerSettings_ControllerWarning(const TieControllerSettings* settings, AeronUiContext* ui,
 													const AeronControllerSnapshot* controller) {
-	const AeronControllerKind kind =
-		controller ? TieControllerPage_Kind(settings, controller) : AERON_CONTROLLER_KIND_NONE;
 	if (!controller) {
 		AeronUi_Help(ui, "Select a connected device to assign controls.");
 		return;
 	}
-	if (!Aeron_ControllerSupportsKind(controller, kind))
-		AeronUi_Error(ui, "This device does not support the saved layout.");
+
 	const int missing = TieControllerSettings_ProfileMissingCount(
-		TieControllerPage_ActiveProfileConst(settings, controller), controller, kind);
+		TieControllerPage_ActiveProfileConst(settings, controller), controller);
 	if (missing && controller->controls_truncated) {
 		char text[256];
 		snprintf(text, sizeof text,
@@ -357,8 +345,9 @@ static void TieControllerSettings_ControllerWarning(const TieControllerSettings*
 		AeronUi_Error(ui, "This controller exposes more controls than the game supports.");
 }
 
-static float TieControllerSettings_ControllerAxisValue(const AeronControllerSnapshot* controller, int source,
-													   AeronControllerKind kind) {
+static float TieControllerSettings_ControllerAxisValue(const AeronControllerSnapshot* controller,
+													   int source) {
+	const AeronControllerKind kind = controller ? controller->kind : AERON_CONTROLLER_KIND_NONE;
 	if (!controller || source < 0)
 		return 0.0f;
 	int value;
@@ -380,8 +369,7 @@ static void TieControllerSettings_InstallAxis(TieControllerSettings* settings,
 	TieControllerOptions candidate = settings->draft;
 	int model = TieControllerMapping_FindModel(&candidate, controller->guid);
 	if (model < 0) {
-		if (!TieControllerMapping_AddModel(&candidate, controller, settings->layout, settings->error,
-										   sizeof settings->error))
+		if (!TieControllerMapping_AddModel(&candidate, controller, settings->error, sizeof settings->error))
 			return;
 		model = (int)candidate.count - 1;
 		candidate.models[model].profile = settings->unconfigured;
@@ -425,18 +413,15 @@ static void TieControllerSettings_AssignCapturedAxis(TieControllerSettings* sett
 
 static void TieControllerSettings_AxisEditor(TieControllerSettings* settings, AeronUiContext* ui,
 											 const AeronControllerSnapshot* controller, TieInputAxis axis) {
-	const AeronControllerKind kind =
-		controller ? TieControllerPage_Kind(settings, controller) : AERON_CONTROLLER_KIND_NONE;
+	const AeronControllerKind kind = controller ? controller->kind : AERON_CONTROLLER_KIND_NONE;
 	TieControllerProfile* profile = TieControllerPage_ActiveProfile(settings, controller);
 
 	TieInputAxisBinding* binding = &profile->mapping.axes[axis];
 	char source[128];
-	TieControllerSettings_FormatAxisSource(source, sizeof source, binding->source, controller, kind);
+	TieControllerSettings_FormatAxisSource(source, sizeof source, binding->source, controller);
 	AeronUi_PushId(ui, axis);
-	const AeronUiControllerCaptureDesc desc = { Aeron_ControllerSupportsKind(controller, kind)
-													? controller->instance_id
-													: 0,
-												AERON_UI_CONTROLLER_CAPTURE_ANALOG_AXIS, kind };
+	const AeronUiControllerCaptureDesc desc = { controller->connected ? controller->instance_id : 0,
+												AERON_UI_CONTROLLER_CAPTURE_ANALOG_AXIS };
 	AeronUiControllerInput captured;
 	const AeronUiControllerCaptureResult capture =
 		AeronUi_ControllerCapture(ui, "Source", source, &desc, &captured);
@@ -445,12 +430,12 @@ static void TieControllerSettings_AxisEditor(TieControllerSettings* settings, Ae
 		TieControllerSettings_AssignCapturedAxis(settings, controller, axis, captured.value.axis);
 	profile = TieControllerPage_ActiveProfile(settings, controller);
 	binding = &profile->mapping.axes[axis];
-	float live = TieControllerSettings_ControllerAxisValue(controller, binding->source, kind);
+	float live = TieControllerSettings_ControllerAxisValue(controller, binding->source);
 	if (TieControllerMapping_EffectiveAxisInvert(kind, axis, binding->invert))
 		live = -live;
 	if (axis == TIE_INPUT_AXIS_THROTTLE) {
-		if (Aeron_ControllerAxisAvailable(controller, kind, binding->source)) {
-			const int16_t raw = Aeron_ControllerAxisValue(controller, kind, binding->source);
+		if (Aeron_ControllerAxisAvailable(controller, binding->source)) {
+			const int16_t raw = Aeron_ControllerAxisValue(controller, binding->source);
 			const uint16_t position =
 				TieControllerMapping_ThrottlePosition(raw, kind, binding->source, binding->invert);
 			AeronUi_PercentageMeter(ui, "Position", (float)position / UINT16_MAX);
@@ -582,13 +567,10 @@ static void TieControllerSettings_AddCapturedBinding(TieControllerSettings* sett
 
 static void TieControllerSettings_FindBindingCapture(TieControllerSettings* settings, AeronUiContext* ui,
 													 const AeronControllerSnapshot* controller) {
-	const AeronControllerKind kind =
-		controller ? TieControllerPage_Kind(settings, controller) : AERON_CONTROLLER_KIND_NONE;
+	const AeronControllerKind kind = controller ? controller->kind : AERON_CONTROLLER_KIND_NONE;
 
-	const AeronUiControllerCaptureDesc desc = { Aeron_ControllerSupportsKind(controller, kind)
-													? controller->instance_id
-													: 0,
-												AERON_UI_CONTROLLER_CAPTURE_DIGITAL, kind };
+	const AeronUiControllerCaptureDesc desc = { controller->connected ? controller->instance_id : 0,
+												AERON_UI_CONTROLLER_CAPTURE_DIGITAL };
 	AeronUiControllerInput captured;
 	const AeronUiControllerCaptureResult result =
 		AeronUi_ControllerCapture(ui, "Find Binding...", "Press to identify", &desc, &captured);
@@ -608,8 +590,6 @@ static void TieControllerSettings_FindBindingCapture(TieControllerSettings* sett
 static void TieControllerSettings_ActionsPage(TieControllerSettings* settings, AeronUiContext* ui,
 											  const AeronControllerSnapshot* controller,
 											  float trailing_height_ref) {
-	const AeronControllerKind kind =
-		controller ? TieControllerPage_Kind(settings, controller) : AERON_CONTROLLER_KIND_NONE;
 	static const char* const categories[TIE_INPUT_ACTION_CATEGORY_COUNT] = { "Weapons", "Targets", "Throttle",
 																			 "View",    "Info",    "System",
 																			 "Comms" };
@@ -628,7 +608,7 @@ static void TieControllerSettings_ActionsPage(TieControllerSettings* settings, A
 		if ((int)TieInputActions_Category((TieInputAction)action) != settings->category)
 			continue;
 		TieControllerSettings_DescribeActionBindings(details[count], sizeof details[count], profile,
-													 (TieInputAction)action, controller, kind);
+													 (TieInputAction)action, controller);
 		items[count] = (AeronUiListItem) { .id = (uint64_t)action,
 										   .label = TieInputActions_DisplayName((TieInputAction)action),
 										   .detail = details[count] };
@@ -648,15 +628,13 @@ static size_t TieControllerSettings_BuildActionBindingItems(const TieControllerS
 															const AeronControllerSnapshot* controller,
 															AeronUiListItem* items, char labels[][128],
 															size_t* profile_indices) {
-	const AeronControllerKind kind =
-		controller ? TieControllerPage_Kind(settings, controller) : AERON_CONTROLLER_KIND_NONE;
 	const TieControllerProfile* profile = TieControllerPage_ActiveProfileConst(settings, controller);
 	size_t count = 0;
 	for (size_t index = 0; index < profile->binding_count; ++index) {
 		if (profile->bindings[index].action != settings->selected_action)
 			continue;
 		TieControllerSettings_FormatDigitalSource(labels[count], 128, &profile->bindings[index].source,
-												  controller, kind);
+												  controller);
 		items[count] = (AeronUiListItem) { .id = index, .label = labels[count], .detail = NULL };
 		profile_indices[count] = index;
 		++count;
@@ -666,8 +644,7 @@ static size_t TieControllerSettings_BuildActionBindingItems(const TieControllerS
 
 static void TieControllerSettings_BindingDetailModal(TieControllerSettings* settings, AeronUiContext* ui,
 													 const AeronControllerSnapshot* controller) {
-	const AeronControllerKind kind =
-		controller ? TieControllerPage_Kind(settings, controller) : AERON_CONTROLLER_KIND_NONE;
+	const AeronControllerKind kind = controller ? controller->kind : AERON_CONTROLLER_KIND_NONE;
 	if (!settings->binding_modal_open || settings->selected_action == TIE_INPUT_ACTION_NONE)
 		return;
 	char title[128];
@@ -708,10 +685,10 @@ static void TieControllerSettings_BindingDetailModal(TieControllerSettings* sett
 	AeronUi_Separator(ui);
 
 	const bool has_capacity = profile->binding_count < TIE_CONTROLLER_BINDING_CAP;
-	const AeronUiControllerCaptureDesc desc = { has_capacity && Aeron_ControllerSupportsKind(controller, kind)
+	const AeronUiControllerCaptureDesc desc = { has_capacity && controller->connected
 													? controller->instance_id
 													: 0,
-												AERON_UI_CONTROLLER_CAPTURE_DIGITAL, kind };
+												AERON_UI_CONTROLLER_CAPTURE_DIGITAL };
 	AeronUiControllerInput captured;
 	const AeronUiControllerCaptureResult capture =
 		AeronUi_ControllerCapture(ui, "Add Binding...", "Press to add", &desc, &captured);
@@ -769,15 +746,24 @@ static void TieControllerSettings_RestoreModal(TieControllerSettings* settings, 
 		for (int i = 0; input && i < AERON_CONTROLLER_MAX; ++i) {
 			const AeronControllerSnapshot* d = &input->controllers[i];
 			if (d->connected && d->kind == AERON_CONTROLLER_KIND_GAMEPAD &&
-				!TieControllerMapping_AddModel(&candidate, d, d->kind, settings->error,
-											   sizeof settings->error))
+				!TieControllerMapping_AddModel(&candidate, d, settings->error, sizeof settings->error))
 				ok = false;
 		}
 		if (ok) {
+			for (int i = 0; input && i < AERON_CONTROLLER_MAX; ++i) {
+				const AeronControllerSnapshot* d = &input->controllers[i];
+				int model = d->connected ? TieControllerMapping_FindModel(&candidate, d->guid) : -1;
+				if (model >= 0)
+					candidate.models[model].kind = d->kind;
+			}
 			for (size_t i = 0; i < candidate.count; ++i)
 				TieControllerMapping_ClearProfile(&candidate.models[i].profile, candidate.models[i].kind);
 			settings->draft = candidate;
-			TieControllerMapping_ClearProfile(&settings->unconfigured, settings->layout);
+			const AeronControllerSnapshot* selected_device =
+				TieControllerPage_SelectedController(settings, input);
+			TieControllerMapping_ClearProfile(&settings->unconfigured, selected_device
+																		   ? selected_device->kind
+																		   : AERON_CONTROLLER_KIND_JOYSTICK);
 			settings->dirty = !TieControllerMapping_Optionsequal(&settings->draft, &settings->original);
 			TieControllerMapping_SetOptions(&settings->draft);
 			settings->error[0] = 0;
@@ -805,25 +791,6 @@ void TieControllerSettings_Draw(TieControllerSettings* settings, AeronUiContext*
 		settings->active_instance = active_instance;
 	}
 	if (controller) {
-		const TieControllerProfile* p = TieControllerPage_ActiveProfileConst(settings, controller);
-		bool empty = p->binding_count == 0;
-		for (int i = 0; i < 4; ++i)
-			empty &= p->mapping.axes[i].source < 0;
-		if (empty && controller->kind == AERON_CONTROLLER_KIND_GAMEPAD) {
-			int raw = TieControllerPage_Kind(settings, controller) == AERON_CONTROLLER_KIND_JOYSTICK;
-			if (AeronUi_Toggle(ui, "Raw controls (advanced)", &raw)) {
-				settings->layout = raw ? AERON_CONTROLLER_KIND_JOYSTICK : AERON_CONTROLLER_KIND_GAMEPAD;
-				TieControllerMapping_ClearProfile(&settings->unconfigured, settings->layout);
-				int model = TieControllerMapping_FindModel(&settings->draft, controller->guid);
-				if (model >= 0) {
-					settings->draft.models[model].kind = settings->layout;
-					TieControllerMapping_ClearProfile(&settings->draft.models[model].profile,
-													  settings->layout);
-					TieControllerSettings_ApplyDraft(settings);
-				}
-				TieControllerSettings_ResetDeviceEditState(settings, ui);
-			}
-		}
 		int matches = 0;
 		for (int i = 0; i < AERON_CONTROLLER_MAX; ++i)
 			if (input->controllers[i].connected && !strcmp(input->controllers[i].guid, controller->guid))
@@ -843,21 +810,32 @@ void TieControllerSettings_Draw(TieControllerSettings* settings, AeronUiContext*
 				}
 		}
 		if (AeronUi_Button(ui, "Clear Bindings")) {
+			int model = TieControllerMapping_FindModel(&settings->draft, controller->guid);
+			if (model >= 0)
+				settings->draft.models[model].kind = controller->kind;
 			TieControllerMapping_ClearProfile(TieControllerPage_ActiveProfile(settings, controller),
-											  TieControllerPage_Kind(settings, controller));
+											  controller->kind);
 			TieControllerSettings_ApplyDraft(settings);
 			TieControllerSettings_ResetDeviceEditState(settings, ui);
 		}
 	}
-	TieControllerSettings_ControllerWarning(settings, ui, controller);
-	if (controller && AeronUi_SegmentedSelector(ui, "Controller Page", &settings->page, pages, 2)) {
+	int model = controller ? TieControllerMapping_FindModel(&settings->draft, controller->guid) : -1;
+	bool compatible = !controller || model < 0 || settings->draft.models[model].kind == controller->kind;
+	if (!compatible) {
+		TieControllerSettings_ResetDeviceEditState(settings, ui);
+		AeronUi_Error(ui,
+					  "Saved bindings use a different device type. Clear Bindings to configure this device.");
+	} else
+		TieControllerSettings_ControllerWarning(settings, ui, controller);
+	if (controller && compatible &&
+		AeronUi_SegmentedSelector(ui, "Controller Page", &settings->page, pages, 2)) {
 		AeronUi_CancelControllerCapture(ui);
 		settings->binding_modal_open = 0;
 	}
 	float trailing_height = 143.0f;
 	if (settings->error[0])
 		trailing_height += AeronUi_MeasureHelpHeight(ui, settings->error, 0.0f) + 60.0f;
-	if (controller && settings->page == CONTROLLER_PAGE_AXES) {
+	if (controller && compatible && settings->page == CONTROLLER_PAGE_AXES) {
 		float scroll_height = AeronUi_AvailableHeight(ui) - trailing_height;
 		if (scroll_height < 180.0f)
 			scroll_height = 180.0f;
@@ -865,7 +843,7 @@ void TieControllerSettings_Draw(TieControllerSettings* settings, AeronUiContext*
 			TieControllerSettings_AxisPage(settings, ui, controller);
 			AeronUi_EndScroll(ui);
 		}
-	} else if (controller) {
+	} else if (controller && compatible) {
 		TieControllerSettings_ActionsPage(settings, ui, controller, trailing_height);
 	}
 	if (settings->error[0]) {
