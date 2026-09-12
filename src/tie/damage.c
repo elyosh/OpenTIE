@@ -32,11 +32,11 @@ char** systemstrings;
 #define COLOR_TEXT_PARTIAL 0x4E /* partial system health              */
 #define COLOR_TEXT_HEALTHY 0x52 /* "100%" (fully operational)        */
 
-/* Key codes observed in the binary for this room. */
-#define K_UP 0x01
-#define K_DOWN 0x02
-#define K_RIGHT 0x03
-#define K_LEFT 0x04
+/* Post-FEINPUT arrow codes: left/right/up/down are 1/2/3/4. */
+#define K_LEFT 0x01
+#define K_RIGHT 0x02
+#define K_UP 0x03
+#define K_DOWN 0x04
 #define K_ENTER 0x0D
 #define K_ESC 0x1B
 #define K_SPACE 0x20
@@ -317,17 +317,17 @@ static int damage_poll_once(DamageTask* t) {
 	int redraw = 0;
 
 	switch (key) {
-		case K_UP:
+		case K_LEFT:
 			t->ret_dir = -1;
 			return 1;
-		case K_DOWN:
+		case K_RIGHT:
 			t->ret_dir = 1;
 			return 1;
-		case K_RIGHT:
+		case K_UP:
 		case K_KP8:
 			action = ACT_PREV;
 			break;
-		case K_LEFT:
+		case K_DOWN:
 		case K_KP2:
 			action = ACT_NEXT;
 			break;

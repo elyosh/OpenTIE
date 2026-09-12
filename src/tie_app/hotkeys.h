@@ -11,6 +11,7 @@ typedef struct TieHotkeys {
 } TieHotkeys;
 
 typedef struct TieHotkeysFrame {
+	bool settings_opened;
 	bool menu_open;
 	bool paused;
 } TieHotkeysFrame;

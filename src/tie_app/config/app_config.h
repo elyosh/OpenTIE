@@ -15,9 +15,9 @@
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
 #include "tie_runtime/flight_assets/model_types.h"
-#include "tie_runtime/input/actions.h"
 #include "tie_runtime/input/controller_mapping.h"
 #include "tie_runtime/input/input.h"
+#include "tie_runtime/input/keyboard_mapping.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
@@ -134,6 +134,9 @@ bool TieAppConfig_ResolveLaunch(const TieAppConfig* config, bool has_tie95, bool
 bool TieAppConfig_SetVideo(TieAppConfigState* state, const TieAppVideoConfig* video, char* error,
 						   size_t error_capacity);
 bool TieAppConfig_RestoreVideo(TieAppConfigState* state, char* error, size_t error_capacity);
+bool TieAppConfig_SetKeyboard(TieAppConfigState* state, const TieKeyboardBindings* keyboard, char* error,
+							  size_t capacity);
+bool TieAppConfig_RestoreKeyboard(TieAppConfigState* state, char* error, size_t capacity);
 bool TieAppConfig_SetController(TieAppConfigState* state, const TieControllerOptions* controller, char* error,
 								size_t error_capacity);
 

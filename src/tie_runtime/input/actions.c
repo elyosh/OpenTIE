@@ -274,6 +274,13 @@ static const TieInputActionDef g_action_defs[TIE_INPUT_ACTION_COUNT] = {
 	[TIE_INPUT_ACTION_VIEW_RIGHT_FORWARD] = { "view_right_forward", "Right Forward View",
 											  TIE_INPUT_ACTION_CATEGORY_VIEW,
 											  TIE_INPUT_ACTION_KIND_KEYPRESS_ASCII, '9' },
+	[TIE_INPUT_ACTION_INFO_PREVIOUS_ITEM] = { "info_previous_item", "Previous Item / Scroll Up",
+											  TIE_INPUT_ACTION_CATEGORY_INFORMATION,
+											  TIE_INPUT_ACTION_KIND_KEYPRESS_SCAN, 0x48 },
+	[TIE_INPUT_ACTION_INFO_NEXT_ITEM] = { "info_next_item", "Next Item / Scroll Down",
+										  TIE_INPUT_ACTION_CATEGORY_INFORMATION,
+										  TIE_INPUT_ACTION_KIND_KEYPRESS_SCAN, 0x50 },
+
 };
 
 TieInputAction TieInputActions_FromName(const char* name) {
@@ -315,8 +322,6 @@ const char* TieInputActions_CategoryName(TieInputActionCategory category) {
 
 /* ---------------- Published bindings ---------------- */
 
-static TieKeyboardBindings g_bindings;
-static bool g_keyboard_held[AERON_KEY_COUNT];
 static uint16_t g_action_hold_count[TIE_INPUT_ACTION_COUNT];
 
 uint16_t TieInputActions_VirtualButtons;
@@ -353,33 +358,18 @@ static void TieActions_ApplyAction(TieInputAction action, bool pressed) {
 	}
 }
 
-static void TieActions_Dispatch(TieInputAction action, bool* held, bool pressed) {
-	if (*held == pressed)
-		return;
-	*held = pressed;
-	TieActions_ApplyAction(action, pressed);
-}
-
-void TieInputActions_InstallKeyboard(const TieKeyboardBindings* bindings) {
-	memset(&g_bindings, 0, sizeof g_bindings);
-	memset(g_keyboard_held, 0, sizeof g_keyboard_held);
-	memset(g_action_hold_count, 0, sizeof g_action_hold_count);
-	TieInputActions_VirtualButtons = 0;
-	if (bindings)
-		g_bindings = *bindings;
+uint16_t TieInputActions_ButtonBit(TieInputAction action) {
+	if (action <= TIE_INPUT_ACTION_NONE || action >= TIE_INPUT_ACTION_COUNT ||
+		g_action_defs[action].kind != TIE_INPUT_ACTION_KIND_BUTTON_BIT)
+		return 0;
+	return (uint16_t)(1u << (g_action_defs[action].param & 0xF));
 }
 
 void TieInputActions_DispatchController(TieInputAction action, bool pressed) {
 	TieActions_ApplyAction(action, pressed);
 }
 
-bool TieInputActions_DispatchKeyboard(int scancode, bool pressed) {
-	TieInputAction action;
-	if (scancode < 0 || scancode >= AERON_KEY_COUNT)
-		return false;
-	action = g_bindings.keyboard[scancode];
-	if (action == TIE_INPUT_ACTION_NONE)
-		return false;
-	TieActions_Dispatch(action, &g_keyboard_held[scancode], pressed);
-	return true;
+void TieInputActions_DispatchKeyboard(TieInputAction action, bool pressed, bool repeat) {
+	if (!repeat || (action != TIE_INPUT_ACTION_PAUSE && !TieInputActions_ButtonBit(action)))
+		TieActions_ApplyAction(action, pressed);
 }

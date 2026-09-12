@@ -190,23 +190,23 @@ static int msgroom_poll_once(MsgRoomTask* t) {
 	int16_t newtop = t->cur_top_idx;
 
 	switch (k) {
-		case 1: /* Up arrow: exit prev */
+		case KEY_LEFT_ARROW: /* Previous information room */
 			t->exit_dir = -1;
 			exited = 1;
 			handled = 1;
 			break;
-		case 2: /* Down arrow: exit next */
+		case KEY_RIGHT_ARROW: /* Next information room */
 			t->exit_dir = 1;
 			exited = 1;
 			handled = 1;
 			break;
-		case 3:    /* Right arrow */
+		case KEY_UP_ARROW:
 		case 0x38: /* keypad '8' */
 			newtop = msgroom_scrollmsgs(t->cur_top_idx, -1);
 			handled = 1;
 			redraw = 1;
 			break;
-		case 4:    /* Left arrow */
+		case KEY_DOWN_ARROW:
 		case 0x32: /* keypad '2' */
 			newtop = msgroom_scrollmsgs(t->cur_top_idx, 1);
 			handled = 1;

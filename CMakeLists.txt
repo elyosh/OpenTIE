@@ -337,6 +337,7 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/presentation/classic_layer.h
     src/tie_runtime/presentation/pilot_name.c
     src/tie_runtime/presentation/pilot_name.h
+    src/tie_runtime/input/keyboard_mapping.c
     src/tie_runtime/input/actions.c
     src/tie_runtime/input/actions.h
     src/tie_runtime/input/input.c

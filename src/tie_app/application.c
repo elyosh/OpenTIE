@@ -154,6 +154,14 @@ int TieApplication_Run(const TieLaunchOptions* launch) {
 		return 1;
 	}
 
+#if defined(__APPLE__)
+	TieKeyboardPlatform keyboard_platform = TIE_KEYBOARD_PLATFORM_MACOS;
+#elif defined(_WIN32)
+	TieKeyboardPlatform keyboard_platform = TIE_KEYBOARD_PLATFORM_WINDOWS;
+#else
+	TieKeyboardPlatform keyboard_platform = TIE_KEYBOARD_PLATFORM_OTHER;
+#endif
+	TieKeyboardMapping_SetPolicy(keyboard_platform, Aeron_DebugUiAvailable() != 0);
 	TieAppConfigState app_config = { 0 };
 	char config_error[512];
 	if (!TieAppConfig_Load(vfs, &app_config, config_error, sizeof config_error)) {
@@ -162,8 +170,9 @@ int TieApplication_Run(const TieLaunchOptions* launch) {
 		if (app_config.controllers_reset)
 			Aeron_LogWarn("tie.config",
 						  "Custom controller bindings were reset for configuration v5. Gamepads receive "
-						  "shipped defaults; configure HOTAS in Settings. Keyboard bindings are unchanged.");
-		TieInputActions_InstallKeyboard(&app_config.requested.keyboard);
+						  "shipped defaults; configure HOTAS in Settings. Keyboard bindings are migrated to "
+						  "configuration v6.");
+		TieKeyboardMapping_Install(&app_config.requested.keyboard);
 		TieControllerMapping_SetOptions(&app_config.requested.controller);
 		if (!Aeron_SetFullscreen(app_config.requested.video.fullscreen))
 			Aeron_LogWarn("tie.config", "could not apply fullscreen setting");

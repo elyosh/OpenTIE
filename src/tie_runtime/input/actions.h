@@ -112,6 +112,9 @@ typedef enum TieInputAction {
 	TIE_INPUT_ACTION_VIEW_FORWARD,        /* Num 8 */
 	TIE_INPUT_ACTION_VIEW_RIGHT_FORWARD,  /* Num 9 */
 
+	TIE_INPUT_ACTION_INFO_PREVIOUS_ITEM, /* Up — previous item / scroll up */
+	TIE_INPUT_ACTION_INFO_NEXT_ITEM,     /* Down — next item / scroll down */
+
 	TIE_INPUT_ACTION_COUNT
 } TieInputAction;
 
@@ -126,19 +129,15 @@ typedef enum TieInputActionCategory {
 	TIE_INPUT_ACTION_CATEGORY_COUNT
 } TieInputActionCategory;
 
-typedef struct TieKeyboardBindings {
-	TieInputAction keyboard[AERON_KEY_COUNT];
-} TieKeyboardBindings;
-
 TieInputAction TieInputActions_FromName(const char* name);
 const char* TieInputActions_ToName(TieInputAction action);
 const char* TieInputActions_DisplayName(TieInputAction action);
 TieInputActionCategory TieInputActions_Category(TieInputAction action);
 const char* TieInputActions_CategoryName(TieInputActionCategory category);
 
-void TieInputActions_InstallKeyboard(const TieKeyboardBindings* bindings);
 void TieInputActions_DispatchController(TieInputAction action, bool pressed);
-bool TieInputActions_DispatchKeyboard(int scancode, bool pressed);
+void TieInputActions_DispatchKeyboard(TieInputAction action, bool pressed, bool repeat);
+uint16_t TieInputActions_ButtonBit(TieInputAction action);
 
 extern uint16_t TieInputActions_VirtualButtons;
 

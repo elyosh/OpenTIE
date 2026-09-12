@@ -13,6 +13,7 @@
 #include "tie_app/settings/controller_page.h"
 #include "tie_app/settings/flight_options.h"
 #include "tie_app/settings/inflight_options.h"
+#include "tie_app/settings/keyboard_page.h"
 #include "tie_app/settings/launch_options.h"
 #include "tie_app/settings/video_options.h"
 #include "tie_app/setup/installation_ui.h"
@@ -32,6 +33,14 @@ typedef struct TieMidiBackendChoice {
 	TieMidiBackendKind kind;
 } TieMidiBackendChoice;
 
+enum {
+	SETTINGS_PAGE_GAME,
+	SETTINGS_PAGE_VIDEO,
+	SETTINGS_PAGE_AUDIO,
+	SETTINGS_PAGE_CONTROLLER,
+	SETTINGS_PAGE_KEYBOARD,
+};
+
 static struct {
 	AeronUiContext* ui;
 	TieAppConfigState* config;
@@ -40,12 +49,14 @@ static struct {
 	bool has_tie98;
 	bool open;
 	bool captures_controller;
+	bool captures_keyboard;
 	int exit_confirmation_open;
 	int page;
 	char error[512];
 	AeronUiFilePicker* path_picker;
 	TiePathPickerTarget path_picker_target;
 	TieControllerSettings controller;
+	TieKeyboardSettings keyboard;
 } g_settings;
 
 static bool TieSettings_RequestSelectedFlightProfile(const TieAppLaunchOptions* launch,
@@ -254,6 +265,7 @@ bool TieSettings_Init(TieUi* ui, TieAppConfigState* config, bool has_tie95, bool
 void TieSettings_Shutdown(void) {
 	if (g_settings.open) {
 		TieControllerSettings_CancelCapture(&g_settings.controller, g_settings.ui);
+		TieKeyboardSettings_CancelCapture(&g_settings.keyboard, g_settings.ui);
 		TieControllerMapping_Resume();
 	}
 	TieVideoOptions_Shutdown();
@@ -268,6 +280,7 @@ void TieSettings_Shutdown(void) {
 bool TieSettings_Available(void) { return g_settings.available; }
 bool TieSettings_Open(void) { return g_settings.open; }
 bool TieSettings_CapturesController(void) { return g_settings.open && g_settings.captures_controller; }
+bool TieSettings_CapturesKeyboard(void) { return g_settings.open && g_settings.captures_keyboard; }
 
 bool TieSettings_Flush(char* error, size_t error_capacity) {
 	if (!TieVideoOptions_Flush(error, error_capacity) || !TieFlightOptions_Flush(error, error_capacity) ||
@@ -275,7 +288,8 @@ bool TieSettings_Flush(char* error, size_t error_capacity) {
 		!TieLaunchOptions_Flush(error, error_capacity))
 		return false;
 	return !g_settings.open ||
-		   TieControllerSettings_Commit(&g_settings.controller, g_settings.config, error, error_capacity);
+		   (TieControllerSettings_Commit(&g_settings.controller, g_settings.config, error, error_capacity) &&
+			TieKeyboardSettings_Commit(&g_settings.keyboard, g_settings.config, error, error_capacity));
 }
 
 static bool TieSettings_SettingsClose(void) {
@@ -288,8 +302,10 @@ static bool TieSettings_SettingsClose(void) {
 		return false;
 	}
 	TieControllerSettings_CancelCapture(&g_settings.controller, g_settings.ui);
+	TieKeyboardSettings_CancelCapture(&g_settings.keyboard, g_settings.ui);
 	AeronUiFilePicker_Cancel(g_settings.path_picker);
 	g_settings.captures_controller = false;
+	g_settings.captures_keyboard = false;
 	g_settings.exit_confirmation_open = 0;
 	g_settings.open = false;
 	TieControllerMapping_Resume();
@@ -301,8 +317,11 @@ void TieSettings_Show(void) {
 		return;
 	g_settings.open = true;
 	g_settings.captures_controller = false;
+	g_settings.captures_keyboard = false;
 	g_settings.error[0] = '\0';
 	TieControllerSettings_Open(&g_settings.controller, g_settings.config);
+	TieKeyboardSettings_Open(&g_settings.keyboard, g_settings.config);
+	TieInput_BlockKeyboard();
 	TieControllerMapping_Suspend();
 }
 
@@ -830,7 +849,7 @@ static void TieSettings_DrawExitConfirmation(AeronUiContext* ui) {
 }
 
 void TieSettings_Frame(const AeronInputSnapshot* input, float dt_seconds) {
-	static const char* const pages[] = { "Game", "Video", "Audio", "Controller" };
+	static const char* const pages[] = { "Game", "Video", "Audio", "Controller", "Keyboard" };
 	if (!g_settings.available || !g_settings.open || !input)
 		return;
 	AeronUi_BeginFrame(g_settings.ui, &(AeronUiFrameDesc) {
@@ -841,10 +860,15 @@ void TieSettings_Frame(const AeronInputSnapshot* input, float dt_seconds) {
 								   &g_settings.config->gamepad_defaults);
 	AeronUiWindowDesc window = { .width_ref = 980.0f, .height_ref = 1000.0f, .centered = 1 };
 	if (AeronUi_BeginWindow(g_settings.ui, "OpenTIE SETTINGS", &window)) {
-		AeronUi_BeginTabBar(g_settings.ui, "pages", pages, 4, &g_settings.page);
-		if (g_settings.page == 0)
+		const int previous_page = g_settings.page;
+		AeronUi_BeginTabBar(g_settings.ui, "pages", pages, sizeof pages / sizeof pages[0], &g_settings.page);
+		if (previous_page != g_settings.page) {
+			TieControllerSettings_CancelCapture(&g_settings.controller, g_settings.ui);
+			TieKeyboardSettings_CancelCapture(&g_settings.keyboard, g_settings.ui);
+		}
+		if (g_settings.page == SETTINGS_PAGE_GAME)
 			TieSettings_GamePage(g_settings.ui);
-		else if (g_settings.page == 1) {
+		else if (g_settings.page == SETTINGS_PAGE_VIDEO) {
 			/* Keep the tab ending, separator and Close row outside the scroll view. */
 			const float footer_reserve = 83.0f;
 			const float scroll_height = AeronUi_AvailableHeight(g_settings.ui) - footer_reserve;
@@ -854,15 +878,22 @@ void TieSettings_Frame(const AeronInputSnapshot* input, float dt_seconds) {
 					AeronUi_Error(g_settings.ui, g_settings.error);
 				AeronUi_EndScroll(g_settings.ui);
 			}
-		} else if (g_settings.page == 2)
+		} else if (g_settings.page == SETTINGS_PAGE_AUDIO)
 			TieSettings_AudioPage(g_settings.ui);
-		else
+		else if (g_settings.page == SETTINGS_PAGE_CONTROLLER) {
+			AeronUi_PushId(g_settings.ui, SETTINGS_PAGE_CONTROLLER);
 			TieControllerSettings_Draw(&g_settings.controller, g_settings.ui, input);
+			AeronUi_PopId(g_settings.ui);
+		} else if (g_settings.page == SETTINGS_PAGE_KEYBOARD) {
+			AeronUi_PushId(g_settings.ui, SETTINGS_PAGE_KEYBOARD);
+			TieKeyboardSettings_Draw(&g_settings.keyboard, g_settings.ui);
+			AeronUi_PopId(g_settings.ui);
+		}
 		AeronUi_EndTabBar(g_settings.ui);
-		if (g_settings.page != 1 && g_settings.error[0])
+		if (g_settings.page != SETTINGS_PAGE_VIDEO && g_settings.error[0])
 			AeronUi_Error(g_settings.ui, g_settings.error);
 		AeronUi_Separator(g_settings.ui);
-		if (g_settings.page == 0) {
+		if (g_settings.page == SETTINGS_PAGE_GAME) {
 			AeronUi_BeginColumns(g_settings.ui, 2, NULL);
 			if (AeronUi_Button(g_settings.ui, "Exit Game"))
 				g_settings.exit_confirmation_open = 1;
@@ -873,15 +904,24 @@ void TieSettings_Frame(const AeronInputSnapshot* input, float dt_seconds) {
 		} else if (AeronUi_Button(g_settings.ui, "Close")) {
 			(void)TieSettings_SettingsClose();
 		}
-		if (g_settings.open && g_settings.page == 3)
+		if (g_settings.open && g_settings.page == SETTINGS_PAGE_CONTROLLER) {
+			AeronUi_PushId(g_settings.ui, SETTINGS_PAGE_CONTROLLER);
 			TieControllerSettings_DrawModals(&g_settings.controller, g_settings.ui, input, g_settings.config);
+			AeronUi_PopId(g_settings.ui);
+		}
+		if (g_settings.open && g_settings.page == SETTINGS_PAGE_KEYBOARD) {
+			AeronUi_PushId(g_settings.ui, SETTINGS_PAGE_KEYBOARD);
+			TieKeyboardSettings_DrawModals(&g_settings.keyboard, g_settings.ui, g_settings.config);
+			AeronUi_PopId(g_settings.ui);
+		}
 		if (g_settings.open && g_settings.exit_confirmation_open)
 			TieSettings_DrawExitConfirmation(g_settings.ui);
 		AeronUi_EndWindow(g_settings.ui);
 	}
 	TieSettings_DrawPathPicker(g_settings.ui);
 	AeronUiOutput out = AeronUi_EndFrame(g_settings.ui);
-	g_settings.captures_controller = out.capture_all != 0;
+	g_settings.captures_keyboard = AeronUi_KeyboardCaptureActive(g_settings.ui) != 0;
+	g_settings.captures_controller = out.capture_all != 0 && !g_settings.captures_keyboard;
 	if (out.cancel_pressed)
 		(void)TieSettings_SettingsClose();
 	AeronUi_Submit(g_settings.ui);

@@ -23,10 +23,10 @@
 #define COLOR_TEXT_DEFAULT 0x52
 
 /* Keyboard codes (post-remap). Arrows 1..4 ordering is UP/DOWN/RIGHT/LEFT. */
-#define K_UP 0x01
-#define K_DOWN 0x02
-#define K_RIGHT 0x03
-#define K_LEFT 0x04
+#define K_LEFT 0x01
+#define K_RIGHT 0x02
+#define K_UP 0x03
+#define K_DOWN 0x04
 #define K_ENTER 0x0D
 #define K_ESC 0x1B
 #define K_SPACE 0x20
@@ -99,17 +99,17 @@ static int wingman_poll_once(WingmanTask* t) {
 	const uint16_t key = (uint16_t)inputkey;
 	int redraw = 0;
 
-	if (key == K_UP) {
+	if (key == K_LEFT) {
 		t->ret_delta = -1;
 		return 1;
-	} else if (key == K_DOWN) {
+	} else if (key == K_RIGHT) {
 		t->ret_delta = 1;
 		return 1;
-	} else if (key == K_RIGHT || key == K_KP8) {
+	} else if (key == K_UP || key == K_KP8) {
 		/* Move up (wrap 0 <-> 9). */
 		t->selected_idx = (int16_t)(t->selected_idx ? t->selected_idx - 1 : NUM_WINGMAN_CMDS - 1);
 		redraw = 1;
-	} else if (key == K_LEFT || key == K_KP2) {
+	} else if (key == K_DOWN || key == K_KP2) {
 		/* Move down (wrap). */
 		t->selected_idx = (int16_t)((t->selected_idx + 1) % NUM_WINGMAN_CMDS);
 		redraw = 1;

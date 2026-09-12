@@ -43,6 +43,7 @@ uint32_t TieInput_ReadThrottleCommand(bool eligible);
 void TieInput_ResetThrottle(void);
 void TieInput_EnqueueDosKey(int16_t key);
 void TieInput_EnqueueKey(int16_t key);
+void TieInput_ClearKeys(void);
 int TieInput_KeyPending(void);
 int TieInput_ReadKey(void);
 int TieInput_ModifierKeys(void);
@@ -62,5 +63,7 @@ void TieInput_CursorFramebufferPosition(float* x, float* y);
 void TieInput_SetFramebufferSize(int width, int height);
 void TieInput_SuppressKey(int aeron_key);
 void TieInput_BeginFrame(int32_t delta_us);
+void TieInput_UpdateKeyboard(const AeronInputSnapshot* input, bool blocked);
+void TieInput_BlockKeyboard(void);
 
 #endif

@@ -1,5 +1,6 @@
 #include "tie_app/config/app_config.h"
 #include "tie_app/config/controller_config.h"
+#include "tie_app/config/keyboard_config.h"
 
 #include "aeron/log.h"
 
@@ -122,8 +123,8 @@ static bool TieAppConfig_CheckVersion(const AeronConfigFile* document, char* err
 	if (AeronConfigNode_Type(root) != AERON_CONFIG_MAP)
 		return TieAppConfig_ConfigError(error, capacity, "configuration root must be a mapping");
 	version = AeronConfigNode_MapGet(root, "version");
-	if (!version || AeronConfigNode_Type(version) != AERON_CONFIG_INT || AeronConfigNode_Int(version, 0) != 5)
-		return TieAppConfig_ConfigError(error, capacity, "configuration version must be integer 5");
+	if (!version || AeronConfigNode_Type(version) != AERON_CONFIG_INT || AeronConfigNode_Int(version, 0) != 6)
+		return TieAppConfig_ConfigError(error, capacity, "configuration version must be integer 6");
 	return true;
 }
 
@@ -206,32 +207,6 @@ static bool TieAppConfig_ValidateSchemaKeys(const AeronConfigFile* document, boo
 				  "contrib_cap", "training_headlight");
 	VALIDATE_KEYS(document, "point_lights.training_headlight", warn, "enabled", "color", "intensity",
 				  "range_m", "nose_offset_m");
-	return true;
-}
-
-static bool TieAppConfig_ParseBindings(const AeronConfigFile* document, TieKeyboardBindings* keyboard,
-									   char* error, size_t capacity) {
-	memset(keyboard, 0, sizeof *keyboard);
-	{
-		const AeronConfigNode* map =
-			TieAppConfig_RequiredNode(document, "input.keyboard", AERON_CONFIG_MAP, error, capacity);
-		size_t index;
-		if (!map)
-			return false;
-		for (index = 0; index < AeronConfigNode_MapCount(map); ++index) {
-			const char* name = AeronConfigNode_MapKeyAt(map, index);
-			const char* key = AeronConfigNode_String(AeronConfigNode_MapValueAt(map, index), NULL);
-			TieInputAction action = TieInputActions_FromName(name);
-			AeronKey aeron_key;
-			if (action == TIE_INPUT_ACTION_NONE || !key)
-				return TieAppConfig_ConfigError(error, capacity, "invalid keyboard binding '%s'", name);
-			if (!AeronKey_FromName(key, &aeron_key))
-				return TieAppConfig_ConfigError(error, capacity, "unknown keyboard key '%s'", key);
-			if (keyboard->keyboard[aeron_key] != TIE_INPUT_ACTION_NONE)
-				return TieAppConfig_ConfigError(error, capacity, "keyboard key '%s' is bound twice", key);
-			keyboard->keyboard[aeron_key] = action;
-		}
-	}
 	return true;
 }
 
@@ -554,7 +529,7 @@ static bool TieAppConfig_ParseComplete(const AeronConfigFile* document,
 							   error, capacity))
 		return false;
 	const bool parsed = TieControllerConfig_Read(document, &out->controller, error, capacity) &&
-						TieAppConfig_ParseBindings(document, &out->keyboard, error, capacity) &&
+						TieKeyboardConfig_Read(document, &out->keyboard, error, capacity) &&
 						TieAppConfig_ParseVideo(document, &out->video, error, capacity) &&
 						TieAppConfig_ParseRender(document, baseline_ssao, baseline_shadows, baseline_tonemap,
 												 &out->render, error, capacity) &&
@@ -592,6 +567,7 @@ bool TieAppConfig_Load(AeronVfs* vfs, TieAppConfigState* state, char* error, siz
 	TieAppConfig requested_value;
 	bool success = false;
 	bool reset_controllers = false;
+	bool migrated_keyboard = false;
 	TieControllerProfile gamepad_defaults;
 
 	if (!vfs || !state)
@@ -629,6 +605,11 @@ bool TieAppConfig_Load(AeronVfs* vfs, TieAppConfigState* state, char* error, siz
 			}
 			reset_controllers = true;
 		}
+		if (AeronConfigFile_GetInt(user, "version", 0) == 5) {
+			if (!TieKeyboardConfig_Migrate(user, &defaults_value.keyboard, error, capacity))
+				goto done;
+			migrated_keyboard = true;
+		}
 		if (AeronConfigFile_Has(user, "input.gamepad_defaults")) {
 			Aeron_LogWarn("tie.config", "input.gamepad_defaults is shipped-only; ignoring user override");
 			if (!AeronConfigFile_Remove(user, "input.gamepad_defaults", &aeron_error)) {
@@ -641,7 +622,7 @@ bool TieAppConfig_Load(AeronVfs* vfs, TieAppConfigState* state, char* error, siz
 			goto done;
 	} else {
 		if (!AeronConfigFile_CreateMap(AERON_VFS_ROOT_USER, "config.yaml", &user, &aeron_error) ||
-			!AeronConfigFile_SetInt(user, "version", 5, &aeron_error)) {
+			!AeronConfigFile_SetInt(user, "version", 6, &aeron_error)) {
 			TieAppConfig_LogAeronError(&aeron_error, error, capacity);
 			goto done;
 		}
@@ -650,7 +631,8 @@ bool TieAppConfig_Load(AeronVfs* vfs, TieAppConfigState* state, char* error, siz
 		TieAppConfig_LogAeronError(&aeron_error, error, capacity);
 		goto done;
 	}
-	if (!TieAppConfig_ParseComplete(merged, &baseline_ssao, &baseline_shadows, &baseline_tonemap,
+	if (!TieKeyboardConfig_Resolve(&defaults_value.keyboard, user, merged, error, capacity) ||
+		!TieAppConfig_ParseComplete(merged, &baseline_ssao, &baseline_shadows, &baseline_tonemap,
 									&requested_value, error, capacity))
 		goto done;
 	if (!TieControllerConfig_ReadProfile(shipped, "input.gamepad_defaults", AERON_CONTROLLER_KIND_GAMEPAD,
@@ -660,7 +642,7 @@ bool TieAppConfig_Load(AeronVfs* vfs, TieAppConfigState* state, char* error, siz
 	state->defaults = defaults_value;
 	state->gamepad_defaults = gamepad_defaults;
 	state->controllers_reset = reset_controllers;
-	state->dirty = reset_controllers;
+	state->dirty = reset_controllers || migrated_keyboard;
 	state->requested = requested_value;
 	state->shipped_document = shipped;
 	state->user_document = user;
@@ -695,7 +677,8 @@ static bool TieAppConfig_ReplaceUserCandidate(TieAppConfigState* state, AeronCon
 	TieAppConfig requested;
 	if (!AeronConfigFile_Overlay(state->shipped_document, candidate, &merged, &aeron_error))
 		return TieAppConfig_LogAeronError(&aeron_error, error, capacity);
-	if (!TieAppConfig_ParseComplete(merged, &state->defaults.render.ssao, &state->defaults.render.shadows,
+	if (!TieKeyboardConfig_Resolve(&state->defaults.keyboard, candidate, merged, error, capacity) ||
+		!TieAppConfig_ParseComplete(merged, &state->defaults.render.ssao, &state->defaults.render.shadows,
 									&state->defaults.render.tonemap, &requested, error, capacity)) {
 		AeronConfigFile_Destroy(merged);
 		return false;
@@ -1121,6 +1104,22 @@ bool TieAppConfig_SetController(TieAppConfigState* state, const TieControllerOpt
 	return true;
 }
 
+bool TieAppConfig_SetKeyboard(TieAppConfigState* state, const TieKeyboardBindings* keyboard, char* error,
+							  size_t capacity) {
+	AeronConfigFile* candidate = NULL;
+	AeronConfigError detail = { 0 };
+	if (!AeronConfigFile_Clone(state->user_document, &candidate, &detail) ||
+		!TieKeyboardConfig_Write(candidate, keyboard, &detail)) {
+		AeronConfigFile_Destroy(candidate);
+		return TieAppConfig_LogAeronError(&detail, error, capacity);
+	}
+	if (!TieAppConfig_ReplaceUserCandidate(state, candidate, error, capacity)) {
+		AeronConfigFile_Destroy(candidate);
+		return false;
+	}
+	return true;
+}
+
 static bool TieAppConfig_RestoreUserPaths(TieAppConfigState* state, const char* const* paths,
 										  size_t path_count, char* error, size_t capacity) {
 	AeronConfigFile* candidate = NULL;
@@ -1141,6 +1140,11 @@ static bool TieAppConfig_RestoreUserPaths(TieAppConfigState* state, const char* 
 		return false;
 	}
 	return true;
+}
+
+bool TieAppConfig_RestoreKeyboard(TieAppConfigState* state, char* error, size_t capacity) {
+	const char* paths[] = { "input.keyboard" };
+	return TieAppConfig_RestoreUserPaths(state, paths, 1, error, capacity);
 }
 
 static const char* TieAppConfig_ShadowFitModeName(uint32_t mode) {

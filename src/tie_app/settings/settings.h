@@ -4,7 +4,8 @@
  * A modal overlay above the game layers. Live settings are applied through
  * typed option owners; the flight engine is queued for the next flight, and
  * the remaining launch-only settings stay pending until restart.
- * The game's Esc options flow opens the menu; gamepad Start opens it outside flight. Esc closes it.
+ * Escape opens the menu in flight; outside flight it belongs to the frontend.
+ * Gamepad Start opens this menu outside flight. Escape closes an open menu.
  * While open, the frame loop skips the host input pump and TieRuntime_Tick and pauses audio.
  */
 #ifndef TIE_APP_SETTINGS_H
@@ -29,10 +30,12 @@ bool TieSettings_Available(void);
 bool TieSettings_Open(void);
 /* Nonzero while AeronUi is capturing a controller control for rebinding. */
 bool TieSettings_CapturesController(void);
+/* Includes the keyboard capture completion/cancellation frame. */
+bool TieSettings_CapturesKeyboard(void);
 void TieSettings_Show(void);
 void TieSettings_Toggle(void);
 
-/* Flushes option owners and commits an open controller draft. */
+/* Flushes option owners and commits open binding drafts. */
 bool TieSettings_Flush(char* error, size_t error_capacity);
 
 /* Builds and submits the menu UI for this frame. Call after

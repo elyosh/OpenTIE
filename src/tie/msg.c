@@ -199,7 +199,11 @@ void msg_messageprintf(MsgTemplate template_id) {
 	entry.display_count = 0;
 
 	/* Walk the template string, expanding '*' and '&N' opcodes into body[]. */
-	const uint8_t* tpl = (const uint8_t*)messagetable[template_id];
+	const uint8_t* message_template =
+		template_id == MSG_PAUSED
+			? (const uint8_t*)"\006Mission paused. Press your pause key or button to continue."
+			: (const uint8_t*)messagetable[template_id];
+	const uint8_t* tpl = message_template;
 	uint16_t body_len = 0;
 	uint16_t arg_idx = 0;
 
@@ -251,7 +255,7 @@ void msg_messageprintf(MsgTemplate template_id) {
 		entry.body[body_len] = 0;
 
 	/* msg_type from raw template[0] byte, clamped >=8 -> 6. */
-	const uint8_t type_raw = (uint8_t)messagetable[template_id][0];
+	const uint8_t type_raw = message_template[0];
 	entry.msg_type = (type_raw >= 8) ? 6 : type_raw;
 
 	const int16_t new_type = entry.msg_type;

@@ -187,9 +187,9 @@ void TieControllerSettings_Open(TieControllerSettings* settings, const TieAppCon
 	memset(settings, 0, sizeof *settings);
 	settings->original = config->requested.controller;
 	settings->draft = settings->original;
-	settings->action_selected = SIZE_MAX;
-	settings->binding_selected = SIZE_MAX;
-	settings->selected_action = TIE_INPUT_ACTION_NONE;
+	settings->editor.action_selected = SIZE_MAX;
+	settings->editor.binding_selected = SIZE_MAX;
+	settings->editor.selected_action = TIE_INPUT_ACTION_NONE;
 	settings->pending_axis = TIE_INPUT_AXIS_YAW;
 	TieControllerMapping_ClearProfile(&settings->unconfigured, AERON_CONTROLLER_KIND_JOYSTICK);
 }
@@ -200,16 +200,16 @@ void TieControllerSettings_CancelCapture(TieControllerSettings* settings, AeronU
 	if (settings) {
 		settings->axis_conflict_open = 0;
 		settings->binding_conflict_open = 0;
-		settings->binding_modal_open = 0;
+		settings->editor.binding_modal_open = 0;
 	}
 }
 
 static void TieControllerSettings_ResetDeviceEditState(TieControllerSettings* settings, AeronUiContext* ui) {
 	AeronUi_CancelControllerCapture(ui);
-	settings->action_selected = SIZE_MAX;
-	settings->binding_selected = SIZE_MAX;
-	settings->selected_action = TIE_INPUT_ACTION_NONE;
-	settings->binding_modal_open = 0;
+	settings->editor.action_selected = SIZE_MAX;
+	settings->editor.binding_selected = SIZE_MAX;
+	settings->editor.selected_action = TIE_INPUT_ACTION_NONE;
+	settings->editor.binding_modal_open = 0;
 	settings->axis_conflict_open = 0;
 	settings->binding_conflict_open = 0;
 }
@@ -511,42 +511,18 @@ static void TieControllerSettings_RemoveBinding(TieControllerProfile* profile, s
 	--profile->binding_count;
 }
 
-static size_t TieControllerSettings_ActionListPosition(TieInputActionCategory category,
-													   TieInputAction action) {
-	size_t position = 0;
-	for (int candidate = TIE_INPUT_ACTION_NONE + 1; candidate < TIE_INPUT_ACTION_COUNT; ++candidate) {
-		if (TieInputActions_Category((TieInputAction)candidate) != category)
-			continue;
-		if (candidate == (int)action)
-			return position;
-		++position;
-	}
-	return SIZE_MAX;
-}
-
-static void TieControllerSettings_SelectAction(TieControllerSettings* settings, TieInputAction action,
-											   bool open_modal) {
-	settings->selected_action = action;
-	settings->category = TieInputActions_Category(action);
-	settings->action_selected =
-		TieControllerSettings_ActionListPosition((TieInputActionCategory)settings->category, action);
-	settings->binding_selected = SIZE_MAX;
-	if (open_modal)
-		settings->binding_modal_open = 1;
-}
-
 static void TieControllerSettings_AddCapturedBinding(TieControllerSettings* settings,
 													 const AeronControllerSnapshot* controller,
 													 const AeronControllerDigitalSource* source) {
 	TieControllerProfile* profile = TieControllerPage_ActiveProfile(settings, controller);
 	const size_t existing = TieControllerSettings_FindSourceBinding(profile, source);
 	if (existing != SIZE_MAX) {
-		if (profile->bindings[existing].action == settings->selected_action) {
+		if (profile->bindings[existing].action == settings->editor.selected_action) {
 			size_t position = 0;
 			for (size_t index = 0; index < existing; ++index)
-				if (profile->bindings[index].action == settings->selected_action)
+				if (profile->bindings[index].action == settings->editor.selected_action)
 					++position;
-			settings->binding_selected = position;
+			settings->editor.binding_selected = position;
 			return;
 		}
 		settings->pending_digital = *source;
@@ -560,8 +536,8 @@ static void TieControllerSettings_AddCapturedBinding(TieControllerSettings* sett
 		return;
 	}
 	profile->bindings[profile->binding_count++] =
-		(TieInputActionBinding) { .source = *source, .action = settings->selected_action };
-	settings->binding_selected = SIZE_MAX;
+		(TieInputActionBinding) { .source = *source, .action = settings->editor.selected_action };
+	settings->editor.binding_selected = SIZE_MAX;
 	TieControllerSettings_ApplyDraft(settings);
 }
 
@@ -583,21 +559,14 @@ static void TieControllerSettings_FindBindingCapture(TieControllerSettings* sett
 		snprintf(settings->error, sizeof settings->error, "This control is not bound.");
 		return;
 	}
-	TieControllerSettings_SelectAction(settings, profile->bindings[binding].action, false);
+	TieBindingsEditor_Select(&settings->editor, profile->bindings[binding].action, false);
 	settings->error[0] = '\0';
 }
 
 static void TieControllerSettings_ActionsPage(TieControllerSettings* settings, AeronUiContext* ui,
 											  const AeronControllerSnapshot* controller,
 											  float trailing_height_ref) {
-	static const char* const categories[TIE_INPUT_ACTION_CATEGORY_COUNT] = { "Weapons", "Targets", "Throttle",
-																			 "View",    "Info",    "System",
-																			 "Comms" };
-	if (AeronUi_SegmentedSelector(ui, "Action Category", &settings->category, categories,
-								  TIE_INPUT_ACTION_CATEGORY_COUNT)) {
-		settings->action_selected = SIZE_MAX;
-		settings->selected_action = TIE_INPUT_ACTION_NONE;
-	}
+	TieBindingsEditor_Category(&settings->editor, ui);
 	TieControllerSettings_FindBindingCapture(settings, ui, controller);
 	AeronUi_Spacer(ui, 8.0f);
 	AeronUiListItem items[TIE_INPUT_ACTION_COUNT - 1];
@@ -605,7 +574,7 @@ static void TieControllerSettings_ActionsPage(TieControllerSettings* settings, A
 	size_t count = 0;
 	const TieControllerProfile* profile = TieControllerPage_ActiveProfileConst(settings, controller);
 	for (int action = TIE_INPUT_ACTION_NONE + 1; action < TIE_INPUT_ACTION_COUNT; ++action) {
-		if ((int)TieInputActions_Category((TieInputAction)action) != settings->category)
+		if ((int)TieInputActions_Category((TieInputAction)action) != settings->editor.category)
 			continue;
 		TieControllerSettings_DescribeActionBindings(details[count], sizeof details[count], profile,
 													 (TieInputAction)action, controller);
@@ -614,14 +583,7 @@ static void TieControllerSettings_ActionsPage(TieControllerSettings* settings, A
 										   .detail = details[count] };
 		++count;
 	}
-	float list_height = AeronUi_AvailableHeight(ui) - trailing_height_ref;
-	if (list_height < 180.0f)
-		list_height = 180.0f;
-	const uint32_t result =
-		AeronUi_ListBox(ui, "Actions", items, count, &settings->action_selected, list_height);
-	if ((result & AERON_UI_LIST_ACTIVATED) && settings->action_selected < count)
-		TieControllerSettings_SelectAction(settings, (TieInputAction)items[settings->action_selected].id,
-										   true);
+	TieBindingsEditor_Actions(&settings->editor, ui, items, count, trailing_height_ref);
 }
 
 static size_t TieControllerSettings_BuildActionBindingItems(const TieControllerSettings* settings,
@@ -631,7 +593,7 @@ static size_t TieControllerSettings_BuildActionBindingItems(const TieControllerS
 	const TieControllerProfile* profile = TieControllerPage_ActiveProfileConst(settings, controller);
 	size_t count = 0;
 	for (size_t index = 0; index < profile->binding_count; ++index) {
-		if (profile->bindings[index].action != settings->selected_action)
+		if (profile->bindings[index].action != settings->editor.selected_action)
 			continue;
 		TieControllerSettings_FormatDigitalSource(labels[count], 128, &profile->bindings[index].source,
 												  controller);
@@ -645,12 +607,7 @@ static size_t TieControllerSettings_BuildActionBindingItems(const TieControllerS
 static void TieControllerSettings_BindingDetailModal(TieControllerSettings* settings, AeronUiContext* ui,
 													 const AeronControllerSnapshot* controller) {
 	const AeronControllerKind kind = controller ? controller->kind : AERON_CONTROLLER_KIND_NONE;
-	if (!settings->binding_modal_open || settings->selected_action == TIE_INPUT_ACTION_NONE)
-		return;
-	char title[128];
-	snprintf(title, sizeof title, "%s", TieInputActions_DisplayName(settings->selected_action));
-	if (!AeronUi_BeginModal(ui, title, &settings->binding_modal_open,
-							&(AeronUiWindowDesc) { .width_ref = 720.0f, .centered = 1 }))
+	if (!TieBindingsEditor_BeginDetail(&settings->editor, ui))
 		return;
 	TieControllerProfile* profile = TieControllerPage_ActiveProfile(settings, controller);
 	AeronUiListItem items[TIE_CONTROLLER_BINDING_CAP];
@@ -658,15 +615,9 @@ static void TieControllerSettings_BindingDetailModal(TieControllerSettings* sett
 	size_t profile_indices[TIE_CONTROLLER_BINDING_CAP];
 	const size_t count =
 		TieControllerSettings_BuildActionBindingItems(settings, controller, items, labels, profile_indices);
-	AeronUi_Header(ui, "Current Bindings");
-	if (count) {
-		AeronUi_ListBox(ui, "Bindings", items, count, &settings->binding_selected, 180.0f);
-	} else {
-		settings->binding_selected = SIZE_MAX;
-		AeronUi_Help(ui, "This action has no controller binding.");
-	}
-	if (settings->binding_selected < count) {
-		const size_t profile_index = profile_indices[settings->binding_selected];
+	TieBindingsEditor_List(&settings->editor, ui, items, count, "This action has no controller binding.");
+	if (settings->editor.binding_selected < count) {
+		const size_t profile_index = profile_indices[settings->editor.binding_selected];
 		AeronControllerDigitalSource* source = &profile->bindings[profile_index].source;
 		if (source->kind == AERON_CONTROLLER_DIGITAL_AXIS_POSITIVE ||
 			source->kind == AERON_CONTROLLER_DIGITAL_AXIS_NEGATIVE) {
@@ -676,9 +627,9 @@ static void TieControllerSettings_BindingDetailModal(TieControllerSettings* sett
 				TieControllerSettings_ApplyDraft(settings);
 			}
 		}
-		if (AeronUi_Button(ui, "Remove Binding")) {
+		if (TieBindingsEditor_Remove(ui)) {
 			TieControllerSettings_RemoveBinding(profile, profile_index);
-			settings->binding_selected = SIZE_MAX;
+			settings->editor.binding_selected = SIZE_MAX;
 			TieControllerSettings_ApplyDraft(settings);
 		}
 	}
@@ -697,22 +648,15 @@ static void TieControllerSettings_BindingDetailModal(TieControllerSettings* sett
 		TieControllerSettings_AddCapturedBinding(settings, controller, &captured.value.digital);
 	if (!has_capacity)
 		AeronUi_Error(ui, "This controller has reached its binding capacity.");
-	if (AeronUi_Button(ui, "Done"))
-		settings->binding_modal_open = 0;
-	AeronUi_EndModal(ui);
+	TieBindingsEditor_EndDetail(&settings->editor, ui);
 }
 
 static void TieControllerSettings_BindingConflictModal(TieControllerSettings* settings, AeronUiContext* ui,
 													   const AeronControllerSnapshot* controller) {
-	if (!AeronUi_BeginModal(ui, "CONTROL ALREADY BOUND", &settings->binding_conflict_open, NULL))
-		return;
-	char text[256];
-	snprintf(text, sizeof text, "This control is assigned to %s. Replace it with %s?",
-			 TieInputActions_DisplayName(settings->conflicting_action),
-			 TieInputActions_DisplayName(settings->selected_action));
-	AeronUi_Error(ui, text);
-	AeronUi_BeginColumns(ui, 2, NULL);
-	if (AeronUi_Button(ui, "Replace")) {
+	char source[128];
+	TieControllerSettings_FormatDigitalSource(source, sizeof source, &settings->pending_digital, controller);
+	if (TieBindingsEditor_Conflict(ui, &settings->binding_conflict_open, source, settings->conflicting_action,
+								   settings->editor.selected_action)) {
 		TieControllerProfile* profile = TieControllerPage_ActiveProfile(settings, controller);
 		const size_t existing = TieControllerSettings_FindSourceBinding(profile, &settings->pending_digital);
 		if (existing != SIZE_MAX)
@@ -720,16 +664,11 @@ static void TieControllerSettings_BindingConflictModal(TieControllerSettings* se
 		if (profile->binding_count < TIE_CONTROLLER_BINDING_CAP)
 			profile->bindings[profile->binding_count++] =
 				(TieInputActionBinding) { .source = settings->pending_digital,
-										  .action = settings->selected_action };
-		settings->binding_selected = SIZE_MAX;
+										  .action = settings->editor.selected_action };
+		settings->editor.binding_selected = SIZE_MAX;
 		settings->binding_conflict_open = 0;
 		TieControllerSettings_ApplyDraft(settings);
 	}
-	AeronUi_NextColumn(ui);
-	if (AeronUi_Button(ui, "Cancel"))
-		settings->binding_conflict_open = 0;
-	AeronUi_EndColumns(ui);
-	AeronUi_EndModal(ui);
 }
 
 static void TieControllerSettings_RestoreModal(TieControllerSettings* settings, AeronUiContext* ui,
@@ -769,7 +708,7 @@ static void TieControllerSettings_RestoreModal(TieControllerSettings* settings, 
 			settings->error[0] = 0;
 		}
 		settings->restore_modal_open = 0;
-		settings->binding_modal_open = 0;
+		settings->editor.binding_modal_open = 0;
 	}
 	AeronUi_NextColumn(ui);
 	if (AeronUi_Button(ui, "Cancel"))
@@ -830,7 +769,7 @@ void TieControllerSettings_Draw(TieControllerSettings* settings, AeronUiContext*
 	if (controller && compatible &&
 		AeronUi_SegmentedSelector(ui, "Controller Page", &settings->page, pages, 2)) {
 		AeronUi_CancelControllerCapture(ui);
-		settings->binding_modal_open = 0;
+		settings->editor.binding_modal_open = 0;
 	}
 	float trailing_height = 143.0f;
 	if (settings->error[0])
@@ -864,7 +803,7 @@ void TieControllerSettings_DrawModals(TieControllerSettings* settings, AeronUiCo
 		AeronUi_CancelControllerCapture(ui);
 		settings->axis_conflict_open = 0;
 		settings->binding_conflict_open = 0;
-		settings->binding_modal_open = 0;
+		settings->editor.binding_modal_open = 0;
 	}
 	if (settings->axis_conflict_open) {
 		TieControllerSettings_AxisConflictModal(settings, ui, controller);

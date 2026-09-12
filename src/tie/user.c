@@ -1251,6 +1251,7 @@ static PauseState s_pause_state;
 static int16_t s_pause_saved_vol;
 
 static void pause_enter(void) {
+	TieInput_ClearKeys();
 	TieInput_ResetThrottle();
 	s_pause_saved_vol = imuse_get_master_vol(im);
 	imuse_set_master_vol(im, 0);
@@ -1264,6 +1265,7 @@ static void pause_enter(void) {
 }
 
 static void pause_exit(void) {
+	TieInput_ClearKeys();
 	TieInput_ResetThrottle();
 	if (TieClassicDisplay_UsesDx5())
 		FrontendDisplay_PresentFrame();
@@ -1303,12 +1305,14 @@ static void ui_apply_absolute_throttle(void) {
 // FUNCTION: TIE 0x5C440, TIE98 0x493840
 void user_userinterface(void) {
 	inputthrottle = UINT32_MAX;
-	/* Phase 0: paused? Poll for any input; any key resumes. The
-	 * outer flight loop keeps iterating at the existing 62.5 Hz
-	 * floor in tie_doframe Step 1, so this samples input ~16 ms. */
+	/* Drain commands received while paused; only the mapped Pause command resumes. */
 	if (s_pause_state == PAUSE_ACTIVE) {
-		if (feinput_getrawinput() != 0)
-			pause_exit();
+		while (TieInput_KeyPending()) {
+			if (feinput_getrawinput() == KEY_p) {
+				pause_exit();
+				break;
+			}
+		}
 		return;
 	}
 

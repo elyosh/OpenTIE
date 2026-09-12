@@ -561,43 +561,44 @@ static int goals_poll_once(GoalsTask* t) {
 	inputdeltay = (int16_t)(inputdeltay * 2);
 
 	const uint16_t key = (uint16_t)inputkey;
+	/* Directions describe the viewport, not movement of the rendered text. */
 	enum {
 		ACT_NONE,
-		ACT_SCROLL_UP_1,    /* one line up   */
-		ACT_SCROLL_DOWN_1,  /* one line down */
-		ACT_SCROLL_UP_16,   /* page up       */
-		ACT_SCROLL_DOWN_16, /* page down     */
-		ACT_NAV_PREV,       /* return -1     */
-		ACT_NAV_NEXT,       /* return +1     */
-		ACT_EXIT_0,         /* return 0      */
-		ACT_ACCEPT_IF_END   /* Enter/Space: exit only when end_flag */
+		ACT_SCROLL_DOWN_1,
+		ACT_SCROLL_UP_1,
+		ACT_SCROLL_DOWN_16,
+		ACT_SCROLL_UP_16,
+		ACT_NAV_PREV,
+		ACT_NAV_NEXT,
+		ACT_EXIT_0,
+		ACT_ACCEPT_IF_END
 	} action = ACT_NONE;
 
 	switch (key) {
-		case 1:
+		case KEY_LEFT_ARROW:
 			action = ACT_NAV_PREV;
-			break; /* arrow-left / ESC-like */
-		case 2:
+			break;
+		case KEY_RIGHT_ARROW:
 			action = ACT_NAV_NEXT;
-			break; /* arrow-right */
-		case 3:
+			break;
+		case KEY_UP_ARROW:
+			action = ACT_SCROLL_UP_1;
+			break;
+		case KEY_DOWN_ARROW:
 			action = ACT_SCROLL_DOWN_1;
-			break; /* arrow-down (LABEL_131) */
-		case 4:
-			action = ACT_SCROLL_UP_1;
-			break; /* arrow-up   (LABEL_135) */
+			break;
 		case 0x32:
-			action = ACT_SCROLL_UP_1;
+			action = ACT_SCROLL_DOWN_1;
 			break; /* keypad '2' (50) */
 		case 0x33:
-			action = ACT_SCROLL_UP_16;
-			break; /* '3' -> PgUp-ish (51) */
+			action = ACT_SCROLL_DOWN_16;
+			break; /* keypad '3': page down */
 		case 0x38:
-			action = ACT_SCROLL_DOWN_1;
+			action = ACT_SCROLL_UP_1;
 			break; /* keypad '8' (56) */
 		case 0x39:
-			action = ACT_SCROLL_DOWN_16;
-			break; /* '9' -> PgDn-ish (57) */
+			action = ACT_SCROLL_UP_16;
+			break; /* keypad '9': page up */
 		case 0x0D: /* Enter */
 		case 0x20:
 			action = ACT_ACCEPT_IF_END;
@@ -631,25 +632,25 @@ static int goals_poll_once(GoalsTask* t) {
 				return 1;
 			}
 			break;
-		case ACT_SCROLL_UP_1:
+		case ACT_SCROLL_DOWN_1:
 			t->scroll_y = (int16_t)(t->scroll_y - fontheight);
 			if (t->scroll_y < (int16_t)(goalsTop - t->content_height))
 				t->scroll_y = (int16_t)(goalsTop - t->content_height);
 			redraw = 1;
 			break;
-		case ACT_SCROLL_DOWN_1:
+		case ACT_SCROLL_UP_1:
 			t->scroll_y = (int16_t)(t->scroll_y + fontheight);
 			if (t->scroll_y > (int16_t)goalsTop)
 				t->scroll_y = (int16_t)goalsTop;
 			redraw = 1;
 			break;
-		case ACT_SCROLL_UP_16:
+		case ACT_SCROLL_DOWN_16:
 			t->scroll_y = (int16_t)(t->scroll_y - 16 * fontheight);
 			if (t->scroll_y < (int16_t)(goalsTop - t->content_height))
 				t->scroll_y = (int16_t)(goalsTop - t->content_height);
 			redraw = 1;
 			break;
-		case ACT_SCROLL_DOWN_16:
+		case ACT_SCROLL_UP_16:
 			t->scroll_y = (int16_t)(t->scroll_y + 16 * fontheight);
 			if (t->scroll_y > (int16_t)goalsTop)
 				t->scroll_y = (int16_t)goalsTop;

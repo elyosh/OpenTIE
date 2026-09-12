@@ -147,7 +147,7 @@ void TieFrameLoop_Run(void) {
 		TieFrameLoop_UpdatePresentation(input, delta_us);
 		const TieHotkeysFrame hotkey_frame = TieHotkeys_Process(&hotkeys, input);
 		bool menu_open = hotkey_frame.menu_open;
-		bool settings_opened_from_runtime = false;
+		bool settings_opened_this_frame = hotkey_frame.settings_opened;
 		TieInput_UpdateCapture(TieSnapshot_Current(), TieSettings_Open());
 		TieClassicLayer_SyncInputExtent();
 
@@ -157,6 +157,7 @@ void TieFrameLoop_Run(void) {
 		TieRemaster_BeginFrame(input);
 		if (Aeron_FatalErrorRequested())
 			break;
+		TieInput_UpdateKeyboard(input, menu_open || hotkey_frame.paused || focus_paused);
 		if (!menu_open)
 			TieInput_BeginFrame(delta_us);
 		if (!hotkey_frame.paused && !menu_open && !focus_paused)
@@ -164,7 +165,7 @@ void TieFrameLoop_Run(void) {
 		if (TieRuntime_ConsumeSettingsMenuRequest()) {
 			const bool was_open = TieSettings_Open();
 			TieSettings_Show();
-			settings_opened_from_runtime = !was_open && TieSettings_Open();
+			settings_opened_this_frame |= !was_open && TieSettings_Open();
 			menu_open = menu_open || TieSettings_Open();
 		}
 		if (Aeron_FatalErrorRequested() || !TieFrameLoop_SynchronizeFlightProfile(&profile_generation))
@@ -182,7 +183,7 @@ void TieFrameLoop_Run(void) {
 		TieFrameLoop_SubmitGameLayers(&previous_output_kind, snapshot, &flight_options, delta_us,
 									  hotkey_frame.paused || menu_open);
 		/* Do not let the input edge that opened the menu close it again. */
-		if (!settings_opened_from_runtime)
+		if (!settings_opened_this_frame)
 			TieSettings_Frame(input, (float)delta_us * 1e-6f);
 		TieInput_SyncSystemCursor(TieSettings_Open());
 

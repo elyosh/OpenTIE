@@ -2,8 +2,8 @@
 #include "tie_runtime/display/classic_framebuffer.h"
 
 #include "tie_runtime/display/classic_display.h"
-#include "tie_runtime/input/actions.h"
 #include "tie_runtime/input/controller_mapping.h"
+#include "tie_runtime/input/keyboard_mapping.h"
 #include "tie_runtime/snapshot/snapshot.h"
 
 #include "aeron/aeron.h"
@@ -100,6 +100,8 @@ void TieInput_EnqueueDosKey(int16_t key) {
 }
 
 void TieInput_EnqueueKey(int16_t key) { TieInput_EnqueueByte(key); }
+
+void TieInput_ClearKeys(void) { key_queue_head = key_queue_tail = 0; }
 
 static int16_t TieInput_DequeueKey(void) {
 	if (key_queue_head == key_queue_tail)
@@ -357,13 +359,18 @@ void TieInput_UpdateCapture(const TieSnapshot* snapshot, bool settings_open) {
 		engine_cursor_y = snapshot->cursor.y;
 		engine_cursor_valid = 1;
 	}
-	const bool ctrl = in->key_down[AERON_KEY_LCTRL] || in->key_down[AERON_KEY_RCTRL];
-	const bool alt = in->key_down[AERON_KEY_LALT] || in->key_down[AERON_KEY_RALT];
-	const int release_key = AERON_KEY_A + ('m' - 'a');
-	if (relative_input_screen && ctrl && alt && in->key_pressed[release_key]) {
-		manual_release = !manual_release;
-		TieInput_SuppressKey(release_key);
+	bool release_pressed = false;
+	for (uint16_t i = 0; !settings_open && !in->key_events_overflow && i < in->key_event_count; ++i) {
+		const AeronKeyEvent* event = &in->key_events[i];
+		if (event->down && !event->repeat &&
+			TieKeyboardMapping_Shortcut(event->chord) == TIE_KEYBOARD_SHORTCUT_MOUSE) {
+			release_pressed = true;
+			TieInput_SuppressKey(event->chord.key);
+		}
 	}
+	if (relative_input_screen && release_pressed)
+		manual_release = !manual_release;
+
 	if (!relative_input_screen)
 		manual_release = 0;
 	if (relative_input_screen && manual_release && in->has_focus && in->mouse.inside_content &&
@@ -485,7 +492,9 @@ void TieInput_CursorFramebufferPosition(float* x, float* y) {
  * Joystick — Aeron gamepad snapshot, canonical axis order
  * ================================================================ */
 
-int TieInput_JoystickPresent(void) { return TieControllerMapping_Present(); }
+int TieInput_JoystickPresent(void) {
+	return TieControllerMapping_Present() || TieKeyboardMapping_HasButtons();
+}
 
 void TieInput_JoystickShutdown(void) {}
 
@@ -517,8 +526,75 @@ void TieInput_SetFramebufferSize(int w, int h) {
 	relative_drain_fraction_y = 0.0f;
 }
 
-/* Application-consumed keys skipped by the next pump (Tab view-mode cycle). */
+/* Application-consumed primary keys stay suppressed until release. */
 static uint8_t suppressed_keys[AERON_KEY_COUNT];
+static bool keyboard_blocked;
+static bool keyboard_gameplay;
+
+static bool TieInput_KeyboardGameplay(void) {
+	const TieSnapshot* snapshot = TieSnapshot_Current();
+	return snapshot && snapshot->scene_kind == TIE_SCENE_FLIGHT && snapshot->replay_mode != 2 &&
+		   snapshot->flight_screen <= TIE_FLIGHT_SCREEN_HELP;
+}
+
+void TieInput_BlockKeyboard(void) {
+	keyboard_blocked = true;
+	TieInput_ClearKeys();
+	TieKeyboardMapping_Suspend();
+}
+
+void TieInput_UpdateKeyboard(const AeronInputSnapshot* input, bool blocked) {
+	blocked |= !input || !input->has_focus;
+	keyboard_gameplay = TieInput_KeyboardGameplay();
+	if (blocked && !keyboard_blocked)
+		TieInput_BlockKeyboard();
+	keyboard_blocked = blocked;
+	TieKeyboardMapping_Enable(!blocked && keyboard_gameplay, input);
+}
+
+static void TieInput_PumpRawKeyboard(const AeronInputSnapshot* in) {
+	const int shift = in->key_down[AERON_KEY_LSHIFT] || in->key_down[AERON_KEY_RSHIFT];
+	bool suppress_alt_text = false;
+	for (int sc = 0; sc < AERON_KEY_COUNT; ++sc) {
+		int n = suppressed_keys[sc] ? 0 : in->key_typed[sc];
+		int alt_n = suppressed_keys[sc] ? 0 : in->key_alt_typed[sc];
+		if (alt_n > n)
+			alt_n = n;
+		suppress_alt_text |= alt_n != 0;
+		int16_t key = TieInput_TranslateAltAeronKey(sc);
+		for (int repeat = 0; key && repeat < alt_n; ++repeat)
+			TieInput_EnqueueDosKey(key);
+		n -= alt_n;
+		key = TieInput_TranslateAeronKey(sc, shift);
+		for (int repeat = 0; key && repeat < n; ++repeat)
+			TieInput_EnqueueDosKey(key);
+	}
+	if (!suppress_alt_text)
+		for (uint32_t i = 0; i < in->text_length; ++i) {
+			const unsigned char ch = (unsigned char)in->text[i];
+			if (ch >= 0x20 && ch <= 0x7e)
+				TieInput_EnqueueByte((int16_t)ch);
+		}
+}
+
+static void TieInput_PumpKeyboard(const AeronInputSnapshot* in) {
+	TieKeyboardMapping_BeginFrame(in);
+	if (!keyboard_blocked) {
+		if (keyboard_gameplay) {
+			for (uint16_t i = 0; !in->key_events_overflow && i < in->key_event_count; ++i) {
+				const AeronKeyEvent* event = &in->key_events[i];
+				TieKeyboardMapping_Event(event, suppressed_keys[event->chord.key] != 0);
+				if (!event->down)
+					suppressed_keys[event->chord.key] = 0;
+			}
+		} else {
+			TieInput_PumpRawKeyboard(in);
+		}
+	}
+	for (int key = 0; key < AERON_KEY_COUNT; ++key)
+		if (!in->key_down[key])
+			suppressed_keys[key] = 0;
+}
 
 void TieInput_SuppressKey(int aeron_key) {
 	if (aeron_key >= 0 && aeron_key < AERON_KEY_COUNT)
@@ -527,7 +603,6 @@ void TieInput_SuppressKey(int aeron_key) {
 
 void TieInput_BeginFrame(int32_t delta_us) {
 	const AeronInputSnapshot* in = Aeron_InputSnapshot();
-	int sc;
 
 	if (!in) {
 		memset(suppressed_keys, 0, sizeof suppressed_keys);
@@ -567,45 +642,7 @@ void TieInput_BeginFrame(int32_t delta_us) {
 
 	TieControllerMapping_Update(in);
 
-	/* Keyboard: key_typed counts include OS typematic repeats, matching the
-	 * per-SDL-event enqueue of the sdl3 application (DOS BIOS repeat behavior).
-	 * A key bound in the action layer REPLACES the default DOS key — the
-	 * dispatch consumes it. Releases also dispatch so held BUTTON_BIT
-	 * actions clear. */
-	const int shift = in->key_down[AERON_KEY_LSHIFT] || in->key_down[AERON_KEY_RSHIFT];
-	int suppress_alt_text = 0;
-	for (sc = 0; sc < AERON_KEY_COUNT; ++sc) {
-		if (in->key_released[sc])
-			(void)TieInputActions_DispatchKeyboard(sc, false);
-		int n = suppressed_keys[sc] ? 0 : in->key_typed[sc];
-		int alt_n = suppressed_keys[sc] ? 0 : in->key_alt_typed[sc];
-		if (alt_n > n)
-			alt_n = n;
-		if (alt_n)
-			suppress_alt_text = 1;
-		if (n) {
-			const bool action_consumed = TieInputActions_DispatchKeyboard(sc, true);
-			if (action_consumed)
-				continue;
-			int16_t key = TieInput_TranslateAltAeronKey(sc);
-			for (int repeat = 0; key && repeat < alt_n; ++repeat)
-				TieInput_EnqueueDosKey(key);
-			n -= alt_n;
-			key = TieInput_TranslateAeronKey(sc, shift);
-			if (key) {
-				while (n--)
-					TieInput_EnqueueDosKey(key);
-			}
-		}
-	}
-	if (in->has_focus && !suppress_alt_text) {
-		for (uint32_t index = 0; index < in->text_length; ++index) {
-			const uint32_t codepoint = in->text[index];
-			if (codepoint >= 0x20u && codepoint <= 0x7Eu)
-				TieInput_EnqueueByte((int16_t)codepoint);
-		}
-	}
-	memset(suppressed_keys, 0, sizeof suppressed_keys);
+	TieInput_PumpKeyboard(in);
 
 	/* Mouse: captured flight consumes relative motion. Released frontend
 	 * input follows the absolute OS pointer and converts that position into

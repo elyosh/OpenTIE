@@ -6,10 +6,12 @@
 
 #include "aeron/scene/ui.h"
 #include "tie_app/config/app_config.h"
+#include "tie_app/settings/bindings_editor.h"
 
 #define TIE_CONTROLLER_SETTINGS_ERROR_CAPACITY 512
 
 typedef struct TieControllerSettings {
+	TieBindingsEditor editor;
 	TieControllerOptions original;
 	TieControllerOptions draft;
 	TieControllerProfile unconfigured;
@@ -19,17 +21,12 @@ typedef struct TieControllerSettings {
 	bool capacity_warned;
 	int page;
 	int axis;
-	int category;
-	size_t action_selected;
-	size_t binding_selected;
-	TieInputAction selected_action;
 	TieInputAxis pending_axis;
 	int pending_axis_source;
 	int conflicting_axis;
 	AeronControllerDigitalSource pending_digital;
 	TieInputAction conflicting_action;
 	uint32_t active_instance;
-	int binding_modal_open;
 	int axis_conflict_open;
 	int binding_conflict_open;
 	int restore_modal_open;

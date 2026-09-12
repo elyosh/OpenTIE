@@ -9,6 +9,7 @@ add_executable(tie
     midi_resources.c
     ui.c
     config/app_config.c
+    config/keyboard_config.c
     config/controller_config.c
     settings/flight_options.c
 	settings/audio_options.c
@@ -16,6 +17,8 @@ add_executable(tie
     settings/launch_options.c
     settings/video_options.c
     settings/settings.c
+    settings/keyboard_page.c
+    settings/bindings_editor.c
     settings/controller_page.c
     setup/installation.c
     setup/installation_ui.c

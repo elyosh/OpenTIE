@@ -7,7 +7,7 @@
 
 typedef enum MsgTemplate {
 	MSG_TIE_VERSION = 0,                /* <C6>TIE Fighter [Final V2.0] 11/28/94 */
-	MSG_PAUSED = 1,                     /* <C6>Mission paused.  Press any key to continue */
+	MSG_PAUSED = 1,                     /* Pause prompt supplied by msg_messageprintf */
 	MSG_RESUMED = 2,                    /* <C6>Mission resumed */
 	MSG_LASERS_ARMED = 3,               /* <C3>Laser cannons armed */
 	MSG_IONS_ARMED = 4,                 /* <C3>Ion cannons armed */

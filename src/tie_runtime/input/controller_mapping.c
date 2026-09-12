@@ -1,5 +1,6 @@
 #include "tie_runtime/input/controller_mapping.h"
 #include "aeron/log.h"
+#include "tie_runtime/input/keyboard_mapping.h"
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -517,5 +518,5 @@ void TieControllerMapping_Read(int16_t* axes, int count, uint16_t* buttons) {
 			axes[i] = g_controller.axes[i];
 	}
 	if (buttons)
-		*buttons = g_controller.present ? TieInputActions_VirtualButtons : 0;
+		*buttons = TieKeyboardMapping_ReadButtons();
 }

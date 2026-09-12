@@ -1,4 +1,4 @@
-version: 5
+version: 6
 
 paths:
   installations:
@@ -62,7 +62,185 @@ input:
       pause: start
       escape: back
       view_return_to_cockpit: rightstick
-  keyboard: {}
+  keyboard:
+    info_previous_item:
+      - {key: "Up"}
+    info_next_item:
+      - {key: "Down"}
+    fire_weapon: []
+    target_roll_throttle_modifier: []
+    target_next:
+      - {key: "T"}
+    target_prev:
+      - {key: "Y"}
+    target_nearest_fighter_or_mine:
+      - {key: "R"}
+    target_my_attacker:
+      - {key: "E"}
+    target_attacker_chain:
+      - {key: "A"}
+    target_newest_craft:
+      - {key: "U"}
+    target_clear:
+      - {key: "O"}
+    auto_target:
+      - {key: "1", modifiers: [alt]}
+    cycle_warhead_view:
+      - {key: "F2"}
+    throttle_up:
+      - {key: "="}
+      - {key: "=", modifiers: [shift]}
+      - {key: "Keypad +"}
+    throttle_down:
+      - {key: "-"}
+      - {key: "Keypad -"}
+    throttle_full:
+      - {key: "Backspace"}
+    match_speed:
+      - {key: "Return"}
+      - {key: "Keypad Enter"}
+    cycle_weapon_group:
+      - {key: "W"}
+    cycle_weapon_firing_mode:
+      - {key: "X"}
+    toggle_beam:
+      - {key: "B"}
+    xfer_cannon_to_shields:
+      - {key: "'"}
+    xfer_shields_to_cannon:
+      - {key: ";"}
+    cycle_shield_mode:
+      - {key: "S"}
+    view_return_to_cockpit:
+      - {key: "F1"}
+    view_toggle_high_angle:
+      - {key: "0"}
+      - {key: "Keypad 0"}
+    view_toggle_external_camera:
+      - {key: "/"}
+      - {key: "Keypad /"}
+      - {key: "F3"}
+    view_toggle_external_camera_control:
+      - {key: "8", modifiers: [shift]}
+      - {key: "Keypad *"}
+      - {key: "F4"}
+    view_toggle_cockpit:
+      - {key: "."}
+      - {key: "Keypad ."}
+    info_goals:
+      - {key: "G"}
+    info_map:
+      - {key: "M"}
+    info_messages:
+      - {key: "L"}
+    info_damage:
+      - {key: "D"}
+    info_help:
+      - {key: "K"}
+    hyperspace:
+      - {key: "H"}
+    eject:
+      - {key: "E", modifiers: [alt]}
+    recorder_toggle:
+      - {key: "C"}
+    pause:
+      - {key: "P"}
+    escape: []
+    confirm:
+      - {key: "Space"}
+    end_mission:
+      - {key: "Q"}
+    cycle_time_acceleration:
+      - {key: "T", modifiers: [alt]}
+    throttle_zero:
+      - {key: "\\"}
+    throttle_one_third:
+      - {key: "["}
+    throttle_two_thirds:
+      - {key: "]"}
+    toggle_slam:
+      - {key: "N"}
+    cycle_beam_recharge_rate:
+      - {key: "F8"}
+    cycle_cannon_recharge_rate:
+      - {key: "F9"}
+    cycle_shield_recharge_rate:
+      - {key: "F10"}
+    toggle_component_tracking:
+      - {key: "I"}
+    target_component_next:
+      - {key: ","}
+    target_component_prev:
+      - {key: ",", modifiers: [shift]}
+    target_preset_store_1:
+      - {key: "F5", modifiers: [shift]}
+    target_preset_store_2:
+      - {key: "F6", modifiers: [shift]}
+    target_preset_store_3:
+      - {key: "F7", modifiers: [shift]}
+    target_preset_recall_1:
+      - {key: "F5"}
+    target_preset_recall_2:
+      - {key: "F6"}
+    target_preset_recall_3:
+      - {key: "F7"}
+    toggle_threat_display:
+      - {key: "Z"}
+    roll_left_info_previous:
+      - {key: "Left"}
+    roll_right_info_next:
+      - {key: "Right"}
+    info_wingman_commands:
+      - {key: "Z", modifiers: [shift]}
+    recorder_view:
+      - {key: "V"}
+    comm_assign_target:
+      - {key: "A", modifiers: [shift]}
+    comm_request_resupply:
+      - {key: "B", modifiers: [shift]}
+    comm_cover_me:
+      - {key: "C", modifiers: [shift]}
+    comm_evade:
+      - {key: "E", modifiers: [shift]}
+    comm_continue_mission:
+      - {key: "G", modifiers: [shift]}
+    comm_head_home:
+      - {key: "H", modifiers: [shift]}
+    comm_ignore_target:
+      - {key: "I", modifiers: [shift]}
+    comm_report_orders:
+      - {key: "R", modifiers: [shift]}
+    comm_reinforcements:
+      - {key: "S", modifiers: [shift]}
+    comm_stop_and_wait:
+      - {key: "W", modifiers: [shift]}
+    view_left_shoulder:
+      - {key: "1"}
+      - {key: "Keypad 1"}
+    view_rear:
+      - {key: "2"}
+      - {key: "Keypad 2"}
+    view_right_shoulder:
+      - {key: "3"}
+      - {key: "Keypad 3"}
+    view_left_wing:
+      - {key: "4"}
+      - {key: "Keypad 4"}
+    view_straight_up:
+      - {key: "5"}
+      - {key: "Keypad 5"}
+    view_right_wing:
+      - {key: "6"}
+      - {key: "Keypad 6"}
+    view_left_forward:
+      - {key: "7"}
+      - {key: "Keypad 7"}
+    view_forward:
+      - {key: "8"}
+      - {key: "Keypad 8"}
+    view_right_forward:
+      - {key: "9"}
+      - {key: "Keypad 9"}
 
 video:
   fullscreen: false

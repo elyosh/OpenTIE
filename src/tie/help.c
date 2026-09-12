@@ -64,33 +64,33 @@ char** helpscreenstrings;
  */
 enum HelpAction {
 	HA_NONE = 0,
-	HA_UP,    /* cursor -= 24, or exit -1 from left column  */
-	HA_DOWN,  /* cursor += 24, or exit +1 from right column */
-	HA_LEFT,  /* --cursor, wraps 0 -> 47                    */
-	HA_RIGHT, /* ++cursor, wraps 47 -> 0                    */
-	HA_PICK,  /* exit with 0 (ESC / Enter / F1 / 'q' ...)   */
+	HA_PREVIOUS_COLUMN, /* cursor -= 24, or exit -1 from left column  */
+	HA_NEXT_COLUMN,     /* cursor += 24, or exit +1 from right column */
+	HA_PREVIOUS_ITEM,   /* --cursor, wraps 0 -> 47                    */
+	HA_NEXT_ITEM,       /* ++cursor, wraps 47 -> 0                    */
+	HA_EXIT,            /* return to flight */
 };
 
 static int help_classify_key(uint16_t key) {
 	switch (key) {
-		case 1:
+		case KEY_LEFT_ARROW:
 		case 0x34: /* '4' */
-			return HA_UP;
-		case 2:
+			return HA_PREVIOUS_COLUMN;
+		case KEY_RIGHT_ARROW:
 		case 0x36: /* '6' */
-			return HA_DOWN;
-		case 3:
+			return HA_NEXT_COLUMN;
+		case KEY_UP_ARROW:
 		case 0x38: /* '8' */
-			return HA_LEFT;
-		case 4:
+			return HA_PREVIOUS_ITEM;
+		case KEY_DOWN_ARROW:
 		case 0x32: /* '2' */
-			return HA_RIGHT;
+			return HA_NEXT_ITEM;
 		case 0x1B: /* ESC  */
 		case 0x51: /* 'Q'  */
 		case 0x71: /* 'q'  */
 		case 0x6B: /* 'k'  */
 		case 0xBB: /* F1 extended scan (0x3B + 0x80) */
-			return HA_PICK;
+			return HA_EXIT;
 		default:
 			return HA_NONE;
 	}
@@ -223,7 +223,7 @@ static int help_poll_once(HelpTask* t) {
 	int redraw = 0;
 
 	switch (action) {
-		case HA_UP:
+		case HA_PREVIOUS_COLUMN:
 			if (t->cursor_idx >= HELP_ROWS_PER_COL) {
 				t->cursor_idx -= HELP_ROWS_PER_COL;
 				redraw = 1;
@@ -232,7 +232,7 @@ static int help_poll_once(HelpTask* t) {
 				return 1;
 			}
 			break;
-		case HA_DOWN:
+		case HA_NEXT_COLUMN:
 			if (t->cursor_idx < HELP_ROWS_PER_COL) {
 				t->cursor_idx = (int16_t)(t->cursor_idx + HELP_ROWS_PER_COL);
 				if (t->cursor_idx == HELP_TOTAL_ENTRIES)
@@ -243,17 +243,17 @@ static int help_poll_once(HelpTask* t) {
 				return 1;
 			}
 			break;
-		case HA_LEFT:
+		case HA_PREVIOUS_ITEM:
 			t->cursor_idx = t->cursor_idx ? (int16_t)(t->cursor_idx - 1) : (int16_t)(HELP_TOTAL_ENTRIES - 1);
 			redraw = 1;
 			break;
-		case HA_RIGHT:
+		case HA_NEXT_ITEM:
 			t->cursor_idx = (int16_t)(t->cursor_idx + 1);
 			if (t->cursor_idx == HELP_TOTAL_ENTRIES)
 				t->cursor_idx = 0;
 			redraw = 1;
 			break;
-		case HA_PICK:
+		case HA_EXIT:
 			t->page_delta = 0;
 			return 1;
 		default:
