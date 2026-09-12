@@ -86,18 +86,21 @@ void TieFlightRenderer_LinesDrawPass(TieFlightRenderer* g, AeronCommandBuffer* c
 	TieFlightFrustumPlanes fr;
 	TieFlightRenderer_BuildFrustumPlanes(&fr, view_proj);
 
-	uint32_t draw_keys[TIE_MAX_FLIGHT_OBJECTS];
+	uint32_t draw_keys[TIE_MAX_FLIGHT_OBJECTS + TIE_MAX_STATIC_OBJECTS];
 	uint32_t draw_count = 0;
-	for (uint16_t i = 0; i < curr->flight_count; ++i) {
-		const TieFlightObjectState* fl = &curr->flights[i];
+	for (uint16_t i = 0; i < curr->flight_count + curr->static_count; ++i) {
+		TieFlightObjectState static_flight;
+		const TieFlightObjectState* fl = TieFlightMesh_ClassicObject(curr, i, &static_flight);
+		if (!fl)
+			continue;
 		const uint16_t species_idx =
 			(fl->genus == TIE_GENUS_DEBRIS) ? (uint16_t)fl->parent_ship_idx : (uint16_t)fl->ship_idx;
 		if (species_idx >= TIE_FLIGHT_MAX_SPECIES)
 			continue;
 		if (fl->flags & TIE_FOBJ_INVISIBLE)
 			continue;
-		if (fl->slot == curr->camera.target_obj_slot && curr->camera.zoom_active == 0 &&
-			curr->replay_mode != 2)
+		if (i < curr->flight_count && fl->slot == curr->camera.target_obj_slot &&
+			curr->camera.zoom_active == 0 && curr->replay_mode != 2)
 			continue;
 		const TieFlightSpeciesMesh* sm = &g->meshes[species_idx];
 		if (!sm->ready)
@@ -117,7 +120,10 @@ void TieFlightRenderer_LinesDrawPass(TieFlightRenderer* g, AeronCommandBuffer* c
 
 	for (uint32_t k = 0; k < draw_count; ++k) {
 		const uint16_t i = (uint16_t)(draw_keys[k] & 0xFFFFu);
-		const TieFlightObjectState* fl = &curr->flights[i];
+		TieFlightObjectState static_flight;
+		const TieFlightObjectState* fl = TieFlightMesh_ClassicObject(curr, i, &static_flight);
+		if (!fl)
+			continue;
 		const uint16_t species_idx = (uint16_t)(draw_keys[k] >> 16);
 		TieFlightSpeciesMesh* sm = &g->meshes[species_idx];
 

@@ -95,10 +95,11 @@ typedef enum TieHudInstrumentId {
 	TIE_HUDI_BEAM_FIRE = 91,
 } TieHudInstrumentId;
 #define TIE_MAX_EVENTS 128
-/* Per-craft component pool. Upper bound is 120 craft × ~12 meshes
+/* Craft and selected static-target component pool. Upper bound is 120 craft × ~12 meshes
  * = 1440; pinned at 2048 to absorb variability across species. The
  * pool is flat; each TieFlightObjectState carries
- * (component_start, component_count) indices into it. */
+ * (component_start, component_count) indices into it, as does the selected
+ * static BSP target (up to 40 additional meshes). */
 #define TIE_MAX_FLIGHT_COMPONENTS 2048
 
 /* Per-tick billboard queue. The classic engine has a 32-slot drawitems[]
@@ -457,7 +458,10 @@ typedef struct TieStaticObjectState {
 	uint8_t model_visible;
 	int32_t world_pos[3];
 	float ori[4];
-	uint16_t status_flags; /* 10-bit subsystems */
+	uint16_t status_flags;    /* 10-bit subsystems */
+	uint8_t highlight;        /* Same blink-aware whole-object encoding as flight objects. */
+	uint16_t component_start; /* Selected static BSP target's mesh state in flight_components. */
+	uint16_t component_count;
 } TieStaticObjectState;
 
 /* 2D landru actor — front-end UI layer. (res_type, res_name) is the
@@ -1060,7 +1064,7 @@ typedef struct TieCockpitState {
 	/* Targeted-subsystem mesh index to highlight inside the PIP only
 	 * (engine's highlightcolor=2 ramp via the highlightmapping table —
 	 * see flight_mesh_classic_lut.frag.hlsl). Resolves the full
-	 * engine gate: `pstate.radar_enable && target is a craft &&
+	 * engine gate: `pstate.radar_enable && target uses the craft mesh draw path &&
 	 * pstate.radar_target1 is a valid mesh index`. Mirrors the engine
 	 * PIP path where panel_update3Dcrt OR's bit 0x200 into
 	 * currenttarget so DRAW_drawcraft's component-highlight code

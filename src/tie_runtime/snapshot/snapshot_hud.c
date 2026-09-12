@@ -473,23 +473,19 @@ static void TieHudSnapshot_CaptureCockpit(void) {
 		ck->pip_back_step[0] = s_pip_back_step_x;
 		ck->pip_back_step[1] = s_pip_back_step_y;
 		ck->pip_back_step[2] = s_pip_back_step_z;
-		/* Targeted-subsystem index for the PIP component highlight.
-		 * Matches the engine's PIP gate: panel_update3Dcrt OR's
-		 * 0x200 into currenttarget when pstate.radar_enable; DRAW_drawcraft
-		 * promotes the matching component's drawpol highlightcolor to 2
-		 * (only when both `comp_idx == currenttargetcomp` and the
-		 * currenttarget 0x200 bit are set — see draw.c:898). For non-
-		 * craft targets the engine never enters the PIP-craft path, so
-		 * we gate on target_obj_idx < NUM_CRAFTS too. Cap at 40 =
-		 * TIE_FLIGHT_MAX_MESHES to keep the renderer's per-mesh array
-		 * lookup safe; the engine's `< num_meshes` per-craft check
-		 * collapses to <40 in our enumeration since the snapshot
-		 * emitter clamps mesh_count to that. */
-		ck->pip_subsys_idx = 0xFFu;
-		if (pstate.radar_enable && pstate.target_obj_idx < NUM_CRAFTS && pstate.radar_target1 >= 0 &&
-			pstate.radar_target1 < 40) {
-			ck->pip_subsys_idx = (uint8_t)pstate.radar_target1;
+		/* panel_update3Dcrt enables component highlighting through bit 0x200.
+		 * TIE95 static BSP targets also enter draw_drawcraft; the separate
+		 * NUM_CRAFTS gate in panel.c applies to the subsystem marker box. */
+		bool component_target = pstate.target_obj_idx < NUM_CRAFTS;
+		if (!TieProfile_UsesTie98Logic() && pstate.target_obj_idx >= OBJ_REF_STATIC_BASE &&
+			pstate.target_obj_idx < OBJ_REF_STATIC_BASE + NUM_STATIC_OBJECTS) {
+			const StaticObject* so = &staticobjects[pstate.target_obj_idx - OBJ_REF_STATIC_BASE];
+			component_target = so->species != 0 && so->ship_class >= 8 && so->ship_class <= 11 &&
+							   species_table[so->species].draw_data == NULL;
 		}
+		ck->pip_subsys_idx = 0xFFu;
+		if (pstate.radar_enable && component_target && pstate.radar_target1 >= 0 && pstate.radar_target1 < 40)
+			ck->pip_subsys_idx = (uint8_t)pstate.radar_target1;
 		/* PIP FOVs derived from the engine projection used during
 		 * logbuf2_startPIP — same perspFactor / yAspect as the main
 		 * view but with pip_w/h instead of screenXRes/Res, producing

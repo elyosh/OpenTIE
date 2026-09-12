@@ -138,7 +138,7 @@ typedef struct TieFlightSceneFrame {
 
 typedef struct TieFlightClassicMeshTables {
 	AeronBuffer* buffer;
-	AeronSceneMeshTable tables[TIE_MAX_FLIGHT_OBJECTS + 1];
+	AeronSceneMeshTable tables[TIE_MAX_FLIGHT_OBJECTS + TIE_MAX_STATIC_OBJECTS + 1];
 	uint32_t count;
 } TieFlightClassicMeshTables;
 

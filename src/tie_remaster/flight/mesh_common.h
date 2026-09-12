@@ -32,6 +32,12 @@ struct TieFlightObjectState;
 extern "C" {
 #endif
 
+/* Main-pass index space is flights followed by statics. Eligible statics
+ * become rigid flight records in scratch; hidden/non-mesh statics return NULL. */
+const struct TieFlightObjectState* TieFlightMesh_ClassicObject(const struct TieSnapshot* snapshot,
+															   uint16_t index,
+															   struct TieFlightObjectState* scratch);
+
 /* Build the retained-scene mesh-table payload for one craft. */
 void TieFlightMesh_BuildmeshTable(const AeronMeshRot* mesh_rot, const struct TieFlightObjectState* fl,
 								  const struct TieSnapshot* curr, AeronSceneMeshTable* out);

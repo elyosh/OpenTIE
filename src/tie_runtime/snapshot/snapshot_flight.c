@@ -172,15 +172,16 @@ static uint8_t TieFlightSnapshot_LightningState(const FlightObject* obj) {
 	return obj->craft_ptr->mesh_state[nm];
 }
 
-/* Emit per-mesh component state for one craft. Returns the
- * number of components written (0 when craft has no CraftData /
- * model). Walks every mesh slot of the species; classic skips
+/* Emit per-mesh state for a craft or a targeted static BSP model.
+ * Static meshes participate in draw_drawcraft highlighting but have no
+ * CraftData visibility or rotation. Walk every mesh slot; classic skips
  * mesh_state != MESH_STATE_VISIBLE in draw_drawcraft, but the renderer
  * wants to know about hidden/blown-off meshes too (their absence is
  * part of the visual). */
 static uint16_t TieFlightSnapshot_EmitComponents(const FlightObject* obj, uint16_t obj_idx,
 												 uint8_t craft_highlight) {
-	if (!TieFlightSnapshot_HasCraftData(obj))
+	const bool is_static = obj_idx >= OBJ_REF_STATIC_BASE;
+	if (!is_static && !TieFlightSnapshot_HasCraftData(obj))
 		return 0;
 	const bool tie98 = TieProfile_UsesTie98Logic();
 	const SpeciesEntry* spec = &species_table[obj->ship_idx];
@@ -199,8 +200,8 @@ static uint16_t TieFlightSnapshot_EmitComponents(const FlightObject* obj, uint16
 			break;
 		const ShipModelMesh* m = tie98 ? NULL : &meshes[mi];
 		const int mesh_type = tie98 ? modelmesh_gettype(obj->ship_idx, mi) : m->mesh_type;
-		uint8_t state = obj->craft_ptr->mesh_state[mi];
-		uint8_t rot = obj->craft_ptr->mesh_rotation[mi];
+		uint8_t state = is_static ? MESH_STATE_VISIBLE : obj->craft_ptr->mesh_state[mi];
+		uint8_t rot = is_static ? 0 : obj->craft_ptr->mesh_rotation[mi];
 		uint8_t f = 0;
 		c->tie95_training_pivot_fwd = 0;
 		const bool tie98_gate = tie98 && obj->genus == GENUS_GATE;
@@ -219,7 +220,8 @@ static uint16_t TieFlightSnapshot_EmitComponents(const FlightObject* obj, uint16
 			 * mesh_state. Force visible so HD reproduces the gate frame. */
 			f |= 0x1u;
 		}
-		if (tie98 ? modelmesh_getrotscaledata(obj->ship_idx, mi) != NULL : m->rotation_offset != 0)
+		if (!is_static &&
+			(tie98 ? modelmesh_getrotscaledata(obj->ship_idx, mi) != NULL : m->rotation_offset != 0))
 			f |= 0x2u;
 		/* TIE95 fview_componentrotation ignores authored rotation metadata
 		 * during training and synthesizes this pivot from the mesh center. */
@@ -256,7 +258,7 @@ static uint16_t TieFlightSnapshot_EmitComponents(const FlightObject* obj, uint16
 			rotation_bam = (uint16_t)(0u - rotation_bam);
 		c->rotation_angle = (int16_t)rotation_bam;
 		c->flags = f;
-		c->hp_remaining = obj->craft_ptr->mesh_component_hp[mi];
+		c->hp_remaining = is_static ? 0 : obj->craft_ptr->mesh_component_hp[mi];
 		++emitted;
 	}
 	return emitted;
@@ -659,9 +661,21 @@ static void TieFlightSnapshot_CaptureWorld(void) {
 		TieFlightSnapshot_ByteEulersToMat(so->roll_byte, so->yaw_byte, so->pitch_byte, m);
 		TieSnapshotBuilder_Mat3ToQuat(m, out->ori);
 		out->status_flags = so->status_flags;
+		out->highlight = TieFlightSnapshot_CraftHighlight((uint16_t)(OBJ_REF_STATIC_BASE + i), so->species);
 		const AnimOp* frame_table = (const AnimOp*)species_table[so->species].draw_data;
 		out->model_visible = frame_table ? (uint8_t)animop_is_mesh(frame_table[so->anim_frame])
 										 : (uint8_t)(so->anim_frame == 0);
+		out->component_start = TieSnapshotBuilder_FlightComponentCount();
+		out->component_count = 0;
+		/* TIE95 static BSP objects enter draw_drawcraft, including its
+		 * selected-mesh rules. Only the player target needs these records. */
+		const uint16_t object_ref = (uint16_t)(OBJ_REF_STATIC_BASE + i);
+		if (!TieProfile_UsesTie98Logic() && object_ref == pstate.target_obj_idx && so->ship_class >= 8 &&
+			so->ship_class <= 11 && !frame_table) {
+			const FlightObject model_object = { .ship_idx = so->species, .genus = so->ship_class };
+			out->component_count =
+				TieFlightSnapshot_EmitComponents(&model_object, object_ref, out->highlight);
+		}
 		/* Preserve the flight group's planet palette selector. */
 		out->palette_version = fg_array[so->fg_idx].version;
 	}

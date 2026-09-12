@@ -370,17 +370,22 @@ static void TieFlightRenderer_SceneHookAfterUpscale(AeronCommandBuffer* cmd, Aer
 static bool TieFlightRenderer_PrepareClassicMeshTables(TieFlightRenderer* g, AeronCommandBuffer* cmd,
 													   const TieSnapshot* snapshot,
 													   const TieFlightObjectState* pip_flight) {
-	if (snapshot->flight_count > TIE_MAX_FLIGHT_OBJECTS)
+	if (snapshot->flight_count > TIE_MAX_FLIGHT_OBJECTS || snapshot->static_count > TIE_MAX_STATIC_OBJECTS)
 		return false;
-	for (uint32_t i = 0; i < snapshot->flight_count; ++i) {
-		const TieFlightObjectState* flight = &snapshot->flights[i];
+	const uint16_t object_count =
+		snapshot->flight_count + (g->scene_model_backend ? 0 : snapshot->static_count);
+	for (uint16_t i = 0; i < object_count; ++i) {
+		TieFlightObjectState static_flight;
+		const TieFlightObjectState* flight = TieFlightMesh_ClassicObject(snapshot, i, &static_flight);
+		if (!flight)
+			continue;
 		uint16_t species = flight->genus == TIE_GENUS_DEBRIS ? flight->parent_ship_idx : flight->ship_idx;
 		const TieFlightSpeciesMesh* mesh =
 			species < TIE_FLIGHT_MAX_SPECIES && g->meshes[species].ready ? &g->meshes[species] : NULL;
 		TieFlightMesh_BuildclassicMeshTable(mesh, flight, snapshot, TIE_FLIGHT_MESH_TABLE_MAIN,
 											&g->classic_mesh_tables.tables[i]);
 	}
-	g->classic_pip_table_index = snapshot->flight_count;
+	g->classic_pip_table_index = object_count;
 	TieFlightObjectState empty = { 0 };
 	const TieFlightObjectState* flight = pip_flight ? pip_flight : &empty;
 	const TieFlightSpeciesMesh* mesh = NULL;
@@ -388,7 +393,7 @@ static bool TieFlightRenderer_PrepareClassicMeshTables(TieFlightRenderer* g, Aer
 		mesh = &g->meshes[pip_flight->ship_idx];
 	TieFlightMesh_BuildclassicMeshTable(mesh, flight, snapshot, TIE_FLIGHT_MESH_TABLE_PIP,
 										&g->classic_mesh_tables.tables[g->classic_pip_table_index]);
-	g->classic_mesh_tables.count = snapshot->flight_count + 1;
+	g->classic_mesh_tables.count = object_count + 1;
 	return Aeron_UploadBufferDataCmd(cmd, g->classic_mesh_tables.buffer, 0, g->classic_mesh_tables.tables,
 									 g->classic_mesh_tables.count * sizeof(AeronSceneMeshTable)) != 0;
 }
@@ -410,6 +415,9 @@ static bool TieFlightRenderer_PreparePip(TieFlightRenderer* g, AeronCommandBuffe
 			synth_static.genus = TIE_GENUS_UTILITY;
 			synth_static.ship_idx = so->species;
 			synth_static.slot = so->slot;
+			synth_static.highlight = so->highlight;
+			synth_static.component_start = so->component_start;
+			synth_static.component_count = so->component_count;
 			memcpy(synth_static.world_pos, so->world_pos, sizeof synth_static.world_pos);
 			memcpy(synth_static.ori, so->ori, sizeof synth_static.ori);
 			fl = &synth_static;

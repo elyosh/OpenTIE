@@ -12,6 +12,28 @@
 #include <stdlib.h>
 #include <string.h>
 
+const TieFlightObjectState* TieFlightMesh_ClassicObject(const TieSnapshot* snapshot, uint16_t index,
+														TieFlightObjectState* scratch) {
+	if (index < snapshot->flight_count)
+		return &snapshot->flights[index];
+	const uint16_t static_index = index - snapshot->flight_count;
+	if (static_index >= snapshot->static_count)
+		return NULL;
+	const TieStaticObjectState* so = &snapshot->statics[static_index];
+	if (so->ship_class < 8 || so->ship_class > 11 || !so->model_visible)
+		return NULL;
+	memset(scratch, 0, sizeof *scratch);
+	scratch->genus = TIE_GENUS_UTILITY;
+	scratch->ship_idx = so->species;
+	scratch->slot = so->slot;
+	scratch->highlight = so->highlight;
+	scratch->component_start = so->component_start;
+	scratch->component_count = so->component_count;
+	memcpy(scratch->world_pos, so->world_pos, sizeof scratch->world_pos);
+	memcpy(scratch->ori, so->ori, sizeof scratch->ori);
+	return scratch;
+}
+
 static void TieFlightRenderer_AffineMultiply(float out[3][4], const float left[3][4],
 											 const float right[3][4]) {
 	float result[3][4];
@@ -130,11 +152,16 @@ void TieFlightMesh_BuildclassicMeshTable(const TieFlightSpeciesMesh* mesh, const
 										 const TieSnapshot* snapshot, TieFlightMeshTablePurpose purpose,
 										 AeronSceneMeshTable* out) {
 	const bool markings = snapshot->drawmarkingsflag != 0;
+	/* Whole-object targeting is the default; selected meshes override it. */
+	const float whole_highlight =
+		purpose == TIE_FLIGHT_MESH_TABLE_MAIN && (flight->highlight == 1 || flight->highlight == 3)
+			? (float)flight->highlight
+			: 0.0f;
 	const uint16_t species = flight->genus == TIE_GENUS_DEBRIS ? flight->parent_ship_idx : flight->ship_idx;
 	for (uint32_t i = 0; i < AERON_MAX_MESH_SLOTS; ++i) {
 		TieRenderMath_Mat3x4Identity(out->rows[i]);
 		out->visibility_packed[i >> 2][i & 3] = 1.0f;
-		out->highlight_packed[i >> 2][i & 3] = 0.0f;
+		out->highlight_packed[i >> 2][i & 3] = whole_highlight;
 		uint8_t mesh_type = 0;
 		if (mesh && mesh->mesh_rot && i < mesh->mesh_count)
 			mesh_type = mesh->mesh_rot[i].mesh_type;
@@ -152,10 +179,6 @@ void TieFlightMesh_BuildclassicMeshTable(const TieFlightSpeciesMesh* mesh, const
 			out->visibility_packed[flight->submesh_idx >> 2][flight->submesh_idx & 3] = 1.0f;
 	}
 
-	if (purpose == TIE_FLIGHT_MESH_TABLE_MAIN && flight->highlight == 1) {
-		for (uint32_t i = 0; i < AERON_MAX_MESH_SLOTS; ++i)
-			out->highlight_packed[i >> 2][i & 3] = 1.0f;
-	}
 	if (!mesh || !mesh->mesh_rot || flight->component_count == 0 || !snapshot->flight_components)
 		return;
 
@@ -186,12 +209,6 @@ void TieFlightMesh_BuildclassicMeshTable(const TieFlightSpeciesMesh* mesh, const
 		float angle =
 			(float)(uint16_t)component->rotation_angle * (2.0f * 3.14159265358979323846f / 65536.0f);
 		TieRenderMath_Mat3x4RotationAboutPivot(out->rows[mesh_index], rotation->axis, rotation->pivot, angle);
-	}
-	if (purpose == TIE_FLIGHT_MESH_TABLE_MAIN && flight->highlight == 3) {
-		for (uint32_t i = 0; i < AERON_MAX_MESH_SLOTS; ++i) {
-			if (out->highlight_packed[i >> 2][i & 3] == 0.0f)
-				out->highlight_packed[i >> 2][i & 3] = 3.0f;
-		}
 	}
 }
 
