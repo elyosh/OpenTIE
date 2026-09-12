@@ -597,7 +597,7 @@ int16_t paifight_checkforfuturetargets(uint16_t ai_entry) {
 // FUNCTION: TIE 0x37570
 int16_t paifight_scanfortargetswitch(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
-	uint8_t order_class = ordersldr[cur_ai->order];
+	uint8_t order_class = create_getleaderorder(cur_ai->order);
 
 	ai.live_target_only = order_class == 19;
 	ai.search_flags = 7u;
@@ -616,7 +616,7 @@ int16_t paifight_scanfortargetswitch(uint16_t ai_entry) {
 // FUNCTION: TIE 0x37624
 int16_t paifight_scanfortargetsallgone(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
-	uint8_t order_class = ordersldr[cur_ai->order];
+	uint8_t order_class = create_getleaderorder(cur_ai->order);
 
 	ai.live_target_only = order_class == 19;
 	ai.search_flags = 2u;

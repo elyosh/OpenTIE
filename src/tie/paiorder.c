@@ -1170,8 +1170,9 @@ int16_t paiorder_completegootherorder(void) {
 	craftptr->ai_state_1C = (uint8_t)new_entry;
 
 	uint8_t new_order = fg_array[ai.fg_idx].ai[new_entry].order;
-	craftptr->default_order_ldr = ordersldr[new_order];
-	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? ordersldr[new_order] : ordersflw[new_order];
+	craftptr->default_order_ldr = create_getleaderorder(new_order);
+	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? create_getleaderorder(new_order)
+															  : create_getfollowerorder(new_order);
 	return 1;
 }
 
@@ -1189,8 +1190,9 @@ int16_t paiorder_completefolloworder(void) {
 	craftptr->ai_state_1C = leader_entry;
 
 	uint8_t new_order = fg_array[ai.fg_idx].ai[leader_entry].order;
-	craftptr->default_order_ldr = ordersldr[new_order];
-	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? ordersldr[new_order] : ordersflw[new_order];
+	craftptr->default_order_ldr = create_getleaderorder(new_order);
+	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? create_getleaderorder(new_order)
+															  : create_getfollowerorder(new_order);
 	return 1;
 }
 
@@ -1221,8 +1223,9 @@ int16_t paiorder_waitgootherorder(void) {
 
 	uint8_t order = fg_array[ai.fg_idx].ai[picked].order;
 	craftptr->ai_state_1C = picked;
-	craftptr->default_order_ldr = ordersldr[order];
-	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? ordersldr[order] : ordersflw[order];
+	craftptr->default_order_ldr = create_getleaderorder(order);
+	ai.staged_next_order =
+		(craftptr->leader_obj_idx == 0xFF) ? create_getleaderorder(order) : create_getfollowerorder(order);
 	return 1;
 }
 
@@ -1242,7 +1245,7 @@ int16_t paiorder_orderswitchorder(void) {
 			continue;
 
 		uint8_t order = fg_array[ai.fg_idx].ai[scan].order;
-		uint8_t mapped = ordersldr[order];
+		uint8_t mapped = create_getleaderorder(order);
 
 		if (mapped < 0x1Cu) {
 			if (mapped < 7 || (mapped > 9 && mapped != 19))
@@ -1266,8 +1269,9 @@ int16_t paiorder_orderswitchorder(void) {
 	uint8_t picked = (uint8_t)scan;
 	uint8_t order = fg_array[ai.fg_idx].ai[picked].order;
 	craftptr->ai_state_1C = picked;
-	craftptr->default_order_ldr = ordersldr[order];
-	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? ordersldr[order] : ordersflw[order];
+	craftptr->default_order_ldr = create_getleaderorder(order);
+	ai.staged_next_order =
+		(craftptr->leader_obj_idx == 0xFF) ? create_getleaderorder(order) : create_getfollowerorder(order);
 	return 1;
 }
 

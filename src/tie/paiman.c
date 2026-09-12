@@ -1123,8 +1123,8 @@ int16_t paiman_outofhyperspacemaneuver(void) {
 	if (!done)
 		return 0;
 
-	mapped_order = (cd->leader_obj_idx == 0xFFu) ? ordersldr[fg_array[ai.fg_idx].ai[0].order]
-												 : ordersflw[fg_array[ai.fg_idx].ai[0].order];
+	mapped_order = (cd->leader_obj_idx == 0xFFu) ? create_getleaderorder(fg_array[ai.fg_idx].ai[0].order)
+												 : create_getfollowerorder(fg_array[ai.fg_idx].ai[0].order);
 
 	cd->flight_flag = 0;
 	cd->ai_target_ref = (int16_t)0xFF; /* clear maneuver target ref */
@@ -1337,8 +1337,9 @@ int16_t paiman_outofhangarmaneuver(void) {
 		return 0;
 
 	/* The plan VM reads exithangarplan[3] as the next order. */
-	uint8_t mapped_order = (cd->leader_obj_idx == 0xFFu) ? ordersldr[fg_array[ai.fg_idx].ai[0].order]
-														 : ordersflw[fg_array[ai.fg_idx].ai[0].order];
+	uint8_t mapped_order = (cd->leader_obj_idx == 0xFFu)
+							   ? create_getleaderorder(fg_array[ai.fg_idx].ai[0].order)
+							   : create_getfollowerorder(fg_array[ai.fg_idx].ai[0].order);
 	exithangarplan[3] = mapped_order;
 
 	cd->formation_separation = 2;

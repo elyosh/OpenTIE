@@ -134,6 +134,15 @@ extern uint16_t aiupdatetranslate[6];
 extern uint8_t ordersldr[33];
 extern uint8_t ordersflw[33];
 
+/* Unsupported mission orders (including retail HI1W.TIE's 35) use the null plan. */
+static inline uint8_t create_getleaderorder(uint8_t order) {
+	return order < sizeof(ordersldr) / sizeof(ordersldr[0]) ? ordersldr[order] : 0;
+}
+
+static inline uint8_t create_getfollowerorder(uint8_t order) {
+	return order < sizeof(ordersflw) / sizeof(ordersflw[0]) ? ordersflw[order] : 0;
+}
+
 /* Craft-type -> species index (161-space narrowed to 89-space). */
 extern uint8_t speciesconvert[89];
 

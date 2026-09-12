@@ -1078,7 +1078,7 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 			adjust_if_hostile = 1;
 		} else if (fggenus == GENUS_FIGHTER) {
 			for (int k = 0; k < 3; k++) {
-				if (ordersldr[f->ai[k].order] == 19)
+				if (create_getleaderorder(f->ai[k].order) == 19)
 					adjust_if_hostile = 0;
 			}
 		}
@@ -1544,8 +1544,8 @@ uint16_t create_createcraft(void) {
 
 	/* AI orders: leader + follower both indexed by ai[0].order.
 	 * Hyper/hangar states override with fixed opcodes 52/50. */
-	const uint8_t order_ldr = ordersldr[f->ai[0].order];
-	const uint8_t order_flw = ordersflw[f->ai[0].order];
+	const uint8_t order_ldr = create_getleaderorder(f->ai[0].order);
+	const uint8_t order_flw = create_getfollowerorder(f->ai[0].order);
 	c->default_order_ldr = order_ldr;
 	if (fghyperspace)
 		c->current_order = 52;
