@@ -441,11 +441,15 @@ static int TieCockpitText_BuildRecordingPct(const TieHudInstrument* instruments,
 }
 
 /* panel_updatehardpoint ammo digits (idx 15..18). */
-static int TieCockpitText_BuildMissileAmmo(const TieHudInstrument* instruments, TieUIText* out, int cap) {
+static int TieCockpitText_BuildMissileAmmo(const TieHudState* hud, const TieHudInstrument* instruments,
+										   TieUIText* out, int cap) {
 	int n = 0;
-	for (int i = 0; i < 4; ++i)
+	for (int i = 0; i < 4; ++i) {
+		if (!TieCockpitCommon_MissileHardpointVisible(hud, i))
+			continue;
 		TieCockpitText_EmitPanelValue(out, &n, cap, &instruments[TIE_HUDI_MISSILE_AMMO_FIRST + i], 1,
 									  COCKPIT_BG_AMMO);
+	}
 	return n;
 }
 
@@ -454,9 +458,8 @@ static int TieCockpitText_BuildPanelCmd(struct TieScene2dTextRenderer* text_rend
 										const TieHudInstrument* instruments, const TieCockpitLayout* layout,
 										const TieScene2dTextSpace* space, TieUIText* out, int cap) {
 	const TieHudState* h = &snap->hud;
-	if (h->target_obj_slot == 0xFFFFu)
+	if (h->target_obj_slot == 0xFFFFu || !(h->working_subsystems & 0x01u))
 		return 0;
-	const bool tgt_craft = (h->target_obj_slot < 0x3800u);
 	const bool is_svga = TieCockpitCommon_IsSvga(snap);
 	/* Engine column widths used to fall back when no layout-authored
 	 * absolute position is supplied. */
@@ -508,7 +511,7 @@ static int TieCockpitText_BuildPanelCmd(struct TieScene2dTextRenderer* text_rend
 
 	/* Cargo (idx 63) + subsystem focus (idx 65) — colors set by
 	 * panel_updatecmd at the paint sites. */
-	if (tgt_craft) {
+	{
 		const TieHudInstrument* ins = &instruments[63];
 		const int16_t right_at =
 			TieCockpitText_ResolveRightAt(layout, 63, (int16_t)ins->x, cmd_text_w_classic);
@@ -762,7 +765,6 @@ static int TieCockpitText_BuildPanelThreat(struct TieScene2dTextRenderer* text_r
 	const TieHudState* h = &snap->hud;
 	if (h->target_obj_slot == 0xFFFFu)
 		return 0;
-	const bool tgt_craft = (h->target_obj_slot < 0x3800u);
 	const bool is_svga = TieCockpitCommon_IsSvga(snap);
 	/* Engine constants for the threat label column + target-name
 	 * centering — fallback when no layout-authored override. */
@@ -780,11 +782,11 @@ static int TieCockpitText_BuildPanelThreat(struct TieScene2dTextRenderer* text_r
 	}
 
 	/* Idx 70 — cargo. */
-	if (tgt_craft) {
+	{
 		const TieHudInstrument* ins = &instruments[70];
 		if (ins->x || ins->y)
-			TieCockpitText_EmitPanelText(out, &n, cap, (int16_t)ins->x, (int16_t)ins->y,
-										 TieCockpitText_ResolveCargoText(h), ins->color, COCKPIT_BG_THREAT);
+			TieCockpitText_EmitPanelText(out, &n, cap, (int16_t)ins->x, (int16_t)ins->y, h->threat_cargo,
+										 ins->color, COCKPIT_BG_THREAT);
 	}
 
 	/* Distance + shield/hull % digits. */
@@ -824,9 +826,10 @@ int TieCockpitText_BuildHudText(struct TieScene2dTextRenderer* text_renderer, co
 		return 0;
 	int n = 0;
 	if (v == 0) {
-		n += TieCockpitText_BuildPlayerReadouts(instruments, out + n, cap - n);
+		if (snap->hud.working_subsystems & 0x40u)
+			n += TieCockpitText_BuildPlayerReadouts(instruments, out + n, cap - n);
 		n += TieCockpitText_BuildRecordingPct(instruments, out + n, cap - n);
-		n += TieCockpitText_BuildMissileAmmo(instruments, out + n, cap - n);
+		n += TieCockpitText_BuildMissileAmmo(&snap->hud, instruments, out + n, cap - n);
 		/* Training missions replace the CMD readout with the gate CRT
 		 * stats (mission.train_craft_type != 0 → gate_trainingupdatecrt
 		 * in classic, panel.c:1945-1949). */

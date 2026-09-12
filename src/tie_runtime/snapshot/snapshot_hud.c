@@ -10,6 +10,7 @@
 #include "tie/panel.h"
 #include "tie/render_scene_tie98.h"
 #include "tie/rtsvga2.h"
+#include "tie/shipext.h"
 #include "tie/spec.h"
 #include "tie/static.h"
 #include "tie/tie.h"
@@ -156,6 +157,7 @@ static void TieHudSnapshot_CaptureHud(void) {
 	/* Player-craft summary — only meaningful when a flight session
 	 * has run create_createhyperin (which seats player_craft). */
 	CraftData* pc = pstate.player_craft;
+	hud->missile_hardpoint_count = 0;
 	if (pc) {
 		hud->hull_damage = (int16_t)pc->hull_damage;
 		hud->hull_max = (int16_t)pc->hull_max;
@@ -164,6 +166,10 @@ static void TieHudSnapshot_CaptureHud(void) {
 		hud->subsystem_active = pc->subsystem_active;
 		hud->status_flags = pc->status_flags;
 		hud->weapon_group_cnt = pc->weapon_group_cnt;
+		if (spec_data[pstate.player_spec_num].missile_count[0] +
+				spec_data[pstate.player_spec_num].missile_count[1] !=
+			0)
+			hud->missile_hardpoint_count = pstate.player_spec_num == spec_getspecnum(12) ? 4 : 2;
 		hud->beam_type = pc->beam_type;
 		hud->laser_power = pc->laser_power;
 		hud->shield_power = pc->shield_power;
@@ -184,6 +190,10 @@ static void TieHudSnapshot_CaptureHud(void) {
 	const uint16_t tslot = pstate.target_obj_idx;
 	hud->target_obj_slot = tslot;
 	hud->target_name[0] = '\0';
+	/* Eligibility is current-frame state; the HUD payload otherwise persists. */
+	hud->target_box_engine_ok = 0;
+	hud->target_box_inputs_ok = 0;
+	hud->target_subsystem_box_engine_ok = 0;
 
 	/* target_box_engine_ok: 1995 gates including pilotview ∈ {0,19}.
 	 * target_box_inputs_ok: 1998 gates (drops pilotview).
@@ -351,6 +361,7 @@ static void TieHudSnapshot_CaptureCockpit(void) {
 	TieCockpitState* ck = TieSnapshotBuilder_CockpitMut();
 	const uint8_t view_idx = camera.pilotview;
 	ck->view_idx = view_idx;
+	ck->covers_allowed = pstate.player && pstate.player->ship_idx != CRAFT_TIE_FIGHTER && view_idx == 0;
 	if (view_idx < PANEL_NUM_VIEWS) {
 		const PanelViewDef* vd = &panelviewdefs[view_idx];
 		/* Resolve the inherit/mirror chain to find the view whose LFD

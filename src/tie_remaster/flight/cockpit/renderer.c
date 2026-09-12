@@ -64,6 +64,8 @@ typedef TieCockpitCoverageRect TieCockpitRendererCoverRect;
 
 typedef struct TieCockpitRendererEntry {
 	char view_name[COCKPIT_VIEW_NAME_MAX];
+	char parts_basename[10];
+	uint16_t parts_shape_count;
 	uint16_t classic_w;
 	uint16_t classic_h;
 	AeronTexture* base_tex; /* canopy bitmap (full screen) */
@@ -166,6 +168,7 @@ struct TieCockpitRenderer {
 		uint16_t installed_subsystems;
 		uint16_t working_subsystems;
 		uint16_t subsystem_active;
+		uint8_t covers_allowed;
 		int coord_w, coord_h;
 		int rt_w, rt_h;
 	} chrome_key;
@@ -539,19 +542,21 @@ void TieCockpitRenderer_Shutdown(TieCockpitRenderer* cg) {
 	free(cg);
 }
 
-/* Look up or LRU-evict an entry for (view_name, classic dims).
- * Returns a still-unloaded slot when assets aren't on disk yet. */
+/* Cache views by their parts identity and resolution; evict the oldest insertion. */
 static TieCockpitRendererEntry* TieCockpitRenderer_FindOrAllocEntry(TieCockpitRenderer* cg,
-																	const char* view_name, uint16_t classic_w,
-																	uint16_t classic_h) {
-	if (!view_name || !view_name[0])
+																	const TieCockpitState* cockpit) {
+	if (!cockpit->view_name[0])
 		return NULL;
 	for (int i = 0; i < cg->entry_count; ++i) {
 		TieCockpitRendererEntry* entry = &cg->entries[i];
-		if (strncmp(entry->view_name, view_name, COCKPIT_VIEW_NAME_MAX) == 0 &&
-			entry->classic_w == classic_w && entry->classic_h == classic_h)
+		if (strncmp(entry->view_name, cockpit->view_name, sizeof entry->view_name) == 0 &&
+			strncmp(entry->parts_basename, cockpit->parts_basename, sizeof entry->parts_basename) == 0 &&
+			entry->parts_shape_count == cockpit->parts_shape_count &&
+			entry->classic_w == cockpit->classic_w && entry->classic_h == cockpit->classic_h)
 			return entry;
 	}
+	/* Eviction moves entries, so a cached pointer cannot identify the previous bake. */
+	cg->chrome_valid = false;
 	if (cg->entry_count >= COCKPIT_MAX_CACHED) {
 		TieCockpitRenderer_ReleaseEntry(cg, &cg->entries[0]);
 		for (int i = 1; i < cg->entry_count; ++i)
@@ -561,9 +566,11 @@ static TieCockpitRendererEntry* TieCockpitRenderer_FindOrAllocEntry(TieCockpitRe
 	}
 	TieCockpitRendererEntry* entry = &cg->entries[cg->entry_count++];
 	memset(entry, 0, sizeof *entry);
-	snprintf(entry->view_name, sizeof entry->view_name, "%s", view_name);
-	entry->classic_w = classic_w;
-	entry->classic_h = classic_h;
+	snprintf(entry->view_name, sizeof entry->view_name, "%s", cockpit->view_name);
+	snprintf(entry->parts_basename, sizeof entry->parts_basename, "%s", cockpit->parts_basename);
+	entry->parts_shape_count = cockpit->parts_shape_count;
+	entry->classic_w = cockpit->classic_w;
+	entry->classic_h = cockpit->classic_h;
 	return entry;
 }
 
@@ -1471,9 +1478,14 @@ static void TieCockpitRenderer_DrawShapeLever(TieCockpitRenderer* cg, AeronComma
 		/* panel_updateshields: gated on working_subsystems & 0x20. */
 		if ((cap & 0x20u) == 0)
 			return;
+	} else if (idx >= TIE_HUDI_MISSILE_HP_FIRST && idx <= TIE_HUDI_MISSILE_HP_LAST) {
+		if (!TieCockpitCommon_MissileHardpointVisible(&snap->hud, idx - TIE_HUDI_MISSILE_HP_FIRST))
+			return;
 	} else if (idx >= TIE_HUDI_WEAPON_FIRE_FIRST && idx <= TIE_HUDI_WEAPON_FIRE_LAST) {
-		/* panel_updatelasers: gated on bits 0x02 AND 0x04. */
-		if ((cap & 0x06u) != 0x06u)
+		/* Fire levers follow the group loop, independently of charge-bar health. */
+		const int group = idx - TIE_HUDI_WEAPON_FIRE_FIRST;
+		if (group >= snap->hud.weapon_group_cnt ||
+			!TieCockpitCommon_InstrumentActive(&snap->hud.instruments[TIE_HUDI_LASER_LED_FIRST + group]))
 			return;
 	}
 
@@ -1527,15 +1539,14 @@ static void TieCockpitRenderer_DrawDamageCracks(TieCockpitRenderer* cg, AeronCom
  * shields are inactive (SF_SHIELDS bit clear in subsystem_active), or
  * over the beam-charge zone when the tractor beam is inactive
  * (SF_TRACTOR_BEAM bit clear). Each cover has a single cel at param1.
- * View 0 only. Drawn before live widgets so the LED drawers paint on
- * top when the subsystem is active (and skip when it's not, leaving
- * the cover visible). */
+ * Forward view except the TIE Fighter. Classic paints covers before
+ * instrument plates and live widgets during panel_initpanel. */
 static void TieCockpitRenderer_DrawCovers(TieCockpitRenderer* cg, AeronCommandBuffer* cmd,
 										  AeronRenderPass* pass, const TieCockpitRendererEntry* entry,
 										  int coord_w, int coord_h, const TieSnapshot* snap) {
 	if (!entry->parts_tex)
 		return;
-	if (snap->cockpit.view_idx != 0)
+	if (!snap->cockpit.covers_allowed)
 		return;
 
 	const uint16_t active = snap->hud.subsystem_active;
@@ -1609,6 +1620,7 @@ static bool TieCockpitRenderer_ChromeKeyMatches(const TieCockpitRenderer* cg,
 		   cg->chrome_key.installed_subsystems == snap->hud.installed_subsystems &&
 		   cg->chrome_key.working_subsystems == snap->hud.working_subsystems &&
 		   cg->chrome_key.subsystem_active == snap->hud.subsystem_active &&
+		   cg->chrome_key.covers_allowed == snap->cockpit.covers_allowed &&
 		   cg->chrome_key.coord_w == coord_w && cg->chrome_key.coord_h == coord_h &&
 		   cg->chrome_key.rt_w == rt_w && cg->chrome_key.rt_h == rt_h;
 }
@@ -1635,8 +1647,8 @@ static bool TieCockpitRenderer_BakeCockpitChrome(TieCockpitRenderer* cg, AeronCo
 	TIE_GPU_PUSH(cmd, "Cockpit chrome bake");
 	TieCockpitRenderer_DrawCockpitBase(cg, cmd, NULL, entry, coord_w, coord_h, cockpit_area_h,
 									   snap->cockpit.mirrored_view);
-	TieCockpitRenderer_DrawDamageCracks(cg, cmd, NULL, entry, coord_w, coord_h, snap);
 	TieCockpitRenderer_DrawCovers(cg, cmd, NULL, entry, coord_w, coord_h, snap);
+	TieCockpitRenderer_DrawDamageCracks(cg, cmd, NULL, entry, coord_w, coord_h, snap);
 	if (!AeronDrawList_Prepare(cg->chrome_bake_list, cmd)) {
 		TIE_GPU_POP(cmd);
 		cg->record_list = NULL;
@@ -1653,6 +1665,7 @@ static bool TieCockpitRenderer_BakeCockpitChrome(TieCockpitRenderer* cg, AeronCo
 	cg->chrome_key.installed_subsystems = snap->hud.installed_subsystems;
 	cg->chrome_key.working_subsystems = snap->hud.working_subsystems;
 	cg->chrome_key.subsystem_active = snap->hud.subsystem_active;
+	cg->chrome_key.covers_allowed = snap->cockpit.covers_allowed;
 	cg->chrome_key.coord_w = coord_w;
 	cg->chrome_key.coord_h = coord_h;
 	cg->chrome_key.rt_w = rt_w;
@@ -1807,6 +1820,9 @@ static void TieCockpitRenderer_DrawVertSlider(TieCockpitRenderer* cg, AeronComma
 static void TieCockpitRenderer_DrawRadarDisc(TieCockpitRenderer* cg, AeronCommandBuffer* cmd,
 											 AeronRenderPass* pass, const TieCockpitRendererEntry* entry,
 											 int coord_w, int coord_h, int idx, const TieSnapshot* snap) {
+	if (!TieCockpitCommon_RadarWorking(&snap->hud))
+		return;
+
 	/* The disc bezel is baked into the cockpit bitmap; this drawer
 	 * only emits blip pixels. Engine writes them 1×1 (VGA) or 1×2
 	 * (SVGA) — we drop classic's "only-over-radar-background" check
@@ -2151,7 +2167,7 @@ static void TieCockpitRenderer_DrawMainTargetBox(TieCockpitRenderer* cg, AeronCo
 static void TieCockpitRenderer_DrawRadarBracket(TieCockpitRenderer* cg, AeronCommandBuffer* cmd,
 												AeronRenderPass* pass, const TieCockpitRendererEntry* entry,
 												int coord_w, int coord_h, const TieSnapshot* snap) {
-	if (!snap->hud.bracket_present)
+	if (!snap->hud.bracket_present || !TieCockpitCommon_RadarWorking(&snap->hud))
 		return;
 
 	const int8_t* def;
@@ -2526,7 +2542,7 @@ static void TieCockpitRenderer_Draw3dcrt(TieCockpitRenderer* cg, AeronCommandBuf
 
 	if (dst_w <= 0.0f || dst_h <= 0.0f)
 		return;
-	if (!snap->cockpit.pip_target_present)
+	if (!snap->cockpit.pip_target_present || !(snap->hud.working_subsystems & 0x01u))
 		return;
 	if (!cg->flight_gpu)
 		return;
@@ -2557,7 +2573,7 @@ static void TieCockpitRenderer_DrawPipTargetBox(TieCockpitRenderer* cg, AeronCom
 												int coord_w, int coord_h, const TieSnapshot* snap) {
 	if (!snap->hud.target_subsystem_box_engine_ok)
 		return;
-	if (!snap->cockpit.pip_target_present)
+	if (!snap->cockpit.pip_target_present || !(snap->hud.working_subsystems & 0x01u))
 		return;
 	/* Engine path: panel_drawboxinxtrans only fires inside
 	 * panel_update3Dcrt, which panel_updatepanel calls strictly when
@@ -2816,8 +2832,7 @@ bool TieCockpitRenderer_Prepare(TieCockpitRenderer* cg, AeronCommandBuffer* cmd,
 	 * buffer OUTSIDE any render pass (the backend forbids overlapping
 	 * copy / render passes). All of this MUST run before the caller
 	 * opens the flight-main render pass. */
-	TieCockpitRendererEntry* entry = TieCockpitRenderer_FindOrAllocEntry(
-		cg, snap->cockpit.view_name, snap->cockpit.classic_w, snap->cockpit.classic_h);
+	TieCockpitRendererEntry* entry = TieCockpitRenderer_FindOrAllocEntry(cg, &snap->cockpit);
 	if (!entry) {
 		cg->pending_ready = TieCockpitRenderer_FlightHudRecordLists(cg, cmd, rt_w, rt_h, snap);
 		return cg->pending_ready;
@@ -2932,10 +2947,10 @@ static bool TieCockpitRenderer_CockpitRecordLists(TieCockpitRenderer* cg, AeronC
 		TIE_GPU_MARKER(cmd, "Cockpit base");
 		TieCockpitRenderer_DrawCockpitBase(cg, cmd, NULL, entry, coord_w, coord_h, cockpit_area_h,
 										   snap->cockpit.mirrored_view);
-		TIE_GPU_MARKER(cmd, "Cockpit damage");
-		TieCockpitRenderer_DrawDamageCracks(cg, cmd, NULL, entry, coord_w, coord_h, snap);
 		TIE_GPU_MARKER(cmd, "Cockpit covers");
 		TieCockpitRenderer_DrawCovers(cg, cmd, NULL, entry, coord_w, coord_h, snap);
+		TIE_GPU_MARKER(cmd, "Cockpit damage");
+		TieCockpitRenderer_DrawDamageCracks(cg, cmd, NULL, entry, coord_w, coord_h, snap);
 	}
 	/* Per-frame clearwindow rects for dynamic-text areas the cockpit
 	 * base bitmap leaves with placeholder graphics. View-0 gated. */
@@ -2978,6 +2993,9 @@ static bool TieCockpitRenderer_CockpitRecordLists(TieCockpitRenderer* cg, AeronC
 		TieHudInstrument instruments_remapped[TIE_MAX_HUD_INSTRUMENTS];
 		for (int i = 0; i < TIE_MAX_HUD_INSTRUMENTS; ++i) {
 			instruments_remapped[i] = snap->hud.instruments[i];
+			/* Layout anchors position existing instruments; unused slots stay absent. */
+			if (!TieCockpitCommon_InstrumentActive(&snap->hud.instruments[i]))
+				continue;
 			float ax, ay;
 			TieCockpitRenderer_InsAnchor(entry, i, snap->hud.instruments[i].x, snap->hud.instruments[i].y,
 										 snap, &ax, &ay);

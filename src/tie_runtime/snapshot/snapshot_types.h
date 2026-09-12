@@ -860,6 +860,8 @@ typedef struct TieHudState {
 	/* Active player weapon-group count (cp->weapon_group_cnt). Bounds
 	 * the LASER_LED_ROW iteration at indices 3..3+N-1. */
 	uint8_t weapon_group_cnt;
+	/* Hardpoints painted by panel_updateweapons: 0, 2, or 4, from the craft spec. */
+	uint8_t missile_hardpoint_count;
 	uint8_t beam_type;
 	/* Per-LED palette index for the 9-LED beam-arc bar (idx 35).
 	 * panel_updatebeam picks one of beamcolors[0..3] per LED based on
@@ -941,6 +943,8 @@ typedef struct TieHudState {
 
 	/* Resolved string painted into instrument[63]. Empty = no text. */
 	char target_cargo[24];
+	/* Cargo painted by panel_updatethreatname at instrument 70. */
+	char threat_cargo[24];
 
 	/* Threat-view (pilotview 20) resolved text — engine paints these
 	 * strings into the threat-view text slots; the snapshot mirrors
@@ -1028,9 +1032,10 @@ typedef struct TieHudState {
  * widgets, and frame the picture-in-picture target render the same
  * way classic does. Updated once per tick by TieHudSnapshot_Capture. */
 typedef struct TieCockpitState {
-	uint8_t view_idx;     /* mirrors camera.pilotview */
-	uint8_t panel_loaded; /* 1 if panelviewptrs[view].handle != 0 */
-	int16_t view_yoffset; /* screen-Y offset (PanelViewDef.yoffset) */
+	uint8_t view_idx;       /* mirrors camera.pilotview */
+	uint8_t panel_loaded;   /* 1 if panelviewptrs[view].handle != 0 */
+	uint8_t covers_allowed; /* panel_updatecovers: forward view, except the TIE Fighter */
+	int16_t view_yoffset;   /* screen-Y offset (PanelViewDef.yoffset) */
 	uint16_t view_x, view_y;
 	uint16_t view_width, view_depth;
 	char view_name[10];         /* PanelViewDef.name — LFD basename, NUL-terminated */

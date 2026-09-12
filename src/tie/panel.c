@@ -554,7 +554,7 @@ void panel_updatesetting(uint16_t value, uint16_t idx, uint16_t count, int16_t s
  * when their subsystems are inactive. Each cover is a single cel at
  * `param1`; the engine writes value=0 unconditionally (covers have only
  * the one closed-state graphic). Skip non-view-0 and ship_idx==5
- * (escape pod).
+ * (TIE Fighter).
  */
 // FUNCTION: TIE 0x42634
 void panel_updatecovers(void) {
@@ -624,6 +624,7 @@ void panel_updatereplaystuff(void) {
 			clearwindow();
 			festring_settextcolor(0x4E);
 			panelrts_outnum((int32_t)remaining, 3, 1);
+			TieHudSnapshot_RecordInstrumentDisplay(TIE_HUDI_REC_PCT, (int16_t)remaining, 0x4E, 3);
 		}
 	} else if (replaypercent != -1) {
 		replaypercent = -1;
@@ -1699,7 +1700,9 @@ void panel_updatethreatname(void) {
 		festring_setcursor((int16_t)instruments[70].x, (int16_t)instruments[70].y);
 		festring_settextcolor(0x46);
 		festring_outstring((const uint8_t*)cargo_str);
-		TieSnapshotBuilder_HudMut()->instruments[70].color = 0x46;
+		TieHudState* hud = TieSnapshotBuilder_HudMut();
+		str_copy_bounded(hud->threat_cargo, sizeof hud->threat_cargo, (const uint8_t*)cargo_str);
+		hud->instruments[70].color = 0x46;
 	}
 
 	/* Order / link / ETA text block (only for dynamic craft). */

@@ -18,6 +18,16 @@ static inline bool TieCockpitCommon_InstrumentActive(const TieHudInstrument* ins
 	return (ins->x != 0) || (ins->y != 0);
 }
 
+/* panel_updateweapons gates both hardpoint sprites and ammunition text. */
+static inline bool TieCockpitCommon_MissileHardpointVisible(const TieHudState* hud, int hardpoint) {
+	return (hud->working_subsystems & 0x08u) != 0 && hardpoint >= 0 &&
+		   hardpoint < hud->missile_hardpoint_count;
+}
+
+static inline bool TieCockpitCommon_RadarWorking(const TieHudState* hud) {
+	return (hud->working_subsystems & 0x180u) == 0x180u;
+}
+
 /* panel.c branches layout widths on TIE_FLIGHT_RES_VGA vs SVGA. */
 static inline bool TieCockpitCommon_IsSvga(const TieSnapshot* snap) { return snap->cockpit.classic_w >= 600; }
 
