@@ -280,7 +280,9 @@ static int help_poll_once(HelpTask* t) {
 	return redraw ? 2 : 0;
 }
 
-// FUNCTION: TIE 0x2C7F0, TIE98 0x42F390 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x2C7F0
+// ORIGINAL_FUNCTION: TIE98 0x42F390
+// (task-split recovery)
 static LandruTaskStepResult help_task_step(void* self) {
 	HelpTask* t = (HelpTask*)self;
 

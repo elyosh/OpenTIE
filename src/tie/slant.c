@@ -3,7 +3,7 @@
 #include "landru/bitmap.h"
 #include "landru/canvas.h"
 
-// FUNCTION: TIE 0x877E0
+// FUNCTION: TIE95 0x877E0
 void slant_Scale_Line(void* bitmap_data, int16_t src_x, int16_t src_y, int16_t skip, int16_t skipf,
 					  int16_t dst_x, int16_t dst_y, int16_t width, uint8_t color) {
 	BitmapStruct* canvas_bm = xcanvas_Get_Current_Canvas_Bitmap();

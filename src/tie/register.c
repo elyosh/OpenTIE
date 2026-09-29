@@ -241,13 +241,17 @@ static const RegisterSpec* active_spec;
 
 /* ---- Static globals ---- */
 
-// GLOBAL: TIE95 0xD11FC; TIE98 0x4EAB88
+// GLOBAL: TIE95 0xD11FC
+// GLOBAL: TIE98 0x4EAB88
 static int16_t pilot_active; /* logical index of selected pilot (-1 = none) */
-// GLOBAL: TIE95 0xD11FE; TIE98 0x589784
+// GLOBAL: TIE95 0xD11FE
+// GLOBAL: TIE98 0x589784
 static int16_t pilot_offset; /* first visible pilot in list */
-// GLOBAL: TIE95 0xD1200; TIE98 0x589788
+// GLOBAL: TIE95 0xD1200
+// GLOBAL: TIE98 0x589788
 static int16_t num_pilots; /* count of valid (non-deleted) pilots */
-// GLOBAL: TIE95 0xD1202; TIE98 0x58978C
+// GLOBAL: TIE95 0xD1202
+// GLOBAL: TIE98 0x58978C
 static int16_t num_loaded_pilots; /* total directory entries */
 static int16_t pilot_loaded;
 
@@ -277,7 +281,8 @@ static Actor* reg_button[3]; /* film callback actor cache */
 static Actor* reg_door;
 static Input* door_input;
 static Input* pilot_list;
-// GLOBAL: TIE95 0xF6DF4; TIE98 0x588E70
+// GLOBAL: TIE95 0xF6DF4
+// GLOBAL: TIE98 0x588E70
 static Actor* reg_bak;
 static Directory directory;
 // GLOBAL: TIE95 0xF6E46
@@ -289,7 +294,8 @@ static int16_t protect_count;
 // GLOBAL: TIE95 0xF6E50
 static int16_t protect_index;
 static int16_t num_pages;
-// GLOBAL: TIE95 0xF6E52; TIE98 0x588E74
+// GLOBAL: TIE95 0xF6E52
+// GLOBAL: TIE98 0x588E74
 static void* fast_pilot_record; /* HANDLE → void* adapted */
 static int16_t cur_page;
 static int16_t pilot_delete_status;
@@ -319,7 +325,8 @@ static void idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, int16_t r
 
 /* Map logical pilot index (skipping deleted slots) to physical slot.
  * Returns 1 if found, 0 otherwise. */
-// FUNCTION: TIE95 0x7BC00; TIE98 0x4715C0
+// FUNCTION: TIE95 0x7BC00
+// FUNCTION: TIE98 0x4715C0
 static int16_t Index_To_Pilot(int16_t logical_idx, int16_t* out_slot) {
 	if (!fast_pilot_record)
 		return 0;
@@ -342,7 +349,8 @@ static int16_t Index_To_Pilot(int16_t logical_idx, int16_t* out_slot) {
 }
 
 /* Like Index_To_Pilot but also copies the 20-byte FPR. */
-// FUNCTION: TIE95 0x7BC84; TIE98 0x471630
+// FUNCTION: TIE95 0x7BC84
+// FUNCTION: TIE98 0x471630
 static int16_t Index_To_Pilot_Record(int16_t logical_idx, FastPilotRecord* out_rec) {
 	if (!fast_pilot_record)
 		return 0;
@@ -367,7 +375,8 @@ static int16_t Index_To_Pilot_Record(int16_t logical_idx, FastPilotRecord* out_r
 }
 
 /* Copy the idx-th directory entry name into dst. */
-// FUNCTION: TIE95 0x7C770; TIE98 0x472390
+// FUNCTION: TIE95 0x7C770
+// FUNCTION: TIE98 0x472390
 // PORT: capacity parameter supports the wider TIE98 pilot name.
 // HARDENING: validates the destination and directory storage.
 static int16_t Find_Reg_Dir_Name(char* dst, size_t capacity, int16_t idx) {
@@ -386,7 +395,8 @@ static int16_t Find_Reg_Dir_Name(char* dst, size_t capacity, int16_t idx) {
  * RegStringButton helpers
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7C480; TIE98 0x471F70
+// FUNCTION: TIE95 0x7C480
+// FUNCTION: TIE98 0x471F70
 // PORT: capacity parameter supports the wider TIE98 pilot name.
 // HARDENING: validates the output buffer.
 static void Get_Reg_String_Button_Name(RegStringButton* btn, char* dst, size_t capacity) {
@@ -396,7 +406,8 @@ static void Get_Reg_String_Button_Name(RegStringButton* btn, char* dst, size_t c
 	dst[capacity - 1] = 0;
 }
 
-// FUNCTION: TIE95 0x7C44C; TIE98 0x471F30
+// FUNCTION: TIE95 0x7C44C
+// FUNCTION: TIE98 0x471F30
 // PORT: bounded copy supports the shared enlarged runtime structure.
 static void Set_Reg_String_Button_Name(RegStringButton* btn, const char* src) {
 	strncpy(btn->name, src, sizeof(btn->name) - 1);
@@ -404,7 +415,8 @@ static void Set_Reg_String_Button_Name(RegStringButton* btn, const char* src) {
 	xinpattr_Refresh_Input(&btn->header);
 }
 
-// FUNCTION: TIE95 0x7C408; TIE98 0x471EE0
+// FUNCTION: TIE95 0x7C408
+// FUNCTION: TIE98 0x471EE0
 static int16_t Add_Key_To_Reg_String(RegStringButton* btn, char* s, char c) {
 	int16_t len = (int16_t)strlen(s);
 	int16_t max_len = btn->is_filename_mode ? active_spec->filename_max_length : 20;
@@ -415,7 +427,8 @@ static int16_t Add_Key_To_Reg_String(RegStringButton* btn, char* s, char c) {
 	return 1;
 }
 
-// FUNCTION: TIE95 0x7C148; TIE98 0x471BB0
+// FUNCTION: TIE95 0x7C148
+// FUNCTION: TIE98 0x471BB0
 // PORT: allocation uses the shared native RegStringButton size.
 // HARDENING: propagates allocation failure.
 static RegStringButton* Alloc_Input_Reg_String_Button(Input* parent, Rect* r, int16_t zinput,
@@ -438,7 +451,8 @@ static RegStringButton* Alloc_Input_Reg_String_Button(Input* parent, Rect* r, in
  * Pilot data I/O
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7BE54; TIE98 0x471850
+// FUNCTION: TIE95 0x7BE54
+// FUNCTION: TIE98 0x471850
 static int16_t Read_Pilot_Data(TieFile* f, uint8_t* dst, uint16_t count) {
 	uint16_t pos = 0;
 	uint8_t buf[64];
@@ -454,7 +468,8 @@ static int16_t Read_Pilot_Data(TieFile* f, uint8_t* dst, uint16_t count) {
 	return 1;
 }
 
-// FUNCTION: TIE95 0x7BD28; TIE98 0x4716C0
+// FUNCTION: TIE95 0x7BD28
+// FUNCTION: TIE98 0x4716C0
 // PORT: native allocation replaces the original Landru handle.
 // HARDENING: returns when allocation fails.
 static void Build_Fast_Pilot_Record(void) {
@@ -497,7 +512,8 @@ static void Build_Fast_Pilot_Record(void) {
 	}
 }
 
-// FUNCTION: TIE95 0x7BF14; TIE98 0x471910
+// FUNCTION: TIE95 0x7BF14
+// FUNCTION: TIE98 0x471910
 static void Delete_Pilot_Record(void) {
 	if (!fast_pilot_record)
 		return;
@@ -529,7 +545,8 @@ static void Delete_Pilot_Record(void) {
 	shipext_Init_Pilot();
 }
 
-// FUNCTION: TIE95 0x7BFF0; TIE98 0x4719F0
+// FUNCTION: TIE95 0x7BFF0
+// FUNCTION: TIE98 0x4719F0
 static void Revive_Pilot_Record(Input* input, int32_t time) {
 	(void)input;
 	(void)time;
@@ -540,7 +557,8 @@ static void Revive_Pilot_Record(Input* input, int32_t time) {
 	register_Revive_Pilot_Info();
 }
 
-// FUNCTION: TIE95 0x7C018; TIE98 0x471A30
+// FUNCTION: TIE95 0x7C018
+// FUNCTION: TIE98 0x471A30
 void register_Revive_Pilot_Info(void) {
 	if (!fast_pilot_record)
 		return;
@@ -555,7 +573,8 @@ void register_Revive_Pilot_Info(void) {
 	}
 }
 
-// FUNCTION: TIE95 0x7C078; TIE98 0x471A90
+// FUNCTION: TIE95 0x7C078
+// FUNCTION: TIE98 0x471A90
 static void Set_Your_Reg_Pilot(void) {
 	if (fast_pilot_record) {
 		char current_name[TIE_PILOT_NAME_CAPACITY];
@@ -585,7 +604,8 @@ static void Set_Your_Reg_Pilot(void) {
  * Film callback
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7AB24; TIE98 0x470340
+// FUNCTION: TIE95 0x7AB24
+// FUNCTION: TIE98 0x470340
 static int16_t film_Callback(Film* film, FilmObject* fo) {
 	if (fo->id != 3)
 		return 0;
@@ -600,7 +620,8 @@ static int16_t film_Callback(Film* film, FilmObject* fo) {
  * Actor callbacks
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7AB60; TIE98 0x470380
+// FUNCTION: TIE95 0x7AB60
+// FUNCTION: TIE98 0x470380
 static void user_Door(Actor* door, int32_t time) {
 	(void)time;
 	if (door->var1) {
@@ -627,7 +648,8 @@ static void user_Door(Actor* door, int32_t time) {
 	}
 }
 
-// FUNCTION: TIE95 0x7AC10; TIE98 0x470450
+// FUNCTION: TIE95 0x7AC10
+// FUNCTION: TIE98 0x470450
 static void user_Troop(Actor* troop, int32_t time) {
 	(void)time;
 	if (troop->var1) {
@@ -642,7 +664,8 @@ static void user_Troop(Actor* troop, int32_t time) {
 	}
 }
 
-// FUNCTION: TIE95 0x7AC80; TIE98 0x4704C0
+// FUNCTION: TIE95 0x7AC80
+// FUNCTION: TIE98 0x4704C0
 static int16_t draw_Register_Back(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								  int16_t refresh) {
 	if (!refresh)
@@ -665,7 +688,8 @@ static int16_t draw_Register_Back(Actor* actor, Rect* bounds, Rect* clip, int16_
  * RegStringButton draw/update
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7C1BC; TIE98 0x471C40
+// FUNCTION: TIE95 0x7C1BC
+// FUNCTION: TIE98 0x471C40
 static void idraw_Reg_String_Button(Input* input, Rect* frame, Rect* clip, int16_t refresh) {
 	RegStringButton* btn = (RegStringButton*)input;
 	int16_t saved_font = xfont_Get_Font();
@@ -688,7 +712,8 @@ static void idraw_Reg_String_Button(Input* input, Rect* frame, Rect* clip, int16
 		xdirty_Dirty_Rect(clip);
 }
 
-// FUNCTION: TIE95 0x7C288; TIE98 0x471D20
+// FUNCTION: TIE95 0x7C288
+// FUNCTION: TIE98 0x471D20
 static int16_t iupdate_Reg_String_Button(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 										 uint8_t right, int16_t mouse_x, int16_t mouse_y) {
 	(void)bounds;
@@ -747,7 +772,8 @@ static int16_t iupdate_Reg_String_Button(Input* input, Rect* bounds, Rect* clip,
  * iupdate/iuser/idraw — Register main
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7AD2C; TIE98 0x470580
+// FUNCTION: TIE95 0x7AD2C
+// FUNCTION: TIE98 0x470580
 static int16_t iupdate_Register(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 								uint8_t right, int16_t mouse_x, int16_t mouse_y) {
 	(void)bounds;
@@ -791,7 +817,8 @@ static int16_t iupdate_Register(Input* input, Rect* bounds, Rect* clip, int16_t 
 	return 1;
 }
 
-// FUNCTION: TIE95 0x7AE3C; TIE98 0x470680
+// FUNCTION: TIE95 0x7AE3C
+// FUNCTION: TIE98 0x470680
 static void iuser_Register(Input* input, int32_t time) {
 	(void)time;
 	int16_t state = input->var1;
@@ -821,7 +848,8 @@ static void iuser_Register(Input* input, int32_t time) {
  * Pilot list callbacks
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7AEA4; TIE98 0x470720
+// FUNCTION: TIE95 0x7AEA4
+// FUNCTION: TIE98 0x470720
 static int16_t iupdate_Pilot_List(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 								  uint8_t right, int16_t mouse_x, int16_t mouse_y) {
 	(void)bounds;
@@ -859,7 +887,8 @@ static int16_t iupdate_Pilot_List(Input* input, Rect* bounds, Rect* clip, int16_
 	return 1;
 }
 
-// FUNCTION: TIE95 0x7AF6C; TIE98 0x470800
+// FUNCTION: TIE95 0x7AF6C
+// FUNCTION: TIE98 0x470800
 static void idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int16_t refresh) {
 	if (!refresh)
 		return;
@@ -907,7 +936,8 @@ static void idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int16_t refr
  * Pilot button callbacks
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7B0A0; TIE98 0x470950
+// FUNCTION: TIE95 0x7B0A0
+// FUNCTION: TIE98 0x470950
 static void iuser_Pilot_Button(Input* input, int32_t time) {
 	(void)time;
 	PushButton* btn = (PushButton*)input;
@@ -997,7 +1027,8 @@ static void after_delete_dialog(int16_t result, void* ctx) {
 	}
 }
 
-// FUNCTION: TIE95 0x7B200; TIE98 0x470AE0
+// FUNCTION: TIE95 0x7B200
+// FUNCTION: TIE98 0x470AE0
 static void idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, int16_t refresh) {
 	if (!refresh)
 		return;
@@ -1019,7 +1050,8 @@ static void idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, int16_t re
  * Pilot name callbacks
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7B2CC; TIE98 0x470B70
+// FUNCTION: TIE95 0x7B2CC
+// FUNCTION: TIE98 0x470B70
 static void iuser_Pilot_Name(Input* input, int32_t time) {
 	(void)time;
 	RegStringButton* btn = (RegStringButton*)input;
@@ -1063,7 +1095,8 @@ static void iuser_Pilot_Name(Input* input, int32_t time) {
 	}
 }
 
-// FUNCTION: TIE98 0x470BE0; corresponding TIE95 logic is inline.
+// FUNCTION: TIE98 0x470BE0
+// corresponding TIE95 logic is inline.
 static void xuser_Pilot_Name(const char* search_name) {
 	int16_t matched = -1;
 
@@ -1093,7 +1126,8 @@ static void xuser_Pilot_Name(const char* search_name) {
 	}
 }
 
-// FUNCTION: TIE95 0x7B3B0; TIE98 0x470D00
+// FUNCTION: TIE95 0x7B3B0
+// FUNCTION: TIE98 0x470D00
 static void idraw_Pilot_Name(Input* input, Rect* frame, Rect* clip, int16_t refresh) {
 	RegStringButton* btn = (RegStringButton*)input;
 	char display_name[TIE_PILOT_NAME_CAPACITY];
@@ -1129,7 +1163,8 @@ static void idraw_Pilot_Name(Input* input, Rect* frame, Rect* clip, int16_t refr
  * Pilot info callbacks + draw helpers
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7B490; TIE98 0x470E20
+// FUNCTION: TIE95 0x7B490
+// FUNCTION: TIE98 0x470E20
 static void iuser_Pilot_Info(Input* input, int32_t time) {
 	(void)time;
 	if (!input->var1)
@@ -1145,7 +1180,8 @@ static void iuser_Pilot_Info(Input* input, int32_t time) {
 	}
 }
 
-// FUNCTION: TIE95 0x7B578; TIE98 0x470F10
+// FUNCTION: TIE95 0x7B578
+// FUNCTION: TIE98 0x470F10
 static void Draw_Pilot_Title(Rect* frame, int16_t phase) {
 	/* Conditional coordinates are from TIE98 0x470F10; fixed coordinates
 	 * are from TIE95 0x7B578. */
@@ -1192,7 +1228,8 @@ static void Draw_Pilot_Title(Rect* frame, int16_t phase) {
 	}
 }
 
-// FUNCTION: TIE95 0x7B710; TIE98 0x471090
+// FUNCTION: TIE95 0x7B710
+// FUNCTION: TIE98 0x471090
 static void Draw_Pilot_Lines(Rect* frame, int16_t phase, int16_t line2_off) {
 	int16_t pc = phase > 15 ? 15 : phase;
 	int16_t w = frame->right - frame->left - (30 - 2 * pc);
@@ -1240,7 +1277,8 @@ static void Draw_Pilot_Lines(Rect* frame, int16_t phase, int16_t line2_off) {
 	}
 }
 
-// FUNCTION: TIE95 0x7B858; TIE98 0x471190
+// FUNCTION: TIE95 0x7B858
+// FUNCTION: TIE98 0x471190
 static void Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 	char typed[TIE_PILOT_NAME_CAPACITY];
 	Get_Reg_String_Button_Name(pilot_name_input, typed, sizeof(typed));
@@ -1289,7 +1327,8 @@ static void Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 	}
 }
 
-// FUNCTION: TIE95 0x7B9B8; TIE98 0x471320
+// FUNCTION: TIE95 0x7B9B8
+// FUNCTION: TIE98 0x471320
 static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 	// TIE98 0x471320; the branch below it is TIE95 0x7B9B8.
 	if (active_spec->dynamic_info_layout) {
@@ -1396,7 +1435,8 @@ static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 	}
 }
 
-// FUNCTION: TIE95 0x7B4DC; TIE98 0x470E70
+// FUNCTION: TIE95 0x7B4DC
+// FUNCTION: TIE98 0x470E70
 static void idraw_Pilot_Info(Input* input, Rect* frame, Rect* clip, int16_t refresh) {
 	(void)refresh;
 	xpaint_Paint_Clipped_Rect(frame, 16);
@@ -1429,7 +1469,8 @@ static void idraw_Pilot_Info(Input* input, Rect* frame, Rect* clip, int16_t refr
  * Delete dialog
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7C50C; TIE98 0x472010
+// FUNCTION: TIE95 0x7C50C
+// FUNCTION: TIE98 0x472010
 // HARDENING: unwinds partial dialog allocation.
 static Input* Build_Delete_Dialog(void) {
 	Rect r;
@@ -1467,7 +1508,8 @@ static Input* Build_Delete_Dialog(void) {
 	return dlg;
 }
 
-// FUNCTION: TIE95 0x7C624; TIE98 0x472170
+// FUNCTION: TIE95 0x7C624
+// FUNCTION: TIE98 0x472170
 // DIVERGENCE: the original joystick-calibration shortcut is not implemented.
 static int16_t iupdate_Delete_Input(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 									uint8_t right, int16_t mouse_x, int16_t mouse_y) {
@@ -1482,7 +1524,8 @@ static int16_t iupdate_Delete_Input(Input* input, Rect* bounds, Rect* clip, int1
 	return 0;
 }
 
-// FUNCTION: TIE95 0x7C660; TIE98 0x4721B0
+// FUNCTION: TIE95 0x7C660
+// FUNCTION: TIE98 0x4721B0
 static void iuser_Delete_Input(Input* input, int32_t time) {
 	(void)time;
 	if (!xinpattr_Get_Input_Selected(input))
@@ -1492,7 +1535,8 @@ static void iuser_Delete_Input(Input* input, int32_t time) {
 		xdialog_Set_Dialog_Exit(id);
 }
 
-// FUNCTION: TIE95 0x7C688; TIE98 0x4721E0
+// FUNCTION: TIE95 0x7C688
+// FUNCTION: TIE98 0x4721E0
 static void idraw_Delete_Input(Input* input, Rect* frame, Rect* clip, int16_t refresh) {
 	if (!refresh)
 		return;
@@ -1547,7 +1591,8 @@ static void register_push_protect_dialog(void) {
 	xdialog_Push_Dialog_View_Task(s_protect_ctx.sub_dlg);
 }
 
-// FUNCTION: TIE95 0x7C820; absent from TIE98
+// FUNCTION: TIE95 0x7C820
+// absent from TIE98
 static Input* Build_Protect_Dialog(void) {
 	Rect r;
 	xrect_Set_Rect(&r, 0, 0, 112, 86);
@@ -1607,7 +1652,8 @@ static Input* Build_Protect_Dialog(void) {
 	return dlg;
 }
 
-// FUNCTION: TIE95 0x7CA58; absent from TIE98
+// FUNCTION: TIE95 0x7CA58
+// absent from TIE98
 static int16_t iupdate_Protect_Input(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 									 uint8_t right, int16_t mouse_x, int16_t mouse_y) {
 	(void)input;
@@ -1626,7 +1672,8 @@ static int16_t iupdate_Protect_Input(Input* input, Rect* bounds, Rect* clip, int
 	return 0;
 }
 
-// FUNCTION: TIE95 0x7CAC0; absent from TIE98
+// FUNCTION: TIE95 0x7CAC0
+// absent from TIE98
 static void iuser_Protect_Input(Input* input, int32_t time) {
 	(void)time;
 
@@ -1683,7 +1730,8 @@ static void iuser_Protect_Input(Input* input, int32_t time) {
 	}
 }
 
-// FUNCTION: TIE95 0x7CC78; absent from TIE98
+// FUNCTION: TIE95 0x7CC78
+// absent from TIE98
 static void idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, int16_t refresh) {
 	if (!refresh)
 		return;
@@ -1734,7 +1782,8 @@ static void idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, int16_t r
  * View update callback
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7A93C; TIE98 0x4700D0
+// FUNCTION: TIE95 0x7A93C
+// FUNCTION: TIE98 0x4700D0
 static void end_View(int32_t phase) {
 	if (!phase) {
 		if (!xcursor_Is_Cursor_Visible())

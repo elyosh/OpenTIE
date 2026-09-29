@@ -96,7 +96,7 @@ static const MainMenuSpec* active_spec;
 
 static Actor* door[8]; /* 8 door animation actors */
 static Film* mainmenu_film;
-// GLOBAL: TIE 0xF5968
+// GLOBAL: TIE95 0xF5DC0
 static Actor* title_actor; /* title text overlay delta actor */
 static Input* parent;      /* root XINPUT for menu buttons */
 static Input* tour_input;  /* Tour Battle (id=0, conditional) */

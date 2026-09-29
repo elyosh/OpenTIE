@@ -30,21 +30,21 @@ uint8_t fontcolorconvert[8] = { 0x42, 0x4A, 0x46, 0x4E, 0x52, 0x45, 0x42, 0x52 }
 uint8_t radiosidecolors[6] = { 0x4A, 0x52, 0x46, 0x56, 0x4A, 0x56 };
 uint8_t eventsidecolors[6] = { 0x52, 0x4A, 0x46, 0x56, 0x4A, 0x56 };
 int32_t frameticksmsgflag;
-// GLOBAL: TIE 0xD4C6C
+// GLOBAL: TIE95 0xD4C6C
 char* messageptrs[4];
-// GLOBAL: TIE 0xD4C80
+// GLOBAL: TIE95 0xD4C80
 int32_t msgLineRight;
 char** messagetable;
 int32_t msgLineBottom;
-// GLOBAL: TIE 0xD4C88
+// GLOBAL: TIE95 0xD4C88
 int32_t msgLineTop;
-// GLOBAL: TIE 0xD4C8C
+// GLOBAL: TIE95 0xD4C8C
 MsgHistoryEntry messagequeue[MSG_QUEUE_SLOTS];
 uint16_t dxtticks;
 uint16_t oxtticks;
-// GLOBAL: TIE 0xD502E
+// GLOBAL: TIE95 0xD502E
 uint16_t currentmessagesave;
-// GLOBAL: TIE 0xD5030
+// GLOBAL: TIE95 0xD5030
 uint8_t messagecnt;
 
 /* Pending voice-clip id selector for the next msg_messageprintf call.
@@ -60,7 +60,7 @@ uint16_t pending_voice_id;
 
 /* --- msg_messageinit -- */
 
-// FUNCTION: TIE 0x32EE0
+// FUNCTION: TIE95 0x32EE0
 uint16_t msg_messageinit(void) {
 	if (tie_is_high_resolution_flight()) {
 		msgLineTop = 456;
@@ -102,7 +102,7 @@ uint16_t msg_messageinit(void) {
  * In the binary this function falls through into MSG_messagedisplay
  * (12-byte thunk, no ret/jmp). Mirrored here as an explicit call. */
 
-// FUNCTION: TIE 0x3300C
+// FUNCTION: TIE95 0x3300C
 void msg_messagerestore(void) {
 	messagequeue[0].template_idx = currentmessagesave;
 	msg_messagedisplay();
@@ -110,7 +110,7 @@ void msg_messagerestore(void) {
 
 /* --- msg_messagedisplay -- */
 
-// FUNCTION: TIE 0x33018
+// FUNCTION: TIE95 0x33018
 void msg_messagedisplay(void) {
 	if (messagequeue[0].template_idx == 0xFFFF)
 		return;
@@ -175,7 +175,7 @@ void msg_messagedisplay(void) {
 
 /* --- msg_messageprintf -- */
 
-// FUNCTION: TIE 0x330CC
+// FUNCTION: TIE95 0x330CC
 void msg_messageprintf(MsgTemplate template_id) {
 	/* Temporary 82-byte staging buffer for the entry. */
 	MsgHistoryEntry entry;
@@ -336,7 +336,7 @@ preempt_no_move:
 
 /* --- msg_movecurrentmessageinqueue -- */
 
-// FUNCTION: TIE 0x33544
+// FUNCTION: TIE95 0x33544
 void msg_movecurrentmessageinqueue(void) {
 	if (messagequeue[0].display_count >= 2)
 		return;
@@ -353,7 +353,7 @@ void msg_movecurrentmessageinqueue(void) {
 		messagecnt--;
 }
 
-// FUNCTION: TIE 0x335B8
+// FUNCTION: TIE95 0x335B8
 int16_t msg_getmessagefromqueue(void) {
 	const uint8_t old_cnt = messagecnt;
 	uint16_t i;
@@ -366,7 +366,7 @@ int16_t msg_getmessagefromqueue(void) {
 
 /* --- msg_readymessage -- */
 
-// FUNCTION: TIE 0x336B0
+// FUNCTION: TIE95 0x336B0
 void msg_readymessage(void) {
 	festring_setfontsize(1);
 	festring_setbackcolor(0x2C);
@@ -379,7 +379,7 @@ void msg_readymessage(void) {
 
 /* --- msg_completemessage -- */
 
-// FUNCTION: TIE 0x3371C
+// FUNCTION: TIE95 0x3371C
 void msg_completemessage(uint16_t msg_type, char last_char) {
 	if (last_char != '?' && last_char != '!' && last_char != ':' && last_char != ' ')
 		if (outchar)
@@ -405,7 +405,7 @@ void msg_completemessage(uint16_t msg_type, char last_char) {
 
 /* --- msg_messageupdate -- */
 
-// FUNCTION: TIE 0x337D4
+// FUNCTION: TIE95 0x337D4
 void msg_messageupdate(void) {
 	/* Timer-driven queue advance. */
 	if (timers[TIMER_MSG] == 0 && messagequeue[0].template_idx != 0xFFFF) {
@@ -459,7 +459,7 @@ void msg_messageupdate(void) {
 
 /* --- msg_clearmessagequeue -- */
 
-// FUNCTION: TIE 0x339E8
+// FUNCTION: TIE95 0x339E8
 void msg_clearmessagequeue(void) {
 	messagecnt = 0;
 	messagequeue[0].template_idx = 0xFFFF;
@@ -467,7 +467,7 @@ void msg_clearmessagequeue(void) {
 
 /* --- msg_updatemessageage -- */
 
-// FUNCTION: TIE 0x33A00
+// FUNCTION: TIE95 0x33A00
 void msg_updatemessageage(void) {
 	if (messagequeue[0].template_idx != 0xFFFF)
 		messagequeue[0].age++;
@@ -475,7 +475,7 @@ void msg_updatemessageage(void) {
 
 /* --- msg_timeout -- */
 
-// FUNCTION: TIE 0x33A14
+// FUNCTION: TIE95 0x33A14
 void msg_timeout(void) {
 	static const char ts_prefix[] = "T:";
 	festring_setbackcolor(0x2C);
@@ -495,7 +495,7 @@ void msg_timeout(void) {
 
 /* --- msg_reportfgcreation -- */
 
-// FUNCTION: TIE 0x33AB8
+// FUNCTION: TIE95 0x33AB8
 void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 	/* Locate the FG's lead object (leader_obj_idx == 255) or fall back to
 	 * CREATE_getworldposition(0x8000, fg_idx) anchor. */
@@ -556,7 +556,7 @@ void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 
 /* --- msg_addmessageptr -- */
 
-// FUNCTION: TIE 0x33CF4
+// FUNCTION: TIE95 0x33CF4
 uint16_t msg_addmessageptr(uint16_t slot_idx, char* ptr) {
 	messageptrs[slot_idx] = ptr;
 	const uint16_t tagged = (uint16_t)(slot_idx | 0x8000);
@@ -566,7 +566,7 @@ uint16_t msg_addmessageptr(uint16_t slot_idx, char* ptr) {
 
 /* --- msg_craftmessage -- */
 
-// FUNCTION: TIE 0x33D10
+// FUNCTION: TIE95 0x33D10
 void msg_craftmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id) {
 	messageside = objects[obj_idx].side;
 	argtable[0] = 0x8000;
@@ -588,7 +588,7 @@ void msg_craftmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_
 
 /* --- msg_radiomessage -- */
 
-// FUNCTION: TIE 0x33DD0
+// FUNCTION: TIE95 0x33DD0
 int8_t msg_radiomessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id, uint16_t cmdr_mode) {
 	MsgTemplate tpl;
 	if (cmdr_mode) {
@@ -618,7 +618,7 @@ int8_t msg_radiomessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_templat
 
 /* --- msg_reportmessage -- */
 
-// FUNCTION: TIE 0x33EF4
+// FUNCTION: TIE95 0x33EF4
 void msg_reportmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id) {
 	argtable[0] = 0x8000;
 	messageptrs[0] = spec_data[craft->species_idx].short_name;
@@ -650,7 +650,7 @@ static char* str_append(char* buf, const char* src) {
 	return buf;
 }
 
-// FUNCTION: TIE 0x33FA8
+// FUNCTION: TIE95 0x33FA8
 int16_t msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_buf) {
 	*out_buf = 0;
 
@@ -732,7 +732,7 @@ int16_t msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_b
 /* --- msg_msgstrcat --
  * Appends src to dst in place. Returns src + strlen(src) (Watcom quirk). */
 
-// FUNCTION: TIE 0x34300
+// FUNCTION: TIE95 0x34300
 char* msg_msgstrcat(char* src, char* dst) {
 	while (*dst)
 		dst++;
@@ -745,7 +745,7 @@ char* msg_msgstrcat(char* src, char* dst) {
 
 /* --- msg_msgstradd -- Append single char, NUL-terminate, return char. */
 
-// FUNCTION: TIE 0x34324
+// FUNCTION: TIE95 0x34324
 char msg_msgstradd(char ch, char* dst) {
 	while (*dst)
 		dst++;

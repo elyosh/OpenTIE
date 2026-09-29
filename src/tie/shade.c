@@ -28,7 +28,7 @@ uint8_t shade_palette[256];
  * Find which palette entries are available for shade mapping.
  * Entries in active cycling ranges are marked 0 (locked), all others 1.
  */
-// FUNCTION: TIE 0x6CA50
+// FUNCTION: TIE95 0x6CA50
 void shade_Find_Shade_Cycles(uint8_t* mask) {
 	int i;
 	Palette* pal;
@@ -129,7 +129,7 @@ static void build_shade_table(uint8_t* pal_data, const uint16_t* dist, const uin
 
 /* --- Public API --- */
 
-// FUNCTION: TIE 0x6C720
+// FUNCTION: TIE95 0x6C720
 void shade_Build_Shaded_Palette(void) {
 	Palette* dest_pal = xpal_Get_Dest_Palette();
 	uint8_t* pal_data = xmemhdl_Lock_Handle(dest_pal->colors);
@@ -154,7 +154,7 @@ void shade_Build_Shaded_Palette(void) {
 	xmemhdl_Unlock_Handle(dest_pal->colors);
 }
 
-// FUNCTION: TIE 0x6C77C
+// FUNCTION: TIE95 0x6C77C
 void shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, int16_t target_r, int16_t target_g,
 							  uint16_t target_b) {
 	uint16_t dist[256];
@@ -219,7 +219,7 @@ void shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, int16_t targ
 	}
 }
 
-// FUNCTION: TIE 0x6CAC0
+// FUNCTION: TIE95 0x6CAC0
 void shade_Draw_Talk_Shade_Rect(Rect* r) {
 	xpaint_Frame_Clipped_Rect(r, 16);
 
@@ -268,7 +268,7 @@ void shade_Draw_Talk_Shade_Rect(Rect* r) {
 	}
 }
 
-// FUNCTION: TIE 0x8B270
+// FUNCTION: TIE95 0x8B270
 void shade_Shadow_Line_List(const uint8_t* palette, int16_t x, int16_t y, int16_t width, int16_t height) {
 	BitmapStruct* canvas = xcanvas_Get_Current_Canvas_Bitmap();
 	uint8_t* pixels = (uint8_t*)xbitmap_Lock_Bitmap(canvas);

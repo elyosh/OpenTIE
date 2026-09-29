@@ -20,7 +20,7 @@
 /* Per-frame "active species" latch. Written at the top of each
  * planedynamics iteration and consumed by drawpol_setmarkingcolors
  * during the same frame's render. watdbg places it in dynamix.c. */
-// GLOBAL: TIE 0xD4058
+// GLOBAL: TIE95 0xD4058
 uint16_t pspecnum;
 
 /* ======================================================================
@@ -35,7 +35,7 @@ uint16_t pspecnum;
  * via an unsigned comparison on the pre-update value.
  * ================================================================== */
 
-// FUNCTION: TIE 0x1FDB0
+// FUNCTION: TIE95 0x1FDB0
 void dynamix_addvelocity(uint16_t obj_idx, uint16_t accel) {
 	FlightObject* obj = &objects[obj_idx];
 	if (TieFlightTiming_IsHighRate()) {
@@ -63,7 +63,7 @@ void dynamix_addvelocity(uint16_t obj_idx, uint16_t accel) {
 	}
 }
 
-// FUNCTION: TIE 0x1FE44
+// FUNCTION: TIE95 0x1FE44
 void dynamix_subvelocity(uint16_t obj_idx, uint16_t decel) {
 	FlightObject* obj = &objects[obj_idx];
 	if (TieFlightTiming_IsHighRate()) {
@@ -102,7 +102,7 @@ void dynamix_subvelocity(uint16_t obj_idx, uint16_t decel) {
  * unsigned >= 0x8000 idiom to match the binary exactly.
  * ================================================================== */
 
-// FUNCTION: TIE 0x1FC78
+// FUNCTION: TIE95 0x1FC78
 void dynamix_adjustvelocity(uint16_t obj_idx, int16_t target_speed, int16_t allow_decel,
 							uint16_t throttle_frac) {
 	FlightObject* obj = &objects[obj_idx];
@@ -145,7 +145,7 @@ void dynamix_adjustvelocity(uint16_t obj_idx, int16_t target_speed, int16_t allo
  * dynamix_pulloutdive
  * ================================================================== */
 
-// FUNCTION: TIE 0x1FED8
+// FUNCTION: TIE95 0x1FED8
 void dynamix_pulloutdive(uint16_t obj_idx) {
 	FlightObject* obj = &objects[obj_idx];
 	int32_t altitude = obj->world_z - craftptr->waypoint_z_cache;
@@ -221,7 +221,7 @@ static uint16_t ap_step(uint16_t obj_idx, unsigned int axis, int16_t rate_cap, i
 	return math2_fraction(tick_rate, axis_scale);
 }
 
-// FUNCTION: TIE 0x1F4FC
+// FUNCTION: TIE95 0x1F4FC
 void dynamix_planedynamics(void) {
 	for (uint16_t i = 0; i < NUM_CRAFTS; i++) {
 		FlightObject* obj = &objects[i];

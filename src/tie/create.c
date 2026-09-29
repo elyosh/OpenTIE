@@ -42,7 +42,7 @@
 
 uint8_t playerside;
 
-// GLOBAL: TIE 0xC17DA
+// GLOBAL: TIE95 0xC17DA
 uint16_t skilltranslate[6] = { 0, 0x4000, 0x8000, 0xC000, 0xFFFF, 0xFFFF };
 uint16_t aiupdatetranslate[6] = { 0x02C4, 0x01D8, 0x00EC, 0x0076, 0x003B, 0x001D };
 
@@ -131,14 +131,14 @@ uint16_t fgsidecreated;
 /*   Leaf functions                                                */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x19FA0
+// FUNCTION: TIE95 0x19FA0
 uint16_t create_maxrandom(uint16_t max) {
 	if (!max)
 		return 0;
 	return (uint16_t)((uint16_t)math2_getrandom() % max);
 }
 
-// FUNCTION: TIE 0x19CEC
+// FUNCTION: TIE95 0x19CEC
 uint16_t create_findslot(uint16_t genus_idx) {
 	const uint16_t start = genus[genus_idx];
 	const uint16_t end = genus_limit[genus_idx];
@@ -152,7 +152,7 @@ uint16_t create_findslot(uint16_t genus_idx) {
 	return 0xFFFF;
 }
 
-// FUNCTION: TIE 0x19D44
+// FUNCTION: TIE95 0x19D44
 uint16_t create_findstaticslot(void) {
 	for (uint16_t i = 0; i < NUM_STATIC_OBJECTS; i++)
 		if (!staticobjects[i].species)
@@ -162,7 +162,7 @@ uint16_t create_findstaticslot(void) {
 
 /* Resolve a 16-bit object reference to the worldlocx/y/z globals. See
  * header comment for the encoding ranges. */
-// FUNCTION: TIE 0x196C0
+// FUNCTION: TIE95 0x196C0
 void create_getworldposition(uint16_t obj_or_kind, int fg_idx) {
 	int32_t wx, wy, wz;
 
@@ -210,7 +210,7 @@ void create_getworldposition(uint16_t obj_or_kind, int fg_idx) {
 /*   Static-object spawning                                        */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x195D0
+// FUNCTION: TIE95 0x195D0
 int create_createstaticobject(uint16_t fg_idx, uint8_t ship_class, uint8_t species_idx) {
 	const uint16_t slot = create_findstaticslot();
 	if (slot == 0xFFFF)
@@ -240,7 +240,7 @@ int create_createstaticobject(uint16_t fg_idx, uint8_t ship_class, uint8_t speci
 /*   Debris / ember / component spawn                              */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x19A6C
+// FUNCTION: TIE95 0x19A6C
 uint16_t create_createcomponent(uint16_t parent_obj, uint8_t mesh_idx) {
 	const uint16_t slot = create_findslot(11);
 	if (slot == 0xFFFF)
@@ -262,7 +262,7 @@ uint16_t create_createcomponent(uint16_t parent_obj, uint8_t mesh_idx) {
 	return slot;
 }
 
-// FUNCTION: TIE 0x19B48
+// FUNCTION: TIE95 0x19B48
 uint16_t create_createember(uint16_t parent_obj) {
 	const uint16_t slot = create_findslot(GENUS_EXPLOSION);
 	if (slot == 0xFFFF)
@@ -313,7 +313,7 @@ uint16_t create_createember(uint16_t parent_obj) {
 	return slot;
 }
 
-// FUNCTION: TIE 0x198A4
+// FUNCTION: TIE95 0x198A4
 int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 	FlightObject* parent = &objects[obj_idx];
 	const bool tie98 = TieProfile_UsesTie98Logic();
@@ -389,7 +389,7 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
  * more than 0x800 fixed-point units from the player, respawn it with a
  * random spark/dust species at a random offset in the player's forward-
  * below-side frame. Called once per frame. */
-// FUNCTION: TIE 0x19D74
+// FUNCTION: TIE95 0x19D74
 void create_checkdebris(void) {
 	const uint16_t slot = currentdebrisslot++;
 	if (currentdebrisslot == NUM_OBJECTS)
@@ -451,7 +451,7 @@ void create_checkdebris(void) {
 /*   Mission lifecycle                                             */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x16B04
+// FUNCTION: TIE95 0x16B04
 CraftData* create_createhyperin(void) {
 	create_createmission();
 	for (uint16_t i = 0; i < NUM_OBJECTS; i++) {
@@ -472,7 +472,8 @@ CraftData* create_createhyperin(void) {
 	return pstate.player_craft;
 }
 
-// FUNCTION: TIE 0x16B8C, TIE98 0x411200
+// FUNCTION: TIE95 0x16B8C
+// FUNCTION: TIE98 0x411200
 int16_t create_createmission(void) {
 	idnumber = 0;
 
@@ -614,7 +615,7 @@ int16_t create_createmission(void) {
 /*   Mission file loader                                           */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x165C0
+// FUNCTION: TIE95 0x165C0
 int16_t create_loadmission(const char* filename) {
 	uint16_t saved_fgcnt = fgcnt;
 	mission.train_craft_type = mission.train_craft_type_src;
@@ -809,7 +810,7 @@ int16_t create_loadmission(const char* filename) {
 /*   Backdrop                                                      */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x197B4
+// FUNCTION: TIE95 0x197B4
 void create_createbackdrop(void) {
 	backdropfrontcnt = 4;
 	backdropbackcnt = 4;
@@ -852,7 +853,7 @@ void create_createbackdrop(void) {
 /*   FG activation                                                 */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x1706C
+// FUNCTION: TIE95 0x1706C
 int create_startflightgroup(int16_t craft_slot, int16_t fg_idx) {
 	fgstatus[fgcnt].active = 1;
 	const uint8_t sp = speciesconvert[fg_array[fgcnt].species];
@@ -880,7 +881,7 @@ uint16_t create_reinforceflightgroup(int16_t fg_idx) {
 /*   Per-frame FG spawn driver                                     */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x1713C
+// FUNCTION: TIE95 0x1713C
 void create_updatefgstatus(void) {
 	CraftData* saved_cp = craftptr;
 
@@ -962,7 +963,7 @@ void create_updatefgstatus(void) {
 /*   Dynamic flight-group spawn                                    */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x17460
+// FUNCTION: TIE95 0x17460
 int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 	EFGStruct* f = &fg_array[fgcnt];
 	fghyperspace = 0;
@@ -1145,7 +1146,7 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 /*   Per-craft spawn                                               */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x17BF8
+// FUNCTION: TIE95 0x17BF8
 uint16_t create_createcraft(void) {
 	EFGStruct* f = &fg_array[fgcnt];
 	const uint16_t ship_idx = speciesconvert[f->species];
@@ -1613,7 +1614,7 @@ uint16_t create_createcraft(void) {
 /*   Static flight-group spawn (mines / planets / asteroids)      */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x19054
+// FUNCTION: TIE95 0x19054
 int create_createstaticflightgroup(int16_t craft_slot) {
 	int result = fgcnt;
 	FGStatus* st = &fgstatus[fgcnt];
@@ -1721,7 +1722,7 @@ int create_createstaticflightgroup(int16_t craft_slot) {
 /*   Drop-position resolver                                        */
 /* ============================================================== */
 
-// FUNCTION: TIE 0x19FD0
+// FUNCTION: TIE95 0x19FD0
 int create_getdropposition(uint16_t fg_idx, uint16_t craft_index, uint16_t anchor_obj) {
 	EFGStruct* f = &fg_array[fg_idx];
 	const uint16_t species_idx = speciesconvert[f->species];

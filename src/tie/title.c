@@ -63,7 +63,7 @@ static Actor* back_actor;
 static int16_t line_y[MAX_LINES];
 static int16_t line_yf[MAX_LINES];
 static int16_t line_yv[MAX_LINES];
-// GLOBAL: TIE 0xF5968
+// GLOBAL: TIE95 0xF5104
 static Actor* title_actor;
 static int16_t line_used[MAX_LINES];
 static Actor* along_actor;

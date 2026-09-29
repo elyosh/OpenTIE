@@ -42,7 +42,8 @@ uint16_t genus_limit[16] = {
 	[8] = 0,  [9] = 0,  [10] = 0, [11] = 96, [12] = 0, [13] = 112, [14] = 0, [15] = 0,
 };
 
-// GLOBAL: TIE98 0x4F0390, ModelTypeInfo_TIE98.model_index bit 0x40.
+// GLOBAL: TIE98 0x4F0390
+// ModelTypeInfo_TIE98.model_index bit 0x40.
 const uint8_t tie98_model_variant_enabled[NUM_SPECIES] = {
 	[1] = 1,   [2] = 1,   [3] = 1,   [4] = 1,   [5] = 1,   [6] = 1,   [7] = 1,   [8] = 1,   [9] = 1,
 	[10] = 1,  [11] = 1,  [12] = 1,  [13] = 1,  [14] = 1,  [15] = 1,  [16] = 1,  [17] = 1,  [18] = 1,

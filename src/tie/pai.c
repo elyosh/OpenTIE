@@ -33,7 +33,7 @@
  * state. Field layout mirrors the watdbg _ai[52] symbol at 0xF8F48.
  * PAIMAN boarding/dropoff snapshot-restores the entire struct when
  * re-homing craftptr to a docked target craft. */
-// GLOBAL: TIE 0xEB104
+// GLOBAL: TIE95 0xEB104
 AiContext ai;
 
 /* ======================================================================
@@ -286,7 +286,7 @@ int16_t paiorder_orderswitchorder(void);
 int16_t paiorder_dropoffdestorder(void);
 int16_t paiorder_mothershipreadyorder(void);
 
-// GLOBAL: TIE 0xC5C94
+// GLOBAL: TIE95 0xC5C94
 OrderFunc ordersfunctionptrs[47] = {
 	paiorder_nullorder,              /*  0 */
 	paiorder_updatecourseorder,      /*  1 */
@@ -356,14 +356,14 @@ int pai_getprof(uint16_t skill) {
 }
 
 /* Unused getter — hull_max of objects[obj_idx]'s craft. */
-// FUNCTION: TIE 0x36258
+// FUNCTION: TIE95 0x36258
 uint16_t pai_getcraftdoomedlevel(uint16_t obj_idx) { return objects[obj_idx].craft_ptr->hull_max; }
 
 /* ======================================================================
  *                       Distance / proximity helpers
  * ====================================================================== */
 
-// FUNCTION: TIE 0x36048
+// FUNCTION: TIE95 0x36048
 void pai_distancebetween(uint16_t a_ref, uint16_t b_ref) {
 	int32_t bx, by, bz;
 	create_getworldposition(b_ref, 0);
@@ -374,7 +374,7 @@ void pai_distancebetween(uint16_t a_ref, uint16_t b_ref) {
 	trig2_ctop(bx - worldlocx, by - worldlocy, bz - worldlocz);
 }
 
-// FUNCTION: TIE 0x360A0
+// FUNCTION: TIE95 0x360A0
 void pai_roughdistancebetween(uint16_t a_ref, uint16_t b_ref) {
 	int32_t ax, ay, az;
 	int32_t dx, dy, dz;
@@ -409,14 +409,14 @@ void pai_roughdistancebetween(uint16_t a_ref, uint16_t b_ref) {
 	roughdistance = dz + xy_sum;
 }
 
-// FUNCTION: TIE 0x3627C
+// FUNCTION: TIE95 0x3627C
 void pai_targetdistance(void) {
 	trig2_ctop(craftptr->waypoint_x_cache - objects[ai.active_obj_idx].world_x,
 			   craftptr->waypoint_y_cache - objects[ai.active_obj_idx].world_y,
 			   craftptr->waypoint_z_cache - objects[ai.active_obj_idx].world_z);
 }
 
-// FUNCTION: TIE 0x35E9C
+// FUNCTION: TIE95 0x35E9C
 int16_t pai_roughproximitycheck(uint16_t obj_ref, int32_t radius_24_8) {
 	int32_t tx, ty, tz;
 	int32_t dx, dy, dz;
@@ -461,7 +461,7 @@ int16_t pai_roughproximitycheck(uint16_t obj_ref, int32_t radius_24_8) {
 	return (radius_24_8 > roughdistance) ? 1 : 0;
 }
 
-// FUNCTION: TIE 0x35C34
+// FUNCTION: TIE95 0x35C34
 char pai_checkcombatarea(uint16_t obj_ref) {
 	/* Skill-tiered combat-zone radius:
 	 *   tier 0 -> 2560    tier 1 -> 2880    tier 2 -> 3200    tier 3 -> 3520 */
@@ -474,7 +474,7 @@ char pai_checkcombatarea(uint16_t obj_ref) {
  *                        Target eligibility filters
  * ====================================================================== */
 
-// FUNCTION: TIE 0x35B3C
+// FUNCTION: TIE95 0x35B3C
 char pai_worthytarget(uint16_t obj_ref) {
 	if (obj_ref == 0xFF || obj_ref == 0xFFFFu)
 		return 0;
@@ -511,7 +511,7 @@ char pai_worthytarget(uint16_t obj_ref) {
 	return 1;
 }
 
-// FUNCTION: TIE 0x35ABC
+// FUNCTION: TIE95 0x35ABC
 char pai_checktargetforattack(uint16_t obj_ref, int16_t pursue_hot) {
 	if (!pai_worthytarget(obj_ref))
 		return 0;
@@ -523,7 +523,7 @@ char pai_checktargetforattack(uint16_t obj_ref, int16_t pursue_hot) {
 	return (pai_roughproximitycheck(obj_ref, radius << 8) == 1) ? 1 : 0;
 }
 
-// FUNCTION: TIE 0x368A8
+// FUNCTION: TIE95 0x368A8
 char pai_isobjectvalidtarget(uint16_t obj_ref) {
 	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai.ai_entry_count];
 
@@ -544,7 +544,7 @@ char pai_isobjectvalidtarget(uint16_t obj_ref) {
  *                          Group / FG scans
  * ====================================================================== */
 
-// FUNCTION: TIE 0x35A58
+// FUNCTION: TIE95 0x35A58
 uint16_t pai_searchformother(uint16_t fg_idx) {
 	for (uint16_t i = 0; i < NUM_CRAFTS; ++i) {
 		if (!objects[i].ship_idx)
@@ -562,7 +562,7 @@ uint16_t pai_searchformother(uint16_t fg_idx) {
 	return 0xFFFFu;
 }
 
-// FUNCTION: TIE 0x35C80
+// FUNCTION: TIE95 0x35C80
 int pai_searchforcraftingroup(uint8_t group_type1, uint16_t group_id1, int16_t combine_op,
 							  uint8_t group_type2, uint16_t group_id2) {
 	/* Flight objects. */
@@ -594,12 +594,12 @@ int pai_searchforcraftingroup(uint8_t group_type1, uint16_t group_id1, int16_t c
 	return 0;
 }
 
-// FUNCTION: TIE 0x35DB8
+// FUNCTION: TIE95 0x35DB8
 char pai_lookfordisableswitch(uint16_t fg_idx) {
 	return (pai_checkfortargetstodisable(fg_idx) != 0xFFFFu) ? 1 : 0;
 }
 
-// FUNCTION: TIE 0x35DD4
+// FUNCTION: TIE95 0x35DD4
 uint16_t pai_checkfortargetstodisable(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
 
@@ -614,7 +614,7 @@ uint16_t pai_checkfortargetstodisable(uint16_t ai_entry) {
 								   cur_ai->target_type[1], cur_ai->target_id[1]);
 }
 
-// FUNCTION: TIE 0x362D4
+// FUNCTION: TIE95 0x362D4
 uint16_t pai_finddisabledingroup(uint8_t group_type1, uint16_t group_id1, int16_t combine_op,
 								 uint8_t group_type2, uint16_t group_id2) {
 	uint16_t best_obj = 0xFFFFu;
@@ -726,7 +726,7 @@ uint16_t pai_finddisabledingroup(uint8_t group_type1, uint16_t group_id1, int16_
  *                      AI context + target / formation
  * ====================================================================== */
 
-// FUNCTION: TIE 0x35F7C
+// FUNCTION: TIE95 0x35F7C
 void pai_settarget(void) {
 	create_getworldposition((uint16_t)craftptr->ai_target_ref, objects[ai.active_obj_idx].fg_idx);
 	craftptr->waypoint_x_cache = worldlocx;
@@ -734,7 +734,7 @@ void pai_settarget(void) {
 	craftptr->waypoint_z_cache = worldlocz;
 }
 
-// FUNCTION: TIE 0x35FD4
+// FUNCTION: TIE95 0x35FD4
 void pai_setformation(uint16_t leader_obj_idx, uint8_t formation, uint8_t separation) {
 	/* Leader receives the intended (formation, separation). */
 	ai.leader_craft->formation = formation;
@@ -756,7 +756,7 @@ void pai_setformation(uint16_t leader_obj_idx, uint8_t formation, uint8_t separa
 	}
 }
 
-// FUNCTION: TIE 0x36134
+// FUNCTION: TIE95 0x36134
 void pai_calcrotatedpoint(FlightObject* obj, int16_t side_arg, int16_t up_arg, int16_t fwd_arg) {
 	/* Refresh the local-frame basis from heading/pitch/roll if dirty. */
 	if (obj->orient_dirty) {
@@ -798,7 +798,7 @@ int32_t pai_RotateLocalVectorToWorldScratch(FlightObject* obj, int side_arg, int
  *                        Per-craft context cache
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3591C
+// FUNCTION: TIE95 0x3591C
 uint8_t* pai_setupcraftaivars(uint16_t obj_idx) {
 	ai.active_obj_idx = obj_idx;
 	ai.active_craft = objects[obj_idx].craft_ptr;
@@ -858,7 +858,7 @@ uint8_t* pai_setupcraftaivars(uint16_t obj_idx) {
  *                           Plan init + VM step
  * ====================================================================== */
 
-// FUNCTION: TIE 0x356B0
+// FUNCTION: TIE95 0x356B0
 void pai_initplan(void) {
 	uint16_t co = craftptr->current_order;
 	if (co >= 69u) {
@@ -923,7 +923,7 @@ maneuver_start:
 	craftptr->ai_update_rate_copy = craftptr->ai_update_rate;
 }
 
-// FUNCTION: TIE 0x35870
+// FUNCTION: TIE95 0x35870
 uint8_t pai_updatecraftplan(void) {
 	/* Player-craft escort override: re-evaluate escort targets before
 	 * running the handler loop. */
@@ -954,7 +954,7 @@ uint8_t pai_updatecraftplan(void) {
  *                        Top-level per-frame tick
  * ====================================================================== */
 
-// FUNCTION: TIE 0x35640
+// FUNCTION: TIE95 0x35640
 void pai_updateplaneai(void) {
 	for (uint16_t i = 0; i < NUM_CRAFTS; ++i) {
 		if (!objects[i].ship_idx)
@@ -988,7 +988,7 @@ void pai_updateplaneai(void) {
  *                       Order-completion evaluator
  * ====================================================================== */
 
-// FUNCTION: TIE 0x36654
+// FUNCTION: TIE95 0x36654
 int pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry) {
 	const EFGStruct* g = &fg_array[ai.fg_idx];
 	const EAIStruct* cur_ai = &g->ai[ai_entry];

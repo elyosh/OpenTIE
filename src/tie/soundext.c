@@ -97,7 +97,7 @@ static ResFile* sfx2_file;
 static ResFile* speech_file;
 static ResFile* speech2_file;
 static Sound* music_sound;
-// GLOBAL: TIE 0xF5024
+// GLOBAL: TIE95 0xF5024
 static int16_t script_active_gbl;
 static int16_t group_vol_gbl;
 
@@ -111,7 +111,7 @@ static void Find_Sound_Range(int16_t scene, int16_t* pstart, int16_t* pstop);
 
 /* --- Functions --- */
 
-// FUNCTION: TIE 0x651E4
+// FUNCTION: TIE95 0x651E4
 void soundext_Open_Post_iMuse(int16_t use_script) {
 	void* fp;
 
@@ -151,7 +151,7 @@ void soundext_Open_Post_iMuse(int16_t use_script) {
 	}
 }
 
-// FUNCTION: TIE 0x6531A
+// FUNCTION: TIE95 0x6531A
 void soundext_Close_Post_iMuse(void) {
 	xres_Close_Resource(speech_file);
 	xres_Close_Resource(sfx_file);
@@ -172,7 +172,7 @@ void soundext_Close_Post_iMuse(void) {
 	xmemcom_Free_Memory_Callback(soundext_compact_Sound);
 }
 
-// FUNCTION: TIE 0x653BB
+// FUNCTION: TIE95 0x653BB
 void soundext_Open_Sound_Scene(int16_t scene) {
 	int16_t start, stop;
 
@@ -183,7 +183,7 @@ void soundext_Open_Sound_Scene(int16_t scene) {
 	}
 }
 
-// FUNCTION: TIE 0x6540A
+// FUNCTION: TIE95 0x6540A
 void soundext_Close_Sound_Scene(int16_t scene, int16_t next_scene) {
 	Sound* snd;
 	int16_t flight;
@@ -206,7 +206,7 @@ void soundext_Close_Sound_Scene(int16_t scene, int16_t next_scene) {
  * Walks the sound scene list for entries matching next_scene, processing
  * only time==-1 entries to extract cue, state, and sequence values.
  */
-// FUNCTION: TIE 0x6549B
+// FUNCTION: TIE95 0x6549B
 void soundext_Prep_Sound_Scene(int16_t next_scene) {
 	int16_t start, stop;
 	int16_t type, time_val, arg;
@@ -341,7 +341,7 @@ static void Find_Sound_Range(int16_t scene, int16_t* pstart, int16_t* pstop) {
 	*pstop = stop;
 }
 
-// FUNCTION: TIE 0x65837
+// FUNCTION: TIE95 0x65837
 void soundext_Play_SFX(uint8_t sound_index, int16_t volume) {
 	Sound* snd;
 	uint8_t idx = sound_index;
@@ -360,7 +360,7 @@ void soundext_Play_SFX(uint8_t sound_index, int16_t volume) {
 	}
 }
 
-// FUNCTION: TIE 0x658D0
+// FUNCTION: TIE95 0x658D0
 void soundext_Fade_SFX(uint8_t sound_index, int16_t volume, int16_t time) {
 	Sound* snd;
 
@@ -369,7 +369,7 @@ void soundext_Fade_SFX(uint8_t sound_index, int16_t volume, int16_t time) {
 		xsound_Set_Sound_Fade(snd, volume, time);
 }
 
-// FUNCTION: TIE 0x65929
+// FUNCTION: TIE95 0x65929
 void soundext_Stop_SFX(uint8_t sound_index) {
 	Sound* snd;
 
@@ -378,7 +378,7 @@ void soundext_Stop_SFX(uint8_t sound_index) {
 		xsound_Stop_Sound(snd);
 }
 
-// FUNCTION: TIE 0x65978
+// FUNCTION: TIE95 0x65978
 void soundext_Play_Speech(uint8_t sound_index) {
 	Sound* snd;
 
@@ -391,7 +391,7 @@ void soundext_Play_Speech(uint8_t sound_index) {
 	}
 }
 
-// FUNCTION: TIE 0x659F7
+// FUNCTION: TIE95 0x659F7
 void soundext_compact_Sound(int16_t post_compaction) {
 	if (post_compaction)
 		imuse_resume(im);
@@ -399,7 +399,7 @@ void soundext_compact_Sound(int16_t post_compaction) {
 		imuse_pause(im);
 }
 
-// FUNCTION: TIE 0x65A2E
+// FUNCTION: TIE95 0x65A2E
 void soundext_Action_iMuse(int16_t state, Sound* the_sound, int16_t var1, int16_t var2) {
 	void* snd_id = the_sound;
 
@@ -462,7 +462,7 @@ void soundext_Action_iMuse(int16_t state, Sound* the_sound, int16_t var1, int16_
 	}
 }
 
-// FUNCTION: TIE 0x65B5A
+// FUNCTION: TIE95 0x65B5A
 void* soundext_TIE_Load_Sound(const char* name) {
 	char low_name[16];
 	Sound* snd;
@@ -477,7 +477,7 @@ void* soundext_TIE_Load_Sound(const char* name) {
 	return snd;
 }
 
-// FUNCTION: TIE 0x65BEE
+// FUNCTION: TIE95 0x65BEE
 void soundext_TIE_Unload_Sound(void* sound) {
 	xsound_Clear_Sound_Keepable((Sound*)sound);
 	xsound_Free_Sound((Sound*)sound);

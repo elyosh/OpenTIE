@@ -19,7 +19,7 @@
 #define FMUSIC_ID_BASE 500
 
 /* Paging slot offsets into music_buffer (initialized data in the binary) */
-// GLOBAL: TIE 0xC1F48
+// GLOBAL: TIE95 0xC1F48
 static const uint16_t music_slot_offsets[FMUSIC_NUM_SLOTS] = { 0x0000, 0x2000 };
 
 /* Per-track data */
@@ -28,21 +28,21 @@ static uint16_t music_size[FMUSIC_MAX_TRACKS]; /* data size per track */
 static void* music_data[FMUSIC_MAX_TRACKS];    /* malloc'd track data (replaces HANDLE) */
 
 /* Paging state */
-// GLOBAL: TIE 0xD41A8
+// GLOBAL: TIE95 0xD41A8
 static int32_t music_page_state[FMUSIC_NUM_SLOTS]; /* track index in each slot, -1 = empty */
 static uint8_t music_age[FMUSIC_NUM_SLOTS];        /* LRU age bit: 1 = recently used */
 
 /* Module state */
-// GLOBAL: TIE 0xD41B0
+// GLOBAL: TIE95 0xD41B0
 void* music_buffer; /* paging buffer (allocated externally) */
-// GLOBAL: TIE 0xD4952
+// GLOBAL: TIE95 0xD4952
 int16_t num_music; /* number of loaded tracks, -1 = not initialized */
 
 /*
  * Look up a music track by name.
  * Returns FMUSIC_ID_BASE + track_index on match, 0 if not found.
  */
-// FUNCTION: TIE 0x239B0
+// FUNCTION: TIE95 0x239B0
 int16_t fmusic_fmLoadSound(const char* name) {
 	if (!num_music)
 		return 0;
@@ -62,13 +62,13 @@ int16_t fmusic_fmLoadSound(const char* name) {
  * Unload stub — always returns 1.
  * Track data stays resident until freemusic.
  */
-// FUNCTION: TIE 0x23A28
+// FUNCTION: TIE95 0x23A28
 int16_t fmusic_fmUnloadSound(void) { return 1; }
 
 /*
  * Return a pointer to the paged data for a track, or NULL if not paged in.
  */
-// FUNCTION: TIE 0x23A30
+// FUNCTION: TIE95 0x23A30
 void* fmusic_GetPagedSound(uint16_t track_idx) {
 	if (track_idx >= (uint16_t)num_music)
 		return NULL;
@@ -86,7 +86,7 @@ void* fmusic_GetPagedSound(uint16_t track_idx) {
  */
 static int16_t pagemusic(int track_idx, int slot);
 
-// FUNCTION: TIE 0x23A7C
+// FUNCTION: TIE95 0x23A7C
 int16_t fmusic_PageSound(uint16_t track_idx) {
 	if (track_idx >= (uint16_t)num_music)
 		return -1;
@@ -134,7 +134,7 @@ static int16_t pagemusic(int track_idx, int slot) {
  * Initialize paging state. Does NOT allocate music_buffer — that must be
  * set externally before calling loadmusic.
  */
-// FUNCTION: TIE 0x23B90
+// FUNCTION: TIE95 0x23B90
 void fmusic_allocmusicbuffer(void) {
 	num_music = 0;
 	for (int i = 0; i < FMUSIC_NUM_SLOTS; i++) {
@@ -162,7 +162,7 @@ static int16_t allocmusic(uint16_t size) {
 /*
  * Free all track data and set num_music to -1 (not initialized).
  */
-// FUNCTION: TIE 0x23C30
+// FUNCTION: TIE95 0x23C30
 void fmusic_freemusic(void) {
 	while (num_music > 0) {
 		num_music--;
@@ -216,7 +216,7 @@ static int readfiledata(TieFile* fp, void* dest, uint16_t total) {
  *
  * Returns the number of tracks loaded, or 0 on failure.
  */
-// FUNCTION: TIE 0x23CB0
+// FUNCTION: TIE95 0x23CB0
 int16_t fmusic_loadmusic(const char* filename) {
 	if (!music_buffer) {
 		TieDiagnostics_Log(TIE_LOG_WARN, "fmusic_loadmusic: music_buffer not allocated\n");

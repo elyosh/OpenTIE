@@ -51,7 +51,7 @@ static int16_t cached_radar_resolution = -1;
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x31EE0
+// FUNCTION: TIE95 0x31EE0
 int32_t math2_ABoverC32(int32_t a, int32_t b, int32_t c) {
 	int sign = 0;
 	if (a < 0) {
@@ -77,14 +77,14 @@ int32_t math2_ABoverC32(int32_t a, int32_t b, int32_t c) {
 	return sign ? -result : result;
 }
 
-// FUNCTION: TIE 0x31F40
+// FUNCTION: TIE95 0x31F40
 uint16_t math2_fraction(uint16_t val, uint16_t frac) {
 	if (frac == 0xFFFF)
 		return val;
 	return (uint16_t)(((uint32_t)frac * val + 0x8000) >> 16);
 }
 
-// FUNCTION: TIE 0x31F68
+// FUNCTION: TIE95 0x31F68
 int32_t math2_longfraction(int32_t val, uint16_t frac) {
 	if (frac == 0xFFFF)
 		return val;
@@ -94,13 +94,13 @@ int32_t math2_longfraction(int32_t val, uint16_t frac) {
 	return (int32_t)((uint32_t)frac * hi + (((uint32_t)frac * lo + 0x8000u) >> 16));
 }
 
-// FUNCTION: TIE 0x31FA0
+// FUNCTION: TIE95 0x31FA0
 int16_t math2_divide(uint16_t a, uint16_t b) {
 	math2_remainder = (int16_t)((((uint32_t)(a % b)) << 16) / b);
 	return (int16_t)(a / b);
 }
 
-// FUNCTION: TIE 0x31FE4
+// FUNCTION: TIE95 0x31FE4
 uint16_t math2_percentage(uint16_t a, uint16_t b) {
 	if (a == b)
 		return 0xFFFF;
@@ -111,7 +111,7 @@ uint16_t math2_percentage(uint16_t a, uint16_t b) {
 	return (uint16_t)(((uint32_t)a << 16) / b);
 }
 
-// FUNCTION: TIE 0x32014
+// FUNCTION: TIE95 0x32014
 uint16_t math2_longpercentage(uint32_t a, uint32_t b) {
 	if (a == b || !b || a >= b)
 		return 0xFFFF;
@@ -123,7 +123,7 @@ uint16_t math2_longpercentage(uint32_t a, uint32_t b) {
 }
 
 /* 16-bit LFSR pseudo-random number generator */
-// FUNCTION: TIE 0x32054
+// FUNCTION: TIE95 0x32054
 int16_t math2_getrandom(void) {
 	uint16_t val = (uint16_t)randomnumber;
 	for (int i = 0; i < 16; i++) {
@@ -140,7 +140,7 @@ int16_t math2_getrandom(void) {
 /* No-op in the binary (just retn 4) */
 void math2_setrandomseed(void) {}
 
-// FUNCTION: TIE 0x32144
+// FUNCTION: TIE95 0x32144
 uint16_t math2_mphconvert(int16_t speed, uint16_t divisor) {
 	uint32_t val = (uint32_t)(4660 * speed + 128);
 	uint32_t shifted = val >> 8;
@@ -152,17 +152,17 @@ uint16_t math2_mphconvert(int16_t speed, uint16_t divisor) {
 
 uint16_t math2_calcratio(uint16_t a, uint16_t b, uint16_t c) { return (uint16_t)((uint32_t)b * c / a); }
 
-// FUNCTION: TIE 0x32190
+// FUNCTION: TIE95 0x32190
 int32_t math2_convertwdw(uint16_t val) { return (int32_t)val << 16; }
 
-// FUNCTION: TIE 0x3219C
+// FUNCTION: TIE95 0x3219C
 uint32_t math2_divide32u(uint32_t a, uint32_t b) {
 	if (!b)
 		return 0;
 	return a / b;
 }
 
-// FUNCTION: TIE 0x32394
+// FUNCTION: TIE95 0x32394
 int16_t math2_halfplane(int32_t x1, int32_t y1, int32_t x2, int32_t y2) { return (x2 * y2 - y1 * x1) >= 0; }
 
 /* ------------------------------------------------------------------ */
@@ -176,7 +176,7 @@ int16_t math2_halfplane(int32_t x1, int32_t y1, int32_t x2, int32_t y2) { return
  * angle steps 0..90° (step = 443 out of 16384). At each angle,
  * the pair gives the maximum x and y extents of the radar circle.
  */
-// FUNCTION: TIE 0x321B4
+// FUNCTION: TIE95 0x321B4
 void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz) {
 	/* Rebuild radar boundary table if resolution changed */
 	if (cached_radar_resolution != flightResolution) {

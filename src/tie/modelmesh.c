@@ -44,26 +44,30 @@ static const TieModelMeshView* mesh_view(uint16_t model_type, int mesh_index) {
 	return model->mesh_count ? &model->meshes[mesh_index] : NULL;
 }
 
-// FUNCTION: TIE98 0x43B5E0 ModelMesh_GetCount; same name in OpenXWA.
+// FUNCTION: TIE98 0x43B5E0
+// ModelMesh_GetCount; same name in OpenXWA.
 int modelmesh_getcount(uint16_t model_type) {
 	if (!modelmesh_has_opt(model_type))
 		return 0;
 	return modelmesh_require_model(model_type)->mesh_count;
 }
 
-// FUNCTION: TIE98 0x43BC40 ModelMesh_GetType; same name in OpenXWA.
+// FUNCTION: TIE98 0x43BC40
+// ModelMesh_GetType; same name in OpenXWA.
 int modelmesh_gettype(uint16_t model_type, int mesh_index) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
 	return mesh && mesh->has_descriptor ? mesh->mesh_type : TIE_MESH_DEFAULT;
 }
 
-// FUNCTION: TIE98 0x43D5B0 ModelMesh_GetObjectTypeMeshType; same name in OpenXWA.
+// FUNCTION: TIE98 0x43D5B0
+// ModelMesh_GetObjectTypeMeshType; same name in OpenXWA.
 int modelmesh_getobjecttypemeshtype(uint16_t model_type, int mesh_index) {
 	// PORT: the host model view is the authoritative object-type mesh cache.
 	return modelmesh_gettype(model_type, mesh_index);
 }
 
-// FUNCTION: TIE98 0x43BCE0 ModelMesh_GetVertexCount (inferred).
+// FUNCTION: TIE98 0x43BCE0
+// ModelMesh_GetVertexCount (inferred).
 int modelmesh_getvertexcount(uint16_t model_type, int mesh_index) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
 	return mesh ? (int)mesh->vertex_count : 0;
@@ -78,19 +82,22 @@ static const TieModelVec3f* mesh_vertex(uint16_t model_type, int mesh_index, int
 	return vertex_index >= 0 ? &mesh->vertices[vertex_index] : NULL;
 }
 
-// FUNCTION: TIE98 0x43BD60 ModelMesh_GetVertexX; same name in OpenXWA.
+// FUNCTION: TIE98 0x43BD60
+// ModelMesh_GetVertexX; same name in OpenXWA.
 int modelmesh_getvertexx(uint16_t model_type, int mesh_index, int vertex_index) {
 	const TieModelVec3f* vertex = mesh_vertex(model_type, mesh_index, vertex_index);
 	return vertex ? (int)vertex->x : 0;
 }
 
-// FUNCTION: TIE98 0x43BE00 ModelMesh_GetVertexY; same name in OpenXWA.
+// FUNCTION: TIE98 0x43BE00
+// ModelMesh_GetVertexY; same name in OpenXWA.
 int modelmesh_getvertexy(uint16_t model_type, int mesh_index, int vertex_index) {
 	const TieModelVec3f* vertex = mesh_vertex(model_type, mesh_index, vertex_index);
 	return vertex ? (int)vertex->y : 0;
 }
 
-// FUNCTION: TIE98 0x43BEA0 ModelMesh_GetVertexZ; same name in OpenXWA.
+// FUNCTION: TIE98 0x43BEA0
+// ModelMesh_GetVertexZ; same name in OpenXWA.
 int modelmesh_getvertexz(uint16_t model_type, int mesh_index, int vertex_index) {
 	const TieModelVec3f* vertex = mesh_vertex(model_type, mesh_index, vertex_index);
 	return vertex ? (int)vertex->z : 0;
@@ -122,27 +129,37 @@ static int descriptor_value(uint16_t model_type, int mesh_index, int field) {
 	}
 }
 
-// FUNCTION: TIE98 0x43BF40 ModelMesh_GetCenterX
+// FUNCTION: TIE98 0x43BF40
+// ModelMesh_GetCenterX
 int modelmesh_getcenterx(uint16_t m, int i) { return descriptor_value(m, i, 0); }
-// FUNCTION: TIE98 0x43BFE0 ModelMesh_GetCenterY
+// FUNCTION: TIE98 0x43BFE0
+// ModelMesh_GetCenterY
 int modelmesh_getcentery(uint16_t m, int i) { return descriptor_value(m, i, 1); }
-// FUNCTION: TIE98 0x43C080 ModelMesh_GetCenterZ
+// FUNCTION: TIE98 0x43C080
+// ModelMesh_GetCenterZ
 int modelmesh_getcenterz(uint16_t m, int i) { return descriptor_value(m, i, 2); }
 
-// FUNCTION: TIE98 0x43C120 ModelMesh_GetBoundsMinX
+// FUNCTION: TIE98 0x43C120
+// ModelMesh_GetBoundsMinX
 int modelmesh_getboundsminx(uint16_t m, int i) { return descriptor_value(m, i, 3); }
-// FUNCTION: TIE98 0x43C1C0 ModelMesh_GetBoundsMinY
+// FUNCTION: TIE98 0x43C1C0
+// ModelMesh_GetBoundsMinY
 int modelmesh_getboundsminy(uint16_t m, int i) { return descriptor_value(m, i, 4); }
-// FUNCTION: TIE98 0x43C260 ModelMesh_GetBoundsMinZ
+// FUNCTION: TIE98 0x43C260
+// ModelMesh_GetBoundsMinZ
 int modelmesh_getboundsminz(uint16_t m, int i) { return descriptor_value(m, i, 5); }
-// FUNCTION: TIE98 0x43C300 ModelMesh_GetBoundsMaxX
+// FUNCTION: TIE98 0x43C300
+// ModelMesh_GetBoundsMaxX
 int modelmesh_getboundsmaxx(uint16_t m, int i) { return descriptor_value(m, i, 6); }
-// FUNCTION: TIE98 0x43C3A0 ModelMesh_GetBoundsMaxY
+// FUNCTION: TIE98 0x43C3A0
+// ModelMesh_GetBoundsMaxY
 int modelmesh_getboundsmaxy(uint16_t m, int i) { return descriptor_value(m, i, 7); }
-// FUNCTION: TIE98 0x43C440 ModelMesh_GetBoundsMaxZ
+// FUNCTION: TIE98 0x43C440
+// ModelMesh_GetBoundsMaxZ
 int modelmesh_getboundsmaxz(uint16_t m, int i) { return descriptor_value(m, i, 8); }
 
-// FUNCTION: TIE98 0x43C4E0 ModelMesh_GetTargetId; same name in OpenXWA.
+// FUNCTION: TIE98 0x43C4E0
+// ModelMesh_GetTargetId; same name in OpenXWA.
 int modelmesh_gettargetid(uint16_t model_type, int mesh_index) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
 	return mesh && mesh->has_descriptor ? mesh->target_id : 0;
@@ -156,14 +173,18 @@ static int component_focus(uint16_t model_type, int mesh_index, int axis) {
 	return axis == 0 ? (int)point->x : axis == 1 ? (int)point->y : (int)point->z;
 }
 
-// FUNCTION: TIE98 0x43C570 ModelMesh_GetComponentFocusX
+// FUNCTION: TIE98 0x43C570
+// ModelMesh_GetComponentFocusX
 int modelmesh_getcomponentfocusx(uint16_t m, int i) { return component_focus(m, i, 0); }
-// FUNCTION: TIE98 0x43C620 ModelMesh_GetComponentFocusY
+// FUNCTION: TIE98 0x43C620
+// ModelMesh_GetComponentFocusY
 int modelmesh_getcomponentfocusy(uint16_t m, int i) { return component_focus(m, i, 1); }
-// FUNCTION: TIE98 0x43C6D0 ModelMesh_GetComponentFocusZ
+// FUNCTION: TIE98 0x43C6D0
+// ModelMesh_GetComponentFocusZ
 int modelmesh_getcomponentfocusz(uint16_t m, int i) { return component_focus(m, i, 2); }
 
-// FUNCTION: TIE98 0x43C780 ModelMesh_GetComponentMaxExtent; same name in OpenXWA.
+// FUNCTION: TIE98 0x43C780
+// ModelMesh_GetComponentMaxExtent; same name in OpenXWA.
 int modelmesh_getcomponentmaxextent(uint16_t model_type, int mesh_index) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
 	if (!mesh || !mesh->has_descriptor)
@@ -186,12 +207,14 @@ static int explosion_type(uint16_t model_type, int mesh_index) {
 	return value;
 }
 
-// FUNCTION: TIE98 0x43C850 ModelMesh_IsObjectTypeMeshDamageable; same name in OpenXWA.
+// FUNCTION: TIE98 0x43C850
+// ModelMesh_IsObjectTypeMeshDamageable; same name in OpenXWA.
 int modelmesh_isobjecttypemeshdamageable(uint16_t model_type, int mesh_index) {
 	return explosion_type(model_type, mesh_index) & 2;
 }
 
-// FUNCTION: TIE98 0x43C8F0 ModelMesh_HasExplosionType1; same name in OpenXWA.
+// FUNCTION: TIE98 0x43C8F0
+// ModelMesh_HasExplosionType1; same name in OpenXWA.
 int modelmesh_hasexplosiontype1(uint16_t model_type, int mesh_index) {
 	return explosion_type(model_type, mesh_index) & 1;
 }
@@ -212,26 +235,30 @@ void modelmesh_enableexplosiontype2(uint16_t model_type, int mesh_index) {
 	enable_explosion_type(model_type, mesh_index, 2);
 }
 
-// FUNCTION: TIE98 0x43CAB0 ModelMesh_GetRotScaleData; same name in OpenXWA.
+// FUNCTION: TIE98 0x43CAB0
+// ModelMesh_GetRotScaleData; same name in OpenXWA.
 const TieModelRotationScale* modelmesh_getrotscaledata(uint16_t model_type, int mesh_index) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
 	return mesh && mesh->has_rotation_scale ? &mesh->rotation_scale : NULL;
 }
 
-// FUNCTION: TIE98 0x43CCE0 ModelMesh_CountHardpoints; same name in OpenXWA.
+// FUNCTION: TIE98 0x43CCE0
+// ModelMesh_CountHardpoints; same name in OpenXWA.
 int modelmesh_counthardpoints(uint16_t model_type, int mesh_index) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
 	return mesh ? (int)mesh->hardpoint_count : 0;
 }
 
-// FUNCTION: TIE98 0x43CD60 ModelMesh_GetAlternateHardpointIndex; same name in OpenXWA.
+// FUNCTION: TIE98 0x43CD60
+// ModelMesh_GetAlternateHardpointIndex; same name in OpenXWA.
 int modelmesh_getalternatehardpointindex(uint16_t model_type, int mesh_index, int hardpoint_index) {
 	(void)model_type;
 	(void)mesh_index;
 	return hardpoint_index;
 }
 
-// FUNCTION: TIE98 0x43CF50 ModelMesh_GetHardpoint; same name in OpenXWA.
+// FUNCTION: TIE98 0x43CF50
+// ModelMesh_GetHardpoint; same name in OpenXWA.
 void modelmesh_gethardpoint(uint16_t model_type, int mesh_index, int hardpoint_index, int* type, int* x,
 							int* y, int* z) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
@@ -246,7 +273,8 @@ void modelmesh_gethardpoint(uint16_t model_type, int mesh_index, int hardpoint_i
 	*z = (int)hardpoint->position.z;
 }
 
-// FUNCTION: TIE98 0x43D4A0 ModelMesh_FindBridgeIndex; same name in OpenXWA.
+// FUNCTION: TIE98 0x43D4A0
+// ModelMesh_FindBridgeIndex; same name in OpenXWA.
 int modelmesh_findbridgeindex(uint16_t model_type) {
 	if (!modelmesh_has_opt(model_type))
 		return -1;
@@ -261,7 +289,8 @@ static int32_t clamp_q30(int64_t value) {
 	return (int32_t)value;
 }
 
-// FUNCTION: TIE98 0x423FC0 ModelMesh_ApplyAnimatedMeshRotationToPoint; same name in OpenXWA.
+// FUNCTION: TIE98 0x423FC0
+// ModelMesh_ApplyAnimatedMeshRotationToPoint; same name in OpenXWA.
 void modelmesh_applyanimatedmeshrotationtopoint(int angle, uint16_t model_type, int mesh_index, int x, int y,
 												int z, int* out_x, int* out_y, int* out_z) {
 	*out_x = x;

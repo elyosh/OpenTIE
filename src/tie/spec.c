@@ -32,7 +32,7 @@ __attribute__((constructor)) static void spec_data_init_retail(void) {
 	memcpy(spec_data, spec_data_retail_bytes, sizeof(spec_data));
 }
 
-// FUNCTION: TIE 0x52EA0
+// FUNCTION: TIE95 0x52EA0
 uint16_t spec_getspecnum(uint16_t species_idx) { return species_table[species_idx].spec_num; }
 
 /* ===== Public species-name helpers =====================================

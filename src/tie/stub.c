@@ -19,7 +19,7 @@
  * (buf_w, buf_h) is the full buffer size (for the bitmap wrapper).
  */
 
-// FUNCTION: TIE 0x870F0
+// FUNCTION: TIE95 0x870F0
 int stub_Copy_From_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, int16_t screen_y,
 								  int16_t buf_w, int16_t buf_h) {
 	BitmapStruct bm;
@@ -81,7 +81,7 @@ int stub_Copy_From_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x
 	return 1;
 }
 
-// FUNCTION: TIE 0x872C8
+// FUNCTION: TIE95 0x872C8
 int stub_Copy_To_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, int16_t screen_y,
 								int16_t buf_w, int16_t buf_h) {
 	BitmapStruct bm;
@@ -158,7 +158,7 @@ int stub_Copy_To_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, 
  * 4. Detect winding order (which side is left vs right)
  * 5. Call Map_Image to render the textured scanlines
  */
-// FUNCTION: TIE 0x874A0
+// FUNCTION: TIE95 0x874A0
 void stub_Map_Clipped_Image(void* src_data, int16_t* dst_poly, Rect* src_rect, int16_t src_stride,
 							int16_t map_mode) {
 	Poly src_poly;

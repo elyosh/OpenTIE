@@ -26,18 +26,24 @@ static int32_t lastB1mul[16], lastB2mul[16], lastB3mul[16];
 static int32_t lastC1mul[16], lastC2mul[16], lastC3mul[16];
 
 /* Rotation matrix (set by FVIEW) */
-// GLOBAL: TIE 0xEC174
-// GLOBAL: TIE 0xEC178
-// GLOBAL: TIE 0xEC17C
-int32_t worldeyeA1, worldeyeA2, worldeyeA3;
-// GLOBAL: TIE 0xEC18C
-// GLOBAL: TIE 0xEC190
-// GLOBAL: TIE 0xEC194
-int32_t worldeyeB1, worldeyeB2, worldeyeB3;
-// GLOBAL: TIE 0xEC180
-// GLOBAL: TIE 0xEC184
-// GLOBAL: TIE 0xEC188
-int32_t worldeyeC1, worldeyeC2, worldeyeC3;
+// GLOBAL: TIE95 0xEC174
+int32_t worldeyeA1;
+// GLOBAL: TIE95 0xEC178
+int32_t worldeyeA2;
+// GLOBAL: TIE95 0xEC17C
+int32_t worldeyeA3;
+// GLOBAL: TIE95 0xEC18C
+int32_t worldeyeB1;
+// GLOBAL: TIE95 0xEC190
+int32_t worldeyeB2;
+// GLOBAL: TIE95 0xEC194
+int32_t worldeyeB3;
+// GLOBAL: TIE95 0xEC180
+int32_t worldeyeC1;
+// GLOBAL: TIE95 0xEC184
+int32_t worldeyeC2;
+// GLOBAL: TIE95 0xEC188
+int32_t worldeyeC3;
 int32_t transfm2_screenyoffset;
 
 /* Working state */
@@ -60,24 +66,24 @@ static inline int32_t fpmul15(int32_t a, int32_t b) { return (int32_t)(((int64_t
 
 /* ================================================================== */
 
-// FUNCTION: TIE 0x59D20
+// FUNCTION: TIE95 0x59D20
 int32_t transfm2_geteyex(int32_t x, int32_t y, int32_t z) {
 	return fpmul15(x, worldeyeA1) + fpmul15(y, worldeyeB1) + fpmul15(z, worldeyeC1);
 }
 
-// FUNCTION: TIE 0x59D68
+// FUNCTION: TIE95 0x59D68
 int32_t transfm2_geteyey(int32_t x, int32_t y, int32_t z) {
 	return fpmul15(x, worldeyeA2) + fpmul15(y, worldeyeB2) + fpmul15(z, worldeyeC2);
 }
 
-// FUNCTION: TIE 0x59DB0
+// FUNCTION: TIE95 0x59DB0
 int32_t transfm2_geteyez(int32_t x, int32_t y, int32_t z) {
 	return fpmul15(x, worldeyeA3) + fpmul15(y, worldeyeB3) + fpmul15(z, worldeyeC3);
 }
 
 /* ================================================================== */
 
-// FUNCTION: TIE 0x59CA0
+// FUNCTION: TIE95 0x59CA0
 void transfm2_clipobjecteyez(int32_t x, int32_t y, int32_t z) {
 	int32_t zneg = -objecteyez;
 	if (x <= objecteyex)
@@ -99,7 +105,7 @@ void transfm2_clipobjecteyez(int32_t x, int32_t y, int32_t z) {
  * Dest: int32 (eyex, eyey, eyez) triples.
  * Uses cached multiply tables for vertices with 0x7F00 reference codes.
  */
-// FUNCTION: TIE 0x59DF8
+// FUNCTION: TIE95 0x59DF8
 int32_t* transfm2_geteyecoords(const int16_t* source, int32_t* dest) {
 	int32_t ptIndex = (uint16_t)numpoints;
 	numeyezpos = 0;
@@ -164,7 +170,7 @@ int32_t* transfm2_geteyecoords(const int16_t* source, int32_t* dest) {
 }
 
 /* S2 variant: same algorithm with shift-2 scaling */
-// FUNCTION: TIE 0x5A050
+// FUNCTION: TIE95 0x5A050
 int32_t* transfm2_geteyecoordsS2(const int16_t* source, int32_t* dest) {
 	/* Scale summed products by 14 bits instead of the standard 16. */
 	int32_t ptIndex = (uint16_t)numpoints;
@@ -226,7 +232,7 @@ int32_t* transfm2_geteyecoordsS2(const int16_t* source, int32_t* dest) {
 /* ================================================================== */
 
 /* Z=0 plane transforms: 2D points (x,y), z assumed 0 */
-// FUNCTION: TIE 0x5A9E0
+// FUNCTION: TIE95 0x5A9E0
 int32_t* transfm2_geteyecoordsZ0(const int16_t* source, int32_t* dest) {
 	for (int32_t count = (uint16_t)numpoints; count; count--) {
 		int32_t x = source[0];
@@ -243,7 +249,7 @@ int32_t* transfm2_geteyecoordsZ0(const int16_t* source, int32_t* dest) {
 	return dest;
 }
 
-// FUNCTION: TIE 0x5AA94
+// FUNCTION: TIE95 0x5AA94
 int32_t* transfm2_geteyecoordsZ0s16(const int16_t* source, int32_t* dest) {
 	for (int32_t count = (uint16_t)numpoints; count; count--) {
 		int32_t x = source[0];
@@ -260,7 +266,7 @@ int32_t* transfm2_geteyecoordsZ0s16(const int16_t* source, int32_t* dest) {
 	return dest;
 }
 
-// FUNCTION: TIE 0x5AB44
+// FUNCTION: TIE95 0x5AB44
 int32_t* transfm2_geteyecoordsZ0s8(const int16_t* source, int32_t* dest) {
 	for (int32_t count = (uint16_t)numpoints; count; count--) {
 		int32_t x = source[0];
@@ -285,7 +291,7 @@ int32_t* transfm2_geteyecoordsZ0s8(const int16_t* source, int32_t* dest) {
  * off-screen and clip it. All arithmetic is bit-pattern-faithful to
  * the binary (single 64-bit unsigned divide, plain wrapping add for
  * the screen-center offset). */
-// FUNCTION: TIE 0x5ACC4
+// FUNCTION: TIE95 0x5ACC4
 int32_t transfm2_getscreenx(int32_t eyex, int32_t eyez) {
 	bool neg = (eyex < 0);
 	uint32_t mag = neg ? -(uint32_t)eyex : (uint32_t)eyex;
@@ -297,7 +303,7 @@ int32_t transfm2_getscreenx(int32_t eyex, int32_t eyez) {
 	return (int32_t)(halfpixelswide + result);
 }
 
-// FUNCTION: TIE 0x5AD60
+// FUNCTION: TIE95 0x5AD60
 int32_t transfm2_getscreeny(int32_t eyey, int32_t eyez) {
 	bool neg = (eyey < 0);
 	uint32_t mag = neg ? -(uint32_t)eyey : (uint32_t)eyey;
@@ -319,7 +325,7 @@ int32_t transfm2_getscreencoordx(int32_t eyex, int32_t eyez) { return transfm2_g
 
 int32_t transfm2_getscreencoordy(int32_t eyey, int32_t eyez) { return transfm2_getscreeny(eyey, eyez); }
 
-// FUNCTION: TIE 0x5AD28
+// FUNCTION: TIE95 0x5AD28
 void transfm2_doxminmax(int32_t screenx, int32_t* ptr) {
 	if (*minscreenx >= screenx) {
 		if (*minscreenx <= screenx)
@@ -331,7 +337,7 @@ void transfm2_doxminmax(int32_t screenx, int32_t* ptr) {
 	}
 }
 
-// FUNCTION: TIE 0x5ADF8
+// FUNCTION: TIE95 0x5ADF8
 void transfm2_doyminmax(int32_t screeny, int32_t* ptr) {
 	if (minscreeny[1] >= screeny) {
 		if (minscreeny[1] <= screeny)
@@ -346,7 +352,7 @@ void transfm2_doyminmax(int32_t screeny, int32_t* ptr) {
 /* ================================================================== */
 
 /* Batch screen projection with z-clipping */
-// FUNCTION: TIE 0x5ABF8
+// FUNCTION: TIE95 0x5ABF8
 int32_t* transfm2_getscreencoords(int32_t* source, int32_t* dest) {
 	while (counter) {
 		int32_t eyez = source[2];
@@ -452,7 +458,7 @@ static void project_clipped_y(const int32_t* source1, const int32_t* source2, in
 	*out = transfm2_screenyoffset + halfpixelsdeep + screen;
 }
 
-// FUNCTION: TIE 0x5AE84
+// FUNCTION: TIE95 0x5AE84
 int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* dest) {
 	compute_zratio(source1[2], source2[2]);
 
@@ -465,7 +471,7 @@ int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* de
 	return dest + 2;
 }
 
-// FUNCTION: TIE 0x5AE30
+// FUNCTION: TIE95 0x5AE30
 int32_t* transfm2_clipeyez(int32_t* source, int32_t* dest) {
 	int32_t* result = dest;
 	numpoints--;
@@ -492,7 +498,7 @@ int32_t* transfm2_clipeyez(int32_t* source, int32_t* dest) {
  * This is the most complex function — handles per-vertex normal-based
  * lighting computation and interpolation at the clip point.
  */
-// FUNCTION: TIE 0x5B090
+// FUNCTION: TIE95 0x5B090
 int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, int32_t* source2,
 								 int32_t* dest) {
 	compute_zratio(source1[2], source2[2]);
@@ -548,7 +554,7 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 
 /* ================================================================== */
 
-// FUNCTION: TIE 0x5B41C
+// FUNCTION: TIE95 0x5B41C
 int32_t* transfm2_calclinepts(const uint8_t* source) {
 	uint8_t idx1 = source[2];
 	int32_t* dest = calcflag[idx1];
@@ -594,7 +600,7 @@ int32_t* transfm2_calclinepts(const uint8_t* source) {
 
 /* ================================================================== */
 
-// FUNCTION: TIE 0x5B578
+// FUNCTION: TIE95 0x5B578
 int16_t transfm2_getfacescreenxy(uint16_t ptCnt) {
 	numpoints = ptCnt;
 	counter = ptCnt;
@@ -618,7 +624,7 @@ int16_t transfm2_getfacescreenxy(uint16_t ptCnt) {
 
 /* ================================================================== */
 
-// FUNCTION: TIE 0x5B658
+// FUNCTION: TIE95 0x5B658
 int16_t transfm2_classifyedges(void) {
 	for (uint8_t i = 0;; i++) {
 		if (i >= (uint16_t)numpoints)
@@ -830,7 +836,7 @@ static void minmax_axis(int32_t m, int32_t v1, int32_t v2, int32_t* acc_min, int
 	}
 }
 
-// FUNCTION: TIE 0x5A2A8
+// FUNCTION: TIE95 0x5A2A8
 void transfm2_geteyeminmax(const int16_t* source, int32_t* dest) {
 	int32_t x1 = source[0];
 	int32_t y1 = source[1];
@@ -889,7 +895,7 @@ void transfm2_geteyeminmax(const int16_t* source, int32_t* dest) {
 	dest[5] = objectz + (int16_t)((uint32_t)mx >> 16);
 }
 
-// FUNCTION: TIE 0x5A458
+// FUNCTION: TIE95 0x5A458
 void transfm2_geteyeminmaxS2(const int16_t* source, int32_t* dest) {
 	int32_t x1 = source[0];
 	int32_t y1 = source[1];
@@ -943,7 +949,7 @@ void transfm2_geteyeminmaxS2(const int16_t* source, int32_t* dest) {
 	dest[5] = objectz + (mx >> 14);
 }
 
-// FUNCTION: TIE 0x5A608
+// FUNCTION: TIE95 0x5A608
 void transfm2_getworldminmax(const int16_t* source, int16_t* dest) {
 	int32_t x1 = source[0];
 	int32_t z1 = source[2];
@@ -1000,7 +1006,7 @@ void transfm2_getworldminmax(const int16_t* source, int16_t* dest) {
 	dest[5] += (int16_t)((mx - 0x100000) >> 21);
 }
 
-// FUNCTION: TIE 0x5A7F4
+// FUNCTION: TIE95 0x5A7F4
 void transfm2_getworldminmaxS2(const int16_t* source, int16_t* dest) {
 	int32_t x1 = source[0];
 	int32_t z1 = source[2];

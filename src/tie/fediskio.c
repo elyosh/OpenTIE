@@ -61,20 +61,24 @@ static const char* fatal_error_strings[] = { "Error! Not Enough Memory!\n",
 
 /* --- Globals --- */
 
-// GLOBAL: TIE 0xD4068, TIE98 0x6267A0
+// GLOBAL: TIE95 0xD4068
+// GLOBAL: TIE98 0x6267A0
 // PORT: shared storage includes the common 16-character name and ".tfr".
 char pilotname[TIE_PILOT_FILENAME_CAPACITY];
-// GLOBAL: TIE 0xD4078, TIE98 0x6267E0
+// GLOBAL: TIE95 0xD4078
+// GLOBAL: TIE98 0x6267E0
 char openfilename[256];
 static TieFileRoot openfileroot;
-// GLOBAL: TIE 0xD4178, TIE98 0x6267C8
+// GLOBAL: TIE95 0xD4178
+// GLOBAL: TIE98 0x6267C8
 TieFile* fileptr;
 uint8_t currentmission;
 uint8_t currentbattle;
 
 char resourcedir[10];
 char** fatalerrstrings;
-// GLOBAL: TIE 0xC1E08, TIE98 0x4E00FC
+// GLOBAL: TIE95 0xC1E08
+// GLOBAL: TIE98 0x4E00FC
 static char** flightloadstrings;
 
 /* Per-species model allocation size used by the classic renderer's
@@ -125,7 +129,8 @@ void* flightbuf_big;   /* retail word_D4186, TRACE2_EDGEHEADER_CAP records */
 
 /* --- File I/O wrappers --- */
 
-// FUNCTION: TIE 0x226D0, TIE98 0x41C5F0
+// FUNCTION: TIE95 0x226D0
+// FUNCTION: TIE98 0x41C5F0
 int8_t fediskio_displayerror(void) {
 	int16_t saved_cursor_x = cursorx;
 	int16_t saved_cursor_y = cursory;
@@ -236,7 +241,8 @@ int8_t fediskio_displayerror(void) {
 	return response;
 }
 
-// FUNCTION: TIE 0x229CC, TIE98 0x41C910
+// FUNCTION: TIE95 0x229CC
+// FUNCTION: TIE98 0x41C910
 int16_t fediskio_tryopenfile(TieFileRoot root, const char* name, const char* mode, int16_t fatal) {
 	int16_t attempt_count = TieProfile_UsesTie98Logic() ? 2 : 4;
 
@@ -253,7 +259,7 @@ int16_t fediskio_tryopenfile(TieFileRoot root, const char* name, const char* mod
 		fediskio_fatalerror(FATAL_ERROR_THE_FOLLOWING_FILE_IS_MISSING_);
 	return 0;
 }
-// FUNCTION: TIE 0x22BE4
+// FUNCTION: TIE95 0x22BE4
 int16_t fediskio_tryclosefile(int16_t delete_on_error) {
 	int16_t had_error = 0;
 
@@ -269,7 +275,7 @@ int16_t fediskio_tryclosefile(int16_t delete_on_error) {
 	return had_error;
 }
 
-// FUNCTION: TIE 0x22C24
+// FUNCTION: TIE95 0x22C24
 int16_t fediskio_readfileblock(void* buf, unsigned int size, unsigned int count, TieFile* fp) {
 	int16_t result = (int16_t)TieStorage_Read(buf, size, count, fp);
 	if ((unsigned int)result == count) {
@@ -281,7 +287,7 @@ int16_t fediskio_readfileblock(void* buf, unsigned int size, unsigned int count,
 	return result;
 }
 
-// FUNCTION: TIE 0x22D38
+// FUNCTION: TIE95 0x22D38
 int16_t fediskio_writefileblock(void* buf, unsigned int size, int count, TieFile* fp) {
 	int16_t result = (int16_t)TieStorage_Write(buf, size, count, fp);
 	if (result == count) {
@@ -293,7 +299,7 @@ int16_t fediskio_writefileblock(void* buf, unsigned int size, int count, TieFile
 	return result;
 }
 
-// FUNCTION: TIE 0x22D60
+// FUNCTION: TIE95 0x22D60
 void fediskio_fatalerror(FatalErrId error_code) {
 	char str[128];
 	int i;
@@ -321,7 +327,7 @@ void fediskio_fatalerror(FatalErrId error_code) {
 
 /* --- Pilot record I/O --- */
 
-// FUNCTION: TIE 0x204A0
+// FUNCTION: TIE95 0x204A0
 void fediskio_initpilotrecord(int16_t clear_name) {
 	uint8_t* raw;
 
@@ -348,7 +354,7 @@ void fediskio_initpilotrecord(int16_t clear_name) {
  * differs from the 1928-byte on-disk record -- never raw-cast loadbuffer as
  * `PilotRecord *`. Use PilotRecord_decode / _encode at every access. */
 
-// FUNCTION: TIE 0x205B8
+// FUNCTION: TIE95 0x205B8
 int16_t fediskio_readpilotrecord(const char* name) {
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, name, "rb", 0))
 		return 0;
@@ -358,7 +364,7 @@ int16_t fediskio_readpilotrecord(const char* name) {
 	return 1;
 }
 
-// FUNCTION: TIE 0x205F8
+// FUNCTION: TIE95 0x205F8
 int16_t fediskio_writepilotrecord(const char* name) {
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, name, "wb", 0))
 		return 0;
@@ -368,7 +374,7 @@ int16_t fediskio_writepilotrecord(const char* name) {
 	return 1;
 }
 
-// FUNCTION: TIE 0x204DC
+// FUNCTION: TIE95 0x204DC
 void fediskio_createpilotrecord(void) {
 	PilotRecord pilot;
 	int i;
@@ -431,7 +437,7 @@ static uint16_t train_craft_type_to_ship_idx(uint8_t train_craft_type) {
 	}
 }
 
-// FUNCTION: TIE 0x20668
+// FUNCTION: TIE95 0x20668
 int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 	PilotRecord pilot;
 	PilotRecord* p = &pilot;
@@ -649,7 +655,7 @@ write_and_exit:
 
 /* --- Buffer loading --- */
 
-// FUNCTION: TIE 0x20E48
+// FUNCTION: TIE95 0x20E48
 int fediskio_readfiletofarmemory(TieFileRoot root, const char* filename, void* dest) {
 	uint8_t buf[512];
 	int total = 0;
@@ -669,7 +675,7 @@ int fediskio_readfiletofarmemory(TieFileRoot root, const char* filename, void* d
 	return total;
 }
 
-// FUNCTION: TIE 0x20D8C
+// FUNCTION: TIE95 0x20D8C
 void fediskio_loadbufferdata(const char* filename, uint16_t buf_index, int16_t num_entries,
 							 uint16_t skip_count) {
 	int16_t line_idx = 0;
@@ -699,7 +705,8 @@ void fediskio_loadbufferdata(const char* filename, uint16_t buf_index, int16_t n
 
 /* --- Flight engine buffer management --- */
 
-// FUNCTION: TIE 0x20ED4, TIE98 0x41AAC0
+// FUNCTION: TIE95 0x20ED4
+// FUNCTION: TIE98 0x41AAC0
 void fediskio_Init_Buffers_and_Fonts(void) {
 	int fail = 0;
 	char path[64];
@@ -847,13 +854,13 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 	}
 }
 
-// FUNCTION: TIE 0x212E4
+// FUNCTION: TIE95 0x212E4
 void fediskio_UnlockGlobals(void) {
 	/* In the binary: unlocks 7 XMEMHDL handles.
 	 * With malloc, pointers remain valid — nothing to do. */
 }
 
-// FUNCTION: TIE 0x21348
+// FUNCTION: TIE95 0x21348
 void fediskio_RelockGlobals(void) {
 	/* In the binary: re-locks handles into global pointers.
 	 * With malloc, pointers are already valid. Just refresh string data
@@ -892,7 +899,7 @@ static char** sdata_resolved;
 static size_t sdata_resolved_cap;
 static size_t sdata_resolved_count; /* valid entries from the last load */
 
-// FUNCTION: TIE 0x213F0
+// FUNCTION: TIE95 0x213F0
 void fediskio_FreeFlightHandles(void) {
 	uint16_t i;
 
@@ -967,7 +974,7 @@ const char* TieTextSnapshot_StringCell(int cell) {
 }
 int TieTextSnapshot_StringCount(void) { return (int)sdata_resolved_count; }
 
-// FUNCTION: TIE 0x215B0
+// FUNCTION: TIE95 0x215B0
 void fediskio_loadstringdata(void) {
 	void** p;
 	int i;
@@ -1161,7 +1168,8 @@ static void fediskio_prepare_tie98_inverse_palette(void) {
 	RenderTexture_ResetSoftwareShadeTableCache();
 }
 
-// FUNCTION: TIE 0x218D8, TIE98 0x41BA70
+// FUNCTION: TIE95 0x218D8
+// FUNCTION: TIE98 0x41BA70
 void fediskio_loadspecies(void) {
 	/* Load ship species data from 3 LFD files.
 	 * For each file: read directory, match against species_table entries,
@@ -1440,7 +1448,8 @@ static uint8_t fediskio_fillinspec_tie98_appendweapongroup(uint8_t result, SpecD
 	return result;
 }
 
-// FUNCTION: TIE98 0x41BE70 FEDISKIO_fillinspec
+// FUNCTION: TIE98 0x41BE70
+// FEDISKIO_fillinspec
 // PORT: writes the recovered TIE95 runtime SpecData layout from OPT metadata.
 void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
 	modelmesh_require_craft_capacity(model_type);
@@ -1574,7 +1583,7 @@ void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
 	}
 }
 
-// FUNCTION: TIE 0x21E48
+// FUNCTION: TIE95 0x21E48
 void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 	/* Skip the 2-byte file-size prefix so struct offsets line up with
 	 * retail FEDISKIO_fillinspec's `v48 = a1 + 2` convention. */

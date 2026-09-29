@@ -124,25 +124,35 @@ static const BriefSpec* active_spec;
 
 /* ---- Static globals ---- */
 
-// GLOBAL: TIE95 0xF6038; TIE98 0x50AA40
+// GLOBAL: TIE95 0xF6038
+// GLOBAL: TIE98 0x50AA40
 static Actor* door[2]; /* door[0]=mainmenu, door[1]=mission */
-// GLOBAL: TIE95 0xF5FF8; TIE98 0x50A9F8
+// GLOBAL: TIE95 0xF5FF8
+// GLOBAL: TIE98 0x50A9F8
 static char notice_str[64]; /* OK button label buffer */
-// GLOBAL: TIE95 0xF6054; TIE98 0x50AA48
+// GLOBAL: TIE95 0xF6054
+// GLOBAL: TIE98 0x50AA48
 static Actor* title_actor;
-// GLOBAL: TIE95 0xF6058; TIE98 0x50A9EC
+// GLOBAL: TIE95 0xF6058
+// GLOBAL: TIE98 0x50A9EC
 static Input* parent;
-// GLOBAL: TIE95 0xF6050; TIE98 0x50A9DC
+// GLOBAL: TIE95 0xF6050
+// GLOBAL: TIE98 0x50A9DC
 static Input* mainmenu_input; /* id=0: main menu */
-// GLOBAL: TIE95 0xF6040; TIE98 0x50A9E4
+// GLOBAL: TIE95 0xF6040
+// GLOBAL: TIE98 0x50A9E4
 static Input* mission_input; /* id=1: enter mission */
-// GLOBAL: TIE95 0xF6044; TIE98 0x50A9F0
+// GLOBAL: TIE95 0xF6044
+// GLOBAL: TIE98 0x50A9F0
 static Input* officer_input; /* id=3: officer */
-// GLOBAL: TIE95 0xF6048; TIE98 0x50A9E8
+// GLOBAL: TIE95 0xF6048
+// GLOBAL: TIE98 0x50A9E8
 static Input* priest_input; /* id=4: priest */
-// GLOBAL: TIE95 0xF604C; TIE98 0x50A9D8
+// GLOBAL: TIE95 0xF604C
+// GLOBAL: TIE98 0x50A9D8
 static Input* map_input; /* id=2: map */
-// GLOBAL: TIE95 0xF6060; TIE98 0x50A9E0
+// GLOBAL: TIE95 0xF6060
+// GLOBAL: TIE98 0x50A9E0
 static Film* brief_film;
 
 /* ---- Forward declarations ---- */
@@ -160,7 +170,8 @@ static void iuser_Notice(Input* input, int32_t time);
  * ================================================================ */
 
 /* Show the cursor on the first view update. */
-// FUNCTION: TIE95 0x7316C; TIE98 0x406520
+// FUNCTION: TIE95 0x7316C
+// FUNCTION: TIE98 0x406520
 static void end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
@@ -173,7 +184,8 @@ static void end_View(int32_t frame_num) {
  * Film callback
  * ================================================================ */
 
-// FUNCTION: TIE95 0x731E0; TIE98 0x406580
+// FUNCTION: TIE95 0x731E0
+// FUNCTION: TIE98 0x406580
 static int16_t film_Callback(Film* film, FilmObject* fo) {
 	if (fo->id != 3)
 		return 0; /* type_code: 3 = actor */
@@ -228,7 +240,8 @@ static int16_t film_Callback(Film* film, FilmObject* fo) {
  * XINPUT callbacks
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7330C; TIE98 0x4066E0
+// FUNCTION: TIE95 0x7330C
+// FUNCTION: TIE98 0x4066E0
 static int16_t iupdate_Brief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left, uint8_t right,
 							 int16_t mouse_x, int16_t mouse_y) {
 	(void)bounds;
@@ -283,7 +296,8 @@ static int16_t iupdate_Brief(Input* input, Rect* bounds, Rect* clip, int16_t key
 	return 1;
 }
 
-// FUNCTION: TIE95 0x73410; TIE98 0x4067F0
+// FUNCTION: TIE95 0x73410
+// FUNCTION: TIE98 0x4067F0
 static void iuser_Brief(Input* input, int32_t time) {
 	(void)time;
 
@@ -316,7 +330,8 @@ static void iuser_Brief(Input* input, int32_t time) {
  * Actor callbacks
  * ================================================================ */
 
-// FUNCTION: TIE95 0x73480; TIE98 0x406860
+// FUNCTION: TIE95 0x73480
+// FUNCTION: TIE98 0x406860
 static void user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
@@ -329,7 +344,8 @@ static void user_Title(Actor* actor, int32_t time) {
 	}
 }
 
-// FUNCTION: TIE95 0x734D8; TIE98 0x4068B0
+// FUNCTION: TIE95 0x734D8
+// FUNCTION: TIE98 0x4068B0
 static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 						  int16_t refresh) {
 	if (!refresh)
@@ -375,7 +391,8 @@ draw_text:
 	return 1;
 }
 
-// FUNCTION: TIE95 0x735D4; TIE98 0x4069E0
+// FUNCTION: TIE95 0x735D4
+// FUNCTION: TIE98 0x4069E0
 static void user_Door(Actor* actor, int32_t time) {
 	if (!time) {
 		actor->var2 = 0;
@@ -401,7 +418,8 @@ static void user_Door(Actor* actor, int32_t time) {
  * Notice dialog ("Your pilot has been restored!")
  * ================================================================ */
 
-// FUNCTION: TIE95 0x73668; TIE98 0x406A70
+// FUNCTION: TIE95 0x73668
+// FUNCTION: TIE98 0x406A70
 static Input* Build_Notice(const char* text) {
 	(void)text;
 	Rect r;
@@ -420,7 +438,8 @@ static Input* Build_Notice(const char* text) {
 	return dlg;
 }
 
-// FUNCTION: TIE95 0x7370C; TIE98 0x406B20
+// FUNCTION: TIE95 0x7370C
+// FUNCTION: TIE98 0x406B20
 static void idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh) {
 	if (!refresh)
 		return;
@@ -438,7 +457,8 @@ static void idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh) {
 		xdirty_Dirty_Rect(clip);
 }
 
-// FUNCTION: TIE95 0x7377C; TIE98 0x406BB0
+// FUNCTION: TIE95 0x7377C
+// FUNCTION: TIE98 0x406BB0
 static void iuser_Notice(Input* input, int32_t time) {
 	(void)time;
 	if (xinpattr_Get_Input_Selected(input))

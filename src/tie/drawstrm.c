@@ -35,7 +35,7 @@ static void diff_apply_nibble(uint8_t* dst, const uint8_t* ref, uint8_t nibble) 
  * stream_data: encoded frame data from the CD stream
  * cur_frame:   64000-byte output buffer for the decoded frame
  */
-// FUNCTION: TIE 0x89600
+// FUNCTION: TIE95 0x89600
 void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void* cur_frame) {
 	uint8_t* prev = (uint8_t*)prev_frame;
 	const uint8_t* stream = (const uint8_t*)stream_data;

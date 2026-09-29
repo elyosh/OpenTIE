@@ -78,7 +78,7 @@ static inline int32_t clamp_q30(int32_t v) {
  *                               0xFF.. = sentinel (skip), 0x80.. = billboard,
  *                               < 0x80.. = poly model (common path).
  * ========================================================================== */
-// FUNCTION: TIE 0x54710
+// FUNCTION: TIE95 0x54710
 void static_drawstaticobject(uint16_t slot_idx) {
 	uint16_t self_idx = (uint16_t)(slot_idx + OBJ_REF_STATIC_BASE);
 	StaticObject* so = &staticobjects[slot_idx];
@@ -210,7 +210,7 @@ void static_drawstaticobject_tie98(uint16_t slot_idx) {
  * then AABB-reject against the mesh bbox, then run collide_checkhitpolygons
  * for a parametric hit fraction.
  * ========================================================================== */
-// FUNCTION: TIE 0x548D4
+// FUNCTION: TIE95 0x548D4
 int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot) {
 	uint16_t target_self_idx = (uint16_t)(target_slot + OBJ_REF_STATIC_BASE);
 	uint16_t shooter_self_idx = (uint16_t)objects[shooter_obj_idx].self_idx;
@@ -389,7 +389,7 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
  *     shooter.
  * Returns the FSFX trigger result (caller ignores).
  * ========================================================================== */
-// FUNCTION: TIE 0x54F6C
+// FUNCTION: TIE95 0x54F6C
 int16_t static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
 	StaticObject* so = &staticobjects[target_slot];
 	int16_t explosion_ship_idx;
@@ -504,7 +504,7 @@ int16_t static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
 /* Update one mine turret. After its fractional cooldown, it selects a live
  * in-range target, computes lead and scatter, offsets the barrel by turret
  * orientation, and spawns a homing projectile. */
-// FUNCTION: TIE 0x55278
+// FUNCTION: TIE95 0x55278
 int16_t static_updatemineguns(uint16_t slot_idx) {
 	StaticObject* so = &staticobjects[slot_idx];
 

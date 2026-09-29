@@ -108,7 +108,7 @@ static inline uint8_t pick_heading_state(uint16_t target, uint16_t current) {
 /* Snap or drive craftptr->ai_pitch toward ai_target_pitch. Threshold
  * 0x300 (~4.2°) distinguishes "close enough, snap now" from "rotate
  * over time". */
-// FUNCTION: TIE 0x3D3B4
+// FUNCTION: TIE95 0x3D3B4
 void paiman_setturn(int16_t pitch_step) {
 	CraftData* cd = craftptr;
 	uint16_t delta = abs_angle_delta((uint16_t)objects[ai.active_obj_idx].pitch, cd->ai_target_pitch);
@@ -125,12 +125,12 @@ void paiman_setturn(int16_t pitch_step) {
 }
 
 /* Write the 16-bit throttle value passed in DX by the binary ABI. */
-// FUNCTION: TIE 0x3D45C
+// FUNCTION: TIE95 0x3D45C
 void paiman_setpower(uint16_t throttle) { craftptr->throttle_speed = throttle; }
 
 /* Convert absolute desired_speed to throttle_speed, accounting for the
  * shield/beam/laser power-balance margin and the craft's max_speed. */
-// FUNCTION: TIE 0x3D46C
+// FUNCTION: TIE95 0x3D46C
 void paiman_setspeed(uint16_t obj_idx_param, uint16_t desired_speed) {
 	CraftData* cd = objects[obj_idx_param].craft_ptr;
 	int16_t margin = 6 - (int16_t)(cd->shield_power + cd->beam_power + cd->laser_power);
@@ -152,7 +152,7 @@ void paiman_setspeed(uint16_t obj_idx_param, uint16_t desired_speed) {
 
 /* Point the AI craft's flight vector at craftptr->waypoint_*_cache.
  * Uses the current PAI skill_value to pick turn rate. */
-// FUNCTION: TIE 0x3CD04
+// FUNCTION: TIE95 0x3CD04
 void paiman_setflighttotarget(int16_t pitch_bias, int16_t drive_heading) {
 	CraftData* cd = craftptr;
 
@@ -175,7 +175,7 @@ void paiman_setflighttotarget(int16_t pitch_bias, int16_t drive_heading) {
 
 /* Level-the-wings helper: roll to 0, freeze pitch, clear climb/dive,
  * heading → 0x4000 with short-way direction. */
-// FUNCTION: TIE 0x3CDC4
+// FUNCTION: TIE95 0x3CDC4
 void paiman_controlplane(void) {
 	CraftData* cd = craftptr;
 
@@ -199,7 +199,7 @@ void paiman_controlplane(void) {
 }
 
 /* Pick a new turn-inside target orientation and hold-timer. */
-// FUNCTION: TIE 0x39740
+// FUNCTION: TIE95 0x39740
 uint16_t paiman_setnewturninside(uint16_t own_obj_idx) {
 	CraftData* cd = craftptr;
 	uint16_t ref_idx = (cd->attacker_idx == 0xFFu) ? own_obj_idx : cd->attacker_idx;
@@ -218,7 +218,7 @@ uint16_t paiman_setnewturninside(uint16_t own_obj_idx) {
 
 /* Pick a new turn-away target orientation: face the attacker's own pitch
  * (not flipped), or flip our own pitch if there is no attacker. */
-// FUNCTION: TIE 0x3C8C0
+// FUNCTION: TIE95 0x3C8C0
 uint16_t paiman_setnewturnaway(uint16_t own_obj_idx) {
 	CraftData* cd = craftptr;
 	uint16_t new_target_pitch;
@@ -239,7 +239,7 @@ uint16_t paiman_setnewturnaway(uint16_t own_obj_idx) {
 }
 
 /* Random z-axis jink used by speedaway. */
-// FUNCTION: TIE 0x3A8D8
+// FUNCTION: TIE95 0x3A8D8
 void paiman_setjink(uint16_t self_idx) {
 	CraftData* cd = craftptr;
 	int32_t push_z = (int32_t)(math2_getrandom() & 0x1F) + 50;
@@ -263,7 +263,7 @@ void paiman_setjink(uint16_t self_idx) {
 }
 
 /* Advance to the next waypoint in a cruise/patrol cycle. */
-// FUNCTION: TIE 0x39D74
+// FUNCTION: TIE95 0x39D74
 void paiman_gonextwaypoint(void) {
 	CraftData* cd = craftptr;
 	uint8_t next_idx = (uint8_t)(cd->active_waypoint_idx + 1);
@@ -280,7 +280,7 @@ void paiman_gonextwaypoint(void) {
 }
 
 /* Compute aim-lead waypoint for target tgt_obj_idx. */
-// FUNCTION: TIE 0x3CF50
+// FUNCTION: TIE95 0x3CF50
 void paiman_calcplanelead(uint16_t tgt_obj_idx) {
 	CraftData* cd = craftptr;
 	uint32_t lead_ticks = 0;
@@ -343,7 +343,7 @@ void paiman_calcplanelead(uint16_t tgt_obj_idx) {
 	cd->waypoint_z_cache = objects[tgt_obj_idx].world_z + (int32_t)lead_ticks * dz;
 }
 
-// FUNCTION: TIE 0x3D164
+// FUNCTION: TIE95 0x3D164
 void paiman_calcformation(void) {
 	CraftData* cd = craftptr;
 	uint8_t species_idx = cd->species_idx;
@@ -428,7 +428,7 @@ void paiman_attacktarget(int16_t pitch_bias) {
 
 /* ---- MODE_None (slot 0) — nullmaneuver stub ------------------------ */
 
-// FUNCTION: TIE 0x396F8
+// FUNCTION: TIE95 0x396F8
 int16_t paiman_nullmaneuver(void) { return 0; }
 
 /* ---- MODE_TurnInside (1) ------------------------------------------- */
@@ -438,7 +438,7 @@ void paiman_initturninsidemaneuver(void) {
 	craftptr->maneuver_timer = 3540;
 }
 
-// FUNCTION: TIE 0x39718
+// FUNCTION: TIE95 0x39718
 int16_t paiman_turninsidemaneuver(void) {
 	if (!craftptr->maneuver_timer)
 		return 1;
@@ -449,7 +449,7 @@ int16_t paiman_turninsidemaneuver(void) {
 
 /* ---- MODE_Splits (2) ----------------------------------------------- */
 
-// FUNCTION: TIE 0x397C0
+// FUNCTION: TIE95 0x397C0
 void paiman_initsplitsmaneuver(void) {
 	CraftData* cd = craftptr;
 	cd->ai_roll_state = 1;
@@ -462,14 +462,14 @@ void paiman_initsplitsmaneuver(void) {
 	cd->ai_heading_step = 0xFFFFu;
 }
 
-// FUNCTION: TIE 0x397F8
+// FUNCTION: TIE95 0x397F8
 int16_t paiman_splitsmaneuver(void) {
 	return (craftptr->ai_roll_state == 4 && craftptr->ai_heading_state == 3) ? 1 : 0;
 }
 
 /* ---- MODE_Immelmann (3) -------------------------------------------- */
 
-// FUNCTION: TIE 0x39820
+// FUNCTION: TIE95 0x39820
 void paiman_initimmelmannmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint16_t cur_heading;
@@ -493,7 +493,7 @@ void paiman_initimmelmannmaneuver(void) {
 	cd->maneuver_timer = 0;
 }
 
-// FUNCTION: TIE 0x39898
+// FUNCTION: TIE95 0x39898
 int16_t paiman_immelmannmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint8_t phase = cd->mode_subbyte;
@@ -527,7 +527,7 @@ int16_t paiman_immelmannmaneuver(void) {
 
 /* ---- MODE_Scissors (4) --------------------------------------------- */
 
-// FUNCTION: TIE 0x39930
+// FUNCTION: TIE95 0x39930
 void paiman_initscissorsmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint16_t ref_idx = (cd->attacker_idx == 0xFFu) ? ai.active_obj_idx : cd->attacker_idx;
@@ -545,7 +545,7 @@ void paiman_initscissorsmaneuver(void) {
 	cd->ai_target_roll = rnd_roll;
 }
 
-// FUNCTION: TIE 0x399C4
+// FUNCTION: TIE95 0x399C4
 int16_t paiman_scissorsmaneuver(void) {
 	CraftData* cd = craftptr;
 
@@ -570,7 +570,7 @@ int16_t paiman_scissorsmaneuver(void) {
 
 /* ---- MODE_Rendezvous (5) ------------------------------------------- */
 
-// FUNCTION: TIE 0x39A14
+// FUNCTION: TIE95 0x39A14
 void paiman_initrendezvousmaneuver(void) {
 	paiman_setflighttotarget(0, 1);
 	uint16_t t = _throttleconvert[fg_array[ai.fg_idx].ai[ai.ai_entry_count].speed];
@@ -579,7 +579,7 @@ void paiman_initrendezvousmaneuver(void) {
 	craftptr->throttle_speed = t;
 }
 
-// FUNCTION: TIE 0x39A7C
+// FUNCTION: TIE95 0x39A7C
 int16_t paiman_rendezvousmaneuver(void) {
 	paiman_setflighttotarget(0, 1);
 	uint16_t t = _throttleconvert[fg_array[ai.fg_idx].ai[ai.ai_entry_count].speed];
@@ -591,7 +591,7 @@ int16_t paiman_rendezvousmaneuver(void) {
 
 /* ---- MODE_Cruise (6) ----------------------------------------------- */
 
-// FUNCTION: TIE 0x39AE4
+// FUNCTION: TIE95 0x39AE4
 void paiman_initcruisemaneuver(void) {
 	CraftData* cd = craftptr;
 
@@ -603,7 +603,7 @@ void paiman_initcruisemaneuver(void) {
 	cd->throttle_speed = _throttleconvert[fg_array[ai.fg_idx].ai[ai.ai_entry_count].speed];
 }
 
-// FUNCTION: TIE 0x39B78
+// FUNCTION: TIE95 0x39B78
 int16_t paiman_cruisemaneuver(void) {
 	CraftData* cd = craftptr;
 	int32_t way_radius;
@@ -652,14 +652,14 @@ int16_t paiman_cruisemaneuver(void) {
 
 /* ---- MODE_HeadTowardFull (7) --------------------------------------- */
 
-// FUNCTION: TIE 0x39DFC
+// FUNCTION: TIE95 0x39DFC
 void paiman_initheadtowardfullmaneuver(void) {
 	paiman_setflighttotarget(0, 0);
 	craftptr->throttle_speed = 0xFFFFu;
 	craftptr->ai_plan_state = 1180;
 }
 
-// FUNCTION: TIE 0x39E1C
+// FUNCTION: TIE95 0x39E1C
 int16_t paiman_headtowardfullmaneuver(void) {
 	if (!craftptr->ai_plan_state) {
 		pai_settarget();
@@ -672,14 +672,14 @@ int16_t paiman_headtowardfullmaneuver(void) {
 
 /* ---- MODE_RunAway (8) ---------------------------------------------- */
 
-// FUNCTION: TIE 0x39E50
+// FUNCTION: TIE95 0x39E50
 void paiman_initrunawaymaneuver(void) {
 	paiman_controlplane();
 	if ((uint16_t)objects[ai.active_obj_idx].roll < 0x8000u)
 		paiman_setflighttotarget((int16_t)0x8000, 1);
 }
 
-// FUNCTION: TIE 0x39E94
+// FUNCTION: TIE95 0x39E94
 int16_t paiman_runawaymaneuver(void) {
 	paiman_setflighttotarget((int16_t)0x8000, 1);
 	craftptr->throttle_speed = 0xFFFFu;
@@ -688,7 +688,7 @@ int16_t paiman_runawaymaneuver(void) {
 
 /* ---- MODE_HeadOnAttack (9) ----------------------------------------- */
 
-// FUNCTION: TIE 0x39EB8
+// FUNCTION: TIE95 0x39EB8
 void paiman_initheadonattackmaneuver(void) {
 	CraftData* cd = craftptr;
 	cd->ai_target_ref = (int16_t)cd->attacker_idx;
@@ -697,7 +697,7 @@ void paiman_initheadonattackmaneuver(void) {
 	cd->maneuver_timer = 1888;
 }
 
-// FUNCTION: TIE 0x39EEC
+// FUNCTION: TIE95 0x39EEC
 int16_t paiman_headonattackmaneuver(void) {
 	if (!craftptr->maneuver_timer)
 		return 1;
@@ -710,7 +710,7 @@ int16_t paiman_headonattackmaneuver(void) {
 
 void paiman_initfollowleadermaneuver(void) { /* No-op: the runtime step re-initialises every frame. */ }
 
-// FUNCTION: TIE 0x39F20
+// FUNCTION: TIE95 0x39F20
 int16_t paiman_followleadermaneuver(void) {
 	CraftData* cd = craftptr;
 	uint16_t self_idx = ai.active_obj_idx;
@@ -816,13 +816,13 @@ zero_push:
 
 /* ---- MODE_SetupAttack (11), MODE_Attack (12), MODE_AttackSecondary (23) */
 
-// FUNCTION: TIE 0x3A2AC
+// FUNCTION: TIE95 0x3A2AC
 void paiman_initsetupattackmaneuver(void) {
 	craftptr->throttle_speed = 0xFFFFu;
 	paiman_attacktarget(0);
 }
 
-// FUNCTION: TIE 0x3A2FC
+// FUNCTION: TIE95 0x3A2FC
 int16_t paiman_setupattackmaneuver(void) {
 	uint16_t pitch_delta;
 
@@ -835,7 +835,7 @@ int16_t paiman_setupattackmaneuver(void) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x3A364
+// FUNCTION: TIE95 0x3A364
 int16_t paiman_attackmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint8_t phase = cd->mode_subbyte;
@@ -924,7 +924,7 @@ int16_t paiman_attackmaneuver(void) {
 
 /* ---- MODE_Zoom (13) / MODE_Dive (14) — shared runtime body --------- */
 
-// FUNCTION: TIE 0x3A6C0
+// FUNCTION: TIE95 0x3A6C0
 void paiman_initzoommaneuver(void) {
 	CraftData* cd = craftptr;
 	int16_t up_pitch_rnd;
@@ -952,10 +952,10 @@ void paiman_initzoommaneuver(void) {
 	cd->ai_heading_state = pick_heading_state(cd->ai_target_heading, cd->orient_heading);
 }
 
-// FUNCTION: TIE 0x3A760
+// FUNCTION: TIE95 0x3A760
 int16_t paiman_zoommaneuver(void) { return craftptr->maneuver_timer == 0 ? 1 : 0; }
 
-// FUNCTION: TIE 0x3A770
+// FUNCTION: TIE95 0x3A770
 void paiman_initdivemaneuver(void) {
 	CraftData* cd = craftptr;
 	int16_t down_pitch_rnd;
@@ -977,7 +977,7 @@ void paiman_initdivemaneuver(void) {
 
 /* ---- MODE_SplitsDive (15) / MODE_SplitsDiveAlt (27) ---------------- */
 
-// FUNCTION: TIE 0x3A7C4
+// FUNCTION: TIE95 0x3A7C4
 void paiman_initsplitsdivemaneuver(void) {
 	CraftData* cd = craftptr;
 	uint16_t hd_rnd = (uint16_t)math2_getrandom();
@@ -996,14 +996,14 @@ void paiman_initsplitsdivemaneuver(void) {
 	cd->ai_target_heading = hd_rnd;
 }
 
-// FUNCTION: TIE 0x3A810
+// FUNCTION: TIE95 0x3A810
 int16_t paiman_splitsdivemaneuver(void) {
 	return (craftptr->ai_roll_state == 4 && craftptr->ai_heading_state == 3) ? 1 : 0;
 }
 
 /* ---- MODE_SpeedAway (16) ------------------------------------------- */
 
-// FUNCTION: TIE 0x3A838
+// FUNCTION: TIE95 0x3A838
 void paiman_initspeedawaymaneuver(void) {
 	CraftData* cd = craftptr;
 	cd->throttle_speed = 0xFFFFu;
@@ -1012,7 +1012,7 @@ void paiman_initspeedawaymaneuver(void) {
 	paiman_setjink(ai.active_obj_idx);
 }
 
-// FUNCTION: TIE 0x3A89C
+// FUNCTION: TIE95 0x3A89C
 int16_t paiman_speedawaymaneuver(void) {
 	CraftData* cd = craftptr;
 
@@ -1025,7 +1025,7 @@ int16_t paiman_speedawaymaneuver(void) {
 
 /* ---- MODE_IntoHyperspace (21) -------------------------------------- */
 
-// FUNCTION: TIE 0x3A968
+// FUNCTION: TIE95 0x3A968
 void paiman_initintohyperspacemaneuver(void) {
 	CraftData* cd = craftptr;
 	paiman_setflighttotarget(0, 1);
@@ -1033,7 +1033,7 @@ void paiman_initintohyperspacemaneuver(void) {
 	cd->mode_subbyte = 0;
 }
 
-// FUNCTION: TIE 0x3A98C
+// FUNCTION: TIE95 0x3A98C
 int16_t paiman_intohyperspacemaneuver(void) {
 	CraftData* cd = craftptr;
 	uint8_t phase = cd->mode_subbyte;
@@ -1081,7 +1081,7 @@ int16_t paiman_intohyperspacemaneuver(void) {
 
 /* ---- MODE_OutOfHyperspace (22) ------------------------------------- */
 
-// FUNCTION: TIE 0x3AB48
+// FUNCTION: TIE95 0x3AB48
 void paiman_initoutofhyperspacemaneuver(void) {
 	CraftData* cd = craftptr;
 
@@ -1096,7 +1096,7 @@ void paiman_initoutofhyperspacemaneuver(void) {
 	cd->ai_update_rate = 59;
 }
 
-// FUNCTION: TIE 0x3ABA8
+// FUNCTION: TIE95 0x3ABA8
 int16_t paiman_outofhyperspacemaneuver(void) {
 	CraftData* cd = craftptr;
 	bool done = false;
@@ -1146,7 +1146,7 @@ int16_t paiman_outofhyperspacemaneuver(void) {
 
 void paiman_initescortmaneuver(void) { /* No-op: the runtime step is fully self-initialising. */ }
 
-// FUNCTION: TIE 0x3AD70
+// FUNCTION: TIE95 0x3AD70
 int16_t paiman_escortmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint16_t self_idx = ai.active_obj_idx;
@@ -1274,7 +1274,7 @@ int16_t paiman_escortmaneuver(void) {
 
 /* ---- MODE_AwaitBoard (19) / AwaitBoardAlt (25) --------------------- */
 
-// FUNCTION: TIE 0x3C7FC
+// FUNCTION: TIE95 0x3C7FC
 void paiman_initawaitboardmaneuver(void) {
 	CraftData* cd = craftptr;
 	cd->ai_roll_state = 0;
@@ -1283,7 +1283,7 @@ void paiman_initawaitboardmaneuver(void) {
 	cd->throttle_speed = 0;
 }
 
-// FUNCTION: TIE 0x3C81C
+// FUNCTION: TIE95 0x3C81C
 int16_t paiman_awaitboardmaneuver(void) {
 	CraftData* cd = craftptr;
 	cd->ai_roll_state = 0;
@@ -1295,10 +1295,10 @@ int16_t paiman_awaitboardmaneuver(void) {
 
 /* ---- MODE_HeadToward (20) ------------------------------------------ */
 
-// FUNCTION: TIE 0x3C83C
+// FUNCTION: TIE95 0x3C83C
 void paiman_initheadtowardmaneuver(void) { paiman_setflighttotarget(0, 1); }
 
-// FUNCTION: TIE 0x3C84C
+// FUNCTION: TIE95 0x3C84C
 int16_t paiman_headtowardmaneuver(void) {
 	CraftData* cd = craftptr;
 	paiman_setflighttotarget(0, 1);
@@ -1310,13 +1310,13 @@ int16_t paiman_headtowardmaneuver(void) {
 
 /* ---- MODE_TurnAway (24) -------------------------------------------- */
 
-// FUNCTION: TIE 0x3C878
+// FUNCTION: TIE95 0x3C878
 void paiman_initturnawaymaneuver(void) {
 	paiman_setnewturnaway(ai.active_obj_idx);
 	craftptr->maneuver_timer = 3540;
 }
 
-// FUNCTION: TIE 0x3C894
+// FUNCTION: TIE95 0x3C894
 int16_t paiman_turnawaymaneuver(void) {
 	if (!craftptr->maneuver_timer)
 		return 1;
@@ -1327,10 +1327,10 @@ int16_t paiman_turnawaymaneuver(void) {
 
 /* ---- MODE_OutOfHangar (26) ----------------------------------------- */
 
-// FUNCTION: TIE 0x3C94C
+// FUNCTION: TIE95 0x3C94C
 void paiman_initoutofhangarmaneuver(void) { craftptr->maneuver_timer = 2360; }
 
-// FUNCTION: TIE 0x3C95C
+// FUNCTION: TIE95 0x3C95C
 int16_t paiman_outofhangarmaneuver(void) {
 	CraftData* cd = craftptr;
 	if (cd->maneuver_timer)
@@ -1348,7 +1348,7 @@ int16_t paiman_outofhangarmaneuver(void) {
 
 /* ---- MODE_AvoidStarship (28) / MODE_Wait (29) ---------------------- */
 
-// FUNCTION: TIE 0x3C9D0
+// FUNCTION: TIE95 0x3C9D0
 void paiman_initavoidstarshipmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint16_t rnd_ticks = (uint16_t)(236u * (uint32_t)((math2_getrandom() & 7) + 15));
@@ -1359,7 +1359,7 @@ void paiman_initavoidstarshipmaneuver(void) {
 	cd->ai_heading_state = pick_heading_state(cd->ai_target_heading, cd->orient_heading);
 }
 
-// FUNCTION: TIE 0x3CA2C
+// FUNCTION: TIE95 0x3CA2C
 void paiman_initwaitmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint8_t var0 = fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[0];
@@ -1377,7 +1377,7 @@ int16_t paiman_avoidstarshipmaneuver(void) {
 
 /* ---- MODE_DropOff (30) --------------------------------------------- */
 
-// FUNCTION: TIE 0x3CA94
+// FUNCTION: TIE95 0x3CA94
 int16_t paiman_dropoffmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint8_t active_waypoint_idx;
@@ -1473,7 +1473,7 @@ int16_t paiman_dropoffmaneuver(void) {
  * Returns 1 only on phase-3 completion; otherwise 0.
  */
 
-// FUNCTION: TIE 0x3B334
+// FUNCTION: TIE95 0x3B334
 void paiman_initboardmaneuver(void) {
 	craftptr->mode_subbyte = 0;
 	TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, (uint16_t)craftptr->ai_target_ref, TIE_TRACE_BOARD_APPROACH,
@@ -2000,7 +2000,7 @@ static int16_t board_phase3(CraftData* cd, uint16_t target_ref) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x3B350
+// FUNCTION: TIE95 0x3B350
 int16_t paiman_boardmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint16_t target_ref = (uint16_t)cd->ai_target_ref;
@@ -2106,7 +2106,7 @@ const ManeuverFunc _manvrfunctionptrs[MODE_COUNT] = {
 
 /* ---- Public entry points ------------------------------------------ */
 
-// FUNCTION: TIE 0x396B0
+// FUNCTION: TIE95 0x396B0
 void paiman_initmaneuver(void) {
 	CraftData* cd = craftptr;
 

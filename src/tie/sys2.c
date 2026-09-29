@@ -7,7 +7,7 @@
 #include "tie/sys2.h"
 #include "tie/tie.h"
 
-// FUNCTION: TIE 0x559E0
+// FUNCTION: TIE95 0x559E0
 int sys2_checkctrlkey(void) { return 0; }
 
 /*
@@ -21,7 +21,7 @@ int sys2_checkctrlkey(void) { return 0; }
  * If the font doesn't support lowercase (fontlowercase == 0), a-z are
  * uppercased before lookup.
  */
-// FUNCTION: TIE 0x559E4
+// FUNCTION: TIE95 0x559E4
 int16_t sys2_calclength(const uint8_t* s) {
 	int total_width = 0;
 

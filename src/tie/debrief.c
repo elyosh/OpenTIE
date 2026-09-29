@@ -103,7 +103,7 @@ static Actor* door_actors[2]; /* door[0]=brief door, door[1]=fly-again door */
 static Input* priest;         /* priest widget (id=2) */
 static Input* flyagain;       /* fly-again widget (id=3) */
 static Film* debrief_film;
-// GLOBAL: TIE 0xF5968
+// GLOBAL: TIE95 0xF5D74
 static Actor* title_actor;
 static Input* parent;
 static Input* brief_input;
@@ -121,7 +121,8 @@ static void user_Officer(Actor* actor, int32_t time);
  * View update callback
  * ================================================================ */
 
-// FUNCTION: TIE95 0x700E4; TIE98 0x415920
+// FUNCTION: TIE95 0x700E4
+// FUNCTION: TIE98 0x415920
 static void end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
@@ -133,7 +134,8 @@ static void end_View(int32_t frame_num) {
  * Film callback — register actors by var1
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7012C; TIE98 0x415940
+// FUNCTION: TIE95 0x7012C
+// FUNCTION: TIE98 0x415940
 static int16_t film_Callback(Film* film, FilmObject* film_object) {
 	if (film_object->id != 3) /* type_code: 3 = actor */
 		return 0;
@@ -220,7 +222,8 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
  * XINPUT callbacks
  * ================================================================ */
 
-// FUNCTION: TIE95 0x702AC; TIE98 0x415AA0
+// FUNCTION: TIE95 0x702AC
+// FUNCTION: TIE98 0x415AA0
 static int16_t iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 							   uint8_t right, int16_t mouse_x, int16_t mouse_y) {
 	(void)bounds;
@@ -275,7 +278,8 @@ static int16_t iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, int16_t k
 	return 1;
 }
 
-// FUNCTION: TIE95 0x703B4; TIE98 0x415B90
+// FUNCTION: TIE95 0x703B4
+// FUNCTION: TIE98 0x415B90
 static void iuser_Debrief(Input* input, int32_t time) {
 	(void)time;
 	if (!input->var1)
@@ -309,7 +313,8 @@ static void iuser_Debrief(Input* input, int32_t time) {
  * Title label callbacks
  * ================================================================ */
 
-// FUNCTION: TIE95 0x70440; TIE98 0x415C60
+// FUNCTION: TIE95 0x70440
+// FUNCTION: TIE98 0x415C60
 static void user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
@@ -322,7 +327,8 @@ static void user_Title(Actor* actor, int32_t time) {
 	}
 }
 
-// FUNCTION: TIE95 0x70494; TIE98 0x415CB0
+// FUNCTION: TIE95 0x70494
+// FUNCTION: TIE98 0x415CB0
 static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 						  int16_t refresh) {
 	if (!refresh)
@@ -369,7 +375,8 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
  * Door callback
  * ================================================================ */
 
-// FUNCTION: TIE95 0x70598; TIE98 0x415DE0
+// FUNCTION: TIE95 0x70598
+// FUNCTION: TIE98 0x415DE0
 static void user_Door(Actor* actor, int32_t time) {
 	if (!time) {
 		actor->var2 = 0;
@@ -397,7 +404,8 @@ static void user_Door(Actor* actor, int32_t time) {
  * Officer/priest character animation
  * ================================================================ */
 
-// FUNCTION: TIE95 0x7063C; TIE98 0x415E70
+// FUNCTION: TIE95 0x7063C
+// FUNCTION: TIE98 0x415E70
 static void user_Officer(Actor* actor, int32_t time) {
 	if (!time) {
 		actor->var2 = 0;

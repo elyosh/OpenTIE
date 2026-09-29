@@ -116,15 +116,18 @@ static const TrainSpec* active_spec;
 
 /* The first eight defaults are shared by both originals; TIE98 adds two
  * empty slots and displays all ten entries. */
-// GLOBAL: TIE95 0xCE5CA; TIE98 0x4F2F18
+// GLOBAL: TIE95 0xCE5CA
+// GLOBAL: TIE98 0x4F2F18
 static char train_score_name[NUM_SCORE_ENTRIES][SCORE_NAME_LEN] = {
 	"Luke", "Jon", "Larry", "Peter", "Bucky", "Jim", "Edward", "Wade",
 };
-// GLOBAL: TIE95 0xCE61C; TIE98 0x4F3068
+// GLOBAL: TIE95 0xCE61C
+// GLOBAL: TIE98 0x4F3068
 static int32_t train_score_points[NUM_SCORE_ENTRIES] = {
 	100, 100, 100, 100, 100, 100, 100, 100,
 };
-// GLOBAL: TIE95 0xCE63C; TIE98 0x4F3090
+// GLOBAL: TIE95 0xCE63C
+// GLOBAL: TIE98 0x4F3090
 static int16_t train_score_level[NUM_SCORE_ENTRIES] = {
 	1, 1, 1, 1, 1, 1, 1, 1,
 };
@@ -155,22 +158,22 @@ static const CourseInfoEntry train_course_info[] = {
 
 /* Module state */
 static ResFile* train_file;
-// GLOBAL: TIE 0xF5798
+// GLOBAL: TIE95 0xF5798
 static Film* train_film;
 static Input* world_input;
 static Input* button_input[6];
 static Input* monitor_input;
-// GLOBAL: TIE 0xF5790
+// GLOBAL: TIE95 0xF5790
 static Actor* arrow_actor;
-// GLOBAL: TIE 0xF5780
+// GLOBAL: TIE95 0xF5780
 static Actor* button[6]; /* TIE98 stores one actor for each input. */
-// GLOBAL: TIE 0xF57A0
+// GLOBAL: TIE95 0xF57A0
 static Actor* helmet;
-// GLOBAL: TIE 0xF5788
+// GLOBAL: TIE95 0xF5788
 static int32_t train_time;
-// GLOBAL: TIE 0xF578C
+// GLOBAL: TIE95 0xF578C
 static int32_t train_mode;
-// GLOBAL: TIE 0xF57A8
+// GLOBAL: TIE95 0xF57A8
 static int16_t train_help;
 // GLOBAL: TIE98 0x50B328
 static int32_t train_monitor_needs_clear;
@@ -189,7 +192,8 @@ static void train_user_Train_Helmet(Actor* the_actor, int32_t time);
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE95 0x6B7EC; TIE98 0x491EC0
+// FUNCTION: TIE95 0x6B7EC
+// FUNCTION: TIE98 0x491EC0
 static void train_end_Train_View(int32_t time) {
 	if (time == 0 && !xcursor_Is_Cursor_Visible())
 		xcursor_Show_Cursor();
@@ -197,7 +201,8 @@ static void train_end_Train_View(int32_t time) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE95 0x6B800; TIE98 0x491EE0
+// FUNCTION: TIE95 0x6B800
+// FUNCTION: TIE98 0x491EE0
 static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object) {
 	if (active_spec->surface_set == LANDRU_SURFACE_SVGA && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
@@ -241,7 +246,8 @@ static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE95 0x6B8DC; TIE98 0x491FF0
+// FUNCTION: TIE95 0x6B8DC
+// FUNCTION: TIE98 0x491FF0
 static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 								   uint8_t mouseState, uint8_t prevMouseState, int16_t key, int16_t prevKey) {
 	(void)draw_rect;
@@ -319,7 +325,8 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE95 0x6BA58; TIE98 0x492150
+// FUNCTION: TIE95 0x6BA58
+// FUNCTION: TIE98 0x492150
 static void train_iuser_Train(Input* input, int32_t time) {
 	(void)time;
 
@@ -415,7 +422,8 @@ static void train_idraw_Train(Input* input, Rect* draw_rect, Rect* clip_rect, in
  * Help tooltip overlay. Draws the delta actor with centered text from
  * the TIEText table when a nav button is hovered and visor is up.
  */
-// FUNCTION: TIE95 0x6BC68; TIE98 0x492200
+// FUNCTION: TIE95 0x6BC68
+// FUNCTION: TIE98 0x492200
 static int16_t train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 									 int16_t off_y, int16_t refresh) {
 	if (refresh) {
@@ -439,7 +447,8 @@ static int16_t train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* cl
 /* ------------------------------------------------------------------ */
 
 /* Freeze clam actor on the final film frame */
-// FUNCTION: TIE95 0x6BD00; TIE98 0x4922B0
+// FUNCTION: TIE95 0x6BD00
+// FUNCTION: TIE98 0x4922B0
 static void train_user_Train_Clam(Actor* the_actor, int32_t time) {
 	if (time == (int32_t)train_film->cels)
 		xactor_Non_Refreshable_Actor(the_actor);
@@ -452,7 +461,8 @@ static void train_user_Train_Clam(Actor* the_actor, int32_t time) {
  * Bit 14 of var2 distinguishes "on" vs "off" phase.
  * Each phase has random frame changes and a random-length hold.
  */
-// FUNCTION: TIE95 0x6BD1C; TIE98 0x4922E0
+// FUNCTION: TIE95 0x6BD1C
+// FUNCTION: TIE98 0x4922E0
 static void train_user_Train_Light(Actor* the_actor, int32_t time) {
 	if (time == 0) {
 		xactor_Show_Actor(the_actor);
@@ -486,7 +496,8 @@ static void train_user_Train_Light(Actor* the_actor, int32_t time) {
  * training). var2 == 0 with scene TRAIN_B auto-plays visor opening
  * (returning from training). Saves pilot and exits to flight scene.
  */
-// FUNCTION: TIE95 0x6BDD0; TIE98 0x492390
+// FUNCTION: TIE95 0x6BDD0
+// FUNCTION: TIE98 0x492390
 static void train_user_Train_Helmet(Actor* the_actor, int32_t time) {
 	if (the_actor->var2) {
 		/* Entering training — close visor */
@@ -532,7 +543,8 @@ static void train_user_Train_Helmet(Actor* the_actor, int32_t time) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE95 0x6BEF8; TIE98 0x4924C0
+// FUNCTION: TIE95 0x6BEF8
+// FUNCTION: TIE98 0x4924C0
 static int16_t train_iupdate_Train_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 										  uint8_t mouseState, uint8_t prevMouseState, int16_t key,
 										  int16_t prevKey) {
@@ -557,7 +569,8 @@ static int16_t train_iupdate_Train_Screen(Input* input, Rect* draw_rect, Rect* c
  *   384-766: flyby with 3D movie (mode 2)
  *   767: reset to mode 0
  */
-// FUNCTION: TIE95 0x6BF20; TIE98 0x492500
+// FUNCTION: TIE95 0x6BF20
+// FUNCTION: TIE98 0x492500
 static void train_iuser_Train_Screen(Input* input, int32_t time) {
 	(void)time;
 
@@ -610,7 +623,8 @@ static void train_iuser_Train_Screen(Input* input, int32_t time) {
 /* ------------------------------------------------------------------ */
 
 /* Draw mission description on the training monitor */
-// FUNCTION: TIE95 0x6C078; TIE98 0x4926A0
+// FUNCTION: TIE95 0x6C078
+// FUNCTION: TIE98 0x4926A0
 static void train_Draw_Train_Screen_Mission(Rect* src) {
 	Rect dst;
 	char string[48], buf[48], name[48];
@@ -714,7 +728,8 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 /* ------------------------------------------------------------------ */
 
 /* Draw high score table on the training monitor */
-// FUNCTION: TIE95 0x6C45C; TIE98 0x492A40
+// FUNCTION: TIE95 0x6C45C
+// FUNCTION: TIE98 0x492A40
 static void train_Draw_Train_Screen_Score(Rect* src) {
 	char string[40], str[40];
 	bool svga = active_spec->surface_set == LANDRU_SURFACE_SVGA;
@@ -763,7 +778,8 @@ static void train_Draw_Train_Screen_Score(Rect* src) {
 /* ------------------------------------------------------------------ */
 
 /* Draw flyby course info text on the training monitor */
-// FUNCTION: TIE95 0x6C644; TIE98 0x492BE0
+// FUNCTION: TIE95 0x6C644
+// FUNCTION: TIE98 0x492BE0
 static void train_Draw_Train_Screen_Flyby(Rect* src) {
 	int16_t t = train_time - 384;
 	char text[48];
@@ -797,7 +813,8 @@ static void train_Draw_Train_Screen_Flyby(Rect* src) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE95 0x6C018; TIE98 0x492610
+// FUNCTION: TIE95 0x6C018
+// FUNCTION: TIE98 0x492610
 static void train_idraw_Train_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh) {
 	if (!refresh)
 		return;

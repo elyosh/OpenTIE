@@ -28,9 +28,9 @@ extern void* buffer_ptr;
 /* Background palette index used by the logical-buffer clear. */
 extern uint8_t deepspacecolor;
 
-// GLOBAL: TIE98 0x5926D8
+// ORIGINAL_GLOBAL: TIE98 0x5926D8
 extern uint32_t g_surfacePitch;
-// GLOBAL: TIE98 0x4F2ACC
+// ORIGINAL_GLOBAL: TIE98 0x4F2ACC
 extern uint32_t g_flight16bppBytesPerPixel;
 
 /* --- API --- */

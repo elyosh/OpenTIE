@@ -55,7 +55,7 @@ static int16_t text_res[3];
  * emitter can map to a TIE_SUBTITLE_STYLE_* enum without
  * heuristically inverting the color computation. */
 static TextFade text_fade_type[3];
-// GLOBAL: TIE 0xF5D5A
+// GLOBAL: TIE95 0xF5D5A
 static LandruHandle text_para[3];
 static int16_t num_text_lines;
 static void* text_buffer;
@@ -69,7 +69,7 @@ static int16_t draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t 
 
 /* --- Functions --- */
 
-// FUNCTION: TIE 0x6F4B0
+// FUNCTION: TIE95 0x6F4B0
 void textext_Open_Text_Ext(void) {
 	ResFile* res_file;
 	int16_t size[3] = { 0, 0, 0 };
@@ -96,7 +96,7 @@ void textext_Open_Text_Ext(void) {
 	}
 }
 
-// FUNCTION: TIE 0x6F544
+// FUNCTION: TIE95 0x6F544
 void textext_Close_Text_Ext(void) {
 	int16_t i;
 
@@ -108,7 +108,7 @@ void textext_Close_Text_Ext(void) {
 	}
 }
 
-// FUNCTION: TIE 0x6F588
+// FUNCTION: TIE95 0x6F588
 void textext_Open_Text_Ext_Scene(int16_t scene) {
 	Rect r;
 	int16_t start, stop;
@@ -138,7 +138,7 @@ void textext_Open_Text_Ext_Scene(int16_t scene) {
 	xactor_Set_Actor_Draw_Function(display_text_actor, draw_Text_Actor);
 }
 
-// FUNCTION: TIE 0x6F690
+// FUNCTION: TIE95 0x6F690
 void textext_Close_Text_Ext_Scene(int16_t scene) {
 	(void)scene;
 	if (text_buffer) {
@@ -347,7 +347,7 @@ bool TieRecoveredText_ReadSnapshotLine(int index, TieRecoveredTextSnapshotLine* 
 	return true;
 }
 
-// FUNCTION: TIE 0x6FC24
+// FUNCTION: TIE95 0x6FC24
 const char* textext_Get_Text(int16_t id) {
 	int16_t res_id, str_idx;
 
@@ -361,13 +361,13 @@ const char* textext_Get_Text(int16_t id) {
 	return text_ext_string;
 }
 
-// FUNCTION: TIE 0x6FC7C
+// FUNCTION: TIE95 0x6FC7C
 void textext_Copy_Text(char* string, int16_t id) { strcpy(string, textext_Get_Text(id)); }
 
-// FUNCTION: TIE 0x6FCAC
+// FUNCTION: TIE95 0x6FCAC
 void textext_Cat_Text(char* string, int16_t id) { strcat(string, textext_Get_Text(id)); }
 
-// FUNCTION: TIE 0x6FCE4
+// FUNCTION: TIE95 0x6FCE4
 void textext_Copy_Joy_Text(char* string, int16_t id) {
 	const char* text;
 
@@ -387,20 +387,20 @@ void textext_Copy_Joy_Text(char* string, int16_t id) {
 	}
 }
 
-// FUNCTION: TIE 0x6FD38
+// FUNCTION: TIE95 0x6FD38
 void textext_Get_Ship_Text(char* string, int16_t ship_id) {
 	xparagrp_Get_Paragraph_String(text_para[0], string, 2, ship_id);
 }
 
-// FUNCTION: TIE 0x6FD5C
+// FUNCTION: TIE95 0x6FD5C
 void textext_Get_Train_Text(char* string, int16_t line) {
 	xparagrp_Get_Paragraph_String(text_para[0], string, 3, line);
 }
 
-// FUNCTION: TIE 0x6FD80
+// FUNCTION: TIE95 0x6FD80
 int16_t textext_Count_Train_Text_Lines(void) { return xparagrp_Count_Paragraph_Strings(text_para[0], 3); }
 
-// FUNCTION: TIE 0x6FD98
+// FUNCTION: TIE95 0x6FD98
 void textext_Get_Weapon_Select_Text(char* string, int16_t line) {
 	xparagrp_Get_Paragraph_String(text_para[0], string, 4, line);
 }

@@ -190,9 +190,9 @@ AnimOp bigexplo2[14] = {
  * ====================================================================== */
 
 void* animarrayptr; /* never read in shipped binary */
-// GLOBAL: TIE 0xD3554
+// GLOBAL: TIE95 0xD3554
 AnimOp* animptr; /* current pattern */
-// GLOBAL: TIE 0xD355A
+// GLOBAL: TIE95 0xD355A
 uint16_t animindex;     /* current frame index */
 uint16_t hyperfgnumber; /* mission_file_header.num_fg saved across the warp */
 uint8_t curgenus;       /* genus byte cached during anim tick */
@@ -235,7 +235,7 @@ static inline int16_t* hyperstar_p1_x_ptr(void) { return (int16_t*)(hyperstardat
  * `drawshape` function pointer, crashing the HUD path). Drop the sprite when
  * the queue is full instead -- observably identical (the slot is never drawn).
  * ====================================================================== */
-// FUNCTION: TIE 0x106BC
+// FUNCTION: TIE95 0x106BC
 void anim_add_bitmap_draw(uint16_t obj_idx_arg, uint16_t species_packed, uint16_t scale_factor,
 						  int16_t screen_x, int16_t screen_y, int32_t eye_z, int16_t angle) {
 	int16_t slot = numbitmaps;
@@ -264,7 +264,7 @@ void anim_add_bitmap_draw(uint16_t obj_idx_arg, uint16_t species_packed, uint16_
  * The binary does a 4-DWORD swap of the 16-byte struct; in C a struct copy
  * does the same thing.
  * ====================================================================== */
-// FUNCTION: TIE 0x10720
+// FUNCTION: TIE95 0x10720
 int16_t anim_sort_and_draw_bitmaps(void) {
 	int swapped = 1;
 	while (--numbitmaps != -1) {
@@ -322,7 +322,7 @@ void anim_sort_and_draw_bitmaps_tie98(int draw_target) {
  * to it.
  *
  * ====================================================================== */
-// FUNCTION: TIE 0x107D4
+// FUNCTION: TIE95 0x107D4
 int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
 	/* species_packed is the same bitfield emitted by ANIMOP_BITMAP;
 	 * decode with the shared accessors. */
@@ -427,7 +427,7 @@ void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
  * anim_frame; the polymesh path falls through into a sparks2[] read after
  * the mesh draw to enqueue a sparkle layer.
  * ====================================================================== */
-// FUNCTION: TIE 0x10390
+// FUNCTION: TIE95 0x10390
 int16_t anim_drawverysimpleobject(uint16_t obj_idx_arg) {
 	uint16_t ship_type = (uint16_t)objects[obj_idx_arg].ship_idx;
 
@@ -619,7 +619,7 @@ void anim_drawverysimpleobject_tie98(uint16_t object_index) {
  * staticobjects[] vs objects[]. If animptr is NULL the function is a
  * no-op (animindex stays put).
  * ====================================================================== */
-// FUNCTION: TIE 0x11224
+// FUNCTION: TIE95 0x11224
 int16_t anim_updateanimstate(uint16_t obj_or_kind) {
 	if (!animptr)
 		return 0;
@@ -648,7 +648,8 @@ int16_t anim_updateanimstate(uint16_t obj_or_kind) {
 	return (int16_t)op;
 }
 
-// FUNCTION: TIE98 0x401600 ANIM_updateanimation
+// FUNCTION: TIE98 0x401600
+// ANIM_updateanimation
 void anim_updateanimation_tie98(void) {
 	if (mission.train_craft_type)
 		gate_updategateanimations();
@@ -806,7 +807,7 @@ void anim_updateanimation_tie98(void) {
 /* Timer-gated animation update for turrets, articulated craft meshes, debris,
  * explosions, and static objects. Static animation references use the packed
  * OBJ_REF_STATIC_BASE namespace. */
-// FUNCTION: TIE 0x109BC
+// FUNCTION: TIE95 0x109BC
 void anim_updateanimation(void) {
 	if (TieProfile_UsesTie98Logic()) {
 		anim_updateanimation_tie98();
@@ -1056,7 +1057,8 @@ void anim_updateanimation(void) {
 /* Six-phase hyperspace sequence: align and validate the route, replace the
  * scene with stars, stretch streaks, traverse, retract streaks, then settle
  * and complete the mission transition. hyperticks is the absolute phase clock. */
-// FUNCTION: TIE 0x112EC, TIE98 0x401E80
+// FUNCTION: TIE95 0x112EC
+// FUNCTION: TIE98 0x401E80
 void anim_dohyperspace(void) {
 	hyperticks += frameticks;
 

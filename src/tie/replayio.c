@@ -268,7 +268,7 @@ static void replayio_port_rebind_checkpoint_pointers(void) {
 	pstate.player_craft = pstate.player->craft_ptr;
 }
 
-// FUNCTION: TIE 0x478A0
+// FUNCTION: TIE95 0x478A0
 int16_t replayio_copytosave(const char* fname) {
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, fname, "wb", 0))
 		return 0;
@@ -319,7 +319,7 @@ fail:
 	return 0;
 }
 
-// FUNCTION: TIE 0x47A08
+// FUNCTION: TIE95 0x47A08
 int16_t replayio_copyfromsave(const char* fname) {
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, fname, "rb", 1))
 		return 0;
@@ -386,7 +386,7 @@ int16_t replayio_copyfromsave(const char* fname) {
  * Input-buffer spooling
  * -------------------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x47B2C
+// FUNCTION: TIE95 0x47B2C
 int replayio_openreplayinputfile(void) {
 	/* Drop any stale .spl, then create a fresh one prefixed with the
 	 * current versioned header. Subsequent replayio_spoolreplayinput calls
@@ -402,7 +402,7 @@ int replayio_openreplayinputfile(void) {
 }
 
 /* replayio_spoolreplayinput — append the valid records in this chunk. */
-// FUNCTION: TIE 0x47B3C
+// FUNCTION: TIE95 0x47B3C
 int16_t replayio_spoolreplayinput(void) {
 	if (!replayspoolflag)
 		return 1;
@@ -439,7 +439,7 @@ int16_t replayio_spoolreplayinput(void) {
 	return 1;
 }
 
-// FUNCTION: TIE 0x47C44
+// FUNCTION: TIE95 0x47C44
 int16_t replayio_savereplaybuffer(void) {
 	if (replaybuffercnt > REPLAY_INPUT_CHUNK_FRAMES)
 		return 0;
@@ -458,7 +458,7 @@ int16_t replayio_savereplaybuffer(void) {
 	return (TieStorage_Close(fileptr) == 0);
 }
 
-// FUNCTION: TIE 0x47CA4
+// FUNCTION: TIE95 0x47CA4
 int replayio_restorereplaybuffer(void) {
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, kBufferTempFile, "rb", 1))
 		return 0;
@@ -616,7 +616,9 @@ static void replayio_resume_imuse_if_paused(void) {
 	}
 }
 
-// FUNCTION: TIE 0x47CF4, TIE98 0x475350 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x47CF4
+// ORIGINAL_FUNCTION: TIE98 0x475350
+// (task-split recovery)
 static LandruTaskStepResult replayio_task_step(void* self) {
 	ReplayioTask* t = (ReplayioTask*)self;
 
@@ -787,7 +789,7 @@ void replayio_Push_ReplayScreen_Task(void) {
  * replayio_setreturnview -- restore the cockpit when re-entering the live
  * simulator. Unchanged between demo and retail.
  * -------------------------------------------------------------------------- */
-// FUNCTION: TIE 0x483E4
+// FUNCTION: TIE95 0x483E4
 void replayio_setreturnview(void) {
 	farbufferptr = (uint8_t*)panelpartsptr;
 	build_panel_path(parts);

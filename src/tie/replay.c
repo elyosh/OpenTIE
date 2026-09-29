@@ -86,17 +86,17 @@ const uint16_t replaybuttonleft[38][2] = {
  * the shared 265-entry shape table. */
 enum { REPLAY_BUTTON_SHAPE_BASE = 0xE3 };
 
-// GLOBAL: TIE 0xC7340
+// GLOBAL: TIE95 0xC7340
 uint8_t replaymusic;
-// GLOBAL: TIE 0xD5E5C
+// GLOBAL: TIE95 0xD5E5C
 int16_t replayvolume;
 int16_t replaymsgtimer;
 
-// GLOBAL: TIE 0xD5E5A
+// GLOBAL: TIE95 0xD5E5A
 uint8_t chasespecies;
-// GLOBAL: TIE 0xD5E5E
+// GLOBAL: TIE95 0xD5E5E
 uint8_t trackspecies;
-// GLOBAL: TIE 0xD5E60
+// GLOBAL: TIE95 0xD5E60
 uint16_t trackobject;
 // GLOBAL: TIE98 0x5FBC44
 uint8_t reentersimflag;
@@ -104,7 +104,7 @@ uint8_t reentersimflag;
 uint8_t exitflag;
 int32_t cameraposstate;
 
-// GLOBAL: TIE 0xE36FC
+// GLOBAL: TIE95 0xE36FC
 Camera replaycam;
 
 /* Clip filename suffix (".clp"). Retail lowercased it from demo's ".CLP". */
@@ -119,7 +119,7 @@ static const char kClipSuffix[] = ".clp";
  * (the demo was per-byte fgetc/fputc). On TIE_EOF / short write both streams
  * are fclosed and 0 is returned. Returns 1 on success (streams left
  * open). */
-// FUNCTION: TIE 0x454F4
+// FUNCTION: TIE95 0x454F4
 int replay_copybytesinfile(uint16_t count, TieFile* src, TieFile* dst) {
 	uint8_t buf[256];
 	uint32_t remaining = count;
@@ -187,7 +187,8 @@ static void build_clip_filename(char out[16]) {
  * tag (< 8 indexes fontcolorconvert[], else default 0x42); '[' / ']'
  * nudge the text color up/down. Appends a '.' unless the final printable
  * character was one of '?','!',':',' '. Arms replaymsgtimer to 944 ticks. */
-// FUNCTION: TIE 0x475F4, TIE98 0x474BC0
+// FUNCTION: TIE95 0x475F4
+// FUNCTION: TIE98 0x474BC0
 void replay_replaymessage(uint16_t msg_id) {
 	msg_readymessage();
 
@@ -234,7 +235,7 @@ void replay_replaymessage(uint16_t msg_id) {
  *
  * Retail supports VGA and SVGA coordinate sets for both the cockpit and
  * stand-alone layouts. */
-// FUNCTION: TIE 0x459B8
+// FUNCTION: TIE95 0x459B8
 void replay_drawreplaybutton(uint16_t btn_id) {
 	uint16_t idx = btn_id;
 	int res = 0; /* 0 = VGA / demo layout */
@@ -401,7 +402,7 @@ void replay_drawreplaybutton(uint16_t btn_id) {
  *
  * Static objects (obj_id >= 0x3800) never reach any craft_ptr deref
  * below: staticobjects[].species is in the buoy range (70..84). */
-// FUNCTION: TIE 0x462BC
+// FUNCTION: TIE95 0x462BC
 int replay_getstatusnum(uint16_t obj_id) {
 	if (obj_id >= 0x3800u) {
 		uint16_t species = staticobjects[obj_id - 14336].species;
@@ -437,7 +438,7 @@ int replay_getstatusnum(uint16_t obj_id) {
 
 /* replay_outputobjectname — format obj_id's display name into tempstring
  * and outstring-center it. Identical to demo. */
-// FUNCTION: TIE 0x46094
+// FUNCTION: TIE95 0x46094
 void replay_outputobjectname(uint16_t obj_id) {
 	if (obj_id >= 0x3800u) {
 		festring_settextcolor(0x43);
@@ -498,7 +499,7 @@ void replay_outputobjectname(uint16_t obj_id) {
 
 /* replay_outputclipname — paint the current clip name centered in the
  * info strip. Retail added an SVGA cockpit strip (341, 13, 411, 22). */
-// FUNCTION: TIE 0x463BC
+// FUNCTION: TIE95 0x463BC
 void replay_outputclipname(void) {
 	festring_setbackcolor(0x40);
 	int16_t cx, cy;
@@ -531,7 +532,7 @@ void replay_outputclipname(void) {
  * Playback-state mutators
  * -------------------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x4596C
+// FUNCTION: TIE95 0x4596C
 void replay_stopreplay(void) {
 	TieReplayTiming_Reset();
 	updateactionflag = 0;
@@ -545,7 +546,7 @@ void replay_stopreplay(void) {
 	}
 }
 
-// FUNCTION: TIE 0x458DC
+// FUNCTION: TIE95 0x458DC
 void replay_rewindreplay(void) {
 	TieReplayTiming_Reset();
 	if (replaymusic == 1) {
@@ -576,7 +577,7 @@ void replay_rewindreplay(void) {
  * Reads only the remaining valid records and shows "loading"
  * (MSG_CAMERA_LOADING) first. Returns 1 on success, 0 on I/O error.
  * Preserves fileptr across the call. */
-// FUNCTION: TIE 0x44F70
+// FUNCTION: TIE95 0x44F70
 int16_t replay_loadreplayinput(void) {
 	replay_replaymessage(MSG_CAMERA_LOADING);
 	if (replaytotalcnt <= 0 || replaytotalcntdown >= (uint32_t)replaytotalcnt)
@@ -628,7 +629,7 @@ int16_t replay_loadreplayinput(void) {
  * Camera pose
  * -------------------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x474B4
+// FUNCTION: TIE95 0x474B4
 void replay_movecambehind(uint16_t obj_id) {
 	create_getworldposition(obj_id, 0);
 	replaycam.x = worldlocx;
@@ -649,7 +650,7 @@ void replay_movecambehind(uint16_t obj_id) {
 	replaycam.z -= push_z;
 }
 
-// FUNCTION: TIE 0x47190
+// FUNCTION: TIE95 0x47190
 void replay_calcreplayview(void) {
 	uint8_t chase_sp = (pstate.target_obj_idx >= 0x3800u)
 						   ? staticobjects[pstate.target_obj_idx - 14336].species
@@ -759,7 +760,9 @@ static void replay_save_draw_editor(const ReplaySaveTask* t) {
 	outchar('\n');
 }
 
-/* FUNCTION: TIE 0x476CC, TIE98 0x474CA0 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x476CC
+// ORIGINAL_FUNCTION: TIE98 0x474CA0
+/* task-split recovery
  * PORT: the original polls inside REPLAY_editstring until Enter. Host input is
  * queued once per application frame, so this state machine consumes one key
  * per step and yields whenever the queue is empty. */
@@ -972,7 +975,9 @@ static bool replay_Push_SaveReplay_Task(void) {
  *   N*14   input stream        — chunked reads/writes
  * -------------------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x45078, TIE98 0x4724E0 (file-write portion)
+// FUNCTION: TIE95 0x45078
+// FUNCTION: TIE98 0x4724E0
+// (file-write portion)
 static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* filename) {
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, filename, "wb", 0))
 		return MSG_FILE_ERROR;
@@ -1067,7 +1072,7 @@ static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* fi
 	return MSG_REPLAY_SAVED;
 }
 
-// FUNCTION: TIE 0x455B4
+// FUNCTION: TIE95 0x455B4
 int replay_loadreplay(void) {
 	char filename[16];
 	build_clip_filename(filename);
@@ -1398,7 +1403,9 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 	return pushed_subtask;
 }
 
-// FUNCTION: TIE 0x4646C, TIE98 0x473AA0 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x4646C
+// ORIGINAL_FUNCTION: TIE98 0x473AA0
+// (task-split recovery)
 static LandruTaskStepResult replay_doreplayscreen_task_step(void* self) {
 	ReplayDoScreenTask* t = (ReplayDoScreenTask*)self;
 
@@ -1453,8 +1460,9 @@ void replay_Push_DoReplayScreen_Task(void) {
 }
 
 /* replay_replayinput — read one hardware tick of input and dispatch. */
-// FUNCTION: TIE 0x46928, TIE98 0x474040
 /* PORT: the boolean return is the child-task handoff; retail returns void. */
+// FUNCTION: TIE95 0x46928
+// FUNCTION: TIE98 0x474040
 bool replay_replayinput(void) {
 	bool save_requested = false;
 	feinput_getrawinput();

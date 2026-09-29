@@ -23,7 +23,8 @@ static int max_extent(const TieModelBounds* value) {
 	return (int)extent;
 }
 
-// FUNCTION: TIE98 0x43B8C0 ModelBounds_GetMaxExtent; same name in OpenXWA.
+// FUNCTION: TIE98 0x43B8C0
+// ModelBounds_GetMaxExtent; same name in OpenXWA.
 int modelbounds_getmaxextent(uint16_t model_type) { return max_extent(bounds(model_type)); }
 
 /* MODERN ADAPTATION: frontend BPFLIGHT renders the stock TIE98 OPT even when
@@ -39,30 +40,39 @@ int modelbounds_getmaxextent_from_api(const TieFlightModelApi* models, uint16_t 
 	return max_extent(&model->bounds);
 }
 
-// FUNCTION: TIE98 0x43B970 ModelBounds_GetMinX
+// FUNCTION: TIE98 0x43B970
+// ModelBounds_GetMinX
 int modelbounds_getminx(uint16_t m) { return (int)bounds(m)->min.x; }
-// FUNCTION: TIE98 0x43B9A0 ModelBounds_GetMinY
+// FUNCTION: TIE98 0x43B9A0
+// ModelBounds_GetMinY
 int modelbounds_getminy(uint16_t m) { return (int)bounds(m)->min.y; }
-// FUNCTION: TIE98 0x43B9D0 ModelBounds_GetMinZ
+// FUNCTION: TIE98 0x43B9D0
+// ModelBounds_GetMinZ
 int modelbounds_getminz(uint16_t m) { return (int)bounds(m)->min.z; }
-// FUNCTION: TIE98 0x43BA00 ModelBounds_GetMaxX
+// FUNCTION: TIE98 0x43BA00
+// ModelBounds_GetMaxX
 int modelbounds_getmaxx(uint16_t m) { return (int)bounds(m)->max.x; }
-// FUNCTION: TIE98 0x43BA30 ModelBounds_GetMaxY
+// FUNCTION: TIE98 0x43BA30
+// ModelBounds_GetMaxY
 int modelbounds_getmaxy(uint16_t m) { return (int)bounds(m)->max.y; }
-// FUNCTION: TIE98 0x43BA60 ModelBounds_GetMaxZ
+// FUNCTION: TIE98 0x43BA60
+// ModelBounds_GetMaxZ
 int modelbounds_getmaxz(uint16_t m) { return (int)bounds(m)->max.z; }
 
-// FUNCTION: TIE98 0x43BA90 ModelBounds_GetSizeX
+// FUNCTION: TIE98 0x43BA90
+// ModelBounds_GetSizeX
 int modelbounds_getsizex(uint16_t m) {
 	const TieModelBounds* value = bounds(m);
 	return (int)(value->max.x - value->min.x);
 }
-// FUNCTION: TIE98 0x43BAD0 ModelBounds_GetSizeY
+// FUNCTION: TIE98 0x43BAD0
+// ModelBounds_GetSizeY
 int modelbounds_getsizey(uint16_t m) {
 	const TieModelBounds* value = bounds(m);
 	return (int)(value->max.y - value->min.y);
 }
-// FUNCTION: TIE98 0x43BB10 ModelBounds_GetSizeZ
+// FUNCTION: TIE98 0x43BB10
+// ModelBounds_GetSizeZ
 int modelbounds_getsizez(uint16_t m) {
 	const TieModelBounds* value = bounds(m);
 	return (int)(value->max.z - value->min.z);

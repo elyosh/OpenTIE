@@ -75,7 +75,7 @@ int32_t goalsCompletedCount[3];
  * goals_checkidflag
  * ==================================================================== */
 
-// FUNCTION: TIE 0x2C6BC
+// FUNCTION: TIE95 0x2C6BC
 uint8_t goals_checkidflag(uint16_t fg_index) { return fgstatus[fg_index].cond_id[4].detail; }
 
 /* ====================================================================
@@ -97,7 +97,7 @@ uint8_t goals_checkwrap(const uint8_t* s) {
  * goals_outputspeciesname
  * ==================================================================== */
 
-// FUNCTION: TIE 0x2C6D8
+// FUNCTION: TIE95 0x2C6D8
 uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 	const uint8_t* name_ptr;
 	const uint16_t spec_num = spec_getspecnum(species_idx);
@@ -124,7 +124,7 @@ uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 /* Render one localized goal line for a target, condition, status, and
  * quantifier. Returns the accumulated vertical space added by wrapping. */
 
-// FUNCTION: TIE 0x2BF50
+// FUNCTION: TIE95 0x2BF50
 int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, uint16_t status, uint16_t op) {
 	int32_t total = fontheight; /* accumulator starts at fontheight */
 	uint16_t tense_offset = 10;
@@ -673,7 +673,9 @@ static int goals_poll_once(GoalsTask* t) {
 	return redraw ? 2 : 0;
 }
 
-// FUNCTION: TIE 0x2AD90, TIE98 0x42DCA0 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x2AD90
+// ORIGINAL_FUNCTION: TIE98 0x42DCA0
+// (task-split recovery)
 static LandruTaskStepResult goals_task_step(void* self) {
 	GoalsTask* t = (GoalsTask*)self;
 

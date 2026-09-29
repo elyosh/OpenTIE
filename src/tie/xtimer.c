@@ -10,7 +10,7 @@ static int s_initialized;
 
 enum { XTIMER_PIT_PERIOD_US = 4000 };
 
-// FUNCTION: TIE 0x8D46C
+// FUNCTION: TIE95 0x8D46C
 uint32_t xtimer_time_elapsed(void) {
 	if (!s_initialized) {
 		TieSimClock_CursorInit(&s_cursor);

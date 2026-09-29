@@ -152,14 +152,14 @@ static uint8_t combatroommapping[39] = {
 };
 
 /* Viewport actors + orbit Matrix + primary object buffer. */
-// GLOBAL: TIE 0xF64B8
+// GLOBAL: TIE95 0xF64B8
 static Actor* engine;
 static Actor* engine_secondary;
-// GLOBAL: TIE 0xF64C4
+// GLOBAL: TIE95 0xF64C4
 static Matrix* matrix;
 
 /* Scanline transform scratch (65000 bytes). HANDLE in the binary. */
-// GLOBAL: TIE 0xD0E18
+// GLOBAL: TIE95 0xD0E18
 static void* xtransdata;
 
 /* True when BPFLIGHT owns the shared edge-pool allocations. */
@@ -174,14 +174,14 @@ static int16_t bpcameralookpitch[3], bpcameralookclock[3];
 static int16_t bpcameraxv[3], bpcamerayv[3], bpcamerazv[3], bpcameravel[3];
 
 /* Per-viewport runtime state. */
-// GLOBAL: TIE 0xF6500
+// GLOBAL: TIE95 0xF6500
 static int16_t bpshipstate[3]; /* 1 = draw the ship this frame */
 static int16_t bpused[3];      /* 1 = viewport is active */
 static int16_t bpid[3];        /* mode tag copied into actor->id */
 
 /* Save / restore + per-frame scratch. */
 static int fullstarupdate;
-// GLOBAL: TIE 0xF6564
+// GLOBAL: TIE95 0xF6564
 static int16_t tempRes;
 static int16_t cur_flight_scene;
 static int16_t objectloadsize; /* nonzero while the active preview model is loaded */
@@ -239,7 +239,8 @@ static int32_t q15_clamp_shift15(int32_t v) {
 
 /* ----- BPFLIGHT_Open_Flight_Engine (0x7A3A0) ----- */
 
-// FUNCTION: TIE 0x78E70, TIE98 0x404D60
+// FUNCTION: TIE95 0x78E70
+// FUNCTION: TIE98 0x404D60
 Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	Rect r;
 
@@ -473,7 +474,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 
 /* ----- BPFLIGHT_Close_Flight_Engine (0x7A948) ----- */
 
-// FUNCTION: TIE 0x79414
+// FUNCTION: TIE95 0x79414
 void bpflight_Close_Flight_Engine(void) {
 	bpflight_opt_models[0] = NULL;
 	bpflight_opt_models[1] = NULL;
@@ -510,7 +511,7 @@ void bpflight_Close_Flight_Engine(void) {
 
 /* ----- BPFLIGHT_Open_New_Matrix (0x7A9B0) ----- */
 
-// FUNCTION: TIE 0x794B4
+// FUNCTION: TIE95 0x794B4
 void bpflight_Open_New_Matrix(const char* name) {
 	if (matrix) {
 		matrix_Free_Matrix(matrix);
@@ -523,7 +524,7 @@ void bpflight_Open_New_Matrix(const char* name) {
 
 /* ----- BPFLIGHT_Start_Movie_Engine (0x7A9F0) ----- */
 
-// FUNCTION: TIE 0x794F4
+// FUNCTION: TIE95 0x794F4
 void bpflight_Start_Movie_Engine(void) {
 	bpshipstate[1] = 1;
 	bpshipstate[2] = 1;
@@ -534,7 +535,7 @@ void bpflight_Start_Movie_Engine(void) {
 
 /* ----- BPFLIGHT_Stop_Movie_Engine (0x7AA28) ----- */
 
-// FUNCTION: TIE 0x7952C
+// FUNCTION: TIE95 0x7952C
 void bpflight_Stop_Movie_Engine(void) {
 	/* Blueprint scene never stops: the ship keeps rendering even when
 	 * the orbit is paused because BLUEPRNT drives the camera manually. */
@@ -546,7 +547,7 @@ void bpflight_Stop_Movie_Engine(void) {
 
 /* ----- BPFLIGHT_user_Engine (0x7AA5C) ----- */
 
-// FUNCTION: TIE 0x79560
+// FUNCTION: TIE95 0x79560
 static void bpflight_user_Engine(Actor* actor, int32_t time) {
 	/* Primary viewport frame 1 only: program 4 star palette slots
 	 * (VGA colors 252..255). Used to cross-fade the star colors. */
@@ -601,7 +602,8 @@ static void bpflight_user_Engine(Actor* actor, int32_t time) {
  *
  * Main render. Conforms to the xactorDrawFunc ABI even though only actor
  * and clip are used. */
-// FUNCTION: TIE98 0x405640 BPFLIGHT_draw_Engine
+// FUNCTION: TIE98 0x405640
+// BPFLIGHT_draw_Engine
 static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
 										  int16_t refresh) {
 	(void)dest;
@@ -751,7 +753,7 @@ static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, 
 	return 0;
 }
 
-// FUNCTION: TIE 0x7975C
+// FUNCTION: TIE95 0x7975C
 static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
 									int16_t refresh) {
 	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
@@ -1146,7 +1148,7 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 	return 0;
 }
 
-// FUNCTION: TIE 0x79DEC
+// FUNCTION: TIE95 0x79DEC
 uint8_t bpflight_getrelativexyz(void) {
 	int32_t dx_raw = 2 * (scene_camerax - worldx);
 	int32_t dy_raw = 2 * (scene_cameray - worldy);
@@ -1192,7 +1194,7 @@ uint8_t bpflight_getrelativexyz(void) {
 
 /* ----- BPFLIGHT_drawtreeobject (0x7BBA8) ----- */
 
-// FUNCTION: TIE 0x79FD4
+// FUNCTION: TIE95 0x79FD4
 void bpflight_drawtreeobject(void* node, int16_t pass_gated, int16_t pass_mainhull) {
 	BSPNode* n = (BSPNode*)node;
 	/* PORT: Watcom emits variable x86 SAR instructions here. Masking
@@ -1266,7 +1268,7 @@ void bpflight_drawtreeobject(void* node, int16_t pass_gated, int16_t pass_mainhu
  *   bpflight_drawtreeobject(node, 1, 1);
  * The binary unrolled both passes to save the recursive call in each
  * traversal step. No xrefs in the demo. */
-// FUNCTION: TIE 0x7A1D8
+// FUNCTION: TIE95 0x7A1D8
 void bpflight_drawtrainobject(void* node) {
 	bpflight_drawtreeobject(node, 1, 0);
 	bpflight_drawtreeobject(node, 1, 1);
@@ -1274,7 +1276,8 @@ void bpflight_drawtrainobject(void* node) {
 
 /* ----- BPFLIGHT_Load_Flight_Craft (0x7C1BC) ----- */
 
-// FUNCTION: TIE98 0x405BE0 BPFLIGHT_Load_Flight_Craft
+// FUNCTION: TIE98 0x405BE0
+// BPFLIGHT_Load_Flight_Craft
 static void bpflight_Load_Flight_Craft_tie98(const char* lfd_name, const char* opt_name, int16_t model_slot,
 											 int scene) {
 	(void)lfd_name;
@@ -1330,7 +1333,7 @@ int tie98_preview_primary_model_max_extent(void) {
 	return modelbounds_getmaxextent_from_api(&original_models, bpflight_opt_model_types[0]);
 }
 
-// FUNCTION: TIE 0x7A1FC
+// FUNCTION: TIE95 0x7A1FC
 int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16_t mode) {
 	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98) {
 		bpflight_Load_Flight_Craft_tie98(lfd_name, shp_name, mode, cur_flight_scene);
@@ -1368,7 +1371,7 @@ int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16
  *
  * Thinner variant of Load_Flight_Craft: caller supplies the ResFile and
  * the buffer. No xrefs in the demo. */
-// FUNCTION: TIE 0x7A244
+// FUNCTION: TIE95 0x7A244
 int bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, const char* name) {
 	char up[16];
 	uppercase_copy(up, sizeof(up), name);
@@ -1392,7 +1395,8 @@ int bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, const char* name) {
  *
  * Extracts a joint pose + rotation from a MatrixFrame and folds it into
  * the shared craft{f,S,U}{1,2,3} basis. No xrefs in the demo (inlined). */
-// FUNCTION: TIE98 0x405F00 BPFLIGHT_Position_Craft
+// FUNCTION: TIE98 0x405F00
+// BPFLIGHT_Position_Craft
 static void bpflight_Position_Craft_tie98(const MatrixFrame* frame, int16_t joint_idx) {
 	worldx = frame->joint_pos[joint_idx][0];
 	worldy = frame->joint_pos[joint_idx][1];
@@ -1419,7 +1423,7 @@ static void bpflight_Position_Craft_tie98(const MatrixFrame* frame, int16_t join
 	fview_calcrotworldeye();
 }
 
-// FUNCTION: TIE 0x7A2C4
+// FUNCTION: TIE95 0x7A2C4
 void bpflight_Position_Craft(MatrixFrame* frame, int16_t joint_idx) {
 	worldx = frame->joint_pos[joint_idx][0];
 	worldy = frame->joint_pos[joint_idx][1];
@@ -1454,7 +1458,7 @@ void bpflight_Position_Craft(MatrixFrame* frame, int16_t joint_idx) {
  * Apply (forward) or undo (inverse) the 39×16-byte training-room material
  * offset. apply_forward != 0 adds trainroommapping[j], == 0 subtracts.
  * No xrefs in the demo (inlined in draw_Engine). */
-// FUNCTION: TIE 0x7A3F4
+// FUNCTION: TIE95 0x7A3F4
 void bpflight_settraincolors(int16_t apply_forward) {
 	for (int j = 0; j < 39; ++j) {
 		uint8_t d = trainroommapping[j];
@@ -1468,7 +1472,7 @@ void bpflight_settraincolors(int16_t apply_forward) {
 
 /* ----- BPFLIGHT_setcombatcolors (0x7C4C8) ----- */
 
-// FUNCTION: TIE 0x7A478
+// FUNCTION: TIE95 0x7A478
 void bpflight_setcombatcolors(int16_t apply_forward) {
 	for (int j = 0; j < 39; ++j) {
 		uint8_t d = combatroommapping[j];
@@ -1482,7 +1486,7 @@ void bpflight_setcombatcolors(int16_t apply_forward) {
 
 /* ----- BPFLIGHT_swapbpmaterials (0x7C488) ----- */
 
-// FUNCTION: TIE 0x7A438
+// FUNCTION: TIE95 0x7A438
 void bpflight_swapbpmaterials(void) {
 	for (int i = 0; i < 45; ++i) {
 		uint8_t* mc = materialcolors + i * 16;

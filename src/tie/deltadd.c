@@ -132,7 +132,7 @@ static const uint8_t* process_scanline_add_clipped(const uint8_t* src, uint8_t* 
  * Fast unclipped additive delta renderer. Adds color to canvas pixels
  * at each position defined by the delta scanlines.
  */
-// FUNCTION: TIE 0x650B0
+// FUNCTION: TIE95 0x650B0
 static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t off_y, uint8_t color) {
 	BitmapStruct* bm = xcanvas_Get_Current_Canvas_Bitmap();
 	uint8_t* canvas = (uint8_t*)xbitmap_Lock_Bitmap(bm);
@@ -158,7 +158,7 @@ static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t
  * Clipped additive delta renderer. Uses scratch buffer for two-pass
  * rendering: add color to scratch, then clip-copy to canvas.
  */
-// FUNCTION: TIE 0x64E2C
+// FUNCTION: TIE95 0x64E2C
 static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t off_y, uint8_t color,
 								   int16_t clip_left, int16_t clip_top, int16_t clip_right,
 								   int16_t clip_bottom) {
@@ -190,7 +190,7 @@ static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t 
  * Gets the actor's current frame data, checks bounds against the
  * canvas clip rect, dispatches to unclipped or clipped renderer.
  */
-// FUNCTION: TIE 0x64C10
+// FUNCTION: TIE95 0x64C10
 int16_t deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 									 int16_t off_y, int16_t refresh) {
 	(void)draw_rect;

@@ -82,12 +82,12 @@ static Film* talk_film;
 static Input* answer;
 static EFArrayStruct* talk_fgroup;
 static int16_t talk_win_status[5];
-// GLOBAL: TIE 0xF5744
+// GLOBAL: TIE95 0xF5744
 static int16_t max_paragraph_size;
 static int16_t cur_talk_question;
 static int16_t num_talk_paragraphs;
 static int16_t center_line;
-// GLOBAL: TIE 0xF5752
+// GLOBAL: TIE95 0xF5752
 static int16_t cur_talk_paragraph;
 static int16_t talk_mode;
 static int16_t num_talk_questions;
@@ -98,7 +98,7 @@ static int16_t officer_mood_val[5]; /* officer_mood — 5 int16 mood state */
  * paragraph step; auto-advance triggers when iuser time arg exceeds it.
  * Stays at INT32_MAX (inert) when speech is disabled or when the current
  * question is the final debrief paragraph. Shared with map.c. */
-// GLOBAL: TIE 0xCE586
+// GLOBAL: TIE95 0xCE586
 int32_t talk_paragraph_timer = 0x7FFFFFFF;
 
 /* ----------------------------------------------------------------------
@@ -115,7 +115,7 @@ int32_t talk_paragraph_timer = 0x7FFFFFFF;
  * (species index, mission number, officer character, mood character,
  * paragraph index).
  * -------------------------------------------------------------------- */
-// GLOBAL: TIE 0xF5704
+// GLOBAL: TIE95 0xF5704
 Sound* talk_speech_sound = NULL;
 int16_t talk_voice_species = 0; /* >0: numeric "Nm…" filename */
 								/* <0: char-encoded "[fibagdm]m…" */
@@ -126,9 +126,9 @@ uint8_t talk_voice_mood = 0;    /* 'b', 'd', 'h', 'o', etc. */
 
 #define TALK_SPEECH_BUF_SIZE 2048000 /* matches retail allocation */
 
-// GLOBAL: TIE 0xF5708
+// GLOBAL: TIE95 0xF5708
 static int32_t talk_speech_pos = 0;
-// GLOBAL: TIE 0xF575C
+// GLOBAL: TIE95 0xF575C
 static uint8_t talk_speech_streaming = 0;
 
 /* ======================================================================
@@ -776,7 +776,7 @@ void talk_Get_Talk_Question(char* out, int16_t id) {
  * talk_Get_Talk_Paragraph — extract paragraph line text
  * ====================================================================== */
 
-// FUNCTION: TIE 0x69868
+// FUNCTION: TIE95 0x69868
 void talk_Get_Talk_Paragraph(char* out, int16_t line) {
 	*out = '\0';
 	int16_t italic = 0;
@@ -1204,7 +1204,7 @@ static int16_t iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t key, 
 /* Per-frame user callback on the streaming Sound. Retail filled the
  * next 2 KB chunk from the CD streamer here; with our synchronous I/O
  * the file is fully loaded at trigger time so this is a no-op. */
-// FUNCTION: TIE 0x6B43F
+// FUNCTION: TIE95 0x6B43F
 static void talk_Speech_User_Func(Sound* snd, int32_t time) {
 	(void)snd;
 	(void)time;
@@ -1213,7 +1213,7 @@ static void talk_Speech_User_Func(Sound* snd, int32_t time) {
 /* Allocate the talk-speech Sound + 2 MB streaming buffer. Mirrors
  * retail TALK_Alloc_Speech_Sound (sub_6B363). Idempotent — already
  * allocated returns the existing sound. */
-// FUNCTION: TIE 0x6B363
+// FUNCTION: TIE95 0x6B363
 void talk_Alloc_Speech_Sound(void) {
 	if (talk_speech_sound)
 		return;
@@ -1249,7 +1249,7 @@ void talk_Alloc_Speech_Sound(void) {
  * buffer to be reclaimed by the global sound free pass at scene
  * shutdown; we do the same — just clear our reference so the next
  * scene can re-allocate. */
-// FUNCTION: TIE 0x6B400
+// FUNCTION: TIE95 0x6B400
 void talk_Free_Speech_Sound(void) {
 	talk_speech_sound = NULL;
 	talk_speech_pos = 0;
@@ -1327,7 +1327,7 @@ static int talk_Build_Voc_Path(char* out, size_t cap) {
  *
  * Falls back silently if speech is disabled or the .voc file is
  * missing — the screen still works without voice. */
-// FUNCTION: TIE 0x6AFF9
+// FUNCTION: TIE95 0x6AFF9
 void talk_Start_Speech_Stream(void) {
 	if (!talk_speech_sound || !talk_speech_sound->data)
 		return;
@@ -1390,7 +1390,7 @@ void talk_Start_Speech_Stream(void) {
  * mission come from the pilot record's tour-battle position; the
  * mood char is forced to 'h' (hostile/failed) when the relevant
  * objective is incomplete. */
-// FUNCTION: TIE 0x6AF31
+// FUNCTION: TIE95 0x6AF31
 void talk_Set_Voice_Species_Mission(void) {
 	uint8_t cur = pilot_record.cur_battle;
 	talk_voice_species = (int16_t)(cur + 1);

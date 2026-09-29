@@ -254,7 +254,7 @@ static char sequenceData[18][10] = { "",         "s-win-lg", "        ", "s-los-
 									 "s-reb-lg", "s-reb-sm", "s-neu-lg", "s-neu-sm", "s-eject",  "s-hyper" };
 
 /* Sequence priorities: indexed by seq_id */
-// GLOBAL: TIE 0xC51E4
+// GLOBAL: TIE95 0xC51E4
 static int32_t sequencePriorities[18] = { 0, 10, 2, 9, 1, 15, 14, 13, 12, 11, 8, 5, 7, 4, 6, 3, 20, 20 };
 
 /* SmallWin SDP record: 4 random destinations */
@@ -265,38 +265,38 @@ static SdpRecord smallWin = {
 
 /* Channel buildup bitmasks — indexed by attributes[0] (buildup level).
  * Each bit enables a MIDI channel. Used by CbSetChannels in fcallbk.c. */
-// GLOBAL: TIE 0xC526A
+// GLOBAL: TIE95 0xC526A
 uint16_t introBuildup[6] = { 0x9DC3, 0xBDC3, 0xBD47, 0xFF46, 0xFF76, 0xFF7E };
-// GLOBAL: TIE 0xC5276
+// GLOBAL: TIE95 0xC5276
 uint16_t waitingBuildup[7] = { 0x7D83, 0xFDC3, 0xFDC5, 0xFFC5, 0xFBF5, 0xFBFD, 0x0000 };
 
 /* SDP array pointers: sdpArrays[state] -> SdpRecord chain */
-// GLOBAL: TIE 0xD4958
+// GLOBAL: TIE95 0xD4958
 static SdpRecord* sdpArrays[NUM_STATES];
 
-// GLOBAL: TIE 0xD4988
+// GLOBAL: TIE95 0xD4988
 static void* initDataPtr;
-// GLOBAL: TIE 0xD49A4
+// GLOBAL: TIE95 0xD49A4
 int32_t currentState;
-// GLOBAL: TIE 0xD4998
+// GLOBAL: TIE95 0xD4998
 int32_t playingState;
-// GLOBAL: TIE 0xD49AC
+// GLOBAL: TIE95 0xD49AC
 void* currentID;
-// GLOBAL: TIE 0xD49B0
+// GLOBAL: TIE95 0xD49B0
 void* nextID;
-// GLOBAL: TIE 0xD499C
+// GLOBAL: TIE95 0xD499C
 void* sequenceID;
-// GLOBAL: TIE 0xD4994
+// GLOBAL: TIE95 0xD4994
 int32_t currentSequence;
-// GLOBAL: TIE 0xD49A8
+// GLOBAL: TIE95 0xD49A8
 int32_t sequencePri;
-// GLOBAL: TIE 0xD49A0
+// GLOBAL: TIE95 0xD49A0
 static SdpRecord* currentSdp;
-// GLOBAL: TIE 0xD498C
+// GLOBAL: TIE95 0xD498C
 static int32_t rseed1;
-// GLOBAL: TIE 0xD4990
+// GLOBAL: TIE95 0xD4990
 static int32_t rseed2;
-// GLOBAL: TIE 0xD49B8
+// GLOBAL: TIE95 0xD49B8
 int16_t attributes[2];
 
 /* Forward declarations for internal functions */
@@ -319,7 +319,7 @@ static SdpRecord* sdp_chain_end(SdpRecord* chain) {
  * Public API
  * ================================================================ */
 
-// FUNCTION: TIE 0x23EF8
+// FUNCTION: TIE95 0x23EF8
 int16_t fscript_MsStartScript(void* init_data) {
 	fcallbk_CbInitialize();
 
@@ -360,7 +360,7 @@ int16_t fscript_MsStopScript(void) {
 
 int16_t fscript_MsSetCuePoint(void) { return 0; }
 
-// FUNCTION: TIE 0x23FF4
+// FUNCTION: TIE95 0x23FF4
 int16_t fscript_MsRefreshScript(void) {
 	if (currentState) {
 		if (!nextID) {
@@ -379,21 +379,21 @@ int16_t fscript_MsRefreshScript(void) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x2406C
+// FUNCTION: TIE95 0x2406C
 int16_t fscript_MsSetState(int16_t new_state) {
 	if (new_state >= 0 && new_state < NUM_STATES && new_state != currentState)
 		change_state(new_state);
 	return currentState;
 }
 
-// FUNCTION: TIE 0x2408C
+// FUNCTION: TIE95 0x2408C
 int16_t fscript_MsSetSequence(int16_t seq_id) {
 	if (seq_id > 0 && imuse_get_param(im, (intptr_t)currentID, PARAM_MARKER) > 0)
 		play_sequence(seq_id);
 	return currentSequence;
 }
 
-// FUNCTION: TIE 0x240BC
+// FUNCTION: TIE95 0x240BC
 int16_t fscript_MsSetAttribute(int16_t attr_id, int16_t value) {
 	if (attr_id >= 1)
 		return 0;

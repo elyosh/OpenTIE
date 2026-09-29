@@ -149,7 +149,9 @@ static int wingman_poll_once(WingmanTask* t) {
 	return redraw ? 2 : 0;
 }
 
-// FUNCTION: TIE 0x61F70, TIE98 0x499310 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x61F70
+// ORIGINAL_FUNCTION: TIE98 0x499310
+// (task-split recovery)
 static LandruTaskStepResult wingman_task_step(void* self) {
 	WingmanTask* t = (WingmanTask*)self;
 

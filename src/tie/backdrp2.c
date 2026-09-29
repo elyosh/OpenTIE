@@ -75,7 +75,7 @@ static void draw_wall(int start, int count, uint16_t angle, const int32_t* prim_
 	}
 }
 
-// FUNCTION: TIE 0x11C90
+// FUNCTION: TIE95 0x11C90
 void backdrp2_backdrop(void) {
 	/* 1) Refresh shift tables:
 	 *      shift*Kmul[i] = (i * worldeye*K) >> 5,  i in [0..15]. */
@@ -200,7 +200,7 @@ static int32_t project_axis(int32_t n, int32_t z) {
 	return (n >= 0) ? q : -q;
 }
 
-// FUNCTION: TIE 0x125D4
+// FUNCTION: TIE95 0x125D4
 void backdrp2_backdrawbitmap(int32_t x, int32_t y, int32_t z, uint16_t angle, int tile_idx) {
 	/* Frustum cull (symmetric 90° FOV in the eye XY plane). */
 	const int32_t ax = (x >= 0) ? x : -x;

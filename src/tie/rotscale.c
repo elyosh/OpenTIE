@@ -48,7 +48,7 @@ static int32_t g_dbg_sx_last_xmin, g_dbg_sx_last_xmax;
  * to ~+32K near index 82 (tangent091/100) or 70 (tangent110), then
  * monotonic descent through the negative range back to 0 (or -1) at
  * the last index. */
-// GLOBAL: TIE 0xC7564
+// GLOBAL: TIE95 0xC7564
 static const int16_t tangent091[137] = {
 	0,      366,    731,    1097,   1463,   1828,   2194,   2561,   2927,   3293,   3660,   4027,   4395,
 	4762,   5131,   5499,   5868,   6237,   6607,   6977,   7348,   7720,   8092,   8464,   8838,   9212,
@@ -63,7 +63,7 @@ static const int16_t tangent091[137] = {
 	-4477,  -3723,  -2959,  -2185,  -1401,  -607,   -1,
 };
 
-// GLOBAL: TIE 0xC7676
+// GLOBAL: TIE95 0xC7676
 static const int16_t tangent100[137] = {
 	0,      402,    804,    1206,   1608,   2011,   2414,   2817,   2927,   3293,   3660,   4027,   4395,
 	4762,   5131,   5499,   5868,   6237,   6607,   6977,   7348,   7720,   8092,   8464,   8838,   9212,
@@ -78,7 +78,7 @@ static const int16_t tangent100[137] = {
 	-4477,  -3723,  -2959,  -2185,  -1401,  -607,   -1,
 };
 
-// GLOBAL: TIE 0xC7788
+// GLOBAL: TIE95 0xC7788
 static const int16_t tangent110[122] = {
 	0,      442,    885,    1327,   1770,   2212,   2655,   3098,   3542,   3985,   4429,   4873,   5318,
 	5763,   6208,   6654,   7100,   7547,   7995,   8443,   8891,   9341,   9791,   10242,  10693,  11146,
@@ -92,9 +92,9 @@ static const int16_t tangent110[122] = {
 	-2575,  -1792,  -999,   -198,   -1,
 };
 
-// GLOBAL: TIE 0xC7898
+// GLOBAL: TIE95 0xC7898
 uint16_t reverseflag; /* 1 = horizontal-flip sprite */
-// GLOBAL: TIE 0xC7880
+// GLOBAL: TIE95 0xC7880
 uint16_t bSquarePixels; /* set in preparefastdraw / scalesetup */
 
 /* paletteconvert state populated by preparecolor.
@@ -139,62 +139,62 @@ static const uint8_t rotscale_run_shift[16] = {
 };
 
 /* Draw-buffer state (set by preparefastdraw). */
-// GLOBAL: TIE 0xD797C
+// GLOBAL: TIE95 0xD797C
 static uint8_t* pDrawBuffer; /* base of current draw target */
-// GLOBAL: TIE 0xDB848
+// GLOBAL: TIE95 0xDB848
 static int32_t nDrawBufferMemoryWidth; /* bytes per scanline */
-// GLOBAL: TIE 0xDBC7E
+// GLOBAL: TIE95 0xDBC7E
 static int16_t nDrawBufferWidth;
-// GLOBAL: TIE 0xDBC80
+// GLOBAL: TIE95 0xDBC80
 static int16_t nDrawBufferDepth;
-// GLOBAL: TIE 0xDBC82
+// GLOBAL: TIE95 0xDBC82
 static int16_t nDrawBufferWidthMin1;
-// GLOBAL: TIE 0xDBC88
+// GLOBAL: TIE95 0xDBC88
 static int16_t nDrawBufferDepthMin1;
-// GLOBAL: TIE 0xDBC8E
+// GLOBAL: TIE95 0xDBC8E
 static int16_t nDrawBufferOrientation;
-// GLOBAL: TIE 0xDBC90
+// GLOBAL: TIE95 0xDBC90
 static int16_t nDiagonalAngle;
 
 /* Per-sprite cel state (refreshed each rotatescaleimage call). */
-// GLOBAL: TIE 0xDBC8A
+// GLOBAL: TIE95 0xDBC8A
 static int16_t celoffsetx;
-// GLOBAL: TIE 0xDBC8C
+// GLOBAL: TIE95 0xDBC8C
 static int16_t celoffsety;
 
 /* Per-row scan state (mutated by setstartcase / updatecase handlers) */
-// GLOBAL: TIE 0xDBC58
+// GLOBAL: TIE95 0xDBC58
 static int16_t perpendflag;
-// GLOBAL: TIE 0xDBC64
+// GLOBAL: TIE95 0xDBC64
 static uint16_t perpendfrac;
-// GLOBAL: TIE 0xDBC5A
+// GLOBAL: TIE95 0xDBC5A
 static int16_t startdrawpoint;
-// GLOBAL: TIE 0xDBC5C
+// GLOBAL: TIE95 0xDBC5C
 static int16_t firstvispoint;
-// GLOBAL: TIE 0xDBC7C
+// GLOBAL: TIE95 0xDBC7C
 static int16_t lastvispoint;
-// GLOBAL: TIE 0xDBC66
+// GLOBAL: TIE95 0xDBC66
 static int16_t firstxincoffset;
 static int16_t lastxincoffset;
-// GLOBAL: TIE 0xDBC6E
+// GLOBAL: TIE95 0xDBC6E
 static int16_t firstyincoffset;
-// GLOBAL: TIE 0xDBC78
+// GLOBAL: TIE95 0xDBC78
 static int16_t lastyincoffset;
-// GLOBAL: TIE 0xDBC76
+// GLOBAL: TIE95 0xDBC76
 static int16_t linestartx;
-// GLOBAL: TIE 0xDBC74
+// GLOBAL: TIE95 0xDBC74
 static int16_t linestarty;
-// GLOBAL: TIE 0xDBC6A
+// GLOBAL: TIE95 0xDBC6A
 static int16_t lineendx;
-// GLOBAL: TIE 0xDBC6C
+// GLOBAL: TIE95 0xDBC6C
 static int16_t lineendy;
-// GLOBAL: TIE 0xDBC70
+// GLOBAL: TIE95 0xDBC70
 static int16_t plotx;
-// GLOBAL: TIE 0xDBC72
+// GLOBAL: TIE95 0xDBC72
 static int16_t ploty;
-// GLOBAL: TIE 0xDBC86
+// GLOBAL: TIE95 0xDBC86
 static int16_t adjustplotx;
-// GLOBAL: TIE 0xDBC84
+// GLOBAL: TIE95 0xDBC84
 static int16_t adjustploty;
 
 /* --- LineData (per-angle precomputed rotation tables) ----------- */
@@ -246,13 +246,13 @@ typedef struct rotscale_line_data {
 } rotscale_line_data;
 
 static rotscale_line_data line_data_storage;
-// GLOBAL: TIE 0xDB844
+// GLOBAL: TIE95 0xDB844
 static rotscale_line_data* pCurrentLine;
 
 /* Cache-validity flag. The binary uses dword_C787C for the same gate;
  * tie_simulator clears it on mission start to force a rebuild on the
  * next preparefastdraw call. (Owned by rotscale.c per watdbg.) */
-// GLOBAL: TIE 0xC787C
+// GLOBAL: TIE95 0xC787C
 int rotscale_linedata_built;
 
 /* --- ScaleData (per-scale lookup tables) ------------------------ */
@@ -292,7 +292,7 @@ static int16_t GetUpdateIncrement(uint16_t pos, int16_t rate) {
  * rotscale_calcscale: clamp((factor * bound_hwidth / (|depth|>>8)) >> 8, 1024).
  * Near objects -> max clamp 1024. Far objects scale down.
  */
-// FUNCTION: TIE 0x4B8A4
+// FUNCTION: TIE95 0x4B8A4
 int16_t rotscale_calcscale(int32_t depth, uint16_t bound_hwidth, uint16_t factor) {
 	int32_t abs_depth = depth < 0 ? -depth : depth;
 	int32_t ratio = abs_depth >> 8;

@@ -72,7 +72,7 @@ void user_resetview(void);
 /* ------------------------------------------------------------------ */
 
 /* Bytes 2 and 3 are patched for the active cockpit resolution. */
-// GLOBAL: TIE 0xC61A8
+// GLOBAL: TIE95 0xC61A8
 char cockpitdir[7] = "CP640/";
 char parts[11] = { 0 };
 /* LFD cockpit-palette section magic. */
@@ -92,7 +92,7 @@ char beamcolors[4] = { 0x30, 0x2D, 0x31, 0x32 };
 
 char panelfilename[32];
 char panelname[32];
-// GLOBAL: TIE 0xD5518
+// GLOBAL: TIE95 0xD5518
 PanelViewDef panelviewdefs[PANEL_NUM_VIEWS];
 
 static int32_t panel_tie98_sar1(int32_t value);
@@ -114,9 +114,9 @@ RadarBlip* oldleftbliplist;
 RadarBlip* newrightbliplist;
 RadarBlip* newleftbliplist;
 
-// GLOBAL: TIE 0xD5B10
+// GLOBAL: TIE95 0xD5B10
 HudInstrument instruments[PANEL_NUM_INSTRUMENTS];
-// GLOBAL: TIE 0xD5D4A
+// GLOBAL: TIE95 0xD5D4A
 int16_t oldinstruments[PANEL_NUM_INSTRUMENTS];
 
 int16_t oldbracketx, oldbrackety;
@@ -124,29 +124,31 @@ int16_t radary, radarx;
 int16_t bracketx, brackety;
 int16_t blipboxx, blipboxy;
 int16_t oldblipboxx, oldblipboxy;
-// GLOBAL: TIE 0xD5E0E
-int16_t oldleftlistsize, newrightlistsize;
+// GLOBAL: TIE95 0xD5E0E
+int16_t oldleftlistsize;
+int16_t newrightlistsize;
 int16_t blipcolor;
-// GLOBAL: TIE 0xD5E22
-int16_t oldrightlistsize, newleftlistsize;
-// GLOBAL: TIE 0xD5E28
+// GLOBAL: TIE95 0xD5E22
+int16_t oldrightlistsize;
+int16_t newleftlistsize;
+// GLOBAL: TIE95 0xD5E28
 int16_t lasttargetnum;
-// GLOBAL: TIE 0xD5E24
+// GLOBAL: TIE95 0xD5E24
 int16_t lastpilotpaneldraw;
 
-// GLOBAL: TIE 0xD5E35
+// GLOBAL: TIE95 0xD5E35
 uint8_t lockflag;
-// GLOBAL: TIE 0xD5E36
+// GLOBAL: TIE95 0xD5E36
 uint8_t bracketflag;
-// GLOBAL: TIE 0xD5E37
+// GLOBAL: TIE95 0xD5E37
 uint8_t blipboxflag;
-// GLOBAL: TIE 0xD5E3B
+// GLOBAL: TIE95 0xD5E3B
 uint8_t blipptrflag;
-// GLOBAL: TIE 0xD5E38
+// GLOBAL: TIE95 0xD5E38
 uint8_t initpanelflag;
-// GLOBAL: TIE 0xD5E39
+// GLOBAL: TIE95 0xD5E39
 uint8_t searchpartsflag;
-// GLOBAL: TIE 0xD5E3A
+// GLOBAL: TIE95 0xD5E3A
 uint8_t panelpartsflag;
 uint8_t panelmirrorflag;
 
@@ -214,7 +216,7 @@ static void str_copy_festring_remapped(char* dst, size_t dst_size, const uint8_t
  * panel_initpanel -- reset HUD state, force a full redraw on the next
  * panel_updatepanel call.
  */
-// FUNCTION: TIE 0x3FA80
+// FUNCTION: TIE95 0x3FA80
 void panel_initpanel(void) {
 	initpanelflag = 1;
 
@@ -240,7 +242,7 @@ void panel_initpanel(void) {
  * panel_updatepanel -- top-of-frame HUD refresh. Validates the current
  * target, then dispatches to one of three render paths.
  */
-// FUNCTION: TIE 0x3FB04
+// FUNCTION: TIE95 0x3FB04
 void panel_updatepanel(void) {
 	uint16_t initial_obj = pstate.target_obj_idx;
 	int16_t saved_obj = (int16_t)pstate.target_obj_idx;
@@ -328,7 +330,7 @@ void panel_updatepanel(void) {
  * plus a numeric speed% readout at instrument 24 when the ship supports
  * it (capability bit 0x40).
  */
-// FUNCTION: TIE 0x3FCF4
+// FUNCTION: TIE95 0x3FCF4
 void panel_updateforwardpanel(void) {
 	festring_setfontsize(2);
 	panel_updateradar();
@@ -393,7 +395,7 @@ static uint16_t threat_blink_phase(void);
  * The binary has a spurious EAX-mode parameter that is never read; we
  * match that by taking no arguments.
  */
-// FUNCTION: TIE 0x3FDA4
+// FUNCTION: TIE95 0x3FDA4
 void panel_updateweaponwarnings(void) {
 	uint16_t warn_incoming = 0;
 	uint16_t warn_lock = 0;
@@ -465,7 +467,7 @@ void panel_updateweaponwarnings(void) {
  * panel_updatelever -- cached shape redraw.
  * farbufferptrs[instruments[idx].param1 + value] picks the frame.
  */
-// FUNCTION: TIE 0x433E0
+// FUNCTION: TIE95 0x433E0
 void panel_updatelever(uint16_t idx, uint16_t value) {
 	if (value == (uint16_t)oldinstruments[idx])
 		return;
@@ -478,7 +480,7 @@ void panel_updatelever(uint16_t idx, uint16_t value) {
  * panel_updatemonolever -- monochrome variant: the shape is fixed, the
  * 'value' becomes the colour argument.
  */
-// FUNCTION: TIE 0x4344C
+// FUNCTION: TIE95 0x4344C
 void panel_updatemonolever(uint16_t idx, uint16_t value) {
 	if (value == (uint16_t)oldinstruments[idx])
 		return;
@@ -492,7 +494,7 @@ void panel_updatemonolever(uint16_t idx, uint16_t value) {
  * param2 = default text colour. Override colours for critical /
  * warning / grayed-out states.
  */
-// FUNCTION: TIE 0x434B0
+// FUNCTION: TIE95 0x434B0
 void panel_updatevalue(uint16_t idx, uint16_t value, uint16_t flags) {
 	if (value == (uint16_t)oldinstruments[idx])
 		return;
@@ -531,7 +533,7 @@ void panel_updatevalue(uint16_t idx, uint16_t value, uint16_t flags) {
  * Each rung lit if rung < value; uses farbufferptrs[param1] (unlit) and
  * farbufferptrs[param1+1] (lit).
  */
-// FUNCTION: TIE 0x422AC
+// FUNCTION: TIE95 0x422AC
 void panel_updatesetting(uint16_t value, uint16_t idx, uint16_t count, int16_t step) {
 	if (value == (uint16_t)oldinstruments[idx])
 		return;
@@ -556,7 +558,7 @@ void panel_updatesetting(uint16_t value, uint16_t idx, uint16_t count, int16_t s
  * the one closed-state graphic). Skip non-view-0 and ship_idx==5
  * (TIE Fighter).
  */
-// FUNCTION: TIE 0x42634
+// FUNCTION: TIE95 0x42634
 void panel_updatecovers(void) {
 	if (pstate.player->ship_idx == 5 || camera.pilotview)
 		return;
@@ -580,7 +582,7 @@ void panel_updatecovers(void) {
  * (collide.c). The icons sit underneath live widget redraws in the
  * framebuffer because panel_initpanel runs first.
  */
-// FUNCTION: TIE 0x426A8
+// FUNCTION: TIE95 0x426A8
 void panel_updatecockpitdamage(void) {
 	if (camera.pilotview)
 		return;
@@ -601,7 +603,7 @@ void panel_updatecockpitdamage(void) {
  * panel_updatereplaystuff -- REC LED + %remaining counter at
  * instrument 32.
  */
-// FUNCTION: TIE 0x42518
+// FUNCTION: TIE95 0x42518
 void panel_updatereplaystuff(void) {
 	panel_updatelever(TIE_HUDI_REC_LED, (uint16_t)recordingreplay);
 
@@ -639,7 +641,7 @@ void panel_updatereplaystuff(void) {
 /*
  * panel_updatespeed -- speed as % of MAX (29127 units ~ 111 MGLT).
  */
-// FUNCTION: TIE 0x41F00
+// FUNCTION: TIE95 0x41F00
 void panel_updatespeed(void) {
 	if ((pstate.player_craft->working_subsystems & 0x40) == 0)
 		return;
@@ -652,7 +654,7 @@ void panel_updatespeed(void) {
  * panel_updatethrottle -- /655 scale; slam-off mode doubles the
  * internal value so max still registers as 100.
  */
-// FUNCTION: TIE 0x41F54
+// FUNCTION: TIE95 0x41F54
 void panel_updatethrottle(void) {
 	if ((pstate.player_craft->working_subsystems & 0x40) == 0)
 		return;
@@ -668,7 +670,7 @@ void panel_updatethrottle(void) {
  * Training / combat = mtimer (countdown); else = mission elapsed
  * `_date.minute` / `_date.second`, ticked by tie_updatetime.
  */
-// FUNCTION: TIE 0x41FBC
+// FUNCTION: TIE95 0x41FBC
 void panel_updateclock(void) {
 	uint8_t min_v, sec_v;
 
@@ -710,7 +712,7 @@ void panel_updateclock(void) {
 /*
  * panel_updatepower -- 4 sliders (lasers, shields, beam, balance).
  */
-// FUNCTION: TIE 0x42114
+// FUNCTION: TIE95 0x42114
 void panel_updatepower(void) {
 	int16_t step = (flightResolution == TIE_FLIGHT_RES_VGA) ? 2 : 6;
 
@@ -755,7 +757,7 @@ void panel_updatepower(void) {
  * line predicts an intersection with the current target -- consumed
  * by panel_updategunsight to flash the reticle.
  */
-// FUNCTION: TIE 0x41418
+// FUNCTION: TIE95 0x41418
 void panel_updatelasers(void) {
 	lockflag = 0;
 
@@ -874,7 +876,7 @@ void panel_updatelasers(void) {
 /*
  * panel_updateweapons -- draw the 4 missile-hardpoint icons.
  */
-// FUNCTION: TIE 0x41840
+// FUNCTION: TIE95 0x41840
 void panel_updateweapons(void) {
 	if ((pstate.player_craft->working_subsystems & 8) == 0)
 		return;
@@ -897,7 +899,7 @@ void panel_updateweapons(void) {
  * panel_updatehardpoint -- single missile-slot indicator: ammo count
  * (text) + ready lever.
  */
-// FUNCTION: TIE 0x4194C
+// FUNCTION: TIE95 0x4194C
 void panel_updatehardpoint(uint16_t slot, uint16_t hp_idx, uint16_t flags) {
 	uint16_t ammo = 0;
 	if (pstate.player_craft->missile_group_cnt)
@@ -980,7 +982,7 @@ static void panel_shield_onehalf(int16_t shield_hp, uint16_t normal_idx, uint16_
 	panel_updatemonolever(over_idx, (uint16_t)(uint8_t)shieldcolor[hi_leds]);
 }
 
-// FUNCTION: TIE 0x41ADC
+// FUNCTION: TIE95 0x41ADC
 void panel_updateshields(void) {
 	if ((pstate.player_craft->working_subsystems & 0x20) == 0)
 		return;
@@ -1007,7 +1009,7 @@ void panel_updateshields(void) {
 /*
  * panel_updatebeam -- 9-LED beam charge bar (drawn RTL) + fire lever.
  */
-// FUNCTION: TIE 0x41D7C
+// FUNCTION: TIE95 0x41D7C
 void panel_updatebeam(void) {
 	if ((pstate.player_craft->working_subsystems & 0x10) == 0)
 		return;
@@ -1081,7 +1083,7 @@ void panel_updatebeam(void) {
  * lockflag mirrors the solid-lock condition (radar_subtarget_state==2)
  * so other drawers (laser fire, updatelasers) can flash red.
  */
-// FUNCTION: TIE 0x413A0
+// FUNCTION: TIE95 0x413A0
 void panel_updategunsight(void) {
 	int16_t st;
 	if (pstate.player_weapon_mode) {
@@ -1099,7 +1101,7 @@ void panel_updategunsight(void) {
 /*
  * panel_updateradar -- diff-draw radar blips + target bracket.
  */
-// FUNCTION: TIE 0x3FE50
+// FUNCTION: TIE95 0x3FE50
 void panel_updateradar(void) {
 	if (!(pstate.player_craft->working_subsystems & 0x80) ||
 		!(pstate.player_craft->working_subsystems & 0x100))
@@ -1177,7 +1179,7 @@ void panel_updateradar(void) {
  * TIE95 uses cached eye coordinates for craft and downscaled world coordinates
  * for other objects. TIE98 rotates every target's current full world position.
  */
-// FUNCTION: TIE 0x400AC
+// FUNCTION: TIE95 0x400AC
 // FUNCTION: TIE98 0x4637D0
 void panel_addbliptoradar(uint16_t target_obj) {
 	int32_t eye_x, eye_y_neg, eye_z;
@@ -1360,7 +1362,7 @@ static char pick_color_secondary(uint8_t side) {
 	return 0x56;     /* V */
 }
 
-// FUNCTION: TIE 0x40E94
+// FUNCTION: TIE95 0x40E94
 void panel_buildobjectname(uint16_t target_obj, uint8_t flags) {
 	tempstring[0] = 0;
 
@@ -1448,7 +1450,7 @@ void panel_buildobjectname(uint16_t target_obj, uint8_t flags) {
 /*
  * panel_getcraftstatus -- status code for the target-CRT color.
  */
-// FUNCTION: TIE 0x41288
+// FUNCTION: TIE95 0x41288
 uint16_t panel_getcraftstatus(uint16_t target_obj) {
 	CraftData* cp = objects[target_obj].craft_ptr;
 	if (!cp->status_flags)
@@ -1473,7 +1475,7 @@ uint16_t panel_getcraftstatus(uint16_t target_obj) {
  * panel_outputdistance -- polar_dist (Q? fixed-point) -> km.cm at
  * instruments 0x3B / 0x3C. Clamped to <= 9999.99 km.
  */
-// FUNCTION: TIE 0x41334
+// FUNCTION: TIE95 0x41334
 void panel_outputdistance(int32_t polar_dist) {
 	uint32_t scaled = (uint32_t)(161 * polar_dist) >> 16;
 	if (scaled >= 0x2710u)
@@ -1499,7 +1501,7 @@ static uint16_t threat_blink_phase(void) {
 	return (uint16_t)(((uint16_t)_date.subsec / 59u) & 1u);
 }
 
-// FUNCTION: TIE 0x3FDC0
+// FUNCTION: TIE95 0x3FDC0
 void panel_updatethreatweapons(void) {
 	uint16_t shield_pct = 0;
 
@@ -1564,7 +1566,7 @@ void panel_updatethreatweapons(void) {
 	panel_updatelever(TIE_HUDI_THREAT_BEAM, beam);
 }
 
-// FUNCTION: TIE 0x42734
+// FUNCTION: TIE95 0x42734
 void panel_updatethreatname(void) {
 	dropflag = 0;
 	festring_setbackcolor(0x2C);
@@ -1883,7 +1885,7 @@ void panel_updatethreatname(void) {
  * Implements the full target-change invalidation + 5 data lines
  * (shield/hull/dist/system/cargo + subsystem focus).
  */
-// FUNCTION: TIE 0x40530
+// FUNCTION: TIE95 0x40530
 void panel_updatecmd(void) {
 	dropflag = 0;
 	if (mission.train_craft_type) {
@@ -2176,7 +2178,7 @@ void panel_updatecmd(void) {
  * panel_loadpaneldata -- panelname = cockpitdir + spec.internal_name,
  * then preload every view.
  */
-// FUNCTION: TIE 0x43628
+// FUNCTION: TIE95 0x43628
 void panel_loadpaneldata(void) {
 	strcpy(panelname, cockpitdir);
 	strcat(panelname, spec_data[pstate.player_spec_num].internal_name);
@@ -2190,7 +2192,7 @@ void panel_loadpaneldata(void) {
 /*
  * panel_forcenewviewdir -- invalidate cockpit state and switch view.
  */
-// FUNCTION: TIE 0x436E4
+// FUNCTION: TIE95 0x436E4
 void panel_forcenewviewdir(uint16_t view_idx) {
 	lastpilotpaneldraw = -1;
 	camera.pilotview = 0xFF;
@@ -2203,7 +2205,7 @@ void panel_forcenewviewdir(uint16_t view_idx) {
  * panel_loadcontrolpanel -- read N sections of an LFD into
  * temppanelptr, recording each section's start in section_ptrs[].
  */
-// FUNCTION: TIE 0x43B6C
+// FUNCTION: TIE95 0x43B6C
 void panel_loadcontrolpanel(char* name, void** section_ptrs, uint16_t count) {
 	strcpy(panelfilename, cockpitdir);
 	strcat(panelfilename, name);
@@ -2239,7 +2241,7 @@ void panel_loadcontrolpanel(char* name, void** section_ptrs, uint16_t count) {
 /*
  * panel_tryEMSforpanels -- preload every defined view slot.
  */
-// FUNCTION: TIE 0x43CF4
+// FUNCTION: TIE95 0x43CF4
 void panel_tryEMSforpanels(void) {
 	/* Binary: XMEMHDL_Alloc_Handle -> malloc; Lock/Unlock -> no-op.
 	 * handle field repurposed as a "loaded" flag (1 = loaded, 0 = empty). */
@@ -2334,7 +2336,7 @@ void HudInstrument_decode(HudInstrument* dst, const uint8_t* src) {
 }
 
 /* Decode .INT records without relying on host alignment or byte order. */
-// FUNCTION: TIE 0x43F4C
+// FUNCTION: TIE95 0x43F4C
 void panel_loadpanelviewdefs(char* base_name) {
 	strcpy(panelfilename, base_name);
 	strcat(panelfilename, ".INT");
@@ -2357,7 +2359,8 @@ void panel_loadpanelviewdefs(char* base_name) {
  * flags-0x80 / 0xC0 mirror tables, lazy bitmap load, and the final
  * buffer-dim + mask-copy sequence.
  */
-// FUNCTION: TIE 0x43710, TIE98 0x466B70
+// FUNCTION: TIE95 0x43710
+// FUNCTION: TIE98 0x466B70
 void panel_dosetnewpilotview(uint16_t view_idx) {
 	const bool tie98 = TieProfile_UsesTie98Logic();
 	panelmirrorflag = 0;
@@ -2483,7 +2486,7 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
  * rewritten to a 3-byte [0, 0, x] form because (b+1) would overflow
  * into another escape. VGA (320 px) skips the SVGA-only nested arms.
  */
-// FUNCTION: TIE 0x44008
+// FUNCTION: TIE95 0x44008
 void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint8_t mirror) {
 	uint8_t* out = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
 	int is_svga = (screenXRes != 320);
@@ -2602,7 +2605,7 @@ void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint8_t
  * 0; round-trip is exact. SVGA (640) is the only place width >= 511
  * triggers in practice; VGA (320) never reaches the double-escape arm.
  */
-// FUNCTION: TIE 0x441EC
+// FUNCTION: TIE95 0x441EC
 void panel_clearmaskdata(uint16_t width, uint16_t height) {
 	uint8_t* out = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
 	for (uint16_t row = 0; row < height; ++row) {
@@ -2621,7 +2624,7 @@ void panel_clearmaskdata(uint16_t width, uint16_t height) {
 /*
  * panel_update3Dcrt -- rotating target silhouette on the CMD CRT.
  */
-// FUNCTION: TIE 0x4427C
+// FUNCTION: TIE95 0x4427C
 void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, int16_t clear_runs) {
 #if 0
 	{
@@ -2830,7 +2833,8 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 	transfm2_screenyoffset = save_transfm2_screenyoffset;
 }
 
-// FUNCTION: TIE98 0x467570 PANEL_update3Dcrt
+// FUNCTION: TIE98 0x467570
+// PANEL_update3Dcrt
 void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int clear_runs) {
 	int32_t save_screenyoffset = transfm2_screenyoffset;
 	int32_t save_camera_x = camera.x;
@@ -2974,7 +2978,8 @@ void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int c
 	transfm2_screenyoffset = save_screenyoffset;
 }
 
-// FUNCTION: TIE98 0x463400 PANEL_Update3DCrtIfVisible
+// FUNCTION: TIE98 0x463400
+// PANEL_Update3DCrtIfVisible
 void PANEL_Update3DCrtIfVisible(void) {
 	if (pstate.target_obj_idx == 0xffff)
 		return;
@@ -2997,7 +3002,8 @@ void PANEL_Update3DCrtIfVisible(void) {
 	}
 }
 
-// FUNCTION: TIE98 0x467CE0 PANEL_drawboxinxtrans
+// FUNCTION: TIE98 0x467CE0
+// PANEL_drawboxinxtrans
 int16_t panel_drawboxinxtrans_tie98(int x, int y, int width, int height, uint8_t color) {
 	return Hud_DrawBoxInXTrans(x, y, width, height, color, 1);
 }
@@ -3008,7 +3014,7 @@ int16_t panel_drawboxinxtrans_tie98(int x, int y, int width, int height, uint8_t
 /* flatcolors/flatx/flaty/flatz/flatparentobj/flatcomponentnum/flatobjnum
  * are declared in xtrans2.h (already included). */
 
-// FUNCTION: TIE 0x447F8
+// FUNCTION: TIE95 0x447F8
 void panel_drawboxinxtrans(int16_t left_x, int16_t top_y, uint16_t width, uint16_t height, uint8_t color) {
 	uint16_t n = flatobjnum;
 	flatcolors[n] = color;
@@ -3127,7 +3133,8 @@ static void calculate_tie98_pip_subsystem_offset(FlightObject* target, int mesh_
 	}
 }
 
-// FUNCTION: TIE98 0x467D10 PANEL_pointcamera
+// FUNCTION: TIE98 0x467D10
+// PANEL_pointcamera
 void panel_pointcamera_tie98(uint16_t target_obj, int16_t use_hud_size) {
 	FlightObject* player = pstate.player;
 	create_getworldposition(target_obj, 0);
@@ -3218,7 +3225,7 @@ void panel_pointcamera_tie98(uint16_t target_obj, int16_t use_hud_size) {
  * panel_pointcamera -- position the 3D CRT's camera to frame the target
  * with auto-zoom sized on bound_hwidth.
  */
-// FUNCTION: TIE 0x4499C
+// FUNCTION: TIE95 0x4499C
 void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 	FlightObject* pl = pstate.player;
 	create_getworldposition(target_obj, 0);
@@ -3348,7 +3355,7 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 /*
  * panel_AdjustXForRes -- scale X coord from 320-design to current res.
  */
-// FUNCTION: TIE 0x44E00
+// FUNCTION: TIE95 0x44E00
 uint16_t panel_AdjustXForRes(uint16_t x) {
 	if (flightResolution == TIE_FLIGHT_RES_VGA)
 		return x;

@@ -36,7 +36,7 @@
 
 /* ===== Globals ===== */
 
-// GLOBAL: TIE 0xFB620
+// GLOBAL: TIE95 0xFB620
 int16_t frontendflag;
 
 /* libimuse session handle. Created in gamesnd_Open_Pre_iMuse, destroyed
@@ -145,7 +145,7 @@ static void gamesnd_RenderAudio(void* userdata, int16_t* frames, size_t frame_co
 	}
 }
 
-// FUNCTION: TIE 0x88905
+// FUNCTION: TIE95 0x88905
 int16_t gamesnd_Open_Pre_iMuse(void) {
 	const TieAudioConfig* audio_config = TieAudio_Config();
 	ImuseMidiBackend* midiBackend = TieMidiBackend_Create(&audio_config->midi_backend);
@@ -190,7 +190,7 @@ int16_t gamesnd_Open_Pre_iMuse(void) {
 	return 1;
 }
 
-// FUNCTION: TIE 0x88BDB
+// FUNCTION: TIE95 0x88BDB
 void gamesnd_Close_Pre_iMuse(void) {
 	if (!im)
 		return;
@@ -347,7 +347,7 @@ static void fmusic_unload_cb(void* handle) {
  * GAMESND_game_Open_iMuse at 0x88EF6 does not re-initialize iMUSE -- that
  * would fail with "system already initialized". It only drains the
  * active sounds and swaps the filelist callback pair. */
-// FUNCTION: TIE 0x88EF6
+// FUNCTION: TIE95 0x88EF6
 void gamesnd_game_Open_iMuse(void) {
 	imuse_stop_all_sounds(im);
 	imuse_filelist_unload_all(im);
@@ -359,7 +359,7 @@ void gamesnd_game_Open_iMuse(void) {
 
 void gamesnd_game_Close_iMuse(void) { gamesnd_Close_Pre_iMuse(); }
 
-// FUNCTION: TIE 0x88E47
+// FUNCTION: TIE95 0x88E47
 void gamesnd_game_Set_Front_Sound(void) {
 	frontendflag = 1;
 	imuse_pause(im);
@@ -367,10 +367,10 @@ void gamesnd_game_Set_Front_Sound(void) {
 	imuse_resume(im);
 }
 
-// FUNCTION: TIE 0x88E8C
+// FUNCTION: TIE95 0x88E8C
 void gamesnd_game_Set_Flight_Sound(void) { gamesnd_Transition_Sound(); }
 
-// FUNCTION: TIE 0x88EB0
+// FUNCTION: TIE95 0x88EB0
 void gamesnd_Transition_Sound(void) {
 	imuse_stop_all_sounds(im);
 	imuse_filelist_unload_all(im);

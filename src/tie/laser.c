@@ -40,7 +40,7 @@
 
 /* Kinetic mass for collision physics. Light lasers ~200-500; torps
  * and capital-ship munitions ~10000-65000. */
-// GLOBAL: TIE 0xC542C
+// GLOBAL: TIE95 0xC542C
 const uint16_t projectileweight[NUM_PROJECTILE_TYPES] = {
 	250,  500,   200,   400,  200,  400,  10000, 3000, 1000, 800, 800, 15000,
 	6000, 65000, 35000, 3000, 6000, 9000, 0,     0,    0,    0,   0,   0,
@@ -51,14 +51,14 @@ const uint16_t projectileweight[NUM_PROJECTILE_TYPES] = {
  * The alternating HIBYTE / LOBYTE of entries 3..23 is read by nine
  * sites as a 'projectile explodes on death' boolean (see note in
  * laser.h). We don't break that by tweaking values. */
-// GLOBAL: TIE 0xC545C
+// GLOBAL: TIE95 0xC545C
 const uint16_t projectilevelocity[NUM_PROJECTILE_TYPES] = {
 	1000, 1000, 900, 900, 700, 800, 250, 500, 1000, 900, 400, 300,
 	600,  25,   175, 300, 350, 400, 0,   0,   0,    0,   0,   0,
 };
 
 /* Lifetime in ticks. Lasers live 2-5; warheads 30-120. */
-// GLOBAL: TIE 0xC548C
+// GLOBAL: TIE95 0xC548C
 const uint16_t projectilelife[NUM_PROJECTILE_TYPES] = {
 	2, 3, 2, 3, 3, 4, 60, 30, 3, 3, 5, 50, 25, 120, 90, 45, 40, 35, 0, 0, 0, 0, 0, 0,
 };
@@ -66,14 +66,16 @@ const uint16_t projectilelife[NUM_PROJECTILE_TYPES] = {
 /* Forward displacement from the hardpoint to the projectile model origin.
  * The model extends backward by this distance so its tail begins at the
  * muzzle. The two game versions use different model dimensions. */
-// GLOBAL: TIE 0xC53A8 + 2*species
+// GLOBAL: TIE95 0xC53A8
+// + 2*species
 static const uint16_t s_projectile_launch_offset_tie95[NUM_PROJECTILE_TYPES] = {
 	0,   2048, 2048, 2048, 2048, 2048, 2048, 512, /* species 137..144 */
 	512, 2048, 2048, 2048, 512,  512,  48,   512, /* species 145..152 */
 	512, 512,  512,  0,    0,    0,    0,    0,   /* species 153..160 */
 };
 
-// GLOBAL: TIE98 0x4E449E + 2*species
+// GLOBAL: TIE98 0x4E449E
+// + 2*species
 static const uint16_t s_projectile_launch_offset_tie98[NUM_PROJECTILE_TYPES] = {
 	921, 921, 921, 921, 921, 921, 512, 512, /* species 137..144 */
 	921, 921, 921, 512, 512, 48,  512, 512, /* species 145..152 */
@@ -131,7 +133,7 @@ const uint8_t projectile_is_warhead_type[WARHEAD_TYPE_COUNT] = {
 /* ================================================================== */
 /* laser_warnplayer                                                    */
 /* ================================================================== */
-// FUNCTION: TIE 0x2E768
+// FUNCTION: TIE95 0x2E768
 void laser_warnplayer(uint16_t warhead_slot) {
 	if (warheads[warhead_slot].target_obj != pstate.object_idx)
 		return;
@@ -156,7 +158,7 @@ void laser_warnplayer(uint16_t warhead_slot) {
 /* ================================================================== */
 /* laser_chargeshields                                                 */
 /* ================================================================== */
-// FUNCTION: TIE 0x2D6D8
+// FUNCTION: TIE95 0x2D6D8
 void laser_chargeshields(uint16_t shooter_obj_idx, uint16_t shield_side, int16_t delta) {
 	/*
 	 * _craftptr is the SHOOTER here (not the defender). On Easy
@@ -196,7 +198,7 @@ void laser_chargeshields(uint16_t shooter_obj_idx, uint16_t shield_side, int16_t
 /* ================================================================== */
 /* laser_createprojectile                                              */
 /* ================================================================== */
-// FUNCTION: TIE 0x2E0E4
+// FUNCTION: TIE95 0x2E0E4
 uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint16_t projectile_type) {
 	/* Genus: 6 (GENUS_PROJECTILE_PLAYER) if shooter is the player, 7
 	 * (GENUS_PROJECTILE_NPC) otherwise. The game uses this to tag "player's
@@ -349,7 +351,7 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 /* ================================================================== */
 /* laser_createprojectilefromstatic                                    */
 /* ================================================================== */
-// FUNCTION: TIE 0x2E514
+// FUNCTION: TIE95 0x2E514
 uint16_t laser_createprojectilefromstatic(uint16_t static_obj_idx, uint16_t shooter_obj_idx) {
 	uint16_t fg_idx = staticobjects[static_obj_idx].fg_idx;
 	uint8_t warhead_kind = fg_array[fg_idx].warhead;
@@ -422,7 +424,7 @@ uint16_t laser_createprojectilefromstatic(uint16_t static_obj_idx, uint16_t shoo
 /* ================================================================== */
 /* laser_firemissile                                                   */
 /* ================================================================== */
-// FUNCTION: TIE 0x2DF68
+// FUNCTION: TIE95 0x2DF68
 uint16_t laser_firemissile(uint16_t shooter_obj_idx, uint16_t weapon_slot_idx, uint16_t projectile_type,
 						   uint16_t group_idx) {
 	WeaponSlot* ws = &craftptr->weapon_slots[weapon_slot_idx];
@@ -476,7 +478,7 @@ uint16_t laser_firemissile(uint16_t shooter_obj_idx, uint16_t weapon_slot_idx, u
 /* ================================================================== */
 /* laser_firelasersystem                                               */
 /* ================================================================== */
-// FUNCTION: TIE 0x2D9AC
+// FUNCTION: TIE95 0x2D9AC
 void laser_firelasersystem(uint16_t shooter_obj_idx, uint16_t group_idx) {
 	craftptr = objects[shooter_obj_idx].craft_ptr;
 	uint8_t species_idx = craftptr->species_idx;
@@ -588,7 +590,7 @@ void laser_firelasersystem(uint16_t shooter_obj_idx, uint16_t group_idx) {
 /* ================================================================== */
 /* laser_firerocketsystem                                              */
 /* ================================================================== */
-// FUNCTION: TIE 0x2DD50
+// FUNCTION: TIE95 0x2DD50
 void laser_firerocketsystem(uint16_t shooter_obj_idx, uint16_t group_idx) {
 	craftptr = objects[shooter_obj_idx].craft_ptr;
 
@@ -646,7 +648,7 @@ void laser_firerocketsystem(uint16_t shooter_obj_idx, uint16_t group_idx) {
 /* ================================================================== */
 /* laser_fireplayerweapon                                              */
 /* ================================================================== */
-// FUNCTION: TIE 0x2D7C8
+// FUNCTION: TIE95 0x2D7C8
 void laser_fireplayerweapon(void) {
 	CraftData* pc = pstate.player_craft;
 	if (pstate.player_weapon_mode) {
@@ -700,7 +702,7 @@ void laser_fireplayerweapon(void) {
 /* ================================================================== */
 /* laser_weaponsfire -- per-frame master dispatch.                     */
 /* ================================================================== */
-// FUNCTION: TIE 0x2CDD0
+// FUNCTION: TIE95 0x2CDD0
 void laser_weaponsfire(void) {
 	CraftData* saved_craftptr = craftptr;
 

@@ -89,7 +89,8 @@ static Std3DTexFmt g_std3DTextureFormats[STD3D_TEXTURE_FORMAT_LIMIT];
 static Std3DRenderTargetDesc g_std3DRenderTargetDesc;
 // GLOBAL: TIE98 0x6B0FA0
 static Std3DRenderTargetDesc* g_pStd3DRenderTarget;
-// GLOBAL: TIE98 0x6B1E04 (surface field of the original std3D surface block)
+// GLOBAL: TIE98 0x6B1E04
+// (surface field of the original std3D surface block)
 static IDirectDrawSurface* g_std3DZBufferSurface;
 // GLOBAL: TIE98 0x5FE88C
 IDirectDrawSurface* g_rendererAttachedZBufferSurface;
@@ -1478,7 +1479,8 @@ char std3D_ClearZBuffer(void) {
 	}
 }
 
-// FUNCTION: TIE98 0x42B300 Renderer_ClearCockpitCrtZBuffer
+// FUNCTION: TIE98 0x42B300
+// Renderer_ClearCockpitCrtZBuffer
 void Renderer_ClearCockpitCrtZBuffer(void) {
 	uint8_t negative_run_fill;
 	uint8_t positive_run_fill;

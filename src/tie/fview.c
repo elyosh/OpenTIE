@@ -94,7 +94,7 @@ static void build_rodrigues(int32_t ax, int32_t ay, int32_t az, int16_t angle, i
 
 /* ---------- core pipeline ---------- */
 
-// FUNCTION: TIE 0x263AC
+// FUNCTION: TIE95 0x263AC
 void fview_calcrotatemove(int16_t heading, int16_t pitch, FlightObject* craft) {
 	int16_t neg_pitch = -pitch;
 	int16_t adj_heading = -16384 - heading;
@@ -126,7 +126,7 @@ void fview_calcrotatemove(int16_t heading, int16_t pitch, FlightObject* craft) {
 	}
 }
 
-// FUNCTION: TIE 0x264DC
+// FUNCTION: TIE95 0x264DC
 void fview_calcrotateorient(int16_t roll, int16_t bank, FlightObject* craft) {
 	fview_transformaxes(calcU1, calcU2, calcU3, bank);
 	fview_transformaxes(calcf1, calcf2, calcf3, roll);
@@ -155,7 +155,7 @@ void fview_calcrotateorient(int16_t roll, int16_t bank, FlightObject* craft) {
 	}
 }
 
-// FUNCTION: TIE 0x265F8
+// FUNCTION: TIE95 0x265F8
 void fview_calcrotworldeye(void) {
 	rotworldeyeA1 = q15_clamp_shift(worldeyeA1 * calcS1 + worldeyeB1 * calcS2 + worldeyeC1 * calcS3);
 	rotworldeyeA2 = q15_clamp_shift(worldeyeA2 * calcS1 + worldeyeB2 * calcS2 + worldeyeC2 * calcS3);
@@ -178,7 +178,7 @@ void fview_calcrotworldeye(void) {
 	}
 }
 
-// FUNCTION: TIE 0x287F4
+// FUNCTION: TIE95 0x287F4
 void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, int16_t angle) {
 	int32_t rot[9];
 	int32_t new_S1, new_S2, new_U1, new_U2, new_f1, new_f2;
@@ -207,7 +207,7 @@ void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, int16_t
 	calcf2 = new_f2;
 }
 
-// FUNCTION: TIE 0x26140
+// FUNCTION: TIE95 0x26140
 void fview_newcalcview(int16_t roll, int16_t heading, int16_t pitch, int16_t bank, int16_t side_angle,
 					   int16_t up_angle, FlightObject* craft) {
 	int32_t neg_U1, neg_U2, neg_U3;
@@ -240,7 +240,7 @@ void fview_newcalcview(int16_t roll, int16_t heading, int16_t pitch, int16_t ban
 	worldeyeC3 = calcf3;
 }
 
-// FUNCTION: TIE 0x26258
+// FUNCTION: TIE95 0x26258
 void fview_newcalcrotate(int16_t roll, int16_t heading, int16_t pitch, int16_t bank, FlightObject* craft) {
 	if (craft) {
 		if (craft->orient_dirty) {
@@ -276,7 +276,7 @@ void fview_newcalcrotate(int16_t roll, int16_t heading, int16_t pitch, int16_t b
 	fview_calcrotworldeye();
 }
 
-// FUNCTION: TIE 0x28100
+// FUNCTION: TIE95 0x28100
 void fview_restorerotation(void) {
 	rotworldeyeA1 = fview_sfoiltempA1;
 	rotworldeyeA2 = fview_sfoiltempA2;
@@ -297,7 +297,7 @@ void fview_restorerotation(void) {
 
 /* ---------- ship-specific component rotations ---------- */
 
-// FUNCTION: TIE 0x269F4
+// FUNCTION: TIE95 0x269F4
 void fview_sfoilrotation(int16_t angle) {
 	int32_t sin_a, cos_a, neg_sin;
 
@@ -316,7 +316,7 @@ void fview_sfoilrotation(int16_t angle) {
 	rotworldeyeC3 = q15_clamp_shift(fview_sfoiltempA3 * sin_a + fview_sfoiltempC3 * cos_a);
 }
 
-// FUNCTION: TIE 0x26C24
+// FUNCTION: TIE95 0x26C24
 void fview_corvettegunrotation(int16_t angle) {
 	int32_t sin_a, cos_a, neg_sin;
 
@@ -335,7 +335,7 @@ void fview_corvettegunrotation(int16_t angle) {
 	rotworldeyeB3 = q15_clamp_shift(fview_sfoiltempA3 * sin_a + fview_sfoiltempB3 * cos_a);
 }
 
-// FUNCTION: TIE 0x26E54
+// FUNCTION: TIE95 0x26E54
 void fview_bwingrotation(int16_t angle, uint16_t part_id) {
 	int32_t cos_a, sin_a, neg_sin;
 	int32_t lat_offset, vert_offset;
@@ -437,7 +437,7 @@ void fview_bwingrotation(int16_t angle, uint16_t part_id) {
 
 /* ---------- general component rotation ---------- */
 
-// FUNCTION: TIE 0x2759C
+// FUNCTION: TIE95 0x2759C
 void fview_componentrotation(int16_t angle, const ShipModelMesh* mesh) {
 	int32_t axis_x, axis_y, axis_z;
 	int32_t pivot_raw, pivot_x, pivot_z;
@@ -525,7 +525,7 @@ void fview_componentrotation(int16_t angle, const ShipModelMesh* mesh) {
 								fview_sfoiltemplightZ * rot[8]);
 }
 
-// FUNCTION: TIE 0x28198
+// FUNCTION: TIE95 0x28198
 void fview_comprotatepoint(int16_t angle, const ShipModelMesh* mesh, int32_t point_x, int32_t point_y,
 						   int32_t point_z) {
 	const ComponentRotData* rd;

@@ -82,7 +82,7 @@ static int16_t random_push_component(uint16_t speed_pct) {
  *                   Slot 0 — nullorder (stub)
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3D530
+// FUNCTION: TIE95 0x3D530
 int16_t paiorder_nullorder(void) { return 0; }
 
 /* ======================================================================
@@ -92,7 +92,7 @@ int16_t paiorder_nullorder(void) { return 0; }
  * an indirect call to _manvrfunctionptrs[craftptr->mode_byte].
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3D534
+// FUNCTION: TIE95 0x3D534
 int16_t paiorder_updatecourseorder(void) { return paiman_updatemaneuver(); }
 
 /* ======================================================================
@@ -104,7 +104,7 @@ int16_t paiorder_updatecourseorder(void) { return paiman_updatemaneuver(); }
  * the dispatch description in the IDA comment.
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3D554
+// FUNCTION: TIE95 0x3D554
 int16_t paiorder_underattackorder(void) {
 	uint16_t a_ref = ai.active_obj_idx;
 	uint8_t genus = objects[a_ref].genus;
@@ -199,7 +199,7 @@ int16_t paiorder_underattackorder(void) {
  * still a threat; otherwise clear and transition.
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3D928
+// FUNCTION: TIE95 0x3D928
 int16_t paiorder_stillattackorder(void) {
 	if (craftptr->mode_byte == ai.plan_order)
 		return 0;
@@ -231,7 +231,7 @@ int16_t paiorder_stillattackorder(void) {
  * distance < 0x800 (final landing trigger).
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3D9D8
+// FUNCTION: TIE95 0x3D9D8
 int16_t paiorder_flyhomeorder(void) {
 	craftptr->formation_separation = 1;
 
@@ -284,7 +284,7 @@ int16_t paiorder_flyhomeorder(void) {
  *                   Slot 10 — waitrunorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3DF88
+// FUNCTION: TIE95 0x3DF88
 int16_t paiorder_waitrunorder(void) {
 	if (craftptr->mode_byte != ai.plan_order)
 		return 0;
@@ -300,7 +300,7 @@ int16_t paiorder_waitrunorder(void) {
  *                   Slot 11 — breakofforder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3DFD0
+// FUNCTION: TIE95 0x3DFD0
 int16_t paiorder_breakofforder(void) {
 	uint16_t link = (uint16_t)craftptr->ai_target_ref;
 
@@ -329,7 +329,7 @@ int16_t paiorder_breakofforder(void) {
  * Detect a lost leader and redistribute wingmen.
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3E37C
+// FUNCTION: TIE95 0x3E37C
 int16_t paiorder_leaderdeadorder(void) {
 	uint8_t leader_idx = craftptr->leader_obj_idx;
 	if (leader_idx == 0xFF)
@@ -387,7 +387,7 @@ int16_t paiorder_leaderdeadorder(void) {
  * Evaluate fg.stop_abort to decide whether to break off the attack.
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3E0BC
+// FUNCTION: TIE95 0x3E0BC
 int16_t paiorder_abortatkorder(void) {
 	uint16_t active_idx = ai.active_obj_idx;
 
@@ -475,7 +475,7 @@ int16_t paiorder_abortatkorder(void) {
  *                   Slot 16 — ontailorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3E514
+// FUNCTION: TIE95 0x3E514
 int16_t paiorder_ontailorder(void) {
 	if (craftptr->mode_byte != ai.plan_order)
 		return 0;
@@ -513,7 +513,7 @@ int16_t paiorder_ontailorder(void) {
  *                   Slot 17 — alwaysorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3E5D0
+// FUNCTION: TIE95 0x3E5D0
 int16_t paiorder_alwaysorder(void) { return 1; }
 
 /* ======================================================================
@@ -521,7 +521,7 @@ int16_t paiorder_alwaysorder(void) { return 1; }
  *
  * Plan bytecode dispatches on current_order==45 => flyhomeplan. */
 
-// FUNCTION: TIE 0x3E5D8
+// FUNCTION: TIE95 0x3E5D8
 int16_t paiorder_leadergohomeorder(void) {
 	/* 45 = flyhome, 47 = hyperspace-home — both count as "leader is on
 	 * the way out" so wingmen know to follow the home leg. */
@@ -533,7 +533,7 @@ int16_t paiorder_leadergohomeorder(void) {
  *                   Slot 20 — hyperspaceorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3E5F8
+// FUNCTION: TIE95 0x3E5F8
 int16_t paiorder_hyperspaceorder(void) {
 	EFGStruct* g = &fg_array[ai.fg_idx];
 	SpecData* sp = &spec_data[craftptr->species_idx];
@@ -580,7 +580,7 @@ int16_t paiorder_hyperspaceorder(void) {
  *                   Slot 21 — enterhangarorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3DC18
+// FUNCTION: TIE95 0x3DC18
 int16_t paiorder_enterhangarorder(void) {
 	craftptr->formation_separation = 1;
 	craftptr->ai_update_rate = 59;
@@ -667,7 +667,7 @@ int16_t paiorder_enterhangarorder(void) {
  *                   Slot 22 — mothershiporder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3E798
+// FUNCTION: TIE95 0x3E798
 int16_t paiorder_mothershiporder(void) {
 	if (objects[ai.active_obj_idx].genus == GENUS_PLATFORM)
 		return 0;
@@ -682,7 +682,7 @@ int16_t paiorder_mothershiporder(void) {
  *                   Slot 24 — lookfordisableorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3E80C
+// FUNCTION: TIE95 0x3E80C
 int16_t paiorder_lookfordisableorder(void) {
 	uint16_t cached = (uint16_t)craftptr->pending_radio_command;
 	if (cached != 0xFF && cached != 0xFB) {
@@ -704,7 +704,7 @@ int16_t paiorder_lookfordisableorder(void) {
  *                   Slot 25 — abortboardorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3E884
+// FUNCTION: TIE95 0x3E884
 int16_t paiorder_abortboardorder(void) {
 	if (craftptr->mode_subbyte >= 3)
 		return 0;
@@ -741,7 +741,7 @@ int16_t paiorder_abortboardorder(void) {
  *                   Slot 26 — returnboardorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3E960
+// FUNCTION: TIE95 0x3E960
 int16_t paiorder_returnboardorder(void) {
 	pai_targetdistance();
 	return (trig2_polardistance < 0x4000) ? 1 : 0; /* retail: 16384, demo had 4096 */
@@ -754,7 +754,7 @@ int16_t paiorder_returnboardorder(void) {
  * threshold is reached and emit the 'capture complete' radio line.
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3E978
+// FUNCTION: TIE95 0x3E978
 int16_t paiorder_awaitboardorder(void) {
 	if (craftptr->boarding_state != 2)
 		return 0;
@@ -787,7 +787,7 @@ int16_t paiorder_awaitboardorder(void) {
  *                   Slot 28 — makedisabledorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3EA38
+// FUNCTION: TIE95 0x3EA38
 int16_t paiorder_makedisabledorder(void) {
 	craftptr->status_flags = 0;
 	return 0;
@@ -811,7 +811,7 @@ int16_t paiorder_neartargetorder(void) {
  * byte_C5463[warhead_type] (indexed by weapon species 137..154).
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3EA4C
+// FUNCTION: TIE95 0x3EA4C
 int16_t paiorder_rocketsonboardorder(void) {
 	/* ai_target_ref is only an objects[] index when it points at a live
 	 * craft slot (< NUM_CRAFTS). Out-of-range values land in warhead
@@ -848,7 +848,7 @@ int16_t paiorder_rocketsonboardorder(void) {
  * drive push_accum_* with random per-axis jink.
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3EB38
+// FUNCTION: TIE95 0x3EB38
 int16_t paiorder_avoidhitorder(void) {
 	uint16_t active = ai.active_obj_idx;
 	uint8_t genus = objects[active].genus;
@@ -937,7 +937,7 @@ apply_jink:
  * finish: active, no waves remaining, no alive objects with that fg_idx.
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3EF24
+// FUNCTION: TIE95 0x3EF24
 int16_t paiorder_waitforkidsorder(void) {
 	for (uint16_t fi = 0; fi < (uint16_t)mission_file_header.num_fg; ++fi) {
 		EFGStruct* g = &fg_array[fi];
@@ -968,7 +968,7 @@ int16_t paiorder_waitforkidsorder(void) {
  * AND finished spawning all its waves.
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F000
+// FUNCTION: TIE95 0x3F000
 int16_t paiorder_waitforallcreateorder(void) {
 	for (uint16_t fi = 0; fi < (uint16_t)mission_file_header.num_fg; ++fi) {
 		EFGStruct* g = &fg_array[fi];
@@ -991,7 +991,7 @@ int16_t paiorder_waitforallcreateorder(void) {
  *                   Slot 34 — evasiveorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F0A0
+// FUNCTION: TIE95 0x3F0A0
 int16_t paiorder_evasiveorder(void) {
 	if (craftptr->mode_byte != ai.plan_order)
 		return 0;
@@ -1007,7 +1007,7 @@ int16_t paiorder_evasiveorder(void) {
  *                   Slot 35 — newtargetorder (player FG only)
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F0E0
+// FUNCTION: TIE95 0x3F0E0
 int16_t paiorder_newtargetorder(void) {
 	if (ai.fg_idx != pstate.player->fg_idx)
 		return 0;
@@ -1032,7 +1032,7 @@ int16_t paiorder_newtargetorder(void) {
  *                   Slot 36 — avoidstarshiporder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F148
+// FUNCTION: TIE95 0x3F148
 int16_t paiorder_avoidstarshiporder(void) {
 	/* Save the original craftptr so we can write back to OUR CraftData
 	 * after the COLLIDE call. collide_craftstarshipcollision indirects
@@ -1093,7 +1093,7 @@ int16_t paiorder_avoidstarshiporder(void) {
  *                   Slot 37 — checkhyperorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F2D4
+// FUNCTION: TIE95 0x3F2D4
 int16_t paiorder_checkhyperorder(void) { return fg_array[ai.fg_idx].pri_stop_fg_used ? 1 : 0; }
 
 /* ======================================================================
@@ -1102,7 +1102,7 @@ int16_t paiorder_checkhyperorder(void) { return fg_array[ai.fg_idx].pri_stop_fg_
  * Return 1 when our FG's stop criterion has fired (clock AND/OR goal).
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F2FC
+// FUNCTION: TIE95 0x3F2FC
 int16_t paiorder_stopgohomeorder(void) {
 	if (objects[ai.active_obj_idx].genus == GENUS_PLATFORM)
 		return 0;
@@ -1131,7 +1131,7 @@ int16_t paiorder_stopgohomeorder(void) {
  *                   Slot 39 — completegohomeorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F3F4
+// FUNCTION: TIE95 0x3F3F4
 int16_t paiorder_completegohomeorder(void) {
 	if (!pai_aicompletioncheck(craftptr->default_order_ldr, ai.ai_entry_count))
 		return 0;
@@ -1154,7 +1154,7 @@ int16_t paiorder_completegohomeorder(void) {
  *                   Slot 40 — completegootherorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F4B8
+// FUNCTION: TIE95 0x3F4B8
 int16_t paiorder_completegootherorder(void) {
 	uint16_t cur_entry = ai.ai_entry_count;
 	if (craftptr->ai_complete_state[cur_entry] != 2 || cur_entry == 2)
@@ -1180,7 +1180,7 @@ int16_t paiorder_completegootherorder(void) {
  *                   Slot 41 — completefolloworder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F788
+// FUNCTION: TIE95 0x3F788
 int16_t paiorder_completefolloworder(void) {
 	uint8_t leader_entry = ai.leader_craft->ai_state_1C;
 	if (ai.ai_entry_count == leader_entry)
@@ -1203,7 +1203,7 @@ int16_t paiorder_completefolloworder(void) {
  * stamp it WITHOUT advancing ai.ai_entry_count.
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F59C
+// FUNCTION: TIE95 0x3F59C
 int16_t paiorder_waitgootherorder(void) {
 	uint16_t entry = ai.ai_entry_count;
 	uint8_t picked = 0xFF;
@@ -1233,7 +1233,7 @@ int16_t paiorder_waitgootherorder(void) {
  *                   Slot 43 — orderswitchorder
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F620
+// FUNCTION: TIE95 0x3F620
 int16_t paiorder_orderswitchorder(void) {
 	if (!ai.ai_entry_count)
 		return 0;
@@ -1281,7 +1281,7 @@ int16_t paiorder_orderswitchorder(void) {
  * Fly the passenger FG to its drop point and release when close.
  * ====================================================================== */
 
-// FUNCTION: TIE 0x3F844
+// FUNCTION: TIE95 0x3F844
 int16_t paiorder_dropoffdestorder(void) {
 	uint16_t drop_fg = (uint16_t)((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[1] - 1);
 	if (fgstatus[drop_fg].cond[0].detail)
@@ -1314,7 +1314,7 @@ int16_t paiorder_dropoffdestorder(void) {
  *   attached   -> only check capture_fg (count==detail) if capture_fg_used
  *   not-attached -> AND of (pri_stop_fg match if pri_stop_fg_used) and
  *                   (sec_stop_fg match if sec_stop_fg_used). */
-// FUNCTION: TIE 0x3F934
+// FUNCTION: TIE95 0x3F934
 int16_t paiorder_mothershipreadyorder(void) {
 	EFGStruct* fg = &fg_array[ai.fg_idx];
 

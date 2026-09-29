@@ -15,13 +15,15 @@ static uint8_t remap_color(uint16_t color) {
 
 /* --- Cursor and margin setters --- */
 
-// FUNCTION: TIE 0x23670, TIE98 0x41D460
+// FUNCTION: TIE95 0x23670
+// FUNCTION: TIE98 0x41D460
 void festring_setcursor(int16_t x, int16_t y) {
 	cursorx = x;
 	cursory = y;
 }
 
-// FUNCTION: TIE 0x23680, TIE98 0x41D480
+// FUNCTION: TIE95 0x23680
+// FUNCTION: TIE98 0x41D480
 void festring_setbound(int16_t left, int16_t top, int16_t right, int16_t bottom) {
 	leftmargin = left;
 	topmargin = top;
@@ -31,18 +33,18 @@ void festring_setbound(int16_t left, int16_t top, int16_t right, int16_t bottom)
 
 /* --- Color setters (remap palette indices >= 0x40) --- */
 
-// FUNCTION: TIE 0x2369C
+// FUNCTION: TIE95 0x2369C
 void festring_settextcolor(uint16_t color) { textcolor = remap_color(color); }
 
-// FUNCTION: TIE 0x236B8
+// FUNCTION: TIE95 0x236B8
 void festring_setbackcolor(uint16_t color) { backcolor = remap_color(color); }
 
-// FUNCTION: TIE 0x236D4
+// FUNCTION: TIE95 0x236D4
 void festring_setdropcolor(uint16_t color) { dropcolor = remap_color(color); }
 
 /* --- Flag setters --- */
 
-// FUNCTION: TIE 0x236F0
+// FUNCTION: TIE95 0x236F0
 void festring_setlinewrap(int16_t enable) { lwrapflag = enable; }
 
 void festring_setautofill(int16_t enable) { autofillflag = enable; }
@@ -52,7 +54,8 @@ void festring_setautofill(int16_t enable) { autofillflag = enable; }
  * Size 1: tiny font (9px height, 20 char size; hi-res: 21px, 170 char size), lowercase
  * Size 2: micro font (5px height, 12 char size; hi-res: 9px, 74 char size), uppercase only
  */
-// FUNCTION: TIE 0x23700, TIE98 0x41D530
+// FUNCTION: TIE95 0x23700
+// FUNCTION: TIE98 0x41D530
 void festring_setfontsize(int16_t size) {
 	int16_t char_size = fontcharsize;
 	uint8_t height = fontheight;
@@ -87,7 +90,7 @@ void festring_setfontsize(int16_t size) {
 
 /* --- String buffer operations (on the global tempstring[40]) --- */
 
-// FUNCTION: TIE 0x237A8
+// FUNCTION: TIE95 0x237A8
 void festring_farstrcpy(const char* src) {
 	char* dst = tempstring;
 	while (*src)
@@ -95,7 +98,7 @@ void festring_farstrcpy(const char* src) {
 	*dst = '\0';
 }
 
-// FUNCTION: TIE 0x237C8
+// FUNCTION: TIE95 0x237C8
 void festring_farstrcat(const char* src) {
 	char* dst = tempstring;
 	while (*dst)
@@ -105,7 +108,7 @@ void festring_farstrcat(const char* src) {
 	*dst = '\0';
 }
 
-// FUNCTION: TIE 0x237F8
+// FUNCTION: TIE95 0x237F8
 void festring_farstradd(char c) {
 	char* dst = tempstring;
 	while (*dst)
@@ -123,7 +126,7 @@ void festring_farstradd(char c) {
  *   0xFE:        color escape: next byte sets textcolor (with remap)
  *   0xFF:        (not used as escape; treated as printable)
  */
-// FUNCTION: TIE 0x23820
+// FUNCTION: TIE95 0x23820
 void festring_outstring(const uint8_t* s) {
 	if (!*s)
 		return;
@@ -154,7 +157,8 @@ void festring_outstring(const uint8_t* s) {
 	}
 }
 
-// FUNCTION: TIE 0x238B4, TIE98 0x41D6D0
+// FUNCTION: TIE95 0x238B4
+// FUNCTION: TIE98 0x41D6D0
 void festring_outstringcenter(const uint8_t* s) {
 	int16_t center = ((uint16_t)rightmargin + (uint16_t)leftmargin) / 2;
 	int16_t half_len = (uint16_t)sys2_calclength(s) / 2;
@@ -167,7 +171,7 @@ void festring_outstringcenter(const uint8_t* s) {
 	festring_outstring(s);
 }
 
-// FUNCTION: TIE 0x23914
+// FUNCTION: TIE95 0x23914
 void festring_outstringright(const uint8_t* s) {
 	uint16_t x = rightmargin - (sys2_calclength(s) + 2);
 
@@ -182,7 +186,7 @@ void festring_outstringright(const uint8_t* s) {
 
 /* --- Screen operations --- */
 
-// FUNCTION: TIE 0x23964
+// FUNCTION: TIE95 0x23964
 void festring_clearscreen(void) {
 	topmargin = 0;
 	bottommargin = 200;
@@ -192,8 +196,8 @@ void festring_clearscreen(void) {
 	clearwindow();
 }
 
-// FUNCTION: TIE 0x239A0
+// FUNCTION: TIE95 0x239A0
 void festring_hidescreen(void) { blank(); }
 
-// FUNCTION: TIE 0x239A8
+// FUNCTION: TIE95 0x239A8
 void festring_showscreen(void) { unblank(); }

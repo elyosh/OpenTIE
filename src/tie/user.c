@@ -193,14 +193,14 @@ uint8_t musicvolflag;
  * ticks. 236 = one nominal-rate frame, so at target framerate this is
  * the identity. See binary 0x5DCB8.
  */
-// FUNCTION: TIE 0x5FC50
+// FUNCTION: TIE95 0x5FC50
 int16_t user_framerateadjust(int16_t per_236) { return (int16_t)math2_ABoverC32(per_236, frameticks, 236); }
 
 /*
  * user_increasepower / user_decreasepower -- saturating throttle adjust.
  * Binary 0x5DCD4 / 0x5DD04.
  */
-// FUNCTION: TIE 0x5FC6C
+// FUNCTION: TIE95 0x5FC6C
 void user_increasepower(uint16_t delta) {
 	uint16_t cur = pstate.player_craft->throttle_speed;
 	uint16_t next = (uint16_t)(cur + delta);
@@ -209,7 +209,7 @@ void user_increasepower(uint16_t delta) {
 		pstate.player_craft->throttle_speed = 0xFFFF;
 }
 
-// FUNCTION: TIE 0x5FC9C
+// FUNCTION: TIE95 0x5FC9C
 void user_decreasepower(uint16_t delta) {
 	uint16_t cur = pstate.player_craft->throttle_speed;
 	pstate.player_craft->throttle_speed = (uint16_t)(cur - delta);
@@ -224,7 +224,7 @@ void user_decreasepower(uint16_t delta) {
  * Binary 0x5DD34. The binary indexes the two 16-bit shield fields as
  * (&forward_shield)[idx]; we express that via a local pointer.
  */
-// FUNCTION: TIE 0x5FCCC
+// FUNCTION: TIE95 0x5FCCC
 void user_adjustshields(uint16_t dst_idx, uint16_t src_idx) {
 	int16_t* shields = &pstate.player_craft->forward_shield;
 	int16_t src_cur = shields[src_idx];
@@ -256,7 +256,7 @@ void user_adjustshields(uint16_t dst_idx, uint16_t src_idx) {
  * zero the pitch offset and either restore the saved angles (if still
  * tracking the player) or default back to pilotview 18. Binary 0x5DDE4.
  */
-// FUNCTION: TIE 0x5FD7C
+// FUNCTION: TIE95 0x5FD7C
 void user_resetview(void) {
 	if (camera.view_zoom_flag) {
 		uint16_t view_idx = camera.view_heading_offset ? 20u : 18u;
@@ -290,7 +290,7 @@ void user_resetview(void) {
  * user_setdetaillevel -- install the detail-preset tables into the
  * runtime flags. Binary 0x5F07C.
  */
-// FUNCTION: TIE 0x60FD0
+// FUNCTION: TIE95 0x60FD0
 void user_setdetaillevel(uint16_t level) {
 	starshipexplodetail = starshipexplodtl[level];
 	starshipdetail = starshipdtl[level];
@@ -309,7 +309,7 @@ void user_setdetaillevel(uint16_t level) {
  * user_mapmissiletomessage -- warhead_type -> status-banner argtable id.
  * Unknown types return default_msg. Binary 0x5FEC0.
  */
-// FUNCTION: TIE 0x61E40
+// FUNCTION: TIE95 0x61E40
 int32_t user_mapmissiletomessage(uint8_t warhead_type, int32_t default_msg) {
 	switch (warhead_type) {
 		case 0x8F:
@@ -335,7 +335,7 @@ int32_t user_mapmissiletomessage(uint8_t warhead_type, int32_t default_msg) {
  * user_validcomponent -- filter hidden meshes when advancing radar_target1.
  * Binary 0x5FF1C.
  */
-// FUNCTION: TIE 0x61E9C
+// FUNCTION: TIE95 0x61E9C
 int16_t user_validcomponent(uint16_t comp_idx) {
 	const ShipModelMesh* m = &componentblockptr[comp_idx];
 	int mtype = m->mesh_type;
@@ -357,7 +357,8 @@ int16_t user_validcomponent(uint16_t comp_idx) {
 	return 0;
 }
 
-// FUNCTION: TIE98 0x498D00 USER_validcomponent
+// FUNCTION: TIE98 0x498D00
+// USER_validcomponent
 int16_t user_validcomponent_tie98(uint16_t model_type, uint16_t mesh_index) {
 	const int mesh_type = modelmesh_gettype(model_type, mesh_index);
 	if (mesh_type == TIE_MESH_MISC_HULL || mesh_type == TIE_MESH_ANTENNA)
@@ -385,7 +386,7 @@ int16_t user_validcomponent_tie98(uint16_t model_type, uint16_t mesh_index) {
  * Scores hostile craft in view by reticle proximity; fallback to nearest
  * by screendist when none land in the reticle.
  */
-// FUNCTION: TIE 0x5FE4C
+// FUNCTION: TIE95 0x5FE4C
 uint16_t user_picktarget(void) {
 	uint32_t best_in_cross_rough = 0xFFFFFFFFu;
 	uint16_t best_offscreen_dist = 0xFFFF;
@@ -438,7 +439,7 @@ uint16_t user_picktarget(void) {
  * the 0..0x73 craft + 0x3800..0x383F static index spaces, skipping dead
  * slots. Updates global craftptr. Binary 0x5DFD0.
  */
-// FUNCTION: TIE 0x5FF78
+// FUNCTION: TIE95 0x5FF78
 uint16_t user_picknexttarget(uint16_t start, int32_t step) {
 	/* Binary quirk preserved: the local craft_ptr persists across loop
 	 * iterations. If a prior iteration captured a hyperspacing craft's
@@ -525,7 +526,7 @@ uint16_t user_picknexttarget(uint16_t start, int32_t step) {
  * Watcom unaligned-dword-load idioms on player->{orient_dirty, fwd_*,
  * side_*, up_*} are rewritten as explicit field accesses.
  */
-// FUNCTION: TIE 0x60080
+// FUNCTION: TIE95 0x60080
 int16_t user_targetincross(uint16_t obj_idx, int32_t strict) {
 	FlightObject* pl = pstate.player;
 	screendist = 0xFFFF;
@@ -616,7 +617,7 @@ int16_t user_targetincross(uint16_t obj_idx, int32_t strict) {
  * buffer via panel_drawboxinxtrans, sized to screen resolution. The demo
  * binary used a rotscale bracket sprite; we follow retail.
  */
-// FUNCTION: TIE 0x603EC
+// FUNCTION: TIE95 0x603EC
 int16_t user_targetonscreen(uint16_t obj_or_kind) {
 	FlightObject* pl = pstate.player;
 	if (obj_or_kind == 0xFFFF || replayviewmode)
@@ -829,7 +830,7 @@ void user_targetonscreen_tie98(uint16_t object_reference, int16_t mesh_index, ui
  * to first MainHull/Engines mesh; emits 'report from' radio line when
  * the target viewer is open. Binary 0x5E83C.
  */
-// FUNCTION: TIE 0x60790
+// FUNCTION: TIE95 0x60790
 void user_setnewtarget(uint16_t new_obj) {
 	if ((pstate.player_craft->status_flags & 4) == 0) {
 		argtable[0] = 33;
@@ -922,7 +923,7 @@ void user_setnewtarget(uint16_t new_obj) {
  * caller's `orient_dirty = 1`.  Player-only path; PAIMAN AI uses separate
  * code.
  */
-// FUNCTION: TIE 0x60A4C
+// FUNCTION: TIE95 0x60A4C
 void user_calcdeltapitch(int16_t dheading, int16_t dpitch, uint16_t obj_idx, CraftData* cp) {
 	FlightObject* o = &objects[obj_idx];
 
@@ -1024,7 +1025,7 @@ void user_calcdeltapitch(int16_t dheading, int16_t dpitch, uint16_t obj_idx, Cra
  * user_checkradio -- validate radio target. Binary 0x5F11C.
  * Side effect: writes craftptr.
  */
-// FUNCTION: TIE 0x61070
+// FUNCTION: TIE95 0x61070
 int16_t user_checkradio(void) {
 	if (pstate.target_obj_idx == 0xFFFF)
 		return 0;
@@ -1041,7 +1042,7 @@ int16_t user_checkradio(void) {
 /*
  * user_assigntarget -- wingman 'attack my target' etc. Binary 0x5F1D8.
  */
-// FUNCTION: TIE 0x6112C
+// FUNCTION: TIE95 0x6112C
 void user_assigntarget(uint16_t new_target_obj, uint16_t msg_template_id) {
 	FlightObject* pl = pstate.player;
 	/* No-op when the target is an ally. */
@@ -1088,7 +1089,7 @@ void user_assigntarget(uint16_t new_target_obj, uint16_t msg_template_id) {
 /*
  * user_findclosestattacker -- nearest enemy targeting obj_idx. Binary 0x5F308.
  */
-// FUNCTION: TIE 0x61268
+// FUNCTION: TIE95 0x61268
 uint16_t user_findclosestattacker(uint16_t obj_idx) {
 	if (obj_idx == 0xFFFF)
 		return 0xFFFF;
@@ -1124,7 +1125,7 @@ uint16_t user_findclosestattacker(uint16_t obj_idx) {
  * returns true iff nearest hostile is more than twice as far as nearest
  * friendly.
  */
-// FUNCTION: TIE 0x61310
+// FUNCTION: TIE95 0x61310
 int16_t user_isrescued(uint16_t player_obj_idx) {
 	if (rescue_override_flag & 1)
 		return 1;
@@ -1158,7 +1159,7 @@ int16_t user_isrescued(uint16_t player_obj_idx) {
 /*
  * user_checkreplaycamera -- stop-and-flush helper. Binary 0x5F478.
  */
-// FUNCTION: TIE 0x613D8
+// FUNCTION: TIE95 0x613D8
 void user_checkreplaycamera(void) {
 	if (!recordingreplay)
 		return;
@@ -1173,7 +1174,7 @@ void user_checkreplaycamera(void) {
 /*
  * user_ejectcamera -- swap to eject pod / fly-by camera. Binary 0x5F4CC.
  */
-// FUNCTION: TIE 0x6142C
+// FUNCTION: TIE95 0x6142C
 void user_ejectcamera(void) {
 	fscript_MsSetSequence(16);
 	hyperspaceflag = 0;
@@ -1212,7 +1213,7 @@ void user_ejectcamera(void) {
 /*
  * user_nextreplaycount -- per playback tick. Binary 0x5AC64.
  */
-// FUNCTION: TIE 0x5CC44
+// FUNCTION: TIE95 0x5CC44
 void user_nextreplaycount(void) {
 	++replaytotalcntdown;
 	uint16_t new_bufcnt = (uint16_t)(replaybuffercnt + 1);
@@ -1235,7 +1236,7 @@ void user_nextreplaycount(void) {
 /*
  * user_nextreplaystore -- per record tick. Binary 0x5ACBC.
  */
-// FUNCTION: TIE 0x5CC9C
+// FUNCTION: TIE95 0x5CC9C
 void user_nextreplaystore(void) { TieReplayRecording_StoreRecord(true); }
 
 /* ================================================================== *
@@ -1302,7 +1303,8 @@ static void ui_apply_absolute_throttle(void) {
  *   (4) if recording, append to tape.
  *   (5) dispatch flight controls via user_inputforplane.
  */
-// FUNCTION: TIE 0x5C440, TIE98 0x493840
+// FUNCTION: TIE95 0x5C440
+// FUNCTION: TIE98 0x493840
 void user_userinterface(void) {
 	inputthrottle = UINT32_MAX;
 	/* Drain commands received while paused; only the mapped Pause command resumes. */
@@ -1765,7 +1767,9 @@ static void inflight_finish(InflightInfoTask* t) {
 	rtsvga2_invalidatepagecache();
 }
 
-// FUNCTION: TIE 0x61544, TIE98 0x498430 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x61544
+// ORIGINAL_FUNCTION: TIE98 0x498430
+// (task-split recovery)
 static LandruTaskStepResult user_inflightinfo_task_step(void* self) {
 	InflightInfoTask* t = (InflightInfoTask*)self;
 
@@ -2963,7 +2967,7 @@ static void ui_apply_view_or_flight_input(void) {
  * Intentionally monolithic: the binary is a single 12kB function; the
  * only structural abstractions here are the ui_* static helpers above.
  */
-// FUNCTION: TIE 0x5CDA0
+// FUNCTION: TIE95 0x5CDA0
 void user_inputforplane(void) {
 	/* Phase 0: hyperspace-abort on 'h'. */
 	if (hyperspaceflag < 2u && hyperabortflag && inputkey == KEY_h && hyperspaceflag) {

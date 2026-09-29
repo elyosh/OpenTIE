@@ -34,7 +34,7 @@ int8_t FlightInput_GetChar(void) {
  *   mode 0: VGA  320x200    (RTSVGA2_*VGA)
  *   mode 1: SVGA 640x480    (RTSVGA2_*VGA, slot 8 swapped to outchar32VGA)
  *   mode 2: RGB  640x480x16 (TIE98 packed-pixel routines) */
-// GLOBAL: TIE 0xC1EA4
+// GLOBAL: TIE95 0xC1EA4
 void* graphroutines[39] = {
 	/* --- mode 0: VGA 320x200 --- */
 	(void*)rtsvga2_initgraphVGA,      /* [0]  initgraph */
@@ -79,16 +79,16 @@ void* graphroutines[39] = {
 	(void*)rtsvga2_saveboxVGA_tie98,
 	(void*)rtsvga2_restoreboxVGA_tie98,
 };
-// GLOBAL: TIE 0xD41A4
+// GLOBAL: TIE95 0xD41A4
 int16_t buffer256flag;
-// GLOBAL: TIE 0xD41A6
+// GLOBAL: TIE95 0xD41A6
 int16_t thrustmastertopflag;
 
 /* String table pointers (assigned by loadstringdata, defined here per watdbg) */
 
 /* --- Input polling --- */
 
-// FUNCTION: TIE 0x22DF0
+// FUNCTION: TIE95 0x22DF0
 void feinput_checkinput(void) {
 	int16_t delta_x = 0;
 	int16_t delta_y = 0;
@@ -133,7 +133,7 @@ void feinput_checkinput(void) {
 	inputdeltaroll = delta_roll;
 }
 
-// FUNCTION: TIE 0x22EB8
+// FUNCTION: TIE95 0x22EB8
 void feinput_degitterinput(void) {
 	int16_t dx = inputdeltax;
 	int16_t dy = inputdeltay;
@@ -156,7 +156,7 @@ void feinput_degitterinput(void) {
 	inputdeltaroll = dr;
 }
 
-// FUNCTION: TIE 0x22F08
+// FUNCTION: TIE95 0x22F08
 void feinput_getinput(void) {
 	feinput_getrawinput();
 	feinput_checkinput();
@@ -174,7 +174,7 @@ void feinput_getinput(void) {
 		inputdeltaroll = 0;
 }
 
-// FUNCTION: TIE 0x22FD8
+// FUNCTION: TIE95 0x22FD8
 void feinput_clearinput(void) {
 	/* Drain joy+mouse buttons, then wait for 2 timer ticks of "blank" with
 	 * no buttons before returning. If buttons re-engage during the wait,
@@ -221,7 +221,7 @@ void feinput_waitrelease(void) {
 
 /* --- Device setup --- */
 
-// FUNCTION: TIE 0x23038
+// FUNCTION: TIE95 0x23038
 void feinput_setupinputdevices(void) {
 	joystickflag = 0;
 	ngstickflag = 0;
@@ -237,7 +237,7 @@ void feinput_setupinputdevices(void) {
 
 /* --- Raw input polling --- */
 
-// FUNCTION: TIE 0x233AC
+// FUNCTION: TIE95 0x233AC
 uint16_t feinput_getrawinput(void) {
 	/* Retail polled DOS INT 16h / mouse INT 33h directly each call; our
 	 * SDL port routes keystrokes through an event queue that only fills
@@ -335,7 +335,8 @@ uint16_t feinput_getrawinput(void) {
 
 /* --- Graphics setup --- */
 
-// FUNCTION: TIE 0x23544, TIE98 0x41D340
+// FUNCTION: TIE95 0x23544
+// FUNCTION: TIE98 0x41D340
 void feinput_setupgraphics(uint8_t detail_level) {
 	uint8_t mode;
 
@@ -352,7 +353,7 @@ void feinput_setupgraphics(uint8_t detail_level) {
 	detaillevel = detail_level;
 }
 
-// FUNCTION: TIE 0x2359C
+// FUNCTION: TIE95 0x2359C
 void feinput_SetGraphicsPtrs(uint8_t mode) {
 	/* graphroutines holds 13 function pointers per graphics mode.
 	 * Mode 0 = VGA 320x200, mode 1 = SVGA 640x480, mode 2 = SVGA 640x480 RGB. */

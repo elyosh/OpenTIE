@@ -21,7 +21,8 @@ typedef struct OptCollisionContext {
 	uint16_t hit_mesh_one_based;
 } OptCollisionContext;
 
-// FUNCTION: TIE98 0x486B70 COLLIDE_intersectsegmentwithfaceplane; OpenXWA counterpart
+// FUNCTION: TIE98 0x486B70
+// COLLIDE_intersectsegmentwithfaceplane; OpenXWA counterpart
 // collide_IntersectSegmentWithFacePlane.
 static int collide_intersectsegmentwithfaceplane(const TieModelVec3f* normal,
 												 const TieModelVec3f* face_vertex, const TieModelVec3f* start,
@@ -57,7 +58,8 @@ static int collide_intersectsegmentwithfaceplane(const TieModelVec3f* normal,
 	return 0;
 }
 
-// FUNCTION: TIE98 0x486D20 COLLIDE_pointinfacepolygon; OpenXWA counterpart collide_PointInFacePolygon.
+// FUNCTION: TIE98 0x486D20
+// COLLIDE_pointinfacepolygon; OpenXWA counterpart collide_PointInFacePolygon.
 static int collide_pointinfacepolygon(const TieModelVec3f* normal, const TieModelVec3f* vertices,
 									  const int32_t indices[4], const TieModelVec3f* point) {
 	const float absolute[3] = { fabsf(normal->x), fabsf(normal->y), fabsf(normal->z) };
@@ -121,7 +123,8 @@ static int collision_face_indices_valid(const TieModelCollisionFace* face, uint3
 		   (face->vertex_indices[3] >= 0 && (uint32_t)face->vertex_indices[3] < vertex_count);
 }
 
-// FUNCTION: TIE98 0x486670 COLLIDE_testsweepagainstoptnode; OpenXWA counterpart
+// FUNCTION: TIE98 0x486670
+// COLLIDE_testsweepagainstoptnode; OpenXWA counterpart
 // collide_TestSweepAgainstOptNode.
 static int collide_testsweepagainstoptnode(OptCollisionContext* context, int node_index) {
 	if (node_index < 0 || (uint32_t)node_index >= context->model->collision_node_count)
@@ -209,7 +212,8 @@ static void set_collision_offsets(float fraction) {
 	collidezoff = (int32_t)((float)(laserz - laserzold) * fraction);
 }
 
-// FUNCTION: TIE98 0x485E30 COLLIDE_checksweptmodelcollision; OpenXWA counterpart
+// FUNCTION: TIE98 0x485E30
+// COLLIDE_checksweptmodelcollision; OpenXWA counterpart
 // collide_CheckSweptModelCollision.
 uint16_t collide_checksweptmodelcollision(uint16_t source_object_index, uint16_t target_object_index) {
 	FlightObject* target = &objects[target_object_index];
@@ -296,7 +300,8 @@ uint16_t collide_checksweptmodelcollision(uint16_t source_object_index, uint16_t
 	return context.hit_mesh_one_based;
 }
 
-// FUNCTION: TIE98 0x486440 COLLIDE_checksweptmodelmeshcollision (inferred)
+// FUNCTION: TIE98 0x486440
+// COLLIDE_checksweptmodelmeshcollision (inferred)
 uint16_t collide_checksweptmodelmeshcollision(uint8_t model_type, uint16_t mesh_index, int32_t start_x,
 											  int32_t start_y, int32_t start_z, int32_t end_x, int32_t end_y,
 											  int32_t end_z) {

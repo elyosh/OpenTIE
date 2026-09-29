@@ -29,17 +29,17 @@
  * ========================================================================== */
 
 uint16_t comp[40];
-// GLOBAL: TIE 0xD35E0
+// GLOBAL: TIE95 0xD35E0
 uint16_t highlightcolor;
-// GLOBAL: TIE 0xD35E2
+// GLOBAL: TIE95 0xD35E2
 uint16_t numberofcomp;
-// GLOBAL: TIE 0xD35E4
+// GLOBAL: TIE95 0xD35E4
 int16_t relativeshift;
-// GLOBAL: TIE 0xD35E8
+// GLOBAL: TIE95 0xD35E8
 int16_t relativex;
-// GLOBAL: TIE 0xD35EA
+// GLOBAL: TIE95 0xD35EA
 int16_t relativey;
-// GLOBAL: TIE 0xD35E6
+// GLOBAL: TIE95 0xD35E6
 int16_t relativez;
 
 /* ============================================================================
@@ -213,7 +213,7 @@ static const uint8_t laser_bolt_152[186] = {
  * label is NOT a separate object but rather the effective base of an
  * offset-array access. Same indexing convention as the projectile parameter
  * tables in laser.c. */
-// GLOBAL: TIE 0xCD10C
+// GLOBAL: TIE95 0xCD10C
 static const uint8_t* const laser_species_poly[WEAPON_SPECIES_COUNT] = {
 	/*   0 = species 137 */ laser_bolt_137,
 	/*   1 = species 138 */ laser_bolt_138,
@@ -276,7 +276,7 @@ static inline int32_t clamp_q30(int32_t v) {
  * pointers used by DRAW/FVIEW/COLLIDE/etc. Returns the byte size of the
  * LOD-records sub-table (= 6 * num_lods).
  * ========================================================================== */
-// FUNCTION: TIE 0x1AF50
+// FUNCTION: TIE95 0x1AF50
 int draw_lockshipfileptrs(uint16_t ship_idx) {
 	void* handle = species_table[ship_idx].model_handle;
 	void* raw = xmemhdl_lock(handle);
@@ -301,7 +301,7 @@ int draw_lockshipfileptrs(uint16_t ship_idx) {
  * Resolve mesh by ship_base + comp_idx. Sets componentblockptr.
  * Returns &mesh + mesh.render_offset (per-mesh detail-LOD table base).
  * ========================================================================== */
-// FUNCTION: TIE 0x1AFB4
+// FUNCTION: TIE95 0x1AFB4
 ShipMeshLOD* draw_getcomponentptr(ShipModelData* ship_base, uint16_t comp_idx) {
 	ShipModelMesh* mesh_base = (ShipModelMesh*)&ship_base->lod_records[ship_base->num_lods];
 	ShipModelMesh* mesh = &mesh_base[comp_idx];
@@ -318,7 +318,7 @@ ShipMeshLOD* draw_getcomponentptr(ShipModelData* ship_base, uint16_t comp_idx) {
  * Restores shipdetailpolycnt on exit (drawcraft may have temporarily
  * raised it).
  * ========================================================================== */
-// FUNCTION: TIE 0x1AFF0
+// FUNCTION: TIE95 0x1AFF0
 const uint16_t* draw_getcompdetailptr(ShipModelMesh* comp, int base_z) {
 	uint16_t saved_polycnt = shipdetailpolycnt;
 
@@ -361,7 +361,7 @@ const uint16_t* draw_getcompdetailptr(ShipModelMesh* comp, int base_z) {
  *                      (a coarser LOD). The fallback is a perf-saving
  *                      coarsening, NOT an upgrade.
  * ========================================================================== */
-// FUNCTION: TIE 0x1B0A8
+// FUNCTION: TIE95 0x1B0A8
 const uint16_t* draw_getdetailptr(ShipMeshLOD* lod_table, int z_threshold) {
 	int detail_mode = (uint16_t)shipdetailvalue;
 	if (shipdetailvalue == -1) {
@@ -397,7 +397,7 @@ const uint16_t* draw_getdetailptr(ShipMeshLOD* lod_table, int z_threshold) {
  * defensive branch that shipped data never triggers (laser species have
  * flags & 2 == 0, so FEDISKIO_loadspecies skips them — by design).
  * ========================================================================== */
-// FUNCTION: TIE 0x1BAB4
+// FUNCTION: TIE95 0x1BAB4
 void draw_drawlaser(uint16_t laser_obj_idx) {
 	parentobject = laser_obj_idx;
 	uint16_t ship_idx = objects[laser_obj_idx].ship_idx;
@@ -480,7 +480,7 @@ const void* tie_laser_species_poly(uint16_t species_idx, size_t* out_size) {
  * the obj-ref namespace; see tie.h). byte_DC3AC = (star_idx & 3) - 4.
  * Saves/restores flatobjnum so the caller's flat-poly ring is unaffected.
  * ========================================================================== */
-// FUNCTION: TIE 0x1BB28
+// FUNCTION: TIE95 0x1BB28
 void draw_drawhyperstar(int16_t star_idx) {
 	parentobject = (uint16_t)(star_idx + OBJ_REF_STATIC_BASE);
 	hyperstardata[0x14] = (uint8_t)((star_idx & 3) - 4);
@@ -594,7 +594,8 @@ void draw_sync_tie98_hyperstar_state(void) {
 	}
 }
 
-// FUNCTION: TIE98 0x42F990 DRAW_drawhyperstar
+// FUNCTION: TIE98 0x42F990
+// DRAW_drawhyperstar
 void draw_drawhyperstar_tie98(int16_t star_idx) {
 	const int saved_bilinear = g_bilinearEnabled;
 	FlightObject saved_object = objects[0];
@@ -630,7 +631,7 @@ void draw_drawhyperstar_tie98(int16_t star_idx) {
  * Reads species[ship_idx].model_handle for the bitmap blob and
  * species[ship_idx].bitmap_data for the palette remap.
  * ========================================================================== */
-// FUNCTION: TIE 0x1BB70
+// FUNCTION: TIE95 0x1BB70
 uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
 	reverseflag = 1;
 	worldz = 0x100000;
@@ -650,7 +651,8 @@ uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t scr
 	return rotscale_rotate_scale_image(screen_x, screen_y, 0x100, v9);
 }
 
-// FUNCTION: TIE98 0x417FF0 DRAW_drawbackdropimage
+// FUNCTION: TIE98 0x417FF0
+// DRAW_drawbackdropimage
 uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
 	reverseflag = 1;
 	worldz = 0x100000;
@@ -695,7 +697,7 @@ uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16
  *   pos_xyz (if has_position). Probes detail header for INT_MAX skip
  *   marker. If eyez <= mesh.draw_distance, appends mesh_idx to comp[].
  * ========================================================================== */
-// FUNCTION: TIE 0x1B414
+// FUNCTION: TIE95 0x1B414
 ShipModelMesh* draw_gettreeorder(int* bsp_node) {
 	BSPNode* node = (BSPNode*)bsp_node;
 	BSPNode* leaf_node = node;
@@ -782,7 +784,7 @@ ShipModelMesh* draw_gettreeorder(int* bsp_node) {
  *    draw_drawcraft.
  * 10. Restore decal palette.
  * ========================================================================== */
-// FUNCTION: TIE 0x1B12C
+// FUNCTION: TIE95 0x1B12C
 int draw_drawcomplexobject(int obj_idx) {
 	uint16_t obj_idx_u16 = (uint16_t)obj_idx;
 	uint16_t ship_idx;
@@ -885,7 +887,7 @@ int draw_drawcomplexobject(int obj_idx) {
 /* Draw visible craft components with their articulation, markings, and target
  * highlighting. Critically damaged fuselages may also emit a lightning
  * billboard. Restores currenttarget before returning its saved value. */
-// FUNCTION: TIE 0x1B690
+// FUNCTION: TIE95 0x1B690
 int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 	uint16_t obj_idx_u16 = (uint16_t)obj_idx;
 	int saved_currenttarget = currenttarget;
@@ -1034,7 +1036,8 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 	return saved_currenttarget;
 }
 
-// FUNCTION: TIE98 0x417C40 DRAW_drawcraft
+// FUNCTION: TIE98 0x417C40
+// DRAW_drawcraft
 static void draw_drawcraft_tie98(uint16_t object_ref, uint16_t model_type) {
 	const uint16_t saved_current_target = currenttarget;
 	int16_t bolt_angle = 0;
@@ -1166,7 +1169,7 @@ static const int16_t* draw_polydepth_walk(const uint8_t* start, int axis, const 
 /* Resolve ambiguous XTRANS2 depth ordering. Category flags handle fixed
  * priority cases; mesh overlaps compare the camera vector against both
  * polygon planes after resolving 0x7F00 vertex back-references. */
-// FUNCTION: TIE 0x1BBF4
+// FUNCTION: TIE95 0x1BBF4
 uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj_id_field,
 							uint16_t a_parent_category, int a_eyex, int a_eyey, uint16_t b_face_info,
 							uint16_t obj_b, uint16_t b_parent_category, uint16_t b_obj_id_field) {

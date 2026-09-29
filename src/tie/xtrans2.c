@@ -45,7 +45,7 @@ uint8_t* xtrans2_videobaseptr;
  * placing it past the polygon-data region drawpol writes via newobjectdef.
  * If left at 0, drawpol's writes overlap and corrupt the mask before
  * drawxtrans runs. */
-// GLOBAL: TIE 0xCDDE6
+// GLOBAL: TIE95 0xCDDE6
 int16_t maskbufptr = (int16_t)0xC000;
 
 int32_t leftsidedata1[480];
@@ -59,17 +59,17 @@ int32_t rightsidedata2[480];
  * for nested PIP rendering, logbuf2_finishPIP restores them. Without this
  * initialisation xtrans2_clearruntable crashes the first time BPFLIGHT runs
  * without a prior startPIP call (e.g. tech/blueprint room). */
-// GLOBAL: TIE 0xCDDF0
+// GLOBAL: TIE95 0xCDDF0
 int32_t* leftside = leftsidedata1;
-// GLOBAL: TIE 0xCDDF4
+// GLOBAL: TIE95 0xCDDF4
 int32_t* rightside = rightsidedata1;
 
 uint8_t* logbufbaseptr;
 int32_t logbufypos;
 
-// GLOBAL: TIE 0xEC610
+// GLOBAL: TIE95 0xEC610
 int32_t* edgept1[256]; /* watdbg size=1024 bytes = 256 ptrs */
-// GLOBAL: TIE 0xEC210
+// GLOBAL: TIE95 0xEC210
 int32_t* edgept2[128]; /* watdbg size=512 bytes  = 128 ptrs */
 int32_t edgexdiff[128];
 int32_t edgeydiff[128];
@@ -81,7 +81,7 @@ int16_t edgeslopefrac[128];
 uint8_t edgeflags[128];
 void* edgeflagptr[128];
 
-// GLOBAL: TIE 0xD404C
+// GLOBAL: TIE95 0xD404C
 uint16_t flatobjnum;
 uint8_t flatcolors[128];
 uint8_t flatcomponentnum[128];
@@ -206,7 +206,7 @@ static inline xtrans2_ObjectRecord* obj_record(uint16_t id) {
  *
  * Callers: logbuf2_startPIP, TIE_updatescreen, BPFLIGHT_draw_Engine.
  * ========================================================================== */
-// FUNCTION: TIE 0x622D0
+// FUNCTION: TIE95 0x622D0
 void xtrans2_clearruntable(void) {
 	int mat_base, step;
 	int dither_out_base;
@@ -302,7 +302,7 @@ void xtrans2_clearruntable(void) {
  * are NULL before that and between FreeFlightHandles / a subsequent
  * re-init.
  * ========================================================================== */
-// FUNCTION: TIE 0x6258C
+// FUNCTION: TIE95 0x6258C
 void xtrans2_initxtrans(void) {
 	uint16_t pd = pixelsdeep;
 
@@ -349,7 +349,7 @@ void xtrans2_initxtrans(void) {
  *
  * Returns 0 if the heap is empty.
  * ========================================================================== */
-// FUNCTION: TIE 0x64668
+// FUNCTION: TIE95 0x64668
 uint16_t xtrans2_findnearest(void) {
 	uint16_t new_lastheap = lastheap;
 	uint16_t result;
@@ -397,7 +397,7 @@ uint16_t xtrans2_findnearest(void) {
  *   4. Two meshes: check face_covers cache, then six bbox axes; fall back
  *      to draw_polydepthsort on a full bbox overlap.
  * ========================================================================== */
-// FUNCTION: TIE 0x64720
+// FUNCTION: TIE95 0x64720
 uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b) {
 	if (obj_a == 128)
 		return obj_b;
@@ -577,7 +577,7 @@ uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b) {
  * ----------------------------------------------------------------------------
  * Remove _objid from the active object heap.
  * ========================================================================== */
-// FUNCTION: TIE 0x63CD0
+// FUNCTION: TIE95 0x63CD0
 void xtrans2_closeobject(void) {
 	uint32_t removed = objid;
 	uint8_t removed_pos = objflag[removed];
@@ -651,7 +651,7 @@ void xtrans2_closeobject(void) {
  * Push _objid onto the active object heap. If the newcomer is in front of
  * the current top, it becomes the new frontmost.
  * ========================================================================== */
-// FUNCTION: TIE 0x63E78
+// FUNCTION: TIE95 0x63E78
 void xtrans2_openobject(void) {
 	uint16_t cur = curobjid;
 
@@ -735,7 +735,7 @@ void xtrans2_openobject(void) {
  *   [1,0x7F]: mesh face transition — maintain face_ypos[] and
  *              objectminface[]/objectminedgeptr[]; may call open/close.
  * ========================================================================== */
-// FUNCTION: TIE 0x633DC
+// FUNCTION: TIE95 0x633DC
 void xtrans2_processedge(void) {
 	/* --- Branch 1: marking-list handling for objid >= 0xF0. */
 	if (objid >= 0xF0) {
@@ -1054,7 +1054,7 @@ void xtrans2_processedge(void) {
  * Gouraud path interpolates lt_cursor across the span with per-pixel
  * dither (alternating dither accumulator by scanline parity).
  * ========================================================================== */
-// FUNCTION: TIE 0x64088
+// FUNCTION: TIE95 0x64088
 void xtrans2_outputxt(void) {
 	trace2_EdgeHeader* right_edge = (trace2_EdgeHeader*)currptr2;
 
@@ -1328,7 +1328,7 @@ void xtrans2_outputxt(void) {
  *   7. Clear marking / objflag / objectcount state touched this scanline.
  *   8. Advance videoypos / logbufypos / currentypos.
  * ========================================================================== */
-// FUNCTION: TIE 0x626C0
+// FUNCTION: TIE95 0x626C0
 void xtrans2_drawxtrans(void) {
 	/* Running locals mirroring the decompiler's register spills for
 	 * tempptr / currptr / maskptr. These are written back to the matching

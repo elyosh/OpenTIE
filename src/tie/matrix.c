@@ -22,7 +22,7 @@
 #include "landru/res.h"
 #include "tie/matrix.h"
 
-// FUNCTION: TIE 0x89040
+// FUNCTION: TIE95 0x89040
 Matrix* matrix_Alloc_Matrix(void) {
 	Matrix* m = (Matrix*)malloc(sizeof(Matrix));
 	if (m)
@@ -30,7 +30,7 @@ Matrix* matrix_Alloc_Matrix(void) {
 	return m;
 }
 
-// FUNCTION: TIE 0x8905C
+// FUNCTION: TIE95 0x8905C
 void matrix_Init_Matrix(Matrix* m) {
 	m->frame_count = 0;
 	m->trans_count = 0;
@@ -38,7 +38,7 @@ void matrix_Init_Matrix(Matrix* m) {
 	m->data = LANDRU_NULL_HANDLE;
 }
 
-// FUNCTION: TIE 0x89074
+// FUNCTION: TIE95 0x89074
 Matrix* matrix_Res_Matrix(ResFile* rf, const char* name) {
 	int offset;
 	uint32_t total_size;
@@ -68,7 +68,7 @@ Matrix* matrix_Res_Matrix(ResFile* rf, const char* name) {
 	return m;
 }
 
-// FUNCTION: TIE 0x89154
+// FUNCTION: TIE95 0x89154
 void matrix_Free_Matrix(Matrix* m) {
 	if (m->data)
 		xmemhdl_Free_Handle(m->data);
@@ -82,7 +82,7 @@ void matrix_Free_Matrix(Matrix* m) {
  * the last translation entry survives). Real .MTRX assets use
  * trans_count <= 1, so this is harmless in practice.
  */
-// FUNCTION: TIE 0x89174
+// FUNCTION: TIE95 0x89174
 int16_t matrix_Get_Matrix_Frame(Matrix* m, MatrixFrame* dest, int16_t frame) {
 	if (frame >= m->frame_count)
 		return 0;

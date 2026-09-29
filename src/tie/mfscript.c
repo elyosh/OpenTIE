@@ -390,14 +390,14 @@ static CueRef cut14Seq[4] = {
 };
 
 /* Runtime state */
-// GLOBAL: TIE 0xD498C
+// GLOBAL: TIE95 0xFB608
 static int32_t rseed1;
-// GLOBAL: TIE 0xD4990
+// GLOBAL: TIE95 0xFB60C
 static int32_t rseed2;
 static int16_t currentCuePoint;
-// GLOBAL: TIE 0xD4994
+// GLOBAL: TIE95 0xFB610
 static int16_t currentSequence;
-// GLOBAL: TIE 0xD49A4
+// GLOBAL: TIE95 0xFB612
 static int16_t currentState;
 
 /* --- Internal helpers --- */
@@ -414,7 +414,7 @@ static void DoCallback(void);
 
 /* --- Public API --- */
 
-// FUNCTION: TIE 0x87BE0
+// FUNCTION: TIE95 0x87BE0
 int16_t mfscript_MfStartScript(void* idp) {
 	(void)idp;
 	currentState = 0;
@@ -426,20 +426,20 @@ int16_t mfscript_MfStartScript(void* idp) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x87C28
+// FUNCTION: TIE95 0x87C28
 int16_t mfscript_MfStopScript(void) {
 	imuse_stop_all_sounds(im);
 	imuse_filelist_unload_all(im);
 	return 0;
 }
 
-// FUNCTION: TIE 0x87C44
+// FUNCTION: TIE95 0x87C44
 int16_t mfscript_MfRefreshScript(void) {
 	imuse_filelist_flush(im);
 	return 0;
 }
 
-// FUNCTION: TIE 0x87C50
+// FUNCTION: TIE95 0x87C50
 int16_t mfscript_MfSetState(int16_t state) {
 	StateRef *oldSrp, *newSrp;
 	ChangeRef* cgp;
@@ -485,7 +485,7 @@ int16_t mfscript_MfSetState(int16_t state) {
 	return state;
 }
 
-// FUNCTION: TIE 0x87D74
+// FUNCTION: TIE95 0x87D74
 int16_t mfscript_MfSetSequence(int16_t sequence) {
 	CueRef *sqp, *crp;
 	StateRef* srp;
@@ -534,7 +534,7 @@ int16_t mfscript_MfSetSequence(int16_t sequence) {
 	return currentSequence;
 }
 
-// FUNCTION: TIE 0x87EEC
+// FUNCTION: TIE95 0x87EEC
 int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 	CueRef *sqp, *crp, *nextCrp;
 	ChangeRef* cgp;

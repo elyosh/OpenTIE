@@ -13,15 +13,15 @@
  * ==================================================================== */
 
 /* Extern (shared with drawpol callers). */
-// GLOBAL: TIE 0xD35EC
+// GLOBAL: TIE95 0xD35EC
 int32_t* point1ptr;
 int16_t linelightincy;
 int16_t linelightincx;
-// GLOBAL: TIE 0xD35FC
+// GLOBAL: TIE95 0xD35FC
 uint16_t thickness;
-// GLOBAL: TIE 0xD35F4
+// GLOBAL: TIE95 0xD35F4
 int16_t linelight1;
-// GLOBAL: TIE 0xD35F6
+// GLOBAL: TIE95 0xD35F6
 int16_t linelight2;
 
 /* Static (file-private per watdbg 'static OPAQUE'). */
@@ -61,7 +61,7 @@ static inline int clear_b1_lsb(int x) {
 /* ======================================================================
  * drawln2_tracelineedges
  * ==================================================================== */
-// FUNCTION: TIE 0x1C6D0
+// FUNCTION: TIE95 0x1C6D0
 void drawln2_tracelineedges(int32_t* pt2) {
 	int32_t* pt1ptr = point1ptr;
 

@@ -17,10 +17,10 @@ void* statusstrings;
 /* Place-value table, 6 entries matching the 12-byte binary layout.
  * placevalue[pos] is the divisor used to extract the digit at position
  * 'pos' (1-based: 1=ones, 2=tens, ..., 5=ten-thousands). Entry 0 is dead. */
-// GLOBAL: TIE 0xC7204
+// GLOBAL: TIE95 0xC7204
 uint16_t placevalue[6] = { 1, 1, 10, 100, 1000, 10000 };
 
-// FUNCTION: TIE 0x44E30
+// FUNCTION: TIE95 0x44E30
 uint16_t panelrts_setnewpilotview(uint16_t view_idx) {
 	if (panelviewdefs[view_idx].flags == 0)
 		return 0;
@@ -34,7 +34,7 @@ uint16_t panelrts_setnewpilotview(uint16_t view_idx) {
 	return 1;
 }
 
-// FUNCTION: TIE 0x44E8C
+// FUNCTION: TIE95 0x44E8C
 void panelrts_outnum(int32_t value, uint16_t ndigits, uint16_t minpad) {
 	/* "unknown" placeholder: draw ndigits '0' glyphs in color 0x40 with the
 	 * drop-shadow disabled, then restore the previous drop / text state.

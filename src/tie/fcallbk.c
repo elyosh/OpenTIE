@@ -24,7 +24,7 @@ int fcallbk_CbSetChannels(void);
 
 /* ================================================================ */
 
-// FUNCTION: TIE 0x1FFB0
+// FUNCTION: TIE95 0x1FFB0
 void fcallbk_CbInitialize(void) { /* No-op — all state lives in FSCRIPT globals */ }
 
 /*
@@ -113,7 +113,7 @@ int fcallbk_CbDoCallback(int marker_type) {
  * Intro state: uses introBuildup[], with fading for changed channels.
  * Waiting state: uses waitingBuildup[], immediate set.
  */
-// FUNCTION: TIE 0x201C0
+// FUNCTION: TIE95 0x201C0
 int fcallbk_CbSetChannels(void) {
 	if (playingState == 1 && imuse_filelist_find(im, "tro-in") != currentID &&
 		imuse_filelist_find(im, "wait-seq") != currentID) {

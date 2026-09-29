@@ -35,16 +35,16 @@ static Actor* blue_bar;
 static Actor* credit_actor; /* custom draw actor for the credits */
 static Actor* stars_actor;
 static int16_t next_credit_scene;
-// GLOBAL: TIE 0xF5E02
+// GLOBAL: TIE95 0xF5E02
 static int16_t credit_text_len; /* hold duration per credit (130) */
 static int16_t film_time;       /* current frame counter */
-// GLOBAL: TIE 0xF5E06
+// GLOBAL: TIE95 0xF5E06
 static void* star_buffer; /* 320x100 star pixel cache */
-// GLOBAL: TIE 0xF5E08
+// GLOBAL: TIE95 0xF5E08
 static int16_t num_credit_lines; /* paragraph count in credit text */
-// GLOBAL: TIE 0xF5E0A
+// GLOBAL: TIE95 0xF5E0A
 static int16_t credit_film_len; /* total animation length */
-// GLOBAL: TIE 0xF5E0C
+// GLOBAL: TIE95 0xF5E0C
 static LandruHandle credit_text; /* paragraph data from tietext0.lfd */
 
 /* ================================================================

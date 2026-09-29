@@ -49,7 +49,7 @@ static int16_t transition_check[] = { 120, 121, 130, 131, 270, 4, 0 };
 
 /* --- Functions --- */
 
-// FUNCTION: TIE 0x65C61
+// FUNCTION: TIE95 0x65C61
 void shellext_Open_Landru(void* extern_mem, int16_t use_timer, int16_t use_script) {
 	const TieFrontendProfile* profile = TieProfile_Frontend();
 	Rect r;
@@ -112,7 +112,7 @@ void shellext_Open_Landru(void* extern_mem, int16_t use_timer, int16_t use_scrip
 	shellext_Load_Preferences();
 }
 
-// FUNCTION: TIE 0x65E67
+// FUNCTION: TIE95 0x65E67
 void shellext_Close_Landru(int16_t use_timer) {
 	Rect r;
 
@@ -136,7 +136,7 @@ void shellext_Close_Landru(int16_t use_timer) {
 	asl_Close_ASL();
 }
 
-// FUNCTION: TIE 0x65F0F
+// FUNCTION: TIE95 0x65F0F
 void shellext_Open_Landru_Scene(int16_t scene) {
 	xerror_Clear_Landru_Escape();
 	xerror_Clear_Landru_Exit();
@@ -188,7 +188,7 @@ void shellext_Begin_Close_Landru_Scene(int16_t scene, int16_t* out_sudden_end) {
  * sudden-end fade pushed by the caller has popped. */
 void shellext_Finalize_Close_Landru_Scene(void) { xcanvas_Copy_Screen_To_Diff(); }
 
-// FUNCTION: TIE 0x66006
+// FUNCTION: TIE95 0x66006
 ResFile* shellext_Open_Empire_Resource(const char* filename) {
 	char res_name[64];
 
@@ -197,7 +197,7 @@ ResFile* shellext_Open_Empire_Resource(const char* filename) {
 	return xres_Open_Resource(res_name);
 }
 
-// FUNCTION: TIE 0x6604F
+// FUNCTION: TIE95 0x6604F
 LandruFile* shellext_Open_Empire_File(const char* filename, const char* mode) {
 	char file_name[64];
 
@@ -208,12 +208,12 @@ LandruFile* shellext_Open_Empire_File(const char* filename, const char* mode) {
 
 int16_t shellext_Check_Cur_Scene(int16_t current_scene) { return sHead_gbl->cur_scene == current_scene; }
 
-// FUNCTION: TIE 0x6621B
+// FUNCTION: TIE95 0x6621B
 int16_t shellext_Get_Cur_Scene(void) { return sHead_gbl->cur_scene; }
 
 int16_t shellext_Check_Last_Scene(int16_t last_scene) { return sHead_gbl->last_scene == last_scene; }
 
-// FUNCTION: TIE 0x66297
+// FUNCTION: TIE95 0x66297
 int16_t shellext_Get_Last_Scene(void) { return sHead_gbl->last_scene; }
 
 int16_t shellext_Is_Scene_Exit(int16_t scene_flag) {
@@ -227,7 +227,7 @@ int16_t shellext_Is_Scene_Exit(int16_t scene_flag) {
 	return scene_flag;
 }
 
-// FUNCTION: TIE 0x66338
+// FUNCTION: TIE95 0x66338
 int16_t shellext_Check_Scene_Exit(int16_t* exit_id, int16_t next_scene, int16_t next_section,
 								  int16_t scene_flag) {
 	int16_t key;
@@ -253,13 +253,13 @@ int16_t shellext_Check_Scene_Exit(int16_t* exit_id, int16_t next_scene, int16_t 
 	return 1;
 }
 
-// FUNCTION: TIE 0x663ED
+// FUNCTION: TIE95 0x663ED
 int16_t shellext_Sudden_Scene_End(void) {
 	sHead_gbl->sudden_end = 1;
 	return 1;
 }
 
-// FUNCTION: TIE 0x66423
+// FUNCTION: TIE95 0x66423
 int16_t shellext_Is_Sudden_Scene_End(void) { return sHead_gbl->sudden_end; }
 
 /* Push the "back stage to VGA" fade task: caller-task yields after
@@ -287,7 +287,7 @@ void shellext_Push_Sudden_Scene_Fade_Task(void) {
 	shellext_Push_Back_Stage_To_VGA_Task(0);
 }
 
-// FUNCTION: TIE 0x66526
+// FUNCTION: TIE95 0x66526
 int16_t shellext_escape_TIE(void) {
 	/* ESC key handler: outside an active dialog/fade and once a view
 	 * has accumulated time, push the in-flight Computer dialog
@@ -306,7 +306,7 @@ int16_t shellext_escape_TIE(void) {
 	return xerror_Get_Landru_Exit();
 }
 
-// FUNCTION: TIE 0x6659A
+// FUNCTION: TIE95 0x6659A
 void shellext_Load_Preferences(void) {
 	char name[16];
 	LandruFile* the_file;
@@ -348,7 +348,7 @@ void shellext_Load_Preferences(void) {
 	shellext_Set_Prefs_Sound();
 }
 
-// FUNCTION: TIE 0x666A9
+// FUNCTION: TIE95 0x666A9
 int16_t shellext_Set_Prefs_Sound(void) {
 	if (options_gbl.music_active && options_gbl.music_volume)
 		imuse_set_music_vol(im, options_gbl.music_volume * 8 - 1);
@@ -368,7 +368,7 @@ int16_t shellext_Set_Prefs_Sound(void) {
 	return 1;
 }
 
-// FUNCTION: TIE 0x66779
+// FUNCTION: TIE95 0x66779
 int16_t shellext_Convert_Transition(int16_t scene, int16_t sudden) {
 	int16_t i;
 

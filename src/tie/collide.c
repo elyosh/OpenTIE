@@ -86,7 +86,7 @@ int16_t instrumentdisable[17] = { 0x200, 0x040, 0x020, 0x006,  0x400, 0x180, 0x0
  */
 
 /* ---------- 1. collide_makeobjectexplosion ---------- */
-// FUNCTION: TIE 0x15A24
+// FUNCTION: TIE95 0x15A24
 char collide_makeobjectexplosion(uint16_t obj_idx, uint8_t ship_variant) {
 	FlightObject* o = &objects[obj_idx];
 	TIE_FLIGHT_TRACE_EXPLOSION(obj_idx, ship_variant);
@@ -128,7 +128,7 @@ char collide_makeobjectexplosion(uint16_t obj_idx, uint8_t ship_variant) {
 }
 
 /* ---------- 2. collide_roughdistance3du ---------- */
-// FUNCTION: TIE 0x15AB8
+// FUNCTION: TIE95 0x15AB8
 uint32_t collide_roughdistance3du(uint32_t abs_dx, uint32_t abs_dy, uint32_t abs_dz) {
 	if (abs_dx > abs_dy && abs_dx > abs_dz)
 		return abs_dx + (abs_dy / 4) + (abs_dz / 4);
@@ -138,7 +138,7 @@ uint32_t collide_roughdistance3du(uint32_t abs_dx, uint32_t abs_dy, uint32_t abs
 }
 
 /* ---------- 3. collide_roughdistance3d ---------- */
-// FUNCTION: TIE 0x15AF0
+// FUNCTION: TIE95 0x15AF0
 int32_t collide_roughdistance3d(int32_t dx, int32_t dy, int32_t dz) {
 	if (dx < 0)
 		dx = -dx;
@@ -150,7 +150,7 @@ int32_t collide_roughdistance3d(int32_t dx, int32_t dy, int32_t dz) {
 }
 
 /* ---------- 4. collide_updatehits ---------- */
-// FUNCTION: TIE 0x164D0
+// FUNCTION: TIE95 0x164D0
 CraftData* collide_updatehits(uint16_t projectile_obj_idx) {
 	uint16_t self_idx = objects[projectile_obj_idx].self_idx;
 	uint16_t ship_idx = objects[projectile_obj_idx].ship_idx;
@@ -207,7 +207,7 @@ static int16_t apply_cut_threshold(int16_t cur_threshold, uint8_t cond) {
 }
 
 /* ---------- 5. collide_updatekills ---------- */
-// FUNCTION: TIE 0x16218
+// FUNCTION: TIE95 0x16218
 void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx) {
 	CraftData* shooter_craft;
 	uint16_t victim_specnum;
@@ -289,7 +289,7 @@ void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx) {
 /* Liang-Barsky-style swept-segment vs swept-AABB-extruded-by-radius
  * clip. Reads the laser/laserold and craft/craftold globals; writes
  * collide{x,y,z}off + returns 0xFFFF on hit, 0 on miss. */
-// FUNCTION: TIE 0x138C4
+// FUNCTION: TIE95 0x138C4
 int32_t collide_checkboxcollision(int32_t radius) {
 	int32_t seg_dx = laserx - laserxold;
 	int32_t seg_dy = lasery - laseryold;
@@ -532,7 +532,7 @@ int32_t collide_checkboxcollision(int32_t radius) {
 }
 
 /* ---------- 7. collide_lasercraftcollide ---------- */
-// FUNCTION: TIE 0x136C0
+// FUNCTION: TIE95 0x136C0
 uint16_t collide_lasercraftcollide(uint16_t attacker_obj_idx, uint16_t target_obj_idx) {
 	int32_t abs_dx = laserx - craftx;
 	int32_t abs_dy, abs_dz;
@@ -609,7 +609,7 @@ uint16_t collide_lasercraftcollide(uint16_t attacker_obj_idx, uint16_t target_ob
 }
 
 /* ---------- 8. collide_targetinrange ---------- */
-// FUNCTION: TIE 0x13E64
+// FUNCTION: TIE95 0x13E64
 uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx, uint8_t hp_idx) {
 	FlightObject* shooter = &objects[shooter_obj_idx];
 	FlightObject* tgt;
@@ -672,7 +672,7 @@ uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx
 }
 
 /* ---------- 9. collide_craftstarshipcollision ---------- */
-// FUNCTION: TIE 0x14124
+// FUNCTION: TIE95 0x14124
 uint16_t collide_craftstarshipcollision(uint16_t craft_obj_idx, int16_t lookahead_frames) {
 	int16_t lookahead_ticks = (int16_t)(lookahead_frames * framerate);
 	FlightObject* atk = &objects[craft_obj_idx];
@@ -722,7 +722,7 @@ uint16_t collide_craftstarshipcollision(uint16_t craft_obj_idx, int16_t lookahea
 }
 
 /* ---------- 10. collide_laserhitcraft ---------- */
-// FUNCTION: TIE 0x1433C
+// FUNCTION: TIE95 0x1433C
 char collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx, int16_t hit_offset) {
 	uint16_t self_idx;
 	CraftData* tgt_craft;
@@ -867,7 +867,7 @@ char collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
  *      (flight_flag=3, death_timer = random ticks), spawn a wing
  *      component, trigger MsSetSequence cue, score the kill.
  */
-// FUNCTION: TIE 0x148F0
+// FUNCTION: TIE95 0x148F0
 char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_t weapon_group,
 						 uint16_t attacker_obj_idx) {
 	TIE_FLIGHT_TRACE_DAMAGE_BEFORE(target_obj_idx);
@@ -1337,7 +1337,7 @@ static int32_t resolve_vert(const int16_t* p) {
 	return v;
 }
 
-// FUNCTION: TIE 0x15B38
+// FUNCTION: TIE95 0x15B38
 uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t y1, int32_t z1, int32_t x2,
 								  int32_t y2, int32_t z2, int32_t return_first_hit) {
 	const uint8_t* base = mesh_data;
@@ -1549,7 +1549,7 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
  * three passes (player-vs-craft + tractor + friendly-tag, player-vs-static,
  * genus-driven cross-craft / projectile / probe).
  */
-// FUNCTION: TIE 0x12740
+// FUNCTION: TIE95 0x12740
 void collide_collisions(void) {
 	uint16_t target_idx;
 	uint16_t projectile_idx;

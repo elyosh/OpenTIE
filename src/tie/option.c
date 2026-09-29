@@ -34,7 +34,7 @@
 
 /* In-flight audio and gameplay settings persisted across missions. */
 int8_t inflight_music_vol;
-// GLOBAL: TIE 0xC1551
+// GLOBAL: TIE95 0xC1551
 int8_t inflight_sound_vol;
 int8_t inflight_speech_vol;
 int8_t inflight_unlimited;
@@ -477,7 +477,9 @@ static int option_poll_once(OptionTask* t) {
 	return redraw ? 2 : 0;
 }
 
-// FUNCTION: TIE 0x34C40, TIE98 0x458340 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x34C40
+// ORIGINAL_FUNCTION: TIE98 0x458340
+// (task-split recovery)
 static LandruTaskStepResult option_task_step(void* self) {
 	OptionTask* t = (OptionTask*)self;
 

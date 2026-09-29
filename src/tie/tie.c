@@ -91,188 +91,229 @@
 /* species_table owned by species.c now (it has the static initializer
  * extracted from the binary's _species table). */
 CraftData crafts[NUM_CRAFTS];
-// GLOBAL: TIE 0xE38BC
+// GLOBAL: TIE95 0xE38BC
 FlightObject objects[NUM_OBJECTS];
-// GLOBAL: TIE 0xEA6D6
+// GLOBAL: TIE95 0xEA6D6
 StaticObject staticobjects[NUM_STATIC_OBJECTS];
-// GLOBAL: TIE 0xEB70C
+// GLOBAL: TIE95 0xEB70C
 uint16_t framerate = 20; /* populated by the frame-pacer; fallback value avoids divide-by-zero before init */
-// GLOBAL: TIE 0xEB712
+// GLOBAL: TIE95 0xEB712
 uint16_t frameticks;
 
 /* Rendering pipeline scratch (set by pai/fview each frame). */
-// GLOBAL: TIE 0xEB0E0
-// GLOBAL: TIE 0xEB0E4
-// GLOBAL: TIE 0xEB0E8
-int32_t rotatedx, rotatedy, rotatedz;
-// GLOBAL: TIE 0xEAC34
-// GLOBAL: TIE 0xEAC38
-// GLOBAL: TIE 0xEAC3C
-int32_t craftmoveX, craftmoveY, craftmoveZ;
+// GLOBAL: TIE95 0xEB0E0
+int32_t rotatedx;
+// GLOBAL: TIE95 0xEB0E4
+int32_t rotatedy;
+// GLOBAL: TIE95 0xEB0E8
+int32_t rotatedz;
+// GLOBAL: TIE95 0xEAC34
+int32_t craftmoveX;
+// GLOBAL: TIE95 0xEAC38
+int32_t craftmoveY;
+// GLOBAL: TIE95 0xEAC3C
+int32_t craftmoveZ;
 
 /* spec_data[] lives in spec.c (its watdbg owning module). */
-// GLOBAL: TIE 0xEB29C
+// GLOBAL: TIE95 0xEB29C
 RUNTIME_MissionState mission;
 
 int16_t fileerror;
 
 /* --- Display --- */
 
-// GLOBAL: TIE 0xEB148, TIE98 0x59190C
+// GLOBAL: TIE95 0xEB148
+// GLOBAL: TIE98 0x59190C
 int32_t screenXRes;
-// GLOBAL: TIE 0xEB14C, TIE98 0x591E34
+// GLOBAL: TIE95 0xEB14C
+// GLOBAL: TIE98 0x591E34
 int32_t screenYRes;
 /* Required before the first same-mode framebuffer allocation. */
-// GLOBAL: TIE 0xCD17C
+// GLOBAL: TIE95 0xCD17C
 int32_t bytesPerPixel = 1;
-// GLOBAL: TIE 0xCD180
+// GLOBAL: TIE95 0xCD180
 int16_t flightResolution;
 
 /* The linear framebuffer disables bank switching with an unbounded page. */
-// GLOBAL: TIE 0xCD170
+// GLOBAL: TIE95 0xCD170
 uint32_t vesa_page_size = 0xFFFFFFFFu;
-// GLOBAL: TIE 0xCD178
+// GLOBAL: TIE95 0xCD178
 uint8_t vesa_window;
-// GLOBAL: TIE 0xEB150
+// GLOBAL: TIE95 0xEB150
 int32_t screenMemWidth;
 
 /* --- Ship-render context (set by DRAW_Lockshipfileptrs). watdbg owner: tie.c. --- */
 struct ShipModelData* shipimageptr;
-// GLOBAL: TIE 0xEB27C
+// GLOBAL: TIE95 0xEB27C
 struct ShipModelData* objectblockptr;
-// GLOBAL: TIE 0xEB280
+// GLOBAL: TIE95 0xEB280
 struct ShipModelMesh* componentblockptr;
-// GLOBAL: TIE 0xEB28C
+// GLOBAL: TIE95 0xEB28C
 CraftData* craftptr;
-// GLOBAL: TIE 0xEB730
+// GLOBAL: TIE95 0xEB730
 int16_t shipdetailvalue;
-// GLOBAL: TIE 0xEB734
+// GLOBAL: TIE95 0xEB734
 uint16_t shipdetailpolycnt;
 
 /* --- World-to-eye rotation matrices. watdbg owner: tie.c. --- */
-// GLOBAL: TIE 0xEAC0C
-// GLOBAL: TIE 0xEAC10
-// GLOBAL: TIE 0xEAC14
-int32_t rotworldeyeA1, rotworldeyeA2, rotworldeyeA3;
-// GLOBAL: TIE 0xEABC8
-// GLOBAL: TIE 0xEABCC
-// GLOBAL: TIE 0xEAC18
-int32_t rotworldeyeB1, rotworldeyeB2, rotworldeyeB3;
-// GLOBAL: TIE 0xEABB8
-// GLOBAL: TIE 0xEABBC
-// GLOBAL: TIE 0xEABC4
-int32_t rotworldeyeC1, rotworldeyeC2, rotworldeyeC3;
+// GLOBAL: TIE95 0xEAC0C
+int32_t rotworldeyeA1;
+// GLOBAL: TIE95 0xEAC10
+int32_t rotworldeyeA2;
+// GLOBAL: TIE95 0xEAC14
+int32_t rotworldeyeA3;
+// GLOBAL: TIE95 0xEABC8
+int32_t rotworldeyeB1;
+// GLOBAL: TIE95 0xEABCC
+int32_t rotworldeyeB2;
+// GLOBAL: TIE95 0xEAC18
+int32_t rotworldeyeB3;
+// GLOBAL: TIE95 0xEABB8
+int32_t rotworldeyeC1;
+// GLOBAL: TIE95 0xEABBC
+int32_t rotworldeyeC2;
+// GLOBAL: TIE95 0xEABC4
+int32_t rotworldeyeC3;
 
 /* Perspective-projection constants (set by TIE_InitFlightResolution per
  * selected flight resolution). */
-// GLOBAL: TIE 0xEB771
+// GLOBAL: TIE95 0xEB771
 uint8_t perspShift;
-// GLOBAL: TIE 0xEB13C
+// GLOBAL: TIE95 0xEB13C
 int32_t perspFactor;
-// GLOBAL: TIE 0xEB140
+// GLOBAL: TIE95 0xEB140
 int32_t halfPerspFactor;
 
 /* Master enable for the skybox backdrop renderer. */
-// GLOBAL: TIE 0xEB775
+// GLOBAL: TIE95 0xEB775
 uint8_t drawbackdropflag;
 
 /* --- calc-frame rotation rows. tie.c. --- */
-// GLOBAL: TIE 0xEAC1C
-// GLOBAL: TIE 0xEAC20
-// GLOBAL: TIE 0xEAC24
-int32_t calcS1, calcS2, calcS3;
-// GLOBAL: TIE 0xEABF4
-// GLOBAL: TIE 0xEABF8
-// GLOBAL: TIE 0xEABFC
-int32_t calcf1, calcf2, calcf3;
-// GLOBAL: TIE 0xEABDC
-// GLOBAL: TIE 0xEABE0
-// GLOBAL: TIE 0xEABE4
-int32_t calcU1, calcU2, calcU3;
+// GLOBAL: TIE95 0xEAC1C
+int32_t calcS1;
+// GLOBAL: TIE95 0xEAC20
+int32_t calcS2;
+// GLOBAL: TIE95 0xEAC24
+int32_t calcS3;
+// GLOBAL: TIE95 0xEABF4
+int32_t calcf1;
+// GLOBAL: TIE95 0xEABF8
+int32_t calcf2;
+// GLOBAL: TIE95 0xEABFC
+int32_t calcf3;
+// GLOBAL: TIE95 0xEABDC
+int32_t calcU1;
+// GLOBAL: TIE95 0xEABE0
+int32_t calcU2;
+// GLOBAL: TIE95 0xEABE4
+int32_t calcU3;
 
 /* --- Current-craft orientation rows. tie.c. --- */
-// GLOBAL: TIE 0xEAC00
-// GLOBAL: TIE 0xEAC04
-// GLOBAL: TIE 0xEAC08
-int32_t craftS1, craftS2, craftS3;
-// GLOBAL: TIE 0xEAC28
-// GLOBAL: TIE 0xEAC2C
-// GLOBAL: TIE 0xEAC30
-int32_t craftf1, craftf2, craftf3;
-// GLOBAL: TIE 0xEABE8
-// GLOBAL: TIE 0xEABEC
-// GLOBAL: TIE 0xEABF0
-int32_t craftU1, craftU2, craftU3;
+// GLOBAL: TIE95 0xEAC00
+int32_t craftS1;
+// GLOBAL: TIE95 0xEAC04
+int32_t craftS2;
+// GLOBAL: TIE95 0xEAC08
+int32_t craftS3;
+// GLOBAL: TIE95 0xEAC28
+int32_t craftf1;
+// GLOBAL: TIE95 0xEAC2C
+int32_t craftf2;
+// GLOBAL: TIE95 0xEAC30
+int32_t craftf3;
+// GLOBAL: TIE95 0xEABE8
+int32_t craftU1;
+// GLOBAL: TIE95 0xEABEC
+int32_t craftU2;
+// GLOBAL: TIE95 0xEABF0
+int32_t craftU3;
 
 /* --- World/camera state. The 408-byte _camera struct from the binary
  * (see Camera typedef in tie.h) is owned here. replaycam lives in
  * replay.c. --- */
-// GLOBAL: TIE 0xE2D8C
+// GLOBAL: TIE95 0xE2D8C
 Camera camera;
 
-// GLOBAL: TIE 0xEB0C4
-// GLOBAL: TIE 0xEB0C8
-// GLOBAL: TIE 0xEB0D0
-int32_t worldlocx, worldlocy, worldlocz;
-// GLOBAL: TIE 0xEAC40
-// GLOBAL: TIE 0xEAC44
-// GLOBAL: TIE 0xEAC48
-int32_t worldx, worldy, worldz; /* watdbg-owned by tie.c */
-// GLOBAL: TIE 0xEB72C
+// GLOBAL: TIE95 0xEB0C4
+int32_t worldlocx;
+// GLOBAL: TIE95 0xEB0C8
+int32_t worldlocy;
+// GLOBAL: TIE95 0xEB0D0
+int32_t worldlocz;
+// GLOBAL: TIE95 0xEAC40
+int32_t worldx;
+// GLOBAL: TIE95 0xEAC44
+int32_t worldy;
+// GLOBAL: TIE95 0xEAC48
+int32_t worldz; /* watdbg-owned by tie.c */
+// GLOBAL: TIE95 0xEB72C
 uint16_t yAspect; /* watdbg-owned by tie.c; 0 = square pixels */
 int16_t objectsize;
 uint8_t gouraudflag;
-// GLOBAL: TIE 0xEAC54
-// GLOBAL: TIE 0xEAC58
-// GLOBAL: TIE 0xEAC5C
-int32_t objecteyex, objecteyey, objecteyez;
+// GLOBAL: TIE95 0xEAC54
+int32_t objecteyex;
+// GLOBAL: TIE95 0xEAC58
+int32_t objecteyey;
+// GLOBAL: TIE95 0xEAC5C
+int32_t objecteyez;
 
 /* --- Swept-segment globals for collision pipeline. tie.c. --- */
-// GLOBAL: TIE 0xEAB90
-// GLOBAL: TIE 0xEAB94
-// GLOBAL: TIE 0xEAB98
-int32_t laserx, lasery, laserz;
-// GLOBAL: TIE 0xEABD0
-// GLOBAL: TIE 0xEABD4
-// GLOBAL: TIE 0xEABD8
-int32_t laserxold, laseryold, laserzold;
-// GLOBAL: TIE 0xEAB80
-// GLOBAL: TIE 0xEABA8
-// GLOBAL: TIE 0xEABAC
-int32_t craftx, crafty, craftz;
-// GLOBAL: TIE 0xEABB0
-// GLOBAL: TIE 0xEABB4
-// GLOBAL: TIE 0xEABC0
-int32_t craftxold, craftyold, craftzold;
+// GLOBAL: TIE95 0xEAB90
+int32_t laserx;
+// GLOBAL: TIE95 0xEAB94
+int32_t lasery;
+// GLOBAL: TIE95 0xEAB98
+int32_t laserz;
+// GLOBAL: TIE95 0xEABD0
+int32_t laserxold;
+// GLOBAL: TIE95 0xEABD4
+int32_t laseryold;
+// GLOBAL: TIE95 0xEABD8
+int32_t laserzold;
+// GLOBAL: TIE95 0xEAB80
+int32_t craftx;
+// GLOBAL: TIE95 0xEABA8
+int32_t crafty;
+// GLOBAL: TIE95 0xEABAC
+int32_t craftz;
+// GLOBAL: TIE95 0xEABB0
+int32_t craftxold;
+// GLOBAL: TIE95 0xEABB4
+int32_t craftyold;
+// GLOBAL: TIE95 0xEABC0
+int32_t craftzold;
 int32_t gatex1, gatey1, gatez1;
 int32_t gatex2, gatey2, gatez2;
 int32_t gatenx, gateny, gatenz;
-// GLOBAL: TIE 0xEAB74
-// GLOBAL: TIE 0xEAB78
-// GLOBAL: TIE 0xEAB7C
-int32_t collidexoff, collideyoff, collidezoff;
+// GLOBAL: TIE95 0xEAB74
+int32_t collidexoff;
+// GLOBAL: TIE95 0xEAB78
+int32_t collideyoff;
+// GLOBAL: TIE95 0xEAB7C
+int32_t collidezoff;
 
 /* --- Targeting / damage state. tie.c. --- */
-// GLOBAL: TIE 0xEB724
+// GLOBAL: TIE95 0xEB724
 uint16_t bluetarget;
-// GLOBAL: TIE 0xEB71E
+// GLOBAL: TIE95 0xEB71E
 uint16_t currenttarget;
-// GLOBAL: TIE 0xEB718
+// GLOBAL: TIE95 0xEB718
 uint16_t currenttargetcomp;
 uint8_t drawmarkingsflag;
 
 /* --- Sound/input flags --- */
 
-// GLOBAL: TIE 0xEB769
+// GLOBAL: TIE95 0xEB769
 uint8_t musicenabled;
-// GLOBAL: TIE 0xEB76D
+// GLOBAL: TIE95 0xEB76D
 uint8_t voiceenabled;
-// GLOBAL: TIE 0xEB773
+// GLOBAL: TIE95 0xEB773
 uint8_t sfxenabled;
 
 /* --- Flight engine state --- */
 
-// GLOBAL: TIE 0xEB763, TIE98 0x596218
+// GLOBAL: TIE95 0xEB763
+// GLOBAL: TIE98 0x596218
 uint16_t maingameflag;
 uint8_t cheatingflag;
 
@@ -292,12 +333,12 @@ uint16_t idnumber;                              /* monotonic per-craft id */
 uint16_t currentdebrisslot = DEBRIS_FIRST_SLOT; /* cycled 112..119 (retail) by checkdebris */
 uint16_t missionversion;                        /* .TIE file version (0 = legacy) */
 uint16_t baseframerate = 20;                    /* mission base framerate (seeded by xtimer) */
-// GLOBAL: TIE 0xEB71C
+// GLOBAL: TIE95 0xEB71C
 uint16_t tickcounter;
 uint16_t targetblinkstate;
 int16_t targetblinkflag;
 uint16_t fullupdateflag;
-// GLOBAL: TIE 0xEB75D
+// GLOBAL: TIE95 0xEB75D
 uint8_t hyperspaceflag;
 uint8_t hyperabortflag;
 
@@ -315,16 +356,16 @@ uint16_t hypertemp2;
 /* drawdebrisflag -- enables the parallax-debris layer in BACKDRP2/CREATE.
  * Cleared to 0 during the hyperspace warp; restored from hypertemp2 in
  * phase 5. Owned by tie.c per watdbg. */
-// GLOBAL: TIE 0xEB776
+// GLOBAL: TIE95 0xEB776
 uint8_t drawdebrisflag;
 
 /* timers[20] -- the global cooldown bank. tie_updatetime decrements every
  * non-zero slot by frameticks and clamps to zero. Slots are named via the
  * TimerSlot enum in tie.h; consumers reset their slot to a tick count
  * (e.g. timers[TIMER_ANIM_UPDATE] = 29). */
-// GLOBAL: TIE 0xEB75C
+// GLOBAL: TIE95 0xEB75C
 uint8_t calcframerate;
-// GLOBAL: TIE 0xEB75E
+// GLOBAL: TIE95 0xEB75E
 uint8_t entercombatflag;
 /* Set by user_ejectcamera; gates beam/laser firing in laser_weaponsfire and
  * suppresses normal HUD/input updates after the player ejects. Cleared at
@@ -336,41 +377,41 @@ int16_t timers[20];
  * consumes recordingreplay / replaypercent / replaytotalcnt / replaymaxcnt
  * for the cockpit REC LED + %-remaining readout. replay.c / replayio.c
  * consume the rest. */
-// GLOBAL: TIE 0xEB6A6
+// GLOBAL: TIE95 0xEB6A6
 int16_t replaypercent;
-// GLOBAL: TIE 0xEB6CC
+// GLOBAL: TIE95 0xEB6CC
 int16_t recordingreplay;
-// GLOBAL: TIE 0xEAC50
+// GLOBAL: TIE95 0xEAC50
 int32_t replaytotalcnt;
-// GLOBAL: TIE 0xEAC60
+// GLOBAL: TIE95 0xEAC60
 int32_t replaymaxcnt;
 char replayclipname[14];
 char replaystartfile[10] = "start.rpy";
 char replaysavegamefile[13] = "savegame.rpy";
 char inputspoolfile[10] = "input.spl";
-// GLOBAL: TIE 0xEAC68
+// GLOBAL: TIE95 0xEAC68
 void* replayptr; /* write/read cursor into replaybuffer. */
-// GLOBAL: TIE 0xEB6AA
+// GLOBAL: TIE95 0xEB6AA
 uint16_t replaybuffercnt; /* frames in the current 3071-slot page. */
 int16_t replaybuffercntdown;
-// GLOBAL: TIE 0xEAC4C
+// GLOBAL: TIE95 0xEAC4C
 uint32_t replaytotalcntdown; /* playback counter (counts up toward replaytotalcnt). */
-// GLOBAL: TIE 0xEB6AC
+// GLOBAL: TIE95 0xEB6AC
 uint16_t replayrandomseed;
 int16_t replayviewtype;
 int16_t lastreplayviewtype;
 int16_t replayobjectnum;
 int16_t replaydebounce;
-// GLOBAL: TIE 0xEB6C4
+// GLOBAL: TIE95 0xEB6C4
 uint8_t replayviewmode;
-// GLOBAL: TIE 0xEB74C
+// GLOBAL: TIE95 0xEB74C
 uint8_t replayspoolflag; /* 1 = auto-spool to disk when buffer fills. */
 uint8_t endgamereplayflag;
 uint8_t replayescapeflag;
 uint8_t replayfpctr;
 uint8_t lastreplayname;
 uint8_t replayfg;
-// GLOBAL: TIE 0xEB751
+// GLOBAL: TIE95 0xEB751
 uint8_t updateactionflag; /* 1 = replay is actively advancing */
 uint16_t replayavailable; /* 1 if a saved film is loadable. */
 
@@ -381,14 +422,13 @@ uint8_t rescue_override_flag;
 
 /* Binary is u8 in both demo and retail. Readers only test for nonzero
  * and decrement, so the narrower type matches. */
-// GLOBAL: TIE 0xEB770
+// GLOBAL: TIE95 0xEB770
 uint8_t acceleratedtimectr;
-// GLOBAL: TIE 0xEB736
+// GLOBAL: TIE95 0xEB736
 int16_t hyperspacedetail;
 
-/* --- View-angle lookup table used by the 0..9 numpad view keys. Populated
- * at startup from a trig-derived formula; 512 entries in the binary. --- */
-// GLOBAL: TIE 0xCDB08
+/* Port-owned camera lookup storage. The original TIE95 square-root table
+ * at 0xCDB08 is represented by trig2.c, not this zero-initialized array. */
 int16_t squarerootable[512];
 
 /* Shield LED flash toggle (set by COLLIDE_damagecraft on hit; read by
@@ -414,19 +454,19 @@ const char _appendmode[3] = { 'a', 'b', '\0' };
 /* Rendering scratch (owned by tie.c per watdbg). maxPixelsDeep is set by
  * tie_initflightresolution per video mode; numbitmaps and lightflag are
  * written each frame by the 3D pipeline (anim.c / draw.c / xtrans2.c). */
-// GLOBAL: TIE 0xEB154
+// GLOBAL: TIE95 0xEB154
 int32_t maxPixelsDeep;
 int16_t numbitmaps;
-// GLOBAL: TIE 0xEB74A
+// GLOBAL: TIE95 0xEB74A
 uint8_t lightflag;
 
 /* Squared distance scratch written by pai_roughdistancebetween and
  * consumed by PANEL_addbliptoradar for the distance-fade color step.
  * Owned by tie.c per watdbg. */
-// GLOBAL: TIE 0xEB0EC
+// GLOBAL: TIE95 0xEB0EC
 int32_t roughdistance;
 uint16_t messageside; /* 0xF955A -- sampled by MSG_*message writers */
-// GLOBAL: TIE 0xDED54
+// GLOBAL: TIE95 0xDED54
 uint16_t argtable[4];      /* 0xED560 -- '*' and '&N' substitution slots */
 uint16_t messageloghandle; /* 0xF94F8 -- unused handle-shaped state */
 /* (pstate.space_confirm_action: 1=laser-warn ack, 2=abort mission,
@@ -435,9 +475,9 @@ uint16_t messageloghandle; /* 0xF94F8 -- unused handle-shaped state */
 uint8_t mtimer_state, mtimer_min, mtimer_sec;
 uint8_t mfile_time_min, mfile_time_sec;
 int16_t mfile_rnd_seed;
-// GLOBAL: TIE 0xE2F24
+// GLOBAL: TIE95 0xE2F24
 uint8_t radiomsg[1440];
-// GLOBAL: TIE 0xE34C4
+// GLOBAL: TIE95 0xE34C4
 EMissionGoal cut[4];
 
 /* Cockpit instrument knockout flag set by panel_updatecockpitdamage
@@ -458,102 +498,118 @@ int32_t approxdist;
 
 /* --- Input state (read/written by FEINPUT, consumed by screen modules) --- */
 
-// GLOBAL: TIE 0xEB6DE
+// GLOBAL: TIE95 0xEB6DE
 int16_t inputbuttons;
-// GLOBAL: TIE 0xEB6E8
+// GLOBAL: TIE95 0xEB6E8
 int16_t inputkey;
-// GLOBAL: TIE 0xEB6D2
+// GLOBAL: TIE95 0xEB6D2
 int16_t inputdeltax;
-// GLOBAL: TIE 0xEB6CE
+// GLOBAL: TIE95 0xEB6CE
 int16_t inputdeltay;
 int16_t inputdeltaroll;
-// GLOBAL: TIE 0xEB6DC
+// GLOBAL: TIE95 0xEB6DC
 int16_t mouseflag;
-// GLOBAL: TIE 0xEB708
+// GLOBAL: TIE95 0xEB708
 int16_t joystickflag;
-// GLOBAL: TIE 0xEB6F8
+// GLOBAL: TIE95 0xEB6F8
 int16_t joystickx;
-// GLOBAL: TIE 0xEB6F4
+// GLOBAL: TIE95 0xEB6F4
 int16_t joysticky;
 int16_t joystickroll;
 uint32_t inputthrottle = UINT32_MAX;
-// GLOBAL: TIE 0xEB6FC
+// GLOBAL: TIE95 0xEB6FC
 int16_t joybuttons;
-// GLOBAL: TIE 0xEB6D8
+// GLOBAL: TIE95 0xEB6D8
 int16_t mousebuttons;
-// GLOBAL: TIE 0xEB6FA
+// GLOBAL: TIE95 0xEB6FA
 int16_t keypress;
-// GLOBAL: TIE 0xEB6E2
+// GLOBAL: TIE95 0xEB6E2
 int16_t deltamx;
-// GLOBAL: TIE 0xEB6E0
+// GLOBAL: TIE95 0xEB6E0
 int16_t deltamy;
 int16_t mousex;
 int16_t mousey;
 int16_t joystickcount;
-// GLOBAL: TIE 0xEB772
+// GLOBAL: TIE95 0xEB772
 uint8_t graphicsmode;
-// GLOBAL: TIE 0xCD16C
+// GLOBAL: TIE95 0xCD16C
 int16_t detaillevel;
 
 void* viewfilmstr;
 
 /* --- FESTRING text output globals --- */
 
-// GLOBAL: TIE 0xEB702, TIE98 0x5A26D8
+// GLOBAL: TIE95 0xEB702
+// GLOBAL: TIE98 0x5A26D8
 int16_t cursorx;
-// GLOBAL: TIE 0xEB6FE, TIE98 0x5A26D0
+// GLOBAL: TIE95 0xEB6FE
+// GLOBAL: TIE98 0x5A26D0
 int16_t cursory;
-// GLOBAL: TIE 0xEB704, TIE98 0x5A26EA
+// GLOBAL: TIE95 0xEB704
+// GLOBAL: TIE98 0x5A26EA
 int16_t topmargin;
-// GLOBAL: TIE 0xEB706, TIE98 0x5A26CC
+// GLOBAL: TIE95 0xEB706
+// GLOBAL: TIE98 0x5A26CC
 int16_t bottommargin;
-// GLOBAL: TIE 0xEB70A, TIE98 0x5918E0
+// GLOBAL: TIE95 0xEB70A
+// GLOBAL: TIE98 0x5918E0
 int16_t leftmargin;
-// GLOBAL: TIE 0xEB700, TIE98 0x5926D0
+// GLOBAL: TIE95 0xEB700
+// GLOBAL: TIE98 0x5926D0
 int16_t rightmargin;
-// GLOBAL: TIE 0xEB754, TIE98 0x591D8A
+// GLOBAL: TIE95 0xEB754
+// GLOBAL: TIE98 0x591D8A
 uint8_t textcolor;
-// GLOBAL: TIE 0xEB756, TIE98 0x5A26CF
+// GLOBAL: TIE95 0xEB756
+// GLOBAL: TIE98 0x5A26CF
 uint8_t backcolor;
-// GLOBAL: TIE 0xEB757, TIE98 0x595DE2
+// GLOBAL: TIE95 0xEB757
+// GLOBAL: TIE98 0x595DE2
 uint8_t dropcolor;
-// GLOBAL: TIE 0xEB758, TIE98 0x595F5F
+// GLOBAL: TIE95 0xEB758
+// GLOBAL: TIE98 0x595F5F
 uint8_t dropflag;
-// GLOBAL: TIE 0xEB6F2, TIE98 0x592206
+// GLOBAL: TIE95 0xEB6F2
+// GLOBAL: TIE98 0x592206
 int16_t lwrapflag;
-// GLOBAL: TIE 0xEB6F0, TIE98 0x596BA4
+// GLOBAL: TIE95 0xEB6F0
+// GLOBAL: TIE98 0x596BA4
 int16_t autofillflag;
-// GLOBAL: TIE 0xEB6EE, TIE98 0x5A269C
+// GLOBAL: TIE95 0xEB6EE
+// GLOBAL: TIE98 0x5A269C
 int16_t flight_text_reserved_flag;
-// GLOBAL: TIE 0xEB75A, TIE98 0x5926A0
+// GLOBAL: TIE95 0xEB75A
+// GLOBAL: TIE98 0x5926A0
 uint8_t fontflag;
-// GLOBAL: TIE 0xEB755, TIE98 0x590E6D
+// GLOBAL: TIE95 0xEB755
+// GLOBAL: TIE98 0x590E6D
 uint8_t fontheight;
-// GLOBAL: TIE 0xEB6F6
+// GLOBAL: TIE95 0xEB6F6
 int16_t fontcharsize;
-// GLOBAL: TIE 0xEB759
+// GLOBAL: TIE95 0xEB759
 uint8_t fontlowercase;
-// GLOBAL: TIE 0xEAC70
+// GLOBAL: TIE95 0xEAC70
 void* curfontptr;
-// GLOBAL: TIE 0xDED7C
+// GLOBAL: TIE95 0xDED7C
 char tempstring[40];
 char temp2string[40];
 
 /* Graphics function pointers (assigned by FEINPUT_SetGraphicsPtrs) */
 void* initgraph;
-// GLOBAL: TIE 0xEB0FC
+// GLOBAL: TIE95 0xEB0FC
 void (*blank)(void);
-// GLOBAL: TIE 0xEB0F0
+// GLOBAL: TIE95 0xEB0F0
 void (*unblank)(void);
-// GLOBAL: TIE 0xEB0CC
+// GLOBAL: TIE95 0xEB0CC
 void (*buildpalette)(const uint8_t* rgb_src, uint16_t start_idx, uint16_t count);
 void* savepalette;
 void* restorepalette;
 uint32_t (*calcposition)(uint16_t, uint16_t);
 void (*drawshape)(const void*, int16_t, int16_t, int16_t, uint16_t);
-// GLOBAL: TIE 0xEB0F4
+// GLOBAL: TIE95 0xEB0F4
 void (*outchar)(int ch);
-// GLOBAL: TIE 0xEB100, TIE98 0x59222C
+// GLOBAL: TIE95 0xEB100
+// GLOBAL: TIE98 0x59222C
 void (*clearwindow)(void);
 void (*fillbox)(uint16_t, uint16_t, uint16_t, uint16_t);
 void* savebox;
@@ -573,7 +629,7 @@ void* restorebox;
  * labels, and message log all rendered in palette index 0 (black) on a
  * black background, producing the "empty cockpit" look.
  */
-// GLOBAL: TIE 0xC5810
+// GLOBAL: TIE95 0xC5810
 uint8_t color_remap_table[256] = {
 	/* 0x00 */ 0xC8,
 	0x00,
@@ -835,21 +891,22 @@ uint8_t color_remap_table[256] = {
 
 /* --- Buffer pointers --- */
 
-// GLOBAL: TIE 0xEAC74
+// GLOBAL: TIE95 0xEAC74
 uint8_t* farbufferptr;
 /* Shape pointer table shared with maproom_swap_buffer_ptrs. */
 uint8_t* farbufferptrs[265];
-// GLOBAL: TIE 0xEB0A4
+// GLOBAL: TIE95 0xEB0A4
 void* fontptrtiny;
-// GLOBAL: TIE 0xEB0AC
+// GLOBAL: TIE95 0xEB0AC
 void* fontptrmicro;
-// GLOBAL: TIE 0xEAC7C, TIE98 0x591E48
+// GLOBAL: TIE95 0xEAC7C
+// GLOBAL: TIE98 0x591E48
 void* newbuf;
-// GLOBAL: TIE 0xEAC64
+// GLOBAL: TIE95 0xEAC64
 void* xtransdataptr;
-// GLOBAL: TIE 0xEB0A8
+// GLOBAL: TIE95 0xEB0A8
 void* loadbuffer;
-// GLOBAL: TIE 0xEAC6C
+// GLOBAL: TIE95 0xEAC6C
 void* replaybufferstart;
 
 /* --- Starfield source data (watdbg owner: tie.c). ---
@@ -866,13 +923,15 @@ uint8_t starcol1;
  *                     cycling is active (checked by the cycle timer
  *                     and by blankVGA/unblankVGA).
  *   blankcondition -- bit field. Bit 0 = fade-to-black active. */
-// GLOBAL: TIE 0xEB760, TIE98 0x596208
+// GLOBAL: TIE95 0xEB760
+// GLOBAL: TIE98 0x596208
 uint8_t colorcycleflag;
-// GLOBAL: TIE 0xEB762, TIE98 0x5A2736
+// GLOBAL: TIE95 0xEB762
+// GLOBAL: TIE98 0x5A2736
 uint8_t blankcondition;
 
 /* Accelerated-game-clock gear shift (fediskio persists; xtimer uses it). */
-// GLOBAL: TIE 0xCD184
+// GLOBAL: TIE95 0xCD184
 uint8_t acceleratedtimesetting;
 
 /* Bitmap-draw queue populated by anim_add_bitmap_draw, consumed by
@@ -884,9 +943,9 @@ BitmapDrawEntry drawitems[ANIM_DRAWITEMS_MAX];
  * pending blast/voice SFX slots processed by fsfx_updatesfx; blastflag is
  * set on enqueue and cleared by the scheduler; blastcount tracks the
  * number of outstanding entries. */
-// GLOBAL: TIE 0xEB764
+// GLOBAL: TIE95 0xEB764
 uint8_t blastflag;
-// GLOBAL: TIE 0xEB761
+// GLOBAL: TIE95 0xEB761
 uint8_t blastcount;
 uint8_t blastqueue[FSFX_BLAST_QUEUE_SIZE];
 
@@ -894,7 +953,7 @@ uint8_t blastqueue[FSFX_BLAST_QUEUE_SIZE];
 WarheadRecord warheads[NUM_WARHEAD_SLOTS];
 
 /* VESA paging state. */
-// GLOBAL: TIE 0xCD174
+// GLOBAL: TIE95 0xCD174
 uint32_t vesa_grains_per_page;
 
 /* Starship LOD / explosion-LOD thresholds (written by user_updateflight). */
@@ -902,15 +961,17 @@ uint16_t starshipdetail;
 uint16_t starshipexplodetail;
 
 /* Directional-light vector rotated into the current craft's local frame. */
-// GLOBAL: TIE 0xEAB9C
-// GLOBAL: TIE 0xEABA0
-// GLOBAL: TIE 0xEABA4
-int32_t rotlightX, rotlightY, rotlightZ;
+// GLOBAL: TIE95 0xEAB9C
+int32_t rotlightX;
+// GLOBAL: TIE95 0xEABA0
+int32_t rotlightY;
+// GLOBAL: TIE95 0xEABA4
+int32_t rotlightZ;
 // GLOBAL: TIE98 0x4F2A70
 int32_t g_localLightsEnabled = 1;
 // GLOBAL: TIE98 0x4F3C68
 int32_t g_explosionLightBase = 256;
-// GLOBAL: TIE 0xEB144
+// GLOBAL: TIE95 0xEB144
 int16_t thicknessMultiple;
 
 /* Draw color used for training-gate silhouettes. */
@@ -918,11 +979,11 @@ uint16_t gatecolor;
 
 /* .TIE file/path scratch. The binary sizes the buffer at 64 bytes to hold
  * a full DOS directory + filename. */
-// GLOBAL: TIE 0xCD185
+// GLOBAL: TIE95 0xCD185
 char missionfilename[64];
 
 /* Front-end vs flight resolution selectors. */
-// GLOBAL: TIE 0xCD182
+// GLOBAL: TIE95 0xCD182
 int16_t frontResolution;
 
 /* --- TIE module per-frame engine driver state (defined here because
@@ -932,22 +993,22 @@ int16_t frontResolution;
  * opens the in-flight map; cleared at the top of each TIE_doframe before
  * USER_userinterface runs. The post-userinterface check `!end_flag &&
  * !mapflag` is what suspends the world-render block while the map is up. */
-// GLOBAL: TIE 0xEB767
+// GLOBAL: TIE95 0xEB767
 uint8_t mapflag;
 
 /* Replay fast-forward UI state. fastforwardtimer (initialized to 236)
  * counts the ticks left before the next render frame; tie_doframe drains
  * it by frameticks each call. Reloaded with +236 when a render fires. */
-// GLOBAL: TIE 0xEB750
+// GLOBAL: TIE95 0xEB750
 uint8_t fastforwardflag;
-// GLOBAL: TIE 0xEB6BC
+// GLOBAL: TIE95 0xEB6BC
 int16_t fastforwardtimer;
 
 /* Hyperspace-cinematic + reload-mission gate. Was the binary's
  * byte_D354C — set non-zero by SHELLEXT_loadprefs when "transitions" is
  * enabled in the player's preferences. tie_simulator only triggers
  * CREATE_createhyperin when this is set. */
-// GLOBAL: TIE 0xD354C
+// GLOBAL: TIE95 0xD354C
 uint8_t transitions_on;
 
 /* Retail-only special-features dword (binary's dword_D3548). Gate for
@@ -960,7 +1021,7 @@ uint32_t special_features_flag;
 
 /* Snapshot of XTIMER tickcounter taken at the top of tie_doframe (live
  * branch). Used to seed framerate / frameticks for this frame. */
-// GLOBAL: TIE 0xEB6A2
+// GLOBAL: TIE95 0xEB6A2
 int16_t lastcounter;
 
 /* HUD target-blink tick countdown. Decremented by frameticks per call to
@@ -981,13 +1042,14 @@ uint8_t musicflag; /* iMUSE script live? */
 int16_t music_state = 1;
 uint16_t music_intensity;
 uint8_t debugnum; /* on-screen debug overlay enabled */
-// GLOBAL: TIE 0xEB768
+// GLOBAL: TIE95 0xEB768
 uint8_t graphicsinit; /* video mode set + buffers allocated */
 uint8_t soundinit;    /* iMUSE init complete */
 uint8_t outputflag;   /* msg / festring writes enabled */
-// GLOBAL: TIE 0xEB748, TIE98 0x59266C
+// GLOBAL: TIE95 0xEB748
+// GLOBAL: TIE98 0x59266C
 uint8_t colorcycleuserflag; /* user-side palette-cycling enable (transient) */
-// GLOBAL: TIE 0xEB746
+// GLOBAL: TIE95 0xEB746
 uint8_t panelflag; /* cockpit-panel rendering enabled */
 
 /* "Map icons loaded" latch (binary's byte_CD1C5 in retail, byte_DC409 in
@@ -1003,17 +1065,17 @@ uint8_t mapiconsloaded;
  *   (palette_cycle_user & colorcycleflag) || colorcycleuserflag
  * so this is the persistent user setting; colorcycleuserflag is the
  * transient runtime toggle. tie_simulator sets it to 1 at startup. */
-// GLOBAL: TIE 0xEB766
+// GLOBAL: TIE95 0xEB766
 uint8_t palette_cycle_user;
 
 /* Always zero because the host does not use DOS expanded memory. */
-// GLOBAL: TIE 0xD5B0C
+// GLOBAL: TIE95 0xD5B0C
 int panels_in_ems;
 
 /* Write-only simulator initialization flags. */
-// GLOBAL: TIE 0xEB76C
+// GLOBAL: TIE95 0xEB76C
 uint8_t deadflag_EB76C;
-// GLOBAL: TIE 0xEB774
+// GLOBAL: TIE95 0xEB774
 uint8_t deadflag_EB774;
 
 /* Last iMUSE music state pushed by tie_updatemusic. Latched here so the
@@ -1036,7 +1098,8 @@ static void view_replay_prompt_Push_Task(uint16_t saved_master_vol);
 
 /* Configure flight geometry for VGA or the 640x480 modes and select the
  * corresponding CP320/CP640 cockpit asset directory. */
-// FUNCTION: TIE 0x56048, TIE98 0x48D850
+// FUNCTION: TIE95 0x56048
+// FUNCTION: TIE98 0x48D850
 void tie_initflightresolution(void) {
 	const bool dx5_display = TieClassicDisplay_UsesDx5();
 	/* PORT: display ownership and mode selection happen at the simulator,
@@ -1123,7 +1186,7 @@ void tie_initflightresolution(void) {
  * into the globals (worldx/y/z, objecteyex/y/z) AND into the craft's
  * eye_{x,y,z}_cache slots. Identical to the demo version (byte-for-byte
  * match after absolute-address normalization). */
-// FUNCTION: TIE 0x57518
+// FUNCTION: TIE95 0x57518
 void tie_getobjecteyexyz(uint16_t obj_idx) {
 	FlightObject* obj = &objects[obj_idx];
 
@@ -1158,7 +1221,7 @@ void tie_getobjecteyexyz(uint16_t obj_idx) {
  *   |eye_y| - bound        <= eye_z+bound (within view cone slope 1)
  *
  * Identical to demo. */
-// FUNCTION: TIE 0x575E4
+// FUNCTION: TIE95 0x575E4
 int16_t tie_checkobjecteyexyz(uint16_t obj_idx, uint16_t bound) {
 	FlightObject* obj = &objects[obj_idx];
 	int near_far_extent;
@@ -1197,7 +1260,7 @@ int16_t tie_checkobjecteyexyz(uint16_t obj_idx, uint16_t bound) {
  * depth/view-cone tests so the function only computes the eye coords.
  *
  * Identical to demo. */
-// FUNCTION: TIE 0x576E4
+// FUNCTION: TIE95 0x576E4
 int16_t tie_checkstaticobjecteyexyz(int16_t wx, int16_t wy, int16_t wz, uint16_t bound) {
 	int near_far_extent;
 	int abs_x, abs_y;
@@ -1227,7 +1290,7 @@ int16_t tie_checkstaticobjecteyexyz(int16_t wx, int16_t wy, int16_t wz, uint16_t
 
 /* Build up to eight explosion lights in the source craft's reflected local
  * basis (side, -forward, up). Returns and stores the emitted count. */
-// FUNCTION: TIE 0x57158
+// FUNCTION: TIE95 0x57158
 int tie_makelocallights(int obj_idx) {
 	uint32_t max_distance_sq;
 
@@ -1367,7 +1430,8 @@ int tie_makelocallights(int obj_idx) {
 	return light_count;
 }
 
-// FUNCTION: TIE98 0x48EC60 TIE_MakeLocalLights
+// FUNCTION: TIE98 0x48EC60
+// TIE_MakeLocalLights
 int tie_makelocallights_tie98(FlightObject* src_obj) {
 	localLightCnt = 0;
 	if (!g_localLightsEnabled)
@@ -1482,9 +1546,9 @@ int tie_makelocallights_tie98(FlightObject* src_obj) {
 
 /* Advance global and craft timers, target blinking, mission clock and warning,
  * pilot damage bookkeeping, object ages, and message ages. */
-// FUNCTION: TIE 0x577F4
 static uint16_t s_ai_timer_elapsed_ticks;
 
+// FUNCTION: TIE95 0x577F4
 void tie_updatetime(void) {
 	/* systemmask[10] / damagemsg[10] declared in collide.h. */
 	/* Polar distance scratch: trig2_polardistance is set by the binary's
@@ -1708,7 +1772,7 @@ static void tie_run_animation(TieFlightCadence cadence) {
 /* Throttled iMUSE state evaluator. Training progress, objective state,
  * hostile proximity, missile locks, and force balance determine the music
  * state and intensity. */
-// FUNCTION: TIE 0x57C7C
+// FUNCTION: TIE95 0x57C7C
 void tie_updatemusic(void) {
 	/* music_state / music_intensity are file-scope globals (see top of
 	 * tie.c); we seed them fresh at entry to match the binary's
@@ -1975,7 +2039,8 @@ static void tie_start_tie98_mission_music(void) {
 	}
 }
 
-// FUNCTION: TIE98 0x48D9B0 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE98 0x48D9B0
+// (task-split recovery)
 static bool tie_doframe_tie98(void) {
 	if (!Tie98Renderer_ApplyPending())
 		return false;
@@ -2128,7 +2193,7 @@ static bool tie_doframe_tie98(void) {
 	return true;
 }
 
-// FUNCTION: TIE 0x56270
+// FUNCTION: TIE95 0x56270
 bool tie_doframe(void) {
 	if (TieProfile_UsesTie98Logic())
 		return tie_doframe_tie98();
@@ -2308,7 +2373,7 @@ void tie_updatescreen(void) {
 	tie_updatescreen_tie95();
 }
 
-// FUNCTION: TIE 0x56574
+// FUNCTION: TIE95 0x56574
 static void tie_updatescreen_tie95(void) {
 	/* SNAPSHOT-ONLY: reset the per-tick HD billboard capture caches
 	 * here, at the start of every tick that actually renders the 3D
@@ -2930,7 +2995,9 @@ static void tie_simulator_setup_mission_and_push(void) {
 	tie_Push_FlightMission_Task();
 }
 
-// FUNCTION: TIE 0x55A60, TIE98 0x48CF10 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x55A60
+// ORIGINAL_FUNCTION: TIE98 0x48CF10
+// (task-split recovery)
 static LandruTaskStepResult tie_simulator_task_step(void* self) {
 	TieSimulatorTask* t = (TieSimulatorTask*)self;
 

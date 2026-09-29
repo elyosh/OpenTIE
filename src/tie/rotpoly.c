@@ -6,7 +6,7 @@
 #define EDGE_TABLE_U_OFFSET 200 /* 400 bytes / sizeof(int16_t) */
 #define EDGE_TABLE_V_OFFSET 400 /* 800 bytes / sizeof(int16_t) */
 
-// FUNCTION: TIE 0x87890
+// FUNCTION: TIE95 0x87890
 void rotpoly_Build_Ratio(int16_t* dest, int16_t count, int16_t start, int16_t end) {
 	int16_t i, accum, delta;
 
@@ -41,7 +41,7 @@ void rotpoly_Build_Ratio(int16_t* dest, int16_t count, int16_t start, int16_t en
 	}
 }
 
-// FUNCTION: TIE 0x87934
+// FUNCTION: TIE95 0x87934
 void rotpoly_Map_Image(void* src_data, const int16_t* left_table, int16_t src_stride,
 					   const int16_t* right_table, int16_t num_scanlines, int16_t start_y) {
 	BitmapStruct* canvas_bm;

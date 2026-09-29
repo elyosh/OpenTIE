@@ -34,7 +34,7 @@ static const char TS_PAD_MS[] = "00:00 ";
 
 /* --- msgroom_scrollmsgs -- */
 
-// FUNCTION: TIE 0x34A54
+// FUNCTION: TIE95 0x34A54
 int16_t msgroom_scrollmsgs(int16_t cur_idx, int16_t delta) {
 	if (numhistorymsgs == 0 || lasthistorymsg == -1)
 		return cur_idx;
@@ -277,7 +277,9 @@ static int msgroom_poll_once(MsgRoomTask* t) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x34340, TIE98 0x4570C0 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x34340
+// ORIGINAL_FUNCTION: TIE98 0x4570C0
+// (task-split recovery)
 static LandruTaskStepResult msgroom_task_step(void* self) {
 	MsgRoomTask* t = (MsgRoomTask*)self;
 

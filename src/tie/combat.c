@@ -67,18 +67,19 @@ static Film* combat_film;
 static Input* world_input;
 static Input* button_input[8];
 static Input* monitor_input;
-// GLOBAL: TIE 0xF5790
+// GLOBAL: TIE95 0xF58E0
 static Actor* arrow_actor;
-// GLOBAL: TIE 0xF5780
+// GLOBAL: TIE95 0xF58D8
 static Actor* button[7];
-// GLOBAL: TIE 0xF57A0; TIE98 0x50AA6C
+// GLOBAL: TIE95 0xF58FC
+// GLOBAL: TIE98 0x50AA6C
 static Actor* helmet;
 // GLOBAL: TIE98 0x50AAA8
 static int32_t combat_time;
 // GLOBAL: TIE98 0x50AA58
 static int32_t combat_mode;
 static int32_t combat_round;
-// GLOBAL: TIE 0xF5910
+// GLOBAL: TIE95 0xF5910
 static int16_t combat_help;
 static int16_t combat_num_scores;
 static GameScoreHead* combat_score_data;
@@ -102,7 +103,7 @@ static void combat_user_Combat_Helmet(Actor* the_actor, int32_t time);
  * Generates filename: ship01-12.hgh or battle01+.hgh.
  * Caches by combat_score_id to avoid redundant loads.
  */
-// FUNCTION: TIE 0x6DF54
+// FUNCTION: TIE95 0x6DF54
 static void combat_Load_Combat_High_Scores(void) {
 	int16_t ship = shipext_Get_Combat_Ship();
 	if (ship == combat_score_id)
@@ -133,7 +134,7 @@ static void combat_Load_Combat_High_Scores(void) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6CE98
+// FUNCTION: TIE95 0x6CE98
 static void combat_end_Combat_View(int32_t time) {
 	if (time == 0 && !xcursor_Is_Cursor_Visible())
 		xcursor_Show_Cursor();
@@ -141,7 +142,8 @@ static void combat_end_Combat_View(int32_t time) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6CEAC; TIE98 0x40A710
+// FUNCTION: TIE95 0x6CEAC
+// FUNCTION: TIE98 0x40A710
 static int16_t combat_film_Combat_Callback(Film* the_film, FilmObject* film_object) {
 	if (combat_svga && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
@@ -196,7 +198,8 @@ static int16_t combat_draw_Combat_Back(Actor* the_actor, Rect* draw_rect, Rect* 
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6CF70; TIE98 0x40A800
+// FUNCTION: TIE95 0x6CF70
+// FUNCTION: TIE98 0x40A800
 static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 									 uint8_t mouseState, uint8_t prevMouseState, int16_t key,
 									 int16_t prevKey) {
@@ -263,7 +266,8 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6D0E8; TIE98 0x40A970
+// FUNCTION: TIE95 0x6D0E8
+// FUNCTION: TIE98 0x40A970
 static void combat_iuser_Combat(Input* input, int32_t time) {
 	/* Pressure door SFX on button 5 at entry scene A with time == 4 */
 	if (input->id == 5 && time == 4 && shellext_Get_Cur_Scene() == SCENE_COMBAT_A)
@@ -309,7 +313,8 @@ static void combat_iuser_Combat(Input* input, int32_t time) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6D260; TIE98 0x40AAD0
+// FUNCTION: TIE95 0x6D260
+// FUNCTION: TIE98 0x40AAD0
 static void combat_idraw_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh) {
 	char buf[48];
 
@@ -355,7 +360,8 @@ static void combat_idraw_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, 
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6D37C; TIE98 0x40AC00
+// FUNCTION: TIE95 0x6D37C
+// FUNCTION: TIE98 0x40AC00
 static int16_t combat_iupdate_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 											uint8_t mouseState, uint8_t prevMouseState, int16_t key,
 											int16_t prevKey) {
@@ -381,7 +387,8 @@ static int16_t combat_iupdate_Combat_Screen(Input* input, Rect* draw_rect, Rect*
  *   384..638: 3D flyby movie + text overlay (mode 2)
  *   639:      stop movie + reset; advance combat_round (mod 4)
  */
-// FUNCTION: TIE 0x6D3A4; TIE98 0x40AC40
+// FUNCTION: TIE95 0x6D3A4
+// FUNCTION: TIE98 0x40AC40
 static void combat_iuser_Combat_Screen(Input* input, int32_t time) {
 	(void)time;
 
@@ -431,7 +438,8 @@ static void combat_iuser_Combat_Screen(Input* input, int32_t time) {
 /* ------------------------------------------------------------------ */
 
 /* Draw mission description on the combat monitor */
-// FUNCTION: TIE 0x6D52C; TIE98 0x40ADE0
+// FUNCTION: TIE95 0x6D52C
+// FUNCTION: TIE98 0x40ADE0
 static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 	Rect dst;
 	char string[48], buf[48], name[48];
@@ -516,7 +524,8 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 /* ------------------------------------------------------------------ */
 
 /* Draw high score table on the combat monitor */
-// FUNCTION: TIE 0x6D888; TIE98 0x40B140
+// FUNCTION: TIE95 0x6D888
+// FUNCTION: TIE98 0x40B140
 static void combat_Draw_Combat_Screen_Score(Rect* src) {
 	char fmt[40], string[40], name_buf[16];
 
@@ -588,7 +597,8 @@ static void combat_Draw_Combat_Screen_Score(Rect* src) {
  * Strip occupies the bottom 10 px of `src` (bottom-24 .. bottom-14).
  * Skips drawing entirely while fade==16 (edges of name window).
  */
-// FUNCTION: TIE 0x6DBB0; TIE98 0x40B480
+// FUNCTION: TIE95 0x6DBB0
+// FUNCTION: TIE98 0x40B480
 static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
 	Rect dst;
 	char str[48];
@@ -643,7 +653,8 @@ static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6D4CC; TIE98 0x40AD50
+// FUNCTION: TIE95 0x6D4CC
+// FUNCTION: TIE98 0x40AD50
 static void combat_idraw_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh) {
 	if (!refresh || helmet->state)
 		return;
@@ -674,7 +685,8 @@ static void combat_idraw_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip
  * Help tooltip overlay. Draws delta actor with text from
  * TIEText[combat_help + 84] when a button is hovered and visor is up.
  */
-// FUNCTION: TIE 0x6DCF4; TIE98 0x40B5E0
+// FUNCTION: TIE95 0x6DCF4
+// FUNCTION: TIE98 0x40B5E0
 static int16_t combat_draw_Combat_Help(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 									   int16_t off_y, int16_t refresh) {
 	if (refresh) {
@@ -696,7 +708,8 @@ static int16_t combat_draw_Combat_Help(Actor* the_actor, Rect* draw_rect, Rect* 
 /* ------------------------------------------------------------------ */
 
 /* Flickering light — identical algorithm to TRAIN */
-// FUNCTION: TIE 0x6DD8C; TIE98 0x40B690
+// FUNCTION: TIE95 0x6DD8C
+// FUNCTION: TIE98 0x40B690
 static void combat_user_Combat_Light(Actor* the_actor, int32_t time) {
 	if (time == 0) {
 		xactor_Show_Actor(the_actor);
@@ -730,7 +743,8 @@ static void combat_user_Combat_Light(Actor* the_actor, int32_t time) {
  * var2==0 with scene COMBAT_B: auto-play visor opening.
  * Otherwise hide visor if visible.
  */
-// FUNCTION: TIE 0x6DE40; TIE98 0x40B740
+// FUNCTION: TIE95 0x6DE40
+// FUNCTION: TIE98 0x40B740
 static void combat_user_Combat_Helmet(Actor* the_actor, int32_t time) {
 	if (the_actor->var2) {
 		/* Entering combat — close visor */

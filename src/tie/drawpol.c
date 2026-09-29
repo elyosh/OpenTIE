@@ -44,22 +44,22 @@
  * (_array - stride) as a load-base optimization; the C source uses plain
  * 0-based access. */
 int32_t* calcflag[128];
-// GLOBAL: TIE 0xD3E4C
+// GLOBAL: TIE95 0xD3E4C
 uint16_t vertexlight[128];
 
 /* Per-frame drawpol diagnostic counters (flushed by tie_updatescreen). */
 int dbg_dp_total, dbg_dp_polycnt0, dbg_dp_polycnt_nz;
 int dbg_dp_first_min_z, dbg_dp_first_max_z;
-// GLOBAL: TIE 0xD3FE0
+// GLOBAL: TIE95 0xD3FE0
 uint8_t* firstvertptr;
 /* edgeflags[], edgept1[], edgept2[] defined in xtrans2.c per watdbg. */
 
 /* Screen-xy ring */
-// GLOBAL: TIE 0xD4010
+// GLOBAL: TIE95 0xD4010
 int32_t* firstscreenxy;
-// GLOBAL: TIE 0xD3FF4
+// GLOBAL: TIE95 0xD3FF4
 int32_t* lastscreenxy;
-// GLOBAL: TIE 0xD3FE4
+// GLOBAL: TIE95 0xD3FE4
 int32_t* newscreenxy;
 
 /* Shared scratch buffer for newscreenxy. Retail does `mov newscreenxy,
@@ -69,29 +69,31 @@ int32_t* newscreenxy;
  * (≤255); the worst-case advance across one drawpolyobject call (line
  * branch + polygon branch via dobsptree) stays well under this. */
 static int32_t newscreenxy_buf[4096];
-// GLOBAL: TIE 0xD4008
-// GLOBAL: TIE 0xD400C
-int32_t *minscreenx, *maxscreenx;
-// GLOBAL: TIE 0xD3FD4
-// GLOBAL: TIE 0xD3FDC
-int32_t *minscreeny, *maxscreeny;
+// GLOBAL: TIE95 0xD4008
+int32_t *minscreenx;
+// GLOBAL: TIE95 0xD400C
+int32_t *maxscreenx;
+// GLOBAL: TIE95 0xD3FD4
+int32_t *minscreeny;
+// GLOBAL: TIE95 0xD3FDC
+int32_t *maxscreeny;
 
 /* Current polygon context */
-// GLOBAL: TIE 0xD4026
+// GLOBAL: TIE95 0xD4026
 int16_t numpoints;
 int16_t numedges;
-// GLOBAL: TIE 0xD4034
+// GLOBAL: TIE95 0xD4034
 int16_t samexcnt;
-// GLOBAL: TIE 0xD4036
+// GLOBAL: TIE95 0xD4036
 int16_t sameycnt;
-// GLOBAL: TIE 0xD4032
+// GLOBAL: TIE95 0xD4032
 int16_t counter;
-// GLOBAL: TIE 0xD4054
+// GLOBAL: TIE95 0xD4054
 uint8_t color;
 uint16_t facenumber;
-// GLOBAL: TIE 0xD4030
+// GLOBAL: TIE95 0xD4030
 uint16_t objectnum;
-// GLOBAL: TIE 0xD4048
+// GLOBAL: TIE95 0xD4048
 uint16_t parentobject;
 uint8_t gauraudflag;
 uint16_t layervalue;
@@ -112,11 +114,13 @@ int16_t objectxlo, objectylo, objectzlo;
 /* worldx, worldy moved to tie.c per watdbg ownership; declared in tie.h. */
 
 /* Light rig (rotlight{X,Y,Z} are tie.c-owned per watdbg). */
-// GLOBAL: TIE 0xD4014
-// GLOBAL: TIE 0xD4018
-// GLOBAL: TIE 0xD401C
-int32_t lightX, lightY, lightZ;
-// GLOBAL: TIE 0xC1918
+// GLOBAL: TIE95 0xD4014
+int32_t lightX;
+// GLOBAL: TIE95 0xD4018
+int32_t lightY;
+// GLOBAL: TIE95 0xD401C
+int32_t lightZ;
+// GLOBAL: TIE95 0xC1918
 int32_t localLightCnt;
 DRAWPOL_LocalLight localLights[8];
 
@@ -124,9 +128,9 @@ DRAWPOL_LocalLight localLights[8];
 uint8_t* firstcoloroff;
 PolyVert* firstpointoff;
 PolyVert* firstvertnorm;
-// GLOBAL: TIE 0xD3FE8
+// GLOBAL: TIE95 0xD3FE8
 PolyFace* firstfaceoff;
-// GLOBAL: TIE 0xD4004
+// GLOBAL: TIE95 0xD4004
 DRAWPOL_EyeVertex* firsteyexyz;
 /* eyexyzdata[] defined in xtrans2.c per watdbg. */
 uint8_t facevisflag[256];
@@ -138,7 +142,7 @@ uint8_t* curobjptr;
 
 /* Gameplay shade palette: 45 materials × 16 shades. The rasterizer copies
  * a ramp locally when it needs the duplicated boundary shade at index 16. */
-// GLOBAL: TIE 0xC191C
+// GLOBAL: TIE95 0xC191C
 uint8_t materialcolors[720] = {
 	0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x54,
 	0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5B, 0x5C, 0x5D, 0x5E, 0x5F, 0x60, 0x61, 0x62, 0x63, 0x68, 0x69,
@@ -190,7 +194,7 @@ uint8_t materialcolors[720] = {
  * 0xa8..0xb3. setmarkingcolors copies the chosen row into
  * materialcolors[208..223] (= the marking-material shade ramp). Bytes
  * dumped from retail binary at 0xC1C20 (debug symbol _markingdefs[48]). */
-// GLOBAL: TIE 0xC1C20
+// GLOBAL: TIE95 0xC1C20
 uint8_t markingdefs[3][16] = {
 	/* mode 0 (OFF):    */
 	{ 0x9c, 0x9d, 0x9e, 0x9e, 0x9f, 0xa0, 0xa1, 0xa1, 0xa2, 0xa3, 0xa4, 0xa4, 0xa5, 0xa6, 0xa7, 0xa7 },
@@ -216,7 +220,7 @@ uint8_t markingdefs[3][16] = {
  * at 0xC1BEB (a 0x9b spill from shieldcolor's tail) which then
  * indexes way past highlightmapping; we treat it as an invalid
  * input and return 0 deterministically instead. */
-// GLOBAL: TIE 0xC1BEC
+// GLOBAL: TIE95 0xC1BEC
 const uint8_t targetmapping[39] = {
 	0x00, 0x00, 0x00, 0x00, 0x01, 0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x02, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x01, 0x02,
@@ -227,7 +231,7 @@ const uint8_t targetmapping[39] = {
  * values. DRAW_drawcraft only ever sets highlightcolor in {0, 1, 2}
  * and targetmapping_base1 returns idx in {0, 1, 2} for legitimate
  * inputs, so 9 entries suffice). */
-// GLOBAL: TIE 0xC1C13
+// GLOBAL: TIE95 0xC1C13
 const uint8_t highlightmapping[9] = {
 	/* highlightcolor=0 (whole-craft target): */ 0x18,
 	0x19,
@@ -242,7 +246,7 @@ const uint8_t highlightmapping[9] = {
 
 /* traininggatecolors (binary 0xC1C1C, 4 bytes). Indexed by gatecolor in
  * 0..3 when parentobject HIBYTE == 0x40 (training-gate overlay path). */
-// GLOBAL: TIE 0xC1C1C
+// GLOBAL: TIE95 0xC1C1C
 const uint8_t traininggatecolors[4] = {
 	0x00,
 	0x0d,
@@ -252,7 +256,7 @@ const uint8_t traininggatecolors[4] = {
 
 /* Signed per-face color offsets. Index 14 is the mutable three-frame
  * marking animation state; masked reads can address indices 0..63. */
-// GLOBAL: TIE 0xC1C50
+// GLOBAL: TIE95 0xC1C50
 int8_t markcoloroffset[72] = { 0 };
 
 /* linelight1, linelight2, point1ptr: drawln2.c-owned per watdbg. */
@@ -270,7 +274,7 @@ uint16_t nummarks;
 /* flatx/y/z, flatcolors, flatcomponentnum, flatparentobj, flatobjnum all
  * defined in xtrans2.c per watdbg. */
 
-// GLOBAL: TIE 0xD404A
+// GLOBAL: TIE95 0xD404A
 uint16_t solidindex;
 
 /* ======================================================================
@@ -316,7 +320,7 @@ static inline int32_t clamp_q30(int32_t v) {
  * material 13 / 14 / 15 (= materialcolors row 12 / 13 / 14) for the
  * three modes. That's the "marking material" three-frame animation.
  * ================================================================== */
-// FUNCTION: TIE 0x1D480
+// FUNCTION: TIE95 0x1D480
 void drawpol_setmarkingcolors(MarkingMode mode) {
 	uint8_t* dest = &materialcolors[208]; /* row 13, col 0 */
 	switch (mode) {
@@ -354,7 +358,7 @@ void drawpol_setmarkingcolors(MarkingMode mode) {
  * -- 0 means draw, 1 means back-facing (handled separately or culled).
  * dobsptree's jz after checknormal skips the face when 0 is returned.
  * ================================================================== */
-// FUNCTION: TIE 0x1E674
+// FUNCTION: TIE95 0x1E674
 uint16_t drawpol_checknormal(uint16_t face_idx) {
 	PolyFace* face = &firstfaceoff[face_idx];
 
@@ -385,7 +389,7 @@ uint16_t drawpol_checknormal(uint16_t face_idx) {
  * TRACE2_drawscreencoords. Kept as a direct port of the binary for
  * faithfulness; color_code -= 80 is the documented adjustment.
  * ================================================================== */
-// FUNCTION: TIE 0x1F454
+// FUNCTION: TIE95 0x1F454
 void drawpol_drawsurfacepoly(int32_t* scratch, char color_code) {
 	/* Duplicate vertex data into the slots expected by getscreencoords. */
 	scratch[17] = scratch[5];
@@ -424,7 +428,7 @@ void drawpol_drawsurfacepoly(int32_t* scratch, char color_code) {
  * two endpoints, copies the precomputed screen-xy pairs into the
  * scratch buffer, and calls drawln2_tracelineedges.
  * ================================================================== */
-// FUNCTION: TIE 0x1F328
+// FUNCTION: TIE95 0x1F328
 void drawpol_drawlineface(void) {
 	uint8_t edge_idx = firstvertptr[4];
 	uint8_t vtx1_idx = firstvertptr[2];
@@ -468,7 +472,7 @@ void drawpol_drawlineface(void) {
 
 /* Resolve material remapping, training-gate and target overlays, then either
  * cache Gouraud vertex lighting or return a flat-shaded palette color. */
-// FUNCTION: TIE 0x1E7E4
+// FUNCTION: TIE95 0x1E7E4
 int16_t drawpol_getlightvalue(int16_t color_byte, uint16_t face_idx) {
 	uint16_t mapped_color = (uint16_t)((int16_t)markcoloroffset[color_byte & 0x3F] + color_byte);
 
@@ -595,7 +599,7 @@ int16_t drawpol_getlightvalue(int16_t color_byte, uint16_t face_idx) {
  *       +2 (u8) barycentric weight toward diagonal vertex
  * Weights use a denominator of 32. Two-vertex markings use the line path;
  * other markings use screen-coordinate tracing. */
-// FUNCTION: TIE 0x1EC68
+// FUNCTION: TIE95 0x1EC68
 void drawpol_drawmarkings(uint16_t face_idx) {
 	uint16_t saved_flatobj = flatobjnum;
 	uint16_t saved_layerv = layervalue;
@@ -796,7 +800,7 @@ void drawpol_drawmarkings(uint16_t face_idx) {
 /* Recursive back-to-front BSP walk. Nodes contain a face index and signed
  * self-relative child/sibling offset. Visibility bits select normal testing,
  * two-sided lighting, face emission, and marking emission. */
-// FUNCTION: TIE 0x1E388
+// FUNCTION: TIE95 0x1E388
 uint8_t* drawpol_dobsptree(uint8_t* node_ptr) {
 	BSPFaceNode* node = (BSPFaceNode*)node_ptr;
 	uint8_t* result = node_ptr;
@@ -934,7 +938,7 @@ uint8_t* drawpol_dobsptree(uint8_t* node_ptr) {
  *   +17+nf+12*np    faces[numfaces]             (PolyFace, firstfaceoff)
  *   +after          variable-length face bodies (firstvertptr)
  * The dedup flag enables 0x7F00 continuation markers in face bodies. */
-// FUNCTION: TIE 0x1D4F0
+// FUNCTION: TIE95 0x1D4F0
 void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t obj_y, int32_t obj_z) {
 	const uint8_t* data = (const uint8_t*)poly_data;
 

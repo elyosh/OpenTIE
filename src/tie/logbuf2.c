@@ -10,25 +10,25 @@
 
 /* --- Module-owned globals ----------------------------------------- */
 
-// GLOBAL: TIE 0xD4C1E
+// GLOBAL: TIE95 0xD4C1E
 uint16_t pixelswide;
-// GLOBAL: TIE 0xD4C1C
+// GLOBAL: TIE95 0xD4C1C
 uint16_t pixelswidemin1;
-// GLOBAL: TIE 0xD4C18
+// GLOBAL: TIE95 0xD4C18
 uint16_t halfpixelswide;
-// GLOBAL: TIE 0xD4C20
+// GLOBAL: TIE95 0xD4C20
 uint16_t pixelsdeep;
-// GLOBAL: TIE 0xD4C1A
+// GLOBAL: TIE95 0xD4C1A
 uint16_t pixelsdeepmin1;
-// GLOBAL: TIE 0xD4C16
+// GLOBAL: TIE95 0xD4C16
 uint16_t halfpixelsdeep;
-// GLOBAL: TIE 0xD4C08
+// GLOBAL: TIE95 0xD4C08
 uint32_t displaycorner;
-// GLOBAL: TIE 0xD4C00
+// GLOBAL: TIE95 0xD4C00
 uint32_t displaycorner_lines;
-// GLOBAL: TIE 0xD4C04
+// GLOBAL: TIE95 0xD4C04
 uint32_t displaycorner_columns;
-// GLOBAL: TIE 0xD4C0C
+// GLOBAL: TIE95 0xD4C0C
 void* buffer_ptr;
 /* Retail Z_TIE__.EXE ships this initialized to 0xFB (== (uint8_t)-5) at
  * 0xC5504. tie_updatescreen only assigns -5 AFTER the world render, so
@@ -38,7 +38,7 @@ void* buffer_ptr;
  * "color==0 => copy from logbuf" branch emitting zeros and stars'
  * `*dst < deepspacecolor` guard skipping every draw -- flight viewport
  * stays black until some non-render path happens to set deepspacecolor. */
-// GLOBAL: TIE 0xC5504
+// GLOBAL: TIE95 0xC5504
 uint8_t deepspacecolor = 0xFB;
 
 // GLOBAL: TIE98 0x5926D8
@@ -85,13 +85,13 @@ static inline int32_t screen_mem_width(void) { return vesa_bpsl_gbl; }
 
 /* --- API ---------------------------------------------------------- */
 
-// FUNCTION: TIE 0x2E7F0
+// FUNCTION: TIE95 0x2E7F0
 void logbuf2_graphsetup(void) { /* Empty stub in the shipped binary. */ }
 
-// FUNCTION: TIE 0x2E7F4
+// FUNCTION: TIE95 0x2E7F4
 void logbuf2_selectbuffer(void* buffer) { buffer_ptr = buffer; }
 
-// FUNCTION: TIE 0x2E7FC
+// FUNCTION: TIE95 0x2E7FC
 void logbuf2_setbufferdimensions(uint16_t width, uint16_t depth, uint32_t dc) {
 	const uint32_t smw = (uint32_t)screen_mem_width();
 
@@ -106,7 +106,8 @@ void logbuf2_setbufferdimensions(uint16_t width, uint16_t depth, uint32_t dc) {
 	displaycorner_columns = smw ? (dc % smw) : dc;
 }
 
-// FUNCTION: TIE98 0x44C2C0 LOGBUF2_setbufferdimensions
+// FUNCTION: TIE98 0x44C2C0
+// LOGBUF2_setbufferdimensions
 void logbuf2_setbufferdimensions_tie98(uint16_t width, uint16_t depth, int unused, uint32_t dc) {
 	(void)unused;
 	pixelswide = width;
@@ -120,7 +121,7 @@ void logbuf2_setbufferdimensions_tie98(uint16_t width, uint16_t depth, int unuse
 	displaycorner_columns = dc % g_surfacePitch / g_flight16bppBytesPerPixel;
 }
 
-// FUNCTION: TIE 0x2E870
+// FUNCTION: TIE95 0x2E870
 void logbuf2_clearbuffer(void) {
 	if (!buffer_ptr)
 		return;
@@ -143,7 +144,7 @@ void logbuf2_clearbuffer_tie98(void) {
 		dst[i] = color;
 }
 
-// FUNCTION: TIE 0x2E89C
+// FUNCTION: TIE95 0x2E89C
 void logbuf2_outbuffer(const void* src) {
 	uint8_t* dst = video_base() + displaycorner;
 	const uint8_t* s = src;
@@ -171,7 +172,7 @@ void logbuf2_outbuffer_tie98(const void* src) {
 	}
 }
 
-// FUNCTION: TIE 0x2E978
+// FUNCTION: TIE95 0x2E978
 void logbuf2_outdiffbuffer(const void* oldbuf, const void* newbuf) {
 	/* Callers mirror newbuf into oldbuf after this copy. */
 	(void)oldbuf;
@@ -367,12 +368,13 @@ static void logbuf2_drawclippedline_impl(int32_t x1, int32_t y1, int32_t x2, int
 	}
 }
 
-// FUNCTION: TIE 0x2EAF8
+// FUNCTION: TIE95 0x2EAF8
 void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color) {
 	logbuf2_drawclippedline_impl(x1, y1, x2, y2, color, 1);
 }
 
-// FUNCTION: TIE98 0x44C470, 0x44C8A0
+// FUNCTION: TIE98 0x44C470
+// 0x44C8A0
 void logbuf2_drawclippedline_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color) {
 	logbuf2_drawclippedline_impl(x1, y1, x2, y2, color, (uint8_t)g_flight16bppBytesPerPixel);
 }
@@ -383,7 +385,7 @@ void logbuf2_drawclippedline_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y
  * pointers. The binary uses -8192 / -16384 for maskbufptr depending on
  * which pair of side-buffers is active; we preserve those literals.
  * ------------------------------------------------------------------ */
-// FUNCTION: TIE 0x2EF3C
+// FUNCTION: TIE95 0x2EF3C
 void logbuf2_startPIP(uint16_t width, uint16_t depth, int16_t clear_runs, uint32_t dc) {
 	s_temp_pw = pixelswide;
 	s_temp_pd = pixelsdeep;
@@ -408,7 +410,7 @@ void logbuf2_startPIP(uint16_t width, uint16_t depth, int16_t clear_runs, uint32
 		xtrans2_clearruntable();
 }
 
-// FUNCTION: TIE 0x2F070
+// FUNCTION: TIE95 0x2F070
 void logbuf2_finishPIP(void) {
 	worldeyeA1 = s_tempA1;
 	worldeyeA2 = s_tempA2;
@@ -436,7 +438,8 @@ void logbuf2_finishPIP(void) {
 	rightside = rightsidedata1;
 }
 
-// FUNCTION: TIE98 0x44CCB0 LOGBUF2_startPIP
+// FUNCTION: TIE98 0x44CCB0
+// LOGBUF2_startPIP
 void logbuf2_startPIP_tie98(uint16_t width, uint16_t depth, int clear_runs, uint32_t dc) {
 	(void)clear_runs;
 	s_tie98_temp_pw = pixelswide;
@@ -464,7 +467,8 @@ void logbuf2_startPIP_tie98(uint16_t width, uint16_t depth, int clear_runs, uint
 	displaycorner_columns = dc % g_surfacePitch / g_flight16bppBytesPerPixel;
 }
 
-// FUNCTION: TIE98 0x44CDC0 LOGBUF2_finishPIP
+// FUNCTION: TIE98 0x44CDC0
+// LOGBUF2_finishPIP
 void logbuf2_finishPIP_tie98(void) {
 	worldeyeA1 = s_tie98_tempA1;
 	worldeyeA2 = s_tie98_tempA2;

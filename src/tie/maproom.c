@@ -87,11 +87,11 @@
 
 /* --- Module globals (watdbg owner: maproom.c) ----------------------------- */
 
-// GLOBAL: TIE 0xC5508
+// GLOBAL: TIE95 0xC5508
 uint8_t imperialflag;
-// GLOBAL: TIE 0xC5509
+// GLOBAL: TIE95 0xC5509
 uint8_t neutralflag;
-// GLOBAL: TIE 0xC550A
+// GLOBAL: TIE95 0xC550A
 uint8_t hostileflag;
 uint8_t warheadflag;
 /* mapiconsloaded is owned by tie.c per watdbg; extern in maproom.h. */
@@ -101,7 +101,7 @@ int32_t mapScreenRight;
 int32_t mapScreenTop;
 int32_t mapScreenBottom;
 int32_t mapScreenWidth;
-// GLOBAL: TIE 0xD4C54
+// GLOBAL: TIE95 0xD4C54
 int32_t mapScreenHeight;
 int32_t maxMapIcons;
 
@@ -110,15 +110,15 @@ const uint8_t* iconxsize;
 const uint8_t* iconysize;
 const char* iconfilename;
 
-// GLOBAL: TIE 0xD4C58
+// GLOBAL: TIE95 0xD4C58
 const char* hostilestr;
-// GLOBAL: TIE 0xD4C40
+// GLOBAL: TIE95 0xD4C40
 const char* imperialstr;
-// GLOBAL: TIE 0xD4C24
+// GLOBAL: TIE95 0xD4C24
 const char* neutralstr;
-// GLOBAL: TIE 0xD4C48
+// GLOBAL: TIE95 0xD4C48
 const char** NHIstatusstrings;
-// GLOBAL: TIE 0xD4C38
+// GLOBAL: TIE95 0xD4C38
 const char** maproomhelpstrings;
 
 void** mapfarbufferptrs;
@@ -235,7 +235,7 @@ static int32_t maproom_local_world_z(uint16_t local_idx) {
 
 /* --- maproom_firstingroup ------------------------------------------------- */
 
-// FUNCTION: TIE 0x31B94
+// FUNCTION: TIE95 0x31B94
 int32_t maproom_firstingroup(uint16_t idx) {
 	/* Sentinel + boundary cases all return "is first". */
 	if (idx == 0xFFFF)
@@ -259,7 +259,7 @@ int32_t maproom_firstingroup(uint16_t idx) {
 
 /* --- maproom_setcamerafocus ----------------------------------------------- */
 
-// FUNCTION: TIE 0x31ABC
+// FUNCTION: TIE95 0x31ABC
 void maproom_setcamerafocus(uint16_t obj_or_kind, int32_t distance) {
 	/* Resolve the focus point (writes worldlocx/y/z). fg_idx=0 is the
 	 * caller's "no fg context" sentinel for create_getworldposition. */
@@ -314,7 +314,7 @@ static void maproom_draw_status_panel(int16_t left, int16_t top, int16_t right, 
 		festring_outstringright((const uint8_t*)value);
 }
 
-// FUNCTION: TIE 0x31C04
+// FUNCTION: TIE95 0x31C04
 void maproom_drawNHIstatus(uint16_t page_idx) {
 	/* The status row sits along the bottom of the screen. mapScreenHeight
 	 * is the world-area height (= mapScreenBottom - mapScreenTop) but the
@@ -374,7 +374,7 @@ static void maproom_project(int32_t wx, int32_t wy, int32_t wz, int32_t clip_x, 
 	*out_sy = transfm2_getscreencoordy(objecteyey, objecteyez);
 }
 
-// FUNCTION: TIE 0x31010
+// FUNCTION: TIE95 0x31010
 void maproom_drawmapitem(uint16_t obj_idx, uint16_t selected_obj_ref, char num_label, int32_t z) {
 	/* --- Phase 1: world position lookup --- */
 	if (obj_idx >= MAP_FLIGHT_SLOT_COUNT) {
@@ -1139,7 +1139,8 @@ static const LandruTaskVtable maproom_task_vt = {
 	.step = maproom_task_step,
 };
 
-// FUNCTION: TIE98 0x451470 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE98 0x451470
+// Initialization portion of MAPROOM_maproom; the original also contains the task loop.
 void maproom_Push_MapRoom_Task(void) {
 	if (TieProfile_UsesTie98Logic()) {
 		uint8_t saved_mapflag = mapflag;
@@ -1583,7 +1584,9 @@ typedef enum {
 	MAPROOM_STEP_POLL,
 } MaproomStepPhase;
 
-// FUNCTION: TIE 0x2F1BC, TIE98 0x451470 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x2F1BC
+// ORIGINAL_FUNCTION: TIE98 0x451470
+// Loop portion of MAPROOM_maproom; no separate original entry point.
 static LandruTaskStepResult maproom_task_step(void* self) {
 	MaproomTask* t = (MaproomTask*)self;
 

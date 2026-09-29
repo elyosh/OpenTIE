@@ -101,7 +101,7 @@ static const int16_t map_cmd_size[BCMD_END_PAGE + 2] = {
 
 /* Briefing polygon for talk-screen projection */
 static Poly brief_poly;
-// GLOBAL: TIE 0xFABC2
+// GLOBAL: TIE95 0xFABC2
 static int16_t brief_poly_used;
 
 /* Icon actors: [0]=green(enemy), [1]=red, [2]=blue(friendly), [3]=purple(neutral) */
@@ -111,13 +111,13 @@ static Actor* icon_actors[4];
 static BitmapStruct brief_buffer;
 
 /* Flight group data + briefing state */
-// GLOBAL: TIE 0xF6EC0
+// GLOBAL: TIE95 0xF6EC0
 static EFArrayStruct fgroup;
 static EBriefStruct brief;
 
 /* Map display state */
 static int16_t map_playing; /* 1 = animation running */
-// GLOBAL: TIE 0xF6EA2
+// GLOBAL: TIE95 0xF6EA2
 static int16_t selected_fg_idx;
 static int16_t map_center_x, map_center_y;
 static int16_t map_target_x, map_target_y;
@@ -132,9 +132,9 @@ static void* star_buffer_data; /* 320x150 pixel cache */
 static Input* map_emit_widget;
 
 /* Weapon state */
-// GLOBAL: TIE 0xFABC0
+// GLOBAL: TIE95 0xFABC0
 static int16_t beam_level;
-// GLOBAL: TIE 0xFABC6
+// GLOBAL: TIE95 0xFABC6
 static int16_t weapon_level;
 
 /* ---- Helpers ---- */
@@ -197,31 +197,31 @@ static void idraw_Map(Input* inp, Rect* bounds, Rect* clip, int16_t refresh);
  * Weapon selectors
  * ================================================================ */
 
-// FUNCTION: TIE 0x7D8EC
+// FUNCTION: TIE95 0x7D8EC
 int16_t player_Get_Beam_Used(void) { return mission.beam_used; }
 
-// FUNCTION: TIE 0x7D8F4
+// FUNCTION: TIE95 0x7D8F4
 void player_Next_Beam(void) {
 	if (++mission.beam_used > beam_level)
 		mission.beam_used = 1;
 }
 
-// FUNCTION: TIE 0x7D918
+// FUNCTION: TIE95 0x7D918
 void player_Last_Beam(void) {
 	if (--mission.beam_used == 0)
 		mission.beam_used = beam_level;
 }
 
-// FUNCTION: TIE 0x7D938
+// FUNCTION: TIE95 0x7D938
 int16_t player_Get_Torp_Used(void) { return mission.torp_used; }
 
-// FUNCTION: TIE 0x7D940
+// FUNCTION: TIE95 0x7D940
 void player_Next_Torp(void) {
 	if (++mission.torp_used > weapon_level)
 		mission.torp_used = 1;
 }
 
-// FUNCTION: TIE 0x7D964
+// FUNCTION: TIE95 0x7D964
 void player_Last_Torp(void) {
 	if (--mission.torp_used == 0)
 		mission.torp_used = weapon_level;
@@ -233,10 +233,10 @@ void player_Last_Torp(void) {
 
 EBriefStruct* player_Fetch_Brief(void) { return &brief; }
 
-// FUNCTION: TIE 0x7D8B8
+// FUNCTION: TIE95 0x7D8B8
 EFArrayStruct* player_Fetch_FGroup(void) { return &fgroup; }
 
-// FUNCTION: TIE 0x7D99C
+// FUNCTION: TIE95 0x7D99C
 int16_t player_Is_Side_Enemy(int16_t side) {
 	switch (side) {
 		case 0:
@@ -253,10 +253,10 @@ int16_t player_Is_Side_Enemy(int16_t side) {
 	}
 }
 
-// FUNCTION: TIE 0x7E838
+// FUNCTION: TIE95 0x7E838
 int16_t player_Is_Map_Playing(void) { return map_playing; }
 
-// FUNCTION: TIE 0x7E840
+// FUNCTION: TIE95 0x7E840
 int player_Toggle_Map_Play(void) {
 	map_playing = (map_playing == 0) ? 1 : 0;
 	return 1;
@@ -266,7 +266,7 @@ int player_Toggle_Map_Play(void) {
  * Move_To_Value — step current toward target
  * ================================================================ */
 
-// FUNCTION: TIE 0x7EAA4
+// FUNCTION: TIE95 0x7EAA4
 int16_t player_Move_To_Value(int16_t current, int16_t target, int16_t step) {
 	if (current > target) {
 		current -= step;
@@ -285,7 +285,7 @@ int16_t player_Move_To_Value(int16_t current, int16_t target, int16_t step) {
  * Map coordinate transforms
  * ================================================================ */
 
-// FUNCTION: TIE 0x7E990
+// FUNCTION: TIE95 0x7E990
 void player_Map_To_Screen_Pos(Rect* view_rect, int16_t map_x, int16_t map_y, int16_t* out_x, int16_t* out_y) {
 	int32_t sx = (int32_t)(map_x - map_center_x) * map_scale_x;
 	*out_x = sdiv256(sx) + view_rect->left + ((view_rect->right - view_rect->left) >> 1);
@@ -348,7 +348,7 @@ int16_t player_Find_Ship_On_Screen(Rect* bounds, int16_t screen_x, int16_t scree
  * Actor / star buffer helpers
  * ================================================================ */
 
-// FUNCTION: TIE 0x7F55C
+// FUNCTION: TIE95 0x7F55C
 void player_Actor_To_Buffer(Actor* actor, void* buffer) {
 	Rect r;
 	xrect_Set_Rect(&r, 0, 0, 320, 150);
@@ -359,7 +359,7 @@ void player_Actor_To_Buffer(Actor* actor, void* buffer) {
 	stub_Copy_To_Clipped_Buffer(buffer, &r, 0, 0, 320, 150);
 }
 
-// FUNCTION: TIE 0x7F5D0
+// FUNCTION: TIE95 0x7F5D0
 void player_Stars_To_Back(int16_t screen_y) {
 	if (star_buffer_data) {
 		Rect r;
@@ -374,7 +374,7 @@ void player_Stars_To_Back(int16_t screen_y) {
 
 /* Process a single page command step. `flag` nonzero means skip SFX and
  * snap move/zoom instantly. Used for initial seek and rewind. */
-// FUNCTION: TIE 0x7E460
+// FUNCTION: TIE95 0x7E460
 void player_Step_Page(int16_t flag) {
 	int16_t cmd_index = brief.page.index;
 	int16_t cmd_time = brief.page.commands[cmd_index];
@@ -522,7 +522,7 @@ void player_Step_Page(int16_t flag) {
 	brief.page.time++;
 }
 
-// FUNCTION: TIE 0x7E1E0
+// FUNCTION: TIE95 0x7E1E0
 void player_Clear_Page_Commands(void) {
 	brief.page.len = 200;
 	brief.page.time = 0;
@@ -1009,7 +1009,7 @@ void player_Step_Display_Map(void) {
 	brief.page.time++;
 }
 
-// FUNCTION: TIE 0x7E85C
+// FUNCTION: TIE95 0x7E85C
 void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
 	int16_t min_dist = 999;
 	int16_t closest_fg = 0;
@@ -1056,7 +1056,7 @@ void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
  * Drawing: readout text
  * ================================================================ */
 
-// FUNCTION: TIE 0x7FA14
+// FUNCTION: TIE95 0x7FA14
 void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_t x, int16_t index,
 							  int16_t state) {
 	if (index < 0)
@@ -1106,7 +1106,7 @@ void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_
 	}
 }
 
-// FUNCTION: TIE 0x7F9E8
+// FUNCTION: TIE95 0x7F9E8
 void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t screen_x, int16_t screen_y,
 									 int16_t text_y, int16_t text_state) {
 	if (text_y < 0)
@@ -1166,7 +1166,7 @@ void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t sc
  * Drawing: paragraph text
  * ================================================================ */
 
-// FUNCTION: TIE 0x7F624
+// FUNCTION: TIE95 0x7F624
 void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 	Rect text_rect;
 	xrect_Copy_Rect(&text_rect, clip);
@@ -1300,7 +1300,7 @@ void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
  * Drawing: grid
  * ================================================================ */
 
-// FUNCTION: TIE 0x7EE58
+// FUNCTION: TIE95 0x7EE58
 void player_Draw_Display_Grid(Rect* clip) {
 	Rect clip_rect;
 	xrect_Copy_Rect(&clip_rect, clip);
@@ -1426,7 +1426,7 @@ void player_Draw_Display_Grid(Rect* clip) {
  * Drawing: zoom target animation
  * ================================================================ */
 
-// FUNCTION: TIE 0x7FBD0
+// FUNCTION: TIE95 0x7FBD0
 void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t target_id) {
 	int16_t species = fgroup.fg[fg_index].species - 1;
 	int16_t way_x = fgroup.fg[fg_index].way_x[14];
@@ -1997,7 +1997,7 @@ void player_Init_Display_Map(void) {
 	xrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
 }
 
-// FUNCTION: TIE 0x7DD0C
+// FUNCTION: TIE95 0x7DD0C
 void player_Free_Display_Map(void) {
 	int16_t i;
 	for (i = 0; i < 32; i++) {
@@ -2020,7 +2020,7 @@ void player_Free_Display_Map(void) {
 	}
 }
 
-// FUNCTION: TIE 0x7DDDC
+// FUNCTION: TIE95 0x7DDDC
 void player_Load_Display_Map(void) {
 	char name[64];
 	int16_t version_flag = 0;
@@ -2147,7 +2147,8 @@ void player_Load_Display_Map(void) {
 	TieStorage_Close(fp);
 }
 
-// FUNCTION: TIE95 0x7D594; TIE98 0x469580
+// FUNCTION: TIE95 0x7D594
+// FUNCTION: TIE98 0x469580
 void player_Init_Brief_Display(Input* input, void* poly) {
 	int16_t i;
 
@@ -2304,7 +2305,7 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 	}
 }
 
-// FUNCTION: TIE 0x7DB7C
+// FUNCTION: TIE95 0x7DB7C
 void player_Init_Brief_For_Talk(void) {
 	int16_t i;
 
@@ -2338,7 +2339,7 @@ void player_Init_Brief_For_Talk(void) {
 	player_Load_Display_Map();
 }
 
-// FUNCTION: TIE 0x7D8C0
+// FUNCTION: TIE95 0x7D8C0
 void player_Free_Brief_Display(void) {
 	int16_t i;
 

@@ -71,7 +71,7 @@ static const char map_str[17][14] = { "map.lfd",    "brfmap1", "brfpnl",  "cmbti
 
 static const int16_t map_panel_y[5] = { 43, 29, 14, 10, 11 };
 static const int16_t map_panel_hdl_y[5] = { 92, 80, 89, 84, 85 };
-// GLOBAL: TIE 0xCFA6E
+// GLOBAL: TIE95 0xCFA6E
 static const int16_t map_panel_hdl_cel[5] = { 0, 0, 2, 2, 2 };
 
 /* Button rects: [0-5]=training/combat, [6-9]=briefing (offset by index) */
@@ -101,21 +101,21 @@ static Input* play_input;
 static EBriefStruct* talk_brief;
 static Input* map_input;
 static Input* talk_input;
-// GLOBAL: TIE 0xF5968
+// GLOBAL: TIE95 0xF6104
 static Actor* title_actor;
 static Actor* cmbticons;
 static Film* brief_film;
 static EFArrayStruct* talk_fgroup;
 static Palette* cmbtpal;
 static int16_t talk_win_status[5];
-// GLOBAL: TIE 0xF6126
+// GLOBAL: TIE95 0xF6126
 static int16_t max_paragraph_size;
 static int16_t map_text;
 static int16_t map_text_count;
 static int16_t num_talk_paragraphs;
 static int16_t combat_pilot_medal_status;
 static int16_t center_line;
-// GLOBAL: TIE 0xF6134
+// GLOBAL: TIE95 0xF6134
 static int16_t cur_talk_paragraph;
 static int16_t combat_pilot_medal_init;
 static int16_t talk_mode;
@@ -123,9 +123,9 @@ static int16_t num_talk_questions;
 static int16_t next_mode;
 static int16_t talk_person;
 static int16_t cur_talk_question;
-// GLOBAL: TIE 0xCFA78
+// GLOBAL: TIE95 0xCFA78
 static uint8_t map_uses_battle_voice;
-// GLOBAL: TIE 0xF6144
+// GLOBAL: TIE95 0xF6144
 static uint8_t map_is_post_mission;
 
 /* extern per watdbg */
@@ -1046,7 +1046,7 @@ static int16_t iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key, uin
 	return 1;
 }
 
-// FUNCTION: TIE 0x77C4C
+// FUNCTION: TIE95 0x77C4C
 static void Set_Voice_Species_Mission(void) {
 	uint8_t mission_cursor;
 

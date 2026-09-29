@@ -31,7 +31,8 @@
 // GLOBAL: TIE98 0x592204
 uint16_t g_flightInitialTextureCacheFlushPending;
 
-// FUNCTION: TIE98 0x48EF70 TIE_getobjecteyexyz
+// FUNCTION: TIE98 0x48EF70
+// TIE_getobjecteyexyz
 static int32_t tie_getobjecteyexyz_tie98(uint16_t object_index) {
 	FlightObject* object = &objects[object_index];
 	worldx = object->world_x - camera.x;
@@ -53,7 +54,8 @@ static int32_t tie_getobjecteyexyz_tie98(uint16_t object_index) {
 	return objecteyez;
 }
 
-// FUNCTION: TIE98 0x48F0C0 TIE_Get_Static_Object_Eye_Position
+// FUNCTION: TIE98 0x48F0C0
+// TIE_Get_Static_Object_Eye_Position
 static int tie_getstaticobjecteyeposition(uint16_t static_object_index) {
 	StaticObject* object = &staticobjects[static_object_index];
 	worldx = ((int32_t)object->world_x << 8) - camera.x;
@@ -65,7 +67,8 @@ static int tie_getstaticobjecteyeposition(uint16_t static_object_index) {
 	return objecteyez;
 }
 
-// FUNCTION: TIE98 0x48DF40 TIE_Update_Screen
+// FUNCTION: TIE98 0x48DF40
+// TIE_Update_Screen
 void tie_updatescreen_tie98(void) {
 	if (replayviewmode) {
 		replay_calcreplayview();

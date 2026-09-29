@@ -60,9 +60,9 @@ Actor* fighter_actor;
 
 static BitmapStruct background;
 static Actor* close_actor;
-// GLOBAL: TIE 0xF5FEC
+// GLOBAL: TIE95 0xF5FEC
 static Actor* backdrop;
-// GLOBAL: TIE 0xF5FF0
+// GLOBAL: TIE95 0xF5FF0
 static Film* tielogo_film;
 static int32_t fight_count;
 

@@ -27,11 +27,11 @@ trace2_EdgeHeader* trace2_lastedgeheader;
 
 /* --- Module globals --------------------------------------------- */
 
-// GLOBAL: TIE 0xEBF2A
+// GLOBAL: TIE95 0xEBF2A
 uint16_t polyidbyte;
-// GLOBAL: TIE 0xEBF2C
+// GLOBAL: TIE95 0xEBF2C
 uint16_t edgeidbyte;
-// GLOBAL: TIE 0xEBF1C
+// GLOBAL: TIE95 0xEBF1C
 uint16_t objectedgeword;
 
 int16_t vertlight1;
@@ -72,7 +72,7 @@ int32_t* trace2_lastpointPtr;
 /*  Flat-polygon entry points                                        */
 /* ================================================================ */
 
-// FUNCTION: TIE 0x58140
+// FUNCTION: TIE95 0x58140
 void trace2_enterflatvertical(int16_t xCoord, int16_t topY, int16_t lineCnt) {
 	polyidbyte = flatobjnum + 0x80;
 	edgeidbyte = layervalue;
@@ -80,7 +80,7 @@ void trace2_enterflatvertical(int16_t xCoord, int16_t topY, int16_t lineCnt) {
 	trace2_entervertedge(topY, lineCnt, xCoord, 0);
 }
 
-// FUNCTION: TIE 0x5818C
+// FUNCTION: TIE95 0x5818C
 void trace2_entervertedge(int16_t topY, int16_t lineCnt, int16_t xCoord, int16_t lightVal) {
 	if (lineCnt == 0)
 		return;
@@ -125,7 +125,7 @@ void trace2_entervertedge(int16_t topY, int16_t lineCnt, int16_t xCoord, int16_t
 /*                                 top-to-bottom scanline order.     */
 /* ================================================================ */
 
-// FUNCTION: TIE 0x58238
+// FUNCTION: TIE95 0x58238
 void trace2_ydownleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
 	int32_t ytotala = (int32_t)ytotal;
 	if (ytop + ytotal > pixelsdeep)
@@ -186,7 +186,7 @@ void trace2_ydownleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t sl
 		trace2_newedgeinfo = trace2_lastedgeinfo;
 }
 
-// FUNCTION: TIE 0x58374
+// FUNCTION: TIE95 0x58374
 void trace2_ydownright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
 	int32_t ytotala = (int32_t)ytotal;
 	if (ytop + ytotal > pixelsdeep)
@@ -243,7 +243,7 @@ void trace2_ydownright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t s
 		trace2_newedgeinfo = trace2_lastedgeinfo;
 }
 
-// FUNCTION: TIE 0x584B0
+// FUNCTION: TIE95 0x584B0
 void trace2_yupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
 	int32_t ytopa = (int32_t)(ytop - ytotal);
 	int32_t ytotala = (int32_t)ytotal;
@@ -307,7 +307,7 @@ void trace2_yupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slop
 		trace2_newedgeinfo = trace2_lastedgeinfo;
 }
 
-// FUNCTION: TIE 0x58614
+// FUNCTION: TIE95 0x58614
 void trace2_yupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
 	int32_t ytopa = (int32_t)(ytop - ytotal);
 	int32_t ytotala = (int32_t)ytotal;
@@ -378,7 +378,7 @@ void trace2_yupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slo
 /*  Pre-biased by ±slope/2 for mid-pixel sampling.                   */
 /* ================================================================ */
 
-// FUNCTION: TIE 0x58778
+// FUNCTION: TIE95 0x58778
 void trace2_xdownleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
 	int32_t ytotala = (int32_t)ytotal;
 	if (ytop + ytotal > pixelsdeep)
@@ -413,7 +413,7 @@ void trace2_xdownleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t sl
 		trace2_newedgeinfo = trace2_lastedgeinfo;
 }
 
-// FUNCTION: TIE 0x5885C
+// FUNCTION: TIE95 0x5885C
 void trace2_xdownright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
 	int32_t ytotala = (int32_t)ytotal;
 	if (ytop + ytotal > pixelsdeep)
@@ -448,7 +448,7 @@ void trace2_xdownright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t s
 		trace2_newedgeinfo = trace2_lastedgeinfo;
 }
 
-// FUNCTION: TIE 0x58940
+// FUNCTION: TIE95 0x58940
 void trace2_xupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
 	int32_t ytopa = (int32_t)(ytop - ytotal);
 	int32_t ytotala = (int32_t)ytotal;
@@ -489,7 +489,7 @@ void trace2_xupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slop
 		trace2_newedgeinfo = trace2_lastedgeinfo;
 }
 
-// FUNCTION: TIE 0x58A24
+// FUNCTION: TIE95 0x58A24
 void trace2_xupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
 	int32_t ytopa = (int32_t)(ytop - ytotal);
 	int32_t ytotala = (int32_t)ytotal;
@@ -534,7 +534,7 @@ void trace2_xupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slo
 /*  Clippers                                                         */
 /* ================================================================ */
 
-// FUNCTION: TIE 0x58B08
+// FUNCTION: TIE95 0x58B08
 void trace2_ydomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t slope, uint16_t fraction) {
 	const int32_t pd = (int32_t)pixelsdeep;
 
@@ -618,7 +618,7 @@ void trace2_ydomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t sl
 	}
 }
 
-// FUNCTION: TIE 0x58D4C
+// FUNCTION: TIE95 0x58D4C
 void trace2_xdomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t slope, uint16_t fraction) {
 	const int32_t pd = (int32_t)pixelsdeep;
 
@@ -699,7 +699,7 @@ void trace2_xdomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t sl
 /*  Domain-specific dispatchers (retail variant with clamp)          */
 /* ================================================================ */
 
-// FUNCTION: TIE 0x59AC0
+// FUNCTION: TIE95 0x59AC0
 void trace2_ydomedge(int32_t slope, uint16_t fraction, int32_t* pt1, int32_t* pt2) {
 	int32_t slopea = slope;
 	trace2_ydomclipy(pt1[0], pt1[1], pt2[0], pt2[1], slope, fraction);
@@ -731,7 +731,7 @@ void trace2_ydomedge(int32_t slope, uint16_t fraction, int32_t* pt1, int32_t* pt
 	}
 }
 
-// FUNCTION: TIE 0x59BB0
+// FUNCTION: TIE95 0x59BB0
 void trace2_xdomedge(int32_t slope, uint16_t fraction, int32_t* pt1, int32_t* pt2) {
 	int32_t slopea = slope;
 	trace2_xdomclipy(pt1[0], pt1[1], pt2[0], pt2[1], slope, fraction);
@@ -766,7 +766,7 @@ void trace2_xdomedge(int32_t slope, uint16_t fraction, int32_t* pt1, int32_t* pt
 /*  findlastedge                                                     */
 /* ================================================================ */
 
-// FUNCTION: TIE 0x59A78
+// FUNCTION: TIE95 0x59A78
 void trace2_findlastedge(void) {
 	uint16_t edge = (uint16_t)numedges;
 	uint16_t index = 0;
@@ -783,7 +783,7 @@ void trace2_findlastedge(void) {
 /*  drawscreencoords — flat-polygon tracer                           */
 /* ================================================================ */
 
-// FUNCTION: TIE 0x58F4C
+// FUNCTION: TIE95 0x58F4C
 void trace2_drawscreencoords(void) {
 	const int32_t pd = (int32_t)pixelsdeep;
 	const int32_t pw = (int32_t)pixelswide;
@@ -906,7 +906,7 @@ void trace2_drawscreencoords(void) {
 /*  drawface — lit-polygon tracer                                    */
 /* ================================================================ */
 
-// FUNCTION: TIE 0x59278
+// FUNCTION: TIE95 0x59278
 void trace2_drawface(uint16_t numberOfVertices) {
 	trace2_znegflag = 0;
 

@@ -40,7 +40,7 @@ uint8_t conditiongrouprelated[26] = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1,
  * score_fgmemberofgroup
  * ==================================================================== */
 
-// FUNCTION: TIE 0x524F0
+// FUNCTION: TIE95 0x524F0
 int8_t score_fgmemberofgroup(uint16_t fg_idx, uint8_t group_type, uint16_t group_id) {
 	const EFGStruct* const f = &fg_array[fg_idx];
 	const uint8_t fg_spec = speciesconvert[f->species];
@@ -77,7 +77,7 @@ int8_t score_fgmemberofgroup(uint16_t fg_idx, uint8_t group_type, uint16_t group
  * score_objectmemberofgroup
  * ==================================================================== */
 
-// FUNCTION: TIE 0x526D0
+// FUNCTION: TIE95 0x526D0
 int8_t score_objectmemberofgroup(uint16_t obj_idx, uint8_t group_type, uint8_t group_id) {
 	uint16_t fg_idx;
 	CraftData* craft_ptr = NULL;
@@ -152,7 +152,7 @@ int8_t score_objectmemberofgroup(uint16_t obj_idx, uint8_t group_type, uint8_t g
  * score_craftexitscoring
  * ==================================================================== */
 
-// FUNCTION: TIE 0x52A9C
+// FUNCTION: TIE95 0x52A9C
 void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kind) {
 	TIE_FLIGHT_TRACE_FG_EXIT(obj_idx, exit_kind);
 	FGStatus* const fs = &fgstatus[fg_idx];
@@ -325,7 +325,7 @@ static int8_t check_mission_level(uint8_t cond) {
 	return INCOMPLETE;
 }
 
-// FUNCTION: TIE 0x51698
+// FUNCTION: TIE95 0x51698
 int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id, uint8_t amount_op,
 							int8_t exclude_player) {
 	if (!conditiongrouprelated[cond])
@@ -606,7 +606,7 @@ static void play_objectives_complete(uint16_t cooldown_set, MsgTemplate complete
 	fscript_MsSetSequence(script_seq);
 }
 
-// FUNCTION: TIE 0x50A70
+// FUNCTION: TIE95 0x50A70
 int8_t score_checkobjective(void) {
 	int8_t ret_al = (int8_t)mission.player_status;
 	if (mission.player_status != 3)

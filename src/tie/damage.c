@@ -88,7 +88,7 @@ static void promote_to_top(uint16_t sel_sys) {
 
 /* --- damage_outputsystem --- */
 
-// FUNCTION: TIE 0x1AD94
+// FUNCTION: TIE95 0x1AD94
 void damage_outputsystem(SystemStringId system_id, int16_t y) {
 	const uint16_t idx = (uint16_t)system_id;
 	char buf[8];
@@ -145,7 +145,7 @@ void damage_outputsystem(SystemStringId system_id, int16_t y) {
  *       pass backward from priority 9; if still nothing, return the final system.
  */
 
-// FUNCTION: TIE 0x1ABB4
+// FUNCTION: TIE95 0x1ABB4
 uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
 	uint8_t priority_to_system[NUM_SYSTEMS];
 	build_priority_to_system(priority_to_system);
@@ -391,7 +391,9 @@ static int damage_poll_once(DamageTask* t) {
 	return redraw ? 2 : 0;
 }
 
-// FUNCTION: TIE 0x1A600, TIE98 0x414CC0 (task-split recovery)
+// ORIGINAL_FUNCTION: TIE95 0x1A600
+// ORIGINAL_FUNCTION: TIE98 0x414CC0
+// (task-split recovery)
 static LandruTaskStepResult damage_task_step(void* self) {
 	DamageTask* t = (DamageTask*)self;
 

@@ -26,7 +26,7 @@
  * the full range. With only 257 entries any angle past 90° read past
  * the array and returned garbage from adjacent globals — visible as
  * rotating axes whose magnitude shrinks mid-turn. */
-// GLOBAL: TIE 0xCD200
+// GLOBAL: TIE95 0xCD200
 static const uint16_t sintable[514] = {
 	0,     402,   804,   1206,  1608,  2010,  2412,  2814,  3216,  3617,  4019,  4420,  4821,  5222,  5623,
 	6023,  6424,  6824,  7224,  7623,  8022,  8421,  8820,  9218,  9616,  10014, 10411, 10808, 11204, 11600,
@@ -66,7 +66,7 @@ static const uint16_t sintable[514] = {
 };
 
 /* Arctangent table: 258 entries, atan(i/256) * 32768/90° */
-// GLOBAL: TIE 0xCD904
+// GLOBAL: TIE95 0xCD904
 static const uint16_t arctantable[258] = {
 	0,    41,   81,   122,  163,  204,  244,  285,  326,  367,  407,  448,  489,  529,  570,  610,  651,
 	692,  732,  773,  813,  854,  894,  935,  975,  1015, 1056, 1096, 1136, 1177, 1217, 1257, 1297, 1337,
@@ -87,7 +87,7 @@ static const uint16_t arctantable[258] = {
 };
 
 /* Square root table: sqrt(1 + (i/256)²) * 256, for distance computation */
-// GLOBAL: TIE 0xCDB08
+// GLOBAL: TIE95 0xCDB08
 static const uint16_t squarerootable[258] = {
 	0,     0,     2,     4,     8,     12,    18,    24,    32,    40,    50,    60,    72,    84,    98,
 	112,   128,   144,   162,   180,   200,   220,   242,   264,   287,   312,   337,   363,   391,   419,
@@ -125,7 +125,7 @@ int16_t trig2_divisorhi, trig2_divisorlo;
 /* ------------------------------------------------------------------ */
 
 /* Core sine lookup with linear interpolation within the quarter-wave table */
-// FUNCTION: TIE 0x5BBE8
+// FUNCTION: TIE95 0x5BBE8
 uint16_t trig2_calcsineofangle(uint16_t angle) {
 	/* The 0x3FE mask covers both halves of the quarter-wave table. `diff`
 	 * points from the current sample to the next. */
@@ -140,10 +140,10 @@ uint16_t trig2_calcsineofangle(uint16_t angle) {
 	return base + interp;
 }
 
-// FUNCTION: TIE 0x5BBE0
+// FUNCTION: TIE95 0x5BBE0
 uint16_t trig2_getsine(uint16_t angle) { return trig2_calcsineofangle(angle); }
 
-// FUNCTION: TIE 0x5BC58
+// FUNCTION: TIE95 0x5BC58
 int16_t trig2_getsignedsin(uint16_t angle) {
 	/* Binary does `shr ax,1; or edx,0FFFEh; and eax,edx`. The or/and masks
 	 * force bit 0 of the returned value to zero whenever the raw sine
@@ -157,10 +157,10 @@ int16_t trig2_getsignedsin(uint16_t angle) {
 	return result;
 }
 
-// FUNCTION: TIE 0x5BE94
+// FUNCTION: TIE95 0x5BE94
 uint16_t trig2_getcosine(uint16_t angle) { return trig2_calcsineofangle(angle + 0x4000); }
 
-// FUNCTION: TIE 0x5BEA4
+// FUNCTION: TIE95 0x5BEA4
 int16_t trig2_getsignedcos(int16_t angle) {
 	/* Same even-sin bit-clear mask as getsignedsin (see comment there). */
 	int16_t shifted = angle + 0x4000;
@@ -174,7 +174,7 @@ int16_t trig2_getsignedcos(int16_t angle) {
 /* ------------------------------------------------------------------ */
 
 /* Multiply 16-bit value by sine of angle, returns 16-bit fixed-point */
-// FUNCTION: TIE 0x5BDDC
+// FUNCTION: TIE95 0x5BDDC
 int16_t trig2_sinewordmult(int16_t val, uint16_t angle) {
 	uint16_t abs_val = (val < 0) ? -val : val;
 	int16_t sign = (val & 0x8000) ^ (angle & 0x8000);
@@ -185,11 +185,11 @@ int16_t trig2_sinewordmult(int16_t val, uint16_t angle) {
 	return (int16_t)(result >> 16);
 }
 
-// FUNCTION: TIE 0x5BED0
+// FUNCTION: TIE95 0x5BED0
 int16_t trig2_cosinewordmult(int16_t val, uint16_t angle) { return trig2_sinewordmult(val, angle + 0x4000); }
 
 /* Multiply 32-bit value by sine of angle, returns 32-bit */
-// FUNCTION: TIE 0x5BE34
+// FUNCTION: TIE95 0x5BE34
 int32_t trig2_sinedwordmult(int32_t val, uint16_t angle) {
 	int16_t sign = 0;
 	if (val < 0) {
@@ -206,7 +206,7 @@ int32_t trig2_sinedwordmult(int32_t val, uint16_t angle) {
 	return result;
 }
 
-// FUNCTION: TIE 0x5BF2C
+// FUNCTION: TIE95 0x5BF2C
 int32_t trig2_cosinedwordmult(int32_t val, uint16_t angle) {
 	return trig2_sinedwordmult(val, angle + 0x4000);
 }
@@ -234,7 +234,7 @@ int32_t trig2_cosinedwordmult(int32_t val, uint16_t angle) {
  * current interval, low-byte fraction taken at 32-bit width so
  * the boundary case target == sintable[idx] (quotient = 65536)
  * propagates a full step. */
-// FUNCTION: TIE 0x5BC80
+// FUNCTION: TIE95 0x5BC80
 int16_t trig2_arcsin(int16_t val) {
 	int16_t abs_val = (val < 0) ? -val : val;
 	uint16_t target = 2 * abs_val;
@@ -265,7 +265,7 @@ int16_t trig2_arcsin(int16_t val) {
 }
 
 /* Inverse cosine — search sintable from 90° downward */
-// FUNCTION: TIE 0x5BD0C
+// FUNCTION: TIE95 0x5BD0C
 int16_t trig2_arccos(int16_t val) {
 	int16_t abs_val = (val < 0) ? -val : val;
 	uint16_t target = 2 * abs_val;
@@ -373,7 +373,7 @@ static void calcarctan_core(int32_t a, int32_t b, int16_t* out_ratio, int16_t* o
 	}
 }
 
-// FUNCTION: TIE 0x5C3B4
+// FUNCTION: TIE95 0x5C3B4
 int16_t trig2_arctan(int32_t y, int32_t x) {
 	trig2_signy = 0;
 	if (y < 0) {
@@ -401,7 +401,7 @@ int16_t trig2_arctan(int32_t y, int32_t x) {
 /* ------------------------------------------------------------------ */
 
 /* Public calcarctan — called by MATH2_getradarcoord */
-// FUNCTION: TIE 0x5C2C0
+// FUNCTION: TIE95 0x5C2C0
 void trig2_calcarctan(int32_t a, int32_t b) {
 	int16_t ratio, angle;
 	calcarctan_core(a, b, &ratio, &angle);
@@ -433,7 +433,7 @@ void trig2_ptoc2dim(void) {
 	trig2_cartesianyoffset = trig2_sinedwordmult(trig2_distanceplane, trig2_angleplane);
 }
 
-// FUNCTION: TIE 0x5C024
+// FUNCTION: TIE95 0x5C024
 void trig2_movexyz(uint16_t distance, int16_t pitch, uint16_t heading) {
 	trig2_phi = heading;
 	trig2_theta = 0x4000 - pitch;
@@ -444,7 +444,7 @@ void trig2_movexyz(uint16_t distance, int16_t pitch, uint16_t heading) {
 	trig2_zmovedist = trig2_zoffset;
 }
 
-// FUNCTION: TIE 0x5C1D0
+// FUNCTION: TIE95 0x5C1D0
 void trig2_ctop2dim(int32_t x, int32_t y) {
 	trig2_signx = 0;
 	if (x < 0) {
@@ -470,7 +470,7 @@ void trig2_ctop2dim(int32_t x, int32_t y) {
 	trig2_xyangle = angle;
 }
 
-// FUNCTION: TIE 0x5C0BC
+// FUNCTION: TIE95 0x5C0BC
 void trig2_ctop(int32_t x, int32_t y, int32_t z) {
 	trig2_signx = (x < 0) ? 1 : 0;
 	if (x < 0)

@@ -130,20 +130,20 @@ static const TourDeskSpec* active_spec;
 
 /* ---- Static globals ---- */
 
-// GLOBAL: TIE 0xF6070
+// GLOBAL: TIE95 0xF6070
 static Actor* galaxy_art_actor[20]; /* cached per-battle galaxy art */
 static Actor* door[2];              /* left/right door actors */
 static Input* parent;
 static Actor* battle_text_actor; /* "Battle N" title text */
-// GLOBAL: TIE 0xF60C0
+// GLOBAL: TIE95 0xF60C0
 static int32_t tour_time; /* animation frame counter */
-// GLOBAL: TIE 0xF5968
+// GLOBAL: TIE95 0xF60C4
 static Actor* title_actor;
 static Actor* button_actor[2]; /* next/previous battle buttons */
 static Actor* galaxy_actor;    /* galaxy display custom actor */
 static Actor* tourdesk_actor;  /* desk background delta */
 static Film* tourdesk_film;
-// GLOBAL: TIE 0xF60E0
+// GLOBAL: TIE95 0xF60E0
 static int32_t cur_tour_battle; /* battle at entry (for detecting changes) */
 
 /* ---- Forward declarations ---- */
@@ -169,7 +169,8 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
  * View update callback
  * ================================================================ */
 
-// FUNCTION: TIE95 0x73AF4; TIE98 0x490E40
+// FUNCTION: TIE95 0x73AF4
+// FUNCTION: TIE98 0x490E40
 static void end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
@@ -183,7 +184,8 @@ static void end_View(int32_t frame_num) {
  * XINPUT callbacks
  * ================================================================ */
 
-// FUNCTION: TIE95 0x73B18; TIE98 0x490E70
+// FUNCTION: TIE95 0x73B18
+// FUNCTION: TIE98 0x490E70
 static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 								uint8_t right, int16_t mouse_x, int16_t mouse_y) {
 	(void)bounds;
@@ -245,7 +247,8 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 	return 1;
 }
 
-// FUNCTION: TIE95 0x73CB8; TIE98 0x491010
+// FUNCTION: TIE95 0x73CB8
+// FUNCTION: TIE98 0x491010
 static void iuser_TourDesk(Input* input, int32_t time) {
 	(void)time;
 	if (!input->var1)
@@ -263,7 +266,8 @@ static void iuser_TourDesk(Input* input, int32_t time) {
  * Actor callbacks
  * ================================================================ */
 
-// FUNCTION: TIE95 0x73D04; TIE98 0x491060
+// FUNCTION: TIE95 0x73D04
+// FUNCTION: TIE98 0x491060
 static void user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
@@ -276,7 +280,8 @@ static void user_Title(Actor* actor, int32_t time) {
 	}
 }
 
-// FUNCTION: TIE95 0x73D58; TIE98 0x4910B0
+// FUNCTION: TIE95 0x73D58
+// FUNCTION: TIE98 0x4910B0
 static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 						  int16_t refresh) {
 	if (!refresh)
@@ -319,7 +324,8 @@ draw_text:
 	return 1;
 }
 
-// FUNCTION: TIE95 0x73E6C; TIE98 0x491200
+// FUNCTION: TIE95 0x73E6C
+// FUNCTION: TIE98 0x491200
 static void user_Door(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1) {
@@ -337,7 +343,8 @@ static void user_Door(Actor* actor, int32_t time) {
 	}
 }
 
-// FUNCTION: TIE95 0x73EEC; TIE98 0x491280
+// FUNCTION: TIE95 0x73EEC
+// FUNCTION: TIE98 0x491280
 static void user_Battle(Actor* actor, int32_t time) {
 	(void)actor;
 	if (!time) {
@@ -352,7 +359,8 @@ static void user_Battle(Actor* actor, int32_t time) {
  * Battle text draw
  * ================================================================ */
 
-// FUNCTION: TIE95 0x73F0C; TIE98 0x4912B0
+// FUNCTION: TIE95 0x73F0C
+// FUNCTION: TIE98 0x4912B0
 static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
 	(void)actor;
 	(void)clip_r;
@@ -386,7 +394,8 @@ static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, 
  * ================================================================ */
 
 /* Phase 0-7: zoom from center to galaxy rect */
-// FUNCTION: TIE95 0x73FA0; TIE98 0x491360
+// FUNCTION: TIE95 0x73FA0
+// FUNCTION: TIE98 0x491360
 static void Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
 	if (time >= 8)
 		return;
@@ -429,7 +438,8 @@ static void Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
 }
 
 /* Phase 8-23: hold at galaxy rect */
-// FUNCTION: TIE95 0x74118; TIE98 0x491500
+// FUNCTION: TIE95 0x74118
+// FUNCTION: TIE98 0x491500
 static void Draw_Battle_Two(Rect* galaxy_rect, int16_t time, Rect* clip_r) {
 	(void)clip_r;
 	if (time < 8 || time >= 24)
@@ -460,7 +470,8 @@ static void Draw_Battle_Two(Rect* galaxy_rect, int16_t time, Rect* clip_r) {
 }
 
 /* Phase 24-31: zoom from galaxy rect to actor bounds */
-// FUNCTION: TIE95 0x741BC; TIE98 0x4915E0
+// FUNCTION: TIE95 0x741BC
+// FUNCTION: TIE98 0x4915E0
 static void Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t time) {
 	if (time < 24 || time >= 32)
 		return;
@@ -482,7 +493,8 @@ static void Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t time) {
 }
 
 /* Phase 32-39: reveal actor with vertical wipe */
-// FUNCTION: TIE95 0x742A0; TIE98 0x4916F0
+// FUNCTION: TIE95 0x742A0
+// FUNCTION: TIE98 0x4916F0
 static void Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int16_t time) {
 	(void)galaxy_rect;
 	if (time < 32 || time >= 40)
@@ -507,7 +519,8 @@ static void Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int1
 }
 
 /* Phase 40+: final state — full art + battle info text */
-// FUNCTION: TIE95 0x7434C; TIE98 0x4917E0
+// FUNCTION: TIE95 0x7434C
+// FUNCTION: TIE98 0x4917E0
 static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 	if (time < 40)
 		return 1;
@@ -573,7 +586,8 @@ static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
  * Galaxy zoom composite draw
  * ================================================================ */
 
-// FUNCTION: TIE95 0x74534; TIE98 0x491A30
+// FUNCTION: TIE95 0x74534
+// FUNCTION: TIE98 0x491A30
 static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
 	(void)actor;
 	(void)x;

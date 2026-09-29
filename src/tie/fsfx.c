@@ -36,7 +36,7 @@
 /* soundhandles[0..3] are unused (the binary reserves them for the music
  * bank reused in other builds). [4..50] SFX, [51..106] voice, and
  * [107..] follows the edition-specific SFXDOE/mission-voice layout. */
-// GLOBAL: TIE 0xD49BC
+// GLOBAL: TIE95 0xD49BC
 void* soundhandles[FSFX_NUM_SOUND_HANDLES];
 static char soundnames[FSFX_NUM_SOUND_HANDLES][FSFX_SOUND_NAME_CAPACITY];
 
@@ -84,19 +84,19 @@ uint8_t fullvolume[FSFX_NUM_DIST_ENTRIES] = {
 /* Per-mission voice-filename inputs (see fsfx.h). Snapshot of the
  * pilot's tour/combat cursor at mission entry; consumed by
  * fsfx_loadvoicelfd to build VOICE\<NAME>\<NAME>.LFD. */
-// GLOBAL: TIE 0xD4190
+// GLOBAL: TIE95 0xD4190
 uint8_t voice_id_a;
-// GLOBAL: TIE 0xD418E
+// GLOBAL: TIE95 0xD418E
 uint8_t voice_id_b;
-// GLOBAL: TIE 0xD418F
+// GLOBAL: TIE95 0xD418F
 uint8_t voice_tour_battle;
-// GLOBAL: TIE 0xD418C
+// GLOBAL: TIE95 0xD418C
 uint8_t voice_tour_mission;
 
 /* "FIBAGDM" -- single-letter filename prefix for combat-sim ships in
  * mode 1. Indexed by voice_id_a (cur_combat_ship). The trailing NUL
  * keeps strlen() happy if anyone walks the table. */
-// GLOBAL: TIE 0xC5358
+// GLOBAL: TIE95 0xC5358
 static const char combat_ship_voice_letters[8] = "FIBAGDM";
 
 /* Five SFX-group prefix strings matched against EFGStruct.name by
@@ -201,7 +201,7 @@ static uint16_t player_engine_sound_id(int16_t species) {
 	return UINT16_MAX;
 }
 
-/* FUNCTION: TIE98 0x422760 */
+// FUNCTION: TIE98 0x422760
 void FSFX_UpdatePlayerEngineSound(void) {
 	const TieFlightProfile* profile = TieProfile_Flight();
 	if (profile->version != TIE_GAME_VERSION_TIE98 || !sfxenabled || !g_playerEngineSoundUpdateEnabled)
@@ -256,13 +256,13 @@ void FSFX_UpdatePlayerEngineSound(void) {
  * Setup / teardown.
  * -------------------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x24740
+// FUNCTION: TIE95 0x24740
 void fsfx_allocsfxbuffer(void) {
 	/* Empty stub in the binary -- module-level buffers are set up in
 	 * fediskio_init_buffers_and_fonts. */
 }
 
-// FUNCTION: TIE 0x24744
+// FUNCTION: TIE95 0x24744
 void fsfx_freesfx(void) {
 	FsfxSoundLayout layout = fsfx_sound_layout();
 	if (layout.has_player_engine_loops) {
@@ -381,7 +381,7 @@ static int load_sound_bank(const char* filename, int start_idx, int end_idx, int
 	return handle_idx - start_idx;
 }
 
-// FUNCTION: TIE 0x247D8
+// FUNCTION: TIE95 0x247D8
 int16_t fsfx_loadsfx(const char* filename) {
 	int total = 0;
 	FsfxSoundLayout layout = fsfx_sound_layout();
@@ -484,7 +484,7 @@ static int voice_slot_active(uint16_t logical_index) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x24ADC
+// FUNCTION: TIE95 0x24ADC
 int16_t fsfx_loadvoicelfd(void) {
 	char path[64];
 	char base[8];
@@ -602,7 +602,7 @@ int16_t fsfx_loadvoicelfd(void) {
  * Positional audio math.
  * -------------------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x251B0
+// FUNCTION: TIE95 0x251B0
 int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id) {
 	/* 0xFFFF = "local / player" sound, max volume. */
 	if (src_obj == 0xFFFF) {
@@ -668,7 +668,7 @@ int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id) {
 	return vol;
 }
 
-// FUNCTION: TIE 0x2530C
+// FUNCTION: TIE95 0x2530C
 int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr) {
 	if (src_obj == 0xFFFF)
 		return 64;
@@ -748,7 +748,7 @@ int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr) {
  * Trigger dispatchers.
  * -------------------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x24F5C
+// FUNCTION: TIE95 0x24F5C
 int8_t fsfx_triggersfx(uint16_t sound_id, uint16_t src_obj) {
 	if (!sfxenabled)
 		return 0;
@@ -790,7 +790,7 @@ int8_t fsfx_triggersfx(uint16_t sound_id, uint16_t src_obj) {
 	return 1;
 }
 
-// FUNCTION: TIE 0x25108
+// FUNCTION: TIE95 0x25108
 int8_t fsfx_triggerlasersfx(uint16_t projectile_obj) {
 	if (!sfxenabled)
 		return 0;
@@ -834,7 +834,7 @@ int8_t fsfx_triggerlasersfx(uint16_t projectile_obj) {
 	return fsfx_triggersfx(sfx_id, projectile_obj);
 }
 
-// FUNCTION: TIE 0x2554C
+// FUNCTION: TIE95 0x2554C
 int32_t fsfx_triggergunsightsfx(int16_t mode) {
 	if (!sfxenabled)
 		return 0;
@@ -869,7 +869,7 @@ int32_t fsfx_triggergunsightsfx(int16_t mode) {
 	return 1;
 }
 
-// FUNCTION: TIE 0x25648
+// FUNCTION: TIE95 0x25648
 int8_t fsfx_triggerbeamsfx(int32_t firing) {
 	if (!sfxenabled || !inflight_sound_vol)
 		return (int8_t)firing;
@@ -906,7 +906,7 @@ int8_t fsfx_triggerbeamsfx(int32_t firing) {
 	return fsfx_triggersfx(id, 0xFFFF);
 }
 
-// FUNCTION: TIE 0x25734
+// FUNCTION: TIE95 0x25734
 int8_t fsfx_triggervoicesfx(uint16_t voice_id) {
 	if (!voiceenabled)
 		return 0;
@@ -936,7 +936,7 @@ int8_t fsfx_triggervoicesfx(uint16_t voice_id) {
  * Per-frame helpers (driven by TIE_doframe).
  * -------------------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x25824
+// FUNCTION: TIE95 0x25824
 void fsfx_checkblastqueue(void) {
 	if (!blastflag || !blastcount)
 		return;
@@ -962,7 +962,7 @@ void fsfx_checkblastqueue(void) {
 	currentdigital = (uint8_t)next_voice;
 }
 
-// FUNCTION: TIE 0x25950
+// FUNCTION: TIE95 0x25950
 int16_t fsfx_checktieflyby(void) {
 	uint16_t i;
 	for (i = 0; i < NUM_CRAFTS; i++) {
@@ -1032,7 +1032,7 @@ int16_t fsfx_checktieflyby(void) {
 	return (int16_t)i;
 }
 
-// FUNCTION: TIE 0x25AAC
+// FUNCTION: TIE95 0x25AAC
 int8_t fsfx_speakeravailable(void) {
 	if (!blastflag)
 		return 0;
@@ -1052,7 +1052,7 @@ int8_t fsfx_speakeravailable(void) {
  * Voice-clip stitching.
  * -------------------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x25B0C
+// FUNCTION: TIE95 0x25B0C
 int8_t fsfx_speakobjectname(uint16_t obj_idx, uint16_t prefix_voice) {
 	/* Retail bails for obj_idx >= NUM_CRAFTS so warhead-slot CraftData*
 	 * (a WarheadRecord*) is never reinterpreted as a craft. */
@@ -1138,7 +1138,7 @@ int8_t fsfx_speakobjectname(uint16_t obj_idx, uint16_t prefix_voice) {
 	return (int8_t)prefix_voice;
 }
 
-// FUNCTION: TIE 0x25CDC
+// FUNCTION: TIE95 0x25CDC
 int8_t fsfx_speakcongrats(void) {
 	/* Pick one of 3 kudos clips (76..78). */
 	uint16_t r = (uint16_t)math2_getrandom();
@@ -1169,7 +1169,7 @@ int8_t fsfx_speakcongrats(void) {
 	return (int8_t)r;
 }
 
-// FUNCTION: TIE 0x25D60
+// FUNCTION: TIE95 0x25D60
 int8_t fsfx_speakoperation(uint16_t order_voice, uint16_t verb_voice) {
 	/* verb_voice 63 is the "take action" phrasing -- in that case,
 	 * randomise the prefix (0x3C / 0x3D / fall-through). Otherwise
@@ -1193,7 +1193,7 @@ int8_t fsfx_speakoperation(uint16_t order_voice, uint16_t verb_voice) {
 	return fsfx_triggervoicesfx(verb_voice);
 }
 
-// FUNCTION: TIE 0x25DDC
+// FUNCTION: TIE95 0x25DDC
 int8_t fsfx_speakobjectives(uint16_t objective_voice) {
 	/* 50% chance to prepend a kudos + "objective" + player name. */
 	if ((uint16_t)math2_getrandom() > 0x4000u) {
@@ -1222,7 +1222,7 @@ int8_t fsfx_speakobjectives(uint16_t objective_voice) {
 	return (int8_t)r;
 }
 
-// FUNCTION: TIE 0x25EA4
+// FUNCTION: TIE95 0x25EA4
 int8_t fsfx_speakorderack(int32_t target_idx, int32_t order_char, uint16_t cmdr_mode) {
 	uint16_t target_obj = (uint16_t)target_idx;
 	uint16_t r = (uint16_t)math2_getrandom();
@@ -1293,7 +1293,7 @@ int8_t fsfx_speakorderack(int32_t target_idx, int32_t order_char, uint16_t cmdr_
  * the 9..12 range. */
 static int is_destroy_cond(uint8_t cond) { return cond == 7 || cond == 9 || cond == 12; }
 
-// FUNCTION: TIE 0x26004
+// FUNCTION: TIE95 0x26004
 int32_t fsfx_checkcriticalcraft(int32_t obj_idx_arg, uint16_t action_voice) {
 	uint16_t obj_idx_u16 = (uint16_t)obj_idx_arg;
 

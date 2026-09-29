@@ -72,7 +72,8 @@ static int32_t starship_damagecomponent_tie98_rotclamp(int64_t value) {
 	return (int32_t)(value >> 15);
 }
 
-// FUNCTION: TIE98 0x487000 STARSHIP_damagecomponent
+// FUNCTION: TIE98 0x487000
+// STARSHIP_damagecomponent
 static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t component_plus1, uint16_t damage) {
 	const uint16_t component_idx = (uint16_t)(component_plus1 - 1);
 	const uint8_t hp = craftptr->mesh_component_hp[component_idx];
@@ -185,7 +186,7 @@ int16_t starship_getcoordvalue(const uint8_t* bsp_coord) { return starship_coord
  * STARSHIP_checkstarshiphit -- per-mesh laser hit test (@0x4F8EC)
  * ---------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x52EDC
+// FUNCTION: TIE95 0x52EDC
 uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj_idx) {
 	if (TieProfile_UsesTie98Logic())
 		return collide_checksweptmodelcollision(shooter_obj_idx, target_obj_idx);
@@ -385,7 +386,7 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
  * STARSHIP_damagecomponent -- apply hit damage to one mesh (@0x4FED0)
  * ---------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x534E4
+// FUNCTION: TIE95 0x534E4
 uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, uint16_t damage) {
 	if (TieProfile_UsesTie98Logic())
 		return starship_damagecomponent_tie98(obj_idx_in, component_plus1, damage);
@@ -548,7 +549,8 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
  * STARSHIP_createstarshipexplo -- whole-ship or sparking (@0x50428)
  * ---------------------------------------------------------------- */
 
-// FUNCTION: TIE98 0x4875F0 STARSHIP_makestarshipcompexplo
+// FUNCTION: TIE98 0x4875F0
+// STARSHIP_makestarshipcompexplo
 static uint16_t starship_makestarshipcompexplo_tie98(FlightObject* craft, uint16_t component_idx,
 													 uint32_t effect_size, int use_random_vertex) {
 	const uint16_t model_type = craft->ship_idx;
@@ -594,7 +596,8 @@ static uint16_t starship_makestarshipcompexplo_tie98(FlightObject* craft, uint16
 	return new_obj;
 }
 
-// FUNCTION: TIE98 0x487440 STARSHIP_createstarshipexplo
+// FUNCTION: TIE98 0x487440
+// STARSHIP_createstarshipexplo
 static void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_ship) {
 	if ((uint16_t)math2_getrandom() >= starshipexplodetail && !full_ship)
 		return;
@@ -631,7 +634,7 @@ static void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_sh
 	}
 }
 
-// FUNCTION: TIE 0x53A3C
+// FUNCTION: TIE95 0x53A3C
 void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 	if (TieProfile_UsesTie98Logic()) {
 		starship_createstarshipexplo_tie98(obj_idx_in, full_ship);
@@ -696,7 +699,7 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
  * STARSHIP_makestarshipcompexplo -- one component explosion (@0x50640)
  * ---------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x53BFC
+// FUNCTION: TIE95 0x53BFC
 uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_idx, uint16_t size,
 										int16_t use_bsp_random) {
 	if (TieProfile_UsesTie98Logic())
@@ -804,7 +807,7 @@ uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_
 /* Warhead slot metadata lives in laser.c. We access it via the WarheadRecord
  * struct from laser.h. */
 
-// FUNCTION: TIE 0x53EAC
+// FUNCTION: TIE95 0x53EAC
 void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, uint16_t target_ref) {
 	if (craftptr->status_flags == 0)
 		return;

@@ -130,7 +130,7 @@ static void publish_shooter_origin(uint8_t group_idx, int publish_search) {
  *                              Leaf helpers
  * ===================================================================== */
 
-// FUNCTION: TIE 0x3741C
+// FUNCTION: TIE95 0x3741C
 int paifight_countattackers(uint16_t target_obj_idx) {
 	/* Count active objects currently attacking target_obj_idx in
 	 * combat modes 11/12/23. Self-attackers are skipped. */
@@ -186,7 +186,7 @@ int paifight_countattackers(uint16_t target_obj_idx) {
 	return (not_wingman_locked && attackers < cap) ? 1 : 0;
 }
 
-// FUNCTION: TIE 0x37F64
+// FUNCTION: TIE95 0x37F64
 int16_t paifight_gethullcomponent(uint16_t target_obj_idx) {
 	uint8_t hull_list[44];
 	uint16_t hull_count = 0;
@@ -219,7 +219,7 @@ int16_t paifight_gethullcomponent(uint16_t target_obj_idx) {
 /* searchforclosestingroup -- closest moving or static object in a FG
  * that matches the (pri_type, pri_id)/(sec_type, sec_id) selector under
  * op (1=AND, else OR). Side effect: writes `escortfg`. */
-// FUNCTION: TIE 0x393CC
+// FUNCTION: TIE95 0x393CC
 int16_t paifight_searchforclosestingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 										 uint8_t sec_id) {
 	uint32_t best_dist = 0xFFFFFFFFu;
@@ -264,7 +264,7 @@ int16_t paifight_searchforclosestingroup(uint8_t pri_type, uint8_t pri_id, int16
 
 /* futuretargets -- look-ahead predicate: does any inactive/waves-
  * remaining FG match the selector under the current difficulty mask? */
-// FUNCTION: TIE 0x395D8
+// FUNCTION: TIE95 0x395D8
 int16_t paifight_futuretargets(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 							   uint8_t sec_id) {
 	for (uint16_t f = 0; (int16_t)f < mission_file_header.num_fg; ++f) {
@@ -292,7 +292,7 @@ int16_t paifight_futuretargets(uint8_t pri_type, uint8_t pri_id, int16_t op, uin
  *                           Target finders
  * ===================================================================== */
 
-// FUNCTION: TIE 0x36C3C
+// FUNCTION: TIE95 0x36C3C
 int16_t paifight_findtargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 								   uint8_t sec_id) {
 	uint32_t best_dist = 0xFFFFFFFFu;
@@ -372,7 +372,7 @@ int16_t paifight_findtargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op,
 	return best_obj;
 }
 
-// FUNCTION: TIE 0x36FE4
+// FUNCTION: TIE95 0x36FE4
 int16_t paifight_findescorterofgroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 									 uint8_t sec_id) {
 	uint32_t best_dist = 0xFFFFFFFFu;
@@ -416,7 +416,7 @@ int16_t paifight_findescorterofgroup(uint8_t pri_type, uint8_t pri_id, int16_t o
 	return best_obj;
 }
 
-// FUNCTION: TIE 0x37210
+// FUNCTION: TIE95 0x37210
 int16_t paifight_findattackedtargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 										   uint8_t sec_id) {
 	uint32_t best_dist = 0xFFFFFFFFu;
@@ -475,7 +475,7 @@ int16_t paifight_findattackedtargetingroup(uint8_t pri_type, uint8_t pri_id, int
 	return best_obj;
 }
 
-// FUNCTION: TIE 0x38B08
+// FUNCTION: TIE95 0x38B08
 uint16_t paifight_findgunnertargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 										  uint8_t sec_id) {
 	uint32_t best_dist = 0xFFFFFFFFu;
@@ -542,7 +542,7 @@ uint16_t paifight_findgunnertargetingroup(uint8_t pri_type, uint8_t pri_id, int1
 	return best_obj;
 }
 
-// FUNCTION: TIE 0x36B74
+// FUNCTION: TIE95 0x36B74
 int16_t paifight_checkfortargets(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
 	int16_t result = paifight_findtargetingroup(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op,
@@ -554,7 +554,7 @@ int16_t paifight_checkfortargets(uint16_t ai_entry) {
 	return result;
 }
 
-// FUNCTION: TIE 0x36F1C
+// FUNCTION: TIE95 0x36F1C
 int16_t paifight_checkforescortertargets(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
 	int16_t result = paifight_findescorterofgroup(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op,
@@ -566,7 +566,7 @@ int16_t paifight_checkforescortertargets(uint16_t ai_entry) {
 	return result;
 }
 
-// FUNCTION: TIE 0x37148
+// FUNCTION: TIE95 0x37148
 int16_t paifight_checkforattackedtargets(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
 	int16_t result = paifight_findattackedtargetingroup(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op,
@@ -579,7 +579,7 @@ int16_t paifight_checkforattackedtargets(uint16_t ai_entry) {
 	return result;
 }
 
-// FUNCTION: TIE 0x3950C
+// FUNCTION: TIE95 0x3950C
 int16_t paifight_checkforfuturetargets(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
 	if (paifight_futuretargets(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op, cur_ai->sec_type,
@@ -594,7 +594,7 @@ int16_t paifight_checkforfuturetargets(uint16_t ai_entry) {
 	return result;
 }
 
-// FUNCTION: TIE 0x37570
+// FUNCTION: TIE95 0x37570
 int16_t paifight_scanfortargetswitch(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
 	uint8_t order_class = create_getleaderorder(cur_ai->order);
@@ -613,7 +613,7 @@ int16_t paifight_scanfortargetswitch(uint16_t ai_entry) {
 	return (uint16_t)result != 0xFFFFu;
 }
 
-// FUNCTION: TIE 0x37624
+// FUNCTION: TIE95 0x37624
 int16_t paifight_scanfortargetsallgone(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
 	uint8_t order_class = create_getleaderorder(cur_ai->order);
@@ -632,7 +632,7 @@ int16_t paifight_scanfortargetsallgone(uint16_t ai_entry) {
 	return (uint16_t)result != 0xFFFFu;
 }
 
-// FUNCTION: TIE 0x36A90
+// FUNCTION: TIE95 0x36A90
 int16_t paifight_scanfortargetorder(void) {
 	/* Plan slot 9 -- target-acquire step. Bails when the craft's mode
 	 * has drifted from the plan's declared order. */
@@ -693,7 +693,7 @@ void paifight_checkescortorder_entry(void) {
  *                        Plan-VM combat handlers
  * ===================================================================== */
 
-// FUNCTION: TIE 0x376D4
+// FUNCTION: TIE95 0x376D4
 int16_t paifight_escorttargetorder(void) {
 	/* Plan slot 23: escort target picker. */
 	if (craftptr->mode_byte != (uint8_t)ai.plan_order)
@@ -769,7 +769,7 @@ int16_t paifight_escorttargetorder(void) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x37900
+// FUNCTION: TIE95 0x37900
 int16_t paifight_fightershootorder(void) {
 	/* Plan slot 5: fighter laser + missile fire control. */
 	if (!craftptr->status_flags)
@@ -978,7 +978,7 @@ int16_t paifight_fightershootorder(void) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x38000
+// FUNCTION: TIE95 0x38000
 int16_t paifight_missiledefenseorder(void) {
 	/* Plan slot 8: countermeasure firing. */
 	if (craftptr->flight_flag == 3)
@@ -1110,7 +1110,7 @@ int16_t paifight_missiledefenseorder(void) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x384F8
+// FUNCTION: TIE95 0x384F8
 int16_t paifight_gunnerselfdefenseorder(void) {
 	/* Plan slot 6: turret picks a defensive target. */
 	ai.live_target_only = 0;
@@ -1201,7 +1201,7 @@ int16_t paifight_gunnerselfdefenseorder(void) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x38848
+// FUNCTION: TIE95 0x38848
 int16_t paifight_gunneroffenseorder(void) {
 	/* Plan slot 7: turret picks an offensive target via the gunner
 	 * target finder. */
@@ -1252,7 +1252,7 @@ int16_t paifight_gunneroffenseorder(void) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x38D28
+// FUNCTION: TIE95 0x38D28
 int16_t paifight_coverleaderorder(void) {
 	/* Plan slot 13: wingman-cover target picker. */
 	CraftData* leader_craft = objects[ai.leader_obj_idx].craft_ptr;
@@ -1298,7 +1298,7 @@ int16_t paifight_coverleaderorder(void) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x38EF4
+// FUNCTION: TIE95 0x38EF4
 int16_t paifight_followleadatkorder(void) {
 	/* Plan slot 14: attack leader's current target. */
 	uint8_t leader_mode = ai.leader_craft->mode_byte;

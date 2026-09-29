@@ -523,7 +523,7 @@ static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, 
  * and handles scene exit. Scene 7 checks for lobo.lfd (expansion pack);
  * scene 910 redirects to the next battle cutscene.
  */
-// FUNCTION: TIE 0x78500
+// FUNCTION: TIE95 0x78500
 static void play1_end_View(int32_t time) {
 	(void)time;
 	const play1_data_set_t* p = play1_data_set();
@@ -562,7 +562,7 @@ static void play1_end_View(int32_t time) {
  * - var1 == 123: set up CD streaming actor
  * Returns 1 to suppress the actor.
  */
-// FUNCTION: TIE 0x78580
+// FUNCTION: TIE95 0x78580
 static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 	int16_t retval = 0;
 
@@ -643,7 +643,7 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
  * On the first frame (time == 0), sets the actor state to
  * (secret_medal - 1), capped at state 2.
  */
-// FUNCTION: TIE 0x787C4
+// FUNCTION: TIE95 0x787C4
 static void play1_user_Play_Arm(Actor* the_actor, int32_t time) {
 	if (time == 0) {
 		int16_t medal = shipext_Get_Secret_Medal();
@@ -666,7 +666,7 @@ static void play1_user_Play_Arm(Actor* the_actor, int32_t time) {
  */
 #define LITERAL_MAX_SIZE 48000
 
-// FUNCTION: TIE 0x78800
+// FUNCTION: TIE95 0x78800
 static void play1_Make_Literal_Actor(Actor* the_actor) {
 	BitmapStruct* canvas_bm = xcanvas_Get_Current_Canvas_Bitmap();
 	uint8_t* temp_buffer = (uint8_t*)xbitmap_Lock_Bitmap(canvas_bm);
@@ -730,7 +730,7 @@ static void play1_Make_Literal_Actor(Actor* the_actor) {
  * even = copy). Uncompressed: raw pixel data. Strips compression bit
  * from the output length. 63000-byte overflow guard.
  */
-// FUNCTION: TIE 0x78A28
+// FUNCTION: TIE95 0x78A28
 static int play1_Literal_Image(uint8_t* buffer, const uint8_t* image) {
 	int32_t index, bindex;
 
@@ -795,7 +795,7 @@ static int play1_Literal_Image(uint8_t* buffer, const uint8_t* image) {
  * State 1: read frames (4-byte size + data), decode via
  * drawstrm_Convert_Frame_To_Palette.
  */
-// FUNCTION: TIE 0x78B70
+// FUNCTION: TIE95 0x78B70
 static void play1_Update_Stream_Actor(Actor* the_actor) {
 	if (!xactor_Is_Actor_Visible(the_actor))
 		return;
@@ -854,7 +854,7 @@ static void play1_Update_Stream_Actor(Actor* the_actor) {
 /* ------------------------------------------------------------------ */
 
 /* Stream actor draw callback. Copies current_frame to canvas. */
-// FUNCTION: TIE 0x78D2C
+// FUNCTION: TIE95 0x78D2C
 static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
 									   int16_t refresh) {
 	(void)the_actor;
@@ -875,7 +875,7 @@ static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, 
  * Prepare CD streaming for the current and next scene. Tries Use first;
  * falls back to Chain+Use. Then pre-chains the next scene's stream.
  */
-// FUNCTION: TIE 0x78D54
+// FUNCTION: TIE95 0x78D54
 static void play1_Chain_Scene(void) {
 	const play1_data_set_t* p = play1_data_set();
 	use_chain_successful = 0;

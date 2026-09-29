@@ -41,7 +41,7 @@
 #include "tie_runtime/storage/storage.h"
 
 /* Create Landru modules in dependency order. */
-// FUNCTION: TIE 0x86C05
+// FUNCTION: TIE95 0x86C05
 void asl_Open_ASL(void) {
 	const TieFrontendProfile* profile = TieProfile_Frontend();
 	Rect canvas_bounds;
@@ -92,7 +92,7 @@ void asl_Open_ASL(void) {
 }
 
 /* Shut down all Landru modules in reverse creation order. */
-// FUNCTION: TIE 0x86D22
+// FUNCTION: TIE95 0x86D22
 void asl_Close_ASL(void) {
 	xfiledir_Destroy_Directory_Module();
 	xview_Destroy_View_Module();
@@ -122,7 +122,7 @@ void asl_Close_ASL(void) {
 }
 
 /* Emergency teardown, including iMUSE cleanup. */
-// FUNCTION: TIE 0x86DC3
+// FUNCTION: TIE95 0x86DC3
 int asl_Case_Bail(void) {
 	xfiledir_Destroy_Directory_Module();
 	xview_Destroy_View_Module();

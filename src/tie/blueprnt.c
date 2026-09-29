@@ -62,13 +62,13 @@ static Input* door_input;
 static Actor* ship_name_actor;
 static Actor* ship_comp_actor;
 static Actor* ship_info_actor;
-// GLOBAL: TIE 0xF5790
+// GLOBAL: TIE95 0xF5984
 static Actor* arrow_actor;
-// GLOBAL: TIE 0xF5980
+// GLOBAL: TIE95 0xF5980
 static Actor* door_actor;
-// GLOBAL: TIE 0xF5990
+// GLOBAL: TIE95 0xF5990
 static Actor* door_back_actor;
-// GLOBAL: TIE 0xF5968
+// GLOBAL: TIE95 0xF5968
 static Actor* title_actor;
 static int16_t blueprint_info_ship;
 static int16_t blueprint_info_time;
@@ -101,7 +101,7 @@ static int32_t compute_ship_size(void) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6E3D0
+// FUNCTION: TIE95 0x6E3D0
 static void blueprnt_end_Blueprint_View(int32_t time) {
 	if (time == 0 && !xcursor_Is_Cursor_Visible())
 		xcursor_Show_Cursor();
@@ -109,7 +109,8 @@ static void blueprnt_end_Blueprint_View(int32_t time) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6E3E4; TIE98 0x4045B0
+// FUNCTION: TIE95 0x6E3E4
+// FUNCTION: TIE98 0x4045B0
 static int16_t blueprnt_film_Blueprint_Callback(Film* the_film, FilmObject* film_object) {
 	if (blueprint_svga && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
@@ -152,7 +153,7 @@ static int16_t blueprnt_film_Blueprint_Callback(Film* the_film, FilmObject* film
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6E4B8
+// FUNCTION: TIE95 0x6E4B8
 static int16_t blueprnt_iupdate_Blueprint(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 										  uint8_t mouseState, uint8_t prevMouseState, int16_t key,
 										  int16_t prevKey) {
@@ -192,7 +193,7 @@ static int16_t blueprnt_iupdate_Blueprint(Input* input, Rect* draw_rect, Rect* c
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6E588
+// FUNCTION: TIE95 0x6E588
 static void blueprnt_iuser_Blueprint(Input* input, int32_t time) {
 	(void)time;
 
@@ -219,7 +220,7 @@ static void blueprnt_iuser_Blueprint(Input* input, int32_t time) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6E5DC
+// FUNCTION: TIE95 0x6E5DC
 static int16_t blueprnt_iupdate_Blueprint_Door(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 											   uint8_t mouseState, uint8_t prevMouseState, int16_t key,
 											   int16_t prevKey) {
@@ -240,7 +241,7 @@ static int16_t blueprnt_iupdate_Blueprint_Door(Input* input, Rect* draw_rect, Re
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6E610
+// FUNCTION: TIE95 0x6E610
 static void blueprnt_iuser_Blueprint_Door(Input* input, int32_t time) {
 	(void)time;
 	if (xinpattr_Get_Input_Selected(input))
@@ -254,7 +255,7 @@ static void blueprnt_iuser_Blueprint_Door(Input* input, int32_t time) {
  * Each ship occupies 11 animation frames. On first frame, jumps to
  * the target position. On subsequent frames, interpolates by ±1.
  */
-// FUNCTION: TIE 0x6E62C
+// FUNCTION: TIE95 0x6E62C
 static void blueprnt_user_Blueprint_Projector(Actor* the_actor, int32_t time) {
 	int16_t new_state;
 
@@ -280,7 +281,7 @@ static void blueprnt_user_Blueprint_Projector(Actor* the_actor, int32_t time) {
  * closes when var1 is 0. Controls title_actor->var2 to show/hide the
  * "Return to Concourse" label.
  */
-// FUNCTION: TIE 0x6E6A8
+// FUNCTION: TIE95 0x6E6A8
 static void blueprnt_user_Blueprint_Door(Actor* the_actor, int32_t time) {
 	if (time == 0)
 		the_actor->var1 = 0;
@@ -311,7 +312,8 @@ static void blueprnt_user_Blueprint_Door(Actor* the_actor, int32_t time) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6E768; TIE98 0x4049C0
+// FUNCTION: TIE95 0x6E768
+// FUNCTION: TIE98 0x4049C0
 static int16_t blueprnt_draw_Blueprint_Text(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 											int16_t off_y, int16_t refresh) {
 	(void)off_x;
@@ -336,7 +338,7 @@ static int16_t blueprnt_draw_Blueprint_Text(Actor* the_actor, Rect* draw_rect, R
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6E7CC
+// FUNCTION: TIE95 0x6E7CC
 static void blueprnt_user_Blueprint_Info(Actor* the_actor, int32_t time) {
 	(void)the_actor;
 
@@ -363,7 +365,8 @@ static int16_t fade_clamp(int16_t raw, int16_t info_time) {
 	return fade;
 }
 
-// FUNCTION: TIE 0x6E820; TIE98 0x404A80
+// FUNCTION: TIE95 0x6E820
+// FUNCTION: TIE98 0x404A80
 static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 											int16_t off_y, int16_t refresh) {
 	(void)the_actor;
@@ -428,7 +431,7 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6EA5C
+// FUNCTION: TIE95 0x6EA5C
 static int16_t blueprnt_draw_Blueprint_Title(Actor* the_actor, Rect* draw_rect, Rect* clip_rect,
 											 int16_t off_x, int16_t off_y, int16_t refresh) {
 	if (!refresh || !the_actor->var2)
@@ -446,7 +449,7 @@ static int16_t blueprnt_draw_Blueprint_Title(Actor* the_actor, Rect* draw_rect, 
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x6EAB4
+// FUNCTION: TIE95 0x6EAB4
 int16_t blueprnt_Flight_Object_Size(void) { return (int16_t)compute_ship_size(); }
 
 /* ------------------------------------------------------------------ */

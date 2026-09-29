@@ -391,7 +391,8 @@ static int16_t pilot_info_num_pages;
  * Init_Computer_Medal — scan pilot record, build medal page arrays
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x869A4; TIE98 0x410650
+// FUNCTION: TIE95 0x869A4
+// FUNCTION: TIE98 0x410650
 static int16_t Init_Computer_Medal(void) {
 	int16_t count, bits;
 	int16_t i, j;
@@ -453,7 +454,8 @@ static int16_t Init_Computer_Medal(void) {
  * Find_Backup_Pilot_Info — read backup pilot rank/score from .tfr file
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x86B60; TIE98 0x4107D0
+// FUNCTION: TIE95 0x86B60
+// FUNCTION: TIE98 0x4107D0
 static int16_t Find_Backup_Pilot_Info(void) {
 	/* TIE98 stack size; also accommodates the widened runtime pilot name. */
 	char file_name[40];
@@ -482,7 +484,8 @@ static int16_t Find_Backup_Pilot_Info(void) {
  * Set_Computer_Medal_Palette — crossfade to medal-specific palette
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x84DD8; TIE98 0x40DFB0
+// FUNCTION: TIE95 0x84DD8
+// FUNCTION: TIE98 0x40DFB0
 static int16_t Set_Computer_Medal_Palette(void) {
 	xpal_Screen_To_Dest_Palette(0, 0, 255);
 
@@ -509,7 +512,8 @@ static int16_t Set_Computer_Medal_Palette(void) {
  * Small drawing helpers
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x863C8; TIE98 0x40FCC0
+// FUNCTION: TIE95 0x863C8
+// FUNCTION: TIE98 0x40FCC0
 static void draw_Computer_On_Off(Rect* r, int16_t on) {
 	Rect tr1, tr2;
 
@@ -533,7 +537,8 @@ static void draw_Computer_On_Off(Rect* r, int16_t on) {
 	xfont_Print_Centered_Text(textext_Get_Text(txtCompGaugeOff), &tr2, 14, active_spec->content_font);
 }
 
-// FUNCTION: TIE95 0x86498; TIE98 0x40FDB0
+// FUNCTION: TIE95 0x86498
+// FUNCTION: TIE98 0x40FDB0
 static void draw_Computer_Level(Rect* r, int16_t state) {
 	Rect tr1, tr2, tr3;
 
@@ -566,7 +571,8 @@ static void draw_Computer_Level(Rect* r, int16_t state) {
 	xfont_Print_Centered_Text(textext_Get_Text(txtCompLevelHard), &tr3, 14, active_spec->content_font);
 }
 
-// FUNCTION: TIE95 0x865F4; TIE98 0x40FF90
+// FUNCTION: TIE95 0x865F4
+// FUNCTION: TIE98 0x40FF90
 static void draw_Computer_Gauge(Rect* r, int16_t amount) {
 	Rect tr;
 	int16_t i;
@@ -609,7 +615,8 @@ static void iuser_Exit(Input* input, int32_t time) {
 		xdialog_Set_Dialog_Exit(2);
 }
 
-// FUNCTION: TIE95 0x867F8; TIE98 0x410350
+// FUNCTION: TIE95 0x867F8
+// FUNCTION: TIE98 0x410350
 static Input* Build_Exit(int16_t id) {
 	Rect r;
 	Input* the_input;
@@ -711,7 +718,8 @@ static void schedule_exitdos_dialog(Input* parent_input) {
  * Preferences panel — update + draw
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x85974; TIE98 0x40EC80
+// FUNCTION: TIE95 0x85974
+// FUNCTION: TIE98 0x40EC80
 static void update_Computer_Prefs(int16_t x, int16_t y) {
 	const Rect* pref_rect = active_spec->pref_rect;
 	int16_t refresh = 0;
@@ -782,7 +790,8 @@ static void iuser_Computer_Open_Options(Input* input, int32_t time) {
 		TieRuntime_RequestSettingsMenu();
 }
 
-// FUNCTION: TIE95 0x85CAC; TIE98 0x40F1E0
+// FUNCTION: TIE95 0x85CAC
+// FUNCTION: TIE98 0x40F1E0
 static void draw_Computer_Prefs(Rect* r, Rect* clip_r) {
 	const Rect* pref_rect = active_spec->pref_rect;
 	int16_t i;
@@ -821,7 +830,8 @@ static void draw_Computer_Prefs(Rect* r, Rect* clip_r) {
  * Backup panel — update + draw + user
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x85E64; TIE98 0x40F700
+// FUNCTION: TIE95 0x85E64
+// FUNCTION: TIE98 0x40F700
 static void xupdate_Computer_Backup(int16_t x, int16_t y) {
 	const Rect* backup_rect = active_spec->backup_rect;
 	int16_t refresh = 0;
@@ -841,7 +851,8 @@ static void xupdate_Computer_Backup(int16_t x, int16_t y) {
 		xview_Refresh_View();
 }
 
-// FUNCTION: TIE95 0x85F20; TIE98 0x40F7A0
+// FUNCTION: TIE95 0x85F20
+// FUNCTION: TIE98 0x40F7A0
 static void iuser_Computer_Backup(Input* input, int32_t time) {
 	(void)time;
 
@@ -857,7 +868,8 @@ static void iuser_Computer_Backup(Input* input, int32_t time) {
 	}
 }
 
-// FUNCTION: TIE95 0x85FB4; TIE98 0x40F840
+// FUNCTION: TIE95 0x85FB4
+// FUNCTION: TIE98 0x40F840
 static void xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 	const Rect* backup_rect = active_spec->backup_rect;
 	char name[64];
@@ -976,7 +988,8 @@ static void computer_advance_page(Rect* r, const Rect* page) {
 	xrect_Copy_Rect(r, &next);
 }
 
-// FUNCTION: TIE95 0x84E64; TIE98 0x40E060
+// FUNCTION: TIE95 0x84E64
+// FUNCTION: TIE98 0x40E060
 static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color) {
 	char str1[80];
 	char str2[40];
@@ -1045,7 +1058,8 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 	computer_advance_page(r, &page);
 }
 
-// FUNCTION: TIE95 0x851E8; TIE98 0x40E470
+// FUNCTION: TIE95 0x851E8
+// FUNCTION: TIE98 0x40E470
 static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color) {
 	char str1[80];
 	char str2[40];
@@ -1113,7 +1127,8 @@ static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color
 	}
 }
 
-// FUNCTION: TIE95 0x854A0; TIE98 0x40E770
+// FUNCTION: TIE95 0x854A0
+// FUNCTION: TIE98 0x40E770
 static void Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color) {
 	char str1[80];
 	char str2[40];
@@ -1181,7 +1196,8 @@ static void Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color
 	}
 }
 
-// FUNCTION: TIE95 0x857C0; TIE98 0x40EA90
+// FUNCTION: TIE95 0x857C0
+// FUNCTION: TIE98 0x40EA90
 static void Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color) {
 	char str1[80];
 	Rect page;
@@ -1232,7 +1248,8 @@ static void Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color)
  * Info page dispatch
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x84CFC; TIE98 0x40DEB0
+// FUNCTION: TIE95 0x84CFC
+// FUNCTION: TIE98 0x40DEB0
 static void xdraw_Computer_Info(Rect* r, Rect* clip_r) {
 	Rect clip_tr, tr;
 	int16_t color = 15;
@@ -1261,7 +1278,8 @@ static void xdraw_Computer_Info(Rect* r, Rect* clip_r) {
  * Medal/Info page navigation buttons
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x84B84; TIE98 0x40DD20
+// FUNCTION: TIE95 0x84B84
+// FUNCTION: TIE98 0x40DD20
 static void iuser_Computer_Info(Input* input, int32_t time) {
 	(void)time;
 
@@ -1319,7 +1337,8 @@ static void idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, int16_t re
 		xdirty_Dirty_Rect(clip_r);
 }
 
-// FUNCTION: TIE95 0x84C88; TIE98 0x40DE30
+// FUNCTION: TIE95 0x84C88
+// FUNCTION: TIE98 0x40DE30
 static void idraw_Computer_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	PushButton* btn = (PushButton*)input;
 
@@ -1345,7 +1364,8 @@ static void idraw_Computer_Info(Input* input, Rect* r, Rect* clip_r, int16_t ref
  * xdraw_Computer_Medal — medal display rendering (complex)
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x83E7C; TIE98 0x40D220
+// FUNCTION: TIE95 0x83E7C
+// FUNCTION: TIE98 0x40D220
 static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 	const ComputerMedalSpec* medal = active_spec->medal;
 	char name1[40];
@@ -1624,7 +1644,8 @@ static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
  * iupdate_Computer — main dialog update callback
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x83248; TIE98 0x40C4A0
+// FUNCTION: TIE95 0x83248
+// FUNCTION: TIE98 0x40C4A0
 static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
 								int16_t x, int16_t y) {
 	const Rect* computer_mode_rect = active_spec->mode_rect;
@@ -1762,7 +1783,8 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
  * iuser_Computer — main dialog user callback
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x835A4; TIE98 0x40C950
+// FUNCTION: TIE95 0x835A4
+// FUNCTION: TIE98 0x40C950
 static void iuser_Computer(Input* input, int32_t time) {
 	Palette* screen_pal;
 	int16_t i;
@@ -1818,7 +1840,8 @@ static void iuser_Computer(Input* input, int32_t time) {
  * idraw_Computer — main dialog draw callback
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x836E0; TIE98 0x40CB70
+// FUNCTION: TIE95 0x836E0
+// FUNCTION: TIE98 0x40CB70
 static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	const Rect* backup_rect = active_spec->backup_rect;
 	PushButton* btn;
@@ -2053,7 +2076,8 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
  * Build_Computer_Dialog — construct the widget tree
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x83000; TIE98 0x40C220
+// FUNCTION: TIE95 0x83000
+// FUNCTION: TIE98 0x40C220
 static Input* Build_Computer_Dialog(void) {
 	const Rect* backup_rect = active_spec->backup_rect;
 	Rect r;

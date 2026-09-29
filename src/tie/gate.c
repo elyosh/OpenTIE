@@ -55,7 +55,7 @@ uint16_t gatespeed[20] = {
  * is intentional -- gate_outdnum's loop runs pos = num_digits..1 and reads
  * powersof10[pos], so pos==1 maps to divisor 1 (the ones place). Pulled
  * from the binary's data segment at D4C54. */
-// GLOBAL: TIE 0xC5388
+// GLOBAL: TIE95 0xC5388
 uint32_t powersof10[9] = {
 	1, 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000,
 };
@@ -76,13 +76,14 @@ int16_t gateguntimer;
 
 /* Next gate the player must cross (1..12). Reset to 1 by
  * gate_settraininglevel; advanced by gate_updategateanimations. */
-// GLOBAL: TIE 0xD4B60
+// GLOBAL: TIE95 0xD4B60
 uint16_t currentgate;
 
 // GLOBAL: TIE98 0x6258DC
 uint16_t gate_render_reference_object;
 
-// FUNCTION: TIE98 0x426310 GATE_setrenderreferenceobject (inferred)
+// FUNCTION: TIE98 0x426310
+// GATE_setrenderreferenceobject (inferred)
 void gate_setrenderreferenceobject(uint16_t object_index) { gate_render_reference_object = object_index; }
 
 /* -------------------------------------------------------------------------
@@ -113,7 +114,7 @@ static inline int32_t gate_mul_q15(int16_t axis, int32_t distance) {
  * while a training mission is active; gate_checkgateedge reads this history
  * to perform swept-volume plane-crossing detection.
  * ---------------------------------------------------------------------- */
-// FUNCTION: TIE 0x28FD0
+// FUNCTION: TIE95 0x28FD0
 void gate_savegatelastpos(void) {
 	/* Shift rings: [3]=[2], [2]=[1], [1]=[0] (i = 2, 1, 0). */
 	for (int i = 2; i >= 0; --i) {
@@ -146,7 +147,7 @@ void gate_savegatelastpos(void) {
  * remaining high positions are padded with spaces). Digits above 9 are
  * clamped to '9'.
  * ---------------------------------------------------------------------- */
-// FUNCTION: TIE 0x2ABE8
+// FUNCTION: TIE95 0x2ABE8
 void gate_outdnum(int32_t value, uint16_t num_digits, uint16_t min_digits) {
 	int16_t started = 0;
 	uint16_t pos = num_digits;
@@ -180,7 +181,7 @@ void gate_outdnum(int32_t value, uint16_t num_digits, uint16_t min_digits) {
  * DRAW_drawcomplexobject; past gates render only the MESH_MainHull. Called
  * once per visible gate by tie_updatescreen.
  * ---------------------------------------------------------------------- */
-// FUNCTION: TIE 0x29088
+// FUNCTION: TIE95 0x29088
 void gate_drawtraininggate(uint16_t obj_idx) {
 	ShipModelMesh* mesh;
 	uint16_t i;
@@ -271,7 +272,7 @@ typedef struct {
 } GATE_InitTable;
 #pragma pack(pop)
 
-// FUNCTION: TIE 0x291A0
+// FUNCTION: TIE95 0x291A0
 void gate_createtraininggates(void) {
 	GATE_InitTable init = { 0 };
 
@@ -460,7 +461,7 @@ void gate_createtraininggates(void) {
  * mesh_component_hp here is overloaded: positive = rotation-speed-per-tick,
  * 0 = static / visible, 0xFF = free-spin (reset).
  * ---------------------------------------------------------------------- */
-// FUNCTION: TIE 0x297D8
+// FUNCTION: TIE95 0x297D8
 void gate_settraininglevel(uint16_t level) {
 	currentgate = 1;
 	mission.train_gates_remaining = 12;
@@ -597,7 +598,7 @@ void gate_settraininglevel(uint16_t level) {
  * Swept-volume test: did the player cross the plane of gate `obj_idx`
  * between the previous tick and this one?
  * ---------------------------------------------------------------------- */
-// FUNCTION: TIE 0x29D94
+// FUNCTION: TIE95 0x29D94
 int gate_checkgateedge(uint16_t obj_idx) {
 	FlightObject* obj = &objects[obj_idx];
 	uint8_t ship_idx = obj->ship_idx;
@@ -680,7 +681,7 @@ int gate_checkgateedge(uint16_t obj_idx) {
  * Redraw the HUD timer (MM:SS) and bonus score. Position is resolution-
  * dependent. Calls panel_updatepanel unless replayviewmode is set.
  * ---------------------------------------------------------------------- */
-// FUNCTION: TIE 0x2AC74
+// FUNCTION: TIE95 0x2AC74
 void gate_updatebonuspoints(void) {
 	int16_t y, bonus_x, timer_x;
 
@@ -764,7 +765,8 @@ void gate_updatecourseprogress(void) {
  *       crossing advance currentgate and, if we just passed gate 12, run
  *       the level-complete reward count-down.
  * ---------------------------------------------------------------------- */
-// FUNCTION: TIE 0x29AB4, TIE98 0x426020
+// FUNCTION: TIE95 0x29AB4
+// FUNCTION: TIE98 0x426020
 void gate_updategateanimations(void) {
 	int16_t delta_cargopod = 0;
 	int16_t delta_wing = 0;
@@ -933,7 +935,7 @@ void gate_Push_Bonus_Countdown_Task(void) {
  * numeric values refreshed every call.
  * ---------------------------------------------------------------------- */
 
-// FUNCTION: TIE 0x2A7CC
+// FUNCTION: TIE95 0x2A7CC
 void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 	int16_t side_offset;
 	int16_t y;
@@ -1059,7 +1061,7 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 
 /* Pre-release training-gun entry point. Shipped game paths do not call it;
  * only its timer behavior is represented because its hardpoint format is unknown. */
-// FUNCTION: TIE 0x2A02C
+// FUNCTION: TIE95 0x2A02C
 void gate_updategateguns(void) {
 	if ((uint16_t)gateguntimer <= frameticks) {
 		gateguntimer = 59;

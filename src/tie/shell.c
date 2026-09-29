@@ -213,7 +213,9 @@ typedef struct FlightSceneTask {
 	FlightScenePhase phase;
 } FlightSceneTask;
 
-// FUNCTION: TIE 0x672D5, TIE98 0x47EF60 (flight-scene task split)
+// ORIGINAL_FUNCTION: TIE95 0x672D5
+// ORIGINAL_FUNCTION: TIE98 0x47EF60
+// Extracted flight branch of SHELL_Shell; no separate original entry point.
 static LandruTaskStepResult flight_scene_step(void* self) {
 	FlightSceneTask* t = (FlightSceneTask*)self;
 
@@ -432,7 +434,9 @@ static int shell_dispatch_converted(int16_t cur_scene, ShellTask* t) {
 	return 0;
 }
 
-// FUNCTION: TIE 0x672D5, TIE98 0x47EF60 (dispatcher task split)
+// ORIGINAL_FUNCTION: TIE95 0x672D5
+// ORIGINAL_FUNCTION: TIE98 0x47EF60
+// Dispatcher portion of SHELL_Shell; shares its original entry with the flight branch.
 static LandruTaskStepResult shell_task_step(void* self) {
 	ShellTask* t = (ShellTask*)self;
 
@@ -581,7 +585,7 @@ void shell_session_begin(int16_t scene, int16_t script) {
 	soundext_Prep_Sound_Scene(scene);
 }
 
-// FUNCTION: TIE 0x67EFA
+// FUNCTION: TIE95 0x67EFA
 void shell_programexit(const char* str) {
 	shellext_Close_Landru(0);
 	gamesnd_Close_Pre_iMuse();

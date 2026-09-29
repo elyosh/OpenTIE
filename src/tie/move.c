@@ -100,7 +100,7 @@ static const uint8_t homing_idx_lookup[256] = {
 /* move_updatexyz                                                      */
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE 0x32E48
+// FUNCTION: TIE95 0x32E48
 void move_updatexyz(FlightObject* obj) {
 	obj->world_x += trig2_xmovedist;
 	if (obj->world_x < WORLD_CLAMP_NEG)
@@ -650,7 +650,7 @@ static void move_separate_friendly_overlap(void) {
 	}
 }
 
-// FUNCTION: TIE 0x32448
+// FUNCTION: TIE95 0x32448
 void move_moveobjects(void) {
 	s_flight_frame++;
 
