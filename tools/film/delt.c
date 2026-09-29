@@ -43,6 +43,9 @@ bool decode_delt(Image8* out, const uint8_t* data, uint32_t size) {
 	memset(out, 0, sizeof(*out));
 	if (size < 8)
 		return false;
+	/* Empty frames can carry inverted bounds (e.g. opntie2f frame 0). */
+	if (size >= 10 && rd_u16(data + 8) == 0)
+		return true;
 
 	int left = rd_i16(data + 0);
 	int top = rd_i16(data + 2);

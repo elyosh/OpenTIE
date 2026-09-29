@@ -69,10 +69,7 @@ typedef struct {
 	uint8_t* pltt_data;
 	uint32_t pltt_size;
 
-	/* True iff the resource named by (res_type, res_name) was found in
-	   the LFD chain at load time. False means the actor will silently
-	   composite to nothing or the PLTT swap will be a no-op — surface
-	   this in the UI so users notice missing --extra LFDs. */
+	/* False when a required resource is missing or its sprite decode fails. */
 	bool resource_loaded;
 
 	/* CUST stream actor (engine path: play1_film_Callback installs a

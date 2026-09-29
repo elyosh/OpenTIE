@@ -620,12 +620,13 @@ static void TieFilmPlayer_LoadObjectResource(TieFilmPlayerObject* o, const TieLf
 	const TieLfdFile* owner = NULL;
 	const TieLfdFileEntry* e = NULL;
 	bool needs_resource = true;
+	bool decoded = true;
 
 	switch (o->res_type) {
 		case FCC_DELT:
 			e = TieLfdFileChain_Find(chain, FCC_DELT, o->res_name, &owner);
 			if (e)
-				decode_delt(&o->sprite, TieLfdFile_Data(owner, e), e->size);
+				decoded = decode_delt(&o->sprite, TieLfdFile_Data(owner, e), e->size);
 			break;
 		case FCC_RAW:
 			/* Engine path: lfilm_Res_Film_Object falls back DELT→RAW when
@@ -635,12 +636,12 @@ static void TieFilmPlayer_LoadObjectResource(TieFilmPlayerObject* o, const TieLf
 			if (!e)
 				e = TieLfdFileChain_Find(chain, FCC_DELT, o->res_name, &owner);
 			if (e)
-				decode_delt(&o->sprite, TieLfdFile_Data(owner, e), e->size);
+				decoded = decode_delt(&o->sprite, TieLfdFile_Data(owner, e), e->size);
 			break;
 		case FCC_ANIM:
 			e = TieLfdFileChain_Find(chain, FCC_ANIM, o->res_name, &owner);
 			if (e)
-				decode_anim(&o->anim, TieLfdFile_Data(owner, e), e->size);
+				decoded = decode_anim(&o->anim, TieLfdFile_Data(owner, e), e->size);
 			break;
 		case FCC_PLTT:
 			e = TieLfdFileChain_Find(chain, FCC_PLTT, o->res_name, &owner);
@@ -661,7 +662,13 @@ static void TieFilmPlayer_LoadObjectResource(TieFilmPlayerObject* o, const TieLf
 			break;
 	}
 
-	o->resource_loaded = (e != NULL) || !needs_resource;
+	o->resource_loaded = (e != NULL && decoded) || !needs_resource;
+	if (!decoded) {
+		char tn[5];
+		TieFilmFourcc_Str(o->res_type, tn);
+		fprintf(stderr, "filmview: FILM '%s' failed to decode %s '%s' — actor will composite to nothing.\n",
+				film_name, tn, o->res_name);
+	}
 
 	if (needs_resource && !e) {
 		char tn[5];

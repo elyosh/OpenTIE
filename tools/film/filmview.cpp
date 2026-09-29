@@ -1112,7 +1112,7 @@ static bool TieFilmView_LoadFilmAt(TieFilmViewApp &app, int film_index) {
 	app.current_film = film_index;
 	app.play_accum_s = 0.0;
 
-	/* Stash any missing-resource diagnostics so the GUI can flag them
+	/* Stash any resource-load failures so the GUI can flag them
 	   loudly. The same warnings already went to stderr at player_init. */
 	app.missing_resources.clear();
 	for (int i = 0; i < app.player.object_count; i++) {
@@ -1786,9 +1786,8 @@ static void TieFilmView_UiActorsWindow(TieFilmViewApp &app) {
 	if (!app.missing_resources.empty()) {
 		ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 120, 80, 255));
 		ImGui::TextWrapped(
-		    "%zu resource(s) NOT FOUND in the LFD chain — these actors "
-		    "composite to nothing. Add the LFD that owns them via "
-		    "--extra <file.lfd> (typically EMPIRE.LFD for shared assets):",
+		    "%zu resource(s) unavailable — missing from the LFD chain or failed to decode. "
+		    "See stderr for details. For missing resources, add the owning LFD via --extra <file.lfd>:",
 		    app.missing_resources.size());
 		for (const auto &m : app.missing_resources)
 			ImGui::BulletText("%s", m.c_str());
@@ -1848,7 +1847,7 @@ static void TieFilmView_UiActorsWindow(TieFilmViewApp &app) {
 			ImGui::TableSetColumnIndex(3);
 			if (!o->resource_loaded) {
 				ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.3f, 1.0f),
-				                   "%s ← MISSING", o->res_name);
+				                   "%s ← UNAVAILABLE", o->res_name);
 			} else {
 				ImGui::Text("%s", o->res_name);
 			}
