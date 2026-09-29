@@ -75,6 +75,12 @@ models:
   - { species: 84, path: "IVFILES/PROBEA.OPT" }
   - { species: 98, path: "IVFILES/OBSTRT.OPT" }
   - { species: 99, path: "IVFILES/OBBEND.OPT" }
+  - { species: 100, path: "IVFILES/ASTROID1.OPT" }
+  - { species: 101, path: "IVFILES/ASTROID2.OPT" }
+  - { species: 102, path: "IVFILES/ASTROID3.OPT" }
+  - { species: 103, path: "IVFILES/ASTROID4.OPT" }
+  - { species: 104, path: "IVFILES/ASTROID5.OPT" }
+  - { species: 105, path: "IVFILES/ASTROID6.OPT" }
   - { species: PROJECTILE_137, path: "IVFILES/LASERR.OPT" }
   - { species: PROJECTILE_138, path: "IVFILES/TLASERR.OPT" }
   - { species: PROJECTILE_139, path: "IVFILES/LASERG.OPT" }
