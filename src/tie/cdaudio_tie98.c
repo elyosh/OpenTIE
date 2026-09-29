@@ -79,7 +79,7 @@ int CDAUDIO_Play_Track(int track, int start_minute, int start_second) {
 	if (!cdaudio_device_id || track < 1 || track > cdaudio_track_count)
 		return 0;
 	length = cdaudio_track_lengths[track];
-	play.dwCallback = (MciDwordPtr)(uintptr_t)g_flightWindowHandle;
+	play.dwCallback = g_flightWindowHandle;
 	play.dwFrom = MCI_MAKE_TMSF(track, start_minute, start_second, 0);
 	play.dwTo = MCI_MAKE_TMSF(track, MCI_MSF_MINUTE(length), MCI_MSF_SECOND(length), MCI_MSF_FRAME(length));
 	if (mciSendCommandA(cdaudio_device_id, MCI_PLAY, MCI_NOTIFY | MCI_FROM | MCI_TO, &play) !=

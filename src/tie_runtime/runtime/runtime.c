@@ -1,6 +1,7 @@
 #include "tie_runtime/runtime/runtime.h"
 #include "tie_runtime/display/classic_framebuffer.h"
 
+#include "tie/dsound_wave_tie98.h"
 #include "tie/fediskio.h"
 #include "tie/frontend_display_tie98.h"
 #include "tie/fsfx.h"
@@ -12,6 +13,7 @@
 #include "tie/tielogo.h"
 #include "tie/title.h"
 #include "tie/user.h"
+#include "tie/wavestream_tie98.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/audio/music_policy.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
@@ -35,6 +37,7 @@
 #include <landru/surface.h>
 #include <landru/task.h>
 
+#include <stdio.h>
 #include <string.h>
 
 static bool s_quit_requested;
@@ -79,6 +82,12 @@ bool TieRuntime_Init(const TieRuntimeConfig* config, char* error, size_t error_c
 	g_quitRequested = 0;
 	/* The recovered Win32 global is only an opaque platform token. */
 	g_flightWindowHandle = (void*)(uintptr_t)1;
+	if (TieStorage_HasInstallation(TIE_GAME_VERSION_TIE98) && !TieDirectSound_Init(g_flightWindowHandle)) {
+		if (error && error_capacity)
+			snprintf(error, error_capacity, "TIE98 DirectSound initialization failed");
+		TieRuntime_Shutdown();
+		return false;
+	}
 
 	const bool initialize_tie98_display = TieProfile_UsesDx5() || TieFlightAssets_Tie98Available();
 	uint16_t initial_mode =
@@ -117,6 +126,8 @@ void TieRuntime_Shutdown(void) {
 	TIE_FLIGHT_TRACE_SHUTDOWN();
 	landru_task_clear_all();
 	TieFlightScreen_Reset();
+	FrontendWaveStream_Shutdown();
+	TieDirectSound_Shutdown();
 	TieLandruAdapter_Shutdown();
 	if (s_tie98_display_initialized)
 		tie98_display_shutdown();
