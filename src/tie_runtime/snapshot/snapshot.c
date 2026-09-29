@@ -11,7 +11,7 @@
 #include "tie_runtime/snapshot/snapshot_internal.h"
 #include "tie_runtime/storage/storage.h"
 #include "tie_runtime/timing/sim_clock.h"
-#include <landru/cursor.h> /* lcursor_get_bitmap */
+#include <landru/cursor.h> /* xcursor_get_bitmap */
 
 #include <ctype.h>
 #include <inttypes.h>
@@ -480,7 +480,7 @@ void TieSnapshotBuilder_SetFlightScreen(TieFlightScreen screen) {
 }
 
 const uint8_t* TieCursorSnapshot_Bitmap(int16_t* out_w, int16_t* out_h) {
-	return lcursor_get_bitmap(out_w, out_h);
+	return xcursor_get_bitmap(out_w, out_h);
 }
 
 const uint8_t* TieTextSnapshot_ColorRemapTable(void) { return color_remap_table; }

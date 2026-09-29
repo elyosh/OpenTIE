@@ -6,7 +6,7 @@
 #include "landru/actor.h"
 #include "landru/rect.h"
 
-int deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x, int16_t off_y,
-								 int16_t refresh);
+int16_t deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
+									 int16_t off_y, int16_t refresh);
 
 #endif

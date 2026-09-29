@@ -36,8 +36,8 @@ void TieFrontendSnapshot_CaptureTitle(void) {
 	const int count = TieRecoveredTitle_SnapshotLineCount();
 	if (count <= 0)
 		return;
-	TieSnapshotBuilder_SetSceneClock(lview_Get_View_Time(), ltimer_Frame_Progress(),
-									 ltimer_Frame_Period_Us());
+	TieSnapshotBuilder_SetSceneClock(xview_Get_View_Time(), xtimer_Frame_Progress(),
+									 xtimer_Frame_Period_Us());
 	for (int index = 0; index < count; ++index) {
 		TieTitleCrawlLine* output = TieSnapshotBuilder_AllocTitleCrawlLine();
 		if (!output)

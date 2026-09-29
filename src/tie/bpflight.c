@@ -197,10 +197,10 @@ static int16_t scene_cameralookpitch, scene_camerayaw;
 /* ----- Forward decls for callbacks registered with the actor system. ----- */
 
 static void bpflight_user_Engine(Actor* actor, int32_t time);
-static int bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
-								int16_t refresh);
-static int bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
-									  int16_t refresh);
+static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
+									int16_t refresh);
+static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
+										  int16_t refresh);
 static void bpflight_Position_Craft_tie98(const MatrixFrame* frame, int16_t joint_idx);
 static void bpflight_Load_Flight_Craft_tie98(const char* lfd_name, const char* opt_name, int16_t model_slot,
 											 int scene);
@@ -256,26 +256,26 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		 * orbit matrix from matrix.lfd entry "trnfly1". */
 		ResFile* rf = shellext_Open_Empire_Resource("matrix.lfd");
 		matrix = matrix_Res_Matrix(rf, "trnfly1");
-		lres_Close_Resource(rf);
+		xres_Close_Resource(rf);
 
 		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-			lrect_Set_Rect(&r, 144, 60, 500, 300);
+			xrect_Set_Rect(&r, 144, 60, 500, 300);
 		else
-			lrect_Set_Rect(&r, 62, 4, 256, 116);
-		engine = lactcust_Alloc_Custom_Actor(NULL, &r, 0, 0, 10);
-		lactor_Set_Actor_User_Function(engine, bpflight_user_Engine);
-		lactor_Set_Actor_Draw_Function(engine, bpflight_draw_Engine);
+			xrect_Set_Rect(&r, 62, 4, 256, 116);
+		engine = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
+		xactor_Set_Actor_User_Function(engine, bpflight_user_Engine);
+		xactor_Set_Actor_Draw_Function(engine, bpflight_draw_Engine);
 		engine->id = 0;
 		bpused[0] = 1;
 		bpid[0] = 0;
 
 		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-			lrect_Set_Rect(&r, 176, 340, 358, 449);
+			xrect_Set_Rect(&r, 176, 340, 358, 449);
 		else
-			lrect_Set_Rect(&r, 85, 131, 182, 178);
-		engine_secondary = lactcust_Alloc_Custom_Actor(NULL, &r, 0, 0, 10);
-		lactor_Set_Actor_User_Function(engine_secondary, bpflight_user_Engine);
-		lactor_Set_Actor_Draw_Function(engine_secondary, bpflight_draw_Engine);
+			xrect_Set_Rect(&r, 85, 131, 182, 178);
+		engine_secondary = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
+		xactor_Set_Actor_User_Function(engine_secondary, bpflight_user_Engine);
+		xactor_Set_Actor_Draw_Function(engine_secondary, bpflight_draw_Engine);
 		engine_secondary->id = 1;
 		bpid[1] = 1;
 		bpused[1] = 1;
@@ -288,26 +288,26 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		/* Combat room: primary + thumbnail, "cmbtfly1" orbit. */
 		ResFile* rf = shellext_Open_Empire_Resource("matrix.lfd");
 		matrix = matrix_Res_Matrix(rf, "cmbtfly1");
-		lres_Close_Resource(rf);
+		xres_Close_Resource(rf);
 
 		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-			lrect_Set_Rect(&r, 124, 7, 516, 272);
+			xrect_Set_Rect(&r, 124, 7, 516, 272);
 		else
-			lrect_Set_Rect(&r, 59, 2, 260, 115);
-		engine = lactcust_Alloc_Custom_Actor(NULL, &r, 0, 0, 10);
-		lactor_Set_Actor_User_Function(engine, bpflight_user_Engine);
-		lactor_Set_Actor_Draw_Function(engine, bpflight_draw_Engine);
+			xrect_Set_Rect(&r, 59, 2, 260, 115);
+		engine = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
+		xactor_Set_Actor_User_Function(engine, bpflight_user_Engine);
+		xactor_Set_Actor_Draw_Function(engine, bpflight_draw_Engine);
 		engine->id = 0;
 		bpid[0] = 0;
 		bpused[0] = 1;
 
 		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-			lrect_Set_Rect(&r, 297, 313, 485, 440);
+			xrect_Set_Rect(&r, 297, 313, 485, 440);
 		else
-			lrect_Set_Rect(&r, 146, 130, 247, 179);
-		engine_secondary = lactcust_Alloc_Custom_Actor(NULL, &r, 0, 0, 10);
-		lactor_Set_Actor_User_Function(engine_secondary, bpflight_user_Engine);
-		lactor_Set_Actor_Draw_Function(engine_secondary, bpflight_draw_Engine);
+			xrect_Set_Rect(&r, 146, 130, 247, 179);
+		engine_secondary = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
+		xactor_Set_Actor_User_Function(engine_secondary, bpflight_user_Engine);
+		xactor_Set_Actor_Draw_Function(engine_secondary, bpflight_draw_Engine);
 		engine_secondary->id = 1;
 		bpid[1] = 1;
 		bpused[1] = 1;
@@ -320,12 +320,12 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		/* Blueprint viewer: single full-area viewport, no orbit matrix.
 		 * Z plane 20 places it above the UI chrome. */
 		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-			lrect_Set_Rect(&r, 222, 75, 570, 310);
+			xrect_Set_Rect(&r, 222, 75, 570, 310);
 		else
-			lrect_Set_Rect(&r, 131, 30, 278, 200);
-		engine = lactcust_Alloc_Custom_Actor(NULL, &r, 0, 0, 20);
-		lactor_Set_Actor_User_Function(engine, bpflight_user_Engine);
-		lactor_Set_Actor_Draw_Function(engine, bpflight_draw_Engine);
+			xrect_Set_Rect(&r, 131, 30, 278, 200);
+		engine = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 20);
+		xactor_Set_Actor_User_Function(engine, bpflight_user_Engine);
+		xactor_Set_Actor_Draw_Function(engine, bpflight_draw_Engine);
 		engine->id = 2;
 		bpid[2] = 2;
 		bpused[2] = 1;
@@ -518,7 +518,7 @@ void bpflight_Open_New_Matrix(const char* name) {
 	}
 	ResFile* rf = shellext_Open_Empire_Resource("matrix.lfd");
 	matrix = matrix_Res_Matrix(rf, name);
-	lres_Close_Resource(rf);
+	xres_Close_Resource(rf);
 }
 
 /* ----- BPFLIGHT_Start_Movie_Engine (0x7A9F0) ----- */
@@ -554,9 +554,9 @@ static void bpflight_user_Engine(Actor* actor, int32_t time) {
 		int16_t color_slot = 252;
 		for (int i = 0; i < 4; ++i) {
 			uint8_t r = starpal[i].r, g = starpal[i].g, b = starpal[i].b;
-			lpal_Set_Screen_RGB(color_slot, color_slot, r, g, b);
-			lpal_Set_Src_Pal_Color(color_slot, color_slot, r, g, b);
-			lpal_Set_Dest_Pal_Color(color_slot, color_slot, r, g, b);
+			xpal_Set_Screen_RGB(color_slot, color_slot, r, g, b);
+			xpal_Set_Src_Pal_Color(color_slot, color_slot, r, g, b);
+			xpal_Set_Dest_Pal_Color(color_slot, color_slot, r, g, b);
 			++color_slot;
 		}
 	}
@@ -599,22 +599,22 @@ static void bpflight_user_Engine(Actor* actor, int32_t time) {
 
 /* ----- BPFLIGHT_draw_Engine (0x7AC50) -----
  *
- * Main render. Conforms to the lactorDrawFunc ABI even though only actor
+ * Main render. Conforms to the xactorDrawFunc ABI even though only actor
  * and clip are used. */
 // FUNCTION: TIE98 0x405640 BPFLIGHT_draw_Engine
-static int bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
-									  int16_t refresh) {
+static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
+										  int16_t refresh) {
 	(void)dest;
 	(void)xoff;
 	(void)yoff;
 	(void)refresh;
 
 	if (!objectloadsize) {
-		lpaint_Paint_Clipped_Rect(clip, 0);
+		xpaint_Paint_Clipped_Rect(clip, 0);
 		return 0;
 	}
 
-	ldirty_Dirty_Rect(clip);
+	xdirty_Dirty_Rect(clip);
 	MatrixFrame frame;
 	if (actor->id == 0) {
 		matrix_Get_Matrix_Frame(matrix, &frame, actor->var1);
@@ -644,8 +644,8 @@ static int bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, int1
 	}
 
 	xtransdataptr = xtransdata;
-	BitmapStruct* bitmap = lcanvas_Get_Current_Canvas_Bitmap();
-	xtrans2_videobaseptr = (uint8_t*)lbitmap_Lock_Bitmap(bitmap);
+	BitmapStruct* bitmap = xcanvas_Get_Current_Canvas_Bitmap();
+	xtrans2_videobaseptr = (uint8_t*)xbitmap_Lock_Bitmap(bitmap);
 	buffer_ptr = xtrans2_videobaseptr;
 	const uint16_t width = (uint16_t)(clip->right - clip->left);
 	const uint16_t height = (uint16_t)(clip->bottom - clip->top);
@@ -747,13 +747,13 @@ static int bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, int1
 	g_flightSurfaceAlreadyLocked = 0;
 	RenderScene_UnlockSceneBuffers_tie98();
 	deepspacecolor = saved_deepspace_color;
-	lbitmap_Unlock_Bitmap(bitmap);
+	xbitmap_Unlock_Bitmap(bitmap);
 	return 0;
 }
 
 // FUNCTION: TIE 0x7975C
-static int bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
-								int16_t refresh) {
+static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
+									int16_t refresh) {
 	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
 		return bpflight_draw_Engine_tie98(actor, clip, dest, xoff, yoff, refresh);
 	(void)dest;
@@ -763,12 +763,12 @@ static int bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_t xo
 
 	/* No ship loaded yet → paint the viewport black and exit. */
 	if (!objectloadsize) {
-		lpaint_Paint_Clipped_Rect(clip, 0);
+		xpaint_Paint_Clipped_Rect(clip, 0);
 		return 0;
 	}
 
 	/* Mark the viewport dirty so XDIRTY refreshes this region. */
-	ldirty_Dirty_Rect(clip);
+	xdirty_Dirty_Rect(clip);
 
 	/* -- Camera setup -- */
 	MatrixFrame frame;
@@ -806,8 +806,8 @@ static int bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_t xo
 
 	/* Lock the XTRANS2 scratch + canvas; logbuf picks up videobaseptr. */
 	xtransdataptr = xtransdata;
-	BitmapStruct* bm = lcanvas_Get_Current_Canvas_Bitmap();
-	xtrans2_videobaseptr = (uint8_t*)lbitmap_Lock_Bitmap(bm);
+	BitmapStruct* bm = xcanvas_Get_Current_Canvas_Bitmap();
+	xtrans2_videobaseptr = (uint8_t*)xbitmap_Lock_Bitmap(bm);
 	buffer_ptr = xtrans2_videobaseptr;
 
 	/* Re-fill the XTRANS2 mask buffer for this viewport. */
@@ -1142,7 +1142,7 @@ static int bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_t xo
 	}
 	deepspacecolor = saved_deepspace;
 
-	lbitmap_Unlock_Bitmap(bm);
+	xbitmap_Unlock_Bitmap(bm);
 	return 0;
 }
 
@@ -1282,13 +1282,13 @@ static void bpflight_Load_Flight_Craft_tie98(const char* lfd_name, const char* o
 	 * g_loaded_model_handles[model_slot]. The host native-OPT cache owns an
 	 * immutable equivalent for the same IVFILES name. */
 	g_inversePaletteTable = bpflight_inverse_palette;
-	Palette* palette = lpal_Get_Dest_Palette();
+	Palette* palette = xpal_Get_Dest_Palette();
 	int palette_changed = 0;
 	for (int index = 0; index < 256; ++index) {
 		int16_t red = 0;
 		int16_t green = 0;
 		int16_t blue = 0;
-		lpal_Get_Palette_Index_RGB(palette, &red, &green, &blue, (int16_t)index);
+		xpal_Get_Palette_Index_RGB(palette, &red, &green, &blue, (int16_t)index);
 		uint8_t* previous = &bpflight_palette_rgb[3 * index];
 		if (previous[0] != red || previous[1] != green || previous[2] != blue)
 			palette_changed = 1;
@@ -1349,18 +1349,18 @@ int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16
 
 	int out_offset = 0;
 	uint32_t out_size = 0;
-	if (lres_Get_Resource_Offset(rf, FOURCC_SHIP, name, &out_offset, &out_size)) {
-		if (lres_Open_Resource_Data(FOURCC_SHIP, name)) {
+	if (xres_Get_Resource_Offset(rf, FOURCC_SHIP, name, &out_offset, &out_size)) {
+		if (xres_Open_Resource_Data(FOURCC_SHIP, name)) {
 			/* Leading u16 in the resource is the object data size; the
 			 * rest is raw ShipModelData. */
-			uint16_t size = lres_Read_Resource_Word(rf);
+			uint16_t size = xres_Read_Resource_Word(rf);
 			objectloadsize = (int16_t)size;
-			lres_Read_Resource_Buffer_Data(rf, obj_data, size);
-			lres_Close_Resource_Data(rf);
+			xres_Read_Resource_Buffer_Data(rf, obj_data, size);
+			xres_Close_Resource_Data(rf);
 		}
 	}
 
-	lres_Close_Resource(rf);
+	xres_Close_Resource(rf);
 	return 1;
 }
 
@@ -1376,12 +1376,12 @@ int bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, const char* name) {
 	int out_offset = 0;
 	uint32_t out_size = 0;
 	int ok = 0;
-	if (lres_Get_Resource_Offset(rf, FOURCC_SHIP, up, &out_offset, &out_size)) {
-		if (lres_Open_Resource_Data(FOURCC_SHIP, up)) {
-			uint16_t size = lres_Read_Resource_Word(rf);
+	if (xres_Get_Resource_Offset(rf, FOURCC_SHIP, up, &out_offset, &out_size)) {
+		if (xres_Open_Resource_Data(FOURCC_SHIP, up)) {
+			uint16_t size = xres_Read_Resource_Word(rf);
 			objectloadsize = (int16_t)size;
-			lres_Read_Resource_Buffer_Data(rf, buffer, size);
-			lres_Close_Resource_Data(rf);
+			xres_Read_Resource_Buffer_Data(rf, buffer, size);
+			xres_Close_Resource_Data(rf);
 			ok = 1;
 		}
 	}

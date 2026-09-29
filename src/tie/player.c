@@ -351,9 +351,9 @@ int16_t player_Find_Ship_On_Screen(Rect* bounds, int16_t screen_x, int16_t scree
 // FUNCTION: TIE 0x7F55C
 void player_Actor_To_Buffer(Actor* actor, void* buffer) {
 	Rect r;
-	lrect_Set_Rect(&r, 0, 0, 320, 150);
+	xrect_Set_Rect(&r, 0, 0, 320, 150);
 	if (actor->draw) {
-		lpaint_Paint_Clipped_Rect(&r, actor->var1);
+		xpaint_Paint_Clipped_Rect(&r, actor->var1);
 		actor->draw(actor, &r, &r, actor->x, actor->y, 1);
 	}
 	stub_Copy_To_Clipped_Buffer(buffer, &r, 0, 0, 320, 150);
@@ -363,7 +363,7 @@ void player_Actor_To_Buffer(Actor* actor, void* buffer) {
 void player_Stars_To_Back(int16_t screen_y) {
 	if (star_buffer_data) {
 		Rect r;
-		lrect_Set_Rect(&r, 0, 0, 320, 150);
+		xrect_Set_Rect(&r, 0, 0, 320, 150);
 		stub_Copy_From_Clipped_Buffer(star_buffer_data, &r, 0, screen_y, 320, 150);
 	}
 }
@@ -1017,7 +1017,7 @@ void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
 	int16_t scr_x, scr_y;
 	int16_t i;
 
-	lrect_Copy_Rect(&map_rect, &map_src_rect);
+	xrect_Copy_Rect(&map_rect, &map_src_rect);
 
 	for (i = 0; i < fgroup.num_fgs; i++) {
 		if (!fgroup.fg[i].way_used[14])
@@ -1049,7 +1049,7 @@ void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
 		found = 1;
 	}
 	if (found)
-		lview_Refresh_View();
+		xview_Refresh_View();
 }
 
 /* ================================================================
@@ -1075,7 +1075,7 @@ void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_
 			final_color = base_ramp + 4;
 		else
 			final_color = base_ramp + 9 - (index - str_len);
-		lfont_Print_Clipped_Text((const char*)str, y, x, color, final_color);
+		xfont_Print_Clipped_Text((const char*)str, y, x, color, final_color);
 	} else {
 		int16_t char_count = index;
 		if (str_len < index)
@@ -1088,21 +1088,21 @@ void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_
 			ramp_steps = 3;
 		int16_t ramp_color = base_ramp + 6 - 2 * ramp_steps;
 
-		int16_t saved_font = lfont_Get_Font();
-		lfont_Set_Font(color);
-		int16_t text_width = lfont_Get_String_Width((const char*)str);
-		lfont_Set_Font(saved_font);
+		int16_t saved_font = xfont_Get_Font();
+		xfont_Set_Font(color);
+		int16_t text_width = xfont_Get_String_Width((const char*)str);
+		xfont_Set_Font(saved_font);
 
 		while (ramp_color <= base_ramp + 6 && char_count > 0) {
 			int16_t loop_color = ramp_color++;
 			str[char_count--] = 0;
-			lfont_Print_Clipped_Text((const char*)str, y, x, color, loop_color);
+			xfont_Print_Clipped_Text((const char*)str, y, x, color, loop_color);
 		}
 
 		Rect r;
-		lrect_Set_Rect(&r, text_width + y + 2, x, text_width + y + 8, x + 6);
+		xrect_Set_Rect(&r, text_width + y + 2, x, text_width + y + 8, x + 6);
 		if (index < str_len)
-			lpaint_Paint_Clipped_Rect(&r, base_ramp + 7);
+			xpaint_Paint_Clipped_Rect(&r, base_ramp + 7);
 	}
 }
 
@@ -1129,7 +1129,7 @@ void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t sc
 			final_color = base_ramp + 4;
 		else
 			final_color = base_ramp + 9 - (anim_progress - str_len);
-		lfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, color, final_color);
+		xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, color, final_color);
 	} else {
 		int16_t char_count;
 		if (anim_progress > str_len)
@@ -1144,21 +1144,21 @@ void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t sc
 			ramp_steps = 3;
 		int16_t ramp_color = base_ramp + 6 - 2 * ramp_steps;
 
-		int16_t saved_font = lfont_Get_Font();
-		lfont_Set_Font(color);
-		int16_t text_width = lfont_Get_String_Width((const char*)str);
-		lfont_Set_Font(saved_font);
+		int16_t saved_font = xfont_Get_Font();
+		xfont_Set_Font(color);
+		int16_t text_width = xfont_Get_String_Width((const char*)str);
+		xfont_Set_Font(saved_font);
 
 		while (ramp_color <= base_ramp + 6 && char_count > 0) {
 			int16_t loop_color = ramp_color++;
 			str[char_count--] = 0;
-			lfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, color, loop_color);
+			xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, color, loop_color);
 		}
 
 		Rect r;
-		lrect_Set_Rect(&r, text_width + screen_x + 2, screen_y, text_width + screen_x + 8, screen_y + 6);
+		xrect_Set_Rect(&r, text_width + screen_x + 2, screen_y, text_width + screen_x + 8, screen_y + 6);
 		if (anim_progress < str_len)
-			lpaint_Paint_Clipped_Rect(&r, base_ramp + 7);
+			xpaint_Paint_Clipped_Rect(&r, base_ramp + 7);
 	}
 }
 
@@ -1169,7 +1169,7 @@ void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t sc
 // FUNCTION: TIE 0x7F624
 void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 	Rect text_rect;
-	lrect_Copy_Rect(&text_rect, clip);
+	xrect_Copy_Rect(&text_rect, clip);
 	text_rect.bottom = text_rect.top + 10;
 	int16_t avail_width = text_rect.right - text_rect.left;
 
@@ -1186,7 +1186,7 @@ void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 	int16_t word_pos = 0;
 	int16_t done = 0;
 
-	lfont_Enable_FontID_Shadow(0);
+	xfont_Enable_FontID_Shadow(0);
 
 	do {
 		int ch = (unsigned char)text_data[char_idx];
@@ -1215,10 +1215,10 @@ void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 			line_buf[char_idx - text_width_idx] = 0;
 
 			/* Check if line overflows */
-			int16_t saved_font = lfont_Get_Font();
-			lfont_Set_Font(0);
-			int16_t str_width = lfont_Get_String_Width(line_buf);
-			lfont_Set_Font(saved_font);
+			int16_t saved_font = xfont_Get_Font();
+			xfont_Set_Font(0);
+			int16_t str_width = xfont_Get_String_Width(line_buf);
+			xfont_Set_Font(saved_font);
 
 			if (str_width >= avail_width) {
 				line_end_pos = text_width_idx;
@@ -1280,20 +1280,20 @@ void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 			 * Pass `out + 1` to skip the '>' just like the binary's
 			 * Print_Centered_Text(v26, ...) call (v26 = unified+1). */
 			if (!flag && out[0] == '>') {
-				lrect_Offset_Rect(&text_rect, 0, 1);
-				lfont_Print_Centered_Text(out + 1, &text_rect, 14, 0);
-				lrect_Offset_Rect(&text_rect, 0, -1);
+				xrect_Offset_Rect(&text_rect, 0, 1);
+				xfont_Print_Centered_Text(out + 1, &text_rect, 14, 0);
+				xrect_Offset_Rect(&text_rect, 0, -1);
 			} else {
-				lfont_Print_Clipped_Text(out, text_rect.left + 2, text_rect.top + 2, 0, 31);
+				xfont_Print_Clipped_Text(out, text_rect.left + 2, text_rect.top + 2, 0, 31);
 			}
 
 			line_start = -1;
 			line_end_pos = -1;
-			lrect_Offset_Rect(&text_rect, 0, 10);
+			xrect_Offset_Rect(&text_rect, 0, 10);
 		}
 	} while (!done);
 
-	lfont_Disable_FontID_Shadow(0);
+	xfont_Disable_FontID_Shadow(0);
 }
 
 /* ================================================================
@@ -1303,8 +1303,8 @@ void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 // FUNCTION: TIE 0x7EE58
 void player_Draw_Display_Grid(Rect* clip) {
 	Rect clip_rect;
-	lrect_Copy_Rect(&clip_rect, clip);
-	lpaint_Frame_Clipped_Rect(&clip_rect, 232);
+	xrect_Copy_Rect(&clip_rect, clip);
+	xpaint_Frame_Clipped_Rect(&clip_rect, 232);
 
 	int16_t major_color = 234;
 	int16_t minor_color = 232;
@@ -1347,19 +1347,19 @@ void player_Draw_Display_Grid(Rect* clip) {
 		while (x < clip_rect.right) {
 			int16_t m = ci & 3;
 			if (m != 0 && (m == 2 || show_minor)) {
-				lpaint_Vert_Clipped_Line(x, clip_rect.top, clip_rect.bottom - clip_rect.top, minor_color);
+				xpaint_Vert_Clipped_Line(x, clip_rect.top, clip_rect.bottom - clip_rect.top, minor_color);
 				if (brief_poly_used) {
 					/* Thickness padding for the classic-FB polygon
 					 * minification — rasters into brief_buffer but
 					 * stays out of the HD snapshot (source RT
 					 * renders crisp 1-classic-px lines that don't
 					 * need the trick). */
-					lpaint_Set_Thickness_Duplicate(true);
-					lpaint_Vert_Clipped_Line(x + 1, clip_rect.top, clip_rect.bottom - clip_rect.top,
+					xpaint_Set_Thickness_Duplicate(true);
+					xpaint_Vert_Clipped_Line(x + 1, clip_rect.top, clip_rect.bottom - clip_rect.top,
 											 minor_color);
-					lpaint_Vert_Clipped_Line(x + 2, clip_rect.top, clip_rect.bottom - clip_rect.top,
+					xpaint_Vert_Clipped_Line(x + 2, clip_rect.top, clip_rect.bottom - clip_rect.top,
 											 minor_color);
-					lpaint_Set_Thickness_Duplicate(false);
+					xpaint_Set_Thickness_Duplicate(false);
 				}
 			}
 			x += map_scale_x;
@@ -1372,12 +1372,12 @@ void player_Draw_Display_Grid(Rect* clip) {
 		while (y < clip_rect.bottom) {
 			int16_t m = ri & 3;
 			if (m != 0 && (m == 2 || show_minor)) {
-				lpaint_Horiz_Clipped_Line(clip_rect.left, y, clip_rect.right - clip_rect.left, minor_color);
+				xpaint_Horiz_Clipped_Line(clip_rect.left, y, clip_rect.right - clip_rect.left, minor_color);
 				if (brief_poly_used) {
-					lpaint_Set_Thickness_Duplicate(true);
-					lpaint_Horiz_Clipped_Line(clip_rect.left, y + 1, clip_rect.right - clip_rect.left,
+					xpaint_Set_Thickness_Duplicate(true);
+					xpaint_Horiz_Clipped_Line(clip_rect.left, y + 1, clip_rect.right - clip_rect.left,
 											  minor_color);
-					lpaint_Set_Thickness_Duplicate(false);
+					xpaint_Set_Thickness_Duplicate(false);
 				}
 			}
 			y += map_scale_y;
@@ -1393,14 +1393,14 @@ void player_Draw_Display_Grid(Rect* clip) {
 	/* Major grid lines (every 4 cells) */
 	while (grid_x < clip_rect.right) {
 		if ((col_idx & 3) == 0) {
-			lpaint_Vert_Clipped_Line(grid_x, clip_rect.top, clip_rect.bottom - clip_rect.top, major_color);
+			xpaint_Vert_Clipped_Line(grid_x, clip_rect.top, clip_rect.bottom - clip_rect.top, major_color);
 			if (brief_poly_used) {
-				lpaint_Set_Thickness_Duplicate(true);
-				lpaint_Vert_Clipped_Line(grid_x + 1, clip_rect.top, clip_rect.bottom - clip_rect.top,
+				xpaint_Set_Thickness_Duplicate(true);
+				xpaint_Vert_Clipped_Line(grid_x + 1, clip_rect.top, clip_rect.bottom - clip_rect.top,
 										 major_color);
-				lpaint_Vert_Clipped_Line(grid_x + 2, clip_rect.top, clip_rect.bottom - clip_rect.top,
+				xpaint_Vert_Clipped_Line(grid_x + 2, clip_rect.top, clip_rect.bottom - clip_rect.top,
 										 major_color);
-				lpaint_Set_Thickness_Duplicate(false);
+				xpaint_Set_Thickness_Duplicate(false);
 			}
 		}
 		grid_x += map_scale_x;
@@ -1409,12 +1409,12 @@ void player_Draw_Display_Grid(Rect* clip) {
 
 	while (grid_y < clip_rect.bottom) {
 		if ((row_idx & 3) == 0) {
-			lpaint_Horiz_Clipped_Line(clip_rect.left, grid_y, clip_rect.right - clip_rect.left, major_color);
+			xpaint_Horiz_Clipped_Line(clip_rect.left, grid_y, clip_rect.right - clip_rect.left, major_color);
 			if (brief_poly_used) {
-				lpaint_Set_Thickness_Duplicate(true);
-				lpaint_Horiz_Clipped_Line(clip_rect.left, grid_y + 1, clip_rect.right - clip_rect.left,
+				xpaint_Set_Thickness_Duplicate(true);
+				xpaint_Horiz_Clipped_Line(clip_rect.left, grid_y + 1, clip_rect.right - clip_rect.left,
 										  major_color);
-				lpaint_Set_Thickness_Duplicate(false);
+				xpaint_Set_Thickness_Duplicate(false);
 			}
 		}
 		grid_y += map_scale_y;
@@ -1447,19 +1447,19 @@ void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t targ
 	int16_t screen_y = sdiv256(sy) + clip->top + ((clip->bottom - clip->top) >> 1);
 
 	Rect r;
-	lrect_Set_Rect(&r, screen_x - 4, screen_y - 4, screen_x + 5, screen_y + 5);
+	xrect_Set_Rect(&r, screen_x - 4, screen_y - 4, screen_x + 5, screen_y + 5);
 
-	lactor_Set_Actor_State(icon_actors[0], species, 0);
+	xactor_Set_Actor_State(icon_actors[0], species, 0);
 	int16_t offx, offy;
-	lactor_Get_Actor_Offset(icon_actors[0], &offx, &offy);
+	xactor_Get_Actor_Offset(icon_actors[0], &offx, &offy);
 	screen_x -= offx + (icon_actors[0]->w / 2);
 	screen_y -= offy + (icon_actors[0]->h / 2);
 	icon_actors[0]->flags |= AF_REMAP_COLOR;
 
 	if (target_id >= 12) {
-		lrect_Inset_Rect(&r, -2, -2);
-		lpaint_Paint_Clipped_Rect(&r, target_color + 2);
-		lpaint_Frame_Clipped_Rect(&r, target_color + 6);
+		xrect_Inset_Rect(&r, -2, -2);
+		xpaint_Paint_Clipped_Rect(&r, target_color + 2);
+		xpaint_Frame_Clipped_Rect(&r, target_color + 6);
 		icon_actors[0]->flags &= ~AF_REMAP_COLOR;
 		return;
 	}
@@ -1480,18 +1480,18 @@ void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t targ
 	}
 
 	if (target_id >= 8) {
-		lrect_Inset_Rect(&r, 11 - target_id, 11 - target_id);
-		lpaint_Paint_Clipped_Rect(&r, target_color + 2);
-		lpaint_Frame_Clipped_Rect(&r, target_color + target_id - 6);
+		xrect_Inset_Rect(&r, 11 - target_id, 11 - target_id);
+		xpaint_Paint_Clipped_Rect(&r, target_color + 2);
+		xpaint_Frame_Clipped_Rect(&r, target_color + target_id - 6);
 	}
 
 	int16_t i;
 	for (i = 0; i < anim_count; i++) {
 		icon_actors[0]->foreColor = base_color;
-		lactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, screen_x - anim_size, screen_y - anim_size, 1);
-		lactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, screen_x + anim_size, screen_y - anim_size, 1);
-		lactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, screen_x - anim_size, screen_y + anim_size, 1);
-		lactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, screen_x + anim_size, screen_y + anim_size, 1);
+		xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, screen_x - anim_size, screen_y - anim_size, 1);
+		xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, screen_x + anim_size, screen_y - anim_size, 1);
+		xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, screen_x - anim_size, screen_y + anim_size, 1);
+		xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, screen_x + anim_size, screen_y + anim_size, 1);
 		anim_size -= 2;
 		base_color += 2;
 	}
@@ -1505,7 +1505,7 @@ void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t targ
 
 void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 	Rect dst;
-	lrect_Copy_Rect(&dst, clip);
+	xrect_Copy_Rect(&dst, clip);
 	int16_t i;
 
 	/* Draw target highlighting for active targets */
@@ -1529,11 +1529,11 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 		player_Map_To_Screen_Pos(clip, way_x, way_y, &scr_x, &scr_y);
 
 		Rect r;
-		lrect_Set_Rect(&r, scr_x - 4, scr_y - 4, scr_x + 5, scr_y + 5);
+		xrect_Set_Rect(&r, scr_x - 4, scr_y - 4, scr_x + 5, scr_y + 5);
 
-		lactor_Set_Actor_State(icon_actors[0], species, 0);
+		xactor_Set_Actor_State(icon_actors[0], species, 0);
 		int16_t offx, offy;
-		lactor_Get_Actor_Offset(icon_actors[0], &offx, &offy);
+		xactor_Get_Actor_Offset(icon_actors[0], &offx, &offy);
 		scr_x -= offx + (icon_actors[0]->w / 2);
 		scr_y -= offy + (icon_actors[0]->h / 2);
 
@@ -1541,9 +1541,9 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 
 		int16_t state = brief.target_state[i];
 		if (state >= 12) {
-			lrect_Inset_Rect(&r, -2, -2);
-			lpaint_Paint_Clipped_Rect(&r, target_color + 2);
-			lpaint_Frame_Clipped_Rect(&r, target_color + 6);
+			xrect_Inset_Rect(&r, -2, -2);
+			xpaint_Paint_Clipped_Rect(&r, target_color + 2);
+			xpaint_Frame_Clipped_Rect(&r, target_color + 6);
 		} else {
 			int16_t anim_size, anim_count, base_color;
 			if (state < 4) {
@@ -1561,18 +1561,18 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 			}
 
 			if (state >= 8) {
-				lrect_Inset_Rect(&r, 11 - state, 11 - state);
-				lpaint_Paint_Clipped_Rect(&r, target_color + 2);
-				lpaint_Frame_Clipped_Rect(&r, target_color + state - 6);
+				xrect_Inset_Rect(&r, 11 - state, 11 - state);
+				xpaint_Paint_Clipped_Rect(&r, target_color + 2);
+				xpaint_Frame_Clipped_Rect(&r, target_color + state - 6);
 			}
 
 			int16_t j;
 			for (j = 0; j < anim_count; j++) {
 				icon_actors[0]->foreColor = base_color;
-				lactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x - anim_size, scr_y - anim_size, 1);
-				lactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x + anim_size, scr_y - anim_size, 1);
-				lactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x - anim_size, scr_y + anim_size, 1);
-				lactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x + anim_size, scr_y + anim_size, 1);
+				xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x - anim_size, scr_y - anim_size, 1);
+				xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x + anim_size, scr_y - anim_size, 1);
+				xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x - anim_size, scr_y + anim_size, 1);
+				xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x + anim_size, scr_y + anim_size, 1);
 				anim_size -= 2;
 				base_color += 2;
 			}
@@ -1636,14 +1636,14 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 		int32_t sy = (int32_t)(way_y - map_center_y) * map_scale_y;
 		int16_t scr_y = sdiv256(sy) + (dst.bottom - dst.top) / 2 + dst.top;
 
-		lactor_Set_Actor_State(icon_actors[icon_idx], species, 0);
+		xactor_Set_Actor_State(icon_actors[icon_idx], species, 0);
 		int16_t offx, offy;
-		lactor_Get_Actor_Offset(icon_actors[icon_idx], &offx, &offy);
+		xactor_Get_Actor_Offset(icon_actors[icon_idx], &offx, &offy);
 
 		scr_x -= offx + (icon_actors[icon_idx]->w / 2);
 		scr_y -= offy + (icon_actors[icon_idx]->h / 2);
 
-		lactanim_Draw_Anim_Actor(icon_actors[icon_idx], clip, dest, scr_x, scr_y, 1);
+		xactanim_Draw_Anim_Actor(icon_actors[icon_idx], clip, dest, scr_x, scr_y, 1);
 	}
 }
 
@@ -1658,38 +1658,38 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 
 	if (!brief_poly_used) {
 		/* Top paragraph area */
-		lrect_Copy_Rect(&dst, &map_src_rect);
-		lrect_Offset_Rect(&dst, view_rect->left, view_rect->top);
+		xrect_Copy_Rect(&dst, &map_src_rect);
+		xrect_Offset_Rect(&dst, view_rect->left, view_rect->top);
 		dst.bottom = dst.top + 12;
 		if (shellext_Get_Cur_Scene() != SCENE_COMBAT_MAP_A)
-			lpaint_Paint_Clipped_Rect(&dst, 1);
+			xpaint_Paint_Clipped_Rect(&dst, 1);
 		if (brief.para_on[0])
 			player_Draw_Map_Paragraph(&dst, brief.para_data[brief.para_id[0]], 0);
 
 		/* Bottom status area */
 		Rect src;
-		lrect_Copy_Rect(&src, &map_src_rect);
-		lrect_Offset_Rect(&src, view_rect->left, view_rect->top);
+		xrect_Copy_Rect(&src, &map_src_rect);
+		xrect_Offset_Rect(&src, view_rect->left, view_rect->top);
 		src.top = src.bottom - 22;
 		if (shellext_Get_Cur_Scene() != SCENE_COMBAT_MAP_A)
-			lpaint_Paint_Clipped_Rect(&src, 1);
+			xpaint_Paint_Clipped_Rect(&src, 1);
 		if (brief.para_on[1])
 			player_Draw_Map_Paragraph(&src, brief.para_data[brief.para_id[1]], 0);
 
 		/* Map area (between top paragraph and bottom status) */
-		lrect_Copy_Rect(&map_area, &map_src_rect);
-		lrect_Offset_Rect(&map_area, view_rect->left, view_rect->top);
+		xrect_Copy_Rect(&map_area, &map_src_rect);
+		xrect_Offset_Rect(&map_area, view_rect->left, view_rect->top);
 		map_area.top += 12;
 		map_area.bottom -= 22;
 	} else {
-		lrect_Copy_Rect(&map_area, &map_src_rect);
-		lrect_Offset_Rect(&map_area, view_rect->left, view_rect->top);
+		xrect_Copy_Rect(&map_area, &map_src_rect);
+		xrect_Offset_Rect(&map_area, view_rect->left, view_rect->top);
 	}
 
 	/* Clip and draw grid + ships */
-	lrect_Copy_Rect(&draw_clip, clip_rect);
-	lrect_Clip_Rect(&draw_clip, &map_area);
-	lcanvas_Set_Drawing_Canvas_Clip(&draw_clip);
+	xrect_Copy_Rect(&draw_clip, clip_rect);
+	xrect_Clip_Rect(&draw_clip, &map_area);
+	xcanvas_Set_Drawing_Canvas_Clip(&draw_clip);
 
 	player_Draw_Display_Grid(&map_area);
 	player_Draw_Display_Ship(&map_area, &draw_clip);
@@ -1697,7 +1697,7 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 	/* Draw target zoom animations */
 	int16_t i;
 	Rect ship_rect;
-	lrect_Copy_Rect(&ship_rect, &map_area);
+	xrect_Copy_Rect(&ship_rect, &map_area);
 
 	for (i = 0; i < 8; i++) {
 		if (!brief.target_on[i])
@@ -1751,13 +1751,13 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 		int16_t scr_x, scr_y;
 		player_Map_To_Screen_Pos(&ship_rect, fgroup.fg[i].way_x[14], fgroup.fg[i].way_y[14], &scr_x, &scr_y);
 
-		lactor_Set_Actor_State(icon_actors[icon_idx], species, 0);
+		xactor_Set_Actor_State(icon_actors[icon_idx], species, 0);
 		int16_t offx, offy;
-		lactor_Get_Actor_Offset(icon_actors[icon_idx], &offx, &offy);
+		xactor_Get_Actor_Offset(icon_actors[icon_idx], &offx, &offy);
 		scr_x -= offx + (icon_actors[icon_idx]->w / 2);
 		scr_y -= offy + (icon_actors[icon_idx]->h / 2);
 
-		lactanim_Draw_Anim_Actor(icon_actors[icon_idx], &map_area, &draw_clip, scr_x, scr_y, 1);
+		xactanim_Draw_Anim_Actor(icon_actors[icon_idx], &map_area, &draw_clip, scr_x, scr_y, 1);
 	}
 }
 
@@ -1771,17 +1771,17 @@ static int16_t iupdate_Map(Input* input, Rect* bounds, Rect* clip, int16_t key, 
 	(void)left;
 	(void)right;
 	Rect inset_bounds, clipped_rect, map_rect;
-	lrect_Copy_Rect(&inset_bounds, bounds);
-	lrect_Inset_Rect(&inset_bounds, 1, 1);
-	lrect_Copy_Rect(&clipped_rect, clip);
-	lrect_Clip_Rect(&clipped_rect, &inset_bounds);
+	xrect_Copy_Rect(&inset_bounds, bounds);
+	xrect_Inset_Rect(&inset_bounds, 1, 1);
+	xrect_Copy_Rect(&clipped_rect, clip);
+	xrect_Clip_Rect(&clipped_rect, &inset_bounds);
 
 	if (key)
 		return 0;
 
-	lrect_Copy_Rect(&map_rect, &map_src_rect);
+	xrect_Copy_Rect(&map_rect, &map_src_rect);
 	if (player_Find_Ship_On_Screen(&map_rect, mouse_x - 1, mouse_y - 1))
-		lview_Refresh_View();
+		xview_Refresh_View();
 
 	return 1;
 }
@@ -1868,74 +1868,74 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 		 * routes them to the source RT and applies the polygon warp
 		 * at composite time. Other scratch-canvas paths (tielogo,
 		 * title) leave the override off so they stay suppressed. */
-		lcanvas_Set_Render_Allow_Non_Screen(true);
-		lcanvas_Push_Canvas(&brief_buffer);
-		lrect_Set_Rect(&r, 0, 0, 292, 147);
-		lrect_Copy_Rect(&draw_clip, &r);
-		lcanvas_Set_Drawing_Canvas_Clip(&draw_clip);
+		xcanvas_Set_Render_Allow_Non_Screen(true);
+		xcanvas_Push_Canvas(&brief_buffer);
+		xrect_Set_Rect(&r, 0, 0, 292, 147);
+		xrect_Copy_Rect(&draw_clip, &r);
+		xcanvas_Set_Drawing_Canvas_Clip(&draw_clip);
 	} else {
-		lrect_Copy_Rect(&r, bounds);
-		lrect_Inset_Rect(&r, 1, 1);
-		lrect_Copy_Rect(&draw_clip, clip);
-		lrect_Clip_Rect(&draw_clip, &r);
+		xrect_Copy_Rect(&r, bounds);
+		xrect_Inset_Rect(&r, 1, 1);
+		xrect_Copy_Rect(&draw_clip, clip);
+		xrect_Clip_Rect(&draw_clip, &r);
 	}
 
 	player_Stars_To_Back(r.top);
 
 	if (brief_poly_used) {
-		lrect_Copy_Rect(&map_area, &map_src_rect);
-		lrect_Offset_Rect(&map_area, r.left, r.top);
+		xrect_Copy_Rect(&map_area, &map_src_rect);
+		xrect_Offset_Rect(&map_area, r.left, r.top);
 	} else {
 		/* Top paragraph */
 		Rect dst;
-		lrect_Copy_Rect(&dst, &map_src_rect);
-		lrect_Offset_Rect(&dst, r.left, r.top);
+		xrect_Copy_Rect(&dst, &map_src_rect);
+		xrect_Offset_Rect(&dst, r.left, r.top);
 		dst.bottom = dst.top + 12;
 		if (shellext_Get_Cur_Scene() != SCENE_COMBAT_MAP_A)
-			lpaint_Paint_Clipped_Rect(&dst, 1);
+			xpaint_Paint_Clipped_Rect(&dst, 1);
 		if (brief.para_on[0])
 			player_Draw_Map_Paragraph(&dst, brief.para_data[brief.para_id[0]], 0);
 
 		/* Bottom status */
 		Rect status_rect;
-		lrect_Copy_Rect(&status_rect, &map_src_rect);
-		lrect_Offset_Rect(&status_rect, r.left, r.top);
+		xrect_Copy_Rect(&status_rect, &map_src_rect);
+		xrect_Offset_Rect(&status_rect, r.left, r.top);
 		status_rect.top = status_rect.bottom - 22;
 		if (shellext_Get_Cur_Scene() != SCENE_COMBAT_MAP_A)
-			lpaint_Paint_Clipped_Rect(&status_rect, 1);
+			xpaint_Paint_Clipped_Rect(&status_rect, 1);
 		if (brief.para_on[1])
 			player_Draw_Map_Paragraph(&status_rect, brief.para_data[brief.para_id[1]], 0);
 
 		/* Map area */
-		lrect_Copy_Rect(&map_area, &map_src_rect);
-		lrect_Offset_Rect(&map_area, r.left, r.top);
+		xrect_Copy_Rect(&map_area, &map_src_rect);
+		xrect_Offset_Rect(&map_area, r.left, r.top);
 		map_area.top += 12;
 		map_area.bottom -= 22;
 	}
 
 	Rect dest;
-	lrect_Copy_Rect(&dest, &draw_clip);
-	lrect_Clip_Rect(&dest, &map_area);
-	lcanvas_Set_Drawing_Canvas_Clip(&dest);
+	xrect_Copy_Rect(&dest, &draw_clip);
+	xrect_Clip_Rect(&dest, &map_area);
+	xcanvas_Set_Drawing_Canvas_Clip(&dest);
 
 	player_Draw_Display_Grid(&map_area);
 	player_Draw_Display_Ship(&map_area, &dest);
 
 	if (brief_poly_used) {
-		lcanvas_Pop_Canvas();
+		xcanvas_Pop_Canvas();
 		Rect src_rect;
-		lrect_Copy_Rect(&src_rect, &map_src_rect);
-		lrect_Inset_Rect(&src_rect, 32, 16);
-		char* pixels = (char*)lbitmap_Lock_Bitmap(&brief_buffer);
+		xrect_Copy_Rect(&src_rect, &map_src_rect);
+		xrect_Inset_Rect(&src_rect, 32, 16);
+		char* pixels = (char*)xbitmap_Lock_Bitmap(&brief_buffer);
 		stub_Map_Clipped_Image(pixels, brief_poly.x, &src_rect, 320, 150);
-		lbitmap_Unlock_Bitmap(&brief_buffer);
+		xbitmap_Unlock_Bitmap(&brief_buffer);
 		/* Restore the canvas-leak gate so subsequent scratch-canvas
 		 * emits (tielogo / title backgrounds, etc.) stay suppressed. */
-		lcanvas_Set_Render_Allow_Non_Screen(false);
+		xcanvas_Set_Render_Allow_Non_Screen(false);
 	}
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip);
 }
 
 /* ================================================================
@@ -1994,7 +1994,7 @@ void player_Init_Display_Map(void) {
 
 	clear_brief_state();
 
-	lrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
+	xrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
 }
 
 // FUNCTION: TIE 0x7DD0C
@@ -2182,11 +2182,11 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 		brief.talk_data[i] = calloc(1, 1024);
 
 	clear_brief_state();
-	lrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
+	xrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
 
 	/* Set up polygon projection if provided */
 	if (poly) {
-		lrect_Copy_Poly(&brief_poly, (Poly*)poly);
+		xrect_Copy_Poly(&brief_poly, (Poly*)poly);
 		brief_poly_used = 1;
 	} else {
 		brief_poly_used = 0;
@@ -2195,38 +2195,38 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 	/* Load icon actors from player.lfd */
 	ResFile* player_res = shellext_Open_Empire_Resource("player.lfd");
 	Rect r;
-	lrect_Set_Rect(&r, 0, 0, draw_bm_gbl->w, draw_bm_gbl->h);
+	xrect_Set_Rect(&r, 0, 0, draw_bm_gbl->w, draw_bm_gbl->h);
 
-	icon_actors[0] = lactanim_Res_Anim_Actor("iconsgrn", &r, 0, 0, 0);
-	lactor_Set_Actor_Time(icon_actors[0], 0, 0);
-	lactor_Non_Dirty_Actor(icon_actors[0]);
+	icon_actors[0] = xactanim_Res_Anim_Actor("iconsgrn", &r, 0, 0, 0);
+	xactor_Set_Actor_Time(icon_actors[0], 0, 0);
+	xactor_Non_Dirty_Actor(icon_actors[0]);
 
-	icon_actors[1] = lactanim_Res_Anim_Actor("iconsred", &r, 0, 0, 0);
-	lactor_Set_Actor_Time(icon_actors[1], 0, 0);
-	lactor_Non_Dirty_Actor(icon_actors[1]);
+	icon_actors[1] = xactanim_Res_Anim_Actor("iconsred", &r, 0, 0, 0);
+	xactor_Set_Actor_Time(icon_actors[1], 0, 0);
+	xactor_Non_Dirty_Actor(icon_actors[1]);
 
-	icon_actors[2] = lactanim_Res_Anim_Actor("iconsblu", &r, 0, 0, 0);
-	lactor_Set_Actor_Time(icon_actors[2], 0, 0);
-	lactor_Non_Dirty_Actor(icon_actors[2]);
+	icon_actors[2] = xactanim_Res_Anim_Actor("iconsblu", &r, 0, 0, 0);
+	xactor_Set_Actor_Time(icon_actors[2], 0, 0);
+	xactor_Non_Dirty_Actor(icon_actors[2]);
 
-	icon_actors[3] = lactanim_Res_Anim_Actor("iconspur", &r, 0, 0, 0);
-	lactor_Set_Actor_Time(icon_actors[3], 0, 0);
-	lactor_Non_Dirty_Actor(icon_actors[3]);
+	icon_actors[3] = xactanim_Res_Anim_Actor("iconspur", &r, 0, 0, 0);
+	xactor_Set_Actor_Time(icon_actors[3], 0, 0);
+	xactor_Non_Dirty_Actor(icon_actors[3]);
 
 	/* Load star background */
-	lrect_Set_Rect(&r, 0, 0, 320, 150);
+	xrect_Set_Rect(&r, 0, 0, 320, 150);
 	if (shellext_Get_Cur_Scene() == SCENE_COMBAT_MAP_A || shellext_Get_Cur_Scene() == SCENE_COMBAT_MAP_B) {
 		ResFile* combat_res = shellext_Open_Empire_Resource("map.lfd");
-		stars_actor = lactdelt_Res_Delta_Actor("cmbtmap2", &r, 0, 0, 0);
-		lres_Close_Resource(combat_res);
+		stars_actor = xactdelt_Res_Delta_Actor("cmbtmap2", &r, 0, 0, 0);
+		xres_Close_Resource(combat_res);
 	} else {
-		stars_actor = lactdelt_Res_Delta_Actor("stars", &r, 0, 0, 0);
+		stars_actor = xactdelt_Res_Delta_Actor("stars", &r, 0, 0, 0);
 	}
-	lactor_Set_Actor_Time(stars_actor, 0, 0);
+	xactor_Set_Actor_Time(stars_actor, 0, 0);
 
 	if (brief_poly_used) {
-		lbitmap_Init_Bitmap(&brief_buffer);
-		lbitmap_Alloc_Bitmap(&brief_buffer, 320, 200);
+		xbitmap_Init_Bitmap(&brief_buffer);
+		xbitmap_Alloc_Bitmap(&brief_buffer, 320, 200);
 	}
 
 	/* Allocate star buffer and render star background into it */
@@ -2240,23 +2240,23 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 	/* Render star actor into buffer */
 	{
 		Rect src_rect;
-		lrect_Set_Rect(&src_rect, 0, 0, 320, 150);
+		xrect_Set_Rect(&src_rect, 0, 0, 320, 150);
 		if (stars_actor->draw) {
-			lpaint_Paint_Clipped_Rect(&src_rect, stars_actor->var1);
+			xpaint_Paint_Clipped_Rect(&src_rect, stars_actor->var1);
 			stars_actor->draw(stars_actor, &src_rect, &src_rect, stars_actor->x, stars_actor->y, 1);
 		}
 		stub_Copy_To_Clipped_Buffer(star_buffer_data, &src_rect, 0, 0, 320, 150);
 	}
 
-	lres_Close_Resource(player_res);
+	xres_Close_Resource(player_res);
 
 	/* Set up XINPUT callbacks */
 	if (!brief_poly_used) {
-		linpattr_Set_Input_Update_Function(input, iupdate_Map);
-		linpattr_Set_Input_User_Function(input, iuser_Map);
+		xinpattr_Set_Input_Update_Function(input, iupdate_Map);
+		xinpattr_Set_Input_User_Function(input, iuser_Map);
 		input->mouseUsage = downMoveUpInput;
 	}
-	linpattr_Set_Input_Draw_Function(input, idraw_Map);
+	xinpattr_Set_Input_Draw_Function(input, idraw_Map);
 
 	/* Load mission data */
 	player_Load_Display_Map();
@@ -2334,7 +2334,7 @@ void player_Init_Brief_For_Talk(void) {
 		brief.talk_data[i] = calloc(1, 1024);
 
 	clear_brief_state();
-	lrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
+	xrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
 	player_Load_Display_Map();
 }
 
@@ -2351,7 +2351,7 @@ void player_Free_Brief_Display(void) {
 	star_buffer_data = NULL;
 
 	if (brief_poly_used)
-		lbitmap_Free_Bitmap(&brief_buffer);
+		xbitmap_Free_Bitmap(&brief_buffer);
 
 	for (i = 0; i < 32; i++) {
 		if (brief.text_data[i]) {
@@ -2396,7 +2396,7 @@ bool TieRecoveredMap_ReadSnapshotView(TieRecoveredMapSnapshotView* out) {
 		}
 	} else {
 		Rect frame = map_emit_widget->frame;
-		lrect_Inset_Rect(&frame, 1, 1);
+		xrect_Inset_Rect(&frame, 1, 1);
 		out->destination_x = frame.left;
 		out->destination_y = frame.top;
 	}

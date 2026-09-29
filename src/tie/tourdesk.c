@@ -153,16 +153,17 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 								uint8_t right, int16_t mouse_x, int16_t mouse_y);
 static void iuser_TourDesk(Input* input, int32_t time);
 static void user_Title(Actor* actor, int32_t time);
-static int draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff, int16_t refresh);
+static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+						  int16_t refresh);
 static void user_Door(Actor* actor, int32_t time);
 static void user_Battle(Actor* actor, int32_t time);
-static int draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh);
+static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh);
 static void Draw_Battle_One(Rect* galaxy_rect, int16_t tour_time);
 static void Draw_Battle_Two(Rect* galaxy_rect, int16_t tour_time, Rect* clip_r);
 static void Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t tour_time);
 static void Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int16_t tour_time);
 static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time);
-static int draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh);
+static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh);
 
 /* ================================================================
  * View update callback
@@ -173,9 +174,9 @@ static void end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
 	if (active_spec->first_frame_background_zplane >= 0)
-		lactor_Set_Actor_ZPlane(tourdesk_actor, active_spec->first_frame_background_zplane);
-	if (!lcursor_Is_Cursor_Visible())
-		lcursor_Show_Cursor();
+		xactor_Set_Actor_ZPlane(tourdesk_actor, active_spec->first_frame_background_zplane);
+	if (!xcursor_Is_Cursor_Visible())
+		xcursor_Show_Cursor();
 }
 
 /* ================================================================
@@ -206,7 +207,7 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 		if (left || right) {
 			if (input->id == 2 || input->id == 3) {
 				int16_t button_index = input->id - 2;
-				lactor_Set_Actor_State(button_actor[button_index],
+				xactor_Set_Actor_State(button_actor[button_index],
 									   active_spec->button_hover_state[button_index], 0);
 			}
 		}
@@ -223,7 +224,7 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 			input->var2 = shipext_Set_Tourdesk_Cutscene();
 			break;
 		case 2: /* Next battle */
-			lactor_Set_Actor_State(button_actor[0], active_spec->button_click_state[0], 0);
+			xactor_Set_Actor_State(button_actor[0], active_spec->button_click_state[0], 0);
 			soundext_Play_SFX(sfxButton, 80);
 			shipext_Next_Battle();
 			tour_time = 0;
@@ -231,7 +232,7 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 				galaxy_art_actor[pilot_record.cur_battle] = shipext_Get_Battle_Galaxy_Image();
 			break;
 		case 3: /* Previous battle */
-			lactor_Set_Actor_State(button_actor[1], active_spec->button_click_state[1], 0);
+			xactor_Set_Actor_State(button_actor[1], active_spec->button_click_state[1], 0);
 			soundext_Play_SFX(sfxButton, 80);
 			shipext_Last_Battle();
 			tour_time = 0;
@@ -255,7 +256,7 @@ static void iuser_TourDesk(Input* input, int32_t time) {
 		if (pilot_record.cur_battle != (uint8_t)cur_tour_battle)
 			input->var2 = SCENE_TOUR_CUTSCENE;
 	}
-	lerror_Set_Landru_Exit(input->var2);
+	xerror_Set_Landru_Exit(input->var2);
 }
 
 /* ================================================================
@@ -266,26 +267,27 @@ static void iuser_TourDesk(Input* input, int32_t time) {
 static void user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
-		if (!lactor_Is_Actor_Visible(actor))
-			lactor_Show_Actor(actor);
+		if (!xactor_Is_Actor_Visible(actor))
+			xactor_Show_Actor(actor);
 		actor->var1 = 0;
 	} else {
-		if (lactor_Is_Actor_Visible(actor))
-			lactor_Hide_Actor(actor);
+		if (xactor_Is_Actor_Visible(actor))
+			xactor_Hide_Actor(actor);
 	}
 }
 
 // FUNCTION: TIE95 0x73D58; TIE98 0x4910B0
-static int draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff, int16_t refresh) {
+static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+						  int16_t refresh) {
 	if (!refresh)
 		return 0;
 
-	lactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
+	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
 
 	int16_t offx, offy;
-	lactor_Get_Actor_Offset(actor, &offx, &offy);
+	xactor_Get_Actor_Offset(actor, &offx, &offy);
 	Rect r;
-	lrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
+	xrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
 
 	char label[32];
 	TIEText text_id;
@@ -310,10 +312,10 @@ static int draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int1
 	strcpy(label, textext_Get_Text(text_id));
 
 draw_text:
-	lrect_Offset_Rect(&r, 1, 1);
-	lfont_Print_Centered_Text(label, &r, 16, active_spec->font_id);
-	lrect_Offset_Rect(&r, -1, -1);
-	lfont_Print_Centered_Text(label, &r, 15, active_spec->font_id);
+	xrect_Offset_Rect(&r, 1, 1);
+	xfont_Print_Centered_Text(label, &r, 16, active_spec->font_id);
+	xrect_Offset_Rect(&r, -1, -1);
+	xfont_Print_Centered_Text(label, &r, 15, active_spec->font_id);
 	return 1;
 }
 
@@ -324,11 +326,11 @@ static void user_Door(Actor* actor, int32_t time) {
 		if (!actor->state)
 			soundext_Play_SFX(sfxAirLock, 90);
 		if (actor->state < actor->arraySize - 1)
-			lactor_Set_Actor_State(actor, actor->state + 1, 0);
+			xactor_Set_Actor_State(actor, actor->state + 1, 0);
 		actor->var1 = 0;
 	} else {
 		if (actor->state > 0) {
-			lactor_Set_Actor_State(actor, actor->state - 1, 0);
+			xactor_Set_Actor_State(actor, actor->state - 1, 0);
 			if (!actor->state)
 				soundext_Play_SFX(sfxLargeDoorShut, 90);
 		}
@@ -351,7 +353,7 @@ static void user_Battle(Actor* actor, int32_t time) {
  * ================================================================ */
 
 // FUNCTION: TIE95 0x73F0C; TIE98 0x4912B0
-static int draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
 	(void)actor;
 	(void)clip_r;
 	(void)x;
@@ -359,23 +361,23 @@ static int draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int1
 	if (!refresh)
 		return 0;
 
-	lpaint_Paint_Clipped_Rect(r, 0);
+	xpaint_Paint_Clipped_Rect(r, 0);
 	Rect dst;
-	lrect_Copy_Rect(&dst, r);
+	xrect_Copy_Rect(&dst, r);
 	int16_t line_height = active_spec->battle_text_line_height;
 	if (!line_height)
-		line_height = (int16_t)lfont_Get_FontID_Height(active_spec->font_id);
+		line_height = (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
 	dst.bottom = dst.top + line_height;
 
 	for (int16_t i = 0; i < 3; i++) {
 		char buf[64];
 		shipext_Get_Battle_Title(buf, i);
 		int16_t color = i ? 2 : 15;
-		lfont_Print_Centered_Text(buf, &dst, color, active_spec->font_id);
-		lrect_Offset_Rect(&dst, 0, line_height);
+		xfont_Print_Centered_Text(buf, &dst, color, active_spec->font_id);
+		xrect_Offset_Rect(&dst, 0, line_height);
 	}
 
-	ldirty_Dirty_Rect(r);
+	xdirty_Dirty_Rect(r);
 	return 1;
 }
 
@@ -390,8 +392,8 @@ static void Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
 		return;
 
 	Rect dst, ra;
-	lrect_Copy_Rect(&dst, galaxy_rect);
-	lrect_Copy_Rect(&ra, galaxy_rect);
+	xrect_Copy_Rect(&dst, galaxy_rect);
+	xrect_Copy_Rect(&ra, galaxy_rect);
 
 	/* Start from center point */
 	dst.left += (dst.right - dst.left) >> 1;
@@ -405,25 +407,25 @@ static void Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
 	dst.right += (time * (ra.right - dst.right)) >> 3;
 	dst.bottom += (time * (ra.bottom - dst.bottom)) >> 3;
 
-	if (!lrect_Empty_Rect(&dst))
+	if (!xrect_Empty_Rect(&dst))
 		shade_Draw_Talk_Shade_Rect(&dst);
 
-	lrect_Inset_Rect(&ra, -64, 0);
+	xrect_Inset_Rect(&ra, -64, 0);
 	if (active_spec->dynamic_text_layout) {
-		int16_t font_height = (int16_t)lfont_Get_FontID_Height(active_spec->font_id);
+		int16_t font_height = (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
 		ra.top = ra.bottom + (font_height >> 1);
-		ra.bottom = ra.top + (int16_t)lfont_Get_FontID_Height(active_spec->font_id);
+		ra.bottom = ra.top + (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
 	} else {
 		ra.top = ra.bottom + 2;
 		ra.bottom += 10;
 	}
-	lrect_Offset_Rect(&ra, -4, 0);
+	xrect_Offset_Rect(&ra, -4, 0);
 
-	lfont_Enable_FontID_Shadow(active_spec->font_id);
+	xfont_Enable_FontID_Shadow(active_spec->font_id);
 	char name[64];
 	shipext_Get_Battle_Galaxy_Name(name);
-	lfont_Print_Centered_Text(name, &ra, 2 * time + 16, active_spec->font_id);
-	lfont_Disable_FontID_Shadow(active_spec->font_id);
+	xfont_Print_Centered_Text(name, &ra, 2 * time + 16, active_spec->font_id);
+	xfont_Disable_FontID_Shadow(active_spec->font_id);
 }
 
 /* Phase 8-23: hold at galaxy rect */
@@ -434,27 +436,27 @@ static void Draw_Battle_Two(Rect* galaxy_rect, int16_t time, Rect* clip_r) {
 		return;
 
 	Rect dst;
-	lrect_Copy_Rect(&dst, galaxy_rect);
+	xrect_Copy_Rect(&dst, galaxy_rect);
 	shade_Draw_Talk_Shade_Rect(&dst);
 
 	Rect ra;
-	lrect_Copy_Rect(&ra, &dst);
-	lrect_Inset_Rect(&ra, -64, 0);
+	xrect_Copy_Rect(&ra, &dst);
+	xrect_Inset_Rect(&ra, -64, 0);
 	if (active_spec->dynamic_text_layout) {
-		int16_t font_height = (int16_t)lfont_Get_FontID_Height(active_spec->font_id);
+		int16_t font_height = (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
 		ra.top = ra.bottom + (font_height >> 1);
-		ra.bottom = ra.top + (int16_t)lfont_Get_FontID_Height(active_spec->font_id);
+		ra.bottom = ra.top + (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
 	} else {
 		ra.top = ra.bottom + 2;
 		ra.bottom += 10;
 	}
-	lrect_Offset_Rect(&ra, -4, 0);
+	xrect_Offset_Rect(&ra, -4, 0);
 
-	lfont_Enable_FontID_Shadow(active_spec->font_id);
+	xfont_Enable_FontID_Shadow(active_spec->font_id);
 	char name[64];
 	shipext_Get_Battle_Galaxy_Name(name);
-	lfont_Print_Centered_Text(name, &ra, 31, active_spec->font_id);
-	lfont_Disable_FontID_Shadow(active_spec->font_id);
+	xfont_Print_Centered_Text(name, &ra, 31, active_spec->font_id);
+	xfont_Disable_FontID_Shadow(active_spec->font_id);
 }
 
 /* Phase 24-31: zoom from galaxy rect to actor bounds */
@@ -465,9 +467,9 @@ static void Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t time) {
 
 	Actor* art = galaxy_art_actor[pilot_record.cur_battle];
 	Rect dst, art_bounds;
-	lrect_Copy_Rect(&dst, galaxy_rect);
-	lactor_Get_Actor_Bounds(art, &art_bounds);
-	lrect_Offset_Rect(&art_bounds, view_r->left, view_r->top);
+	xrect_Copy_Rect(&dst, galaxy_rect);
+	xactor_Get_Actor_Bounds(art, &art_bounds);
+	xrect_Offset_Rect(&art_bounds, view_r->left, view_r->top);
 
 	int16_t t = time - 24;
 	dst.left += (t * (art_bounds.left - dst.left)) >> 3;
@@ -475,7 +477,7 @@ static void Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t time) {
 	dst.right += (t * (art_bounds.right - dst.right)) >> 3;
 	dst.bottom += (t * (art_bounds.bottom - dst.bottom)) >> 3;
 
-	if (!lrect_Empty_Rect(&dst))
+	if (!xrect_Empty_Rect(&dst))
 		shade_Draw_Talk_Shade_Rect(&dst);
 }
 
@@ -488,19 +490,19 @@ static void Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int1
 
 	Actor* art = galaxy_art_actor[pilot_record.cur_battle];
 	Rect bounds;
-	lactor_Get_Actor_Bounds(art, &bounds);
-	lrect_Offset_Rect(&bounds, view_r->left, view_r->top);
+	xactor_Get_Actor_Bounds(art, &bounds);
+	xrect_Offset_Rect(&bounds, view_r->left, view_r->top);
 	if (active_spec->clip_reveal_before_shade)
-		lrect_Clip_Rect(&bounds, clip_r);
+		xrect_Clip_Rect(&bounds, clip_r);
 
 	int16_t t = time - 32;
-	if (!lrect_Empty_Rect(&bounds))
+	if (!xrect_Empty_Rect(&bounds))
 		shade_Draw_Talk_Shade_Rect(&bounds);
 
 	bounds.bottom = ((t * (bounds.bottom - bounds.top)) >> 3) + bounds.top;
-	if (lrect_Clip_Rect(&bounds, clip_r)) {
-		lcanvas_Set_Drawing_Canvas_Clip(&bounds);
-		lactdelt_Draw_Delta_Actor(art, view_r, &bounds, view_r->left, view_r->top, 1);
+	if (xrect_Clip_Rect(&bounds, clip_r)) {
+		xcanvas_Set_Drawing_Canvas_Clip(&bounds);
+		xactdelt_Draw_Delta_Actor(art, view_r, &bounds, view_r->left, view_r->top, 1);
 	}
 }
 
@@ -513,28 +515,28 @@ static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 	int16_t fade = time - 40;
 	Actor* art = galaxy_art_actor[pilot_record.cur_battle];
 
-	lactdelt_Draw_Delta_Actor(art, r, clip_r, r->left, r->top, 1);
+	xactdelt_Draw_Delta_Actor(art, r, clip_r, r->left, r->top, 1);
 
 	Rect art_bounds;
-	lactor_Get_Actor_Bounds(art, &art_bounds);
-	lrect_Offset_Rect(&art_bounds, r->left, r->top);
+	xactor_Get_Actor_Bounds(art, &art_bounds);
+	xrect_Offset_Rect(&art_bounds, r->left, r->top);
 
-	lfont_Enable_FontID_Shadow(active_spec->font_id);
+	xfont_Enable_FontID_Shadow(active_spec->font_id);
 
 	/* Galaxy name with fade-in */
 	char name[64];
 	shipext_Get_Battle_Galaxy_Name(name);
 	int16_t name_color = (fade >= 8) ? 31 : 2 * fade + 16;
-	lfont_Print_Centered_Text(name, &art_bounds, name_color, active_spec->font_id);
+	xfont_Print_Centered_Text(name, &art_bounds, name_color, active_spec->font_id);
 
 	/* "Battle N" text */
 	Rect dst;
-	lrect_Copy_Rect(&dst, r);
+	xrect_Copy_Rect(&dst, r);
 	dst.left = art_bounds.right;
 	if (active_spec->dynamic_text_layout) {
-		int16_t font_height = (int16_t)lfont_Get_FontID_Height(active_spec->font_id);
+		int16_t font_height = (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
 		dst.top = art_bounds.top + 3 * font_height;
-		dst.bottom = dst.top + (int16_t)lfont_Get_FontID_Height(active_spec->font_id);
+		dst.bottom = dst.top + (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
 	} else {
 		dst.top = art_bounds.top + 28;
 		dst.bottom = art_bounds.top + 38;
@@ -545,25 +547,25 @@ static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 	snprintf(buf, sizeof(buf), battle_str, pilot_record.cur_battle + 1);
 
 	if (pilot_record.battle_status[pilot_record.cur_battle] == 3)
-		lrect_Offset_Rect(&dst, 0, 4);
+		xrect_Offset_Rect(&dst, 0, 4);
 
 	int16_t battle_color = (fade >= 8) ? 31 : 2 * fade + 16;
-	lfont_Print_Centered_Text(buf, &dst, battle_color, active_spec->font_id);
+	xfont_Print_Centered_Text(buf, &dst, battle_color, active_spec->font_id);
 
 	/* "Mission N" text (only if battle not complete) */
 	int16_t line_height =
-		active_spec->dynamic_text_layout ? (int16_t)lfont_Get_FontID_Height(active_spec->font_id) : 10;
-	lrect_Offset_Rect(&dst, 0, line_height);
+		active_spec->dynamic_text_layout ? (int16_t)xfont_Get_FontID_Height(active_spec->font_id) : 10;
+	xrect_Offset_Rect(&dst, 0, line_height);
 	if (pilot_record.battle_status[pilot_record.cur_battle] != 3) {
 		char mission_label[16];
 		strcpy(mission_label, textext_Get_Text(txtCombatMission));
 		snprintf(buf, sizeof(buf), "%s %d", mission_label,
 				 pilot_record.battle_cursor[pilot_record.cur_battle] + 1);
 		int16_t mission_color = (fade >= 8) ? 31 : 2 * fade + 16;
-		lfont_Print_Centered_Text(buf, &dst, mission_color, active_spec->font_id);
+		xfont_Print_Centered_Text(buf, &dst, mission_color, active_spec->font_id);
 	}
 
-	lfont_Disable_FontID_Shadow(active_spec->font_id);
+	xfont_Disable_FontID_Shadow(active_spec->font_id);
 	return 1;
 }
 
@@ -572,7 +574,7 @@ static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
  * ================================================================ */
 
 // FUNCTION: TIE95 0x74534; TIE98 0x491A30
-static int draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
 	(void)actor;
 	(void)x;
 	(void)y;
@@ -585,14 +587,14 @@ static int draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y
 	galaxy_rect.left *= active_spec->galaxy_rect_scale;
 	galaxy_rect.bottom *= active_spec->galaxy_rect_scale;
 	galaxy_rect.right *= active_spec->galaxy_rect_scale;
-	lrect_Offset_Rect(&galaxy_rect, r->left, r->top);
+	xrect_Offset_Rect(&galaxy_rect, r->left, r->top);
 
 	if (!galaxy_art_actor[pilot_record.cur_battle]) {
 		if (active_spec->refresh_background) {
-			lactor_Refresh_Actor(tourdesk_actor);
-			lactor_Dirty_Actor(tourdesk_actor);
+			xactor_Refresh_Actor(tourdesk_actor);
+			xactor_Dirty_Actor(tourdesk_actor);
 		}
-		ldirty_Dirty_Rect(r);
+		xdirty_Dirty_Rect(r);
 		return 1;
 	}
 
@@ -605,10 +607,10 @@ static int draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y
 	Draw_Battle_Five(r, clip_r, t);
 
 	if (active_spec->refresh_background) {
-		lactor_Refresh_Actor(tourdesk_actor);
-		lactor_Dirty_Actor(tourdesk_actor);
+		xactor_Refresh_Actor(tourdesk_actor);
+		xactor_Dirty_Actor(tourdesk_actor);
 	}
-	ldirty_Dirty_Rect(r);
+	xdirty_Dirty_Rect(r);
 	return 1;
 }
 
@@ -638,18 +640,18 @@ static LandruTaskStepResult tourdesk_task_step(void* self) {
 
 		active_spec = t->spec;
 		if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-			(void)lsurface_Select_Surface_Set(active_spec->surface_set);
-			lview_Init_View(lview_Get_Current_View());
+			(void)xsurface_Select_Surface_Set(active_spec->surface_set);
+			xview_Init_View(xview_Get_Current_View());
 		}
-		lio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+		xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
 		cur_tour_battle = pilot_record.cur_battle;
 
 		/* Load resources */
 		ResFile* res_file = shellext_Open_Empire_Resource("tourdesk.lfd");
-		lrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
 
-		tourdesk_film = lfilm_Res_Film("tourdesk", &frame, 0, 0, 0);
-		lfilm_Set_Film_Def_Palette(tourdesk_film, t->scene_head->def_palette);
+		tourdesk_film = xfilm_Res_Film("tourdesk", &frame, 0, 0, 0);
+		xfilm_Set_Film_Def_Palette(tourdesk_film, t->scene_head->def_palette);
 
 		/* Tag the snapshot with (lfd, film) so the cutscene compositor
 		 * resolves the TOURDESK/tourdesk remaster bundle for this
@@ -660,39 +662,40 @@ static LandruTaskStepResult tourdesk_task_step(void* self) {
 		TieSnapshotBuilder_SetActiveFilm("TOURDESK", "tourdesk");
 
 		/* Find actors */
-		tourdesk_actor = lactor_Find_Actor(FOURCC_DELT, "toddesk");
-		lactor_Non_Refreshable_Actor(tourdesk_actor);
+		tourdesk_actor = xactor_Find_Actor(FOURCC_DELT, "toddesk");
+		xactor_Non_Refreshable_Actor(tourdesk_actor);
 
-		door[0] = lactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[0]);
-		door[1] = lactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[1]);
+		door[0] = xactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[0]);
+		door[1] = xactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[1]);
 		for (int16_t i = 0; i < 2; i++) {
-			lactor_Set_Actor_User_Function(door[i], (lactorCallback)user_Door);
+			xactor_Set_Actor_User_Function(door[i], (xactorCallback)user_Door);
 			door[i]->id = i;
 		}
 
-		button_actor[0] = lactor_Find_Actor(FOURCC_ANIM, active_spec->button_names[0]);
+		button_actor[0] = xactor_Find_Actor(FOURCC_ANIM, active_spec->button_names[0]);
 		button_actor[1] = active_spec->button_names[1]
-							  ? lactor_Find_Actor(FOURCC_ANIM, active_spec->button_names[1])
+							  ? xactor_Find_Actor(FOURCC_ANIM, active_spec->button_names[1])
 							  : button_actor[0];
 
 		/* Title label */
-		title_actor = lactdelt_Res_Delta_Actor("title", &frame, 0, 0, 0);
-		lactor_Set_Actor_User_Function(title_actor, (lactorCallback)user_Title);
-		lactor_Set_Actor_Draw_Function(title_actor, (lactorDrawFunc)draw_Title);
+		title_actor = xactdelt_Res_Delta_Actor("title", &frame, 0, 0, 0);
+		xactor_Set_Actor_User_Function(title_actor, (xactorCallback)user_Title);
+		xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
 
 		/* Battle text custom actor */
 		bounds = active_spec->battle_text_bounds;
-		lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		battle_text_actor = lactcust_Alloc_Custom_Actor(NULL, &frame, 0, 0, active_spec->battle_text_zplane);
-		lactor_Set_Actor_Draw_Function(battle_text_actor, (lactorDrawFunc)draw_Battle_Text);
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		battle_text_actor =
+			xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, active_spec->battle_text_zplane);
+		xactor_Set_Actor_Draw_Function(battle_text_actor, draw_Battle_Text);
 		battle_text_actor->id = 0;
 
 		/* Galaxy display custom actor */
 		bounds = active_spec->galaxy_bounds;
-		lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		galaxy_actor = lactcust_Alloc_Custom_Actor(NULL, &frame, 0, 0, 50);
-		lactor_Set_Actor_User_Function(galaxy_actor, (lactorCallback)user_Battle);
-		lactor_Set_Actor_Draw_Function(galaxy_actor, (lactorDrawFunc)draw_Battle);
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		galaxy_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 50);
+		xactor_Set_Actor_User_Function(galaxy_actor, (xactorCallback)user_Battle);
+		xactor_Set_Actor_Draw_Function(galaxy_actor, draw_Battle);
 		galaxy_actor->id = 1;
 
 		/* Initialize galaxy art cache */
@@ -703,69 +706,69 @@ static LandruTaskStepResult tourdesk_task_step(void* self) {
 		/* Create XINPUT widgets */
 		parent = NULL;
 		if (active_spec->create_input_parent) {
-			lrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
-			parent = linput_Alloc_Input(NULL, &frame, 0, 0);
+			xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+			parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 		}
 
 		/* Main Menu (id=0) */
 		bounds = active_spec->input_bounds[0];
-		lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		Input* inp = linput_Alloc_Input(parent, &frame, 0, 0);
-		linpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
-		linpattr_Set_Input_User_Function(inp, iuser_TourDesk);
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		Input* inp = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
+		xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
 		inp->mouseUsage = allInput;
 		inp->id = 0;
 
 		/* Join/Cutscene (id=1) */
 		bounds = active_spec->input_bounds[1];
-		lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		inp = linput_Alloc_Input(parent, &frame, 0, 0);
-		linpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
-		linpattr_Set_Input_User_Function(inp, iuser_TourDesk);
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		inp = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
+		xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
 		inp->mouseUsage = allInput;
 		inp->id = 1;
 
 		/* Next battle (id=2) */
 		bounds = active_spec->input_bounds[2];
-		lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		inp = linput_Alloc_Input(parent, &frame, 0, 0);
-		linpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
-		linpattr_Set_Input_User_Function(inp, iuser_TourDesk);
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		inp = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
+		xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
 		inp->mouseUsage = allInput;
 		inp->id = 2;
 
 		/* Previous battle (id=3) */
 		bounds = active_spec->input_bounds[3];
-		lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		inp = linput_Alloc_Input(parent, &frame, 0, 0);
-		linpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
-		linpattr_Set_Input_User_Function(inp, iuser_TourDesk);
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		inp = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
+		xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
 		inp->mouseUsage = allInput;
 		inp->id = 3;
 
-		lres_Close_Resource(res_file);
+		xres_Close_Resource(res_file);
 
 		/* Push the modal view task */
-		lview_Set_View_Update_Function(end_View);
-		lviewadd_Clear_View();
-		lview_Disable_All_View_Erase();
+		xview_Set_View_Update_Function(end_View);
+		xviewadd_Clear_View();
+		xview_Disable_All_View_Erase();
 
-		lviewadd_Push_Handle_View_Task();
+		xviewadd_Push_Handle_View_Task();
 
 		t->phase = TOURDESK_PHASE_CLEANUP;
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
 	/* CLEANUP */
-	lview_Enable_All_View_Erase();
-	lview_Clear_View_Update_Function();
+	xview_Enable_All_View_Erase();
+	xview_Clear_View_Update_Function();
 
-	if (lcursor_Is_Cursor_Visible())
-		lcursor_Hide_Cursor();
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
 
 	if (t->spec->surface_set == LANDRU_SURFACE_SVGA) {
-		lvesa_Erase_Video(16);
-		(void)lsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
+		xvesa_Erase_Video(16);
+		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 	}
 
 	return LANDRU_TASK_STEP_DONE;

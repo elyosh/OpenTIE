@@ -134,8 +134,8 @@ static const uint8_t* process_scanline_add_clipped(const uint8_t* src, uint8_t* 
  */
 // FUNCTION: TIE 0x650B0
 static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t off_y, uint8_t color) {
-	BitmapStruct* bm = lcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* canvas = (uint8_t*)lbitmap_Lock_Bitmap(bm);
+	BitmapStruct* bm = xcanvas_Get_Current_Canvas_Bitmap();
+	uint8_t* canvas = (uint8_t*)xbitmap_Lock_Bitmap(bm);
 
 	uint16_t length = *data++;
 	while (length) {
@@ -151,7 +151,7 @@ static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t
 		length = *data++;
 	}
 
-	lbitmap_Unlock_Bitmap(bm);
+	xbitmap_Unlock_Bitmap(bm);
 }
 
 /*
@@ -165,8 +165,8 @@ static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t 
 	uint8_t scratch[SCREEN_WIDTH];
 	memset(scratch, 0, sizeof(scratch));
 
-	BitmapStruct* bm = lcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* canvas = (uint8_t*)lbitmap_Lock_Bitmap(bm);
+	BitmapStruct* bm = xcanvas_Get_Current_Canvas_Bitmap();
+	uint8_t* canvas = (uint8_t*)xbitmap_Lock_Bitmap(bm);
 
 	uint16_t length = *data++;
 	while (length) {
@@ -182,7 +182,7 @@ static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t 
 		length = *data++;
 	}
 
-	lbitmap_Unlock_Bitmap(bm);
+	xbitmap_Unlock_Bitmap(bm);
 }
 
 /*
@@ -191,8 +191,8 @@ static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t 
  * canvas clip rect, dispatches to unclipped or clipped renderer.
  */
 // FUNCTION: TIE 0x64C10
-int deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x, int16_t off_y,
-								 int16_t refresh) {
+int16_t deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
+									 int16_t off_y, int16_t refresh) {
 	(void)draw_rect;
 	(void)clip_rect;
 
@@ -200,7 +200,8 @@ int deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect,
 		return 0;
 
 	/* Get the delta image handle for the current animation state */
-	void* frame_data = lactor_Get_Actor_Array_Data(actor, actor->state);
+	LandruHandle frame_handle = xactor_Get_Actor_Array_Data(actor, actor->state);
+	const void* frame_data = xmemhdl_Lock_Handle(frame_handle);
 	if (!frame_data)
 		return 0;
 
@@ -208,7 +209,7 @@ int deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect,
 
 	/* Get canvas clip rect */
 	Rect canvas_clip;
-	lcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
+	xcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
 	int16_t clip_left = canvas_clip.left;
 	int16_t clip_top = canvas_clip.top;
 	int16_t clip_w = canvas_clip.right - canvas_clip.left;
@@ -238,5 +239,6 @@ int deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect,
 		drawn = 0;
 	}
 
+	xmemhdl_Unlock_Handle(frame_handle);
 	return drawn;
 }

@@ -11,7 +11,7 @@ typedef struct {
 	int16_t frame_count;
 	int16_t trans_count;
 	int16_t matrix_count;
-	void* data;
+	LandruHandle data;
 } Matrix;
 
 typedef struct {

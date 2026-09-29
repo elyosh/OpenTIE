@@ -181,8 +181,8 @@ static int32_t train_monitor_needs_clear;
  * (declared extern in map.h); both writers must reach the same global. */
 
 /* Forward declarations (referenced by film callback before definition) */
-static int train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
-								 int16_t off_y, int16_t refresh);
+static int16_t train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
+									 int16_t off_y, int16_t refresh);
 static void train_user_Train_Clam(Actor* the_actor, int32_t time);
 static void train_user_Train_Light(Actor* the_actor, int32_t time);
 static void train_user_Train_Helmet(Actor* the_actor, int32_t time);
@@ -191,8 +191,8 @@ static void train_user_Train_Helmet(Actor* the_actor, int32_t time);
 
 // FUNCTION: TIE95 0x6B7EC; TIE98 0x491EC0
 static void train_end_Train_View(int32_t time) {
-	if (time == 0 && !lcursor_Is_Cursor_Visible())
-		lcursor_Show_Cursor();
+	if (time == 0 && !xcursor_Is_Cursor_Visible())
+		xcursor_Show_Cursor();
 }
 
 /* ------------------------------------------------------------------ */
@@ -200,39 +200,39 @@ static void train_end_Train_View(int32_t time) {
 // FUNCTION: TIE95 0x6B800; TIE98 0x491EE0
 static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object) {
 	if (active_spec->surface_set == LANDRU_SURFACE_SVGA && film_object->id == FTC_PALETTE) {
-		lfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
+		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
 		return 0;
 	}
 
 	if (film_object->id != 3)
 		return 0;
 
-	lfilm_Rewind_Actor_Film(the_film, film_object, (void*)(film_object + 1));
+	xfilm_Rewind_Actor_Film(the_film, film_object, (void*)(film_object + 1));
 	Actor* the_actor = (Actor*)film_object->object;
 	int16_t var1 = the_actor->var1;
 
 	switch (var1) {
 		case 1:
-			lactor_Set_Actor_Draw_Function(the_actor, train_draw_Train_Help);
+			xactor_Set_Actor_Draw_Function(the_actor, train_draw_Train_Help);
 			break;
 		case 5:
 			button[the_actor->var2] = the_actor;
 			break;
 		case 10:
-			lactor_Set_Actor_User_Function(the_actor, train_user_Train_Clam);
+			xactor_Set_Actor_User_Function(the_actor, train_user_Train_Clam);
 			return 0;
 		case 12:
-			lactor_Set_Actor_User_Function(the_actor, train_user_Train_Helmet);
+			xactor_Set_Actor_User_Function(the_actor, train_user_Train_Helmet);
 			helmet = the_actor;
 			return 0;
 		case 15:
 			arrow_actor = the_actor;
 			return 0;
 		case 16:
-			lactor_Set_Actor_User_Function(the_actor, train_user_Train_Light);
+			xactor_Set_Actor_User_Function(the_actor, train_user_Train_Light);
 			return 0;
 		case 20:
-			lactor_Non_Refreshable_Actor(the_actor);
+			xactor_Non_Refreshable_Actor(the_actor);
 			break;
 	}
 
@@ -270,12 +270,12 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 			input_actor = button[id + 1];
 
 		if (mouseState == 3 || prevMouseState == 3) {
-			lactor_Set_Actor_State(input_actor, 0, 0);
-			linpattr_Selected_Input(input);
+			xactor_Set_Actor_State(input_actor, 0, 0);
+			xinpattr_Selected_Input(input);
 		} else {
 			if (mouseState == 1 || prevMouseState == 1)
 				soundext_Play_SFX(sfxButton, id <= 4 ? 95 : 80);
-			lactor_Set_Actor_State(input_actor, 1, 0);
+			xactor_Set_Actor_State(input_actor, 1, 0);
 		}
 		return 1;
 	}
@@ -283,34 +283,34 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 	if (id == 5) {
 		/* Start training button */
 		if (mouseState == 3 || prevMouseState == 3) {
-			lactor_Set_Actor_State(button[0], 2, 0);
-			linpattr_Selected_Input(input);
+			xactor_Set_Actor_State(button[0], 2, 0);
+			xinpattr_Selected_Input(input);
 		} else {
 			if (mouseState == 1 || prevMouseState == 1)
 				soundext_Play_SFX(sfxButton, 80);
-			lactor_Set_Actor_State(button[0], 3, 0);
+			xactor_Set_Actor_State(button[0], 3, 0);
 		}
 	} else if (id == 6) {
 		/* Exit door button */
 		if (mouseState == 3 || prevMouseState == 3) {
-			lactor_Set_Actor_State(button[1], 0, 0);
-			linpattr_Selected_Input(input);
+			xactor_Set_Actor_State(button[1], 0, 0);
+			xinpattr_Selected_Input(input);
 		} else {
 			if (mouseState == 1 || prevMouseState == 1)
 				soundext_Play_SFX(sfxButton, 80);
-			lactor_Set_Actor_State(button[1], 1, 0);
+			xactor_Set_Actor_State(button[1], 1, 0);
 		}
 	} else {
 		/* Nav buttons 1-4 */
 		if (mouseState == 3 || prevMouseState == 3) {
-			linpattr_Clear_Input_Flag1(input);
-			linpattr_Selected_Input(input);
-			lactor_Hide_Actor(arrow_actor);
+			xinpattr_Clear_Input_Flag1(input);
+			xinpattr_Selected_Input(input);
+			xactor_Hide_Actor(arrow_actor);
 		}
 		if (mouseState == 1 || prevMouseState == 1) {
-			linpattr_Set_Input_Flag1(input);
-			lactor_Show_Actor(arrow_actor);
-			lactor_Set_Actor_State(arrow_actor, 2 * (input->id - 1), 0);
+			xinpattr_Set_Input_Flag1(input);
+			xactor_Show_Actor(arrow_actor);
+			xactor_Set_Actor_State(arrow_actor, 2 * (input->id - 1), 0);
 			soundext_Play_SFX(sfxButton, 95);
 		}
 	}
@@ -323,7 +323,7 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 static void train_iuser_Train(Input* input, int32_t time) {
 	(void)time;
 
-	if (!linpattr_Get_Input_Selected(input) || helmet->var2)
+	if (!xinpattr_Get_Input_Selected(input) || helmet->var2)
 		return;
 
 	switch (input->id) {
@@ -355,7 +355,7 @@ static void train_iuser_Train(Input* input, int32_t time) {
 			helmet->var2 = 1;
 			break;
 		case 6:
-			lerror_Set_Landru_Exit(SCENE_MAIN_MENU);
+			xerror_Set_Landru_Exit(SCENE_MAIN_MENU);
 			break;
 	}
 
@@ -396,17 +396,17 @@ static void train_idraw_Train(Input* input, Rect* draw_rect, Rect* clip_rect, in
 				break;
 			}
 		}
-		lfont_Print_Centered_Text(buf, draw_rect, color, 1);
+		xfont_Print_Centered_Text(buf, draw_rect, color, 1);
 	} else if (id == 7) {
 		/* "Level N" */
 		char fmt[32];
 		textext_Copy_Text(fmt, txtTrainLevel);
 		snprintf(buf, sizeof(buf), fmt, shipext_Get_Train_Level() + 1);
-		lfont_Print_Centered_Text(buf, draw_rect, color, 1);
+		xfont_Print_Centered_Text(buf, draw_rect, color, 1);
 	}
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip_rect);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip_rect);
 }
 
 /* ------------------------------------------------------------------ */
@@ -416,20 +416,20 @@ static void train_idraw_Train(Input* input, Rect* draw_rect, Rect* clip_rect, in
  * the TIEText table when a nav button is hovered and visor is up.
  */
 // FUNCTION: TIE95 0x6BC68; TIE98 0x492200
-static int train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
-								 int16_t off_y, int16_t refresh) {
+static int16_t train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
+									 int16_t off_y, int16_t refresh) {
 	if (refresh) {
 		if (train_help && !helmet->state) {
-			lactdelt_Draw_Delta_Actor(the_actor, draw_rect, clip_rect, off_x, off_y, refresh);
+			xactdelt_Draw_Delta_Actor(the_actor, draw_rect, clip_rect, off_x, off_y, refresh);
 			Rect bounds;
-			lactor_Get_Actor_Bounds(the_actor, &bounds);
-			lfont_Enable_FontID_Shadow(0);
+			xactor_Get_Actor_Bounds(the_actor, &bounds);
+			xfont_Enable_FontID_Shadow(0);
 			char text[32];
 			/* train_help 1-6 maps to txtTrainLastShip(74)..txtTrainExit(79) */
 			textext_Copy_Text(text, (int16_t)(train_help + 73));
-			lfont_Print_Centered_Text(text, &bounds, 15,
+			xfont_Print_Centered_Text(text, &bounds, 15,
 									  active_spec->surface_set == LANDRU_SURFACE_SVGA ? 2 : 0);
-			lfont_Disable_FontID_Shadow(0);
+			xfont_Disable_FontID_Shadow(0);
 		}
 		train_help = 0;
 	}
@@ -442,7 +442,7 @@ static int train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* clip_r
 // FUNCTION: TIE95 0x6BD00; TIE98 0x4922B0
 static void train_user_Train_Clam(Actor* the_actor, int32_t time) {
 	if (time == (int32_t)train_film->cels)
-		lactor_Non_Refreshable_Actor(the_actor);
+		xactor_Non_Refreshable_Actor(the_actor);
 }
 
 /* ------------------------------------------------------------------ */
@@ -455,7 +455,7 @@ static void train_user_Train_Clam(Actor* the_actor, int32_t time) {
 // FUNCTION: TIE95 0x6BD1C; TIE98 0x4922E0
 static void train_user_Train_Light(Actor* the_actor, int32_t time) {
 	if (time == 0) {
-		lactor_Show_Actor(the_actor);
+		xactor_Show_Actor(the_actor);
 		the_actor->var2 = (rand_rand() & 0xF) + 2;
 	}
 
@@ -490,22 +490,22 @@ static void train_user_Train_Light(Actor* the_actor, int32_t time) {
 static void train_user_Train_Helmet(Actor* the_actor, int32_t time) {
 	if (the_actor->var2) {
 		/* Entering training — close visor */
-		if (!lactor_Is_Actor_Visible(the_actor)) {
-			lactor_Show_Actor(the_actor);
-			lactor_Set_Actor_State(the_actor, 0, 0);
+		if (!xactor_Is_Actor_Visible(the_actor)) {
+			xactor_Show_Actor(the_actor);
+			xactor_Set_Actor_State(the_actor, 0, 0);
 			soundext_Play_SFX(sfxVisor, 80);
 		} else {
 			int16_t next_state = the_actor->state + 1;
 			if (next_state == the_actor->arraySize) {
 				/* Visor fully closed — enter training */
 				shipext_Update_Pilot();
-				lerror_Set_Landru_Exit(SCENE_FLIGHT_TRAIN);
+				xerror_Set_Landru_Exit(SCENE_FLIGHT_TRAIN);
 				soundext_Stop_SFX(sfxVisor);
 				soundext_Play_SFX(sfxVisorClick, 80);
 				uint8_t ship = shipext_Get_Train_Ship();
 				train_pilot_medal_status = pilot_record.train_max_level[ship];
 			} else {
-				lactor_Set_Actor_State(the_actor, next_state, 0);
+				xactor_Set_Actor_State(the_actor, next_state, 0);
 			}
 		}
 	} else {
@@ -513,20 +513,20 @@ static void train_user_Train_Helmet(Actor* the_actor, int32_t time) {
 		int16_t cur_scene = shellext_Get_Cur_Scene();
 		if (time < the_actor->arraySize && cur_scene == SCENE_TRAIN_B) {
 			/* Auto-play visor opening (reverse) */
-			if (!lactor_Is_Actor_Visible(the_actor)) {
-				lactor_Show_Actor(the_actor);
+			if (!xactor_Is_Actor_Visible(the_actor)) {
+				xactor_Show_Actor(the_actor);
 				soundext_Play_SFX(sfxVisor, 80);
 			}
-			lactor_Set_Actor_State(the_actor, the_actor->arraySize - (time + 1), 0);
+			xactor_Set_Actor_State(the_actor, the_actor->arraySize - (time + 1), 0);
 		} else {
 			/* Idle: nothing to refresh if visor is already hidden. */
-			if (!lactor_Is_Actor_Visible(the_actor))
+			if (!xactor_Is_Actor_Visible(the_actor))
 				return;
 			soundext_Stop_SFX(sfxVisor);
 			soundext_Play_SFX(sfxVisorClick, 80);
-			lactor_Hide_Actor(the_actor);
+			xactor_Hide_Actor(the_actor);
 		}
-		lview_Refresh_View();
+		xview_Refresh_View();
 	}
 }
 
@@ -544,7 +544,7 @@ static int16_t train_iupdate_Train_Screen(Input* input, Rect* draw_rect, Rect* c
 	if (active)
 		return 0;
 	if (mouseState == 3 || prevMouseState == 3)
-		linpattr_Selected_Input(input);
+		xinpattr_Selected_Input(input);
 	return 1;
 }
 
@@ -561,7 +561,7 @@ static int16_t train_iupdate_Train_Screen(Input* input, Rect* draw_rect, Rect* c
 static void train_iuser_Train_Screen(Input* input, int32_t time) {
 	(void)time;
 
-	if (linpattr_Get_Input_Selected(input)) {
+	if (xinpattr_Get_Input_Selected(input)) {
 		if (train_time > 384)
 			train_time = 767;
 		else if (train_time > 256)
@@ -616,9 +616,9 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	char string[48], buf[48], name[48];
 	bool svga = active_spec->surface_set == LANDRU_SURFACE_SVGA;
 	int16_t font_id = svga ? 2 : 0;
-	int16_t font_height = svga ? lfont_Get_FontID_Height(2) : 10;
+	int16_t font_height = svga ? xfont_Get_FontID_Height(2) : 10;
 
-	lrect_Copy_Rect(&dst, src);
+	xrect_Copy_Rect(&dst, src);
 	int16_t t = train_time;
 	int16_t num_lines = shipext_Num_Train_Mission_Text_Lines();
 
@@ -633,10 +633,10 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	int16_t max_width = 0;
 	for (int16_t i = 0; i < num_lines; i++) {
 		shipext_Get_Train_Mission_Text(string, i);
-		int16_t old_font = lfont_Get_Font();
-		lfont_Set_Font(font_id);
-		int16_t w = lfont_Get_String_Width(string);
-		lfont_Set_Font(old_font);
+		int16_t old_font = xfont_Get_Font();
+		xfont_Set_Font(font_id);
+		int16_t w = xfont_Get_String_Width(string);
+		xfont_Set_Font(old_font);
 		if (w > max_width)
 			max_width = w;
 	}
@@ -645,39 +645,39 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	/* Animated horizontal bars */
 	if (svga) {
 		if (t >= 24) {
-			lpaint_Horiz_Clipped_Line(dst.left + 6, dst.top + 1, 390, 2);
-			lpaint_Horiz_Clipped_Line(dst.left + 6, dst.bottom - 1, 390, 2);
+			xpaint_Horiz_Clipped_Line(dst.left + 6, dst.top + 1, 390, 2);
+			xpaint_Horiz_Clipped_Line(dst.left + 6, dst.bottom - 1, 390, 2);
 		} else {
-			lpaint_Horiz_Clipped_Line(dst.left + 6 * (33 - t), dst.top + 1, 12 * t + 3, 2);
-			lpaint_Horiz_Clipped_Line(dst.left + 6 * (33 - t), dst.bottom - 1, 12 * t + 3, 2);
+			xpaint_Horiz_Clipped_Line(dst.left + 6 * (33 - t), dst.top + 1, 12 * t + 3, 2);
+			xpaint_Horiz_Clipped_Line(dst.left + 6 * (33 - t), dst.bottom - 1, 12 * t + 3, 2);
 		}
 	} else {
 		if (t >= 16) {
-			lpaint_Horiz_Clipped_Line(dst.left + 3, dst.top + 1, 195, 2);
-			lpaint_Horiz_Clipped_Line(dst.left + 3, dst.bottom - 1, 195, 2);
+			xpaint_Horiz_Clipped_Line(dst.left + 3, dst.top + 1, 195, 2);
+			xpaint_Horiz_Clipped_Line(dst.left + 3, dst.bottom - 1, 195, 2);
 		} else {
-			lpaint_Horiz_Clipped_Line(dst.left + 99 - 6 * t, dst.top + 1, 12 * t + 3, 2);
-			lpaint_Horiz_Clipped_Line(dst.left + 99 - 6 * t, dst.bottom - 1, 12 * t + 3, 2);
+			xpaint_Horiz_Clipped_Line(dst.left + 99 - 6 * t, dst.top + 1, 12 * t + 3, 2);
+			xpaint_Horiz_Clipped_Line(dst.left + 99 - 6 * t, dst.bottom - 1, 12 * t + 3, 2);
 		}
 	}
 
 	int16_t bar_y = dst.bottom + font_height * num_lines + 2;
 	if (svga) {
 		if (t >= font_height * num_lines) {
-			lpaint_Horiz_Clipped_Line(dst.left + 6, bar_y, 390, 2);
+			xpaint_Horiz_Clipped_Line(dst.left + 6, bar_y, 390, 2);
 		} else {
 			int16_t bt = t - (10 * num_lines - 10);
 			if (bt >= 0) {
-				lpaint_Horiz_Clipped_Line(dst.left + 6 * (33 - bt), bar_y, 12 * bt + 3, 2);
+				xpaint_Horiz_Clipped_Line(dst.left + 6 * (33 - bt), bar_y, 12 * bt + 3, 2);
 			}
 		}
 	} else {
 		if (t >= 10 * num_lines) {
-			lpaint_Horiz_Clipped_Line(dst.left + 3, bar_y, 195, 2);
+			xpaint_Horiz_Clipped_Line(dst.left + 3, bar_y, 195, 2);
 		} else {
 			int16_t bt = t - (10 * num_lines - 16);
 			if (bt >= 0) {
-				lpaint_Horiz_Clipped_Line(dst.left + 99 - 6 * bt, bar_y, 12 * bt + 3, 2);
+				xpaint_Horiz_Clipped_Line(dst.left + 99 - 6 * bt, bar_y, 12 * bt + 3, 2);
 			}
 		}
 	}
@@ -695,10 +695,10 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 			snprintf(buf, sizeof(buf), string, shipext_Get_Train_Level() + 1);
 			strcat(name, " ");
 			strcat(name, buf);
-			lfont_Print_Centered_Text(name, &dst, fade, font_id);
+			xfont_Print_Centered_Text(name, &dst, fade, font_id);
 		} else {
 			shipext_Get_Train_Mission_Text(string, text_line);
-			lfont_Print_Clipped_Text(string, text_left, text_y, font_id, fade);
+			xfont_Print_Clipped_Text(string, text_left, text_y, font_id, fade);
 		}
 
 		t -= 8;
@@ -729,9 +729,9 @@ static void train_Draw_Train_Screen_Score(Rect* src) {
 	int16_t total_width = 2 * border_offset;
 
 	/* Horizontal bars */
-	lpaint_Horiz_Clipped_Line(border_offset + src->left, src->top + 6, src->right - src->left - total_width,
+	xpaint_Horiz_Clipped_Line(border_offset + src->left, src->top + 6, src->right - src->left - total_width,
 							  2);
-	lpaint_Horiz_Clipped_Line(border_offset + src->left, src->bottom - 6,
+	xpaint_Horiz_Clipped_Line(border_offset + src->left, src->bottom - 6,
 							  src->right - src->left - total_width, 2);
 
 	int16_t name_x = src->left + (svga ? 8 : 4);
@@ -746,17 +746,17 @@ static void train_Draw_Train_Screen_Score(Rect* src) {
 		TiePilotName_CopyForDisplay(display_name, sizeof(display_name), train_score_name[i]);
 
 		if (display_name[0]) {
-			lfont_Print_Clipped_Text(display_name, name_x, y, font_id, fade);
+			xfont_Print_Clipped_Text(display_name, name_x, y, font_id, fade);
 			textext_Copy_Text(string, txtTrainScore);
 			snprintf(str, sizeof(str), string, train_score_points[i]);
-			lfont_Print_Clipped_Text(str, score_x, y, font_id, fade);
+			xfont_Print_Clipped_Text(str, score_x, y, font_id, fade);
 			textext_Copy_Text(string, txtTrainLevel);
 			snprintf(str, sizeof(str), string, (uint16_t)train_score_level[i]);
-			lfont_Print_Clipped_Text(str, level_x, y, font_id, fade);
+			xfont_Print_Clipped_Text(str, level_x, y, font_id, fade);
 		}
 
 		t -= 4;
-		y += svga ? lfont_Get_FontID_Height(2) + 2 : 12;
+		y += svga ? xfont_Get_FontID_Height(2) + 2 : 12;
 	}
 }
 
@@ -770,7 +770,7 @@ static void train_Draw_Train_Screen_Flyby(Rect* src) {
 	bool svga = active_spec->surface_set == LANDRU_SURFACE_SVGA;
 	int16_t font_id = svga ? 2 : 0;
 
-	lfont_Enable_FontID_Shadow(font_id);
+	xfont_Enable_FontID_Shadow(font_id);
 
 	for (int i = 0; train_course_info[i].start_time != -1; i++) {
 		const CourseInfoEntry* e = &train_course_info[i];
@@ -788,11 +788,11 @@ static void train_Draw_Train_Screen_Flyby(Rect* src) {
 				py = src->top + e->x_offset;
 			}
 			textext_Copy_Text(text, e->text_id);
-			lfont_Print_Clipped_Text(text, px, py, font_id, fade);
+			xfont_Print_Clipped_Text(text, px, py, font_id, fade);
 		}
 	}
 
-	lfont_Disable_FontID_Shadow(font_id);
+	xfont_Disable_FontID_Shadow(font_id);
 }
 
 /* ------------------------------------------------------------------ */
@@ -803,7 +803,7 @@ static void train_idraw_Train_Screen(Input* input, Rect* draw_rect, Rect* clip_r
 		return;
 
 	if (active_spec->clear_monitor && train_monitor_needs_clear) {
-		lpaint_Paint_Clipped_Rect(draw_rect, 0);
+		xpaint_Paint_Clipped_Rect(draw_rect, 0);
 		train_monitor_needs_clear = 0;
 	}
 
@@ -822,8 +822,8 @@ static void train_idraw_Train_Screen(Input* input, Rect* draw_rect, Rect* clip_r
 			break;
 	}
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip_rect);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip_rect);
 }
 
 /* ------------------------------------------------------------------ */
@@ -850,45 +850,45 @@ static LandruTaskStepResult train_task_step(void* self) {
 
 		active_spec = t->spec;
 		if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-			(void)lsurface_Select_Surface_Set(active_spec->surface_set);
-			lview_Init_View(lview_Get_Current_View());
-			lvesa_Erase_Video(16);
+			(void)xsurface_Select_Surface_Set(active_spec->surface_set);
+			xview_Init_View(xview_Get_Current_View());
+			xvesa_Erase_Video(16);
 		}
 
-		lio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+		xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
 
 		train_file = shellext_Open_Empire_Resource(active_spec->archive);
-		lviewadd_Clear_View();
-		lview_Disable_All_View_Erase();
+		xviewadd_Clear_View();
+		xview_Disable_All_View_Erase();
 
 		/* Select film based on scene: entry A = first visit, B = return */
-		lrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
 		const char* film_name =
 			(shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? active_spec->film_a : train_film_b;
-		train_film = lfilm_Res_Callback_Film(film_name, &frame, 0, 0, 0, train_film_Train_Callback);
-		lfilm_Set_Film_Def_Palette(train_film, t->the_head->def_palette);
+		train_film = xfilm_Res_Callback_Film(film_name, &frame, 0, 0, 0, train_film_Train_Callback);
+		xfilm_Set_Film_Def_Palette(train_film, t->the_head->def_palette);
 
 		/* World input (full screen) */
-		lrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
-		world_input = linput_Alloc_Input(NULL, &frame, 0, 0);
+		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+		world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 		/* Monitor screen input */
 		bounds = active_spec->monitor_bounds;
-		lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		monitor_input = linput_Alloc_Input(world_input, &frame, 0, 0);
-		linpattr_Set_Input_Update_Function(monitor_input, train_iupdate_Train_Screen);
-		linpattr_Set_Input_User_Function(monitor_input, train_iuser_Train_Screen);
-		linpattr_Set_Input_Draw_Function(monitor_input, train_idraw_Train_Screen);
-		linpattr_Refreshable_Input(monitor_input);
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(monitor_input, train_iupdate_Train_Screen);
+		xinpattr_Set_Input_User_Function(monitor_input, train_iuser_Train_Screen);
+		xinpattr_Set_Input_Draw_Function(monitor_input, train_idraw_Train_Screen);
+		xinpattr_Refreshable_Input(monitor_input);
 		monitor_input->id = 0;
 
 		/* 6 navigation buttons */
 		for (int16_t i = 0; i < 6; i++) {
 			bounds = active_spec->input_bounds[i];
-			lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-			button_input[i] = linput_Alloc_Input(world_input, &frame, 0, 0);
-			linpattr_Set_Input_Update_Function(button_input[i], train_iupdate_Train);
-			linpattr_Set_Input_User_Function(button_input[i], train_iuser_Train);
+			xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+			button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
+			xinpattr_Set_Input_Update_Function(button_input[i], train_iupdate_Train);
+			xinpattr_Set_Input_User_Function(button_input[i], train_iuser_Train);
 			button_input[i]->mouseUsage = 4;
 			button_input[i]->id = i + 1;
 		}
@@ -911,27 +911,27 @@ static LandruTaskStepResult train_task_step(void* self) {
 		}
 
 		/* Push the modal view task */
-		lview_Set_View_Update_Function(train_end_Train_View);
-		lviewadd_Push_Handle_View_Task();
+		xview_Set_View_Update_Function(train_end_Train_View);
+		xviewadd_Push_Handle_View_Task();
 
 		t->phase = TRAIN_PHASE_CLEANUP;
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
 	/* CLEANUP */
-	linpcall_Clear_Active_Input();
-	lview_Clear_View_Update_Function();
+	xinpcall_Clear_Active_Input();
+	xview_Clear_View_Update_Function();
 	bpflight_Close_Flight_Engine();
-	lview_Enable_All_View_Erase();
+	xview_Enable_All_View_Erase();
 
-	if (lcursor_Is_Cursor_Visible())
-		lcursor_Hide_Cursor();
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
 
-	lres_Close_Resource(train_file);
+	xres_Close_Resource(train_file);
 	if (t->spec->surface_set == LANDRU_SURFACE_SVGA) {
-		lvesa_Erase_Video(16);
-		lviewadd_Clear_View();
-		(void)lsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
+		xvesa_Erase_Video(16);
+		xviewadd_Clear_View();
+		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 	}
 	return LANDRU_TASK_STEP_DONE;
 }

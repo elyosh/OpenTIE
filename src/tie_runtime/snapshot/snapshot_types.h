@@ -227,9 +227,9 @@ typedef enum {
  * are tagged TIE_EMIT_TARGET_BRIEF_SOURCE so the application routes them onto
  * a transient HD source RT (which the polygon-warp quad then samples).
  *
- * Tagging happens at record-allocation time (lactor_emit_draw,
- * emit_paint, lfont_Print_Clipped_Text) — the tag is sourced from the
- * canvas module via lcanvas_Render_Emit_Target(). The TIE Landru adapter
+ * Tagging happens at record-allocation time (xactor_emit_draw,
+ * emit_paint, xfont_Print_Clipped_Text) — the tag is sourced from the
+ * canvas module via xcanvas_Render_Emit_Target(). The TIE Landru adapter
  * maps Landru's auxiliary target to BRIEF_SOURCE and its screen target to
  * CUTSCENE. */
 typedef enum {
@@ -742,7 +742,7 @@ typedef struct TiePaintCmd {
 	int16_t x, y, w, h; /* classic-coord; HLINE: w=length, h ignored */
 	int16_t z_order;
 	/* Canvas-clip rect snapshot in classic-px, captured at emit time
-	 * (the value of lcanvas_Get_Drawing_Canvas_Clip when the paint
+	 * (the value of xcanvas_Get_Drawing_Canvas_Clip when the paint
 	 * fired). Mirrors TieDraw2D's clip_* fields: classic engine clips
 	 * each lpaint_* op against this rect via dl_rect / dl_horiz_line
 	 * / dl_vert_line, the HD compositor applies it as a scissor.

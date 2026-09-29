@@ -112,7 +112,8 @@ static Input* officer; /* officer widget (id=1) */
 /* ---- Forward declarations ---- */
 
 static void user_Title(Actor* actor, int32_t time);
-static int draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff, int16_t refresh);
+static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+						  int16_t refresh);
 static void user_Door(Actor* actor, int32_t time);
 static void user_Officer(Actor* actor, int32_t time);
 
@@ -124,8 +125,8 @@ static void user_Officer(Actor* actor, int32_t time);
 static void end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
-	if (!lcursor_Is_Cursor_Visible())
-		lcursor_Show_Cursor();
+	if (!xcursor_Is_Cursor_Visible())
+		xcursor_Show_Cursor();
 }
 
 /* ================================================================
@@ -137,16 +138,16 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 	if (film_object->id != 3) /* type_code: 3 = actor */
 		return 0;
 
-	lfilm_Rewind_Actor_Film(film, film_object, (void*)((char*)film_object + sizeof(FilmObject)));
+	xfilm_Rewind_Actor_Film(film, film_object, (void*)((char*)film_object + sizeof(FilmObject)));
 	Actor* actor = (Actor*)film_object->object;
 
 	switch (actor->var1) {
 		case 1: /* Background */
-			lactor_Non_Refreshable_Actor(actor);
+			xactor_Non_Refreshable_Actor(actor);
 			return 0;
 
 		case 2: /* Door actor — stored by var2 index */
-			lactor_Set_Actor_User_Function(actor, user_Door);
+			xactor_Set_Actor_User_Function(actor, user_Door);
 			door_actors[actor->var2] = actor;
 			return 0;
 
@@ -157,7 +158,7 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 				case 2:
 					if (shipext_Get_Mission_Officer() == 2)
 						return 1; /* hide if priest-only */
-					lactor_Set_Actor_User_Function(actor, user_Officer);
+					xactor_Set_Actor_User_Function(actor, user_Officer);
 					actor->id = actor->var2;
 					return 0;
 
@@ -170,7 +171,7 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 				case 4:
 					if (shipext_Get_Mission_Officer() == 1)
 						return 1; /* hide if officer-only */
-					lactor_Set_Actor_User_Function(actor, user_Officer);
+					xactor_Set_Actor_User_Function(actor, user_Officer);
 					actor->id = 3;
 					return 0;
 
@@ -205,8 +206,8 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 						return 1;
 				}
 			}
-			lactor_Set_Actor_User_Function(actor, user_Title);
-			lactor_Set_Actor_Draw_Function(actor, draw_Title);
+			xactor_Set_Actor_User_Function(actor, user_Title);
+			xactor_Set_Actor_Draw_Function(actor, draw_Title);
 			title_actor = actor;
 			return 0;
 
@@ -301,7 +302,7 @@ static void iuser_Debrief(Input* input, int32_t time) {
 			shipext_Refly_Tour_Mission();
 	}
 
-	lerror_Set_Landru_Exit(scene);
+	xerror_Set_Landru_Exit(scene);
 }
 
 /* ================================================================
@@ -312,27 +313,28 @@ static void iuser_Debrief(Input* input, int32_t time) {
 static void user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
-		if (!lactor_Is_Actor_Visible(actor))
-			lactor_Show_Actor(actor);
+		if (!xactor_Is_Actor_Visible(actor))
+			xactor_Show_Actor(actor);
 		actor->var1 = 0;
 	} else {
-		if (lactor_Is_Actor_Visible(actor))
-			lactor_Hide_Actor(actor);
+		if (xactor_Is_Actor_Visible(actor))
+			xactor_Hide_Actor(actor);
 	}
 }
 
 // FUNCTION: TIE95 0x70494; TIE98 0x415CB0
-static int draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff, int16_t refresh) {
+static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+						  int16_t refresh) {
 	if (!refresh)
 		return 0;
 
-	lactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
+	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
 
 	int16_t offx, offy;
-	lactor_Get_Actor_Offset(actor, &offx, &offy);
+	xactor_Get_Actor_Offset(actor, &offx, &offy);
 
 	Rect r;
-	lrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
+	xrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
 
 	char label[32];
 	TIEText text_id;
@@ -356,10 +358,10 @@ static int draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int1
 	}
 
 	/* Drop shadow */
-	lrect_Offset_Rect(&r, 1, 1);
-	lfont_Print_Centered_Text(label, &r, 16, active_spec->title_font);
-	lrect_Offset_Rect(&r, -1, -1);
-	lfont_Print_Centered_Text(label, &r, 15, active_spec->title_font);
+	xrect_Offset_Rect(&r, 1, 1);
+	xfont_Print_Centered_Text(label, &r, 16, active_spec->title_font);
+	xrect_Offset_Rect(&r, -1, -1);
+	xfont_Print_Centered_Text(label, &r, 15, active_spec->title_font);
 	return 1;
 }
 
@@ -379,12 +381,12 @@ static void user_Door(Actor* actor, int32_t time) {
 		if (!actor->state)
 			soundext_Play_SFX(sfxSmallDoorOpen, 80);
 		if (actor->state < actor->arraySize - 1)
-			lactor_Set_Actor_State(actor, actor->state + 1, 0);
+			xactor_Set_Actor_State(actor, actor->state + 1, 0);
 		actor->var1 = 0;
 	} else {
 		/* Closing */
 		if (actor->state > 0) {
-			lactor_Set_Actor_State(actor, actor->state - 1, 0);
+			xactor_Set_Actor_State(actor, actor->state - 1, 0);
 			if (!actor->state)
 				soundext_Play_SFX(sfxSmallDoorShut, 80);
 		}
@@ -422,8 +424,8 @@ static void user_Officer(Actor* actor, int32_t time) {
 				anim_state = actor->var1 / 2 - 2;
 
 			int16_t zplane = anim_state ? 15 : 30;
-			lactor_Set_Actor_ZPlane(actor, zplane);
-			lactor_Set_Actor_State(actor, anim_state, 0);
+			xactor_Set_Actor_ZPlane(actor, zplane);
+			xactor_Set_Actor_State(actor, anim_state, 0);
 			break;
 		}
 
@@ -444,7 +446,7 @@ static void user_Officer(Actor* actor, int32_t time) {
 
 			if (anim_state > active_spec->officer_side_max_state)
 				anim_state = active_spec->officer_side_max_state;
-			lactor_Set_Actor_State(actor, anim_state, 0);
+			xactor_Set_Actor_State(actor, anim_state, 0);
 			break;
 		}
 
@@ -463,7 +465,7 @@ static void user_Officer(Actor* actor, int32_t time) {
 			else
 				anim_state = actor->var1;
 
-			lactor_Set_Actor_State(actor, anim_state, 0);
+			xactor_Set_Actor_State(actor, anim_state, 0);
 			break;
 		}
 
@@ -476,7 +478,7 @@ static void user_Officer(Actor* actor, int32_t time) {
 					actor->var1--;
 			}
 
-			lactor_Set_Actor_State(actor, actor->var1, 0);
+			xactor_Set_Actor_State(actor, actor->var1, 0);
 			break;
 		}
 
@@ -512,8 +514,8 @@ static LandruTaskStepResult debrief_task_step(void* self) {
 
 		active_spec = t->spec;
 		if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-			(void)lsurface_Select_Surface_Set(active_spec->surface_set);
-			lview_Init_View(lview_Get_Current_View());
+			(void)xsurface_Select_Surface_Set(active_spec->surface_set);
+			xview_Init_View(xview_Get_Current_View());
 		}
 
 		/* Position mouse based on outcome and officer type */
@@ -531,35 +533,35 @@ static LandruTaskStepResult debrief_task_step(void* self) {
 			mouse_x = active_spec->failure_mouse_x;
 			mouse_y = active_spec->failure_mouse_y;
 		}
-		lio_Set_Mouse_Position(mouse_x, mouse_y);
+		xio_Set_Mouse_Position(mouse_x, mouse_y);
 
 		/* Load resources */
 		t->res_file = shellext_Open_Empire_Resource("debrief.lfd");
-		lrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
 
-		debrief_film = lfilm_Res_Callback_Film("debrief", &frame, 0, 0, 0, film_Callback);
+		debrief_film = xfilm_Res_Callback_Film("debrief", &frame, 0, 0, 0, film_Callback);
 		TieSnapshotBuilder_SetActiveFilm("DEBRIEF", "debrief");
-		lfilm_Set_Film_Def_Palette(debrief_film, t->scene_head->def_palette);
+		xfilm_Set_Film_Def_Palette(debrief_film, t->scene_head->def_palette);
 
 		/* Create XINPUT widgets */
-		parent = linput_Alloc_Input(NULL, &frame, 0, 0);
+		parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 		/* Brief door (id=0) */
 		bounds = active_spec->input_bounds[0];
-		lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		brief_input = linput_Alloc_Input(parent, &frame, 0, 0);
-		linpattr_Set_Input_Update_Function(brief_input, iupdate_Debrief);
-		linpattr_Set_Input_User_Function(brief_input, iuser_Debrief);
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		brief_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(brief_input, iupdate_Debrief);
+		xinpattr_Set_Input_User_Function(brief_input, iuser_Debrief);
 		brief_input->mouseUsage = allInput;
 		brief_input->id = 0;
 
 		/* Officer door (id=1) — skip if priest only */
 		if (shipext_Get_Mission_Officer() != 2) {
 			bounds = active_spec->input_bounds[1];
-			lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-			officer = linput_Alloc_Input(parent, &frame, 0, 0);
-			linpattr_Set_Input_Update_Function(officer, iupdate_Debrief);
-			linpattr_Set_Input_User_Function(officer, iuser_Debrief);
+			xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+			officer = xinput_Alloc_Input(parent, &frame, 0, 0);
+			xinpattr_Set_Input_Update_Function(officer, iupdate_Debrief);
+			xinpattr_Set_Input_User_Function(officer, iuser_Debrief);
 			officer->mouseUsage = allInput;
 			officer->id = 1;
 		}
@@ -567,44 +569,44 @@ static LandruTaskStepResult debrief_task_step(void* self) {
 		/* Priest door (id=2) — skip if officer only */
 		if (shipext_Get_Mission_Officer() != 1) {
 			bounds = active_spec->input_bounds[2];
-			lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-			priest = linput_Alloc_Input(parent, &frame, 0, 0);
-			linpattr_Set_Input_Update_Function(priest, iupdate_Debrief);
-			linpattr_Set_Input_User_Function(priest, iuser_Debrief);
+			xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+			priest = xinput_Alloc_Input(parent, &frame, 0, 0);
+			xinpattr_Set_Input_Update_Function(priest, iupdate_Debrief);
+			xinpattr_Set_Input_User_Function(priest, iuser_Debrief);
 			priest->mouseUsage = allInput;
 			priest->id = 2;
 		}
 
 		/* Fly-again area (id=3) */
 		bounds = active_spec->input_bounds[3];
-		lrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		flyagain = linput_Alloc_Input(parent, &frame, 0, 0);
-		linpattr_Set_Input_Update_Function(flyagain, iupdate_Debrief);
-		linpattr_Set_Input_User_Function(flyagain, iuser_Debrief);
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		flyagain = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(flyagain, iupdate_Debrief);
+		xinpattr_Set_Input_User_Function(flyagain, iuser_Debrief);
 		flyagain->mouseUsage = allInput;
 		flyagain->id = 3;
 
 		/* Push the modal view task */
-		lview_Set_View_Update_Function(end_View);
-		lviewadd_Clear_View();
-		lview_Disable_All_View_Erase();
+		xview_Set_View_Update_Function(end_View);
+		xviewadd_Clear_View();
+		xview_Disable_All_View_Erase();
 
-		lviewadd_Push_Handle_View_Task();
+		xviewadd_Push_Handle_View_Task();
 
 		t->phase = DEBRIEF_PHASE_CLEANUP;
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
 	/* CLEANUP */
-	lview_Enable_All_View_Erase();
-	lview_Clear_View_Update_Function();
+	xview_Enable_All_View_Erase();
+	xview_Clear_View_Update_Function();
 
-	if (lcursor_Is_Cursor_Visible())
-		lcursor_Hide_Cursor();
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
 
-	lres_Close_Resource(t->res_file);
+	xres_Close_Resource(t->res_file);
 	if (t->spec->surface_set == LANDRU_SURFACE_SVGA)
-		(void)lsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
+		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 	return LANDRU_TASK_STEP_DONE;
 }
 

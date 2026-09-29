@@ -36,7 +36,7 @@ void shade_Find_Shade_Cycles(uint8_t* mask) {
 	for (i = 0; i < 256; i++)
 		mask[i] = 1;
 
-	pal = lpal_Ask_Palette_List();
+	pal = xpal_Ask_Palette_List();
 	while (pal) {
 		if (pal->cycle_active) {
 			for (i = 0; i < pal->cycle_count; i++) {
@@ -131,9 +131,10 @@ static void build_shade_table(uint8_t* pal_data, const uint16_t* dist, const uin
 
 // FUNCTION: TIE 0x6C720
 void shade_Build_Shaded_Palette(void) {
-	Palette* dest_pal = lpal_Get_Dest_Palette();
-	/* Palette colors are directly addressable host memory. */
-	uint8_t* pal_data = (uint8_t*)dest_pal->colors;
+	Palette* dest_pal = xpal_Get_Dest_Palette();
+	uint8_t* pal_data = xmemhdl_Lock_Handle(dest_pal->colors);
+	if (!pal_data)
+		return;
 
 	uint16_t dist[256];
 	uint8_t weight[256];
@@ -150,7 +151,7 @@ void shade_Build_Shaded_Palette(void) {
 		build_shade_table(pal_data, dist, weight, cycle_mask, 0, 0, 0);
 	}
 
-	/* Binary does Unlock_Handle(pal->colors_handle). No-op with direct pointers. */
+	xmemhdl_Unlock_Handle(dest_pal->colors);
 }
 
 // FUNCTION: TIE 0x6C77C
@@ -163,7 +164,7 @@ void shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, int16_t targ
 	for (int i = 0; i < 256; i++)
 		avail[256 + i] = 1;
 
-	Palette* pal = lpal_Ask_Palette_List();
+	Palette* pal = xpal_Ask_Palette_List();
 	while (pal) {
 		if (pal->cycle_active) {
 			for (int j = 0; j < pal->cycle_count; j++) {
@@ -220,7 +221,7 @@ void shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, int16_t targ
 
 // FUNCTION: TIE 0x6CAC0
 void shade_Draw_Talk_Shade_Rect(Rect* r) {
-	lpaint_Frame_Clipped_Rect(r, 16);
+	xpaint_Frame_Clipped_Rect(r, 16);
 
 	int16_t w = r->right - r->left;
 	int16_t h = r->bottom - r->top;
@@ -231,14 +232,14 @@ void shade_Draw_Talk_Shade_Rect(Rect* r) {
 		/* Emit a TIE_PAINT_SHADE_RECT for the HD overlay. The classic
 		 * FB pixel-walk above mutates indexed pixels in place — those
 		 * writes never enter lpaint_*, so without this emit the HD
-		 * compositor sees only the lpaint_Frame_Clipped_Rect border
+		 * compositor sees only the xpaint_Frame_Clipped_Rect border
 		 * and the dimmed interior is hidden behind the opaque HD
 		 * background sprite. Target / intensity mirror the values
 		 * used by shade_Build_Shaded_Palette: red for tourdesk,
 		 * black for everything else; intensity 160. The compositor
 		 * decomposes this into one PMA alpha-over quad whose tint is
 		 * (target_RGB * alpha, alpha) with alpha = intensity / 256. */
-		if (lcanvas_Render_Emit_Allowed()) {
+		if (xcanvas_Render_Emit_Allowed()) {
 			TiePaintCmd* out = TieSnapshotBuilder_AllocPaintCmd();
 			if (out) {
 				int is_tour = (shellext_Get_Cur_Scene() == SCENE_TOUR_DESK);
@@ -251,13 +252,13 @@ void shade_Draw_Talk_Shade_Rect(Rect* r) {
 				out->colors[2] = 0;                 /* target B */
 				out->colors[3] = 160;               /* intensity */
 				out->colors[4] = 0;
-				out->target = lcanvas_Render_Emit_Target();
+				out->target = xcanvas_Render_Emit_Target();
 				out->x = r->left + 1;
 				out->y = r->top + 1;
 				out->w = w - 2;
 				out->h = h - 2;
 				Rect cc;
-				lcanvas_Get_Drawing_Canvas_Clip(&cc);
+				xcanvas_Get_Drawing_Canvas_Clip(&cc);
 				out->clip_left = cc.left;
 				out->clip_top = cc.top;
 				out->clip_right = cc.right;
@@ -269,8 +270,8 @@ void shade_Draw_Talk_Shade_Rect(Rect* r) {
 
 // FUNCTION: TIE 0x8B270
 void shade_Shadow_Line_List(const uint8_t* palette, int16_t x, int16_t y, int16_t width, int16_t height) {
-	BitmapStruct* canvas = lcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* pixels = (uint8_t*)lbitmap_Lock_Bitmap(canvas);
+	BitmapStruct* canvas = xcanvas_Get_Current_Canvas_Bitmap();
+	uint8_t* pixels = (uint8_t*)xbitmap_Lock_Bitmap(canvas);
 	int16_t stride = canvas->w;
 
 	uint8_t* row = pixels + stride * y + x;
@@ -283,5 +284,5 @@ void shade_Shadow_Line_List(const uint8_t* palette, int16_t x, int16_t y, int16_
 		row += stride - width;
 	}
 
-	lbitmap_Unlock_Bitmap(canvas);
+	xbitmap_Unlock_Bitmap(canvas);
 }

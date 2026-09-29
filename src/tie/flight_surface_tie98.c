@@ -45,7 +45,7 @@ void FlightSurface_Lock(void) {
 														  NULL) == DX_DDERR_SURFACELOST)
 				g_flightOffscreenSurface->lpVtbl->Restore(g_flightOffscreenSurface);
 			g_flightPrimaryPitch = descriptor.lPitch;
-			XVESA_Set_Video_Buffer((uint8_t*)descriptor.lpSurface);
+			xvesa_Set_Video_Buffer((uint8_t*)descriptor.lpSurface);
 			vgapointer = descriptor.lpSurface;
 			xtrans2_videobaseptr = descriptor.lpSurface;
 			memset(&descriptor, 0, sizeof descriptor);
@@ -60,7 +60,7 @@ void FlightSurface_Lock(void) {
 												   NULL) == DX_DDERR_SURFACELOST)
 				g_lpRenderSurface->lpVtbl->Restore(g_lpRenderSurface);
 			g_flightPrimaryPitch = descriptor.lPitch;
-			XVESA_Set_Video_Buffer((uint8_t*)descriptor.lpSurface);
+			xvesa_Set_Video_Buffer((uint8_t*)descriptor.lpSurface);
 			vgapointer = descriptor.lpSurface;
 			xtrans2_videobaseptr = descriptor.lpSurface;
 			memset(&descriptor, 0, sizeof descriptor);
@@ -80,7 +80,7 @@ void FlightSurface_Lock(void) {
 											 DDLOCK_WAIT | DDLOCK_NOSYSLOCK, NULL) == DX_DDERR_SURFACELOST)
 			g_landruSurface->lpVtbl->Restore(g_landruSurface);
 		g_flightPrimaryPitch = descriptor.lPitch;
-		XVESA_Set_Video_Buffer((uint8_t*)descriptor.lpSurface);
+		xvesa_Set_Video_Buffer((uint8_t*)descriptor.lpSurface);
 		vgapointer = descriptor.lpSurface;
 		xtrans2_videobaseptr = descriptor.lpSurface;
 		memset(&descriptor, 0, sizeof descriptor);
@@ -94,7 +94,7 @@ void FlightSurface_Lock(void) {
 		xtrans2_videobaseptr += offset;
 	}
 
-	XVESA_Set_Linear_Buffer_Size((uint32_t)(480 * FrontendDisplay_GetDrawSurfacePitch()));
+	xvesa_Set_Linear_Buffer_Size((uint32_t)(480 * FrontendDisplay_GetDrawSurfacePitch()));
 	if (g_surfacePitch != (uint32_t)g_flightPrimaryPitch) {
 		g_surfacePitch = (uint32_t)g_flightPrimaryPitch;
 		rtsvga2_setvgapointers(vgapointer, (uint16_t)g_flightPrimaryPitch, 480);

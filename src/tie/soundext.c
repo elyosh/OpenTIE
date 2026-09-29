@@ -116,9 +116,9 @@ void soundext_Open_Post_iMuse(int16_t use_script) {
 	void* fp;
 
 	script_active_gbl = use_script && TieMusicPolicy_UsesImuse();
-	memcom_Add_Memory_Callback(soundext_compact_Sound, 0x1000);
+	xmemcom_Add_Memory_Callback(soundext_compact_Sound, 0x1000);
 	/* Adapt the recovered usercall callback to Landru's function type. */
-	lsound_Set_Sound_Action_Function((SoundActionFunc)(void*)soundext_Action_iMuse);
+	xsound_Set_Sound_Action_Function((SoundActionFunc)(void*)soundext_Action_iMuse);
 
 	music_file = shellext_Open_Empire_Resource("tiemusic.lfd");
 	sfx_file = shellext_Open_Empire_Resource("tiesfx.lfd");
@@ -128,7 +128,7 @@ void soundext_Open_Post_iMuse(int16_t use_script) {
 	/* tiespch2.lfd and tiemus2.lfd are optional (CD version extras) */
 	fp = shellext_Open_Empire_File("tiespch2.lfd", "r");
 	if (fp) {
-		lfile_Close_File(fp);
+		xfile_Close_File(fp);
 		speech2_file = shellext_Open_Empire_Resource("tiespch2.lfd");
 	} else {
 		speech2_file = NULL;
@@ -136,7 +136,7 @@ void soundext_Open_Post_iMuse(int16_t use_script) {
 
 	fp = shellext_Open_Empire_File("tiemus2.lfd", "r");
 	if (fp) {
-		lfile_Close_File(fp);
+		xfile_Close_File(fp);
 		music2_file = shellext_Open_Empire_Resource("tiemus2.lfd");
 	} else {
 		music2_file = NULL;
@@ -144,32 +144,32 @@ void soundext_Open_Post_iMuse(int16_t use_script) {
 
 	if (script_active_gbl) {
 		mfscript_MfStartScript(initData);
-		music_sound = lsound_Alloc_Sound(0);
-		lsound_Set_Sound_Keepable(music_sound);
-		lsound_Set_Sound_User_Keep(music_sound);
-		lsound_Set_Sound_User_Function(music_sound, isnd_iMuse);
+		music_sound = xsound_Alloc_Sound(LANDRU_NULL_HANDLE, 0, 0);
+		xsound_Set_Sound_Keepable(music_sound);
+		xsound_Set_Sound_User_Keep(music_sound);
+		xsound_Set_Sound_User_Function(music_sound, isnd_iMuse);
 	}
 }
 
 // FUNCTION: TIE 0x6531A
 void soundext_Close_Post_iMuse(void) {
-	lres_Close_Resource(speech_file);
-	lres_Close_Resource(sfx_file);
-	lres_Close_Resource(sfx2_file);
-	lres_Close_Resource(music_file);
+	xres_Close_Resource(speech_file);
+	xres_Close_Resource(sfx_file);
+	xres_Close_Resource(sfx2_file);
+	xres_Close_Resource(music_file);
 	if (speech2_file)
-		lres_Close_Resource(speech2_file);
+		xres_Close_Resource(speech2_file);
 	if (music2_file)
-		lres_Close_Resource(music2_file);
+		xres_Close_Resource(music2_file);
 
 	if (script_active_gbl) {
-		lsound_Clear_Sound_Keepable(music_sound);
-		lsound_Free_Sound(music_sound);
+		xsound_Clear_Sound_Keepable(music_sound);
+		xsound_Free_Sound(music_sound);
 		mfscript_MfStopScript();
 	}
 
-	lsound_Set_Sound_Action_Function(NULL);
-	memcom_Free_Memory_Callback(soundext_compact_Sound);
+	xsound_Set_Sound_Action_Function(NULL);
+	xmemcom_Free_Memory_Callback(soundext_compact_Sound);
 }
 
 // FUNCTION: TIE 0x653BB
@@ -192,9 +192,9 @@ void soundext_Close_Sound_Scene(int16_t scene, int16_t next_scene) {
 	flight = (uint16_t)next_scene >= 2 && (uint16_t)next_scene <= 4;
 
 	if (shellext_Is_Sudden_Scene_End() || flight) {
-		for (snd = lsound_Ask_Sound_List(); snd; snd = snd->next) {
+		for (snd = xsound_Ask_Sound_List(); snd; snd = snd->next) {
 			if (snd->type == digitalSound)
-				lsound_Stop_Sound(snd);
+				xsound_Stop_Sound(snd);
 		}
 	}
 
@@ -349,14 +349,14 @@ void soundext_Play_SFX(uint8_t sound_index, int16_t volume) {
 	if (idx == sfxSmallDoorOpen)
 		idx = (rand_rand() & 3) + 1;
 
-	snd = lsound_Find_Sound_Type(Sound_SFX_Name[idx - 1], FOURCC_VOIC);
+	snd = xsound_Find_Sound_Type(Sound_SFX_Name[idx - 1], FOURCC_VOIC);
 	if (!snd)
-		snd = lsound_Res_Digital_Sound(Sound_SFX_Name[idx - 1]);
+		snd = xsound_Res_Digital_Sound(Sound_SFX_Name[idx - 1]);
 	if (snd) {
-		lsound_Start_SFX(snd);
-		lsound_Set_Sound_Keep(snd);
+		xsound_Start_SFX(snd);
+		xsound_Set_Sound_Keep(snd);
 		if (volume)
-			lsound_Set_Sound_Volume(snd, volume);
+			xsound_Set_Sound_Volume(snd, volume);
 	}
 }
 
@@ -364,29 +364,29 @@ void soundext_Play_SFX(uint8_t sound_index, int16_t volume) {
 void soundext_Fade_SFX(uint8_t sound_index, int16_t volume, int16_t time) {
 	Sound* snd;
 
-	snd = lsound_Find_Sound_Type(Sound_SFX_Name[sound_index - 1], FOURCC_VOIC);
+	snd = xsound_Find_Sound_Type(Sound_SFX_Name[sound_index - 1], FOURCC_VOIC);
 	if (snd)
-		lsound_Set_Sound_Fade(snd, volume, time);
+		xsound_Set_Sound_Fade(snd, volume, time);
 }
 
 // FUNCTION: TIE 0x65929
 void soundext_Stop_SFX(uint8_t sound_index) {
 	Sound* snd;
 
-	snd = lsound_Find_Sound_Type(Sound_SFX_Name[sound_index - 1], FOURCC_VOIC);
+	snd = xsound_Find_Sound_Type(Sound_SFX_Name[sound_index - 1], FOURCC_VOIC);
 	if (snd)
-		lsound_Stop_Sound(snd);
+		xsound_Stop_Sound(snd);
 }
 
 // FUNCTION: TIE 0x65978
 void soundext_Play_Speech(uint8_t sound_index) {
 	Sound* snd;
 
-	snd = lsound_Find_Sound_Type(Sound_Speech_Name[sound_index - 1], FOURCC_VOIC);
+	snd = xsound_Find_Sound_Type(Sound_Speech_Name[sound_index - 1], FOURCC_VOIC);
 	if (!snd)
-		snd = lsound_Res_Digital_Sound(Sound_Speech_Name[sound_index - 1]);
+		snd = xsound_Res_Digital_Sound(Sound_Speech_Name[sound_index - 1]);
 	if (snd) {
-		lsound_Start_Speech(snd);
+		xsound_Start_Speech(snd);
 		imuse_set_param(im, (intptr_t)snd, 0x500, 4);
 	}
 }
@@ -472,15 +472,15 @@ void* soundext_TIE_Load_Sound(const char* name) {
 		low_name[i] = tolower((unsigned char)name[i]);
 	low_name[i] = '\0';
 
-	snd = lsound_Res_Music(low_name);
-	lsound_Set_Sound_Keepable(snd);
+	snd = xsound_Res_Music(low_name);
+	xsound_Set_Sound_Keepable(snd);
 	return snd;
 }
 
 // FUNCTION: TIE 0x65BEE
 void soundext_TIE_Unload_Sound(void* sound) {
-	lsound_Clear_Sound_Keepable((Sound*)sound);
-	lsound_Free_Sound((Sound*)sound);
+	xsound_Clear_Sound_Keepable((Sound*)sound);
+	xsound_Free_Sound((Sound*)sound);
 }
 
 void soundext_TIE_Print_Msg(const char* ptr) {

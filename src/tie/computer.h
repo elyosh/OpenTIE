@@ -13,8 +13,8 @@ typedef enum {
 
 /* Push the in-flight Computer (options/medal/backup/record) screen
  * as a sub-task. Caller-task yields after this; the dialog itself
- * sets landru_exit_gbl on its way out via lerror_Set_Landru_Exit
- * (read by callers on the next step or via lerror_Get_Landru_Exit). */
+ * sets landru_exit_gbl on its way out via xerror_Set_Landru_Exit
+ * (read by callers on the next step or via xerror_Get_Landru_Exit). */
 void computer_Push_Computer_Dialog_Task(void);
 
 #endif

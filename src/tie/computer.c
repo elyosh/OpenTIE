@@ -465,14 +465,14 @@ static int16_t Find_Backup_Pilot_Info(void) {
 	shipext_Get_Pilot_Name(file_name, sizeof(file_name));
 	strcat(file_name, ".tfr");
 
-	the_file = lfile_Open_File(LANDRU_FILE_ROOT_USER, file_name, "rb");
+	the_file = xfile_Open_File(LANDRU_FILE_ROOT_USER, file_name, "rb");
 	if (the_file) {
 		/* Seek to backup slot: offset 1930 from start of second slot */
-		lfile_Seek_File(the_file, 1930, 1);
-		lfile_Read_Byte_From_File(the_file, (uint8_t*)&backup_pilot_rank);
-		lfile_Seek_File(the_file, 1, 1);
-		lfile_Read_Long_From_File(the_file, (int32_t*)&backup_pilot_points);
-		lfile_Close_File(the_file);
+		xfile_Seek_File(the_file, 1930, 1);
+		xfile_Read_Byte_From_File(the_file, (uint8_t*)&backup_pilot_rank);
+		xfile_Seek_File(the_file, 1, 1);
+		xfile_Read_Long_From_File(the_file, (int32_t*)&backup_pilot_points);
+		xfile_Close_File(the_file);
 	}
 
 	return 1;
@@ -484,24 +484,24 @@ static int16_t Find_Backup_Pilot_Info(void) {
 
 // FUNCTION: TIE95 0x84DD8; TIE98 0x40DFB0
 static int16_t Set_Computer_Medal_Palette(void) {
-	lpal_Screen_To_Dest_Palette(0, 0, 255);
+	xpal_Screen_To_Dest_Palette(0, 0, 255);
 
 	switch (pilot_medal_type[pilot_medal_page]) {
 		case 0:
 		case 3:
-			lpal_Set_Dest_Palette(medal_palette[0]);
+			xpal_Set_Dest_Palette(medal_palette[0]);
 			break;
 		case 1:
-			lpal_Set_Dest_Palette(medal_palette[1]);
+			xpal_Set_Dest_Palette(medal_palette[1]);
 			if (pilot_medal_status[pilot_medal_page] < 2)
-				lpal_Set_Dest_Palette(medal_palette[pilot_medal_status[pilot_medal_page] + 2]);
+				xpal_Set_Dest_Palette(medal_palette[pilot_medal_status[pilot_medal_page] + 2]);
 			break;
 		case 2:
-			lpal_Set_Dest_Palette(medal_palette[1]);
+			xpal_Set_Dest_Palette(medal_palette[1]);
 			break;
 	}
 
-	lfade_Start_Full_Fade(FADE_WIPE_INSTANT, FADE_COLOR_CROSSFADE, 1, 0, 0);
+	xfade_Start_Full_Fade(FADE_WIPE_INSTANT, FADE_COLOR_CROSSFADE, 1, 0, 0);
 	return 1;
 }
 
@@ -513,57 +513,57 @@ static int16_t Set_Computer_Medal_Palette(void) {
 static void draw_Computer_On_Off(Rect* r, int16_t on) {
 	Rect tr1, tr2;
 
-	lrect_Copy_Rect(&tr1, r);
-	lrect_Inset_Rect(&tr1, 1, 1);
+	xrect_Copy_Rect(&tr1, r);
+	xrect_Inset_Rect(&tr1, 1, 1);
 	tr1.right = tr1.left + (tr1.right - tr1.left) / 2;
 
-	lrect_Copy_Rect(&tr2, r);
-	lrect_Inset_Rect(&tr2, 1, 1);
+	xrect_Copy_Rect(&tr2, r);
+	xrect_Inset_Rect(&tr2, 1, 1);
 	tr2.left = tr1.right;
 
 	if (on) {
-		lpaint_Paint_Clipped_Rect(&tr1, 38);
-		lpaint_Paint_Clipped_Rect(&tr2, 0);
+		xpaint_Paint_Clipped_Rect(&tr1, 38);
+		xpaint_Paint_Clipped_Rect(&tr2, 0);
 	} else {
-		lpaint_Paint_Clipped_Rect(&tr1, 0);
-		lpaint_Paint_Clipped_Rect(&tr2, 38);
+		xpaint_Paint_Clipped_Rect(&tr1, 0);
+		xpaint_Paint_Clipped_Rect(&tr2, 38);
 	}
 
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompGaugeOn), &tr1, 14, active_spec->content_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompGaugeOff), &tr2, 14, active_spec->content_font);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompGaugeOn), &tr1, 14, active_spec->content_font);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompGaugeOff), &tr2, 14, active_spec->content_font);
 }
 
 // FUNCTION: TIE95 0x86498; TIE98 0x40FDB0
 static void draw_Computer_Level(Rect* r, int16_t state) {
 	Rect tr1, tr2, tr3;
 
-	lrect_Copy_Rect(&tr1, r);
-	lrect_Inset_Rect(&tr1, 1, 1);
+	xrect_Copy_Rect(&tr1, r);
+	xrect_Inset_Rect(&tr1, 1, 1);
 	tr1.right = tr1.left + (tr1.right - tr1.left) / 3;
 
-	lrect_Copy_Rect(&tr2, r);
-	lrect_Inset_Rect(&tr2, 1, 1);
+	xrect_Copy_Rect(&tr2, r);
+	xrect_Inset_Rect(&tr2, 1, 1);
 	tr2.left = tr1.right;
 	tr2.right -= (r->right - r->left) / 3;
 
-	lrect_Copy_Rect(&tr3, r);
-	lrect_Inset_Rect(&tr3, 1, 1);
+	xrect_Copy_Rect(&tr3, r);
+	xrect_Inset_Rect(&tr3, 1, 1);
 	tr3.left = tr2.right;
 
-	lpaint_Paint_Clipped_Rect(&tr1, 0);
-	lpaint_Paint_Clipped_Rect(&tr2, 0);
-	lpaint_Paint_Clipped_Rect(&tr3, 0);
+	xpaint_Paint_Clipped_Rect(&tr1, 0);
+	xpaint_Paint_Clipped_Rect(&tr2, 0);
+	xpaint_Paint_Clipped_Rect(&tr3, 0);
 
 	if (state == 0)
-		lpaint_Paint_Clipped_Rect(&tr1, 38);
+		xpaint_Paint_Clipped_Rect(&tr1, 38);
 	else if (state == 1)
-		lpaint_Paint_Clipped_Rect(&tr2, 38);
+		xpaint_Paint_Clipped_Rect(&tr2, 38);
 	else if (state == 2)
-		lpaint_Paint_Clipped_Rect(&tr3, 38);
+		xpaint_Paint_Clipped_Rect(&tr3, 38);
 
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompLevelEasy), &tr1, 14, active_spec->content_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompLevelMed), &tr2, 14, active_spec->content_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompLevelHard), &tr3, 14, active_spec->content_font);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompLevelEasy), &tr1, 14, active_spec->content_font);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompLevelMed), &tr2, 14, active_spec->content_font);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompLevelHard), &tr3, 14, active_spec->content_font);
 }
 
 // FUNCTION: TIE95 0x865F4; TIE98 0x40FF90
@@ -571,16 +571,16 @@ static void draw_Computer_Gauge(Rect* r, int16_t amount) {
 	Rect tr;
 	int16_t i;
 
-	lrect_Copy_Rect(&tr, r);
-	lrect_Inset_Rect(&tr, 1, 1);
-	lpaint_Paint_Clipped_Rect(&tr, 16);
-	lrect_Inset_Rect(&tr, 1, 1);
+	xrect_Copy_Rect(&tr, r);
+	xrect_Inset_Rect(&tr, 1, 1);
+	xpaint_Paint_Clipped_Rect(&tr, 16);
+	xrect_Inset_Rect(&tr, 1, 1);
 	tr.left += active_spec->gauge_left_inset;
 	tr.right = tr.left + active_spec->gauge_step - 1;
 
 	for (i = 0; i < amount; i++) {
-		lpaint_Frame_Clipped_Rect(&tr, 14);
-		lrect_Offset_Rect(&tr, active_spec->gauge_step, 0);
+		xpaint_Frame_Clipped_Rect(&tr, 14);
+		xrect_Offset_Rect(&tr, active_spec->gauge_step, 0);
 	}
 }
 
@@ -592,21 +592,21 @@ static void idraw_Exit(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	if (!refresh)
 		return;
 
-	lstyle_Style_Paint_Border(r, 0);
-	lfont_Print_Clipped_Text(textext_Get_Text(input->var1), r->left + active_spec->confirm_text_x,
+	xstyle_Style_Paint_Border(r, 0);
+	xfont_Print_Clipped_Text(textext_Get_Text(input->var1), r->left + active_spec->confirm_text_x,
 							 r->top + active_spec->confirm_text_y, active_spec->content_font, 15);
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip_r);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip_r);
 }
 
 static void iuser_Exit(Input* input, int32_t time) {
 	(void)time;
 
-	if (input->id == 1 && linpattr_Get_Input_Selected(input))
-		ldialog_Set_Dialog_Exit(1);
-	else if (input->id == 2 && linpattr_Get_Input_Selected(input))
-		ldialog_Set_Dialog_Exit(2);
+	if (input->id == 1 && xinpattr_Get_Input_Selected(input))
+		xdialog_Set_Dialog_Exit(1);
+	else if (input->id == 2 && xinpattr_Get_Input_Selected(input))
+		xdialog_Set_Dialog_Exit(2);
 }
 
 // FUNCTION: TIE95 0x867F8; TIE98 0x410350
@@ -614,11 +614,11 @@ static Input* Build_Exit(int16_t id) {
 	Rect r;
 	Input* the_input;
 
-	lrect_Copy_Rect(&r, (Rect*)&active_spec->confirm_rect);
-	the_input = linput_Alloc_Dialog_Input(NULL, &r, 0, 0);
-	linpattr_Set_Input_Draw_Function(the_input, idraw_Exit);
-	linpattr_Set_Input_Allign(the_input, 1, 1);
-	linpattr_Start_Input(the_input);
+	xrect_Copy_Rect(&r, (Rect*)&active_spec->confirm_rect);
+	the_input = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
+	xinpattr_Set_Input_Draw_Function(the_input, idraw_Exit);
+	xinpattr_Set_Input_Allign(the_input, 1, 1);
+	xinpattr_Start_Input(the_input);
 
 	/* Store text_id in var1 for the draw callback */
 	the_input->var1 = id;
@@ -626,11 +626,11 @@ static Input* Build_Exit(int16_t id) {
 	strcpy(comp_exit_str[0], textext_Get_Text(txtCompExitYes));
 	strcpy(comp_exit_str[1], textext_Get_Text(txtCompExitNo));
 
-	lrect_Copy_Rect(&r, (Rect*)&active_spec->confirm_yes_rect);
-	lbtnpush_Alloc_Button(the_input, &r, 0, iuser_Exit, comp_exit_str[0], 1);
+	xrect_Copy_Rect(&r, (Rect*)&active_spec->confirm_yes_rect);
+	xbtnpush_Alloc_Button(the_input, &r, 0, iuser_Exit, comp_exit_str[0], 1);
 
-	lrect_Copy_Rect(&r, (Rect*)&active_spec->confirm_no_rect);
-	lbtnpush_Alloc_Button(the_input, &r, 0, iuser_Exit, comp_exit_str[1], 2);
+	xrect_Copy_Rect(&r, (Rect*)&active_spec->confirm_no_rect);
+	xbtnpush_Alloc_Button(the_input, &r, 0, iuser_Exit, comp_exit_str[1], 2);
 
 	return the_input;
 }
@@ -640,7 +640,7 @@ static Input* Build_Exit(int16_t id) {
  * The three confirmation prompts (Backup, Restore, Exit-to-DOS) all
  * fire from inside iuser callbacks running in the parent computer
  * dialog's task step. The callback can't yield, so it stages a
- * sub-dialog via ldialog_Schedule_Sub_Dialog and a handler runs the
+ * sub-dialog via xdialog_Schedule_Sub_Dialog and a handler runs the
  * post-result action when the sub-dialog pops. */
 typedef struct ComputerSubCtx {
 	Input* sub_dlg;
@@ -653,58 +653,58 @@ static ComputerSubCtx s_exitdos_ctx;
 
 static void after_backup_dialog(int16_t result, void* ctx) {
 	ComputerSubCtx* c = (ComputerSubCtx*)ctx;
-	linput_Free_Inputs(c->sub_dlg);
+	xinput_Free_Inputs(c->sub_dlg);
 	c->sub_dlg = NULL;
 	if (result != 2) {
 		shipext_Backup_Pilot();
 		backup_pilot_rank = pilot_record.rank;
 		backup_pilot_points = pilot_record.score;
-		lview_Refresh_View();
+		xview_Refresh_View();
 	}
 }
 
 static void after_restore_dialog(int16_t result, void* ctx) {
 	ComputerSubCtx* c = (ComputerSubCtx*)ctx;
-	linput_Free_Inputs(c->sub_dlg);
+	xinput_Free_Inputs(c->sub_dlg);
 	c->sub_dlg = NULL;
 	if (result != 2) {
 		shipext_Restore_Pilot();
 		Init_Computer_Medal();
 		pilot_info_page = 0;
 		restore_pilot = 1;
-		linpattr_Show_Input(backup_input);
-		lview_Refresh_View();
+		xinpattr_Show_Input(backup_input);
+		xview_Refresh_View();
 	}
 }
 
 static void after_exitdos_dialog(int16_t result, void* ctx) {
 	ComputerSubCtx* c = (ComputerSubCtx*)ctx;
-	linput_Free_Inputs(c->sub_dlg);
+	xinput_Free_Inputs(c->sub_dlg);
 	c->sub_dlg = NULL;
 	if (result != 2) {
 		c->parent_input->var1 = 1;
 		computer_display = 0;
 	}
-	lview_Refresh_View();
+	xview_Refresh_View();
 }
 
 static void schedule_backup_dialog(void) {
 	s_backup_ctx.sub_dlg = Build_Exit(txtCompBackupPilot);
-	lio_Set_Mouse_Position(active_spec->confirm_mouse_x, active_spec->confirm_mouse_y);
-	ldialog_Schedule_Sub_Dialog(s_backup_ctx.sub_dlg, after_backup_dialog, &s_backup_ctx);
+	xio_Set_Mouse_Position(active_spec->confirm_mouse_x, active_spec->confirm_mouse_y);
+	xdialog_Schedule_Sub_Dialog(s_backup_ctx.sub_dlg, after_backup_dialog, &s_backup_ctx);
 }
 
 static void schedule_restore_dialog(void) {
 	s_restore_ctx.sub_dlg = Build_Exit(txtCompRestorePilot);
-	lio_Set_Mouse_Position(active_spec->confirm_mouse_x, active_spec->confirm_mouse_y);
-	ldialog_Schedule_Sub_Dialog(s_restore_ctx.sub_dlg, after_restore_dialog, &s_restore_ctx);
+	xio_Set_Mouse_Position(active_spec->confirm_mouse_x, active_spec->confirm_mouse_y);
+	xdialog_Schedule_Sub_Dialog(s_restore_ctx.sub_dlg, after_restore_dialog, &s_restore_ctx);
 }
 
 static void schedule_exitdos_dialog(Input* parent_input) {
 	s_exitdos_ctx.sub_dlg = Build_Exit(txtCompExitDOS);
 	s_exitdos_ctx.parent_input = parent_input;
-	lio_Set_Mouse_Position(active_spec->confirm_mouse_x, active_spec->confirm_mouse_y);
-	ldialog_Schedule_Sub_Dialog(s_exitdos_ctx.sub_dlg, after_exitdos_dialog, &s_exitdos_ctx);
+	xio_Set_Mouse_Position(active_spec->confirm_mouse_x, active_spec->confirm_mouse_y);
+	xdialog_Schedule_Sub_Dialog(s_exitdos_ctx.sub_dlg, after_exitdos_dialog, &s_exitdos_ctx);
 }
 
 /* ======================================================================
@@ -716,11 +716,11 @@ static void update_Computer_Prefs(int16_t x, int16_t y) {
 	const Rect* pref_rect = active_spec->pref_rect;
 	int16_t refresh = 0;
 
-	if (lrect_Point_In_Rect((Rect*)&pref_rect[2], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&pref_rect[2], x, y)) {
 		options_gbl.music_active = (x < pref_rect[2].left + (pref_rect[2].right - pref_rect[2].left) / 2);
 		refresh = 1;
 	}
-	if (lrect_Point_In_Rect((Rect*)&pref_rect[3], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&pref_rect[3], x, y)) {
 		options_gbl.music_volume = (x - pref_rect[3].left) / active_spec->gauge_step;
 		if (options_gbl.music_volume > 16)
 			options_gbl.music_volume = 16;
@@ -729,11 +729,11 @@ static void update_Computer_Prefs(int16_t x, int16_t y) {
 			options_gbl.music_active = options_gbl.music_volume != 0;
 		refresh = 1;
 	}
-	if (lrect_Point_In_Rect((Rect*)&pref_rect[5], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&pref_rect[5], x, y)) {
 		options_gbl.sound_active = (x < pref_rect[5].left + (pref_rect[5].right - pref_rect[5].left) / 2);
 		refresh = 1;
 	}
-	if (lrect_Point_In_Rect((Rect*)&pref_rect[6], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&pref_rect[6], x, y)) {
 		options_gbl.sound_volume = (x - pref_rect[6].left) / active_spec->gauge_step;
 		if (options_gbl.sound_volume > 16)
 			options_gbl.sound_volume = 16;
@@ -741,11 +741,11 @@ static void update_Computer_Prefs(int16_t x, int16_t y) {
 			options_gbl.sound_active = options_gbl.sound_volume != 0;
 		refresh = 1;
 	}
-	if (lrect_Point_In_Rect((Rect*)&pref_rect[8], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&pref_rect[8], x, y)) {
 		options_gbl.speech_active = (x < pref_rect[8].left + (pref_rect[8].right - pref_rect[8].left) / 2);
 		refresh = 1;
 	}
-	if (lrect_Point_In_Rect((Rect*)&pref_rect[9], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&pref_rect[9], x, y)) {
 		options_gbl.speech_volume = (x - pref_rect[9].left) / active_spec->gauge_step;
 		if (options_gbl.speech_volume > 16)
 			options_gbl.speech_volume = 16;
@@ -753,16 +753,16 @@ static void update_Computer_Prefs(int16_t x, int16_t y) {
 			options_gbl.speech_active = options_gbl.speech_volume != 0;
 		refresh = 1;
 	}
-	if (lrect_Point_In_Rect((Rect*)&pref_rect[11], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&pref_rect[11], x, y)) {
 		options_gbl.transition_active =
 			(x < pref_rect[11].left + (pref_rect[11].right - pref_rect[11].left) / 2);
 		refresh = 1;
 	}
-	if (lrect_Point_In_Rect((Rect*)&pref_rect[13], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&pref_rect[13], x, y)) {
 		options_gbl.text_active = (x < pref_rect[13].left + (pref_rect[13].right - pref_rect[13].left) / 2);
 		refresh = 1;
 	}
-	if (lrect_Point_In_Rect((Rect*)&pref_rect[15], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&pref_rect[15], x, y)) {
 		int16_t third = (pref_rect[15].right - pref_rect[15].left) / 3;
 		if (x < pref_rect[15].left + third)
 			options_gbl.game_level = 0;
@@ -773,12 +773,12 @@ static void update_Computer_Prefs(int16_t x, int16_t y) {
 		refresh = 1;
 	}
 	if (refresh)
-		lview_Refresh_View();
+		xview_Refresh_View();
 }
 
 static void iuser_Computer_Open_Options(Input* input, int32_t time) {
 	(void)time;
-	if (linpattr_Get_Input_Selected(input))
+	if (xinpattr_Get_Input_Selected(input))
 		TieRuntime_RequestSettingsMenu();
 }
 
@@ -790,21 +790,21 @@ static void draw_Computer_Prefs(Rect* r, Rect* clip_r) {
 	(void)clip_r;
 
 	for (i = 0; i < 16; i++)
-		lpaint_Frame_Clipped_Rect((Rect*)&pref_rect[i], 38);
+		xpaint_Frame_Clipped_Rect((Rect*)&pref_rect[i], 38);
 
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompPrefTitle), (Rect*)&pref_rect[0], 15,
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefTitle), (Rect*)&pref_rect[0], 15,
 							  active_spec->content_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompPrefMusic), (Rect*)&pref_rect[1], 15,
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefMusic), (Rect*)&pref_rect[1], 15,
 							  active_spec->content_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSound), (Rect*)&pref_rect[4], 15,
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSound), (Rect*)&pref_rect[4], 15,
 							  active_spec->content_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSpeech), (Rect*)&pref_rect[7], 15,
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSpeech), (Rect*)&pref_rect[7], 15,
 							  active_spec->content_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompPrefTrans), (Rect*)&pref_rect[10], 15,
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefTrans), (Rect*)&pref_rect[10], 15,
 							  active_spec->toggle_label_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSub), (Rect*)&pref_rect[12], 15,
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSub), (Rect*)&pref_rect[12], 15,
 							  active_spec->toggle_label_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompPrefGame), (Rect*)&pref_rect[14], 15,
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefGame), (Rect*)&pref_rect[14], 15,
 							  active_spec->content_font);
 	draw_Computer_On_Off((Rect*)&pref_rect[2], options_gbl.music_active);
 	draw_Computer_On_Off((Rect*)&pref_rect[5], options_gbl.sound_active);
@@ -826,19 +826,19 @@ static void xupdate_Computer_Backup(int16_t x, int16_t y) {
 	const Rect* backup_rect = active_spec->backup_rect;
 	int16_t refresh = 0;
 
-	if (lrect_Point_In_Rect((Rect*)&backup_rect[2], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&backup_rect[2], x, y)) {
 		options_gbl.auto_backup =
 			(x < backup_rect[2].left + (backup_rect[2].right - backup_rect[2].left) / 2);
 		refresh = 1;
 	}
-	if (lrect_Point_In_Rect((Rect*)&backup_rect[4], x, y)) {
+	if (xrect_Point_In_Rect((Rect*)&backup_rect[4], x, y)) {
 		options_gbl.auto_restore =
 			(x < backup_rect[4].left + (backup_rect[4].right - backup_rect[4].left) / 2);
 		refresh = 1;
 	}
 
 	if (refresh)
-		lview_Refresh_View();
+		xview_Refresh_View();
 }
 
 // FUNCTION: TIE95 0x85F20; TIE98 0x40F7A0
@@ -847,7 +847,7 @@ static void iuser_Computer_Backup(Input* input, int32_t time) {
 
 	if (input->id < 3 || input->id > 4)
 		return;
-	if (!linpattr_Get_Input_Selected(input))
+	if (!xinpattr_Get_Input_Selected(input))
 		return;
 
 	if (input->id == 3) {
@@ -876,48 +876,48 @@ static void xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 		if (i < 5 || i > 5) {
 			if (i == 7) {
 				/* Split info panel into two halves */
-				lrect_Copy_Rect(&tr, (Rect*)&backup_rect[7]);
+				xrect_Copy_Rect(&tr, (Rect*)&backup_rect[7]);
 				tr.bottom = tr.top + (tr.bottom - tr.top) / 2;
-				lpaint_Paint_Clipped_Rect(&tr, 34);
+				xpaint_Paint_Clipped_Rect(&tr, 34);
 				tr.top = tr.bottom;
 				tr.bottom = backup_rect[i].bottom;
-				lpaint_Paint_Clipped_Rect(&tr, 82);
-				lrect_Copy_Rect(&tr, (Rect*)&backup_rect[i]);
-				lpaint_Frame_Clipped_Rect(&tr, color);
-				lpaint_Horiz_Clipped_Line(tr.left, (tr.bottom - tr.top) / 2 + tr.top, tr.right - tr.left,
+				xpaint_Paint_Clipped_Rect(&tr, 82);
+				xrect_Copy_Rect(&tr, (Rect*)&backup_rect[i]);
+				xpaint_Frame_Clipped_Rect(&tr, color);
+				xpaint_Horiz_Clipped_Line(tr.left, (tr.bottom - tr.top) / 2 + tr.top, tr.right - tr.left,
 										  color);
 			} else {
-				lpaint_Frame_Clipped_Rect((Rect*)&backup_rect[i], color);
+				xpaint_Frame_Clipped_Rect((Rect*)&backup_rect[i], color);
 			}
 		} else {
 			/* Backup button (index 5): only show if pilot not lost */
 			if (!pilot_record.exit_status)
-				lpaint_Frame_Clipped_Rect((Rect*)&backup_rect[i], color);
+				xpaint_Frame_Clipped_Rect((Rect*)&backup_rect[i], color);
 		}
 	}
 
 	color = 15;
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompBackTitle), (Rect*)&backup_rect[0], 15,
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompBackTitle), (Rect*)&backup_rect[0], 15,
 							  active_spec->content_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompBackAutoBackup), (Rect*)&backup_rect[1], color,
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompBackAutoBackup), (Rect*)&backup_rect[1], color,
 							  active_spec->content_font);
-	lfont_Print_Centered_Text(textext_Get_Text(txtCompBackAutoRestore), (Rect*)&backup_rect[3], color,
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompBackAutoRestore), (Rect*)&backup_rect[3], color,
 							  active_spec->content_font);
 
 	/* Current pilot info */
-	lrect_Copy_Rect(&tr, (Rect*)&backup_rect[7]);
+	xrect_Copy_Rect(&tr, (Rect*)&backup_rect[7]);
 	tr.top += active_spec->surface_set == LANDRU_SURFACE_SVGA ? 5 : 2;
 	tr.bottom = tr.top + (active_spec->line_height ? active_spec->line_height - 2
-												   : lfont_Get_FontID_Height(active_spec->content_font));
+												   : xfont_Get_FontID_Height(active_spec->content_font));
 
 	textext_Copy_Text(name, pilot_record.rank + txtCompRankCadet);
 	strcat(name, " ");
 	shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
 	strcat(name, pilot_name);
-	lfont_Print_Centered_Text(name, &tr, color, active_spec->content_font);
+	xfont_Print_Centered_Text(name, &tr, color, active_spec->content_font);
 
-	lrect_Offset_Rect(&tr, 0,
-					  active_spec->line_height ? 9 : lfont_Get_FontID_Height(active_spec->content_font));
+	xrect_Offset_Rect(&tr, 0,
+					  active_spec->line_height ? 9 : xfont_Get_FontID_Height(active_spec->content_font));
 	if (pilot_record.exit_status) {
 		textext_Copy_Text(name, pilot_record.exit_status + txtCompStatusCapture - 1);
 		strcat(name, " ");
@@ -928,28 +928,28 @@ static void xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 	snprintf(points, sizeof(points), " %ld ", (long)pilot_record.score);
 	strcat(name, points);
 	textext_Cat_Text(name, txtCompNamePoints);
-	lfont_Print_Centered_Text(name, &tr, color, active_spec->content_font);
+	xfont_Print_Centered_Text(name, &tr, color, active_spec->content_font);
 
 	/* Backup pilot info */
 	if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-		lrect_Copy_Rect(&tr, (Rect*)&backup_rect[7]);
+		xrect_Copy_Rect(&tr, (Rect*)&backup_rect[7]);
 		tr.top += (tr.bottom - tr.top) / 2 + 5;
-		tr.bottom = tr.top + lfont_Get_FontID_Height(active_spec->content_font);
+		tr.bottom = tr.top + xfont_Get_FontID_Height(active_spec->content_font);
 	} else {
-		lrect_Offset_Rect(&tr, 0, 11);
+		xrect_Offset_Rect(&tr, 0, 11);
 	}
 	textext_Copy_Text(name, txtCompNameLast);
 	strcat(name, " ");
 	textext_Cat_Text(name, backup_pilot_rank + txtCompRankCadet);
-	lfont_Print_Centered_Text(name, &tr, 90, active_spec->content_font);
+	xfont_Print_Centered_Text(name, &tr, 90, active_spec->content_font);
 
-	lrect_Offset_Rect(&tr, 0,
-					  active_spec->line_height ? 9 : lfont_Get_FontID_Height(active_spec->content_font));
+	xrect_Offset_Rect(&tr, 0,
+					  active_spec->line_height ? 9 : xfont_Get_FontID_Height(active_spec->content_font));
 	snprintf(points, sizeof(points), " %ld ", (long)backup_pilot_points);
 	textext_Copy_Text(name, txtCompNameWith);
 	strcat(name, points);
 	textext_Cat_Text(name, txtCompNamePoints);
-	lfont_Print_Centered_Text(name, &tr, 90, active_spec->content_font);
+	xfont_Print_Centered_Text(name, &tr, 90, active_spec->content_font);
 
 	draw_Computer_On_Off((Rect*)&backup_rect[2], options_gbl.auto_backup);
 	draw_Computer_On_Off((Rect*)&backup_rect[4], options_gbl.auto_restore);
@@ -962,18 +962,18 @@ static void xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 static int16_t computer_line_height(void) {
 	if (active_spec->line_height)
 		return active_spec->line_height;
-	return lfont_Get_FontID_Height(active_spec->content_font);
+	return xfont_Get_FontID_Height(active_spec->content_font);
 }
 
 static void computer_advance_line(Rect* r, int16_t heading) {
-	lrect_Offset_Rect(r, 0, computer_line_height() + (heading ? active_spec->heading_extra : 0));
+	xrect_Offset_Rect(r, 0, computer_line_height() + (heading ? active_spec->heading_extra : 0));
 }
 
 static void computer_advance_page(Rect* r, const Rect* page) {
 	Rect next;
-	lrect_Copy_Rect(&next, (Rect*)page);
-	lrect_Offset_Rect(&next, 0, active_spec->page_height);
-	lrect_Copy_Rect(r, &next);
+	xrect_Copy_Rect(&next, (Rect*)page);
+	xrect_Offset_Rect(&next, 0, active_spec->page_height);
+	xrect_Copy_Rect(r, &next);
 }
 
 // FUNCTION: TIE95 0x84E64; TIE98 0x40E060
@@ -983,15 +983,15 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 	Rect page;
 	uint32_t val;
 
-	lrect_Copy_Rect(&page, r);
+	xrect_Copy_Rect(&page, r);
 
 	/* Rank + Name header */
 	textext_Copy_Text(str1, pilot_record.rank + 1);
 	strcat(str1, " ");
 	shipext_Get_Pilot_Name(str2, sizeof(str2));
 	strcat(str1, str2);
-	lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-	lpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
+	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+	xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
 	computer_advance_line(r, 1);
 
 	/* Score + Skill */
@@ -1001,7 +1001,7 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 	textext_Cat_Text(str1, txtCompInfoSkill);
 	snprintf(str2, sizeof(str2), " %u", (unsigned)pilot_record.avg_score);
 	strcat(str1, str2);
-	lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 	computer_advance_line(r, 0);
 
 	/* Laser accuracy */
@@ -1011,7 +1011,7 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 		val = 0;
 	textext_Copy_Text(str2, txtCompInfoLaser);
 	snprintf(str1, sizeof(str1), str2, pilot_record.laser_hits, pilot_record.laser_total, (int16_t)val);
-	lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 	computer_advance_line(r, 0);
 
 	/* Warhead accuracy */
@@ -1023,25 +1023,25 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 		val = 0;
 	textext_Copy_Text(str2, txtCompInfoRocket);
 	snprintf(str1, sizeof(str1), str2, pilot_record.warhead_hits, pilot_record.warhead_total, (int16_t)val);
-	lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 	computer_advance_line(r, 0);
 
 	/* Total kills */
 	textext_Copy_Text(str2, txtCompInfoKills);
 	snprintf(str1, sizeof(str1), str2, pilot_record.total_kills);
-	lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 	computer_advance_line(r, 0);
 
 	/* Total captures */
 	textext_Copy_Text(str2, txtCompInfoCaptures);
 	snprintf(str1, sizeof(str1), str2, pilot_record.total_captures);
-	lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 	computer_advance_line(r, 0);
 
 	/* Craft lost */
 	textext_Copy_Text(str2, txtCompInfoCraftLost);
 	snprintf(str1, sizeof(str1), str2, pilot_record.ejection_count);
-	lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 	computer_advance_page(r, &page);
 }
 
@@ -1080,11 +1080,11 @@ static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color
 
 		if (!ship_info[i])
 			continue;
-		lrect_Copy_Rect(&page, r);
+		xrect_Copy_Rect(&page, r);
 
 		shipext_Get_Ship_Name(str1, i, 0, 0);
-		lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-		lpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
+		xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+		xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
 		computer_advance_line(r, 1);
 
 		if (pilot_record.train_score[i]) {
@@ -1093,7 +1093,7 @@ static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color
 			else
 				textext_Copy_Text(str2, txtCompInfoTrainComplete);
 			snprintf(str1, sizeof(str1), str2, pilot_record.train_score[i]);
-			lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+			xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 			computer_advance_line(r, 0);
 		}
 
@@ -1104,7 +1104,7 @@ static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color
 				else
 					textext_Copy_Text(str2, txtCompInfoCombatIncomplete);
 				snprintf(str1, sizeof(str1), str2, j + 1, pilot_record.combat_score[i][j]);
-				lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+				xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 				computer_advance_line(r, 0);
 			}
 		}
@@ -1140,13 +1140,13 @@ static void Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color
 
 		if (!battle_info[i])
 			continue;
-		lrect_Copy_Rect(&page, r);
+		xrect_Copy_Rect(&page, r);
 
 		textext_Copy_Text(str2, txtCompInfoBattle);
 		snprintf(str1, sizeof(str1), str2, i + 1);
 		textext_Cat_Text(str1, pilot_record.battle_status[i] + txtCompInfoBattle);
-		lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-		lpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
+		xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+		xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
 		computer_advance_line(r, 1);
 
 		max_missions = pilot_record.battle_cursor[i] + 1;
@@ -1163,17 +1163,17 @@ static void Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color
 		for (j = 0; j < max_missions; j++) {
 			textext_Copy_Text(str2, txtCompInfoMissionPoints);
 			snprintf(str1, sizeof(str1), str2, j + 1, pilot_record.tour_score[i][j]);
-			lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+			xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 			total_score += pilot_record.tour_score[i][j];
 			computer_advance_line(r, 0);
 		}
 
 		if (total_score && max_missions > 1) {
-			lpaint_Horiz_Clipped_Line(r->left + 10, r->top - 1, r->right - r->left - 20, back_color);
-			lrect_Offset_Rect(r, 0, active_spec->heading_extra);
+			xpaint_Horiz_Clipped_Line(r->left + 10, r->top - 1, r->right - r->left - 20, back_color);
+			xrect_Offset_Rect(r, 0, active_spec->heading_extra);
 			textext_Copy_Text(str2, txtCompTotalScore);
 			snprintf(str1, sizeof(str1), str2, (long)total_score);
-			lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+			xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 			computer_advance_line(r, 0);
 		}
 
@@ -1190,7 +1190,7 @@ static void Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color)
 	int16_t count = 0;
 	int16_t i;
 
-	lrect_Copy_Rect(&page, r);
+	xrect_Copy_Rect(&page, r);
 
 	for (i = 0; i < NUM_SPEC; i++) {
 		if (pilot_record.kills_by_ship_type[i])
@@ -1203,29 +1203,29 @@ static void Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color)
 	for (i = 0; i < NUM_SPEC && craft_count < num_craft; i++) {
 		if (!(count % active_spec->kills_page_rows)) {
 			if (count) {
-				lrect_Offset_Rect(&page, 0, active_spec->page_height);
-				lrect_Copy_Rect(r, &page);
+				xrect_Offset_Rect(&page, 0, active_spec->page_height);
+				xrect_Copy_Rect(r, &page);
 			}
 			textext_Copy_Text(str1, txtCompInfoVictories);
-			lfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-			lpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
+			xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
+			xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
 			computer_advance_line(r, 1);
 			count++;
 		}
 
 		if (pilot_record.kills_by_ship_type[i]) {
 			textext_Get_Ship_Text(str1, i);
-			lfont_Print_Clipped_Text(str1, r->left + 8, r->top + 1, active_spec->content_font, color);
+			xfont_Print_Clipped_Text(str1, r->left + 8, r->top + 1, active_spec->content_font, color);
 			snprintf(str1, sizeof(str1), "%d", pilot_record.kills_by_ship_type[i]);
-			lfont_Print_Clipped_Text(str1, r->right - 30, r->top + 1, active_spec->content_font, color);
+			xfont_Print_Clipped_Text(str1, r->right - 30, r->top + 1, active_spec->content_font, color);
 			computer_advance_line(r, 0);
 			count++;
 			craft_count++;
 		}
 	}
 
-	lrect_Offset_Rect(&page, 0, active_spec->page_height);
-	lrect_Copy_Rect(r, &page);
+	xrect_Offset_Rect(&page, 0, active_spec->page_height);
+	xrect_Copy_Rect(r, &page);
 }
 
 /* ======================================================================
@@ -1241,11 +1241,11 @@ static void xdraw_Computer_Info(Rect* r, Rect* clip_r) {
 
 	(void)r;
 
-	lrect_Copy_Rect(&clip_tr, (Rect*)&active_spec->info_clip);
-	lcanvas_Set_Drawing_Canvas_Clip(&clip_tr);
-	lrect_Copy_Rect(&tr, &clip_tr);
+	xrect_Copy_Rect(&clip_tr, (Rect*)&active_spec->info_clip);
+	xcanvas_Set_Drawing_Canvas_Clip(&clip_tr);
+	xrect_Copy_Rect(&tr, &clip_tr);
 	tr.bottom = tr.top + computer_line_height();
-	lrect_Offset_Rect(&tr, 0, -active_spec->page_height * pilot_info_page);
+	xrect_Offset_Rect(&tr, 0, -active_spec->page_height * pilot_info_page);
 	start_top = tr.top;
 
 	Draw_Computer_Header_Info(&tr, color, back_color);
@@ -1254,7 +1254,7 @@ static void xdraw_Computer_Info(Rect* r, Rect* clip_r) {
 	Draw_Computer_Kills_Info(&tr, color, back_color);
 
 	pilot_info_num_pages = (tr.top - start_top) / active_spec->page_height;
-	lcanvas_Set_Drawing_Canvas_Clip(clip_r);
+	xcanvas_Set_Drawing_Canvas_Clip(clip_r);
 }
 
 /* ======================================================================
@@ -1265,7 +1265,7 @@ static void xdraw_Computer_Info(Rect* r, Rect* clip_r) {
 static void iuser_Computer_Info(Input* input, int32_t time) {
 	(void)time;
 
-	if (!linpattr_Get_Input_Selected(input))
+	if (!xinpattr_Get_Input_Selected(input))
 		return;
 
 	if (computer_mode == COMP_MODE_MEDALS) {
@@ -1295,7 +1295,7 @@ static void iuser_Computer_Info(Input* input, int32_t time) {
 		}
 	}
 
-	lview_Refresh_View();
+	xview_Refresh_View();
 }
 
 static void idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
@@ -1305,18 +1305,18 @@ static void idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, int16_t re
 		return;
 
 	if (btn->pressed)
-		lpaint_Paint_Clipped_Rect(r, 38);
+		xpaint_Paint_Clipped_Rect(r, 38);
 	else
-		lpaint_Paint_Clipped_Rect(r, 16);
-	lpaint_Frame_Clipped_Rect(r, 38);
+		xpaint_Paint_Clipped_Rect(r, 16);
+	xpaint_Frame_Clipped_Rect(r, 38);
 
 	if (input->id)
-		lfont_Print_Centered_Text(textext_Get_Text(txtCompInfoLast), r, 14, active_spec->content_font);
+		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoLast), r, 14, active_spec->content_font);
 	else
-		lfont_Print_Centered_Text(textext_Get_Text(txtCompInfoNext), r, 14, active_spec->content_font);
+		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoNext), r, 14, active_spec->content_font);
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip_r);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip_r);
 }
 
 // FUNCTION: TIE95 0x84C88; TIE98 0x40DE30
@@ -1327,18 +1327,18 @@ static void idraw_Computer_Info(Input* input, Rect* r, Rect* clip_r, int16_t ref
 		return;
 
 	if (btn->pressed)
-		lpaint_Paint_Clipped_Rect(r, 38);
+		xpaint_Paint_Clipped_Rect(r, 38);
 	else
-		lpaint_Paint_Clipped_Rect(r, 16);
-	lpaint_Frame_Clipped_Rect(r, 38);
+		xpaint_Paint_Clipped_Rect(r, 16);
+	xpaint_Frame_Clipped_Rect(r, 38);
 
 	if (input->id)
-		lfont_Print_Centered_Text(textext_Get_Text(txtCompInfoLast), r, 14, active_spec->content_font);
+		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoLast), r, 14, active_spec->content_font);
 	else
-		lfont_Print_Centered_Text(textext_Get_Text(txtCompInfoNext), r, 14, active_spec->content_font);
+		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoNext), r, 14, active_spec->content_font);
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip_r);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip_r);
 }
 
 /* ======================================================================
@@ -1366,7 +1366,7 @@ static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 	if (type == 0) {
 		/* Training certificate */
 		textext_Copy_Text(name1, txtCompCertificate);
-		lactdelt_Draw_Delta_Actor(medal_actor[12], r, clip_r, r->left, r->top, 1);
+		xactdelt_Draw_Delta_Actor(medal_actor[12], r, clip_r, r->left, r->top, 1);
 
 		for (i = 0; i < 6; i++) {
 			if (pilot_record.train_max_level[i] >= 4) {
@@ -1375,8 +1375,8 @@ static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 					page = 4;
 				else if (page == 4)
 					page = 3;
-				lactor_Set_Actor_State(medal_actor[0], page, 0);
-				lactanim_Draw_Anim_Actor(medal_actor[0], r, clip_r, r->left, r->top, 1);
+				xactor_Set_Actor_State(medal_actor[0], page, 0);
+				xactanim_Draw_Anim_Actor(medal_actor[0], r, clip_r, r->left, r->top, 1);
 			}
 		}
 
@@ -1389,11 +1389,11 @@ static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 
 		if (k >= 0) {
 			if (pilot_record.train_max_level[6] < 4) {
-				lactor_Set_Actor_State(medal_actor2[k], 1, 0);
+				xactor_Set_Actor_State(medal_actor2[k], 1, 0);
 			} else {
-				lactor_Set_Actor_State(medal_actor2[k], 0, 0);
+				xactor_Set_Actor_State(medal_actor2[k], 0, 0);
 			}
-			lactanim_Draw_Anim_Actor(medal_actor2[k], r, clip_r, r->left, r->top, 1);
+			xactanim_Draw_Anim_Actor(medal_actor2[k], r, clip_r, r->left, r->top, 1);
 		}
 	} else if (type == 1) {
 		/* Ship combat medal */
@@ -1402,18 +1402,18 @@ static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 		textext_Copy_Text(string, status + txtCompBronze);
 
 		if (id < 6) {
-			lactor_Set_Actor_State(medal_actor[7], id, 0);
-			lactanim_Draw_Anim_Actor(medal_actor[7], r, clip_r, r->left + medal->ship_x,
+			xactor_Set_Actor_State(medal_actor[7], id, 0);
+			xactanim_Draw_Anim_Actor(medal_actor[7], r, clip_r, r->left + medal->ship_x,
 									 r->top + medal->ship_y, 1);
 		} else {
 			if (shipext_Is_Mission_Disk1()) {
-				lactor_Set_Actor_State(medal_actor2[3], 0, 0);
-				lactanim_Draw_Anim_Actor(medal_actor2[3], r, clip_r, r->left + medal->ship_x,
+				xactor_Set_Actor_State(medal_actor2[3], 0, 0);
+				xactanim_Draw_Anim_Actor(medal_actor2[3], r, clip_r, r->left + medal->ship_x,
 										 r->top + medal->ship_y, 1);
 			}
 			if (shipext_Is_Mission_Disk2()) {
-				lactor_Set_Actor_State(medal_actor2[8], 0, 0);
-				lactanim_Draw_Anim_Actor(medal_actor2[8], r, clip_r, r->left + medal->ship_x,
+				xactor_Set_Actor_State(medal_actor2[8], 0, 0);
+				xactanim_Draw_Anim_Actor(medal_actor2[8], r, clip_r, r->left + medal->ship_x,
 										 r->top + medal->ship_y, 1);
 			}
 		}
@@ -1470,81 +1470,81 @@ static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 			if (page <= 6) {
 				/* Base game battle medals */
 				if (page != 4) {
-					lactor_Set_Actor_Flip(medal_actor[1], 1, 0);
-					lactor_Set_Actor_State(medal_actor[1], 3 * page, 0);
-					lactanim_Draw_Anim_Actor(medal_actor[1], r, clip_r, medal->base_flip_x, y, 1);
+					xactor_Set_Actor_Flip(medal_actor[1], 1, 0);
+					xactor_Set_Actor_State(medal_actor[1], 3 * page, 0);
+					xactanim_Draw_Anim_Actor(medal_actor[1], r, clip_r, medal->base_flip_x, y, 1);
 				}
-				lactor_Set_Actor_Flip(medal_actor[1], 0, 0);
-				lactor_Set_Actor_State(medal_actor[1], 3 * page, 0);
-				lactanim_Draw_Anim_Actor(medal_actor[1], r, clip_r, x, y, 1);
+				xactor_Set_Actor_Flip(medal_actor[1], 0, 0);
+				xactor_Set_Actor_State(medal_actor[1], 3 * page, 0);
+				xactanim_Draw_Anim_Actor(medal_actor[1], r, clip_r, x, y, 1);
 
 				/* Special overlays for specific pages */
 				if (page == 2) {
-					lrect_Copy_Rect(&tr, (Rect*)&medal->clip);
-					lrect_Clip_Rect(&tr, clip_r);
-					lcanvas_Set_Drawing_Canvas_Clip(&tr);
-					lactor_Set_Actor_State(medal_actor[3], 4, 0);
-					lactor_Set_Actor_State(medal_actor[4], 0, 0);
-					lactdelt_Draw_Delta_Actor(medal_actor[8], r, &tr, medal->page2_xy[0][0],
+					xrect_Copy_Rect(&tr, (Rect*)&medal->clip);
+					xrect_Clip_Rect(&tr, clip_r);
+					xcanvas_Set_Drawing_Canvas_Clip(&tr);
+					xactor_Set_Actor_State(medal_actor[3], 4, 0);
+					xactor_Set_Actor_State(medal_actor[4], 0, 0);
+					xactdelt_Draw_Delta_Actor(medal_actor[8], r, &tr, medal->page2_xy[0][0],
 											  medal->page2_xy[0][1], 1);
-					lactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, medal->page2_xy[1][0],
+					xactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, medal->page2_xy[1][0],
 											 medal->page2_xy[1][1], 1);
-					lactanim_Draw_Anim_Actor(medal_actor[3], r, &tr, medal->page2_xy[2][0],
+					xactanim_Draw_Anim_Actor(medal_actor[3], r, &tr, medal->page2_xy[2][0],
 											 medal->page2_xy[2][1], 1);
-					lactdelt_Draw_Delta_Actor(medal_actor[10], r, &tr, medal->page2_xy[3][0],
+					xactdelt_Draw_Delta_Actor(medal_actor[10], r, &tr, medal->page2_xy[3][0],
 											  medal->page2_xy[3][1], 1);
 				}
 				if (page == 3) {
-					lrect_Copy_Rect(&tr, (Rect*)&medal->tall_clip);
-					lrect_Clip_Rect(&tr, clip_r);
-					lcanvas_Set_Drawing_Canvas_Clip(&tr);
-					lactdelt_Draw_Delta_Actor(medal_actor[8], r, &tr, medal->page3_xy[0][0],
+					xrect_Copy_Rect(&tr, (Rect*)&medal->tall_clip);
+					xrect_Clip_Rect(&tr, clip_r);
+					xcanvas_Set_Drawing_Canvas_Clip(&tr);
+					xactdelt_Draw_Delta_Actor(medal_actor[8], r, &tr, medal->page3_xy[0][0],
 											  medal->page3_xy[0][1], 1);
-					lactor_Set_Actor_State(medal_actor[4], 1, 0);
-					lactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, medal->page3_xy[1][0],
+					xactor_Set_Actor_State(medal_actor[4], 1, 0);
+					xactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, medal->page3_xy[1][0],
 											 medal->page3_xy[1][1], 1);
-					lactor_Set_Actor_State(medal_actor[4], 0, 0);
-					lactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, medal->page3_xy[2][0],
+					xactor_Set_Actor_State(medal_actor[4], 0, 0);
+					xactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, medal->page3_xy[2][0],
 											 medal->page3_xy[2][1], 1);
-					lactdelt_Draw_Delta_Actor(medal_actor[11], r, &tr, medal->page3_xy[3][0],
+					xactdelt_Draw_Delta_Actor(medal_actor[11], r, &tr, medal->page3_xy[3][0],
 											  medal->page3_xy[3][1], 1);
-					lactdelt_Draw_Delta_Actor(medal_actor[9], r, &tr, medal->page3_xy[4][0],
+					xactdelt_Draw_Delta_Actor(medal_actor[9], r, &tr, medal->page3_xy[4][0],
 											  medal->page3_xy[4][1], 1);
 				}
 				if (page == 1) {
-					lactdelt_Draw_Delta_Actor(medal_actor[13], r, clip_r, x, y, 1);
+					xactdelt_Draw_Delta_Actor(medal_actor[13], r, clip_r, x, y, 1);
 				}
 			} else if (page <= 9) {
 				/* Expansion pack 1 medals */
 				if (shipext_Is_Mission_Disk1()) {
 					page -= 7;
-					lactor_Set_Actor_Flip(medal_actor2[1], 1, 0);
-					lactor_Set_Actor_State(medal_actor2[1], page, 0);
-					lactanim_Draw_Anim_Actor(medal_actor2[1], r, clip_r, medal->expansion1_flip_x, y, 1);
-					lactor_Set_Actor_Flip(medal_actor2[1], 0, 0);
-					lactor_Set_Actor_State(medal_actor2[1], page, 0);
-					lactanim_Draw_Anim_Actor(medal_actor2[1], r, clip_r, x, y, 1);
+					xactor_Set_Actor_Flip(medal_actor2[1], 1, 0);
+					xactor_Set_Actor_State(medal_actor2[1], page, 0);
+					xactanim_Draw_Anim_Actor(medal_actor2[1], r, clip_r, medal->expansion1_flip_x, y, 1);
+					xactor_Set_Actor_Flip(medal_actor2[1], 0, 0);
+					xactor_Set_Actor_State(medal_actor2[1], page, 0);
+					xactanim_Draw_Anim_Actor(medal_actor2[1], r, clip_r, x, y, 1);
 
 					if (page == 0) {
-						lrect_Copy_Rect(&tr, (Rect*)&medal->clip);
-						lrect_Clip_Rect(&tr, clip_r);
-						lactor_Set_Actor_State(medal_actor2[2], 0, 0);
-						lactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, medal->expansion1_overlay_y[0],
+						xrect_Copy_Rect(&tr, (Rect*)&medal->clip);
+						xrect_Clip_Rect(&tr, clip_r);
+						xactor_Set_Actor_State(medal_actor2[2], 0, 0);
+						xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, medal->expansion1_overlay_y[0],
 												 1);
-						lactor_Set_Actor_State(medal_actor2[2], 2, 0);
-						lactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, medal->expansion1_overlay_y[0],
+						xactor_Set_Actor_State(medal_actor2[2], 2, 0);
+						xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, medal->expansion1_overlay_y[0],
 												 1);
 					} else if (page == 1) {
-						lrect_Copy_Rect(&tr, (Rect*)&medal->clip);
-						lrect_Clip_Rect(&tr, clip_r);
-						lactor_Set_Actor_State(medal_actor2[2], 3, 0);
-						lactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, medal->expansion1_overlay_y[1],
+						xrect_Copy_Rect(&tr, (Rect*)&medal->clip);
+						xrect_Clip_Rect(&tr, clip_r);
+						xactor_Set_Actor_State(medal_actor2[2], 3, 0);
+						xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, medal->expansion1_overlay_y[1],
 												 1);
 					} else if (page == 2) {
-						lrect_Copy_Rect(&tr, (Rect*)&medal->clip);
-						lrect_Clip_Rect(&tr, clip_r);
-						lactor_Set_Actor_State(medal_actor2[2], 1, 0);
-						lactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, medal->expansion1_overlay_y[2],
+						xrect_Copy_Rect(&tr, (Rect*)&medal->clip);
+						xrect_Clip_Rect(&tr, clip_r);
+						xactor_Set_Actor_State(medal_actor2[2], 1, 0);
+						xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, medal->expansion1_overlay_y[2],
 												 1);
 					}
 				}
@@ -1552,46 +1552,46 @@ static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 				/* Expansion pack 2 medals */
 				if (shipext_Is_Mission_Disk2()) {
 					page -= 10;
-					lactor_Set_Actor_Flip(medal_actor2[6], 1, 0);
-					lactor_Set_Actor_State(medal_actor2[6], page, 0);
-					lactanim_Draw_Anim_Actor(medal_actor2[6], r, clip_r, medal->expansion2_flip_x, y, 1);
-					lactor_Set_Actor_Flip(medal_actor2[6], 0, 0);
-					lactor_Set_Actor_State(medal_actor2[6], page, 0);
-					lactanim_Draw_Anim_Actor(medal_actor2[6], r, clip_r, x, y, 1);
+					xactor_Set_Actor_Flip(medal_actor2[6], 1, 0);
+					xactor_Set_Actor_State(medal_actor2[6], page, 0);
+					xactanim_Draw_Anim_Actor(medal_actor2[6], r, clip_r, medal->expansion2_flip_x, y, 1);
+					xactor_Set_Actor_Flip(medal_actor2[6], 0, 0);
+					xactor_Set_Actor_State(medal_actor2[6], page, 0);
+					xactanim_Draw_Anim_Actor(medal_actor2[6], r, clip_r, x, y, 1);
 
 					if (page == 2) {
-						lrect_Copy_Rect(&tr, (Rect*)&medal->clip);
-						lrect_Clip_Rect(&tr, clip_r);
-						lactor_Set_Actor_State(medal_actor2[7], 0, 0);
-						lactanim_Draw_Anim_Actor(medal_actor2[7], r, &tr, x, y, 1);
+						xrect_Copy_Rect(&tr, (Rect*)&medal->clip);
+						xrect_Clip_Rect(&tr, clip_r);
+						xactor_Set_Actor_State(medal_actor2[7], 0, 0);
+						xactanim_Draw_Anim_Actor(medal_actor2[7], r, &tr, x, y, 1);
 					}
 				}
 			}
 		}
 
-		lcanvas_Set_Drawing_Canvas_Clip(clip_r);
+		xcanvas_Set_Drawing_Canvas_Clip(clip_r);
 
 		/* Draw mission completion pips */
 		x = medal->pip_status_x[0];
 		y = medal->pip_y;
-		lactor_Set_Actor_State(medal_actor[2], 2, 0);
+		xactor_Set_Actor_State(medal_actor[2], 2, 0);
 		for (i = 0; i < status; i++) {
 			if (i >= 4)
-				lactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, medal->pip_status_x[1],
+				xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, medal->pip_status_x[1],
 										 y + medal->pip_step * (i - 4), 1);
 			else
-				lactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, x, y + medal->pip_step * i, 1);
+				xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, x, y + medal->pip_step * i, 1);
 		}
 
 		x = medal->pip_bonus_x[0];
 		y = medal->pip_y;
-		lactor_Set_Actor_State(medal_actor[2], 0, 0);
+		xactor_Set_Actor_State(medal_actor[2], 0, 0);
 		for (i = 0; i < bonus; i++) {
 			if (i >= 4)
-				lactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, medal->pip_bonus_x[1],
+				xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, medal->pip_bonus_x[1],
 										 y + medal->pip_step * (i - 4), 1);
 			else
-				lactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, x, y + medal->pip_step * i, 1);
+				xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, x, y + medal->pip_step * i, 1);
 		}
 	}
 
@@ -1600,23 +1600,23 @@ static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 		int16_t text_height;
 		int16_t text_step;
 
-		lrect_Copy_Rect(&tr, (Rect*)&medal->text_rect);
+		xrect_Copy_Rect(&tr, (Rect*)&medal->text_rect);
 		/* TIE95 uses fixed 8/9-pixel spacing; TIE98 advances by font height. */
 		if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-			text_height = lfont_Get_FontID_Height(active_spec->content_font);
+			text_height = xfont_Get_FontID_Height(active_spec->content_font);
 			text_step = text_height;
 		} else {
 			text_height = 8;
 			text_step = 9;
 		}
 		tr.bottom = tr.top + text_height;
-		lfont_Enable_FontID_Shadow(active_spec->content_font);
-		lfont_Print_Centered_Text(name1, &tr, 15, active_spec->content_font);
+		xfont_Enable_FontID_Shadow(active_spec->content_font);
+		xfont_Print_Centered_Text(name1, &tr, 15, active_spec->content_font);
 		if (string[0]) {
-			lrect_Offset_Rect(&tr, 0, text_step);
-			lfont_Print_Centered_Text(string, &tr, 15, active_spec->content_font);
+			xrect_Offset_Rect(&tr, 0, text_step);
+			xfont_Print_Centered_Text(string, &tr, 15, active_spec->content_font);
 		}
-		lfont_Disable_FontID_Shadow(active_spec->content_font);
+		xfont_Disable_FontID_Shadow(active_spec->content_font);
 	}
 }
 
@@ -1638,7 +1638,7 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 	if (key) {
 		/* ESC → select cancel button */
 		if (key == 27) {
-			linpattr_Selected_Input(cancel_input);
+			xinpattr_Selected_Input(cancel_input);
 			return 1;
 		}
 		/* TIE98 consumes other keys while its options page is active. */
@@ -1659,17 +1659,17 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 		new_mode = 0;
 		if (computer_mode == COMP_MODE_MEDALS && pilot_medal_type[pilot_medal_page] == 2) {
 			if (pilot_medal_status[pilot_medal_page]) {
-				if (lrect_Point_In_Rect((Rect*)&active_spec->medal_hover[0], x, y))
+				if (xrect_Point_In_Rect((Rect*)&active_spec->medal_hover[0], x, y))
 					new_mode = 1;
 			}
 			if (pilot_medal_bonus_status[pilot_medal_page]) {
-				if (lrect_Point_In_Rect((Rect*)&active_spec->medal_hover[1], x, y))
+				if (xrect_Point_In_Rect((Rect*)&active_spec->medal_hover[1], x, y))
 					new_mode = 2;
 			}
 		}
 		if (new_mode != pilot_medal_text) {
 			pilot_medal_text = new_mode;
-			lview_Refresh_View();
+			xview_Refresh_View();
 		}
 		return 1;
 	}
@@ -1680,7 +1680,7 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 	/* Click: check tab switching */
 	new_mode = computer_mode;
 	for (i = 0; i < 4; i++) {
-		if (lrect_Point_In_Rect((Rect*)&computer_mode_rect[i], x + r->left, y + r->top)) {
+		if (xrect_Point_In_Rect((Rect*)&computer_mode_rect[i], x + r->left, y + r->top)) {
 			shipext_Get_Pilot_Name(name, sizeof(name));
 			if (i == 3 || name[0])
 				new_mode = i;
@@ -1705,23 +1705,23 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 		/* Tab switch: hide old mode's widgets */
 		switch (computer_mode) {
 			case COMP_MODE_MEDALS:
-				lpal_Screen_To_Dest_Palette(0, 0, 255);
+				xpal_Screen_To_Dest_Palette(0, 0, 255);
 				for (i = 0; i < 4; i++)
-					lpal_Set_Dest_Palette(computer_palettes[active_spec->resources->palette_slot[i]]);
-				lfade_Start_Full_Fade(FADE_WIPE_INSTANT, FADE_COLOR_CROSSFADE, 1, 0, 0);
-				linpattr_Hide_Input(next_info_input);
-				linpattr_Hide_Input(last_info_input);
+					xpal_Set_Dest_Palette(computer_palettes[active_spec->resources->palette_slot[i]]);
+				xfade_Start_Full_Fade(FADE_WIPE_INSTANT, FADE_COLOR_CROSSFADE, 1, 0, 0);
+				xinpattr_Hide_Input(next_info_input);
+				xinpattr_Hide_Input(last_info_input);
 				break;
 			case COMP_MODE_RECORD:
-				linpattr_Hide_Input(next_info_input);
-				linpattr_Hide_Input(last_info_input);
+				xinpattr_Hide_Input(next_info_input);
+				xinpattr_Hide_Input(last_info_input);
 				break;
 			case COMP_MODE_BACKUP:
-				linpattr_Hide_Input(backup_input);
-				linpattr_Hide_Input(restore_input);
+				xinpattr_Hide_Input(backup_input);
+				xinpattr_Hide_Input(restore_input);
 				break;
 			case COMP_MODE_OPTIONS:
-				linpattr_Hide_Input(open_options_input);
+				xinpattr_Hide_Input(open_options_input);
 				break;
 			default:
 				break;
@@ -1733,26 +1733,26 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 		switch (new_mode) {
 			case COMP_MODE_MEDALS:
 				Set_Computer_Medal_Palette();
-				linpattr_Show_Input(next_info_input);
-				linpattr_Show_Input(last_info_input);
+				xinpattr_Show_Input(next_info_input);
+				xinpattr_Show_Input(last_info_input);
 				break;
 			case COMP_MODE_RECORD:
-				linpattr_Show_Input(next_info_input);
-				linpattr_Show_Input(last_info_input);
+				xinpattr_Show_Input(next_info_input);
+				xinpattr_Show_Input(last_info_input);
 				break;
 			case COMP_MODE_BACKUP:
 				if (!pilot_record.exit_status)
-					linpattr_Show_Input(backup_input);
-				linpattr_Show_Input(restore_input);
+					xinpattr_Show_Input(backup_input);
+				xinpattr_Show_Input(restore_input);
 				break;
 			case COMP_MODE_OPTIONS:
-				linpattr_Show_Input(open_options_input);
+				xinpattr_Show_Input(open_options_input);
 				break;
 			default:
 				break;
 		}
 
-		lview_Refresh_View();
+		xview_Refresh_View();
 	}
 
 	return 1;
@@ -1772,12 +1772,12 @@ static void iuser_Computer(Input* input, int32_t time) {
 		if (input->var2) {
 			if (input->var1 < active_spec->exit_limit) {
 				input->var1 += active_spec->exit_step;
-				lview_Refresh_View();
+				xview_Refresh_View();
 			}
 			input->var2 = 0;
 		} else if (input->var1) {
 			input->var1 -= active_spec->exit_step;
-			lview_Refresh_View();
+			xview_Refresh_View();
 		}
 		return;
 	}
@@ -1787,14 +1787,14 @@ static void iuser_Computer(Input* input, int32_t time) {
 
 	/* OK/Cancel buttons: restore palette on button-down with id 2 (cancel) */
 	if (time == 1 && input->id == 2) {
-		screen_pal = lpal_Get_Screen_Palette();
-		lpal_Copy_Palette(screen_pal, computer_palette, 0, 32, 0);
-		lpal_Put_Screen_Pal_Range(0, 32);
+		screen_pal = xpal_Get_Screen_Palette();
+		xpal_Copy_Palette(screen_pal, computer_palette, 0, 32, 0);
+		xpal_Put_Screen_Pal_Range(0, 32);
 		for (i = 0; i < 4; i++)
-			lpal_Set_Screen_Palette(computer_palettes[active_spec->resources->palette_slot[i]]);
+			xpal_Set_Screen_Palette(computer_palettes[active_spec->resources->palette_slot[i]]);
 	}
 
-	if (linpattr_Get_Input_Selected(input)) {
+	if (xinpattr_Get_Input_Selected(input)) {
 		if (input->id == 1) {
 			/* Exit to DOS — confirm via deferred sub-dialog. The
 			 * handler sets input->var1 = 1 + computer_display = 0
@@ -1806,11 +1806,11 @@ static void iuser_Computer(Input* input, int32_t time) {
 			input->var1 = 1;
 			computer_display = 0;
 		}
-		lview_Refresh_View();
+		xview_Refresh_View();
 	} else if (input->var1 == 1) {
 		/* Post-selection cleanup: restore palette, signal dialog exit */
-		lpal_Set_Screen_Palette(computer_palette);
-		ldialog_Set_Dialog_Exit(input->id);
+		xpal_Set_Screen_Palette(computer_palette);
+		xdialog_Set_Dialog_Exit(input->id);
 	}
 }
 
@@ -1835,7 +1835,7 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 	switch (input->id) {
 		case 0:
 			/* Main background */
-			lpaint_Paint_Clipped_Rect(r, 0);
+			xpaint_Paint_Clipped_Rect(r, 0);
 			if (!computer_display)
 				break;
 
@@ -1866,8 +1866,8 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 								rank_state = j + 2;
 						}
 						if (rank_state >= 0) {
-							lactor_Set_Actor_State(computer_actors[7], rank_state, 0);
-							lactanim_Draw_Anim_Actor(computer_actors[7], r, clip_r, 0, 0, 1);
+							xactor_Set_Actor_State(computer_actors[7], rank_state, 0);
+							xactanim_Draw_Anim_Actor(computer_actors[7], r, clip_r, 0, 0, 1);
 						}
 					}
 
@@ -1882,8 +1882,8 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 						for (j = 0; j < 6; j++) {
 							rank_state = pilot_record.secret_order_rank - 7 - j;
 							if (rank_state >= 0) {
-								lactor_Set_Actor_State(medal_actor2[k + 4], rank_state, 0);
-								lactanim_Draw_Anim_Actor(medal_actor2[k + 4], r, clip_r, 0, 0, 1);
+								xactor_Set_Actor_State(medal_actor2[k + 4], rank_state, 0);
+								xactanim_Draw_Anim_Actor(medal_actor2[k + 4], r, clip_r, 0, 0, 1);
 							}
 						}
 					}
@@ -1892,11 +1892,11 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 				/* Draw actor: use shifted version (actor i+2) for the medal display overlay,
 				 * except when on medals tab with no battle medal */
 				if (i == 2 && (computer_mode || pilot_medal_type[pilot_medal_page])) {
-					lactdelt_Draw_Delta_Actor(computer_actors[i + 2], r, clip_r,
+					xactdelt_Draw_Delta_Actor(computer_actors[i + 2], r, clip_r,
 											  scroll_x + active_spec->actor_x[i] - 41,
 											  scroll_y + active_spec->actor_y[i], 1);
 				} else {
-					lactdelt_Draw_Delta_Actor(computer_actors[i], r, clip_r,
+					xactdelt_Draw_Delta_Actor(computer_actors[i], r, clip_r,
 											  scroll_x + active_spec->actor_x[i],
 											  scroll_y + active_spec->actor_y[i], 1);
 				}
@@ -1904,9 +1904,9 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 
 			/* Draw tab indicators */
 			for (i = 0; i < 4; i++) {
-				lactor_Set_Actor_State(computer_actors[6], active_spec->tab_icon_state[i][computer_mode == i],
+				xactor_Set_Actor_State(computer_actors[6], active_spec->tab_icon_state[i][computer_mode == i],
 									   0);
-				lactanim_Draw_Anim_Actor(computer_actors[6], r, clip_r, 0, 0, 1);
+				xactanim_Draw_Anim_Actor(computer_actors[6], r, clip_r, 0, 0, 1);
 			}
 
 			/* Tab labels */
@@ -1914,33 +1914,33 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 
 			/* Options tab (always accessible) */
 			tab_color = (computer_mode == COMP_MODE_OPTIONS) ? 14 : 15;
-			lfont_Print_Clipped_Text(textext_Get_Text(txtCompModeOptions), active_spec->tab_x[3],
+			xfont_Print_Clipped_Text(textext_Get_Text(txtCompModeOptions), active_spec->tab_x[3],
 									 active_spec->tab_y, active_spec->tab_font, tab_color);
 
 			/* Medals tab */
 			if (name[0] && pilot_medal_num_pages) {
 				tab_color = (computer_mode == COMP_MODE_MEDALS) ? 14 : 15;
-				lfont_Print_Clipped_Text(textext_Get_Text(txtCompModeMedals), active_spec->tab_x[0],
+				xfont_Print_Clipped_Text(textext_Get_Text(txtCompModeMedals), active_spec->tab_x[0],
 										 active_spec->tab_y, active_spec->tab_font, tab_color);
 			} else {
-				lfont_Print_Clipped_Text(textext_Get_Text(txtCompModeMedals), active_spec->tab_x[0],
+				xfont_Print_Clipped_Text(textext_Get_Text(txtCompModeMedals), active_spec->tab_x[0],
 										 active_spec->tab_y, active_spec->tab_font, 20);
 			}
 
 			/* Record + Backup tabs */
 			if (name[0]) {
 				tab_color = (computer_mode == COMP_MODE_RECORD) ? 14 : 15;
-				lfont_Print_Clipped_Text(textext_Get_Text(txtCompModeRecord), active_spec->tab_x[1],
+				xfont_Print_Clipped_Text(textext_Get_Text(txtCompModeRecord), active_spec->tab_x[1],
 										 active_spec->tab_y, active_spec->tab_font, tab_color);
 
 				tab_color = (computer_mode == COMP_MODE_BACKUP) ? 14 : 15;
-				lfont_Print_Clipped_Text(textext_Get_Text(txtCompModeBackup), active_spec->tab_x[2],
+				xfont_Print_Clipped_Text(textext_Get_Text(txtCompModeBackup), active_spec->tab_x[2],
 										 active_spec->tab_y, active_spec->tab_font, tab_color);
 			} else {
 				/* Greyed out (no pilot loaded) */
-				lfont_Print_Clipped_Text(textext_Get_Text(txtCompModeRecord), active_spec->tab_x[1],
+				xfont_Print_Clipped_Text(textext_Get_Text(txtCompModeRecord), active_spec->tab_x[1],
 										 active_spec->tab_y, active_spec->tab_font, 20);
-				lfont_Print_Clipped_Text(textext_Get_Text(txtCompModeBackup), active_spec->tab_x[2],
+				xfont_Print_Clipped_Text(textext_Get_Text(txtCompModeBackup), active_spec->tab_x[2],
 										 active_spec->tab_y, active_spec->tab_font, 20);
 			}
 			break;
@@ -1950,8 +1950,8 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 			if (!computer_display)
 				break;
 			btn = (PushButton*)input;
-			lactor_Set_Actor_State(computer_actors[5], active_spec->action_button_state[0][btn->pressed], 0);
-			lactanim_Draw_Anim_Actor(computer_actors[5], r, clip_r, 0, 0, 1);
+			xactor_Set_Actor_State(computer_actors[5], active_spec->action_button_state[0][btn->pressed], 0);
+			xactanim_Draw_Anim_Actor(computer_actors[5], r, clip_r, 0, 0, 1);
 			break;
 
 		case 2:
@@ -1959,8 +1959,8 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 			if (!computer_display)
 				break;
 			btn = (PushButton*)input;
-			lactor_Set_Actor_State(computer_actors[5], active_spec->action_button_state[1][btn->pressed], 0);
-			lactanim_Draw_Anim_Actor(computer_actors[5], r, clip_r, 0, 0, 1);
+			xactor_Set_Actor_State(computer_actors[5], active_spec->action_button_state[1][btn->pressed], 0);
+			xactanim_Draw_Anim_Actor(computer_actors[5], r, clip_r, 0, 0, 1);
 			break;
 
 		case 3:
@@ -1968,11 +1968,11 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 			if (!computer_display)
 				break;
 			btn = (PushButton*)input;
-			lpaint_Paint_Clipped_Rect(r, btn->pressed ? 38 : 16);
-			lfont_Print_Centered_Text(textext_Get_Text(txtCompBackBackup), (Rect*)&backup_rect[5], 14,
+			xpaint_Paint_Clipped_Rect(r, btn->pressed ? 38 : 16);
+			xfont_Print_Centered_Text(textext_Get_Text(txtCompBackBackup), (Rect*)&backup_rect[5], 14,
 									  active_spec->content_font);
-			if (linpattr_Is_Input_Dirty(input))
-				ldirty_Dirty_Rect(clip_r);
+			if (xinpattr_Is_Input_Dirty(input))
+				xdirty_Dirty_Rect(clip_r);
 			break;
 
 		case 4:
@@ -1980,11 +1980,11 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 			if (!computer_display)
 				break;
 			btn = (PushButton*)input;
-			lpaint_Paint_Clipped_Rect(r, btn->pressed ? 38 : 16);
-			lfont_Print_Centered_Text(textext_Get_Text(txtCompBackRestore), (Rect*)&backup_rect[6], 14,
+			xpaint_Paint_Clipped_Rect(r, btn->pressed ? 38 : 16);
+			xfont_Print_Centered_Text(textext_Get_Text(txtCompBackRestore), (Rect*)&backup_rect[6], 14,
 									  active_spec->content_font);
-			if (linpattr_Is_Input_Dirty(input))
-				ldirty_Dirty_Rect(clip_r);
+			if (xinpattr_Is_Input_Dirty(input))
+				xdirty_Dirty_Rect(clip_r);
 			break;
 
 		case 5:
@@ -1992,11 +1992,11 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 			if (!computer_display || computer_mode != COMP_MODE_OPTIONS)
 				break;
 			btn = (PushButton*)input;
-			lpaint_Paint_Clipped_Rect(r, btn->pressed ? 38 : 16);
-			lpaint_Frame_Clipped_Rect(r, 38);
-			lfont_Print_Centered_Text("OpenTIE Options", r, 14, active_spec->content_font);
-			if (linpattr_Is_Input_Dirty(input))
-				ldirty_Dirty_Rect(clip_r);
+			xpaint_Paint_Clipped_Rect(r, btn->pressed ? 38 : 16);
+			xpaint_Frame_Clipped_Rect(r, 38);
+			xfont_Print_Centered_Text("OpenTIE Options", r, 14, active_spec->content_font);
+			if (xinpattr_Is_Input_Dirty(input))
+				xdirty_Dirty_Rect(clip_r);
 			break;
 	}
 
@@ -2021,31 +2021,31 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 		if (input->var1 && pilot_record.secret_order_rank) {
 			int16_t line_step = active_spec->surface_set == LANDRU_SURFACE_SVGA ? 20 : 10;
 
-			lrect_Copy_Rect(&tr, (Rect*)&active_spec->secret_rect);
-			lpaint_Paint_Clipped_Rect(&tr, 1);
-			lpaint_Frame_Clipped_Rect(&tr, 16);
-			lfont_Enable_FontID_Shadow(0);
+			xrect_Copy_Rect(&tr, (Rect*)&active_spec->secret_rect);
+			xpaint_Paint_Clipped_Rect(&tr, 1);
+			xpaint_Frame_Clipped_Rect(&tr, 16);
+			xfont_Enable_FontID_Shadow(0);
 
 			tr.top += active_spec->surface_set == LANDRU_SURFACE_SVGA ? 10 : 2;
 			tr.bottom = tr.top + line_step;
 			if (pilot_record.secret_order_rank > 6)
-				lfont_Print_Centered_Text(
+				xfont_Print_Centered_Text(
 					textext_Get_Text(pilot_record.secret_order_rank + txtComp2Secret7 - 7), &tr, 15,
 					active_spec->content_font);
 			else
-				lfont_Print_Centered_Text(
+				xfont_Print_Centered_Text(
 					textext_Get_Text(pilot_record.secret_order_rank + txtCompSecret1 - 1), &tr, 15,
 					active_spec->content_font);
 
 			tr.top = tr.bottom;
 			tr.bottom = tr.top + line_step;
-			lfont_Print_Centered_Text(textext_Get_Text(txtCompSecretOrder), &tr, 15,
+			xfont_Print_Centered_Text(textext_Get_Text(txtCompSecretOrder), &tr, 15,
 									  active_spec->content_font);
-			lfont_Disable_FontID_Shadow(0);
+			xfont_Disable_FontID_Shadow(0);
 		}
 
-		if (linpattr_Is_Input_Dirty(input))
-			ldirty_Dirty_Rect(clip_r);
+		if (xinpattr_Is_Input_Dirty(input))
+			xdirty_Dirty_Rect(clip_r);
 	}
 }
 
@@ -2059,60 +2059,60 @@ static Input* Build_Computer_Dialog(void) {
 	Rect r;
 	Input *parent, *inp;
 
-	lrect_Set_Rect(&r, 0, 0, active_spec->width, active_spec->height);
-	parent = linput_Alloc_Dialog_Input(NULL, &r, 0, 0);
-	linpattr_Set_Input_Draw_Function(parent, idraw_Computer);
-	linpattr_Set_Input_User_Function(parent, iuser_Computer);
-	linpattr_Set_Input_Update_Function(parent, iupdate_Computer);
-	linpattr_Show_Input(parent);
+	xrect_Set_Rect(&r, 0, 0, active_spec->width, active_spec->height);
+	parent = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
+	xinpattr_Set_Input_Draw_Function(parent, idraw_Computer);
+	xinpattr_Set_Input_User_Function(parent, iuser_Computer);
+	xinpattr_Set_Input_Update_Function(parent, iupdate_Computer);
+	xinpattr_Show_Input(parent);
 	parent->mouseUsage = allInput;
 	parent->id = 0;
 
 	/* Next Page button (for medals/record) */
-	lrect_Copy_Rect(&r, (Rect*)&active_spec->next_rect);
-	inp = (Input*)lbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Info, NULL, 0);
-	linpattr_Set_Input_Draw_Function(inp, idraw_Computer_Info);
-	linpattr_Hide_Input(inp);
+	xrect_Copy_Rect(&r, (Rect*)&active_spec->next_rect);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Info, NULL, 0);
+	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer_Info);
+	xinpattr_Hide_Input(inp);
 	next_info_input = inp;
 
 	/* Last Page button */
-	lrect_Copy_Rect(&r, (Rect*)&active_spec->last_rect);
-	inp = (Input*)lbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Info, NULL, 1);
-	linpattr_Set_Input_Draw_Function(inp, idraw_Computer_Info);
-	linpattr_Hide_Input(inp);
+	xrect_Copy_Rect(&r, (Rect*)&active_spec->last_rect);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Info, NULL, 1);
+	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer_Info);
+	xinpattr_Hide_Input(inp);
 	last_info_input = inp;
 
 	/* Backup button */
-	lrect_Copy_Rect(&r, (Rect*)&backup_rect[5]);
-	lrect_Inset_Rect(&r, 1, 1);
-	inp = (Input*)lbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Backup, NULL, 3);
-	linpattr_Set_Input_Draw_Function(inp, idraw_Computer);
-	linpattr_Hide_Input(inp);
+	xrect_Copy_Rect(&r, (Rect*)&backup_rect[5]);
+	xrect_Inset_Rect(&r, 1, 1);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Backup, NULL, 3);
+	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer);
+	xinpattr_Hide_Input(inp);
 	backup_input = inp;
 
 	/* Restore button */
-	lrect_Copy_Rect(&r, (Rect*)&backup_rect[6]);
-	lrect_Inset_Rect(&r, 1, 1);
-	inp = (Input*)lbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Backup, NULL, 4);
-	linpattr_Set_Input_Draw_Function(inp, idraw_Computer);
-	linpattr_Hide_Input(inp);
+	xrect_Copy_Rect(&r, (Rect*)&backup_rect[6]);
+	xrect_Inset_Rect(&r, 1, 1);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Backup, NULL, 4);
+	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer);
+	xinpattr_Hide_Input(inp);
 	restore_input = inp;
 
 	/* Modern options button; COMPUTER starts on the Options tab. */
-	lrect_Copy_Rect(&r, (Rect*)&active_spec->open_options_rect);
-	inp = (Input*)lbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Open_Options, NULL, 5);
-	linpattr_Set_Input_Draw_Function(inp, idraw_Computer);
+	xrect_Copy_Rect(&r, (Rect*)&active_spec->open_options_rect);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Open_Options, NULL, 5);
+	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer);
 	open_options_input = inp;
 
 	/* OK button (id=1, Exit to DOS) */
-	lrect_Copy_Rect(&r, (Rect*)&active_spec->exit_rect);
-	inp = (Input*)lbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer, NULL, 1);
-	linpattr_Set_Input_Draw_Function(inp, idraw_Computer);
+	xrect_Copy_Rect(&r, (Rect*)&active_spec->exit_rect);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer, NULL, 1);
+	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer);
 
 	/* Cancel button (id=2, Accept/Save) */
-	lrect_Copy_Rect(&r, (Rect*)&active_spec->accept_rect);
-	inp = (Input*)lbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer, NULL, 2);
-	linpattr_Set_Input_Draw_Function(inp, idraw_Computer);
+	xrect_Copy_Rect(&r, (Rect*)&active_spec->accept_rect);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer, NULL, 2);
+	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer);
 	cancel_input = inp;
 
 	return parent;
@@ -2134,76 +2134,76 @@ typedef struct ComputerTask {
 
 static void computer_release_resources(ComputerTask* t) {
 	if (t->the_dialog) {
-		linput_Free_Inputs(t->the_dialog);
+		xinput_Free_Inputs(t->the_dialog);
 		t->the_dialog = NULL;
 	}
 
 	for (int16_t i = 0; i < 14; ++i) {
 		if (medal_actor[i]) {
-			lactor_Free_Actor_From_System(medal_actor[i]);
-			lactor_Free_Actor(medal_actor[i]);
+			xactor_Free_Actor_From_System(medal_actor[i]);
+			xactor_Free_Actor(medal_actor[i]);
 			medal_actor[i] = NULL;
 		}
 	}
 	for (int16_t i = 0; i < 10; ++i) {
 		if (medal_actor2[i]) {
-			lactor_Free_Actor_From_System(medal_actor2[i]);
-			lactor_Free_Actor(medal_actor2[i]);
+			xactor_Free_Actor_From_System(medal_actor2[i]);
+			xactor_Free_Actor(medal_actor2[i]);
 			medal_actor2[i] = NULL;
 		}
 	}
 	for (int16_t i = 0; i < 8; ++i) {
 		if (computer_actors[i]) {
-			lactor_Free_Actor_From_System(computer_actors[i]);
-			lactor_Free_Actor(computer_actors[i]);
+			xactor_Free_Actor_From_System(computer_actors[i]);
+			xactor_Free_Actor(computer_actors[i]);
 			computer_actors[i] = NULL;
 		}
 	}
 	for (int16_t i = 0; i < 4; ++i) {
 		if (medal_palette[i]) {
-			lpal_Free_Palette_From_System(medal_palette[i]);
-			lpal_Free_Palette(medal_palette[i]);
+			xpal_Free_Palette_From_System(medal_palette[i]);
+			xpal_Free_Palette(medal_palette[i]);
 			medal_palette[i] = NULL;
 		}
 	}
 	for (int16_t i = 0; i < 5; ++i) {
 		if (computer_palettes[i]) {
-			lpal_Free_Palette_From_System(computer_palettes[i]);
-			lpal_Free_Palette(computer_palettes[i]);
+			xpal_Free_Palette_From_System(computer_palettes[i]);
+			xpal_Free_Palette(computer_palettes[i]);
 			computer_palettes[i] = NULL;
 		}
 	}
 	if (medal_palette2[0]) {
-		lpal_Free_Palette_From_System(medal_palette2[0]);
-		lpal_Free_Palette(medal_palette2[0]);
+		xpal_Free_Palette_From_System(medal_palette2[0]);
+		xpal_Free_Palette(medal_palette2[0]);
 		medal_palette2[0] = NULL;
 	}
 	if (medal_palette3[0]) {
-		lpal_Free_Palette_From_System(medal_palette3[0]);
-		lpal_Free_Palette(medal_palette3[0]);
+		xpal_Free_Palette_From_System(medal_palette3[0]);
+		xpal_Free_Palette(medal_palette3[0]);
 		medal_palette3[0] = NULL;
 	}
 	if (computer_palette) {
-		lpal_Free_Palette(computer_palette);
+		xpal_Free_Palette(computer_palette);
 		computer_palette = NULL;
 	}
 	if (t->spec->surface_set == LANDRU_SURFACE_SVGA) {
-		(void)lsurface_Select_Surface_Set(t->saved_surface_set);
-		lview_Set_View_Frame(0, &t->saved_view_frame);
-		lview_Set_Full_View_Clip_Frame(&t->saved_view_clip);
+		(void)xsurface_Select_Surface_Set(t->saved_surface_set);
+		xview_Set_View_Frame(0, &t->saved_view_frame);
+		xview_Set_Full_View_Clip_Frame(&t->saved_view_clip);
 	}
 }
 
 static LandruTaskStepResult computer_setup_failed(ComputerTask* t, ResFile* open_resource,
 												  const char* resource) {
 	if (open_resource)
-		lres_Close_Resource(open_resource);
+		xres_Close_Resource(open_resource);
 	TieDiagnostics_Log(TIE_LOG_ERROR, "[COMPUTER] missing frontend resource: %s\n",
 					   resource ? resource : "unknown");
 	computer_release_resources(t);
 	shellext_Set_Prefs_Sound();
-	lsound_Resume_Sounds();
-	lerror_Set_Landru_Error(6);
+	xsound_Resume_Sounds();
+	xerror_Set_Landru_Error(6);
 	return LANDRU_TASK_STEP_DONE;
 }
 
@@ -2219,17 +2219,17 @@ static LandruTaskStepResult computer_task_step(void* self) {
 		Rect r;
 		int16_t i;
 
-		lsound_Pause_Sounds();
-		lio_Clear_Key();
+		xsound_Pause_Sounds();
+		xio_Clear_Key();
 		active_spec = t->spec;
 		if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-			t->saved_surface_set = lsurface_Get_Surface_Set();
-			lview_Get_View_Frame(0, &t->saved_view_frame);
-			lview_Get_Full_View_Clip_Frame(&t->saved_view_clip);
-			(void)lsurface_Select_Surface_Set(active_spec->surface_set);
-			lrect_Set_Rect(&r, 0, 0, active_spec->width, active_spec->height);
-			lview_Set_View_Frame(0, &r);
-			lview_Set_Full_View_Clip_Frame(&r);
+			t->saved_surface_set = xsurface_Get_Surface_Set();
+			xview_Get_View_Frame(0, &t->saved_view_frame);
+			xview_Get_Full_View_Clip_Frame(&t->saved_view_clip);
+			(void)xsurface_Select_Surface_Set(active_spec->surface_set);
+			xrect_Set_Rect(&r, 0, 0, active_spec->width, active_spec->height);
+			xview_Set_View_Frame(0, &r);
+			xview_Set_Full_View_Clip_Frame(&r);
 		}
 
 		restore_pilot = 0;
@@ -2248,113 +2248,113 @@ static LandruTaskStepResult computer_task_step(void* self) {
 		medal_palette3[0] = NULL;
 		computer_palette = NULL;
 
-		computer_palette = lpal_Alloc_Palette(0, 256);
-		src_palette = lpal_Get_Screen_Palette();
+		computer_palette = xpal_Alloc_Palette(0, 256);
+		src_palette = xpal_Get_Screen_Palette();
 		if (!computer_palette || !src_palette)
 			return computer_setup_failed(t, NULL, "computer palette");
-		lpal_Copy_Palette(computer_palette, src_palette, 0, 256, 0);
+		xpal_Copy_Palette(computer_palette, src_palette, 0, 256, 0);
 
 		res_file = shellext_Open_Empire_Resource(resources->archive);
 		if (!res_file)
 			return computer_setup_failed(t, NULL, resources->archive);
-		lrect_Set_Rect(&r, 0, 0, active_spec->width, active_spec->height);
+		xrect_Set_Rect(&r, 0, 0, active_spec->width, active_spec->height);
 
 		for (i = 0; i < 5; i++) {
-			computer_actors[i] = lactdelt_Res_Delta_Actor(resources->delta[i], &r, 0, 0, 0);
+			computer_actors[i] = xactdelt_Res_Delta_Actor(resources->delta[i], &r, 0, 0, 0);
 			if (!computer_actors[i])
 				return computer_setup_failed(t, res_file, resources->delta[i]);
-			lactor_Set_Actor_Time(computer_actors[i], 0, 0);
+			xactor_Set_Actor_Time(computer_actors[i], 0, 0);
 		}
 		for (i = 0; i < 3; i++) {
-			computer_actors[i + 5] = lactanim_Res_Anim_Actor(resources->anim[i], &r, 0, 0, 0);
+			computer_actors[i + 5] = xactanim_Res_Anim_Actor(resources->anim[i], &r, 0, 0, 0);
 			if (!computer_actors[i + 5])
 				return computer_setup_failed(t, res_file, resources->anim[i]);
-			lactor_Set_Actor_Time(computer_actors[i + 5], 0, 0);
+			xactor_Set_Actor_Time(computer_actors[i + 5], 0, 0);
 		}
 		for (i = 0; i < 4; i++) {
 			uint8_t slot = resources->palette_slot[i];
-			computer_palettes[slot] = lpal_Res_Palette(resources->palette[i]);
+			computer_palettes[slot] = xpal_Res_Palette(resources->palette[i]);
 			if (!computer_palettes[slot])
 				return computer_setup_failed(t, res_file, resources->palette[i]);
 		}
-		lpal_Set_Screen_RGB(0, 255, 0, 0, 0);
-		lres_Close_Resource(res_file);
+		xpal_Set_Screen_RGB(0, 255, 0, 0, 0);
+		xres_Close_Resource(res_file);
 
 		res_file = shellext_Open_Empire_Resource(resources->awards_archive);
 		if (!res_file)
 			return computer_setup_failed(t, NULL, resources->awards_archive);
 		for (i = 0; i < 14; i++) {
 			if (i >= 8)
-				medal_actor[i] = lactdelt_Res_Delta_Actor(resources->award_actor[i], &r, 0, 0, 0);
+				medal_actor[i] = xactdelt_Res_Delta_Actor(resources->award_actor[i], &r, 0, 0, 0);
 			else
-				medal_actor[i] = lactanim_Res_Anim_Actor(resources->award_actor[i], &r, 0, 0, 0);
+				medal_actor[i] = xactanim_Res_Anim_Actor(resources->award_actor[i], &r, 0, 0, 0);
 			if (!medal_actor[i])
 				return computer_setup_failed(t, res_file, resources->award_actor[i]);
 		}
 		for (i = 0; i < 4; i++) {
-			medal_palette[i] = lpal_Res_Palette(resources->award_palette[i]);
+			medal_palette[i] = xpal_Res_Palette(resources->award_palette[i]);
 			if (!medal_palette[i])
 				return computer_setup_failed(t, res_file, resources->award_palette[i]);
 		}
-		lres_Close_Resource(res_file);
+		xres_Close_Resource(res_file);
 
 		if (shipext_Is_Mission_Disk1()) {
 			res_file = shellext_Open_Empire_Resource(resources->awards1_archive);
 			if (!res_file)
 				return computer_setup_failed(t, NULL, resources->awards1_archive);
-			medal_actor2[0] = lactanim_Res_Anim_Actor(resources->awards1[0], &r, 0, 0, 0);
-			medal_actor2[1] = lactanim_Res_Anim_Actor(resources->awards1[1], &r, 0, 0, 0);
-			medal_actor2[2] = lactanim_Res_Anim_Actor(resources->awards1[2], &r, 0, 0, 0);
-			medal_actor2[3] = lactanim_Res_Anim_Actor(resources->awards1[4], &r, 0, 0, 0);
-			medal_actor2[4] = lactanim_Res_Anim_Actor(resources->awards1[5], &r, 0, 0, 0);
+			medal_actor2[0] = xactanim_Res_Anim_Actor(resources->awards1[0], &r, 0, 0, 0);
+			medal_actor2[1] = xactanim_Res_Anim_Actor(resources->awards1[1], &r, 0, 0, 0);
+			medal_actor2[2] = xactanim_Res_Anim_Actor(resources->awards1[2], &r, 0, 0, 0);
+			medal_actor2[3] = xactanim_Res_Anim_Actor(resources->awards1[4], &r, 0, 0, 0);
+			medal_actor2[4] = xactanim_Res_Anim_Actor(resources->awards1[5], &r, 0, 0, 0);
 			if (resources->load_expansion_palette)
-				medal_palette2[0] = lpal_Res_Palette(resources->awards1[3]);
+				medal_palette2[0] = xpal_Res_Palette(resources->awards1[3]);
 			for (i = 0; i < 5; ++i)
 				if (!medal_actor2[i])
 					return computer_setup_failed(t, res_file, resources->awards1[i < 3 ? i : i + 1]);
 			if (resources->load_expansion_palette && !medal_palette2[0])
 				return computer_setup_failed(t, res_file, resources->awards1[3]);
-			lres_Close_Resource(res_file);
+			xres_Close_Resource(res_file);
 		}
 
 		if (shipext_Is_Mission_Disk2()) {
 			res_file = shellext_Open_Empire_Resource(resources->awards2_archive);
 			if (!res_file)
 				return computer_setup_failed(t, NULL, resources->awards2_archive);
-			medal_actor2[5] = lactanim_Res_Anim_Actor(resources->awards2[0], &r, 0, 0, 0);
-			medal_actor2[6] = lactanim_Res_Anim_Actor(resources->awards2[1], &r, 0, 0, 0);
-			medal_actor2[7] = lactanim_Res_Anim_Actor(resources->awards2[2], &r, 0, 0, 0);
-			medal_actor2[8] = lactanim_Res_Anim_Actor(resources->awards2[4], &r, 0, 0, 0);
-			medal_actor2[9] = lactanim_Res_Anim_Actor(resources->awards2[5], &r, 0, 0, 0);
+			medal_actor2[5] = xactanim_Res_Anim_Actor(resources->awards2[0], &r, 0, 0, 0);
+			medal_actor2[6] = xactanim_Res_Anim_Actor(resources->awards2[1], &r, 0, 0, 0);
+			medal_actor2[7] = xactanim_Res_Anim_Actor(resources->awards2[2], &r, 0, 0, 0);
+			medal_actor2[8] = xactanim_Res_Anim_Actor(resources->awards2[4], &r, 0, 0, 0);
+			medal_actor2[9] = xactanim_Res_Anim_Actor(resources->awards2[5], &r, 0, 0, 0);
 			if (resources->load_expansion_palette)
-				medal_palette3[0] = lpal_Res_Palette(resources->awards2[3]);
+				medal_palette3[0] = xpal_Res_Palette(resources->awards2[3]);
 			for (i = 5; i < 10; ++i)
 				if (!medal_actor2[i])
 					return computer_setup_failed(t, res_file, resources->awards2[i < 8 ? i - 5 : i - 4]);
 			if (resources->load_expansion_palette && !medal_palette3[0])
 				return computer_setup_failed(t, res_file, resources->awards2[3]);
-			lres_Close_Resource(res_file);
+			xres_Close_Resource(res_file);
 		}
 
 		t->the_dialog = Build_Computer_Dialog();
 		if (!t->the_dialog)
 			return computer_setup_failed(t, NULL, "computer dialog");
-		ldialog_Push_Dialog_View_Task(t->the_dialog);
+		xdialog_Push_Dialog_View_Task(t->the_dialog);
 		t->phase = COMP_TASK_PHASE_AFTER_DIALOG;
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
 	/* AFTER_DIALOG */
-	int16_t retval = ldialog_Get_Dialog_Exit();
-	ldialog_Clear_Dialog_Exit();
+	int16_t retval = xdialog_Get_Dialog_Exit();
+	xdialog_Clear_Dialog_Exit();
 
 	if (retval == 2) {
 		/* Accept: save options */
-		LandruFile* the_file = lfile_Open_File(LANDRU_FILE_ROOT_USER, "foption.cfg", "wb");
+		LandruFile* the_file = xfile_Open_File(LANDRU_FILE_ROOT_USER, "foption.cfg", "wb");
 		if (the_file) {
-			lfile_Write_Data_To_File(the_file, &options_gbl, 22);
-			lfile_Write_Long_To_File(the_file, f_res);
-			lfile_Close_File(the_file);
+			xfile_Write_Data_To_File(the_file, &options_gbl, 22);
+			xfile_Write_Long_To_File(the_file, f_res);
+			xfile_Close_File(the_file);
 		}
 
 		if (f_res == 0)
@@ -2371,26 +2371,26 @@ static LandruTaskStepResult computer_task_step(void* self) {
 			int16_t scene = shellext_Get_Cur_Scene();
 			if (scene == SCENE_REGISTER || scene == SCENE_EXIT) {
 				register_Revive_Pilot_Info();
-				retval = lerror_Get_Landru_Exit();
+				retval = xerror_Get_Landru_Exit();
 			} else {
 				retval = 110;
 			}
 		} else {
-			retval = lerror_Get_Landru_Exit();
+			retval = xerror_Get_Landru_Exit();
 		}
 	} else {
-		retval = lerror_Get_Landru_Escape();
+		retval = xerror_Get_Landru_Escape();
 	}
 
 	computer_release_resources(t);
 
 	shellext_Set_Prefs_Sound();
-	lsound_Resume_Sounds();
+	xsound_Resume_Sounds();
 
 	/* Hand the result up: the escape mechanism stores the return
 	 * from shellext_escape_TIE in landru_exit_gbl, but we run
 	 * asynchronously, so set the exit directly. */
-	lerror_Set_Landru_Exit(retval);
+	xerror_Set_Landru_Exit(retval);
 	return LANDRU_TASK_STEP_DONE;
 }
 

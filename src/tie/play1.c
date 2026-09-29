@@ -503,7 +503,7 @@ static Film* play1_film;
 static int16_t is_streaming;
 static int16_t read_state;
 static int16_t stream_actor_frames_to_go;
-static void* read_buffer;
+static LandruHandle read_buffer;
 static uint8_t use_chain_successful;
 static BitmapStruct last_frame;
 static BitmapStruct current_frame;
@@ -513,8 +513,8 @@ static void play1_user_Play_Arm(Actor* the_actor, int32_t time);
 static void play1_Make_Literal_Actor(Actor* the_actor);
 static int play1_Literal_Image(uint8_t* buffer, const uint8_t* image);
 static void play1_Update_Stream_Actor(Actor* the_actor);
-static int play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
-								   int16_t refresh);
+static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
+									   int16_t refresh);
 
 /* ------------------------------------------------------------------ */
 
@@ -535,9 +535,9 @@ static void play1_end_View(int32_t time) {
 		if (p == &play1_set_retail) {
 			next_scene = 8;
 		} else {
-			LandruFile* f = lfile_Open_File(LANDRU_FILE_ROOT_ASSET, "resource\\lobo.lfd", "rb");
+			LandruFile* f = xfile_Open_File(LANDRU_FILE_ROOT_ASSET, "resource\\lobo.lfd", "rb");
 			if (f)
-				lfile_Close_File(f);
+				xfile_Close_File(f);
 			else
 				next_scene = 8;
 		}
@@ -548,7 +548,7 @@ static void play1_end_View(int32_t time) {
 	if (shellext_Check_Scene_Exit(&scene, next_scene, skip_scene, at_end)) {
 		if (scene == 910)
 			scene = shipext_Next_Battle_Cutscene();
-		lerror_Set_Landru_Exit(scene);
+		xerror_Set_Landru_Exit(scene);
 	}
 }
 
@@ -569,7 +569,7 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 	if (film_object->id != 3)
 		return retval;
 
-	lfilm_Rewind_Actor_Film(the_film, film_object, (void*)(film_object + 1));
+	xfilm_Rewind_Actor_Film(the_film, film_object, (void*)(film_object + 1));
 	Actor* the_actor = (Actor*)film_object->object;
 
 	if (the_actor->var2 == 25)
@@ -579,18 +579,18 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 
 	if (cur_scene == SCENE_COMBAT_TRANSITION) {
 		if (the_actor->var1 == 15) {
-			lactor_Set_Actor_Draw_Function(the_actor, (lactorDrawFunc)deltadd_Draw_Delta_Add_Actor);
-			lactor_Set_Actor_Color(the_actor, 112, 0);
+			xactor_Set_Actor_Draw_Function(the_actor, deltadd_Draw_Delta_Add_Actor);
+			xactor_Set_Actor_Color(the_actor, 112, 0);
 		}
 	} else if (cur_scene == SCENE_CUT_BATTLE_270) {
 		if (the_actor->var1 == 15) {
-			lactor_Set_Actor_Draw_Function(the_actor, (lactorDrawFunc)deltadd_Draw_Delta_Add_Actor);
-			lactor_Set_Actor_Color(the_actor, 160, 0);
+			xactor_Set_Actor_Draw_Function(the_actor, deltadd_Draw_Delta_Add_Actor);
+			xactor_Set_Actor_Color(the_actor, 160, 0);
 		}
 	} else if (cur_scene == SCENE_CUT_420) {
 		if (the_actor->var1) {
 			if (the_actor->var1 == 1) {
-				lactor_Set_Actor_User_Function(the_actor, play1_user_Play_Arm);
+				xactor_Set_Actor_User_Function(the_actor, play1_user_Play_Arm);
 			} else if (shipext_Get_Secret_Medal() - 2 < the_actor->var1) {
 				retval = 1;
 			}
@@ -602,32 +602,32 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 		if (!p->stream_str[play1_id][0] || !use_chain_successful)
 			return 1;
 
-		read_buffer = malloc(STREAM_BUFFER_SIZE);
+		read_buffer = xmemhdl_Alloc_Handle(STREAM_BUFFER_SIZE, LANDRU_MEMORY_DEFAULT);
 		if (!read_buffer)
 			return 1;
 
-		lbitmap_Init_Bitmap(&last_frame);
-		lbitmap_Init_Bitmap(&current_frame);
+		xbitmap_Init_Bitmap(&last_frame);
+		xbitmap_Init_Bitmap(&current_frame);
 
-		int16_t ok = lbitmap_Alloc_Bitmap(&last_frame, 320, 200);
+		int16_t ok = xbitmap_Alloc_Bitmap(&last_frame, 320, 200);
 		if (ok)
-			ok = lbitmap_Alloc_Bitmap(&current_frame, 320, 200);
+			ok = xbitmap_Alloc_Bitmap(&current_frame, 320, 200);
 
 		if (!ok) {
-			free(read_buffer);
-			read_buffer = NULL;
-			lbitmap_Free_Bitmap(&last_frame);
-			lbitmap_Free_Bitmap(&current_frame);
+			xmemhdl_Free_Handle(read_buffer);
+			read_buffer = LANDRU_NULL_HANDLE;
+			xbitmap_Free_Bitmap(&last_frame);
+			xbitmap_Free_Bitmap(&current_frame);
 			return 1;
 		}
 
-		lbitmap_Erase_Bitmap(&last_frame);
-		lbitmap_Erase_Bitmap(&current_frame);
-		lactor_Set_Actor_Update_Function(the_actor, (lactorUpdateFunc)play1_Update_Stream_Actor);
-		lactor_Set_Actor_Draw_Function(the_actor, (lactorDrawFunc)play1_Draw_Stream_Actor);
-		lactor_Set_Actor_ZPlane(the_actor, 12700);
-		lpal_Set_Screen_RGB(0, 255, 0, 0, 0);
-		lcanvas_Erase_Canvas();
+		xbitmap_Erase_Bitmap(&last_frame);
+		xbitmap_Erase_Bitmap(&current_frame);
+		xactor_Set_Actor_Update_Function(the_actor, (xactorUpdateFunc)play1_Update_Stream_Actor);
+		xactor_Set_Actor_Draw_Function(the_actor, play1_Draw_Stream_Actor);
+		xactor_Set_Actor_ZPlane(the_actor, 12700);
+		xpal_Set_Screen_RGB(0, 255, 0, 0, 0);
+		xcanvas_Erase_Canvas();
 		textext_Clear_Text_Bounds_Rect();
 		is_streaming = 1;
 		read_state = 0;
@@ -648,9 +648,9 @@ static void play1_user_Play_Arm(Actor* the_actor, int32_t time) {
 	if (time == 0) {
 		int16_t medal = shipext_Get_Secret_Medal();
 		if (medal > 3)
-			lactor_Set_Actor_State(the_actor, 2, 0);
+			xactor_Set_Actor_State(the_actor, 2, 0);
 		else
-			lactor_Set_Actor_State(the_actor, medal - 1, 0);
+			xactor_Set_Actor_State(the_actor, medal - 1, 0);
 	}
 }
 
@@ -668,20 +668,20 @@ static void play1_user_Play_Arm(Actor* the_actor, int32_t time) {
 
 // FUNCTION: TIE 0x78800
 static void play1_Make_Literal_Actor(Actor* the_actor) {
-	BitmapStruct* canvas_bm = lcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* temp_buffer = (uint8_t*)lbitmap_Lock_Bitmap(canvas_bm);
+	BitmapStruct* canvas_bm = xcanvas_Get_Current_Canvas_Bitmap();
+	uint8_t* temp_buffer = (uint8_t*)xbitmap_Lock_Bitmap(canvas_bm);
 	memset(temp_buffer, 0, 64000);
 
 	if (the_actor->res_type == FOURCC_DELT) {
 		if (the_actor->data) {
-			uint8_t* image = (uint8_t*)the_actor->data;
+			const uint8_t* image = xmemhdl_Lock_Handle(the_actor->data);
 			int size = play1_Literal_Image(temp_buffer, image);
+			xmemhdl_Unlock_Handle(the_actor->data);
 
 			if (size > 0 && size < LITERAL_MAX_SIZE) {
-				uint8_t* new_data = malloc(size);
+				LandruHandle new_data = xmemhdl_Data_To_Handle(temp_buffer, size, LANDRU_MEMORY_DEFAULT);
 				if (new_data) {
-					memcpy(new_data, temp_buffer, size);
-					free(the_actor->data);
+					xmemhdl_Free_Handle(the_actor->data);
 					the_actor->data = new_data;
 				}
 			}
@@ -690,34 +690,35 @@ static void play1_Make_Literal_Actor(Actor* the_actor) {
 	} else {
 		int16_t num_frames = the_actor->arraySize;
 		if (the_actor->array) {
+			LandruHandle* arr = xmemhdl_Lock_Handle(the_actor->array);
 			for (int16_t i = 0; i < num_frames; i++) {
-				void** arr = the_actor->array;
 				if (!arr[i])
 					continue;
 
-				uint8_t* image = (uint8_t*)arr[i];
+				const uint8_t* image = xmemhdl_Lock_Handle(arr[i]);
 				int size = play1_Literal_Image(temp_buffer, image);
+				xmemhdl_Unlock_Handle(arr[i]);
 
 				if (size <= 0 || size >= LITERAL_MAX_SIZE) {
 					memset(temp_buffer, 0, 64000);
 					continue;
 				}
 
-				uint8_t* new_data = malloc(size);
+				LandruHandle new_data = xmemhdl_Data_To_Handle(temp_buffer, size, LANDRU_MEMORY_DEFAULT);
 				if (!new_data) {
 					memset(temp_buffer, 0, 64000);
 					break;
 				}
 
-				memcpy(new_data, temp_buffer, size);
-				free(arr[i]);
+				xmemhdl_Free_Handle(arr[i]);
 				arr[i] = new_data;
 				memset(temp_buffer, 0, 64000);
 			}
+			xmemhdl_Unlock_Handle(the_actor->array);
 		}
 	}
 
-	lbitmap_Unlock_Bitmap(canvas_bm);
+	xbitmap_Unlock_Bitmap(canvas_bm);
 }
 
 /* ------------------------------------------------------------------ */
@@ -796,20 +797,22 @@ static int play1_Literal_Image(uint8_t* buffer, const uint8_t* image) {
  */
 // FUNCTION: TIE 0x78B70
 static void play1_Update_Stream_Actor(Actor* the_actor) {
-	if (!lactor_Is_Actor_Visible(the_actor))
+	if (!xactor_Is_Actor_Visible(the_actor))
 		return;
 	if (!is_streaming)
 		return;
-	if (lfilm_Is_Film_Fade())
+	if (xfilm_Is_Film_Fade())
 		return;
 
 	if (read_state == 0) {
-		if (lstream_Read_From_Stream_Buffer(read_buffer, 16, 1) != 16) {
+		if (xstream_Read_From_Stream_Buffer(0, read_buffer, 0, 16, 1) != 16) {
 			read_state = 0;
-			lactor_Deactivate_Actor(the_actor);
+			xactor_Deactivate_Actor(the_actor);
 			return;
 		}
-		stream_actor_frames_to_go = br_i16le(read_buffer + 2);
+		const uint8_t* data = xmemhdl_Lock_Handle(read_buffer);
+		stream_actor_frames_to_go = br_i16le(data + 2);
+		xmemhdl_Unlock_Handle(read_buffer);
 		read_state = 1;
 	}
 
@@ -817,29 +820,34 @@ static void play1_Update_Stream_Actor(Actor* the_actor) {
 		return;
 
 	if (stream_actor_frames_to_go <= 0) {
-		lactor_Deactivate_Actor(the_actor);
+		xactor_Deactivate_Actor(the_actor);
 		read_state = 0;
 		return;
 	}
 
-	if (lstream_Read_From_Stream_Buffer(read_buffer, 4, 1) == 0) {
+	if (xstream_Read_From_Stream_Buffer(0, read_buffer, 0, 4, 1) != 4) {
 		read_state = 0;
-		lactor_Deactivate_Actor(the_actor);
+		xactor_Deactivate_Actor(the_actor);
 		return;
 	}
-	uint32_t size = br_u32le(read_buffer);
+	uint8_t* data = xmemhdl_Lock_Handle(read_buffer);
+	uint32_t size = br_u32le(data);
+	xmemhdl_Unlock_Handle(read_buffer);
 
-	if (lstream_Read_From_Stream_Buffer(read_buffer, size, 1) != size) {
+	if (size == 0 || size > STREAM_BUFFER_SIZE ||
+		xstream_Read_From_Stream_Buffer(0, read_buffer, 0, size, 1) != (int32_t)size) {
 		read_state = 0;
-		lactor_Deactivate_Actor(the_actor);
+		xactor_Deactivate_Actor(the_actor);
 		return;
 	}
 
-	void* prev_pixels = lbitmap_Lock_Bitmap(&last_frame);
-	void* cur_pixels = lbitmap_Lock_Bitmap(&current_frame);
-	drawstrm_Convert_Frame_To_Palette(prev_pixels, read_buffer, cur_pixels);
-	lbitmap_Unlock_Bitmap(&last_frame);
-	lbitmap_Unlock_Bitmap(&current_frame);
+	void* prev_pixels = xbitmap_Lock_Bitmap(&last_frame);
+	void* cur_pixels = xbitmap_Lock_Bitmap(&current_frame);
+	data = xmemhdl_Lock_Handle(read_buffer);
+	drawstrm_Convert_Frame_To_Palette(prev_pixels, data, cur_pixels);
+	xmemhdl_Unlock_Handle(read_buffer);
+	xbitmap_Unlock_Bitmap(&last_frame);
+	xbitmap_Unlock_Bitmap(&current_frame);
 	stream_actor_frames_to_go--;
 }
 
@@ -847,8 +855,8 @@ static void play1_Update_Stream_Actor(Actor* the_actor) {
 
 /* Stream actor draw callback. Copies current_frame to canvas. */
 // FUNCTION: TIE 0x78D2C
-static int play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
-								   int16_t refresh) {
+static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
+									   int16_t refresh) {
 	(void)the_actor;
 	(void)r;
 	(void)clip_r;
@@ -856,8 +864,8 @@ static int play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int1
 	(void)off_y;
 	if (!refresh)
 		return 0;
-	lcanvas_Copy_Bitmap_To_Canvas(&current_frame, 0, 0);
-	ldirty_Max_Dirty_List();
+	xcanvas_Copy_Bitmap_To_Canvas(&current_frame, 0, 0);
+	xdirty_Max_Dirty_List();
 	return 1;
 }
 
@@ -873,10 +881,10 @@ static void play1_Chain_Scene(void) {
 	use_chain_successful = 0;
 
 	if (p->stream_str[play1_id][0]) {
-		if (lstream_Use_Stream_File(p->stream_str[play1_id])) {
+		if (xstream_Use_Stream_File(0, p->stream_str[play1_id])) {
 			use_chain_successful = 1;
-		} else if (lstream_Chain_Stream_File(p->stream_str[play1_id]) &&
-				   lstream_Use_Stream_File(p->stream_str[play1_id])) {
+		} else if (xstream_Chain_Stream_File(0, p->stream_str[play1_id]) &&
+				   xstream_Use_Stream_File(0, p->stream_str[play1_id])) {
 			use_chain_successful = 1;
 		}
 	}
@@ -894,7 +902,7 @@ static void play1_Chain_Scene(void) {
 		}
 	}
 	if (p->stream_str[next_id][0])
-		lstream_Chain_Stream_File(p->stream_str[next_id]);
+		xstream_Chain_Stream_File(0, p->stream_str[next_id]);
 }
 
 /* ------------------------------------------------------------------ */
@@ -953,8 +961,8 @@ static LandruTaskStepResult play1_task_step(void* self) {
 		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 &&
 			(scene == SCENE_TRAIN_TRANSITION || scene == SCENE_COMBAT_TRANSITION)) {
 			t->surface_set = LANDRU_SURFACE_SVGA;
-			(void)lsurface_Select_Surface_Set(t->surface_set);
-			lview_Init_View(lview_Get_Current_View());
+			(void)xsurface_Select_Surface_Set(t->surface_set);
+			xview_Init_View(xview_Get_Current_View());
 		}
 
 		for (play1_id = 0; scene != p->cur_scene[play1_id] && p->cur_scene[play1_id]; play1_id++)
@@ -966,7 +974,7 @@ static LandruTaskStepResult play1_task_step(void* self) {
 		t->file2 = NULL;
 		ResFile* file = t->file; /* shadow for the existing switch body */
 		ResFile* file2 = t->file2;
-		lcanvas_Get_Drawing_Canvas_Bounds(&r);
+		xcanvas_Get_Drawing_Canvas_Bounds(&r);
 
 		int16_t cur = p->cur_scene[play1_id];
 		bool rate_changed = false;
@@ -991,7 +999,7 @@ static LandruTaskStepResult play1_task_step(void* self) {
 			case 700:
 			case 710:
 			case 720:
-				ltimer_Set_Frame_Rate(24);
+				xtimer_Set_Frame_Rate(24);
 				strcpy(name, p->film_str[play1_id]);
 				rate_changed = true;
 				break;
@@ -1010,7 +1018,7 @@ static LandruTaskStepResult play1_task_step(void* self) {
 			case 620:
 			case 621:
 			case 622:
-				ltimer_Set_Frame_Rate(20);
+				xtimer_Set_Frame_Rate(20);
 				strcpy(name, p->film_str[play1_id]);
 				rate_changed = true;
 				break;
@@ -1018,7 +1026,7 @@ static LandruTaskStepResult play1_task_step(void* self) {
 			/* 24fps + file2 = "bridge.lfd" (resource[6]) */
 			case 520:
 			case 581:
-				ltimer_Set_Frame_Rate(24);
+				xtimer_Set_Frame_Rate(24);
 				strcpy(name, p->film_str[play1_id]);
 				file2 = shellext_Open_Empire_Resource(p->resource_str[6]);
 				rate_changed = true;
@@ -1028,7 +1036,7 @@ static LandruTaskStepResult play1_task_step(void* self) {
 			case 590:
 			case 591:
 			case 730:
-				ltimer_Set_Frame_Rate(24);
+				xtimer_Set_Frame_Rate(24);
 				strcpy(name, p->film_str[play1_id]);
 				file2 = shellext_Open_Empire_Resource(p->resource_str[4]);
 				rate_changed = true;
@@ -1036,7 +1044,7 @@ static LandruTaskStepResult play1_task_step(void* self) {
 
 			/* 20fps + file2 = "scene10.lfd" (resource[80]) — retail-only */
 			case 623:
-				ltimer_Set_Frame_Rate(20);
+				xtimer_Set_Frame_Rate(20);
 				strcpy(name, p->film_str[play1_id]);
 				file2 = shellext_Open_Empire_Resource(p->resource_str[80]);
 				rate_changed = true;
@@ -1044,7 +1052,7 @@ static LandruTaskStepResult play1_task_step(void* self) {
 
 			/* 20fps + file2 = "emperor.lfd" (resource[4]) — retail-only */
 			case 740:
-				ltimer_Set_Frame_Rate(20);
+				xtimer_Set_Frame_Rate(20);
 				strcpy(name, p->film_str[play1_id]);
 				file2 = shellext_Open_Empire_Resource(p->resource_str[4]);
 				rate_changed = true;
@@ -1052,7 +1060,7 @@ static LandruTaskStepResult play1_task_step(void* self) {
 
 			/* 24fps + file2 from peer resource */
 			case 580:
-				ltimer_Set_Frame_Rate(24);
+				xtimer_Set_Frame_Rate(24);
 				strcpy(name, p->film_str[play1_id]);
 				file2 = shellext_Open_Empire_Resource(p->resource_str[play1_id - 11]);
 				rate_changed = true;
@@ -1090,7 +1098,7 @@ static LandruTaskStepResult play1_task_step(void* self) {
 				strcpy(name, p->film_str[play1_id]);
 				if (shipext_Is_Mission_Disk1() || shipext_Is_Mission_Disk2()) {
 					strcpy(name, "secarm2f");
-					lres_Close_Resource(file);
+					xres_Close_Resource(file);
 					if (shipext_Is_Mission_Disk2())
 						file = shellext_Open_Empire_Resource(mission_disk2_resource);
 					else if (shipext_Is_Mission_Disk1())
@@ -1130,12 +1138,12 @@ static LandruTaskStepResult play1_task_step(void* self) {
 		TieDiagnostics_Log(TIE_LOG_INFO, "[PLAY1] scene=%d film='%s' resource='%s' stream='%s'\n", play1_id,
 						   name, p->resource_str[play1_id],
 						   p->stream_str[play1_id][0] ? p->stream_str[play1_id] : "(none)");
-		play1_film = lfilm_Res_Callback_Film(name, &r, 0, 0, 0, play1_film_Callback);
+		play1_film = xfilm_Res_Callback_Film(name, &r, 0, 0, 0, play1_film_Callback);
 		if (!play1_film) {
 			if (t->file2)
-				lres_Close_Resource(t->file2);
-			lres_Close_Resource(t->file);
-			lerror_Set_Landru_Exit(p->next_scene[play1_id]);
+				xres_Close_Resource(t->file2);
+			xres_Close_Resource(t->file);
+			xerror_Set_Landru_Exit(p->next_scene[play1_id]);
 			return LANDRU_TASK_STEP_DONE;
 		}
 		if (TieMusicPolicy_UsesTie98()) {
@@ -1144,17 +1152,17 @@ static LandruTaskStepResult play1_task_step(void* self) {
 				FrontendWaveStream_PlayWaveFile(music_path, 0);
 		}
 
-		lfilm_Set_Film_Def_Palette(play1_film, t->the_head->def_palette);
-		lview_Set_View_Update_Function(play1_end_View);
+		xfilm_Set_Film_Def_Palette(play1_film, t->the_head->def_palette);
+		xview_Set_View_Update_Function(play1_end_View);
 
-		if (lcursor_Is_Cursor_Visible())
-			lcursor_Hide_Cursor();
+		if (xcursor_Is_Cursor_Visible())
+			xcursor_Hide_Cursor();
 
 		/* Start palette cycling for scenes 20 and 25 */
 		if (scene == 20 || scene == 25) {
-			for (Palette* pal = lpal_Ask_Palette_List(); pal; pal = pal->next) {
+			for (Palette* pal = xpal_Ask_Palette_List(); pal; pal = pal->next) {
 				if (pal->cycle_active)
-					lpal_Start_Cycle(pal);
+					xpal_Start_Cycle(pal);
 			}
 		}
 
@@ -1164,50 +1172,58 @@ static LandruTaskStepResult play1_task_step(void* self) {
 		t->is_streaming_active = is_streaming;
 
 		/* Push the modal view task */
-		lviewadd_Push_Handle_View_Task();
+		xviewadd_Push_Handle_View_Task();
 
 		t->phase = PLAY1_PHASE_CLEANUP;
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
+
+	return LANDRU_TASK_STEP_DONE;
+}
+
+static void play1_task_end(void* self) {
+	Play1Task* t = (Play1Task*)self;
+	if (t->phase == PLAY1_PHASE_BEGIN)
+		return;
 
 	/* CLEANUP */
 	if (TieMusicPolicy_UsesTie98() && play1_tie98_music_ends_after_scene(t->scene))
 		FrontendWaveStream_Shutdown();
 	/* Restore frame rate to 20fps for scenes that changed it */
 	if (t->rate_changed)
-		ltimer_Set_Frame_Rate(20);
+		xtimer_Set_Frame_Rate(20);
 
 	/* Tear down streaming */
 	if (t->is_streaming_active && is_streaming) {
-		lstream_Unchain_Current_Stream_File();
+		xstream_Unchain_Current_Stream_File(0);
 		is_streaming = 0;
 		if (read_buffer) {
-			free(read_buffer);
-			read_buffer = NULL;
+			xmemhdl_Free_Handle(read_buffer);
+			read_buffer = LANDRU_NULL_HANDLE;
 		}
 		if (last_frame.data)
-			lbitmap_Free_Bitmap(&last_frame);
+			xbitmap_Free_Bitmap(&last_frame);
 		if (current_frame.data)
-			lbitmap_Free_Bitmap(&current_frame);
+			xbitmap_Free_Bitmap(&current_frame);
 	}
 
-	lview_Clear_View_Update_Function();
+	xview_Clear_View_Update_Function();
 	if (t->file2)
-		lres_Close_Resource(t->file2);
+		xres_Close_Resource(t->file2);
 	if (t->file)
-		lres_Close_Resource(t->file);
+		xres_Close_Resource(t->file);
 
 	/* Drop the active-film tag — the compositor will fall back to
 	 * classic rendering for whatever scene runs next until another
 	 * PLAY1 push re-tags. */
 	TieSnapshotBuilder_SetActiveFilm(NULL, NULL);
 	if (t->surface_set == LANDRU_SURFACE_SVGA)
-		(void)lsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
-	return LANDRU_TASK_STEP_DONE;
+		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 }
 
 static const LandruTaskVtable play1_task_vt = {
 	.step = play1_task_step,
+	.end = play1_task_end,
 };
 
 void play1_Push_Play1_Task(SceneHeadStruct* the_head) {

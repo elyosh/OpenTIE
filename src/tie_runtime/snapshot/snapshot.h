@@ -23,7 +23,7 @@ const TieSnapshot* TieSnapshot_Previous(void);
  * Returns NULL when no cursor module is initialised. out_w/out_h
  * mirror snapshot.cursor.w/h. The pointer is owned by tie_core and
  * stable for the session; the bitmap content itself mutates on every
- * lcursor_Set_Cursor call (pointer ↔ wait), so callers re-check
+ * xcursor_Set_Cursor call (pointer ↔ wait), so callers re-check
  * cursor.kind to decide whether to re-upload. */
 const uint8_t* TieCursorSnapshot_Bitmap(int16_t* out_w, int16_t* out_h);
 

@@ -94,7 +94,7 @@ static int s_stamp_count;
  * classic uses it as a draw-function host (replaced with
  * draw_Backdrop afterwards, which blits the accumulated bitmap each
  * frame) rather than as visible content of its own. The HD path
- * already covers it via lactor_emit_render_state's live entry at the
+ * already covers it via xactor_emit_render_state's live entry at the
  * correct background zplane; capturing a sticky duplicate here would
  * land at the END of actors_2D (sticky entries are appended last) and
  * paint the full-screen backdrop on top of every other actor in
@@ -104,31 +104,31 @@ static void stamp_actor_to_background(Actor* actor, bool capture_sticky) {
 
 	if (capture_sticky && s_stamp_count < TIELOGO_MAX_STAMPS) {
 		LandruActorRenderState* st = &s_stamps[s_stamp_count++];
-		lactor_fill_render_state(actor, st);
+		xactor_fill_render_state(actor, st);
 		/* Force the captured pose to be drawn by the HD renderer
-		 * even after classic hides the actor (lactor_Hide_Actor in
+		 * even after classic hides the actor (xactor_Hide_Actor in
 		 * user_Tie / fight_state[]=-1 in user_Fighter). */
 		st->flags |= TIE_ACTOR2D_VISIBLE;
 	}
 
-	lcanvas_Get_Drawing_Canvas_Bounds(&canvas_bounds);
-	lcanvas_Push_Canvas(&background);
+	xcanvas_Get_Drawing_Canvas_Bounds(&canvas_bounds);
+	xcanvas_Push_Canvas(&background);
 	if (actor->draw) {
-		lrect_Copy_Rect(&clip, &actor->frame);
-		lcanvas_Set_Drawing_Canvas_Clip(&clip);
+		xrect_Copy_Rect(&clip, &actor->frame);
+		xcanvas_Set_Drawing_Canvas_Clip(&clip);
 		actor->draw(actor, &canvas_bounds, &clip, actor->x, actor->y, 1);
-		lcanvas_Max_Drawing_Canvas_Clip();
+		xcanvas_Max_Drawing_Canvas_Clip();
 	}
-	lcanvas_Pop_Canvas();
+	xcanvas_Pop_Canvas();
 }
 
 /* Actor draw callback that stamps the actor into the background bitmap.
- * Has the lactorDrawFunc signature so it can replace actor->draw.
+ * Has the xactorDrawFunc signature so it can replace actor->draw.
  * The passed-in r/clip_r/x/y/refresh are ignored — the actor's own
  * frame and position are used instead. Returns the inner draw result.
  * No callers in the LecDemos build (0 xrefs), but present in the binary. */
-static int film_Actor_To_Background(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
-									int16_t refresh) {
+static int16_t film_Actor_To_Background(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+										int16_t refresh) {
 	(void)r;
 	(void)clip_r;
 	(void)x;
@@ -137,15 +137,15 @@ static int film_Actor_To_Background(Actor* actor, Rect* r, Rect* clip_r, int16_t
 	Rect canvas_bounds, clip;
 	int result = 0;
 
-	lcanvas_Get_Drawing_Canvas_Bounds(&canvas_bounds);
-	lcanvas_Push_Canvas(&background);
+	xcanvas_Get_Drawing_Canvas_Bounds(&canvas_bounds);
+	xcanvas_Push_Canvas(&background);
 	if (actor->draw) {
-		lrect_Copy_Rect(&clip, &actor->frame);
-		lcanvas_Set_Drawing_Canvas_Clip(&clip);
+		xrect_Copy_Rect(&clip, &actor->frame);
+		xcanvas_Set_Drawing_Canvas_Clip(&clip);
 		result = actor->draw(actor, &canvas_bounds, &clip, actor->x, actor->y, 1);
-		lcanvas_Max_Drawing_Canvas_Clip();
+		xcanvas_Max_Drawing_Canvas_Clip();
 	}
-	lcanvas_Pop_Canvas();
+	xcanvas_Pop_Canvas();
 	return result;
 }
 
@@ -153,7 +153,7 @@ static int film_Actor_To_Background(Actor* actor, Rect* r, Rect* clip_r, int16_t
 
 /* Draw callback: copy the entire background bitmap to the canvas.
  * Replaces the normal draw for actors composited into the background. */
-static int draw_Backdrop(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+static int16_t draw_Backdrop(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
 	(void)actor;
 	(void)r;
 	(void)clip_r;
@@ -163,8 +163,8 @@ static int draw_Backdrop(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t
 		return 0;
 
 	Rect ra;
-	lrect_Set_Rect(&ra, 0, 0, 320, 200);
-	lcanvas_Copy_Bitmap_Portion_To_Canvas(&background, &ra, 0, 0);
+	xrect_Set_Rect(&ra, 0, 0, 320, 200);
+	xcanvas_Copy_Bitmap_Portion_To_Canvas(&background, &ra, 0, 0);
 	return 1;
 }
 
@@ -173,7 +173,7 @@ static int draw_Backdrop(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t
 static void user_Close(Actor* actor, int32_t time) {
 	(void)time;
 	if (tielogo_film->cur_cel == tielogo_film->cels) {
-		lactor_Hide_Actor(backdrop);
+		xactor_Hide_Actor(backdrop);
 		actor->var1 = 1;
 	} else {
 		actor->var1 = 0;
@@ -182,16 +182,16 @@ static void user_Close(Actor* actor, int32_t time) {
 
 /* Draw callback for the close actor. When var1 is set (film finished),
  * erases the canvas and maxes the dirty list for the scene transition. */
-static int draw_Close(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+static int16_t draw_Close(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
 	(void)r;
 	(void)clip_r;
 	(void)x;
 	(void)y;
 	(void)refresh;
 	if (actor->var1) {
-		lcanvas_Erase_Canvas();
-		ldirty_Max_Dirty_List();
-		lcanvas_Invalid_Screen_Diff();
+		xcanvas_Erase_Canvas();
+		xdirty_Max_Dirty_List();
+		xcanvas_Invalid_Screen_Diff();
 	}
 	return 1;
 }
@@ -201,12 +201,12 @@ static int draw_Close(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
  * and hides it on the next frame. */
 static void user_Tie(Actor* actor, int32_t time) {
 	(void)time;
-	if (!lactor_Is_Actor_Visible(actor))
+	if (!xactor_Is_Actor_Visible(actor))
 		return;
 
 	if (tie_actor->id) {
 		stamp_actor_to_background(actor, /*capture_sticky=*/true);
-		lactor_Hide_Actor(actor);
+		xactor_Hide_Actor(actor);
 	} else if (tie_actor->state == tie_actor->arraySize - 1) {
 		tie_actor->id++;
 	}
@@ -214,15 +214,15 @@ static void user_Tie(Actor* actor, int32_t time) {
 
 /* Draw callback for the fighter particle system. Draws all active
  * fighter slots at their current positions. */
-static int draw_Fighter(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+static int16_t draw_Fighter(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
 	if (!refresh)
 		return 1;
 
 	int16_t i;
 	for (i = 0; i < 32; i++) {
 		if (fight_state[i] >= 0) {
-			lactor_Set_Actor_State(actor, i, 0);
-			lactanim_Draw_Anim_Actor(actor, r, clip_r, fight_x[i] + x, fight_y[i] + y, refresh);
+			xactor_Set_Actor_State(actor, i, 0);
+			xactanim_Draw_Anim_Actor(actor, r, clip_r, fight_x[i] + x, fight_y[i] + y, refresh);
 		}
 	}
 	return 1;
@@ -240,7 +240,7 @@ static void user_Fighter(Actor* actor, int32_t time) {
 			fight_state[i] = -1;
 			fight_count += 140 / (20 - fight_vel[i]);
 		}
-		lactor_Hide_Actor(actor);
+		xactor_Hide_Actor(actor);
 		return;
 	}
 
@@ -255,22 +255,22 @@ static void user_Fighter(Actor* actor, int32_t time) {
 
 	/* Frame rate control */
 	if (time == 52)
-		ltimer_Set_Frame_Rate(4);
+		xtimer_Set_Frame_Rate(4);
 	if (time == 200)
-		ltimer_Set_Frame_Rate(20);
+		xtimer_Set_Frame_Rate(20);
 
 	/* Outside active window: hide actor when visible */
 	if (time < 52 || time >= fight_count + 52) {
 		if (time == fight_count + 52)
-			ltimer_Set_Frame_Rate(20);
-		if (lactor_Is_Actor_Visible(actor))
-			lactor_Hide_Actor(actor);
+			xtimer_Set_Frame_Rate(20);
+		if (xactor_Is_Actor_Visible(actor))
+			xactor_Hide_Actor(actor);
 		return;
 	}
 
 	/* Inside active window */
-	if (!lactor_Is_Actor_Visible(actor))
-		lactor_Show_Actor(actor);
+	if (!xactor_Is_Actor_Visible(actor))
+		xactor_Show_Actor(actor);
 
 	int16_t slot_idx = 0;
 	int32_t launch_frame = time - 52;
@@ -301,7 +301,7 @@ static void user_Fighter(Actor* actor, int32_t time) {
 				fight_y[slot_idx] += fight_yadd[slot_idx];
 			} else if (steps_left == 0) {
 				/* Fighter arrived: stamp into background */
-				lactor_Set_Actor_State(fighter_actor, slot_idx, 0);
+				xactor_Set_Actor_State(fighter_actor, slot_idx, 0);
 				stamp_actor_to_background(fighter_actor,
 										  /*capture_sticky=*/true);
 				fight_state[slot_idx] = -1;
@@ -320,7 +320,7 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 	if (film_object->id != 3)
 		return 0;
 
-	lfilm_Rewind_Actor_Film(film, film_object, (void*)((char*)film_object + sizeof(FilmObject)));
+	xfilm_Rewind_Actor_Film(film, film_object, (void*)((char*)film_object + sizeof(FilmObject)));
 	Actor* actor = film_object->object;
 
 	if (actor->var1 != 20)
@@ -337,7 +337,7 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 	stamp_actor_to_background(actor, capture_sticky);
 
 	if (actor->var2 == 1) {
-		lactor_Set_Actor_Draw_Function(actor, draw_Backdrop);
+		xactor_Set_Actor_Draw_Function(actor, draw_Backdrop);
 		backdrop = actor;
 	}
 
@@ -349,12 +349,12 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
  * Checks for scene exit (film finished = cur_cel == cels). */
 static void end_View(int32_t frame_num) {
 	if (!frame_num)
-		ldirty_Max_Dirty_List();
+		xdirty_Max_Dirty_List();
 
 	int16_t exit_id;
 	int16_t film_done = (tielogo_film->cur_cel == tielogo_film->cels) ? 1 : 0;
 	if (shellext_Check_Scene_Exit(&exit_id, 90, 100, film_done))
-		lerror_Set_Landru_Exit(exit_id);
+		xerror_Set_Landru_Exit(exit_id);
 }
 
 /* Add sticky background stamps and the fighter particle slots to the
@@ -376,7 +376,7 @@ int TieRecoveredLogo_ReadSnapshotActors(LandruActorRenderState* actors, int capa
 		LandruActorRenderState* output = &actors[count++];
 		memset(output, 0, sizeof *output);
 		fighter2_actor->state = (int16_t)index;
-		lactor_fill_render_state(fighter2_actor, output);
+		xactor_fill_render_state(fighter2_actor, output);
 		output->flags |= LANDRU_ACTOR_RENDER_VISIBLE;
 		output->x = (int16_t)(output->x + fight_x[index]);
 		output->y = (int16_t)(output->y + fight_y[index]);
@@ -404,14 +404,14 @@ static LandruTaskStepResult tielogo_task_step(void* self) {
 
 		t->res_file = shellext_Open_Empire_Resource("tielogo.lfd");
 
-		lrect_Set_Rect(&frame, 0, 0, 320, 200);
-		lbitmap_Init_Bitmap(&background);
-		lbitmap_Alloc_Bitmap(&background, 320, 200);
-		lbitmap_Erase_Bitmap(&background);
+		xrect_Set_Rect(&frame, 0, 0, 320, 200);
+		xbitmap_Init_Bitmap(&background);
+		xbitmap_Alloc_Bitmap(&background, 320, 200);
+		xbitmap_Erase_Bitmap(&background);
 
-		lviewadd_Clear_View();
-		lview_Disable_All_View_Erase();
-		lcanvas_Invalid_Screen_Diff();
+		xviewadd_Clear_View();
+		xview_Disable_All_View_Erase();
+		xcanvas_Invalid_Screen_Diff();
 
 		/* Reset sticky stamps BEFORE loading the film. lfilm_Res_
 		 * Callback_Film walks every film object and invokes the
@@ -424,11 +424,11 @@ static LandruTaskStepResult tielogo_task_step(void* self) {
 		s_stamp_count = 0;
 
 		/* Load logo film with per-frame callback */
-		tielogo_film = lfilm_Res_Callback_Film("logo", &frame, 0, 0, 0, film_Callback);
+		tielogo_film = xfilm_Res_Callback_Film("logo", &frame, 0, 0, 0, film_Callback);
 
 		/* Find TIE text actor in the film and set its user callback */
-		tie_actor = lactor_Find_Actor(FOURCC_ANIM, "tie3");
-		lactor_Set_Actor_User_Function(tie_actor, user_Tie);
+		tie_actor = xactor_Find_Actor(FOURCC_ANIM, "tie3");
+		xactor_Set_Actor_User_Function(tie_actor, user_Tie);
 		tie_actor->id = 0;
 
 		/* Load fighter animation actors.
@@ -439,35 +439,35 @@ static LandruTaskStepResult tielogo_task_step(void* self) {
 		 * via the standard actor-system path. fighter2_actor is the
 		 * orchestrator: its draw_Fighter loops over fight_state[]
 		 * slots and ignores the actor's own state. Both are flagged
-		 * AF_NO_RENDER_CAPTURE so lactor_emit_render_state doesn't ship
+		 * AF_NO_RENDER_CAPTURE so xactor_emit_render_state doesn't ship
 		 * phantom poses to the HD compositor — the real HD coverage
 		 * for the fly-in / stamping comes from TieRecoveredLogo_CaptureSnapshot
 		 * (live fighter2 slot emits + sticky fighter stamp list). */
-		fighter_actor = lactanim_Res_Anim_Actor("fighter", &frame, 0, 0, 0);
-		lactor_Set_Actor_Time(fighter_actor, -1, -1);
-		lactor_Set_Actor_Render_Capture_Hidden(fighter_actor, true);
+		fighter_actor = xactanim_Res_Anim_Actor("fighter", &frame, 0, 0, 0);
+		xactor_Set_Actor_Time(fighter_actor, -1, -1);
+		xactor_Set_Actor_Render_Capture_Hidden(fighter_actor, true);
 
-		fighter2_actor = lactanim_Res_Anim_Actor("fighter2", &frame, 0, 0, 0);
-		lactor_Set_Actor_User_Function(fighter2_actor, user_Fighter);
-		lactor_Set_Actor_Draw_Function(fighter2_actor, draw_Fighter);
-		lactor_Set_Actor_Render_Capture_Hidden(fighter2_actor, true);
+		fighter2_actor = xactanim_Res_Anim_Actor("fighter2", &frame, 0, 0, 0);
+		xactor_Set_Actor_User_Function(fighter2_actor, user_Fighter);
+		xactor_Set_Actor_Draw_Function(fighter2_actor, draw_Fighter);
+		xactor_Set_Actor_Render_Capture_Hidden(fighter2_actor, true);
 
 		/* Create close/cleanup actor at z=-200 (drawn last). draw_Close
 		 * erases the canvas at film end — no pixel content. CUST
 		 * actors are auto-flagged AF_NO_RENDER_CAPTURE in
-		 * lactcust_Alloc_Custom_Actor, so no explicit hide call here. */
-		close_actor = lactcust_Alloc_Custom_Actor(NULL, &frame, 0, 0, -200);
-		lactor_Set_Actor_User_Function(close_actor, user_Close);
-		lactor_Set_Actor_Draw_Function(close_actor, draw_Close);
+		 * xactcust_Alloc_Custom_Actor, so no explicit hide call here. */
+		close_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, -200);
+		xactor_Set_Actor_User_Function(close_actor, user_Close);
+		xactor_Set_Actor_Draw_Function(close_actor, draw_Close);
 
 		/* Set the film's default palette from the scene head */
-		lfilm_Set_Film_Def_Palette(tielogo_film, t->scene_head->def_palette);
+		xfilm_Set_Film_Def_Palette(tielogo_film, t->scene_head->def_palette);
 
 		/* Install view update callback and push the modal view */
-		lview_Set_View_Update_Function(end_View);
+		xview_Set_View_Update_Function(end_View);
 
-		if (lcursor_Is_Cursor_Visible())
-			lcursor_Hide_Cursor();
+		if (xcursor_Is_Cursor_Visible())
+			xcursor_Hide_Cursor();
 
 		/* Tag the scene for the HD compositor: bundle key
 		 * (TIELOGO, logo) resolves the remaster manifest at
@@ -480,23 +480,31 @@ static LandruTaskStepResult tielogo_task_step(void* self) {
 		TieSnapshotBuilder_SetRedrawModel(TIE_REDRAW_FULL_FRAME);
 		TieSnapshotBuilder_SetSceneKind(TIE_SCENE_CUTSCENE);
 
-		lviewadd_Push_Handle_View_Task();
+		xviewadd_Push_Handle_View_Task();
 
 		t->phase = TIELOGO_PHASE_CLEANUP;
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
+	return LANDRU_TASK_STEP_DONE;
+}
+
+static void tielogo_task_end(void* self) {
+	TielogoTask* t = (TielogoTask*)self;
+	if (t->phase == TIELOGO_PHASE_BEGIN)
+		return;
+
 	/* CLEANUP — view popped */
 	Rect frame;
-	lview_Clear_View_Update_Function();
-	lview_Enable_All_View_Erase();
+	xview_Clear_View_Update_Function();
+	xview_Enable_All_View_Erase();
 
-	lcanvas_Get_Drawing_Canvas_Bounds(&frame);
-	lview_Set_View_Frame(0, &frame);
-	lview_Set_View_Pos(0, frame.left, frame.top);
+	xcanvas_Get_Drawing_Canvas_Bounds(&frame);
+	xview_Set_View_Frame(0, &frame);
+	xview_Set_View_Pos(0, frame.left, frame.top);
 
-	lbitmap_Free_Bitmap(&background);
-	lres_Close_Resource(t->res_file);
+	xbitmap_Free_Bitmap(&background);
+	xres_Close_Resource(t->res_file);
 
 	/* Drop the sticky stamp list — TieRecoveredLogo_CaptureSnapshot will be a
 	 * no-op for whatever scene runs next until another tielogo push
@@ -504,13 +512,12 @@ static LandruTaskStepResult tielogo_task_step(void* self) {
 	s_stamp_count = 0;
 	fighter2_actor = NULL;
 
-	ltimer_Set_Frame_Rate(20);
-
-	return LANDRU_TASK_STEP_DONE;
+	xtimer_Set_Frame_Rate(20);
 }
 
 static const LandruTaskVtable tielogo_task_vt = {
 	.step = tielogo_task_step,
+	.end = tielogo_task_end,
 };
 
 void tielogo_Push_TieLogo_Task(SceneHeadStruct* scene_head) {

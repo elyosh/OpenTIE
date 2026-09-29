@@ -282,6 +282,8 @@ RUN mkdir -p /build/package/tie-windows-x86_64/licenses \
     && cp -a /build/tie/resources /build/package/tie-windows-x86_64/ \
     && cp /src/README.md \
         /build/package/tie-windows-x86_64/README.md \
+    && cp /src/src/landru/LICENSE \
+        /build/package/tie-windows-x86_64/licenses/Landru-GPL-3.0.txt \
     && cp /opt/tie-licenses/SDL3.txt \
         /build/package/tie-windows-x86_64/licenses/SDL3.txt \
     && cp /opt/tie-licenses/zstd.txt \

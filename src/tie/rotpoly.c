@@ -48,8 +48,8 @@ void rotpoly_Map_Image(void* src_data, const int16_t* left_table, int16_t src_st
 	uint8_t* canvas_pixels;
 	int16_t row;
 
-	canvas_bm = lcanvas_Get_Current_Canvas_Bitmap();
-	canvas_pixels = (uint8_t*)lbitmap_Lock_Bitmap(canvas_bm);
+	canvas_bm = xcanvas_Get_Current_Canvas_Bitmap();
+	canvas_pixels = (uint8_t*)xbitmap_Lock_Bitmap(canvas_bm);
 
 	for (row = 0; row < num_scanlines; row++) {
 		/* Read edge coordinates for this scanline */
@@ -151,5 +151,5 @@ void rotpoly_Map_Image(void* src_data, const int16_t* left_table, int16_t src_st
 		start_y++;
 	}
 
-	lbitmap_Unlock_Bitmap(canvas_bm);
+	xbitmap_Unlock_Bitmap(canvas_bm);
 }

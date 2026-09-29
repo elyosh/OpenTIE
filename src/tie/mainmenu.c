@@ -110,7 +110,8 @@ static int16_t iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t 
 								uint8_t right, int16_t mouse_x, int16_t mouse_y);
 static void iuser_MainMenu(Input* input, int32_t time);
 static void user_Title(Actor* actor, int32_t time);
-static int draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff, int16_t refresh);
+static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+						  int16_t refresh);
 static void user_Door(Actor* actor, int32_t time);
 
 /* ================================================================
@@ -122,8 +123,8 @@ static void user_Door(Actor* actor, int32_t time);
 static void end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
-	if (!lcursor_Is_Cursor_Visible())
-		lcursor_Show_Cursor();
+	if (!xcursor_Is_Cursor_Visible())
+		xcursor_Show_Cursor();
 }
 
 /* ================================================================
@@ -156,7 +157,7 @@ static int16_t iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t 
 		case 0: { /* Tour Battle */
 			int16_t ok = shipext_Set_Tour_Battle();
 			if (!ok) {
-				linpattr_Hide_Input(input);
+				xinpattr_Hide_Input(input);
 				return 1;
 			}
 			input->var2 = SCENE_BRIEF; /* exit_code */
@@ -191,7 +192,7 @@ static void iuser_MainMenu(Input* input, int32_t time) {
 		shipext_Get_Battle_Mission_Name(name);
 		shipext_Set_Mission_Name(name);
 	}
-	lerror_Set_Landru_Exit(input->var2); /* exit_code */
+	xerror_Set_Landru_Exit(input->var2); /* exit_code */
 }
 
 /* ================================================================
@@ -202,27 +203,28 @@ static void iuser_MainMenu(Input* input, int32_t time) {
 static void user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
-		if (!lactor_Is_Actor_Visible(actor))
-			lactor_Show_Actor(actor);
+		if (!xactor_Is_Actor_Visible(actor))
+			xactor_Show_Actor(actor);
 		actor->var1 = 0;
 	} else {
-		if (lactor_Is_Actor_Visible(actor))
-			lactor_Hide_Actor(actor);
+		if (xactor_Is_Actor_Visible(actor))
+			xactor_Hide_Actor(actor);
 	}
 }
 
 /* Title overlay draw: render the delta actor + centered text label. */
-static int draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff, int16_t refresh) {
+static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+						  int16_t refresh) {
 	if (!refresh)
 		return 0;
 
-	lactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
+	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
 
 	int16_t offx, offy;
-	lactor_Get_Actor_Offset(actor, &offx, &offy);
+	xactor_Get_Actor_Offset(actor, &offx, &offy);
 
 	Rect r;
-	lrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
+	xrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
 
 	char label[32];
 	switch (actor->var2) {
@@ -261,10 +263,10 @@ static int draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int1
 	}
 
 	/* Drop shadow: dark color at (1,1) offset, then bright at (0,0) */
-	lrect_Offset_Rect(&r, 1, 1);
-	lfont_Print_Centered_Text(label, &r, 16, active_spec->title_font);
-	lrect_Offset_Rect(&r, -1, -1);
-	lfont_Print_Centered_Text(label, &r, 15, active_spec->title_font);
+	xrect_Offset_Rect(&r, 1, 1);
+	xfont_Print_Centered_Text(label, &r, 16, active_spec->title_font);
+	xrect_Offset_Rect(&r, -1, -1);
+	xfont_Print_Centered_Text(label, &r, 15, active_spec->title_font);
 	return 1;
 }
 
@@ -276,12 +278,12 @@ static void user_Door(Actor* actor, int32_t time) {
 		if (!actor->state)
 			soundext_Play_SFX(sfxSmallDoorOpen, door_volume[actor->id]);
 		if (actor->state < actor->arraySize - 1)
-			lactor_Set_Actor_State(actor, actor->state + 1, 0);
+			xactor_Set_Actor_State(actor, actor->state + 1, 0);
 		actor->var1 = 0;
 	} else {
 		/* Closing */
 		if (actor->state > 0) {
-			lactor_Set_Actor_State(actor, actor->state - 1, 0);
+			xactor_Set_Actor_State(actor, actor->state - 1, 0);
 			if (!actor->state)
 				soundext_Play_SFX(sfxSmallDoorShut, door_volume[actor->id]);
 		}
@@ -307,7 +309,7 @@ typedef struct MainMenuTask {
 static LandruTaskStepResult mainmenu_setup_failed(MainMenuTask* t, const char* resource) {
 	TieDiagnostics_Log(TIE_LOG_ERROR, "[MAINMENU] missing frontend resource: %s\n",
 					   resource ? resource : "unknown");
-	lerror_Set_Landru_Error(6);
+	xerror_Set_Landru_Error(6);
 	t->phase = MAINMENU_PHASE_CLEANUP;
 	return LANDRU_TASK_STEP_CONTINUE;
 }
@@ -320,15 +322,15 @@ static LandruTaskStepResult mainmenu_task_step(void* self) {
 		int16_t i;
 
 		active_spec = t->spec;
-		if (!lsurface_Select_Surface_Set(active_spec->surface_set))
+		if (!xsurface_Select_Surface_Set(active_spec->surface_set))
 			return mainmenu_setup_failed(t, "surface set");
-		lview_Init_View(lview_Get_Current_View());
-		lio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+		xview_Init_View(xview_Get_Current_View());
+		xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
 
 		t->res_file = shellext_Open_Empire_Resource(active_spec->archive);
 		if (!t->res_file)
 			return mainmenu_setup_failed(t, active_spec->archive);
-		lrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
 
 		/* Load main menu film. Tag the snapshot with the (lfd, film)
 		 * tuple so the cutscene compositor can resolve a remaster
@@ -336,88 +338,88 @@ static LandruTaskStepResult mainmenu_task_step(void* self) {
 		 * correct here (dirty-rect refresh, persistent RT) — same as
 		 * register. The tag is auto-cleared at the next scene
 		 * transition by shell_run_scene_dispatch. */
-		mainmenu_film = lfilm_Res_Film(active_spec->film, &frame, 0, 0, 0);
+		mainmenu_film = xfilm_Res_Film(active_spec->film, &frame, 0, 0, 0);
 		if (!mainmenu_film)
 			return mainmenu_setup_failed(t, active_spec->film);
 		TieSnapshotBuilder_SetActiveFilm(active_spec->snapshot_lfd, active_spec->film);
-		lfilm_Set_Film_Def_Palette(mainmenu_film, t->scene_head->def_palette);
+		xfilm_Set_Film_Def_Palette(mainmenu_film, t->scene_head->def_palette);
 
 		/* Find the background actor */
 		mainmenu_actor =
-			active_spec->background ? lactor_Find_Actor(FOURCC_DELT, active_spec->background) : NULL;
+			active_spec->background ? xactor_Find_Actor(FOURCC_DELT, active_spec->background) : NULL;
 		if (active_spec->background && !mainmenu_actor)
 			return mainmenu_setup_failed(t, active_spec->background);
 		if (mainmenu_actor)
-			lactor_Non_Refreshable_Actor(mainmenu_actor);
+			xactor_Non_Refreshable_Actor(mainmenu_actor);
 
 		/* Find the 8 door actors */
 		for (i = 0; i < 8; i++) {
-			door[i] = lactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[i]);
+			door[i] = xactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[i]);
 			if (!door[i])
 				return mainmenu_setup_failed(t, active_spec->door_names[i]);
-			lactor_Set_Actor_User_Function(door[i], (lactorCallback)user_Door);
+			xactor_Set_Actor_User_Function(door[i], (xactorCallback)user_Door);
 			door[i]->id = i;
 		}
 
 		/* Create title text overlay */
-		title_actor = lactdelt_Res_Delta_Actor("title", &frame, 0, 0, 0);
+		title_actor = xactdelt_Res_Delta_Actor("title", &frame, 0, 0, 0);
 		if (!title_actor)
 			return mainmenu_setup_failed(t, "title");
-		lactor_Set_Actor_User_Function(title_actor, (lactorCallback)user_Title);
-		lactor_Set_Actor_Draw_Function(title_actor, (lactorDrawFunc)draw_Title);
+		xactor_Set_Actor_User_Function(title_actor, (xactorCallback)user_Title);
+		xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
 
 		/* Create XINPUT button regions */
-		parent = linput_Alloc_Input(NULL, &frame, 0, 0);
+		parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 		if (!parent)
 			return mainmenu_setup_failed(t, "main-menu input root");
 
 		/* Tour Battle button (only if current battle is active) */
 		if (pilot_record.battle_status[pilot_record.cur_battle] == 1) {
 			const int16_t* b = active_spec->button_bounds[0];
-			lrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
-			tour_input = linput_Alloc_Input(parent, &frame, 0, 0);
+			xrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
+			tour_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 			if (!tour_input)
 				return mainmenu_setup_failed(t, "tour input");
-			linpattr_Set_Input_Update_Function(tour_input, iupdate_MainMenu);
-			linpattr_Set_Input_User_Function(tour_input, iuser_MainMenu);
+			xinpattr_Set_Input_Update_Function(tour_input, iupdate_MainMenu);
+			xinpattr_Set_Input_User_Function(tour_input, iuser_MainMenu);
 			tour_input->mouseUsage = allInput;
 			tour_input->id = 0;
 		}
 
 		for (i = 2; i < 8; i++) {
 			const int16_t* b = active_spec->button_bounds[i];
-			lrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
-			menu_input[i] = linput_Alloc_Input(parent, &frame, 0, 0);
+			xrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
+			menu_input[i] = xinput_Alloc_Input(parent, &frame, 0, 0);
 			if (!menu_input[i])
 				return mainmenu_setup_failed(t, "main-menu input");
-			linpattr_Set_Input_Update_Function(menu_input[i], iupdate_MainMenu);
-			linpattr_Set_Input_User_Function(menu_input[i], iuser_MainMenu);
+			xinpattr_Set_Input_Update_Function(menu_input[i], iupdate_MainMenu);
+			xinpattr_Set_Input_User_Function(menu_input[i], iuser_MainMenu);
 			menu_input[i]->mouseUsage = allInput;
 			menu_input[i]->id = i;
 		}
 
 		/* Push the modal view task */
-		lview_Set_View_Update_Function(end_View);
-		lviewadd_Clear_View();
-		lview_Disable_All_View_Erase();
+		xview_Set_View_Update_Function(end_View);
+		xviewadd_Clear_View();
+		xview_Disable_All_View_Erase();
 
-		lviewadd_Push_Handle_View_Task();
+		xviewadd_Push_Handle_View_Task();
 
 		t->phase = MAINMENU_PHASE_CLEANUP;
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
 	/* CLEANUP */
-	lview_Enable_All_View_Erase();
-	lview_Clear_View_Update_Function();
+	xview_Enable_All_View_Erase();
+	xview_Clear_View_Update_Function();
 
-	if (lcursor_Is_Cursor_Visible())
-		lcursor_Hide_Cursor();
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
 
 	if (t->res_file)
-		lres_Close_Resource(t->res_file);
+		xres_Close_Resource(t->res_file);
 	if (t->spec->surface_set == LANDRU_SURFACE_SVGA)
-		(void)lsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
+		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 
 	return LANDRU_TASK_STEP_DONE;
 }

@@ -45,7 +45,7 @@ static int16_t num_credit_lines; /* paragraph count in credit text */
 // GLOBAL: TIE 0xF5E0A
 static int16_t credit_film_len; /* total animation length */
 // GLOBAL: TIE 0xF5E0C
-static void* credit_text; /* paragraph data from tietext0.lfd */
+static LandruHandle credit_text; /* paragraph data from tietext0.lfd */
 
 /* ================================================================
  * Helpers
@@ -64,21 +64,21 @@ static void* credit_text; /* paragraph data from tietext0.lfd */
  * z order. */
 static void Credit_Stars_To_Back(void) {
 	Rect r;
-	lrect_Set_Rect(&r, 0, 0, 320, 100);
+	xrect_Set_Rect(&r, 0, 0, 320, 100);
 	stub_Copy_From_Clipped_Buffer(star_buffer, &r, 0, 0, 320, 100);
 	stub_Copy_From_Clipped_Buffer(star_buffer, &r, 0, 100, 320, 100);
 
-	lactor_emit_draw(stars_actor, 0, 0);
-	lactor_emit_draw(stars_actor, 0, 100);
+	xactor_emit_draw(stars_actor, 0, 0);
+	xactor_emit_draw(stars_actor, 0, 100);
 }
 
 /* Render a star actor into the 320x100 star buffer. Fills with black,
  * calls the actor's draw, copies canvas to buffer. */
 static void Credit_Actor_To_Buffer(Actor* actor, void* buffer) {
 	Rect r;
-	lrect_Set_Rect(&r, 0, 0, 320, 100);
+	xrect_Set_Rect(&r, 0, 0, 320, 100);
 	if (actor->draw) {
-		lpaint_Paint_Clipped_Rect(&r, 0);
+		xpaint_Paint_Clipped_Rect(&r, 0);
 		actor->draw(actor, &r, &r, actor->x, actor->y, 1);
 	}
 	stub_Copy_To_Clipped_Buffer(buffer, &r, 0, 0, 320, 100);
@@ -87,8 +87,8 @@ static void Credit_Actor_To_Buffer(Actor* actor, void* buffer) {
 /* Initialize credit display state: dirty rect, paragraph count,
  * text hold duration, total film length. */
 static void Init_Credit_Info(void) {
-	lrect_Set_Rect(&credit_dirty_rect, 40, 40, 280, 160);
-	num_credit_lines = lparagrp_Count_Paragraphs(credit_text);
+	xrect_Set_Rect(&credit_dirty_rect, 40, 40, 280, 160);
+	num_credit_lines = xparagrp_Count_Paragraphs(credit_text);
 	credit_text_len = 130;
 	film_time = 0;
 	credit_film_len = 90 * (num_credit_lines - 1) + 138;
@@ -103,7 +103,7 @@ static void end_View(int32_t frame_num) {
 	int16_t exit_id;
 	int16_t done = (film_time == credit_film_len) ? 1 : 0;
 	if (shellext_Check_Scene_Exit(&exit_id, next_credit_scene, next_credit_scene, done))
-		lerror_Set_Landru_Exit(exit_id);
+		xerror_Set_Landru_Exit(exit_id);
 	film_time++;
 }
 
@@ -121,7 +121,8 @@ static void end_View(int32_t frame_num) {
  * base_y = film_time + 96, decremented by 90 per paragraph.
  * color = palette index for the text (ramps 167..239 range).
  * text_y = vertical position for text block. */
-static int draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff, int16_t refresh) {
+static int16_t draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+						   int16_t refresh) {
 	(void)actor;
 	(void)xoff;
 	(void)yoff;
@@ -132,10 +133,10 @@ static int draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int
 	/* Film ended: black screen */
 	if (credit_film_len <= film_time) {
 		Rect r;
-		lrect_Set_Rect(&r, 0, 0, 320, 200);
-		lpaint_Paint_Clipped_Rect(&r, 0);
-		lcanvas_Invalid_Screen_Diff();
-		ldirty_Max_Dirty_List();
+		xrect_Set_Rect(&r, 0, 0, 320, 200);
+		xpaint_Paint_Clipped_Rect(&r, 0);
+		xcanvas_Invalid_Screen_Diff();
+		xdirty_Max_Dirty_List();
 		return 1;
 	}
 
@@ -178,7 +179,7 @@ static int draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int
 				}
 			}
 
-			int16_t num_strings = lparagrp_Count_Paragraph_Strings(credit_text, credit_idx);
+			int16_t num_strings = xparagrp_Count_Paragraph_Strings(credit_text, credit_idx);
 
 			/* Draw red/blue bar decorations during hold phase */
 			if (time_offset >= 45) {
@@ -195,34 +196,34 @@ static int draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int
 				}
 
 				if (bar_width != -1) {
-					lactdelt_Draw_Delta_Actor(red_bar, bounds, clip, bar_width - 240, 79, refresh);
+					xactdelt_Draw_Delta_Actor(red_bar, bounds, clip, bar_width - 240, 79, refresh);
 
 					Rect saved_clip;
-					lcanvas_Get_Drawing_Canvas_Clip(&saved_clip);
+					xcanvas_Get_Drawing_Canvas_Clip(&saved_clip);
 
 					Rect bar_clip;
-					lrect_Set_Rect(&bar_clip, 0, 0, 320, 10 * (num_strings - 1) + 93);
-					lrect_Clip_Rect(&bar_clip, clip);
-					lcanvas_Set_Drawing_Canvas_Clip(&bar_clip);
+					xrect_Set_Rect(&bar_clip, 0, 0, 320, 10 * (num_strings - 1) + 93);
+					xrect_Clip_Rect(&bar_clip, clip);
+					xcanvas_Set_Drawing_Canvas_Clip(&bar_clip);
 
-					lactdelt_Draw_Delta_Actor(blue_bar, &bar_clip, &bar_clip, 320 - bar_width, 91, refresh);
+					xactdelt_Draw_Delta_Actor(blue_bar, &bar_clip, &bar_clip, 320 - bar_width, 91, refresh);
 
-					lcanvas_Set_Drawing_Canvas_Clip(&saved_clip);
+					xcanvas_Set_Drawing_Canvas_Clip(&saved_clip);
 				}
 			}
 
 			/* Draw text lines */
 			Rect text_rect;
-			lrect_Set_Rect(&text_rect, 0, text_y, 320, text_y + 10);
+			xrect_Set_Rect(&text_rect, 0, text_y, 320, text_y + 10);
 
 			int16_t i;
 			for (i = 0; i < num_strings; i++) {
 				char line_buf[80];
-				lparagrp_Get_Paragraph_String(credit_text, line_buf, credit_idx, i);
-				lfont_Print_Centered_Text(line_buf, &text_rect, color, 0);
+				xparagrp_Get_Paragraph_String(credit_text, line_buf, credit_idx, i);
+				xfont_Print_Centered_Text(line_buf, &text_rect, color, 0);
 
 				int16_t spacing = i ? 10 : 12;
-				lrect_Offset_Rect(&text_rect, 0, spacing);
+				xrect_Offset_Rect(&text_rect, 0, spacing);
 			}
 		}
 
@@ -232,7 +233,7 @@ static int draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int
 		credit_idx++;
 	}
 
-	ldirty_Dirty_Rect(&credit_dirty_rect);
+	xdirty_Dirty_Rect(&credit_dirty_rect);
 	return 1;
 }
 
@@ -267,37 +268,37 @@ static LandruTaskStepResult credits_task_step(void* self) {
 		/* Load resources */
 		t->credit_res = shellext_Open_Empire_Resource("credits.lfd");
 		t->text_res = shellext_Open_Empire_Resource("tietext0.lfd");
-		credit_text = lparagrp_Res_Paragraph(t->text_res, "credits");
+		credit_text = xparagrp_Res_Paragraph(t->text_res, "credits");
 
 		/* Allocate star buffer and render star background */
-		lrect_Set_Rect(&r, 0, 0, 320, 200);
+		xrect_Set_Rect(&r, 0, 0, 320, 200);
 		star_buffer = calloc(1, 32000);
 
-		stars_actor = lactdelt_Res_Delta_Actor("stars", &r, 0, 0, 100);
-		lactor_Set_Actor_Time(stars_actor, 0, 0);
+		stars_actor = xactdelt_Res_Delta_Actor("stars", &r, 0, 0, 100);
+		xactor_Set_Actor_Time(stars_actor, 0, 0);
 
-		red_bar = lactdelt_Res_Delta_Actor("redbar", &r, 0, 0, 100);
-		lactor_Set_Actor_Time(red_bar, 0, 0);
+		red_bar = xactdelt_Res_Delta_Actor("redbar", &r, 0, 0, 100);
+		xactor_Set_Actor_Time(red_bar, 0, 0);
 
-		blue_bar = lactdelt_Res_Delta_Actor("bluebar", &r, 0, 0, 100);
-		lactor_Set_Actor_Time(blue_bar, 0, 0);
+		blue_bar = xactdelt_Res_Delta_Actor("bluebar", &r, 0, 0, 100);
+		xactor_Set_Actor_Time(blue_bar, 0, 0);
 
 		Credit_Actor_To_Buffer(stars_actor, star_buffer);
 
-		credit_actor = lactcust_Alloc_Custom_Actor(NULL, &r, 0, 0, 0);
-		lactor_Set_Actor_Draw_Function(credit_actor, (lactorDrawFunc)draw_Credit);
+		credit_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 0);
+		xactor_Set_Actor_Draw_Function(credit_actor, draw_Credit);
 
-		Palette* pal = lpal_Res_Palette("colors");
-		lpal_Set_Dest_Palette(pal);
-		lpal_Set_Dest_Palette(t->scene_head->def_palette);
+		Palette* pal = xpal_Res_Palette("colors");
+		xpal_Set_Dest_Palette(pal);
+		xpal_Set_Dest_Palette(t->scene_head->def_palette);
 
 		Init_Credit_Info();
 
-		lfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
+		xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
 
-		lview_Set_View_Update_Function(end_View);
-		lview_Disable_Global_View_Erase();
-		ltimer_Set_Frame_Rate(12);
+		xview_Set_View_Update_Function(end_View);
+		xview_Disable_Global_View_Erase();
+		xtimer_Set_Frame_Rate(12);
 
 		/* Tag the scene for the HD compositor: bundle key
 		 * (CREDITS, credits) resolves the remaster manifest at
@@ -311,28 +312,36 @@ static LandruTaskStepResult credits_task_step(void* self) {
 
 		/* Push the view modal task. The runner steps IT on
 		 * subsequent ticks; we do not run again until it pops. */
-		lviewadd_Push_Handle_View_Task();
+		xviewadd_Push_Handle_View_Task();
 
 		t->phase = CREDITS_PHASE_CLEANUP;
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
+	return LANDRU_TASK_STEP_DONE;
+}
+
+static void credits_task_end(void* self) {
+	CreditsTask* t = (CreditsTask*)self;
+	if (t->phase == CREDITS_PHASE_BEGIN)
+		return;
+
 	/* CLEANUP — view task popped; do teardown. */
-	ltimer_Set_Frame_Rate(20);
-	lview_Enable_Global_View_Erase();
-	lview_Clear_View_Update_Function();
+	xtimer_Set_Frame_Rate(20);
+	xview_Enable_Global_View_Erase();
+	xview_Clear_View_Update_Function();
 
 	free(star_buffer);
 	star_buffer = NULL;
-	lparagrp_Free_Paragraph(credit_text);
-	lres_Close_Resource(t->text_res);
-	lres_Close_Resource(t->credit_res);
-
-	return LANDRU_TASK_STEP_DONE;
+	xparagrp_Free_Paragraph(credit_text);
+	credit_text = LANDRU_NULL_HANDLE;
+	xres_Close_Resource(t->text_res);
+	xres_Close_Resource(t->credit_res);
 }
 
 static const LandruTaskVtable credits_task_vt = {
 	.step = credits_task_step,
+	.end = credits_task_end,
 };
 
 void credits_Push_Credits_Task(SceneHeadStruct* scene_head) {

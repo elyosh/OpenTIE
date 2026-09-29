@@ -230,12 +230,12 @@ static LandruTaskStepResult flight_scene_step(void* self) {
 			if (t->kind == TIE_FLIGHT_KIND_FILM_REPLAY) {
 				gamesnd_game_Set_Flight_Sound();
 				flightResolution = TieProfile_UsesTie98Logic() ? TIE_FLIGHT_RES_SVGA : TIE_FLIGHT_RES_VGA;
-				lstream_Exit_Stream_Engine();
+				xstream_Exit_Stream_Engine(0);
 				tie_Push_Simulator_Task(1);
 			} else {
 				shipext_Mission_Enter(t->cur_scene);
 				gamesnd_game_Set_Flight_Sound();
-				lstream_Exit_Stream_Engine();
+				xstream_Exit_Stream_Engine(0);
 				/* Pull the user's "Transitions" pref into the live flag.
 				 * Retail does `transitions_on = BYTE2(dword_F503E)` here
 				 * (the low byte of options_gbl.transition_active). Without
@@ -256,8 +256,8 @@ static LandruTaskStepResult flight_scene_step(void* self) {
 				g_frontendDisplayWndProcMode = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 1 : -1;
 
 			shipext_Reset_Battle_Results();
-			lstream_Init_Stream_Engine(SHELL_STREAM_BUFFER_BYTES, SHELL_STREAM_PREFETCH_BYTES);
-			lpal_Set_Screen_RGB(0, 255, 0, 0, 0);
+			xstream_Init_Stream_Engine(0, SHELL_STREAM_BUFFER_BYTES, SHELL_STREAM_PREFETCH_BYTES);
+			xpal_Set_Screen_RGB(0, 255, 0, 0, 0);
 			gamesnd_game_Set_Front_Sound();
 
 			if (t->kind == TIE_FLIGHT_KIND_BATTLE) {
@@ -274,7 +274,7 @@ static LandruTaskStepResult flight_scene_step(void* self) {
 
 			/* Hand the next scene back to ShellTask via the Landru exit
 			 * latch (same channel the Layer-3 scene tasks use). */
-			lerror_Set_Landru_Exit(next);
+			xerror_Set_Landru_Exit(next);
 			return LANDRU_TASK_STEP_DONE;
 		}
 	}
@@ -420,7 +420,7 @@ static int shell_dispatch_converted(int16_t cur_scene, ShellTask* t) {
 		return 1;
 	}
 	if (is_play1_nodiff_scene(cur_scene)) {
-		lcanvas_Disable_Screen_Diff();
+		xcanvas_Disable_Screen_Diff();
 		t->diff_disabled = true;
 		play1_Push_Play1_Task(sHead_gbl);
 		return 1;
@@ -442,13 +442,13 @@ static LandruTaskStepResult shell_task_step(void* self) {
 		 * fade and yield. The Finalize_Close + Convert_Transition
 		 * step happens in AFTER_SUDDEN_FADE — that phase runs even
 		 * when no fade was pushed (single-step fall-through). */
-		t->next_scene = lerror_Get_Landru_Exit();
+		t->next_scene = xerror_Get_Landru_Exit();
 		if (t->owns_tie98_music) {
 			FrontendWaveStream_Shutdown();
 			t->owns_tie98_music = false;
 		}
 		if (t->diff_disabled) {
-			lcanvas_Enable_Screen_Diff();
+			xcanvas_Enable_Screen_Diff();
 			t->diff_disabled = false;
 		}
 		int16_t sudden_end = 0;
@@ -467,7 +467,7 @@ static LandruTaskStepResult shell_task_step(void* self) {
 	}
 
 	/* DISPATCH phase. */
-	if (t->exit_flag || lerror_Is_Landru_Error())
+	if (t->exit_flag || xerror_Is_Landru_Error())
 		return LANDRU_TASK_STEP_DONE;
 
 	/* Reset HD-overlay scene tags to their defaults right before
@@ -483,14 +483,14 @@ static LandruTaskStepResult shell_task_step(void* self) {
 	TieSnapshotBuilder_SetActiveFilm(NULL, NULL);
 	TieSnapshotBuilder_SetRedrawModel(TIE_REDRAW_INCREMENTAL);
 	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 &&
-		!lsurface_Select_Surface_Set(LANDRU_SURFACE_VGA)) {
+		!xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA)) {
 		TieDiagnostics_Log(TIE_LOG_ERROR, "[SHELL] could not select VGA Landru surface for scene %d\n",
 						   t->cur_scene);
-		lerror_Set_Landru_Error(7);
+		xerror_Set_Landru_Error(7);
 		return LANDRU_TASK_STEP_DONE;
 	}
 	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-		lview_Init_View(lview_Get_Current_View());
+		xview_Init_View(xview_Get_Current_View());
 	/* MODERN TASK ADAPTATION: original SHELL_Shell clears and presents
 	 * immediately before entering these display-owning scene handlers. */
 	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 &&
@@ -536,7 +536,7 @@ static void shell_task_end(void* self) {
 	FrontendWaveStream_Shutdown();
 	shipext_Validate_Tour_Battle();
 	shipext_Delete_Temp_Pilot();
-	lstream_Exit_Stream_Engine();
+	xstream_Exit_Stream_Engine(0);
 	shellext_Close_Landru(0);
 	gamesnd_Close_Pre_iMuse();
 	if (TieProfile_UsesDx5())
@@ -566,17 +566,17 @@ void shell_session_begin(int16_t scene, int16_t script) {
 
 	frontResolution = (int16_t)TieProfile_Frontend()->vesa_mode;
 
-	lerror_Clear_Landru_Error();
+	xerror_Clear_Landru_Error();
 	gamesnd_Open_Pre_iMuse();
 	gamesnd_game_Set_Front_Sound();
 
 	shellext_Open_Landru(NULL, 0, script);
 
 	imuse_pause(im);
-	lstream_Set_Stream_Tick_Counts();
+	xstream_Set_Stream_Tick_Counts();
 	imuse_resume(im);
 
-	lstream_Init_Stream_Engine(SHELL_STREAM_BUFFER_BYTES, SHELL_STREAM_PREFETCH_BYTES);
+	xstream_Init_Stream_Engine(0, SHELL_STREAM_BUFFER_BYTES, SHELL_STREAM_PREFETCH_BYTES);
 
 	soundext_Prep_Sound_Scene(scene);
 }

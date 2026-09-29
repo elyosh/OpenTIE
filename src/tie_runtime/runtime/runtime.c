@@ -153,7 +153,7 @@ bool TieRuntime_IsActive(void) { return !landru_task_stack_empty(); }
 void TieRuntime_RequestExit(void) {
 	s_quit_requested = true;
 	g_quitRequested = 1;
-	lerror_Set_Landru_Exit(0);
+	xerror_Set_Landru_Exit(0);
 }
 
 bool TieRuntime_ShouldExit(void) { return s_quit_requested; }
@@ -220,7 +220,7 @@ static uint64_t TieRuntime_FrontendPresentDelayUs(void) {
 
 	/* A palette update waits for its retrace before the subsequent frame
 	 * transfer. Preserve that ordering instead of overlapping both waits. */
-	uint64_t palette_delay_us = lpal_Next_VGA_Delay_Us();
+	uint64_t palette_delay_us = xpal_Next_VGA_Delay_Us();
 	if (palette_delay_us != UINT64_MAX)
 		return palette_delay_us;
 
@@ -287,7 +287,7 @@ static void TieRuntime_RunFrontendTasks(int32_t delta_us) {
 
 		/* Advancing time can itself update a cycling palette. Its retrace
 		 * wait takes precedence over the task that was otherwise due. */
-		if (lpal_Next_VGA_Delay_Us() != UINT64_MAX) {
+		if (xpal_Next_VGA_Delay_Us() != UINT64_MAX) {
 			s_frontend_task_waiting = true;
 			runnable = false;
 			continue;
@@ -320,7 +320,7 @@ static void TieRuntime_RunFrontendTasks(int32_t delta_us) {
 		}
 
 		s_frontend_task_waiting = false;
-		if (lpal_Next_VGA_Delay_Us() != UINT64_MAX) {
+		if (xpal_Next_VGA_Delay_Us() != UINT64_MAX) {
 			s_frontend_task_waiting = true;
 			runnable = false;
 		}
@@ -349,7 +349,7 @@ void TieRuntime_Tick(int32_t delta_us) {
 
 	if (TieClassicDisplay_FrontendActive()) {
 		LandruVideoTarget target;
-		if (lsurface_Get_Active_Video_Target(&target)) {
+		if (xsurface_Get_Active_Video_Target(&target)) {
 			TieSnapshotBuilder_SetClassicDims((uint16_t)target.width, (uint16_t)target.height);
 			TieSnapshotBuilder_SetLandruPresentation((uint16_t)target.width, (uint16_t)target.height,
 													 target.width == 320 ? TIE_SOURCE_PIXEL_ASPECT_VGA_4_3

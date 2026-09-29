@@ -29,7 +29,7 @@ int stub_Copy_From_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x
 	int16_t copy_w, copy_h;
 	int16_t dest_x, dest_y;
 
-	lcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
+	xcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
 	clip_w = canvas_clip.right - canvas_clip.left;
 	clip_h = canvas_clip.bottom - canvas_clip.top;
 
@@ -69,15 +69,15 @@ int stub_Copy_From_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x
 	/* Build temporary bitmap wrapping the buffer */
 	bm.w = buf_w;
 	bm.h = buf_h;
-	lrect_Set_Rect(&bm.clip, 0, 0, buf_w, buf_h);
+	xrect_Set_Rect(&bm.clip, 0, 0, buf_w, buf_h);
 	bm.flags = 0;
 	bm.type = 0;
 	bm.offset = 0;
 	bm.data = buffer;
 
 	Rect copy_rect;
-	lrect_Set_Rect(&copy_rect, buf_left, buf_top, copy_w + buf_left, buf_top + copy_h);
-	lcanvas_Copy_Bitmap_Portion_To_Canvas(&bm, &copy_rect, dest_x, dest_y);
+	xrect_Set_Rect(&copy_rect, buf_left, buf_top, copy_w + buf_left, buf_top + copy_h);
+	xcanvas_Copy_Bitmap_Portion_To_Canvas(&bm, &copy_rect, dest_x, dest_y);
 	return 1;
 }
 
@@ -91,7 +91,7 @@ int stub_Copy_To_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, 
 	int16_t copy_w, copy_h;
 	int16_t src_x, src_y;
 
-	lcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
+	xcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
 	clip_w = canvas_clip.right - canvas_clip.left;
 	clip_h = canvas_clip.bottom - canvas_clip.top;
 
@@ -131,15 +131,15 @@ int stub_Copy_To_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, 
 	/* Build temporary bitmap wrapping the buffer */
 	bm.w = buf_w;
 	bm.h = buf_h;
-	lrect_Set_Rect(&bm.clip, 0, 0, buf_w, buf_h);
+	xrect_Set_Rect(&bm.clip, 0, 0, buf_w, buf_h);
 	bm.flags = 0;
 	bm.type = 0;
 	bm.offset = 0;
 	bm.data = buffer;
 
 	Rect copy_rect;
-	lrect_Set_Rect(&copy_rect, buf_left, buf_top, copy_w + buf_left, buf_top + copy_h);
-	lcanvas_Copy_Canvas_Portion_To_Bitmap(&bm, &copy_rect, src_x, src_y);
+	xrect_Set_Rect(&copy_rect, buf_left, buf_top, copy_w + buf_left, buf_top + copy_h);
+	xcanvas_Copy_Canvas_Portion_To_Bitmap(&bm, &copy_rect, src_x, src_y);
 	return 1;
 }
 
@@ -175,7 +175,7 @@ void stub_Map_Clipped_Image(void* src_data, int16_t* dst_poly, Rect* src_rect, i
 	int16_t* poly_y = dst_poly + 4;
 
 	/* Build source-space polygon from src_rect corners (TL, TR, BR, BL) */
-	lrect_Set_Poly(&src_poly, src_rect->left, src_rect->top, src_rect->right - 1, src_rect->top,
+	xrect_Set_Poly(&src_poly, src_rect->left, src_rect->top, src_rect->right - 1, src_rect->top,
 				   src_rect->right - 1, src_rect->bottom - 1, src_rect->left, src_rect->bottom - 1);
 
 	/* Find min/max Y vertices */

@@ -447,7 +447,7 @@ void rtsvga2_unblankVGA(void) {
 void rtsvga2_clearflightdisplay(void) {
 	rtsvga2_blankVGA();
 	blankcondition = 0;
-	lvesa_Erase_Video(16);
+	xvesa_Erase_Video(16);
 }
 
 /* ------------------------------------------------------------------ */

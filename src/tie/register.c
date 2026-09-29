@@ -371,11 +371,14 @@ static int16_t Index_To_Pilot_Record(int16_t logical_idx, FastPilotRecord* out_r
 // PORT: capacity parameter supports the wider TIE98 pilot name.
 // HARDENING: validates the destination and directory storage.
 static int16_t Find_Reg_Dir_Name(char* dst, size_t capacity, int16_t idx) {
-	if (!dst || !capacity || !directory.entries || idx < 0)
+	if (!dst || !capacity || !directory.entries || idx < 0 || idx >= directory.count)
 		return 0;
-	DirEntry* entries = directory.entries;
+	const DirEntry* entries = xmemhdl_Lock_Handle(directory.entries);
+	if (!entries)
+		return 0;
 	strncpy(dst, entries[idx].name, capacity - 1);
 	dst[capacity - 1] = 0;
+	xmemhdl_Unlock_Handle(directory.entries);
 	return 1;
 }
 
@@ -398,7 +401,7 @@ static void Get_Reg_String_Button_Name(RegStringButton* btn, char* dst, size_t c
 static void Set_Reg_String_Button_Name(RegStringButton* btn, const char* src) {
 	strncpy(btn->name, src, sizeof(btn->name) - 1);
 	btn->name[sizeof(btn->name) - 1] = 0;
-	linpattr_Refresh_Input(&btn->header);
+	xinpattr_Refresh_Input(&btn->header);
 }
 
 // FUNCTION: TIE95 0x7C408; TIE98 0x471EE0
@@ -419,12 +422,12 @@ static RegStringButton* Alloc_Input_Reg_String_Button(Input* parent, Rect* r, in
 													  InputUserFunc user_fn, const char* name,
 													  int16_t is_filename_mode, int16_t id) {
 	RegStringButton* btn =
-		(RegStringButton*)linput_Alloc_Dialog_Input(parent, r, zinput, sizeof(*btn) - sizeof(btn->header));
+		(RegStringButton*)xinput_Alloc_Dialog_Input(parent, r, zinput, sizeof(*btn) - sizeof(btn->header));
 	if (!btn)
 		return NULL;
-	linpattr_Set_Input_Draw_Function(&btn->header, idraw_Reg_String_Button);
-	linpattr_Set_Input_Update_Function(&btn->header, iupdate_Reg_String_Button);
-	linpattr_Set_Input_User_Function(&btn->header, user_fn);
+	xinpattr_Set_Input_Draw_Function(&btn->header, idraw_Reg_String_Button);
+	xinpattr_Set_Input_Update_Function(&btn->header, iupdate_Reg_String_Button);
+	xinpattr_Set_Input_User_Function(&btn->header, user_fn);
 	btn->header.id = id;
 	Set_Reg_String_Button_Name(btn, name);
 	btn->is_filename_mode = is_filename_mode;
@@ -586,7 +589,7 @@ static void Set_Your_Reg_Pilot(void) {
 static int16_t film_Callback(Film* film, FilmObject* fo) {
 	if (fo->id != 3)
 		return 0;
-	lfilm_Rewind_Actor_Film(film, fo, (void*)((char*)fo + sizeof(FilmObject)));
+	xfilm_Rewind_Actor_Film(film, fo, (void*)((char*)fo + sizeof(FilmObject)));
 	Actor* actor = (Actor*)fo->object;
 	if (actor->var1 == 10)
 		reg_button[actor->var2] = actor;
@@ -601,24 +604,24 @@ static int16_t film_Callback(Film* film, FilmObject* fo) {
 static void user_Door(Actor* door, int32_t time) {
 	(void)time;
 	if (door->var1) {
-		if (!lactor_Is_Actor_Visible(door)) {
+		if (!xactor_Is_Actor_Visible(door)) {
 			if (!door->state)
 				soundext_Play_SFX(sfxSmallDoorOpen, 0);
-			lactor_Show_Actor(door);
-			lactor_Set_Actor_State(door, 0, 0);
+			xactor_Show_Actor(door);
+			xactor_Set_Actor_State(door, 0, 0);
 		} else {
 			if (door->state < door->arraySize - 1)
-				lactor_Set_Actor_State(door, door->state + 1, 0);
+				xactor_Set_Actor_State(door, door->state + 1, 0);
 		}
 		door->var1 = 0;
 	} else {
-		if (lactor_Is_Actor_Visible(door)) {
+		if (xactor_Is_Actor_Visible(door)) {
 			if (door->state <= 0) {
 				soundext_Play_SFX(sfxSmallDoorShut, 0);
-				lactor_Hide_Actor(door);
-				lactor_Refresh_Actor(reg_bak);
+				xactor_Hide_Actor(door);
+				xactor_Refresh_Actor(reg_bak);
 			} else {
-				lactor_Set_Actor_State(door, door->state - 1, 0);
+				xactor_Set_Actor_State(door, door->state - 1, 0);
 			}
 		}
 	}
@@ -631,29 +634,29 @@ static void user_Troop(Actor* troop, int32_t time) {
 		if (troop->state == 3)
 			soundext_Play_SFX(sfxGunCock, 64);
 		if (troop->state < troop->arraySize - 1)
-			lactor_Set_Actor_State(troop, troop->state + 1, 0);
+			xactor_Set_Actor_State(troop, troop->state + 1, 0);
 		troop->var1 = 0;
 	} else {
 		if (troop->state > 0)
-			lactor_Set_Actor_State(troop, troop->state - 1, 0);
+			xactor_Set_Actor_State(troop, troop->state - 1, 0);
 	}
 }
 
 // FUNCTION: TIE95 0x7AC80; TIE98 0x4704C0
-static int draw_Register_Back(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-							  int16_t refresh) {
+static int16_t draw_Register_Back(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								  int16_t refresh) {
 	if (!refresh)
 		return 1;
-	lactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
+	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
 	if (num_pages > 1) {
 		Rect r;
 		const int16_t* b = active_spec->page_bounds;
-		lrect_Set_Rect(&r, b[0], b[1], b[2], b[3]);
+		xrect_Set_Rect(&r, b[0], b[1], b[2], b[3]);
 		char buf[16];
 		snprintf(buf, sizeof(buf), "%d:%d", cur_page + 1, num_pages);
-		lfont_Enable_FontID_Shadow(1);
-		lfont_Print_Centered_Text(buf, &r, 15, active_spec->page_font);
-		lfont_Disable_FontID_Shadow(1);
+		xfont_Enable_FontID_Shadow(1);
+		xfont_Print_Centered_Text(buf, &r, 15, active_spec->page_font);
+		xfont_Disable_FontID_Shadow(1);
 	}
 	return 1;
 }
@@ -665,24 +668,24 @@ static int draw_Register_Back(Actor* actor, Rect* bounds, Rect* clip, int16_t xo
 // FUNCTION: TIE95 0x7C1BC; TIE98 0x471C40
 static void idraw_Reg_String_Button(Input* input, Rect* frame, Rect* clip, int16_t refresh) {
 	RegStringButton* btn = (RegStringButton*)input;
-	int16_t saved_font = lfont_Get_Font();
-	lfont_Set_Font(active_spec->edit_font);
-	int16_t str_width = lfont_Get_String_Width(btn->name);
-	lfont_Set_Font(saved_font);
+	int16_t saved_font = xfont_Get_Font();
+	xfont_Set_Font(active_spec->edit_font);
+	int16_t str_width = xfont_Get_String_Width(btn->name);
+	xfont_Set_Font(saved_font);
 
 	if (refresh) {
-		lstyle_Style_Paint_TextField(frame);
-		int16_t color = lstyle_Get_Style_Down_Color();
-		lfont_Print_Clipped_Text(btn->name, frame->left + 3, frame->top + 3, active_spec->edit_font, color);
+		xstyle_Style_Paint_TextField(frame);
+		int16_t color = xstyle_Get_Style_Down_Color();
+		xfont_Print_Clipped_Text(btn->name, frame->left + 3, frame->top + 3, active_spec->edit_font, color);
 	}
 
-	if (linpattr_Is_Input_Active(&btn->header)) {
-		int16_t caret_color = lio_Blink() ? lstyle_Get_Style_Down_Color() : 0;
-		lpaint_Horiz_Clipped_Line(frame->left + str_width + 4, frame->top + 11, 6, caret_color);
+	if (xinpattr_Is_Input_Active(&btn->header)) {
+		int16_t caret_color = xio_Blink() ? xstyle_Get_Style_Down_Color() : 0;
+		xpaint_Horiz_Clipped_Line(frame->left + str_width + 4, frame->top + 11, 6, caret_color);
 	}
 
-	if (linpattr_Is_Input_Dirty(&btn->header))
-		ldirty_Dirty_Rect(clip);
+	if (xinpattr_Is_Input_Dirty(&btn->header))
+		xdirty_Dirty_Rect(clip);
 }
 
 // FUNCTION: TIE95 0x7C288; TIE98 0x471D20
@@ -700,7 +703,7 @@ static int16_t iupdate_Reg_String_Button(Input* input, Rect* bounds, Rect* clip,
 	int16_t changed = 1;
 
 	if (key) {
-		lio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+		xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
 		if (key == 0x5300 || key == 8) {
 			/* Delete/Backspace */
 			int16_t len = (int16_t)strlen(work);
@@ -734,8 +737,8 @@ static int16_t iupdate_Reg_String_Button(Input* input, Rect* bounds, Rect* clip,
 
 	strcpy(btn->name, work);
 	if (changed) {
-		linpattr_Refresh_Input(&btn->header);
-		linpattr_Selected_Input(&btn->header);
+		xinpattr_Refresh_Input(&btn->header);
+		xinpattr_Selected_Input(&btn->header);
 	}
 	return 0;
 }
@@ -759,7 +762,7 @@ static int16_t iupdate_Register(Input* input, Rect* bounds, Rect* clip, int16_t 
 
 	if (!strlen(name_buf)) {
 		input->var1 = 3;
-		if (!lactor_Is_Actor_Visible(reg_door))
+		if (!xactor_Is_Actor_Visible(reg_door))
 			reg_troop->var1 = 1;
 		return 1;
 	}
@@ -769,7 +772,7 @@ static int16_t iupdate_Register(Input* input, Rect* bounds, Rect* clip, int16_t 
 	if (pilot_active != -1 && Index_To_Pilot_Record(pilot_active, &fpr)) {
 		if (fpr.lost_status) {
 			input->var1 = (fpr.lost_status == 2) ? 5 : 4;
-			if (!lactor_Is_Actor_Visible(reg_door))
+			if (!xactor_Is_Actor_Visible(reg_door))
 				reg_troop->var1 = 1;
 			return 1;
 		}
@@ -794,7 +797,7 @@ static void iuser_Register(Input* input, int32_t time) {
 	int16_t state = input->var1;
 	switch (state) {
 		case 1: {
-			lerror_Set_Landru_Exit(input->var2);
+			xerror_Set_Landru_Exit(input->var2);
 			char name_buf[TIE_PILOT_NAME_CAPACITY];
 			Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
 			shipext_Set_Pilot_Name(name_buf);
@@ -832,7 +835,7 @@ static int16_t iupdate_Pilot_List(Input* input, Rect* bounds, Rect* clip, int16_
 		return 1;
 
 	int16_t row =
-		(mouse_y + active_spec->list_click_bias) / (lfont_Get_FontID_Height(active_spec->list_font) + 1) -
+		(mouse_y + active_spec->list_click_bias) / (xfont_Get_FontID_Height(active_spec->list_font) + 1) -
 		active_spec->list_click_offset;
 	if (row < 0)
 		row = 0;
@@ -850,7 +853,7 @@ static int16_t iupdate_Pilot_List(Input* input, Rect* bounds, Rect* clip, int16_
 
 	shipext_Set_Pilot_Name("");
 	Set_Reg_String_Button_Name(pilot_name_input, dir_name);
-	linpattr_Refresh_Input(input);
+	xinpattr_Refresh_Input(input);
 	pilot_active = pilot_offset + row;
 	pilot_info->var1 = 1;
 	return 1;
@@ -861,14 +864,14 @@ static void idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int16_t refr
 	if (!refresh)
 		return;
 
-	lpaint_Paint_Clipped_Rect(frame, 240);
+	xpaint_Paint_Clipped_Rect(frame, 240);
 	Rect dst;
-	lrect_Copy_Rect(&dst, frame);
+	xrect_Copy_Rect(&dst, frame);
 	dst.left++;
-	dst.bottom = dst.top + lfont_Get_FontID_Height(active_spec->list_font) + 3;
+	dst.bottom = dst.top + xfont_Get_FontID_Height(active_spec->list_font) + 3;
 	dst.top += 2;
 
-	lfont_Enable_FontID_Shadow(active_spec->list_font);
+	xfont_Enable_FontID_Shadow(active_spec->list_font);
 
 	for (int16_t row = 0; row < active_spec->page_size; row++) {
 		int16_t wanted = pilot_offset + row;
@@ -891,13 +894,13 @@ static void idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int16_t refr
 		if (pilot_active == wanted)
 			color = 14;
 
-		lfont_Print_Clipped_Text(display_name, dst.left + 1, dst.top, active_spec->list_font, color);
-		lrect_Offset_Rect(&dst, 0, lfont_Get_FontID_Height(active_spec->list_font) + 1);
+		xfont_Print_Clipped_Text(display_name, dst.left + 1, dst.top, active_spec->list_font, color);
+		xrect_Offset_Rect(&dst, 0, xfont_Get_FontID_Height(active_spec->list_font) + 1);
 	}
 
-	lfont_Disable_FontID_Shadow(active_spec->list_font);
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip);
+	xfont_Disable_FontID_Shadow(active_spec->list_font);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip);
 }
 
 /* ================================================================
@@ -914,16 +917,16 @@ static void iuser_Pilot_Button(Input* input, int32_t time) {
 	 * below uses three distinct actor state formulas. */
 	if (active_spec->shared_page_button_actor) {
 		int16_t actor_id = id == 0 ? 0 : 1;
-		lactor_Set_Actor_State(reg_button[actor_id], btn->pressed, 0);
+		xactor_Set_Actor_State(reg_button[actor_id], btn->pressed, 0);
 	} else if (id == 0) {
-		lactor_Set_Actor_State(reg_button[0], 2 * btn->pressed, 0);
+		xactor_Set_Actor_State(reg_button[0], 2 * btn->pressed, 0);
 	} else if (id == 1) {
-		lactor_Set_Actor_State(reg_button[1], 2 * btn->pressed + 1, 0);
+		xactor_Set_Actor_State(reg_button[1], 2 * btn->pressed + 1, 0);
 	} else if (id == 2) {
-		lactor_Set_Actor_State(reg_button[2], btn->pressed + 4, 0);
+		xactor_Set_Actor_State(reg_button[2], btn->pressed + 4, 0);
 	}
 
-	if (!linpattr_Get_Input_Selected(&btn->header))
+	if (!xinpattr_Get_Input_Selected(&btn->header))
 		return;
 	soundext_Play_SFX(sfxButton, 64);
 
@@ -951,12 +954,12 @@ static void iuser_Pilot_Button(Input* input, int32_t time) {
 			TieDiagnostics_Log(TIE_LOG_ERROR, "[REGISTER] could not allocate delete dialog\n");
 			return;
 		}
-		s_delete_ctx.was_key_buttons = lio_Is_Key_Buttons();
+		s_delete_ctx.was_key_buttons = xio_Is_Key_Buttons();
 		s_delete_ctx.sub_dlg = sub;
 		if (!s_delete_ctx.was_key_buttons)
-			lio_Set_Key_Buttons();
-		lio_Set_Mouse_Position(active_spec->delete_mouse_x, active_spec->delete_mouse_y);
-		ldialog_Schedule_Sub_Dialog(sub, after_delete_dialog, &s_delete_ctx);
+			xio_Set_Key_Buttons();
+		xio_Set_Mouse_Position(active_spec->delete_mouse_x, active_spec->delete_mouse_y);
+		xdialog_Schedule_Sub_Dialog(sub, after_delete_dialog, &s_delete_ctx);
 	}
 }
 
@@ -966,13 +969,13 @@ static void iuser_Pilot_Button(Input* input, int32_t time) {
 static void after_delete_dialog(int16_t result, void* ctx) {
 	DeleteCtx* c = (DeleteCtx*)ctx;
 
-	lview_Refresh_View();
-	linput_Free_Inputs(c->sub_dlg);
+	xview_Refresh_View();
+	xinput_Free_Inputs(c->sub_dlg);
 	c->sub_dlg = NULL;
 
 	if (!c->was_key_buttons)
-		lio_Clear_Key_Buttons();
-	lio_Set_Mouse_Position(active_spec->delete_return_mouse_x, active_spec->delete_return_mouse_y);
+		xio_Clear_Key_Buttons();
+	xio_Set_Mouse_Position(active_spec->delete_return_mouse_x, active_spec->delete_return_mouse_y);
 
 	if (result == 1) {
 		/* Confirmed delete */
@@ -982,7 +985,7 @@ static void after_delete_dialog(int16_t result, void* ctx) {
 		snprintf(path, sizeof(path), "%s.tfr", name_buf);
 		TieStorage_Remove(TIE_FILE_ROOT_USER, path);
 		Delete_Pilot_Record();
-		lview_Refresh_View();
+		xview_Refresh_View();
 	} else if (result != 2) {
 		/* Revive */
 		char name_buf[TIE_PILOT_NAME_CAPACITY];
@@ -990,7 +993,7 @@ static void after_delete_dialog(int16_t result, void* ctx) {
 		shipext_Load_Pilot(name_buf);
 		shipext_Revive_Pilot(name_buf);
 		register_Revive_Pilot_Info();
-		lview_Refresh_View();
+		xview_Refresh_View();
 	}
 }
 
@@ -1000,16 +1003,16 @@ static void idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, int16_t re
 		return;
 	PushButton* btn = (PushButton*)input;
 	Rect tr;
-	lrect_Copy_Rect(&tr, frame);
+	xrect_Copy_Rect(&tr, frame);
 	tr.top++;
 
 	int16_t color = btn->pressed ? 18 : 20;
 	if (btn->name) {
-		lfont_Print_Centered_Text(btn->name, &tr, color, active_spec->button_font);
+		xfont_Print_Centered_Text(btn->name, &tr, color, active_spec->button_font);
 	}
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip);
 }
 
 /* ================================================================
@@ -1020,7 +1023,7 @@ static void idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, int16_t re
 static void iuser_Pilot_Name(Input* input, int32_t time) {
 	(void)time;
 	RegStringButton* btn = (RegStringButton*)input;
-	if (!linpattr_Get_Input_Selected(&btn->header))
+	if (!xinpattr_Get_Input_Selected(&btn->header))
 		return;
 
 	int16_t matched = -1;
@@ -1038,11 +1041,11 @@ static void iuser_Pilot_Name(Input* input, int32_t time) {
 
 	if (matched == -1) {
 		if (pilot_active != -1) {
-			linpattr_Refresh_Input(pilot_list);
+			xinpattr_Refresh_Input(pilot_list);
 			pilot_active = -1;
 		}
 	} else if (matched != pilot_active) {
-		linpattr_Refresh_Input(pilot_list);
+		xinpattr_Refresh_Input(pilot_list);
 		pilot_active = matched;
 		int16_t page = matched / active_spec->page_size;
 		if (page != cur_page) {
@@ -1056,7 +1059,7 @@ static void iuser_Pilot_Name(Input* input, int32_t time) {
 	} else {
 		pilot_info->var1 = 0;
 		pilot_info->var2 = 0;
-		linpattr_Refresh_Input(pilot_info);
+		xinpattr_Refresh_Input(pilot_info);
 	}
 }
 
@@ -1076,11 +1079,11 @@ static void xuser_Pilot_Name(const char* search_name) {
 
 	if (matched == -1) {
 		if (pilot_active != -1) {
-			linpattr_Refresh_Input(pilot_list);
+			xinpattr_Refresh_Input(pilot_list);
 			pilot_active = -1;
 		}
 	} else if (matched != pilot_active) {
-		linpattr_Refresh_Input(pilot_list);
+		xinpattr_Refresh_Input(pilot_list);
 		pilot_active = matched;
 		int16_t page = matched / active_spec->page_size;
 		if (page != cur_page) {
@@ -1095,31 +1098,31 @@ static void idraw_Pilot_Name(Input* input, Rect* frame, Rect* clip, int16_t refr
 	RegStringButton* btn = (RegStringButton*)input;
 	char display_name[TIE_PILOT_NAME_CAPACITY];
 	TiePilotName_CopyForDisplay(display_name, sizeof(display_name), btn->name);
-	int16_t saved_font = lfont_Get_Font();
-	lfont_Set_Font(active_spec->edit_font);
-	int16_t str_width = lfont_Get_String_Width(display_name);
-	lfont_Set_Font(saved_font);
+	int16_t saved_font = xfont_Get_Font();
+	xfont_Set_Font(active_spec->edit_font);
+	int16_t str_width = xfont_Get_String_Width(display_name);
+	xfont_Set_Font(saved_font);
 
 	if (refresh) {
-		lpaint_Paint_Clipped_Rect(frame, 0);
-		int16_t color = lstyle_Get_Style_Down_Color();
+		xpaint_Paint_Clipped_Rect(frame, 0);
+		int16_t color = xstyle_Get_Style_Down_Color();
 		int16_t x = frame->left + (active_spec->dynamic_info_layout ? 1 : 2);
 		int16_t y = frame->top + (active_spec->dynamic_info_layout ? 2 : 1);
-		lfont_Print_Clipped_Text(display_name, x, y, active_spec->edit_font, color);
+		xfont_Print_Clipped_Text(display_name, x, y, active_spec->edit_font, color);
 	}
 
 	int16_t caret_color = 0;
-	if (linpattr_Is_Input_Active(&btn->header) && (int)strlen(btn->name) < active_spec->filename_max_length &&
-		lio_Blink())
-		caret_color = lstyle_Get_Style_Down_Color();
+	if (xinpattr_Is_Input_Active(&btn->header) && (int)strlen(btn->name) < active_spec->filename_max_length &&
+		xio_Blink())
+		caret_color = xstyle_Get_Style_Down_Color();
 
 	int16_t caret_y = active_spec->dynamic_info_layout
-						  ? frame->top + lfont_Get_FontID_Height(active_spec->edit_font) + 1
+						  ? frame->top + xfont_Get_FontID_Height(active_spec->edit_font) + 1
 						  : frame->top + 7;
-	lpaint_Horiz_Clipped_Line(frame->left + str_width + 4, caret_y, 5, caret_color);
+	xpaint_Horiz_Clipped_Line(frame->left + str_width + 4, caret_y, 5, caret_color);
 
-	if (linpattr_Is_Input_Dirty(&btn->header))
-		ldirty_Dirty_Rect(clip);
+	if (xinpattr_Is_Input_Dirty(&btn->header))
+		xdirty_Dirty_Rect(clip);
 }
 
 /* ================================================================
@@ -1153,8 +1156,8 @@ static void Draw_Pilot_Title(Rect* frame, int16_t phase) {
 		if (frame->top + extra_h >= frame->bottom)
 			extra_h = frame->bottom - frame->top;
 		Rect tr;
-		lrect_Set_Rect(&tr, frame->left, frame->top, frame->right, frame->top + extra_h);
-		lpaint_Paint_Clipped_Rect(&tr, 240);
+		xrect_Set_Rect(&tr, frame->left, frame->top, frame->right, frame->top + extra_h);
+		xpaint_Paint_Clipped_Rect(&tr, 240);
 	}
 
 	int16_t len1 = phase >= 8 ? 8 : phase;
@@ -1164,7 +1167,7 @@ static void Draw_Pilot_Title(Rect* frame, int16_t phase) {
 	if (c1 > 247)
 		c1 = 247;
 	int16_t imperial_x = active_spec->dynamic_info_layout ? 30 : 11;
-	lfont_Print_Clipped_Text(buf, frame->left + imperial_x, frame->top + 1, active_spec->info_value_font, c1);
+	xfont_Print_Clipped_Text(buf, frame->left + imperial_x, frame->top + 1, active_spec->info_value_font, c1);
 
 	if (phase >= 4) {
 		int16_t len2 = phase >= 12 ? 8 : phase - 4;
@@ -1175,15 +1178,15 @@ static void Draw_Pilot_Title(Rect* frame, int16_t phase) {
 			c2 = 247;
 		int16_t database_x = active_spec->dynamic_info_layout ? 26 : 10;
 		int16_t database_y =
-			active_spec->dynamic_info_layout ? lfont_Get_FontID_Height(active_spec->info_value_font) + 1 : 7;
-		lfont_Print_Clipped_Text(buf, frame->left + database_x, frame->top + database_y,
+			active_spec->dynamic_info_layout ? xfont_Get_FontID_Height(active_spec->info_value_font) + 1 : 7;
+		xfont_Print_Clipped_Text(buf, frame->left + database_x, frame->top + database_y,
 								 active_spec->info_value_font, c2);
 	}
 
 	if (phase < 16) {
 		int16_t access_x = active_spec->dynamic_info_layout ? 20 : 10;
 		int16_t access_y = active_spec->dynamic_info_layout ? (frame->bottom - frame->top) / 2 : 36;
-		lfont_Print_Clipped_Text(textext_Get_Text(txtRegInfoAccess), frame->left + access_x,
+		xfont_Print_Clipped_Text(textext_Get_Text(txtRegInfoAccess), frame->left + access_x,
 								 frame->top + access_y, active_spec->info_value_font,
 								 4 * ((phase >> 1) & 3) + 19);
 	}
@@ -1197,11 +1200,11 @@ static void Draw_Pilot_Lines(Rect* frame, int16_t phase, int16_t line2_off) {
 
 	// TIE98 0x471090; the branch below it is TIE95 0x7B710.
 	if (active_spec->dynamic_info_layout) {
-		int16_t font_h = lfont_Get_FontID_Height(active_spec->info_value_font);
+		int16_t font_h = xfont_Get_FontID_Height(active_spec->info_value_font);
 		int16_t line1_y = frame->top + 2 * font_h + 3;
 		int16_t line2_y = frame->top + line2_off + 3 * font_h + 4;
-		lpaint_Horiz_Clipped_Line(x, line1_y, w, pc / 2 + 240);
-		lpaint_Horiz_Clipped_Line(x, line2_y, w, pc / 2 + 240);
+		xpaint_Horiz_Clipped_Line(x, line1_y, w, pc / 2 + 240);
+		xpaint_Horiz_Clipped_Line(x, line2_y, w, pc / 2 + 240);
 
 		if (phase > line2_off + 15) {
 			int16_t color = 240;
@@ -1210,7 +1213,7 @@ static void Draw_Pilot_Lines(Rect* frame, int16_t phase, int16_t line2_off) {
 				if (progress >= 0) {
 					int16_t clamped = progress <= 62 ? progress : 62;
 					if (clamped != 62 || color == 247)
-						lpaint_Horiz_Clipped_Line(frame->left, frame->bottom - 3, w, color);
+						xpaint_Horiz_Clipped_Line(frame->left, frame->bottom - 3, w, color);
 				}
 				progress++;
 				color++;
@@ -1219,8 +1222,8 @@ static void Draw_Pilot_Lines(Rect* frame, int16_t phase, int16_t line2_off) {
 		return;
 	}
 
-	lpaint_Horiz_Clipped_Line(x, frame->top + 14, w, pc / 2 + 240);
-	lpaint_Horiz_Clipped_Line(x, line2_off + frame->top + 22, w, pc / 2 + 240);
+	xpaint_Horiz_Clipped_Line(x, frame->top + 14, w, pc / 2 + 240);
+	xpaint_Horiz_Clipped_Line(x, line2_off + frame->top + 22, w, pc / 2 + 240);
 
 	if (phase > line2_off + 15) {
 		int16_t color = 240;
@@ -1229,7 +1232,7 @@ static void Draw_Pilot_Lines(Rect* frame, int16_t phase, int16_t line2_off) {
 			if (yp >= 0) {
 				int16_t yo = yp <= 62 ? yp : 62;
 				if (yo != 62 || color == 247)
-					lpaint_Horiz_Clipped_Line(frame->left, yo + line2_off + frame->top + 23, w, color);
+					xpaint_Horiz_Clipped_Line(frame->left, yo + line2_off + frame->top + 23, w, color);
 			}
 			yp++;
 			color++;
@@ -1252,7 +1255,7 @@ static void Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 					pilot_active = -1;
 					typed[0] = 0;
 					Set_Reg_String_Button_Name(pilot_name_input, typed);
-					linpattr_Refresh_Input(&pilot_name_input->header);
+					xinpattr_Refresh_Input(&pilot_name_input->header);
 				}
 			}
 		}
@@ -1263,24 +1266,24 @@ static void Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 		TiePilotName_CopyForDisplay(display_name, sizeof(display_name), typed);
 		int16_t ci = phase >= 15 ? 7 : phase - 8;
 		Rect tr;
-		lrect_Copy_Rect(&tr, frame);
+		xrect_Copy_Rect(&tr, frame);
 		// TIE98 0x471190; the alternative is TIE95 0x7B858.
 		if (active_spec->dynamic_info_layout) {
-			int16_t font_h = lfont_Get_FontID_Height(active_spec->info_value_font);
+			int16_t font_h = xfont_Get_FontID_Height(active_spec->info_value_font);
 			tr.top = frame->top + 2 * font_h + 4;
 			tr.bottom = tr.top + font_h;
 		} else {
 			tr.top = frame->top + 17;
 			tr.bottom = frame->top + 22;
 		}
-		lfont_Print_Centered_Text(display_name, &tr, ci + 248, active_spec->info_value_font);
+		xfont_Print_Centered_Text(display_name, &tr, ci + 248, active_spec->info_value_font);
 
 		int16_t status_offset =
-			active_spec->dynamic_info_layout ? lfont_Get_FontID_Height(active_spec->info_value_font) : 6;
+			active_spec->dynamic_info_layout ? xfont_Get_FontID_Height(active_spec->info_value_font) : 6;
 		int16_t status_phase = active_spec->dynamic_info_layout ? status_offset + 1 : 6;
 		if (phase >= 16 && pilot_record.exit_status && inner_phase >= status_phase) {
-			lrect_Offset_Rect(&tr, 0, status_offset);
-			lfont_Print_Centered_Text(textext_Get_Text((TIEText)(pilot_record.exit_status + 10)), &tr,
+			xrect_Offset_Rect(&tr, 0, status_offset);
+			xfont_Print_Centered_Text(textext_Get_Text((TIEText)(pilot_record.exit_status + 10)), &tr,
 									  (phase & 7) / 2 + 252, active_spec->info_value_font);
 		}
 	}
@@ -1290,8 +1293,8 @@ static void Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 	// TIE98 0x471320; the branch below it is TIE95 0x7B9B8.
 	if (active_spec->dynamic_info_layout) {
-		int16_t label_h = lfont_Get_FontID_Height(active_spec->info_label_font);
-		int16_t value_h = lfont_Get_FontID_Height(active_spec->info_value_font);
+		int16_t label_h = xfont_Get_FontID_Height(active_spec->info_label_font);
+		int16_t value_h = xfont_Get_FontID_Height(active_spec->info_value_font);
 		int16_t row = label_h + value_h + 2;
 		int16_t first_row_y = 3 * value_h + 7;
 
@@ -1303,39 +1306,39 @@ static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 			int16_t c2 = sub + 248;
 			int16_t y = frame->top + inner_phase + first_row_y;
 
-			lfont_Enable_FontID_Shadow(active_spec->info_label_font);
-			lfont_Enable_FontID_Shadow(active_spec->info_value_font);
+			xfont_Enable_FontID_Shadow(active_spec->info_label_font);
+			xfont_Enable_FontID_Shadow(active_spec->info_value_font);
 
-			lfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotRank), frame->left + 2, y,
+			xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotRank), frame->left + 2, y,
 									 active_spec->info_label_font, c1);
-			lfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.rank + 1)), frame->left + 2,
+			xfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.rank + 1)), frame->left + 2,
 									 y + label_h, active_spec->info_value_font, c2);
 
 			char buf[20];
 			snprintf(buf, sizeof(buf), "%lu", (unsigned long)pilot_record.score);
 			y += row + 10;
-			lfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotScore), frame->left + 2, y,
+			xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotScore), frame->left + 2, y,
 									 active_spec->info_label_font, c1);
-			lfont_Print_Clipped_Text(buf, frame->left + 2, y + label_h, active_spec->info_value_font, c2);
+			xfont_Print_Clipped_Text(buf, frame->left + 2, y + label_h, active_spec->info_value_font, c2);
 
 			y += row + 10;
-			lfont_Print_Clipped_Text(textext_Get_Text(txtRegLevel), frame->left + 2, y,
+			xfont_Print_Clipped_Text(textext_Get_Text(txtRegLevel), frame->left + 2, y,
 									 active_spec->info_label_font, c1);
-			lfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.game_level + 29)),
+			xfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.game_level + 29)),
 									 frame->left + 2, y + label_h, active_spec->info_value_font, c2);
 
-			lfont_Disable_FontID_Shadow(active_spec->info_label_font);
-			lfont_Disable_FontID_Shadow(active_spec->info_value_font);
+			xfont_Disable_FontID_Shadow(active_spec->info_label_font);
+			xfont_Disable_FontID_Shadow(active_spec->info_value_font);
 		}
 
 		if (phase > inner_phase + 15) {
 			int16_t cover = 2 * (phase - inner_phase) - 30;
 			if (cover < 62) {
 				Rect r;
-				lrect_Set_Rect(&r, frame->left,
+				xrect_Set_Rect(&r, frame->left,
 							   frame->top + inner_phase + cover + first_row_y + 2 * (row + 10), frame->right,
 							   frame->bottom);
-				lpaint_Paint_Clipped_Rect(&r, 16);
+				xpaint_Paint_Clipped_Rect(&r, 16);
 			}
 		}
 		return;
@@ -1348,34 +1351,34 @@ static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 	if (sub > 7)
 		sub = 7;
 
-	lfont_Enable_FontID_Shadow(active_spec->info_label_font);
-	lfont_Enable_FontID_Shadow(active_spec->info_value_font);
+	xfont_Enable_FontID_Shadow(active_spec->info_label_font);
+	xfont_Enable_FontID_Shadow(active_spec->info_value_font);
 
 	int16_t c1 = sub + 240;
 	int16_t c2 = sub + 248;
 
 	/* Rank */
-	lfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotRank), frame->left + 2,
+	xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotRank), frame->left + 2,
 							 inner_phase + frame->top + 24, active_spec->info_label_font, c1);
-	lfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.rank + 1)), frame->left + 2,
+	xfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.rank + 1)), frame->left + 2,
 							 inner_phase + frame->top + 34, active_spec->info_value_font, c2);
 
 	/* Score */
 	char buf[20];
 	snprintf(buf, sizeof(buf), "%lu", (unsigned long)pilot_record.score);
-	lfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotScore), frame->left + 2,
+	xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotScore), frame->left + 2,
 							 inner_phase + frame->top + 44, active_spec->info_label_font, c1);
-	lfont_Print_Clipped_Text(buf, frame->left + 2, inner_phase + frame->top + 54,
+	xfont_Print_Clipped_Text(buf, frame->left + 2, inner_phase + frame->top + 54,
 							 active_spec->info_value_font, c2);
 
 	/* Level */
-	lfont_Print_Clipped_Text(textext_Get_Text(txtRegLevel), frame->left + 2, inner_phase + frame->top + 64,
+	xfont_Print_Clipped_Text(textext_Get_Text(txtRegLevel), frame->left + 2, inner_phase + frame->top + 64,
 							 active_spec->info_label_font, c1);
-	lfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.game_level + 29)), frame->left + 2,
+	xfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.game_level + 29)), frame->left + 2,
 							 inner_phase + frame->top + 74, active_spec->info_value_font, c2);
 
-	lfont_Disable_FontID_Shadow(active_spec->info_label_font);
-	lfont_Disable_FontID_Shadow(active_spec->info_value_font);
+	xfont_Disable_FontID_Shadow(active_spec->info_label_font);
+	xfont_Disable_FontID_Shadow(active_spec->info_value_font);
 
 	/* Progressive reveal: paint a color-16 cover rect over the lower
 	 * portion of the panel that hasn't been animated in yet. The cover
@@ -1386,9 +1389,9 @@ static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 		int16_t cover = 2 * (phase - (inner_phase + 15));
 		if (cover < 62) {
 			Rect r;
-			lrect_Set_Rect(&r, frame->left, frame->top + inner_phase + cover + 24, frame->right,
+			xrect_Set_Rect(&r, frame->left, frame->top + inner_phase + cover + 24, frame->right,
 						   frame->bottom);
-			lpaint_Paint_Clipped_Rect(&r, 16);
+			xpaint_Paint_Clipped_Rect(&r, 16);
 		}
 	}
 }
@@ -1396,7 +1399,7 @@ static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 // FUNCTION: TIE95 0x7B4DC; TIE98 0x470E70
 static void idraw_Pilot_Info(Input* input, Rect* frame, Rect* clip, int16_t refresh) {
 	(void)refresh;
-	lpaint_Paint_Clipped_Rect(frame, 16);
+	xpaint_Paint_Clipped_Rect(frame, 16);
 
 	if (input->var1) {
 		int16_t phase = input->var2;
@@ -1406,7 +1409,7 @@ static void idraw_Pilot_Info(Input* input, Rect* frame, Rect* clip, int16_t refr
 		if (phase >= 16 && pilot_record.exit_status) {
 			inner = phase - 15;
 			int16_t inner_max = active_spec->dynamic_info_layout
-									? lfont_Get_FontID_Height(active_spec->info_value_font) + 1
+									? xfont_Get_FontID_Height(active_spec->info_value_font) + 1
 									: 6;
 			if (inner > inner_max)
 				inner = inner_max;
@@ -1418,8 +1421,8 @@ static void idraw_Pilot_Info(Input* input, Rect* frame, Rect* clip, int16_t refr
 		Draw_Pilot_Info(frame, phase, inner);
 	}
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip);
 }
 
 /* ================================================================
@@ -1430,36 +1433,36 @@ static void idraw_Pilot_Info(Input* input, Rect* frame, Rect* clip, int16_t refr
 // HARDENING: unwinds partial dialog allocation.
 static Input* Build_Delete_Dialog(void) {
 	Rect r;
-	lrect_Set_Rect(&r, 0, 0, active_spec->delete_dialog_width, active_spec->delete_dialog_height);
-	Input* dlg = linput_Alloc_Dialog_Input(NULL, &r, 0, 0);
+	xrect_Set_Rect(&r, 0, 0, active_spec->delete_dialog_width, active_spec->delete_dialog_height);
+	Input* dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
 	if (!dlg)
 		return NULL;
-	linpattr_Set_Input_Update_Function(dlg, iupdate_Delete_Input);
-	linpattr_Set_Input_Draw_Function(dlg, idraw_Delete_Input);
-	linpattr_Set_Input_Allign(dlg, 1, 1);
-	linpattr_Show_Input(dlg);
+	xinpattr_Set_Input_Update_Function(dlg, iupdate_Delete_Input);
+	xinpattr_Set_Input_Draw_Function(dlg, idraw_Delete_Input);
+	xinpattr_Set_Input_Allign(dlg, 1, 1);
+	xinpattr_Show_Input(dlg);
 
 	Index_To_Pilot_Record(pilot_active, &shell_pilot);
 
 	char label[32];
 	const int16_t* b = active_spec->delete_button_bounds;
-	lrect_Set_Rect(&r, b[0], b[1], b[2], b[3]);
+	xrect_Set_Rect(&r, b[0], b[1], b[2], b[3]);
 	strcpy(label, textext_Get_Text(txtRegBtnDelete));
-	PushButton* del = lbtnpush_Alloc_Button(dlg, &r, 0, iuser_Delete_Input, label, 1);
+	PushButton* del = xbtnpush_Alloc_Button(dlg, &r, 0, iuser_Delete_Input, label, 1);
 	if (!del) {
-		linput_Free_Inputs(dlg);
+		xinput_Free_Inputs(dlg);
 		return NULL;
 	}
-	linpattr_Set_Input_Allign(&del->header, 0, 2);
+	xinpattr_Set_Input_Allign(&del->header, 0, 2);
 
-	lrect_Set_Rect(&r, b[0], b[1], b[2], b[3]);
+	xrect_Set_Rect(&r, b[0], b[1], b[2], b[3]);
 	strcpy(label, textext_Get_Text(txtRegBtnCancel));
-	PushButton* cancel = lbtnpush_Alloc_Button(dlg, &r, 0, iuser_Delete_Input, label, 2);
+	PushButton* cancel = xbtnpush_Alloc_Button(dlg, &r, 0, iuser_Delete_Input, label, 2);
 	if (!cancel) {
-		linput_Free_Inputs(dlg);
+		xinput_Free_Inputs(dlg);
 		return NULL;
 	}
-	linpattr_Set_Input_Allign(&cancel->header, 2, 2);
+	xinpattr_Set_Input_Allign(&cancel->header, 2, 2);
 
 	return dlg;
 }
@@ -1482,11 +1485,11 @@ static int16_t iupdate_Delete_Input(Input* input, Rect* bounds, Rect* clip, int1
 // FUNCTION: TIE95 0x7C660; TIE98 0x4721B0
 static void iuser_Delete_Input(Input* input, int32_t time) {
 	(void)time;
-	if (!linpattr_Get_Input_Selected(input))
+	if (!xinpattr_Get_Input_Selected(input))
 		return;
 	int16_t id = input->id;
 	if (id >= 1 && id <= 3)
-		ldialog_Set_Dialog_Exit(id);
+		xdialog_Set_Dialog_Exit(id);
 }
 
 // FUNCTION: TIE95 0x7C688; TIE98 0x4721E0
@@ -1505,23 +1508,23 @@ static void idraw_Delete_Input(Input* input, Rect* frame, Rect* clip, int16_t re
 	strcat(title, "?");
 
 	Rect dst;
-	lrect_Copy_Rect(&dst, frame);
-	lpaint_Frame_Clipped_Rect(&dst, 16);
-	lrect_Inset_Rect(&dst, 1, 1);
-	lstyle_Style_Paint_Border(&dst, 0);
+	xrect_Copy_Rect(&dst, frame);
+	xpaint_Frame_Clipped_Rect(&dst, 16);
+	xrect_Inset_Rect(&dst, 1, 1);
+	xstyle_Style_Paint_Border(&dst, 0);
 	if (active_spec->dynamic_info_layout) {
-		int16_t font_h = lfont_Get_FontID_Height(active_spec->delete_title_font);
+		int16_t font_h = xfont_Get_FontID_Height(active_spec->delete_title_font);
 		dst.top += font_h;
 		dst.bottom = dst.top + font_h;
 	} else {
 		dst.bottom = dst.top + 14;
 	}
-	lfont_Enable_FontID_Shadow(active_spec->delete_title_font);
-	lfont_Print_Centered_Text(title, &dst, 15, active_spec->delete_title_font);
-	lfont_Disable_FontID_Shadow(active_spec->delete_title_font);
+	xfont_Enable_FontID_Shadow(active_spec->delete_title_font);
+	xfont_Print_Centered_Text(title, &dst, 15, active_spec->delete_title_font);
+	xfont_Disable_FontID_Shadow(active_spec->delete_title_font);
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip);
 }
 
 /* ================================================================
@@ -1539,67 +1542,67 @@ static void register_push_protect_dialog(void) {
 	for (int16_t i = 0; i < 3; i++)
 		protect_state[i] = reg_cp[i];
 
-	lio_Set_Mouse_Position(160, 135);
+	xio_Set_Mouse_Position(160, 135);
 	s_protect_ctx.sub_dlg = Build_Protect_Dialog();
-	ldialog_Push_Dialog_View_Task(s_protect_ctx.sub_dlg);
+	xdialog_Push_Dialog_View_Task(s_protect_ctx.sub_dlg);
 }
 
 // FUNCTION: TIE95 0x7C820; absent from TIE98
 static Input* Build_Protect_Dialog(void) {
 	Rect r;
-	lrect_Set_Rect(&r, 0, 0, 112, 86);
-	Input* dlg = linput_Alloc_Dialog_Input(NULL, &r, 0, 0);
-	linpattr_Set_Input_Update_Function(dlg, iupdate_Protect_Input);
-	linpattr_Set_Input_Draw_Function(dlg, idraw_Protect_Input);
-	linpattr_Set_Input_Allign(dlg, 1, 1);
-	linpattr_Show_Input(dlg);
+	xrect_Set_Rect(&r, 0, 0, 112, 86);
+	Input* dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
+	xinpattr_Set_Input_Update_Function(dlg, iupdate_Protect_Input);
+	xinpattr_Set_Input_Draw_Function(dlg, idraw_Protect_Input);
+	xinpattr_Set_Input_Allign(dlg, 1, 1);
+	xinpattr_Show_Input(dlg);
 	dlg->id = 0;
 	protect_parent = dlg;
 
 	/* Symbol challenge area */
-	lrect_Set_Rect(&r, 4, 14, 108, 37);
-	Input* sym_input = linput_Alloc_Dialog_Input(dlg, &r, 0, 0);
-	linpattr_Set_Input_User_Function(sym_input, iuser_Protect_Input);
-	linpattr_Set_Input_Draw_Function(sym_input, idraw_Protect_Input);
-	linpattr_Show_Input(sym_input);
+	xrect_Set_Rect(&r, 4, 14, 108, 37);
+	Input* sym_input = xinput_Alloc_Dialog_Input(dlg, &r, 0, 0);
+	xinpattr_Set_Input_User_Function(sym_input, iuser_Protect_Input);
+	xinpattr_Set_Input_Draw_Function(sym_input, idraw_Protect_Input);
+	xinpattr_Show_Input(sym_input);
 	sym_input->id = 3;
 
 	/* Subtitle */
-	lrect_Set_Rect(&r, 4, 39, 108, 49);
-	Input* sub_input = linput_Alloc_Dialog_Input(dlg, &r, 0, 0);
-	linpattr_Set_Input_Draw_Function(sub_input, idraw_Protect_Input);
-	linpattr_Show_Input(sub_input);
+	xrect_Set_Rect(&r, 4, 39, 108, 49);
+	Input* sub_input = xinput_Alloc_Dialog_Input(dlg, &r, 0, 0);
+	xinpattr_Set_Input_Draw_Function(sub_input, idraw_Protect_Input);
+	xinpattr_Show_Input(sub_input);
 	sub_input->id = 6;
 
 	/* Password field (RegStringButton, filename mode=0). Seeded from
 	 * the persistent `initial_name` buffer so the field retains what
 	 * the user typed previously. */
-	lrect_Set_Rect(&r, 4, 51, 108, 65);
+	xrect_Set_Rect(&r, 4, 51, 108, 65);
 	RegStringButton* pwd = Alloc_Input_Reg_String_Button(dlg, &r, 0, iuser_Protect_Input, initial_name, 0, 4);
-	linpattr_Hide_Input(&pwd->header);
+	xinpattr_Hide_Input(&pwd->header);
 	protect_btns_arr[0] = &pwd->header;
 
 	/* OK button */
-	lrect_Set_Rect(&r, 4, 4, 32, 20);
+	xrect_Set_Rect(&r, 4, 4, 32, 20);
 	textext_Copy_Text(reg_prot_name, txtRegProtOK);
-	PushButton* btn_ok = lbtnpush_Alloc_Button(dlg, &r, 0, iuser_Protect_Input, reg_prot_name, 1);
-	linpattr_Set_Input_Allign(&btn_ok->header, 0, 2);
-	linpattr_Hide_Input(&btn_ok->header);
+	PushButton* btn_ok = xbtnpush_Alloc_Button(dlg, &r, 0, iuser_Protect_Input, reg_prot_name, 1);
+	xinpattr_Set_Input_Allign(&btn_ok->header, 0, 2);
+	xinpattr_Hide_Input(&btn_ok->header);
 	protect_btns_arr[1] = &btn_ok->header;
 
 	/* Exit to DOS button */
-	lrect_Set_Rect(&r, 4, 4, 76, 20);
+	xrect_Set_Rect(&r, 4, 4, 76, 20);
 	textext_Copy_Text(reg_prot_name + 24, txtRegProtExit);
-	PushButton* btn_exit = lbtnpush_Alloc_Button(dlg, &r, 0, iuser_Protect_Input, reg_prot_name + 24, 2);
-	linpattr_Set_Input_Allign(&btn_exit->header, 2, 2);
-	linpattr_Hide_Input(&btn_exit->header);
+	PushButton* btn_exit = xbtnpush_Alloc_Button(dlg, &r, 0, iuser_Protect_Input, reg_prot_name + 24, 2);
+	xinpattr_Set_Input_Allign(&btn_exit->header, 2, 2);
+	xinpattr_Hide_Input(&btn_exit->header);
 	protect_btns_arr[2] = &btn_exit->header;
 
 	/* Press to Continue button */
-	lrect_Set_Rect(&r, 4, 4, 108, 20);
+	xrect_Set_Rect(&r, 4, 4, 108, 20);
 	textext_Copy_Text(reg_prot_name + 48, txtRegProtPress);
-	PushButton* btn_quit = lbtnpush_Alloc_Button(dlg, &r, 0, iuser_Protect_Input, reg_prot_name + 48, 5);
-	linpattr_Set_Input_Allign(&btn_quit->header, 0, 2);
+	PushButton* btn_quit = xbtnpush_Alloc_Button(dlg, &r, 0, iuser_Protect_Input, reg_prot_name + 48, 5);
+	xinpattr_Set_Input_Allign(&btn_quit->header, 0, 2);
 
 	return dlg;
 }
@@ -1616,7 +1619,7 @@ static int16_t iupdate_Protect_Input(Input* input, Rect* bounds, Rect* clip, int
 		return 0;
 
 	if (key == 13) {
-		linpattr_Selected_Input(protect_btns_arr[1]);
+		xinpattr_Selected_Input(protect_btns_arr[1]);
 	}
 	(void)bounds;
 	(void)clip;
@@ -1632,10 +1635,10 @@ static void iuser_Protect_Input(Input* input, int32_t time) {
 		protect_index = rand_rand() % 29;
 		for (int16_t i = 0; i < 3; i++)
 			protect_state[i] = reg_cp[3 * protect_index + i];
-		linpattr_Refresh_Input(input);
+		xinpattr_Refresh_Input(input);
 	}
 
-	if (!linpattr_Get_Input_Selected(input))
+	if (!xinpattr_Get_Input_Selected(input))
 		return;
 
 	switch (input->id) {
@@ -1649,31 +1652,31 @@ static void iuser_Protect_Input(Input* input, int32_t time) {
 
 			if (strcmp(buf, reg_cp_name[protect_index]) == 0 || strcmp(buf, "evarobinyali") == 0) {
 				/* Correct answer — exit dialog with input's id */
-				ldialog_Set_Dialog_Exit(input->id);
+				xdialog_Set_Dialog_Exit(input->id);
 			} else {
 				/* Wrong answer — allow up to 3 attempts */
 				if (++protect_count >= 3) {
-					ldialog_Set_Dialog_Exit(2);
+					xdialog_Set_Dialog_Exit(2);
 				} else {
 					pwd->name[0] = 0;
-					linpattr_Refresh_Input(&pwd->header);
-					linpattr_Refresh_Input(protect_parent);
+					xinpattr_Refresh_Input(&pwd->header);
+					xinpattr_Refresh_Input(protect_parent);
 				}
 			}
 			break;
 		}
 		case 2: /* Exit to DOS */
-			ldialog_Set_Dialog_Exit(2);
+			xdialog_Set_Dialog_Exit(2);
 			break;
 		case 4: /* Password field clicked */
-			lio_Set_Mouse_Position(120, 130);
+			xio_Set_Mouse_Position(120, 130);
 			break;
 		case 5: /* Quit/Skip */
 			protect_chosen = 1;
-			linpattr_Hide_Input(input);
+			xinpattr_Hide_Input(input);
 			for (int16_t i = 0; i < 3; i++)
-				linpattr_Show_Input(protect_btns_arr[i]);
-			linpattr_Refresh_Input(protect_parent);
+				xinpattr_Show_Input(protect_btns_arr[i]);
+			xinpattr_Refresh_Input(protect_parent);
 			break;
 		default:
 			break;
@@ -1689,28 +1692,28 @@ static void idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, int16_t r
 	if (id == 0) {
 		/* Title bar */
 		Rect tr;
-		lrect_Copy_Rect(&tr, frame);
-		lpaint_Frame_Clipped_Rect(&tr, 16);
-		lrect_Inset_Rect(&tr, 1, 1);
-		lstyle_Style_Paint_Border(&tr, 0);
+		xrect_Copy_Rect(&tr, frame);
+		xpaint_Frame_Clipped_Rect(&tr, 16);
+		xrect_Inset_Rect(&tr, 1, 1);
+		xstyle_Style_Paint_Border(&tr, 0);
 		tr.bottom = tr.top + 14;
-		lfont_Enable_FontID_Shadow(0);
+		xfont_Enable_FontID_Shadow(0);
 		char buf[32];
 		textext_Copy_Text(buf, txtRegProtCopy);
-		lfont_Print_Centered_Text(buf, &tr, 15, 0);
-		lfont_Disable_FontID_Shadow(0);
+		xfont_Print_Centered_Text(buf, &tr, 15, 0);
+		xfont_Disable_FontID_Shadow(0);
 	} else if (id == 3) {
 		/* Symbol challenge */
 		int16_t x_off = 0;
 		for (int16_t i = 0; i < 3; i++) {
 			Rect tr;
-			lrect_Copy_Rect(&tr, frame);
+			xrect_Copy_Rect(&tr, frame);
 			tr.left += x_off;
 			tr.right = tr.left + 32;
-			lstyle_Style_Paint_TextField(&tr);
-			lrect_Inset_Rect(&tr, 2, 2);
-			lactor_Set_Actor_State(symbols, protect_state[i], 0);
-			lactanim_Draw_Anim_Actor(symbols, frame, clip, tr.left + 4, tr.top + 1, 1);
+			xstyle_Style_Paint_TextField(&tr);
+			xrect_Inset_Rect(&tr, 2, 2);
+			xactor_Set_Actor_State(symbols, protect_state[i], 0);
+			xactanim_Draw_Anim_Actor(symbols, frame, clip, tr.left + 4, tr.top + 1, 1);
 			x_off += 36;
 		}
 	} else if (id == 6 && protect_chosen) {
@@ -1718,13 +1721,13 @@ static void idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, int16_t r
 		char fmt[32], buf[32];
 		textext_Copy_Text(fmt, txtRegProtManual);
 		snprintf(buf, sizeof(buf), fmt, protect_index + 4);
-		lfont_Enable_FontID_Shadow(0);
-		lfont_Print_Centered_Text(buf, frame, 15, 0);
-		lfont_Disable_FontID_Shadow(0);
+		xfont_Enable_FontID_Shadow(0);
+		xfont_Print_Centered_Text(buf, frame, 15, 0);
+		xfont_Disable_FontID_Shadow(0);
 	}
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip);
 }
 
 /* ================================================================
@@ -1734,8 +1737,8 @@ static void idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, int16_t r
 // FUNCTION: TIE95 0x7A93C; TIE98 0x4700D0
 static void end_View(int32_t phase) {
 	if (!phase) {
-		if (!lcursor_Is_Cursor_Visible())
-			lcursor_Show_Cursor();
+		if (!xcursor_Is_Cursor_Visible())
+			xcursor_Show_Cursor();
 
 		/* Copy-protection challenge moved to register_task_step's
 		 * PROTECT phase (runs before the view is pushed) so it can
@@ -1747,11 +1750,11 @@ static void end_View(int32_t phase) {
 
 	if (!phase) {
 		/* Load pilot directory and build FPR cache */
-		lfiledir_Read_Directory(&directory);
+		xfiledir_Read_Directory(&directory);
 		num_loaded_pilots = directory.count;
-		lcursor_Set_Cursor(1); /* waitCursor */
+		xcursor_Set_Cursor(1); /* waitCursor */
 		Build_Fast_Pilot_Record();
-		lcursor_Set_Cursor(0); /* mainCursor */
+		xcursor_Set_Cursor(0); /* mainCursor */
 
 		num_pages = (num_pilots + active_spec->page_size - 1) / active_spec->page_size;
 		if (!num_pages)
@@ -1768,26 +1771,26 @@ static void end_View(int32_t phase) {
 
 	/* Show/hide delete button */
 	if (typed[0]) {
-		if (linpattr_Is_Input_Visible(pilot_delete)) {
+		if (xinpattr_Is_Input_Visible(pilot_delete)) {
 			if (pilot_active == -1) {
-				linpattr_Hide_Input(pilot_delete);
-				lview_Refresh_View();
+				xinpattr_Hide_Input(pilot_delete);
+				xview_Refresh_View();
 			}
 		} else if (pilot_active != -1) {
-			linpattr_Show_Input(pilot_delete);
+			xinpattr_Show_Input(pilot_delete);
 			pilot_delete_status = -1;
-			lview_Refresh_View();
+			xview_Refresh_View();
 		}
 
-		if (linpattr_Is_Input_Visible(pilot_delete) && pilot_delete_status) {
-			lbtnpush_Set_Button_Name((PushButton*)pilot_delete, textext_Get_Text(txtRegBtnDeletePilot));
+		if (xinpattr_Is_Input_Visible(pilot_delete) && pilot_delete_status) {
+			xbtnpush_Set_Button_Name((PushButton*)pilot_delete, textext_Get_Text(txtRegBtnDeletePilot));
 			pilot_delete_status = 0;
-			lview_Refresh_View();
+			xview_Refresh_View();
 		}
 	} else {
-		if (linpattr_Is_Input_Visible(pilot_delete)) {
-			linpattr_Hide_Input(pilot_delete);
-			lview_Refresh_View();
+		if (xinpattr_Is_Input_Visible(pilot_delete)) {
+			xinpattr_Hide_Input(pilot_delete);
+			xview_Refresh_View();
 		}
 	}
 }
@@ -1813,14 +1816,14 @@ typedef struct RegisterTask {
 
 // PORT: adapts recovered edition data to the shared Rect API.
 static void register_set_rect(Rect* rect, const int16_t bounds[4]) {
-	lrect_Set_Rect(rect, bounds[0], bounds[1], bounds[2], bounds[3]);
+	xrect_Set_Rect(rect, bounds[0], bounds[1], bounds[2], bounds[3]);
 }
 
 // HARDENING: clean failure path for missing or incompatible resources.
 static LandruTaskStepResult register_setup_failed(RegisterTask* t, const char* resource) {
 	TieDiagnostics_Log(TIE_LOG_ERROR, "[REGISTER] missing frontend resource: %s\n",
 					   resource ? resource : "unknown");
-	lerror_Set_Landru_Error(6);
+	xerror_Set_Landru_Error(6);
 	t->phase = REGISTER_PHASE_CLEANUP;
 	return LANDRU_TASK_STEP_CONTINUE;
 }
@@ -1835,9 +1838,9 @@ static LandruTaskStepResult register_task_step(void* self) {
 		Rect frame;
 
 		active_spec = t->spec;
-		if (!lsurface_Select_Surface_Set(active_spec->surface_set))
+		if (!xsurface_Select_Surface_Set(active_spec->surface_set))
 			return register_setup_failed(t, "surface set");
-		lview_Init_View(lview_Get_Current_View());
+		xview_Init_View(xview_Get_Current_View());
 
 		shipext_Delete_Temp_Pilot();
 		pilot_active = -1;
@@ -1857,15 +1860,15 @@ static LandruTaskStepResult register_task_step(void* self) {
 		pilot_name_input = NULL;
 		pilot_info = NULL;
 		pilot_delete = NULL;
-		directory.entries = NULL;
+		directory.entries = LANDRU_NULL_HANDLE;
 		memset(reg_button, 0, sizeof(reg_button));
 
-		lio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+		xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
 
 		t->rf = shellext_Open_Empire_Resource(active_spec->archive);
 		if (!t->rf)
 			return register_setup_failed(t, active_spec->archive);
-		lrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
 
 		/* Load film. Tag the snapshot with the (lfd, film) tuple so
 		 * the cutscene compositor can resolve a remaster bundle for
@@ -1874,10 +1877,10 @@ static LandruTaskStepResult register_task_step(void* self) {
 		 * dynamic UI text the engine renders into the classic FB
 		 * that should still show through. */
 		if (shellext_Get_Cur_Scene() == SCENE_REGISTER) {
-			register_film = lfilm_Res_Callback_Film("register", &frame, 0, 0, 0, film_Callback);
+			register_film = xfilm_Res_Callback_Film("register", &frame, 0, 0, 0, film_Callback);
 			TieSnapshotBuilder_SetActiveFilm(active_spec->snapshot_lfd, "register");
 		} else {
-			register_film = lfilm_Res_Callback_Film("reg2", &frame, 0, 0, 0, film_Callback);
+			register_film = xfilm_Res_Callback_Film("reg2", &frame, 0, 0, 0, film_Callback);
 			TieSnapshotBuilder_SetActiveFilm(active_spec->snapshot_lfd, "reg2");
 		}
 		if (!register_film)
@@ -1890,66 +1893,66 @@ static LandruTaskStepResult register_task_step(void* self) {
 		 * — dirty-rect refresh, persistent RT. No explicit setter
 		 * needed; left as-is from shellext_Begin_Close_Landru_Scene. */
 
-		lfilm_Set_Film_Def_Palette(register_film, t->scene_head->def_palette);
+		xfilm_Set_Film_Def_Palette(register_film, t->scene_head->def_palette);
 
 		/* TIE95 0x7A593 loads reg-bak1; TIE98 has no equivalent actor. */
 		if (active_spec->use_background) {
-			Actor* bak1 = lactor_Find_Actor(FOURCC_DELT, active_spec->background);
+			Actor* bak1 = xactor_Find_Actor(FOURCC_DELT, active_spec->background);
 			if (!bak1)
 				return register_setup_failed(t, active_spec->background);
-			lactor_Non_Refreshable_Actor(bak1);
-			lactor_Refresh_Actor(bak1);
+			xactor_Non_Refreshable_Actor(bak1);
+			xactor_Refresh_Actor(bak1);
 		}
 
-		reg_bak = lactor_Find_Actor(FOURCC_DELT, active_spec->back_panel);
+		reg_bak = xactor_Find_Actor(FOURCC_DELT, active_spec->back_panel);
 		if (!reg_bak)
 			return register_setup_failed(t, active_spec->back_panel);
-		lactor_Set_Actor_Draw_Function(reg_bak, (lactorDrawFunc)draw_Register_Back);
+		xactor_Set_Actor_Draw_Function(reg_bak, draw_Register_Back);
 
-		reg_door = lactor_Find_Actor(FOURCC_ANIM, active_spec->door);
+		reg_door = xactor_Find_Actor(FOURCC_ANIM, active_spec->door);
 		if (!reg_door)
 			return register_setup_failed(t, active_spec->door);
-		lactor_Set_Actor_User_Function(reg_door, (lactorCallback)user_Door);
+		xactor_Set_Actor_User_Function(reg_door, (xactorCallback)user_Door);
 
-		reg_troop = lactor_Find_Actor(FOURCC_ANIM, active_spec->troop);
+		reg_troop = xactor_Find_Actor(FOURCC_ANIM, active_spec->troop);
 		if (!reg_troop)
 			return register_setup_failed(t, active_spec->troop);
-		lactor_Set_Actor_User_Function(reg_troop, (lactorCallback)user_Troop);
+		xactor_Set_Actor_User_Function(reg_troop, (xactorCallback)user_Troop);
 
 		/* Init directory and symbol actor */
-		lfiledir_Init_Directory(&directory, ".tfr", 0);
+		xfiledir_Init_Directory(&directory, ".tfr", 0);
 		if (!directory.entries)
 			return register_setup_failed(t, "pilot directory");
-		lfiledir_Set_Name_Length(&directory, active_spec->directory_name_length);
+		xfiledir_Set_Name_Length(&directory, active_spec->directory_name_length);
 		// TIE95 0x7A616; the copy-protection actor is absent from TIE98.
 		if (active_spec->load_symbols) {
-			symbols = lactanim_Res_Anim_Actor("symbols", &frame, 0, 0, 0);
+			symbols = xactanim_Res_Anim_Actor("symbols", &frame, 0, 0, 0);
 			if (!symbols)
 				return register_setup_failed(t, "symbols");
-			lactor_Set_Actor_Time(symbols, 0, 0);
+			xactor_Set_Actor_Time(symbols, 0, 0);
 		}
 
 		/* Build input tree */
-		reg_parent = linput_Alloc_Input(NULL, &frame, 0, 0);
+		reg_parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 		if (!reg_parent)
 			return register_setup_failed(t, "registration input root");
 
 		register_set_rect(&frame, active_spec->door_bounds);
-		door_input = linput_Alloc_Input(reg_parent, &frame, 0, 0);
+		door_input = xinput_Alloc_Input(reg_parent, &frame, 0, 0);
 		if (!door_input)
 			return register_setup_failed(t, "registration door input");
-		linpattr_Set_Input_Update_Function(door_input, iupdate_Register);
-		linpattr_Set_Input_User_Function(door_input, iuser_Register);
+		xinpattr_Set_Input_Update_Function(door_input, iupdate_Register);
+		xinpattr_Set_Input_User_Function(door_input, iuser_Register);
 		door_input->mouseUsage = allInput;
 		door_input->id = 0;
 
 		register_set_rect(&frame, active_spec->list_bounds);
-		pilot_list = linput_Alloc_Input(reg_parent, &frame, 0, 0);
+		pilot_list = xinput_Alloc_Input(reg_parent, &frame, 0, 0);
 		if (!pilot_list)
 			return register_setup_failed(t, "pilot list input");
-		linpattr_Set_Input_Update_Function(pilot_list, iupdate_Pilot_List);
-		linpattr_Set_Input_Draw_Function(pilot_list, idraw_Pilot_List);
-		linpattr_Refreshable_Input(pilot_list);
+		xinpattr_Set_Input_Update_Function(pilot_list, iupdate_Pilot_List);
+		xinpattr_Set_Input_Draw_Function(pilot_list, idraw_Pilot_List);
+		xinpattr_Refreshable_Input(pilot_list);
 		pilot_list->id = 0;
 
 		/* Pilot name input (RegStringButton, filename mode) */
@@ -1957,32 +1960,32 @@ static LandruTaskStepResult register_task_step(void* self) {
 		pilot_name_input = Alloc_Input_Reg_String_Button(reg_parent, &frame, 0, iuser_Pilot_Name, "", 1, 0);
 		if (!pilot_name_input)
 			return register_setup_failed(t, "pilot name input");
-		linpattr_Set_Input_Draw_Function(&pilot_name_input->header, idraw_Pilot_Name);
-		linpattr_Refreshable_Input(&pilot_name_input->header);
+		xinpattr_Set_Input_Draw_Function(&pilot_name_input->header, idraw_Pilot_Name);
+		xinpattr_Refreshable_Input(&pilot_name_input->header);
 
 		/* Prev/Next buttons */
 		register_set_rect(&frame, active_spec->prev_bounds);
-		PushButton* prev = lbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, NULL, 0);
+		PushButton* prev = xbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, NULL, 0);
 		if (!prev)
 			return register_setup_failed(t, "previous-page input");
-		linpattr_Set_Input_Draw_Function(&prev->header, (InputDrawFunc)0);
-		linpattr_Refreshable_Input(&prev->header);
+		xinpattr_Set_Input_Draw_Function(&prev->header, (InputDrawFunc)0);
+		xinpattr_Refreshable_Input(&prev->header);
 
 		register_set_rect(&frame, active_spec->next_bounds);
-		PushButton* next = lbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, NULL, 1);
+		PushButton* next = xbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, NULL, 1);
 		if (!next)
 			return register_setup_failed(t, "next-page input");
-		linpattr_Set_Input_Draw_Function(&next->header, (InputDrawFunc)0);
-		linpattr_Refreshable_Input(&next->header);
+		xinpattr_Set_Input_Draw_Function(&next->header, (InputDrawFunc)0);
+		xinpattr_Refreshable_Input(&next->header);
 
 		/* Pilot info display */
 		register_set_rect(&frame, active_spec->info_bounds);
-		pilot_info = linput_Alloc_Input(reg_parent, &frame, 0, 0);
+		pilot_info = xinput_Alloc_Input(reg_parent, &frame, 0, 0);
 		if (!pilot_info)
 			return register_setup_failed(t, "pilot info input");
-		linpattr_Set_Input_User_Function(pilot_info, iuser_Pilot_Info);
-		linpattr_Set_Input_Draw_Function(pilot_info, idraw_Pilot_Info);
-		linpattr_Refreshable_Input(pilot_info);
+		xinpattr_Set_Input_User_Function(pilot_info, iuser_Pilot_Info);
+		xinpattr_Set_Input_Draw_Function(pilot_info, idraw_Pilot_Info);
+		xinpattr_Refreshable_Input(pilot_info);
 		pilot_info->id = 0;
 
 		/* Delete button (initially hidden) */
@@ -1990,12 +1993,12 @@ static LandruTaskStepResult register_task_step(void* self) {
 		char del_label[32];
 		strcpy(del_label, textext_Get_Text(txtRegBtnDeletePilot));
 		pilot_delete =
-			(Input*)lbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, del_label, 2);
+			(Input*)xbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, del_label, 2);
 		if (!pilot_delete)
 			return register_setup_failed(t, "delete-pilot input");
-		linpattr_Set_Input_Draw_Function(pilot_delete, idraw_Pilot_Button);
-		linpattr_Refreshable_Input(pilot_delete);
-		linpattr_Hide_Input(pilot_delete);
+		xinpattr_Set_Input_Draw_Function(pilot_delete, idraw_Pilot_Button);
+		xinpattr_Refreshable_Input(pilot_delete);
+		xinpattr_Hide_Input(pilot_delete);
 
 		/* Copy-protection challenge moved out of end_View into a
 		 * dedicated phase: push the protect dialog (if needed) and
@@ -2018,26 +2021,26 @@ static LandruTaskStepResult register_task_step(void* self) {
 		 * dialog's exit code (2) which the scene transition routes
 		 * to "abort". result!=2 means challenge passed: clear the
 		 * exit so the register scene continues normally. */
-		int16_t result = ldialog_Get_Dialog_Exit();
-		ldialog_Clear_Dialog_Exit();
-		linput_Free_Inputs(s_protect_ctx.sub_dlg);
+		int16_t result = xdialog_Get_Dialog_Exit();
+		xdialog_Clear_Dialog_Exit();
+		xinput_Free_Inputs(s_protect_ctx.sub_dlg);
 		s_protect_ctx.sub_dlg = NULL;
 		if (result != 2)
-			lerror_Set_Landru_Exit(0);
-		lio_Set_Mouse_Position(160, 130);
+			xerror_Set_Landru_Exit(0);
+		xio_Set_Mouse_Position(160, 130);
 		t->phase = REGISTER_PHASE_PUSH_VIEW;
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
 	if (t->phase == REGISTER_PHASE_PUSH_VIEW) {
 		/* Push the modal view task */
-		lview_Set_View_Update_Function(end_View);
-		lviewadd_Clear_View();
-		lview_Disable_All_View_Erase();
-		lcanvas_Invalid_Screen_Diff();
-		lio_Set_Key_Buttons();
+		xview_Set_View_Update_Function(end_View);
+		xviewadd_Clear_View();
+		xview_Disable_All_View_Erase();
+		xcanvas_Invalid_Screen_Diff();
+		xio_Set_Key_Buttons();
 
-		lviewadd_Push_Handle_View_Task();
+		xviewadd_Push_Handle_View_Task();
 		t->view_pushed = true;
 
 		t->phase = REGISTER_PHASE_CLEANUP;
@@ -2045,28 +2048,28 @@ static LandruTaskStepResult register_task_step(void* self) {
 	}
 
 	/* CLEANUP */
-	lio_Clear_Key_Buttons();
-	lview_Enable_All_View_Erase();
-	lview_Clear_View_Update_Function();
+	xio_Clear_Key_Buttons();
+	xview_Enable_All_View_Erase();
+	xview_Clear_View_Update_Function();
 
 	if (!t->view_pushed) {
-		lview_Free_All_From_View(lview_Get_Current_View());
-		lview_Init_View(lview_Get_Current_View());
+		xview_Free_All_From_View(xview_Get_Current_View());
+		xview_Init_View(xview_Get_Current_View());
 	}
 
-	lfiledir_Free_Directory(&directory);
+	xfiledir_Free_Directory(&directory);
 	if (fast_pilot_record)
 		free(fast_pilot_record);
 	fast_pilot_record = NULL;
 
-	if (lcursor_Is_Cursor_Visible())
-		lcursor_Hide_Cursor();
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
 
 	if (t->rf)
-		lres_Close_Resource(t->rf);
+		xres_Close_Resource(t->rf);
 	t->rf = NULL;
 	if (t->spec->surface_set == LANDRU_SURFACE_SVGA)
-		(void)lsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
+		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 	return LANDRU_TASK_STEP_DONE;
 }
 

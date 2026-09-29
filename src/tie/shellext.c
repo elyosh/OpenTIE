@@ -56,19 +56,19 @@ void shellext_Open_Landru(void* extern_mem, int16_t use_timer, int16_t use_scrip
 
 	(void)extern_mem;
 	asl_Open_ASL();
-	if (lerror_Is_Landru_Error())
+	if (xerror_Is_Landru_Error())
 		return;
-	/* Retail front-end: Alt+O (key 0x1800) in lio_Poll_Input dumps a PCX. */
+	/* Retail front-end: Alt+O (key 0x1800) in xio_Poll_Input dumps a PCX. */
 	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-		lio_Set_Screenshot_Hook((void (*)(void))FrontendDisplay_CaptureScreenshot);
+		xio_Set_Screenshot_Hook((void (*)(void))FrontendDisplay_CaptureScreenshot);
 	else
-		lio_Set_Screenshot_Hook((void (*)(void))rtsvga2_takeScreenshot);
+		xio_Set_Screenshot_Hook((void (*)(void))rtsvga2_takeScreenshot);
 
 	if (sHead_gbl->cur_scene != SCENE_FILM_VIEWER) {
-		lcanvas_Erase_Canvas();
-		lpal_Set_Screen_RGB(0, 0, 0, 0, 0);
-		lcanvas_Get_Drawing_Canvas_Bounds(&r);
-		lcanvas_Copy_Screen_To_Video(&r);
+		xcanvas_Erase_Canvas();
+		xpal_Set_Screen_RGB(0, 0, 0, 0, 0);
+		xcanvas_Get_Drawing_Canvas_Bounds(&r);
+		xcanvas_Copy_Screen_To_Video(&r);
 	}
 
 	if (use_timer == 0)
@@ -76,39 +76,39 @@ void shellext_Open_Landru(void* extern_mem, int16_t use_timer, int16_t use_scrip
 
 	shipext_Open_Ships();
 	textext_Open_Text_Ext();
-	ltimer_Set_Frame_Rate(20);
+	xtimer_Set_Frame_Rate(20);
 
-	if (lcursor_Is_Cursor_Visible())
-		lcursor_Hide_Cursor();
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
 
 	sHead_gbl->def_file = shellext_Open_Empire_Resource("empire.lfd");
-	sHead_gbl->def_palette = lpal_Res_Palette("standard");
-	sHead_gbl->def_icons = lactanim_Res_Anim_Actor("icons", &r, 0, 0, 0);
-	sHead_gbl->def_cursors = lactanim_Res_Anim_Actor("cursors", &r, 0, 0, 0);
+	sHead_gbl->def_palette = xpal_Res_Palette("standard");
+	sHead_gbl->def_icons = xactanim_Res_Anim_Actor("icons", &r, 0, 0, 0);
+	sHead_gbl->def_cursors = xactanim_Res_Anim_Actor("cursors", &r, 0, 0, 0);
 	sHead_gbl->def_font8 = 0;
-	lfont_Res_Font("font8", 0);
+	xfont_Res_Font("font8", 0);
 	sHead_gbl->def_font6 = 1;
-	lfont_Res_Font("font6", 1);
+	xfont_Res_Font("font6", 1);
 	if (profile->font_count > 2) {
-		lfont_Res_Font("font18", 2);
-		lfont_Res_Font("font12", 3);
+		xfont_Res_Font("font18", 2);
+		xfont_Res_Font("font12", 3);
 	}
-	lfont_Set_Font(0);
+	xfont_Set_Font(0);
 
-	lpal_Set_Screen_Palette(sHead_gbl->def_palette);
-	lremap_Remap_Interface();
-	lio_Flush_Input();
-	lcanvas_Get_Drawing_Canvas_Bounds(&r);
-	ldirty_Dirty_Master_Rect(&r);
-	ldirty_Set_Dirty_Merge();
-	ldirty_Max_Dirty_List();
+	xpal_Set_Screen_Palette(sHead_gbl->def_palette);
+	xremap_Remap_Interface();
+	xio_Flush_Input();
+	xcanvas_Get_Drawing_Canvas_Bounds(&r);
+	xdirty_Dirty_Master_Rect(&r);
+	xdirty_Set_Dirty_Merge();
+	xdirty_Max_Dirty_List();
 
-	lpal_Free_Palette_From_System(sHead_gbl->def_palette);
-	lactor_Free_Actor_From_System(sHead_gbl->def_icons);
-	lstyle_Style_Set_Icon_Actor(sHead_gbl->def_icons);
-	lactor_Free_Actor_From_System(sHead_gbl->def_cursors);
-	lcanvas_Enable_Screen_Diff();
-	lcursor_Set_Cursor(0);
+	xpal_Free_Palette_From_System(sHead_gbl->def_palette);
+	xactor_Free_Actor_From_System(sHead_gbl->def_icons);
+	xstyle_Style_Set_Icon_Actor(sHead_gbl->def_icons);
+	xactor_Free_Actor_From_System(sHead_gbl->def_cursors);
+	xcanvas_Enable_Screen_Diff();
+	xcursor_Set_Cursor(0);
 	shellext_Load_Preferences();
 }
 
@@ -116,11 +116,11 @@ void shellext_Open_Landru(void* extern_mem, int16_t use_timer, int16_t use_scrip
 void shellext_Close_Landru(int16_t use_timer) {
 	Rect r;
 
-	lcanvas_Disable_Screen_Diff();
-	lpal_Free_Palette(sHead_gbl->def_palette);
-	lactor_Free_Actor(sHead_gbl->def_icons);
-	lactor_Free_Actor(sHead_gbl->def_cursors);
-	lres_Close_Resource(sHead_gbl->def_file);
+	xcanvas_Disable_Screen_Diff();
+	xpal_Free_Palette(sHead_gbl->def_palette);
+	xactor_Free_Actor(sHead_gbl->def_icons);
+	xactor_Free_Actor(sHead_gbl->def_cursors);
+	xres_Close_Resource(sHead_gbl->def_file);
 	textext_Close_Text_Ext();
 	shipext_Close_Ships();
 
@@ -128,9 +128,9 @@ void shellext_Close_Landru(int16_t use_timer) {
 		soundext_Close_Post_iMuse();
 
 	if (shellext_Get_Cur_Scene() != SCENE_FILM_REPLAY) {
-		lcanvas_Erase_Canvas();
-		lcanvas_Get_Drawing_Canvas_Bounds(&r);
-		lcanvas_Copy_Screen_To_Video(&r);
+		xcanvas_Erase_Canvas();
+		xcanvas_Get_Drawing_Canvas_Bounds(&r);
+		xcanvas_Copy_Screen_To_Video(&r);
 	}
 
 	asl_Close_ASL();
@@ -138,9 +138,9 @@ void shellext_Close_Landru(int16_t use_timer) {
 
 // FUNCTION: TIE 0x65F0F
 void shellext_Open_Landru_Scene(int16_t scene) {
-	lerror_Clear_Landru_Escape();
-	lerror_Clear_Landru_Exit();
-	lerror_Set_Landru_Escape_Function(shellext_escape_TIE);
+	xerror_Clear_Landru_Escape();
+	xerror_Clear_Landru_Exit();
+	xerror_Set_Landru_Escape_Function(shellext_escape_TIE);
 	sHead_gbl->cur_scene = scene;
 	sHead_gbl->sudden_end = 0;
 	/* Snapshot scene tagging is NOT reset here. shell_dispatch_converted
@@ -174,7 +174,7 @@ void shellext_Begin_Close_Landru_Scene(int16_t scene, int16_t* out_sudden_end) {
 	 * inherits a clean default or overrides as needed. See
 	 * shell_task_step in shell.c for the clear point. */
 	textext_Close_Text_Ext_Scene(scene);
-	next_scene = lerror_Get_Landru_Exit();
+	next_scene = xerror_Get_Landru_Exit();
 	if (scene != 270 && ((uint16_t)next_scene >= 2u && ((uint16_t)next_scene <= 4u || next_scene == 290)))
 		next_scene = 270;
 	soundext_Close_Sound_Scene(scene, next_scene);
@@ -186,7 +186,7 @@ void shellext_Begin_Close_Landru_Scene(int16_t scene, int16_t* out_sudden_end) {
 
 /* Close-scene step 2: stage the screen-diff copy. Run after any
  * sudden-end fade pushed by the caller has popped. */
-void shellext_Finalize_Close_Landru_Scene(void) { lcanvas_Copy_Screen_To_Diff(); }
+void shellext_Finalize_Close_Landru_Scene(void) { xcanvas_Copy_Screen_To_Diff(); }
 
 // FUNCTION: TIE 0x66006
 ResFile* shellext_Open_Empire_Resource(const char* filename) {
@@ -194,7 +194,7 @@ ResFile* shellext_Open_Empire_Resource(const char* filename) {
 
 	strcpy(res_name, "resource/");
 	strcat(res_name, filename);
-	return lres_Open_Resource(res_name);
+	return xres_Open_Resource(res_name);
 }
 
 // FUNCTION: TIE 0x6604F
@@ -203,7 +203,7 @@ LandruFile* shellext_Open_Empire_File(const char* filename, const char* mode) {
 
 	strcpy(file_name, "resource/");
 	strcat(file_name, filename);
-	return lfile_Open_File(LANDRU_FILE_ROOT_ASSET, file_name, mode);
+	return xfile_Open_File(LANDRU_FILE_ROOT_ASSET, file_name, mode);
 }
 
 int16_t shellext_Check_Cur_Scene(int16_t current_scene) { return sHead_gbl->cur_scene == current_scene; }
@@ -219,10 +219,10 @@ int16_t shellext_Get_Last_Scene(void) { return sHead_gbl->last_scene; }
 int16_t shellext_Is_Scene_Exit(int16_t scene_flag) {
 	int16_t key;
 
-	key = lio_Get_Free_Key();
-	if (lio_Right_Button_Release() || key == 13)
+	key = xio_Get_Free_Key();
+	if (xio_Right_Button_Release() || key == 13)
 		return 1;
-	if (lio_Left_Button_Release() || key == 32)
+	if (xio_Left_Button_Release() || key == 32)
 		return 1;
 	return scene_flag;
 }
@@ -232,15 +232,15 @@ int16_t shellext_Check_Scene_Exit(int16_t* exit_id, int16_t next_scene, int16_t 
 								  int16_t scene_flag) {
 	int16_t key;
 
-	key = lio_Get_Key();
-	if (!lerror_Get_Landru_Exit())
+	key = xio_Get_Key();
+	if (!xerror_Get_Landru_Exit())
 		return 0;
-	if (lio_Right_Button_Release() || key == 13) {
+	if (xio_Right_Button_Release() || key == 13) {
 		/* Right click / Enter: skip ahead to the optional next_section
 		 * (long-form path). */
 		shellext_Sudden_Scene_End();
 		*exit_id = next_section;
-	} else if (lio_Left_Button_Release() || key == 32) {
+	} else if (xio_Left_Button_Release() || key == 32) {
 		/* Left click / Space: end the current scene early and continue
 		 * to the regular next_scene. */
 		shellext_Sudden_Scene_End();
@@ -268,22 +268,22 @@ int16_t shellext_Is_Sudden_Scene_End(void) { return sHead_gbl->sudden_end; }
  * synchronous shellext_Back_Stage_To_VGA. */
 void shellext_Push_Back_Stage_To_VGA_Task(int16_t dialog) {
 	Rect r;
-	lcanvas_Get_Drawing_Canvas_Bounds(&r);
-	bool cursor_was_visible = lcursor_Is_Cursor_Visible();
+	xcanvas_Get_Drawing_Canvas_Bounds(&r);
+	bool cursor_was_visible = xcursor_Is_Cursor_Visible();
 	if (cursor_was_visible)
-		lcursor_Cursor_To_Back();
-	(void)lfade_Push_Fade_To_Video_Screen_Task(
+		xcursor_Cursor_To_Back();
+	(void)xfade_Push_Fade_To_Video_Screen_Task(
 		&r, dialog, cursor_was_visible ? FADE_END_CURSOR_TO_FRONT : FADE_END_CURSOR_FROM_FADE,
 		/*force_refresh_view=*/false);
 }
 
 /* Push the sudden-scene-end fade. Used by shell_task_step when
  * shellext_Close_Landru_Scene reports sudden_end was set. The
- * lviewadd_Clear_View + lfade_Start_Full_Fade pair runs synchronously
+ * xviewadd_Clear_View + xfade_Start_Full_Fade pair runs synchronously
  * before the fade push so the FadeTask sees the configured wipe. */
 void shellext_Push_Sudden_Scene_Fade_Task(void) {
-	lviewadd_Clear_View();
-	lfade_Start_Full_Fade(2, 2, 0, 0, 1);
+	xviewadd_Clear_View();
+	xfade_Start_Full_Fade(2, 2, 0, 0, 1);
 	shellext_Push_Back_Stage_To_VGA_Task(0);
 }
 
@@ -294,16 +294,16 @@ int16_t shellext_escape_TIE(void) {
 	 * task. The escape callback runs synchronously inside an input
 	 * poll and cannot wait on the dialog; computer_Push_Computer_
 	 * Dialog_Task pushes the task on the tie_core stack and the
-	 * dialog itself calls lerror_Set_Landru_Exit on its way out
-	 * (whose value lerror_Do_Landru_Escape would otherwise have
+	 * dialog itself calls xerror_Set_Landru_Exit on its way out
+	 * (whose value xerror_Do_Landru_Escape would otherwise have
 	 * stored from a synchronous return). We return -1 so the
 	 * escape mechanism leaves landru_exit_gbl alone — the dialog's
 	 * exit value already populated it. */
-	if (!ldialog_Is_Active_Dialog() && !lfade_Fade_Active() && lview_Get_View_Time() > 0) {
+	if (!xdialog_Is_Active_Dialog() && !xfade_Fade_Active() && xview_Get_View_Time() > 0) {
 		computer_Push_Computer_Dialog_Task();
 		return -1;
 	}
-	return lerror_Get_Landru_Exit();
+	return xerror_Get_Landru_Exit();
 }
 
 // FUNCTION: TIE 0x6659A
@@ -325,11 +325,11 @@ void shellext_Load_Preferences(void) {
 	/* PORT: Default new users to the TIE95 640x480 flight mode. */
 	f_res = 1;
 
-	the_file = lfile_Open_File(LANDRU_FILE_ROOT_USER, "foption.cfg", "rb");
+	the_file = xfile_Open_File(LANDRU_FILE_ROOT_USER, "foption.cfg", "rb");
 	if (the_file) {
-		lfile_Read_Data_From_File(the_file, &options_gbl, sizeof(FrontOptionsStruct));
-		lfile_Read_Long_From_File(the_file, &f_res);
-		lfile_Close_File(the_file);
+		xfile_Read_Data_From_File(the_file, &options_gbl, sizeof(FrontOptionsStruct));
+		xfile_Read_Long_From_File(the_file, &f_res);
+		xfile_Close_File(the_file);
 	}
 
 	/* Retail SHELLEXT_Load_Preferences translates f_res (0 or 1) into the

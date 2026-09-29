@@ -275,6 +275,7 @@ stage_licenses() {
     local license_dir="${application}/Contents/Resources/licenses"
 
     mkdir -p "${license_dir}"
+    cp "${repo_root}/src/landru/LICENSE" "${license_dir}/Landru-GPL-3.0.txt"
     cp "${source_root}/SDL-${sdl_version}/LICENSE.txt" "${license_dir}/SDL3.txt"
     cp "${source_root}/zstd-${zstd_version}/LICENSE" "${license_dir}/zstd.txt"
     cp "${source_root}/FFmpeg-${ffmpeg_version}/COPYING.LGPLv2.1" \

@@ -63,6 +63,8 @@ option(TIE_GPU_DEBUG_LABELS
     ${_TIE_GPU_DEBUG_LABELS_DEFAULT})
 unset(_TIE_GPU_DEBUG_LABELS_DEFAULT)
 
+set(LANDRU_GAME TIE)
+set(LANDRU_MODERN ON)
 add_subdirectory(src/landru)
 tie_enable_warnings(landru)
 if(NOT MSVC)
@@ -583,7 +585,7 @@ if(CLANG_FORMAT)
         "${CMAKE_SOURCE_DIR}/src/*.c"      "${CMAKE_SOURCE_DIR}/src/*.h"
         "${CMAKE_SOURCE_DIR}/tools/*.c"    "${CMAKE_SOURCE_DIR}/tools/*.h"
         "${CMAKE_SOURCE_DIR}/examples/*.c" "${CMAKE_SOURCE_DIR}/examples/*.h")
-    list(FILTER TIE_FORMAT_FILES EXCLUDE REGEX "/src/third_party/")
+    list(FILTER TIE_FORMAT_FILES EXCLUDE REGEX "/src/(third_party|landru)/")
 
     add_custom_target(format
         COMMAND ${CLANG_FORMAT} --Wno-error=unknown -i ${TIE_FORMAT_FILES}

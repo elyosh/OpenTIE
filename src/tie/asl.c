@@ -49,106 +49,106 @@ void asl_Open_ASL(void) {
 					   profile->vesa_mode, profile->width, profile->height,
 					   (unsigned)(uint16_t)profile->scratch_size, profile->font_count);
 
-	lerror_Set_Landru_Bail_Function(asl_Case_Bail);
+	xerror_Set_Landru_Bail_Function(asl_Case_Bail);
 	if (!TieClassicDisplay_InitializeFrontend()) {
-		lerror_Set_Landru_Error(12);
+		xerror_Set_Landru_Error(12);
 		return;
 	}
-	lvesa_Create_Vesa_Module(profile->vesa_mode);
-	lmouse_MS_Initialize_Mouse();
-	ltimer_Create_Timer_Interrupt();
-	lio_Create_IO_Module();
-	lres_Create_Resource_Module();
-	lpal_Create_Palette_Module();
-	lremap_Create_Remap_Module();
-	lfade_Create_Fade_Module();
-	lcursor_Create_Cursor_Module();
-	ldirty_Create_Dirty_List_Module(64);
-	lcanvas_Create_Canvas_Module(profile->scratch_size, profile->width, profile->height, true);
-	if (!lsurface_Create_Surface_Module(profile->secondary_vga)) {
-		lerror_Set_Landru_Error(12);
+	xvesa_Create_Vesa_Module(profile->vesa_mode);
+	xmouse_MS_Initialize_Mouse();
+	xtimer_Create_Timer_Interrupt();
+	xio_Create_IO_Module();
+	xres_Create_Resource_Module();
+	xpal_Create_Palette_Module();
+	xremap_Create_Remap_Module();
+	xfade_Create_Fade_Module();
+	xcursor_Create_Cursor_Module();
+	xdirty_Create_Dirty_List_Module(64);
+	xcanvas_Create_Canvas_Module(profile->scratch_size, profile->width, profile->height, true);
+	if (!xsurface_Create_Surface_Module(profile->secondary_vga)) {
+		xerror_Set_Landru_Error(12);
 		return;
 	}
-	linput_Create_Input_Module();
-	ldialog_Create_Dialog_Module();
-	lbtnpush_Create_Button_Module();
-	lbtnstr_Create_String_Button_Module();
-	lbtnsldr_Create_Slider_Button_Module();
-	lbtntext_Create_Text_Button_Module();
-	lbtnchk_Create_Check_Button_Module();
-	lactor_Create_Actor_Module();
-	lactanim_Create_Anim_Actor_Module();
-	lactdelt_Create_Delta_Actor_Module();
-	lactcust_Create_Custom_Actor_Module();
-	lfont_Create_Font_Module();
-	lview_Create_View_Module();
-	lfiledir_Create_Directory_Module();
-	lcanvas_Erase_Canvas();
-	lio_Flush_Input();
-	lcanvas_Get_Drawing_Canvas_Bounds(&canvas_bounds);
-	ldirty_Dirty_Master_Rect(&canvas_bounds);
-	ldirty_Set_Dirty_Merge();
-	ldirty_Max_Dirty_List();
+	xinput_Create_Input_Module();
+	xdialog_Create_Dialog_Module();
+	xbtnpush_Create_Button_Module();
+	xbtnstr_Create_String_Button_Module();
+	xbtnsldr_Create_Slider_Button_Module();
+	xbtntext_Create_Text_Button_Module();
+	xbtnchk_Create_Check_Button_Module();
+	xactor_Create_Actor_Module();
+	xactanim_Create_Anim_Actor_Module();
+	xactdelt_Create_Delta_Actor_Module();
+	xactcust_Create_Custom_Actor_Module();
+	xfont_Create_Font_Module();
+	xview_Create_View_Module();
+	xfiledir_Create_Directory_Module();
+	xcanvas_Erase_Canvas();
+	xio_Flush_Input();
+	xcanvas_Get_Drawing_Canvas_Bounds(&canvas_bounds);
+	xdirty_Dirty_Master_Rect(&canvas_bounds);
+	xdirty_Set_Dirty_Merge();
+	xdirty_Max_Dirty_List();
 }
 
 /* Shut down all Landru modules in reverse creation order. */
 // FUNCTION: TIE 0x86D22
 void asl_Close_ASL(void) {
-	lfiledir_Destroy_Directory_Module();
-	lview_Destroy_View_Module();
-	lfont_Destroy_Font_Module();
-	lactcust_Destroy_Custom_Actor_Module();
-	lactdelt_Destroy_Delta_Actor_Module();
-	lactanim_Destroy_Anim_Actor_Module();
-	lactor_Destroy_Actor_Module();
-	lbtnchk_Destroy_Check_Button_Module();
-	lbtntext_Destroy_Text_Button_Module();
-	lbtnsldr_Destroy_Slider_Button_Module();
-	lbtnstr_Destroy_String_Button_Module();
-	lbtnpush_Destroy_Button_Module();
-	ldialog_Destroy_Dialog_Module();
-	linput_Destroy_Input_Module();
-	lsurface_Destroy_Surface_Module();
-	lcanvas_Destroy_Canvas_Module();
-	ldirty_Destroy_Dirty_List_Module();
-	lcursor_Destroy_Cursor_Module();
-	lfade_Destroy_Fade_Module();
-	lremap_Destroy_Remap_Module();
-	lpal_Destroy_Palette_Module();
-	lres_Destroy_Resource_Module();
-	lio_Destroy_IO_Module();
-	ltimer_Destroy_Timer_Interrupt();
-	lvesa_Destroy_VESA_Module();
+	xfiledir_Destroy_Directory_Module();
+	xview_Destroy_View_Module();
+	xfont_Destroy_Font_Module();
+	xactcust_Destroy_Custom_Actor_Module();
+	xactdelt_Destroy_Delta_Actor_Module();
+	xactanim_Destroy_Anim_Actor_Module();
+	xactor_Destroy_Actor_Module();
+	xbtnchk_Destroy_Check_Button_Module();
+	xbtntext_Destroy_Text_Button_Module();
+	xbtnsldr_Destroy_Slider_Button_Module();
+	xbtnstr_Destroy_String_Button_Module();
+	xbtnpush_Destroy_Button_Module();
+	xdialog_Destroy_Dialog_Module();
+	xinput_Destroy_Input_Module();
+	xsurface_Destroy_Surface_Module();
+	xcanvas_Destroy_Canvas_Module();
+	xdirty_Destroy_Dirty_List_Module();
+	xcursor_Destroy_Cursor_Module();
+	xfade_Destroy_Fade_Module();
+	xremap_Destroy_Remap_Module();
+	xpal_Destroy_Palette_Module();
+	xres_Destroy_Resource_Module();
+	xio_Destroy_IO_Module();
+	xtimer_Destroy_Timer_Interrupt();
+	xvesa_Destroy_VESA_Module();
 }
 
 /* Emergency teardown, including iMUSE cleanup. */
 // FUNCTION: TIE 0x86DC3
 int asl_Case_Bail(void) {
-	lfiledir_Destroy_Directory_Module();
-	lview_Destroy_View_Module();
-	lfont_Destroy_Font_Module();
-	lactcust_Destroy_Custom_Actor_Module();
-	lactdelt_Destroy_Delta_Actor_Module();
-	lactanim_Destroy_Anim_Actor_Module();
-	lactor_Destroy_Actor_Module();
-	lbtnchk_Destroy_Check_Button_Module();
-	lbtntext_Destroy_Text_Button_Module();
-	lbtnsldr_Destroy_Slider_Button_Module();
-	lbtnstr_Destroy_String_Button_Module();
-	lbtnpush_Destroy_Button_Module();
-	ldialog_Destroy_Dialog_Module();
-	linput_Destroy_Input_Module();
-	lsurface_Destroy_Surface_Module();
-	lcanvas_Destroy_Canvas_Module();
-	ldirty_Destroy_Dirty_List_Module();
-	lcursor_Destroy_Cursor_Module();
-	lfade_Destroy_Fade_Module();
-	lremap_Destroy_Remap_Module();
-	lpal_Destroy_Palette_Module();
-	lres_Destroy_Resource_Module();
-	lio_Destroy_IO_Module();
-	ltimer_Destroy_Timer_Interrupt();
-	lvesa_Destroy_VESA_Module();
+	xfiledir_Destroy_Directory_Module();
+	xview_Destroy_View_Module();
+	xfont_Destroy_Font_Module();
+	xactcust_Destroy_Custom_Actor_Module();
+	xactdelt_Destroy_Delta_Actor_Module();
+	xactanim_Destroy_Anim_Actor_Module();
+	xactor_Destroy_Actor_Module();
+	xbtnchk_Destroy_Check_Button_Module();
+	xbtntext_Destroy_Text_Button_Module();
+	xbtnsldr_Destroy_Slider_Button_Module();
+	xbtnstr_Destroy_String_Button_Module();
+	xbtnpush_Destroy_Button_Module();
+	xdialog_Destroy_Dialog_Module();
+	xinput_Destroy_Input_Module();
+	xsurface_Destroy_Surface_Module();
+	xcanvas_Destroy_Canvas_Module();
+	xdirty_Destroy_Dirty_List_Module();
+	xcursor_Destroy_Cursor_Module();
+	xfade_Destroy_Fade_Module();
+	xremap_Destroy_Remap_Module();
+	xpal_Destroy_Palette_Module();
+	xres_Destroy_Resource_Module();
+	xio_Destroy_IO_Module();
+	xtimer_Destroy_Timer_Interrupt();
+	xvesa_Destroy_VESA_Module();
 	gamesnd_Close_Pre_iMuse();
 	return 1;
 }

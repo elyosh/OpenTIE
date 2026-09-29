@@ -82,7 +82,7 @@ static int16_t base_color;
 static int16_t scale_amount_f;
 static int16_t scale_amount;
 static int16_t num_lines;
-static void* title_text; /* paragraph data */
+static LandruHandle title_text; /* paragraph data */
 static int16_t title_font;
 
 /* ================================================================
@@ -96,15 +96,15 @@ static void end_View(int32_t time) {
 	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
 		int16_t scene;
 		if (shellext_Check_Scene_Exit(&scene, 10, 100, film_time == 690))
-			lerror_Set_Landru_Exit(scene);
+			xerror_Set_Landru_Exit(scene);
 	}
 
 	/* At time 100: reset view frame for the text crawl */
 	if (film_time == 100) {
 		Rect r;
-		lrect_Set_Rect(&r, 0, 0, 320, 200);
-		lview_Set_View_Frame(0, &r);
-		lview_Set_View_Pos(0, r.left, r.top);
+		xrect_Set_Rect(&r, 0, 0, 320, 200);
+		xview_Set_View_Frame(0, &r);
+		xview_Set_View_Pos(0, r.left, r.top);
 	}
 
 	/* Fade out: increment base_color every other frame after time 620 */
@@ -119,7 +119,7 @@ static void end_View(int32_t time) {
 
 	/* Advance time; skip ahead on slow systems */
 	if (++film_time == 40) {
-		if (lio_Is_System_Slower_Than(2))
+		if (xio_Is_System_Slower_Than(2))
 			film_time = 64;
 	}
 }
@@ -133,26 +133,26 @@ static void user_StarWars(Actor* actor, int32_t time) {
 	(void)time;
 
 	if (!film_time) {
-		lactor_Hide_Actor(actor);
+		xactor_Hide_Actor(actor);
 		return;
 	}
 
 	/* At time 84: capture palette and start fade to black */
 	if (film_time == 84) {
-		lpal_Screen_To_Src_Palette(0, 0, 255);
-		lpal_Screen_To_Dest_Palette(0, 0, 255);
-		lpal_Set_Dest_Pal_Color(81, 96, 0, 0, 0);
-		lfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_PAL_TO_PAL, 1, 0, 0);
+		xpal_Screen_To_Src_Palette(0, 0, 255);
+		xpal_Screen_To_Dest_Palette(0, 0, 255);
+		xpal_Set_Dest_Pal_Color(81, 96, 0, 0, 0);
+		xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_PAL_TO_PAL, 1, 0, 0);
 	}
 
 	/* At time 39: show and set initial scale */
 	if (film_time == 39) {
-		lactor_Show_Actor(actor);
-		lactor_Set_Actor_Scale(actor, 460, 460);
+		xactor_Show_Actor(actor);
+		xactor_Set_Actor_Scale(actor, 460, 460);
 	}
 
 	/* Decrease scale each frame */
-	lactor_Set_Actor_Scale(actor, actor->xscale - scale_amount, actor->yscale - scale_amount);
+	xactor_Set_Actor_Scale(actor, actor->xscale - scale_amount, actor->yscale - scale_amount);
 
 	/* Clamp to minimum 1 */
 	if (actor->xscale < 1)
@@ -171,7 +171,7 @@ static void user_StarWars(Actor* actor, int32_t time) {
 
 	/* At time 100: hide */
 	if (film_time == 100)
-		lactor_Hide_Actor(actor);
+		xactor_Hide_Actor(actor);
 }
 
 /* Slow system variant: static display, no per-frame scaling */
@@ -179,19 +179,19 @@ static void user_Slow_StarWars(Actor* actor, int32_t time) {
 	(void)time;
 
 	if (!film_time) {
-		lactor_Hide_Actor(actor);
+		xactor_Hide_Actor(actor);
 		return;
 	}
 
 	if (film_time == 39)
-		lactor_Show_Actor(actor);
+		xactor_Show_Actor(actor);
 
 	if (film_time == 84) {
-		lpal_Screen_To_Src_Palette(0, 0, 255);
-		lpal_Screen_To_Dest_Palette(0, 0, 255);
-		lpal_Set_Dest_Pal_Color(81, 96, 0, 0, 0);
-		lfade_Start_Full_Fade(FADE_WIPE_SNAP_OFF, FADE_COLOR_PAL_TO_PAL, 1, 0, 1);
-		lactor_Hide_Actor(actor);
+		xpal_Screen_To_Src_Palette(0, 0, 255);
+		xpal_Screen_To_Dest_Palette(0, 0, 255);
+		xpal_Set_Dest_Pal_Color(81, 96, 0, 0, 0);
+		xfade_Start_Full_Fade(FADE_WIPE_SNAP_OFF, FADE_COLOR_PAL_TO_PAL, 1, 0, 1);
+		xactor_Hide_Actor(actor);
 	}
 }
 
@@ -205,12 +205,12 @@ static void user_Stars(Actor* actor, int32_t time) {
 		return;
 
 	if (!film_time) {
-		lactor_Hide_Actor(actor);
+		xactor_Hide_Actor(actor);
 	} else {
 		if (film_time == 38)
-			lfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
+			xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
 		if (film_time == 39)
-			lactor_Show_Actor(actor);
+			xactor_Show_Actor(actor);
 	}
 }
 
@@ -252,7 +252,8 @@ static void user_Title(Actor* actor, int32_t time) {
 }
 
 /* Draw: render each active line with perspective horizontal scaling */
-static int draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y, int16_t refresh) {
+static int16_t draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
+						  int16_t refresh) {
 	(void)actor;
 	(void)r;
 	(void)clip_r;
@@ -262,7 +263,7 @@ static int draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_
 	if (!refresh)
 		return 1;
 
-	char* dataptr = (char*)lbitmap_Lock_Bitmap(&background);
+	char* dataptr = (char*)xbitmap_Lock_Bitmap(&background);
 
 	for (int16_t i = 0; i < num_lines; i++) {
 		if (!line_used[i])
@@ -291,7 +292,7 @@ static int draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_
 		}
 	}
 
-	lbitmap_Unlock_Bitmap(&background);
+	xbitmap_Unlock_Bitmap(&background);
 	return 1;
 }
 
@@ -305,7 +306,7 @@ static void user_Back(Actor* actor, int32_t time) {
 
 	int16_t start = 100;
 	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
-		if (lio_Is_System_Slower_Than(2))
+		if (xio_Is_System_Slower_Than(2))
 			start = 60;
 	} else {
 		start = 1;
@@ -328,7 +329,7 @@ static void user_Back(Actor* actor, int32_t time) {
 }
 
 /* Draw: render text lines into background bitmap as they come into view */
-static int draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y, int16_t refresh) {
+static int16_t draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y, int16_t refresh) {
 	(void)actor;
 	(void)r;
 	(void)clip_r;
@@ -338,22 +339,22 @@ static int draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t
 	if (!refresh)
 		return 1;
 
-	lcanvas_Push_Canvas(&background);
+	xcanvas_Push_Canvas(&background);
 
 	for (int16_t i = 0; i < num_lines; i++) {
 		if (!line_drawn[i] && line_y[i] <= 200) {
 			Rect tr;
-			lrect_Set_Rect(&tr, 0, buff_y[i], 320, buff_y[i] + 20);
-			lpaint_Paint_Clipped_Rect(&tr, 0);
+			xrect_Set_Rect(&tr, 0, buff_y[i], 320, buff_y[i] + 20);
+			xpaint_Paint_Clipped_Rect(&tr, 0);
 
 			char string[64];
-			lparagrp_Get_Paragraph_String(title_text, string, 0, i);
-			lfont_Print_Centered_Text(string, &tr, 15, title_font);
+			xparagrp_Get_Paragraph_String(title_text, string, 0, i);
+			xfont_Print_Centered_Text(string, &tr, 15, title_font);
 			line_drawn[i] = 1;
 		}
 	}
 
-	lcanvas_Pop_Canvas();
+	xcanvas_Pop_Canvas();
 	return 1;
 }
 
@@ -373,7 +374,7 @@ bool TieRecoveredTitle_ReadSnapshotLine(int index, char* text, size_t capacity, 
 	if (!title_text || !text || !capacity || !initial_y || index < 0 || index >= num_lines)
 		return false;
 	text[0] = '\0';
-	lparagrp_Get_Paragraph_String(title_text, text, 0, index);
+	xparagrp_Get_Paragraph_String(title_text, text, 0, index);
 	text[capacity - 1] = '\0';
 	*initial_y = (float)line_y_initial_arr[index];
 	return true;
@@ -411,13 +412,13 @@ static LandruTaskStepResult title_task_step(void* self) {
 			strcpy(film_name, title_str[6]); /* "todtxt1" */
 			film_name[6] = pilot_record.cur_battle + '1';
 		}
-		title_text = lparagrp_Res_Paragraph(t->file, film_name);
+		title_text = xparagrp_Res_Paragraph(t->file, film_name);
 
 		/* Load font */
 		/* TIE98 0x490067/0x4909E6: retain slot 2 for the
 		 * SVGA frontend font and place the VGA title font in slot 4. */
 		title_font = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 4 : 2;
-		lfont_Res_Font(title_str[1], (uint16_t)title_font); /* "helv-20" */
+		xfont_Res_Font(title_str[1], (uint16_t)title_font); /* "helv-20" */
 
 		/* Initialize state */
 		base_color = 0;
@@ -437,48 +438,48 @@ static LandruTaskStepResult title_task_step(void* self) {
 		}
 
 		/* Allocate background bitmap */
-		lrect_Set_Rect(&frame, 0, 0, 320, 200);
-		lbitmap_Init_Bitmap(&background);
-		lbitmap_Alloc_Bitmap(&background, 320, 200);
+		xrect_Set_Rect(&frame, 0, 0, 320, 200);
+		xbitmap_Init_Bitmap(&background);
+		xbitmap_Alloc_Bitmap(&background, 320, 200);
 
 		/* Create actors (scene 8 only: along + starwars) */
 		if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
-			along_actor = lactdelt_Res_Delta_Actor(title_str[2], &frame, 0, 0, 20); /* "along" */
-			lactor_Set_Actor_Time(along_actor, 0, 38);
+			along_actor = xactdelt_Res_Delta_Actor(title_str[2], &frame, 0, 0, 20); /* "along" */
+			xactor_Set_Actor_Time(along_actor, 0, 38);
 
-			starwars_actor = lactdelt_Res_Delta_Actor(title_str[3], &frame, 30, 32, 20); /* "starwars" */
-			if (lio_Is_System_Slower_Than(2))
-				lactor_Set_Actor_User_Function(starwars_actor, user_Slow_StarWars);
+			starwars_actor = xactdelt_Res_Delta_Actor(title_str[3], &frame, 30, 32, 20); /* "starwars" */
+			if (xio_Is_System_Slower_Than(2))
+				xactor_Set_Actor_User_Function(starwars_actor, user_Slow_StarWars);
 			else
-				lactor_Set_Actor_User_Function(starwars_actor, user_StarWars);
+				xactor_Set_Actor_User_Function(starwars_actor, user_StarWars);
 		}
 
-		stars_actor = lactdelt_Res_Delta_Actor(title_str[4], &frame, 0, 0, 100); /* "stars" */
-		lactor_Set_Actor_User_Function(stars_actor, user_Stars);
+		stars_actor = xactdelt_Res_Delta_Actor(title_str[4], &frame, 0, 0, 100); /* "stars" */
+		xactor_Set_Actor_User_Function(stars_actor, user_Stars);
 
-		back_actor = lactcust_Alloc_Custom_Actor(NULL, &frame, 0, 0, 10);
-		lactor_Set_Actor_User_Function(back_actor, user_Back);
-		lactor_Set_Actor_Draw_Function(back_actor, draw_Back);
+		back_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 10);
+		xactor_Set_Actor_User_Function(back_actor, user_Back);
+		xactor_Set_Actor_Draw_Function(back_actor, draw_Back);
 
-		title_actor = lactcust_Alloc_Custom_Actor(NULL, &frame, 0, 0, 0);
-		lactor_Set_Actor_User_Function(title_actor, user_Title);
-		lactor_Set_Actor_Draw_Function(title_actor, draw_Title);
+		title_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
+		xactor_Set_Actor_User_Function(title_actor, user_Title);
+		xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
 
 		/* Set palettes */
-		Palette* pal = lpal_Res_Palette(title_str[5]); /* "title" */
-		lpal_Set_Dest_Palette(pal);
-		lpal_Set_Dest_Palette(t->scene_head->def_palette);
+		Palette* pal = xpal_Res_Palette(title_str[5]); /* "title" */
+		xpal_Set_Dest_Palette(pal);
+		xpal_Set_Dest_Palette(t->scene_head->def_palette);
 
 		/* Start fade and push the modal view task */
-		lfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
-		lview_Set_View_Update_Function(end_View);
-		lview_Disable_Global_View_Erase();
+		xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
+		xview_Set_View_Update_Function(end_View);
+		xview_Disable_Global_View_Erase();
 
 		const char* path = (TieStorage_IsDirectory(TIE_FILE_ROOT_FRONTEND_ASSET, "astream") ||
 							TieStorage_IsDirectory(TIE_FILE_ROOT_FRONTEND_ASSET, "ASTREAM"))
 							   ? "astream\\os1-v3.wrk"
 							   : "stream\\os1-v3.wrk";
-		lstream_Chain_Stream_File(path);
+		xstream_Chain_Stream_File(0, path);
 
 		/* Tag the scene for the HD compositor: bundle key (TITLE, <film>)
 		 * resolves the remaster manifest at <root>/TITLE/films/<film>/.
@@ -488,31 +489,38 @@ static LandruTaskStepResult title_task_step(void* self) {
 		TieSnapshotBuilder_SetActiveFilm("TITLE", film_name);
 		TieSnapshotBuilder_SetRedrawModel(TIE_REDRAW_FULL_FRAME);
 
-		lviewadd_Push_Handle_View_Task();
+		xviewadd_Push_Handle_View_Task();
 
 		t->phase = TITLE_PHASE_CLEANUP;
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
+	return LANDRU_TASK_STEP_DONE;
+}
+
+static void title_task_end(void* self) {
+	TitleTask* t = (TitleTask*)self;
+	if (t->phase == TITLE_PHASE_BEGIN)
+		return;
+
 	/* CLEANUP */
 	Rect frame;
-	lview_Enable_Global_View_Erase();
-	lview_Clear_View_Update_Function();
-	lbitmap_Free_Bitmap(&background);
-	lparagrp_Free_Paragraph(title_text);
-	title_text = NULL; /* mute TieRecoveredTitle_CaptureSnapshot once we leave */
+	xview_Enable_Global_View_Erase();
+	xview_Clear_View_Update_Function();
+	xbitmap_Free_Bitmap(&background);
+	xparagrp_Free_Paragraph(title_text);
+	title_text = LANDRU_NULL_HANDLE; /* mute TieRecoveredTitle_CaptureSnapshot once we leave */
 	num_lines = 0;
-	lres_Close_Resource(t->file);
+	xres_Close_Resource(t->file);
 
-	lcanvas_Get_Drawing_Canvas_Bounds(&frame);
-	lview_Set_View_Frame(0, &frame);
-	lview_Set_View_Pos(0, 0, 0);
-
-	return LANDRU_TASK_STEP_DONE;
+	xcanvas_Get_Drawing_Canvas_Bounds(&frame);
+	xview_Set_View_Frame(0, &frame);
+	xview_Set_View_Pos(0, 0, 0);
 }
 
 static const LandruTaskVtable title_task_vt = {
 	.step = title_task_step,
+	.end = title_task_end,
 };
 
 void title_Push_Title_Task(SceneHeadStruct* scene_head) {

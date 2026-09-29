@@ -51,7 +51,7 @@ static bool audio_output_started;
  *
  * Three address spaces depending on frontendflag (matches retail
  * GAMESND_GetSoundAddr at 0x88c1d):
- *   == 1 (front-end):  soundId is a Sound* — return snd->data.
+ *   == 1 (front-end): soundId is a Sound* — resolve its data handle.
  *   == 2 (transition): return NULL (engine is being drained).
  *   == 0 (flight):     soundId is a small integer id.
  *     id <  500  -> fsfx SFX index: soundhandles[id]
@@ -61,8 +61,11 @@ static bool audio_output_started;
 static void* GetSoundAddr(intptr_t soundId) {
 	if (frontendflag == 1) {
 		Sound* snd = (Sound*)soundId;
-		if (snd && snd->data)
-			return snd->data;
+		if (snd && snd->data) {
+			void* data = xmemhdl_Lock_Handle(snd->data);
+			xmemhdl_Unlock_Handle(snd->data);
+			return data;
+		}
 		return NULL;
 	}
 	if (frontendflag == 2)
@@ -87,8 +90,9 @@ __attribute__((unused)) static void CopySoundRange(void* dest, void* sound, int3
 		return;
 
 	if (snd && snd->data) {
-		uint8_t* data = (uint8_t*)snd->data;
+		const uint8_t* data = xmemhdl_Lock_Handle(snd->data);
 		memmove(dest, &data[start], length);
+		xmemhdl_Unlock_Handle(snd->data);
 	} else {
 		memset(dest, 0, length);
 	}

@@ -35,35 +35,35 @@ void matrix_Init_Matrix(Matrix* m) {
 	m->frame_count = 0;
 	m->trans_count = 0;
 	m->matrix_count = 0;
-	m->data = NULL;
+	m->data = LANDRU_NULL_HANDLE;
 }
 
 // FUNCTION: TIE 0x89074
 Matrix* matrix_Res_Matrix(ResFile* rf, const char* name) {
 	int offset;
 	uint32_t total_size;
-	if (!lres_Get_Resource_Offset(rf, FOURCC_MTRX, name, &offset, &total_size))
+	if (!xres_Get_Resource_Offset(rf, FOURCC_MTRX, name, &offset, &total_size))
 		return NULL;
 
-	ResFile* stream = lres_Open_Resource_Data(FOURCC_MTRX, name);
+	ResFile* stream = xres_Open_Resource_Data(FOURCC_MTRX, name);
 	if (!stream)
 		return NULL;
 
 	Matrix* m = matrix_Alloc_Matrix();
 	if (!m) {
-		lres_Close_Resource_Data(rf);
+		xres_Close_Resource_Data(rf);
 		return NULL;
 	}
 
-	m->frame_count = lres_Read_Resource_Word(rf);
-	m->trans_count = lres_Read_Resource_Word(rf);
-	m->matrix_count = lres_Read_Resource_Word(rf);
+	m->frame_count = xres_Read_Resource_Word(rf);
+	m->trans_count = xres_Read_Resource_Word(rf);
+	m->matrix_count = xres_Read_Resource_Word(rf);
 
 	int32_t frame_size = 12 + 6 * m->trans_count + 24 * m->matrix_count;
 	int32_t data_size = frame_size * m->frame_count;
 
-	m->data = lres_Read_Resource_Data(rf, data_size);
-	lres_Close_Resource_Data(rf);
+	m->data = xres_Read_Resource_Data(rf, data_size, LANDRU_MEMORY_DEFAULT);
+	xres_Close_Resource_Data(rf);
 
 	return m;
 }
@@ -71,7 +71,7 @@ Matrix* matrix_Res_Matrix(ResFile* rf, const char* name) {
 // FUNCTION: TIE 0x89154
 void matrix_Free_Matrix(Matrix* m) {
 	if (m->data)
-		free(m->data);
+		xmemhdl_Free_Handle(m->data);
 	free(m);
 }
 
@@ -88,7 +88,10 @@ int16_t matrix_Get_Matrix_Frame(Matrix* m, MatrixFrame* dest, int16_t frame) {
 		return 0;
 
 	int32_t frame_size = 12 + 6 * m->trans_count + 24 * m->matrix_count;
-	const int16_t* src = (const int16_t*)((const uint8_t*)m->data + frame * frame_size);
+	const uint8_t* data = xmemhdl_Lock_Handle(m->data);
+	if (!data)
+		return 0;
+	const int16_t* src = (const int16_t*)(data + frame * frame_size);
 
 	/* Camera: 6 WORDs */
 	dest->cam_x = *src++;
@@ -114,5 +117,6 @@ int16_t matrix_Get_Matrix_Frame(Matrix* m, MatrixFrame* dest, int16_t frame) {
 			dest->joint_pos[j][p] = *src++;
 	}
 
+	xmemhdl_Unlock_Handle(m->data);
 	return 1;
 }

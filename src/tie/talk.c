@@ -706,7 +706,7 @@ static void user_Talk_Eyes(Actor* actor, int32_t time) {
 
 	if (actor->id == 0) {
 		/* Officer face: separate eye + mouth actors */
-		if (!lactor_Is_Actor_Visible(actor))
+		if (!xactor_Is_Actor_Visible(actor))
 			return;
 		int16_t blink = officer_mood_blink[mood];
 		int16_t mouth_st = officer_mood_mouth[mood];
@@ -714,31 +714,31 @@ static void user_Talk_Eyes(Actor* actor, int32_t time) {
 		if (time && actor->var1 > 0) {
 			int16_t eye = officer_mood_eye[mood];
 			actor->var1--;
-			lactor_Set_Actor_State(actor, eye, 0);
+			xactor_Set_Actor_State(actor, eye, 0);
 		} else {
 			if (actor->var1 == -2)
 				actor->var1 = rand_rand() & 0x5F;
 			else
 				actor->var1--;
-			lactor_Set_Actor_State(actor, blink, 0);
+			xactor_Set_Actor_State(actor, blink, 0);
 		}
-		lactor_Set_Actor_State(mouth_actor, mouth_st, 0);
+		xactor_Set_Actor_State(mouth_actor, mouth_st, 0);
 	} else if (actor->id == 1) {
 		/* Priest face: single actor with eye states */
-		if (!lactor_Is_Actor_Visible(actor))
+		if (!xactor_Is_Actor_Visible(actor))
 			return;
 		int16_t eye = priest_mood_eye[mood];
 		int16_t blink = priest_mood_blink[mood];
 
 		if (time && actor->var1 > 0) {
 			actor->var1--;
-			lactor_Set_Actor_State(actor, eye, 0);
+			xactor_Set_Actor_State(actor, eye, 0);
 		} else {
 			if (actor->var1 == -3)
 				actor->var1 = rand_rand() & 0x5F;
 			else
 				actor->var1--;
-			lactor_Set_Actor_State(actor, blink, 0);
+			xactor_Set_Actor_State(actor, blink, 0);
 		}
 	}
 }
@@ -985,18 +985,18 @@ void talk_Set_Talk_To_Text(void) {
 	char question_buf[80];
 	for (int16_t q = 0; q <= num_talk_questions; q++) {
 		talk_Get_Talk_Question(question_buf, q);
-		int16_t saved_font = lfont_Get_Font();
-		lfont_Set_Font(0);
-		int16_t w = lfont_Get_String_Width(question_buf);
-		lfont_Set_Font(saved_font);
+		int16_t saved_font = xfont_Get_Font();
+		xfont_Set_Font(0);
+		int16_t w = xfont_Get_String_Width(question_buf);
+		xfont_Set_Font(saved_font);
 		if (max_w < w)
 			max_w = w;
 		total_h += 10;
 	}
 
 	Rect r;
-	lrect_Set_Rect(&r, 318 - (max_w + 6), 198 - (total_h + 3), 318, 198);
-	linpattr_Set_Input_Frame(talk_input, &r);
+	xrect_Set_Rect(&r, 318 - (max_w + 6), 198 - (total_h + 3), 318, 198);
+	xinpattr_Set_Input_Frame(talk_input, &r);
 }
 
 /* ======================================================================
@@ -1021,8 +1021,8 @@ static int16_t iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t key, ui
 			hover = y / 10;
 		if (hover != active_talk_question) {
 			active_talk_question = hover;
-			linpattr_Refresh_Input(input);
-			linpattr_Refresh_Input(answer);
+			xinpattr_Refresh_Input(input);
+			xinpattr_Refresh_Input(answer);
 			if (button) {
 				input->var1 = 1;
 				input->var2 = 1;
@@ -1032,13 +1032,13 @@ static int16_t iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t key, ui
 	} else if (button == 3) {
 		if (active_talk_question != -1) {
 			if (cur_talk_question == active_talk_question) {
-				linpattr_Selected_Input(answer);
+				xinpattr_Selected_Input(answer);
 				answer->var2 = (right == 3);
 			} else {
-				linpattr_Selected_Input(input);
+				xinpattr_Selected_Input(input);
 			}
-			linpattr_Refresh_Input(input);
-			linpattr_Refresh_Input(answer);
+			xinpattr_Refresh_Input(input);
+			xinpattr_Refresh_Input(answer);
 		}
 		input->var1 = 0;
 	}
@@ -1049,18 +1049,18 @@ static int16_t iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t key, ui
 static void iuser_Talk(Input* input, int32_t time) {
 	if (!time) {
 		shade_Build_Shaded_Palette();
-		linpattr_Show_Input(talk_input);
-		linpattr_Refresh_Input(talk_input);
+		xinpattr_Show_Input(talk_input);
+		xinpattr_Refresh_Input(talk_input);
 	}
 
-	if (linpattr_Get_Input_Selected(input)) {
+	if (xinpattr_Get_Input_Selected(input)) {
 		if (active_talk_question == num_talk_questions) {
 			/* Exit selected */
 			int16_t scene = shellext_Get_Cur_Scene();
 			if (scene == SCENE_TALK_BRIEF_OFFICER || scene == SCENE_TALK_BRIEF_PRIEST)
-				lerror_Set_Landru_Exit(SCENE_BRIEF);
+				xerror_Set_Landru_Exit(SCENE_BRIEF);
 			else if (scene == SCENE_TALK_DEBRIEF_OFFICER || scene == SCENE_TALK_DEBRIEF_PRIEST)
-				lerror_Set_Landru_Exit(SCENE_DEBRIEF);
+				xerror_Set_Landru_Exit(SCENE_DEBRIEF);
 		} else {
 			cur_talk_question = active_talk_question;
 			if (active_talk_question < 0 || active_talk_question >= num_talk_questions) {
@@ -1107,8 +1107,8 @@ static void iuser_Talk(Input* input, int32_t time) {
 					talk_paragraph_timer = 0x7FFFFFFF;
 				}
 			}
-			linpattr_Refresh_Input(input);
-			linpattr_Refresh_Input(answer);
+			xinpattr_Refresh_Input(input);
+			xinpattr_Refresh_Input(answer);
 		}
 	}
 
@@ -1116,8 +1116,8 @@ static void iuser_Talk(Input* input, int32_t time) {
 		input->var2 = 0;
 	} else if (active_talk_question != -1) {
 		active_talk_question = -1;
-		linpattr_Refresh_Input(input);
-		linpattr_Refresh_Input(answer);
+		xinpattr_Refresh_Input(input);
+		xinpattr_Refresh_Input(answer);
 	}
 }
 
@@ -1127,9 +1127,9 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 
 	shade_Draw_Talk_Shade_Rect(r);
 	Rect tr;
-	lrect_Copy_Rect(&tr, r);
+	xrect_Copy_Rect(&tr, r);
 	tr.bottom = tr.top + 10 * num_talk_questions + 4;
-	lfont_Enable_FontID_Shadow(0);
+	xfont_Enable_FontID_Shadow(0);
 
 	char question_buf[80];
 	int16_t y_offset = 0;
@@ -1161,13 +1161,13 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 				question_buf[0] = '\0';
 			}
 		}
-		lfont_Print_Clipped_Text(question_buf, tr.left + 3, y_offset + tr.top + 2, 0, color);
+		xfont_Print_Clipped_Text(question_buf, tr.left + 3, y_offset + tr.top + 2, 0, color);
 		y_offset += 10;
 	}
-	lfont_Disable_FontID_Shadow(0);
+	xfont_Disable_FontID_Shadow(0);
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip_r);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip_r);
 }
 
 static int16_t iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
@@ -1187,12 +1187,12 @@ static int16_t iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t key, 
 		} else if (button == 3) {
 			input->var1 = 0;
 			input->var2 = (right == 3);
-			linpattr_Selected_Input(input);
+			xinpattr_Selected_Input(input);
 		} else {
 			return 1;
 		}
-		linpattr_Refresh_Input(input);
-		linpattr_Refresh_Input(talk_input);
+		xinpattr_Refresh_Input(input);
+		xinpattr_Refresh_Input(talk_input);
 	}
 	return 1;
 }
@@ -1218,27 +1218,31 @@ void talk_Alloc_Speech_Sound(void) {
 	if (talk_speech_sound)
 		return;
 
-	talk_speech_sound = lsound_Alloc_Sound(0);
-	if (!talk_speech_sound)
+	LandruHandle data = xmemhdl_Alloc_Clear_Handle(TALK_SPEECH_BUF_SIZE, LANDRU_MEMORY_DEFAULT);
+	if (!data)
 		return;
+	talk_speech_sound = xsound_Alloc_Sound(data, 0, 0);
+	if (!talk_speech_sound) {
+		xmemhdl_Free_Handle(data);
+		return;
+	}
 
 	/* Retail TALK_Alloc_Speech_Sound writes 0x564F4943 (= FOURCC_VOIC as
 	 * a little-endian DWORD). Use the same FOURCC so anything that
 	 * looks at the sound list by res_type matches. */
 	talk_speech_sound->res_type = FOURCC_VOIC;
 	talk_speech_sound->type = digitalSound;
-	talk_speech_sound->data = calloc(1, TALK_SPEECH_BUF_SIZE);
 	talk_speech_sound->size = 0;
 	talk_speech_pos = 0;
 	talk_speech_streaming = 0;
 
 	/* Match retail flag clears so the sound is freed normally on
 	 * scene shutdown rather than being held alive. */
-	lsound_Discard_Sound_Data(talk_speech_sound);
-	lsound_Clear_Sound_Keep(talk_speech_sound);
-	lsound_Clear_Sound_Keepable(talk_speech_sound);
-	lsound_Clear_Sound_User_Keep(talk_speech_sound);
-	lsound_Set_Sound_User_Function(talk_speech_sound, talk_Speech_User_Func);
+	xsound_Discard_Sound_Data(talk_speech_sound);
+	xsound_Clear_Sound_Keep(talk_speech_sound);
+	xsound_Clear_Sound_Keepable(talk_speech_sound);
+	xsound_Clear_Sound_User_Keep(talk_speech_sound);
+	xsound_Set_Sound_User_Function(talk_speech_sound, talk_Speech_User_Func);
 }
 
 /* Tear down the streaming state. Retail leaves the Sound and its
@@ -1266,7 +1270,7 @@ void talk_Free_Speech_Sound(void) {
  *
  *   3. default — full sp/mission/officer/mood/idx filename.
  *
- * Path separators are forward slashes — lfile_Open_File handles
+ * Path separators are forward slashes — xfile_Open_File handles
  * cross-platform translation. */
 static int talk_Build_Voc_Path(char* out, size_t cap) {
 	char sp[8] = { 0 };
@@ -1335,7 +1339,7 @@ void talk_Start_Speech_Stream(void) {
 		return;
 
 	/* Stop any currently playing speech. */
-	lsound_Stop_Sound(talk_speech_sound);
+	xsound_Stop_Sound(talk_speech_sound);
 	talk_speech_streaming = 0;
 	talk_speech_pos = 0;
 
@@ -1348,14 +1352,19 @@ void talk_Start_Speech_Stream(void) {
 	TieDiagnostics_Log(TIE_LOG_INFO, "[talk-voice] play %s source=%s\n", path,
 					   TieFrontendVoice_SourceName(voice_source));
 
-	memset(talk_speech_sound->data, 0, TALK_SPEECH_BUF_SIZE);
-	size_t bytes_read = TieStorage_Read(talk_speech_sound->data, 1, TALK_SPEECH_BUF_SIZE, fp);
+	uint8_t* data = xmemhdl_Lock_Handle(talk_speech_sound->data);
+	if (!data) {
+		TieStorage_Close(fp);
+		return;
+	}
+	memset(data, 0, TALK_SPEECH_BUF_SIZE);
+	size_t bytes_read = TieStorage_Read(data, 1, TALK_SPEECH_BUF_SIZE, fp);
 	TieStorage_Close(fp);
 	uint32_t source_rate_hz = 0;
 	/* MODERN ADAPTATION: TIE98 ships VOC 1.20/type-9 PCM, while the
 	 * recovered TIE95 iMUSE dispatcher consumes VOC 1.10/type-1 blocks. */
-	const TieVocCompatResult voc_compat =
-		TieVocCompat_PrepareImuse(talk_speech_sound->data, &bytes_read, &source_rate_hz);
+	const TieVocCompatResult voc_compat = TieVocCompat_PrepareImuse(data, &bytes_read, &source_rate_hz);
+	xmemhdl_Unlock_Handle(talk_speech_sound->data);
 	if (voc_compat == TIE_VOC_COMPAT_INVALID) {
 		TieDiagnostics_Log(TIE_LOG_WARN, "[talk-voice] unsupported VOC format in %s\n", path);
 		talk_speech_sound->size = 0;
@@ -1369,7 +1378,7 @@ void talk_Start_Speech_Stream(void) {
 	if (bytes_read == 0)
 		return;
 
-	lsound_Start_Speech(talk_speech_sound);
+	xsound_Start_Speech(talk_speech_sound);
 	if (voc_compat == TIE_VOC_COMPAT_CONVERTED)
 		(void)imuse_set_param(im, (intptr_t)talk_speech_sound, IMUSE_PARAM_SOUND_FREQUENCY,
 							  (int)source_rate_hz);
@@ -1416,7 +1425,7 @@ static void iuser_Answer(Input* input, int32_t time) {
 		}
 	}
 
-	if (linpattr_Get_Input_Selected(input)) {
+	if (xinpattr_Get_Input_Selected(input)) {
 		if (input->var2) {
 			/* Right-click: previous page; disable auto-advance */
 			if (cur_talk_paragraph) {
@@ -1447,11 +1456,11 @@ static void idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		goto dirty_check;
 
 	Rect dst;
-	lrect_Copy_Rect(&dst, r);
+	xrect_Copy_Rect(&dst, r);
 	int16_t first_line = max_paragraph_size * cur_talk_paragraph;
 	int16_t text_color = input->var1 ? 1 : 9;
 
-	lfont_Enable_FontID_Shadow(0);
+	xfont_Enable_FontID_Shadow(0);
 
 	char line_buf[80];
 	int16_t y_off = 0;
@@ -1472,10 +1481,10 @@ static void idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		int16_t line_y = y_off + dst.top;
 		if (center_line) {
 			Rect line_rect;
-			lrect_Set_Rect(&line_rect, dst.left, line_y, dst.right, line_y + 10);
-			lfont_Print_Centered_Text(line_buf, &line_rect, text_color, 0);
+			xrect_Set_Rect(&line_rect, dst.left, line_y, dst.right, line_y + 10);
+			xfont_Print_Centered_Text(line_buf, &line_rect, text_color, 0);
 		} else {
-			lfont_Print_Clipped_Text(line_buf, dst.left, line_y, 0, text_color);
+			xfont_Print_Clipped_Text(line_buf, dst.left, line_y, 0, text_color);
 		}
 		y_off += 10;
 	}
@@ -1487,12 +1496,12 @@ static void idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	textext_Copy_Text(line_buf, txtMapPage);
 	strcat(line_buf, " ");
 	strcat(line_buf, page_buf);
-	lfont_Print_Clipped_Text(line_buf, dst.right - 84, y_off + dst.top, 0, text_color);
-	lfont_Disable_FontID_Shadow(0);
+	xfont_Print_Clipped_Text(line_buf, dst.right - 84, y_off + dst.top, 0, text_color);
+	xfont_Disable_FontID_Shadow(0);
 
 dirty_check:
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip_r);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip_r);
 }
 
 /* ======================================================================
@@ -1502,9 +1511,9 @@ dirty_check:
 static void end_View(int32_t refresh) {
 	if (refresh)
 		return;
-	if (lcursor_Is_Cursor_Visible())
+	if (xcursor_Is_Cursor_Visible())
 		return;
-	lcursor_Show_Cursor();
+	xcursor_Show_Cursor();
 }
 
 /* ======================================================================
@@ -1534,7 +1543,7 @@ static LandruTaskStepResult talk_task_step(void* self) {
 		int16_t i;
 
 		t->res_file = shellext_Open_Empire_Resource(talk_str[0]);
-		lrect_Set_Rect(&frame, 0, 0, 320, 200);
+		xrect_Set_Rect(&frame, 0, 0, 320, 200);
 
 		int16_t scene = shellext_Get_Cur_Scene();
 		switch (scene) {
@@ -1566,13 +1575,13 @@ static LandruTaskStepResult talk_task_step(void* self) {
 		 * scroll under dirty-rect refresh, persistent RT). The tag is
 		 * auto-cleared at the next scene transition by
 		 * shell_run_scene_dispatch. */
-		talk_film = lfilm_Res_Film(talk_str[talk_type], &frame, 0, 0, 0);
+		talk_film = xfilm_Res_Film(talk_str[talk_type], &frame, 0, 0, 0);
 		TieSnapshotBuilder_SetActiveFilm("TALK", talk_str[talk_type]);
-		lfilm_Set_Film_Def_Palette(talk_film, t->scene_head->def_palette);
+		xfilm_Set_Film_Def_Palette(talk_film, t->scene_head->def_palette);
 
 		/* Find and disable the text overlay delta actor */
-		Actor* delt = lactor_Find_Actor(FOURCC_DELT, talk_str[talk_type + 6]);
-		// lactor_Non_Refreshable_Actor(delt);
+		Actor* delt = xactor_Find_Actor(FOURCC_DELT, talk_str[talk_type + 6]);
+		// xactor_Non_Refreshable_Actor(delt);
 
 		/* Set up face animation actors and voice-over filename chars.
 		 * Retail TALK_Talk seeds officer/mood directly: 'o','b' for brief
@@ -1581,33 +1590,33 @@ static LandruTaskStepResult talk_task_step(void* self) {
 		scene = shellext_Get_Cur_Scene();
 		switch (scene) {
 			case SCENE_TALK_BRIEF_OFFICER:
-				eye_actor = lactor_Find_Actor(FOURCC_ANIM, "eyes");
-				mouth_actor = lactor_Find_Actor(FOURCC_ANIM, "mouth");
-				lactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
+				eye_actor = xactor_Find_Actor(FOURCC_ANIM, "eyes");
+				mouth_actor = xactor_Find_Actor(FOURCC_ANIM, "mouth");
+				xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
 				eye_actor->id = 0;
 				talk_voice_officer = 'o';
 				talk_voice_mood = 'b';
 				break;
 			case SCENE_TALK_DEBRIEF_OFFICER:
-				eye_actor = lactor_Find_Actor(FOURCC_ANIM, "eyes");
-				mouth_actor = lactor_Find_Actor(FOURCC_ANIM, "mouth");
-				lactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
+				eye_actor = xactor_Find_Actor(FOURCC_ANIM, "eyes");
+				mouth_actor = xactor_Find_Actor(FOURCC_ANIM, "mouth");
+				xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
 				eye_actor->id = 0;
 				talk_voice_officer = 'o';
 				talk_voice_mood = 'd';
 				break;
 			case SCENE_TALK_BRIEF_PRIEST:
-				eye_actor = lactor_Find_Actor(FOURCC_ANIM, "ssface");
+				eye_actor = xactor_Find_Actor(FOURCC_ANIM, "ssface");
 				mouth_actor = NULL;
-				lactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
+				xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
 				eye_actor->id = 1;
 				talk_voice_officer = 'p';
 				talk_voice_mood = 'b';
 				break;
 			case SCENE_TALK_DEBRIEF_PRIEST:
-				eye_actor = lactor_Find_Actor(FOURCC_ANIM, "ssface");
+				eye_actor = xactor_Find_Actor(FOURCC_ANIM, "ssface");
 				mouth_actor = NULL;
-				lactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
+				xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
 				eye_actor->id = 1;
 				talk_voice_officer = 'p';
 				talk_voice_mood = 'd';
@@ -1615,23 +1624,23 @@ static LandruTaskStepResult talk_task_step(void* self) {
 		}
 
 		/* Build the input widget tree */
-		parent = linput_Alloc_Input(NULL, &frame, 0, 0);
+		parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
-		lrect_Set_Rect(&frame, 122, 116 - 10 * (max_paragraph_size + 1), 318, 116);
-		answer = linput_Alloc_Input(parent, &frame, 0, 0);
-		linpattr_Set_Input_Update_Function(answer, iupdate_Answer);
-		linpattr_Set_Input_User_Function(answer, iuser_Answer);
-		linpattr_Set_Input_Draw_Function(answer, idraw_Answer);
-		linpattr_Refreshable_Input(answer);
+		xrect_Set_Rect(&frame, 122, 116 - 10 * (max_paragraph_size + 1), 318, 116);
+		answer = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(answer, iupdate_Answer);
+		xinpattr_Set_Input_User_Function(answer, iuser_Answer);
+		xinpattr_Set_Input_Draw_Function(answer, idraw_Answer);
+		xinpattr_Refreshable_Input(answer);
 		answer->mouseUsage = allInput;
 		answer->id = 0;
 
-		lrect_Set_Rect(&frame, 122, 135, 318, 195);
-		talk_input = linput_Alloc_Input(parent, &frame, 0, 0);
-		linpattr_Set_Input_Update_Function(talk_input, iupdate_Talk);
-		linpattr_Set_Input_User_Function(talk_input, iuser_Talk);
-		linpattr_Set_Input_Draw_Function(talk_input, idraw_Talk);
-		linpattr_Refreshable_Input(talk_input);
+		xrect_Set_Rect(&frame, 122, 135, 318, 195);
+		talk_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(talk_input, iupdate_Talk);
+		xinpattr_Set_Input_User_Function(talk_input, iuser_Talk);
+		xinpattr_Set_Input_Draw_Function(talk_input, idraw_Talk);
+		xinpattr_Refreshable_Input(talk_input);
 		talk_input->mouseUsage = allInput;
 		talk_input->id = 0;
 
@@ -1692,26 +1701,26 @@ static LandruTaskStepResult talk_task_step(void* self) {
 		char question_buf[80];
 		for (i = 0; i <= num_talk_questions; i++) {
 			talk_Get_Talk_Question(question_buf, i);
-			int16_t saved_font = lfont_Get_Font();
-			lfont_Set_Font(0);
-			int16_t w = lfont_Get_String_Width(question_buf);
-			lfont_Set_Font(saved_font);
+			int16_t saved_font = xfont_Get_Font();
+			xfont_Set_Font(0);
+			int16_t w = xfont_Get_String_Width(question_buf);
+			xfont_Set_Font(saved_font);
 			if (max_w < w)
 				max_w = w;
 			total_h += 10;
 		}
 
 		Rect r;
-		lrect_Set_Rect(&r, 318 - (max_w + 6), 198 - (total_h + 3), 318, 198);
-		linpattr_Set_Input_Frame(talk_input, &r);
+		xrect_Set_Rect(&r, 318 - (max_w + 6), 198 - (total_h + 3), 318, 198);
+		xinpattr_Set_Input_Frame(talk_input, &r);
 		officer_mood_val[0] = 0;
 
 		/* Position mouse */
 		scene = shellext_Get_Cur_Scene();
 		if (scene == SCENE_TALK_BRIEF_OFFICER || scene == SCENE_TALK_BRIEF_PRIEST)
-			lio_Set_Mouse_Position(260, 192 - 10 * num_talk_questions);
+			xio_Set_Mouse_Position(260, 192 - 10 * num_talk_questions);
 		else if (scene == SCENE_TALK_DEBRIEF_OFFICER || scene == SCENE_TALK_DEBRIEF_PRIEST)
-			lio_Set_Mouse_Position(260, 182);
+			xio_Set_Mouse_Position(260, 182);
 
 		/* Resolve species/mission and arm the streaming speech sound.
 		 * Retail does the same dance: TALK_Set_Voice_Species_Mission
@@ -1720,10 +1729,10 @@ static LandruTaskStepResult talk_task_step(void* self) {
 		talk_Alloc_Speech_Sound();
 
 		/* Push the modal view task */
-		lview_Set_View_Update_Function(end_View);
-		lviewadd_Clear_View();
-		lview_Disable_All_View_Erase();
-		lviewadd_Push_Handle_View_Task();
+		xview_Set_View_Update_Function(end_View);
+		xviewadd_Clear_View();
+		xview_Disable_All_View_Erase();
+		xviewadd_Push_Handle_View_Task();
 
 		t->phase = TALK_PHASE_CLEANUP;
 		return LANDRU_TASK_STEP_CONTINUE;
@@ -1732,14 +1741,14 @@ static LandruTaskStepResult talk_task_step(void* self) {
 cleanup:
 	/* CLEANUP — view popped */
 	talk_Free_Speech_Sound();
-	lview_Enable_All_View_Erase();
-	lview_Clear_View_Update_Function();
+	xview_Enable_All_View_Erase();
+	xview_Clear_View_Update_Function();
 
-	if (lcursor_Is_Cursor_Visible())
-		lcursor_Hide_Cursor();
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
 
 	player_Free_Display_Map();
-	lres_Close_Resource(t->res_file);
+	xres_Close_Resource(t->res_file);
 	return LANDRU_TASK_STEP_DONE;
 }
 

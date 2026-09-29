@@ -667,7 +667,7 @@ static LandruTaskStepResult replayio_task_step(void* self) {
 				 * resolution (if the user changed it inside the viewer)
 				 * before copyfromsave. */
 				if (!restore_graphics_if_changed(t->saved_res)) {
-					lerror_Set_Landru_Error(12);
+					xerror_Set_Landru_Error(12);
 					return LANDRU_TASK_STEP_DONE;
 				}
 				replayio_copyfromsave(replaysavegamefile);

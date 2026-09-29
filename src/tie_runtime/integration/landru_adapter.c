@@ -266,8 +266,8 @@ static void TieLandruAdapter_HostVideoSetMode(void* userdata, uint16_t mode) {
 	FrontendDisplay_SetDisplayMode(mode);
 	FlightSurface_Lock();
 	FlightSurface_Unlock();
-	lvesa_Set_Platform_Pitch((int16_t)FrontendDisplay_GetDrawSurfacePitch());
-	lsurface_Invalidate_Presentation();
+	xvesa_Set_Platform_Pitch((int16_t)FrontendDisplay_GetDrawSurfacePitch());
+	xsurface_Invalidate_Presentation();
 }
 
 static void TieLandruAdapter_HostVideoLock(void* userdata) {
@@ -520,8 +520,8 @@ void TieLandruAdapter_Shutdown(void) {
 }
 
 void TieLandruAdapter_EmitRenderState(void) {
-	lactor_emit_render_state();
-	lfilm_emit_render_state();
-	lcursor_emit_render_state();
-	lfade_emit_render_state();
+	xactor_emit_render_state();
+	xfilm_emit_render_state();
+	xcursor_emit_render_state();
+	xfade_emit_render_state();
 }

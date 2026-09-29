@@ -56,7 +56,7 @@ static int16_t text_res[3];
  * heuristically inverting the color computation. */
 static TextFade text_fade_type[3];
 // GLOBAL: TIE 0xF5D5A
-static void* text_para[3];
+static LandruHandle text_para[3];
 static int16_t num_text_lines;
 static void* text_buffer;
 
@@ -64,7 +64,8 @@ static void* text_buffer;
 
 static void Find_Text_Range(int16_t scene, int16_t* pstart, int16_t* pstop);
 static void user_Text_Actor(Actor* the_actor, int32_t time);
-static int draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh);
+static int16_t draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+							   int16_t refresh);
 
 /* --- Functions --- */
 
@@ -81,8 +82,8 @@ void textext_Open_Text_Ext(void) {
 	for (i = 0; i < 3; i++) {
 		res_file = shellext_Open_Empire_Resource(text_res_names[i]);
 		if (res_file) {
-			text_para[i] = lparagrp_Res_Paragraph(res_file, text_file_names[i]);
-			lres_Close_Resource(res_file);
+			text_para[i] = xparagrp_Res_Paragraph(res_file, text_file_names[i]);
+			xres_Close_Resource(res_file);
 		}
 		size[i] = 0;
 	}
@@ -101,8 +102,8 @@ void textext_Close_Text_Ext(void) {
 
 	for (i = 0; i < 3; i++) {
 		if (text_para[i]) {
-			lparagrp_Free_Paragraph(text_para[i]);
-			text_para[i] = NULL;
+			xparagrp_Free_Paragraph(text_para[i]);
+			text_para[i] = LANDRU_NULL_HANDLE;
 		}
 	}
 }
@@ -119,22 +120,22 @@ void textext_Open_Text_Ext_Scene(int16_t scene) {
 	if (start == -1 || stop == -1)
 		return;
 
-	lrect_Set_Rect(&r, 0, 0, 320, 200);
+	xrect_Set_Rect(&r, 0, 0, 320, 200);
 
-	ViewStruct* view = lview_Get_Current_View();
+	ViewStruct* view = xview_Get_Current_View();
 	if (view->clear)
 		text_buffer = NULL;
 	else
 		text_buffer = malloc(12800);
 
-	restore_text_actor = lactcust_Alloc_Custom_Actor(NULL, &r, 0, 0, 10000);
-	display_text_actor = lactcust_Alloc_Custom_Actor(NULL, &r, 0, 0, -10000);
+	restore_text_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10000);
+	display_text_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, -10000);
 	restore_text_actor->id = 0;
 	display_text_actor->id = 1;
 
-	lactor_Set_Actor_User_Function(display_text_actor, user_Text_Actor);
-	lactor_Set_Actor_Draw_Function(restore_text_actor, (lactorDrawFunc)draw_Text_Actor);
-	lactor_Set_Actor_Draw_Function(display_text_actor, (lactorDrawFunc)draw_Text_Actor);
+	xactor_Set_Actor_User_Function(display_text_actor, user_Text_Actor);
+	xactor_Set_Actor_Draw_Function(restore_text_actor, draw_Text_Actor);
+	xactor_Set_Actor_Draw_Function(display_text_actor, draw_Text_Actor);
 }
 
 // FUNCTION: TIE 0x6F690
@@ -167,7 +168,7 @@ static void user_Text_Actor(Actor* the_actor, int32_t time) {
 	TextFade type;
 
 	(void)the_actor;
-	lrect_Copy_Rect(&prev_text_bounds, &text_bounds);
+	xrect_Copy_Rect(&prev_text_bounds, &text_bounds);
 	num_text_lines = 0;
 	base_id = 0;
 
@@ -193,17 +194,17 @@ static void user_Text_Actor(Actor* the_actor, int32_t time) {
 		if (num_text_lines >= 3)
 			continue;
 
-		lparagrp_Get_Paragraph_String(text_para[resource], str, 1, i - base_id);
+		xparagrp_Get_Paragraph_String(text_para[resource], str, 1, i - base_id);
 
-		old_font = lfont_Set_Font(0);
-		width = lfont_Get_String_Width(str);
-		lfont_Set_Font(old_font);
+		old_font = xfont_Set_Font(0);
+		width = xfont_Get_String_Width(str);
+		xfont_Set_Font(old_font);
 
 		text_res[num_text_lines] = resource;
 		text_string[num_text_lines] = i - base_id;
 		text_fade_type[num_text_lines] = type;
 		text_w[num_text_lines] = width;
-		text_h[num_text_lines] = lfont_Get_FontID_Height(0);
+		text_h[num_text_lines] = xfont_Get_FontID_Height(0);
 
 		if (type < fadeTitle1) {
 			/* Fade in/out: color ramp 16..31 */
@@ -236,26 +237,26 @@ static void user_Text_Actor(Actor* the_actor, int32_t time) {
 	}
 
 	if (num_text_lines) {
-		if (lactor_Is_Actor_Visible(display_text_actor))
-			lactor_Show_Actor(restore_text_actor);
+		if (xactor_Is_Actor_Visible(display_text_actor))
+			xactor_Show_Actor(restore_text_actor);
 		else
-			lactor_Show_Actor(display_text_actor);
+			xactor_Show_Actor(display_text_actor);
 
-		lrect_Set_Rect(&text_bounds, text_x[0], text_y[0], text_w[0] + text_x[0], text_h[0] + text_y[0]);
+		xrect_Set_Rect(&text_bounds, text_x[0], text_y[0], text_w[0] + text_x[0], text_h[0] + text_y[0]);
 
 		for (i = 1; i < num_text_lines; i++) {
-			lrect_Set_Rect(&r, text_x[i], text_y[i], text_w[i] + text_x[i], text_h[i] + text_y[i]);
-			lrect_Enclose_Rect(&text_bounds, &r);
+			xrect_Set_Rect(&r, text_x[i], text_y[i], text_w[i] + text_x[i], text_h[i] + text_y[i]);
+			xrect_Enclose_Rect(&text_bounds, &r);
 		}
 	} else {
-		if (lactor_Is_Actor_Visible(display_text_actor))
-			lactor_Hide_Actor(display_text_actor);
+		if (xactor_Is_Actor_Visible(display_text_actor))
+			xactor_Hide_Actor(display_text_actor);
 		else
-			lactor_Hide_Actor(restore_text_actor);
+			xactor_Hide_Actor(restore_text_actor);
 	}
 
 	/* Per-line state is captured by the lfont snapshot hook when the
-	 * text actor's draw callback runs lfont_Print_Clipped_Text — no
+	 * text actor's draw callback runs xfont_Print_Clipped_Text — no
 	 * separate textext snapshot channel is needed. */
 }
 
@@ -264,7 +265,8 @@ static void user_Text_Actor(Actor* the_actor, int32_t time) {
  * id=1 (display): save background, draw text lines with shadow.
  * id=0 (restore): restore previously saved background.
  */
-static int draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+static int16_t draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+							   int16_t refresh) {
 	char string[80];
 	Rect br;
 	int16_t i;
@@ -285,30 +287,30 @@ static int draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t x, i
 		 * the per-tick subtitle records instead. Without this gate
 		 * the lfont hook would double-emit on redraw frames. */
 		if (text_buffer) {
-			lrect_Copy_Rect(&br, &text_bounds);
-			lrect_Origin_Rect(&br);
+			xrect_Copy_Rect(&br, &text_bounds);
+			xrect_Origin_Rect(&br);
 			stub_Copy_To_Clipped_Buffer(text_buffer, &br, text_bounds.left, text_bounds.top,
 										br.right - br.left, br.bottom - br.top);
 		}
 
-		lcanvas_Set_Suppress_Text_Render(true);
-		lfont_Enable_FontID_Shadow(0);
+		xcanvas_Set_Suppress_Text_Render(true);
+		xfont_Enable_FontID_Shadow(0);
 		for (i = 0; i < num_text_lines; i++) {
-			lparagrp_Get_Paragraph_String(text_para[text_res[i]], string, 1, text_string[i]);
-			lfont_Print_Clipped_Text(string, text_x[i], text_y[i], 0, text_color[i]);
+			xparagrp_Get_Paragraph_String(text_para[text_res[i]], string, 1, text_string[i]);
+			xfont_Print_Clipped_Text(string, text_x[i], text_y[i], 0, text_color[i]);
 		}
-		lfont_Disable_FontID_Shadow(0);
-		lcanvas_Set_Suppress_Text_Render(false);
+		xfont_Disable_FontID_Shadow(0);
+		xcanvas_Set_Suppress_Text_Render(false);
 
-		ldirty_Dirty_Rect(&text_bounds);
+		xdirty_Dirty_Rect(&text_bounds);
 	} else {
 		/* Restore actor: put saved background back */
 		if (text_buffer) {
-			lrect_Copy_Rect(&br, &prev_text_bounds);
-			lrect_Origin_Rect(&br);
+			xrect_Copy_Rect(&br, &prev_text_bounds);
+			xrect_Origin_Rect(&br);
 			stub_Copy_From_Clipped_Buffer(text_buffer, &br, prev_text_bounds.left, prev_text_bounds.top,
 										  br.right - br.left, br.bottom - br.top);
-			ldirty_Dirty_Rect(&prev_text_bounds);
+			xdirty_Dirty_Rect(&prev_text_bounds);
 		}
 	}
 
@@ -335,13 +337,13 @@ bool TieRecoveredText_ReadSnapshotLine(int index, TieRecoveredTextSnapshotLine* 
 	if (!out || index < 0 || index >= num_text_lines)
 		return false;
 	memset(out, 0, sizeof *out);
-	lparagrp_Get_Paragraph_String(text_para[text_res[index]], out->text, 1, text_string[index]);
+	xparagrp_Get_Paragraph_String(text_para[text_res[index]], out->text, 1, text_string[index]);
 	out->text[sizeof out->text - 1] = '\0';
 	out->x = text_x[index];
 	out->y = text_y[index];
 	out->color = (uint8_t)text_color[index];
-	out->bold_color = (uint8_t)lfont_Get_FontID_Bold_Color(0);
-	out->shadow_color = (uint8_t)lfont_Get_FontID_Shadow_Color(0);
+	out->bold_color = (uint8_t)xfont_Get_FontID_Bold_Color(0);
+	out->shadow_color = (uint8_t)xfont_Get_FontID_Shadow_Color(0);
 	return true;
 }
 
@@ -354,7 +356,7 @@ const char* textext_Get_Text(int16_t id) {
 	str_idx = text_string_table[id];
 
 	if (text_para[res_id])
-		lparagrp_Get_Paragraph_String(text_para[res_id], text_ext_string, 0, str_idx);
+		xparagrp_Get_Paragraph_String(text_para[res_id], text_ext_string, 0, str_idx);
 
 	return text_ext_string;
 }
@@ -387,20 +389,20 @@ void textext_Copy_Joy_Text(char* string, int16_t id) {
 
 // FUNCTION: TIE 0x6FD38
 void textext_Get_Ship_Text(char* string, int16_t ship_id) {
-	lparagrp_Get_Paragraph_String(text_para[0], string, 2, ship_id);
+	xparagrp_Get_Paragraph_String(text_para[0], string, 2, ship_id);
 }
 
 // FUNCTION: TIE 0x6FD5C
 void textext_Get_Train_Text(char* string, int16_t line) {
-	lparagrp_Get_Paragraph_String(text_para[0], string, 3, line);
+	xparagrp_Get_Paragraph_String(text_para[0], string, 3, line);
 }
 
 // FUNCTION: TIE 0x6FD80
-int16_t textext_Count_Train_Text_Lines(void) { return lparagrp_Count_Paragraph_Strings(text_para[0], 3); }
+int16_t textext_Count_Train_Text_Lines(void) { return xparagrp_Count_Paragraph_Strings(text_para[0], 3); }
 
 // FUNCTION: TIE 0x6FD98
 void textext_Get_Weapon_Select_Text(char* string, int16_t line) {
-	lparagrp_Get_Paragraph_String(text_para[0], string, 4, line);
+	xparagrp_Get_Paragraph_String(text_para[0], string, 4, line);
 }
 
 static void Find_Text_Range(int16_t scene, int16_t* pstart, int16_t* pstop) {
@@ -433,8 +435,8 @@ static void Find_Text_Range(int16_t scene, int16_t* pstart, int16_t* pstop) {
 
 Rect* textext_Get_Prev_Text_Bounds_Rect(void) { return &prev_text_bounds; }
 
-void textext_Clear_Prev_Text_Bounds_Rect(void) { lrect_Clear_Rect(&prev_text_bounds); }
+void textext_Clear_Prev_Text_Bounds_Rect(void) { xrect_Clear_Rect(&prev_text_bounds); }
 
 Rect* textext_Get_Text_Bounds_Rect(void) { return &text_bounds; }
 
-void textext_Clear_Text_Bounds_Rect(void) { lrect_Clear_Rect(&text_bounds); }
+void textext_Clear_Text_Bounds_Rect(void) { xrect_Clear_Rect(&text_bounds); }

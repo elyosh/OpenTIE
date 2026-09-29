@@ -43,7 +43,7 @@ static bool TieClassicDisplay_Activate(TieClassicDisplayOwner owner, TieGameVers
 		FrontendDisplay_ClearSurface(g_flightOffscreenSurface);
 	s_active_display_owner = owner;
 	TieClassicFramebuffer_InvalidatePresentedVga();
-	lcursor_port_Set_External_Presentation(owner == TIE_CLASSIC_DISPLAY_OWNER_FRONTEND);
+	xcursor_port_Set_External_Presentation(owner == TIE_CLASSIC_DISPLAY_OWNER_FRONTEND);
 	return true;
 }
 
@@ -60,7 +60,7 @@ bool TieClassicDisplay_InitializeFrontend(void) {
 	if (!landru_port_Set_Initial_Video_Backend(TieClassicDisplay_BackendForVersion(TieProfile_FrontendId())))
 		return false;
 	TieClassicDisplay_Reset();
-	lcursor_port_Set_External_Presentation(true);
+	xcursor_port_Set_External_Presentation(true);
 	return true;
 }
 

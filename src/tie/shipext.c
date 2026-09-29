@@ -14,8 +14,8 @@
 #include "tie/shellext.h"
 #include "tie/textext.h"
 
-#include "landru/actdelt.h" /* lactdelt_Res_Delta_Actor */
-#include "landru/canvas.h"  /* lcanvas_Get_Drawing_Canvas_Bounds */
+#include "landru/actdelt.h" /* xactdelt_Res_Delta_Actor */
+#include "landru/canvas.h"  /* xcanvas_Get_Drawing_Canvas_Bounds */
 #include "landru/file.h"
 #include "landru/paragrp.h"
 #include "landru/res.h"
@@ -491,13 +491,13 @@ void PilotRecord_encode(uint8_t* dst, const PilotRecord* src) {
 PilotRecord pilot_record;
 
 // GLOBAL: TIE 0xFB3A8
-static void* ship_info[SHIP_INFO_SIZE]; /* paragraph handles */
+static LandruHandle ship_info[SHIP_INFO_SIZE]; /* paragraph handles */
 // PORT: widened runtime storage required by TIE98 registration.
 static char pilot_name[TIE_PILOT_NAME_CAPACITY];
 /* Matches the "__temp__.tfr" literal the retail binary passes directly
  * to each temp-pilot open/delete call (no runtime setter; it's a fixed
  * filename). RE of the buffer was incomplete — callers asserted in
- * lfile_Open_File when scene 100 ran Delete_Temp_Pilot on startup. */
+ * xfile_Open_File when scene 100 ran Delete_Temp_Pilot on startup. */
 static char temp_pilot_name[16] = "__temp__.tfr";
 // GLOBAL: TIE 0xFB3E8
 static char mission_name[12];
@@ -546,12 +546,12 @@ void shipext_Open_Ships(void) {
 		snprintf(buf, sizeof(buf), "ship%d.lfd", i + 1);
 		fp = shellext_Open_Empire_File(buf, "r");
 		if (fp) {
-			lfile_Close_File(fp);
+			xfile_Close_File(fp);
 			res = shellext_Open_Empire_Resource(buf);
 			if (res) {
 				snprintf(buf, sizeof(buf), "ship%d", i + 1);
-				ship_info[i] = lparagrp_Res_Paragraph(res, buf);
-				lres_Close_Resource(res);
+				ship_info[i] = xparagrp_Res_Paragraph(res, buf);
+				xres_Close_Resource(res);
 			}
 		}
 	}
@@ -561,12 +561,12 @@ void shipext_Open_Ships(void) {
 		snprintf(buf, sizeof(buf), "battle%d.lfd", i + 1);
 		fp = shellext_Open_Empire_File(buf, "r");
 		if (fp) {
-			lfile_Close_File(fp);
+			xfile_Close_File(fp);
 			res = shellext_Open_Empire_Resource(buf);
 			if (res) {
 				snprintf(buf, sizeof(buf), "battle%d", i + 1);
-				ship_info[i + NUM_SHIPS] = lparagrp_Res_Paragraph(res, buf);
-				lres_Close_Resource(res);
+				ship_info[i + NUM_SHIPS] = xparagrp_Res_Paragraph(res, buf);
+				xres_Close_Resource(res);
 			}
 		}
 	}
@@ -578,20 +578,20 @@ void shipext_Close_Ships(void) {
 
 	for (i = 0; i < NUM_SHIPS; i++) {
 		if (ship_info[i])
-			lparagrp_Free_Paragraph(ship_info[i]);
-		ship_info[i] = NULL;
+			xparagrp_Free_Paragraph(ship_info[i]);
+		ship_info[i] = LANDRU_NULL_HANDLE;
 	}
 	for (i = 0; i < NUM_BATTLES; i++) {
 		if (ship_info[i + NUM_SHIPS])
-			lparagrp_Free_Paragraph(ship_info[i + NUM_SHIPS]);
-		ship_info[i + NUM_SHIPS] = NULL;
+			xparagrp_Free_Paragraph(ship_info[i + NUM_SHIPS]);
+		ship_info[i + NUM_SHIPS] = LANDRU_NULL_HANDLE;
 	}
 }
 
 /* --- Ship queries --- */
 
 // FUNCTION: TIE 0x80110
-bool shipext_Is_Ship(int16_t ship_idx) { return ship_info[ship_idx] != NULL; }
+bool shipext_Is_Ship(int16_t ship_idx) { return ship_info[ship_idx] != LANDRU_NULL_HANDLE; }
 
 // FUNCTION: TIE 0x80120
 bool shipext_Is_Ship_Available(int16_t ship_idx) {
@@ -642,17 +642,17 @@ int16_t shipext_Open_Launch_Resource(void) {
 // FUNCTION: TIE 0x82284
 void shipext_Get_Ship_Name(char* out, int16_t ship_idx, int16_t para_type, int16_t para_idx) {
 	if (ship_info[ship_idx])
-		lparagrp_Get_Paragraph_String(ship_info[ship_idx], out, para_type, para_idx);
+		xparagrp_Get_Paragraph_String(ship_info[ship_idx], out, para_type, para_idx);
 	else
 		*out = '\0';
 }
 
 // FUNCTION: TIE 0x80768
-void shipext_Get_Launch_Name(char* out) { lparagrp_Get_Paragraph_String(ship_info[mission_ship], out, 4, 0); }
+void shipext_Get_Launch_Name(char* out) { xparagrp_Get_Paragraph_String(ship_info[mission_ship], out, 4, 0); }
 
 // FUNCTION: TIE 0x80790
 void shipext_Get_Weapon_Select_Name(char* out) {
-	lparagrp_Get_Paragraph_String(ship_info[mission_ship], out, 4, 1);
+	xparagrp_Get_Paragraph_String(ship_info[mission_ship], out, 4, 1);
 }
 
 /* --- Pilot management --- */
@@ -708,12 +708,12 @@ int16_t shipext_Write_Temp_Pilot(void) {
 	LandruFile* fp;
 
 	pilot_record.game_level = options_gbl.game_level;
-	fp = lfile_Open_File(LANDRU_FILE_ROOT_TEMP, temp_pilot_name, "wb");
+	fp = xfile_Open_File(LANDRU_FILE_ROOT_TEMP, temp_pilot_name, "wb");
 	if (fp) {
 		uint8_t buf[PILOTRECORD_DISK_SIZE];
 		PilotRecord_encode(buf, &pilot_record);
-		lfile_Write_Data_To_File(fp, buf, PILOTRECORD_DISK_SIZE);
-		lfile_Close_File(fp);
+		xfile_Write_Data_To_File(fp, buf, PILOTRECORD_DISK_SIZE);
+		xfile_Close_File(fp);
 		return 1;
 	}
 	return 0;
@@ -723,9 +723,9 @@ int16_t shipext_Write_Temp_Pilot(void) {
 void shipext_Delete_Temp_Pilot(void) {
 	LandruFile* fp;
 
-	fp = lfile_Open_File(LANDRU_FILE_ROOT_TEMP, temp_pilot_name, "rb");
+	fp = xfile_Open_File(LANDRU_FILE_ROOT_TEMP, temp_pilot_name, "rb");
 	if (fp) {
-		lfile_Close_File(fp);
+		xfile_Close_File(fp);
 		TieStorage_Remove(TIE_FILE_ROOT_TEMP, temp_pilot_name);
 	}
 }
@@ -746,7 +746,7 @@ LandruFile* shipext_Open_Pilot_File(char* name, char* mode) {
 	char path[72];
 
 	strcpy(path, name);
-	return lfile_Open_File(LANDRU_FILE_ROOT_USER, path, mode);
+	return xfile_Open_File(LANDRU_FILE_ROOT_USER, path, mode);
 }
 
 // FUNCTION: TIE 0x822B4
@@ -858,13 +858,13 @@ bool shipext_Is_Combat_Ship_Tour(void) { return pilot_record.cur_combat_ship >= 
 // FUNCTION: TIE 0x81460
 int16_t shipext_Num_Combat_Missions(void) {
 	int16_t para_type = (pilot_record.cur_combat_ship >= NUM_SHIPS) ? 3 : 5;
-	return lparagrp_Count_Paragraph_Strings(ship_info[pilot_record.cur_combat_ship], para_type);
+	return xparagrp_Count_Paragraph_Strings(ship_info[pilot_record.cur_combat_ship], para_type);
 }
 
 // FUNCTION: TIE 0x8149C
 void shipext_Get_Combat_Mission_Name(char* out) {
 	int16_t para_type = (pilot_record.cur_combat_ship >= NUM_SHIPS) ? 3 : 5;
-	lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], out, para_type,
+	xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], out, para_type,
 								  pilot_record.combat_course_cursor[pilot_record.cur_combat_ship]);
 }
 
@@ -872,14 +872,14 @@ void shipext_Get_Combat_Mission_Name(char* out) {
 void shipext_Get_Combat_Mission_Text(char* out, int16_t line) {
 	int16_t base = (pilot_record.cur_combat_ship >= NUM_SHIPS) ? 4 : 6;
 	int16_t para_type = pilot_record.combat_course_cursor[pilot_record.cur_combat_ship] + base;
-	lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], out, para_type, line);
+	xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], out, para_type, line);
 }
 
 // FUNCTION: TIE 0x81548
 int16_t shipext_Num_Combat_Mission_Text_Lines(void) {
 	int16_t base = (pilot_record.cur_combat_ship >= NUM_SHIPS) ? 4 : 6;
 	int16_t para_type = pilot_record.combat_course_cursor[pilot_record.cur_combat_ship] + base;
-	return lparagrp_Count_Paragraph_Strings(ship_info[pilot_record.cur_combat_ship], para_type);
+	return xparagrp_Count_Paragraph_Strings(ship_info[pilot_record.cur_combat_ship], para_type);
 }
 
 /* --- Battle/Tour --- */
@@ -903,13 +903,13 @@ uint8_t shipext_Get_Tour_Battle(void) { return pilot_record.cur_battle; }
 
 // FUNCTION: TIE 0x81EFC
 int16_t shipext_Get_Tour_Battle_Size(int16_t battle) {
-	return lparagrp_Count_Paragraph_Strings(ship_info[battle + NUM_SHIPS], 3);
+	return xparagrp_Count_Paragraph_Strings(ship_info[battle + NUM_SHIPS], 3);
 }
 
 // FUNCTION: TIE 0x81DC0
 bool shipext_Is_Tour_Battle_End(void) {
 	int16_t cur = pilot_record.cur_battle;
-	return pilot_record.battle_cursor[cur] == lparagrp_Count_Paragraph_Strings(ship_info[cur + NUM_SHIPS], 3);
+	return pilot_record.battle_cursor[cur] == xparagrp_Count_Paragraph_Strings(ship_info[cur + NUM_SHIPS], 3);
 }
 
 // FUNCTION: TIE 0x81DFC
@@ -922,27 +922,27 @@ void shipext_Refly_Tour_Mission(void) {
 // FUNCTION: TIE 0x81FC4
 void shipext_Get_Battle_Mission_Name(char* out) {
 	int16_t cur = pilot_record.cur_battle;
-	lparagrp_Get_Paragraph_String(ship_info[cur + NUM_SHIPS], out, 3, pilot_record.battle_cursor[cur]);
+	xparagrp_Get_Paragraph_String(ship_info[cur + NUM_SHIPS], out, 3, pilot_record.battle_cursor[cur]);
 }
 
 // FUNCTION: TIE 0x81650
 void shipext_Get_Battle_Ship_Name(char* out) {
 	if (ship_info[mission_ship])
-		lparagrp_Get_Paragraph_String(ship_info[mission_ship], out, 0, 0);
+		xparagrp_Get_Paragraph_String(ship_info[mission_ship], out, 0, 0);
 	else
 		*out = '\0';
 }
 
 // FUNCTION: TIE 0x816E8
 void shipext_Get_Battle_Galaxy_Name(char* out) {
-	lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_battle + NUM_SHIPS], out, 2, 1);
+	xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_battle + NUM_SHIPS], out, 2, 1);
 }
 
 /* Ship name actor slots (for Show_Train/Combat_Ship_Name) */
 static Actor* ship_name_actors[SHIP_INFO_SIZE];
 
 /* Blueprint data */
-static void* blueprint_info[4];
+static LandruHandle blueprint_info[4];
 static int16_t blueprint_count[4];
 static int16_t num_blueprint_ships;
 
@@ -1004,12 +1004,12 @@ bool shipext_Load_Pilot(const char* name) {
 	strcpy(path, name);
 	strcat(path, ".tfr");
 	options_gbl.game_level = 1;
-	fp = lfile_Open_File(LANDRU_FILE_ROOT_USER, path, "rb");
+	fp = xfile_Open_File(LANDRU_FILE_ROOT_USER, path, "rb");
 	if (!fp)
 		return false;
 	uint8_t buf[PILOTRECORD_DISK_SIZE];
-	lfile_Read_Data_From_File(fp, buf, PILOTRECORD_DISK_SIZE);
-	lfile_Close_File(fp);
+	xfile_Read_Data_From_File(fp, buf, PILOTRECORD_DISK_SIZE);
+	xfile_Close_File(fp);
 	PilotRecord_decode(&pilot_record, buf);
 	shipext_Set_Pilot_Name(name);
 	options_gbl.game_level = pilot_record.game_level;
@@ -1046,10 +1046,10 @@ void shipext_Save_Pilot_Data(const char* name) {
 	pilot_record.game_level = options_gbl.game_level;
 
 	/* Try reading existing file (preserves backup slot) */
-	fp = lfile_Open_File(LANDRU_FILE_ROOT_USER, path, "rb");
+	fp = xfile_Open_File(LANDRU_FILE_ROOT_USER, path, "rb");
 	if (fp) {
-		lfile_Read_Data_From_File(fp, buf, sizeof(buf));
-		lfile_Close_File(fp);
+		xfile_Read_Data_From_File(fp, buf, sizeof(buf));
+		xfile_Close_File(fp);
 		buf[TFR_BACKUP_OFFSET + TFR_GAME_LEVEL_OFFSET] = options_gbl.game_level;
 	} else {
 		/* No existing file -- mirror current record into backup slot */
@@ -1059,10 +1059,10 @@ void shipext_Save_Pilot_Data(const char* name) {
 	/* Encode current record into primary slot */
 	PilotRecord_encode(buf, &pilot_record);
 
-	fp = lfile_Open_File(LANDRU_FILE_ROOT_USER, path, "wb");
+	fp = xfile_Open_File(LANDRU_FILE_ROOT_USER, path, "wb");
 	if (fp) {
-		lfile_Write_Data_To_File(fp, buf, sizeof(buf));
-		lfile_Close_File(fp);
+		xfile_Write_Data_To_File(fp, buf, sizeof(buf));
+		xfile_Close_File(fp);
 	}
 }
 
@@ -1079,10 +1079,10 @@ void shipext_Backup_Pilot(void) {
 	PilotRecord_encode(buf, &pilot_record);
 	PilotRecord_encode(buf + TFR_BACKUP_OFFSET, &pilot_record);
 
-	fp = lfile_Open_File(LANDRU_FILE_ROOT_USER, path, "wb");
+	fp = xfile_Open_File(LANDRU_FILE_ROOT_USER, path, "wb");
 	if (fp) {
-		lfile_Write_Data_To_File(fp, buf, sizeof(buf));
-		lfile_Close_File(fp);
+		xfile_Write_Data_To_File(fp, buf, sizeof(buf));
+		xfile_Close_File(fp);
 	}
 }
 
@@ -1095,10 +1095,10 @@ void shipext_Restore_Pilot(void) {
 	strcpy(path, pilot_name);
 	strcat(path, ".tfr");
 
-	fp = lfile_Open_File(LANDRU_FILE_ROOT_USER, path, "rb");
+	fp = xfile_Open_File(LANDRU_FILE_ROOT_USER, path, "rb");
 	if (fp) {
-		lfile_Read_Data_From_File(fp, buf, sizeof(buf));
-		lfile_Close_File(fp);
+		xfile_Read_Data_From_File(fp, buf, sizeof(buf));
+		xfile_Close_File(fp);
 	}
 
 	/* Copy game_level byte from primary slot to backup slot, then
@@ -1108,10 +1108,10 @@ void shipext_Restore_Pilot(void) {
 	memcpy(buf, buf + TFR_BACKUP_OFFSET, PILOTRECORD_DISK_SIZE);
 	PilotRecord_decode(&pilot_record, buf + TFR_BACKUP_OFFSET);
 
-	fp = lfile_Open_File(LANDRU_FILE_ROOT_USER, path, "wb");
+	fp = xfile_Open_File(LANDRU_FILE_ROOT_USER, path, "wb");
 	if (fp) {
-		lfile_Write_Data_To_File(fp, buf, sizeof(buf));
-		lfile_Close_File(fp);
+		xfile_Write_Data_To_File(fp, buf, sizeof(buf));
+		xfile_Close_File(fp);
 	}
 }
 
@@ -1120,19 +1120,19 @@ bool shipext_Read_Temp_Pilot(void) {
 	LandruFile* fp;
 
 	pilot_record.game_level = options_gbl.game_level;
-	fp = lfile_Open_File(LANDRU_FILE_ROOT_TEMP, temp_pilot_name, "rb");
+	fp = xfile_Open_File(LANDRU_FILE_ROOT_TEMP, temp_pilot_name, "rb");
 	if (fp) {
 		uint8_t buf[PILOTRECORD_DISK_SIZE];
-		if (!lfile_Read_Data_From_File(fp, buf, PILOTRECORD_DISK_SIZE)) {
+		if (!xfile_Read_Data_From_File(fp, buf, PILOTRECORD_DISK_SIZE)) {
 			/* Read failed -- reload from the .tfr file */
 			char name_buf[TIE_PILOT_NAME_CAPACITY];
-			lfile_Close_File(fp);
+			xfile_Close_File(fp);
 			strcpy(name_buf, pilot_name);
 			shipext_Load_Pilot(name_buf);
 			return false;
 		}
 		PilotRecord_decode(&pilot_record, buf);
-		lfile_Close_File(fp);
+		xfile_Close_File(fp);
 		return true;
 	}
 	return false;
@@ -1149,21 +1149,21 @@ void shipext_Open_Blueprint_Ships(void) {
 
 	num_blueprint_ships = 0;
 	for (i = 0; i < 4; i++) {
-		blueprint_info[i] = NULL;
+		blueprint_info[i] = LANDRU_NULL_HANDLE;
 		blueprint_count[i] = 0;
 	}
 	for (i = 0; i < 4; i++) {
 		snprintf(buf, sizeof(buf), "shipset%d.lfd", i + 1);
 		fp = shellext_Open_Empire_File(buf, "r");
 		if (fp) {
-			lfile_Close_File(fp);
+			xfile_Close_File(fp);
 			res = shellext_Open_Empire_Resource(buf);
 			if (res) {
 				snprintf(buf, sizeof(buf), "shipset%d", i + 1);
-				blueprint_info[i] = lparagrp_Res_Paragraph(res, buf);
-				lres_Close_Resource(res);
+				blueprint_info[i] = xparagrp_Res_Paragraph(res, buf);
+				xres_Close_Resource(res);
 				if (blueprint_info[i]) {
-					para_count = lparagrp_Count_Paragraphs(blueprint_info[i]);
+					para_count = xparagrp_Count_Paragraphs(blueprint_info[i]);
 					blueprint_count[i] = para_count;
 					num_blueprint_ships += para_count;
 				}
@@ -1177,8 +1177,8 @@ void shipext_Close_Blueprint_Ships(void) {
 	int16_t i;
 	for (i = 0; i < 4; i++) {
 		if (blueprint_info[i])
-			lparagrp_Free_Paragraph(blueprint_info[i]);
-		blueprint_info[i] = NULL;
+			xparagrp_Free_Paragraph(blueprint_info[i]);
+		blueprint_info[i] = LANDRU_NULL_HANDLE;
 	}
 }
 
@@ -1226,8 +1226,8 @@ void shipext_Get_Blueprint_Ship_SHP(void) {
 	if (blueprint_ship < NUM_SHIPS) {
 		if (!ship_info[blueprint_ship])
 			return;
-		lparagrp_Get_Paragraph_String(ship_info[blueprint_ship], lfd_name, 3, 0);
-		lparagrp_Get_Paragraph_String(ship_info[blueprint_ship], shp_name, 3, 1);
+		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], lfd_name, 3, 0);
+		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], shp_name, 3, 1);
 	} else {
 		find_blueprint_cat(blueprint_ship, &cat, &offset);
 		if (!blueprint_info[cat])
@@ -1236,7 +1236,7 @@ void shipext_Get_Blueprint_Ship_SHP(void) {
 			snprintf(lfd_name, sizeof(lfd_name), "species%d.lfd", cat + 1);
 		else
 			strcpy(lfd_name, "species.lfd");
-		lparagrp_Get_Paragraph_String(blueprint_info[cat], shp_name, offset, 1);
+		xparagrp_Get_Paragraph_String(blueprint_info[cat], shp_name, offset, 1);
 	}
 	bpflight_Load_Flight_Craft(lfd_name, shp_name, 0);
 }
@@ -1247,13 +1247,13 @@ void shipext_Get_Blueprint_Ship_Name(char* out) {
 
 	if (blueprint_ship < NUM_SHIPS) {
 		if (ship_info[blueprint_ship])
-			lparagrp_Get_Paragraph_String(ship_info[blueprint_ship], out, 0, 0);
+			xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], out, 0, 0);
 		else
 			*out = '\0';
 	} else {
 		find_blueprint_cat(blueprint_ship, &cat, &offset);
 		if (blueprint_info[cat])
-			lparagrp_Get_Paragraph_String(blueprint_info[cat], out, offset, 0);
+			xparagrp_Get_Paragraph_String(blueprint_info[cat], out, offset, 0);
 		else
 			*out = '\0';
 	}
@@ -1265,10 +1265,10 @@ void shipext_Get_Blueprint_Ship_Line(char* out, int16_t line) {
 
 	str_idx = line + 2;
 	if (blueprint_ship < NUM_SHIPS) {
-		lparagrp_Get_Paragraph_String(ship_info[blueprint_ship], out, 3, str_idx);
+		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], out, 3, str_idx);
 	} else {
 		find_blueprint_cat(blueprint_ship, &cat, &offset);
-		lparagrp_Get_Paragraph_String(blueprint_info[cat], out, offset, str_idx);
+		xparagrp_Get_Paragraph_String(blueprint_info[cat], out, offset, str_idx);
 	}
 }
 
@@ -1278,10 +1278,10 @@ int16_t shipext_Get_Num_Blueprint_Ship_Lines(void) {
 	int16_t total;
 
 	if (blueprint_ship < NUM_SHIPS)
-		total = lparagrp_Count_Paragraph_Strings(ship_info[blueprint_ship], 3);
+		total = xparagrp_Count_Paragraph_Strings(ship_info[blueprint_ship], 3);
 	else {
 		find_blueprint_cat(blueprint_ship, &cat, &offset);
-		total = lparagrp_Count_Paragraph_Strings(blueprint_info[cat], offset);
+		total = xparagrp_Count_Paragraph_Strings(blueprint_info[cat], offset);
 	}
 	/* Drop the 2 leading paragraphs (ship name + class) that the caller
 	 * renders separately as the info-screen header. */
@@ -1298,7 +1298,7 @@ void shipext_Get_Blueprint_Index(int16_t* out_category, int16_t* out_offset) {
 // FUNCTION: TIE 0x80D34
 void shipext_Get_Train_Ship_Name(char* out) {
 	if (ship_info[pilot_record.cur_train_ship])
-		lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], out, 0, 0);
+		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], out, 0, 0);
 	else
 		*out = '\0';
 }
@@ -1311,8 +1311,8 @@ void shipext_Next_Train_Ship(void) {
 	} while (!shipext_Is_Ship_Available(pilot_record.cur_train_ship));
 	shipext_Show_Train_Ship_Name();
 	if (ship_info[pilot_record.cur_train_ship]) {
-		lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_name, 1, 0);
-		lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_model, 1, 1);
+		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_name, 1, 0);
+		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_model, 1, 1);
 		bpflight_Load_Flight_Craft(shp_name, shp_model, 0);
 	}
 }
@@ -1325,8 +1325,8 @@ void shipext_Last_Train_Ship(void) {
 	} while (!shipext_Is_Ship_Available(pilot_record.cur_train_ship));
 	shipext_Show_Train_Ship_Name();
 	if (ship_info[pilot_record.cur_train_ship]) {
-		lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_name, 1, 0);
-		lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_model, 1, 1);
+		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_name, 1, 0);
+		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_model, 1, 1);
 		bpflight_Load_Flight_Craft(shp_name, shp_model, 0);
 	}
 }
@@ -1370,22 +1370,22 @@ void shipext_Show_Train_Ship_Name(void) {
 	int16_t i, cur;
 	char name[16];
 
-	lcanvas_Get_Drawing_Canvas_Bounds(&bounds);
+	xcanvas_Get_Drawing_Canvas_Bounds(&bounds);
 	for (i = 0; i < NUM_SHIPS; i++)
 		if (ship_name_actors[i])
-			lactor_Hide_Actor(ship_name_actors[i]);
+			xactor_Hide_Actor(ship_name_actors[i]);
 
 	cur = pilot_record.cur_train_ship;
 	if (ship_name_actors[cur]) {
-		lactor_Show_Actor(ship_name_actors[cur]);
+		xactor_Show_Actor(ship_name_actors[cur]);
 	} else {
 		ResFile* res = shipext_Open_Ship_Resource(cur);
 		if (res) {
 			snprintf(name, sizeof(name), "train%d", cur + 1);
-			ship_name_actors[cur] = lactdelt_Res_Delta_Actor(name, &bounds, 1, 0, 14);
-			lactor_Set_Actor_Time(ship_name_actors[cur], -1, -1);
-			lactor_Show_Actor(ship_name_actors[cur]);
-			lres_Close_Resource(res);
+			ship_name_actors[cur] = xactdelt_Res_Delta_Actor(name, &bounds, 1, 0, 14);
+			xactor_Set_Actor_Time(ship_name_actors[cur], -1, -1);
+			xactor_Show_Actor(ship_name_actors[cur]);
+			xres_Close_Resource(res);
 		}
 	}
 }
@@ -1394,8 +1394,8 @@ void shipext_Show_Train_Ship_Name(void) {
 void shipext_Get_Train_Ship_SHP(void) {
 	char shp_name[16], shp_model[16];
 	if (ship_info[pilot_record.cur_train_ship]) {
-		lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_name, 1, 0);
-		lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_model, 1, 1);
+		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_name, 1, 0);
+		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], shp_model, 1, 1);
 		bpflight_Load_Flight_Craft(shp_name, shp_model, 0);
 	}
 }
@@ -1415,7 +1415,7 @@ void shipext_Get_Train_Ship_Pos(int32_t* out_x, int32_t* out_y, int32_t* out_z) 
 			*out_z = 30;
 			return;
 		}
-		lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], buf, 1, 2);
+		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], buf, 1, 2);
 	} else {
 		find_blueprint_cat(pilot_record.cur_train_ship, &cat, &offset);
 		if (!blueprint_info[cat]) {
@@ -1424,7 +1424,7 @@ void shipext_Get_Train_Ship_Pos(int32_t* out_x, int32_t* out_y, int32_t* out_z) 
 			*out_z = 30;
 			return;
 		}
-		lparagrp_Get_Paragraph_String(blueprint_info[cat], buf, offset, 2);
+		xparagrp_Get_Paragraph_String(blueprint_info[cat], buf, offset, 2);
 	}
 	parse_position(buf, out_x, out_y, out_z);
 }
@@ -1434,7 +1434,7 @@ void shipext_Get_Train_Ship_Pos(int32_t* out_x, int32_t* out_y, int32_t* out_z) 
 // FUNCTION: TIE 0x81448
 void shipext_Get_Combat_Ship_Name(char* out) {
 	if (ship_info[pilot_record.cur_combat_ship])
-		lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], out, 0, 0);
+		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], out, 0, 0);
 	else
 		*out = '\0';
 }
@@ -1449,7 +1449,7 @@ void shipext_Next_Combat_Ship(void) {
 	} while (!shipext_Is_Ship_Available(pilot_record.cur_combat_ship));
 
 	para_section = (pilot_record.cur_combat_ship >= NUM_SHIPS) ? 3 : 5;
-	lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], mission_str, para_section,
+	xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], mission_str, para_section,
 								  pilot_record.combat_course_cursor[pilot_record.cur_combat_ship]);
 	strcpy(mission_name, mission_str);
 
@@ -1461,8 +1461,8 @@ void shipext_Next_Combat_Ship(void) {
 	shipext_Show_Combat_Ship_Name();
 	if (ship_info[pilot_record.cur_combat_ship]) {
 		int16_t ms = shipext_Get_Mission_Ship();
-		lparagrp_Get_Paragraph_String(ship_info[ms], shp_name, 2, 0);
-		lparagrp_Get_Paragraph_String(ship_info[ms], shp_model, 2, 1);
+		xparagrp_Get_Paragraph_String(ship_info[ms], shp_name, 2, 0);
+		xparagrp_Get_Paragraph_String(ship_info[ms], shp_model, 2, 1);
 		bpflight_Load_Flight_Craft(shp_name, shp_model, 0);
 	}
 }
@@ -1477,7 +1477,7 @@ void shipext_Last_Combat_Ship(void) {
 	} while (!shipext_Is_Ship_Available(pilot_record.cur_combat_ship));
 
 	para_section = (pilot_record.cur_combat_ship >= NUM_SHIPS) ? 3 : 5;
-	lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], mission_str, para_section,
+	xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], mission_str, para_section,
 								  pilot_record.combat_course_cursor[pilot_record.cur_combat_ship]);
 	strcpy(mission_name, mission_str);
 
@@ -1489,8 +1489,8 @@ void shipext_Last_Combat_Ship(void) {
 	shipext_Show_Combat_Ship_Name();
 	if (ship_info[pilot_record.cur_combat_ship]) {
 		int16_t ms = shipext_Get_Mission_Ship();
-		lparagrp_Get_Paragraph_String(ship_info[ms], shp_name, 2, 0);
-		lparagrp_Get_Paragraph_String(ship_info[ms], shp_model, 2, 1);
+		xparagrp_Get_Paragraph_String(ship_info[ms], shp_name, 2, 0);
+		xparagrp_Get_Paragraph_String(ship_info[ms], shp_model, 2, 1);
 		bpflight_Load_Flight_Craft(shp_name, shp_model, 0);
 	}
 }
@@ -1518,21 +1518,21 @@ void shipext_Show_Combat_Ship_Name(void) {
 	int16_t i;
 	char name[16];
 
-	lcanvas_Get_Drawing_Canvas_Bounds(&bounds);
+	xcanvas_Get_Drawing_Canvas_Bounds(&bounds);
 	for (i = 0; i < NUM_SHIPS; i++)
 		if (ship_name_actors[i])
-			lactor_Hide_Actor(ship_name_actors[i]);
+			xactor_Hide_Actor(ship_name_actors[i]);
 
 	if (ship_name_actors[mission_ship]) {
-		lactor_Show_Actor(ship_name_actors[mission_ship]);
+		xactor_Show_Actor(ship_name_actors[mission_ship]);
 	} else {
 		ResFile* res = shipext_Open_Ship_Resource(mission_ship);
 		if (res) {
 			snprintf(name, sizeof(name), "ship%d", mission_ship + 1);
-			ship_name_actors[mission_ship] = lactdelt_Res_Delta_Actor(name, &bounds, 0, 0, 19);
-			lactor_Set_Actor_Time(ship_name_actors[mission_ship], -1, -1);
-			lactor_Show_Actor(ship_name_actors[mission_ship]);
-			lres_Close_Resource(res);
+			ship_name_actors[mission_ship] = xactdelt_Res_Delta_Actor(name, &bounds, 0, 0, 19);
+			xactor_Set_Actor_Time(ship_name_actors[mission_ship], -1, -1);
+			xactor_Show_Actor(ship_name_actors[mission_ship]);
+			xres_Close_Resource(res);
 		}
 	}
 }
@@ -1541,8 +1541,8 @@ void shipext_Show_Combat_Ship_Name(void) {
 void shipext_Get_Combat_Ship_SHP(void) {
 	char shp_name[16], shp_model[16];
 	if (ship_info[pilot_record.cur_combat_ship]) {
-		lparagrp_Get_Paragraph_String(ship_info[mission_ship], shp_name, 2, 0);
-		lparagrp_Get_Paragraph_String(ship_info[mission_ship], shp_model, 2, 1);
+		xparagrp_Get_Paragraph_String(ship_info[mission_ship], shp_name, 2, 0);
+		xparagrp_Get_Paragraph_String(ship_info[mission_ship], shp_model, 2, 1);
 		bpflight_Load_Flight_Craft(shp_name, shp_model, 0);
 	}
 }
@@ -1559,7 +1559,7 @@ void shipext_Get_Combat_Ship_Pos(int32_t* out_x, int32_t* out_y, int32_t* out_z)
 			*out_z = 30;
 			return;
 		}
-		lparagrp_Get_Paragraph_String(ship_info[mission_ship], buf, 2, 2);
+		xparagrp_Get_Paragraph_String(ship_info[mission_ship], buf, 2, 2);
 	} else {
 		find_blueprint_cat(mission_ship, &cat, &offset);
 		if (!blueprint_info[cat]) {
@@ -1568,7 +1568,7 @@ void shipext_Get_Combat_Ship_Pos(int32_t* out_x, int32_t* out_y, int32_t* out_z)
 			*out_z = 30;
 			return;
 		}
-		lparagrp_Get_Paragraph_String(blueprint_info[cat], buf, offset, 2);
+		xparagrp_Get_Paragraph_String(blueprint_info[cat], buf, offset, 2);
 	}
 	parse_position(buf, out_x, out_y, out_z);
 }
@@ -1579,7 +1579,7 @@ void shipext_Next_Combat_Mission(void) {
 	int16_t para_section, mission_count, cur;
 
 	para_section = (pilot_record.cur_combat_ship >= NUM_SHIPS) ? 3 : 5;
-	mission_count = lparagrp_Count_Paragraph_Strings(ship_info[pilot_record.cur_combat_ship], para_section);
+	mission_count = xparagrp_Count_Paragraph_Strings(ship_info[pilot_record.cur_combat_ship], para_section);
 	cur = pilot_record.cur_combat_ship;
 	pilot_record.combat_course_cursor[cur] = (pilot_record.combat_course_cursor[cur] + 1) % mission_count;
 
@@ -1592,7 +1592,7 @@ void shipext_Next_Combat_Mission(void) {
 		pilot_record.combat_course_cursor[cur] = 0;
 
 	para_section = (pilot_record.cur_combat_ship >= NUM_SHIPS) ? 3 : 5;
-	lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], mission_str, para_section,
+	xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], mission_str, para_section,
 								  pilot_record.combat_course_cursor[pilot_record.cur_combat_ship]);
 	strcpy(mission_name, mission_str);
 
@@ -1602,8 +1602,8 @@ void shipext_Next_Combat_Mission(void) {
 	shipext_Show_Combat_Ship_Name();
 	if (ship_info[pilot_record.cur_combat_ship]) {
 		int16_t ms = shipext_Get_Mission_Ship();
-		lparagrp_Get_Paragraph_String(ship_info[ms], shp_name, 2, 0);
-		lparagrp_Get_Paragraph_String(ship_info[ms], shp_model, 2, 1);
+		xparagrp_Get_Paragraph_String(ship_info[ms], shp_name, 2, 0);
+		xparagrp_Get_Paragraph_String(ship_info[ms], shp_model, 2, 1);
 		bpflight_Load_Flight_Craft(shp_name, shp_model, 0);
 	}
 }
@@ -1614,7 +1614,7 @@ void shipext_Last_Combat_Mission(void) {
 	int16_t para_section, mission_count, cur;
 
 	para_section = (pilot_record.cur_combat_ship >= NUM_SHIPS) ? 3 : 5;
-	mission_count = lparagrp_Count_Paragraph_Strings(ship_info[pilot_record.cur_combat_ship], para_section);
+	mission_count = xparagrp_Count_Paragraph_Strings(ship_info[pilot_record.cur_combat_ship], para_section);
 	cur = pilot_record.cur_combat_ship;
 	pilot_record.combat_course_cursor[cur] =
 		(mission_count + pilot_record.combat_course_cursor[cur] - 1) % mission_count;
@@ -1625,7 +1625,7 @@ void shipext_Last_Combat_Mission(void) {
 		pilot_record.combat_course_cursor[cur] = pilot_record.battle_cursor[cur - NUM_SHIPS] - 1;
 
 	para_section = (pilot_record.cur_combat_ship >= NUM_SHIPS) ? 3 : 5;
-	lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], mission_str, para_section,
+	xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], mission_str, para_section,
 								  pilot_record.combat_course_cursor[pilot_record.cur_combat_ship]);
 	strcpy(mission_name, mission_str);
 
@@ -1635,8 +1635,8 @@ void shipext_Last_Combat_Mission(void) {
 	shipext_Show_Combat_Ship_Name();
 	if (ship_info[pilot_record.cur_combat_ship]) {
 		int16_t ms = shipext_Get_Mission_Ship();
-		lparagrp_Get_Paragraph_String(ship_info[ms], shp_name, 2, 0);
-		lparagrp_Get_Paragraph_String(ship_info[ms], shp_model, 2, 1);
+		xparagrp_Get_Paragraph_String(ship_info[ms], shp_name, 2, 0);
+		xparagrp_Get_Paragraph_String(ship_info[ms], shp_model, 2, 1);
 		bpflight_Load_Flight_Craft(shp_name, shp_model, 0);
 	}
 }
@@ -1653,12 +1653,12 @@ void shipext_Get_Battle_Title(char* out, int16_t mode) {
 			str_idx = mode + 1;
 		else
 			str_idx = mode - 1;
-		lparagrp_Get_Paragraph_String(ship_info[battle_idx], out, 1, str_idx);
+		xparagrp_Get_Paragraph_String(ship_info[battle_idx], out, 1, str_idx);
 	} else {
 		if (pilot_record.battle_status[pilot_record.cur_battle] == 3)
-			lparagrp_Get_Paragraph_String(ship_info[battle_idx], out, 0, 1);
+			xparagrp_Get_Paragraph_String(ship_info[battle_idx], out, 0, 1);
 		else
-			lparagrp_Get_Paragraph_String(ship_info[battle_idx], out, 0, 0);
+			xparagrp_Get_Paragraph_String(ship_info[battle_idx], out, 0, 0);
 	}
 }
 
@@ -1668,12 +1668,12 @@ Actor* shipext_Get_Battle_Galaxy_Image(void) {
 	Rect bounds;
 	int16_t battle_idx = pilot_record.cur_battle + NUM_SHIPS;
 
-	lparagrp_Get_Paragraph_String(ship_info[battle_idx], name, 2, 0);
+	xparagrp_Get_Paragraph_String(ship_info[battle_idx], name, 2, 0);
 	ResFile* res = shipext_Open_Ship_Resource(battle_idx);
-	lcanvas_Get_Drawing_Canvas_Bounds(&bounds);
-	Actor* actor = lactdelt_Res_Delta_Actor(name, &bounds, 0, 0, 0);
-	lactor_Set_Actor_Time(actor, -1, -1);
-	lres_Close_Resource(res);
+	xcanvas_Get_Drawing_Canvas_Bounds(&bounds);
+	Actor* actor = xactdelt_Res_Delta_Actor(name, &bounds, 0, 0, 0);
+	xactor_Set_Actor_Time(actor, -1, -1);
+	xres_Close_Resource(res);
 	return actor;
 }
 
@@ -1682,7 +1682,7 @@ void shipext_Get_Battle_Galaxy_Rect(Rect* out) {
 	char buf[44];
 	int16_t pos;
 
-	lparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_battle + NUM_SHIPS], buf, 2, 2);
+	xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_battle + NUM_SHIPS], buf, 2, 2);
 	pos = 0;
 	while (buf[pos] == ' ')
 		pos++;
@@ -1808,7 +1808,7 @@ int16_t shipext_Set_Tour_Battle(void) {
 		pilot_record.battle_cursor[cur] = 0;
 	}
 
-	if (pilot_record.battle_cursor[cur] == lparagrp_Count_Paragraph_Strings(ship_info[cur + NUM_SHIPS], 3)) {
+	if (pilot_record.battle_cursor[cur] == xparagrp_Count_Paragraph_Strings(ship_info[cur + NUM_SHIPS], 3)) {
 		/* All missions done — mark battle complete */
 		pilot_record.battle_status[cur] = 3;
 		if (pilot_name[0])
@@ -1816,7 +1816,7 @@ int16_t shipext_Set_Tour_Battle(void) {
 		return 0;
 	}
 
-	lparagrp_Get_Paragraph_String(ship_info[cur + NUM_SHIPS], mission_str, 3,
+	xparagrp_Get_Paragraph_String(ship_info[cur + NUM_SHIPS], mission_str, 3,
 								  pilot_record.battle_cursor[cur]);
 	strcpy(mission_name, mission_str);
 	shipext_Find_Mission_Ship();
@@ -1831,7 +1831,7 @@ void shipext_Validate_Tour_Battle(void) {
 		return;
 	cur = pilot_record.cur_battle;
 	if (pilot_record.battle_status[cur] == 1 &&
-		pilot_record.battle_cursor[cur] == lparagrp_Count_Paragraph_Strings(ship_info[cur + NUM_SHIPS], 3)) {
+		pilot_record.battle_cursor[cur] == xparagrp_Count_Paragraph_Strings(ship_info[cur + NUM_SHIPS], 3)) {
 		pilot_record.battle_status[cur] = 3;
 		if (pilot_name[0])
 			shipext_Save_Pilot_Data(pilot_name);
@@ -1905,7 +1905,7 @@ void shipext_Get_Ship_Pos(int16_t ship, int16_t para_idx, int16_t str_idx, int32
 			*out_z = 30;
 			return;
 		}
-		lparagrp_Get_Paragraph_String(ship_info[ship], buf, para_idx, str_idx);
+		xparagrp_Get_Paragraph_String(ship_info[ship], buf, para_idx, str_idx);
 	} else {
 		find_blueprint_cat(blueprint_ship, &cat, &offset);
 		if (!blueprint_info[cat]) {
@@ -1914,7 +1914,7 @@ void shipext_Get_Ship_Pos(int16_t ship, int16_t para_idx, int16_t str_idx, int32
 			*out_z = 30;
 			return;
 		}
-		lparagrp_Get_Paragraph_String(blueprint_info[cat], buf, offset, 2);
+		xparagrp_Get_Paragraph_String(blueprint_info[cat], buf, offset, 2);
 	}
 	parse_position(buf, out_x, out_y, out_z);
 }
@@ -2029,7 +2029,7 @@ LandruFile* shipext_Open_Mission_File(const char* filename) {
 	char path[72];
 	strcpy(path, "mission/");
 	strcat(path, filename);
-	return lfile_Open_File(LANDRU_FILE_ROOT_AUXILIARY_ASSET, path, "rb");
+	return xfile_Open_File(LANDRU_FILE_ROOT_AUXILIARY_ASSET, path, "rb");
 }
 
 // FUNCTION: TIE 0x82580
@@ -2129,25 +2129,25 @@ void shipext_Find_Mission_Ship(void) {
 	int16_t dummy;
 
 	shipext_Get_Mission_Path(path);
-	fp = lfile_Open_File(LANDRU_FILE_ROOT_AUXILIARY_ASSET, path, "rb");
+	fp = xfile_Open_File(LANDRU_FILE_ROOT_AUXILIARY_ASSET, path, "rb");
 	if (!fp)
 		return;
 
 	/* Read file header: first word is platform/version.
 	 * If negative → TIE format (next word = num_flight_groups).
 	 * If positive → old X-Wing format (this word IS num_flight_groups). */
-	lfile_Read_Word_From_File(fp, &header_word);
+	xfile_Read_Word_From_File(fp, &header_word);
 	if (header_word < 0) {
-		lfile_Read_Word_From_File(fp, &num_fgs);
+		xfile_Read_Word_From_File(fp, &num_fgs);
 	} else {
 		num_fgs = header_word;
 	}
-	lfile_Read_Word_From_File(fp, &dummy); /* num_messages */
-	lfile_Read_Word_From_File(fp, &dummy); /* unknown */
+	xfile_Read_Word_From_File(fp, &dummy); /* num_messages */
+	xfile_Read_Word_From_File(fp, &dummy); /* unknown */
 
 	/* Read 450-byte mission global data */
 	uint8_t mis_buf[EMISSIONSTRUCT_DISK_SIZE];
-	lfile_Read_Data_From_File(fp, mis_buf, EMISSIONSTRUCT_DISK_SIZE);
+	xfile_Read_Data_From_File(fp, mis_buf, EMISSIONSTRUCT_DISK_SIZE);
 	EMissionStruct_decode(&mission_data, mis_buf);
 
 	mission_ship = 0;
@@ -2159,7 +2159,7 @@ void shipext_Find_Mission_Ship(void) {
 	 * not safe to use as the read length. */
 	uint8_t fg_buf[EFGSTRUCT_DISK_SIZE];
 	for (fg_idx = 0; fg_idx < num_fgs; fg_idx++) {
-		lfile_Read_Data_From_File(fp, fg_buf, EFGSTRUCT_DISK_SIZE);
+		xfile_Read_Data_From_File(fp, fg_buf, EFGSTRUCT_DISK_SIZE);
 		EFGStruct_decode(&fg, fg_buf);
 
 		if (!fg.player_flag)
@@ -2214,14 +2214,14 @@ void shipext_Find_Mission_Ship(void) {
 		else
 			seek_count = mothership_fg - fg_idx + 1;
 
-		lfile_Seek_File(fp, (int32_t)EFGSTRUCT_DISK_SIZE * seek_count, 1); /* TIE_SEEK_CUR */
+		xfile_Seek_File(fp, (int32_t)EFGSTRUCT_DISK_SIZE * seek_count, 1); /* TIE_SEEK_CUR */
 
-		if (lfile_Read_Data_From_File(fp, fg_buf, EFGSTRUCT_DISK_SIZE)) {
+		if (xfile_Read_Data_From_File(fp, fg_buf, EFGSTRUCT_DISK_SIZE)) {
 			EFGStruct_decode(&fg, fg_buf);
 			if (fg.species >= CRAFT_CAPITAL_FIRST && fg.species <= CRAFT_CAPITAL_LAST)
 				mission_launch = 0; /* player launches from capital ship */
 		}
 	}
 
-	lfile_Close_File(fp);
+	xfile_Close_File(fp);
 }

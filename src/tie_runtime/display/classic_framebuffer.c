@@ -20,7 +20,7 @@ static bool s_presented_vga_valid;
 
 bool TieClassicFramebuffer_TakeDirty(void) {
 	if (TieClassicDisplay_FrontendActive())
-		return lsurface_Take_Active_Video_Dirty();
+		return xsurface_Take_Active_Video_Dirty();
 
 	/* PORT: TIE95 flight owns vesa_buff_gbl independently of the Landru
 	 * surface set that the frontend last selected. */
@@ -31,7 +31,7 @@ bool TieClassicFramebuffer_TakeDirty(void) {
 
 const TieFramebuffer* TieClassicFramebuffer_Current(void) {
 	LandruVideoTarget target;
-	if (TieClassicDisplay_FrontendActive() && lsurface_Get_Active_Video_Target(&target)) {
+	if (TieClassicDisplay_FrontendActive() && xsurface_Get_Active_Video_Target(&target)) {
 		s_framebuffer.pixels = target.pixels;
 		s_framebuffer.width = target.width;
 		s_framebuffer.height = target.height;
@@ -52,7 +52,7 @@ void TieClassicFramebuffer_CapturePresentedVga(void) {
 	LandruVideoTarget target;
 	s_presented_vga_valid = false;
 	if (!TieClassicDisplay_FrontendActive() || TieProfile_FrontendId() != TIE_FRONTEND_PROFILE_TIE98 ||
-		!(landru_video_flags_gbl & LANDRU_VIDEO_VGA_COMPAT) || !lsurface_Get_Active_Video_Target(&target) ||
+		!(landru_video_flags_gbl & LANDRU_VIDEO_VGA_COMPAT) || !xsurface_Get_Active_Video_Target(&target) ||
 		!target.pixels || target.width != TIE_PRESENTED_VGA_WIDTH ||
 		target.height != TIE_PRESENTED_VGA_HEIGHT || target.stride < TIE_PRESENTED_VGA_WIDTH)
 		return;

@@ -229,7 +229,7 @@ void feinput_setupinputdevices(void) {
 	mousebuttons = 0;
 	joybuttons = 0;
 
-	joystickcount = ljoy_Joystick_Init();
+	joystickcount = xjoy_Joystick_Init();
 	joystickflag = (joystickcount != 0);
 
 	mouseflag = mouse2_checkformouse();
@@ -261,12 +261,12 @@ uint16_t feinput_getrawinput(void) {
 	joysticky = 0;
 	joystickroll = 0;
 
-	joystickcount = ljoy_Joystick_Init();
+	joystickcount = xjoy_Joystick_Init();
 	joystickflag = (joystickcount != 0);
 	if (joystickflag) {
 		/* The host combines physical models into yaw, pitch, and roll. */
 		int16_t raw[3] = { 0 };
-		joybuttons = ljoy_Joystick_Read_Axes(raw, 3, 0);
+		joybuttons = xjoy_Joystick_Read_Axes(raw, 3, 0);
 		const TieInputMapping* mapping = TieInput_Mapping();
 		joystickx = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_YAW]);
 		joysticky = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_PITCH]);

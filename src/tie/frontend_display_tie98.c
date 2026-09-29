@@ -371,7 +371,7 @@ void FrontendDisplay_SetPalette(const uint8_t* rgb6, int first_entry, int entry_
 		Flight_PumpWindowMessages();
 	}
 	if (g_softwareCursorEnabled)
-		XCURSOR_Select_Contrast_Colors(rgb6);
+		xcursor_Select_Contrast_Colors(rgb6);
 	const int lock_count = FlightSurface_GetLockCount();
 	for (int index = 0; index < lock_count; ++index)
 		FlightSurface_Unlock();
@@ -396,7 +396,7 @@ void FrontendDisplay_UpdatePalette(const uint8_t* rgb6, int first_entry, int ent
 		Flight_PumpWindowMessages();
 	}
 	if (g_softwareCursorEnabled)
-		XCURSOR_Select_Contrast_Colors(rgb6);
+		xcursor_Select_Contrast_Colors(rgb6);
 	const int lock_count = FlightSurface_GetLockCount();
 	for (int index = 0; index < lock_count; ++index)
 		FlightSurface_Unlock();
@@ -1064,13 +1064,13 @@ HRESULT FrontendDisplay_PresentFrame(void) {
 	HRESULT result;
 	while (!g_windowActive && !g_quitRequested)
 		Flight_PumpWindowMessages();
-	if (g_softwareCursorEnabled && XCURSOR_Get_Display_Count() >= 0) {
+	if (g_softwareCursorEnabled && xcursor_Get_Display_Count() >= 0) {
 		memset(&descriptor, 0, sizeof descriptor);
 		descriptor.dwSize = 108;
 		if (g_lpRenderSurface->lpVtbl->Lock(g_lpRenderSurface, NULL, &descriptor,
 											DDLOCK_WAIT | DDLOCK_NOSYSLOCK, NULL) == DX_DDERR_SURFACELOST)
 			return FrontendDisplay_RestorePrimarySurface();
-		XCURSOR_Draw_Software_Cursor_To_Surface((uint8_t*)descriptor.lpSurface, descriptor.lPitch, 480);
+		xcursor_Draw_Software_Cursor_To_Surface((uint8_t*)descriptor.lpSurface, descriptor.lPitch, 480);
 		g_lpRenderSurface->lpVtbl->Unlock(g_lpRenderSurface, descriptor.lpSurface);
 	}
 	if (!g_flightPageFlip)
@@ -1222,8 +1222,8 @@ HRESULT DDRAW_Present_Landru_Frame(void) {
 				lower += g_surfacePitch;
 			}
 		}
-		VIDEO_Blit_Indexed_Rect(descriptor.lpSurface, descriptor.lPitch, 480, vga_compat_buffer_gbl, 320, 200,
-								320, 0, 0, landru_video_flags_gbl);
+		xvideo_Blit_Indexed_Rect(descriptor.lpSurface, descriptor.lPitch, 480, vga_compat_buffer_gbl, 320,
+								 200, 320, 0, 0, landru_video_flags_gbl);
 		return g_lpRenderSurface->lpVtbl->Unlock(g_lpRenderSurface, descriptor.lpSurface);
 	}
 

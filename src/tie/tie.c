@@ -1048,7 +1048,7 @@ void tie_initflightresolution(void) {
 
 	/* Disable VESA bank wrapping for the host's linear framebuffer. */
 	{
-		uint16_t* modeinfo = (uint16_t*)lvesa_Get_Vesa_Mode_Struct();
+		uint16_t* modeinfo = (uint16_t*)xvesa_Get_Vesa_Mode_Struct();
 		(void)modeinfo;
 		vesa_page_size = 0xFFFFFFFFu;
 		vesa_grains_per_page = 1u;
@@ -2945,7 +2945,7 @@ static LandruTaskStepResult tie_simulator_task_step(void* self) {
 											? TieClassicDisplay_ActivateFlightMode((uint16_t)flightResolution)
 											: TieClassicDisplay_ActivateFlight();
 			if (!display_active) {
-				lerror_Set_Landru_Error(12);
+				xerror_Set_Landru_Error(12);
 				TieFlightTiming_EndSession();
 				return LANDRU_TASK_STEP_DONE;
 			}
@@ -3231,7 +3231,7 @@ static LandruTaskStepResult tie_simulator_task_step(void* self) {
 				maingameflag = 0;
 				gamesnd_Transition_Sound();
 				if (!TieClassicDisplay_ActivateFrontend()) {
-					lerror_Set_Landru_Error(12);
+					xerror_Set_Landru_Error(12);
 					return LANDRU_TASK_STEP_DONE;
 				}
 				rtsvga2_clearflightdisplay();
@@ -3245,7 +3245,7 @@ static LandruTaskStepResult tie_simulator_task_step(void* self) {
 				if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
 					maingameflag = 0;
 				if (!TieClassicDisplay_ActivateFrontend()) {
-					lerror_Set_Landru_Error(12);
+					xerror_Set_Landru_Error(12);
 					return LANDRU_TASK_STEP_DONE;
 				}
 			}

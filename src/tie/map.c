@@ -171,8 +171,8 @@ static void end_View(int32_t refresh) {
 		last_voiced_paragraph = talk_voice_question;
 	}
 
-	if (!refresh && !lcursor_Is_Cursor_Visible())
-		lcursor_Show_Cursor();
+	if (!refresh && !xcursor_Is_Cursor_Visible())
+		xcursor_Show_Cursor();
 }
 
 /* ======================================================================
@@ -186,22 +186,22 @@ static void user_Map_Panel(Actor* actor, int32_t time) {
 		int16_t y_val = (time <= 4) ? map_panel_hdl_y[time] : map_panel_hdl_y[4];
 		int16_t cel_val = (time <= 4) ? map_panel_hdl_cel[time] : map_panel_hdl_cel[4];
 		actor->y = y_val;
-		lactor_Set_Actor_State(actor, cel_val, 0);
+		xactor_Set_Actor_State(actor, cel_val, 0);
 	}
 }
 
-static int draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
-	lactdelt_Draw_Delta_Actor(actor, r, clip_r, x, y, refresh);
+static int16_t draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+	xactdelt_Draw_Delta_Actor(actor, r, clip_r, x, y, refresh);
 
 	if (map_text != -1) {
-		lactdelt_Draw_Delta_Actor(title_actor, r, clip_r, x, y, refresh);
+		xactdelt_Draw_Delta_Actor(title_actor, r, clip_r, x, y, refresh);
 		Rect tr;
 		char name[48];
-		lrect_Set_Rect(&tr, 60, 158, 260, 170);
+		xrect_Set_Rect(&tr, 60, 158, 260, 170);
 		textext_Copy_Text(name, map_text);
-		lfont_Enable_FontID_Shadow(0);
-		lfont_Print_Centered_Text(name, &tr, 28, 0);
-		lfont_Disable_FontID_Shadow(0);
+		xfont_Enable_FontID_Shadow(0);
+		xfont_Print_Centered_Text(name, &tr, 28, 0);
+		xfont_Disable_FontID_Shadow(0);
 	}
 
 	if (map_text_count <= 0)
@@ -996,13 +996,13 @@ static int16_t iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key, uin
 		if (button == 1)
 			btn->pressed = 1;
 	} else if (button == 2) {
-		btn->pressed = lrect_Point_In_Rect(r, r->left + x, r->top + y);
+		btn->pressed = xrect_Point_In_Rect(r, r->left + x, r->top + y);
 	} else if (button == 3 && btn->pressed) {
-		linpattr_Selected_Input(input);
+		xinpattr_Selected_Input(input);
 		btn->pressed = 0;
 	}
 
-	linpattr_Refresh_Input(input);
+	xinpattr_Refresh_Input(input);
 	map_text_count = 12;
 
 	switch (input->id) {
@@ -1070,9 +1070,9 @@ static void iuser_Map(Input* input, int32_t time) {
 	/* Briefing mode: offset button position during panel animation */
 	if (shellext_Get_Cur_Scene() == SCENE_BRIEF_MAP && time < 5) {
 		if (time)
-			lrect_Offset_Rect(&input->frame, 0, map_panel_y[time] - map_panel_y[time - 1]);
+			xrect_Offset_Rect(&input->frame, 0, map_panel_y[time] - map_panel_y[time - 1]);
 		else
-			lrect_Offset_Rect(&input->frame, 0, map_panel_y[0] - map_panel_y[4]);
+			xrect_Offset_Rect(&input->frame, 0, map_panel_y[0] - map_panel_y[4]);
 	}
 
 	/* Auto-advance the VR talk paragraph in lockstep with the speech.
@@ -1090,7 +1090,7 @@ static void iuser_Map(Input* input, int32_t time) {
 		}
 	}
 
-	if (!linpattr_Get_Input_Selected(input))
+	if (!xinpattr_Get_Input_Selected(input))
 		return;
 
 	switch (input->id) {
@@ -1112,7 +1112,7 @@ static void iuser_Map(Input* input, int32_t time) {
 					player_Toggle_Map_Play();
 				else
 					player_Rewind_Page();
-				linpattr_Refresh_Input(play_input);
+				xinpattr_Refresh_Input(play_input);
 			}
 			break;
 
@@ -1132,17 +1132,17 @@ static void iuser_Map(Input* input, int32_t time) {
 			} else {
 				if (player_Is_Map_Playing()) {
 					player_Rewind_Page();
-					linpattr_Refresh_Input(play_input);
+					xinpattr_Refresh_Input(play_input);
 				} else {
 					player_Toggle_Map_Play();
-					linpattr_Refresh_Input(stop_input);
+					xinpattr_Refresh_Input(stop_input);
 				}
 			}
 			break;
 
 		case 2: /* Skip / Next Page */
 			if (talk_mode) {
-				if (lio_Right_Button_Release()) {
+				if (xio_Right_Button_Release()) {
 					/* Right-click: previous page; disable auto-advance */
 					talk_paragraph_timer = 0x7FFFFFFF;
 					if (--cur_talk_paragraph < 0)
@@ -1186,12 +1186,12 @@ static void iuser_Map(Input* input, int32_t time) {
 				talk_voice_officer = 'i';
 				last_voiced_paragraph = 0;
 				player_Clear_Page_Commands();
-				linpattr_Show_Input(map_input);
-				linpattr_Hide_Input(talk_input);
+				xinpattr_Show_Input(map_input);
+				xinpattr_Hide_Input(talk_input);
 				talk_paragraph_timer = 0x7FFFFFFF;
 			} else if (talk_mode == 1) {
-				linpattr_Hide_Input(map_input);
-				linpattr_Show_Input(talk_input);
+				xinpattr_Hide_Input(map_input);
+				xinpattr_Show_Input(talk_input);
 				talk_voice_officer = 'o';
 				talk_voice_question = 1;
 				if (map_is_post_mission) {
@@ -1202,8 +1202,8 @@ static void iuser_Map(Input* input, int32_t time) {
 				if (options_gbl.speech_active)
 					talk_paragraph_timer = time + 264;
 			} else if (talk_mode == 2) {
-				linpattr_Hide_Input(map_input);
-				linpattr_Show_Input(talk_input);
+				xinpattr_Hide_Input(map_input);
+				xinpattr_Show_Input(talk_input);
 				talk_voice_officer = 'p';
 				talk_voice_question = 1;
 				if (map_is_post_mission) {
@@ -1214,28 +1214,28 @@ static void iuser_Map(Input* input, int32_t time) {
 				if (options_gbl.speech_active)
 					talk_paragraph_timer = time + 264;
 			}
-			lview_Refresh_View();
+			xview_Refresh_View();
 			break;
 
 		case 4: /* Enter Mission / Exit Debrief */
 			if (shellext_Get_Cur_Scene() >= SCENE_COMBAT_MAP_A &&
 				shellext_Get_Cur_Scene() <= SCENE_COMBAT_MAP_B) {
-				lerror_Set_Landru_Exit(SCENE_FLIGHT_COMBAT);
+				xerror_Set_Landru_Exit(SCENE_FLIGHT_COMBAT);
 				shipext_Update_Pilot();
 			} else if (shellext_Get_Cur_Scene() == SCENE_BRIEF_MAP) {
-				lerror_Set_Landru_Exit(SCENE_BRIEF);
+				xerror_Set_Landru_Exit(SCENE_BRIEF);
 			}
 			soundext_Stop_SFX(sfxText);
 			break;
 
 		case 5: /* Exit */
 			if (shellext_Get_Cur_Scene() == SCENE_TRAIN_MAP)
-				lerror_Set_Landru_Exit(SCENE_TRAIN_B);
+				xerror_Set_Landru_Exit(SCENE_TRAIN_B);
 			else if (shellext_Get_Cur_Scene() >= SCENE_COMBAT_MAP_A &&
 					 shellext_Get_Cur_Scene() <= SCENE_COMBAT_MAP_B)
-				lerror_Set_Landru_Exit(SCENE_COMBAT_B);
+				xerror_Set_Landru_Exit(SCENE_COMBAT_B);
 			else if (shellext_Get_Cur_Scene() == SCENE_BRIEF_MAP)
-				lerror_Set_Landru_Exit(SCENE_BRIEF);
+				xerror_Set_Landru_Exit(SCENE_BRIEF);
 			soundext_Stop_SFX(sfxText);
 			break;
 	}
@@ -1297,14 +1297,14 @@ static void idraw_Map(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	}
 
 	if (btn->pressed || down)
-		lactor_Set_Actor_State(cmbticons, down_id, 0);
+		xactor_Set_Actor_State(cmbticons, down_id, 0);
 	else
-		lactor_Set_Actor_State(cmbticons, id, 0);
+		xactor_Set_Actor_State(cmbticons, id, 0);
 
-	lactanim_Draw_Anim_Actor(cmbticons, r, clip_r, x, y, refresh);
+	xactanim_Draw_Anim_Actor(cmbticons, r, clip_r, x, y, refresh);
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip_r);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip_r);
 }
 
 /* ======================================================================
@@ -1315,14 +1315,14 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	char buf[64], fmt[32], str1[32];
 	Rect tr;
 
-	lrect_Copy_Rect(&tr, r);
+	xrect_Copy_Rect(&tr, r);
 	player_Stars_To_Back(r->top + 1);
 
 	if (shellext_Get_Cur_Scene() == SCENE_TRAIN_MAP) {
 		/* Training stats display */
-		lfont_Enable_FontID_Shadow(0);
-		int16_t saved_bold = lfont_Get_FontID_Bold_Color(0);
-		lfont_Set_FontID_Bold_Color(0, 231);
+		xfont_Enable_FontID_Shadow(0);
+		int16_t saved_bold = xfont_Get_FontID_Bold_Color(0);
+		xfont_Set_FontID_Bold_Color(0, 231);
 
 		tr.top += 40;
 		tr.bottom = tr.top + 10;
@@ -1332,57 +1332,57 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		textext_Copy_Text(fmt, txtMapTrainLevel);
 		snprintf(str1, sizeof(str1), fmt, mission.train_level);
 		strcat(buf, str1);
-		lfont_Print_Centered_Text(buf, &tr, 228, 0);
+		xfont_Print_Centered_Text(buf, &tr, 228, 0);
 
-		lrect_Offset_Rect(&tr, 0, 14);
-		lpaint_Horiz_Clipped_Line(tr.left + 48, tr.top - 3, tr.right - tr.left - 96, 231);
+		xrect_Offset_Rect(&tr, 0, 14);
+		xpaint_Horiz_Clipped_Line(tr.left + 48, tr.top - 3, tr.right - tr.left - 96, 231);
 
 		textext_Copy_Text(fmt, txtMapTrainScore);
 		snprintf(buf, sizeof(buf), fmt, mission.mission_score);
-		lfont_Print_Centered_Text(buf, &tr, 228, 0);
-		lrect_Offset_Rect(&tr, 0, 10);
+		xfont_Print_Centered_Text(buf, &tr, 228, 0);
+		xrect_Offset_Rect(&tr, 0, 10);
 
 		if (mission.mission_new_rank) {
 			textext_Copy_Text(str1, txtTalkRank);
 			textext_Copy_Text(fmt, mission.mission_new_rank + 1);
 			replace_italic_codes(str1);
 			snprintf(buf, sizeof(buf), str1, fmt);
-			lfont_Print_Centered_Text(buf, &tr, 228, 0);
-			lrect_Offset_Rect(&tr, 0, 10);
+			xfont_Print_Centered_Text(buf, &tr, 228, 0);
+			xrect_Offset_Rect(&tr, 0, 10);
 		}
 
 		if (train_pilot_medal_status) {
 			textext_Copy_Text(buf, txtTalkTrainPatch);
 			replace_italic_codes(buf);
-			lfont_Print_Centered_Text(buf, &tr, 228, 0);
-			lrect_Offset_Rect(&tr, 0, 10);
+			xfont_Print_Centered_Text(buf, &tr, 228, 0);
+			xrect_Offset_Rect(&tr, 0, 10);
 		}
 
 		textext_Copy_Text(fmt, txtMapTrainPassed);
 		snprintf(buf, sizeof(buf), fmt, (uint16_t)mission.train_gates_passed);
-		lfont_Print_Centered_Text(buf, &tr, 228, 0);
-		lrect_Offset_Rect(&tr, 0, 10);
+		xfont_Print_Centered_Text(buf, &tr, 228, 0);
+		xrect_Offset_Rect(&tr, 0, 10);
 
 		textext_Copy_Text(fmt, txtMapTrainRemain);
 		snprintf(buf, sizeof(buf), fmt, (uint16_t)mission.train_gates_remaining);
-		lfont_Print_Centered_Text(buf, &tr, 228, 0);
-		lrect_Offset_Rect(&tr, 0, 10);
+		xfont_Print_Centered_Text(buf, &tr, 228, 0);
+		xrect_Offset_Rect(&tr, 0, 10);
 
 		textext_Copy_Text(fmt, txtMapTrainTargets);
 		snprintf(buf, sizeof(buf), fmt, (uint16_t)mission.train_targets);
-		lfont_Print_Centered_Text(buf, &tr, 228, 0);
+		xfont_Print_Centered_Text(buf, &tr, 228, 0);
 
 		if (mission.training_badge_earned) {
-			lrect_Offset_Rect(&tr, 0, 10);
+			xrect_Offset_Rect(&tr, 0, 10);
 			textext_Copy_Text(buf, txtMapTrainBadge);
-			lfont_Print_Centered_Text(buf, &tr, 228, 0);
+			xfont_Print_Centered_Text(buf, &tr, 228, 0);
 		}
 
-		lfont_Set_FontID_Bold_Color(0, saved_bold);
-		lfont_Disable_FontID_Shadow(0);
+		xfont_Set_FontID_Bold_Color(0, saved_bold);
+		xfont_Disable_FontID_Shadow(0);
 	} else {
 		/* Combat/briefing talk text display */
-		lfont_Enable_FontID_Shadow(0);
+		xfont_Enable_FontID_Shadow(0);
 		tr.top += 2;
 		tr.bottom = tr.top + 10;
 
@@ -1398,40 +1398,40 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 			snprintf(str1, sizeof(str1), fmt, cur_talk_question + 1, num_talk_questions);
 		}
 		strcat(buf, str1);
-		lfont_Print_Centered_Text(buf, &tr, 14, 0);
+		xfont_Print_Centered_Text(buf, &tr, 14, 0);
 
-		lpaint_Horiz_Clipped_Line(tr.left + 8, tr.bottom + 1, tr.right - tr.left - 16, 24);
+		xpaint_Horiz_Clipped_Line(tr.left + 8, tr.bottom + 1, tr.right - tr.left - 16, 24);
 		tr.top += 14;
 		tr.bottom = tr.top + 10;
 
 		/* Current question text */
 		Get_VR_Talk_Question(buf, cur_talk_question);
-		lfont_Print_Centered_Text(buf, &tr, 15, 0);
-		lrect_Offset_Rect(&tr, 0, 10);
+		xfont_Print_Centered_Text(buf, &tr, 15, 0);
+		xrect_Offset_Rect(&tr, 0, 10);
 
 		/* Paragraph text */
 		int16_t first_line = max_paragraph_size * cur_talk_paragraph;
 		tr.top += 2;
-		lrect_Inset_Rect(&tr, 46, 0);
+		xrect_Inset_Rect(&tr, 46, 0);
 		tr.bottom = tr.top + 78;
-		lpaint_Horiz_Clipped_Line(r->left + 8, tr.top, r->right - r->left - 16, 24);
+		xpaint_Horiz_Clipped_Line(r->left + 8, tr.top, r->right - r->left - 16, 24);
 		tr.top += 4;
 		tr.bottom = tr.top + 10;
 
-		int16_t saved_bold = lfont_Get_FontID_Bold_Color(0);
-		lfont_Set_FontID_Bold_Color(0, 231);
+		int16_t saved_bold = xfont_Get_FontID_Bold_Color(0);
+		xfont_Set_FontID_Bold_Color(0, 231);
 
 		for (int16_t i = first_line; i < first_line + max_paragraph_size; i++) {
 			center_line = 0;
 			Get_VR_Talk_Paragraph(buf, i);
 			if (center_line)
-				lfont_Print_Centered_Text(buf, &tr, 228, 0);
+				xfont_Print_Centered_Text(buf, &tr, 228, 0);
 			else
-				lfont_Print_Clipped_Text(buf, tr.left + 8, tr.top, 0, 228);
-			lrect_Offset_Rect(&tr, 0, 10);
+				xfont_Print_Clipped_Text(buf, tr.left + 8, tr.top, 0, 228);
+			xrect_Offset_Rect(&tr, 0, 10);
 		}
 
-		lfont_Set_FontID_Bold_Color(0, saved_bold);
+		xfont_Set_FontID_Bold_Color(0, saved_bold);
 
 		/* Page indicator */
 		char page_str[16], of_str[16];
@@ -1439,13 +1439,13 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		strcpy(of_str, textext_Get_Text(txtMapOf));
 		snprintf(buf, sizeof(buf), "%s %d %s %d", page_str, cur_talk_paragraph + 1, of_str,
 				 num_talk_paragraphs);
-		lfont_Print_Clipped_Text(buf, r->right - 80, r->bottom - 10, 0, 24);
+		xfont_Print_Clipped_Text(buf, r->right - 80, r->bottom - 10, 0, 24);
 
-		lfont_Disable_FontID_Shadow(0);
+		xfont_Disable_FontID_Shadow(0);
 	}
 
-	if (linpattr_Is_Input_Dirty(input))
-		ldirty_Dirty_Rect(clip_r);
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip_r);
 }
 
 /* ======================================================================
@@ -1489,7 +1489,7 @@ static LandruTaskStepResult map_task_step(void* self) {
 				(train_pilot_medal_status < 4 && pilot_record.train_max_level[shipext_Get_Train_Ship()] >= 4);
 			talk_voice_mood = 'd';
 			map_is_post_mission = 1;
-			lio_Set_Mouse_Position(276, 180);
+			xio_Set_Mouse_Position(276, 180);
 		} else if (scene == SCENE_COMBAT_MAP_A) {
 			if (!shipext_Is_Combat_Ship_Tour()) {
 				combat_pilot_medal_init = 0;
@@ -1499,7 +1499,7 @@ static LandruTaskStepResult map_task_step(void* self) {
 				}
 			}
 			talk_voice_mood = 'b';
-			lio_Set_Mouse_Position(240, 180);
+			xio_Set_Mouse_Position(240, 180);
 		} else if (scene == SCENE_COMBAT_MAP_B) {
 			if (!shipext_Is_Combat_Ship_Tour()) {
 				index = 0;
@@ -1520,13 +1520,13 @@ static LandruTaskStepResult map_task_step(void* self) {
 			map_is_post_mission = 1;
 			if (shipext_Is_Combat_Mission_Success()) {
 				talk_voice_mood = 'd';
-				lio_Set_Mouse_Position(112, 180);
+				xio_Set_Mouse_Position(112, 180);
 			} else {
 				talk_voice_mood = 'h';
-				lio_Set_Mouse_Position(250, 180);
+				xio_Set_Mouse_Position(250, 180);
 			}
 		} else if (scene == SCENE_BRIEF_MAP) {
-			lio_Set_Mouse_Position(240, 180);
+			xio_Set_Mouse_Position(240, 180);
 			last_voiced_paragraph = 0;
 			talk_voice_question = 0;
 			talk_voice_mood = 0;
@@ -1547,10 +1547,10 @@ static LandruTaskStepResult map_task_step(void* self) {
 		/* Load resources */
 		file = shellext_Open_Empire_Resource(map_str[MAP_LFD]);
 		pfile = shellext_Open_Empire_Resource(map_str[MAP_PLAYER_LFD]);
-		lrect_Set_Rect(&r, 0, 0, 320, 200);
+		xrect_Set_Rect(&r, 0, 0, 320, 200);
 
 		if (scene == SCENE_BRIEF_MAP) {
-			the_actor = lactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG], &r, 0, 0, 50);
+			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG], &r, 0, 0, 50);
 			/* Classic FB optimization: brfmap1 paints once at scene start
 			 * and the diff bitmap restores its pixels on dirty-rect refresh,
 			 * so it doesn't need to re-emit. The HD cutscene RT has no
@@ -1559,126 +1559,126 @@ static LandruTaskStepResult map_task_step(void* self) {
 			 * because nothing repaints the underlying background. Re-
 			 * enabling refresh costs one extra delta blit per classic-FB
 			 * tick — negligible — and lets HD render correctly. */
-			/* lactor_Non_Refreshable_Actor(the_actor); */
-			the_actor = lactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG2], &r, 0, 0, 50);
-			the_actor = lactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_PANEL], &r, 0, 0, 20);
-			lactor_Set_Actor_User_Function(the_actor, user_Map_Panel);
+			/* xactor_Non_Refreshable_Actor(the_actor); */
+			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG2], &r, 0, 0, 50);
+			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_PANEL], &r, 0, 0, 20);
+			xactor_Set_Actor_User_Function(the_actor, user_Map_Panel);
 			the_actor->id = 0;
-			the_actor = lactanim_Res_Anim_Actor(map_str[MAP_PANEL_HANDLE], &r, 0, 0, 20);
-			lactor_Set_Actor_User_Function(the_actor, user_Map_Panel);
+			the_actor = xactanim_Res_Anim_Actor(map_str[MAP_PANEL_HANDLE], &r, 0, 0, 20);
+			xactor_Set_Actor_User_Function(the_actor, user_Map_Panel);
 			the_actor->id = 1;
-			cmbticons = lactanim_Res_Anim_Actor(map_str[MAP_BRIEF_BUTTONS], &r, 0, 12, 0);
+			cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BRIEF_BUTTONS], &r, 0, 12, 0);
 		} else if (scene == SCENE_TRAIN_MAP) {
-			the_actor = lactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_OVERLAY], &r, 0, 0, 0);
-			lactor_Set_Actor_Draw_Function(the_actor, draw_Map_Text);
+			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_OVERLAY], &r, 0, 0, 0);
+			xactor_Set_Actor_Draw_Function(the_actor, draw_Map_Text);
 			the_actor->id = 1;
-			the_actor = lactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_TEXT], &r, 0, 0, 0);
-			lactor_Non_Refreshable_Actor(the_actor);
-			cmbticons = lactanim_Res_Anim_Actor(map_str[MAP_BUTTON_ICONS], &r, 0, 0, 0);
-			title_actor = lactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_TITLE], &r, 0, 0, 0);
-			lactor_Set_Actor_Time(title_actor, 0, 0);
+			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_TEXT], &r, 0, 0, 0);
+			xactor_Non_Refreshable_Actor(the_actor);
+			cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BUTTON_ICONS], &r, 0, 0, 0);
+			title_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_TITLE], &r, 0, 0, 0);
+			xactor_Set_Actor_Time(title_actor, 0, 0);
 		} else {
-			the_actor = lactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_TEXT], &r, 0, 0, 0);
-			lactor_Set_Actor_Draw_Function(the_actor, draw_Map_Text);
+			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_TEXT], &r, 0, 0, 0);
+			xactor_Set_Actor_Draw_Function(the_actor, draw_Map_Text);
 			the_actor->id = 1;
-			the_actor = lactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_BG], &r, 0, 0, 0);
-			lactor_Non_Refreshable_Actor(the_actor);
-			cmbticons = lactanim_Res_Anim_Actor(map_str[MAP_BUTTON_ICONS], &r, 0, 0, 0);
-			title_actor = lactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_TITLE], &r, 0, 0, 0);
-			lactor_Set_Actor_Time(title_actor, 0, 0);
+			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_BG], &r, 0, 0, 0);
+			xactor_Non_Refreshable_Actor(the_actor);
+			cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BUTTON_ICONS], &r, 0, 0, 0);
+			title_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_TITLE], &r, 0, 0, 0);
+			xactor_Set_Actor_Time(title_actor, 0, 0);
 		}
 
-		lactor_Set_Actor_Time(cmbticons, -1, -1);
-		parent = linput_Alloc_Input(NULL, &r, 0, 0);
+		xactor_Set_Actor_Time(cmbticons, -1, -1);
+		parent = xinput_Alloc_Input(NULL, &r, 0, 0);
 		index = (scene == SCENE_BRIEF_MAP) ? 6 : 0;
 		max_paragraph_size = 10;
 
 		/* Create buttons (not for training scene) */
 		if (scene != SCENE_TRAIN_MAP) {
 			/* Stop */
-			the_input = (Input*)lbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index], 0, iuser_Map, NULL, 0);
-			linpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-			linpattr_Set_Input_Draw_Function(the_input, idraw_Map);
-			linpattr_Refreshable_Input(the_input);
+			the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index], 0, iuser_Map, NULL, 0);
+			xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
+			xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+			xinpattr_Refreshable_Input(the_input);
 			the_input->mouseUsage = allInput;
 			stop_input = the_input;
 
 			/* Play */
 			the_input =
-				(Input*)lbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 1], 0, iuser_Map, NULL, 1);
-			linpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-			linpattr_Set_Input_Draw_Function(the_input, idraw_Map);
-			linpattr_Refreshable_Input(the_input);
+				(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 1], 0, iuser_Map, NULL, 1);
+			xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
+			xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+			xinpattr_Refreshable_Input(the_input);
 			the_input->mouseUsage = allInput;
 			play_input = the_input;
 
 			/* Skip */
 			the_input =
-				(Input*)lbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 2], 0, iuser_Map, NULL, 2);
-			linpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-			linpattr_Set_Input_Draw_Function(the_input, idraw_Map);
-			linpattr_Refreshable_Input(the_input);
+				(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 2], 0, iuser_Map, NULL, 2);
+			xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
+			xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+			xinpattr_Refreshable_Input(the_input);
 			the_input->mouseUsage = allInput;
 		}
 
 		/* Exit (always present) */
-		the_input = (Input*)lbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 3], 0, iuser_Map, NULL, 5);
-		linpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-		linpattr_Set_Input_Draw_Function(the_input, idraw_Map);
-		linpattr_Refreshable_Input(the_input);
+		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 3], 0, iuser_Map, NULL, 5);
+		xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
+		xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+		xinpattr_Refreshable_Input(the_input);
 		the_input->mouseUsage = allInput;
 
 		/* Combat: Enter Mission + ViewOfficer/ViewPriest buttons */
 		if (scene == SCENE_COMBAT_MAP_A || scene == SCENE_COMBAT_MAP_B) {
 			if (scene == SCENE_COMBAT_MAP_A || !shipext_Get_Mission_Officer()) {
 				the_input =
-					(Input*)lbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 4], 0, iuser_Map, NULL, 3);
-				linpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-				linpattr_Set_Input_Draw_Function(the_input, idraw_Map);
-				linpattr_Refreshable_Input(the_input);
+					(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 4], 0, iuser_Map, NULL, 3);
+				xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
+				xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+				xinpattr_Refreshable_Input(the_input);
 				the_input->mouseUsage = allInput;
 			}
 			the_input =
-				(Input*)lbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 5], 0, iuser_Map, NULL, 4);
-			linpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-			linpattr_Set_Input_Draw_Function(the_input, idraw_Map);
-			linpattr_Refreshable_Input(the_input);
+				(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 5], 0, iuser_Map, NULL, 4);
+			xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
+			xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+			xinpattr_Refreshable_Input(the_input);
 			the_input->mouseUsage = allInput;
 		}
 
 		/* Map + talk display areas */
 		if (scene == SCENE_BRIEF_MAP)
-			lrect_Set_Rect(&r, 13, 18, 307, 167);
+			xrect_Set_Rect(&r, 13, 18, 307, 167);
 		else
-			lrect_Set_Rect(&r, 13, 6, 307, 155);
+			xrect_Set_Rect(&r, 13, 6, 307, 155);
 
-		map_input = linput_Alloc_Input(parent, &r, 0, 0);
-		talk_input = linput_Alloc_Input(parent, &r, 0, 0);
-		linpattr_Set_Input_Draw_Function(talk_input, idraw_Talk);
+		map_input = xinput_Alloc_Input(parent, &r, 0, 0);
+		talk_input = xinput_Alloc_Input(parent, &r, 0, 0);
+		xinpattr_Set_Input_Draw_Function(talk_input, idraw_Talk);
 
 		/* Palette setup */
 		if (scene == SCENE_COMBAT_MAP_A) {
-			lpal_Set_Dest_Pal_Color(1, 255, 6, 6, 6);
-			lpal_Dest_To_Screen_Palette(1, 1, 255);
+			xpal_Set_Dest_Pal_Color(1, 255, 6, 6, 6);
+			xpal_Dest_To_Screen_Palette(1, 1, 255);
 		}
-		lpal_Set_Dest_Palette(scene_head->def_palette);
-		the_palette = lpal_Res_Palette("range");
-		lpal_Set_Dest_Palette(the_palette);
-		the_palette = lpal_Res_Palette((scene == SCENE_COMBAT_MAP_A) ? map_str[MAP_COMBAT_PAL]
+		xpal_Set_Dest_Palette(scene_head->def_palette);
+		the_palette = xpal_Res_Palette("range");
+		xpal_Set_Dest_Palette(the_palette);
+		the_palette = xpal_Res_Palette((scene == SCENE_COMBAT_MAP_A) ? map_str[MAP_COMBAT_PAL]
 																	 : map_str[MAP_BRIEF_PAL]);
-		lpal_Set_Dest_Palette(the_palette);
+		xpal_Set_Dest_Palette(the_palette);
 
 		if (scene == SCENE_COMBAT_MAP_A)
-			lfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_PAL_TO_PAL, 1, 0, 0);
+			xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_PAL_TO_PAL, 1, 0, 0);
 		else
-			lfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
+			xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
 
-		lres_Close_Resource(pfile);
-		lres_Close_Resource(file);
+		xres_Close_Resource(pfile);
+		xres_Close_Resource(file);
 
 		/* Init talk mode */
 		if (scene == SCENE_COMBAT_MAP_B || scene == SCENE_TRAIN_MAP) {
-			linpattr_Hide_Input(map_input);
+			xinpattr_Hide_Input(map_input);
 			if (shipext_Get_Mission_Officer() == 2) {
 				next_mode = 2;
 				talk_voice_officer = 'p';
@@ -1694,7 +1694,7 @@ static LandruTaskStepResult map_task_step(void* self) {
 					next_mode = 2;
 			}
 		} else {
-			linpattr_Hide_Input(talk_input);
+			xinpattr_Hide_Input(talk_input);
 			talk_mode = 0;
 			last_voiced_paragraph = 0;
 			talk_voice_officer = 'i';
@@ -1707,13 +1707,13 @@ static LandruTaskStepResult map_task_step(void* self) {
 		Set_VR_Talk_To_Text(talk_mode == 2 ? 1 : 0);
 
 		/* Push the modal view task */
-		lview_Set_View_Update_Function(end_View);
-		lviewadd_Clear_View();
-		lview_Disable_All_View_Erase();
+		xview_Set_View_Update_Function(end_View);
+		xviewadd_Clear_View();
+		xview_Disable_All_View_Erase();
 		Set_Voice_Species_Mission();
 		talk_Alloc_Speech_Sound();
 		talk_paragraph_timer = 0x7FFFFFFF;
-		lviewadd_Push_Handle_View_Task();
+		xviewadd_Push_Handle_View_Task();
 
 		mt->phase = MAP_PHASE_CLEANUP;
 		return LANDRU_TASK_STEP_CONTINUE;
@@ -1723,11 +1723,11 @@ cleanup:
 	/* CLEANUP — view popped */
 	talk_Free_Speech_Sound();
 	player_Free_Brief_Display();
-	lview_Enable_All_View_Erase();
-	lview_Clear_View_Update_Function();
+	xview_Enable_All_View_Erase();
+	xview_Clear_View_Update_Function();
 
-	if (lcursor_Is_Cursor_Visible())
-		lcursor_Hide_Cursor();
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
 
 	return LANDRU_TASK_STEP_DONE;
 }
