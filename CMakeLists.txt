@@ -51,6 +51,8 @@ set(IMUSE_ENABLE_FM4_OPL3 ${ENABLE_FM4_OPL3})
 option(ENABLE_NUKED_SC55 "Enable Nuked SC-55 MIDI backend" ON)
 set(IMUSE_ENABLE_NUKED_SC55 ${ENABLE_NUKED_SC55})
 
+set(IMUSE_ENABLE_MT32 OFF)
+
 # Enable GPU debug labels by default outside optimized builds.
 if (CMAKE_BUILD_TYPE STREQUAL "Release" OR
     CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
@@ -71,6 +73,10 @@ if(NOT MSVC)
     target_compile_options(landru PRIVATE -fno-strict-aliasing)
 endif()
 
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/imuse/CMakeLists.txt")
+    message(FATAL_ERROR
+        "The iMUSE submodule is not initialized. Run git submodule update --init --recursive.")
+endif()
 add_subdirectory(src/imuse)
 tie_enable_warnings(imuse)
 if(NOT MSVC)
@@ -435,7 +441,7 @@ if(NOT MSVC)
         PROPERTIES COMPILE_OPTIONS "-fno-strict-aliasing")
 endif()
 
-target_link_libraries(tie_core PUBLIC landru::landru imuse PRIVATE tie_formats)
+target_link_libraries(tie_core PUBLIC landru::landru imuse::imuse PRIVATE tie_formats)
 tie_enable_warnings(tie_core)
 
 # Aeron loads all compiled shaders from one executable-relative directory.

@@ -276,6 +276,10 @@ stage_licenses() {
 
     mkdir -p "${license_dir}"
     cp "${repo_root}/src/landru/LICENSE" "${license_dir}/Landru-GPL-3.0.txt"
+    cp "${repo_root}/src/imuse/LICENSE" "${license_dir}/iMUSE-GPL-3.0.txt"
+    cp "${repo_root}/src/imuse/third_party/nuked-opl3-fast/LICENSE" \
+        "${license_dir}/Nuked-OPL3-LGPL-2.1.txt"
+    cp "${repo_root}/src/imuse/third_party/nuked-sc55/LICENSE" "${license_dir}/Nuked-SC55.txt"
     cp "${source_root}/SDL-${sdl_version}/LICENSE.txt" "${license_dir}/SDL3.txt"
     cp "${source_root}/zstd-${zstd_version}/LICENSE" "${license_dir}/zstd.txt"
     cp "${source_root}/FFmpeg-${ffmpeg_version}/COPYING.LGPLv2.1" \

@@ -284,6 +284,12 @@ RUN mkdir -p /build/package/tie-windows-x86_64/licenses \
         /build/package/tie-windows-x86_64/README.md \
     && cp /src/src/landru/LICENSE \
         /build/package/tie-windows-x86_64/licenses/Landru-GPL-3.0.txt \
+    && cp /src/src/imuse/LICENSE \
+        /build/package/tie-windows-x86_64/licenses/iMUSE-GPL-3.0.txt \
+    && cp /src/src/imuse/third_party/nuked-opl3-fast/LICENSE \
+        /build/package/tie-windows-x86_64/licenses/Nuked-OPL3-LGPL-2.1.txt \
+    && cp /src/src/imuse/third_party/nuked-sc55/LICENSE \
+        /build/package/tie-windows-x86_64/licenses/Nuked-SC55.txt \
     && cp /opt/tie-licenses/SDL3.txt \
         /build/package/tie-windows-x86_64/licenses/SDL3.txt \
     && cp /opt/tie-licenses/zstd.txt \

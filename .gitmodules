@@ -1,9 +1,9 @@
 [submodule "aeron"]
 	path = aeron
 	url = https://github.com/elyosh/aeron
-[submodule "src/third_party/nuked-sc55"]
-	path = src/third_party/nuked-sc55
-	url = https://github.com/elyosh/Nuked-SC55.git
 [submodule "src/landru"]
 	path = src/landru
 	url = https://github.com/elyosh/landru.git
+[submodule "src/imuse"]
+	path = src/imuse
+	url = https://github.com/elyosh/imuse.git
