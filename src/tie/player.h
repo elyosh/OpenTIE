@@ -119,7 +119,7 @@ int player_Toggle_Map_Play(void);
 
 /* Init / Free */
 void player_Init_Brief_Display(Input* input, void* poly);
-void player_Init_Brief_For_Talk(void);
+EBriefStruct* player_Init_Brief_For_Talk(void);
 void player_Free_Brief_Display(void);
 void player_Init_Display_Map(void);
 void player_Free_Display_Map(void);
@@ -128,10 +128,10 @@ void player_Load_Display_Map(void);
 /* Page commands */
 void player_Clear_Page_Commands(void);
 void player_Rewind_Page(void);
-void player_Seek_Page(int16_t page, int32_t time);
+int16_t player_Seek_Page(int16_t time, int16_t flag);
 void player_Seek_Page_Section(void);
 void player_Step_Page(int16_t flag);
-void player_Reseek_Page(void);
+int16_t player_Reseek_Page(void);
 
 /* Map display */
 void player_Move_Display_Map(void);
@@ -162,7 +162,6 @@ void player_Stars_To_Back(int16_t screen_y);
 /* XINPUT callbacks */
 int16_t player_iupdate_Map(Input* input, Rect* bounds, Rect* clip, int16_t key, int16_t left, int16_t right,
 						   int16_t mouse_x, int16_t mouse_y);
-void player_iuser_Map(Input* input, int32_t time);
 void player_idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh);
 
 #ifdef __cplusplus

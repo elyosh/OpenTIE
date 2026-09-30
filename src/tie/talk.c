@@ -1762,8 +1762,7 @@ ResFile* talk_OpenScene(SceneHeadStruct* scene_head) {
 	talk_input->id = 0;
 
 	/* Initialize talk state */
-	player_Init_Brief_For_Talk();
-	talk_brief = player_Fetch_Brief();
+	talk_brief = player_Init_Brief_For_Talk();
 	talk_fgroup = player_Fetch_FGroup();
 
 	num_talk_questions = 0;

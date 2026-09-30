@@ -62,6 +62,8 @@ void TieRecoveredBrief_DecodePage(EBriefPage* dst, const uint8_t* src) {
 /* ---- Page command opcodes and parameter counts ---- */
 
 /* Parameter count per opcode (indexed by BriefCmd) */
+// GLOBAL: TIE95 0xD1484
+// GLOBAL: TIE98 0x4E9490
 static const int16_t map_cmd_size[BCMD_END_PAGE + 2] = {
 	/*  0 */ 0,
 	/*  1 SEEK          */ 0,
@@ -121,15 +123,19 @@ static EFArrayStruct fgroup;
 // GLOBAL: TIE98 0x5886A8
 static EBriefStruct brief;
 
-/* Map display state */
-static int16_t map_playing; /* 1 = animation running */
-// GLOBAL: TIE95 0xF6EA2
-static int16_t selected_fg_idx;
-static int16_t map_center_x, map_center_y;
-static int16_t map_target_x, map_target_y;
-static int16_t map_scale_x, map_scale_y;
-static int16_t map_scale_target_x, map_scale_target_y;
-static Rect map_src_rect; /* map area rect (0,0,292,147) */
+typedef struct PlayerMapState {
+	int16_t playing;
+	int16_t selected_fg_idx;
+	int16_t center_x, center_y;
+	int16_t target_x, target_y;
+	int16_t scale_x, scale_y;
+	int16_t scale_target_x, scale_target_y;
+	Rect source_rect;
+} PlayerMapState;
+
+// GLOBAL: TIE95 0xF6EA0
+// GLOBAL: TIE98 0x584DD0
+static PlayerMapState map_state;
 
 /* Star background */
 static Actor* stars_actor;
@@ -182,21 +188,10 @@ static int16_t side_to_color(int16_t side) {
 	}
 }
 
-/* Clear the para_on / target_on / text_on arrays */
-static void clear_brief_state(void) {
-	int16_t i;
-	for (i = 0; i < 2; i++)
-		brief.para_on[i] = 0;
-	for (i = 0; i < 8; i++)
-		brief.target_on[i] = 0;
-	for (i = 0; i < 8; i++)
-		brief.text_on[i] = 0;
-}
-
 /* ---- Forward declarations for XINPUT callbacks ---- */
 static int16_t iupdate_Map(Input* inp, Rect* bounds, Rect* clip, int16_t key, uint8_t left, uint8_t right,
 						   int16_t mouse_x, int16_t mouse_y);
-static void iuser_Map(Input* inp, int32_t time);
+static void player_iuser_Map(Input* inp, int32_t time);
 static void idraw_Map(Input* inp, Rect* bounds, Rect* clip, int16_t refresh);
 
 /* ================================================================
@@ -262,11 +257,11 @@ int16_t player_Is_Side_Enemy(int16_t side) {
 }
 
 // FUNCTION: TIE95 0x7E838
-int16_t player_Is_Map_Playing(void) { return map_playing; }
+int16_t player_Is_Map_Playing(void) { return map_state.playing; }
 
 // FUNCTION: TIE95 0x7E840
 int player_Toggle_Map_Play(void) {
-	map_playing = (map_playing == 0) ? 1 : 0;
+	map_state.playing = (map_state.playing == 0) ? 1 : 0;
 	return 1;
 }
 
@@ -295,12 +290,12 @@ int16_t player_Move_To_Value(int16_t current, int16_t target, int16_t step) {
 
 // FUNCTION: TIE95 0x7E990
 void player_Map_To_Screen_Pos(Rect* view_rect, int16_t map_x, int16_t map_y, int16_t* out_x, int16_t* out_y) {
-	int32_t sx = (int32_t)(map_x - map_center_x) * map_scale_x;
+	int32_t sx = (int32_t)(map_x - map_state.center_x) * map_state.scale_x;
 	int32_t sy;
 
 	*out_x = sdiv256(sx) + view_rect->left + ((view_rect->right - view_rect->left) >> 1);
 
-	sy = (int32_t)(map_y - map_center_y) * map_scale_y;
+	sy = (int32_t)(map_y - map_state.center_y) * map_state.scale_y;
 	*out_y = sdiv256(sy) + view_rect->top + ((view_rect->bottom - view_rect->top) >> 1);
 }
 
@@ -309,8 +304,8 @@ void player_Screen_To_Map_Pos(Rect* view_rect, int16_t screen_x, int16_t screen_
 	int16_t view_cx = view_rect->left + ((view_rect->right - view_rect->left) >> 1);
 	int16_t view_cy = view_rect->top + ((view_rect->bottom - view_rect->top) >> 1);
 
-	*out_x = map_center_x + (int16_t)((int16_t)(screen_x - view_cx) << 8) / map_scale_x;
-	*out_y = map_center_y + (int16_t)((int16_t)(screen_y - view_cy) << 8) / map_scale_y;
+	*out_x = map_state.center_x + (int16_t)((int16_t)(screen_x - view_cx) << 8) / map_state.scale_x;
+	*out_y = map_state.center_y + (int16_t)((int16_t)(screen_y - view_cy) << 8) / map_state.scale_y;
 }
 
 int16_t player_Find_Ship_On_Screen(Rect* bounds, int16_t screen_x, int16_t screen_y) {
@@ -329,10 +324,10 @@ int16_t player_Find_Ship_On_Screen(Rect* bounds, int16_t screen_x, int16_t scree
 		if (!fgroup.fg[i].way_used[14])
 			continue;
 
-		sx = (int32_t)(fgroup.fg[i].way_x[14] - map_center_x) * map_scale_x;
+		sx = (int32_t)(fgroup.fg[i].way_x[14] - map_state.center_x) * map_state.scale_x;
 		scr_x = sdiv256(sx) + bounds->left + ((bounds->right - bounds->left) >> 1);
 
-		sy = (int32_t)(fgroup.fg[i].way_y[14] - map_center_y) * map_scale_y;
+		sy = (int32_t)(fgroup.fg[i].way_y[14] - map_state.center_y) * map_state.scale_y;
 		scr_y = sdiv256(sy) + bounds->top + ((bounds->bottom - bounds->top) >> 1);
 
 		dx = screen_x - scr_x;
@@ -355,7 +350,7 @@ int16_t player_Find_Ship_On_Screen(Rect* bounds, int16_t screen_x, int16_t scree
 	if (min_dist == 999)
 		return 0;
 
-	selected_fg_idx = found_fg;
+	map_state.selected_fg_idx = found_fg;
 	return 1;
 }
 
@@ -445,25 +440,25 @@ void player_Step_Page(int16_t flag) {
 			}
 			case BCMD_MOVE:
 				if (cmd_time && !flag) {
-					map_target_x = params[0];
-					map_target_y = params[1];
+					map_state.target_x = params[0];
+					map_state.target_y = params[1];
 				} else {
-					map_center_x = params[0];
-					map_center_y = params[1];
-					map_target_x = params[0];
-					map_target_y = params[1];
+					map_state.center_x = params[0];
+					map_state.center_y = params[1];
+					map_state.target_x = params[0];
+					map_state.target_y = params[1];
 				}
 				brief.move_on = 1;
 				break;
 			case BCMD_ZOOM:
 				if (cmd_time && !flag) {
-					map_scale_target_x = params[0];
-					map_scale_target_y = params[1];
+					map_state.scale_target_x = params[0];
+					map_state.scale_target_y = params[1];
 				} else {
-					map_scale_x = params[0];
-					map_scale_y = params[1];
-					map_scale_target_x = params[0];
-					map_scale_target_y = params[1];
+					map_state.scale_x = params[0];
+					map_state.scale_y = params[1];
+					map_state.scale_target_x = params[0];
+					map_state.scale_target_y = params[1];
 				}
 				brief.scale_on = 1;
 				break;
@@ -546,7 +541,8 @@ void player_Step_Page(int16_t flag) {
 	brief.page.time++;
 }
 
-// FUNCTION: TIE95 0x7E1E0
+// FUNCTION: TIE95 0x7E18C
+// FUNCTION: TIE98 0x46A160
 void player_Clear_Page_Commands(void) {
 	brief.page.len = 200;
 	brief.page.time = 0;
@@ -555,215 +551,59 @@ void player_Clear_Page_Commands(void) {
 	brief.page.tile = 0;
 	brief.page.commands[0] = 9999;
 	brief.page.commands[1] = BCMD_END_PAGE;
-
-	map_center_x = 0;
-	map_center_y = 0;
-	map_target_x = 0;
-	map_target_y = 0;
-	map_scale_x = 16;
-	map_scale_y = 16;
-	map_scale_target_x = 16;
-	map_scale_target_y = 16;
-
-	clear_brief_state();
-
-	brief.page.time = 0;
-	brief.page.index = 0;
-	player_Step_Page(1);
+	player_Rewind_Page();
 }
 
+// FUNCTION: TIE95 0x7E1E0
+// FUNCTION: TIE98 0x46A1A0
 void player_Rewind_Page(void) {
 	int16_t i;
 
-	int16_t cmd_index;
-	int16_t cmd_time;
-	int16_t saved_index;
+	map_state.center_x = 0;
+	map_state.center_y = 0;
+	map_state.target_x = 0;
+	map_state.target_y = 0;
+	map_state.scale_x = 16;
+	map_state.scale_y = 16;
+	map_state.scale_target_x = 16;
+	map_state.scale_target_y = 16;
 
-	int16_t params[4];
-
-	map_target_x = 0;
-	map_target_y = 0;
-	map_scale_x = 16;
-	map_scale_y = 16;
-	map_scale_target_x = 16;
-	map_scale_target_y = 16;
-	map_center_x = 0;
-	map_center_y = 0;
-
-	clear_brief_state();
-
-	cmd_index = 0;
-	brief.page.index = 0;
-	cmd_time = brief.page.commands[0];
-	brief.page.time = 0;
-	saved_index = 0;
-
-	brief.para_off = 0;
-	brief.target_off = 0;
-	brief.text_off = 0;
-	brief.move_on = 0;
-	brief.scale_on = 0;
-	brief.seek_on = 0;
-
-	while (cmd_time <= brief.page.time) {
-		int16_t opcode;
-
-		saved_index = cmd_index;
-		cmd_time = brief.page.commands[cmd_index];
-		opcode = brief.page.commands[cmd_index + 1];
-		cmd_index += 2;
-
-		for (i = 0; i < map_cmd_size[opcode]; i++)
-			params[i] = brief.page.commands[cmd_index++];
-
-		if (cmd_time != brief.page.time)
-			continue;
-
-		switch (opcode) {
-			case BCMD_SEEK:
-				brief.seek_on = 1;
-				break;
-			case BCMD_CLEAR_PARA:
-				for (i = 0; i < 2; i++)
-					brief.para_on[i] = 0;
-				brief.para_off = 1;
-				break;
-			case BCMD_SHOW_PARA0:
-			case BCMD_SHOW_PARA1: {
-				int16_t slot = opcode - BCMD_SHOW_PARA0;
-				brief.para_on[slot] = 1;
-				brief.para_id[slot] = params[0];
-				/* Retail PLAYER_Step_Page case 5 stamps the slot-1
-				 * paragraph id into talk_voice_question. The briefing
-				 * map's end-view callback watches for that to change
-				 * and fires voice/<sp>m<m>/...i<id>.voc each time. */
-				if (slot == 1)
-					talk_voice_question = params[0];
-				break;
-			}
-			case BCMD_MOVE:
-				map_center_x = params[0];
-				map_center_y = params[1];
-				map_target_x = params[0];
-				map_target_y = params[1];
-				brief.move_on = 1;
-				break;
-			case BCMD_ZOOM:
-				map_scale_x = params[0];
-				map_scale_y = params[1];
-				map_scale_target_x = params[0];
-				map_scale_target_y = params[1];
-				brief.scale_on = 1;
-				break;
-			case BCMD_CLEAR_TARGET:
-				for (i = 0; i < 8; i++)
-					brief.target_on[i] = 0;
-				brief.target_off = 1;
-				break;
-			case BCMD_SHOW_TARGET0:
-			case BCMD_SHOW_TARGET0 + 1:
-			case BCMD_SHOW_TARGET0 + 2:
-			case BCMD_SHOW_TARGET0 + 3:
-			case BCMD_SHOW_TARGET0 + 4:
-			case BCMD_SHOW_TARGET0 + 5:
-			case BCMD_SHOW_TARGET0 + 6:
-			case BCMD_SHOW_TARGET7: {
-				int16_t slot = opcode - BCMD_SHOW_TARGET0;
-				brief.target_on[slot] = 1;
-				brief.target_state[slot] = 80;
-				brief.target_id[slot] = params[0];
-				break;
-			}
-			case BCMD_CLEAR_TEXT:
-				for (i = 0; i < 8; i++)
-					brief.text_on[i] = 0;
-				brief.text_off = 1;
-				break;
-			case BCMD_SHOW_TEXT0:
-			case BCMD_SHOW_TEXT0 + 1:
-			case BCMD_SHOW_TEXT0 + 2:
-			case BCMD_SHOW_TEXT0 + 3:
-			case BCMD_SHOW_TEXT0 + 4:
-			case BCMD_SHOW_TEXT0 + 5:
-			case BCMD_SHOW_TEXT0 + 6:
-			case BCMD_SHOW_TEXT7: {
-				int16_t slot = opcode - BCMD_SHOW_TEXT0;
-				brief.text_on[slot] = 1;
-				brief.text_state[slot] = 80;
-				brief.text_id[slot] = params[0];
-				brief.text_x[slot] = params[1];
-				brief.text_y[slot] = params[2];
-				brief.text_color[slot] = params[3];
-				break;
-			}
-			default:
-				break;
-		}
-	}
-
-	brief.page.index = saved_index;
-	brief.page.time++;
-}
-
-void player_Reseek_Page(void) {
-	int16_t time = brief.page.time;
-	int16_t target_time;
-
-	if (!time)
-		time = 1;
-
-	map_target_x = 0;
-	map_target_y = 0;
-	map_scale_x = 16;
-	map_scale_y = 16;
-	map_scale_target_x = 16;
-	map_scale_target_y = 16;
-	map_center_x = 0;
-	map_center_y = 0;
-
-	clear_brief_state();
+	for (i = 0; i < 2; ++i)
+		brief.para_on[i] = 0;
+	for (i = 0; i < 8; ++i)
+		brief.target_on[i] = 0;
+	for (i = 0; i < 8; ++i)
+		brief.text_on[i] = 0;
 
 	brief.page.time = 0;
 	brief.page.index = 0;
 	player_Step_Page(1);
-
-	target_time = time - 1;
-	if (target_time != brief.page.time - 1) {
-		if (target_time < brief.page.time)
-			player_Rewind_Page();
-		while (target_time >= brief.page.time)
-			player_Step_Page(1);
-	}
 }
 
-void player_Seek_Page(int16_t page, int32_t time) {
-	int16_t target_page = page;
-	int16_t seek_time = (int16_t)time;
-
-	if (target_page == brief.page.time - 1)
-		return;
-
-	if (target_page < brief.page.time) {
-		map_target_x = 0;
-		map_target_y = 0;
-		map_scale_x = 16;
-		map_scale_y = 16;
-		map_scale_target_x = 16;
-		map_scale_target_y = 16;
-		map_center_x = 0;
-		map_center_y = 0;
-
-		clear_brief_state();
-
-		brief.page.time = 0;
-		brief.page.index = 0;
-		player_Step_Page(1);
-	}
-
-	while (target_page >= brief.page.time)
-		player_Step_Page(seek_time ? 1 : 0);
+// FUNCTION: TIE95 0x7E810
+// FUNCTION: TIE98 0x46A7A0
+int16_t player_Reseek_Page(void) {
+	int16_t time = brief.page.time;
+	if (!time)
+		time = 1;
+	player_Rewind_Page();
+	return player_Seek_Page((int16_t)(time - 1), 1);
 }
 
+// FUNCTION: TIE95 0x7E29C
+// FUNCTION: TIE98 0x46A230
+int16_t player_Seek_Page(int16_t time, int16_t flag) {
+	if (time == brief.page.time - 1)
+		return 0;
+	if (time < brief.page.time)
+		player_Rewind_Page();
+	while (time >= brief.page.time)
+		player_Step_Page(flag);
+	return 1;
+}
+
+// FUNCTION: TIE95 0x7E2E0
+// FUNCTION: TIE98 0x46A280
 void player_Seek_Page_Section(void) {
 	int16_t start_time = brief.page.time;
 	int16_t section_done = 0;
@@ -775,20 +615,7 @@ void player_Seek_Page_Section(void) {
 	int16_t time_val;
 	int16_t next_cmd;
 
-	map_center_x = 0;
-	map_center_y = 0;
-	map_target_x = 0;
-	map_target_y = 0;
-	map_scale_x = 16;
-	map_scale_y = 16;
-	map_scale_target_x = 16;
-	map_scale_target_y = 16;
-
-	clear_brief_state();
-
-	brief.page.time = 0;
-	brief.page.index = 0;
-	player_Step_Page(1);
+	player_Rewind_Page();
 
 	next_opcode = 0;
 	while (!section_done) {
@@ -826,41 +653,22 @@ void player_Seek_Page_Section(void) {
 		next_cmd = brief.page.commands[brief.page.index + 1];
 	}
 
-	if (next_cmd == BCMD_END_PAGE) {
-		/* End of page — reset to beginning */
-		map_target_x = 0;
-		map_target_y = 0;
-		map_scale_x = 16;
-		map_scale_y = 16;
-		map_scale_target_x = 16;
-		map_scale_target_y = 16;
-		map_center_x = 0;
-		map_center_y = 0;
-
-		clear_brief_state();
-
-		brief.page.time = 0;
-		brief.page.index = 0;
-		player_Step_Page(1);
-	} else {
-		int16_t target_page = time_val;
-		if (target_page != brief.page.time - 1) {
-			if (target_page < brief.page.time)
-				player_Rewind_Page();
-			while (target_page >= brief.page.time)
-				player_Step_Page(0);
-		}
-	}
+	if (next_cmd == BCMD_END_PAGE)
+		player_Rewind_Page();
+	else
+		player_Seek_Page(time_val, 0);
 }
 
 /* ================================================================
  * Map display movement / animation
  * ================================================================ */
 
+// FUNCTION: TIE95 0x7EAC4
+// FUNCTION: TIE98 0x46AA10
 void player_Move_Display_Map(void) {
 	/* Compute scale step speed */
-	int16_t scale_dx = abs16(map_scale_x - map_scale_target_x);
-	int16_t scale_dy = abs16(map_scale_y - map_scale_target_y);
+	int16_t scale_dx = (int16_t)abs(map_state.scale_x - map_state.scale_target_x);
+	int16_t scale_dy = (int16_t)abs(map_state.scale_y - map_state.scale_target_y);
 	int16_t scale_speed;
 	int16_t pixels_per_unit;
 	int16_t move_dx;
@@ -875,17 +683,17 @@ void player_Move_Display_Map(void) {
 	scale_speed = 2;
 	if (scale_dx >= 12)
 		scale_speed = 8;
-	if (map_scale_x < 10)
+	if (map_state.scale_x < 10)
 		scale_speed = 1;
 
-	map_scale_x = player_Move_To_Value(map_scale_x, map_scale_target_x, scale_speed);
-	map_scale_y = player_Move_To_Value(map_scale_y, map_scale_target_y, scale_speed);
+	map_state.scale_x = player_Move_To_Value(map_state.scale_x, map_state.scale_target_x, scale_speed);
+	map_state.scale_y = player_Move_To_Value(map_state.scale_y, map_state.scale_target_y, scale_speed);
 
 	/* Compute move step speed */
-	pixels_per_unit = map_scale_x ? (256 / map_scale_x + 1) : 1;
+	pixels_per_unit = map_state.scale_x ? (256 / map_state.scale_x + 1) : 1;
 
-	move_dx = abs16(map_center_x - map_target_x);
-	move_dy = abs16(map_center_y - map_target_y);
+	move_dx = (int16_t)abs(map_state.center_x - map_state.target_x);
+	move_dy = (int16_t)abs(map_state.center_y - map_state.target_y);
 	if (move_dx < move_dy)
 		move_dx = move_dy;
 
@@ -894,8 +702,8 @@ void player_Move_Display_Map(void) {
 	if (move_dist >= 16)
 		move_speed *= 2;
 
-	map_center_x = player_Move_To_Value(map_center_x, map_target_x, move_speed);
-	map_center_y = player_Move_To_Value(map_center_y, map_target_y, move_speed);
+	map_state.center_x = player_Move_To_Value(map_state.center_x, map_state.target_x, move_speed);
+	map_state.center_y = player_Move_To_Value(map_state.center_y, map_state.target_y, move_speed);
 
 	/* Advance target/text animation state */
 
@@ -909,163 +717,13 @@ void player_Move_Display_Map(void) {
 	}
 }
 
+// FUNCTION: TIE95 0x7DA58
+// FUNCTION: TIE98 0x46AB70
 void player_Step_Display_Map(void) {
-	int16_t cmd_index;
-	int16_t cmd_time;
-	int16_t saved_index;
-	int16_t sfx_volume;
-	int16_t i;
-
-	int16_t params[4];
-
-	if (brief.page.len <= brief.page.time) {
-		/* Page ended — reset */
-		map_target_x = 0;
-		map_target_y = 0;
-		map_scale_x = 16;
-		map_scale_y = 16;
-		map_scale_target_x = 16;
-		map_scale_target_y = 16;
-		map_center_x = 0;
-		map_center_y = 0;
-
-		clear_brief_state();
-
-		brief.page.time = 0;
-		brief.page.index = 0;
-		player_Step_Page(1);
-		return;
-	}
-
-	/* Process page commands for current time */
-	cmd_index = brief.page.index;
-	cmd_time = brief.page.commands[cmd_index];
-	saved_index = cmd_index;
-
-	sfx_volume = brief_poly_used ? 48 : 70;
-
-	brief.para_off = 0;
-	brief.target_off = 0;
-	brief.text_off = 0;
-	brief.move_on = 0;
-	brief.scale_on = 0;
-	brief.seek_on = 0;
-
-	while (cmd_time <= brief.page.time) {
-		int16_t opcode;
-
-		saved_index = cmd_index;
-		cmd_time = brief.page.commands[cmd_index];
-		opcode = brief.page.commands[cmd_index + 1];
-		cmd_index += 2;
-
-		for (i = 0; i < map_cmd_size[opcode]; i++)
-			params[i] = brief.page.commands[cmd_index++];
-
-		if (cmd_time != brief.page.time)
-			continue;
-
-		switch (opcode) {
-			case BCMD_SEEK:
-				brief.seek_on = 1;
-				break;
-			case BCMD_CLEAR_PARA:
-				for (i = 0; i < 2; i++)
-					brief.para_on[i] = 0;
-				brief.para_off = 1;
-				break;
-			case BCMD_SHOW_PARA0:
-			case BCMD_SHOW_PARA1: {
-				int16_t slot = opcode - BCMD_SHOW_PARA0;
-				brief.para_on[slot] = 1;
-				brief.para_id[slot] = params[0];
-				/* Retail PLAYER_Step_Page case 5 stamps the slot-1
-				 * paragraph id into talk_voice_question. The briefing
-				 * map's end-view callback watches for that to change
-				 * and fires voice/<sp>m<m>/...i<id>.voc each time. */
-				if (slot == 1)
-					talk_voice_question = params[0];
-				break;
-			}
-			case BCMD_MOVE:
-				if (!cmd_time)
-					map_center_x = params[0], map_center_y = params[1];
-				map_target_x = params[0];
-				map_target_y = params[1];
-				brief.move_on = 1;
-				break;
-			case BCMD_ZOOM:
-				if (!cmd_time)
-					map_scale_x = params[0], map_scale_y = params[1];
-				map_scale_target_x = params[0];
-				map_scale_target_y = params[1];
-				brief.scale_on = 1;
-				break;
-			case BCMD_CLEAR_TARGET:
-				for (i = 0; i < 8; i++)
-					brief.target_on[i] = 0;
-				brief.target_off = 1;
-				break;
-			case BCMD_SHOW_TARGET0:
-			case BCMD_SHOW_TARGET0 + 1:
-			case BCMD_SHOW_TARGET0 + 2:
-			case BCMD_SHOW_TARGET0 + 3:
-			case BCMD_SHOW_TARGET0 + 4:
-			case BCMD_SHOW_TARGET0 + 5:
-			case BCMD_SHOW_TARGET0 + 6:
-			case BCMD_SHOW_TARGET7: {
-				int16_t side = fgroup.fg[params[0]].side;
-				int16_t slot;
-
-				if (side > 2)
-					side = 2;
-				soundext_Play_SFX(side == 1 ? sfxTarget2 : sfxTarget1, sfx_volume);
-				slot = opcode - BCMD_SHOW_TARGET0;
-				brief.target_on[slot] = 1;
-				brief.target_state[slot] = 0;
-				brief.target_id[slot] = params[0];
-				break;
-			}
-			case BCMD_CLEAR_TEXT:
-				for (i = 0; i < 8; i++)
-					brief.text_on[i] = 0;
-				brief.text_off = 1;
-				break;
-			case BCMD_SHOW_TEXT0:
-			case BCMD_SHOW_TEXT0 + 1:
-			case BCMD_SHOW_TEXT0 + 2:
-			case BCMD_SHOW_TEXT0 + 3:
-			case BCMD_SHOW_TEXT0 + 4:
-			case BCMD_SHOW_TEXT0 + 5:
-			case BCMD_SHOW_TEXT0 + 6:
-			case BCMD_SHOW_TEXT7: {
-				char* locked = (char*)xmemhdl_Lock_Handle(brief.text_data[params[0]]);
-				int16_t slot;
-
-				if (locked) {
-					int16_t len = (int16_t)strlen(locked);
-					xmemhdl_Unlock_Handle(brief.text_data[params[0]]);
-					if (len) {
-						soundext_Play_SFX(sfxText, 0);
-						soundext_Fade_SFX(sfxText, 0, 4 * len);
-					}
-				}
-				slot = opcode - BCMD_SHOW_TEXT0;
-				brief.text_on[slot] = 1;
-				brief.text_state[slot] = 0;
-				brief.text_id[slot] = params[0];
-				brief.text_x[slot] = params[1];
-				brief.text_y[slot] = params[2];
-				brief.text_color[slot] = params[3];
-				break;
-			}
-			default:
-				break;
-		}
-	}
-
-	brief.page.index = saved_index;
-	brief.page.time++;
+	if (brief.page.len <= brief.page.time)
+		player_Rewind_Page();
+	else
+		player_Step_Page(0);
 }
 
 // FUNCTION: TIE95 0x7E85C
@@ -1078,7 +736,7 @@ void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
 
 	int16_t found;
 
-	xrect_Copy_Rect(&map_rect, &map_src_rect);
+	xrect_Copy_Rect(&map_rect, &map_state.source_rect);
 
 	for (i = 0; i < fgroup.num_fgs; i++) {
 		int16_t dx;
@@ -1109,7 +767,7 @@ void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
 
 	found = 0;
 	if (min_dist != 999) {
-		selected_fg_idx = closest_fg;
+		map_state.selected_fg_idx = closest_fg;
 		found = 1;
 	}
 	if (found)
@@ -1426,26 +1084,26 @@ void player_Draw_Display_Grid(Rect* clip) {
 	minor_color = 232;
 
 	/* Compute grid origin from map center */
-	col_idx = map_center_x / 256;
-	if (map_center_x > 0 && (map_center_x & 0xFF))
+	col_idx = map_state.center_x / 256;
+	if (map_state.center_x > 0 && (map_state.center_x & 0xFF))
 		col_idx++;
 
-	frac_x = (int16_t)(((uint8_t)(-map_center_x) * map_scale_x) >> 8);
+	frac_x = (int16_t)(((uint8_t)(-map_state.center_x) * map_state.scale_x) >> 8);
 	start_x = clip_rect.left + ((clip_rect.right - clip_rect.left) >> 1) + frac_x;
 	while (start_x > clip_rect.left) {
 		col_idx--;
-		start_x -= map_scale_x;
+		start_x -= map_state.scale_x;
 	}
 
-	row_idx = map_center_y / 256;
-	if (map_center_y > 0 && (map_center_y & 0xFF))
+	row_idx = map_state.center_y / 256;
+	if (map_state.center_y > 0 && (map_state.center_y & 0xFF))
 		row_idx++;
 
-	frac_y = (int16_t)(((uint8_t)(-map_center_y) * map_scale_y) >> 8);
+	frac_y = (int16_t)(((uint8_t)(-map_state.center_y) * map_state.scale_y) >> 8);
 	start_y = clip_rect.top + ((clip_rect.bottom - clip_rect.top) >> 1) + frac_y;
 	while (start_y > clip_rect.top) {
 		row_idx--;
-		start_y -= map_scale_y;
+		start_y -= map_state.scale_y;
 	}
 
 	save_col_idx = col_idx;
@@ -1454,8 +1112,8 @@ void player_Draw_Display_Grid(Rect* clip) {
 	grid_x = start_x;
 
 	/* Minor grid lines (drawn if scale >= 16) */
-	if (map_scale_x >= 16) {
-		int16_t show_minor = (map_scale_x >= 32) ? 1 : 0;
+	if (map_state.scale_x >= 16) {
+		int16_t show_minor = (map_state.scale_x >= 32) ? 1 : 0;
 
 		/* Vertical minor lines */
 		int16_t x = start_x;
@@ -1481,7 +1139,7 @@ void player_Draw_Display_Grid(Rect* clip) {
 					xpaint_Set_Thickness_Duplicate(false);
 				}
 			}
-			x += map_scale_x;
+			x += map_state.scale_x;
 			ci++;
 		}
 
@@ -1499,7 +1157,7 @@ void player_Draw_Display_Grid(Rect* clip) {
 					xpaint_Set_Thickness_Duplicate(false);
 				}
 			}
-			y += map_scale_y;
+			y += map_state.scale_y;
 			ri++;
 		}
 
@@ -1522,7 +1180,7 @@ void player_Draw_Display_Grid(Rect* clip) {
 				xpaint_Set_Thickness_Duplicate(false);
 			}
 		}
-		grid_x += map_scale_x;
+		grid_x += map_state.scale_x;
 		col_idx++;
 	}
 
@@ -1536,7 +1194,7 @@ void player_Draw_Display_Grid(Rect* clip) {
 				xpaint_Set_Thickness_Duplicate(false);
 			}
 		}
-		grid_y += map_scale_y;
+		grid_y += map_state.scale_y;
 		row_idx++;
 	}
 }
@@ -1562,16 +1220,16 @@ void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t targ
 	int16_t anim_size, anim_count, base_color;
 	int16_t i;
 
-	if (map_scale_x < 32)
+	if (map_state.scale_x < 32)
 		species += 88;
 	if (species < 0)
 		return;
 
 	/* Compute screen position */
-	sx = (int32_t)(way_x - map_center_x) * map_scale_x;
+	sx = (int32_t)(way_x - map_state.center_x) * map_state.scale_x;
 	screen_x = sdiv256(sx) + clip->left + ((clip->right - clip->left) >> 1);
 
-	sy = (int32_t)(way_y - map_center_y) * map_scale_y;
+	sy = (int32_t)(way_y - map_state.center_y) * map_state.scale_y;
 	screen_y = sdiv256(sy) + clip->top + ((clip->bottom - clip->top) >> 1);
 
 	xrect_Set_Rect(&r, screen_x - 4, screen_y - 4, screen_x + 5, screen_y + 5);
@@ -1658,7 +1316,7 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 		side = fgroup.fg[fg_idx].side;
 		target_color = side_to_color(side);
 
-		if (map_scale_x < 32)
+		if (map_state.scale_x < 32)
 			species += 88;
 		if (species < 0)
 			continue;
@@ -1735,10 +1393,10 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 			continue;
 
 		text_id = brief.text_id[i];
-		tx = (int16_t)(map_scale_x * (brief.text_x[i] - map_center_x) / 256);
+		tx = (int16_t)(map_state.scale_x * (brief.text_x[i] - map_state.center_x) / 256);
 		screen_x = (dst.right - dst.left) / 2 + dst.left + tx;
 
-		ty = (int16_t)((brief.text_y[i] - map_center_y) * map_scale_y / 256);
+		ty = (int16_t)((brief.text_y[i] - map_state.center_y) * map_state.scale_y / 256);
 		screen_y = dst.top + (dst.bottom - dst.top) / 2 + ty;
 
 		text_ptr = (char*)xmemhdl_Lock_Handle(brief.text_data[text_id]);
@@ -1784,15 +1442,15 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 		species = fgroup.fg[fg].species - 1;
 		icon_idx = side_to_icon(fgroup.fg[fg].side);
 
-		if (map_scale_x < 32)
+		if (map_state.scale_x < 32)
 			species += 88;
 		if (species < 0)
 			continue;
 
-		sx = (int32_t)(way_x - map_center_x) * map_scale_x;
+		sx = (int32_t)(way_x - map_state.center_x) * map_state.scale_x;
 		scr_x = sdiv256(sx) + (dst.right - dst.left) / 2 + dst.left;
 
-		sy = (int32_t)(way_y - map_center_y) * map_scale_y;
+		sy = (int32_t)(way_y - map_state.center_y) * map_state.scale_y;
 		scr_y = sdiv256(sy) + (dst.bottom - dst.top) / 2 + dst.top;
 
 		xactor_Set_Actor_State(icon_actors[icon_idx], species, 0);
@@ -1822,7 +1480,7 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 		/* Top paragraph area */
 		Rect src;
 
-		xrect_Copy_Rect(&dst, &map_src_rect);
+		xrect_Copy_Rect(&dst, &map_state.source_rect);
 		xrect_Offset_Rect(&dst, view_rect->left, view_rect->top);
 		dst.bottom = dst.top + 12;
 		if (shellext_Get_Cur_Scene() != SCENE_COMBAT_MAP_A)
@@ -1832,7 +1490,7 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 
 		/* Bottom status area */
 
-		xrect_Copy_Rect(&src, &map_src_rect);
+		xrect_Copy_Rect(&src, &map_state.source_rect);
 		xrect_Offset_Rect(&src, view_rect->left, view_rect->top);
 		src.top = src.bottom - 22;
 		if (shellext_Get_Cur_Scene() != SCENE_COMBAT_MAP_A)
@@ -1841,12 +1499,12 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 			player_Draw_Map_Paragraph(&src, brief.para_data[brief.para_id[1]], 0);
 
 		/* Map area (between top paragraph and bottom status) */
-		xrect_Copy_Rect(&map_area, &map_src_rect);
+		xrect_Copy_Rect(&map_area, &map_state.source_rect);
 		xrect_Offset_Rect(&map_area, view_rect->left, view_rect->top);
 		map_area.top += 12;
 		map_area.bottom -= 22;
 	} else {
-		xrect_Copy_Rect(&map_area, &map_src_rect);
+		xrect_Copy_Rect(&map_area, &map_state.source_rect);
 		xrect_Offset_Rect(&map_area, view_rect->left, view_rect->top);
 	}
 
@@ -1918,7 +1576,7 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 		species = fgroup.fg[i].species - 1;
 		icon_idx = side_to_icon(fgroup.fg[i].side);
 
-		if (map_scale_x < 32)
+		if (map_state.scale_x < 32)
 			species += 88;
 		if (species < 0)
 			continue;
@@ -1955,75 +1613,22 @@ static int16_t iupdate_Map(Input* input, Rect* bounds, Rect* clip, int16_t key, 
 	if (key)
 		return 0;
 
-	xrect_Copy_Rect(&map_rect, &map_src_rect);
+	xrect_Copy_Rect(&map_rect, &map_state.source_rect);
 	if (player_Find_Ship_On_Screen(&map_rect, mouse_x - 1, mouse_y - 1))
 		xview_Refresh_View();
 
 	return 1;
 }
 
-static void iuser_Map(Input* input, int32_t time) {
-	int16_t scale_dx;
-	int16_t scale_dy;
-	int16_t scale_speed;
-	int16_t pixels_per_unit;
-	int16_t move_dx;
-	int16_t move_dy;
-	int16_t move_speed;
-	int16_t i;
-
+// FUNCTION: TIE95 0x7DA48
+// FUNCTION: TIE98 0x469B20
+static void player_iuser_Map(Input* input, int32_t time) {
 	(void)input;
 	(void)time;
-	if (!map_playing)
+	if (!map_state.playing)
 		return;
-
-	/* Animate scale toward target */
-	scale_dx = abs16(map_scale_x - map_scale_target_x);
-	scale_dy = abs16(map_scale_y - map_scale_target_y);
-	if (scale_dx < scale_dy)
-		scale_dx = scale_dy;
-
-	scale_speed = 2;
-	if (scale_dx >= 12)
-		scale_speed = 8;
-	if (map_scale_x < 10)
-		scale_speed = 1;
-
-	map_scale_x = player_Move_To_Value(map_scale_x, map_scale_target_x, scale_speed);
-	map_scale_y = player_Move_To_Value(map_scale_y, map_scale_target_y, scale_speed);
-
-	/* Animate center toward target */
-	pixels_per_unit = map_scale_x ? (256 / map_scale_x + 1) : 1;
-
-	move_dx = abs16(map_center_x - map_target_x);
-	move_dy = abs16(map_center_y - map_target_y);
-	if (move_dx < move_dy)
-		move_dx = move_dy;
-
-	move_speed = 2 * pixels_per_unit;
-	if ((int16_t)(move_dx / pixels_per_unit) >= 16)
-		move_speed *= 2;
-
-	map_center_x = player_Move_To_Value(map_center_x, map_target_x, move_speed);
-	map_center_y = player_Move_To_Value(map_center_y, map_target_y, move_speed);
-
-	/* Advance animation state */
-
-	for (i = 0; i < 8; i++) {
-		if (brief.target_on[i])
-			brief.target_state[i]++;
-	}
-	for (i = 0; i < 8; i++) {
-		if (brief.text_on[i])
-			brief.text_state[i]++;
-	}
-
-	/* Step or rewind page */
-	if (brief.page.len <= brief.page.time)
-		player_Rewind_Page();
-	else
-		player_Step_Page(0);
-
+	player_Move_Display_Map();
+	player_Step_Display_Map();
 #ifdef TIE_MODERN
 	TieMapSnapshot_Capture();
 #endif
@@ -2077,14 +1682,14 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 	player_Stars_To_Back(r.top);
 
 	if (brief_poly_used) {
-		xrect_Copy_Rect(&map_area, &map_src_rect);
+		xrect_Copy_Rect(&map_area, &map_state.source_rect);
 		xrect_Offset_Rect(&map_area, r.left, r.top);
 	} else {
 		/* Top paragraph */
 		Rect dst;
 		Rect status_rect;
 
-		xrect_Copy_Rect(&dst, &map_src_rect);
+		xrect_Copy_Rect(&dst, &map_state.source_rect);
 		xrect_Offset_Rect(&dst, r.left, r.top);
 		dst.bottom = dst.top + 12;
 		if (shellext_Get_Cur_Scene() != SCENE_COMBAT_MAP_A)
@@ -2094,7 +1699,7 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 
 		/* Bottom status */
 
-		xrect_Copy_Rect(&status_rect, &map_src_rect);
+		xrect_Copy_Rect(&status_rect, &map_state.source_rect);
 		xrect_Offset_Rect(&status_rect, r.left, r.top);
 		status_rect.top = status_rect.bottom - 22;
 		if (shellext_Get_Cur_Scene() != SCENE_COMBAT_MAP_A)
@@ -2103,7 +1708,7 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 			player_Draw_Map_Paragraph(&status_rect, brief.para_data[brief.para_id[1]], 0);
 
 		/* Map area */
-		xrect_Copy_Rect(&map_area, &map_src_rect);
+		xrect_Copy_Rect(&map_area, &map_state.source_rect);
 		xrect_Offset_Rect(&map_area, r.left, r.top);
 		map_area.top += 12;
 		map_area.bottom -= 22;
@@ -2122,7 +1727,7 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 
 		xcanvas_Pop_Canvas();
 
-		xrect_Copy_Rect(&src_rect, &map_src_rect);
+		xrect_Copy_Rect(&src_rect, &map_state.source_rect);
 		xrect_Inset_Rect(&src_rect, 32, 16);
 		pixels = (char*)xbitmap_Lock_Bitmap(&brief_buffer);
 		stub_Map_Clipped_Image(pixels, brief_poly.x, &src_rect, 320, 150);
@@ -2140,49 +1745,29 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
  * Init / Free
  * ================================================================ */
 
+// FUNCTION: TIE95 0x7DB7C
+// FUNCTION: TIE98 0x469C80
 void player_Init_Display_Map(void) {
 	int16_t i;
 
-	map_playing = 1;
-	selected_fg_idx = 0;
-	map_center_x = 0;
-	map_center_y = 0;
-	map_target_x = 0;
-	map_target_y = 0;
-	map_scale_x = 16;
-	map_scale_y = 16;
-	map_scale_target_x = 16;
-	map_scale_target_y = 16;
+	map_state.playing = 1;
+	map_state.selected_fg_idx = 0;
+	map_state.center_x = 0;
+	map_state.center_y = 0;
+	map_state.target_x = 0;
+	map_state.target_y = 0;
+	map_state.scale_x = 16;
+	map_state.scale_y = 16;
+	map_state.scale_target_x = 16;
+	map_state.scale_target_y = 16;
 
 	memset(&fgroup, 0, sizeof(fgroup));
 	fgroup.num_fgs = 1;
-	brief.page.size = 2;
 	fgroup.mission.all_way_shown = 0;
 	fgroup.mission.win_type = 1;
-	brief.page.commands[0] = 9999;
-	brief.page.len = 200;
-	brief.page.time = 0;
-	brief.page.index = 0;
-	brief.page.tile = 0;
-	brief.page.commands[1] = BCMD_END_PAGE;
+	player_Clear_Page_Commands();
 	player_Rewind_Page();
 
-	map_center_x = 0;
-	map_center_y = 0;
-	map_target_x = 0;
-	map_target_y = 0;
-	map_scale_x = 16;
-	map_scale_y = 16;
-	map_scale_target_x = 16;
-	map_scale_target_y = 16;
-
-	clear_brief_state();
-
-	brief.page.time = 0;
-	brief.page.index = 0;
-	player_Step_Page(1);
-
-	/* Allocate text/paragraph/talk data buffers */
 	for (i = 0; i < 32; i++)
 		brief.text_data[i] = xmemhdl_Alloc_Clear_Handle(40, LANDRU_MEMORY_RESOURCE);
 	for (i = 0; i < 32; i++)
@@ -2190,9 +1775,14 @@ void player_Init_Display_Map(void) {
 	for (i = 0; i < 20; i++)
 		brief.talk_data[i] = xmemhdl_Alloc_Clear_Handle(1024, LANDRU_MEMORY_RESOURCE);
 
-	clear_brief_state();
+	for (i = 0; i < 2; ++i)
+		brief.para_on[i] = 0;
+	for (i = 0; i < 8; ++i)
+		brief.target_on[i] = 0;
+	for (i = 0; i < 8; ++i)
+		brief.text_on[i] = 0;
 
-	xrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
+	xrect_Set_Rect(&map_state.source_rect, 0, 0, 292, 147);
 }
 
 // FUNCTION: TIE95 0x7DD0C
@@ -2362,44 +1952,14 @@ void player_Load_Display_Map(void) {
 // FUNCTION: TIE95 0x7D594
 // FUNCTION: TIE98 0x469580
 void player_Init_Brief_Display(Input* input, void* poly) {
-	int16_t i;
-
 	ResFile* player_res;
 	Rect r;
 	int16_t player_fg;
 
-	map_playing = 1;
-	selected_fg_idx = 0;
-	map_center_x = 0;
-	map_center_y = 0;
-	map_target_x = 0;
-	map_target_y = 0;
-	map_scale_x = 16;
-	map_scale_y = 16;
-	map_scale_target_x = 16;
-	map_scale_target_y = 16;
-
-	/* Snapshot emitter: cache the widget pointer — its frame is the
-	 * dst-rect anchor for non-polygon scenes. */
+	player_Init_Display_Map();
+#ifdef TIE_MODERN
 	map_emit_widget = input;
-
-	memset(&fgroup, 0, sizeof(fgroup));
-	fgroup.num_fgs = 1;
-	fgroup.mission.all_way_shown = 0;
-	fgroup.mission.win_type = 1;
-	player_Clear_Page_Commands();
-	player_Rewind_Page();
-
-	/* Allocate data buffers */
-	for (i = 0; i < 32; i++)
-		brief.text_data[i] = xmemhdl_Alloc_Clear_Handle(40, LANDRU_MEMORY_RESOURCE);
-	for (i = 0; i < 32; i++)
-		brief.para_data[i] = xmemhdl_Alloc_Clear_Handle(160, LANDRU_MEMORY_RESOURCE);
-	for (i = 0; i < 20; i++)
-		brief.talk_data[i] = xmemhdl_Alloc_Clear_Handle(1024, LANDRU_MEMORY_RESOURCE);
-
-	clear_brief_state();
-	xrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
+#endif
 
 	/* Set up polygon projection if provided */
 	if (poly) {
@@ -2470,7 +2030,7 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 	/* Set up XINPUT callbacks */
 	if (!brief_poly_used) {
 		xinpattr_Set_Input_Update_Function(input, iupdate_Map);
-		xinpattr_Set_Input_User_Function(input, iuser_Map);
+		xinpattr_Set_Input_User_Function(input, player_iuser_Map);
 		input->mouseUsage = downMoveUpInput;
 	}
 	xinpattr_Set_Input_Draw_Function(input, idraw_Map);
@@ -2478,20 +2038,7 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 	/* Load mission data */
 	player_Load_Display_Map();
 
-	map_center_x = 0;
-	map_center_y = 0;
-	map_target_x = 0;
-	map_target_y = 0;
-	map_scale_x = 16;
-	map_scale_y = 16;
-	map_scale_target_x = 16;
-	map_scale_target_y = 16;
-
-	clear_brief_state();
-
-	brief.page.time = 0;
-	brief.page.index = 0;
-	player_Step_Page(1);
+	player_Rewind_Page();
 
 	/* Set up weapon state from player's flight group */
 	mission.beam_used = 0;
@@ -2522,48 +2069,22 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 	}
 }
 
-// FUNCTION: TIE95 0x7DB7C
-void player_Init_Brief_For_Talk(void) {
-	int16_t i;
-
-	map_playing = 1;
-	selected_fg_idx = 0;
-	map_center_x = 0;
-	map_center_y = 0;
-	map_target_x = 0;
-	map_target_y = 0;
-	map_scale_x = 16;
-	map_scale_y = 16;
-	map_scale_target_x = 16;
-	map_scale_target_y = 16;
-
-	memset(&fgroup, 0, sizeof(fgroup));
-	fgroup.num_fgs = 1;
-	fgroup.mission.all_way_shown = 0;
-	fgroup.mission.win_type = 1;
-	player_Clear_Page_Commands();
-	player_Rewind_Page();
-
-	for (i = 0; i < 32; i++)
-		brief.text_data[i] = xmemhdl_Alloc_Clear_Handle(40, LANDRU_MEMORY_RESOURCE);
-	for (i = 0; i < 32; i++)
-		brief.para_data[i] = xmemhdl_Alloc_Clear_Handle(160, LANDRU_MEMORY_RESOURCE);
-	for (i = 0; i < 20; i++)
-		brief.talk_data[i] = xmemhdl_Alloc_Clear_Handle(1024, LANDRU_MEMORY_RESOURCE);
-
-	clear_brief_state();
-	xrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
+// FUNCTION: TIE95 0x7D8A4
+// FUNCTION: TIE98 0x469920
+EBriefStruct* player_Init_Brief_For_Talk(void) {
+	player_Init_Display_Map();
 	player_Load_Display_Map();
+	return &brief;
 }
 
 // FUNCTION: TIE95 0x7D8C0
 void player_Free_Brief_Display(void) {
-	int16_t i;
-
 	/* Snapshot emitter: drop the widget pointer so a stray
 	 * post-teardown emit produces active=0 instead of dereferencing
 	 * freed Input state. */
+#ifdef TIE_MODERN
 	map_emit_widget = NULL;
+#endif
 
 	free(star_buffer_data);
 	star_buffer_data = NULL;
@@ -2571,30 +2092,7 @@ void player_Free_Brief_Display(void) {
 	if (brief_poly_used)
 		xbitmap_Free_Bitmap(&brief_buffer);
 
-	for (i = 0; i < 32; i++) {
-		if (brief.text_data[i]) {
-			xmemhdl_Free_Handle(brief.text_data[i]);
-#ifdef TIE_MODERN
-			brief.text_data[i] = 0;
-#endif
-		}
-	}
-	for (i = 0; i < 32; i++) {
-		if (brief.para_data[i]) {
-			xmemhdl_Free_Handle(brief.para_data[i]);
-#ifdef TIE_MODERN
-			brief.para_data[i] = 0;
-#endif
-		}
-	}
-	for (i = 0; i < 20; i++) {
-		if (brief.talk_data[i]) {
-			xmemhdl_Free_Handle(brief.talk_data[i]);
-#ifdef TIE_MODERN
-			brief.talk_data[i] = 0;
-#endif
-		}
-	}
+	player_Free_Display_Map();
 }
 
 #ifdef TIE_MODERN
@@ -2604,7 +2102,7 @@ bool TieRecoveredMap_ReadSnapshotView(TieRecoveredMapSnapshotView* out) {
 	if (!out)
 		return false;
 	memset(out, 0, sizeof *out);
-	if (!map_emit_widget || !map_playing)
+	if (!map_emit_widget || !map_state.playing)
 		return true;
 
 	scene = shellext_Get_Cur_Scene();
@@ -2614,8 +2112,8 @@ bool TieRecoveredMap_ReadSnapshotView(TieRecoveredMapSnapshotView* out) {
 						   : scene == SCENE_TRAIN_MAP    ? TIE_MAP_BG_TRAINING
 														 : TIE_MAP_BG_STARS;
 	out->has_polygon = brief_poly_used != 0;
-	out->source_width = (int16_t)(map_src_rect.right - map_src_rect.left);
-	out->source_height = (int16_t)(map_src_rect.bottom - map_src_rect.top);
+	out->source_width = (int16_t)(map_state.source_rect.right - map_state.source_rect.left);
+	out->source_height = (int16_t)(map_state.source_rect.bottom - map_state.source_rect.top);
 	if (out->has_polygon) {
 		int index;
 

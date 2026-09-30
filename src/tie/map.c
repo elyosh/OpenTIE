@@ -1271,7 +1271,7 @@ static void iuser_Map(Input* input, int32_t time) {
 			if (talk_mode == 0) {
 				talk_voice_officer = 'i';
 				last_voiced_paragraph = 0;
-				player_Clear_Page_Commands();
+				player_Rewind_Page();
 				xinpattr_Show_Input(map_input);
 				xinpattr_Hide_Input(talk_input);
 				talk_paragraph_timer = 0x7FFFFFFF;
