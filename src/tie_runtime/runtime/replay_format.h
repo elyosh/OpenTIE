@@ -3,6 +3,9 @@
 
 #include <stdint.h>
 
+/* Native checkpoint slot 6, encoded from the live mission header. */
+extern uint8_t TieReplayMissionHeaderImage[456];
+
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"

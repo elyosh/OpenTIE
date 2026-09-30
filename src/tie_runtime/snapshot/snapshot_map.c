@@ -3,13 +3,20 @@
 #include "tie_runtime/snapshot/capture_views.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 
+#include "landru/input.h"
+#include "landru/rect.h"
+
+static Input* s_input;
+
+void TieMapSnapshot_SetInput(Input* input) { s_input = input; }
+
 void TieMapSnapshot_Capture(void) {
 	TieMapHeader* map = TieSnapshotBuilder_MapMut();
 	if (!map)
 		return;
 
 	TieRecoveredMapSnapshotView view;
-	if (!TieRecoveredMap_ReadSnapshotView(&view) || !view.active) {
+	if (!s_input || !TieRecoveredMap_ReadSnapshotView(&view) || !view.active) {
 		map->active = 0;
 		return;
 	}
@@ -19,8 +26,14 @@ void TieMapSnapshot_Capture(void) {
 	map->has_polygon = view.has_polygon ? 1 : 0;
 	map->src_rect_w = view.source_width;
 	map->src_rect_h = view.source_height;
-	map->dst_rect_x = view.destination_x;
-	map->dst_rect_y = view.destination_y;
+	map->dst_rect_x = 0;
+	map->dst_rect_y = 0;
+	if (!view.has_polygon) {
+		Rect frame = s_input->frame;
+		xrect_Inset_Rect(&frame, 1, 1);
+		map->dst_rect_x = frame.left;
+		map->dst_rect_y = frame.top;
+	}
 	for (int index = 0; index < 4; ++index) {
 		map->dst_poly_x[index] = view.polygon_x[index];
 		map->dst_poly_y[index] = view.polygon_y[index];

@@ -1,4 +1,7 @@
 #include "tie/create.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/storage/mission_records.h"
+#endif
 #include "tie/feinput.h"
 #include "tie/paiman.h"
 #include "tie_runtime/runtime/inflight_state.h"
@@ -683,8 +686,10 @@ int16_t create_createmission(void) {
 // FUNCTION: TIE95 0x165C0
 int16_t create_loadmission(const char* filename) {
 	uint16_t i, species_index;
+#ifdef TIE_MODERN
 	uint8_t mfh_buf[MISSIONFILE_DISK_SIZE];
 	uint8_t fg_buf[48 * EFGSTRUCT_DISK_SIZE];
+#endif
 	uint16_t wall_offsets[6];
 	uint16_t saved_fgcnt = fgcnt;
 	uint16_t n_fg;
@@ -728,8 +733,12 @@ int16_t create_loadmission(const char* filename) {
 	fediskio_readfileblock(&missionversion, 2, 1, fileptr);
 	if ((int16_t)missionversion > 0)
 		TieStorage_Seek(fileptr, 0, TIE_SEEK_SET);
+#ifdef TIE_MODERN
 	fediskio_readfileblock(mfh_buf, MISSIONFILE_DISK_SIZE, 1, fileptr);
 	MissionFile_decode(&mission_file_header, mfh_buf);
+#else
+	fediskio_readfileblock(&mission_file_header, MISSIONFILE_DISK_SIZE, 1, fileptr);
+#endif
 	if (mission_file_header.num_msg < 0 || mission_file_header.num_goals < 0)
 		shell_programexit("Mission file has a negative message or goal count");
 	mfile_time_min = mission_file_header.mission.time_min;
@@ -744,9 +753,13 @@ int16_t create_loadmission(const char* filename) {
 	n_fg = (uint16_t)mission_file_header.num_fg;
 	if (n_fg > 48u)
 		n_fg = 48u;
+#ifdef TIE_MODERN
 	fediskio_readfileblock(fg_buf, EFGSTRUCT_DISK_SIZE, n_fg, fileptr);
 	for (i = 0; i < n_fg; ++i)
 		EFGStruct_decode(&fg_array[i], fg_buf + i * EFGSTRUCT_DISK_SIZE);
+#else
+	fediskio_readfileblock(fg_array, EFGSTRUCT_DISK_SIZE, n_fg, fileptr);
+#endif
 	mission_file_header.num_fg = (int16_t)n_fg;
 
 	/* Mission files store messages before goals. Clamp both counts and skip

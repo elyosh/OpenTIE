@@ -2,6 +2,8 @@
 
 #include <string.h>
 
+uint8_t TieReplayMissionHeaderImage[456];
+
 #include "tie_runtime/timing/flight_timing.h"
 
 /* All replay-file I/O goes through TieStorage_Read/fwrite — the

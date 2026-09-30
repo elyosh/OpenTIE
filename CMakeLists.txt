@@ -415,6 +415,8 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/input/controller_mapping.h
     src/tie_runtime/input/transform.c
     src/tie_runtime/input/transform.h
+    src/tie_runtime/storage/mission_records.c
+    src/tie_runtime/storage/mission_records.h
     src/tie_runtime/storage/storage.c
     src/tie_runtime/storage/storage.h
     src/tie_runtime/storage/string_table.c

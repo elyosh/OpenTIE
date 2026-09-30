@@ -17,6 +17,7 @@
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 #include "tie_runtime/snapshot/snapshot_map.h"
+#include "tie_runtime/storage/mission_records.h"
 #endif
 #include "tie_runtime/storage/storage.h"
 
@@ -35,29 +36,9 @@
 #include "landru/res.h"
 #include "landru/view.h"
 
-#include "../util/binio.h"
-
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-
-/* ---- EBriefPage on-disk codec ---- */
-
-/* Decode an 810-byte little-endian page record into the natively
- * aligned runtime struct. Layout: 5 leading int16 scalars at +0..+8,
- * followed by commands[400] at +0x0A. Read-only at runtime so no
- * encoder is provided. */
-void TieRecoveredBrief_DecodePage(EBriefPage* dst, const uint8_t* src) {
-	int i;
-
-	dst->len = br_i16le(src + 0x00);
-	dst->time = br_i16le(src + 0x02);
-	dst->index = br_i16le(src + 0x04);
-	dst->size = br_i16le(src + 0x06);
-	dst->tile = br_i16le(src + 0x08);
-	for (i = 0; i < 400; ++i)
-		dst->commands[i] = br_i16le(src + 0x0A + i * 2);
-}
 
 /* ---- Page command opcodes and parameter counts ---- */
 
@@ -106,14 +87,21 @@ static const int16_t map_cmd_size[BCMD_END_PAGE + 2] = {
 /* ---- Static globals (all owned by PLAYER.C per watdbg) ---- */
 
 /* Briefing polygon for talk-screen projection */
+// GLOBAL: TIE95 0xF6E68
+// GLOBAL: TIE98 0x584DC0
 static Poly brief_poly;
 // GLOBAL: TIE95 0xFABC2
+// GLOBAL: TIE98 0x584DB8
 static int16_t brief_poly_used;
 
 /* Icon actors: [0]=green(enemy), [1]=red, [2]=blue(friendly), [3]=purple(neutral) */
+// GLOBAL: TIE95 0xF6E78
+// GLOBAL: TIE98 0x588698
 static Actor* icon_actors[4];
 
 /* Brief buffer bitmap for polygon projection */
+// GLOBAL: TIE95 0xF6E88
+// GLOBAL: TIE98 0x588678
 static BitmapStruct brief_buffer;
 
 /* Flight group data + briefing state */
@@ -138,10 +126,12 @@ typedef struct PlayerMapState {
 static PlayerMapState map_state;
 
 /* Star background */
+// GLOBAL: TIE95 0xF6EBC
+// GLOBAL: TIE98 0x584DEC
 static Actor* stars_actor;
-static void* star_buffer_data; /* 320x150 pixel cache */
-
-static Input* map_emit_widget;
+// GLOBAL: TIE95 0xFABC4
+// GLOBAL: TIE98 0x588B24
+static LandruHandle star_buffer; /* 320x150 pixel cache */
 
 /* Weapon state */
 // GLOBAL: TIE95 0xFABC0
@@ -149,50 +139,11 @@ static int16_t beam_level;
 // GLOBAL: TIE95 0xFABC6
 static int16_t weapon_level;
 
-/* ---- Helpers ---- */
-
-static int16_t abs16(int16_t v) { return v < 0 ? -v : v; }
-
-/* Signed division toward zero (matches Watcom codegen for >> 8 with sign adjust) */
-static int16_t sdiv256(int32_t v) { return (int16_t)(v / 256); }
-
-/* Side → icon index mapping */
-static int16_t side_to_icon(int16_t side) {
-	switch (side) {
-		case 1:
-		case 4:
-			return 1;
-		case 2:
-			return 2;
-		case 3:
-		case 5:
-			return 3;
-		default:
-			return 0;
-	}
-}
-
-/* Side → target highlight base color */
-static int16_t side_to_color(int16_t side) {
-	switch (side) {
-		case 1:
-		case 4:
-			return 232;
-		case 2:
-			return 248;
-		case 3:
-		case 5:
-			return 240;
-		default:
-			return 224;
-	}
-}
-
 /* ---- Forward declarations for XINPUT callbacks ---- */
-static int16_t iupdate_Map(Input* inp, Rect* bounds, Rect* clip, int16_t key, uint8_t left, uint8_t right,
-						   int16_t mouse_x, int16_t mouse_y);
+static int16_t player_iupdate_Map(Input* inp, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+								  uint8_t right, int16_t mouse_x, int16_t mouse_y);
 static void player_iuser_Map(Input* inp, int32_t time);
-static void idraw_Map(Input* inp, Rect* bounds, Rect* clip, int16_t refresh);
+static void player_idraw_Map(Input* inp, Rect* bounds, Rect* clip, int16_t refresh);
 
 /* ================================================================
  * Weapon selectors
@@ -289,25 +240,31 @@ int16_t player_Move_To_Value(int16_t current, int16_t target, int16_t step) {
  * ================================================================ */
 
 // FUNCTION: TIE95 0x7E990
+// FUNCTION: TIE98 0x46A8D0
 void player_Map_To_Screen_Pos(Rect* view_rect, int16_t map_x, int16_t map_y, int16_t* out_x, int16_t* out_y) {
-	int32_t sx = (int32_t)(map_x - map_state.center_x) * map_state.scale_x;
-	int32_t sy;
-
-	*out_x = sdiv256(sx) + view_rect->left + ((view_rect->right - view_rect->left) >> 1);
-
-	sy = (int32_t)(map_y - map_state.center_y) * map_state.scale_y;
-	*out_y = sdiv256(sy) + view_rect->top + ((view_rect->bottom - view_rect->top) >> 1);
+	*out_x = (map_x - map_state.center_x) * map_state.scale_x / 256;
+	*out_x += view_rect->left + ((view_rect->right - view_rect->left) >> 1);
+	*out_y = (map_y - map_state.center_y) * map_state.scale_y / 256;
+	*out_y += view_rect->top + ((view_rect->bottom - view_rect->top) >> 1);
 }
 
+// FUNCTION: TIE95 0x7EA20
+// FUNCTION: TIE98 0x46A960
 void player_Screen_To_Map_Pos(Rect* view_rect, int16_t screen_x, int16_t screen_y, int16_t* out_x,
 							  int16_t* out_y) {
-	int16_t view_cx = view_rect->left + ((view_rect->right - view_rect->left) >> 1);
-	int16_t view_cy = view_rect->top + ((view_rect->bottom - view_rect->top) >> 1);
-
-	*out_x = map_state.center_x + (int16_t)((int16_t)(screen_x - view_cx) << 8) / map_state.scale_x;
-	*out_y = map_state.center_y + (int16_t)((int16_t)(screen_y - view_cy) << 8) / map_state.scale_y;
+	/* Retail narrows the pixel displacement before scaling it. */
+	*out_x =
+		map_state.center_x +
+		(int16_t)(256 * (int16_t)(screen_x - ((view_rect->right - view_rect->left) >> 1) - view_rect->left) /
+				  map_state.scale_x);
+	*out_y =
+		map_state.center_y +
+		(int16_t)(256 * (int16_t)(screen_y - ((view_rect->bottom - view_rect->top) >> 1) - view_rect->top) /
+				  map_state.scale_y);
 }
 
+// FUNCTION: TIE95 0x7E85C
+// FUNCTION: TIE98 0x46A800
 int16_t player_Find_Ship_On_Screen(Rect* bounds, int16_t screen_x, int16_t screen_y) {
 	int16_t min_dist = 999;
 	int16_t found_fg = 0;
@@ -315,41 +272,21 @@ int16_t player_Find_Ship_On_Screen(Rect* bounds, int16_t screen_x, int16_t scree
 	int16_t scr_x, scr_y;
 
 	for (i = 0; i < fgroup.num_fgs; i++) {
-		int32_t sx;
-		int32_t sy;
-		int16_t dx;
-		int16_t dy;
-		int16_t chebyshev;
-
 		if (!fgroup.fg[i].way_used[14])
 			continue;
-
-		sx = (int32_t)(fgroup.fg[i].way_x[14] - map_state.center_x) * map_state.scale_x;
-		scr_x = sdiv256(sx) + bounds->left + ((bounds->right - bounds->left) >> 1);
-
-		sy = (int32_t)(fgroup.fg[i].way_y[14] - map_state.center_y) * map_state.scale_y;
-		scr_y = sdiv256(sy) + bounds->top + ((bounds->bottom - bounds->top) >> 1);
-
-		dx = screen_x - scr_x;
-		if (abs16(dx) >= min_dist)
+		player_Map_To_Screen_Pos(bounds, fgroup.fg[i].way_x[14], fgroup.fg[i].way_y[14], &scr_x, &scr_y);
+		if (abs(screen_x - scr_x) >= min_dist)
 			continue;
-
-		dy = screen_y - scr_y;
-		if (abs16(dy) >= min_dist)
+		if (abs(screen_y - scr_y) >= min_dist)
 			continue;
-
-		if (abs16(dx) >= abs16(dy))
-			chebyshev = dx;
+		if (abs(screen_x - scr_x) >= abs(screen_y - scr_y))
+			min_dist = abs(screen_x - scr_x);
 		else
-			chebyshev = dy;
-
-		min_dist = abs16(chebyshev);
+			min_dist = abs(screen_y - scr_y);
 		found_fg = i;
 	}
-
 	if (min_dist == 999)
 		return 0;
-
 	map_state.selected_fg_idx = found_fg;
 	return 1;
 }
@@ -359,22 +296,30 @@ int16_t player_Find_Ship_On_Screen(Rect* bounds, int16_t screen_x, int16_t scree
  * ================================================================ */
 
 // FUNCTION: TIE95 0x7F55C
-void player_Actor_To_Buffer(Actor* actor, void* buffer) {
+// FUNCTION: TIE98 0x46B3E0
+void player_Actor_To_Buffer(Actor* actor, LandruHandle buffer) {
 	Rect r;
+	void* pixels;
 	xrect_Set_Rect(&r, 0, 0, 320, 150);
 	if (actor->draw) {
 		xpaint_Paint_Clipped_Rect(&r, actor->var1);
 		actor->draw(actor, &r, &r, actor->x, actor->y, 1);
 	}
-	stub_Copy_To_Clipped_Buffer(buffer, &r, 0, 0, 320, 150);
+	pixels = xmemhdl_Lock_Handle(buffer);
+	stub_Copy_To_Clipped_Buffer(pixels, &r, 0, 0, 320, 150);
+	xmemhdl_Unlock_Handle(buffer);
 }
 
 // FUNCTION: TIE95 0x7F5D0
+// FUNCTION: TIE98 0x46B460
 void player_Stars_To_Back(int16_t screen_y) {
-	if (star_buffer_data) {
+	if (star_buffer) {
 		Rect r;
+		void* pixels;
 		xrect_Set_Rect(&r, 0, 0, 320, 150);
-		stub_Copy_From_Clipped_Buffer(star_buffer_data, &r, 0, screen_y, 320, 150);
+		pixels = xmemhdl_Lock_Handle(star_buffer);
+		stub_Copy_From_Clipped_Buffer(pixels, &r, 0, screen_y, 320, 150);
+		xmemhdl_Unlock_Handle(star_buffer);
 	}
 }
 
@@ -726,52 +671,19 @@ void player_Step_Display_Map(void) {
 		player_Step_Page(0);
 }
 
-// FUNCTION: TIE95 0x7E85C
-void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
-	int16_t min_dist = 999;
-	int16_t closest_fg = 0;
+// FUNCTION: TIE95 0x7EC84
+// FUNCTION: TIE98 0x46AB90
+int16_t player_Update_Display_Map(Rect* bounds, Rect* clip, uint8_t left, uint8_t right, int16_t mouse_x,
+								  int16_t mouse_y) {
 	Rect map_rect;
-	int16_t scr_x, scr_y;
-	int16_t i;
-
-	int16_t found;
-
+	(void)bounds;
+	(void)clip;
+	(void)left;
+	(void)right;
 	xrect_Copy_Rect(&map_rect, &map_state.source_rect);
-
-	for (i = 0; i < fgroup.num_fgs; i++) {
-		int16_t dx;
-		int16_t dy;
-		int16_t chebyshev;
-
-		if (!fgroup.fg[i].way_used[14])
-			continue;
-
-		player_Map_To_Screen_Pos(&map_rect, fgroup.fg[i].way_x[14], fgroup.fg[i].way_y[14], &scr_x, &scr_y);
-
-		dx = mouse_x - scr_x;
-		if (abs16(dx) >= min_dist)
-			continue;
-
-		dy = mouse_y - scr_y;
-		if (abs16(dy) >= min_dist)
-			continue;
-
-		if (abs16(dx) >= abs16(dy))
-			chebyshev = dx;
-		else
-			chebyshev = dy;
-
-		min_dist = abs16(chebyshev);
-		closest_fg = i;
-	}
-
-	found = 0;
-	if (min_dist != 999) {
-		map_state.selected_fg_idx = closest_fg;
-		found = 1;
-	}
-	if (found)
+	if (player_Find_Ship_On_Screen(&map_rect, mouse_x, mouse_y))
 		xview_Refresh_View();
+	return 1;
 }
 
 /* ================================================================
@@ -779,8 +691,8 @@ void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
  * ================================================================ */
 
 // FUNCTION: TIE95 0x7FA14
-void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_t x, int16_t index,
-							  int16_t state) {
+void player_Draw_Readout_Text(const char* text, int16_t font, int16_t screen_x, int16_t screen_y,
+							  int16_t index, int16_t state) {
 	int16_t str_len;
 	int16_t base_ramp;
 
@@ -804,7 +716,7 @@ void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_
 			final_color = base_ramp + 4;
 		else
 			final_color = base_ramp + 9 - (index - str_len);
-		xfont_Print_Clipped_Text((const char*)str, y, x, color, final_color);
+		xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, font, final_color);
 	} else {
 		int16_t char_count = index;
 		int16_t ramp_steps;
@@ -824,89 +736,28 @@ void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_
 		ramp_color = base_ramp + 6 - 2 * ramp_steps;
 
 		saved_font = xfont_Get_Font();
-		xfont_Set_Font(color);
+		xfont_Set_Font(font);
 		text_width = xfont_Get_String_Width((const char*)str);
 		xfont_Set_Font(saved_font);
 
 		while (ramp_color <= base_ramp + 6 && char_count > 0) {
 			int16_t loop_color = ramp_color++;
 			str[char_count--] = 0;
-			xfont_Print_Clipped_Text((const char*)str, y, x, color, loop_color);
+			xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, font, loop_color);
 		}
 
-		xrect_Set_Rect(&r, text_width + y + 2, x, text_width + y + 8, x + 6);
+		xrect_Set_Rect(&r, text_width + screen_x + 2, screen_y, text_width + screen_x + 8, screen_y + 6);
 		if (index < str_len)
 			xpaint_Paint_Clipped_Rect(&r, base_ramp + 7);
 	}
 }
 
 // FUNCTION: TIE95 0x7F9E8
-void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t screen_x, int16_t screen_y,
-									 int16_t text_y, int16_t text_state) {
-	int16_t anim_progress;
-	int16_t str_len;
-	int16_t base_ramp;
-
-	char str[64];
-
-	if (text_y < 0)
-		return;
-
-	anim_progress = 2 * text_y;
-	if (anim_progress < 0)
-		return;
-
-	str_len = (int16_t)strlen(text);
-
-	strcpy(str, text);
-
-	base_ramp = 8 * text_state + 224;
-
-	if (anim_progress >= str_len + 2) {
-		int16_t final_color;
-
-		strcpy(str, text);
-
-		if (anim_progress >= str_len + 5)
-			final_color = base_ramp + 4;
-		else
-			final_color = base_ramp + 9 - (anim_progress - str_len);
-		xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, color, final_color);
-	} else {
-		int16_t char_count;
-		int16_t ramp_steps;
-		int16_t ramp_color;
-		int16_t saved_font;
-		int16_t text_width;
-		Rect r;
-
-		if (anim_progress > str_len)
-			char_count = str_len;
-		else {
-			char_count = anim_progress;
-			str[anim_progress] = 0;
-		}
-
-		ramp_steps = anim_progress;
-		if (ramp_steps > 3)
-			ramp_steps = 3;
-		ramp_color = base_ramp + 6 - 2 * ramp_steps;
-
-		saved_font = xfont_Get_Font();
-		xfont_Set_Font(color);
-		text_width = xfont_Get_String_Width((const char*)str);
-		xfont_Set_Font(saved_font);
-
-		while (ramp_color <= base_ramp + 6 && char_count > 0) {
-			int16_t loop_color = ramp_color++;
-			str[char_count--] = 0;
-			xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, color, loop_color);
-		}
-
-		xrect_Set_Rect(&r, text_width + screen_x + 2, screen_y, text_width + screen_x + 8, screen_y + 6);
-		if (anim_progress < str_len)
-			xpaint_Paint_Clipped_Rect(&r, base_ramp + 7);
-	}
+// FUNCTION: TIE98 0x46B7F0
+void player_Draw_Double_Readout_Text(const char* text, int16_t font, int16_t screen_x, int16_t screen_y,
+									 int16_t index, int16_t state) {
+	if (index >= 0)
+		player_Draw_Readout_Text(text, font, screen_x, screen_y, (int16_t)(2 * index), state);
 }
 
 /* ================================================================
@@ -1204,41 +1055,52 @@ void player_Draw_Display_Grid(Rect* clip) {
  * ================================================================ */
 
 // FUNCTION: TIE95 0x7FBD0
+// FUNCTION: TIE98 0x46B9F0
 void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t target_id) {
 	int16_t species = fgroup.fg[fg_index].species - 1;
 	int16_t way_x = fgroup.fg[fg_index].way_x[14];
 	int16_t way_y = fgroup.fg[fg_index].way_y[14];
 	int16_t side = fgroup.fg[fg_index].side;
-	int16_t target_color = side_to_color(side);
+	int16_t target_color;
 
-	int32_t sx;
 	int16_t screen_x;
-	int32_t sy;
 	int16_t screen_y;
 	Rect r;
 	int16_t offx, offy;
 	int16_t anim_size, anim_count, base_color;
 	int16_t i;
 
+	switch (side) {
+		case 1:
+		case 4:
+			target_color = 232;
+			break;
+		case 2:
+			target_color = 248;
+			break;
+		case 3:
+		case 5:
+			target_color = 240;
+			break;
+		default:
+			target_color = 224;
+			break;
+	}
+
 	if (map_state.scale_x < 32)
 		species += 88;
 	if (species < 0)
 		return;
 
-	/* Compute screen position */
-	sx = (int32_t)(way_x - map_state.center_x) * map_state.scale_x;
-	screen_x = sdiv256(sx) + clip->left + ((clip->right - clip->left) >> 1);
-
-	sy = (int32_t)(way_y - map_state.center_y) * map_state.scale_y;
-	screen_y = sdiv256(sy) + clip->top + ((clip->bottom - clip->top) >> 1);
+	player_Map_To_Screen_Pos(clip, way_x, way_y, &screen_x, &screen_y);
 
 	xrect_Set_Rect(&r, screen_x - 4, screen_y - 4, screen_x + 5, screen_y + 5);
 
 	xactor_Set_Actor_State(icon_actors[0], species, 0);
 
 	xactor_Get_Actor_Offset(icon_actors[0], &offx, &offy);
-	screen_x -= offx + (icon_actors[0]->w / 2);
-	screen_y -= offy + (icon_actors[0]->h / 2);
+	screen_x -= offx + (icon_actors[0]->w >> 1);
+	screen_y -= offy + (icon_actors[0]->h >> 1);
 	icon_actors[0]->flags |= AF_REMAP_COLOR;
 
 	if (target_id >= 12) {
@@ -1286,180 +1148,80 @@ void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t targ
  * Drawing: ship icons
  * ================================================================ */
 
+// FUNCTION: TIE95 0x7F294
+// FUNCTION: TIE98 0x46B120
 void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 	Rect dst;
 	int16_t i;
-	int16_t fg;
-
+	int16_t scr_x, scr_y;
 	xrect_Copy_Rect(&dst, clip);
 
-	/* Draw target highlighting for active targets */
 	for (i = 0; i < 8; i++) {
-		int16_t fg_idx;
-		int16_t way_x;
-		int16_t way_y;
-		int16_t species;
-		int16_t side;
-		int16_t target_color;
-		int16_t scr_x, scr_y;
-		Rect r;
-		int16_t offx, offy;
-		int16_t state;
-
+		int16_t fg;
 		if (!brief.target_on[i])
 			continue;
-
-		fg_idx = brief.target_id[i];
-		way_x = fgroup.fg[fg_idx].way_x[14];
-		way_y = fgroup.fg[fg_idx].way_y[14];
-		species = fgroup.fg[fg_idx].species - 1;
-		side = fgroup.fg[fg_idx].side;
-		target_color = side_to_color(side);
-
-		if (map_state.scale_x < 32)
-			species += 88;
-		if (species < 0)
-			continue;
-
-		player_Map_To_Screen_Pos(clip, way_x, way_y, &scr_x, &scr_y);
-
-		xrect_Set_Rect(&r, scr_x - 4, scr_y - 4, scr_x + 5, scr_y + 5);
-
-		xactor_Set_Actor_State(icon_actors[0], species, 0);
-
-		xactor_Get_Actor_Offset(icon_actors[0], &offx, &offy);
-		scr_x -= offx + (icon_actors[0]->w / 2);
-		scr_y -= offy + (icon_actors[0]->h / 2);
-
-		icon_actors[0]->flags |= AF_REMAP_COLOR;
-
-		state = brief.target_state[i];
-		if (state >= 12) {
-			xrect_Inset_Rect(&r, -2, -2);
-			xpaint_Paint_Clipped_Rect(&r, target_color + 2);
-			xpaint_Frame_Clipped_Rect(&r, target_color + 6);
-		} else {
-			int16_t anim_size, anim_count, base_color;
-			int16_t j;
-
-			if (state < 4) {
-				base_color = target_color + 7 - 2 * state;
-				anim_count = state + 1;
-				anim_size = 16;
-			} else if (state < 8) {
-				base_color = target_color + 1;
-				anim_size = 16 - 2 * (state - 3);
-				anim_count = 4;
-			} else {
-				base_color = target_color + 1;
-				anim_size = 16 - 2 * (state - 3);
-				anim_count = 12 - state;
-			}
-
-			if (state >= 8) {
-				xrect_Inset_Rect(&r, 11 - state, 11 - state);
-				xpaint_Paint_Clipped_Rect(&r, target_color + 2);
-				xpaint_Frame_Clipped_Rect(&r, target_color + state - 6);
-			}
-
-			for (j = 0; j < anim_count; j++) {
-				icon_actors[0]->foreColor = base_color;
-				xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x - anim_size, scr_y - anim_size, 1);
-				xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x + anim_size, scr_y - anim_size, 1);
-				xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x - anim_size, scr_y + anim_size, 1);
-				xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x + anim_size, scr_y + anim_size, 1);
-				anim_size -= 2;
-				base_color += 2;
-			}
-		}
-
-		icon_actors[0]->flags &= ~AF_REMAP_COLOR;
+		fg = brief.target_id[i];
+		player_Map_To_Screen_Pos(&dst, fgroup.fg[fg].way_x[14], fgroup.fg[fg].way_y[14], &scr_x, &scr_y);
+		player_Draw_Map_Zoom(clip, dest, fg, brief.target_state[i]);
 	}
 
-	/* Draw text labels for active text overlays */
 	for (i = 0; i < 8; i++) {
-		int16_t text_id;
-		int16_t tx;
-		int16_t screen_x;
-		int16_t ty;
-		int16_t screen_y;
-		char* text_ptr;
+		char str[40];
+		char* text;
 		int16_t m;
-		int16_t state;
-
-		char str[43];
-
 		if (!brief.text_on[i])
 			continue;
-
-		text_id = brief.text_id[i];
-		tx = (int16_t)(map_state.scale_x * (brief.text_x[i] - map_state.center_x) / 256);
-		screen_x = (dst.right - dst.left) / 2 + dst.left + tx;
-
-		ty = (int16_t)((brief.text_y[i] - map_state.center_y) * map_state.scale_y / 256);
-		screen_y = dst.top + (dst.bottom - dst.top) / 2 + ty;
-
-		text_ptr = (char*)xmemhdl_Lock_Handle(brief.text_data[text_id]);
-
-		if (text_ptr) {
-			strcpy(str, text_ptr);
-			xmemhdl_Unlock_Handle(brief.text_data[text_id]);
+		player_Map_To_Screen_Pos(&dst, brief.text_x[i], brief.text_y[i], &scr_x, &scr_y);
+		text = (char*)xmemhdl_Lock_Handle(brief.text_data[brief.text_id[i]]);
+#ifdef TIE_MODERN
+		if (text) {
+#endif
+			strcpy(str, text);
+			xmemhdl_Unlock_Handle(brief.text_data[brief.text_id[i]]);
+#ifdef TIE_MODERN
 		} else
 			str[0] = 0;
-
-		/* Replace [ ] with color control codes */
-
+#endif
 		for (m = 0; str[m]; m++) {
 			if (str[m] == '[')
 				str[m] = 2;
 			if (str[m] == ']')
 				str[m] = 1;
 		}
-
-		state = brief.text_state[i];
-		if (state >= 0)
-			player_Draw_Readout_Text(str, 1, screen_x, screen_y, 2 * state, brief.text_color[i]);
+		player_Draw_Double_Readout_Text(str, 1, scr_x, scr_y, brief.text_state[i], brief.text_color[i]);
 	}
 
-	/* Draw all flight group ship icons */
-
-	for (fg = 0; fg < fgroup.num_fgs; fg++) {
-		int16_t way_x;
-		int16_t way_y;
-		int16_t species;
+	for (i = 0; i < fgroup.num_fgs; i++) {
+		int16_t species = fgroup.fg[i].species - 1;
 		int16_t icon_idx;
-		int32_t sx;
-		int16_t scr_x;
-		int32_t sy;
-		int16_t scr_y;
 		int16_t offx, offy;
-
-		if (!fgroup.fg[fg].way_used[14])
+		if (!fgroup.fg[i].way_used[14])
 			continue;
-
-		way_x = fgroup.fg[fg].way_x[14];
-		way_y = fgroup.fg[fg].way_y[14];
-		species = fgroup.fg[fg].species - 1;
-		icon_idx = side_to_icon(fgroup.fg[fg].side);
-
+		switch (fgroup.fg[i].side) {
+			case 1:
+			case 4:
+				icon_idx = 1;
+				break;
+			case 2:
+				icon_idx = 2;
+				break;
+			case 3:
+			case 5:
+				icon_idx = 3;
+				break;
+			default:
+				icon_idx = 0;
+				break;
+		}
 		if (map_state.scale_x < 32)
 			species += 88;
 		if (species < 0)
 			continue;
-
-		sx = (int32_t)(way_x - map_state.center_x) * map_state.scale_x;
-		scr_x = sdiv256(sx) + (dst.right - dst.left) / 2 + dst.left;
-
-		sy = (int32_t)(way_y - map_state.center_y) * map_state.scale_y;
-		scr_y = sdiv256(sy) + (dst.bottom - dst.top) / 2 + dst.top;
-
+		player_Map_To_Screen_Pos(&dst, fgroup.fg[i].way_x[14], fgroup.fg[i].way_y[14], &scr_x, &scr_y);
 		xactor_Set_Actor_State(icon_actors[icon_idx], species, 0);
-
 		xactor_Get_Actor_Offset(icon_actors[icon_idx], &offx, &offy);
-
-		scr_x -= offx + (icon_actors[icon_idx]->w / 2);
-		scr_y -= offy + (icon_actors[icon_idx]->h / 2);
-
+		scr_x -= offx + (icon_actors[icon_idx]->w >> 1);
+		scr_y -= offy + (icon_actors[icon_idx]->h >> 1);
 		xactanim_Draw_Anim_Actor(icon_actors[icon_idx], clip, dest, scr_x, scr_y, 1);
 	}
 }
@@ -1468,11 +1230,12 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
  * Drawing: full map composite
  * ================================================================ */
 
-void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
+// FUNCTION: TIE95 0x7ECC0
+// FUNCTION: TIE98 0x46ABD0
+int16_t player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect, int16_t refresh) {
 	Rect dst, map_area, draw_clip;
 
-	int16_t i;
-	Rect ship_rect;
+	(void)refresh;
 
 	player_Stars_To_Back(view_rect->top);
 
@@ -1516,94 +1279,20 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 	player_Draw_Display_Grid(&map_area);
 	player_Draw_Display_Ship(&map_area, &draw_clip);
 
-	/* Draw target zoom animations */
-
-	xrect_Copy_Rect(&ship_rect, &map_area);
-
-	for (i = 0; i < 8; i++) {
-		int16_t fg_idx;
-		int16_t scr_x, scr_y;
-
-		if (!brief.target_on[i])
-			continue;
-		fg_idx = brief.target_id[i];
-
-		player_Map_To_Screen_Pos(&ship_rect, fgroup.fg[fg_idx].way_x[14], fgroup.fg[fg_idx].way_y[14], &scr_x,
-								 &scr_y);
-		player_Draw_Map_Zoom(&map_area, &draw_clip, fg_idx, brief.target_state[i]);
-	}
-
-	/* Draw text labels */
-	for (i = 0; i < 8; i++) {
-		int16_t scr_x, scr_y;
-		char* txt;
-		int16_t m;
-
-		char text_buf[40];
-
-		if (!brief.text_on[i])
-			continue;
-
-		player_Map_To_Screen_Pos(&ship_rect, brief.text_x[i], brief.text_y[i], &scr_x, &scr_y);
-
-		txt = (char*)xmemhdl_Lock_Handle(brief.text_data[brief.text_id[i]]);
-		if (txt) {
-			strcpy(text_buf, txt);
-			xmemhdl_Unlock_Handle(brief.text_data[brief.text_id[i]]);
-		} else
-			text_buf[0] = 0;
-
-		for (m = 0; text_buf[m]; m++) {
-			if (text_buf[m] == '[')
-				text_buf[m] = 2;
-			if (text_buf[m] == ']')
-				text_buf[m] = 1;
-		}
-
-		player_Draw_Double_Readout_Text(text_buf, 1, scr_x, scr_y, brief.text_state[i], brief.text_color[i]);
-	}
-
-	/* Draw all flight group icons */
-	for (i = 0; i < fgroup.num_fgs; i++) {
-		int16_t species;
-		int16_t icon_idx;
-		int16_t scr_x, scr_y;
-		int16_t offx, offy;
-
-		if (!fgroup.fg[i].way_used[14])
-			continue;
-
-		species = fgroup.fg[i].species - 1;
-		icon_idx = side_to_icon(fgroup.fg[i].side);
-
-		if (map_state.scale_x < 32)
-			species += 88;
-		if (species < 0)
-			continue;
-
-		player_Map_To_Screen_Pos(&ship_rect, fgroup.fg[i].way_x[14], fgroup.fg[i].way_y[14], &scr_x, &scr_y);
-
-		xactor_Set_Actor_State(icon_actors[icon_idx], species, 0);
-
-		xactor_Get_Actor_Offset(icon_actors[icon_idx], &offx, &offy);
-		scr_x -= offx + (icon_actors[icon_idx]->w / 2);
-		scr_y -= offy + (icon_actors[icon_idx]->h / 2);
-
-		xactanim_Draw_Anim_Actor(icon_actors[icon_idx], &map_area, &draw_clip, scr_x, scr_y, 1);
-	}
+	return 1;
 }
 
 /* ================================================================
  * XINPUT callbacks
  * ================================================================ */
 
-static int16_t iupdate_Map(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left, uint8_t right,
-						   int16_t mouse_x, int16_t mouse_y) {
-	Rect inset_bounds, clipped_rect, map_rect;
+// FUNCTION: TIE95 0x7D9E0
+// FUNCTION: TIE98 0x469A90
+static int16_t player_iupdate_Map(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+								  uint8_t right, int16_t mouse_x, int16_t mouse_y) {
+	Rect inset_bounds, clipped_rect;
 
 	(void)input;
-	(void)left;
-	(void)right;
 
 	xrect_Copy_Rect(&inset_bounds, bounds);
 	xrect_Inset_Rect(&inset_bounds, 1, 1);
@@ -1613,11 +1302,8 @@ static int16_t iupdate_Map(Input* input, Rect* bounds, Rect* clip, int16_t key, 
 	if (key)
 		return 0;
 
-	xrect_Copy_Rect(&map_rect, &map_state.source_rect);
-	if (player_Find_Ship_On_Screen(&map_rect, mouse_x - 1, mouse_y - 1))
-		xview_Refresh_View();
-
-	return 1;
+	return player_Update_Display_Map(&inset_bounds, &clipped_rect, left, right, (int16_t)(mouse_x - 1),
+									 (int16_t)(mouse_y - 1));
 }
 
 // FUNCTION: TIE95 0x7DA48
@@ -1634,14 +1320,14 @@ static void player_iuser_Map(Input* input, int32_t time) {
 #endif
 }
 
-static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
-	Rect draw_clip, map_area, r;
-	Rect dest;
+// FUNCTION: TIE95 0x7DA78
+// FUNCTION: TIE98 0x469B40
+static void player_idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
+	Rect draw_clip, r;
 #ifdef TIE_MODERN
 	TieMapHeader* map_h;
 #endif
 
-	(void)refresh;
 #ifdef TIE_MODERN
 
 	/* Stamp `start_z` so the merge dispatch knows where to slot the
@@ -1667,7 +1353,10 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 		 * routes them to the source RT and applies the polygon warp
 		 * at composite time. Other scratch-canvas paths (tielogo,
 		 * title) leave the override off so they stay suppressed. */
+
+#ifdef TIE_MODERN
 		xcanvas_Set_Render_Allow_Non_Screen(true);
+#endif
 		xcanvas_Push_Canvas(&brief_buffer);
 		xrect_Set_Rect(&r, 0, 0, 292, 147);
 		xrect_Copy_Rect(&draw_clip, &r);
@@ -1679,47 +1368,7 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 		xrect_Clip_Rect(&draw_clip, &r);
 	}
 
-	player_Stars_To_Back(r.top);
-
-	if (brief_poly_used) {
-		xrect_Copy_Rect(&map_area, &map_state.source_rect);
-		xrect_Offset_Rect(&map_area, r.left, r.top);
-	} else {
-		/* Top paragraph */
-		Rect dst;
-		Rect status_rect;
-
-		xrect_Copy_Rect(&dst, &map_state.source_rect);
-		xrect_Offset_Rect(&dst, r.left, r.top);
-		dst.bottom = dst.top + 12;
-		if (shellext_Get_Cur_Scene() != SCENE_COMBAT_MAP_A)
-			xpaint_Paint_Clipped_Rect(&dst, 1);
-		if (brief.para_on[0])
-			player_Draw_Map_Paragraph(&dst, brief.para_data[brief.para_id[0]], 0);
-
-		/* Bottom status */
-
-		xrect_Copy_Rect(&status_rect, &map_state.source_rect);
-		xrect_Offset_Rect(&status_rect, r.left, r.top);
-		status_rect.top = status_rect.bottom - 22;
-		if (shellext_Get_Cur_Scene() != SCENE_COMBAT_MAP_A)
-			xpaint_Paint_Clipped_Rect(&status_rect, 1);
-		if (brief.para_on[1])
-			player_Draw_Map_Paragraph(&status_rect, brief.para_data[brief.para_id[1]], 0);
-
-		/* Map area */
-		xrect_Copy_Rect(&map_area, &map_state.source_rect);
-		xrect_Offset_Rect(&map_area, r.left, r.top);
-		map_area.top += 12;
-		map_area.bottom -= 22;
-	}
-
-	xrect_Copy_Rect(&dest, &draw_clip);
-	xrect_Clip_Rect(&dest, &map_area);
-	xcanvas_Set_Drawing_Canvas_Clip(&dest);
-
-	player_Draw_Display_Grid(&map_area);
-	player_Draw_Display_Ship(&map_area, &dest);
+	player_Draw_Display_Map(&r, &draw_clip, refresh);
 
 	if (brief_poly_used) {
 		Rect src_rect;
@@ -1734,7 +1383,10 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 		xbitmap_Unlock_Bitmap(&brief_buffer);
 		/* Restore the canvas-leak gate so subsequent scratch-canvas
 		 * emits (tielogo / title backgrounds, etc.) stay suppressed. */
+
+#ifdef TIE_MODERN
 		xcanvas_Set_Render_Allow_Non_Screen(false);
+#endif
 	}
 
 	if (xinpattr_Is_Input_Dirty(input))
@@ -1826,9 +1478,11 @@ void player_Load_Display_Map(void) {
 	TieFile* fp;
 	int16_t i;
 
+#ifdef TIE_MODERN
 	uint8_t mis_buf[EMISSIONSTRUCT_DISK_SIZE];
 	uint8_t fg_buf[EFGSTRUCT_DISK_SIZE];
 	uint8_t page_buf[EBRIEFPAGE_DISK_SIZE];
+#endif
 
 	shipext_Get_Mission_Path(name);
 	memset(&fgroup, 0, sizeof(fgroup));
@@ -1849,13 +1503,21 @@ void player_Load_Display_Map(void) {
 	TieStorage_Read(&object_count, 2, 1, fp);
 	fgroup.num_fgs = fg_count;
 
+#ifdef TIE_MODERN
 	TieStorage_Read(mis_buf, EMISSIONSTRUCT_DISK_SIZE, 1, fp);
 	EMissionStruct_decode(&fgroup.mission, mis_buf);
+#else
+	TieStorage_Read(&fgroup.mission, EMISSIONSTRUCT_DISK_SIZE, 1, fp);
+#endif
 	shipext_Set_Mission_Ship(0);
 
 	for (i = 0; i < fgroup.num_fgs; i++) {
+#ifdef TIE_MODERN
 		TieStorage_Read(fg_buf, EFGSTRUCT_DISK_SIZE, 1, fp);
 		EFGStruct_decode(&fgroup.fg[i], fg_buf);
+#else
+		TieStorage_Read(&fgroup.fg[i], EFGSTRUCT_DISK_SIZE, 1, fp);
+#endif
 		if (fgroup.fg[i].player_flag) {
 			int16_t ms = -1;
 			switch (fgroup.fg[i].species) {
@@ -1901,8 +1563,12 @@ void player_Load_Display_Map(void) {
 
 	/* Read briefing page commands */
 
+#ifdef TIE_MODERN
 	TieStorage_Read(page_buf, EBRIEFPAGE_DISK_SIZE, 1, fp);
-	TieRecoveredBrief_DecodePage(&brief.page, page_buf);
+	TieBriefing_DecodePage(&brief.page, page_buf);
+#else
+	TieStorage_Read(&brief.page, EBRIEFPAGE_DISK_SIZE, 1, fp);
+#endif
 
 	/* Read text strings */
 	for (i = 0; i < 32; i++) {
@@ -1958,7 +1624,7 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 
 	player_Init_Display_Map();
 #ifdef TIE_MODERN
-	map_emit_widget = input;
+	TieMapSnapshot_SetInput(input);
 #endif
 
 	/* Set up polygon projection if provided */
@@ -2007,33 +1673,24 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 	}
 
 	/* Allocate star buffer and render star background into it */
-	star_buffer_data = malloc(48000);
+	star_buffer = xmemhdl_Alloc_Handle(48000, LANDRU_MEMORY_DEFAULT);
 
 	if (shellext_Get_Cur_Scene() == SCENE_COMBAT_MAP_A)
 		stars_actor->var1 = 17;
 	else
 		stars_actor->var1 = 16;
 
-	/* Render star actor into buffer */
-	{
-		Rect src_rect;
-		xrect_Set_Rect(&src_rect, 0, 0, 320, 150);
-		if (stars_actor->draw) {
-			xpaint_Paint_Clipped_Rect(&src_rect, stars_actor->var1);
-			stars_actor->draw(stars_actor, &src_rect, &src_rect, stars_actor->x, stars_actor->y, 1);
-		}
-		stub_Copy_To_Clipped_Buffer(star_buffer_data, &src_rect, 0, 0, 320, 150);
-	}
+	player_Actor_To_Buffer(stars_actor, star_buffer);
 
 	xres_Close_Resource(player_res);
 
 	/* Set up XINPUT callbacks */
 	if (!brief_poly_used) {
-		xinpattr_Set_Input_Update_Function(input, iupdate_Map);
+		xinpattr_Set_Input_Update_Function(input, player_iupdate_Map);
 		xinpattr_Set_Input_User_Function(input, player_iuser_Map);
 		input->mouseUsage = downMoveUpInput;
 	}
-	xinpattr_Set_Input_Draw_Function(input, idraw_Map);
+	xinpattr_Set_Input_Draw_Function(input, player_idraw_Map);
 
 	/* Load mission data */
 	player_Load_Display_Map();
@@ -2083,11 +1740,13 @@ void player_Free_Brief_Display(void) {
 	 * post-teardown emit produces active=0 instead of dereferencing
 	 * freed Input state. */
 #ifdef TIE_MODERN
-	map_emit_widget = NULL;
+	TieMapSnapshot_SetInput(NULL);
 #endif
 
-	free(star_buffer_data);
-	star_buffer_data = NULL;
+	xmemhdl_Free_Handle(star_buffer);
+#ifdef TIE_MODERN
+	star_buffer = LANDRU_NULL_HANDLE;
+#endif
 
 	if (brief_poly_used)
 		xbitmap_Free_Bitmap(&brief_buffer);
@@ -2102,7 +1761,7 @@ bool TieRecoveredMap_ReadSnapshotView(TieRecoveredMapSnapshotView* out) {
 	if (!out)
 		return false;
 	memset(out, 0, sizeof *out);
-	if (!map_emit_widget || !map_state.playing)
+	if (!map_state.playing)
 		return true;
 
 	scene = shellext_Get_Cur_Scene();
@@ -2121,11 +1780,6 @@ bool TieRecoveredMap_ReadSnapshotView(TieRecoveredMapSnapshotView* out) {
 			out->polygon_x[index] = brief_poly.x[index];
 			out->polygon_y[index] = brief_poly.y[index];
 		}
-	} else {
-		Rect frame = map_emit_widget->frame;
-		xrect_Inset_Rect(&frame, 1, 1);
-		out->destination_x = frame.left;
-		out->destination_y = frame.top;
 	}
 	out->scene_time = brief.page.time;
 	return true;

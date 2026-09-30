@@ -5,10 +5,10 @@
 #include "landru/rect.h"
 #include "landru/res.h"
 
+#include <landru/file.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <landru/file.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -68,9 +68,6 @@ typedef struct {
 
 #define ECONDSTRUCT_DISK_SIZE 4u
 
-void ECondStruct_decode(ECondStruct* dst, const uint8_t* src);
-void ECondStruct_encode(uint8_t* dst, const ECondStruct* src);
-
 /* EAIStruct — single AI order record. Naturally aligned in memory;
  * on-disk layout is the fixed 18-byte record produced/consumed by the
  * codec helpers below. An EFGStruct embeds 3 of these. */
@@ -92,16 +89,12 @@ typedef struct {
 
 #define EAISTRUCT_DISK_SIZE 18u
 
-void EAIStruct_decode(EAIStruct* dst, const uint8_t* src);
-void EAIStruct_encode(uint8_t* dst, const EAIStruct* src);
-
 /* EFGStruct — TIE Fighter flight group.
  * Field names from watdbg debug info (original LucasArts source).
  * Cross-verified against binary disasm and Mission_TIE95.txt (non-
  * official spec). On-disk layout is the fixed 292-byte (0x124) record
- * produced/consumed by EFGStruct_encode / EFGStruct_decode. The runtime
- * layout is naturally aligned and is wider than the disk record on most
- * hosts -- always go through the codec at file-format boundaries. */
+ * converted by the native mission-record codecs in tie_runtime/storage.
+ * The word fields require little-endian conversion on big-endian hosts. */
 typedef struct {
 	char name[12];         /* +0x00 */
 	char cmdr[12];         /* +0x0C: commander/pilot (editor only) */
@@ -202,9 +195,6 @@ typedef struct {
 
 #define EFGSTRUCT_DISK_SIZE 292u
 
-void EFGStruct_decode(EFGStruct* dst, const uint8_t* src);
-void EFGStruct_encode(uint8_t* dst, const EFGStruct* src);
-
 /* EMissionStruct — TIE mission header.
  * In the .TIE file: 2-byte version (read separately, then rewound),
  * followed by 456 bytes = 3 count shorts (num_fg, num_msg, num_goals)
@@ -233,9 +223,6 @@ typedef struct {
 
 #define EMISSIONSTRUCT_DISK_SIZE 450u
 
-void EMissionStruct_decode(EMissionStruct* dst, const uint8_t* src);
-void EMissionStruct_encode(uint8_t* dst, const EMissionStruct* src);
-
 /* MissionFile — the 456-byte block read by CREATE_loadmission.
  * 3 count shorts + EMissionStruct. Naturally aligned in memory; on-disk
  * layout is the fixed 456-byte little-endian record. */
@@ -247,9 +234,6 @@ typedef struct {
 } MissionFile;
 
 #define MISSIONFILE_DISK_SIZE 456u
-
-void MissionFile_decode(MissionFile* dst, const uint8_t* src);
-void MissionFile_encode(uint8_t* dst, const MissionFile* src);
 
 /* Pilot save record. The .tfr file stores two 1928-byte slots back-to-
  * back (primary + backup). Naturally aligned in memory; on-disk layout

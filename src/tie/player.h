@@ -34,17 +34,8 @@ typedef enum {
 	BCMD_END_PAGE = 34,     /* end-of-page sentinel (0 params) */
 } BriefCmd;
 
-/*
- * MAP_EBriefPage — briefing page command buffer.
- *
- * Naturally aligned in memory (all int16 fields, every field already
- * 2-aligned, so dropping the original pragma pack(1) doesn't change
- * sizeof). On-disk layout is the fixed 810-byte little-endian record
- * produced by the original game; loaded via TieRecoveredBrief_DecodePage so BE
- * hosts get the same in-memory values. Read-only at runtime, hence no
- * encoder.
- */
-typedef struct {
+/* Original 810-byte page record: five signed words followed by 400 command words. */
+typedef struct EBriefPage {
 	int16_t len;           /* +0x00: total length */
 	int16_t time;          /* +0x02: current time */
 	int16_t index;         /* +0x04: current command index */
@@ -54,9 +45,6 @@ typedef struct {
 } EBriefPage;
 
 #define EBRIEFPAGE_DISK_SIZE 810u
-
-/* Port adapter for the recovered packed disk record. */
-void TieRecoveredBrief_DecodePage(EBriefPage* dst, const uint8_t* src);
 
 /* Briefing state with the original 16-bit Landru text handles. The embedded
  * page has a disk codec; the containing state is not serialized as a unit. */
@@ -136,16 +124,17 @@ int16_t player_Reseek_Page(void);
 /* Map display */
 void player_Move_Display_Map(void);
 void player_Step_Display_Map(void);
-void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y);
+int16_t player_Update_Display_Map(Rect* bounds, Rect* clip, uint8_t left, uint8_t right, int16_t mouse_x,
+								  int16_t mouse_y);
 
-void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect);
+int16_t player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect, int16_t refresh);
 void player_Draw_Display_Grid(Rect* clip);
 void player_Draw_Display_Ship(Rect* clip, Rect* dest);
 void player_Draw_Map_Paragraph(Rect* clip, LandruHandle handle, int16_t flag);
-void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t screen_x, int16_t screen_y,
-									 int16_t text_y, int16_t text_state);
-void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_t x, int16_t index,
-							  int16_t state);
+void player_Draw_Double_Readout_Text(const char* text, int16_t font, int16_t screen_x, int16_t screen_y,
+									 int16_t index, int16_t state);
+void player_Draw_Readout_Text(const char* text, int16_t font, int16_t screen_x, int16_t screen_y,
+							  int16_t index, int16_t state);
 void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t target_id);
 
 /* Map navigation */
@@ -156,13 +145,8 @@ void player_Screen_To_Map_Pos(Rect* view_rect, int16_t screen_x, int16_t screen_
 int16_t player_Find_Ship_On_Screen(Rect* bounds, int16_t screen_x, int16_t screen_y);
 
 /* Actor helpers */
-void player_Actor_To_Buffer(Actor* actor, void* buffer);
+void player_Actor_To_Buffer(Actor* actor, LandruHandle buffer);
 void player_Stars_To_Back(int16_t screen_y);
-
-/* XINPUT callbacks */
-int16_t player_iupdate_Map(Input* input, Rect* bounds, Rect* clip, int16_t key, int16_t left, int16_t right,
-						   int16_t mouse_x, int16_t mouse_y);
-void player_idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh);
 
 #ifdef __cplusplus
 }

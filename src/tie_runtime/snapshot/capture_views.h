@@ -17,8 +17,6 @@ typedef struct TieRecoveredMapSnapshotView {
 	int16_t source_height;
 	int16_t polygon_x[4];
 	int16_t polygon_y[4];
-	int16_t destination_x;
-	int16_t destination_y;
 	int32_t scene_time;
 } TieRecoveredMapSnapshotView;
 

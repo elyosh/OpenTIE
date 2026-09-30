@@ -1,4 +1,7 @@
 #include "tie/replayio.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/storage/mission_records.h"
+#endif
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
@@ -47,12 +50,6 @@
  * Module-owned globals (watdbg: replayio.c's OBJ).
  * -------------------------------------------------------------------------- */
 
-/* On-disk sidecar buffer for slot [6]. The save loop dumps raw bytes,
- * but mission_file_header's runtime layout is naturally aligned and
- * wider than the 456-byte disk record; copytosave encodes into this
- * buffer before the loop, copyfromsave decodes out of it after. */
-static uint8_t mission_file_header_disk_image[MISSIONFILE_DISK_SIZE];
-
 /* Static (pointer, size) table of dynamic-state regions serialized by
  * replayio_copytosave / copyfromsave and (retail only) replay_save-
  * replay / loadreplay. 67 entries + a NULL terminator. The ordering
@@ -60,145 +57,153 @@ static uint8_t mission_file_header_disk_image[MISSIONFILE_DISK_SIZE];
  * 0xC7454 — replay clip files are only compatible across builds that
  * preserve this order. */
 void* savearrayptrs[68] = {
-	objects,                        /* [ 0] FlightObject[NUM_OBJECTS]    */
-	staticobjects,                  /* [ 1] StaticObject[...]            */
-	crafts,                         /* [ 2] CraftData[NUM_CRAFTS]        */
-	warheads,                       /* [ 3] WarheadRecord[...]           */
-	&_date,                         /* [ 4] mission clock (8 bytes)      */
-	timeleft,                       /* [ 5] mission time-left (8 bytes)  */
-	mission_file_header_disk_image, /* [ 6] mission header (encoded sidecar) */
-	&mission,                       /* [ 7] RUNTIME_MissionState         */
-	&pstate,                        /* [ 8] 292-byte player-state block  */
-	&music_state,                   /* [ 9]                              */
-	&music_intensity,               /* [10]                              */
-	&musicflag,                     /* [11]                              */
-	&currenttarget,                 /* [12]                              */
-	&currenttargetcomp,             /* [13]                              */
-	&bluetarget,                    /* [14]                              */
-	&targetblinkstate,              /* [15]                              */
-	&targetblinkflag,               /* [16]                              */
-	&blinkticks,                    /* [17]                              */
-	timers,                         /* [18] timers[20] (40 bytes)        */
-	&currentdebrisslot,             /* [19]                              */
-	backdropposition,               /* [20] backdrop skybox slot map     */
-	backdropspecies,                /* [21] skybox-species table         */
-	&backdropfrontcnt,              /* [22]                              */
-	&backdropbackcnt,               /* [23]                              */
-	&backdroptopcnt,                /* [24]                              */
-	&backdropbottomcnt,             /* [25]                              */
-	&backdropleftcnt,               /* [26]                              */
-	&backdroprightcnt,              /* [27]                              */
-	&stardetaillevel,               /* [28]                              */
-	&drawbackdropflag,              /* [29]                              */
-	&drawdebrisflag,                /* [30]                              */
-	&starshipexplodetail,           /* [31]                              */
-	&starshipdetail,                /* [32]                              */
-	&hyperspacedetail,              /* [33]                              */
-	&shipdetailvalue,               /* [34]                              */
-	&shipdetailpolycnt,             /* [35]                              */
-	&drawmarkingsflag,              /* [36]                              */
-	&detaillevel,                   /* [37]                              */
-	&cheatingflag,                  /* [38]                              */
-	&inflight_music_vol,            /* [39]                              */
-	&inflight_sound_vol,            /* [40]                              */
-	&inflight_speech_vol,           /* [41]                              */
-	&soundvolflag,                  /* [42]                              */
-	&musicvolflag,                  /* [43]                              */
-	&inflight_unlimited,            /* [44]                              */
-	&inflight_invulnerable,         /* [45]                              */
-	&inflight_collision,            /* [46]                              */
-	&acceleratedtimectr,            /* [47]                              */
-	&acceleratedtimesetting,        /* [48]                              */
-	&musicenabled,                  /* [49]                              */
-	&sfxenabled,                    /* [50]                              */
-	&voiceenabled,                  /* [51]                              */
-	&palette_cycle_user,            /* [52] = demo's colorcycleuserflag  */
-	&gouraudflag,                   /* [53]                              */
-	&blastcount,                    /* [54]                              */
-	blastqueue,                     /* [55] blastqueue (32 bytes)        */
-	&idnumber,                      /* [56]                              */
-	&lasthistorymsg,                /* [57]                              */
-	&numhistorymsgs,                /* [58]                              */
-	gatepreviousx,                  /* [59] gatepreviousx[4]             */
-	gatepreviousy,                  /* [60] gatepreviousy[4]             */
-	gatepreviousz,                  /* [61] gatepreviousz[4]             */
-	gatepreviousroll,               /* [62] gatepreviousroll[4]          */
-	gatepreviouspitch,              /* [63] gatepreviouspitch[4]         */
-	gatepreviousheading,            /* [64] gatepreviousheading[4]       */
-	&currentgate,                   /* [65]                              */
-	gatetimer,                      /* [66] gatetimer[3]                 */
-	NULL                            /* [67] terminator                   */
+	objects,       /* [ 0] FlightObject[NUM_OBJECTS]    */
+	staticobjects, /* [ 1] StaticObject[...]            */
+	crafts,        /* [ 2] CraftData[NUM_CRAFTS]        */
+	warheads,      /* [ 3] WarheadRecord[...]           */
+	&_date,        /* [ 4] mission clock (8 bytes)      */
+	timeleft,      /* [ 5] mission time-left (8 bytes)  */
+#ifdef TIE_MODERN
+	TieReplayMissionHeaderImage, /* [6] native encoded mission header */
+#else
+	&mission_file_header, /* [6] original mission header */
+#endif
+	&mission,                /* [ 7] RUNTIME_MissionState         */
+	&pstate,                 /* [ 8] 292-byte player-state block  */
+	&music_state,            /* [ 9]                              */
+	&music_intensity,        /* [10]                              */
+	&musicflag,              /* [11]                              */
+	&currenttarget,          /* [12]                              */
+	&currenttargetcomp,      /* [13]                              */
+	&bluetarget,             /* [14]                              */
+	&targetblinkstate,       /* [15]                              */
+	&targetblinkflag,        /* [16]                              */
+	&blinkticks,             /* [17]                              */
+	timers,                  /* [18] timers[20] (40 bytes)        */
+	&currentdebrisslot,      /* [19]                              */
+	backdropposition,        /* [20] backdrop skybox slot map     */
+	backdropspecies,         /* [21] skybox-species table         */
+	&backdropfrontcnt,       /* [22]                              */
+	&backdropbackcnt,        /* [23]                              */
+	&backdroptopcnt,         /* [24]                              */
+	&backdropbottomcnt,      /* [25]                              */
+	&backdropleftcnt,        /* [26]                              */
+	&backdroprightcnt,       /* [27]                              */
+	&stardetaillevel,        /* [28]                              */
+	&drawbackdropflag,       /* [29]                              */
+	&drawdebrisflag,         /* [30]                              */
+	&starshipexplodetail,    /* [31]                              */
+	&starshipdetail,         /* [32]                              */
+	&hyperspacedetail,       /* [33]                              */
+	&shipdetailvalue,        /* [34]                              */
+	&shipdetailpolycnt,      /* [35]                              */
+	&drawmarkingsflag,       /* [36]                              */
+	&detaillevel,            /* [37]                              */
+	&cheatingflag,           /* [38]                              */
+	&inflight_music_vol,     /* [39]                              */
+	&inflight_sound_vol,     /* [40]                              */
+	&inflight_speech_vol,    /* [41]                              */
+	&soundvolflag,           /* [42]                              */
+	&musicvolflag,           /* [43]                              */
+	&inflight_unlimited,     /* [44]                              */
+	&inflight_invulnerable,  /* [45]                              */
+	&inflight_collision,     /* [46]                              */
+	&acceleratedtimectr,     /* [47]                              */
+	&acceleratedtimesetting, /* [48]                              */
+	&musicenabled,           /* [49]                              */
+	&sfxenabled,             /* [50]                              */
+	&voiceenabled,           /* [51]                              */
+	&palette_cycle_user,     /* [52] = demo's colorcycleuserflag  */
+	&gouraudflag,            /* [53]                              */
+	&blastcount,             /* [54]                              */
+	blastqueue,              /* [55] blastqueue (32 bytes)        */
+	&idnumber,               /* [56]                              */
+	&lasthistorymsg,         /* [57]                              */
+	&numhistorymsgs,         /* [58]                              */
+	gatepreviousx,           /* [59] gatepreviousx[4]             */
+	gatepreviousy,           /* [60] gatepreviousy[4]             */
+	gatepreviousz,           /* [61] gatepreviousz[4]             */
+	gatepreviousroll,        /* [62] gatepreviousroll[4]          */
+	gatepreviouspitch,       /* [63] gatepreviouspitch[4]         */
+	gatepreviousheading,     /* [64] gatepreviousheading[4]       */
+	&currentgate,            /* [65]                              */
+	gatetimer,               /* [66] gatetimer[3]                 */
+	NULL                     /* [67] terminator                   */
 };
 
 uint32_t savearraysizes[68] = {
-	sizeof(objects),                        /* [ 0] */
-	sizeof(staticobjects),                  /* [ 1] */
-	sizeof(crafts),                         /* [ 2] */
-	sizeof(warheads),                       /* [ 3] */
-	sizeof(_date),                          /* [ 4] = 8 */
-	sizeof(timeleft),                       /* [ 5] = 8 */
-	sizeof(mission_file_header_disk_image), /* [ 6] = 456 */
-	sizeof(mission),                        /* [ 7] */
-	sizeof(pstate),                         /* [ 8] = 292 (300 on 64-bit) */
-	sizeof(music_state),                    /* [ 9] = 2 */
-	sizeof(music_intensity),                /* [10] = 2 */
-	sizeof(musicflag),                      /* [11] = 1 */
-	sizeof(currenttarget),                  /* [12] = 2 */
-	sizeof(currenttargetcomp),              /* [13] = 2 */
-	sizeof(bluetarget),                     /* [14] = 2 */
-	sizeof(targetblinkstate),               /* [15] = 2 */
-	sizeof(targetblinkflag),                /* [16] = 2 */
-	sizeof(blinkticks),                     /* [17] = 2 */
-	sizeof(timers),                         /* [18] = 40 */
-	sizeof(currentdebrisslot),              /* [19] = 2 */
-	sizeof(backdropposition),               /* [20] = 64 */
-	sizeof(backdropspecies),                /* [21] = 64 */
-	sizeof(backdropfrontcnt),               /* [22] = 2 */
-	sizeof(backdropbackcnt),                /* [23] = 2 */
-	sizeof(backdroptopcnt),                 /* [24] = 2 */
-	sizeof(backdropbottomcnt),              /* [25] = 2 */
-	sizeof(backdropleftcnt),                /* [26] = 2 */
-	sizeof(backdroprightcnt),               /* [27] = 2 */
-	sizeof(stardetaillevel),                /* [28] = 2 */
-	sizeof(drawbackdropflag),               /* [29] = 1 */
-	sizeof(drawdebrisflag),                 /* [30] = 1 */
-	sizeof(starshipexplodetail),            /* [31] = 2 */
-	sizeof(starshipdetail),                 /* [32] = 2 */
-	sizeof(hyperspacedetail),               /* [33] = 2 */
-	sizeof(shipdetailvalue),                /* [34] = 2 */
-	sizeof(shipdetailpolycnt),              /* [35] = 2 */
-	sizeof(drawmarkingsflag),               /* [36] = 1 */
-	sizeof(detaillevel),                    /* [37] = 2; host replay format */
-	sizeof(cheatingflag),                   /* [38] = 1 */
-	sizeof(inflight_music_vol),             /* [39] = 1 */
-	sizeof(inflight_sound_vol),             /* [40] = 1 */
-	sizeof(inflight_speech_vol),            /* [41] = 1 */
-	sizeof(soundvolflag),                   /* [42] = 1 */
-	sizeof(musicvolflag),                   /* [43] = 1 */
-	sizeof(inflight_unlimited),             /* [44] = 1 */
-	sizeof(inflight_invulnerable),          /* [45] = 1 */
-	sizeof(inflight_collision),             /* [46] = 1 */
-	sizeof(acceleratedtimectr),             /* [47] = 1 */
-	sizeof(acceleratedtimesetting),         /* [48] = 1 */
-	sizeof(musicenabled),                   /* [49] = 1 */
-	sizeof(sfxenabled),                     /* [50] = 1 */
-	sizeof(voiceenabled),                   /* [51] = 1 */
-	sizeof(palette_cycle_user),             /* [52] = 1 */
-	sizeof(gouraudflag),                    /* [53] = 1 */
-	sizeof(blastcount),                     /* [54] = 1 */
-	sizeof(blastqueue),                     /* [55] = 32 */
-	sizeof(idnumber),                       /* [56] = 2 */
-	sizeof(lasthistorymsg),                 /* [57] = 2 */
-	sizeof(numhistorymsgs),                 /* [58] = 2 */
-	sizeof(gatepreviousx),                  /* [59] = 16 */
-	sizeof(gatepreviousy),                  /* [60] = 16 */
-	sizeof(gatepreviousz),                  /* [61] = 16 */
-	sizeof(gatepreviousroll),               /* [62] = 8 */
-	sizeof(gatepreviouspitch),              /* [63] = 8 */
-	sizeof(gatepreviousheading),            /* [64] = 8 */
-	sizeof(currentgate),                    /* [65] = 2 */
-	sizeof(gatetimer),                      /* [66] = 6 */
-	0                                       /* [67] terminator */
+	sizeof(objects),       /* [ 0] */
+	sizeof(staticobjects), /* [ 1] */
+	sizeof(crafts),        /* [ 2] */
+	sizeof(warheads),      /* [ 3] */
+	sizeof(_date),         /* [ 4] = 8 */
+	sizeof(timeleft),      /* [ 5] = 8 */
+#ifdef TIE_MODERN
+	sizeof(TieReplayMissionHeaderImage), /* [6] native encoded mission header */
+#else
+	206, /* [6] DOS retail saved prefix */
+#endif
+	sizeof(mission),                /* [ 7] */
+	sizeof(pstate),                 /* [ 8] = 292 (300 on 64-bit) */
+	sizeof(music_state),            /* [ 9] = 2 */
+	sizeof(music_intensity),        /* [10] = 2 */
+	sizeof(musicflag),              /* [11] = 1 */
+	sizeof(currenttarget),          /* [12] = 2 */
+	sizeof(currenttargetcomp),      /* [13] = 2 */
+	sizeof(bluetarget),             /* [14] = 2 */
+	sizeof(targetblinkstate),       /* [15] = 2 */
+	sizeof(targetblinkflag),        /* [16] = 2 */
+	sizeof(blinkticks),             /* [17] = 2 */
+	sizeof(timers),                 /* [18] = 40 */
+	sizeof(currentdebrisslot),      /* [19] = 2 */
+	sizeof(backdropposition),       /* [20] = 64 */
+	sizeof(backdropspecies),        /* [21] = 64 */
+	sizeof(backdropfrontcnt),       /* [22] = 2 */
+	sizeof(backdropbackcnt),        /* [23] = 2 */
+	sizeof(backdroptopcnt),         /* [24] = 2 */
+	sizeof(backdropbottomcnt),      /* [25] = 2 */
+	sizeof(backdropleftcnt),        /* [26] = 2 */
+	sizeof(backdroprightcnt),       /* [27] = 2 */
+	sizeof(stardetaillevel),        /* [28] = 2 */
+	sizeof(drawbackdropflag),       /* [29] = 1 */
+	sizeof(drawdebrisflag),         /* [30] = 1 */
+	sizeof(starshipexplodetail),    /* [31] = 2 */
+	sizeof(starshipdetail),         /* [32] = 2 */
+	sizeof(hyperspacedetail),       /* [33] = 2 */
+	sizeof(shipdetailvalue),        /* [34] = 2 */
+	sizeof(shipdetailpolycnt),      /* [35] = 2 */
+	sizeof(drawmarkingsflag),       /* [36] = 1 */
+	sizeof(detaillevel),            /* [37] = 2; host replay format */
+	sizeof(cheatingflag),           /* [38] = 1 */
+	sizeof(inflight_music_vol),     /* [39] = 1 */
+	sizeof(inflight_sound_vol),     /* [40] = 1 */
+	sizeof(inflight_speech_vol),    /* [41] = 1 */
+	sizeof(soundvolflag),           /* [42] = 1 */
+	sizeof(musicvolflag),           /* [43] = 1 */
+	sizeof(inflight_unlimited),     /* [44] = 1 */
+	sizeof(inflight_invulnerable),  /* [45] = 1 */
+	sizeof(inflight_collision),     /* [46] = 1 */
+	sizeof(acceleratedtimectr),     /* [47] = 1 */
+	sizeof(acceleratedtimesetting), /* [48] = 1 */
+	sizeof(musicenabled),           /* [49] = 1 */
+	sizeof(sfxenabled),             /* [50] = 1 */
+	sizeof(voiceenabled),           /* [51] = 1 */
+	sizeof(palette_cycle_user),     /* [52] = 1 */
+	sizeof(gouraudflag),            /* [53] = 1 */
+	sizeof(blastcount),             /* [54] = 1 */
+	sizeof(blastqueue),             /* [55] = 32 */
+	sizeof(idnumber),               /* [56] = 2 */
+	sizeof(lasthistorymsg),         /* [57] = 2 */
+	sizeof(numhistorymsgs),         /* [58] = 2 */
+	sizeof(gatepreviousx),          /* [59] = 16 */
+	sizeof(gatepreviousy),          /* [60] = 16 */
+	sizeof(gatepreviousz),          /* [61] = 16 */
+	sizeof(gatepreviousroll),       /* [62] = 8 */
+	sizeof(gatepreviouspitch),      /* [63] = 8 */
+	sizeof(gatepreviousheading),    /* [64] = 8 */
+	sizeof(currentgate),            /* [65] = 2 */
+	sizeof(gatetimer),              /* [66] = 6 */
+	0                               /* [67] terminator */
 };
 uint8_t replayviewptr[16];
 
@@ -277,14 +282,18 @@ static void replayio_port_rebind_checkpoint_pointers(void) {
 // FUNCTION: TIE95 0x478A0
 int16_t replayio_copytosave(const char* fname) {
 	size_t i;
+#ifdef TIE_MODERN
 	uint8_t fg_save_buf[48 * EFGSTRUCT_DISK_SIZE];
+#endif
 
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, fname, "wb", 0))
 		return 0;
 
 	/* Refresh the slot-[6] sidecar from the live mission_file_header so
 	 * the generic raw-byte loop emits the canonical 456-byte LE image. */
-	MissionFile_encode(mission_file_header_disk_image, &mission_file_header);
+#ifdef TIE_MODERN
+	MissionFile_encode(TieReplayMissionHeaderImage, &mission_file_header);
+#endif
 
 	for (i = 0; savearrayptrs[i]; ++i) {
 		uint32_t sz = savearraysizes[i];
@@ -296,12 +305,16 @@ int16_t replayio_copytosave(const char* fname) {
 	}
 
 	/* The save format expects fg_array as the on-disk 48 x 292-byte
-	 * little-endian image; encode through a buffer because the runtime
-	 * EFGStruct layout is naturally aligned and wider on most hosts. */
+	 * little-endian image; native builds encode the word fields through
+	 * a buffer for host-endian independence. */
 
+#ifdef TIE_MODERN
 	for (i = 0; i < 48; ++i)
 		EFGStruct_encode(fg_save_buf + i * EFGSTRUCT_DISK_SIZE, &fg_array[i]);
 	if (!write_raw_block(fg_save_buf, sizeof fg_save_buf, fileptr))
+#else
+	if (!write_raw_block(fg_array, 48 * EFGSTRUCT_DISK_SIZE, fileptr))
+#endif
 		goto fail;
 	if (!write_raw_block(radiomsg, 0x5A0, fileptr))
 		goto fail;
@@ -331,7 +344,9 @@ fail:
 // FUNCTION: TIE95 0x47A08
 int16_t replayio_copyfromsave(const char* fname) {
 	size_t i;
+#ifdef TIE_MODERN
 	uint8_t fg_load_buf[48 * EFGSTRUCT_DISK_SIZE];
+#endif
 
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, fname, "rb", 1))
 		return 0;
@@ -345,20 +360,28 @@ int16_t replayio_copyfromsave(const char* fname) {
 		}
 	}
 
-	/* Slot [6] just landed in mission_file_header_disk_image; decode
+	/* Slot [6] just landed in TieReplayMissionHeaderImage; decode
 	 * back into the live struct. */
-	MissionFile_decode(&mission_file_header, mission_file_header_disk_image);
+#ifdef TIE_MODERN
+	MissionFile_decode(&mission_file_header, TieReplayMissionHeaderImage);
+#endif
 
 	/* Read 48 x 292-byte fg records as a contiguous on-disk image,
 	 * then decode each into the runtime fg_array (whose element width
 	 * may differ from the disk size due to natural alignment). */
 
+#ifdef TIE_MODERN
 	if (!read_raw_block(fg_load_buf, sizeof fg_load_buf, fileptr)) {
+#else
+	if (!read_raw_block(fg_array, 48 * EFGSTRUCT_DISK_SIZE, fileptr)) {
+#endif
 		TieStorage_Close(fileptr);
 		return 0;
 	}
+#ifdef TIE_MODERN
 	for (i = 0; i < 48; ++i)
 		EFGStruct_decode(&fg_array[i], fg_load_buf + i * EFGSTRUCT_DISK_SIZE);
+#endif
 	if (!read_raw_block(radiomsg, 0x5A0, fileptr)) {
 		TieStorage_Close(fileptr);
 		return 0;
