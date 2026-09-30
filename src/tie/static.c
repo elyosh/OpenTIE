@@ -16,6 +16,7 @@
 #include "tie/create.h"
 #include "tie/draw.h"
 #include "tie/drawpol.h"
+#include "tie/edition.h"
 #include "tie/fsfx.h"
 #include "tie/fview.h"
 #include "tie/laser.h"
@@ -65,7 +66,7 @@ void static_drawstaticobject(uint16_t slot_idx) {
 	parentobject = self_idx;
 
 	if (!frame_tab) {
-		if (TieProfile_UsesTie98Logic())
+		if (TIE_FLIGHT_TIE98)
 			return;
 		/* Complex BSP mesh: anim_frame != 0 hides the mesh. */
 		if (so->anim_frame == 0)
@@ -136,7 +137,7 @@ void static_drawstaticobject(uint16_t slot_idx) {
 		return;
 	}
 
-	if (TieProfile_UsesTie98Logic())
+	if (TIE_FLIGHT_TIE98)
 		return;
 
 	/* Polygon mesh: locate LOD for this eyez and emit via DRAWPOL. */
@@ -344,7 +345,7 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 		z_loc2 = -0x3FFF0000;
 	z_loc2 >>= 15;
 
-	if (TieProfile_UsesTie98Logic()) {
+	if (TIE_FLIGHT_TIE98) {
 		/* TIE98 tests mesh 0's authored descriptor bounds in OPT axis order
 		 * (side, forward, up) before entering the collision tree. */
 		const int32_t start_x = x_loc2;
@@ -789,7 +790,7 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 	fview_calcrotatemove(aim_z, aim_xy, p);
 
 	/* Step from the muzzle to the projectile model origin. */
-	plen = (int32_t)(TieProfile_UsesTie98Logic() ? tie98_projectilelength : projectilelength)[ptype];
+	plen = (int32_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[ptype];
 	p->world_x_prev = sx_w;
 	p->world_y_prev = sy_w;
 	p->world_z_prev = sz_w;

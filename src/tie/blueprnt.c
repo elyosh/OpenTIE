@@ -363,7 +363,7 @@ static int16_t blueprnt_draw_Blueprint_Text(Actor* the_actor, Rect* draw_rect, R
 	else
 		shipext_Get_Blueprint_Ship_Name(text);
 
-	xfont_Print_Centered_Text(text, draw_rect, 15, TIE_EDITION(0, 2));
+	xfont_Print_Centered_Text(text, draw_rect, 15, TIE_FRONTEND_EDITION(0, 2));
 
 	if (xactor_Is_Actor_Dirty(the_actor))
 		xdirty_Dirty_Rect(clip_rect);
@@ -499,7 +499,7 @@ static int16_t blueprnt_draw_Blueprint_Title(Actor* the_actor, Rect* draw_rect, 
 
 	xactor_Get_Actor_Bounds(the_actor, &bounds);
 	text = textext_Get_Text(txtTourMainMenu);
-	xfont_Print_Centered_Text(text, &bounds, 15, TIE_EDITION(0, 2));
+	xfont_Print_Centered_Text(text, &bounds, 15, TIE_FRONTEND_EDITION(0, 2));
 
 	return 1;
 }
@@ -553,32 +553,32 @@ int16_t blueprnt_Blueprint(SceneHeadStruct* the_head) {
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 
-	xrect_Set_Rect(&frame, 0, 0, TIE_EDITION(320, 640), TIE_EDITION(200, 480));
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 	blueprint_film =
 		xfilm_Res_Callback_Film(blueprint_str[1], &frame, 0, 0, 0, blueprnt_film_Blueprint_Callback);
 	xfilm_Set_Film_Def_Palette(blueprint_film, the_head->def_palette);
 
 	/* World input (full screen) */
-	xrect_Set_Rect(&frame, 0, 0, TIE_EDITION(320, 640), TIE_EDITION(200, 480));
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 	for (i = 0; i < 4; i++) {
 		switch (i) {
 			case 0:
-				xrect_Set_Rect(&frame, TIE_EDITION(62, 203), TIE_EDITION(150, 350), TIE_EDITION(92, 255),
-							   TIE_EDITION(164, 380));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(62, 203), TIE_FRONTEND_EDITION(150, 350),
+							   TIE_FRONTEND_EDITION(92, 255), TIE_FRONTEND_EDITION(164, 380));
 				break;
 			case 1:
-				xrect_Set_Rect(&frame, TIE_EDITION(62, 203), TIE_EDITION(165, 385), TIE_EDITION(92, 255),
-							   TIE_EDITION(178, 415));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(62, 203), TIE_FRONTEND_EDITION(165, 385),
+							   TIE_FRONTEND_EDITION(92, 255), TIE_FRONTEND_EDITION(178, 415));
 				break;
 			case 2:
-				xrect_Set_Rect(&frame, TIE_EDITION(263, 553), TIE_EDITION(150, 350), TIE_EDITION(295, 605),
-							   TIE_EDITION(164, 380));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(263, 553), TIE_FRONTEND_EDITION(150, 350),
+							   TIE_FRONTEND_EDITION(295, 605), TIE_FRONTEND_EDITION(164, 380));
 				break;
 			case 3:
-				xrect_Set_Rect(&frame, TIE_EDITION(263, 553), TIE_EDITION(165, 385), TIE_EDITION(295, 605),
-							   TIE_EDITION(178, 415));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(263, 553), TIE_FRONTEND_EDITION(165, 385),
+							   TIE_FRONTEND_EDITION(295, 605), TIE_FRONTEND_EDITION(178, 415));
 				break;
 		}
 		button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
@@ -588,29 +588,30 @@ int16_t blueprnt_Blueprint(SceneHeadStruct* the_head) {
 	}
 
 	/* Door input (left panel) */
-	xrect_Set_Rect(&frame, 0, TIE_EDITION(30, 73), TIE_EDITION(80, 159), TIE_EDITION(116, 296));
+	xrect_Set_Rect(&frame, 0, TIE_FRONTEND_EDITION(30, 73), TIE_FRONTEND_EDITION(80, 159),
+				   TIE_FRONTEND_EDITION(116, 296));
 	door_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(door_input, blueprnt_iupdate_Blueprint_Door);
 	xinpattr_Set_Input_User_Function(door_input, blueprnt_iuser_Blueprint_Door);
 	door_input->mouseUsage = 4;
 
 	/* Ship name text actor */
-	xrect_Set_Rect(&frame, TIE_EDITION(98, 266), TIE_EDITION(153, 355), TIE_EDITION(257, 539),
-				   TIE_EDITION(161, 375));
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(98, 266), TIE_FRONTEND_EDITION(153, 355),
+				   TIE_FRONTEND_EDITION(257, 539), TIE_FRONTEND_EDITION(161, 375));
 	ship_name_actor = xactcust_Alloc_Custom_Actor(0, &frame, 0, 0, 0);
 	xactor_Set_Actor_Draw_Function(ship_name_actor, blueprnt_draw_Blueprint_Text);
 	ship_name_actor->id = 0;
 
 	/* Component text actor ("Rotate Craft") */
-	xrect_Set_Rect(&frame, TIE_EDITION(98, 266), TIE_EDITION(167, 392), TIE_EDITION(257, 539),
-				   TIE_EDITION(175, 412));
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(98, 266), TIE_FRONTEND_EDITION(167, 392),
+				   TIE_FRONTEND_EDITION(257, 539), TIE_FRONTEND_EDITION(175, 412));
 	ship_comp_actor = xactcust_Alloc_Custom_Actor(0, &frame, 0, 0, 0);
 	xactor_Set_Actor_Draw_Function(ship_comp_actor, blueprnt_draw_Blueprint_Text);
 	ship_comp_actor->id = 1;
 
 	/* Ship info overlay actor */
-	xrect_Set_Rect(&frame, TIE_EDITION(131, 222), TIE_EDITION(30, 75), TIE_EDITION(278, 570),
-				   TIE_EDITION(200, 310));
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(131, 222), TIE_FRONTEND_EDITION(30, 75),
+				   TIE_FRONTEND_EDITION(278, 570), TIE_FRONTEND_EDITION(200, 310));
 	ship_info_actor = xactcust_Alloc_Custom_Actor(0, &frame, 0, 0, 10);
 	xactor_Set_Actor_User_Function(ship_info_actor, blueprnt_user_Blueprint_Info);
 	xactor_Set_Actor_Draw_Function(ship_info_actor, blueprnt_draw_Blueprint_Info);

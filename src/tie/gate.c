@@ -1,6 +1,7 @@
 #include "tie/gate.h"
 #include "tie/draw.h"
 #include "tie/drawpol.h"
+#include "tie/edition.h"
 #include "tie/festring.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/frontend_display_tie98.h"
@@ -365,7 +366,6 @@ void gate_createtraininggates(void) {
 		/* --- FlightObject scalar init --- */
 		uint16_t component_count;
 		uint16_t m;
-		bool tie98;
 		int32_t fwd_step;
 		int32_t up_step_gate;
 		int32_t side_step;
@@ -407,7 +407,7 @@ void gate_createtraininggates(void) {
 
 		/* --- CraftData per-mesh init (mesh_state / mesh_rotation / mesh_component_hp) --- */
 		component_count = 40;
-		if (TieProfile_UsesTie98Logic()) {
+		if (TIE_FLIGHT_TIE98) {
 			modelmesh_require_craft_capacity(ship_idx);
 			component_count = (uint16_t)modelmesh_getcount(ship_idx) + 1;
 		}
@@ -435,8 +435,7 @@ void gate_createtraininggates(void) {
 
 		/* Publish craftptr for model-dependent code below. */
 		craftptr = craft;
-		tie98 = TieProfile_UsesTie98Logic();
-		if (!tie98)
+		if (!TIE_FLIGHT_TIE98)
 			draw_lockshipfileptrs(ship_idx);
 
 		/* Apply orientation. */
@@ -448,15 +447,16 @@ void gate_createtraininggates(void) {
 
 		/* TIE95 derives 16-bit offsets from its object block and doubles the
 		 * resulting geometry. TIE98 uses unscaled 32-bit OPT bounds. */
-		fwd_step = tie98 ? -modelbounds_getmaxy(ship_idx) : (int16_t)-(int16_t)objectblockptr->speed_default;
+		fwd_step = TIE_FLIGHT_EDITION((int16_t)-(int16_t)objectblockptr->speed_default,
+									  -modelbounds_getmaxy(ship_idx));
 		up_step_gate = 0;
 		side_step = 0;
 		up_step_advance = 0;
 		fwd_advance = 0;
 
-		if (tie98 && ship_idx == 98) {
+		if (TIE_FLIGHT_TIE98 && ship_idx == 98) {
 			fwd_advance = modelbounds_getsizey(ship_idx);
-		} else if (tie98 && ship_idx == 99) {
+		} else if (TIE_FLIGHT_TIE98 && ship_idx == 99) {
 			const int32_t base_min_z = modelbounds_getminz(98);
 			up_step_gate = modelbounds_getminz(99) - base_min_z;
 			fwd_advance = base_min_z + modelbounds_getsizey(99);
@@ -476,7 +476,7 @@ void gate_createtraininggates(void) {
 		}
 
 		/* Gate position = cumulative minus the model-local placement offset. */
-		geometry_scale = tie98 ? 1 : 2;
+		geometry_scale = TIE_FLIGHT_EDITION(2, 1);
 		dx_gate = math2_mul_q15(craftf1, fwd_step) + math2_mul_q15(craftU1, up_step_gate);
 		dy_gate = math2_mul_q15(craftf2, fwd_step) + math2_mul_q15(craftU2, up_step_gate);
 		dz_gate = math2_mul_q15(craftf3, fwd_step) + math2_mul_q15(craftU3, up_step_gate);
@@ -537,7 +537,6 @@ void gate_settraininglevel(uint16_t level) {
 	craft = craftptr;
 	for (obj_idx = 0; obj_idx < NUM_CRAFTS; ++obj_idx) {
 		uint16_t ship_idx = objects[obj_idx].ship_idx;
-		bool tie98;
 		uint16_t mesh_count;
 		uint16_t mesh_idx;
 
@@ -545,17 +544,17 @@ void gate_settraininglevel(uint16_t level) {
 			continue;
 
 		craftptr = objects[obj_idx].craft_ptr;
-		tie98 = TieProfile_UsesTie98Logic();
-		if (tie98)
+		if (TIE_FLIGHT_TIE98)
 			modelmesh_require_craft_capacity(ship_idx);
 		else
 			draw_lockshipfileptrs(ship_idx);
 		craft = craftptr;
 
-		mesh_count = tie98 ? (uint16_t)modelmesh_getcount(ship_idx) : (uint16_t)objectblockptr->num_meshes;
+		mesh_count =
+			TIE_FLIGHT_EDITION((uint16_t)objectblockptr->num_meshes, (uint16_t)modelmesh_getcount(ship_idx));
 		for (mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-			uint16_t mesh_type = tie98 ? (uint16_t)modelmesh_gettype(ship_idx, mesh_idx)
-									   : componentblockptr[mesh_idx].mesh_type;
+			uint16_t mesh_type = TIE_FLIGHT_EDITION(componentblockptr[mesh_idx].mesh_type,
+													(uint16_t)modelmesh_gettype(ship_idx, mesh_idx));
 
 			if (obj_idx == 1) {
 				/* Gate 1 (course start) is always frozen. */
@@ -573,7 +572,7 @@ void gate_settraininglevel(uint16_t level) {
 				continue;
 			}
 			if (mesh_type == TIE_MESH_WING) {
-				if (tie98) {
+				if (TIE_FLIGHT_TIE98) {
 					modelmesh_enableexplosiontype2(ship_idx, mesh_idx);
 					modelmesh_enableexplosiontype1(ship_idx, mesh_idx);
 				} else {
@@ -599,7 +598,7 @@ void gate_settraininglevel(uint16_t level) {
 				continue;
 			}
 			if (mesh_type == TIE_MESH_CARGO_POD) {
-				if (tie98) {
+				if (TIE_FLIGHT_TIE98) {
 					modelmesh_enableexplosiontype2(ship_idx, mesh_idx);
 					modelmesh_enableexplosiontype1(ship_idx, mesh_idx);
 				} else {
@@ -622,7 +621,7 @@ void gate_settraininglevel(uint16_t level) {
 					craft->mesh_component_hp[mesh_idx] = 0;
 				} else {
 					craft->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-					craft->mesh_rotation[mesh_idx] = tie98 ? 1 : 0;
+					craft->mesh_rotation[mesh_idx] = TIE_FLIGHT_EDITION(0, 1);
 					craft->mesh_component_hp[mesh_idx] = 0xFF;
 				}
 				continue;
@@ -661,7 +660,6 @@ int gate_checkgateedge(uint16_t obj_idx) {
 	FlightObject* obj = &objects[obj_idx];
 	uint8_t ship_idx = obj->ship_idx;
 
-	const bool tie98 = TieProfile_UsesTie98Logic();
 	int32_t base_offset;
 	int32_t fwd_offset;
 	int32_t geometry_scale;
@@ -681,22 +679,22 @@ int gate_checkgateedge(uint16_t obj_idx) {
 	int cur_pos;
 	int prev_pos;
 
-	if (!tie98)
+	if (!TIE_FLIGHT_TIE98)
 		draw_lockshipfileptrs(ship_idx);
 
 	if (ship_idx == 98) {
-		base_offset =
-			tie98 ? -modelbounds_getmaxy(ship_idx) : (int16_t)(-(int16_t)objectblockptr->speed_default);
+		base_offset = TIE_FLIGHT_EDITION((int16_t)(-(int16_t)objectblockptr->speed_default),
+										 -modelbounds_getmaxy(ship_idx));
 	} else {
 		base_offset = 0;
 	}
 
-	if (tie98)
+	if (TIE_FLIGHT_TIE98)
 		fwd_offset = (obj_idx == currentgate) ? base_offset - 1024 : base_offset + 32;
 	else
 		fwd_offset = (obj_idx == currentgate) ? (int16_t)(base_offset - 1024) : (int16_t)(base_offset + 32);
 
-	geometry_scale = tie98 ? 1 : 2;
+	geometry_scale = TIE_FLIGHT_EDITION(2, 1);
 	plane_x = obj->world_x + geometry_scale * math2_mul_q15(obj->fwd_x, fwd_offset);
 	plane_y = obj->world_y + geometry_scale * math2_mul_q15(obj->fwd_y, fwd_offset);
 	plane_z = obj->world_z + geometry_scale * math2_mul_q15(obj->fwd_z, fwd_offset);
@@ -721,7 +719,7 @@ int gate_checkgateedge(uint16_t obj_idx) {
 		dz_prev < -0x4000)
 		return 0;
 
-	if (tie98) {
+	if (TIE_FLIGHT_TIE98) {
 		cur_signed = math2_mul_q15(obj->fwd_x, dx_cur) + math2_mul_q15(obj->fwd_y, dy_cur) +
 					 math2_mul_q15(obj->fwd_z, dz_cur);
 		prev_signed = math2_mul_q15(obj->fwd_x, dx_prev) + math2_mul_q15(obj->fwd_y, dy_prev) +
@@ -824,7 +822,7 @@ void gate_updatecourseprogress(void) {
 	 * step posts MSG_BONUS_AWARDED and bumps train_level. */
 	msg_messageprintf(MSG_LEVEL_COMPLETED);
 	mission.train_bonus = 0;
-	if (TieClassicDisplay_UsesDx5()) {
+	if (TIE_DISPLAY_DX5) {
 		g_flightDrawToOffscreenSurface = 0;
 		FlightSurface_Lock();
 		gate_updatebonuspoints();
@@ -858,16 +856,11 @@ void gate_updategateanimations(void) {
 	uint16_t tickbudget = 0;
 #ifdef TIE_MODERN
 	BonusCountdownTask* continuation = NULL;
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
 	if (bonus_countdown_active) {
 		continuation = landru_task_top();
 		tickbudget = continuation->tickbudget;
 		continuation->waiting = false;
 	} else
-#elif defined(TIE98)
-	const bool tie98_display = true;
-#else
-	const bool tie98_display = false;
 #endif
 	{
 		int16_t delta_cargopod = 0;
@@ -925,17 +918,13 @@ void gate_updategateanimations(void) {
 		/* Phase 2: apply deltas to each gate's meshes. */
 		for (j = 1; j < 13; ++j) {
 			uint16_t ship_idx = objects[j].ship_idx;
-#ifdef TIE_MODERN
-			bool tie98;
-#endif
 			CraftData* craft;
 			uint16_t num_meshes;
 			uint16_t mesh_idx;
 
 			craftptr = saved_craft;
 #ifdef TIE_MODERN
-			tie98 = TieProfile_UsesTie98Logic();
-			if (!tie98)
+			if (!TIE_FLIGHT_TIE98)
 				draw_lockshipfileptrs(ship_idx);
 #elif defined(TIE95)
 			draw_lockshipfileptrs(ship_idx);
@@ -943,8 +932,8 @@ void gate_updategateanimations(void) {
 
 			craft = objects[j].craft_ptr;
 #ifdef TIE_MODERN
-			num_meshes =
-				tie98 ? (uint16_t)modelmesh_getcount(ship_idx) : (uint16_t)objectblockptr->num_meshes;
+			num_meshes = TIE_FLIGHT_EDITION((uint16_t)objectblockptr->num_meshes,
+											(uint16_t)modelmesh_getcount(ship_idx));
 #elif defined(TIE98)
 			num_meshes = (uint16_t)modelmesh_getcount(ship_idx);
 #else
@@ -953,8 +942,8 @@ void gate_updategateanimations(void) {
 
 			for (mesh_idx = 0; mesh_idx < num_meshes; ++mesh_idx) {
 #ifdef TIE_MODERN
-				uint16_t mesh_type = tie98 ? (uint16_t)modelmesh_gettype(ship_idx, mesh_idx)
-										   : componentblockptr[mesh_idx].mesh_type;
+				uint16_t mesh_type = TIE_FLIGHT_EDITION(componentblockptr[mesh_idx].mesh_type,
+														(uint16_t)modelmesh_gettype(ship_idx, mesh_idx));
 #elif defined(TIE98)
 				uint16_t mesh_type = (uint16_t)modelmesh_gettype(ship_idx, mesh_idx);
 #else
@@ -1007,7 +996,7 @@ void gate_updategateanimations(void) {
 			/* Convert the remaining time into the level-completion bonus. */
 			msg_messageprintf(MSG_LEVEL_COMPLETED);
 			mission.train_bonus = 0;
-			if (tie98_display) {
+			if (TIE_DISPLAY_DX5) {
 				g_flightDrawToOffscreenSurface = 0;
 				FlightSurface_Lock();
 				gate_updatebonuspoints();
@@ -1043,7 +1032,7 @@ void gate_updategateanimations(void) {
 		mission.train_bonus += 10;
 		if ((mission.mission_score % 100) == 0)
 			fsfx_triggersfx(0x21, 0xFFFF);
-		if (tie98_display) {
+		if (TIE_DISPLAY_DX5) {
 			g_flightDrawToOffscreenSurface = 0;
 			FlightSurface_Lock();
 			gate_updatebonuspoints();
@@ -1060,10 +1049,10 @@ void gate_updategateanimations(void) {
 	}
 	argtable[0] = (uint16_t)mission.train_bonus;
 	msg_messageprintf(MSG_BONUS_AWARDED);
-	if (tie98_display)
+	if (TIE_DISPLAY_DX5)
 		FlightSurface_Lock();
 	gate_settraininglevel(++mission.train_level);
-	if (tie98_display)
+	if (TIE_DISPLAY_DX5)
 		FlightSurface_Unlock();
 #ifdef TIE_MODERN
 	bonus_countdown_active = 0;
@@ -1129,7 +1118,7 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 		draw_right = 0;
 	}
 
-	if (TieProfile_UsesTie98Logic() &&
+	if (TIE_FLIGHT_TIE98 &&
 		(flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
 		 flightResolution == TIE_FLIGHT_RES_SVGA_D3D) &&
 		pstate.player_spec_num == 4)

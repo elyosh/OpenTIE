@@ -179,12 +179,12 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
 	Input *the_input, *child_input;
 
 	/* Parent dialog */
-	xrect_Set_Rect(&r, TIE_EDITION(0, 70), 14, TIE_EDITION(180, 250), 148);
+	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(0, 70), 14, TIE_FRONTEND_EDITION(180, 250), 148);
 	the_input = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
 	if (!the_input)
 		return 0;
 	xinpattr_Set_Input_Draw_Function(the_input, idraw_FV_File);
-	xinpattr_Set_Input_Allign(the_input, TIE_EDITION(1, 0), 0);
+	xinpattr_Set_Input_Allign(the_input, TIE_FRONTEND_EDITION(1, 0), 0);
 	the_input->varptr = (void*)string;
 	the_input->id = 0;
 

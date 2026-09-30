@@ -1,5 +1,6 @@
 #include "tie/laser.h"
 #include "tie/create.h"
+#include "tie/edition.h"
 #include "tie/fsfx.h"
 #include "tie/math2.h"
 #include "tie/msg.h"
@@ -290,8 +291,7 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 		/* Capship turret branch: projectile fires straight up or
 		 * down (heading forced to 0 / 0x8000); world_z offset by
 		 * the species' muzzle length. */
-		int16_t mlen =
-			(int16_t)(TieProfile_UsesTie98Logic() ? tie98_projectilelength : projectilelength)[spec_idx];
+		int16_t mlen = (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[spec_idx];
 		/* Capship turret muzzle: hp_y < 0 means the gun is mounted in the
 		 * negative-up direction (turret on the underside) -> projectile
 		 * inherits a flipped heading (0x8000) and world_z is offset by
@@ -313,8 +313,7 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 		 * The binary reads fwd_x/y/z via the Watcom
 		 * unaligned-dword-load trick *(int*)&ff>>16; the port reads
 		 * them directly. */
-		int16_t mlen =
-			(int16_t)(TieProfile_UsesTie98Logic() ? tie98_projectilelength : projectilelength)[spec_idx];
+		int16_t mlen = (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[spec_idx];
 		int32_t ox = ((int32_t)shooter->fwd_x * mlen) >> 15;
 		int32_t oy = ((int32_t)shooter->fwd_y * mlen) >> 15;
 		int32_t oz = ((int32_t)shooter->fwd_z * mlen) >> 15;

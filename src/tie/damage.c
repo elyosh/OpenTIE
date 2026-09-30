@@ -3,6 +3,7 @@
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/damage_task.h"
 #endif
+#include "tie/edition.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/frontend_display_tie98.h"
 
@@ -250,16 +251,11 @@ int32_t damage_damageroom(void) {
 	int render_again = 1;
 #ifdef TIE_MODERN
 	DamageRoomState* continuation = landru_task_top();
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
 	sel_sys = continuation->sel_sys;
 	mouse_prev = continuation->mouse_prev;
 	ret_dir = continuation->ret_dir;
 	render_again = continuation->render;
 	if (!continuation->started)
-#elif defined(TIE98)
-	const bool tie98_display = true;
-#else
-	const bool tie98_display = false;
 #endif
 	{
 
@@ -286,7 +282,7 @@ int32_t damage_damageroom(void) {
 	}
 	for (;;) {
 		if (render_again) {
-			if (tie98_display)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 			{
 				uint8_t priority_to_system[NUM_SYSTEMS];
@@ -358,7 +354,7 @@ int32_t damage_damageroom(void) {
 					y = (int16_t)(y + line_step);
 				}
 			}
-			if (tie98_display) {
+			if (TIE_DISPLAY_DX5) {
 				FlightSurface_Unlock();
 				FrontendDisplay_BlitOffscreenToRenderSurface();
 				FrontendDisplay_PresentFrame();

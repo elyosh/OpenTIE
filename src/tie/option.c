@@ -1,4 +1,5 @@
 #include "tie/option.h"
+#include "tie/edition.h"
 #include "tie/fediskio.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/frontend_display_tie98.h"
@@ -142,7 +143,6 @@ int32_t option_optionsroom(int16_t load_settings) {
 	int render_again = 1;
 #ifdef TIE_MODERN
 	OptionRoomState* continuation;
-	const bool uses_dx5 = TieClassicDisplay_UsesDx5();
 	if (load_settings) {
 		TieInflightOptions_Apply();
 		return 0;
@@ -158,7 +158,6 @@ int32_t option_optionsroom(int16_t load_settings) {
 	exit_code = continuation->exit_code;
 	render_again = continuation->render;
 #else
-	const bool uses_dx5 = false;
 	{
 		if (flightResolution == TIE_FLIGHT_RES_VGA) {
 			option_top = 21;
@@ -178,7 +177,7 @@ int32_t option_optionsroom(int16_t load_settings) {
 		if (!continuation->started)
 #endif
 		{
-			if (uses_dx5)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 
 #ifdef TIE_MODERN
@@ -285,7 +284,7 @@ int32_t option_optionsroom(int16_t load_settings) {
 			exit_code = 0;
 			previous_selection = 0;
 			redraw_all = 1;
-			if (uses_dx5)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Unlock();
 #ifdef TIE_MODERN
 			memcpy(continuation->values, values, sizeof values);
@@ -303,7 +302,7 @@ int32_t option_optionsroom(int16_t load_settings) {
 		}
 		for (;;) {
 			if (render_again) {
-				if (uses_dx5)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Lock();
 				{
 					int16_t cursor_y = (int16_t)option_top;
@@ -334,7 +333,7 @@ int32_t option_optionsroom(int16_t load_settings) {
 					previous_selection = selection;
 					redraw_all = 0;
 				}
-				if (uses_dx5) {
+				if (TIE_DISPLAY_DX5) {
 					FlightSurface_Unlock();
 					FrontendDisplay_BlitOffscreenToRenderSurface();
 					FrontendDisplay_PresentFrame();

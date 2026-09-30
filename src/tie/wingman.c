@@ -7,6 +7,7 @@
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/wingman_task.h"
 #endif
+#include "tie/edition.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/frontend_display_tie98.h"
 
@@ -63,16 +64,11 @@ int32_t wingman_wingmanroom(void) {
 	int render_again = 1;
 #ifdef TIE_MODERN
 	WingmanRoomState* continuation = landru_task_top();
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
 	selected_idx = continuation->selected_idx;
 	prev_buttons = continuation->prev_buttons;
 	ret_delta = continuation->ret_delta;
 	render_again = continuation->render;
 	if (!continuation->started)
-#elif defined(TIE98)
-	const bool tie98_display = true;
-#else
-	const bool tie98_display = false;
 #endif
 	{
 
@@ -99,7 +95,7 @@ int32_t wingman_wingmanroom(void) {
 	}
 	for (;;) {
 		if (render_again) {
-			if (tie98_display)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 			{
 				/* 20-line visible grid in 320x200, 50-line in the 640x480 modes. */
@@ -121,7 +117,7 @@ int32_t wingman_wingmanroom(void) {
 					y = (int16_t)(y + row_spacing);
 				}
 			}
-			if (tie98_display) {
+			if (TIE_DISPLAY_DX5) {
 				FlightSurface_Unlock();
 				FrontendDisplay_BlitOffscreenToRenderSurface();
 				FrontendDisplay_PresentFrame();

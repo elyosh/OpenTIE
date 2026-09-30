@@ -170,7 +170,7 @@ static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object
 	Actor* the_actor;
 	int16_t var1;
 #ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend() && film_object->id == FTC_PALETTE) {
+	if (TIE_FRONTEND_TIE98 && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
 		return 0;
 	}
@@ -240,7 +240,7 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 
 #if defined(TIE_MODERN) || defined(TIE98)
 #ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend()) {
+	if (TIE_FRONTEND_TIE98) {
 #else
 	{
 #endif
@@ -348,7 +348,7 @@ static void train_iuser_Train(Input* input, int32_t time) {
 	}
 
 #ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend() && input->id <= 4)
+	if (TIE_FRONTEND_TIE98 && input->id <= 4)
 		train_monitor_needs_clear = 1;
 #elif defined(TIE98)
 	if (input->id <= 4)
@@ -422,7 +422,7 @@ static int16_t train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* cl
 			xfont_Enable_FontID_Shadow(0);
 			/* train_help 1-6 maps to txtTrainLastShip(74)..txtTrainExit(79) */
 			textext_Copy_Text(text, (int16_t)(train_help + 73));
-			xfont_Print_Centered_Text(text, &bounds, 15, TIE_EDITION(0, 2));
+			xfont_Print_Centered_Text(text, &bounds, 15, TIE_FRONTEND_EDITION(0, 2));
 			xfont_Disable_FontID_Shadow(0);
 		}
 		train_help = 0;
@@ -577,7 +577,7 @@ static void train_iuser_Train_Screen(Input* input, int32_t time) {
 		train_time = 1;
 		train_mode = 0;
 #ifdef TIE_MODERN
-		if (TieProfile_UsesTie98Frontend())
+		if (TIE_FRONTEND_TIE98)
 			train_monitor_needs_clear = 1;
 #elif defined(TIE98)
 		train_monitor_needs_clear = 1;
@@ -589,7 +589,7 @@ static void train_iuser_Train_Screen(Input* input, int32_t time) {
 		train_time++;
 		train_mode = 1;
 #ifdef TIE_MODERN
-		if (TieProfile_UsesTie98Frontend())
+		if (TIE_FRONTEND_TIE98)
 			train_monitor_needs_clear = 1;
 #elif defined(TIE98)
 		train_monitor_needs_clear = 1;
@@ -603,7 +603,7 @@ static void train_iuser_Train_Screen(Input* input, int32_t time) {
 		train_mode = 2;
 		train_time++;
 #ifdef TIE_MODERN
-		if (TieProfile_UsesTie98Frontend())
+		if (TIE_FRONTEND_TIE98)
 			train_monitor_needs_clear = 1;
 #elif defined(TIE98)
 		train_monitor_needs_clear = 1;
@@ -615,7 +615,7 @@ static void train_iuser_Train_Screen(Input* input, int32_t time) {
 		bpflight_Stop_Movie_Engine();
 		train_time = 0;
 #ifdef TIE_MODERN
-		if (TieProfile_UsesTie98Frontend())
+		if (TIE_FRONTEND_TIE98)
 			train_monitor_needs_clear = 1;
 #elif defined(TIE98)
 		train_monitor_needs_clear = 1;
@@ -636,15 +636,8 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	int16_t line_idx, text_line, i;
 	Rect dst;
 	char string[48], buf[48], name[48];
-#ifdef TIE_MODERN
-	bool svga = TieProfile_UsesTie98Frontend();
-#elif defined(TIE98)
-	bool svga = true;
-#else
-	bool svga = false;
-#endif
-	int16_t font_id = svga ? 2 : 0;
-	int16_t font_height = svga ? xfont_Get_FontID_Height(2) : 10;
+	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
+	int16_t font_height = TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2));
 
 	xrect_Copy_Rect(&dst, src);
 	t = train_time;
@@ -653,9 +646,9 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	/* Center vertically */
 	dst.top += (dst.bottom - dst.top - (font_height * num_lines + 18)) >> 1;
 
-	text_x = dst.left + (svga ? 4 : 2);
+	text_x = dst.left + TIE_FRONTEND_EDITION(2, 4);
 	text_y = dst.top + 10;
-	dst.bottom = dst.top + (svga ? font_height + 9 : 18);
+	dst.bottom = dst.top + TIE_FRONTEND_EDITION(18, font_height + 9);
 
 	/* Find max line width to center horizontally */
 	max_width = 0;
@@ -672,7 +665,7 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	text_left = ((dst.right - dst.left - max_width) >> 1) + text_x;
 
 	/* Animated horizontal bars */
-	if (svga) {
+	if (TIE_FRONTEND_TIE98) {
 		if (t >= 24) {
 			xpaint_Horiz_Clipped_Line(dst.left + 6, dst.top + 1, 390, 2);
 			xpaint_Horiz_Clipped_Line(dst.left + 6, dst.bottom - 1, 390, 2);
@@ -691,7 +684,7 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	}
 
 	bar_y = dst.bottom + font_height * num_lines + 2;
-	if (svga) {
+	if (TIE_FRONTEND_TIE98) {
 		if (t >= font_height * num_lines) {
 			xpaint_Horiz_Clipped_Line(dst.left + 6, bar_y, 390, 2);
 		} else {
@@ -748,18 +741,11 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 static void train_Draw_Train_Screen_Score(Rect* src) {
 	int16_t total_width, name_x, score_x, level_x, y, displayed_scores, i;
 	char string[40], str[40];
-#ifdef TIE_MODERN
-	bool svga = TieProfile_UsesTie98Frontend();
-#elif defined(TIE98)
-	bool svga = true;
-#else
-	bool svga = false;
-#endif
-	int16_t font_id = svga ? 3 : 0;
+	int16_t font_id = TIE_FRONTEND_EDITION(0, 3);
 
 	int16_t t = train_time - 256;
 	int16_t border_offset;
-	if (svga)
+	if (TIE_FRONTEND_TIE98)
 		border_offset = (t >= 32) ? 2 : 260 - 8 * t;
 	else
 		border_offset = (t >= 32) ? 2 : 130 - 4 * t;
@@ -771,12 +757,12 @@ static void train_Draw_Train_Screen_Score(Rect* src) {
 	xpaint_Horiz_Clipped_Line(border_offset + src->left, src->bottom - 6,
 							  src->right - src->left - total_width, 2);
 
-	name_x = src->left + (svga ? 8 : 4);
-	score_x = name_x + (svga ? 120 : 60);
-	level_x = name_x + (svga ? 280 : 140);
-	y = src->top + (svga ? 18 : 10);
+	name_x = src->left + TIE_FRONTEND_EDITION(4, 8);
+	score_x = name_x + TIE_FRONTEND_EDITION(60, 120);
+	level_x = name_x + TIE_FRONTEND_EDITION(140, 280);
+	y = src->top + TIE_FRONTEND_EDITION(10, 18);
 
-	displayed_scores = svga ? NUM_SCORE_ENTRIES : VGA_SCORE_ENTRIES;
+	displayed_scores = TIE_FRONTEND_EDITION(VGA_SCORE_ENTRIES, NUM_SCORE_ENTRIES);
 	for (i = 0; i < displayed_scores && t >= 0; i++) {
 		int16_t fade = (t + 16 > 31) ? 31 : t + 16;
 		char display_name[SCORE_NAME_LEN];
@@ -793,7 +779,7 @@ static void train_Draw_Train_Screen_Score(Rect* src) {
 		}
 
 		t -= 4;
-		y += svga ? xfont_Get_FontID_Height(2) + 2 : 12;
+		y += TIE_FRONTEND_EDITION(12, xfont_Get_FontID_Height(2) + 2);
 	}
 }
 
@@ -806,14 +792,7 @@ static void train_Draw_Train_Screen_Flyby(Rect* src) {
 	int i;
 	int16_t t = train_time - 384;
 	char text[48];
-#ifdef TIE_MODERN
-	bool svga = TieProfile_UsesTie98Frontend();
-#elif defined(TIE98)
-	bool svga = true;
-#else
-	bool svga = false;
-#endif
-	int16_t font_id = svga ? 2 : 0;
+	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 
 	xfont_Enable_FontID_Shadow(font_id);
 
@@ -823,7 +802,7 @@ static void train_Draw_Train_Screen_Flyby(Rect* src) {
 			int16_t fade = t - train_course_info[i] + 16;
 			if (fade > 31)
 				fade = 31;
-			if (svga) {
+			if (TIE_FRONTEND_TIE98) {
 				px = src->left + 2 * train_course_info[i + 2];
 				py = src->top + 2 * train_course_info[i + 3];
 			} else {
@@ -848,7 +827,7 @@ static void train_idraw_Train_Screen(Input* input, Rect* draw_rect, Rect* clip_r
 
 #if defined(TIE_MODERN) || defined(TIE98)
 #ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend() && train_monitor_needs_clear) {
+	if (TIE_FRONTEND_TIE98 && train_monitor_needs_clear) {
 #else
 	if (train_monitor_needs_clear) {
 #endif
@@ -886,11 +865,10 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 	TrainingScoreEntry loaded_scores[TRAIN_SCORE_ENTRY_COUNT];
 	int16_t i;
 
-	xio_Set_Mouse_Position(TIE_EDITION(220, 235), TIE_EDITION(190, 465));
+	xio_Set_Mouse_Position(TIE_FRONTEND_EDITION(220, 235), TIE_FRONTEND_EDITION(190, 465));
 
 #ifdef TIE_MODERN
-	train_file =
-		shellext_Open_Empire_Resource(TieProfile_UsesTie98Frontend() ? "train640.lfd" : train_str[0]);
+	train_file = shellext_Open_Empire_Resource(TIE_FRONTEND_EDITION(train_str[0], "train640.lfd"));
 #else
 	train_file = shellext_Open_Empire_Resource(train_str[0]);
 #endif
@@ -898,11 +876,10 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 	xview_Disable_All_View_Erase();
 
 	/* Select film based on scene: entry A = first visit, B = return */
-	xrect_Set_Rect(&frame, 0, 0, TIE_EDITION(320, 640), TIE_EDITION(200, 480));
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 #ifdef TIE_MODERN
-	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A)
-					? (TieProfile_UsesTie98Frontend() ? "train640" : train_str[1])
-					: train_str[2];
+	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? TIE_FRONTEND_EDITION(train_str[1], "train640")
+															: train_str[2];
 #else
 	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? train_str[1] : train_str[2];
 #endif
@@ -910,12 +887,12 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 	xfilm_Set_Film_Def_Palette(train_film, the_head->def_palette);
 
 	/* World input (full screen) */
-	xrect_Set_Rect(&frame, 0, 0, TIE_EDITION(320, 640), TIE_EDITION(200, 480));
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 	/* Monitor screen input */
-	xrect_Set_Rect(&frame, TIE_EDITION(62, 144), TIE_EDITION(6, 56), TIE_EDITION(254, 500),
-				   TIE_EDITION(116, 300));
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(62, 144), TIE_FRONTEND_EDITION(6, 56),
+				   TIE_FRONTEND_EDITION(254, 500), TIE_FRONTEND_EDITION(116, 300));
 	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(monitor_input, train_iupdate_Train_Screen);
 	xinpattr_Set_Input_User_Function(monitor_input, train_iuser_Train_Screen);
@@ -927,28 +904,28 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 	for (i = 0; i < 6; i++) {
 		switch (i) {
 			case 0:
-				xrect_Set_Rect(&frame, TIE_EDITION(188, 377), TIE_EDITION(138, 336), TIE_EDITION(214, 398),
-							   TIE_EDITION(154, 346));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(188, 377), TIE_FRONTEND_EDITION(138, 336),
+							   TIE_FRONTEND_EDITION(214, 398), TIE_FRONTEND_EDITION(154, 346));
 				break;
 			case 1:
-				xrect_Set_Rect(&frame, TIE_EDITION(214, 398), TIE_EDITION(138, 336), TIE_EDITION(240, 422),
-							   TIE_EDITION(154, 346));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(214, 398), TIE_FRONTEND_EDITION(138, 336),
+							   TIE_FRONTEND_EDITION(240, 422), TIE_FRONTEND_EDITION(154, 346));
 				break;
 			case 2:
-				xrect_Set_Rect(&frame, TIE_EDITION(188, 386), TIE_EDITION(154, 454), TIE_EDITION(214, 416),
-							   TIE_EDITION(170, 468));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(188, 386), TIE_FRONTEND_EDITION(154, 454),
+							   TIE_FRONTEND_EDITION(214, 416), TIE_FRONTEND_EDITION(170, 468));
 				break;
 			case 3:
-				xrect_Set_Rect(&frame, TIE_EDITION(214, 416), TIE_EDITION(154, 454), TIE_EDITION(240, 446),
-							   TIE_EDITION(170, 468));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(214, 416), TIE_FRONTEND_EDITION(154, 454),
+							   TIE_FRONTEND_EDITION(240, 446), TIE_FRONTEND_EDITION(170, 468));
 				break;
 			case 4:
-				xrect_Set_Rect(&frame, TIE_EDITION(206, 212), TIE_EDITION(184, 455), TIE_EDITION(237, 252),
-							   TIE_EDITION(200, 474));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(206, 212), TIE_FRONTEND_EDITION(184, 455),
+							   TIE_FRONTEND_EDITION(237, 252), TIE_FRONTEND_EDITION(200, 474));
 				break;
 			case 5:
-				xrect_Set_Rect(&frame, TIE_EDITION(49, 453), TIE_EDITION(181, 325), TIE_EDITION(79, 522),
-							   TIE_EDITION(200, 400));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(49, 453), TIE_FRONTEND_EDITION(181, 325),
+							   TIE_FRONTEND_EDITION(79, 522), TIE_FRONTEND_EDITION(200, 400));
 				break;
 		}
 		button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
@@ -961,7 +938,7 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 	train_time = 0;
 	train_help = 0;
 #ifdef TIE_MODERN
-	train_monitor_needs_clear = TieProfile_UsesTie98Frontend();
+	train_monitor_needs_clear = TIE_FRONTEND_TIE98;
 #elif defined(TIE98)
 	train_monitor_needs_clear = true;
 #endif
@@ -979,7 +956,7 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 	}
 	xview_Set_View_Update_Function(train_end_Train_View);
 #ifdef TIE_MODERN
-	TieTrain_RunView(train_file, TieProfile_UsesTie98Frontend());
+	TieTrain_RunView(train_file, TIE_FRONTEND_TIE98);
 	return 0;
 #else
 	shellext_Handle_TIE_View();

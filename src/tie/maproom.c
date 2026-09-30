@@ -4,6 +4,7 @@
 #endif
 #include "tie/backdrp2.h"
 #include "tie/create.h"
+#include "tie/edition.h"
 #include "tie/fediskio.h"
 #include "tie/feinput.h"
 #include "tie/festring.h"
@@ -513,7 +514,7 @@ void maproom_drawmapitem(uint16_t obj_idx, uint16_t selected_obj_ref, char num_l
 			transfm2_clipobjecteyez(eyex, eyey, z);
 		mx = transfm2_getscreenx(objecteyex, objecteyez);
 		my = transfm2_getscreeny(objecteyey, objecteyez);
-		if (TieClassicDisplay_UsesDx5())
+		if (TIE_DISPLAY_DX5)
 			logbuf2_drawclippedline_tie98(mx, my, screen_x, screen_y, fontcolors[10]);
 		else
 			logbuf2_drawclippedline(mx, my, screen_x, screen_y, fontcolors[10]);
@@ -528,7 +529,7 @@ void maproom_drawmapitem(uint16_t obj_idx, uint16_t selected_obj_ref, char num_l
 		transfm2_clipobjecteyez(eyex, eyey, z);
 	ground_screen_x = transfm2_getscreenx(objecteyex, objecteyez);
 	ground_screen_y = transfm2_getscreeny(objecteyey, objecteyez);
-	if (TieClassicDisplay_UsesDx5())
+	if (TIE_DISPLAY_DX5)
 		logbuf2_drawclippedline_tie98(ground_screen_x, ground_screen_y, screen_x, screen_y, backcolor);
 	else
 		logbuf2_drawclippedline(ground_screen_x, ground_screen_y, screen_x, screen_y, backcolor);
@@ -580,7 +581,7 @@ void maproom_drawmapitem(uint16_t obj_idx, uint16_t selected_obj_ref, char num_l
 			transfm2_clipobjecteyez(prev_eyex, prev_eyey, prev_eyez);
 		vx = transfm2_getscreenx(objecteyex, objecteyez);
 		vy = transfm2_getscreeny(objecteyey, objecteyez);
-		if (TieClassicDisplay_UsesDx5())
+		if (TIE_DISPLAY_DX5)
 			logbuf2_drawclippedline_tie98(vx, vy, ground_screen_x, ground_screen_y, backcolor);
 		else
 			logbuf2_drawclippedline(vx, vy, ground_screen_x, ground_screen_y, backcolor);
@@ -709,8 +710,6 @@ int32_t maproom_maproom(void) {
 	int render_again = 1;
 #ifdef TIE_MODERN
 	MaproomState* continuation = landru_task_top();
-	const bool uses_dx5 = TieClassicDisplay_UsesDx5();
-	const bool uses_tie98_logic = TieProfile_UsesTie98Logic();
 	view_mode = continuation->view_mode;
 	view_transition_progress = continuation->view_transition_progress;
 	view_transition_active = continuation->view_transition_active;
@@ -723,25 +722,17 @@ int32_t maproom_maproom(void) {
 	render_again = continuation->render;
 	continuation->waiting = false;
 	if (!continuation->started)
-#elif defined(TIE98)
-	const bool uses_dx5 = true;
-	const bool uses_tie98_logic = true;
-#else
-	const bool uses_dx5 = false;
-	const bool uses_tie98_logic = false;
 #endif
 	{
-		bool tie98_display;
 		uint32_t buffer_line_offset;
 
-		if (uses_tie98_logic) {
+		if (TIE_FLIGHT_TIE98) {
 			uint8_t saved_mapflag = mapflag;
 			mapflag = 1;
 			FSFX_UpdatePlayerEngineSound();
 			mapflag = saved_mapflag;
 		}
-		tie98_display = uses_dx5;
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Lock();
 		/* --- Stage 1: layout setup based on resolution --- */
 		mapScreenLeft = 0;
@@ -802,7 +793,7 @@ int32_t maproom_maproom(void) {
 		dropflag = 0;
 
 		buffer_line_offset = calcposition((uint16_t)mapScreenLeft, (uint16_t)mapScreenTop);
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			logbuf2_setbufferdimensions_tie98((uint16_t)mapScreenWidth, (uint16_t)mapScreenHeight, 1,
 											  buffer_line_offset);
 		else
@@ -812,11 +803,11 @@ int32_t maproom_maproom(void) {
 		fview_newcalcview(0, 0x7FFF, pstate.player->pitch, 0, 0, 0, NULL);
 
 		maproom_setcamerafocus(pstate.object_idx, MAP_CAMERA_DEFAULT);
-		if (uses_tie98_logic)
+		if (TIE_FLIGHT_TIE98)
 			g_flightInitialTextureCacheFlushPending = 1;
 		fullupdateflag = 1;
 		logbuf2_selectbuffer(newbuf);
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Unlock();
 
 		view_mode = 0; /* 0 = side, 1 = top-down */
@@ -855,10 +846,9 @@ int32_t maproom_maproom(void) {
 #endif
 			}
 			frameticks = tickcounter;
-			if (uses_dx5)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 			{
-				bool tie98_display;
 				uint16_t buffer_stride;
 				uint8_t saved_backdrop;
 				int32_t z_buf[140];
@@ -1137,13 +1127,12 @@ int32_t maproom_maproom(void) {
 				}
 
 				/* Render-buffer fill. */
-				tie98_display = uses_dx5;
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					logbuf2_clearbuffer_tie98();
 				else
 					logbuf2_clearbuffer();
 				buffer_stride =
-					(uint16_t)(mapScreenWidth * (tie98_display ? g_flight16bppBytesPerPixel : 1u));
+					(uint16_t)(mapScreenWidth * TIE_DISPLAY_EDITION(1u, g_flight16bppBytesPerPixel));
 				rtsvga2_setvgapointers(buffer_toggle ? newbuf : xtransdataptr, buffer_stride,
 									   (uint16_t)mapScreenHeight);
 
@@ -1230,7 +1219,7 @@ int32_t maproom_maproom(void) {
 					sx_top = transfm2_getscreenx(top_ex, top_ez);
 					sy_base = transfm2_getscreeny(objecteyey, objecteyez);
 					sx_base = transfm2_getscreenx(objecteyex, objecteyez);
-					if (tie98_display)
+					if (TIE_DISPLAY_DX5)
 						logbuf2_drawclippedline_tie98(sx_base, sy_base, sx_top, sy_top, MAP_AXIS_LINE);
 					else
 						logbuf2_drawclippedline(sx_base, sy_base, sx_top, sy_top, MAP_AXIS_LINE);
@@ -1288,7 +1277,7 @@ int32_t maproom_maproom(void) {
 					sx_top = transfm2_getscreenx(top_ex, top_ez);
 					sy_base = transfm2_getscreeny(objecteyey, objecteyez);
 					sx_base = transfm2_getscreenx(objecteyex, objecteyez);
-					if (tie98_display)
+					if (TIE_DISPLAY_DX5)
 						logbuf2_drawclippedline_tie98(sx_base, sy_base, sx_top, sy_top, MAP_AXIS_LINE);
 					else
 						logbuf2_drawclippedline(sx_base, sy_base, sx_top, sy_top, MAP_AXIS_LINE);
@@ -1320,14 +1309,14 @@ int32_t maproom_maproom(void) {
 
 				if (fullupdateflag) {
 					if (buffer_toggle) {
-						if (tie98_display)
+						if (TIE_DISPLAY_DX5)
 							logbuf2_outbuffer_tie98(newbuf);
 						else
 							logbuf2_outbuffer(newbuf);
 						logbuf2_selectbuffer(xtransdataptr);
 						buffer_toggle = 0;
 					} else {
-						if (tie98_display)
+						if (TIE_DISPLAY_DX5)
 							logbuf2_outbuffer_tie98(xtransdataptr);
 						else
 							logbuf2_outbuffer(xtransdataptr);
@@ -1336,14 +1325,14 @@ int32_t maproom_maproom(void) {
 					}
 					fullupdateflag = 0;
 				} else if (buffer_toggle) {
-					if (tie98_display)
+					if (TIE_DISPLAY_DX5)
 						logbuf2_outdiffbuffer_tie98(xtransdataptr, newbuf);
 					else
 						logbuf2_outdiffbuffer(xtransdataptr, newbuf);
 					logbuf2_selectbuffer(xtransdataptr);
 					buffer_toggle = 0;
 				} else {
-					if (tie98_display)
+					if (TIE_DISPLAY_DX5)
 						logbuf2_outdiffbuffer_tie98(newbuf, xtransdataptr);
 					else
 						logbuf2_outdiffbuffer(newbuf, xtransdataptr);
@@ -1355,17 +1344,17 @@ int32_t maproom_maproom(void) {
 				 * BACKDRP2_backdrop only renders the parallax stars). TIE98 clears
 				 * the pending cache flush immediately before and after this pair. */
 				saved_backdrop = drawbackdropflag;
-				if (uses_tie98_logic)
+				if (TIE_FLIGHT_TIE98)
 					g_flightInitialTextureCacheFlushPending = 0;
 				drawbackdropflag = 0;
 				backdrp2_backdrop();
 				drawbackdropflag = saved_backdrop;
 				rtsvga2_drawstars();
-				if (uses_tie98_logic)
+				if (TIE_FLIGHT_TIE98)
 					g_flightInitialTextureCacheFlushPending = 0;
 				fullupdateflag = 0;
 			}
-			if (uses_dx5) {
+			if (TIE_DISPLAY_DX5) {
 				FlightSurface_Unlock();
 				FrontendDisplay_BlitOffscreenToRenderSurface();
 				FrontendDisplay_PresentFrame();

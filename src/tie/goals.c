@@ -3,6 +3,7 @@
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/goals_task.h"
 #endif
+#include "tie/edition.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/frontend_display_tie98.h"
 
@@ -439,20 +440,15 @@ int32_t goals_missiongoalsroom(void) {
 	int render_again = 1;
 #ifdef TIE_MODERN
 	GoalsRoomState* continuation = landru_task_top();
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
 	scroll_y = continuation->scroll_y;
 	content_height = continuation->content_height;
 	nav_code = continuation->nav_code;
 	render_again = continuation->render;
 	if (!continuation->started)
-#elif defined(TIE98)
-	const bool tie98_display = true;
-#else
-	const bool tie98_display = false;
 #endif
 	{
 
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Lock();
 		/* ----- Window bounds from flightResolution --------------------- */
 		if (flightResolution == TIE_FLIGHT_RES_VGA) {
@@ -497,7 +493,7 @@ int32_t goals_missiongoalsroom(void) {
 		dropflag = 1;
 		festring_setbound(0, (int16_t)goalsTop, (int16_t)screenXRes, (int16_t)goalsBottom);
 		festring_setbackcolor(0x44);
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Unlock();
 
 		scroll_y = (int16_t)goalsTop;
@@ -515,7 +511,7 @@ int32_t goals_missiongoalsroom(void) {
 	}
 	for (;;) {
 		if (render_again) {
-			if (tie98_display)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 			{
 				int16_t cur_y = scroll_y;
@@ -783,7 +779,7 @@ int32_t goals_missiongoalsroom(void) {
 					cur_y = (int16_t)(cur_y + fontheight);
 				}
 			}
-			if (tie98_display) {
+			if (TIE_DISPLAY_DX5) {
 				FlightSurface_Unlock();
 				FrontendDisplay_BlitOffscreenToRenderSurface();
 				FrontendDisplay_PresentFrame();

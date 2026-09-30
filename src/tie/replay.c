@@ -9,6 +9,7 @@
 #endif
 
 #include "tie/create.h"
+#include "tie/edition.h"
 #include "tie/fediskio.h"
 #include "tie/feinput.h"
 #include "tie/festring.h"
@@ -788,10 +789,10 @@ uint16_t replay_savereplay(void) {
 		TieFile* existing = TieStorage_Open(TIE_FILE_ROOT_USER, filename, "rb");
 		if (existing) {
 			TieStorage_Close(existing);
-			if (TieClassicDisplay_UsesDx5())
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 			replay_replaymessage(MSG_FILE_REPLACE);
-			if (TieClassicDisplay_UsesDx5()) {
+			if (TIE_DISPLAY_DX5) {
 				FlightSurface_Unlock();
 				FrontendDisplay_PresentFrontSurface();
 				FrontendDisplay_PresentFrame();
@@ -1115,18 +1116,10 @@ void replay_doreplayscreen(void) {
 	uint16_t last_track_status;
 #ifdef TIE_MODERN
 	ReplayScreenState* continuation = landru_task_top();
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
-	const bool tie98_logic = TieProfile_UsesTie98Logic();
 	last_chase_status = continuation->last_chase_status;
 	last_track_status = continuation->last_track_status;
 	continuation->pushed_subtask = false;
 	if (!continuation->started)
-#elif defined(TIE98)
-	const bool tie98_display = true;
-	const bool tie98_logic = true;
-#else
-	const bool tie98_display = false;
-	const bool tie98_logic = false;
 #endif
 	{
 #ifdef TIE_MODERN
@@ -1143,10 +1136,10 @@ void replay_doreplayscreen(void) {
 		replaycam.side_angle = 0;
 		fullupdateflag = 1;
 		trackobject = 0xFFFFu;
-		if (tie98_logic)
+		if (TIE_FLIGHT_TIE98)
 			g_flightInitialTextureCacheFlushPending = 1;
 		tie_updatescreen();
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Lock();
 		updateactionflag = 0;
 		fastforwardflag = 0;
@@ -1156,7 +1149,7 @@ void replay_doreplayscreen(void) {
 		replay_drawreplaybutton(0xC);
 		replay_drawreplaybutton(0xE);
 		replay_outputclipname();
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Unlock();
 		exitflag = 0;
 #ifdef TIE_MODERN
@@ -1181,19 +1174,19 @@ void replay_doreplayscreen(void) {
 			uint16_t pct_fwd;
 			uint16_t pct;
 
-			if (tie98_display)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 #ifdef TIE_MODERN
 			replay_replayinput();
 			save_requested = continuation->save_requested;
 			if (save_requested) {
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Unlock();
 				if (TieReplaySave_Begin()) {
 					continuation->pushed_subtask = true;
 					return;
 				}
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Lock();
 			}
 
@@ -1229,7 +1222,7 @@ void replay_doreplayscreen(void) {
 				/* In replay mode tie_doframe never returns false (the
 				 * tickcounter budget gate is bypassed by the replayviewmode
 				 * branch); cast to void to acknowledge the unused result. */
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Unlock();
 				(void)tie_doframe();
 #ifdef TIE_MODERN
@@ -1240,7 +1233,7 @@ void replay_doreplayscreen(void) {
 					pushed_subtask = true;
 				}
 #endif
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Lock();
 				if (cameraposstate) {
 					int16_t cx, cy;
@@ -1323,10 +1316,10 @@ void replay_doreplayscreen(void) {
 				/* Paused branch: repaint once, recompute framerate from
 				 * XTIMER delta spent repainting. */
 				t0 = tickcounter;
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Unlock();
 				tie_updatescreen();
-				if (tie98_display) {
+				if (TIE_DISPLAY_DX5) {
 					FrontendDisplay_PresentFrame();
 					if (g_useHardware3D)
 						RenderScene_ClearFrameBuffers();
@@ -1406,7 +1399,7 @@ void replay_doreplayscreen(void) {
 				replaymsgtimer -= frameticks;
 			}
 		}
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Unlock();
 
 #ifdef TIE_MODERN
@@ -1688,7 +1681,7 @@ void replay_editstring(int16_t x, int16_t y, uint8_t limit, uint8_t* text, uint8
 #ifdef TIE_MODERN
 		continuation->position = position;
 		continuation->editor_active = 1;
-		if (TieClassicDisplay_UsesDx5()) {
+		if (TIE_DISPLAY_DX5) {
 			FlightSurface_Unlock();
 			FrontendDisplay_PresentFrontSurface();
 			FrontendDisplay_PresentFrame();
@@ -1721,7 +1714,7 @@ void replay_editstring(int16_t x, int16_t y, uint8_t limit, uint8_t* text, uint8
 		text[position] = 0;
 		if (keypress) {
 #ifdef TIE_MODERN
-			if (TieClassicDisplay_UsesDx5())
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 #endif
 			festring_setcursor(x, y);
@@ -1731,7 +1724,7 @@ void replay_editstring(int16_t x, int16_t y, uint8_t limit, uint8_t* text, uint8
 			festring_setbackcolor(background);
 			outchar('\n');
 #ifdef TIE_MODERN
-			if (TieClassicDisplay_UsesDx5()) {
+			if (TIE_DISPLAY_DX5) {
 				FlightSurface_Unlock();
 				FrontendDisplay_PresentFrontSurface();
 				FrontendDisplay_PresentFrame();
@@ -1745,20 +1738,20 @@ void replay_editstring(int16_t x, int16_t y, uint8_t limit, uint8_t* text, uint8
 #endif
 	} while (keypress != 13);
 #ifdef TIE_MODERN
-	if (TieClassicDisplay_UsesDx5())
+	if (TIE_DISPLAY_DX5)
 		FlightSurface_Lock();
 #endif
 	festring_setcursor(x, y);
 	festring_outstring(text);
 	outchar('\n');
 #ifdef TIE_MODERN
-	if (TieClassicDisplay_UsesDx5())
+	if (TIE_DISPLAY_DX5)
 		FlightSurface_Unlock();
 #endif
 	festring_setautofill(0);
 #ifdef TIE_MODERN
 	continuation->editor_active = 0;
-	if (TieClassicDisplay_UsesDx5()) {
+	if (TIE_DISPLAY_DX5) {
 		FrontendDisplay_PresentFrontSurface();
 		FrontendDisplay_PresentFrame();
 	}

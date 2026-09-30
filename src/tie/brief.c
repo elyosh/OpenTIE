@@ -304,7 +304,7 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 	int16_t offx, offy;
 	Rect r;
 	char label[32];
-	int16_t font_id = TIE_EDITION(0, 2);
+	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	if (!refresh)
 		return 0;
 
@@ -377,7 +377,7 @@ static Input* Build_Notice(const char* text) {
 	PushButton* btn;
 	(void)text;
 
-	xrect_Set_Rect(&r, 0, 0, TIE_EDITION(180, 280), TIE_EDITION(40, 60));
+	xrect_Set_Rect(&r, 0, 0, TIE_FRONTEND_EDITION(180, 280), TIE_FRONTEND_EDITION(40, 60));
 	dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
 	xinpattr_Set_Input_Draw_Function(dlg, idraw_Notice);
 	xinpattr_Set_Input_Allign(dlg, 1, 1);
@@ -395,13 +395,13 @@ static Input* Build_Notice(const char* text) {
 // FUNCTION: TIE98 0x406B20
 static void idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh) {
 	Rect tr;
-	int16_t font_id = TIE_EDITION(0, 2);
+	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	if (!refresh)
 		return;
 
 	xrect_Copy_Rect(&tr, r);
 	xstyle_Style_Paint_Border(r, 0);
-	tr.bottom = tr.top + TIE_EDITION(20, 30);
+	tr.bottom = tr.top + TIE_FRONTEND_EDITION(20, 30);
 
 	xfont_Enable_FontID_Shadow(font_id);
 	xfont_Print_Centered_Text(textext_Get_Text(txtBriefRestore), &tr, 15, font_id);
@@ -441,37 +441,37 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	if (last == SCENE_TALK_BRIEF_OFFICER) {
 		/* From officer */
 		if (shipext_Get_Mission_Officer() == 1) {
-			mouse_x = TIE_EDITION(218, 416);
-			mouse_y = TIE_EDITION(126, 302);
+			mouse_x = TIE_FRONTEND_EDITION(218, 416);
+			mouse_y = TIE_FRONTEND_EDITION(126, 302);
 		} else {
-			mouse_x = TIE_EDITION(282, 564);
-			mouse_y = TIE_EDITION(90, 180);
+			mouse_x = TIE_FRONTEND_EDITION(282, 564);
+			mouse_y = TIE_FRONTEND_EDITION(90, 180);
 		}
 	} else if (last == SCENE_BRIEF_MAP) {
 		/* From map */
 		if (shipext_Get_Mission_Officer() != 2) {
-			mouse_x = TIE_EDITION(160, 265);
-			mouse_y = TIE_EDITION(90, 190);
+			mouse_x = TIE_FRONTEND_EDITION(160, 265);
+			mouse_y = TIE_FRONTEND_EDITION(90, 190);
 		} else {
-			mouse_x = TIE_EDITION(282, 564);
-			mouse_y = TIE_EDITION(90, 180);
+			mouse_x = TIE_FRONTEND_EDITION(282, 564);
+			mouse_y = TIE_FRONTEND_EDITION(90, 180);
 		}
 	} else if (last == SCENE_TALK_BRIEF_PRIEST) {
 		/* From priest */
-		mouse_x = TIE_EDITION(218, 416);
-		mouse_y = TIE_EDITION(126, 302);
+		mouse_x = TIE_FRONTEND_EDITION(218, 416);
+		mouse_y = TIE_FRONTEND_EDITION(126, 302);
 	} else {
 		/* Default */
-		mouse_x = TIE_EDITION(78, 156);
-		mouse_y = TIE_EDITION(80, 160);
+		mouse_x = TIE_FRONTEND_EDITION(78, 156);
+		mouse_y = TIE_FRONTEND_EDITION(80, 160);
 	}
 	xio_Set_Mouse_Position(mouse_x, mouse_y);
 
 	/* Load resources */
-	brief_res = shellext_Open_Empire_Resource(TIE_EDITION("brief.lfd", "brief640.lfd"));
+	brief_res = shellext_Open_Empire_Resource(TIE_FRONTEND_EDITION("brief.lfd", "brief640.lfd"));
 	player_res = shellext_Open_Empire_Resource("player.lfd");
 
-	xrect_Set_Rect(&frame, 0, 0, TIE_EDITION(320, 640), TIE_EDITION(200, 480));
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 
 	/* Load brief film. Tag the snapshot with the (lfd, film) tuple
 	 * so the cutscene compositor can resolve a remaster bundle for
@@ -491,8 +491,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 	/* Main menu button (id=0) */
-	xrect_Set_Rect(&frame, TIE_EDITION(84, 123), TIE_EDITION(132, 329), TIE_EDITION(122, 184),
-				   TIE_EDITION(172, 459));
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(84, 123), TIE_FRONTEND_EDITION(132, 329),
+				   TIE_FRONTEND_EDITION(122, 184), TIE_FRONTEND_EDITION(172, 459));
 	mainmenu_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(mainmenu_input, iupdate_Brief);
 	xinpattr_Set_Input_User_Function(mainmenu_input, iuser_Brief);
@@ -500,8 +500,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	mainmenu_input->id = 0;
 
 	/* Enter mission button (id=1) */
-	xrect_Set_Rect(&frame, TIE_EDITION(190, 385), TIE_EDITION(118, 256), TIE_EDITION(248, 448),
-				   TIE_EDITION(138, 350));
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(190, 385), TIE_FRONTEND_EDITION(118, 256),
+				   TIE_FRONTEND_EDITION(248, 448), TIE_FRONTEND_EDITION(138, 350));
 	mission_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(mission_input, iupdate_Brief);
 	xinpattr_Set_Input_User_Function(mission_input, iuser_Brief);
@@ -509,8 +509,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	mission_input->id = 1;
 
 	/* Map area (id=2) */
-	xrect_Set_Rect(&frame, TIE_EDITION(28, 50), TIE_EDITION(46, 80), TIE_EDITION(128, 230),
-				   TIE_EDITION(124, 290));
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(28, 50), TIE_FRONTEND_EDITION(46, 80),
+				   TIE_FRONTEND_EDITION(128, 230), TIE_FRONTEND_EDITION(124, 290));
 	map_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(map_input, iupdate_Brief);
 	xinpattr_Set_Input_User_Function(map_input, iuser_Brief);
@@ -519,8 +519,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 
 	/* Officer door (id=3) — skip if priest only */
 	if (shipext_Get_Mission_Officer() != 2) {
-		xrect_Set_Rect(&frame, TIE_EDITION(140, 230), TIE_EDITION(66, 157), TIE_EDITION(174, 274),
-					   TIE_EDITION(114, 251));
+		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(140, 230), TIE_FRONTEND_EDITION(66, 157),
+					   TIE_FRONTEND_EDITION(174, 274), TIE_FRONTEND_EDITION(114, 251));
 		officer_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(officer_input, iupdate_Brief);
 		xinpattr_Set_Input_User_Function(officer_input, iuser_Brief);
@@ -530,8 +530,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 
 	/* Priest door (id=4) — skip if officer only */
 	if (shipext_Get_Mission_Officer() != 1) {
-		xrect_Set_Rect(&frame, TIE_EDITION(242, 498), TIE_EDITION(66, 125), TIE_EDITION(314, 604),
-					   TIE_EDITION(102, 220));
+		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(242, 498), TIE_FRONTEND_EDITION(66, 125),
+					   TIE_FRONTEND_EDITION(314, 604), TIE_FRONTEND_EDITION(102, 220));
 		priest_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(priest_input, iupdate_Brief);
 		xinpattr_Set_Input_User_Function(priest_input, iuser_Brief);
@@ -543,8 +543,10 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	xres_Close_Resource(brief_res);
 
 	/* Initialize the briefing map with polygon projection */
-	xrect_Set_Poly(&p, TIE_EDITION(34, 56), TIE_EDITION(50, 83), TIE_EDITION(127, 223), TIE_EDITION(58, 93),
-				   TIE_EDITION(125, 225), TIE_EDITION(106, 244), TIE_EDITION(36, 67), TIE_EDITION(120, 277));
+	xrect_Set_Poly(&p, TIE_FRONTEND_EDITION(34, 56), TIE_FRONTEND_EDITION(50, 83),
+				   TIE_FRONTEND_EDITION(127, 223), TIE_FRONTEND_EDITION(58, 93),
+				   TIE_FRONTEND_EDITION(125, 225), TIE_FRONTEND_EDITION(106, 244),
+				   TIE_FRONTEND_EDITION(36, 67), TIE_FRONTEND_EDITION(120, 277));
 	player_Init_Brief_Display(map_input, &p);
 #ifdef TIE_MODERN
 

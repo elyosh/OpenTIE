@@ -308,8 +308,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		matrix = matrix_Res_Matrix(rf, "trnfly1");
 		xres_Close_Resource(rf);
 
-		xrect_Set_Rect(&r, TIE_EDITION(62, 144), TIE_EDITION(4, 60), TIE_EDITION(256, 500),
-					   TIE_EDITION(116, 300));
+		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(62, 144), TIE_FRONTEND_EDITION(4, 60),
+					   TIE_FRONTEND_EDITION(256, 500), TIE_FRONTEND_EDITION(116, 300));
 		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
 		xactor_Set_Actor_User_Function(engine[0], bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
@@ -317,8 +317,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		bpused[0] = 1;
 		bpid[0] = 0;
 
-		xrect_Set_Rect(&r, TIE_EDITION(85, 176), TIE_EDITION(131, 340), TIE_EDITION(182, 358),
-					   TIE_EDITION(178, 449));
+		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(85, 176), TIE_FRONTEND_EDITION(131, 340),
+					   TIE_FRONTEND_EDITION(182, 358), TIE_FRONTEND_EDITION(178, 449));
 		engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
 		xactor_Set_Actor_User_Function(engine[1], bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
@@ -336,8 +336,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		matrix = matrix_Res_Matrix(rf, "cmbtfly1");
 		xres_Close_Resource(rf);
 
-		xrect_Set_Rect(&r, TIE_EDITION(59, 124), TIE_EDITION(2, 7), TIE_EDITION(260, 516),
-					   TIE_EDITION(115, 272));
+		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(59, 124), TIE_FRONTEND_EDITION(2, 7),
+					   TIE_FRONTEND_EDITION(260, 516), TIE_FRONTEND_EDITION(115, 272));
 		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
 		xactor_Set_Actor_User_Function(engine[0], bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
@@ -345,8 +345,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		bpid[0] = 0;
 		bpused[0] = 1;
 
-		xrect_Set_Rect(&r, TIE_EDITION(146, 297), TIE_EDITION(130, 313), TIE_EDITION(247, 485),
-					   TIE_EDITION(179, 440));
+		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(146, 297), TIE_FRONTEND_EDITION(130, 313),
+					   TIE_FRONTEND_EDITION(247, 485), TIE_FRONTEND_EDITION(179, 440));
 		engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
 		xactor_Set_Actor_User_Function(engine[1], bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
@@ -361,8 +361,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	} else if (scene == 3) {
 		/* Blueprint viewer: single full-area viewport, no orbit matrix.
 		 * Z plane 20 places it above the UI chrome. */
-		xrect_Set_Rect(&r, TIE_EDITION(131, 222), TIE_EDITION(30, 75), TIE_EDITION(278, 570),
-					   TIE_EDITION(200, 310));
+		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(131, 222), TIE_FRONTEND_EDITION(30, 75),
+					   TIE_FRONTEND_EDITION(278, 570), TIE_FRONTEND_EDITION(200, 310));
 		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 20);
 		xactor_Set_Actor_User_Function(engine[0], bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
@@ -1236,8 +1236,8 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 
 	/* Primary viewport adds the skybox + star-field over the edge list. */
 	if (actor->id == 0) {
-		uint16_t star_width = TIE_EDITION(0x140, 0x280);
-		uint16_t star_height = TIE_EDITION(0xC8, 0x1E0);
+		uint16_t star_width = TIE_FRONTEND_EDITION(0x140, 0x280);
+		uint16_t star_height = TIE_FRONTEND_EDITION(0xC8, 0x1E0);
 		uint16_t fullupdate_save;
 
 		drawbackdropflag = 0;

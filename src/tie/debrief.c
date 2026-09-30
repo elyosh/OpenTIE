@@ -322,7 +322,7 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 	Rect r;
 	char label[32];
 	TIEText text_id;
-	int16_t font_id = TIE_EDITION(0, 2);
+	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 
 	if (!refresh)
 		return 0;
@@ -441,8 +441,8 @@ static void user_Officer(Actor* actor, int32_t time) {
 			else
 				anim_state = actor->var1 / 2 - 2;
 
-			if (anim_state > TIE_EDITION(2, 3))
-				anim_state = TIE_EDITION(2, 3);
+			if (anim_state > TIE_FRONTEND_EDITION(2, 3))
+				anim_state = TIE_FRONTEND_EDITION(2, 3);
 			xactor_Set_Actor_State(actor, anim_state, 0);
 			break;
 		}
@@ -497,21 +497,21 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 	/* Position mouse based on outcome and officer type */
 	if (shipext_Is_Mission_Success()) {
 		if (shellext_Get_Last_Scene() != SCENE_TALK_DEBRIEF_OFFICER || shipext_Get_Mission_Officer() == 1) {
-			mouse_x = TIE_EDITION(180, 360);
-			mouse_y = TIE_EDITION(100, 200);
+			mouse_x = TIE_FRONTEND_EDITION(180, 360);
+			mouse_y = TIE_FRONTEND_EDITION(100, 200);
 		} else {
-			mouse_x = TIE_EDITION(280, 540);
-			mouse_y = TIE_EDITION(120, 240);
+			mouse_x = TIE_FRONTEND_EDITION(280, 540);
+			mouse_y = TIE_FRONTEND_EDITION(120, 240);
 		}
 	} else {
-		mouse_x = TIE_EDITION(74, 108);
-		mouse_y = TIE_EDITION(100, 200);
+		mouse_x = TIE_FRONTEND_EDITION(74, 108);
+		mouse_y = TIE_FRONTEND_EDITION(100, 200);
 	}
 	xio_Set_Mouse_Position(mouse_x, mouse_y);
 
 	/* Load resources */
 	resource = shellext_Open_Empire_Resource("debrief.lfd");
-	xrect_Set_Rect(&frame, 0, 0, TIE_EDITION(320, 640), TIE_EDITION(200, 480));
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 
 	debrief_film = xfilm_Res_Callback_Film("debrief", &frame, 0, 0, 0, film_Callback);
 #ifdef TIE_MODERN
@@ -523,8 +523,8 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 	/* Brief door (id=0) */
-	xrect_Set_Rect(&frame, TIE_EDITION(133, 298), TIE_EDITION(56, 129), TIE_EDITION(193, 420),
-				   TIE_EDITION(107, 288));
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(133, 298), TIE_FRONTEND_EDITION(56, 129),
+				   TIE_FRONTEND_EDITION(193, 420), TIE_FRONTEND_EDITION(107, 288));
 	brief_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(brief_input, iupdate_Debrief);
 	xinpattr_Set_Input_User_Function(brief_input, iuser_Debrief);
@@ -533,8 +533,8 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 
 	/* Officer door (id=1) — skip if priest only */
 	if (shipext_Get_Mission_Officer() != 2) {
-		xrect_Set_Rect(&frame, TIE_EDITION(85, 226), TIE_EDITION(35, 102), TIE_EDITION(133, 296),
-					   TIE_EDITION(150, 322));
+		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(85, 226), TIE_FRONTEND_EDITION(35, 102),
+					   TIE_FRONTEND_EDITION(133, 296), TIE_FRONTEND_EDITION(150, 322));
 		officer = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(officer, iupdate_Debrief);
 		xinpattr_Set_Input_User_Function(officer, iuser_Debrief);
@@ -544,8 +544,8 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 
 	/* Priest door (id=2) — skip if officer only */
 	if (shipext_Get_Mission_Officer() != 1) {
-		xrect_Set_Rect(&frame, TIE_EDITION(248, 500), TIE_EDITION(51, 134), TIE_EDITION(290, 572),
-					   TIE_EDITION(128, 316));
+		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(248, 500), TIE_FRONTEND_EDITION(51, 134),
+					   TIE_FRONTEND_EDITION(290, 572), TIE_FRONTEND_EDITION(128, 316));
 		priest = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(priest, iupdate_Debrief);
 		xinpattr_Set_Input_User_Function(priest, iuser_Debrief);
@@ -554,8 +554,8 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 	}
 
 	/* Fly-again area (id=3) */
-	xrect_Set_Rect(&frame, TIE_EDITION(0, 56), TIE_EDITION(0, 26), TIE_EDITION(70, 145),
-				   TIE_EDITION(200, 345));
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(0, 56), TIE_FRONTEND_EDITION(0, 26),
+				   TIE_FRONTEND_EDITION(70, 145), TIE_FRONTEND_EDITION(200, 345));
 	flyagain = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(flyagain, iupdate_Debrief);
 	xinpattr_Set_Input_User_Function(flyagain, iuser_Debrief);

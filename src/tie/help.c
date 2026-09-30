@@ -3,6 +3,7 @@
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/help_task.h"
 #endif
+#include "tie/edition.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/frontend_display_tie98.h"
 
@@ -99,7 +100,6 @@ int32_t help_helproom(int32_t start_right_col) {
 	int render_again = 1;
 #ifdef TIE_MODERN
 	HelpRoomState* continuation = landru_task_top();
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
 	cursor_idx = continuation->cursor_idx;
 	previous_cursor = continuation->previous_cursor;
 	redraw_all = continuation->redraw_all;
@@ -109,13 +109,9 @@ int32_t help_helproom(int32_t start_right_col) {
 	group_gap = continuation->group_gap;
 	render_again = continuation->render;
 	if (!continuation->started)
-#elif defined(TIE98)
-	const bool tie98_display = true;
-#else
-	const bool tie98_display = false;
 #endif
 	{
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Lock();
 
 		festring_setfontsize(2);
@@ -181,7 +177,7 @@ int32_t help_helproom(int32_t start_right_col) {
 		page_delta = 0;
 		prev_buttons = 0;
 
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Unlock();
 #ifdef TIE_MODERN
 		continuation->cursor_idx = cursor_idx;
@@ -198,7 +194,7 @@ int32_t help_helproom(int32_t start_right_col) {
 	}
 	for (;;) {
 		if (render_again) {
-			if (tie98_display)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 			{
 				int16_t cur_x = 1;
@@ -232,7 +228,7 @@ int32_t help_helproom(int32_t start_right_col) {
 				previous_cursor = cursor_idx;
 				redraw_all = 0;
 			}
-			if (tie98_display) {
+			if (TIE_DISPLAY_DX5) {
 				FlightSurface_Unlock();
 				FrontendDisplay_BlitOffscreenToRenderSurface();
 				FrontendDisplay_PresentFrame();

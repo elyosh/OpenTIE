@@ -23,6 +23,7 @@
 #include "tie_runtime/timing/flight_checkpoint.h"
 
 #include "tie/backdrp2.h" /* backdrop* arrays */
+#include "tie/edition.h"
 #include "tie/fediskio.h"
 #include "tie/feinput.h"
 #include "tie/festring.h"
@@ -600,20 +601,12 @@ void replayio_replayscreen(void) {
 	int16_t saved_res;
 #ifdef TIE_MODERN
 	ReplayioTask* continuation = landru_task_top();
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
-	const bool tie98_logic = TieProfile_UsesTie98Logic();
 	saved_res = continuation->saved_res;
 	if (continuation->phase == REPLAYIO_PHASE_PREPARE)
-#elif defined(TIE98)
-	const bool tie98_display = true;
-	const bool tie98_logic = true;
-#else
-	const bool tie98_display = false;
-	const bool tie98_logic = false;
 #endif
 	{
 		saved_res = (int16_t)flightResolution;
-		if (tie98_logic) {
+		if (TIE_FLIGHT_TIE98) {
 			uint8_t saved_mapflag = mapflag;
 			mapflag = 1;
 			FSFX_UpdatePlayerEngineSound();
@@ -641,7 +634,7 @@ void replayio_replayscreen(void) {
 		}
 		recordingreplay = 0;
 		replayviewmode = 1;
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Lock();
 		{
 			if (maingameflag) {
@@ -678,7 +671,7 @@ void replayio_replayscreen(void) {
 						panel_loadcontrolpanel((char*)"CAMERA", &replayviewptr.image, 3);
 
 						buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
-						if (tie98_logic) {
+						if (TIE_FLIGHT_TIE98) {
 							festring_setbackcolor(deepspacecolor);
 							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 							clearwindow();
@@ -722,7 +715,7 @@ void replayio_replayscreen(void) {
 						panel_loadcontrolpanel((char*)"CAMERA", &replayviewptr.image, 3);
 
 						buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
-						if (tie98_logic) {
+						if (TIE_FLIGHT_TIE98) {
 							festring_setbackcolor(deepspacecolor);
 							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 							clearwindow();
@@ -783,7 +776,7 @@ void replayio_replayscreen(void) {
 						panel_loadcontrolpanel((char*)"FILM", &replayviewptr.image, 3);
 
 						buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
-						if (tie98_logic) {
+						if (TIE_FLIGHT_TIE98) {
 							festring_setbackcolor(deepspacecolor);
 							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 							clearwindow();
@@ -825,7 +818,7 @@ void replayio_replayscreen(void) {
 						panel_loadcontrolpanel((char*)"FILM", &replayviewptr.image, 3);
 
 						buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
-						if (tie98_logic) {
+						if (TIE_FLIGHT_TIE98) {
 							festring_setbackcolor(deepspacecolor);
 							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 							clearwindow();
@@ -842,7 +835,7 @@ void replayio_replayscreen(void) {
 			}
 		}
 		replay_rewindreplay();
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Unlock();
 #ifdef TIE_MODERN
 		continuation->phase = REPLAYIO_PHASE_VIEW;
@@ -855,7 +848,7 @@ void replayio_replayscreen(void) {
 		{
 			reentersimflag = 0;
 			festring_showscreen();
-			if (tie98_display) {
+			if (TIE_DISPLAY_DX5) {
 				FrontendDisplay_BlitOffscreenToRenderSurface();
 				FrontendDisplay_PresentFrame();
 				FrontendDisplay_BlitOffscreenToRenderSurface();
@@ -909,7 +902,7 @@ void replayio_replayscreen(void) {
 				return;
 			}
 			if (!reentersimflag) {
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Lock();
 				if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
 					flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
@@ -918,7 +911,7 @@ void replayio_replayscreen(void) {
 					festring_setbound(14, 8, 306, 131);
 				festring_setbackcolor(0x40);
 				clearwindow();
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Unlock();
 				if (!replaymusic) {
 					imuse_set_master_vol(im, (uint16_t)replayvolume);
@@ -964,7 +957,7 @@ void replayio_replayscreen(void) {
 		blank();
 		recordingreplay = 0;
 		replayviewmode = 1;
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Lock();
 		replay_loadreplay();
 		replayio_copyfromsave(replaystartfile);
@@ -1001,7 +994,7 @@ void replayio_replayscreen(void) {
 				panel_loadcontrolpanel((char*)"FILM", &replayviewptr.image, 3);
 
 				buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
-				if (tie98_logic) {
+				if (TIE_FLIGHT_TIE98) {
 					festring_setbackcolor(deepspacecolor);
 					festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 					clearwindow();
@@ -1043,7 +1036,7 @@ void replayio_replayscreen(void) {
 				panel_loadcontrolpanel((char*)"FILM", &replayviewptr.image, 3);
 
 				buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
-				if (tie98_logic) {
+				if (TIE_FLIGHT_TIE98) {
 					festring_setbackcolor(deepspacecolor);
 					festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 					clearwindow();
@@ -1058,7 +1051,7 @@ void replayio_replayscreen(void) {
 			}
 		}
 		replay_rewindreplay();
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Unlock();
 		if (!reentersimflag) {
 #ifdef TIE_MODERN

@@ -1,4 +1,5 @@
 #include "tie/user.h"
+#include "tie/edition.h"
 #include "tie/help.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/help_task.h"
@@ -682,8 +683,8 @@ int16_t user_targetonscreen(uint16_t obj_or_kind) {
 	if (obj_idx_loc >= NUM_ACTIVE_CRAFT_SLOTS) {
 		int species = (obj_idx_loc >= 0x3800u) ? staticobjects[obj_idx_loc - 14336].species
 											   : objects[obj_idx_loc].ship_idx;
-		bound_hwidth_pre = TieProfile_UsesTie98Logic() ? modelbounds_getmaxextent(species)
-													   : species_table[species].bound_hwidth;
+		bound_hwidth_pre =
+			TIE_FLIGHT_EDITION(species_table[species].bound_hwidth, modelbounds_getmaxextent(species));
 	} else {
 		int sp = objects[obj_idx_loc].craft_ptr->species_idx;
 		bound_hwidth_pre =
@@ -912,12 +913,11 @@ void user_setnewtarget(uint16_t new_obj) {
 		int nm;
 		int i;
 
-		if (!TieProfile_UsesTie98Logic())
+		if (!TIE_FLIGHT_TIE98)
 			draw_lockshipfileptrs(model_type);
-		nm = TieProfile_UsesTie98Logic() ? modelmesh_getcount(model_type) : objectblockptr->num_meshes;
+		nm = TIE_FLIGHT_EDITION(objectblockptr->num_meshes, modelmesh_getcount(model_type));
 		for (i = 0; i < nm; ++i) {
-			int mt = TieProfile_UsesTie98Logic() ? modelmesh_gettype(model_type, i)
-												 : componentblockptr[i].mesh_type;
+			int mt = TIE_FLIGHT_EDITION(componentblockptr[i].mesh_type, modelmesh_gettype(model_type, i));
 			if (mt == 1 || mt == 3) {
 				pstate.radar_target1 = (int16_t)i;
 				break;
@@ -1703,20 +1703,12 @@ int32_t user_inflightinfo(int32_t screen_id) {
 	uint16_t sub;
 #ifdef TIE_MODERN
 	InflightInfoTask* continuation = landru_task_top();
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
-	const bool tie98_logic = TieProfile_UsesTie98Logic();
 	saved_master_vol = continuation->saved_master_vol;
 	retreat_flag = continuation->retreat_flag;
 	exit_flag = continuation->exit_flag;
 	screen = continuation->screen;
 	old_target = continuation->old_target;
 	if (continuation->phase == INFLIGHT_PHASE_BEGIN)
-#elif defined(TIE98)
-	const bool tie98_display = true;
-	const bool tie98_logic = true;
-#else
-	const bool tie98_display = false;
-	const bool tie98_logic = false;
 #endif
 	{
 		if (mission.train_craft_type && (uint16_t)screen_id <= 4u) {
@@ -1799,7 +1791,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 		retreat_flag = 0;
 		exit_flag = 0;
 		screen = screen_id;
-		if (tie98_logic) {
+		if (TIE_FLIGHT_TIE98) {
 			mapflag = 1;
 			FSFX_UpdatePlayerEngineSound();
 			mapflag = 0;
@@ -1832,7 +1824,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 			TieFlightScreen_SetActive(screen < 0 || screen > 6 ? TIE_FLIGHT_SCREEN_NORMAL
 															   : (TieFlightScreen)(screen + 1));
 #endif
-			if (tie98_display)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 			panel_idx = (int)(uint16_t)(screen + 21);
 			if (!panelviewptrs[panel_idx].handle) {
@@ -1842,7 +1834,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 			buildpalette((const uint8_t*)panelviewptrs[panel_idx].palette, 0, 64);
 			drawshape(panelviewptrs[panel_idx].image, 0, 0, 253, 0);
 			festring_showscreen();
-			if (tie98_display)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Unlock();
 			sub = 0;
 #ifdef TIE_MODERN
@@ -2028,7 +2020,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 		panelrts_setnewpilotview(pilotview_restore);
 		msg_messageinit();
 		msg_messagerestore();
-		if (tie98_logic)
+		if (TIE_FLIGHT_TIE98)
 			g_flightInitialTextureCacheFlushPending = 1;
 		fullupdateflag = 1;
 		imuse_set_master_vol(im, (int16_t)saved_master_vol);
@@ -2294,9 +2286,9 @@ void user_inputforplane(void) {
 				break;
 			cp = objects[pstate.target_obj_idx].craft_ptr;
 			model_type = objects[pstate.target_obj_idx].ship_idx;
-			if (!TieProfile_UsesTie98Logic())
+			if (!TIE_FLIGHT_TIE98)
 				draw_lockshipfileptrs(model_type);
-			nm = TieProfile_UsesTie98Logic() ? modelmesh_getcount(model_type) : objectblockptr->num_meshes;
+			nm = TIE_FLIGHT_EDITION(objectblockptr->num_meshes, modelmesh_getcount(model_type));
 			guard = nm;
 			do {
 				int rt;
@@ -2310,9 +2302,8 @@ void user_inputforplane(void) {
 					rt = nm - 1;
 				pstate.radar_target1 = (int16_t)rt;
 			} while (cp->mesh_state[pstate.radar_target1] != MESH_STATE_VISIBLE ||
-					 (TieProfile_UsesTie98Logic()
-						  ? !user_validcomponent_tie98(model_type, pstate.radar_target1)
-						  : !user_validcomponent(pstate.radar_target1)));
+					 TIE_FLIGHT_EDITION(!user_validcomponent(pstate.radar_target1),
+										!user_validcomponent_tie98(model_type, pstate.radar_target1)));
 			break;
 		}
 		/* Throttle down step + ack beep (LABEL_479). */
@@ -3161,7 +3152,7 @@ void user_inputforplane(void) {
 		}
 		/* Alt+O: screenshot. */
 		case KEY_ALT_O:
-			if (TieClassicDisplay_UsesDx5())
+			if (TIE_DISPLAY_DX5)
 				FrontendDisplay_CaptureScreenshot();
 			else
 				rtsvga2_takeScreenshot();

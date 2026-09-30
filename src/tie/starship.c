@@ -3,6 +3,7 @@
 #include "tie/collide_opt.h"
 #include "tie/create.h"
 #include "tie/draw.h"
+#include "tie/edition.h"
 #include "tie/fsfx.h"
 #include "tie/fview.h"
 #include "tie/laser.h"
@@ -199,7 +200,7 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 	int32_t best_frac;
 	unsigned int i;
 
-	if (TieProfile_UsesTie98Logic())
+	if (TIE_FLIGHT_TIE98)
 		return collide_checksweptmodelcollision(shooter_obj_idx, target_obj_idx);
 
 	craft = &objects[target_obj_idx];
@@ -449,7 +450,7 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
 	int16_t center_fwd_half;
 	int32_t ds;
 
-	if (TieProfile_UsesTie98Logic())
+	if (TIE_FLIGHT_TIE98)
 		return starship_damagecomponent_tie98(obj_idx_in, component_plus1, damage);
 
 	/* Match the binary's trust model: craftptr is caller-provided (set by
@@ -726,7 +727,7 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 
 	uint8_t main_hull_slots[16];
 
-	if (TieProfile_UsesTie98Logic()) {
+	if (TIE_FLIGHT_TIE98) {
 		starship_createstarshipexplo_tie98(obj_idx_in, full_ship);
 		return;
 	}
@@ -800,7 +801,7 @@ uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_
 	int model_scale_shift;
 	FlightObject* ember;
 
-	if (TieProfile_UsesTie98Logic())
+	if (TIE_FLIGHT_TIE98)
 		return starship_makestarshipcompexplo_tie98(craft, component_idx, size, use_bsp_random);
 
 	mesh = &componentblockptr[component_idx];
@@ -918,7 +919,6 @@ enum {
 
 // FUNCTION: TIE95 0x53EAC
 void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, uint16_t target_ref) {
-	bool tie98;
 	uint16_t species_idx;
 	uint8_t mesh_idx;
 	uint8_t link_byte;
@@ -957,7 +957,6 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 
 	if (craftptr->status_flags == 0)
 		return;
-	tie98 = TieProfile_UsesTie98Logic();
 
 	species_idx = craftptr->species_idx;
 	mesh_idx = spec_data[species_idx].hp[weapon_slot_idx].component;
@@ -1002,12 +1001,12 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	craft_wz = craft->world_z;
 
 	mesh = NULL;
-	if (!tie98) {
+	if (!TIE_FLIGHT_TIE98) {
 		draw_lockshipfileptrs(craft->ship_idx);
 		mesh = &componentblockptr[mesh_idx];
 	}
 
-	if (tie98) {
+	if (TIE_FLIGHT_TIE98) {
 		/* The OPT rotation helper uses (X, -Y, Z); PAI uses
 		 * (side, up, forward). */
 		int point_x;
@@ -1108,7 +1107,7 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 		}
 	}
 
-	if (!tie98 && objectblockptr->model_scale_shift) {
+	if (!TIE_FLIGHT_TIE98 && objectblockptr->model_scale_shift) {
 		const int shift = objectblockptr->model_scale_shift;
 		rotatedx = (int32_t)((uint32_t)rotatedx << shift);
 		rotatedy = (int32_t)((uint32_t)rotatedy << shift);
@@ -1221,7 +1220,7 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	 * bolt -- gives a "fired from a moving platform" trail. The push
 	 * factor is the HIWORD of dword_D4C74[projectile_idx], which aliases
 	 * the projectile launch-offset table. */
-	push = (int16_t)(TieProfile_UsesTie98Logic() ? tie98_projectilelength : projectilelength)[proj_type];
+	push = (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[proj_type];
 	laser->world_x_prev = gun_wx;
 	laser->world_y_prev = gun_wy;
 	laser->world_z_prev = gun_wz;

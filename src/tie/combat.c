@@ -360,25 +360,25 @@ static void combat_iuser_Combat(Input* input, int32_t time) {
 			shipext_Last_Combat_Ship();
 			combat_time = (combat_time >= 384) ? 0 : 128;
 			bpflight_Stop_Movie_Engine();
-			combat_monitor_needs_clear = TIE_EDITION(false, true);
+			combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
 			break;
 		case 2:
 			shipext_Next_Combat_Ship();
 			combat_time = (combat_time >= 256) ? 0 : 128;
 			bpflight_Stop_Movie_Engine();
-			combat_monitor_needs_clear = TIE_EDITION(false, true);
+			combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
 			break;
 		case 3:
 			shipext_Last_Combat_Mission();
 			combat_time = (combat_time >= 256) ? 0 : 128;
 			bpflight_Stop_Movie_Engine();
-			combat_monitor_needs_clear = TIE_EDITION(false, true);
+			combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
 			break;
 		case 4:
 			shipext_Next_Combat_Mission();
 			combat_time = (combat_time >= 256) ? 0 : 128;
 			bpflight_Stop_Movie_Engine();
-			combat_monitor_needs_clear = TIE_EDITION(false, true);
+			combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
 			break;
 		case 5:
 			if (!helmet->var2)
@@ -484,14 +484,14 @@ static void combat_iuser_Combat_Screen(Input* input, int32_t time) {
 	if (combat_time == 0) {
 		combat_time = 1;
 		combat_mode = 0;
-		combat_monitor_needs_clear = TIE_EDITION(false, true);
+		combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
 		return;
 	}
 
 	if (combat_time == 256) {
 		combat_time++;
 		combat_mode = 1;
-		combat_monitor_needs_clear = TIE_EDITION(false, true);
+		combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
 		return;
 	}
 
@@ -534,7 +534,7 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 	t = combat_time;
 	num_lines = shipext_Num_Combat_Mission_Text_Lines();
 
-	font_id = TIE_EDITION(0, 2);
+	font_id = TIE_FRONTEND_EDITION(0, 2);
 #ifdef TIE_MODERN
 	line_height = TieProfile_UsesTie98Frontend() ? (int16_t)xfont_Get_FontID_Height(font_id) : 10;
 #elif defined(TIE98)
@@ -544,7 +544,7 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 #endif
 	dst.top += (dst.bottom - dst.top - (line_height * num_lines + 18)) >> 1;
 
-	text_x = dst.left + (TIE_EDITION(2, 4));
+	text_x = dst.left + TIE_FRONTEND_EDITION(2, 4);
 	text_y = dst.top + 10;
 #ifdef TIE_MODERN
 	dst.bottom = dst.top + (TieProfile_UsesTie98Frontend() ? 9 + line_height : 18);
@@ -566,15 +566,15 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 			max_width = w;
 	}
 	text_left = ((dst.right - dst.left - max_width) >> 1) + text_x;
-	full_bar = TIE_EDITION(195, 390);
-	half_bar = TIE_EDITION(99, 198);
-	bar_step = TIE_EDITION(6, 12);
+	full_bar = TIE_FRONTEND_EDITION(195, 390);
+	half_bar = TIE_FRONTEND_EDITION(99, 198);
+	bar_step = TIE_FRONTEND_EDITION(6, 12);
 
 	/* Animated horizontal bars: header strip is framed by two parallel bars
 	 * (top of header at dst.top+1, bottom of header at dst.bottom-1). Both
 	 * grow outward from the centre as `t` ramps 0..16, then snap full at 195. */
 	if (t >= 16) {
-		header_x = dst.left + (TIE_EDITION(3, 6));
+		header_x = dst.left + TIE_FRONTEND_EDITION(3, 6);
 		header_w = full_bar;
 	} else {
 		header_x = dst.left + half_bar - bar_step * t;
@@ -585,7 +585,7 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 
 	bar_y = dst.bottom + line_height * num_lines + 2;
 	if (t >= line_height * num_lines) {
-		xpaint_Horiz_Clipped_Line(dst.left + (TIE_EDITION(3, 6)), bar_y, full_bar, 2);
+		xpaint_Horiz_Clipped_Line(dst.left + TIE_FRONTEND_EDITION(3, 6), bar_y, full_bar, 2);
 	} else {
 		int16_t bt = t - (line_height * num_lines - 16);
 		if (bt >= 0)
@@ -644,24 +644,25 @@ static void combat_Draw_Combat_Screen_Score(Rect* src) {
 
 	if (mi >= combat_num_scores || !combat_score_data[mi].name[0]) {
 		textext_Copy_Text(string, txtCombatHighScore);
-		xfont_Print_Clipped_Text(string, src->left + (TIE_EDITION(64, 128)), src->top + (TIE_EDITION(10, 24)),
-								 TIE_EDITION(0, 2), 31);
+		xfont_Print_Clipped_Text(string, src->left + TIE_FRONTEND_EDITION(64, 128),
+								 src->top + TIE_FRONTEND_EDITION(10, 24), TIE_FRONTEND_EDITION(0, 2), 31);
 		return;
 	}
 
 	t = combat_time - 256;
-	border = ((t >= 32) ? TIE_EDITION(2, 4) : TIE_EDITION(130, 260) - TIE_EDITION(4, 8) * t);
+	border = ((t >= 32) ? TIE_FRONTEND_EDITION(2, 4)
+						: TIE_FRONTEND_EDITION(130, 260) - TIE_FRONTEND_EDITION(4, 8) * t);
 	width = (src->right - src->left) - 2 * border;
 
 	/* Horizontal bars */
 	xpaint_Horiz_Clipped_Line(border + src->left, src->top + 6, width, 2);
 	xpaint_Horiz_Clipped_Line(border + src->left, src->bottom - 6, width, 2);
 
-	name_x = src->left + (TIE_EDITION(4, 8));
-	score_x = src->left + (TIE_EDITION(64, 150));
-	kills_x = src->left + (TIE_EDITION(144, 280));
-	y = src->top + (TIE_EDITION(10, 24));
-	font_id = TIE_EDITION(0, 3);
+	name_x = src->left + TIE_FRONTEND_EDITION(4, 8);
+	score_x = src->left + TIE_FRONTEND_EDITION(64, 150);
+	kills_x = src->left + TIE_FRONTEND_EDITION(144, 280);
+	y = src->top + TIE_FRONTEND_EDITION(10, 24);
+	font_id = TIE_FRONTEND_EDITION(0, 3);
 
 	rec = &combat_score_data[mi];
 
@@ -723,9 +724,9 @@ static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
 	int16_t t = combat_time - 384;
 
 	xrect_Copy_Rect(&dst, src);
-	dst.top = dst.bottom - (TIE_EDITION(24, 58));
-	dst.bottom = dst.top + (TIE_EDITION(10, 24));
-	font_id = TIE_EDITION(0, 2);
+	dst.top = dst.bottom - TIE_FRONTEND_EDITION(24, 58);
+	dst.bottom = dst.top + TIE_FRONTEND_EDITION(10, 24);
+	font_id = TIE_FRONTEND_EDITION(0, 2);
 
 	/* Name fade: hidden outside [16..207]; ramps in 16..47, hold 48..191,
 	 * ramps out 192..207. */
@@ -815,7 +816,7 @@ static int16_t combat_draw_Combat_Help(Actor* the_actor, Rect* draw_rect, Rect* 
 			xactor_Get_Actor_Bounds(the_actor, &bounds);
 			xfont_Enable_FontID_Shadow(0);
 			textext_Copy_Text(text, (int16_t)(combat_help + 84));
-			xfont_Print_Centered_Text(text, &bounds, 15, TIE_EDITION(0, 2));
+			xfont_Print_Centered_Text(text, &bounds, 15, TIE_FRONTEND_EDITION(0, 2));
 			xfont_Disable_FontID_Shadow(0);
 		}
 		combat_help = 0;
@@ -912,7 +913,7 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	char mission_name[64];
 	int16_t i;
 
-	xio_Set_Mouse_Position(TIE_EDITION(268, 536), TIE_EDITION(152, 354));
+	xio_Set_Mouse_Position(TIE_FRONTEND_EDITION(268, 536), TIE_FRONTEND_EDITION(152, 354));
 
 	combat_score_id = -1;
 	combat_Load_Combat_High_Scores();
@@ -926,7 +927,7 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 
-	xrect_Set_Rect(&frame, 0, 0, TIE_EDITION(320, 640), TIE_EDITION(200, 480));
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 	combat_film = xfilm_Res_Callback_Film(combat_str[2], &frame, 0, 0, 0, combat_film_Combat_Callback);
 	xfilm_Set_Film_Def_Palette(combat_film, the_head->def_palette);
 
@@ -939,12 +940,12 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	}
 #endif
 	/* World input */
-	xrect_Set_Rect(&frame, 0, 0, TIE_EDITION(320, 640), TIE_EDITION(200, 480));
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 	/* Monitor screen input */
-	xrect_Set_Rect(&frame, TIE_EDITION(59, 124), TIE_EDITION(2, 7), TIE_EDITION(262, 516),
-				   TIE_EDITION(115, 272));
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(59, 124), TIE_FRONTEND_EDITION(2, 7),
+				   TIE_FRONTEND_EDITION(262, 516), TIE_FRONTEND_EDITION(115, 272));
 	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(monitor_input, combat_iupdate_Combat_Screen);
 	xinpattr_Set_Input_User_Function(monitor_input, combat_iuser_Combat_Screen);
@@ -961,36 +962,36 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	for (i = 0; i < 8; i++) {
 		switch (i) {
 			case 0:
-				xrect_Set_Rect(&frame, TIE_EDITION(32, 88), TIE_EDITION(142, 336), TIE_EDITION(54, 136),
-							   TIE_EDITION(156, 373));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(32, 88), TIE_FRONTEND_EDITION(142, 336),
+							   TIE_FRONTEND_EDITION(54, 136), TIE_FRONTEND_EDITION(156, 373));
 				break;
 			case 1:
-				xrect_Set_Rect(&frame, TIE_EDITION(124, 211), TIE_EDITION(142, 336), TIE_EDITION(146, 255),
-							   TIE_EDITION(156, 373));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(124, 211), TIE_FRONTEND_EDITION(142, 336),
+							   TIE_FRONTEND_EDITION(146, 255), TIE_FRONTEND_EDITION(156, 373));
 				break;
 			case 2:
-				xrect_Set_Rect(&frame, TIE_EDITION(22, 70), TIE_EDITION(160, 370), TIE_EDITION(44, 120),
-							   TIE_EDITION(174, 409));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(22, 70), TIE_FRONTEND_EDITION(160, 370),
+							   TIE_FRONTEND_EDITION(44, 120), TIE_FRONTEND_EDITION(174, 409));
 				break;
 			case 3:
-				xrect_Set_Rect(&frame, TIE_EDITION(124, 206), TIE_EDITION(160, 370), TIE_EDITION(146, 250),
-							   TIE_EDITION(174, 409));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(124, 206), TIE_FRONTEND_EDITION(160, 370),
+							   TIE_FRONTEND_EDITION(146, 250), TIE_FRONTEND_EDITION(174, 409));
 				break;
 			case 4:
-				xrect_Set_Rect(&frame, TIE_EDITION(254, 514), TIE_EDITION(142, 337), TIE_EDITION(280, 577),
-							   TIE_EDITION(158, 389));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(254, 514), TIE_FRONTEND_EDITION(142, 337),
+							   TIE_FRONTEND_EDITION(280, 577), TIE_FRONTEND_EDITION(158, 389));
 				break;
 			case 5:
-				xrect_Set_Rect(&frame, TIE_EDITION(10, 0), TIE_EDITION(176, 406), TIE_EDITION(38, 72),
-							   TIE_EDITION(200, 466));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(10, 0), TIE_FRONTEND_EDITION(176, 406),
+							   TIE_FRONTEND_EDITION(38, 72), TIE_FRONTEND_EDITION(200, 466));
 				break;
 			case 6:
-				xrect_Set_Rect(&frame, TIE_EDITION(55, 134), TIE_EDITION(146, 344), TIE_EDITION(124, 209),
-							   TIE_EDITION(156, 363));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(55, 134), TIE_FRONTEND_EDITION(146, 344),
+							   TIE_FRONTEND_EDITION(124, 209), TIE_FRONTEND_EDITION(156, 363));
 				break;
 			case 7:
-				xrect_Set_Rect(&frame, TIE_EDITION(47, 128), TIE_EDITION(164, 378), TIE_EDITION(122, 201),
-							   TIE_EDITION(176, 400));
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(47, 128), TIE_FRONTEND_EDITION(164, 378),
+							   TIE_FRONTEND_EDITION(122, 201), TIE_FRONTEND_EDITION(176, 400));
 				break;
 		}
 		button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
@@ -1007,7 +1008,7 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 
 	combat_time = 0;
 	combat_round = rand() & 3;
-	combat_monitor_needs_clear = TIE_EDITION(false, true);
+	combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
 
 	shipext_Get_Combat_Mission_Name(mission_name);
 	shipext_Set_Mission_Name(mission_name);
