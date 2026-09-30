@@ -9,6 +9,9 @@
 extern "C" {
 #endif
 
+/* Active subtitle bounds, also cleared when streaming initializes its canvas. */
+extern Rect textext_bounds;
+
 /* TextFadeEnum — from watdbg debug info */
 typedef enum {
 	fadeTitle = 0,
@@ -325,18 +328,6 @@ void textext_Get_Ship_Text(char* string, int16_t ship_id);
 void textext_Get_Train_Text(char* string, int16_t line);
 int16_t textext_Count_Train_Text_Lines(void);
 void textext_Get_Weapon_Select_Text(char* string, int16_t line);
-
-/* Per-tick snapshot emitter — re-emits the active subtitle lines
- * into the unified TieUIText channel every tick. Required because
- * the text actor's draw callback fires only on redraw frames; the
- * engine's classic FB persists between draws but our snapshot
- * doesn't. Must run between TieSnapshotBuilder_BeginTick and
- * finalize_tick (i.e. from TieRuntime_Tick's emit pipeline). */
-
-Rect* textext_Get_Prev_Text_Bounds_Rect(void);
-void textext_Clear_Prev_Text_Bounds_Rect(void);
-Rect* textext_Get_Text_Bounds_Rect(void);
-void textext_Clear_Text_Bounds_Rect(void);
 
 #ifdef __cplusplus
 }

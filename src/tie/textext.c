@@ -18,24 +18,13 @@
 
 #include "tie/stub.h"
 
-#include <stdlib.h>
 #include <string.h>
 
-/*
- * TEXTEXT static data tables — extracted from TIE.EXE binary.
- *
- * text_resource_table[289]: maps text ID (0..287) to resource index (0/1/2).
- *   Entry 288 = 99 (sentinel/unused).
- *
- * text_scene_list_gbl[1099]: 7-word entries for in-game subtitle timing.
- *   Format: [scene, resource, start_time, stop_time, x, y, fade_type]
- *   156 entries + sentinel (-1).
- */
-
 /* Text ID → resource index (0 = tietext0, 1 = tietext1, 2 = tietext2) */
-/* IDs 0..107: resource 0, IDs 108..114: resource 0 (still base text) */
-/* IDs 267..274: resource 1, IDs 275..287: resource 2, ID 288: sentinel 99 */
-static const int16_t text_resource_table_init[289] = {
+/* IDs 0..266 use resource 0, 267..273 resource 1, 274..287 resource 2.
+ * Entry 288 is the original 99 sentinel. */
+// GLOBAL: TIE95 0xCE7B4
+static int16_t text_resource_table[289] = {
 	/* 0-15 */ 0,    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	/* 16-31 */ 0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	/* 32-47 */ 0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -57,1176 +46,156 @@ static const int16_t text_resource_table_init[289] = {
 	/* 288 */ 99,
 };
 
-/* Scene subtitle timing: 7 words per entry, terminated by -1 sentinel.
+/* Retail scene subtitle timing: 216 entries plus a seven-word sentinel row.
  * Fields: scene, resource, start_time, stop_time, x, y, fade_type
  * fade_type: 0=fadeTitle, 1=fadeFastTitle, 2=fadeTitle1, 3=fadeTitle2,
  *            4=fadePerson1, 5=fadePerson2 */
-static const int16_t text_scene_list_init[] = {
-	/* scene 10: intro crawl */
-	10,
-	0,
-	4,
-	100,
-	0,
-	4,
-	0,
-	10,
-	0,
-	4,
-	100,
-	0,
-	14,
-	0,
-	10,
-	0,
-	130,
-	190,
-	0,
-	180,
-	1,
-	10,
-	0,
-	130,
-	190,
-	0,
-	190,
-	1,
-	/* scene 20 */
-	20,
-	0,
-	4,
-	70,
-	0,
-	4,
-	1,
-	20,
-	0,
-	4,
-	70,
-	0,
-	14,
-	1,
-	/* scene 30 */
-	30,
-	0,
-	4,
-	50,
-	0,
-	170,
-	2,
-	30,
-	0,
-	60,
-	116,
-	0,
-	24,
-	2,
-	30,
-	0,
-	60,
-	116,
-	0,
-	34,
-	2,
-	30,
-	0,
-	124,
-	210,
-	0,
-	170,
-	2,
-	30,
-	0,
-	124,
-	210,
-	0,
-	180,
-	2,
-	/* scene 40 */
-	40,
-	0,
-	4,
-	60,
-	0,
-	4,
-	1,
-	40,
-	0,
-	4,
-	60,
-	0,
-	14,
-	1,
-	/* scene 50 */
-	50,
-	0,
-	4,
-	80,
-	0,
-	4,
-	2,
-	50,
-	0,
-	4,
-	80,
-	0,
-	14,
-	2,
-	50,
-	0,
-	4,
-	80,
-	0,
-	24,
-	2,
-	50,
-	0,
-	140,
-	200,
-	0,
-	160,
-	3,
-	50,
-	0,
-	140,
-	200,
-	0,
-	170,
-	3,
-	50,
-	0,
-	202,
-	210,
-	0,
-	40,
-	2,
-	/* scene 170 */
-	170,
-	0,
-	4,
-	32,
-	0,
-	10,
-	1,
-	/* scenes 280-285 */
-	280,
-	0,
-	4,
-	50,
-	0,
-	10,
-	1,
-	281,
-	0,
-	4,
-	50,
-	0,
-	10,
-	1,
-	282,
-	0,
-	4,
-	50,
-	0,
-	10,
-	1,
-	283,
-	0,
-	4,
-	50,
-	0,
-	10,
-	1,
-	284,
-	0,
-	4,
-	50,
-	0,
-	10,
-	1,
-	285,
-	0,
-	4,
-	50,
-	0,
-	10,
-	1,
-	/* scene 390 */
-	390,
-	0,
-	4,
-	40,
-	0,
-	190,
-	1,
-	/* scenes 400-405 */
-	400,
-	0,
-	4,
-	40,
-	0,
-	12,
-	2,
-	401,
-	0,
-	4,
-	60,
-	0,
-	10,
-	2,
-	402,
-	0,
-	4,
-	60,
-	0,
-	10,
-	2,
-	403,
-	0,
-	4,
-	60,
-	0,
-	10,
-	2,
-	404,
-	0,
-	50,
-	90,
-	0,
-	60,
-	2,
-	405,
-	0,
-	50,
-	90,
-	0,
-	60,
-	2,
-	/* scene 210 */
-	210,
-	0,
-	4,
-	40,
-	0,
-	10,
-	1,
-	210,
-	0,
-	210,
-	250,
-	0,
-	100,
-	2,
-	/* scene 500 */
-	500,
-	0,
-	4,
-	60,
-	0,
-	20,
-	1,
-	500,
-	0,
-	4,
-	60,
-	0,
-	30,
-	1,
-	500,
-	0,
-	200,
-	230,
-	0,
-	170,
-	2,
-	500,
-	0,
-	234,
-	280,
-	0,
-	24,
-	3,
-	500,
-	0,
-	234,
-	280,
-	0,
-	34,
-	3,
-	500,
-	0,
-	300,
-	358,
-	0,
-	170,
-	2,
-	500,
-	0,
-	300,
-	358,
-	0,
-	180,
-	2,
-	500,
-	0,
-	360,
-	430,
-	0,
-	24,
-	3,
-	500,
-	0,
-	360,
-	430,
-	0,
-	34,
-	3,
-	/* scene 510 */
-	510,
-	0,
-	4,
-	60,
-	0,
-	20,
-	1,
-	510,
-	0,
-	4,
-	60,
-	0,
-	30,
-	1,
-	510,
-	0,
-	164,
-	230,
-	0,
-	50,
-	2,
-	510,
-	0,
-	164,
-	230,
-	0,
-	60,
-	2,
-	510,
-	0,
-	234,
-	294,
-	0,
-	50,
-	2,
-	510,
-	0,
-	234,
-	294,
-	0,
-	60,
-	2,
-	510,
-	0,
-	296,
-	350,
-	0,
-	50,
-	2,
-	510,
-	0,
-	296,
-	350,
-	0,
-	60,
-	2,
-	/* scene 520 */
-	520,
-	0,
-	4,
-	100,
-	0,
-	20,
-	1,
-	520,
-	0,
-	4,
-	100,
-	0,
-	30,
-	1,
-	520,
-	0,
-	165,
-	190,
-	-10,
-	140,
-	3,
-	520,
-	0,
-	192,
-	220,
-	50,
-	40,
-	2,
-	520,
-	0,
-	192,
-	220,
-	50,
-	50,
-	2,
-	520,
-	0,
-	222,
-	270,
-	-10,
-	140,
-	3,
-	520,
-	0,
-	222,
-	270,
-	-10,
-	150,
-	3,
-	520,
-	0,
-	272,
-	300,
-	50,
-	40,
-	2,
-	520,
-	0,
-	272,
-	300,
-	50,
-	50,
-	2,
-	/* scene 530-531 */
-	530,
-	0,
-	40,
-	98,
-	-20,
-	20,
-	2,
-	530,
-	0,
-	40,
-	98,
-	-20,
-	30,
-	2,
-	530,
-	0,
-	40,
-	98,
-	-20,
-	40,
-	2,
-	530,
-	0,
-	100,
-	126,
-	40,
-	20,
-	3,
-	530,
-	0,
-	100,
-	126,
-	40,
-	30,
-	3,
-	531,
-	0,
-	90,
-	120,
-	40,
-	20,
-	3,
-	531,
-	0,
-	120,
-	190,
-	-20,
-	20,
-	2,
-	531,
-	0,
-	120,
-	190,
-	-20,
-	30,
-	2,
-	531,
-	0,
-	120,
-	190,
-	-20,
-	40,
-	2,
-	531,
-	0,
-	192,
-	250,
-	40,
-	20,
-	3,
-	531,
-	0,
-	192,
-	250,
-	40,
-	30,
-	3,
-	/* scene 540 */
-	540,
-	0,
-	24,
-	70,
-	0,
-	20,
-	2,
-	540,
-	0,
-	90,
-	130,
-	0,
-	20,
-	2,
-	540,
-	0,
-	165,
-	200,
-	0,
-	20,
-	2,
-	/* scene 550 */
-	550,
-	0,
-	4,
-	22,
-	-40,
-	180,
-	2,
-	550,
-	0,
-	24,
-	40,
-	40,
-	180,
-	3,
-	550,
-	0,
-	24,
-	40,
-	40,
-	190,
-	3,
-	550,
-	0,
-	78,
-	104,
-	-40,
-	180,
-	2,
-	550,
-	0,
-	78,
-	104,
-	-40,
-	190,
-	2,
-	550,
-	0,
-	106,
-	120,
-	40,
-	180,
-	3,
-	/* scene 560 */
-	560,
-	0,
-	4,
-	40,
-	0,
-	190,
-	1,
-	560,
-	0,
-	44,
-	100,
-	0,
-	20,
-	2,
-	/* scene 700 */
-	700,
-	0,
-	70,
-	90,
-	0,
-	180,
-	2,
-	700,
-	0,
-	98,
-	150,
-	0,
-	180,
-	3,
-	700,
-	0,
-	98,
-	150,
-	0,
-	190,
-	3,
-	700,
-	0,
-	160,
-	240,
-	0,
-	180,
-	2,
-	700,
-	0,
-	160,
-	240,
-	0,
-	190,
-	2,
-	700,
-	0,
-	260,
-	290,
-	0,
-	180,
-	3,
-	700,
-	0,
-	320,
-	380,
-	0,
-	180,
-	2,
-	/* scene 710 */
-	710,
-	0,
-	10,
-	90,
-	0,
-	180,
-	3,
-	710,
-	0,
-	10,
-	90,
-	0,
-	190,
-	3,
-	710,
-	0,
-	96,
-	184,
-	0,
-	180,
-	2,
-	710,
-	0,
-	96,
-	184,
-	0,
-	190,
-	2,
-	710,
-	0,
-	194,
-	270,
-	0,
-	180,
-	3,
-	710,
-	0,
-	194,
-	270,
-	0,
-	190,
-	3,
-	710,
-	0,
-	280,
-	315,
-	0,
-	180,
-	3,
-	710,
-	0,
-	280,
-	315,
-	0,
-	190,
-	3,
-	710,
-	0,
-	320,
-	370,
-	0,
-	180,
-	2,
-	710,
-	0,
-	320,
-	370,
-	0,
-	190,
-	2,
-	/* scene 720 */
-	720,
-	0,
-	10,
-	45,
-	0,
-	180,
-	2,
-	720,
-	0,
-	60,
-	130,
-	0,
-	170,
-	3,
-	720,
-	0,
-	60,
-	130,
-	0,
-	180,
-	3,
-	720,
-	0,
-	140,
-	210,
-	0,
-	170,
-	3,
-	720,
-	0,
-	140,
-	210,
-	0,
-	180,
-	3,
-	720,
-	0,
-	220,
-	260,
-	0,
-	170,
-	2,
-	720,
-	0,
-	272,
-	360,
-	0,
-	170,
-	3,
-	720,
-	0,
-	272,
-	360,
-	0,
-	180,
-	3,
-	/* scene 580 (resource 1) */
-	580,
-	1,
-	4,
-	60,
-	0,
-	190,
-	0,
-	/* scene 573 (resource 1) */
-	573,
-	1,
-	4,
-	45,
-	0,
-	190,
-	1,
-	573,
-	1,
-	32,
-	60,
-	0,
-	10,
-	2,
-	573,
-	1,
-	64,
-	126,
-	0,
-	10,
-	3,
-	573,
-	1,
-	64,
-	126,
-	0,
-	20,
-	3,
-	573,
-	1,
-	130,
-	189,
-	0,
-	10,
-	2,
-	573,
-	1,
-	130,
-	189,
-	0,
-	20,
-	2,
-	573,
-	1,
-	193,
-	233,
-	0,
-	10,
-	2,
-	573,
-	1,
-	193,
-	233,
-	0,
-	20,
-	2,
-	573,
-	1,
-	237,
-	270,
-	0,
-	10,
-	2,
-	573,
-	1,
-	237,
-	270,
-	0,
-	20,
-	2,
-	573,
-	1,
-	274,
-	303,
-	0,
-	10,
-	2,
-	573,
-	1,
-	307,
-	340,
-	0,
-	10,
-	2,
-	573,
-	1,
-	307,
-	340,
-	0,
-	20,
-	2,
-	573,
-	1,
-	344,
-	360,
-	0,
-	10,
-	3,
-	/* scene 581 (resource 1) */
-	581,
-	1,
-	1,
-	44,
-	0,
-	180,
-	3,
-	581,
-	1,
-	1,
-	44,
-	0,
-	190,
-	3,
-	581,
-	1,
-	48,
-	64,
-	0,
-	190,
-	2,
-	581,
-	1,
-	68,
-	111,
-	0,
-	180,
-	2,
-	581,
-	1,
-	68,
-	111,
-	0,
-	190,
-	2,
-	581,
-	1,
-	115,
-	169,
-	0,
-	180,
-	2,
-	581,
-	1,
-	115,
-	169,
-	0,
-	190,
-	2,
-	581,
-	1,
-	173,
-	237,
-	0,
-	180,
-	2,
-	581,
-	1,
-	173,
-	237,
-	0,
-	190,
-	2,
-	/* scene 590-591 (resource 1) */
-	590,
-	1,
-	80,
-	167,
-	0,
-	180,
-	2,
-	590,
-	1,
-	80,
-	167,
-	0,
-	190,
-	2,
-	590,
-	1,
-	171,
-	255,
-	0,
-	180,
-	2,
-	590,
-	1,
-	171,
-	255,
-	0,
-	190,
-	2,
-	590,
-	1,
-	259,
-	283,
-	0,
-	190,
-	2,
-	591,
-	1,
-	5,
-	50,
-	0,
-	180,
-	3,
-	591,
-	1,
-	5,
-	50,
-	0,
-	190,
-	3,
-	591,
-	1,
-	54,
-	109,
-	0,
-	180,
-	2,
-	591,
-	1,
-	54,
-	109,
-	0,
-	190,
-	2,
-	591,
-	1,
-	118,
-	161,
-	0,
-	190,
-	2,
-	591,
-	1,
-	165,
-	191,
-	0,
-	190,
-	3,
-	591,
-	1,
-	195,
-	233,
-	0,
-	190,
-	3,
-	/* scene 730 (resource 1) */
-	730,
-	1,
-	80,
-	138,
-	0,
-	180,
-	2,
-	730,
-	1,
-	80,
-	138,
-	0,
-	190,
-	2,
-	730,
-	1,
-	142,
-	190,
-	0,
-	180,
-	3,
-	730,
-	1,
-	142,
-	190,
-	0,
-	190,
-	3,
-	730,
-	1,
-	196,
-	239,
-	0,
-	190,
-	3,
-	730,
-	1,
-	245,
-	318,
-	0,
-	180,
-	2,
-	730,
-	1,
-	245,
-	318,
-	0,
-	190,
-	2,
-	730,
-	1,
-	320,
-	385,
-	0,
-	180,
-	2,
-	730,
-	1,
-	320,
-	385,
-	0,
-	190,
-	2,
-	/* scenes 406-408 (resource 1) */
-	406,
-	1,
-	1,
-	40,
-	0,
-	190,
-	2,
-	407,
-	1,
-	1,
-	40,
-	0,
-	190,
-	2,
-	408,
-	1,
-	1,
-	40,
-	0,
-	190,
-	2,
-	/* sentinel */
-	-1,
+// GLOBAL: TIE95 0xCE9F6
+// GLOBAL: TIE98 0x4F1E78
+static int16_t text_scene_list_gbl[1519] = {
+	10,  0,  4,   100, 0,   4,   0,  10,  0, 4,   100, 0,   14,  0, 10,  0, 130, 190, 0,   180, 1,
+	10,  0,  130, 190, 0,   190, 1,  20,  0, 4,   70,  0,   4,   1, 20,  0, 4,   70,  0,   14,  1,
+	30,  0,  4,   50,  0,   170, 2,  30,  0, 60,  116, 0,   24,  2, 30,  0, 60,  116, 0,   34,  2,
+	30,  0,  124, 210, 0,   170, 2,  30,  0, 124, 210, 0,   180, 2, 40,  0, 4,   60,  0,   4,   1,
+	40,  0,  4,   60,  0,   14,  1,  50,  0, 4,   80,  0,   4,   2, 50,  0, 4,   80,  0,   14,  2,
+	50,  0,  4,   80,  0,   24,  2,  50,  0, 140, 200, 0,   160, 3, 50,  0, 140, 200, 0,   170, 3,
+	50,  0,  202, 210, 0,   40,  2,  170, 0, 4,   32,  0,   10,  1, 280, 0, 4,   50,  0,   10,  1,
+	281, 0,  4,   50,  0,   10,  1,  282, 0, 4,   50,  0,   10,  1, 283, 0, 4,   50,  0,   10,  1,
+	284, 0,  4,   50,  0,   10,  1,  285, 0, 4,   50,  0,   10,  1, 390, 0, 4,   40,  0,   190, 1,
+	400, 0,  4,   40,  0,   12,  2,  401, 0, 4,   60,  0,   10,  2, 402, 0, 4,   60,  0,   10,  2,
+	403, 0,  4,   60,  0,   10,  2,  404, 0, 50,  90,  0,   60,  2, 405, 0, 50,  90,  0,   60,  2,
+	210, 0,  4,   40,  0,   10,  1,  210, 0, 210, 250, 0,   100, 2, 500, 0, 4,   60,  0,   20,  1,
+	500, 0,  4,   60,  0,   30,  1,  500, 0, 200, 230, 0,   170, 2, 500, 0, 234, 280, 0,   24,  3,
+	500, 0,  234, 280, 0,   34,  3,  500, 0, 300, 358, 0,   170, 2, 500, 0, 300, 358, 0,   180, 2,
+	500, 0,  360, 430, 0,   24,  3,  500, 0, 360, 430, 0,   34,  3, 510, 0, 4,   60,  0,   20,  1,
+	510, 0,  4,   60,  0,   30,  1,  510, 0, 164, 230, 0,   50,  2, 510, 0, 164, 230, 0,   60,  2,
+	510, 0,  234, 294, 0,   50,  2,  510, 0, 234, 294, 0,   60,  2, 510, 0, 296, 350, 0,   50,  2,
+	510, 0,  296, 350, 0,   60,  2,  520, 0, 4,   100, 0,   20,  1, 520, 0, 4,   100, 0,   30,  1,
+	520, 0,  165, 190, -10, 140, 3,  520, 0, 192, 220, 50,  40,  2, 520, 0, 192, 220, 50,  50,  2,
+	520, 0,  222, 270, -10, 140, 3,  520, 0, 222, 270, -10, 150, 3, 520, 0, 272, 300, 50,  40,  2,
+	520, 0,  272, 300, 50,  50,  2,  530, 0, 40,  98,  -20, 20,  2, 530, 0, 40,  98,  -20, 30,  2,
+	530, 0,  40,  98,  -20, 40,  2,  530, 0, 100, 126, 40,  20,  3, 530, 0, 100, 126, 40,  30,  3,
+	531, 0,  90,  120, 40,  20,  3,  531, 0, 120, 190, -20, 20,  2, 531, 0, 120, 190, -20, 30,  2,
+	531, 0,  120, 190, -20, 40,  2,  531, 0, 192, 250, 40,  20,  3, 531, 0, 192, 250, 40,  30,  3,
+	540, 0,  24,  70,  0,   20,  2,  540, 0, 90,  130, 0,   20,  2, 540, 0, 165, 200, 0,   20,  2,
+	550, 0,  4,   22,  -40, 180, 2,  550, 0, 24,  40,  40,  180, 3, 550, 0, 24,  40,  40,  190, 3,
+	550, 0,  78,  104, -40, 180, 2,  550, 0, 78,  104, -40, 190, 2, 550, 0, 106, 120, 40,  180, 3,
+	560, 0,  4,   40,  0,   190, 1,  560, 0, 44,  100, 0,   20,  2, 700, 0, 70,  90,  0,   180, 2,
+	700, 0,  98,  150, 0,   180, 3,  700, 0, 98,  150, 0,   190, 3, 700, 0, 160, 240, 0,   180, 2,
+	700, 0,  160, 240, 0,   190, 2,  700, 0, 260, 290, 0,   180, 3, 700, 0, 320, 380, 0,   180, 2,
+	710, 0,  10,  90,  0,   180, 3,  710, 0, 10,  90,  0,   190, 3, 710, 0, 96,  184, 0,   180, 2,
+	710, 0,  96,  184, 0,   190, 2,  710, 0, 194, 270, 0,   180, 3, 710, 0, 194, 270, 0,   190, 3,
+	710, 0,  280, 315, 0,   180, 3,  710, 0, 280, 315, 0,   190, 3, 710, 0, 320, 370, 0,   180, 2,
+	710, 0,  320, 370, 0,   190, 2,  720, 0, 10,  45,  0,   180, 2, 720, 0, 60,  130, 0,   170, 3,
+	720, 0,  60,  130, 0,   180, 3,  720, 0, 140, 210, 0,   170, 3, 720, 0, 140, 210, 0,   180, 3,
+	720, 0,  220, 260, 0,   170, 2,  720, 0, 272, 360, 0,   170, 3, 720, 0, 272, 360, 0,   180, 3,
+	580, 1,  4,   60,  0,   190, 0,  573, 1, 4,   45,  0,   190, 1, 573, 1, 32,  60,  0,   10,  2,
+	573, 1,  64,  126, 0,   10,  3,  573, 1, 64,  126, 0,   20,  3, 573, 1, 130, 189, 0,   10,  2,
+	573, 1,  130, 189, 0,   20,  2,  573, 1, 193, 233, 0,   10,  2, 573, 1, 193, 233, 0,   20,  2,
+	573, 1,  237, 270, 0,   10,  2,  573, 1, 237, 270, 0,   20,  2, 573, 1, 274, 303, 0,   10,  2,
+	573, 1,  307, 340, 0,   10,  2,  573, 1, 307, 340, 0,   20,  2, 573, 1, 344, 360, 0,   10,  3,
+	581, 1,  1,   44,  0,   180, 3,  581, 1, 1,   44,  0,   190, 3, 581, 1, 48,  64,  0,   190, 2,
+	581, 1,  68,  111, 0,   180, 2,  581, 1, 68,  111, 0,   190, 2, 581, 1, 115, 169, 0,   180, 2,
+	581, 1,  115, 169, 0,   190, 2,  581, 1, 173, 237, 0,   180, 2, 581, 1, 173, 237, 0,   190, 2,
+	590, 1,  80,  167, 0,   180, 2,  590, 1, 80,  167, 0,   190, 2, 590, 1, 171, 255, 0,   180, 2,
+	590, 1,  171, 255, 0,   190, 2,  590, 1, 259, 283, 0,   190, 2, 591, 1, 5,   50,  0,   180, 3,
+	591, 1,  5,   50,  0,   190, 3,  591, 1, 54,  109, 0,   180, 2, 591, 1, 54,  109, 0,   190, 2,
+	591, 1,  118, 161, 0,   190, 2,  591, 1, 165, 191, 0,   190, 3, 591, 1, 195, 233, 0,   190, 3,
+	730, 1,  80,  138, 0,   180, 2,  730, 1, 80,  138, 0,   190, 2, 730, 1, 142, 190, 0,   180, 3,
+	730, 1,  142, 190, 0,   190, 3,  730, 1, 196, 239, 0,   190, 3, 730, 1, 245, 318, 0,   180, 2,
+	730, 1,  245, 318, 0,   190, 2,  730, 1, 320, 385, 0,   180, 2, 730, 1, 320, 385, 0,   190, 2,
+	406, 1,  1,   40,  0,   190, 2,  407, 1, 1,   40,  0,   190, 2, 408, 1, 1,   40,  0,   190, 2,
+	600, 2,  85,  112, 0,   10,  3,  600, 2, 117, 131, 0,   10,  2, 600, 2, 134, 186, 0,   10,  3,
+	600, 2,  134, 186, 0,   20,  3,  600, 2, 191, 267, 0,   10,  3, 600, 2, 191, 267, 0,   20,  3,
+	600, 2,  191, 267, 0,   30,  3,  600, 2, 272, 325, 0,   10,  3, 600, 2, 272, 325, 0,   20,  3,
+	601, 2,  5,   90,  0,   10,  0,  603, 2, 170, 184, 0,   10,  2, 603, 2, 189, 214, 0,   10,  2,
+	603, 2,  219, 252, 0,   10,  3,  603, 2, 257, 349, 0,   10,  3, 603, 2, 257, 349, 0,   20,  3,
+	603, 2,  257, 349, 0,   30,  3,  603, 2, 354, 405, 0,   10,  2, 603, 2, 354, 405, 0,   20,  2,
+	603, 2,  410, 454, 0,   10,  2,  610, 2, 3,   43,  0,   190, 3, 610, 2, 48,  107, 0,   180, 3,
+	610, 2,  48,  107, 0,   190, 3,  610, 2, 117, 189, 0,   180, 3, 610, 2, 117, 189, 0,   190, 3,
+	610, 2,  194, 230, 0,   190, 3,  610, 2, 235, 334, 0,   10,  2, 610, 2, 235, 334, 0,   20,  2,
+	610, 2,  339, 365, 0,   10,  2,  610, 2, 370, 400, 0,   10,  2, 620, 2, 50,  95,  0,   10,  2,
+	620, 2,  50,  95,  0,   20,  2,  620, 2, 100, 170, 0,   10,  3, 620, 2, 100, 170, 0,   20,  3,
+	621, 2,  1,   46,  0,   180, 2,  621, 2, 1,   46,  0,   190, 2, 621, 2, 55,  70,  0,   100, 3,
+	622, 2,  1,   50,  0,   190, 2,  622, 2, 54,  85,  0,   190, 2, 622, 2, 85,  125, 0,   190, 2,
+	623, 2,  35,  95,  0,   10,  2,  740, 2, 4,   66,  0,   10,  2, 740, 2, 4,   66,  0,   20,  2,
+	740, 2,  70,  142, 0,   10,  2,  740, 2, 70,  142, 0,   20,  2, 740, 2, 146, 233, 0,   10,  2,
+	740, 2,  146, 233, 0,   20,  2,  740, 2, 237, 275, 0,   10,  2, 740, 2, 282, 336, 0,   180, 3,
+	740, 2,  282, 336, 0,   190, 3,  740, 2, 340, 376, 0,   180, 3, 740, 2, 340, 376, 0,   190, 3,
+	740, 2,  380, 440, 0,   190, 3,  740, 2, 446, 542, 0,   180, 2, 740, 2, 446, 542, 0,   190, 2,
+	406, 2,  1,   40,  0,   190, 2,  407, 2, 1,   40,  0,   190, 2, 408, 2, 1,   40,  0,   190, 2,
+	409, 2,  1,   40,  0,   190, 2,  410, 2, 1,   40,  0,   190, 2, 411, 2, 1,   40,  0,   190, 2,
+	-1,  -1, -1,  -1,  -1,  -1,  -1,
 };
 
 /* --- Static data tables --- */
 
+// GLOBAL: TIE95 0xCE754
 static char text_res_names[3][16] = { "tietext0.lfd", "tietext1.lfd", "tietext2.lfd" };
+// GLOBAL: TIE95 0xCE784
 static char text_file_names[3][16] = { "tietext0", "tietext1", "tietext2" };
-
-/* Maps text ID (0..288) to resource index (0, 1, or 2). Entry 288 = 99 (sentinel). */
-static int16_t text_resource_table[289];
-
-/* 7-word entries: [scene, resource, start_time, stop_time, x, y, fade_type], sentinel=-1 */
-static int16_t text_scene_list_gbl[1099];
 
 /* --- Runtime state --- */
 
+// GLOBAL: TIE95 0xCF5D4
+// GLOBAL: TIE98 0x4F2A58
 static int16_t text_start_gbl;
+// GLOBAL: TIE95 0xCF5D6
+// GLOBAL: TIE98 0x4F2A5C
 static int16_t text_stop_gbl;
+// GLOBAL: TIE95 0xF59D8
+// GLOBAL: TIE98 0x589E48
 static Rect prev_text_bounds;
+// GLOBAL: TIE95 0xF59E8
+// GLOBAL: TIE98 0x58A148
 static char text_ext_string[256];
+// GLOBAL: TIE95 0xF5AE8
 static int16_t text_string_table[288];
-static Rect text_bounds;
+// GLOBAL: TIE95 0xF59E0
+// GLOBAL: TIE98 0x58A250
+Rect textext_bounds;
+// GLOBAL: TIE95 0xF5D28
+// GLOBAL: TIE98 0x589E58
 static Actor* display_text_actor;
+// GLOBAL: TIE95 0xF5D2C
+// GLOBAL: TIE98 0x589E5C
 static Actor* restore_text_actor;
+// GLOBAL: TIE95 0xF5D30
+// GLOBAL: TIE98 0x58A248
 static int16_t text_color[3];
+// GLOBAL: TIE95 0xF5D3C
+// GLOBAL: TIE98 0x58A118
 static int16_t text_h[3];
+// GLOBAL: TIE95 0xF5D42
+// GLOBAL: TIE98 0x58A128
 static int16_t text_w[3];
+// GLOBAL: TIE95 0xF5D48
+// GLOBAL: TIE98 0x58A138
 static int16_t text_y[3];
+// GLOBAL: TIE95 0xF5D4E
+// GLOBAL: TIE98 0x58A130
 static int16_t text_x[3];
+// GLOBAL: TIE95 0xF5D54
+// GLOBAL: TIE98 0x589E40
 static int16_t text_string[3];
+// GLOBAL: TIE95 0xF5D36
+// GLOBAL: TIE98 0x589E50
 static int16_t text_res[3];
-/* Original TextFade type per active line — kept so the snapshot
- * emitter can map to a TIE_SUBTITLE_STYLE_* enum without
- * heuristically inverting the color computation. */
-static TextFade text_fade_type[3];
 // GLOBAL: TIE95 0xF5D5A
 static LandruHandle text_para[3];
+// GLOBAL: TIE95 0xF5D62
+// GLOBAL: TIE98 0x58A120
 static int16_t num_text_lines;
-static void* text_buffer;
+// GLOBAL: TIE95 0xF5D60
+// GLOBAL: TIE98 0x58A140
+static LandruHandle text_buffer;
 
 /* --- Internal helpers --- */
 
-static void Find_Text_Range(int16_t scene, int16_t* pstart, int16_t* pstop);
-static void user_Text_Actor(Actor* the_actor, int32_t time);
-static int16_t draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
-							   int16_t refresh);
+static void textext_Find_Text_Range(int16_t scene, int16_t* pstart, int16_t* pstop);
+static void textext_user_Text_Actor(Actor* the_actor, int32_t time);
+static int16_t textext_draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+									   int16_t refresh);
 
 /* --- Functions --- */
 
@@ -1235,10 +204,6 @@ void textext_Open_Text_Ext(void) {
 	ResFile* res_file;
 	int16_t size[3] = { 0, 0, 0 };
 	int16_t i, res_idx;
-
-	/* Initialize data tables from compiled-in binary data */
-	memcpy(text_resource_table, text_resource_table_init, sizeof(text_resource_table));
-	memcpy(text_scene_list_gbl, text_scene_list_init, sizeof(text_scene_list_init));
 
 	for (i = 0; i < 3; i++) {
 		res_file = shellext_Open_Empire_Resource(text_res_names[i]);
@@ -1276,7 +241,7 @@ void textext_Open_Text_Ext_Scene(int16_t scene) {
 
 	ViewStruct* view;
 
-	Find_Text_Range(scene, &start, &stop);
+	textext_Find_Text_Range(scene, &start, &stop);
 	text_start_gbl = start;
 	text_stop_gbl = stop;
 
@@ -1287,31 +252,33 @@ void textext_Open_Text_Ext_Scene(int16_t scene) {
 
 	view = xview_Get_Current_View();
 	if (view->clear)
-		text_buffer = NULL;
+		text_buffer = LANDRU_NULL_HANDLE;
 	else
-		text_buffer = malloc(12800);
+		text_buffer = xmemhdl_Alloc_Handle(12800, LANDRU_MEMORY_DEFAULT);
 
 	restore_text_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10000);
 	display_text_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, -10000);
 	restore_text_actor->id = 0;
 	display_text_actor->id = 1;
 
-	xactor_Set_Actor_User_Function(display_text_actor, user_Text_Actor);
-	xactor_Set_Actor_Draw_Function(restore_text_actor, draw_Text_Actor);
-	xactor_Set_Actor_Draw_Function(display_text_actor, draw_Text_Actor);
+	xactor_Set_Actor_User_Function(display_text_actor, textext_user_Text_Actor);
+	xactor_Set_Actor_Draw_Function(restore_text_actor, textext_draw_Text_Actor);
+	xactor_Set_Actor_Draw_Function(display_text_actor, textext_draw_Text_Actor);
 }
 
 // FUNCTION: TIE95 0x6F690
 void textext_Close_Text_Ext_Scene(int16_t scene) {
 	(void)scene;
 	if (text_buffer) {
-		free(text_buffer);
-		text_buffer = NULL;
+		xmemhdl_Free_Handle(text_buffer);
+		text_buffer = LANDRU_NULL_HANDLE;
 	}
-	/* user_Text_Actor stops running once display_text_actor is gone;
+	/* textext_user_Text_Actor stops running once display_text_actor is gone;
 	 * zero num_text_lines so TieRecoveredText_CaptureSnapshot doesn't keep
 	 * emitting the last frame's data into subsequent snapshots. */
+#ifdef TIE_MODERN
 	num_text_lines = 0;
+#endif
 }
 
 /*
@@ -1319,7 +286,8 @@ void textext_Close_Text_Ext_Scene(int16_t scene) {
  * Walks text_scene_list_gbl for the current scene range, finds lines whose
  * time window includes the current frame, computes position and fade color.
  */
-static void user_Text_Actor(Actor* the_actor, int32_t time) {
+// FUNCTION: TIE95 0x6F6B4
+static void textext_user_Text_Actor(Actor* the_actor, int32_t time) {
 	char str[80];
 	Rect r;
 	int16_t resource, start, stop, x, y;
@@ -1331,7 +299,7 @@ static void user_Text_Actor(Actor* the_actor, int32_t time) {
 	TextFade type;
 
 	(void)the_actor;
-	xrect_Copy_Rect(&prev_text_bounds, &text_bounds);
+	xrect_Copy_Rect(&prev_text_bounds, &textext_bounds);
 	num_text_lines = 0;
 	base_id = 0;
 
@@ -1348,7 +316,7 @@ static void user_Text_Actor(Actor* the_actor, int32_t time) {
 		else if (resource == 2)
 			base_id = 156;
 
-		if (start > (int16_t)time || stop <= (int16_t)time)
+		if (start > time || stop <= time)
 			continue;
 		if (type >= fadeTitle1 && !options_gbl.text_active && digital_exists)
 			continue;
@@ -1359,13 +327,13 @@ static void user_Text_Actor(Actor* the_actor, int32_t time) {
 
 		xparagrp_Get_Paragraph_String(text_para[resource], str, 1, i - base_id);
 
-		old_font = xfont_Set_Font(0);
+		old_font = xfont_Get_Font();
+		xfont_Set_Font(0);
 		width = xfont_Get_String_Width(str);
 		xfont_Set_Font(old_font);
 
 		text_res[num_text_lines] = resource;
 		text_string[num_text_lines] = i - base_id;
-		text_fade_type[num_text_lines] = type;
 		text_w[num_text_lines] = width;
 		text_h[num_text_lines] = xfont_Get_FontID_Height(0);
 
@@ -1405,11 +373,11 @@ static void user_Text_Actor(Actor* the_actor, int32_t time) {
 		else
 			xactor_Show_Actor(display_text_actor);
 
-		xrect_Set_Rect(&text_bounds, text_x[0], text_y[0], text_w[0] + text_x[0], text_h[0] + text_y[0]);
+		xrect_Set_Rect(&textext_bounds, text_x[0], text_y[0], text_w[0] + text_x[0], text_h[0] + text_y[0]);
 
 		for (i = 1; i < num_text_lines; i++) {
 			xrect_Set_Rect(&r, text_x[i], text_y[i], text_w[i] + text_x[i], text_h[i] + text_y[i]);
-			xrect_Enclose_Rect(&text_bounds, &r);
+			xrect_Enclose_Rect(&textext_bounds, &r);
 		}
 	} else {
 		if (xactor_Is_Actor_Visible(display_text_actor))
@@ -1417,10 +385,6 @@ static void user_Text_Actor(Actor* the_actor, int32_t time) {
 		else
 			xactor_Hide_Actor(restore_text_actor);
 	}
-
-	/* Per-line state is captured by the lfont snapshot hook when the
-	 * text actor's draw callback runs xfont_Print_Clipped_Text — no
-	 * separate textext snapshot channel is needed. */
 }
 
 /*
@@ -1428,8 +392,10 @@ static void user_Text_Actor(Actor* the_actor, int32_t time) {
  * id=1 (display): save background, draw text lines with shadow.
  * id=0 (restore): restore previously saved background.
  */
-static int16_t draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
-							   int16_t refresh) {
+// FUNCTION: TIE95 0x6FAA0
+// FUNCTION: TIE98 0x48CAF0
+static int16_t textext_draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+									   int16_t refresh) {
 	char string[80];
 	Rect br;
 	int16_t i;
@@ -1450,29 +416,39 @@ static int16_t draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t 
 		 * the per-tick subtitle records instead. Without this gate
 		 * the lfont hook would double-emit on redraw frames. */
 		if (text_buffer) {
-			xrect_Copy_Rect(&br, &text_bounds);
+			void* pixels;
+			xrect_Copy_Rect(&br, &textext_bounds);
 			xrect_Origin_Rect(&br);
-			stub_Copy_To_Clipped_Buffer(text_buffer, &br, text_bounds.left, text_bounds.top,
+			pixels = xmemhdl_Lock_Handle(text_buffer);
+			stub_Copy_To_Clipped_Buffer(pixels, &br, textext_bounds.left, textext_bounds.top,
 										br.right - br.left, br.bottom - br.top);
+			xmemhdl_Unlock_Handle(text_buffer);
 		}
 
+#ifdef TIE_MODERN
 		xcanvas_Set_Suppress_Text_Render(true);
+#endif
 		xfont_Enable_FontID_Shadow(0);
 		for (i = 0; i < num_text_lines; i++) {
 			xparagrp_Get_Paragraph_String(text_para[text_res[i]], string, 1, text_string[i]);
 			xfont_Print_Clipped_Text(string, text_x[i], text_y[i], 0, text_color[i]);
 		}
 		xfont_Disable_FontID_Shadow(0);
+#ifdef TIE_MODERN
 		xcanvas_Set_Suppress_Text_Render(false);
+#endif
 
-		xdirty_Dirty_Rect(&text_bounds);
+		xdirty_Dirty_Rect(&textext_bounds);
 	} else {
 		/* Restore actor: put saved background back */
 		if (text_buffer) {
+			void* pixels;
 			xrect_Copy_Rect(&br, &prev_text_bounds);
 			xrect_Origin_Rect(&br);
-			stub_Copy_From_Clipped_Buffer(text_buffer, &br, prev_text_bounds.left, prev_text_bounds.top,
+			pixels = xmemhdl_Lock_Handle(text_buffer);
+			stub_Copy_From_Clipped_Buffer(pixels, &br, prev_text_bounds.left, prev_text_bounds.top,
 										  br.right - br.left, br.bottom - br.top);
+			xmemhdl_Unlock_Handle(text_buffer);
 			xdirty_Dirty_Rect(&prev_text_bounds);
 		}
 	}
@@ -1487,12 +463,12 @@ static int16_t draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t 
  * TieRuntime_Tick alongside the other emit_* helpers.
  *
  * Required because the actor system's dirty-rect machinery only
- * fires draw_Text_Actor on redraw frames (the engine's classic FB
+ * fires textext_draw_Text_Actor on redraw frames (the engine's classic FB
  * persists between draws), so the lfont snapshot hook misses ticks
  * where the text is on screen but not being repainted. Re-emitting
  * here every tick (using the fade-machine state populated by
- * user_Text_Actor) gives the renderer per-tick coverage; the lfont
- * hook is suppressed inside draw_Text_Actor's display branch to
+ * textext_user_Text_Actor) gives the renderer per-tick coverage; the lfont
+ * hook is suppressed inside textext_draw_Text_Actor's display branch to
  * keep this from being doubled on the redraw frames.
  */
 int TieRecoveredText_SnapshotLineCount(void) { return num_text_lines > 0 ? num_text_lines : 0; }
@@ -1571,7 +547,9 @@ void textext_Get_Weapon_Select_Text(char* string, int16_t line) {
 	xparagrp_Get_Paragraph_String(text_para[0], string, 4, line);
 }
 
-static void Find_Text_Range(int16_t scene, int16_t* pstart, int16_t* pstop) {
+// FUNCTION: TIE95 0x6FDBC
+// FUNCTION: TIE98 0x48CE60
+static void textext_Find_Text_Range(int16_t scene, int16_t* pstart, int16_t* pstop) {
 	int16_t index, start, stop;
 
 	index = 0;
@@ -1598,11 +576,3 @@ static void Find_Text_Range(int16_t scene, int16_t* pstart, int16_t* pstop) {
 	*pstart = start;
 	*pstop = stop;
 }
-
-Rect* textext_Get_Prev_Text_Bounds_Rect(void) { return &prev_text_bounds; }
-
-void textext_Clear_Prev_Text_Bounds_Rect(void) { xrect_Clear_Rect(&prev_text_bounds); }
-
-Rect* textext_Get_Text_Bounds_Rect(void) { return &text_bounds; }
-
-void textext_Clear_Text_Bounds_Rect(void) { xrect_Clear_Rect(&text_bounds); }

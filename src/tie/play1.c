@@ -640,7 +640,9 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 		xactor_Set_Actor_ZPlane(the_actor, 12700);
 		xpal_Set_Screen_RGB(0, 255, 0, 0, 0);
 		xcanvas_Erase_Canvas();
-		textext_Clear_Text_Bounds_Rect();
+#ifdef TIE_MODERN
+		xrect_Clear_Rect(&textext_bounds);
+#endif
 		is_streaming = 1;
 		read_state = 0;
 	}
