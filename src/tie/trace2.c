@@ -21,7 +21,7 @@
 // GLOBAL: TIE95 0xEB778
 trace2_EdgeHeader* trace2_rowheaders[480];
 // GLOBAL: TIE95 0xEBEF8
-int32_t* trace2_lastpointPtr;
+TRANSFM2_ScreenPoint* trace2_lastpointPtr;
 // GLOBAL: TIE95 0xEBEFC
 int32_t trace2_startx;
 // GLOBAL: TIE95 0xEBF00
@@ -1020,7 +1020,7 @@ void trace2_drawface(uint16_t numberOfVertices) {
 	uint16_t frac;
 	uint16_t vertexIndex;
 	uint16_t vi;
-	int32_t* edgePtc;
+	TRANSFM2_ScreenPoint* edgePtc;
 	uint32_t ydiff;
 	uint32_t xdiff;
 
@@ -1029,10 +1029,10 @@ void trace2_drawface(uint16_t numberOfVertices) {
 	vertexIndex = 0;
 	counter = (int16_t)(uint8_t)numberOfVertices;
 	while (counter > 0) {
-		const uint8_t vtx1 = firstvertptr[vertexIndex];
-		const uint8_t edgeIdx = firstvertptr[vertexIndex + 1];
-		const uint8_t vtx2 = firstvertptr[vertexIndex + 2];
-		int32_t* edgePt;
+		const uint8_t vtx1 = firstvertptr->body[vertexIndex];
+		const uint8_t edgeIdx = firstvertptr->body[vertexIndex + 1];
+		const uint8_t vtx2 = firstvertptr->body[vertexIndex + 2];
+		TRANSFM2_ScreenPoint* edgePt;
 		uint8_t pt;
 
 		vertlight1 = (int16_t)vertexlight[vtx1];
@@ -1166,9 +1166,9 @@ void trace2_drawface(uint16_t numberOfVertices) {
 				}
 
 				if ((edgeflags[edgeIdx] & XTRANS2_EDGEFLAG_YDOM) != 0)
-					trace2_ydomedge(slope, frac, edgept1[edgeIdx], edgept2[edgeIdx]);
+					trace2_ydomedge(slope, frac, edgept1[edgeIdx]->xy, edgept2[edgeIdx]->xy);
 				else
-					trace2_xdomedge(slope, frac, edgept1[edgeIdx], edgept2[edgeIdx]);
+					trace2_xdomedge(slope, frac, edgept1[edgeIdx]->xy, edgept2[edgeIdx]->xy);
 			}
 		}
 
@@ -1184,77 +1184,67 @@ void trace2_drawface(uint16_t numberOfVertices) {
 	vi = 0;
 	edgePtc = NULL;
 
-	if (calcflag[firstvertptr[0]]) {
+	if (calcflag[firstvertptr->body[0]]) {
 		/* First vertex visible. Walk forward until we lose visibility. */
-		int32_t* cf_prev;
-		int32_t* cf_here;
+		TRANSFM2_ScreenPoint* cf_prev;
+		TRANSFM2_ScreenPoint* cf_here;
 
 		do {
 			vi += 2;
-		} while (calcflag[firstvertptr[vi]]);
-		cf_prev = calcflag[firstvertptr[vi - 2]];
-		trace2_lastpointPtr = (cf_prev == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
-																		 : edgept1[firstvertptr[vi - 1]];
+		} while (calcflag[firstvertptr->body[vi]]);
+		cf_prev = calcflag[firstvertptr->body[vi - 2]];
+		trace2_lastpointPtr = (cf_prev == edgept1[firstvertptr->body[vi - 1]])
+								  ? edgept2[firstvertptr->body[vi - 1]]
+								  : edgept1[firstvertptr->body[vi - 1]];
 
 		do {
 			vi += 2;
-			cf_here = calcflag[firstvertptr[vi]];
+			cf_here = calcflag[firstvertptr->body[vi]];
 		} while (!cf_here);
-		edgePtc = (cf_here == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
-															 : edgept1[firstvertptr[vi - 1]];
+		edgePtc = (cf_here == edgept1[firstvertptr->body[vi - 1]]) ? edgept2[firstvertptr->body[vi - 1]]
+																   : edgept1[firstvertptr->body[vi - 1]];
 	} else {
 		/* First vertex invisible. Skip to first visible, then lose-and-regain. */
-		int32_t* cf_here;
-		int32_t* edgePta;
-		int32_t* cf_prev;
+		TRANSFM2_ScreenPoint* cf_here;
+		TRANSFM2_ScreenPoint* edgePta;
+		TRANSFM2_ScreenPoint* cf_prev;
 
 		do {
 			vi += 2;
-			cf_here = calcflag[firstvertptr[vi]];
+			cf_here = calcflag[firstvertptr->body[vi]];
 		} while (!cf_here);
-		edgePta = (cf_here == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
-															 : edgept1[firstvertptr[vi - 1]];
+		edgePta = (cf_here == edgept1[firstvertptr->body[vi - 1]]) ? edgept2[firstvertptr->body[vi - 1]]
+																   : edgept1[firstvertptr->body[vi - 1]];
 		trace2_lastpointPtr = edgePta;
 		do {
 			vi += 2;
-		} while (calcflag[firstvertptr[vi]]);
-		cf_prev = calcflag[firstvertptr[vi - 2]];
-		edgePtc = (cf_prev == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
-															 : edgept1[firstvertptr[vi - 1]];
+		} while (calcflag[firstvertptr->body[vi]]);
+		cf_prev = calcflag[firstvertptr->body[vi - 2]];
+		edgePtc = (cf_prev == edgept1[firstvertptr->body[vi - 1]]) ? edgept2[firstvertptr->body[vi - 1]]
+																   : edgept1[firstvertptr->body[vi - 1]];
 	}
 
-	/* Read u16 light from 2 bytes BEFORE the screen-point pointer. This is
-	 * safe for edges reached from the z-clip repair branch because:
-	 *
-	 * - The repair branch fires only when trace2_znegflag > 0, i.e. at
-	 *   least one vertex has calcflag[v] == NULL (behind near plane).
-	 * - For such vertices, classifyedges went through the else branch of
-	 *   its "eyez >= 0" check and called TRANSFM2_facezintersect for the
-	 *   containing edge.
-	 * - facezintersect allocates a 10-byte record [u16 light][i32 x][i32 y]
-	 *   and returns a pointer to the x field — stored in edgept1/edgept2.
-	 * - Therefore (u16)(edgept - 2) = light, always, for these edges.
-	 *
-	 * (The 8-byte {x,y} records produced when eyez >= 0 don't have a
-	 * light at -2, but the repair branch never reads those as pointers.) */
-	vertlight1 = *(((int16_t*)trace2_lastpointPtr) - 1);
-	vertlight2 = *(((int16_t*)edgePtc) - 1);
+	/* Both repair endpoints are near-plane clip points: each is the endpoint
+	 * of a straddling edge that is not the visible vertex's calcflag[] record,
+	 * so TRANSFM2_facezintersect produced it and filled its light slot. */
+	vertlight1 = trace2_lastpointPtr->light;
+	vertlight2 = edgePtc->light;
 
 	/* Same wrapping sub/neg sequence as the original x86 near-plane repair. */
 	ydiffsign = 1;
-	ydiff = (uint32_t)edgePtc[1] - (uint32_t)trace2_lastpointPtr[1];
+	ydiff = (uint32_t)edgePtc->xy[1] - (uint32_t)trace2_lastpointPtr->xy[1];
 	if ((int32_t)ydiff < 0) {
 		ydiffsign = -1;
 		ydiff = -ydiff;
-		if (trace2_lastpointPtr[1] < 0 || (int32_t)pixelsdeep <= edgePtc[1])
+		if (trace2_lastpointPtr->xy[1] < 0 || (int32_t)pixelsdeep <= edgePtc->xy[1])
 			return;
 	} else {
-		if (ydiff == 0 || edgePtc[1] < 0 || (int32_t)pixelsdeep <= trace2_lastpointPtr[1])
+		if (ydiff == 0 || edgePtc->xy[1] < 0 || (int32_t)pixelsdeep <= trace2_lastpointPtr->xy[1])
 			return;
 	}
 
 	xdiffsign = 1;
-	xdiff = (uint32_t)edgePtc[0] - (uint32_t)trace2_lastpointPtr[0];
+	xdiff = (uint32_t)edgePtc->xy[0] - (uint32_t)trace2_lastpointPtr->xy[0];
 	if ((int32_t)xdiff < 0) {
 		xdiffsign = -1;
 		xdiff = -xdiff;
@@ -1304,11 +1294,11 @@ void trace2_drawface(uint16_t numberOfVertices) {
 		}
 		edgeflags[trace2_lastedge] |= XTRANS2_EDGEFLAG_HAS_HEADER;
 		edgeflagptr[trace2_lastedge] = trace2_newedgeheader;
-		trace2_ydomedge(slope, frac, trace2_lastpointPtr, edgePtc);
+		trace2_ydomedge(slope, frac, trace2_lastpointPtr->xy, edgePtc->xy);
 	} else if ((ydiff >> 1) == xdiff) {
 		edgeflags[trace2_lastedge] |= XTRANS2_EDGEFLAG_HAS_HEADER;
 		edgeflagptr[trace2_lastedge] = trace2_newedgeheader;
-		trace2_ydomedge(TRACE2_SLOPE_EQ, 0, trace2_lastpointPtr, edgePtc);
+		trace2_ydomedge(TRACE2_SLOPE_EQ, 0, trace2_lastpointPtr->xy, edgePtc->xy);
 	} else {
 		if (ydiff != 0) {
 			uint32_t rem;
@@ -1322,7 +1312,7 @@ void trace2_drawface(uint16_t numberOfVertices) {
 		}
 		edgeflags[trace2_lastedge] |= XTRANS2_EDGEFLAG_HAS_HEADER;
 		edgeflagptr[trace2_lastedge] = trace2_newedgeheader;
-		trace2_xdomedge(slope, frac, trace2_lastpointPtr, edgePtc);
+		trace2_xdomedge(slope, frac, trace2_lastpointPtr->xy, edgePtc->xy);
 	}
 	trace2_lastedge = 0;
 }

@@ -1,6 +1,8 @@
 #ifndef TIE_XTRANS2_H
 #define TIE_XTRANS2_H
 
+#include "tie/transfm2.h" /* TRANSFM2_ScreenPoint */
+
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -149,10 +151,11 @@ extern uint8_t* logbufbaseptr;
 extern int32_t logbufypos;
 
 /* Per-edge cache. Filled by TRANSFM2_classifyedges and TRACE2_drawface.
- * edgept1/edgept2 are pointers into the screen-xy ring from
- * TRANSFM2_getscreencoords. Retail sizes all edge tables for 256 edges. */
-extern int32_t* edgept1[256];
-extern int32_t* edgept2[256];
+ * edgept1/edgept2 are the projected endpoint records carved from the
+ * newscreenxy pool by TRANSFM2_classifyedges / TRANSFM2_calclinepts.
+ * Retail sizes all edge tables for 256 edges. */
+extern TRANSFM2_ScreenPoint* edgept1[256];
+extern TRANSFM2_ScreenPoint* edgept2[256];
 extern int32_t edgexdiff[256];
 extern int32_t edgeydiff[256];
 extern int8_t edgexsign[256];

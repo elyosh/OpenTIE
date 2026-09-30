@@ -1,6 +1,8 @@
 #ifndef TIE_TRACE2_H
 #define TIE_TRACE2_H
 
+#include "tie/transfm2.h" /* TRANSFM2_ScreenPoint */
+
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -69,7 +71,7 @@ extern int32_t trace2_endy;
 extern uint16_t trace2_lastedge;
 extern uint16_t trace2_znegflag;
 
-extern int32_t* trace2_lastpointPtr;
+extern TRANSFM2_ScreenPoint* trace2_lastpointPtr;
 
 /* --- API -------------------------------------------------------- */
 

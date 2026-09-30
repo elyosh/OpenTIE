@@ -70,9 +70,9 @@ int32_t logbufypos;
 
 /* Retail edge tables hold 256 entries (edgept1/edgept2 are 1024 bytes). */
 // GLOBAL: TIE95 0xEC610
-int32_t* edgept1[256];
+TRANSFM2_ScreenPoint* edgept1[256];
 // GLOBAL: TIE95 0xEC210
-int32_t* edgept2[256];
+TRANSFM2_ScreenPoint* edgept2[256];
 // GLOBAL: TIE95 0xEF910
 int32_t edgexdiff[256];
 // GLOBAL: TIE95 0xEF110

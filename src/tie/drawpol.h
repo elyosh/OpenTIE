@@ -24,6 +24,7 @@
 
 /* PolyFace is defined in draw.h (cross-module shared). */
 #include "tie/draw.h"
+#include "tie/transfm2.h" /* DRAWPOL_EyeVertex, TRANSFM2_ScreenPoint */
 
 #include <stdint.h>
 
@@ -85,13 +86,24 @@ typedef struct BSPFaceNode {
 #pragma pack(pop)
 #endif
 
-/* Eye-space vertex (12 bytes: 3 int32). Output of TRANSFM2_geteyecoords;
- * stored contiguously in _eyexyzdata (xtrans2.c owned). */
-typedef struct DRAWPOL_EyeVertex {
-	int32_t x;
-	int32_t y;
-	int32_t z;
-} DRAWPOL_EyeVertex;
+/* DRAWPOL_EyeVertex is declared in transfm2.h (TRANSFM2 produces it). */
+
+/* Face vertex record addressed by firstvertptr. flags is the face header
+ * byte (count in the low six bits, DRAWPOL_FACE_GOURAUD, DRAWPOL_FACE_TWOSIDED).
+ * For a polygon, body holds vertex/edge index pairs: vertex i at body[2 * i],
+ * edge i at body[2 * i + 1], with the first vertex repeated at body[2 * n].
+ * A two-vertex (line) face reuses the body as {u16 thickness; u8 vertex1;
+ * u8 vertex2; u8 edge}; line objects (0x40/0x41) point firstvertptr at
+ * their first 5-byte edge record, so flags is that record's thickness low
+ * byte there. Each mesh face record spans 1 + 2 * n + 3 bytes. */
+typedef struct DRAWPOL_FaceRecord {
+	uint8_t flags;
+	uint8_t body[];
+} DRAWPOL_FaceRecord;
+
+#define DRAWPOL_FACE_COUNT_MASK 0x3F
+#define DRAWPOL_FACE_GOURAUD 0x40
+#define DRAWPOL_FACE_TWOSIDED 0x80
 
 /* Scratch buffer for marking (decal) rendering. See drawpol.c for layout. */
 typedef struct DRAWPOL_MarkingEyeData {
@@ -112,9 +124,9 @@ typedef enum MarkingMode {
  * compile-time `_array - stride` base addresses to support its 1-based
  * indexing idiom -- that's a code-gen artifact, not a data-layout concept.
  * ==================================================================== */
-extern int32_t* calcflag[128];    /* NULL if vertex behind near plane, else ptr to screen-xy pair */
-extern uint16_t vertexlight[128]; /* per-vertex light intensity (0xFFFF = not yet computed) */
-extern uint8_t* firstvertptr;     /* base of vertex-list stream for current face */
+extern TRANSFM2_ScreenPoint* calcflag[128]; /* NULL if vertex behind near plane, else its projected point */
+extern uint16_t vertexlight[128];           /* per-vertex light intensity (0xFFFF = not yet computed) */
+extern DRAWPOL_FaceRecord* firstvertptr;    /* vertex record of the current face */
 
 /* edgeflags[], edgept1[], edgept2[], flatx/y/z, flatcolors, flatcomponentnum,
  * flatparentobj, eyexyzdata are owned by xtrans2.c per watdbg -- see xtrans2.h. */

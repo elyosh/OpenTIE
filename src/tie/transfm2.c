@@ -394,23 +394,25 @@ void transfm2_doyminmax(int32_t screeny, int32_t* ptr) {
 
 /* Batch screen projection with z-clipping */
 // FUNCTION: TIE95 0x5ABF8
-int32_t* transfm2_getscreencoords(int32_t* source, int32_t* dest) {
+int32_t* transfm2_getscreencoords(const DRAWPOL_EyeVertex* source, int32_t* dest) {
+	int16_t vertex = 0;
+
 	while (counter) {
-		int32_t eyez = source[2];
+		int32_t eyez = source[vertex].z;
 		if (eyez >= 0) {
-			int32_t sx = transfm2_getscreenx(source[0], eyez);
+			int32_t sx = transfm2_getscreenx(source[vertex].x, eyez);
 			int32_t sy;
 
 			dest[0] = sx;
 			transfm2_doxminmax(sx, dest);
-			sy = transfm2_getscreeny(source[1], eyez);
+			sy = transfm2_getscreeny(source[vertex].y, eyez);
 			dest[1] = sy;
 			transfm2_doyminmax(sy, dest);
 			dest += 2;
 		} else {
-			dest = transfm2_clipeyez(source, dest);
+			dest = transfm2_clipeyez(source, vertex, dest);
 		}
-		source += 3;
+		vertex++;
 		counter--;
 	}
 	return dest;
@@ -419,7 +421,8 @@ int32_t* transfm2_getscreencoords(int32_t* source, int32_t* dest) {
 /* ================================================================== */
 
 // FUNCTION: TIE95 0x5AE84
-int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* dest) {
+int32_t* transfm2_calczintersect(const DRAWPOL_EyeVertex* source1, const DRAWPOL_EyeVertex* source2,
+								 int32_t* dest) {
 	int32_t zneg;
 	int32_t ztotal;
 	int32_t diff;
@@ -430,8 +433,8 @@ int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* de
 
 	/* Z-ratio for linear interpolation between two vertices straddling
 	 * the z=0 plane. */
-	zneg = -source1[2];
-	ztotal = source2[2] - source1[2];
+	zneg = -source1->z;
+	ztotal = source2->z - source1->z;
 	while (zneg & 0xFFFF0000) {
 		zneg >>= 1;
 		ztotal >>= 1;
@@ -441,7 +444,7 @@ int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* de
 	/* Project the clipped point (interpolated at z=0) to screen x,
 	 * clamping to avoid overflow. */
 	eyexsign = 0;
-	diff = *source2 - *source1;
+	diff = source2->x - source1->x;
 	if (diff < 0) {
 		eyexsign = 1;
 		diff = -diff;
@@ -449,7 +452,7 @@ int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* de
 	interp = math2_longfraction(diff, zratio);
 	if (eyexsign)
 		interp = -interp;
-	val = *source1 + interp;
+	val = source1->x + interp;
 
 	limit = 0x7FFFFFFF >> perspShift;
 
@@ -467,7 +470,7 @@ int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* de
 	transfm2_doxminmax(dest[0], dest);
 
 	eyeysign = 0;
-	diff = source2[1] - source1[1];
+	diff = source2->y - source1->y;
 	if (diff < 0) {
 		eyeysign = 1;
 		diff = -diff;
@@ -475,7 +478,7 @@ int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* de
 	interp = math2_longfraction(diff, zratio);
 	if (eyeysign)
 		interp = -interp;
-	val = source1[1] + interp;
+	val = source1->y + interp;
 
 	if (yAspect) {
 		eyeysign = 0;
@@ -504,23 +507,21 @@ int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* de
 }
 
 // FUNCTION: TIE95 0x5AE30
-int32_t* transfm2_clipeyez(int32_t* source, int32_t* dest) {
+int32_t* transfm2_clipeyez(const DRAWPOL_EyeVertex* source, int16_t vertex, int32_t* dest) {
 	int32_t* result = dest;
-	int32_t* prev;
 
 	numpoints--;
 
-	/* Check previous vertex */
-	prev = source - 3;
-	if (prev[2] >= 0) {
+	/* Previous ring vertex */
+	if (source[vertex - 1].z >= 0) {
 		numpoints++;
-		result = transfm2_calczintersect(source, prev, dest);
+		result = transfm2_calczintersect(&source[vertex], &source[vertex - 1], dest);
 	}
 
-	/* Check next vertex (source + 3) */
-	if (source[5] >= 0) {
+	/* Next ring vertex */
+	if (source[vertex + 1].z >= 0) {
 		numpoints++;
-		return transfm2_calczintersect(source, source + 3, result);
+		return transfm2_calczintersect(&source[vertex], &source[vertex + 1], result);
 	}
 
 	return result;
@@ -534,8 +535,8 @@ int32_t* transfm2_clipeyez(int32_t* source, int32_t* dest) {
  * lighting computation and interpolation at the clip point.
  */
 // FUNCTION: TIE95 0x5B090
-int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, int32_t* source2,
-								 int32_t* dest) {
+TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const DRAWPOL_EyeVertex* source1,
+											  const DRAWPOL_EyeVertex* source2, TRANSFM2_ScreenPoint* dest) {
 	int16_t lightVal;
 	int32_t zneg;
 	int32_t ztotal;
@@ -547,8 +548,8 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 
 	/* Z-ratio for linear interpolation between two vertices straddling
 	 * the z=0 plane. */
-	zneg = -source1[2];
-	ztotal = source2[2] - source1[2];
+	zneg = -source1->z;
+	ztotal = source2->z - source1->z;
 	while (zneg & 0xFFFF0000) {
 		zneg >>= 1;
 		ztotal >>= 1;
@@ -557,7 +558,7 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 
 	/* Vertex lighting (if face has lighting flag 0x40) */
 	lightVal = 0;
-	if (*(firstvertptr - 1) & 0x40) {
+	if (firstvertptr->flags & DRAWPOL_FACE_GOURAUD) {
 		/* Compute lighting for negV if not cached */
 		int16_t negLight;
 		int16_t posLight;
@@ -570,7 +571,8 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 			if (dot <= -0x40000000)
 				dot = (int32_t)0xC0010000;
 			vertexlight[negV] = (uint16_t)(dot >> 15);
-			if ((int16_t)vertexlight[negV] < 0 && *(firstvertptr - 1) != 0xC2)
+			if ((int16_t)vertexlight[negV] < 0 &&
+				firstvertptr->flags != (DRAWPOL_FACE_TWOSIDED | DRAWPOL_FACE_GOURAUD | 2))
 				vertexlight[negV] = 0;
 		}
 
@@ -583,7 +585,8 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 			if (dot <= -0x40000000)
 				dot = (int32_t)0xC0010000;
 			vertexlight[posV] = (uint16_t)(dot >> 15);
-			if ((int16_t)vertexlight[posV] < 0 && *(firstvertptr - 1) != 0xC2)
+			if ((int16_t)vertexlight[posV] < 0 &&
+				firstvertptr->flags != (DRAWPOL_FACE_TWOSIDED | DRAWPOL_FACE_GOURAUD | 2))
 				vertexlight[posV] = 0;
 		}
 
@@ -593,15 +596,12 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 		lightVal = negLight + (int16_t)(((int32_t)(zratio >> 1) * (posLight - negLight)) >> 15);
 	}
 
-	/* Write interpolated light value */
-	*(int16_t*)dest = lightVal;
-	dest = (int32_t*)((char*)dest + 2);
-	newscreenxy = (int32_t*)((char*)newscreenxy + 2);
+	dest->light = lightVal;
 
 	/* Project the clipped point (interpolated at z=0) to screen x,
 	 * clamping to avoid overflow. */
 	eyexsign = 0;
-	diff = *source2 - *source1;
+	diff = source2->x - source1->x;
 	if (diff < 0) {
 		eyexsign = 1;
 		diff = -diff;
@@ -609,7 +609,7 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 	interp = math2_longfraction(diff, zratio);
 	if (eyexsign)
 		interp = -interp;
-	val = *source1 + interp;
+	val = source1->x + interp;
 
 	limit = 0x7FFFFFFF >> perspShift;
 
@@ -623,10 +623,10 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 		 * result fits — go through uint32 to match the asm exactly. */
 		screen = (int32_t)((uint32_t)val << perspShift);
 
-	dest[0] = halfpixelswide + screen;
+	dest->xy[0] = halfpixelswide + screen;
 
 	eyeysign = 0;
-	diff = source2[1] - source1[1];
+	diff = source2->y - source1->y;
 	if (diff < 0) {
 		eyeysign = 1;
 		diff = -diff;
@@ -634,7 +634,7 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 	interp = math2_longfraction(diff, zratio);
 	if (eyeysign)
 		interp = -interp;
-	val = source1[1] + interp;
+	val = source1->y + interp;
 
 	if (yAspect) {
 		eyeysign = 0;
@@ -656,7 +656,7 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 	else
 		screen = (int32_t)((uint32_t)val << perspShift);
 
-	dest[1] = transfm2_screenyoffset + halfpixelsdeep + screen;
+	dest->xy[1] = transfm2_screenyoffset + halfpixelsdeep + screen;
 
 	return dest;
 }
@@ -664,52 +664,50 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 /* ================================================================== */
 
 // FUNCTION: TIE95 0x5B41C
-int32_t* transfm2_calclinepts(const uint8_t* source) {
+TRANSFM2_ScreenPoint* transfm2_calclinepts(const uint8_t* source) {
 	uint8_t idx1 = source[2];
-	int32_t* dest = calcflag[idx1];
+	TRANSFM2_ScreenPoint* dest = calcflag[idx1];
 
-	int32_t* dest2;
+	TRANSFM2_ScreenPoint* dest2;
 	int eyez2;
 	uint8_t idx2;
 
 	if (!dest) {
 		int eyez;
 
-		dest = newscreenxy;
-		newscreenxy += 2;
+		dest = (TRANSFM2_ScreenPoint*)newscreenxy;
+		newscreenxy = (int32_t*)(dest + 1);
 		eyez = firsteyexyz[idx1].z;
 
 		if (eyez >= 0) {
-			dest[0] = transfm2_getscreenx(firsteyexyz[idx1].x, eyez);
+			dest->xy[0] = transfm2_getscreenx(firsteyexyz[idx1].x, eyez);
 			calcflag[idx1] = dest;
-			dest[1] = transfm2_getscreeny(firsteyexyz[idx1].y, eyez);
+			dest->xy[1] = transfm2_getscreeny(firsteyexyz[idx1].y, eyez);
 		} else {
 			uint8_t idx2 = source[3];
 			if (firsteyexyz[idx2].z < 0)
 				return NULL;
-			dest = transfm2_facezintersect(idx1, idx2, (int32_t*)&firsteyexyz[idx1],
-										   (int32_t*)&firsteyexyz[idx2], dest);
+			dest = transfm2_facezintersect(idx1, idx2, &firsteyexyz[idx1], &firsteyexyz[idx2], dest);
 		}
 	}
 
-	point1ptr = dest;
+	/* DRAWLN2 consumes the first endpoint as its {x, y} pair. */
+	point1ptr = dest->xy;
 
 	idx2 = source[3];
 	if (calcflag[idx2])
 		return calcflag[idx2];
 
-	dest2 = newscreenxy;
-	newscreenxy += 2;
+	dest2 = (TRANSFM2_ScreenPoint*)newscreenxy;
+	newscreenxy = (int32_t*)(dest2 + 1);
 	eyez2 = firsteyexyz[idx2].z;
 
-	if (eyez2 < 0) {
-		return transfm2_facezintersect(idx2, idx1, (int32_t*)&firsteyexyz[idx2],
-									   (int32_t*)&firsteyexyz[source[2]], dest2);
-	}
+	if (eyez2 < 0)
+		return transfm2_facezintersect(idx2, idx1, &firsteyexyz[idx2], &firsteyexyz[source[2]], dest2);
 
-	dest2[0] = transfm2_getscreenx(firsteyexyz[idx2].x, eyez2);
+	dest2->xy[0] = transfm2_getscreenx(firsteyexyz[idx2].x, eyez2);
 	calcflag[idx2] = dest2;
-	dest2[1] = transfm2_getscreeny(firsteyexyz[idx2].y, eyez2);
+	dest2->xy[1] = transfm2_getscreeny(firsteyexyz[idx2].y, eyez2);
 	return dest2;
 }
 
@@ -732,7 +730,7 @@ int16_t transfm2_getfacescreenxy(uint16_t ptCnt) {
 		int32_t i;
 
 		for (i = 0; i < (uint16_t)numpoints; i++) {
-			if (!calcflag[firstvertptr[2 * i]])
+			if (!calcflag[firstvertptr->body[2 * i]])
 				return 4;
 		}
 	}
@@ -749,17 +747,17 @@ int16_t transfm2_classifyedges(void) {
 		uint8_t edgeNum;
 		uint8_t edgeFlag;
 		uint8_t idx;
-		int32_t* pt1;
+		TRANSFM2_ScreenPoint* pt1;
 		uint8_t idx2;
-		int32_t* pt2;
-		int32_t* ptPtr;
+		TRANSFM2_ScreenPoint* pt2;
+		TRANSFM2_ScreenPoint* ptPtr;
 		uint32_t ydiff;
 		uint32_t xdiff;
 
 		if (i >= (uint16_t)numpoints)
 			return 1;
 
-		edgeNum = firstvertptr[2 * i + 1];
+		edgeNum = firstvertptr->body[2 * i + 1];
 		edgeFlag = edgeflags[edgeNum];
 
 		if (edgeFlag == 0x80) {
@@ -769,7 +767,7 @@ int16_t transfm2_classifyedges(void) {
 
 		/* Pre-classified edge flags: reverse direction and count */
 		if (edgeFlag & 1) {
-			int32_t* tmp;
+			TRANSFM2_ScreenPoint* tmp;
 
 			offrightcnt++;
 			edgexsign[edgeNum] = -edgexsign[edgeNum];
@@ -782,7 +780,7 @@ int16_t transfm2_classifyedges(void) {
 			continue;
 		}
 		if (edgeFlag & 2) {
-			int32_t* tmp;
+			TRANSFM2_ScreenPoint* tmp;
 
 			edgexsign[edgeNum] = -edgexsign[edgeNum];
 			edgeysign[edgeNum] = -edgeysign[edgeNum];
@@ -794,7 +792,7 @@ int16_t transfm2_classifyedges(void) {
 			continue;
 		}
 		if (edgeFlag & 4) {
-			int32_t* tmp;
+			TRANSFM2_ScreenPoint* tmp;
 
 			edgexsign[edgeNum] = -edgexsign[edgeNum];
 			edgeysign[edgeNum] = -edgeysign[edgeNum];
@@ -806,7 +804,7 @@ int16_t transfm2_classifyedges(void) {
 			continue;
 		}
 		if (edgeFlag & 8) {
-			int32_t* tmp;
+			TRANSFM2_ScreenPoint* tmp;
 
 			edgexsign[edgeNum] = -edgexsign[edgeNum];
 			edgeysign[edgeNum] = -edgeysign[edgeNum];
@@ -818,7 +816,7 @@ int16_t transfm2_classifyedges(void) {
 		}
 
 		/* New edge: project both vertices */
-		idx = firstvertptr[2 * i];
+		idx = firstvertptr->body[2 * i];
 		pt1 = calcflag[idx];
 
 		if (!pt1) {
@@ -826,30 +824,29 @@ int16_t transfm2_classifyedges(void) {
 			int32_t eyez = firsteyexyz[idx].z;
 
 			if (eyez >= 0) {
-				pt1 = newscreenxy;
-				newscreenxy += 2;
-				pt1[0] = transfm2_getscreenx(eyex, eyez);
+				pt1 = (TRANSFM2_ScreenPoint*)newscreenxy;
+				newscreenxy = (int32_t*)(pt1 + 1);
+				pt1->xy[0] = transfm2_getscreenx(eyex, eyez);
 				calcflag[idx] = pt1;
-				pt1[1] = transfm2_getscreeny(firsteyexyz[idx].y, eyez);
+				pt1->xy[1] = transfm2_getscreeny(firsteyexyz[idx].y, eyez);
 			} else {
-				uint8_t nextIdx = firstvertptr[2 * i + 2];
-				int32_t* tmp;
+				uint8_t nextIdx = firstvertptr->body[2 * i + 2];
+				TRANSFM2_ScreenPoint* tmp;
 
 				if (firsteyexyz[nextIdx].z < 0) {
 					edgeflags[edgeNum] = 0x80;
 					offrightcnt++;
 					continue;
 				}
-				tmp = newscreenxy;
-				newscreenxy += 2;
-				pt1 = transfm2_facezintersect(idx, nextIdx, (int32_t*)&firsteyexyz[idx],
-											  (int32_t*)&firsteyexyz[nextIdx], tmp);
+				tmp = (TRANSFM2_ScreenPoint*)newscreenxy;
+				newscreenxy = (int32_t*)(tmp + 1);
+				pt1 = transfm2_facezintersect(idx, nextIdx, &firsteyexyz[idx], &firsteyexyz[nextIdx], tmp);
 			}
 		}
 
 		edgept1[edgeNum] = pt1;
 
-		idx2 = firstvertptr[2 * i + 2];
+		idx2 = firstvertptr->body[2 * i + 2];
 		pt2 = calcflag[idx2];
 
 		if (!pt2) {
@@ -857,24 +854,23 @@ int16_t transfm2_classifyedges(void) {
 			int32_t eyez2 = firsteyexyz[idx2].z;
 
 			if (eyez2 >= 0) {
-				pt2 = newscreenxy;
-				newscreenxy += 2;
-				pt2[0] = transfm2_getscreenx(eyex2, eyez2);
+				pt2 = (TRANSFM2_ScreenPoint*)newscreenxy;
+				newscreenxy = (int32_t*)(pt2 + 1);
+				pt2->xy[0] = transfm2_getscreenx(eyex2, eyez2);
 				calcflag[idx2] = pt2;
-				pt2[1] = transfm2_getscreeny(firsteyexyz[idx2].y, eyez2);
+				pt2->xy[1] = transfm2_getscreeny(firsteyexyz[idx2].y, eyez2);
 			} else {
-				uint8_t prevIdx = firstvertptr[2 * i];
-				int32_t* tmp;
+				uint8_t prevIdx = firstvertptr->body[2 * i];
+				TRANSFM2_ScreenPoint* tmp;
 
 				if (firsteyexyz[prevIdx].z < 0) {
 					edgeflags[edgeNum] = 0x80;
 					offrightcnt++;
 					continue;
 				}
-				tmp = newscreenxy;
-				newscreenxy += 2;
-				pt2 = transfm2_facezintersect(idx2, prevIdx, (int32_t*)&firsteyexyz[idx2],
-											  (int32_t*)&firsteyexyz[prevIdx], tmp);
+				tmp = (TRANSFM2_ScreenPoint*)newscreenxy;
+				newscreenxy = (int32_t*)(tmp + 1);
+				pt2 = transfm2_facezintersect(idx2, prevIdx, &firsteyexyz[idx2], &firsteyexyz[prevIdx], tmp);
 			}
 		}
 
@@ -892,7 +888,7 @@ int16_t transfm2_classifyedges(void) {
 		 * mathematical value, which feeds the X/Y-bounds classifier
 		 * below). Use uint32 to match `sub`/`neg` bit-exactly. */
 		edgeysign[edgeNum] = 1;
-		ydiff = (uint32_t)pt2[1] - (uint32_t)ptPtr[1];
+		ydiff = (uint32_t)pt2->xy[1] - (uint32_t)ptPtr->xy[1];
 		if ((int32_t)ydiff < 0) {
 			edgeysign[edgeNum] = -edgeysign[edgeNum];
 			ydiff = -ydiff;
@@ -900,7 +896,7 @@ int16_t transfm2_classifyedges(void) {
 		edgeydiff[edgeNum] = (int32_t)ydiff;
 
 		edgexsign[edgeNum] = 1;
-		xdiff = (uint32_t)pt2[0] - (uint32_t)ptPtr[0];
+		xdiff = (uint32_t)pt2->xy[0] - (uint32_t)ptPtr->xy[0];
 		if ((int32_t)xdiff < 0) {
 			edgexsign[edgeNum] = -edgexsign[edgeNum];
 			xdiff = -xdiff;
@@ -909,13 +905,13 @@ int16_t transfm2_classifyedges(void) {
 
 		/* Check if edge is off-screen vertically */
 		if (edgeysign[edgeNum] >= 0) {
-			if (pt2[1] < 0 || pixelsdeep <= ptPtr[1] || !ydiff) {
+			if (pt2->xy[1] < 0 || pixelsdeep <= ptPtr->xy[1] || !ydiff) {
 				edgeflags[edgeNum] |= 4;
 				offscreencnt++;
 				continue;
 			}
 		} else {
-			if (ptPtr[1] < 0 || pixelsdeep <= pt2[1]) {
+			if (ptPtr->xy[1] < 0 || pixelsdeep <= pt2->xy[1]) {
 				edgeflags[edgeNum] |= 4;
 				offscreencnt++;
 				continue;
@@ -924,8 +920,8 @@ int16_t transfm2_classifyedges(void) {
 
 		/* Check horizontal classification */
 		if (edgexsign[edgeNum] < 0) {
-			if (ptPtr[0] > 0) {
-				if (pixelswide <= pt2[0]) {
+			if (ptPtr->xy[0] > 0) {
+				if (pixelswide <= pt2->xy[0]) {
 					edgeflags[edgeNum] |= 1;
 					if (!++offscreencnt)
 						return 0;
@@ -940,8 +936,8 @@ int16_t transfm2_classifyedges(void) {
 					return 0;
 			}
 		} else {
-			if (pt2[0] > 0) {
-				if (pixelswide <= ptPtr[0]) {
+			if (pt2->xy[0] > 0) {
+				if (pixelswide <= ptPtr->xy[0]) {
 					edgeflags[edgeNum] |= 1;
 					if (!++offscreencnt)
 						return 0;
