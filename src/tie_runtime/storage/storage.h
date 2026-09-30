@@ -63,6 +63,10 @@ long TieStorage_Tell(TieFile* file);
 int32_t TieStorage_FileLength(TieFile* file);
 int TieStorage_Close(TieFile* file);
 int TieStorage_Remove(TieFileRoot root, const char* path);
+/* FEDISKIO keeps one open file and unlinks it by name after a failed close.
+ * The storage root selected at open time follows that name here. */
+void TieStorage_SetOpenFileRoot(TieFileRoot root);
+int TieStorage_RemoveOpenFile(const char* path);
 TieDir* TieStorage_DirOpen(TieFileRoot root, const char* path);
 int TieStorage_DirNext(TieDir* directory, TieDirEntry* entry);
 void TieStorage_DirClose(TieDir* directory);

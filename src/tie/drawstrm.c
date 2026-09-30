@@ -11,23 +11,6 @@ enum {
 	BLOCKS_Y = (SCREEN_HEIGHT / BLOCK_SIZE),
 };
 
-/* 4-bit pixel bitmask tables for the DIFF block decoder.
- * Each nibble value (0-15) selects which of the 4 pixels in a half-row
- * to copy from the previous frame. Bit 0 = pixel 0, bit 1 = pixel 1,
- * bit 2 = pixel 2, bit 3 = pixel 3. A set bit means DON'T copy (keep
- * current); a clear bit means copy from reference. */
-
-static void diff_apply_nibble(uint8_t* dst, const uint8_t* ref, uint8_t nibble) {
-	if (!(nibble & 0x01))
-		dst[0] = ref[0];
-	if (!(nibble & 0x02))
-		dst[1] = ref[1];
-	if (!(nibble & 0x04))
-		dst[2] = ref[2];
-	if (!(nibble & 0x08))
-		dst[3] = ref[3];
-}
-
 /*
  * Decode one frame from the stream.
  *
@@ -89,10 +72,25 @@ void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void
 					uint8_t lo_nibble = mask & 0x0F;
 					uint8_t hi_nibble = (mask >> 4) & 0x0F;
 
-					/* Low nibble controls pixels 0-3 */
-					diff_apply_nibble(dst, src, lo_nibble);
+					/* Each set mask bit keeps the current pixel; a clear bit copies
+					 * the reference pixel. Low nibble controls pixels 0-3. */
+					if (!(lo_nibble & 0x01))
+						dst[0] = src[0];
+					if (!(lo_nibble & 0x02))
+						dst[1] = src[1];
+					if (!(lo_nibble & 0x04))
+						dst[2] = src[2];
+					if (!(lo_nibble & 0x08))
+						dst[3] = src[3];
 					/* High nibble controls pixels 4-7 */
-					diff_apply_nibble(dst + 4, src + 4, hi_nibble);
+					if (!(hi_nibble & 0x01))
+						dst[4] = src[4];
+					if (!(hi_nibble & 0x02))
+						dst[5] = src[5];
+					if (!(hi_nibble & 0x04))
+						dst[6] = src[6];
+					if (!(hi_nibble & 0x08))
+						dst[7] = src[7];
 
 					dst += SCREEN_WIDTH;
 					src += SCREEN_WIDTH;

@@ -26,19 +26,21 @@
 
 /* --- Module globals (watdbg: msgroom.c ownership) --- */
 
+// GLOBAL: TIE95 0xC5888
+// GLOBAL: TIE98 0x4E632C
 int16_t lasthistorymsg = -1;
+// GLOBAL: TIE95 0xC588A
+// GLOBAL: TIE98 0x584D28
 uint16_t numhistorymsgs;
+// GLOBAL: TIE95 0xD5034
+// GLOBAL: TIE98 0x5FCE50
 int32_t msgsPerPage;
 
 /* Static 300-slot message ring; messagehistory is always valid. */
 static MsgHistoryEntry history_ring[MSG_HISTORY_SLOTS];
+// GLOBAL: TIE95 0xD5038
+// GLOBAL: TIE98 0x5FCE54
 MsgHistoryEntry* messagehistory = history_ring;
-
-/* Timestamp width-measuring pads. "00:00:00 " for HH:MM:SS lines, "00:00 "
- * for MM:SS lines. Used only for sys2_calclength() to compute the right-
- * aligned cursor-x position. */
-static const char TS_PAD_HMS[] = "00:00:00 ";
-static const char TS_PAD_MS[] = "00:00 ";
 
 /* --- msgroom_scrollmsgs -- */
 
@@ -204,14 +206,14 @@ int32_t msgroom_messageroom(void) {
 					ts_y = (int16_t)((fontheight + 3) * ((int)msgsPerPage - (i + 1)) + 2 * fontheight);
 
 					if (messagehistory[idx].hours) {
-						const int16_t w = sys2_calclength((const uint8_t*)TS_PAD_HMS);
+						const int16_t w = sys2_calclength((const uint8_t*)"00:00:00 ");
 						festring_setcursor((int16_t)(screenXRes - w), ts_y);
 						panelrts_outnum(messagehistory[idx].hours, 2, 1);
 						if (outchar)
 							outchar(':');
 						min_width = 2;
 					} else {
-						const int16_t w = sys2_calclength((const uint8_t*)TS_PAD_MS);
+						const int16_t w = sys2_calclength((const uint8_t*)"00:00 ");
 						festring_setcursor((int16_t)(screenXRes - w), ts_y);
 						min_width = 1;
 					}

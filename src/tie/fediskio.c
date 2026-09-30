@@ -16,6 +16,7 @@
 #include "tie_runtime/flight_assets/service.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
+#include "tie_runtime/runtime/panel_view_buffers.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
 
@@ -54,9 +55,8 @@
 
 #ifdef TIE_MODERN
 #include "tie_runtime/storage/string_table.h"
-#else
-#include <landru/memhdl.h>
 #endif
+#include <landru/memhdl.h>
 
 #include <stdio.h> /* snprintf */
 #include <stdlib.h>
@@ -64,8 +64,53 @@
 
 /* --- Static data --- */
 
-static const char* fatal_error_strings[] = { "Error! Not Enough Memory!\n",
-											 "Error! The following file is missing or inaccessible: " };
+// GLOBAL: TIE95 0xC1C98
+// GLOBAL: TIE98 0x4DFF70
+char resourcedir[10] = "RESOURCE\\";
+// GLOBAL: TIE95 0xC1CB2
+// GLOBAL: TIE98 0x4DFF90
+char fatalmemorystr[27] = "Error! Not Enough Memory!\n";
+// GLOBAL: TIE95 0xC1CCD
+// GLOBAL: TIE98 0x4DFFB0
+char fatalfilemissingstr[55] = "Error! The following file is missing or inaccessible: ";
+/* Built-in messages used until STRINGS.DAT rebinds fatalerrstrings. */
+// GLOBAL: TIE95 0xC1D04
+// GLOBAL: TIE98 0x4DFFE8
+char* fatalerrstr[2] = { fatalmemorystr, fatalfilemissingstr };
+// GLOBAL: TIE95 0xC1D0C
+// GLOBAL: TIE98 0x4DFFF0
+char** fatalerrstrings = fatalerrstr;
+// GLOBAL: TIE95 0xC1E08
+// GLOBAL: TIE98 0x4E00FC
+static char** flightloadstrings;
+
+// GLOBAL: TIE95 0xC1E10
+// GLOBAL: TIE98 0x4E0100
+uint32_t rankscores[5] = { 20000, 50000, 100000, 250000, 500000 };
+
+// GLOBAL: TIE95 0xC1E24
+// GLOBAL: TIE98 0x4E0118
+uint32_t secretscores[12] = { 20000,   50000,   100000,  250000,  400000,  800000,
+							  1000000, 1200000, 1400000, 1600000, 1800000, 2000000 };
+
+// GLOBAL: TIE95 0xC1E54
+// GLOBAL: TIE98 0x4E0148
+uint8_t secretcompletioncnts[12] = { 2, 4, 6, 9, 12, 15, 18, 20, 22, 24, 26, 28 };
+
+// GLOBAL: TIE95 0xC1E60
+// GLOBAL: TIE98 0x4E0158
+uint8_t battlemask[8] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
+
+/* Species LFD filenames (3 files, 9 chars each, without .lfd extension) */
+// GLOBAL: TIE95 0xC1E68
+char specieslfds[3][9] = { "SPECIES", "SPECIES2", "SPECIES3" };
+
+/* Weapon system type classification (maps weapon ID to 1=laser, 2=missile, 0=none).
+ * IDs 1-6,9-11 = laser (1), IDs 7-8,12-18 = missile/warhead (2). */
+// GLOBAL: TIE95 0xC1E83
+// GLOBAL: TIE98 0x4E01A0
+uint8_t weaponsystype[33] = { 0, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 2, 2, 2, 2, 2,
+							  2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 /* --- Globals --- */
 
@@ -76,48 +121,52 @@ char pilotname[TIE_PILOT_FILENAME_CAPACITY];
 // GLOBAL: TIE95 0xD4078
 // GLOBAL: TIE98 0x6267E0
 char openfilename[256];
-static TieFileRoot openfileroot;
 // GLOBAL: TIE95 0xD4178
 // GLOBAL: TIE98 0x6267C8
 TieFile* fileptr;
+// GLOBAL: TIE95 0xD417C
+// GLOBAL: TIE98 0x51F858
+static LandruHandle font1handle;
+// GLOBAL: TIE95 0xD417E
+// GLOBAL: TIE98 0x51F85C
+static LandruHandle font2handle;
+// GLOBAL: TIE95 0xD4180
+// GLOBAL: TIE98 0x50F854
+static LandruHandle log1handle;
+// GLOBAL: TIE95 0xD4182
+// GLOBAL: TIE98 0x6268E0
+LandruHandle log2handle;
+// GLOBAL: TIE95 0xD4184
+// GLOBAL: TIE98 0x50F848
+static LandruHandle musichandle;
+/* TRACE2 edge pools, locked by xtrans2_initxtrans. BPFLIGHT allocates them
+ * for frontend previews when FEDISKIO has not. */
+// GLOBAL: TIE95 0xD4186
+// GLOBAL: TIE98 0x626786
+LandruHandle flightbuf_big_handle;
+// GLOBAL: TIE95 0xD4188
+// GLOBAL: TIE98 0x6268E4
+LandruHandle flightbuf_small_handle;
+// GLOBAL: TIE95 0xD418C
+// GLOBAL: TIE98 0x626788
 uint8_t currentmission;
+// GLOBAL: TIE95 0xD418F
+// GLOBAL: TIE98 0x6267C6
 uint8_t currentbattle;
 
-char resourcedir[10];
-// GLOBAL: TIE95 0xC1D0C
-// GLOBAL: TIE98 0x4DFFF0
-char** fatalerrstrings;
-// GLOBAL: TIE95 0xC1E08
-// GLOBAL: TIE98 0x4E00FC
-static char** flightloadstrings;
-
-/* Per-species model allocation size used by the classic renderer's
- * internal bounds checks. */
-uint32_t species_model_handle_sizes[NUM_SPECIES];
-
-uint32_t rankscores[5] = { 20000, 50000, 100000, 250000, 500000 };
-
-uint32_t secretscores[12] = { 20000,   50000,   100000,  250000,  400000,  800000,
-							  1000000, 1200000, 1400000, 1600000, 1800000, 2000000 };
-
-uint8_t secretcompletioncnts[12] = { 2, 4, 6, 9, 12, 15, 18, 20, 22, 24, 26, 28 };
-
-uint8_t battlemask[8] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80 };
-
-/* Species LFD filenames (3 files, 9 chars each, without .lfd extension) */
-char specieslfds[3][9] = { "SPECIES", "SPECIES2", "SPECIES3" };
-
-/* Weapon system type classification (maps weapon ID to 1=laser, 2=missile, 0=none).
- * IDs 1-6,9-11 = laser (1), IDs 7-8,12-18 = missile/warhead (2). */
-uint8_t weaponsystype[33] = { 0, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 2, 2, 2, 2, 2,
-							  2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
-// GLOBAL: TIE98 0x4E01A0
-static const uint8_t tie98_hardpoint_weapon_class[40] = { 0, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 1, 2, 2,
-														  2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-														  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
-/* Module-owned asset buffers. */
+/* Shared flight handles (tie.c-owned in the TIE95 demo symbols). */
+// GLOBAL: TIE95 0xEB6B6
+// GLOBAL: TIE98 0x5926A8
+LandruHandle panelpartshandle;
+// GLOBAL: TIE95 0xEB6C6
+// GLOBAL: TIE98 0x595F68
+LandruHandle rundiffhandle;
+// GLOBAL: TIE95 0xEB6C8
+// GLOBAL: TIE98 0x591E2A
+LandruHandle replaybufferhandle;
+// GLOBAL: TIE95 0xEB6CA
+// GLOBAL: TIE98 0x5A26B4
+LandruHandle maproomiconshandle;
 #ifndef TIE_MODERN
 // GLOBAL: TIE95 0xEB6BA
 // GLOBAL: TIE98 0x592646
@@ -126,23 +175,13 @@ static LandruHandle stringdatahandle;
 // GLOBAL: TIE98 0x50F84C
 static char* stringdata_base;
 #endif
-static void* font1_buf;
-static void* font2_buf;
-static void* log1_buf;
-static void* log2_buf;
-static void* panelparts_buf;
-void* maproomicons_buf; /* exposed: maproom_maproom uses this as the icon-ptr table + shape data */
-static void* rundiff_buf;
-static void* replaybuffer_buf;
-static void* messagelog_buf;
-static void* music_handle_buf;
+
+/* Per-species model allocation size used by the classic renderer's
+ * internal bounds checks. */
+uint32_t species_model_handle_sizes[NUM_SPECIES];
 
 // GLOBAL: TIE98 0x50F858
 static uint8_t tie98_flight_inverse_palette[0x10000];
-/* TRACE2 edge pools. BPFLIGHT may allocate them before FEDISKIO initializes.
- * Allocate by record count because EdgeHeader grows with host pointer size. */
-void* flightbuf_small; /* retail word_D4188, TRACE2_EDGEINFO_CAP records */
-void* flightbuf_big;   /* retail word_D4186, TRACE2_EDGEHEADER_CAP records */
 
 /* --- File I/O wrappers --- */
 
@@ -266,7 +305,7 @@ int16_t fediskio_tryopenfile(TieFileRoot root, const char* name, const char* mod
 	int16_t attempt;
 
 	strcpy(openfilename, name);
-	openfileroot = root;
+	TieStorage_SetOpenFileRoot(root);
 	/* MODERN ADAPTATION: the VFS root replaces TIE98's final
 	 * install-drive pathname attempt. Removable-media retries are obsolete. */
 	for (attempt = 0; attempt < attempt_count; ++attempt) {
@@ -289,7 +328,7 @@ int16_t fediskio_tryclosefile(int16_t delete_on_error) {
 	fileptr = NULL;
 
 	if (delete_on_error && had_error)
-		TieStorage_Remove(openfileroot, openfilename);
+		TieStorage_RemoveOpenFile(openfilename);
 
 	return had_error;
 }
@@ -324,7 +363,7 @@ void fediskio_fatalerror(FatalErrId error_code) {
 	int i;
 
 	for (i = 0; i < 128; i++) {
-		str[i] = fatal_error_strings[error_code][i];
+		str[i] = fatalerrstrings[error_code][i];
 		if (!str[i])
 			break;
 	}
@@ -425,9 +464,6 @@ void fediskio_createpilotrecord(void) {
 		memcpy(mission.mission_linked_data, pilot->linked_data, 256);
 		currentbattle = pilot->cur_battle;
 		currentmission = pilot->battle_cursor[currentbattle];
-		/* Snapshot tour cursor for fsfx_loadvoicelfd. */
-		voice_tour_battle = pilot->cur_battle;
-		voice_tour_mission = pilot->battle_cursor[voice_tour_battle];
 	} else {
 		const uint8_t* raw;
 
@@ -444,26 +480,6 @@ void fediskio_createpilotrecord(void) {
 		raw = (const uint8_t*)loadbuffer;
 		voice_id_a = pilot->cur_combat_ship;
 		voice_id_b = raw[0x67 + voice_id_a];
-	}
-}
-
-/* Map CraftType → ship index (0-6) for training score tracking */
-static uint16_t train_craft_type_to_ship_idx(uint8_t train_craft_type) {
-	switch (train_craft_type) {
-		case 5:
-			return 0; /* TIE Fighter */
-		case 6:
-			return 1; /* TIE Interceptor */
-		case 7:
-			return 2; /* TIE Bomber */
-		case 8:
-			return 3; /* TIE Advanced */
-		case 16:
-			return 4; /* Assault Gunboat */
-		case 9:
-			return 5; /* TIE Defender */
-		default:
-			return 6;
 	}
 }
 
@@ -504,7 +520,29 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 	if (mission.train_craft_type) {
 		uint8_t prev_level;
 
-		ship_idx = train_craft_type_to_ship_idx(mission.train_craft_type_src);
+		switch (mission.train_craft_type_src) {
+			case 5:
+				ship_idx = 0; /* TIE Fighter */
+				break;
+			case 6:
+				ship_idx = 1; /* TIE Interceptor */
+				break;
+			case 7:
+				ship_idx = 2; /* TIE Bomber */
+				break;
+			case 8:
+				ship_idx = 3; /* TIE Advanced */
+				break;
+			case 9:
+				ship_idx = 5; /* TIE Defender */
+				break;
+			case 16:
+				ship_idx = 4; /* Assault Gunboat */
+				break;
+			default:
+				ship_idx = 6;
+				break;
+		}
 
 		if ((uint32_t)mission.mission_score > (uint32_t)p->train_score[ship_idx])
 			p->train_score[ship_idx] = mission.mission_score;
@@ -517,180 +555,177 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 			p->rank = 1;
 			mission.mission_new_rank = p->rank;
 		}
-		goto write_and_exit;
-	}
+	} else {
+		/* --- Combat/battle mode: score calculation --- */
+		score = 50 * craft->total_kills;
 
-	/* --- Combat/battle mode: score calculation --- */
-
-	score = 50 * craft->total_kills;
-
-	for (i = 0; i < NUM_SPEC; i++) {
-		uint8_t kv = spec_data[i].kill_value;
-		score += 200 * mission.captures_by_type[i] * kv + 40 * kv * craft->kills_by_species[i];
-	}
-
-	score_quarter = score >> 2;
-	if (mission.difficulty == 0)
-		score -= score_quarter;
-	else if (mission.difficulty == 2)
-		score += score_quarter;
-
-	if (inflight_collision == 1)
-		score += score >> 3;
-
-	total_score = score + 3 * craft->laser_hit - craft->laser_fired + 100 * craft->warhead_hit -
-				  50 * craft->warhead_fired;
-
-	if (ejected)
-		total_score -= 5000;
-	if (pstate.friendly_kill_count)
-		total_score -= 10000;
-	if (mission.penalty_flag)
-		total_score -= 5000;
-
-	if (mission.primary_complete == 1) {
-		total_score += 2500 * (mission.difficulty + 1);
-		if (inflight_collision == 1)
-			total_score += 250;
-	}
-
-	if (mission.secondary_complete == 1) {
-		total_score += 2500 * (mission.difficulty + 1);
-		if (inflight_collision == 1)
-			total_score += 250;
-	}
-
-	/* Per-flight-group bonus (50 × bonus_points for completed FGs) */
-	for (i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
-		if (fgstatus[i].fg_complete == 1)
-			total_score += (int16_t)(50 * fg_array[i].bonus_points);
-	}
-
-	if (mission.bonus_complete == 1) {
-		total_score += 1000 * (mission.difficulty + 1);
-		if (inflight_collision == 1)
-			total_score += 100;
-	}
-
-	if (total_score < 0)
-		total_score = 0;
-	if (cheatingflag)
-		total_score /= 10;
-
-	/* --- Battle mode (mode 4): accumulate career stats --- */
-	if (mission.mission_mode == 4) {
-		uint32_t avg;
-
-		p->exit_status = (uint8_t)exit_status;
-
-		p->laser_total += craft->laser_fired;
-		p->laser_hits += craft->laser_hit;
-		p->warhead_total += craft->warhead_fired;
-		p->warhead_hits += craft->warhead_hit;
-
-		p->total_kills += craft->total_kills;
 		for (i = 0; i < NUM_SPEC; i++) {
-			p->kills_by_ship_type[i] += craft->kills_by_species[i];
-			p->total_kills += craft->kills_by_species[i];
-			p->captures_by_ship_type[i] += mission.captures_by_type[i];
-			p->total_captures += mission.captures_by_type[i];
+			uint8_t kv = spec_data[i].kill_value;
+			score += 200 * mission.captures_by_type[i] * kv + 40 * kv * craft->kills_by_species[i];
 		}
+
+		score_quarter = score >> 2;
+		if (mission.difficulty == 0)
+			score -= score_quarter;
+		else if (mission.difficulty == 2)
+			score += score_quarter;
+
+		if (inflight_collision == 1)
+			score += score >> 3;
+
+		total_score = score + 3 * craft->laser_hit - craft->laser_fired + 100 * craft->warhead_hit -
+					  50 * craft->warhead_fired;
 
 		if (ejected)
-			p->ejection_count++;
+			total_score -= 5000;
+		if (pstate.friendly_kill_count)
+			total_score -= 10000;
+		if (mission.penalty_flag)
+			total_score -= 5000;
 
-		p->score += total_score;
-		avg = ((uint32_t)p->score) / 4;
-		if (avg > 0xFFFF)
-			avg = 0xFFFF;
-		if ((uint16_t)avg > p->avg_score)
-			p->avg_score = (uint16_t)avg;
-
-		if (p->rank < 5 && mission.primary_complete == 1 && (uint32_t)p->score > rankscores[p->rank]) {
-			p->rank++;
-			mission.mission_new_rank = p->rank;
+		if (mission.primary_complete == 1) {
+			total_score += 2500 * (mission.difficulty + 1);
+			if (inflight_collision == 1)
+				total_score += 250;
 		}
-	}
 
-	mission.mission_score = total_score;
+		if (mission.secondary_complete == 1) {
+			total_score += 2500 * (mission.difficulty + 1);
+			if (inflight_collision == 1)
+				total_score += 250;
+		}
 
-	/* --- Combat sim mode (mode 1): per-ship/course high scores --- */
-	if (mission.mission_mode == 1) {
-		uint8_t ship = p->cur_combat_ship;
-		uint8_t course = p->combat_course_cursor[ship];
+		/* Per-flight-group bonus (50 × bonus_points for completed FGs) */
+		for (i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
+			if (fgstatus[i].fg_complete == 1)
+				total_score += (int16_t)(50 * fg_array[i].bonus_points);
+		}
 
-		if ((uint32_t)total_score > (uint32_t)p->combat_score[ship][course])
-			p->combat_score[ship][course] = total_score;
+		if (mission.bonus_complete == 1) {
+			total_score += 1000 * (mission.difficulty + 1);
+			if (inflight_collision == 1)
+				total_score += 100;
+		}
 
-		if (mission.primary_complete == 1 && !p->combat_complete[ship][course]) {
-			uint16_t won;
-			uint16_t s;
-			uint16_t c;
+		if (total_score < 0)
+			total_score = 0;
+		if (cheatingflag)
+			total_score /= 10;
 
-			p->combat_complete[ship][course] = 1;
+		/* --- Battle mode (mode 4): accumulate career stats --- */
+		if (mission.mission_mode == 4) {
+			uint32_t avg;
 
-			won = 0;
-			for (s = 0; s < NUM_SHIPS; s++)
-				for (c = 0; c < 8; c++)
-					if (p->combat_complete[s][c])
-						won++;
+			p->exit_status = (uint8_t)exit_status;
 
-			if (won >= 8 && !p->rank) {
-				p->rank = 1;
-				mission.mission_new_rank = 1;
+			p->laser_total += craft->laser_fired;
+			p->laser_hits += craft->laser_hit;
+			p->warhead_total += craft->warhead_fired;
+			p->warhead_hits += craft->warhead_hit;
+
+			p->total_kills += craft->total_kills;
+			for (i = 0; i < NUM_SPEC; i++) {
+				p->kills_by_ship_type[i] += craft->kills_by_species[i];
+				p->total_kills += craft->kills_by_species[i];
+				p->captures_by_ship_type[i] += mission.captures_by_type[i];
+				p->total_captures += mission.captures_by_type[i];
+			}
+
+			if (ejected)
+				p->ejection_count++;
+
+			p->score += total_score;
+			avg = ((uint32_t)p->score) / 4;
+			if (avg > 0xFFFF)
+				avg = 0xFFFF;
+			if ((uint16_t)avg > p->avg_score)
+				p->avg_score = (uint16_t)avg;
+
+			if (p->rank < 5 && mission.primary_complete == 1 && (uint32_t)p->score > rankscores[p->rank]) {
+				p->rank++;
+				mission.mission_new_rank = p->rank;
 			}
 		}
-	}
-	/* --- Battle mode (mode 4): battle progression --- */
-	else if (mission.mission_mode == 4) {
-		uint8_t battle = p->cur_battle;
-		uint8_t cur_mis = p->battle_cursor[battle];
 
-		if ((uint32_t)total_score > (uint32_t)p->tour_score[battle][cur_mis])
-			p->tour_score[battle][cur_mis] = total_score;
+		mission.mission_score = total_score;
 
-		/* player_status: 0 = dead, 1 = captured/failed */
-		if (mission.player_status == 0 || mission.player_status == 1) {
-			for (i = 0; i < NUM_BATTLES; i++) {
-				if (p->battle_status[i] == 1)
-					p->battle_status[i] = 2;
-			}
-		} else {
-			/* Player survived: check for mission completion.
-			 * Primary complete, OR secondary complete when mis_var[2]==3
-			 * (special mission type that allows secondary-only progression). */
-			uint8_t mis_var2 = mission_file_header.mission.win_type;
-			if (mission.primary_complete == 1 || (mission.secondary_complete == 1 && mis_var2 == 3)) {
-				p->battle_cursor[battle]++;
+		/* --- Combat sim mode (mode 1): per-ship/course high scores --- */
+		if (mission.mission_mode == 1) {
+			uint8_t ship = p->cur_combat_ship;
+			uint8_t course = p->combat_course_cursor[ship];
 
-				for (i = 0; i < 256; i++)
-					p->linked_data[i] = mission.mission_linked_data[i];
+			if ((uint32_t)total_score > (uint32_t)p->combat_score[ship][course])
+				p->combat_score[ship][course] = total_score;
 
-				if (mission.secondary_complete == 1 && mis_var2 != 2) {
-					uint32_t sec_total;
-					uint8_t sec_rank;
+			if (mission.primary_complete == 1 && !p->combat_complete[ship][course]) {
+				uint16_t won;
+				uint16_t s;
+				uint16_t c;
 
-					p->secret_complete_bits[battle] |= battlemask[cur_mis];
+				p->combat_complete[ship][course] = 1;
 
-					p->secret_completions++;
-					sec_total = total_score + p->secret_score;
-					p->secret_score = sec_total;
+				won = 0;
+				for (s = 0; s < NUM_SHIPS; s++)
+					for (c = 0; c < 8; c++)
+						if (p->combat_complete[s][c])
+							won++;
 
-					sec_rank = p->secret_order_rank;
-					if (sec_rank < 9 && sec_total >= secretscores[sec_rank] &&
-						p->secret_completions >= secretcompletioncnts[sec_rank]) {
-						p->secret_order_rank++;
-						mission.mission_secret_medal = p->secret_order_rank;
-					}
+				if (won >= 8 && !p->rank) {
+					p->rank = 1;
+					mission.mission_new_rank = 1;
 				}
+			}
+		}
+		/* --- Battle mode (mode 4): battle progression --- */
+		else if (mission.mission_mode == 4) {
+			uint8_t battle = p->cur_battle;
+			uint8_t cur_mis = p->battle_cursor[battle];
 
-				if (mission.bonus_complete == 1)
-					p->mission_bonus_bits[battle] |= battlemask[cur_mis];
+			if ((uint32_t)total_score > (uint32_t)p->tour_score[battle][cur_mis])
+				p->tour_score[battle][cur_mis] = total_score;
+
+			/* player_status: 0 = dead, 1 = captured/failed */
+			if (mission.player_status == 0 || mission.player_status == 1) {
+				for (i = 0; i < NUM_BATTLES; i++) {
+					if (p->battle_status[i] == 1)
+						p->battle_status[i] = 2;
+				}
+			} else {
+				/* Player survived: check for mission completion.
+				 * Primary complete, OR secondary complete when mis_var[2]==3
+				 * (special mission type that allows secondary-only progression). */
+				uint8_t mis_var2 = mission_file_header.mission.win_type;
+				if (mission.primary_complete == 1 || (mission.secondary_complete == 1 && mis_var2 == 3)) {
+					p->battle_cursor[battle]++;
+
+					for (i = 0; i < 256; i++)
+						p->linked_data[i] = mission.mission_linked_data[i];
+
+					if (mission.secondary_complete == 1 && mis_var2 != 2) {
+						uint32_t sec_total;
+						uint8_t sec_rank;
+
+						p->secret_complete_bits[battle] |= battlemask[cur_mis];
+
+						p->secret_completions++;
+						sec_total = total_score + p->secret_score;
+						p->secret_score = sec_total;
+
+						sec_rank = p->secret_order_rank;
+						if (sec_rank < 9 && sec_total >= secretscores[sec_rank] &&
+							p->secret_completions >= secretcompletioncnts[sec_rank]) {
+							p->secret_order_rank++;
+							mission.mission_secret_medal = p->secret_order_rank;
+						}
+					}
+
+					if (mission.bonus_complete == 1)
+						p->mission_bonus_bits[battle] |= battlemask[cur_mis];
+				}
 			}
 		}
 	}
 
-write_and_exit:
 	/* Preserve the pre-mission backup slot for automatic pilot restore. */
 #ifdef TIE_MODERN
 	PilotRecord_encode((uint8_t*)loadbuffer, p);
@@ -777,59 +812,66 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 		fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
 #endif
 
-	font1_buf = malloc(34600);
-	if (!font1_buf)
+	font1handle = xmemhdl_Alloc_Handle(34600, LANDRU_MEMORY_DEFAULT);
+	if (!font1handle)
 		fail = 1;
 
-	font2_buf = malloc(20600);
-	if (!font2_buf)
+	font2handle = xmemhdl_Alloc_Handle(20600, LANDRU_MEMORY_DEFAULT);
+	if (!font2handle)
 		fail = 1;
 
-	log1_buf = malloc(screen_buffer_size);
-	if (!log1_buf)
+	log1handle = xmemhdl_Alloc_Handle((uint32_t)screen_buffer_size, LANDRU_MEMORY_DEFAULT);
+	if (!log1handle)
 		fail = 1;
 
-	log2_buf = malloc(screen_buffer_size);
-	if (!log2_buf)
+	log2handle = xmemhdl_Alloc_Handle((uint32_t)screen_buffer_size, LANDRU_MEMORY_DEFAULT);
+	if (!log2handle)
 		fail = 1;
 
 	/* EdgeHeader contains host pointers, so allocate by record count. */
-	flightbuf_small = malloc(TRACE2_EDGEINFO_CAP * sizeof(trace2_EdgeInfo));
-	if (!flightbuf_small)
+	flightbuf_small_handle = xmemhdl_Alloc_Handle((uint32_t)(TRACE2_EDGEINFO_CAP * sizeof(trace2_EdgeInfo)),
+												  LANDRU_MEMORY_DEFAULT);
+	if (!flightbuf_small_handle)
 		fail = 1;
 
-	flightbuf_big = malloc(TRACE2_EDGEHEADER_CAP * sizeof(trace2_EdgeHeader));
-	if (!flightbuf_big)
+	flightbuf_big_handle = xmemhdl_Alloc_Handle((uint32_t)(TRACE2_EDGEHEADER_CAP * sizeof(trace2_EdgeHeader)),
+												LANDRU_MEMORY_DEFAULT);
+	if (!flightbuf_big_handle)
 		fail = 1;
 
-	panelparts_buf = malloc(0x1ADB0);
-	if (!panelparts_buf)
+	panelpartshandle = xmemhdl_Alloc_Handle(0x1ADB0, LANDRU_MEMORY_DEFAULT);
+	if (!panelpartshandle)
 		fail = 1;
-	/* Host panel storage remains permanently addressable. */
-	panelpartsptr = panelparts_buf;
+	/* PORT: panel code keeps this pointer instead of relocking the handle. */
+	panelpartsptr = xmemhdl_Lock_Handle(panelpartshandle);
 
-	maproomicons_buf = malloc(31060);
-	if (!maproomicons_buf)
-		fail = 1;
-
-	rundiff_buf = malloc(19452);
-	if (!rundiff_buf)
+	maproomiconshandle = xmemhdl_Alloc_Handle(31060, LANDRU_MEMORY_DEFAULT);
+	if (!maproomiconshandle)
 		fail = 1;
 
-	/* One complete fixed-size replay chunk. calloc keeps temporary-buffer
-	 * snapshots deterministic when the final chunk is only partially used. */
-	replaybuffer_buf = calloc(REPLAY_INPUT_CHUNK_FRAMES, REPLAYINPUTFRAME_DISK_SIZE);
-	if (!replaybuffer_buf)
+	rundiffhandle = xmemhdl_Alloc_Handle(19452, LANDRU_MEMORY_DEFAULT);
+	if (!rundiffhandle)
 		fail = 1;
 
-	messagelog_buf = malloc(32000);
-	if (!messagelog_buf)
+	/* One complete fixed-size replay chunk. */
+#ifdef TIE_MODERN
+	/* PORT: cleared storage keeps temporary-buffer snapshots deterministic
+	 * when the final chunk is only partially used. */
+	replaybufferhandle = xmemhdl_Alloc_Clear_Handle(REPLAY_INPUT_BUFFER_BYTES, LANDRU_MEMORY_DEFAULT);
+#else
+	replaybufferhandle = xmemhdl_Alloc_Handle(REPLAY_INPUT_BUFFER_BYTES, LANDRU_MEMORY_DEFAULT);
+#endif
+	if (!replaybufferhandle)
+		fail = 1;
+
+	messageloghandle = xmemhdl_Alloc_Handle(32000, LANDRU_MEMORY_DEFAULT);
+	if (!messageloghandle)
 		fail = 1;
 
 	if (musicenabled && TieMusicPolicy_UsesImuse()) {
 		fmusic_allocmusicbuffer();
-		music_handle_buf = malloc(0x8000);
-		if (!music_handle_buf)
+		musichandle = xmemhdl_Alloc_Handle(0x8000, LANDRU_MEMORY_DEFAULT);
+		if (!musichandle)
 			fail = 1;
 	} else {
 		music_buffer = NULL;
@@ -841,18 +883,18 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 		fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
 
 	if (musicenabled && TieMusicPolicy_UsesImuse())
-		music_buffer = music_handle_buf;
+		music_buffer = xmemhdl_Lock_Handle(musichandle);
 
-	fontptrtiny = font1_buf;
-	fontptrmicro = font2_buf;
+	fontptrtiny = xmemhdl_Lock_Handle(font1handle);
+	fontptrmicro = xmemhdl_Lock_Handle(font2handle);
 
-	newbuf = log1_buf;
+	newbuf = xmemhdl_Lock_Handle(log1handle);
 	logbuf2_selectbuffer(newbuf);
 
-	xtransdataptr = log2_buf;
-	loadbuffer = log2_buf;
+	xtransdataptr = xmemhdl_Lock_Handle(log2handle);
+	loadbuffer = xtransdataptr;
 
-	replaybufferstart = replaybuffer_buf;
+	replaybufferstart = xmemhdl_Lock_Handle(replaybufferhandle);
 	if (TieProfile_UsesTie98Logic()) {
 		memset(newbuf, 0x40, (size_t)screenXRes * screenYRes * g_flight16bppBytesPerPixel);
 		fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "vga.pac", xtransdataptr);
@@ -913,21 +955,28 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 
 // FUNCTION: TIE95 0x212E4
 void fediskio_UnlockGlobals(void) {
+	if (musicenabled && TieMusicPolicy_UsesImuse())
+		xmemhdl_Unlock_Handle(musichandle);
 #ifndef TIE_MODERN
 	xmemhdl_Unlock_Handle(stringdatahandle);
 #endif
+	xmemhdl_Unlock_Handle(font1handle);
+	xmemhdl_Unlock_Handle(font2handle);
+	xmemhdl_Unlock_Handle(log1handle);
+	xmemhdl_Unlock_Handle(log2handle);
+	xmemhdl_Unlock_Handle(replaybufferhandle);
 }
 
 // FUNCTION: TIE95 0x21348
 void fediskio_RelockGlobals(void) {
 	/* Rebind the string groups and active font/buffer pointers. */
 	if (musicenabled && TieMusicPolicy_UsesImuse())
-		music_buffer = music_handle_buf;
+		music_buffer = xmemhdl_Lock_Handle(musichandle);
 
 	fediskio_loadstringdata(0);
 
-	fontptrtiny = font1_buf;
-	fontptrmicro = font2_buf;
+	fontptrtiny = xmemhdl_Lock_Handle(font1handle);
+	fontptrmicro = xmemhdl_Lock_Handle(font2handle);
 	/* Re-bind the active font to the freshly relocked handle. Without
 	 * this, callers continue to read through the old curfontptr which
 	 * may have been freed/recycled by the resource swap. */
@@ -935,58 +984,62 @@ void fediskio_RelockGlobals(void) {
 		curfontptr = fontptrtiny;
 	else if (fontflag == 2)
 		curfontptr = fontptrmicro;
-	newbuf = log1_buf;
+	newbuf = xmemhdl_Lock_Handle(log1handle);
 	logbuf2_selectbuffer(newbuf);
-	xtransdataptr = log2_buf;
-	loadbuffer = log2_buf;
-	replaybufferstart = replaybuffer_buf;
-	/* panelpartsptr is bound once at fediskio_AllocateFlightHandles
-	 * allocation time; retail relock doesn't touch it either. */
+	xtransdataptr = xmemhdl_Lock_Handle(log2handle);
+	loadbuffer = xtransdataptr;
+	replaybufferstart = xmemhdl_Lock_Handle(replaybufferhandle);
+	/* panelpartsptr is bound once at allocation time; retail relock
+	 * doesn't touch panelpartshandle either. */
 }
 
 // FUNCTION: TIE95 0x213F0
 void fediskio_FreeFlightHandles(void) {
 	uint16_t i;
+
+	if (musicenabled && TieMusicPolicy_UsesImuse())
+		xmemhdl_Unlock_Handle(musichandle);
 #ifndef TIE_MODERN
 	xmemhdl_Unlock_Handle(stringdatahandle);
 #endif
+	xmemhdl_Unlock_Handle(font1handle);
+	xmemhdl_Unlock_Handle(font2handle);
+	xmemhdl_Unlock_Handle(log1handle);
+	xmemhdl_Unlock_Handle(log2handle);
+	xmemhdl_Unlock_Handle(replaybufferhandle);
 
 	if (musicenabled && TieMusicPolicy_UsesImuse()) {
-		free(music_handle_buf);
-		music_handle_buf = NULL;
+		xmemhdl_Free_Handle(musichandle);
 		fmusic_freemusic();
 	}
 	fsfx_freesfx();
 
 #ifdef TIE_MODERN
 	TieStringTable_Clear();
+	/* PORT: the relocated STRINGS.DAT cells were released; later frontend
+	 * fatal errors use the built-in messages instead of freed storage. */
+	fatalerrstrings = fatalerrstr;
 #else
 	xmemhdl_Free_Handle(stringdatahandle);
 #endif
-	free(font1_buf);
-	font1_buf = NULL;
-	free(font2_buf);
-	font2_buf = NULL;
-	free(log1_buf);
-	log1_buf = NULL;
-	free(log2_buf);
-	log2_buf = NULL;
-	free(flightbuf_small);
-	flightbuf_small = NULL;
-	free(flightbuf_big);
-	flightbuf_big = NULL;
-	free(panelparts_buf);
-	panelparts_buf = NULL;
+	xmemhdl_Free_Handle(font1handle);
+	xmemhdl_Free_Handle(font2handle);
+	xmemhdl_Free_Handle(log1handle);
+	xmemhdl_Free_Handle(log2handle);
+	xmemhdl_Free_Handle(flightbuf_small_handle);
+	xmemhdl_Free_Handle(flightbuf_big_handle);
+#ifdef TIE_MODERN
+	/* PORT: BPFLIGHT checks these handles before allocating preview pools. */
+	flightbuf_small_handle = LANDRU_NULL_HANDLE;
+	flightbuf_big_handle = LANDRU_NULL_HANDLE;
+#endif
+	xmemhdl_Free_Handle(panelpartshandle);
 	panelpartsptr = NULL;
-	panel_freeviewbufs();
-	free(maproomicons_buf);
-	maproomicons_buf = NULL;
-	free(rundiff_buf);
-	rundiff_buf = NULL;
-	free(replaybuffer_buf);
-	replaybuffer_buf = NULL;
-	free(messagelog_buf);
-	messagelog_buf = NULL;
+	TiePanelViewBuffers_FreeAll();
+	xmemhdl_Free_Handle(maproomiconshandle);
+	xmemhdl_Free_Handle(rundiffhandle);
+	xmemhdl_Free_Handle(replaybufferhandle);
+	xmemhdl_Free_Handle(messageloghandle);
 
 	/* Free species model blobs. fediskio_loadspecies shares one malloc
 	 * across every species[] entry that maps to the same lfd_file +
@@ -1114,55 +1167,6 @@ void fediskio_loadstringdata(int read_file) {
 #endif
 }
 
-/* Monotonically-increasing counter bumped after fediskio_loadspecies
- * completes. Starts at 0 (no mission loaded yet) and increments by 1
- * on each successful load. Hosts read it via TieRecoveredData_MissionLoadGeneration()
- * and compare against their cached value to detect a mission change. */
-static uint32_t s_mission_load_generation;
-
-/* PORT: optional exact-size asset read replacing the original FILE-based
- * mission/newpal inverse-table loading branches. */
-static int fediskio_try_load_tie98_inverse_palette(const char* filename) {
-	size_t bytes_read;
-
-	if (!fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, filename, "rb", 0))
-		return 0;
-	bytes_read =
-		TieStorage_Read(tie98_flight_inverse_palette, 1, sizeof tie98_flight_inverse_palette, fileptr);
-	fediskio_tryclosefile(0);
-	if (bytes_read == sizeof tie98_flight_inverse_palette)
-		return 1;
-	TieDiagnostics_Log(TIE_LOG_WARN, "TIE98 inverse palette has invalid size: %s\n", filename);
-	return 0;
-}
-
-/* RECOVERY HELPER: extracted from the 8-bpp preamble of TIE98
- * FEDISKIO_loadspecies. */
-static void fediskio_prepare_tie98_inverse_palette(void) {
-	char inverse_filename[sizeof missionfilename];
-	int loaded = 0;
-	size_t mission_name_length;
-
-	g_inversePaletteTable = tie98_flight_inverse_palette;
-
-	mission_name_length = strlen(missionfilename);
-	if (mission_name_length < sizeof inverse_filename) {
-		char* extension;
-
-		memcpy(inverse_filename, missionfilename, mission_name_length + 1);
-		extension = strrchr(inverse_filename, '.');
-		if (extension && (size_t)(extension - inverse_filename) + sizeof ".inv" <= sizeof inverse_filename) {
-			memcpy(extension, ".inv", sizeof ".inv");
-			loaded = fediskio_try_load_tie98_inverse_palette(inverse_filename);
-		}
-	}
-	if (!loaded)
-		loaded = fediskio_try_load_tie98_inverse_palette("newpal.inv");
-	if (!loaded)
-		Color_BuildRgb565ToPaletteIndexTable(tie98_flight_inverse_palette, 0x40, 0x100);
-	RenderTexture_ResetSoftwareShadeTableCache();
-}
-
 // FUNCTION: TIE95 0x218D8
 // FUNCTION: TIE98 0x41BA70
 void fediskio_loadspecies(void) {
@@ -1174,8 +1178,47 @@ void fediskio_loadspecies(void) {
 	int lfd_idx, entry_idx;
 	uint16_t i;
 
-	if (TieProfile_UsesTie98Logic() && !g_useHardware3D && g_flight16bppBytesPerPixel == 1)
-		fediskio_prepare_tie98_inverse_palette();
+	if (TieProfile_UsesTie98Logic() && !g_useHardware3D && g_flight16bppBytesPerPixel == 1) {
+		/* TIE98 8-bpp flight: load the mission's .inv table, then NEWPAL.INV,
+		 * else build it. The mission extension is swapped in place. */
+		size_t name_length = strlen(missionfilename);
+		int loaded = 0;
+
+		g_inversePaletteTable = tie98_flight_inverse_palette;
+		if (name_length >= 3) {
+			char saved_extension[3];
+
+			memcpy(saved_extension, missionfilename + name_length - 3, 3);
+			memcpy(missionfilename + name_length - 3, "inv", 3);
+			if (fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, missionfilename, "rb", 0)) {
+#ifdef TIE_MODERN
+				/* PORT: accept only a complete table; the original read the file
+				 * unchecked and wrote a rebuilt table back beside the mission. */
+				loaded = TieStorage_FileLength(fileptr) == (int32_t)sizeof tie98_flight_inverse_palette;
+#else
+				loaded = 1;
+#endif
+				fediskio_tryclosefile(0);
+				if (loaded)
+					fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, missionfilename,
+												 g_inversePaletteTable);
+			}
+			memcpy(missionfilename + name_length - 3, saved_extension, 3);
+		}
+		if (!loaded && fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, "newpal.inv", "rb", 0)) {
+#ifdef TIE_MODERN
+			loaded = TieStorage_FileLength(fileptr) == (int32_t)sizeof tie98_flight_inverse_palette;
+#else
+			loaded = 1;
+#endif
+			fediskio_tryclosefile(0);
+			if (loaded)
+				fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "newpal.inv", g_inversePaletteTable);
+		}
+		if (!loaded)
+			Color_BuildRgb565ToPaletteIndexTable(tie98_flight_inverse_palette, 0x40, 0x100);
+		RenderTexture_ResetSoftwareShadeTableCache();
+	}
 
 	if (TieProfile_UsesTie98Logic()) {
 		char error[768];
@@ -1212,8 +1255,7 @@ void fediskio_loadspecies(void) {
 		/* Read LFD file header (16 bytes) */
 		TieStorage_Read(lfd_header, 1, 16, fileptr);
 
-		/* Read the directory into log2_buf. */
-		loadbuffer = log2_buf;
+		/* Read the directory into loadbuffer (the locked log2handle). */
 		/* LFD sub-header layout: type[4] + name[8] + size[4]. The size
 		 * dword lives at offset +12, not +8. Every other LFD parser in
 		 * the codebase (fsfx, fmusic, landru/res)
@@ -1373,97 +1415,10 @@ void fediskio_loadspecies(void) {
 		deepspacecolor = deep_space_index;
 	}
 
-	/* Bump the mission-load generation. Hosts use this to detect that
-	 * the species_table model_handle set has been refreshed and they
-	 * can warm their own per-species caches in one shot (or evict + re-
-	 * warm on mission switch). See TieRecoveredData_MissionLoadGeneration(). */
-	s_mission_load_generation++;
-}
-
-uint32_t TieRecoveredData_MissionLoadGeneration(void) { return s_mission_load_generation; }
-
-static bool tie_species_lfd_location(uint16_t species_idx, uint8_t expected_source,
-									 TieSpeciesLfdLocation* out) {
-	const SpeciesEntry* entry;
-
-	if (out)
-		memset(out, 0, sizeof *out);
-	if (!out || species_idx >= NUM_SPECIES)
-		return false;
-
-	entry = &species_table[species_idx];
-	if (!(entry->flags & 2) || !(entry->load_flags & 0x18) || (entry->load_flags & 3) != expected_source ||
-		((entry->load_flags & 0x40) && !mission.train_craft_type) || !entry->model_handle ||
-		entry->lfd_file >= 3)
-		return false;
-
-	out->entry = entry->lfd_entry;
-	out->resource_set = tie_is_high_resolution_flight() ? TIE_SPECIES_LFD_RES640 : TIE_SPECIES_LFD_RES320;
-	out->lfd_file = entry->lfd_file;
-	return true;
-}
-
-bool TieRecoveredData_SpeciesDosModelLocation(uint16_t species_idx, TieSpeciesLfdLocation* out) {
-	return tie_species_lfd_location(species_idx, 1, out);
-}
-
-bool TieRecoveredData_SpeciesXactLocation(uint16_t species_idx, TieSpeciesLfdLocation* out) {
-	return tie_species_lfd_location(species_idx, 2, out);
-}
-
-/* RECOVERY HELPER: removes the repeated hardpoint-to-group construction for
- * both laser slots and both missile slots in TIE98 FEDISKIO_fillinspec. */
-static uint8_t fediskio_fillinspec_tie98_appendweapongroup(uint8_t result, SpecData* spec,
-														   uint8_t weapon_type, bool laser,
-														   uint8_t model_type) {
-	const int mesh_count = modelmesh_getcount(model_type);
-	const int target_type = (uint8_t)(weapon_type + 120);
-	const uint8_t start = result;
-	int mesh;
-
-	for (mesh = 0; mesh < mesh_count && result < 16; ++mesh) {
-		const int mesh_type = modelmesh_gettype(model_type, mesh);
-		int paired = -1;
-		const int count = modelmesh_counthardpoints(model_type, mesh);
-		int hardpoint;
-
-		for (hardpoint = 0; hardpoint < count && result < 16; ++hardpoint) {
-			int type, x, y, z;
-			modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
-			if (type != target_type)
-				continue;
-			if (laser && paired >= 0) {
-				spec->hp[paired].link = modelmesh_getalternatehardpointindex(model_type, mesh, hardpoint);
-				paired = -1;
-				continue;
-			}
-			if (model_type == 53) {
-				x /= 2;
-				y /= 2;
-				z /= 2;
-			}
-			/* Shared SpecData uses flight-local (side, up, forward) order. */
-			spec->hp[result].x = x;
-			spec->hp[result].y = z;
-			spec->hp[result].z = y;
-			spec->hp[result].component = mesh;
-			spec->hp[result].link = -1;
-			if (laser && (mesh_type == TIE_MESH_GUN_TURRET || mesh_type == TIE_MESH_ROTARY_GUN_TURRET))
-				paired = result;
-			++result;
-		}
-	}
-	if (result != start) {
-		uint8_t* first = laser ? spec->laser_start : spec->missile_start;
-		uint8_t* last = laser ? spec->laser_end : spec->missile_end;
-		uint8_t* count = laser ? spec->laser_count : spec->missile_count;
-		const int slot = laser ? (weapon_type == spec->laser_type[0] ? 0 : 1)
-							   : (weapon_type == spec->missile_type[0] ? 0 : 1);
-		first[slot] = start;
-		last[slot] = result - 1;
-		count[slot] = result - start;
-	}
-	return result;
+#ifdef TIE_MODERN
+	/* Hosts refresh per-species caches when the generation changes. */
+	TieRecoveredData_AdvanceMissionLoadGeneration();
+#endif
 }
 
 // FUNCTION: TIE98 0x41BE70
@@ -1524,6 +1479,7 @@ void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
 			int special_hardpoint;
 			uint8_t weapon_type;
 			int known_weapon_type;
+			uint8_t weapon_class;
 
 			int slot;
 
@@ -1578,7 +1534,14 @@ void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
 			if (known_weapon_type)
 				continue;
 
-			if (tie98_hardpoint_weapon_class[type] == 1) {
+#ifdef TIE_MODERN
+			/* PORT: retail reads the zero padding and strings after the
+			 * 33-entry table for unknown OPT types; none classify as 1 or 2. */
+			weapon_class = (unsigned int)type < sizeof weaponsystype ? weaponsystype[type] : 0;
+#else
+			weapon_class = weaponsystype[type];
+#endif
+			if (weapon_class == 1) {
 				int slot;
 				for (slot = 0; slot < 2 && spec->laser_type[slot]; ++slot)
 					;
@@ -1591,7 +1554,7 @@ void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
 					spec->laser_fire_mode[slot] = 2;
 				else
 					spec->laser_fire_mode[slot] = (type == 5 || type == 16);
-			} else if (tie98_hardpoint_weapon_class[type] == 2) {
+			} else if (weapon_class == 2) {
 				int slot;
 				for (slot = 0; slot < 2 && spec->missile_type[slot]; ++slot)
 					;
@@ -1601,23 +1564,114 @@ void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
 		}
 	}
 
+	/* Build laser hardpoint position tables (up to 16 total). */
 	result = 0;
 	for (slot = 0; slot < 2; ++slot) {
+		int target_type;
+		uint8_t start;
+
 		if (result == 16) {
 			spec->laser_type[slot] = 0;
 			spec->laser_fire_mode[slot] = 0;
 			continue;
 		}
-		result = fediskio_fillinspec_tie98_appendweapongroup(result, spec, spec->laser_type[slot], true,
-															 model_type);
+
+		target_type = (uint8_t)(spec->laser_type[slot] + 120);
+		start = result;
+		for (mesh = 0; mesh < mesh_count; ++mesh) {
+			const int hardpoint_count = modelmesh_counthardpoints(model_type, mesh);
+			int mesh_type;
+			int paired;
+			int hardpoint;
+
+			if (!hardpoint_count)
+				continue;
+			mesh_type = modelmesh_gettype(model_type, mesh);
+			paired = 255;
+			for (hardpoint = 0; hardpoint < hardpoint_count; ++hardpoint) {
+				int type, x, y, z;
+
+				modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
+				if (type != target_type)
+					continue;
+				if (paired == 255) {
+					if (model_type == 53) {
+						x /= 2;
+						y /= 2;
+						z /= 2;
+					}
+					/* Shared SpecData uses flight-local (side, up, forward) order. */
+					spec->hp[result].x = x;
+					spec->hp[result].y = z;
+					spec->hp[result].z = y;
+					spec->hp[result].component = mesh;
+					spec->hp[result].link = -1;
+					if (mesh_type == TIE_MESH_GUN_TURRET || mesh_type == TIE_MESH_ROTARY_GUN_TURRET)
+						paired = result;
+					if (++result == 16)
+						break;
+				} else {
+					spec->hp[paired].link = modelmesh_getalternatehardpointindex(model_type, mesh, hardpoint);
+					paired = 255;
+				}
+			}
+			if (result == 16)
+				break;
+		}
+
+		if (result != start) {
+			spec->laser_start[slot] = start;
+			spec->laser_end[slot] = result - 1;
+			spec->laser_count[slot] = result - start;
+		}
 	}
+
+	/* Build missile/warhead hardpoint position tables. */
 	for (slot = 0; slot < 2; ++slot) {
+		int target_type;
+		uint8_t start;
+
 		if (result == 16) {
 			spec->missile_type[slot] = 0;
 			continue;
 		}
-		result = fediskio_fillinspec_tie98_appendweapongroup(result, spec, spec->missile_type[slot], false,
-															 model_type);
+
+		target_type = (uint8_t)(spec->missile_type[slot] + 120);
+		start = result;
+		for (mesh = 0; mesh < mesh_count; ++mesh) {
+			const int hardpoint_count = modelmesh_counthardpoints(model_type, mesh);
+			int hardpoint;
+
+			if (!hardpoint_count)
+				continue;
+			for (hardpoint = 0; hardpoint < hardpoint_count; ++hardpoint) {
+				int type, x, y, z;
+
+				modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
+				if (type != target_type)
+					continue;
+				if (model_type == 53) {
+					x /= 2;
+					y /= 2;
+					z /= 2;
+				}
+				spec->hp[result].x = x;
+				spec->hp[result].y = z;
+				spec->hp[result].z = y;
+				spec->hp[result].component = mesh;
+				spec->hp[result].link = -1;
+				if (++result == 16)
+					break;
+			}
+			if (result == 16)
+				break;
+		}
+
+		if (result != start) {
+			spec->missile_start[slot] = start;
+			spec->missile_end[slot] = result - 1;
+			spec->missile_count[slot] = result - start;
+		}
 	}
 }
 

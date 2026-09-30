@@ -151,12 +151,12 @@ void static_drawstaticobject(uint16_t slot_idx) {
 
 		/* Project onto screen, require |high16| <= 1 on both axes
 		 * (i.e. within one screen-width of the visible rect). */
-		sx_raw = (uint32_t)transfm2_getscreencoordx(objecteyex, objecteyez);
+		sx_raw = (uint32_t)transfm2_getscreenx(objecteyex, objecteyez);
 		sx_hi = (int32_t)sx_raw >> 16;
 		if (sx_hi > 0 || sx_hi < -1)
 			return;
 
-		sy_raw = (uint32_t)transfm2_getscreencoordy(objecteyey, objecteyez);
+		sy_raw = (uint32_t)transfm2_getscreeny(objecteyey, objecteyez);
 		sy_hi = (int32_t)sy_raw >> 16;
 		if (sy_hi > 0 || sy_hi < -1)
 			return;
@@ -792,7 +792,7 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 	fview_calcrotatemove(aim_z, aim_xy, p);
 
 	/* Step from the muzzle to the projectile model origin. */
-	plen = (int32_t)TieProjectileLaunchOffset_Get((unsigned int)ptype);
+	plen = (int32_t)(TieProfile_UsesTie98Logic() ? tie98_projectilelength : projectilelength)[ptype];
 	p->world_x_prev = sx_w;
 	p->world_y_prev = sy_w;
 	p->world_z_prev = sz_w;

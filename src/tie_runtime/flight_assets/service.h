@@ -21,6 +21,10 @@ bool TieFlightAssets_SelectProfile(const TieFlightProfile* profile, char* error,
 const TieFlightAssetSource* TieFlightAssets_CurrentSource(void);
 TieFlightModelApi TieFlightAssets_ModelApi(void);
 TieFlightModelApi TieFlightAssets_Tie98OriginalModelApi(void);
+/* Frontend BPFLIGHT renders the stock TIE98 OPT even when authored GLB models
+ * drive flight simulation; query that stock repository's aggregate extent. */
+bool TieFlightAssets_Tie98OriginalMaxExtent(uint16_t model_type, int* extent, char* error,
+											size_t error_capacity);
 Tie98OptApi TieFlightAssets_NativeOptApi(void);
 bool TieFlightAssets_Tie98Available(void);
 uint32_t TieFlightAssets_ProfileGeneration(void);

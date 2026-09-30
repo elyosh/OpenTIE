@@ -3,6 +3,7 @@
 #include <limits.h>
 
 #include "tie/tie.h"
+#include "tie_runtime/runtime/replay_format.h"
 
 enum { REPLAY_MAX_FRAME_DELTA_US = 64000 };
 
@@ -19,7 +20,7 @@ bool TieReplayTiming_CurrentRecordAvailable(void) {
 bool TieReplayTiming_DecodeCurrentInputFrame(ReplayInputFrame* destination) {
 	if (!destination || !TieReplayTiming_CurrentRecordAvailable())
 		return false;
-	ReplayInputFrame_decode(destination, (const uint8_t*)replayptr);
+	TieReplayFormat_DecodeInputFrame(destination, (const uint8_t*)replayptr);
 	return (destination->throttle_command <= UINT16_MAX || destination->throttle_command == UINT32_MAX) &&
 		   destination->frameticks > 0 && destination->frameticks <= REPLAY_MAX_FRAME_DELTA_US / 4000u &&
 		   destination->delta_us <= REPLAY_MAX_FRAME_DELTA_US;

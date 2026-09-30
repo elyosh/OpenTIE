@@ -1,6 +1,8 @@
 #include "tie_runtime/audio/music_policy.h"
 #include "tie_runtime/audio/imuse_session.h"
 
+#include "tie/tie.h"
+
 static uint64_t music_clock_us;
 
 TieMusicSource TieMusicPolicy_Source(void) { return TieAudio_Config()->music_source; }
@@ -15,3 +17,10 @@ void TieMusicPolicy_AdvanceTime(int32_t delta_us) {
 }
 
 uint32_t TieMusicPolicy_NowMs(void) { return (uint32_t)(music_clock_us / 1000u); }
+
+void TieMusicPolicy_UpdateFlightMusic(void) {
+	if (TieMusicPolicy_UsesTie98())
+		tie_updatemusic_tie98();
+	else
+		tie_updatemusic();
+}

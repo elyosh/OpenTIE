@@ -8,8 +8,6 @@
 #include "tie/textext.h"
 #include "tie/tie.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
-#include "tie_runtime/runtime/profile.h"
-#include "tie_runtime/runtime/runtime.h"
 
 #include "landru/actanim.h"
 #include "landru/actdelt.h"
@@ -66,7 +64,6 @@ typedef struct ComputerResourceSpec {
 	const char* awards1[6];
 	const char* awards2_archive;
 	const char* awards2[6];
-	bool load_expansion_palette;
 } ComputerResourceSpec;
 
 /* DATA: TIE95 COMPUTER_Do_Computer_Dialog 0x82AD0. */
@@ -85,7 +82,6 @@ static const ComputerResourceSpec computer_vga_resources = {
 	/* awards1 */ { "mislboat", "a-medals", "amed-obj", "medpal", "coins", "comptat2" },
 	/* awards2_archive */ "awards2.lfd",
 	/* awards2 */ { "mislboat", "b-medals", "bmed-obj", "medpal", "coins", "comptat2" },
-	/* load_expansion_palette */ true,
 };
 
 /* DATA: TIE98 COMPUTER_Do_Computer_Dialog 0x40BA40. The option and
@@ -105,7 +101,6 @@ static const ComputerResourceSpec computer_svga_resources = {
 	/* awards1 */ { "mislboat", "a-medals", "amed-obj", "medpal", "coins", "tattoo" },
 	/* awards2_archive */ "awards2h.lfd",
 	/* awards2 */ { "mislboat", "b-medals", "bmed-obj", "medpal", "coins", "tattoo" },
-	/* load_expansion_palette */ false,
 };
 
 /* ======================================================================
@@ -366,35 +361,84 @@ static const ComputerSpec* active_spec = &computer_specs[0];
  * Static BSS globals
  * ====================================================================== */
 
+// GLOBAL: TIE95 0xFB404
+// GLOBAL: TIE98 0x50F640
 static Palette* medal_palette[4];
+// GLOBAL: TIE95 0xFB414
+// GLOBAL: TIE98 0x50F6F0
 static Actor* medal_actor[14];
+// GLOBAL: TIE95 0xFB44C
+// GLOBAL: TIE98 0x50F610
 static Actor* medal_actor2[10];
+// GLOBAL: TIE95 0xFB474
+// GLOBAL: TIE98 0x50AAD8
 static Actor* computer_actors[8];
+// GLOBAL: TIE95 0xFB494
+// GLOBAL: TIE98 0x50F580
 static uint32_t backup_pilot_points;
-static Palette* medal_palette3[1];
-static Palette* medal_palette2[1];
+// GLOBAL: TIE95 0xFB498
+// GLOBAL: TIE98 0x50F650
 static Input* restore_input;
+// GLOBAL: TIE95 0xFB4AC
+// GLOBAL: TIE98 0x50F5E8
 static Palette* computer_palettes[5];
+// GLOBAL: TIE95 0xFB4C0
+// GLOBAL: TIE98 0x50F76C
 static Input* last_info_input;
+// GLOBAL: TIE95 0xFB49C
+// GLOBAL: TIE98 0x50F770
 static Input* cancel_input;
+// GLOBAL: TIE95 0xFB4A0
+// GLOBAL: TIE98 0x50F590
 static char comp_exit_str[2][6];
+// GLOBAL: TIE95 0xFB4C4
+// GLOBAL: TIE98 0x50F600
 static Input* backup_input;
+// GLOBAL: TIE95 0xFB4C8
+// GLOBAL: TIE98 0x50F5FC
 static Input* next_info_input;
-static Input* open_options_input;
+// GLOBAL: TIE95 0xFB4CC
+// GLOBAL: TIE98 0x50F774
 static Palette* computer_palette;
+// GLOBAL: TIE95 0xFB4D0
+// GLOBAL: TIE98 0x50F6A0
 static int16_t pilot_medal_bonus_status[33];
+// GLOBAL: TIE95 0xFB512
+// GLOBAL: TIE98 0x50F5A0
 static int16_t pilot_medal_status[33];
+// GLOBAL: TIE95 0xFB554
+// GLOBAL: TIE98 0x50F728
 static int16_t pilot_medal_type[33];
+// GLOBAL: TIE95 0xFB596
+// GLOBAL: TIE98 0x50F658
 static int16_t pilot_medal_id[33];
+// GLOBAL: TIE95 0xFB5DA
+// GLOBAL: TIE98 0x50AAF8
 static int16_t restore_pilot;
+// GLOBAL: TIE95 0xFB5DC
+// GLOBAL: TIE98 0x50F63C
 static int16_t backup_pilot_rank;
+// GLOBAL: TIE95 0xFB5D8
+// GLOBAL: TIE98 0x50F6EC
 static int16_t pilot_medal_text;
+// GLOBAL: TIE95 0xFB5DE
+// GLOBAL: TIE98 0x50F6E4
 static int16_t computer_mode;
+// GLOBAL: TIE95 0xFB5E0
+// GLOBAL: TIE98 0x50F778
 static int16_t computer_display;
-static int16_t pilot_medal_page;
-static int16_t pilot_medal_num_pages;
-static int16_t pilot_info_page;
-static int16_t pilot_info_num_pages;
+// GLOBAL: TIE95 0xD17A6
+// GLOBAL: TIE98 0x50F78C
+static int16_t pilot_medal_page = 0;
+// GLOBAL: TIE95 0xD17A8
+// GLOBAL: TIE98 0x50F790
+static int16_t pilot_medal_num_pages = 0;
+// GLOBAL: TIE95 0xD17AA
+// GLOBAL: TIE98 0x50F794
+static int16_t pilot_info_page = 0;
+// GLOBAL: TIE95 0xD17AC
+// GLOBAL: TIE98 0x50F798
+static int16_t pilot_info_num_pages = 0;
 
 /* ======================================================================
  * Init_Computer_Medal — scan pilot record, build medal page arrays
@@ -606,6 +650,8 @@ static void draw_Computer_Gauge(Rect* r, int16_t amount) {
  * Confirmation dialogs
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x86910
+// FUNCTION: TIE98 0x4105A0
 static void idraw_Exit(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	if (!refresh)
 		return;
@@ -618,6 +664,8 @@ static void idraw_Exit(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		xdirty_Dirty_Rect(clip_r);
 }
 
+// FUNCTION: TIE95 0x86968
+// FUNCTION: TIE98 0x410610
 static void iuser_Exit(Input* input, int32_t time) {
 	(void)time;
 
@@ -654,76 +702,78 @@ static Input* Build_Exit(int16_t id) {
 	return the_input;
 }
 
-/* --- Deferred sub-dialog contexts ---------------------------------
- *
- * The three confirmation prompts (Backup, Restore, Exit-to-DOS) all
- * fire from inside iuser callbacks running in the parent computer
- * dialog's task step. The callback can't yield, so it stages a
- * sub-dialog via xdialog_Schedule_Sub_Dialog and a handler runs the
- * post-result action when the sub-dialog pops. */
-typedef struct ComputerSubCtx {
-	Input* sub_dlg;
-	Input* parent_input; /* exit-to-DOS only: the iuser's input ptr */
-} ComputerSubCtx;
+/* In the modern build the confirmation cannot block inside an input
+ * callback. The runtime runs the confirmation as a sub-dialog and then
+ * re-enters the calling callback, where the stored result is returned. */
 
-static ComputerSubCtx s_backup_ctx;
-static ComputerSubCtx s_restore_ctx;
-static ComputerSubCtx s_exitdos_ctx;
+// FUNCTION: TIE95 0x86738
+// FUNCTION: TIE98 0x4101F0
+static int16_t Check_Backup_Pilot(void) {
+	Input* the_input;
+	int16_t retval;
 
-static void after_backup_dialog(int16_t result, void* ctx) {
-	ComputerSubCtx* c = (ComputerSubCtx*)ctx;
-	xinput_Free_Inputs(c->sub_dlg);
-	c->sub_dlg = NULL;
-	if (result != 2) {
-		shipext_Backup_Pilot();
-		backup_pilot_rank = pilot_record.rank;
-		backup_pilot_points = pilot_record.score;
-		xview_Refresh_View();
-	}
-}
-
-static void after_restore_dialog(int16_t result, void* ctx) {
-	ComputerSubCtx* c = (ComputerSubCtx*)ctx;
-	xinput_Free_Inputs(c->sub_dlg);
-	c->sub_dlg = NULL;
-	if (result != 2) {
-		shipext_Restore_Pilot();
-		Init_Computer_Medal();
-		pilot_info_page = 0;
-		restore_pilot = 1;
-		xinpattr_Show_Input(backup_input);
-		xview_Refresh_View();
-	}
-}
-
-static void after_exitdos_dialog(int16_t result, void* ctx) {
-	ComputerSubCtx* c = (ComputerSubCtx*)ctx;
-	xinput_Free_Inputs(c->sub_dlg);
-	c->sub_dlg = NULL;
-	if (result != 2) {
-		c->parent_input->var1 = 1;
-		computer_display = 0;
-	}
-	xview_Refresh_View();
-}
-
-static void schedule_backup_dialog(void) {
-	s_backup_ctx.sub_dlg = Build_Exit(txtCompBackupPilot);
+#ifdef TIE_MODERN
+	if (TieComputer_TakeConfirmResult(&retval))
+		return retval != 2;
+#endif
+	the_input = Build_Exit(txtCompBackupPilot);
 	xio_Set_Mouse_Position(active_spec->confirm_mouse_x, active_spec->confirm_mouse_y);
-	xdialog_Schedule_Sub_Dialog(s_backup_ctx.sub_dlg, after_backup_dialog, &s_backup_ctx);
+#ifdef TIE_MODERN
+	TieComputer_RunConfirm(the_input);
+	return 0;
+#else
+	retval = xdialog_Handle_Dialog_View(the_input);
+	xinput_Free_Inputs(the_input);
+	xdialog_Clear_Dialog_Exit();
+	return retval != 2;
+#endif
 }
 
-static void schedule_restore_dialog(void) {
-	s_restore_ctx.sub_dlg = Build_Exit(txtCompRestorePilot);
+// FUNCTION: TIE95 0x86778
+// FUNCTION: TIE98 0x410240
+static int16_t Check_Restore_Pilot(void) {
+	Input* the_input;
+	int16_t retval;
+
+#ifdef TIE_MODERN
+	if (TieComputer_TakeConfirmResult(&retval))
+		return retval != 2;
+#endif
+	the_input = Build_Exit(txtCompRestorePilot);
 	xio_Set_Mouse_Position(active_spec->confirm_mouse_x, active_spec->confirm_mouse_y);
-	xdialog_Schedule_Sub_Dialog(s_restore_ctx.sub_dlg, after_restore_dialog, &s_restore_ctx);
+#ifdef TIE_MODERN
+	TieComputer_RunConfirm(the_input);
+	return 0;
+#else
+	retval = xdialog_Handle_Dialog_View(the_input);
+	xinput_Free_Inputs(the_input);
+	xdialog_Clear_Dialog_Exit();
+	return retval != 2;
+#endif
 }
 
-static void schedule_exitdos_dialog(Input* parent_input) {
-	s_exitdos_ctx.sub_dlg = Build_Exit(txtCompExitDOS);
-	s_exitdos_ctx.parent_input = parent_input;
+/* TIE98's Check_Exit_To_DOS (0x4102E0) also services the window-close
+ * request, which this body does not model. */
+// FUNCTION: TIE95 0x867B8
+static int16_t Exit_To_DOS(void) {
+	Input* the_input;
+	int16_t retval;
+
+#ifdef TIE_MODERN
+	if (TieComputer_TakeConfirmResult(&retval))
+		return retval != 2;
+#endif
+	the_input = Build_Exit(txtCompExitDOS);
 	xio_Set_Mouse_Position(active_spec->confirm_mouse_x, active_spec->confirm_mouse_y);
-	xdialog_Schedule_Sub_Dialog(s_exitdos_ctx.sub_dlg, after_exitdos_dialog, &s_exitdos_ctx);
+#ifdef TIE_MODERN
+	TieComputer_RunConfirm(the_input);
+	return 0;
+#else
+	retval = xdialog_Handle_Dialog_View(the_input);
+	xinput_Free_Inputs(the_input);
+	xdialog_Clear_Dialog_Exit();
+	return retval != 2;
+#endif
 }
 
 /* ======================================================================
@@ -794,12 +844,6 @@ static void update_Computer_Prefs(int16_t x, int16_t y) {
 	}
 	if (refresh)
 		xview_Refresh_View();
-}
-
-static void iuser_Computer_Open_Options(Input* input, int32_t time) {
-	(void)time;
-	if (xinpattr_Get_Input_Selected(input))
-		TieRuntime_RequestSettingsMenu();
 }
 
 // FUNCTION: TIE95 0x85CAC
@@ -873,11 +917,25 @@ static void iuser_Computer_Backup(Input* input, int32_t time) {
 	if (!xinpattr_Get_Input_Selected(input))
 		return;
 
+#ifdef TIE_MODERN
+	TieComputer_BeginConfirm(input);
+#endif
 	if (input->id == 3) {
-		schedule_backup_dialog();
+		if (!Check_Backup_Pilot())
+			return;
+		shipext_Backup_Pilot();
+		backup_pilot_rank = pilot_record.rank;
+		backup_pilot_points = pilot_record.score;
 	} else {
-		schedule_restore_dialog();
+		if (!Check_Restore_Pilot())
+			return;
+		shipext_Restore_Pilot();
+		Init_Computer_Medal();
+		pilot_info_page = 0;
+		restore_pilot = 1;
+		xinpattr_Show_Input(backup_input);
 	}
+	xview_Refresh_View();
 }
 
 // FUNCTION: TIE95 0x85FB4
@@ -987,23 +1045,6 @@ static void xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
  * Record info drawing — header, combat, battle, kills panels
  * ====================================================================== */
 
-static int16_t computer_line_height(void) {
-	if (active_spec->line_height)
-		return active_spec->line_height;
-	return xfont_Get_FontID_Height(active_spec->content_font);
-}
-
-static void computer_advance_line(Rect* r, int16_t heading) {
-	xrect_Offset_Rect(r, 0, computer_line_height() + (heading ? active_spec->heading_extra : 0));
-}
-
-static void computer_advance_page(Rect* r, const Rect* page) {
-	Rect next;
-	xrect_Copy_Rect(&next, (Rect*)page);
-	xrect_Offset_Rect(&next, 0, active_spec->page_height);
-	xrect_Copy_Rect(r, &next);
-}
-
 // FUNCTION: TIE95 0x84E64
 // FUNCTION: TIE98 0x40E060
 static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color) {
@@ -1025,7 +1066,10 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 	strcat(str1, str2);
 	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 	xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
-	computer_advance_line(r, 1);
+	xrect_Offset_Rect(r, 0,
+					  (active_spec->line_height ? active_spec->line_height
+												: xfont_Get_FontID_Height(active_spec->content_font)) +
+						  active_spec->heading_extra);
 
 	/* Score + Skill */
 	textext_Copy_Text(str1, txtCompInfoScore);
@@ -1035,7 +1079,9 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 	snprintf(str2, sizeof(str2), " %u", (unsigned)pilot_record.avg_score);
 	strcat(str1, str2);
 	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-	computer_advance_line(r, 0);
+	xrect_Offset_Rect(r, 0,
+					  (active_spec->line_height ? active_spec->line_height
+												: xfont_Get_FontID_Height(active_spec->content_font)));
 
 	/* Laser accuracy */
 	if (pilot_record.laser_hits)
@@ -1045,7 +1091,9 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 	textext_Copy_Text(str2, txtCompInfoLaser);
 	snprintf(str1, sizeof(str1), str2, pilot_record.laser_hits, pilot_record.laser_total, (int16_t)val);
 	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-	computer_advance_line(r, 0);
+	xrect_Offset_Rect(r, 0,
+					  (active_spec->line_height ? active_spec->line_height
+												: xfont_Get_FontID_Height(active_spec->content_font)));
 
 	/* Warhead accuracy */
 	if (pilot_record.warhead_hits > pilot_record.warhead_total)
@@ -1057,25 +1105,32 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 	textext_Copy_Text(str2, txtCompInfoRocket);
 	snprintf(str1, sizeof(str1), str2, pilot_record.warhead_hits, pilot_record.warhead_total, (int16_t)val);
 	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-	computer_advance_line(r, 0);
+	xrect_Offset_Rect(r, 0,
+					  (active_spec->line_height ? active_spec->line_height
+												: xfont_Get_FontID_Height(active_spec->content_font)));
 
 	/* Total kills */
 	textext_Copy_Text(str2, txtCompInfoKills);
 	snprintf(str1, sizeof(str1), str2, pilot_record.total_kills);
 	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-	computer_advance_line(r, 0);
+	xrect_Offset_Rect(r, 0,
+					  (active_spec->line_height ? active_spec->line_height
+												: xfont_Get_FontID_Height(active_spec->content_font)));
 
 	/* Total captures */
 	textext_Copy_Text(str2, txtCompInfoCaptures);
 	snprintf(str1, sizeof(str1), str2, pilot_record.total_captures);
 	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-	computer_advance_line(r, 0);
+	xrect_Offset_Rect(r, 0,
+					  (active_spec->line_height ? active_spec->line_height
+												: xfont_Get_FontID_Height(active_spec->content_font)));
 
 	/* Craft lost */
 	textext_Copy_Text(str2, txtCompInfoCraftLost);
 	snprintf(str1, sizeof(str1), str2, pilot_record.ejection_count);
 	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-	computer_advance_page(r, &page);
+	xrect_Offset_Rect(&page, 0, active_spec->page_height);
+	xrect_Copy_Rect(r, &page);
 }
 
 // FUNCTION: TIE95 0x851E8
@@ -1119,7 +1174,10 @@ static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color
 		shipext_Get_Ship_Name(str1, i, 0, 0);
 		xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 		xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
-		computer_advance_line(r, 1);
+		xrect_Offset_Rect(r, 0,
+						  (active_spec->line_height ? active_spec->line_height
+													: xfont_Get_FontID_Height(active_spec->content_font)) +
+							  active_spec->heading_extra);
 
 		if (pilot_record.train_score[i]) {
 			if (pilot_record.train_max_level[i] < 4)
@@ -1128,7 +1186,10 @@ static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color
 				textext_Copy_Text(str2, txtCompInfoTrainComplete);
 			snprintf(str1, sizeof(str1), str2, pilot_record.train_score[i]);
 			xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-			computer_advance_line(r, 0);
+			xrect_Offset_Rect(r, 0,
+							  (active_spec->line_height
+								   ? active_spec->line_height
+								   : xfont_Get_FontID_Height(active_spec->content_font)));
 		}
 
 		for (j = 0; j < 8; j++) {
@@ -1139,11 +1200,15 @@ static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color
 					textext_Copy_Text(str2, txtCompInfoCombatIncomplete);
 				snprintf(str1, sizeof(str1), str2, j + 1, pilot_record.combat_score[i][j]);
 				xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-				computer_advance_line(r, 0);
+				xrect_Offset_Rect(r, 0,
+								  (active_spec->line_height
+									   ? active_spec->line_height
+									   : xfont_Get_FontID_Height(active_spec->content_font)));
 			}
 		}
 
-		computer_advance_page(r, &page);
+		xrect_Offset_Rect(&page, 0, active_spec->page_height);
+		xrect_Copy_Rect(r, &page);
 	}
 }
 
@@ -1182,7 +1247,10 @@ static void Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color
 		textext_Cat_Text(str1, pilot_record.battle_status[i] + txtCompInfoBattle);
 		xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 		xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
-		computer_advance_line(r, 1);
+		xrect_Offset_Rect(r, 0,
+						  (active_spec->line_height ? active_spec->line_height
+													: xfont_Get_FontID_Height(active_spec->content_font)) +
+							  active_spec->heading_extra);
 
 		max_missions = pilot_record.battle_cursor[i] + 1;
 		if (shipext_Get_Tour_Battle_Size(i) < max_missions)
@@ -1200,7 +1268,10 @@ static void Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color
 			snprintf(str1, sizeof(str1), str2, j + 1, pilot_record.tour_score[i][j]);
 			xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 			total_score += pilot_record.tour_score[i][j];
-			computer_advance_line(r, 0);
+			xrect_Offset_Rect(r, 0,
+							  (active_spec->line_height
+								   ? active_spec->line_height
+								   : xfont_Get_FontID_Height(active_spec->content_font)));
 		}
 
 		if (total_score && max_missions > 1) {
@@ -1209,10 +1280,14 @@ static void Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color
 			textext_Copy_Text(str2, txtCompTotalScore);
 			snprintf(str1, sizeof(str1), str2, (long)total_score);
 			xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
-			computer_advance_line(r, 0);
+			xrect_Offset_Rect(r, 0,
+							  (active_spec->line_height
+								   ? active_spec->line_height
+								   : xfont_Get_FontID_Height(active_spec->content_font)));
 		}
 
-		computer_advance_page(r, &page);
+		xrect_Offset_Rect(&page, 0, active_spec->page_height);
+		xrect_Copy_Rect(r, &page);
 	}
 }
 
@@ -1245,7 +1320,11 @@ static void Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color)
 			textext_Copy_Text(str1, txtCompInfoVictories);
 			xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 			xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
-			computer_advance_line(r, 1);
+			xrect_Offset_Rect(r, 0,
+							  (active_spec->line_height
+								   ? active_spec->line_height
+								   : xfont_Get_FontID_Height(active_spec->content_font)) +
+								  active_spec->heading_extra);
 			count++;
 		}
 
@@ -1254,7 +1333,10 @@ static void Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color)
 			xfont_Print_Clipped_Text(str1, r->left + 8, r->top + 1, active_spec->content_font, color);
 			snprintf(str1, sizeof(str1), "%d", pilot_record.kills_by_ship_type[i]);
 			xfont_Print_Clipped_Text(str1, r->right - 30, r->top + 1, active_spec->content_font, color);
-			computer_advance_line(r, 0);
+			xrect_Offset_Rect(r, 0,
+							  (active_spec->line_height
+								   ? active_spec->line_height
+								   : xfont_Get_FontID_Height(active_spec->content_font)));
 			count++;
 			craft_count++;
 		}
@@ -1281,7 +1363,8 @@ static void xdraw_Computer_Info(Rect* r, Rect* clip_r) {
 	xrect_Copy_Rect(&clip_tr, (Rect*)&active_spec->info_clip);
 	xcanvas_Set_Drawing_Canvas_Clip(&clip_tr);
 	xrect_Copy_Rect(&tr, &clip_tr);
-	tr.bottom = tr.top + computer_line_height();
+	tr.bottom = tr.top + (active_spec->line_height ? active_spec->line_height
+												   : xfont_Get_FontID_Height(active_spec->content_font));
 	xrect_Offset_Rect(&tr, 0, -active_spec->page_height * pilot_info_page);
 	start_top = tr.top;
 
@@ -1336,6 +1419,8 @@ static void iuser_Computer_Info(Input* input, int32_t time) {
 	xview_Refresh_View();
 }
 
+/* Retail TIE95 keeps this callback but never installs it. */
+// FUNCTION: TIE95 0x83DD4
 static void idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	PushButton* btn = (PushButton*)input;
 
@@ -1765,9 +1850,11 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 				xinpattr_Hide_Input(backup_input);
 				xinpattr_Hide_Input(restore_input);
 				break;
+#ifdef TIE_MODERN
 			case COMP_MODE_OPTIONS:
-				xinpattr_Hide_Input(open_options_input);
+				TieComputer_ShowOptionsButton(false);
 				break;
+#endif
 			default:
 				break;
 		}
@@ -1790,9 +1877,11 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 					xinpattr_Show_Input(backup_input);
 				xinpattr_Show_Input(restore_input);
 				break;
+#ifdef TIE_MODERN
 			case COMP_MODE_OPTIONS:
-				xinpattr_Show_Input(open_options_input);
+				TieComputer_ShowOptionsButton(true);
 				break;
+#endif
 			default:
 				break;
 		}
@@ -1842,11 +1931,13 @@ static void iuser_Computer(Input* input, int32_t time) {
 
 	if (xinpattr_Get_Input_Selected(input)) {
 		if (input->id == 1) {
-			/* Exit to DOS — confirm via deferred sub-dialog. The
-			 * handler sets input->var1 = 1 + computer_display = 0
-			 * if the user confirms; on the next tick var1 == 1 path
-			 * below takes over. */
-			schedule_exitdos_dialog(input);
+#ifdef TIE_MODERN
+			TieComputer_BeginConfirm(input);
+#endif
+			if (Exit_To_DOS()) {
+				input->var1 = 1;
+				computer_display = 0;
+			}
 		} else {
 			/* Accept */
 			input->var1 = 1;
@@ -2038,6 +2129,7 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 				xdirty_Dirty_Rect(clip_r);
 			break;
 
+#ifdef TIE_MODERN
 		case 5:
 			/* OpenTIE Options button */
 			if (!computer_display || computer_mode != COMP_MODE_OPTIONS)
@@ -2049,6 +2141,7 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 			if (xinpattr_Is_Input_Dirty(input))
 				xdirty_Dirty_Rect(clip_r);
 			break;
+#endif
 	}
 
 	/* Mode-specific content (only for parent, id=0) */
@@ -2150,11 +2243,11 @@ static Input* Build_Computer_Dialog(void) {
 	xinpattr_Hide_Input(inp);
 	restore_input = inp;
 
+#ifdef TIE_MODERN
 	/* Modern options button; COMPUTER starts on the Options tab. */
 	xrect_Copy_Rect(&r, (Rect*)&active_spec->open_options_rect);
-	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Open_Options, NULL, 5);
-	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer);
-	open_options_input = inp;
+	TieComputer_AllocOptionsButton(parent, &r, idraw_Computer);
+#endif
 
 	/* OK button (id=1, Exit to DOS) */
 	xrect_Copy_Rect(&r, (Rect*)&active_spec->exit_rect);
@@ -2222,8 +2315,6 @@ int16_t computer_Do_Computer_Dialog(void) {
 		memset(medal_actor2, 0, sizeof medal_actor2);
 		memset(computer_palettes, 0, sizeof computer_palettes);
 		memset(medal_palette, 0, sizeof medal_palette);
-		medal_palette2[0] = NULL;
-		medal_palette3[0] = NULL;
 		computer_palette = NULL;
 
 		computer_palette = xpal_Alloc_Palette(0, 256);
@@ -2321,8 +2412,6 @@ int16_t computer_Do_Computer_Dialog(void) {
 			medal_actor2[2] = xactanim_Res_Anim_Actor(resources->awards1[2], &r, 0, 0, 0);
 			medal_actor2[3] = xactanim_Res_Anim_Actor(resources->awards1[4], &r, 0, 0, 0);
 			medal_actor2[4] = xactanim_Res_Anim_Actor(resources->awards1[5], &r, 0, 0, 0);
-			if (resources->load_expansion_palette)
-				medal_palette2[0] = xpal_Res_Palette(resources->awards1[3]);
 #ifdef TIE_MODERN
 			for (i = 0; i < 5; ++i)
 #ifdef TIE_MODERN
@@ -2331,12 +2420,6 @@ int16_t computer_Do_Computer_Dialog(void) {
 					return 0;
 				}
 #endif
-#endif
-#ifdef TIE_MODERN
-			if (resources->load_expansion_palette && !medal_palette2[0]) {
-				TieComputer_Fail(res_file, resources->awards1[3]);
-				return 0;
-			}
 #endif
 			xres_Close_Resource(res_file);
 		}
@@ -2354,8 +2437,6 @@ int16_t computer_Do_Computer_Dialog(void) {
 			medal_actor2[7] = xactanim_Res_Anim_Actor(resources->awards2[2], &r, 0, 0, 0);
 			medal_actor2[8] = xactanim_Res_Anim_Actor(resources->awards2[4], &r, 0, 0, 0);
 			medal_actor2[9] = xactanim_Res_Anim_Actor(resources->awards2[5], &r, 0, 0, 0);
-			if (resources->load_expansion_palette)
-				medal_palette3[0] = xpal_Res_Palette(resources->awards2[3]);
 #ifdef TIE_MODERN
 			for (i = 5; i < 10; ++i)
 #ifdef TIE_MODERN
@@ -2364,12 +2445,6 @@ int16_t computer_Do_Computer_Dialog(void) {
 					return 0;
 				}
 #endif
-#endif
-#ifdef TIE_MODERN
-			if (resources->load_expansion_palette && !medal_palette3[0]) {
-				TieComputer_Fail(res_file, resources->awards2[3]);
-				return 0;
-			}
 #endif
 			xres_Close_Resource(res_file);
 		}
@@ -2473,16 +2548,6 @@ int16_t computer_Do_Computer_Dialog(void) {
 				xpal_Free_Palette(computer_palettes[i]);
 				computer_palettes[i] = NULL;
 			}
-		}
-		if (medal_palette2[0]) {
-			xpal_Free_Palette_From_System(medal_palette2[0]);
-			xpal_Free_Palette(medal_palette2[0]);
-			medal_palette2[0] = NULL;
-		}
-		if (medal_palette3[0]) {
-			xpal_Free_Palette_From_System(medal_palette3[0]);
-			xpal_Free_Palette(medal_palette3[0]);
-			medal_palette3[0] = NULL;
 		}
 		if (computer_palette) {
 			xpal_Free_Palette(computer_palette);

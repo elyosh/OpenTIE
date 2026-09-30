@@ -15,46 +15,54 @@
 
 /* logbuf2.h */
 
-/* Pool storage is allocated by FEDISKIO and bound by xtrans2_initxtrans. */
+/* Pool storage is allocated by FEDISKIO; xtrans2_initxtrans locks it into
+ * the running cursors each frame and derives the overflow clamps. */
 
-trace2_EdgeInfo* trace2_edgeinfos;
-trace2_EdgeHeader* trace2_edgeheaders;
+// GLOBAL: TIE95 0xEB778
 trace2_EdgeHeader* trace2_rowheaders[480];
-
-trace2_EdgeInfo* trace2_newedgeinfo;
+// GLOBAL: TIE95 0xEBEF8
+int32_t* trace2_lastpointPtr;
+// GLOBAL: TIE95 0xEBEFC
+int32_t trace2_startx;
+// GLOBAL: TIE95 0xEBF00
+int32_t trace2_starty;
+// GLOBAL: TIE95 0xEBF04
+int32_t trace2_endy;
+// GLOBAL: TIE95 0xEBF08
 trace2_EdgeHeader* trace2_newedgeheader;
-trace2_EdgeInfo* trace2_lastedgeinfo; /* rebound per-frame by xtrans2_initxtrans */
+// GLOBAL: TIE95 0xEBF0C
+trace2_EdgeInfo* trace2_newedgeinfo;
+// GLOBAL: TIE95 0xEBF10
+trace2_EdgeInfo* trace2_lastedgeinfo;
+// GLOBAL: TIE95 0xEBF14
 trace2_EdgeHeader* trace2_lastedgeheader;
 
 /* --- Module globals --------------------------------------------- */
 
-// GLOBAL: TIE95 0xEBF2A
-uint16_t polyidbyte;
-// GLOBAL: TIE95 0xEBF2C
-uint16_t edgeidbyte;
+// GLOBAL: TIE95 0xEBF18
+int16_t vertlight1;
+// GLOBAL: TIE95 0xEBF1A
+int16_t vertlight2;
 // GLOBAL: TIE95 0xEBF1C
 uint16_t objectedgeword;
-
-int16_t vertlight1;
-int16_t vertlight2;
-int16_t lightincy;
-int16_t lightincx;
-
-int16_t someznegflag;
-uint16_t newxblock;
-
-int8_t xdiffsign;
-int8_t ydiffsign;
-
-int32_t trace2_startx;
-int32_t trace2_starty;
-int32_t trace2_endy;
+// GLOBAL: TIE95 0xEBF1E
 uint16_t trace2_lastedge;
+// GLOBAL: TIE95 0xEBF20
 uint16_t trace2_znegflag;
-uint16_t trace2_nummarks;
-uint16_t trace2_edgeindex;
-
-int32_t* trace2_lastpointPtr;
+// GLOBAL: TIE95 0xEBF22
+int16_t lightincy;
+// GLOBAL: TIE95 0xEBF24
+int16_t lightincx;
+// GLOBAL: TIE95 0xEBF26
+int16_t someznegflag;
+// GLOBAL: TIE95 0xEBF2A
+uint8_t polyidbyte;
+// GLOBAL: TIE95 0xEBF2B
+int8_t xdiffsign;
+// GLOBAL: TIE95 0xEBF2C
+uint8_t edgeidbyte;
+// GLOBAL: TIE95 0xEBF2D
+int8_t ydiffsign;
 
 /* --- Constants --------------------------------------------------- */
 
@@ -1060,7 +1068,7 @@ void trace2_drawface(uint16_t numberOfVertices) {
 			/* New edge: install header + cache slope, then dispatch. */
 			edgeflags[edgeIdx] |= XTRANS2_EDGEFLAG_HAS_HEADER;
 			edgeflagptr[edgeIdx] = trace2_newedgeheader;
-			++trace2_edgeindex;
+			++edgeindex;
 
 			if ((pt & XTRANS2_EDGEFLAG_UNUSED_10) != 0) {
 				/* DEAD CODE: bit 0x10 is never set by TRANSFM2_classifyedges
@@ -1070,12 +1078,13 @@ void trace2_drawface(uint16_t numberOfVertices) {
 				 * (flips signs + swaps edgept1/edgept2 in place when a
 				 * cached flag is seen). Preserved bit-literal to match
 				 * the binary exactly. */
-				uintptr_t v1 = (uintptr_t)edgept1[edgeIdx];
-				uintptr_t v2 = (uintptr_t)edgept2[edgeIdx];
-				v1 = (v1 & ~(uintptr_t)0xFFFF) | (~v1 & 0xFFFF);
-				v2 = (v2 & ~(uintptr_t)0xFFFF) | (~v2 & 0xFFFF);
-				edgept1[edgeIdx] = (int32_t*)v1;
-				edgept2[edgeIdx] = (int32_t*)v2;
+				/* Retail `not word ptr edgept1[i]` / `edgept2[i]`: complement the
+				 * low word of each stored pointer in place. */
+				uint16_t* lo1 = (uint16_t*)&edgept1[edgeIdx];
+				uint16_t* lo2 = (uint16_t*)&edgept2[edgeIdx];
+
+				*lo1 = (uint16_t)~*lo1;
+				*lo2 = (uint16_t)~*lo2;
 			}
 
 			if (gauraudflag) {

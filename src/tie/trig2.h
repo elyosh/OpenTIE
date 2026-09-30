@@ -33,7 +33,7 @@ int32_t trig2_cosinedwordmult(int32_t val, uint16_t angle);
 int16_t trig2_arcsin(int16_t val);
 int16_t trig2_arccos(int16_t val);
 int16_t trig2_arctan(int32_t y, int32_t x);
-void trig2_calcarctan(int32_t a, int32_t b);
+void trig2_calcarctan(int32_t a, int32_t b, int16_t* out_ratio, int16_t* out_angle);
 
 /* Polar ↔ Cartesian conversions (operate on globals) */
 void trig2_ptoc3dim(void);
@@ -41,6 +41,7 @@ void trig2_ptoc2dim(void);
 void trig2_movexyz(uint16_t distance, int16_t pitch, uint16_t heading);
 void trig2_ctop(int32_t x, int32_t y, int32_t z);
 void trig2_ctop2dim(int32_t x, int32_t y);
+void trig2_ctoptwodim(int32_t a, int32_t b);
 
 /* Working globals (set by ptoc/ctop/movexyz functions) */
 extern int32_t trig2_xoffset, trig2_yoffset, trig2_zoffset;

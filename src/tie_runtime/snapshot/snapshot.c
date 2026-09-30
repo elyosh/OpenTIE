@@ -215,7 +215,7 @@ void TieSnapshotBuilder_BeginTick(void) {
 
 	/* SNAPSHOT-ONLY note: the per-tick billboard capture caches are
 	 * intentionally NOT cleared here. They're cleared by tie_core's
-	 * render entry (render_world_or_skip) so that paused frames —
+	 * render entry (tie_doframe render gate) so that paused frames —
 	 * which skip the render and therefore can't re-fill the caches —
 	 * keep showing the last-rendered billboards. TieSnapshotBuilder_Begin
 	 * tick fires every host tick (incl. paused), so resetting here

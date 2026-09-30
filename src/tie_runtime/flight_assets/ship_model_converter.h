@@ -182,7 +182,7 @@ bool TieShipModelConverter_Build(const void* blob, size_t blob_size, float smoot
 								 TieFlightShipModel* out);
 
 /* Convert a laser-bolt poly blob. Lasers (weapon
- * species 137..154) ship through draw.c's laser_species_poly[] table
+ * species 137..154) ship through species.c's projectiledataptrs[] table
  * instead of fediskio — their blobs start directly with a ShipMeshLOD[]
  * table at offset 0 (no ShipModelData header), and the poly the LOD
  * points to is a top-level line object (header byte 0x40 or 0x41,

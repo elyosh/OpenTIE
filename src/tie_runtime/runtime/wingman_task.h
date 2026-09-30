@@ -13,7 +13,7 @@ typedef struct WingmanRoomState {
 	bool finished;
 } WingmanRoomState;
 
-/* Begin the wingman menu; completion publishes user_submodal_result. */
+/* Begin the wingman menu; completion publishes TieFlightRequest_SubmodalResult. */
 void TieWingman_Begin(void);
 
 #endif

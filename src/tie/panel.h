@@ -50,8 +50,8 @@ extern "C" {
  *
  * Naturally aligned in memory (every field already lands on its natural
  * boundary, so dropping the original pragma pack(2) doesn't change
- * sizeof). On-disk layout is the fixed 6-byte little-endian record
- * produced/consumed by the codec helpers below.
+ * sizeof). panel_loadpanelviewdefs reads the fixed 6-byte little-endian
+ * .INT records directly into instruments[].
  */
 typedef struct {
 	uint16_t x;
@@ -60,9 +60,7 @@ typedef struct {
 	uint8_t param2;
 } HudInstrument;
 
-#define HUDINSTRUMENT_DISK_SIZE 6u
-
-void HudInstrument_decode(HudInstrument* dst, const uint8_t* src);
+typedef char HudInstrument_size[(sizeof(HudInstrument) == 6) ? 1 : -1];
 
 /*
  * PanelViewDef -- cockpit view slot. 28 entries loaded from .INT file.
@@ -77,9 +75,9 @@ void HudInstrument_decode(HudInstrument* dst, const uint8_t* src);
  *
  * Naturally aligned in memory (the 1-byte flags + 9-byte name end at
  * offset 0x0A which is already 2-aligned, so dropping the original
- * pragma pack(2) doesn't change sizeof). On-disk layout is the fixed
- * 36-byte little-endian record produced/consumed by the codec helpers
- * below.
+ * pragma pack(2) doesn't change sizeof). panel_loadpanelviewdefs reads
+ * the fixed 36-byte little-endian .INT records directly into
+ * panelviewdefs[].
  */
 typedef struct {
 	uint8_t flags;
@@ -97,9 +95,7 @@ typedef struct {
 	char title[16];
 } PanelViewDef;
 
-#define PANELVIEWDEF_DISK_SIZE 36u
-
-void PanelViewDef_decode(PanelViewDef* dst, const uint8_t* src);
+typedef char PanelViewDef_size[(sizeof(PanelViewDef) == 36) ? 1 : -1];
 
 /*
  * PanelViewPtrs -- loaded-data pointers for one PanelViewDef slot.
@@ -194,8 +190,6 @@ extern int16_t oldinstruments[PANEL_NUM_INSTRUMENTS];
 extern int16_t oldbracketx, oldbrackety;
 extern int16_t radary, radarx;
 extern int16_t bracketx, brackety;
-extern int16_t blipboxx, blipboxy;
-extern int16_t oldblipboxx, oldblipboxy;
 extern int16_t oldleftlistsize, newrightlistsize;
 extern int16_t blipcolor;
 extern int16_t oldrightlistsize, newleftlistsize;
@@ -223,8 +217,6 @@ extern void* panelpartsptr;
 void panel_initpanel(void);
 void panel_updatepanel(void);
 void panel_updateforwardpanel(void);
-void panel_updatefullforward(void);
-void panel_updatethreatdisplay(void);
 
 /* -- Per-widget updaters -- */
 void panel_updatelever(uint16_t idx, uint16_t value);
@@ -266,8 +258,6 @@ void panel_forcenewviewdir(uint16_t view_idx);
 void panel_dosetnewpilotview(uint16_t view_idx);
 void panel_loadcontrolpanel(char* name, void** section_ptrs, uint16_t count);
 void panel_tryEMSforpanels(void);
-void panel_freeviewbufs(void);
-void panel_resetpilotview(void);
 void panel_loadpanelviewdefs(char* base_name);
 
 /* -- Mask / 3D CRT / camera -- */
@@ -303,14 +293,6 @@ extern void* componentnames;
 extern void* timeremstring;
 extern void* timetotargetstring;
 extern void* timetodeststring;
-
-/* Separator glyph strings (owned by tie.c in binary; sys2_calclength input).
- * Retail keeps a 3-space and a 2-space variant at distinct addresses;
- * the former is the '%' offset, the latter is the dist '.' offset. */
-extern char separator_3_spaces[4]; /* "   \0"   — engine 0xC057C */
-extern char separator_2_spaces[4]; /* "  \0\x1c" — engine 0xC0580 */
-extern char separator_colon[4];    /* "00:\0"   — engine 0xC0584 */
-extern char separator_period[4];   /* "00.\0"   — engine 0xC0588 */
 
 #ifdef __cplusplus
 }

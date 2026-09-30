@@ -16,6 +16,7 @@
 #include "tie/tie.h"
 #include "tie/transfm2.h"
 #include "tie/user.h"
+#include "tie_runtime/runtime/bonus_countdown_task.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 
@@ -294,8 +295,8 @@ static void TieHudSnapshot_CaptureHud(void) {
 	hud->bracket_offset_x = s_bracket_offset_x;
 	hud->bracket_offset_y = s_bracket_offset_y;
 	hud->bracket_present = (uint8_t)(bracketflag != 0);
-	hud->blipbox_x = blipboxx;
-	hud->blipbox_y = blipboxy;
+	hud->blipbox_x = 0;
+	hud->blipbox_y = 0;
 	hud->blipbox_present = (uint8_t)(blipboxflag != 0);
 	hud->lock_present = (uint8_t)(lockflag != 0);
 
@@ -634,4 +635,42 @@ static void TieHudSnapshot_CaptureCockpit(void) {
 void TieHudSnapshot_Capture(void) {
 	TieHudSnapshot_CaptureHud();
 	TieHudSnapshot_CaptureCockpit();
+}
+
+/* Copy a NUL-terminated string into a fixed-size buffer, truncating
+ * to fit and always NUL-terminating. */
+void TieHudSnapshot_CopyText(char* dst, size_t dst_size, const uint8_t* src) {
+	size_t n = 0;
+	while (src[n] && n + 1 < dst_size) {
+		dst[n] = (char)src[n];
+		++n;
+	}
+	dst[n] = '\0';
+}
+
+/* Copy a festring into the snapshot representation consumed by the HD
+ * compositor. Plain bytes are unchanged; 0xFE color operands are converted
+ * from engine-logical colors to post-remap palette indices. */
+void TieHudSnapshot_CopyFestringText(char* dst, size_t dst_size, const uint8_t* src) {
+	size_t out;
+
+	if (dst_size == 0)
+		return;
+
+	out = 0;
+	while (*src && out + 1 < dst_size) {
+		uint8_t ch = *src++;
+		if (ch == 0xFEu) {
+			uint8_t color;
+
+			if (!*src || out + 2 >= dst_size)
+				break;
+			dst[out++] = (char)ch;
+			color = *src++;
+			dst[out++] = (char)((color >= 0x40u) ? color_remap_table[color] : color);
+		} else {
+			dst[out++] = (char)ch;
+		}
+	}
+	dst[out] = '\0';
 }

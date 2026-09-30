@@ -5,14 +5,6 @@
 
 #include <string.h>
 
-/* --- Remap helper --- */
-
-static uint8_t remap_color(uint16_t color) {
-	if (color >= 0x40)
-		return color_remap_table[color];
-	return (uint8_t)color;
-}
-
 /* --- Cursor and margin setters --- */
 
 // FUNCTION: TIE95 0x23670
@@ -34,19 +26,35 @@ void festring_setbound(int16_t left, int16_t top, int16_t right, int16_t bottom)
 /* --- Color setters (remap palette indices >= 0x40) --- */
 
 // FUNCTION: TIE95 0x2369C
-void festring_settextcolor(uint16_t color) { textcolor = remap_color(color); }
+void festring_settextcolor(uint16_t color) {
+	if (color >= 0x40)
+		textcolor = color_remap_table[color];
+	else
+		textcolor = (uint8_t)color;
+}
 
 // FUNCTION: TIE95 0x236B8
-void festring_setbackcolor(uint16_t color) { backcolor = remap_color(color); }
+void festring_setbackcolor(uint16_t color) {
+	if (color >= 0x40)
+		backcolor = color_remap_table[color];
+	else
+		backcolor = (uint8_t)color;
+}
 
 // FUNCTION: TIE95 0x236D4
-void festring_setdropcolor(uint16_t color) { dropcolor = remap_color(color); }
+void festring_setdropcolor(uint16_t color) {
+	if (color >= 0x40)
+		dropcolor = color_remap_table[color];
+	else
+		dropcolor = (uint8_t)color;
+}
 
 /* --- Flag setters --- */
 
 // FUNCTION: TIE95 0x236F0
 void festring_setlinewrap(int16_t enable) { lwrapflag = enable; }
 
+// FUNCTION: TIE95 0x236F8
 void festring_setautofill(int16_t enable) { autofillflag = enable; }
 
 /* --- Font selection ---
@@ -137,7 +145,10 @@ void festring_outstring(const uint8_t* s) {
 		if (ch == 0xFE) {
 			/* Color escape: read next byte as new textcolor */
 			s++;
-			textcolor = remap_color(*s);
+			if (*s >= 0x40)
+				textcolor = color_remap_table[*s];
+			else
+				textcolor = *s;
 			if (!*++s)
 				return;
 			continue;
@@ -150,7 +161,10 @@ void festring_outstring(const uint8_t* s) {
 				return;
 		} else {
 			/* Inline color code (0x01-0x0F) */
-			textcolor = remap_color(ch);
+			if (ch >= 0x40)
+				textcolor = color_remap_table[ch];
+			else
+				textcolor = ch;
 			if (!*++s)
 				return;
 		}

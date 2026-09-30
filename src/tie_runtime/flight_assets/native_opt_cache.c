@@ -182,11 +182,11 @@ static Tie98NativeOptNode* TieNativeOptCache_ParseNode(Tie98NativeOpt* native, u
 	if (result->node.type == TIE98_OPT_NODE_REFERENCE && param1 != 0) {
 		/* Non-address values leave the reference unresolved for the original
 		 * renderer's param2 name lookup. */
-		result->node.param1 = 0;
+		result->node.reference = NULL;
 		if (TieNativeOpt_ResolveAddress(&native->model, (uint32_t)param1, 24)) {
 			Tie98NativeOptNode* reference = TieNativeOptCache_ParseNode(native, (uint32_t)param1);
 			if (reference)
-				result->node.param1 = (intptr_t)&reference->node;
+				result->node.reference = &reference->node;
 		}
 	}
 

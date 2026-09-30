@@ -3,6 +3,7 @@
 
 /* Replay spooling, mission checkpoints, and viewer entry. */
 
+#include "tie/panel.h"
 #include "tie/tie.h"
 
 #include <stdint.h>
@@ -34,10 +35,8 @@ void replayio_setreturnview(void);
 extern void* savearrayptrs[68];
 extern uint32_t savearraysizes[68];
 
-/* The 16-byte static reserved block at 0xE4950 (`_replayviewptr[16]`). Not
- * actively read by any shipping code path; kept here so linkers that need
- * the symbol don't complain. */
-extern uint8_t replayviewptr[16];
+/* Replay-viewer CAMERA / FILM panel sections (demo `_replayviewptr`). */
+extern PanelViewPtrs replayviewptr;
 
 void replayio_replayscreen(void);
 

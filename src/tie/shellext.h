@@ -179,11 +179,6 @@ int16_t shellext_Check_Scene_Exit(int16_t* exit_id, int16_t next_scene, int16_t 
 								  int16_t scene_flag);
 int16_t shellext_Sudden_Scene_End(void);
 int16_t shellext_Is_Sudden_Scene_End(void);
-
-/* Push fade tasks; the caller yields until the task's end callback completes
- * cursor and view-refresh housekeeping. */
-void shellext_Push_Sudden_Scene_Fade_Task(void);
-void shellext_Push_Back_Stage_To_VGA_Task(int16_t dialog);
 int16_t shellext_escape_TIE(void);
 void shellext_Load_Preferences(void);
 int16_t shellext_Set_Prefs_Sound(void);

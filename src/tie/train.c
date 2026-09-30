@@ -57,8 +57,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char train_film_b[] = "trainbrf";
-static const char train_score_filename[] = "train.hgh";
+/* Resource names: [0] = LFD file, [1] = first-visit film, [2] = return film. */
+// GLOBAL: TIE95 0xCE58E
+// GLOBAL: TIE98 0x4F3110
+static const char train_str[3][20] = {
+#ifdef TIE98
+	"train640.lfd", "train640",
+#else
+	"train.lfd", "train",
+#endif
+	"trainbrf"
+};
 
 enum {
 	NUM_SCORE_ENTRIES = TRAIN_SCORE_ENTRY_COUNT,
@@ -66,70 +75,9 @@ enum {
 	VGA_SCORE_ENTRIES = 8,
 };
 
-typedef struct TrainSpec {
-	LandruSurfaceSet surface_set;
-	const char* archive;
-	const char* film_a;
-	int16_t width, height;
-	int16_t mouse_x, mouse_y;
-	int16_t monitor_bounds[4];
-	int16_t input_bounds[6][4];
-	bool separate_button_actors;
-	bool clear_monitor;
-} TrainSpec;
-
-/* DATA: TIE95 TRAIN_Train; TIE98 0x491B30. */
-static const TrainSpec train_specs[] = {
-	{
-		/* surface_set */ LANDRU_SURFACE_VGA,
-		/* archive */ "train.lfd",
-		/* film_a */ "train",
-		/* width */ 320,
-		/* height */ 200,
-		/* mouse_x */ 220,
-		/* mouse_y */ 190,
-		/* monitor_bounds */ { 62, 6, 254, 116 },
-		/* input_bounds */
-		{
-			{ 188, 138, 214, 154 },
-			{ 214, 138, 240, 154 },
-			{ 188, 154, 214, 170 },
-			{ 214, 154, 240, 170 },
-			{ 206, 184, 237, 200 },
-			{ 49, 181, 79, 200 },
-		},
-		/* separate_button_actors */ false,
-		/* clear_monitor */ false,
-	},
-	{
-		/* surface_set */ LANDRU_SURFACE_SVGA,
-		/* archive */ "train640.lfd",
-		/* film_a */ "train640",
-		/* width */ 640,
-		/* height */ 480,
-		/* mouse_x */ 235,
-		/* mouse_y */ 465,
-		/* monitor_bounds */ { 144, 56, 500, 300 },
-		/* input_bounds */
-		{
-			{ 377, 336, 398, 346 },
-			{ 398, 336, 422, 346 },
-			{ 386, 454, 416, 468 },
-			{ 416, 454, 446, 468 },
-			{ 212, 455, 252, 474 },
-			{ 453, 325, 522, 400 },
-		},
-		/* separate_button_actors */ true,
-		/* clear_monitor */ true,
-	},
-};
-
 #ifdef TIE_MODERN
-static const TrainSpec* active_spec;
-#elif defined(TIE98)
-static const TrainSpec* const active_spec = &train_specs[1];
-#else
-static const TrainSpec* const active_spec = &train_specs[0];
+/* PORT: runtime frontend selection (TIE98 SVGA layout vs TIE95 VGA layout). */
+static bool train_svga;
 #endif
 
 /* The first eight defaults are shared by both originals; TIE98 adds two
@@ -150,36 +98,34 @@ static int16_t train_score_level[NUM_SCORE_ENTRIES] = {
 	1, 1, 1, 1, 1, 1, 1, 1,
 };
 
-/* Flyby course info: 5-word entries {start_time, end_time, y, x, text_id},
- * terminated by a sentinel with start_time == -1. */
-typedef struct {
-	int16_t start_time;
-	int16_t end_time;
-	int16_t y_offset;
-	int16_t x_offset;
-	int16_t text_id;
-} CourseInfoEntry;
-
-static const CourseInfoEntry train_course_info[] = {
-	{ 20, 84, 60, 90, txtTrainCourse },
-	{ 25, 84, 60, 100, txtTrainSegment },
-	{ 115, 150, 53, 70, txtTrainPyramid },
-	{ 120, 150, 50, 80, txtTrainBonus },
-	{ 175, 230, 30, 40, txtTrainObstacle },
-	{ 180, 230, 15, 50, txtTrainDestroy },
-	{ 235, 290, 10, 90, txtTrainSphere },
-	{ 240, 290, 5, 100, txtTrainBonus },
-	{ 310, 375, 60, 40, txtTrainAdvance },
-	{ 315, 375, 48, 50, txtTrainAdvance2 },
-	{ -1, 0, 0, 0, 0 },
+/* Flyby course info: flat table of 5-word entries {start_time, end_time,
+ * y, x, text_id}, terminated by start_time == -1. */
+// GLOBAL: TIE95 0xCE64C
+// GLOBAL: TIE98 0x4F30A8
+static const int16_t train_course_info[52] = {
+	20,  84,  60, 90, txtTrainCourse,   25,  84,  60, 100, txtTrainSegment,
+	115, 150, 53, 70, txtTrainPyramid,  120, 150, 50, 80,  txtTrainBonus,
+	175, 230, 30, 40, txtTrainObstacle, 180, 230, 15, 50,  txtTrainDestroy,
+	235, 290, 10, 90, txtTrainSphere,   240, 290, 5,  100, txtTrainBonus,
+	310, 375, 60, 40, txtTrainAdvance,  315, 375, 48, 50,  txtTrainAdvance2,
+	-1,  0,
 };
 
 /* Module state */
+// GLOBAL: TIE95 0xF5794
+// GLOBAL: TIE98 0x58AAF4
 static ResFile* train_file;
 // GLOBAL: TIE95 0xF5798
+// GLOBAL: TIE98 0x58AAF0
 static Film* train_film;
+// GLOBAL: TIE95 0xF579C
+// GLOBAL: TIE98 0x58AB00
 static Input* world_input;
+// GLOBAL: TIE95 0xF5768
+// GLOBAL: TIE98 0x58AB10
 static Input* button_input[6];
+// GLOBAL: TIE95 0xF57A4
+// GLOBAL: TIE98 0x58AAE8
 static Input* monitor_input;
 // GLOBAL: TIE95 0xF5790
 static Actor* arrow_actor;
@@ -188,13 +134,17 @@ static Actor* button[6]; /* TIE98 stores one actor for each input. */
 // GLOBAL: TIE95 0xF57A0
 static Actor* helmet;
 // GLOBAL: TIE95 0xF5788
+// GLOBAL: TIE98 0x58AB04
 static int32_t train_time;
 // GLOBAL: TIE95 0xF578C
 static int32_t train_mode;
 // GLOBAL: TIE95 0xF57A8
+// GLOBAL: TIE98 0x58AAF8
 static int16_t train_help;
+#if defined(TIE98) || defined(TIE_MODERN)
 // GLOBAL: TIE98 0x58AAEC
 static int32_t train_monitor_needs_clear;
+#endif
 
 /* train_pilot_medal_status: snapshot of train_max_level[ship] BEFORE the
  * training round so map.c (TRAIN_MAP scene) can detect a fresh max-level
@@ -224,10 +174,17 @@ static void train_end_Train_View(int32_t time) {
 static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object) {
 	Actor* the_actor;
 	int16_t var1;
-	if (active_spec->surface_set == LANDRU_SURFACE_SVGA && film_object->id == FTC_PALETTE) {
+#ifdef TIE_MODERN
+	if (train_svga && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
 		return 0;
 	}
+#elif defined(TIE98)
+	if (film_object->id == FTC_PALETTE) {
+		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
+		return 0;
+	}
+#endif
 
 	if (film_object->id != 3)
 		return 0;
@@ -286,7 +243,12 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 
 	id = input->id;
 
-	if (active_spec->separate_button_actors) {
+#if defined(TIE_MODERN) || defined(TIE98)
+#ifdef TIE_MODERN
+	if (train_svga) {
+#else
+	{
+#endif
 		Actor* input_actor;
 
 		if (id == 5)
@@ -306,7 +268,9 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 		}
 		return 1;
 	}
+#endif
 
+#ifndef TIE98
 	if (id == 5) {
 		/* Start training button */
 		if (mouseState == 3 || prevMouseState == 3) {
@@ -342,6 +306,7 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 		}
 	}
 	return 1;
+#endif
 }
 
 /* ------------------------------------------------------------------ */
@@ -387,8 +352,13 @@ static void train_iuser_Train(Input* input, int32_t time) {
 			break;
 	}
 
-	if (active_spec->clear_monitor && input->id <= 4)
+#ifdef TIE_MODERN
+	if (train_svga && input->id <= 4)
 		train_monitor_needs_clear = 1;
+#elif defined(TIE98)
+	if (input->id <= 4)
+		train_monitor_needs_clear = 1;
+#endif
 }
 
 /* ------------------------------------------------------------------ */
@@ -457,8 +427,13 @@ static int16_t train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* cl
 			xfont_Enable_FontID_Shadow(0);
 			/* train_help 1-6 maps to txtTrainLastShip(74)..txtTrainExit(79) */
 			textext_Copy_Text(text, (int16_t)(train_help + 73));
-			xfont_Print_Centered_Text(text, &bounds, 15,
-									  active_spec->surface_set == LANDRU_SURFACE_SVGA ? 2 : 0);
+#ifdef TIE_MODERN
+			xfont_Print_Centered_Text(text, &bounds, 15, train_svga ? 2 : 0);
+#elif defined(TIE98)
+			xfont_Print_Centered_Text(text, &bounds, 15, 2);
+#else
+			xfont_Print_Centered_Text(text, &bounds, 15, 0);
+#endif
 			xfont_Disable_FontID_Shadow(0);
 		}
 		train_help = 0;
@@ -612,16 +587,24 @@ static void train_iuser_Train_Screen(Input* input, int32_t time) {
 	if (train_time == 0) {
 		train_time = 1;
 		train_mode = 0;
-		if (active_spec->clear_monitor)
+#ifdef TIE_MODERN
+		if (train_svga)
 			train_monitor_needs_clear = 1;
+#elif defined(TIE98)
+		train_monitor_needs_clear = 1;
+#endif
 		return;
 	}
 
 	if (train_time == 256) {
 		train_time++;
 		train_mode = 1;
-		if (active_spec->clear_monitor)
+#ifdef TIE_MODERN
+		if (train_svga)
 			train_monitor_needs_clear = 1;
+#elif defined(TIE98)
+		train_monitor_needs_clear = 1;
+#endif
 		return;
 	}
 
@@ -630,16 +613,24 @@ static void train_iuser_Train_Screen(Input* input, int32_t time) {
 		bpflight_Open_New_Matrix("trnfly1");
 		train_mode = 2;
 		train_time++;
-		if (active_spec->clear_monitor)
+#ifdef TIE_MODERN
+		if (train_svga)
 			train_monitor_needs_clear = 1;
+#elif defined(TIE98)
+		train_monitor_needs_clear = 1;
+#endif
 		return;
 	}
 
 	if (train_time == 767) {
 		bpflight_Stop_Movie_Engine();
 		train_time = 0;
-		if (active_spec->clear_monitor)
+#ifdef TIE_MODERN
+		if (train_svga)
 			train_monitor_needs_clear = 1;
+#elif defined(TIE98)
+		train_monitor_needs_clear = 1;
+#endif
 		return;
 	}
 
@@ -656,7 +647,13 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	int16_t line_idx, text_line, i;
 	Rect dst;
 	char string[48], buf[48], name[48];
-	bool svga = active_spec->surface_set == LANDRU_SURFACE_SVGA;
+#ifdef TIE_MODERN
+	bool svga = train_svga;
+#elif defined(TIE98)
+	bool svga = true;
+#else
+	bool svga = false;
+#endif
 	int16_t font_id = svga ? 2 : 0;
 	int16_t font_height = svga ? xfont_Get_FontID_Height(2) : 10;
 
@@ -762,7 +759,13 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 static void train_Draw_Train_Screen_Score(Rect* src) {
 	int16_t total_width, name_x, score_x, level_x, y, displayed_scores, i;
 	char string[40], str[40];
-	bool svga = active_spec->surface_set == LANDRU_SURFACE_SVGA;
+#ifdef TIE_MODERN
+	bool svga = train_svga;
+#elif defined(TIE98)
+	bool svga = true;
+#else
+	bool svga = false;
+#endif
 	int16_t font_id = svga ? 3 : 0;
 
 	int16_t t = train_time - 256;
@@ -814,26 +817,31 @@ static void train_Draw_Train_Screen_Flyby(Rect* src) {
 	int i;
 	int16_t t = train_time - 384;
 	char text[48];
-	bool svga = active_spec->surface_set == LANDRU_SURFACE_SVGA;
+#ifdef TIE_MODERN
+	bool svga = train_svga;
+#elif defined(TIE98)
+	bool svga = true;
+#else
+	bool svga = false;
+#endif
 	int16_t font_id = svga ? 2 : 0;
 
 	xfont_Enable_FontID_Shadow(font_id);
 
-	for (i = 0; train_course_info[i].start_time != -1; i++) {
-		const CourseInfoEntry* e = &train_course_info[i];
-		if (t >= e->start_time && t < e->end_time) {
+	for (i = 0; train_course_info[i] != -1; i += 5) {
+		if (t >= train_course_info[i] && t < train_course_info[i + 1]) {
 			int16_t px, py;
-			int16_t fade = t - e->start_time + 16;
+			int16_t fade = t - train_course_info[i] + 16;
 			if (fade > 31)
 				fade = 31;
 			if (svga) {
-				px = src->left + 2 * e->y_offset;
-				py = src->top + 2 * e->x_offset;
+				px = src->left + 2 * train_course_info[i + 2];
+				py = src->top + 2 * train_course_info[i + 3];
 			} else {
-				px = src->left + e->y_offset;
-				py = src->top + e->x_offset;
+				px = src->left + train_course_info[i + 2];
+				py = src->top + train_course_info[i + 3];
 			}
-			textext_Copy_Text(text, e->text_id);
+			textext_Copy_Text(text, train_course_info[i + 4]);
 			xfont_Print_Clipped_Text(text, px, py, font_id, fade);
 		}
 	}
@@ -849,10 +857,16 @@ static void train_idraw_Train_Screen(Input* input, Rect* draw_rect, Rect* clip_r
 	if (!refresh)
 		return;
 
-	if (active_spec->clear_monitor && train_monitor_needs_clear) {
+#if defined(TIE_MODERN) || defined(TIE98)
+#ifdef TIE_MODERN
+	if (train_svga && train_monitor_needs_clear) {
+#else
+	if (train_monitor_needs_clear) {
+#endif
 		xpaint_Paint_Clipped_Rect(draw_rect, 0);
 		train_monitor_needs_clear = 0;
 	}
+#endif
 
 	if (helmet->state)
 		return;
@@ -878,23 +892,17 @@ static void train_idraw_Train_Screen(Input* input, Rect* draw_rect, Rect* clip_r
 // FUNCTION: TIE95 0x6B4E8
 // FUNCTION: TIE98 0x491B30
 int16_t train_Train(SceneHeadStruct* the_head) {
-#ifdef TIE_MODERN
-	bool svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
-#endif
 	Rect frame;
 	const char* film_name;
 	TrainingScoreEntry loaded_scores[TRAIN_SCORE_ENTRY_COUNT];
 	int16_t i;
+
 #ifdef TIE_MODERN
-	const int16_t* bounds;
+	train_svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
 #endif
 
 #ifdef TIE_MODERN
-	active_spec = &train_specs[svga ? 1 : 0];
-#endif
-
-#ifdef TIE_MODERN
-	xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+	xio_Set_Mouse_Position(train_svga ? 235 : 220, train_svga ? 465 : 190);
 #elif defined(TIE98)
 	xio_Set_Mouse_Position(235, 465);
 #else
@@ -902,36 +910,33 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 #endif
 
 #ifdef TIE_MODERN
-	train_file = shellext_Open_Empire_Resource(active_spec->archive);
-#elif defined(TIE98)
-	train_file = shellext_Open_Empire_Resource("train640.lfd");
+	train_file = shellext_Open_Empire_Resource(train_svga ? "train640.lfd" : train_str[0]);
 #else
-	train_file = shellext_Open_Empire_Resource("train.lfd");
+	train_file = shellext_Open_Empire_Resource(train_str[0]);
 #endif
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 
 	/* Select film based on scene: entry A = first visit, B = return */
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+	xrect_Set_Rect(&frame, 0, 0, train_svga ? 640 : 320, train_svga ? 480 : 200);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 0, 0, 640, 480);
 #else
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
 #endif
 #ifdef TIE_MODERN
-	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? active_spec->film_a : train_film_b;
-#elif defined(TIE98)
-	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? "train640" : train_film_b;
+	film_name =
+		(shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? (train_svga ? "train640" : train_str[1]) : train_str[2];
 #else
-	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? "train" : train_film_b;
+	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? train_str[1] : train_str[2];
 #endif
 	train_film = xfilm_Res_Callback_Film(film_name, &frame, 0, 0, 0, train_film_Train_Callback);
 	xfilm_Set_Film_Def_Palette(train_film, the_head->def_palette);
 
 	/* World input (full screen) */
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+	xrect_Set_Rect(&frame, 0, 0, train_svga ? 640 : 320, train_svga ? 480 : 200);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 0, 0, 640, 480);
 #else
@@ -941,8 +946,10 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 
 	/* Monitor screen input */
 #ifdef TIE_MODERN
-	bounds = active_spec->monitor_bounds;
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (train_svga)
+		xrect_Set_Rect(&frame, 144, 56, 500, 300);
+	else
+		xrect_Set_Rect(&frame, 62, 6, 254, 116);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 144, 56, 500, 300);
 #else
@@ -958,8 +965,49 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 	/* 6 navigation buttons */
 	for (i = 0; i < 6; i++) {
 #ifdef TIE_MODERN
-		bounds = active_spec->input_bounds[i];
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		if (train_svga) {
+			switch (i) {
+				case 0:
+					xrect_Set_Rect(&frame, 377, 336, 398, 346);
+					break;
+				case 1:
+					xrect_Set_Rect(&frame, 398, 336, 422, 346);
+					break;
+				case 2:
+					xrect_Set_Rect(&frame, 386, 454, 416, 468);
+					break;
+				case 3:
+					xrect_Set_Rect(&frame, 416, 454, 446, 468);
+					break;
+				case 4:
+					xrect_Set_Rect(&frame, 212, 455, 252, 474);
+					break;
+				case 5:
+					xrect_Set_Rect(&frame, 453, 325, 522, 400);
+					break;
+			}
+		} else {
+			switch (i) {
+				case 0:
+					xrect_Set_Rect(&frame, 188, 138, 214, 154);
+					break;
+				case 1:
+					xrect_Set_Rect(&frame, 214, 138, 240, 154);
+					break;
+				case 2:
+					xrect_Set_Rect(&frame, 188, 154, 214, 170);
+					break;
+				case 3:
+					xrect_Set_Rect(&frame, 214, 154, 240, 170);
+					break;
+				case 4:
+					xrect_Set_Rect(&frame, 206, 184, 237, 200);
+					break;
+				case 5:
+					xrect_Set_Rect(&frame, 49, 181, 79, 200);
+					break;
+			}
+		}
 #elif defined(TIE98)
 		switch (i) {
 			case 0:
@@ -1013,7 +1061,7 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 	train_time = 0;
 	train_help = 0;
 #ifdef TIE_MODERN
-	train_monitor_needs_clear = active_spec->clear_monitor;
+	train_monitor_needs_clear = train_svga;
 #elif defined(TIE98)
 	train_monitor_needs_clear = true;
 #endif
@@ -1022,7 +1070,7 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 	bpflight_Stop_Movie_Engine();
 
 	/* Load either legacy TIE95 scores or the shared canonical format. */
-	if (TieScoreTables_LoadTraining(train_score_filename, loaded_scores)) {
+	if (TieScoreTables_LoadTraining("train.hgh", loaded_scores)) {
 		for (i = 0; i < NUM_SCORE_ENTRIES; i++) {
 			snprintf(train_score_name[i], sizeof(train_score_name[i]), "%s", loaded_scores[i].name);
 			train_score_points[i] = loaded_scores[i].score;
@@ -1031,7 +1079,7 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 	}
 	xview_Set_View_Update_Function(train_end_Train_View);
 #ifdef TIE_MODERN
-	TieTrain_RunView(train_file, svga);
+	TieTrain_RunView(train_file, train_svga);
 	return 0;
 #else
 	shellext_Handle_TIE_View();

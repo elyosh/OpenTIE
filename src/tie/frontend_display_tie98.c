@@ -978,65 +978,6 @@ void FrontendDisplay_SetDisplayMode(uint16_t mode) {
 	FrontendDisplay_InitGrayscalePalette();
 }
 
-// MODERN ADAPTATION: application-lifetime entry point for the recovered display module.
-bool tie98_display_startup(uint16_t initial_mode) {
-	g_displayMode = initial_mode;
-	g_surfaceWidth = initial_mode == TIE98_DISPLAY_MODE_VGA ? 320 : 640;
-	g_surfaceHeight = initial_mode == TIE98_DISPLAY_MODE_VGA ? 200 : 480;
-	g_displayWidth = g_surfaceWidth;
-	g_displayHeight = g_surfaceHeight;
-	g_flight16bppBytesPerPixel =
-		initial_mode == TIE98_DISPLAY_MODE_VGA || initial_mode == TIE98_DISPLAY_MODE_SVGA ? 1 : 2;
-	g_useHardware3D = initial_mode == TIE98_DISPLAY_MODE_HARDWARE_FLIGHT;
-	return FrontendDisplay_InitSurfaces() != 0;
-}
-
-// MODERN ADAPTATION: application-lifetime exit point containing the recovered
-// Flight_Main display shutdown block at TIE98 0x499EAE-0x499FCF.
-void tie98_display_shutdown(void) {
-	if (g_useHardware3D) {
-		Renderer_ReleaseHardwareZBuffer();
-		std3D_DestroyDevice();
-		std3D_Shutdown();
-	}
-	if (g_flightDirectDraw) {
-		FrontendDisplay_ClearSurface(g_primarySurface);
-		FrontendDisplay_ClearSurface(g_lpRenderSurface);
-		FrontendDisplay_ClearSurface(g_flightOffscreenSurface);
-		FrontendDisplay_ClearSurface(g_landruSurface);
-		if (g_primarySurface) {
-			g_primarySurface->lpVtbl->Release(g_primarySurface);
-			g_primarySurface = NULL;
-			if (!g_flightFullscreen)
-				g_lpRenderSurface->lpVtbl->Release(g_lpRenderSurface);
-			g_lpRenderSurface = NULL;
-			g_unusedFrontendSurfaceAlias = NULL;
-		}
-		if (g_ddPalette) {
-			g_ddPalette->lpVtbl->Release(g_ddPalette);
-			g_ddPalette = NULL;
-		}
-		if (g_flightOffscreenSurface) {
-			g_flightOffscreenSurface->lpVtbl->Release(g_flightOffscreenSurface);
-			g_flightOffscreenSurface = NULL;
-		}
-		if (g_landruSurface) {
-			g_landruSurface->lpVtbl->Release(g_landruSurface);
-			g_landruSurface = NULL;
-		}
-		g_flightDirectDraw->lpVtbl->SetCooperativeLevel(
-			g_flightDirectDraw, g_flightWindowHandle, DDSCL_FULLSCREEN | DDSCL_EXCLUSIVE | DDSCL_ALLOWMODEX);
-		g_flightDirectDraw->lpVtbl->FlipToGDISurface(g_flightDirectDraw);
-		g_flightDirectDraw->lpVtbl->RestoreDisplayMode(g_flightDirectDraw);
-		g_flightDirectDraw->lpVtbl->Release(g_flightDirectDraw);
-		g_flightDirectDraw = NULL;
-		/* The host owns its native window; there is no Win32 DestroyWindow call. */
-		if (g_flightWindowHandle)
-			g_flightWindowHandle = NULL;
-	}
-	g_useHardware3D = 0;
-}
-
 // FUNCTION: TIE98 0x49CB10
 void FrontendDisplay_ClearSurface(IDirectDrawSurface* surface) {
 	DDBLTFX effects;

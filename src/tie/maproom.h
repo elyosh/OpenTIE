@@ -121,8 +121,7 @@ extern uint8_t warheadflag;
  * species2icon[ship_idx]      -> base icon index
  * iconxsize[base_icon_idx]    -> icon pixel width
  * iconysize[base_icon_idx]    -> icon pixel height
- * iconfilename                -> "icons640.ico" or "mapicons.ico"
- *                                (basename only — caller prepends resourcedir)
+ * iconfilename                -> "RESOURCE\\icons640.ico" or "RESOURCE\\mapicons.ico"
  */
 extern const uint8_t species2icon640[106];
 extern const uint8_t iconxsize640[64];
@@ -130,8 +129,8 @@ extern const uint8_t iconysize640[64];
 extern const uint8_t species2icon320[106];
 extern const uint8_t iconxsize320[66];
 extern const uint8_t iconysize320[66];
-extern const char iconfilename640[22]; /* "icons640.ico\0" */
-extern const char iconfilename320[22]; /* "mapicons.ico\0" */
+extern const char iconfilename640[22]; /* "RESOURCE\\icons640.ico" */
+extern const char iconfilename320[22]; /* "RESOURCE\\mapicons.ico" */
 
 /* Active resolution-dependent pointers (point at one of the *320 / *640
  * tables).  Set by maproom_maproom at room entry. */
@@ -169,7 +168,7 @@ extern const char** maproomhelpstrings;
 /*
  * Saved farbufferptrs[] entries: 265-pointer table used to swap between
  * "panel parts" mode (in-flight) and "map icons" mode (this room).
- * Backing storage = maproomicons_buf (owned by fediskio.c); first 1060
+ * Backing storage = maproomiconshandle (owned by fediskio.c); first 1060
  * bytes hold the 265-entry pointer array and the rest holds the icon
  * shape data.
  */

@@ -65,10 +65,12 @@
 
 // GLOBAL: TIE98 0x5F3464
 SceneHeadStruct* sHead_gbl;
+// GLOBAL: TIE95 0xF56FC
 int16_t digital_exists;
 
-#if defined(TIE95) && !defined(TIE_MODERN)
+#ifndef TIE_MODERN
 // GLOBAL: TIE95 0xF5700
+// GLOBAL: TIE98 0x5F3460
 uint8_t install_cfg_mode;
 #endif
 

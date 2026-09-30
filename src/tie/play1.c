@@ -13,6 +13,7 @@
 #include "tie/play1.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/film_task.h"
+#include "tie_runtime/runtime/play1_data_set.h"
 #endif
 #include "landru/actor.h"
 #include "landru/bitmap.h"
@@ -30,6 +31,7 @@
 #include "landru/timer.h"
 #include "landru/view.h"
 #include "landru/viewadd.h"
+#include "tie/shell.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
 #include "tie/textext.h"
@@ -62,207 +64,24 @@ enum {
 	STREAM_BUFFER_SIZE = 128000,
 };
 
-static const char* play1_tie98_music_path(int16_t scene) {
-	switch (scene) {
-		case 6:
-			return "music/tieintro.wav";
-		case 25:
-			return "music/emperor.wav";
-		case 120:
-			return "music/trainpod.wav";
-		case 130:
-			return "music/fightpod.wav";
-		case 210:
-			return "music/starlog.wav";
-		case 240:
-			return "music/funeral.wav";
-		case 270:
-			return "music/launch.wav";
-		case 280:
-			return "music/medical.wav";
-		case 281:
-		case 282:
-			return "music/battle7.wav";
-		case 283:
-			return "music/medals.wav";
-		case 284:
-			return "music/awe.wav";
-		default:
-			break;
-	}
-	if (scene >= 500 && scene <= 620 && scene % 10 == 0) {
-		static char battle_path[32];
-		snprintf(battle_path, sizeof battle_path, "music/battle%d.wav", (scene - 490) / 10);
-		return battle_path;
-	}
-	return NULL;
-}
-
 /* Wrap table for 320-wide scanline offsets (used by rendering subsystems) */
+// GLOBAL: TIE95 0xF6174
+// GLOBAL: TIE98 0x5FBC60
 static int32_t wrap_table[205];
+// GLOBAL: TIE95 0xF6170
+// GLOBAL: TIE98 0x5FBC4C
 static int32_t wrap;
 
 /* ---- Scene lookup tables ---- */
 /*
- * Two parallel sets exist: one matches the LecDemos sample-disc data
- * layout (under STREAM/), the other matches the Collector's CD retail
- * layout (under ASTREAM/). They differ in late-game scene IDs, secret
- * medal films, a few resource files, and the FMV directory name.
- *
- * Selection is decided once at startup by probing the data directory.
- * Indexed access goes through the selected play1_data_set_t.
+ * Indexed by play1_id. The modern runtime replaces them with the LecDemos
+ * sample-disc tables when that data layout is installed (see
+ * TiePlay1_SelectDataSet).
  */
 
-/* ---- Demo data set (LecDemos sample disc) ---- */
-
-static const int16_t play1_cur_scene_demo[87] = {
-	6,   7,   10,  20,  30,  40,  50,  60,  70,  120, 130, 210, 231, 240, 400, 401, 402, 403,
-	404, 405, 406, 407, 408, 409, 410, 411, 420, 250, 251, 252, 253, 254, 255, 256, 257, 258,
-	259, 260, 261, 262, 263, 270, 170, 280, 281, 282, 283, 284, 285, 390, 500, 510, 520, 530,
-	531, 540, 550, 560, 570, 571, 572, 573, 580, 581, 590, 591, 600, 601, 602, 603, 610, 611,
-	612, 620, 621, 622, 25,  700, 710, 720, 730, 61,  71,  72,  31,  32,  0,
-};
-
-static const int16_t play1_next_scene_demo[86] = {
-	7,   8,   20,  30,  40,  50,  61,  61,  71,  121, 131, 910, 910, 910, 420, 420, 420, 420,
-	420, 420, 420, 420, 420, 420, 420, 420, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910,
-	910, 910, 910, 910, 910, 4,   180, 231, 910, 910, 910, 910, 910, 910, 910, 910, 910, 531,
-	910, 910, 910, 910, 571, 572, 573, 910, 581, 910, 591, 910, 601, 602, 603, 910, 611, 612,
-	910, 621, 622, 910, 910, 910, 910, 910, 910, 70,  72,  80,  32,  40,
-};
-
-static const int16_t play1_skip_scene_demo[86] = {
-	100, 100, 100, 100, 100, 100, 100, 100, 100, 121, 131, 910, 910, 910, 910, 910, 910, 910,
-	910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910,
-	910, 910, 910, 910, 910, 4,   180, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910,
-	910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910,
-	910, 910, 910, 910, 910, 910, 910, 910, 910, 100, 100, 100, 100, 100,
-};
-
-static const char play1_resource_str_demo[86][14] = {
-	"logo.lfd",    "perelogo.lfd", "stardest.lfd", "city.lfd",     "emperor.lfd",  "swarm.lfd",
-	"bridge.lfd",  "platform.lfd", "platform.lfd", "totrain.lfd",  "tocombat.lfd", "capture.lfd",
-	"medical.lfd", "funeral.lfd",  "secret1.lfd",  "secret2.lfd",  "secret2.lfd",  "secret2.lfd",
-	"secret3.lfd", "secret3.lfd",  "secret4.lfd",  "secret4.lfd",  "secret4.lfd",  "secret4.lfd",
-	"secret4.lfd", "secret4.lfd",  "secarm.lfd",   "awards.lfd",   "awards.lfd",   "awards.lfd",
-	"awards.lfd",  "awards.lfd",   "awards.lfd",   "awards.lfd",   "awards.lfd",   "awards1.lfd",
-	"awards1.lfd", "awards1.lfd",  "awards2.lfd",  "awards2.lfd",  "awards2.lfd",  "launch.lfd",
-	"scene2.lfd",  "scene2.lfd",   "scene2.lfd",   "scene2.lfd",   "scene2.lfd",   "scene2.lfd",
-	"scene2.lfd",  "secret.lfd",   "scene1.lfd",   "scene2.lfd",   "scene3.lfd",   "scene4.lfd",
-	"scene4.lfd",  "scene5.lfd",   "scene6.lfd",   "emperor.lfd",  "scene8.lfd",   "scene8.lfd",
-	"scene8.lfd",  "scene8.lfd",   "scene9.lfd",   "scene9.lfd",   "scene10.lfd",  "scene10.lfd",
-	"scene11.lfd", "scene11.lfd",  "scene11.lfd",  "scene11.lfd",  "scene12.lfd",  "scene12.lfd",
-	"scene12.lfd", "scene13.lfd",  "scene13.lfd",  "scene13.lfd",  "city.lfd",     "emperor.lfd",
-	"emperor.lfd", "emperor.lfd",  "scene10.lfd",  "platform.lfd", "platform.lfd", "platform.lfd",
-	"emperor.lfd", "emperor.lfd",
-};
-
-static const char play1_film_str_demo[86][10] = {
-	"logo_f",   "perelogo", "stard_f",  "city1_f",  "emp1_f",   "swarma_f", "brdg1b_f", "plat_f",
-	"chasea1f", "totrn_f",  "tocmbt_f", "cap_f",    "medic_f",  "fun_f",    "sec1_f",   "sec2_f",
-	"sec2_f",   "sec2_f",   "sec3_f",   "sec4_f",   "sec5_f",   "sec6_f",   "sec7_f",   "sec5_f",
-	"sec5_f",   "sec5_f",   "secarm_f", "awards",   "award1",   "award2",   "award3",   "award4",
-	"award5",   "award6",   "award7",   "award8",   "award9",   "award10",  "award11",  "award12",
-	"award13",  "lnch_f",   "newtour",  "landsd",   "landsd",   "landsd",   "landsd",   "landsd",
-	"landsd",   "secret",   "scene1_f", "scene2_f", "scene3_f", "scene4a",  "scene4b",  "scene5_f",
-	"scene6_f", "scene7_f", "battle8a", "battle8b", "battle8c", "battle8d", "scene9_f", "scene9b",
-	"scene10a", "scene10b", "shot1",    "shot2",    "shot3",    "shot4",    "s1_v3",    "s2-v2",
-	"s3-v10",   "s1_v3",    "s2-v2",    "s3-v10",   "sec_f",    "seca_f",   "secb_f",   "secc_f",
-	"secd_f",   "platb2_f", "chaseb_f", "chasec_f", "emp1b_f",  "emp1c_f",
-};
-
-static const char play1_stream_str_demo[86][24] = {
-	"",
-	"",
-	"stream\\os1-v3.wrk",
-	"",
-	"",
-	"stream\\swarm.wrk",
-	"stream\\scene9e.wrk",
-	"",
-	"stream\\scene13a.wrk",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"stream\\shot1.wrk",
-	"stream\\shot2.wrk",
-	"stream\\shot3.wrk",
-	"stream\\shot4.wrk",
-	"stream\\s1_v3.wrk",
-	"stream\\s2-v2.wrk",
-	"stream\\s3-v10.wrk",
-	"stream\\s1_v3.wrk",
-	"stream\\s2-v2.wrk",
-	"stream\\s3-v10.wrk",
-	"",
-	"",
-	"",
-	"",
-	"",
-	"stream\\scene12a.wrk",
-	"",
-	"stream\\scene15.wrk",
-	"stream\\emp1b.wrk",
-	"stream\\emp1c.wrk",
-};
-
-/* ---- Retail data set (Collector's CD) ---- */
-
-static const int16_t play1_cur_scene_retail[87] = {
+// GLOBAL: TIE95 0xD0C02
+// GLOBAL: TIE98 0x4E90B0
+int16_t play1_cur_scene[87] = {
 	6,   7,   10,  20,  30,  40,  50,  60,  70,  120, 130, 210, 231, 240, 400, 401, 402, 403,
 	404, 405, 406, 407, 408, 409, 410, 411, 420, 250, 251, 252, 253, 254, 255, 256, 257, 258,
 	259, 260, 261, 262, 263, 270, 170, 280, 281, 282, 283, 284, 285, 390, 500, 510, 520, 530,
@@ -270,7 +89,9 @@ static const int16_t play1_cur_scene_retail[87] = {
 	621, 622, 623, 25,  700, 710, 720, 730, 740, 61,  71,  72,  31,  32,  0,
 };
 
-static const int16_t play1_next_scene_retail[86] = {
+// GLOBAL: TIE95 0xD0CB0
+// GLOBAL: TIE98 0x4E9160
+int16_t play1_next_scene[86] = {
 	7,   8,   20,  30,  40,  50,  60,  61,  71,  121, 131, 910, 910, 910, 420, 420, 420, 420,
 	420, 420, 420, 420, 420, 420, 420, 420, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910,
 	910, 910, 910, 910, 910, 4,   180, 231, 910, 910, 910, 910, 910, 910, 910, 910, 910, 531,
@@ -278,7 +99,9 @@ static const int16_t play1_next_scene_retail[86] = {
 	622, 623, 910, 910, 910, 910, 910, 910, 910, 70,  72,  80,  32,  40,
 };
 
-static const int16_t play1_skip_scene_retail[86] = {
+// GLOBAL: TIE95 0xD0D5C
+// GLOBAL: TIE98 0x4E9210
+int16_t play1_skip_scene[86] = {
 	100, 100, 100, 100, 100, 100, 100, 100, 100, 121, 131, 910, 910, 910, 910, 910, 910, 910,
 	910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910,
 	910, 910, 910, 910, 910, 4,   180, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910, 910,
@@ -286,7 +109,9 @@ static const int16_t play1_skip_scene_retail[86] = {
 	910, 910, 910, 910, 910, 910, 910, 910, 910, 100, 100, 100, 100, 100,
 };
 
-static const char play1_resource_str_retail[86][14] = {
+// GLOBAL: TIE95 0xD037A
+// GLOBAL: TIE98 0x4E8820
+char play1_resource_str[86][14] = {
 	"logo.lfd",    "perelogo.lfd", "stardest.lfd", "city.lfd",     "emperor.lfd",  "swarm.lfd",
 	"bridge.lfd",  "platform.lfd", "platform.lfd", "totrain.lfd",  "tocombat.lfd", "capture.lfd",
 	"medical.lfd", "funeral.lfd",  "secret1.lfd",  "secret2.lfd",  "secret2.lfd",  "secret2.lfd",
@@ -304,7 +129,9 @@ static const char play1_resource_str_retail[86][14] = {
 	"emperor.lfd", "emperor.lfd",
 };
 
-static const char play1_film_str_retail[86][10] = {
+// GLOBAL: TIE95 0xD082E
+// GLOBAL: TIE98 0x4E8CD8
+char play1_film_str[86][10] = {
 	"logo_f",   "perelogo", "stard_f",  "city1_f",  "emp1_f",   "swarma_f", "brdg1b_f", "plat_f",
 	"chasea1f", "totrn_f",  "tocmbt_f", "cap_f",    "medic_f",  "fun_f",    "sec1_f",   "sec2_f",
 	"sec2_f",   "sec2_f",   "sec3_f",   "sec4_f",   "sec5_f",   "sec6_f",   "sec7_f",   "sec8_f",
@@ -318,16 +145,20 @@ static const char play1_film_str_retail[86][10] = {
 	"sece_f",   "platb2_f", "chaseb_f", "chasec_f", "emp1b_f",  "emp1c_f",
 };
 
-static const char play1_stream_str_retail[86][24] = {
+/* Stream names keep the CD-root form; the hard-drive install
+ * (install_cfg_mode 2) skips the leading backslash. */
+// GLOBAL: TIE95 0xCFB6A
+// GLOBAL: TIE98 0x4E8010
+char play1_stream_str[86][24] = {
 	"",
 	"",
-	"astream\\os1-v3.wrk",
+	"\\astream\\os1-v3.wrk",
 	"",
 	"",
-	"astream\\swarm.wrk",
-	"astream\\scene9e.wrk",
+	"\\astream\\swarm.wrk",
+	"\\astream\\scene9e.wrk",
 	"",
-	"astream\\scene13a.wrk",
+	"\\astream\\scene13a.wrk",
 	"",
 	"",
 	"",
@@ -386,13 +217,13 @@ static const char play1_stream_str_retail[86][24] = {
 	"",
 	"",
 	"",
-	"astream\\shot2.wrk",
-	"astream\\shot3.wrk",
+	"\\astream\\shot2.wrk",
+	"\\astream\\shot3.wrk",
 	"",
 	"",
-	"astream\\s1_v3.wrk",
-	"astream\\s2-v2.wrk",
-	"astream\\s3-v10.wrk",
+	"\\astream\\s1_v3.wrk",
+	"\\astream\\s2-v2.wrk",
+	"\\astream\\s3-v10.wrk",
 	"",
 	"",
 	"",
@@ -400,84 +231,55 @@ static const char play1_stream_str_retail[86][24] = {
 	"",
 	"",
 	"",
-	"astream\\scene12a.wrk",
+	"\\astream\\scene12a.wrk",
 	"",
-	"astream\\scene15.wrk",
-	"astream\\emp1b.wrk",
-	"astream\\emp1c.wrk",
+	"\\astream\\scene15.wrk",
+	"\\astream\\emp1b.wrk",
+	"\\astream\\emp1c.wrk",
 };
 
-/* ---- Data-set descriptor + runtime selector ---- */
-
-typedef struct {
-	const char* name;
-	const int16_t* cur_scene;  /* 87 entries, ends with 0 sentinel */
-	const int16_t* next_scene; /* 86 entries */
-	const int16_t* skip_scene; /* 86 entries */
-	const char (*resource_str)[14];
-	const char (*film_str)[10];
-	const char (*stream_str)[24];
-} play1_data_set_t;
-
-static const play1_data_set_t play1_set_demo = {
-	/* name */ "demo",
-	/* cur_scene */ play1_cur_scene_demo,
-	/* next_scene */ play1_next_scene_demo,
-	/* skip_scene */ play1_skip_scene_demo,
-	/* resource_str */ play1_resource_str_demo,
-	/* film_str */ play1_film_str_demo,
-	/* stream_str */ play1_stream_str_demo,
-};
-
-static const play1_data_set_t play1_set_retail = {
-	/* name */ "retail",
-	/* cur_scene */ play1_cur_scene_retail,
-	/* next_scene */ play1_next_scene_retail,
-	/* skip_scene */ play1_skip_scene_retail,
-	/* resource_str */ play1_resource_str_retail,
-	/* film_str */ play1_film_str_retail,
-	/* stream_str */ play1_stream_str_retail,
-};
-
-/*
- * Probe the data directory once and pick demo vs retail. The retail
- * Collector's CD stores FMV under ASTREAM/; the LecDemos sample disc
- * uses STREAM/. Probes both case spellings since DOS filesystems are
- * case-insensitive but Unix is not.
- */
-static const play1_data_set_t* play1_data_set(void) {
-	static const play1_data_set_t* cached = NULL;
-	if (cached)
-		return cached;
-
-	if (TieStorage_IsDirectory(TIE_FILE_ROOT_FRONTEND_ASSET, "astream") ||
-		TieStorage_IsDirectory(TIE_FILE_ROOT_FRONTEND_ASSET, "ASTREAM")) {
-		cached = &play1_set_retail;
-	} else {
-		cached = &play1_set_demo;
-	}
-	TieDiagnostics_Log(TIE_LOG_INFO, "[PLAY1] data set = %s\n", cached->name);
-	return cached;
-}
-
+// GLOBAL: TIE95 0xD0B8A
+// GLOBAL: TIE98 0x4E9038
 static const char secret_film_str[12][10] = {
 	"hall1_f", "hall2_f", "hall2_f", "hall2_f", "hall3_f", "hall3_f",
 	"hall3_f", "hall3_f", "hall3_f", "hall3_f", "hall3_f", "hall3_f",
 };
 
+// GLOBAL: TIE95 0xCFB4E
+// GLOBAL: TIE98 0x4E7FF0
 static const char mission_disk1_resource[14] = "secarm1.lfd";
+// GLOBAL: TIE95 0xCFB5C
+// GLOBAL: TIE98 0x4E8000
 static const char mission_disk2_resource[14] = "secarm2.lfd";
 
 /* ---- Module state ---- */
 
+// GLOBAL: TIE95 0xF64AC
+// GLOBAL: TIE98 0x584DAC
 static int16_t play1_id;
+// GLOBAL: TIE95 0xF64A8
+// GLOBAL: TIE98 0x584D90
 static Film* play1_film;
+// GLOBAL: TIE95 0xCFB4C
+// GLOBAL: TIE98 0x584DB4
 int16_t play1_is_streaming;
+// GLOBAL: TIE95 0xF64B0
+// GLOBAL: TIE98 0x584DB0
 static int16_t read_state;
+// GLOBAL: TIE95 0xF64AE
+// GLOBAL: TIE98 0x584D88
 static int16_t stream_actor_frames_to_go;
+// GLOBAL: TIE95 0xF64B2
+// GLOBAL: TIE98 0x584D8C
 LandruHandle play1_read_buffer;
+// GLOBAL: TIE95 0xF64B4
+// GLOBAL: TIE98 0x584D84
 static uint8_t use_chain_successful;
+// GLOBAL: TIE95 0xF615C
+// GLOBAL: TIE98 0x584D98
 BitmapStruct play1_last_frame;
+// GLOBAL: TIE95 0xF6148
+// GLOBAL: TIE98 0x584D70
 BitmapStruct play1_current_frame;
 
 /* Forward declarations */
@@ -497,28 +299,31 @@ static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, 
  */
 // FUNCTION: TIE95 0x78500
 static void play1_end_View(int32_t time) {
-	const play1_data_set_t* p;
 	int16_t next_scene;
 	int16_t skip_scene;
 	int16_t scene;
 	bool at_end;
 
 	(void)time;
-	p = play1_data_set();
-	next_scene = p->next_scene[play1_id];
-	skip_scene = p->skip_scene[play1_id];
+	next_scene = play1_next_scene[play1_id];
+	skip_scene = play1_skip_scene[play1_id];
 
-	/* Retail data skips scene 7. Demo data enters it only when LOBO.LFD exists. */
+	/* Retail skips scene 7. */
 	if (next_scene == 7) {
-		if (p == &play1_set_retail) {
-			next_scene = 8;
-		} else {
+#ifdef TIE_MODERN
+		/* PORT: demo data enters scene 7 only when LOBO.LFD exists. */
+		if (TiePlay1_UsesDemoData()) {
 			LandruFile* f = xfile_Open_File(LANDRU_FILE_ROOT_ASSET, "resource\\lobo.lfd", "rb");
 			if (f)
 				xfile_Close_File(f);
 			else
 				next_scene = 8;
+		} else {
+			next_scene = 8;
 		}
+#else
+		next_scene = 8;
+#endif
 	}
 
 	at_end = (play1_film->cur_cel == play1_film->cels);
@@ -578,10 +383,9 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 	}
 
 	if (the_actor->var1 == 123) {
-		const play1_data_set_t* p = play1_data_set();
 		int16_t ok;
 
-		if (!p->stream_str[play1_id][0] || !use_chain_successful)
+		if (!play1_stream_str[play1_id][0] || !use_chain_successful)
 			return 1;
 
 		play1_read_buffer = xmemhdl_Alloc_Handle(STREAM_BUFFER_SIZE, LANDRU_MEMORY_DEFAULT);
@@ -879,18 +683,27 @@ static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, 
  */
 // FUNCTION: TIE95 0x78D54
 static void play1_Chain_Scene(void) {
-	const play1_data_set_t* p = play1_data_set();
+	char name[24];
 	int16_t next_id;
 	int16_t target;
 	int16_t i;
 
 	use_chain_successful = 0;
 
-	if (p->stream_str[play1_id][0]) {
-		if (xstream_Use_Stream_File(0, p->stream_str[play1_id])) {
+#ifdef TIE_MODERN
+	/* PORT: stream files resolve relative to the installed data, like the
+	 * hard-drive install (install_cfg_mode 2). */
+	strcpy(name, play1_stream_str[play1_id] + 1);
+#else
+	if (install_cfg_mode <= 1)
+		strcpy(name, play1_stream_str[play1_id]);
+	else if (install_cfg_mode == 2)
+		strcpy(name, play1_stream_str[play1_id] + 1);
+#endif
+	if (name[0]) {
+		if (xstream_Use_Stream_File(0, name)) {
 			use_chain_successful = 1;
-		} else if (xstream_Chain_Stream_File(0, p->stream_str[play1_id]) &&
-				   xstream_Use_Stream_File(0, p->stream_str[play1_id])) {
+		} else if (xstream_Chain_Stream_File(0, name) && xstream_Use_Stream_File(0, name)) {
 			use_chain_successful = 1;
 		}
 	}
@@ -900,15 +713,23 @@ static void play1_Chain_Scene(void) {
 	 * no sentinel and only terminated by accident of adjacent-global
 	 * memory layout (ASan redzones break that coincidence). */
 	next_id = 0;
-	target = p->next_scene[play1_id];
-	for (i = 0; p->cur_scene[i]; i++) {
-		if (p->cur_scene[i] == target) {
+	target = play1_next_scene[play1_id];
+	for (i = 0; play1_cur_scene[i]; i++) {
+		if (play1_cur_scene[i] == target) {
 			next_id = i;
 			break;
 		}
 	}
-	if (p->stream_str[next_id][0])
-		xstream_Chain_Stream_File(0, p->stream_str[next_id]);
+#ifdef TIE_MODERN
+	strcpy(name, play1_stream_str[next_id] + 1);
+#else
+	if (install_cfg_mode <= 1)
+		strcpy(name, play1_stream_str[next_id]);
+	else if (install_cfg_mode == 2)
+		strcpy(name, play1_stream_str[next_id] + 1);
+#endif
+	if (name[0])
+		xstream_Chain_Stream_File(0, name);
 }
 
 /* ------------------------------------------------------------------ */
@@ -933,10 +754,7 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 	char name[16];
 	Rect r;
 #ifdef TIE_MODERN
-	const play1_data_set_t* p = play1_data_set();
 	LandruSurfaceSet surface_set = LANDRU_SURFACE_VGA;
-#else
-	const play1_data_set_t* p = &play1_set_retail;
 #endif
 
 	int i;
@@ -946,6 +764,9 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 	int16_t cur;
 	bool rate_changed;
 
+#ifdef TIE_MODERN
+	TiePlay1_SelectDataSet();
+#endif
 	for (i = 0; i < 205; i++)
 		wrap_table[i] = 320 * i;
 	wrap = 312;
@@ -966,16 +787,16 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 
 #endif
 
-	for (play1_id = 0; scene != p->cur_scene[play1_id] && p->cur_scene[play1_id]; play1_id++)
+	for (play1_id = 0; scene != play1_cur_scene[play1_id] && play1_cur_scene[play1_id]; play1_id++)
 		;
-	if (!p->cur_scene[play1_id])
+	if (!play1_cur_scene[play1_id])
 		return 0;
 
-	file = shellext_Open_Empire_Resource(p->resource_str[play1_id]);
+	file = shellext_Open_Empire_Resource(play1_resource_str[play1_id]);
 	file2 = NULL;
 	xcanvas_Get_Drawing_Canvas_Bounds(&r);
 
-	cur = p->cur_scene[play1_id];
+	cur = play1_cur_scene[play1_id];
 	rate_changed = false;
 
 	switch (cur) {
@@ -999,7 +820,7 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 		case 710:
 		case 720:
 			xtimer_Set_Frame_Rate(24);
-			strcpy(name, p->film_str[play1_id]);
+			strcpy(name, play1_film_str[play1_id]);
 			rate_changed = true;
 			break;
 
@@ -1018,7 +839,7 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 		case 621:
 		case 622:
 			xtimer_Set_Frame_Rate(20);
-			strcpy(name, p->film_str[play1_id]);
+			strcpy(name, play1_film_str[play1_id]);
 			rate_changed = true;
 			break;
 
@@ -1026,8 +847,8 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 		case 520:
 		case 581:
 			xtimer_Set_Frame_Rate(24);
-			strcpy(name, p->film_str[play1_id]);
-			file2 = shellext_Open_Empire_Resource(p->resource_str[6]);
+			strcpy(name, play1_film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(play1_resource_str[6]);
 			rate_changed = true;
 			break;
 
@@ -1036,32 +857,32 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 		case 591:
 		case 730:
 			xtimer_Set_Frame_Rate(24);
-			strcpy(name, p->film_str[play1_id]);
-			file2 = shellext_Open_Empire_Resource(p->resource_str[4]);
+			strcpy(name, play1_film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(play1_resource_str[4]);
 			rate_changed = true;
 			break;
 
 		/* 20fps + file2 = "scene10.lfd" (resource[80]) — retail-only */
 		case 623:
 			xtimer_Set_Frame_Rate(20);
-			strcpy(name, p->film_str[play1_id]);
-			file2 = shellext_Open_Empire_Resource(p->resource_str[80]);
+			strcpy(name, play1_film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(play1_resource_str[80]);
 			rate_changed = true;
 			break;
 
 		/* 20fps + file2 = "emperor.lfd" (resource[4]) — retail-only */
 		case 740:
 			xtimer_Set_Frame_Rate(20);
-			strcpy(name, p->film_str[play1_id]);
-			file2 = shellext_Open_Empire_Resource(p->resource_str[4]);
+			strcpy(name, play1_film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(play1_resource_str[4]);
 			rate_changed = true;
 			break;
 
 		/* 24fps + file2 from peer resource */
 		case 580:
 			xtimer_Set_Frame_Rate(24);
-			strcpy(name, p->film_str[play1_id]);
-			file2 = shellext_Open_Empire_Resource(p->resource_str[play1_id - 11]);
+			strcpy(name, play1_film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(play1_resource_str[play1_id - 11]);
 			rate_changed = true;
 			break;
 
@@ -1072,8 +893,8 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 		case 261:
 		case 262:
 		case 263:
-			strcpy(name, p->film_str[play1_id]);
-			file2 = shellext_Open_Empire_Resource(p->resource_str[27]);
+			strcpy(name, play1_film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(play1_resource_str[27]);
 			break;
 
 		/* Scene 270: launch ship resource */
@@ -1094,7 +915,7 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 		 * arming cutscene uses film "secarm2f" (only present in
 		 * secarm{1,2}.lfd), not the base "secarm_f" from secarm.lfd. */
 		case 420:
-			strcpy(name, p->film_str[play1_id]);
+			strcpy(name, play1_film_str[play1_id]);
 			if (shipext_Is_Mission_Disk1() || shipext_Is_Mission_Disk2()) {
 				strcpy(name, "secarm2f");
 				xres_Close_Resource(file);
@@ -1102,13 +923,13 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 					file = shellext_Open_Empire_Resource(mission_disk2_resource);
 				else if (shipext_Is_Mission_Disk1())
 					file = shellext_Open_Empire_Resource(mission_disk1_resource);
-				file2 = shellext_Open_Empire_Resource(p->resource_str[play1_id]);
+				file2 = shellext_Open_Empire_Resource(play1_resource_str[play1_id]);
 			}
 			break;
 
 		/* Default: copy film name, no frame rate change */
 		default:
-			strcpy(name, p->film_str[play1_id]);
+			strcpy(name, play1_film_str[play1_id]);
 			break;
 	}
 
@@ -1120,7 +941,7 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 	 * directory conventions. Cleared in PLAY1_PHASE_CLEANUP. */
 	{
 		char lfd_base[16];
-		const char* res = p->resource_str[play1_id];
+		const char* res = play1_resource_str[play1_id];
 		size_t i = 0;
 		for (; i + 1 < sizeof lfd_base && res[i] && res[i] != '.'; ++i)
 			lfd_base[i] = res[i];
@@ -1132,8 +953,8 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 	play1_Chain_Scene();
 #ifdef TIE_MODERN
 	TieDiagnostics_Log(TIE_LOG_INFO, "[PLAY1] scene=%d film='%s' resource='%s' stream='%s'\n", play1_id, name,
-					   p->resource_str[play1_id],
-					   p->stream_str[play1_id][0] ? p->stream_str[play1_id] : "(none)");
+					   play1_resource_str[play1_id],
+					   play1_stream_str[play1_id][0] ? play1_stream_str[play1_id] : "(none)");
 #endif
 	play1_film = xfilm_Res_Callback_Film(name, &r, 0, 0, 0, play1_film_Callback);
 #ifdef TIE_MODERN
@@ -1141,13 +962,89 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 		if (file2)
 			xres_Close_Resource(file2);
 		xres_Close_Resource(file);
-		xerror_Set_Landru_Exit(p->next_scene[play1_id]);
+		xerror_Set_Landru_Exit(play1_next_scene[play1_id]);
 		return 0;
 	}
 	if (TieMusicPolicy_UsesTie98()) {
-		const char* music_path = play1_tie98_music_path(scene);
-		if (music_path)
-			FrontendWaveStream_PlayWaveFile(music_path, 0);
+		/* TIE98 plays the cutscene's digital score after creating the film. */
+		switch (scene) {
+			case 6:
+				FrontendWaveStream_PlayWaveFile("music/tieintro.wav", 0);
+				break;
+			case 25:
+				FrontendWaveStream_PlayWaveFile("music/emperor.wav", 0);
+				break;
+			case 120:
+				FrontendWaveStream_PlayWaveFile("music/trainpod.wav", 0);
+				break;
+			case 130:
+				FrontendWaveStream_PlayWaveFile("music/fightpod.wav", 0);
+				break;
+			case 210:
+				FrontendWaveStream_PlayWaveFile("music/starlog.wav", 0);
+				break;
+			case 240:
+				FrontendWaveStream_PlayWaveFile("music/funeral.wav", 0);
+				break;
+			case 270:
+				FrontendWaveStream_PlayWaveFile("music/launch.wav", 0);
+				break;
+			case 280:
+				FrontendWaveStream_PlayWaveFile("music/medical.wav", 0);
+				break;
+			case 281:
+			case 282:
+				FrontendWaveStream_PlayWaveFile("music/battle7.wav", 0);
+				break;
+			case 283:
+				FrontendWaveStream_PlayWaveFile("music/medals.wav", 0);
+				break;
+			case 284:
+				FrontendWaveStream_PlayWaveFile("music/awe.wav", 0);
+				break;
+			case 500:
+				FrontendWaveStream_PlayWaveFile("music/battle1.wav", 0);
+				break;
+			case 510:
+				FrontendWaveStream_PlayWaveFile("music/battle2.wav", 0);
+				break;
+			case 520:
+				FrontendWaveStream_PlayWaveFile("music/battle3.wav", 0);
+				break;
+			case 530:
+				FrontendWaveStream_PlayWaveFile("music/battle4.wav", 0);
+				break;
+			case 540:
+				FrontendWaveStream_PlayWaveFile("music/battle5.wav", 0);
+				break;
+			case 550:
+				FrontendWaveStream_PlayWaveFile("music/battle6.wav", 0);
+				break;
+			case 560:
+				/* PORT: TIE98 has no score for scene 560. */
+				FrontendWaveStream_PlayWaveFile("music/battle7.wav", 0);
+				break;
+			case 570:
+				FrontendWaveStream_PlayWaveFile("music/battle8.wav", 0);
+				break;
+			case 580:
+				FrontendWaveStream_PlayWaveFile("music/battle9.wav", 0);
+				break;
+			case 590:
+				FrontendWaveStream_PlayWaveFile("music/battle10.wav", 0);
+				break;
+			case 600:
+				FrontendWaveStream_PlayWaveFile("music/battle11.wav", 0);
+				break;
+			case 610:
+				FrontendWaveStream_PlayWaveFile("music/battle12.wav", 0);
+				break;
+			case 620:
+				FrontendWaveStream_PlayWaveFile("music/battle13.wav", 0);
+				break;
+			default:
+				break;
+		}
 	}
 
 #endif

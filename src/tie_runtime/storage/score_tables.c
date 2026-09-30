@@ -26,6 +26,8 @@ enum {
 	GAME_SCORE_MISSION_CAPACITY = 20,
 };
 
+GameScoreHead* combat_score_data;
+
 static size_t fixed_string_length(const char* str, size_t limit) {
 	size_t length = 0;
 	while (length < limit && str[length])

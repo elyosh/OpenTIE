@@ -58,20 +58,35 @@
 #include <stdlib.h>
 #include <string.h>
 
-static const char combat_resource_str[] = "combat.lfd";
-static const char train_resource_str[] = "train.lfd";
-static const char combat_film_name[] = "combat";
+/* Resource names: [0] = combat LFD, [1] = train LFD, [2] = film, [3] = unused. */
+// GLOBAL: TIE95 0xCE6B6
+// GLOBAL: TIE98 0x4DF310
+static const char combat_str[4][20] = { "combat.lfd", "train.lfd", "combat", "combutns" };
 
 enum {
 	COMBAT_MAX_MISSIONS = 8,
 };
 
 /* Module state */
+// GLOBAL: TIE95 0xF5908
+// GLOBAL: TIE98 0x50AA84
 static ResFile* combat_file;
+#ifndef TIE98
+/* TIE98 no longer opens TRAIN.LFD from the combat room. */
+// GLOBAL: TIE95 0xF58E8
 static ResFile* train_file;
+#endif
+// GLOBAL: TIE95 0xF5904
+// GLOBAL: TIE98 0x50AA80
 static Film* combat_film;
+// GLOBAL: TIE95 0xF58F4
+// GLOBAL: TIE98 0x50AA70
 static Input* world_input;
+// GLOBAL: TIE95 0xF58B8
+// GLOBAL: TIE98 0x50AA88
 static Input* button_input[8];
+// GLOBAL: TIE95 0xF5900
+// GLOBAL: TIE98 0x50AA54
 static Input* monitor_input;
 // GLOBAL: TIE95 0xF58E0
 static Actor* arrow_actor;
@@ -80,15 +95,21 @@ static Actor* button[7];
 // GLOBAL: TIE95 0xF58FC
 // GLOBAL: TIE98 0x50AA6C
 static Actor* helmet;
+// GLOBAL: TIE95 0xF58E4
 // GLOBAL: TIE98 0x50AAA8
 static int32_t combat_time;
 // GLOBAL: TIE98 0x50AA58
 static int32_t combat_mode;
+// GLOBAL: TIE95 0xF58F0
+// GLOBAL: TIE98 0x50AA60
 static int32_t combat_round;
 // GLOBAL: TIE95 0xF5910
 static int16_t combat_help;
+// GLOBAL: TIE95 0xF590C
+// GLOBAL: TIE98 0x50AAAC
 static int16_t combat_num_scores;
-GameScoreHead* combat_score_data;
+// GLOBAL: TIE95 0xF5912
+// GLOBAL: TIE98 0x50AA74
 static int16_t combat_score_id;
 #ifdef TIE_MODERN
 static bool combat_svga;
@@ -1051,13 +1072,11 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	combat_Load_Combat_High_Scores();
 
 #ifdef TIE_MODERN
-	train_file = combat_svga ? NULL : shellext_Open_Empire_Resource(train_resource_str);
-#elif defined(TIE98)
-	train_file = NULL;
-#else
-	train_file = shellext_Open_Empire_Resource(train_resource_str);
+	train_file = combat_svga ? NULL : shellext_Open_Empire_Resource(combat_str[1]);
+#elif !defined(TIE98)
+	train_file = shellext_Open_Empire_Resource(combat_str[1]);
 #endif
-	combat_file = shellext_Open_Empire_Resource(combat_resource_str);
+	combat_file = shellext_Open_Empire_Resource(combat_str[0]);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 
@@ -1068,7 +1087,7 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 #else
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
 #endif
-	combat_film = xfilm_Res_Callback_Film(combat_film_name, &frame, 0, 0, 0, combat_film_Combat_Callback);
+	combat_film = xfilm_Res_Callback_Film(combat_str[2], &frame, 0, 0, 0, combat_film_Combat_Callback);
 	xfilm_Set_Film_Def_Palette(combat_film, the_head->def_palette);
 
 #if defined(TIE98) && !defined(TIE_MODERN)
@@ -1240,8 +1259,9 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 		xcursor_Hide_Cursor();
 
 	xres_Close_Resource(combat_file);
-	if (train_file)
-		xres_Close_Resource(train_file);
+#ifndef TIE98
+	xres_Close_Resource(train_file);
+#endif
 	if (combat_score_data) {
 		free(combat_score_data);
 		combat_score_data = NULL;

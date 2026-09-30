@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "tie/dynamix.h"
+#include "tie/laser.h"
 #include "tie/move.h"
 #include "tie/starship.h"
 #include "tie/static.h"
@@ -176,4 +177,24 @@ int TieFlightCheckpoint_Read(TieFile* file) {
 	ok = ok && TieChaseCamera_RestoreCheckpoint(payload + offset, TieChaseCamera_CheckpointSize());
 	free(payload);
 	return ok;
+}
+
+void TieFlightCheckpoint_RebindPointers(void) {
+	size_t i;
+
+	for (i = 0; i < NUM_OBJECTS; ++i) {
+		FlightObject* object = &objects[i];
+		if (!object->ship_idx) {
+			object->craft_ptr = NULL;
+		} else if (i < NUM_CRAFTS) {
+			object->craft_ptr = &crafts[i];
+		} else if (i < WARHEAD_SLOT_END) {
+			object->craft_ptr = (CraftData*)&warheads[i - NUM_CRAFTS];
+		} else {
+			object->craft_ptr = NULL;
+		}
+	}
+
+	pstate.player = &objects[pstate.object_idx];
+	pstate.player_craft = pstate.player->craft_ptr;
 }

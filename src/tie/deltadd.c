@@ -33,105 +33,13 @@ typedef struct {
 	int16_t bottom;
 } DeltaHeader;
 
-static void add_color_run(uint8_t* dst, int16_t count, uint8_t color) {
-	int16_t i;
-	for (i = 0; i < count; i++)
-		dst[i] = dst[i] + color;
-}
-
-static void copy_transparent(uint8_t* dst, const uint8_t* src, int16_t count) {
+// FUNCTION: TIE95 0x65094
+static void deltadd_Copy_Transparent(uint8_t* dst, const uint8_t* src, int16_t count) {
 	int16_t i;
 	for (i = 0; i < count; i++) {
 		if (src[i])
 			dst[i] = src[i];
 	}
-}
-
-/*
- * Process one delta scanline with additive blending (unclipped).
- * Returns pointer past the consumed scanline data.
- */
-static const uint8_t* process_scanline_add(const uint8_t* src, uint8_t* canvas_row, int16_t pixel_count,
-										   int compressed, uint8_t color) {
-	if (compressed) {
-		int16_t remaining = pixel_count;
-		while (remaining > 0) {
-			uint8_t pack_byte = *src++;
-			uint8_t pack_len = pack_byte >> 1;
-			if (pack_byte & 1) {
-				src++; /* skip fill byte — unused in additive mode */
-			} else {
-				src += pack_len; /* skip raw bytes */
-			}
-			add_color_run(canvas_row, pack_len, color);
-			canvas_row += pack_len;
-			remaining -= pack_len;
-		}
-	} else {
-		add_color_run(canvas_row, pixel_count, color);
-		src += pixel_count;
-	}
-	return src;
-}
-
-/*
- * Process one delta scanline with additive blending into a scratch buffer,
- * then clip and composite back to the canvas.
- * Returns pointer past the consumed scanline data.
- */
-static const uint8_t* process_scanline_add_clipped(const uint8_t* src, uint8_t* scratch,
-												   uint8_t* canvas_pixels, int16_t scan_x, int16_t scan_y,
-												   int16_t pixel_count, int compressed, uint8_t color,
-												   int16_t clip_left, int16_t clip_top, int16_t clip_right,
-												   int16_t clip_bottom) {
-	/* First pass: add color to scratch buffer at the scanline's x position */
-	uint8_t* scratch_row = &scratch[scan_x];
-	uint8_t* canvas_src = &canvas_pixels[scan_y * SCREEN_WIDTH + scan_x];
-	int16_t i;
-
-	if (compressed) {
-		int16_t remaining = pixel_count;
-		while (remaining > 0) {
-			uint8_t pack_byte = *src++;
-			uint8_t pack_len = pack_byte >> 1;
-			if (pack_byte & 1) {
-				src++;
-			} else {
-				src += pack_len;
-			}
-			for (i = 0; i < pack_len; i++)
-				scratch_row[i] = color + canvas_src[i];
-			scratch_row += pack_len;
-			canvas_src += pack_len;
-			remaining -= pack_len;
-		}
-	} else {
-		for (i = 0; i < pixel_count; i++)
-			scratch_row[i] = color + canvas_src[i];
-		src += pixel_count;
-	}
-
-	/* Second pass: clip and copy non-zero pixels from scratch to canvas */
-	if (scan_y >= clip_top && scan_y <= clip_bottom) {
-		int16_t x_start = scan_x;
-		int16_t width = pixel_count;
-		int16_t x_end;
-
-		if (x_start < clip_left) {
-			width -= (clip_left - x_start);
-			x_start = clip_left;
-		}
-		x_end = scan_x + pixel_count;
-		if (x_end > clip_right)
-			width -= (x_end - clip_right);
-
-		if (width > 0) {
-			uint8_t* dst = &canvas_pixels[scan_y * SCREEN_WIDTH + x_start];
-			copy_transparent(dst, &scratch[x_start], width);
-		}
-	}
-
-	return src;
 }
 
 /*
@@ -149,11 +57,32 @@ static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t
 		int16_t scan_y = off_y + (int16_t)*data++;
 		uint8_t* row = &canvas[scan_y * SCREEN_WIDTH + scan_x];
 
+		const uint8_t* src = (const uint8_t*)data;
 		int compressed = length & 1;
 		int16_t pixel_count = length >> 1;
+		int16_t i;
 
-		data =
-			(const uint16_t*)process_scanline_add((const uint8_t*)data, row, pixel_count, compressed, color);
+		if (compressed) {
+			int16_t remaining = pixel_count;
+			while (remaining > 0) {
+				uint8_t pack_byte = *src++;
+				uint8_t pack_len = pack_byte >> 1;
+				if (pack_byte & 1) {
+					src++; /* skip fill byte — unused in additive mode */
+				} else {
+					src += pack_len; /* skip raw bytes */
+				}
+				for (i = 0; i < pack_len; i++)
+					row[i] = row[i] + color;
+				row += pack_len;
+				remaining -= pack_len;
+			}
+		} else {
+			for (i = 0; i < pixel_count; i++)
+				row[i] = row[i] + color;
+			src += pixel_count;
+		}
+		data = (const uint16_t*)src;
 		length = *data++;
 	}
 
@@ -183,12 +112,54 @@ static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t 
 		int16_t scan_x = off_x + (int16_t)*data++;
 		int16_t scan_y = off_y + (int16_t)*data++;
 
+		const uint8_t* src = (const uint8_t*)data;
 		int compressed = length & 1;
 		int16_t pixel_count = length >> 1;
+		/* First pass: add color to scratch buffer at the scanline's x position */
+		uint8_t* scratch_row = &scratch[scan_x];
+		uint8_t* canvas_src = &canvas[scan_y * SCREEN_WIDTH + scan_x];
+		int16_t i;
 
-		data = (const uint16_t*)process_scanline_add_clipped((const uint8_t*)data, scratch, canvas, scan_x,
-															 scan_y, pixel_count, compressed, color,
-															 clip_left, clip_top, clip_right, clip_bottom);
+		if (compressed) {
+			int16_t remaining = pixel_count;
+			while (remaining > 0) {
+				uint8_t pack_byte = *src++;
+				uint8_t pack_len = pack_byte >> 1;
+				if (pack_byte & 1) {
+					src++;
+				} else {
+					src += pack_len;
+				}
+				for (i = 0; i < pack_len; i++)
+					scratch_row[i] = color + canvas_src[i];
+				scratch_row += pack_len;
+				canvas_src += pack_len;
+				remaining -= pack_len;
+			}
+		} else {
+			for (i = 0; i < pixel_count; i++)
+				scratch_row[i] = color + canvas_src[i];
+			src += pixel_count;
+		}
+
+		/* Second pass: clip and copy non-zero pixels from scratch to canvas */
+		if (scan_y >= clip_top && scan_y <= clip_bottom) {
+			int16_t x_start = scan_x;
+			int16_t width = pixel_count;
+			int16_t x_end;
+
+			if (x_start < clip_left) {
+				width -= (clip_left - x_start);
+				x_start = clip_left;
+			}
+			x_end = scan_x + pixel_count;
+			if (x_end > clip_right)
+				width -= (x_end - clip_right);
+
+			if (width > 0)
+				deltadd_Copy_Transparent(&canvas[scan_y * SCREEN_WIDTH + x_start], &scratch[x_start], width);
+		}
+		data = (const uint16_t*)src;
 		length = *data++;
 	}
 

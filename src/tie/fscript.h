@@ -22,8 +22,6 @@ typedef struct {
 } SdpRecord;                /* 62 bytes */
 
 int16_t fscript_MsStartScript(void* init_data);
-int16_t fscript_MsStopScript(void);
-int16_t fscript_MsSetCuePoint(void);
 int16_t fscript_MsRefreshScript(void);
 int16_t fscript_MsSetState(int16_t new_state);
 int16_t fscript_MsSetSequence(int16_t seq_id);

@@ -309,7 +309,7 @@ void paiman_calcplanelead(uint16_t tgt_obj_idx) {
 			laser_id = cd->laser_type[0];
 		}
 
-		closing_speed = (int16_t)((int16_t)projectilevelocity[laser_species_idx(laser_id)] +
+		closing_speed = (int16_t)((int16_t)projectilevelocity[laser_id - WEAPON_SPECIES_BASE] +
 								  objects[ai.active_obj_idx].current_speed);
 
 		/* Scale by cos(pitch_delta) between our pitch and target's. */
@@ -1506,536 +1506,6 @@ void paiman_initboardmaneuver(void) {
 						   craftptr->default_order_ldr);
 }
 
-/* Phase 0 — approach to dock point. */
-static int16_t board_phase0(CraftData* cd, uint16_t target_ref, uint8_t tgt_species) {
-	int32_t wp_z;
-
-	if (target_ref >= 0x3800u) {
-		/* Static target: just use its world pos + 2048 z offset. */
-		create_getworldposition(target_ref, 0);
-		cd->waypoint_x_cache = worldlocx;
-		cd->waypoint_y_cache = worldlocy;
-		wp_z = worldlocz + 2048;
-	} else {
-		/* Live target: species-specific dock approach offset. */
-		int16_t dock_fwd = spec_data[tgt_species].dock_fwd;
-		int16_t cd_rspd;
-		int16_t tgt_heading_sel;
-		int16_t dock_active_heavy = spec_data[cd->species_idx].dock_active_heavy;
-
-		if (objects[target_ref].genus && objects[target_ref].genus != GENUS_TRANSPORT) {
-			if (objects[ai.active_obj_idx].genus && objects[ai.active_obj_idx].genus != GENUS_TRANSPORT)
-				cd_rspd = (int16_t)(spec_data[tgt_species].dock_passive_heavy +
-									spec_data[tgt_species].dock_passive_heavy - dock_active_heavy);
-			else
-				cd_rspd = (int16_t)(spec_data[tgt_species].dock_passive_heavy +
-									spec_data[tgt_species].dock_passive_light - dock_active_heavy);
-		} else {
-			cd_rspd = (int16_t)(spec_data[tgt_species].dock_passive_light -
-								spec_data[cd->species_idx].dock_active_light);
-		}
-		tgt_heading_sel = (int16_t)(spec_data[tgt_species].dock_passive_heavy - dock_active_heavy +
-									spec_data[tgt_species].dock_passive_heavy - dock_active_heavy + cd_rspd);
-		if (tgt_heading_sel < 0)
-			tgt_heading_sel = 28672;
-
-		pai_calcrotatedpoint(&objects[target_ref], 0, tgt_heading_sel, dock_fwd);
-		cd->waypoint_x_cache = rotatedx + objects[target_ref].world_x;
-		cd->waypoint_y_cache = rotatedy + objects[target_ref].world_y;
-		wp_z = rotatedz + objects[target_ref].world_z;
-	}
-	cd->waypoint_z_cache = wp_z;
-
-	paiman_setflighttotarget(0, 1);
-	if (trig2_polardistance > 0x4000)
-		cd->throttle_speed = 0xFFFFu;
-	if (trig2_polardistance > 0x2000) {
-		cd->throttle_speed = 0x8000;
-		return 0;
-	}
-	if (trig2_polardistance <= 2048) {
-		cd->throttle_speed = 0;
-		cd->mode_subbyte = 1;
-		TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_ALIGNING,
-							   cd->default_order_ldr);
-	} else {
-		cd->throttle_speed = 0x4000;
-	}
-	return 0;
-}
-
-/* Phase 1 — close alignment + dock announcement. */
-static int16_t board_phase1(CraftData* cd, uint16_t target_ref, uint8_t tgt_species, uint8_t tgt_fg_idx,
-							uint8_t dock_delay_var0) {
-	int32_t abs_dx, abs_dy, abs_dz;
-	uint16_t target_roll_align;
-	uint16_t target_heading_align;
-	uint16_t target_pitch_align;
-	int32_t push_x, push_y, push_z;
-
-	if (target_ref >= 0x3800u) {
-		create_getworldposition(target_ref, 0);
-		push_x = worldlocx - objects[ai.active_obj_idx].world_x;
-		push_y = worldlocy - objects[ai.active_obj_idx].world_y;
-		push_z = (worldlocz + 128) - objects[ai.active_obj_idx].world_z;
-		cd->push_accum_x = push_x;
-		cd->push_accum_y = push_y;
-		cd->push_accum_z = push_z;
-		target_roll_align = 0;
-		target_pitch_align = 0;
-		target_heading_align = 0x4000u;
-	} else {
-		int16_t offset_up;
-		if (objects[target_ref].genus && objects[target_ref].genus != GENUS_TRANSPORT) {
-			if (objects[ai.active_obj_idx].genus && objects[ai.active_obj_idx].genus != GENUS_TRANSPORT)
-				offset_up = (int16_t)(spec_data[tgt_species].dock_passive_heavy -
-									  spec_data[cd->species_idx].dock_active_heavy);
-			else
-				offset_up = (int16_t)(spec_data[tgt_species].dock_passive_light -
-									  spec_data[cd->species_idx].dock_active_heavy);
-		} else {
-			offset_up = (int16_t)(spec_data[tgt_species].dock_passive_light -
-								  spec_data[cd->species_idx].dock_active_light);
-		}
-		pai_calcrotatedpoint(&objects[target_ref], 0, offset_up, spec_data[tgt_species].dock_fwd);
-		push_x = rotatedx + objects[target_ref].world_x - objects[ai.active_obj_idx].world_x;
-		push_y = rotatedy + objects[target_ref].world_y - objects[ai.active_obj_idx].world_y;
-		push_z = rotatedz + objects[target_ref].world_z - objects[ai.active_obj_idx].world_z;
-		cd->push_accum_x = push_x;
-		cd->push_accum_y = push_y;
-		cd->push_accum_z = push_z;
-		target_roll_align = (uint16_t)objects[target_ref].roll;
-		target_pitch_align = (uint16_t)objects[target_ref].pitch;
-		target_heading_align = (uint16_t)objects[target_ref].heading;
-	}
-
-	if ((int16_t)target_roll_align != objects[ai.active_obj_idx].roll) {
-		cd->ai_roll_state = 1;
-		cd->ai_roll_step = 0x8000u;
-		cd->ai_target_roll = target_roll_align;
-	}
-	if ((int16_t)target_pitch_align != objects[ai.active_obj_idx].pitch) {
-		cd->ai_pitch_state = 2;
-		cd->ai_pitch_step = 0x8000u;
-		cd->ai_target_pitch = target_pitch_align;
-	}
-	if (objects[ai.active_obj_idx].heading != objects[target_ref].heading) {
-		cd->ai_heading_step = 0x8000u;
-		cd->ai_target_heading = target_heading_align;
-		cd->ai_heading_force = 0;
-		cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
-	}
-
-	abs_dx = push_x < 0 ? -push_x : push_x;
-	abs_dy = push_y < 0 ? -push_y : push_y;
-	abs_dz = push_z < 0 ? -push_z : push_z;
-	if (abs_dx + abs_dy + abs_dz >= 16)
-		return 0;
-
-	/* Docked. */
-	cd->push_accum_x = 0;
-	cd->push_accum_y = 0;
-	cd->push_accum_z = 0;
-	cd->mode_subbyte = 2;
-	cd->ai_plan_state = 236;
-	cd->maneuver_timer = 1180 * (int32_t)dock_delay_var0;
-	TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_DOCKED, cd->default_order_ldr);
-
-	msg_createobjectname(ai.active_obj_idx, 1, tempstring);
-	msg_addmessageptr(0, tempstring);
-	msg_createobjectname(target_ref, 1, temp2string);
-	msg_addmessageptr(1, temp2string);
-	messageside = objects[ai.active_obj_idx].side;
-	msg_messageprintf(MSG_DOCKED_WITH);
-
-	if (pstate.player->side != objects[ai.active_obj_idx].side) {
-		fsfx_triggersfx(0x27, 0xFFFF);
-		return 0;
-	}
-	fsfx_speakobjectname(ai.active_obj_idx, 0x33);
-
-	{
-		uint8_t order_ldr = cd->default_order_ldr;
-		uint8_t voice;
-
-		/* Voice cascade per binary 0x3BC03..0x3BC9C:
-		 *   0x1C, 0x1D, 0x20, 0x21, 0x44 -> 0x43/0x42 (with-player vs other)
-		 *   0x1E, 0x22                   -> 0x41 (operation-A)
-		 *   0x1F                         -> 0x44 (operation-D / capture)
-		 *   anything else                -> silent. */
-		if (order_ldr < 0x1F) {
-			if (order_ldr < 0x1C)
-				return 0;
-			if (order_ldr <= 0x1D) {
-				voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
-				fsfx_speakoperation(voice, 0x3F);
-				return 0;
-			}
-			/* 0x1E falls through to voice 0x41 below. */
-		} else if (order_ldr == 0x1F) {
-			fsfx_speakoperation(0x44, 0x3F);
-			return 0;
-		} else if (order_ldr < 0x22) {
-			/* 0x20, 0x21 */
-			voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
-			fsfx_speakoperation(voice, 0x3F);
-			return 0;
-		} else if (order_ldr == 0x22) {
-			/* 0x22 falls through to voice 0x41. */
-		} else if (order_ldr == 68) {
-			voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
-			fsfx_speakoperation(voice, 0x3F);
-			return 0;
-		} else {
-			return 0;
-		}
-		fsfx_speakoperation(0x41, 0x3F);
-	}
-	return 0;
-}
-
-/* Phase 2 — transfer. Returns 1 only if the post-transfer logic advances
- * directly to completion (it always falls through to phase 3 instead). */
-static void board_phase2_run_transfer(CraftData* cd, CraftData* tgt_cd, uint16_t target_ref,
-									  uint8_t tgt_fg_idx) {
-	uint8_t order_ldr = cd->default_order_ldr;
-	uint8_t msg_id = 119;
-	uint16_t msg_obj = ai.active_obj_idx;
-	CraftData* msg_cd = cd;
-
-	switch (order_ldr) {
-		case 0x1C: /* Unload to target. */
-			if (target_ref < 0x3800u) {
-				int k;
-
-				for (k = 0; k < 16; ++k)
-					tgt_cd->cargo[k] = cd->cargo[k];
-				tgt_cd->boarding_state = 2;
-			}
-			cd->cargo[0] = 0;
-			cd->boarding_state = 1;
-			break;
-		case 0x1D: /* Load from target. */
-			if (target_ref < 0x3800u) {
-				int k;
-
-				for (k = 0; k < 16; ++k)
-					cd->cargo[k] = tgt_cd->cargo[k];
-				tgt_cd->cargo[0] = 0;
-				tgt_cd->boarding_state = 1;
-			}
-			cd->boarding_state = 2;
-			break;
-		case 0x1E: /* Swap. */
-			if (target_ref < 0x3800u) {
-				int k;
-
-				for (k = 0; k < 16; ++k) {
-					char tmp = cd->cargo[k];
-					cd->cargo[k] = tgt_cd->cargo[k];
-					tgt_cd->cargo[k] = tmp;
-				}
-				tgt_cd->boarding_state = 2;
-			}
-			cd->boarding_state = 2;
-			break;
-		case 0x1F: /* Capture — set steerage + rebuild target's plan. */
-			if (target_ref < 0x3800u) {
-				AiContext saved_ai_ctx;
-				int16_t max_speed_cache = tgt_cd->max_speed_cache;
-				CraftData* cd_prev;
-
-				tgt_cd->dock_state_flags = (uint8_t)(ai.fg_idx | 0x80u);
-				++fgstatus[tgt_fg_idx].cond[3].detail;
-				if (fg_array[tgt_fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
-					fgstatus[tgt_fg_idx].cond_id[3].detail = 1;
-				objects[target_ref].side = objects[ai.active_obj_idx].side;
-				if (objects[ai.active_obj_idx].side == 1 && objects[target_ref].ship_idx < 0x45u)
-					++mission.captures_by_type[tgt_cd->species_idx];
-
-				/* Reset captured craft to cruise mode. Binary 0x3C1E6
-				 * writes flight_flag=0 before status_flags/current_order. */
-				tgt_cd->flight_flag = 0;
-				tgt_cd->status_flags = tgt_cd->subsystem_active;
-				tgt_cd->current_order = max_speed_cache ? 47 : 1;
-
-				cd_prev = craftptr;
-				saved_ai_ctx = ai;
-				craftptr = tgt_cd;
-				pai_setupcraftaivars(target_ref);
-				pai_initplan();
-				craftptr = cd_prev;
-				ai = saved_ai_ctx;
-				TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_CAPTURED, order_ldr);
-
-				msg_id = 101;
-				msg_cd = cd_prev;
-				msg_obj = target_ref;
-			}
-			break;
-		case 0x20: /* Repair. */
-			if (target_ref < 0x3800u) {
-				AiContext saved_ai_ctx;
-				tgt_cd->current_order = 67;
-				tgt_cd->ai_target_ref = (int16_t)ai.active_obj_idx;
-				saved_ai_ctx = ai;
-				{
-					CraftData* cd_prev = craftptr;
-					craftptr = tgt_cd;
-					pai_setupcraftaivars(target_ref);
-					pai_initplan();
-					craftptr = cd_prev;
-				}
-				ai = saved_ai_ctx;
-			}
-			break;
-		case 0x21: /* Retrieve passenger: stage self as carrier. */
-			if (target_ref < 0x3800u) {
-				cd->tow_slave_ref = (int16_t)target_ref;
-				tgt_cd->dock_state_flags = (uint8_t)(ai.fg_idx | 0xC0u);
-				/* Imperial captures of non-Imperial low-id retrievals count
-				 * toward the per-species kill ledger. Binary 0x3C305..0x3C33F:
-				 * active.side==1 && (original) target.side != 1 && ship_idx<0x45.
-				 * The check on target.side runs BEFORE the side overwrite. */
-				if (objects[ai.active_obj_idx].side == 1 && objects[target_ref].side != 1 &&
-					objects[target_ref].ship_idx < 0x45u)
-					++mission.captures_by_type[tgt_cd->species_idx];
-				objects[target_ref].side = objects[ai.active_obj_idx].side;
-				if (fg_array[tgt_fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
-					fgstatus[tgt_fg_idx].cond_id[3].detail = 1;
-			} else {
-				/* Static anchor: bump status. */
-				uint16_t sidx = target_ref - 14336u;
-				uint8_t sf = staticobjects[sidx].fg_idx;
-				++fgstatus[sf].cond[3].detail;
-				/* The binary nulls species to mark the slot retrieved. */
-				staticobjects[sidx].species = 0;
-			}
-			++fgstatus[tgt_fg_idx].cond[3].detail;
-			break;
-		case 0x22: /* Deliver passenger. */
-			if (target_ref < 0x3800u)
-				tgt_cd->boarding_state = 2;
-			break;
-		case 0x44: /* Repair subsystems. */
-			if (target_ref < 0x3800u) {
-				/* Binary 0x3C441 writes flight_flag=0 between loading
-				 * subsystem_active and storing it into status_flags. */
-				tgt_cd->flight_flag = 0;
-				tgt_cd->status_flags = tgt_cd->subsystem_active;
-			}
-			break;
-		default:
-			break;
-	}
-
-	msg_craftmessage(msg_obj, msg_cd, msg_id);
-}
-
-static int16_t board_phase2(CraftData* cd, uint16_t target_ref, uint8_t tgt_species, uint8_t tgt_fg_idx,
-							uint16_t target_idnumber) {
-	CraftData* tgt_cd = (target_ref < 0x3800u) ? objects[target_ref].craft_ptr : NULL;
-	bool changed_flag = false;
-
-	if (!cd->maneuver_timer) {
-		if (tgt_cd)
-			board_phase2_run_transfer(cd, tgt_cd, target_ref, tgt_fg_idx);
-		TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_TRANSFER,
-							   cd->default_order_ldr);
-
-		/* SFX + capture-list bookkeeping. */
-		if (target_ref < 0x3800u && tgt_cd) {
-			if (objects[ai.active_obj_idx].side != pstate.player->side) {
-				fsfx_triggersfx(0x27, 0xFFFF);
-			} else {
-				if (!tgt_cd->inspected) {
-					tgt_cd->inspected = 1;
-					++fgstatus[objects[target_ref].fg_idx].cond[4].detail;
-					if (fg_array[objects[target_ref].fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
-						fgstatus[objects[target_ref].fg_idx].cond_id[4].detail = 1;
-				}
-				fsfx_speakobjectname(ai.active_obj_idx, 0x33);
-				/* Operation-completed voice cascade per binary 0x3C51A..0x3C58E.
-				 * Same shape as phase 1 but uses verb 0x40 (completed) instead
-				 * of 0x3F (acknowledged). */
-				{
-					uint8_t order_ldr = cd->default_order_ldr;
-					uint8_t voice;
-					if (order_ldr < 0x1F) {
-						if (order_ldr >= 0x1C && order_ldr <= 0x1D) {
-							voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
-							fsfx_speakoperation(voice, 0x40);
-						} else if (order_ldr == 0x1E) {
-							fsfx_speakoperation(0x41, 0x40);
-						}
-					} else if (order_ldr == 0x1F) {
-						fsfx_speakoperation(0x44, 0x40);
-					} else if (order_ldr < 0x22) {
-						voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
-						fsfx_speakoperation(voice, 0x40);
-					} else if (order_ldr == 0x22) {
-						fsfx_speakoperation(0x41, 0x40);
-					} else if (order_ldr == 68) {
-						voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
-						fsfx_speakoperation(voice, 0x40);
-					}
-				}
-			}
-		}
-
-		++cd->ai_goal_progress[cd->ai_state_1C];
-		cd->capture_list[cd->capture_count] = target_idnumber;
-		if (++cd->capture_count >= 10)
-			cd->capture_count = 9;
-		if (cd->capture_count == 1) {
-			++fgstatus[ai.fg_idx].cond[6].detail;
-			if (fg_array[ai.fg_idx].special_craft == cd->craft_idx_in_fg)
-				fgstatus[ai.fg_idx].cond_id[6].detail = 1;
-		}
-		if (target_ref < 0x3800u && tgt_cd && !tgt_cd->board_count) {
-			++fgstatus[tgt_fg_idx].cond[5].detail;
-			if (fg_array[tgt_fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
-				fgstatus[tgt_fg_idx].cond_id[5].detail = 1;
-		}
-
-		cd->mode_subbyte = 3;
-		cd->maneuver_timer = 2360;
-		TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_DEPARTING,
-							   cd->default_order_ldr);
-		if (pstate.target_obj_idx == target_ref)
-			lasttargetnum = -3;
-		if (target_ref == pstate.object_idx)
-			cd->pending_radio_command = 0xFFu;
-		return 0;
-	}
-
-	/* Pre-timer: re-arm missiles / subsystems for order 28 when linked
-	 * to the player craft. */
-	if (cd->default_order_ldr != 28)
-		return 0;
-	if (cd->pending_radio_command != (uint8_t)pstate.object_idx)
-		return 0;
-	if (cd->ai_plan_state)
-		return 0;
-
-	/* Missile restock. */
-	{
-		uint16_t bank;
-		const SpecData* tgt_sd = &spec_data[tgt_species];
-		for (bank = 0; bank < tgt_cd->missile_group_cnt; ++bank) {
-			if (!tgt_cd->warhead_type[bank])
-				continue;
-			{
-				uint16_t missile_slot = tgt_sd->missile_start[bank];
-				uint16_t missile_end = tgt_sd->missile_end[bank];
-				for (; missile_slot <= missile_end; ++missile_slot) {
-					uint16_t torp_used = (target_ref == pstate.object_idx)
-											 ? mission.torp_used
-											 : fg_array[objects[target_ref].fg_idx].warhead;
-					uint32_t torp_cnt;
-
-					if (bank == 1)
-						torp_used = 5;
-					/* Binary reads byte_C7AFB[bank + species*236] = +0x47 of the
-					 * SpecData entry, which is missile_fire_mode (always BSS-zero
-					 * — FEDISKIO_fillinspec never writes it). math2_fraction(0, ...)
-					 * returns 0, then the !torp_cnt fallback below forces 1. */
-					torp_cnt = math2_fraction(tgt_sd->missile_fire_mode[bank], warheadadjust[torp_used]);
-					if (!torp_cnt)
-						torp_cnt = 1;
-					{
-						uint8_t sf = fg_array[objects[target_ref].fg_idx].version;
-						if (sf == 1)
-							torp_cnt *= 2;
-						else if (sf == 2)
-							torp_cnt >>= 1;
-					}
-					if (!torp_cnt)
-						torp_cnt = 1;
-					if (target_ref == pstate.object_idx && tgt_species == (uint8_t)spec_getspecnum(0xC)) {
-						if (torp_cnt > 99)
-							torp_cnt = 99;
-					} else if (torp_cnt > 9) {
-						torp_cnt = 9;
-					}
-					/* Restore one round at a time and fully charge the launcher. */
-					if (torp_cnt > tgt_cd->weapon_slots[missile_slot].ammo) {
-						changed_flag = true;
-						++tgt_cd->weapon_slots[missile_slot].ammo;
-					}
-					tgt_cd->weapon_slots[missile_slot].charge = 127;
-				}
-			}
-		}
-	}
-
-	/* First missing capability bit. */
-	{
-		uint16_t bit = 1;
-		uint16_t m;
-
-		for (m = 0; m < 13; ++m) {
-			if ((bit & tgt_cd->installed_subsystems) != 0) {
-				if ((bit & tgt_cd->working_subsystems) == 0) {
-					changed_flag = true;
-					tgt_cd->working_subsystems |= bit;
-					break;
-				}
-			}
-			bit <<= 1;
-		}
-	}
-	/* First missing status bit. */
-	{
-		uint16_t bit = 1;
-		uint16_t m;
-
-		for (m = 0; m < 10; ++m) {
-			if ((bit & tgt_cd->subsystem_active) != 0) {
-				if ((bit & tgt_cd->status_flags) == 0) {
-					changed_flag = true;
-					tgt_cd->status_flags |= bit;
-					break;
-				}
-			}
-			bit <<= 1;
-		}
-	}
-
-	cd->ai_plan_state = 472;
-	if (!changed_flag)
-		return 0;
-	cd->maneuver_timer = 1416;
-	if (pstate.object_idx == target_ref && !replayviewmode)
-		panel_initpanel();
-	return 0;
-}
-
-/* Phase 3 — departure push and exit. */
-static int16_t board_phase3(CraftData* cd, uint16_t target_ref) {
-	if (!cd->maneuver_timer) {
-		TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_COMPLETE,
-							   cd->default_order_ldr);
-		/* Binary 0x3C6E5 clears ai_target_ref to 0xFFFF on timer expiry so
-		 * the next maneuver does not inherit the docking target. */
-		cd->ai_target_ref = (int16_t)0xFFFFu;
-		return 1;
-	}
-
-	if (target_ref >= 0x3800u) {
-		cd->push_accum_x = 0;
-		cd->push_accum_y = 0;
-		cd->push_accum_z = 500;
-		return 0;
-	}
-
-	pai_calcrotatedpoint(&objects[ai.active_obj_idx], 0, 0x4000, 0);
-	cd->push_accum_x = rotatedx + objects[target_ref].world_x - objects[ai.active_obj_idx].world_x;
-	cd->push_accum_y = rotatedy + objects[target_ref].world_y - objects[ai.active_obj_idx].world_y;
-	cd->push_accum_z = rotatedz + objects[target_ref].world_z - objects[ai.active_obj_idx].world_z;
-	return 0;
-}
-
 // FUNCTION: TIE95 0x3B350
 int16_t paiman_boardmaneuver(void) {
 	CraftData* cd = craftptr;
@@ -2057,14 +1527,529 @@ int16_t paiman_boardmaneuver(void) {
 	}
 
 	switch (cd->mode_subbyte) {
-		case 0:
-			return board_phase0(cd, target_ref, tgt_species);
-		case 1:
-			return board_phase1(cd, target_ref, tgt_species, tgt_fg_idx, dock_delay_var0);
-		case 2:
-			return board_phase2(cd, target_ref, tgt_species, tgt_fg_idx, target_idnumber);
-		case 3:
-			return board_phase3(cd, target_ref);
+		case 0: { /* Approach to dock point. */
+			int32_t wp_z;
+
+			if (target_ref >= 0x3800u) {
+				/* Static target: just use its world pos + 2048 z offset. */
+				create_getworldposition(target_ref, 0);
+				cd->waypoint_x_cache = worldlocx;
+				cd->waypoint_y_cache = worldlocy;
+				wp_z = worldlocz + 2048;
+			} else {
+				/* Live target: species-specific dock approach offset. */
+				int16_t dock_fwd = spec_data[tgt_species].dock_fwd;
+				int16_t cd_rspd;
+				int16_t tgt_heading_sel;
+				int16_t dock_active_heavy = spec_data[cd->species_idx].dock_active_heavy;
+
+				if (objects[target_ref].genus && objects[target_ref].genus != GENUS_TRANSPORT) {
+					if (objects[ai.active_obj_idx].genus &&
+						objects[ai.active_obj_idx].genus != GENUS_TRANSPORT)
+						cd_rspd = (int16_t)(spec_data[tgt_species].dock_passive_heavy +
+											spec_data[tgt_species].dock_passive_heavy - dock_active_heavy);
+					else
+						cd_rspd = (int16_t)(spec_data[tgt_species].dock_passive_heavy +
+											spec_data[tgt_species].dock_passive_light - dock_active_heavy);
+				} else {
+					cd_rspd = (int16_t)(spec_data[tgt_species].dock_passive_light -
+										spec_data[cd->species_idx].dock_active_light);
+				}
+				tgt_heading_sel =
+					(int16_t)(spec_data[tgt_species].dock_passive_heavy - dock_active_heavy +
+							  spec_data[tgt_species].dock_passive_heavy - dock_active_heavy + cd_rspd);
+				if (tgt_heading_sel < 0)
+					tgt_heading_sel = 28672;
+
+				pai_calcrotatedpoint(&objects[target_ref], 0, tgt_heading_sel, dock_fwd);
+				cd->waypoint_x_cache = rotatedx + objects[target_ref].world_x;
+				cd->waypoint_y_cache = rotatedy + objects[target_ref].world_y;
+				wp_z = rotatedz + objects[target_ref].world_z;
+			}
+			cd->waypoint_z_cache = wp_z;
+
+			paiman_setflighttotarget(0, 1);
+			if (trig2_polardistance > 0x4000)
+				cd->throttle_speed = 0xFFFFu;
+			if (trig2_polardistance > 0x2000) {
+				cd->throttle_speed = 0x8000;
+				return 0;
+			}
+			if (trig2_polardistance <= 2048) {
+				cd->throttle_speed = 0;
+				cd->mode_subbyte = 1;
+				TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_ALIGNING,
+									   cd->default_order_ldr);
+			} else {
+				cd->throttle_speed = 0x4000;
+			}
+			return 0;
+		}
+		case 1: { /* Close alignment + dock announcement. */
+			int32_t abs_dx, abs_dy, abs_dz;
+			uint16_t target_roll_align;
+			uint16_t target_heading_align;
+			uint16_t target_pitch_align;
+			int32_t push_x, push_y, push_z;
+
+			if (target_ref >= 0x3800u) {
+				create_getworldposition(target_ref, 0);
+				push_x = worldlocx - objects[ai.active_obj_idx].world_x;
+				push_y = worldlocy - objects[ai.active_obj_idx].world_y;
+				push_z = (worldlocz + 128) - objects[ai.active_obj_idx].world_z;
+				cd->push_accum_x = push_x;
+				cd->push_accum_y = push_y;
+				cd->push_accum_z = push_z;
+				target_roll_align = 0;
+				target_pitch_align = 0;
+				target_heading_align = 0x4000u;
+			} else {
+				int16_t offset_up;
+				if (objects[target_ref].genus && objects[target_ref].genus != GENUS_TRANSPORT) {
+					if (objects[ai.active_obj_idx].genus &&
+						objects[ai.active_obj_idx].genus != GENUS_TRANSPORT)
+						offset_up = (int16_t)(spec_data[tgt_species].dock_passive_heavy -
+											  spec_data[cd->species_idx].dock_active_heavy);
+					else
+						offset_up = (int16_t)(spec_data[tgt_species].dock_passive_light -
+											  spec_data[cd->species_idx].dock_active_heavy);
+				} else {
+					offset_up = (int16_t)(spec_data[tgt_species].dock_passive_light -
+										  spec_data[cd->species_idx].dock_active_light);
+				}
+				pai_calcrotatedpoint(&objects[target_ref], 0, offset_up, spec_data[tgt_species].dock_fwd);
+				push_x = rotatedx + objects[target_ref].world_x - objects[ai.active_obj_idx].world_x;
+				push_y = rotatedy + objects[target_ref].world_y - objects[ai.active_obj_idx].world_y;
+				push_z = rotatedz + objects[target_ref].world_z - objects[ai.active_obj_idx].world_z;
+				cd->push_accum_x = push_x;
+				cd->push_accum_y = push_y;
+				cd->push_accum_z = push_z;
+				target_roll_align = (uint16_t)objects[target_ref].roll;
+				target_pitch_align = (uint16_t)objects[target_ref].pitch;
+				target_heading_align = (uint16_t)objects[target_ref].heading;
+			}
+
+			if ((int16_t)target_roll_align != objects[ai.active_obj_idx].roll) {
+				cd->ai_roll_state = 1;
+				cd->ai_roll_step = 0x8000u;
+				cd->ai_target_roll = target_roll_align;
+			}
+			if ((int16_t)target_pitch_align != objects[ai.active_obj_idx].pitch) {
+				cd->ai_pitch_state = 2;
+				cd->ai_pitch_step = 0x8000u;
+				cd->ai_target_pitch = target_pitch_align;
+			}
+			if (objects[ai.active_obj_idx].heading != objects[target_ref].heading) {
+				cd->ai_heading_step = 0x8000u;
+				cd->ai_target_heading = target_heading_align;
+				cd->ai_heading_force = 0;
+				cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+			}
+
+			abs_dx = push_x < 0 ? -push_x : push_x;
+			abs_dy = push_y < 0 ? -push_y : push_y;
+			abs_dz = push_z < 0 ? -push_z : push_z;
+			if (abs_dx + abs_dy + abs_dz >= 16)
+				return 0;
+
+			/* Docked. */
+			cd->push_accum_x = 0;
+			cd->push_accum_y = 0;
+			cd->push_accum_z = 0;
+			cd->mode_subbyte = 2;
+			cd->ai_plan_state = 236;
+			cd->maneuver_timer = 1180 * (int32_t)dock_delay_var0;
+			TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_DOCKED,
+								   cd->default_order_ldr);
+
+			msg_createobjectname(ai.active_obj_idx, 1, tempstring);
+			msg_addmessageptr(0, tempstring);
+			msg_createobjectname(target_ref, 1, temp2string);
+			msg_addmessageptr(1, temp2string);
+			messageside = objects[ai.active_obj_idx].side;
+			msg_messageprintf(MSG_DOCKED_WITH);
+
+			if (pstate.player->side != objects[ai.active_obj_idx].side) {
+				fsfx_triggersfx(0x27, 0xFFFF);
+				return 0;
+			}
+			fsfx_speakobjectname(ai.active_obj_idx, 0x33);
+
+			{
+				uint8_t order_ldr = cd->default_order_ldr;
+				uint8_t voice;
+
+				/* Voice cascade per binary 0x3BC03..0x3BC9C:
+				 *   0x1C, 0x1D, 0x20, 0x21, 0x44 -> 0x43/0x42 (with-player vs other)
+				 *   0x1E, 0x22                   -> 0x41 (operation-A)
+				 *   0x1F                         -> 0x44 (operation-D / capture)
+				 *   anything else                -> silent. */
+				if (order_ldr < 0x1F) {
+					if (order_ldr < 0x1C)
+						return 0;
+					if (order_ldr <= 0x1D) {
+						voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
+						fsfx_speakoperation(voice, 0x3F);
+						return 0;
+					}
+					/* 0x1E falls through to voice 0x41 below. */
+				} else if (order_ldr == 0x1F) {
+					fsfx_speakoperation(0x44, 0x3F);
+					return 0;
+				} else if (order_ldr < 0x22) {
+					/* 0x20, 0x21 */
+					voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
+					fsfx_speakoperation(voice, 0x3F);
+					return 0;
+				} else if (order_ldr == 0x22) {
+					/* 0x22 falls through to voice 0x41. */
+				} else if (order_ldr == 68) {
+					voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
+					fsfx_speakoperation(voice, 0x3F);
+					return 0;
+				} else {
+					return 0;
+				}
+				fsfx_speakoperation(0x41, 0x3F);
+			}
+			return 0;
+		}
+		case 2: { /* Transfer. */
+			CraftData* tgt_cd = (target_ref < 0x3800u) ? objects[target_ref].craft_ptr : NULL;
+			bool changed_flag = false;
+
+			if (!cd->maneuver_timer) {
+				if (tgt_cd) {
+					/* Transfer: per-order cargo / capture / repair effects. */
+					uint8_t order_ldr = cd->default_order_ldr;
+					uint8_t msg_id = 119;
+					uint16_t msg_obj = ai.active_obj_idx;
+					CraftData* msg_cd = cd;
+
+					switch (order_ldr) {
+						case 0x1C: /* Unload to target. */
+							if (target_ref < 0x3800u) {
+								int k;
+
+								for (k = 0; k < 16; ++k)
+									tgt_cd->cargo[k] = cd->cargo[k];
+								tgt_cd->boarding_state = 2;
+							}
+							cd->cargo[0] = 0;
+							cd->boarding_state = 1;
+							break;
+						case 0x1D: /* Load from target. */
+							if (target_ref < 0x3800u) {
+								int k;
+
+								for (k = 0; k < 16; ++k)
+									cd->cargo[k] = tgt_cd->cargo[k];
+								tgt_cd->cargo[0] = 0;
+								tgt_cd->boarding_state = 1;
+							}
+							cd->boarding_state = 2;
+							break;
+						case 0x1E: /* Swap. */
+							if (target_ref < 0x3800u) {
+								int k;
+
+								for (k = 0; k < 16; ++k) {
+									char tmp = cd->cargo[k];
+									cd->cargo[k] = tgt_cd->cargo[k];
+									tgt_cd->cargo[k] = tmp;
+								}
+								tgt_cd->boarding_state = 2;
+							}
+							cd->boarding_state = 2;
+							break;
+						case 0x1F: /* Capture — set steerage + rebuild target's plan. */
+							if (target_ref < 0x3800u) {
+								AiContext saved_ai_ctx;
+								int16_t max_speed_cache = tgt_cd->max_speed_cache;
+								CraftData* cd_prev;
+
+								tgt_cd->dock_state_flags = (uint8_t)(ai.fg_idx | 0x80u);
+								++fgstatus[tgt_fg_idx].cond[3].detail;
+								if (fg_array[tgt_fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
+									fgstatus[tgt_fg_idx].cond_id[3].detail = 1;
+								objects[target_ref].side = objects[ai.active_obj_idx].side;
+								if (objects[ai.active_obj_idx].side == 1 &&
+									objects[target_ref].ship_idx < 0x45u)
+									++mission.captures_by_type[tgt_cd->species_idx];
+
+								/* Reset captured craft to cruise mode. Binary 0x3C1E6
+								 * writes flight_flag=0 before status_flags/current_order. */
+								tgt_cd->flight_flag = 0;
+								tgt_cd->status_flags = tgt_cd->subsystem_active;
+								tgt_cd->current_order = max_speed_cache ? 47 : 1;
+
+								cd_prev = craftptr;
+								saved_ai_ctx = ai;
+								craftptr = tgt_cd;
+								pai_setupcraftaivars(target_ref);
+								pai_initplan();
+								craftptr = cd_prev;
+								ai = saved_ai_ctx;
+								TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref,
+													   TIE_TRACE_BOARD_CAPTURED, order_ldr);
+
+								msg_id = 101;
+								msg_cd = cd_prev;
+								msg_obj = target_ref;
+							}
+							break;
+						case 0x20: /* Repair. */
+							if (target_ref < 0x3800u) {
+								AiContext saved_ai_ctx;
+								tgt_cd->current_order = 67;
+								tgt_cd->ai_target_ref = (int16_t)ai.active_obj_idx;
+								saved_ai_ctx = ai;
+								{
+									CraftData* cd_prev = craftptr;
+									craftptr = tgt_cd;
+									pai_setupcraftaivars(target_ref);
+									pai_initplan();
+									craftptr = cd_prev;
+								}
+								ai = saved_ai_ctx;
+							}
+							break;
+						case 0x21: /* Retrieve passenger: stage self as carrier. */
+							if (target_ref < 0x3800u) {
+								cd->tow_slave_ref = (int16_t)target_ref;
+								tgt_cd->dock_state_flags = (uint8_t)(ai.fg_idx | 0xC0u);
+								/* Imperial captures of non-Imperial low-id retrievals count
+								 * toward the per-species kill ledger. Binary 0x3C305..0x3C33F:
+								 * active.side==1 && (original) target.side != 1 && ship_idx<0x45.
+								 * The check on target.side runs BEFORE the side overwrite. */
+								if (objects[ai.active_obj_idx].side == 1 && objects[target_ref].side != 1 &&
+									objects[target_ref].ship_idx < 0x45u)
+									++mission.captures_by_type[tgt_cd->species_idx];
+								objects[target_ref].side = objects[ai.active_obj_idx].side;
+								if (fg_array[tgt_fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
+									fgstatus[tgt_fg_idx].cond_id[3].detail = 1;
+							} else {
+								/* Static anchor: bump status. */
+								uint16_t sidx = target_ref - 14336u;
+								uint8_t sf = staticobjects[sidx].fg_idx;
+								++fgstatus[sf].cond[3].detail;
+								/* The binary nulls species to mark the slot retrieved. */
+								staticobjects[sidx].species = 0;
+							}
+							++fgstatus[tgt_fg_idx].cond[3].detail;
+							break;
+						case 0x22: /* Deliver passenger. */
+							if (target_ref < 0x3800u)
+								tgt_cd->boarding_state = 2;
+							break;
+						case 0x44: /* Repair subsystems. */
+							if (target_ref < 0x3800u) {
+								/* Binary 0x3C441 writes flight_flag=0 between loading
+								 * subsystem_active and storing it into status_flags. */
+								tgt_cd->flight_flag = 0;
+								tgt_cd->status_flags = tgt_cd->subsystem_active;
+							}
+							break;
+						default:
+							break;
+					}
+
+					msg_craftmessage(msg_obj, msg_cd, msg_id);
+				}
+				TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_TRANSFER,
+									   cd->default_order_ldr);
+
+				/* SFX + capture-list bookkeeping. */
+				if (target_ref < 0x3800u && tgt_cd) {
+					if (objects[ai.active_obj_idx].side != pstate.player->side) {
+						fsfx_triggersfx(0x27, 0xFFFF);
+					} else {
+						if (!tgt_cd->inspected) {
+							tgt_cd->inspected = 1;
+							++fgstatus[objects[target_ref].fg_idx].cond[4].detail;
+							if (fg_array[objects[target_ref].fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
+								fgstatus[objects[target_ref].fg_idx].cond_id[4].detail = 1;
+						}
+						fsfx_speakobjectname(ai.active_obj_idx, 0x33);
+						/* Operation-completed voice cascade per binary 0x3C51A..0x3C58E.
+						 * Same shape as phase 1 but uses verb 0x40 (completed) instead
+						 * of 0x3F (acknowledged). */
+						{
+							uint8_t order_ldr = cd->default_order_ldr;
+							uint8_t voice;
+							if (order_ldr < 0x1F) {
+								if (order_ldr >= 0x1C && order_ldr <= 0x1D) {
+									voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
+									fsfx_speakoperation(voice, 0x40);
+								} else if (order_ldr == 0x1E) {
+									fsfx_speakoperation(0x41, 0x40);
+								}
+							} else if (order_ldr == 0x1F) {
+								fsfx_speakoperation(0x44, 0x40);
+							} else if (order_ldr < 0x22) {
+								voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
+								fsfx_speakoperation(voice, 0x40);
+							} else if (order_ldr == 0x22) {
+								fsfx_speakoperation(0x41, 0x40);
+							} else if (order_ldr == 68) {
+								voice = (target_ref == pstate.object_idx) ? 0x43 : 0x42;
+								fsfx_speakoperation(voice, 0x40);
+							}
+						}
+					}
+				}
+
+				++cd->ai_goal_progress[cd->ai_state_1C];
+				cd->capture_list[cd->capture_count] = target_idnumber;
+				if (++cd->capture_count >= 10)
+					cd->capture_count = 9;
+				if (cd->capture_count == 1) {
+					++fgstatus[ai.fg_idx].cond[6].detail;
+					if (fg_array[ai.fg_idx].special_craft == cd->craft_idx_in_fg)
+						fgstatus[ai.fg_idx].cond_id[6].detail = 1;
+				}
+				if (target_ref < 0x3800u && tgt_cd && !tgt_cd->board_count) {
+					++fgstatus[tgt_fg_idx].cond[5].detail;
+					if (fg_array[tgt_fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
+						fgstatus[tgt_fg_idx].cond_id[5].detail = 1;
+				}
+
+				cd->mode_subbyte = 3;
+				cd->maneuver_timer = 2360;
+				TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_DEPARTING,
+									   cd->default_order_ldr);
+				if (pstate.target_obj_idx == target_ref)
+					lasttargetnum = -3;
+				if (target_ref == pstate.object_idx)
+					cd->pending_radio_command = 0xFFu;
+				return 0;
+			}
+
+			/* Pre-timer: re-arm missiles / subsystems for order 28 when linked
+			 * to the player craft. */
+			if (cd->default_order_ldr != 28)
+				return 0;
+			if (cd->pending_radio_command != (uint8_t)pstate.object_idx)
+				return 0;
+			if (cd->ai_plan_state)
+				return 0;
+
+			/* Missile restock. */
+			{
+				uint16_t bank;
+				const SpecData* tgt_sd = &spec_data[tgt_species];
+				for (bank = 0; bank < tgt_cd->missile_group_cnt; ++bank) {
+					if (!tgt_cd->warhead_type[bank])
+						continue;
+					{
+						uint16_t missile_slot = tgt_sd->missile_start[bank];
+						uint16_t missile_end = tgt_sd->missile_end[bank];
+						for (; missile_slot <= missile_end; ++missile_slot) {
+							uint16_t torp_used = (target_ref == pstate.object_idx)
+													 ? mission.torp_used
+													 : fg_array[objects[target_ref].fg_idx].warhead;
+							uint32_t torp_cnt;
+
+							if (bank == 1)
+								torp_used = 5;
+							/* Binary reads byte_C7AFB[bank + species*236] = +0x47 of the
+							 * SpecData entry, which is missile_fire_mode (always BSS-zero
+							 * — FEDISKIO_fillinspec never writes it). math2_fraction(0, ...)
+							 * returns 0, then the !torp_cnt fallback below forces 1. */
+							torp_cnt =
+								math2_fraction(tgt_sd->missile_fire_mode[bank], warheadadjust[torp_used]);
+							if (!torp_cnt)
+								torp_cnt = 1;
+							{
+								uint8_t sf = fg_array[objects[target_ref].fg_idx].version;
+								if (sf == 1)
+									torp_cnt *= 2;
+								else if (sf == 2)
+									torp_cnt >>= 1;
+							}
+							if (!torp_cnt)
+								torp_cnt = 1;
+							if (target_ref == pstate.object_idx &&
+								tgt_species == (uint8_t)spec_getspecnum(0xC)) {
+								if (torp_cnt > 99)
+									torp_cnt = 99;
+							} else if (torp_cnt > 9) {
+								torp_cnt = 9;
+							}
+							/* Restore one round at a time and fully charge the launcher. */
+							if (torp_cnt > tgt_cd->weapon_slots[missile_slot].ammo) {
+								changed_flag = true;
+								++tgt_cd->weapon_slots[missile_slot].ammo;
+							}
+							tgt_cd->weapon_slots[missile_slot].charge = 127;
+						}
+					}
+				}
+			}
+
+			/* First missing capability bit. */
+			{
+				uint16_t bit = 1;
+				uint16_t m;
+
+				for (m = 0; m < 13; ++m) {
+					if ((bit & tgt_cd->installed_subsystems) != 0) {
+						if ((bit & tgt_cd->working_subsystems) == 0) {
+							changed_flag = true;
+							tgt_cd->working_subsystems |= bit;
+							break;
+						}
+					}
+					bit <<= 1;
+				}
+			}
+			/* First missing status bit. */
+			{
+				uint16_t bit = 1;
+				uint16_t m;
+
+				for (m = 0; m < 10; ++m) {
+					if ((bit & tgt_cd->subsystem_active) != 0) {
+						if ((bit & tgt_cd->status_flags) == 0) {
+							changed_flag = true;
+							tgt_cd->status_flags |= bit;
+							break;
+						}
+					}
+					bit <<= 1;
+				}
+			}
+
+			cd->ai_plan_state = 472;
+			if (!changed_flag)
+				return 0;
+			cd->maneuver_timer = 1416;
+			if (pstate.object_idx == target_ref && !replayviewmode)
+				panel_initpanel();
+			return 0;
+		}
+		case 3: /* Departure push and exit. */
+			if (!cd->maneuver_timer) {
+				TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref, TIE_TRACE_BOARD_COMPLETE,
+									   cd->default_order_ldr);
+				/* Binary 0x3C6E5 clears ai_target_ref to 0xFFFF on timer expiry so
+				 * the next maneuver does not inherit the docking target. */
+				cd->ai_target_ref = (int16_t)0xFFFFu;
+				return 1;
+			}
+
+			if (target_ref >= 0x3800u) {
+				cd->push_accum_x = 0;
+				cd->push_accum_y = 0;
+				cd->push_accum_z = 500;
+				return 0;
+			}
+
+			pai_calcrotatedpoint(&objects[ai.active_obj_idx], 0, 0x4000, 0);
+			cd->push_accum_x = rotatedx + objects[target_ref].world_x - objects[ai.active_obj_idx].world_x;
+			cd->push_accum_y = rotatedy + objects[target_ref].world_y - objects[ai.active_obj_idx].world_y;
+			cd->push_accum_z = rotatedz + objects[target_ref].world_z - objects[ai.active_obj_idx].world_z;
+			return 0;
 		default:
 			return 0;
 	}

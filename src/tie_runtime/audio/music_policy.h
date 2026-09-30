@@ -20,5 +20,8 @@ bool TieMusicPolicy_UsesTie98(void);
 void TieMusicPolicy_ResetClock(void);
 void TieMusicPolicy_AdvanceTime(int32_t delta_us);
 uint32_t TieMusicPolicy_NowMs(void);
+/* Per-frame flight music update for the selected soundtrack: adaptive iMUSE
+ * (TIE_updatemusic) or TIE98 digital CD music. */
+void TieMusicPolicy_UpdateFlightMusic(void);
 
 #endif

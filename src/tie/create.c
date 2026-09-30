@@ -47,24 +47,35 @@
 /* CREATE-owned globals (watdbg: D:\GAMES\XTIE\CODE\create.c)         */
 /* ------------------------------------------------------------------ */
 
-uint8_t playerside;
+// GLOBAL: TIE95 0xC17D8
+// GLOBAL: TIE98 0x4DF7F0
+uint8_t playerside = 1;
 
 // GLOBAL: TIE95 0xC17DA
+// GLOBAL: TIE98 0x4DF7F8
 uint16_t skilltranslate[6] = { 0, 0x4000, 0x8000, 0xC000, 0xFFFF, 0xFFFF };
+// GLOBAL: TIE95 0xC17E6
+// GLOBAL: TIE98 0x4DF808
 uint16_t aiupdatetranslate[6] = { 0x02C4, 0x01D8, 0x00EC, 0x0076, 0x003B, 0x001D };
 
+// GLOBAL: TIE95 0xC17F2
+// GLOBAL: TIE98 0x4DF818
 uint8_t ordersldr[33] = {
 	0x01, 0x2F, 0x03, 0x05, 0x27, 0x2A, 0x2B, 0x07, 0x08, 0x09, 0x14, 0x13, 0x1C, 0x1D, 0x1E, 0x1F, 0x20,
 	0x21, 0x25, 0x42, 0x42, 0x38, 0x3A, 0x3B, 0x3C, 0x3C, 0x3E, 0x3F, 0x01, 0x35, 0x01, 0x22, 0x44,
 };
 
 /* Mission-file follower order to runtime order. */
+// GLOBAL: TIE95 0xC1813
+// GLOBAL: TIE98 0x4DF840
 uint8_t ordersflw[33] = {
 	0x02, 0x30, 0x04, 0x06, 0x29, 0x2A, 0x2B, 0x0E, 0x0E, 0x0E, 0x18, 0x0E, 0x1C, 0x1D, 0x1E, 0x1F, 0x20,
 	0x1D, 0x04, 0x42, 0x42, 0x39, 0x3A, 0x3B, 0x39, 0x39, 0x39, 0x39, 0x02, 0x36, 0x02, 0x22, 0x44,
 };
 
 /* Mission-file species index to species_table index. */
+// GLOBAL: TIE95 0xC1834
+// GLOBAL: TIE98 0x4DF868
 uint8_t speciesconvert[89] = {
 	0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x08, 0x08, 0x0C, 0x0D, 0x0E,
 	0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1A, 0x1B, 0x1C, 0x1D,
@@ -74,25 +85,31 @@ uint8_t speciesconvert[89] = {
 	0x4B, 0x4C, 0x4D, 0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x64, 0x57, 0xEB,
 };
 
+// GLOBAL: TIE95 0xC188D
+// GLOBAL: TIE98 0x4DF8C8
 uint8_t genusconvert[9] = { 0x00, 0x01, 0x03, 0x04, 0x02, 0x05, 0x08, 0x09, 0x02 };
+// GLOBAL: TIE95 0xC1896
+// GLOBAL: TIE98 0x4DF8D4
 uint8_t familyconvert[4] = { 0x00, 0x01, 0x02, 0x00 };
 
+// GLOBAL: TIE95 0xC189A
+// GLOBAL: TIE98 0x4DF8D8
 uint8_t warheadconvert[8] = { 0x00, 0x96, 0x97, 0x90, 0x8F, 0x95, 0x94, 0x98 };
+// GLOBAL: TIE95 0xC18A2
+// GLOBAL: TIE98 0x4DF8E0
 uint16_t warheadadjust[8] = {
-	0x0000, 0x0000, 0x8000, 0xFFFF, 0xC000, 0xFFFF, 0xC000, 0xFFFF,
+	0x0000, 0x4000, 0x8000, 0xFFFF, 0xC000, 0xFFFF, 0xC000, 0xFFFF,
 };
 
+// GLOBAL: TIE95 0xC18B2
+// GLOBAL: TIE98 0x4DF8F0
 uint8_t initialdamagestate[32] = {
 	0xFF, 0xFF, 0xFF, 0xFF, 0x18, 0x04, 0xFF, 0xFF, 0x40, 0xFF, 0x20, 0x30, 0x30, 0x30, 0x70, 0xFF,
 	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x18, 0x20, 0x30, 0x30, 0x30, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 };
 
-uint8_t TieRecoveredData_MeshTypeInitialHp(uint8_t mesh_type) {
-	if (mesh_type >= 32)
-		return 0xFF;
-	return initialdamagestate[mesh_type];
-}
-
+// GLOBAL: TIE95 0xC18D2
+// GLOBAL: TIE98 0x4DF910
 uint8_t componentsgone[60] = {
 	0x16, 0x17, 0x15, 0x14, 0x13, 0x05, 0x0F, 0x10, 0x11, 0x12, 0x18, 0x06, 0x03, 0x05, 0x1B,
 	0x09, 0x0A, 0xFF, 0x01, 0x04, 0x1A, 0x07, 0x08, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
@@ -100,29 +117,88 @@ uint8_t componentsgone[60] = {
 	0x11, 0x12, 0x17, 0x19, 0x1A, 0x1B, 0x1C, 0x1D, 0xFF, 0x15, 0x16, 0x17, 0x18, 0x1E, 0xFF,
 };
 
+// GLOBAL: TIE95 0xC190E
+// GLOBAL: TIE98 0x4DF950
 uint8_t fgdiffmask[6] = { 0x07, 0x01, 0x02, 0x04, 0x06, 0x03 };
+// GLOBAL: TIE95 0xC1914
+// GLOBAL: TIE98 0x4DF958
 uint8_t diffmask[4] = { 0x01, 0x02, 0x04, 0x00 };
 
-int32_t fglocx, fglocy, fglocz;
-int16_t staging_static_x, staging_static_y, staging_static_z;
-int8_t staging_static_pitch, staging_static_yaw, staging_static_roll;
+// GLOBAL: TIE95 0xD3560
+// GLOBAL: TIE98 0x62698C
+int32_t fglocx;
+// GLOBAL: TIE95 0xD3564
+// GLOBAL: TIE98 0x626990
+int32_t fglocy;
+// GLOBAL: TIE95 0xD3568
+// GLOBAL: TIE98 0x626994
+int32_t fglocz;
+// GLOBAL: TIE95 0xD356C
+// GLOBAL: TIE98 0x626970
+int16_t staging_static_x;
+// GLOBAL: TIE95 0xD356E
+// GLOBAL: TIE98 0x626972
+int16_t staging_static_y;
+// GLOBAL: TIE95 0xD3570
+// GLOBAL: TIE98 0x626974
+int16_t staging_static_z;
+// GLOBAL: TIE95 0xD3572
+// GLOBAL: TIE98 0x626976
+int8_t staging_static_pitch;
+// GLOBAL: TIE95 0xD3573
+// GLOBAL: TIE98 0x626977
+int8_t staging_static_yaw;
+// GLOBAL: TIE95 0xD3574
+// GLOBAL: TIE98 0x626978
+int8_t staging_static_roll;
+// GLOBAL: TIE95 0xD3578
+// GLOBAL: TIE98 0x626986
 uint16_t craftcnt;
+// GLOBAL: TIE95 0xD3576
+// GLOBAL: TIE98 0x62699C
 uint16_t fgcnt;
+// GLOBAL: TIE95 0xD357A
+// GLOBAL: TIE98 0x62697E
 int16_t fgheadingxy;
+// GLOBAL: TIE95 0xD357C
+// GLOBAL: TIE98 0x626984
 int16_t fgheadingz;
+// GLOBAL: TIE95 0xD357F
+// GLOBAL: TIE98 0x626981
 uint8_t fgversion;
+// GLOBAL: TIE95 0xD3580
+// GLOBAL: TIE98 0x626982
 uint8_t fghangar;
+// GLOBAL: TIE95 0xD3581
+// GLOBAL: TIE98 0x626980
 uint8_t fghyperspace;
+// GLOBAL: TIE95 0xD3582
+// GLOBAL: TIE98 0x626998
 uint8_t fggenus;
+// GLOBAL: TIE95 0xD3586
+// GLOBAL: TIE98 0x626979
 uint8_t leaderflag;
+// GLOBAL: TIE95 0xD3589
+// GLOBAL: TIE98 0x626988
 uint8_t fgspecies;
-uint8_t fgwarhead;
+// GLOBAL: TIE95 0xD357E
+// GLOBAL: TIE98 0x62697B
 uint8_t fgseparation;
+// GLOBAL: TIE95 0xD3583
+// GLOBAL: TIE98 0x62699A
 uint8_t fgformation;
+// GLOBAL: TIE95 0xD3584
+// GLOBAL: TIE98 0x626989
 uint8_t fgflightflag;
+// GLOBAL: TIE95 0xD3585
+// GLOBAL: TIE98 0x62697D
 uint8_t fgskill;
+// GLOBAL: TIE95 0xD3587
+// GLOBAL: TIE98 0x62697A
 uint8_t fgside;
-uint16_t fgsidecreated;
+// GLOBAL: TIE95 0xD3588
+// GLOBAL: TIE98 0x626999
+uint8_t fgsidecreated;
 
 /* staticobjects[] is tie.c-owned per watdbg; declared in tie.h. */
 
@@ -601,7 +677,6 @@ int16_t create_createmission(void) {
 	targetblinkstate = 0;
 	targetblinkflag = 0;
 	entercombatflag = 0;
-	player_ejected = 0;
 	pstate.hyperin_state = 0;
 	pstate.radar_enable = 1;
 	/* Preserve object_idx, which was bound while creating the player's craft. */
@@ -965,18 +1040,6 @@ int create_startflightgroup(int16_t craft_slot, int16_t fg_idx) {
 		fgstatus[fgcnt].waves_remaining = fg_array[fgcnt].waves;
 	}
 	return 1;
-}
-
-uint16_t create_reinforceflightgroup(int16_t fg_idx) {
-	uint16_t new_fg;
-	uint8_t wr;
-
-	create_createflightgroup(-1, fg_idx);
-	new_fg = fgcnt;
-	wr = fgstatus[new_fg].waves_remaining;
-	if (wr)
-		fgstatus[fgcnt].waves_remaining = (uint8_t)(wr - 1);
-	return (uint16_t)(new_fg * 48);
 }
 
 /* ============================================================== */
@@ -1678,7 +1741,8 @@ uint16_t create_createcraft(void) {
 		for (mesh = 0; mesh < mesh_count; ++mesh) {
 			const int mesh_type = modelmesh_gettype(ship_idx, mesh);
 			if (modelmesh_isobjecttypemeshdamageable(ship_idx, mesh))
-				c->mesh_component_hp[mesh] = TieRecoveredData_MeshTypeInitialHp(mesh_type);
+				// HARDENING: mesh types outside the table keep full damage state.
+				c->mesh_component_hp[mesh] = mesh_type < 32 ? initialdamagestate[mesh_type] : 0xFF;
 			if (fgversion == 5 && (mesh_type == TIE_MESH_GUN_TURRET || mesh_type == TIE_MESH_SMALL_GUN ||
 								   mesh_type == TIE_MESH_ROTARY_GUN_TURRET)) {
 				c->mesh_component_hp[mesh] = 0;
@@ -1748,7 +1812,7 @@ uint16_t create_createcraft(void) {
 	if (obj_slot == pstate.object_idx) {
 		pstate.player_weapon_group = 0;
 		pstate.player_weapon_mode = 0;
-		byte_F8FAB = sp->field_0F;
+		pstate.player_spec_field_0F = sp->field_0F;
 		pstate.player_craft = c;
 		pstate.player_spec_num = spec_num;
 	}

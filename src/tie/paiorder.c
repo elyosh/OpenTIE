@@ -867,7 +867,7 @@ int16_t paiorder_rocketsonboardorder(void) {
 
 	for (grp = 0; grp < craftptr->missile_group_cnt; ++grp) {
 		uint8_t wt = craftptr->warhead_type[grp];
-		uint8_t cls = projectile_is_warhead_type[laser_species_idx(wt)];
+		uint8_t cls = projectile_is_warhead_type[wt - WEAPON_SPECIES_BASE];
 		const SpecData* sd;
 		uint8_t cur;
 		uint8_t end;

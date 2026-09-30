@@ -1,10 +1,3 @@
-/* Retail copy protection is disabled by default and can be enabled at runtime. */
-// PORT: runtime switch for the TIE95-only copy-protection path.
-static int copy_protection_enabled = 0;
-
-// PORT: public setter for the runtime-only switch above.
-void register_set_copy_protection(int enabled) { copy_protection_enabled = enabled ? 1 : 0; }
-
 #include "tie/register.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/register_task.h"
@@ -63,26 +56,11 @@ void register_set_copy_protection(int enabled) { copy_protection_enabled = enabl
 #include <stdlib.h>
 #include <string.h>
 
-/* State retained while deferred sub-dialog tasks are active. */
-typedef struct DeleteCtx {
-	int16_t was_key_buttons;
-	Input* sub_dlg;
-} DeleteCtx;
-
-typedef struct ProtectCtx {
-	Input* sub_dlg;
-} ProtectCtx;
-
-static DeleteCtx s_delete_ctx;
-static ProtectCtx s_protect_ctx;
-
-static void after_delete_dialog(int16_t result, void* ctx);
-
 /* ---- Static data ---- */
 
 /* Copy-protection cipher pad: 29 questions × 3 symbol indices.
  * Each triplet indexes into the symbol animation actor states. */
-// DATA: TIE95 0xD1206
+// GLOBAL: TIE95 0xD1206
 static const int16_t reg_cp[87] = { 6,  2, 8,  0, 10, 9, 3, 4,  7, 11, 2, 5, 1, 9, 11, 7, 9,  5,
 									10, 8, 2,  4, 0,  6, 5, 6,  1, 2,  7, 0, 8, 4, 11, 9, 11, 10,
 									6,  5, 3,  0, 2,  1, 3, 11, 8, 11, 5, 7, 1, 0, 6,  7, 8,  10,
@@ -90,7 +68,7 @@ static const int16_t reg_cp[87] = { 6,  2, 8,  0, 10, 9, 3, 4,  7, 11, 2, 5, 1, 
 									6,  1, 10, 0, 3,  6, 3, 5,  9, 11, 1, 8, 1, 6, 10 };
 
 /* Copy-protection answer table: 29 ship names (16 bytes each, null-padded). */
-// DATA: TIE95; absent from TIE98
+// GLOBAL: TIE95 0xD12B4
 static const char reg_cp_name[29][16] = {
 	"ardent",         "audacity",    "colossus",  "courageous", "devastation", "emperor",
 	"emperor's will", "formidable",  "furious",   "glory",      "glorious",    "harpago",
@@ -265,37 +243,59 @@ static int16_t num_pilots; /* count of valid (non-deleted) pilots */
 // GLOBAL: TIE95 0xD1202
 // GLOBAL: TIE98 0x58978C
 static int16_t num_loaded_pilots; /* total register_directory entries */
-static int16_t pilot_loaded;
 
-static char reg_prot_name[72];                   /* protect dialog button label buffers */
+// GLOBAL: TIE95 0xF6578
+static char reg_prot_name[72]; /* protect dialog button label buffers */
+// GLOBAL: TIE95 0xF65C0
+// GLOBAL: TIE98 0x588F28
 static uint8_t cur_pilot[PILOTRECORD_DISK_SIZE]; /* temp buffer for reading .tfr files */
-static char reg_btn_name[112];                   /* button label scratch buffers */
-
-/* Persistent across protect-dialog invocations: retains the last password
- * the user typed. Mirrors retail's `initial_name` global so the field
- * doesn't reset between failed attempts (the iuser_Protect_Input clears
- * it explicitly on a wrong guess). Sized to match RegStringButton.name. */
-static char initial_name[44];
-
-static Actor* symbols;              /* symbol animation actor for protect dialog */
+// GLOBAL: TIE95 0xF6D58
+// GLOBAL: TIE98 0x588E88
+static char reg_btn_name[96]; /* button label scratch buffers */
+// GLOBAL: TIE95 0xF6DB8
+static Actor* symbols; /* symbol animation actor for protect dialog */
+// GLOBAL: TIE95 0xF6DF8
+// GLOBAL: TIE98 0x588EF8
 static FastPilotRecord shell_pilot; /* cached FPR for the active pilot */
-static Input* protect_btns_arr[3];  /* protect dialog child buttons */
+// GLOBAL: TIE95 0xF6DBC
+static Input* protect_btns_arr[3]; /* protect dialog child buttons */
+// GLOBAL: TIE95 0xF6DC8
 static Input* protect_parent;
-static Input* pilot_door_info;
+// GLOBAL: TIE95 0xF6DD0
+// GLOBAL: TIE98 0x588EEC
 static Input* pilot_info;
+// GLOBAL: TIE95 0xF6DD4
+// GLOBAL: TIE98 0x5896E0
 static Input* reg_parent;
+// GLOBAL: TIE95 0xF6DD8
+// GLOBAL: TIE98 0x588EF4
 static Input* pilot_delete;
+// GLOBAL: TIE95 0xF6DDC
+// GLOBAL: TIE98 0x589748
 static RegStringButton* pilot_name_input;
+// GLOBAL: TIE95 0xF6E0C
+// GLOBAL: TIE98 0x58976C
 static Actor* reg_troop;
+// GLOBAL: TIE95 0xF6E10
+// GLOBAL: TIE98 0x589734
 static Film* register_film;
 // GLOBAL: TIE95 0xF6DE0
+// GLOBAL: TIE98 0x589770
 static Actor* reg_button[3]; /* film callback actor cache */
+// GLOBAL: TIE95 0xF6E14
+// GLOBAL: TIE98 0x58977C
 static Actor* reg_door;
+// GLOBAL: TIE95 0xF6DEC
+// GLOBAL: TIE98 0x588EE8
 static Input* door_input;
+// GLOBAL: TIE95 0xF6DF0
+// GLOBAL: TIE98 0x5896E4
 static Input* pilot_list;
 // GLOBAL: TIE95 0xF6DF4
 // GLOBAL: TIE98 0x588E70
 static Actor* reg_bak;
+// GLOBAL: TIE95 0xF6E18
+// GLOBAL: TIE98 0x5896B0
 Directory register_directory;
 // GLOBAL: TIE95 0xF6E46
 static int16_t protect_state[3];
@@ -305,11 +305,17 @@ static int16_t protect_chosen;
 static int16_t protect_count;
 // GLOBAL: TIE95 0xF6E50
 static int16_t protect_index;
+// GLOBAL: TIE95 0xF6E54
+// GLOBAL: TIE98 0x589730
 static int16_t num_pages;
 // GLOBAL: TIE95 0xF6E52
 // GLOBAL: TIE98 0x588E74
 void* register_fast_pilot_record; /* HANDLE → void* adapted */
+// GLOBAL: TIE95 0xF6E58
+// GLOBAL: TIE98 0x58974C
 static int16_t cur_page;
+// GLOBAL: TIE95 0xF6E56
+// GLOBAL: TIE98 0x589764
 static int16_t pilot_delete_status;
 
 /* ================================================================
@@ -320,6 +326,7 @@ static void idraw_Reg_String_Button(Input* input, Rect* frame, Rect* clip, int16
 static int16_t iupdate_Reg_String_Button(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 										 uint8_t right, int16_t mouse_x, int16_t mouse_y);
 static Input* Build_Delete_Dialog(void);
+static int16_t Do_Delete_Dialog(void);
 static int16_t iupdate_Delete_Input(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 									uint8_t right, int16_t mouse_x, int16_t mouse_y);
 static void iuser_Delete_Input(Input* input, int32_t time);
@@ -590,11 +597,8 @@ static void Delete_Pilot_Record(void) {
 
 // FUNCTION: TIE95 0x7BFF0
 // FUNCTION: TIE98 0x4719F0
-void Revive_Pilot_Record(Input* input, int32_t time) {
+static void Revive_Pilot_Record(void) {
 	char name_buf[TIE_PILOT_NAME_CAPACITY];
-
-	(void)input;
-	(void)time;
 
 	Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
 	shipext_Load_Pilot(name_buf);
@@ -1043,7 +1047,11 @@ static void iuser_Pilot_Button(Input* input, int32_t time) {
 
 	if (!xinpattr_Get_Input_Selected(&btn->header))
 		return;
-	soundext_Play_SFX(sfxButton, 64);
+#ifdef TIE_MODERN
+	/* The delete confirmation re-enters this callback with its result. */
+	if (!TieRegister_IsResumingDelete())
+#endif
+		soundext_Play_SFX(sfxButton, 64);
 
 	if (id == 0) {
 		/* Previous page */
@@ -1060,57 +1068,26 @@ static void iuser_Pilot_Button(Input* input, int32_t time) {
 			cur_page++;
 		pilot_offset = active_spec->page_size * cur_page;
 	} else if (id == 2) {
-		/* Delete pilot — open confirmation as a deferred sub-dialog;
-		 * after_delete_dialog runs the post-result delete/revive
-		 * logic when the sub-dialog pops. */
-		Input* sub = Build_Delete_Dialog();
-		// HARDENING: the original assumes dialog allocation succeeds.
-		if (!sub) {
-			TieDiagnostics_Log(TIE_LOG_ERROR, "[REGISTER] could not allocate delete dialog\n");
-			return;
+		int16_t result;
+
+#ifdef TIE_MODERN
+		TieRegister_BeginDelete(input);
+#endif
+		result = Do_Delete_Dialog();
+		if (result != 2) {
+			if (result == 1) {
+				char name_buf[TIE_PILOT_NAME_CAPACITY];
+				char path[TIE_PILOT_NAME_CAPACITY + 5];
+
+				Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
+				snprintf(path, sizeof(path), "%s.tfr", name_buf);
+				TieStorage_Remove(TIE_FILE_ROOT_USER, path);
+				Delete_Pilot_Record();
+			} else {
+				Revive_Pilot_Record();
+			}
+			xview_Refresh_View();
 		}
-		s_delete_ctx.was_key_buttons = xio_Is_Key_Buttons();
-		s_delete_ctx.sub_dlg = sub;
-		if (!s_delete_ctx.was_key_buttons)
-			xio_Set_Key_Buttons();
-		xio_Set_Mouse_Position(active_spec->delete_mouse_x, active_spec->delete_mouse_y);
-		xdialog_Schedule_Sub_Dialog(sub, after_delete_dialog, &s_delete_ctx);
-	}
-}
-
-/* Post-confirmation delete or revive continuation. */
-// PORT: continuation of TIE95 0x7C4A8 and TIE98 0x471FA0 after the
-// asynchronous dialog task returns.
-static void after_delete_dialog(int16_t result, void* ctx) {
-	DeleteCtx* c = (DeleteCtx*)ctx;
-
-	xview_Refresh_View();
-	xinput_Free_Inputs(c->sub_dlg);
-	c->sub_dlg = NULL;
-
-	if (!c->was_key_buttons)
-		xio_Clear_Key_Buttons();
-	xio_Set_Mouse_Position(active_spec->delete_return_mouse_x, active_spec->delete_return_mouse_y);
-
-	if (result == 1) {
-		/* Confirmed delete */
-		char name_buf[TIE_PILOT_NAME_CAPACITY];
-		char path[TIE_PILOT_NAME_CAPACITY + 5];
-
-		Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
-
-		snprintf(path, sizeof(path), "%s.tfr", name_buf);
-		TieStorage_Remove(TIE_FILE_ROOT_USER, path);
-		Delete_Pilot_Record();
-		xview_Refresh_View();
-	} else if (result != 2) {
-		/* Revive */
-		char name_buf[TIE_PILOT_NAME_CAPACITY];
-		Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
-		shipext_Load_Pilot(name_buf);
-		shipext_Revive_Pilot(name_buf);
-		register_Revive_Pilot_Info();
-		xview_Refresh_View();
 	}
 }
 
@@ -1653,6 +1630,47 @@ static Input* Build_Delete_Dialog(void) {
 	return dlg;
 }
 
+/* The modern build cannot block in the button callback: the first call
+ * schedules the dialog and reports cancel, and the register task re-enters
+ * the callback with the dialog result once the dialog closes. */
+// FUNCTION: TIE95 0x7C4A8
+// FUNCTION: TIE98 0x471FA0
+static int16_t Do_Delete_Dialog(void) {
+	Input* the_input;
+	int16_t key_buttons;
+	int16_t retval;
+
+#ifdef TIE_MODERN
+	if (!TieRegister_ResumeDelete(&the_input, &key_buttons, &retval)) {
+#endif
+		key_buttons = xio_Is_Key_Buttons();
+		if (!key_buttons)
+			xio_Set_Key_Buttons();
+		xio_Set_Mouse_Position(active_spec->delete_mouse_x, active_spec->delete_mouse_y);
+		the_input = Build_Delete_Dialog();
+#ifdef TIE_MODERN
+		// HARDENING: the original assumes dialog allocation succeeds.
+		if (!the_input) {
+			TieDiagnostics_Log(TIE_LOG_ERROR, "[REGISTER] could not allocate delete dialog\n");
+			if (!key_buttons)
+				xio_Clear_Key_Buttons();
+			return 2;
+		}
+		TieRegister_RunDelete(the_input, key_buttons);
+		return 2;
+	}
+#else
+	retval = xdialog_Handle_Dialog_View(the_input);
+#endif
+	xview_Refresh_View();
+	xdialog_Clear_Dialog_Exit();
+	xinput_Free_Inputs(the_input);
+	if (!key_buttons)
+		xio_Clear_Key_Buttons();
+	xio_Set_Mouse_Position(active_spec->delete_return_mouse_x, active_spec->delete_return_mouse_y);
+	return retval;
+}
+
 // FUNCTION: TIE95 0x7C624
 // FUNCTION: TIE98 0x472170
 // DIVERGENCE: the original joystick-calibration shortcut is not implemented.
@@ -1723,24 +1741,6 @@ static void idraw_Delete_Input(Input* input, Rect* frame, Rect* clip, int16_t re
  * Protect (password) dialog
  * ================================================================ */
 
-/* Pushed by the register task's PROTECT phase. The task yields to
- * AFTER_PROTECT after this; that phase reads dlg_exit_gbl and runs
- * the post-protect logic. */
-// PORT: asynchronous form of TIE95 REGISTER_Do_Protect_Dialog (0x7C7AC).
-Input* register_OpenProtection(void) {
-	int16_t i;
-
-	protect_count = 0;
-	protect_index = 0;
-	protect_chosen = 0;
-	for (i = 0; i < 3; i++)
-		protect_state[i] = reg_cp[i];
-
-	xio_Set_Mouse_Position(160, 135);
-	s_protect_ctx.sub_dlg = Build_Protect_Dialog();
-	return s_protect_ctx.sub_dlg;
-}
-
 // FUNCTION: TIE95 0x7C820
 // absent from TIE98
 static Input* Build_Protect_Dialog(void) {
@@ -1777,11 +1777,9 @@ static Input* Build_Protect_Dialog(void) {
 	xinpattr_Show_Input(sub_input);
 	sub_input->id = 6;
 
-	/* Password field (RegStringButton, filename mode=0). Seeded from
-	 * the persistent `initial_name` buffer so the field retains what
-	 * the user typed previously. */
+	/* Password field (RegStringButton, filename mode=0). */
 	xrect_Set_Rect(&r, 4, 51, 108, 65);
-	pwd = Alloc_Input_Reg_String_Button(dlg, &r, 0, iuser_Protect_Input, initial_name, 0, 4);
+	pwd = Alloc_Input_Reg_String_Button(dlg, &r, 0, iuser_Protect_Input, "", 0, 4);
 	xinpattr_Hide_Input(&pwd->header);
 	protect_btns_arr[0] = &pwd->header;
 
@@ -1947,6 +1945,39 @@ static void idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, int16_t r
 		xdirty_Dirty_Rect(clip);
 }
 
+/* Retail TIE95 keeps this dialog but never calls it. The modern build
+ * runs it from the register task when copy protection is enabled; the
+ * task calls it again after the dialog view finishes. */
+// FUNCTION: TIE95 0x7C7AC
+int16_t register_Do_Protect_Dialog(void) {
+	Input* the_input;
+	int16_t retval;
+	int16_t i;
+
+#ifdef TIE_MODERN
+	if (!TieRegister_ResumeProtect(&the_input)) {
+#endif
+		protect_count = 0;
+		protect_index = 0;
+		protect_chosen = 0;
+		for (i = 0; i < 3; i++)
+			protect_state[i] = reg_cp[i];
+		xio_Set_Mouse_Position(160, 135);
+		the_input = Build_Protect_Dialog();
+#ifdef TIE_MODERN
+		TieRegister_RunProtect(the_input);
+		return 0;
+	}
+	retval = xdialog_Get_Dialog_Exit();
+#else
+	retval = xdialog_Handle_Dialog_View(the_input);
+#endif
+	xview_Refresh_View();
+	xdialog_Clear_Dialog_Exit();
+	xinput_Free_Inputs(the_input);
+	return retval != 2;
+}
+
 /* ================================================================
  * View update callback
  * ================================================================ */
@@ -2003,7 +2034,8 @@ void register_end_View(int32_t phase) {
 		}
 
 		if (xinpattr_Is_Input_Visible(pilot_delete) && pilot_delete_status) {
-			xbtnpush_Set_Button_Name((PushButton*)pilot_delete, textext_Get_Text(txtRegBtnDeletePilot));
+			strcpy(reg_btn_name + 32, textext_Get_Text(txtRegBtnDeletePilot));
+			xbtnpush_Set_Button_Name((PushButton*)pilot_delete, reg_btn_name + 32);
 			pilot_delete_status = 0;
 			xview_Refresh_View();
 		}
@@ -2031,7 +2063,6 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	int16_t i;
 	PushButton* prev;
 	PushButton* next;
-	char del_label[32];
 
 #ifdef TIE_MODERN
 	active_spec = &register_specs[tie98 ? 1 : 0];
@@ -2352,9 +2383,9 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, 148, 189, 200, 198);
 #endif
 
-	strcpy(del_label, textext_Get_Text(txtRegBtnDeletePilot));
+	strcpy(reg_btn_name, textext_Get_Text(txtRegBtnDeletePilot));
 	pilot_delete =
-		(Input*)xbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, del_label, 2);
+		(Input*)xbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, reg_btn_name, 2);
 #ifdef TIE_MODERN
 	if (!pilot_delete) {
 		TieRegister_RunView(rf, false, "delete-pilot input");
@@ -2367,7 +2398,7 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 
 #ifdef TIE_MODERN
 	TieRegister_RunView(rf,
-						active_spec->load_symbols && copy_protection_enabled &&
+						active_spec->load_symbols && TieRegister_CopyProtectionEnabled() &&
 							shellext_Get_Cur_Scene() == SCENE_REGISTER,
 						NULL);
 	return 0;
@@ -2390,14 +2421,4 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	xres_Close_Resource(rf);
 	return xerror_Get_Landru_Exit();
 #endif
-}
-
-void register_CloseProtection(void) {
-	int16_t result = xdialog_Get_Dialog_Exit();
-	xdialog_Clear_Dialog_Exit();
-	xinput_Free_Inputs(s_protect_ctx.sub_dlg);
-	s_protect_ctx.sub_dlg = NULL;
-	if (result != 2)
-		xerror_Set_Landru_Exit(0);
-	xio_Set_Mouse_Position(160, 130);
 }

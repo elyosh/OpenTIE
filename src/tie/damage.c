@@ -63,27 +63,6 @@ enum {
 	K_F1 = 0xBB,     /* F1 scancode + 0x80 offset */
 };
 
-/* Output formatters: write an ASCII-decoded field to `dst` and terminate. */
-static void format_pct(char* dst, uint16_t health_percent) {
-	/* "NN%\0": two digits, percent sign, nul. */
-	dst[0] = (char)('0' + health_percent / 10);
-	dst[1] = (char)('0' + health_percent % 10);
-	dst[2] = '%';
-	dst[3] = '\0';
-}
-
-static void format_time(char* dst, uint16_t ticks) {
-	/* "MM:SS\0" from a tick count reinterpreted as minutes:seconds. */
-	const uint8_t minutes = (uint8_t)(ticks / 60);
-	const uint8_t seconds = (uint8_t)(ticks % 60);
-	dst[0] = (char)('0' + minutes / 10);
-	dst[1] = (char)('0' + minutes % 10);
-	dst[2] = ':';
-	dst[3] = (char)('0' + seconds / 10);
-	dst[4] = (char)('0' + seconds % 10);
-	dst[5] = '\0';
-}
-
 /* --- damage_outputsystem --- */
 
 // FUNCTION: TIE95 0x1AD94
@@ -100,19 +79,34 @@ void damage_outputsystem(SystemStringId system_id, int16_t y) {
 		buf[3] = '\0';
 	} else {
 		const int16_t health_percent = (int16_t)pstate.subsystem_health_percent[idx];
-		if (health_percent == 0) {
-			festring_settextcolor(COLOR_TEXT_TIME);
-			format_time(buf, pstate.subsystem_repair_seconds[idx]);
-		} else if (health_percent == 100) {
-			festring_settextcolor(COLOR_TEXT_HEALTHY);
-			buf[0] = '1';
-			buf[1] = '0';
-			buf[2] = '0';
-			buf[3] = '%';
-			buf[4] = '\0';
+		if (health_percent != 0) {
+			if (health_percent == 100) {
+				festring_settextcolor(COLOR_TEXT_HEALTHY);
+				buf[0] = '1';
+				buf[1] = '0';
+				buf[2] = '0';
+				buf[3] = '%';
+				buf[4] = '\0';
+			} else {
+				/* "NN%" */
+				festring_settextcolor(COLOR_TEXT_PARTIAL);
+				buf[0] = (char)('0' + pstate.subsystem_health_percent[idx] / 10);
+				buf[1] = (char)('0' + pstate.subsystem_health_percent[idx] % 10);
+				buf[2] = '%';
+				buf[3] = '\0';
+			}
 		} else {
-			festring_settextcolor(COLOR_TEXT_PARTIAL);
-			format_pct(buf, pstate.subsystem_health_percent[idx]);
+			/* "MM:SS" from the repair time in seconds. */
+			const uint8_t minutes = (uint8_t)(pstate.subsystem_repair_seconds[idx] / 60);
+			const uint8_t seconds = (uint8_t)(pstate.subsystem_repair_seconds[idx] % 60);
+
+			festring_settextcolor(COLOR_TEXT_TIME);
+			buf[0] = (char)('0' + minutes / 10);
+			buf[1] = (char)('0' + minutes % 10);
+			buf[2] = ':';
+			buf[3] = (char)('0' + seconds / 10);
+			buf[4] = (char)('0' + seconds % 10);
+			buf[5] = '\0';
 		}
 	}
 

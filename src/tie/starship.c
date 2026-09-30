@@ -12,6 +12,7 @@
 #include "tie/modelmesh.h"
 #include "tie/pai.h"
 #include "tie/panel.h"
+#include "tie/species.h"
 #include "tie/tie.h"
 #include "tie/trig2.h"
 #ifdef TIE_MODERN
@@ -35,48 +36,6 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
-
-/* ---------------------------------------------------------------- *
- * Local helpers
- * ---------------------------------------------------------------- */
-
-/* Resolve one 16-bit coordinate from a BSP vertex stream, following the
- * back-reference chain. Each record is 3 int16s wide (6 bytes); when the
- * high byte of a record is 0x7F, the low byte N is a back-reference count
- * and we skip N*3 bytes backward to retry. */
-static inline int16_t starship_coord_walk(const uint8_t* p) {
-	int16_t v;
-
-	while (p[1] == 0x7F) {
-		p -= 3 * (int)p[0];
-	}
-
-	memcpy(&v, p, sizeof v);
-	return v;
-}
-
-/* Watcom saturating shift: the binary's rotation pipeline clamps each
- * rotated term to [-0x40000000, 0x40000000) before the final >>15.  The
- * check is spelled out as an if-then assign of 0x40000000-0x4000 (=
- * 1073676288) / -0x40000000+0x4000 (= -1073676288); replicate verbatim so
- * the Q15 output matches the binary bit-for-bit. */
-static inline int32_t rot_clamp(int32_t v) {
-	if (v >= 0x40000000)
-		v = 1073676288;
-	if (v <= -0x40000000)
-		v = -1073676288;
-	return v >> 15;
-}
-
-/* RECOVERY HELPER: removes the repeated defined-C saturating shift used for
- * both coordinates rotated by TIE98 STARSHIP_damagecomponent. */
-static int32_t starship_damagecomponent_tie98_rotclamp(int32_t value) {
-	if (value >= 0x40000000)
-		value = 0x3fffffff;
-	if (value <= -0x40000000)
-		value = -0x3fff0000;
-	return (int32_t)(value >> 15);
-}
 
 // FUNCTION: TIE98 0x487000
 // STARSHIP_damagecomponent
@@ -150,10 +109,20 @@ static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t compone
 		const int32_t sine = trig2_getsignedsin(angle);
 		const int32_t cosine = trig2_getsignedcos((int16_t)angle);
 		const int old_x = center_x;
-		center_x = starship_damagecomponent_tie98_rotclamp(
-			(int32_t)((uint32_t)center_z * (0u - (uint32_t)sine) + (uint32_t)old_x * (uint32_t)cosine));
-		center_z = starship_damagecomponent_tie98_rotclamp(
-			(int32_t)((uint32_t)center_z * (uint32_t)cosine + (uint32_t)old_x * (uint32_t)sine));
+		int32_t rotated;
+
+		rotated = (int32_t)((uint32_t)center_z * (0u - (uint32_t)sine) + (uint32_t)old_x * (uint32_t)cosine);
+		if (rotated >= 0x40000000)
+			rotated = 0x3fffffff;
+		if (rotated <= -0x40000000)
+			rotated = -0x3fff0000;
+		center_x = (int32_t)(rotated >> 15);
+		rotated = (int32_t)((uint32_t)center_z * (uint32_t)cosine + (uint32_t)old_x * (uint32_t)sine);
+		if (rotated >= 0x40000000)
+			rotated = 0x3fffffff;
+		if (rotated <= -0x40000000)
+			rotated = -0x3fff0000;
+		center_z = (int32_t)(rotated >> 15);
 	}
 	pai_calcrotatedpoint(parent, (int16_t)center_x, (int16_t)center_z, (int16_t)-center_y);
 
@@ -183,20 +152,21 @@ static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t compone
 }
 
 /* ---------------------------------------------------------------- *
- * STARSHIP globals.  starshipexplodtl is owned by user.c per watdbg
- * (referenced here via user.h).
+ * STARSHIP_getcoordvalue -- resolve one 16-bit coordinate from a BSP
+ * vertex stream, following the back-reference chain. When the high byte
+ * of a record is 0x7F, the low byte N is a back-reference count and the
+ * walk steps N*3 bytes backward. Retail callers inline the walk.
  * ---------------------------------------------------------------- */
 
-/* First of 5 reserved big-ship-explosion FlightObject slots. Retail
- * reads this from genus_table[13].start (= 96, ember range start). Demo had 92.
- * Must match genus_table[13].start in species.c and NUM_CRAFTS/NUM_WARHEADS in tie.h. */
-const uint16_t bigexplo_obj_first = 96;
+// FUNCTION: TIE95 0x52EC0
+int16_t starship_getcoordvalue(const uint8_t* bsp_coord) {
+	int16_t value;
 
-/* ---------------------------------------------------------------- *
- * STARSHIP_getcoordvalue -- leaf 28-byte helper (@0x4F8D0)
- * ---------------------------------------------------------------- */
-
-int16_t starship_getcoordvalue(const uint8_t* bsp_coord) { return starship_coord_walk(bsp_coord); }
+	while (bsp_coord[1] == 0x7F)
+		bsp_coord -= 3 * (int)bsp_coord[0];
+	memcpy(&value, bsp_coord, sizeof value);
+	return value;
+}
 
 /* ---------------------------------------------------------------- *
  * STARSHIP_checkstarshiphit -- per-mesh laser hit test (@0x4F8EC)
@@ -351,11 +321,32 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 				const uint16_t angle = (uint16_t)(rot << 8);
 				const int16_t rot_sin = trig2_getsignedsin(angle);
 				const int16_t rot_cos = trig2_getsignedcos((int16_t)angle);
+				int32_t temp;
 
-				side_cur_r = rot_clamp(base_up_cur * -rot_sin + base_side_cur * rot_cos);
-				up_cur_r = rot_clamp(base_up_cur * rot_cos + base_side_cur * rot_sin);
-				side_prev_r = rot_clamp(base_up_prev * -rot_sin + base_side_prev * rot_cos);
-				up_prev_r = rot_clamp(base_up_prev * rot_cos + base_side_prev * rot_sin);
+				temp = base_up_cur * -rot_sin + base_side_cur * rot_cos;
+				if (temp >= 0x40000000)
+					temp = 1073676288;
+				if (temp <= -0x40000000)
+					temp = -1073676288;
+				side_cur_r = (temp >> 15);
+				temp = base_up_cur * rot_cos + base_side_cur * rot_sin;
+				if (temp >= 0x40000000)
+					temp = 1073676288;
+				if (temp <= -0x40000000)
+					temp = -1073676288;
+				up_cur_r = (temp >> 15);
+				temp = base_up_prev * -rot_sin + base_side_prev * rot_cos;
+				if (temp >= 0x40000000)
+					temp = 1073676288;
+				if (temp <= -0x40000000)
+					temp = -1073676288;
+				side_prev_r = (temp >> 15);
+				temp = base_up_prev * rot_cos + base_side_prev * rot_sin;
+				if (temp >= 0x40000000)
+					temp = 1073676288;
+				if (temp <= -0x40000000)
+					temp = -1073676288;
+				up_prev_r = (temp >> 15);
 			}
 			if (mesh->mesh_type == 1 /* MESH_MainHull */ && ship_idx == 98) {
 				is_main_hull_ship98 = 1;
@@ -555,11 +546,19 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
 			const int16_t rot_sin = trig2_getsignedsin((uint16_t)rot_angle);
 			const int16_t rot_cos = trig2_getsignedcos(rot_angle);
 
-			const int32_t rot_a = (int32_t)center_up_half * -rot_sin + (int32_t)center_side_half * rot_cos;
-			const int32_t rot_b = (int32_t)center_up_half * rot_cos + (int32_t)center_side_half * rot_sin;
+			int32_t rot_a = (int32_t)center_up_half * -rot_sin + (int32_t)center_side_half * rot_cos;
+			int32_t rot_b = (int32_t)center_up_half * rot_cos + (int32_t)center_side_half * rot_sin;
 
-			center_side_half = (int16_t)rot_clamp(rot_a);
-			center_up_half = (int16_t)rot_clamp(rot_b);
+			if (rot_a >= 0x40000000)
+				rot_a = 1073676288;
+			if (rot_a <= -0x40000000)
+				rot_a = -1073676288;
+			center_side_half = (int16_t)(rot_a >> 15);
+			if (rot_b >= 0x40000000)
+				rot_b = 1073676288;
+			if (rot_b <= -0x40000000)
+				rot_b = -1073676288;
+			center_up_half = (int16_t)(rot_b >> 15);
 		}
 	}
 
@@ -698,7 +697,7 @@ static void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_sh
 	}
 
 	if (full_ship) {
-		objects[bigexplo_obj_first].ship_idx = 0;
+		objects[genus_table[13].start].ship_idx = 0;
 		starship_makestarshipcompexplo_tie98(craft, main_hull_slots[0],
 											 (uint32_t)modelbounds_getmaxextent(model_type), 0);
 		fsfx_triggersfx(18, obj_idx);
@@ -765,7 +764,7 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 		 * per-mesh explosions below. */
 		uint16_t k;
 
-		objects[bigexplo_obj_first].ship_idx = 0;
+		objects[genus_table[13].start].ship_idx = 0;
 
 		for (k = 0; k < num_main_hull; ++k) {
 			starship_makestarshipcompexplo(craft, main_hull_slots[k],
@@ -822,10 +821,20 @@ uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_
 
 		const unsigned int pick = (unsigned int)((uint16_t)math2_getrandom() % num_vertices);
 		const uint8_t* vertex_base = bsp_hdr + 17 + bsp_hdr[4] + 6 * pick;
+		const uint8_t* coord;
 
-		c_side = starship_coord_walk(vertex_base);
-		c_fwd = starship_coord_walk(vertex_base + 2);
-		c_up = starship_coord_walk(vertex_base + 4);
+		coord = vertex_base;
+		while (coord[1] == 0x7F)
+			coord -= 3 * (int)coord[0];
+		memcpy(&c_side, coord, sizeof c_side);
+		coord = vertex_base + 2;
+		while (coord[1] == 0x7F)
+			coord -= 3 * (int)coord[0];
+		memcpy(&c_fwd, coord, sizeof c_fwd);
+		coord = vertex_base + 4;
+		while (coord[1] == 0x7F)
+			coord -= 3 * (int)coord[0];
+		memcpy(&c_up, coord, sizeof c_up);
 
 		pai_calcrotatedpoint(craft, c_side, c_up, (int16_t)(-c_fwd));
 	} else {
@@ -1063,14 +1072,28 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 			uint16_t poly_off;
 			uint8_t skip_byte;
 			const uint8_t* base;
+			const uint8_t* coord;
+			int16_t coord_value;
 
 			memcpy(&poly_off, mesh_bytes + 4 + mesh->render_offset, sizeof poly_off);
 			skip_byte = mesh_bytes[4 + mesh->render_offset + poly_off];
 			base = mesh_bytes + 0x10 + mesh->render_offset + poly_off + skip_byte + 1 + 6 * link_byte;
 
-			hp_side = (int16_t)(starship_coord_walk(base) >> 1);
-			hp_fwd_neg = (int16_t)(-(starship_coord_walk(base + 2) >> 1));
-			hp_up = (int16_t)(starship_coord_walk(base + 4) >> 1);
+			coord = base;
+			while (coord[1] == 0x7F)
+				coord -= 3 * (int)coord[0];
+			memcpy(&coord_value, coord, sizeof coord_value);
+			hp_side = (int16_t)(coord_value >> 1);
+			coord = base + 2;
+			while (coord[1] == 0x7F)
+				coord -= 3 * (int)coord[0];
+			memcpy(&coord_value, coord, sizeof coord_value);
+			hp_fwd_neg = (int16_t)(-(coord_value >> 1));
+			coord = base + 4;
+			while (coord[1] == 0x7F)
+				coord -= 3 * (int)coord[0];
+			memcpy(&coord_value, coord, sizeof coord_value);
+			hp_up = (int16_t)(coord_value >> 1);
 		}
 
 		if (mesh->mesh_type == TIE_MESH_ROTARY_GUN_TURRET) {
@@ -1195,7 +1218,7 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	 * bolt -- gives a "fired from a moving platform" trail. The push
 	 * factor is the HIWORD of dword_D4C74[projectile_idx], which aliases
 	 * the projectile launch-offset table. */
-	push = (int16_t)TieProjectileLaunchOffset_Get(proj_type);
+	push = (int16_t)(TieProfile_UsesTie98Logic() ? tie98_projectilelength : projectilelength)[proj_type];
 	laser->world_x_prev = gun_wx;
 	laser->world_y_prev = gun_wy;
 	laser->world_z_prev = gun_wz;

@@ -21,28 +21,18 @@ extern "C" {
 extern const uint16_t projectileweight[NUM_PROJECTILE_TYPES];
 extern const uint16_t projectilevelocity[NUM_PROJECTILE_TYPES];
 extern const uint16_t projectilelife[NUM_PROJECTILE_TYPES];
-extern const uint16_t projectilewarhead[12];
 
 /* Forward push applied at spawn, indexed by (species - 137). The selected
  * flight version determines which original game's model dimensions apply. */
-uint16_t TieProjectileLaunchOffset_Get(unsigned int projectile_type_idx);
+extern const uint16_t projectilelength[NUM_PROJECTILE_TYPES];
+extern const uint16_t tie98_projectilelength[NUM_PROJECTILE_TYPES];
 
 /* Per-weapon-species 'explodes on death' flag, indexed by
  * (species - WEAPON_SPECIES_BASE). 0 = silent removal on death timer,
  * 1/2 = full explosion (variant picks chunk-type). Replaces the
- * `((char*)&projectilevelocity[3] + 1)[species]` pointer trick.
- * Values at [0..17] match retail byte_C5463[137..154]; entries [18..23]
- * (species 155..160) are zero in both demo and retail builds and are
- * included to match the demo's 24-entry _projectilewarhead so callers
- * iterating up to species 160 stay in-bounds. */
+ * `((char*)&projectilevelocity[3] + 1)[species]` pointer trick. Entries
+ * [18..23] (species 155..160) are zero in the original data. */
 extern const uint8_t projectile_is_warhead_type[WARHEAD_TYPE_COUNT];
-
-/* Species -> 0-based table index. Retail has no bounds check anywhere;
- * callers guarantee species in [137, 154] by only sourcing values from
- * spec_data[].laser_type / warhead_type / warheadconvert[]. We match
- * retail semantics: a stray out-of-range species is a caller bug and
- * should surface as a crash / UB, not be silently papered over. */
-static inline unsigned int laser_species_idx(unsigned int species) { return species - WEAPON_SPECIES_BASE; }
 
 /*
  * WarheadRecord -- 8-byte per-projectile runtime slot.

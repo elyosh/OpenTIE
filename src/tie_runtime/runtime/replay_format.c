@@ -1,4 +1,5 @@
 #include "tie_runtime/runtime/replay_format.h"
+#include "util/binio.h"
 
 #include <string.h>
 
@@ -74,4 +75,28 @@ int TieReplayFormat_ReadHeader(TieFile* fp, TieReplayFormatMetadata* metadata) {
 		metadata->compatibility_ticks = hdr[13];
 	}
 	return 1;
+}
+
+/* ReplayInputFrame V6 wire codec: records are always stored in the
+ * fixed 18-byte little-endian layout regardless of host endianness. */
+void TieReplayFormat_DecodeInputFrame(ReplayInputFrame* dst, const uint8_t* src) {
+	dst->delta_us = br_u32le(src + REPLAYINPUTFRAME_DELTA_US_OFFSET);
+	dst->key = br_u16le(src + REPLAYINPUTFRAME_KEY_OFFSET);
+	dst->deltax = br_i16le(src + REPLAYINPUTFRAME_DELTAX_OFFSET);
+	dst->deltay = br_i16le(src + REPLAYINPUTFRAME_DELTAY_OFFSET);
+	dst->buttons = br_u8(src + REPLAYINPUTFRAME_BUTTONS_OFFSET);
+	dst->frameticks = br_u8(src + REPLAYINPUTFRAME_FRAMETICKS_OFFSET);
+	dst->deltaroll = br_i16le(src + REPLAYINPUTFRAME_DELTAROLL_OFFSET);
+	dst->throttle_command = br_u32le(src + REPLAYINPUTFRAME_THROTTLE_OFFSET);
+}
+
+void TieReplayFormat_EncodeInputFrame(uint8_t* dst, const ReplayInputFrame* src) {
+	bw_u32le(dst + REPLAYINPUTFRAME_DELTA_US_OFFSET, src->delta_us);
+	bw_u16le(dst + REPLAYINPUTFRAME_KEY_OFFSET, src->key);
+	bw_i16le(dst + REPLAYINPUTFRAME_DELTAX_OFFSET, src->deltax);
+	bw_i16le(dst + REPLAYINPUTFRAME_DELTAY_OFFSET, src->deltay);
+	bw_u8(dst + REPLAYINPUTFRAME_BUTTONS_OFFSET, src->buttons);
+	bw_u8(dst + REPLAYINPUTFRAME_FRAMETICKS_OFFSET, src->frameticks);
+	bw_i16le(dst + REPLAYINPUTFRAME_DELTAROLL_OFFSET, src->deltaroll);
+	bw_u32le(dst + REPLAYINPUTFRAME_THROTTLE_OFFSET, src->throttle_command);
 }

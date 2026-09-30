@@ -33,36 +33,9 @@
 // GLOBAL: TIE98 0x4e4600
 static const int16_t door_volume[8] = { 92, 64, 64, 64, 72, 80, 68, 68 };
 
-const MainMenuLayout mainmenu_layout_tie95 = {
-	"mainmenu.lfd",
-	"mainmenu",
-	"main-1",
-	{ "m-hang-d", "m-door-1", "m-door-2", "m-door-3", "m-door-4", "m-door-5", "m-door-6", "m-door-7" },
-	320,
-	200,
-	190,
-	100,
-	{ { 14, 28, 170, 64 },
-	  { 0 },
-	  { 82, 64, 128, 90 },
-	  { 220, 64, 260, 90 },
-	  { 272, 68, 304, 94 },
-	  { 0, 110, 34, 146 },
-	  { 44, 96, 82, 126 },
-	  { 130, 86, 168, 106 } },
-	{ SCENE_BRIEF, 0, SCENE_TOUR_DESK, SCENE_BLUEPRINT, SCENE_FILM_VIEWER, SCENE_EXIT, SCENE_TRAIN_TRANSITION,
-	  SCENE_COMBAT_TRANSITION },
-	{ 0, txtMainCustom, 0, txtMainTrain, txtMainCombat, txtMainRegister, txtMainTech, txtMainFilm },
-	0,
-	4,
-};
-
 #ifdef TIE_MODERN
+/* PORT: runtime frontend selection between the TIE95 and TIE98 layouts. */
 static const MainMenuLayout* active_spec;
-#elif defined(TIE98)
-static const MainMenuLayout* const active_spec = &mainmenu_layout_tie98;
-#else
-static const MainMenuLayout* const active_spec = &mainmenu_layout_tie95;
 #endif
 
 /* ---- Static globals ---- */
@@ -82,7 +55,27 @@ static Input* parent; /* root XINPUT for menu buttons */
 // GLOBAL: TIE95 0xf5dbc
 // GLOBAL: TIE98 0x584c58
 static Input* tour_input; /* Tour Battle (id=0, conditional) */
-static Input* menu_input[8];
+/* Menu door inputs. TIE95 ids: 2 new_tour, 3 tech, 4 film, 5 reg_desk,
+ * 6 train, 7 combat. TIE98 ids: 2 new_tour, 3 train, 4 combat, 5 reg_desk,
+ * 6 tech, 7 film. */
+// GLOBAL: TIE95 0xF5DE4
+// GLOBAL: TIE98 0x584C2C
+static Input* new_tour_input;
+// GLOBAL: TIE95 0xF5DC4
+// GLOBAL: TIE98 0x584C28
+static Input* tech_input;
+// GLOBAL: TIE95 0xF5DDC
+// GLOBAL: TIE98 0x584C50
+static Input* film_input;
+// GLOBAL: TIE95 0xF5DD4
+// GLOBAL: TIE98 0x584C24
+static Input* reg_desk_input;
+// GLOBAL: TIE95 0xF5DC8
+// GLOBAL: TIE98 0x584C14
+static Input* train_input;
+// GLOBAL: TIE95 0xF5DB8
+// GLOBAL: TIE98 0x584C20
+static Input* combat_input;
 // GLOBAL: TIE95 0xf5dd8
 static Actor* mainmenu_actor; /* main background delta actor */
 
@@ -151,6 +144,7 @@ static int16_t iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t 
 			input->var1 = 1;           /* exit_pending */
 			break;
 		}
+#ifdef TIE_MODERN
 		case 2:
 		case 3:
 		case 4:
@@ -162,6 +156,59 @@ static int16_t iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t 
 			if (input->id == active_spec->outcome_input_id)
 				shipext_Set_Mission_Outcome(16);
 			break;
+#elif defined(TIE98)
+		case 2:
+			input->var2 = SCENE_TOUR_DESK;
+			input->var1 = 1;
+			break;
+		case 3:
+			input->var2 = SCENE_TRAIN_TRANSITION;
+			input->var1 = 1;
+			break;
+		case 4:
+			input->var2 = SCENE_COMBAT_TRANSITION;
+			input->var1 = 1;
+			break;
+		case 5:
+			input->var2 = SCENE_EXIT;
+			input->var1 = 1;
+			break;
+		case 6:
+			input->var2 = SCENE_BLUEPRINT;
+			input->var1 = 1;
+			break;
+		case 7:
+			input->var2 = SCENE_FILM_VIEWER;
+			input->var1 = 1;
+			shipext_Set_Mission_Outcome(16);
+			break;
+#else
+		case 2:
+			input->var2 = SCENE_TOUR_DESK;
+			input->var1 = 1;
+			break;
+		case 3:
+			input->var2 = SCENE_BLUEPRINT;
+			input->var1 = 1;
+			break;
+		case 4:
+			input->var1 = 1;
+			input->var2 = SCENE_FILM_VIEWER;
+			shipext_Set_Mission_Outcome(16);
+			break;
+		case 5:
+			input->var2 = SCENE_EXIT;
+			input->var1 = 1;
+			break;
+		case 6:
+			input->var2 = SCENE_TRAIN_TRANSITION;
+			input->var1 = 1;
+			break;
+		case 7:
+			input->var2 = SCENE_COMBAT_TRANSITION;
+			input->var1 = 1;
+			break;
+#endif
 		default:
 			break;
 	}
@@ -211,6 +258,13 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 	int16_t offx, offy;
 	Rect r;
 	char label[32];
+#ifdef TIE_MODERN
+	int16_t font_id = active_spec->title_font;
+#elif defined(TIE98)
+	int16_t font_id = 2;
+#else
+	int16_t font_id = 0;
+#endif
 
 	if (!refresh)
 		return 0;
@@ -231,7 +285,7 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 			break;
 		}
 		case 1:
-			strcpy(label, textext_Get_Text(active_spec->title_text[1]));
+			strcpy(label, textext_Get_Text(txtMainCustom));
 			break;
 		case 2: /* New/Change/View TOD */
 			if (shipext_Find_Battle()) {
@@ -243,6 +297,7 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 				strcpy(label, textext_Get_Text(txtMainViewTOD));
 			}
 			break;
+#ifdef TIE_MODERN
 		case 3:
 		case 4:
 		case 5:
@@ -250,6 +305,39 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 		case 7:
 			strcpy(label, textext_Get_Text(active_spec->title_text[actor->var2]));
 			break;
+#elif defined(TIE98)
+		case 3:
+			strcpy(label, textext_Get_Text(txtMainTech));
+			break;
+		case 4:
+			strcpy(label, textext_Get_Text(txtMainFilm));
+			break;
+		case 5:
+			strcpy(label, textext_Get_Text(txtMainRegister));
+			break;
+		case 6:
+			strcpy(label, textext_Get_Text(txtMainTrain));
+			break;
+		case 7:
+			strcpy(label, textext_Get_Text(txtMainCombat));
+			break;
+#else
+		case 3:
+			strcpy(label, textext_Get_Text(txtMainTrain));
+			break;
+		case 4:
+			strcpy(label, textext_Get_Text(txtMainCombat));
+			break;
+		case 5:
+			strcpy(label, textext_Get_Text(txtMainRegister));
+			break;
+		case 6:
+			strcpy(label, textext_Get_Text(txtMainTech));
+			break;
+		case 7:
+			strcpy(label, textext_Get_Text(txtMainFilm));
+			break;
+#endif
 		default:
 			label[0] = 0;
 			break;
@@ -257,9 +345,9 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 
 	/* Drop shadow: dark color at (1,1) offset, then bright at (0,0) */
 	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, 16, active_spec->title_font);
+	xfont_Print_Centered_Text(label, &r, 16, font_id);
 	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, 15, active_spec->title_font);
+	xfont_Print_Centered_Text(label, &r, 15, font_id);
 	return 1;
 }
 
@@ -448,17 +536,17 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 #else
 	xrect_Set_Rect(&frame, 82, 64, 128, 90);
 #endif
-	menu_input[2] = xinput_Alloc_Input(parent, &frame, 0, 0);
+	new_tour_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 #ifdef TIE_MODERN
-	if (!menu_input[2]) {
+	if (!new_tour_input) {
 		TieMainMenu_RunView(resource, "main-menu input");
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(menu_input[2], iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(menu_input[2], iuser_MainMenu);
-	menu_input[2]->mouseUsage = allInput;
-	menu_input[2]->id = 2;
+	xinpattr_Set_Input_Update_Function(new_tour_input, iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(new_tour_input, iuser_MainMenu);
+	new_tour_input->mouseUsage = allInput;
+	new_tour_input->id = 2;
 #ifdef TIE_MODERN
 	{
 		const int16_t* b = active_spec->button_bounds[3];
@@ -469,17 +557,31 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 #else
 	xrect_Set_Rect(&frame, 220, 64, 260, 90);
 #endif
-	menu_input[3] = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE98
+	train_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 #ifdef TIE_MODERN
-	if (!menu_input[3]) {
+	if (!train_input) {
 		TieMainMenu_RunView(resource, "main-menu input");
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(menu_input[3], iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(menu_input[3], iuser_MainMenu);
-	menu_input[3]->mouseUsage = allInput;
-	menu_input[3]->id = 3;
+	xinpattr_Set_Input_Update_Function(train_input, iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(train_input, iuser_MainMenu);
+	train_input->mouseUsage = allInput;
+	train_input->id = 3;
+#else
+	tech_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE_MODERN
+	if (!tech_input) {
+		TieMainMenu_RunView(resource, "main-menu input");
+		return 0;
+	}
+#endif
+	xinpattr_Set_Input_Update_Function(tech_input, iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(tech_input, iuser_MainMenu);
+	tech_input->mouseUsage = allInput;
+	tech_input->id = 3;
+#endif
 #ifdef TIE_MODERN
 	{
 		const int16_t* b = active_spec->button_bounds[4];
@@ -490,17 +592,31 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 #else
 	xrect_Set_Rect(&frame, 272, 68, 304, 94);
 #endif
-	menu_input[4] = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE98
+	combat_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 #ifdef TIE_MODERN
-	if (!menu_input[4]) {
+	if (!combat_input) {
 		TieMainMenu_RunView(resource, "main-menu input");
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(menu_input[4], iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(menu_input[4], iuser_MainMenu);
-	menu_input[4]->mouseUsage = allInput;
-	menu_input[4]->id = 4;
+	xinpattr_Set_Input_Update_Function(combat_input, iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(combat_input, iuser_MainMenu);
+	combat_input->mouseUsage = allInput;
+	combat_input->id = 4;
+#else
+	film_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE_MODERN
+	if (!film_input) {
+		TieMainMenu_RunView(resource, "main-menu input");
+		return 0;
+	}
+#endif
+	xinpattr_Set_Input_Update_Function(film_input, iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(film_input, iuser_MainMenu);
+	film_input->mouseUsage = allInput;
+	film_input->id = 4;
+#endif
 #ifdef TIE_MODERN
 	{
 		const int16_t* b = active_spec->button_bounds[5];
@@ -511,17 +627,17 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 #else
 	xrect_Set_Rect(&frame, 0, 110, 34, 146);
 #endif
-	menu_input[5] = xinput_Alloc_Input(parent, &frame, 0, 0);
+	reg_desk_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 #ifdef TIE_MODERN
-	if (!menu_input[5]) {
+	if (!reg_desk_input) {
 		TieMainMenu_RunView(resource, "main-menu input");
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(menu_input[5], iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(menu_input[5], iuser_MainMenu);
-	menu_input[5]->mouseUsage = allInput;
-	menu_input[5]->id = 5;
+	xinpattr_Set_Input_Update_Function(reg_desk_input, iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(reg_desk_input, iuser_MainMenu);
+	reg_desk_input->mouseUsage = allInput;
+	reg_desk_input->id = 5;
 #ifdef TIE_MODERN
 	{
 		const int16_t* b = active_spec->button_bounds[6];
@@ -532,17 +648,31 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 #else
 	xrect_Set_Rect(&frame, 44, 96, 82, 126);
 #endif
-	menu_input[6] = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE98
+	tech_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 #ifdef TIE_MODERN
-	if (!menu_input[6]) {
+	if (!tech_input) {
 		TieMainMenu_RunView(resource, "main-menu input");
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(menu_input[6], iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(menu_input[6], iuser_MainMenu);
-	menu_input[6]->mouseUsage = allInput;
-	menu_input[6]->id = 6;
+	xinpattr_Set_Input_Update_Function(tech_input, iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(tech_input, iuser_MainMenu);
+	tech_input->mouseUsage = allInput;
+	tech_input->id = 6;
+#else
+	train_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE_MODERN
+	if (!train_input) {
+		TieMainMenu_RunView(resource, "main-menu input");
+		return 0;
+	}
+#endif
+	xinpattr_Set_Input_Update_Function(train_input, iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(train_input, iuser_MainMenu);
+	train_input->mouseUsage = allInput;
+	train_input->id = 6;
+#endif
 #ifdef TIE_MODERN
 	{
 		const int16_t* b = active_spec->button_bounds[7];
@@ -553,17 +683,31 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 #else
 	xrect_Set_Rect(&frame, 130, 86, 168, 106);
 #endif
-	menu_input[7] = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE98
+	film_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 #ifdef TIE_MODERN
-	if (!menu_input[7]) {
+	if (!film_input) {
 		TieMainMenu_RunView(resource, "main-menu input");
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(menu_input[7], iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(menu_input[7], iuser_MainMenu);
-	menu_input[7]->mouseUsage = allInput;
-	menu_input[7]->id = 7;
+	xinpattr_Set_Input_Update_Function(film_input, iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(film_input, iuser_MainMenu);
+	film_input->mouseUsage = allInput;
+	film_input->id = 7;
+#else
+	combat_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE_MODERN
+	if (!combat_input) {
+		TieMainMenu_RunView(resource, "main-menu input");
+		return 0;
+	}
+#endif
+	xinpattr_Set_Input_Update_Function(combat_input, iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(combat_input, iuser_MainMenu);
+	combat_input->mouseUsage = allInput;
+	combat_input->id = 7;
+#endif
 
 	xview_Set_View_Update_Function(end_View);
 	xviewadd_Clear_View();

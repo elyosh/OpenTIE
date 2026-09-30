@@ -29,22 +29,20 @@
 /* MOVE-owned globals (watdbg: D:\GAMES\XTIE\CODE\move.c)              */
 /* ------------------------------------------------------------------ */
 
-/* Unreferenced in the demo binary; 4 of 12 entries populated (may be used
- * in retail or by code not exercised in the demo). */
-static const uint16_t homingindex[12] = {
-	0, 0, 0, 7, 0, 0, 5390, 3612, 3598, 0, 0, 0,
+/* Homing-profile base per projectile species, indexed by
+ * (ship_idx - WEAPON_SPECIES_BASE). Added to WarheadRecord.homing_tier to
+ * select the maxhomingrate / maxdeccelrate entry. */
+// GLOBAL: TIE95 0xC57AC
+// GLOBAL: TIE98 0x4E6248
+static const uint8_t homingindex[24] = {
+	0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 14, 21, 28, 14, 14, 14, 0, 0, 0, 0, 0, 0,
 };
 
-/* Pitch/heading angular slew rate for genus 6/7 missiles, indexed by:
- *    idx = homing_idx_lookup[obj->ship_idx] + wh->homing_tier
- *
- * Values extracted from the shipped binary. There's a visible pattern --
- * zero entries at indices 0, 7, 14, 21, 28 with ascending values in
- * between -- that LOOKS like five 7-entry tiers, but the index values
- * produced by the formula above don't land cleanly on those boundaries
- * (they scatter across tier interiors), so the tier interpretation is a
- * guess and is not used by this code. The table is just indexed
- * linearly. */
+/* Pitch/heading angular slew rate for genus 6/7 missiles, indexed by
+ *    idx = homingindex[ship_idx - WEAPON_SPECIES_BASE] + wh->homing_tier
+ * i.e. five 7-entry tiers selected by homingindex (0, 7, 14, 21, 28). */
+// GLOBAL: TIE95 0xC57C4
+// GLOBAL: TIE98 0x4E6260
 static const uint16_t maxhomingrate[35] = {
 	0,    1024, 2048, 3072, 5120, 7168, 9216,  0,     512,   1024, 2048, 3072,
 	4608, 6144, 0,    2048, 4096, 5120, 10240, 14336, 18432, 0,    32,   64,
@@ -53,34 +51,12 @@ static const uint16_t maxhomingrate[35] = {
 
 /* Paired deceleration / acceleration rate (speed units per second /
  * framerate) used when the missile is off-track (decel) or below
- * wh->min_speed (accel). Same indexing as maxhomingrate. The last 14
- * entries are all zero -- missiles whose formula lands there simply
- * don't change speed. */
+ * wh->min_speed (accel). Same indexing as maxhomingrate. */
+// GLOBAL: TIE95 0xC580A
+// GLOBAL: TIE98 0x4E62A8
 static const uint16_t maxdeccelrate[35] = {
 	0,   50,  100,  200, 300, 400, 500, 0, 25, 50, 100, 150, 200, 250, 0, 100, 200, 400,
 	600, 800, 1000, 0,   0,   0,   0,   0, 0,  0,  0,   0,   0,   0,   0, 0,   0,
-};
-
-/* Defined image of the flat data-segment lookup addressed by ship_idx.
- * It intentionally preserves the boot-time radar bytes and therefore does
- * not reflect later 640×480 radar-table mutations for indices 57..130. */
-static const uint8_t homing_idx_lookup[256] = {
-	0x10, 0x09, 0x10, 0x0A, 0x10, 0x0A, 0x0F, 0x0B, 0x0F, 0x0C, 0x0F, 0x0C, 0x0E, 0x0D, 0x0E, 0x0E,
-	0x0E, 0x0E, 0x0D, 0x0F, 0x0D, 0x0F, 0x0C, 0x10, 0x0C, 0x10, 0x0B, 0x11, 0x0B, 0x11, 0x0A, 0x12,
-	0x0A, 0x12, 0x09, 0x12, 0x08, 0x13, 0x08, 0x13, 0x07, 0x13, 0x06, 0x14, 0x06, 0x14, 0x05, 0x15,
-	0x04, 0x15, 0x03, 0x15, 0x02, 0x15, 0x01, 0x15, 0x00, 0x00, 0x12, 0x01, 0x12, 0x02, 0x12, 0x03,
-	0x12, 0x04, 0x11, 0x05, 0x11, 0x06, 0x11, 0x07, 0x11, 0x08, 0x10, 0x09, 0x10, 0x0A, 0x10, 0x0A,
-	0x0F, 0x0B, 0x0F, 0x0C, 0x0F, 0x0C, 0x0E, 0x0D, 0x0E, 0x0E, 0x0E, 0x0E, 0x0D, 0x0F, 0x0D, 0x0F,
-	0x0C, 0x10, 0x0C, 0x10, 0x0B, 0x11, 0x0B, 0x11, 0x0A, 0x12, 0x0A, 0x12, 0x09, 0x12, 0x08, 0x13,
-	0x08, 0x13, 0x07, 0x13, 0x06, 0x14, 0x06, 0x14, 0x05, 0x15, 0x04, 0x15, 0x03, 0x15, 0x02, 0x15,
-	0x01, 0x15, 0x00, 0x69, 0x63, 0x13, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x0E, 0x15, 0x1C, 0x0E, 0x0E, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x08, 0x00, 0x0C, 0x00, 0x14, 0x00, 0x1C, 0x00, 0x24, 0x00,
-	0x00, 0x00, 0x02, 0x00, 0x04, 0x00, 0x08, 0x00, 0x0C, 0x00, 0x12, 0x00, 0x18, 0x00, 0x00, 0x00,
-	0x08, 0x00, 0x10, 0x00, 0x14, 0x00, 0x28, 0x00, 0x38, 0x00, 0x48, 0x00, 0x00, 0x20, 0x00, 0x40,
-	0x00, 0x50, 0x00, 0x60, 0x00, 0x70, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x04, 0x00,
-	0x05, 0x00, 0x06, 0x00, 0x07, 0x00, 0x08, 0x00, 0x00, 0x32, 0x00, 0x64, 0x00, 0xC8, 0x00, 0x2C,
-	0x01, 0x90, 0x01, 0xF4, 0x01, 0x00, 0x00, 0x19, 0x00, 0x32, 0x00, 0x64, 0x00, 0x96, 0x00, 0xC8,
 };
 
 /* Formation position tables + throttle LUT are now owned by paiman.c
@@ -128,495 +104,6 @@ void move_updatexyz(FlightObject* obj) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Helpers for move_moveobjects                                        */
-/* ------------------------------------------------------------------ */
-
-/* One of the 3 external-push velocity accumulators at CraftData+0x92/96/9A.
- * Bleeds |accum| toward 0 at min(|accum|, cap) / framerate per tick, adds
- * the bled amount to *out_vel. If the step rounds to zero, dump the entire
- * remaining accum. */
-static void apply_push_accum(uint16_t obj_idx, unsigned int axis, int32_t* accum_ptr, int32_t cap,
-							 int32_t* out_vel) {
-	int32_t accum = *accum_ptr;
-	int32_t clamped;
-	int32_t step;
-
-	if (accum == 0)
-		return;
-
-	clamped = accum;
-	if (clamped > cap)
-		clamped = cap;
-	if (clamped < -cap)
-		clamped = -cap;
-
-#ifdef TIE_MODERN
-	if (TieFlightTiming_IsHighRate()) {
-		TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, &objects[obj_idx]);
-		const int8_t sign = clamped < 0 ? -1 : 1;
-		if (state->push_sign[axis] != sign) {
-			state->push_remainder[axis] = 0;
-			state->push_sign[axis] = sign;
-		}
-		step = TieFlightTiming_ScaleWithRemainder(clamped, frameticks, 236, &state->push_remainder[axis]);
-		if ((accum > 0 && step > accum) || (accum < 0 && step < accum))
-			step = accum;
-	} else
-#endif
-	{
-		step = (int32_t)((int16_t)clamped / (int16_t)framerate);
-		if (step == 0)
-			step = accum;
-	}
-
-	*out_vel += step;
-	*accum_ptr = accum - step;
-#ifdef TIE_MODERN
-	if (*accum_ptr == 0 && TieFlightTiming_IsHighRate()) {
-		TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, &objects[obj_idx]);
-		state->push_remainder[axis] = 0;
-		state->push_sign[axis] = 0;
-	}
-#endif
-}
-
-/* Destruction dispatch when obj->reserved_2c hits zero. Returns:
- *   1 -> slot killed, caller must skip the rest of the per-obj body
- *   0 -> continue normally
- * Mirrors the first genus-switch at 0x30b99. */
-static int dispatch_death(uint16_t obj_idx, FlightObject* obj) {
-	uint8_t genus = obj->genus;
-
-	switch (genus) {
-		case GENUS_FIGHTER: {
-			/* Retail order: blowoff first (which itself consumes RNG),
-			 * then read the random byte for the 127/128 ember pick. */
-			int16_t rnd;
-
-			create_blowoffcomponent(obj_idx, 1);
-			rnd = math2_getrandom();
-			collide_makeobjectexplosion(obj_idx, (char)(127 + (rnd & 1)));
-			return 0;
-		}
-		case GENUS_TRANSPORT:
-		case GENUS_UTILITY:
-		case GENUS_FREIGHTER:
-		case GENUS_STARSHIP:
-		case GENUS_PLATFORM: {
-			/* Capital-class ships always use the dedicated 130 explosion;
-			 * the size split only adds the model lock + damage_state seed
-			 * for ships large enough that the engine renders an oversized
-			 * ember. No RNG consumption in retail. */
-			uint16_t bound = species_table[obj->ship_idx].bound_hwidth;
-			if (bound > 0x578) {
-				if (TieProfile_UsesTie98Logic()) {
-					collide_makeobjectexplosion(obj_idx, (char)130);
-					obj->damage_state = (uint8_t)(modelbounds_getmaxextent(obj->ship_idx) >> 9);
-				} else {
-					int16_t length;
-					uint8_t lod;
-
-					draw_lockshipfileptrs(obj->ship_idx);
-					collide_makeobjectexplosion(obj_idx, (char)130);
-					length = (int16_t)objectblockptr->length;
-					lod = objectblockptr->model_scale_shift;
-					obj->damage_state = (uint8_t)(length >> (9 - lod));
-				}
-			} else {
-				collide_makeobjectexplosion(obj_idx, (char)130);
-			}
-			return 0;
-		}
-		case GENUS_PROJECTILE_PLAYER:
-		case GENUS_PROJECTILE_NPC: {
-			/* Missile/projectile death gate. Retail reads byte_C5463[ship_idx]
-			 * (indexed by weapon species 137..154): 0 = silent removal,
-			 * nonzero = full explosion (always picks the 129 chunk variant). */
-			if (projectile_is_warhead_type[laser_species_idx(obj->ship_idx)] == 0) {
-				obj->ship_idx = 0;
-				return 1;
-			}
-			collide_makeobjectexplosion(obj_idx, (char)129);
-			return 0;
-		}
-		case GENUS_DEBRIS: {
-			/* Debris ember randomises between the 127 and 128 sprites. */
-			int16_t rnd = math2_getrandom();
-			collide_makeobjectexplosion(obj_idx, (char)(127 + (rnd & 1)));
-			return 0;
-		}
-		default:
-			obj->ship_idx = 0;
-			return 1;
-	}
-}
-
-/* Death-spin roll decay. Bleeds |spin_rate| toward zero at 4096/framerate
- * per tick; when decay crosses zero, writes 0xFFFF to craft->spin_done_flag
- * marking the spin complete. Always contributes (spin_pre_decay/framerate)*4
- * to obj->roll. */
-static void apply_roll_decay(uint16_t obj_idx, FlightObject* obj) {
-	int16_t spin = obj->spin_rate;
-	int16_t roll_delta;
-
-	if (spin == 0)
-		return;
-#ifdef TIE_MODERN
-	if (TieFlightTiming_IsHighRate()) {
-		TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, obj);
-		const int16_t sign = spin < 0 ? -1 : 1;
-		if (state->spin_sign != sign) {
-			state->spin_remainder[0] = 0;
-			state->spin_remainder[1] = 0;
-			state->spin_sign = sign;
-		}
-	}
-#endif
-
-	if (obj_idx < NUM_CRAFTS) {
-		CraftData* craft = objects[obj_idx].craft_ptr;
-
-		if (craft->spin_done_flag != 0xFFFF) {
-			int16_t step;
-			int16_t new_spin;
-			int crossed;
-
-#ifdef TIE_MODERN
-			if (TieFlightTiming_IsHighRate()) {
-				TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, obj);
-				step = (int16_t)TieFlightTiming_ScaleWithRemainder(4096, frameticks, 236,
-																   &state->spin_remainder[0]);
-			} else
-#endif
-			{
-				step = (int16_t)((uint16_t)4096 / framerate);
-			}
-
-			if ((spin & 0x8000) == 0) { /* spin > 0: decay toward 0 */
-				new_spin = (int16_t)(spin - step);
-				crossed = (new_spin <= 0);
-			} else { /* spin < 0: decay toward 0 */
-				new_spin = (int16_t)(spin + step);
-				crossed = (new_spin >= 0);
-			}
-			obj->spin_rate = new_spin;
-			if (crossed) {
-				obj->spin_rate = 0;
-				spin = 0; /* affect the roll update below */
-				craft->spin_done_flag = 0xFFFF;
-#ifdef TIE_MODERN
-				if (TieFlightTiming_IsHighRate()) {
-					TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, obj);
-					state->spin_remainder[0] = 0;
-					state->spin_remainder[1] = 0;
-					state->spin_sign = 0;
-				}
-#endif
-			}
-		}
-	}
-
-	/* Roll contribution uses the pre-decay spin value (or 0 if decay
-	 * just crossed zero). Matches the binary's common-tail semantics. */
-
-#ifdef TIE_MODERN
-	if (TieFlightTiming_IsHighRate()) {
-		TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, obj);
-		roll_delta = (int16_t)TieFlightTiming_ScaleWithRemainder((int32_t)spin * 4, frameticks, 236,
-																 &state->spin_remainder[1]);
-	} else
-#endif
-	{
-		roll_delta = (int16_t)((spin / (int16_t)framerate) * 4);
-	}
-	obj->orient_dirty = 1;
-	obj->roll = (int16_t)(obj->roll + roll_delta);
-}
-
-/* Homing slew for genus 6/7. Returns:
- *   1  -> normal path (either homing was skipped or completed), caller
- *         should fall through to the move-vector integration tail.
- *  -1  -> target object is onworld but dead -> explode, caller must break.
- *
- * Fills rotatedx/y/z with target world position minus source world position
- * and xyangle/zangle via trig2_ctop before computing pitch/heading deltas.
- *
- * wh points to an 8-byte WarheadRecord; reading beyond that is UB. Only
- * homing_tier, target_obj, sub_obj_idx, and min_speed are touched.
- */
-static int apply_homing(uint16_t obj_idx, FlightObject* obj, WarheadRecord* wh) {
-	/* homing_tier == 0 => craft-fired projectile with no homing. */
-	uint16_t target_idx_w;
-	uint32_t idx;
-	uint16_t target_idx;
-	uint16_t sub_obj;
-	int16_t pitch_delta;
-#ifdef TIE_MODERN
-	TieMoveTimingState* high_rate;
-#endif
-	int16_t pitch_rate;
-	int16_t abs_pd;
-	int16_t heading_rate;
-	int16_t heading_delta;
-	int16_t abs_hd;
-
-	if (wh->homing_tier == 0)
-		return 1;
-
-	target_idx_w = wh->target_obj;
-	if (target_idx_w == 0xFFFF)
-		return 1;
-
-	/* Target slot dead (and onworld)? Caller should explode us. */
-	if (target_idx_w < (uint16_t)NUM_OBJECTS && !objects[target_idx_w].ship_idx)
-		return -1;
-
-	/* ship_idx is a projectile type, not a species-table index. */
-	idx = (uint32_t)homing_idx_lookup[obj->ship_idx] + wh->homing_tier;
-
-	target_idx = target_idx_w;
-	sub_obj = wh->sub_obj_idx;
-
-	create_getworldposition(target_idx, 0);
-
-	if (target_idx >= (uint16_t)NUM_CRAFTS) {
-		rotatedx = worldlocx;
-		rotatedy = worldlocy;
-		rotatedz = worldlocz;
-	} else if (TieProfile_UsesTie98Logic()) {
-		/* TIE98 0x455942-0x455A70. */
-		if (sub_obj != 0xFFFF) {
-			const uint8_t model_type = objects[target_idx].ship_idx;
-			int side = modelmesh_getcenterx(model_type, sub_obj);
-			int longitudinal = modelmesh_getcentery(model_type, sub_obj);
-			int vertical = modelmesh_getcenterz(model_type, sub_obj);
-			if (model_type == 53) {
-				pai_calcrotatedpoint(&objects[target_idx], side >> 1, vertical >> 1, (-longitudinal) >> 1);
-				rotatedx = (int32_t)((uint32_t)rotatedx << 1);
-				rotatedy = (int32_t)((uint32_t)rotatedy << 1);
-				rotatedz = (int32_t)((uint32_t)rotatedz << 1);
-			} else {
-				pai_calcrotatedpoint(&objects[target_idx], side, vertical, -longitudinal);
-			}
-		} else {
-			rotatedx = 0;
-			rotatedy = 0;
-			rotatedz = 0;
-		}
-		rotatedx += worldlocx;
-		rotatedy += worldlocy;
-		rotatedz += worldlocz;
-	} else {
-		ShipModelMesh* mesh;
-		int16_t ofs_side;
-		int16_t ofs_up;
-		int16_t ofs_fwd;
-		int shift;
-
-		draw_lockshipfileptrs(objects[target_idx].ship_idx);
-		mesh = (sub_obj == 0xFFFF) ? &componentblockptr[-1] /* mirrors binary fallback */
-								   : &componentblockptr[sub_obj];
-		/* Unaligned dword loads in the binary:
-		 *   (dword at mesh+14) >> 17 = center_side >> 1
-		 *   (dword at mesh+18) >> 17 = center_up   >> 1
-		 *   (dword at mesh+16) >> 17 = center_fwd  >> 1
-		 * See CLAUDE.md 'Watcom unaligned dword load pattern'. */
-		ofs_side = (int16_t)(mesh->center_side >> 1);
-		ofs_up = (int16_t)(mesh->center_up >> 1);
-		ofs_fwd = (int16_t)(mesh->center_fwd >> 1);
-		pai_calcrotatedpoint(&objects[target_idx], ofs_side, ofs_up, (int16_t)-ofs_fwd);
-
-		/* ShipModelData.model_scale_shift byte scales the rotated offsets.
-		 * Binary emits `shl reg, cl` (sign-agnostic); shifting a
-		 * negative int32_t in C is UB, so route through uint32_t. */
-		shift = objectblockptr->model_scale_shift;
-		rotatedy = (int32_t)((uint32_t)rotatedy << shift);
-		rotatedx = worldlocx + (int32_t)((uint32_t)rotatedx << shift);
-		rotatedy += worldlocy;
-		rotatedz = worldlocz + (int32_t)((uint32_t)rotatedz << shift);
-	}
-
-	/* Source: this missile's world position. */
-	create_getworldposition(obj_idx, 0);
-	rotatedx -= worldlocx;
-	rotatedz -= worldlocz;
-	rotatedy -= worldlocy;
-	trig2_ctop(rotatedx, rotatedy, rotatedz);
-
-	/* Pitch slew. xyangle = angle to target in X-Y (vertical) plane. */
-	pitch_delta = (int16_t)(trig2_xyangle - obj->pitch);
-#ifdef TIE_MODERN
-	high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_Move(obj_idx, obj) : NULL;
-	if (high_rate)
-		pitch_rate = (int16_t)TieFlightTiming_ScaleWithRemainder(maxhomingrate[idx], frameticks, 236,
-																 &high_rate->homing_remainder[0]);
-	else
-#endif
-		pitch_rate = (int16_t)(maxhomingrate[idx] / framerate);
-	abs_pd = (pitch_delta < 0) ? (int16_t)-pitch_delta : pitch_delta;
-	if (abs_pd > pitch_rate) {
-		int16_t step = (pitch_delta < 0) ? (int16_t)-pitch_rate : pitch_rate;
-		obj->pitch = (int16_t)(obj->pitch + step);
-		/* 200 is the missile homing-decel floor: while off-track and above
-		 * the floor, bleed speed; clamp back up if decel overshoots below. */
-		if ((uint16_t)obj->current_speed > 200) {
-			int16_t decel;
-			int16_t ns;
-
-#ifdef TIE_MODERN
-			if (high_rate && high_rate->homing_speed_sign != -1) {
-				high_rate->homing_remainder[2] = 0;
-				high_rate->homing_speed_sign = -1;
-			}
-			if (high_rate)
-				decel = (int16_t)TieFlightTiming_ScaleWithRemainder(maxdeccelrate[idx], frameticks, 236,
-																	&high_rate->homing_remainder[2]);
-			else
-#endif
-				decel = (int16_t)(maxdeccelrate[idx] / framerate);
-			ns = (int16_t)(obj->current_speed - decel);
-			obj->current_speed = ns;
-			if ((uint16_t)ns < 200)
-				obj->current_speed = 200;
-		}
-	} else {
-		obj->pitch = trig2_xyangle;
-#ifdef TIE_MODERN
-		if (high_rate)
-			high_rate->homing_remainder[0] = 0;
-#endif
-		if ((uint16_t)obj->current_speed < wh->min_speed) {
-			int16_t accel;
-
-#ifdef TIE_MODERN
-			if (high_rate && high_rate->homing_speed_sign != 1) {
-				high_rate->homing_remainder[2] = 0;
-				high_rate->homing_speed_sign = 1;
-			}
-			if (high_rate)
-				accel = (int16_t)TieFlightTiming_ScaleWithRemainder(maxdeccelrate[idx], frameticks, 236,
-																	&high_rate->homing_remainder[2]);
-			else
-#endif
-				accel = (int16_t)(maxdeccelrate[idx] / framerate);
-			obj->current_speed = (int16_t)(obj->current_speed + accel);
-		}
-	}
-
-	/* Heading slew. zangle = angle in horizontal plane. */
-#ifdef TIE_MODERN
-	if (high_rate)
-		heading_rate = (int16_t)TieFlightTiming_ScaleWithRemainder(maxhomingrate[idx], frameticks, 236,
-																   &high_rate->homing_remainder[1]);
-	else
-#endif
-		heading_rate = (int16_t)(maxhomingrate[idx] / framerate);
-	heading_delta = (int16_t)(trig2_zangle - obj->heading);
-	abs_hd = (heading_delta < 0) ? (int16_t)-heading_delta : heading_delta;
-	if (abs_hd > heading_rate) {
-		int16_t step = (heading_delta < 0) ? (int16_t)-heading_rate : heading_rate;
-		obj->heading = (int16_t)(obj->heading + step);
-	} else {
-		obj->heading = trig2_zangle;
-#ifdef TIE_MODERN
-		if (high_rate)
-			high_rate->homing_remainder[1] = 0;
-#endif
-	}
-
-	obj->orient_dirty = 1;
-	obj->move_dirty = obj->orient_dirty;
-	fview_calcrotatemove(obj->heading, obj->pitch, obj);
-	obj->moveX = (int16_t)craftmoveX;
-	obj->moveY = (int16_t)craftmoveY;
-	obj->moveZ = (int16_t)craftmoveZ;
-	return 1;
-}
-
-static void compute_move_distances(uint16_t obj_idx, FlightObject* obj, uint16_t speed_per_tick) {
-#ifdef TIE_MODERN
-	if (TieFlightTiming_IsHighRate()) {
-		TieFlightIntegration_Move(obj_idx, obj);
-		return;
-	}
-#endif
-	trig2_xmovedist = ((int32_t)speed_per_tick * obj->moveX) >> 15;
-	trig2_ymovedist = ((int32_t)speed_per_tick * obj->moveY) >> 15;
-	trig2_zmovedist = ((int32_t)speed_per_tick * obj->moveZ) >> 15;
-}
-
-/* Shared integration tail for genus 6/7, 11, 13. */
-static void integrate_from_move_vec(uint16_t obj_idx, FlightObject* obj, uint16_t speed_per_tick) {
-	if (obj->move_dirty)
-		fview_calcrotatemove(obj->heading, obj->pitch, obj);
-
-	compute_move_distances(obj_idx, obj, speed_per_tick);
-	move_updatexyz(obj);
-}
-
-/* Manned-craft dispatch (genus 0..4). Resolves move vector from current
- * orientation, applies 3 external-push accumulators, integrates, then
- * pins a linked slave craft (tow_slave_ref) to a fixed world-frame offset. */
-static void dispatch_craft(uint16_t obj_idx, FlightObject* obj, uint16_t speed_per_tick) {
-	CraftData* craft = obj->craft_ptr;
-
-	uint16_t link_idx;
-
-	if (obj->move_dirty)
-		fview_calcrotatemove(obj->heading, obj->pitch, obj);
-
-	compute_move_distances(obj_idx, obj, speed_per_tick);
-
-	if (craft->status_flags != 0) {
-		int32_t cap;
-		if (craft->mode_byte == 18)
-			cap = 250;
-		else if (craft->mode_byte == 30)
-			cap = 750;
-		else
-			cap = (uint16_t)spec_data[craft->species_idx].max_push_rate;
-
-		apply_push_accum(obj_idx, 0, &craft->push_accum_x, cap, &trig2_xmovedist);
-		apply_push_accum(obj_idx, 1, &craft->push_accum_y, cap, &trig2_ymovedist);
-		apply_push_accum(obj_idx, 2, &craft->push_accum_z, cap, &trig2_zmovedist);
-	}
-
-	move_updatexyz(obj);
-
-	/* Linked slave craft: pin to a fixed offset behind the leader.
-	 * tow_slave_ref is an obj-ref (see OBJ_REF_* in tie.h); only FlightObject
-	 * slot refs are valid leaders — static refs would index past the array. */
-	link_idx = (uint16_t)craft->tow_slave_ref;
-	if (link_idx < OBJ_REF_STATIC_BASE) {
-		CraftData* tgt_craft = objects[link_idx].craft_ptr;
-		int16_t ofs_z;
-		/* genus > GENUS_UTILITY: tgt is freighter or larger -> use cap-ship offset table. */
-		FlightObject* slave;
-
-		if (objects[link_idx].genus > GENUS_UTILITY) {
-			if (objects[obj_idx].genus > GENUS_UTILITY)
-				ofs_z = (int16_t)(spec_data[craft->species_idx].dock_active_heavy -
-								  spec_data[tgt_craft->species_idx].dock_passive_heavy);
-			else
-				ofs_z = (int16_t)(spec_data[craft->species_idx].dock_active_heavy -
-								  spec_data[tgt_craft->species_idx].dock_passive_light);
-		} else {
-			ofs_z = (int16_t)(spec_data[craft->species_idx].dock_active_light -
-							  spec_data[tgt_craft->species_idx].dock_passive_light);
-		}
-		pai_calcrotatedpoint(obj, 0, ofs_z, spec_data[tgt_craft->species_idx].dock_fwd);
-
-		slave = &objects[link_idx];
-		slave->world_x_prev = slave->world_x;
-		slave->world_y_prev = slave->world_y;
-		slave->world_z_prev = slave->world_z;
-		slave->world_x = rotatedx + obj->world_x;
-		slave->world_y = rotatedy + obj->world_y;
-		slave->world_z = rotatedz + obj->world_z;
-	}
-}
-
-/* ------------------------------------------------------------------ */
 /* move_moveobjects                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -645,6 +132,7 @@ void move_moveobjects(void) {
 	for (i = 0; i < (uint16_t)NUM_OBJECTS; i++) {
 		FlightObject* obj = &objects[i];
 		int16_t dt;
+		int16_t spin;
 		uint16_t speed_per_tick;
 
 		if (obj->ship_idx == 0)
@@ -658,8 +146,66 @@ void move_moveobjects(void) {
 				new_dt = 0;
 			obj->death_timer = new_dt;
 			if (new_dt == 0) {
-				if (dispatch_death(i, obj))
-					continue;
+				switch (obj->genus) {
+					case GENUS_FIGHTER: {
+						/* Retail order: blowoff first (which itself consumes RNG),
+						 * then read the random byte for the 127/128 ember pick. */
+						int16_t rnd;
+
+						create_blowoffcomponent(i, 1);
+						rnd = math2_getrandom();
+						collide_makeobjectexplosion(i, (char)(127 + (rnd & 1)));
+						break;
+					}
+					case GENUS_TRANSPORT:
+					case GENUS_UTILITY:
+					case GENUS_FREIGHTER:
+					case GENUS_STARSHIP:
+					case GENUS_PLATFORM: {
+						/* Capital-class ships always use the dedicated 130 explosion;
+						 * the size split only adds the model lock + damage_state seed
+						 * for ships large enough that the engine renders an oversized
+						 * ember. No RNG consumption in retail. */
+						uint16_t bound = species_table[obj->ship_idx].bound_hwidth;
+						if (bound > 0x578) {
+							if (TieProfile_UsesTie98Logic()) {
+								collide_makeobjectexplosion(i, (char)130);
+								obj->damage_state = (uint8_t)(modelbounds_getmaxextent(obj->ship_idx) >> 9);
+							} else {
+								int16_t length;
+								uint8_t lod;
+
+								draw_lockshipfileptrs(obj->ship_idx);
+								collide_makeobjectexplosion(i, (char)130);
+								length = (int16_t)objectblockptr->length;
+								lod = objectblockptr->model_scale_shift;
+								obj->damage_state = (uint8_t)(length >> (9 - lod));
+							}
+						} else {
+							collide_makeobjectexplosion(i, (char)130);
+						}
+						break;
+					}
+					case GENUS_PROJECTILE_PLAYER:
+					case GENUS_PROJECTILE_NPC:
+						/* Missile/projectile death gate: 0 = silent removal,
+						 * nonzero = full explosion (always the 129 chunk variant). */
+						if (projectile_is_warhead_type[obj->ship_idx - WEAPON_SPECIES_BASE] == 0) {
+							obj->ship_idx = 0;
+							continue;
+						}
+						collide_makeobjectexplosion(i, (char)129);
+						break;
+					case GENUS_DEBRIS: {
+						/* Debris ember randomises between the 127 and 128 sprites. */
+						int16_t rnd = math2_getrandom();
+						collide_makeobjectexplosion(i, (char)(127 + (rnd & 1)));
+						break;
+					}
+					default:
+						obj->ship_idx = 0;
+						continue;
+				}
 			}
 		}
 
@@ -672,9 +218,82 @@ void move_moveobjects(void) {
 		obj->world_y_prev = obj->world_y;
 		obj->world_z_prev = obj->world_z;
 
-		/* Death-spin roll decay. Always runs after the prev-save; may
-		 * increment roll every tick even after decay has finished. */
-		apply_roll_decay(i, obj);
+		/* Death-spin roll decay. Bleeds |spin_rate| toward zero at
+		 * 4096/framerate per tick; when decay crosses zero, writes 0xFFFF to
+		 * craft->spin_done_flag marking the spin complete. The roll always
+		 * advances by (spin/framerate)*4 using the pre-decay spin (or 0 if
+		 * the decay just crossed zero). */
+		spin = obj->spin_rate;
+		if (spin != 0) {
+			int16_t roll_delta;
+
+#ifdef TIE_MODERN
+			if (TieFlightTiming_IsHighRate()) {
+				TieMoveTimingState* state = TieFlightTimingState_Move(i, obj);
+				const int16_t sign = spin < 0 ? -1 : 1;
+				if (state->spin_sign != sign) {
+					state->spin_remainder[0] = 0;
+					state->spin_remainder[1] = 0;
+					state->spin_sign = sign;
+				}
+			}
+#endif
+			if (i < NUM_CRAFTS) {
+				CraftData* craft = objects[i].craft_ptr;
+
+				if (craft->spin_done_flag != 0xFFFF) {
+					int16_t step;
+					int16_t new_spin;
+					int crossed;
+
+#ifdef TIE_MODERN
+					if (TieFlightTiming_IsHighRate()) {
+						TieMoveTimingState* state = TieFlightTimingState_Move(i, obj);
+						step = (int16_t)TieFlightTiming_ScaleWithRemainder(4096, frameticks, 236,
+																		   &state->spin_remainder[0]);
+					} else
+#endif
+					{
+						step = (int16_t)((uint16_t)4096 / framerate);
+					}
+
+					if ((spin & 0x8000) == 0) { /* spin > 0: decay toward 0 */
+						new_spin = (int16_t)(spin - step);
+						crossed = (new_spin <= 0);
+					} else { /* spin < 0: decay toward 0 */
+						new_spin = (int16_t)(spin + step);
+						crossed = (new_spin >= 0);
+					}
+					obj->spin_rate = new_spin;
+					if (crossed) {
+						obj->spin_rate = 0;
+						spin = obj->spin_rate;
+						craft->spin_done_flag = 0xFFFF;
+#ifdef TIE_MODERN
+						if (TieFlightTiming_IsHighRate()) {
+							TieMoveTimingState* state = TieFlightTimingState_Move(i, obj);
+							state->spin_remainder[0] = 0;
+							state->spin_remainder[1] = 0;
+							state->spin_sign = 0;
+						}
+#endif
+					}
+				}
+			}
+
+#ifdef TIE_MODERN
+			if (TieFlightTiming_IsHighRate()) {
+				TieMoveTimingState* state = TieFlightTimingState_Move(i, obj);
+				roll_delta = (int16_t)TieFlightTiming_ScaleWithRemainder((int32_t)spin * 4, frameticks, 236,
+																		 &state->spin_remainder[1]);
+			} else
+#endif
+			{
+				roll_delta = (int16_t)((spin / (int16_t)framerate) * 4);
+			}
+			obj->orient_dirty = 1;
+			obj->roll = (int16_t)(obj->roll + roll_delta);
+		}
 
 		/* Per-tick distance per unit move vector. */
 #ifdef TIE_MODERN
@@ -690,28 +309,363 @@ void move_moveobjects(void) {
 			case GENUS_TRANSPORT:
 			case GENUS_UTILITY:
 			case GENUS_FREIGHTER:
-			case GENUS_STARSHIP:
-				dispatch_craft(i, obj, speed_per_tick);
+			case GENUS_STARSHIP: {
+				/* Manned craft: resolve the move vector, apply the three
+				 * external-push accumulators, integrate, then pin a linked
+				 * slave craft (tow_slave_ref) to a fixed world-frame offset. */
+				CraftData* craft = obj->craft_ptr;
+				uint16_t link_idx;
+
+				if (obj->move_dirty)
+					fview_calcrotatemove(obj->heading, obj->pitch, obj);
+
+#ifdef TIE_MODERN
+				if (TieFlightTiming_IsHighRate()) {
+					TieFlightIntegration_Move(i, obj);
+				} else
+#endif
+				{
+					trig2_xmovedist = ((int32_t)speed_per_tick * obj->moveX) >> 15;
+					trig2_ymovedist = ((int32_t)speed_per_tick * obj->moveY) >> 15;
+					trig2_zmovedist = ((int32_t)speed_per_tick * obj->moveZ) >> 15;
+				}
+
+				if (craft->status_flags != 0) {
+					int32_t cap;
+					int32_t accum;
+					int32_t clamped;
+					int32_t step;
+
+					if (craft->mode_byte == 18)
+						cap = 250;
+					else if (craft->mode_byte == 30)
+						cap = 750;
+					else
+						cap = (uint16_t)spec_data[craft->species_idx].max_push_rate;
+
+					/* Each accumulator bleeds toward 0 at min(|accum|, cap) /
+					 * framerate per tick into the move distance; a step that
+					 * rounds to zero dumps the whole remaining accumulator. */
+					accum = craft->push_accum_x;
+					if (accum != 0) {
+						clamped = accum;
+						if (clamped < -cap)
+							clamped = -cap;
+						else if (clamped > cap)
+							clamped = cap;
+#ifdef TIE_MODERN
+						if (TieFlightTiming_IsHighRate())
+							step = TieFlightIntegration_PushStep(i, 0, accum, clamped);
+						else
+#endif
+						{
+							step = (int32_t)((int16_t)clamped / (int16_t)framerate);
+							if (step == 0)
+								step = accum;
+						}
+						craft->push_accum_x = accum - step;
+						trig2_xmovedist += step;
+					}
+
+					accum = craft->push_accum_y;
+					if (accum != 0) {
+						clamped = accum;
+						if (clamped < -cap)
+							clamped = -cap;
+						else if (clamped > cap)
+							clamped = cap;
+#ifdef TIE_MODERN
+						if (TieFlightTiming_IsHighRate())
+							step = TieFlightIntegration_PushStep(i, 1, accum, clamped);
+						else
+#endif
+						{
+							step = (int32_t)((int16_t)clamped / (int16_t)framerate);
+							if (step == 0)
+								step = accum;
+						}
+						craft->push_accum_y = accum - step;
+						trig2_ymovedist += step;
+					}
+
+					accum = craft->push_accum_z;
+					if (accum != 0) {
+						clamped = accum;
+						if (clamped < -cap)
+							clamped = -cap;
+						else if (clamped > cap)
+							clamped = cap;
+#ifdef TIE_MODERN
+						if (TieFlightTiming_IsHighRate())
+							step = TieFlightIntegration_PushStep(i, 2, accum, clamped);
+						else
+#endif
+						{
+							step = (int32_t)((int16_t)clamped / (int16_t)framerate);
+							if (step == 0)
+								step = accum;
+						}
+						craft->push_accum_z = accum - step;
+						trig2_zmovedist += step;
+					}
+				}
+
+				move_updatexyz(obj);
+
+				/* Linked slave craft: pin to a fixed offset behind the leader.
+				 * tow_slave_ref is an obj-ref (see OBJ_REF_* in tie.h); only
+				 * FlightObject slot refs are valid leaders. */
+				link_idx = (uint16_t)craft->tow_slave_ref;
+				if (link_idx < OBJ_REF_STATIC_BASE) {
+					CraftData* tgt_craft = objects[link_idx].craft_ptr;
+					int16_t ofs_z;
+					FlightObject* slave;
+
+					/* genus > GENUS_UTILITY: freighter or larger -> heavy dock offsets. */
+					if (objects[link_idx].genus > GENUS_UTILITY) {
+						if (objects[i].genus > GENUS_UTILITY)
+							ofs_z = (int16_t)(spec_data[craft->species_idx].dock_active_heavy -
+											  spec_data[tgt_craft->species_idx].dock_passive_heavy);
+						else
+							ofs_z = (int16_t)(spec_data[craft->species_idx].dock_active_heavy -
+											  spec_data[tgt_craft->species_idx].dock_passive_light);
+					} else {
+						ofs_z = (int16_t)(spec_data[craft->species_idx].dock_active_light -
+										  spec_data[tgt_craft->species_idx].dock_passive_light);
+					}
+					pai_calcrotatedpoint(obj, 0, ofs_z, spec_data[tgt_craft->species_idx].dock_fwd);
+
+					slave = &objects[link_idx];
+					slave->world_x_prev = slave->world_x;
+					slave->world_y_prev = slave->world_y;
+					slave->world_z_prev = slave->world_z;
+					slave->world_x = rotatedx + obj->world_x;
+					slave->world_y = rotatedy + obj->world_y;
+					slave->world_z = rotatedz + obj->world_z;
+				}
 				break;
+			}
 
 			case GENUS_PROJECTILE_PLAYER:
 			case GENUS_PROJECTILE_NPC: {
 				/* For projectile slots, obj->craft_ptr addresses an 8-byte
-				 * WarheadRecord, not a CraftData. Cast explicitly so we only
-				 * touch the valid 8 bytes. */
+				 * WarheadRecord, not a CraftData. homing_tier == 0 is a
+				 * craft-fired projectile with no homing. */
 				WarheadRecord* wh = (WarheadRecord*)obj->craft_ptr;
-				int r = apply_homing(i, obj, wh);
-				if (r < 0) {
-					collide_makeobjectexplosion(i, 0x7F);
-					break;
+
+				if (wh->homing_tier != 0 && wh->target_obj != 0xFFFF) {
+					uint16_t target_idx = wh->target_obj;
+					uint16_t sub_obj;
+					uint32_t idx;
+					int16_t pitch_delta;
+					int16_t pitch_rate;
+					int16_t abs_pd;
+					int16_t heading_rate;
+					int16_t heading_delta;
+					int16_t abs_hd;
+#ifdef TIE_MODERN
+					TieMoveTimingState* high_rate;
+#endif
+
+					/* Target slot dead (and onworld)? Explode. */
+					if (target_idx < (uint16_t)NUM_OBJECTS && !objects[target_idx].ship_idx) {
+						collide_makeobjectexplosion(i, (char)129);
+						break;
+					}
+
+					idx = (uint32_t)homingindex[obj->ship_idx - WEAPON_SPECIES_BASE] + wh->homing_tier;
+					sub_obj = wh->sub_obj_idx;
+
+					create_getworldposition(target_idx, 0);
+
+					if (target_idx >= (uint16_t)NUM_CRAFTS) {
+						rotatedx = worldlocx;
+						rotatedy = worldlocy;
+						rotatedz = worldlocz;
+					} else if (TieProfile_UsesTie98Logic()) {
+						/* TIE98 0x455942-0x455A70. */
+						if (sub_obj != 0xFFFF) {
+							const uint8_t model_type = objects[target_idx].ship_idx;
+							int side = modelmesh_getcenterx(model_type, sub_obj);
+							int longitudinal = modelmesh_getcentery(model_type, sub_obj);
+							int vertical = modelmesh_getcenterz(model_type, sub_obj);
+							if (model_type == 53) {
+								pai_calcrotatedpoint(&objects[target_idx], side >> 1, vertical >> 1,
+													 (-longitudinal) >> 1);
+								rotatedx = (int32_t)((uint32_t)rotatedx << 1);
+								rotatedy = (int32_t)((uint32_t)rotatedy << 1);
+								rotatedz = (int32_t)((uint32_t)rotatedz << 1);
+							} else {
+								pai_calcrotatedpoint(&objects[target_idx], side, vertical, -longitudinal);
+							}
+						} else {
+							rotatedx = 0;
+							rotatedy = 0;
+							rotatedz = 0;
+						}
+						rotatedx += worldlocx;
+						rotatedy += worldlocy;
+						rotatedz += worldlocz;
+					} else {
+						ShipModelMesh* mesh;
+						int16_t ofs_side;
+						int16_t ofs_up;
+						int16_t ofs_fwd;
+						int shift;
+
+						draw_lockshipfileptrs(objects[target_idx].ship_idx);
+						/* 0xFFFF selects the record slot immediately before the
+						 * component table (retail `sub ebx, 40h`). */
+						if (sub_obj == 0xFFFF)
+							mesh = componentblockptr - 1;
+						else
+							mesh = componentblockptr + sub_obj;
+						/* Unaligned dword loads in the binary:
+						 *   (dword at mesh+14) >> 17 = center_side >> 1
+						 *   (dword at mesh+18) >> 17 = center_up   >> 1
+						 *   (dword at mesh+16) >> 17 = center_fwd  >> 1 */
+						ofs_side = (int16_t)(mesh->center_side >> 1);
+						ofs_up = (int16_t)(mesh->center_up >> 1);
+						ofs_fwd = (int16_t)(mesh->center_fwd >> 1);
+						pai_calcrotatedpoint(&objects[target_idx], ofs_side, ofs_up, (int16_t)-ofs_fwd);
+
+						/* ShipModelData.model_scale_shift scales the rotated
+						 * offsets; the binary's `shl reg, cl` is routed through
+						 * uint32_t to avoid shifting a negative int32_t. */
+						shift = objectblockptr->model_scale_shift;
+						rotatedy = (int32_t)((uint32_t)rotatedy << shift);
+						rotatedx = worldlocx + (int32_t)((uint32_t)rotatedx << shift);
+						rotatedy += worldlocy;
+						rotatedz = worldlocz + (int32_t)((uint32_t)rotatedz << shift);
+					}
+
+					/* Source: this missile's world position. */
+					create_getworldposition(i, 0);
+					rotatedx -= worldlocx;
+					rotatedz -= worldlocz;
+					rotatedy -= worldlocy;
+					trig2_ctop(rotatedx, rotatedy, rotatedz);
+
+					/* Pitch slew. xyangle = angle to target in X-Y (vertical) plane. */
+					pitch_delta = (int16_t)(trig2_xyangle - obj->pitch);
+#ifdef TIE_MODERN
+					high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_Move(i, obj) : NULL;
+					if (high_rate)
+						pitch_rate = (int16_t)TieFlightTiming_ScaleWithRemainder(
+							maxhomingrate[idx], frameticks, 236, &high_rate->homing_remainder[0]);
+					else
+#endif
+						pitch_rate = (int16_t)(maxhomingrate[idx] / framerate);
+					abs_pd = (pitch_delta < 0) ? (int16_t)-pitch_delta : pitch_delta;
+					if (abs_pd > pitch_rate) {
+						int16_t step = (pitch_delta < 0) ? (int16_t)-pitch_rate : pitch_rate;
+						obj->pitch = (int16_t)(obj->pitch + step);
+						/* 200 is the missile homing-decel floor: while off-track and
+						 * above the floor, bleed speed; clamp back up on overshoot. */
+						if ((uint16_t)obj->current_speed > 200) {
+							int16_t decel;
+							int16_t ns;
+
+#ifdef TIE_MODERN
+							if (high_rate && high_rate->homing_speed_sign != -1) {
+								high_rate->homing_remainder[2] = 0;
+								high_rate->homing_speed_sign = -1;
+							}
+							if (high_rate)
+								decel = (int16_t)TieFlightTiming_ScaleWithRemainder(
+									maxdeccelrate[idx], frameticks, 236, &high_rate->homing_remainder[2]);
+							else
+#endif
+								decel = (int16_t)(maxdeccelrate[idx] / framerate);
+							ns = (int16_t)(obj->current_speed - decel);
+							obj->current_speed = ns;
+							if ((uint16_t)ns < 200)
+								obj->current_speed = 200;
+						}
+					} else {
+						obj->pitch = trig2_xyangle;
+#ifdef TIE_MODERN
+						if (high_rate)
+							high_rate->homing_remainder[0] = 0;
+#endif
+						if ((uint16_t)obj->current_speed < wh->min_speed) {
+							int16_t accel;
+
+#ifdef TIE_MODERN
+							if (high_rate && high_rate->homing_speed_sign != 1) {
+								high_rate->homing_remainder[2] = 0;
+								high_rate->homing_speed_sign = 1;
+							}
+							if (high_rate)
+								accel = (int16_t)TieFlightTiming_ScaleWithRemainder(
+									maxdeccelrate[idx], frameticks, 236, &high_rate->homing_remainder[2]);
+							else
+#endif
+								accel = (int16_t)(maxdeccelrate[idx] / framerate);
+							obj->current_speed = (int16_t)(obj->current_speed + accel);
+						}
+					}
+
+					/* Heading slew. zangle = angle in horizontal plane. */
+#ifdef TIE_MODERN
+					if (high_rate)
+						heading_rate = (int16_t)TieFlightTiming_ScaleWithRemainder(
+							maxhomingrate[idx], frameticks, 236, &high_rate->homing_remainder[1]);
+					else
+#endif
+						heading_rate = (int16_t)(maxhomingrate[idx] / framerate);
+					heading_delta = (int16_t)(trig2_zangle - obj->heading);
+					abs_hd = (heading_delta < 0) ? (int16_t)-heading_delta : heading_delta;
+					if (abs_hd > heading_rate) {
+						int16_t step = (heading_delta < 0) ? (int16_t)-heading_rate : heading_rate;
+						obj->heading = (int16_t)(obj->heading + step);
+					} else {
+						obj->heading = trig2_zangle;
+#ifdef TIE_MODERN
+						if (high_rate)
+							high_rate->homing_remainder[1] = 0;
+#endif
+					}
+
+					obj->orient_dirty = 1;
+					obj->move_dirty = obj->orient_dirty;
+					fview_calcrotatemove(obj->heading, obj->pitch, obj);
+					obj->moveX = (int16_t)craftmoveX;
+					obj->moveY = (int16_t)craftmoveY;
+					obj->moveZ = (int16_t)craftmoveZ;
 				}
-				integrate_from_move_vec(i, obj, speed_per_tick);
+
+				if (obj->move_dirty)
+					fview_calcrotatemove(obj->heading, obj->pitch, obj);
+#ifdef TIE_MODERN
+				if (TieFlightTiming_IsHighRate()) {
+					TieFlightIntegration_Move(i, obj);
+				} else
+#endif
+				{
+					trig2_xmovedist = ((int32_t)speed_per_tick * obj->moveX) >> 15;
+					trig2_ymovedist = ((int32_t)speed_per_tick * obj->moveY) >> 15;
+					trig2_zmovedist = ((int32_t)speed_per_tick * obj->moveZ) >> 15;
+				}
+				move_updatexyz(obj);
 				break;
 			}
 
 			case GENUS_DEBRIS:
 			case GENUS_EXPLOSION:
-				integrate_from_move_vec(i, obj, speed_per_tick);
+				if (obj->move_dirty)
+					fview_calcrotatemove(obj->heading, obj->pitch, obj);
+#ifdef TIE_MODERN
+				if (TieFlightTiming_IsHighRate()) {
+					TieFlightIntegration_Move(i, obj);
+				} else
+#endif
+				{
+					trig2_xmovedist = ((int32_t)speed_per_tick * obj->moveX) >> 15;
+					trig2_ymovedist = ((int32_t)speed_per_tick * obj->moveY) >> 15;
+					trig2_zmovedist = ((int32_t)speed_per_tick * obj->moveZ) >> 15;
+				}
+				move_updatexyz(obj);
 				break;
 
 			default:

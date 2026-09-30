@@ -19,11 +19,6 @@ int16_t rotscale_calcscale(int32_t depth, uint16_t bound_hwidth, uint16_t factor
 
 void rotscale_prepare_fastdraw(uint16_t angle);
 
-/* Force a line_data rebuild on the next preparefastdraw. tie_simulator
- * calls this on mission start to drop any stale cache from a previous
- * flight. Mirrors the binary's `dword_C787C = 0` write. */
-void rotscale_invalidate_linedata(void);
-
 extern int rotscale_linedata_built;
 
 void rotscale_prepare_color(const char* palette_entries);

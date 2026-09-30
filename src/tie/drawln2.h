@@ -23,19 +23,18 @@ extern "C" {
  */
 
 /* DRAWLN2-owned globals per docs/watdbg-prototypes.txt:
- *   point1ptr       @0xE2220  DWORD*  start XY-pair pointer
- *   linelightincy   @0xE2224  i16     per-scanline light gradient (y-dominant)
- *   linelightincx   @0xE2226  i16     per-column light gradient (x-dominant)
- *   thickness       @0xE2228  u16     line thickness in pixels
- *   linelight1/2    @0xE222A/C i16    per-endpoint input light values
+ *   point1ptr       DWORD*  start XY-pair pointer
+ *   linelightincy   i16     per-scanline light gradient (y-dominant)
+ *   thickness       u16     line thickness in pixels
+ *   linelight1/2    i16     per-endpoint input light values
  * Static (file-scope in the original C source):
- *   templight1/2    @0xE222E/30 i16   scratch light state
- *   ydomflag        @0xE2232  u8      0 = x-dominant, 1 = y-dominant, 2 = pre-loaded
- *   linexsign       @0xE2233  i8      sign of (pt2.x - pt1.x)
- *   lineysign[4]    @0xE2234  i8      sign of (pt2.y - pt1.y) (4 bytes reserved) */
+ *   templight1/2    i16     scratch light state
+ *   ydomflag        u8      0 = x-dominant, 1 = y-dominant, 2 = pre-loaded
+ *   linexsign       i8      sign of (pt2.x - pt1.x)
+ *   lineysign       i8      sign of (pt2.y - pt1.y)
+ * The demo's linelightincx has no retail reference and is not recovered. */
 extern int32_t* point1ptr;
 extern int16_t linelightincy;
-extern int16_t linelightincx;
 extern uint16_t thickness;
 extern int16_t linelight1;
 extern int16_t linelight2;

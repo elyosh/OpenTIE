@@ -2643,8 +2643,8 @@ static void TieCockpitRenderer_DrawPipTargetBox(TieCockpitRenderer* cg, AeronCom
 		return;
 
 	/* Engine arithmetic (panel.c:2693-2695):
-	 *     sx = transfm2_getscreencoordx(...);              // projected x
-	 *     sy = transfm2_getscreencoordy(...) - 2;          // projected y - 2
+	 *     sx = transfm2_getscreenx(...);              // projected x
+	 *     sy = transfm2_getscreeny(...) - 2;          // projected y - 2
 	 *     panel_drawboxinxtrans(sx - 2, sy, 4, 4, 0xCE);
 	 * Box dimensions (4×4) and the -2 offset are classic-px; scale
 	 * into the layout's ref frame so the box stays visible at HD

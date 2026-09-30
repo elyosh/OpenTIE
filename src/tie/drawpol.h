@@ -133,6 +133,7 @@ extern int32_t *minscreeny, *maxscreeny;
  * ==================================================================== */
 extern int16_t numpoints;
 extern int16_t numedges;
+extern uint16_t edgeindex;
 extern int16_t samexcnt;
 extern int16_t sameycnt;
 extern int16_t counter;
@@ -242,7 +243,7 @@ extern DRAWPOL_LocalLight localLights[8];
 
 /* Marking book-keeping. */
 extern uint8_t* farmarkingptr[128];
-extern uint16_t markingnumber[128];
+extern uint8_t markingnumber[128];
 extern uint16_t markingptr[128];
 extern uint16_t objectptrs[128];
 extern DRAWPOL_MarkingEyeData markingeyedata;
@@ -286,7 +287,7 @@ void drawpol_drawmarkings(uint16_t face_idx);
 /* Recursive BSP-tree painter's-sort walker. Variable-stride node stream:
  *   +0 (u8) face index, +1 (i16) self-relative offset to subtree/sibling.
  * Four modes keyed by facevisflag[face]; see function for details. */
-uint8_t* drawpol_dobsptree(uint8_t* node);
+void drawpol_dobsptree(uint8_t* node);
 
 /* Dead code in the demo: quad-rasterization helper, no callers. */
 void drawpol_drawsurfacepoly(int32_t* scratch, char color_code);

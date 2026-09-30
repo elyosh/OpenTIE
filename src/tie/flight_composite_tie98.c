@@ -7,9 +7,9 @@
 #include "tie/xtrans2.h"
 
 #include "aeron/compat/host.h"
+#include "tie_runtime/display/tie98_display.h"
 
 #include <stdint.h>
-#include <stdlib.h>
 #include <string.h>
 
 // FUNCTION: TIE98 0x42B500
@@ -22,10 +22,6 @@ void RenderScene_ClearFrameBuffers(void) {
 								   &effects);
 	std3D_ClearZBuffer();
 }
-
-/* PORT: host-owned coverage plane consumed by the render-target composition. */
-static uint8_t* g_cockpitCoverage;
-static size_t g_cockpitCoverageCapacity;
 
 // FUNCTION: TIE98 0x42B560
 void Renderer_CopyDirtyRectsToHardwareSurface(void) {
@@ -40,22 +36,19 @@ void Renderer_CopyDirtyRectsToHardwareSurface(void) {
 	const size_t coverage_size = (size_t)width * (size_t)height;
 	int view_left, view_top, view_bottom;
 	const uint8_t* mask;
+	uint8_t* coverage;
 	uint8_t* row;
 	int y;
 	if (coverage_size == 0)
 		return;
-	if (g_cockpitCoverageCapacity < coverage_size) {
-		uint8_t* coverage = realloc(g_cockpitCoverage, coverage_size);
-		if (!coverage)
-			return;
-		g_cockpitCoverage = coverage;
-		g_cockpitCoverageCapacity = coverage_size;
-	}
+	coverage = Tie98Display_ReserveCockpitCoverage(coverage_size);
+	if (!coverage)
+		return;
 
 	view_left = (int)displaycorner_columns;
 	view_top = (int)displaycorner_lines;
 	mask = (const uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
-	row = g_cockpitCoverage;
+	row = coverage;
 
 	memset(row, 255, (size_t)width * (size_t)view_top);
 	row += (size_t)width * (size_t)view_top;
@@ -94,5 +87,5 @@ void Renderer_CopyDirtyRectsToHardwareSurface(void) {
 
 	AeronDx5_ComposeSurfaceOverRenderTarget(g_lpRenderSurface, (int)((g_displayWidth - g_surfaceWidth) >> 1),
 											(int)((g_displayHeight - g_surfaceHeight) >> 1),
-											g_flightOffscreenSurface, g_cockpitCoverage, width);
+											g_flightOffscreenSurface, coverage, width);
 }

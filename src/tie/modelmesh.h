@@ -5,6 +5,7 @@
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
+#include "tie_runtime/flight_assets/model_access.h"
 #include "tie_runtime/flight_assets/model_types.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
@@ -46,9 +47,6 @@ enum TieModelMeshType {
 	TIE_MESH_ROTARY_BEAM_SYSTEM = 24,
 	TIE_MESH_ROTARY_COMMAND_BEAM = 25,
 };
-
-const TieFlightModelView* modelmesh_require_model(uint16_t model_type);
-void modelmesh_require_craft_capacity(uint16_t model_type);
 
 int modelmesh_getcount(uint16_t model_type);
 int modelmesh_gettype(uint16_t model_type, int mesh_index);

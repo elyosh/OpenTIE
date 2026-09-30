@@ -3,6 +3,7 @@
 
 #include <landru/dialog.h>
 #include <landru/error.h>
+#include <landru/inpattr.h>
 #include <landru/inpcall.h>
 #include <landru/io.h>
 #include <landru/task.h>
@@ -14,12 +15,17 @@ typedef struct FilmViewFileContext {
 	FileDialog dialog;
 	Input* root;
 	int16_t had_key_buttons;
+	int16_t result;
 	bool active;
+	bool scheduled;
+	bool resumed;
 } FilmViewFileContext;
 
 typedef struct FilmViewDeleteContext {
 	Input* root;
-	Input* file_input;
+	Input* owner;
+	int16_t result;
+	bool resumed;
 } FilmViewDeleteContext;
 
 static FilmViewFileContext file_context;
@@ -37,28 +43,49 @@ static void close_file_dialog(void) {
 		xio_Clear_Key_Buttons();
 	file_context.root = NULL;
 	file_context.active = false;
+	file_context.scheduled = false;
 }
 
 static void after_file_dialog(int16_t result, void* unused) {
+	void (*update)(int32_t) = NULL;
 	(void)unused;
 	close_file_dialog();
-	filmview_ApplySelectedFile(result);
+	/* Re-enter the view update callback; its Do_FV_File_Dialog call now
+	 * returns the dialog result instead of opening the dialog again. */
+	file_context.result = result;
+	file_context.resumed = true;
+	xview_Get_View_Update_Function(&update);
+	if (update)
+		update(0);
+	file_context.resumed = false;
 }
 
-void TieFilmView_RequestFiles(void) {
-	if (file_context.active)
-		return;
+FileDialog* TieFilmView_OpenFileDialog(void) {
 	memset(&file_context, 0, sizeof file_context);
 	file_context.active = true;
-	file_context.had_key_buttons = xio_Is_Key_Buttons();
-	if (!file_context.had_key_buttons)
-		xio_Set_Key_Buttons();
-	if (!filmview_PrepareFileDialog(&file_context.dialog, &file_context.root)) {
-		close_file_dialog();
-		xerror_Set_Landru_Exit(SCENE_MAIN_MENU);
-		return;
-	}
-	xdialog_Schedule_Sub_Dialog(file_context.root, after_file_dialog, NULL);
+	return &file_context.dialog;
+}
+
+void TieFilmView_RunFileDialog(Input* root, int16_t key_buttons) {
+	file_context.root = root;
+	file_context.had_key_buttons = key_buttons;
+	file_context.scheduled = true;
+	xdialog_Schedule_Sub_Dialog(root, after_file_dialog, NULL);
+}
+
+void TieFilmView_CloseFileDialog(int16_t key_buttons) {
+	file_context.had_key_buttons = key_buttons;
+	close_file_dialog();
+}
+
+bool TieFilmView_FileDialogPending(void) { return file_context.scheduled; }
+
+bool TieFilmView_TakeFileResult(int16_t* result) {
+	if (!file_context.resumed)
+		return false;
+	*result = file_context.result;
+	file_context.resumed = false;
+	return true;
 }
 
 static void close_delete_dialog(void) {
@@ -70,23 +97,46 @@ static void close_delete_dialog(void) {
 }
 
 static void after_delete_dialog(int16_t result, void* unused) {
+	Input* owner = delete_context.owner;
 	(void)unused;
 	close_delete_dialog();
-	if (result != 2)
-		filmview_CompleteDelete(delete_context.file_input);
-	delete_context.file_input = NULL;
+	if (!owner || !owner->user) {
+		delete_context.owner = NULL;
+		return;
+	}
+	/* Re-enter the requesting callback; its Do_Delete_Dialog call now
+	 * returns the confirmation result instead of opening the dialog again. */
+	delete_context.result = result;
+	delete_context.resumed = true;
+	xinpattr_Selected_Input(owner);
+	owner->user(owner, 0);
+	delete_context.resumed = false;
+	delete_context.owner = NULL;
 }
 
-void TieFilmView_RequestDelete(Input* input) {
+void TieFilmView_BeginDelete(Input* owner) {
+	if (!delete_context.resumed)
+		delete_context.owner = owner;
+}
+
+void TieFilmView_RunDelete(Input* dialog) {
 	if (delete_context.root)
 		return;
-	delete_context.root = filmview_BuildDeleteDialog();
-	if (!delete_context.root) {
+	if (!dialog) {
+		delete_context.owner = NULL;
 		xerror_Set_Landru_Error(6);
 		return;
 	}
-	delete_context.file_input = input;
-	xdialog_Schedule_Sub_Dialog(delete_context.root, after_delete_dialog, NULL);
+	delete_context.root = dialog;
+	xdialog_Schedule_Sub_Dialog(dialog, after_delete_dialog, NULL);
+}
+
+bool TieFilmView_TakeDeleteResult(int16_t* result) {
+	if (!delete_context.resumed)
+		return false;
+	*result = delete_context.result;
+	delete_context.resumed = false;
+	return true;
 }
 
 typedef struct FilmViewTask {
@@ -114,7 +164,7 @@ static void filmview_end(void* self) {
 		xinpcall_Clear_Active_Input();
 		close_delete_dialog();
 		close_file_dialog();
-		delete_context.file_input = NULL;
+		delete_context.owner = NULL;
 	}
 	xview_Clear_View_Update_Function();
 	if (task->resource)

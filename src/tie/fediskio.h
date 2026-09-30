@@ -21,6 +21,8 @@
 #include "tie/string_table_ids.h"
 #include "tie/tie.h"
 
+#include <landru/memhdl.h>
+
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -77,6 +79,10 @@ extern TieFile* fileptr;
 extern uint8_t currentmission;
 extern uint8_t currentbattle;
 extern char resourcedir[10];
+extern char fatalmemorystr[27];
+extern char fatalfilemissingstr[55];
+extern char* fatalerrstr[2];
+extern char** fatalerrstrings;
 /* acceleratedtimesetting is tie.c-owned per watdbg; declared in tie.h. */
 
 extern uint32_t species_model_handle_sizes[NUM_SPECIES];
@@ -88,20 +94,18 @@ extern uint8_t battlemask[8];
 extern char specieslfds[3][9];
 extern uint8_t weaponsystype[33];
 
-/* Map-room icon buffer (31060 bytes). The first 1060 bytes are a 265-entry
- * `void *` lookup table (mapfarbufferptrs), the remainder holds the icon
- * shape byte-stream loaded from RESOURCE\\icons{320,640}.ico by
- * fediskio_loadbufferdata. Owned/allocated by fediskio.c; consumed by
- * maproom.c at room entry/exit. NULL until fediskio_Init_Buffers_and_Fonts
- * runs, freed by fediskio_FreeFlightHandles. */
-extern void* maproomicons_buf;
-
-/* Flight-engine edge pools (retail word_D4188 / word_D4186). Allocated
- * by fediskio_Init_Buffers_and_Fonts and consumed by xtrans2_initxtrans,
- * which casts them to trace2_edgeinfos / trace2_edgeheaders and derives
- * the TRACE2 overflow clamps. NULL before init / after FreeFlightHandles. */
-extern void* flightbuf_small; /* 0x3C000 B */
-extern void* flightbuf_big;   /* 0xCB200 B */
+/* Flight memory handles allocated by fediskio_Init_Buffers_and_Fonts and
+ * released by fediskio_FreeFlightHandles. The map-room icon handle holds a
+ * 265-entry pointer table (1060 bytes) followed by icon shape data. The
+ * TRACE2 edge pools are locked by xtrans2_initxtrans; BPFLIGHT allocates
+ * them itself for frontend previews when they are not allocated. */
+extern LandruHandle log2handle;
+extern LandruHandle flightbuf_big_handle;
+extern LandruHandle flightbuf_small_handle;
+extern LandruHandle panelpartshandle;
+extern LandruHandle rundiffhandle;
+extern LandruHandle replaybufferhandle;
+extern LandruHandle maproomiconshandle;
 
 #ifdef __cplusplus
 }

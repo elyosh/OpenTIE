@@ -19,7 +19,6 @@ extern int g_clipIdxB[32];
 extern int g_clipCountA;
 extern int g_clipCountB;
 extern int g_clipVertCursor;
-extern int g_clipOccurred;
 extern float g_invProjScale;
 
 void RenderClip_ClipPolyTop(int prev_vert, int cur_vert, ProjVertexTIE98* vert_buf);

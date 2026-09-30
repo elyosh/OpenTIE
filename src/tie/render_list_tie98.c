@@ -1,15 +1,11 @@
 #include "tie/render_list_tie98.h"
 #include <stddef.h>
 
-enum {
-	TIE98_RENDER_OBJECT_LIST_CAPACITY = 184,
-};
-
 // GLOBAL: TIE98 0x591904
 static int g_renderObjectListCount;
 
-// PORT: replaces the original handle-backed 184-entry allocation.
-static RenderObjectListEntryTIE98 g_renderObjectListEntries[TIE98_RENDER_OBJECT_LIST_CAPACITY];
+// GLOBAL: TIE98 0x595FD4
+RenderObjectListEntryTIE98* g_renderObjectListEntries;
 
 // GLOBAL: TIE98 0x591E38
 RenderObjectListEntryTIE98* g_renderListHead;

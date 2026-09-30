@@ -1,6 +1,9 @@
 #include "tie_runtime/runtime/bonus_countdown_task.h"
 #include "tie/gate.h"
 #include <landru/task.h>
+
+uint8_t bonus_countdown_active;
+
 static LandruTaskStepResult bonus_countdown_step(void* self) {
 	BonusCountdownTask* task = self;
 	gate_updategateanimations();

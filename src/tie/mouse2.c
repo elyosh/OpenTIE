@@ -17,4 +17,5 @@ int16_t mouse2_readmouse(int16_t* x, int16_t* y) {
 	return buttons;
 }
 
+// FUNCTION: TIE95 0x323D4
 void mouse2_deltamouse(int16_t* dx, int16_t* dy) { xmouse_MS_Mouse_Movement(dx, dy); }

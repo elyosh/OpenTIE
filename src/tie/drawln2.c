@@ -5,7 +5,7 @@
 #include "tie/drawpol.h"
 #include "tie/math2.h"
 #include "tie/math2_wide.h" /* math2_ABoverC32 */
-#include "tie/xtrans2.h" /* flatobjnum */
+#include "tie/xtrans2.h"    /* flatobjnum */
 
 #include <stdint.h>
 
@@ -16,8 +16,8 @@
 /* Extern (shared with drawpol callers). */
 // GLOBAL: TIE95 0xD35EC
 int32_t* point1ptr;
+// GLOBAL: TIE95 0xD35F0
 int16_t linelightincy;
-int16_t linelightincx;
 // GLOBAL: TIE95 0xD35FC
 uint16_t thickness;
 // GLOBAL: TIE95 0xD35F4
@@ -26,37 +26,20 @@ int16_t linelight1;
 int16_t linelight2;
 
 /* Static (file-private per watdbg 'static OPAQUE'). */
+// GLOBAL: TIE95 0xD35FA
 static int16_t templight1;
+// GLOBAL: TIE95 0xD35F8
 static int16_t templight2;
+// GLOBAL: TIE95 0xD35FE
 static uint8_t ydomflag;
+// GLOBAL: TIE95 0xD35FF
 static int8_t linexsign;
+// GLOBAL: TIE95 0xD3600
 static int8_t lineysign;
 
 /* ======================================================================
  * Cross-module externs (not re-declared in any included header but used here)
  * ==================================================================== */
-
-/* ======================================================================
- * Helpers
- * ==================================================================== */
-
-/* num is a remainder below den. Taking the high 16 quotient bits is
- * equivalent to dividing num * 65536, whose quotient fits in 16 bits. */
-static inline uint16_t q16_frac(uint32_t num, uint32_t den) {
-	return (uint16_t)math2_mul_div_u32(num, 0x10000u, den);
-}
-
-/* Binary idiom: `if (BYTE1(x)) LOBYTE(x) = x & 0xFE` (asm: test ah,FFh
- * / and bl,FEh). Clears bit 0 of byte 0 when any of bits 8..15 is set —
- * i.e. round the divide quotient down to even when its magnitude
- * exceeds 8 bits OR it is negative (sign-extension makes byte 1 = 0xFF).
- * This ensures the subsequent `2 * x` doubling preserves the rounded
- * value's parity. */
-static inline int clear_b1_lsb(int x) {
-	if ((x >> 8) & 0xFF)
-		x &= ~1;
-	return x;
-}
 
 /* ======================================================================
  * drawln2_tracelineedges
@@ -200,7 +183,10 @@ void drawln2_tracelineedges(int32_t* pt2) {
 			if ((int16_t)light_step > (int)dy_abs) {
 				if (dy_abs)
 					light_step = (int16_t)light_step / (int16_t)dy_abs;
-				light_step = clear_b1_lsb(light_step);
+				/* Binary idiom `test ah,FFh / and bl,FEh`: round down to even when the
+				 * quotient exceeds 8 bits or is negative. */
+				if ((light_step >> 8) & 0xFF)
+					light_step &= ~1;
 				/* Sign-reconcile: ydiffsign and light_neg_flag together
 				 * pick the sign of the gradient. */
 				if (((ydiffsign ^ (uint16_t)-light_neg_flag) & 0x8000u) != 0)
@@ -244,7 +230,8 @@ void drawln2_tracelineedges(int32_t* pt2) {
 					 * Match the bit pattern even when an input
 					 * is wrapped-negative from saturation. */
 					edge_slope = (int)((uint32_t)dy_abs / (uint32_t)dx_abs);
-					edge_fraction = q16_frac((uint32_t)dy_abs % (uint32_t)dx_abs, (uint32_t)dx_abs);
+					edge_fraction = (uint16_t)math2_mul_div_u32((uint32_t)dy_abs % (uint32_t)dx_abs, 0x10000u,
+																(uint32_t)dx_abs);
 				} else {
 					edge_slope = 0x7FFFFFFF;
 					edge_fraction = 0;
@@ -253,7 +240,8 @@ void drawln2_tracelineedges(int32_t* pt2) {
 				trace2_ydomedge(edge_slope, edge_fraction, pt1ptr, pt2);
 			} else if (dy_abs) {
 				edge_slope = (int)((uint32_t)dx_abs / (uint32_t)dy_abs);
-				edge_fraction = q16_frac((uint32_t)dx_abs % (uint32_t)dy_abs, (uint32_t)dy_abs);
+				edge_fraction = (uint16_t)math2_mul_div_u32((uint32_t)dx_abs % (uint32_t)dy_abs, 0x10000u,
+															(uint32_t)dy_abs);
 				trace2_xdomedge(edge_slope, edge_fraction, pt1ptr, pt2);
 			} else {
 				edge_slope = 0x7FFFFFFF;
@@ -283,7 +271,8 @@ void drawln2_tracelineedges(int32_t* pt2) {
 				if ((uint32_t)dy_abs / 2 < (uint32_t)dx_abs) {
 					if (dy_abs)
 						trace2_xdomedge((int)((uint32_t)dx_abs / (uint32_t)dy_abs),
-										q16_frac((uint32_t)dx_abs % (uint32_t)dy_abs, (uint32_t)dy_abs),
+										(uint16_t)math2_mul_div_u32((uint32_t)dx_abs % (uint32_t)dy_abs,
+																	0x10000u, (uint32_t)dy_abs),
 										pt1ptr, pt2);
 					else
 						trace2_xdomedge(0x7FFFFFFF, 0, pt1ptr, pt2);
@@ -292,7 +281,8 @@ void drawln2_tracelineedges(int32_t* pt2) {
 				if ((uint32_t)dy_abs / 2 > (uint32_t)dx_abs) {
 					if (dx_abs)
 						trace2_ydomedge((int)((uint32_t)dy_abs / (uint32_t)dx_abs),
-										q16_frac((uint32_t)dy_abs % (uint32_t)dx_abs, (uint32_t)dx_abs),
+										(uint16_t)math2_mul_div_u32((uint32_t)dy_abs % (uint32_t)dx_abs,
+																	0x10000u, (uint32_t)dx_abs),
 										pt1ptr, pt2);
 					else
 						trace2_ydomedge(0x7FFFFFFF, 0, pt1ptr, pt2);
@@ -335,7 +325,10 @@ void drawln2_tracelineedges(int32_t* pt2) {
 		if ((int16_t)step > (int)thickness) {
 			if (thickness)
 				step = (uint16_t)step / thickness;
-			step = clear_b1_lsb(step);
+			/* Binary idiom `test ah,FFh / and bl,FEh`: round down to even when the
+			 * quotient exceeds 8 bits or is negative. */
+			if ((step >> 8) & 0xFF)
+				step &= ~1;
 			if (neg)
 				step = -step;
 		}
@@ -355,7 +348,10 @@ void drawln2_tracelineedges(int32_t* pt2) {
 		if ((int16_t)step > (int)dy_abs) {
 			if (dy_abs)
 				step = (int16_t)step / (int16_t)dy_abs;
-			step = clear_b1_lsb(step);
+			/* Binary idiom `test ah,FFh / and bl,FEh`: round down to even when the
+			 * quotient exceeds 8 bits or is negative. */
+			if ((step >> 8) & 0xFF)
+				step &= ~1;
 			if (((ydiffsign ^ (uint16_t)-neg) & 0x8000u) != 0)
 				step = -step;
 		}
@@ -458,7 +454,8 @@ void drawln2_tracelineedges(int32_t* pt2) {
 		if (dy_abs) {
 			/* Asm: div ebx — unsigned 32-bit divide. */
 			edge_slope = (int)((uint32_t)dx_abs / (uint32_t)dy_abs);
-			edge_fraction = q16_frac((uint32_t)dx_abs % (uint32_t)dy_abs, (uint32_t)dy_abs);
+			edge_fraction =
+				(uint16_t)math2_mul_div_u32((uint32_t)dx_abs % (uint32_t)dy_abs, 0x10000u, (uint32_t)dy_abs);
 			ydomflag = (uint8_t)-1;
 			trace2_xdomedge(edge_slope, edge_fraction, pt1ptr, pt2);
 		}
@@ -525,8 +522,10 @@ void drawln2_tracelineedges(int32_t* pt2) {
 
 	if (!ydomflag) {
 		if (dy_abs)
-			trace2_xdomedge((int)((uint32_t)dx_abs / (uint32_t)dy_abs),
-							q16_frac((uint32_t)dx_abs % (uint32_t)dy_abs, (uint32_t)dy_abs), pt1ptr, pt2);
+			trace2_xdomedge(
+				(int)((uint32_t)dx_abs / (uint32_t)dy_abs),
+				(uint16_t)math2_mul_div_u32((uint32_t)dx_abs % (uint32_t)dy_abs, 0x10000u, (uint32_t)dy_abs),
+				pt1ptr, pt2);
 		return;
 	}
 	/* ydomflag == 2: caller did a pre-emit; skip the final xdomedge. */

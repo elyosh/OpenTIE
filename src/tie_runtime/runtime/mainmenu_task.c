@@ -11,6 +11,54 @@
 #include <landru/view.h>
 #include <landru/viewadd.h>
 
+const MainMenuLayout mainmenu_layout_tie95 = {
+	"mainmenu.lfd",
+	"mainmenu",
+	"main-1",
+	{ "m-hang-d", "m-door-1", "m-door-2", "m-door-3", "m-door-4", "m-door-5", "m-door-6", "m-door-7" },
+	320,
+	200,
+	190,
+	100,
+	{ { 14, 28, 170, 64 },
+	  { 0 },
+	  { 82, 64, 128, 90 },
+	  { 220, 64, 260, 90 },
+	  { 272, 68, 304, 94 },
+	  { 0, 110, 34, 146 },
+	  { 44, 96, 82, 126 },
+	  { 130, 86, 168, 106 } },
+	{ SCENE_BRIEF, 0, SCENE_TOUR_DESK, SCENE_BLUEPRINT, SCENE_FILM_VIEWER, SCENE_EXIT, SCENE_TRAIN_TRANSITION,
+	  SCENE_COMBAT_TRANSITION },
+	{ 0, txtMainCustom, 0, txtMainTrain, txtMainCombat, txtMainRegister, txtMainTech, txtMainFilm },
+	0,
+	4,
+};
+
+const MainMenuLayout mainmenu_layout_tie98 = {
+	"mm640.lfd",
+	"main_00",
+	NULL,
+	{ "hr_mhngr", "hr_md3_1", "hr_md2_1", "hr_md1_2", "hr_md1_3", "hr_md1_1", "hr_md2_2", "hr_md2_3" },
+	640,
+	480,
+	387,
+	387,
+	{ { 19, 66, 340, 142 },
+	  { 0 },
+	  { 172, 163, 248, 210 },
+	  { 104, 237, 154, 299 },
+	  { 266, 212, 331, 260 },
+	  { 0, 268, 55, 357 },
+	  { 433, 159, 512, 215 },
+	  { 549, 168, 604, 226 } },
+	{ SCENE_BRIEF, 0, SCENE_TOUR_DESK, SCENE_TRAIN_TRANSITION, SCENE_COMBAT_TRANSITION, SCENE_EXIT,
+	  SCENE_BLUEPRINT, SCENE_FILM_VIEWER },
+	{ 0, txtMainCustom, 0, txtMainTech, txtMainFilm, txtMainRegister, txtMainTrain, txtMainCombat },
+	2,
+	7,
+};
+
 typedef struct MainMenuTask {
 	SceneHeadStruct* scene_head;
 	ResFile* resource;

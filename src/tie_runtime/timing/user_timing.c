@@ -3,6 +3,9 @@
 #include "tie/tie.h"
 #include "tie_runtime/timing/flight_timing.h"
 #include "tie_runtime/timing/flight_timing_state.h"
+#include "tie_runtime/timing/replay_recording.h"
+
+#include <stdint.h>
 
 int16_t TieUserTiming_ScaleValue(int32_t value, int32_t* remainder) {
 	const int64_t numerator = (int64_t)value * frameticks + *remainder;
@@ -78,4 +81,16 @@ int16_t TieUserTiming_SlewAxis(int16_t current, int16_t target, unsigned int axi
 		return target;
 	}
 	return (int16_t)(current + step);
+}
+
+bool TieUserTiming_ThrottleCommandEligible(void) {
+	return !pstate.hyperin_state && !hyperspaceflag && pstate.player_craft &&
+		   (pstate.player_craft->status_flags & 0x20) && !camera.view_pitch_offset &&
+		   !TieReplayRecording_KeyStartsInfoPayload((uint16_t)inputkey);
+}
+
+void TieUserTiming_ApplyThrottleCommand(void) {
+	if (inputthrottle <= UINT16_MAX && TieUserTiming_ThrottleCommandEligible())
+		pstate.player_craft->throttle_speed = (uint16_t)inputthrottle;
+	inputthrottle = UINT32_MAX;
 }

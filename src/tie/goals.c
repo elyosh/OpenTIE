@@ -95,27 +95,46 @@ void* goalallfgstring; /* const char *     "all FG"                */
 
 /* "---" placeholder printed by outputgoal when target_type in {7,10}
  * (the condstr0 alias at 0xD4C78). Four bytes including the NUL. */
+// GLOBAL: TIE95 0xC53AC
+// GLOBAL: TIE98 0x4E3C80
 static const char condstr0[4] = { '-', '-', '-', '\0' };
 
 /* Status-priority display order: {failed, incomplete, completed}. The room
  * iterates status_prio=0..2, matching goal.status against goalstatusorder[j]
  * to decide whether to emit the goal at that row. */
+// GLOBAL: TIE95 0xC53B0
+// GLOBAL: TIE98 0x4E3C84
 static const uint8_t goalstatusorder[3] = { 2, 4, 1 };
 
 /* Palette indices for status text color. Category-subcond calls use
  * goalstatuscolor[prio] + 1 (one shade lighter); per-FG calls use the base
  * value. The matching backgrounds live in the front-end palette. */
+// GLOBAL: TIE95 0xC53B3
+// GLOBAL: TIE98 0x4E3C88
 static const uint8_t goalstatuscolor[3] = { 0x4A, 0x4E, 0x52 };
 
 /* 21-entry LUT indexed by condition code (0..20). A value of 5 selects
  * the active-perfect verb group (has/have/must have); zero selects the
- * passive verb group (was/were/must be). Mirrors byte_C53B6 in TIE95. */
+ * passive verb group (was/were/must be). */
+// GLOBAL: TIE95 0xC53B6
+// GLOBAL: TIE98 0x4E3C90
 static const uint8_t tenseflag[21] = { 0, 5, 0, 0, 0, 0, 0, 5, 0, 5, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0 };
 
+// GLOBAL: TIE95 0xD4B90
+// GLOBAL: TIE98 0x5FE824
 int32_t goalsTop;
+// GLOBAL: TIE95 0xD4BA8
+// GLOBAL: TIE98 0x5FE840
 int32_t goalsBottom;
-uint8_t showbonusgoals;
+/* Both retail data segments initialize this to 1. */
+// GLOBAL: TIE95 0xC53CB
+// GLOBAL: TIE98 0x4E3CA8
+uint8_t showbonusgoals = 1;
+// GLOBAL: TIE95 0xD4B80
+// GLOBAL: TIE98 0x5FE830
 int32_t goalsCount[3];
+// GLOBAL: TIE95 0xD4B9C
+// GLOBAL: TIE98 0x5FE860
 int32_t goalsCompletedCount[3];
 
 /* ====================================================================
@@ -124,21 +143,6 @@ int32_t goalsCompletedCount[3];
 
 // FUNCTION: TIE95 0x2C6BC
 uint8_t goals_checkidflag(uint16_t fg_index) { return fgstatus[fg_index].cond_id[4].detail; }
-
-/* ====================================================================
- * goals_checkwrap
- * ==================================================================== */
-
-uint8_t goals_checkwrap(const uint8_t* s) {
-	const uint16_t width = (uint16_t)sys2_calclength(s);
-	if ((uint16_t)cursorx + (uint32_t)width <= (uint32_t)screenXRes - 11u)
-		return 0;
-
-	if (outchar)
-		outchar('\n');
-	festring_setcursor(6, cursory);
-	return fontheight;
-}
 
 /* ====================================================================
  * goals_outputspeciesname
@@ -167,7 +171,14 @@ uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 #endif
 	}
 
-	wrap = goals_checkwrap(name_ptr);
+	/* Right-margin wrap check (checkwrap, inlined in retail). */
+	wrap = 0;
+	if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(name_ptr) > (uint32_t)screenXRes - 11u) {
+		if (outchar)
+			outchar('\n');
+		festring_setcursor(6, cursory);
+		wrap = fontheight;
+	}
 	festring_outstring(name_ptr);
 	if (outchar)
 		outchar(plural_flag ? 's' : ' ');
@@ -181,6 +192,7 @@ uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, uint16_t status, uint16_t op) {
 	int32_t total = fontheight; /* accumulator starts at fontheight */
 	uint16_t tense_offset = 10;
+	uint8_t wrap; /* right-margin checkwrap result, inlined in retail */
 
 	if (op == 4 || op == 14 || op == 9)
 		tense_offset = 0;
@@ -262,14 +274,39 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 			if (fg_array[j].count <= 1) {
 				/* Single-craft FG: "species FG_name". */
 				total += goals_outputspeciesname(fg_array[j].species, 0);
-				total += goals_checkwrap((const uint8_t*)&fg_array[j]);
+				wrap = 0;
+				if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength((const uint8_t*)&fg_array[j]) >
+					(uint32_t)screenXRes - 11u) {
+					if (outchar)
+						outchar('\n');
+					festring_setcursor(6, cursory);
+					wrap = fontheight;
+				}
+				total += wrap;
 				festring_outstring((const uint8_t*)&fg_array[j]);
 			} else {
 				/* Multi-craft FG: "species group FG_name". */
 				total += goals_outputspeciesname(fg_array[j].species, 0);
-				total += goals_checkwrap((const uint8_t*)goal_group_string);
+				wrap = 0;
+				if ((uint16_t)cursorx +
+						(uint32_t)(uint16_t)sys2_calclength((const uint8_t*)goal_group_string) >
+					(uint32_t)screenXRes - 11u) {
+					if (outchar)
+						outchar('\n');
+					festring_setcursor(6, cursory);
+					wrap = fontheight;
+				}
+				total += wrap;
 				festring_outstring((const uint8_t*)goal_group_string);
-				total += goals_checkwrap((const uint8_t*)&fg_array[j]);
+				wrap = 0;
+				if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength((const uint8_t*)&fg_array[j]) >
+					(uint32_t)screenXRes - 11u) {
+					if (outchar)
+						outchar('\n');
+					festring_setcursor(6, cursory);
+					wrap = fontheight;
+				}
+				total += wrap;
 				festring_outstring((const uint8_t*)&fg_array[j]);
 				tense_offset = 10;
 			}
@@ -278,7 +315,14 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 			 * optional leading space when no wrap occurred; preceding ->
 			 * ", "; last (zero remaining) -> nothing. */
 			if (--in_set == 1) {
-				const uint8_t wrap = goals_checkwrap((const uint8_t*)goal_and_string);
+				wrap = 0;
+				if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength((const uint8_t*)goal_and_string) >
+					(uint32_t)screenXRes - 11u) {
+					if (outchar)
+						outchar('\n');
+					festring_setcursor(6, cursory);
+					wrap = fontheight;
+				}
 				total += wrap;
 				if (wrap == 0 && outchar)
 					outchar(' ');
@@ -351,16 +395,29 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 		const uint32_t verb_idx = (uint32_t)tenseflag[cond] + (uint32_t)status + (uint32_t)tense_offset;
 		const uint8_t* verb = ((const uint8_t**)condverbstrings)[verb_idx];
 
-		const uint8_t verb_wrap = goals_checkwrap(verb);
-		total += verb_wrap;
-		if (verb_wrap == 0 && outchar)
+		wrap = 0;
+		if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(verb) > (uint32_t)screenXRes - 11u) {
+			if (outchar)
+				outchar('\n');
+			festring_setcursor(6, cursory);
+			wrap = fontheight;
+		}
+		total += wrap;
+		if (wrap == 0 && outchar)
 			outchar(' ');
 		festring_outstring(verb);
 	}
 
 	{
 		const uint8_t* clause = ((const uint8_t**)condstrings)[cond];
-		total += goals_checkwrap(clause);
+		wrap = 0;
+		if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(clause) > (uint32_t)screenXRes - 11u) {
+			if (outchar)
+				outchar('\n');
+			festring_setcursor(6, cursory);
+			wrap = fontheight;
+		}
+		total += wrap;
 		festring_outstring(clause);
 	}
 

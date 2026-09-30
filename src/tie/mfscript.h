@@ -19,14 +19,14 @@ typedef struct {
 
 /* CueRef — a cue point within a sequence */
 typedef struct {
-	intptr_t sound;      /* sound handle (populated at runtime, pointer-width) */
+	void* sound;         /* iMUSE file handle (populated at runtime) */
 	int16_t nameIndex;   /* index into soundNames[] */
 	ChangeRef cueChange; /* transition to execute at this cue */
 } CueRef;
 
 /* StateRef — a music state with its transitions */
 typedef struct {
-	intptr_t sound;            /* sound handle (populated at runtime, pointer-width) */
+	void* sound;               /* iMUSE file handle (populated at runtime) */
 	int16_t nameIndex;         /* index into soundNames[] */
 	ChangeRef stateChanges[7]; /* transitions to other states */
 	ChangeRef seqChanges[2];   /* transitions when entering/leaving sequences */

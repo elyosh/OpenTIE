@@ -31,6 +31,8 @@ enum {
 	IM_PARAM_ATTR = 0xF00,
 };
 
+// GLOBAL: TIE95 0xD1880
+// GLOBAL: TIE98 0x4E4D70
 static char soundNames[NUM_SOUND_NAMES][9] = {
 	"",         "drone",    "POINK",    "title",    "tocity",   "battle",   "stately", "bridge",
 	"briefmap", "secret",   "launch",   "awe",      "register", "mainmen",  "emperor", "phew",
@@ -39,6 +41,8 @@ static char soundNames[NUM_SOUND_NAMES][9] = {
 	"perelogo", "2battle",  "2thrawny", "2emperor", "empshort", "cloaktst", "kablam"
 };
 
+// GLOBAL: TIE95 0xD19E0
+// GLOBAL: TIE98 0x4E4ED0
 static StateRef stateRefs[NUM_STATES] = {
 	/* [ 0] */ { 0,
 				 0,
@@ -302,6 +306,8 @@ static StateRef stateRefs[NUM_STATES] = {
  * in tiemus2.lfd). Using demo timings against retail audio produces
  * out-of-sync cue firings. Bytes copied verbatim from Z_TIE__.EXE
  * at 0xD2420 (SHA256 593820de…). */
+// GLOBAL: TIE95 0xD2420
+// GLOBAL: TIE98 0x4E5910
 static CueRef openingSeq[20] = {
 	{ 0, 1, { 0, 1, 400, 0, 0, 0 } },   { 0, 2, { 0, 1, 400, 0, 0, 0 } },
 	{ 0, 32, { 0, 1, 400, 0, 0, 0 } },  { 0, 0, { 0, 1, 0, 0, 0, 0 } },
@@ -314,46 +320,82 @@ static CueRef openingSeq[20] = {
 	{ 0, 5, { 0, 2, 6, 0, 0, 0 } },     { 0, 5, { 0, 2, 6, 0, 0, 0 } },
 	{ 0, 5, { 0, 6, 1, 1, 2, 0 } },     { 0, 16, { 0, 0, 0, 0, 0, 0 } },
 };
+// GLOBAL: TIE95 0xD2588
+// GLOBAL: TIE98 0x4E5A78
 static CueRef trainPodSeq[1] = { { 0, 16, { 5, 1, 0, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD259C
+// GLOBAL: TIE98 0x4E5A90
 static CueRef combatPodSeq[1] = { { 0, 17, { 8, 1, 60, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD25B0
+// GLOBAL: TIE98 0x4E5AA8
 static CueRef launchSeq[1] = { { 0, 10, { 0, 0, 0, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD25C4
+// GLOBAL: TIE98 0x4E5AC0
 static CueRef medalsSeq[9] = {
 	{ 0, 20, { 0, 0, 0, 0, 0, 0 } }, { 0, 20, { 0, 0, 0, 0, 0, 0 } }, { 0, 20, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 20, { 0, 0, 0, 0, 0, 0 } }, { 0, 20, { 0, 2, 2, 0, 0, 0 } }, { 0, 20, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 20, { 0, 0, 0, 0, 0, 0 } }, { 0, 20, { 0, 0, 0, 0, 0, 0 } }, { 0, 20, { 17, 1, 120, 0, 0, 0 } },
 };
+// GLOBAL: TIE95 0xD2668
+// GLOBAL: TIE98 0x4E5B68
 static CueRef cut1Seq[1] = { { 0, 22, { 0, 0, 0, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD267C
+// GLOBAL: TIE98 0x4E5B80
 static CueRef cut2Seq[1] = { { 0, 23, { 0, 0, 0, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD2690
+// GLOBAL: TIE98 0x4E5B98
 static CueRef cut3Seq[1] = { { 0, 25, { 0, 0, 0, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD26A4
+// GLOBAL: TIE98 0x4E5BB0
 static CueRef cut4Seq[2] = { { 0, 21, { 0, 5, 0, 0, 0, 0 } }, { 0, 21, { 0, 0, 0, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD26C8
+// GLOBAL: TIE98 0x4E5BD8
 static CueRef cut5Seq[2] = { { 0, 24, { 0, 5, 0, 0, 0, 0 } }, { 0, 24, { 0, 0, 0, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD26EC
+// GLOBAL: TIE98 0x4E5C00
 static CueRef cut6Seq[1] = { { 0, 30, { 0, 0, 0, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD2700
+// GLOBAL: TIE98 0x4E5C18
 static CueRef cut7Seq[11] = {
 	{ 0, 27, { 0, 0, 0, 0, 0, 0 } }, { 0, 27, { 0, 0, 0, 0, 0, 0 } }, { 0, 27, { 0, 2, 1, 1, 265, 268 } },
 	{ 0, 27, { 0, 0, 0, 0, 0, 0 } }, { 0, 27, { 0, 6, 1, 1, 2, 0 } }, { 0, 20, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 20, { 0, 0, 0, 0, 0, 0 } }, { 0, 20, { 0, 0, 0, 0, 0, 0 } }, { 0, 20, { 0, 1, 200, 0, 0, 0 } },
 	{ 0, 3, { 0, 6, 1, 1, 2, 0 } },  { 0, 16, { 0, 0, 0, 0, 0, 0 } },
 };
+// GLOBAL: TIE95 0xD27C8
+// GLOBAL: TIE98 0x4E5CE0
 static CueRef emperorSeq[7] = {
 	{ 0, 14, { 0, 0, 0, 0, 0, 0 } }, { 0, 14, { 0, 0, 0, 0, 0, 0 } }, { 0, 14, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 14, { 0, 0, 0, 0, 0, 0 } }, { 0, 14, { 0, 0, 0, 0, 0, 0 } }, { 0, 14, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 14, { 0, 0, 0, 0, 0, 0 } },
 };
+// GLOBAL: TIE95 0xD2848
+// GLOBAL: TIE98 0x4E5D60
 static CueRef medicalSeq[3] = {
 	{ 0, 28, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 28, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 28, { 0, 0, 0, 0, 0, 0 } },
 };
+// GLOBAL: TIE95 0xD2880
+// GLOBAL: TIE98 0x4E5D98
 static CueRef capturedSeq[1] = { { 0, 26, { 0, 0, 0, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD2894
+// GLOBAL: TIE98 0x4E5DB0
 static CueRef deathSeq[1] = { { 0, 29, { 0, 0, 0, 0, 0, 0 } } };
+// GLOBAL: TIE95 0xD28A8
+// GLOBAL: TIE98 0x4E5DC8
 static CueRef cut8Seq[6] = {
 	{ 0, 33, { 0, 2, 1, 0, 0, 0 } }, { 0, 33, { 0, 0, 0, 0, 0, 0 } }, { 0, 33, { 0, 0, 0, 0, 278, 287 } },
 	{ 0, 33, { 0, 0, 0, 0, 0, 0 } }, { 0, 33, { 0, 2, 2, 0, 0, 0 } }, { 0, 33, { 0, 0, 0, 0, 0, 0 } },
 };
+// GLOBAL: TIE95 0xD2914
+// GLOBAL: TIE98 0x4E5E38
 static CueRef cut9Seq[5] = {
 	{ 0, 34, { 0, 0, 0, 0, 0, 0 } }, { 0, 34, { 0, 2, 1, 0, 0, 0 } }, { 0, 34, { 0, 0, 0, 0, 273, 275 } },
 	{ 0, 34, { 0, 2, 2, 0, 0, 0 } }, { 0, 34, { 0, 0, 0, 0, 0, 0 } },
 };
+// GLOBAL: TIE95 0xD2970
+// GLOBAL: TIE98 0x4E5E98
 static CueRef cut10Seq[6] = {
 	{ 0, 35, { 0, 0, 0, 0, 0, 0 } }, { 0, 35, { 0, 0, 0, 0, 0, 0 } }, { 0, 35, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 35, { 0, 0, 0, 0, 0, 0 } }, { 0, 35, { 0, 0, 0, 0, 0, 0 } }, { 0, 36, { 0, 0, 0, 0, 0, 0 } },
@@ -364,6 +406,8 @@ static CueRef cut10Seq[6] = {
  * the Collector's CD expansion content. Bytes copied from
  * Z_TIE__.EXE @ 0xD29E0 (cut11) / 0xD2A28 (cut12) / 0xD2A60 (cut13) /
  * 0xD2ABC (cut14). Demo sampler does not have these. */
+// GLOBAL: TIE95 0xD29E0
+// GLOBAL: TIE98 0x4E5F10
 static CueRef cut11Seq[4] = {
 	/* case 24, 'cloaktst' */
 	{ 0, 37, { 0, 2, 1, 0, 271, 274 } },
@@ -371,17 +415,23 @@ static CueRef cut11Seq[4] = {
 	{ 0, 37, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 37, { 0, 0, 0, 0, 0, 0 } },
 };
+// GLOBAL: TIE95 0xD2A28
+// GLOBAL: TIE98 0x4E5F58
 static CueRef cut12Seq[3] = {
 	/* case 25, 'empshort' */
 	{ 0, 36, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 36, { 0, 0, 0, 0, 0, 0 } },
 	{ 0, 36, { 0, 0, 0, 0, 0, 0 } },
 };
+// GLOBAL: TIE95 0xD2A60
+// GLOBAL: TIE98 0x4E5F90
 static CueRef cut13Seq[5] = {
 	/* case 26, 'kablam' */
 	{ 0, 38, { 0, 2, 1, 0, 0, 0 } }, { 0, 38, { 0, 2, 2, 0, 0, 0 } }, { 0, 38, { 0, 2, 3, 0, 0, 0 } },
 	{ 0, 38, { 0, 0, 0, 0, 0, 0 } }, { 0, 38, { 0, 0, 0, 0, 0, 0 } },
 };
+// GLOBAL: TIE95 0xD2ABC
+// GLOBAL: TIE98 0x4E5FF0
 static CueRef cut14Seq[4] = {
 	/* case 27, 'empshort' */
 	{ 0, 36, { 0, 0, 0, 0, 0, 0 } },
@@ -392,26 +442,33 @@ static CueRef cut14Seq[4] = {
 
 /* Runtime state */
 // GLOBAL: TIE95 0xFB608
+// GLOBAL: TIE98 0x584D00
 static int32_t rseed1;
 // GLOBAL: TIE95 0xFB60C
+// GLOBAL: TIE98 0x584D04
 static int32_t rseed2;
+// GLOBAL: TIE95 0xFB614
+// GLOBAL: TIE98 0x584D0C
 static int16_t currentCuePoint;
 // GLOBAL: TIE95 0xFB610
+// GLOBAL: TIE98 0x584D08
 static int16_t currentSequence;
 // GLOBAL: TIE95 0xFB612
+// GLOBAL: TIE98 0x584CFC
 static int16_t currentState;
 
 /* --- Internal helpers --- */
 
-static int16_t GetRandom(int16_t lo, int16_t hi);
-static CueRef* GetSequence(void);
-static ChangeRef* GetDefaultChangeRef(void);
-static void DoChange(ChangeRef* cgp, void* sound1, void* sound2);
-static void DoJumpStart(ChangeRef* cgp, void* sound);
-static void ChgXfade(void* sound1, void* sound2, int16_t fadeOut, int16_t fadeIn);
-static void ChgJumpMrk(void* sound1, void* sound2, int16_t jumpHook1, int16_t marker, int16_t jumpHook2);
-static void ChgJumpOnBeat(void* sound1, void* sound2, int16_t endChunk, int16_t marker, int16_t jumpHook2);
-static void DoCallback(void);
+static int16_t mfscript_GetRandom(int16_t lo, int16_t hi);
+static CueRef* mfscript_GetSequence(void);
+static ChangeRef* mfscript_GetDefaultChangeRef(void);
+static void mfscript_DoChange(ChangeRef* cgp, void* sound1, void* sound2);
+static void mfscript_DoJumpStart(ChangeRef* cgp, void* sound);
+static void mfscript_ChgXfade(void* sound1, void* sound2, int16_t fadeOut, int16_t fadeIn);
+static void mfscript_ChgJumpMrk(void* sound1, void* sound2, int16_t jumpHook1, int16_t marker,
+								int16_t jumpHook2);
+static void mfscript_ChgJumpOnBeat(void* sound1, void* sound2, int16_t endChunk, int16_t marker,
+								   int16_t jumpHook2);
 
 /* --- Public API --- */
 
@@ -422,8 +479,8 @@ int16_t mfscript_MfStartScript(void* idp) {
 	currentSequence = 0;
 	currentCuePoint = -1;
 	/* Seed PRNG from stack addresses (deterministic per run) */
-	rseed1 = (int32_t)(intptr_t)&rseed2;
-	rseed2 = ~(int32_t)(intptr_t)&rseed1;
+	rseed1 = TieImuse_AddressSeed(&rseed2);
+	rseed2 = ~TieImuse_AddressSeed(&rseed1);
 	return 0;
 }
 
@@ -467,9 +524,9 @@ int16_t mfscript_MfSetState(int16_t state) {
 	if (newSrp->nameIndex) {
 		newSrp->sound = 0;
 		if (newSrp->nameIndex == oldSrp->nameIndex)
-			newSrp->sound = (intptr_t)imuse_filelist_find(im, soundNames[newSrp->nameIndex]);
+			newSrp->sound = imuse_filelist_find(im, soundNames[newSrp->nameIndex]);
 		if (!newSrp->sound)
-			newSrp->sound = (intptr_t)imuse_filelist_load(im, soundNames[newSrp->nameIndex]);
+			newSrp->sound = imuse_filelist_load(im, soundNames[newSrp->nameIndex]);
 		if (!newSrp->sound) {
 			imuse_stop_all_sounds(im);
 			return currentState;
@@ -481,7 +538,7 @@ int16_t mfscript_MfSetState(int16_t state) {
 	for (i = 0; i < MAX_STATE_CHANGES && cgp->target != state && cgp->target; i++)
 		cgp++;
 
-	DoChange(cgp, (void*)oldSrp->sound, (void*)newSrp->sound);
+	mfscript_DoChange(cgp, oldSrp->sound, newSrp->sound);
 	currentState = state;
 	return state;
 }
@@ -505,7 +562,7 @@ int16_t mfscript_MfSetSequence(int16_t sequence) {
 		if (currentCuePoint == -1) {
 			newState = currentState;
 		} else {
-			sqp = GetSequence();
+			sqp = mfscript_GetSequence();
 			if (!sqp)
 				return currentSequence;
 			crp = &sqp[currentCuePoint];
@@ -514,10 +571,10 @@ int16_t mfscript_MfSetSequence(int16_t sequence) {
 			if (crp->cueChange.target) {
 				srp->sound = 0;
 				if (crp->nameIndex == srp->nameIndex)
-					srp->sound = (intptr_t)imuse_filelist_find(im, soundNames[crp->nameIndex]);
+					srp->sound = imuse_filelist_find(im, soundNames[crp->nameIndex]);
 				if (!srp->sound)
-					srp->sound = (intptr_t)imuse_filelist_load(im, soundNames[srp->nameIndex]);
-				DoChange(&crp->cueChange, (void*)crp->sound, (void*)srp->sound);
+					srp->sound = imuse_filelist_load(im, soundNames[srp->nameIndex]);
+				mfscript_DoChange(&crp->cueChange, crp->sound, srp->sound);
 			} else {
 				newState = currentState;
 			}
@@ -549,7 +606,7 @@ int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 		return currentCuePoint;
 	}
 
-	sqp = GetSequence();
+	sqp = mfscript_GetSequence();
 	if (!sqp)
 		return currentCuePoint;
 
@@ -562,8 +619,8 @@ int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 		cgp = &crp->cueChange;
 
 		if (!crp->sound)
-			crp->sound = (intptr_t)imuse_filelist_find(im, soundNames[crp->nameIndex]);
-		sound = (void*)crp->sound;
+			crp->sound = imuse_filelist_find(im, soundNames[crp->nameIndex]);
+		sound = crp->sound;
 	} else {
 		/* Transition from state into sequence (cue 0) */
 		StateRef* srp = &stateRefs[currentState];
@@ -572,19 +629,19 @@ int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 			cgp++;
 
 		if (cgp->target == currentSequence)
-			sound = (void*)srp->sound;
+			sound = srp->sound;
 		else {
 			sound = NULL;
-			cgp = GetDefaultChangeRef();
+			cgp = mfscript_GetDefaultChangeRef();
 		}
 	}
 
 	/* Load the next cue's sound */
 	nextCrp = &sqp[cuePoint];
 	if (nextCrp->nameIndex) {
-		nextCrp->sound = (intptr_t)imuse_filelist_find(im, soundNames[nextCrp->nameIndex]);
-		if (!nextCrp->sound || (void*)nextCrp->sound != sound)
-			nextCrp->sound = (intptr_t)imuse_filelist_load(im, soundNames[nextCrp->nameIndex]);
+		nextCrp->sound = imuse_filelist_find(im, soundNames[nextCrp->nameIndex]);
+		if (!nextCrp->sound || nextCrp->sound != sound)
+			nextCrp->sound = imuse_filelist_load(im, soundNames[nextCrp->nameIndex]);
 
 		if (!nextCrp->sound) {
 			imuse_stop_all_sounds(im);
@@ -593,12 +650,13 @@ int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 	}
 
 	if (sound)
-		DoJumpStart(cgp, sound);
-	DoChange(cgp, sound, (void*)nextCrp->sound);
+		mfscript_DoJumpStart(cgp, sound);
+	mfscript_DoChange(cgp, sound, nextCrp->sound);
 	currentCuePoint = cuePoint;
 	return cuePoint;
 }
 
+// FUNCTION: TIE98 0x454B50
 int16_t mfscript_MfSetAttribute(int16_t number, int16_t val) {
 	(void)number;
 	(void)val;
@@ -607,26 +665,29 @@ int16_t mfscript_MfSetAttribute(int16_t number, int16_t val) {
 
 /* --- Transition implementations --- */
 
-static void ChgXfade(void* sound1, void* sound2, int16_t fadeOut, int16_t fadeIn) {
+// FUNCTION: TIE95 0x8810C
+static void mfscript_ChgXfade(void* sound1, void* sound2, int16_t fadeOut, int16_t fadeIn) {
 	if (sound1 != sound2) {
 		if (sound1)
-			imuse_fade_param(im, (intptr_t)sound1, IM_PARAM_VOLALT, 0, fadeOut);
+			imuse_fade_param(im, TieImuse_SoundId(sound1), IM_PARAM_VOLALT, 0, fadeOut);
 		if (sound2) {
 			imuse_pause(im);
-			imuse_start_sound(im, (intptr_t)sound2, 0);
-			imuse_set_param(im, (intptr_t)sound2, IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
+			imuse_start_sound(im, TieImuse_SoundId(sound2), 0);
+			imuse_set_param(im, TieImuse_SoundId(sound2), IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
 			if (fadeIn) {
-				imuse_set_param(im, (intptr_t)sound2, IM_PARAM_VOLALT, 0);
-				imuse_fade_param(im, (intptr_t)sound2, IM_PARAM_VOLALT, 127, fadeIn);
+				imuse_set_param(im, TieImuse_SoundId(sound2), IM_PARAM_VOLALT, 0);
+				imuse_fade_param(im, TieImuse_SoundId(sound2), IM_PARAM_VOLALT, 127, fadeIn);
 			}
 			imuse_resume(im);
 		}
 	}
 }
 
-static void ChgJumpMrk(void* sound1, void* sound2, int16_t jumpHook1, int16_t marker, int16_t jumpHook2) {
+// FUNCTION: TIE95 0x881B4
+static void mfscript_ChgJumpMrk(void* sound1, void* sound2, int16_t jumpHook1, int16_t marker,
+								int16_t jumpHook2) {
 	if (jumpHook1)
-		imuse_set_hook(im, (intptr_t)sound1, jumpHook1);
+		imuse_set_hook(im, TieImuse_SoundId(sound1), jumpHook1);
 
 	if (sound2 && sound1 != sound2) {
 		if (sound1) {
@@ -639,43 +700,45 @@ static void ChgJumpMrk(void* sound1, void* sound2, int16_t jumpHook1, int16_t ma
 			 * arm a hook on sound2. Each trigger packs a different
 			 * IMUSE_CMD_* opcode + replay args. */
 			t_start.opcode = IMUSE_CMD_START_SOUND;
-			t_start.args[0] = (intptr_t)sound2;
+			t_start.args[0] = TieImuse_SoundId(sound2);
 			t_group.opcode = IMUSE_CMD_SET_PARAM;
-			t_group.args[0] = (intptr_t)sound2;
+			t_group.args[0] = TieImuse_SoundId(sound2);
 			t_group.args[1] = IMUSE_PARAM_SOUND_GROUP;
 			t_group.args[2] = IMUSE_GROUP_DIPPED;
 			t_fade.opcode = IMUSE_CMD_FADE_PARAM;
-			t_fade.args[0] = (intptr_t)sound1;
+			t_fade.args[0] = TieImuse_SoundId(sound1);
 			t_fade.args[1] = IM_PARAM_VOLALT;
 			t_fade.args[2] = 0;
 			t_fade.args[3] = 60;
-			imuse_set_trigger(im, (intptr_t)sound1, marker, &t_start);
-			imuse_set_trigger(im, (intptr_t)sound1, marker, &t_group);
-			imuse_set_trigger(im, (intptr_t)sound1, marker, &t_fade);
+			imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_start);
+			imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_group);
+			imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_fade);
 			if (jumpHook2) {
 				ImuseCmd t_hook = { 0 };
 				t_hook.opcode = IMUSE_CMD_SET_HOOK;
-				t_hook.args[0] = (intptr_t)sound2;
+				t_hook.args[0] = TieImuse_SoundId(sound2);
 				t_hook.args[1] = jumpHook2;
-				imuse_set_trigger(im, (intptr_t)sound1, marker, &t_hook);
+				imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_hook);
 			}
 		} else {
 			imuse_pause(im);
-			imuse_start_sound(im, (intptr_t)sound2, 0);
-			imuse_set_param(im, (intptr_t)sound2, IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
+			imuse_start_sound(im, TieImuse_SoundId(sound2), 0);
+			imuse_set_param(im, TieImuse_SoundId(sound2), IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
 			if (jumpHook2)
-				imuse_set_hook(im, (intptr_t)sound2, jumpHook2);
+				imuse_set_hook(im, TieImuse_SoundId(sound2), jumpHook2);
 		}
 		imuse_resume(im);
 	}
 }
 
-static void ChgJumpOnBeat(void* sound1, void* sound2, int16_t endChunk, int16_t marker, int16_t jumpHook2) {
+// FUNCTION: TIE95 0x88310
+static void mfscript_ChgJumpOnBeat(void* sound1, void* sound2, int16_t endChunk, int16_t marker,
+								   int16_t jumpHook2) {
 	int16_t tick;
 
 	imuse_pause(im);
-	tick = imuse_get_param(im, (intptr_t)sound1, IM_PARAM_TICK);
-	imuse_midi_jump(im, (intptr_t)sound1, endChunk, 1, 4, tick, 1);
+	tick = imuse_get_param(im, TieImuse_SoundId(sound1), IM_PARAM_TICK);
+	imuse_midi_jump(im, TieImuse_SoundId(sound1), endChunk, 1, 4, tick, 1);
 	imuse_resume(im);
 
 	if (sound2 && sound1 != sound2) {
@@ -684,37 +747,38 @@ static void ChgJumpOnBeat(void* sound1, void* sound2, int16_t endChunk, int16_t 
 			ImuseCmd t_group = { 0 };
 			imuse_pause(im);
 			t_start.opcode = IMUSE_CMD_START_SOUND;
-			t_start.args[0] = (intptr_t)sound2;
+			t_start.args[0] = TieImuse_SoundId(sound2);
 			t_group.opcode = IMUSE_CMD_SET_PARAM;
-			t_group.args[0] = (intptr_t)sound2;
+			t_group.args[0] = TieImuse_SoundId(sound2);
 			t_group.args[1] = IMUSE_PARAM_SOUND_GROUP;
 			t_group.args[2] = IMUSE_GROUP_DIPPED;
-			imuse_set_trigger(im, (intptr_t)sound1, marker, &t_start);
-			imuse_set_trigger(im, (intptr_t)sound1, marker, &t_group);
+			imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_start);
+			imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_group);
 			if (jumpHook2) {
 				ImuseCmd t_hook = { 0 };
 				t_hook.opcode = IMUSE_CMD_SET_HOOK;
-				t_hook.args[0] = (intptr_t)sound2;
+				t_hook.args[0] = TieImuse_SoundId(sound2);
 				t_hook.args[1] = jumpHook2;
-				imuse_set_trigger(im, (intptr_t)sound1, marker, &t_hook);
+				imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_hook);
 			}
 		} else {
 			imuse_pause(im);
-			imuse_start_sound(im, (intptr_t)sound2, 0);
-			imuse_set_param(im, (intptr_t)sound2, IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
+			imuse_start_sound(im, TieImuse_SoundId(sound2), 0);
+			imuse_set_param(im, TieImuse_SoundId(sound2), IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
 			if (jumpHook2)
-				imuse_set_hook(im, (intptr_t)sound2, jumpHook2);
+				imuse_set_hook(im, TieImuse_SoundId(sound2), jumpHook2);
 		}
 		imuse_resume(im);
 	}
 }
 
-static void DoChange(ChangeRef* cgp, void* sound1, void* sound2) {
+// FUNCTION: TIE95 0x88470
+static void mfscript_DoChange(ChangeRef* cgp, void* sound1, void* sound2) {
 	void* s1 = sound1;
 
 	if (cgp->opcode) {
 		/* Validate sound1 is playing */
-		if (s1 && imuse_get_param(im, (intptr_t)s1, IM_PARAM_PRIORITY) <= 0)
+		if (s1 && imuse_get_param(im, TieImuse_SoundId(s1), IM_PARAM_PRIORITY) <= 0)
 			s1 = NULL;
 
 		if (!s1) {
@@ -723,56 +787,57 @@ static void DoChange(ChangeRef* cgp, void* sound1, void* sound2) {
 			 * through `int` or the 64-bit sound-id truncation
 			 * creates a stable iteration point and the loop hangs. */
 			do {
-				s1 = (void*)imuse_next_sound(im, (intptr_t)s1);
-			} while (s1 && (intptr_t)s1 != -1 && s1 != sound2);
+				s1 = TieImuse_SoundHandle(imuse_next_sound(im, TieImuse_SoundId(s1)));
+			} while (s1 && TieImuse_SoundId(s1) != -1 && s1 != sound2);
 
 			if (s1 == sound2) {
-				imuse_set_hook(im, (intptr_t)s1, 0);
+				imuse_set_hook(im, TieImuse_SoundId(s1), 0);
 				return;
 			}
 			s1 = NULL;
 			imuse_stop_all_sounds(im);
 		}
 
-		imuse_set_hook(im, (intptr_t)s1, 0);
+		imuse_set_hook(im, TieImuse_SoundId(s1), 0);
 		imuse_clear_trigger(im, (intptr_t)-1, -1, -1);
 
 		switch (cgp->opcode) {
 			case 1:
-				ChgXfade(s1, sound2, cgp->arg1, cgp->arg2);
+				mfscript_ChgXfade(s1, sound2, cgp->arg1, cgp->arg2);
 				break;
 			case 2:
-				ChgJumpMrk(s1, sound2, cgp->arg1, cgp->arg2, 0);
+				mfscript_ChgJumpMrk(s1, sound2, cgp->arg1, cgp->arg2, 0);
 				break;
 			case 4:
-				ChgXfade(s1, sound2, cgp->arg1, cgp->arg2);
+				mfscript_ChgXfade(s1, sound2, cgp->arg1, cgp->arg2);
 				{
 					ImuseCmd t_attr = { 0 };
 					t_attr.opcode = IMUSE_CMD_SET_PARAM;
-					t_attr.args[0] = (intptr_t)sound2;
+					t_attr.args[0] = TieImuse_SoundId(sound2);
 					t_attr.args[1] = IM_PARAM_ATTR;
 					t_attr.args[2] = 0;
-					imuse_set_trigger(im, (intptr_t)sound2, 1, &t_attr);
+					imuse_set_trigger(im, TieImuse_SoundId(sound2), 1, &t_attr);
 				}
 				break;
 			case 5:
-				imuse_set_param(im, (intptr_t)s1, IM_PARAM_ATTR, 64);
+				imuse_set_param(im, TieImuse_SoundId(s1), IM_PARAM_ATTR, 64);
 				break;
 			case 6:
-				ChgJumpMrk(s1, sound2, cgp->arg1, cgp->arg2, cgp->arg3);
+				mfscript_ChgJumpMrk(s1, sound2, cgp->arg1, cgp->arg2, cgp->arg3);
 				break;
 			case 7:
-				ChgJumpOnBeat(s1, sound2, cgp->arg1, cgp->arg2, cgp->arg3);
+				mfscript_ChgJumpOnBeat(s1, sound2, cgp->arg1, cgp->arg2, cgp->arg3);
 				break;
 			default:
-				ChgXfade(s1, sound2, 100, 0);
+				mfscript_ChgXfade(s1, sound2, 100, 0);
 				break;
 		}
 	}
 	imuse_filelist_unload(im, sound2);
 }
 
-static void DoJumpStart(ChangeRef* cgp, void* sound) {
+// FUNCTION: TIE95 0x88638
+static void mfscript_DoJumpStart(ChangeRef* cgp, void* sound) {
 	/* arg3/arg4 each pack a (chunk, measure) byte pair:
 	 *   arg3 = (thresholdChunk << 8) | thresholdMeas
 	 *   arg4 = (scanTargetChunk << 8) | scanTargetMeas
@@ -785,25 +850,27 @@ static void DoJumpStart(ChangeRef* cgp, void* sound) {
 	if (!cgp->arg3)
 		return;
 
-	chunk = imuse_get_param(im, (intptr_t)sound, IM_PARAM_CHUNK);
+	chunk = imuse_get_param(im, TieImuse_SoundId(sound), IM_PARAM_CHUNK);
 	if (chunk < 0)
 		return;
-	meas = imuse_get_param(im, (intptr_t)sound, IM_PARAM_MEASURE);
+	meas = imuse_get_param(im, TieImuse_SoundId(sound), IM_PARAM_MEASURE);
 	if (meas < 0)
 		return;
 
 	thresholdChunk = (int16_t)(int8_t)((cgp->arg3 >> 8) & 0xFF);
 	thresholdMeas = (int16_t)(uint8_t)(cgp->arg3 & 0xFF);
 	if (chunk <= thresholdChunk && meas <= thresholdMeas) {
-		imuse_set_param(im, (intptr_t)sound, IM_PARAM_VOLALT, 0);
+		imuse_set_param(im, TieImuse_SoundId(sound), IM_PARAM_VOLALT, 0);
 		jsc = (int16_t)(int8_t)((cgp->arg4 >> 8) & 0xFF);
 		jsm = (int16_t)(uint8_t)(cgp->arg4 & 0xFF);
-		imuse_midi_scan(im, (intptr_t)sound, jsc, jsm, 1, 0);
-		imuse_fade_param(im, (intptr_t)sound, IM_PARAM_VOLALT, 127, 30);
+		imuse_midi_scan(im, TieImuse_SoundId(sound), jsc, jsm, 1, 0);
+		imuse_fade_param(im, TieImuse_SoundId(sound), IM_PARAM_VOLALT, 127, 30);
 	}
 }
 
-static CueRef* GetSequence(void) {
+// FUNCTION: TIE95 0x88764
+// FUNCTION: TIE98 0x455180
+static CueRef* mfscript_GetSequence(void) {
 	switch (currentSequence) {
 		case 1:
 			return openingSeq;
@@ -860,23 +927,20 @@ static CueRef* GetSequence(void) {
 	}
 }
 
-static ChangeRef* GetDefaultChangeRef(void) {
+// FUNCTION: TIE95 0x8881C
+// FUNCTION: TIE98 0x4552A0
+static ChangeRef* mfscript_GetDefaultChangeRef(void) {
 	if (currentSequence >= 9 && currentSequence <= 10)
 		return &stateRefs[0].seqChanges[1];
 	return &stateRefs[0].seqChanges[0];
 }
 
+/* Unreferenced in retail. */
+// FUNCTION: TIE95 0x8883C
 #if defined(__GNUC__)
 __attribute__((unused))
 #endif
-static void DoCallback(void) {
-	/* empty stub — placeholder for user callback mechanism */
-}
-
-#if defined(__GNUC__)
-__attribute__((unused))
-#endif
-static int16_t GetRandom(int16_t lo, int16_t hi) {
+static int16_t mfscript_GetRandom(int16_t lo, int16_t hi) {
 	int i, c;
 
 	uint16_t raw;

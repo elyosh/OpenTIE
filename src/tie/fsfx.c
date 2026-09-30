@@ -13,6 +13,7 @@
 #include "tie/transfm2.h"
 #include "tie/trig2.h"
 #include "tie_runtime/audio/config.h"
+#include "tie_runtime/audio/flight_sound_bank.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
@@ -39,17 +40,24 @@
  * [107..] follows the edition-specific SFXDOE/mission-voice layout. */
 // GLOBAL: TIE95 0xD49BC
 void* soundhandles[FSFX_NUM_SOUND_HANDLES];
-static char soundnames[FSFX_NUM_SOUND_HANDLES][FSFX_SOUND_NAME_CAPACITY];
+/* TIE98 per-slot sound names consumed by the name-based FrontendSound layer. */
+// GLOBAL: TIE98 0x6259E0
+char soundnames[FSFX_NUM_SOUND_HANDLES][FSFX_SOUND_NAME_CAPACITY];
 
+// GLOBAL: TIE95 0xD4ABC
+// GLOBAL: TIE98 0x626746
 uint8_t currentdigital;
-uint16_t soundhandleinit;
 
 /* TIE98 recovered controller globals. The update-enable value is initialized
  * by tie_init and may be changed by the modern runtime option boundary. */
+// GLOBAL: TIE98 0x5926AA
 uint8_t g_playerEngineSoundUpdateEnabled;
-int16_t g_engineSoundPreviousPlayerSpecies = -1;
+// GLOBAL: TIE98 0x5601A0
+int32_t g_engineSoundPreviousPlayerSpecies = -1;
 
 /* Per-sound falloff radius and full-volume tables. */
+// GLOBAL: TIE95 0xC5284
+// GLOBAL: TIE98 0x4E37F8
 uint16_t sounddist[FSFX_NUM_DIST_ENTRIES] = {
 	0x0000, 0x0000, 0x0000, 0x0000,                 /*  0.. 3 unused */
 	0x2000, 0x2000, 0x2000,                         /*  4.. 6 engine */
@@ -65,6 +73,8 @@ uint16_t sounddist[FSFX_NUM_DIST_ENTRIES] = {
 	0x2000, 0x2000,                                 /* 49..50        */
 	0x2000, 0x2000, 0x9000, 0x2000,                 /* 51..54 unused */
 };
+// GLOBAL: TIE95 0xC52F2
+// GLOBAL: TIE98 0x4E3868
 uint8_t fullvolume[FSFX_NUM_DIST_ENTRIES] = {
 	0x00, 0x00, 0x00, 0x00,             /*  0.. 3 unused */
 	0x48, 0x48, 0x48,                   /*  4.. 6 engine */
@@ -89,10 +99,6 @@ uint8_t fullvolume[FSFX_NUM_DIST_ENTRIES] = {
 uint8_t voice_id_a;
 // GLOBAL: TIE95 0xD418E
 uint8_t voice_id_b;
-// GLOBAL: TIE95 0xD418F
-uint8_t voice_tour_battle;
-// GLOBAL: TIE95 0xD418C
-uint8_t voice_tour_mission;
 
 /* "FIBAGDM" -- single-letter filename prefix for combat-sim ships in
  * mode 1. Indexed by voice_id_a (cur_combat_ship). The trailing NUL
@@ -103,19 +109,27 @@ static const char combat_ship_voice_letters[8] = "FIBAGDM";
 /* Five SFX-group prefix strings matched against EFGStruct.name by
  * fsfx_speakobjectname. Order is meaningful: the matched index feeds
  * directly into the group-voice offset (53 + index). */
-static const char sfxgroupname_alpha[] = "ALPHA";
-static const char sfxgroupname_beta[] = "BETA";
-static const char sfxgroupname_gamma[] = "GAMMA";
-static const char sfxgroupname_delta[] = "DELTA";
-static const char sfxgroupname_mu[] = "MU";
+// GLOBAL: TIE95 0xC5329
+// GLOBAL: TIE98 0x4E38A0
+static const char sfxgroupname1[] = "ALPHA";
+// GLOBAL: TIE95 0xC532F
+// GLOBAL: TIE98 0x4E38A8
+static const char sfxgroupname2[] = "BETA";
+// GLOBAL: TIE95 0xC5334
+// GLOBAL: TIE98 0x4E38B0
+static const char sfxgroupname3[] = "GAMMA";
+// GLOBAL: TIE95 0xC533A
+// GLOBAL: TIE98 0x4E38B8
+static const char sfxgroupname4[] = "DELTA";
+// GLOBAL: TIE95 0xC5340
+// GLOBAL: TIE98 0x4E38C0
+static const char sfxgroupname5[] = "MU";
 
+// GLOBAL: TIE95 0xC5344
+// GLOBAL: TIE98 0x4E38C8
 const char* sfxgroupnameptrs[5] = {
-	sfxgroupname_alpha, sfxgroupname_beta, sfxgroupname_gamma, sfxgroupname_delta, sfxgroupname_mu,
+	sfxgroupname1, sfxgroupname2, sfxgroupname3, sfxgroupname4, sfxgroupname5,
 };
-
-/* --------------------------------------------------------------------------
- * Helpers.
- * -------------------------------------------------------------------------- */
 
 /* iMUSE parameter codes (see imuse/lolevel). Exposed here to keep the
  * FSFX call sites readable. */
@@ -125,94 +139,6 @@ enum {
 	IM_PARAM_VOLUME = 0x600,
 	IM_PARAM_PAN = 0x700,
 };
-
-/* Cast an integer SFX/voice index to the pointer-width soundId the
- * engine expects. getSoundPtrFunc indexes soundhandles[] to resolve. */
-static inline intptr_t sfx_id(uint16_t idx) { return (intptr_t)idx; }
-
-typedef struct FsfxSoundLayout {
-	uint16_t table_count;
-	uint16_t mission_voice_base;
-	uint16_t mission_voice_count;
-	uint8_t has_player_engine_loops;
-} FsfxSoundLayout;
-
-static FsfxSoundLayout fsfx_sound_layout(void) {
-	static const FsfxSoundLayout tie95 = { FSFX_TIE95_SOUND_TABLE_COUNT, FSFX_TIE95_MISSION_VOICE_BASE,
-										   FSFX_MISSION_VOICE_COUNT, 0 };
-	static const FsfxSoundLayout tie98 = { FSFX_TIE98_SOUND_TABLE_COUNT, FSFX_TIE98_MISSION_VOICE_BASE,
-										   FSFX_MISSION_VOICE_COUNT, 1 };
-	return TieProfile_Flight()->version == TIE_GAME_VERSION_TIE98 ? tie98 : tie95;
-}
-
-uint16_t fsfx_mission_voice_id(uint16_t logical_index) {
-	FsfxSoundLayout layout = fsfx_sound_layout();
-	return logical_index < layout.mission_voice_count ? (uint16_t)(layout.mission_voice_base + logical_index)
-													  : UINT16_MAX;
-}
-
-const char* fsfx_sound_name(uint16_t sound_id) {
-	FsfxSoundLayout layout = fsfx_sound_layout();
-	if (sound_id >= layout.table_count || !soundnames[sound_id][0])
-		return NULL;
-	return soundnames[sound_id];
-}
-
-int fsfx_find_sound_id(const char* name) {
-	FsfxSoundLayout layout = fsfx_sound_layout();
-	uint16_t i;
-
-	if (!name)
-		return -1;
-	for (i = 4; i < layout.table_count; ++i)
-		if (soundnames[i][0] && strcmp(soundnames[i], name) == 0)
-			return i;
-	return -1;
-}
-
-static void store_sound_name(uint16_t sound_id, const char* bank_path, const uint8_t record_name[8]) {
-	const char* base;
-	const char* p;
-	size_t bank_len;
-	int i;
-
-	char bank[12];
-	char record[9];
-
-	if (sound_id >= FSFX_NUM_SOUND_HANDLES)
-		return;
-	base = bank_path;
-	for (p = bank_path; *p; ++p)
-		if (*p == '/' || *p == '\\')
-			base = p + 1;
-
-	bank_len = 0;
-	while (base[bank_len] && base[bank_len] != '.' && bank_len + 1 < sizeof bank) {
-		bank[bank_len] = base[bank_len];
-		++bank_len;
-	}
-	bank[bank_len] = '\0';
-
-	memcpy(record, record_name, 8);
-	record[8] = '\0';
-	for (i = 7; i >= 0 && (record[i] == ' ' || record[i] == '\0'); --i)
-		record[i] = '\0';
-	snprintf(soundnames[sound_id], sizeof soundnames[sound_id], "%s:%s", bank, record);
-}
-
-/* Byte-swap a big-endian u32 directory tag to host byte order. */
-static uint32_t fsfx_swapdword(uint32_t v) {
-	return ((v & 0xFF000000u) >> 24) | ((v & 0x00FF0000u) >> 8) | ((v & 0x0000FF00u) << 8) |
-		   ((v & 0x000000FFu) << 24);
-}
-
-static uint16_t player_engine_sound_id(int16_t species) {
-	if (species >= 5 && species <= 9)
-		return FSFX_PLAYER_ENGINE_TIE_ID;
-	if (species == 12 || species == 16)
-		return FSFX_PLAYER_ENGINE_REBEL_ID;
-	return UINT16_MAX;
-}
 
 // FUNCTION: TIE98 0x422760
 void FSFX_UpdatePlayerEngineSound(void) {
@@ -238,11 +164,36 @@ void FSFX_UpdatePlayerEngineSound(void) {
 	if (pstate.object_idx != UINT16_MAX && !mapflag && pstate.object_idx < NUM_OBJECTS) {
 		FlightObject* player = &objects[pstate.object_idx];
 		species = player->ship_idx;
-		sound_id = player_engine_sound_id(species);
+		switch (species) {
+			case 5:
+			case 6:
+			case 7:
+			case 8:
+			case 9:
+				sound_id = FSFX_PLAYER_ENGINE_TIE_ID;
+				break;
+			case 12:
+			case 16:
+				sound_id = FSFX_PLAYER_ENGINE_REBEL_ID;
+				break;
+		}
 	}
 
 	if (sound_id == UINT16_MAX) {
-		uint16_t previous_id = player_engine_sound_id(g_engineSoundPreviousPlayerSpecies);
+		uint16_t previous_id = UINT16_MAX;
+		switch (g_engineSoundPreviousPlayerSpecies) {
+			case 5:
+			case 6:
+			case 7:
+			case 8:
+			case 9:
+				previous_id = FSFX_PLAYER_ENGINE_TIE_ID;
+				break;
+			case 12:
+			case 16:
+				previous_id = FSFX_PLAYER_ENGINE_REBEL_ID;
+				break;
+		}
 		if (previous_id != UINT16_MAX && LOLEVEL_ImGetParam(previous_id, 0x100) != 0)
 			(void)LOLEVEL_ImStopSound(previous_id);
 		return;
@@ -263,7 +214,7 @@ void FSFX_UpdatePlayerEngineSound(void) {
 	frequency = (int)(base_frequency + 55u * (q16 / 655u));
 	original_volume = 48 * inflight_sound_vol / 15;
 	volume = original_volume * profile->player_engine_sound_volume_percent / 100;
-	name = fsfx_sound_name(sound_id);
+	name = TieFlightSound_Name(sound_id);
 	if (!name)
 		return;
 
@@ -290,12 +241,12 @@ void fsfx_allocsfxbuffer(void) {
 
 // FUNCTION: TIE95 0x24744
 void fsfx_freesfx(void) {
-	FsfxSoundLayout layout = fsfx_sound_layout();
+	TieFlightSoundLayout layout = TieFlightSound_Layout();
 	int i;
 
 	if (layout.has_player_engine_loops) {
-		const char* tie_name = fsfx_sound_name(FSFX_PLAYER_ENGINE_TIE_ID);
-		const char* rebel_name = fsfx_sound_name(FSFX_PLAYER_ENGINE_REBEL_ID);
+		const char* tie_name = TieFlightSound_Name(FSFX_PLAYER_ENGINE_TIE_ID);
+		const char* rebel_name = TieFlightSound_Name(FSFX_PLAYER_ENGINE_REBEL_ID);
 		while (tie_name && FrontendSound_CountPlaying(tie_name))
 			FrontendSound_StopSoundByName(tie_name);
 		while (rebel_name && FrontendSound_CountPlaying(rebel_name))
@@ -310,125 +261,13 @@ void fsfx_freesfx(void) {
 	memset(soundnames, 0, sizeof soundnames);
 }
 
-/* Load one RMAP sound bank into soundhandles[start_idx ..]. max_records caps
- * the usable slice (used by fsfx_loadsfx to honour "voice disabled"
- * capping on the main file). Returns the number of handles allocated. */
-static int load_sound_bank(const char* filename, int start_idx, int end_idx, int max_records) {
-	TieFile* fp = TieStorage_Open(TIE_FILE_ROOT_FLIGHT_ASSET, filename, "rb");
-	uint32_t dir_size_dw;
-	uint16_t dir_size;
-	uint16_t num_records;
-	uint8_t* dir_buf;
-	int handle_idx;
-	long file_skip;
-	uint16_t i;
-
-	uint8_t header[16];
-
-	if (!fp) {
-		TieDiagnostics_Log(TIE_LOG_WARN, "fsfx: fopen(\"%s\") failed (SFX bank not loaded)\n", filename);
-		return 0;
-	}
-
-	/* 16-byte file header -- only the trailing dword 'dir_size' is
-	 * consulted; bytes 0..11 are unused format/magic. */
-
-	if (TieStorage_Read(header, 1, 16, fp) != 16) {
-		TieStorage_Close(fp);
-		return 0;
-	}
-
-	memcpy(&dir_size_dw, &header[12], 4);
-	dir_size = (uint16_t)dir_size_dw;
-	num_records = (uint16_t)(dir_size >> 4);
-	if (max_records > 0 && num_records > max_records)
-		num_records = (uint16_t)max_records;
-	if (num_records > (uint16_t)(end_idx - start_idx))
-		num_records = (uint16_t)(end_idx - start_idx);
-
-	/* Read the directory block (num_records * 16 bytes of tag/name/size). */
-	dir_buf = (uint8_t*)malloc(dir_size ? dir_size : 16);
-	if (!dir_buf) {
-		TieStorage_Close(fp);
-		return 0;
-	}
-	if (TieStorage_Read(dir_buf, 1, dir_size, fp) != dir_size) {
-		free(dir_buf);
-		TieStorage_Close(fp);
-		return 0;
-	}
-
-	handle_idx = start_idx;
-	file_skip = 0;
-	for (i = 0; i < num_records; i++) {
-		uint16_t rec_off = (uint16_t)(i * 16);
-
-		/* Each record's payload in the data section is preceded by a
-		 * 16-byte per-file LFD entry header (a duplicate of the
-		 * directory record). Skip it before reading. The binary does
-		 * `v7 += 16` at the top of every iteration -- without this the
-		 * cursor accumulates a 16-byte deficit per record and reads
-		 * land in the middle of the previous file's PCM data. Symptom
-		 * was iMUSE rejecting laser SFX with bad-magic on bytes that
-		 * happened to be VOC sample values (~0x80). */
-		uint32_t tag;
-		uint16_t sample_size;
-		uint32_t sample_size_dw;
-		void* handle;
-
-		file_skip += 16;
-
-		/* Directory records pack [tag(BE u32) | name(8) | size(u32)].
-		 * Byte-swap the tag in-place (binary parity). */
-
-		memcpy(&tag, &dir_buf[rec_off], 4);
-		tag = fsfx_swapdword(tag);
-		memcpy(&dir_buf[rec_off], &tag, 4);
-
-		memcpy(&sample_size, &dir_buf[rec_off + 12], 2);
-
-		memcpy(&sample_size_dw, &dir_buf[rec_off + 12], 4);
-
-		/* Allocate the slot (matches XMEMHDL_Alloc_Handle(size, 0)).
-		 * soundhandleinit: when nonzero, the binary fseeks past the
-		 * sample data instead of reading it. We replicate the same
-		 * skip semantics even though we keep the allocated buffer
-		 * uninitialised -- this preserves the file cursor for the
-		 * next record. */
-		handle = malloc(sample_size ? sample_size : 1);
-		soundhandles[handle_idx] = handle;
-		if (handle) {
-			store_sound_name((uint16_t)handle_idx, filename, &dir_buf[rec_off + 4]);
-			if (soundhandleinit) {
-				file_skip += sample_size_dw;
-			} else {
-				if (file_skip) {
-					TieStorage_Seek(fp, file_skip, TIE_SEEK_CUR);
-					file_skip = 0;
-				}
-				if (TieStorage_Read(handle, 1, sample_size, fp) != sample_size) {
-					/* Short read: leave whatever we got.
-					 * The binary silently tolerates this too. */
-				}
-			}
-		} else {
-			file_skip += sample_size_dw;
-		}
-		handle_idx++;
-		blastflag = 1;
-	}
-
-	free(dir_buf);
-	TieStorage_Close(fp);
-	return handle_idx - start_idx;
-}
-
 // FUNCTION: TIE95 0x247D8
 int16_t fsfx_loadsfx(const char* filename) {
 	int total = 0;
-	FsfxSoundLayout layout = fsfx_sound_layout();
+	TieFlightSoundLayout layout = TieFlightSound_Layout();
 
-	/* The port owns the loaded buffers. Stop name-based loops before
+	/* MODERN ADAPTATION: the runtime sound-bank loader owns the native
+	 * sample buffers and TIE98 sound names. Stop name-based loops before
 	 * replacing the bank so no active track retains a freed VOC pointer. */
 	int main_cap;
 
@@ -440,14 +279,14 @@ int16_t fsfx_loadsfx(const char* filename) {
 	 * 47 records when voice is disabled, so the voice slots [51..]
 	 * are never populated. */
 	main_cap = voiceenabled ? 0 : 47;
-	total += load_sound_bank(filename, 4, 107, main_cap);
+	total += TieFlightSound_LoadBank(filename, 4, 107, main_cap);
 
 	/* SFXDOE.LFD adjunct -- fills [107..108]. Built via resourcedir
 	 * for platform-correct path separator (caller's `filename` arg
 	 * already follows the same convention). */
 
 	snprintf(doe_path, sizeof(doe_path), "%sSFXDOE.LFD", resourcedir);
-	total += load_sound_bank(doe_path, 107, layout.mission_voice_base, 0);
+	total += TieFlightSound_LoadBank(doe_path, 107, layout.mission_voice_base, 0);
 
 	return (int16_t)total;
 }
@@ -456,88 +295,11 @@ int16_t fsfx_loadsfx(const char* filename) {
  * Per-mission voice .LFD loader.
  * -------------------------------------------------------------------------- */
 
-/* Build the LFD basename ("<L>M<digit>" or "<battle>M<mission>") into
- * out[0..]. Caller guarantees out is at least 5 bytes. Returns the
- * length written (excluding the trailing NUL). Battle/mission digits >=9
- * are encoded as "1<digit-9+'0'>" so each cursor stays single-byte.
- *
- * Casing matches retail (uppercase). On-disk asset folders ship as
- * VOICE/<NAME>/<NAME>.LFD; case-sensitive filesystems will fail to
- * resolve a lower-cased path. */
-static int build_voice_basename(char* out) {
-	int n = 0;
-	if (mission.mission_mode == 1) {
-		/* Combat-sim, non-tour. <ship-letter>M<course+1>.
-		 * voice_id_a indexes the FIBAGDM table (0..6). */
-		out[n++] = combat_ship_voice_letters[voice_id_a & 7];
-		out[n++] = 'M';
-		out[n++] = (char)(voice_id_b + '1');
-	} else {
-		/* Mode 4 (tour), 5 (combat-of-tour), and 0/2/3 fall through
-		 * to the same battle/mission digit pair. The combat-of-tour
-		 * branch encodes its battle as 12+battle in voice_id_a; the
-		 * subtraction below recovers the 0-based battle index. */
-		uint16_t battle, mission_idx;
-		if (mission.mission_mode == 4) {
-			battle = voice_tour_battle;
-			mission_idx = voice_tour_mission;
-		} else {
-			battle = (uint16_t)(voice_id_a - 12);
-			mission_idx = voice_id_b;
-		}
-		if (battle >= 9) {
-			out[n++] = '1';
-			out[n++] = (char)(battle + '0' - 9);
-		} else {
-			out[n++] = (char)(battle + '1');
-		}
-		out[n++] = 'M';
-		if (mission_idx >= 9) {
-			out[n++] = '1';
-			out[n++] = (char)(mission_idx + '0' - 9);
-		} else {
-			out[n++] = (char)(mission_idx + '1');
-		}
-	}
-	out[n] = '\0';
-	return n;
-}
-
-/* Clear and free the selected edition's owned mission-voice range. */
-static void clear_voice_slots(void) {
-	FsfxSoundLayout layout = fsfx_sound_layout();
-	int i;
-
-	for (i = layout.mission_voice_base; i < layout.mission_voice_base + layout.mission_voice_count; i++) {
-		if (soundhandles[i]) {
-			free(soundhandles[i]);
-			soundhandles[i] = NULL;
-		}
-		soundnames[i][0] = '\0';
-	}
-}
-
-/* Per-slot active gate. Returns 1 if the slot's voice clip should be
- * loaded, 0 if the slot stays empty. Mirrors the four-way switch in
- * FSFX_loadvoicelfd at 0x24da3-0x24de9. */
-static int voice_slot_active(uint16_t logical_index) {
-	if (logical_index <= 15u)
-		return radiomsg[90u * logical_index] != 0;
-	if (logical_index == FSFX_MISSION_VOICE_PRIMARY)
-		return mission_file_header.mission.win_msg1[0][0] != 0;
-	if (logical_index == FSFX_MISSION_VOICE_SECONDARY)
-		return mission_file_header.mission.win_msg2[0][0] != 0;
-	if (logical_index == FSFX_MISSION_VOICE_LOSS)
-		return mission_file_header.mission.loss_msg[0][0] != 0;
-	return 0;
-}
-
 // FUNCTION: TIE95 0x24ADC
 int16_t fsfx_loadvoicelfd(void) {
 	char path[64];
 	char base[8];
 
-	/* Drop any voice cues left over from the previous mission. */
 	int n;
 	TieFile* fp;
 	uint32_t dir_size_dw;
@@ -545,12 +307,22 @@ int16_t fsfx_loadvoicelfd(void) {
 	uint8_t* dir_buf;
 	uint32_t entry_idx;
 	int16_t loaded;
-	FsfxSoundLayout layout;
+	TieFlightSoundLayout layout;
 	uint16_t logical_index;
+	int i;
 
 	uint8_t hdr[16];
 
-	clear_voice_slots();
+	/* Drop any voice cues left over from the previous mission: clear and
+	 * free the selected edition's owned mission-voice range. */
+	layout = TieFlightSound_Layout();
+	for (i = layout.mission_voice_base; i < layout.mission_voice_base + layout.mission_voice_count; i++) {
+		if (soundhandles[i]) {
+			free(soundhandles[i]);
+			soundhandles[i] = NULL;
+		}
+		soundnames[i][0] = '\0';
+	}
 
 	/* Training: no in-flight voice. train_craft_type is set non-zero
 	 * by SHIPEXT_Mission_Enter for training scenes; CREATE_loadmission
@@ -559,14 +331,52 @@ int16_t fsfx_loadvoicelfd(void) {
 	if (mission.train_craft_type)
 		return 0;
 
-	/* Build basename into local scratch, then assemble the full
-	 * relative path "VOICE/<NAME>/<NAME>.LFD". Retail prepends a CD
-	 * drive letter from shell_drives_dw HIBYTE and uses backslashes;
-	 * the port uses forward slashes (cross-platform) and the install
-	 * directory's CD layout, where the asset folders ship as
+	/* Build the LFD basename ("<L>M<digit>" or "<battle>M<mission>").
+	 * Battle/mission digits >=9 are encoded as "1<digit-9+'0'>" so each
+	 * cursor stays single-byte. Casing matches retail (uppercase). */
+	n = 0;
+	if (mission.mission_mode == 1) {
+		/* Combat-sim, non-tour. <ship-letter>M<course+1>.
+		 * voice_id_a indexes the FIBAGDM table (0..6). */
+		base[n++] = combat_ship_voice_letters[voice_id_a & 7];
+		base[n++] = 'M';
+		base[n++] = (char)(voice_id_b + '1');
+	} else {
+		/* Mode 4 (tour), 5 (combat-of-tour), and 0/2/3 fall through
+		 * to the same battle/mission digit pair. The combat-of-tour
+		 * branch encodes its battle as 12+battle in voice_id_a; the
+		 * subtraction below recovers the 0-based battle index. */
+		uint16_t battle;
+		uint16_t mission_idx;
+
+		if (mission.mission_mode == 4) {
+			battle = currentbattle;
+			mission_idx = currentmission;
+		} else {
+			battle = (uint16_t)(voice_id_a - 12);
+			mission_idx = voice_id_b;
+		}
+		if (battle >= 9) {
+			base[n++] = '1';
+			base[n++] = (char)(battle + '0' - 9);
+		} else {
+			base[n++] = (char)(battle + '1');
+		}
+		base[n++] = 'M';
+		if (mission_idx >= 9) {
+			base[n++] = '1';
+			base[n++] = (char)(mission_idx + '0' - 9);
+		} else {
+			base[n++] = (char)(mission_idx + '1');
+		}
+	}
+	base[n] = '\0';
+
+	/* Assemble the full relative path "VOICE/<NAME>/<NAME>.LFD". Retail
+	 * prepends a CD drive letter from shell_drives_dw HIBYTE and uses
+	 * backslashes; the port uses forward slashes (cross-platform) and the
+	 * install directory's CD layout, where the asset folders ship as
 	 * VOICE/<NAME>/<NAME>.LFD (case preserved). */
-	build_voice_basename(base);
-	n = (int)strlen(base);
 	memcpy(path, "VOICE/", 6);
 	memcpy(path + 6, base, (size_t)n);
 	path[6 + n] = '/';
@@ -612,15 +422,28 @@ int16_t fsfx_loadvoicelfd(void) {
 	 * advances when a slot is loaded). */
 	entry_idx = 0;
 	loaded = 0;
-	layout = fsfx_sound_layout();
 	for (logical_index = 0; logical_index < layout.mission_voice_count; logical_index++) {
 		uint16_t slot = (uint16_t)(layout.mission_voice_base + logical_index);
 		uint32_t entry_off;
 		uint32_t sample_size;
+		int active;
 
 		uint8_t sub[16];
 
-		if (!voice_slot_active(logical_index)) {
+		/* Per-slot active gate (the four-way switch in FSFX_loadvoicelfd
+		 * at 0x24da3-0x24de9): radio messages, then the primary,
+		 * secondary, and loss win/loss message texts. */
+		if (logical_index <= 15u)
+			active = radiomsg[90u * logical_index] != 0;
+		else if (logical_index == FSFX_MISSION_VOICE_PRIMARY)
+			active = mission_file_header.mission.win_msg1[0][0] != 0;
+		else if (logical_index == FSFX_MISSION_VOICE_SECONDARY)
+			active = mission_file_header.mission.win_msg2[0][0] != 0;
+		else if (logical_index == FSFX_MISSION_VOICE_LOSS)
+			active = mission_file_header.mission.loss_msg[0][0] != 0;
+		else
+			active = 0;
+		if (!active) {
 			soundhandles[slot] = NULL;
 			continue;
 		}
@@ -652,7 +475,7 @@ int16_t fsfx_loadvoicelfd(void) {
 			free(dir_buf);
 			return 0;
 		}
-		store_sound_name(slot, base, &dir_buf[entry_off + 4]);
+		TieFlightSound_StoreName(slot, base, &dir_buf[entry_off + 4]);
 
 		entry_idx++;
 		loaded++;
@@ -871,19 +694,19 @@ int8_t fsfx_triggersfx(uint16_t sound_id, uint16_t src_obj) {
 		priority = 126;
 	}
 
-	if (imuse_get_param(im, sfx_id(sound_id), IM_PARAM_IS_PLAYING)) {
+	if (imuse_get_param(im, sound_id, IM_PARAM_IS_PLAYING)) {
 		/* Looping engine/laser SFX -- don't retrigger while alive. */
 		if (sound_id >= 0x2Au && sound_id <= 0x2Fu)
 			return 0;
-		if (imuse_get_param(im, sfx_id(sound_id), IM_PARAM_PRIORITY) > (int)priority)
+		if (imuse_get_param(im, sound_id, IM_PARAM_PRIORITY) > (int)priority)
 			return 0;
-		imuse_stop_sound(im, sfx_id(sound_id));
+		imuse_stop_sound(im, sound_id);
 	}
 
-	imuse_start_sfx(im, (void*)sfx_id(sound_id));
-	imuse_set_param(im, sfx_id(sound_id), IM_PARAM_PRIORITY, priority);
-	imuse_set_param(im, sfx_id(sound_id), IM_PARAM_PAN, (int)pan);
-	imuse_set_param(im, sfx_id(sound_id), IM_PARAM_VOLUME, (uint16_t)vol_buf);
+	imuse_start_sfx(im, TieImuse_SoundHandle(sound_id));
+	imuse_set_param(im, sound_id, IM_PARAM_PRIORITY, priority);
+	imuse_set_param(im, sound_id, IM_PARAM_PAN, (int)pan);
+	imuse_set_param(im, sound_id, IM_PARAM_VOLUME, (uint16_t)vol_buf);
 	return 1;
 }
 
@@ -944,26 +767,26 @@ int32_t fsfx_triggergunsightsfx(int16_t mode) {
 		uint16_t id;
 		if (mode == 3) {
 			/* Red lock: stop green (35), keep or play red (36). */
-			if (imuse_get_param(im, sfx_id(35), IM_PARAM_IS_PLAYING))
-				imuse_stop_sound(im, sfx_id(35));
-			if (imuse_get_param(im, sfx_id(36), IM_PARAM_IS_PLAYING))
+			if (imuse_get_param(im, 35, IM_PARAM_IS_PLAYING))
+				imuse_stop_sound(im, 35);
+			if (imuse_get_param(im, 36, IM_PARAM_IS_PLAYING))
 				return 1;
 			id = 36;
 		} else {
 			/* Green lock: stop red, keep or play green. */
-			if (imuse_get_param(im, sfx_id(36), IM_PARAM_IS_PLAYING))
-				imuse_stop_sound(im, sfx_id(36));
-			if (imuse_get_param(im, sfx_id(35), IM_PARAM_IS_PLAYING))
+			if (imuse_get_param(im, 36, IM_PARAM_IS_PLAYING))
+				imuse_stop_sound(im, 36);
+			if (imuse_get_param(im, 35, IM_PARAM_IS_PLAYING))
 				return 1;
 			id = 35;
 		}
 		fsfx_triggersfx(id, 0xFFFF);
 	} else {
 		/* mode 0 or 1: stop whichever gunsight channel is active. */
-		if (imuse_get_param(im, sfx_id(36), IM_PARAM_IS_PLAYING))
-			imuse_stop_sound(im, sfx_id(36));
-		else if (imuse_get_param(im, sfx_id(35), IM_PARAM_IS_PLAYING))
-			imuse_stop_sound(im, sfx_id(35));
+		if (imuse_get_param(im, 36, IM_PARAM_IS_PLAYING))
+			imuse_stop_sound(im, 36);
+		else if (imuse_get_param(im, 35, IM_PARAM_IS_PLAYING))
+			imuse_stop_sound(im, 35);
 	}
 	return 1;
 }
@@ -980,27 +803,27 @@ int8_t fsfx_triggerbeamsfx(int32_t firing) {
 		/* Release: stop whichever beam channel is active. */
 		int playing;
 
-		if (imuse_get_param(im, sfx_id(38), IM_PARAM_IS_PLAYING))
-			imuse_stop_sound(im, sfx_id(38));
-		playing = imuse_get_param(im, sfx_id(37), IM_PARAM_IS_PLAYING);
+		if (imuse_get_param(im, 38, IM_PARAM_IS_PLAYING))
+			imuse_stop_sound(im, 38);
+		playing = imuse_get_param(im, 37, IM_PARAM_IS_PLAYING);
 		if (playing)
-			playing = imuse_stop_sound(im, sfx_id(37));
+			playing = imuse_stop_sound(im, 37);
 		return (int8_t)playing;
 	}
 
 	if (bluetarget == 0xFFFF) {
 		/* No locked target -- use the free-fire beam clip. */
-		if (imuse_get_param(im, sfx_id(38), IM_PARAM_IS_PLAYING))
-			imuse_stop_sound(im, sfx_id(38));
-		was_playing = imuse_get_param(im, sfx_id(37), IM_PARAM_IS_PLAYING);
+		if (imuse_get_param(im, 38, IM_PARAM_IS_PLAYING))
+			imuse_stop_sound(im, 38);
+		was_playing = imuse_get_param(im, 37, IM_PARAM_IS_PLAYING);
 		if (was_playing)
 			return (int8_t)was_playing;
 		id = 37;
 	} else {
 		/* Locked target -- use the aimed-beam clip. */
-		if (imuse_get_param(im, sfx_id(37), IM_PARAM_IS_PLAYING))
-			imuse_stop_sound(im, sfx_id(37));
-		was_playing = imuse_get_param(im, sfx_id(38), IM_PARAM_IS_PLAYING);
+		if (imuse_get_param(im, 37, IM_PARAM_IS_PLAYING))
+			imuse_stop_sound(im, 37);
+		was_playing = imuse_get_param(im, 38, IM_PARAM_IS_PLAYING);
 		if (was_playing)
 			return (int8_t)was_playing;
 		id = 38;
@@ -1017,7 +840,7 @@ int8_t fsfx_triggervoicesfx(uint16_t voice_id) {
 	if (!inflight_speech_vol)
 		return 0;
 
-	if (imuse_get_param(im, sfx_id(currentdigital), IM_PARAM_IS_PLAYING) || blastcount) {
+	if (imuse_get_param(im, currentdigital, IM_PARAM_IS_PLAYING) || blastcount) {
 		/* Voice channel busy or queue non-empty -- preserve order. */
 		if (blastcount == FSFX_BLAST_QUEUE_SIZE)
 			return 0;
@@ -1026,10 +849,10 @@ int8_t fsfx_triggervoicesfx(uint16_t voice_id) {
 		return 1;
 	}
 
-	imuse_start_voice(im, (void*)sfx_id(voice_id));
-	imuse_set_param(im, sfx_id(voice_id), IM_PARAM_PRIORITY, 127);
-	imuse_set_param(im, sfx_id(voice_id), IM_PARAM_PAN, 64);
-	imuse_set_param(im, sfx_id(voice_id), IM_PARAM_VOLUME, 127);
+	imuse_start_voice(im, TieImuse_SoundHandle(voice_id));
+	imuse_set_param(im, voice_id, IM_PARAM_PRIORITY, 127);
+	imuse_set_param(im, voice_id, IM_PARAM_PAN, 64);
+	imuse_set_param(im, voice_id, IM_PARAM_VOLUME, 127);
 	currentdigital = (uint8_t)voice_id;
 	return 1;
 }
@@ -1046,7 +869,7 @@ void fsfx_checkblastqueue(void) {
 
 	if (!blastflag || !blastcount)
 		return;
-	if (currentdigital && imuse_get_param(im, sfx_id(currentdigital), IM_PARAM_IS_PLAYING))
+	if (currentdigital && imuse_get_param(im, currentdigital, IM_PARAM_IS_PLAYING))
 		return;
 
 	/* Dequeue head. */
@@ -1061,10 +884,10 @@ void fsfx_checkblastqueue(void) {
 	if (!soundhandles[next_voice])
 		return;
 
-	imuse_start_voice(im, (void*)sfx_id(next_voice));
-	imuse_set_param(im, sfx_id(next_voice), IM_PARAM_PRIORITY, 127);
-	imuse_set_param(im, sfx_id(next_voice), IM_PARAM_PAN, 64);
-	imuse_set_param(im, sfx_id(next_voice), IM_PARAM_VOLUME, 127);
+	imuse_start_voice(im, TieImuse_SoundHandle(next_voice));
+	imuse_set_param(im, next_voice, IM_PARAM_PRIORITY, 127);
+	imuse_set_param(im, next_voice, IM_PARAM_PAN, 64);
+	imuse_set_param(im, next_voice, IM_PARAM_VOLUME, 127);
 	currentdigital = (uint8_t)next_voice;
 }
 
@@ -1418,14 +1241,6 @@ int8_t fsfx_speakorderack(int32_t target_idx, int32_t order_char, uint16_t cmdr_
  * Mission-critical kill announcer.
  * -------------------------------------------------------------------------- */
 
-/* Win-condition codes that count as "destroy / disable".
- *
- * Verified against disasm at 0x24D0F..0x24D1D: the binary's two-branch
- * cmp/jb/jbe/cmp-0Ch pattern matches EXACTLY {7, 9, 12} -- codes 10 and
- * 11 do NOT trigger the critical-kill voicing, even though they are in
- * the 9..12 range. */
-static int is_destroy_cond(uint8_t cond) { return cond == 7 || cond == 9 || cond == 12; }
-
 // FUNCTION: TIE95 0x26004
 int32_t fsfx_checkcriticalcraft(int32_t obj_idx_arg, uint16_t action_voice) {
 	uint16_t obj_idx_u16 = (uint16_t)obj_idx_arg;
@@ -1444,18 +1259,35 @@ int32_t fsfx_checkcriticalcraft(int32_t obj_idx_arg, uint16_t action_voice) {
 	 * condition is "any craft in the FG with this kill-type goal". */
 	pri_win_cond = fg_array[objects[obj_idx_u16].fg_idx].pri_win_cond;
 	is_critical = 0;
-	if (is_destroy_cond(pri_win_cond))
-		is_critical = 1;
+	/* Win-condition codes 7, 9 and 12 count as "destroy / disable"; the
+	 * binary compare chain excludes 10 and 11. */
+	switch (pri_win_cond) {
+		case 7:
+		case 9:
+		case 12:
+			is_critical = 1;
+			break;
+	}
 
 	/* Match the dead craft against each of the primary goal's two
 	 * subconditions (cut[0].subcond[0] and [1]) via
 	 * score_objectmemberofgroup; OR into is_critical. */
 	sa = &cut[0].subcond[0];
 	sb = &cut[0].subcond[1];
-	if (is_destroy_cond(sa->cond))
-		is_critical |= score_objectmemberofgroup(obj_idx_u16, sa->type, sa->id);
-	if (is_destroy_cond(sb->cond))
-		is_critical |= score_objectmemberofgroup(obj_idx_u16, sb->type, sb->id);
+	switch (sa->cond) {
+		case 7:
+		case 9:
+		case 12:
+			is_critical |= score_objectmemberofgroup(obj_idx_u16, sa->type, sa->id);
+			break;
+	}
+	switch (sb->cond) {
+		case 7:
+		case 9:
+		case 12:
+			is_critical |= score_objectmemberofgroup(obj_idx_u16, sb->type, sb->id);
+			break;
+	}
 	if (!(uint16_t)is_critical)
 		return 0;
 

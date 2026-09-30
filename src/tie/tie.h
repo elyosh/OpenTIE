@@ -892,7 +892,6 @@ extern int32_t craftx, crafty, craftz;
 extern int32_t craftxold, craftyold, craftzold;
 extern int32_t gatex1, gatey1, gatez1;
 extern int32_t gatex2, gatey2, gatez2;
-extern int32_t gatenx, gateny, gatenz;
 extern int32_t collidexoff, collideyoff, collidezoff;
 
 /* --- Targeting state read by DRAW_drawcraft. tie.c. --- */
@@ -950,6 +949,8 @@ extern int16_t inputbuttons;
 extern int16_t inputkey;
 extern int16_t inputdeltax;
 extern int16_t inputdeltay;
+/* PORT: analog roll axis and absolute throttle command; defined in
+ * tie_runtime/input/input.c. */
 extern int16_t inputdeltaroll;
 extern int16_t mouseflag;
 extern int16_t joystickflag;
@@ -986,7 +987,7 @@ typedef struct PlayerInFlightState {
 	/* +0x00C */ uint8_t post_mission_shield_q4; /* 1 */
 	/* +0x00D */ uint8_t _pad_0D;                /* 1 */
 	/* +0x00E */ uint8_t player_spec_num;        /* 1 */
-	/* +0x00F */ uint8_t _pad_0F;                /* 1 */
+	/* +0x00F */ uint8_t player_spec_field_0F;   /* 1; copied from spec field_0F by create_createcraft */
 	/* +0x010 */ uint8_t radar_enable;           /* 1 */
 	/* +0x011 */ uint8_t _pad_11;                /* 1 */
 	/* +0x012 */ uint16_t target_obj_idx;        /* 2 */
@@ -1527,7 +1528,6 @@ extern uint8_t mtimer_sec;             /* mission-timer seconds */
 extern int16_t targetblinkflag; /* blink toggle for the HUD target box */
 extern uint8_t calcframerate;   /* 1 = refresh HUD framerate readout this frame */
 extern uint8_t entercombatflag; /* set when the player leaves training for combat */
-extern uint8_t player_ejected;  /* set by user_ejectcamera; gates flight beam/laser/HUD post-eject */
 extern uint8_t lightflag;       /* global directional light is enabled this frame */
 extern uint8_t colorcycleflag;  /* palette cycling active */
 extern uint8_t blankcondition;  /* bit 0 = fade-to-black active */
@@ -1566,22 +1566,13 @@ extern char replaystartfile[10];    /* "start.rpy"  - per-replay state snapshot 
 extern char replaysavegamefile[13]; /* "savegame.rpy" - in-flight checkpoint */
 extern char inputspoolfile[10];     /* "input.spl"  - on-disk frame spool */
 extern uint32_t replaytotalcntdown; /* playback counter (counts up to replaytotalcnt) */
-extern int16_t replaybuffercntdown; /* per-frame pacing decrement */
 extern uint16_t replayrandomseed;   /* RNG seed captured at record start */
-extern int16_t replayviewtype;      /* view kind saved per frame */
-extern int16_t lastreplayviewtype;
-extern int16_t replayobjectnum;
-extern int16_t replaydebounce;
-extern uint8_t endgamereplayflag; /* 1 = suppress UI during end-mission spool */
-extern uint8_t replayescapeflag;
-extern uint8_t replayfpctr;
-extern uint8_t lastreplayname;
-extern uint8_t replayfg;
-extern uint8_t updateactionflag; /* 1 = replay is actively stepping frames */
-extern uint16_t replayavailable; /* 1 if a saved clip is loadable */
-extern uint8_t replayspoolflag;  /* 1 = spool input frames to disk */
-extern void* replayptr;          /* write/read cursor into replaybuffer */
-extern uint16_t replaybuffercnt; /* frames in the current page */
+extern uint8_t endgamereplayflag;   /* 1 = suppress UI during end-mission spool */
+extern uint8_t updateactionflag;    /* 1 = replay is actively stepping frames */
+extern uint16_t replayavailable;    /* 1 if a saved clip is loadable */
+extern uint8_t replayspoolflag;     /* 1 = spool input frames to disk */
+extern void* replayptr;             /* write/read cursor into replaybuffer */
+extern uint16_t replaybuffercnt;    /* frames in the current page */
 
 /* Mission file / runtime paths. */
 extern char missionfilename[64];
@@ -1611,9 +1602,6 @@ extern void* restorebox;
 
 /* Per-frame engine driver. Native mission scheduling is runtime-owned. */
 void tie_simulator(int replay_mode);
-#ifdef TIE_MODERN
-void tie_start_tie98_mission_music(void);
-#endif
 
 void tie_initflightresolution(void);
 
@@ -1641,6 +1629,7 @@ int16_t tie_checkobjecteyexyz(uint16_t obj_idx, uint16_t bound);
 int16_t tie_checkstaticobjecteyexyz(int16_t wx, int16_t wy, int16_t wz, uint16_t bound);
 void tie_updatetime(void);
 void tie_updatemusic(void);
+void tie_updatemusic_tie98(void);
 
 /* --------------------------------------------------------------------------
  * tie.c globals not declared above (used by tie_doframe / updatescreen).
@@ -1743,18 +1732,12 @@ extern uint8_t mapiconsloaded;
 extern uint8_t deadflag_EB76C;
 extern uint8_t deadflag_EB774;
 
-/* Mission-file flag: bit 0 forces eject-pod rescue (story gate). */
-extern uint8_t rescue_override_flag;
-
 /* View-angle lookup table for the 0..9 numpad view keys. */
 extern int16_t squarerootable[512];
 
 /* Mission-file timestamp + RNG seed (sampled at room load). */
 extern uint8_t mfile_time_min, mfile_time_sec;
 extern int16_t mfile_rnd_seed;
-
-/* Cockpit instrument knockout flag (panel_updatecockpitdamage). */
-extern uint8_t byte_F8FAB;
 
 /* Transient user-side palette-cycling enable flag. */
 extern uint8_t colorcycleuserflag;

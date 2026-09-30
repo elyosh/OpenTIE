@@ -34,11 +34,13 @@
 /* ---------- Module-private static state ---------- */
 
 /*
- * targetcomputerflag (0xD1164, int, static per watdbg).
+ * targetcomputerflag (int, static per watdbg).
  * One-shot override set by collide_targetinrange to force
  * collide_lasercraftcollide onto the box-test path even for
  * capital-ship-sized targets. Cleared on consumption.
  */
+// GLOBAL: TIE95 0xC1780
+// GLOBAL: TIE98 0x50AA4C
 static int32_t targetcomputerflag = 0;
 
 /* ---------- Module globals (defined here, declared extern in collide.h) ---------- */
@@ -46,26 +48,38 @@ static int32_t targetcomputerflag = 0;
 /*
  * Per-subsystem bitmasks AND'd against CraftData.status_flags during
  * missile/warhead overflow damage. Verbatim from the binary's .data
- * segment (0xD1168). Values are ordered by random pick index, NOT by
+ * segment. Values are ordered by random pick index, NOT by
  * subsystem id -- so e.g. systemmask[0]=0x002 disables a different
  * subsystem than systemmask[1]=0x080.
  */
+// GLOBAL: TIE95 0xC1784
+// GLOBAL: TIE98 0x4DF2B0
 int16_t systemmask[10] = { 0x002, 0x080, 0x010, 0x020, 0x040, 0x004, 0x001, 0x008, 0x100, 0x200 };
 
-/* MSG_SYSTEM_STATUS substring id per subsystem (from 0xD117C). */
+/* MSG_SYSTEM_STATUS substring id per subsystem. */
+// GLOBAL: TIE95 0xC1798
+// GLOBAL: TIE98 0x4DF2C8
 uint8_t damagemsg[10] = { 34, 36, 166, 28, 27, 33, 35, 165, 166, 166 };
 
-/* Repair countdown duration per subsystem in ticks (from 0xD1186). */
+/* Repair countdown duration per subsystem in ticks. */
+// GLOBAL: TIE95 0xC17A2
+// GLOBAL: TIE98 0x4DF2D8
 int16_t repairtime[10] = { 180, 300, 45, 25, 100, 30, 50, 60, 60, 60 };
 
 /*
- * Random instrument disable bitmasks AND'd against ~working_subsystems
- * (from 0xD119A). Index 0 is gated against mission.train_craft_type to avoid
- * disabling the forward shield in briefing/training/combat. The 17th
- * entry (instrumentdisable[16] = 0) is the never-fire default.
+ * Random instrument disable bitmasks AND'd against ~working_subsystems.
+ * Index 0 is gated against mission.train_craft_type to avoid disabling the
+ * forward shield in briefing/training/combat. TIE95 carries a 17th entry
+ * (0, never selected by the 4-bit random pick); TIE98 has only 16.
  */
-int16_t instrumentdisable[17] = { 0x200, 0x040, 0x020, 0x006,  0x400, 0x180, 0x010, 0x008, 0x800,
-								  0x180, 0x020, 0x006, 0x1000, 0x001, 0x020, 0x008, 0x000 };
+// GLOBAL: TIE95 0xC17B6
+// GLOBAL: TIE98 0x4DF2F0
+int16_t instrumentdisable[] = { 0x200, 0x040, 0x020, 0x006, 0x400,  0x180, 0x010, 0x008,
+								0x800, 0x180, 0x020, 0x006, 0x1000, 0x001, 0x020, 0x008,
+#ifndef TIE98
+								0x000
+#endif
+};
 
 /* ---------- External cross-module declarations -----------
  * tie.c-owned globals consumed by COLLIDE: timers[TIMER_SHIELD_FLASH] /
@@ -84,7 +98,7 @@ int16_t instrumentdisable[17] = { 0x200, 0x040, 0x020, 0x006,  0x400, 0x180, 0x0
  * The retail 'projectilevelocity_base' anchor at 0xC534A is the same
  * table as 'projectilevelocity' at 0xC545C, just rebased so that
  * projectilevelocity_base[species*2] == projectilevelocity[species-137].
- * collide_targetinrange therefore reads laser_species_idx(laser_type)
+ * collide_targetinrange therefore reads (laser_type - WEAPON_SPECIES_BASE)
  * out of projectilevelocity[] -- no separate lookahead table exists.
  */
 
@@ -190,29 +204,6 @@ CraftData* collide_updatehits(uint16_t projectile_obj_idx) {
 	return result;
 }
 
-/* ---------- Helper: 5-cut win-condition voice/MSG threshold (collide_updatekills inner block) ----------
- * Each cut byte is one of:
- *   0,1     -> 'no win/loss tracking'      threshold = 0
- *   2       -> primary objective           threshold = -4096 (~12.5%)
- *   3..9    -> secondary/loss/bonus levels threshold = 24576 (~75%)
- *   10      -> 'always congratulate'       threshold = 0
- * The initial value passed in is short-circuited to itself if no cut
- * disables congratulation; otherwise the cap is downgraded. The 5
- * cuts are: pri/sec/bonus FG cond + cut[0] + the byte at +3
- * (see comment at the call site). */
-static int16_t apply_cut_threshold(int16_t cur_threshold, uint8_t cond) {
-	if (cond < 2u) {
-		if (cond == 0)
-			return 24576;
-		return cur_threshold;
-	}
-	if (cond <= 2u)
-		return -4096;
-	if (cond == 10)
-		return 24576;
-	return cur_threshold;
-}
-
 /* ---------- 5. collide_updatekills ---------- */
 // FUNCTION: TIE95 0x16218
 void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx) {
@@ -221,7 +212,6 @@ void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx) {
 	uint8_t* kills_arr;
 	int16_t voice_threshold;
 	uint8_t new_count;
-	uint8_t fifth_cut;
 
 	if (shooter_obj_idx >= NUM_CRAFTS)
 		return;
@@ -244,41 +234,76 @@ void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx) {
 	if (new_count == 0)
 		kills_arr[victim_specnum] = 0xFF;
 
-	/* Player-only path: 5 win-condition cuts gate the voice / friendly-kill path. */
+	/* Player-only path: five win-condition cuts pick the congratulation
+	 * voice threshold. Each cut: 0/10 -> 24576, 2 -> -4096, else keep. */
 	if (shooter_obj_idx == pstate.object_idx) {
-		uint8_t victim_fg = objects[victim_obj_idx].fg_idx;
-		EFGStruct* vfg = &fg_array[victim_fg];
-
-		uint16_t cur;
-
 		voice_threshold = 0;
-		voice_threshold = apply_cut_threshold(voice_threshold, vfg->pri_win_cond);
-		voice_threshold = apply_cut_threshold(voice_threshold, vfg->sec_win_cond);
-		voice_threshold = apply_cut_threshold(voice_threshold, vfg->bonus_cond);
-		voice_threshold = apply_cut_threshold(voice_threshold, cut[0].subcond[0].cond);
-
+		switch (fg_array[objects[victim_obj_idx].fg_idx].pri_win_cond) {
+			case 0:
+			case 10:
+				voice_threshold = 24576;
+				break;
+			case 2:
+				voice_threshold = -4096;
+				break;
+		}
+		switch (fg_array[objects[victim_obj_idx].fg_idx].sec_win_cond) {
+			case 0:
+			case 10:
+				voice_threshold = 24576;
+				break;
+			case 2:
+				voice_threshold = -4096;
+				break;
+		}
+		switch (fg_array[objects[victim_obj_idx].fg_idx].bonus_cond) {
+			case 0:
+			case 10:
+				voice_threshold = 24576;
+				break;
+			case 2:
+				voice_threshold = -4096;
+				break;
+		}
+		switch (cut[0].subcond[0].cond) {
+			case 0:
+			case 10:
+				voice_threshold = 24576;
+				break;
+			case 2:
+				voice_threshold = -4096;
+				break;
+		}
 		/* Binary reads a byte at cut[0].subcond[1].cond (primary goal's
 		 * second subcondition's cond code) -- the binary emitted a
 		 * misaligned dword load from 0xF4809 with >>24, but the resolved
 		 * address lands on the same byte. */
-		fifth_cut = cut[0].subcond[1].cond;
-		voice_threshold = apply_cut_threshold(voice_threshold, fifth_cut);
+		switch (cut[0].subcond[1].cond) {
+			case 0:
+			case 10:
+				voice_threshold = 24576;
+				break;
+			case 2:
+				voice_threshold = -4096;
+				break;
+		}
 
 		if (objects[pstate.object_idx].side == objects[victim_obj_idx].side) {
 			/* Friendly-fire kill: announce + bump counter. */
 			messageside = objects[pstate.object_idx].side;
 			pstate.friendly_kill_count++;
 			msg_messageprintf(MSG_FRIENDLY_KILL);
-		} else if ((uint16_t)math2_getrandom() < (uint16_t)voice_threshold) {
-			if (fsfx_speakeravailable())
-				fsfx_speakcongrats();
+		} else {
+			/* Player-side per-species kill increment (enemy kills only). */
+			uint16_t cur = (uint16_t)(pstate.player_kills_per_species[victim_specnum] + 1);
+			pstate.player_kills_per_species[victim_specnum] = cur;
+			if (cur == 0)
+				pstate.player_kills_per_species[victim_specnum] = 0xFFu;
+			if ((uint16_t)math2_getrandom() < (uint16_t)voice_threshold) {
+				if (fsfx_speakeravailable())
+					fsfx_speakcongrats();
+			}
 		}
-
-		/* Player-side per-species kill increment. */
-		cur = (uint16_t)(pstate.player_kills_per_species[victim_specnum] + 1);
-		pstate.player_kills_per_species[victim_specnum] = cur;
-		if (cur == 0)
-			pstate.player_kills_per_species[victim_specnum] = 0xFFu;
 	}
 
 	/* Side-aware mission.kills_losses[6][69]: 69 species per side. The
@@ -626,7 +651,7 @@ uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx
 	 * bank (player_weapon_group). */
 	uint8_t bank = pstate.player_weapon_group;
 	uint16_t laser_species = spec_data[pstate.player_spec_num].laser_type[bank];
-	int16_t proj_speed = (int16_t)projectilevelocity[laser_species_idx(laser_species)];
+	int16_t proj_speed = (int16_t)projectilevelocity[laser_species - WEAPON_SPECIES_BASE];
 	int16_t lookahead_3frame = 3 * (int16_t)framerate;
 	/* Hardpoint position: retail uses shooter->species_idx and the
 	 * caller-supplied group index, NOT the active bank. Each weapon
@@ -830,7 +855,7 @@ char collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
 		/* Retail byte_C5463[ship_idx] flags 'craft chunk' explosion
 		 * variants (0 = silent, 1/2 = chunk). Retained as a proper
 		 * species-indexed table in laser.c. */
-		is_craft_chunk_variant = projectile_is_warhead_type[laser_species_idx(expl_obj->ship_idx)];
+		is_craft_chunk_variant = projectile_is_warhead_type[expl_obj->ship_idx - WEAPON_SPECIES_BASE];
 
 		if (is_craft_chunk_variant)
 			expl_obj->ship_idx = (uint8_t)((math2_getrandom() & 1) + 127);
@@ -1339,25 +1364,8 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
  *
  * Vertex IDs in the per-face vertex-id table use a 0x7Fxx 'continuation'
  * indirection (each 0x7Fxx entry points back 3*((value>>1)) int16
- * slots; a real coord has high byte != 0x7F). resolve_vert() walks
- * that chain. */
-/* Reproduce retail's `imul reg32,reg32; sar eax,0Fh`: the product is
- * truncated to its low 32 bits (defined wrap, computed in uint32) before
- * the arithmetic >>15. The product can legitimately exceed 32 bits because
- * the segment endpoints reach +-Q30 (clamped) doubled, so a plain signed
- * multiply would be overflow UB while still being x86-faithful. */
-static inline int32_t fixmul15(int32_t a, int32_t b) { return (int32_t)((uint32_t)a * (uint32_t)b) >> 15; }
-
-/* Walk the 0x7Fxx indirection chain to fetch a real vertex coord. */
-static int32_t resolve_vert(const int16_t* p) {
-	int16_t v = *p;
-	while ((v & 0xFF00) == 0x7F00) {
-		p -= 3 * ((int)(uint8_t)v >> 1);
-		v = *p;
-	}
-	return v;
-}
-
+ * slots; a real coord has high byte != 0x7F). Each vertex fetch walks
+ * that chain inline. */
 // FUNCTION: TIE95 0x15B38
 uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t y1, int32_t z1, int32_t x2,
 								  int32_t y2, int32_t z2, int32_t return_first_hit) {
@@ -1409,6 +1417,7 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
 		int32_t first_a, first_b;
 		int inside_flag = 1;
 		const uint8_t* vert_byte_p;
+		const int16_t* vp;
 		int axis_a_pick;
 		int axis_b_pick;
 		int half_first;
@@ -1419,9 +1428,18 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
 		if (remaining_edges == 2)
 			continue;
 
-		vx0 = resolve_vert(vert_array + 3 * face_record[1]);
-		vy0 = resolve_vert(vert_array + 3 * face_record[1] + 1);
-		vz0 = resolve_vert(vert_array + 3 * face_record[1] + 2);
+		for (vp = vert_array + 3 * face_record[1]; (*vp & 0xFF00) == 0x7F00;
+			 vp -= 3 * ((int)(uint8_t)*vp >> 1))
+			;
+		vx0 = *vp;
+		for (vp = vert_array + 3 * face_record[1] + 1; (*vp & 0xFF00) == 0x7F00;
+			 vp -= 3 * ((int)(uint8_t)*vp >> 1))
+			;
+		vy0 = *vp;
+		for (vp = vert_array + 3 * face_record[1] + 2; (*vp & 0xFF00) == 0x7F00;
+			 vp -= 3 * ((int)(uint8_t)*vp >> 1))
+			;
+		vz0 = *vp;
 
 		side1 = math2_mul_q15(x1 - vx0, face_nx);
 		side1 += math2_mul_q15(y1 - vy0, face_nz);
@@ -1471,9 +1489,9 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
 				 * the product is truncated to 32 bits before the arithmetic
 				 * shift, and likewise wraps for large deltas. Reproduce the
 				 * exact low-32-bit result via an unsigned multiply. */
-				x_isect = x2 + (fixmul15((int32_t)t_param, x1 - x2));
-				y_isect = y2 + (fixmul15((int32_t)t_param, y1 - y2));
-				z_isect = z2 + (fixmul15((int32_t)t_param, z1 - z2));
+				x_isect = x2 + ((int32_t)(t_param * (uint32_t)(x1 - x2)) >> 15);
+				y_isect = y2 + ((int32_t)(t_param * (uint32_t)(y1 - y2)) >> 15);
+				z_isect = z2 + ((int32_t)(t_param * (uint32_t)(z1 - z2)) >> 15);
 			} else {
 				t_param = 0;
 				x_isect = x2;
@@ -1525,11 +1543,25 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
 
 		/* Walk vertex list around the face, requiring all
 		 * MATH2_halfplane signs to match the first edge. */
-		first_a = resolve_vert(vert_array + 3 * vert_byte_p[0] + axis_a_pick);
-		first_b = resolve_vert(vert_array + 3 * vert_byte_p[0] + axis_b_pick);
+		for (vp = vert_array + 3 * vert_byte_p[0] + axis_a_pick; (*vp & 0xFF00) == 0x7F00;
+			 vp -= 3 * ((int)(uint8_t)*vp >> 1))
+			;
+		first_a = *vp;
+		for (vp = vert_array + 3 * vert_byte_p[0] + axis_b_pick; (*vp & 0xFF00) == 0x7F00;
+			 vp -= 3 * ((int)(uint8_t)*vp >> 1))
+			;
+		first_b = *vp;
 		{
-			int32_t edge_a = resolve_vert(vert_array + 3 * vert_byte_p[2] + axis_a_pick);
-			int32_t edge_b = resolve_vert(vert_array + 3 * vert_byte_p[2] + axis_b_pick);
+			int32_t edge_a;
+			int32_t edge_b;
+			for (vp = vert_array + 3 * vert_byte_p[2] + axis_a_pick; (*vp & 0xFF00) == 0x7F00;
+				 vp -= 3 * ((int)(uint8_t)*vp >> 1))
+				;
+			edge_a = *vp;
+			for (vp = vert_array + 3 * vert_byte_p[2] + axis_b_pick; (*vp & 0xFF00) == 0x7F00;
+				 vp -= 3 * ((int)(uint8_t)*vp >> 1))
+				;
+			edge_b = *vp;
 			half_first =
 				math2_halfplane(isect_a - first_a, edge_b - first_b, isect_b - first_b, edge_a - first_a);
 
@@ -1537,8 +1569,14 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
 				int32_t prev_a = edge_a;
 				int32_t prev_b = edge_b;
 				int half_test;
-				edge_a = resolve_vert(vert_array + 3 * vert_byte_p[4] + axis_a_pick);
-				edge_b = resolve_vert(vert_array + 3 * vert_byte_p[4] + axis_b_pick);
+				for (vp = vert_array + 3 * vert_byte_p[4] + axis_a_pick; (*vp & 0xFF00) == 0x7F00;
+					 vp -= 3 * ((int)(uint8_t)*vp >> 1))
+					;
+				edge_a = *vp;
+				for (vp = vert_array + 3 * vert_byte_p[4] + axis_b_pick; (*vp & 0xFF00) == 0x7F00;
+					 vp -= 3 * ((int)(uint8_t)*vp >> 1))
+					;
+				edge_b = *vp;
 				half_test =
 					math2_halfplane(isect_a - prev_a, edge_b - prev_b, isect_b - prev_b, edge_a - prev_a);
 				if (half_test != half_first) {
@@ -1610,79 +1648,70 @@ void collide_collisions(void) {
 				craftyold = tgt->world_y_prev;
 				craftzold = tgt->world_z_prev;
 
-				if (pstate.object_idx == target_idx)
-					goto proximity;
-				if (tgt->genus == GENUS_EXPLOSION)
-					goto proximity;
-				if (tgt->fg_idx == pl->fg_idx)
-					goto proximity;
-				if (target_idx == pc->spin_done_flag)
-					goto proximity;
-
-				tgt_craft = tgt->craft_ptr;
-				if (tgt_craft->default_order_ldr == 28 &&
-					pstate.object_idx == (uint16_t)tgt_craft->ai_target_ref)
-					goto proximity;
-				if (inflight_invulnerable && !mission.train_craft_type)
-					goto proximity;
-
-				hit_offset = collide_lasercraftcollide(pstate.object_idx, target_idx);
-				if (hit_offset) {
-					if (mission.train_craft_type) {
-						/* Briefing/training/combat: teleport player back
-						 * to the spawn snapshot. */
-						pl->current_speed = 0;
-						pc->throttle_speed = 0;
-						pl->world_x = pl->world_x_prev = gatepreviousx[3];
-						pl->world_y = pl->world_y_prev = gatepreviousy[3];
-						pl->world_z = pl->world_z_prev = gatepreviousz[3];
-						pl->roll = gatepreviousroll[3];
-						pl->heading = gatepreviouspitch[3]; /* binary's storage swap */
-						pc->orient_heading = gatepreviouspitch[3];
-						pl->pitch = gatepreviousheading[3]; /* binary's storage swap */
-						pl->move_dirty = 1;
-						pl->orient_dirty = 1;
-						fsfx_triggersfx(((uint16_t)math2_getrandom() & 0x8000u) ? 0x1C : 0x1D,
-										pstate.object_idx);
-					} else {
-						uint8_t tgt_genus = tgt->genus;
-						/* Real combat: elastic momentum bounce on
-						 * fighter / freighter / shuttle (genus 0..2). */
-						if (tgt_genus == GENUS_FIGHTER || tgt_genus == GENUS_TRANSPORT ||
-							tgt_genus == GENUS_UTILITY) {
-							/* Mark target's spin-done flag so we don't
-							 * re-bounce next frame. */
-							pc->spin_done_flag = target_idx;
-							/* (Full bounce maths replicated literally
-							 * below; abridged for clarity.) */
-							msg_messageprintf(MSG_COLLISION_OCCURRED);
-							fsfx_triggersfx(0x1C, pstate.object_idx);
-							fsfx_triggersfx(0x1D, target_idx);
-						}
-						if (inflight_collision || tgt_genus == GENUS_FREIGHTER ||
-							tgt_genus == GENUS_STARSHIP || tgt_genus == GENUS_PLATFORM) {
-							int32_t dot;
-							TIE_FLIGHT_TRACE_COLLISION(pstate.object_idx, target_idx,
-													   TIE_TRACE_COLLISION_CRAFT, hit_offset);
-							collide_damagecraft(target_idx, hit_offset, 0, pstate.object_idx);
-							if (pl->orient_dirty) {
-								fview_calcrotatemove(pl->heading, pl->pitch, pl);
-								fview_calcrotateorient(pl->roll, 0, pl);
+				if (pstate.object_idx != target_idx && tgt->genus != GENUS_EXPLOSION &&
+					tgt->fg_idx != pl->fg_idx && target_idx != pc->spin_done_flag) {
+					tgt_craft = tgt->craft_ptr;
+					if ((tgt_craft->default_order_ldr != 28 ||
+						 pstate.object_idx != (uint16_t)tgt_craft->ai_target_ref) &&
+						(!inflight_invulnerable || mission.train_craft_type)) {
+						hit_offset = collide_lasercraftcollide(pstate.object_idx, target_idx);
+						if (hit_offset) {
+							if (mission.train_craft_type) {
+								/* Briefing/training/combat: teleport player back
+								 * to the spawn snapshot. */
+								pl->current_speed = 0;
+								pc->throttle_speed = 0;
+								pl->world_x = pl->world_x_prev = gatepreviousx[3];
+								pl->world_y = pl->world_y_prev = gatepreviousy[3];
+								pl->world_z = pl->world_z_prev = gatepreviousz[3];
+								pl->roll = gatepreviousroll[3];
+								pl->heading = gatepreviouspitch[3]; /* binary's storage swap */
+								pc->orient_heading = gatepreviouspitch[3];
+								pl->pitch = gatepreviousheading[3]; /* binary's storage swap */
+								pl->move_dirty = 1;
+								pl->orient_dirty = 1;
+								fsfx_triggersfx(((uint16_t)math2_getrandom() & 0x8000u) ? 0x1C : 0x1D,
+												pstate.object_idx);
+							} else {
+								uint8_t tgt_genus = tgt->genus;
+								/* Real combat: elastic momentum bounce on
+								 * fighter / freighter / shuttle (genus 0..2). */
+								if (tgt_genus == GENUS_FIGHTER || tgt_genus == GENUS_TRANSPORT ||
+									tgt_genus == GENUS_UTILITY) {
+									/* Mark target's spin-done flag so we don't
+									 * re-bounce next frame. */
+									pc->spin_done_flag = target_idx;
+									/* (Full bounce maths replicated literally
+									 * below; abridged for clarity.) */
+									msg_messageprintf(MSG_COLLISION_OCCURRED);
+									fsfx_triggersfx(0x1C, pstate.object_idx);
+									fsfx_triggersfx(0x1D, target_idx);
+								}
+								if (inflight_collision || tgt_genus == GENUS_FREIGHTER ||
+									tgt_genus == GENUS_STARSHIP || tgt_genus == GENUS_PLATFORM) {
+									int32_t dot;
+									TIE_FLIGHT_TRACE_COLLISION(pstate.object_idx, target_idx,
+															   TIE_TRACE_COLLISION_CRAFT, hit_offset);
+									collide_damagecraft(target_idx, hit_offset, 0, pstate.object_idx);
+									if (pl->orient_dirty) {
+										fview_calcrotatemove(pl->heading, pl->pitch, pl);
+										fview_calcrotateorient(pl->roll, 0, pl);
+									}
+									dot = (int16_t)(craftx - craftxold) * (int32_t)pl->fwd_x +
+										  (int16_t)(crafty - craftyold) * (int32_t)pl->fwd_y +
+										  (int16_t)(craftz - craftzold) * (int32_t)pl->fwd_z;
+									if (dot >= 0x40000000)
+										dot = 0x3FFF0000;
+									if (dot <= -0x40000000)
+										dot = -0x3FFF0000;
+									collide_damagecraft(pstate.object_idx, 0xFFFF,
+														(((dot >> 15) & 0x8000u) != 0) ? 1 : 0, target_idx);
+								}
 							}
-							dot = (int16_t)(craftx - craftxold) * (int32_t)pl->fwd_x +
-								  (int16_t)(crafty - craftyold) * (int32_t)pl->fwd_y +
-								  (int16_t)(craftz - craftzold) * (int32_t)pl->fwd_z;
-							if (dot >= 0x40000000)
-								dot = 0x3FFF0000;
-							if (dot <= -0x40000000)
-								dot = -0x3FFF0000;
-							collide_damagecraft(pstate.object_idx, 0xFFFF,
-												(((dot >> 15) & 0x8000u) != 0) ? 1 : 0, target_idx);
 						}
 					}
 				}
 
-			proximity:
 				/* Proximity check: scan-to-identify + tractor prompt. */
 				approxdist = collide_roughdistance3d(laserx - craftx, lasery - crafty, laserz - craftz);
 
@@ -1872,7 +1901,7 @@ void collide_collisions(void) {
 					if (i >= NUM_CRAFTS) {
 						/* Projectile/warhead slot range: only consider
 						 * slots whose species explodes at death. */
-						if (!projectile_is_warhead_type[laser_species_idx(objects[i].ship_idx)])
+						if (!projectile_is_warhead_type[objects[i].ship_idx - WEAPON_SPECIES_BASE])
 							continue;
 						if (i == projectile_idx)
 							continue;

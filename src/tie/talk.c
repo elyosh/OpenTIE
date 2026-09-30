@@ -62,48 +62,97 @@
  * Static data — resource name table (16 entries × 14 chars)
  * ====================================================================== */
 
+// GLOBAL: TIE95 0xCE474
+// GLOBAL: TIE98 0x4F1978
 static const char talk_str[16][14] = { "talk.lfd", "brf_off", "brf_ss", "dbrf_off", "dbrf_ss", "eyes",
 									   "ssface",   "offbak",  "ssbak",  "doffbak",  "dssbak",  "offtxt",
 									   "sstxt",    "dofftxt", "dsstxt", "mouth" };
 
 /* Officer face animation state tables (indexed by mood 0-4) */
+// GLOBAL: TIE95 0xCE554
+// GLOBAL: TIE98 0x4F1A58
 static const int16_t officer_mood_eye[5] = { 0, 5, 9, 6, 9 };
+// GLOBAL: TIE95 0xCE55E
+// GLOBAL: TIE98 0x4F1A68
 static const int16_t officer_mood_blink[5] = { 4, 4, 4, 7, 7 };
+// GLOBAL: TIE95 0xCE568
+// GLOBAL: TIE98 0x4F1A78
 static const int16_t officer_mood_mouth[5] = { 0, 2, 1, 3, 0 };
+// GLOBAL: TIE95 0xCE572
+// GLOBAL: TIE98 0x4F1A88
 static const int16_t priest_mood_eye[5] = { 0, 5, 5, 6, 5 };
-static const int16_t priest_mood_blink[6] = { 4, 5, 5, 7, 5, 0 };
+// GLOBAL: TIE95 0xCE57C
+// GLOBAL: TIE98 0x4F1A98
+static const int16_t priest_mood_blink[5] = { 4, 5, 5, 7, 5 };
 
 /* ======================================================================
  * Static BSS globals
  * ====================================================================== */
 
+// GLOBAL: TIE95 0xF570C
+// GLOBAL: TIE98 0x589CE0
 static int16_t talk_win_id[6];
+// GLOBAL: TIE95 0xF5718
+// GLOBAL: TIE98 0x589D0C
 static EBriefStruct* talk_brief;
+// GLOBAL: TIE95 0xF571C
+// GLOBAL: TIE98 0x589CF8
 static Actor* eye_actor;
+// GLOBAL: TIE95 0xF5720
+// GLOBAL: TIE98 0x589CEC
 static Input* parent;
+// GLOBAL: TIE95 0xF5724
+// GLOBAL: TIE98 0x589D00
 static Actor* mouth_actor;
+// GLOBAL: TIE95 0xF5728
+// GLOBAL: TIE98 0x589D04
 static Input* talk_input; /* renamed from 'talk' to avoid keyword conflict */
+// GLOBAL: TIE95 0xF572C
+// GLOBAL: TIE98 0x589CDC
 static Film* talk_film;
+// GLOBAL: TIE95 0xF5730
+// GLOBAL: TIE98 0x589D18
 static Input* answer;
+// GLOBAL: TIE95 0xF5734
+// GLOBAL: TIE98 0x589CC4
 static EFArrayStruct* talk_fgroup;
+// GLOBAL: TIE95 0xF5738
+// GLOBAL: TIE98 0x589CD0
 static int16_t talk_win_status[5];
 // GLOBAL: TIE95 0xF5744
+// GLOBAL: TIE98 0x589D08
 static int16_t max_paragraph_size;
+// GLOBAL: TIE95 0xF5746
+// GLOBAL: TIE98 0x589CC0
 static int16_t cur_talk_question;
+// GLOBAL: TIE95 0xF574C
+// GLOBAL: TIE98 0x589D14
 static int16_t num_talk_paragraphs;
+// GLOBAL: TIE95 0xF574E
+// GLOBAL: TIE98 0x589CC8
 static int16_t center_line;
 // GLOBAL: TIE95 0xF5752
+// GLOBAL: TIE98 0x589CF4
 static int16_t cur_talk_paragraph;
+// GLOBAL: TIE95 0xF5754
+// GLOBAL: TIE98 0x589D10
 static int16_t talk_mode;
+// GLOBAL: TIE95 0xF5756
+// GLOBAL: TIE98 0x589CFC
 static int16_t num_talk_questions;
+// GLOBAL: TIE95 0xF5748
+// GLOBAL: TIE98 0x589CCC
 static int16_t active_talk_question;
-static int16_t officer_mood_val[5]; /* officer_mood — 5 int16 mood state */
+// GLOBAL: TIE95 0xF5758
+// GLOBAL: TIE98 0x589CF0
+static int16_t officer_mood;
 
 /* Auto-advance timer for paragraph display. Retail bumps this by 264 per
  * paragraph step; auto-advance triggers when iuser time arg exceeds it.
  * Stays at INT32_MAX (inert) when speech is disabled or when the current
  * question is the final debrief paragraph. Shared with map.c. */
 // GLOBAL: TIE95 0xCE586
+// GLOBAL: TIE98 0x4F1AA4
 int32_t talk_paragraph_timer = 0x7FFFFFFF;
 
 /* ----------------------------------------------------------------------
@@ -122,51 +171,52 @@ int32_t talk_paragraph_timer = 0x7FFFFFFF;
  * -------------------------------------------------------------------- */
 // GLOBAL: TIE95 0xF5704
 Sound* talk_speech_sound = NULL;
-int16_t talk_voice_species = 0; /* >0: numeric "Nm…" filename */
-								/* <0: char-encoded "[fibagdm]m…" */
+/* talk_voice_species >0: numeric "Nm..." filename; <0: char-encoded "[fibagdm]m...". */
+// GLOBAL: TIE95 0xF5742
+// GLOBAL: TIE98 0x5A2768
+int16_t talk_voice_species = 0;
+// GLOBAL: TIE95 0xF5750
+// GLOBAL: TIE98 0x5A2760
 int16_t talk_voice_mission = 0;
+// GLOBAL: TIE95 0xF574A
+// GLOBAL: TIE98 0x5A2756
 int16_t talk_voice_question = 0;
+// GLOBAL: TIE95 0xF575A
+// GLOBAL: TIE98 0x5A2754
 uint8_t talk_voice_officer = 0; /* 'o', 'p', 'i' */
-uint8_t talk_voice_mood = 0;    /* 'b', 'd', 'h', 'o', etc. */
+// GLOBAL: TIE95 0xF575B
+// GLOBAL: TIE98 0x5A276A
+uint8_t talk_voice_mood = 0; /* 'b', 'd', 'h', 'o', etc. */
 
 enum {
 	TALK_SPEECH_BUF_SIZE = 2048000, /* matches retail allocation */
 };
 
 // GLOBAL: TIE95 0xF5708
+// GLOBAL: TIE98 0x5A2764
 static int32_t talk_speech_pos = 0;
 // GLOBAL: TIE95 0xF575C
+// GLOBAL: TIE98 0x5A276B
 static uint8_t talk_speech_streaming = 0;
-
-/* ======================================================================
- * Helper: replace ASCII '1'/'2' in string with control codes 0x01/0x02
- * (italic on/off). Used by all debrief text formatting.
- * ====================================================================== */
-
-static void replace_italic_codes(char* str) {
-	int16_t i;
-
-	for (i = 0; str[i]; i++) {
-		if (str[i] == '1')
-			str[i] = 1;
-		if (str[i] == '2')
-			str[i] = 2;
-	}
-}
 
 /* ======================================================================
  * Mood get/set
  * ====================================================================== */
 
-void talk_Set_Officer_Mood(int16_t mood) { officer_mood_val[0] = mood; }
+// FUNCTION: TIE95 0x68D68
+// FUNCTION: TIE98 0x48A8E0
+void talk_Set_Officer_Mood(int16_t mood) { officer_mood = mood; }
 
-int16_t talk_Get_Officer_Mood(void) { return officer_mood_val[0]; }
+// FUNCTION: TIE95 0x68D95
+// FUNCTION: TIE98 0x48A2A0
+int16_t talk_Get_Officer_Mood(void) { return officer_mood; }
 
 /* ======================================================================
  * Check_Talk_Questions — scan talk data for visibility conditions
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x696A8
+// FUNCTION: TIE98 0x48A8F0
 static void Check_Talk_Questions(void) {
 	int16_t slot_idx = 0;
 
@@ -202,8 +252,16 @@ static void Check_Talk_Questions(void) {
  * Count_Debrief_* — page count helpers
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x699EB
+// FUNCTION: TIE98 0x48AB10
 static int16_t Count_Debrief_Header(void) { return 1; }
 
+// FUNCTION: TIE95 0x6A024
+// FUNCTION: TIE98 0x48B040
+static int16_t Count_Debrief_Goals(void) { return 1; }
+
+// FUNCTION: TIE95 0x6A542
+// FUNCTION: TIE98 0x48B500
 static int16_t Count_Debrief_Kills(void) {
 	int16_t count = 0;
 	int16_t craft;
@@ -224,6 +282,8 @@ static int16_t Count_Debrief_Kills(void) {
 	return (max_paragraph_size + count - 3) / (max_paragraph_size - 2);
 }
 
+// FUNCTION: TIE95 0x6A92D
+// FUNCTION: TIE98 0x48B840
 static int16_t Count_Debrief_Losses(void) {
 	int16_t count = 0;
 	int16_t craft;
@@ -242,6 +302,8 @@ static int16_t Count_Debrief_Losses(void) {
 	return (max_paragraph_size + count - 3) / (max_paragraph_size - 2);
 }
 
+// FUNCTION: TIE95 0x6AC8E
+// FUNCTION: TIE98 0x48BAD0
 static int16_t Count_Debrief_Captures(void) {
 	int16_t count = 0;
 	int16_t craft;
@@ -253,8 +315,11 @@ static int16_t Count_Debrief_Captures(void) {
 	return (max_paragraph_size + count - 3) / (max_paragraph_size - 2);
 }
 
+// FUNCTION: TIE95 0x69816
+// FUNCTION: TIE98 0x48A9C0
 static int16_t Count_Debrief_Pages(void) {
-	int16_t total = 2; /* header + goals pages */
+	int16_t total = Count_Debrief_Header();
+	total += Count_Debrief_Goals();
 	total += Count_Debrief_Kills();
 	total += Count_Debrief_Losses();
 	total += Count_Debrief_Captures();
@@ -265,6 +330,8 @@ static int16_t Count_Debrief_Pages(void) {
  * Debrief entry renderers — Get_Debrief_Kills/Losses/Captures
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6A81A
+// FUNCTION: TIE98 0x48B730
 static void Get_Debrief_Kills(char* string, int16_t craft_idx) {
 	uint16_t count = 0;
 	char name[40];
@@ -293,6 +360,8 @@ static void Get_Debrief_Kills(char* string, int16_t craft_idx) {
 	}
 }
 
+// FUNCTION: TIE95 0x6ABD9
+// FUNCTION: TIE98 0x48BA30
 static void Get_Debrief_Losses(char* string, int16_t craft_idx) {
 	uint16_t count = 0;
 	char name[40];
@@ -313,6 +382,8 @@ static void Get_Debrief_Losses(char* string, int16_t craft_idx) {
 	}
 }
 
+// FUNCTION: TIE95 0x6AEBC
+// FUNCTION: TIE98 0x48BC40
 static void Get_Debrief_Captures(char* string, int16_t craft_idx) {
 	uint16_t count = mission.captures_by_type[craft_idx];
 	if (count) {
@@ -328,6 +399,8 @@ static void Get_Debrief_Captures(char* string, int16_t craft_idx) {
  * Debrief title renderers — Get_Debrief_Kill/Loss/Capture_Title
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6A6DB
+// FUNCTION: TIE98 0x48B620
 static void Get_Debrief_Kill_Title(char* string) {
 	uint16_t total_kills = 0, player_total = 0;
 	char fmt[40], buf[80];
@@ -344,12 +417,19 @@ static void Get_Debrief_Kill_Title(char* string) {
 		player_total += pstate.player_kills_per_species[craft];
 	}
 	textext_Copy_Text(fmt, txtTalkDestroyed);
-	replace_italic_codes(fmt);
+	for (craft = 0; fmt[craft]; craft++) {
+		if (fmt[craft] == '1')
+			fmt[craft] = 1;
+		if (fmt[craft] == '2')
+			fmt[craft] = 2;
+	}
 	snprintf(buf, sizeof(buf), fmt, total_kills, player_total);
 	strcpy(string, buf);
 	center_line = 1;
 }
 
+// FUNCTION: TIE95 0x6AAB9
+// FUNCTION: TIE98 0x48B950
 static void Get_Debrief_Loss_Title(char* string) {
 	uint16_t total = 0;
 	char fmt[40], buf[80];
@@ -365,12 +445,19 @@ static void Get_Debrief_Loss_Title(char* string) {
 		}
 	}
 	textext_Copy_Text(fmt, txtTalkLost);
-	replace_italic_codes(fmt);
+	for (craft = 0; fmt[craft]; craft++) {
+		if (fmt[craft] == '1')
+			fmt[craft] = 1;
+		if (fmt[craft] == '2')
+			fmt[craft] = 2;
+	}
 	snprintf(buf, sizeof(buf), fmt, total);
 	strcpy(string, buf);
 	center_line = 1;
 }
 
+// FUNCTION: TIE95 0x6ADD0
+// FUNCTION: TIE98 0x48BB90
 static void Get_Debrief_Capture_Title(char* string) {
 	uint16_t total = 0;
 	char fmt[40], buf[80];
@@ -381,7 +468,12 @@ static void Get_Debrief_Capture_Title(char* string) {
 		total += mission.captures_by_type[craft];
 
 	textext_Copy_Text(fmt, txtTalkCaptured);
-	replace_italic_codes(fmt);
+	for (craft = 0; fmt[craft]; craft++) {
+		if (fmt[craft] == '1')
+			fmt[craft] = 1;
+		if (fmt[craft] == '2')
+			fmt[craft] = 2;
+	}
 	snprintf(buf, sizeof(buf), fmt, total);
 	strcpy(string, buf);
 	center_line = 1;
@@ -391,6 +483,8 @@ static void Get_Debrief_Capture_Title(char* string) {
  * Debrief section Find_ renderers (paginated iteration)
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6A61B
+// FUNCTION: TIE98 0x48B590
 static void Find_Debrief_Kills(char* string, int16_t page, int16_t line) {
 	int16_t line_in_page = line % max_paragraph_size;
 
@@ -415,6 +509,8 @@ static void Find_Debrief_Kills(char* string, int16_t page, int16_t line) {
 	}
 }
 
+// FUNCTION: TIE95 0x6A9F9
+// FUNCTION: TIE98 0x48B8C0
 static void Find_Debrief_Losses(char* string, int16_t page, int16_t line) {
 	int16_t line_in_page = line % max_paragraph_size;
 
@@ -439,6 +535,8 @@ static void Find_Debrief_Losses(char* string, int16_t page, int16_t line) {
 	}
 }
 
+// FUNCTION: TIE95 0x6AD10
+// FUNCTION: TIE98 0x48BB00
 static void Find_Debrief_Captures(char* string, int16_t page, int16_t line) {
 	int16_t line_in_page = line % max_paragraph_size;
 
@@ -467,9 +565,12 @@ static void Find_Debrief_Captures(char* string, int16_t page, int16_t line) {
  * Find/Get_Debrief_Header — mission header info
  * ====================================================================== */
 
-static void render_header_line(char* string, int16_t line_idx) {
+// FUNCTION: TIE95 0x69A7C
+// FUNCTION: TIE98 0x48AB60
+static void Get_Debrief_Header(char* string, int16_t line_idx) {
 	char buf[80], fmt[40], rank_name[40];
 	int16_t cur_battle = pilot_record.cur_battle;
+	int16_t i;
 
 	switch (line_idx) {
 		case 0:
@@ -482,7 +583,12 @@ static void render_header_line(char* string, int16_t line_idx) {
 			int16_t mission_num;
 
 			textext_Copy_Text(fmt, txtTalkBattle);
-			replace_italic_codes(fmt);
+			for (i = 0; fmt[i]; i++) {
+				if (fmt[i] == '1')
+					fmt[i] = 1;
+				if (fmt[i] == '2')
+					fmt[i] = 2;
+			}
 
 			if (shipext_Is_Mission_Success())
 				mission_num = pilot_record.battle_cursor[cur_battle];
@@ -491,7 +597,12 @@ static void render_header_line(char* string, int16_t line_idx) {
 			snprintf(buf, sizeof(buf), fmt, cur_battle + 1, mission_num);
 			strcpy(string, buf);
 			textext_Copy_Text(fmt, txtTalkScore);
-			replace_italic_codes(fmt);
+			for (i = 0; fmt[i]; i++) {
+				if (fmt[i] == '1')
+					fmt[i] = 1;
+				if (fmt[i] == '2')
+					fmt[i] = 2;
+			}
 			snprintf(buf, sizeof(buf), fmt, mission.mission_score);
 			strcat(string, buf);
 			center_line = 1;
@@ -507,7 +618,12 @@ static void render_header_line(char* string, int16_t line_idx) {
 				textext_Copy_Text(buf, txtTalkSuccess);
 			else
 				textext_Copy_Text(buf, txtTalkFailure);
-			replace_italic_codes(buf);
+			for (i = 0; buf[i]; i++) {
+				if (buf[i] == '1')
+					buf[i] = 1;
+				if (buf[i] == '2')
+					buf[i] = 2;
+			}
 			strcpy(string, buf);
 			return;
 		case 4:
@@ -515,7 +631,12 @@ static void render_header_line(char* string, int16_t line_idx) {
 				return;
 			textext_Copy_Text(fmt, txtTalkRank);
 			textext_Copy_Text(rank_name, mission.mission_new_rank + 1);
-			replace_italic_codes(fmt);
+			for (i = 0; fmt[i]; i++) {
+				if (fmt[i] == '1')
+					fmt[i] = 1;
+				if (fmt[i] == '2')
+					fmt[i] = 2;
+			}
 			snprintf(buf, sizeof(buf), fmt, rank_name);
 			strcpy(string, buf);
 			return;
@@ -523,7 +644,12 @@ static void render_header_line(char* string, int16_t line_idx) {
 			if (!shipext_Get_TOD_Medal())
 				return;
 			textext_Copy_Text(buf, txtTalkMedal);
-			replace_italic_codes(buf);
+			for (i = 0; buf[i]; i++) {
+				if (buf[i] == '1')
+					buf[i] = 1;
+				if (buf[i] == '2')
+					buf[i] = 2;
+			}
 			strcpy(string, buf);
 			return;
 		case 7: {
@@ -557,12 +683,14 @@ static void render_header_line(char* string, int16_t line_idx) {
 	}
 }
 
-static void Find_Debrief_Header(char* string, int16_t line, int16_t max_size) {
+// FUNCTION: TIE95 0x69A16
+// FUNCTION: TIE98 0x48AB20
+static void Find_Debrief_Header(char* string, int16_t line) {
 	int16_t skip = line;
 	int16_t i;
 
 	for (i = 0; i < max_paragraph_size; i++) {
-		render_header_line(string, i);
+		Get_Debrief_Header(string, i);
 		if (*string) {
 			if (!skip)
 				return;
@@ -572,15 +700,16 @@ static void Find_Debrief_Header(char* string, int16_t line, int16_t max_size) {
 	}
 }
 
-static void Get_Debrief_Header(char* string, int16_t line) { render_header_line(string, line); }
-
 /* ======================================================================
  * Find/Get_Debrief_Goals — mission goal completion
  * ====================================================================== */
 
-static void render_goals_line(char* string, int16_t line_idx) {
+// FUNCTION: TIE95 0x6A0B5
+// FUNCTION: TIE98 0x48B090
+static void Get_Debrief_Goals(char* string, int16_t line_idx) {
 	char buf[80], fmt[40], count_str[40];
 	int16_t cur_battle = pilot_record.cur_battle;
+	int16_t i;
 
 	switch (line_idx) {
 		case 0:
@@ -592,7 +721,12 @@ static void render_goals_line(char* string, int16_t line_idx) {
 			int16_t mn;
 
 			textext_Copy_Text(fmt, txtTalkBattle);
-			replace_italic_codes(fmt);
+			for (i = 0; fmt[i]; i++) {
+				if (fmt[i] == '1')
+					fmt[i] = 1;
+				if (fmt[i] == '2')
+					fmt[i] = 2;
+			}
 
 			if (shipext_Is_Mission_Success())
 				mn = pilot_record.battle_cursor[cur_battle];
@@ -601,7 +735,12 @@ static void render_goals_line(char* string, int16_t line_idx) {
 			snprintf(buf, sizeof(buf), fmt, cur_battle + 1, mn);
 			strcpy(string, buf);
 			textext_Copy_Text(fmt, txtTalkScore);
-			replace_italic_codes(fmt);
+			for (i = 0; fmt[i]; i++) {
+				if (fmt[i] == '1')
+					fmt[i] = 1;
+				if (fmt[i] == '2')
+					fmt[i] = 2;
+			}
 			snprintf(buf, sizeof(buf), fmt, mission.mission_score);
 			strcat(string, buf);
 			break;
@@ -681,12 +820,14 @@ static void render_goals_line(char* string, int16_t line_idx) {
 	center_line = 1;
 }
 
-static void Find_Debrief_Goals(char* string, int16_t line, int16_t max_size) {
+// FUNCTION: TIE95 0x6A04F
+// FUNCTION: TIE98 0x48B050
+static void Find_Debrief_Goals(char* string, int16_t line) {
 	int16_t skip = line;
 	int16_t i;
 
 	for (i = 0; i < max_paragraph_size; i++) {
-		render_goals_line(string, i);
+		Get_Debrief_Goals(string, i);
 		if (*string) {
 			if (!skip)
 				return;
@@ -696,13 +837,13 @@ static void Find_Debrief_Goals(char* string, int16_t line, int16_t max_size) {
 	}
 }
 
-static void Get_Debrief_Goals(char* string, int16_t line) { render_goals_line(string, line); }
-
 /* ======================================================================
  * Get_Debrief_Line — dispatch a single debrief line to the right section
  * ====================================================================== */
 
-static void Get_Debrief_Line(char* string, int16_t line, int16_t max_size) {
+// FUNCTION: TIE95 0x69868
+// FUNCTION: TIE98 0x48A9F0
+static void Get_Debrief_Line(char* string, int16_t line) {
 	int16_t abs_line = line;
 	int16_t section_page = line / max_paragraph_size;
 
@@ -717,12 +858,12 @@ static void Get_Debrief_Line(char* string, int16_t line, int16_t max_size) {
 			case 0:
 				section_pages = Count_Debrief_Header();
 				if (section_page < section_pages)
-					Find_Debrief_Header(string, abs_line, max_size);
+					Find_Debrief_Header(string, abs_line);
 				break;
 			case 1:
-				section_pages = Count_Debrief_Header();
+				section_pages = Count_Debrief_Goals();
 				if (section_page < section_pages)
-					Find_Debrief_Goals(string, abs_line, max_size);
+					Find_Debrief_Goals(string, abs_line);
 				break;
 			case 2:
 				section_pages = Count_Debrief_Kills();
@@ -755,21 +896,22 @@ static void Get_Debrief_Line(char* string, int16_t line, int16_t max_size) {
  * user_Talk_Eyes — actor callback for face animation
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x68BC8
+// FUNCTION: TIE98 0x48A140
 static void user_Talk_Eyes(Actor* actor, int32_t time) {
-	int16_t mood = officer_mood_val[0];
-
 	if (actor->id == 0) {
 		/* Officer face: separate eye + mouth actors */
+		int16_t eye;
 		int16_t blink;
 		int16_t mouth_st;
 
 		if (!xactor_Is_Actor_Visible(actor))
 			return;
-		blink = officer_mood_blink[mood];
-		mouth_st = officer_mood_mouth[mood];
+		eye = officer_mood_eye[talk_Get_Officer_Mood()];
+		blink = officer_mood_blink[talk_Get_Officer_Mood()];
+		mouth_st = officer_mood_mouth[talk_Get_Officer_Mood()];
 
 		if (time && actor->var1 > 0) {
-			int16_t eye = officer_mood_eye[mood];
 			actor->var1--;
 			xactor_Set_Actor_State(actor, eye, 0);
 		} else {
@@ -787,8 +929,8 @@ static void user_Talk_Eyes(Actor* actor, int32_t time) {
 
 		if (!xactor_Is_Actor_Visible(actor))
 			return;
-		eye = priest_mood_eye[mood];
-		blink = priest_mood_blink[mood];
+		eye = priest_mood_eye[talk_Get_Officer_Mood()];
+		blink = priest_mood_blink[talk_Get_Officer_Mood()];
 
 		if (time && actor->var1 > 0) {
 			actor->var1--;
@@ -807,6 +949,8 @@ static void user_Talk_Eyes(Actor* actor, int32_t time) {
  * talk_Get_Talk_Question — extract question display text
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x69282
+// FUNCTION: TIE98 0x48A5F0
 void talk_Get_Talk_Question(char* out, int16_t id) {
 	if (id >= 0 && id < num_talk_questions) {
 		int16_t question_id = talk_win_id[id];
@@ -841,7 +985,8 @@ void talk_Get_Talk_Question(char* out, int16_t id) {
  * talk_Get_Talk_Paragraph — extract paragraph line text
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x69868
+// FUNCTION: TIE95 0x6943C
+// FUNCTION: TIE98 0x48A720
 void talk_Get_Talk_Paragraph(char* out, int16_t line) {
 	int16_t italic;
 	int16_t question_id;
@@ -849,9 +994,9 @@ void talk_Get_Talk_Paragraph(char* out, int16_t line) {
 	int16_t pos;
 	int16_t line_idx;
 
-	*out = '\0';
 	italic = 0;
-	officer_mood_val[0] = 0;
+	*out = '\0';
+	talk_Set_Officer_Mood(0);
 
 	if (cur_talk_question < 0 || cur_talk_question >= num_talk_questions)
 		return;
@@ -859,53 +1004,7 @@ void talk_Get_Talk_Paragraph(char* out, int16_t line) {
 	question_id = talk_win_id[cur_talk_question];
 	if (question_id == 5) {
 		/* Debrief mode: dispatch to section renderers */
-		int16_t rem_line;
-		int16_t section_page;
-		int16_t section;
-
-		*out = '\0';
-		center_line = 0;
-		rem_line = line;
-		section_page = line / max_paragraph_size;
-
-		for (section = 0; section < 5 && section_page >= 0; section++) {
-			int16_t section_pages;
-			switch (section) {
-				case 0:
-					section_pages = Count_Debrief_Header();
-					if (section_page < section_pages)
-						Find_Debrief_Header(out, rem_line, max_paragraph_size);
-					break;
-				case 1:
-					section_pages = Count_Debrief_Header();
-					if (section_page < section_pages)
-						Find_Debrief_Goals(out, rem_line, max_paragraph_size);
-					break;
-				case 2:
-					section_pages = Count_Debrief_Kills();
-					if (section_page < section_pages) {
-						talk_Set_Officer_Mood(1);
-						Find_Debrief_Kills(out, section_page, rem_line);
-					}
-					break;
-				case 3:
-					section_pages = Count_Debrief_Losses();
-					if (section_page < section_pages) {
-						talk_Set_Officer_Mood(3);
-						Find_Debrief_Losses(out, section_page, rem_line);
-					}
-					break;
-				case 4:
-					section_pages = Count_Debrief_Captures();
-					if (section_page < section_pages) {
-						talk_Set_Officer_Mood(1);
-						Find_Debrief_Captures(out, section_page, rem_line);
-					}
-					break;
-			}
-			rem_line -= section_pages * max_paragraph_size;
-			section_page -= section_pages;
-		}
+		Get_Debrief_Line(out, line);
 		return;
 	}
 
@@ -930,8 +1029,8 @@ void talk_Get_Talk_Paragraph(char* out, int16_t line) {
 			}
 			while (data[pos] && data[pos] != '\n') {
 				if (data[pos] == 3) {
+					talk_Set_Officer_Mood(data[pos + 1] - 1);
 					pos += 2;
-					officer_mood_val[0] = data[pos - 1] - 1;
 				} else {
 					out[out_len++] = data[pos++];
 				}
@@ -944,8 +1043,8 @@ void talk_Get_Talk_Paragraph(char* out, int16_t line) {
 				if (data[pos] == 1)
 					italic = 0;
 				if (data[pos] == 3) {
+					talk_Set_Officer_Mood(data[pos + 1] - 1);
 					pos += 2;
-					officer_mood_val[0] = data[pos - 1] - 1;
 				} else {
 					pos++;
 				}
@@ -962,6 +1061,8 @@ void talk_Get_Talk_Paragraph(char* out, int16_t line) {
  * talk_Set_Talk_Paragraph — recalculate paragraph count
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x690CE
+// FUNCTION: TIE98 0x48A4C0
 void talk_Set_Talk_Paragraph(void) {
 	int16_t question_id;
 	char* data;
@@ -1012,6 +1113,8 @@ void talk_Set_Talk_Paragraph(void) {
  * talk_Set_Talk_To_Text — reinitialize talk for text mode
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x68DC2
+// FUNCTION: TIE98 0x48A2B0
 void talk_Set_Talk_To_Text(void) {
 	int16_t i;
 	int16_t total_h, max_w;
@@ -1095,6 +1198,8 @@ void talk_Set_Talk_To_Text(void) {
  * iupdate/iuser/idraw callbacks
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x683F5
+// FUNCTION: TIE98 0x489A30
 static int16_t iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
 							int16_t x, int16_t y) {
 	uint8_t button;
@@ -1140,6 +1245,8 @@ static int16_t iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t key, ui
 	return 1;
 }
 
+// FUNCTION: TIE95 0x6855A
+// FUNCTION: TIE98 0x489B50
 static void iuser_Talk(Input* input, int32_t time) {
 	if (!time) {
 		shade_Build_Shaded_Palette();
@@ -1157,53 +1264,20 @@ static void iuser_Talk(Input* input, int32_t time) {
 				xerror_Set_Landru_Exit(SCENE_DEBRIEF);
 		} else {
 			cur_talk_question = active_talk_question;
-			if (active_talk_question < 0 || active_talk_question >= num_talk_questions) {
-				cur_talk_paragraph = -1;
-				num_talk_paragraphs = 0;
-			} else {
-				int16_t qid = talk_win_id[cur_talk_question];
-				if (qid == 5) {
-					num_talk_paragraphs = Count_Debrief_Pages();
-					cur_talk_paragraph = 0;
-				} else {
-					/* Count lines in talk data */
-					char* data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_mode + qid]);
-					int16_t pos = 0;
-					int16_t line_count;
-
-					while (data[pos] && data[pos] != '\n')
-						pos++;
-					pos++;
-					line_count = 0;
-					while (data[pos]) {
-						while (data[pos] && data[pos] != '\n')
-							pos++;
-						if (data[pos])
-							pos++;
-						line_count++;
-					}
-					xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_mode + qid]);
-					num_talk_paragraphs = (max_paragraph_size + line_count - 1) / max_paragraph_size;
-					cur_talk_paragraph = num_talk_paragraphs ? 0 : -1;
-				}
-
-				/* Voice-over: kick off the .voc for this question and
-				 * arm auto-advance. Retail TALK_iuser_Talk also
-				 * suppresses auto-advance when the clicked question
-				 * is the last debrief one (mood 'd' + last index) so
-				 * the player reads the closing paragraph manually. */
-				talk_voice_question = (int16_t)(cur_talk_question + 1);
-				talk_Start_Speech_Stream();
-				if (options_gbl.speech_active) {
-					int16_t last = (int16_t)(num_talk_questions - 1);
-					if (talk_voice_mood == 'd' && cur_talk_question == last)
-						talk_paragraph_timer = 0x7FFFFFFF;
-					else
-						talk_paragraph_timer = time + 264;
-				} else {
+			/* Voice-over: kick off the .voc for this question and arm
+			 * auto-advance, except for the closing debrief question
+			 * (mood 'd' + last index), which the player reads manually. */
+			talk_voice_question = (int16_t)(active_talk_question + 1);
+			talk_Start_Speech_Stream();
+			if (options_gbl.speech_active) {
+				if (talk_voice_mood == 'd' && cur_talk_question == num_talk_questions - 1)
 					talk_paragraph_timer = 0x7FFFFFFF;
-				}
+				else
+					talk_paragraph_timer = time + 264;
+			} else {
+				talk_paragraph_timer = 0x7FFFFFFF;
 			}
+			talk_Set_Talk_Paragraph();
 			xinpattr_Refresh_Input(input);
 			xinpattr_Refresh_Input(answer);
 		}
@@ -1218,6 +1292,8 @@ static void iuser_Talk(Input* input, int32_t time) {
 	}
 }
 
+// FUNCTION: TIE95 0x686D5
+// FUNCTION: TIE98 0x489CB0
 static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	Rect tr;
 	int16_t y_offset;
@@ -1237,37 +1313,13 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	y_offset = 0;
 	for (q = 0; q <= num_talk_questions; q++) {
 		int16_t color;
-		int16_t qid;
 
 		if (q == active_talk_question)
 			color = input->var1 ? 14 : 28;
 		else
 			color = (q == cur_talk_question) ? 9 : 24;
 
-		qid = talk_win_id[q];
-		if (qid == 6) {
-			strcpy(question_buf, textext_Get_Text(txtTalkExit));
-		} else if (qid == 5) {
-			strcpy(question_buf, textext_Get_Text(txtTalkDebrief));
-		} else {
-			/* Extract question title from talk data */
-			char* data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_mode + qid]);
-			if (data) {
-				int16_t len = 0;
-				int16_t i;
-
-				for (i = 0; data[i] && data[i] != '\n'; i++) {
-					if (data[i] == 4 || data[i] == 5)
-						i++;
-					else
-						question_buf[len++] = data[i];
-				}
-				question_buf[len] = '\0';
-			} else {
-				question_buf[0] = '\0';
-			}
-			xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_mode + qid]);
-		}
+		talk_Get_Talk_Question(question_buf, q);
 		xfont_Print_Clipped_Text(question_buf, tr.left + 3, y_offset + tr.top + 2, 0, color);
 		y_offset += 10;
 	}
@@ -1277,6 +1329,8 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		xdirty_Dirty_Rect(clip_r);
 }
 
+// FUNCTION: TIE95 0x687FB
+// FUNCTION: TIE98 0x489DB0
 static int16_t iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
 							  int16_t x, int16_t y) {
 	uint8_t button;
@@ -1367,68 +1421,6 @@ void talk_Free_Speech_Sound(void) {
 	talk_speech_streaming = 0;
 }
 
-/* Build the .voc filename for the current talk_voice_* state into
- * `out`. Returns 1 on success, 0 on overflow / unsupported species.
- * Mirrors retail TALK_Start_Speech_Stream's sprintf logic, including
- * three branches:
- *
- *   1. officer 'i' (info briefing) — no mood char in filename.
- *      Mission name ending in 'w' (wraith variants) decrements idx.
- *
- *   2. mission-1 retry special case — when species == "1", mission ==
- *      1, mood == 'h', primary_complete != 1, secondary_complete ==
- *      1, and idx is 1 or 2: use the hardcoded fallback paths.
- *
- *   3. default — full sp/mission/officer/mood/idx filename.
- *
- * Path separators are forward slashes — xfile_Open_File handles
- * cross-platform translation. */
-static int talk_Build_Voc_Path(char* out, size_t cap) {
-	char sp[8] = { 0 };
-
-	int n;
-
-	if (talk_voice_species >= 0) {
-		/* Numeric species (1m1, 2m1, ...) */
-		snprintf(sp, sizeof(sp), "%d", talk_voice_species);
-	} else {
-		/* Character-encoded species (1=f, 2=i, 3=b, 4=a, 5=g, 6=d, 7=m) */
-		static const char species_chars[] = { 0, 'f', 'i', 'b', 'a', 'g', 'd', 'm' };
-		int idx = -talk_voice_species;
-		if (idx < 1 || idx > 7) {
-			TieDiagnostics_Log(TIE_LOG_INFO, "talk_Build_Voc_Path: species %d out of range\n",
-							   talk_voice_species);
-			sp[0] = 'f';
-		} else {
-			sp[0] = species_chars[idx];
-		}
-	}
-
-	if (talk_voice_officer == 'i') {
-		/* Briefing-officer voiceover: no mood character. Retail
-		 * shaves one off the idx for missions whose name ends in
-		 * 'w' — those use a separate (one-shorter) voice list. */
-		const char* mission_name = shipext_Get_Mission_Name();
-		size_t mn_len = mission_name ? strlen(mission_name) : 0;
-		int16_t idx = talk_voice_question;
-		if (mn_len > 0 && mission_name[mn_len - 1] == 'w')
-			idx = (int16_t)(idx - 1);
-		n = snprintf(out, cap, "voice/%sm%d/%sm%d%c%d.voc", sp, talk_voice_mission, sp, talk_voice_mission,
-					 talk_voice_officer, idx);
-	} else if (strcmp(sp, "1") == 0 && talk_voice_mission == 1 && talk_voice_mood == 'h' &&
-			   mission.primary_complete != 1 && mission.secondary_complete == 1 &&
-			   (talk_voice_question == 1 || talk_voice_question == 2)) {
-		/* mission-1 secondary-only retry: retail picks fixed files
-		 * for the first two questions. */
-		const char* fixed = (talk_voice_question == 1) ? "voice/1m1/1m1od2.voc" : "voice/1m1/1m1oh1.voc";
-		n = snprintf(out, cap, "%s", fixed);
-	} else {
-		n = snprintf(out, cap, "voice/%sm%d/%sm%d%c%c%d.voc", sp, talk_voice_mission, sp, talk_voice_mission,
-					 talk_voice_officer, talk_voice_mood, talk_voice_question);
-	}
-	return (n > 0 && (size_t)n < cap);
-}
-
 /* Stop any running speech, build the next .voc filename, load the
  * file into the staging buffer, and start playback. Mirrors retail
  * TALK_Start_Speech_Stream (sub_6AFF9). Reads the file directly with
@@ -1448,14 +1440,87 @@ void talk_Start_Speech_Stream(void) {
 	uint32_t source_rate_hz;
 	TieVocCompatResult voc_compat;
 
+	char sp[8] = { 0 };
 	char path[64];
+	int n;
 
 	if (!talk_speech_sound || !talk_speech_sound->data)
 		return;
 	if (!options_gbl.speech_active)
 		return;
 
-	if (!talk_Build_Voc_Path(path, sizeof(path)))
+	/* Build the .voc filename for the current talk_voice_* state. Retail
+	 * has three branches:
+	 *
+	 *   1. officer 'i' (info briefing) -- no mood char in filename.
+	 *      Mission name ending in 'w' (wraith variants) decrements idx.
+	 *
+	 *   2. mission-1 retry special case -- when species == "1", mission ==
+	 *      1, mood == 'h', primary_complete != 1, secondary_complete ==
+	 *      1, and idx is 1 or 2: use the hardcoded fallback paths.
+	 *
+	 *   3. default -- full sp/mission/officer/mood/idx filename.
+	 *
+	 * Path separators are forward slashes -- xfile_Open_File handles
+	 * cross-platform translation. */
+	if (talk_voice_species >= 0) {
+		/* Numeric species (1m1, 2m1, ...) */
+		snprintf(sp, sizeof(sp), "%d", talk_voice_species);
+	} else {
+		/* Character-encoded species (1=f, 2=i, 3=b, 4=a, 5=g, 6=d, 7=m) */
+		switch (-talk_voice_species) {
+			case 1:
+				sp[0] = 'f';
+				break;
+			case 2:
+				sp[0] = 'i';
+				break;
+			case 3:
+				sp[0] = 'b';
+				break;
+			case 4:
+				sp[0] = 'a';
+				break;
+			case 5:
+				sp[0] = 'g';
+				break;
+			case 6:
+				sp[0] = 'd';
+				break;
+			case 7:
+				sp[0] = 'm';
+				break;
+			default:
+				TieDiagnostics_Log(TIE_LOG_INFO, "talk_Start_Speech_Stream: species %d out of range\n",
+								   talk_voice_species);
+				sp[0] = 'f';
+				break;
+		}
+	}
+
+	if (talk_voice_officer == 'i') {
+		/* Briefing-officer voiceover: no mood character. Retail
+		 * shaves one off the idx for missions whose name ends in
+		 * 'w' -- those use a separate (one-shorter) voice list. */
+		const char* mission_name = shipext_Get_Mission_Name();
+		size_t mn_len = mission_name ? strlen(mission_name) : 0;
+		int16_t idx = talk_voice_question;
+		if (mn_len > 0 && mission_name[mn_len - 1] == 'w')
+			idx = (int16_t)(idx - 1);
+		n = snprintf(path, sizeof(path), "voice/%sm%d/%sm%d%c%d.voc", sp, talk_voice_mission, sp,
+					 talk_voice_mission, talk_voice_officer, idx);
+	} else if (strcmp(sp, "1") == 0 && talk_voice_mission == 1 && talk_voice_mood == 'h' &&
+			   mission.primary_complete != 1 && mission.secondary_complete == 1 &&
+			   (talk_voice_question == 1 || talk_voice_question == 2)) {
+		/* mission-1 secondary-only retry: retail picks fixed files
+		 * for the first two questions. */
+		const char* fixed = (talk_voice_question == 1) ? "voice/1m1/1m1od2.voc" : "voice/1m1/1m1oh1.voc";
+		n = snprintf(path, sizeof(path), "%s", fixed);
+	} else {
+		n = snprintf(path, sizeof(path), "voice/%sm%d/%sm%d%c%c%d.voc", sp, talk_voice_mission, sp,
+					 talk_voice_mission, talk_voice_officer, talk_voice_mood, talk_voice_question);
+	}
+	if (n <= 0 || (size_t)n >= sizeof(path))
 		return;
 
 	/* Stop any currently playing speech. */
@@ -1499,9 +1564,9 @@ void talk_Start_Speech_Stream(void) {
 
 	xsound_Start_Speech(talk_speech_sound);
 	if (voc_compat == TIE_VOC_COMPAT_CONVERTED)
-		(void)imuse_set_param(im, (intptr_t)talk_speech_sound, IMUSE_PARAM_SOUND_FREQUENCY,
+		(void)imuse_set_param(im, TieImuse_SoundId(talk_speech_sound), IMUSE_PARAM_SOUND_FREQUENCY,
 							  (int)source_rate_hz);
-	imuse_set_param(im, (intptr_t)talk_speech_sound, 0x500, 100);
+	imuse_set_param(im, TieImuse_SoundId(talk_speech_sound), 0x500, 100);
 }
 
 /* Initialize species/mission for a talk briefing/debrief. Mirrors
@@ -1510,6 +1575,7 @@ void talk_Start_Speech_Stream(void) {
  * mood char is forced to 'h' (hostile/failed) when the relevant
  * objective is incomplete. */
 // FUNCTION: TIE95 0x6AF31
+// FUNCTION: TIE98 0x48BCC0
 void talk_Set_Voice_Species_Mission(void) {
 	uint8_t cur = pilot_record.cur_battle;
 	talk_voice_species = (int16_t)(cur + 1);
@@ -1531,6 +1597,8 @@ void talk_Set_Voice_Species_Mission(void) {
 	}
 }
 
+// FUNCTION: TIE95 0x688E2
+// FUNCTION: TIE98 0x489E50
 static void iuser_Answer(Input* input, int32_t time) {
 	/* Auto-advance: when armed (talk_paragraph_timer < INT32_MAX) the
 	 * paragraph advances each time the current time exceeds the
@@ -1568,6 +1636,8 @@ static void iuser_Answer(Input* input, int32_t time) {
 	}
 }
 
+// FUNCTION: TIE95 0x689DF
+// FUNCTION: TIE98 0x489F30
 static void idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	Rect dst;
 	int16_t first_line;
@@ -1580,54 +1650,41 @@ static void idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 
 	if (!refresh)
 		return;
-	if (cur_talk_paragraph == -1)
-		goto dirty_check;
+	if (cur_talk_paragraph != -1) {
+		xrect_Copy_Rect(&dst, r);
+		first_line = max_paragraph_size * cur_talk_paragraph;
+		text_color = input->var1 ? 1 : 9;
 
-	xrect_Copy_Rect(&dst, r);
-	first_line = max_paragraph_size * cur_talk_paragraph;
-	text_color = input->var1 ? 1 : 9;
+		xfont_Enable_FontID_Shadow(0);
 
-	xfont_Enable_FontID_Shadow(0);
+		y_off = 0;
+		for (cur_line = first_line; cur_line < first_line + max_paragraph_size; cur_line++) {
+			int16_t line_y;
 
-	y_off = 0;
-	for (cur_line = first_line; cur_line < first_line + max_paragraph_size; cur_line++) {
-		int16_t line_y;
+			center_line = 0;
+			talk_Get_Talk_Paragraph(line_buf, cur_line);
 
-		line_buf[0] = '\0';
-		center_line = 0;
-		talk_Set_Officer_Mood(0);
-
-		if (cur_talk_question >= 0 && cur_talk_question < num_talk_questions) {
-			int16_t qid = talk_win_id[cur_talk_question];
-			if (qid == 5) {
-				Get_Debrief_Line(line_buf, cur_line, 0);
+			line_y = y_off + dst.top;
+			if (center_line) {
+				Rect line_rect;
+				xrect_Set_Rect(&line_rect, dst.left, line_y, dst.right, line_y + 10);
+				xfont_Print_Centered_Text(line_buf, &line_rect, text_color, 0);
 			} else {
-				talk_Get_Talk_Paragraph(line_buf, cur_line);
+				xfont_Print_Clipped_Text(line_buf, dst.left, line_y, 0, text_color);
 			}
+			y_off += 10;
 		}
 
-		line_y = y_off + dst.top;
-		if (center_line) {
-			Rect line_rect;
-			xrect_Set_Rect(&line_rect, dst.left, line_y, dst.right, line_y + 10);
-			xfont_Print_Centered_Text(line_buf, &line_rect, text_color, 0);
-		} else {
-			xfont_Print_Clipped_Text(line_buf, dst.left, line_y, 0, text_color);
-		}
-		y_off += 10;
+		/* Page indicator */
+		textext_Copy_Text(line_buf, txtTalkOf);
+		snprintf(page_buf, sizeof(page_buf), line_buf, cur_talk_paragraph + 1, num_talk_paragraphs);
+		textext_Copy_Text(line_buf, txtMapPage);
+		strcat(line_buf, " ");
+		strcat(line_buf, page_buf);
+		xfont_Print_Clipped_Text(line_buf, dst.right - 84, y_off + dst.top, 0, text_color);
+		xfont_Disable_FontID_Shadow(0);
 	}
 
-	/* Page indicator */
-
-	textext_Copy_Text(line_buf, txtTalkOf);
-	snprintf(page_buf, sizeof(page_buf), line_buf, cur_talk_paragraph + 1, num_talk_paragraphs);
-	textext_Copy_Text(line_buf, txtMapPage);
-	strcat(line_buf, " ");
-	strcat(line_buf, page_buf);
-	xfont_Print_Clipped_Text(line_buf, dst.right - 84, y_off + dst.top, 0, text_color);
-	xfont_Disable_FontID_Shadow(0);
-
-dirty_check:
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip_r);
 }
@@ -1636,6 +1693,8 @@ dirty_check:
  * end_View — view update callback
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x683BD
+// FUNCTION: TIE98 0x489A10
 static void end_View(int32_t refresh) {
 	if (refresh)
 		return;
@@ -1654,13 +1713,8 @@ int16_t talk_Talk(SceneHeadStruct* scene_head) {
 	ResFile* resource;
 	Rect frame;
 	int16_t talk_type = 0;
-	int16_t i;
-
 	int16_t scene;
 	Actor* delt;
-	int16_t total_h, max_w;
-	char question_buf[80];
-	Rect r;
 
 	resource = shellext_Open_Empire_Resource(talk_str[0]);
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
@@ -1770,74 +1824,8 @@ int16_t talk_Talk(SceneHeadStruct* scene_head) {
 	talk_brief = player_Init_Brief_For_Talk();
 	talk_fgroup = player_Fetch_FGroup();
 
-	num_talk_questions = 0;
-	num_talk_paragraphs = 0;
-	active_talk_question = -1;
-	cur_talk_question = -1;
-	cur_talk_paragraph = -1;
-
-	Check_Talk_Questions();
-
-	/* Build filtered question list */
-	for (i = 0; i < 5; i++) {
-		int16_t show = 0;
-		switch (talk_win_status[i]) {
-			case 1:
-				show = 1;
-				break;
-			case 2:
-				show = (mission.primary_complete == 1);
-				break;
-			case 3:
-				show = (mission.secondary_complete == 1);
-				break;
-			case 4:
-				show = (mission.primary_complete != 1);
-				break;
-			case 5:
-				show = (mission.secondary_complete != 1);
-				break;
-		}
-		if (show)
-			talk_win_id[num_talk_questions++] = i;
-	}
-
-	/* For debrief scenes, add debrief question */
-	if (shellext_Get_Cur_Scene() == SCENE_TALK_DEBRIEF_OFFICER ||
-		shellext_Get_Cur_Scene() == SCENE_TALK_DEBRIEF_PRIEST) {
-		if (num_talk_questions == 5)
-			talk_win_id[4] = 5;
-		else
-			talk_win_id[num_talk_questions++] = 5;
-		cur_talk_question = num_talk_questions - 1;
-		active_talk_question = num_talk_questions - 1;
-		num_talk_paragraphs = Count_Debrief_Pages();
-		cur_talk_paragraph = 0;
-	}
-
-	/* Add exit entry and size the talk widget */
-	talk_win_id[num_talk_questions] = 6;
-
-	total_h = 0;
-	max_w = 0;
-
-	for (i = 0; i <= num_talk_questions; i++) {
-		int16_t saved_font;
-		int16_t w;
-
-		talk_Get_Talk_Question(question_buf, i);
-		saved_font = xfont_Get_Font();
-		xfont_Set_Font(0);
-		w = xfont_Get_String_Width(question_buf);
-		xfont_Set_Font(saved_font);
-		if (max_w < w)
-			max_w = w;
-		total_h += 10;
-	}
-
-	xrect_Set_Rect(&r, 318 - (max_w + 6), 198 - (total_h + 3), 318, 198);
-	xinpattr_Set_Input_Frame(talk_input, &r);
-	officer_mood_val[0] = 0;
+	talk_Set_Talk_To_Text();
+	officer_mood = 0;
 
 	/* Position mouse */
 	scene = shellext_Get_Cur_Scene();

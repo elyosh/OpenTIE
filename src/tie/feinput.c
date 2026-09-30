@@ -199,6 +199,7 @@ void feinput_clearinput(void) {
 	}
 }
 
+// FUNCTION: TIE95 0x22F7C
 void feinput_waitpress(void) {
 	/* Wait for any input (key, joystick button, or mouse button) */
 	do {
@@ -209,13 +210,6 @@ void feinput_waitpress(void) {
 	} while (!mousebuttons);
 
 	/* Wait for release */
-	if ((joybuttons & 0xF) || mousebuttons) {
-		while ((joybuttons & 0xF) || mousebuttons)
-			feinput_getinput();
-	}
-}
-
-void feinput_waitrelease(void) {
 	if ((joybuttons & 0xF) || mousebuttons) {
 		while ((joybuttons & 0xF) || mousebuttons)
 			feinput_getinput();

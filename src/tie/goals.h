@@ -4,12 +4,11 @@
 /*
  * GOALS -- mission-objectives screen and goal-text formatter.
  *
- * Five functions ported 1:1 from the Watcom binary (goals.c):
+ * Four functions ported 1:1 from the Watcom binary (goals.c):
  *   goals_missiongoalsroom  -- the scrollable goals display room
  *   goals_outputgoal        -- format one goal line with word-wrap
  *   goals_outputspeciesname -- species name + trailing separator
  *   goals_checkidflag       -- 'specific craft ID' flag accessor (orphan in demo)
- *   goals_checkwrap         -- right-margin word-wrap helper (orphan in demo)
  *
  * Data flow: the mission objectives are cached in the global cut[] array as
  * four EMissionGoal records (cut[0]=primary, [1]=secondary, [2]=bonus; see
@@ -41,11 +40,6 @@ uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag);
  * flag that drives craft-number vs '?' in outputgoal. Orphan (inlined) in
  * the demo build; body preserved for source-level callers. */
 uint8_t goals_checkidflag(uint16_t fg_index);
-
-/* Right-margin wrap test for string `s`. Emits newline + resets cursor to
- * x=6 when needed, returning fontheight; otherwise returns 0. Orphan
- * (inlined) in the demo build. */
-uint8_t goals_checkwrap(const uint8_t* s);
 
 /* --- Module-owned globals (watdbg: goals.c) --------------------------- */
 

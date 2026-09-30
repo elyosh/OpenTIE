@@ -62,6 +62,7 @@
  * matches the retail binary's Z_TIE__.EXE data section at 0xC7344 /
  * 0xC7454 — replay clip files are only compatible across builds that
  * preserve this order. */
+// GLOBAL: TIE95 0xC7344
 void* savearrayptrs[68] = {
 	objects,       /* [ 0] FlightObject[NUM_OBJECTS]    */
 	staticobjects, /* [ 1] StaticObject[...]            */
@@ -137,6 +138,7 @@ void* savearrayptrs[68] = {
 	NULL                     /* [67] terminator                   */
 };
 
+// GLOBAL: TIE95 0xC7454
 uint32_t savearraysizes[68] = {
 	sizeof(objects),       /* [ 0] */
 	sizeof(staticobjects), /* [ 1] */
@@ -211,15 +213,12 @@ uint32_t savearraysizes[68] = {
 	sizeof(gatetimer),              /* [66] = 6 */
 	0                               /* [67] terminator */
 };
-uint8_t replayviewptr[16];
 
-/* Panel section pointers filled in by panel_loadcontrolpanel. In retail
- * the CAMERA / FILM panels still only have 3 sections (image, mask,
- * palette), so three slots suffice. */
-static void* section_ptrs[3];
-
-/* Disk filename for the replay input-buffer checkpoint. */
-static const char kBufferTempFile[] = "rpybuff.tmp";
+/* CAMERA / FILM panel sections (image, mask, palette) filled in by
+ * panel_loadcontrolpanel for the replay viewer. */
+// GLOBAL: TIE95 0xD5E68
+// GLOBAL: TIE98 0x5FBC30
+PanelViewPtrs replayviewptr;
 
 enum {
 	REPLAY_BUFFER_TEMP_HEADER_SIZE = 8,
@@ -239,55 +238,11 @@ enum {
  *   0x198  camera block
  * -------------------------------------------------------------------------- */
 
-static int write_raw_block(const void* src, size_t bytes, TieFile* fp) {
-	const uint8_t* p = (const uint8_t*)src;
-	size_t i;
-
-	for (i = 0; i < bytes; ++i) {
-		if (TieStorage_Putc(p[i], fp) == TIE_EOF)
-			return 0;
-	}
-	return 1;
-}
-
-static int read_raw_block(void* dst, size_t bytes, TieFile* fp) {
-	uint8_t* p = (uint8_t*)dst;
-	size_t i;
-
-	for (i = 0; i < bytes; ++i) {
-		int c = TieStorage_Getc(fp);
-		if (c == TIE_EOF)
-			return 0;
-		p[i] = (uint8_t)c;
-	}
-	return 1;
-}
-
-/* PORT: retail checkpoints contain absolute addresses into fixed-image
- * globals. Rebuild those aliases after PIE/ASLR relocation. */
-static void replayio_port_rebind_checkpoint_pointers(void) {
-	size_t i;
-
-	for (i = 0; i < NUM_OBJECTS; ++i) {
-		FlightObject* object = &objects[i];
-		if (!object->ship_idx) {
-			object->craft_ptr = NULL;
-		} else if (i < NUM_CRAFTS) {
-			object->craft_ptr = &crafts[i];
-		} else if (i < WARHEAD_SLOT_END) {
-			object->craft_ptr = (CraftData*)&warheads[i - NUM_CRAFTS];
-		} else {
-			object->craft_ptr = NULL;
-		}
-	}
-
-	pstate.player = &objects[pstate.object_idx];
-	pstate.player_craft = pstate.player->craft_ptr;
-}
-
 // FUNCTION: TIE95 0x478A0
 int16_t replayio_copytosave(const char* fname) {
 	size_t i;
+	int ok;
+	const uint8_t* src;
 #ifdef TIE_MODERN
 	uint8_t fg_save_buf[48 * EFGSTRUCT_DISK_SIZE];
 #endif
@@ -313,43 +268,53 @@ int16_t replayio_copytosave(const char* fname) {
 	/* The save format expects fg_array as the on-disk 48 x 292-byte
 	 * little-endian image; native builds encode the word fields through
 	 * a buffer for host-endian independence. */
-
+	ok = 1;
 #ifdef TIE_MODERN
 	for (i = 0; i < 48; ++i)
 		EFGStruct_encode(fg_save_buf + i * EFGSTRUCT_DISK_SIZE, &fg_array[i]);
-	if (!write_raw_block(fg_save_buf, sizeof fg_save_buf, fileptr))
+	src = fg_save_buf;
 #else
-	if (!write_raw_block(fg_array, 48 * EFGSTRUCT_DISK_SIZE, fileptr))
+	src = (const uint8_t*)fg_array;
 #endif
-		goto fail;
-	if (!write_raw_block(radiomsg, 0x5A0, fileptr))
-		goto fail;
-	if (!write_raw_block(cut, 0x70, fileptr))
-		goto fail;
-	if (!write_raw_block(fgstatus, 0x900, fileptr))
-		goto fail;
-
-	for (i = 0; i < NUM_SPECIES; ++i) {
-		if (TieStorage_Putc(species_table[i].load_flags, fileptr) == TIE_EOF)
-			goto fail;
+	for (i = 0; ok && i < 48 * EFGSTRUCT_DISK_SIZE; ++i) {
+		if (TieStorage_Putc(src[i], fileptr) == TIE_EOF)
+			ok = 0;
 	}
-
-	if (fediskio_writefileblock(&camera, sizeof(camera), 1, fileptr) != 1 ||
-		!TieFlightCheckpoint_Write(fileptr))
-		goto fail;
+	src = (const uint8_t*)radiomsg;
+	for (i = 0; ok && i < 0x5A0; ++i) {
+		if (TieStorage_Putc(src[i], fileptr) == TIE_EOF)
+			ok = 0;
+	}
+	src = (const uint8_t*)cut;
+	for (i = 0; ok && i < 0x70; ++i) {
+		if (TieStorage_Putc(src[i], fileptr) == TIE_EOF)
+			ok = 0;
+	}
+	src = (const uint8_t*)fgstatus;
+	for (i = 0; ok && i < 0x900; ++i) {
+		if (TieStorage_Putc(src[i], fileptr) == TIE_EOF)
+			ok = 0;
+	}
+	for (i = 0; ok && i < NUM_SPECIES; ++i) {
+		if (TieStorage_Putc(species_table[i].load_flags, fileptr) == TIE_EOF)
+			ok = 0;
+	}
+	if (ok && (fediskio_writefileblock(&camera, sizeof(camera), 1, fileptr) != 1 ||
+			   !TieFlightCheckpoint_Write(fileptr)))
+		ok = 0;
 
 	TieStorage_Close(fileptr);
+	if (!ok)
+		return 0;
 	msg_clearmessagequeue();
 	return 1;
-
-fail:
-	TieStorage_Close(fileptr);
-	return 0;
 }
 
 // FUNCTION: TIE95 0x47A08
 int16_t replayio_copyfromsave(const char* fname) {
 	size_t i;
+	int ok;
+	uint8_t* dst;
 #ifdef TIE_MODERN
 	uint8_t fg_load_buf[48 * EFGSTRUCT_DISK_SIZE];
 #endif
@@ -375,28 +340,48 @@ int16_t replayio_copyfromsave(const char* fname) {
 	/* Read 48 x 292-byte fg records as a contiguous on-disk image,
 	 * then decode each into the runtime fg_array (whose element width
 	 * may differ from the disk size due to natural alignment). */
-
+	ok = 1;
 #ifdef TIE_MODERN
-	if (!read_raw_block(fg_load_buf, sizeof fg_load_buf, fileptr)) {
+	dst = fg_load_buf;
 #else
-	if (!read_raw_block(fg_array, 48 * EFGSTRUCT_DISK_SIZE, fileptr)) {
+	dst = (uint8_t*)fg_array;
 #endif
-		TieStorage_Close(fileptr);
-		return 0;
+	for (i = 0; ok && i < 48 * EFGSTRUCT_DISK_SIZE; ++i) {
+		int c = TieStorage_Getc(fileptr);
+		if (c == TIE_EOF)
+			ok = 0;
+		else
+			dst[i] = (uint8_t)c;
 	}
 #ifdef TIE_MODERN
-	for (i = 0; i < 48; ++i)
+	for (i = 0; ok && i < 48; ++i)
 		EFGStruct_decode(&fg_array[i], fg_load_buf + i * EFGSTRUCT_DISK_SIZE);
 #endif
-	if (!read_raw_block(radiomsg, 0x5A0, fileptr)) {
-		TieStorage_Close(fileptr);
-		return 0;
+	dst = (uint8_t*)radiomsg;
+	for (i = 0; ok && i < 0x5A0; ++i) {
+		int c = TieStorage_Getc(fileptr);
+		if (c == TIE_EOF)
+			ok = 0;
+		else
+			dst[i] = (uint8_t)c;
 	}
-	if (!read_raw_block(cut, 0x70, fileptr)) {
-		TieStorage_Close(fileptr);
-		return 0;
+	dst = (uint8_t*)cut;
+	for (i = 0; ok && i < 0x70; ++i) {
+		int c = TieStorage_Getc(fileptr);
+		if (c == TIE_EOF)
+			ok = 0;
+		else
+			dst[i] = (uint8_t)c;
 	}
-	if (!read_raw_block(fgstatus, 0x900, fileptr)) {
+	dst = (uint8_t*)fgstatus;
+	for (i = 0; ok && i < 0x900; ++i) {
+		int c = TieStorage_Getc(fileptr);
+		if (c == TIE_EOF)
+			ok = 0;
+		else
+			dst[i] = (uint8_t)c;
+	}
+	if (!ok) {
 		TieStorage_Close(fileptr);
 		return 0;
 	}
@@ -415,9 +400,11 @@ int16_t replayio_copyfromsave(const char* fname) {
 		TieStorage_Close(fileptr);
 		return 0;
 	}
+#ifdef TIE_MODERN
 	TieInput_ResetThrottle();
 	inputthrottle = UINT32_MAX;
-	replayio_port_rebind_checkpoint_pointers();
+	TieFlightCheckpoint_RebindPointers();
+#endif
 	msg_clearmessagequeue();
 	TieStorage_Close(fileptr);
 	return 1;
@@ -494,7 +481,7 @@ int16_t replayio_savereplaybuffer(void) {
 
 	if (replaybuffercnt > REPLAY_INPUT_CHUNK_FRAMES)
 		return 0;
-	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, kBufferTempFile, "wb", 0))
+	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, "rpybuff.tmp", "wb", 0))
 		return 0;
 	header[4] = REPLAY_BUFFER_TEMP_VERSION;
 	header[6] = (uint8_t)replaybuffercnt;
@@ -514,7 +501,7 @@ int replayio_restorereplaybuffer(void) {
 	uint16_t frame_count;
 	size_t valid_bytes;
 
-	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, kBufferTempFile, "rb", 1))
+	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, "rpybuff.tmp", "rb", 1))
 		return 0;
 
 	if (TieStorage_Read(header, 1, sizeof header, fileptr) != sizeof header ||
@@ -684,20 +671,20 @@ void replayio_replayscreen(void) {
 						}
 						fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
 						temppanelptr = newbuf;
-						panel_loadcontrolpanel((char*)"CAMERA", section_ptrs, 3);
+						panel_loadcontrolpanel((char*)"CAMERA", &replayviewptr.image, 3);
 
-						buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+						buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
 						if (tie98_logic) {
 							festring_setbackcolor(deepspacecolor);
 							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 							clearwindow();
 						}
-						drawshape(section_ptrs[0], 0, 0, 253, 0);
+						drawshape(replayviewptr.image, 0, 0, 253, 0);
 
 						dc = rtsvga2_calcpositionVGA(0, 17);
 						logbuf2_setbufferdimensions(320, 135, dc);
 
-						panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+						panel_copymaskdata((char*)replayviewptr.mask, pixelswide, pixelsdeep, 0);
 						transfm2_screenyoffset = 0;
 					}
 				} else {
@@ -727,20 +714,20 @@ void replayio_replayscreen(void) {
 						}
 						fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
 						temppanelptr = newbuf;
-						panel_loadcontrolpanel((char*)"CAMERA", section_ptrs, 3);
+						panel_loadcontrolpanel((char*)"CAMERA", &replayviewptr.image, 3);
 
-						buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+						buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
 						if (tie98_logic) {
 							festring_setbackcolor(deepspacecolor);
 							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 							clearwindow();
 						}
-						drawshape(section_ptrs[0], 0, 0, 253, 0);
+						drawshape(replayviewptr.image, 0, 0, 253, 0);
 
 						dc = rtsvga2_calcpositionVGA(0, 40);
 						logbuf2_setbufferdimensions(640, 325, dc);
 
-						panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+						panel_copymaskdata((char*)replayviewptr.mask, pixelswide, pixelsdeep, 0);
 						transfm2_screenyoffset = 0;
 					}
 				}
@@ -785,20 +772,20 @@ void replayio_replayscreen(void) {
 						}
 						fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
 						temppanelptr = newbuf;
-						panel_loadcontrolpanel((char*)"FILM", section_ptrs, 3);
+						panel_loadcontrolpanel((char*)"FILM", &replayviewptr.image, 3);
 
-						buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+						buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
 						if (tie98_logic) {
 							festring_setbackcolor(deepspacecolor);
 							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 							clearwindow();
 						}
-						drawshape(section_ptrs[0], 0, 0, 253, 0);
+						drawshape(replayviewptr.image, 0, 0, 253, 0);
 
 						dc = rtsvga2_calcpositionVGA(28, 16);
 						logbuf2_setbufferdimensions(584, 298, dc);
 
-						panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+						panel_copymaskdata((char*)replayviewptr.mask, pixelswide, pixelsdeep, 0);
 						transfm2_screenyoffset = 0;
 					} else {
 						uint32_t dc;
@@ -826,20 +813,20 @@ void replayio_replayscreen(void) {
 						}
 						fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
 						temppanelptr = newbuf;
-						panel_loadcontrolpanel((char*)"FILM", section_ptrs, 3);
+						panel_loadcontrolpanel((char*)"FILM", &replayviewptr.image, 3);
 
-						buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+						buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
 						if (tie98_logic) {
 							festring_setbackcolor(deepspacecolor);
 							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 							clearwindow();
 						}
-						drawshape(section_ptrs[0], 0, 0, 253, 0);
+						drawshape(replayviewptr.image, 0, 0, 253, 0);
 
 						dc = rtsvga2_calcpositionVGA(0, 8);
 						logbuf2_setbufferdimensions(320, 123, dc);
 
-						panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+						panel_copymaskdata((char*)replayviewptr.mask, pixelswide, pixelsdeep, 0);
 						transfm2_screenyoffset = 0;
 					}
 				}
@@ -999,20 +986,20 @@ void replayio_replayscreen(void) {
 				}
 				fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
 				temppanelptr = newbuf;
-				panel_loadcontrolpanel((char*)"FILM", section_ptrs, 3);
+				panel_loadcontrolpanel((char*)"FILM", &replayviewptr.image, 3);
 
-				buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+				buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
 				if (tie98_logic) {
 					festring_setbackcolor(deepspacecolor);
 					festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 					clearwindow();
 				}
-				drawshape(section_ptrs[0], 0, 0, 253, 0);
+				drawshape(replayviewptr.image, 0, 0, 253, 0);
 
 				dc = rtsvga2_calcpositionVGA(28, 16);
 				logbuf2_setbufferdimensions(584, 298, dc);
 
-				panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+				panel_copymaskdata((char*)replayviewptr.mask, pixelswide, pixelsdeep, 0);
 				transfm2_screenyoffset = 0;
 			} else {
 				uint32_t dc;
@@ -1040,20 +1027,20 @@ void replayio_replayscreen(void) {
 				}
 				fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
 				temppanelptr = newbuf;
-				panel_loadcontrolpanel((char*)"FILM", section_ptrs, 3);
+				panel_loadcontrolpanel((char*)"FILM", &replayviewptr.image, 3);
 
-				buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+				buildpalette((uint8_t*)replayviewptr.palette, 0, 64);
 				if (tie98_logic) {
 					festring_setbackcolor(deepspacecolor);
 					festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 					clearwindow();
 				}
-				drawshape(section_ptrs[0], 0, 0, 253, 0);
+				drawshape(replayviewptr.image, 0, 0, 253, 0);
 
 				dc = rtsvga2_calcpositionVGA(0, 8);
 				logbuf2_setbufferdimensions(320, 123, dc);
 
-				panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+				panel_copymaskdata((char*)replayviewptr.mask, pixelswide, pixelsdeep, 0);
 				transfm2_screenyoffset = 0;
 			}
 		}

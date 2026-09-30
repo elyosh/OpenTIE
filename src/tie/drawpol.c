@@ -22,7 +22,7 @@
 #include "tie/collide.h"  /* collide_roughdistance3d (stub) */
 #include "tie/draw.h"     /* PolyFace struct */
 #include "tie/drawln2.h"  /* drawln2_tracelineedges */
-#include "tie/dynamix.h" /* pspecnum (dynamix-owned) */
+#include "tie/dynamix.h"  /* pspecnum (dynamix-owned) */
 #include "tie/logbuf2.h"
 #include "tie/math2_wide.h"
 #include "tie/spec.h"     /* spec_getspecnum */
@@ -41,19 +41,51 @@
  * Globals (DRAWPOL-owned per watdbg)
  * ================================================================== */
 
+/* Marking book-keeping */
+// GLOBAL: TIE95 0xD3604
+uint8_t* farmarkingptr[128];
+// GLOBAL: TIE95 0xD3804
+uint8_t markingnumber[128];
+/* Retail reserves 200 bytes here; the port's scratch keeps the 17th vertex
+ * slot inside the object instead of spilling into markingptr[]. */
+// GLOBAL: TIE95 0xD3884
+DRAWPOL_MarkingEyeData markingeyedata;
+// GLOBAL: TIE95 0xD394C
+uint16_t markingptr[128];
+// GLOBAL: TIE95 0xD3A4C
+uint16_t objectptrs[128];
+// GLOBAL: TIE95 0xD3B4C
+uint8_t facevisflag[256];
+
 /* Per-vertex / per-edge setup arrays. Watcom binary emits 1-based aliases
  * (_array - stride) as a load-base optimization; the C source uses plain
  * 0-based access. */
+// GLOBAL: TIE95 0xD3C4C
 int32_t* calcflag[128];
 // GLOBAL: TIE95 0xD3E4C
 uint16_t vertexlight[128];
+// GLOBAL: TIE95 0xD3F4C
+DRAWPOL_LocalLight localLights[8];
 
-/* Per-frame drawpol diagnostic counters (flushed by tie_updatescreen). */
-int dbg_dp_total, dbg_dp_polycnt0, dbg_dp_polycnt_nz;
-int dbg_dp_first_min_z, dbg_dp_first_max_z;
+/* Object-record write cursor and poly-data layout pointers */
+// GLOBAL: TIE95 0xD3FCC
+uint16_t* objectdef;
+// GLOBAL: TIE95 0xD3FD0
+PolyVert* firstpointoff;
+// GLOBAL: TIE95 0xD3FD8
+uint8_t* firstcoloroff;
 // GLOBAL: TIE95 0xD3FE0
 uint8_t* firstvertptr;
 /* edgeflags[], edgept1[], edgept2[] defined in xtrans2.c per watdbg. */
+// GLOBAL: TIE95 0xD3FE8
+PolyFace* firstfaceoff;
+// GLOBAL: TIE95 0xD3FEC
+uint8_t* curobjptr;
+// GLOBAL: TIE95 0xD3FF0
+PolyVert* firstvertnorm;
+// GLOBAL: TIE95 0xD4004
+DRAWPOL_EyeVertex* firsteyexyz;
+/* eyexyzdata[] defined in xtrans2.c per watdbg. */
 
 /* Screen-xy ring */
 // GLOBAL: TIE95 0xD4010
@@ -62,84 +94,95 @@ int32_t* firstscreenxy;
 int32_t* lastscreenxy;
 // GLOBAL: TIE95 0xD3FE4
 int32_t* newscreenxy;
-
-/* Shared scratch buffer for newscreenxy. Retail does `mov newscreenxy,
- * esp` and writes into uncommitted DOS stack memory below SP, so the
- * effective size is bounded only by the stack segment. We need a real
- * fixed-size allocation. numpoints/numedges/numfaces are single-byte
- * (≤255); the worst-case advance across one drawpolyobject call (line
- * branch + polygon branch via dobsptree) stays well under this. */
-static int32_t newscreenxy_buf[4096];
 // GLOBAL: TIE95 0xD4008
-int32_t *minscreenx;
+int32_t* minscreenx;
 // GLOBAL: TIE95 0xD400C
-int32_t *maxscreenx;
+int32_t* maxscreenx;
 // GLOBAL: TIE95 0xD3FD4
-int32_t *minscreeny;
+int32_t* minscreeny;
 // GLOBAL: TIE95 0xD3FDC
-int32_t *maxscreeny;
-
-/* Current polygon context */
-// GLOBAL: TIE95 0xD4026
-int16_t numpoints;
-int16_t numedges;
-// GLOBAL: TIE95 0xD4034
-int16_t samexcnt;
-// GLOBAL: TIE95 0xD4036
-int16_t sameycnt;
-// GLOBAL: TIE95 0xD4032
-int16_t counter;
-// GLOBAL: TIE95 0xD4054
-uint8_t color;
-uint16_t facenumber;
-// GLOBAL: TIE95 0xD4030
-uint16_t objectnum;
-// GLOBAL: TIE95 0xD4048
-uint16_t parentobject;
-uint8_t gauraudflag;
-uint16_t layervalue;
-int16_t numfaces;
-int16_t polycnt;
-int16_t threedflag;
-uint8_t closerthansizeflag;
-uint8_t doublesideflag;
-uint8_t numeyezpos;
-uint8_t lightval;
-/* polyidbyte / edgeidbyte / objectedgeword are trace2.c-owned per watdbg.
- * thickness is drawln2.c-owned per watdbg. */
+int32_t* maxscreeny;
 
 /* Object position (worldz is tie.c-owned per watdbg). */
-int32_t objectx, objecty, objectz;
-int16_t objectxhi, objectyhi, objectzhi;
-int16_t objectxlo, objectylo, objectzlo;
+// GLOBAL: TIE95 0xD3FF8
+int32_t objectz;
+// GLOBAL: TIE95 0xD3FFC
+int32_t objecty;
+// GLOBAL: TIE95 0xD4000
+int32_t objectx;
 /* worldx, worldy moved to tie.c per watdbg ownership; declared in tie.h. */
 
 /* Light rig (rotlight{X,Y,Z} are tie.c-owned per watdbg). */
 // GLOBAL: TIE95 0xD4014
-int32_t lightX;
+int32_t lightZ;
 // GLOBAL: TIE95 0xD4018
 int32_t lightY;
 // GLOBAL: TIE95 0xD401C
-int32_t lightZ;
+int32_t lightX;
 // GLOBAL: TIE95 0xC1918
 int32_t localLightCnt;
-DRAWPOL_LocalLight localLights[8];
 
-/* Poly-data layout pointers for the current mesh */
-uint8_t* firstcoloroff;
-PolyVert* firstpointoff;
-PolyVert* firstvertnorm;
-// GLOBAL: TIE95 0xD3FE8
-PolyFace* firstfaceoff;
-// GLOBAL: TIE95 0xD4004
-DRAWPOL_EyeVertex* firsteyexyz;
-/* eyexyzdata[] defined in xtrans2.c per watdbg. */
-uint8_t facevisflag[256];
-
-/* Object-record write cursor */
+/* Current polygon context */
+// GLOBAL: TIE95 0xD4020
+uint16_t nummarks;
+// GLOBAL: TIE95 0xD4022
+int16_t polycnt;
+// GLOBAL: TIE95 0xD4024
+int16_t numfaces;
+// GLOBAL: TIE95 0xD4026
+int16_t numpoints;
+// GLOBAL: TIE95 0xD4028
+uint16_t facenumber;
+// GLOBAL: TIE95 0xD402A
+uint16_t layervalue;
+// GLOBAL: TIE95 0xD402C
+int16_t numedges;
+// GLOBAL: TIE95 0xD402E
+uint16_t edgeindex;
+// GLOBAL: TIE95 0xD4030
+uint16_t objectnum;
+// GLOBAL: TIE95 0xD4032
+int16_t counter;
+// GLOBAL: TIE95 0xD4034
+int16_t samexcnt;
+// GLOBAL: TIE95 0xD4036
+int16_t sameycnt;
+// GLOBAL: TIE95 0xD4038
 uint16_t newobjectdef;
-uint16_t* objectdef;
-uint8_t* curobjptr;
+// GLOBAL: TIE95 0xD403A
+int16_t objectzhi;
+// GLOBAL: TIE95 0xD403C
+int16_t objectyhi;
+// GLOBAL: TIE95 0xD403E
+int16_t objectxhi;
+// GLOBAL: TIE95 0xD4040
+int16_t objectzlo;
+// GLOBAL: TIE95 0xD4042
+int16_t objectylo;
+// GLOBAL: TIE95 0xD4044
+int16_t threedflag;
+// GLOBAL: TIE95 0xD4046
+int16_t objectxlo;
+// GLOBAL: TIE95 0xD4048
+uint16_t parentobject;
+// GLOBAL: TIE95 0xD404A
+uint16_t solidindex;
+// GLOBAL: TIE95 0xD404E
+uint8_t lightval;
+// GLOBAL: TIE95 0xD4050
+uint8_t markcnt;
+// GLOBAL: TIE95 0xD4051
+uint8_t closerthansizeflag;
+// GLOBAL: TIE95 0xD4052
+uint8_t doublesideflag;
+// GLOBAL: TIE95 0xD4053
+uint8_t numeyezpos;
+// GLOBAL: TIE95 0xD4054
+uint8_t color;
+// GLOBAL: TIE95 0xD4055
+uint8_t gauraudflag;
+/* polyidbyte / edgeidbyte / objectedgeword are trace2.c-owned per watdbg.
+ * thickness is drawln2.c-owned per watdbg. */
 
 /* Gameplay shade palette: 45 materials × 16 shades. The rasterizer copies
  * a ramp locally when it needs the duplicated boundary shade at index 16. */
@@ -262,21 +305,10 @@ int8_t markcoloroffset[72] = { 0 };
 
 /* linelight1, linelight2, point1ptr: drawln2.c-owned per watdbg. */
 
-/* Marking book-keeping */
-uint8_t* farmarkingptr[128];
-uint16_t markingnumber[128];
-uint16_t markingptr[128];
-uint16_t objectptrs[128];
-DRAWPOL_MarkingEyeData markingeyedata;
-uint8_t markcnt;
-uint16_t nummarks;
 /* gatecolor is tie.c-owned per watdbg. */
 
 /* flatx/y/z, flatcolors, flatcomponentnum, flatparentobj, flatobjnum all
  * defined in xtrans2.c per watdbg. */
-
-// GLOBAL: TIE95 0xD404A
-uint16_t solidindex;
 
 /* ======================================================================
  * Cross-module externs (referenced but owned elsewhere)
@@ -288,20 +320,6 @@ uint16_t solidindex;
 /* Pixel geometry (owned by tie.c / vesa.c). */
 
 /* Engine tick / globals. */
-
-/* ======================================================================
- * Helpers
- * ================================================================== */
-
-/* Clamp a 30-bit accumulator to +/-0x40000000, then callers >> 15 to get
- * a signed Q15 result. Matches the binary's clamp-then-shift idiom. */
-static inline int32_t clamp_q30(int32_t v) {
-	if (v >= 0x40000000)
-		return 0x3FFF0000;
-	if (v <= -0x40000000)
-		return -0x3FFF0000;
-	return v;
-}
 
 /* ======================================================================
  * drawpol_setmarkingcolors
@@ -362,22 +380,39 @@ void drawpol_setmarkingcolors(MarkingMode mode) {
 // FUNCTION: TIE95 0x1E674
 uint16_t drawpol_checknormal(uint16_t face_idx) {
 	PolyFace* face = &firstfaceoff[face_idx];
+	int32_t nx;
+	int32_t ny;
+	int32_t nz_pre;
+	uint8_t first_vtx_idx;
+	DRAWPOL_EyeVertex* v;
+	uint32_t dot;
 
-	int32_t nx = clamp_q30(face->normal_x * rotworldeyeA1 + face->normal_y * rotworldeyeB1 +
-						   face->normal_z * rotworldeyeC1) >>
-				 15;
-	int32_t ny = clamp_q30(face->normal_x * rotworldeyeA2 + face->normal_y * rotworldeyeB2 +
-						   face->normal_z * rotworldeyeC2) >>
-				 15;
-	int32_t nz_pre = clamp_q30(face->normal_x * rotworldeyeA3 + face->normal_y * rotworldeyeB3 +
-							   face->normal_z * rotworldeyeC3);
+	/* Clamp each rotated Q30 normal component to +/-0x40000000 before
+	 * shifting down to Q15. */
+	nx = face->normal_x * rotworldeyeA1 + face->normal_y * rotworldeyeB1 + face->normal_z * rotworldeyeC1;
+	if (nx >= 0x40000000)
+		nx = 0x3FFF0000;
+	if (nx <= -0x40000000)
+		nx = -0x3FFF0000;
+	nx >>= 15;
+	ny = face->normal_x * rotworldeyeA2 + face->normal_y * rotworldeyeB2 + face->normal_z * rotworldeyeC2;
+	if (ny >= 0x40000000)
+		ny = 0x3FFF0000;
+	if (ny <= -0x40000000)
+		ny = -0x3FFF0000;
+	ny >>= 15;
+	nz_pre = face->normal_x * rotworldeyeA3 + face->normal_y * rotworldeyeB3 + face->normal_z * rotworldeyeC3;
+	if (nz_pre >= 0x40000000)
+		nz_pre = 0x3FFF0000;
+	if (nz_pre <= -0x40000000)
+		nz_pre = -0x3FFF0000;
 
 	/* First vertex of the face: byte at face + vlist_offset + 3 */
-	uint8_t first_vtx_idx = ((uint8_t*)face)[face->vlist_offset + 3];
-	DRAWPOL_EyeVertex* v = &firsteyexyz[first_vtx_idx];
+	first_vtx_idx = ((uint8_t*)face)[face->vlist_offset + 3];
+	v = &firsteyexyz[first_vtx_idx];
 
 	/* Retail adds the shifted products in a wrapping 32-bit accumulator. */
-	uint32_t dot = (uint32_t)math2_mul_q15(v->x, nx);
+	dot = (uint32_t)math2_mul_q15(v->x, nx);
 	dot += (uint32_t)math2_mul_q15(v->y, ny);
 	dot += (uint32_t)math2_mul_q15(v->z, nz_pre >> 15);
 	return (dot & 0x80000000u) ? 0 : 2;
@@ -555,7 +590,12 @@ int16_t drawpol_getlightvalue(int16_t color_byte, uint16_t face_idx) {
 				continue;
 
 			vn = &firstvertnorm[vtx_idx];
-			dot = clamp_q30(rotlightX * vn->x + rotlightY * vn->y + rotlightZ * vn->z) >> 15;
+			dot = rotlightX * vn->x + rotlightY * vn->y + rotlightZ * vn->z;
+			if (dot >= 0x40000000)
+				dot = 0x3FFF0000;
+			if (dot <= -0x40000000)
+				dot = -0x3FFF0000;
+			dot >>= 15;
 			vertexlight[vtx_idx] = (uint16_t)dot;
 			if ((dot & 0x8000) && flag_byte != 194)
 				vertexlight[vtx_idx] = 0;
@@ -581,10 +621,14 @@ int16_t drawpol_getlightvalue(int16_t color_byte, uint16_t face_idx) {
 				/* Watcom emits `shl reg, 15` then `idiv`; perform the
 				 * shift in uint32_t (well-defined for negative dx/dy/dz)
 				 * and cast back for the signed divide. */
-				n_dot = clamp_q30(((int32_t)((uint32_t)dx << 15) / d) * vn->x +
-								  ((int32_t)((uint32_t)dy << 15) / d) * vn->y +
-								  ((int32_t)((uint32_t)dz << 15) / d) * vn->z) >>
-						15;
+				n_dot = ((int32_t)((uint32_t)dx << 15) / d) * vn->x +
+						((int32_t)((uint32_t)dy << 15) / d) * vn->y +
+						((int32_t)((uint32_t)dz << 15) / d) * vn->z;
+				if (n_dot >= 0x40000000)
+					n_dot = 0x3FFF0000;
+				if (n_dot <= -0x40000000)
+					n_dot = -0x3FFF0000;
+				n_dot >>= 15;
 				gain = n_dot + 0x8000;
 				if (gain <= 0)
 					continue;
@@ -603,8 +647,12 @@ int16_t drawpol_getlightvalue(int16_t color_byte, uint16_t face_idx) {
 	}
 
 	/* Flat-face lighting path. */
-	face_dot =
-		clamp_q30(face->normal_x * rotlightX + face->normal_y * rotlightY + face->normal_z * rotlightZ) >> 15;
+	face_dot = face->normal_x * rotlightX + face->normal_y * rotlightY + face->normal_z * rotlightZ;
+	if (face_dot >= 0x40000000)
+		face_dot = 0x3FFF0000;
+	if (face_dot <= -0x40000000)
+		face_dot = -0x3FFF0000;
+	face_dot >>= 15;
 	shade_off = (uint16_t)(16 * (color_with_flags & 0x7F));
 
 	if (face_dot >= 0) {
@@ -852,19 +900,18 @@ void drawpol_drawmarkings(uint16_t face_idx) {
  * self-relative child/sibling offset. Visibility bits select normal testing,
  * two-sided lighting, face emission, and marking emission. */
 // FUNCTION: TIE95 0x1E388
-uint8_t* drawpol_dobsptree(uint8_t* node_ptr) {
+void drawpol_dobsptree(uint8_t* node_ptr) {
 	BSPFaceNode* node = (BSPFaceNode*)node_ptr;
-	uint8_t* result = node_ptr;
 	uint8_t face_idx = 0;
 
 	/* 4-level nested structure mirroring the binary's control flow.
 	 * Each inner loop handles one walk mode; break falls through to the
 	 * next-outer mode's body. face_idx is carried across levels (it's
 	 * re-read at the top of mode-1). */
-	while (1) {         /* outer: mode-4 */
+	while (1) { /* outer: mode-4 */
 		int16_t offset_m4;
 
-		while (1) {     /* inner-3: mode-3 */
+		while (1) { /* inner-3: mode-3 */
 			int16_t offset_m3;
 
 			while (1) { /* inner-2: mode-2 */
@@ -906,9 +953,8 @@ uint8_t* drawpol_dobsptree(uint8_t* node_ptr) {
 							drawpol_drawmarkings(face_idx);
 						++facenumber;
 					}
-					result = (uint8_t*)&node->next_off;
 					if (node->next_off <= 0)
-						return result;
+						return;
 					node = (BSPFaceNode*)((uint8_t*)node + node->next_off);
 				}
 
@@ -956,9 +1002,8 @@ uint8_t* drawpol_dobsptree(uint8_t* node_ptr) {
 						++facenumber;
 					}
 				}
-				result = (uint8_t*)&node->next_off;
 				if (node->next_off <= 3 && node->next_off >= 0)
-					return result;
+					return;
 				node = (BSPFaceNode*)((uint8_t*)node + 3);
 				/* loop back to top of inner-2 (which re-enters inner-1). */
 			}
@@ -968,14 +1013,10 @@ uint8_t* drawpol_dobsptree(uint8_t* node_ptr) {
 				break;
 
 			offset_m3 = node->next_off;
-			/* Binary: result = (uint8_t *)offset_m3 (bogus pointer when
-			 * offset_m3 is small). Overwritten by recursion if we take it.
-			 * Callers discard the return value, so the bogus value is harmless. */
-			result = (uint8_t*)(uintptr_t)(uint16_t)offset_m3;
 			if (offset_m3 > 3 || offset_m3 < 0)
-				result = drawpol_dobsptree((uint8_t*)(node + 1));
+				drawpol_dobsptree((uint8_t*)(node + 1));
 			if (node->next_off <= 0)
-				return result;
+				return;
 			node = (BSPFaceNode*)((uint8_t*)node + offset_m3);
 			/* loop back to top of inner-3 (which re-enters inner-2). */
 		}
@@ -986,12 +1027,10 @@ uint8_t* drawpol_dobsptree(uint8_t* node_ptr) {
 			drawpol_dobsptree((uint8_t*)node + offset_m4);
 			/* node stays (binary's back - offset dance is a no-op). */
 		}
-		result = (uint8_t*)(uintptr_t)(uint16_t)offset_m4;
 		if (offset_m4 <= 3 && offset_m4 >= 0)
 			break; /* exit outer loop */
 		node = (BSPFaceNode*)((uint8_t*)node + 3);
 	}
-	return result;
 }
 
 /* Polyobject types are 0xFF billboards, 0x40/0x41 line objects, and
@@ -1023,6 +1062,9 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 	int32_t max_y;
 	int32_t min_z;
 	int32_t max_z;
+	/* Retail points newscreenxy at stack memory owned by this call; every
+	 * consumer runs before drawpolyobject returns. */
+	int32_t screenxy_buf[4096];
 
 	objectx = obj_x;
 	objecty = obj_y;
@@ -1120,7 +1162,7 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 		if (!numeyezpos)
 			return;
 
-		newscreenxy = newscreenxy_buf;
+		newscreenxy = screenxy_buf;
 		/* Edges sit immediately after numpoints PolyVerts. */
 		edge = (uint8_t*)&firstpointoff[numpoints];
 		/* Binary 0x1d8de: `firstvertptr = edge + 1` before walking edges.
@@ -1333,7 +1375,7 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 		else
 			transfm2_geteyecoordsS2((int16_t*)verts, eyexyzdata);
 
-		newscreenxy = newscreenxy_buf;
+		newscreenxy = screenxy_buf;
 		/* Normals sit immediately after the vertex array; faces after normals. */
 		firstvertnorm = firstpointoff + numpoints;
 		firstfaceoff = (PolyFace*)(firstpointoff + 2 * numpoints);
@@ -1385,20 +1427,6 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 			firstvertptr += 2 * (doublesideflag & 0x3F) + 3;
 		}
 
-		{
-			/* Accumulate stats; tie_updatescreen's end-of-frame hook
-			 * flushes + resets. */
-
-			dbg_dp_total++;
-			if (polycnt == 0)
-				dbg_dp_polycnt0++;
-			else
-				dbg_dp_polycnt_nz++;
-			if (dbg_dp_total == 1) {
-				dbg_dp_first_min_z = (int)min_z;
-				dbg_dp_first_max_z = (int)max_z;
-			}
-		}
 		if (polycnt) {
 			uint16_t saved_optr;
 

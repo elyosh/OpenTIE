@@ -20,8 +20,6 @@ extern int8_t inflight_collision;
 enum { OPTION_ROW_COUNT = 14 };
 
 int32_t option_optionsroom(int16_t load_settings);
-void option_ApplyFlightValues(const uint8_t* values);
-void option_ApplyValues(const uint8_t* values);
 
 /*
  * Pointer tables into stringdata_buf (filled by fediskio_loadstringdata):

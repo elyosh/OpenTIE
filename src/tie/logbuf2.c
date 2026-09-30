@@ -47,41 +47,42 @@ uint32_t g_surfacePitch;
 uint32_t g_flight16bppBytesPerPixel;
 
 /* PIP state (saved by startPIP, restored by finishPIP). */
-static uint16_t s_temp_pw, s_temp_pd, s_temp_dc;
-static int32_t s_tempA1, s_tempA2, s_tempA3;
-static int32_t s_tempB1, s_tempB2, s_tempB3;
-static int32_t s_tempC1, s_tempC2, s_tempC3;
-
+// GLOBAL: TIE95 0xD4C12
 // GLOBAL: TIE98 0x584C0C
-static uint16_t s_tie98_temp_pw;
+static uint16_t temppw;
+// GLOBAL: TIE95 0xD4C10
 // GLOBAL: TIE98 0x584C08
-static uint16_t s_tie98_temp_pd;
+static uint16_t temppd;
+// GLOBAL: TIE95 0xD4C14
 // GLOBAL: TIE98 0x584C04
-static uint16_t s_tie98_temp_dc;
+static uint16_t tempdc;
+// GLOBAL: TIE95 0xD4BF4
 // GLOBAL: TIE98 0x584BE0
-static int32_t s_tie98_tempA1;
+static int32_t tempA1;
+// GLOBAL: TIE95 0xD4BFC
 // GLOBAL: TIE98 0x584BE4
-static int32_t s_tie98_tempA2;
+static int32_t tempA2;
+// GLOBAL: TIE95 0xD4BF8
 // GLOBAL: TIE98 0x584BF0
-static int32_t s_tie98_tempA3;
+static int32_t tempA3;
+// GLOBAL: TIE95 0xD4BDC
 // GLOBAL: TIE98 0x584BE8
-static int32_t s_tie98_tempB1;
+static int32_t tempB1;
+// GLOBAL: TIE95 0xD4BE4
 // GLOBAL: TIE98 0x584BEC
-static int32_t s_tie98_tempB2;
+static int32_t tempB2;
+// GLOBAL: TIE95 0xD4BE0
 // GLOBAL: TIE98 0x584BFC
-static int32_t s_tie98_tempB3;
+static int32_t tempB3;
+// GLOBAL: TIE95 0xD4BE8
 // GLOBAL: TIE98 0x584BF4
-static int32_t s_tie98_tempC1;
+static int32_t tempC1;
+// GLOBAL: TIE95 0xD4BF0
 // GLOBAL: TIE98 0x584BF8
-static int32_t s_tie98_tempC2;
+static int32_t tempC2;
+// GLOBAL: TIE95 0xD4BEC
 // GLOBAL: TIE98 0x584C00
-static int32_t s_tie98_tempC3;
-
-/* --- helpers ------------------------------------------------------ */
-
-static inline uint8_t* video_base(void) { return vesa_buff_gbl; }
-
-static inline int32_t screen_mem_width(void) { return vesa_bpsl_gbl; }
+static int32_t tempC3;
 
 /* --- API ---------------------------------------------------------- */
 
@@ -93,7 +94,7 @@ void logbuf2_selectbuffer(void* buffer) { buffer_ptr = buffer; }
 
 // FUNCTION: TIE95 0x2E7FC
 void logbuf2_setbufferdimensions(uint16_t width, uint16_t depth, uint32_t dc) {
-	const uint32_t smw = (uint32_t)screen_mem_width();
+	const uint32_t smw = (uint32_t)vesa_bpsl_gbl;
 
 	pixelswide = width;
 	pixelswidemin1 = (uint16_t)(width - 1);
@@ -150,11 +151,11 @@ void logbuf2_clearbuffer_tie98(void) {
 // FUNCTION: TIE95 0x2E89C
 void logbuf2_outbuffer(const void* src) {
 	uint16_t line;
-	uint8_t* dst = video_base() + displaycorner;
+	uint8_t* dst = vesa_buff_gbl + displaycorner;
 	const uint8_t* s = src;
 	const uint16_t w = pixelswide;
 	const uint16_t h = pixelsdeep;
-	const int32_t pitch = screen_mem_width();
+	const int32_t pitch = vesa_bpsl_gbl;
 
 	for (line = 0; line < h; ++line) {
 		memcpy(dst, s, w);
@@ -166,7 +167,7 @@ void logbuf2_outbuffer(const void* src) {
 // FUNCTION: TIE98 0x44C3B0
 void logbuf2_outbuffer_tie98(const void* src) {
 	uint16_t line;
-	uint8_t* dst = video_base() + displaycorner;
+	uint8_t* dst = vesa_buff_gbl + displaycorner;
 	const uint8_t* s = src;
 	const size_t row_bytes = (size_t)g_flight16bppBytesPerPixel * pixelswide;
 
@@ -187,11 +188,11 @@ void logbuf2_outdiffbuffer(const void* oldbuf, const void* newbuf) {
 	/* Callers mirror newbuf into oldbuf after this copy. */
 	(void)oldbuf;
 
-	dst = video_base() + displaycorner;
+	dst = vesa_buff_gbl + displaycorner;
 	s = newbuf;
 	w = pixelswide;
 	h = pixelsdeep;
-	pitch = screen_mem_width();
+	pitch = vesa_bpsl_gbl;
 
 	for (line = 0; line < h; ++line) {
 		memcpy(dst, s, w);
@@ -200,6 +201,8 @@ void logbuf2_outdiffbuffer(const void* oldbuf, const void* newbuf) {
 	}
 }
 
+// FUNCTION: TIE98 0x44C460
+// LOGBUF2_outdiffbuffer
 void logbuf2_outdiffbuffer_tie98(const void* oldbuf, const void* newbuf) {
 	(void)oldbuf;
 	logbuf2_outbuffer_tie98(newbuf);
@@ -220,101 +223,131 @@ void logbuf2_outdiffbuffer_tie98(const void* oldbuf, const void* newbuf) {
  *   - else        : shallow Bresenham (step X, accumulate Y)
  * Off-screen endpoints are clipped with math2_ABoverC32.
  * ------------------------------------------------------------------ */
-static inline void logbuf2_write_pixel(uint8_t* dst, uint16_t color, uint8_t pixel_bytes) {
-	if (pixel_bytes == 2)
-		*(uint16_t*)dst = color;
-	else
-		*dst = (uint8_t)color;
-}
-
-static void logbuf2_drawclippedline_impl(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color_index,
-										 uint8_t pixel_bytes) {
-	int32_t pw, pd, pwm1, pdm1, dx, dy_signed, dy, ystep, xspan, yspan, i;
-	uint8_t* buf;
+// FUNCTION: TIE95 0x2EAF8
+void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color) {
+	int32_t dx, dy, t, len, err, steps, i;
 	uint8_t* p;
-	uint16_t color;
-	int going_up;
+
+#ifdef TIE_MODERN
 	if (!buffer_ptr)
 		return;
+#endif
 
-	pw = (int32_t)pixelswide;
-	pd = (int32_t)pixelsdeep;
-	pwm1 = (int32_t)pixelswidemin1;
-	pdm1 = (int32_t)pixelsdeepmin1;
-	buf = (uint8_t*)buffer_ptr;
-	color = pixel_bytes == 2 ? g_flightTextPalette[color_index] : color_index;
-
-	/* --- Canonicalise so x1 <= x2 --- */
 	dx = x2 - x1;
 	if (dx < 0) {
-		int32_t tx = x1, ty = y1;
+		t = x1;
 		x1 = x2;
+		x2 = t;
+		t = y1;
 		y1 = y2;
-		x2 = tx;
-		y2 = ty;
+		y2 = t;
 		dx = -dx;
-	}
-
-	/* --- Vertical line fast path (x1 == x2) --- */
-	if (dx == 0) {
-		int32_t len;
-		if (x1 < 0 || x1 >= pw)
+	} else if (dx == 0) {
+		/* Vertical line. */
+		if (x1 < 0 || x1 >= pixelswide)
 			return;
-		if (y2 < y1) {
-			int32_t t = y1;
+		if (y1 > y2) {
+			t = y1;
 			y1 = y2;
 			y2 = t;
 		}
 		if (y1 < 0)
 			y1 = 0;
-		if (y2 >= pd)
-			y2 = pdm1;
+		if (y2 >= pixelsdeep)
+			y2 = pixelsdeepmin1;
 		len = y2 - y1;
-		if (len <= 0)
-			return;
-		p = buf + pixel_bytes * (x1 + y1 * pw);
-		for (i = 0; i < len; ++i) {
-			logbuf2_write_pixel(p, color, pixel_bytes);
-			p += pixel_bytes * pw;
+		if (len > 0) {
+			p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+			for (i = 0; i < len; ++i) {
+				*p = color;
+				p += pixelswide;
+			}
 		}
 		return;
 	}
 
-	/* Reject if the x-range cannot intersect the buffer. */
-	if (x1 >= pw || x2 < 0)
+	if (x1 >= pixelswide || x2 < 0)
 		return;
 
-	/* --- Horizontal line fast path (y1 == y2) --- */
-	if (y1 == y2) {
-		int32_t xa, xb, len;
-		if (y1 < 0 || y1 >= pd)
-			return;
-		xa = x1 < 0 ? 0 : x1;
-		xb = x2 >= pw ? pwm1 : x2;
-		len = xb - xa;
-		if (len <= 0)
-			return;
-		p = buf + pixel_bytes * (xa + y1 * pw);
-		for (i = 0; i < len; ++i) {
-			logbuf2_write_pixel(p, color, pixel_bytes);
-			p += pixel_bytes;
-		}
-		return;
-	}
-
-	/* --- General Bresenham --- */
-	dy_signed = y2 - y1;
-	dy = dy_signed < 0 ? -dy_signed : dy_signed;
-	going_up = dy_signed < 0;
-
-	if (going_up) {
-		if (y1 < 0 || y2 >= pd)
-			return;
-		if (y1 >= pd) {
-			x1 += math2_ABoverC32(y1 - pdm1, dx, dy);
-			if (x1 >= pw)
+	dy = y2 - y1;
+	if (dy >= 0) {
+		if (dy == 0) {
+			/* Horizontal line. */
+			if (y1 < 0 || y1 >= pixelsdeep)
 				return;
-			y1 = pdm1;
+			if (x1 < 0)
+				x1 = 0;
+			if (x2 >= pixelswide)
+				x2 = pixelswidemin1;
+			len = x2 - x1;
+			if (len > 0) {
+				p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+				for (i = 0; i < len; ++i)
+					*p++ = color;
+			}
+			return;
+		}
+
+		/* Downward line. */
+		if (y1 >= pixelsdeep || y2 < 0)
+			return;
+		if (y1 < 0) {
+			x1 += math2_ABoverC32(-y1, dx, dy);
+			if (x1 >= pixelswide)
+				return;
+			y1 = 0;
+		}
+		if (x1 < 0) {
+			y1 += math2_ABoverC32(-x1, dy, dx);
+			if (y1 >= pixelsdeep)
+				return;
+			x1 = 0;
+		}
+		if (x2 >= pixelswide)
+			x2 = pixelswidemin1;
+		if (y2 >= pixelsdeep)
+			y2 = pixelsdeepmin1;
+		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+		if (dx < dy) {
+			steps = x2 - x1 + 1;
+			err = dy >> 1;
+			len = y2 - y1;
+			for (i = 0; i < len; ++i) {
+				*p = color;
+				p += pixelswide;
+				err -= dx;
+				if (err < 0) {
+					err += dy;
+					if (--steps == 0)
+						return;
+					++p;
+				}
+			}
+		} else {
+			steps = y2 - y1 + 1;
+			err = dx >> 1;
+			len = x2 - x1;
+			for (i = 0; i < len; ++i) {
+				*p++ = color;
+				err -= dy;
+				if (err < 0) {
+					err += dx;
+					if (--steps == 0)
+						return;
+					p += pixelswide;
+				}
+			}
+		}
+	} else {
+		/* Upward line. */
+		dy = -dy;
+		if (y1 < 0 || y2 >= pixelsdeep)
+			return;
+		if (y1 >= pixelsdeep) {
+			x1 += math2_ABoverC32(y1 - pixelsdeepmin1, dx, dy);
+			if (x1 >= pixelswide)
+				return;
+			y1 = pixelsdeepmin1;
 		}
 		if (x1 < 0) {
 			y1 -= math2_ABoverC32(-x1, dy, dx);
@@ -322,78 +355,388 @@ static void logbuf2_drawclippedline_impl(int32_t x1, int32_t y1, int32_t x2, int
 				return;
 			x1 = 0;
 		}
-		if (x2 >= pw)
-			x2 = pwm1;
+		if (x2 >= pixelswide)
+			x2 = pixelswidemin1;
 		if (y2 < 0)
 			y2 = 0;
-	} else {
-		if (y1 >= pd || y2 < 0)
+		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+		if (dx < dy) {
+			steps = x2 - x1 + 1;
+			err = dy >> 1;
+			len = y1 - y2;
+			for (i = 0; i < len; ++i) {
+				*p = color;
+				p -= pixelswide;
+				err -= dx;
+				if (err < 0) {
+					err += dy;
+					if (--steps == 0)
+						return;
+					++p;
+				}
+			}
+		} else {
+			steps = y1 - y2 + 1;
+			err = dx >> 1;
+			len = x2 - x1;
+			for (i = 0; i < len; ++i) {
+				*p++ = color;
+				err -= dy;
+				if (err < 0) {
+					err += dx;
+					if (--steps == 0)
+						return;
+					p -= pixelswide;
+				}
+			}
+		}
+	}
+}
+
+// FUNCTION: TIE98 0x44C8A0
+// LOGBUF2_drawclippedline16
+void logbuf2_drawclippedline16_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color) {
+	int32_t dx, dy, t, len, err, steps, i;
+	uint16_t* p;
+	uint16_t value;
+
+#ifdef TIE_MODERN
+	if (!buffer_ptr)
+		return;
+#endif
+	value = g_flightTextPalette[color];
+	dx = x2 - x1;
+	if (dx < 0) {
+		t = x1;
+		x1 = x2;
+		x2 = t;
+		t = y1;
+		y1 = y2;
+		y2 = t;
+		dx = -dx;
+	} else if (dx == 0) {
+		/* Vertical line. */
+		if (x1 < 0 || x1 >= pixelswide)
+			return;
+		if (y1 > y2) {
+			t = y1;
+			y1 = y2;
+			y2 = t;
+		}
+		if (y1 < 0)
+			y1 = 0;
+		if (y2 >= pixelsdeep)
+			y2 = pixelsdeepmin1;
+		len = y2 - y1;
+		if (len > 0) {
+			p = (uint16_t*)buffer_ptr + x1 + y1 * pixelswide;
+			for (i = 0; i < len; ++i) {
+				*p = value;
+				p += pixelswide;
+			}
+		}
+		return;
+	}
+
+	if (x1 >= pixelswide || x2 < 0)
+		return;
+
+	dy = y2 - y1;
+	if (dy >= 0) {
+		if (dy == 0) {
+			/* Horizontal line. */
+			if (y1 < 0 || y1 >= pixelsdeep)
+				return;
+			if (x1 < 0)
+				x1 = 0;
+			if (x2 >= pixelswide)
+				x2 = pixelswidemin1;
+			len = x2 - x1;
+			if (len > 0) {
+				p = (uint16_t*)buffer_ptr + x1 + y1 * pixelswide;
+				for (i = 0; i < len; ++i)
+					*p++ = value;
+			}
+			return;
+		}
+
+		/* Downward line. */
+		if (y1 >= pixelsdeep || y2 < 0)
 			return;
 		if (y1 < 0) {
 			x1 += math2_ABoverC32(-y1, dx, dy);
-			if (x1 >= pw)
+			if (x1 >= pixelswide)
 				return;
 			y1 = 0;
 		}
 		if (x1 < 0) {
 			y1 += math2_ABoverC32(-x1, dy, dx);
-			if (y1 >= pd)
+			if (y1 >= pixelsdeep)
 				return;
 			x1 = 0;
 		}
-		if (x2 >= pw)
-			x2 = pwm1;
-		if (y2 >= pd)
-			y2 = pdm1;
-	}
-
-	p = buf + pixel_bytes * (x1 + y1 * pw);
-	ystep = going_up ? -pixel_bytes * pw : pixel_bytes * pw;
-	xspan = x2 - x1;
-	yspan = going_up ? (y1 - y2) : (y2 - y1);
-
-	if (dx < dy) {
-		/* Steep: one pixel per Y step, X accumulates. */
-		int32_t cols_left = xspan + 1;
-		int32_t err = dy >> 1;
-		for (i = 0; i < yspan; ++i) {
-			logbuf2_write_pixel(p, color, pixel_bytes);
-			err -= dx;
-			p += ystep;
-			if (err < 0) {
-				err += dy;
-				if (--cols_left == 0)
-					return;
-				p += pixel_bytes;
+		if (x2 >= pixelswide)
+			x2 = pixelswidemin1;
+		if (y2 >= pixelsdeep)
+			y2 = pixelsdeepmin1;
+		p = (uint16_t*)buffer_ptr + x1 + y1 * pixelswide;
+		if (dx < dy) {
+			steps = x2 - x1 + 1;
+			err = dy >> 1;
+			len = y2 - y1;
+			for (i = 0; i < len; ++i) {
+				*p = value;
+				p += pixelswide;
+				err -= dx;
+				if (err < 0) {
+					err += dy;
+					if (--steps == 0)
+						return;
+					++p;
+				}
+			}
+		} else {
+			steps = y2 - y1 + 1;
+			err = dx >> 1;
+			len = x2 - x1;
+			for (i = 0; i < len; ++i) {
+				*p++ = value;
+				err -= dy;
+				if (err < 0) {
+					err += dx;
+					if (--steps == 0)
+						return;
+					p += pixelswide;
+				}
 			}
 		}
 	} else {
-		/* Shallow: one pixel per X step, Y accumulates. */
-		int32_t rows_left = yspan + 1;
-		int32_t err = dx >> 1;
-		for (i = 0; i < xspan; ++i) {
-			logbuf2_write_pixel(p, color, pixel_bytes);
-			p += pixel_bytes;
-			err -= dy;
-			if (err < 0) {
-				err += dx;
-				if (--rows_left == 0)
-					return;
-				p += ystep;
+		/* Upward line. */
+		dy = -dy;
+		if (y1 < 0 || y2 >= pixelsdeep)
+			return;
+		if (y1 >= pixelsdeep) {
+			x1 += math2_ABoverC32(y1 - pixelsdeepmin1, dx, dy);
+			if (x1 >= pixelswide)
+				return;
+			y1 = pixelsdeepmin1;
+		}
+		if (x1 < 0) {
+			y1 -= math2_ABoverC32(-x1, dy, dx);
+			if (y1 < 0)
+				return;
+			x1 = 0;
+		}
+		if (x2 >= pixelswide)
+			x2 = pixelswidemin1;
+		if (y2 < 0)
+			y2 = 0;
+		p = (uint16_t*)buffer_ptr + x1 + y1 * pixelswide;
+		if (dx < dy) {
+			steps = x2 - x1 + 1;
+			err = dy >> 1;
+			len = y1 - y2;
+			for (i = 0; i < len; ++i) {
+				*p = value;
+				p -= pixelswide;
+				err -= dx;
+				if (err < 0) {
+					err += dy;
+					if (--steps == 0)
+						return;
+					++p;
+				}
+			}
+		} else {
+			steps = y1 - y2 + 1;
+			err = dx >> 1;
+			len = x2 - x1;
+			for (i = 0; i < len; ++i) {
+				*p++ = value;
+				err -= dy;
+				if (err < 0) {
+					err += dx;
+					if (--steps == 0)
+						return;
+					p -= pixelswide;
+				}
 			}
 		}
 	}
 }
 
-// FUNCTION: TIE95 0x2EAF8
-void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color) {
-	logbuf2_drawclippedline_impl(x1, y1, x2, y2, color, 1);
-}
-
 // FUNCTION: TIE98 0x44C470
-// 0x44C8A0
+// LOGBUF2_drawclippedline
 void logbuf2_drawclippedline_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color) {
-	logbuf2_drawclippedline_impl(x1, y1, x2, y2, color, (uint8_t)g_flight16bppBytesPerPixel);
+	int32_t dx, dy, t, len, err, steps, i;
+	uint8_t* p;
+
+	if (g_flight16bppBytesPerPixel == 2) {
+		logbuf2_drawclippedline16_tie98(x1, y1, x2, y2, color);
+		return;
+	}
+#ifdef TIE_MODERN
+	if (!buffer_ptr)
+		return;
+#endif
+
+	dx = x2 - x1;
+	if (dx < 0) {
+		t = x1;
+		x1 = x2;
+		x2 = t;
+		t = y1;
+		y1 = y2;
+		y2 = t;
+		dx = -dx;
+	} else if (dx == 0) {
+		/* Vertical line. */
+		if (x1 < 0 || x1 >= pixelswide)
+			return;
+		if (y1 > y2) {
+			t = y1;
+			y1 = y2;
+			y2 = t;
+		}
+		if (y1 < 0)
+			y1 = 0;
+		if (y2 >= pixelsdeep)
+			y2 = pixelsdeepmin1;
+		len = y2 - y1;
+		if (len > 0) {
+			p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+			for (i = 0; i < len; ++i) {
+				*p = color;
+				p += pixelswide;
+			}
+		}
+		return;
+	}
+
+	if (x1 >= pixelswide || x2 < 0)
+		return;
+
+	dy = y2 - y1;
+	if (dy >= 0) {
+		if (dy == 0) {
+			/* Horizontal line. */
+			if (y1 < 0 || y1 >= pixelsdeep)
+				return;
+			if (x1 < 0)
+				x1 = 0;
+			if (x2 >= pixelswide)
+				x2 = pixelswidemin1;
+			len = x2 - x1;
+			if (len > 0) {
+				p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+				memset(p, color, (size_t)len);
+			}
+			return;
+		}
+
+		/* Downward line. */
+		if (y1 >= pixelsdeep || y2 < 0)
+			return;
+		if (y1 < 0) {
+			x1 += math2_ABoverC32(-y1, dx, dy);
+			if (x1 >= pixelswide)
+				return;
+			y1 = 0;
+		}
+		if (x1 < 0) {
+			y1 += math2_ABoverC32(-x1, dy, dx);
+			if (y1 >= pixelsdeep)
+				return;
+			x1 = 0;
+		}
+		if (x2 >= pixelswide)
+			x2 = pixelswidemin1;
+		if (y2 >= pixelsdeep)
+			y2 = pixelsdeepmin1;
+		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+		if (dx < dy) {
+			steps = x2 - x1 + 1;
+			err = dy >> 1;
+			len = y2 - y1;
+			for (i = 0; i < len; ++i) {
+				*p = color;
+				p += pixelswide;
+				err -= dx;
+				if (err < 0) {
+					err += dy;
+					if (--steps == 0)
+						return;
+					++p;
+				}
+			}
+		} else {
+			steps = y2 - y1 + 1;
+			err = dx >> 1;
+			len = x2 - x1;
+			for (i = 0; i < len; ++i) {
+				*p++ = color;
+				err -= dy;
+				if (err < 0) {
+					err += dx;
+					if (--steps == 0)
+						return;
+					p += pixelswide;
+				}
+			}
+		}
+	} else {
+		/* Upward line. */
+		dy = -dy;
+		if (y1 < 0 || y2 >= pixelsdeep)
+			return;
+		if (y1 >= pixelsdeep) {
+			x1 += math2_ABoverC32(y1 - pixelsdeepmin1, dx, dy);
+			if (x1 >= pixelswide)
+				return;
+			y1 = pixelsdeepmin1;
+		}
+		if (x1 < 0) {
+			y1 -= math2_ABoverC32(-x1, dy, dx);
+			if (y1 < 0)
+				return;
+			x1 = 0;
+		}
+		if (x2 >= pixelswide)
+			x2 = pixelswidemin1;
+		if (y2 < 0)
+			y2 = 0;
+		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+		if (dx < dy) {
+			steps = x2 - x1 + 1;
+			err = dy >> 1;
+			len = y1 - y2;
+			for (i = 0; i < len; ++i) {
+				*p = color;
+				p -= pixelswide;
+				err -= dx;
+				if (err < 0) {
+					err += dy;
+					if (--steps == 0)
+						return;
+					++p;
+				}
+			}
+		} else {
+			steps = y1 - y2 + 1;
+			err = dx >> 1;
+			len = x2 - x1;
+			for (i = 0; i < len; ++i) {
+				*p++ = color;
+				err -= dy;
+				if (err < 0) {
+					err += dx;
+					if (--steps == 0)
+						return;
+					p -= pixelswide;
+				}
+			}
+		}
+	}
 }
 
 /* ------------------------------------------------------------------
@@ -404,18 +747,18 @@ void logbuf2_drawclippedline_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y
  * ------------------------------------------------------------------ */
 // FUNCTION: TIE95 0x2EF3C
 void logbuf2_startPIP(uint16_t width, uint16_t depth, int16_t clear_runs, uint32_t dc) {
-	s_temp_pw = pixelswide;
-	s_temp_pd = pixelsdeep;
-	s_temp_dc = (uint16_t)displaycorner; /* binary truncates to 16 bits */
-	s_tempA1 = worldeyeA1;
-	s_tempA2 = worldeyeA2;
-	s_tempA3 = worldeyeA3;
-	s_tempB1 = worldeyeB1;
-	s_tempB2 = worldeyeB2;
-	s_tempB3 = worldeyeB3;
-	s_tempC1 = worldeyeC1;
-	s_tempC2 = worldeyeC2;
-	s_tempC3 = worldeyeC3;
+	temppw = pixelswide;
+	temppd = pixelsdeep;
+	tempdc = (uint16_t)displaycorner; /* binary truncates to 16 bits */
+	tempA1 = worldeyeA1;
+	tempA2 = worldeyeA2;
+	tempA3 = worldeyeA3;
+	tempB1 = worldeyeB1;
+	tempB2 = worldeyeB2;
+	tempB3 = worldeyeB3;
+	tempC1 = worldeyeC1;
+	tempC2 = worldeyeC2;
+	tempC3 = worldeyeC3;
 
 	logbuf2_setbufferdimensions(width, depth, dc);
 
@@ -430,26 +773,26 @@ void logbuf2_startPIP(uint16_t width, uint16_t depth, int16_t clear_runs, uint32
 // FUNCTION: TIE95 0x2F070
 void logbuf2_finishPIP(void) {
 	uint32_t smw;
-	worldeyeA1 = s_tempA1;
-	worldeyeA2 = s_tempA2;
-	worldeyeA3 = s_tempA3;
-	worldeyeB1 = s_tempB1;
-	worldeyeB2 = s_tempB2;
-	worldeyeB3 = s_tempB3;
-	worldeyeC1 = s_tempC1;
-	worldeyeC2 = s_tempC2;
-	worldeyeC3 = s_tempC3;
+	worldeyeA1 = tempA1;
+	worldeyeA2 = tempA2;
+	worldeyeA3 = tempA3;
+	worldeyeB1 = tempB1;
+	worldeyeB2 = tempB2;
+	worldeyeB3 = tempB3;
+	worldeyeC1 = tempC1;
+	worldeyeC2 = tempC2;
+	worldeyeC3 = tempC3;
 
-	smw = (uint32_t)screen_mem_width();
-	pixelswide = s_temp_pw;
-	pixelswidemin1 = (uint16_t)(s_temp_pw - 1);
-	halfpixelswide = (uint16_t)(s_temp_pw / 2);
-	pixelsdeep = s_temp_pd;
-	pixelsdeepmin1 = (uint16_t)(s_temp_pd - 1);
-	halfpixelsdeep = (uint16_t)(s_temp_pd / 2);
-	displaycorner = s_temp_dc;
-	displaycorner_lines = smw ? (s_temp_dc / smw) : 0;
-	displaycorner_columns = smw ? (s_temp_dc % smw) : s_temp_dc;
+	smw = (uint32_t)vesa_bpsl_gbl;
+	pixelswide = temppw;
+	pixelswidemin1 = (uint16_t)(temppw - 1);
+	halfpixelswide = (uint16_t)(temppw / 2);
+	pixelsdeep = temppd;
+	pixelsdeepmin1 = (uint16_t)(temppd - 1);
+	halfpixelsdeep = (uint16_t)(temppd / 2);
+	displaycorner = tempdc;
+	displaycorner_lines = smw ? (tempdc / smw) : 0;
+	displaycorner_columns = smw ? (tempdc % smw) : tempdc;
 
 	maskbufptr = (int16_t)0xC000; /* -16384 */
 	leftside = leftsidedata1;
@@ -460,18 +803,18 @@ void logbuf2_finishPIP(void) {
 // LOGBUF2_startPIP
 void logbuf2_startPIP_tie98(uint16_t width, uint16_t depth, int clear_runs, uint32_t dc) {
 	(void)clear_runs;
-	s_tie98_temp_pw = pixelswide;
-	s_tie98_temp_pd = pixelsdeep;
-	s_tie98_temp_dc = (uint16_t)displaycorner;
-	s_tie98_tempA1 = worldeyeA1;
-	s_tie98_tempA2 = worldeyeA2;
-	s_tie98_tempA3 = worldeyeA3;
-	s_tie98_tempB1 = worldeyeB1;
-	s_tie98_tempB2 = worldeyeB2;
-	s_tie98_tempB3 = worldeyeB3;
-	s_tie98_tempC1 = worldeyeC1;
-	s_tie98_tempC2 = worldeyeC2;
-	s_tie98_tempC3 = worldeyeC3;
+	temppw = pixelswide;
+	temppd = pixelsdeep;
+	tempdc = (uint16_t)displaycorner;
+	tempA1 = worldeyeA1;
+	tempA2 = worldeyeA2;
+	tempA3 = worldeyeA3;
+	tempB1 = worldeyeB1;
+	tempB2 = worldeyeB2;
+	tempB3 = worldeyeB3;
+	tempC1 = worldeyeC1;
+	tempC2 = worldeyeC2;
+	tempC3 = worldeyeC3;
 
 	pixelswide = width;
 	pixelswidemin1 = (uint16_t)(width - 1);
@@ -488,24 +831,24 @@ void logbuf2_startPIP_tie98(uint16_t width, uint16_t depth, int clear_runs, uint
 // FUNCTION: TIE98 0x44CDC0
 // LOGBUF2_finishPIP
 void logbuf2_finishPIP_tie98(void) {
-	worldeyeA1 = s_tie98_tempA1;
-	worldeyeA2 = s_tie98_tempA2;
-	worldeyeA3 = s_tie98_tempA3;
-	worldeyeB1 = s_tie98_tempB1;
-	worldeyeB2 = s_tie98_tempB2;
-	worldeyeB3 = s_tie98_tempB3;
-	worldeyeC1 = s_tie98_tempC1;
-	worldeyeC2 = s_tie98_tempC2;
-	worldeyeC3 = s_tie98_tempC3;
+	worldeyeA1 = tempA1;
+	worldeyeA2 = tempA2;
+	worldeyeA3 = tempA3;
+	worldeyeB1 = tempB1;
+	worldeyeB2 = tempB2;
+	worldeyeB3 = tempB3;
+	worldeyeC1 = tempC1;
+	worldeyeC2 = tempC2;
+	worldeyeC3 = tempC3;
 
-	pixelswide = s_tie98_temp_pw;
-	pixelswidemin1 = (uint16_t)(s_tie98_temp_pw - 1);
-	halfpixelswide = (uint16_t)(s_tie98_temp_pw >> 1);
-	pixelsdeep = s_tie98_temp_pd;
-	pixelsdeepmin1 = (uint16_t)(s_tie98_temp_pd - 1);
-	halfpixelsdeep = (uint16_t)(s_tie98_temp_pd >> 1);
-	displaycorner = s_tie98_temp_dc;
+	pixelswide = temppw;
+	pixelswidemin1 = (uint16_t)(temppw - 1);
+	halfpixelswide = (uint16_t)(temppw >> 1);
+	pixelsdeep = temppd;
+	pixelsdeepmin1 = (uint16_t)(temppd - 1);
+	halfpixelsdeep = (uint16_t)(temppd >> 1);
+	displaycorner = tempdc;
 	maskbufptr = (int16_t)0xC000;
-	displaycorner_lines = s_tie98_temp_dc / g_surfacePitch;
-	displaycorner_columns = s_tie98_temp_dc % g_surfacePitch / g_flight16bppBytesPerPixel;
+	displaycorner_lines = tempdc / g_surfacePitch;
+	displaycorner_columns = tempdc % g_surfacePitch / g_flight16bppBytesPerPixel;
 }

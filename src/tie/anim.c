@@ -553,11 +553,11 @@ int16_t anim_drawverysimpleobject(uint16_t obj_idx_arg) {
 		else
 			angle = trig2_arctan(ax_y, -ax_x);
 
-		sx_full = (uint32_t)transfm2_getscreencoordx(objecteyex, objecteyez);
+		sx_full = (uint32_t)transfm2_getscreenx(objecteyex, objecteyez);
 		sx_lo = (int16_t)sx_full;
 		sx_hi = (int32_t)sx_full >> 16;
 		if (sx_hi <= 0 && sx_hi >= -1) {
-			int32_t sy_full = transfm2_getscreencoordy(objecteyey, objecteyez);
+			int32_t sy_full = transfm2_getscreeny(objecteyey, objecteyez);
 			int32_t sy_hi = sy_full >> 16;
 			if (sy_hi <= 0 && sy_hi >= -1) {
 				int16_t sy = (int16_t)((int32_t)pixelsdeep - sy_full);
@@ -629,10 +629,10 @@ void anim_drawverysimpleobject_tie98(uint16_t object_index) {
 	axis_x = abs_a3 >= abs_b3 ? rotworldeyeB1 : rotworldeyeA1;
 	axis_y = abs_a3 >= abs_b3 ? rotworldeyeB2 : rotworldeyeA2;
 	angle = axis_x >= 0 ? (int16_t)-(int32_t)trig2_arctan(axis_y, axis_x) : trig2_arctan(axis_y, -axis_x);
-	screen_x = transfm2_getscreencoordx(objecteyex, objecteyez);
+	screen_x = transfm2_getscreenx(objecteyex, objecteyez);
 	if ((screen_x >> 16) > 0 || (screen_x >> 16) < -1)
 		return;
-	screen_y = transfm2_getscreencoordy(objecteyey, objecteyez);
+	screen_y = transfm2_getscreeny(objecteyey, objecteyez);
 	if ((screen_y >> 16) > 0 || (screen_y >> 16) < -1)
 		return;
 

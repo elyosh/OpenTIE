@@ -121,6 +121,38 @@ TieFlightModelApi TieFlightAssets_Tie98OriginalModelApi(void) {
 											   : (TieFlightModelApi) { 0 };
 }
 
+bool TieFlightAssets_Tie98OriginalMaxExtent(uint16_t model_type, int* extent, char* error,
+											size_t error_capacity) {
+	TieFlightModelApi models = TieFlightAssets_Tie98OriginalModelApi();
+	const TieFlightModelView* model;
+	float size_x;
+	float size_y;
+	float size_z;
+
+	if (error_capacity > 0)
+		error[0] = '\0';
+	if (!models.acquire) {
+		snprintf(error, error_capacity, "TIE98 original model repository is unavailable");
+		return false;
+	}
+	model = models.acquire(models.context, model_type, error, error_capacity);
+	if (!model) {
+		if (error_capacity > 0 && error[0] == '\0')
+			snprintf(error, error_capacity, "TIE98 original model is unavailable");
+		return false;
+	}
+	size_x = model->bounds.max.x - model->bounds.min.x;
+	size_y = model->bounds.max.y - model->bounds.min.y;
+	size_z = model->bounds.max.z - model->bounds.min.z;
+	if (size_y >= size_x && size_y >= size_z)
+		*extent = (int)size_y;
+	else if (size_z >= size_x && size_z >= size_y)
+		*extent = (int)size_z;
+	else
+		*extent = (int)size_x;
+	return true;
+}
+
 Tie98OptApi TieFlightAssets_NativeOptApi(void) {
 	return s_assets.tie98_original_initialized ? TieFlightAssetStore_NativeOptApi(&s_assets.tie98_original)
 											   : (Tie98OptApi) { 0 };

@@ -28,18 +28,15 @@ typedef struct trace2_EdgeHeader {
 	struct trace2_EdgeHeader* next;      /* next in the active chain */
 } trace2_EdgeHeader;
 
-/* --- Pool bases + cursors (module-owned) -------------------------
+/* --- Pool cursors (module-owned) ---------------------------------
  *
- * trace2_edgeinfos / trace2_edgeheaders are bound to fediskio's
- * flightbuf_small / flightbuf_big once xtrans2_initxtrans runs. They
- * are NULL between FEDISKIO_FreeFlightHandles and the next
- * xtrans2_initxtrans; never read them before the first init. */
+ * xtrans2_initxtrans points the cursors at fediskio's flightbuf_small_handle /
+ * flightbuf_big_handle and derives the last-slot clamps; they are invalid between
+ * FEDISKIO_FreeFlightHandles and the next xtrans2_initxtrans. */
 
-#define TRACE2_EDGEINFO_CAP 30720u   /* retail word_D4188 capacity */
-#define TRACE2_EDGEHEADER_CAP 26016u /* retail word_D4186 capacity */
+#define TRACE2_EDGEINFO_CAP 30720u   /* flightbuf_small_handle capacity */
+#define TRACE2_EDGEHEADER_CAP 26016u /* flightbuf_big_handle capacity */
 
-extern trace2_EdgeInfo* trace2_edgeinfos;
-extern trace2_EdgeHeader* trace2_edgeheaders;
 extern trace2_EdgeHeader* trace2_rowheaders[480];
 
 extern trace2_EdgeInfo* trace2_newedgeinfo;
@@ -49,8 +46,8 @@ extern trace2_EdgeHeader* trace2_lastedgeheader;
 
 /* --- Module globals written by TRACE2, read by XTRANS2 / drawxtrans --- */
 
-extern uint16_t polyidbyte; /* u8 in practice; Watcom pads to u16 */
-extern uint16_t edgeidbyte;
+extern uint8_t polyidbyte;
+extern uint8_t edgeidbyte;
 extern uint16_t objectedgeword; /* (polyidbyte << 8) | edgeidbyte */
 
 extern int16_t vertlight1;
@@ -59,7 +56,6 @@ extern int16_t lightincy; /* light gradient per scanline */
 extern int16_t lightincx; /* cached adjacent to lightincy (Watcom dword load trick) */
 
 extern int16_t someznegflag;
-extern uint16_t newxblock;
 
 extern int8_t xdiffsign;
 extern int8_t ydiffsign;
@@ -72,8 +68,6 @@ extern int32_t trace2_starty;
 extern int32_t trace2_endy;
 extern uint16_t trace2_lastedge;
 extern uint16_t trace2_znegflag;
-extern uint16_t trace2_nummarks;
-extern uint16_t trace2_edgeindex;
 
 extern int32_t* trace2_lastpointPtr;
 

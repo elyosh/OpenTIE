@@ -1,7 +1,6 @@
 #ifndef TIE_MAINMENU_H
 #define TIE_MAINMENU_H
 
-#include "tie/menudata.h"
 #include "tie/shellext.h"
 
 #include <stdint.h>

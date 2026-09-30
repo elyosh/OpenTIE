@@ -23,110 +23,41 @@
 
 /* Per-skill gunner tuning (watdbg: paifight.c). frwdgunnerranges is a
  * 24.8 fixed-point max gunner engagement range for each of the three
- * ai.skill_tier buckets (0/1/2). Values transcribed from the binary at
+ * ai.skill_tier buckets (0/1/2); demo symbol at
  * dseg02:0x5170. */
+// GLOBAL: TIE95 0xC58A8
+// GLOBAL: TIE98 0x4E6388
 const uint32_t frwdgunnerranges[3] = { 0x06000u, 0x08000u, 0x0A000u };
 
-/* Burst-shot count per skill tier. The binary at dseg02:0x517C stores a
+/* Burst-shot count per skill tier. The demo symbol (dseg02:0x517C) is a
  * 4-byte LUT; only tiers 0..2 are consulted, the 4th entry is padding. */
+// GLOBAL: TIE95 0xC58B4
+// GLOBAL: TIE98 0x4E6394
 const uint8_t frwdgunnerbursts[4] = { 3, 4, 5, 0 };
 
 /* Public shooter-origin (24.8 world-space). Written by gunnerself/offense
  * handlers after computing turret hardpoint + pai_world; consumed by
  * starship_firelasergunner and static_updatemineguns when firing. */
-int32_t shooterx;
+// GLOBAL: TIE95 0xD5058
+// GLOBAL: TIE98 0x5FCE34
 int32_t shootery;
+// GLOBAL: TIE95 0xD505C
+// GLOBAL: TIE98 0x5FCE38
+int32_t shooterx;
+// GLOBAL: TIE95 0xD5060
+// GLOBAL: TIE98 0x5FCE3C
 int32_t shooterz;
 
 /* Scratch FG idx: last FG that yielded a match inside searchforclosest-
- * ingroup. Consumed by paifight_checkescortorder_entry to stamp
+ * ingroup. Consumed by paifight_checkescortorder to stamp
  * craftptr->escortee_fg_idx. */
+// GLOBAL: TIE95 0xD5064
+// GLOBAL: TIE98 0x5FCE30
 uint8_t escortfg;
 
 /* search_flags / search_x/y/z live in the shared AiContext struct
  * (ai.search_*); watdbg's _ai[52] is a single symbol spanning both PAI
  * and PAIFIGHT fields. Declared in pai.h — no separate definitions. */
-
-/* =====================================================================
- *                         Shared internal helpers
- * ===================================================================== */
-
-/* Resolve an AI entry within the current flight group. */
-static inline const EAIStruct* ai_entry_ptr(uint16_t ai_entry) { return &fg_array[ai.fg_idx].ai[ai_entry]; }
-
-/* True when an object currently targeting the AI is in one of the three
- * "actively engaging" modes. mode_byte values come from the plan body's
- * next_order stream (11=pursue, 12=attack, 23=escort-target). */
-static inline int mode_is_combat_engage(uint8_t mode_byte) {
-	return mode_byte == 11 || mode_byte == 12 || mode_byte == 23;
-}
-
-/* Non-weapon species can occur in reused projectile slots and do not
- * belong to the warhead-class table. */
-static inline uint8_t warhead_class_byte(uint8_t warhead_type) {
-	if (warhead_type < WEAPON_SPECIES_BASE || warhead_type >= WEAPON_SPECIES_BASE + WARHEAD_TYPE_COUNT)
-		return 0;
-	return projectile_is_warhead_type[laser_species_idx(warhead_type)];
-}
-
-/* Apply the (pri AND/OR sec) combinator. Retail: op==1 -> OR, any other
- * value -> AND (jnz from cmp ax,1 selects AND, fallthrough is OR). The
- * op byte is read as int16 from the EAI stream. */
-static inline int selector_match(int pri_hit, int sec_hit, int op) {
-	return (op == 1) ? (pri_hit || sec_hit) : (pri_hit && sec_hit);
-}
-
-/* Count the homing warheads in flight currently targeting `target_obj`.
- * min_tier clamps to warheads with homing_tier >= min_tier. Skips
- * target_obj itself so a missile that re-targeted to its own slot is not
- * counted. Scans the warhead FlightObject slice
- * [NUM_CRAFTS, NUM_CRAFTS + NUM_WARHEADS) = [32, 80) retail / [28, 76) demo. */
-static int count_inbound_homing(uint16_t target_obj, uint8_t min_tier) {
-	int n = 0;
-	uint16_t obj;
-
-	for (obj = NUM_CRAFTS; obj < WARHEAD_SLOT_END; ++obj) {
-		uint16_t wh = obj - NUM_CRAFTS;
-		if (!objects[obj].ship_idx)
-			continue;
-		if (target_obj == obj)
-			continue;
-		if (warheads[wh].homing_tier < min_tier)
-			continue;
-		if (warheads[wh].target_obj == target_obj)
-			++n;
-	}
-	return n;
-}
-
-/* Compute turret shooter origin: pai_world + rotated hp[group] hardpoint
- * and stash it in both the public shooter* and the pai_search_* copies.
- * gunneroffenseorder writes both; the self-defense handler writes only
- * the public shooter*. `publish_search` toggles the pai_search_* write. */
-static void publish_shooter_origin(uint8_t group_idx, int publish_search) {
-	uint8_t species = craftptr->species_idx;
-	SpecData* sp = &spec_data[species];
-
-	shooterx = ai.world_x;
-	shootery = ai.world_y;
-	shooterz = ai.world_z;
-
-	/* HardpointPos field-to-axis mapping is consistent with the on-disk
-	 * format: x = local-side, y = local-up, z = local-fwd. Pass them in
-	 * that order to pai_calcrotatedpoint(obj, side, up, fwd). */
-	pai_calcrotatedpoint(&objects[ai.active_obj_idx], sp->hp[group_idx].x, sp->hp[group_idx].y,
-						 sp->hp[group_idx].z);
-
-	shooterx += rotatedx;
-	shootery += rotatedy;
-	shooterz += rotatedz;
-
-	if (publish_search) {
-		ai.search_x = shooterx;
-		ai.search_y = shootery;
-		ai.search_z = shooterz;
-	}
-}
 
 /* =====================================================================
  *                              Leaf helpers
@@ -153,7 +84,7 @@ int paifight_countattackers(uint16_t target_obj_idx) {
 			continue;
 		if ((int16_t)i == link)
 			continue;
-		if (mode_is_combat_engage(cp->mode_byte))
+		if (cp->mode_byte == 11 || cp->mode_byte == 12 || cp->mode_byte == 23)
 			++attackers;
 	}
 
@@ -246,7 +177,7 @@ int16_t paifight_searchforclosestingroup(uint8_t pri_type, uint8_t pri_id, int16
 		uint16_t stat_slot;
 		uint16_t s;
 
-		if (!selector_match(pri_hit, sec_hit, op))
+		if (!(op == 1 ? (pri_hit || sec_hit) : (pri_hit && sec_hit)))
 			continue;
 
 		/* Moving-object scan. */
@@ -300,7 +231,7 @@ int16_t paifight_futuretargets(uint8_t pri_type, uint8_t pri_id, int16_t op, uin
 
 		pri_hit = score_fgmemberofgroup(f, pri_type, pri_id);
 		sec_hit = score_fgmemberofgroup(f, sec_type, sec_id);
-		if (!selector_match(pri_hit, sec_hit, op))
+		if (!(op == 1 ? (pri_hit || sec_hit) : (pri_hit && sec_hit)))
 			continue;
 
 		if (!fgstatus[f].active)
@@ -338,7 +269,7 @@ int16_t paifight_findtargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op,
 
 		pri_hit = score_objectmemberofgroup(o, pri_type, pri_id);
 		sec_hit = score_objectmemberofgroup(o, sec_type, sec_id);
-		if (!selector_match(pri_hit, sec_hit, op))
+		if (!(op == 1 ? (pri_hit || sec_hit) : (pri_hit && sec_hit)))
 			continue;
 		if (!pai_worthytarget(o))
 			continue;
@@ -386,7 +317,7 @@ int16_t paifight_findtargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op,
 
 		pri_hit = score_objectmemberofgroup(stat_ref, pri_type, pri_id);
 		sec_hit = score_objectmemberofgroup(stat_ref, sec_type, sec_id);
-		if (!selector_match(pri_hit, sec_hit, op))
+		if (!(op == 1 ? (pri_hit || sec_hit) : (pri_hit && sec_hit)))
 			continue;
 		if (!pai_worthytarget(stat_ref))
 			continue;
@@ -419,7 +350,7 @@ int16_t paifight_findescorterofgroup(uint8_t pri_type, uint8_t pri_id, int16_t o
 		int sec_hit = score_fgmemberofgroup(f, sec_type, sec_id);
 		uint16_t o;
 
-		if (!selector_match(pri_hit, sec_hit, op))
+		if (!(op == 1 ? (pri_hit || sec_hit) : (pri_hit && sec_hit)))
 			continue;
 
 		/* Pick the closest active craft whose default_order_ldr is 20
@@ -478,7 +409,7 @@ int16_t paifight_findattackedtargetingroup(uint8_t pri_type, uint8_t pri_id, int
 
 		pri_hit = score_objectmemberofgroup(target, pri_type, pri_id);
 		sec_hit = score_objectmemberofgroup(target, sec_type, sec_id);
-		if (!selector_match(pri_hit, sec_hit, op))
+		if (!(op == 1 ? (pri_hit || sec_hit) : (pri_hit && sec_hit)))
 			continue;
 
 		/* Inner: pick the closest live attacker. An attacker qualifies
@@ -494,7 +425,8 @@ int16_t paifight_findattackedtargetingroup(uint8_t pri_type, uint8_t pri_id, int
 				continue;
 			ac = objects[a].craft_ptr;
 
-			combat_atk = mode_is_combat_engage(ac->mode_byte) && (int16_t)target == ac->ai_target_ref;
+			combat_atk = (ac->mode_byte == 11 || ac->mode_byte == 12 || ac->mode_byte == 23) &&
+						 (int16_t)target == ac->ai_target_ref;
 			player_atk = (tc->was_hit_flag & 0x80u) != 0 && a == pstate.object_idx;
 			if (!(combat_atk || player_atk))
 				continue;
@@ -548,7 +480,7 @@ uint16_t paifight_findgunnertargetingroup(uint8_t pri_type, uint8_t pri_id, int1
 
 		pri_hit = score_objectmemberofgroup(o, pri_type, pri_id);
 		sec_hit = score_objectmemberofgroup(o, sec_type, sec_id);
-		if (!selector_match(pri_hit, sec_hit, op))
+		if (!(op == 1 ? (pri_hit || sec_hit) : (pri_hit && sec_hit)))
 			continue;
 
 		cp = objects[o].craft_ptr;
@@ -582,7 +514,7 @@ uint16_t paifight_findgunnertargetingroup(uint8_t pri_type, uint8_t pri_id, int1
 
 		pri_hit = score_objectmemberofgroup(stat_ref, pri_type, pri_id);
 		sec_hit = score_objectmemberofgroup(stat_ref, sec_type, sec_id);
-		if (!selector_match(pri_hit, sec_hit, op))
+		if (!(op == 1 ? (pri_hit || sec_hit) : (pri_hit && sec_hit)))
 			continue;
 		if (!pai_worthytarget(stat_ref))
 			continue;
@@ -608,7 +540,7 @@ uint16_t paifight_findgunnertargetingroup(uint8_t pri_type, uint8_t pri_id, int1
 
 // FUNCTION: TIE95 0x36B74
 int16_t paifight_checkfortargets(uint16_t ai_entry) {
-	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
 	int16_t result = paifight_findtargetingroup(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op,
 												cur_ai->sec_type, cur_ai->sec_id);
 	if ((uint16_t)result == 0xFFFFu) {
@@ -620,7 +552,7 @@ int16_t paifight_checkfortargets(uint16_t ai_entry) {
 
 // FUNCTION: TIE95 0x36F1C
 int16_t paifight_checkforescortertargets(uint16_t ai_entry) {
-	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
 	int16_t result = paifight_findescorterofgroup(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op,
 												  cur_ai->sec_type, cur_ai->sec_id);
 	if ((uint16_t)result == 0xFFFFu) {
@@ -632,7 +564,7 @@ int16_t paifight_checkforescortertargets(uint16_t ai_entry) {
 
 // FUNCTION: TIE95 0x37148
 int16_t paifight_checkforattackedtargets(uint16_t ai_entry) {
-	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
 	int16_t result = paifight_findattackedtargetingroup(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op,
 														cur_ai->sec_type, cur_ai->sec_id);
 	if ((uint16_t)result == 0xFFFFu) {
@@ -645,7 +577,7 @@ int16_t paifight_checkforattackedtargets(uint16_t ai_entry) {
 
 // FUNCTION: TIE95 0x3950C
 int16_t paifight_checkforfuturetargets(uint16_t ai_entry) {
-	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
 	int16_t result;
 
 	if (paifight_futuretargets(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op, cur_ai->sec_type,
@@ -662,7 +594,7 @@ int16_t paifight_checkforfuturetargets(uint16_t ai_entry) {
 
 // FUNCTION: TIE95 0x37570
 int16_t paifight_scanfortargetswitch(uint16_t ai_entry) {
-	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
 	uint8_t order_class = create_getleaderorder(cur_ai->order);
 
 	int16_t result;
@@ -682,7 +614,7 @@ int16_t paifight_scanfortargetswitch(uint16_t ai_entry) {
 
 // FUNCTION: TIE95 0x37624
 int16_t paifight_scanfortargetsallgone(uint16_t ai_entry) {
-	const EAIStruct* cur_ai = ai_entry_ptr(ai_entry);
+	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
 	uint8_t order_class = create_getleaderorder(cur_ai->order);
 
 	int16_t result;
@@ -738,12 +670,13 @@ int16_t paifight_scanfortargetorder(void) {
 	return 1;
 }
 
-/* =====================================================================
- *                        Direct entry (from PAI)
- * ===================================================================== */
-
-void paifight_checkescortorder_entry(void) {
-	const EAIStruct* cur_ai = ai_entry_ptr(ai.ai_entry_count);
+/* checkescortorder -- plan order handler, also called directly by
+ * pai_updatecraftplan when the player's craft has default_order_ldr == 20
+ * (Escort). Stamps craftptr->escortee_fg_idx with the closest matching FG. */
+// FUNCTION: TIE95 0x392CC
+// FUNCTION: TIE98 0x45CAB0
+int16_t paifight_checkescortorder(void) {
+	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai.ai_entry_count];
 
 	int found_pri;
 	int found_any;
@@ -761,6 +694,7 @@ void paifight_checkescortorder_entry(void) {
 	}
 	if (found_any)
 		craftptr->escortee_fg_idx = escortfg;
+	return 0;
 }
 
 /* =====================================================================
@@ -987,9 +921,10 @@ int16_t paifight_fightershootorder(void) {
 			uint8_t wt = craftptr->warhead_type[w];
 			uint16_t dmg;
 
-			if (warhead_class_byte(wt) != warhead_class)
+			if (wt < WEAPON_SPECIES_BASE || wt >= WEAPON_SPECIES_BASE + WARHEAD_TYPE_COUNT ||
+				projectile_is_warhead_type[wt - WEAPON_SPECIES_BASE] != warhead_class)
 				continue;
-			dmg = projectileweight[laser_species_idx(wt)];
+			dmg = projectileweight[wt - WEAPON_SPECIES_BASE];
 			if (tgt_genus == GENUS_STARSHIP || tgt_genus == GENUS_PLATFORM)
 				dmg >>= 4;
 			if (tgt_genus == GENUS_FREIGHTER)
@@ -1006,7 +941,7 @@ int16_t paifight_fightershootorder(void) {
 			projectile = objects[obj].craft_ptr;
 			if (!projectile->species_idx || projectile->missile_target != target)
 				continue;
-			incoming_dmg += projectileweight[laser_species_idx(projectile_species)];
+			incoming_dmg += projectileweight[projectile_species - WEAPON_SPECIES_BASE];
 		}
 		if (incoming_dmg >= damage_limit)
 			return 0;
@@ -1023,7 +958,8 @@ int16_t paifight_fightershootorder(void) {
 
 		if (!ship_idx)
 			continue;
-		if (warhead_class_byte(ship_idx) != warhead_class)
+		if (ship_idx < WEAPON_SPECIES_BASE || ship_idx >= WEAPON_SPECIES_BASE + WARHEAD_TYPE_COUNT ||
+			projectile_is_warhead_type[ship_idx - WEAPON_SPECIES_BASE] != warhead_class)
 			continue;
 		ic = objects[obj].craft_ptr;
 		if (ic->species_idx == 0)
@@ -1072,7 +1008,9 @@ int16_t paifight_fightershootorder(void) {
 
 		if (craftptr->missile_state[j])
 			continue;
-		if (warhead_class != warhead_class_byte(craftptr->warhead_type[j]))
+		if (craftptr->warhead_type[j] < WEAPON_SPECIES_BASE ||
+			craftptr->warhead_type[j] >= WEAPON_SPECIES_BASE + WARHEAD_TYPE_COUNT ||
+			projectile_is_warhead_type[craftptr->warhead_type[j] - WEAPON_SPECIES_BASE] != warhead_class)
 			continue;
 
 		/* Ammo balance across the two sub-pods (left/right). If the
@@ -1141,7 +1079,15 @@ int16_t paifight_missiledefenseorder(void) {
 
 			/* Arm: clear current target and compute shooter origin. */
 			ws->target_obj = 0xFFFFu;
-			publish_shooter_origin((uint8_t)slot, /*publish_search=*/0);
+			shooterx = ai.world_x;
+			shootery = ai.world_y;
+			shooterz = ai.world_z;
+			pai_calcrotatedpoint(&objects[ai.active_obj_idx], spec_data[craftptr->species_idx].hp[slot].x,
+								 spec_data[craftptr->species_idx].hp[slot].y,
+								 spec_data[craftptr->species_idx].hp[slot].z);
+			shooterx += rotatedx;
+			shootery += rotatedy;
+			shooterz += rotatedz;
 
 			/* --- Pass A: pick the closest inbound homing missile that
 			 * is not already being targeted by another countermeasure. */
@@ -1198,6 +1144,8 @@ int16_t paifight_missiledefenseorder(void) {
 					CraftData* ac;
 					int targeting_us;
 					int is_attacker;
+					uint16_t inbound;
+					uint16_t p;
 					uint32_t d;
 
 					if (!objects[a].ship_idx)
@@ -1212,7 +1160,21 @@ int16_t paifight_missiledefenseorder(void) {
 
 					if (!pai_worthytarget(a))
 						continue;
-					if (count_inbound_homing(a, /*min_tier=*/1) >= 2)
+					/* Count homing warheads (homing_tier >= 1) already
+					 * in flight toward this attacker. */
+					inbound = 0;
+					for (p = NUM_CRAFTS; p < WARHEAD_SLOT_END; ++p) {
+						uint16_t wh2 = p - NUM_CRAFTS;
+						if (!objects[p].ship_idx)
+							continue;
+						if (a == p)
+							continue;
+						if (warheads[wh2].homing_tier < 1)
+							continue;
+						if (warheads[wh2].target_obj == a)
+							++inbound;
+					}
+					if (inbound >= 2)
 						continue;
 
 					d = (uint32_t)collide_roughdistance3d(objects[a].world_x - shooterx,
@@ -1281,7 +1243,15 @@ int16_t paifight_gunnerselfdefenseorder(void) {
 		if (craftptr->ion_drain_timer)
 			continue;
 
-		publish_shooter_origin((uint8_t)g, /*publish_search=*/0);
+		shooterx = ai.world_x;
+		shootery = ai.world_y;
+		shooterz = ai.world_z;
+		pai_calcrotatedpoint(&objects[ai.active_obj_idx], spec_data[craftptr->species_idx].hp[g].x,
+							 spec_data[craftptr->species_idx].hp[g].y,
+							 spec_data[craftptr->species_idx].hp[g].z);
+		shooterx += rotatedx;
+		shootery += rotatedy;
+		shooterz += rotatedz;
 
 		/* Prefer the attacker_idx when in range and worthy. */
 		atk = (int16_t)craftptr->attacker_idx;
@@ -1382,7 +1352,18 @@ int16_t paifight_gunneroffenseorder(void) {
 		if (craftptr->weapon_slots[g].target_obj != 0xFFFFu)
 			continue;
 
-		publish_shooter_origin((uint8_t)g, /*publish_search=*/1);
+		shooterx = ai.world_x;
+		shootery = ai.world_y;
+		shooterz = ai.world_z;
+		pai_calcrotatedpoint(&objects[ai.active_obj_idx], spec_data[craftptr->species_idx].hp[g].x,
+							 spec_data[craftptr->species_idx].hp[g].y,
+							 spec_data[craftptr->species_idx].hp[g].z);
+		shooterx += rotatedx;
+		ai.search_x = shooterx;
+		shootery += rotatedy;
+		ai.search_y = shootery;
+		shooterz += rotatedz;
+		ai.search_z = shooterz;
 
 		ord = craftptr->default_order_ldr;
 		if (ord == 60 || ord == 61) {
@@ -1399,7 +1380,7 @@ int16_t paifight_gunneroffenseorder(void) {
 		special_order = (ord == 63 || ord == 19);
 		ai.live_target_only = special_order ? 1 : 0;
 
-		cur_ai = ai_entry_ptr(ai.ai_entry_count);
+		cur_ai = &fg_array[ai.fg_idx].ai[ai.ai_entry_count];
 		found = paifight_findgunnertargetingroup(cur_ai->pri_type, cur_ai->pri_id, cur_ai->pri_sec_op,
 												 cur_ai->sec_type, cur_ai->sec_id);
 		if (found == 0xFFFFu) {

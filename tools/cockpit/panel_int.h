@@ -6,8 +6,8 @@
  *   +0x3F0  95 × HudInstrument (6 bytes each)   =  570 bytes
  *   +0x626  11 × byte parts[]                   =   11 bytes
  *
- * Codec parity: matches PanelViewDef_decode / HudInstrument_decode in
- * src/tie/panel.c. parts[0..7] holds the .PNL filename basename (NUL-
+ * Record parity: matches the PanelViewDef / HudInstrument records read by
+ * panel_loadpanelviewdefs in src/tie/panel.c. parts[0..7] holds the .PNL filename basename (NUL-
  * padded to 8 chars), parts[8] is a mode flag, parts[9]+parts[10] is the
  * total shape count to read from that .PNL.
  *

@@ -33,17 +33,21 @@ extern uint8_t* planetpalptrs[8];
  */
 extern uint8_t hyperstardata[24];
 
-/*
- * Projectile data dispatch table. 18 entries, indexed by projectile kind
- * (laser bank types, warhead types, additional aliased weapon IDs). Each
- * entry points to one of 10 opaque 183-186 byte data blobs owned by
- * species.c (rebellaserdata, turborebellaserdata, empirelaserdata, ...).
- *
- * The blobs themselves are file-static in species.c -- consumers reach
- * them only through this dispatch table. Slot [13] is NULL (reserved).
- *
- * The demo binary has no consumers for this dispatch table.
- */
+/* Projectile polygon models: six 183-byte laser bolts and four 186-byte
+ * warheads, reached through projectiledataptrs[ship_idx - 137]. */
+extern uint8_t rebellaserdata[183];
+extern uint8_t turborebellaserdata[183];
+extern uint8_t empirelaserdata[183];
+extern uint8_t turboempirelaserdata[183];
+extern uint8_t ioncannondata[183];
+extern uint8_t turboioncannondata[183];
+extern uint8_t torpedodata[186];
+extern uint8_t concussiondata[186];
+extern uint8_t rocketdata[186];
+extern uint8_t magneticpulsedata[186];
+
+/* Projectile model table indexed by (ship_idx - 137); slot 13 is NULL and
+ * later slots alias earlier models. */
 extern const uint8_t* projectiledataptrs[18];
 
 #ifdef __cplusplus

@@ -57,25 +57,47 @@ enum {
 	SIZE_SCALE_FACTOR = 1605,
 };
 
-static const char blueprint_str[] = "blueprnt.lfd";
-static const char blueprint_film_name[] = "blueprnt";
+/* Resource names: [0] = LFD file, [1] = film. */
+// GLOBAL: TIE95 0xCE708
+// GLOBAL: TIE98 0x4DF1B8
+static const char blueprint_str[2][20] = { "blueprnt.lfd", "blueprnt" };
 
 /* Module state */
+// GLOBAL: TIE95 0xF598C
+// GLOBAL: TIE98 0x4FA5B8
 static ResFile* blueprint_file;
+// GLOBAL: TIE95 0xF5994
+// GLOBAL: TIE98 0x4FA5B0
 static Film* blueprint_film;
+// GLOBAL: TIE95 0xF5970
+// GLOBAL: TIE98 0x4FA5A4
 static Input* world_input;
+// GLOBAL: TIE95 0xF5958
+// GLOBAL: TIE98 0x4FA5C8
 static Input* button_input[4];
+// GLOBAL: TIE95 0xF5974
+// GLOBAL: TIE98 0x4FA55C
 static Input* door_input;
+// GLOBAL: TIE95 0xF597C
+// GLOBAL: TIE98 0x4FA5D8
 static Actor* ship_name_actor;
+// GLOBAL: TIE95 0xF5988
+// GLOBAL: TIE98 0x4FA5E0
 static Actor* ship_comp_actor;
+// GLOBAL: TIE95 0xF5978
+// GLOBAL: TIE98 0x4FA5AC
 static Actor* ship_info_actor;
 // GLOBAL: TIE95 0xF5984
+// GLOBAL: TIE98 0x4FA5BC
 static Actor* arrow_actor;
 // GLOBAL: TIE95 0xF5980
+// GLOBAL: TIE98 0x4FA5A0
 static Actor* door_actor;
 // GLOBAL: TIE95 0xF5990
+// GLOBAL: TIE98 0x4FA558
 static Actor* door_back_actor;
 // GLOBAL: TIE95 0xF5968
+// GLOBAL: TIE98 0x4FA5DC
 static Actor* title_actor;
 // GLOBAL: TIE95 0xF5998
 // GLOBAL: TIE98 0x4FA5B4
@@ -541,7 +563,7 @@ int16_t blueprnt_Blueprint(SceneHeadStruct* the_head) {
 	xio_Set_Mouse_Position(256, 156);
 #endif
 
-	blueprint_file = shellext_Open_Empire_Resource(blueprint_str);
+	blueprint_file = shellext_Open_Empire_Resource(blueprint_str[0]);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 
@@ -553,7 +575,7 @@ int16_t blueprnt_Blueprint(SceneHeadStruct* the_head) {
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
 #endif
 	blueprint_film =
-		xfilm_Res_Callback_Film(blueprint_film_name, &frame, 0, 0, 0, blueprnt_film_Blueprint_Callback);
+		xfilm_Res_Callback_Film(blueprint_str[1], &frame, 0, 0, 0, blueprnt_film_Blueprint_Callback);
 	xfilm_Set_Film_Def_Palette(blueprint_film, the_head->def_palette);
 
 	/* World input (full screen) */

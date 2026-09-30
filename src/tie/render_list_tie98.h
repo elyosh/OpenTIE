@@ -7,12 +7,18 @@
 extern "C" {
 #endif
 
+enum {
+	TIE98_RENDER_OBJECT_LIST_CAPACITY = 184,
+};
+
 typedef struct RenderObjectListEntryTIE98 {
 	int32_t sortDepth;
 	int32_t objectIdx;
 	struct RenderObjectListEntryTIE98* next;
 } RenderObjectListEntryTIE98;
 
+/* Handle-backed 184-entry storage locked by FEDISKIO_Init_Buffers_and_Fonts. */
+extern RenderObjectListEntryTIE98* g_renderObjectListEntries;
 extern RenderObjectListEntryTIE98* g_renderListHead;
 
 void RenderList_Reset(void);

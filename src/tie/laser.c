@@ -45,6 +45,7 @@
 /* Kinetic mass for collision physics. Light lasers ~200-500; torps
  * and capital-ship munitions ~10000-65000. */
 // GLOBAL: TIE95 0xC542C
+// GLOBAL: TIE98 0x4E4520
 const uint16_t projectileweight[NUM_PROJECTILE_TYPES] = {
 	250,  500,   200,   400,  200,  400,  10000, 3000, 1000, 800, 800, 15000,
 	6000, 65000, 35000, 3000, 6000, 9000, 0,     0,    0,    0,   0,   0,
@@ -56,6 +57,7 @@ const uint16_t projectileweight[NUM_PROJECTILE_TYPES] = {
  * sites as a 'projectile explodes on death' boolean (see note in
  * laser.h). We don't break that by tweaking values. */
 // GLOBAL: TIE95 0xC545C
+// GLOBAL: TIE98 0x4E4550
 const uint16_t projectilevelocity[NUM_PROJECTILE_TYPES] = {
 	1000, 1000, 900, 900, 700, 800, 250, 500, 1000, 900, 400, 300,
 	600,  25,   175, 300, 350, 400, 0,   0,   0,    0,   0,   0,
@@ -63,6 +65,7 @@ const uint16_t projectilevelocity[NUM_PROJECTILE_TYPES] = {
 
 /* Lifetime in ticks. Lasers live 2-5; warheads 30-120. */
 // GLOBAL: TIE95 0xC548C
+// GLOBAL: TIE98 0x4E4580
 const uint16_t projectilelife[NUM_PROJECTILE_TYPES] = {
 	2, 3, 2, 3, 3, 4, 60, 30, 3, 3, 5, 50, 25, 120, 90, 45, 40, 35, 0, 0, 0, 0, 0, 0,
 };
@@ -70,42 +73,26 @@ const uint16_t projectilelife[NUM_PROJECTILE_TYPES] = {
 /* Forward displacement from the hardpoint to the projectile model origin.
  * The model extends backward by this distance so its tail begins at the
  * muzzle. The two game versions use different model dimensions. */
-// GLOBAL: TIE95 0xC53A8
-// + 2*species
-static const uint16_t s_projectile_launch_offset_tie95[NUM_PROJECTILE_TYPES] = {
-	0,   2048, 2048, 2048, 2048, 2048, 2048, 512, /* species 137..144 */
-	512, 2048, 2048, 2048, 512,  512,  48,   512, /* species 145..152 */
-	512, 512,  512,  0,    0,    0,    0,    0,   /* species 153..160 */
+// GLOBAL: TIE95 0xC54BC
+const uint16_t projectilelength[NUM_PROJECTILE_TYPES] = {
+	2048, 2048, 2048, 2048, 2048, 2048, 512, 512, /* species 137..144 */
+	2048, 2048, 2048, 512,  512,  48,   512, 512, /* species 145..152 */
+	512,  512,  0,    0,    0,    0,    0,   0,   /* species 153..160 */
 };
 
-// GLOBAL: TIE98 0x4E449E
-// + 2*species
-static const uint16_t s_projectile_launch_offset_tie98[NUM_PROJECTILE_TYPES] = {
+// GLOBAL: TIE98 0x4E45B0
+const uint16_t tie98_projectilelength[NUM_PROJECTILE_TYPES] = {
 	921, 921, 921, 921, 921, 921, 512, 512, /* species 137..144 */
 	921, 921, 921, 512, 512, 48,  512, 512, /* species 145..152 */
 	512, 512, 0,   0,   0,   0,   0,   0,   /* species 153..160 */
 };
 
-uint16_t TieProjectileLaunchOffset_Get(unsigned int projectile_type_idx) {
-	const uint16_t* offsets =
-		TieProfile_UsesTie98Logic() ? s_projectile_launch_offset_tie98 : s_projectile_launch_offset_tie95;
-	return offsets[projectile_type_idx];
-}
-
-/* Warhead flags. Only 12 entries; never referenced in demo. */
-const uint16_t projectilewarhead[12] = {
-	0, 0, 0, 258, 0, 512, 513, 258, 513, 0, 0, 0,
-};
-
-/* Per-weapon-species 'explodes on death' flag. Retail byte_C5463 bytes
- * [137..154] copied here, indexed by (species - 137). 0 = silent
- * removal; 1/2 = full explosion (picks chunk variant).
- *
- * Sized to 24 entries to match the demo's _projectilewarhead at
- * 0xD4DB8 (and the matching 24-byte slot the retail leaves between
- * the projectile launch-offset table and deepspacecolor). Entries [18..23] (species
- * 155..160) are zero in the original data — kept for callers that
- * iterate the full projectile species range. */
+/* Per-weapon-species 'explodes on death' flag (the demo's
+ * _projectilewarhead), indexed by (species - 137). 0 = silent removal;
+ * 1/2 = full explosion (picks chunk variant). Entries [18..23] (species
+ * 155..160) are zero in the original data. */
+// GLOBAL: TIE95 0xC54EC
+// GLOBAL: TIE98 0x4E45E0
 const uint8_t projectile_is_warhead_type[WARHEAD_TYPE_COUNT] = {
 	/* 137 */ 0, /* 138 */ 0, /* 139 */ 0, /* 140 */ 0,
 	/* 141 */ 0, /* 142 */ 0, /* 143 */ 2, /* 144 */ 1,
@@ -262,7 +249,7 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 	 * / projectilelife are keyed by (species - WEAPON_SPECIES_BASE).
 	 * Callers guarantee species in [137, 154] — matches retail contract;
 	 * no bounds check. */
-	spec_idx = laser_species_idx(projectile_type);
+	spec_idx = projectile_type - WEAPON_SPECIES_BASE;
 
 	proj_speed = (int16_t)(projectilevelocity[spec_idx] + shooter->current_speed);
 	proj->current_speed = proj_speed;
@@ -303,7 +290,8 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 		/* Capship turret branch: projectile fires straight up or
 		 * down (heading forced to 0 / 0x8000); world_z offset by
 		 * the species' muzzle length. */
-		int16_t mlen = (int16_t)TieProjectileLaunchOffset_Get(spec_idx);
+		int16_t mlen =
+			(int16_t)(TieProfile_UsesTie98Logic() ? tie98_projectilelength : projectilelength)[spec_idx];
 		/* Capship turret muzzle: hp_y < 0 means the gun is mounted in the
 		 * negative-up direction (turret on the underside) -> projectile
 		 * inherits a flipped heading (0x8000) and world_z is offset by
@@ -325,7 +313,8 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 		 * The binary reads fwd_x/y/z via the Watcom
 		 * unaligned-dword-load trick *(int*)&ff>>16; the port reads
 		 * them directly. */
-		int16_t mlen = (int16_t)TieProjectileLaunchOffset_Get(spec_idx);
+		int16_t mlen =
+			(int16_t)(TieProfile_UsesTie98Logic() ? tie98_projectilelength : projectilelength)[spec_idx];
 		int32_t ox = ((int32_t)shooter->fwd_x * mlen) >> 15;
 		int32_t oy = ((int32_t)shooter->fwd_y * mlen) >> 15;
 		int32_t oz = ((int32_t)shooter->fwd_z * mlen) >> 15;
@@ -435,7 +424,7 @@ uint16_t laser_createprojectilefromstatic(uint16_t static_obj_idx, uint16_t shoo
 	p->roll = 0;
 	p->pitch = 0;
 
-	ptype_idx = laser_species_idx(ptype);
+	ptype_idx = ptype - WEAPON_SPECIES_BASE;
 	proj_speed = (int16_t)projectilevelocity[ptype_idx];
 	warheads[slot - NUM_CRAFTS].min_speed = (uint16_t)proj_speed;
 	p->collision_radius = (int16_t)projectileweight[ptype_idx];
@@ -596,38 +585,35 @@ void laser_firelasersystem(uint16_t shooter_obj_idx, uint16_t group_idx) {
 		uint16_t pslot;
 		uint16_t wh;
 
-		if (ws->type == 0 || (int8_t)ws->charge <= 0)
-			goto next;
+		if (ws->type != 0 && (int8_t)ws->charge > 0) {
+			ltype = spec_data[species_idx].laser_type[group_idx];
+			if (ws->charge >= 64)
+				ltype++; /* charged variant */
+			final_laser_type = ltype;
 
-		ltype = spec_data[species_idx].laser_type[group_idx];
-		if (ws->charge >= 64)
-			ltype++; /* charged variant */
-		final_laser_type = ltype;
+			pslot = laser_createprojectile(shooter_obj_idx, i, ltype);
+			if (pslot != 0xFFFF) {
+				if (shooter_obj_idx == pstate.object_idx) {
+					if (!inflight_unlimited)
+						craftptr->weapon_slots[i].charge -= 4;
+				} else {
+					craftptr->weapon_slots[i].charge -= 1;
+				}
+				if ((int8_t)craftptr->weapon_slots[i].charge < 0)
+					craftptr->weapon_slots[i].charge = 0;
 
-		pslot = laser_createprojectile(shooter_obj_idx, i, ltype);
-		if (pslot == 0xFFFF)
-			goto next;
+				if (shots_fired < 2)
+					fsfx_triggerlasersfx(pslot);
 
-		if (shooter_obj_idx == pstate.object_idx) {
-			if (!inflight_unlimited)
-				craftptr->weapon_slots[i].charge -= 4;
-		} else {
-			craftptr->weapon_slots[i].charge -= 1;
+				wh = pslot - NUM_CRAFTS;
+				if (shooter_obj_idx == pstate.object_idx)
+					warheads[wh].target_obj = pstate.target_obj_idx;
+				else
+					warheads[wh].target_obj = (uint16_t)craftptr->ai_target_ref;
+
+				shots_fired++;
+			}
 		}
-		if ((int8_t)craftptr->weapon_slots[i].charge < 0)
-			craftptr->weapon_slots[i].charge = 0;
-
-		if (shots_fired < 2)
-			fsfx_triggerlasersfx(pslot);
-
-		wh = pslot - NUM_CRAFTS;
-		if (shooter_obj_idx == pstate.object_idx)
-			warheads[wh].target_obj = pstate.target_obj_idx;
-		else
-			warheads[wh].target_obj = (uint16_t)craftptr->ai_target_ref;
-
-		shots_fired++;
-	next:
 		if (--shots_remaining == 0)
 			break;
 	}
@@ -826,10 +812,10 @@ void laser_weaponsfire(void) {
 	beam_firing_now = 0;
 
 	/* Retail also requires status_flags & 0x100 (beam subsystem online —
-	 * cleared when ion-drained or boarded) and !player_ejected (post-eject
+	 * cleared when ion-drained or boarded) and !pstate.hyperin_state (post-eject
 	 * the cockpit is gone). Demo had only the inner two checks. */
 	if ((pstate.player_craft->status_flags & 0x100) && (pstate.player_craft->beam_state & 0x80) &&
-		pstate.player_craft->beam_charge > 0 && !player_ejected) {
+		pstate.player_craft->beam_charge > 0 && !pstate.hyperin_state) {
 		uint16_t i;
 
 		if (!timers[TIMER_LASER_BEAM_DRAIN]) {

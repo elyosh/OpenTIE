@@ -17,11 +17,16 @@
 #include <stdlib.h>
 
 /* Globals */
+// GLOBAL: TIE95 0xD4C6A
 int16_t math2_remainder;
 /* Retail initial value = 0x2357 (statically initialized at 0xC5710 in
  * Z_TIE__.EXE). Zero is a fixed point of this LFSR, so BSS-default 0
  * would make every call return 0 until CREATE_loadmission overwrote it. */
+// GLOBAL: TIE95 0xC5710
+// GLOBAL: TIE98 0x4E4C98
 int16_t math2_randomseed = 0x2357;
+// GLOBAL: TIE95 0xD4C68
+// GLOBAL: TIE98 0x584CF8
 static int16_t randomnumber;
 
 /*
@@ -33,17 +38,22 @@ static int16_t randomnumber;
  * radarmax:    runtime-computed for 640×480 (radius 44, square pixels)
  *              or copied from radarmax320 for 320×200 (resolution==19)
  */
+// GLOBAL: TIE95 0xC5712
 const uint8_t radarmax320[74] = {
 	0,  18, 1,  18, 2,  18, 3,  18, 4,  17, 5,  17, 6,  17, 7,  17, 8,  16, 9,  16, 10, 16, 10, 15, 11,
 	15, 12, 15, 12, 14, 13, 14, 14, 14, 14, 13, 15, 13, 15, 12, 16, 12, 16, 11, 17, 11, 17, 10, 18, 10,
 	18, 9,  18, 8,  19, 8,  19, 7,  19, 6,  20, 6,  20, 5,  21, 4,  21, 3,  21, 2,  21, 1,  21, 0,
 };
+// GLOBAL: TIE95 0xC575C
 static uint8_t radarmax[74] = {
 	0,  18, 1,  18, 2,  18, 3,  18, 4,  17, 5,  17, 6,  17, 7,  17, 8,  16, 9,  16, 10, 16, 10, 15, 11,
 	15, 12, 15, 12, 14, 13, 14, 14, 14, 14, 13, 15, 13, 15, 12, 16, 12, 16, 11, 17, 11, 17, 10, 18, 10,
 	18, 9,  18, 8,  19, 8,  19, 7,  19, 6,  20, 6,  20, 5,  21, 4,  21, 3,  21, 2,  21, 1,  21, 0,
 };
-static int16_t cached_radar_resolution = -1;
+/* Resolution radarmax[] was last built for; the initial table is the
+ * 320x200 one. */
+// GLOBAL: TIE95 0xC57A8
+static int32_t cached_radar_resolution = TIE_FLIGHT_RES_VGA;
 /* Retail stores the projected radar coordinate in shared globals
  * (radarx / radary, declared in panel.h) that PANEL_addbliptoradar reads
  * immediately after the call. Bind the math2 outputs to those symbols
@@ -140,7 +150,8 @@ int16_t math2_getrandom(void) {
 	return (int16_t)val;
 }
 
-/* No-op in the binary (just retn 4) */
+/* Empty in retail; MATH2_getrandom shares its ret. */
+// FUNCTION: TIE95 0x32140
 void math2_setrandomseed(void) {}
 
 // FUNCTION: TIE95 0x32144
@@ -153,6 +164,7 @@ uint16_t math2_mphconvert(int16_t speed, uint16_t divisor) {
 	return result;
 }
 
+// FUNCTION: TIE95 0x32174
 uint16_t math2_calcratio(uint16_t a, uint16_t b, uint16_t c) { return (uint16_t)((uint32_t)b * c / a); }
 
 // FUNCTION: TIE95 0x32190
@@ -185,6 +197,8 @@ void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz) {
 	int32_t ax;
 	int32_t ay;
 	int shift;
+	int16_t ratio;
+	int16_t angle;
 	uint16_t nav_angle;
 	uint16_t table_idx;
 	uint8_t max_x;
@@ -239,10 +253,10 @@ void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz) {
 	radary = (int16_t)ay;
 
 	/* Compute angle via calcarctan(ax, ay) */
-	trig2_calcarctan(ax, ay);
+	trig2_calcarctan(ax, ay, &ratio, &angle);
 
-	/* Convert to navigation angle: -angleplane + 90° */
-	nav_angle = (uint16_t)(-trig2_angleplane + 0x4000);
+	/* Convert to navigation angle: -angle + 90° */
+	nav_angle = (uint16_t)(-angle + 0x4000);
 
 	/* Look up radar boundary at this angle */
 	table_idx = 2 * (nav_angle / 443);

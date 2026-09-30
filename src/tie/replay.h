@@ -39,8 +39,9 @@ extern "C" {
  * sequence of fixed-size records. See user.c for the per-slot layout.
  *
  * The runtime layout is naturally aligned. The on-disk layout is the
- * fixed 18-byte little-endian record produced by `ReplayInputFrame_encode`
- * and consumed by `ReplayInputFrame_decode`.
+ * fixed 18-byte little-endian record produced by
+ * `TieReplayFormat_EncodeInputFrame` and consumed by
+ * `TieReplayFormat_DecodeInputFrame`.
  * -------------------------------------------------------------------------- */
 
 typedef struct ReplayInputFrame {
@@ -72,9 +73,6 @@ enum {
 typedef char
 	ReplayInputFrameWireSizeCheck[(REPLAYINPUTFRAME_THROTTLE_OFFSET + 4 == REPLAYINPUTFRAME_DISK_SIZE) ? 1
 																									   : -1];
-
-void ReplayInputFrame_decode(ReplayInputFrame* dst, const uint8_t* src);
-void ReplayInputFrame_encode(uint8_t* dst, const ReplayInputFrame* src);
 
 /* --------------------------------------------------------------------------
  * API
@@ -144,7 +142,7 @@ extern uint8_t trackspecies;   /* species of the track-target (info box) */
 extern uint16_t trackobject;   /* 0xFFFF = no track, else object slot */
 extern uint8_t reentersimflag; /* 1 = return to live sim from viewer */
 extern uint8_t exitflag;       /* 1 = exit current replay loop */
-extern int32_t cameraposstate; /* 0 = chase info hidden, 1 = visible */
+extern uint8_t cameraposstate; /* 0 = chase info hidden, 1 = visible */
 
 #ifdef __cplusplus
 }

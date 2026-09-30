@@ -25,10 +25,6 @@ typedef struct {
 } FileDialog;
 
 int16_t filmview_FilmView(SceneHeadStruct* scene_head);
-int16_t filmview_PrepareFileDialog(FileDialog* dialog, Input** root);
-void filmview_ApplySelectedFile(int16_t result);
-Input* filmview_BuildDeleteDialog(void);
-void filmview_CompleteDelete(Input* input);
 
 #ifdef __cplusplus
 }

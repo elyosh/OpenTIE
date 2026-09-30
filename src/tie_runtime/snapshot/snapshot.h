@@ -52,12 +52,6 @@ const uint8_t* TieTextSnapshot_ColorRemapTable(void);
 const char* TieTextSnapshot_StringCell(int cell);
 int TieTextSnapshot_StringCount(void);
 
-/* AI-order-code → messagetable[] index lookup table, 69 entries. The
- * engine uses this in user_resetview to map a craft's `order` byte
- * to a display-message cell (panel.c:1713). HD overlays that build
- * threat-view labels read it via this accessor. */
-const uint8_t* TieTextSnapshot_ConvertMessageTable(void);
-
 typedef enum TieSnapshotChannel {
 	TIE_SNAPSHOT_CHANNEL_FLIGHTS,
 	TIE_SNAPSHOT_CHANNEL_STATICS,

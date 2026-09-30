@@ -1,6 +1,7 @@
 #include "tie/frontend_sound_tie98.h"
 #include "tie/fsfx.h"
 #include "tie_runtime/audio/flight_audio.h"
+#include "tie_runtime/audio/flight_sound_bank.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -26,34 +27,13 @@ static FrontendSoundPending pending_sounds[FRONTEND_SOUND_PENDING_CAPACITY + 1];
 // GLOBAL: TIE98 0x5F2B14
 static int pending_sound_count;
 
-static int loaded_sound_id(const char* name) { return fsfx_find_sound_id(name); }
-
-static int find_pending(const char* name) {
-	int i;
-	if (!name)
-		return -1;
-	for (i = 0; i < pending_sound_count; ++i)
-		if (strcmp(pending_sounds[i].name, name) == 0)
-			return i;
-	return -1;
-}
-
-static void remove_pending(int index) {
-	if (index < 0 || index >= pending_sound_count)
-		return;
-	--pending_sound_count;
-	if (index < pending_sound_count)
-		memmove(&pending_sounds[index], &pending_sounds[index + 1],
-				(size_t)(pending_sound_count - index) * sizeof pending_sounds[0]);
-}
-
 // FUNCTION: TIE98 0x484560
 int FrontendSound_QueueSound(const char* name, int start_mode, int loop, int priority, int volume, int pan,
 							 int use_voice_volume) {
 	int insert;
 	FrontendSoundPending* pending;
 
-	if (!name || loaded_sound_id(name) < 0 || pending_sound_count >= FRONTEND_SOUND_PENDING_CAPACITY ||
+	if (!name || TieFlightSound_FindId(name) < 0 || pending_sound_count >= FRONTEND_SOUND_PENDING_CAPACITY ||
 		priority < 0 || priority > 127 || volume < 0 || volume > 127 || pan < 0 || pan > 127)
 		return 0;
 
@@ -81,8 +61,11 @@ void FrontendSound_FlushQueuedSounds(void) {
 		int sound_id;
 		TieFlightWaveStart request;
 
-		remove_pending(0);
-		sound_id = loaded_sound_id(pending.name);
+		--pending_sound_count;
+		if (pending_sound_count > 0)
+			memmove(&pending_sounds[0], &pending_sounds[1],
+					(size_t)pending_sound_count * sizeof pending_sounds[0]);
+		sound_id = TieFlightSound_FindId(pending.name);
 		if (sound_id < 0)
 			continue;
 		request.sound_id = (uint16_t)sound_id;
@@ -98,7 +81,7 @@ void FrontendSound_FlushQueuedSounds(void) {
 
 // FUNCTION: TIE98 0x4851a0
 int FrontendSound_CountPlaying(const char* name) {
-	int sound_id = loaded_sound_id(name);
+	int sound_id = TieFlightSound_FindId(name);
 	int active;
 	int queued = 0;
 	int i;
@@ -114,46 +97,70 @@ int FrontendSound_CountPlaying(const char* name) {
 
 // FUNCTION: TIE98 0x484a70
 int FrontendSound_StopSoundByName(const char* name) {
-	int sound_id = loaded_sound_id(name);
+	int sound_id = TieFlightSound_FindId(name);
 	int pending;
+	int i;
 	if (sound_id < 0)
 		return 0;
 	if (TieFlightAudio_GetPlayCount((uint16_t)sound_id) > 0) {
 		TieFlightAudio_StopWave((uint16_t)sound_id);
 		return 1;
 	}
-	pending = find_pending(name);
+	pending = -1;
+	for (i = 0; name && i < pending_sound_count; ++i) {
+		if (strcmp(pending_sounds[i].name, name) == 0) {
+			pending = i;
+			break;
+		}
+	}
 	if (pending < 0)
 		return 0;
-	remove_pending(pending);
+	--pending_sound_count;
+	if (pending < pending_sound_count)
+		memmove(&pending_sounds[pending], &pending_sounds[pending + 1],
+				(size_t)(pending_sound_count - pending) * sizeof pending_sounds[0]);
 	return 1;
 }
 
 // FUNCTION: TIE98 0x484ec0
 int FrontendSound_GetVolume(const char* name) {
-	int sound_id = loaded_sound_id(name);
+	int sound_id = TieFlightSound_FindId(name);
 	int pending;
+	int i;
 	int active;
 	if (sound_id < 0)
 		return -1;
 	active = TieFlightAudio_GetVolume((uint16_t)sound_id);
 	if (active >= 0)
 		return active;
-	pending = find_pending(name);
+	pending = -1;
+	for (i = 0; name && i < pending_sound_count; ++i) {
+		if (strcmp(pending_sounds[i].name, name) == 0) {
+			pending = i;
+			break;
+		}
+	}
 	return pending >= 0 ? pending_sounds[pending].volume : -1;
 }
 
 // FUNCTION: TIE98 0x484db0
 int FrontendSound_SetVolume(const char* name, int volume) {
-	int sound_id = loaded_sound_id(name);
+	int sound_id = TieFlightSound_FindId(name);
 	int pending;
+	int i;
 	if (sound_id < 0 || volume < 0 || volume > 127)
 		return 0;
 	if (TieFlightAudio_GetPlayCount((uint16_t)sound_id) > 0) {
 		TieFlightAudio_SetVolume((uint16_t)sound_id, (uint8_t)volume);
 		return 1;
 	}
-	pending = find_pending(name);
+	pending = -1;
+	for (i = 0; name && i < pending_sound_count; ++i) {
+		if (strcmp(pending_sounds[i].name, name) == 0) {
+			pending = i;
+			break;
+		}
+	}
 	if (pending < 0)
 		return 0;
 	pending_sounds[pending].volume = volume;
@@ -162,15 +169,22 @@ int FrontendSound_SetVolume(const char* name, int volume) {
 
 // FUNCTION: TIE98 0x484f30
 int FrontendSound_SetPan(const char* name, int pan) {
-	int sound_id = loaded_sound_id(name);
+	int sound_id = TieFlightSound_FindId(name);
 	int pending;
+	int i;
 	if (sound_id < 0 || pan < 0 || pan > 127)
 		return 0;
 	if (TieFlightAudio_GetPlayCount((uint16_t)sound_id) > 0) {
 		TieFlightAudio_SetPan((uint16_t)sound_id, (uint8_t)pan);
 		return 1;
 	}
-	pending = find_pending(name);
+	pending = -1;
+	for (i = 0; name && i < pending_sound_count; ++i) {
+		if (strcmp(pending_sounds[i].name, name) == 0) {
+			pending = i;
+			break;
+		}
+	}
 	if (pending < 0)
 		return 0;
 	pending_sounds[pending].pan = pan;
@@ -179,15 +193,22 @@ int FrontendSound_SetPan(const char* name, int pan) {
 
 // FUNCTION: TIE98 0x4850b0
 int FrontendSound_SetPriority(const char* name, int priority) {
-	int sound_id = loaded_sound_id(name);
+	int sound_id = TieFlightSound_FindId(name);
 	int pending;
+	int i;
 	if (sound_id < 0 || priority < 0 || priority > 127)
 		return 0;
 	if (TieFlightAudio_GetPlayCount((uint16_t)sound_id) > 0) {
 		TieFlightAudio_SetPriority((uint16_t)sound_id, (uint8_t)priority);
 		return 1;
 	}
-	pending = find_pending(name);
+	pending = -1;
+	for (i = 0; name && i < pending_sound_count; ++i) {
+		if (strcmp(pending_sounds[i].name, name) == 0) {
+			pending = i;
+			break;
+		}
+	}
 	if (pending < 0)
 		return 0;
 	pending_sounds[pending].priority = priority;
@@ -196,21 +217,28 @@ int FrontendSound_SetPriority(const char* name, int priority) {
 
 // FUNCTION: TIE98 0x485170
 int FrontendSound_GetPriority(const char* name) {
-	int sound_id = loaded_sound_id(name);
+	int sound_id = TieFlightSound_FindId(name);
 	int pending;
+	int i;
 	int active;
 	if (sound_id < 0)
 		return -1;
 	active = TieFlightAudio_GetPriority((uint16_t)sound_id);
 	if (active >= 0)
 		return active;
-	pending = find_pending(name);
+	pending = -1;
+	for (i = 0; name && i < pending_sound_count; ++i) {
+		if (strcmp(pending_sounds[i].name, name) == 0) {
+			pending = i;
+			break;
+		}
+	}
 	return pending >= 0 ? pending_sounds[pending].priority : -1;
 }
 
 // FUNCTION: TIE98 0x485060
 int FrontendSound_SetFrequency(const char* name, int frequency_hz) {
-	int sound_id = loaded_sound_id(name);
+	int sound_id = TieFlightSound_FindId(name);
 	if (sound_id < 0 || frequency_hz < 0 || TieFlightAudio_GetPlayCount((uint16_t)sound_id) <= 0)
 		return 0;
 	TieFlightAudio_SetFrequency((uint16_t)sound_id, (uint32_t)frequency_hz);
@@ -222,7 +250,7 @@ int LOLEVEL_ImGetParam(uint16_t sound_id, int param) {
 	const char* name;
 	if (sound_id < 4 || sound_id >= FSFX_NUM_SOUND_HANDLES)
 		return param == 0x100 ? 0 : -1;
-	name = fsfx_sound_name(sound_id);
+	name = TieFlightSound_Name(sound_id);
 	if (!name)
 		return param == 0x100 ? 0 : -1;
 	if (param == 0x100)
@@ -234,7 +262,7 @@ int LOLEVEL_ImGetParam(uint16_t sound_id, int param) {
 
 // FUNCTION: TIE98 0x42fe20
 int LOLEVEL_ImStopSound(uint16_t sound_id) {
-	const char* name = fsfx_sound_name(sound_id);
+	const char* name = TieFlightSound_Name(sound_id);
 	return name ? FrontendSound_StopSoundByName(name) : 0;
 }
 

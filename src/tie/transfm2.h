@@ -39,8 +39,6 @@ int32_t* transfm2_geteyecoordsZ0s16(const int16_t* source, int32_t* dest);
 int32_t* transfm2_geteyecoordsZ0s8(const int16_t* source, int32_t* dest);
 
 /* Screen projection */
-int32_t transfm2_getscreencoordx(int32_t eyex, int32_t eyez);
-int32_t transfm2_getscreencoordy(int32_t eyey, int32_t eyez);
 int32_t* transfm2_getscreencoords(int32_t* source, int32_t* dest);
 int32_t transfm2_getscreenx(int32_t eyex, int32_t eyez);
 int32_t transfm2_getscreeny(int32_t eyey, int32_t eyez);

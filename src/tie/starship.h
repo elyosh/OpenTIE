@@ -87,7 +87,7 @@ uint16_t starship_damagecomponent(uint16_t obj_idx, int16_t component_plus1, uin
  *   full_ship == 1 (move_moveobjects when a big ship's death_timer expires):
  *     - detonate every MESH_MainHull mesh in sequence (up to 16 entries),
  *       passing the per-mesh explosion_scale value (mesh+0x0A, u16)
- *     - clear ship_idx on the 5 slots starting at bigexplo_obj_first so
+ *     - clear ship_idx on the slot at genus_table[13].start so
  *       the big-bitmap pool is free for the new explosion frames
  *     - trigger the whole-ship SFX (0x12)
  *
@@ -125,19 +125,6 @@ uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_
  * cooldown rate; hardpoint position, range, self-occlusion, and target lead
  * determine whether a projectile is spawned. */
 void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, uint16_t target_ref);
-
-/*
- * STARSHIP run-time scalar detail control.
- *
- *   bigexplo_obj_first -- first of 5 reserved FlightObject slots used for
- *                         big-ship bitmap explosion sprites. In the binary
- *                         this is 92, so slots 92..96 are reused.
- *
- * starshipdetail / starshipexplodetail are tie.c-owned scalars declared in
- * tie.h. The LOD source tables (starshipdtl / starshipexplodtl) are user.c-
- * owned and declared in user.h.
- */
-extern const uint16_t bigexplo_obj_first;
 
 /*
  * Mesh-flag bit consumed by starship_damagecomponent: when the mesh's flags

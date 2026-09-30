@@ -108,18 +108,50 @@ static const uint16_t squarerootable[258] = {
 	26964, 27146, 0,
 };
 
-/* Working globals */
-int32_t trig2_xoffset, trig2_yoffset, trig2_zoffset;
-int32_t trig2_xmovedist, trig2_ymovedist, trig2_zmovedist;
-int32_t trig2_rho, trig2_distanceplane, trig2_polardistance;
-int32_t trig2_cartesianxoffset, trig2_cartesianyoffset;
+/* Working globals. The demo's sin/cos theta/phi, their sign words and
+ * divisorhi/divisorlo have no retail reference and are not recovered. */
+// GLOBAL: TIE95 0xEC1A4
 int32_t trig2_divisorhilo;
-int16_t trig2_theta, trig2_phi;
-int16_t trig2_xyangle, trig2_zangle, trig2_angleplane;
-int16_t trig2_signx, trig2_signy, trig2_signz, trig2_signswap;
-int16_t trig2_sintheta, trig2_costheta, trig2_sinphi, trig2_cosphi;
-int16_t trig2_sinthetasign, trig2_costhetasign, trig2_sinphisign, trig2_cosphisign;
-int16_t trig2_divisorhi, trig2_divisorlo;
+// GLOBAL: TIE95 0xEC1A8
+int32_t trig2_xoffset;
+// GLOBAL: TIE95 0xEC1AC
+int32_t trig2_yoffset;
+// GLOBAL: TIE95 0xEC1B0
+int32_t trig2_zoffset;
+// GLOBAL: TIE95 0xEC1B4
+int32_t trig2_rho;
+// GLOBAL: TIE95 0xEC1B8
+int32_t trig2_cartesianyoffset;
+// GLOBAL: TIE95 0xEC1BC
+int32_t trig2_polardistance;
+// GLOBAL: TIE95 0xEC1C0
+int32_t trig2_cartesianxoffset;
+// GLOBAL: TIE95 0xEC1C4
+int32_t trig2_zmovedist;
+// GLOBAL: TIE95 0xEC1C8
+int32_t trig2_ymovedist;
+// GLOBAL: TIE95 0xEC1CC
+int32_t trig2_xmovedist;
+// GLOBAL: TIE95 0xEC1D0
+int32_t trig2_distanceplane;
+// GLOBAL: TIE95 0xEC1D4
+int16_t trig2_signz;
+// GLOBAL: TIE95 0xEC1D6
+int16_t trig2_signy;
+// GLOBAL: TIE95 0xEC1D8
+int16_t trig2_signx;
+// GLOBAL: TIE95 0xEC1E6
+int16_t trig2_signswap;
+// GLOBAL: TIE95 0xEC1EE
+int16_t trig2_phi;
+// GLOBAL: TIE95 0xEC1F2
+int16_t trig2_theta;
+// GLOBAL: TIE95 0xEC1F4
+int16_t trig2_xyangle;
+// GLOBAL: TIE95 0xEC1F6
+int16_t trig2_angleplane;
+// GLOBAL: TIE95 0xEC1F8
+int16_t trig2_zangle;
 
 /* ------------------------------------------------------------------ */
 
@@ -327,7 +359,7 @@ int16_t trig2_arccos(int16_t val) {
 /* ------------------------------------------------------------------ */
 
 /* Core arctangent with table lookup and 8-bit linear interpolation.
- * Sets trig2_angleplane, trig2_divisorhilo, trig2_signswap globals.
+ * Sets trig2_divisorhilo and trig2_signswap; returns ratio and angle.
  *
  * Quotient layout: bits 8..15 = integer ratio (table index), bits 0..7
  * = fractional ratio (interpolation weight, scaled to 0xFF00 to match
@@ -335,7 +367,8 @@ int16_t trig2_arccos(int16_t val) {
  * (a==b, larger==smaller after normalization) use a frac of 0 since
  * arctantable[ratio+1]-arctantable[ratio] near the boundary is small
  * enough that the contribution is sub-tick. */
-static void calcarctan_core(int32_t a, int32_t b, int16_t* out_ratio, int16_t* out_angle) {
+// FUNCTION: TIE95 0x5C2C0
+void trig2_calcarctan(int32_t a, int32_t b, int16_t* out_ratio, int16_t* out_angle) {
 	uint32_t frac;
 	uint16_t ratio;
 	int16_t base;
@@ -407,7 +440,7 @@ int16_t trig2_arctan(int32_t y, int32_t x) {
 		trig2_signx = 1;
 	}
 
-	calcarctan_core(x, y, &ratio, &angle);
+	trig2_calcarctan(x, y, &ratio, &angle);
 
 	if (trig2_signy)
 		angle = -angle;
@@ -420,20 +453,13 @@ int16_t trig2_arctan(int32_t y, int32_t x) {
 
 /* ------------------------------------------------------------------ */
 
-/* Public calcarctan — called by MATH2_getradarcoord */
-// FUNCTION: TIE95 0x5C2C0
-void trig2_calcarctan(int32_t a, int32_t b) {
-	int16_t ratio, angle;
-	calcarctan_core(a, b, &ratio, &angle);
-	trig2_angleplane = angle;
-}
-
-/* Internal: 2D cartesian to polar using calcarctan + square root table */
-static void trig2_ctoptwodim_internal(int32_t a, int32_t b) {
+/* 2D cartesian to polar using calcarctan + square root table */
+// FUNCTION: TIE95 0x5C258
+void trig2_ctoptwodim(int32_t a, int32_t b) {
 	int16_t ratio, angle;
 	uint16_t sqrt_val;
 
-	calcarctan_core(a, b, &ratio, &angle);
+	trig2_calcarctan(a, b, &ratio, &angle);
 	trig2_angleplane = angle;
 
 	/* Distance = divisorhilo * sqrt(1 + (ratio/256)²) */
@@ -443,6 +469,7 @@ static void trig2_ctoptwodim_internal(int32_t a, int32_t b) {
 						  (int32_t)sqrt_val * (trig2_divisorhilo >> 16);
 }
 
+// FUNCTION: TIE95 0x5BF90
 void trig2_ptoc3dim(void) {
 	trig2_zoffset = trig2_sinedwordmult(trig2_rho, trig2_phi);
 	trig2_xoffset = trig2_cosinedwordmult(trig2_zoffset, trig2_theta);
@@ -450,6 +477,7 @@ void trig2_ptoc3dim(void) {
 	trig2_zoffset = trig2_cosinedwordmult(trig2_rho, trig2_phi);
 }
 
+// FUNCTION: TIE95 0x5BFF0
 void trig2_ptoc2dim(void) {
 	trig2_cartesianxoffset = trig2_cosinedwordmult(trig2_distanceplane, trig2_angleplane);
 	trig2_cartesianyoffset = trig2_sinedwordmult(trig2_distanceplane, trig2_angleplane);
@@ -460,7 +488,11 @@ void trig2_movexyz(uint16_t distance, int16_t pitch, uint16_t heading) {
 	trig2_phi = heading;
 	trig2_theta = 0x4000 - pitch;
 	trig2_rho = distance;
-	trig2_ptoc3dim();
+	/* ptoc3dim body, expanded in place in the retail function. */
+	trig2_zoffset = trig2_sinedwordmult(trig2_rho, trig2_phi);
+	trig2_xoffset = trig2_cosinedwordmult(trig2_zoffset, trig2_theta);
+	trig2_yoffset = trig2_sinedwordmult(trig2_zoffset, trig2_theta);
+	trig2_zoffset = trig2_cosinedwordmult(trig2_rho, trig2_phi);
 	trig2_xmovedist = trig2_xoffset;
 	trig2_ymovedist = trig2_yoffset;
 	trig2_zmovedist = trig2_zoffset;
@@ -481,7 +513,7 @@ void trig2_ctop2dim(int32_t x, int32_t y) {
 		trig2_signy = 1;
 	}
 
-	trig2_ctoptwodim_internal(x, y);
+	trig2_ctoptwodim(x, y);
 
 	angle = trig2_angleplane;
 	if (trig2_signy)
@@ -512,7 +544,7 @@ void trig2_ctop(int32_t x, int32_t y, int32_t z) {
 	trig2_zoffset = z;
 
 	/* XY-plane angle */
-	trig2_ctoptwodim_internal(trig2_xoffset, trig2_yoffset);
+	trig2_ctoptwodim(trig2_xoffset, trig2_yoffset);
 	trig2_xyangle = trig2_angleplane;
 	if (trig2_signy)
 		trig2_xyangle = -trig2_angleplane;
@@ -523,7 +555,7 @@ void trig2_ctop(int32_t x, int32_t y, int32_t z) {
 	trig2_xyangle = -trig2_xyangle + 0x4000;
 
 	/* Z-elevation angle */
-	trig2_ctoptwodim_internal(trig2_polardistance, trig2_zoffset);
+	trig2_ctoptwodim(trig2_polardistance, trig2_zoffset);
 	trig2_zangle = trig2_angleplane;
 	if (trig2_signz)
 		trig2_zangle = -trig2_angleplane;

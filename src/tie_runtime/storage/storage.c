@@ -157,6 +157,12 @@ int TieStorage_Remove(TieFileRoot root, const char* path) {
 	return AeronVfs_Remove(vfs, vfs_root, path) ? 0 : -1;
 }
 
+static TieFileRoot s_open_file_root;
+
+void TieStorage_SetOpenFileRoot(TieFileRoot root) { s_open_file_root = root; }
+
+int TieStorage_RemoveOpenFile(const char* path) { return TieStorage_Remove(s_open_file_root, path); }
+
 static int TieStorage_CollectEntry(void* userdata, const AeronVfsEntry* entry) {
 	TieStorageDirectory* directory = (TieStorageDirectory*)userdata;
 	if (directory->count == directory->capacity) {

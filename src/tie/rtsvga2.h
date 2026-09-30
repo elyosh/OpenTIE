@@ -1,6 +1,10 @@
 #ifndef TIE_RTSVGA2_H
 #define TIE_RTSVGA2_H
 
+#ifdef TIE_MODERN
+#include "tie_runtime/display/tie98_starfield.h"
+#endif
+
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -47,9 +51,6 @@ extern int32_t stareyex[128], stareyey[128], stareyez[128];
 extern uint16_t stardetaillevel; /* 1 = full detail, >1 = coarser */
 extern int16_t drawshapex;
 extern int16_t drawshapey;
-extern int16_t tempdepth;
-extern int16_t drawdepth;
-extern int16_t tempwidth;
 extern int16_t drawwidth;           /* reused as scratch by save/restore box */
 extern uint8_t basecolor;           /* shape blitter running base color */
 extern int16_t skipcolorvga;        /* shape "transparent" color (low byte) */
@@ -137,7 +138,12 @@ void rtsvga2_removecross(uint16_t x, uint16_t y);
 /* Starfield */
 void rtsvga2_drawstars(void);
 void rtsvga2_drawstars_tie98(void);
-void Tie98StarColors_Invalidate(void);
+
+/* TIE98 drawstars lazy-initialisation flags for its star tables. */
+extern int g_starColor8Allocated;
+extern int g_starColor8Initialized;
+extern int g_starColor16Initialized;
+extern int g_starPositionsInitialized;
 
 /* Retail-only screenshot */
 int rtsvga2_takeScreenshot(void);

@@ -32,11 +32,23 @@
  * used by collide_collisions on a briefing/training/combat collision.
  * NOTE: the binary writes player->heading into gatepreviouspitch[0] and
  * player->pitch into gatepreviousheading[0] (swap); readers compensate. */
+// GLOBAL: TIE95 0xD4AFC
+// GLOBAL: TIE98 0x6258A8
 int16_t gatepreviousroll[4];
+// GLOBAL: TIE95 0xD4B24
+// GLOBAL: TIE98 0x6258F0
 int32_t gatepreviousx[4];
+// GLOBAL: TIE95 0xD4B14
+// GLOBAL: TIE98 0x625900
 int32_t gatepreviousy[4];
+// GLOBAL: TIE95 0xD4B04
+// GLOBAL: TIE98 0x6258E0
 int32_t gatepreviousz[4];
+// GLOBAL: TIE95 0xD4B34
+// GLOBAL: TIE98 0x6258C8
 int16_t gatepreviousheading[4];
+// GLOBAL: TIE95 0xD4B3C
+// GLOBAL: TIE98 0x6258C0
 int16_t gatepreviouspitch[4];
 
 /* -------------------------------------------------------------------------
@@ -50,7 +62,9 @@ int16_t gatepreviouspitch[4];
 
 /* Rotation period per training level (20 entries; only levels 0..19 are
  * reachable in practice). Values taken directly from the shipped .EXE data
- * segment at D4C2C. Lower = faster mesh rotation. */
+ * segment. Lower = faster mesh rotation. */
+// GLOBAL: TIE95 0xC5360
+// GLOBAL: TIE98 0x4E3950
 uint16_t gatespeed[20] = {
 	24, 24, 24, 24, 20, 16, 14, 14, 14, 12, 12, 12, 10, 8, 6, 6, 6, 6, 6, 6,
 };
@@ -83,9 +97,13 @@ void* targetshitstr;
 void* scorestr;
 
 /* Animation timers: [0] = cargopod, [1] = wing, [2] = antenna. */
+// GLOBAL: TIE95 0xD4B58
+// GLOBAL: TIE98 0x6258D0
 int16_t gatetimer[3];
 
 /* Unused training-gun timer. */
+// GLOBAL: TIE95 0xD4B5E
+// GLOBAL: TIE98 0x6258A4
 int16_t gateguntimer;
 
 /* Next gate the player must cross (1..12). Reset to 1 by
@@ -99,22 +117,6 @@ uint16_t gate_render_reference_object;
 // FUNCTION: TIE98 0x426310
 // GATE_setrenderreferenceobject (inferred)
 void gate_setrenderreferenceobject(uint16_t object_index) { gate_render_reference_object = object_index; }
-
-/* -------------------------------------------------------------------------
- * Small local helpers
- * ---------------------------------------------------------------------- */
-
-/* Clamp a 32-bit fixed-point accumulator to the range the binary uses
- * before its arithmetic right shift by 15. Matches the three-instruction
- * sequence: cmp+cmov at 0x40000000 and -0x40000000, replacing the value
- * with +/- 0x3FFF0000 (== 1073676288). */
-static inline int32_t clamp_dot_30(int32_t v) {
-	if (v >= 0x40000000)
-		return 0x3FFF0000;
-	if (v <= -0x40000000)
-		return -0x3FFF0000;
-	return v;
-}
 
 /* -------------------------------------------------------------------------
  * gate_savegatelastpos  (0x27c90)
@@ -729,10 +731,19 @@ int gate_checkgateedge(uint16_t obj_idx) {
 						  (int32_t)obj->fwd_x * (int16_t)dx_cur;
 		int32_t dot_prev;
 
-		cur_signed = clamp_dot_30(dot_cur) >> 15;
+		/* Clamp the Q30 dot product to +/-0x3FFF0000 before the >> 15. */
+		if (dot_cur >= 0x40000000)
+			dot_cur = 0x3FFF0000;
+		else if (dot_cur <= -0x40000000)
+			dot_cur = -0x3FFF0000;
+		cur_signed = dot_cur >> 15;
 		dot_prev = (int32_t)obj->fwd_z * (int16_t)dz_prev + (int32_t)obj->fwd_y * (int16_t)dy_prev +
 				   (int32_t)obj->fwd_x * (int16_t)dx_prev;
-		prev_signed = clamp_dot_30(dot_prev) >> 15;
+		if (dot_prev >= 0x40000000)
+			dot_prev = 0x3FFF0000;
+		else if (dot_prev <= -0x40000000)
+			dot_prev = -0x3FFF0000;
+		prev_signed = dot_prev >> 15;
 	}
 
 	/* Same-sign on both ticks = no crossing. The binary encodes this as
@@ -1057,13 +1068,6 @@ void gate_updategateanimations(void) {
 	bonus_countdown_active = 0;
 #endif
 }
-
-/* Set while the countdown task is on the stack. Mirrors the window
- * during which `gate_updatebonuspoints` overdraws the bonus-bar
- * region every step — outside that window panel_updatepanel's
- * cockpit-bitmap paint leaves the region bare. Host renderers read
- * via gate.h to gate the bonus-bar emission to the same window. */
-uint8_t bonus_countdown_active;
 
 /* -------------------------------------------------------------------------
  * gate_trainingupdatecrt  (0x2948c)

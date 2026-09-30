@@ -6,6 +6,7 @@
 #include "tie_runtime/audio/imuse_session.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/computer_task.h"
+#include "tie_runtime/runtime/shell_task.h"
 #endif
 
 #include "landru/actanim.h"
@@ -34,11 +35,17 @@
 
 /* --- Globals --- */
 
+// GLOBAL: TIE95 0xF5032
+// GLOBAL: TIE98 0x5F32E0
 FrontOptionsStruct options_gbl;
-int32_t f_res;
+// GLOBAL: TIE95 0xCE3D0
+// GLOBAL: TIE98 0x4EB920
+int32_t f_res = 1;
 
 /* Scene→redirect pairs: when transitions are disabled, these scenes skip
    to their redirect target. Sentinel = 0. */
+// GLOBAL: TIE95 0xCE3D4
+// GLOBAL: TIE98 0x4EB928
 static int16_t transition_check[] = { 120, 121, 130, 131, 270, 4, 0 };
 
 #include "tie/soundext.h"
@@ -163,7 +170,7 @@ void shellext_Close_Landru_Scene(int16_t scene) {
 
 #ifdef TIE_MODERN
 	if (sHead_gbl->sudden_end)
-		shellext_Push_Sudden_Scene_Fade_Task();
+		TieShell_PushSuddenSceneFadeTask();
 #else
 	if (sHead_gbl->sudden_end)
 		shellext_Sudden_Scene_Fade();
@@ -189,16 +196,22 @@ LandruFile* shellext_Open_Empire_File(const char* filename, const char* mode) {
 	return xfile_Open_File(LANDRU_FILE_ROOT_ASSET, file_name, mode);
 }
 
+// FUNCTION: TIE95 0x661CF
+// FUNCTION: TIE98 0x4808F0
 int16_t shellext_Check_Cur_Scene(int16_t current_scene) { return sHead_gbl->cur_scene == current_scene; }
 
 // FUNCTION: TIE95 0x6621B
 int16_t shellext_Get_Cur_Scene(void) { return sHead_gbl->cur_scene; }
 
+// FUNCTION: TIE95 0x6624B
+// FUNCTION: TIE98 0x480920
 int16_t shellext_Check_Last_Scene(int16_t last_scene) { return sHead_gbl->last_scene == last_scene; }
 
 // FUNCTION: TIE95 0x66297
 int16_t shellext_Get_Last_Scene(void) { return sHead_gbl->last_scene; }
 
+// FUNCTION: TIE95 0x662C7
+// FUNCTION: TIE98 0x480950
 int16_t shellext_Is_Scene_Exit(int16_t scene_flag) {
 	int16_t key;
 
@@ -245,33 +258,6 @@ int16_t shellext_Sudden_Scene_End(void) {
 // FUNCTION: TIE95 0x66423
 int16_t shellext_Is_Sudden_Scene_End(void) { return sHead_gbl->sudden_end; }
 
-/* Push the "back stage to VGA" fade task: caller-task yields after
- * this call; the FadeTask's end callback restores the cursor as it
- * pops, matching the pre/post cursor state of the original
- * synchronous shellext_Back_Stage_To_VGA. */
-void shellext_Push_Back_Stage_To_VGA_Task(int16_t dialog) {
-	bool cursor_was_visible;
-
-	Rect r;
-	xcanvas_Get_Drawing_Canvas_Bounds(&r);
-	cursor_was_visible = xcursor_Is_Cursor_Visible();
-	if (cursor_was_visible)
-		xcursor_Cursor_To_Back();
-	(void)xfade_Push_Fade_To_Video_Screen_Task(
-		&r, dialog, cursor_was_visible ? FADE_END_CURSOR_TO_FRONT : FADE_END_CURSOR_FROM_FADE,
-		/*force_refresh_view=*/false);
-}
-
-/* Push the sudden-scene-end fade. Used by shell_task_step when
- * shellext_Close_Landru_Scene reports sudden_end was set. The
- * xviewadd_Clear_View + xfade_Start_Full_Fade pair runs synchronously
- * before the fade push so the FadeTask sees the configured wipe. */
-void shellext_Push_Sudden_Scene_Fade_Task(void) {
-	xviewadd_Clear_View();
-	xfade_Start_Full_Fade(2, 2, 0, 0, 1);
-	shellext_Push_Back_Stage_To_VGA_Task(0);
-}
-
 // FUNCTION: TIE95 0x66526
 int16_t shellext_escape_TIE(void) {
 	/* Native dialog completion writes the exit latch after the wait. */
@@ -302,8 +288,12 @@ void shellext_Load_Preferences(void) {
 	options_gbl.game_level = 1;
 	options_gbl.auto_backup = 1;
 	options_gbl.auto_restore = 1;
-	/* PORT: Default new users to the TIE95 640x480 flight mode. */
+#ifdef TIE_MODERN
+	/* PORT: Default new users to the TIE95 640x480 flight mode on every
+	 * load; the original keeps the previous value when foption.cfg is
+	 * missing. */
 	f_res = 1;
+#endif
 
 	the_file = xfile_Open_File(LANDRU_FILE_ROOT_USER, "foption.cfg", "rb");
 	if (the_file) {

@@ -185,8 +185,6 @@ set(TIE_RECOVERED_SOURCES
         src/tie/tielogo.h
         src/tie/mainmenu.c
         src/tie/mainmenu.h
-        src/tie/menudata.h
-        src/tie/mainmenu_tie98.c
         src/tie/credits.c
         src/tie/credits.h
         src/tie/credits_internal.h
@@ -302,6 +300,11 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/timing/flight_integration.h
     src/tie_runtime/display/palette_cycle.c
     src/tie_runtime/display/palette_cycle.h
+    src/tie_runtime/display/dos_bios.c
+    src/tie_runtime/display/dos_bios.h
+    src/tie_runtime/display/tie98_starfield.c
+    src/tie_runtime/display/tie98_starfield.h
+    src/tie_runtime/runtime/pointer_key.h
     src/tie_runtime/runtime/brief_task.c
     src/tie_runtime/runtime/brief_task.h
     src/tie_runtime/runtime/tourdesk_task.c
@@ -347,12 +350,18 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/runtime/replay_session_task.c
     src/tie_runtime/runtime/replay_save_task.c
     src/tie_runtime/runtime/map_task.c
+    src/tie_runtime/runtime/panel_view_buffers.c
+    src/tie_runtime/runtime/panel_view_buffers.h
     src/tie_runtime/runtime/film_task.c
+    src/tie_runtime/runtime/play1_data_set.c
+    src/tie_runtime/runtime/play1_data_set.h
     src/tie_runtime/runtime/maproom_task.c
     src/tie_runtime/runtime/inflight_info_task.c
     src/tie_runtime/runtime/register_task.c
     src/tie_runtime/runtime/flight_task.c
     src/tie_runtime/runtime/flight_task.h
+    src/tie_runtime/runtime/flight_requests.c
+    src/tie_runtime/runtime/flight_requests.h
     src/tie_runtime/runtime/shell_task.c
     src/tie_runtime/runtime/shell_task.h
     src/tie_runtime/timing/flight_clock.c
@@ -388,6 +397,10 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/flight_assets/native_opt.h
     src/tie_runtime/display/tie98_renderer.c
     src/tie_runtime/display/tie98_renderer.h
+    src/tie_runtime/display/tie98_display.c
+    src/tie_runtime/display/tie98_display.h
+    src/tie_runtime/display/tie98_texture_cache.c
+    src/tie_runtime/display/tie98_texture_cache.h
     src/tie_runtime/runtime/profile.c
     src/tie_runtime/runtime/profile.h
     src/tie_runtime/runtime/replay_format.c
@@ -421,12 +434,15 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/storage/mission_records.h
     src/tie_runtime/storage/storage.c
     src/tie_runtime/storage/storage.h
+    src/tie_runtime/storage/media_stream.c
+    src/tie_runtime/storage/media_stream.h
     src/tie_runtime/storage/string_table.c
     src/tie_runtime/storage/string_table.h
     src/tie_runtime/storage/pilot_storage.h
     src/tie_runtime/storage/score_tables.c
     src/tie_runtime/storage/score_tables.h
     src/tie_runtime/flight_assets/assets.c
+    src/tie_runtime/flight_assets/species_names.c
     src/tie_runtime/flight_assets/assets.h
     src/tie_runtime/flight_assets/source.h
     src/tie_runtime/flight_assets/config.h
@@ -442,10 +458,14 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/flight_assets/ship_model_converter.h
     src/tie_runtime/flight_assets/service.c
     src/tie_runtime/flight_assets/service.h
+    src/tie_runtime/flight_assets/model_access.c
+    src/tie_runtime/flight_assets/model_access.h
     src/tie_runtime/timing/sim_clock.c
     src/tie_runtime/timing/sim_clock.h
     src/tie_runtime/timing/flight_timing.c
     src/tie_runtime/timing/flight_timing.h
+    src/tie_runtime/timing/flight_cadence.c
+    src/tie_runtime/timing/flight_cadence.h
     src/tie_runtime/timing/flight_timing_state.c
     src/tie_runtime/timing/flight_timing_state.h
     src/tie_runtime/timing/user_timing.c
@@ -466,16 +486,21 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/audio/music_policy.h
     src/tie_runtime/audio/flight_audio.c
     src/tie_runtime/audio/flight_audio.h
+    src/tie_runtime/audio/flight_sound_bank.c
+    src/tie_runtime/audio/flight_sound_bank.h
     src/tie_runtime/audio/frontend_voice.c
     src/tie_runtime/audio/frontend_voice.h
     src/tie_runtime/audio/player_engine.c
     src/tie_runtime/audio/player_engine.h
     src/tie_runtime/audio/voc_compat.c
     src/tie_runtime/audio/voc_compat.h
+    src/tie_runtime/audio/imuse_session.c
     src/tie_runtime/audio/imuse_session.h
     src/tie_runtime/audio/config.c
     src/tie_runtime/audio/output.c
     src/tie_runtime/audio/output.h
+    src/tie_runtime/audio/direct_sound.c
+    src/tie_runtime/audio/direct_sound.h
     src/tie_runtime/hooks/orientation.c
     src/tie_runtime/hooks/orientation.h)
 

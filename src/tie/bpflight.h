@@ -6,6 +6,7 @@
 #include "landru/rect.h"
 #include "landru/res.h"
 #include "tie/matrix.h"
+#include "tie_runtime/flight_assets/model_access.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -91,9 +92,6 @@ void bpflight_Stop_Movie_Engine(void);
  * Always returns 1; on failure objectloadsize stays 0 and the viewer
  * paints a black rect. */
 int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16_t mode);
-
-/* Maximum axis span of the primary TIE98 OPT preview model. */
-int tie98_preview_primary_model_max_extent(void);
 
 /* -- Dead-code helpers (inlined by Watcom in the shipped binary, no
  *    public callers). Declared for completeness / retail parity. -- */

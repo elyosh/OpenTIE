@@ -26,8 +26,10 @@
 #include "tie_runtime/hooks/orientation.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
+#include "tie_runtime/runtime/flight_requests.h"
 #include "tie_runtime/runtime/inflight_state.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/replay_format.h"
 #include "tie_runtime/runtime/runtime.h"
 #include "tie_runtime/storage/storage.h"
 #include "tie_runtime/timing/flight_timing_state.h"
@@ -101,49 +103,11 @@
  * ================================================================== */
 
 /*
- * Sub-modal result handoff. Set by every leaf sub-modal task
- * (msgroom / goals / maproom / damage / wingman / help / option /
- * inflightinfo) on the tick it returns LANDRU_TASK_STEP_DONE; consumed
- * once by the parent task on the next step.
- */
-int32_t user_submodal_result;
-
-/*
- * Pending info-room request. Set to a screen index (0..6) by the
- * synchronous user_userinterface keybind handlers; consumed (and
- * reset to -1) by the flight task step which pushes the
- * TieInflightInfo_Begin task in response.
- */
-static int32_t s_info_room_pending = -1;
-
-int32_t user_consume_info_room_request(void) {
-	int32_t r = s_info_room_pending;
-	s_info_room_pending = -1;
-	return r;
-}
-
-/*
- * Pending replay-viewer request. Set by the 'v' key handler in
- * user_userinterface; consumed by the flight task step, which pushes
- * TieReplaySession_Begin in response. The pre-empt bookkeeping
- * (spool flush, blank screen, recording stop, info banner) runs
- * immediately at the keybind site, since those side effects need to
- * happen on the same tick the user pressed the key (the viewer push
- * itself happens one tick later, after user_userinterface returns).
- */
-static int s_replay_viewer_pending;
-
-int user_consume_replay_viewer_request(void) {
-	int r = s_replay_viewer_pending;
-	s_replay_viewer_pending = 0;
-	return r;
-}
-
-/*
  * convertmessage -- 69-byte AI-order -> display-message-index table.
- * Binary values sampled from IDA (@ 0xDCF76); used by the 'radio order
- * report' key (R) to show the target's current order by name.
+ * Used by the 'radio order report' key (R) to show the target's current order by name.
  */
+// GLOBAL: TIE95 0xCDD2E
+// GLOBAL: TIE98 0x4F3C98
 uint8_t convertmessage[69] = { 0x7a, 0x7a, 0x7a, 0x92, 0x92, 0x92, 0x92, 0x7d, 0x7e, 0x7d, 0x7f, 0x80,
 							   0x80, 0x81, 0x82, 0x7f, 0x80, 0x81, 0x80, 0x83, 0x84, 0x7f, 0x80, 0x81,
 							   0x84, 0x7f, 0x80, 0x81, 0x85, 0x85, 0x85, 0x86, 0x85, 0x87, 0x85, 0x88,
@@ -151,41 +115,66 @@ uint8_t convertmessage[69] = { 0x7a, 0x7a, 0x7a, 0x92, 0x92, 0x92, 0x92, 0x7d, 0
 							   0x8d, 0x8e, 0x8f, 0x90, 0x91, 0x90, 0x8d, 0x7a, 0x92, 0x92, 0x93, 0x94,
 							   0x7c, 0x7c, 0x92, 0x92, 0x96, 0x95, 0x97, 0x7a, 0x85 };
 
-const uint8_t* TieTextSnapshot_ConvertMessageTable(void) { return convertmessage; }
-
 /*
  * viewtranslate[10] -- scan-key -> pilotview slot for the numpad view keys.
  * Indexed 0..9. Binary bytes: {0,3,4,5,2,16,6,1,0,7}.
  */
+// GLOBAL: TIE95 0xCDD10
+// GLOBAL: TIE98 0x4F3C70
 uint8_t viewtranslate[10] = { 0, 3, 4, 5, 2, 16, 6, 1, 0, 7 };
 
 /*
- * looktranslate[20] -- (pilotview, side_angle_byte) pairs, 10 keys.
- * Used by the chase-camera snap keys; binary at 0xDCF62.
+ * looktranslate[10] -- camera.up_angle per numpad view key, indexed like
+ * viewtranslate.
  */
-uint8_t looktranslate[20] = {
-	0, 0, 0, 0xa0, 0, 0x80, 0, 0x60, 0, 0xc0, 0, 0, 0, 0x40, 0, 0xe0, 0, 0, 0, 0x20
-};
+// GLOBAL: TIE95 0xCDD1A
+// GLOBAL: TIE98 0x4F3C80
+int16_t looktranslate[10] = { 0, -24576, -32768, 24576, -16384, 0, 16384, -8192, 0, 8192 };
 
 /*
  * LOD preset tables. Indexed 0..3 by user_setdetaillevel. Level 0 is
  * the shipped default (moderate detail); higher levels increase
  * fidelity at frame-rate cost.
  */
+// GLOBAL: TIE95 0xCDD96
+// GLOBAL: TIE98 0x4F3CE0
 const uint16_t starshipexplodtl[4] = { 0x1000, 0x2000, 0x4000, 0x7FFF };
+// GLOBAL: TIE95 0xCDD9E
+// GLOBAL: TIE98 0x4F3CE8
 const uint16_t starshipdtl[4] = { 1, 2, 3, 4 };
+// GLOBAL: TIE95 0xCDDA6
+// GLOBAL: TIE98 0x4F3CF0
 const uint16_t stardtl[4] = { 2, 1, 1, 1 };
+// GLOBAL: TIE95 0xCDDAE
+// GLOBAL: TIE98 0x4F3CF8
 const uint16_t backdtl[4] = { 0, 0, 0, 1 };
+// GLOBAL: TIE95 0xCDDB6
+// GLOBAL: TIE98 0x4F3D00
 const uint16_t debrisdtl[4] = { 0, 0, 1, 1 };
+// GLOBAL: TIE95 0xCDDBE
+// GLOBAL: TIE98 0x4F3D08
 const int16_t polydtl[4] = { 1, 1, 0, -1 };
+// GLOBAL: TIE95 0xCDDC6
+// GLOBAL: TIE98 0x4F3D10
 const uint16_t numpolydtl[4] = { 8, 12, 16, 16 };
+// GLOBAL: TIE95 0xCDDCE
+// GLOBAL: TIE98 0x4F3D18
 const uint16_t markdtl[4] = { 0, 0, 1, 1 };
+// GLOBAL: TIE95 0xCDDD6
+// GLOBAL: TIE98 0x4F3D20
 const uint16_t hyperdtl[4] = { 16, 32, 44, 50 };
+// GLOBAL: TIE95 0xCDDDE
 const uint8_t gourauddtl[6] = { 0, 0, 0x40, 0x40, 0, 0 };
 
 /* Per-frame scratch + volume-toggle latches (user.c per watdbg). */
+// GLOBAL: TIE95 0xEC208
+// GLOBAL: TIE98 0x58E018
 uint16_t screendist;
+// GLOBAL: TIE95 0xEC20A
+// GLOBAL: TIE98 0x58E01A
 uint8_t soundvolflag;
+// GLOBAL: TIE95 0xEC20B
+// GLOBAL: TIE98 0x58E01B
 uint8_t musicvolflag;
 
 /* ================================================================== *
@@ -602,7 +591,7 @@ int16_t user_targetincross(uint16_t obj_idx, int32_t strict) {
 	half_wide = pixelswide / 2;
 	eye_side_dot = ((pl->side_z * (int16_t)delta_z) >> 15) + ((pl->side_y * (int16_t)delta_y) >> 15) +
 				   ((pl->side_x * (int16_t)delta_x) >> 15);
-	screen_x_rel = transfm2_getscreencoordx(eye_side_dot, eye_z) - half_wide;
+	screen_x_rel = transfm2_getscreenx(eye_side_dot, eye_z) - half_wide;
 
 	screen_dx_abs = (int32_t)(int16_t)screen_x_rel;
 	if (screen_dx_abs & 0x8000)
@@ -612,7 +601,7 @@ int16_t user_targetincross(uint16_t obj_idx, int32_t strict) {
 
 	eye_up_dot = ((pl->up_z * (int16_t)delta_z) >> 15) + ((pl->up_y * (int16_t)delta_y) >> 15) +
 				 ((pl->up_x * (int16_t)delta_x) >> 15);
-	screen_y_rel = transfm2_getscreencoordy(eye_up_dot, eye_z) - (pixelsdeep / 2) - transfm2_screenyoffset;
+	screen_y_rel = transfm2_getscreeny(eye_up_dot, eye_z) - (pixelsdeep / 2) - transfm2_screenyoffset;
 
 	screen_dy_abs = (int32_t)(int16_t)screen_y_rel;
 	if (screen_dy_abs & 0x8000)
@@ -729,7 +718,7 @@ int16_t user_targetonscreen(uint16_t obj_or_kind) {
 
 	eye_side = ((pl->side_z * (int16_t)delta_z) >> 15) + ((pl->side_y * (int16_t)delta_y) >> 15) +
 			   ((pl->side_x * (int16_t)delta_x) >> 15);
-	screen_x = (int16_t)transfm2_getscreencoordx(eye_side, eye_z);
+	screen_x = (int16_t)transfm2_getscreenx(eye_side, eye_z);
 	if ((int32_t)screen_x < 0 || screen_x > (int32_t)pixelswide)
 		return 0;
 
@@ -1265,7 +1254,7 @@ uint16_t user_findclosestattacker(uint16_t obj_idx) {
 
 /*
  * user_isrescued -- eject-pod rescue test. Binary 0x5F3B0.
- * rescue_override_flag bit 0 forces rescue (mission file flag). Otherwise
+ * Mission-header byte +8 (mission.win_type) bit 0 forces rescue. Otherwise
  * returns true iff nearest hostile is more than twice as far as nearest
  * friendly.
  */
@@ -1275,7 +1264,7 @@ int16_t user_isrescued(uint16_t player_obj_idx) {
 	uint32_t nearest_hostile;
 	uint16_t i;
 
-	if (rescue_override_flag & 1)
+	if (mission_file_header.mission.win_type & 1)
 		return 1;
 	nearest_friend = 0x1000000u;
 	nearest_hostile = 0x1000000u;
@@ -1328,7 +1317,6 @@ void user_checkreplaycamera(void) {
 void user_ejectcamera(void) {
 	fscript_MsSetSequence(16);
 	hyperspaceflag = 0;
-	player_ejected = 1;
 	if (recordingreplay) {
 		if (!replayio_spoolreplayinput())
 			replaytotalcnt -= replaybuffercnt;
@@ -1395,60 +1383,11 @@ void user_nextreplaystore(void) { TieReplayRecording_StoreRecord(true); }
  *                         TOP-LEVEL FRAME                             *
  * ================================================================== */
 
-typedef enum {
-	PAUSE_NONE = 0,
-	PAUSE_ACTIVE = 1,
-} PauseState;
-
-static PauseState s_pause_state;
-static int16_t s_pause_saved_vol;
-
-static void pause_enter(void) {
-	TieInput_ClearKeys();
-	TieInput_ResetThrottle();
-	s_pause_saved_vol = imuse_get_master_vol(im);
-	imuse_set_master_vol(im, 0);
-	imuse_pause(im);
-	msg_messageprintf(MSG_PAUSED);
-	if (TieClassicDisplay_UsesDx5()) {
-		FrontendDisplay_BlitOffscreenToRenderSurface();
-		FrontendDisplay_PresentFrame();
-	}
-	s_pause_state = PAUSE_ACTIVE;
-}
-
-static void pause_exit(void) {
-	TieInput_ClearKeys();
-	TieInput_ResetThrottle();
-	if (TieClassicDisplay_UsesDx5())
-		FrontendDisplay_PresentFrame();
-	msg_messageprintf(MSG_RESUMED);
-	calcframerate = 0;
-	keypress = 0;
-	imuse_set_master_vol(im, s_pause_saved_vol);
-	imuse_resume(im);
-	s_pause_state = PAUSE_NONE;
-}
-
-int user_is_paused(void) { return s_pause_state == PAUSE_ACTIVE; }
-
-static bool ui_throttle_eligible(void) {
-	return !pstate.hyperin_state && !hyperspaceflag && pstate.player_craft &&
-		   (pstate.player_craft->status_flags & 0x20) && !camera.view_pitch_offset &&
-		   !TieReplayRecording_KeyStartsInfoPayload((uint16_t)inputkey);
-}
-
-static void ui_apply_absolute_throttle(void) {
-	if (inputthrottle <= UINT16_MAX && ui_throttle_eligible())
-		pstate.player_craft->throttle_speed = (uint16_t)inputthrottle;
-	inputthrottle = UINT32_MAX;
-}
-
 /*
  * user_userinterface -- top-of-frame dispatcher. Binary 0x5A6B0.
  * Phases:
  *   (0) if paused, poll for resume key and return; world update +
- *       render are skipped by tie_doframe via user_is_paused().
+ *       render are skipped by tie_doframe via TieFlightPause_IsActive().
  *   (1) auto-drop destroyed camera.view_target_obj back to the player.
  *   (2) if in replay playback, read next (key,dx,dy,buttons) tuple.
  *   (3) else fetch raw hardware input and handle meta keys (pause/menu).
@@ -1459,16 +1398,12 @@ static void ui_apply_absolute_throttle(void) {
 // FUNCTION: TIE98 0x493840
 void user_userinterface(void) {
 	inputthrottle = UINT32_MAX;
-	/* Drain commands received while paused; only the mapped Pause command resumes. */
-	if (s_pause_state == PAUSE_ACTIVE) {
-		while (TieInput_KeyPending()) {
-			if (feinput_getrawinput() == KEY_p) {
-				pause_exit();
-				break;
-			}
-		}
+#ifdef TIE_MODERN
+	if (TieFlightPause_IsActive()) {
+		TieFlightPause_Service();
 		return;
 	}
+#endif
 
 	/* Phase 1: target object disappeared → snap view back to the player. */
 	if (!replayviewmode && camera.view_target_obj != 0xFFFF) {
@@ -1533,9 +1468,25 @@ void user_userinterface(void) {
 
 		if (k >= KEY_ALT_P) {
 			if (k == KEY_ALT_P) {
-				/* Alt+P: pause. State machine — see pause_enter. */
-				pause_enter();
+				/* Alt+P: pause. */
+#ifdef TIE_MODERN
+				TieFlightPause_Enter();
 				return;
+#else
+				int16_t saved_vol = imuse_get_master_vol(im);
+
+				imuse_set_master_vol(im, 0);
+				imuse_pause(im);
+				msg_messageprintf(MSG_PAUSED);
+				while (!feinput_getrawinput())
+					;
+				msg_messageprintf(MSG_RESUMED);
+				calcframerate = 0;
+				keypress = 0;
+				imuse_set_master_vol(im, saved_vol);
+				imuse_resume(im);
+				rtsvga2_invalidatepagecache();
+#endif
 			} else if (k < KEY_ALT_C) {
 				/* nothing */
 			} else if (k == KEY_ALT_C) {
@@ -1599,16 +1550,31 @@ void user_userinterface(void) {
 			calcframerate = 0;
 			fsfx_triggersfx(0x21u, 0xFFFF);
 		} else if (k == KEY_p) {
-			/* 'p': pause (alternate binding). State machine — see pause_enter. */
-			pause_enter();
+			/* 'p': pause (alternate binding). */
+#ifdef TIE_MODERN
+			TieFlightPause_Enter();
 			return;
+#else
+			int16_t saved_vol = imuse_get_master_vol(im);
+
+			imuse_set_master_vol(im, 0);
+			imuse_pause(im);
+			msg_messageprintf(MSG_PAUSED);
+			while (!feinput_getrawinput())
+				;
+			msg_messageprintf(MSG_RESUMED);
+			calcframerate = 0;
+			keypress = 0;
+			imuse_set_master_vol(im, saved_vol);
+			imuse_resume(im);
+			rtsvga2_invalidatepagecache();
+#endif
 		} else if (k == KEY_v && !hyperspaceflag && maingameflag && !pstate.hyperin_state) {
 			/* 'v': replay screen. The spool flush, recording stop,
 			 * blank, and CAMERA-OFF banner all run on this tick; the
-			 * actual viewer push is deferred to the next flight-task
-			 * step via s_replay_viewer_pending. The RESUMED banner
-			 * is posted by the flight task after the viewer pops
-			 * (see flight_mission_step). */
+			 * port defers the viewer push to the next flight-task step
+			 * and posts the RESUMED banner after the viewer pops (see
+			 * flight_mission_step). */
 			if (replayavailable == 1) {
 				if (recordingreplay) {
 					if (!replayio_spoolreplayinput())
@@ -1619,13 +1585,18 @@ void user_userinterface(void) {
 				}
 				calcframerate = 0;
 				blank();
-				s_replay_viewer_pending = 1;
+#ifdef TIE_MODERN
+				TieFlightRequest_ReplayViewer();
+#else
+				replayio_replayscreen();
+				msg_messageprintf(MSG_RESUMED);
+#endif
 			} else {
 				msg_messageprintf(MSG_FILM_NONE);
 			}
 		}
 
-		if (!ui_throttle_eligible())
+		if (!TieUserTiming_ThrottleCommandEligible())
 			(void)TieInput_ReadThrottleCommand(false);
 		else if (acceleratedtimesetting <= 1u || !acceleratedtimectr)
 			inputthrottle = TieInput_ReadThrottleCommand(true);
@@ -1655,7 +1626,7 @@ void user_userinterface(void) {
 					frame.deltaroll = inputdeltaroll;
 					frame.buttons = (uint8_t)(inputbuttons & 0xFF);
 				}
-				ReplayInputFrame_encode(rp, &frame);
+				TieReplayFormat_EncodeInputFrame(rp, &frame);
 				replayptr = rp + REPLAYINPUTFRAME_DISK_SIZE;
 				user_nextreplaystore();
 			}
@@ -1875,7 +1846,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 				FlightSurface_Unlock();
 			sub = 0;
 #ifdef TIE_MODERN
-			user_submodal_result = 0;
+			TieFlightRequest_SetSubmodalResult(0);
 #endif
 			switch ((int16_t)screen) {
 				case 0:
@@ -1950,7 +1921,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 #endif
 		}
 #ifdef TIE_MODERN
-		sub = (uint16_t)user_submodal_result;
+		sub = (uint16_t)TieFlightRequest_SubmodalResult();
 #endif
 		if (screen == 1 && !mission.train_craft_type && old_target != pstate.target_obj_idx) {
 			uint16_t new_target = pstate.target_obj_idx;
@@ -2073,1142 +2044,13 @@ int32_t user_inflightinfo(int32_t screen_id) {
 	return screen;
 }
 
-/* ================================================================== *
- *              user_inputforplane  key-cluster helpers                *
- * ================================================================== */
-
-/* Trigger the 0x21 SFX "acknowledge" ping and nothing else. */
-static void ui_ack_beep(void) { fsfx_triggersfx(0x21u, 0xFFFF); }
-
-/* 'System damaged' helper: fills argtable + queues MSG_SYSTEM_STATUS. */
-static void ui_system_damaged(uint16_t system_arg) {
-	argtable[0] = system_arg;
-	argtable[1] = 25;
-	msg_messageprintf(MSG_SYSTEM_STATUS);
-}
-
-/* 'System not equipped' helper: fills argtable + queues NO_SUCH_SYSTEM. */
-static void ui_no_such_system(uint16_t system_arg) {
-	argtable[0] = system_arg;
-	msg_messageprintf(MSG_NO_SUCH_SYSTEM);
-}
-
-/* Numpad camera direction key dispatch for keys 0x35..0x39 (binary 0x5B41F). */
-static void ui_numpad_camera_key(uint16_t k) {
-	if (replayviewmode)
-		return;
-	if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
-		panelrts_setnewpilotview(camera.view_dir_dirty + (uint8_t)squarerootable[234 + k]);
-	camera.side_angle = ((int32_t)camera.view_dir_dirty) << 10;
-	camera.up_angle = squarerootable[215 + k];
-}
-
-/* '0': toggle between wing-level and 45-degree high-angle views. Binary 0x5B367. */
-static void ui_toggle_high_angle_view(void) {
-	if (replayviewmode)
-		return;
-	if (camera.pilotview >= 16u && !camera.view_zoom_flag)
-		return;
-	camera.view_dir_dirty ^= 8u;
-	camera.side_angle = ((int32_t)camera.view_dir_dirty) << 10;
-	if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
-		panelrts_setnewpilotview((uint8_t)(camera.pilotview ^ 8));
-}
-
-/* 0x34 (') key: snap side view to 0x4000. Binary 0x5B3CC. */
-static void ui_snap_side_view(void) {
-	if (replayviewmode)
-		return;
-	camera.up_angle = 0;
-	camera.side_angle = 0x4000;
-	if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
-		panelrts_setnewpilotview(0x10u);
-}
-
-/* '/' or F3: toggle the external camera. Binary 0x5B63D. */
-static void ui_toggle_external_camera(void) {
-	int was_zoomed_out;
-
-	if (replayviewmode || camera.view_heading_offset)
-		return;
-	was_zoomed_out = !camera.view_zoom_flag;
-	camera.view_zoom_flag = !camera.view_zoom_flag;
-	if (was_zoomed_out && camera.view_target_obj == pstate.object_idx) {
-		camera.view_saved_idx = camera.pilotview;
-		camera.view_saved_side_angle = camera.side_angle;
-		camera.view_saved_up_angle = camera.up_angle;
-	}
-	user_resetview();
-}
-
-/* T (0x74) or 119 ('w') target-cycle step. Binary 0x5C6FD. */
-static void ui_target_cycle(int16_t step) {
-	uint16_t start =
-		(pstate.target_obj_idx == 0xFFFF) ? (uint16_t)pstate.radar_target0 : pstate.target_obj_idx;
-	uint16_t pick = user_picknexttarget(start, step);
-	user_setnewtarget(pick);
-}
-
-/*
- * 'R' (0x72) -- find nearest enemy craft or mine-gun and target it.
- * Skips own-side craft, side-2/3/5 craft unless their mission-file hostile
- * tag is '1', GENUS 3/4/5 (passive: starship/mine/debris), craft with
- * status_flags == 0 (dead) or flight_flag not in {0, 6}. Also checks
- * static mine-gun turrets (ship_class==8). Binary 0x5C7E1.
- *
- * Watcom unaligned load: `*(int*)&fg[i].version >> 24` = byte at +0x37,
- * which is `side`. Rewritten as direct read below.
- */
-static void ui_target_nearest_fighter_or_mine(void) {
-	uint32_t best_dist = 0xFFFFFFFFu;
-	uint16_t best_idx = 0xFFFF;
-
-	/* Pass 1: craft slots 0..NUM_CRAFTS-1. */
-	int16_t i;
-	uint16_t k;
-	int16_t m;
-
-	for (i = 0; i < NUM_CRAFTS; ++i) {
-		uint8_t side;
-		int g;
-		CraftData* cp;
-		uint8_t ff;
-
-		if (!objects[i].ship_idx)
-			continue;
-		if (i == pstate.object_idx)
-			continue;
-		side = objects[i].side;
-		if (side == objects[pstate.object_idx].side)
-			continue;
-		if (side == 2 && mission_file_header.mission.neutral_name[0][0] != '1')
-			continue;
-		if (side == 3 && mission_file_header.mission.neutral_name[1][0] != '1')
-			continue;
-		if (side == 5 && mission_file_header.mission.neutral_name[3][0] != '1')
-			continue;
-		g = objects[i].genus;
-		if (g == 3 || g == 4 || g == 5)
-			continue;
-		cp = objects[i].craft_ptr;
-		if (!cp->status_flags)
-			continue;
-		ff = cp->flight_flag;
-		if (ff && ff != 6)
-			continue;
-
-		pai_distancebetween(pstate.object_idx, i);
-		if (best_dist > (uint32_t)trig2_polardistance) {
-			best_idx = (uint16_t)i;
-			best_dist = (uint32_t)trig2_polardistance;
-		}
-	}
-
-	/* Pass 2: static mine-gun turrets (ship_class == 8). */
-	k = 14336;
-	for (m = 0; m < 64; ++m, ++k) {
-		uint8_t fg_side;
-
-		if (!staticobjects[m].species)
-			continue;
-		if (staticobjects[m].ship_class != 8)
-			continue;
-		if (!staticobjects[m].status_flags)
-			continue;
-		fg_side = fg_array[staticobjects[m].fg_idx].side;
-		if (fg_side == objects[pstate.object_idx].side)
-			continue;
-
-		pai_distancebetween(pstate.object_idx, k);
-		if (best_dist > (uint32_t)trig2_polardistance) {
-			best_idx = k;
-			best_dist = (uint32_t)trig2_polardistance;
-		}
-	}
-
-	user_setnewtarget(best_idx);
-}
-
-/*
- * 'U' (0x75) -- target the newest craft in the area. Per the QRC manual
- * this is "Select the newest craft in the area." In the engine, age_ticks
- * is monotonic-ish per spawn slot (set by CREATE on reinforcement arrival)
- * so the craft with the lowest age_ticks among FG leaders / standalone
- * craft is the most recently spawned. Only craft with leader_obj_idx == 255
- * (FG leader or solo) are eligible -- wingmen are filtered out so the
- * player jumps to the leader of a freshly-arrived wave, not a follower.
- * Binary 0x5C77E.
- */
-static void ui_target_newest_craft(void) {
-	uint16_t best_obj = 0xFFFF;
-	uint16_t best_tick = 0xFFFF;
-	int16_t i;
-
-	for (i = 0; i < NUM_ACTIVE_CRAFT_SLOTS; ++i) {
-		CraftData* cp;
-		uint8_t ff;
-		uint16_t tick;
-
-		if (!objects[i].ship_idx)
-			continue;
-		if (i == pstate.object_idx)
-			continue;
-		cp = objects[i].craft_ptr;
-		if (cp->leader_obj_idx != 255)
-			continue;
-		/* Accept flight_flag in {0, 2, 6}; reject everything else. */
-		ff = cp->flight_flag;
-		if (ff && ff != 2 && ff != 6)
-			continue;
-		tick = (uint16_t)objects[i].age_ticks;
-		if (tick < best_tick) {
-			best_obj = (uint16_t)i;
-			best_tick = tick;
-		}
-	}
-	user_setnewtarget(best_obj);
-}
-
-/* Shield front/rear selector toggle (keys 0x72 = 's'). Binary 0x5C0D1. */
-static void ui_cycle_shield_mode(void) {
-	CraftData* pc = pstate.player_craft;
-	uint8_t new_mode;
-
-	if ((pc->subsystem_active & 1) == 0) {
-		ui_no_such_system(35);
-		return;
-	}
-	if ((pc->status_flags & 1) == 0) {
-		ui_system_damaged(35);
-		return;
-	}
-	new_mode = (uint8_t)(pc->is_player_craft + 1);
-	pc->is_player_craft = new_mode;
-	if (new_mode > 2) {
-		pc->is_player_craft = 0;
-		user_adjustshields(0, 1);
-	} else if (new_mode == 2) {
-		user_adjustshields(1, 0);
-	} else {
-		/* Balanced (mode 1): split evenly, honoring easy-diff 4x cap. */
-		int16_t cap_base = (int16_t)(2 * spec_data[pstate.player_spec_num].shield_points);
-		int16_t points = spec_data[pstate.player_spec_num].shield_points;
-		int16_t cap = cap_base;
-		uint16_t pct;
-		int16_t total;
-
-		if (!mission.difficulty) {
-			cap = (int16_t)(4 * spec_data[pstate.player_spec_num].shield_points);
-			points = cap_base;
-		}
-		pct = math2_percentage(points, cap);
-		total = (int16_t)(pc->forward_shield + pc->rear_shield);
-		if (total > 0) {
-			int16_t fwd = (int16_t)math2_fraction(total, pct);
-			pc->forward_shield = fwd;
-			pc->rear_shield = (int16_t)(total - fwd);
-		}
-	}
-	argtable[0] = (uint16_t)(pc->is_player_craft + 14);
-	msg_messageprintf(MSG_SHIELDS_SET);
-	ui_ack_beep();
-}
-
-/* Cannon-rate cycle (keys 0xC3 = F10 / ']'). Binary 0x5BE3D. */
-static void ui_cycle_cannon_rate(void) {
-	CraftData* pc = pstate.player_craft;
-	uint8_t nr = (uint8_t)(pc->laser_power + 1);
-	MsgTemplate msg;
-
-	pc->laser_power = nr;
-	if (nr >= 5)
-		pc->laser_power = 0;
-
-	if (pc->status_flags & 0x10) {
-		argtable[0] = (uint16_t)(pc->laser_power + 19);
-		msg = MSG_CANNON_RATE;
-	} else {
-		argtable[0] = 29;
-		argtable[1] = 25;
-		msg = MSG_SYSTEM_STATUS;
-	}
-	msg_messageprintf(msg);
-	ui_ack_beep();
-}
-
-/* Shield-rate cycle (key 0xC4). Binary 0x5C272. */
-static void ui_cycle_shield_rate(void) {
-	CraftData* pc = pstate.player_craft;
-	uint8_t nr;
-
-	if ((pc->subsystem_active & 1) == 0) {
-		ui_no_such_system(35);
-		return;
-	}
-	if ((pc->status_flags & 1) == 0) {
-		ui_system_damaged(35);
-		return;
-	}
-	nr = (uint8_t)(pc->shield_power + 1);
-	pc->shield_power = nr;
-	if (nr >= 5)
-		pc->shield_power = 0;
-	argtable[0] = (uint16_t)(pc->shield_power + 19);
-	msg_messageprintf(MSG_SHIELD_RATE);
-	ui_ack_beep();
-}
-
-/* Beam-rate cycle (key 0xC2). Binary 0x5C615. */
-static void ui_cycle_beam_rate(void) {
-	CraftData* pc = pstate.player_craft;
-	uint8_t nr;
-
-	if ((pc->subsystem_active & 0x100) == 0) {
-		ui_no_such_system(32);
-		return;
-	}
-	if ((pc->status_flags & 0x100) == 0) {
-		ui_system_damaged(32);
-		return;
-	}
-	nr = (uint8_t)(pc->beam_power + 1);
-	pc->beam_power = nr;
-	if (nr >= 5)
-		pc->beam_power = 0;
-	argtable[0] = (uint16_t)(pc->beam_power + 19);
-	msg_messageprintf(MSG_BEAM_RATE);
-	ui_ack_beep();
-}
-
-/* Beam toggle (key 0x62 = 'b'). Binary 0x5C55A. */
-static void ui_toggle_beam(void) {
-	CraftData* pc = pstate.player_craft;
-	if ((pc->subsystem_active & 0x100) == 0) {
-		ui_no_such_system(32);
-		return;
-	}
-	if ((pc->status_flags & 0x100) == 0) {
-		ui_system_damaged(32);
-		return;
-	}
-	pc->beam_state ^= 0x80u;
-	argtable[0] = (uint16_t)(pc->beam_type + 192);
-	msg_messageprintf((pc->beam_state & 0x80) ? MSG_BEAM_ON : MSG_BEAM_OFF);
-}
-
-/* 'Reinforce' confirm on key 83 = 'S'. Binary 0x5D63B. */
-static void ui_reinforce_request(void) {
-	int reinforce_avail;
-	uint16_t i;
-
-	if (pstate.space_confirm_action)
-		return;
-	reinforce_avail = 0;
-	for (i = 0; i < (uint16_t)mission_file_header.num_fg; ++i) {
-		/* Watcom unaligned load on fg_array[i].link_code: the +3 byte is
-		 * start_cond[0].type (byte 0x4A), same byte both paths check. */
-		if (fg_array[i].link_code == 20 || fg_array[i].start_cond[0].type == 20) {
-			reinforce_avail = 1;
-			break;
-		}
-	}
-	if (!reinforce_avail) {
-		msg_messageprintf(MSG_NO_REINFORCEMENTS);
-		fsfx_triggervoicesfx(0x66u);
-		fsfx_triggervoicesfx(0x67u);
-		fsfx_triggervoicesfx(0x69u);
-		return;
-	}
-	if (mission.penalty_flag) {
-		msg_messageprintf(MSG_REINFORCE_ALREADY_USED);
-		fsfx_triggervoicesfx(0x66u);
-		fsfx_triggervoicesfx(0x67u);
-		fsfx_triggervoicesfx(0x69u);
-	} else {
-		msg_messageprintf(MSG_REINFORCE_PROMPT);
-		pstate.space_confirm_action = 3;
-		timers[TIMER_SPACE_CONFIRM] = 1888;
-	}
-}
-
-/* SPACE: confirm pending action. Binary 0x5B22B. */
-static void ui_space_confirm(void) {
-	if (!pstate.space_confirm_action)
-		return;
-	if (pstate.space_confirm_action == 1) {
-		pstate.target_obj_idx = (uint16_t)pstate.msg_arg_obj_idx;
-		if (!replayviewmode && camera.view_heading_offset)
-			camera.view_target_obj = pstate.target_obj_idx;
-		pstate.radar_subtarget_state = 0;
-		pstate.player_craft->missile_count_total = 0;
-		msg_messageprintf(MSG_WARHEAD_TARGETED);
-		pstate.space_confirm_action = 0;
-	} else if (pstate.space_confirm_action == 2) {
-		if (recordingreplay) {
-			if (!replayio_spoolreplayinput())
-				replaytotalcnt -= replaybuffercnt;
-			replaybuffercnt = 0;
-			recordingreplay = 0;
-			msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
-			calcframerate = 0;
-		}
-		mission.end_flag = 1;
-		mission.player_status = 3;
-	} else if (pstate.space_confirm_action == 3) {
-		mission.penalty_flag = 1;
-		msg_messageprintf(MSG_REINFORCE_ACK);
-		pstate.space_confirm_action = 0;
-		fsfx_triggervoicesfx(0x66u);
-		fsfx_triggervoicesfx(0x67u);
-		fsfx_triggervoicesfx(0x68u);
-	}
-}
-
-/* F2: select or cycle the view through launched warheads. Binary 0x5B539. */
-static void ui_cycle_warhead_view(void) {
-	uint16_t scan;
-	uint16_t found;
-	int k;
-
-	frameticksmsgflag = !frameticksmsgflag;
-	if (replayviewmode || camera.view_heading_offset)
-		return;
-
-	scan =
-		(camera.view_target_obj == pstate.object_idx) ? (uint16_t)(NUM_CRAFTS - 1) : camera.view_target_obj;
-	found = 0xFFFF;
-	for (k = NUM_CRAFTS; k < WARHEAD_SLOT_END; ++k) {
-		unsigned int projectile_type_idx;
-
-		scan = (uint16_t)(scan + 1);
-		if (scan >= WARHEAD_SLOT_END)
-			scan = NUM_CRAFTS;
-		projectile_type_idx = laser_species_idx(objects[scan].ship_idx);
-		/* Freed projectile slots retain their genus after ship_idx is cleared. */
-		if (objects[scan].genus == GENUS_PROJECTILE_PLAYER && projectile_type_idx < WARHEAD_TYPE_COUNT &&
-			projectile_is_warhead_type[projectile_type_idx]) {
-			if (pstate.object_idx == (uint16_t)objects[scan].self_idx)
-				found = scan;
-			break;
-		}
-	}
-	if (found != 0xFFFF) {
-		if (camera.view_target_obj == pstate.object_idx) {
-			camera.view_saved_idx = camera.pilotview;
-			camera.view_saved_side_angle = camera.side_angle;
-			camera.view_saved_up_angle = camera.up_angle;
-			camera.view_zoom_flag = 0;
-		}
-		camera.view_target_obj = found;
-		user_resetview();
-	}
-}
-
-/* Target viewer toggle (0x7A = 'z'/Y). Binary 0x5B6DF. */
-static void ui_target_viewer_toggle(void) {
-	if (replayviewmode)
-		return;
-	if (camera.view_heading_offset) {
-		camera.view_heading_offset = 0;
-		targetblinkflag = 0;
-		camera.view_zoom_flag = (camera.view_saved_idx == 18);
-		lasttargetnum = -2;
-		camera.view_target_obj = pstate.object_idx;
-		user_resetview();
-	} else if (pstate.target_obj_idx == 0xFFFF) {
-		msg_messageprintf(MSG_NO_TARGET);
-	} else {
-		if (!camera.view_zoom_flag) {
-			camera.view_saved_idx = camera.pilotview;
-			camera.view_saved_side_angle = camera.side_angle;
-			camera.view_saved_up_angle = camera.up_angle;
-		}
-		camera.view_zoom_flag = 1;
-		camera.view_heading_offset = 1;
-		camera.view_target_obj = pstate.target_obj_idx;
-		targetblinkflag = 1024;
-		user_resetview();
-	}
-}
-
-/* 'H' (0x92) -> eject or surrender. Binary 0x5D034. */
-static void ui_eject_or_surrender(void) {
-	int16_t status;
-	int sp;
-	uint16_t spin;
-	uint16_t rnd;
-
-	if (mission.train_craft_type) {
-		if (recordingreplay) {
-			if (!replayio_spoolreplayinput())
-				replaytotalcnt -= replaybuffercnt;
-			replaybuffercnt = 0;
-			recordingreplay = 0;
-			msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
-			calcframerate = 0;
-		}
-		mission.end_flag = 1;
-		mission.player_status = 3;
-		return;
-	}
-	if ((pstate.player_craft->status_flags & 2) == 0) {
-		ui_system_damaged(34);
-		return;
-	}
-	if (hyperspaceflag || replayviewmode)
-		return;
-
-	if (user_isrescued(pstate.object_idx)) {
-		status = 0;
-		mission.player_status = 2;
-	} else {
-		status = 1;
-		mission.player_status = 1;
-	}
-	fediskio_updatepilotrecord(status, 1);
-	user_ejectcamera();
-	sp = pstate.player_craft->species_idx;
-	spin = (uint16_t)math2_getrandom();
-	spin = (uint16_t)(((uint8_t)((spin >> 8) & 0x3F) + 32) << 8);
-	while (spin > (uint16_t)spec_data[sp].max_spin_rate)
-		spin >>= 1;
-	pstate.player->spin_rate = (int16_t)spin;
-	pstate.player_craft->flight_flag = 3;
-	rnd = (uint16_t)math2_getrandom();
-	pstate.player->death_timer = (int16_t)(236 * ((rnd & 3) + 3));
-	TIE_FLIGHT_TRACE_DEATH(pstate.object_idx, 0xFFFFu, TIE_TRACE_DEATH_EJECTED, pstate.player->death_timer);
-}
-
-/*
- * No-hyperdrive "return to X" helper. Called when the ship spec has
- * no hyperdrive installed. Scans for primary/secondary stop-FG craft
- * in the player's own FG record and announces where to return.
- *
- * Watcom unaligned-dword loads from the binary:
- *   *(int *)&fg[i].cur_start_fg + 1 >> 24 -> pri_stop_fg   (byte at +0x62)
- *   *(int *)&fg[i].start_fg_used    >> 24 -> sec_stop_fg   (byte at +0x64)
- * Rewritten as direct field reads below.
- */
-static void ui_no_hyperdrive_return(void) {
-	EFGStruct* pfg = &fg_array[pstate.player_fg_idx];
-	uint16_t pri_stop_obj = 0xFFFF;
-	uint16_t sec_stop_obj = 0xFFFF;
-
-	uint16_t i;
-	uint16_t obj;
-
-	for (i = 0; i < NUM_ACTIVE_CRAFT_SLOTS; ++i) {
-		if (pfg->pri_stop_fg_used && objects[i].ship_idx && objects[i].fg_idx == pfg->pri_stop_fg)
-			pri_stop_obj = i;
-		if (pfg->sec_stop_fg_used && objects[i].ship_idx && objects[i].fg_idx == pfg->sec_stop_fg)
-			sec_stop_obj = i;
-	}
-
-	if (pri_stop_obj != 0xFFFF && sec_stop_obj != 0xFFFF) {
-		msg_createobjectname(pri_stop_obj, 0, tempstring);
-		msg_addmessageptr(0, tempstring);
-		msg_createobjectname(sec_stop_obj, 0, temp2string);
-		msg_addmessageptr(1u, temp2string);
-		msg_messageprintf(MSG_NO_HYPERDRIVE_RETURN_ALT);
-		return;
-	}
-	obj = (pri_stop_obj != 0xFFFF) ? pri_stop_obj : sec_stop_obj;
-	if (obj == 0xFFFF)
-		return; /* neither found -> silent. */
-	msg_createobjectname(obj, 0, tempstring);
-	msg_addmessageptr(0, tempstring);
-	msg_messageprintf(MSG_NO_HYPERDRIVE_RETURN);
-}
-
-/* Hyperspace jump (key 0x68 = 'h'). */
-static void ui_hyperspace(void) {
-	int interdictor;
-	int i;
-
-	if ((pstate.player_craft->subsystem_active & 0x80) == 0) {
-		ui_no_hyperdrive_return();
-		return;
-	}
-	if (mission.train_craft_type) {
-		if (recordingreplay) {
-			if (!replayio_spoolreplayinput())
-				replaytotalcnt -= replaybuffercnt;
-			replaybuffercnt = 0;
-			recordingreplay = 0;
-			msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
-			calcframerate = 0;
-		}
-		mission.end_flag = 1;
-		mission.player_status = 3;
-		return;
-	}
-	if ((pstate.player_craft->status_flags & 0x80) == 0) {
-		ui_system_damaged(36);
-		return;
-	}
-
-	interdictor = 0;
-	for (i = 0; i < NUM_CRAFTS; ++i) {
-		if (objects[i].ship_idx == 51 && objects[i].side != pstate.player->side)
-			interdictor = 1;
-	}
-	if (interdictor) {
-		msg_messageprintf(MSG_INTERDICTOR_BLOCK);
-		return;
-	}
-	fscript_MsSetSequence(17);
-	msg_clearmessagequeue();
-	msg_messageprintf(MSG_HYPER_PREP);
-	hyperspaceflag = 1;
-	hyperabortflag = 1;
-	camera.view_zoom_flag = 0;
-	camera.view_target_obj = pstate.object_idx;
-	camera.view_pitch_offset = 0;
-	panelrts_setnewpilotview(0);
-	camera.side_angle = 0;
-	camera.up_angle = 0;
-	hyperticks = 0;
-	ui_ack_beep();
-}
-
-/* Weapon cycle (0x77 = 'w'). Binary 0x5BB0D. */
-static void ui_cycle_weapon_group(void) {
-	CraftData* pc = pstate.player_craft;
-	uint8_t nwg = (++pstate.player_weapon_group);
-	MsgTemplate msg;
-
-	if (pstate.player_weapon_mode) {
-		if (nwg >= pc->missile_group_cnt) {
-			if (pc->laser_group_cnt)
-				pstate.player_weapon_mode = 0;
-			pstate.player_weapon_group = 0;
-		}
-	} else if (nwg >= pc->laser_group_cnt) {
-		pstate.player_weapon_mode = (uint8_t)(pc->missile_group_cnt != 0);
-		pstate.player_weapon_group = 0;
-	}
-
-	argtable[1] = 25;
-
-	if (pstate.player_weapon_mode) {
-		if (pc->status_flags & 8) {
-			int32_t w = pc->warhead_type[pstate.player_weapon_group];
-			argtable[0] = (uint16_t)user_mapmissiletomessage((uint8_t)w, 0);
-			msg = MSG_LAUNCHERS_ARMED;
-		} else {
-			argtable[0] = 31;
-			msg = MSG_SYSTEM_STATUS;
-		}
-	} else if (pc->status_flags & 0x10) {
-		msg = (MsgTemplate)(pstate.player_weapon_group + 3);
-	} else {
-		argtable[0] = (uint16_t)(pstate.player_weapon_group + 29);
-		msg = MSG_SYSTEM_STATUS;
-	}
-	msg_messageprintf(msg);
-	ui_ack_beep();
-}
-
-/* 'x': cycle cannon linking or the selected warhead firing mode. Binary 0x5BC9B. */
-static void ui_cycle_weapon_firing_mode(void) {
-	CraftData* pc = pstate.player_craft;
-	uint16_t nl;
-
-	if (pstate.player_weapon_mode) {
-		int32_t w;
-		MsgTemplate m;
-
-		pc->missile_armed[pstate.player_weapon_group] ^= 2u;
-		w = pc->warhead_type[pstate.player_weapon_group];
-		argtable[0] = (uint16_t)user_mapmissiletomessage((uint8_t)w, 0);
-		m = (MsgTemplate)(((pc->missile_armed[pstate.player_weapon_group] & 0x7F) >> 1) + 6);
-		msg_messageprintf(m);
-		return;
-	}
-	if (spec_data[pstate.player_spec_num].laser_count[pstate.player_weapon_group] == 1) {
-		ui_ack_beep();
-		return;
-	}
-	nl = (uint16_t)(pc->laser_owner_player[pstate.player_weapon_group] + 1);
-	if (nl > 3)
-		nl = 1;
-	if (spec_data[pstate.player_spec_num].laser_count[pstate.player_weapon_group] != 4 && nl == 2)
-		nl = 3;
-	pc->laser_owner_player[pstate.player_weapon_group] = (uint8_t)nl;
-	pc->laser_first_slot[pstate.player_weapon_group] =
-		spec_data[pstate.player_spec_num].laser_start[pstate.player_weapon_group];
-	msg_messageprintf((MsgTemplate)(nl + 9));
-	ui_ack_beep();
-}
-
-/* Overdrive (SLAM) toggle on 0x6E 'n'. Binary 0x5BA4C. */
-static void ui_overdrive_toggle(void) {
-	CraftData* pc = pstate.player_craft;
-	int slam_was_off;
-	int has_charge;
-	int n;
-	int i;
-
-	if (pstate.player_spec_num != spec_getspecnum(0xCu))
-		return;
-	slam_was_off = (pc->slam_active == 0xFFFF);
-	pc->slam_active = (uint16_t)~pc->slam_active;
-	if (!slam_was_off) {
-		msg_messageprintf(MSG_OVERDRIVE_DISENGAGED);
-		fsfx_triggersfx(0x6Cu, 0xFFFF);
-		return;
-	}
-	has_charge = 0;
-	n = pc->weapon_group_cnt;
-	for (i = 0; i < n; ++i) {
-		if ((int8_t)pc->weapon_slots[i].charge > 0) {
-			has_charge = 1;
-			break;
-		}
-	}
-	if (has_charge) {
-		msg_messageprintf(MSG_OVERDRIVE_ENGAGED);
-		fsfx_triggersfx(0x6Bu, 0xFFFF);
-	} else {
-		pc->slam_active = 0xFFFF;
-		msg_messageprintf(MSG_OVERDRIVE_FAIL);
-	}
-}
-
-/* Radar toggle 0x69 'i'. Binary 0x5CB40. */
-static void ui_toggle_radar(void) {
-	pstate.radar_enable ^= 1u;
-	argtable[0] = (uint16_t)(pstate.radar_enable + 86);
-	msg_messageprintf(MSG_CMD_TRACK_TOGGLE);
-	ui_ack_beep();
-}
-
-/* Match-speed key (enter). Binary 0x5B918. */
-static void ui_match_speed(void) {
-	CraftData* pc = pstate.player_craft;
-	uint16_t cur;
-	uint16_t slack;
-	uint16_t maxs;
-	uint16_t match_speed;
-
-	if (pstate.target_obj_idx == 0xFFFF)
-		return;
-	if (pstate.target_obj_idx >= 0x3800u) {
-		pc->throttle_speed = 0;
-		return;
-	}
-	if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS) {
-		pc->throttle_speed = 0xFFFF;
-		return;
-	}
-	cur = (uint16_t)objects[pstate.target_obj_idx].current_speed;
-	slack = (uint16_t)(6 - (pc->shield_power + pc->beam_power + pc->laser_power));
-	maxs = (uint16_t)pc->max_speed_cache;
-
-	if (slack < 0x8000u) {
-		match_speed =
-			(uint16_t)((uint16_t)pc->max_speed_cache + math2_fraction((int16_t)(slack << 13), maxs));
-	} else {
-		uint16_t adj = math2_fraction((int16_t)(-8192 * slack), maxs);
-		match_speed = (uint16_t)(pc->max_speed_cache - adj);
-	}
-	if (cur < match_speed) {
-		uint16_t pct = math2_percentage(cur, match_speed);
-		pc->throttle_speed = pct;
-		msg_messageprintf(MSG_MATCHING_SPEED);
-	} else {
-		pc->throttle_speed = 0xFFFF;
-		msg_messageprintf(MSG_MATCHING_SPEED_MAX);
-	}
-}
-
-/* Roll keys 1,2 (left/right). Binary 0x5D7DC. */
-static void ui_roll_input(int16_t direction_key) {
-	int roll_pct = math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1;
-	int scale = (direction_key == 1) ? 53248 : 12288;
-	int q15 = (roll_pct * scale) >> 15;
-	int16_t rd = (int16_t)math2_ABoverC32((int16_t)q15, frameticks, 236);
-	objects[pstate.object_idx].roll = (int16_t)(objects[pstate.object_idx].roll - rd);
-}
-
-/*
- * Transfer energy between weapons/shields (keys 59 -> shield->cannon,
- * 119 ('w'+SHIELDS_TO_CANNON) and counterpart 0xC4 scancode for
- * cannon->shields). Binary 0x5BEDE / 0x5C2F3.
- */
-static void ui_xfer_cannon_to_shields(void) {
-	CraftData* pc = pstate.player_craft;
-	/* Bail if shields are offline. */
-	int16_t cap;
-	int16_t need;
-	int step, cycles;
-	int k;
-	int i;
-
-	if ((pc->subsystem_active & 1) == 0) {
-		ui_no_such_system(35);
-		return;
-	}
-	if ((pc->status_flags & 1) == 0) {
-		ui_system_damaged(35);
-		return;
-	}
-	cap = (int16_t)(2 * spec_data[pstate.player_spec_num].shield_points);
-	if (!mission.difficulty)
-		cap *= 2;
-
-	if (pc->is_player_craft) {
-		if (pc->is_player_craft == 2)
-			need = (int16_t)(cap - pc->rear_shield);
-		else {
-			need = (int16_t)(cap - pc->rear_shield + cap - pc->forward_shield);
-			if (need & 0x8000)
-				need = 800;
-		}
-	} else {
-		need = (int16_t)(cap - pc->forward_shield);
-	}
-	if (need > 800)
-		need = 800;
-
-	if (pstate.player_spec_num == spec_getspecnum(0xCu)) {
-		cycles = need >> 5;
-		step = 32;
-	} else {
-		cycles = need >> 3;
-		step = 8;
-	}
-	if (cycles == 0)
-		return;
-
-	k = 0;
-	for (i = 0; i < 100 && cycles > 0; ++i) {
-		int8_t ch = (int8_t)pc->weapon_slots[k].charge;
-		if (ch > 0) {
-			pc->weapon_slots[k].charge = (int8_t)(ch - 1);
-			--cycles;
-			if (!pc->is_player_craft)
-				pc->forward_shield += (int16_t)step;
-			else if (pc->is_player_craft == 2)
-				pc->rear_shield += (int16_t)step;
-			else {
-				pc->forward_shield += (int16_t)(step / 2);
-				pc->rear_shield += (int16_t)(step / 2);
-			}
-		}
-		if ((uint16_t)++k >= (uint16_t)pc->weapon_group_cnt)
-			k = 0;
-	}
-	ui_ack_beep();
-	msg_messageprintf(MSG_XFER_CANNON_TO_SHIELDS);
-}
-
-static void ui_xfer_shields_to_cannon(void) {
-	CraftData* pc = pstate.player_craft;
-	int charge_sum;
-	int n;
-	int j;
-	int step;
-	int xfer_amount;
-	int xfer_total;
-	int pips;
-	int k;
-	int i;
-
-	if ((pc->subsystem_active & 1) == 0) {
-		ui_no_such_system(35);
-		return;
-	}
-	charge_sum = 0;
-	n = pc->weapon_group_cnt;
-	for (j = 0; j < n; ++j)
-		charge_sum += 127 - (int8_t)pc->weapon_slots[j].charge;
-	step = (pstate.player_spec_num == spec_getspecnum(0xCu)) ? 32 : 8;
-	if (charge_sum > 100)
-		charge_sum = 100;
-	xfer_amount = step * charge_sum;
-
-	if (!pc->is_player_craft) {
-		int16_t fwd = pc->forward_shield;
-		if (xfer_amount > fwd)
-			xfer_amount = fwd;
-		xfer_total = xfer_amount;
-		pc->forward_shield -= (int16_t)xfer_amount;
-	} else if (pc->is_player_craft == 2) {
-		int16_t rear = pc->rear_shield;
-		if (xfer_amount > rear)
-			xfer_amount = rear;
-		xfer_total = xfer_amount;
-		pc->rear_shield -= (int16_t)xfer_amount;
-	} else {
-		/* Balanced mode. The binary tests different quantities on the
-		 * forward vs rear halves:
-		 *   forward: if (half > fwd) half = fwd;
-		 *   rear:    if (xfer_amount > rear) tmp = rear;  (NOT half > rear)
-		 * The rear branch therefore drains rear completely when the full
-		 * xfer exceeds rear shield -- even though only half was intended. */
-		int16_t fwd = pc->forward_shield;
-		int half_fwd = xfer_amount >> 1;
-		int16_t rear;
-		int half_rear;
-
-		if (half_fwd > fwd)
-			half_fwd = fwd;
-		pc->forward_shield -= (int16_t)half_fwd;
-
-		rear = pc->rear_shield;
-		half_rear = xfer_amount >> 1;
-		if (xfer_amount > rear)
-			half_rear = rear;
-		pc->rear_shield -= (int16_t)half_rear;
-		xfer_total = half_fwd + half_rear;
-	}
-	pips = xfer_total / step;
-	if (!pips)
-		return;
-	k = 0;
-	for (i = 0; i < 100 && pips > 0; ++i) {
-		/* Watcom unaligned load on weapon_slots[k]: +80 offset = ammo byte */
-		if ((int8_t)pc->weapon_slots[k].ammo != 127)
-			pc->weapon_slots[k].charge++;
-		++k;
-		--pips;
-		if (k >= pc->weapon_group_cnt)
-			k = 0;
-	}
-	ui_ack_beep();
-	msg_messageprintf(MSG_XFER_SHIELDS_TO_CANNON);
-}
-
-/* Cycle radar component target forward/backward. Binary 0x5CA14 / 0x5CAAE. */
-static void ui_cycle_radar_target1(int step) {
-	CraftData* cp;
-	uint8_t model_type;
-	int nm;
-	int guard;
-
-	if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS)
-		return;
-	cp = objects[pstate.target_obj_idx].craft_ptr;
-	model_type = objects[pstate.target_obj_idx].ship_idx;
-	if (!TieProfile_UsesTie98Logic())
-		draw_lockshipfileptrs(model_type);
-	nm = TieProfile_UsesTie98Logic() ? modelmesh_getcount(model_type) : objectblockptr->num_meshes;
-	guard = nm;
-	do {
-		int rt;
-
-		if (--guard < 0)
-			break;
-		rt = pstate.radar_target1 + step;
-		if (rt >= nm)
-			rt = 0;
-		if (rt < 0)
-			rt = nm - 1;
-		pstate.radar_target1 = (int16_t)rt;
-	} while (cp->mesh_state[pstate.radar_target1] != MESH_STATE_VISIBLE ||
-			 (TieProfile_UsesTie98Logic() ? !user_validcomponent_tie98(model_type, pstate.radar_target1)
-										  : !user_validcomponent(pstate.radar_target1)));
-}
-
-/* ================================================================== *
- *                   user_inputforplane (dispatcher)                   *
- * ================================================================== */
-
-/* Orientation update at the end of the per-frame dispatch. Binary 0x5D835. */
-static void ui_apply_view_or_flight_input(void) {
-	int16_t x_input;
-	int16_t y_input;
-	int16_t roll_input;
-	int x_roll_mode;
-	TieUserTimingState* high_rate;
-	int16_t x_per_tick;
-	int16_t y_per_tick;
-	int16_t roll_per_tick;
-
-	if (camera.view_pitch_offset) {
-		TieUserTimingState* high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_User() : NULL;
-		int16_t up_delta = high_rate ? TieUserTiming_ScaleValue(inputdeltax, &high_rate->view_remainder[0])
-									 : (int16_t)math2_ABoverC32(inputdeltax, frameticks, 236);
-		int16_t side_delta = high_rate ? TieUserTiming_ScaleValue(inputdeltay, &high_rate->view_remainder[1])
-									   : (int16_t)math2_ABoverC32(inputdeltay, frameticks, 236);
-		int zoom_btn;
-
-		camera.up_angle += up_delta;
-		camera.side_angle = (int16_t)(camera.side_angle + side_delta);
-		zoom_btn = inputbuttons & 0xF;
-		if (zoom_btn == 1 || zoom_btn == 2) {
-			int32_t delta;
-			int32_t hiw;
-
-			if (high_rate) {
-				const uint32_t numerator = 32u * frameticks + high_rate->zoom_rate_remainder;
-				camera.view_zoom_rate += (int16_t)(numerator / TieFlightTiming_CompatibilityTicks());
-				high_rate->zoom_rate_remainder = (uint16_t)(numerator % TieFlightTiming_CompatibilityTicks());
-			} else {
-				camera.view_zoom_rate += 32;
-			}
-			if ((uint16_t)camera.view_zoom_rate > 0x400u)
-				camera.view_zoom_rate = 1024;
-			delta = high_rate ? TieUserTiming_ScaleValue(camera.view_zoom_rate, &high_rate->zoom_remainder)
-							  : math2_ABoverC32(camera.view_zoom_rate, frameticks, 236);
-			hiw = camera.view_zoom;
-			if (zoom_btn == 1) {
-				hiw -= delta;
-				if (hiw < 48)
-					hiw = 48;
-			} else {
-				hiw += delta;
-				if (hiw > 5120)
-					hiw = 5120;
-			}
-			camera.view_zoom = (int16_t)hiw;
-		} else {
-			camera.view_zoom_rate = 32;
-			if (high_rate) {
-				high_rate->zoom_remainder = 0;
-				high_rate->zoom_rate_remainder = 0;
-			}
-		}
-		return;
-	}
-
-	/* Watcom emits `xor eax,eax; mov ax,inputdeltax; imul eax,ebx; sar eax,15`
-	 * for both axes — i.e. the inputdelta is unsigned-loaded to a 32-bit reg.
-	 * For negative inputdelta the int32 result has bit-15 set, so the LOW 16
-	 * bits, reinterpreted as int16, carry the correctly signed slew target.
-	 * The binary's slew arithmetic at 0x5F886+ then operates only on the low
-	 * 16 (sub bx,ax / test bx,bx / movsx edx,ax), discarding the poisoned
-	 * upper half. Using the full int32 here would feed values up to 65533
-	 * into a slew toward an int16 axis_*_accum, overshooting and wrapping
-	 * every few frames — the "mouse-left banks right + flicker" symptom. */
-	x_input = (int16_t)(((math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1) *
-						 (uint16_t)inputdeltax) >>
-						15);
-	y_input = (int16_t)(((math2_percentage(pstate.player_craft->heading_rate_cache, 0x1000u) >> 1) *
-						 (uint16_t)inputdeltay) >>
-						15);
-	/* Analog roll input from the second-stick axis. Uses roll_rate_cache
-	 * like the X-input modifier path so a fully-deflected stick produces
-	 * the same per-tick rotation the held-button roll mode produces. */
-	roll_input = (int16_t)(((math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1) *
-							(uint16_t)inputdeltaroll) >>
-						   15);
-	if ((pstate.player_craft->status_flags & 0x20) == 0) {
-		x_input = 0;
-		y_input = 0;
-		roll_input = 0;
-	}
-	x_roll_mode = (inputbuttons & 0xE) == 2;
-
-	if (pstate.prev_x_roll_mode == x_roll_mode) {
-		pstate.axis_x_accum = TieUserTiming_SlewAxis(pstate.axis_x_accum, x_input, 0);
-		pstate.axis_y_accum = TieUserTiming_SlewAxis(pstate.axis_y_accum, y_input, 1);
-	} else {
-		pstate.axis_x_accum = 0;
-		pstate.axis_y_accum = 0;
-		if (TieFlightTiming_IsHighRate()) {
-			TieUserTimingState* state = TieFlightTimingState_User();
-			state->slew_remainder[0] = state->slew_remainder[1] = 0;
-			state->slew_sign[0] = state->slew_sign[1] = 0;
-		}
-	}
-	pstate.prev_x_roll_mode = (int16_t)x_roll_mode;
-
-	/* Roll accumulator slews independently of the modifier-button latch
-	 * — pulling the second stick should respond regardless of whether
-	 * the player is also in held-button X-roll mode. */
-	pstate.axis_roll_accum = TieUserTiming_SlewAxis(pstate.axis_roll_accum, roll_input, 2);
-
-	high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_User() : NULL;
-	x_per_tick = high_rate
-					 ? TieUserTiming_ScaleValue(pstate.axis_x_accum, &high_rate->flight_axis_remainder[0])
-					 : (int16_t)math2_ABoverC32(pstate.axis_x_accum, frameticks, 236);
-	y_per_tick = high_rate
-					 ? TieUserTiming_ScaleValue(pstate.axis_y_accum, &high_rate->flight_axis_remainder[1])
-					 : (int16_t)math2_ABoverC32(pstate.axis_y_accum, frameticks, 236);
-	roll_per_tick =
-		high_rate ? TieUserTiming_ScaleValue(pstate.axis_roll_accum, &high_rate->flight_axis_remainder[2])
-				  : (int16_t)math2_ABoverC32(pstate.axis_roll_accum, frameticks, 236);
-	if ((pstate.player_craft->status_flags & 0x20) == 0) {
-		x_per_tick = 0;
-		y_per_tick = 0;
-		roll_per_tick = 0;
-	}
-
-	if (x_roll_mode) {
-		if (x_per_tick) {
-			objects[pstate.object_idx].roll -= (int16_t)(2 * x_per_tick);
-			pstate.player->orient_dirty = 1;
-			pstate.player->move_dirty = 1;
-		}
-		/* Throttle nudge via Y axis in roll mode. */
-		if ((uint16_t)inputdeltay) {
-			uint16_t iy = (uint16_t)inputdeltay;
-			if (iy < 0x8000u || iy > 0xE000u) {
-				if (iy <= 0x8000u && iy >= 0x2000u) {
-					uint16_t decrement = 256;
-					uint16_t cur;
-
-					if (high_rate)
-						decrement = (uint16_t)-TieUserTiming_ScaleCompatibilityIncrement(
-							-256, &high_rate->throttle_remainder[0], &high_rate->throttle_sign[0]);
-					cur = pstate.player_craft->throttle_speed;
-					pstate.player_craft->throttle_speed = (uint16_t)(cur - decrement);
-					if (cur < decrement)
-						pstate.player_craft->throttle_speed = 0;
-				}
-			} else {
-				uint16_t increment = 256;
-				uint16_t cur;
-				uint16_t nxt;
-
-				if (high_rate)
-					increment = (uint16_t)TieUserTiming_ScaleCompatibilityIncrement(
-						256, &high_rate->throttle_remainder[0], &high_rate->throttle_sign[0]);
-				cur = pstate.player_craft->throttle_speed;
-				nxt = (uint16_t)(cur + increment);
-				pstate.player_craft->throttle_speed = nxt;
-				if (cur > nxt)
-					pstate.player_craft->throttle_speed = 0xFFFF;
-			}
-		} else if (high_rate) {
-			high_rate->throttle_remainder[0] = 0;
-			high_rate->throttle_sign[0] = 0;
-		}
-	} else {
-		if (high_rate) {
-			high_rate->throttle_remainder[0] = 0;
-			high_rate->throttle_sign[0] = 0;
-		}
-		if (y_per_tick || x_per_tick) {
-			user_calcdeltapitch(y_per_tick, (int16_t)-x_per_tick, pstate.object_idx, pstate.player_craft);
-			pstate.player->orient_dirty = 1;
-			pstate.player->move_dirty = 1;
-		}
-		/* Auto-bank-into-turn: only when the player isn't supplying
-		 * their own analog roll input. Otherwise the auto component
-		 * fights the stick. */
-		if (x_per_tick && !roll_per_tick)
-			objects[pstate.object_idx].roll -= x_per_tick;
-	}
-
-	/* Apply analog roll on top of either branch (same 2× gain as the
-	 * held-button mode for parity). */
-	if (roll_per_tick) {
-		objects[pstate.object_idx].roll -= (int16_t)(2 * roll_per_tick);
-		pstate.player->orient_dirty = 1;
-		pstate.player->move_dirty = 1;
-	}
-}
-
 /*
  * user_inputforplane -- per-frame in-flight control dispatcher. Large
  * switch on inputkey covering ~150 bindings (flight controls, weapons,
  * shields, view, replay, F-keys, info-rooms). See binary 0x5ADC0.
  *
- * Intentionally monolithic: the binary is a single 12kB function; the
- * only structural abstractions here are the ui_* static helpers above.
+ * The binary is a single 12kB function; each binding is recovered in
+ * place in its switch case.
  */
 // FUNCTION: TIE95 0x5CDA0
 void user_inputforplane(void) {
@@ -3253,35 +2095,176 @@ void user_inputforplane(void) {
 	switch ((uint16_t)inputkey) {
 		/* Left/right arrow: roll. */
 		case KEY_LEFT_ARROW:
-		case KEY_RIGHT_ARROW:
-			ui_roll_input(inputkey);
+		case KEY_RIGHT_ARROW: {
+			int roll_pct = math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1;
+			int scale = (inputkey == 1) ? 53248 : 12288;
+			int q15 = (roll_pct * scale) >> 15;
+			int16_t rd = (int16_t)math2_ABoverC32((int16_t)q15, frameticks, 236);
+			objects[pstate.object_idx].roll = (int16_t)(objects[pstate.object_idx].roll - rd);
 			break;
+		}
 		/* Throttle full. */
 		case KEY_BACKSPACE:
 			pstate.player_craft->throttle_speed = 0xFFFF;
-			ui_ack_beep();
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			argtable[0] = 84;
 			msg_messageprintf(MSG_THROTTLE_SET);
 			break;
 		/* Match target speed. */
-		case KEY_ENTER:
-			ui_match_speed();
+		case KEY_ENTER: {
+			CraftData* pc = pstate.player_craft;
+			uint16_t cur;
+			uint16_t slack;
+			uint16_t maxs;
+			uint16_t match_speed;
+
+			if (pstate.target_obj_idx == 0xFFFF)
+				break;
+			if (pstate.target_obj_idx >= 0x3800u) {
+				pc->throttle_speed = 0;
+				break;
+			}
+			if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS) {
+				pc->throttle_speed = 0xFFFF;
+				break;
+			}
+			cur = (uint16_t)objects[pstate.target_obj_idx].current_speed;
+			slack = (uint16_t)(6 - (pc->shield_power + pc->beam_power + pc->laser_power));
+			maxs = (uint16_t)pc->max_speed_cache;
+
+			if (slack < 0x8000u) {
+				match_speed =
+					(uint16_t)((uint16_t)pc->max_speed_cache + math2_fraction((int16_t)(slack << 13), maxs));
+			} else {
+				uint16_t adj = math2_fraction((int16_t)(-8192 * slack), maxs);
+				match_speed = (uint16_t)(pc->max_speed_cache - adj);
+			}
+			if (cur < match_speed) {
+				uint16_t pct = math2_percentage(cur, match_speed);
+				pc->throttle_speed = pct;
+				msg_messageprintf(MSG_MATCHING_SPEED);
+			} else {
+				pc->throttle_speed = 0xFFFF;
+				msg_messageprintf(MSG_MATCHING_SPEED_MAX);
+			}
 			break;
+		}
 		/* In-flight options room. */
 		case KEY_ESCAPE:
+#ifdef TIE_MODERN
 			if (replayviewmode)
-				s_info_room_pending = 6;
+				TieFlightRequest_InfoRoom(6);
 			else
 				TieRuntime_RequestSettingsMenu();
+#else
+			(void)user_inflightinfo(6);
+#endif
 			break;
 		/* Confirm pending action. */
-		case KEY_SPACE:
-			ui_space_confirm();
+		case KEY_SPACE: {
+			if (!pstate.space_confirm_action)
+				break;
+			if (pstate.space_confirm_action == 1) {
+				pstate.target_obj_idx = (uint16_t)pstate.msg_arg_obj_idx;
+				if (!replayviewmode && camera.view_heading_offset)
+					camera.view_target_obj = pstate.target_obj_idx;
+				pstate.radar_subtarget_state = 0;
+				pstate.player_craft->missile_count_total = 0;
+				msg_messageprintf(MSG_WARHEAD_TARGETED);
+				pstate.space_confirm_action = 0;
+			} else if (pstate.space_confirm_action == 2) {
+				if (recordingreplay) {
+					if (!replayio_spoolreplayinput())
+						replaytotalcnt -= replaybuffercnt;
+					replaybuffercnt = 0;
+					recordingreplay = 0;
+					msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
+					calcframerate = 0;
+				}
+				mission.end_flag = 1;
+				mission.player_status = 3;
+			} else if (pstate.space_confirm_action == 3) {
+				mission.penalty_flag = 1;
+				msg_messageprintf(MSG_REINFORCE_ACK);
+				pstate.space_confirm_action = 0;
+				fsfx_triggervoicesfx(0x66u);
+				fsfx_triggervoicesfx(0x67u);
+				fsfx_triggervoicesfx(0x68u);
+			}
 			break;
-		/* Transfer cannon -> shields. */
+		}
+		/* Transfer cannon -> shields (also Shift+F10). */
 		case KEY_APOSTROPHE:
-			ui_xfer_cannon_to_shields();
+		case KEY_SHIFT_F10: {
+			CraftData* pc = pstate.player_craft;
+			/* Bail if shields are offline. */
+			int16_t cap;
+			int16_t need;
+			int step, cycles;
+			int k;
+			int i;
+
+			if ((pc->subsystem_active & 1) == 0) {
+				argtable[0] = 35;
+				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				break;
+			}
+			if ((pc->status_flags & 1) == 0) {
+				argtable[0] = 35;
+				argtable[1] = 25;
+				msg_messageprintf(MSG_SYSTEM_STATUS);
+				break;
+			}
+			cap = (int16_t)(2 * spec_data[pstate.player_spec_num].shield_points);
+			if (!mission.difficulty)
+				cap *= 2;
+
+			if (pc->is_player_craft) {
+				if (pc->is_player_craft == 2)
+					need = (int16_t)(cap - pc->rear_shield);
+				else {
+					need = (int16_t)(cap - pc->rear_shield + cap - pc->forward_shield);
+					if (need & 0x8000)
+						need = 800;
+				}
+			} else {
+				need = (int16_t)(cap - pc->forward_shield);
+			}
+			if (need > 800)
+				need = 800;
+
+			if (pstate.player_spec_num == spec_getspecnum(0xCu)) {
+				cycles = need >> 5;
+				step = 32;
+			} else {
+				cycles = need >> 3;
+				step = 8;
+			}
+			if (cycles == 0)
+				break;
+
+			k = 0;
+			for (i = 0; i < 100 && cycles > 0; ++i) {
+				int8_t ch = (int8_t)pc->weapon_slots[k].charge;
+				if (ch > 0) {
+					pc->weapon_slots[k].charge = (int8_t)(ch - 1);
+					--cycles;
+					if (!pc->is_player_craft)
+						pc->forward_shield += (int16_t)step;
+					else if (pc->is_player_craft == 2)
+						pc->rear_shield += (int16_t)step;
+					else {
+						pc->forward_shield += (int16_t)(step / 2);
+						pc->rear_shield += (int16_t)(step / 2);
+					}
+				}
+				if ((uint16_t)++k >= (uint16_t)pc->weapon_group_cnt)
+					k = 0;
+			}
+			fsfx_triggersfx(0x21u, 0xFFFF);
+			msg_messageprintf(MSG_XFER_CANNON_TO_SHIELDS);
 			break;
+		}
 		/* Toggle camera.view_pitch_offset when zoomed (LABEL_213). */
 		case KEY_ASTERISK:
 			if (!replayviewmode && camera.view_zoom_flag)
@@ -3295,20 +2278,50 @@ void user_inputforplane(void) {
 			pstate.player_craft->throttle_speed = nxt;
 			if (cur > nxt)
 				pstate.player_craft->throttle_speed = 0xFFFF;
-			ui_ack_beep();
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
 		}
-		/* Radar subtarget forward. */
+		/* Radar subtarget forward (',') / back ('<'). */
 		case KEY_COMMA:
-			ui_cycle_radar_target1(+1);
+		case KEY_LESS: {
+			int step = ((uint16_t)inputkey == KEY_COMMA) ? 1 : -1;
+			CraftData* cp;
+			uint8_t model_type;
+			int nm;
+			int guard;
+
+			if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS)
+				break;
+			cp = objects[pstate.target_obj_idx].craft_ptr;
+			model_type = objects[pstate.target_obj_idx].ship_idx;
+			if (!TieProfile_UsesTie98Logic())
+				draw_lockshipfileptrs(model_type);
+			nm = TieProfile_UsesTie98Logic() ? modelmesh_getcount(model_type) : objectblockptr->num_meshes;
+			guard = nm;
+			do {
+				int rt;
+
+				if (--guard < 0)
+					break;
+				rt = pstate.radar_target1 + step;
+				if (rt >= nm)
+					rt = 0;
+				if (rt < 0)
+					rt = nm - 1;
+				pstate.radar_target1 = (int16_t)rt;
+			} while (cp->mesh_state[pstate.radar_target1] != MESH_STATE_VISIBLE ||
+					 (TieProfile_UsesTie98Logic()
+						  ? !user_validcomponent_tie98(model_type, pstate.radar_target1)
+						  : !user_validcomponent(pstate.radar_target1)));
 			break;
+		}
 		/* Throttle down step + ack beep (LABEL_479). */
 		case KEY_MINUS: {
 			uint16_t cur = pstate.player_craft->throttle_speed;
 			pstate.player_craft->throttle_speed = (uint16_t)(cur - 0x800);
 			if (cur < 0x800)
 				pstate.player_craft->throttle_speed = 0;
-			ui_ack_beep();
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
 		}
 		/* Toggle cockpit and recenter the view. */
@@ -3320,40 +2333,143 @@ void user_inputforplane(void) {
 				camera.up_angle = 0;
 			}
 			break;
-		/* Toggle external camera (LABEL_207). */
+		/* '/' or F3: toggle external camera (LABEL_207). */
 		case KEY_SLASH:
-			ui_toggle_external_camera();
+		case KEY_F3: {
+			int was_zoomed_out;
+
+			if (replayviewmode || camera.view_heading_offset)
+				break;
+			was_zoomed_out = !camera.view_zoom_flag;
+			camera.view_zoom_flag = !camera.view_zoom_flag;
+			if (was_zoomed_out && camera.view_target_obj == pstate.object_idx) {
+				camera.view_saved_idx = camera.pilotview;
+				camera.view_saved_side_angle = camera.side_angle;
+				camera.view_saved_up_angle = camera.up_angle;
+			}
+			user_resetview();
 			break;
+		}
 		/* Toggle wing-level / high-angle view. */
-		case KEY_0:
-			ui_toggle_high_angle_view();
+		case KEY_0: {
+			if (replayviewmode)
+				break;
+			if (camera.pilotview >= 16u && !camera.view_zoom_flag)
+				break;
+			camera.view_dir_dirty ^= 8u;
+			camera.side_angle = ((int32_t)camera.view_dir_dirty) << 10;
+			if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
+				panelrts_setnewpilotview((uint8_t)(camera.pilotview ^ 8));
 			break;
-		/* Numpad camera angles 1..4. */
+		}
+		/* Numpad camera angles 1..4 and 6..9. */
 		case KEY_1:
 		case KEY_2:
 		case KEY_3:
 		case KEY_4:
-			ui_numpad_camera_key((uint16_t)inputkey);
-			break;
-		/* Snap side view (center of numpad). */
-		case KEY_5:
-			ui_snap_side_view();
-			break;
-		/* Numpad camera angles 6..9. */
 		case KEY_6:
 		case KEY_7:
 		case KEY_8:
-		case KEY_9:
-			ui_numpad_camera_key((uint16_t)inputkey);
+		case KEY_9: {
+			if (replayviewmode)
+				break;
+			if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
+				panelrts_setnewpilotview(camera.view_dir_dirty + viewtranslate[(uint16_t)inputkey - KEY_0]);
+			camera.side_angle = ((int32_t)camera.view_dir_dirty) << 10;
+			camera.up_angle = looktranslate[(uint16_t)inputkey - KEY_0];
 			break;
-		/* Transfer shields -> cannon. */
+		}
+		/* Snap side view (center of numpad). */
+		case KEY_5: {
+			if (replayviewmode)
+				break;
+			camera.up_angle = 0;
+			camera.side_angle = 0x4000;
+			if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
+				panelrts_setnewpilotview(0x10u);
+			break;
+		}
+		/* Transfer shields -> cannon (also Shift+F9, synthesized from the
+		 * joystick chord-11 release in user_userinterface). */
 		case KEY_SEMICOLON:
-			ui_xfer_shields_to_cannon();
+		case KEY_SHIFT_F9: {
+			CraftData* pc = pstate.player_craft;
+			int charge_sum;
+			int n;
+			int j;
+			int step;
+			int xfer_amount;
+			int xfer_total;
+			int pips;
+			int k;
+			int i;
+
+			if ((pc->subsystem_active & 1) == 0) {
+				argtable[0] = 35;
+				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				break;
+			}
+			charge_sum = 0;
+			n = pc->weapon_group_cnt;
+			for (j = 0; j < n; ++j)
+				charge_sum += 127 - (int8_t)pc->weapon_slots[j].charge;
+			step = (pstate.player_spec_num == spec_getspecnum(0xCu)) ? 32 : 8;
+			if (charge_sum > 100)
+				charge_sum = 100;
+			xfer_amount = step * charge_sum;
+
+			if (!pc->is_player_craft) {
+				int16_t fwd = pc->forward_shield;
+				if (xfer_amount > fwd)
+					xfer_amount = fwd;
+				xfer_total = xfer_amount;
+				pc->forward_shield -= (int16_t)xfer_amount;
+			} else if (pc->is_player_craft == 2) {
+				int16_t rear = pc->rear_shield;
+				if (xfer_amount > rear)
+					xfer_amount = rear;
+				xfer_total = xfer_amount;
+				pc->rear_shield -= (int16_t)xfer_amount;
+			} else {
+				/* Balanced mode. The binary tests different quantities on the
+				 * forward vs rear halves:
+				 *   forward: if (half > fwd) half = fwd;
+				 *   rear:    if (xfer_amount > rear) tmp = rear;  (NOT half > rear)
+				 * The rear branch therefore drains rear completely when the full
+				 * xfer exceeds rear shield -- even though only half was intended. */
+				int16_t fwd = pc->forward_shield;
+				int half_fwd = xfer_amount >> 1;
+				int16_t rear;
+				int half_rear;
+
+				if (half_fwd > fwd)
+					half_fwd = fwd;
+				pc->forward_shield -= (int16_t)half_fwd;
+
+				rear = pc->rear_shield;
+				half_rear = xfer_amount >> 1;
+				if (xfer_amount > rear)
+					half_rear = rear;
+				pc->rear_shield -= (int16_t)half_rear;
+				xfer_total = half_fwd + half_rear;
+			}
+			pips = xfer_total / step;
+			if (!pips)
+				break;
+			k = 0;
+			for (i = 0; i < 100 && pips > 0; ++i) {
+				/* Watcom unaligned load on weapon_slots[k]: +80 offset = ammo byte */
+				if ((int8_t)pc->weapon_slots[k].ammo != 127)
+					pc->weapon_slots[k].charge++;
+				++k;
+				--pips;
+				if (k >= pc->weapon_group_cnt)
+					k = 0;
+			}
+			fsfx_triggersfx(0x21u, 0xFFFF);
+			msg_messageprintf(MSG_XFER_SHIELDS_TO_CANNON);
 			break;
-		/* Cycle subtarget back. */
-		case KEY_LESS:
-			ui_cycle_radar_target1(-1);
-			break;
+		}
 		/* 'A' (Shift+a): wingmen attack player's target. */
 		case KEY_A:
 			if (pstate.target_obj_idx != 0xFFFF) {
@@ -3438,9 +2554,40 @@ void user_inputforplane(void) {
 			}
 			break;
 		/* 'S': reinforce request. */
-		case KEY_S:
-			ui_reinforce_request();
+		case KEY_S: {
+			int reinforce_avail;
+			uint16_t i;
+
+			if (pstate.space_confirm_action)
+				break;
+			reinforce_avail = 0;
+			for (i = 0; i < (uint16_t)mission_file_header.num_fg; ++i) {
+				/* Watcom unaligned load on fg_array[i].link_code: the +3 byte is
+				 * start_cond[0].type (byte 0x4A), same byte both paths check. */
+				if (fg_array[i].link_code == 20 || fg_array[i].start_cond[0].type == 20) {
+					reinforce_avail = 1;
+					break;
+				}
+			}
+			if (!reinforce_avail) {
+				msg_messageprintf(MSG_NO_REINFORCEMENTS);
+				fsfx_triggervoicesfx(0x66u);
+				fsfx_triggervoicesfx(0x67u);
+				fsfx_triggervoicesfx(0x69u);
+				break;
+			}
+			if (mission.penalty_flag) {
+				msg_messageprintf(MSG_REINFORCE_ALREADY_USED);
+				fsfx_triggervoicesfx(0x66u);
+				fsfx_triggervoicesfx(0x67u);
+				fsfx_triggervoicesfx(0x69u);
+			} else {
+				msg_messageprintf(MSG_REINFORCE_PROMPT);
+				pstate.space_confirm_action = 3;
+				timers[TIMER_SPACE_CONFIRM] = 1888;
+			}
 			break;
+		}
 		/* 'W': wait in place. */
 		case KEY_W:
 			if (!user_checkradio()) {
@@ -3458,26 +2605,30 @@ void user_inputforplane(void) {
 			break;
 		/* 'Z': wingmen info room. */
 		case KEY_Z:
-			s_info_room_pending = 4;
+#ifdef TIE_MODERN
+			TieFlightRequest_InfoRoom(4);
+#else
+			(void)user_inflightinfo(4);
+#endif
 			break;
 		/* '[': throttle 1/3. */
 		case KEY_LBRACKET:
 			pstate.player_craft->throttle_speed = 21845;
-			ui_ack_beep();
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			argtable[0] = 82;
 			msg_messageprintf(MSG_THROTTLE_SET);
 			break;
 		/* '\\': throttle off. */
 		case KEY_BACKSLASH:
 			pstate.player_craft->throttle_speed = 0;
-			ui_ack_beep();
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			argtable[0] = 81;
 			msg_messageprintf(MSG_THROTTLE_SET);
 			break;
 		/* ']': throttle 2/3. */
 		case KEY_RBRACKET:
 			pstate.player_craft->throttle_speed = (uint16_t)(int16_t)-21846;
-			ui_ack_beep();
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			argtable[0] = 83;
 			msg_messageprintf(MSG_THROTTLE_SET);
 			break;
@@ -3488,12 +2639,31 @@ void user_inputforplane(void) {
 			break;
 		}
 		/* 'b': beam on/off. */
-		case KEY_b:
-			ui_toggle_beam();
+		case KEY_b: {
+			CraftData* pc = pstate.player_craft;
+			if ((pc->subsystem_active & 0x100) == 0) {
+				argtable[0] = 32;
+				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				break;
+			}
+			if ((pc->status_flags & 0x100) == 0) {
+				argtable[0] = 32;
+				argtable[1] = 25;
+				msg_messageprintf(MSG_SYSTEM_STATUS);
+				break;
+			}
+			pc->beam_state ^= 0x80u;
+			argtable[0] = (uint16_t)(pc->beam_type + 192);
+			msg_messageprintf((pc->beam_state & 0x80) ? MSG_BEAM_ON : MSG_BEAM_OFF);
 			break;
+		}
 		/* 'd': damage info room. */
 		case KEY_d:
-			s_info_room_pending = 3;
+#ifdef TIE_MODERN
+			TieFlightRequest_InfoRoom(3);
+#else
+			(void)user_inflightinfo(3);
+#endif
 			break;
 		/* 'e': target my closest attacker. */
 		case KEY_e: {
@@ -3503,32 +2673,159 @@ void user_inputforplane(void) {
 		}
 		/* 'g': goals info room. */
 		case KEY_g:
-			s_info_room_pending = 0;
+#ifdef TIE_MODERN
+			TieFlightRequest_InfoRoom(0);
+#else
+			(void)user_inflightinfo(0);
+#endif
 			break;
 		/* 'h': hyperspace. */
-		case KEY_h:
-			ui_hyperspace();
+		case KEY_h: {
+			int interdictor;
+			int i;
+
+			if ((pstate.player_craft->subsystem_active & 0x80) == 0) {
+				/* No hyperdrive: scan for the primary/secondary stop-FG
+				 * craft of the player's own FG and announce where to
+				 * return. */
+				EFGStruct* pfg = &fg_array[pstate.player_fg_idx];
+				uint16_t pri_stop_obj = 0xFFFF;
+				uint16_t sec_stop_obj = 0xFFFF;
+				uint16_t obj;
+
+				for (i = 0; i < NUM_ACTIVE_CRAFT_SLOTS; ++i) {
+					if (pfg->pri_stop_fg_used && objects[i].ship_idx && objects[i].fg_idx == pfg->pri_stop_fg)
+						pri_stop_obj = (uint16_t)i;
+					if (pfg->sec_stop_fg_used && objects[i].ship_idx && objects[i].fg_idx == pfg->sec_stop_fg)
+						sec_stop_obj = (uint16_t)i;
+				}
+
+				if (pri_stop_obj != 0xFFFF && sec_stop_obj != 0xFFFF) {
+					msg_createobjectname(pri_stop_obj, 0, tempstring);
+					msg_addmessageptr(0, tempstring);
+					msg_createobjectname(sec_stop_obj, 0, temp2string);
+					msg_addmessageptr(1u, temp2string);
+					msg_messageprintf(MSG_NO_HYPERDRIVE_RETURN_ALT);
+					break;
+				}
+				obj = (pri_stop_obj != 0xFFFF) ? pri_stop_obj : sec_stop_obj;
+				if (obj == 0xFFFF)
+					break; /* neither found -> silent. */
+				msg_createobjectname(obj, 0, tempstring);
+				msg_addmessageptr(0, tempstring);
+				msg_messageprintf(MSG_NO_HYPERDRIVE_RETURN);
+				break;
+			}
+			if (mission.train_craft_type) {
+				if (recordingreplay) {
+					if (!replayio_spoolreplayinput())
+						replaytotalcnt -= replaybuffercnt;
+					replaybuffercnt = 0;
+					recordingreplay = 0;
+					msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
+					calcframerate = 0;
+				}
+				mission.end_flag = 1;
+				mission.player_status = 3;
+				break;
+			}
+			if ((pstate.player_craft->status_flags & 0x80) == 0) {
+				argtable[0] = 36;
+				argtable[1] = 25;
+				msg_messageprintf(MSG_SYSTEM_STATUS);
+				break;
+			}
+
+			interdictor = 0;
+			for (i = 0; i < NUM_CRAFTS; ++i) {
+				if (objects[i].ship_idx == 51 && objects[i].side != pstate.player->side)
+					interdictor = 1;
+			}
+			if (interdictor) {
+				msg_messageprintf(MSG_INTERDICTOR_BLOCK);
+				break;
+			}
+			fscript_MsSetSequence(17);
+			msg_clearmessagequeue();
+			msg_messageprintf(MSG_HYPER_PREP);
+			hyperspaceflag = 1;
+			hyperabortflag = 1;
+			camera.view_zoom_flag = 0;
+			camera.view_target_obj = pstate.object_idx;
+			camera.view_pitch_offset = 0;
+			panelrts_setnewpilotview(0);
+			camera.side_angle = 0;
+			camera.up_angle = 0;
+			hyperticks = 0;
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
+		}
 		/* 'i': radar toggle. */
-		case KEY_i:
-			ui_toggle_radar();
+		case KEY_i: {
+			pstate.radar_enable ^= 1u;
+			argtable[0] = (uint16_t)(pstate.radar_enable + 86);
+			msg_messageprintf(MSG_CMD_TRACK_TOGGLE);
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
+		}
 		/* 'k': help info room. */
 		case KEY_k:
-			s_info_room_pending = 5;
+#ifdef TIE_MODERN
+			TieFlightRequest_InfoRoom(5);
+#else
+			(void)user_inflightinfo(5);
+#endif
 			break;
 		/* 'l': messages info room. */
 		case KEY_l:
-			s_info_room_pending = 2;
+#ifdef TIE_MODERN
+			TieFlightRequest_InfoRoom(2);
+#else
+			(void)user_inflightinfo(2);
+#endif
 			break;
 		/* 'm': map info room. */
 		case KEY_m:
-			s_info_room_pending = 1;
+#ifdef TIE_MODERN
+			TieFlightRequest_InfoRoom(1);
+#else
+			(void)user_inflightinfo(1);
+#endif
 			break;
 		/* 'n': overdrive toggle. */
-		case KEY_n:
-			ui_overdrive_toggle();
+		case KEY_n: {
+			CraftData* pc = pstate.player_craft;
+			int slam_was_off;
+			int has_charge;
+			int n;
+			int i;
+
+			if (pstate.player_spec_num != spec_getspecnum(0xCu))
+				break;
+			slam_was_off = (pc->slam_active == 0xFFFF);
+			pc->slam_active = (uint16_t)~pc->slam_active;
+			if (!slam_was_off) {
+				msg_messageprintf(MSG_OVERDRIVE_DISENGAGED);
+				fsfx_triggersfx(0x6Cu, 0xFFFF);
+				break;
+			}
+			has_charge = 0;
+			n = pc->weapon_group_cnt;
+			for (i = 0; i < n; ++i) {
+				if ((int8_t)pc->weapon_slots[i].charge > 0) {
+					has_charge = 1;
+					break;
+				}
+			}
+			if (has_charge) {
+				msg_messageprintf(MSG_OVERDRIVE_ENGAGED);
+				fsfx_triggersfx(0x6Bu, 0xFFFF);
+			} else {
+				pc->slam_active = 0xFFFF;
+				msg_messageprintf(MSG_OVERDRIVE_FAIL);
+			}
 			break;
+		}
 		/* 'o': drop current target lock and reset external view back to
 		 * the player's cockpit. */
 		case KEY_o:
@@ -3555,42 +2852,313 @@ void user_inputforplane(void) {
 			break;
 		/* 'r': find nearest enemy and target it. Also synthesized by
 		 * user_userinterface on button-chord-4 release. */
-		case KEY_r:
-			ui_target_nearest_fighter_or_mine();
+		case KEY_r: {
+			uint32_t best_dist = 0xFFFFFFFFu;
+			uint16_t best_idx = 0xFFFF;
+
+			/* Pass 1: craft slots 0..NUM_CRAFTS-1. */
+			int16_t i;
+			uint16_t k;
+			int16_t m;
+
+			for (i = 0; i < NUM_CRAFTS; ++i) {
+				uint8_t side;
+				int g;
+				CraftData* cp;
+				uint8_t ff;
+
+				if (!objects[i].ship_idx)
+					continue;
+				if (i == pstate.object_idx)
+					continue;
+				side = objects[i].side;
+				if (side == objects[pstate.object_idx].side)
+					continue;
+				if (side == 2 && mission_file_header.mission.neutral_name[0][0] != '1')
+					continue;
+				if (side == 3 && mission_file_header.mission.neutral_name[1][0] != '1')
+					continue;
+				if (side == 5 && mission_file_header.mission.neutral_name[3][0] != '1')
+					continue;
+				g = objects[i].genus;
+				if (g == 3 || g == 4 || g == 5)
+					continue;
+				cp = objects[i].craft_ptr;
+				if (!cp->status_flags)
+					continue;
+				ff = cp->flight_flag;
+				if (ff && ff != 6)
+					continue;
+
+				pai_distancebetween(pstate.object_idx, i);
+				if (best_dist > (uint32_t)trig2_polardistance) {
+					best_idx = (uint16_t)i;
+					best_dist = (uint32_t)trig2_polardistance;
+				}
+			}
+
+			/* Pass 2: static mine-gun turrets (ship_class == 8). */
+			k = 14336;
+			for (m = 0; m < 64; ++m, ++k) {
+				uint8_t fg_side;
+
+				if (!staticobjects[m].species)
+					continue;
+				if (staticobjects[m].ship_class != 8)
+					continue;
+				if (!staticobjects[m].status_flags)
+					continue;
+				fg_side = fg_array[staticobjects[m].fg_idx].side;
+				if (fg_side == objects[pstate.object_idx].side)
+					continue;
+
+				pai_distancebetween(pstate.object_idx, k);
+				if (best_dist > (uint32_t)trig2_polardistance) {
+					best_idx = k;
+					best_dist = (uint32_t)trig2_polardistance;
+				}
+			}
+
+			user_setnewtarget(best_idx);
 			break;
+		}
 		/* 's': shield mode cycle. Also synthesized on button-chord-7
 		 * release. */
-		case KEY_s:
-			ui_cycle_shield_mode();
+		case KEY_s: {
+			CraftData* pc = pstate.player_craft;
+			uint8_t new_mode;
+
+			if ((pc->subsystem_active & 1) == 0) {
+				argtable[0] = 35;
+				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				break;
+			}
+			if ((pc->status_flags & 1) == 0) {
+				argtable[0] = 35;
+				argtable[1] = 25;
+				msg_messageprintf(MSG_SYSTEM_STATUS);
+				break;
+			}
+			new_mode = (uint8_t)(pc->is_player_craft + 1);
+			pc->is_player_craft = new_mode;
+			if (new_mode > 2) {
+				pc->is_player_craft = 0;
+				user_adjustshields(0, 1);
+			} else if (new_mode == 2) {
+				user_adjustshields(1, 0);
+			} else {
+				/* Balanced (mode 1): split evenly, honoring easy-diff 4x cap. */
+				int16_t cap_base = (int16_t)(2 * spec_data[pstate.player_spec_num].shield_points);
+				int16_t points = spec_data[pstate.player_spec_num].shield_points;
+				int16_t cap = cap_base;
+				uint16_t pct;
+				int16_t total;
+
+				if (!mission.difficulty) {
+					cap = (int16_t)(4 * spec_data[pstate.player_spec_num].shield_points);
+					points = cap_base;
+				}
+				pct = math2_percentage(points, cap);
+				total = (int16_t)(pc->forward_shield + pc->rear_shield);
+				if (total > 0) {
+					int16_t fwd = (int16_t)math2_fraction(total, pct);
+					pc->forward_shield = fwd;
+					pc->rear_shield = (int16_t)(total - fwd);
+				}
+			}
+			argtable[0] = (uint16_t)(pc->is_player_craft + 14);
+			msg_messageprintf(MSG_SHIELDS_SET);
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
-		/* 't': target cycle forward. */
+		}
+		/* 't' / 'y': target cycle forward / backward. */
 		case KEY_t:
-			ui_target_cycle(+1);
+		case KEY_y: {
+			uint16_t start =
+				(pstate.target_obj_idx == 0xFFFF) ? (uint16_t)pstate.radar_target0 : pstate.target_obj_idx;
+			uint16_t pick = user_picknexttarget(start, ((uint16_t)inputkey == KEY_t) ? 1 : -1);
+			user_setnewtarget(pick);
 			break;
+		}
 		/* 'u': target newest craft in the area (QRC manual). */
-		case KEY_u:
-			ui_target_newest_craft();
+		case KEY_u: {
+			uint16_t best_obj = 0xFFFF;
+			uint16_t best_tick = 0xFFFF;
+			int16_t i;
+
+			for (i = 0; i < NUM_ACTIVE_CRAFT_SLOTS; ++i) {
+				CraftData* cp;
+				uint8_t ff;
+				uint16_t tick;
+
+				if (!objects[i].ship_idx)
+					continue;
+				if (i == pstate.object_idx)
+					continue;
+				cp = objects[i].craft_ptr;
+				if (cp->leader_obj_idx != 255)
+					continue;
+				/* Accept flight_flag in {0, 2, 6}; reject everything else. */
+				ff = cp->flight_flag;
+				if (ff && ff != 2 && ff != 6)
+					continue;
+				tick = (uint16_t)objects[i].age_ticks;
+				if (tick < best_tick) {
+					best_obj = (uint16_t)i;
+					best_tick = tick;
+				}
+			}
+			user_setnewtarget(best_obj);
 			break;
+		}
 		/* 'w': weapon group cycle. */
-		case KEY_w:
-			ui_cycle_weapon_group();
+		case KEY_w: {
+			CraftData* pc = pstate.player_craft;
+			uint8_t nwg = (++pstate.player_weapon_group);
+			MsgTemplate msg;
+
+			if (pstate.player_weapon_mode) {
+				if (nwg >= pc->missile_group_cnt) {
+					if (pc->laser_group_cnt)
+						pstate.player_weapon_mode = 0;
+					pstate.player_weapon_group = 0;
+				}
+			} else if (nwg >= pc->laser_group_cnt) {
+				pstate.player_weapon_mode = (uint8_t)(pc->missile_group_cnt != 0);
+				pstate.player_weapon_group = 0;
+			}
+
+			argtable[1] = 25;
+
+			if (pstate.player_weapon_mode) {
+				if (pc->status_flags & 8) {
+					int32_t w = pc->warhead_type[pstate.player_weapon_group];
+					argtable[0] = (uint16_t)user_mapmissiletomessage((uint8_t)w, 0);
+					msg = MSG_LAUNCHERS_ARMED;
+				} else {
+					argtable[0] = 31;
+					msg = MSG_SYSTEM_STATUS;
+				}
+			} else if (pc->status_flags & 0x10) {
+				msg = (MsgTemplate)(pstate.player_weapon_group + 3);
+			} else {
+				argtable[0] = (uint16_t)(pstate.player_weapon_group + 29);
+				msg = MSG_SYSTEM_STATUS;
+			}
+			msg_messageprintf(msg);
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
+		}
 		/* 'x': weapon firing-mode cycle. */
-		case KEY_x:
-			ui_cycle_weapon_firing_mode();
+		case KEY_x: {
+			CraftData* pc = pstate.player_craft;
+			uint16_t nl;
+
+			if (pstate.player_weapon_mode) {
+				int32_t w;
+				MsgTemplate m;
+
+				pc->missile_armed[pstate.player_weapon_group] ^= 2u;
+				w = pc->warhead_type[pstate.player_weapon_group];
+				argtable[0] = (uint16_t)user_mapmissiletomessage((uint8_t)w, 0);
+				m = (MsgTemplate)(((pc->missile_armed[pstate.player_weapon_group] & 0x7F) >> 1) + 6);
+				msg_messageprintf(m);
+				break;
+			}
+			if (spec_data[pstate.player_spec_num].laser_count[pstate.player_weapon_group] == 1) {
+				fsfx_triggersfx(0x21u, 0xFFFF);
+				break;
+			}
+			nl = (uint16_t)(pc->laser_owner_player[pstate.player_weapon_group] + 1);
+			if (nl > 3)
+				nl = 1;
+			if (spec_data[pstate.player_spec_num].laser_count[pstate.player_weapon_group] != 4 && nl == 2)
+				nl = 3;
+			pc->laser_owner_player[pstate.player_weapon_group] = (uint8_t)nl;
+			pc->laser_first_slot[pstate.player_weapon_group] =
+				spec_data[pstate.player_spec_num].laser_start[pstate.player_weapon_group];
+			msg_messageprintf((MsgTemplate)(nl + 9));
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
-		/* 'y': target cycle backward. */
-		case KEY_y:
-			ui_target_cycle(-1);
-			break;
+		}
 		/* 'z': target-viewer toggle. */
-		case KEY_z:
-			ui_target_viewer_toggle();
+		case KEY_z: {
+			if (replayviewmode)
+				break;
+			if (camera.view_heading_offset) {
+				camera.view_heading_offset = 0;
+				targetblinkflag = 0;
+				camera.view_zoom_flag = (camera.view_saved_idx == 18);
+				lasttargetnum = -2;
+				camera.view_target_obj = pstate.object_idx;
+				user_resetview();
+			} else if (pstate.target_obj_idx == 0xFFFF) {
+				msg_messageprintf(MSG_NO_TARGET);
+			} else {
+				if (!camera.view_zoom_flag) {
+					camera.view_saved_idx = camera.pilotview;
+					camera.view_saved_side_angle = camera.side_angle;
+					camera.view_saved_up_angle = camera.up_angle;
+				}
+				camera.view_zoom_flag = 1;
+				camera.view_heading_offset = 1;
+				camera.view_target_obj = pstate.target_obj_idx;
+				targetblinkflag = 1024;
+				user_resetview();
+			}
 			break;
+		}
 		/* Alt+E: eject / surrender. */
-		case KEY_ALT_E:
-			ui_eject_or_surrender();
+		case KEY_ALT_E: {
+			int16_t status;
+			int sp;
+			uint16_t spin;
+			uint16_t rnd;
+
+			if (mission.train_craft_type) {
+				if (recordingreplay) {
+					if (!replayio_spoolreplayinput())
+						replaytotalcnt -= replaybuffercnt;
+					replaybuffercnt = 0;
+					recordingreplay = 0;
+					msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
+					calcframerate = 0;
+				}
+				mission.end_flag = 1;
+				mission.player_status = 3;
+				break;
+			}
+			if ((pstate.player_craft->status_flags & 2) == 0) {
+				argtable[0] = 34;
+				argtable[1] = 25;
+				msg_messageprintf(MSG_SYSTEM_STATUS);
+				break;
+			}
+			if (hyperspaceflag || replayviewmode)
+				break;
+
+			if (user_isrescued(pstate.object_idx)) {
+				status = 0;
+				mission.player_status = 2;
+			} else {
+				status = 1;
+				mission.player_status = 1;
+			}
+			fediskio_updatepilotrecord(status, 1);
+			user_ejectcamera();
+			sp = pstate.player_craft->species_idx;
+			spin = (uint16_t)math2_getrandom();
+			spin = (uint16_t)(((uint8_t)((spin >> 8) & 0x3F) + 32) << 8);
+			while (spin > (uint16_t)spec_data[sp].max_spin_rate)
+				spin >>= 1;
+			pstate.player->spin_rate = (int16_t)spin;
+			pstate.player_craft->flight_flag = 3;
+			rnd = (uint16_t)math2_getrandom();
+			pstate.player->death_timer = (int16_t)(236 * ((rnd & 3) + 3));
+			TIE_FLIGHT_TRACE_DEATH(pstate.object_idx, 0xFFFFu, TIE_TRACE_DEATH_EJECTED,
+								   pstate.player->death_timer);
 			break;
+		}
 		/* Alt+O: screenshot. */
 		case KEY_ALT_O:
 			if (TieClassicDisplay_UsesDx5())
@@ -3637,7 +3205,7 @@ void user_inputforplane(void) {
 			user_setdetaillevel(dl);
 			argtable[0] = (uint16_t)(dl + 38);
 			msg_messageprintf(MSG_GFX_DETAIL);
-			ui_ack_beep();
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
 		}
 		/* Alt+M: music volume toggle. */
@@ -3668,46 +3236,130 @@ void user_inputforplane(void) {
 			}
 			break;
 		/* F2: select or cycle warhead view. */
-		case KEY_F2:
-			ui_cycle_warhead_view();
+		case KEY_F2: {
+			uint16_t scan;
+			uint16_t found;
+			int k;
+
+			frameticksmsgflag = !frameticksmsgflag;
+			if (replayviewmode || camera.view_heading_offset)
+				break;
+
+			scan = (camera.view_target_obj == pstate.object_idx) ? (uint16_t)(NUM_CRAFTS - 1)
+																 : camera.view_target_obj;
+			found = 0xFFFF;
+			for (k = NUM_CRAFTS; k < WARHEAD_SLOT_END; ++k) {
+				unsigned int projectile_type_idx;
+
+				scan = (uint16_t)(scan + 1);
+				if (scan >= WARHEAD_SLOT_END)
+					scan = NUM_CRAFTS;
+				projectile_type_idx = objects[scan].ship_idx - WEAPON_SPECIES_BASE;
+				/* Freed projectile slots retain their genus after ship_idx is cleared. */
+				if (objects[scan].genus == GENUS_PROJECTILE_PLAYER &&
+					projectile_type_idx < WARHEAD_TYPE_COUNT &&
+					projectile_is_warhead_type[projectile_type_idx]) {
+					if (pstate.object_idx == (uint16_t)objects[scan].self_idx)
+						found = scan;
+					break;
+				}
+			}
+			if (found != 0xFFFF) {
+				if (camera.view_target_obj == pstate.object_idx) {
+					camera.view_saved_idx = camera.pilotview;
+					camera.view_saved_side_angle = camera.side_angle;
+					camera.view_saved_up_angle = camera.up_angle;
+					camera.view_zoom_flag = 0;
+				}
+				camera.view_target_obj = found;
+				user_resetview();
+			}
 			break;
-		/* F3: toggle external camera (LABEL_207). */
-		case KEY_F3:
-			ui_toggle_external_camera();
-			break;
+		}
 		/* F4: toggle external-camera positioning controls (LABEL_213). */
 		case KEY_F4:
 			if (!replayviewmode && camera.view_zoom_flag)
 				camera.view_pitch_offset = (camera.view_pitch_offset == 0);
 			break;
 		/* F8: beam-rate cycle. */
-		case KEY_F8:
-			ui_cycle_beam_rate();
+		case KEY_F8: {
+			CraftData* pc = pstate.player_craft;
+			uint8_t nr;
+
+			if ((pc->subsystem_active & 0x100) == 0) {
+				argtable[0] = 32;
+				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				break;
+			}
+			if ((pc->status_flags & 0x100) == 0) {
+				argtable[0] = 32;
+				argtable[1] = 25;
+				msg_messageprintf(MSG_SYSTEM_STATUS);
+				break;
+			}
+			nr = (uint8_t)(pc->beam_power + 1);
+			pc->beam_power = nr;
+			if (nr >= 5)
+				pc->beam_power = 0;
+			argtable[0] = (uint16_t)(pc->beam_power + 19);
+			msg_messageprintf(MSG_BEAM_RATE);
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
+		}
 		/* F9: cannon-rate cycle. */
-		case KEY_F9:
-			ui_cycle_cannon_rate();
+		case KEY_F9: {
+			CraftData* pc = pstate.player_craft;
+			uint8_t nr = (uint8_t)(pc->laser_power + 1);
+			MsgTemplate msg;
+
+			pc->laser_power = nr;
+			if (nr >= 5)
+				pc->laser_power = 0;
+
+			if (pc->status_flags & 0x10) {
+				argtable[0] = (uint16_t)(pc->laser_power + 19);
+				msg = MSG_CANNON_RATE;
+			} else {
+				argtable[0] = 29;
+				argtable[1] = 25;
+				msg = MSG_SYSTEM_STATUS;
+			}
+			msg_messageprintf(msg);
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
+		}
 		/* F10: shield-rate cycle. */
-		case KEY_F10:
-			ui_cycle_shield_rate();
+		case KEY_F10: {
+			CraftData* pc = pstate.player_craft;
+			uint8_t nr;
+
+			if ((pc->subsystem_active & 1) == 0) {
+				argtable[0] = 35;
+				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				break;
+			}
+			if ((pc->status_flags & 1) == 0) {
+				argtable[0] = 35;
+				argtable[1] = 25;
+				msg_messageprintf(MSG_SYSTEM_STATUS);
+				break;
+			}
+			nr = (uint8_t)(pc->shield_power + 1);
+			pc->shield_power = nr;
+			if (nr >= 5)
+				pc->shield_power = 0;
+			argtable[0] = (uint16_t)(pc->shield_power + 19);
+			msg_messageprintf(MSG_SHIELD_RATE);
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
-		/* Shift+F9: xfer shields -> cannon (LABEL_303). Also synthesized
-		 * from joystick chord-11 release in user_userinterface. */
-		case KEY_SHIFT_F9:
-			ui_xfer_shields_to_cannon();
-			break;
+		}
 		/* Shift+F5..F7: quicksave target recall slots. */
 		case KEY_SHIFT_F5:
 		case KEY_SHIFT_F6:
 		case KEY_SHIFT_F7:
 			if (pstate.target_obj_idx != 0xFFFF)
 				pstate.target_presets[(uint16_t)inputkey - KEY_SHIFT_F5] = pstate.target_obj_idx;
-			ui_ack_beep();
-			break;
-		/* Shift+F10: xfer cannon -> shields (LABEL_354). */
-		case KEY_SHIFT_F10:
-			ui_xfer_cannon_to_shields();
+			fsfx_triggersfx(0x21u, 0xFFFF);
 			break;
 		/* Alt+1: auto-target. */
 		case KEY_ALT_1: {
@@ -3731,6 +3383,196 @@ void user_inputforplane(void) {
 			break;
 	}
 
-	ui_apply_view_or_flight_input();
-	ui_apply_absolute_throttle();
+	/* Orientation update at the end of the per-frame dispatch. */
+	{
+		int16_t x_input;
+		int16_t y_input;
+		int16_t roll_input;
+		int x_roll_mode;
+		TieUserTimingState* high_rate;
+		int16_t x_per_tick;
+		int16_t y_per_tick;
+		int16_t roll_per_tick;
+
+		if (camera.view_pitch_offset) {
+			TieUserTimingState* high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_User() : NULL;
+			int16_t up_delta = high_rate
+								   ? TieUserTiming_ScaleValue(inputdeltax, &high_rate->view_remainder[0])
+								   : (int16_t)math2_ABoverC32(inputdeltax, frameticks, 236);
+			int16_t side_delta = high_rate
+									 ? TieUserTiming_ScaleValue(inputdeltay, &high_rate->view_remainder[1])
+									 : (int16_t)math2_ABoverC32(inputdeltay, frameticks, 236);
+			int zoom_btn;
+
+			camera.up_angle += up_delta;
+			camera.side_angle = (int16_t)(camera.side_angle + side_delta);
+			zoom_btn = inputbuttons & 0xF;
+			if (zoom_btn == 1 || zoom_btn == 2) {
+				int32_t delta;
+				int32_t hiw;
+
+				if (high_rate) {
+					const uint32_t numerator = 32u * frameticks + high_rate->zoom_rate_remainder;
+					camera.view_zoom_rate += (int16_t)(numerator / TieFlightTiming_CompatibilityTicks());
+					high_rate->zoom_rate_remainder =
+						(uint16_t)(numerator % TieFlightTiming_CompatibilityTicks());
+				} else {
+					camera.view_zoom_rate += 32;
+				}
+				if ((uint16_t)camera.view_zoom_rate > 0x400u)
+					camera.view_zoom_rate = 1024;
+				delta = high_rate
+							? TieUserTiming_ScaleValue(camera.view_zoom_rate, &high_rate->zoom_remainder)
+							: math2_ABoverC32(camera.view_zoom_rate, frameticks, 236);
+				hiw = camera.view_zoom;
+				if (zoom_btn == 1) {
+					hiw -= delta;
+					if (hiw < 48)
+						hiw = 48;
+				} else {
+					hiw += delta;
+					if (hiw > 5120)
+						hiw = 5120;
+				}
+				camera.view_zoom = (int16_t)hiw;
+			} else {
+				camera.view_zoom_rate = 32;
+				if (high_rate) {
+					high_rate->zoom_remainder = 0;
+					high_rate->zoom_rate_remainder = 0;
+				}
+			}
+		} else {
+
+			/* Watcom emits `xor eax,eax; mov ax,inputdeltax; imul eax,ebx; sar eax,15`
+			 * for both axes — i.e. the inputdelta is unsigned-loaded to a 32-bit reg.
+			 * For negative inputdelta the int32 result has bit-15 set, so the LOW 16
+			 * bits, reinterpreted as int16, carry the correctly signed slew target.
+			 * The binary's slew arithmetic at 0x5F886+ then operates only on the low
+			 * 16 (sub bx,ax / test bx,bx / movsx edx,ax), discarding the poisoned
+			 * upper half. Using the full int32 here would feed values up to 65533
+			 * into a slew toward an int16 axis_*_accum, overshooting and wrapping
+			 * every few frames — the "mouse-left banks right + flicker" symptom. */
+			x_input = (int16_t)(((math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1) *
+								 (uint16_t)inputdeltax) >>
+								15);
+			y_input = (int16_t)(((math2_percentage(pstate.player_craft->heading_rate_cache, 0x1000u) >> 1) *
+								 (uint16_t)inputdeltay) >>
+								15);
+			/* Analog roll input from the second-stick axis. Uses roll_rate_cache
+			 * like the X-input modifier path so a fully-deflected stick produces
+			 * the same per-tick rotation the held-button roll mode produces. */
+			roll_input = (int16_t)(((math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1) *
+									(uint16_t)inputdeltaroll) >>
+								   15);
+			if ((pstate.player_craft->status_flags & 0x20) == 0) {
+				x_input = 0;
+				y_input = 0;
+				roll_input = 0;
+			}
+			x_roll_mode = (inputbuttons & 0xE) == 2;
+
+			if (pstate.prev_x_roll_mode == x_roll_mode) {
+				pstate.axis_x_accum = TieUserTiming_SlewAxis(pstate.axis_x_accum, x_input, 0);
+				pstate.axis_y_accum = TieUserTiming_SlewAxis(pstate.axis_y_accum, y_input, 1);
+			} else {
+				pstate.axis_x_accum = 0;
+				pstate.axis_y_accum = 0;
+				if (TieFlightTiming_IsHighRate()) {
+					TieUserTimingState* state = TieFlightTimingState_User();
+					state->slew_remainder[0] = state->slew_remainder[1] = 0;
+					state->slew_sign[0] = state->slew_sign[1] = 0;
+				}
+			}
+			pstate.prev_x_roll_mode = (int16_t)x_roll_mode;
+
+			/* Roll accumulator slews independently of the modifier-button latch
+			 * — pulling the second stick should respond regardless of whether
+			 * the player is also in held-button X-roll mode. */
+			pstate.axis_roll_accum = TieUserTiming_SlewAxis(pstate.axis_roll_accum, roll_input, 2);
+
+			high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_User() : NULL;
+			x_per_tick = high_rate ? TieUserTiming_ScaleValue(pstate.axis_x_accum,
+															  &high_rate->flight_axis_remainder[0])
+								   : (int16_t)math2_ABoverC32(pstate.axis_x_accum, frameticks, 236);
+			y_per_tick = high_rate ? TieUserTiming_ScaleValue(pstate.axis_y_accum,
+															  &high_rate->flight_axis_remainder[1])
+								   : (int16_t)math2_ABoverC32(pstate.axis_y_accum, frameticks, 236);
+			roll_per_tick = high_rate ? TieUserTiming_ScaleValue(pstate.axis_roll_accum,
+																 &high_rate->flight_axis_remainder[2])
+									  : (int16_t)math2_ABoverC32(pstate.axis_roll_accum, frameticks, 236);
+			if ((pstate.player_craft->status_flags & 0x20) == 0) {
+				x_per_tick = 0;
+				y_per_tick = 0;
+				roll_per_tick = 0;
+			}
+
+			if (x_roll_mode) {
+				if (x_per_tick) {
+					objects[pstate.object_idx].roll -= (int16_t)(2 * x_per_tick);
+					pstate.player->orient_dirty = 1;
+					pstate.player->move_dirty = 1;
+				}
+				/* Throttle nudge via Y axis in roll mode. */
+				if ((uint16_t)inputdeltay) {
+					uint16_t iy = (uint16_t)inputdeltay;
+					if (iy < 0x8000u || iy > 0xE000u) {
+						if (iy <= 0x8000u && iy >= 0x2000u) {
+							uint16_t decrement = 256;
+							uint16_t cur;
+
+							if (high_rate)
+								decrement = (uint16_t)-TieUserTiming_ScaleCompatibilityIncrement(
+									-256, &high_rate->throttle_remainder[0], &high_rate->throttle_sign[0]);
+							cur = pstate.player_craft->throttle_speed;
+							pstate.player_craft->throttle_speed = (uint16_t)(cur - decrement);
+							if (cur < decrement)
+								pstate.player_craft->throttle_speed = 0;
+						}
+					} else {
+						uint16_t increment = 256;
+						uint16_t cur;
+						uint16_t nxt;
+
+						if (high_rate)
+							increment = (uint16_t)TieUserTiming_ScaleCompatibilityIncrement(
+								256, &high_rate->throttle_remainder[0], &high_rate->throttle_sign[0]);
+						cur = pstate.player_craft->throttle_speed;
+						nxt = (uint16_t)(cur + increment);
+						pstate.player_craft->throttle_speed = nxt;
+						if (cur > nxt)
+							pstate.player_craft->throttle_speed = 0xFFFF;
+					}
+				} else if (high_rate) {
+					high_rate->throttle_remainder[0] = 0;
+					high_rate->throttle_sign[0] = 0;
+				}
+			} else {
+				if (high_rate) {
+					high_rate->throttle_remainder[0] = 0;
+					high_rate->throttle_sign[0] = 0;
+				}
+				if (y_per_tick || x_per_tick) {
+					user_calcdeltapitch(y_per_tick, (int16_t)-x_per_tick, pstate.object_idx,
+										pstate.player_craft);
+					pstate.player->orient_dirty = 1;
+					pstate.player->move_dirty = 1;
+				}
+				/* Auto-bank-into-turn: only when the player isn't supplying
+				 * their own analog roll input. Otherwise the auto component
+				 * fights the stick. */
+				if (x_per_tick && !roll_per_tick)
+					objects[pstate.object_idx].roll -= x_per_tick;
+			}
+
+			/* Apply analog roll on top of either branch (same 2× gain as the
+			 * held-button mode for parity). */
+			if (roll_per_tick) {
+				objects[pstate.object_idx].roll -= (int16_t)(2 * roll_per_tick);
+				pstate.player->orient_dirty = 1;
+				pstate.player->move_dirty = 1;
+			}
+		}
+	}
+	TieUserTiming_ApplyThrottleCommand();
 }

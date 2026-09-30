@@ -6,6 +6,7 @@
 /* Native checkpoint slot 6, encoded from the live mission header. */
 extern uint8_t TieReplayMissionHeaderImage[456];
 
+#include "tie/replay.h"
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
@@ -96,5 +97,9 @@ int TieReplayFormat_WriteHeader(TieFile* fp);
  * Returns 1 if the header is well-formed and matches; 0 on EOF, I/O
  * error, magic mismatch, or unsupported version / frame_size. */
 int TieReplayFormat_ReadHeader(TieFile* fp, TieReplayFormatMetadata* metadata);
+
+/* Decode/encode one fixed REPLAYINPUTFRAME_DISK_SIZE-byte V6 input record. */
+void TieReplayFormat_DecodeInputFrame(ReplayInputFrame* dst, const uint8_t* src);
+void TieReplayFormat_EncodeInputFrame(uint8_t* dst, const ReplayInputFrame* src);
 
 #endif /* TIE_REPLAY_FORMAT_H */

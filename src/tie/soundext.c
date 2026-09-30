@@ -23,6 +23,7 @@
 /* --- External modules --- */
 
 #include "tie/mfscript.h"
+#include "tie/overlay.h"
 
 #include "landru/memcom.h"
 
@@ -45,6 +46,8 @@
 /* Retail scene cues as [scene, type, time, arg], terminated by {-1,-1,-1,-1}.
  * Types 0, 1, and 2 select cue point, state, and sequence respectively;
  * time -1 runs during scene setup. */
+// GLOBAL: TIE95 0xCDDF8
+// GLOBAL: TIE98 0x4EBC90
 static int16_t sound_scene_list_gbl[644] = {
 	6,   2, 0,   1,  6,   0, 0,   0,  6,   1, 0,   1,  6,   0, 46,  1,  7,   0,  -1,  2,  8,   0, -1,  3,
 	8,   0, 40,  4,  10,  0, -1,  5,  20,  0, -1,  6,  30,  0, -1,  7,  30,  0,  71,  8,  40,  0, -1,  9,
@@ -74,39 +77,59 @@ static int16_t sound_scene_list_gbl[644] = {
 	259, 0, -1,  3,  259, 0, 79,  4,  260, 0, -1,  3,  260, 0, 79,  4,  261, 0,  -1,  3,  261, 0, 79,  4,
 	262, 0, -1,  3,  262, 0, 79,  4,  263, 0, -1,  3,  263, 0, 79,  4,  -1,  -1, -1,  -1,
 };
-static int16_t sound_start_gbl;
-static int16_t sound_stop_gbl;
-/* Unused binary data-segment state. */
-static int16_t sound_state_gbl __attribute__((unused));
+// GLOBAL: TIE95 0xCE300
+// GLOBAL: TIE98 0x4EC198
+static int16_t sound_start_gbl = -1;
+// GLOBAL: TIE95 0xCE302
+// GLOBAL: TIE98 0x4EC19C
+static int16_t sound_stop_gbl = -1;
 
+// GLOBAL: TIE95 0xCE306
+// GLOBAL: TIE98 0x4EC1A0
 static char Sound_Speech_Name[1][10] = {
 	"reg1",
 };
 
+// GLOBAL: TIE95 0xCE310
+// GLOBAL: TIE98 0x4EC1B0
 static char Sound_SFX_Name[19][10] = {
 	"door-1",  "door-1a",  "door-1b",  "door-1c",  "dr-cls-1", "door-1",   "dr-cls-1",
 	"guncock", "log-on-c", "visor-1b", "button-1", "button-2", "target-4", "target-5",
 	"door-6",  "vis-clk2", "text-5",   "door-5",   "cannon-1",
 };
 
+// GLOBAL: TIE95 0xF5008
+// GLOBAL: TIE98 0x589C4C
 static ResFile* music_file;
+// GLOBAL: TIE95 0xF500C
+// GLOBAL: TIE98 0x589C54
 static ResFile* music2_file;
-static ResFile* sfx_file;
+// GLOBAL: TIE95 0xF5010
+// GLOBAL: TIE98 0x589C44
 static ResFile* sfx2_file;
+// GLOBAL: TIE95 0xF5014
+// GLOBAL: TIE98 0x589C60
 static ResFile* speech_file;
+// GLOBAL: TIE95 0xF5018
+// GLOBAL: TIE98 0x589C48
 static ResFile* speech2_file;
+// GLOBAL: TIE95 0xF501C
+// GLOBAL: TIE98 0x589C64
+static ResFile* sfx_file;
+// GLOBAL: TIE95 0xF5020
+// GLOBAL: TIE98 0x589C5C
 static Sound* music_sound;
 // GLOBAL: TIE95 0xF5024
+// GLOBAL: TIE98 0x589C50
 static int16_t script_active_gbl;
+// GLOBAL: TIE95 0xF5026
+// GLOBAL: TIE98 0x589C58
 static int16_t group_vol_gbl;
-
-/* iMUSE init data (zeroed BSS in the binary) */
-static uint8_t initData[16];
 
 /* --- Internal helpers --- */
 
-static void isnd_iMuse(Sound* the_sound, int32_t time);
-static void Find_Sound_Range(int16_t scene, int16_t* pstart, int16_t* pstop);
+static void soundext_isnd_iMuse(Sound* the_sound, int32_t time);
+static void soundext_Find_Sound_Range(int16_t scene, int16_t* pstart, int16_t* pstop);
 
 /* --- Functions --- */
 
@@ -146,7 +169,7 @@ void soundext_Open_Post_iMuse(int16_t use_script) {
 		music_sound = xsound_Alloc_Sound(LANDRU_NULL_HANDLE, 0, 0);
 		xsound_Set_Sound_Keepable(music_sound);
 		xsound_Set_Sound_User_Keep(music_sound);
-		xsound_Set_Sound_User_Function(music_sound, isnd_iMuse);
+		xsound_Set_Sound_User_Function(music_sound, soundext_isnd_iMuse);
 	}
 }
 
@@ -176,7 +199,7 @@ void soundext_Open_Sound_Scene(int16_t scene) {
 	int16_t start, stop;
 
 	if (script_active_gbl) {
-		Find_Sound_Range(scene, &start, &stop);
+		soundext_Find_Sound_Range(scene, &start, &stop);
 		sound_start_gbl = start;
 		sound_stop_gbl = stop;
 	}
@@ -215,7 +238,7 @@ void soundext_Prep_Sound_Scene(int16_t next_scene) {
 	if (!script_active_gbl)
 		return;
 
-	Find_Sound_Range(next_scene, &start, &stop);
+	soundext_Find_Sound_Range(next_scene, &start, &stop);
 	state = 0;
 	seq = 0;
 	cue = -1;
@@ -263,7 +286,8 @@ void soundext_Prep_Sound_Scene(int16_t next_scene) {
 }
 
 /* Per-frame iMUSE callback on music_sound */
-static void isnd_iMuse(Sound* the_sound, int32_t time) {
+// FUNCTION: TIE95 0x65649
+static void soundext_isnd_iMuse(Sound* the_sound, int32_t time) {
 	int16_t state, seq, cue;
 	int16_t sound_type, sound_arg;
 	int16_t index, i;
@@ -304,7 +328,8 @@ static void isnd_iMuse(Sound* the_sound, int32_t time) {
 
 /* Search sound_scene_list_gbl for all entries matching scene.
    Returns entry indices (not WORD indices) via pstart/pstop. */
-static void Find_Sound_Range(int16_t scene, int16_t* pstart, int16_t* pstop) {
+// FUNCTION: TIE95 0x65770
+static void soundext_Find_Sound_Range(int16_t scene, int16_t* pstart, int16_t* pstop) {
 	int16_t index, start, stop;
 
 	index = 0;
@@ -386,7 +411,7 @@ void soundext_Play_Speech(uint8_t sound_index) {
 		snd = xsound_Res_Digital_Sound(Sound_Speech_Name[sound_index - 1]);
 	if (snd) {
 		xsound_Start_Speech(snd);
-		imuse_set_param(im, (intptr_t)snd, 0x500, 4);
+		imuse_set_param(im, TieImuse_SoundId(snd), 0x500, 4);
 	}
 }
 
@@ -400,7 +425,6 @@ void soundext_compact_Sound(int16_t post_compaction) {
 
 // FUNCTION: TIE95 0x65A2E
 void soundext_Action_iMuse(int16_t state, Sound* the_sound, int16_t var1, int16_t var2) {
-	void* snd_id = the_sound;
 
 #ifdef AUDIO_TRACE
 	/* state is really a dispatch opcode for the sound action. Names
@@ -435,28 +459,28 @@ void soundext_Action_iMuse(int16_t state, Sound* the_sound, int16_t var1, int16_
 				FrontendWaveStream_Resume();
 			break;
 		case 3:
-			imuse_start_music(im, snd_id);
+			imuse_start_music(im, the_sound);
 			break;
 		case 4:
-			imuse_start_sfx(im, snd_id);
+			imuse_start_sfx(im, the_sound);
 			break;
 		case 5:
-			imuse_start_voice(im, snd_id);
+			imuse_start_voice(im, the_sound);
 			break;
 		case 6:
-			imuse_stop_sound(im, (intptr_t)snd_id);
+			imuse_stop_sound(im, TieImuse_SoundId(the_sound));
 			break;
 		case 7:
-			imuse_set_param(im, (intptr_t)snd_id, 0x600, var1);
+			imuse_set_param(im, TieImuse_SoundId(the_sound), 0x600, var1);
 			break;
 		case 8:
-			imuse_fade_param(im, (intptr_t)snd_id, 0x600, var1, var2);
+			imuse_fade_param(im, TieImuse_SoundId(the_sound), 0x600, var1, var2);
 			break;
 		case 9:
-			imuse_set_param(im, (intptr_t)snd_id, 0x700, var1);
+			imuse_set_param(im, TieImuse_SoundId(the_sound), 0x700, var1);
 			break;
 		case 10:
-			imuse_fade_param(im, (intptr_t)snd_id, 0x700, var1, var2);
+			imuse_fade_param(im, TieImuse_SoundId(the_sound), 0x700, var1, var2);
 			break;
 	}
 }
@@ -482,7 +506,10 @@ void soundext_TIE_Unload_Sound(void* sound) {
 	xsound_Free_Sound((Sound*)sound);
 }
 
+/* Release-build debug stub: copies the message and discards it. */
+// FUNCTION: TIE98 0x485DB0
 void soundext_TIE_Print_Msg(const char* ptr) {
-	/* Debug stub — binary copies to local buffer but does nothing */
-	(void)ptr;
+	char msg[80];
+
+	strcpy(msg, ptr);
 }

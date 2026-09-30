@@ -15,11 +15,13 @@
 #include "tie/title.h"
 #include "tie/user.h"
 #include "tie/wavestream_tie98.h"
+#include "tie_runtime/audio/direct_sound.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/audio/music_policy.h"
-#include "tie_runtime/display/palette_cycle.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/display/classic_display.h"
+#include "tie_runtime/display/palette_cycle.h"
+#include "tie_runtime/display/tie98_display.h"
 #include "tie_runtime/flight_assets/service.h"
 #include "tie_runtime/integration/landru_adapter.h"
 #include "tie_runtime/runtime/flight_screen.h"
@@ -99,7 +101,7 @@ bool TieRuntime_Init(const TieRuntimeConfig* config, char* error, size_t error_c
 				config->flight_profile.tie98_original_renderer == TIE98_ORIGINAL_RENDERER_D3D
 			? TIE98_DISPLAY_MODE_HARDWARE_FLIGHT
 			: TIE98_DISPLAY_MODE_SOFTWARE_FLIGHT;
-	if (initialize_tie98_display && !tie98_display_startup(initial_mode)) {
+	if (initialize_tie98_display && !Tie98Display_Startup(initial_mode)) {
 		TieDiagnostics_Log(TIE_LOG_ERROR, "TIE98 display initialization failed\n");
 		TieRuntime_Shutdown();
 		return false;
@@ -107,7 +109,7 @@ bool TieRuntime_Init(const TieRuntimeConfig* config, char* error, size_t error_c
 	s_tie98_display_initialized = initialize_tie98_display;
 	if (!TieLandruAdapter_Init()) {
 		if (s_tie98_display_initialized)
-			tie98_display_shutdown();
+			Tie98Display_Shutdown();
 		s_tie98_display_initialized = false;
 		TieRuntime_Shutdown();
 		return false;
@@ -133,7 +135,7 @@ void TieRuntime_Shutdown(void) {
 	TieDirectSound_Shutdown();
 	TieLandruAdapter_Shutdown();
 	if (s_tie98_display_initialized)
-		tie98_display_shutdown();
+		Tie98Display_Shutdown();
 	s_tie98_display_initialized = false;
 	TieAudio_Configure(NULL);
 	TieFlightAssets_Shutdown();
@@ -170,7 +172,7 @@ bool TieRuntime_ConsumeSettingsMenuRequest(void) {
 }
 
 bool TieRuntime_SetMusicDuckingVolumePercent(int percent) {
-	if (!gamesnd_SetMusicDuckingVolumePercent(percent))
+	if (!TieImuseSession_SetMusicDuckingVolumePercent(percent))
 		return false;
 	return TieAudio_SetMusicDuckingVolumePercent(percent);
 }
@@ -207,7 +209,7 @@ static void TieRuntime_AdvanceEngineTime(uint64_t delta_us) {
 		TieSimClock_Advance(step_us);
 		TieMusicPolicy_AdvanceTime(step_us);
 
-		gamesnd_AdvanceAudio(step_us);
+		TieImuseSession_Advance(step_us);
 		TiePaletteCycle_Tick();
 		delta_us -= (uint32_t)step_us;
 	}

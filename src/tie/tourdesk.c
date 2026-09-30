@@ -49,116 +49,50 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ---- Edition data ---- */
-
-typedef struct TourDeskSpec {
-	LandruSurfaceSet surface_set;
-	int16_t width, height;
-	int16_t mouse_x, mouse_y;
-	const char* door_names[2];
-	const char* button_names[2];
-	int16_t battle_text_bounds[4];
-	int16_t galaxy_bounds[4];
-	int16_t input_bounds[4][4];
-	int16_t battle_text_zplane;
-	int16_t font_id;
-	int16_t battle_text_line_height;
-	int16_t galaxy_rect_scale;
-	int16_t first_frame_background_zplane;
-	int16_t button_click_state[2];
-	int16_t button_hover_state[2];
-	bool create_input_parent;
-	bool dynamic_text_layout;
-	bool clip_reveal_before_shade;
-	bool refresh_background;
-} TourDeskSpec;
-
-/* DATA: TIE95 TOURDESK_TourDesk 0x73790; TIE98 0x490A20. */
-static const TourDeskSpec tourdesk_specs[] = {
-	{
-		/* surface_set */ LANDRU_SURFACE_VGA,
-		/* width */ 320,
-		/* height */ 200,
-		/* mouse_x */ 150,
-		/* mouse_y */ 158,
-		/* door_names */ { "lhdoor", "rhdoor" },
-		/* button_names */ { "todbttn", NULL },
-		/* battle_text_bounds */ { 72, 7, 256, 33 },
-		/* galaxy_bounds */ { 72, 45, 256, 120 },
-		/* input_bounds */
-		{
-			{ 0, 92, 54, 162 },
-			{ 286, 64, 320, 120 },
-			{ 130, 132, 180, 164 },
-			{ 130, 164, 180, 196 },
-		},
-		/* battle_text_zplane */ 50,
-		/* font_id */ 0,
-		/* battle_text_line_height */ 9,
-		/* galaxy_rect_scale */ 1,
-		/* first_frame_background_zplane */ -1,
-		/* button_click_state */ { 1, 1 },
-		/* button_hover_state */ { 2, 0 },
-		/* create_input_parent */ true,
-		/* dynamic_text_layout */ false,
-		/* clip_reveal_before_shade */ false,
-		/* refresh_background */ false,
-	},
-	{
-		/* surface_set */ LANDRU_SURFACE_SVGA,
-		/* width */ 640,
-		/* height */ 480,
-		/* mouse_x */ 320,
-		/* mouse_y */ 415,
-		/* door_names */ { "lhdor", "rhdor" },
-		/* button_names */ { "upbutton", "dnbutton" },
-		/* battle_text_bounds */ { 169, 33, 512, 90 },
-		/* galaxy_bounds */ { 166, 116, 512, 291 },
-		/* input_bounds */
-		{
-			{ 0, 229, 137, 390 },
-			{ 552, 147, 639, 302 },
-			{ 306, 401, 338, 434 },
-			{ 307, 436, 338, 466 },
-		},
-		/* battle_text_zplane */ 30,
-		/* font_id */ 2,
-		/* battle_text_line_height */ 0,
-		/* galaxy_rect_scale */ 2,
-		/* first_frame_background_zplane */ 40,
-		/* button_click_state */ { 1, 0 },
-		/* button_hover_state */ { 0, 1 },
-		/* create_input_parent */ false,
-		/* dynamic_text_layout */ true,
-		/* clip_reveal_before_shade */ true,
-		/* refresh_background */ true,
-	},
-};
-
 #ifdef TIE_MODERN
-static const TourDeskSpec* active_spec;
-#elif defined(TIE98)
-static const TourDeskSpec* const active_spec = &tourdesk_specs[1];
-#else
-static const TourDeskSpec* const active_spec = &tourdesk_specs[0];
+/* PORT: runtime frontend selection (TIE98 SVGA layout vs TIE95 VGA layout). */
+static bool tourdesk_svga;
 #endif
 
 /* ---- Static globals ---- */
 
 // GLOBAL: TIE95 0xF6070
+// GLOBAL: TIE98 0x58AA80
 static Actor* galaxy_art_actor[20]; /* cached per-battle galaxy art */
-static Actor* door[2];              /* left/right door actors */
+// GLOBAL: TIE95 0xF6068
+// GLOBAL: TIE98 0x58AAD8
+static Actor* door[2]; /* left/right door actors */
+// GLOBAL: TIE95 0xF60D4
+// GLOBAL: TIE98 0x58AAD0
 static Input* parent;
+// GLOBAL: TIE95 0xF60DC
+// GLOBAL: TIE98 0x58AAE0
 static Actor* battle_text_actor; /* "Battle N" title text */
 // GLOBAL: TIE95 0xF60C0
+// GLOBAL: TIE98 0x58AAD4
 static int32_t tour_time; /* animation frame counter */
 // GLOBAL: TIE95 0xF60C4
+// GLOBAL: TIE98 0x58AAE4
 static Actor* title_actor;
-static Actor* button_actor[2]; /* next/previous battle buttons */
-static Actor* galaxy_actor;    /* galaxy display custom actor */
-static Actor* tourdesk_actor;  /* desk background delta */
+/* TIE95: one arrow actor for next/previous; TIE98: the up (next) arrow. */
+// GLOBAL: TIE95 0xF60C8
+// GLOBAL: TIE98 0x58AA70
+static Actor* buttons;
+#if defined(TIE98) || defined(TIE_MODERN)
+// GLOBAL: TIE98 0x58AA74
+static Actor* down_button; /* previous-battle arrow */
+#endif
+// GLOBAL: TIE95 0xF60CC
+// GLOBAL: TIE98 0x58AA78
+static Actor* galaxy_actor; /* galaxy display custom actor */
+// GLOBAL: TIE95 0xF60D0
+// GLOBAL: TIE98 0x58AA60
+static Actor* tourdesk_actor; /* desk background delta */
+// GLOBAL: TIE95 0xF60D8
+// GLOBAL: TIE98 0x58AA64
 static Film* tourdesk_film;
 // GLOBAL: TIE95 0xF60E0
+// GLOBAL: TIE98 0x58AA68
 static int32_t cur_tour_battle; /* battle at entry (for detecting changes) */
 
 /* ---- Forward declarations ---- */
@@ -189,8 +123,12 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
 static void end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
-	if (active_spec->first_frame_background_zplane >= 0)
-		xactor_Set_Actor_ZPlane(tourdesk_actor, active_spec->first_frame_background_zplane);
+#ifdef TIE_MODERN
+	if (tourdesk_svga)
+		xactor_Set_Actor_ZPlane(tourdesk_actor, 40);
+#elif defined(TIE98)
+	xactor_Set_Actor_ZPlane(tourdesk_actor, 40);
+#endif
 	if (!xcursor_Is_Cursor_Visible())
 		xcursor_Show_Cursor();
 }
@@ -222,11 +160,22 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 	if (left != 3 && right != 3) {
 		/* Button hover state for next/prev arrows */
 		if (left || right) {
-			if (input->id == 2 || input->id == 3) {
-				int16_t button_index = input->id - 2;
-				xactor_Set_Actor_State(button_actor[button_index],
-									   active_spec->button_hover_state[button_index], 0);
-			}
+#ifdef TIE_MODERN
+			if (input->id == 2)
+				xactor_Set_Actor_State(buttons, tourdesk_svga ? 0 : 2, 0);
+			else if (input->id == 3)
+				xactor_Set_Actor_State(down_button, tourdesk_svga ? 1 : 0, 0);
+#elif defined(TIE98)
+			if (input->id == 2)
+				xactor_Set_Actor_State(buttons, 0, 0);
+			else if (input->id == 3)
+				xactor_Set_Actor_State(down_button, 1, 0);
+#else
+			if (input->id == 2)
+				xactor_Set_Actor_State(buttons, 2, 0);
+			else if (input->id == 3)
+				xactor_Set_Actor_State(buttons, 0, 0);
+#endif
 		}
 		return 1;
 	}
@@ -241,7 +190,7 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 			input->var2 = shipext_Set_Tourdesk_Cutscene();
 			break;
 		case 2: /* Next battle */
-			xactor_Set_Actor_State(button_actor[0], active_spec->button_click_state[0], 0);
+			xactor_Set_Actor_State(buttons, 1, 0);
 			soundext_Play_SFX(sfxButton, 80);
 			shipext_Next_Battle();
 			tour_time = 0;
@@ -249,7 +198,13 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 				galaxy_art_actor[pilot_record.cur_battle] = shipext_Get_Battle_Galaxy_Image();
 			break;
 		case 3: /* Previous battle */
-			xactor_Set_Actor_State(button_actor[1], active_spec->button_click_state[1], 0);
+#ifdef TIE_MODERN
+			xactor_Set_Actor_State(down_button, tourdesk_svga ? 0 : 1, 0);
+#elif defined(TIE98)
+			xactor_Set_Actor_State(down_button, 0, 0);
+#else
+			xactor_Set_Actor_State(buttons, 1, 0);
+#endif
 			soundext_Play_SFX(sfxButton, 80);
 			shipext_Last_Battle();
 			tour_time = 0;
@@ -302,7 +257,13 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 	int16_t offx, offy;
 	Rect r;
 	char label[32];
-	TIEText text_id;
+#ifdef TIE_MODERN
+	int16_t font_id = tourdesk_svga ? 2 : 0;
+#elif defined(TIE98)
+	int16_t font_id = 2;
+#else
+	int16_t font_id = 0;
+#endif
 	if (!refresh)
 		return 0;
 
@@ -313,29 +274,28 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 
 	switch (actor->var2) {
 		case 0:
-			text_id = txtTourMainMenu;
+			strcpy(label, textext_Get_Text(txtTourMainMenu));
 			break;
 		case 1:
-			text_id =
-				(pilot_record.battle_status[pilot_record.cur_battle] == 3) ? txtTourCutscene : txtTourJoin;
+			strcpy(label, textext_Get_Text((pilot_record.battle_status[pilot_record.cur_battle] == 3)
+											   ? txtTourCutscene
+											   : txtTourJoin));
 			break;
 		case 2:
-			text_id = txtTourNext;
+			strcpy(label, textext_Get_Text(txtTourNext));
 			break;
 		case 3:
-			text_id = txtTourPrev;
+			strcpy(label, textext_Get_Text(txtTourPrev));
 			break;
 		default:
 			label[0] = 0;
-			goto draw_text;
+			break;
 	}
-	strcpy(label, textext_Get_Text(text_id));
 
-draw_text:
 	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, 16, active_spec->font_id);
+	xfont_Print_Centered_Text(label, &r, 16, font_id);
 	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, 15, active_spec->font_id);
+	xfont_Print_Centered_Text(label, &r, 15, font_id);
 	return 1;
 }
 
@@ -379,6 +339,13 @@ static void user_Battle(Actor* actor, int32_t time) {
 static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
 	Rect dst;
 	int16_t line_height, i;
+#ifdef TIE_MODERN
+	int16_t font_id = tourdesk_svga ? 2 : 0;
+#elif defined(TIE98)
+	int16_t font_id = 2;
+#else
+	int16_t font_id = 0;
+#endif
 	(void)actor;
 	(void)clip_r;
 	(void)x;
@@ -388,9 +355,13 @@ static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, 
 
 	xpaint_Paint_Clipped_Rect(r, 0);
 	xrect_Copy_Rect(&dst, r);
-	line_height = active_spec->battle_text_line_height;
-	if (!line_height)
-		line_height = (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
+#ifdef TIE_MODERN
+	line_height = tourdesk_svga ? (int16_t)xfont_Get_FontID_Height(font_id) : 9;
+#elif defined(TIE98)
+	line_height = (int16_t)xfont_Get_FontID_Height(font_id);
+#else
+	line_height = 9;
+#endif
 	dst.bottom = dst.top + line_height;
 
 	for (i = 0; i < 3; i++) {
@@ -398,7 +369,7 @@ static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, 
 		char buf[64];
 		shipext_Get_Battle_Title(buf, i);
 		color = i ? 2 : 15;
-		xfont_Print_Centered_Text(buf, &dst, color, active_spec->font_id);
+		xfont_Print_Centered_Text(buf, &dst, color, font_id);
 		xrect_Offset_Rect(&dst, 0, line_height);
 	}
 
@@ -416,6 +387,20 @@ static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, 
 static void Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
 	Rect dst, ra;
 	char name[64];
+#ifdef TIE_MODERN
+	int16_t font_id = tourdesk_svga ? 2 : 0;
+#elif defined(TIE98)
+	int16_t font_id = 2;
+#else
+	int16_t font_id = 0;
+#endif
+#ifdef TIE_MODERN
+	bool dynamic_text_layout = tourdesk_svga;
+#elif defined(TIE98)
+	bool dynamic_text_layout = true;
+#else
+	bool dynamic_text_layout = false;
+#endif
 	if (time >= 8)
 		return;
 
@@ -438,20 +423,20 @@ static void Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
 		shade_Draw_Talk_Shade_Rect(&dst);
 
 	xrect_Inset_Rect(&ra, -64, 0);
-	if (active_spec->dynamic_text_layout) {
-		int16_t font_height = (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
+	if (dynamic_text_layout) {
+		int16_t font_height = (int16_t)xfont_Get_FontID_Height(font_id);
 		ra.top = ra.bottom + (font_height >> 1);
-		ra.bottom = ra.top + (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
+		ra.bottom = ra.top + (int16_t)xfont_Get_FontID_Height(font_id);
 	} else {
 		ra.top = ra.bottom + 2;
 		ra.bottom += 10;
 	}
 	xrect_Offset_Rect(&ra, -4, 0);
 
-	xfont_Enable_FontID_Shadow(active_spec->font_id);
+	xfont_Enable_FontID_Shadow(font_id);
 	shipext_Get_Battle_Galaxy_Name(name);
-	xfont_Print_Centered_Text(name, &ra, 2 * time + 16, active_spec->font_id);
-	xfont_Disable_FontID_Shadow(active_spec->font_id);
+	xfont_Print_Centered_Text(name, &ra, 2 * time + 16, font_id);
+	xfont_Disable_FontID_Shadow(font_id);
 }
 
 /* Phase 8-23: hold at galaxy rect */
@@ -460,6 +445,20 @@ static void Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
 static void Draw_Battle_Two(Rect* galaxy_rect, int16_t time, Rect* clip_r) {
 	Rect dst, ra;
 	char name[64];
+#ifdef TIE_MODERN
+	int16_t font_id = tourdesk_svga ? 2 : 0;
+#elif defined(TIE98)
+	int16_t font_id = 2;
+#else
+	int16_t font_id = 0;
+#endif
+#ifdef TIE_MODERN
+	bool dynamic_text_layout = tourdesk_svga;
+#elif defined(TIE98)
+	bool dynamic_text_layout = true;
+#else
+	bool dynamic_text_layout = false;
+#endif
 	(void)clip_r;
 	if (time < 8 || time >= 24)
 		return;
@@ -469,20 +468,20 @@ static void Draw_Battle_Two(Rect* galaxy_rect, int16_t time, Rect* clip_r) {
 
 	xrect_Copy_Rect(&ra, &dst);
 	xrect_Inset_Rect(&ra, -64, 0);
-	if (active_spec->dynamic_text_layout) {
-		int16_t font_height = (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
+	if (dynamic_text_layout) {
+		int16_t font_height = (int16_t)xfont_Get_FontID_Height(font_id);
 		ra.top = ra.bottom + (font_height >> 1);
-		ra.bottom = ra.top + (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
+		ra.bottom = ra.top + (int16_t)xfont_Get_FontID_Height(font_id);
 	} else {
 		ra.top = ra.bottom + 2;
 		ra.bottom += 10;
 	}
 	xrect_Offset_Rect(&ra, -4, 0);
 
-	xfont_Enable_FontID_Shadow(active_spec->font_id);
+	xfont_Enable_FontID_Shadow(font_id);
 	shipext_Get_Battle_Galaxy_Name(name);
-	xfont_Print_Centered_Text(name, &ra, 31, active_spec->font_id);
-	xfont_Disable_FontID_Shadow(active_spec->font_id);
+	xfont_Print_Centered_Text(name, &ra, 31, font_id);
+	xfont_Disable_FontID_Shadow(font_id);
 }
 
 /* Phase 24-31: zoom from galaxy rect to actor bounds */
@@ -524,8 +523,12 @@ static void Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int1
 	art = galaxy_art_actor[pilot_record.cur_battle];
 	xactor_Get_Actor_Bounds(art, &bounds);
 	xrect_Offset_Rect(&bounds, view_r->left, view_r->top);
-	if (active_spec->clip_reveal_before_shade)
+#ifdef TIE_MODERN
+	if (tourdesk_svga)
 		xrect_Clip_Rect(&bounds, clip_r);
+#elif defined(TIE98)
+	xrect_Clip_Rect(&bounds, clip_r);
+#endif
 
 	t = time - 32;
 	if (!xrect_Empty_Rect(&bounds))
@@ -546,6 +549,20 @@ static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 	Actor* art;
 	Rect art_bounds, dst;
 	char name[64], battle_str[16], buf[64];
+#ifdef TIE_MODERN
+	int16_t font_id = tourdesk_svga ? 2 : 0;
+#elif defined(TIE98)
+	int16_t font_id = 2;
+#else
+	int16_t font_id = 0;
+#endif
+#ifdef TIE_MODERN
+	bool dynamic_text_layout = tourdesk_svga;
+#elif defined(TIE98)
+	bool dynamic_text_layout = true;
+#else
+	bool dynamic_text_layout = false;
+#endif
 	if (time < 40)
 		return 1;
 
@@ -557,20 +574,20 @@ static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 	xactor_Get_Actor_Bounds(art, &art_bounds);
 	xrect_Offset_Rect(&art_bounds, r->left, r->top);
 
-	xfont_Enable_FontID_Shadow(active_spec->font_id);
+	xfont_Enable_FontID_Shadow(font_id);
 
 	/* Galaxy name with fade-in */
 	shipext_Get_Battle_Galaxy_Name(name);
 	name_color = (fade >= 8) ? 31 : 2 * fade + 16;
-	xfont_Print_Centered_Text(name, &art_bounds, name_color, active_spec->font_id);
+	xfont_Print_Centered_Text(name, &art_bounds, name_color, font_id);
 
 	/* "Battle N" text */
 	xrect_Copy_Rect(&dst, r);
 	dst.left = art_bounds.right;
-	if (active_spec->dynamic_text_layout) {
-		int16_t font_height = (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
+	if (dynamic_text_layout) {
+		int16_t font_height = (int16_t)xfont_Get_FontID_Height(font_id);
 		dst.top = art_bounds.top + 3 * font_height;
-		dst.bottom = dst.top + (int16_t)xfont_Get_FontID_Height(active_spec->font_id);
+		dst.bottom = dst.top + (int16_t)xfont_Get_FontID_Height(font_id);
 	} else {
 		dst.top = art_bounds.top + 28;
 		dst.bottom = art_bounds.top + 38;
@@ -583,11 +600,10 @@ static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 		xrect_Offset_Rect(&dst, 0, 4);
 
 	battle_color = (fade >= 8) ? 31 : 2 * fade + 16;
-	xfont_Print_Centered_Text(buf, &dst, battle_color, active_spec->font_id);
+	xfont_Print_Centered_Text(buf, &dst, battle_color, font_id);
 
 	/* "Mission N" text (only if battle not complete) */
-	line_height =
-		active_spec->dynamic_text_layout ? (int16_t)xfont_Get_FontID_Height(active_spec->font_id) : 10;
+	line_height = dynamic_text_layout ? (int16_t)xfont_Get_FontID_Height(font_id) : 10;
 	xrect_Offset_Rect(&dst, 0, line_height);
 	if (pilot_record.battle_status[pilot_record.cur_battle] != 3) {
 		char mission_label[16];
@@ -595,10 +611,10 @@ static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 		snprintf(buf, sizeof(buf), "%s %d", mission_label,
 				 pilot_record.battle_cursor[pilot_record.cur_battle] + 1);
 		mission_color = (fade >= 8) ? 31 : 2 * fade + 16;
-		xfont_Print_Centered_Text(buf, &dst, mission_color, active_spec->font_id);
+		xfont_Print_Centered_Text(buf, &dst, mission_color, font_id);
 	}
 
-	xfont_Disable_FontID_Shadow(active_spec->font_id);
+	xfont_Disable_FontID_Shadow(font_id);
 	return 1;
 }
 
@@ -618,17 +634,31 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
 		return 0;
 
 	shipext_Get_Battle_Galaxy_Rect(&galaxy_rect);
-	galaxy_rect.top *= active_spec->galaxy_rect_scale;
-	galaxy_rect.left *= active_spec->galaxy_rect_scale;
-	galaxy_rect.bottom *= active_spec->galaxy_rect_scale;
-	galaxy_rect.right *= active_spec->galaxy_rect_scale;
+#ifdef TIE_MODERN
+	if (tourdesk_svga) {
+		galaxy_rect.top *= 2;
+		galaxy_rect.left *= 2;
+		galaxy_rect.bottom *= 2;
+		galaxy_rect.right *= 2;
+	}
+#elif defined(TIE98)
+	galaxy_rect.top *= 2;
+	galaxy_rect.left *= 2;
+	galaxy_rect.bottom *= 2;
+	galaxy_rect.right *= 2;
+#endif
 	xrect_Offset_Rect(&galaxy_rect, r->left, r->top);
 
 	if (!galaxy_art_actor[pilot_record.cur_battle]) {
-		if (active_spec->refresh_background) {
+#ifdef TIE_MODERN
+		if (tourdesk_svga) {
 			xactor_Refresh_Actor(tourdesk_actor);
 			xactor_Dirty_Actor(tourdesk_actor);
 		}
+#elif defined(TIE98)
+		xactor_Refresh_Actor(tourdesk_actor);
+		xactor_Dirty_Actor(tourdesk_actor);
+#endif
 		xdirty_Dirty_Rect(r);
 		return 1;
 	}
@@ -641,10 +671,15 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
 	Draw_Battle_Four(&galaxy_rect, r, clip_r, t);
 	Draw_Battle_Five(r, clip_r, t);
 
-	if (active_spec->refresh_background) {
+#ifdef TIE_MODERN
+	if (tourdesk_svga) {
 		xactor_Refresh_Actor(tourdesk_actor);
 		xactor_Dirty_Actor(tourdesk_actor);
 	}
+#elif defined(TIE98)
+	xactor_Refresh_Actor(tourdesk_actor);
+	xactor_Dirty_Actor(tourdesk_actor);
+#endif
 	xdirty_Dirty_Rect(r);
 	return 1;
 }
@@ -656,22 +691,16 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
 // FUNCTION: TIE95 0x73790
 // FUNCTION: TIE98 0x490A20
 int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
-#ifdef TIE_MODERN
-	bool svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
-#endif
 	Rect frame;
 	ResFile* res_file;
 	Input* inp;
 	int16_t i;
-#ifdef TIE_MODERN
-	const int16_t* bounds;
-#endif
 
 #ifdef TIE_MODERN
-	active_spec = &tourdesk_specs[svga ? 1 : 0];
+	tourdesk_svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
 #endif
 #ifdef TIE_MODERN
-	xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+	xio_Set_Mouse_Position(tourdesk_svga ? 320 : 150, tourdesk_svga ? 415 : 158);
 #elif defined(TIE98)
 	xio_Set_Mouse_Position(320, 415);
 #else
@@ -682,7 +711,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	/* Load resources */
 	res_file = shellext_Open_Empire_Resource("tourdesk.lfd");
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+	xrect_Set_Rect(&frame, 0, 0, tourdesk_svga ? 640 : 320, tourdesk_svga ? 480 : 200);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 0, 0, 640, 480);
 #else
@@ -707,14 +736,14 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	xactor_Non_Refreshable_Actor(tourdesk_actor);
 
 #ifdef TIE_MODERN
-	door[0] = xactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[0]);
+	door[0] = xactor_Find_Actor(FOURCC_ANIM, tourdesk_svga ? "lhdor" : "lhdoor");
 #elif defined(TIE98)
 	door[0] = xactor_Find_Actor(FOURCC_ANIM, "lhdor");
 #else
 	door[0] = xactor_Find_Actor(FOURCC_ANIM, "lhdoor");
 #endif
 #ifdef TIE_MODERN
-	door[1] = xactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[1]);
+	door[1] = xactor_Find_Actor(FOURCC_ANIM, tourdesk_svga ? "rhdor" : "rhdoor");
 #elif defined(TIE98)
 	door[1] = xactor_Find_Actor(FOURCC_ANIM, "rhdor");
 #else
@@ -726,15 +755,18 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	}
 
 #ifdef TIE_MODERN
-	button_actor[0] = xactor_Find_Actor(FOURCC_ANIM, active_spec->button_names[0]);
-	button_actor[1] = active_spec->button_names[1]
-						  ? xactor_Find_Actor(FOURCC_ANIM, active_spec->button_names[1])
-						  : button_actor[0];
+	if (tourdesk_svga) {
+		buttons = xactor_Find_Actor(FOURCC_ANIM, "upbutton");
+		down_button = xactor_Find_Actor(FOURCC_ANIM, "dnbutton");
+	} else {
+		buttons = xactor_Find_Actor(FOURCC_ANIM, "todbttn");
+		down_button = buttons;
+	}
 #elif defined(TIE98)
-	button_actor[0] = xactor_Find_Actor(FOURCC_ANIM, "upbutton");
-	button_actor[1] = xactor_Find_Actor(FOURCC_ANIM, "dnbutton");
+	buttons = xactor_Find_Actor(FOURCC_ANIM, "upbutton");
+	down_button = xactor_Find_Actor(FOURCC_ANIM, "dnbutton");
 #else
-	button_actor[0] = xactor_Find_Actor(FOURCC_ANIM, "todbttn");
+	buttons = xactor_Find_Actor(FOURCC_ANIM, "todbttn");
 #endif
 
 	/* Title label */
@@ -744,8 +776,10 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 
 	/* Battle text custom actor */
 #ifdef TIE_MODERN
-	bounds = active_spec->battle_text_bounds;
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (tourdesk_svga)
+		xrect_Set_Rect(&frame, 169, 33, 512, 90);
+	else
+		xrect_Set_Rect(&frame, 72, 7, 256, 33);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 169, 33, 512, 90);
 #else
@@ -753,7 +787,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 #endif
 #ifdef TIE_MODERN
 	battle_text_actor =
-		xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, active_spec->battle_text_zplane);
+		xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, tourdesk_svga ? 30 : 50);
 #elif defined(TIE98)
 	battle_text_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 30);
 #else
@@ -764,8 +798,10 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 
 	/* Galaxy display custom actor */
 #ifdef TIE_MODERN
-	bounds = active_spec->galaxy_bounds;
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (tourdesk_svga)
+		xrect_Set_Rect(&frame, 166, 116, 512, 291);
+	else
+		xrect_Set_Rect(&frame, 72, 45, 256, 120);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 166, 116, 512, 291);
 #else
@@ -784,22 +820,18 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	/* Create XINPUT widgets */
 #ifdef TIE_MODERN
 	parent = NULL;
-	if (active_spec->create_input_parent) {
-#ifdef TIE_MODERN
-		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
-#elif defined(TIE98)
-		xrect_Set_Rect(&frame, 0, 0, 640, 480);
-#else
+	if (!tourdesk_svga) {
 		xrect_Set_Rect(&frame, 0, 0, 320, 200);
-#endif
 		parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 	}
 #endif
 
 	/* Main Menu (id=0) */
 #ifdef TIE_MODERN
-	bounds = active_spec->input_bounds[0];
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (tourdesk_svga)
+		xrect_Set_Rect(&frame, 0, 229, 137, 390);
+	else
+		xrect_Set_Rect(&frame, 0, 92, 54, 162);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 0, 229, 137, 390);
 #else
@@ -813,8 +845,10 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 
 	/* Join/Cutscene (id=1) */
 #ifdef TIE_MODERN
-	bounds = active_spec->input_bounds[1];
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (tourdesk_svga)
+		xrect_Set_Rect(&frame, 552, 147, 639, 302);
+	else
+		xrect_Set_Rect(&frame, 286, 64, 320, 120);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 552, 147, 639, 302);
 #else
@@ -828,8 +862,10 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 
 	/* Next battle (id=2) */
 #ifdef TIE_MODERN
-	bounds = active_spec->input_bounds[2];
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (tourdesk_svga)
+		xrect_Set_Rect(&frame, 306, 401, 338, 434);
+	else
+		xrect_Set_Rect(&frame, 130, 132, 180, 164);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 306, 401, 338, 434);
 #else
@@ -843,8 +879,10 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 
 	/* Previous battle (id=3) */
 #ifdef TIE_MODERN
-	bounds = active_spec->input_bounds[3];
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (tourdesk_svga)
+		xrect_Set_Rect(&frame, 307, 436, 338, 466);
+	else
+		xrect_Set_Rect(&frame, 130, 164, 180, 196);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 307, 436, 338, 466);
 #else
@@ -862,7 +900,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 #ifdef TIE_MODERN
-	TieTourDesk_RunView(svga);
+	TieTourDesk_RunView(tourdesk_svga);
 	return 0;
 #else
 	shellext_Handle_TIE_View();

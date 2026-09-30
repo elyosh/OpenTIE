@@ -16,12 +16,6 @@ static int32_t cdaudio_saved_aux_volume = -1;
 // GLOBAL: TIE98 0x588E68
 static int cdaudio_playing_track;
 
-static void CDAUDIO_Clear_State(void) {
-	memset(&cdaudio_track_lengths[1], 0, 0x78);
-	cdaudio_track_count = 0;
-	cdaudio_playing_track = 0;
-}
-
 // FUNCTION: TIE98 0x46F5B0
 int CDAUDIO_Open_Device(void) {
 	MCI_OPEN_PARMSA open_params = { 0 };
@@ -35,7 +29,9 @@ int CDAUDIO_Open_Device(void) {
 		return 0;
 	if (cdaudio_device_id)
 		CDAUDIO_Close_Device();
-	CDAUDIO_Clear_State();
+	memset(&cdaudio_track_lengths[1], 0, 0x78);
+	cdaudio_track_count = 0;
+	cdaudio_playing_track = 0;
 	for (i = 0; i < auxGetNumDevs(); ++i) {
 		AUXCAPSA caps;
 		if (auxGetDevCapsA(i, &caps, sizeof caps) == MMSYSERR_NOERROR &&
@@ -50,26 +46,27 @@ int CDAUDIO_Open_Device(void) {
 		return 0;
 	cdaudio_device_id = open_params.wDeviceID;
 	set_params.dwTimeFormat = MCI_FORMAT_TMSF;
-	if (mciSendCommandA(cdaudio_device_id, MCI_SET, MCI_SET_TIME_FORMAT, &set_params) != MMSYSERR_NOERROR)
-		goto fail;
-	status.dwItem = MCI_STATUS_NUMBER_OF_TRACKS;
-	if (mciSendCommandA(cdaudio_device_id, MCI_STATUS, MCI_STATUS_ITEM, &status) != MMSYSERR_NOERROR)
-		goto fail;
-	cdaudio_track_count = status.dwReturn > 30 ? 30 : (int)status.dwReturn;
-	for (track = 1; track <= cdaudio_track_count; ++track) {
-		status.dwItem = MCI_STATUS_LENGTH;
-		status.dwTrack = (uint32_t)track;
-		if (mciSendCommandA(cdaudio_device_id, MCI_STATUS, MCI_STATUS_ITEM | MCI_TRACK, &status) !=
-			MMSYSERR_NOERROR)
-			goto fail;
-		cdaudio_track_lengths[track] = (uint32_t)status.dwReturn;
+	if (mciSendCommandA(cdaudio_device_id, MCI_SET, MCI_SET_TIME_FORMAT, &set_params) == MMSYSERR_NOERROR) {
+		status.dwItem = MCI_STATUS_NUMBER_OF_TRACKS;
+		if (mciSendCommandA(cdaudio_device_id, MCI_STATUS, MCI_STATUS_ITEM, &status) == MMSYSERR_NOERROR) {
+			cdaudio_track_count = status.dwReturn > 30 ? 30 : (int)status.dwReturn;
+			for (track = 1; track <= cdaudio_track_count; ++track) {
+				status.dwItem = MCI_STATUS_LENGTH;
+				status.dwTrack = (uint32_t)track;
+				if (mciSendCommandA(cdaudio_device_id, MCI_STATUS, MCI_STATUS_ITEM | MCI_TRACK, &status) !=
+					MMSYSERR_NOERROR)
+					break;
+				cdaudio_track_lengths[track] = (uint32_t)status.dwReturn;
+			}
+			if (track > cdaudio_track_count)
+				return 1;
+		}
 	}
-	return 1;
-
-fail:
 	mciSendCommandA(cdaudio_device_id, MCI_CLOSE, MCI_WAIT, 0);
 	cdaudio_device_id = 0;
-	CDAUDIO_Clear_State();
+	memset(&cdaudio_track_lengths[1], 0, 0x78);
+	cdaudio_track_count = 0;
+	cdaudio_playing_track = 0;
 	return 0;
 }
 
@@ -105,7 +102,9 @@ void CDAUDIO_Close_Device(void) {
 		mciSendCommandA(cdaudio_device_id, MCI_CLOSE, MCI_WAIT, 0);
 		cdaudio_device_id = 0;
 	}
-	CDAUDIO_Clear_State();
+	memset(&cdaudio_track_lengths[1], 0, 0x78);
+	cdaudio_track_count = 0;
+	cdaudio_playing_track = 0;
 	if (cdaudio_saved_aux_volume >= 0) {
 		const uint32_t volume = 0x10001u * (uint32_t)cdaudio_saved_aux_volume;
 		uint32_t i;

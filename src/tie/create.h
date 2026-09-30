@@ -42,11 +42,6 @@ int create_startflightgroup(int16_t craft_slot, int16_t fg_idx);
  * start_op; active FGs respawn their wave when all craft are dead. */
 void create_updatefgstatus(void);
 
-/* Spawn the next wave for FG fg_idx (craft_slot=-1). Decrements
- * fgstatus[fg_idx].waves_remaining. Returns byte offset of the updated
- * fgstatus row (fg_idx * 48). */
-uint16_t create_reinforceflightgroup(int16_t fg_idx);
-
 /* Spawn a dynamic (non-static) FG. Computes spawn pose from waypoints
  * or from a carrier craft (hangar-spawn). Sets fg{species,skill,side,...}
  * globals, rolls friendly skill bump on difficulty 0, loops from
@@ -174,9 +169,15 @@ extern uint8_t diffmask[4];
 /* --- Flight-group staging (globals written by create_createflightgroup
  *     before spawning each craft, read by create_createcraft). --- */
 
-extern int32_t fglocx, fglocy, fglocz;
-extern int16_t staging_static_x, staging_static_y, staging_static_z;
-extern int8_t staging_static_pitch, staging_static_yaw, staging_static_roll;
+extern int32_t fglocx;
+extern int32_t fglocy;
+extern int32_t fglocz;
+extern int16_t staging_static_x;
+extern int16_t staging_static_y;
+extern int16_t staging_static_z;
+extern int8_t staging_static_pitch;
+extern int8_t staging_static_yaw;
+extern int8_t staging_static_roll;
 extern uint16_t craftcnt;
 extern uint16_t fgcnt;
 extern int16_t fgheadingxy;
@@ -187,13 +188,12 @@ extern uint8_t fghyperspace;
 extern uint8_t fggenus;
 extern uint8_t leaderflag;
 extern uint8_t fgspecies;
-extern uint8_t fgwarhead;
 extern uint8_t fgseparation;
 extern uint8_t fgformation;
 extern uint8_t fgflightflag;
 extern uint8_t fgskill;
 extern uint8_t fgside;
-extern uint16_t fgsidecreated;
+extern uint8_t fgsidecreated;
 
 #ifdef __cplusplus
 }

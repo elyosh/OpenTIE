@@ -2,6 +2,7 @@
 
 #include "tie/tie.h"
 #ifdef TIE_MODERN
+#include "tie_runtime/runtime/flight_requests.h"
 #include "tie_runtime/runtime/flight_task.h"
 #include "tie_runtime/runtime/inflight_info_task.h"
 #include "tie_runtime/runtime/replay_session_task.h"
@@ -79,6 +80,7 @@
 #include "tie_runtime/storage/storage.h"
 #include "tie_runtime/timing/ai_lead.h"
 #include "tie_runtime/timing/chase_camera.h"
+#include "tie_runtime/timing/flight_cadence.h"
 #include "tie_runtime/timing/flight_timing.h"
 #include "tie_runtime/timing/replay_timing.h"
 #include "util/binio.h"
@@ -98,6 +100,7 @@
 
 /* species_table owned by species.c now (it has the static initializer
  * extracted from the binary's _species table). */
+// GLOBAL: TIE95 0xE6394
 CraftData crafts[NUM_CRAFTS];
 // GLOBAL: TIE95 0xE38BC
 FlightObject objects[NUM_OBJECTS];
@@ -126,6 +129,7 @@ int32_t craftmoveZ;
 // GLOBAL: TIE95 0xEB29C
 RUNTIME_MissionState mission;
 
+// GLOBAL: TIE95 0xEB72E
 int16_t fileerror;
 
 /* --- Display --- */
@@ -151,6 +155,7 @@ uint8_t vesa_window;
 int32_t screenMemWidth;
 
 /* --- Ship-render context (set by DRAW_Lockshipfileptrs). watdbg owner: tie.c. --- */
+// GLOBAL: TIE95 0xEB284
 struct ShipModelData* shipimageptr;
 // GLOBAL: TIE95 0xEB27C
 struct ShipModelData* objectblockptr;
@@ -256,7 +261,10 @@ int32_t worldy;
 int32_t worldz; /* watdbg-owned by tie.c */
 // GLOBAL: TIE95 0xEB72C
 uint16_t yAspect; /* watdbg-owned by tie.c; 0 = square pixels */
+// GLOBAL: TIE95 0xEB6AE
 int16_t objectsize;
+// GLOBAL: TIE95 0xEB75F
+// GLOBAL: TIE98 0x5A2748
 uint8_t gouraudflag;
 // GLOBAL: TIE95 0xEAC54
 int32_t objecteyex;
@@ -290,9 +298,18 @@ int32_t craftxold;
 int32_t craftyold;
 // GLOBAL: TIE95 0xEABC0
 int32_t craftzold;
-int32_t gatex1, gatey1, gatez1;
-int32_t gatex2, gatey2, gatez2;
-int32_t gatenx, gateny, gatenz;
+// GLOBAL: TIE95 0xEAB58
+int32_t gatex1;
+// GLOBAL: TIE95 0xEAB60
+int32_t gatey1;
+// GLOBAL: TIE95 0xEAB68
+int32_t gatez1;
+// GLOBAL: TIE95 0xEAB5C
+int32_t gatex2;
+// GLOBAL: TIE95 0xEAB64
+int32_t gatey2;
+// GLOBAL: TIE95 0xEAB6C
+int32_t gatez2;
 // GLOBAL: TIE95 0xEAB74
 int32_t collidexoff;
 // GLOBAL: TIE95 0xEAB78
@@ -307,6 +324,8 @@ uint16_t bluetarget;
 uint16_t currenttarget;
 // GLOBAL: TIE95 0xEB718
 uint16_t currenttargetcomp;
+// GLOBAL: TIE95 0xEB732
+// GLOBAL: TIE98 0x5A2744
 uint8_t drawmarkingsflag;
 
 /* --- Sound/input flags --- */
@@ -323,31 +342,49 @@ uint8_t sfxenabled;
 // GLOBAL: TIE95 0xEB763
 // GLOBAL: TIE98 0x596218
 uint16_t maingameflag;
+// GLOBAL: TIE95 0xCD16E
+// GLOBAL: TIE98 0x58A264
 uint8_t cheatingflag;
 
 /* --- Mission data --- */
 
+// GLOBAL: TIE95 0xDEDCC
 FGStatus fgstatus[48];
+// GLOBAL: TIE95 0xDF6CC
 EFGStruct fg_array[48];
 
 /* Authoritative player state serialized by replay slot 8. Its native
  * pointers make host replay files pointer-width dependent. */
+// GLOBAL: TIE95 0xEB158
 PlayerInFlightState pstate;
 typedef char CheckPlayerInFlightStateSize[sizeof(pstate) == 294 + 2 * (sizeof(void*) - 4) ? 1 : -1];
 
+// GLOBAL: TIE95 0xE3534
 MissionFile mission_file_header;
 
-uint16_t idnumber;                              /* monotonic per-craft id */
+// GLOBAL: TIE95 0xEB71A
+// GLOBAL: TIE98 0x591E4C
+uint16_t idnumber; /* monotonic per-craft id */
+// GLOBAL: TIE95 0xEB744
+// GLOBAL: TIE98 0x591E10
 uint16_t currentdebrisslot = DEBRIS_FIRST_SLOT; /* cycled 112..119 (retail) by checkdebris */
-uint16_t missionversion;                        /* .TIE file version (0 = legacy) */
-uint16_t baseframerate = 20;                    /* mission base framerate (seeded by xtimer) */
+// GLOBAL: TIE95 0xEB740
+uint16_t missionversion; /* .TIE file version (0 = legacy) */
+// GLOBAL: TIE95 0xEB710
+uint16_t baseframerate = 20; /* mission base framerate (seeded by xtimer) */
 // GLOBAL: TIE95 0xEB71C
 uint16_t tickcounter;
+// GLOBAL: TIE95 0xEB720
+// GLOBAL: TIE98 0x592678
 uint16_t targetblinkstate;
+// GLOBAL: TIE95 0xEB726
+// GLOBAL: TIE98 0x5A26DA
 int16_t targetblinkflag;
+// GLOBAL: TIE95 0xEB6B2
 uint16_t fullupdateflag;
 // GLOBAL: TIE95 0xEB75D
 uint8_t hyperspaceflag;
+// GLOBAL: TIE95 0xEB765
 uint8_t hyperabortflag;
 
 /* Hyperspace timing + state -- driven by anim_dohyperspace.
@@ -356,9 +393,13 @@ uint8_t hyperabortflag;
  *   hypertemp1/2     -- saved drawbackdropflag / drawdebrisflag (restored
  *                       at the end of phase 5 so the post-warp scene comes
  *                       back with the same backdrop config) */
+// GLOBAL: TIE95 0xEB722
 uint16_t hyperticks;
+// GLOBAL: TIE95 0xEB716
 uint16_t hyperstarlength;
+// GLOBAL: TIE95 0xEB72A
 uint16_t hypertemp1;
+// GLOBAL: TIE95 0xEB728
 uint16_t hypertemp2;
 
 /* drawdebrisflag -- enables the parallax-debris layer in BACKDRP2/CREATE.
@@ -375,10 +416,8 @@ uint8_t drawdebrisflag;
 uint8_t calcframerate;
 // GLOBAL: TIE95 0xEB75E
 uint8_t entercombatflag;
-/* Set by user_ejectcamera; gates beam/laser firing in laser_weaponsfire and
- * suppresses normal HUD/input updates after the player ejects. Cleared at
- * mission init. Mirrors retail byte_EB163. */
-uint8_t player_ejected;
+// GLOBAL: TIE95 0xE3894
+// GLOBAL: TIE98 0x595E00
 int16_t timers[20];
 
 /* REPLAY module globals -- watdbg-owned by tie.c. PANEL_updatereplaystuff
@@ -393,38 +432,33 @@ int16_t recordingreplay;
 int32_t replaytotalcnt;
 // GLOBAL: TIE95 0xEAC60
 int32_t replaymaxcnt;
+// GLOBAL: TIE95 0xCD1F0
 char replayclipname[14];
+// GLOBAL: TIE95 0xCD1DC
 char replaystartfile[10] = "start.rpy";
+// GLOBAL: TIE95 0xCD1CF
 char replaysavegamefile[13] = "savegame.rpy";
+// GLOBAL: TIE95 0xCD1E6
 char inputspoolfile[10] = "input.spl";
 // GLOBAL: TIE95 0xEAC68
 void* replayptr; /* write/read cursor into replaybuffer. */
 // GLOBAL: TIE95 0xEB6AA
 uint16_t replaybuffercnt; /* frames in the current 3071-slot page. */
-int16_t replaybuffercntdown;
 // GLOBAL: TIE95 0xEAC4C
 uint32_t replaytotalcntdown; /* playback counter (counts up toward replaytotalcnt). */
 // GLOBAL: TIE95 0xEB6AC
 uint16_t replayrandomseed;
-int16_t replayviewtype;
-int16_t lastreplayviewtype;
-int16_t replayobjectnum;
-int16_t replaydebounce;
 // GLOBAL: TIE95 0xEB6C4
 uint8_t replayviewmode;
 // GLOBAL: TIE95 0xEB74C
 uint8_t replayspoolflag; /* 1 = auto-spool to disk when buffer fills. */
+// GLOBAL: TIE95 0xEB74F
 uint8_t endgamereplayflag;
-uint8_t replayescapeflag;
-uint8_t replayfpctr;
-uint8_t lastreplayname;
-uint8_t replayfg;
 // GLOBAL: TIE95 0xEB751
 uint8_t updateactionflag; /* 1 = replay is actively advancing */
+// GLOBAL: TIE95 0xEB6B4
+// GLOBAL: TIE98 0x592210
 uint16_t replayavailable; /* 1 if a saved film is loadable. */
-
-/* --- Mission-file flag: bit 0 forces eject-pod rescue (story gate). --- */
-uint8_t rescue_override_flag;
 
 /* lasttargetnum is owned by panel.c per watdbg; declared extern in panel.h. */
 
@@ -442,21 +476,29 @@ int16_t squarerootable[512];
 /* Shield LED flash toggle (set by COLLIDE_damagecraft on hit; read by
  * PANEL_updateshields). 0 = fwd flash, 1 = rear flash. Owned by tie.c.
  * Single byte in the binary (byte_EB75B); paired with timers[TIMER_SHIELD_FLASH]. */
+// GLOBAL: TIE95 0xEB75B
 uint8_t shieldblink;
 
 /* MissionClock — the single 8-byte wall-clock storage. See the typedef
  * comment in tie.h for the layout and tick semantics. */
+// GLOBAL: TIE95 0xE6384
+// GLOBAL: TIE98 0x596210
 MissionClock _date;
 
 /* 8-byte "time left" strip at watdbg _timeleft[8] (owned by tie.c).
  * Captured wholesale by the replay state-dump; individual bytes index
  * into mission-timer display state. */
+// GLOBAL: TIE95 0xE638C
+// GLOBAL: TIE98 0x5926C8
 uint8_t timeleft[8];
 
 /* TieStorage_Open(3) modes embedded in the binary as const char arrays; owned by tie.c
  * per watdbg. C stdlib fopen treats the first two chars the same way here. */
+// GLOBAL: TIE95 0xCD1C6
 const char _readmode[3] = { 'r', 'b', '\0' };
+// GLOBAL: TIE95 0xCD1C9
 const char _writemode[3] = { 'w', 'b', '\0' };
+// GLOBAL: TIE95 0xCD1CC
 const char _appendmode[3] = { 'a', 'b', '\0' };
 
 /* Rendering scratch (owned by tie.c per watdbg). maxPixelsDeep is set by
@@ -464,6 +506,7 @@ const char _appendmode[3] = { 'a', 'b', '\0' };
  * written each frame by the 3D pipeline (anim.c / draw.c / xtrans2.c). */
 // GLOBAL: TIE95 0xEB154
 int32_t maxPixelsDeep;
+// GLOBAL: TIE95 0xEB6A8
 int16_t numbitmaps;
 // GLOBAL: TIE95 0xEB74A
 uint8_t lightflag;
@@ -473,10 +516,13 @@ uint8_t lightflag;
  * Owned by tie.c per watdbg. */
 // GLOBAL: TIE95 0xEB0EC
 int32_t roughdistance;
-uint16_t messageside; /* 0xF955A -- sampled by MSG_*message writers */
+// GLOBAL: TIE95 0xEB70E
+uint16_t messageside; /* sampled by MSG_*message writers */
 // GLOBAL: TIE95 0xDED54
-uint16_t argtable[4];      /* 0xED560 -- '*' and '&N' substitution slots */
-uint16_t messageloghandle; /* 0xF94F8 -- unused handle-shaped state */
+uint16_t argtable[4]; /* 0xED560 -- '*' and '&N' substitution slots */
+// GLOBAL: TIE95 0xEB6BE
+// GLOBAL: TIE98 0x595FD8
+uint16_t messageloghandle; /* 32000-byte message-history handle */
 /* (pstate.space_confirm_action: 1=laser-warn ack, 2=abort mission,
  * 3=accept penalty; driven by timers[TIMER_SPACE_CONFIRM] decay in
  * msg_messageupdate.) */
@@ -488,12 +534,9 @@ uint8_t radiomsg[1440];
 // GLOBAL: TIE95 0xE34C4
 EMissionGoal cut[4];
 
-/* Cockpit instrument knockout flag set by panel_updatecockpitdamage
- * (byte 0xF8FAB). */
-uint8_t byte_F8FAB;
-
 /* Approximate distance scratch -- last collide_roughdistance3d result.
  * Owned by tie.c per watdbg (segment 2 offset 0x2899C). */
+// GLOBAL: TIE95 0xEAB70
 int32_t approxdist;
 
 /* (mission elapsed hr/min/sec previously lived as standalone globals here;
@@ -514,7 +557,6 @@ int16_t inputkey;
 int16_t inputdeltax;
 // GLOBAL: TIE95 0xEB6CE
 int16_t inputdeltay;
-int16_t inputdeltaroll;
 // GLOBAL: TIE95 0xEB6DC
 int16_t mouseflag;
 // GLOBAL: TIE95 0xEB708
@@ -523,8 +565,6 @@ int16_t joystickflag;
 int16_t joystickx;
 // GLOBAL: TIE95 0xEB6F4
 int16_t joysticky;
-int16_t joystickroll;
-uint32_t inputthrottle = UINT32_MAX;
 // GLOBAL: TIE95 0xEB6FC
 int16_t joybuttons;
 // GLOBAL: TIE95 0xEB6D8
@@ -535,8 +575,11 @@ int16_t keypress;
 int16_t deltamx;
 // GLOBAL: TIE95 0xEB6E0
 int16_t deltamy;
+// GLOBAL: TIE95 0xEB6D6
 int16_t mousex;
+// GLOBAL: TIE95 0xEB6D4
 int16_t mousey;
+// GLOBAL: TIE95 0xEB6DA
 int16_t joystickcount;
 // GLOBAL: TIE95 0xEB772
 uint8_t graphicsmode;
@@ -602,9 +645,11 @@ uint8_t fontlowercase;
 void* curfontptr;
 // GLOBAL: TIE95 0xDED7C
 char tempstring[40];
+// GLOBAL: TIE95 0xDEDA4
 char temp2string[40];
 
 /* Graphics function pointers (assigned by FEINPUT_SetGraphicsPtrs) */
+// GLOBAL: TIE95 0xEB0D4
 void* initgraph;
 // GLOBAL: TIE95 0xEB0FC
 void (*blank)(void);
@@ -612,17 +657,24 @@ void (*blank)(void);
 void (*unblank)(void);
 // GLOBAL: TIE95 0xEB0CC
 void (*buildpalette)(const uint8_t* rgb_src, uint16_t start_idx, uint16_t count);
+// GLOBAL: TIE95 0xEB0D8
 void* savepalette;
+// GLOBAL: TIE95 0xEB0F8
 void* restorepalette;
+// GLOBAL: TIE95 0xEB0C0
 uint32_t (*calcposition)(uint16_t, uint16_t);
+// GLOBAL: TIE95 0xEB0DC
 void (*drawshape)(const void*, int16_t, int16_t, int16_t, uint16_t);
 // GLOBAL: TIE95 0xEB0F4
 void (*outchar)(int ch);
 // GLOBAL: TIE95 0xEB100
 // GLOBAL: TIE98 0x59222C
 void (*clearwindow)(void);
+// GLOBAL: TIE95 0xEB0B4
 void (*fillbox)(uint16_t, uint16_t, uint16_t, uint16_t);
+// GLOBAL: TIE95 0xEB0BC
 void* savebox;
+// GLOBAL: TIE95 0xEB0B8
 void* restorebox;
 
 /* Color remap table. Indexed by FESTRING_set{text,back,drop}color for any
@@ -904,6 +956,7 @@ uint8_t color_remap_table[256] = {
 // GLOBAL: TIE95 0xEAC74
 uint8_t* farbufferptr;
 /* Shape pointer table shared with maproom_swap_buffer_ptrs. */
+// GLOBAL: TIE95 0xEAC80
 uint8_t* farbufferptrs[265];
 // GLOBAL: TIE95 0xEB0A4
 void* fontptrtiny;
@@ -925,7 +978,11 @@ void* replaybufferstart;
  * color-slot delta added to starcol1 to pick one of palette entries
  * 0xFC..0xFF via the clamp(starcol1 + delta, 0..3) - 4 formula
  * in rtsvga2_drawstars. Initialized once at the start of each flight. */
+// GLOBAL: TIE95 0xDE7C4
+// GLOBAL: TIE98 0x592000
 uint8_t stars[512];
+// GLOBAL: TIE95 0xEB74B
+// GLOBAL: TIE98 0x596648
 uint8_t starcol1;
 
 /* Palette-cycling state (watdbg owner: tie.c).
@@ -947,6 +1004,7 @@ uint8_t acceleratedtimesetting;
 /* Bitmap-draw queue populated by anim_add_bitmap_draw, consumed by
  * anim_sort_and_draw_bitmaps. numbitmaps is defined above; the array
  * itself is declared in anim.h. */
+// GLOBAL: TIE95 0xDEB54
 BitmapDrawEntry drawitems[ANIM_DRAWITEMS_MAX];
 
 /* In-flight SFX scheduler (watdbg owner: tie.c). blastqueue is a FIFO of
@@ -957,9 +1015,12 @@ BitmapDrawEntry drawitems[ANIM_DRAWITEMS_MAX];
 uint8_t blastflag;
 // GLOBAL: TIE95 0xEB761
 uint8_t blastcount;
+// GLOBAL: TIE95 0xDED5C
+// GLOBAL: TIE98 0x5A2700
 uint8_t blastqueue[FSFX_BLAST_QUEUE_SIZE];
 
 /* Warhead state table: one record per concurrent missile/torpedo. */
+// GLOBAL: TIE95 0xE61FC
 WarheadRecord warheads[NUM_WARHEAD_SLOTS];
 
 /* VESA paging state. */
@@ -967,7 +1028,11 @@ WarheadRecord warheads[NUM_WARHEAD_SLOTS];
 uint32_t vesa_grains_per_page;
 
 /* Starship LOD / explosion-LOD thresholds (written by user_updateflight). */
+// GLOBAL: TIE95 0xEB73A
+// GLOBAL: TIE98 0x596202
 uint16_t starshipdetail;
+// GLOBAL: TIE95 0xEB738
+// GLOBAL: TIE98 0x595DE0
 uint16_t starshipexplodetail;
 
 /* Directional-light vector rotated into the current craft's local frame. */
@@ -985,6 +1050,7 @@ int32_t g_explosionLightBase = 256;
 int16_t thicknessMultiple;
 
 /* Draw color used for training-gate silhouettes. */
+// GLOBAL: TIE95 0xEB714
 uint16_t gatecolor;
 
 /* .TIE file/path scratch. The binary sizes the buffer at 64 bytes to hold
@@ -1024,6 +1090,8 @@ uint8_t transitions_on;
 /* Retail-only special-features dword (binary's dword_D3548). Gate for
  * the training-filename auto-detect (set train_craft_type_src to 5 when the
  * mission filename starts with 't'). 0 in normal builds. */
+// GLOBAL: TIE95 0xD3548
+// GLOBAL: TIE98 0x58CA58
 uint32_t special_features_flag;
 
 /* (Mission elapsed clock `_date` is defined above as a single
@@ -1038,24 +1106,28 @@ int16_t lastcounter;
  * tie_updatetime; on expiry toggles the targetblinkstate 0x400 bit and
  * picks a new tick interval (118 normal, 14 micro-flicker for too-small
  * targets). Owned by tie.c per watdbg. */
+// GLOBAL: TIE95 0xEB73E
+// GLOBAL: TIE98 0x591D82
 int16_t blinkticks;
 
 /* Engine-init/teardown latches set/cleared at mission boundaries by
  * tie_simulator. Each is a byte in the binary's data segment, owned by
- * tie.c per watdbg. Read by other modules to gate optional subsystems
- * (mute audio if !soundinit, suppress prints if !outputflag, etc.). */
+ * tie.c per watdbg. Read by other modules to gate optional subsystems. */
+// GLOBAL: TIE95 0xEB777
+// GLOBAL: TIE98 0x596B9C
 uint8_t musicflag; /* iMUSE script live? */
-/* iMUSE per-frame evaluation state (two 16-bit globals in the binary at
- * 0xF9578 / 0xF9582). tie_updatemusic reads/updates them each frame so
+/* iMUSE per-frame evaluation state saved by the replay state dump.
+ * tie_updatemusic reads/updates them each frame so
  * they persist across evaluations and are captured by the replay-state
  * dump. */
+// GLOBAL: TIE95 0xEB73C
+// GLOBAL: TIE98 0x596BB0
 int16_t music_state = 1;
+// GLOBAL: TIE95 0xEB742
+// GLOBAL: TIE98 0x596B82
 uint16_t music_intensity;
-uint8_t debugnum; /* on-screen debug overlay enabled */
 // GLOBAL: TIE95 0xEB768
 uint8_t graphicsinit; /* video mode set + buffers allocated */
-uint8_t soundinit;    /* iMUSE init complete */
-uint8_t outputflag;   /* msg / festring writes enabled */
 // GLOBAL: TIE95 0xEB748
 // GLOBAL: TIE98 0x59266C
 uint8_t colorcycleuserflag; /* user-side palette-cycling enable (transient) */
@@ -1067,6 +1139,8 @@ uint8_t panelflag; /* cockpit-panel rendering enabled */
  * and fediskio_readfiletofarmemory so the first map-room open on a fresh
  * mission re-uploads the icon atlas. Other modules (MAP, PANEL) set it
  * after a successful load. Owned by tie.c per watdbg. */
+// GLOBAL: TIE95 0xCD1C5
+// GLOBAL: TIE98 0x58A284
 uint8_t mapiconsloaded;
 
 /* User-toggleable "Color Cycling" option (binary's byte_EB766). Persists
@@ -1090,19 +1164,11 @@ uint8_t deadflag_EB774;
 
 /* Last iMUSE music state pushed by tie_updatemusic. Latched here so the
  * UI / debug overlays can read what's currently playing. */
+// GLOBAL: TIE95 0xEB747
 uint8_t lastmusicstate;
 
-/* Objective-just-completed grace timers. SCORE_checkobjective sets them
- * to a small non-zero on the frame an objective transitions to "done";
- * tie_updatemusic checks them as a "hold the post-objective music state
- * for a few seconds" gate. Bytes in the binary, not real timers[] slots. */
-uint8_t pri_complete_cooldown;
-uint8_t sec_complete_cooldown;
-
 /* Forward decls for static helpers. */
-static bool render_world_or_skip(int has_panel);
 static bool tie_doframe_tie98(void);
-static void tie_updatescreen_tie95(void);
 
 /* Configure flight geometry for VGA or the 640x480 modes and select the
  * corresponding CP320/CP640 cockpit asset directory. */
@@ -1578,8 +1644,6 @@ int tie_makelocallights_tie98(FlightObject* src_obj) {
 
 /* Advance global and craft timers, target blinking, mission clock and warning,
  * pilot damage bookkeeping, object ages, and message ages. */
-static uint16_t s_ai_timer_elapsed_ticks;
-
 // FUNCTION: TIE95 0x577F4
 void tie_updatetime(void) {
 	/* systemmask[10] / damagemsg[10] declared in collide.h. */
@@ -1588,6 +1652,14 @@ void tie_updatetime(void) {
 
 	/* 1. Per-slot timer decrement. */
 	uint16_t i;
+	uint16_t ai_timer_ticks;
+
+#ifdef TIE_MODERN
+	/* PORT: high-rate flight advances per-craft AI timers on the AI cadence. */
+	ai_timer_ticks = TieFlightCadence_AiTimerTicks();
+#else
+	ai_timer_ticks = frameticks;
+#endif
 
 	for (i = 0; i < 20; ++i) {
 		if (timers[i] != 0) {
@@ -1606,15 +1678,15 @@ void tie_updatetime(void) {
 			continue;
 		cp = obj->craft_ptr;
 
-		if (s_ai_timer_elapsed_ticks && cp->ai_update_rate_copy)
-			cp->ai_update_rate_copy = (uint16_t)(cp->ai_update_rate_copy - s_ai_timer_elapsed_ticks);
+		if (ai_timer_ticks && cp->ai_update_rate_copy)
+			cp->ai_update_rate_copy = (uint16_t)(cp->ai_update_rate_copy - ai_timer_ticks);
 
-		if (s_ai_timer_elapsed_ticks && cp->maneuver_timer) {
-			int v = cp->maneuver_timer - s_ai_timer_elapsed_ticks;
+		if (ai_timer_ticks && cp->maneuver_timer) {
+			int v = cp->maneuver_timer - ai_timer_ticks;
 			cp->maneuver_timer = (v < 0) ? 0 : v;
 		}
-		if (s_ai_timer_elapsed_ticks && cp->ai_plan_state) {
-			int16_t v = (int16_t)(cp->ai_plan_state - s_ai_timer_elapsed_ticks);
+		if (ai_timer_ticks && cp->ai_plan_state) {
+			int16_t v = (int16_t)(cp->ai_plan_state - ai_timer_ticks);
 			cp->ai_plan_state = (uint16_t)((v < 0) ? 0 : v);
 		}
 		if (cp->ion_drain_timer) {
@@ -1650,17 +1722,16 @@ void tie_updatetime(void) {
 			 * on" phase; otherwise "blink off". The size-vs-distance test
 			 * picks 118 (normal cycle) vs 14 (micro-flicker for small targets). */
 			if ((targetblinkstate & 0x0400u) != 0) {
-				if ((int)bound_hwidth > trig2_polardistance) {
+				if ((int)bound_hwidth > trig2_polardistance)
 					blinkticks = 118; /* big enough to hold steady */
-					goto blink_done;
-				}
+				else
+					blinkticks = 14; /* small/distant target: flicker */
 			} else if ((int)bound_hwidth <= trig2_polardistance) {
 				blinkticks = 118;
-				goto blink_done;
+			} else {
+				blinkticks = 14;
 			}
-			blinkticks = 14; /* small/distant target: flicker */
 		}
-	blink_done:;
 	}
 
 	/* 4. Publish target HUD state and tick the mission clock. */
@@ -1677,7 +1748,7 @@ void tie_updatetime(void) {
 	 * original byte-for-byte. */
 	_date.subsec = (int16_t)(_date.subsec - frameticks);
 	if (_date.subsec > 0)
-		goto skip_clock_tick;
+		return;
 
 	_date.subsec += 236;
 
@@ -1756,62 +1827,6 @@ void tie_updatetime(void) {
 
 	/* 7. Tick all queued cockpit messages forward. */
 	msg_updatemessageage();
-
-skip_clock_tick:
-	return;
-}
-
-static void tie_run_plane_ai(TieFlightCadence cadence) {
-	uint16_t real_frameticks;
-	uint16_t real_framerate;
-
-	if (!cadence.due || mission.train_craft_type != 0)
-		return;
-	if (!TieFlightTiming_IsHighRate()) {
-		pai_updateplaneai();
-		return;
-	}
-
-	real_frameticks = frameticks;
-	real_framerate = framerate;
-	frameticks = cadence.elapsed_ticks;
-	framerate = (uint16_t)(236u / cadence.elapsed_ticks);
-	if (!framerate)
-		framerate = 1;
-	pai_updateplaneai();
-	TieAiLead_CommitBoundary();
-	frameticks = real_frameticks;
-	framerate = real_framerate;
-}
-
-static void tie_run_animation(TieFlightCadence cadence) {
-	uint16_t real_frameticks;
-	uint16_t real_framerate;
-
-	if (!cadence.due) {
-		/* PORT: Player movement still advances on unlocked ticks. Keep the
-		 * gate-plane check at that cadence while mesh animation remains on
-		 * the recovered compatibility cadence. */
-#ifdef TIE_MODERN
-		if (TieFlightTiming_IsHighRate() && mission.train_craft_type)
-			gate_updatecourseprogress();
-#endif
-		return;
-	}
-	if (!TieFlightTiming_IsHighRate()) {
-		anim_updateanimation();
-		return;
-	}
-
-	real_frameticks = frameticks;
-	real_framerate = framerate;
-	frameticks = cadence.elapsed_ticks;
-	framerate = (uint16_t)(236u / cadence.elapsed_ticks);
-	if (!framerate)
-		framerate = 1;
-	anim_updateanimation();
-	frameticks = real_frameticks;
-	framerate = real_framerate;
 }
 
 /* Throttled iMUSE state evaluator. Training progress, objective state,
@@ -1865,162 +1880,146 @@ void tie_updatemusic(void) {
 		} else {
 			music_state = 8;
 		}
-		goto publish;
-	}
-
-	/* --- Combat mission state ----------------------------------------- */
-	if (mission.primary_complete == 2) { /* won */
+	} else if (mission.primary_complete == 2) { /* won */
+		/* --- Combat mission state ----------------------------------- */
 		music_state = 10;
-		goto publish;
-	}
-	if (pri_complete_cooldown != 0 || sec_complete_cooldown != 0) {
+	} else if (timers[TIMER_PRI_COMPLETE] != 0 || timers[TIMER_SEC_COMPLETE] != 0) {
 		music_state = 11; /* objective hold */
-		goto publish;
-	}
+	} else {
+		/* Tally ships per side weighted by genus + find the closest hostile. */
+		/* RETAIL: scan first NUM_CRAFTS (32) slots. */
+		for (obj_iter = 0; obj_iter < NUM_CRAFTS; ++obj_iter) {
+			FlightObject* obj = &objects[obj_iter];
+			uint8_t g;
 
-	/* Tally ships per side weighted by genus + find the closest hostile. */
-	/* RETAIL: scan first NUM_CRAFTS (32) slots. */
-	for (obj_iter = 0; obj_iter < NUM_CRAFTS; ++obj_iter) {
-		FlightObject* obj = &objects[obj_iter];
-		uint8_t g;
+			if (obj->ship_idx == 0)
+				continue;
+			g = obj->genus;
+			if (g == GENUS_STARSHIP || g == GENUS_PLATFORM)
+				ships_per_side[obj->side] += 4;
+			else if (g == GENUS_TRANSPORT || g == GENUS_FREIGHTER)
+				ships_per_side[obj->side] += 2;
+			else
+				++ships_per_side[obj->side];
 
-		if (obj->ship_idx == 0)
-			continue;
-		g = obj->genus;
-		if (g == GENUS_STARSHIP || g == GENUS_PLATFORM)
-			ships_per_side[obj->side] += 4;
-		else if (g == GENUS_TRANSPORT || g == GENUS_FREIGHTER)
-			ships_per_side[obj->side] += 2;
-		else
-			++ships_per_side[obj->side];
+			if (obj->side != pstate.player->side && obj->craft_ptr->status_flags != 0) {
+				uint32_t d;
+				pai_roughdistancebetween(obj_iter, pstate.object_idx);
+				d = (uint32_t)roughdistance;
+				/* Cap-ship and freighter weight: count them as closer. */
+				if (obj->genus == GENUS_STARSHIP)
+					d >>= 2;
+				if (obj->genus == GENUS_PLATFORM)
+					d >>= 2;
+				if (obj->genus == GENUS_FREIGHTER)
+					d >>= 1;
+				if (min_distance > d) {
+					min_distance = d;
+					closest_enemy_obj = obj_iter;
+				}
+			}
+		}
 
-		if (obj->side != pstate.player->side && obj->craft_ptr->status_flags != 0) {
-			uint32_t d;
-			pai_roughdistancebetween(obj_iter, pstate.object_idx);
-			d = (uint32_t)roughdistance;
-			/* Cap-ship and freighter weight: count them as closer. */
-			if (obj->genus == GENUS_STARSHIP)
-				d >>= 2;
-			if (obj->genus == GENUS_PLATFORM)
-				d >>= 2;
-			if (obj->genus == GENUS_FREIGHTER)
-				d >>= 1;
-			if (min_distance > d) {
-				min_distance = d;
-				closest_enemy_obj = obj_iter;
+		if ((uint16_t)closest_enemy_obj == 0xFFFFu) {
+			/* No hostile in range. */
+			if (mission.primary_complete == 1)
+				music_state = 11;
+			else if (entercombatflag)
+				music_state = 2;
+			else
+				music_state = 1;
+		} else {
+			/* Hostile in range — pick combat-near vs combat-far threshold. */
+			combat_thresh = entercombatflag ? 0x40000u : 0x20000u;
+			if (min_distance > combat_thresh) {
+				/* Far away: ramp intensity 5 -> 0 as we go further. */
+				music_intensity = (uint16_t)(5 - ((min_distance - combat_thresh) >> 15));
+				music_state = 1;
+				if (music_intensity >= 0x8000u)
+					music_intensity = 0;
+			} else {
+				/* Within attack range: scan AI fighter slots for missile lock
+				 * on player. RETAIL: slots 48..79 (32 wide). Demo was 44..75. */
+				entercombatflag = 1;
+				for (slot = 48; slot < 80; ++slot) {
+					FlightObject* obj = &objects[slot];
+					CraftData* cp;
+					if (obj->ship_idx == 0)
+						continue;
+					cp = obj->craft_ptr;
+					if (cp->species_idx == 0)
+						continue;
+					if (pstate.object_idx == cp->missile_target) {
+						has_missile_lock_on_player = 1;
+						break;
+					}
+				}
+				if (has_missile_lock_on_player) {
+					music_state = 8; /* urgent */
+				} else if (min_distance <= 0x10000u) {
+					/* Mid-to-close-range: walk the FG kill counts to detect
+					 * "almost wiped". */
+					uint16_t fg_iter = 0;
+					uint16_t total_primary = 0;
+
+					for (fg_iter = 0; fg_iter < (uint16_t)mission_file_header.num_fg; ++fg_iter) {
+						if (mission.primary_fg[fg_iter])
+							++total_primary;
+						if (mission.primary_fg[fg_iter] == 1)
+							++primary_kill_count;
+						if (mission.secondary_fg[fg_iter])
+							++secondary_total;
+						if (mission.secondary_fg[fg_iter] == 1)
+							++secondary_kill_count;
+					}
+
+					if ((total_primary > 3u && primary_kill_count + 1 == total_primary) ||
+						(secondary_total > 3u && secondary_kill_count + 1 == secondary_total)) {
+						/* Big primary or secondary FG with all but 1 dead. */
+						music_state = 9;
+					} else {
+						music_state = 8; /* outnumbered */
+						/* Compare hostile vs ally weighted score (sides 0/4
+						 * always count; sides 2/3/5 only count if their tag
+						 * string starts with '1'). */
+						if (min_distance >= 0x8000u ||
+							(objects[(uint16_t)closest_enemy_obj].genus != GENUS_STARSHIP &&
+							 objects[(uint16_t)closest_enemy_obj].genus != GENUS_PLATFORM)) {
+							hostile_score = (uint16_t)(ships_per_side[4] + ships_per_side[0]);
+							/* Sides 2/3/5 only count as hostile when their .TIE-file
+							 * IFF tag string starts with '1' (mission_file_header.
+							 * mission.neutral_name[side-2][0]). */
+							if (mission_file_header.mission.neutral_name[0][0] == '1')
+								hostile_score += ships_per_side[2];
+							if (mission_file_header.mission.neutral_name[1][0] == '1')
+								hostile_score += ships_per_side[3];
+							if (mission_file_header.mission.neutral_name[3][0] == '1')
+								hostile_score += ships_per_side[5];
+
+							if (hostile_score <= ships_per_side[1]) {
+								music_state = 7; /* winning */
+							} else {
+								hostile_pct = math2_percentage(ships_per_side[1], hostile_score);
+								if (hostile_pct >= 57344) /* >= 87.5% */
+									music_state = 7;
+								else if (hostile_pct >= 0x8000) /* >= 50% */
+									music_state = 6;
+							}
+						}
+					}
+				} else if (ships_per_side[0]) {
+					/* Mid-range default: pick a music state based on which
+					 * sides are alive. */
+					music_state = 3;
+				} else if (ships_per_side[4]) {
+					music_state = 5;
+				} else {
+					music_state = 4;
+				}
 			}
 		}
 	}
 
-	/* No hostile in range. */
-	if ((uint16_t)closest_enemy_obj == 0xFFFFu) {
-		if (mission.primary_complete == 1)
-			music_state = 11;
-		else if (entercombatflag)
-			music_state = 2;
-		else
-			music_state = 1;
-		goto publish;
-	}
-
-	/* Hostile in range — pick combat-near vs combat-far threshold. */
-	combat_thresh = entercombatflag ? 0x40000u : 0x20000u;
-	if (min_distance > combat_thresh) {
-		/* Far away: ramp intensity 5 -> 0 as we go further. */
-		music_intensity = (uint16_t)(5 - ((min_distance - combat_thresh) >> 15));
-		music_state = 1;
-		if (music_intensity >= 0x8000u)
-			music_intensity = 0;
-		goto publish;
-	}
-
-	/* Within attack range: scan AI fighter slots for missile lock on player.
-	 * RETAIL: slots 48..79 (32 wide). Demo was 44..75. */
-	entercombatflag = 1;
-	for (slot = 48; slot < 80; ++slot) {
-		FlightObject* obj = &objects[slot];
-		CraftData* cp;
-		if (obj->ship_idx == 0)
-			continue;
-		cp = obj->craft_ptr;
-		if (cp->species_idx == 0)
-			continue;
-		if (pstate.object_idx == cp->missile_target) {
-			has_missile_lock_on_player = 1;
-			break;
-		}
-	}
-	if (has_missile_lock_on_player) {
-		music_state = 8; /* urgent */
-		goto publish;
-	}
-
-	/* Mid-to-close-range: walk the FG kill counts to detect "almost wiped". */
-	if (min_distance <= 0x10000u) {
-		uint16_t fg_iter = 0;
-		uint16_t total_primary = 0;
-
-		for (fg_iter = 0; fg_iter < (uint16_t)mission_file_header.num_fg; ++fg_iter) {
-			if (mission.primary_fg[fg_iter])
-				++total_primary;
-			if (mission.primary_fg[fg_iter] == 1)
-				++primary_kill_count;
-			if (mission.secondary_fg[fg_iter])
-				++secondary_total;
-			if (mission.secondary_fg[fg_iter] == 1)
-				++secondary_kill_count;
-		}
-
-		/* Big primary or secondary FG with all but 1 dead -> state 9. */
-		if ((total_primary > 3u && primary_kill_count + 1 == total_primary) ||
-			(secondary_total > 3u && secondary_kill_count + 1 == secondary_total)) {
-			music_state = 9;
-			goto publish;
-		}
-
-		/* Compare hostile vs ally weighted score (sides 0/4 always count;
-		 * sides 2/3/5 only count if their tag string starts with '1'). */
-		if (min_distance >= 0x8000u || (objects[(uint16_t)closest_enemy_obj].genus != GENUS_STARSHIP &&
-										objects[(uint16_t)closest_enemy_obj].genus != GENUS_PLATFORM)) {
-			hostile_score = (uint16_t)(ships_per_side[4] + ships_per_side[0]);
-			/* Sides 2/3/5 only count as hostile when their .TIE-file IFF
-			 * tag string starts with '1' (mission_file_header.mission.
-			 * neutral_name[side-2][0]). Side 4 is unconditionally counted
-			 * above; the binary's nearest-enemy filter likewise omits it. */
-			if (mission_file_header.mission.neutral_name[0][0] == '1')
-				hostile_score += ships_per_side[2];
-			if (mission_file_header.mission.neutral_name[1][0] == '1')
-				hostile_score += ships_per_side[3];
-			if (mission_file_header.mission.neutral_name[3][0] == '1')
-				hostile_score += ships_per_side[5];
-
-			if (hostile_score <= ships_per_side[1]) {
-				music_state = 7; /* winning */
-				goto publish;
-			}
-			hostile_pct = math2_percentage(ships_per_side[1], hostile_score);
-			if (hostile_pct >= 57344) { /* >= 87.5% */
-				music_state = 7;
-				goto publish;
-			}
-			if (hostile_pct >= 0x8000) { /* >= 50% */
-				music_state = 6;
-				goto publish;
-			}
-		}
-		music_state = 8; /* outnumbered */
-		goto publish;
-	}
-
-	/* Mid-range default: pick a music state based on which sides are alive. */
-	if (ships_per_side[0])
-		music_state = 3;
-	else if (ships_per_side[4])
-		music_state = 5;
-	else
-		music_state = 4;
-
-publish:
 	if (music_intensity > 5u)
 		music_intensity = 5;
 	lastmusicstate = (uint8_t)music_state;
@@ -2037,11 +2036,13 @@ static int cdmusic_switch_latched;
 static int32_t cdmusic_ms_remaining;
 // GLOBAL: TIE98 0x591C20
 static uint32_t cdmusic_last_ms;
+// GLOBAL: TIE98 0x4F2B88
 static const uint8_t cdmusic_start_min[4] = { 0, 4, 8, 12 };
+// GLOBAL: TIE98 0x4F2B8C
 static const uint8_t cdmusic_start_sec[4] = { 0, 1, 40, 52 };
 
 // FUNCTION: TIE98 0x48F730
-static void tie_updatemusic_tie98(void) {
+void tie_updatemusic_tie98(void) {
 	uint32_t now;
 	if (inflight_music_vol == 0 || musicenabled == 0) {
 		CDAUDIO_Stop_Track();
@@ -2073,31 +2074,9 @@ static void tie_updatemusic_tie98(void) {
 	}
 }
 
-static void tie_update_selected_music(void) {
-	if (TieMusicPolicy_UsesTie98())
-		tie_updatemusic_tie98();
-	else
-		tie_updatemusic();
-}
-
-void tie_start_tie98_mission_music(void) {
-	cdmusic_switch_latched = 0;
-	if (CDAUDIO_Open_Device()) {
-		const int start = rand_rand() & 3;
-		gamesnd_Set_CD_Volume(inflight_music_vol);
-		CDAUDIO_Play_Track(2, cdmusic_start_min[start], cdmusic_start_sec[start]);
-		cdmusic_ms_remaining =
-			CDAUDIO_Track_Length_Ms(2) - 1000 * (cdmusic_start_sec[start] + 60 * cdmusic_start_min[start]);
-		cdmusic_last_ms = TieMusicPolicy_NowMs();
-		cdmusic_kind = 2;
-	} else {
-		cdmusic_ms_remaining = INT32_MAX;
-		cdmusic_kind = 0;
-	}
-}
-
-// ORIGINAL_FUNCTION: TIE98 0x48D9B0
-// (task-split recovery)
+/* PORT: returns false until one flight period has accumulated, in place of
+ * the original busy-wait, so the flight task can yield to the host. */
+// FUNCTION: TIE98 0x48D9B0
 static bool tie_doframe_tie98(void) {
 	TieFlightCadence ai_cadence;
 	TieFlightCadence animation_cadence;
@@ -2139,9 +2118,11 @@ static bool tie_doframe_tie98(void) {
 	mapflag = 0;
 	if (acceleratedtimesetting <= 1u || acceleratedtimectr == 0)
 		user_userinterface();
+#ifdef TIE_MODERN
 	/* PORT: TIE98's pause loop is represented by the host task state. */
-	if (user_is_paused())
+	if (TieFlightPause_IsActive())
 		return true;
+#endif
 	if (mission.end_flag != 0 || mapflag != 0)
 		return true;
 
@@ -2150,7 +2131,7 @@ static bool tie_doframe_tie98(void) {
 	TieAiLead_Advance(frameticks);
 	ai_cadence = TieFlightTiming_AdvanceAi(frameticks);
 	animation_cadence = TieFlightTiming_AdvanceAnimation(frameticks);
-	s_ai_timer_elapsed_ticks = ai_cadence.due ? ai_cadence.elapsed_ticks : 0;
+	TieFlightCadence_SetAiTimerTicks(ai_cadence);
 	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_TIME);
 	tie_updatetime();
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
@@ -2160,7 +2141,7 @@ static bool tie_doframe_tie98(void) {
 		TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	}
 	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_AI);
-	tie_run_plane_ai(ai_cadence);
+	TieFlightCadence_RunPlaneAi(ai_cadence);
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_WEAPONS);
 	laser_weaponsfire();
@@ -2227,14 +2208,18 @@ static bool tie_doframe_tie98(void) {
 	move_moveobjects();
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_ANIMATION);
-	tie_run_animation(animation_cadence);
+	TieFlightCadence_RunAnimation(animation_cadence);
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_OBJECTIVES);
 	score_checkobjective();
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	msg_messageupdate();
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	tie_update_selected_music();
+#ifdef TIE_MODERN
+	TieMusicPolicy_UpdateFlightMusic();
+#else
+	tie_updatemusic_tie98();
+#endif
 	if (blastflag) {
 		FrontendSound_FlushQueuedSounds();
 		if (blastcount)
@@ -2300,9 +2285,11 @@ bool tie_doframe(void) {
 	if (acceleratedtimesetting <= 1u || acceleratedtimectr == 0)
 		user_userinterface();
 
+#ifdef TIE_MODERN
 	/* The tick budget was consumed even when world work is skipped. */
-	if (user_is_paused())
+	if (TieFlightPause_IsActive())
 		return true;
+#endif
 	if (mission.end_flag != 0 || mapflag != 0)
 		return true;
 
@@ -2311,7 +2298,7 @@ bool tie_doframe(void) {
 	TieAiLead_Advance(frameticks);
 	ai_cadence = TieFlightTiming_AdvanceAi(frameticks);
 	animation_cadence = TieFlightTiming_AdvanceAnimation(frameticks);
-	s_ai_timer_elapsed_ticks = ai_cadence.due ? ai_cadence.elapsed_ticks : 0;
+	TieFlightCadence_SetAiTimerTicks(ai_cadence);
 	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_TIME);
 	tie_updatetime();
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
@@ -2321,7 +2308,7 @@ bool tie_doframe(void) {
 		TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	}
 	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_AI);
-	tie_run_plane_ai(ai_cadence);
+	TieFlightCadence_RunPlaneAi(ai_cadence);
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_WEAPONS);
 	laser_weaponsfire();
@@ -2329,7 +2316,8 @@ bool tie_doframe(void) {
 	dynamix_planedynamics();
 
 	/* Render gate (with accelerated-time skip): renders once every
-	 * acceleratedtimesetting frames when set > 1. */
+	 * acceleratedtimesetting frames when set > 1. The live branch also
+	 * redraws the cockpit panel. */
 	rendered = false;
 	if (replayviewmode) {
 		if (fastforwardflag) {
@@ -2337,14 +2325,82 @@ bool tie_doframe(void) {
 			 * one mission-second (236 ticks) worth of frame time. */
 			if (frameticks > (uint16_t)fastforwardtimer) {
 				fastforwardtimer += 236;
-				rendered = render_world_or_skip(/*has_panel=*/0);
+				if (acceleratedtimesetting <= 1u) {
+					if (TieClassicDisplay_UsesDx5())
+						FlightSurface_Lock();
+					tie_updatescreen();
+					if (TieClassicDisplay_UsesDx5())
+						FlightSurface_Unlock();
+					rendered = true;
+				} else {
+					if (acceleratedtimectr) {
+						/* Skip the render — let the timer catch up. */
+						tickcounter += (uint16_t)xtimer_time_elapsed();
+						tickcounter += frameticks;
+					} else {
+						if (TieClassicDisplay_UsesDx5())
+							FlightSurface_Lock();
+						tie_updatescreen();
+						if (TieClassicDisplay_UsesDx5())
+							FlightSurface_Unlock();
+						rendered = true;
+						acceleratedtimectr = acceleratedtimesetting;
+					}
+					--acceleratedtimectr;
+				}
 			}
 			fastforwardtimer -= (int16_t)frameticks;
 		} else {
-			rendered = render_world_or_skip(/*has_panel=*/0);
+			if (acceleratedtimesetting <= 1u) {
+				if (TieClassicDisplay_UsesDx5())
+					FlightSurface_Lock();
+				tie_updatescreen();
+				if (TieClassicDisplay_UsesDx5())
+					FlightSurface_Unlock();
+				rendered = true;
+			} else {
+				if (acceleratedtimectr) {
+					/* Skip the render — let the timer catch up. */
+					tickcounter += (uint16_t)xtimer_time_elapsed();
+					tickcounter += frameticks;
+				} else {
+					if (TieClassicDisplay_UsesDx5())
+						FlightSurface_Lock();
+					tie_updatescreen();
+					if (TieClassicDisplay_UsesDx5())
+						FlightSurface_Unlock();
+					rendered = true;
+					acceleratedtimectr = acceleratedtimesetting;
+				}
+				--acceleratedtimectr;
+			}
 		}
 	} else {
-		rendered = render_world_or_skip(/*has_panel=*/1);
+		if (acceleratedtimesetting <= 1u) {
+			if (TieClassicDisplay_UsesDx5())
+				FlightSurface_Lock();
+			tie_updatescreen();
+			panel_updatepanel();
+			if (TieClassicDisplay_UsesDx5())
+				FlightSurface_Unlock();
+			rendered = true;
+		} else {
+			if (acceleratedtimectr) {
+				/* Skip the render — let the timer catch up. */
+				tickcounter += (uint16_t)xtimer_time_elapsed();
+				tickcounter += frameticks;
+			} else {
+				if (TieClassicDisplay_UsesDx5())
+					FlightSurface_Lock();
+				tie_updatescreen();
+				panel_updatepanel();
+				if (TieClassicDisplay_UsesDx5())
+					FlightSurface_Unlock();
+				rendered = true;
+				acceleratedtimectr = acceleratedtimesetting;
+			}
+			--acceleratedtimectr;
+		}
 	}
 
 	/* Post-render world updates. */
@@ -2358,14 +2414,18 @@ bool tie_doframe(void) {
 	move_moveobjects();
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_ANIMATION);
-	tie_run_animation(animation_cadence);
+	TieFlightCadence_RunAnimation(animation_cadence);
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_OBJECTIVES);
 	score_checkobjective();
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
 	msg_messageupdate();
 	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	tie_update_selected_music();
+#ifdef TIE_MODERN
+	TieMusicPolicy_UpdateFlightMusic();
+#else
+	tie_updatemusic();
+#endif
 
 	if (blastflag) {
 		if (blastcount)
@@ -2382,48 +2442,14 @@ bool tie_doframe(void) {
 	return true;
 }
 
-/* Render-or-skip helper used by both branches of tie_doframe. Implements
- * the accelerated-time pattern:
- *   acceleratedtimesetting <= 1            -> always render.
- *   acceleratedtimesetting > 1, ctr == 0   -> render once, re-arm ctr.
- *   acceleratedtimesetting > 1, ctr != 0   -> skip render, accumulate
- *                                              elapsed ticks instead.
- * has_panel is 1 only for the live (non-replay) branch, which also runs
- * panel_updatepanel after the world render. */
-static bool render_world_or_skip(int has_panel) {
-	bool rendered = false;
-	if (acceleratedtimesetting <= 1u) {
-		if (TieClassicDisplay_UsesDx5())
-			FlightSurface_Lock();
-		tie_updatescreen();
-		if (has_panel)
-			panel_updatepanel();
-		if (TieClassicDisplay_UsesDx5())
-			FlightSurface_Unlock();
-		rendered = true;
-	} else if (acceleratedtimectr) {
-		/* Skip the render — let the timer catch up. */
-		tickcounter += (uint16_t)xtimer_time_elapsed();
-		tickcounter += frameticks;
-	} else {
-		if (TieClassicDisplay_UsesDx5())
-			FlightSurface_Lock();
-		tie_updatescreen();
-		if (has_panel)
-			panel_updatepanel();
-		if (TieClassicDisplay_UsesDx5())
-			FlightSurface_Unlock();
-		acceleratedtimectr = acceleratedtimesetting;
-		rendered = true;
-	}
-	if (acceleratedtimesetting > 1u)
-		--acceleratedtimectr;
-	return rendered;
-}
-
 /* Per-frame world render: camera, flight objects, static objects, rasterizer,
  * bitmap queue, and starfield. */
+// FUNCTION: TIE95 0x56574
 void tie_updatescreen(void) {
+	int16_t obj_iter;
+	int16_t i;
+
+#ifdef TIE_MODERN
 	if (TieProfile_UsesTie98Logic()) {
 		/* PORT: keep host-only frame state outside recovered TIE98 TIE_Update_Screen. */
 		TieBillboardCapture_BeginTick();
@@ -2435,23 +2461,17 @@ void tie_updatescreen(void) {
 		TieFlightSnapshot_RecordCameraBasis();
 		return;
 	}
-	tie_updatescreen_tie95();
-}
+#endif
 
-// FUNCTION: TIE95 0x56574
-static void tie_updatescreen_tie95(void) {
 	/* SNAPSHOT-ONLY: reset the per-tick HD billboard capture caches
 	 * here, at the start of every tick that actually renders the 3D
-	 * world. tie_doframe gates this call behind user_is_paused() and
+	 * world. tie_doframe gates this call behind TieFlightPause_IsActive() and
 	 * the accelerated-time skip counter, so paused / skipped frames
 	 * leave the caches frozen on the last-rendered tick — which is
 	 * exactly what the HD billboard pass needs to keep showing the
 	 * frozen sprites while the engine is paused (classic just keeps
 	 * the previous framebuffer; HD pulls a fresh snapshot every host
 	 * tick and would otherwise see an empty billboard array). */
-	int16_t obj_iter;
-	int16_t i;
-
 	TieBillboardCapture_BeginTick();
 
 	/* --- Step 1: pick a camera --------------------------------------- */
@@ -3034,14 +3054,10 @@ void tie_simulator(int replay_mode) {
 				mission.mission_score = 10000 * ((int)mission.train_level - 1);
 			}
 
+#if defined(TIE_MODERN) || defined(TIE98)
 #ifdef TIE_MODERN
 			if (TieMusicPolicy_UsesTie98())
-				tie_start_tie98_mission_music();
-			continuation->phase = TIE_SIM_PHASE_AFTER_MISSION;
-			TieFlightTask_BeginMission();
-			return;
-#else
-#ifdef TIE98
+#endif
 			{
 				cdmusic_switch_latched = 0;
 				if (CDAUDIO_Open_Device()) {
@@ -3058,6 +3074,11 @@ void tie_simulator(int replay_mode) {
 				}
 			}
 #endif
+#ifdef TIE_MODERN
+			continuation->phase = TIE_SIM_PHASE_AFTER_MISSION;
+			TieFlightTask_BeginMission();
+			return;
+#else
 			do {
 				tickcounter += xtimer_time_elapsed();
 			} while (!tickcounter);

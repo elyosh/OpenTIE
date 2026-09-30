@@ -13,6 +13,7 @@
 #include "tie/transfm2.h"
 #include "tie/trig2.h"
 #include "tie/xtrans2.h"
+#include "tie_runtime/display/tie98_display.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -45,9 +46,6 @@ static SceneMeshTIE98 g_meshQueue[TIE98_MESH_QUEUE_MAX];
 static ProjVertexTIE98* g_projVertList;
 // GLOBAL: TIE98 0x5FD318
 static int* g_vertexRemap;
-/* PORT: records the hardware vertex emitted for each projected vertex. The
- * original 32-bit renderer stores this transient mapping in its scene buffers. */
-static int* g_emittedVertexByProjection;
 // GLOBAL: TIE98 0x5FD306
 static int g_projVertCapacity;
 // GLOBAL: TIE98 0x5FD31E
@@ -136,11 +134,6 @@ static float g_lodDistanceScale = 1.0f;
 
 // GLOBAL: TIE98 0x58A274
 static int g_nodeSwitchIndex;
-
-/* PORT: replaces TIE98's temporary rewrite of a locked OPT header. The
- * native OPT cache owns parsed host structures rather than writable file
- * images, so DRAW_drawhyperstar selects its executable-defined quad here. */
-const Tie98OptimizedPolyObject* g_flightModelOverride;
 
 // GLOBAL: TIE98 0x5833F8
 static int g_modelSelfOcclusionEnabled;
@@ -259,7 +252,7 @@ static intptr_t g_modelNodeWalkUnusedScratch0;
 // GLOBAL: TIE98 0x580350
 static intptr_t g_modelNodeWalkUnusedScratch1;
 // GLOBAL: TIE98 0x580370
-static intptr_t g_curVertNormals;
+static const Vec3f* g_curVertNormals;
 // GLOBAL: TIE98 0x580358
 static intptr_t g_modelNodeWalkUnusedScratch2;
 // GLOBAL: TIE98 0x580340
@@ -269,72 +262,32 @@ static int g_curVertexCount;
 // GLOBAL: TIE98 0x580354
 static OptTextureDataTIE98* g_curTextureDesc;
 
-/* PORT: fallback material for host OPT nodes without a texture node. */
-static OptTextureDataTIE98 g_defaultMaterial = {
-	256, /* paletteAddress */
-	16,  /* paletteType */
-	0,   /* textureSize */
-	0,   /* dataSize */
-	8,   /* width */
-	8,   /* height */
-};
-/* PORT: host-owned storage backing the fallback material. */
+/* Fallback material for OPT nodes drawn before any texture node; its 8x8
+ * texels and shade tables follow the header in g_defaultTextureData. */
+// GLOBAL: TIE98 0x580378
+static OptTextureDataTIE98 g_defaultMaterial;
+// GLOBAL: TIE98 0x580390
 static uint8_t g_defaultTextureData[64 + 4096 + 8192];
-/* PORT: initialization state for the host fallback material. */
-static int g_defaultTextureInitialized;
-/* PORT: source colors used to build the host fallback shade table. */
-static uint8_t g_defaultTextureRgb24[8 * 8 * 3];
+// GLOBAL: TIE98 0x5833F4
+static OptTextureDataTIE98* g_defaultMaterialDesc;
+// GLOBAL: TIE98 0x4E42D8
+static const uint8_t g_defaultTextureRgb24[8 * 8 * 3] = {
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+};
 
 static int FlightModel_IsLightSegmentBlocked(FlightObject* object, const Vec3f* segment_start,
 											 const Vec3f* segment_end);
-
-/* RECOVERY HELPER: removes the texture-data binding duplicated by the
- * face-data and texture-node cases in FlightModel_Draw_OPT_Node. */
-static void FlightModel_BindTextureData(const Tie98OptimizedPolyObject* model, SceneMeshTIE98* mesh,
-										OptTextureDataTIE98* material) {
-	uint8_t* shade_table;
-
-	mesh->pMaterial = material;
-	if (material == &g_defaultMaterial) {
-		mesh->pTexels = g_defaultTextureData;
-		mesh->pPalette0 = g_defaultTextureData + 64;
-		mesh->pPalette1 = g_defaultTextureData + 64 + 4096;
-		return;
-	}
-
-	mesh->pTexels = (uint8_t*)material + sizeof *material;
-
-	if (material->paletteType == 0) {
-		shade_table = (uint8_t*)TieNativeOpt_ResolveAddress(model, material->paletteAddress, 1);
-	} else {
-		int base_size;
-
-		shade_table = mesh->pTexels;
-		base_size = material->width * material->height;
-		if (base_size == material->textureSize)
-			shade_table += material->dataSize;
-		else
-			shade_table += base_size;
-	}
-	if (g_useHardware3D) {
-		/* pPalette1 carries the runtime-built RGB565 shade tables (analyzed
-		 * level 0, level 8 base palette at +4096, overlay metadata) the
-		 * hardware draw path consumes; pPalette0 keeps the serialized shade
-		 * table and is only read by the software rasterizer. */
-		mesh->pPalette0 = shade_table;
-		mesh->pPalette1 = (uint8_t*)RenderTexture_GetHardwareShadeTables(
-			(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
-	} else if (g_flight16bppBytesPerPixel == 1) {
-		mesh->pPalette0 = (uint8_t*)RenderTexture_GetSoftwareShadeTable(
-			(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
-		mesh->pPalette1 = mesh->pPalette0 + 4096;
-	} else {
-		/* The 16-bit software span reads the serialized RGB565 shades at
-		 * pPalette0 + 4096, matching OptModel_BuildRuntimeHandle. */
-		mesh->pPalette0 = shade_table;
-		mesh->pPalette1 = shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES;
-	}
-}
 
 // FUNCTION: TIE98 0x427990
 static void Math_SetFpuSinglePrecisionMode(void) {
@@ -1114,12 +1067,6 @@ static void sw3d_ProjectMeshVerticesDistant(SceneMeshTIE98* mesh) {
 	g_projVertCount += mesh->projVertCursor;
 }
 
-static int RenderScene_HardwareStagingHasCapacity(int vertex_count, int triangle_count) {
-	return vertex_count >= 0 && triangle_count >= 0 &&
-		   g_d3dVertexCount <= TIE98_HARDWARE_VERTEX_CAPACITY - vertex_count &&
-		   g_d3dIndexCount <= TIE98_HARDWARE_TRIANGLE_CAPACITY - triangle_count;
-}
-
 // FUNCTION: TIE98 0x42B130
 static int RenderScene_EmitFlightVertex(int vertex_index, ProjVertexTIE98* vertices) {
 	ProjVertexTIE98* source;
@@ -1128,7 +1075,9 @@ static int RenderScene_EmitFlightVertex(int vertex_index, ProjVertexTIE98* verti
 	D3DTLVERTEX* output;
 	int intensity;
 
-	if (!RenderScene_HardwareStagingHasCapacity(1, 0))
+	/* PORT: bounds the host staging buffers allocated for the batch. */
+	if (g_d3dVertexCount > TIE98_HARDWARE_VERTEX_CAPACITY - 1 ||
+		g_d3dIndexCount > TIE98_HARDWARE_TRIANGLE_CAPACITY)
 		return -1;
 	source = &vertices[vertex_index];
 	w = source->w;
@@ -1161,12 +1110,16 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 	Std3DTextureSurface* opaque;
 	Std3DTextureSurface* color_key;
 	int face_iter;
+	/* PORT: the original reuses g_sceneEdgeList as this per-projection map of
+	 * emitted hardware vertices; the host edge list is sized per mesh, so the
+	 * display runtime owns a separately sized map. */
+	int* emitted_by_projection = Tie98Display_ReserveEmittedVertexMap((size_t)projection_end);
 
 	int i;
 
 	g_clipVertCursor = projection_end;
 	for (i = 0; i < projection_end; ++i)
-		g_emittedVertexByProjection[i] = -1;
+		emitted_by_projection[i] = -1;
 	face = &g_visFaceList[mesh->faceBaseIndex];
 	previous_texels = NULL;
 	opaque = NULL;
@@ -1293,10 +1246,9 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 			const int projected = g_clipIdxA[i];
 			int emitted;
 			if (projected < projection_end) {
-				if (g_emittedVertexByProjection[projected] == -1)
-					g_emittedVertexByProjection[projected] =
-						RenderScene_EmitFlightVertex(projected, vertices);
-				emitted = g_emittedVertexByProjection[projected];
+				if (emitted_by_projection[projected] == -1)
+					emitted_by_projection[projected] = RenderScene_EmitFlightVertex(projected, vertices);
+				emitted = emitted_by_projection[projected];
 			} else {
 				emitted = RenderScene_EmitFlightVertex(projected, vertices);
 			}
@@ -1346,7 +1298,10 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 		triangles_per_pass = g_clipCountA > 2 ? g_clipCountA - 2 : 0;
 		additional_vertices = color_key ? g_clipCountA : 0;
 		additional_triangles = triangles_per_pass * (color_key ? 2 : 1);
-		if (!RenderScene_HardwareStagingHasCapacity(additional_vertices, additional_triangles))
+		/* PORT: bounds the host staging buffers allocated for the batch. */
+		if (additional_vertices < 0 || additional_triangles < 0 ||
+			g_d3dVertexCount > TIE98_HARDWARE_VERTEX_CAPACITY - additional_vertices ||
+			g_d3dIndexCount > TIE98_HARDWARE_TRIANGLE_CAPACITY - additional_triangles)
 			return;
 
 		if (color_key) {
@@ -1709,51 +1664,6 @@ static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
 	right->lightIntensity = right_start_light;
 }
 
-/* RECOVERY HELPER: removes the repeated span-unlink sequence in
- * sw3d_InsertSpan. */
-static SceneSpanTIE98* sw3d_UnlinkSpan(SceneSpanTIE98** link, SceneSpanTIE98* span, int scan_y) {
-	span->pFace->pSpans[scan_y - span->pFace->yTop] = NULL;
-	*link = span->next;
-	return *link;
-}
-
-/* RECOVERY HELPER: removes the repeated start-edge adjustment and ordered
- * reinsertion sequence in sw3d_InsertSpan. */
-static int sw3d_MoveSpanStart(SceneSpanTIE98** link, SceneSpanTIE98* span, int start_x, int scan_y) {
-	SceneSpanTIE98* next;
-	SceneSpanTIE98** insert_link;
-
-	span->startLightIntensity += (float)(start_x - span->startX) * span->dLightIntensityDx;
-	span->startX = start_x;
-	next = span->next;
-	if (!next || next->startX >= span->startX)
-		return 0;
-
-	*link = next;
-	if (span->startX < next->endX) {
-		span->startLightIntensity += (float)(next->endX - span->startX) * span->dLightIntensityDx;
-		span->startX = next->endX;
-	}
-	insert_link = &next->next;
-	while (*insert_link && (*insert_link)->startX < span->startX) {
-		if (span->startX < (*insert_link)->endX) {
-			span->startLightIntensity +=
-				(float)((*insert_link)->endX - span->startX) * span->dLightIntensityDx;
-			span->startX = (*insert_link)->endX;
-		}
-		if (span->startX >= span->endX)
-			break;
-		insert_link = &(*insert_link)->next;
-	}
-	if (span->startX >= span->endX) {
-		span->pFace->pSpans[scan_y - span->pFace->yTop] = NULL;
-	} else {
-		span->next = *insert_link;
-		*insert_link = span;
-	}
-	return 1;
-}
-
 // FUNCTION: TIE98 0x43E2C0
 static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTIE98* face) {
 	int start_x;
@@ -1761,6 +1671,8 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 	SceneSpanTIE98** link;
 	SceneSpanTIE98* current;
 	SceneSpanTIE98* span;
+	SceneSpanTIE98* next;
+	SceneSpanTIE98** insert_link;
 
 	face->pSpans[scan_y - face->yTop] = NULL;
 	start_x = left_x < 0.0f ? 0 : (int)left_x;
@@ -1815,9 +1727,11 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 				continue;
 			}
 			current->endX = start_x;
-			if (current->endX == current->startX)
-				current = sw3d_UnlinkSpan(link, current, scan_y);
-			else {
+			if (current->endX == current->startX) {
+				current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+				*link = current->next;
+				current = *link;
+			} else {
 				link = &current->next;
 				current = current->next;
 			}
@@ -1865,9 +1779,11 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 				continue;
 			}
 			current->endX = start_x;
-			if (current->endX == current->startX)
-				current = sw3d_UnlinkSpan(link, current, scan_y);
-			else {
+			if (current->endX == current->startX) {
+				current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+				*link = current->next;
+				current = *link;
+			} else {
 				link = &current->next;
 				current = current->next;
 			}
@@ -1900,9 +1816,11 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 		current_end_depth = old_depth + (float)overlap_width * current_slope;
 		if (new_end_depth >= current_end_depth) {
 			current->endX = start_x;
-			if (current->endX == current->startX)
-				current = sw3d_UnlinkSpan(link, current, scan_y);
-			else {
+			if (current->endX == current->startX) {
+				current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+				*link = current->next;
+				current = *link;
+			} else {
 				link = &current->next;
 				current = current->next;
 			}
@@ -1921,9 +1839,11 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 		if (crossing_from_right <= current_left_width && crossing_from_right <= new_left_width &&
 			crossing_from_right <= new_right_width) {
 			current->endX = start_x;
-			if (current->endX == current->startX)
-				current = sw3d_UnlinkSpan(link, current, scan_y);
-			else {
+			if (current->endX == current->startX) {
+				current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+				*link = current->next;
+				current = *link;
+			} else {
 				link = &current->next;
 				current = current->next;
 			}
@@ -1932,8 +1852,35 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 		if (crossing_from_right >= current_left_width &&
 			(current_left_width > new_left_width || current_left_width > new_right_width)) {
 			const int moved_start = current->endX - crossing_from_right;
-			if (!sw3d_MoveSpanStart(link, current, moved_start, scan_y))
+			current->startLightIntensity +=
+				(float)(moved_start - current->startX) * current->dLightIntensityDx;
+			current->startX = moved_start;
+			next = current->next;
+			if (!next || next->startX >= current->startX)
 				break;
+			*link = next;
+			if (current->startX < next->endX) {
+				current->startLightIntensity +=
+					(float)(next->endX - current->startX) * current->dLightIntensityDx;
+				current->startX = next->endX;
+			}
+			insert_link = &next->next;
+			while (*insert_link && (*insert_link)->startX < current->startX) {
+				if (current->startX < (*insert_link)->endX) {
+					current->startLightIntensity +=
+						(float)((*insert_link)->endX - current->startX) * current->dLightIntensityDx;
+					current->startX = (*insert_link)->endX;
+				}
+				if (current->startX >= current->endX)
+					break;
+				insert_link = &(*insert_link)->next;
+			}
+			if (current->startX >= current->endX) {
+				current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+			} else {
+				current->next = *insert_link;
+				*insert_link = current;
+			}
 			current = *link;
 			continue;
 		}
@@ -1995,10 +1942,41 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 		}
 		if (face->minVertW >= current_face->maxVertW) {
 			if (current->endX <= span->endX) {
-				current = sw3d_UnlinkSpan(link, current, scan_y);
+				{
+					current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+					*link = current->next;
+					current = *link;
+				}
 				continue;
 			}
-			if (sw3d_MoveSpanStart(link, current, span->endX, scan_y)) {
+			current->startLightIntensity +=
+				(float)(span->endX - current->startX) * current->dLightIntensityDx;
+			current->startX = span->endX;
+			next = current->next;
+			if (next && next->startX < current->startX) {
+				*link = next;
+				if (current->startX < next->endX) {
+					current->startLightIntensity +=
+						(float)(next->endX - current->startX) * current->dLightIntensityDx;
+					current->startX = next->endX;
+				}
+				insert_link = &next->next;
+				while (*insert_link && (*insert_link)->startX < current->startX) {
+					if (current->startX < (*insert_link)->endX) {
+						current->startLightIntensity +=
+							(float)((*insert_link)->endX - current->startX) * current->dLightIntensityDx;
+						current->startX = (*insert_link)->endX;
+					}
+					if (current->startX >= current->endX)
+						break;
+					insert_link = &(*insert_link)->next;
+				}
+				if (current->startX >= current->endX) {
+					current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+				} else {
+					current->next = *insert_link;
+					*insert_link = current;
+				}
 				current = *link;
 				continue;
 			}
@@ -2049,9 +2027,11 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 				if (crossing_from_right < 0)
 					crossing_from_right = 0;
 				current->endX -= crossing_from_right;
-				if (current->endX <= current->startX)
-					current = sw3d_UnlinkSpan(link, current, scan_y);
-				else {
+				if (current->endX <= current->startX) {
+					current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+					*link = current->next;
+					current = *link;
+				} else {
 					link = &current->next;
 					current = current->next;
 				}
@@ -2078,15 +2058,44 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 			}
 			if (new_visible_width >= current_right_width) {
 				current->endX = span->endX - crossing_from_right;
-				if (current->endX <= current->startX)
-					current = sw3d_UnlinkSpan(link, current, scan_y);
-				else {
+				if (current->endX <= current->startX) {
+					current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+					*link = current->next;
+					current = *link;
+				} else {
 					link = &current->next;
 					current = current->next;
 				}
 				continue;
 			}
-			if (sw3d_MoveSpanStart(link, current, span->endX, scan_y)) {
+			current->startLightIntensity +=
+				(float)(span->endX - current->startX) * current->dLightIntensityDx;
+			current->startX = span->endX;
+			next = current->next;
+			if (next && next->startX < current->startX) {
+				*link = next;
+				if (current->startX < next->endX) {
+					current->startLightIntensity +=
+						(float)(next->endX - current->startX) * current->dLightIntensityDx;
+					current->startX = next->endX;
+				}
+				insert_link = &next->next;
+				while (*insert_link && (*insert_link)->startX < current->startX) {
+					if (current->startX < (*insert_link)->endX) {
+						current->startLightIntensity +=
+							(float)((*insert_link)->endX - current->startX) * current->dLightIntensityDx;
+						current->startX = (*insert_link)->endX;
+					}
+					if (current->startX >= current->endX)
+						break;
+					insert_link = &(*insert_link)->next;
+				}
+				if (current->startX >= current->endX) {
+					current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+				} else {
+					current->next = *insert_link;
+					*insert_link = current;
+				}
 				current = *link;
 				continue;
 			}
@@ -2097,10 +2106,41 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 
 		if (new_slope >= current_slope) {
 			if (current->endX <= span->endX) {
-				current = sw3d_UnlinkSpan(link, current, scan_y);
+				{
+					current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+					*link = current->next;
+					current = *link;
+				}
 				continue;
 			}
-			if (sw3d_MoveSpanStart(link, current, span->endX, scan_y)) {
+			current->startLightIntensity +=
+				(float)(span->endX - current->startX) * current->dLightIntensityDx;
+			current->startX = span->endX;
+			next = current->next;
+			if (next && next->startX < current->startX) {
+				*link = next;
+				if (current->startX < next->endX) {
+					current->startLightIntensity +=
+						(float)(next->endX - current->startX) * current->dLightIntensityDx;
+					current->startX = next->endX;
+				}
+				insert_link = &next->next;
+				while (*insert_link && (*insert_link)->startX < current->startX) {
+					if (current->startX < (*insert_link)->endX) {
+						current->startLightIntensity +=
+							(float)((*insert_link)->endX - current->startX) * current->dLightIntensityDx;
+						current->startX = (*insert_link)->endX;
+					}
+					if (current->startX >= current->endX)
+						break;
+					insert_link = &(*insert_link)->next;
+				}
+				if (current->startX >= current->endX) {
+					current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+				} else {
+					current->next = *insert_link;
+					*insert_link = current;
+				}
 				current = *link;
 				continue;
 			}
@@ -2125,7 +2165,34 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 					visible_width = overlap_width;
 				moved_start = current->startX + visible_width;
 			}
-			if (sw3d_MoveSpanStart(link, current, moved_start, scan_y)) {
+			current->startLightIntensity +=
+				(float)(moved_start - current->startX) * current->dLightIntensityDx;
+			current->startX = moved_start;
+			next = current->next;
+			if (next && next->startX < current->startX) {
+				*link = next;
+				if (current->startX < next->endX) {
+					current->startLightIntensity +=
+						(float)(next->endX - current->startX) * current->dLightIntensityDx;
+					current->startX = next->endX;
+				}
+				insert_link = &next->next;
+				while (*insert_link && (*insert_link)->startX < current->startX) {
+					if (current->startX < (*insert_link)->endX) {
+						current->startLightIntensity +=
+							(float)((*insert_link)->endX - current->startX) * current->dLightIntensityDx;
+						current->startX = (*insert_link)->endX;
+					}
+					if (current->startX >= current->endX)
+						break;
+					insert_link = &(*insert_link)->next;
+				}
+				if (current->startX >= current->endX) {
+					current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+				} else {
+					current->next = *insert_link;
+					*insert_link = current;
+				}
 				current = *link;
 				continue;
 			}
@@ -2138,7 +2205,11 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 		new_end_depth = new_depth + (float)overlap_width * new_slope;
 		current_end_depth = current_depth + (float)overlap_width * current_slope;
 		if (new_end_depth >= current_end_depth) {
-			current = sw3d_UnlinkSpan(link, current, scan_y);
+			{
+				current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+				*link = current->next;
+				current = *link;
+			}
 			continue;
 		}
 		crossing_from_right = (int)((new_end_depth - current_end_depth) / (new_slope - current_slope));
@@ -2149,10 +2220,40 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 			moved_width = 0;
 		moved_start = current->startX + moved_width;
 		if (moved_start >= current->endX) {
-			current = sw3d_UnlinkSpan(link, current, scan_y);
+			{
+				current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+				*link = current->next;
+				current = *link;
+			}
 			continue;
 		}
-		if (sw3d_MoveSpanStart(link, current, moved_start, scan_y)) {
+		current->startLightIntensity += (float)(moved_start - current->startX) * current->dLightIntensityDx;
+		current->startX = moved_start;
+		next = current->next;
+		if (next && next->startX < current->startX) {
+			*link = next;
+			if (current->startX < next->endX) {
+				current->startLightIntensity +=
+					(float)(next->endX - current->startX) * current->dLightIntensityDx;
+				current->startX = next->endX;
+			}
+			insert_link = &next->next;
+			while (*insert_link && (*insert_link)->startX < current->startX) {
+				if (current->startX < (*insert_link)->endX) {
+					current->startLightIntensity +=
+						(float)((*insert_link)->endX - current->startX) * current->dLightIntensityDx;
+					current->startX = (*insert_link)->endX;
+				}
+				if (current->startX >= current->endX)
+					break;
+				insert_link = &(*insert_link)->next;
+			}
+			if (current->startX >= current->endX) {
+				current->pFace->pSpans[scan_y - current->pFace->yTop] = NULL;
+			} else {
+				current->next = *insert_link;
+				*insert_link = current;
+			}
 			current = *link;
 			continue;
 		}
@@ -2286,56 +2387,6 @@ static void RenderScene_DrawSceneMesh(SceneMeshTIE98* mesh) {
 	}
 }
 
-/* RECOVERY HELPER: source-shaped form of the eight repeated TL-quad emission
- * blocks in TIE98 Hud_DrawBoxOverlayHW. */
-static int16_t Hud_EmitBoxOverlayQuadHW(float left, float top, float right, float bottom, float depth,
-										uint32_t color, int vertical) {
-	const int base_vertex = g_d3dVertexCount;
-	D3DTLVERTEX* vertices = &g_flightVertexBuffer[base_vertex];
-	int i;
-	Std3DRenderTri* triangles;
-
-	vertices[0].sx = g_flightVpOriginX + left;
-	vertices[0].sy = g_flightVpOriginY + top;
-	if (vertical) {
-		vertices[1].sx = g_flightVpOriginX + left;
-		vertices[1].sy = g_flightVpOriginY + bottom;
-		vertices[2].sx = g_flightVpOriginX + right;
-		vertices[2].sy = g_flightVpOriginY + bottom;
-		vertices[3].sx = g_flightVpOriginX + right;
-		vertices[3].sy = g_flightVpOriginY + top;
-	} else {
-		vertices[1].sx = g_flightVpOriginX + right;
-		vertices[1].sy = g_flightVpOriginY + top;
-		vertices[2].sx = g_flightVpOriginX + right;
-		vertices[2].sy = g_flightVpOriginY + bottom;
-		vertices[3].sx = g_flightVpOriginX + left;
-		vertices[3].sy = g_flightVpOriginY + bottom;
-	}
-	for (i = 0; i < 4; ++i) {
-		vertices[i].sz = depth;
-		vertices[i].rhw = depth;
-		vertices[i].color = color;
-		vertices[i].specular = 0;
-		vertices[i].tu = 0.0f;
-		vertices[i].tv = 0.0f;
-	}
-	triangles = &g_triBuffer[g_d3dIndexCount];
-	triangles[0].v0 = base_vertex;
-	triangles[0].v1 = base_vertex + 1;
-	triangles[0].v2 = base_vertex + 2;
-	triangles[0].flags = (Std3DRenderStateFlags)38912;
-	triangles[0].texture = NULL;
-	triangles[1].v0 = base_vertex;
-	triangles[1].v1 = base_vertex + 2;
-	triangles[1].v2 = base_vertex + 3;
-	triangles[1].flags = (Std3DRenderStateFlags)38912;
-	triangles[1].texture = NULL;
-	g_d3dIndexCount += 2;
-	g_d3dVertexCount += 4;
-	return (int16_t)g_d3dVertexCount;
-}
-
 // FUNCTION: TIE98 0x453B90
 static void FlightMap_DrawObjectBoxSpan(int start_x, int end_x, int y, uint8_t color_index) {
 	uint8_t* row = vgapointer + (size_t)g_surfacePitch * (displaycorner_lines + (uint32_t)y);
@@ -2451,6 +2502,10 @@ int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_inde
 	uint32_t color;
 	float screen_depth;
 	int16_t result;
+	int quad_base;
+	D3DTLVERTEX* quad;
+	Std3DRenderTri* quad_triangles;
+	int quad_vertex;
 
 	if (depth == 1 && width == 4 && height == 4) {
 		int start = x;
@@ -2515,64 +2570,320 @@ int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_inde
 		int end = x + corner_width;
 		if (end >= pixelswide)
 			end = pixelswide - 1;
-		if (start < end)
-			result = Hud_EmitBoxOverlayQuadHW(start, y, end, y + 1, screen_depth, color, 0);
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)start;
+			quad[0].sy = g_flightVpOriginY + (float)y;
+			quad[1].sx = g_flightVpOriginX + (float)end;
+			quad[1].sy = g_flightVpOriginY + (float)y;
+			quad[2].sx = g_flightVpOriginX + (float)end;
+			quad[2].sy = g_flightVpOriginY + (float)(y + 1);
+			quad[3].sx = g_flightVpOriginX + (float)start;
+			quad[3].sy = g_flightVpOriginY + (float)(y + 1);
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
 		start = right - corner_width;
 		end = right;
 		if (start < 0)
 			start = 0;
 		if (end >= pixelswide)
 			end = pixelswide - 1;
-		if (start < end)
-			result = Hud_EmitBoxOverlayQuadHW(start, y, end, y + 1, screen_depth, color, 0);
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)start;
+			quad[0].sy = g_flightVpOriginY + (float)y;
+			quad[1].sx = g_flightVpOriginX + (float)end;
+			quad[1].sy = g_flightVpOriginY + (float)y;
+			quad[2].sx = g_flightVpOriginX + (float)end;
+			quad[2].sy = g_flightVpOriginY + (float)(y + 1);
+			quad[3].sx = g_flightVpOriginX + (float)start;
+			quad[3].sy = g_flightVpOriginY + (float)(y + 1);
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
 	}
 	if (bottom >= 0 && bottom < pixelsdeep) {
 		int start = x < 0 ? 0 : x;
 		int end = x + corner_width;
 		if (end >= pixelswide)
 			end = pixelswide - 1;
-		if (start < end)
-			result = Hud_EmitBoxOverlayQuadHW(start, bottom, end, bottom + 1, screen_depth, color, 0);
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)start;
+			quad[0].sy = g_flightVpOriginY + (float)bottom;
+			quad[1].sx = g_flightVpOriginX + (float)end;
+			quad[1].sy = g_flightVpOriginY + (float)bottom;
+			quad[2].sx = g_flightVpOriginX + (float)end;
+			quad[2].sy = g_flightVpOriginY + (float)(bottom + 1);
+			quad[3].sx = g_flightVpOriginX + (float)start;
+			quad[3].sy = g_flightVpOriginY + (float)(bottom + 1);
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
 		start = right - corner_width;
 		end = right + 1;
 		if (start < 0)
 			start = 0;
 		if (end >= pixelswide)
 			end = pixelswide - 1;
-		if (start < end)
-			result = Hud_EmitBoxOverlayQuadHW(start, bottom, end, bottom + 1, screen_depth, color, 0);
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)start;
+			quad[0].sy = g_flightVpOriginY + (float)bottom;
+			quad[1].sx = g_flightVpOriginX + (float)end;
+			quad[1].sy = g_flightVpOriginY + (float)bottom;
+			quad[2].sx = g_flightVpOriginX + (float)end;
+			quad[2].sy = g_flightVpOriginY + (float)(bottom + 1);
+			quad[3].sx = g_flightVpOriginX + (float)start;
+			quad[3].sy = g_flightVpOriginY + (float)(bottom + 1);
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
 	}
 	if (x >= 0 && x < pixelswide) {
 		int start = y < 0 ? 0 : y;
 		int end = y + corner_height;
 		if (end >= pixelsdeep)
 			end = pixelsdeep - 1;
-		if (start < end)
-			result = Hud_EmitBoxOverlayQuadHW(x, start, x + 1, end, screen_depth, color, 1);
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)x;
+			quad[0].sy = g_flightVpOriginY + (float)start;
+			quad[1].sx = g_flightVpOriginX + (float)x;
+			quad[1].sy = g_flightVpOriginY + (float)end;
+			quad[2].sx = g_flightVpOriginX + (float)(x + 1);
+			quad[2].sy = g_flightVpOriginY + (float)end;
+			quad[3].sx = g_flightVpOriginX + (float)(x + 1);
+			quad[3].sy = g_flightVpOriginY + (float)start;
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
 		start = bottom - corner_height;
 		end = bottom;
 		if (start < 0)
 			start = 0;
 		if (end >= pixelsdeep)
 			end = pixelsdeep - 1;
-		if (start < end)
-			result = Hud_EmitBoxOverlayQuadHW(x, start, x + 1, end, screen_depth, color, 1);
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)x;
+			quad[0].sy = g_flightVpOriginY + (float)start;
+			quad[1].sx = g_flightVpOriginX + (float)x;
+			quad[1].sy = g_flightVpOriginY + (float)end;
+			quad[2].sx = g_flightVpOriginX + (float)(x + 1);
+			quad[2].sy = g_flightVpOriginY + (float)end;
+			quad[3].sx = g_flightVpOriginX + (float)(x + 1);
+			quad[3].sy = g_flightVpOriginY + (float)start;
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
 	}
 	if (right >= 0 && right < pixelswide) {
 		int start = y < 0 ? 0 : y;
 		int end = y + corner_height;
 		if (end >= pixelsdeep)
 			end = pixelsdeep - 1;
-		if (start < end)
-			result = Hud_EmitBoxOverlayQuadHW(right, start, right + 1, end, screen_depth, color, 1);
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)right;
+			quad[0].sy = g_flightVpOriginY + (float)start;
+			quad[1].sx = g_flightVpOriginX + (float)right;
+			quad[1].sy = g_flightVpOriginY + (float)end;
+			quad[2].sx = g_flightVpOriginX + (float)(right + 1);
+			quad[2].sy = g_flightVpOriginY + (float)end;
+			quad[3].sx = g_flightVpOriginX + (float)(right + 1);
+			quad[3].sy = g_flightVpOriginY + (float)start;
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
 		start = bottom - corner_height;
 		end = bottom;
 		if (start < 0)
 			start = 0;
 		if (end >= pixelsdeep)
 			end = pixelsdeep - 1;
-		if (start < end)
-			result = Hud_EmitBoxOverlayQuadHW(right, start, right + 1, end, screen_depth, color, 1);
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)right;
+			quad[0].sy = g_flightVpOriginY + (float)start;
+			quad[1].sx = g_flightVpOriginX + (float)right;
+			quad[1].sy = g_flightVpOriginY + (float)end;
+			quad[2].sx = g_flightVpOriginX + (float)(right + 1);
+			quad[2].sy = g_flightVpOriginY + (float)end;
+			quad[3].sx = g_flightVpOriginX + (float)(right + 1);
+			quad[3].sy = g_flightVpOriginY + (float)start;
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
 	}
 	return result;
 }
@@ -3307,7 +3618,7 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 				mesh->pModelVerts = (Vec3f*)node->param2;
 				break;
 			case TIE98_OPT_NODE_VERTEX_NORMALS:
-				g_curVertNormals = (intptr_t)node->param2;
+				g_curVertNormals = (const Vec3f*)node->param2;
 				mesh->pVertNormals = (Vec3f*)node->param2;
 				break;
 			default:
@@ -3320,7 +3631,7 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 	child_mesh = *mesh;
 	g_modelNodeWalkUnusedScratch0 = 0;
 	g_modelNodeWalkUnusedScratch1 = 0;
-	g_curVertNormals = 0;
+	g_curVertNormals = NULL;
 	g_modelNodeWalkUnusedScratch2 = 0;
 	g_curMeshFlags = 0;
 	g_curVertexCount = 0;
@@ -3357,7 +3668,7 @@ static int FlightModel_IsLightSegmentBlocked(FlightObject* object, const Vec3f* 
 	mesh.orient.m[8] = 1.0f;
 	g_modelNodeWalkUnusedScratch0 = 0;
 	g_modelNodeWalkUnusedScratch1 = 0;
-	g_curVertNormals = 0;
+	g_curVertNormals = NULL;
 	g_modelNodeWalkUnusedScratch2 = 0;
 	g_curMeshFlags = 0;
 	g_curVertexCount = 0;
@@ -3402,8 +3713,8 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 	if (!node)
 		return;
 	while (node->type == TIE98_OPT_NODE_REFERENCE) {
-		if (node->param1)
-			node = (const Tie98OptNode*)node->param1;
+		if (node->reference)
+			node = node->reference;
 		else
 			node = OptModel_FindNodeByNameInModel(model, (const char*)node->param2);
 		if (!node)
@@ -3434,8 +3745,49 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 				mesh->pFaceNormals = (Vec3f*)(mesh->pFaceGeom + mesh->faceCount);
 				mesh->pFaceTexturing = (FaceTextureGradientsTIE98*)(mesh->pFaceNormals + mesh->faceCount);
 				inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + mesh->faceCount);
-				if (!mesh->pMaterial)
-					FlightModel_BindTextureData(model, mesh, g_curTextureDesc);
+				if (!mesh->pMaterial) {
+					uint8_t* shade_table;
+
+					mesh->pMaterial = g_curTextureDesc;
+					if (g_curTextureDesc == &g_defaultMaterial) {
+						mesh->pTexels = g_defaultTextureData;
+						mesh->pPalette0 = g_defaultTextureData + 64;
+						mesh->pPalette1 = g_defaultTextureData + 64 + 4096;
+					} else {
+						mesh->pTexels = (uint8_t*)g_curTextureDesc + sizeof *g_curTextureDesc;
+						if (g_curTextureDesc->paletteType == 0) {
+							shade_table = (uint8_t*)TieNativeOpt_ResolveAddress(
+								model, g_curTextureDesc->paletteAddress, 1);
+						} else {
+							int base_size;
+
+							shade_table = mesh->pTexels;
+							base_size = g_curTextureDesc->width * g_curTextureDesc->height;
+							if (base_size == g_curTextureDesc->textureSize)
+								shade_table += g_curTextureDesc->dataSize;
+							else
+								shade_table += base_size;
+						}
+						if (g_useHardware3D) {
+							/* pPalette1 carries the runtime-built RGB565 shade tables (analyzed
+							 * level 0, level 8 base palette at +4096, overlay metadata) the
+							 * hardware draw path consumes; pPalette0 keeps the serialized shade
+							 * table and is only read by the software rasterizer. */
+							mesh->pPalette0 = shade_table;
+							mesh->pPalette1 = (uint8_t*)RenderTexture_GetHardwareShadeTables(
+								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
+						} else if (g_flight16bppBytesPerPixel == 1) {
+							mesh->pPalette0 = (uint8_t*)RenderTexture_GetSoftwareShadeTable(
+								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
+							mesh->pPalette1 = mesh->pPalette0 + 4096;
+						} else {
+							/* The 16-bit software span reads the serialized RGB565 shades at
+							 * pPalette0 + 4096, matching OptModel_BuildRuntimeHandle. */
+							mesh->pPalette0 = shade_table;
+							mesh->pPalette1 = shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES;
+						}
+					}
+				}
 				if (mesh->pVertNormals) {
 					RenderScene_DrawSceneMesh(mesh);
 				} else {
@@ -3515,15 +3867,12 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 					g_projVertList =
 						realloc(g_projVertList, (size_t)g_projVertCapacity * sizeof *g_projVertList);
 					g_vertexRemap = realloc(g_vertexRemap, (size_t)node->param1 * sizeof *g_vertexRemap);
-					g_emittedVertexByProjection =
-						realloc(g_emittedVertexByProjection,
-								(size_t)g_projVertCapacity * sizeof *g_emittedVertexByProjection);
 				}
 				mesh->vertexCount = (int)node->param1;
 				mesh->pModelVerts = (Vec3f*)node->param2;
 				break;
 			case TIE98_OPT_NODE_VERTEX_NORMALS:
-				g_curVertNormals = (intptr_t)node->param2;
+				g_curVertNormals = (const Vec3f*)node->param2;
 				mesh->pVertNormals = (Vec3f*)node->param2;
 				break;
 			case TIE98_OPT_NODE_TEXTURE_COORDINATES:
@@ -3543,7 +3892,49 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 			case TIE98_OPT_NODE_TEXTURE: {
 				mesh->textureName = node->name;
 				g_curTextureDesc = (OptTextureDataTIE98*)node->param2;
-				FlightModel_BindTextureData(model, mesh, g_curTextureDesc);
+				{
+					uint8_t* shade_table;
+
+					mesh->pMaterial = g_curTextureDesc;
+					if (g_curTextureDesc == &g_defaultMaterial) {
+						mesh->pTexels = g_defaultTextureData;
+						mesh->pPalette0 = g_defaultTextureData + 64;
+						mesh->pPalette1 = g_defaultTextureData + 64 + 4096;
+					} else {
+						mesh->pTexels = (uint8_t*)g_curTextureDesc + sizeof *g_curTextureDesc;
+						if (g_curTextureDesc->paletteType == 0) {
+							shade_table = (uint8_t*)TieNativeOpt_ResolveAddress(
+								model, g_curTextureDesc->paletteAddress, 1);
+						} else {
+							int base_size;
+
+							shade_table = mesh->pTexels;
+							base_size = g_curTextureDesc->width * g_curTextureDesc->height;
+							if (base_size == g_curTextureDesc->textureSize)
+								shade_table += g_curTextureDesc->dataSize;
+							else
+								shade_table += base_size;
+						}
+						if (g_useHardware3D) {
+							/* pPalette1 carries the runtime-built RGB565 shade tables (analyzed
+							 * level 0, level 8 base palette at +4096, overlay metadata) the
+							 * hardware draw path consumes; pPalette0 keeps the serialized shade
+							 * table and is only read by the software rasterizer. */
+							mesh->pPalette0 = shade_table;
+							mesh->pPalette1 = (uint8_t*)RenderTexture_GetHardwareShadeTables(
+								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
+						} else if (g_flight16bppBytesPerPixel == 1) {
+							mesh->pPalette0 = (uint8_t*)RenderTexture_GetSoftwareShadeTable(
+								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
+							mesh->pPalette1 = mesh->pPalette0 + 4096;
+						} else {
+							/* The 16-bit software span reads the serialized RGB565 shades at
+							 * pPalette0 + 4096, matching OptModel_BuildRuntimeHandle. */
+							mesh->pPalette0 = shade_table;
+							mesh->pPalette1 = shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES;
+						}
+					}
+				}
 				break;
 			}
 			case TIE98_OPT_NODE_FACE_GROUP: {
@@ -3636,63 +4027,13 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 	child_mesh = *mesh;
 	g_modelNodeWalkUnusedScratch0 = 0;
 	g_modelNodeWalkUnusedScratch1 = 0;
-	g_curVertNormals = 0;
+	g_curVertNormals = NULL;
 	g_modelNodeWalkUnusedScratch2 = 0;
 	g_curMeshFlags = 0;
 	g_curVertexCount = 0;
 	for (i = 0; i < node->child_count; ++i) {
 		++g_curLayerId;
 		FlightModel_Draw_OPT_Node(model, node->children[i], &child_mesh);
-	}
-}
-
-/* RECOVERY HELPER: removes the SceneMesh initialization duplicated by
- * TIE98 FlightModel_Draw_Object and FlightModel_Draw_Object_Mesh. */
-static void FlightModel_Init_Object_Mesh(SceneMeshTIE98* mesh, FlightObject* object,
-										 int full_width_position) {
-	int row;
-	int column;
-
-	memset(mesh, 0, sizeof *mesh);
-	mesh->pObject = object;
-	/* PORT: when full_width_position is false, TIE98 reads a compact position
-	 * overlay from ObjectRecord. tie_core stores every object in the recovered
-	 * TIE95 full-width layout, so both source representations resolve here. */
-	(void)full_width_position;
-	mesh->viewPos.x = (float)(object->world_x - camera.x);
-	mesh->viewPos.y = (float)(object->world_y - camera.y);
-	mesh->viewPos.z = (float)(object->world_z - camera.z);
-	mesh->viewOrient.m[0] = (float)worldeyeA1 / 32768.0f;
-	mesh->viewOrient.m[1] = (float)worldeyeA2 / 32768.0f;
-	mesh->viewOrient.m[2] = (float)worldeyeA3 / 32768.0f;
-	mesh->viewOrient.m[3] = (float)worldeyeB1 / 32768.0f;
-	mesh->viewOrient.m[4] = (float)worldeyeB2 / 32768.0f;
-	mesh->viewOrient.m[5] = (float)worldeyeB3 / 32768.0f;
-	mesh->viewOrient.m[6] = (float)worldeyeC1 / 32768.0f;
-	mesh->viewOrient.m[7] = (float)worldeyeC2 / 32768.0f;
-	mesh->viewOrient.m[8] = (float)worldeyeC3 / 32768.0f;
-	Math3D_RotateVec3(&mesh->viewPos, &mesh->viewOrient);
-
-	mesh->viewOrient.m[0] = (float)rotworldeyeA1 / 32768.0f;
-	mesh->viewOrient.m[1] = (float)rotworldeyeA2 / 32768.0f;
-	mesh->viewOrient.m[2] = (float)rotworldeyeA3 / 32768.0f;
-	mesh->viewOrient.m[3] = (float)rotworldeyeB1 / 32768.0f;
-	mesh->viewOrient.m[4] = (float)rotworldeyeB2 / 32768.0f;
-	mesh->viewOrient.m[5] = (float)rotworldeyeB3 / 32768.0f;
-	mesh->viewOrient.m[6] = (float)rotworldeyeC1 / 32768.0f;
-	mesh->viewOrient.m[7] = (float)rotworldeyeC2 / 32768.0f;
-	mesh->viewOrient.m[8] = (float)rotworldeyeC3 / 32768.0f;
-	for (row = 0; row < 3; ++row)
-		for (column = 0; column < 3; ++column)
-			mesh->orient.m[row * 3 + column] = mesh->viewOrient.m[column * 3 + row];
-	mesh->pos.x = -mesh->viewPos.x;
-	mesh->pos.y = -mesh->viewPos.y;
-	mesh->pos.z = -mesh->viewPos.z;
-	Math3D_RotateVec3(&mesh->pos, &mesh->orient);
-	if (!g_defaultTextureInitialized) {
-		memset(g_defaultTextureRgb24, 255, sizeof g_defaultTextureRgb24);
-		ModelTexture_BuildPalettedShadeTable(g_defaultTextureData, g_defaultTextureRgb24, 8, 8);
-		g_defaultTextureInitialized = 1;
 	}
 }
 
@@ -3704,17 +4045,61 @@ void FlightModel_Draw_Object(FlightObject* object) {
 	SceneMeshTIE98 mesh;
 	int mesh_ordinal;
 	int root;
+	int row;
+	int column;
 
 	g_nodeSwitchIndex = model_has_component_state ? object->decal_color : 0;
 	model = g_flightModelOverride ? g_flightModelOverride : TieNativeOpt_Acquire(model_type);
 	if (!model)
 		return;
 
-	FlightModel_Init_Object_Mesh(&mesh, object, model_type == 0 || model_has_component_state);
-	g_curTextureDesc = &g_defaultMaterial;
+	memset(&mesh, 0, sizeof mesh);
+	mesh.pObject = object;
+	/* PORT: TIE98 reads a compact position overlay from ObjectRecord for
+	 * models without component state. tie_core stores every object in the
+	 * recovered TIE95 full-width layout, so both representations resolve here. */
+	mesh.viewPos.x = (float)(object->world_x - camera.x);
+	mesh.viewPos.y = (float)(object->world_y - camera.y);
+	mesh.viewPos.z = (float)(object->world_z - camera.z);
+	mesh.viewOrient.m[0] = (float)worldeyeA1 / 32768.0f;
+	mesh.viewOrient.m[1] = (float)worldeyeA2 / 32768.0f;
+	mesh.viewOrient.m[2] = (float)worldeyeA3 / 32768.0f;
+	mesh.viewOrient.m[3] = (float)worldeyeB1 / 32768.0f;
+	mesh.viewOrient.m[4] = (float)worldeyeB2 / 32768.0f;
+	mesh.viewOrient.m[5] = (float)worldeyeB3 / 32768.0f;
+	mesh.viewOrient.m[6] = (float)worldeyeC1 / 32768.0f;
+	mesh.viewOrient.m[7] = (float)worldeyeC2 / 32768.0f;
+	mesh.viewOrient.m[8] = (float)worldeyeC3 / 32768.0f;
+	Math3D_RotateVec3(&mesh.viewPos, &mesh.viewOrient);
+
+	mesh.viewOrient.m[0] = (float)rotworldeyeA1 / 32768.0f;
+	mesh.viewOrient.m[1] = (float)rotworldeyeA2 / 32768.0f;
+	mesh.viewOrient.m[2] = (float)rotworldeyeA3 / 32768.0f;
+	mesh.viewOrient.m[3] = (float)rotworldeyeB1 / 32768.0f;
+	mesh.viewOrient.m[4] = (float)rotworldeyeB2 / 32768.0f;
+	mesh.viewOrient.m[5] = (float)rotworldeyeB3 / 32768.0f;
+	mesh.viewOrient.m[6] = (float)rotworldeyeC1 / 32768.0f;
+	mesh.viewOrient.m[7] = (float)rotworldeyeC2 / 32768.0f;
+	mesh.viewOrient.m[8] = (float)rotworldeyeC3 / 32768.0f;
+	for (row = 0; row < 3; ++row)
+		for (column = 0; column < 3; ++column)
+			mesh.orient.m[row * 3 + column] = mesh.viewOrient.m[column * 3 + row];
+	mesh.pos.x = -mesh.viewPos.x;
+	mesh.pos.y = -mesh.viewPos.y;
+	mesh.pos.z = -mesh.viewPos.z;
+	Math3D_RotateVec3(&mesh.pos, &mesh.orient);
 	g_modelNodeWalkUnusedScratch0 = 0;
+	if (!g_defaultMaterialDesc) {
+		g_defaultMaterialDesc = &g_defaultMaterial;
+		g_defaultMaterial.height = 8;
+		g_defaultMaterial.width = 8;
+		g_defaultMaterial.paletteType = 16;
+		g_defaultMaterial.paletteAddress = 256;
+		ModelTexture_BuildPalettedShadeTable(g_defaultTextureData, g_defaultTextureRgb24, 8, 8);
+	}
 	g_modelNodeWalkUnusedScratch1 = 0;
-	g_curVertNormals = 0;
+	g_curTextureDesc = g_defaultMaterialDesc;
+	g_curVertNormals = NULL;
 	g_modelNodeWalkUnusedScratch2 = 0;
 	g_curMeshFlags = 0;
 	g_curVertexCount = 0;
@@ -3760,6 +4145,8 @@ void FlightModel_Draw_Object_Mesh(FlightObject* object, int mesh_index) {
 	const Tie98OptimizedPolyObject* model;
 	SceneMeshTIE98 mesh;
 	int root;
+	int row;
+	int column;
 
 	if (model_type == 89)
 		model_type = object->ship_type_override;
@@ -3768,11 +4155,53 @@ void FlightModel_Draw_Object_Mesh(FlightObject* object, int mesh_index) {
 		return;
 	g_nodeSwitchIndex = object->decal_color;
 
-	FlightModel_Init_Object_Mesh(&mesh, object, 1);
-	g_curTextureDesc = &g_defaultMaterial;
+	memset(&mesh, 0, sizeof mesh);
+	mesh.pObject = object;
+	/* PORT: TIE98 reads a compact position overlay from ObjectRecord for
+	 * models without component state. tie_core stores every object in the
+	 * recovered TIE95 full-width layout, so both representations resolve here. */
+	mesh.viewPos.x = (float)(object->world_x - camera.x);
+	mesh.viewPos.y = (float)(object->world_y - camera.y);
+	mesh.viewPos.z = (float)(object->world_z - camera.z);
+	mesh.viewOrient.m[0] = (float)worldeyeA1 / 32768.0f;
+	mesh.viewOrient.m[1] = (float)worldeyeA2 / 32768.0f;
+	mesh.viewOrient.m[2] = (float)worldeyeA3 / 32768.0f;
+	mesh.viewOrient.m[3] = (float)worldeyeB1 / 32768.0f;
+	mesh.viewOrient.m[4] = (float)worldeyeB2 / 32768.0f;
+	mesh.viewOrient.m[5] = (float)worldeyeB3 / 32768.0f;
+	mesh.viewOrient.m[6] = (float)worldeyeC1 / 32768.0f;
+	mesh.viewOrient.m[7] = (float)worldeyeC2 / 32768.0f;
+	mesh.viewOrient.m[8] = (float)worldeyeC3 / 32768.0f;
+	Math3D_RotateVec3(&mesh.viewPos, &mesh.viewOrient);
+
+	mesh.viewOrient.m[0] = (float)rotworldeyeA1 / 32768.0f;
+	mesh.viewOrient.m[1] = (float)rotworldeyeA2 / 32768.0f;
+	mesh.viewOrient.m[2] = (float)rotworldeyeA3 / 32768.0f;
+	mesh.viewOrient.m[3] = (float)rotworldeyeB1 / 32768.0f;
+	mesh.viewOrient.m[4] = (float)rotworldeyeB2 / 32768.0f;
+	mesh.viewOrient.m[5] = (float)rotworldeyeB3 / 32768.0f;
+	mesh.viewOrient.m[6] = (float)rotworldeyeC1 / 32768.0f;
+	mesh.viewOrient.m[7] = (float)rotworldeyeC2 / 32768.0f;
+	mesh.viewOrient.m[8] = (float)rotworldeyeC3 / 32768.0f;
+	for (row = 0; row < 3; ++row)
+		for (column = 0; column < 3; ++column)
+			mesh.orient.m[row * 3 + column] = mesh.viewOrient.m[column * 3 + row];
+	mesh.pos.x = -mesh.viewPos.x;
+	mesh.pos.y = -mesh.viewPos.y;
+	mesh.pos.z = -mesh.viewPos.z;
+	Math3D_RotateVec3(&mesh.pos, &mesh.orient);
 	g_modelNodeWalkUnusedScratch0 = 0;
+	if (!g_defaultMaterialDesc) {
+		g_defaultMaterialDesc = &g_defaultMaterial;
+		g_defaultMaterial.height = 8;
+		g_defaultMaterial.width = 8;
+		g_defaultMaterial.paletteType = 16;
+		g_defaultMaterial.paletteAddress = 256;
+		ModelTexture_BuildPalettedShadeTable(g_defaultTextureData, g_defaultTextureRgb24, 8, 8);
+	}
 	g_modelNodeWalkUnusedScratch1 = 0;
-	g_curVertNormals = 0;
+	g_curTextureDesc = g_defaultMaterialDesc;
+	g_curVertNormals = NULL;
 	g_modelNodeWalkUnusedScratch2 = 0;
 	g_curMeshFlags = 0;
 	g_curVertexCount = 0;
@@ -3974,47 +4403,6 @@ static float FlightLight_ComputeSoftwareFaceSampleIntensity(SceneFaceTIE98* face
 	return intensity;
 }
 
-/* RECOVERY HELPER: reproduces the original texture-size-specialized wrapping
- * without duplicating its 8-bit and 16-bit span kernels. */
-static void sw3d_DrawTexturedShadeSpanKernel(void) {
-	uint8_t* pixel =
-		xtrans2_videobaseptr + g_sw3dScanlineByteOffset + g_flight16bppBytesPerPixel * g_sw3dSpanStartX;
-	const int width_shift = g_sw3dSpanTextureWidthShift;
-	const int height_shift = g_sw3dSpanTextureHeightShift;
-	const bool use_specialized_wrap =
-		width_shift >= 3 && width_shift <= 8 && height_shift >= 3 && height_shift <= 8;
-	const uint32_t u_mask = use_specialized_wrap ? (1u << width_shift) - 1u : 0;
-	const uint32_t v_mask = use_specialized_wrap ? (1u << height_shift) - 1u : 0;
-	int index;
-
-	for (index = 0; index < g_sw3dSpanLength; ++index) {
-		const uint32_t integer_u = (uint32_t)g_sw3dSpanUQ8 >> 8;
-		const uint32_t integer_v = (uint32_t)g_sw3dSpanVQ8 >> 8;
-		uint32_t texel_index;
-		uint8_t texel;
-		unsigned shade;
-
-		if (use_specialized_wrap) {
-			texel_index = ((integer_v & v_mask) << width_shift) | (integer_u & u_mask);
-		} else {
-			texel_index = ((integer_v << width_shift) + integer_u) & (uint32_t)g_sw3dSpanTexelMask;
-		}
-		texel = g_sw3dSpanTexels[texel_index];
-		shade = (unsigned)(g_sw3dSpanShadeDitherAccum + g_sw3dSpanShadeQ8);
-		g_sw3dSpanShadeDitherAccum = (uint8_t)shade;
-		if (g_flight16bppBytesPerPixel == 2) {
-			const uint16_t* colors = (const uint16_t*)(g_sw3dSpanShadeTable + 4096);
-			((uint16_t*)pixel)[0] = colors[((shade >> 8) & 15) * 256 + texel];
-			pixel += 2;
-		} else {
-			*pixel++ = g_sw3dSpanShadeTable[((shade >> 8) & 15) * 256 + texel];
-		}
-		g_sw3dSpanShadeQ8 += g_sw3dSpanShadeStepQ8;
-		g_sw3dSpanUQ8 += g_sw3dSpanStepUQ8;
-		g_sw3dSpanVQ8 += g_sw3dSpanStepVQ8;
-	}
-}
-
 // FUNCTION: TIE98 0x43F260
 static void sw3d_DrawTexturedShadeSpan(int start_x, int end_x, float start_view_z) {
 	SceneFaceTIE98* face = g_sw3dCurrentFace;
@@ -4149,7 +4537,46 @@ static void sw3d_DrawTexturedShadeSpan(int start_x, int end_x, float start_view_
 			boundary_view_z += view_z_step;
 			inverse_view_z = 1.0f / boundary_view_z;
 		}
-		sw3d_DrawTexturedShadeSpanKernel();
+		/* The original specializes its 8-bit and 16-bit span kernels by texture
+		 * size; this span loop reproduces the specialized wrapping. */
+		{
+			uint8_t* pixel = xtrans2_videobaseptr + g_sw3dScanlineByteOffset +
+							 g_flight16bppBytesPerPixel * g_sw3dSpanStartX;
+			const int width_shift = g_sw3dSpanTextureWidthShift;
+			const int height_shift = g_sw3dSpanTextureHeightShift;
+			const bool use_specialized_wrap =
+				width_shift >= 3 && width_shift <= 8 && height_shift >= 3 && height_shift <= 8;
+			const uint32_t u_mask = use_specialized_wrap ? (1u << width_shift) - 1u : 0;
+			const uint32_t v_mask = use_specialized_wrap ? (1u << height_shift) - 1u : 0;
+			int index;
+
+			for (index = 0; index < g_sw3dSpanLength; ++index) {
+				const uint32_t integer_u = (uint32_t)g_sw3dSpanUQ8 >> 8;
+				const uint32_t integer_v = (uint32_t)g_sw3dSpanVQ8 >> 8;
+				uint32_t texel_index;
+				uint8_t texel;
+				unsigned shade;
+
+				if (use_specialized_wrap) {
+					texel_index = ((integer_v & v_mask) << width_shift) | (integer_u & u_mask);
+				} else {
+					texel_index = ((integer_v << width_shift) + integer_u) & (uint32_t)g_sw3dSpanTexelMask;
+				}
+				texel = g_sw3dSpanTexels[texel_index];
+				shade = (unsigned)(g_sw3dSpanShadeDitherAccum + g_sw3dSpanShadeQ8);
+				g_sw3dSpanShadeDitherAccum = (uint8_t)shade;
+				if (g_flight16bppBytesPerPixel == 2) {
+					const uint16_t* colors = (const uint16_t*)(g_sw3dSpanShadeTable + 4096);
+					((uint16_t*)pixel)[0] = colors[((shade >> 8) & 15) * 256 + texel];
+					pixel += 2;
+				} else {
+					*pixel++ = g_sw3dSpanShadeTable[((shade >> 8) & 15) * 256 + texel];
+				}
+				g_sw3dSpanShadeQ8 += g_sw3dSpanShadeStepQ8;
+				g_sw3dSpanUQ8 += g_sw3dSpanStepUQ8;
+				g_sw3dSpanVQ8 += g_sw3dSpanStepVQ8;
+			}
+		}
 		if (block > end_block)
 			break;
 

@@ -12,7 +12,6 @@ void feinput_degitterinput(void);
 void feinput_getinput(void);
 void feinput_clearinput(void);
 void feinput_waitpress(void);
-void feinput_waitrelease(void);
 void feinput_setupinputdevices(void);
 uint16_t feinput_getrawinput(void);
 void feinput_setupgraphics(uint8_t detail_level);

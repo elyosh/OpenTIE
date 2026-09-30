@@ -63,12 +63,12 @@ static uint16_t TieFlightSnapshot_FlightFlags(const FlightObject* obj) {
 	if (obj->death_timer != 0)
 		f |= TIE_FOBJ_DESTROYED;
 	/* Hyperspace/eject markers tracked at the player level via the
-	 * hyperspaceflag global and player_ejected; mirror those onto the
+	 * hyperspaceflag global and pstate.hyperin_state; mirror those onto the
 	 * player's slot so a renderer can flip cockpit shaders. */
 	if (obj == pstate.player) {
 		if (hyperspaceflag)
 			f |= TIE_FOBJ_HYPER;
-		if (player_ejected)
+		if (pstate.hyperin_state)
 			f |= TIE_FOBJ_EJECTING;
 	}
 	return f;

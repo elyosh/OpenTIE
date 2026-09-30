@@ -229,20 +229,6 @@ enum {
  * scaffolding used by roll / heading / pitch. They work on objects[i]
  * via the supplied pointers to keep the body of planedynamics readable. */
 
-/* Returns the base step value used by all three axes:
- *   step = (rate_cap / framerate) * pacing * axis_scale, all fractional. */
-static uint16_t ap_step(uint16_t obj_idx, unsigned int axis, int16_t rate_cap, int16_t pacing,
-						uint16_t axis_scale) {
-	uint16_t tick_rate;
-
-#ifdef TIE_MODERN
-	if (TieFlightTiming_IsHighRate())
-		return TieFlightIntegration_AutopilotStep(obj_idx, axis, rate_cap, pacing, axis_scale);
-#endif
-	tick_rate = math2_fraction((uint16_t)((uint16_t)rate_cap / framerate), (uint16_t)pacing);
-	return math2_fraction(tick_rate, axis_scale);
-}
-
 // FUNCTION: TIE95 0x1F4FC
 void dynamix_planedynamics(void) {
 	uint16_t i;
@@ -290,8 +276,18 @@ void dynamix_planedynamics(void) {
 			/* ---- Roll autopilot ---- */
 			if (craftptr->ai_roll_state >= 1 && craftptr->ai_roll_state <= 3) {
 				uint16_t delta_roll = (uint16_t)(craftptr->ai_target_roll - obj->roll);
-				uint16_t roll_step =
-					ap_step(i, 0, craftptr->roll_rate_cache, craftptr->ai_target_c, craftptr->ai_roll_step);
+				uint16_t roll_step;
+
+#ifdef TIE_MODERN
+				if (TieFlightTiming_IsHighRate())
+					roll_step = TieFlightIntegration_AutopilotStep(
+						i, 0, craftptr->roll_rate_cache, craftptr->ai_target_c, craftptr->ai_roll_step);
+				else
+#endif
+					roll_step = math2_fraction(
+						math2_fraction((uint16_t)((uint16_t)craftptr->roll_rate_cache / framerate),
+									   (uint16_t)craftptr->ai_target_c),
+						craftptr->ai_roll_step);
 				if (craftptr->ai_roll_state == 3) {
 					/* "Bias" state used once ai_target_roll is known
 					 * to be on the +ve half; just slew one step. */
@@ -328,8 +324,17 @@ void dynamix_planedynamics(void) {
 				if ((uint16_t)d >= 0x8000u) {
 					d = -d;
 				}
-				step = ap_step(i, 1, craftptr->heading_rate_cache, craftptr->ai_target_b,
-							   craftptr->ai_heading_step);
+
+#ifdef TIE_MODERN
+				if (TieFlightTiming_IsHighRate())
+					step = TieFlightIntegration_AutopilotStep(
+						i, 1, craftptr->heading_rate_cache, craftptr->ai_target_b, craftptr->ai_heading_step);
+				else
+#endif
+					step = math2_fraction(
+						math2_fraction((uint16_t)((uint16_t)craftptr->heading_rate_cache / framerate),
+									   (uint16_t)craftptr->ai_target_b),
+						craftptr->ai_heading_step);
 
 				if (craftptr->ai_heading_state == 1) {
 					/* Turn left: decrement orient_heading. */
@@ -372,12 +377,22 @@ void dynamix_planedynamics(void) {
 			if (craftptr->flight_flag != 2 && craftptr->ai_pitch_state) {
 				uint16_t delta_pitch = (uint16_t)(craftptr->ai_target_pitch - obj->pitch);
 				if (delta_pitch) {
-					uint16_t pitch_step = ap_step(i, 2, craftptr->pitch_rate_cache, craftptr->ai_target_d,
-												  craftptr->ai_pitch_step);
-					uint16_t step_for_bleed = pitch_step;
+					uint16_t pitch_step;
+					uint16_t step_for_bleed;
 					bool stepped = false;
-
 					uint8_t rs;
+
+#ifdef TIE_MODERN
+					if (TieFlightTiming_IsHighRate())
+						pitch_step = TieFlightIntegration_AutopilotStep(
+							i, 2, craftptr->pitch_rate_cache, craftptr->ai_target_d, craftptr->ai_pitch_step);
+					else
+#endif
+						pitch_step = math2_fraction(
+							math2_fraction((uint16_t)((uint16_t)craftptr->pitch_rate_cache / framerate),
+										   (uint16_t)craftptr->ai_target_d),
+							craftptr->ai_pitch_step);
+					step_for_bleed = pitch_step;
 
 					if (delta_pitch >= 0x8000u) {
 						/* target < current: pitch down */

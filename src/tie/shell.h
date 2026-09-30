@@ -16,7 +16,7 @@ extern "C" {
 
 extern SceneHeadStruct* sHead_gbl;
 extern int16_t digital_exists;
-#if defined(TIE95) && !defined(TIE_MODERN)
+#ifndef TIE_MODERN
 extern uint8_t install_cfg_mode;
 #endif
 

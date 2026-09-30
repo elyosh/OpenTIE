@@ -69,16 +69,25 @@ enum MapStr {
 	MAP_TRAIN_TITLE = 16,   /* "trntitle" — training title overlay */
 };
 
+// GLOBAL: TIE95 0xCF96C
+// GLOBAL: TIE98 0x4E4730
 static const char map_str[17][14] = { "map.lfd",    "brfmap1", "brfpnl",  "cmbticns", "cmbtmap1", "combatvr",
 									  "player.lfd", "brfpnl",  "brfmap2", "pnlhldr",  "brfbutns", "cmbtmap3",
 									  "title",      "trnmap1", "trnmap2", "trnmap3",  "trntitle" };
 
+// GLOBAL: TIE95 0xCFA5A
+// GLOBAL: TIE98 0x4E4820
 static const int16_t map_panel_y[5] = { 43, 29, 14, 10, 11 };
+// GLOBAL: TIE95 0xCFA64
+// GLOBAL: TIE98 0x4E4830
 static const int16_t map_panel_hdl_y[5] = { 92, 80, 89, 84, 85 };
 // GLOBAL: TIE95 0xCFA6E
+// GLOBAL: TIE98 0x4E4840
 static const int16_t map_panel_hdl_cel[5] = { 0, 0, 2, 2, 2 };
 
 /* Button rects: [0-5]=training/combat, [6-9]=briefing (offset by index) */
+// GLOBAL: TIE95 0xCFA7A
+// GLOBAL: TIE98 0x4E4850
 static const Rect map_rect[10] = {
 	{ 172, 29, 194, 61 },   /* Stop */
 	{ 172, 64, 194, 96 },   /* Play */
@@ -92,67 +101,94 @@ static const Rect map_rect[10] = {
 	{ 175, 216, 196, 249 }, /* Brief Exit */
 };
 
-/* Training score file, kept in the shared TIE98-capable representation. */
-static TrainingScoreEntry debrief_train_scores[TRAIN_SCORE_ENTRY_COUNT];
-
 /* ======================================================================
  * Static BSS globals
  * ====================================================================== */
 
+// GLOBAL: TIE95 0xF60E8
+// GLOBAL: TIE98 0x584C98
 static int16_t talk_win_id[6];
+// GLOBAL: TIE95 0xF60FC
+// GLOBAL: TIE98 0x584CB0
 static Input* stop_input;
+// GLOBAL: TIE95 0xF6110
+// GLOBAL: TIE98 0x584C74
 static Input* play_input;
+// GLOBAL: TIE95 0xF60F4
+// GLOBAL: TIE98 0x584CCC
 static EBriefStruct* talk_brief;
+// GLOBAL: TIE95 0xF60F8
+// GLOBAL: TIE98 0x584C7C
 static Input* map_input;
+// GLOBAL: TIE95 0xF6100
+// GLOBAL: TIE98 0x584CB8
 static Input* talk_input;
 // GLOBAL: TIE95 0xF6104
+// GLOBAL: TIE98 0x584C60
 static Actor* title_actor;
+// GLOBAL: TIE95 0xF6108
+// GLOBAL: TIE98 0x584CA4
 static Actor* cmbticons;
-static Film* brief_film;
+// GLOBAL: TIE95 0xF6114
+// GLOBAL: TIE98 0x584C6C
 static EFArrayStruct* talk_fgroup;
-static Palette* cmbtpal;
+// GLOBAL: TIE95 0xF611C
+// GLOBAL: TIE98 0x584C80
 static int16_t talk_win_status[5];
 // GLOBAL: TIE95 0xF6126
+// GLOBAL: TIE98 0x584CC8
 static int16_t max_paragraph_size;
+// GLOBAL: TIE95 0xF6128
+// GLOBAL: TIE98 0x584C8C
 static int16_t map_text;
+// GLOBAL: TIE95 0xF612C
+// GLOBAL: TIE98 0x584CBC
 static int16_t map_text_count;
+// GLOBAL: TIE95 0xF6142
+// GLOBAL: TIE98 0x584CE0
 static int16_t num_talk_paragraphs;
+// GLOBAL: TIE95 0xF6130
+// GLOBAL: TIE98 0x584CD8
 static int16_t combat_pilot_medal_status;
+// GLOBAL: TIE95 0xF6132
+// GLOBAL: TIE98 0x584C70
 static int16_t center_line;
 // GLOBAL: TIE95 0xF6134
+// GLOBAL: TIE98 0x584CA8
 static int16_t cur_talk_paragraph;
+// GLOBAL: TIE95 0xF6136
+// GLOBAL: TIE98 0x584C64
 static int16_t combat_pilot_medal_init;
+// GLOBAL: TIE95 0xF6138
+// GLOBAL: TIE98 0x584CDC
 static int16_t talk_mode;
+// GLOBAL: TIE95 0xF613A
+// GLOBAL: TIE98 0x584CB4
 static int16_t num_talk_questions;
+// GLOBAL: TIE95 0xF613C
+// GLOBAL: TIE98 0x584CAC
 static int16_t next_mode;
+// GLOBAL: TIE95 0xF613E
+// GLOBAL: TIE98 0x584C78
 static int16_t talk_person;
+// GLOBAL: TIE95 0xF6140
+// GLOBAL: TIE98 0x584C68
 static int16_t cur_talk_question;
 // GLOBAL: TIE95 0xCFA78
+// GLOBAL: TIE98 0x584CE4
 static uint8_t map_uses_battle_voice;
 // GLOBAL: TIE95 0xF6144
+// GLOBAL: TIE98 0x584CD0
 static uint8_t map_is_post_mission;
 
 /* extern per watdbg */
+// GLOBAL: TIE95 0xF612A
+// GLOBAL: TIE98 0x5FD27C
 int16_t train_pilot_medal_status;
 
 /* Forward declarations — only for functions called before their definition */
 static int16_t Count_VR_Debrief_Pages(void);
 static void Get_VR_Debrief_Line(char* string, int16_t line);
-
-/* ======================================================================
- * Helper: replace ASCII '1'/'2' with italic control codes 0x01/0x02
- * ====================================================================== */
-
-static void replace_italic_codes(char* str) {
-	int16_t i;
-
-	for (i = 0; str[i]; i++) {
-		if (str[i] == '1')
-			str[i] = 1;
-		if (str[i] == '2')
-			str[i] = 2;
-	}
-}
 
 /* ======================================================================
  * View callback
@@ -162,8 +198,12 @@ static void replace_italic_codes(char* str) {
  * against talk_voice_question every frame to detect when the
  * briefing engine advances to a new paragraph (BCMD_SHOW_PARA1
  * stamps the new id) and we should fire the next .voc. */
+// GLOBAL: TIE95 0xF612E
+// GLOBAL: TIE98 0x584CC4
 static int16_t last_voiced_paragraph;
 
+// FUNCTION: TIE95 0x74E48
+// FUNCTION: TIE98 0x44E3A0
 static void end_View(int32_t refresh) {
 	/* Briefing-map voice path. Retail MAP_end_View does the same:
 	 * when the page id stamped by PLAYER_Step_Page differs from the
@@ -185,6 +225,8 @@ static void end_View(int32_t refresh) {
  * Panel actor callbacks
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x7581C
+// FUNCTION: TIE98 0x44EC90
 static void user_Map_Panel(Actor* actor, int32_t time) {
 	if (actor->id == 0) {
 		actor->y = (time <= 4) ? map_panel_y[time] : map_panel_y[4];
@@ -196,6 +238,8 @@ static void user_Map_Panel(Actor* actor, int32_t time) {
 	}
 }
 
+// FUNCTION: TIE95 0x7588C
+// FUNCTION: TIE98 0x44ED10
 static int16_t draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
 	xactdelt_Draw_Delta_Actor(actor, r, clip_r, x, y, refresh);
 
@@ -224,6 +268,8 @@ static int16_t draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int
  * Check_VR_Talk_Questions — scan talk data visibility conditions
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x765B8
+// FUNCTION: TIE98 0x44F9F0
 static void Check_VR_Talk_Questions(void) {
 	int16_t i;
 
@@ -253,6 +299,8 @@ static void Check_VR_Talk_Questions(void) {
  * VR talk text functions
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x762F4
+// FUNCTION: TIE98 0x44F770
 static void Get_VR_Talk_Question(char* string, int16_t question) {
 	int16_t qid;
 	char* data;
@@ -284,6 +332,8 @@ static void Get_VR_Talk_Question(char* string, int16_t question) {
 	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
 }
 
+// FUNCTION: TIE95 0x76400
+// FUNCTION: TIE98 0x44F860
 static void Get_VR_Talk_Paragraph(char* string, int16_t line) {
 	int16_t bold = 0;
 	int16_t qid;
@@ -346,6 +396,8 @@ static void Get_VR_Talk_Paragraph(char* string, int16_t line) {
 	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
 }
 
+// FUNCTION: TIE95 0x761C0
+// FUNCTION: TIE98 0x44F660
 static void Set_VR_Talk_Paragraph(void) {
 	int16_t qid;
 	char* data;
@@ -385,6 +437,8 @@ static void Set_VR_Talk_Paragraph(void) {
 	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
 }
 
+// FUNCTION: TIE95 0x76074
+// FUNCTION: TIE98 0x44F530
 static void Set_VR_Talk_To_Text(int16_t person) {
 	int16_t i;
 
@@ -446,9 +500,15 @@ static void Set_VR_Talk_To_Text(int16_t person) {
  * VR debrief — count/find/get for all 5 sections
  * ====================================================================== */
 
-static int16_t Count_VR_Debrief_Header(void) { return 1; }
-static int16_t Count_VR_Debrief_Goals(void) { return 1; }
+// FUNCTION: TIE95 0x769DC
+// FUNCTION: TIE98 0x44FBE0
+int16_t Count_VR_Debrief_Header(void) { return 1; }
+// FUNCTION: TIE95 0x769DC FOLDED
+// FUNCTION: TIE98 0x450280
+int16_t Count_VR_Debrief_Goals(void) { return 1; }
 
+// FUNCTION: TIE95 0x770BC
+// FUNCTION: TIE98 0x450590
 static int16_t Count_VR_Debrief_Kills(void) {
 	int16_t count = 0;
 	int16_t i;
@@ -468,6 +528,8 @@ static int16_t Count_VR_Debrief_Kills(void) {
 	return (count + max_paragraph_size - 3) / (max_paragraph_size - 2);
 }
 
+// FUNCTION: TIE95 0x77378
+// FUNCTION: TIE98 0x4508D0
 static int16_t Count_VR_Debrief_Losses(void) {
 	int16_t count = 0;
 	int16_t i;
@@ -485,6 +547,8 @@ static int16_t Count_VR_Debrief_Losses(void) {
 	return (count + max_paragraph_size - 3) / (max_paragraph_size - 2);
 }
 
+// FUNCTION: TIE95 0x775B8
+// FUNCTION: TIE98 0x450B60
 static int16_t Count_VR_Debrief_Captures(void) {
 	int16_t count = 0;
 	int16_t i;
@@ -496,6 +560,8 @@ static int16_t Count_VR_Debrief_Captures(void) {
 	return (count + max_paragraph_size - 3) / (max_paragraph_size - 2);
 }
 
+// FUNCTION: TIE95 0x766A4
+// FUNCTION: TIE98 0x44FAB0
 static int16_t Count_VR_Debrief_Pages(void) {
 	return Count_VR_Debrief_Header() + Count_VR_Debrief_Goals() + Count_VR_Debrief_Kills() +
 		   Count_VR_Debrief_Losses() + Count_VR_Debrief_Captures();
@@ -503,8 +569,11 @@ static int16_t Count_VR_Debrief_Pages(void) {
 
 /* --- Standard header (shared by header + goals Find functions) --- */
 
+// FUNCTION: TIE95 0x767F8
+// FUNCTION: TIE98 0x44FC40
 static void Get_VR_Standard_Debrief_Header(char* string, int16_t line) {
 	char buf[80], fmt[40];
+	uint16_t j;
 
 	switch (line) {
 		case 0: {
@@ -519,16 +588,31 @@ static void Get_VR_Standard_Debrief_Header(char* string, int16_t line) {
 			uint8_t combat_ship = shipext_Get_Combat_Ship();
 			if (combat_ship < 12) {
 				textext_Copy_Text(fmt, txtMapHistorical);
-				replace_italic_codes(fmt);
+				for (j = 0; fmt[j]; j++) {
+					if (fmt[j] == '1')
+						fmt[j] = 1;
+					if (fmt[j] == '2')
+						fmt[j] = 2;
+				}
 				snprintf(buf, sizeof(buf), fmt, shipext_Get_Combat_Mission() + 1);
 			} else {
 				textext_Copy_Text(fmt, txtTalkBattle);
-				replace_italic_codes(fmt);
+				for (j = 0; fmt[j]; j++) {
+					if (fmt[j] == '1')
+						fmt[j] = 1;
+					if (fmt[j] == '2')
+						fmt[j] = 2;
+				}
 				snprintf(buf, sizeof(buf), fmt, combat_ship - 11, shipext_Get_Combat_Mission() + 1);
 			}
 			strcpy(string, buf);
 			textext_Copy_Text(fmt, txtTalkScore);
-			replace_italic_codes(fmt);
+			for (j = 0; fmt[j]; j++) {
+				if (fmt[j] == '1')
+					fmt[j] = 1;
+				if (fmt[j] == '2')
+					fmt[j] = 2;
+			}
 			snprintf(buf, sizeof(buf), fmt, mission.mission_score);
 			strcat(string, buf);
 			center_line = 1;
@@ -543,9 +627,12 @@ static void Get_VR_Standard_Debrief_Header(char* string, int16_t line) {
 
 /* --- Header section --- */
 
+// FUNCTION: TIE95 0x76A50
+// FUNCTION: TIE98 0x44FE80
 static void Get_VR_Debrief_Header(char* string, int16_t line) {
 	char buf[80], fmt[40], rank_name[40];
 	uint16_t val;
+	uint16_t j;
 
 	switch (line) {
 		case 3:
@@ -553,7 +640,12 @@ static void Get_VR_Debrief_Header(char* string, int16_t line) {
 				textext_Copy_Text(buf, txtTalkSuccess);
 			else
 				textext_Copy_Text(buf, txtTalkFailure);
-			replace_italic_codes(buf);
+			for (j = 0; buf[j]; j++) {
+				if (buf[j] == '1')
+					buf[j] = 1;
+				if (buf[j] == '2')
+					buf[j] = 2;
+			}
 			strcpy(string, buf);
 			return;
 		case 4:
@@ -561,7 +653,12 @@ static void Get_VR_Debrief_Header(char* string, int16_t line) {
 				return;
 			textext_Copy_Text(fmt, txtTalkRank);
 			textext_Copy_Text(rank_name, mission.mission_new_rank + 1);
-			replace_italic_codes(fmt);
+			for (j = 0; fmt[j]; j++) {
+				if (fmt[j] == '1')
+					fmt[j] = 1;
+				if (fmt[j] == '2')
+					fmt[j] = 2;
+			}
 			snprintf(buf, sizeof(buf), fmt, rank_name);
 			strcpy(string, buf);
 			return;
@@ -578,7 +675,12 @@ static void Get_VR_Debrief_Header(char* string, int16_t line) {
 					return;
 				textext_Copy_Text(buf, txtTalkMedal);
 			}
-			replace_italic_codes(buf);
+			for (j = 0; buf[j]; j++) {
+				if (buf[j] == '1')
+					buf[j] = 1;
+				if (buf[j] == '2')
+					buf[j] = 2;
+			}
 			strcpy(string, buf);
 			return;
 		case 6:
@@ -610,6 +712,8 @@ static void Get_VR_Debrief_Header(char* string, int16_t line) {
 	}
 }
 
+// FUNCTION: TIE95 0x769E4
+// FUNCTION: TIE98 0x44FBF0
 static void Find_VR_Debrief_Header(char* string, int16_t line) {
 	int16_t skip = line;
 	int16_t i;
@@ -630,6 +734,8 @@ static void Find_VR_Debrief_Header(char* string, int16_t line) {
 
 /* --- Goals section --- */
 
+// FUNCTION: TIE95 0x76E10
+// FUNCTION: TIE98 0x4502E0
 static void Get_VR_Debrief_Goals(char* string, int16_t line) {
 	char buf[80], fmt[40], count_str[40];
 	int16_t done, fail;
@@ -695,6 +801,8 @@ static void Get_VR_Debrief_Goals(char* string, int16_t line) {
 	center_line = 1;
 }
 
+// FUNCTION: TIE95 0x76DC0
+// FUNCTION: TIE98 0x450290
 static void Find_VR_Debrief_Goals(char* string, int16_t line) {
 	int16_t skip = line;
 	int16_t i;
@@ -715,14 +823,15 @@ static void Find_VR_Debrief_Goals(char* string, int16_t line) {
 
 /* --- Kills section --- */
 
+// FUNCTION: TIE95 0x771BC
+// FUNCTION: TIE98 0x4506B0
 static void Get_VR_Debrief_Kill_Title(char* string) {
 	uint16_t total = 0, player_total = 0;
 	char fmt[40], buf[80];
 	uint16_t i;
+	uint16_t j;
 
 	for (i = 0; i < NUM_SPEC; i++) {
-		uint16_t j;
-
 		for (j = 0; j < 6; j++) {
 			if (player_Is_Side_Enemy(j))
 				total += mission.kills_losses[j][i];
@@ -730,12 +839,19 @@ static void Get_VR_Debrief_Kill_Title(char* string) {
 		player_total += pstate.player_kills_per_species[i];
 	}
 	textext_Copy_Text(fmt, txtTalkDestroyed);
-	replace_italic_codes(fmt);
+	for (j = 0; fmt[j]; j++) {
+		if (fmt[j] == '1')
+			fmt[j] = 1;
+		if (fmt[j] == '2')
+			fmt[j] = 2;
+	}
 	snprintf(buf, sizeof(buf), fmt, total, player_total);
 	strcpy(string, buf);
 	center_line = 1;
 }
 
+// FUNCTION: TIE95 0x772AC
+// FUNCTION: TIE98 0x4507C0
 static void Get_VR_Debrief_Kills(char* string, int16_t craft_idx) {
 	uint16_t count = 0;
 	char name[40], buf[80];
@@ -762,6 +878,8 @@ static void Get_VR_Debrief_Kills(char* string, int16_t craft_idx) {
 	}
 }
 
+// FUNCTION: TIE95 0x77148
+// FUNCTION: TIE98 0x450620
 static void Find_VR_Debrief_Kills(char* string, int16_t page, int16_t line) {
 	int16_t in_page = line % max_paragraph_size;
 	if (in_page == 0) {
@@ -787,26 +905,34 @@ static void Find_VR_Debrief_Kills(char* string, int16_t page, int16_t line) {
 
 /* --- Losses section --- */
 
+// FUNCTION: TIE95 0x77470
+// FUNCTION: TIE98 0x4509E0
 static void Get_VR_Debrief_Loss_Title(char* string) {
 	uint16_t total = 0;
 	char fmt[40], buf[80];
 	uint16_t i;
+	uint16_t j;
 
 	for (i = 0; i < NUM_SPEC; i++) {
-		uint16_t j;
-
 		for (j = 0; j < 6; j++) {
 			if (!player_Is_Side_Enemy(j))
 				total += mission.kills_losses[j][i];
 		}
 	}
 	textext_Copy_Text(fmt, txtTalkLost);
-	replace_italic_codes(fmt);
+	for (j = 0; fmt[j]; j++) {
+		if (fmt[j] == '1')
+			fmt[j] = 1;
+		if (fmt[j] == '2')
+			fmt[j] = 2;
+	}
 	snprintf(buf, sizeof(buf), fmt, total);
 	strcpy(string, buf);
 	center_line = 1;
 }
 
+// FUNCTION: TIE95 0x77538
+// FUNCTION: TIE98 0x450AC0
 static void Get_VR_Debrief_Losses(char* string, int16_t craft_idx) {
 	uint16_t count = 0;
 	char name[40], buf[80];
@@ -825,6 +951,8 @@ static void Get_VR_Debrief_Losses(char* string, int16_t craft_idx) {
 	}
 }
 
+// FUNCTION: TIE95 0x773F8
+// FUNCTION: TIE98 0x450950
 static void Find_VR_Debrief_Losses(char* string, int16_t page, int16_t line) {
 	int16_t in_page = line % max_paragraph_size;
 	if (in_page == 0) {
@@ -850,20 +978,30 @@ static void Find_VR_Debrief_Losses(char* string, int16_t page, int16_t line) {
 
 /* --- Captures section --- */
 
+// FUNCTION: TIE95 0x7766C
+// FUNCTION: TIE98 0x450C20
 static void Get_VR_Debrief_Capture_Title(char* string) {
 	uint16_t total = 0;
 	char fmt[40], buf[80];
 	uint16_t i;
+	uint16_t j;
 
 	for (i = 0; i < NUM_SPEC; i++)
 		total += mission.captures_by_type[i];
 	textext_Copy_Text(fmt, txtTalkCaptured);
-	replace_italic_codes(fmt);
+	for (j = 0; fmt[j]; j++) {
+		if (fmt[j] == '1')
+			fmt[j] = 1;
+		if (fmt[j] == '2')
+			fmt[j] = 2;
+	}
 	snprintf(buf, sizeof(buf), fmt, total);
 	strcpy(string, buf);
 	center_line = 1;
 }
 
+// FUNCTION: TIE95 0x77708
+// FUNCTION: TIE98 0x450CD0
 static void Get_VR_Debrief_Captures(char* string, int16_t craft_idx) {
 	uint16_t count = mission.captures_by_type[craft_idx];
 	if (count) {
@@ -874,6 +1012,8 @@ static void Get_VR_Debrief_Captures(char* string, int16_t craft_idx) {
 	}
 }
 
+// FUNCTION: TIE95 0x775F4
+// FUNCTION: TIE98 0x450B90
 static void Find_VR_Debrief_Captures(char* string, int16_t page, int16_t line) {
 	int16_t in_page = line % max_paragraph_size;
 	if (in_page == 0) {
@@ -899,6 +1039,8 @@ static void Find_VR_Debrief_Captures(char* string, int16_t page, int16_t line) {
 
 /* --- Debrief line dispatcher --- */
 
+// FUNCTION: TIE95 0x766E0
+// FUNCTION: TIE98 0x44FAE0
 static void Get_VR_Debrief_Line(char* string, int16_t line) {
 	int16_t abs_line = line;
 	int16_t section_page = line / max_paragraph_size;
@@ -945,133 +1087,127 @@ static void Get_VR_Debrief_Line(char* string, int16_t line) {
  * Score update functions
  * ====================================================================== */
 
-static void Update_Debrief_Train_Scores(void) {
-	int16_t change, index;
-	char pilot_name[TIE_PILOT_NAME_CAPACITY];
-	int16_t i;
+/* Retail inlines the training and combat score updates here. */
+// FUNCTION: TIE95 0x77754
+// FUNCTION: TIE98 0x450D50
+static void Update_Debrief_Scores(void) {
+	int16_t scene = shellext_Get_Cur_Scene();
 
-	if (!TieScoreTables_LoadTraining("train.hgh", debrief_train_scores))
-		memset(debrief_train_scores, 0, sizeof(debrief_train_scores));
-
-	change = 0;
-	index = 0;
-#ifdef TIE_MODERN
-	shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
-#else
-	shipext_Get_Pilot_Name(pilot_name);
-#endif
-
-	for (i = 0; i < TRAIN_SCORE_ENTRY_COUNT && !change; i++) {
-		if (debrief_train_scores[i].score < mission.mission_score) {
-			change = 1;
-			index = i;
-		}
-	}
-
-	if (change) {
+	if (scene == SCENE_TRAIN_MAP) {
+		/* Training score file, kept in the shared TIE98-capable representation. */
+		TrainingScoreEntry train_scores[TRAIN_SCORE_ENTRY_COUNT];
+		char pilot_name[TIE_PILOT_NAME_CAPACITY];
+		int16_t change, index;
 		int16_t i;
 
-		for (i = TRAIN_SCORE_ENTRY_COUNT - 1; i > index; i--)
-			debrief_train_scores[i] = debrief_train_scores[i - 1];
-		snprintf(debrief_train_scores[index].name, sizeof(debrief_train_scores[index].name), "%s",
-				 pilot_name);
-		debrief_train_scores[index].score = mission.mission_score;
-		debrief_train_scores[index].level = mission.train_level;
-		TieScoreTables_SaveTraining("train.hgh", debrief_train_scores);
-	}
-}
+		if (!TieScoreTables_LoadTraining("train.hgh", train_scores))
+			memset(train_scores, 0, sizeof(train_scores));
 
-static void Update_Debrief_Combat_Scores(void) {
-	char mission_name[16], pilot_name[TIE_PILOT_NAME_CAPACITY];
-	uint8_t ship_idx = shipext_Get_Combat_Ship();
-	char file_name[16];
-	int16_t missions;
-
-	GameScoreHead* scores;
-	int16_t num_scores;
-	int16_t kills;
-	int16_t i;
-	int16_t index;
-
-	if (ship_idx < 12) {
-		strcpy(file_name, "shipxx.hgh");
-		file_name[4] = (ship_idx + 1) / 10 + '0';
-		file_name[5] = (ship_idx + 1) % 10 + '0';
-		missions = 8;
-	} else {
-		strcpy(file_name, "battlexx.hgh");
-		file_name[6] = (ship_idx - 11) / 10 + '0';
-		file_name[7] = (ship_idx - 11) % 10 + '0';
-		missions = 20;
-	}
-
-	scores = (GameScoreHead*)calloc(missions, sizeof(GameScoreHead));
-	if (!scores)
-		return;
-	num_scores = 0;
-	TieScoreTables_LoadGame(file_name, scores, missions, &num_scores);
-
-	/* Count player kills */
-	kills = 0;
-	for (i = 0; i < (int16_t)NUM_SPEC; i++)
-		kills += pstate.player_kills_per_species[i];
-
-	strcpy(mission_name, shipext_Get_Mission_Name());
+		change = 0;
+		index = 0;
 #ifdef TIE_MODERN
-	shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
+		shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
 #else
-	shipext_Get_Pilot_Name(pilot_name);
+		shipext_Get_Pilot_Name(pilot_name);
 #endif
 
-	/* Find or create mission slot */
-	index = 0;
-	while (index < missions && scores[index].name[0] && strcmp(scores[index].name, mission_name))
-		index++;
-
-	if (index < missions && !scores[index].name[0]) {
-		snprintf(scores[index].name, sizeof(scores[index].name), "%s", mission_name);
-		num_scores++;
-	}
-
-	if (index < missions) {
-		int16_t change = 0, score_index = 0;
-		int16_t i;
-
-		for (i = 0; i < GAME_SCORE_ENTRY_COUNT && !change; i++) {
-			if (scores[index].scores[i].score < mission.mission_score) {
+		for (i = 0; i < TRAIN_SCORE_ENTRY_COUNT && !change; i++) {
+			if (train_scores[i].score < mission.mission_score) {
 				change = 1;
-				score_index = i;
+				index = i;
 			}
 		}
 
 		if (change) {
-			int16_t i;
-
-			for (i = GAME_SCORE_ENTRY_COUNT - 1; i > score_index; i--)
-				scores[index].scores[i] = scores[index].scores[i - 1];
-			snprintf(scores[index].scores[score_index].name, sizeof(scores[index].scores[score_index].name),
-					 "%s", pilot_name);
-			scores[index].scores[score_index].score = mission.mission_score;
-			scores[index].scores[score_index].status = kills;
-			TieScoreTables_SaveGame(file_name, scores, num_scores);
+			for (i = TRAIN_SCORE_ENTRY_COUNT - 1; i > index; i--)
+				train_scores[i] = train_scores[i - 1];
+			snprintf(train_scores[index].name, sizeof(train_scores[index].name), "%s", pilot_name);
+			train_scores[index].score = mission.mission_score;
+			train_scores[index].level = mission.train_level;
+			TieScoreTables_SaveTraining("train.hgh", train_scores);
 		}
+	} else if (scene == SCENE_COMBAT_MAP_B) {
+		char mission_name[16], pilot_name[TIE_PILOT_NAME_CAPACITY];
+		uint8_t ship_idx = shipext_Get_Combat_Ship();
+		char file_name[16];
+		int16_t missions;
+		GameScoreHead* scores;
+		int16_t num_scores;
+		int16_t kills;
+		int16_t i;
+		int16_t index;
+
+		if (ship_idx < 12) {
+			strcpy(file_name, "shipxx.hgh");
+			file_name[4] = (ship_idx + 1) / 10 + '0';
+			file_name[5] = (ship_idx + 1) % 10 + '0';
+			missions = 8;
+		} else {
+			strcpy(file_name, "battlexx.hgh");
+			file_name[6] = (ship_idx - 11) / 10 + '0';
+			file_name[7] = (ship_idx - 11) % 10 + '0';
+			missions = 20;
+		}
+
+		scores = (GameScoreHead*)calloc(missions, sizeof(GameScoreHead));
+		if (!scores)
+			return;
+		num_scores = 0;
+		TieScoreTables_LoadGame(file_name, scores, missions, &num_scores);
+
+		/* Count player kills */
+		kills = 0;
+		for (i = 0; i < (int16_t)NUM_SPEC; i++)
+			kills += pstate.player_kills_per_species[i];
+
+		strcpy(mission_name, shipext_Get_Mission_Name());
+#ifdef TIE_MODERN
+		shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
+#else
+		shipext_Get_Pilot_Name(pilot_name);
+#endif
+
+		/* Find or create mission slot */
+		index = 0;
+		while (index < missions && scores[index].name[0] && strcmp(scores[index].name, mission_name))
+			index++;
+
+		if (index < missions && !scores[index].name[0]) {
+			snprintf(scores[index].name, sizeof(scores[index].name), "%s", mission_name);
+			num_scores++;
+		}
+
+		if (index < missions) {
+			int16_t change = 0, score_index = 0;
+
+			for (i = 0; i < GAME_SCORE_ENTRY_COUNT && !change; i++) {
+				if (scores[index].scores[i].score < mission.mission_score) {
+					change = 1;
+					score_index = i;
+				}
+			}
+
+			if (change) {
+				for (i = GAME_SCORE_ENTRY_COUNT - 1; i > score_index; i--)
+					scores[index].scores[i] = scores[index].scores[i - 1];
+				snprintf(scores[index].scores[score_index].name,
+						 sizeof(scores[index].scores[score_index].name), "%s", pilot_name);
+				scores[index].scores[score_index].score = mission.mission_score;
+				scores[index].scores[score_index].status = kills;
+				TieScoreTables_SaveGame(file_name, scores, num_scores);
+			}
+		}
+
+		free(scores);
 	}
-
-	free(scores);
-}
-
-static void Update_Debrief_Scores(void) {
-	int16_t scene = shellext_Get_Cur_Scene();
-	if (scene == SCENE_TRAIN_MAP)
-		Update_Debrief_Train_Scores();
-	else if (scene == SCENE_COMBAT_MAP_B)
-		Update_Debrief_Combat_Scores();
 }
 
 /* ======================================================================
  * iupdate/iuser/idraw callbacks for MAP buttons
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x74EA8
+// FUNCTION: TIE98 0x44E3F0
 static int16_t iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
 						   int16_t x, int16_t y) {
 	uint8_t button;
@@ -1143,6 +1279,7 @@ static int16_t iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key, uin
 }
 
 // FUNCTION: TIE95 0x77C4C
+// FUNCTION: TIE98 0x4513E0
 static void Set_Voice_Species_Mission(void) {
 	uint8_t mission_cursor;
 
@@ -1162,6 +1299,8 @@ static void Set_Voice_Species_Mission(void) {
 	talk_voice_mission = (int16_t)(mission_cursor + 1);
 }
 
+// FUNCTION: TIE95 0x75110
+// FUNCTION: TIE98 0x44E5B0
 static void iuser_Map(Input* input, int32_t time) {
 	/* Briefing mode: offset button position during panel animation */
 	if (shellext_Get_Cur_Scene() == SCENE_BRIEF_MAP && time < 5) {
@@ -1337,6 +1476,8 @@ static void iuser_Map(Input* input, int32_t time) {
 	}
 }
 
+// FUNCTION: TIE95 0x75684
+// FUNCTION: TIE98 0x44EB20
 static void idraw_Map(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	PushButton* btn;
 	int16_t down;
@@ -1412,6 +1553,8 @@ static void idraw_Map(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
  * idraw_Talk — talk text overlay in MAP mode
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x75960
+// FUNCTION: TIE98 0x44EDF0
 static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	char buf[64], fmt[32], str1[32];
 	Rect tr;
@@ -1423,6 +1566,7 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		/* Training stats display */
 		int16_t saved_bold;
 		uint8_t train_ship;
+		uint16_t j;
 
 		xfont_Enable_FontID_Shadow(0);
 		saved_bold = xfont_Get_FontID_Bold_Color(0);
@@ -1449,7 +1593,12 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		if (mission.mission_new_rank) {
 			textext_Copy_Text(str1, txtTalkRank);
 			textext_Copy_Text(fmt, mission.mission_new_rank + 1);
-			replace_italic_codes(str1);
+			for (j = 0; str1[j]; j++) {
+				if (str1[j] == '1')
+					str1[j] = 1;
+				if (str1[j] == '2')
+					str1[j] = 2;
+			}
 			snprintf(buf, sizeof(buf), str1, fmt);
 			xfont_Print_Centered_Text(buf, &tr, 228, 0);
 			xrect_Offset_Rect(&tr, 0, 10);
@@ -1457,7 +1606,12 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 
 		if (train_pilot_medal_status) {
 			textext_Copy_Text(buf, txtTalkTrainPatch);
-			replace_italic_codes(buf);
+			for (j = 0; buf[j]; j++) {
+				if (buf[j] == '1')
+					buf[j] = 1;
+				if (buf[j] == '2')
+					buf[j] = 2;
+			}
 			xfont_Print_Centered_Text(buf, &tr, 228, 0);
 			xrect_Offset_Rect(&tr, 0, 10);
 		}

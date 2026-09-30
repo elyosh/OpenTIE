@@ -19,7 +19,7 @@ typedef struct HelpRoomState {
 
 #include <stdint.h>
 
-/* Begin the help menu; completion publishes user_submodal_result. */
+/* Begin the help menu; completion publishes TieFlightRequest_SubmodalResult. */
 void TieHelp_Begin(int32_t start_right_col);
 
 #endif

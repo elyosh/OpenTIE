@@ -16,6 +16,7 @@
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/damage_task.h"
+#include "tie_runtime/runtime/flight_requests.h"
 #include "tie_runtime/runtime/flight_screen.h"
 #include "tie_runtime/runtime/goals_task.h"
 #include "tie_runtime/runtime/help_task.h"
@@ -178,7 +179,7 @@ static LandruTaskStepResult user_inflightinfo_task_step(void* self) {
 	InflightInfoTask* task = self;
 	int32_t result = user_inflightinfo(task->screen_id);
 	if (task->finished) {
-		user_submodal_result = result;
+		TieFlightRequest_SetSubmodalResult(result);
 		return LANDRU_TASK_STEP_DONE;
 	}
 	return LANDRU_TASK_STEP_CONTINUE;

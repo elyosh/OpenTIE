@@ -1,8 +1,8 @@
 /*
  * panel_int — implementation.
  *
- * Byte-for-byte parity with src/tie/panel.c::PanelViewDef_decode and
- * HudInstrument_decode. Field offsets verified against retail Z_TIE__.EXE
+ * Byte-for-byte parity with the PanelViewDef / HudInstrument records read
+ * by src/tie/panel.c::panel_loadpanelviewdefs. Field offsets verified against retail Z_TIE__.EXE
  * and against decoded test files in CP640/.
  */
 #include "panel_int.h"

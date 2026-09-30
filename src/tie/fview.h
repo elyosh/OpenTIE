@@ -83,15 +83,15 @@ void fview_corvettegunrotation(int16_t angle);
 void fview_bwingrotation(int16_t angle, uint16_t part_id);
 
 /* Saved rotation matrix (Q15 fixed-point) */
-extern int32_t fview_sfoiltempA1, fview_sfoiltempA2, fview_sfoiltempA3;
-extern int32_t fview_sfoiltempB1, fview_sfoiltempB2, fview_sfoiltempB3;
-extern int32_t fview_sfoiltempC1, fview_sfoiltempC2, fview_sfoiltempC3;
+extern int32_t sfoiltempA1, sfoiltempA2, sfoiltempA3;
+extern int32_t sfoiltempB1, sfoiltempB2, sfoiltempB3;
+extern int32_t sfoiltempC1, sfoiltempC2, sfoiltempC3;
 
 /* Saved light direction (Q15) */
-extern int32_t fview_sfoiltemplightX, fview_sfoiltemplightY, fview_sfoiltemplightZ;
+extern int32_t sfoiltemplightX, sfoiltemplightY, sfoiltemplightZ;
 
 /* Saved objecteye position (Q15) */
-extern int32_t fview_sfoiltempx, fview_sfoiltempy, fview_sfoiltempz;
+extern int32_t sfoiltempx, sfoiltempy, sfoiltempz;
 
 #ifdef __cplusplus
 }

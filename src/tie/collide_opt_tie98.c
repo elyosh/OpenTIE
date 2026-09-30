@@ -99,36 +99,6 @@ static int collide_pointinfacepolygon(const TieModelVec3f* normal, const TieMode
 	return 1;
 }
 
-static void rotate_point(TieModelVec3f* point, const TieModelRotationScale* rotation, float angle) {
-	const float inverse_q15 = 1.0f / 32768.0f;
-	const float axis_x = rotation->rotation_axis.x * inverse_q15;
-	const float axis_y = rotation->rotation_axis.y * inverse_q15;
-	const float axis_z = rotation->rotation_axis.z * inverse_q15;
-	const float x = point->x - rotation->pivot.x;
-	const float y = point->y - rotation->pivot.y;
-	const float z = point->z - rotation->pivot.z;
-	const float cosine = cosf(angle);
-	const float sine = sinf(angle);
-	const float dot = axis_x * x + axis_y * y + axis_z * z;
-	const float one_minus_cosine = 1.0f - cosine;
-	point->x =
-		rotation->pivot.x + x * cosine + (axis_y * z - axis_z * y) * sine + axis_x * dot * one_minus_cosine;
-	point->y =
-		rotation->pivot.y + y * cosine + (axis_z * x - axis_x * z) * sine + axis_y * dot * one_minus_cosine;
-	point->z =
-		rotation->pivot.z + z * cosine + (axis_x * y - axis_y * x) * sine + axis_z * dot * one_minus_cosine;
-}
-
-static int collision_face_indices_valid(const TieModelCollisionFace* face, uint32_t vertex_count) {
-	int i;
-	for (i = 0; i < 3; ++i) {
-		if (face->vertex_indices[i] < 0 || (uint32_t)face->vertex_indices[i] >= vertex_count)
-			return 0;
-	}
-	return face->vertex_indices[3] == -1 ||
-		   (face->vertex_indices[3] >= 0 && (uint32_t)face->vertex_indices[3] < vertex_count);
-}
-
 // FUNCTION: TIE98 0x486670
 // COLLIDE_testsweepagainstoptnode; OpenXWA counterpart
 // collide_TestSweepAgainstOptNode.
@@ -149,8 +119,32 @@ static int collide_testsweepagainstoptnode(OptCollisionContext* context, int nod
 		if ((uint16_t)rotation_mesh < context->model->mesh_count) {
 			const TieModelMeshView* mesh = &context->model->meshes[rotation_mesh];
 			if (mesh->has_rotation_scale) {
-				rotate_point(&context->segment_start, &mesh->rotation_scale, context->rotation_radians);
-				rotate_point(&context->segment_end, &mesh->rotation_scale, context->rotation_radians);
+				/* Rotate both swept-segment endpoints around the payload
+				 * pivot/axis by the current mesh rotation. */
+				const TieModelRotationScale* rotation = &mesh->rotation_scale;
+				const float inverse_q15 = 1.0f / 32768.0f;
+				const float axis_x = rotation->rotation_axis.x * inverse_q15;
+				const float axis_y = rotation->rotation_axis.y * inverse_q15;
+				const float axis_z = rotation->rotation_axis.z * inverse_q15;
+				const float cosine = cosf(context->rotation_radians);
+				const float sine = sinf(context->rotation_radians);
+				const float one_minus_cosine = 1.0f - cosine;
+				TieModelVec3f* point;
+				int endpoint;
+				for (endpoint = 0; endpoint < 2; ++endpoint) {
+					float x, y, z, dot;
+					point = endpoint == 0 ? &context->segment_start : &context->segment_end;
+					x = point->x - rotation->pivot.x;
+					y = point->y - rotation->pivot.y;
+					z = point->z - rotation->pivot.z;
+					dot = axis_x * x + axis_y * y + axis_z * z;
+					point->x = rotation->pivot.x + x * cosine + (axis_y * z - axis_z * y) * sine +
+							   axis_x * dot * one_minus_cosine;
+					point->y = rotation->pivot.y + y * cosine + (axis_z * x - axis_x * z) * sine +
+							   axis_y * dot * one_minus_cosine;
+					point->z = rotation->pivot.z + z * cosine + (axis_x * y - axis_y * x) * sine +
+							   axis_z * dot * one_minus_cosine;
+				}
 			}
 		}
 		context->rotation_radians = 0.0f;
@@ -181,7 +175,11 @@ static int collide_testsweepagainstoptnode(OptCollisionContext* context, int nod
 			if (face_index >= context->model->collision_face_count)
 				break;
 			face = &context->model->collision_faces[face_index];
-			if (!collision_face_indices_valid(face, set->vertex_count))
+			if (face->vertex_indices[0] < 0 || (uint32_t)face->vertex_indices[0] >= set->vertex_count ||
+				face->vertex_indices[1] < 0 || (uint32_t)face->vertex_indices[1] >= set->vertex_count ||
+				face->vertex_indices[2] < 0 || (uint32_t)face->vertex_indices[2] >= set->vertex_count ||
+				(face->vertex_indices[3] != -1 &&
+				 (face->vertex_indices[3] < 0 || (uint32_t)face->vertex_indices[3] >= set->vertex_count)))
 				continue;
 			if (!collide_intersectsegmentwithfaceplane(&face->normal, &set->vertices[face->vertex_indices[0]],
 													   &context->segment_start, &context->segment_end,
@@ -211,15 +209,6 @@ static int collide_testsweepagainstoptnode(OptCollisionContext* context, int nod
 			return 1;
 	}
 	return 0;
-}
-
-static void set_collision_offsets(float fraction) {
-	fraction -= 0.1f;
-	if (fraction < 0.0f)
-		fraction = 0.0f;
-	collidexoff = (int32_t)((float)(laserx - laserxold) * fraction);
-	collideyoff = (int32_t)((float)(lasery - laseryold) * fraction);
-	collidezoff = (int32_t)((float)(laserz - laserzold) * fraction);
 }
 
 // FUNCTION: TIE98 0x485E30
@@ -305,8 +294,14 @@ uint16_t collide_checksweptmodelcollision(uint16_t source_object_index, uint16_t
 		context.current_vertex_set = -1;
 		collide_testsweepagainstoptnode(&context, mesh->collision_root);
 	}
-	if (context.hit_mesh_one_based)
-		set_collision_offsets(context.nearest_fraction);
+	if (context.hit_mesh_one_based) {
+		context.nearest_fraction -= 0.1f;
+		if (context.nearest_fraction < 0.0f)
+			context.nearest_fraction = 0.0f;
+		collidexoff = (int32_t)((float)(laserx - laserxold) * context.nearest_fraction);
+		collideyoff = (int32_t)((float)(lasery - laseryold) * context.nearest_fraction);
+		collidezoff = (int32_t)((float)(laserz - laserzold) * context.nearest_fraction);
+	}
 	return context.hit_mesh_one_based;
 }
 
@@ -331,7 +326,13 @@ uint16_t collide_checksweptmodelmeshcollision(uint8_t model_type, uint16_t mesh_
 	context.saved_end = context.segment_end;
 	if (mesh_index < model->mesh_count)
 		collide_testsweepagainstoptnode(&context, model->meshes[mesh_index].collision_root);
-	if (context.hit_mesh_one_based)
-		set_collision_offsets(context.nearest_fraction);
+	if (context.hit_mesh_one_based) {
+		context.nearest_fraction -= 0.1f;
+		if (context.nearest_fraction < 0.0f)
+			context.nearest_fraction = 0.0f;
+		collidexoff = (int32_t)((float)(laserx - laserxold) * context.nearest_fraction);
+		collideyoff = (int32_t)((float)(lasery - laseryold) * context.nearest_fraction);
+		collidezoff = (int32_t)((float)(laserz - laserzold) * context.nearest_fraction);
+	}
 	return context.hit_mesh_one_based;
 }

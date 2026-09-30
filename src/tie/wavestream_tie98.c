@@ -56,34 +56,6 @@ static uint8_t* g_waveStreamStaging;
 // GLOBAL: TIE98 0x584D68
 static int g_waveStreamPauseDepth;
 
-static int tie98_wave_group_volume(int music_group) {
-	const int active = music_group ? options_gbl.music_active : options_gbl.sound_active;
-	const int volume = music_group ? options_gbl.music_volume : options_gbl.sound_volume;
-	return active && volume ? 8 * volume - 1 : 0;
-}
-
-static long tie98_wave_file_size(const char* path) {
-	TieFile* file;
-	long size;
-	if (!path)
-		return -1;
-	file = TieStorage_Open(TIE_FILE_ROOT_TIE98_MEDIA, path, "rb");
-	if (!file)
-		return -1;
-	if (TieStorage_Seek(file, 0, TIE_SEEK_END) != 0)
-		size = -1;
-	else
-		size = TieStorage_Tell(file);
-	TieStorage_Close(file);
-	return size;
-}
-
-static void tie98_wave_fill_silence(void* first, size_t first_bytes, void* second, size_t second_bytes) {
-	memset(first, 0x80, first_bytes);
-	if (second_bytes)
-		memset(second, 0x80, second_bytes);
-}
-
 // FUNCTION: TIE98 0x458250
 static int FrontendWaveStream_EnsureBuffer(void) {
 	int initial = -1;
@@ -105,12 +77,20 @@ static int FrontendWaveStream_EnsureBuffer(void) {
 // FUNCTION: TIE98 0x457B70
 static int FrontendWaveStream_StartFile(const char* path) {
 	int initial;
+	int volume;
 
-	if (!FrontendFileStream_QueueFile(1, path) ||
-		(g_waveStreamLoop && !FrontendFileStream_QueueFile(1, path)))
-		goto error;
-	if (!FrontendFileStream_StartNamedFile(1, path))
-		goto error;
+	if (!FrontendFileStream_QueueFile(1, path))
+		return 0;
+	if (g_waveStreamLoop && !FrontendFileStream_QueueFile(1, path)) {
+		FrontendFileStream_PopHead(1);
+		return 0;
+	}
+	if (!FrontendFileStream_StartNamedFile(1, path)) {
+		if (g_waveStreamLoop)
+			FrontendFileStream_PopHead(1);
+		FrontendFileStream_PopHead(1);
+		return 0;
+	}
 	initial = FrontendWaveStream_EnsureBuffer();
 	g_waveStreamWriteCursor = initial >= 0 ? (uint32_t)initial : 0;
 	g_waveStreamBytesPlayed = 0;
@@ -129,7 +109,9 @@ static int FrontendWaveStream_StartFile(const char* path) {
 			FrontendWaveStream_Shutdown();
 			return 0;
 		}
-		tie98_wave_fill_silence(first, first_bytes, second, second_bytes);
+		memset(first, 0x80, first_bytes);
+		if (second_bytes)
+			memset(second, 0x80, second_bytes);
 		DirectSound_UnlockBuffer(g_waveStreamBuffer, first, first_bytes, second, second_bytes);
 	}
 	g_waveStreamFilling = 1;
@@ -165,15 +147,14 @@ static int FrontendWaveStream_StartFile(const char* path) {
 			DirectSound_UnlockBuffer(g_waveStreamBuffer, first, first_bytes, second, second_bytes);
 		}
 	}
-	DirectSound_PlayBuffer(g_waveStreamBuffer, 0, 1, tie98_wave_group_volume(g_waveStreamLoop ? 0 : 1));
+	if (g_waveStreamLoop)
+		volume = options_gbl.sound_active && options_gbl.sound_volume ? 8 * options_gbl.sound_volume - 1 : 0;
+	else
+		volume = options_gbl.music_active && options_gbl.music_volume ? 8 * options_gbl.music_volume - 1 : 0;
+	DirectSound_PlayBuffer(g_waveStreamBuffer, 0, 1, volume);
 	g_waveStreamPlaying = 1;
 	g_waveStreamPrevFreeBytes = WAVE_STREAM_PREFILL_BYTES;
 	return 1;
-
-error:
-	FrontendFileStream_PopHead(1);
-	FrontendFileStream_PopHead(1);
-	return 0;
 }
 
 // FUNCTION: TIE98 0x457F70
@@ -218,7 +199,9 @@ static void FrontendWaveStream_Refill(void) {
 
 	if (DirectSound_LockBuffer(g_waveStreamBuffer, g_waveStreamWriteCursor, 0, &first, &first_bytes, &second,
 							   &second_bytes)) {
-		tie98_wave_fill_silence(first, first_bytes, second, second_bytes);
+		memset(first, 0x80, first_bytes);
+		if (second_bytes)
+			memset(second, 0x80, second_bytes);
 		DirectSound_UnlockBuffer(g_waveStreamBuffer, first, first_bytes, second, second_bytes);
 	}
 	g_waveStreamEnd = 1;
@@ -227,12 +210,20 @@ static void FrontendWaveStream_Refill(void) {
 
 // FUNCTION: TIE98 0x4579E0
 int FrontendWaveStream_PlayWaveFile(const char* path, int loop) {
+	TieFile* file;
 	long file_size;
+	int volume;
 
 	FrontendWaveStream_Shutdown();
 	g_waveStreamPauseDepth = 0;
 	g_waveStreamLoop = loop != 0;
-	file_size = tie98_wave_file_size(path);
+	file_size = -1;
+	file = path ? TieStorage_Open(TIE_FILE_ROOT_TIE98_MEDIA, path, "rb") : NULL;
+	if (file) {
+		if (TieStorage_Seek(file, 0, TIE_SEEK_END) == 0)
+			file_size = TieStorage_Tell(file);
+		TieStorage_Close(file);
+	}
 	if (file_size <= 0) {
 		TieDiagnostics_Log(TIE_LOG_WARN, "TIE98 wave music is missing or unreadable: %s\n",
 						   path ? path : "(null)");
@@ -246,8 +237,13 @@ int FrontendWaveStream_PlayWaveFile(const char* path, int loop) {
 			TieDiagnostics_Log(TIE_LOG_WARN, "TIE98 wave music has an unsupported RIFF format: %s\n", path);
 			return 0;
 		}
-		DirectSound_PlayBuffer(g_waveStreamBuffer, 0, g_waveStreamLoop,
-							   tie98_wave_group_volume(g_waveStreamLoop ? 0 : 1));
+		if (g_waveStreamLoop)
+			volume =
+				options_gbl.sound_active && options_gbl.sound_volume ? 8 * options_gbl.sound_volume - 1 : 0;
+		else
+			volume =
+				options_gbl.music_active && options_gbl.music_volume ? 8 * options_gbl.music_volume - 1 : 0;
+		DirectSound_PlayBuffer(g_waveStreamBuffer, 0, g_waveStreamLoop, volume);
 		g_waveStreamPlaying = 1;
 		return 0;
 	}
@@ -313,8 +309,9 @@ void FrontendWaveStream_Resume(void) {
 	if (g_waveStreamPauseDepth <= 0 || --g_waveStreamPauseDepth != 0)
 		return;
 	if (g_waveStreamBuffer && g_waveStreamPlaying == 1)
-		DirectSound_PlayBuffer(g_waveStreamBuffer, g_waveStreamLastPlayCursor,
-							   g_waveStreamLoop || g_waveStreamIsStreaming, tie98_wave_group_volume(1));
+		DirectSound_PlayBuffer(
+			g_waveStreamBuffer, g_waveStreamLastPlayCursor, g_waveStreamLoop || g_waveStreamIsStreaming,
+			options_gbl.music_active && options_gbl.music_volume ? 8 * options_gbl.music_volume - 1 : 0);
 	g_waveStreamFilling = g_waveStreamFillingSaved;
 }
 

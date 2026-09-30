@@ -35,19 +35,11 @@ int16_t register_Register(SceneHeadStruct* scene_head);
 void register_end_View(int32_t time);
 extern Directory register_directory;
 extern void* register_fast_pilot_record;
-Input* register_OpenProtection(void);
-void register_CloseProtection(void);
+int16_t register_Do_Protect_Dialog(void);
 
 /* Clear the is_protected flag on the active pilot's FastPilotRecord.
  * Called by COMPUTER after a pilot restore. */
-/* Recovered callback retained for whole-translation-unit matching. */
-void Revive_Pilot_Record(Input* input, int32_t time);
 void register_Revive_Pilot_Info(void);
-
-/* Enable/disable the copy-protection symbol challenge shown by the
- * register scene. Disabled by default (matches retail). Non-zero
- * restores the original 29-symbol password prompt. */
-void register_set_copy_protection(int enabled);
 
 #ifdef __cplusplus
 }

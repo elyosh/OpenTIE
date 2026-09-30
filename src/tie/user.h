@@ -161,8 +161,6 @@ typedef enum {
  * into user_inputforplane for flight controls. */
 void user_userinterface(void);
 
-int user_is_paused(void);
-
 /* Full in-flight key/joystick dispatcher (~150 keybinds). Called from
  * user_userinterface after the hyperspace-freeze / replay-view / pause
  * guards clear. */
@@ -240,7 +238,7 @@ void user_assigntarget(uint16_t new_target_obj, uint16_t msg_template_id);
 uint16_t user_findclosestattacker(uint16_t obj_idx);
 
 /* Eject-pod rescue test: true if nearest friendly is closer than half
- * the distance to the nearest hostile (or rescue_override_flag&1). */
+ * the distance to the nearest hostile (or mission_file_header.mission.win_type & 1). */
 int16_t user_isrescued(uint16_t player_obj_idx);
 
 /* --- Replay camera ------------------------------------------------ */
@@ -259,37 +257,9 @@ void user_ejectcamera(void);
  * Seven tabs (goals/map/messages/damage/wingmen/help/options) reachable
  * via Up/Down navigation; ESC/Q/q dismisses. The task drives replay
  * serialize/deserialize of the selected state and writes the final
- * screen index (or 0xFFFF on retreat-cancel) into user_submodal_result
+ * screen index (or 0xFFFF on retreat-cancel) via TieFlightRequest_SetSubmodalResult
  * before popping, so its parent task (the flight task / tie_simulator
  * AFTER_MISSION phase) can consume the outcome. */
-
-/* Sub-modal result handoff — single int32 channel shared by every leaf
- * sub-modal task (msgroom / goals / maproom / damage / wingman / help /
- * option / inflightinfo). The producer writes its return code on the
- * tick it returns LANDRU_TASK_STEP_DONE; the consumer (the parent task)
- * reads it once in its post-sub-modal phase. The values mirror the
- * legacy synchronous returns:
- *   -1 / 0xFFFF : navigate to previous tab
- *    0          : exit info room
- *   +1          : navigate to next tab
- *   other       : sub-modal-specific (e.g. option's exit codes) */
-extern int32_t user_submodal_result;
-
-/* Info-room request channel. user_userinterface keybinds set this to
- * the requested screen index (0..6); the flight task step picks it up
- * AFTER tie_doframe returns, pushes TieInflightInfo_Begin, and
- * resets to -1. -1 means "no request". This decouples the synchronous
- * keybind handler from the asynchronous task push. */
-int32_t user_consume_info_room_request(void);
-
-/* Replay-viewer request channel. The 'v' key handler in
- * user_userinterface sets a pending flag after running the immediate
- * pre-empt bookkeeping (spool flush, blank, recording stop). The
- * flight task step picks it up AFTER tie_doframe returns, pushes
- * TieReplaySession_Begin, and clears the flag. The RESUMED
- * banner is posted by the flight task once the viewer task pops.
- * Returns 1 if a request was pending (and consumes it), 0 otherwise. */
-int user_consume_replay_viewer_request(void);
 
 /* --- Miscellaneous ------------------------------------------------ */
 
@@ -309,10 +279,10 @@ int16_t user_validcomponent_tie98(uint16_t model_type, uint16_t mesh_index);
  * by fediskio_loadtext. */
 extern uint8_t convertmessage[69];
 
-/* Key -> pilotview-index translation tables. 10- and 20-byte lookup
- * tables driven by the view keys inside user_inputforplane. */
+/* Numpad view-key -> pilotview / up_angle translation tables, both
+ * indexed by key - '0' and driven by the view keys inside user_inputforplane. */
 extern uint8_t viewtranslate[10];
-extern uint8_t looktranslate[20];
+extern int16_t looktranslate[10];
 
 /* Detail-level LOD tables (indexed 0..3 by user_setdetaillevel). */
 extern const uint16_t starshipexplodtl[4];

@@ -39,13 +39,12 @@ extern int g_hardwarePixelFormatAvailable;
 extern int g_frontendDisplayWndProcMode;
 extern int g_windowReactivated;
 extern void* g_flightWindowHandle;
+extern int g_flightFullscreen;
+extern IDirectDrawSurface* g_unusedFrontendSurfaceAlias;
 
 void Flight_PumpWindowMessages(void);
 void Renderer_ReleaseHardwareZBuffer(void);
 const DxGuid* FrontendDisplay_LoadDriverGuid(void);
-
-bool tie98_display_startup(uint16_t initial_mode);
-void tie98_display_shutdown(void);
 
 int FrontendDisplay_InitSurfaces(void);
 void FrontendDisplay_SetDisplayMode(uint16_t mode);

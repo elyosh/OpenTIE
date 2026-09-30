@@ -129,41 +129,6 @@ static void out_volume_bar(uint16_t vol, int16_t y) {
 	festring_setbound(2, 0, (int16_t)((int)screenXRes - 2), (int16_t)screenYRes);
 }
 
-/* --- Static helpers for the main routine ------------------------------ */
-
-static void apply_visual_to_globals(const uint8_t* values) {
-	gouraudflag = (uint8_t)(values[0] << 6);
-	shipdetailvalue = (int16_t)(1 - values[1]);
-	shipdetailpolycnt = (uint16_t)(4 * values[1] + 8);
-	starshipdetail = (uint16_t)(values[2] + 1);
-	starshipexplodetail = (uint16_t)(((uint32_t)4096 << values[1]) - 1);
-	drawmarkingsflag = values[3];
-	drawbackdropflag = values[4];
-	drawdebrisflag = values[5];
-	palette_cycle_user = values[6];
-	stardetaillevel = (uint16_t)(2 - values[7]);
-	hyperspacedetail = (int16_t)(75 - 25 * (2 - values[7]));
-}
-
-void option_ApplyFlightValues(const uint8_t* values) {
-	inflight_collision = (int8_t)values[8];
-	inflight_invulnerable = (int8_t)values[9];
-	inflight_unlimited = (int8_t)values[10];
-	inflight_sound_vol = (int8_t)values[11];
-	inflight_music_vol = (int8_t)values[12];
-	inflight_speech_vol = (int8_t)values[13];
-
-	soundvolflag = (uint8_t)(inflight_speech_vol + inflight_sound_vol);
-	musicvolflag = (uint8_t)inflight_music_vol;
-	cheatingflag = (uint8_t)(cheatingflag | (uint8_t)inflight_invulnerable | (uint8_t)inflight_unlimited);
-}
-
-/* Apply the game-state portion of the fourteen DOS options. */
-void option_ApplyValues(const uint8_t* values) {
-	apply_visual_to_globals(values);
-	option_ApplyFlightValues(values);
-}
-
 // FUNCTION: TIE95 0x34C40
 int32_t option_optionsroom(int16_t load_settings) {
 	uint8_t values[OPTION_ROW_COUNT];

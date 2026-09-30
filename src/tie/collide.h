@@ -39,7 +39,7 @@ extern uint8_t damagemsg[10];
 extern int16_t repairtime[10];
 
 /*
- * instrumentdisable[17] -- bitmasks AND'd against
+ * instrumentdisable[] -- bitmasks (17 entries on TIE95, 16 on TIE98) AND'd against
  * CraftData.working_subsystems when a non-shield-overload random damage
  * roll triggers a cockpit instrument knockout. Indexed by the low
  * nibble of MATH2_getrandom (0..15); index 0 is reserved (typically
@@ -47,7 +47,7 @@ extern int16_t repairtime[10];
  * mission.train_craft_type to avoid disabling the player's mission-critical
  * shield in briefing/training/combat).
  */
-extern int16_t instrumentdisable[17];
+extern int16_t instrumentdisable[];
 
 /* ---------- Function prototypes ---------- */
 

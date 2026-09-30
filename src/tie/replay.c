@@ -4,6 +4,7 @@
 #include "tie_runtime/runtime/inflight_info_task.h"
 #include "tie_runtime/runtime/replay_save_task.h"
 #ifdef TIE_MODERN
+#include "tie_runtime/runtime/flight_requests.h"
 #include "tie_runtime/runtime/replay_viewer_task.h"
 #endif
 
@@ -65,6 +66,7 @@
 
 /* VGA (320x200) in column 0, SVGA (640x480) in column 1. Values copied
  * verbatim from Z_TIE__.EXE at 0xC7210 (top) and 0xC72A8 (left). */
+// GLOBAL: TIE95 0xC7210
 const uint16_t replaybuttontop[38][2] = {
 	{ 1, 2 },     { 1, 2 },     { 1, 2 },     { 1, 2 },     /*  0- 3 */
 	{ 1, 2 },     { 1, 2 },     { 1, 2 },     { 1, 2 },     /*  4- 7 */
@@ -78,6 +80,7 @@ const uint16_t replaybuttontop[38][2] = {
 	{ 147, 147 }, { 147, 147 },                             /* 36-37 */
 };
 
+// GLOBAL: TIE95 0xC72A8
 const uint16_t replaybuttonleft[38][2] = {
 	{ 47, 94 },   { 47, 94 },   { 82, 164 },  { 82, 164 },  /*  0- 3 */
 	{ 117, 234 }, { 117, 234 }, { 210, 420 }, { 210, 420 }, /*  4- 7 */
@@ -99,6 +102,8 @@ enum { REPLAY_BUTTON_SHAPE_BASE = 0xE3 };
 uint8_t replaymusic;
 // GLOBAL: TIE95 0xD5E5C
 int16_t replayvolume;
+// GLOBAL: TIE95 0xD5E58
+// GLOBAL: TIE98 0x5FBC3E
 int16_t replaymsgtimer;
 
 // GLOBAL: TIE95 0xD5E5A
@@ -111,13 +116,12 @@ uint16_t trackobject;
 uint8_t reentersimflag;
 // GLOBAL: TIE98 0x5FBC46
 uint8_t exitflag;
-int32_t cameraposstate;
+// GLOBAL: TIE95 0xD5E64
+// GLOBAL: TIE98 0x5FBC45
+uint8_t cameraposstate;
 
 // GLOBAL: TIE95 0xE36FC
 Camera replaycam;
-
-/* Clip filename suffix (".clp"). Retail lowercased it from demo's ".CLP". */
-static const char kClipSuffix[] = ".clp";
 
 /* --------------------------------------------------------------------------
  * Helpers
@@ -143,50 +147,6 @@ int replay_copybytesinfile(uint16_t count, TieFile* src, TieFile* dst) {
 		remaining -= chunk;
 	}
 	return 1;
-}
-
-/* --------------------------------------------------------------------------
- * ReplayInputFrame on-disk codec. Used by user.c on the record/playback
- * paths so the buffer is always written in the DOS binary's little-endian
- * format regardless of host endianness.
- * -------------------------------------------------------------------------- */
-void ReplayInputFrame_decode(ReplayInputFrame* dst, const uint8_t* src) {
-	dst->delta_us = br_u32le(src + REPLAYINPUTFRAME_DELTA_US_OFFSET);
-	dst->key = br_u16le(src + REPLAYINPUTFRAME_KEY_OFFSET);
-	dst->deltax = br_i16le(src + REPLAYINPUTFRAME_DELTAX_OFFSET);
-	dst->deltay = br_i16le(src + REPLAYINPUTFRAME_DELTAY_OFFSET);
-	dst->buttons = br_u8(src + REPLAYINPUTFRAME_BUTTONS_OFFSET);
-	dst->frameticks = br_u8(src + REPLAYINPUTFRAME_FRAMETICKS_OFFSET);
-	dst->deltaroll = br_i16le(src + REPLAYINPUTFRAME_DELTAROLL_OFFSET);
-	dst->throttle_command = br_u32le(src + REPLAYINPUTFRAME_THROTTLE_OFFSET);
-}
-
-void ReplayInputFrame_encode(uint8_t* dst, const ReplayInputFrame* src) {
-	bw_u32le(dst + REPLAYINPUTFRAME_DELTA_US_OFFSET, src->delta_us);
-	bw_u16le(dst + REPLAYINPUTFRAME_KEY_OFFSET, src->key);
-	bw_i16le(dst + REPLAYINPUTFRAME_DELTAX_OFFSET, src->deltax);
-	bw_i16le(dst + REPLAYINPUTFRAME_DELTAY_OFFSET, src->deltay);
-	bw_u8(dst + REPLAYINPUTFRAME_BUTTONS_OFFSET, src->buttons);
-	bw_u8(dst + REPLAYINPUTFRAME_FRAMETICKS_OFFSET, src->frameticks);
-	bw_i16le(dst + REPLAYINPUTFRAME_DELTAROLL_OFFSET, src->deltaroll);
-	bw_u32le(dst + REPLAYINPUTFRAME_THROTTLE_OFFSET, src->throttle_command);
-}
-
-/* Compose "<clipname>.clp" from the module-global replayclipname into a
- * 16-byte caller buffer. */
-static void build_clip_filename(char out[16]) {
-	size_t n = 0;
-	size_t s;
-
-	while (n < sizeof(replayclipname) && replayclipname[n]) {
-		out[n] = replayclipname[n];
-		++n;
-	}
-	s = 0;
-	while (n + 1 < 16 && kClipSuffix[s]) {
-		out[n++] = kClipSuffix[s++];
-	}
-	out[n] = '\0';
 }
 
 /* --------------------------------------------------------------------------
@@ -1045,15 +1005,16 @@ uint16_t replay_savereplay(void) {
 
 // FUNCTION: TIE95 0x455B4
 int replay_loadreplay(void) {
-	char filename[16];
+	char filename[40];
 	uint8_t preamble[6];
 	uint32_t cnt;
 	TieFile* clip_fp;
 	size_t i;
 
-	build_clip_filename(filename);
+	strcpy(filename, replayclipname);
 	if (!filename[0])
 		return 0;
+	strcat(filename, ".clp");
 
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, filename, "rb", 0))
 		return 0;
@@ -1270,7 +1231,7 @@ void replay_doreplayscreen(void) {
 				(void)tie_doframe();
 #ifdef TIE_MODERN
 				TieReplayTiming_ConsumeFrame();
-				info_screen = user_consume_info_room_request();
+				info_screen = TieFlightRequest_ConsumeInfoRoom();
 				if (info_screen >= 0) {
 					TieInflightInfo_Begin(info_screen);
 					pushed_subtask = true;

@@ -10,8 +10,6 @@
 extern "C" {
 #endif
 
-extern GameScoreHead* combat_score_data;
-
 int16_t combat_Combat(SceneHeadStruct* scene_head);
 
 #ifdef __cplusplus

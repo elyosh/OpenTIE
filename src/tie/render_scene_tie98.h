@@ -4,6 +4,7 @@
 #include "tie/math3d_tie98.h"
 #include "tie/render_clip_tie98.h"
 #include "tie/std3d_tie98.h"
+#include "tie_runtime/flight_assets/model_access.h"
 #include "tie_runtime/flight_assets/native_opt.h"
 
 #include <stdint.h>
@@ -130,7 +131,6 @@ extern int g_useHardware3D;
 extern int g_powerVrSceneWorkaround;
 extern int g_bilinearEnabled;
 extern int g_flightSurfaceAlreadyLocked;
-extern const Tie98OptimizedPolyObject* g_flightModelOverride;
 
 #ifdef __cplusplus
 }

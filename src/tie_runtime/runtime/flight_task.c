@@ -1,4 +1,5 @@
 #include "tie_runtime/runtime/flight_task.h"
+#include "tie_runtime/runtime/flight_requests.h"
 #include "tie_runtime/runtime/inflight_info_task.h"
 #include "tie_runtime/runtime/replay_session_task.h"
 
@@ -130,7 +131,7 @@ static LandruTaskStepResult flight_mission_step(void* self) {
 	 * next; this step yields, and the next tick advances the
 	 * sub-task. When the info-room pops, control returns here and
 	 * tie_doframe resumes its frame-by-frame cadence. */
-	int32_t pending = user_consume_info_room_request();
+	int32_t pending = TieFlightRequest_ConsumeInfoRoom();
 	if (pending >= 0) {
 		TieInflightInfo_Begin(pending);
 		t->rebase_pending = 1;
@@ -139,7 +140,7 @@ static LandruTaskStepResult flight_mission_step(void* self) {
 
 	/* Pending replay-viewer request from the 'v' keybind? Push the
 	 * viewer on top and arm the post-pop RESUMED banner. */
-	if (user_consume_replay_viewer_request()) {
+	if (TieFlightRequest_ConsumeReplayViewer()) {
 		TieReplaySession_Begin();
 		t->resumed_banner_pending = 1;
 		t->rebase_pending = 1;

@@ -12,6 +12,8 @@ const uint8_t* TieRecoveredData_HighlightMapping(void);
 const uint8_t* TieRecoveredData_TargetMapping(void);
 const char* TieRecoveredData_GateLabel(int idx);
 uint32_t TieRecoveredData_MissionLoadGeneration(void);
+/* Called by fediskio_loadspecies after species model storage is refreshed. */
+void TieRecoveredData_AdvanceMissionLoadGeneration(void);
 
 typedef enum TieSpeciesLfdResourceSet {
 	TIE_SPECIES_LFD_RES320,

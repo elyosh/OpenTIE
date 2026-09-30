@@ -121,10 +121,6 @@ typedef struct xtrans2_ObjectRecord {
 extern uint8_t xtrans2_dithercolorinitflag;
 extern uint8_t xtrans2_materialrgbinitflag;
 
-/* 4-byte constant sentinel used as an operand scratch by TRACE2 inlines
- * (the linker collapses repeated `dd -1` loads to this label). */
-extern uint32_t xtrans2_minusone;
-
 /* Linear framebuffer base used by outputxt / drawxtrans. Owned by XTRANS2
  * per watdbg; other modules (XVESA, PANEL) read through it. */
 extern uint8_t* xtrans2_videobaseptr;
@@ -154,19 +150,18 @@ extern int32_t logbufypos;
 
 /* Per-edge cache. Filled by TRANSFM2_classifyedges and TRACE2_drawface.
  * edgept1/edgept2 are pointers into the screen-xy ring from
- * TRANSFM2_getscreencoords. Sizes per watdbg: _edgept1[1024 bytes]=256 ptrs,
- * _edgept2[512 bytes]=128 ptrs. */
+ * TRANSFM2_getscreencoords. Retail sizes all edge tables for 256 edges. */
 extern int32_t* edgept1[256];
-extern int32_t* edgept2[128];
-extern int32_t edgexdiff[128];
-extern int32_t edgeydiff[128];
-extern int8_t edgexsign[128];
-extern int8_t edgeysign[128];
-extern int16_t edgeslopehi[128];
-extern int16_t edgeslopelo[128];
-extern int16_t edgeslopefrac[128];
-extern uint8_t edgeflags[128];
-extern void* edgeflagptr[128]; /* TRACE2 EdgeHeader per-edge pointer */
+extern int32_t* edgept2[256];
+extern int32_t edgexdiff[256];
+extern int32_t edgeydiff[256];
+extern int8_t edgexsign[256];
+extern int8_t edgeysign[256];
+extern int16_t edgeslopehi[256];
+extern int16_t edgeslopelo[256];
+extern int16_t edgeslopefrac[256];
+extern uint8_t edgeflags[256];
+extern void* edgeflagptr[256]; /* TRACE2 EdgeHeader per-edge pointer */
 
 /* Flat-polygon tables (filled by TRACE2_drawscreencoords). */
 extern uint16_t flatobjnum;
@@ -204,13 +199,12 @@ extern uint8_t starhashtable[2048];
 extern int32_t eyexyzdata[384];
 
 /* Per-scanline working state. These live in contiguous BSS and are used
- * as single scalars (not arrays). Layout follows watdbg exactly. */
+ * as single scalars (not arrays). */
 extern int32_t newx;           /* next edge's x (pixel col) */
 extern uint8_t* maskptr;       /* mask-RLE cursor into xtransdataptr */
 extern uint32_t videoypos;     /* byte offset within VESA window */
 extern int32_t startx_mod_54;  /* binary-level 'startx' — renamed to
 								* avoid collision with TRACE2's startx */
-extern int32_t starty_mod_54;  /* matching 'starty' companion */
 extern int32_t newlt;          /* next edge's lighting value */
 extern uint32_t objid;         /* current edge's object id */
 extern uint32_t face2;         /* current edge's second face id */
@@ -219,7 +213,6 @@ extern int32_t maskx;          /* current mask-run x transition */
 extern int32_t currentypos;    /* current scanline index */
 extern int32_t runx;           /* current edge's pixel column (x>>8) */
 extern int32_t endx;           /* run end column for outputxt */
-extern int32_t endy_mod_54;    /* companion (unused by XTRANS2 itself) */
 extern uint32_t edgeid;        /* current edge id */
 extern uint32_t pixdeepshft24; /* pixelsdeep << 24 */
 extern void* tempptr;          /* reusable temporary */
@@ -229,11 +222,8 @@ extern void* currentedgeptr;   /* current edge under processing */
 extern void* lastptr;          /* reusable temporary */
 extern void* headerlist;       /* active-edge list head for current scanline */
 
-extern int16_t tempslope;
 extern int16_t numlastrow;
 extern uint16_t curobjid; /* frontmost object id (0xFFFF = needs resort) */
-extern int16_t oxtlightinc;
-extern int16_t lightcount;
 extern uint16_t twicepixelsdeep;
 extern uint16_t lastheap;     /* top-of-heap index */
 extern uint16_t pixdeepshft8; /* pixelsdeep << 8 (low-word snapshot) */
@@ -242,8 +232,6 @@ extern uint16_t pixwideshft7; /* pixelswide << 7 */
 extern int8_t maskflag; /* sign flips each mask run */
 extern uint8_t popflag; /* deferred-pop count */
 extern uint8_t xtflagvalue;
-extern uint8_t delflag;
-extern int16_t changesign;
 
 /* --- API -------------------------------------------------------------- */
 

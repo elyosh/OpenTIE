@@ -49,106 +49,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ---- Edition data ---- */
-
-typedef struct BriefSpec {
-	LandruSurfaceSet surface_set;
-	const char* archive;
-	const char* snapshot_lfd;
-	int16_t width, height;
-	int16_t default_mouse_x, default_mouse_y;
-	int16_t officer_mouse_x, officer_mouse_y;
-	int16_t map_mouse_x, map_mouse_y;
-	int16_t priest_mouse_x, priest_mouse_y;
-	int16_t notice_mouse_x, notice_mouse_y;
-	int16_t notice_return_mouse_x, notice_return_mouse_y;
-	int16_t input_bounds[5][4];
-	int16_t map_poly[8];
-	int16_t title_font;
-	int16_t notice_width, notice_height;
-	int16_t notice_text_height;
-	int16_t notice_font;
-	bool film_actor_case_8;
-} BriefSpec;
-
-/* DATA: TIE95 BRIEF_Brief 0x72E20; TIE98 0x405FF0. */
-static const BriefSpec brief_specs[] = {
-	{
-		/* surface_set */ LANDRU_SURFACE_VGA,
-		/* archive */ "brief.lfd",
-		/* snapshot_lfd */ "BRIEF",
-		/* width */ 320,
-		/* height */ 200,
-		/* default_mouse_x */ 78,
-		/* default_mouse_y */ 80,
-		/* officer_mouse_x */ 218,
-		/* officer_mouse_y */ 126,
-		/* map_mouse_x */ 160,
-		/* map_mouse_y */ 90,
-		/* priest_mouse_x */ 282,
-		/* priest_mouse_y */ 90,
-		/* notice_mouse_x */ 190,
-		/* notice_mouse_y */ 110,
-		/* notice_return_mouse_x */ 218,
-		/* notice_return_mouse_y */ 126,
-		/* input_bounds */
-		{
-			{ 84, 132, 122, 172 },
-			{ 190, 118, 248, 138 },
-			{ 28, 46, 128, 124 },
-			{ 140, 66, 174, 114 },
-			{ 242, 66, 314, 102 },
-		},
-		/* map_poly */ { 34, 50, 127, 58, 125, 106, 36, 120 },
-		/* title_font */ 0,
-		/* notice_width */ 180,
-		/* notice_height */ 40,
-		/* notice_text_height */ 20,
-		/* notice_font */ 0,
-		/* film_actor_case_8 */ false,
-	},
-	{
-		/* surface_set */ LANDRU_SURFACE_SVGA,
-		/* archive */ "brief640.lfd",
-		/* snapshot_lfd */ "BRIEF640",
-		/* width */ 640,
-		/* height */ 480,
-		/* default_mouse_x */ 156,
-		/* default_mouse_y */ 160,
-		/* officer_mouse_x */ 416,
-		/* officer_mouse_y */ 302,
-		/* map_mouse_x */ 265,
-		/* map_mouse_y */ 190,
-		/* priest_mouse_x */ 564,
-		/* priest_mouse_y */ 180,
-		/* notice_mouse_x */ 330,
-		/* notice_mouse_y */ 260,
-		/* notice_return_mouse_x */ 416,
-		/* notice_return_mouse_y */ 302,
-		/* input_bounds */
-		{
-			{ 123, 329, 184, 459 },
-			{ 385, 256, 448, 350 },
-			{ 50, 80, 230, 290 },
-			{ 230, 157, 274, 251 },
-			{ 498, 125, 604, 220 },
-		},
-		/* map_poly */ { 56, 83, 223, 93, 225, 244, 67, 277 },
-		/* title_font */ 2,
-		/* notice_width */ 280,
-		/* notice_height */ 60,
-		/* notice_text_height */ 30,
-		/* notice_font */ 2,
-		/* film_actor_case_8 */ true,
-	},
-};
-
 #ifdef TIE_MODERN
-static const BriefSpec* active_spec;
-#elif defined(TIE98)
-static const BriefSpec* const active_spec = &brief_specs[1];
-#else
-static const BriefSpec* const active_spec = &brief_specs[0];
+/* PORT: runtime frontend selection (TIE98 SVGA layout vs TIE95 VGA layout). */
+static bool brief_svga;
 #endif
 
 /* ---- Static globals ---- */
@@ -257,9 +160,15 @@ static int16_t film_Callback(Film* film, FilmObject* fo) {
 			return shipext_Get_Mission_Officer() != 2;
 
 		case 8: /* Additional TIE98 officer-room actor variant. */
-			if (active_spec->film_actor_case_8)
+#ifdef TIE_MODERN
+			if (brief_svga)
 				return shipext_Get_Mission_Officer() != 2;
 			return 0;
+#elif defined(TIE98)
+			return shipext_Get_Mission_Officer() != 2;
+#else
+			return 0;
+#endif
 
 		default:
 			return 0;
@@ -382,7 +291,13 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 	int16_t offx, offy;
 	Rect r;
 	char label[32];
-	TIEText text_id;
+#ifdef TIE_MODERN
+	int16_t font_id = brief_svga ? 2 : 0;
+#elif defined(TIE98)
+	int16_t font_id = 2;
+#else
+	int16_t font_id = 0;
+#endif
 	if (!refresh)
 		return 0;
 
@@ -394,31 +309,29 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 
 	switch (actor->var2) {
 		case 0:
-			text_id = txtBriefMainMenu;
+			strcpy(label, textext_Get_Text(txtBriefMainMenu));
 			break;
 		case 1:
-			text_id = txtBriefEnter;
+			strcpy(label, textext_Get_Text(txtBriefEnter));
 			break;
 		case 2:
-			text_id = txtBriefMap;
+			strcpy(label, textext_Get_Text(txtBriefMap));
 			break;
 		case 3:
-			text_id = txtBriefOfficer;
+			strcpy(label, textext_Get_Text(txtBriefOfficer));
 			break;
 		case 4:
-			text_id = txtBriefPriest;
+			strcpy(label, textext_Get_Text(txtBriefPriest));
 			break;
 		default:
 			label[0] = 0;
-			goto draw_text;
+			break;
 	}
-	strcpy(label, textext_Get_Text(text_id));
 
-draw_text:
 	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, 16, active_spec->title_font);
+	xfont_Print_Centered_Text(label, &r, 16, font_id);
 	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, 15, active_spec->title_font);
+	xfont_Print_Centered_Text(label, &r, 15, font_id);
 	return 1;
 }
 
@@ -457,7 +370,13 @@ static Input* Build_Notice(const char* text) {
 	PushButton* btn;
 	(void)text;
 
-	xrect_Set_Rect(&r, 0, 0, active_spec->notice_width, active_spec->notice_height);
+#ifdef TIE_MODERN
+	xrect_Set_Rect(&r, 0, 0, brief_svga ? 280 : 180, brief_svga ? 60 : 40);
+#elif defined(TIE98)
+	xrect_Set_Rect(&r, 0, 0, 280, 60);
+#else
+	xrect_Set_Rect(&r, 0, 0, 180, 40);
+#endif
 	dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
 	xinpattr_Set_Input_Draw_Function(dlg, idraw_Notice);
 	xinpattr_Set_Input_Allign(dlg, 1, 1);
@@ -475,16 +394,29 @@ static Input* Build_Notice(const char* text) {
 // FUNCTION: TIE98 0x406B20
 static void idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh) {
 	Rect tr;
+#ifdef TIE_MODERN
+	int16_t font_id = brief_svga ? 2 : 0;
+#elif defined(TIE98)
+	int16_t font_id = 2;
+#else
+	int16_t font_id = 0;
+#endif
 	if (!refresh)
 		return;
 
 	xrect_Copy_Rect(&tr, r);
 	xstyle_Style_Paint_Border(r, 0);
-	tr.bottom = tr.top + active_spec->notice_text_height;
+#ifdef TIE_MODERN
+	tr.bottom = tr.top + (brief_svga ? 30 : 20);
+#elif defined(TIE98)
+	tr.bottom = tr.top + 30;
+#else
+	tr.bottom = tr.top + 20;
+#endif
 
-	xfont_Enable_FontID_Shadow(active_spec->notice_font);
-	xfont_Print_Centered_Text(textext_Get_Text(txtBriefRestore), &tr, 15, active_spec->notice_font);
-	xfont_Disable_FontID_Shadow(active_spec->notice_font);
+	xfont_Enable_FontID_Shadow(font_id);
+	xfont_Print_Centered_Text(textext_Get_Text(txtBriefRestore), &tr, 15, font_id);
+	xfont_Disable_FontID_Shadow(font_id);
 
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip);
@@ -506,23 +438,16 @@ static void iuser_Notice(Input* input, int32_t time) {
 // FUNCTION: TIE98 0x405FF0
 int16_t brief_Brief(SceneHeadStruct* scene_head) {
 #ifdef TIE_MODERN
-	bool svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
 	Input* notice = NULL;
 #endif
 	int16_t mouse_x, mouse_y, last;
 	ResFile* brief_res;
 	ResFile* player_res;
 	Poly p;
-#ifdef TIE_MODERN
-	const int16_t* poly;
-#endif
 	Rect frame;
-#ifdef TIE_MODERN
-	const int16_t* bounds;
-#endif
 
 #ifdef TIE_MODERN
-	active_spec = &brief_specs[svga ? 1 : 0];
+	brief_svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
 #endif
 
 	/* Position mouse based on last scene and officer type */
@@ -532,8 +457,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 		/* From officer */
 		if (shipext_Get_Mission_Officer() == 1) {
 #ifdef TIE_MODERN
-			mouse_x = active_spec->officer_mouse_x;
-			mouse_y = active_spec->officer_mouse_y;
+			mouse_x = brief_svga ? 416 : 218;
+			mouse_y = brief_svga ? 302 : 126;
 #elif defined(TIE98)
 			mouse_x = 416;
 			mouse_y = 302;
@@ -543,8 +468,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 #endif
 		} else {
 #ifdef TIE_MODERN
-			mouse_x = active_spec->priest_mouse_x;
-			mouse_y = active_spec->priest_mouse_y;
+			mouse_x = brief_svga ? 564 : 282;
+			mouse_y = brief_svga ? 180 : 90;
 #elif defined(TIE98)
 			mouse_x = 564;
 			mouse_y = 180;
@@ -557,8 +482,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 		/* From map */
 		if (shipext_Get_Mission_Officer() != 2) {
 #ifdef TIE_MODERN
-			mouse_x = active_spec->map_mouse_x;
-			mouse_y = active_spec->map_mouse_y;
+			mouse_x = brief_svga ? 265 : 160;
+			mouse_y = brief_svga ? 190 : 90;
 #elif defined(TIE98)
 			mouse_x = 265;
 			mouse_y = 190;
@@ -568,8 +493,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 #endif
 		} else {
 #ifdef TIE_MODERN
-			mouse_x = active_spec->priest_mouse_x;
-			mouse_y = active_spec->priest_mouse_y;
+			mouse_x = brief_svga ? 564 : 282;
+			mouse_y = brief_svga ? 180 : 90;
 #elif defined(TIE98)
 			mouse_x = 564;
 			mouse_y = 180;
@@ -581,8 +506,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	} else if (last == SCENE_TALK_BRIEF_PRIEST) {
 		/* From priest */
 #ifdef TIE_MODERN
-		mouse_x = active_spec->officer_mouse_x;
-		mouse_y = active_spec->officer_mouse_y;
+		mouse_x = brief_svga ? 416 : 218;
+		mouse_y = brief_svga ? 302 : 126;
 #elif defined(TIE98)
 		mouse_x = 416;
 		mouse_y = 302;
@@ -593,8 +518,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	} else {
 		/* Default */
 #ifdef TIE_MODERN
-		mouse_x = active_spec->default_mouse_x;
-		mouse_y = active_spec->default_mouse_y;
+		mouse_x = brief_svga ? 156 : 78;
+		mouse_y = brief_svga ? 160 : 80;
 #elif defined(TIE98)
 		mouse_x = 156;
 		mouse_y = 160;
@@ -607,7 +532,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 
 	/* Load resources */
 #ifdef TIE_MODERN
-	brief_res = shellext_Open_Empire_Resource(active_spec->archive);
+	brief_res = shellext_Open_Empire_Resource(brief_svga ? "brief640.lfd" : "brief.lfd");
 #elif defined(TIE98)
 	brief_res = shellext_Open_Empire_Resource("brief640.lfd");
 #else
@@ -616,7 +541,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	player_res = shellext_Open_Empire_Resource("player.lfd");
 
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+	xrect_Set_Rect(&frame, 0, 0, brief_svga ? 640 : 320, brief_svga ? 480 : 200);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 0, 0, 640, 480);
 #else
@@ -633,7 +558,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	 * shell_run_scene_dispatch. */
 	brief_film = xfilm_Res_Callback_Film("brief", &frame, 0, 0, 0, film_Callback);
 #ifdef TIE_MODERN
-	TieSnapshotBuilder_SetActiveFilm(active_spec->snapshot_lfd, "brief");
+	TieSnapshotBuilder_SetActiveFilm(brief_svga ? "BRIEF640" : "BRIEF", "brief");
 #endif
 	xfilm_Set_Film_Def_Palette(brief_film, scene_head->def_palette);
 
@@ -642,8 +567,10 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 
 	/* Main menu button (id=0) */
 #ifdef TIE_MODERN
-	bounds = active_spec->input_bounds[0];
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (brief_svga)
+		xrect_Set_Rect(&frame, 123, 329, 184, 459);
+	else
+		xrect_Set_Rect(&frame, 84, 132, 122, 172);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 123, 329, 184, 459);
 #else
@@ -657,8 +584,10 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 
 	/* Enter mission button (id=1) */
 #ifdef TIE_MODERN
-	bounds = active_spec->input_bounds[1];
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (brief_svga)
+		xrect_Set_Rect(&frame, 385, 256, 448, 350);
+	else
+		xrect_Set_Rect(&frame, 190, 118, 248, 138);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 385, 256, 448, 350);
 #else
@@ -672,8 +601,10 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 
 	/* Map area (id=2) */
 #ifdef TIE_MODERN
-	bounds = active_spec->input_bounds[2];
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (brief_svga)
+		xrect_Set_Rect(&frame, 50, 80, 230, 290);
+	else
+		xrect_Set_Rect(&frame, 28, 46, 128, 124);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 50, 80, 230, 290);
 #else
@@ -688,8 +619,10 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	/* Officer door (id=3) — skip if priest only */
 	if (shipext_Get_Mission_Officer() != 2) {
 #ifdef TIE_MODERN
-		bounds = active_spec->input_bounds[3];
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		if (brief_svga)
+			xrect_Set_Rect(&frame, 230, 157, 274, 251);
+		else
+			xrect_Set_Rect(&frame, 140, 66, 174, 114);
 #elif defined(TIE98)
 		xrect_Set_Rect(&frame, 230, 157, 274, 251);
 #else
@@ -705,8 +638,10 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	/* Priest door (id=4) — skip if officer only */
 	if (shipext_Get_Mission_Officer() != 1) {
 #ifdef TIE_MODERN
-		bounds = active_spec->input_bounds[4];
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		if (brief_svga)
+			xrect_Set_Rect(&frame, 498, 125, 604, 220);
+		else
+			xrect_Set_Rect(&frame, 242, 66, 314, 102);
 #elif defined(TIE98)
 		xrect_Set_Rect(&frame, 498, 125, 604, 220);
 #else
@@ -724,8 +659,10 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 
 	/* Initialize the briefing map with polygon projection */
 #ifdef TIE_MODERN
-	poly = active_spec->map_poly;
-	xrect_Set_Poly(&p, poly[0], poly[1], poly[2], poly[3], poly[4], poly[5], poly[6], poly[7]);
+	if (brief_svga)
+		xrect_Set_Poly(&p, 56, 83, 223, 93, 225, 244, 67, 277);
+	else
+		xrect_Set_Poly(&p, 34, 50, 127, 58, 125, 106, 36, 120);
 #elif defined(TIE98)
 	xrect_Set_Poly(&p, 56, 83, 223, 93, 225, 244, 67, 277);
 #else
@@ -736,9 +673,9 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 
 	if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
 		notice = Build_Notice(NULL);
-		xio_Set_Mouse_Position(active_spec->notice_mouse_x, active_spec->notice_mouse_y);
+		xio_Set_Mouse_Position(brief_svga ? 330 : 190, brief_svga ? 260 : 110);
 	}
-	TieBrief_RunView(notice, svga, active_spec->notice_return_mouse_x, active_spec->notice_return_mouse_y);
+	TieBrief_RunView(notice, brief_svga, brief_svga ? 416 : 218, brief_svga ? 302 : 126);
 	return 0;
 #else
 	xview_Set_View_Update_Function(brief_end_View);

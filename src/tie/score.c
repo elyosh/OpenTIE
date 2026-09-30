@@ -10,6 +10,7 @@
 #include "tie/shipext.h" /* EFGStruct, EAIStruct */
 #include "tie/tie.h"
 #include "tie/user.h"
+#include "tie_runtime/audio/flight_sound_bank.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
 
 #include <stddef.h>
@@ -18,11 +19,15 @@
 /* --- Module-owned globals (watdbg: score.c) -------------------------- */
 
 /* 5-entry LUT mapping per-FG pct bucket (0..4) -> amount_op for checkcondition. */
+// GLOBAL: TIE95 0xC7A90
+// GLOBAL: TIE98 0x4EB7B8
 int16_t percentcon[5] = { 0, 2, 4, 5, 6 };
 
 /* Per-cond-code dispatch flag: 0 = mission-level direct check,
  *                              1 = FG-iteration evaluator.
  * Frozen at load time; mirrors the _conditiongrouprelated data table. */
+// GLOBAL: TIE95 0xC7A9A
+// GLOBAL: TIE98 0x4EB7C8
 uint8_t conditiongrouprelated[26] = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1,
 									  0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0 };
 
@@ -167,8 +172,8 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
 	if (cd->craft_idx_in_fg == special)
 		((&fs->cond_id[0].count))[exit_kind] = 1;
 
-/* Conditional buckets: each bumps its own cond[N].count when the
- * craft's flag is CLEAR (i.e. the exit qualifies for that bucket). */
+	/* Conditional buckets: each bumps its own cond[N].count when the
+	 * craft's flag is CLEAR (i.e. the exit qualifies for that bucket). */
 	if (!cd->inspected) {
 		fs->cond[5].count++;
 		if (cd->craft_idx_in_fg == special)
@@ -266,92 +271,6 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
  * score_checkcondition (body)
  * ==================================================================== */
 
-/* Helper: craft live-state predicate for cond 21..24. Returns nonzero when
- * the craft at object slot `i` satisfies the cond-specific filter. */
-static int craft_pred_live(uint8_t cond, const CraftData* cd) {
-	switch (cond) {
-		case 21:
-			/* Watcom emitted unaligned-dword-HIWORD reads on cargo[14] and
-			 * forward_shield, which decode to forward_shield and rear_shield
-			 * respectively (the int16 sitting two bytes past each named field). */
-			return (cd->forward_shield + cd->rear_shield) > 0;
-		case 22:
-			return cd->hull_damage <= (uint16_t)(cd->hull_max / 2);
-		case 23: {
-			uint16_t ammo = 0;
-			int k;
-
-			for (k = 0; k < (int)cd->missile_group_cnt; k++) {
-				ammo = (uint16_t)(ammo + cd->weapon_slots[spec_data[cd->species_idx].missile_end[k]].ammo +
-								  cd->weapon_slots[spec_data[cd->species_idx].missile_start[k]].ammo);
-			}
-			return ammo != 0;
-		}
-		default: /* cond 24 and fallback */
-			return (cd->status_flags & 0x10u) != 0;
-	}
-}
-
-/* Mission-level direct-check path (used when conditiongrouprelated[cond]==0). */
-static int8_t check_mission_level(uint8_t cond) {
-	const int8_t INCOMPLETE = 4;
-
-	if (cond < 15u) {
-		if (cond < 10u)
-			return (cond == 0) ? 1 : INCOMPLETE; /* 0=true; 1..9=incomplete */
-		if (cond == 10u)
-			return 0; /* always-false */
-		if (cond < 13u)
-			return INCOMPLETE; /* 11, 12: fall-through */
-		if (cond == 13u) {
-			if (mission.primary_complete == 1)
-				return 1;
-			if (mission.primary_complete == 2)
-				return 2;
-			return INCOMPLETE;
-		}
-		/* cond == 14: mirror of 13 with 1/2 swapped. */
-		if (mission.primary_complete == 2)
-			return 1;
-		if (mission.primary_complete == 1)
-			return 2;
-		return INCOMPLETE;
-	}
-
-	if (cond == 15u) {
-		if (mission.secondary_complete == 1)
-			return 1;
-		if (mission.secondary_complete == 2)
-			return 2;
-		return INCOMPLETE;
-	}
-	if (cond == 16u) {
-		if (mission.secondary_complete == 2)
-			return 1;
-		if (mission.secondary_complete == 1)
-			return 2;
-		return INCOMPLETE;
-	}
-	if (cond == 17u) {
-		if (mission.bonus_complete == 1)
-			return 1;
-		if (mission.bonus_complete == 2)
-			return 2;
-		return INCOMPLETE;
-	}
-	if (cond == 18u) {
-		if (mission.bonus_complete == 2)
-			return 1;
-		if (mission.bonus_complete == 1)
-			return 2;
-		return INCOMPLETE;
-	}
-	if (cond == 20u)
-		return mission.penalty_flag ? 1 : 2;
-
-	return INCOMPLETE;
-}
-
 // FUNCTION: TIE95 0x51698
 int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id, uint8_t amount_op,
 							int8_t exclude_player) {
@@ -366,8 +285,63 @@ int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id
 	uint16_t fg_idx;
 	int8_t INCOMPLETE;
 
-	if (!conditiongrouprelated[cond])
-		return check_mission_level(cond);
+	if (!conditiongrouprelated[cond]) {
+		/* Mission-level direct check. */
+		INCOMPLETE = 4;
+		if (cond < 15u) {
+			if (cond < 10u) {
+				if (cond == 0)
+					return 1; /* 0=true; 1..9=incomplete */
+			} else if (cond == 10u) {
+				return 0; /* always-false */
+			} else if (cond >= 13u) {
+				if (cond == 13u) {
+					if (mission.primary_complete == 1)
+						return 1;
+					if (mission.primary_complete == 2)
+						return 2;
+				} else {
+					/* cond == 14: mirror of 13 with 1/2 swapped. */
+					if (mission.primary_complete == 2)
+						return 1;
+					if (mission.primary_complete == 1)
+						return 2;
+				}
+			}
+			return INCOMPLETE;
+		}
+		if (cond == 15u) {
+			if (mission.secondary_complete == 1)
+				return 1;
+			if (mission.secondary_complete == 2)
+				return 2;
+			return INCOMPLETE;
+		}
+		if (cond == 16u) {
+			if (mission.secondary_complete == 2)
+				return 1;
+			if (mission.secondary_complete == 1)
+				return 2;
+			return INCOMPLETE;
+		}
+		if (cond == 17u) {
+			if (mission.bonus_complete == 1)
+				return 1;
+			if (mission.bonus_complete == 2)
+				return 2;
+			return INCOMPLETE;
+		}
+		if (cond == 18u) {
+			if (mission.bonus_complete == 2)
+				return 1;
+			if (mission.bonus_complete == 1)
+				return 2;
+			return INCOMPLETE;
+		}
+		if (cond != 20u)
+			return INCOMPLETE;
+		return mission.penalty_flag ? 1 : 2;
+	}
 
 	if (!target_type)
 		return 2; /* No target -> failed. */
@@ -399,7 +373,7 @@ int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id
 		if (cond < 6u) {
 			if (cond < 3u) {
 				if (cond == 0u) {
-					/* Handled by check_mission_level; unreachable here. */
+					/* Handled by the mission-level check; unreachable here. */
 				} else if (cond == 1u) {
 					/* Captured/disabled: cond[0].detail + cond_id[0].detail;
 					 * also flag player match. */
@@ -479,7 +453,7 @@ int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id
 		} else if (cond >= 21u && cond <= 24u) {
 			/* Scan live craft of this FG, apply a cond-specific predicate.
 			 *
-			 * craft_pred_live returns nonzero when the craft is "alive" by
+			 * `alive` is nonzero when the craft passes
 			 * the cond-specific filter (cargo+shield > 0, shield <= max/2,
 			 * ammo > 0, status&0x10 != 0). Retail's predicate-TRUE branch
 			 * (++cond_count + ++player_matched) fires on the OPPOSITE
@@ -496,7 +470,34 @@ int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id
 				if ((uint16_t)objects[i].fg_idx != fg_idx)
 					continue;
 				cd = objects[i].craft_ptr;
-				alive = craft_pred_live(cond, cd);
+				switch (cond) {
+					case 21:
+						/* Watcom emitted unaligned-dword-HIWORD reads on cargo[14] and
+						 * forward_shield, which decode to forward_shield and rear_shield
+						 * respectively (the int16 sitting two bytes past each named field). */
+						alive = (cd->forward_shield + cd->rear_shield) > 0;
+						break;
+					case 22:
+						alive = cd->hull_damage <= (uint16_t)(cd->hull_max / 2);
+						break;
+					case 23: {
+						uint16_t ammo = 0;
+						int k;
+
+						for (k = 0; k < (int)cd->missile_group_cnt; k++) {
+							ammo =
+								(uint16_t)(ammo +
+										   cd->weapon_slots[spec_data[cd->species_idx].missile_end[k]].ammo +
+										   cd->weapon_slots[spec_data[cd->species_idx].missile_start[k]]
+											   .ammo);
+						}
+						alive = ammo != 0;
+						break;
+					}
+					default: /* cond 24 */
+						alive = (cd->status_flags & 0x10u) != 0;
+						break;
+				}
 				if (!alive) {
 					cond_count++;
 					if (cd->craft_idx_in_fg == f->special_craft)
@@ -594,64 +595,6 @@ int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id
 /* ====================================================================
  * score_checkobjective
  * ==================================================================== */
-
-/* Combine two subcondition results (1/2/4) with OR or AND semantics.
- * Returns 1, 2, or 4 (incomplete). */
-static int8_t combine_subconds(int8_t a, int8_t b, int or_joined) {
-	if (or_joined) {
-		if (((a | b) & 1) != 0)
-			return 1;
-		if ((a & b & 2) != 0)
-			return 2;
-		return 4;
-	}
-	if ((a & b & 1) != 0)
-		return 1;
-	if (((a | b) & 2) != 0)
-		return 2;
-	return 4;
-}
-
-/* Play the "objectives complete" cue for primary/secondary: prints the
- * template, walks the two 64-byte name entries from the .TIE header, then
- * triggers voiced acknowledgement. The bonus variant has no name list
- * (name_kind == NULL). */
-typedef enum { NAME_LIST_PRI, NAME_LIST_SEC, NAME_LIST_NONE } NameListKind;
-
-static void play_objectives_complete(uint16_t cooldown_set, MsgTemplate complete_msg, NameListKind name_kind,
-									 uint16_t voice_id_first, uint16_t speak_voice, int16_t script_seq,
-									 int16_t* cooldown_slot) {
-	if (*cooldown_slot == 0) {
-		uint16_t k;
-
-		*cooldown_slot = (int16_t)cooldown_set;
-		msg_messageprintf(complete_msg);
-		/* The first name-list line carries the edition-specific primary
-		 * or secondary objective voice cue; the second
-		 * line plays silently. Bonus passes voice_id_first=0 because
-		 * MSG_BONUS_COMPLETE doesn't pair with a per-mission cue. */
-		for (k = 0; k < 2u; k++) {
-			const uint8_t* p = NULL;
-			switch (name_kind) {
-				case NAME_LIST_PRI:
-					p = (const uint8_t*)mission_file_header.mission.win_msg1[k];
-					break;
-				case NAME_LIST_SEC:
-					p = (const uint8_t*)mission_file_header.mission.win_msg2[k];
-					break;
-				case NAME_LIST_NONE:
-					break;
-			}
-			if (p && *p) {
-				msg_addmessageptr(0, (char*)p);
-				pending_voice_id = (k == 0) ? voice_id_first : 0;
-				msg_messageprintf(MSG_GENERIC_STAR);
-			}
-		}
-	}
-	fsfx_speakobjectives(speak_voice);
-	fscript_MsSetSequence(script_seq);
-}
 
 // FUNCTION: TIE95 0x50A70
 int8_t score_checkobjective(void) {
@@ -818,16 +761,45 @@ int8_t score_checkobjective(void) {
 										 pri->subcond[0].pct, 0);
 			pri_b = score_checkcondition(pri->subcond[1].cond, pri->subcond[1].type, pri->subcond[1].id,
 										 pri->subcond[1].pct, 0);
-			pri_mission_status = combine_subconds(pri_a, pri_b, pri->or_joined == 1);
+			if (pri->or_joined == 1) {
+				if (((pri_a | pri_b) & 1) != 0)
+					pri_mission_status = 1;
+				else if ((pri_a & pri_b & 2) != 0)
+					pri_mission_status = 2;
+				else
+					pri_mission_status = 4;
+			} else if ((pri_a & pri_b & 1) != 0) {
+				pri_mission_status = 1;
+			} else if (((pri_a | pri_b) & 2) != 0) {
+				pri_mission_status = 2;
+			} else {
+				pri_mission_status = 4;
+			}
 			mission.primary_global = (uint8_t)pri_mission_status;
 		}
 		if (pri_mission_status == 2 && !mission.primary_complete)
 			mission.primary_complete = 2;
 		if (pri_mission_status == 1 && pri_all_ok && any_pri_goal) {
 			if (mission.primary_complete != 1) {
-				play_objectives_complete(7080, MSG_PRIMARY_COMPLETE, NAME_LIST_PRI,
-										 fsfx_mission_voice_id(FSFX_MISSION_VOICE_PRIMARY), 0x5Bu, 5,
-										 &timers[TIMER_PRI_COMPLETE]);
+				if (timers[TIMER_PRI_COMPLETE] == 0) {
+					uint16_t k;
+
+					timers[TIMER_PRI_COMPLETE] = 7080;
+					msg_messageprintf(MSG_PRIMARY_COMPLETE);
+					for (k = 0; k < 2u; k++) {
+						const uint8_t* p = (const uint8_t*)mission_file_header.mission.win_msg1[k];
+						if (*p) {
+							msg_addmessageptr(0, (char*)p);
+							/* The first name-list line carries the edition-specific
+							 * objective voice cue; the second line plays silently. */
+							pending_voice_id =
+								(k == 0) ? TieFlightSound_MissionVoiceId(FSFX_MISSION_VOICE_PRIMARY) : 0;
+							msg_messageprintf(MSG_GENERIC_STAR);
+						}
+					}
+				}
+				fsfx_speakobjectives(0x5Bu);
+				fscript_MsSetSequence(5);
 			}
 			mission.primary_complete = 1;
 			/* Battle 12 / mission 7: force end-of-mission on primary complete. */
@@ -846,7 +818,20 @@ int8_t score_checkobjective(void) {
 													  sec->subcond[0].id, sec->subcond[0].pct, 0);
 			const int8_t sec_b = score_checkcondition(sec->subcond[1].cond, sec->subcond[1].type,
 													  sec->subcond[1].id, sec->subcond[1].pct, 0);
-			sec_mission_status = combine_subconds(sec_a, sec_b, sec->or_joined == 1);
+			if (sec->or_joined == 1) {
+				if (((sec_a | sec_b) & 1) != 0)
+					sec_mission_status = 1;
+				else if ((sec_a & sec_b & 2) != 0)
+					sec_mission_status = 2;
+				else
+					sec_mission_status = 4;
+			} else if ((sec_a & sec_b & 1) != 0) {
+				sec_mission_status = 1;
+			} else if (((sec_a | sec_b) & 2) != 0) {
+				sec_mission_status = 2;
+			} else {
+				sec_mission_status = 4;
+			}
 			mission.secondary_global = (uint8_t)sec_mission_status;
 			if (sec_mission_status == 2 && !mission.secondary_complete)
 				mission.secondary_complete = 2;
@@ -858,9 +843,26 @@ int8_t score_checkobjective(void) {
 			}
 			if (sec_mission_status == 1 && sec_all_ok == 1 && any_sec_goal) {
 				if (mission.secondary_complete != 1) {
-					play_objectives_complete(7080, MSG_SECONDARY_COMPLETE, NAME_LIST_SEC,
-											 fsfx_mission_voice_id(FSFX_MISSION_VOICE_SECONDARY), 0x5Cu, 7,
-											 &timers[TIMER_SEC_COMPLETE]);
+					if (timers[TIMER_SEC_COMPLETE] == 0) {
+						uint16_t k;
+
+						timers[TIMER_SEC_COMPLETE] = 7080;
+						msg_messageprintf(MSG_SECONDARY_COMPLETE);
+						for (k = 0; k < 2u; k++) {
+							const uint8_t* p = (const uint8_t*)mission_file_header.mission.win_msg2[k];
+							if (*p) {
+								msg_addmessageptr(0, (char*)p);
+								/* The first name-list line carries the edition-specific
+								 * objective voice cue; the second line plays silently. */
+								pending_voice_id =
+									(k == 0) ? TieFlightSound_MissionVoiceId(FSFX_MISSION_VOICE_SECONDARY)
+											 : 0;
+								msg_messageprintf(MSG_GENERIC_STAR);
+							}
+						}
+					}
+					fsfx_speakobjectives(0x5Cu);
+					fscript_MsSetSequence(7);
 				}
 				mission.secondary_complete = 1;
 			}
@@ -873,7 +875,22 @@ int8_t score_checkobjective(void) {
 														bonus->subcond[0].id, bonus->subcond[0].pct, 0);
 			const int8_t bonus_b = score_checkcondition(bonus->subcond[1].cond, bonus->subcond[1].type,
 														bonus->subcond[1].id, bonus->subcond[1].pct, 0);
-			int16_t bonus_mission_status = combine_subconds(bonus_a, bonus_b, bonus->or_joined == 1);
+			int16_t bonus_mission_status;
+
+			if (bonus->or_joined == 1) {
+				if (((bonus_a | bonus_b) & 1) != 0)
+					bonus_mission_status = 1;
+				else if ((bonus_a & bonus_b & 2) != 0)
+					bonus_mission_status = 2;
+				else
+					bonus_mission_status = 4;
+			} else if ((bonus_a & bonus_b & 1) != 0) {
+				bonus_mission_status = 1;
+			} else if (((bonus_a | bonus_b) & 2) != 0) {
+				bonus_mission_status = 2;
+			} else {
+				bonus_mission_status = 4;
+			}
 			mission.bonus_global = (uint8_t)bonus_mission_status;
 			if (bonus_mission_status == 2 && !mission.bonus_complete)
 				mission.bonus_complete = 2;
@@ -885,8 +902,12 @@ int8_t score_checkobjective(void) {
 			}
 			if (bonus_mission_status == 1 && bonus_all_ok == 1 && any_bonus_goal) {
 				if (mission.bonus_complete != 1) {
-					play_objectives_complete(14160, MSG_BONUS_COMPLETE, NAME_LIST_NONE, 0, 0x5Eu, 9,
-											 &timers[TIMER_BONUS_COMPLETE]);
+					if (timers[TIMER_BONUS_COMPLETE] == 0) {
+						timers[TIMER_BONUS_COMPLETE] = 14160;
+						msg_messageprintf(MSG_BONUS_COMPLETE);
+					}
+					fsfx_speakobjectives(0x5Eu);
+					fscript_MsSetSequence(9);
 				}
 				mission.bonus_complete = 1;
 			}
@@ -906,7 +927,7 @@ int8_t score_checkobjective(void) {
 					/* First failure-name line carries the edition-specific
 					 * loss VO loaded by fsfx_loadvoicelfd;
 					 * second line plays silently. */
-					pending_voice_id = (k == 0) ? fsfx_mission_voice_id(FSFX_MISSION_VOICE_LOSS) : 0;
+					pending_voice_id = (k == 0) ? TieFlightSound_MissionVoiceId(FSFX_MISSION_VOICE_LOSS) : 0;
 					msg_messageprintf(MSG_GENERIC_STAR);
 				}
 			}
@@ -941,7 +962,7 @@ int8_t score_checkobjective(void) {
 						/* Pair the radio text with the edition-specific
 						 * per-mission voice cue loaded from the
 						 * <NAME>.LFD by fsfx_loadvoicelfd. */
-						pending_voice_id = fsfx_mission_voice_id(j);
+						pending_voice_id = TieFlightSound_MissionVoiceId(j);
 						msg_messageprintf(MSG_GENERIC_STAR_INFO);
 					}
 				}
@@ -960,7 +981,7 @@ int8_t score_checkobjective(void) {
 			mission.radiomsg_countdown[j] = cd_seed;
 			if (cd_seed == 0) {
 				msg_addmessageptr(0, (char*)rec);
-				pending_voice_id = fsfx_mission_voice_id(j);
+				pending_voice_id = TieFlightSound_MissionVoiceId(j);
 				msg_messageprintf(MSG_GENERIC_STAR_INFO);
 			}
 		}

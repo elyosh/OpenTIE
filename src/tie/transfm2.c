@@ -18,9 +18,24 @@
 /* ---- Module-owned globals (from watdbg "static") ---- */
 
 /* Cached per-component multiply tables (16 entries each, indexed by vertex & 0xF) */
-static int32_t lastA1mul[16], lastA2mul[16], lastA3mul[16];
-static int32_t lastB1mul[16], lastB2mul[16], lastB3mul[16];
-static int32_t lastC1mul[16], lastC2mul[16], lastC3mul[16];
+// GLOBAL: TIE95 0xEBF30
+static int32_t lastC3mul[16];
+// GLOBAL: TIE95 0xEBF70
+static int32_t lastC2mul[16];
+// GLOBAL: TIE95 0xEBFB0
+static int32_t lastB1mul[16];
+// GLOBAL: TIE95 0xEBFF0
+static int32_t lastB3mul[16];
+// GLOBAL: TIE95 0xEC030
+static int32_t lastB2mul[16];
+// GLOBAL: TIE95 0xEC070
+static int32_t lastA1mul[16];
+// GLOBAL: TIE95 0xEC0B0
+static int32_t lastA3mul[16];
+// GLOBAL: TIE95 0xEC0F0
+static int32_t lastA2mul[16];
+// GLOBAL: TIE95 0xEC130
+static int32_t lastC1mul[16];
 
 /* Rotation matrix (set by FVIEW) */
 // GLOBAL: TIE95 0xEC174
@@ -41,12 +56,26 @@ int32_t worldeyeC1;
 int32_t worldeyeC2;
 // GLOBAL: TIE95 0xEC188
 int32_t worldeyeC3;
+// GLOBAL: TIE95 0xEC170
 int32_t transfm2_screenyoffset;
 
 /* Working state */
+// GLOBAL: TIE95 0xEC198
 static uint16_t zratio;
-static int16_t eyexsign, eyeysign;
-static uint8_t offleftcnt, offrightcnt, offscreencnt, validcnt, slivercnt;
+// GLOBAL: TIE95 0xEC19A
+static int16_t eyeysign;
+// GLOBAL: TIE95 0xEC19C
+static int16_t eyexsign;
+// GLOBAL: TIE95 0xEC19E
+static uint8_t offleftcnt;
+// GLOBAL: TIE95 0xEC19F
+static uint8_t offscreencnt;
+// GLOBAL: TIE95 0xEC1A0
+static uint8_t validcnt;
+// GLOBAL: TIE95 0xEC1A1
+static uint8_t slivercnt;
+// GLOBAL: TIE95 0xEC1A2
+static uint8_t offrightcnt;
 
 #include "tie/drawpol.h" /* authoritative types for DRAWPOL-owned globals:
                          * PolyVert, calcflag[], firsteyexyz, firstvertnorm,
@@ -337,10 +366,6 @@ int32_t transfm2_getscreeny(int32_t eyey, int32_t eyez) {
 	return (int32_t)((uint32_t)transfm2_screenyoffset + halfpixelsdeep + result);
 }
 
-int32_t transfm2_getscreencoordx(int32_t eyex, int32_t eyez) { return transfm2_getscreenx(eyex, eyez); }
-
-int32_t transfm2_getscreencoordy(int32_t eyey, int32_t eyez) { return transfm2_getscreeny(eyey, eyez); }
-
 // FUNCTION: TIE95 0x5AD28
 void transfm2_doxminmax(int32_t screenx, int32_t* ptr) {
 	if (*minscreenx >= screenx) {
@@ -393,33 +418,28 @@ int32_t* transfm2_getscreencoords(int32_t* source, int32_t* dest) {
 
 /* ================================================================== */
 
-/* Z-plane clipping helpers */
-
-/*
- * Compute z-ratio for linear interpolation between two vertices
- * straddling the z=0 plane.
- */
-static void compute_zratio(int32_t z1, int32_t z2) {
-	int32_t zneg = -z1;
-	int32_t ztotal = z2 - z1;
-	while (zneg & 0xFFFF0000) {
-		zneg >>= 1;
-		ztotal >>= 1;
-	}
-	zratio = (uint16_t)((zneg << 16) / ztotal);
-}
-
-/*
- * Project a clipped point (interpolated at z=0) to screen coords.
- * Clamps to avoid overflow.
- */
-static void project_clipped_x(const int32_t* source1, const int32_t* source2, int32_t* out) {
+// FUNCTION: TIE95 0x5AE84
+int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* dest) {
+	int32_t zneg;
+	int32_t ztotal;
 	int32_t diff;
 	int32_t interp;
 	int32_t val;
 	int32_t limit;
 	int32_t screen;
 
+	/* Z-ratio for linear interpolation between two vertices straddling
+	 * the z=0 plane. */
+	zneg = -source1[2];
+	ztotal = source2[2] - source1[2];
+	while (zneg & 0xFFFF0000) {
+		zneg >>= 1;
+		ztotal >>= 1;
+	}
+	zratio = (uint16_t)((zneg << 16) / ztotal);
+
+	/* Project the clipped point (interpolated at z=0) to screen x,
+	 * clamping to avoid overflow. */
 	eyexsign = 0;
 	diff = *source2 - *source1;
 	if (diff < 0) {
@@ -443,15 +463,8 @@ static void project_clipped_x(const int32_t* source1, const int32_t* source2, in
 		 * result fits — go through uint32 to match the asm exactly. */
 		screen = (int32_t)((uint32_t)val << perspShift);
 
-	*out = halfpixelswide + screen;
-}
-
-static void project_clipped_y(const int32_t* source1, const int32_t* source2, int32_t* out) {
-	int32_t diff;
-	int32_t interp;
-	int32_t val;
-	int32_t limit;
-	int32_t screen;
+	dest[0] = halfpixelswide + screen;
+	transfm2_doxminmax(dest[0], dest);
 
 	eyeysign = 0;
 	diff = source2[1] - source1[1];
@@ -482,20 +495,9 @@ static void project_clipped_y(const int32_t* source1, const int32_t* source2, in
 	else if (val < -limit)
 		screen = perspFactor - 0x7FFFFFFF;
 	else
-		/* See project_clipped_x — same `shl` UB workaround. */
 		screen = (int32_t)((uint32_t)val << perspShift);
 
-	*out = transfm2_screenyoffset + halfpixelsdeep + screen;
-}
-
-// FUNCTION: TIE95 0x5AE84
-int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* dest) {
-	compute_zratio(source1[2], source2[2]);
-
-	project_clipped_x(source1, source2, &dest[0]);
-	transfm2_doxminmax(dest[0], dest);
-
-	project_clipped_y(source1, source2, &dest[1]);
+	dest[1] = transfm2_screenyoffset + halfpixelsdeep + screen;
 	transfm2_doyminmax(dest[1], dest);
 
 	return dest + 2;
@@ -504,12 +506,15 @@ int32_t* transfm2_calczintersect(int32_t* source1, int32_t* source2, int32_t* de
 // FUNCTION: TIE95 0x5AE30
 int32_t* transfm2_clipeyez(int32_t* source, int32_t* dest) {
 	int32_t* result = dest;
+	int32_t* prev;
+
 	numpoints--;
 
-	/* Check previous vertex (source - 3) */
-	if (source[-1] >= 0) {
+	/* Check previous vertex */
+	prev = source - 3;
+	if (prev[2] >= 0) {
 		numpoints++;
-		result = transfm2_calczintersect(source, source - 3, dest);
+		result = transfm2_calczintersect(source, prev, dest);
 	}
 
 	/* Check next vertex (source + 3) */
@@ -532,8 +537,23 @@ int32_t* transfm2_clipeyez(int32_t* source, int32_t* dest) {
 int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, int32_t* source2,
 								 int32_t* dest) {
 	int16_t lightVal;
+	int32_t zneg;
+	int32_t ztotal;
+	int32_t diff;
+	int32_t interp;
+	int32_t val;
+	int32_t limit;
+	int32_t screen;
 
-	compute_zratio(source1[2], source2[2]);
+	/* Z-ratio for linear interpolation between two vertices straddling
+	 * the z=0 plane. */
+	zneg = -source1[2];
+	ztotal = source2[2] - source1[2];
+	while (zneg & 0xFFFF0000) {
+		zneg >>= 1;
+		ztotal >>= 1;
+	}
+	zratio = (uint16_t)((zneg << 16) / ztotal);
 
 	/* Vertex lighting (if face has lighting flag 0x40) */
 	lightVal = 0;
@@ -578,11 +598,65 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 	dest = (int32_t*)((char*)dest + 2);
 	newscreenxy = (int32_t*)((char*)newscreenxy + 2);
 
-	/* Project clipped x */
-	project_clipped_x(source1, source2, &dest[0]);
+	/* Project the clipped point (interpolated at z=0) to screen x,
+	 * clamping to avoid overflow. */
+	eyexsign = 0;
+	diff = *source2 - *source1;
+	if (diff < 0) {
+		eyexsign = 1;
+		diff = -diff;
+	}
+	interp = math2_longfraction(diff, zratio);
+	if (eyexsign)
+		interp = -interp;
+	val = *source1 + interp;
 
-	/* Project clipped y */
-	project_clipped_y(source1, source2, &dest[1]);
+	limit = 0x7FFFFFFF >> perspShift;
+
+	if (val > limit)
+		screen = 0x7FFFFFFF - perspFactor;
+	else if (val < -limit)
+		screen = perspFactor - 0x7FFFFFFF;
+	else
+		/* Retail emits `shl eax, cl` (logical bit-shift, sign-agnostic).
+		 * C signed left-shift of a negative value is UB even when the
+		 * result fits — go through uint32 to match the asm exactly. */
+		screen = (int32_t)((uint32_t)val << perspShift);
+
+	dest[0] = halfpixelswide + screen;
+
+	eyeysign = 0;
+	diff = source2[1] - source1[1];
+	if (diff < 0) {
+		eyeysign = 1;
+		diff = -diff;
+	}
+	interp = math2_longfraction(diff, zratio);
+	if (eyeysign)
+		interp = -interp;
+	val = source1[1] + interp;
+
+	if (yAspect) {
+		eyeysign = 0;
+		if (val < 0) {
+			eyeysign = 1;
+			val = -val;
+		}
+		val = math2_longfraction(val, yAspect);
+		if (eyeysign)
+			val = -val;
+	}
+
+	limit = 0x7FFFFFFF >> perspShift;
+
+	if (val > limit)
+		screen = 0x7FFFFFFF - perspFactor;
+	else if (val < -limit)
+		screen = perspFactor - 0x7FFFFFFF;
+	else
+		screen = (int32_t)((uint32_t)val << perspShift);
+
+	dest[1] = transfm2_screenyoffset + halfpixelsdeep + screen;
 
 	return dest;
 }
@@ -887,22 +961,6 @@ int16_t transfm2_classifyedges(void) {
 
 /* ================================================================== */
 
-/*
- * Helper: compute min/max of (m * v1) and (m * v2), accumulate into
- * running min/max sums.
- */
-static void minmax_axis(int32_t m, int32_t v1, int32_t v2, int32_t* acc_min, int32_t* acc_max) {
-	int32_t a = m * v1;
-	int32_t b = m * v2;
-	if (b < a) {
-		*acc_min += b;
-		*acc_max += a;
-	} else {
-		*acc_min += a;
-		*acc_max += b;
-	}
-}
-
 // FUNCTION: TIE95 0x5A2A8
 void transfm2_geteyeminmax(const int16_t* source, int32_t* dest) {
 	int32_t x1 = source[0];
@@ -922,8 +980,24 @@ void transfm2_geteyeminmax(const int16_t* source, int32_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(rotworldeyeB1, y1, y2, &mn, &mx);
-	minmax_axis(rotworldeyeC1, z1, z2, &mn, &mx);
+	a = rotworldeyeB1 * y1;
+	b = rotworldeyeB1 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = rotworldeyeC1 * z1;
+	b = rotworldeyeC1 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[0] = objectx + (int16_t)((uint32_t)mn >> 16);
 	dest[1] = objectx + (int16_t)((uint32_t)mx >> 16);
 
@@ -939,8 +1013,24 @@ void transfm2_geteyeminmax(const int16_t* source, int32_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(rotworldeyeB2, y1, y2, &mn, &mx);
-	minmax_axis(rotworldeyeC2, z1, z2, &mn, &mx);
+	a = rotworldeyeB2 * y1;
+	b = rotworldeyeB2 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = rotworldeyeC2 * z1;
+	b = rotworldeyeC2 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[2] = objecty + (int16_t)((uint32_t)mn >> 16);
 	dest[3] = objecty + (int16_t)((uint32_t)mx >> 16);
 
@@ -956,8 +1046,24 @@ void transfm2_geteyeminmax(const int16_t* source, int32_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(rotworldeyeB3, y1, y2, &mn, &mx);
-	minmax_axis(rotworldeyeC3, z1, z2, &mn, &mx);
+	a = rotworldeyeB3 * y1;
+	b = rotworldeyeB3 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = rotworldeyeC3 * z1;
+	b = rotworldeyeC3 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[4] = objectz + (int16_t)((uint32_t)mn >> 16);
 	dest[5] = objectz + (int16_t)((uint32_t)mx >> 16);
 }
@@ -982,8 +1088,24 @@ void transfm2_geteyeminmaxS2(const int16_t* source, int32_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(rotworldeyeB1, y1, y2, &mn, &mx);
-	minmax_axis(rotworldeyeC1, z1, z2, &mn, &mx);
+	a = rotworldeyeB1 * y1;
+	b = rotworldeyeB1 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = rotworldeyeC1 * z1;
+	b = rotworldeyeC1 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[0] = objectx + (mn >> 14);
 	dest[1] = objectx + (mx >> 14);
 
@@ -996,8 +1118,24 @@ void transfm2_geteyeminmaxS2(const int16_t* source, int32_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(rotworldeyeB2, y1, y2, &mn, &mx);
-	minmax_axis(rotworldeyeC2, z1, z2, &mn, &mx);
+	a = rotworldeyeB2 * y1;
+	b = rotworldeyeB2 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = rotworldeyeC2 * z1;
+	b = rotworldeyeC2 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[2] = objecty + (mn >> 14);
 	dest[3] = objecty + (mx >> 14);
 
@@ -1010,8 +1148,24 @@ void transfm2_geteyeminmaxS2(const int16_t* source, int32_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(rotworldeyeB3, y1, y2, &mn, &mx);
-	minmax_axis(rotworldeyeC3, z1, z2, &mn, &mx);
+	a = rotworldeyeB3 * y1;
+	b = rotworldeyeB3 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = rotworldeyeC3 * z1;
+	b = rotworldeyeC3 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[4] = objectz + (mn >> 14);
 	dest[5] = objectz + (mx >> 14);
 }
@@ -1037,8 +1191,24 @@ void transfm2_getworldminmax(const int16_t* source, int16_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(craftf1, y1, y2, &mn, &mx);
-	minmax_axis(craftU1, z1, z2, &mn, &mx);
+	a = craftf1 * y1;
+	b = craftf1 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = craftU1 * z1;
+	b = craftU1 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[0] += (int16_t)((mn + 0x100000) >> 21);
 	dest[3] += (int16_t)((mx - 0x100000) >> 21);
 
@@ -1052,8 +1222,24 @@ void transfm2_getworldminmax(const int16_t* source, int16_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(craftf2, y1, y2, &mn, &mx);
-	minmax_axis(craftU2, z1, z2, &mn, &mx);
+	a = craftf2 * y1;
+	b = craftf2 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = craftU2 * z1;
+	b = craftU2 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[1] += (int16_t)((mn + 0x100000) >> 21);
 	dest[4] += (int16_t)((mx - 0x100000) >> 21);
 
@@ -1067,8 +1253,24 @@ void transfm2_getworldminmax(const int16_t* source, int16_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(craftf3, y1, y2, &mn, &mx);
-	minmax_axis(craftU3, z1, z2, &mn, &mx);
+	a = craftf3 * y1;
+	b = craftf3 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = craftU3 * z1;
+	b = craftU3 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[2] += (int16_t)((mn + 0x100000) >> 21);
 	dest[5] += (int16_t)((mx - 0x100000) >> 21);
 }
@@ -1093,8 +1295,24 @@ void transfm2_getworldminmaxS2(const int16_t* source, int16_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(craftf1, y1, y2, &mn, &mx);
-	minmax_axis(craftU1, z1, z2, &mn, &mx);
+	a = craftf1 * y1;
+	b = craftf1 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = craftU1 * z1;
+	b = craftU1 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[0] += (int16_t)((mn + 0x40000) >> 19);
 	dest[3] += (int16_t)((mx - 0x40000) >> 19);
 
@@ -1107,8 +1325,24 @@ void transfm2_getworldminmaxS2(const int16_t* source, int16_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(craftf2, y1, y2, &mn, &mx);
-	minmax_axis(craftU2, z1, z2, &mn, &mx);
+	a = craftf2 * y1;
+	b = craftf2 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = craftU2 * z1;
+	b = craftU2 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[1] += (int16_t)((mn + 0x40000) >> 19);
 	dest[4] += (int16_t)((mx - 0x40000) >> 19);
 
@@ -1121,8 +1355,24 @@ void transfm2_getworldminmaxS2(const int16_t* source, int16_t* dest) {
 		mn = a;
 		mx = b;
 	}
-	minmax_axis(craftf3, y1, y2, &mn, &mx);
-	minmax_axis(craftU3, z1, z2, &mn, &mx);
+	a = craftf3 * y1;
+	b = craftf3 * y2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
+	a = craftU3 * z1;
+	b = craftU3 * z2;
+	if (b < a) {
+		mn += b;
+		mx += a;
+	} else {
+		mn += a;
+		mx += b;
+	}
 	dest[2] += (int16_t)((mn + 0x40000) >> 19);
 	dest[5] += (int16_t)((mx - 0x40000) >> 19);
 }

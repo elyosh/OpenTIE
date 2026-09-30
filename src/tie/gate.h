@@ -160,15 +160,6 @@ extern int16_t gateguntimer;
 extern uint16_t currentgate;
 extern uint16_t gate_render_reference_object;
 
-/* Set while the per-section bonus countdown task is on the task stack
- * (TieBonusCountdown_Begin → 1, bonus_countdown_step on DONE
- * → 0). The classic cockpit bonus bar is only visible during this
- * window: `panel_updatepanel` redraws the cockpit bitmap every tick
- * and only the per-step `gate_updatebonuspoints` paints the timer +
- * bonus text on top — outside the countdown the region is bare
- * cockpit. HD reads this flag to reproduce the same gating. */
-extern uint8_t bonus_countdown_active;
-
 /* 4-slot player-pose history ring. Written by gate_savegatelastpos each
  * physics tick; slot 0 is the newest pose, slot 3 is the pose used by
  * collide_collisions as the respawn snapshot on a training collision.

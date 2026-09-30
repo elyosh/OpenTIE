@@ -1,6 +1,8 @@
 #include "tie/gamesnd.h"
 #include "tie/option.h"
+#include "tie/rtsvga2.h"
 #include "tie/tie.h"
+#include "tie/user.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/audio/music_policy.h"
 #include "tie_runtime/runtime/inflight_state.h"
@@ -21,6 +23,36 @@ static const uint8_t option_max_values[OPTION_ROW_COUNT] = {
 
 static uint8_t option_values[OPTION_ROW_COUNT];
 static bool option_values_loaded;
+
+/* Game-state portion of the fourteen DOS options, as applied at the end of
+ * option_optionsroom. */
+static void apply_flight_values(const uint8_t* values) {
+	inflight_collision = (int8_t)values[8];
+	inflight_invulnerable = (int8_t)values[9];
+	inflight_unlimited = (int8_t)values[10];
+	inflight_sound_vol = (int8_t)values[11];
+	inflight_music_vol = (int8_t)values[12];
+	inflight_speech_vol = (int8_t)values[13];
+
+	soundvolflag = (uint8_t)(inflight_speech_vol + inflight_sound_vol);
+	musicvolflag = (uint8_t)inflight_music_vol;
+	cheatingflag = (uint8_t)(cheatingflag | (uint8_t)inflight_invulnerable | (uint8_t)inflight_unlimited);
+}
+
+static void apply_values(const uint8_t* values) {
+	gouraudflag = (uint8_t)(values[0] << 6);
+	shipdetailvalue = (int16_t)(1 - values[1]);
+	shipdetailpolycnt = (uint16_t)(4 * values[1] + 8);
+	starshipdetail = (uint16_t)(values[2] + 1);
+	starshipexplodetail = (uint16_t)(((uint32_t)4096 << values[1]) - 1);
+	drawmarkingsflag = values[3];
+	drawbackdropflag = values[4];
+	drawdebrisflag = values[5];
+	palette_cycle_user = values[6];
+	stardetaillevel = (uint16_t)(2 - values[7]);
+	hyperspacedetail = (int16_t)(75 - 25 * (2 - values[7]));
+	apply_flight_values(values);
+}
 
 void TieInflightOptions_ApplyAudio(void) {
 	/*
@@ -83,7 +115,7 @@ bool TieInflightOptions_Set(const TieInflightOptions* options) {
 	option_values[12] = options->music_volume;
 	option_values[13] = options->speech_volume;
 	if (maingameflag && !replayviewmode) {
-		option_ApplyFlightValues(option_values);
+		apply_flight_values(option_values);
 		TieInflightOptions_ApplyAudio();
 	}
 	return true;
@@ -101,7 +133,7 @@ bool TieInflightOptions_Flush(char* error, size_t error_capacity) {
 
 void TieInflightOptions_Apply(void) {
 	TieInflightOptions_Load();
-	option_ApplyValues(option_values);
+	apply_values(option_values);
 	TieInflightOptions_ApplyAudio();
 }
 

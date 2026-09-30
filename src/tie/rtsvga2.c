@@ -13,37 +13,43 @@
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
+#include "tie_runtime/display/dos_bios.h"
+#include "tie_runtime/display/tie98_starfield.h"
 #include "tie_runtime/flight_assets/model_types.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
-#include "tie_runtime/storage/storage.h"
 
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 /* ------------------------------------------------------------------ */
 /* Module-local static state (watdbg "static" in demo; retail matches) */
 /* ------------------------------------------------------------------ */
 
-/* 10-point bracket shape (5-wide x 3-tall dx/dy deltas around centre).
- * Bytes verified against retail binary at 0xC7A20. */
+/* 10-point bracket shape (5-wide x 3-tall dx/dy deltas around centre). */
+// GLOBAL: TIE95 0xC7A20
+// GLOBAL: TIE98 0x4EB760
 static const int8_t bracketdef_10pt[20] = { -1, +1, -2, +1, -2, 0, -2, -1, -1, -1,
 											+1, -1, +2, -1, +2, 0, +2, +1, +1, +1 };
 
-/* 12-point bracket shape (5-wide x 4-tall; new in retail for VESA 640x480).
- * Bytes verified against retail binary at 0xC7A34. */
+/* 12-point bracket shape (5-wide x 4-tall; new in retail for VESA 640x480). */
+// GLOBAL: TIE95 0xC7A34
+// GLOBAL: TIE98 0x4EB778
 static const int8_t bracketdef_12pt[24] = { -1, +2, -2, +2, -2, +1, -2, 0,  -2, -1, -1, -1,
 											+1, -1, +2, -1, +2, 0,  +2, +1, +2, +2, +1, +2 };
 
-/* 7-point cross shape (4 arms + centre duplicate). Bytes verified
- * against retail binary at 0xC7A54. */
+/* 7-point cross shape (4 arms + centre duplicate). */
+// GLOBAL: TIE95 0xC7A54
+// GLOBAL: TIE98 0x4EB798
 static const int8_t crossdef[14] = { -2, 0, -1, 0, 0, 0, +1, 0, +2, 0, 0, +1, 0, -1 };
 
 /* Pointer+count selected by initgraphVGA based on flightResolution. */
+// GLOBAL: TIE95 0xC7A4C
+// GLOBAL: TIE98 0x4EB790
 static const int8_t* bracketdef_ptr = bracketdef_10pt;
+// GLOBAL: TIE95 0xC7A50
+// GLOBAL: TIE98 0x4EB794
 static uint32_t bracketdef_count = 10;
 
 /* Saved pixels under the bracket / cross so remove* can restore them. */
@@ -51,10 +57,15 @@ static uint32_t bracketdef_count = 10;
 static uint8_t bracketsave[16];
 // GLOBAL: TIE98 0x5897B0
 static uint16_t bracketsave_tie98[10];
+// GLOBAL: TIE95 0xDE77E
 static uint8_t crosssave[7];
 
 /* Last VESA window-A / window-B page (-1 = unknown, force BIOS call). */
+// GLOBAL: TIE95 0xC7A64
+// GLOBAL: TIE98 0x4EB7AC
 static uint32_t lastpageA = 0xFFFFFFFFu;
+// GLOBAL: TIE95 0xC7A68
+// GLOBAL: TIE98 0x4EB7B0
 static uint32_t lastpageB = 0xFFFFFFFFu;
 
 /* fillrectangle / autofill scratch state (module-local in demo watdbg). */
@@ -66,19 +77,24 @@ static int16_t bottomfill;
 static int16_t leftfill;
 // GLOBAL: TIE95 0xDE77C
 static int16_t rightfill;
-static int16_t starty;  /* fillrectangle per-row y counter */
-static uint32_t htemp2; /* compiler register-spill slot in retail */
+/* fillrectangle per-row y counter */
+// GLOBAL: TIE95 0xDE778
+static int16_t starty;
+/* fillrectangle remaining-row counter */
+// GLOBAL: TIE95 0xDE764
+static uint32_t htemp2;
 
 /* Brightness setting from OPTION_optionsroom (0..256; 256 = unchanged). */
+// GLOBAL: TIE95 0xCDD0C
+// GLOBAL: TIE98 0x4F3C68
 uint32_t brightness_setting = 256;
-
-/* Retail screenshot counter -> screen%d.pcx */
-static int screenshot_seq;
 
 /* ------------------------------------------------------------------ */
 /* RTSVGA2-owned shared globals (extern in header)                    */
 /* ------------------------------------------------------------------ */
 
+// GLOBAL: TIE95 0xDC424
+// GLOBAL: TIE98 0x591920
 uint8_t rtsvga2_vgapalette[768];
 // GLOBAL: TIE95 0xC7A04
 uint8_t* vgapointer;
@@ -92,26 +108,64 @@ uint8_t* vgapointer;
 int32_t lineaddressVGA[481];
 
 /* Star double-buffer pair + the two underlying buffers. */
+// GLOBAL: TIE95 0xDD3E4
+// GLOBAL: TIE98 0x5F44C0
 static int32_t starposbuf1[768];
+// GLOBAL: TIE95 0xDC7E4
+// GLOBAL: TIE98 0x5F50C0
 static int32_t starposbuf2[768];
+// GLOBAL: TIE95 0xC7A08
+// GLOBAL: TIE98 0x4EB748
 int32_t* newstarptr = starposbuf1;
+// GLOBAL: TIE95 0xC7A0C
+// GLOBAL: TIE98 0x4EB74C
 int32_t* oldstarptr = starposbuf2;
 
-int32_t shiftA1mul[16], shiftA2mul[16], shiftA3mul[16];
-int32_t shiftB1mul[16], shiftB2mul[16], shiftB3mul[16];
-int32_t shiftC1mul[16], shiftC2mul[16], shiftC3mul[16];
+// GLOBAL: TIE95 0xDC724
+// GLOBAL: TIE98 0x5F43A0
+int32_t shiftA1mul[16];
+// GLOBAL: TIE95 0xDC764
+// GLOBAL: TIE98 0x5F3B80
+int32_t shiftA2mul[16];
+// GLOBAL: TIE95 0xDC7A4
+// GLOBAL: TIE98 0x5F4360
+int32_t shiftA3mul[16];
+// GLOBAL: TIE95 0xDE6A4
+// GLOBAL: TIE98 0x5F4480
+int32_t shiftB1mul[16];
+// GLOBAL: TIE95 0xDE6E4
+// GLOBAL: TIE98 0x5F43E0
+int32_t shiftB2mul[16];
+// GLOBAL: TIE95 0xDE724
+// GLOBAL: TIE98 0x5F4420
+int32_t shiftB3mul[16];
+// GLOBAL: TIE95 0xDDFE4
+// GLOBAL: TIE98 0x5F5D60
+int32_t shiftC1mul[16];
+// GLOBAL: TIE95 0xDE024
+// GLOBAL: TIE98 0x5F5CC0
+int32_t shiftC2mul[16];
+// GLOBAL: TIE95 0xDE064
+// GLOBAL: TIE98 0x5F5D20
+int32_t shiftC3mul[16];
 
-int32_t stareyex[128], stareyey[128], stareyez[128];
+// GLOBAL: TIE95 0xDE2A4
+// GLOBAL: TIE98 0x5F3980
+int32_t stareyex[128];
+// GLOBAL: TIE95 0xDE4A4
+// GLOBAL: TIE98 0x5F3580
+int32_t stareyey[128];
+// GLOBAL: TIE95 0xDE0A4
+// GLOBAL: TIE98 0x5F3780
+int32_t stareyez[128];
 
+// GLOBAL: TIE95 0xC7A00
 // GLOBAL: TIE98 0x4EB740
 uint16_t stardetaillevel = 1;
 // GLOBAL: TIE95 0xDE774
 int16_t drawshapex;
 // GLOBAL: TIE95 0xDE768
 int16_t drawshapey;
-int16_t tempdepth;
-int16_t drawdepth;
-int16_t tempwidth;
 // GLOBAL: TIE95 0xDE770
 int16_t drawwidth;
 // GLOBAL: TIE95 0xDE785
@@ -138,14 +192,6 @@ int16_t skipcolorvga;
 // FUNCTION: TIE95 0x8FE4C
 void XPAL_Set_VGA_Palette(uint16_t count, uint16_t start_idx, const uint8_t* rgb) {
 	TieClassicFramebuffer_SetPalette(rgb, (int)start_idx, (int)count);
-}
-
-/* Host default for unsupported BIOS interrupts. */
-__attribute__((weak)) int int386(int int_no, const void* inregs, void* outregs) {
-	(void)int_no;
-	(void)inregs;
-	(void)outregs;
-	return 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -753,27 +799,28 @@ void rtsvga2__lowdrawshapeVGA(const uint8_t* shape, uint16_t x, uint16_t y, uint
 		uint32_t off = lineaddressVGA[(uint16_t)drawshapey] + (uint16_t)drawshapex;
 		uint8_t* dst = vgapointer + off;
 
-		int opcode;
 		uint8_t op;
 		uint8_t color;
 		int16_t run_raw;
 
-	read_ops_same_row:
 		for (;;) {
-			/* Pixel-run path. */
-			for (;;) {
-				op = *shape;
-				opcode = *shape++;
-				if (opcode >= 251)
-					break;
+			op = *shape++;
+			if (op < 251 || op == 253) {
+				uint16_t run_len;
 
-				color = (uint8_t)(op >> 2);
-				if (!mono_flag)
-					color += basecolor;
-				run_raw = (int16_t)(opcode & 3);
+				if (op == 253) {
+					/* 0xFD: explicit (count, color) run. */
+					run_raw = (int16_t)shape[0];
+					color = shape[1];
+					shape += 2;
+				} else {
+					color = (uint8_t)(op >> 2);
+					if (!mono_flag)
+						color += basecolor;
+					run_raw = (int16_t)(op & 3);
+				}
 
-			label_10: {
-				uint16_t run_len = (uint16_t)(run_raw + 1);
+				run_len = (uint16_t)(run_raw + 1);
 				if (color == (uint8_t)skip_color) {
 					if (flip_x)
 						dst -= run_len;
@@ -799,70 +846,56 @@ void rtsvga2__lowdrawshapeVGA(const uint8_t* shape, uint16_t x, uint16_t y, uint
 						}
 					}
 				}
+				continue;
 			}
-			}
 
-			if (opcode > 251)
-				break; /* 0xFC..0xFF drop out */
-
-			/* opcode == 0xFB: set basecolor (or skip byte in mono mode) */
-			if (mono_flag)
-				++shape;
-			else
-				basecolor = *shape++;
-		}
-
-		/* opcode is now in {0xFC, 0xFD, 0xFE, 0xFF}. */
-		if (opcode == 252 && !mono_flag) {
-			/* 0xFC: alternating (color, color+1) pair run on same scanline.
-			 * Retail jmp target is 4C2FC (read next opcode without
-			 * recomputing dst) -- we jump back to read_ops_same_row so
-			 * subsequent opcodes continue from the current dst. Using
-			 * `continue` here would rewind dst to drawshapex and produce
-			 * horizontal smearing where later runs overwrite earlier ones. */
-			uint8_t dbl_color = *shape;
-			const uint8_t* after_col = shape + 1;
-			int dbl_cnt = (int)(uint8_t)*after_col;
-			int dbl_rem;
-
-			shape = after_col + 1;
-
-			dbl_rem = dbl_cnt + 1;
-			while ((int16_t)dbl_rem > 0) {
-				*dst = dbl_color;
-				if (flip_x)
-					--dst;
+			if (op == 251) {
+				/* 0xFB: set basecolor (or skip byte in mono mode). */
+				if (mono_flag)
+					++shape;
 				else
-					++dst;
-				--dbl_rem;
-				if ((int16_t)dbl_rem > 0) {
-					*dst = (uint8_t)(dbl_color + 1);
+					basecolor = *shape++;
+				continue;
+			}
+
+			if (op == 252 && !mono_flag) {
+				/* 0xFC: alternating (color, color+1) pair run on the same
+				 * scanline; later opcodes continue from the current dst. */
+				uint8_t dbl_color = *shape;
+				const uint8_t* after_col = shape + 1;
+				int dbl_cnt = (int)(uint8_t)*after_col;
+				int dbl_rem;
+
+				shape = after_col + 1;
+
+				dbl_rem = dbl_cnt + 1;
+				while ((int16_t)dbl_rem > 0) {
+					*dst = dbl_color;
 					if (flip_x)
 						--dst;
 					else
 						++dst;
 					--dbl_rem;
+					if ((int16_t)dbl_rem > 0) {
+						*dst = (uint8_t)(dbl_color + 1);
+						if (flip_x)
+							--dst;
+						else
+							++dst;
+						--dbl_rem;
+					}
 				}
+				continue;
 			}
-			goto read_ops_same_row;
+			break;
 		}
 
-		if (op == 253) {
-			/* 0xFD: explicit (count, color) run -- rejoin pixel-run code. */
-			run_raw = (int16_t)shape[0];
-			color = shape[1];
-			shape += 2;
-			goto label_10;
-		}
+		/* 0xFF: end-of-shape. */
+		if (op == 255)
+			return;
 
-		if (op != 255) {
-			/* 0xFE or others: end-of-line */
-			++drawshapey;
-			continue;
-		}
-
-		/* 0xFF: end-of-shape */
-		return;
+		/* 0xFE or others: end-of-line. */
+		++drawshapey;
 	}
 }
 
@@ -1051,6 +1084,7 @@ void rtsvga2_outcharVGA(uint8_t ch) {
 		int row_width;
 		int16_t row_x;
 		uint8_t row_bits;
+		int draw_row;
 
 		if (y >= bottommargin)
 			break;
@@ -1062,16 +1096,19 @@ void rtsvga2_outcharVGA(uint8_t ch) {
 		if (dropflag)
 			++row_width;
 
+		draw_row = 1;
 		if (cursorx < leftmargin) {
 			int shift = leftmargin - cursorx;
-			if (shift >= row_width)
-				goto next_row;
-			row_width -= shift;
-			row_x = leftmargin;
-			row_bits <<= shift;
+			if (shift >= row_width) {
+				draw_row = 0;
+			} else {
+				row_width -= shift;
+				row_x = leftmargin;
+				row_bits <<= shift;
+			}
 		}
 
-		if (y >= topmargin) {
+		if (draw_row && y >= topmargin) {
 			uint8_t* dst;
 			int px;
 
@@ -1093,7 +1130,6 @@ void rtsvga2_outcharVGA(uint8_t ch) {
 				row_bits <<= 1;
 			}
 		}
-	next_row:
 		prev_row = (uint8_t)(row_ptr[0] >> 1);
 		row_ptr += 2;
 	}
@@ -1163,6 +1199,7 @@ void rtsvga2_outchar32VGA(uint8_t ch) {
 		int row_width;
 		int16_t row_x;
 		uint32_t row_bits;
+		int draw_row;
 
 		if (y >= bottommargin)
 			break;
@@ -1174,16 +1211,19 @@ void rtsvga2_outchar32VGA(uint8_t ch) {
 		if (saved_dropflag)
 			++row_width;
 
+		draw_row = 1;
 		if (cursorx < leftmargin) {
 			int shift = leftmargin - cursorx;
-			if (shift >= row_width)
-				goto next_row32;
-			row_width -= shift;
-			row_x = leftmargin;
-			row_bits <<= shift;
+			if (shift >= row_width) {
+				draw_row = 0;
+			} else {
+				row_width -= shift;
+				row_x = leftmargin;
+				row_bits <<= shift;
+			}
 		}
 
-		if (y >= topmargin) {
+		if (draw_row && y >= topmargin) {
 			uint8_t* dst;
 			int px;
 
@@ -1205,7 +1245,6 @@ void rtsvga2_outchar32VGA(uint8_t ch) {
 				prev_row <<= 1;
 			}
 		}
-	next_row32:
 		prev_row = row_ptr[0] / 2;
 		row_ptr += 2;
 	}
@@ -1788,95 +1827,6 @@ void rtsvga2_removecross(uint16_t x, uint16_t y) {
  *   5. Terminate new list with -1.
  *   6. Erase pass: walk old list, erase any pixel still >= deepspacecolor
  *      whose offset is not in the hash. */
-static inline int project_axis(int ax, int z, int* out_signed) {
-	/* Returns 1 if the axis projects successfully (|ax|<=z), 0 to cull.
-	 * *out_signed receives the projected signed screen delta. */
-	int abs_ax = (ax < 0) ? -ax : ax;
-	uint32_t q;
-
-	if (abs_ax > z)
-		return 0;
-
-	q = math2_project_u32((uint32_t)abs_ax, perspShift, halfPerspFactor, (uint32_t)z);
-	*out_signed = (int32_t)(ax < 0 ? 0u - q : q);
-	return 1;
-}
-
-int g_dbg_star_total;
-int g_dbg_star_cull_z;
-int g_dbg_star_cull_x;
-int g_dbg_star_cull_y;
-int g_dbg_star_cull_screen_x;
-int g_dbg_star_cull_screen_y;
-int g_dbg_star_cull_deepspace;
-int g_dbg_star_painted;
-static inline void try_draw_star(int eye_x, int eye_y, int eye_z, int star_off, int32_t** new_cursor) {
-	int screen_x;
-	int screen_y;
-	int32_t pix_off;
-	uint8_t* dst;
-	uint8_t palette_delta;
-	uint8_t shade;
-	uint32_t* hash32;
-	uint16_t h;
-
-	int sx, sy;
-
-	g_dbg_star_total++;
-	/* Mirror camera space so z >= 0. */
-	if (eye_z < 0) {
-		eye_x = -eye_x;
-		eye_y = -eye_y;
-		eye_z = -eye_z;
-	}
-
-	if (!project_axis(eye_x, eye_z, &sx)) {
-		g_dbg_star_cull_x++;
-		return;
-	}
-	if (!project_axis(eye_y, eye_z, &sy)) {
-		g_dbg_star_cull_y++;
-		return;
-	}
-
-	screen_x = halfpixelswide + sx;
-	if (screen_x < 0 || screen_x >= (int)pixelswide) {
-		g_dbg_star_cull_screen_x++;
-		return;
-	}
-	screen_y = transfm2_screenyoffset + halfpixelsdeep + sy;
-	if (screen_y < 0 || screen_y >= (int)pixelsdeep) {
-		g_dbg_star_cull_screen_y++;
-		return;
-	}
-
-	pix_off = lineaddressVGA[displaycorner_lines + screen_y] + (int)displaycorner_columns + screen_x;
-	dst = vgapointer + (uint32_t)pix_off;
-	if (*dst < deepspacecolor) {
-		g_dbg_star_cull_deepspace++;
-		return;
-	}
-	g_dbg_star_painted++;
-
-	/* stars[] is stride-2: stars[2k]=index, stars[2k+1]=palette delta.
-	 * star_off is the byte offset into stars[]. */
-	palette_delta = stars[star_off + 1];
-	shade = (uint8_t)(starcol1 + palette_delta);
-	if (shade > 3)
-		shade = 3;
-	*dst = (uint8_t)(shade - 4);
-
-	/* Linear-probe into starhashtable (512 dwords, mask 0x1FF). */
-	hash32 = (uint32_t*)starhashtable;
-	h = (uint16_t)pix_off;
-	do {
-		h = (h + 1) & 0x1FF;
-	} while (hash32[h]);
-	hash32[h] = (uint32_t)pix_off;
-
-	*(*new_cursor)++ = pix_off;
-}
-
 // FUNCTION: TIE95 0x4D9F8
 void rtsvga2_drawstars(void) {
 	int32_t* new_cursor;
@@ -1889,6 +1839,16 @@ void rtsvga2_drawstars(void) {
 	int32_t base_z_saved;
 	uint32_t* hash32;
 	int32_t* m;
+	int s;
+	int32_t eye_x, eye_y, eye_z;
+	int32_t abs_x, abs_y;
+	uint32_t q;
+	int32_t sx, sy;
+	int screen_x, screen_y;
+	int32_t pix_off;
+	uint8_t* dst;
+	uint8_t shade;
+	uint16_t h;
 
 	int A_outer, A_star_off;
 	int B_outer, B_star_off;
@@ -1896,15 +1856,8 @@ void rtsvga2_drawstars(void) {
 	int C_outer, C_star_off;
 	int32_t base_xC, base_yC, base_zC;
 
-	g_dbg_star_total = 0;
-	g_dbg_star_cull_z = 0;
-	g_dbg_star_cull_x = 0;
-	g_dbg_star_cull_y = 0;
-	g_dbg_star_cull_screen_x = 0;
-	g_dbg_star_cull_screen_y = 0;
-	g_dbg_star_cull_deepspace = 0;
-	g_dbg_star_painted = 0;
 	memset(starhashtable, 0, 2048);
+	hash32 = (uint32_t*)starhashtable;
 
 	new_cursor = oldstarptr;
 	prev_old = oldstarptr;
@@ -1930,9 +1883,48 @@ void rtsvga2_drawstars(void) {
 		int i;
 
 		for (i = 0; i < 16; i += stardetaillevel) {
-			int s = stars[A_star_off];
-			try_draw_star(stareyex[s] + shiftA1mul[i] + base_x, stareyey[s] + shiftA2mul[i] + base_y,
-						  stareyez[s] + shiftA3mul[i] + base_z, A_star_off, &new_cursor);
+			s = stars[A_star_off];
+			eye_x = stareyex[s] + shiftA1mul[i] + base_x;
+			eye_y = stareyey[s] + shiftA2mul[i] + base_y;
+			eye_z = stareyez[s] + shiftA3mul[i] + base_z;
+			/* Mirror camera space so z >= 0. */
+			if (eye_z < 0) {
+				eye_x = -eye_x;
+				eye_y = -eye_y;
+				eye_z = -eye_z;
+			}
+			abs_x = (eye_x < 0) ? -eye_x : eye_x;
+			abs_y = (eye_y < 0) ? -eye_y : eye_y;
+			if (abs_x <= eye_z && abs_y <= eye_z) {
+				q = math2_project_u32((uint32_t)abs_x, perspShift, halfPerspFactor, (uint32_t)eye_z);
+				sx = (int32_t)(eye_x < 0 ? 0u - q : q);
+				q = math2_project_u32((uint32_t)abs_y, perspShift, halfPerspFactor, (uint32_t)eye_z);
+				sy = (int32_t)(eye_y < 0 ? 0u - q : q);
+				screen_x = halfpixelswide + sx;
+				screen_y = transfm2_screenyoffset + halfpixelsdeep + sy;
+				if (screen_x >= 0 && screen_x < (int)pixelswide && screen_y >= 0 &&
+					screen_y < (int)pixelsdeep) {
+					pix_off = lineaddressVGA[displaycorner_lines + screen_y] + (int)displaycorner_columns +
+							  screen_x;
+					dst = vgapointer + (uint32_t)pix_off;
+					if (*dst >= deepspacecolor) {
+						/* stars[] is stride-2: [2k]=index, [2k+1]=palette delta. */
+						shade = (uint8_t)(starcol1 + stars[A_star_off + 1]);
+						if (shade > 3)
+							shade = 3;
+						*dst = (uint8_t)(shade - 4);
+
+						/* Linear-probe into starhashtable (512 dwords, mask 0x1FF). */
+						h = (uint16_t)pix_off;
+						do {
+							h = (h + 1) & 0x1FF;
+						} while (hash32[h]);
+						hash32[h] = (uint32_t)pix_off;
+
+						*new_cursor++ = pix_off;
+					}
+				}
+			}
 			A_star_off += 2;
 		}
 		base_x = shiftB1mul[A_outer] + base_x_saved;
@@ -1951,9 +1943,48 @@ void rtsvga2_drawstars(void) {
 		int j;
 
 		for (j = 0; j < 16; j += stardetaillevel) {
-			int s = stars[B_star_off];
-			try_draw_star(stareyex[s] + shiftA1mul[j] + base_xB, stareyey[s] + shiftA2mul[j] + base_yB,
-						  stareyez[s] + shiftA3mul[j] + base_zB, B_star_off, &new_cursor);
+			s = stars[B_star_off];
+			eye_x = stareyex[s] + shiftA1mul[j] + base_xB;
+			eye_y = stareyey[s] + shiftA2mul[j] + base_yB;
+			eye_z = stareyez[s] + shiftA3mul[j] + base_zB;
+			/* Mirror camera space so z >= 0. */
+			if (eye_z < 0) {
+				eye_x = -eye_x;
+				eye_y = -eye_y;
+				eye_z = -eye_z;
+			}
+			abs_x = (eye_x < 0) ? -eye_x : eye_x;
+			abs_y = (eye_y < 0) ? -eye_y : eye_y;
+			if (abs_x <= eye_z && abs_y <= eye_z) {
+				q = math2_project_u32((uint32_t)abs_x, perspShift, halfPerspFactor, (uint32_t)eye_z);
+				sx = (int32_t)(eye_x < 0 ? 0u - q : q);
+				q = math2_project_u32((uint32_t)abs_y, perspShift, halfPerspFactor, (uint32_t)eye_z);
+				sy = (int32_t)(eye_y < 0 ? 0u - q : q);
+				screen_x = halfpixelswide + sx;
+				screen_y = transfm2_screenyoffset + halfpixelsdeep + sy;
+				if (screen_x >= 0 && screen_x < (int)pixelswide && screen_y >= 0 &&
+					screen_y < (int)pixelsdeep) {
+					pix_off = lineaddressVGA[displaycorner_lines + screen_y] + (int)displaycorner_columns +
+							  screen_x;
+					dst = vgapointer + (uint32_t)pix_off;
+					if (*dst >= deepspacecolor) {
+						/* stars[] is stride-2: [2k]=index, [2k+1]=palette delta. */
+						shade = (uint8_t)(starcol1 + stars[B_star_off + 1]);
+						if (shade > 3)
+							shade = 3;
+						*dst = (uint8_t)(shade - 4);
+
+						/* Linear-probe into starhashtable (512 dwords, mask 0x1FF). */
+						h = (uint16_t)pix_off;
+						do {
+							h = (h + 1) & 0x1FF;
+						} while (hash32[h]);
+						hash32[h] = (uint32_t)pix_off;
+
+						*new_cursor++ = pix_off;
+					}
+				}
+			}
 			B_star_off += 2;
 		}
 		base_xB = shiftC1mul[B_outer] + base_x_saved;
@@ -1972,9 +2003,48 @@ void rtsvga2_drawstars(void) {
 		int k;
 
 		for (k = 0; k < 16; k += stardetaillevel) {
-			int s = stars[C_star_off];
-			try_draw_star(stareyex[s] + shiftB1mul[k] + base_xC, stareyey[s] + shiftB2mul[k] + base_yC,
-						  stareyez[s] + shiftB3mul[k] + base_zC, C_star_off, &new_cursor);
+			s = stars[C_star_off];
+			eye_x = stareyex[s] + shiftB1mul[k] + base_xC;
+			eye_y = stareyey[s] + shiftB2mul[k] + base_yC;
+			eye_z = stareyez[s] + shiftB3mul[k] + base_zC;
+			/* Mirror camera space so z >= 0. */
+			if (eye_z < 0) {
+				eye_x = -eye_x;
+				eye_y = -eye_y;
+				eye_z = -eye_z;
+			}
+			abs_x = (eye_x < 0) ? -eye_x : eye_x;
+			abs_y = (eye_y < 0) ? -eye_y : eye_y;
+			if (abs_x <= eye_z && abs_y <= eye_z) {
+				q = math2_project_u32((uint32_t)abs_x, perspShift, halfPerspFactor, (uint32_t)eye_z);
+				sx = (int32_t)(eye_x < 0 ? 0u - q : q);
+				q = math2_project_u32((uint32_t)abs_y, perspShift, halfPerspFactor, (uint32_t)eye_z);
+				sy = (int32_t)(eye_y < 0 ? 0u - q : q);
+				screen_x = halfpixelswide + sx;
+				screen_y = transfm2_screenyoffset + halfpixelsdeep + sy;
+				if (screen_x >= 0 && screen_x < (int)pixelswide && screen_y >= 0 &&
+					screen_y < (int)pixelsdeep) {
+					pix_off = lineaddressVGA[displaycorner_lines + screen_y] + (int)displaycorner_columns +
+							  screen_x;
+					dst = vgapointer + (uint32_t)pix_off;
+					if (*dst >= deepspacecolor) {
+						/* stars[] is stride-2: [2k]=index, [2k+1]=palette delta. */
+						shade = (uint8_t)(starcol1 + stars[C_star_off + 1]);
+						if (shade > 3)
+							shade = 3;
+						*dst = (uint8_t)(shade - 4);
+
+						/* Linear-probe into starhashtable (512 dwords, mask 0x1FF). */
+						h = (uint16_t)pix_off;
+						do {
+							h = (h + 1) & 0x1FF;
+						} while (hash32[h]);
+						hash32[h] = (uint32_t)pix_off;
+
+						*new_cursor++ = pix_off;
+					}
+				}
+			}
 			C_star_off += 2;
 		}
 		base_xC = shiftC1mul[C_outer] + base_x_saved;
@@ -1988,17 +2058,14 @@ void rtsvga2_drawstars(void) {
 	/* Erase pass: anything in the old list whose pixel is still a star
 	 * colour and isn't found in this frame's hashtable gets overwritten
 	 * with deepspacecolor. */
-	hash32 = (uint32_t*)starhashtable;
 	m = oldstarptr;
 	while (*m != -1) {
-		uint32_t pix_off = (uint32_t)*m;
 		int32_t key = *m;
-		uint8_t* dst;
 
 		++m;
-		dst = vgapointer + pix_off;
+		dst = vgapointer + (uint32_t)key;
 		if (*dst > deepspacecolor) {
-			uint16_t h = (uint16_t)key;
+			h = (uint16_t)key;
 			for (;;) {
 				uint32_t v;
 
@@ -2015,20 +2082,16 @@ void rtsvga2_drawstars(void) {
 	}
 }
 
-/* TIE98 keeps random star positions plus indexed and packed-color tables in
- * handle-backed arrays. Fixed storage preserves that lifetime and separation. */
-static uint8_t tie98_star_position_index[3072];
-static uint8_t tie98_star_color8[3072];
-static uint16_t tie98_star_color16[3072];
-static int tie98_star_positions_initialized;
-static int tie98_star_color8_initialized;
-static int tie98_star_color16_initialized;
-
-/* PORT: refresh colors after palette or 16-bit display-format changes. */
-void Tie98StarColors_Invalidate(void) {
-	tie98_star_color8_initialized = 0;
-	tie98_star_color16_initialized = 0;
-}
+/* TIE98 star-table lazy-initialisation flags. The tables themselves live in
+ * Memory_AllocHandle blocks in the original; see tie98_starfield.h. */
+// GLOBAL: TIE98 0x589824
+int g_starColor8Allocated;
+// GLOBAL: TIE98 0x58A290
+int g_starColor8Initialized;
+// GLOBAL: TIE98 0x589828
+int g_starColor16Initialized;
+// GLOBAL: TIE98 0x58982C
+int g_starPositionsInitialized;
 
 // FUNCTION: TIE98 0x47C7F0
 // RTSVGA2_drawstars
@@ -2043,14 +2106,14 @@ void rtsvga2_drawstars_tie98(void) {
 	int star_index;
 	int lobe;
 
-	if (g_flight16bppBytesPerPixel == 2 && !tie98_star_color16_initialized) {
+	if (g_flight16bppBytesPerPixel == 2 && !g_starColor16Initialized) {
 		const uint16_t gray_step = FrontendDisplay_GetPixelFormat555() ? 1057 : 2113;
 		int i;
 
 		for (i = 0; i < 3072; ++i)
-			tie98_star_color16[i] = (uint16_t)(gray_step * ((math2_getrandom() & 0xF) + 8));
-		tie98_star_color16_initialized = 1;
-	} else if (g_flight16bppBytesPerPixel != 2 && !tie98_star_color8_initialized) {
+			g_tie98StarColor16[i] = (uint16_t)(gray_step * ((math2_getrandom() & 0xF) + 8));
+		g_starColor16Initialized = 1;
+	} else if (g_flight16bppBytesPerPixel != 2 && (!g_starColor8Allocated || !g_starColor8Initialized)) {
 		int i;
 
 		for (i = 0; i < 3072; ++i) {
@@ -2059,12 +2122,13 @@ void rtsvga2_drawstars_tie98(void) {
 			rgb[0] = brightness;
 			rgb[1] = brightness;
 			rgb[2] = brightness;
-			tie98_star_color8[i] = (uint8_t)rtsvga2_findNearestColor(rgb, rtsvga2_vgapalette, 0x40, 0x100);
+			g_tie98StarColor8[i] = (uint8_t)rtsvga2_findNearestColor(rgb, rtsvga2_vgapalette, 0x40, 0x100);
 		}
-		tie98_star_color8_initialized = 1;
+		g_starColor8Initialized = 1;
+		g_starColor8Allocated = 1;
 	}
 
-	if (!tie98_star_positions_initialized) {
+	if (!g_starPositionsInitialized) {
 		int i;
 
 		for (i = 0; i < 3072; ++i) {
@@ -2072,9 +2136,9 @@ void rtsvga2_drawstars_tie98(void) {
 			do {
 				index = (uint16_t)math2_getrandom() & 0x7F;
 			} while (index > 124);
-			tie98_star_position_index[i] = (uint8_t)index;
+			g_tie98StarPositionIndex[i] = (uint8_t)index;
 		}
-		tie98_star_positions_initialized = 1;
+		g_starPositionsInitialized = 1;
 	}
 
 	grid_size = 32 / stardetaillevel;
@@ -2109,7 +2173,7 @@ void rtsvga2_drawstars_tie98(void) {
 			int column;
 
 			for (column = 0; column < grid_size; ++column, ++star_index) {
-				const uint8_t position_index = tie98_star_position_index[star_index];
+				const uint8_t position_index = g_tie98StarPositionIndex[star_index];
 				float x = (float)stareyex[position_index] + eye_x;
 				float y = (float)stareyey[position_index] + eye_y;
 				float z = (float)stareyez[position_index] + eye_z;
@@ -2130,9 +2194,9 @@ void rtsvga2_drawstars_tie98(void) {
 						if (g_flight16bppBytesPerPixel == 2) {
 							uint16_t* destination16 = (uint16_t*)destination;
 							if (*destination16 == background_color16)
-								*destination16 = tie98_star_color16[star_index];
+								*destination16 = g_tie98StarColor16[star_index];
 						} else if (*destination == deepspacecolor) {
-							*destination = tie98_star_color8[star_index];
+							*destination = g_tie98StarColor8[star_index];
 						}
 					}
 				}
@@ -2151,93 +2215,11 @@ void rtsvga2_drawstars_tie98(void) {
 /* rtsvga2_takeScreenshot (0x4E670)                                   */
 /* ------------------------------------------------------------------ */
 
-/* Write the framebuffer and active palette as PCX. */
-static int write_pcx(const char* path, const uint8_t* img, uint16_t width, uint16_t height,
-					 const uint8_t* pal_768) {
-	uint8_t header[128];
-	TieFile* f = TieStorage_Open(TIE_FILE_ROOT_USER, path, "wb");
-	int i;
-	uint16_t bpl;
-	uint16_t row;
-
-	if (!f)
-		return 0;
-
-	memset(header, 0, sizeof header);
-	header[0] = 0x0A; /* ZSoft PCX */
-	header[1] = 5;    /* version */
-	header[2] = 1;    /* RLE */
-	header[3] = 8;    /* 8 bits per plane */
-	/* xmin, ymin = 0 */
-	header[8] = (uint8_t)((width - 1) & 0xFF);
-	header[9] = (uint8_t)(((width - 1) >> 8) & 0xFF);
-	header[10] = (uint8_t)((height - 1) & 0xFF);
-	header[11] = (uint8_t)(((height - 1) >> 8) & 0xFF);
-	header[12] = (uint8_t)(width & 0xFF);
-	header[13] = (uint8_t)((width >> 8) & 0xFF);
-	header[14] = (uint8_t)(height & 0xFF);
-	header[15] = (uint8_t)((height >> 8) & 0xFF);
-	/* 48-byte 16-color palette placeholder: retail writes 0, 1, .. 47. */
-	for (i = 0; i < 48; ++i)
-		header[16 + i] = (uint8_t)i;
-	header[64] = 0; /* reserved */
-	header[65] = 1; /* 1 plane */
-	bpl = (uint16_t)(width + (width & 1));
-	header[66] = (uint8_t)(bpl & 0xFF);
-	header[67] = (uint8_t)((bpl >> 8) & 0xFF);
-	/* Remainder (palette info + padding) = 0. */
-	if (TieStorage_Write(header, 1, 128, f) != 128) {
-		TieStorage_Close(f);
-		return 0;
-	}
-
-	/* RLE-encode each scanline and write. */
-	for (row = 0; row < height; ++row) {
-		const uint8_t* line = img + (size_t)row * width;
-		uint16_t x = 0;
-		while (x < bpl) {
-			uint8_t v = (x < width) ? line[x] : 0;
-			uint8_t run = 1;
-			while (run < 63 && (x + run) < bpl && ((x + run) < width ? line[x + run] : 0) == v)
-				++run;
-			if (run > 1 || (v & 0xC0) == 0xC0) {
-				uint8_t hdr = (uint8_t)(0xC0 | run);
-				TieStorage_Putc(hdr, f);
-			}
-			TieStorage_Putc(v, f);
-			x = (uint16_t)(x + run);
-		}
-	}
-
-	/* 256-color palette trailer: marker 0x0C then 768 bytes RGB (8-bit). */
-	TieStorage_Putc(0x0C, f);
-	for (i = 0; i < 768; ++i)
-		TieStorage_Putc((uint8_t)(pal_768[i] << 2), f); /* 6-bit DAC -> 8-bit */
-
-	TieStorage_Close(f);
-	return 1;
-}
-
 // FUNCTION: TIE95 0x4E670
 int rtsvga2_takeScreenshot(void) {
-	char path[64];
-	size_t sz;
-	uint8_t* buf;
-	int ok;
-
+	/* Retail: rtsvga2_saveboxVGA(newbuf, 0, 0, screenXRes, screenYRes), then
+	 * Save_PCX_Screenshot(newbuf, screenXRes, screenYRes, rtsvga2_vgapalette).
+	 * The PCX writer is an unrecovered library routine; capture stays
+	 * disabled until it is recovered. */
 	return 0;
-
-	if (!vgapointer || screenXRes <= 0 || screenYRes <= 0)
-		return 0;
-	sz = (size_t)screenXRes * (size_t)screenYRes;
-	buf = (uint8_t*)malloc(sz);
-	if (!buf)
-		return 0;
-
-	rtsvga2_saveboxVGA(buf, 0, 0, (uint16_t)screenXRes, (uint16_t)screenYRes);
-
-	snprintf(path, sizeof path, "screenshots/screen%d.pcx", screenshot_seq++);
-	ok = write_pcx(path, buf, (uint16_t)screenXRes, (uint16_t)screenYRes, rtsvga2_vgapalette);
-	free(buf);
-	return ok;
 }

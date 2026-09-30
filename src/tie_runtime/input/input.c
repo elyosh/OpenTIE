@@ -16,6 +16,12 @@
 
 enum { TIE_FLIGHT_MOUSE_REFERENCE_INTERVAL_US = 16000 };
 
+/* Port-owned analog roll axis and absolute throttle command consumed by the
+ * recovered FEINPUT/USER/REPLAY code (declared in tie/tie.h). */
+int16_t inputdeltaroll;
+int16_t joystickroll;
+uint32_t inputthrottle = UINT32_MAX;
+
 /* ================================================================
  * Keyboard — DOS scancode queue fed from AeronInputSnapshot
  * ================================================================ */

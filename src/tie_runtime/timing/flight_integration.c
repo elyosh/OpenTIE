@@ -3,6 +3,7 @@
 #include "tie/pai.h"
 #include "tie/tie.h"
 #include "tie/trig2.h"
+#include "tie_runtime/timing/flight_timing.h"
 #include "tie_runtime/timing/flight_timing_state.h"
 
 void TieFlightIntegration_Move(uint16_t obj_idx, FlightObject* obj) {
@@ -46,6 +47,11 @@ static int32_t move_isqrt(int64_t n) {
 	}
 	return (int32_t)x;
 }
+
+/* OPTIONAL enhancement (non-faithful), default 1 = on. Set to 0 for
+ * byte-faithful behaviour (the original has no fighter-vs-fighter
+ * separation). */
+static int8_t pai_friendly_separation = 1;
 
 /* OPTIONAL (pai_friendly_separation, default on): gently push apart same-FG
  * AI craft whose hulls overlap, so wingmen ganging up on one target don't
@@ -140,6 +146,25 @@ void TieFlightIntegration_SeparateFriendly(void) {
 }
 
 void TieFlightIntegration_BeginFrame(void) { ++s_flight_frame; }
+
+int32_t TieFlightIntegration_PushStep(uint16_t obj_idx, unsigned int axis, int32_t accum, int32_t clamped) {
+	TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, &objects[obj_idx]);
+	const int8_t sign = clamped < 0 ? -1 : 1;
+	int32_t step;
+
+	if (state->push_sign[axis] != sign) {
+		state->push_remainder[axis] = 0;
+		state->push_sign[axis] = sign;
+	}
+	step = TieFlightTiming_ScaleWithRemainder(clamped, frameticks, 236, &state->push_remainder[axis]);
+	if ((accum > 0 && step > accum) || (accum < 0 && step < accum))
+		step = accum;
+	if (accum - step == 0) {
+		state->push_remainder[axis] = 0;
+		state->push_sign[axis] = 0;
+	}
+	return step;
+}
 
 uint16_t TieFlightIntegration_AutopilotStep(uint16_t obj_idx, unsigned int axis, int16_t rate_cap,
 											int16_t pacing, uint16_t axis_scale) {

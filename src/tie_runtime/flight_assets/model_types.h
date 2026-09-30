@@ -123,7 +123,12 @@ typedef struct Tie98OptNode {
 	Tie98OptNodeType type;
 	int32_t child_count;
 	struct Tie98OptNode** children;
-	intptr_t param1;
+	union {
+		intptr_t param1;
+		/* Resolved target of a TIE98_OPT_NODE_REFERENCE node, NULL when the
+		 * reference is looked up by the name in param2. */
+		const struct Tie98OptNode* reference;
+	};
 	const void* param2;
 } Tie98OptNode;
 

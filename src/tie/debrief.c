@@ -118,14 +118,29 @@ static const DebriefSpec* const active_spec = &debrief_specs[0];
 
 /* ---- Static globals ---- */
 
+// GLOBAL: TIE95 0xF5D68
+// GLOBAL: TIE98 0x50F800
 static Actor* door_actors[2]; /* door[0]=brief door, door[1]=fly-again door */
-static Input* priest;         /* priest widget (id=2) */
-static Input* flyagain;       /* fly-again widget (id=3) */
+// GLOBAL: TIE95 0xF5D84
+// GLOBAL: TIE98 0x50F7EC
+static Input* priest; /* priest widget (id=2) */
+// GLOBAL: TIE95 0xF5D8C
+// GLOBAL: TIE98 0x50F7E0
+static Input* flyagain; /* fly-again widget (id=3) */
+// GLOBAL: TIE95 0xF5D70
+// GLOBAL: TIE98 0x50F7E8
 static Film* debrief_film;
 // GLOBAL: TIE95 0xF5D74
+// GLOBAL: TIE98 0x50F808
 static Actor* title_actor;
+// GLOBAL: TIE95 0xF5D78
+// GLOBAL: TIE98 0x50F7F0
 static Input* parent;
+// GLOBAL: TIE95 0xF5D7C
+// GLOBAL: TIE98 0x50F7F8
 static Input* brief_input;
+// GLOBAL: TIE95 0xF5D80
+// GLOBAL: TIE98 0x50F7F4
 static Input* officer; /* officer widget (id=1) */
 
 /* ---- Forward declarations ---- */

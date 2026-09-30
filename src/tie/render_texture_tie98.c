@@ -1,32 +1,19 @@
 #include "tie/render_texture_tie98.h"
 #include "tie/render_scene_tie98.h"
 #include "tie/rtsvga2.h"
+#include "tie_runtime/runtime/pointer_key.h"
 
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
 enum {
-	RENDER_TEXTURE_CACHE_SIZE = 1024,
 	RENDER_TEXTURE_MAX_PIXELS = 65536,
-	SOFTWARE_SHADE_TABLE_CACHE_SIZE = 1024,
-	SOFTWARE_SHADE_TABLE_SIZE = 4096,
-	HARDWARE_SHADE_TABLE_CACHE_SIZE = 1024,
 	HARDWARE_SHADE_TABLE_ENTRIES = (16 * 256),
 };
 
-typedef struct SoftwareShadeTableCacheEntry {
-	const uint16_t* rgb565_shades;
-	uint8_t palette_indices[SOFTWARE_SHADE_TABLE_SIZE];
-} SoftwareShadeTableCacheEntry;
-
-typedef struct HardwareShadeTableCacheEntry {
-	const uint16_t* rgb565_shades;
-	uint16_t shades[HARDWARE_SHADE_TABLE_ENTRIES];
-} HardwareShadeTableCacheEntry;
-
 // GLOBAL: TIE98 0x5FE8A0
-static uintptr_t g_renderTextureCacheKeys[RENDER_TEXTURE_CACHE_SIZE];
+const void* g_renderTextureCacheKeys[RENDER_TEXTURE_CACHE_SIZE];
 // GLOBAL: TIE98 0x5FF8A0
 static Std3DTextureSurface g_renderTextureCache[RENDER_TEXTURE_CACHE_SIZE];
 // GLOBAL: TIE98 0x5601C4
@@ -39,44 +26,10 @@ static uint8_t g_renderTextureDecodeScratch[RENDER_TEXTURE_MAX_PIXELS];
 // GLOBAL: TIE98 0x5FD35C
 uint8_t* g_inversePaletteTable;
 
-/* PORT: the original runtime OPT builder stores one converted 8-bit shade
- * table inside each mutable model handle. Native host OPT images remain
- * immutable, so the equivalent tables are retained by source address here. */
-static SoftwareShadeTableCacheEntry g_softwareShadeTableCache[SOFTWARE_SHADE_TABLE_CACHE_SIZE];
-
-/* PORT: hardware-mode counterpart of the software cache above. The original
- * builder copies each texture's 16 RGB565 shade palettes into the mutable
- * handle, runs the illumination analysis, and bakes the brightness option
- * into the copy; the rebuilt tables are retained by source address here. */
-static HardwareShadeTableCacheEntry g_hardwareShadeTableCache[HARDWARE_SHADE_TABLE_CACHE_SIZE];
-
 // GLOBAL: TIE98 0x5971A0
 uint16_t g_flightTextPalette[256];
 // GLOBAL: TIE98 0x4F2A80
 uint8_t g_flightColorKeyIndex = 0xFB;
-
-// PORT: TIE98 maintains the 16-bit table when its DirectDraw palette changes. The
-// portable host exposes the active flight palette as 6-bit RGB instead.
-void RenderTexture_SyncFlightPalette(void) {
-	unsigned int index;
-
-	unsigned int best_distance = UINT32_MAX;
-	for (index = 0; index < 256; ++index) {
-		const uint8_t* rgb = &rtsvga2_vgapalette[3 * index];
-		const unsigned int red8 = rgb[0] * 255u / 63u;
-		const unsigned int green8 = rgb[1] * 255u / 63u;
-		const unsigned int blue8 = rgb[2] * 255u / 63u;
-		int blue_delta;
-		unsigned int distance;
-		g_flightTextPalette[index] = (uint16_t)(((red8 >> 3) << 11) | ((green8 >> 2) << 5) | (blue8 >> 3));
-		blue_delta = (int)rgb[2] - 2;
-		distance = rgb[0] * rgb[0] + rgb[1] * rgb[1] + (unsigned int)(blue_delta * blue_delta);
-		if (distance < best_distance) {
-			best_distance = distance;
-			g_flightColorKeyIndex = (uint8_t)index;
-		}
-	}
-}
 
 // FUNCTION: TIE98 0x47AEC0
 void Color_BuildRgb565ToPaletteIndexTable(uint8_t* dst, unsigned int first_index, unsigned int end_index) {
@@ -90,56 +43,6 @@ void Color_BuildRgb565ToPaletteIndexTable(uint8_t* dst, unsigned int first_index
 		};
 		dst[value] = (uint8_t)rtsvga2_findNearestColor(rgb6, rtsvga2_vgapalette, first_index, end_index);
 	}
-}
-
-/* PORT: supplies the representation produced by the original
- * OptModel_BuildRuntimeHandle software branch without modifying the host-owned
- * serialized OPT image. */
-const uint8_t* RenderTexture_GetSoftwareShadeTable(const uint16_t* rgb565_shades) {
-	unsigned int count;
-	int index;
-	SoftwareShadeTableCacheEntry* entry;
-
-	unsigned int slot = ((uintptr_t)rgb565_shades >> 4) & (SOFTWARE_SHADE_TABLE_CACHE_SIZE - 1);
-	for (count = 0; count < SOFTWARE_SHADE_TABLE_CACHE_SIZE; ++count) {
-		entry = &g_softwareShadeTableCache[slot];
-		if (entry->rgb565_shades == rgb565_shades)
-			return entry->palette_indices;
-		if (entry->rgb565_shades == NULL) {
-			entry->rgb565_shades = rgb565_shades;
-			for (index = 0; index < SOFTWARE_SHADE_TABLE_SIZE; ++index)
-				entry->palette_indices[index] = g_inversePaletteTable[rgb565_shades[index]];
-			return entry->palette_indices;
-		}
-		slot = (slot + 1) & (SOFTWARE_SHADE_TABLE_CACHE_SIZE - 1);
-	}
-
-	entry = &g_softwareShadeTableCache[slot];
-	entry->rgb565_shades = rgb565_shades;
-	for (index = 0; index < SOFTWARE_SHADE_TABLE_SIZE; ++index)
-		entry->palette_indices[index] = g_inversePaletteTable[rgb565_shades[index]];
-	return entry->palette_indices;
-}
-
-/* PORT: changing the active indexed destination palette invalidates the
- * converted tables embedded in the original runtime OPT handles. */
-void RenderTexture_ResetSoftwareShadeTableCache(void) {
-	int index;
-
-	for (index = 0; index < SOFTWARE_SHADE_TABLE_CACHE_SIZE; ++index)
-		g_softwareShadeTableCache[index].rgb565_shades = NULL;
-}
-
-void RenderTexture_ReleaseMissionCaches(void) {
-	int index;
-
-	if (g_useHardware3D && g_pStd3DCurDevice)
-		std3D_FlushTextureCache();
-	memset(g_renderTextureCacheKeys, 0, sizeof g_renderTextureCacheKeys);
-	g_renderTextureCacheCursor = -1;
-	RenderTexture_ResetSoftwareShadeTableCache();
-	for (index = 0; index < HARDWARE_SHADE_TABLE_CACHE_SIZE; ++index)
-		g_hardwareShadeTableCache[index].rgb565_shades = NULL;
 }
 
 // FUNCTION: TIE98 0x42DAE0
@@ -191,7 +94,7 @@ static void RenderTexture_AnalyzeIlluminationShades(uint16_t* shades) {
 }
 
 // FUNCTION: TIE98 0x437EF0
-static void RenderTexture_BuildHardwareShadeTables(uint16_t* shades) {
+void RenderTexture_BuildHardwareShadeTables(uint16_t* shades) {
 	int chunk, i;
 
 	/* Illumination analysis first, then the brightness option is baked into
@@ -216,36 +119,8 @@ static void RenderTexture_BuildHardwareShadeTables(uint16_t* shades) {
 	}
 }
 
-/* PORT: supplies the representation produced by the original
- * OptModel_BuildRuntimeHandle hardware branch without modifying the
- * host-owned serialized OPT image. The returned tables are mutable: the
- * renderer clears the overlay flag for projectile models and
- * RenderTexture_GetOrCreateColorKey saves palette[0] through the remap slot,
- * exactly as the original mutated its handle. */
-uint16_t* RenderTexture_GetHardwareShadeTables(const uint16_t* rgb565_shades) {
-	unsigned int count;
-	HardwareShadeTableCacheEntry* entry;
-
-	unsigned int slot = ((uintptr_t)rgb565_shades >> 4) & (HARDWARE_SHADE_TABLE_CACHE_SIZE - 1);
-	for (count = 0; count < HARDWARE_SHADE_TABLE_CACHE_SIZE; ++count) {
-		entry = &g_hardwareShadeTableCache[slot];
-		if (entry->rgb565_shades == rgb565_shades)
-			return entry->shades;
-		if (entry->rgb565_shades == NULL)
-			break;
-		slot = (slot + 1) & (HARDWARE_SHADE_TABLE_CACHE_SIZE - 1);
-	}
-
-	entry = &g_hardwareShadeTableCache[slot];
-	entry->rgb565_shades = rgb565_shades;
-	memcpy(entry->shades, rgb565_shades, sizeof entry->shades);
-	RenderTexture_BuildHardwareShadeTables(entry->shades);
-	return entry->shades;
-}
-
 // FUNCTION: TIE98 0x427250
 Std3DTextureSurface* RenderTexture_FindOrAllocateCacheEntry(const void* cache_key) {
-	uintptr_t key;
 	int slot, count, index;
 
 	if (g_renderTextureCacheCursor == -1) {
@@ -254,23 +129,22 @@ Std3DTextureSurface* RenderTexture_FindOrAllocateCacheEntry(const void* cache_ke
 			g_renderTextureCache[index].bCached = 0;
 	}
 
-	key = (uintptr_t)cache_key;
-	slot = (int)(key & (RENDER_TEXTURE_CACHE_SIZE - 1));
+	slot = TiePointerKey_LowBits(cache_key) & (RENDER_TEXTURE_CACHE_SIZE - 1);
 	g_renderTextureCacheCursor = slot;
 	count = 0;
 	while (count < RENDER_TEXTURE_CACHE_SIZE) {
-		if (g_renderTextureCacheKeys[slot] == key)
+		if (g_renderTextureCacheKeys[slot] == cache_key)
 			break;
 		slot = (slot + 1) & (RENDER_TEXTURE_CACHE_SIZE - 1);
 		++count;
 	}
 	g_renderTextureCacheCursor = slot;
 	if (count != RENDER_TEXTURE_CACHE_SIZE) {
-		g_renderTextureCacheKeys[slot] = key;
+		g_renderTextureCacheKeys[slot] = cache_key;
 		return &g_renderTextureCache[slot];
 	}
 
-	slot = (int)(key & (RENDER_TEXTURE_CACHE_SIZE - 1));
+	slot = TiePointerKey_LowBits(cache_key) & (RENDER_TEXTURE_CACHE_SIZE - 1);
 	g_renderTextureCacheCursor = slot;
 	count = 0;
 	while (count < RENDER_TEXTURE_CACHE_SIZE) {
@@ -282,7 +156,7 @@ Std3DTextureSurface* RenderTexture_FindOrAllocateCacheEntry(const void* cache_ke
 	g_renderTextureCacheCursor = slot;
 	if (count == RENDER_TEXTURE_CACHE_SIZE)
 		return &g_renderTextureCache[g_renderTextureCacheCursor];
-	g_renderTextureCacheKeys[slot] = key;
+	g_renderTextureCacheKeys[slot] = cache_key;
 	return &g_renderTextureCache[slot];
 }
 

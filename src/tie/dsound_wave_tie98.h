@@ -7,9 +7,11 @@
 extern "C" {
 #endif
 
-/* Runtime ownership of the TIE98 media device and primary buffer. */
-int TieDirectSound_Init(void* window);
-void TieDirectSound_Shutdown(void);
+extern IDirectSound* direct_sound;
+extern IDirectSoundBuffer* primary_buffer;
+
+int DirectSound_ParseWaveHeader(const void* riff_data, DSWaveFormat** out_format, uint8_t** out_data,
+								uint32_t* out_data_size);
 
 int DirectSound_CreateWaveBuffer(IDirectSoundBuffer** out_buffer, uint32_t buffer_bytes, DSWaveFormat* format,
 								 int alternate_capabilities);

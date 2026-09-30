@@ -17,7 +17,7 @@ extern int32_t shootery;
 extern int32_t shooterz;
 
 /* -- Last FG chosen by searchforclosestingroup; consumed by
- *    paifight_checkescortorder_entry to stamp craftptr->escortee_fg_idx. */
+ *    paifight_checkescortorder to stamp craftptr->escortee_fg_idx. */
 extern uint8_t escortfg;
 
 /* -- Tail 14 bytes of watdbg's _ai[52] scratch at 0xF8F6E..0xF8F7B.
@@ -102,9 +102,9 @@ int16_t paifight_coverleaderorder(void);       /* plan slot 13 */
 int16_t paifight_followleadatkorder(void);     /* plan slot 14 */
 int16_t paifight_escorttargetorder(void);      /* plan slot 23 */
 
-/* -- Direct entry from pai_updatecraftplan when default_order_ldr == 20
- *    (Escort) on the player's own craft. */
-void paifight_checkescortorder_entry(void);
+/* -- Order handler; also called directly from pai_updatecraftplan when
+ *    default_order_ldr == 20 (Escort) on the player's own craft. */
+int16_t paifight_checkescortorder(void);
 
 #ifdef __cplusplus
 }

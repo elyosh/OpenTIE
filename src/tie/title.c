@@ -39,6 +39,8 @@
 
 /* Perspective dither table — Y thresholds for scale-line rendering.
  * Each line is drawn only when its perspective Y exceeds the table entry. */
+// GLOBAL: TIE95 0xCE3E4
+// GLOBAL: TIE98 0x4F2E18
 static const int16_t scale_table[20] = { 276, 116, 238, 38, 188, 132, 248, 70,  260, 100,
 										 228, 54,  178, 22, 214, 148, 164, 202, 6,   86 };
 
@@ -48,35 +50,79 @@ enum {
 	MAX_LINES = 18,
 };
 
+// GLOBAL: TIE95 0xF5108
+// GLOBAL: TIE98 0x58A9C0
 static int16_t line_drawn[MAX_LINES];
+// GLOBAL: TIE95 0xF5058
+// GLOBAL: TIE98 0x58AA48
 BitmapStruct title_background;
+// GLOBAL: TIE95 0xF506C
+// GLOBAL: TIE98 0x58AA40
 static Actor* starwars_actor;
+// GLOBAL: TIE95 0xF5070
+// GLOBAL: TIE98 0x58AA18
 static int16_t buff_y[MAX_LINES];
+// GLOBAL: TIE95 0xF5094
+// GLOBAL: TIE98 0x58A994
 static Actor* back_actor;
+// GLOBAL: TIE95 0xF5098
+// GLOBAL: TIE98 0x58A9F0
 static int16_t line_y[MAX_LINES];
+// GLOBAL: TIE95 0xF50BC
+// GLOBAL: TIE98 0x58A970
 static int16_t line_yf[MAX_LINES];
+// GLOBAL: TIE95 0xF50E0
+// GLOBAL: TIE98 0x58A998
 static int16_t line_yv[MAX_LINES];
 // GLOBAL: TIE95 0xF5104
+// GLOBAL: TIE98 0x58A6AC
 static Actor* title_actor;
+// GLOBAL: TIE95 0xF512C
+// GLOBAL: TIE98 0x58A6C0
 static int16_t line_used[MAX_LINES];
+// GLOBAL: TIE95 0xF5150
+// GLOBAL: TIE98 0x58A6B4
 static Actor* along_actor;
+// GLOBAL: TIE95 0xF5154
+// GLOBAL: TIE98 0x58A6E4
 static Actor* stars_actor;
+// GLOBAL: TIE95 0xF5158
+// GLOBAL: TIE98 0x58A400
 static int16_t line_yvf[MAX_LINES];
-static Actor* smallsw_actor;
+// GLOBAL: TIE95 0xF5180
+// GLOBAL: TIE98 0x58A6E8
 static int16_t scale_skipf[321];
+// GLOBAL: TIE95 0xF5402
+// GLOBAL: TIE98 0x58A428
 static int16_t scale_skip[321];
+// GLOBAL: TIE95 0xF5688
+// GLOBAL: TIE98 0x58A96C
 static int16_t film_time;
+// GLOBAL: TIE95 0xF568A
+// GLOBAL: TIE98 0x58A9BC
 static int16_t base_color;
+// GLOBAL: TIE95 0xF568C
+// GLOBAL: TIE98 0x58A9E8
 static int16_t scale_amount_f;
+// GLOBAL: TIE95 0xF568E
+// GLOBAL: TIE98 0x58A6B8
 static int16_t scale_amount;
+// GLOBAL: TIE95 0xF5690
+// GLOBAL: TIE98 0x58AA3C
 int16_t title_num_lines;
+// GLOBAL: TIE95 0xF5684
+// GLOBAL: TIE98 0x58AA44
 LandruHandle title_text; /* paragraph data */
+// GLOBAL: TIE95 0xF5686
+// GLOBAL: TIE98 0x58A6B0
 static int16_t title_font;
 
 /* ================================================================
  * View update callback
  * ================================================================ */
 
+// FUNCTION: TIE95 0x66B9C
+// FUNCTION: TIE98 0x490340
 static void end_View(int32_t time) {
 	int16_t i;
 	(void)time;
@@ -118,6 +164,8 @@ static void end_View(int32_t time) {
  * ================================================================ */
 
 /* Normal speed: per-frame scale decrease with deceleration */
+// FUNCTION: TIE95 0x66CB8
+// FUNCTION: TIE98 0x490440
 static void user_StarWars(Actor* actor, int32_t time) {
 	(void)time;
 
@@ -164,6 +212,8 @@ static void user_StarWars(Actor* actor, int32_t time) {
 }
 
 /* Slow system variant: static display, no per-frame scaling */
+// FUNCTION: TIE95 0x66DFC
+// FUNCTION: TIE98 0x490560
 static void user_Slow_StarWars(Actor* actor, int32_t time) {
 	(void)time;
 
@@ -188,6 +238,8 @@ static void user_Slow_StarWars(Actor* actor, int32_t time) {
  * Stars background callback
  * ================================================================ */
 
+// FUNCTION: TIE95 0x66E80
+// FUNCTION: TIE98 0x4905F0
 static void user_Stars(Actor* actor, int32_t time) {
 	(void)time;
 	if (shellext_Get_Cur_Scene() != SCENE_TITLE)
@@ -208,6 +260,8 @@ static void user_Stars(Actor* actor, int32_t time) {
  * ================================================================ */
 
 /* Per-frame: advance each active line's Y position with deceleration */
+// FUNCTION: TIE95 0x66EE0
+// FUNCTION: TIE98 0x490650
 static void user_Title(Actor* actor, int32_t time) {
 	int16_t i;
 	(void)actor;
@@ -242,6 +296,8 @@ static void user_Title(Actor* actor, int32_t time) {
 }
 
 /* Draw: render each active line with perspective horizontal scaling */
+// FUNCTION: TIE95 0x66FD4
+// FUNCTION: TIE98 0x490740
 static int16_t draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
 						  int16_t refresh) {
 	char* dataptr;
@@ -294,6 +350,8 @@ static int16_t draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, in
  * ================================================================ */
 
 /* At time 0: initialize 18 text lines with staggered positions */
+// FUNCTION: TIE95 0x67148
+// FUNCTION: TIE98 0x490870
 static void user_Back(Actor* actor, int32_t time) {
 	int16_t start = 100;
 	int16_t i;
@@ -324,6 +382,8 @@ static void user_Back(Actor* actor, int32_t time) {
 }
 
 /* Draw: render text lines into background bitmap as they come into view */
+// FUNCTION: TIE95 0x671FC
+// FUNCTION: TIE98 0x490940
 static int16_t draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y, int16_t refresh) {
 	int16_t i;
 	(void)actor;

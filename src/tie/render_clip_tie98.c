@@ -5,52 +5,18 @@
 
 #include <math.h>
 
+// GLOBAL: TIE98 0x570250
 int g_clipIdxA[32];
+// GLOBAL: TIE98 0x5601D0
 int g_clipIdxB[32];
+// GLOBAL: TIE98 0x5802D8
 int g_clipCountA;
+// GLOBAL: TIE98 0x5802F8
 int g_clipCountB;
+// GLOBAL: TIE98 0x5802FC
 int g_clipVertCursor;
-int g_clipOccurred;
+// GLOBAL: TIE98 0x5FD2A0
 float g_invProjScale;
-
-/* RECOVERY HELPER: removes the intersection-field interpolation repeated by
- * all five recovered TIE98 polygon clipping functions. */
-static void RenderClip_WriteIntersection(ProjVertexTIE98* destination, const ProjVertexTIE98* previous,
-										 const ProjVertexTIE98* current, float t, int base_is_current,
-										 int subtract_delta) {
-	const float delta_sx = current->sx - previous->sx;
-	const float delta_sy = current->sy - previous->sy;
-	const float delta_w = current->w - previous->w;
-	const float delta_light = current->lightIntensity - previous->lightIntensity;
-	const float delta_tu = current->tu - previous->tu;
-	const float delta_tv = current->tv - previous->tv;
-	const ProjVertexTIE98* base = base_is_current ? current : previous;
-	const float direction = subtract_delta ? -t : t;
-
-	destination->sx = base->sx + delta_sx * direction;
-	destination->sy = base->sy + delta_sy * direction;
-	destination->w = base->w + delta_w * direction;
-	destination->lightIntensity = base->lightIntensity + delta_light * direction;
-
-	if (fabsf(delta_w) < 0.00001f) {
-		destination->tu = base->tu + delta_tu * direction;
-		destination->tv = base->tv + delta_tv * direction;
-	} else if (base_is_current) {
-		const float current_inv_w = (float)perspFactor / current->w;
-		const float previous_inv_w = (float)perspFactor / previous->w;
-		const float uv_t =
-			((float)perspFactor / destination->w - current_inv_w) / (previous_inv_w - current_inv_w);
-		destination->tu = current->tu - delta_tu * uv_t;
-		destination->tv = current->tv - delta_tv * uv_t;
-	} else {
-		const float previous_inv_w = (float)perspFactor / previous->w;
-		const float current_inv_w = (float)perspFactor / current->w;
-		const float uv_t =
-			((float)perspFactor / destination->w - previous_inv_w) / (current_inv_w - previous_inv_w);
-		destination->tu = previous->tu + delta_tu * uv_t;
-		destination->tv = previous->tv + delta_tv * uv_t;
-	}
-}
 
 // FUNCTION: TIE98 0x429060
 void RenderClip_ClipPolyTop(int prev_vert, int cur_vert, ProjVertexTIE98* vert_buf) {
@@ -59,30 +25,111 @@ void RenderClip_ClipPolyTop(int prev_vert, int cur_vert, ProjVertexTIE98* vert_b
 	const float previous_y = previous->sy;
 	const float current_y = current->sy;
 	const float delta_y = current_y - previous_y;
+	float delta_sx;
+	float delta_sy;
+	float delta_w;
+	float delta_light;
+	float delta_tu;
+	float delta_tv;
+	float t;
+	float uv_t;
+	float previous_inv_w;
+	float current_inv_w;
+	ProjVertexTIE98* out;
 	int output;
 
 	if (previous_y < 0.0f) {
 		if (current_y < 0.0f)
 			return;
-		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
-		if (-previous_y >= current_y)
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, current_y / delta_y, 1, 1);
-		else
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, -previous_y / delta_y, 0, 0);
-		vert_buf[output].sy = 0.0f;
+		out = &vert_buf[output];
+		delta_sx = current->sx - previous->sx;
+		delta_sy = current->sy - previous->sy;
+		delta_w = current->w - previous->w;
+		delta_light = current->lightIntensity - previous->lightIntensity;
+		delta_tu = current->tu - previous->tu;
+		delta_tv = current->tv - previous->tv;
+		if (-previous_y >= current_y) {
+			t = current_y / delta_y;
+			out->sx = current->sx - delta_sx * t;
+			out->sy = current->sy - delta_sy * t;
+			out->w = current->w - delta_w * t;
+			out->lightIntensity = current->lightIntensity - delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = current->tu - delta_tu * t;
+				out->tv = current->tv - delta_tv * t;
+			} else {
+				current_inv_w = (float)perspFactor / current->w;
+				previous_inv_w = (float)perspFactor / previous->w;
+				uv_t = ((float)perspFactor / out->w - current_inv_w) / (previous_inv_w - current_inv_w);
+				out->tu = current->tu - delta_tu * uv_t;
+				out->tv = current->tv - delta_tv * uv_t;
+			}
+		} else {
+			t = -previous_y / delta_y;
+			out->sx = previous->sx + delta_sx * t;
+			out->sy = previous->sy + delta_sy * t;
+			out->w = previous->w + delta_w * t;
+			out->lightIntensity = previous->lightIntensity + delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = previous->tu + delta_tu * t;
+				out->tv = previous->tv + delta_tv * t;
+			} else {
+				previous_inv_w = (float)perspFactor / previous->w;
+				current_inv_w = (float)perspFactor / current->w;
+				uv_t = ((float)perspFactor / out->w - previous_inv_w) / (current_inv_w - previous_inv_w);
+				out->tu = previous->tu + delta_tu * uv_t;
+				out->tv = previous->tv + delta_tv * uv_t;
+			}
+		}
+		out->sy = 0.0f;
 		g_clipIdxB[g_clipCountB++] = output;
 		g_clipIdxB[g_clipCountB++] = cur_vert;
 		return;
 	}
 	if (current_y < 0.0f) {
-		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
-		if (previous_y >= -current_y)
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, -current_y / delta_y, 1, 0);
-		else
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, previous_y / delta_y, 0, 1);
-		vert_buf[output].sy = 0.0f;
+		out = &vert_buf[output];
+		delta_sx = current->sx - previous->sx;
+		delta_sy = current->sy - previous->sy;
+		delta_w = current->w - previous->w;
+		delta_light = current->lightIntensity - previous->lightIntensity;
+		delta_tu = current->tu - previous->tu;
+		delta_tv = current->tv - previous->tv;
+		if (previous_y >= -current_y) {
+			t = -current_y / delta_y;
+			out->sx = current->sx + delta_sx * t;
+			out->sy = current->sy + delta_sy * t;
+			out->w = current->w + delta_w * t;
+			out->lightIntensity = current->lightIntensity + delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = current->tu + delta_tu * t;
+				out->tv = current->tv + delta_tv * t;
+			} else {
+				current_inv_w = (float)perspFactor / current->w;
+				previous_inv_w = (float)perspFactor / previous->w;
+				uv_t = ((float)perspFactor / out->w - current_inv_w) / (previous_inv_w - current_inv_w);
+				out->tu = current->tu - delta_tu * uv_t;
+				out->tv = current->tv - delta_tv * uv_t;
+			}
+		} else {
+			t = previous_y / delta_y;
+			out->sx = previous->sx - delta_sx * t;
+			out->sy = previous->sy - delta_sy * t;
+			out->w = previous->w - delta_w * t;
+			out->lightIntensity = previous->lightIntensity - delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = previous->tu - delta_tu * t;
+				out->tv = previous->tv - delta_tv * t;
+			} else {
+				previous_inv_w = (float)perspFactor / previous->w;
+				current_inv_w = (float)perspFactor / current->w;
+				uv_t = ((float)perspFactor / out->w - previous_inv_w) / (current_inv_w - previous_inv_w);
+				out->tu = previous->tu + delta_tu * uv_t;
+				out->tv = previous->tv + delta_tv * uv_t;
+			}
+		}
+		out->sy = 0.0f;
 		g_clipIdxB[g_clipCountB++] = output;
 		return;
 	}
@@ -97,34 +144,111 @@ void RenderClip_ClipPolyBottom(int prev_vert, int cur_vert, ProjVertexTIE98* ver
 	const float current_y = current->sy;
 	const float max_y = (float)pixelsdeepmin1;
 	const float delta_y = current_y - previous_y;
+	float delta_sx;
+	float delta_sy;
+	float delta_w;
+	float delta_light;
+	float delta_tu;
+	float delta_tv;
+	float t;
+	float uv_t;
+	float previous_inv_w;
+	float current_inv_w;
+	ProjVertexTIE98* out;
 	int output;
 
 	if (previous_y > max_y) {
 		if (current_y > max_y)
 			return;
-		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
-		if (previous_y - max_y >= max_y - current_y)
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, (max_y - current_y) / delta_y,
-										 1, 0);
-		else
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, (previous_y - max_y) / delta_y,
-										 0, 1);
-		vert_buf[output].sy = max_y;
+		out = &vert_buf[output];
+		delta_sx = current->sx - previous->sx;
+		delta_sy = current->sy - previous->sy;
+		delta_w = current->w - previous->w;
+		delta_light = current->lightIntensity - previous->lightIntensity;
+		delta_tu = current->tu - previous->tu;
+		delta_tv = current->tv - previous->tv;
+		if (previous_y - max_y >= max_y - current_y) {
+			t = (max_y - current_y) / delta_y;
+			out->sx = current->sx + delta_sx * t;
+			out->sy = current->sy + delta_sy * t;
+			out->w = current->w + delta_w * t;
+			out->lightIntensity = current->lightIntensity + delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = current->tu + delta_tu * t;
+				out->tv = current->tv + delta_tv * t;
+			} else {
+				current_inv_w = (float)perspFactor / current->w;
+				previous_inv_w = (float)perspFactor / previous->w;
+				uv_t = ((float)perspFactor / out->w - current_inv_w) / (previous_inv_w - current_inv_w);
+				out->tu = current->tu - delta_tu * uv_t;
+				out->tv = current->tv - delta_tv * uv_t;
+			}
+		} else {
+			t = (previous_y - max_y) / delta_y;
+			out->sx = previous->sx - delta_sx * t;
+			out->sy = previous->sy - delta_sy * t;
+			out->w = previous->w - delta_w * t;
+			out->lightIntensity = previous->lightIntensity - delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = previous->tu - delta_tu * t;
+				out->tv = previous->tv - delta_tv * t;
+			} else {
+				previous_inv_w = (float)perspFactor / previous->w;
+				current_inv_w = (float)perspFactor / current->w;
+				uv_t = ((float)perspFactor / out->w - previous_inv_w) / (current_inv_w - previous_inv_w);
+				out->tu = previous->tu + delta_tu * uv_t;
+				out->tv = previous->tv + delta_tv * uv_t;
+			}
+		}
+		out->sy = max_y;
 		g_clipIdxA[g_clipCountA++] = output;
 		g_clipIdxA[g_clipCountA++] = cur_vert;
 		return;
 	}
 	if (current_y > max_y) {
-		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
-		if (max_y - previous_y >= current_y - max_y)
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, (current_y - max_y) / delta_y,
-										 1, 1);
-		else
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, (max_y - previous_y) / delta_y,
-										 0, 0);
-		vert_buf[output].sy = max_y;
+		out = &vert_buf[output];
+		delta_sx = current->sx - previous->sx;
+		delta_sy = current->sy - previous->sy;
+		delta_w = current->w - previous->w;
+		delta_light = current->lightIntensity - previous->lightIntensity;
+		delta_tu = current->tu - previous->tu;
+		delta_tv = current->tv - previous->tv;
+		if (max_y - previous_y >= current_y - max_y) {
+			t = (current_y - max_y) / delta_y;
+			out->sx = current->sx - delta_sx * t;
+			out->sy = current->sy - delta_sy * t;
+			out->w = current->w - delta_w * t;
+			out->lightIntensity = current->lightIntensity - delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = current->tu - delta_tu * t;
+				out->tv = current->tv - delta_tv * t;
+			} else {
+				current_inv_w = (float)perspFactor / current->w;
+				previous_inv_w = (float)perspFactor / previous->w;
+				uv_t = ((float)perspFactor / out->w - current_inv_w) / (previous_inv_w - current_inv_w);
+				out->tu = current->tu - delta_tu * uv_t;
+				out->tv = current->tv - delta_tv * uv_t;
+			}
+		} else {
+			t = (max_y - previous_y) / delta_y;
+			out->sx = previous->sx + delta_sx * t;
+			out->sy = previous->sy + delta_sy * t;
+			out->w = previous->w + delta_w * t;
+			out->lightIntensity = previous->lightIntensity + delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = previous->tu + delta_tu * t;
+				out->tv = previous->tv + delta_tv * t;
+			} else {
+				previous_inv_w = (float)perspFactor / previous->w;
+				current_inv_w = (float)perspFactor / current->w;
+				uv_t = ((float)perspFactor / out->w - previous_inv_w) / (current_inv_w - previous_inv_w);
+				out->tu = previous->tu + delta_tu * uv_t;
+				out->tv = previous->tv + delta_tv * uv_t;
+			}
+		}
+		out->sy = max_y;
 		g_clipIdxA[g_clipCountA++] = output;
 		return;
 	}
@@ -138,30 +262,111 @@ void RenderClip_ClipPolyLeft(int prev_vert, int cur_vert, ProjVertexTIE98* vert_
 	const float previous_x = previous->sx;
 	const float current_x = current->sx;
 	const float delta_x = current_x - previous_x;
+	float delta_sx;
+	float delta_sy;
+	float delta_w;
+	float delta_light;
+	float delta_tu;
+	float delta_tv;
+	float t;
+	float uv_t;
+	float previous_inv_w;
+	float current_inv_w;
+	ProjVertexTIE98* out;
 	int output;
 
 	if (previous_x < 0.0f) {
 		if (current_x < 0.0f)
 			return;
-		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
-		if (-previous_x >= current_x)
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, current_x / delta_x, 1, 1);
-		else
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, -previous_x / delta_x, 0, 0);
-		vert_buf[output].sx = 0.0f;
+		out = &vert_buf[output];
+		delta_sx = current->sx - previous->sx;
+		delta_sy = current->sy - previous->sy;
+		delta_w = current->w - previous->w;
+		delta_light = current->lightIntensity - previous->lightIntensity;
+		delta_tu = current->tu - previous->tu;
+		delta_tv = current->tv - previous->tv;
+		if (-previous_x >= current_x) {
+			t = current_x / delta_x;
+			out->sx = current->sx - delta_sx * t;
+			out->sy = current->sy - delta_sy * t;
+			out->w = current->w - delta_w * t;
+			out->lightIntensity = current->lightIntensity - delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = current->tu - delta_tu * t;
+				out->tv = current->tv - delta_tv * t;
+			} else {
+				current_inv_w = (float)perspFactor / current->w;
+				previous_inv_w = (float)perspFactor / previous->w;
+				uv_t = ((float)perspFactor / out->w - current_inv_w) / (previous_inv_w - current_inv_w);
+				out->tu = current->tu - delta_tu * uv_t;
+				out->tv = current->tv - delta_tv * uv_t;
+			}
+		} else {
+			t = -previous_x / delta_x;
+			out->sx = previous->sx + delta_sx * t;
+			out->sy = previous->sy + delta_sy * t;
+			out->w = previous->w + delta_w * t;
+			out->lightIntensity = previous->lightIntensity + delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = previous->tu + delta_tu * t;
+				out->tv = previous->tv + delta_tv * t;
+			} else {
+				previous_inv_w = (float)perspFactor / previous->w;
+				current_inv_w = (float)perspFactor / current->w;
+				uv_t = ((float)perspFactor / out->w - previous_inv_w) / (current_inv_w - previous_inv_w);
+				out->tu = previous->tu + delta_tu * uv_t;
+				out->tv = previous->tv + delta_tv * uv_t;
+			}
+		}
+		out->sx = 0.0f;
 		g_clipIdxB[g_clipCountB++] = output;
 		g_clipIdxB[g_clipCountB++] = cur_vert;
 		return;
 	}
 	if (current_x < 0.0f) {
-		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
-		if (previous_x >= -current_x)
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, -current_x / delta_x, 1, 0);
-		else
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, previous_x / delta_x, 0, 1);
-		vert_buf[output].sx = 0.0f;
+		out = &vert_buf[output];
+		delta_sx = current->sx - previous->sx;
+		delta_sy = current->sy - previous->sy;
+		delta_w = current->w - previous->w;
+		delta_light = current->lightIntensity - previous->lightIntensity;
+		delta_tu = current->tu - previous->tu;
+		delta_tv = current->tv - previous->tv;
+		if (previous_x >= -current_x) {
+			t = -current_x / delta_x;
+			out->sx = current->sx + delta_sx * t;
+			out->sy = current->sy + delta_sy * t;
+			out->w = current->w + delta_w * t;
+			out->lightIntensity = current->lightIntensity + delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = current->tu + delta_tu * t;
+				out->tv = current->tv + delta_tv * t;
+			} else {
+				current_inv_w = (float)perspFactor / current->w;
+				previous_inv_w = (float)perspFactor / previous->w;
+				uv_t = ((float)perspFactor / out->w - current_inv_w) / (previous_inv_w - current_inv_w);
+				out->tu = current->tu - delta_tu * uv_t;
+				out->tv = current->tv - delta_tv * uv_t;
+			}
+		} else {
+			t = previous_x / delta_x;
+			out->sx = previous->sx - delta_sx * t;
+			out->sy = previous->sy - delta_sy * t;
+			out->w = previous->w - delta_w * t;
+			out->lightIntensity = previous->lightIntensity - delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = previous->tu - delta_tu * t;
+				out->tv = previous->tv - delta_tv * t;
+			} else {
+				previous_inv_w = (float)perspFactor / previous->w;
+				current_inv_w = (float)perspFactor / current->w;
+				uv_t = ((float)perspFactor / out->w - previous_inv_w) / (current_inv_w - previous_inv_w);
+				out->tu = previous->tu + delta_tu * uv_t;
+				out->tv = previous->tv + delta_tv * uv_t;
+			}
+		}
+		out->sx = 0.0f;
 		g_clipIdxB[g_clipCountB++] = output;
 		return;
 	}
@@ -176,34 +381,111 @@ void RenderClip_ClipPolyRight(int prev_vert, int cur_vert, ProjVertexTIE98* vert
 	const float current_x = current->sx;
 	const float max_x = (float)pixelswide;
 	const float delta_x = current_x - previous_x;
+	float delta_sx;
+	float delta_sy;
+	float delta_w;
+	float delta_light;
+	float delta_tu;
+	float delta_tv;
+	float t;
+	float uv_t;
+	float previous_inv_w;
+	float current_inv_w;
+	ProjVertexTIE98* out;
 	int output;
 
 	if (previous_x > max_x) {
 		if (current_x > max_x)
 			return;
-		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
-		if (previous_x - max_x >= max_x - current_x)
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, (max_x - current_x) / delta_x,
-										 1, 0);
-		else
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, (previous_x - max_x) / delta_x,
-										 0, 1);
-		vert_buf[output].sx = max_x;
+		out = &vert_buf[output];
+		delta_sx = current->sx - previous->sx;
+		delta_sy = current->sy - previous->sy;
+		delta_w = current->w - previous->w;
+		delta_light = current->lightIntensity - previous->lightIntensity;
+		delta_tu = current->tu - previous->tu;
+		delta_tv = current->tv - previous->tv;
+		if (previous_x - max_x >= max_x - current_x) {
+			t = (max_x - current_x) / delta_x;
+			out->sx = current->sx + delta_sx * t;
+			out->sy = current->sy + delta_sy * t;
+			out->w = current->w + delta_w * t;
+			out->lightIntensity = current->lightIntensity + delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = current->tu + delta_tu * t;
+				out->tv = current->tv + delta_tv * t;
+			} else {
+				current_inv_w = (float)perspFactor / current->w;
+				previous_inv_w = (float)perspFactor / previous->w;
+				uv_t = ((float)perspFactor / out->w - current_inv_w) / (previous_inv_w - current_inv_w);
+				out->tu = current->tu - delta_tu * uv_t;
+				out->tv = current->tv - delta_tv * uv_t;
+			}
+		} else {
+			t = (previous_x - max_x) / delta_x;
+			out->sx = previous->sx - delta_sx * t;
+			out->sy = previous->sy - delta_sy * t;
+			out->w = previous->w - delta_w * t;
+			out->lightIntensity = previous->lightIntensity - delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = previous->tu - delta_tu * t;
+				out->tv = previous->tv - delta_tv * t;
+			} else {
+				previous_inv_w = (float)perspFactor / previous->w;
+				current_inv_w = (float)perspFactor / current->w;
+				uv_t = ((float)perspFactor / out->w - previous_inv_w) / (current_inv_w - previous_inv_w);
+				out->tu = previous->tu + delta_tu * uv_t;
+				out->tv = previous->tv + delta_tv * uv_t;
+			}
+		}
+		out->sx = max_x;
 		g_clipIdxA[g_clipCountA++] = output;
 		g_clipIdxA[g_clipCountA++] = cur_vert;
 		return;
 	}
 	if (current_x > max_x) {
-		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
-		if (max_x - previous_x >= current_x - max_x)
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, (current_x - max_x) / delta_x,
-										 1, 1);
-		else
-			RenderClip_WriteIntersection(&vert_buf[output], previous, current, (max_x - previous_x) / delta_x,
-										 0, 0);
-		vert_buf[output].sx = max_x;
+		out = &vert_buf[output];
+		delta_sx = current->sx - previous->sx;
+		delta_sy = current->sy - previous->sy;
+		delta_w = current->w - previous->w;
+		delta_light = current->lightIntensity - previous->lightIntensity;
+		delta_tu = current->tu - previous->tu;
+		delta_tv = current->tv - previous->tv;
+		if (max_x - previous_x >= current_x - max_x) {
+			t = (current_x - max_x) / delta_x;
+			out->sx = current->sx - delta_sx * t;
+			out->sy = current->sy - delta_sy * t;
+			out->w = current->w - delta_w * t;
+			out->lightIntensity = current->lightIntensity - delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = current->tu - delta_tu * t;
+				out->tv = current->tv - delta_tv * t;
+			} else {
+				current_inv_w = (float)perspFactor / current->w;
+				previous_inv_w = (float)perspFactor / previous->w;
+				uv_t = ((float)perspFactor / out->w - current_inv_w) / (previous_inv_w - current_inv_w);
+				out->tu = current->tu - delta_tu * uv_t;
+				out->tv = current->tv - delta_tv * uv_t;
+			}
+		} else {
+			t = (max_x - previous_x) / delta_x;
+			out->sx = previous->sx + delta_sx * t;
+			out->sy = previous->sy + delta_sy * t;
+			out->w = previous->w + delta_w * t;
+			out->lightIntensity = previous->lightIntensity + delta_light * t;
+			if (fabsf(delta_w) < 0.00001f) {
+				out->tu = previous->tu + delta_tu * t;
+				out->tv = previous->tv + delta_tv * t;
+			} else {
+				previous_inv_w = (float)perspFactor / previous->w;
+				current_inv_w = (float)perspFactor / current->w;
+				uv_t = ((float)perspFactor / out->w - previous_inv_w) / (current_inv_w - previous_inv_w);
+				out->tu = previous->tu + delta_tu * uv_t;
+				out->tv = previous->tv + delta_tv * uv_t;
+			}
+		}
+		out->sx = max_x;
 		g_clipIdxA[g_clipCountA++] = output;
 		return;
 	}
@@ -226,7 +508,6 @@ void RenderClip_ClipPolyNear(int prev_vert, int cur_vert, ProjVertexTIE98* vert_
 
 		if (current_w < 0.0f)
 			return;
-		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
 		current_scale = (float)perspFactor / current_w;
 		current_x = (current->sx - (float)halfpixelswide) * current_scale * g_invProjScale;
@@ -245,7 +526,6 @@ void RenderClip_ClipPolyNear(int prev_vert, int cur_vert, ProjVertexTIE98* vert_
 		float previous_y;
 		float t;
 
-		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
 		previous_scale = (float)perspFactor / previous_w;
 		previous_x = (previous->sx - (float)halfpixelswide) * previous_scale * g_invProjScale;

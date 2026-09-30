@@ -34,6 +34,10 @@ typedef struct GameScoreHead {
 	GameScoreEntry scores[GAME_SCORE_ENTRY_COUNT];
 } GameScoreHead;
 
+/* Native combat high-score cache loaded by the combat room. The original
+ * kept these records in a Landru memory handle (combat_score_handle). */
+extern GameScoreHead* combat_score_data;
+
 bool TieScoreTables_LoadGame(const char* filename, GameScoreHead* records, size_t capacity,
 							 int16_t* out_count);
 bool TieScoreTables_SaveGame(const char* filename, const GameScoreHead* records, int16_t count);

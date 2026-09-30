@@ -8,12 +8,6 @@
 #include <stdint.h>
 #include <string.h>
 
-/* Debug logging is disabled. */
-static inline void imuse_ImPrintf(imuse_t* im, const char* fmt, ...) {
-	(void)im;
-	(void)fmt;
-}
-
 enum {
 	NUM_STATES = 12,
 	SDP_STRIDE = 62,
@@ -22,10 +16,8 @@ enum {
 	PARAM_MARKER = 256,
 };
 
-/* Full bitmask table: full_masks[n] = (1 << n) - 1, for n = 0..7 */
-static const uint8_t full_masks[8] = { 0x00, 0x01, 0x03, 0x07, 0x0F, 0x1F, 0x3F, 0x7F };
-
 /* SDP data arrays — extracted from TIE.EXE data segment */
+// GLOBAL: TIE95 0xC1F4C
 static SdpRecord introData[14] = { { "tro-01", "tro-01", 1, 0, { "tro-02", "", "", "" } },
 								   { "tro-02", "tro-02", 1, 0, { "tro-03", "", "", "" } },
 								   { "tro-03", "tro-03", 1, 0, { "tro-04", "", "", "" } },
@@ -40,6 +32,7 @@ static SdpRecord introData[14] = { { "tro-01", "tro-01", 1, 0, { "tro-02", "", "
 								   { "", "", 1, 0, { "tro-in", "", "", "" } },
 								   { "", "\x0c", 1, 0, { "wait-in", "", "", "" } },
 								   { "", "\x0d", 1, 0, { "wait-seq", "", "", "" } } };
+// GLOBAL: TIE95 0xC22B0
 static SdpRecord waitingData[12] = {
 	{ "wait-01", "wait-01", 3, 0, { "wait-02", "wait-05", "wait-06", "" } },
 	{ "wait-02", "wait-02", 4, 0, { "wait-03", "wait-04", "wait-05", "wait-06" } },
@@ -54,6 +47,7 @@ static SdpRecord waitingData[12] = {
 	{ "", "\x0c", 1, 0, { "wait-in", "", "", "" } },
 	{ "", "\x0d", 1, 0, { "wait-seq", "", "", "" } }
 };
+// GLOBAL: TIE95 0xC2598
 static SdpRecord rebellionData[25] = {
 	{ "reb-01", "reb-01", 4, 0, { "reb-02", "reb-03", "reb-04", "reb-13" } },
 	{ "reb-02", "reb-02", 4, 0, { "reb-03", "reb-04", "reb-06", "reb-07" } },
@@ -81,6 +75,7 @@ static SdpRecord rebellionData[25] = {
 	{ "", "\x0a", 1, 0, { "fail-out", "", "", "" } },
 	{ "", "\x0c", 3, 0, { "reb-01", "reb-06", "reb-13", "" } }
 };
+// GLOBAL: TIE95 0xC2BA6
 static SdpRecord policeData[20] = { { "pol-01", "pol-01", 4, 0, { "pol-02", "pol-02", "pol-04", "pol-09" } },
 									{ "pol-02", "pol-02", 1, 0, { "pol-03", "", "", "" } },
 									{ "pol-03", "pol-03", 4, 0, { "pol-02", "pol-04", "pol-05", "pol-06" } },
@@ -101,6 +96,7 @@ static SdpRecord policeData[20] = { { "pol-01", "pol-01", 4, 0, { "pol-02", "pol
 									{ "", "\x0b", 1, 0, { "succ-out", "", "", "" } },
 									{ "", "\x0a", 1, 0, { "fail-out", "", "", "" } },
 									{ "", "\x0c", 3, 0, { "pol-01", "pol-03", "pol-08", "" } } };
+// GLOBAL: TIE95 0xC307E
 static SdpRecord intrigueData[21] = {
 	{ "intr-01", "intr-01", 4, 0, { "intr-02", "intr-03", "intr-07", "intr-10" } },
 	{ "intr-02", "intr-02", 3, 0, { "intr-03", "intr-04", "intr-09", "" } },
@@ -124,6 +120,7 @@ static SdpRecord intrigueData[21] = {
 	{ "", "\x0a", 1, 0, { "fail-out", "", "", "" } },
 	{ "", "\x0c", 3, 0, { "intr-01", "intr-04", "intr-07", "" } }
 };
+// GLOBAL: TIE95 0xC3594
 static SdpRecord challengeData[27] = {
 	{ "chal-01", "chal-01", 4, 0, { "chal-07", "chal-08", "chal-10", "chal-12" } },
 	{ "chal-02", "chal-02", 3, 0, { "chal-03", "chal-10", "chal-13", "" } },
@@ -153,6 +150,7 @@ static SdpRecord challengeData[27] = {
 	{ "", "\x0a", 1, 0, { "fail-out", "", "", "" } },
 	{ "", "\x0c", 3, 0, { "chal-01", "chal-08", "chal-12", "" } }
 };
+// GLOBAL: TIE95 0xC3C1E
 static SdpRecord confidentData[25] = {
 	{ "conf-01", "conf-01", 2, 0, { "conf-02", "conf-13", "", "" } },
 	{ "conf-02", "conf-02", 4, 0, { "conf-03", "conf-06", "conf-09", "conf-13" } },
@@ -180,6 +178,7 @@ static SdpRecord confidentData[25] = {
 	{ "", "\x0a", 1, 0, { "fail-out", "", "", "" } },
 	{ "", "\x0c", 1, 0, { "conf-06", "", "", "" } }
 };
+// GLOBAL: TIE95 0xC422C
 static SdpRecord panicData[23] = {
 	{ "panic-01", "panic-01", 2, 0, { "panic-05", "panic-09", "", "" } },
 	{ "panic-02", "panic-02", 2, 0, { "panic-01", "panic-03", "", "" } },
@@ -205,6 +204,7 @@ static SdpRecord panicData[23] = {
 	{ "", "\x0a", 1, 0, { "fail-out", "", "", "" } },
 	{ "", "\x0c", 1, 0, { "panic-11", "", "", "" } }
 };
+// GLOBAL: TIE95 0xC47BE
 static SdpRecord climaxData[18] = { { "clim-01", "clim-01", 1, 0, { "clim-02", "", "", "" } },
 									{ "clim-02", "clim-02", 1, 0, { "clim-03", "", "", "" } },
 									{ "clim-03", "clim-03", 1, 0, { "clim-04", "", "", "" } },
@@ -223,6 +223,7 @@ static SdpRecord climaxData[18] = { { "clim-01", "clim-01", 1, 0, { "clim-02", "
 									{ "", "\x0b", 1, 0, { "succ-out", "", "", "" } },
 									{ "", "\x0a", 1, 0, { "fail-out", "", "", "" } },
 									{ "", "\x0c", 1, 0, { "clim-01", "", "", "" } } };
+// GLOBAL: TIE95 0xC4C1A
 static SdpRecord failureData[10] = {
 	{ "fail-01", "fail-01", 4, 0, { "fail-02", "fail-02", "fail-03", "fail-05" } },
 	{ "fail-02", "fail-02", 4, 0, { "fail-03", "fail-03", "fail-04", "fail-05" } },
@@ -235,6 +236,7 @@ static SdpRecord failureData[10] = {
 	{ "", "", 1, 0, { "fail-01", "", "", "" } },
 	{ "", "\x0c", 1, 0, { "fail-in", "", "", "" } }
 };
+// GLOBAL: TIE95 0xC4E86
 static SdpRecord successData[11] = {
 	{ "succ-01", "succ-01", 1, 0, { "succ-02", "", "", "" } },
 	{ "succ-02", "succ-02", 2, 0, { "succ-03", "succ-04", "", "" } },
@@ -250,6 +252,7 @@ static SdpRecord successData[11] = {
 };
 
 /* Sequence names: 10-byte entries indexed by seq_id */
+// GLOBAL: TIE95 0xC5130
 static char sequenceData[18][10] = { "",         "s-win-lg", "        ", "s-los-lg", "s-los-sm", "s-ob1-pa",
 									 "s-ob1-fa", "s-ob2-pa", "s-ob2-fa", "s-ob3-pa", "s-emp-lg", "s-emp-sm",
 									 "s-reb-lg", "s-reb-sm", "s-neu-lg", "s-neu-sm", "s-eject",  "s-hyper" };
@@ -259,6 +262,7 @@ static char sequenceData[18][10] = { "",         "s-win-lg", "        ", "s-los-
 static int32_t sequencePriorities[18] = { 0, 10, 2, 9, 1, 15, 14, 13, 12, 11, 8, 5, 7, 4, 6, 3, 20, 20 };
 
 /* SmallWin SDP record: 4 random destinations */
+// GLOBAL: TIE95 0xC522C
 static SdpRecord smallWin = { "", "", 4, 0, { "s-win-1", "s-win-2", "s-win-3", "s-win-4" } };
 
 /* Channel buildup bitmasks — indexed by attributes[0] (buildup level).
@@ -298,20 +302,12 @@ static int32_t rseed2;
 int16_t attributes[2];
 
 /* Forward declarations for internal functions */
-static void change_state(int new_state);
-static void play_sequence(int seq_id);
-static SdpRecord* select_sdp(SdpRecord* sdp, int state);
-static char* select_sequence(int seq_id);
-static int choose_dest(SdpRecord* sdp);
-static int16_t get_random(int16_t lo, int16_t hi);
-
-/* Walk an SDP chain to the end (first record with name[0]==0) */
-static SdpRecord* sdp_chain_end(SdpRecord* chain) {
-	SdpRecord* p = chain;
-	while (p->name[0])
-		p++;
-	return p;
-}
+static void fscript_ChangeState(int new_state);
+static void fscript_PlaySequence(int seq_id);
+static SdpRecord* fscript_SelectSdp(SdpRecord* sdp, int state);
+static char* fscript_SelectSequence(int seq_id);
+static int fscript_ChooseDest(SdpRecord* sdp);
+static int16_t fscript_GetRandom(int16_t lo, int16_t hi);
 
 /* ================================================================
  * Public API
@@ -344,32 +340,24 @@ int16_t fscript_MsStartScript(void* init_data) {
 	sequencePri = 0;
 
 	/* Seed PRNG from stack addresses (non-deterministic) */
-	rseed1 = (int32_t)(intptr_t)&rseed2;
-	rseed2 = ~(int32_t)(intptr_t)&rseed1;
+	rseed1 = TieImuse_AddressSeed(&rseed2);
+	rseed2 = ~TieImuse_AddressSeed(&rseed1);
 
 	return 0;
 }
-
-int16_t fscript_MsStopScript(void) {
-	imuse_stop_all_sounds(im);
-	imuse_filelist_unload_all(im);
-	return 0;
-}
-
-int16_t fscript_MsSetCuePoint(void) { return 0; }
 
 // FUNCTION: TIE95 0x23FF4
 int16_t fscript_MsRefreshScript(void) {
 	if (currentState) {
 		if (!nextID) {
-			currentSdp = select_sdp(currentSdp, currentState);
+			currentSdp = fscript_SelectSdp(currentSdp, currentState);
 			nextID = imuse_filelist_load(im, currentSdp->sound_name);
 			if (!nextID) {
 				imuse_stop_all_sounds(im);
 				currentState = 0;
-				imuse_ImPrintf(im, "Unable to load file ");
-				imuse_ImPrintf(im, currentSdp->sound_name);
-				imuse_ImPrintf(im, "\n");
+				TieImuse_Printf("Unable to load file ");
+				TieImuse_Printf(currentSdp->sound_name);
+				TieImuse_Printf("...");
 			}
 		}
 		imuse_filelist_flush(im);
@@ -380,14 +368,14 @@ int16_t fscript_MsRefreshScript(void) {
 // FUNCTION: TIE95 0x2406C
 int16_t fscript_MsSetState(int16_t new_state) {
 	if (new_state >= 0 && new_state < NUM_STATES && new_state != currentState)
-		change_state(new_state);
+		fscript_ChangeState(new_state);
 	return currentState;
 }
 
 // FUNCTION: TIE95 0x2408C
 int16_t fscript_MsSetSequence(int16_t seq_id) {
-	if (seq_id > 0 && imuse_get_param(im, (intptr_t)currentID, PARAM_MARKER) > 0)
-		play_sequence(seq_id);
+	if (seq_id > 0 && imuse_get_param(im, TieImuse_SoundId(currentID), PARAM_MARKER) > 0)
+		fscript_PlaySequence(seq_id);
 	return currentSequence;
 }
 
@@ -412,7 +400,8 @@ int16_t fscript_MsSetAttribute(int16_t attr_id, int16_t value) {
  *   (3) From active to different state: find transition SDP matching the
  *       target, preload it, swap next sound under pause.
  */
-static void change_state(int new_state) {
+// FUNCTION: TIE95 0x240E4
+static void fscript_ChangeState(int new_state) {
 	char* snd_name;
 	void* new_handle;
 
@@ -433,35 +422,37 @@ static void change_state(int new_state) {
 			return;
 
 		/* Walk to end of named records */
-		p = sdp_chain_end(chain);
+		p = chain;
+		while (p->name[0])
+			p++;
 
 		/* Find first playable or terminal record past the chain end */
 		while (p->sound_name[0] && (uint8_t)p->sound_name[0] != SDP_TERMINAL)
 			p++;
 
 		currentSdp = p;
-		selected = select_sdp(p, new_state);
+		selected = fscript_SelectSdp(p, new_state);
 		currentSdp = selected;
 
 		/* Load current sound */
 		currentID = imuse_filelist_load(im, selected->sound_name);
 		if (!currentID) {
 			currentState = 0;
-			imuse_ImPrintf(im, "Unable to load file ");
-			imuse_ImPrintf(im, selected->sound_name);
-			imuse_ImPrintf(im, "\n");
+			TieImuse_Printf("Unable to load file ");
+			TieImuse_Printf(selected->sound_name);
+			TieImuse_Printf("...");
 			return;
 		}
 
 		/* Select and preload next sound */
-		next_sdp = select_sdp(selected, new_state);
+		next_sdp = fscript_SelectSdp(selected, new_state);
 		currentSdp = next_sdp;
 		nextID = imuse_filelist_load(im, next_sdp->sound_name);
 		if (!nextID) {
 			currentState = 0;
-			imuse_ImPrintf(im, "Unable to load file ");
-			imuse_ImPrintf(im, next_sdp->sound_name);
-			imuse_ImPrintf(im, "\n");
+			TieImuse_Printf("Unable to load file ");
+			TieImuse_Printf(next_sdp->sound_name);
+			TieImuse_Printf("...");
 			return;
 		}
 
@@ -470,8 +461,8 @@ static void change_state(int new_state) {
 		imuse_filelist_unload(im, currentID);
 		{
 			ImuseCmd cb = { 0 };
-			cb.opcode = (intptr_t)fcallbk_CbDoCallback;
-			imuse_set_trigger(im, (intptr_t)currentID, 0, &cb);
+			cb.opcode = TieImuse_CallbackOpcode(fcallbk_CbDoCallback);
+			imuse_set_trigger(im, TieImuse_SoundId(currentID), 0, &cb);
 		}
 		playingState = currentState;
 		fcallbk_CbSetChannels();
@@ -497,15 +488,17 @@ static void change_state(int new_state) {
 	chain = sdpArrays[new_state];
 
 	/* Walk to end of named records in the NEW state's chain */
-	p = sdp_chain_end(chain);
+	p = chain;
+	while (p->name[0])
+		p++;
 
 	/* Find transition record matching the OUTGOING state or generic terminal */
 	while ((uint8_t)p->sound_name[0] != (uint8_t)currentState && (uint8_t)p->sound_name[0] != SDP_TERMINAL)
 		p++;
 
-	selected = select_sdp(p, new_state);
+	selected = fscript_SelectSdp(p, new_state);
 	if (selected == currentSdp)
-		selected = select_sdp(selected, new_state);
+		selected = fscript_SelectSdp(selected, new_state);
 
 	/* Load the transition sound */
 	snd_name = selected->sound_name;
@@ -513,9 +506,9 @@ static void change_state(int new_state) {
 	if (!new_handle) {
 		imuse_stop_all_sounds(im);
 		currentState = 0;
-		imuse_ImPrintf(im, "Unable to load file ");
-		imuse_ImPrintf(im, snd_name);
-		imuse_ImPrintf(im, "\n");
+		TieImuse_Printf("Unable to load file ");
+		TieImuse_Printf(snd_name);
+		TieImuse_Printf("...");
 		return;
 	}
 
@@ -533,7 +526,8 @@ static void change_state(int new_state) {
  * unloads old if lower priority. For intro/waiting states, also sets
  * up the next SDP continuation sound.
  */
-static void play_sequence(int seq_id) {
+// FUNCTION: TIE95 0x24370
+static void fscript_PlaySequence(int seq_id) {
 	char* seq_name;
 	void* handle;
 
@@ -549,19 +543,19 @@ static void play_sequence(int seq_id) {
 	}
 	imuse_resume(im);
 
-	seq_name = select_sequence(seq_id);
+	seq_name = fscript_SelectSequence(seq_id);
 	handle = imuse_filelist_load(im, seq_name);
 	if (!handle) {
 		imuse_stop_all_sounds(im);
 		currentState = 0;
-		imuse_ImPrintf(im, "Unable to load sequence ");
-		imuse_ImPrintf(im, seq_name);
-		imuse_ImPrintf(im, "\n");
+		TieImuse_Printf("Unable to load sequence ");
+		TieImuse_Printf(seq_name);
+		TieImuse_Printf("...");
 		return;
 	}
 
 	/* Only start if current sound isn't already at a marker */
-	if (imuse_get_param(im, (intptr_t)handle, PARAM_MARKER) > 0)
+	if (imuse_get_param(im, TieImuse_SoundId(handle), PARAM_MARKER) > 0)
 		return;
 
 	sequenceID = handle;
@@ -579,18 +573,20 @@ static void play_sequence(int seq_id) {
 			return;
 
 		/* Walk to chain end, then find terminal (0x0D = 13) record */
-		p = sdp_chain_end(chain);
+		p = chain;
+		while (p->name[0])
+			p++;
 		while ((uint8_t)p->sound_name[0] != 13)
 			p++;
 
-		cont = select_sdp(p, currentState);
+		cont = fscript_SelectSdp(p, currentState);
 		cont_handle = imuse_filelist_load(im, cont->sound_name);
 		if (!cont_handle) {
 			imuse_stop_all_sounds(im);
 			currentState = 0;
-			imuse_ImPrintf(im, "Unable to load file ");
-			imuse_ImPrintf(im, cont->sound_name);
-			imuse_ImPrintf(im, "\n");
+			TieImuse_Printf("Unable to load file ");
+			TieImuse_Printf(cont->sound_name);
+			TieImuse_Printf("...");
 			return;
 		}
 
@@ -606,18 +602,19 @@ static void play_sequence(int seq_id) {
  * Select an SDP record from the state's chain. Uses ChooseDest to pick
  * a random destination, then searches the chain for a matching name.
  */
-static SdpRecord* select_sdp(SdpRecord* sdp, int state) {
+// FUNCTION: TIE95 0x244DC
+static SdpRecord* fscript_SelectSdp(SdpRecord* sdp, int state) {
 	int dest_idx;
 	const char* dest_name;
 	SdpRecord* chain;
 	SdpRecord* p;
 
 	if (!sdp->num_dests) {
-		imuse_ImPrintf(im, "Script err: no destinations\n");
+		TieImuse_Printf("Script Err: no dest count...");
 		return sdp;
 	}
 
-	dest_idx = choose_dest(sdp);
+	dest_idx = fscript_ChooseDest(sdp);
 	dest_name = &sdp->dest_names[dest_idx][0];
 
 	chain = sdpArrays[state];
@@ -628,9 +625,9 @@ static SdpRecord* select_sdp(SdpRecord* sdp, int state) {
 		p++;
 	}
 
-	imuse_ImPrintf(im, "Unable to find sdp ");
-	imuse_ImPrintf(im, dest_name);
-	imuse_ImPrintf(im, "\n");
+	TieImuse_Printf("Unable to find sdp for ");
+	TieImuse_Printf(dest_name);
+	TieImuse_Printf("...");
 	return sdp;
 }
 
@@ -638,9 +635,10 @@ static SdpRecord* select_sdp(SdpRecord* sdp, int state) {
  * Select a sequence sound name. For seq_id 2 (smallWin), uses random
  * destination selection. For all others, returns sequenceData[seq_id].
  */
-static char* select_sequence(int seq_id) {
+// FUNCTION: TIE95 0x24588
+static char* fscript_SelectSequence(int seq_id) {
 	if (seq_id == SEQ_SMALLWIN) {
-		int idx = choose_dest(&smallWin);
+		int idx = fscript_ChooseDest(&smallWin);
 		return smallWin.dest_names[idx];
 	}
 	return sequenceData[seq_id];
@@ -652,8 +650,10 @@ static char* select_sequence(int seq_id) {
  * sdp->used_mask = bitmask of remaining choices (reset when exhausted).
  * Picks uniformly from remaining, clears the chosen bit.
  */
-static int choose_dest(SdpRecord* sdp) {
-	/* Initialize mask on first use */
+// FUNCTION: TIE95 0x245C0
+static int fscript_ChooseDest(SdpRecord* sdp) {
+	/* Full bitmask table: full_masks[n] = (1 << n) - 1, for n = 0..7 */
+	uint8_t full_masks[8] = { 0x00, 0x01, 0x03, 0x07, 0x0F, 0x1F, 0x3F, 0x7F };
 	int16_t avail;
 	uint8_t mask;
 	int i;
@@ -674,7 +674,7 @@ static int choose_dest(SdpRecord* sdp) {
 	}
 
 	/* Pick a random index among available */
-	pick = get_random(0, avail - 1);
+	pick = fscript_GetRandom(0, avail - 1);
 
 	/* Walk destinations, counting only available ones */
 	pick_mask = 1;
@@ -695,7 +695,7 @@ static int choose_dest(SdpRecord* sdp) {
 	}
 
 	if (pick) {
-		imuse_ImPrintf(im, "Script err: could not choose dest\n");
+		TieImuse_Printf("Script Err: couldn't find bit");
 		return 0;
 	}
 	return result;
@@ -705,7 +705,8 @@ static int choose_dest(SdpRecord* sdp) {
  * LFSR-based PRNG. Advances two 32-bit seeds (23 + 37 iterations)
  * with cross-feedback XOR, then scales to [lo..hi] range.
  */
-static int16_t get_random(int16_t lo, int16_t hi) {
+// FUNCTION: TIE95 0x2467C
+static int16_t fscript_GetRandom(int16_t lo, int16_t hi) {
 	/* LFSR step: shift left by 1, OR in a tap-XOR feedback bit.
 	 * Done in uint32 so the doubling matches the binary's `shl`/`add`
 	 * with modular wraparound — signed `2 * rseed` is UB once the

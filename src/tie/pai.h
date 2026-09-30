@@ -193,14 +193,6 @@ extern const uint8_t* planptrs[69];
 extern uint8_t exithangarplan[5];
 extern uint8_t outofhyperspaceplan[5];
 
-/* OPTIONAL enhancement (non-faithful), default 1 = on. When set, same-flight-
- * group AI craft (fighter/transport/utility) whose hulls overlap are gently
- * pushed apart each frame (position only — heading and guns stay locked on
- * their target, unlike an aim offset which makes them fire off-target). The
- * player is never pushed. Set to 0 for byte-faithful behaviour (the original
- * has no fighter-vs-fighter separation). See MOVE_moveobjects. */
-extern int8_t pai_friendly_separation;
-
 /* ordersfunctionptrs is paiorder.c-owned per watdbg; declared in paiorder.h. */
 
 /* --- Legacy compatibility wrappers ---

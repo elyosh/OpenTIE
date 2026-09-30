@@ -31,18 +31,33 @@
 
 /* ---- Static globals ---- */
 
+// GLOBAL: TIE95 0xF5E18
+// GLOBAL: TIE98 0x51F880
 static char film_name_str[5][16]; /* button labels from TEXTEXT */
+// GLOBAL: TIE95 0xF5E68
+// GLOBAL: TIE98 0x51F8D0
 static Film* filmview_film;
+// GLOBAL: TIE95 0xF5E6C
+// GLOBAL: TIE98 0x51F878
 static Input* delete_input;
+// GLOBAL: TIE95 0xF5E70
+// GLOBAL: TIE98 0x51F8D8
 static Input* load_input;
+// GLOBAL: TIE95 0xF5E74
+// GLOBAL: TIE98 0x51F8E0
 static char filmview_name[14]; /* currently selected filename (no ext) */
+// GLOBAL: TIE95 0xF5E82
+// GLOBAL: TIE98 0x51F8D4
 static int16_t num_pages;
+// GLOBAL: TIE95 0xF5E84
+// GLOBAL: TIE98 0x51F8DC
 static int16_t cur_page;
 
 /* replayclipname is a global shared with the flight engine */
 
 /* ---- Forward declarations ---- */
 
+static int16_t Do_FV_File_Dialog(void);
 static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const char* string);
 static void iuser_FilmView_Button(Input* input, int32_t time);
 static void idraw_FilmView_Button(Input* input, Rect* r, Rect* clip_r, int16_t refresh);
@@ -54,6 +69,8 @@ static void iuser_FV_File(Input* input, int32_t time);
 static void Select_Active_FV_File(Input* input, Rect* r, int16_t x, int16_t y);
 static void Set_Active_FV_File(FileDialog* the_dialog, int16_t file, int16_t hit);
 
+static int16_t Do_Delete_Dialog(void);
+static Input* Build_Delete_Dialog(void);
 static int16_t iupdate_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
 									uint8_t right, int16_t x, int16_t y);
 static void iuser_Delete_Input(Input* input, int32_t time);
@@ -63,14 +80,22 @@ static void idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t refr
  * View update callback
  * ================================================================ */
 
+// FUNCTION: TIE95 0x7177C
+// FUNCTION: TIE98 0x41D940
 static void end_View(int32_t time) {
 	(void)time;
 
-	/* Penultimate frame: open the file dialog as a deferred
-	 * sub-dialog. ViewAddTask drains the request after this
-	 * callback returns and pushes the dialog task. */
+	/* Penultimate frame: choose the clip to play. */
 	if (filmview_film->cur_cel == filmview_film->cels - 1) {
-		TieFilmView_RequestFiles();
+		if (Do_FV_File_Dialog() && filmview_name[0])
+			strcpy(replayclipname, filmview_name);
+		else
+#ifdef TIE_MODERN
+			/* The file dialog runs as a sub-dialog and re-enters this
+			 * callback with its result. */
+			if (!TieFilmView_FileDialogPending())
+#endif
+				xerror_Set_Landru_Exit(SCENE_MAIN_MENU);
 	}
 
 	/* Last frame: play the clip selected by the Film Room dialog. */
@@ -82,35 +107,72 @@ static void end_View(int32_t time) {
  * File dialog
  * ================================================================ */
 
-int16_t filmview_PrepareFileDialog(FileDialog* dialog, Input** root) {
-	int16_t built;
-	dialog->read = 1;
+// FUNCTION: TIE95 0x717F8
+// FUNCTION: TIE98 0x41D9C0
+static int16_t Do_FV_File_Dialog(void) {
+#ifdef TIE_MODERN
+	FileDialog* the_dialog;
+#else
+	FileDialog dialog;
+	FileDialog* the_dialog = &dialog;
+#endif
+	Input* file = NULL;
+	int16_t key_buttons;
+	int16_t result;
+
+#ifdef TIE_MODERN
+	if (TieFilmView_TakeFileResult(&result))
+		return result == 1;
+	the_dialog = TieFilmView_OpenFileDialog();
+#endif
+	key_buttons = xio_Is_Key_Buttons();
+	if (!key_buttons)
+		xio_Set_Key_Buttons();
+
+	the_dialog->name_offset = 0;
+	the_dialog->active_name = 0;
+	the_dialog->active_hits = 0;
 	filmview_name[0] = 0;
-	xfiledir_Init_Directory(&dialog->the_head, ".CLP", 0);
-	xfiledir_Read_Directory(&dialog->the_head);
-	num_pages = (dialog->the_head.count + 15) / 16;
+	the_dialog->read = 1;
+	xfiledir_Init_Directory(&the_dialog->the_head, ".CLP", 0);
+	xfiledir_Read_Directory(&the_dialog->the_head);
+	num_pages = (the_dialog->the_head.count + 15) / 16;
 	if (!num_pages)
 		num_pages = 1;
-	built = Build_FV_File_Dialog(root, dialog, "Load Mission Film");
-	dialog->dialog = *root;
-	if (built && dialog->the_head.count) {
-		Set_Active_FV_File(dialog, 0, 1);
-		dialog->active_hits = 0;
-	}
-	return built;
-}
 
-void filmview_ApplySelectedFile(int16_t result) {
-	if (result == 1 && filmview_name[0])
-		strcpy(replayclipname, filmview_name);
-	else
-		xerror_Set_Landru_Exit(SCENE_MAIN_MENU);
+	result = Build_FV_File_Dialog(&file, the_dialog, "Load Mission Film");
+	the_dialog->dialog = file;
+	if (result && the_dialog->the_head.count) {
+		Set_Active_FV_File(the_dialog, 0, 1);
+		the_dialog->active_hits = 0;
+	}
+
+	if (result) {
+#ifdef TIE_MODERN
+		TieFilmView_RunFileDialog(file, key_buttons);
+		return 0;
+#else
+		result = xdialog_Handle_Dialog_View(file);
+		xfiledir_Free_Directory(&the_dialog->the_head);
+		xinput_Free_Inputs(file);
+#endif
+	}
+
+#ifdef TIE_MODERN
+	TieFilmView_CloseFileDialog(key_buttons);
+#else
+	if (!key_buttons)
+		xio_Clear_Key_Buttons();
+#endif
+	return result == 1;
 }
 
 /* ================================================================
  * Build file dialog UI
  * ================================================================ */
 
+// FUNCTION: TIE95 0x71960
+// FUNCTION: TIE98 0x41DB30
 static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const char* string) {
 	Rect r;
 	Input *the_input, *child_input;
@@ -236,6 +298,8 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
  * Page button callbacks
  * ================================================================ */
 
+// FUNCTION: TIE95 0x71C78
+// FUNCTION: TIE98 0x41DE70
 static void iuser_FilmView_Button(Input* input, int32_t time) {
 	FileDialog* the_dialog = (FileDialog*)input->varptr;
 	(void)time;
@@ -266,6 +330,8 @@ static void iuser_FilmView_Button(Input* input, int32_t time) {
 	}
 }
 
+// FUNCTION: TIE95 0x71D20
+// FUNCTION: TIE98 0x41DF10
 static void idraw_FilmView_Button(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	PushButton* btn;
 	uint8_t icon;
@@ -282,6 +348,8 @@ static void idraw_FilmView_Button(Input* input, Rect* r, Rect* clip_r, int16_t r
 		xdirty_Dirty_Rect(clip_r);
 }
 
+// FUNCTION: TIE95 0x71D78
+// FUNCTION: TIE98 0x41DF70
 static void idraw_FilmView_Page(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	char string[32];
 	(void)clip_r;
@@ -301,6 +369,8 @@ static void idraw_FilmView_Page(Input* input, Rect* r, Rect* clip_r, int16_t ref
  * File list draw
  * ================================================================ */
 
+// FUNCTION: TIE95 0x71DF4
+// FUNCTION: TIE98 0x41DFF0
 static void idraw_FV_File(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	Rect dr;
 	if (!refresh)
@@ -394,6 +464,8 @@ static void idraw_FV_File(Input* input, Rect* r, Rect* clip_r, int16_t refresh) 
  * File list input callbacks
  * ================================================================ */
 
+// FUNCTION: TIE95 0x720B0
+// FUNCTION: TIE98 0x41E2B0
 static int16_t iupdate_FV_File(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
 							   int16_t x, int16_t y) {
 	(void)clip_r;
@@ -413,6 +485,8 @@ static int16_t iupdate_FV_File(Input* input, Rect* r, Rect* clip_r, int16_t key,
 	return 1;
 }
 
+// FUNCTION: TIE95 0x72110
+// FUNCTION: TIE98 0x41E310
 static void iuser_FV_File(Input* input, int32_t time) {
 	(void)time;
 
@@ -427,13 +501,47 @@ static void iuser_FV_File(Input* input, int32_t time) {
 				xdialog_Set_Dialog_Exit(2);
 			break;
 
-		case 4: { /* Delete */
-			if (!xinpattr_Get_Input_Selected(input) || !filmview_name[0])
-				break;
+		case 4: /* Delete */
+#ifdef TIE_MODERN
+			TieFilmView_BeginDelete(input);
+#endif
+			if (xinpattr_Get_Input_Selected(input) && filmview_name[0] && Do_Delete_Dialog()) {
+				FileDialog* the_dialog = (FileDialog*)input->varptr;
+				DirEntry* entries = xmemhdl_Lock_Handle(the_dialog->the_head.entries);
 
-			TieFilmView_RequestDelete(input);
+				if (the_dialog->active_name < the_dialog->the_head.count) {
+					char file_name[16];
+					int16_t j;
+
+					/* Remove the file */
+					strcpy(file_name, filmview_name);
+					strcat(file_name, ".clp");
+					TieStorage_Remove(TIE_FILE_ROOT_USER, file_name);
+
+					/* Shift remaining entries down */
+					for (j = the_dialog->active_name; j < the_dialog->the_head.count - 1; j++)
+						entries[j] = entries[j + 1];
+
+					if (--the_dialog->the_head.count <= the_dialog->active_name && the_dialog->active_name)
+						the_dialog->active_name--;
+
+					filmview_name[0] = 0;
+					the_dialog->active_hits = 0;
+
+					if (the_dialog->the_head.count) {
+						Set_Active_FV_File(the_dialog, 0, 1);
+						the_dialog->active_hits = 0;
+					} else {
+						if (load_input)
+							xinpattr_Hide_Input(load_input);
+						if (delete_input)
+							xinpattr_Hide_Input(delete_input);
+					}
+					xview_Refresh_View();
+				}
+				xmemhdl_Unlock_Handle(the_dialog->the_head.entries);
+			}
 			break;
-		}
 
 		case 5: /* Replay last */
 			if (xinpattr_Get_Input_Selected(input)) {
@@ -451,6 +559,8 @@ static void iuser_FV_File(Input* input, int32_t time) {
  * File selection helpers
  * ================================================================ */
 
+// FUNCTION: TIE95 0x7231C
+// FUNCTION: TIE98 0x41E580
 static void Select_Active_FV_File(Input* input, Rect* r, int16_t x, int16_t y) {
 	FileDialog* the_dialog = (FileDialog*)input->varptr;
 	int16_t file = the_dialog->name_offset + (y / 8);
@@ -462,6 +572,8 @@ static void Select_Active_FV_File(Input* input, Rect* r, int16_t x, int16_t y) {
 	Set_Active_FV_File(the_dialog, file, 1);
 }
 
+// FUNCTION: TIE95 0x7236C
+// FUNCTION: TIE98 0x41E5D0
 static void Set_Active_FV_File(FileDialog* the_dialog, int16_t file, int16_t hit) {
 	int16_t change = 0;
 	int16_t scroll = 0;
@@ -510,6 +622,7 @@ static void Set_Active_FV_File(FileDialog* the_dialog, int16_t file, int16_t hit
 		xinpattr_Refresh_Input(the_dialog->dialog);
 }
 
+// FUNCTION: TIE95 0x724A8
 static int16_t Clip_Active_FV_File(FileDialog* the_dialog) {
 	int16_t value = the_dialog->active_name;
 	if (value < the_dialog->name_offset)
@@ -523,48 +636,31 @@ static int16_t Clip_Active_FV_File(FileDialog* the_dialog) {
  * Delete confirmation dialog
  * ================================================================ */
 
-void filmview_CompleteDelete(Input* input) {
-	FileDialog* the_dialog = (FileDialog*)input->varptr;
-	int16_t idx = the_dialog->active_name;
-	DirEntry* entries;
-	char file_name[16];
-	int16_t j;
+// FUNCTION: TIE95 0x724D8
+// FUNCTION: TIE98 0x41E720
+static int16_t Do_Delete_Dialog(void) {
+	Input* the_input;
+	int16_t result;
 
-	if (idx < 0 || idx >= the_dialog->the_head.count)
-		return;
-	entries = xmemhdl_Lock_Handle(the_dialog->the_head.entries);
-	if (!entries)
-		return;
-
-	/* Remove the file */
-	strcpy(file_name, filmview_name);
-	strcat(file_name, ".clp");
-	TieStorage_Remove(TIE_FILE_ROOT_USER, file_name);
-
-	/* Shift remaining entries down */
-	for (j = idx; j < the_dialog->the_head.count - 1; j++)
-		entries[j] = entries[j + 1];
-	xmemhdl_Unlock_Handle(the_dialog->the_head.entries);
-
-	if (the_dialog->active_name >= --the_dialog->the_head.count && the_dialog->active_name)
-		the_dialog->active_name--;
-
-	filmview_name[0] = 0;
-	the_dialog->active_hits = 0;
-
-	if (the_dialog->the_head.count) {
-		Set_Active_FV_File(the_dialog, 0, 1);
-		the_dialog->active_hits = 0;
-	} else {
-		if (load_input)
-			xinpattr_Hide_Input(load_input);
-		if (delete_input)
-			xinpattr_Hide_Input(delete_input);
-	}
-	xview_Refresh_View();
+#ifdef TIE_MODERN
+	if (TieFilmView_TakeDeleteResult(&result))
+		return result != 2;
+#endif
+	the_input = Build_Delete_Dialog();
+#ifdef TIE_MODERN
+	TieFilmView_RunDelete(the_input);
+	return 0;
+#else
+	result = xdialog_Handle_Dialog_View(the_input);
+	xdialog_Clear_Dialog_Exit();
+	xinput_Free_Inputs(the_input);
+	return result != 2;
+#endif
 }
 
-Input* filmview_BuildDeleteDialog(void) {
+// FUNCTION: TIE95 0x72504
+// FUNCTION: TIE98 0x41E750
+static Input* Build_Delete_Dialog(void) {
 	Rect r;
 	Input *parent_input, *input;
 
@@ -599,6 +695,8 @@ Input* filmview_BuildDeleteDialog(void) {
 	return parent_input;
 }
 
+// FUNCTION: TIE95 0x725E4
+// FUNCTION: TIE98 0x41E840
 static int16_t iupdate_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
 									uint8_t right, int16_t x, int16_t y) {
 	(void)input;
@@ -613,6 +711,8 @@ static int16_t iupdate_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t
 	return 0;
 }
 
+// FUNCTION: TIE95 0x72620
+// FUNCTION: TIE98 0x41E880
 static void iuser_Delete_Input(Input* input, int32_t time) {
 	int16_t id;
 	(void)time;
@@ -624,6 +724,8 @@ static void iuser_Delete_Input(Input* input, int32_t time) {
 		xdialog_Set_Dialog_Exit(id);
 }
 
+// FUNCTION: TIE95 0x72648
+// FUNCTION: TIE98 0x41E8B0
 static void idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	char string[32];
 	if (!refresh)

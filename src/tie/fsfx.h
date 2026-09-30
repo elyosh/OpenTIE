@@ -165,18 +165,18 @@ int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr);
 #define FSFX_NUM_DIST_ENTRIES 55
 
 extern void* soundhandles[FSFX_NUM_SOUND_HANDLES];
+/* Per-slot "BANK:RECORD" names for the TIE98 name-based FrontendSound layer. */
+extern char soundnames[FSFX_NUM_SOUND_HANDLES][FSFX_SOUND_NAME_CAPACITY];
 extern uint8_t currentdigital;
-extern uint16_t soundhandleinit;
 
 /* Per-mission voice-filename inputs. Populated by fediskio_createpilotrecord
  * from the .tfr pilot save; consumed only by fsfx_loadvoicelfd to build
- * VOICE\<NAME>\<NAME>.LFD. The combat-of-tour mode (mission_mode==5) packs
+ * VOICE\<NAME>\<NAME>.LFD. Tour mode uses fediskio's currentbattle and
+ * currentmission. The combat-of-tour mode (mission_mode==5) packs
  * the battle index into voice_id_a as 12+battle so voice_id_a-12 still
  * yields a 0-based battle digit in the loader. */
-extern uint8_t voice_id_a;         /* combat-sim ship 0..11, or 12+battle (mode 5) */
-extern uint8_t voice_id_b;         /* combat-sim course / mission-mode mission idx */
-extern uint8_t voice_tour_battle;  /* tour-mode battle index */
-extern uint8_t voice_tour_mission; /* tour-mode mission index in that battle */
+extern uint8_t voice_id_a; /* combat-sim ship 0..11, or 12+battle (mode 5) */
+extern uint8_t voice_id_b; /* combat-sim course / mission-mode mission idx */
 
 /* Voice-queue scheduler state. Storage owned by tie.c per watdbg; declared
  * here because the array size depends on FSFX_BLAST_QUEUE_SIZE. */
@@ -187,17 +187,9 @@ extern uint16_t sounddist[FSFX_NUM_DIST_ENTRIES];
 extern uint8_t fullvolume[FSFX_NUM_DIST_ENTRIES];
 extern const char* sfxgroupnameptrs[5];
 
-/* Translate the stable mission-voice logical index to the selected
- * edition's numeric sound ID. Returns UINT16_MAX for an invalid index. */
-uint16_t fsfx_mission_voice_id(uint16_t logical_index);
-
-/* Canonical LFD name table shared by the recovered FrontendSound layer. */
-const char* fsfx_sound_name(uint16_t sound_id);
-int fsfx_find_sound_id(const char* name);
-
 /* TIE98 recovered player-engine controller state and entry point. */
 extern uint8_t g_playerEngineSoundUpdateEnabled;
-extern int16_t g_engineSoundPreviousPlayerSpecies;
+extern int32_t g_engineSoundPreviousPlayerSpecies;
 void FSFX_UpdatePlayerEngineSound(void);
 
 #ifdef __cplusplus

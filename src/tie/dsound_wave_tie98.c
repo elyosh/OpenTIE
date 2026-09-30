@@ -8,14 +8,10 @@
 
 enum { DIRECTSOUND_WAVE_HEADER_BYTES = 90 };
 
-static IDirectSound* direct_sound;
-static IDirectSoundBuffer* primary_buffer;
-
-typedef struct WaveFormat {
-	DSWaveFormat pcm;
-	uint32_t data_offset;
-	uint32_t data_size;
-} WaveFormat;
+// GLOBAL: TIE98 0x5A2784
+IDirectSound* direct_sound;
+// GLOBAL: TIE98 0x5A2788
+IDirectSoundBuffer* primary_buffer;
 
 // GLOBAL: TIE98 0x4EBA90
 static const int32_t g_directSoundVolumeTable[128] = {
@@ -30,94 +26,51 @@ static const int32_t g_directSoundVolumeTable[128] = {
 	-81,    -69,   -57,   -45,   -34,   -22,   -11,   0,
 };
 
-static uint16_t read_u16(const uint8_t* p) { return (uint16_t)(p[0] | (uint16_t)p[1] << 8); }
+// FUNCTION: TIE98 0x418EF0
+int DirectSound_ParseWaveHeader(const void* riff_data, DSWaveFormat** out_format, uint8_t** out_data,
+								uint32_t* out_data_size) {
+	const uint8_t* chunk;
+	const uint8_t* riff_end;
+	uint32_t chunk_id;
+	uint32_t chunk_size;
+	uint8_t* payload;
 
-static uint32_t read_u32(const uint8_t* p) {
-	return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
-}
-
-/* Parses a bounded RIFF prefix; sample data may extend beyond the supplied bytes. */
-static int parse_wave_prefix(const uint8_t* bytes, size_t size, WaveFormat* format) {
-	size_t offset = 12;
-	int have_format = 0;
-	uint64_t riff_end;
-
-	if (!bytes || !format || size < 12 || memcmp(bytes, "RIFF", 4) || memcmp(bytes + 8, "WAVE", 4))
+	if (out_format)
+		*out_format = NULL;
+	if (out_data)
+		*out_data = NULL;
+	if (out_data_size)
+		*out_data_size = 0;
+	chunk = (const uint8_t*)riff_data + 12;
+	if (((const uint32_t*)riff_data)[0] != 0x46464952u || ((const uint32_t*)riff_data)[2] != 0x45564157u)
 		return 0;
-	riff_end = (uint64_t)read_u32(bytes + 4) + 8;
-	if (riff_end < 12)
+	riff_end = chunk + ((const uint32_t*)riff_data)[1] - 4;
+	if (chunk >= riff_end)
 		return 0;
-	memset(format, 0, sizeof *format);
-	while (offset <= size && size - offset >= 8) {
-		uint32_t chunk_size = read_u32(bytes + offset + 4);
-		size_t payload = offset + 8;
-		uint64_t next;
-
-		if (payload > riff_end || chunk_size > riff_end - payload)
-			return 0;
-		if (!memcmp(bytes + offset, "fmt ", 4)) {
-			DSWaveFormat* pcm;
-
-			if (chunk_size < 16 || chunk_size > size - payload || read_u16(bytes + payload) != 1)
-				return 0;
-			pcm = &format->pcm;
-			pcm->wFormatTag = 1;
-			pcm->nChannels = read_u16(bytes + payload + 2);
-			pcm->nSamplesPerSec = read_u32(bytes + payload + 4);
-			pcm->nAvgBytesPerSec = read_u32(bytes + payload + 8);
-			pcm->nBlockAlign = read_u16(bytes + payload + 12);
-			pcm->wBitsPerSample = read_u16(bytes + payload + 14);
-			if ((pcm->nChannels != 1 && pcm->nChannels != 2) ||
-				(pcm->wBitsPerSample != 8 && pcm->wBitsPerSample != 16) || !pcm->nSamplesPerSec ||
-				pcm->nSamplesPerSec > INT_MAX ||
-				pcm->nBlockAlign != pcm->nChannels * (pcm->wBitsPerSample / 8))
-				return 0;
-			have_format = 1;
-		} else if (!memcmp(bytes + offset, "data", 4)) {
-			if (!have_format || payload > UINT32_MAX)
-				return 0;
-			format->data_offset = (uint32_t)payload;
-			format->data_size = chunk_size;
-			return 1;
+	for (;;) {
+		chunk_id = ((const uint32_t*)chunk)[0];
+		chunk_size = ((const uint32_t*)chunk)[1];
+		payload = (uint8_t*)chunk + 8;
+		if (chunk_id == 0x20746D66u) {
+			if (out_format && !*out_format) {
+				if (chunk_size < 14)
+					return 0;
+				*out_format = (DSWaveFormat*)payload;
+				if ((!out_data || *out_data) && (!out_data_size || *out_data_size))
+					return 1;
+			}
+		} else if (chunk_id == 0x61746164u &&
+				   ((out_data && !*out_data) || (out_data_size && !*out_data_size))) {
+			if (out_data)
+				*out_data = payload;
+			if (out_data_size)
+				*out_data_size = chunk_size;
+			if (!out_format || *out_format)
+				return 1;
 		}
-		if (chunk_size > size - payload)
+		chunk = payload + ((chunk_size + 1) & ~1u);
+		if (chunk >= riff_end)
 			return 0;
-		next = (uint64_t)payload + chunk_size + (chunk_size & 1u);
-		if (next > size)
-			return 0;
-		offset = (size_t)next;
-	}
-	return 0;
-}
-
-int TieDirectSound_Init(void* window) {
-	DSBufferDesc desc = { 0 };
-	void* device;
-
-	if (direct_sound)
-		return 1;
-	device = NULL;
-	if (DirectSoundCreate(NULL, &device, NULL) != 0)
-		return 0;
-	direct_sound = (IDirectSound*)device;
-	if (direct_sound->lpVtbl->SetCooperativeLevel(direct_sound, window, DSSCL_PRIORITY) != 0) {
-		TieDirectSound_Shutdown();
-		return 0;
-	}
-	desc.dwSize = 20;
-	desc.dwFlags = DSBCAPS_PRIMARYBUFFER;
-	if (direct_sound->lpVtbl->CreateSoundBuffer(direct_sound, &desc, &primary_buffer, NULL) != 0) {
-		TieDirectSound_Shutdown();
-		return 0;
-	}
-	return 1;
-}
-
-void TieDirectSound_Shutdown(void) {
-	DirectSound_ReleaseBuffer(&primary_buffer);
-	if (direct_sound) {
-		direct_sound->lpVtbl->Release(direct_sound);
-		direct_sound = NULL;
 	}
 }
 
@@ -168,7 +121,9 @@ IDirectSoundBuffer* DirectSound_LoadWaveBuffer(IDirectSound* device, const char*
 	IDirectSoundBuffer* buffer;
 	uint8_t* bytes;
 	long file_size;
-	WaveFormat format;
+	DSWaveFormat* format;
+	uint8_t* data;
+	uint32_t data_size;
 
 	if (!device || !path)
 		return NULL;
@@ -178,25 +133,24 @@ IDirectSoundBuffer* DirectSound_LoadWaveBuffer(IDirectSound* device, const char*
 	buffer = NULL;
 	bytes = NULL;
 
-	if (TieStorage_Seek(file, 0, TIE_SEEK_END) != 0 || (file_size = TieStorage_Tell(file)) < 12 ||
-		(uint64_t)file_size > UINT32_MAX || TieStorage_Seek(file, 0, TIE_SEEK_SET) != 0)
-		goto done;
-	bytes = (uint8_t*)malloc((size_t)file_size);
-	if (!bytes || TieStorage_Read(bytes, 1, (size_t)file_size, file) != (size_t)file_size ||
-		!parse_wave_prefix(bytes, (size_t)file_size, &format) ||
-		(uint64_t)read_u32(bytes + 4) + 8 > (uint64_t)file_size ||
-		format.data_size > (size_t)file_size - format.data_offset)
-		goto done;
-	desc.dwSize = 20;
-	desc.dwFlags = alternate_capabilities ? 194u : 234u;
-	desc.dwBufferBytes = format.data_size;
-	desc.lpwfxFormat = &format.pcm;
-	if (device->lpVtbl->CreateSoundBuffer(device, &desc, &buffer, NULL) < 0) {
-		buffer = NULL;
-	} else if (!DirectSound_CopyWaveDataToBuffer(buffer, bytes + format.data_offset, format.data_size)) {
-		DirectSound_ReleaseBuffer(&buffer);
+	if (TieStorage_Seek(file, 0, TIE_SEEK_END) == 0 && (file_size = TieStorage_Tell(file)) >= 12 &&
+		(uint64_t)file_size <= UINT32_MAX && TieStorage_Seek(file, 0, TIE_SEEK_SET) == 0) {
+		bytes = (uint8_t*)malloc((size_t)file_size);
+		if (bytes && TieStorage_Read(bytes, 1, (size_t)file_size, file) == (size_t)file_size &&
+			(uint64_t)((const uint32_t*)bytes)[1] + 8 <= (uint64_t)file_size &&
+			DirectSound_ParseWaveHeader(bytes, &format, &data, &data_size) &&
+			data_size <= (size_t)(bytes + file_size - data)) {
+			desc.dwSize = 20;
+			desc.dwFlags = alternate_capabilities ? 194u : 234u;
+			desc.dwBufferBytes = data_size;
+			desc.lpwfxFormat = format;
+			if (device->lpVtbl->CreateSoundBuffer(device, &desc, &buffer, NULL) < 0) {
+				buffer = NULL;
+			} else if (!DirectSound_CopyWaveDataToBuffer(buffer, data, data_size)) {
+				DirectSound_ReleaseBuffer(&buffer);
+			}
+		}
 	}
-done:
 	free(bytes);
 	TieStorage_Close(file);
 	return buffer;
@@ -215,7 +169,9 @@ IDirectSoundBuffer* DirectSound_LoadWaveBufferIntoPtr(IDirectSoundBuffer** out_b
 int DirectSound_CreateStreamingWaveBuffer(IDirectSoundBuffer** out_buffer, uint32_t buffer_bytes,
 										  uint32_t* data_offset, int file_stream_channel) {
 	uint8_t header[DIRECTSOUND_WAVE_HEADER_BYTES];
-	WaveFormat format;
+	DSWaveFormat* format;
+	uint8_t* data;
+	uint32_t header_data_offset;
 	int got;
 	uint32_t initial_bytes;
 	void* first;
@@ -230,14 +186,16 @@ int DirectSound_CreateStreamingWaveBuffer(IDirectSoundBuffer** out_buffer, uint3
 	do {
 		got = FrontendFileStream_ReadBytes(file_stream_channel, header, 0, sizeof header, 1);
 	} while (got == -1);
-	if (got != (int)sizeof header || !parse_wave_prefix(header, sizeof header, &format))
+	if (got != (int)sizeof header || !DirectSound_ParseWaveHeader(header, &format, &data, NULL) ||
+		data > header + sizeof header)
 		return -1;
-	DirectSound_CreateWaveBuffer(out_buffer, buffer_bytes, &format.pcm, 0);
+	header_data_offset = (uint32_t)(data - header);
+	DirectSound_CreateWaveBuffer(out_buffer, buffer_bytes, format, 0);
 	if (!*out_buffer)
 		return -1;
 	if (data_offset)
-		*data_offset = format.data_offset;
-	initial_bytes = (uint32_t)sizeof header - format.data_offset;
+		*data_offset = header_data_offset;
+	initial_bytes = (uint32_t)sizeof header - header_data_offset;
 	if (!initial_bytes)
 		return 0;
 
@@ -247,7 +205,7 @@ int DirectSound_CreateStreamingWaveBuffer(IDirectSoundBuffer** out_buffer, uint3
 		return -1;
 	copy_bytes = first_bytes < initial_bytes ? first_bytes : initial_bytes;
 	/* The original copies the locked region into the temporary WAV prefix. */
-	memcpy(header + format.data_offset, first, copy_bytes);
+	memcpy(data, first, copy_bytes);
 	(*out_buffer)->lpVtbl->Unlock(*out_buffer, first, copy_bytes, second, 0);
 	return (int)initial_bytes;
 }

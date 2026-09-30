@@ -1,4 +1,4 @@
-/* HD hyperspace-streak rendering. Geometry follows tie_updatescreen_tie95,
+/* HD hyperspace-streak rendering. Geometry follows tie_updatescreen (TIE95),
  * draw_drawhyperstar, and drawpol.c's line-object path. Colors come from
  * palette[252..255], matching `(slot & 3) - 4` with uint8 wrap. */
 

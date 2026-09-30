@@ -23,6 +23,8 @@ typedef struct ShellTask {
 	ShellPhase phase;
 } ShellTask;
 bool TieShell_PrepareScene(int16_t scene);
+/* Push the sudden-scene-end fade; the caller yields until it completes. */
+void TieShell_PushSuddenSceneFadeTask(void);
 
 #include <stdint.h>
 
