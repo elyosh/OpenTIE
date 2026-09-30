@@ -9,14 +9,14 @@
 
 // FUNCTION: TIE95 0x23670
 // FUNCTION: TIE98 0x41D460
-void festring_setcursor(int16_t x, int16_t y) {
+void festring_setcursor(FestringCoord x, FestringCoord y) {
 	cursorx = x;
 	cursory = y;
 }
 
 // FUNCTION: TIE95 0x23680
 // FUNCTION: TIE98 0x41D480
-void festring_setbound(int16_t left, int16_t top, int16_t right, int16_t bottom) {
+void festring_setbound(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom) {
 	leftmargin = left;
 	topmargin = top;
 	rightmargin = right;
@@ -64,7 +64,7 @@ void festring_setautofill(int16_t enable) { autofillflag = enable; }
  */
 // FUNCTION: TIE95 0x23700
 // FUNCTION: TIE98 0x41D530
-void festring_setfontsize(int16_t size) {
+void festring_setfontsize(int size) {
 	int16_t char_size = fontcharsize;
 	uint8_t height = fontheight;
 

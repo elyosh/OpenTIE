@@ -174,7 +174,7 @@ uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 
 	/* Right-margin wrap check (checkwrap, inlined in retail). */
 	wrap = 0;
-	if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(name_ptr) > (uint32_t)screenXRes - 11u) {
+	if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(name_ptr) > screenXRes - 11u) {
 		if (outchar)
 			outchar('\n');
 		festring_setcursor(6, cursory);
@@ -277,7 +277,7 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 				total += goals_outputspeciesname(fg_array[j].species, 0);
 				wrap = 0;
 				if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength((const uint8_t*)&fg_array[j]) >
-					(uint32_t)screenXRes - 11u) {
+					screenXRes - 11u) {
 					if (outchar)
 						outchar('\n');
 					festring_setcursor(6, cursory);
@@ -291,7 +291,7 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 				wrap = 0;
 				if ((uint16_t)cursorx +
 						(uint32_t)(uint16_t)sys2_calclength((const uint8_t*)goal_group_string) >
-					(uint32_t)screenXRes - 11u) {
+					screenXRes - 11u) {
 					if (outchar)
 						outchar('\n');
 					festring_setcursor(6, cursory);
@@ -301,7 +301,7 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 				festring_outstring((const uint8_t*)goal_group_string);
 				wrap = 0;
 				if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength((const uint8_t*)&fg_array[j]) >
-					(uint32_t)screenXRes - 11u) {
+					screenXRes - 11u) {
 					if (outchar)
 						outchar('\n');
 					festring_setcursor(6, cursory);
@@ -318,7 +318,7 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 			if (--in_set == 1) {
 				wrap = 0;
 				if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength((const uint8_t*)goal_and_string) >
-					(uint32_t)screenXRes - 11u) {
+					screenXRes - 11u) {
 					if (outchar)
 						outchar('\n');
 					festring_setcursor(6, cursory);
@@ -397,7 +397,7 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 		const uint8_t* verb = ((const uint8_t**)condverbstrings)[verb_idx];
 
 		wrap = 0;
-		if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(verb) > (uint32_t)screenXRes - 11u) {
+		if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(verb) > screenXRes - 11u) {
 			if (outchar)
 				outchar('\n');
 			festring_setcursor(6, cursory);
@@ -412,7 +412,7 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 	{
 		const uint8_t* clause = ((const uint8_t**)condstrings)[cond];
 		wrap = 0;
-		if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(clause) > (uint32_t)screenXRes - 11u) {
+		if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(clause) > screenXRes - 11u) {
 			if (outchar)
 				outchar('\n');
 			festring_setcursor(6, cursory);
@@ -472,8 +472,8 @@ int32_t goals_missiongoalsroom(void) {
 		/* ----- Optional "[ESC]" banner when mission has already ended --- */
 		if (mission.end_flag) {
 			const uint16_t esc_w = (uint16_t)sys2_calclength((const uint8_t*)goalescapestr);
-			const uint32_t esc_y_base = (((uint32_t)(screenYRes - goalsBottom)) / 2) + (uint32_t)goalsBottom -
-										(((uint32_t)(fontheight)) / 2);
+			const uint32_t esc_y_base =
+				(((screenYRes - goalsBottom)) / 2) + (uint32_t)goalsBottom - (((uint32_t)(fontheight)) / 2);
 			const int16_t esc_x = (int16_t)((screenXRes - (fontheight + (uint32_t)esc_w)) / 2);
 
 			festring_setbound(esc_x, (int16_t)esc_y_base, (int16_t)(screenXRes - esc_x),

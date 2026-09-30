@@ -7,14 +7,21 @@
 extern "C" {
 #endif
 
-void festring_setcursor(int16_t x, int16_t y);
-void festring_setbound(int16_t left, int16_t top, int16_t right, int16_t bottom);
+/* TIE98 widened the cursor coordinates to int. */
+#if defined(TIE98) && !defined(TIE_MODERN)
+typedef int FestringCoord;
+#else
+typedef uint16_t FestringCoord;
+#endif
+
+void festring_setcursor(FestringCoord x, FestringCoord y);
+void festring_setbound(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom);
 void festring_settextcolor(uint16_t color);
 void festring_setbackcolor(uint16_t color);
 void festring_setdropcolor(uint16_t color);
 void festring_setlinewrap(int16_t enable);
 void festring_setautofill(int16_t enable);
-void festring_setfontsize(int16_t size);
+void festring_setfontsize(int size);
 void festring_farstrcpy(const char* src);
 void festring_farstrcat(const char* src);
 void festring_farstradd(char c);

@@ -697,8 +697,8 @@ typedef struct {
 extern FGStatus fgstatus[48];
 extern uint8_t* farbufferptr;
 extern uint8_t* farbufferptrs[265];
-extern int32_t screenXRes;
-extern int32_t screenYRes;
+extern uint32_t screenXRes;
+extern uint32_t screenYRes;
 extern int32_t bytesPerPixel;
 extern uint16_t yAspect; /* watdbg-owned by tie.c; 0 = square pixels */
 extern int32_t screenMemWidth;

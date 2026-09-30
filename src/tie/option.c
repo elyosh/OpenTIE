@@ -112,10 +112,10 @@ enum {
 // FUNCTION: TIE98 0x458BE0
 static void out_volume_bar(uint16_t vol, int16_t y) {
 	const int half_fh = (int)(int8_t)fontheight >> 1;
-	const int16_t left = (int16_t)((int)screenXRes - 17 * half_fh);
+	const int16_t left = (int16_t)(screenXRes - 17 * half_fh);
 	uint16_t cell;
 
-	festring_setbound((int16_t)(left - 1), (int16_t)(y + 1), (int16_t)((int)screenXRes - half_fh),
+	festring_setbound((int16_t)(left - 1), (int16_t)(y + 1), (int16_t)(screenXRes - half_fh),
 					  (int16_t)(y + fontheight - 1));
 	festring_setbackcolor(0x40);
 	clearwindow();
@@ -127,7 +127,7 @@ static void out_volume_bar(uint16_t vol, int16_t y) {
 		clearwindow();
 	}
 
-	festring_setbound(2, 0, (int16_t)((int)screenXRes - 2), (int16_t)screenYRes);
+	festring_setbound(2, 0, (int16_t)(screenXRes - 2), (int16_t)screenYRes);
 }
 
 // FUNCTION: TIE95 0x34C40
@@ -207,7 +207,7 @@ int32_t option_optionsroom(int16_t load_settings) {
 
 			{
 				const int row_step = fontheight + 2;
-				const int16_t right = (int16_t)((int)screenXRes - 2);
+				const int16_t right = (int16_t)(screenXRes - 2);
 
 				int16_t run_top = (int16_t)option_top;
 				int16_t y = run_top;

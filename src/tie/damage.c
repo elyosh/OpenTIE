@@ -303,7 +303,7 @@ int32_t damage_damageroom(void) {
 					 flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
 						? 51
 						: 21;
-				line_step = (uint32_t)(screenYRes - 2 * y) / NUM_SYSTEMS;
+				line_step = (screenYRes - 2 * y) / NUM_SYSTEMS;
 
 				/* -- Draw group A: present and under repair (health == 0). ---- */
 				for (i = 0; i < NUM_SYSTEMS; i++) {

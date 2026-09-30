@@ -104,7 +104,7 @@ int32_t wingman_wingmanroom(void) {
 					 flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
 						? 51
 						: 21;
-				const uint32_t row_spacing = (uint32_t)(screenYRes - 2 * margin) / NUM_WINGMAN_CMDS;
+				const uint32_t row_spacing = (screenYRes - 2 * margin) / NUM_WINGMAN_CMDS;
 
 				int16_t y = margin;
 				int i;

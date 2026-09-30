@@ -137,10 +137,10 @@ int16_t fileerror;
 
 // GLOBAL: TIE95 0xEB148
 // GLOBAL: TIE98 0x59190C
-int32_t screenXRes;
+uint32_t screenXRes;
 // GLOBAL: TIE95 0xEB14C
 // GLOBAL: TIE98 0x591E34
-int32_t screenYRes;
+uint32_t screenYRes;
 /* Required before the first same-mode framebuffer allocation. */
 // GLOBAL: TIE95 0xCD17C
 int32_t bytesPerPixel = 1;

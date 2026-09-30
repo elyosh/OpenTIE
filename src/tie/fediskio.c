@@ -63,6 +63,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef TIE_MODERN
+#include <conio.h>
+#endif
+
 /* --- Static data --- */
 
 // GLOBAL: TIE95 0xC1C98
@@ -83,7 +87,7 @@ char* fatalerrstr[2] = { fatalmemorystr, fatalfilemissingstr };
 char** fatalerrstrings = fatalerrstr;
 // GLOBAL: TIE95 0xC1E08
 // GLOBAL: TIE98 0x4E00FC
-static char** flightloadstrings;
+char** flightloadstrings;
 
 // GLOBAL: TIE95 0xC1E10
 // GLOBAL: TIE98 0x4E0100
@@ -209,9 +213,11 @@ int8_t fediskio_displayerror(void) {
 	colorcycleuserflag = 1;
 	festring_setfontsize(1);
 	if (TIE_DISPLAY_DX5) {
-		saved_box = (uint8_t*)newbuf + (size_t)g_surfacePitch * (screenYRes - 4 * fontheight - 1);
+		saved_box = (uint8_t*)newbuf;
+		saved_box += (screenYRes - 4 * fontheight - 1) * g_surfacePitch;
 	} else {
-		saved_box = (uint8_t*)newbuf + (size_t)bytesPerPixel * screenXRes * (screenYRes - 4 * fontheight - 1);
+		saved_box = (uint8_t*)newbuf + screenXRes * screenYRes * bytesPerPixel;
+		saved_box -= (4 * fontheight + 1) * screenXRes * bytesPerPixel;
 	}
 	if (TIE_DISPLAY_DX5)
 		rtsvga2_saveboxVGA_tie98(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
@@ -219,28 +225,20 @@ int8_t fediskio_displayerror(void) {
 	else
 		rtsvga2_saveboxVGA(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight), (uint16_t)screenXRes,
 						   (uint16_t)(4 * fontheight + 1));
-	festring_setbound((int16_t)(screenXRes >> 4), (int16_t)((screenYRes >> 1) - 2 * fontheight),
-					  (int16_t)(screenXRes - (screenXRes >> 4)),
-					  (int16_t)((screenYRes >> 1) + 2 * fontheight));
+	festring_setbound(screenXRes >> 4, (screenYRes >> 1) - 2 * fontheight, screenXRes - (screenXRes >> 4),
+					  (screenYRes >> 1) + 2 * fontheight);
 	backcolor = 0xF9;
 	clearwindow();
-	festring_setbound((int16_t)((screenXRes >> 4) + 1), (int16_t)((screenYRes >> 1) - 2 * fontheight + 1),
-					  (int16_t)(screenXRes - (screenXRes >> 4) - 1),
-					  (int16_t)((screenYRes >> 1) + 2 * fontheight - 1));
+	festring_setbound((screenXRes >> 4) + 1, (screenYRes >> 1) - 2 * fontheight + 1,
+					  screenXRes - (screenXRes >> 4) - 1, (screenYRes >> 1) + 2 * fontheight - 1);
 	backcolor = 0;
 	clearwindow();
-	if (TIE_DISPLAY_DX5) {
-		textcolor = 0xF9;
-		dropcolor = 0;
-		dropflag = 0;
-	} else {
-		dropcolor = 0;
-		dropflag = 0;
-		textcolor = 0xF9;
-	}
-	festring_setcursor(0, (int16_t)((screenYRes >> 1) - fontheight - 2));
+	textcolor = 0xF9;
+	dropcolor = 0;
+	dropflag = 0;
+	festring_setcursor(0, (screenYRes >> 1) - fontheight - 2);
 	festring_outstringcenter((const uint8_t*)flightloadstrings[5]);
-	festring_setcursor(0, (int16_t)((screenYRes >> 1) + 2));
+	festring_setcursor(0, (screenYRes >> 1) + 2);
 	festring_outstringcenter((const uint8_t*)flightloadstrings[6]);
 	if (TIE_DISPLAY_DX5) {
 		FlightSurface_Unlock();
@@ -249,7 +247,11 @@ int8_t fediskio_displayerror(void) {
 		response = FlightInput_GetChar();
 		FrontendDisplay_PresentFrame();
 	} else {
+#ifdef TIE_MODERN
 		response = (int8_t)TieInput_ReadKey();
+#else
+		response = (int8_t)getch();
+#endif
 	}
 	colorcycleuserflag = 0;
 	if (TIE_DISPLAY_DX5)
@@ -258,38 +260,22 @@ int8_t fediskio_displayerror(void) {
 	else
 		rtsvga2_restoreboxVGA(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
 							  (uint16_t)screenXRes, (uint16_t)(4 * fontheight + 1));
-	if (TIE_DISPLAY_DX5) {
+	if (TIE_DISPLAY_DX5)
 		memset(newbuf, 0x40, (size_t)screenXRes * screenYRes * g_flight16bppBytesPerPixel);
-		festring_setfontsize(saved_font);
-		cursorx = saved_cursor_x;
-		leftmargin = saved_left;
-		cursory = saved_cursor_y;
-		topmargin = saved_top;
-		bottommargin = saved_bottom;
-		rightmargin = saved_right;
-		lwrapflag = saved_line_wrap;
-		autofillflag = saved_autofill;
-		flight_text_reserved_flag = saved_reserved;
-		textcolor = saved_text_color;
-		dropcolor = saved_drop_color;
-		backcolor = saved_back_color;
-		dropflag = saved_drop_flag;
-	} else {
-		festring_setfontsize(saved_font);
-		cursorx = saved_cursor_x;
-		cursory = saved_cursor_y;
-		leftmargin = saved_left;
-		topmargin = saved_top;
-		rightmargin = saved_right;
-		bottommargin = saved_bottom;
-		lwrapflag = saved_line_wrap;
-		flight_text_reserved_flag = saved_reserved;
-		autofillflag = saved_autofill;
-		textcolor = saved_text_color;
-		backcolor = saved_back_color;
-		dropcolor = saved_drop_color;
-		dropflag = saved_drop_flag;
-	}
+	festring_setfontsize(saved_font);
+	cursorx = saved_cursor_x;
+	cursory = saved_cursor_y;
+	leftmargin = saved_left;
+	topmargin = saved_top;
+	rightmargin = saved_right;
+	bottommargin = saved_bottom;
+	lwrapflag = saved_line_wrap;
+	flight_text_reserved_flag = saved_reserved;
+	autofillflag = saved_autofill;
+	textcolor = saved_text_color;
+	backcolor = saved_back_color;
+	dropcolor = saved_drop_color;
+	dropflag = saved_drop_flag;
 	return response;
 }
 
