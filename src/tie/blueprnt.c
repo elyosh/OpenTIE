@@ -38,6 +38,7 @@
 #include "tie_runtime/runtime/profile.h"
 
 #include "tie/bpflight.h"
+#include "tie/modelbounds.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -71,8 +72,14 @@ static Actor* door_actor;
 static Actor* door_back_actor;
 // GLOBAL: TIE95 0xF5968
 static Actor* title_actor;
+// GLOBAL: TIE95 0xF5998
+// GLOBAL: TIE98 0x4FA5B4
 static int16_t blueprint_info_ship;
+// GLOBAL: TIE95 0xF599A
+// GLOBAL: TIE98 0x4FA5A8
 static int16_t blueprint_info_time;
+// GLOBAL: TIE95 0xF596C
+// GLOBAL: TIE98 0x4FA5C0
 static int32_t blueprint_info_size;
 static bool blueprint_svga;
 
@@ -81,31 +88,6 @@ static void blueprnt_user_Blueprint_Projector(Actor* the_actor, int32_t time);
 static void blueprnt_user_Blueprint_Door(Actor* the_actor, int32_t time);
 static int16_t blueprnt_draw_Blueprint_Title(Actor* the_actor, Rect* draw_rect, Rect* clip_rect,
 											 int16_t off_x, int16_t off_y, int16_t refresh);
-
-static int32_t scale_and_round_ship_size(int32_t extent) {
-	/* Split the Q16 product so both terms fit in 32 bits. */
-	int32_t raw = (extent >> 16) * SIZE_SCALE_FACTOR +
-				  (int32_t)(((uint32_t)(uint16_t)extent * SIZE_SCALE_FACTOR) >> 16);
-	if (raw < 100)
-		return 5 * ((raw + 2) / 5);
-	return 50 * ((raw + 25) / 50);
-}
-
-static int32_t compute_ship_size(void) {
-	const uint8_t* data;
-	uint16_t dimension;
-	uint8_t shift;
-	int32_t extent;
-
-	if (blueprint_svga)
-		return scale_and_round_ship_size(tie98_preview_primary_model_max_extent());
-
-	data = (const uint8_t*)bpflight_fltobj_data;
-	dimension = *(const uint16_t*)(data + 12);
-	shift = data[32];
-	extent = (int32_t)((uint32_t)(dimension / 2) << shift);
-	return scale_and_round_ship_size(extent);
-}
 
 /* ------------------------------------------------------------------ */
 
@@ -359,23 +341,11 @@ static void blueprnt_user_Blueprint_Info(Actor* the_actor, int32_t time) {
 	} else {
 		blueprint_info_ship = shipext_Get_Blueprint_Ship();
 		blueprint_info_time = 0;
-		blueprint_info_size = compute_ship_size();
+		blueprint_info_size = blueprnt_Flight_Object_Size();
 	}
 }
 
 /* ------------------------------------------------------------------ */
-
-/*
- * Clamp a fade value to [0, 7], with fade-out starting at time 142.
- */
-static int16_t fade_clamp(int16_t raw, int16_t info_time) {
-	int16_t fade = raw;
-	if (fade > 7)
-		fade = 7;
-	if (info_time >= 142)
-		fade = 148 - info_time;
-	return fade;
-}
 
 // FUNCTION: TIE95 0x6E820
 // FUNCTION: TIE98 0x404A80
@@ -402,14 +372,22 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 		xrect_Copy_Rect(&dst, draw_rect);
 		dst.bottom = dst.top + line_height;
 
-		fade = fade_clamp(t_name, blueprint_info_time);
+		fade = t_name;
+		if (fade > 7)
+			fade = 7;
+		if (blueprint_info_time >= 142)
+			fade = 148 - blueprint_info_time;
 		shipext_Get_Blueprint_Ship_Name((char*)str);
 		xfont_Print_Centered_Text(str, &dst, fade + 24, font_id);
 
 		if (t_name >= 2) {
 			int16_t t_size = t_name - 2;
 			xrect_Offset_Rect(&dst, 0, line_height);
-			fade = fade_clamp(t_size, blueprint_info_time);
+			fade = t_size;
+			if (fade > 7)
+				fade = 7;
+			if (blueprint_info_time >= 142)
+				fade = 148 - blueprint_info_time;
 			textext_Copy_Text(fmt, txtBlueMeters);
 			snprintf((char*)str, sizeof(str), fmt, blueprint_info_size);
 			xfont_Print_Centered_Text(str, &dst, fade + 24, font_id);
@@ -434,7 +412,11 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 			int16_t fade;
 			if (t_lines < 0)
 				break;
-			fade = fade_clamp(t_lines, blueprint_info_time);
+			fade = t_lines;
+			if (fade > 7)
+				fade = 7;
+			if (blueprint_info_time >= 142)
+				fade = 148 - blueprint_info_time;
 			shipext_Get_Blueprint_Ship_Line((char*)str, i);
 			xfont_Print_Centered_Text(str, &dst, fade + 24, font_id);
 			xrect_Offset_Rect(&dst, 0, line_height);
@@ -468,7 +450,31 @@ static int16_t blueprnt_draw_Blueprint_Title(Actor* the_actor, Rect* draw_rect, 
 /* ------------------------------------------------------------------ */
 
 // FUNCTION: TIE95 0x6EAB4
-int16_t blueprnt_Flight_Object_Size(void) { return (int16_t)compute_ship_size(); }
+// FUNCTION: TIE98 0x404D00
+int32_t blueprnt_Flight_Object_Size(void) {
+	int32_t extent;
+	int32_t size;
+#if !defined(TIE_MODERN) && defined(_MSC_VER)
+	extent = modelbounds_getmaxextent(0);
+#else
+#ifdef TIE_MODERN
+	if (blueprint_svga) {
+		extent = tie98_preview_primary_model_max_extent();
+	} else
+#endif
+	{
+		const uint8_t* data = (const uint8_t*)bpflight_fltobj_data;
+		uint16_t dimension = *(const uint16_t*)(data + 12);
+		uint8_t shift = data[32];
+		extent = (int32_t)((uint32_t)(dimension / 2) << (shift & 31));
+	}
+#endif
+	/* Retail keeps the low 32 bits of the product before the signed shift. */
+	size = (int32_t)((uint32_t)extent * SIZE_SCALE_FACTOR) >> 16;
+	if (size < 100)
+		return 5 * ((size + 2) / 5);
+	return 50 * ((size + 25) / 50);
+}
 
 /* ------------------------------------------------------------------ */
 
