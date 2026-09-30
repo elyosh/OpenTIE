@@ -7,9 +7,9 @@ extern "C" {
 
 /* Edition selection for code shared by the TIE95 and TIE98 releases.
  *
- * Matching builds compile the retail code of their edition: the predicates
- * are literal constants, so the compilers drop the other edition's branch,
- * and the value selectors expand to the retail literal. Modern builds select
+ * Matching builds compile only their own edition's code: the predicates are
+ * literal constants, so the compilers drop the other edition's branch, and the
+ * value selectors expand to that edition's literal. Modern builds select
  * at runtime, with the frontend, the flight logic and the display chosen
  * independently. */
 #if defined(TIE_MODERN)
