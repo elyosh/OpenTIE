@@ -5,4 +5,6 @@
 
 void TieArmShip_Begin(SceneHeadStruct* scene_head);
 
+void TieArmShip_RunView(ResFile* launch_resource, bool ready);
+
 #endif

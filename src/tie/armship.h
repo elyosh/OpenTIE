@@ -9,9 +9,8 @@
 extern "C" {
 #endif
 
-/* Returns zero on setup failure. CloseScene also releases partial setup. */
-int16_t armship_OpenScene(SceneHeadStruct* scene_head, ResFile** launch_resource);
-void armship_CloseScene(ResFile* launch_resource);
+int16_t armship_ArmShip(SceneHeadStruct* scene_head);
+extern ResFile* armship_file;
 
 #ifdef __cplusplus
 }

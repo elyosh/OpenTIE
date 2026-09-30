@@ -654,7 +654,10 @@ static void idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t refr
  * Entry point
  * ================================================================ */
 
-int16_t filmview_OpenScene(SceneHeadStruct* scene_head, ResFile** resource) {
+// FUNCTION: TIE95 0x71690
+// FUNCTION: TIE98 0x41D810
+int16_t filmview_FilmView(SceneHeadStruct* scene_head) {
+	ResFile* resource;
 	Rect r;
 	int16_t i;
 
@@ -662,24 +665,34 @@ int16_t filmview_OpenScene(SceneHeadStruct* scene_head, ResFile** resource) {
 	num_pages = 1;
 	if (scene_head->last_scene == SCENE_MAIN_MENU)
 		replayclipname[0] = 0;
-	*resource = shellext_Open_Empire_Resource("filmview.lfd");
-	if (!*resource)
+	resource = shellext_Open_Empire_Resource("filmview.lfd");
+#ifdef TIE_MODERN
+	if (!resource) {
+		TieFilmView_RunView(resource, false);
 		return 0;
+	}
+#endif
 	xrect_Set_Rect(&r, 0, 0, 320, 200);
 	for (i = 0; i < 5; i++) {
 		const char* text = textext_Get_Text((TIEText)(txtFilmDelete + i));
 		strcpy(film_name_str[i], text);
 	}
 	filmview_film = xfilm_Res_Film("filmview", &r, 0, 0, 0);
-	if (!filmview_film)
+#ifdef TIE_MODERN
+	if (!filmview_film) {
+		TieFilmView_RunView(resource, false);
 		return 0;
+	}
+#endif
 	xfilm_Set_Film_Def_Palette(filmview_film, scene_head->def_palette);
 	xview_Set_View_Update_Function(end_View);
-	return 1;
-}
-
-void filmview_CloseScene(ResFile* resource) {
+#ifdef TIE_MODERN
+	TieFilmView_RunView(resource, true);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
 	xview_Clear_View_Update_Function();
-	if (resource)
-		xres_Close_Resource(resource);
+	xres_Close_Resource(resource);
+	return xerror_Get_Landru_Exit();
+#endif
 }

@@ -24,8 +24,7 @@ typedef struct {
 	int16_t read;        /* needs-read flag */
 } FileDialog;
 
-int16_t filmview_OpenScene(SceneHeadStruct* scene_head, ResFile** resource);
-void filmview_CloseScene(ResFile* resource);
+int16_t filmview_FilmView(SceneHeadStruct* scene_head);
 int16_t filmview_PrepareFileDialog(FileDialog* dialog, Input** root);
 void filmview_ApplySelectedFile(int16_t result);
 Input* filmview_BuildDeleteDialog(void);

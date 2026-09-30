@@ -6,6 +6,7 @@
 #include <landru/inpcall.h>
 #include <landru/io.h>
 #include <landru/task.h>
+#include <landru/view.h>
 #include <landru/viewadd.h>
 #include <string.h>
 
@@ -94,18 +95,12 @@ typedef struct FilmViewTask {
 	bool started;
 } FilmViewTask;
 
-// ORIGINAL_FUNCTION: TIE95 0x71690
-// ORIGINAL_FUNCTION: TIE98 0x41D810
 static LandruTaskStepResult filmview_step(void* self) {
 	FilmViewTask* task = self;
 	if (task->started)
 		return LANDRU_TASK_STEP_DONE;
 	task->started = true;
-	if (!filmview_OpenScene(task->scene_head, &task->resource)) {
-		xerror_Set_Landru_Error(6);
-		return LANDRU_TASK_STEP_DONE;
-	}
-	xviewadd_Push_Handle_View_Task();
+	filmview_FilmView(task->scene_head);
 	return LANDRU_TASK_STEP_CONTINUE;
 }
 
@@ -121,10 +116,21 @@ static void filmview_end(void* self) {
 		close_file_dialog();
 		delete_context.file_input = NULL;
 	}
-	filmview_CloseScene(task->resource);
+	xview_Clear_View_Update_Function();
+	if (task->resource)
+		xres_Close_Resource(task->resource);
 }
 
 static const LandruTaskVtable filmview_vtable = { filmview_step, filmview_end, NULL, NULL };
+
+void TieFilmView_RunView(ResFile* resource, bool ready) {
+	FilmViewTask* task = landru_task_top();
+	task->resource = resource;
+	if (ready)
+		xviewadd_Push_Handle_View_Task();
+	else
+		xerror_Set_Landru_Error(6);
+}
 
 void TieFilmView_Begin(SceneHeadStruct* scene_head) {
 	FilmViewTask* task = landru_task_push(&filmview_vtable);

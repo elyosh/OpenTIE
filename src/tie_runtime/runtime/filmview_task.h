@@ -8,4 +8,6 @@ void TieFilmView_Begin(SceneHeadStruct* scene_head);
 void TieFilmView_RequestFiles(void);
 void TieFilmView_RequestDelete(Input* input);
 
+void TieFilmView_RunView(ResFile* resource, bool ready);
+
 #endif

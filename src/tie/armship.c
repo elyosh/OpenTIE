@@ -1,4 +1,7 @@
 #include "tie/armship.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/armship_task.h"
+#endif
 #include "tie/player.h"
 #include "tie/shade.h"
 #include "tie/shellext.h"
@@ -59,7 +62,7 @@ static Actor* beam_name_actor;
 static Film* armship_film;
 // GLOBAL: TIE95 0xf59d0
 // GLOBAL: TIE98 0x4fa49c
-static ResFile* armship_file;
+ResFile* armship_file;
 // GLOBAL: TIE95 0xf59d4
 // GLOBAL: TIE98 0x4fa4a4
 static Input* info_input;
@@ -399,19 +402,33 @@ static void idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
  * armship_ArmShip — main entry point
  * ====================================================================== */
 
-/* The runtime task owns the modal-view wait and calls CloseScene on exit. */
-int16_t armship_OpenScene(SceneHeadStruct* scene_head, ResFile** launch_resource) {
+// FUNCTION: TIE95 0x6EB48
+// FUNCTION: TIE98 0x402680
+int16_t armship_ArmShip(SceneHeadStruct* scene_head) {
+#ifdef TIE_MODERN
+	ResFile* launch_resource = NULL;
+#else
+	ResFile* launch_resource;
+#endif
 	Rect frame;
 	char name[32];
 	int16_t i;
 
 	xio_Set_Mouse_Position(44, 166);
 	armship_file = shellext_Open_Empire_Resource(armship_str);
-	if (!armship_file)
+#ifdef TIE_MODERN
+	if (!armship_file) {
+		TieArmShip_RunView(launch_resource, false);
 		return 0;
-	*launch_resource = shipext_Open_Launch_Resource();
-	if (!*launch_resource)
+	}
+#endif
+	launch_resource = shipext_Open_Launch_Resource();
+#ifdef TIE_MODERN
+	if (!launch_resource) {
+		TieArmShip_RunView(launch_resource, false);
 		return 0;
+	}
+#endif
 
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
@@ -419,14 +436,22 @@ int16_t armship_OpenScene(SceneHeadStruct* scene_head, ResFile** launch_resource
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
 	shipext_Get_Weapon_Select_Name(name);
 	armship_film = xfilm_Res_Callback_Film(name, &frame, 0, 0, 0, film_ArmShip_Callback);
-	if (!armship_film)
+#ifdef TIE_MODERN
+	if (!armship_film) {
+		TieArmShip_RunView(launch_resource, false);
 		return 0;
+	}
+#endif
 	xfilm_Set_Film_Def_Palette(armship_film, scene_head->def_palette);
 
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
 	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
-	if (!world_input)
+#ifdef TIE_MODERN
+	if (!world_input) {
+		TieArmShip_RunView(launch_resource, false);
 		return 0;
+	}
+#endif
 
 	/* Create 6 weapon buttons */
 	for (i = 0; i < 6; i++) {
@@ -454,8 +479,12 @@ int16_t armship_OpenScene(SceneHeadStruct* scene_head, ResFile** launch_resource
 		/* Only create beam buttons (0-1) if beam is equipped */
 		if (player_Get_Beam_Used() || i >= 2) {
 			button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
-			if (!button_input[i])
+#ifdef TIE_MODERN
+			if (!button_input[i]) {
+				TieArmShip_RunView(launch_resource, false);
 				return 0;
+			}
+#endif
 			xinpattr_Set_Input_Update_Function(button_input[i], iupdate_ArmShip);
 			xinpattr_Set_Input_User_Function(button_input[i], iuser_ArmShip);
 			button_input[i]->id = i + 1;
@@ -468,8 +497,12 @@ int16_t armship_OpenScene(SceneHeadStruct* scene_head, ResFile** launch_resource
 	/* Info panel for weapon description text */
 	xrect_Set_Rect(&frame, 92, 12, 260, 152);
 	info_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
-	if (!info_input)
+#ifdef TIE_MODERN
+	if (!info_input) {
+		TieArmShip_RunView(launch_resource, false);
 		return 0;
+	}
+#endif
 	xinpattr_Set_Input_User_Function(info_input, iuser_Arm_Info);
 	xinpattr_Set_Input_Draw_Function(info_input, idraw_Arm_Info);
 	xinpattr_Refreshable_Input(info_input);
@@ -477,32 +510,40 @@ int16_t armship_OpenScene(SceneHeadStruct* scene_head, ResFile** launch_resource
 	/* Beam name label actor */
 	xrect_Set_Rect(&frame, 12, 45, 81, 58);
 	beam_name_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
-	if (!beam_name_actor)
+#ifdef TIE_MODERN
+	if (!beam_name_actor) {
+		TieArmShip_RunView(launch_resource, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_Draw_Function(beam_name_actor, draw_ArmShip);
 	beam_name_actor->id = 10;
 
 	/* Torpedo name label actor */
 	xrect_Set_Rect(&frame, 12, 101, 81, 114);
 	torp_name_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
-	if (!torp_name_actor)
+#ifdef TIE_MODERN
+	if (!torp_name_actor) {
+		TieArmShip_RunView(launch_resource, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_Draw_Function(torp_name_actor, draw_ArmShip);
 	torp_name_actor->id = 11;
 
 	xview_Set_View_Update_Function(end_ArmShip_View);
-	return 1;
-}
-
-void armship_CloseScene(ResFile* launch_resource) {
+#ifdef TIE_MODERN
+	TieArmShip_RunView(launch_resource, true);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
 	xinpcall_Clear_Active_Input();
 	xview_Clear_View_Update_Function();
 	xview_Enable_All_View_Erase();
 	if (xcursor_Is_Cursor_Visible())
 		xcursor_Hide_Cursor();
-	if (launch_resource)
-		xres_Close_Resource(launch_resource);
-	if (armship_file)
-		xres_Close_Resource(armship_file);
-	armship_file = NULL;
+	xres_Close_Resource(launch_resource);
+	xres_Close_Resource(armship_file);
+	return xerror_Get_Landru_Exit();
+#endif
 }
