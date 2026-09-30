@@ -155,7 +155,7 @@ void paiman_setspeed(uint16_t obj_idx_param, uint16_t desired_speed) {
 /* Point the AI craft's flight vector at craftptr->waypoint_*_cache.
  * Uses the current PAI skill_value to pick turn rate. */
 // FUNCTION: TIE95 0x3CD04
-void paiman_setflighttotarget(int16_t pitch_bias, int16_t drive_heading) {
+void paiman_setflighttotarget(uint16_t pitch_bias, int16_t drive_heading) {
 	CraftData* cd = craftptr;
 
 	trig2_ctop(cd->waypoint_x_cache - objects[ai.active_obj_idx].world_x,
@@ -607,7 +607,7 @@ void paiman_initcruisemaneuver(void) {
 	CraftData* cd = craftptr;
 
 	paiman_controlplane();
-	if ((uint16_t)objects[ai.active_obj_idx].roll < 0x8000u)
+	if ((uint16_t)objects[ai.active_obj_idx].roll < 0x8000)
 		paiman_setflighttotarget(0, 1);
 
 	cd->ai_plan_state = 236;
@@ -688,13 +688,13 @@ int16_t paiman_headtowardfullmaneuver(void) {
 // FUNCTION: TIE95 0x39E50
 void paiman_initrunawaymaneuver(void) {
 	paiman_controlplane();
-	if ((uint16_t)objects[ai.active_obj_idx].roll < 0x8000u)
-		paiman_setflighttotarget((int16_t)0x8000, 1);
+	if ((uint16_t)objects[ai.active_obj_idx].roll < 0x8000)
+		paiman_setflighttotarget(0x8000, 1);
 }
 
 // FUNCTION: TIE95 0x39E94
 int16_t paiman_runawaymaneuver(void) {
-	paiman_setflighttotarget((int16_t)0x8000, 1);
+	paiman_setflighttotarget(0x8000, 1);
 	craftptr->throttle_speed = 0xFFFFu;
 	return 0;
 }
@@ -1209,7 +1209,7 @@ int16_t paiman_escortmaneuver(void) {
 		cd->waypoint_x_cache = objects[leader_idx].world_x;
 		cd->waypoint_y_cache = objects[leader_idx].world_y;
 		cd->waypoint_z_cache = objects[leader_idx].world_z;
-		paiman_setflighttotarget(leader_cd->status_flags ? 0 : (int16_t)0x4000, 1);
+		paiman_setflighttotarget(leader_cd->status_flags ? 0 : 0x4000, 1);
 		cd->throttle_speed = (trig2_polardistance <= 0x10000) ? 0x4000 : 0xFFFFu;
 		cd->push_accum_x = 0;
 		cd->push_accum_y = 0;

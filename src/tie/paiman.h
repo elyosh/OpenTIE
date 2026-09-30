@@ -120,7 +120,7 @@ int16_t paiman_dropoffmaneuver(void);         /* 30 */
 /* Point the AI craft's flight vector at craftptr->waypoint_*_cache.
  *   pitch_bias: added to xyangle before writing ai_target_pitch.
  *   drive_heading: non-zero = also update target_heading / ai_heading_state. */
-void paiman_setflighttotarget(int16_t pitch_bias, int16_t drive_heading);
+void paiman_setflighttotarget(uint16_t pitch_bias, int16_t drive_heading);
 
 /* Drive or snap objects[ai.active_obj_idx].pitch toward ai_target_pitch.
  * Small residual (|delta| <= 0x300): snap immediately (pitch_state=3).
