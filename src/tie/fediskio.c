@@ -201,20 +201,19 @@ int8_t fediskio_displayerror(void) {
 	uint8_t saved_font = fontflag;
 	uint8_t* saved_box;
 	int8_t response;
-	const int tie98 = TieClassicDisplay_OutputKind() == TIE_CLASSIC_OUTPUT_DX5_SURFACE;
 
-	if (tie98) {
+	if (TIE_DISPLAY_DX5) {
 		FlightSurface_Lock();
 		g_flightDrawToOffscreenSurface = 0;
 	}
 	colorcycleuserflag = 1;
 	festring_setfontsize(1);
-	if (tie98) {
+	if (TIE_DISPLAY_DX5) {
 		saved_box = (uint8_t*)newbuf + (size_t)g_surfacePitch * (screenYRes - 4 * fontheight - 1);
 	} else {
 		saved_box = (uint8_t*)newbuf + (size_t)bytesPerPixel * screenXRes * (screenYRes - 4 * fontheight - 1);
 	}
-	if (tie98)
+	if (TIE_DISPLAY_DX5)
 		rtsvga2_saveboxVGA_tie98(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
 								 (uint16_t)screenXRes, (uint16_t)(4 * fontheight + 1));
 	else
@@ -230,7 +229,7 @@ int8_t fediskio_displayerror(void) {
 					  (int16_t)((screenYRes >> 1) + 2 * fontheight - 1));
 	backcolor = 0;
 	clearwindow();
-	if (tie98) {
+	if (TIE_DISPLAY_DX5) {
 		textcolor = 0xF9;
 		dropcolor = 0;
 		dropflag = 0;
@@ -243,7 +242,7 @@ int8_t fediskio_displayerror(void) {
 	festring_outstringcenter((const uint8_t*)flightloadstrings[5]);
 	festring_setcursor(0, (int16_t)((screenYRes >> 1) + 2));
 	festring_outstringcenter((const uint8_t*)flightloadstrings[6]);
-	if (tie98) {
+	if (TIE_DISPLAY_DX5) {
 		FlightSurface_Unlock();
 		g_flightDrawToOffscreenSurface = 1;
 		FrontendDisplay_PresentFrame();
@@ -253,13 +252,13 @@ int8_t fediskio_displayerror(void) {
 		response = (int8_t)TieInput_ReadKey();
 	}
 	colorcycleuserflag = 0;
-	if (tie98)
+	if (TIE_DISPLAY_DX5)
 		rtsvga2_restoreboxVGA_tie98(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
 									(uint16_t)screenXRes, (uint16_t)(4 * fontheight + 1));
 	else
 		rtsvga2_restoreboxVGA(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
 							  (uint16_t)screenXRes, (uint16_t)(4 * fontheight + 1));
-	if (tie98) {
+	if (TIE_DISPLAY_DX5) {
 		memset(newbuf, 0x40, (size_t)screenXRes * screenYRes * g_flight16bppBytesPerPixel);
 		festring_setfontsize(saved_font);
 		cursorx = saved_cursor_x;
