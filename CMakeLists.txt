@@ -479,8 +479,6 @@ set(TIE_RUNTIME_SOURCES
 add_library(tie_formats STATIC
 	 src/tie_formats/common.c
 	 src/tie_formats/lfd.c
-	 src/tie_formats/string_table.c
-	 src/tie_formats/string_table.h
 	 src/tie_formats/panel.c
 	 src/tie_formats/shape.c
 	 src/tie_formats/cockpit.c

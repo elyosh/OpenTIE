@@ -4,6 +4,7 @@
 #include "landru/actor.h"
 #include "landru/bitmap.h"
 #include "landru/input.h"
+#include "landru/memhdl.h"
 #include "landru/rect.h"
 #include "tie/shipext.h"
 
@@ -57,37 +58,32 @@ typedef struct {
 /* Port adapter for the recovered packed disk record. */
 void TieRecoveredBrief_DecodePage(EBriefPage* dst, const uint8_t* src);
 
-/*
- * MAP_EBriefStruct — briefing data. Runtime layout only; the embedded
- * EBriefPage is loaded from disk as a unit but EBriefStruct itself is
- * never serialized (it carries void * handles to allocated buffers).
- * Offsets in the comments below are the original DOS pack(1) offsets;
- * the runtime offsets on the host depend on natural alignment.
- */
+/* Briefing state with the original 16-bit Landru text handles. The embedded
+ * page has a disk codec; the containing state is not serialized as a unit. */
 typedef struct {
-	EBriefPage page;         /* +0x000 */
-	void* text_data[32];     /* +0x32A: text data (HANDLE → void*) */
-	void* para_data[32];     /* +0x36A: paragraph data (HANDLE → void*) */
-	void* talk_data[20];     /* +0x3AA: talk data (HANDLE → void*) */
-	int16_t cur_text;        /* +0x3D2 */
-	int16_t cur_back;        /* +0x3D4 */
-	int16_t move_on;         /* +0x3D6 */
-	int16_t scale_on;        /* +0x3D8 */
-	int16_t para_on[2];      /* +0x3DA */
-	int16_t para_id[2];      /* +0x3DE */
-	int16_t para_off;        /* +0x3E2 */
-	int16_t target_on[8];    /* +0x3E4 */
-	int16_t target_id[8];    /* +0x3F4 */
-	int16_t target_state[8]; /* +0x404 */
-	int16_t target_off;      /* +0x414 */
-	int16_t text_on[8];      /* +0x416 */
-	int16_t text_id[8];      /* +0x426 */
-	int16_t text_x[8];       /* +0x436 */
-	int16_t text_y[8];       /* +0x446 */
-	int16_t text_state[8];   /* +0x456 */
-	int16_t text_color[8];   /* +0x466 */
-	int16_t text_off;        /* +0x476 */
-	int16_t seek_on;         /* +0x478 */
+	EBriefPage page;            /* +0x000 */
+	LandruHandle text_data[32]; /* +0x32A: text data handle */
+	LandruHandle para_data[32]; /* +0x36A: paragraph data handle */
+	LandruHandle talk_data[20]; /* +0x3AA: talk data handle */
+	int16_t cur_text;           /* +0x3D2 */
+	int16_t cur_back;           /* +0x3D4 */
+	int16_t move_on;            /* +0x3D6 */
+	int16_t scale_on;           /* +0x3D8 */
+	int16_t para_on[2];         /* +0x3DA */
+	int16_t para_id[2];         /* +0x3DE */
+	int16_t para_off;           /* +0x3E2 */
+	int16_t target_on[8];       /* +0x3E4 */
+	int16_t target_id[8];       /* +0x3F4 */
+	int16_t target_state[8];    /* +0x404 */
+	int16_t target_off;         /* +0x414 */
+	int16_t text_on[8];         /* +0x416 */
+	int16_t text_id[8];         /* +0x426 */
+	int16_t text_x[8];          /* +0x436 */
+	int16_t text_y[8];          /* +0x446 */
+	int16_t text_state[8];      /* +0x456 */
+	int16_t text_color[8];      /* +0x466 */
+	int16_t text_off;           /* +0x476 */
+	int16_t seek_on;            /* +0x478 */
 } EBriefStruct;
 
 /*
@@ -145,7 +141,7 @@ void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y);
 void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect);
 void player_Draw_Display_Grid(Rect* clip);
 void player_Draw_Display_Ship(Rect* clip, Rect* dest);
-void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag);
+void player_Draw_Map_Paragraph(Rect* clip, LandruHandle handle, int16_t flag);
 void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t screen_x, int16_t screen_y,
 									 int16_t text_y, int16_t text_state);
 void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_t x, int16_t index,

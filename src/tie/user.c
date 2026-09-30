@@ -943,7 +943,7 @@ void user_setnewtarget(uint16_t new_obj) {
 		EFGStruct* fgp;
 
 #ifdef TIE_MODERN
-		msg_addmessageptr(0, (char*)TieStringTable_SpeciesName(cp_t->species_idx));
+		msg_addmessageptr(0, (char*)spec_name_ptrs[cp_t->species_idx]);
 #else
 		msg_addmessageptr(0, (char*)spec_data[cp_t->species_idx].name_ptr);
 #endif

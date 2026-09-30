@@ -1,21 +1,21 @@
 #ifndef TIE_RUNTIME_STORAGE_STRING_TABLE_H
 #define TIE_RUNTIME_STORAGE_STRING_TABLE_H
 
-#include "tie_runtime/storage/storage.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* Host-thread storage. Returned strings remain valid until the next successful
- * read or Clear; failed reads retain the previous table. */
-/* Read consumes a file positioned at its beginning. */
-char** TieStringTable_Read(TieFile* file, size_t minimum_entries);
+/* Host storage and pointer-width adaptation for the recovered string loader.
+ * The game owns file reads and assigns its string groups after resolution. */
+void* TieStringTable_Allocate(void);
+void* TieStringTable_Data(void);
+char** TieStringTable_Resolve(void);
 char** TieStringTable_Current(void);
 void TieStringTable_Clear(void);
 const char* TieStringTable_Cell(int cell);
 int TieStringTable_Count(void);
-const char* TieStringTable_SpeciesName(unsigned int species);
+
+extern const char* spec_name_ptrs[69];
 
 #ifdef __cplusplus
 }

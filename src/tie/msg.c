@@ -554,7 +554,7 @@ void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 			messageptrs[1] = fg_array[fg_idx].name;
 			argtable[2] = (uint16_t)clicks;
 #ifdef TIE_MODERN
-			messageptrs[0] = (char*)TieStringTable_SpeciesName(species_idx);
+			messageptrs[0] = (char*)spec_name_ptrs[species_idx];
 #else
 			messageptrs[0] = (char*)spec_data[species_idx].name_ptr;
 #endif
@@ -567,7 +567,7 @@ void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 		argtable[3] = (uint16_t)clicks;
 		argtable[2] = (uint16_t)0x8002; /* ptr to messageptrs[2] */
 #ifdef TIE_MODERN
-		messageptrs[1] = (char*)TieStringTable_SpeciesName(species_idx);
+		messageptrs[1] = (char*)spec_name_ptrs[species_idx];
 #else
 		messageptrs[1] = (char*)spec_data[species_idx].name_ptr;
 #endif
@@ -577,7 +577,7 @@ void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 		/* Hostile sighting -- color line by side via messageside. */
 		messageside = side;
 #ifdef TIE_MODERN
-		messageptrs[1] = (char*)TieStringTable_SpeciesName(species_idx);
+		messageptrs[1] = (char*)spec_name_ptrs[species_idx];
 #else
 		messageptrs[1] = (char*)spec_data[species_idx].name_ptr;
 #endif
@@ -609,7 +609,7 @@ void msg_craftmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_
 	messageside = objects[obj_idx].side;
 	argtable[0] = 0x8000;
 #ifdef TIE_MODERN
-	messageptrs[0] = (char*)TieStringTable_SpeciesName(craft->species_idx);
+	messageptrs[0] = (char*)spec_name_ptrs[craft->species_idx];
 #else
 	messageptrs[0] = (char*)spec_data[craft->species_idx].name_ptr;
 #endif
@@ -700,7 +700,7 @@ void msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_buf)
 
 			if (use_official) {
 #ifdef TIE_MODERN
-				src = TieStringTable_SpeciesName(craft->species_idx);
+				src = spec_name_ptrs[craft->species_idx];
 #else
 				src = spec_data[craft->species_idx].name_ptr;
 #endif

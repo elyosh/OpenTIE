@@ -29,6 +29,7 @@
 #include "landru/inpattr.h"
 #include "landru/input.h"
 #include "landru/io.h"
+#include "landru/memhdl.h"
 #include "landru/paint.h"
 #include "landru/pal.h"
 #include "landru/rect.h"
@@ -225,7 +226,7 @@ static void Check_VR_Talk_Questions(void) {
 
 	for (i = 0; i < 5; i++) {
 		int16_t status = 0;
-		char* data = (char*)talk_brief->talk_data[5 * talk_person + i];
+		char* data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_person + i]);
 		if (data) {
 			if (data[0]) {
 				int16_t j;
@@ -240,6 +241,7 @@ static void Check_VR_Talk_Questions(void) {
 				}
 			}
 		}
+		xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + i]);
 		talk_win_status[i] = status;
 	}
 }
@@ -264,7 +266,7 @@ static void Get_VR_Talk_Question(char* string, int16_t question) {
 		return;
 	}
 
-	data = (char*)talk_brief->talk_data[5 * talk_person + qid];
+	data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
 	if (!data)
 		return;
 
@@ -276,6 +278,7 @@ static void Get_VR_Talk_Question(char* string, int16_t question) {
 			string[out_len++] = data[i];
 	}
 	string[out_len] = '\0';
+	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
 }
 
 static void Get_VR_Talk_Paragraph(char* string, int16_t line) {
@@ -296,7 +299,7 @@ static void Get_VR_Talk_Paragraph(char* string, int16_t line) {
 		return;
 	}
 
-	data = (char*)talk_brief->talk_data[5 * talk_person + qid];
+	data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
 	if (!data)
 		return;
 
@@ -337,6 +340,7 @@ static void Get_VR_Talk_Paragraph(char* string, int16_t line) {
 			pos++;
 		line_idx++;
 	}
+	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
 }
 
 static void Set_VR_Talk_Paragraph(void) {
@@ -355,7 +359,7 @@ static void Set_VR_Talk_Paragraph(void) {
 		return;
 	}
 
-	data = (char*)talk_brief->talk_data[5 * talk_person + qid];
+	data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
 	if (!data)
 		return;
 
@@ -375,6 +379,7 @@ static void Set_VR_Talk_Paragraph(void) {
 
 	num_talk_paragraphs = (max_paragraph_size + line_count - 1) / max_paragraph_size;
 	cur_talk_paragraph = 0;
+	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
 }
 
 static void Set_VR_Talk_To_Text(int16_t person) {

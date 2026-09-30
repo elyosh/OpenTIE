@@ -152,7 +152,7 @@ uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 		name_ptr = (const uint8_t*)(((char**)buoystr)[species_idx - 70]);
 	} else {
 #ifdef TIE_MODERN
-		name_ptr = (const uint8_t*)TieStringTable_SpeciesName(spec_num);
+		name_ptr = (const uint8_t*)spec_name_ptrs[spec_num];
 #else
 		name_ptr = (const uint8_t*)spec_data[spec_num].name_ptr;
 #endif

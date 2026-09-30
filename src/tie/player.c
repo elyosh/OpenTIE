@@ -117,6 +117,8 @@ static BitmapStruct brief_buffer;
 /* Flight group data + briefing state */
 // GLOBAL: TIE95 0xF6EC0
 static EFArrayStruct fgroup;
+// GLOBAL: TIE95 0xFA744
+// GLOBAL: TIE98 0x5886A8
 static EBriefStruct brief;
 
 /* Map display state */
@@ -235,6 +237,8 @@ void player_Last_Torp(void) {
  * Data accessors
  * ================================================================ */
 
+// FUNCTION: TIE95 0x7D8B0
+// FUNCTION: TIE98 0x469930
 EBriefStruct* player_Fetch_Brief(void) { return &brief; }
 
 // FUNCTION: TIE95 0x7D8B8
@@ -511,11 +515,12 @@ void player_Step_Page(int16_t flag) {
 
 				if (!flag) {
 					char text_buf[40];
-					char* src = (char*)brief.text_data[params[0]];
+					char* src = (char*)xmemhdl_Lock_Handle(brief.text_data[params[0]]);
 					if (src) {
 						int16_t text_len;
 
 						strcpy(text_buf, src);
+						xmemhdl_Unlock_Handle(brief.text_data[params[0]]);
 						text_len = (int16_t)strlen(text_buf);
 						if (text_len) {
 							soundext_Play_SFX(sfxText, 0);
@@ -1034,11 +1039,12 @@ void player_Step_Display_Map(void) {
 			case BCMD_SHOW_TEXT0 + 5:
 			case BCMD_SHOW_TEXT0 + 6:
 			case BCMD_SHOW_TEXT7: {
-				char* locked = (char*)brief.text_data[params[0]];
+				char* locked = (char*)xmemhdl_Lock_Handle(brief.text_data[params[0]]);
 				int16_t slot;
 
 				if (locked) {
 					int16_t len = (int16_t)strlen(locked);
+					xmemhdl_Unlock_Handle(brief.text_data[params[0]]);
 					if (len) {
 						soundext_Play_SFX(sfxText, 0);
 						soundext_Fade_SFX(sfxText, 0, 4 * len);
@@ -1250,7 +1256,7 @@ void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t sc
  * ================================================================ */
 
 // FUNCTION: TIE95 0x7F624
-void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
+void player_Draw_Map_Paragraph(Rect* clip, LandruHandle handle, int16_t flag) {
 	Rect text_rect;
 	int16_t avail_width;
 	char* text_data;
@@ -1267,7 +1273,7 @@ void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 	text_rect.bottom = text_rect.top + 10;
 	avail_width = text_rect.right - text_rect.left;
 
-	text_data = (char*)handle;
+	text_data = (char*)xmemhdl_Lock_Handle(handle);
 	if (!text_data)
 		return;
 
@@ -1390,6 +1396,7 @@ void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 	} while (!done);
 
 	xfont_Disable_FontID_Shadow(0);
+	xmemhdl_Unlock_Handle(handle);
 }
 
 /* ================================================================
@@ -1734,11 +1741,12 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 		ty = (int16_t)((brief.text_y[i] - map_center_y) * map_scale_y / 256);
 		screen_y = dst.top + (dst.bottom - dst.top) / 2 + ty;
 
-		text_ptr = (char*)brief.text_data[text_id];
+		text_ptr = (char*)xmemhdl_Lock_Handle(brief.text_data[text_id]);
 
-		if (text_ptr)
+		if (text_ptr) {
 			strcpy(str, text_ptr);
-		else
+			xmemhdl_Unlock_Handle(brief.text_data[text_id]);
+		} else
 			str[0] = 0;
 
 		/* Replace [ ] with color control codes */
@@ -1880,10 +1888,11 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 
 		player_Map_To_Screen_Pos(&ship_rect, brief.text_x[i], brief.text_y[i], &scr_x, &scr_y);
 
-		txt = (char*)brief.text_data[brief.text_id[i]];
-		if (txt)
+		txt = (char*)xmemhdl_Lock_Handle(brief.text_data[brief.text_id[i]]);
+		if (txt) {
 			strcpy(text_buf, txt);
-		else
+			xmemhdl_Unlock_Handle(brief.text_data[brief.text_id[i]]);
+		} else
 			text_buf[0] = 0;
 
 		for (m = 0; text_buf[m]; m++) {
@@ -2175,11 +2184,11 @@ void player_Init_Display_Map(void) {
 
 	/* Allocate text/paragraph/talk data buffers */
 	for (i = 0; i < 32; i++)
-		brief.text_data[i] = calloc(1, 40);
+		brief.text_data[i] = xmemhdl_Alloc_Clear_Handle(40, LANDRU_MEMORY_RESOURCE);
 	for (i = 0; i < 32; i++)
-		brief.para_data[i] = calloc(1, 160);
+		brief.para_data[i] = xmemhdl_Alloc_Clear_Handle(160, LANDRU_MEMORY_RESOURCE);
 	for (i = 0; i < 20; i++)
-		brief.talk_data[i] = calloc(1, 1024);
+		brief.talk_data[i] = xmemhdl_Alloc_Clear_Handle(1024, LANDRU_MEMORY_RESOURCE);
 
 	clear_brief_state();
 
@@ -2191,20 +2200,26 @@ void player_Free_Display_Map(void) {
 	int16_t i;
 	for (i = 0; i < 32; i++) {
 		if (brief.text_data[i]) {
-			free(brief.text_data[i]);
+			xmemhdl_Free_Handle(brief.text_data[i]);
+#ifdef TIE_MODERN
 			brief.text_data[i] = 0;
+#endif
 		}
 	}
 	for (i = 0; i < 32; i++) {
 		if (brief.para_data[i]) {
-			free(brief.para_data[i]);
+			xmemhdl_Free_Handle(brief.para_data[i]);
+#ifdef TIE_MODERN
 			brief.para_data[i] = 0;
+#endif
 		}
 	}
 	for (i = 0; i < 20; i++) {
 		if (brief.talk_data[i]) {
-			free(brief.talk_data[i]);
+			xmemhdl_Free_Handle(brief.talk_data[i]);
+#ifdef TIE_MODERN
 			brief.talk_data[i] = 0;
+#endif
 		}
 	}
 }
@@ -2301,7 +2316,7 @@ void player_Load_Display_Map(void) {
 
 	/* Read text strings */
 	for (i = 0; i < 32; i++) {
-		char* buf = (char*)(uintptr_t)brief.text_data[i];
+		char* buf = (char*)xmemhdl_Lock_Handle(brief.text_data[i]);
 		if (version_flag)
 			TieStorage_Read(&read_len, 2, 1, fp);
 		else
@@ -2310,11 +2325,12 @@ void player_Load_Display_Map(void) {
 			TieStorage_Read(buf, read_len, 1, fp);
 		if (version_flag && buf)
 			buf[read_len] = 0;
+		xmemhdl_Unlock_Handle(brief.text_data[i]);
 	}
 
 	/* Read paragraph strings */
 	for (i = 0; i < 32; i++) {
-		char* buf = (char*)(uintptr_t)brief.para_data[i];
+		char* buf = (char*)xmemhdl_Lock_Handle(brief.para_data[i]);
 		if (version_flag)
 			TieStorage_Read(&read_len, 2, 1, fp);
 		else
@@ -2323,11 +2339,12 @@ void player_Load_Display_Map(void) {
 			TieStorage_Read(buf, read_len, 1, fp);
 		if (version_flag && buf)
 			buf[read_len] = 0;
+		xmemhdl_Unlock_Handle(brief.para_data[i]);
 	}
 
 	/* Read talk strings */
 	for (i = 0; i < 20; i++) {
-		char* buf = (char*)(uintptr_t)brief.talk_data[i];
+		char* buf = (char*)xmemhdl_Lock_Handle(brief.talk_data[i]);
 		if (version_flag)
 			TieStorage_Read(&read_len, 2, 1, fp);
 		else
@@ -2336,6 +2353,7 @@ void player_Load_Display_Map(void) {
 			TieStorage_Read(buf, read_len, 1, fp);
 		if (buf)
 			buf[read_len] = 0;
+		xmemhdl_Unlock_Handle(brief.talk_data[i]);
 	}
 
 	TieStorage_Close(fp);
@@ -2374,11 +2392,11 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 
 	/* Allocate data buffers */
 	for (i = 0; i < 32; i++)
-		brief.text_data[i] = calloc(1, 40);
+		brief.text_data[i] = xmemhdl_Alloc_Clear_Handle(40, LANDRU_MEMORY_RESOURCE);
 	for (i = 0; i < 32; i++)
-		brief.para_data[i] = calloc(1, 160);
+		brief.para_data[i] = xmemhdl_Alloc_Clear_Handle(160, LANDRU_MEMORY_RESOURCE);
 	for (i = 0; i < 20; i++)
-		brief.talk_data[i] = calloc(1, 1024);
+		brief.talk_data[i] = xmemhdl_Alloc_Clear_Handle(1024, LANDRU_MEMORY_RESOURCE);
 
 	clear_brief_state();
 	xrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
@@ -2527,11 +2545,11 @@ void player_Init_Brief_For_Talk(void) {
 	player_Rewind_Page();
 
 	for (i = 0; i < 32; i++)
-		brief.text_data[i] = calloc(1, 40);
+		brief.text_data[i] = xmemhdl_Alloc_Clear_Handle(40, LANDRU_MEMORY_RESOURCE);
 	for (i = 0; i < 32; i++)
-		brief.para_data[i] = calloc(1, 160);
+		brief.para_data[i] = xmemhdl_Alloc_Clear_Handle(160, LANDRU_MEMORY_RESOURCE);
 	for (i = 0; i < 20; i++)
-		brief.talk_data[i] = calloc(1, 1024);
+		brief.talk_data[i] = xmemhdl_Alloc_Clear_Handle(1024, LANDRU_MEMORY_RESOURCE);
 
 	clear_brief_state();
 	xrect_Set_Rect(&map_src_rect, 0, 0, 292, 147);
@@ -2555,20 +2573,26 @@ void player_Free_Brief_Display(void) {
 
 	for (i = 0; i < 32; i++) {
 		if (brief.text_data[i]) {
-			free(brief.text_data[i]);
+			xmemhdl_Free_Handle(brief.text_data[i]);
+#ifdef TIE_MODERN
 			brief.text_data[i] = 0;
+#endif
 		}
 	}
 	for (i = 0; i < 32; i++) {
 		if (brief.para_data[i]) {
-			free(brief.para_data[i]);
+			xmemhdl_Free_Handle(brief.para_data[i]);
+#ifdef TIE_MODERN
 			brief.para_data[i] = 0;
+#endif
 		}
 	}
 	for (i = 0; i < 20; i++) {
 		if (brief.talk_data[i]) {
-			free(brief.talk_data[i]);
+			xmemhdl_Free_Handle(brief.talk_data[i]);
+#ifdef TIE_MODERN
 			brief.talk_data[i] = 0;
+#endif
 		}
 	}
 }

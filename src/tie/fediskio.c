@@ -746,7 +746,10 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 
 	/* Error formatting depends on stringdata; later allocation failures can
 	 * be accumulated and reported after it loads. */
-#ifndef TIE_MODERN
+#ifdef TIE_MODERN
+	if (!TieStringTable_Allocate())
+		fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
+#else
 	stringdatahandle = xmemhdl_Alloc_Handle(16000, LANDRU_MEMORY_DEFAULT);
 	if (!stringdatahandle)
 		fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
@@ -991,22 +994,16 @@ void fediskio_FreeFlightHandles(void) {
 // FUNCTION: TIE95 0x215B0
 // FUNCTION: TIE98 0x41B300
 void fediskio_loadstringdata(int read_file) {
-#ifndef TIE_MODERN
 	int i;
-#endif
 	char** base_pp;
 
 #ifdef TIE_MODERN
 	if (read_file) {
-		fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, "strings.dat", "rb", 1);
-		/* Cells 685..694 contain the ten wingman commands. */
-		base_pp = TieStringTable_Read(fileptr, 695);
-		fediskio_tryclosefile(0);
+		fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "strings.dat", TieStringTable_Data());
+		base_pp = TieStringTable_Resolve();
 	} else {
 		base_pp = TieStringTable_Current();
 	}
-	if (!base_pp)
-		shell_programexit("Error! Unable to load STRINGS.DAT.\n");
 #else
 	base_pp = (char**)xmemhdl_Lock_Handle(stringdatahandle);
 	if (read_file) {
@@ -1081,10 +1078,13 @@ void fediskio_loadstringdata(int read_file) {
 
 	/* Retail cells 615..683 name the 69 species; the following cells
 	 * contain the film label and the wingman command table. */
-#ifndef TIE_MODERN
-	for (i = 0; i < NUM_SPEC_DATA; i++)
+	for (i = 0; i < NUM_SPEC_DATA; i++) {
+#ifdef TIE_MODERN
+		spec_name_ptrs[i] = base_pp[615 + i];
+#else
 		spec_data[i].name_ptr = base_pp[615 + i];
 #endif
+	}
 	viewfilmstr = base_pp[684];
 	wingmanstrings = (const char**)(base_pp + 685);
 #ifndef TIE_MODERN

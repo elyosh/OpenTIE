@@ -40,6 +40,7 @@
 #include "landru/inpattr.h"
 #include "landru/input.h"
 #include "landru/io.h"
+#include "landru/memhdl.h"
 #include "landru/paint.h"
 #include "landru/pal.h"
 #include "landru/rect.h"
@@ -162,15 +163,16 @@ int16_t talk_Get_Officer_Mood(void) { return officer_mood_val[0]; }
  * Check_Talk_Questions — scan talk data for visibility conditions
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x696A8
 static void Check_Talk_Questions(void) {
 	int16_t slot_idx = 0;
 
 	do {
-		uint16_t handle = (uint16_t)(uintptr_t)talk_brief->talk_data[5 * talk_mode + slot_idx];
+		LandruHandle handle = talk_brief->talk_data[5 * talk_mode + slot_idx];
 		int16_t status = 0;
 
 		if (handle) {
-			char* data = (char*)talk_brief->talk_data[5 * talk_mode + slot_idx];
+			char* data = (char*)xmemhdl_Lock_Handle(handle);
 			int16_t pos = 0;
 			if (data[0]) {
 				status = 1;
@@ -186,6 +188,8 @@ static void Check_Talk_Questions(void) {
 				}
 			}
 		}
+		if (handle)
+			xmemhdl_Unlock_Handle(handle);
 		talk_win_status[slot_idx] = status;
 		slot_idx++;
 	} while (slot_idx < 5);
@@ -809,7 +813,7 @@ void talk_Get_Talk_Question(char* out, int16_t id) {
 			strcpy(out, textext_Get_Text(txtTalkDebrief));
 			return;
 		}
-		data = (char*)talk_brief->talk_data[5 * talk_mode + question_id];
+		data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_mode + question_id]);
 		if (data) {
 			int16_t buf_len = 0;
 			int16_t i;
@@ -824,6 +828,7 @@ void talk_Get_Talk_Question(char* out, int16_t id) {
 		} else {
 			*out = '\0';
 		}
+		xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_mode + question_id]);
 	} else if (talk_win_id[id] == 6) {
 		strcpy(out, textext_Get_Text(txtTalkExit));
 	}
@@ -902,7 +907,7 @@ void talk_Get_Talk_Paragraph(char* out, int16_t line) {
 	}
 
 	/* Normal talk data: parse line-by-line */
-	data = (char*)talk_brief->talk_data[5 * talk_mode + question_id];
+	data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_mode + question_id]);
 	if (!data)
 		return;
 
@@ -947,6 +952,7 @@ void talk_Get_Talk_Paragraph(char* out, int16_t line) {
 			pos++;
 		line_idx++;
 	}
+	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_mode + question_id]);
 }
 
 /* ======================================================================
@@ -972,7 +978,7 @@ void talk_Set_Talk_Paragraph(void) {
 		return;
 	}
 
-	data = (char*)talk_brief->talk_data[5 * talk_mode + question_id];
+	data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_mode + question_id]);
 	if (!data) {
 		cur_talk_paragraph = -1;
 		num_talk_paragraphs = 0;
@@ -996,6 +1002,7 @@ void talk_Set_Talk_Paragraph(void) {
 
 	num_talk_paragraphs = (max_paragraph_size + line_count - 1) / max_paragraph_size;
 	cur_talk_paragraph = num_talk_paragraphs ? 0 : -1;
+	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_mode + question_id]);
 }
 
 /* ======================================================================
@@ -1157,7 +1164,7 @@ static void iuser_Talk(Input* input, int32_t time) {
 					cur_talk_paragraph = 0;
 				} else {
 					/* Count lines in talk data */
-					char* data = (char*)talk_brief->talk_data[5 * talk_mode + qid];
+					char* data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_mode + qid]);
 					int16_t pos = 0;
 					int16_t line_count;
 
@@ -1172,6 +1179,7 @@ static void iuser_Talk(Input* input, int32_t time) {
 							pos++;
 						line_count++;
 					}
+					xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_mode + qid]);
 					num_talk_paragraphs = (max_paragraph_size + line_count - 1) / max_paragraph_size;
 					cur_talk_paragraph = num_talk_paragraphs ? 0 : -1;
 				}
@@ -1240,7 +1248,7 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 			strcpy(question_buf, textext_Get_Text(txtTalkDebrief));
 		} else {
 			/* Extract question title from talk data */
-			char* data = (char*)talk_brief->talk_data[5 * talk_mode + qid];
+			char* data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_mode + qid]);
 			if (data) {
 				int16_t len = 0;
 				int16_t i;
@@ -1255,6 +1263,7 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 			} else {
 				question_buf[0] = '\0';
 			}
+			xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_mode + qid]);
 		}
 		xfont_Print_Clipped_Text(question_buf, tr.left + 3, y_offset + tr.top + 2, 0, color);
 		y_offset += 10;
