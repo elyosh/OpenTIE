@@ -1,9 +1,12 @@
 #include "tie/shellext.h"
 #include "tie/asl.h"
+#include "tie/computer.h"
 #include "tie/shell.h"
 #include "tie/tie.h"
 #include "tie_runtime/audio/imuse_session.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/runtime/computer_task.h"
+#endif
 
 #include "landru/actanim.h"
 #include "landru/actor.h"
@@ -142,36 +145,15 @@ void shellext_Open_Landru_Scene(int16_t scene) {
 	xerror_Set_Landru_Escape_Function(shellext_escape_TIE);
 	sHead_gbl->cur_scene = scene;
 	sHead_gbl->sudden_end = 0;
-	/* Snapshot scene tagging is NOT reset here. shell_dispatch_converted
-	 * pushes the scene task (which calls e.g. TieFilm_Begin →
-	 * set_scene_kind(CUTSCENE), or a non-cutscene scene's Push that
-	 * tags itself) BEFORE shellext_Open_Landru_Scene runs — see
-	 * shell.c:439-451. Resetting here would clobber the push-time
-	 * tags. Cleanup (clearing stale tags from the prior scene)
-	 * happens in shellext_Begin_Close_Landru_Scene + each scene's
-	 * end path, which run BEFORE the next scene's push. */
+	/* The shell preserves scene tags until the outgoing fade completes. */
 	soundext_Open_Sound_Scene(scene);
 	textext_Open_Text_Ext_Scene(scene);
 }
 
-/* Close-scene step 1: text + sound teardown, last_scene stamp. Caller
- * (shell task) inspects the returned `out_sudden_end` flag — when 1,
- * caller is responsible for pushing shellext_Push_Sudden_Scene_Fade_Task
- * + yielding before calling shellext_Finalize_Close_Landru_Scene to
- * land the screen-diff copy. The synchronous bridge function it
- * replaces had been called from inside ShellTask::step's AWAITING
- * phase, so the caller-task can push and yield naturally. */
-void shellext_Begin_Close_Landru_Scene(int16_t scene, int16_t* out_sudden_end) {
+// FUNCTION: TIE95 0x65F71
+// FUNCTION: TIE98 0x480550
+void shellext_Close_Landru_Scene(int16_t scene) {
 	int16_t next_scene;
-
-	/* Snapshot scene tags are NOT cleared here. The closing scene's
-	 * bundle MUST stay active throughout XFADE's transition fade
-	 * (which animates the classic FB) — without it, the HD overlay
-	 * drops mid-fade and the user sees the classic fading-out of the
-	 * old scene. Tags get reset by the shell's main dispatcher right
-	 * before the next scene's Push runs, so the next scene either
-	 * inherits a clean default or overrides as needed. See
-	 * shell_task_step in shell.c for the clear point. */
 	textext_Close_Text_Ext_Scene(scene);
 	next_scene = xerror_Get_Landru_Exit();
 	if (scene != 270 && ((uint16_t)next_scene >= 2u && ((uint16_t)next_scene <= 4u || next_scene == 290)))
@@ -179,13 +161,15 @@ void shellext_Begin_Close_Landru_Scene(int16_t scene, int16_t* out_sudden_end) {
 	soundext_Close_Sound_Scene(scene, next_scene);
 	sHead_gbl->last_scene = scene;
 
-	if (out_sudden_end)
-		*out_sudden_end = sHead_gbl->sudden_end;
+#ifdef TIE_MODERN
+	if (sHead_gbl->sudden_end)
+		shellext_Push_Sudden_Scene_Fade_Task();
+#else
+	if (sHead_gbl->sudden_end)
+		shellext_Sudden_Scene_Fade();
+	xcanvas_Copy_Screen_To_Diff();
+#endif
 }
-
-/* Close-scene step 2: stage the screen-diff copy. Run after any
- * sudden-end fade pushed by the caller has popped. */
-void shellext_Finalize_Close_Landru_Scene(void) { xcanvas_Copy_Screen_To_Diff(); }
 
 // FUNCTION: TIE95 0x66006
 ResFile* shellext_Open_Empire_Resource(const char* filename) {
@@ -290,19 +274,14 @@ void shellext_Push_Sudden_Scene_Fade_Task(void) {
 
 // FUNCTION: TIE95 0x66526
 int16_t shellext_escape_TIE(void) {
-	/* ESC key handler: outside an active dialog/fade and once a view
-	 * has accumulated time, push the in-flight Computer dialog
-	 * task. The escape callback runs synchronously inside an input
-	 * poll and cannot wait on the dialog; computer_Push_Computer_
-	 * Dialog_Task pushes the task on the tie_core stack and the
-	 * dialog itself calls xerror_Set_Landru_Exit on its way out
-	 * (whose value xerror_Do_Landru_Escape would otherwise have
-	 * stored from a synchronous return). We return -1 so the
-	 * escape mechanism leaves landru_exit_gbl alone — the dialog's
-	 * exit value already populated it. */
+	/* Native dialog completion writes the exit latch after the wait. */
 	if (!xdialog_Is_Active_Dialog() && !xfade_Fade_Active() && xview_Get_View_Time() > 0) {
+#ifdef TIE_MODERN
 		TieComputer_Begin();
 		return -1;
+#else
+		return computer_Do_Computer_Dialog();
+#endif
 	}
 	return xerror_Get_Landru_Exit();
 }

@@ -54,7 +54,9 @@ void gate_updategateanimations(void);
 /* PORT: Check only course progression. Unlocked flight timing calls this
  * when compatibility-cadence mesh animation is skipped so no one-tick
  * player sweep can be lost. The recovered animation function also calls it. */
+#ifdef TIE_MODERN
 void gate_updatecourseprogress(void);
+#endif
 
 /*
  * Draw one training gate into the 3D scene. obj_idx is the FlightObject slot

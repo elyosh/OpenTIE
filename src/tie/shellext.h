@@ -165,13 +165,9 @@ void shellext_Open_Landru_Scene(int16_t scene);
 #ifndef TIE_MODERN
 /* Original synchronous entry; shared Landru loop recovery is pending. */
 void shellext_Handle_TIE_View(void);
+void shellext_Sudden_Scene_Fade(void);
 #endif
-/* Two-step scene close: shell task calls Begin to drain text/sound
- * scenes and read out the sudden_end flag, then optionally pushes
- * shellext_Push_Sudden_Scene_Fade_Task and yields, and finally calls
- * Finalize on its post-fade phase to land the screen-diff copy. */
-void shellext_Begin_Close_Landru_Scene(int16_t scene, int16_t* out_sudden_end);
-void shellext_Finalize_Close_Landru_Scene(void);
+void shellext_Close_Landru_Scene(int16_t scene);
 ResFile* shellext_Open_Empire_Resource(const char* filename);
 LandruFile* shellext_Open_Empire_File(const char* filename, const char* mode);
 int16_t shellext_Check_Cur_Scene(int16_t current_scene);

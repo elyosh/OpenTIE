@@ -1610,6 +1610,7 @@ extern void* savebox;
 extern void* restorebox;
 
 /* Per-frame engine driver. Native mission scheduling is runtime-owned. */
+void tie_simulator(int replay_mode);
 #ifdef TIE_MODERN
 void tie_start_tie98_mission_music(void);
 #endif

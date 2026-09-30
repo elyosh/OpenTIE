@@ -1,6 +1,13 @@
 /* Flight-engine globals and per-frame driver. */
 
 #include "tie/tie.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/flight_task.h"
+#include "tie_runtime/runtime/inflight_info_task.h"
+#include "tie_runtime/runtime/replay_session_task.h"
+#include "tie_runtime/snapshot/snapshot_internal.h"
+#include "tie_runtime/timing/sim_clock.h"
+#endif
 #include "tie/anim.h"
 #include "tie/backdrp2.h"
 #include "tie/cdaudio_tie98.h"
@@ -76,6 +83,11 @@
 #include "tie_runtime/timing/replay_timing.h"
 #include "util/binio.h"
 
+#ifndef TIE_MODERN
+#include <conio.h>
+#else
+#include <landru/task.h>
+#endif
 #include <imuse/filelist.h>
 #include <imuse/hilevel.h>
 #include <imuse/lolevel.h>
@@ -1780,8 +1792,10 @@ static void tie_run_animation(TieFlightCadence cadence) {
 		/* PORT: Player movement still advances on unlocked ticks. Keep the
 		 * gate-plane check at that cadence while mesh animation remains on
 		 * the recovered compatibility cadence. */
+#ifdef TIE_MODERN
 		if (TieFlightTiming_IsHighRate() && mission.train_craft_type)
 			gate_updatecourseprogress();
+#endif
 		return;
 	}
 	if (!TieFlightTiming_IsHighRate()) {
@@ -2713,4 +2727,567 @@ static void tie_updatescreen_tie95(void) {
 
 	/* Signal that the application must upload the classic framebuffer. */
 	vesa_dirty_gbl = true;
+}
+
+// FUNCTION: TIE95 0x55A60
+// FUNCTION: TIE98 0x48CF10
+void tie_simulator(int replay_mode) {
+	uint8_t saved_drawbackdrop;
+	uint8_t saved_drawdebris;
+	uint16_t saved_master_vol;
+	bool post_mission_ui;
+	int16_t i;
+#ifdef TIE_MODERN
+	TieSimulatorTask* continuation = landru_task_top();
+	const bool tie98_display = TieClassicDisplay_UsesDx5();
+	const bool tie98_logic = TieProfile_UsesTie98Logic();
+	saved_drawbackdrop = continuation->saved_drawbackdrop;
+	saved_drawdebris = continuation->saved_drawdebris;
+	saved_master_vol = continuation->saved_master_vol;
+	post_mission_ui = continuation->post_mission_ui;
+	if (continuation->phase == TIE_SIM_PHASE_INIT)
+#elif defined(TIE98)
+	const bool tie98_display = true;
+	const bool tie98_logic = true;
+#else
+	const bool tie98_display = false;
+	const bool tie98_logic = false;
+#endif
+	{
+#ifdef TIE_MODERN
+		if (!TieFlightRuntime_PrepareSimulator(replay_mode)) {
+			continuation->next_step = LANDRU_TASK_STEP_DONE;
+			return;
+		}
+#endif
+		deadflag_EB76C = 0;
+		deadflag_EB774 = 1;
+		maingameflag = 0;
+#ifdef TIE_MODERN
+		replaymaxcnt = (int32_t)TieFlightTiming_RecordFrameLimit();
+#else
+		replaymaxcnt = 0x20000;
+#endif
+		panels_in_ems = 0;
+		blastcount = 0;
+#ifdef TIE_MODERN
+		g_engineSoundPreviousPlayerSpecies = -1;
+#endif
+		rotscale_linedata_built = 0;
+		replayspoolflag = 1;
+
+		tie_initflightresolution();
+		rtsvga2_blankVGA();
+		if (tie98_display)
+			FlightSurface_Lock();
+		rtsvga2_initgraphVGA();
+		if (tie98_display) {
+			FlightSurface_Unlock();
+		}
+		feinput_setupgraphics(3u);
+
+		graphicsinit = 1;
+		colorcycleflag = 1;
+		palette_cycle_user = 1;
+		colorcycleuserflag = 1;
+
+		if (tie98_display) {
+			maingameflag = 1;
+			FlightSurface_Lock();
+		}
+		fediskio_Init_Buffers_and_Fonts();
+		if (tie98_display) {
+			FlightSurface_Unlock();
+			maingameflag = 0;
+			FrontendDisplay_BlitOffscreenToRenderSurface();
+			FrontendDisplay_PresentFrame();
+		}
+		mapiconsloaded = 0;
+		if (!tie98_logic) {
+			fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "VGA.PAC", xtransdataptr);
+			buildpalette(xtransdataptr, 64, 192);
+		}
+		if (tie98_display)
+			FlightSurface_Lock();
+		feinput_setupinputdevices();
+		if (tie98_display)
+			FlightSurface_Unlock();
+
+		if (special_features_flag) {
+			if (missionfilename[0] == 't')
+				mission.train_craft_type_src = 5;
+			else
+				mission.train_craft_type_src = 0;
+		}
+
+		for (i = 0; i < 511; i += 2) {
+
+			do {
+				stars[i] = (uint8_t)(rand_rand() & 0x7F);
+			} while (stars[i] > 0x7C);
+			stars[i + 1] = (uint8_t)(rand_rand() & 3);
+		}
+
+		starcol1 = 0;
+		lightX = 18000;
+		lightY = -18000;
+
+		lightZ = tie98_logic ? 18000 : -18000;
+		colorcycleflag = 1;
+#ifdef TIE_MODERN
+		TieInflightOptions_Apply();
+#else
+		option_optionsroom(1);
+#endif
+#ifdef TIE_MODERN
+		shipdetailvalue = -1;
+		shipdetailpolycnt = 16;
+#endif
+
+		if (replay_mode) {
+			gamesnd_game_Open_iMuse();
+			hyperspaceflag = 0;
+			entercombatflag = 0;
+			colorcycleuserflag = 0;
+			if (tie98_display) {
+#ifdef TIE_MODERN
+				Tie98StarColors_Invalidate();
+#endif
+				FlightSurface_Lock();
+				worldeyeA1 = 0;
+				worldeyeA2 = 0;
+				worldeyeA3 = 0;
+				worldeyeB1 = 0;
+				worldeyeB2 = 0;
+				worldeyeB3 = 0;
+				worldeyeC1 = 0;
+				worldeyeC2 = 0;
+				worldeyeC3 = 0;
+				pixelswide = 0;
+				pixelsdeep = 0;
+				rtsvga2_drawstars_tie98();
+				FlightSurface_Unlock();
+			}
+#ifdef TIE_MODERN
+			TieReplaySession_Begin();
+			continuation->phase = TIE_SIM_PHASE_AFTER_REPLAY_VIEWER;
+			return;
+#else
+			replayio_replayscreen();
+#endif
+		} else {
+			maingameflag = 1;
+			fediskio_createpilotrecord();
+
+			lasthistorymsg = -1;
+			numhistorymsgs = 0;
+			panelflag = 0;
+			replayavailable = 0;
+
+			if (tie98_display)
+				FlightSurface_Lock();
+			create_loadmission(missionfilename);
+			if (tie98_display) {
+				FlightSurface_Unlock();
+				FrontendDisplay_BlitOffscreenToRenderSurface();
+				FrontendDisplay_PresentFrame();
+			}
+			fediskio_loadspecies();
+			gamesnd_game_Open_iMuse();
+			if (tie98_display) {
+#ifdef TIE_MODERN
+				Tie98StarColors_Invalidate();
+#endif
+				FlightSurface_Lock();
+				worldeyeA1 = 0;
+				worldeyeA2 = 0;
+				worldeyeA3 = 0;
+				worldeyeB1 = 0;
+				worldeyeB2 = 0;
+				worldeyeB3 = 0;
+				worldeyeC1 = 0;
+				worldeyeC2 = 0;
+				worldeyeC3 = 0;
+				pixelswide = 0;
+				pixelsdeep = 0;
+				rtsvga2_drawstars_tie98();
+				FlightSurface_Unlock();
+			}
+
+#ifdef TIE_MODERN
+			continuation->loadscreen_shown_us = TieSimClock_NowUs();
+			continuation->phase = TIE_SIM_PHASE_LOADSCREEN_HOLD;
+			continuation->next_step = LANDRU_TASK_STEP_YIELD;
+			return;
+#endif
+		}
+	}
+#ifdef TIE_MODERN
+	if (continuation->phase == TIE_SIM_PHASE_AFTER_REPLAY_VIEWER) {
+		continuation->phase = TIE_SIM_PHASE_TEARDOWN;
+		return;
+	}
+#endif
+	if (!replay_mode) {
+#ifdef TIE_MODERN
+		if (continuation->phase == TIE_SIM_PHASE_LOADSCREEN_HOLD ||
+			continuation->phase == TIE_SIM_PHASE_AFTER_HYPER)
+#endif
+		{
+#ifdef TIE_MODERN
+			if (continuation->phase == TIE_SIM_PHASE_LOADSCREEN_HOLD) {
+				if (TieSimClock_NowUs() - continuation->loadscreen_shown_us < TIE_SIM_LOADSCREEN_MIN_US) {
+					continuation->next_step = LANDRU_TASK_STEP_YIELD;
+					return;
+				}
+#endif
+				if (pstate.player_fg_idx < 48 && !fg_array[pstate.player_fg_idx].start_fg_used &&
+					transitions_on && spec_data[pstate.player_spec_num].has_hyperdrive) {
+					saved_drawbackdrop = drawbackdropflag;
+					saved_drawdebris = drawdebrisflag;
+					if (tie98_display)
+						FlightSurface_Lock();
+					create_createhyperin();
+					if (tie98_display)
+						FlightSurface_Unlock();
+					hyperspaceflag = 2;
+					colorcycleuserflag = 0;
+					drawbackdropflag = 0;
+					drawdebrisflag = 0;
+					anim_dohyperspace();
+#ifdef TIE_MODERN
+					continuation->saved_drawbackdrop = saved_drawbackdrop;
+					continuation->saved_drawdebris = saved_drawdebris;
+					continuation->phase = TIE_SIM_PHASE_AFTER_HYPER;
+					TieFlightRuntime_BeginHyperspace();
+					return;
+#else
+				while (hyperspaceflag)
+					tie_doframe();
+				drawbackdropflag = saved_drawbackdrop;
+				drawdebrisflag = saved_drawdebris;
+				species_table[114].load_flags &= ~0x10u;
+				species_table[115].load_flags &= ~0x10u;
+				species_table[116].load_flags &= ~0x10u;
+				hyperspaceflag = 0;
+				if (tie98_display)
+					FlightSurface_Lock();
+				create_loadmission(missionfilename);
+				if (tie98_display)
+					FlightSurface_Unlock();
+#endif
+				}
+#ifdef TIE_MODERN
+			}
+			if (continuation->phase == TIE_SIM_PHASE_AFTER_HYPER) {
+				drawbackdropflag = saved_drawbackdrop;
+				drawdebrisflag = saved_drawdebris;
+				species_table[114].load_flags &= ~0x10u;
+				species_table[115].load_flags &= ~0x10u;
+				species_table[116].load_flags &= ~0x10u;
+				hyperspaceflag = 0;
+				if (tie98_display)
+					FlightSurface_Lock();
+				create_loadmission(missionfilename);
+				if (tie98_display)
+					FlightSurface_Unlock();
+			}
+#endif
+
+			if (tie98_display)
+				FlightSurface_Lock();
+#ifdef TIE_MODERN
+			TIE_FLIGHT_TRACE_BEGIN_MISSION(missionfilename);
+#endif
+			create_createmission();
+#ifdef TIE_MODERN
+			TieFlightRuntime_ResetTiming();
+#endif
+			if (tie98_display) {
+				FlightSurface_Unlock();
+				FrontendDisplay_BlitOffscreenToRenderSurface();
+				FrontendDisplay_PresentFrame();
+				FrontendDisplay_BlitOffscreenToRenderSurface();
+			}
+
+			colorcycleuserflag = 0;
+			if (mission.train_craft_type) {
+				if (tie98_display)
+					FlightSurface_Lock();
+				gate_createtraininggates();
+				gate_settraininglevel(mission.train_level);
+				if (tie98_display)
+					FlightSurface_Unlock();
+			}
+#ifdef TIE_MODERN
+			TIE_FLIGHT_TRACE_MISSION_CREATED();
+#endif
+
+			if (pstate.player_fg_idx < 48 && !fg_array[pstate.player_fg_idx].start_fg_used &&
+				spec_data[pstate.player_spec_num].has_hyperdrive)
+				msg_messageprintf(MSG_HYPER_COMPLETED);
+
+			if (mission.train_craft_type && mission.train_level > 1u) {
+				argtable[0] = (uint16_t)(mission.train_level - 1);
+				msg_messageprintf(MSG_BONUS_PRIOR_LEVELS);
+
+				mission.mission_score = 10000 * ((int)mission.train_level - 1);
+			}
+
+#ifdef TIE_MODERN
+			if (TieMusicPolicy_UsesTie98())
+				tie_start_tie98_mission_music();
+			continuation->phase = TIE_SIM_PHASE_AFTER_MISSION;
+			TieFlightTask_BeginMission();
+			return;
+#else
+#ifdef TIE98
+			{
+				cdmusic_switch_latched = 0;
+				if (CDAUDIO_Open_Device()) {
+					const int start = rand_rand() & 3;
+					CDAUDIO_Set_Volume((uint16_t)(0xFFFF * inflight_music_vol / 16));
+					CDAUDIO_Play_Track(2, cdmusic_start_min[start], cdmusic_start_sec[start]);
+					cdmusic_ms_remaining = CDAUDIO_Track_Length_Ms(2) -
+										   1000 * (cdmusic_start_sec[start] + 60 * cdmusic_start_min[start]);
+					cdmusic_last_ms = TieMusicPolicy_NowMs();
+					cdmusic_kind = 2;
+				} else {
+					cdmusic_ms_remaining = INT32_MAX;
+					cdmusic_kind = 0;
+				}
+			}
+#endif
+			do {
+				tickcounter += xtimer_time_elapsed();
+			} while (!tickcounter);
+			while (!mission.end_flag)
+				tie_doframe();
+#endif
+		}
+#ifdef TIE_MODERN
+		if (continuation->phase == TIE_SIM_PHASE_AFTER_MISSION) {
+			TIE_FLIGHT_TRACE_END_MISSION();
+			if (TieMusicPolicy_UsesTie98())
+				CDAUDIO_Close_Device();
+#else
+#ifdef TIE98
+		CDAUDIO_Close_Device();
+#endif
+		{
+#endif
+			post_mission_ui = mission.player_status < 10u || mission.end_flag == 2;
+#ifdef TIE_MODERN
+			continuation->post_mission_ui = post_mission_ui;
+#endif
+			if (post_mission_ui) {
+				pstate.post_mission_shield_q4 =
+					(uint8_t)((int)math2_percentage(pstate.player_craft->hull_damage,
+													pstate.player_craft->hull_max) >>
+							  14);
+				if (mission.end_flag == 2)
+					mission.player_status = 3;
+				blank();
+#ifdef TIE_MODERN
+				if (replayavailable) {
+					continuation->saved_master_vol = (uint16_t)imuse_get_master_vol(im);
+					continuation->previous_screen =
+						TieFlightScreen_SetActive(TIE_FLIGHT_SCREEN_REPLAY_PROMPT);
+					continuation->phase = TIE_SIM_PHASE_PROMPT_RENDER;
+					return;
+				}
+#endif
+			} else {
+				blank();
+#ifdef TIE_MODERN
+				continuation->phase = TIE_SIM_PHASE_TEARDOWN;
+				return;
+#endif
+			}
+		}
+		if (post_mission_ui) {
+#ifdef TIE_MODERN
+			if (continuation->phase == TIE_SIM_PHASE_PROMPT_RENDER ||
+				continuation->phase == TIE_SIM_PHASE_PROMPT_POLL ||
+				continuation->phase == TIE_SIM_PHASE_PROMPT_AFTER_VIEWER)
+#else
+			if (replayavailable)
+#endif
+			{
+#ifdef TIE_MODERN
+				if (continuation->phase == TIE_SIM_PHASE_PROMPT_RENDER)
+#else
+				saved_master_vol = (uint16_t)imuse_get_master_vol(im);
+#endif
+				{
+					int32_t margin = screenXRes / 10;
+					int32_t right = screenXRes - margin;
+					int32_t top;
+					int32_t bottom;
+					imuse_set_master_vol(im, 0);
+					imuse_pause(im);
+					if (tie98_display)
+						FlightSurface_Lock();
+					festring_setfontsize(1);
+					top = (screenYRes >> 1) - (int32_t)fontheight - (screenYRes >> 3);
+					bottom = top + 2 * (int32_t)fontheight;
+					festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
+					festring_setbackcolor(0x40);
+					clearwindow();
+					festring_setbound((int16_t)(margin - 1), (int16_t)(top - 1), (int16_t)(right + 1),
+									  (int16_t)(bottom + 1));
+					festring_setbackcolor(0x4A);
+					clearwindow();
+					festring_setbound((int16_t)margin, (int16_t)top, (int16_t)right, (int16_t)bottom);
+					festring_setbackcolor(0x40);
+					clearwindow();
+					festring_settextcolor(0x43);
+					festring_setdropcolor(0x41);
+					festring_setcursor((int16_t)(margin + 1), (int16_t)(top + (int32_t)fontheight / 2));
+					festring_outstringcenter((const uint8_t*)viewfilmstr);
+					unblank();
+					if (tie98_display) {
+						FlightSurface_Unlock();
+						FrontendDisplay_BlitOffscreenToRenderSurface();
+						FrontendDisplay_PresentFrame();
+					}
+#ifdef TIE_MODERN
+					continuation->phase = TIE_SIM_PHASE_PROMPT_POLL;
+					return;
+#endif
+				}
+#ifdef TIE_MODERN
+				if (continuation->phase == TIE_SIM_PHASE_PROMPT_POLL)
+#endif
+				{
+					int ch;
+					for (;;) {
+#ifdef TIE_MODERN
+						if (!TieInput_KeyPending()) {
+							continuation->next_step = LANDRU_TASK_STEP_YIELD;
+							return;
+						}
+						ch = TieInput_ReadKey();
+#elif defined(TIE98)
+						ch = FlightInput_GetChar();
+#else
+					ch = (char)getch();
+#endif
+						if (ch == 'y' || ch == 'Y') {
+							blank();
+							imuse_set_master_vol(im, saved_master_vol);
+							imuse_resume(im);
+#ifdef TIE_MODERN
+							TieReplaySession_Begin();
+							continuation->phase = TIE_SIM_PHASE_PROMPT_AFTER_VIEWER;
+							return;
+#else
+#ifdef TIE98
+							imuse_stop_all_sounds(im);
+#endif
+							replayio_replayscreen();
+							blank();
+							break;
+#endif
+						}
+						if (ch == 'n' || ch == 'N') {
+							imuse_set_master_vol(im, saved_master_vol);
+							imuse_resume(im);
+							imuse_stop_all_sounds(im);
+							break;
+						}
+#ifdef TIE_MODERN
+						return;
+#endif
+					}
+#ifdef TIE_MODERN
+					TieFlightScreen_SetActive(continuation->previous_screen);
+					continuation->phase = TIE_SIM_PHASE_AFTER_REPLAY_PROMPT;
+					return;
+#endif
+				}
+#ifdef TIE_MODERN
+				if (continuation->phase == TIE_SIM_PHASE_PROMPT_AFTER_VIEWER) {
+					blank();
+					TieFlightScreen_SetActive(continuation->previous_screen);
+					continuation->phase = TIE_SIM_PHASE_AFTER_REPLAY_PROMPT;
+					return;
+				}
+#endif
+			}
+#ifdef TIE_MODERN
+			if (continuation->phase == TIE_SIM_PHASE_AFTER_MISSION ||
+				continuation->phase == TIE_SIM_PHASE_AFTER_REPLAY_PROMPT)
+#endif
+			{
+				if (!mission.train_craft_type) {
+#ifdef TIE_MODERN
+					TieInflightInfo_Begin(0);
+					continuation->phase = TIE_SIM_PHASE_AFTER_INFOROOM;
+					return;
+#else
+					user_inflightinfo(0);
+					blank();
+#endif
+				}
+				if (mission.player_status == 3)
+					fediskio_updatepilotrecord(0, 0);
+#ifdef TIE_MODERN
+				continuation->phase = TIE_SIM_PHASE_TEARDOWN;
+				return;
+#endif
+			}
+#ifdef TIE_MODERN
+			if (continuation->phase == TIE_SIM_PHASE_AFTER_INFOROOM) {
+				blank();
+				if (mission.player_status == 3)
+					fediskio_updatepilotrecord(0, 0);
+				continuation->phase = TIE_SIM_PHASE_TEARDOWN;
+				return;
+			}
+#endif
+		}
+	}
+#ifdef TIE_MODERN
+	TieFlightTiming_EndSession();
+#endif
+	imuse_stop_all_sounds(im);
+	imuse_filelist_unload_all(im);
+	if (tie98_logic) {
+		colorcycleflag = 0;
+		fediskio_FreeFlightHandles();
+#ifdef TIE_MODERN
+		TieFlightRuntime_ReleaseRecoveredResources();
+#endif
+		maingameflag = 0;
+		gamesnd_Transition_Sound();
+#ifdef TIE_MODERN
+		if (!TieClassicDisplay_ActivateFrontend()) {
+			xerror_Set_Landru_Error(12);
+			continuation->next_step = LANDRU_TASK_STEP_DONE;
+			return;
+		}
+#else
+		if (flightResolution != frontResolution)
+			xvesa_Enter_VESA_Mode((uint16_t)frontResolution);
+#endif
+		rtsvga2_clearflightdisplay();
+	} else {
+		gamesnd_Transition_Sound();
+		colorcycleflag = 0;
+		fediskio_FreeFlightHandles();
+#ifdef TIE_MODERN
+		TieFlightRuntime_ReleaseRecoveredResources();
+		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
+			maingameflag = 0;
+		if (!TieClassicDisplay_ActivateFrontend())
+			xerror_Set_Landru_Error(12);
+#else
+		if (flightResolution != frontResolution)
+			xvesa_Enter_VESA_Mode((uint16_t)frontResolution);
+#endif
+	}
+#ifdef TIE_MODERN
+	continuation->next_step = LANDRU_TASK_STEP_DONE;
+#endif
 }

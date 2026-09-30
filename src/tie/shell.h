@@ -20,6 +20,8 @@ extern int16_t digital_exists;
 extern uint8_t install_cfg_mode;
 #endif
 
+int32_t shell_Shell(int32_t scene, int32_t script);
+
 void shell_programexit(const char* str) __attribute__((noreturn));
 
 #ifdef __cplusplus

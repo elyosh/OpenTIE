@@ -2120,9 +2120,7 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 #endif
 	}
 #endif
-	/* Default redraw model (INCREMENTAL) is correct for register
-	 * — dirty-rect refresh, persistent RT. No explicit setter
-	 * needed; left as-is from shellext_Begin_Close_Landru_Scene. */
+	/* Registration uses the default incremental redraw model. */
 
 	xfilm_Set_Film_Def_Palette(register_film, scene_head->def_palette);
 
