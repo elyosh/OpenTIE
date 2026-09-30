@@ -19,7 +19,7 @@ int16_t msgroom_scrollmsgs(int16_t cur_idx, int16_t delta);
 extern int16_t lasthistorymsg;          /* newest ring slot (-1 = empty) */
 extern uint16_t numhistorymsgs;         /* saturating msg count (<= 300) */
 extern int32_t msgsPerPage;             /* msgs per info-panel page (14 hi-res / 16 low-res) */
-extern MsgHistoryEntry* messagehistory; /* pointer to the 300-slot ring */
+extern MsgHistoryEntry* messagehistory; /* locked messageloghandle: 300-slot ring */
 
 int32_t msgroom_messageroom(void);
 

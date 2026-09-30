@@ -864,120 +864,114 @@ char std3D_CreateMipSurface(Std3DVBuffer* source, Std3DTextureSurface* surface, 
 	descriptor.dwHeight = height;
 	descriptor.ddsCaps.dwCaps = DDSCAPS_TEXTURE | DDSCAPS_SYSTEMMEMORY;
 	result = g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor, &source_surface, NULL);
-	if (result != 0)
-		goto fail;
+	if (result == 0) {
+		memset(&lock, 0, sizeof lock);
+		lock.dwSize = 108;
+		result = source_surface->lpVtbl->Lock(source_surface, NULL, &lock, 1, NULL);
+	}
+	if (result == 0) {
+		if (input->raster.sourceType <= 2) {
+			uint32_t y;
 
-	memset(&lock, 0, sizeof lock);
-	lock.dwSize = 108;
-	result = source_surface->lpVtbl->Lock(source_surface, NULL, &lock, 1, NULL);
-	if (result != 0)
-		goto fail;
-	if (input->raster.sourceType <= 2) {
-		uint32_t y;
+			std3D_LockVBuffer(input);
+			for (y = 0; y < height; ++y) {
+				uint8_t* destination = (uint8_t*)lock.lpSurface + (size_t)lock.lPitch * y;
+				uint8_t* source_row = (uint8_t*)input->pixels + (size_t)input->raster.rowPitch * y;
+				if (input->raster.sourceType != 0) {
+					memcpy(destination, source_row, (size_t)width * 2);
+				} else {
+					uint16_t* output = (uint16_t*)destination;
+					uint16_t* palette = g_std3DPaletteScratch16;
+					uint32_t x;
 
-		std3D_LockVBuffer(input);
-		for (y = 0; y < height; ++y) {
-			uint8_t* destination = (uint8_t*)lock.lpSurface + (size_t)lock.lPitch * y;
-			uint8_t* source_row = (uint8_t*)input->pixels + (size_t)input->raster.rowPitch * y;
-			if (input->raster.sourceType != 0) {
-				memcpy(destination, source_row, (size_t)width * 2);
-			} else {
-				uint16_t* output = (uint16_t*)destination;
-				uint16_t* palette = g_std3DPaletteScratch16;
-				uint32_t x;
-
-				if (texture_format_mode != 0 && g_pStd3DCurDevice->caps.bAlphaTexture != 0)
-					palette = alpha_mask ? g_texConvBuf4444 : g_texConvBuf1555;
-				else if (alpha_mask)
-					palette = g_texConvBuf4444;
-				for (x = 0; x < width; ++x)
-					output[x] = palette[source_row[x]];
+					if (texture_format_mode != 0 && g_pStd3DCurDevice->caps.bAlphaTexture != 0)
+						palette = alpha_mask ? g_texConvBuf4444 : g_texConvBuf1555;
+					else if (alpha_mask)
+						palette = g_texConvBuf4444;
+					for (x = 0; x < width; ++x)
+						output[x] = palette[source_row[x]];
+				}
 			}
+			std3D_UnlockVBuffer(input);
 		}
-		std3D_UnlockVBuffer(input);
+		result = source_surface->lpVtbl->Unlock(source_surface, NULL);
 	}
-	result = source_surface->lpVtbl->Unlock(source_surface, NULL);
-	if (result != 0)
-		goto fail;
-
-	if (texture_format_mode != 0 && g_pStd3DCurDevice->caps.bAlphaTexture == 0) {
-		DDCOLORKEY key;
-		if (input->raster.sourceType == 0) {
-			key.dwColorSpaceLowValue = g_std3DPaletteScratch16[0];
-			key.dwColorSpaceHighValue = g_std3DPaletteScratch16[0];
-			source_surface->lpVtbl->SetColorKey(source_surface, DDCKEY_SRCBLT, &key);
-		} else if (input->raster.sourceType == 1) {
-			key.dwColorSpaceLowValue = input->transparentColor;
-			key.dwColorSpaceHighValue = input->transparentColor;
-			source_surface->lpVtbl->SetColorKey(source_surface, DDCKEY_SRCBLT, &key);
-		}
-		/* PORT: TIE98 passes an uninitialized key for source type 2. That
-		 * has no source transparency value to preserve, so omit the call. */
-	}
-	result = source_surface->lpVtbl->QueryInterface(source_surface, &IID_IDirect3DTexture_Compat,
-													(void**)&source_texture);
-	if (result != 0)
-		goto fail;
-	result = source_surface->lpVtbl->GetSurfaceDesc(source_surface, &descriptor);
-	if (result != 0)
-		goto fail;
-	surface->ddsd = descriptor;
-	descriptor.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT;
-	descriptor.ddsCaps.dwCaps = DDSCAPS_TEXTURE | DDSCAPS_VIDEOMEMORY | DDSCAPS_ALLOCONLOAD;
-	result = g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor, &cached_surface, NULL);
-	if (result == DX_DDERR_OUTOFVIDEOMEMORY) {
-		Std3DTextureSurface* candidate = g_std3DTextureCacheHead;
-		const unsigned int needed = width * height;
-		for (;;) {
-			unsigned int freed = 0;
-			while (freed < needed && candidate && candidate->cacheFrameTag != g_std3DTextureFrameTag) {
-				Std3DTextureSurface* next = candidate->pNext;
-				candidate->pCachedSurface->lpVtbl->Release(candidate->pCachedSurface);
-				candidate->pCachedTexture->lpVtbl->Release(candidate->pCachedTexture);
-				freed += candidate->byteSize;
-				candidate->bCached = 0;
-				std3D_CacheListRemove(candidate);
-				candidate = next;
+	if (result == 0) {
+		if (texture_format_mode != 0 && g_pStd3DCurDevice->caps.bAlphaTexture == 0) {
+			DDCOLORKEY key;
+			if (input->raster.sourceType == 0) {
+				key.dwColorSpaceLowValue = g_std3DPaletteScratch16[0];
+				key.dwColorSpaceHighValue = g_std3DPaletteScratch16[0];
+				source_surface->lpVtbl->SetColorKey(source_surface, DDCKEY_SRCBLT, &key);
+			} else if (input->raster.sourceType == 1) {
+				key.dwColorSpaceLowValue = input->transparentColor;
+				key.dwColorSpaceHighValue = input->transparentColor;
+				source_surface->lpVtbl->SetColorKey(source_surface, DDCKEY_SRCBLT, &key);
 			}
-			if (freed < needed)
-				goto fail;
-			result = g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor, &cached_surface,
-															  NULL);
-			if (result == 0)
-				break;
-			if (result != DX_DDERR_OUTOFVIDEOMEMORY)
-				goto fail;
+			/* PORT: TIE98 passes an uninitialized key for source type 2. That
+			 * has no source transparency value to preserve, so omit the call. */
 		}
-	} else if (result != 0) {
-		goto fail;
+		result = source_surface->lpVtbl->QueryInterface(source_surface, &IID_IDirect3DTexture_Compat,
+														(void**)&source_texture);
 	}
-	result = cached_surface->lpVtbl->QueryInterface(cached_surface, &IID_IDirect3DTexture_Compat,
-													(void**)&cached_texture);
-	if (result != 0)
-		goto fail;
-	result = cached_texture->lpVtbl->Load(cached_texture, source_texture);
-	if (result != 0)
-		goto fail;
-	handle = 0;
-	result = cached_texture->lpVtbl->GetHandle(cached_texture, g_d3dDevice, &handle);
-	if (result != 0)
+	if (result == 0)
+		result = source_surface->lpVtbl->GetSurfaceDesc(source_surface, &descriptor);
+	if (result == 0) {
+		surface->ddsd = descriptor;
+		descriptor.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT;
+		descriptor.ddsCaps.dwCaps = DDSCAPS_TEXTURE | DDSCAPS_VIDEOMEMORY | DDSCAPS_ALLOCONLOAD;
+		result =
+			g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor, &cached_surface, NULL);
+		if (result == DX_DDERR_OUTOFVIDEOMEMORY) {
+			/* Evict textures not used this frame until enough bytes are
+			 * released for a retry; stop when eviction cannot free enough. */
+			Std3DTextureSurface* candidate = g_std3DTextureCacheHead;
+			const unsigned int needed = width * height;
+			unsigned int freed;
+
+			do {
+				freed = 0;
+				while (freed < needed && candidate && candidate->cacheFrameTag != g_std3DTextureFrameTag) {
+					Std3DTextureSurface* next = candidate->pNext;
+					candidate->pCachedSurface->lpVtbl->Release(candidate->pCachedSurface);
+					candidate->pCachedTexture->lpVtbl->Release(candidate->pCachedTexture);
+					freed += candidate->byteSize;
+					candidate->bCached = 0;
+					std3D_CacheListRemove(candidate);
+					candidate = next;
+				}
+				if (freed >= needed)
+					result = g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor,
+																	  &cached_surface, NULL);
+			} while (freed >= needed && result == DX_DDERR_OUTOFVIDEOMEMORY);
+		}
+	}
+	if (result == 0)
+		result = cached_surface->lpVtbl->QueryInterface(cached_surface, &IID_IDirect3DTexture_Compat,
+														(void**)&cached_texture);
+	if (result == 0)
+		result = cached_texture->lpVtbl->Load(cached_texture, source_texture);
+	if (result == 0) {
 		handle = 0;
-	source_texture->lpVtbl->Release(source_texture);
-	source_surface->lpVtbl->Release(source_surface);
-	if (scaled)
-		std3D_FreeVBuffer(scaled);
-	surface->pCachedTexture = cached_texture;
-	surface->pCachedSurface = cached_surface;
-	surface->texHandle = handle;
-	surface->width = width;
-	surface->height = height;
-	surface->byteSize = width * height;
-	surface->bCached = 1;
-	surface->cacheFrameTag = g_std3DTextureFrameTag;
-	std3D_CacheListAppend(surface);
-	return 1;
+		result = cached_texture->lpVtbl->GetHandle(cached_texture, g_d3dDevice, &handle);
+		if (result != 0)
+			handle = 0;
+		source_texture->lpVtbl->Release(source_texture);
+		source_surface->lpVtbl->Release(source_surface);
+		if (scaled)
+			std3D_FreeVBuffer(scaled);
+		surface->pCachedTexture = cached_texture;
+		surface->pCachedSurface = cached_surface;
+		surface->texHandle = handle;
+		surface->width = width;
+		surface->height = height;
+		surface->byteSize = width * height;
+		surface->bCached = 1;
+		surface->cacheFrameTag = g_std3DTextureFrameTag;
+		std3D_CacheListAppend(surface);
+		return 1;
+	}
 
-fail:
 	if (source_surface)
 		source_surface->lpVtbl->Release(source_surface);
 	if (source_texture)

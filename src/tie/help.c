@@ -119,7 +119,8 @@ int32_t help_helproom(int32_t start_right_col) {
 			FlightSurface_Lock();
 
 		festring_setfontsize(2);
-		if (tie_is_high_resolution_flight()) {
+		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 			helpTop = 44;
 			row_step = (int16_t)(fontheight + 5);
 			group_gap = 12;

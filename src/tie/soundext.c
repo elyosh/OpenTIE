@@ -1,5 +1,4 @@
 #include "tie/soundext.h"
-#include "tie/rand.h"
 #include "tie/shellext.h"
 #include "tie/wavestream_tie98.h"
 #include "tie_runtime/audio/config.h"
@@ -371,7 +370,7 @@ void soundext_Play_SFX(uint8_t sound_index, int16_t volume) {
 	uint8_t idx = sound_index;
 
 	if (idx == sfxSmallDoorOpen)
-		idx = (rand_rand() & 3) + 1;
+		idx = (rand() & 3) + 1;
 
 	snd = xsound_Find_Sound_Type(Sound_SFX_Name[idx - 1], FOURCC_VOIC);
 	if (!snd)

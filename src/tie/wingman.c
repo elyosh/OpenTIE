@@ -103,7 +103,11 @@ int32_t wingman_wingmanroom(void) {
 				FlightSurface_Lock();
 			{
 				/* 20-line visible grid in 320x200, 50-line in the 640x480 modes. */
-				const int16_t margin = tie_is_high_resolution_flight() ? 51 : 21;
+				const int16_t margin =
+					(flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+					 flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
+						? 51
+						: 21;
 				const uint32_t row_spacing = (uint32_t)(screenYRes - 2 * margin) / NUM_WINGMAN_CMDS;
 
 				int16_t y = margin;

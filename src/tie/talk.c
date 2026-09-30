@@ -7,7 +7,6 @@
 #include "tie/goals.h"
 #include "tie/mission.h"
 #include "tie/player.h"
-#include "tie/rand.h"
 #include "tie/shade.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
@@ -916,7 +915,7 @@ static void user_Talk_Eyes(Actor* actor, int32_t time) {
 			xactor_Set_Actor_State(actor, eye, 0);
 		} else {
 			if (actor->var1 == -2)
-				actor->var1 = rand_rand() & 0x5F;
+				actor->var1 = rand() & 0x5F;
 			else
 				actor->var1--;
 			xactor_Set_Actor_State(actor, blink, 0);
@@ -937,7 +936,7 @@ static void user_Talk_Eyes(Actor* actor, int32_t time) {
 			xactor_Set_Actor_State(actor, eye, 0);
 		} else {
 			if (actor->var1 == -3)
-				actor->var1 = rand_rand() & 0x5F;
+				actor->var1 = rand() & 0x5F;
 			else
 				actor->var1--;
 			xactor_Set_Actor_State(actor, blink, 0);

@@ -14,6 +14,45 @@ typedef struct ComputerConfirmState {
 	bool resumed;
 } ComputerConfirmState;
 
+const char TieComputer_SvgaStr[13][14] = {
+	"computer.lfd", "arm",    "sleeve", "newtscrn", "compface", "medlbak", "buttons",
+	"compicon",     "tattoo", "arm",    "newtscrn", "computr",  "medlbak",
+};
+
+const char TieComputer_SvgaMedalStr[19][14] = {
+	"awardshr.lfd", "trnships", "medls-a",  "strsnbrs", "sunrisea", "aniplnts", "star-1",
+	"star-2",       "coins",    "starsbak", "mdl-bak1", "mdl-bak2", "ani1-sta", "trnships",
+	"raptrhed",     "trnshps",  "medlbak",  "brnzpal",  "slvrpal",
+};
+
+const char TieComputer_SvgaMedalStr2[7][14] = {
+	"awards1h.lfd", "mislboat", "a-medals", "amed-obj", "medpal", "coins", "tattoo",
+};
+
+const char TieComputer_SvgaMedalStr3[7][14] = {
+	"awards2h.lfd", "mislboat", "b-medals", "bmed-obj", "medpal", "coins", "tattoo",
+};
+
+const Rect TieComputer_SvgaModeRect[4] = {
+	{ 350, 318, 453, 380 },
+	{ 350, 388, 453, 445 },
+	{ 350, 451, 453, 511 },
+	{ 350, 517, 453, 577 },
+};
+
+const Rect TieComputer_SvgaPrefRect[18] = {
+	{ 26, 242, 60, 478 },   { 67, 190, 93, 280 },   { 67, 286, 93, 386 },   { 67, 392, 93, 530 },
+	{ 98, 190, 124, 280 },  { 98, 286, 124, 386 },  { 98, 392, 124, 530 },  { 129, 190, 155, 280 },
+	{ 129, 286, 155, 386 }, { 129, 392, 155, 530 }, { 160, 190, 186, 264 }, { 160, 270, 186, 354 },
+	{ 160, 360, 186, 434 }, { 160, 440, 186, 530 }, { 191, 190, 217, 344 }, { 191, 350, 217, 530 },
+	{ 222, 190, 248, 434 }, { 253, 190, 279, 530 },
+};
+
+const Rect TieComputer_SvgaBackupRect[8] = {
+	{ 26, 242, 64, 478 },   { 67, 190, 96, 424 },   { 67, 430, 96, 530 },   { 105, 190, 134, 424 },
+	{ 105, 430, 134, 530 }, { 144, 190, 177, 350 }, { 144, 370, 177, 530 }, { 187, 190, 285, 530 },
+};
+
 static ComputerConfirmState confirm_state;
 static Input* options_button;
 

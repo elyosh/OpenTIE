@@ -1,6 +1,10 @@
 #ifndef TIE_MATH2_WIDE_H
 #define TIE_MATH2_WIDE_H
 
+#if defined(TIE_MODERN) && !defined(__WATCOMC__)
+#include "tie_runtime/runtime/wide_arithmetic.h"
+#endif
+
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -47,10 +51,14 @@ uint32_t math2_project_u32(uint32_t magnitude, uint32_t shift, uint32_t rounding
 
 // clang-format on
 
+#elif defined(TIE_MODERN)
+
+/* Native builds use the port's portable C arithmetic (wide_arithmetic.h). */
+
 #else
 
 static inline int32_t math2_mul_q15(int32_t a, int32_t b) {
-#if defined(_MSC_VER) && !defined(TIE_MODERN)
+#if defined(_MSC_VER)
 	__asm {
 		push edx
 		mov eax, a

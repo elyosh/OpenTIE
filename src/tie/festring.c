@@ -72,7 +72,8 @@ void festring_setfontsize(int16_t size) {
 
 	if ((uint8_t)size == 1) {
 		curfontptr = fontptrtiny;
-		if (tie_is_high_resolution_flight()) {
+		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 			height = 21;
 			char_size = 170;
 		} else {
@@ -82,7 +83,8 @@ void festring_setfontsize(int16_t size) {
 		fontlowercase = 1;
 	} else if ((uint8_t)size == 2) {
 		curfontptr = fontptrmicro;
-		if (tie_is_high_resolution_flight()) {
+		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 			height = 9;
 			char_size = 74;
 		} else {

@@ -106,7 +106,7 @@ void draw_drawlaser_tie98(uint16_t laser_obj_idx);
 
 /* Hyperspace starburst sprite. */
 void draw_drawhyperstar(int16_t star_idx);
-void draw_sync_tie98_hyperstar_state(void);
+extern uint32_t g_hyperspaceStreakLength;
 void draw_drawhyperstar_tie98(int16_t star_idx);
 
 /* Rotated/scaled backdrop blit (planet/big-ship sprite). */

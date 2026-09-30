@@ -40,7 +40,6 @@
 #include "landru/view.h"
 #include "landru/viewadd.h"
 #include "tie/map.h"
-#include "tie/rand.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
 #include "tie/soundext.h"
@@ -464,24 +463,24 @@ static void train_user_Train_Light(Actor* the_actor, int32_t time) {
 
 	if (time == 0) {
 		xactor_Show_Actor(the_actor);
-		the_actor->var2 = (rand_rand() & 0xF) + 2;
+		the_actor->var2 = (rand() & 0xF) + 2;
 	}
 
 	if (the_actor->var2 & 0x4000) {
 		int16_t countdown;
 		/* "On" phase: random state every other frame */
 		if (time & 1)
-			the_actor->state = rand_rand() % the_actor->arraySize;
+			the_actor->state = rand() % the_actor->arraySize;
 		countdown = the_actor->var2 & 0x3FFF;
 		if (countdown == 1) {
-			the_actor->var2 = (rand_rand() & 0xF) + 2;
+			the_actor->var2 = (rand() & 0xF) + 2;
 			return;
 		}
 	} else {
 		/* "Off" phase: random state, check var1 for phase toggle */
-		the_actor->state = rand_rand() % the_actor->arraySize;
+		the_actor->state = rand() % the_actor->arraySize;
 		if (the_actor->var1 == 1) {
-			the_actor->var2 = (rand_rand() & 0xF) + 0x4002;
+			the_actor->var2 = (rand() & 0xF) + 0x4002;
 			return;
 		}
 	}

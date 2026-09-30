@@ -280,7 +280,8 @@ void rtsvga2_initgraphVGA(void) {
 		for (y = 0; y < screenYRes; ++y)
 			lineaddressVGA[y] = (int32_t)g_surfacePitch * y;
 		memset(vgapointer, 0, (size_t)screenYRes * g_surfacePitch);
-		if (tie_is_high_resolution_flight()) {
+		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 			bracketdef_ptr = bracketdef_12pt;
 			bracketdef_count = 12;
 		} else {
@@ -310,7 +311,8 @@ void rtsvga2_initgraphVGA(void) {
 	if (vgapointer)
 		memset(vgapointer, 0, (size_t)screenYRes * (size_t)screenMemWidth);
 
-	if (tie_is_high_resolution_flight()) {
+	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 		bracketdef_ptr = bracketdef_12pt;
 		bracketdef_count = 12;
 	} else {

@@ -36,11 +36,9 @@ uint16_t numhistorymsgs;
 // GLOBAL: TIE98 0x5FCE50
 int32_t msgsPerPage;
 
-/* Static 300-slot message ring; messagehistory is always valid. */
-static MsgHistoryEntry history_ring[MSG_HISTORY_SLOTS];
 // GLOBAL: TIE95 0xD5038
 // GLOBAL: TIE98 0x5FCE54
-MsgHistoryEntry* messagehistory = history_ring;
+MsgHistoryEntry* messagehistory;
 
 /* --- msgroom_scrollmsgs -- */
 
@@ -114,6 +112,8 @@ int32_t msgroom_messageroom(void) {
 		festring_setbackcolor(0x44);
 		festring_settextcolor(0x43);
 
+		messagehistory = (MsgHistoryEntry*)xmemhdl_Lock_Handle(messageloghandle);
+		xmemhdl_Unlock_Handle(messageloghandle);
 		cur_top_idx = lasthistorymsg;
 		exit_dir = 0;
 

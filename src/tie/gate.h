@@ -22,7 +22,7 @@ void gate_createtraininggates(void);
 /*
  * Apply a training difficulty level (0..N) to the already-built course.
  * Resets currentgate to 1, mission.train_gates_passed to 0 and
- * mission.train_gates_remaining to 12, recomputes mtimer_min / mtimer_sec,
+ * mission.train_gates_remaining to 12, recomputes timeleft.minute / timeleft.second,
  * and re-runs the per-mesh state pass that configures which meshes rotate
  * and at what rate. Calls panel_initpanel() unless in replayviewmode.
  */

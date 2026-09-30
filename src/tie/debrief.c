@@ -40,80 +40,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* ---- Edition data ---- */
-
-typedef enum DebriefActorVariantSet {
-	DEBRIEF_ACTORS_VGA,
-	DEBRIEF_ACTORS_SVGA,
-} DebriefActorVariantSet;
-
-typedef struct DebriefSpec {
-	LandruSurfaceSet surface_set;
-	DebriefActorVariantSet actor_variants;
-	int16_t width, height;
-	int16_t success_mouse_x, success_mouse_y;
-	int16_t talk_mouse_x, talk_mouse_y;
-	int16_t failure_mouse_x, failure_mouse_y;
-	int16_t input_bounds[4][4];
-	int16_t title_font;
-	int16_t officer_side_max_state;
-	bool title_variants;
-} DebriefSpec;
-
-/* DATA: TIE95 DEBRIEF_Debrief 0x6FE60; TIE98 0x4155F0. */
-static const DebriefSpec debrief_specs[] = {
-	{
-		/* surface_set */ LANDRU_SURFACE_VGA,
-		/* actor_variants */ DEBRIEF_ACTORS_VGA,
-		/* width */ 320,
-		/* height */ 200,
-		/* success_mouse_x */ 180,
-		/* success_mouse_y */ 100,
-		/* talk_mouse_x */ 280,
-		/* talk_mouse_y */ 120,
-		/* failure_mouse_x */ 74,
-		/* failure_mouse_y */ 100,
-		/* input_bounds */
-		{
-			{ 133, 56, 193, 107 },
-			{ 85, 35, 133, 150 },
-			{ 248, 51, 290, 128 },
-			{ 0, 0, 70, 200 },
-		},
-		/* title_font */ 0,
-		/* officer_side_max_state */ 2,
-		/* title_variants */ true,
-	},
-	{
-		/* surface_set */ LANDRU_SURFACE_SVGA,
-		/* actor_variants */ DEBRIEF_ACTORS_SVGA,
-		/* width */ 640,
-		/* height */ 480,
-		/* success_mouse_x */ 360,
-		/* success_mouse_y */ 200,
-		/* talk_mouse_x */ 540,
-		/* talk_mouse_y */ 240,
-		/* failure_mouse_x */ 108,
-		/* failure_mouse_y */ 200,
-		/* input_bounds */
-		{
-			{ 298, 129, 420, 288 },
-			{ 226, 102, 296, 322 },
-			{ 500, 134, 572, 316 },
-			{ 56, 26, 145, 345 },
-		},
-		/* title_font */ 2,
-		/* officer_side_max_state */ 3,
-		/* title_variants */ false,
-	},
-};
-
 #ifdef TIE_MODERN
-static const DebriefSpec* active_spec;
-#elif defined(TIE98)
-static const DebriefSpec* const active_spec = &debrief_specs[1];
-#else
-static const DebriefSpec* const active_spec = &debrief_specs[0];
+/* PORT: runtime frontend selection (TIE98 SVGA layout vs TIE95 VGA layout). */
+static bool debrief_svga;
 #endif
 
 /* ---- Static globals ---- */
@@ -215,16 +144,28 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 
 				case 5:
 					/* TIE98 reverses the officer-specific door variants 5 and 6. */
-					if (active_spec->actor_variants == DEBRIEF_ACTORS_SVGA)
+#ifdef TIE_MODERN
+					if (debrief_svga)
 						return (shipext_Get_Mission_Officer() == 2) ? 1 : 0;
 					return (shipext_Get_Mission_Officer() == 2) ? 0 : 1;
+#elif defined(TIE98)
+					return (shipext_Get_Mission_Officer() == 2) ? 1 : 0;
+#else
+					return (shipext_Get_Mission_Officer() == 2) ? 0 : 1;
+#endif
 
 				case 6:
-					if (active_spec->actor_variants == DEBRIEF_ACTORS_SVGA)
+#ifdef TIE_MODERN
+					if (debrief_svga)
 						return (shipext_Get_Mission_Officer() == 1) ? 1 : 0;
+					return (shipext_Get_Mission_Officer() != 1) ? 1 : 0;
+#elif defined(TIE98)
+					return (shipext_Get_Mission_Officer() == 1) ? 1 : 0;
+#else
 					/* Binary @ 0x7024F: return mission_officer != 1.
 					 * Hide this variant when mission is officer-only. */
 					return (shipext_Get_Mission_Officer() != 1) ? 1 : 0;
+#endif
 
 				case 8:
 					/* Binary @ 0x7021F: hide when mission_officer == 1. */
@@ -235,7 +176,8 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 			}
 
 		case 4: /* Title label */
-			if (active_spec->title_variants) {
+#ifdef TIE_MODERN
+			if (!debrief_svga) {
 				if (shipext_Get_Mission_Officer() == 2) {
 					if (!actor->var2)
 						return 1;
@@ -244,6 +186,15 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 						return 1;
 				}
 			}
+#elif !defined(TIE98)
+			if (shipext_Get_Mission_Officer() == 2) {
+				if (!actor->var2)
+					return 1;
+			} else {
+				if (actor->var2)
+					return 1;
+			}
+#endif
 			xactor_Set_Actor_User_Function(actor, user_Title);
 			xactor_Set_Actor_Draw_Function(actor, draw_Title);
 			title_actor = actor;
@@ -375,6 +326,13 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 	Rect r;
 	char label[32];
 	TIEText text_id;
+#ifdef TIE_MODERN
+	int16_t font_id = debrief_svga ? 2 : 0;
+#elif defined(TIE98)
+	int16_t font_id = 2;
+#else
+	int16_t font_id = 0;
+#endif
 
 	if (!refresh)
 		return 0;
@@ -406,9 +364,9 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 
 	/* Drop shadow */
 	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, 16, active_spec->title_font);
+	xfont_Print_Centered_Text(label, &r, 16, font_id);
 	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, 15, active_spec->title_font);
+	xfont_Print_Centered_Text(label, &r, 15, font_id);
 	return 1;
 }
 
@@ -493,8 +451,16 @@ static void user_Officer(Actor* actor, int32_t time) {
 			else
 				anim_state = actor->var1 / 2 - 2;
 
-			if (anim_state > active_spec->officer_side_max_state)
-				anim_state = active_spec->officer_side_max_state;
+#ifdef TIE_MODERN
+			if (anim_state > (debrief_svga ? 3 : 2))
+				anim_state = debrief_svga ? 3 : 2;
+#elif defined(TIE98)
+			if (anim_state > 3)
+				anim_state = 3;
+#else
+			if (anim_state > 2)
+				anim_state = 2;
+#endif
 			xactor_Set_Actor_State(actor, anim_state, 0);
 			break;
 		}
@@ -542,26 +508,20 @@ static void user_Officer(Actor* actor, int32_t time) {
 // FUNCTION: TIE95 0x6FE60
 // FUNCTION: TIE98 0x4155F0
 int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
-#ifdef TIE_MODERN
-	bool svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
-#endif
 	Rect frame;
 	ResFile* resource;
 	int16_t mouse_x, mouse_y;
-#ifdef TIE_MODERN
-	const int16_t* bounds;
-#endif
 
 #ifdef TIE_MODERN
-	active_spec = &debrief_specs[svga ? 1 : 0];
+	debrief_svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
 #endif
 
 	/* Position mouse based on outcome and officer type */
 	if (shipext_Is_Mission_Success()) {
 		if (shellext_Get_Last_Scene() != SCENE_TALK_DEBRIEF_OFFICER || shipext_Get_Mission_Officer() == 1) {
 #ifdef TIE_MODERN
-			mouse_x = active_spec->success_mouse_x;
-			mouse_y = active_spec->success_mouse_y;
+			mouse_x = debrief_svga ? 360 : 180;
+			mouse_y = debrief_svga ? 200 : 100;
 #elif defined(TIE98)
 			mouse_x = 360;
 			mouse_y = 200;
@@ -571,8 +531,8 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 #endif
 		} else {
 #ifdef TIE_MODERN
-			mouse_x = active_spec->talk_mouse_x;
-			mouse_y = active_spec->talk_mouse_y;
+			mouse_x = debrief_svga ? 540 : 280;
+			mouse_y = debrief_svga ? 240 : 120;
 #elif defined(TIE98)
 			mouse_x = 540;
 			mouse_y = 240;
@@ -583,8 +543,8 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 		}
 	} else {
 #ifdef TIE_MODERN
-		mouse_x = active_spec->failure_mouse_x;
-		mouse_y = active_spec->failure_mouse_y;
+		mouse_x = debrief_svga ? 108 : 74;
+		mouse_y = debrief_svga ? 200 : 100;
 #elif defined(TIE98)
 		mouse_x = 108;
 		mouse_y = 200;
@@ -598,7 +558,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 	/* Load resources */
 	resource = shellext_Open_Empire_Resource("debrief.lfd");
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+	xrect_Set_Rect(&frame, 0, 0, debrief_svga ? 640 : 320, debrief_svga ? 480 : 200);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 0, 0, 640, 480);
 #else
@@ -616,8 +576,10 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 
 	/* Brief door (id=0) */
 #ifdef TIE_MODERN
-	bounds = active_spec->input_bounds[0];
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (debrief_svga)
+		xrect_Set_Rect(&frame, 298, 129, 420, 288);
+	else
+		xrect_Set_Rect(&frame, 133, 56, 193, 107);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 298, 129, 420, 288);
 #else
@@ -632,8 +594,10 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 	/* Officer door (id=1) — skip if priest only */
 	if (shipext_Get_Mission_Officer() != 2) {
 #ifdef TIE_MODERN
-		bounds = active_spec->input_bounds[1];
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		if (debrief_svga)
+			xrect_Set_Rect(&frame, 226, 102, 296, 322);
+		else
+			xrect_Set_Rect(&frame, 85, 35, 133, 150);
 #elif defined(TIE98)
 		xrect_Set_Rect(&frame, 226, 102, 296, 322);
 #else
@@ -649,8 +613,10 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 	/* Priest door (id=2) — skip if officer only */
 	if (shipext_Get_Mission_Officer() != 1) {
 #ifdef TIE_MODERN
-		bounds = active_spec->input_bounds[2];
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		if (debrief_svga)
+			xrect_Set_Rect(&frame, 500, 134, 572, 316);
+		else
+			xrect_Set_Rect(&frame, 248, 51, 290, 128);
 #elif defined(TIE98)
 		xrect_Set_Rect(&frame, 500, 134, 572, 316);
 #else
@@ -665,8 +631,10 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 
 	/* Fly-again area (id=3) */
 #ifdef TIE_MODERN
-	bounds = active_spec->input_bounds[3];
-	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	if (debrief_svga)
+		xrect_Set_Rect(&frame, 56, 26, 145, 345);
+	else
+		xrect_Set_Rect(&frame, 0, 0, 70, 200);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 56, 26, 145, 345);
 #else
@@ -682,7 +650,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 #ifdef TIE_MODERN
-	TieDebrief_RunView(resource, svga);
+	TieDebrief_RunView(resource, debrief_svga);
 	return 0;
 #else
 	shellext_Handle_TIE_View();

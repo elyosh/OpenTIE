@@ -523,11 +523,11 @@ void gate_settraininglevel(uint16_t level) {
 	mission.train_gates_passed = 0;
 
 	if (level <= 8) {
-		mtimer_min = (uint8_t)((10 - level) / 2);
-		mtimer_sec = (uint8_t)(30 * (level & 1));
+		timeleft.minute = (uint8_t)((10 - level) / 2);
+		timeleft.second = (uint8_t)(30 * (level & 1));
 	} else {
-		mtimer_min = 0;
-		mtimer_sec = (uint8_t)(60 - 5 * (level - 8));
+		timeleft.minute = 0;
+		timeleft.second = (uint8_t)(60 - 5 * (level - 8));
 	}
 
 	speed_wing = (uint8_t)(24 * level);
@@ -769,7 +769,8 @@ int gate_checkgateedge(uint16_t obj_idx) {
 void gate_updatebonuspoints(void) {
 	int16_t y, bonus_x, timer_x;
 
-	if (tie_is_high_resolution_flight()) {
+	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 		y = 456;
 		bonus_x = 465;
 		timer_x = 360;
@@ -788,9 +789,9 @@ void gate_updatebonuspoints(void) {
 	festring_setfontsize(1);
 	festring_setbound(0, y, (int16_t)screenXRes, (int16_t)screenYRes);
 	festring_setcursor(timer_x, y);
-	panelrts_outnum(mtimer_min, 2, 2);
+	panelrts_outnum(timeleft.minute, 2, 2);
 	outchar(':');
-	panelrts_outnum(mtimer_sec, 2, 2);
+	panelrts_outnum(timeleft.second, 2, 2);
 	festring_setcursor(bonus_x, y);
 	panelrts_outnum((uint16_t)mission.train_bonus, 5, 5);
 
@@ -1020,7 +1021,7 @@ void gate_updategateanimations(void) {
 		}
 #endif
 	}
-	while (mtimer_min || mtimer_sec) {
+	while (timeleft.minute || timeleft.second) {
 		tickbudget = (uint16_t)(tickbudget + (uint16_t)xtimer_time_elapsed());
 		if (tickbudget < 4) {
 #ifdef TIE_MODERN
@@ -1032,11 +1033,11 @@ void gate_updategateanimations(void) {
 #endif
 		}
 		tickbudget = 0;
-		if (mtimer_sec) {
-			--mtimer_sec;
+		if (timeleft.second) {
+			--timeleft.second;
 		} else {
-			mtimer_sec = 59;
-			--mtimer_min;
+			timeleft.second = 59;
+			--timeleft.minute;
 		}
 		mission.mission_score += 10;
 		mission.train_bonus += 10;
@@ -1090,7 +1091,8 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 	uint8_t fh;
 	int16_t y_plus_1;
 
-	if (tie_is_high_resolution_flight()) {
+	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 		x_origin += 10;
 		y = (int16_t)(y_origin - 10);
 		side_offset = 16;
@@ -1127,7 +1129,10 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 		draw_right = 0;
 	}
 
-	if (TieProfile_UsesTie98Logic() && tie_is_high_resolution_flight() && pstate.player_spec_num == 4)
+	if (TieProfile_UsesTie98Logic() &&
+		(flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		 flightResolution == TIE_FLIGHT_RES_SVGA_D3D) &&
+		pstate.player_spec_num == 4)
 		crt_x = x_origin;
 	else
 		crt_x = draw_right ? (int16_t)(x_origin + side_offset) : (int16_t)(x_origin - side_offset);

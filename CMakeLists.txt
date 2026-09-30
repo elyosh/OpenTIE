@@ -229,8 +229,6 @@ set(TIE_RECOVERED_SOURCES
         src/tie/trig2.h
         src/tie/math2.c
         src/tie/math2.h
-        src/tie/rand.c
-        src/tie/rand.h
         src/tie/logbuf2.c
         src/tie/logbuf2.h
         src/tie/xtrans2.c
@@ -305,6 +303,7 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/display/tie98_starfield.c
     src/tie_runtime/display/tie98_starfield.h
     src/tie_runtime/runtime/pointer_key.h
+    src/tie_runtime/runtime/wide_arithmetic.h
     src/tie_runtime/runtime/brief_task.c
     src/tie_runtime/runtime/brief_task.h
     src/tie_runtime/runtime/tourdesk_task.c

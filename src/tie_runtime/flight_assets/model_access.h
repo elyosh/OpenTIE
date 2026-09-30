@@ -40,6 +40,12 @@ int tie98_preview_primary_model_max_extent(void);
 uint8_t TieFlightAssets_MeshExplosionTypeOverride(uint16_t model_type, int mesh_index);
 void TieFlightAssets_EnableMeshExplosionType(uint16_t model_type, int mesh_index, uint8_t flag);
 
+/* TIE98 passes &staticobjects[slot] to the OPT object draw entry points,
+ * whose static branch reads the packed StaticObject position. The host keeps
+ * the TIE95 FlightObject layout for both editions, so each static slot has a
+ * stable full-width view carrying the widened position and model index. */
+struct FlightObject* TieFlightAssets_StaticRenderObject(uint16_t slot_idx);
+
 #ifdef __cplusplus
 }
 #endif

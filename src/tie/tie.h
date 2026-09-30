@@ -5,6 +5,7 @@
 #include "tie/shipext.h"
 #include "tie_runtime/species_id.h"
 
+#include <landru/memhdl.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -27,8 +28,9 @@ typedef struct {
 	uint8_t ship_class;    /* +0x03: ship classification (weapon slot typing) */
 	uint16_t bound_hwidth; /* +0x04: bounding half-width (LOD-shifted) */
 	uint16_t bound_qdepth; /* +0x06: bounding quarter-depth */
-	void* model_handle;    /* binary +0x08 (u16 HANDLE); host ship-model pointer,
-							shared by entries for the same LFD resource */
+	/* binary +0x08 (u16 HANDLE). Species model/bitmap handle, shared by
+	 * entries for the same LFD resource. */
+	LandruHandle model_handle;
 	/* binary +0x0A (int). Pointer to the species' animation pattern
 	 * (AnimOp array: bigexplo / sparks / ember / lightning / ...). NULL
 	 * means 'no animation' -- static objects with NULL draw_data render
@@ -709,11 +711,6 @@ extern uint8_t vesa_window;
 #define TIE_FLIGHT_RES_SVGA_D3D 0x1FF /* TIE98 640x480x16 hardware */
 extern int16_t flightResolution;
 
-/* RECOVERY HELPER: shares the repeated TIE98 640x480 mode predicate. */
-static inline int tie_is_high_resolution_flight(void) {
-	return flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
-		   flightResolution == TIE_FLIGHT_RES_SVGA_D3D;
-}
 extern uint8_t musicenabled;
 extern uint8_t voiceenabled;
 extern uint8_t sfxenabled;
@@ -1520,9 +1517,6 @@ extern uint8_t acceleratedtimesetting; /* accelerated-game-clock gear shift */
 extern uint16_t baseframerate;         /* mission base framerate (default 20) */
 extern uint16_t tickcounter;           /* monotonic tick counter (xtimer) */
 extern uint16_t missionversion;        /* .TIE file format version */
-extern uint8_t mtimer_state;           /* mission-timer FSM state */
-extern uint8_t mtimer_min;             /* mission-timer minutes */
-extern uint8_t mtimer_sec;             /* mission-timer seconds */
 
 /* Per-frame flags. */
 extern int16_t targetblinkflag; /* blink toggle for the HUD target box */
@@ -1691,8 +1685,10 @@ typedef struct MissionClock {
 
 extern MissionClock _date;
 
-/* 8-byte mission-timer countdown state (watdbg _timeleft[8]). */
-extern uint8_t timeleft[8];
+/* Mission time-limit countdown (watdbg _timeleft[8], same 8-byte layout as
+ * _date): minute/second count down in tie_updatetime; create_loadmission
+ * clears hour and seeds minute/second from the mission file. */
+extern MissionClock timeleft;
 
 /* fopen mode literal "rb" — owned by tie.c, used by every module that
  * opens a binary asset file. Watcom kept it as a single global to share
@@ -1731,13 +1727,6 @@ extern uint8_t panelflag;
 extern uint8_t mapiconsloaded;
 extern uint8_t deadflag_EB76C;
 extern uint8_t deadflag_EB774;
-
-/* View-angle lookup table for the 0..9 numpad view keys. */
-extern int16_t squarerootable[512];
-
-/* Mission-file timestamp + RNG seed (sampled at room load). */
-extern uint8_t mfile_time_min, mfile_time_sec;
-extern int16_t mfile_rnd_seed;
 
 /* Transient user-side palette-cycling enable flag. */
 extern uint8_t colorcycleuserflag;

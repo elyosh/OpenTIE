@@ -198,8 +198,6 @@ uint8_t panelpartsflag;
 // GLOBAL: TIE98 0x5FC260
 uint8_t panelmirrorflag;
 
-void* panelpartsptr;
-
 /* String-table pointers (filled by fediskio_loadstringdata). */
 // GLOBAL: TIE95 0xD5AC0
 // GLOBAL: TIE98 0x5FC008
@@ -748,8 +746,8 @@ void panel_updateclock(void) {
 	int16_t x_bump;
 
 	if (mission.train_craft_type) {
-		min_v = mtimer_min;
-		sec_v = mtimer_sec;
+		min_v = timeleft.minute;
+		sec_v = timeleft.second;
 	} else {
 		min_v = _date.minute;
 		sec_v = _date.second;
@@ -1171,7 +1169,8 @@ void panel_updatebeam(void) {
 
 		hud->beam_arc_led_colors[i] = led_color;
 
-		if (tie_is_high_resolution_flight()) {
+		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 			led_x = (int16_t)(3 * step_rev + instruments[TIE_HUDI_BEAM_ARC].x);
 			led_y = (int16_t)(3 * step_rev + instruments[TIE_HUDI_BEAM_ARC].y);
 		} else {
@@ -2576,7 +2575,8 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
 		festring_hidescreen();
 
 		if (panelpartsflag != searchpartsflag) {
-			farbufferptr = (uint8_t*)panelpartsptr;
+			farbufferptr = (uint8_t*)xmemhdl_Lock_Handle(panelpartshandle);
+			xmemhdl_Unlock_Handle(panelpartshandle);
 			strcpy(panelname, cockpitdir);
 			strcat(panelname, parts);
 			strcat(panelname, ".PNL");
@@ -3639,7 +3639,8 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 		species_special = 1;
 	z = (uint16_t)(((bound_hwidth << perspShift) / pix) >> (species_special + 4));
 	/* The 640x480 flight modes shift the framing back another 1.25x. */
-	if (tie_is_high_resolution_flight())
+	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
 		z = (uint16_t)((z >> 2) + z);
 	s = (uint8_t)(species_special + 4);
 

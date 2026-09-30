@@ -42,7 +42,6 @@
 #include "tie/option.h"
 #include "tie/pai.h"
 #include "tie/panel.h"
-#include "tie/rand.h"
 #include "tie/render_scene_tie98.h"
 #include "tie/render_texture_tie98.h"
 #include "tie/replay.h"
@@ -95,6 +94,7 @@
 #include <imuse/lolevel.h>
 #include <landru/error.h>
 #include <landru/vesa.h>
+#include <stdlib.h>
 
 /* --- Struct arrays --- */
 
@@ -469,10 +469,6 @@ uint8_t acceleratedtimectr;
 // GLOBAL: TIE95 0xEB736
 int16_t hyperspacedetail;
 
-/* Port-owned camera lookup storage. The original TIE95 square-root table
- * at 0xCDB08 is represented by trig2.c, not this zero-initialized array. */
-int16_t squarerootable[512];
-
 /* Shield LED flash toggle (set by COLLIDE_damagecraft on hit; read by
  * PANEL_updateshields). 0 = fwd flash, 1 = rear flash. Owned by tie.c.
  * Single byte in the binary (byte_EB75B); paired with timers[TIMER_SHIELD_FLASH]. */
@@ -485,12 +481,11 @@ uint8_t shieldblink;
 // GLOBAL: TIE98 0x596210
 MissionClock _date;
 
-/* 8-byte "time left" strip at watdbg _timeleft[8] (owned by tie.c).
- * Captured wholesale by the replay state-dump; individual bytes index
- * into mission-timer display state. */
+/* Mission time-limit countdown (watdbg _timeleft[8], owned by tie.c).
+ * Captured wholesale by the replay state-dump. */
 // GLOBAL: TIE95 0xE638C
 // GLOBAL: TIE98 0x5926C8
-uint8_t timeleft[8];
+MissionClock timeleft;
 
 /* TieStorage_Open(3) modes embedded in the binary as const char arrays; owned by tie.c
  * per watdbg. C stdlib fopen treats the first two chars the same way here. */
@@ -526,9 +521,6 @@ uint16_t messageloghandle; /* 32000-byte message-history handle */
 /* (pstate.space_confirm_action: 1=laser-warn ack, 2=abort mission,
  * 3=accept penalty; driven by timers[TIMER_SPACE_CONFIRM] decay in
  * msg_messageupdate.) */
-uint8_t mtimer_state, mtimer_min, mtimer_sec;
-uint8_t mfile_time_min, mfile_time_sec;
-int16_t mfile_rnd_seed;
 // GLOBAL: TIE95 0xE2F24
 uint8_t radiomsg[1440];
 // GLOBAL: TIE95 0xE34C4
@@ -1209,7 +1201,8 @@ void tie_initflightresolution(void) {
 		return;
 	}
 
-	if (tie_is_high_resolution_flight()) {
+	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 		/* TIE95 mode 0x101 and the three TIE98 640x480 modes share geometry. */
 		screenXRes = 640;
 		screenYRes = 480;
@@ -1763,12 +1756,12 @@ void tie_updatetime(void) {
 	}
 
 	/* Mission time-limit countdown. */
-	--mtimer_sec;
-	if (mtimer_sec == 255u) { /* sec underflowed */
-		mtimer_sec = 59;
-		if ((--mtimer_min) == 255u) { /* min underflowed -> done */
-			mtimer_sec = 0;
-			mtimer_min = 0;
+	--timeleft.second;
+	if (timeleft.second == 255u) { /* sec underflowed */
+		timeleft.second = 59;
+		if ((--timeleft.minute) == 255u) { /* min underflowed -> done */
+			timeleft.second = 0;
+			timeleft.minute = 0;
 			if (mission.train_craft_type) { /* training mission */
 				user_checkreplaycamera();
 				mission.end_flag = 1;
@@ -1777,7 +1770,7 @@ void tie_updatetime(void) {
 		}
 	}
 	/* Last-15-second timer warning beep. */
-	if (mission.train_craft_type && mtimer_min == 0 && mtimer_sec < 15u)
+	if (mission.train_craft_type && timeleft.minute == 0 && timeleft.second < 15u)
 		fsfx_triggersfx(0x20u, 0xFFFFu);
 
 	/* 5. Repair the highest-priority offline subsystem. Zero health marks
@@ -1870,7 +1863,7 @@ void tie_updatemusic(void) {
 
 	/* --- Training mission paths ---------------------------------------- */
 	if (mission.train_craft_type != 0) {
-		if (mtimer_min || mtimer_sec >= 20u) {
+		if (timeleft.minute || timeleft.second >= 20u) {
 			if ((uint16_t)mission.train_gates_remaining < 2u)
 				music_state = 9;
 			else if ((uint16_t)mission.train_gates_remaining < 3u)
@@ -2453,7 +2446,6 @@ void tie_updatescreen(void) {
 	if (TieProfile_UsesTie98Logic()) {
 		/* PORT: keep host-only frame state outside recovered TIE98 TIE_Update_Screen. */
 		TieBillboardCapture_BeginTick();
-		draw_sync_tie98_hyperstar_state();
 		/* PORT: TIE98 rebuilds its hardware palette table when DirectDraw's
 		 * palette changes. The shared framebuffer owns that palette here. */
 		RenderTexture_SyncFlightPalette();
@@ -2843,9 +2835,9 @@ void tie_simulator(int replay_mode) {
 		for (i = 0; i < 511; i += 2) {
 
 			do {
-				stars[i] = (uint8_t)(rand_rand() & 0x7F);
+				stars[i] = (uint8_t)(rand() & 0x7F);
 			} while (stars[i] > 0x7C);
-			stars[i + 1] = (uint8_t)(rand_rand() & 3);
+			stars[i + 1] = (uint8_t)(rand() & 3);
 		}
 
 		starcol1 = 0;
@@ -3061,7 +3053,7 @@ void tie_simulator(int replay_mode) {
 			{
 				cdmusic_switch_latched = 0;
 				if (CDAUDIO_Open_Device()) {
-					const int start = rand_rand() & 3;
+					const int start = math2_getrandomalt() & 3;
 					CDAUDIO_Set_Volume((uint16_t)(0xFFFF * inflight_music_vol / 16));
 					CDAUDIO_Play_Track(2, cdmusic_start_min[start], cdmusic_start_sec[start]);
 					cdmusic_ms_remaining = CDAUDIO_Track_Length_Ms(2) -

@@ -84,10 +84,10 @@ static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t compone
 		mission.mission_score += 50;
 		if (craftptr->mesh_rotation[component_idx])
 			mission.mission_score += 50;
-		mtimer_sec = (uint8_t)(mtimer_sec + 2);
-		if (mtimer_sec >= 60) {
-			mtimer_sec = (uint8_t)(mtimer_sec - 60);
-			++mtimer_min;
+		timeleft.second = (uint8_t)(timeleft.second + 2);
+		if (timeleft.second >= 60) {
+			timeleft.second = (uint8_t)(timeleft.second - 60);
+			++timeleft.minute;
 		}
 	}
 
@@ -433,6 +433,7 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 
 // FUNCTION: TIE95 0x534E4
 uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, uint16_t damage) {
+	uint8_t* model_data;
 	ShipModelData* model;
 	ShipModelMesh* meshes_base;
 	uint16_t component_idx;
@@ -459,7 +460,9 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
 	 * objectblockptr happen to be parked on a different ship. This mirrors
 	 * the binary's XMEMHDL_Lock_Handle / model_base walk at 0x4FF26..0x4FF6B. */
 	/* Skip the 2-byte file-size prefix — matches retail's v48=a1+2. */
-	model = (ShipModelData*)((uint8_t*)species_table[objects[obj_idx_in].ship_idx].model_handle + 2);
+	model_data = (uint8_t*)xmemhdl_Lock_Handle(species_table[objects[obj_idx_in].ship_idx].model_handle);
+	model = (ShipModelData*)(model_data + 2);
+	xmemhdl_Unlock_Handle(species_table[objects[obj_idx_in].ship_idx].model_handle);
 	meshes_base = (ShipModelMesh*)&model->lod_records[model->num_lods];
 
 	component_idx = (uint16_t)(component_plus1 - 1);
@@ -512,10 +515,10 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
 		mission.mission_score += 50;
 		if (craftptr->mesh_rotation[component_idx])
 			mission.mission_score += 50; /* rotating turret = extra 50 */
-		mtimer_sec = (uint8_t)(mtimer_sec + 2);
-		if (mtimer_sec >= 60) {
-			mtimer_sec = (uint8_t)(mtimer_sec - 60);
-			++mtimer_min;
+		timeleft.second = (uint8_t)(timeleft.second + 2);
+		if (timeleft.second >= 60) {
+			timeleft.second = (uint8_t)(timeleft.second - 60);
+			++timeleft.minute;
 		}
 	}
 

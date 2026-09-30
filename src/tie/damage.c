@@ -303,7 +303,10 @@ int32_t damage_damageroom(void) {
 
 				/* 20-line layout in 320x200, 50-line in 640x480; line spacing
 				 * derived from remaining vertical space. */
-				y = tie_is_high_resolution_flight() ? 51 : 21;
+				y = (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+					 flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
+						? 51
+						: 21;
 				line_step = (uint32_t)(screenYRes - 2 * y) / NUM_SYSTEMS;
 
 				/* -- Draw group A: present and under repair (health == 0). ---- */

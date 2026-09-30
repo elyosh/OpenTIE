@@ -5,7 +5,6 @@
 #ifdef TIE_MODERN
 #include "tie_runtime/storage/pilot_storage.h"
 #endif
-#include "tie/rand.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
 #include "tie/soundext.h"
@@ -77,156 +76,9 @@ static const char reg_cp_name[29][16] = {
 	"renown",         "resolution",  "thunderer", "triumph",    "vanguard"
 };
 
-/* PORT: immutable edition dispatch. The VGA values come from TIE95
- * REGISTER_Register (0x7A4C0); the SVGA values come from TIE98
- * REGISTER_Register (0x46FBC0) and its callbacks. */
-typedef struct RegisterSpec {
-	LandruSurfaceSet surface_set;
-	const char* archive;
-	const char* snapshot_lfd;
-	const char* background;
-	const char* back_panel;
-	const char* door;
-	const char* troop;
-	int16_t width;
-	int16_t height;
-	int16_t mouse_x;
-	int16_t mouse_y;
-	int16_t door_bounds[4];
-	int16_t list_bounds[4];
-	int16_t name_bounds[4];
-	int16_t prev_bounds[4];
-	int16_t next_bounds[4];
-	int16_t info_bounds[4];
-	int16_t delete_bounds[4];
-	int16_t page_bounds[4];
-	int16_t page_size;
-	int16_t list_click_bias;
-	int16_t list_click_offset;
-	int16_t page_font;
-	int16_t list_font;
-	int16_t button_font;
-	int16_t edit_font;
-	int16_t info_label_font;
-	int16_t info_value_font;
-	int16_t filename_max_length;
-	int16_t directory_name_length;
-	int16_t button_actor_count;
-	int16_t delete_dialog_width;
-	int16_t delete_dialog_height;
-	int16_t delete_button_bounds[4];
-	int16_t delete_mouse_x;
-	int16_t delete_mouse_y;
-	int16_t delete_return_mouse_x;
-	int16_t delete_return_mouse_y;
-	int16_t delete_title_font;
-	bool use_background;
-	bool load_symbols;
-	bool dynamic_info_layout;
-	bool shared_page_button_actor;
-} RegisterSpec;
-
-static const RegisterSpec register_specs[] = {
-	// DATA: TIE95 REGISTER_Register 0x7A4C0 and callbacks 0x7A93C-0x7C827.
-	{
-		/* surface_set */ LANDRU_SURFACE_VGA,
-		/* archive */ "register.lfd",
-		/* snapshot_lfd */ "REGISTER",
-		/* background */ "reg-bak1",
-		/* back_panel */ "reg-bak2",
-		/* door */ "reg-dora",
-		/* troop */ "reg-trpa",
-		/* width */ 320,
-		/* height */ 200,
-		/* mouse_x */ 124,
-		/* mouse_y */ 106,
-		/* door_bounds */ { 240, 80, 320, 150 },
-		/* list_bounds */ { 75, 102, 127, 174 },
-		/* name_bounds */ { 75, 176, 127, 186 },
-		/* prev_bounds */ { 75, 189, 85, 197 },
-		/* next_bounds */ { 117, 189, 127, 197 },
-		/* info_bounds */ { 149, 102, 201, 188 },
-		/* delete_bounds */ { 148, 189, 200, 198 },
-		/* page_bounds */ { 92, 192, 111, 196 },
-		/* page_size */ 10,
-		/* list_click_bias */ 6,
-		/* list_click_offset */ 1,
-		/* page_font */ 1,
-		/* list_font */ 1,
-		/* button_font */ 1,
-		/* edit_font */ 0,
-		/* info_label_font */ 0,
-		/* info_value_font */ 1,
-		/* filename_max_length */ TIE_PILOT_NAME_MAX,
-		/* directory_name_length */ FILEDIR_MAX_NAME_LENGTH,
-		/* button_actor_count */ 3,
-		/* delete_dialog_width */ 180,
-		/* delete_dialog_height */ 46,
-		/* delete_button_bounds */ { 4, 4, 54, 20 },
-		/* delete_mouse_x */ 160,
-		/* delete_mouse_y */ 100,
-		/* delete_return_mouse_x */ 160,
-		/* delete_return_mouse_y */ 180,
-		/* delete_title_font */ 0,
-		/* use_background */ true,
-		/* load_symbols */ true,
-		/* dynamic_info_layout */ false,
-		/* shared_page_button_actor */ false,
-	},
-	// DATA: TIE98 REGISTER_Register 0x46FBC0 and callbacks 0x4700D0-0x4723FB.
-	{
-		/* surface_set */ LANDRU_SURFACE_SVGA,
-		/* archive */ "reg640.lfd",
-		/* snapshot_lfd */ "REG640",
-		/* background */ NULL,
-		/* back_panel */ "reg-bak2",
-		/* door */ "reg-dora",
-		/* troop */ "reg-trpa",
-		/* width */ 640,
-		/* height */ 480,
-		/* mouse_x */ 536,
-		/* mouse_y */ 274,
-		/* door_bounds */ { 486, 188, 621, 356 },
-		/* list_bounds */ { 170, 247, 271, 414 },
-		/* name_bounds */ { 170, 424, 271, 445 },
-		/* prev_bounds */ { 167, 452, 186, 475 },
-		/* next_bounds */ { 255, 452, 276, 475 },
-		/* info_bounds */ { 308, 247, 408, 450 },
-		/* delete_bounds */ { 304, 452, 413, 478 },
-		/* page_bounds */ { 187, 456, 255, 472 },
-		/* page_size */ 12,
-		/* list_click_bias */ 0,
-		/* list_click_offset */ 0,
-		/* page_font */ 3,
-		/* list_font */ 3,
-		/* button_font */ 3,
-		/* edit_font */ 3,
-		/* info_label_font */ 2,
-		/* info_value_font */ 3,
-		/* filename_max_length */ TIE_PILOT_NAME_MAX,
-		/* directory_name_length */ FILEDIR_MAX_NAME_LENGTH,
-		/* button_actor_count */ 2,
-		/* delete_dialog_width */ 360,
-		/* delete_dialog_height */ 110,
-		/* delete_button_bounds */ { 8, 10, 108, 48 },
-		/* delete_mouse_x */ 420,
-		/* delete_mouse_y */ 260,
-		/* delete_return_mouse_x */ 320,
-		/* delete_return_mouse_y */ 360,
-		/* delete_title_font */ 2,
-		/* use_background */ false,
-		/* load_symbols */ false,
-		/* dynamic_info_layout */ true,
-		/* shared_page_button_actor */ true,
-	},
-};
-
 #ifdef TIE_MODERN
-static const RegisterSpec* active_spec;
-#elif defined(TIE98)
-static const RegisterSpec* const active_spec = &register_specs[1];
-#else
-static const RegisterSpec* const active_spec = &register_specs[0];
+/* PORT: runtime frontend selection (TIE98 SVGA layout vs TIE95 VGA layout). */
+static bool register_svga;
 #endif
 
 /* ---- Static globals ---- */
@@ -449,7 +301,7 @@ static void Set_Reg_String_Button_Name(RegStringButton* btn, const char* src) {
 // FUNCTION: TIE98 0x471EE0
 static int16_t Add_Key_To_Reg_String(RegStringButton* btn, char* s, char c) {
 	int16_t len = (int16_t)strlen(s);
-	int16_t max_len = btn->is_filename_mode ? active_spec->filename_max_length : 20;
+	int16_t max_len = btn->is_filename_mode ? TIE_PILOT_NAME_MAX : 20;
 	if (len >= max_len)
 		return 0;
 	s[len] = c;
@@ -584,12 +436,24 @@ static void Delete_Pilot_Record(void) {
 
 	if (deleted) {
 		num_pilots--;
-		num_pages = (num_pilots + active_spec->page_size - 1) / active_spec->page_size;
+#ifdef TIE_MODERN
+		num_pages = (num_pilots + (register_svga ? 12 : 10) - 1) / (register_svga ? 12 : 10);
+#elif defined(TIE98)
+		num_pages = (num_pilots + 12 - 1) / 12;
+#else
+		num_pages = (num_pilots + 10 - 1) / 10;
+#endif
 		if (!num_pages)
 			num_pages = 1;
 		if (num_pages <= cur_page)
 			cur_page = num_pages - 1;
-		pilot_offset = active_spec->page_size * cur_page;
+#ifdef TIE_MODERN
+		pilot_offset = (register_svga ? 12 : 10) * cur_page;
+#elif defined(TIE98)
+		pilot_offset = 12 * cur_page;
+#else
+		pilot_offset = 10 * cur_page;
+#endif
 	}
 	pilot_active = -1;
 	shipext_Init_Pilot();
@@ -734,14 +598,28 @@ static int16_t draw_Register_Back(Actor* actor, Rect* bounds, Rect* clip, int16_
 	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
 	if (num_pages > 1) {
 		Rect r;
-		const int16_t* b = active_spec->page_bounds;
 		char buf[16];
 
-		xrect_Set_Rect(&r, b[0], b[1], b[2], b[3]);
+#ifdef TIE_MODERN
+		if (register_svga)
+			xrect_Set_Rect(&r, 187, 456, 255, 472);
+		else
+			xrect_Set_Rect(&r, 92, 192, 111, 196);
+#elif defined(TIE98)
+		xrect_Set_Rect(&r, 187, 456, 255, 472);
+#else
+		xrect_Set_Rect(&r, 92, 192, 111, 196);
+#endif
 
 		snprintf(buf, sizeof(buf), "%d:%d", cur_page + 1, num_pages);
 		xfont_Enable_FontID_Shadow(1);
-		xfont_Print_Centered_Text(buf, &r, 15, active_spec->page_font);
+#ifdef TIE_MODERN
+		xfont_Print_Centered_Text(buf, &r, 15, register_svga ? 3 : 1);
+#elif defined(TIE98)
+		xfont_Print_Centered_Text(buf, &r, 15, 3);
+#else
+		xfont_Print_Centered_Text(buf, &r, 15, 1);
+#endif
 		xfont_Disable_FontID_Shadow(1);
 	}
 	return 1;
@@ -758,7 +636,13 @@ static void idraw_Reg_String_Button(Input* input, Rect* frame, Rect* clip, int16
 	int16_t saved_font = xfont_Get_Font();
 	int16_t str_width;
 
-	xfont_Set_Font(active_spec->edit_font);
+#ifdef TIE_MODERN
+	xfont_Set_Font(register_svga ? 3 : 0);
+#elif defined(TIE98)
+	xfont_Set_Font(3);
+#else
+	xfont_Set_Font(0);
+#endif
 	str_width = xfont_Get_String_Width(btn->name);
 	xfont_Set_Font(saved_font);
 
@@ -767,7 +651,13 @@ static void idraw_Reg_String_Button(Input* input, Rect* frame, Rect* clip, int16
 
 		xstyle_Style_Paint_TextField(frame);
 		color = xstyle_Get_Style_Down_Color();
-		xfont_Print_Clipped_Text(btn->name, frame->left + 3, frame->top + 3, active_spec->edit_font, color);
+#ifdef TIE_MODERN
+		xfont_Print_Clipped_Text(btn->name, frame->left + 3, frame->top + 3, register_svga ? 3 : 0, color);
+#elif defined(TIE98)
+		xfont_Print_Clipped_Text(btn->name, frame->left + 3, frame->top + 3, 3, color);
+#else
+		xfont_Print_Clipped_Text(btn->name, frame->left + 3, frame->top + 3, 0, color);
+#endif
 	}
 
 	if (xinpattr_Is_Input_Active(&btn->header)) {
@@ -798,7 +688,13 @@ static int16_t iupdate_Reg_String_Button(Input* input, Rect* bounds, Rect* clip,
 	changed = 1;
 
 	if (key) {
-		xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+#ifdef TIE_MODERN
+		xio_Set_Mouse_Position(register_svga ? 536 : 124, register_svga ? 274 : 106);
+#elif defined(TIE98)
+		xio_Set_Mouse_Position(536, 274);
+#else
+		xio_Set_Mouse_Position(124, 106);
+#endif
 		if (key == 0x5300 || key == 8) {
 			/* Delete/Backspace */
 			int16_t len = (int16_t)strlen(work);
@@ -944,12 +840,26 @@ static int16_t iupdate_Pilot_List(Input* input, Rect* bounds, Rect* clip, int16_
 	if (btn != 3)
 		return 1;
 
-	row = (mouse_y + active_spec->list_click_bias) / (xfont_Get_FontID_Height(active_spec->list_font) + 1) -
-		  active_spec->list_click_offset;
+#ifdef TIE_MODERN
+	row = (mouse_y + (register_svga ? 0 : 6)) / (xfont_Get_FontID_Height(register_svga ? 3 : 1) + 1) -
+		  (register_svga ? 0 : 1);
+#elif defined(TIE98)
+	row = mouse_y / (xfont_Get_FontID_Height(3) + 1);
+#else
+	row = (mouse_y + 6) / (xfont_Get_FontID_Height(1) + 1) - 1;
+#endif
 	if (row < 0)
 		row = 0;
-	if (row >= active_spec->page_size)
-		row = active_spec->page_size - 1;
+#ifdef TIE_MODERN
+	if (row >= (register_svga ? 12 : 10))
+		row = (register_svga ? 12 : 10) - 1;
+#elif defined(TIE98)
+	if (row >= 12)
+		row = 12 - 1;
+#else
+	if (row >= 10)
+		row = 10 - 1;
+#endif
 
 	wanted = pilot_offset + row;
 
@@ -980,12 +890,30 @@ static void idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int16_t refr
 
 	xrect_Copy_Rect(&dst, frame);
 	dst.left++;
-	dst.bottom = dst.top + xfont_Get_FontID_Height(active_spec->list_font) + 3;
+#ifdef TIE_MODERN
+	dst.bottom = dst.top + xfont_Get_FontID_Height(register_svga ? 3 : 1) + 3;
+#elif defined(TIE98)
+	dst.bottom = dst.top + xfont_Get_FontID_Height(3) + 3;
+#else
+	dst.bottom = dst.top + xfont_Get_FontID_Height(1) + 3;
+#endif
 	dst.top += 2;
 
-	xfont_Enable_FontID_Shadow(active_spec->list_font);
+#ifdef TIE_MODERN
+	xfont_Enable_FontID_Shadow(register_svga ? 3 : 1);
+#elif defined(TIE98)
+	xfont_Enable_FontID_Shadow(3);
+#else
+	xfont_Enable_FontID_Shadow(1);
+#endif
 
-	for (row = 0; row < active_spec->page_size; row++) {
+#ifdef TIE_MODERN
+	for (row = 0; row < (register_svga ? 12 : 10); row++) {
+#elif defined(TIE98)
+	for (row = 0; row < 12; row++) {
+#else
+	for (row = 0; row < 10; row++) {
+#endif
 		int16_t wanted = pilot_offset + row;
 		int16_t slot;
 		char dir_name[TIE_PILOT_NAME_CAPACITY];
@@ -1009,11 +937,25 @@ static void idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int16_t refr
 		if (pilot_active == wanted)
 			color = 14;
 
-		xfont_Print_Clipped_Text(display_name, dst.left + 1, dst.top, active_spec->list_font, color);
-		xrect_Offset_Rect(&dst, 0, xfont_Get_FontID_Height(active_spec->list_font) + 1);
+#ifdef TIE_MODERN
+		xfont_Print_Clipped_Text(display_name, dst.left + 1, dst.top, register_svga ? 3 : 1, color);
+		xrect_Offset_Rect(&dst, 0, xfont_Get_FontID_Height(register_svga ? 3 : 1) + 1);
+#elif defined(TIE98)
+		xfont_Print_Clipped_Text(display_name, dst.left + 1, dst.top, 3, color);
+		xrect_Offset_Rect(&dst, 0, xfont_Get_FontID_Height(3) + 1);
+#else
+		xfont_Print_Clipped_Text(display_name, dst.left + 1, dst.top, 1, color);
+		xrect_Offset_Rect(&dst, 0, xfont_Get_FontID_Height(1) + 1);
+#endif
 	}
 
-	xfont_Disable_FontID_Shadow(active_spec->list_font);
+#ifdef TIE_MODERN
+	xfont_Disable_FontID_Shadow(register_svga ? 3 : 1);
+#elif defined(TIE98)
+	xfont_Disable_FontID_Shadow(3);
+#else
+	xfont_Disable_FontID_Shadow(1);
+#endif
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip);
 }
@@ -1034,9 +976,9 @@ static void iuser_Pilot_Button(Input* input, int32_t time) {
 
 	/* TIE98 0x470950 shares the page-button actor. The TIE95 branch
 	 * below uses three distinct actor state formulas. */
-	if (active_spec->shared_page_button_actor) {
-		int16_t actor_id = id == 0 ? 0 : 1;
-		xactor_Set_Actor_State(reg_button[actor_id], btn->pressed, 0);
+#ifdef TIE_MODERN
+	if (register_svga) {
+		xactor_Set_Actor_State(reg_button[id == 0 ? 0 : 1], btn->pressed, 0);
 	} else if (id == 0) {
 		xactor_Set_Actor_State(reg_button[0], 2 * btn->pressed, 0);
 	} else if (id == 1) {
@@ -1044,6 +986,16 @@ static void iuser_Pilot_Button(Input* input, int32_t time) {
 	} else if (id == 2) {
 		xactor_Set_Actor_State(reg_button[2], btn->pressed + 4, 0);
 	}
+#elif defined(TIE98)
+	xactor_Set_Actor_State(reg_button[id == 0 ? 0 : 1], btn->pressed, 0);
+#else
+	if (id == 0)
+		xactor_Set_Actor_State(reg_button[0], 2 * btn->pressed, 0);
+	else if (id == 1)
+		xactor_Set_Actor_State(reg_button[1], 2 * btn->pressed + 1, 0);
+	else if (id == 2)
+		xactor_Set_Actor_State(reg_button[2], btn->pressed + 4, 0);
+#endif
 
 	if (!xinpattr_Get_Input_Selected(&btn->header))
 		return;
@@ -1059,14 +1011,26 @@ static void iuser_Pilot_Button(Input* input, int32_t time) {
 			cur_page = num_pages - 1;
 		else
 			cur_page--;
-		pilot_offset = active_spec->page_size * cur_page;
+#ifdef TIE_MODERN
+		pilot_offset = (register_svga ? 12 : 10) * cur_page;
+#elif defined(TIE98)
+		pilot_offset = 12 * cur_page;
+#else
+		pilot_offset = 10 * cur_page;
+#endif
 	} else if (id == 1) {
 		/* Next page */
 		if (cur_page >= num_pages - 1)
 			cur_page = 0;
 		else
 			cur_page++;
-		pilot_offset = active_spec->page_size * cur_page;
+#ifdef TIE_MODERN
+		pilot_offset = (register_svga ? 12 : 10) * cur_page;
+#elif defined(TIE98)
+		pilot_offset = 12 * cur_page;
+#else
+		pilot_offset = 10 * cur_page;
+#endif
 	} else if (id == 2) {
 		int16_t result;
 
@@ -1107,7 +1071,13 @@ static void idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, int16_t re
 
 	color = btn->pressed ? 18 : 20;
 	if (btn->name) {
-		xfont_Print_Centered_Text(btn->name, &tr, color, active_spec->button_font);
+#ifdef TIE_MODERN
+		xfont_Print_Centered_Text(btn->name, &tr, color, register_svga ? 3 : 1);
+#elif defined(TIE98)
+		xfont_Print_Centered_Text(btn->name, &tr, color, 3);
+#else
+		xfont_Print_Centered_Text(btn->name, &tr, color, 1);
+#endif
 	}
 
 	if (xinpattr_Is_Input_Dirty(input))
@@ -1155,10 +1125,22 @@ static void iuser_Pilot_Name(Input* input, int32_t time) {
 
 		xinpattr_Refresh_Input(pilot_list);
 		pilot_active = matched;
-		page = matched / active_spec->page_size;
+#ifdef TIE_MODERN
+		page = matched / (register_svga ? 12 : 10);
+#elif defined(TIE98)
+		page = matched / 12;
+#else
+		page = matched / 10;
+#endif
 		if (page != cur_page) {
 			cur_page = page;
-			pilot_offset = active_spec->page_size * page;
+#ifdef TIE_MODERN
+			pilot_offset = (register_svga ? 12 : 10) * page;
+#elif defined(TIE98)
+			pilot_offset = 12 * page;
+#else
+			pilot_offset = 10 * page;
+#endif
 		}
 	}
 
@@ -1200,10 +1182,22 @@ static void xuser_Pilot_Name(const char* search_name) {
 
 		xinpattr_Refresh_Input(pilot_list);
 		pilot_active = matched;
-		page = matched / active_spec->page_size;
+#ifdef TIE_MODERN
+		page = matched / (register_svga ? 12 : 10);
+#elif defined(TIE98)
+		page = matched / 12;
+#else
+		page = matched / 10;
+#endif
 		if (page != cur_page) {
 			cur_page = page;
-			pilot_offset = active_spec->page_size * page;
+#ifdef TIE_MODERN
+			pilot_offset = (register_svga ? 12 : 10) * page;
+#elif defined(TIE98)
+			pilot_offset = 12 * page;
+#else
+			pilot_offset = 10 * page;
+#endif
 		}
 	}
 }
@@ -1220,7 +1214,13 @@ static void idraw_Pilot_Name(Input* input, Rect* frame, Rect* clip, int16_t refr
 
 	TiePilotName_CopyForDisplay(display_name, sizeof(display_name), btn->name);
 	saved_font = xfont_Get_Font();
-	xfont_Set_Font(active_spec->edit_font);
+#ifdef TIE_MODERN
+	xfont_Set_Font(register_svga ? 3 : 0);
+#elif defined(TIE98)
+	xfont_Set_Font(3);
+#else
+	xfont_Set_Font(0);
+#endif
 	str_width = xfont_Get_String_Width(display_name);
 	xfont_Set_Font(saved_font);
 
@@ -1231,19 +1231,32 @@ static void idraw_Pilot_Name(Input* input, Rect* frame, Rect* clip, int16_t refr
 
 		xpaint_Paint_Clipped_Rect(frame, 0);
 		color = xstyle_Get_Style_Down_Color();
-		x = frame->left + (active_spec->dynamic_info_layout ? 1 : 2);
-		y = frame->top + (active_spec->dynamic_info_layout ? 2 : 1);
-		xfont_Print_Clipped_Text(display_name, x, y, active_spec->edit_font, color);
+#ifdef TIE_MODERN
+		x = frame->left + (register_svga ? 1 : 2);
+		y = frame->top + (register_svga ? 2 : 1);
+		xfont_Print_Clipped_Text(display_name, x, y, register_svga ? 3 : 0, color);
+#elif defined(TIE98)
+		x = frame->left + 1;
+		y = frame->top + 2;
+		xfont_Print_Clipped_Text(display_name, x, y, 3, color);
+#else
+		x = frame->left + 2;
+		y = frame->top + 1;
+		xfont_Print_Clipped_Text(display_name, x, y, 0, color);
+#endif
 	}
 
 	caret_color = 0;
-	if (xinpattr_Is_Input_Active(&btn->header) && (int)strlen(btn->name) < active_spec->filename_max_length &&
-		xio_Blink())
+	if (xinpattr_Is_Input_Active(&btn->header) && (int)strlen(btn->name) < TIE_PILOT_NAME_MAX && xio_Blink())
 		caret_color = xstyle_Get_Style_Down_Color();
 
-	caret_y = active_spec->dynamic_info_layout
-				  ? frame->top + xfont_Get_FontID_Height(active_spec->edit_font) + 1
-				  : frame->top + 7;
+#ifdef TIE_MODERN
+	caret_y = register_svga ? frame->top + xfont_Get_FontID_Height(3) + 1 : frame->top + 7;
+#elif defined(TIE98)
+	caret_y = frame->top + xfont_Get_FontID_Height(3) + 1;
+#else
+	caret_y = frame->top + 7;
+#endif
 	xpaint_Horiz_Clipped_Line(frame->left + str_width + 4, caret_y, 5, caret_color);
 
 	if (xinpattr_Is_Input_Dirty(&btn->header))
@@ -1299,8 +1312,16 @@ static void Draw_Pilot_Title(Rect* frame, int16_t phase) {
 	c1 = len1 + 240;
 	if (c1 > 247)
 		c1 = 247;
-	imperial_x = active_spec->dynamic_info_layout ? 30 : 11;
-	xfont_Print_Clipped_Text(buf, frame->left + imperial_x, frame->top + 1, active_spec->info_value_font, c1);
+#ifdef TIE_MODERN
+	imperial_x = register_svga ? 30 : 11;
+	xfont_Print_Clipped_Text(buf, frame->left + imperial_x, frame->top + 1, register_svga ? 3 : 1, c1);
+#elif defined(TIE98)
+	imperial_x = 30;
+	xfont_Print_Clipped_Text(buf, frame->left + imperial_x, frame->top + 1, 3, c1);
+#else
+	imperial_x = 11;
+	xfont_Print_Clipped_Text(buf, frame->left + imperial_x, frame->top + 1, 1, c1);
+#endif
 
 	if (phase >= 4) {
 		int16_t len2 = phase >= 12 ? 8 : phase - 4;
@@ -1313,19 +1334,39 @@ static void Draw_Pilot_Title(Rect* frame, int16_t phase) {
 		c2 = len2 + 240;
 		if (c2 > 247)
 			c2 = 247;
-		database_x = active_spec->dynamic_info_layout ? 26 : 10;
-		database_y =
-			active_spec->dynamic_info_layout ? xfont_Get_FontID_Height(active_spec->info_value_font) + 1 : 7;
+#ifdef TIE_MODERN
+		database_x = register_svga ? 26 : 10;
+		database_y = (register_svga ? xfont_Get_FontID_Height(3) + 1 : 7);
 		xfont_Print_Clipped_Text(buf, frame->left + database_x, frame->top + database_y,
-								 active_spec->info_value_font, c2);
+								 register_svga ? 3 : 1, c2);
+#elif defined(TIE98)
+		database_x = 26;
+		database_y = xfont_Get_FontID_Height(3) + 1;
+		xfont_Print_Clipped_Text(buf, frame->left + database_x, frame->top + database_y, 3, c2);
+#else
+		database_x = 10;
+		database_y = 7;
+		xfont_Print_Clipped_Text(buf, frame->left + database_x, frame->top + database_y, 1, c2);
+#endif
 	}
 
 	if (phase < 16) {
-		int16_t access_x = active_spec->dynamic_info_layout ? 20 : 10;
-		int16_t access_y = active_spec->dynamic_info_layout ? (frame->bottom - frame->top) / 2 : 36;
+#ifdef TIE_MODERN
+		int16_t access_x = register_svga ? 20 : 10;
+		int16_t access_y = register_svga ? (frame->bottom - frame->top) / 2 : 36;
 		xfont_Print_Clipped_Text(textext_Get_Text(txtRegInfoAccess), frame->left + access_x,
-								 frame->top + access_y, active_spec->info_value_font,
-								 4 * ((phase >> 1) & 3) + 19);
+								 frame->top + access_y, register_svga ? 3 : 1, 4 * ((phase >> 1) & 3) + 19);
+#elif defined(TIE98)
+		int16_t access_x = 20;
+		int16_t access_y = (frame->bottom - frame->top) / 2;
+		xfont_Print_Clipped_Text(textext_Get_Text(txtRegInfoAccess), frame->left + access_x,
+								 frame->top + access_y, 3, 4 * ((phase >> 1) & 3) + 19);
+#else
+		int16_t access_x = 10;
+		int16_t access_y = 36;
+		xfont_Print_Clipped_Text(textext_Get_Text(txtRegInfoAccess), frame->left + access_x,
+								 frame->top + access_y, 1, 4 * ((phase >> 1) & 3) + 19);
+#endif
 	}
 }
 
@@ -1337,8 +1378,30 @@ static void Draw_Pilot_Lines(Rect* frame, int16_t phase, int16_t line2_off) {
 	int16_t x = 15 - pc + frame->left;
 
 	// TIE98 0x471090; the branch below it is TIE95 0x7B710.
-	if (active_spec->dynamic_info_layout) {
-		int16_t font_h = xfont_Get_FontID_Height(active_spec->info_value_font);
+#ifdef TIE98
+	int16_t font_h = xfont_Get_FontID_Height(3);
+	int16_t line1_y = frame->top + 2 * font_h + 3;
+	int16_t line2_y = frame->top + line2_off + 3 * font_h + 4;
+	xpaint_Horiz_Clipped_Line(x, line1_y, w, pc / 2 + 240);
+	xpaint_Horiz_Clipped_Line(x, line2_y, w, pc / 2 + 240);
+
+	if (phase > line2_off + 15) {
+		int16_t color = 240;
+		int16_t progress = 2 * (phase - line2_off) - 37;
+		while (color <= 247) {
+			if (progress >= 0) {
+				int16_t clamped = progress <= 62 ? progress : 62;
+				if (clamped != 62 || color == 247)
+					xpaint_Horiz_Clipped_Line(frame->left, frame->bottom - 3, w, color);
+			}
+			progress++;
+			color++;
+		}
+	}
+#else
+#ifdef TIE_MODERN
+	if (register_svga) {
+		int16_t font_h = xfont_Get_FontID_Height(3);
 		int16_t line1_y = frame->top + 2 * font_h + 3;
 		int16_t line2_y = frame->top + line2_off + 3 * font_h + 4;
 		xpaint_Horiz_Clipped_Line(x, line1_y, w, pc / 2 + 240);
@@ -1359,6 +1422,7 @@ static void Draw_Pilot_Lines(Rect* frame, int16_t phase, int16_t line2_off) {
 		}
 		return;
 	}
+#endif
 
 	xpaint_Horiz_Clipped_Line(x, frame->top + 14, w, pc / 2 + 240);
 	xpaint_Horiz_Clipped_Line(x, line2_off + frame->top + 22, w, pc / 2 + 240);
@@ -1376,6 +1440,7 @@ static void Draw_Pilot_Lines(Rect* frame, int16_t phase, int16_t line2_off) {
 			color++;
 		}
 	}
+#endif
 }
 
 // FUNCTION: TIE95 0x7B858
@@ -1412,23 +1477,48 @@ static void Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 
 		xrect_Copy_Rect(&tr, frame);
 		// TIE98 0x471190; the alternative is TIE95 0x7B858.
-		if (active_spec->dynamic_info_layout) {
-			int16_t font_h = xfont_Get_FontID_Height(active_spec->info_value_font);
+#ifdef TIE_MODERN
+		if (register_svga) {
+			int16_t font_h = xfont_Get_FontID_Height(3);
 			tr.top = frame->top + 2 * font_h + 4;
 			tr.bottom = tr.top + font_h;
 		} else {
 			tr.top = frame->top + 17;
 			tr.bottom = frame->top + 22;
 		}
-		xfont_Print_Centered_Text(display_name, &tr, ci + 248, active_spec->info_value_font);
+		xfont_Print_Centered_Text(display_name, &tr, ci + 248, register_svga ? 3 : 1);
+#elif defined(TIE98)
+		tr.top = frame->top + 2 * xfont_Get_FontID_Height(3) + 4;
+		tr.bottom = tr.top + xfont_Get_FontID_Height(3);
+		xfont_Print_Centered_Text(display_name, &tr, ci + 248, 3);
+#else
+		tr.top = frame->top + 17;
+		tr.bottom = frame->top + 22;
+		xfont_Print_Centered_Text(display_name, &tr, ci + 248, 1);
+#endif
 
-		status_offset =
-			active_spec->dynamic_info_layout ? xfont_Get_FontID_Height(active_spec->info_value_font) : 6;
-		status_phase = active_spec->dynamic_info_layout ? status_offset + 1 : 6;
+#ifdef TIE_MODERN
+		status_offset = (register_svga ? xfont_Get_FontID_Height(3) : 6);
+		status_phase = register_svga ? status_offset + 1 : 6;
+#elif defined(TIE98)
+		status_offset = xfont_Get_FontID_Height(3);
+		status_phase = status_offset + 1;
+#else
+		status_offset = 6;
+		status_phase = 6;
+#endif
 		if (phase >= 16 && pilot_record.exit_status && inner_phase >= status_phase) {
 			xrect_Offset_Rect(&tr, 0, status_offset);
+#ifdef TIE_MODERN
 			xfont_Print_Centered_Text(textext_Get_Text((TIEText)(pilot_record.exit_status + 10)), &tr,
-									  (phase & 7) / 2 + 252, active_spec->info_value_font);
+									  (phase & 7) / 2 + 252, register_svga ? 3 : 1);
+#elif defined(TIE98)
+			xfont_Print_Centered_Text(textext_Get_Text((TIEText)(pilot_record.exit_status + 10)), &tr,
+									  (phase & 7) / 2 + 252, 3);
+#else
+			xfont_Print_Centered_Text(textext_Get_Text((TIEText)(pilot_record.exit_status + 10)), &tr,
+									  (phase & 7) / 2 + 252, 1);
+#endif
 		}
 	}
 }
@@ -1437,14 +1527,65 @@ static void Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 // FUNCTION: TIE98 0x471320
 static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 	// TIE98 0x471320; the branch below it is TIE95 0x7B9B8.
+#ifdef TIE98
+	int16_t label_h = xfont_Get_FontID_Height(2);
+	int16_t value_h = xfont_Get_FontID_Height(3);
+	int16_t row = label_h + value_h + 2;
+	int16_t first_row_y = 3 * value_h + 7;
+
+	if (phase >= inner_phase + 18) {
+		int16_t sub = phase - (inner_phase + 18);
+		int16_t c1;
+		int16_t c2;
+		int16_t y;
+		char buf[20];
+
+		if (sub > 7)
+			sub = 7;
+		c1 = sub + 240;
+		c2 = sub + 248;
+		y = frame->top + inner_phase + first_row_y;
+
+		xfont_Enable_FontID_Shadow(2);
+		xfont_Enable_FontID_Shadow(3);
+
+		xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotRank), frame->left + 2, y, 2, c1);
+		xfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.rank + 1)), frame->left + 2,
+								 y + label_h, 3, c2);
+
+		snprintf(buf, sizeof(buf), "%lu", (unsigned long)pilot_record.score);
+		y += row + 10;
+		xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotScore), frame->left + 2, y, 2, c1);
+		xfont_Print_Clipped_Text(buf, frame->left + 2, y + label_h, 3, c2);
+
+		y += row + 10;
+		xfont_Print_Clipped_Text(textext_Get_Text(txtRegLevel), frame->left + 2, y, 2, c1);
+		xfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.game_level + 29)), frame->left + 2,
+								 y + label_h, 3, c2);
+
+		xfont_Disable_FontID_Shadow(2);
+		xfont_Disable_FontID_Shadow(3);
+	}
+
+	if (phase > inner_phase + 15) {
+		int16_t cover = 2 * (phase - inner_phase) - 30;
+		if (cover < 62) {
+			Rect r;
+			xrect_Set_Rect(&r, frame->left, frame->top + inner_phase + cover + first_row_y + 2 * (row + 10),
+						   frame->right, frame->bottom);
+			xpaint_Paint_Clipped_Rect(&r, 16);
+		}
+	}
+#else
 	int16_t sub;
 	int16_t c1;
 	int16_t c2;
 	char buf[20];
 
-	if (active_spec->dynamic_info_layout) {
-		int16_t label_h = xfont_Get_FontID_Height(active_spec->info_label_font);
-		int16_t value_h = xfont_Get_FontID_Height(active_spec->info_value_font);
+#ifdef TIE_MODERN
+	if (register_svga) {
+		int16_t label_h = xfont_Get_FontID_Height(2);
+		int16_t value_h = xfont_Get_FontID_Height(3);
 		int16_t row = label_h + value_h + 2;
 		int16_t first_row_y = 3 * value_h + 7;
 
@@ -1461,28 +1602,25 @@ static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 			c2 = sub + 248;
 			y = frame->top + inner_phase + first_row_y;
 
-			xfont_Enable_FontID_Shadow(active_spec->info_label_font);
-			xfont_Enable_FontID_Shadow(active_spec->info_value_font);
+			xfont_Enable_FontID_Shadow(2);
+			xfont_Enable_FontID_Shadow(3);
 
-			xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotRank), frame->left + 2, y,
-									 active_spec->info_label_font, c1);
+			xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotRank), frame->left + 2, y, 2, c1);
 			xfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.rank + 1)), frame->left + 2,
-									 y + label_h, active_spec->info_value_font, c2);
+									 y + label_h, 3, c2);
 
 			snprintf(buf, sizeof(buf), "%lu", (unsigned long)pilot_record.score);
 			y += row + 10;
-			xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotScore), frame->left + 2, y,
-									 active_spec->info_label_font, c1);
-			xfont_Print_Clipped_Text(buf, frame->left + 2, y + label_h, active_spec->info_value_font, c2);
+			xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotScore), frame->left + 2, y, 2, c1);
+			xfont_Print_Clipped_Text(buf, frame->left + 2, y + label_h, 3, c2);
 
 			y += row + 10;
-			xfont_Print_Clipped_Text(textext_Get_Text(txtRegLevel), frame->left + 2, y,
-									 active_spec->info_label_font, c1);
+			xfont_Print_Clipped_Text(textext_Get_Text(txtRegLevel), frame->left + 2, y, 2, c1);
 			xfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.game_level + 29)),
-									 frame->left + 2, y + label_h, active_spec->info_value_font, c2);
+									 frame->left + 2, y + label_h, 3, c2);
 
-			xfont_Disable_FontID_Shadow(active_spec->info_label_font);
-			xfont_Disable_FontID_Shadow(active_spec->info_value_font);
+			xfont_Disable_FontID_Shadow(2);
+			xfont_Disable_FontID_Shadow(3);
 		}
 
 		if (phase > inner_phase + 15) {
@@ -1497,6 +1635,7 @@ static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 		}
 		return;
 	}
+#endif
 
 	if (phase < inner_phase + 18)
 		return;
@@ -1505,34 +1644,33 @@ static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 	if (sub > 7)
 		sub = 7;
 
-	xfont_Enable_FontID_Shadow(active_spec->info_label_font);
-	xfont_Enable_FontID_Shadow(active_spec->info_value_font);
+	xfont_Enable_FontID_Shadow(0);
+	xfont_Enable_FontID_Shadow(1);
 
 	c1 = sub + 240;
 	c2 = sub + 248;
 
 	/* Rank */
 	xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotRank), frame->left + 2,
-							 inner_phase + frame->top + 24, active_spec->info_label_font, c1);
+							 inner_phase + frame->top + 24, 0, c1);
 	xfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.rank + 1)), frame->left + 2,
-							 inner_phase + frame->top + 34, active_spec->info_value_font, c2);
+							 inner_phase + frame->top + 34, 1, c2);
 
 	/* Score */
 
 	snprintf(buf, sizeof(buf), "%lu", (unsigned long)pilot_record.score);
 	xfont_Print_Clipped_Text(textext_Get_Text(txtRegPilotScore), frame->left + 2,
-							 inner_phase + frame->top + 44, active_spec->info_label_font, c1);
-	xfont_Print_Clipped_Text(buf, frame->left + 2, inner_phase + frame->top + 54,
-							 active_spec->info_value_font, c2);
+							 inner_phase + frame->top + 44, 0, c1);
+	xfont_Print_Clipped_Text(buf, frame->left + 2, inner_phase + frame->top + 54, 1, c2);
 
 	/* Level */
-	xfont_Print_Clipped_Text(textext_Get_Text(txtRegLevel), frame->left + 2, inner_phase + frame->top + 64,
-							 active_spec->info_label_font, c1);
+	xfont_Print_Clipped_Text(textext_Get_Text(txtRegLevel), frame->left + 2, inner_phase + frame->top + 64, 0,
+							 c1);
 	xfont_Print_Clipped_Text(textext_Get_Text((TIEText)(pilot_record.game_level + 29)), frame->left + 2,
-							 inner_phase + frame->top + 74, active_spec->info_value_font, c2);
+							 inner_phase + frame->top + 74, 1, c2);
 
-	xfont_Disable_FontID_Shadow(active_spec->info_label_font);
-	xfont_Disable_FontID_Shadow(active_spec->info_value_font);
+	xfont_Disable_FontID_Shadow(0);
+	xfont_Disable_FontID_Shadow(1);
 
 	/* Progressive reveal: paint a color-16 cover rect over the lower
 	 * portion of the panel that hasn't been animated in yet. The cover
@@ -1548,6 +1686,7 @@ static void Draw_Pilot_Info(Rect* frame, int16_t phase, int16_t inner_phase) {
 			xpaint_Paint_Clipped_Rect(&r, 16);
 		}
 	}
+#endif
 }
 
 // FUNCTION: TIE95 0x7B4DC
@@ -1565,9 +1704,13 @@ static void idraw_Pilot_Info(Input* input, Rect* frame, Rect* clip, int16_t refr
 			int16_t inner_max;
 
 			inner = phase - 15;
-			inner_max = active_spec->dynamic_info_layout
-							? xfont_Get_FontID_Height(active_spec->info_value_font) + 1
-							: 6;
+#ifdef TIE_MODERN
+			inner_max = register_svga ? xfont_Get_FontID_Height(3) + 1 : 6;
+#elif defined(TIE98)
+			inner_max = xfont_Get_FontID_Height(3) + 1;
+#else
+			inner_max = 6;
+#endif
 			if (inner > inner_max)
 				inner = inner_max;
 		}
@@ -1593,11 +1736,16 @@ static Input* Build_Delete_Dialog(void) {
 	Rect r;
 	Input* dlg;
 	char label[32];
-	const int16_t* b;
 	PushButton* del;
 	PushButton* cancel;
 
-	xrect_Set_Rect(&r, 0, 0, active_spec->delete_dialog_width, active_spec->delete_dialog_height);
+#ifdef TIE_MODERN
+	xrect_Set_Rect(&r, 0, 0, register_svga ? 360 : 180, register_svga ? 110 : 46);
+#elif defined(TIE98)
+	xrect_Set_Rect(&r, 0, 0, 360, 110);
+#else
+	xrect_Set_Rect(&r, 0, 0, 180, 46);
+#endif
 	dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
 	if (!dlg)
 		return NULL;
@@ -1608,8 +1756,16 @@ static Input* Build_Delete_Dialog(void) {
 
 	Index_To_Pilot_Record(pilot_active, &shell_pilot);
 
-	b = active_spec->delete_button_bounds;
-	xrect_Set_Rect(&r, b[0], b[1], b[2], b[3]);
+#ifdef TIE_MODERN
+	if (register_svga)
+		xrect_Set_Rect(&r, 8, 10, 108, 48);
+	else
+		xrect_Set_Rect(&r, 4, 4, 54, 20);
+#elif defined(TIE98)
+	xrect_Set_Rect(&r, 8, 10, 108, 48);
+#else
+	xrect_Set_Rect(&r, 4, 4, 54, 20);
+#endif
 	strcpy(label, textext_Get_Text(txtRegBtnDelete));
 	del = xbtnpush_Alloc_Button(dlg, &r, 0, iuser_Delete_Input, label, 1);
 	if (!del) {
@@ -1618,7 +1774,16 @@ static Input* Build_Delete_Dialog(void) {
 	}
 	xinpattr_Set_Input_Allign(&del->header, 0, 2);
 
-	xrect_Set_Rect(&r, b[0], b[1], b[2], b[3]);
+#ifdef TIE_MODERN
+	if (register_svga)
+		xrect_Set_Rect(&r, 8, 10, 108, 48);
+	else
+		xrect_Set_Rect(&r, 4, 4, 54, 20);
+#elif defined(TIE98)
+	xrect_Set_Rect(&r, 8, 10, 108, 48);
+#else
+	xrect_Set_Rect(&r, 4, 4, 54, 20);
+#endif
 	strcpy(label, textext_Get_Text(txtRegBtnCancel));
 	cancel = xbtnpush_Alloc_Button(dlg, &r, 0, iuser_Delete_Input, label, 2);
 	if (!cancel) {
@@ -1646,7 +1811,13 @@ static int16_t Do_Delete_Dialog(void) {
 		key_buttons = xio_Is_Key_Buttons();
 		if (!key_buttons)
 			xio_Set_Key_Buttons();
-		xio_Set_Mouse_Position(active_spec->delete_mouse_x, active_spec->delete_mouse_y);
+#ifdef TIE_MODERN
+		xio_Set_Mouse_Position(register_svga ? 420 : 160, register_svga ? 260 : 100);
+#elif defined(TIE98)
+	xio_Set_Mouse_Position(420, 260);
+#else
+	xio_Set_Mouse_Position(160, 100);
+#endif
 		the_input = Build_Delete_Dialog();
 #ifdef TIE_MODERN
 		// HARDENING: the original assumes dialog allocation succeeds.
@@ -1667,7 +1838,13 @@ static int16_t Do_Delete_Dialog(void) {
 	xinput_Free_Inputs(the_input);
 	if (!key_buttons)
 		xio_Clear_Key_Buttons();
-	xio_Set_Mouse_Position(active_spec->delete_return_mouse_x, active_spec->delete_return_mouse_y);
+#ifdef TIE_MODERN
+	xio_Set_Mouse_Position(register_svga ? 320 : 160, register_svga ? 360 : 180);
+#elif defined(TIE98)
+	xio_Set_Mouse_Position(320, 360);
+#else
+	xio_Set_Mouse_Position(160, 180);
+#endif
 	return retval;
 }
 
@@ -1722,16 +1899,29 @@ static void idraw_Delete_Input(Input* input, Rect* frame, Rect* clip, int16_t re
 	xpaint_Frame_Clipped_Rect(&dst, 16);
 	xrect_Inset_Rect(&dst, 1, 1);
 	xstyle_Style_Paint_Border(&dst, 0);
-	if (active_spec->dynamic_info_layout) {
-		int16_t font_h = xfont_Get_FontID_Height(active_spec->delete_title_font);
+#ifdef TIE_MODERN
+	if (register_svga) {
+		int16_t font_h = xfont_Get_FontID_Height(2);
 		dst.top += font_h;
 		dst.bottom = dst.top + font_h;
 	} else {
 		dst.bottom = dst.top + 14;
 	}
-	xfont_Enable_FontID_Shadow(active_spec->delete_title_font);
-	xfont_Print_Centered_Text(title, &dst, 15, active_spec->delete_title_font);
-	xfont_Disable_FontID_Shadow(active_spec->delete_title_font);
+	xfont_Enable_FontID_Shadow(register_svga ? 2 : 0);
+	xfont_Print_Centered_Text(title, &dst, 15, register_svga ? 2 : 0);
+	xfont_Disable_FontID_Shadow(register_svga ? 2 : 0);
+#elif defined(TIE98)
+	dst.top += xfont_Get_FontID_Height(2);
+	dst.bottom = dst.top + xfont_Get_FontID_Height(2);
+	xfont_Enable_FontID_Shadow(2);
+	xfont_Print_Centered_Text(title, &dst, 15, 2);
+	xfont_Disable_FontID_Shadow(2);
+#else
+	dst.bottom = dst.top + 14;
+	xfont_Enable_FontID_Shadow(0);
+	xfont_Print_Centered_Text(title, &dst, 15, 0);
+	xfont_Disable_FontID_Shadow(0);
+#endif
 
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip);
@@ -1838,7 +2028,7 @@ static void iuser_Protect_Input(Input* input, int32_t time) {
 	if (input->id == 3 && !protect_chosen) {
 		int16_t i;
 
-		protect_index = rand_rand() % 29;
+		protect_index = rand() % 29;
 		for (i = 0; i < 3; i++)
 			protect_state[i] = reg_cp[3 * protect_index + i];
 		xinpattr_Refresh_Input(input);
@@ -2007,7 +2197,13 @@ void register_end_View(int32_t phase) {
 		Build_Fast_Pilot_Record();
 		xcursor_Set_Cursor(0); /* mainCursor */
 
-		num_pages = (num_pilots + active_spec->page_size - 1) / active_spec->page_size;
+#ifdef TIE_MODERN
+		num_pages = (num_pilots + (register_svga ? 12 : 10) - 1) / (register_svga ? 12 : 10);
+#elif defined(TIE98)
+		num_pages = (num_pilots + 12 - 1) / 12;
+#else
+		num_pages = (num_pilots + 10 - 1) / 10;
+#endif
 		if (!num_pages)
 			num_pages = 1;
 		cur_page = 0;
@@ -2056,7 +2252,6 @@ void register_end_View(int32_t phase) {
 int16_t register_Register(SceneHeadStruct* scene_head) {
 	ResFile* rf;
 #ifdef TIE_MODERN
-	bool tie98 = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
 #endif
 	Rect frame;
 
@@ -2065,7 +2260,7 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	PushButton* next;
 
 #ifdef TIE_MODERN
-	active_spec = &register_specs[tie98 ? 1 : 0];
+	register_svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
 #endif
 
 	shipext_Delete_Temp_Pilot();
@@ -2090,7 +2285,7 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	memset(reg_button, 0, sizeof(reg_button));
 
 #ifdef TIE_MODERN
-	xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+	xio_Set_Mouse_Position(register_svga ? 536 : 124, register_svga ? 274 : 106);
 #elif defined(TIE98)
 	xio_Set_Mouse_Position(536, 274);
 #else
@@ -2098,7 +2293,7 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 #endif
 
 #ifdef TIE_MODERN
-	rf = shellext_Open_Empire_Resource(active_spec->archive);
+	rf = shellext_Open_Empire_Resource(register_svga ? "reg640.lfd" : "register.lfd");
 #elif defined(TIE98)
 	rf = shellext_Open_Empire_Resource("reg640.lfd");
 #else
@@ -2106,12 +2301,12 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 #endif
 #ifdef TIE_MODERN
 	if (!rf) {
-		TieRegister_RunView(rf, false, active_spec->archive);
+		TieRegister_RunView(rf, false, register_svga ? "reg640.lfd" : "register.lfd");
 		return 0;
 	}
 #endif
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+	xrect_Set_Rect(&frame, 0, 0, register_svga ? 640 : 320, register_svga ? 480 : 200);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 0, 0, 640, 480);
 #else
@@ -2127,12 +2322,12 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	if (shellext_Get_Cur_Scene() == SCENE_REGISTER) {
 		register_film = xfilm_Res_Callback_Film("register", &frame, 0, 0, 0, film_Callback);
 #ifdef TIE_MODERN
-		TieSnapshotBuilder_SetActiveFilm(active_spec->snapshot_lfd, "register");
+		TieSnapshotBuilder_SetActiveFilm(register_svga ? "REG640" : "REGISTER", "register");
 #endif
 	} else {
 		register_film = xfilm_Res_Callback_Film("reg2", &frame, 0, 0, 0, film_Callback);
 #ifdef TIE_MODERN
-		TieSnapshotBuilder_SetActiveFilm(active_spec->snapshot_lfd, "reg2");
+		TieSnapshotBuilder_SetActiveFilm(register_svga ? "REG640" : "REGISTER", "reg2");
 #endif
 	}
 #ifdef TIE_MODERN
@@ -2142,7 +2337,7 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	}
 #endif
 #ifdef TIE_MODERN
-	for (i = 0; i < active_spec->button_actor_count; i++) {
+	for (i = 0; i < (register_svga ? 2 : 3); i++) {
 #ifdef TIE_MODERN
 		if (!reg_button[i]) {
 			TieRegister_RunView(rf, false, "registration button actor");
@@ -2157,11 +2352,11 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 
 #ifdef TIE_MODERN
 	/* TIE95 0x7A593 loads reg-bak1; TIE98 has no equivalent actor. */
-	if (active_spec->use_background) {
-		Actor* bak1 = xactor_Find_Actor(FOURCC_DELT, active_spec->background);
+	if (!register_svga) {
+		Actor* bak1 = xactor_Find_Actor(FOURCC_DELT, "reg-bak1");
 #ifdef TIE_MODERN
 		if (!bak1) {
-			TieRegister_RunView(rf, false, active_spec->background);
+			TieRegister_RunView(rf, false, "reg-bak1");
 			return 0;
 		}
 #endif
@@ -2179,39 +2374,39 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	}
 #endif
 #ifdef TIE_MODERN
-	reg_bak = xactor_Find_Actor(FOURCC_DELT, active_spec->back_panel);
+	reg_bak = xactor_Find_Actor(FOURCC_DELT, "reg-bak2");
 #else
 	reg_bak = xactor_Find_Actor(FOURCC_DELT, "reg-bak2");
 #endif
 #ifdef TIE_MODERN
 	if (!reg_bak) {
-		TieRegister_RunView(rf, false, active_spec->back_panel);
+		TieRegister_RunView(rf, false, "reg-bak2");
 		return 0;
 	}
 #endif
 	xactor_Set_Actor_Draw_Function(reg_bak, draw_Register_Back);
 
 #ifdef TIE_MODERN
-	reg_door = xactor_Find_Actor(FOURCC_ANIM, active_spec->door);
+	reg_door = xactor_Find_Actor(FOURCC_ANIM, "reg-dora");
 #else
 	reg_door = xactor_Find_Actor(FOURCC_ANIM, "reg-dora");
 #endif
 #ifdef TIE_MODERN
 	if (!reg_door) {
-		TieRegister_RunView(rf, false, active_spec->door);
+		TieRegister_RunView(rf, false, "reg-dora");
 		return 0;
 	}
 #endif
 	xactor_Set_Actor_User_Function(reg_door, (xactorCallback)user_Door);
 
 #ifdef TIE_MODERN
-	reg_troop = xactor_Find_Actor(FOURCC_ANIM, active_spec->troop);
+	reg_troop = xactor_Find_Actor(FOURCC_ANIM, "reg-trpa");
 #else
 	reg_troop = xactor_Find_Actor(FOURCC_ANIM, "reg-trpa");
 #endif
 #ifdef TIE_MODERN
 	if (!reg_troop) {
-		TieRegister_RunView(rf, false, active_spec->troop);
+		TieRegister_RunView(rf, false, "reg-trpa");
 		return 0;
 	}
 #endif
@@ -2226,11 +2421,11 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	}
 #endif
 #ifdef TIE_MODERN
-	xfiledir_Set_Name_Length(&register_directory, active_spec->directory_name_length);
+	xfiledir_Set_Name_Length(&register_directory, FILEDIR_MAX_NAME_LENGTH);
 #endif
 	// TIE95 0x7A616; the copy-protection actor is absent from TIE98.
 #ifdef TIE_MODERN
-	if (active_spec->load_symbols) {
+	if (!register_svga) {
 		symbols = xactanim_Res_Anim_Actor("symbols", &frame, 0, 0, 0);
 #ifdef TIE_MODERN
 		if (!symbols) {
@@ -2257,8 +2452,10 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 #endif
 
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, active_spec->door_bounds[0], active_spec->door_bounds[1],
-				   active_spec->door_bounds[2], active_spec->door_bounds[3]);
+	if (register_svga)
+		xrect_Set_Rect(&frame, 486, 188, 621, 356);
+	else
+		xrect_Set_Rect(&frame, 240, 80, 320, 150);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 486, 188, 621, 356);
 #else
@@ -2277,8 +2474,10 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	door_input->id = 0;
 
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, active_spec->list_bounds[0], active_spec->list_bounds[1],
-				   active_spec->list_bounds[2], active_spec->list_bounds[3]);
+	if (register_svga)
+		xrect_Set_Rect(&frame, 170, 247, 271, 414);
+	else
+		xrect_Set_Rect(&frame, 75, 102, 127, 174);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 170, 247, 271, 414);
 #else
@@ -2298,8 +2497,10 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 
 	/* Pilot name input (RegStringButton, filename mode) */
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, active_spec->name_bounds[0], active_spec->name_bounds[1],
-				   active_spec->name_bounds[2], active_spec->name_bounds[3]);
+	if (register_svga)
+		xrect_Set_Rect(&frame, 170, 424, 271, 445);
+	else
+		xrect_Set_Rect(&frame, 75, 176, 127, 186);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 170, 424, 271, 445);
 #else
@@ -2317,8 +2518,10 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 
 	/* Prev/Next buttons */
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, active_spec->prev_bounds[0], active_spec->prev_bounds[1],
-				   active_spec->prev_bounds[2], active_spec->prev_bounds[3]);
+	if (register_svga)
+		xrect_Set_Rect(&frame, 167, 452, 186, 475);
+	else
+		xrect_Set_Rect(&frame, 75, 189, 85, 197);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 167, 452, 186, 475);
 #else
@@ -2335,8 +2538,10 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	xinpattr_Refreshable_Input(&prev->header);
 
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, active_spec->next_bounds[0], active_spec->next_bounds[1],
-				   active_spec->next_bounds[2], active_spec->next_bounds[3]);
+	if (register_svga)
+		xrect_Set_Rect(&frame, 255, 452, 276, 475);
+	else
+		xrect_Set_Rect(&frame, 117, 189, 127, 197);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 255, 452, 276, 475);
 #else
@@ -2354,8 +2559,10 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 
 	/* Pilot info display */
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, active_spec->info_bounds[0], active_spec->info_bounds[1],
-				   active_spec->info_bounds[2], active_spec->info_bounds[3]);
+	if (register_svga)
+		xrect_Set_Rect(&frame, 308, 247, 408, 450);
+	else
+		xrect_Set_Rect(&frame, 149, 102, 201, 188);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 308, 247, 408, 450);
 #else
@@ -2375,8 +2582,10 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 
 	/* Delete button (initially hidden) */
 #ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, active_spec->delete_bounds[0], active_spec->delete_bounds[1],
-				   active_spec->delete_bounds[2], active_spec->delete_bounds[3]);
+	if (register_svga)
+		xrect_Set_Rect(&frame, 304, 452, 413, 478);
+	else
+		xrect_Set_Rect(&frame, 148, 189, 200, 198);
 #elif defined(TIE98)
 	xrect_Set_Rect(&frame, 304, 452, 413, 478);
 #else
@@ -2398,7 +2607,7 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 
 #ifdef TIE_MODERN
 	TieRegister_RunView(rf,
-						active_spec->load_symbols && TieRegister_CopyProtectionEnabled() &&
+						!register_svga && TieRegister_CopyProtectionEnabled() &&
 							shellext_Get_Cur_Scene() == SCENE_REGISTER,
 						NULL);
 	return 0;

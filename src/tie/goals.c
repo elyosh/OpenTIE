@@ -458,7 +458,8 @@ int32_t goals_missiongoalsroom(void) {
 		if (flightResolution == TIE_FLIGHT_RES_VGA) {
 			goalsTop = 19;
 			goalsBottom = 182;
-		} else if (tie_is_high_resolution_flight()) {
+		} else if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+				   flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 			goalsTop = 44;
 			goalsBottom = 444;
 		} else {

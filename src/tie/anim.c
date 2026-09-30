@@ -237,10 +237,6 @@ uint8_t curgenus; /* genus byte cached during anim tick */
 /* lolevel iMUSE -- stop a sound. The binary's LOLEVEL_ImStopSound takes
  * the sound 'pointer' as an integer (sound id 48 here). */
 
-/* Model handles are direct pointers; locking is an identity operation. */
-static inline void* xmemhdl_lock_anim(void* handle) { return handle; }
-static inline void xmemhdl_unlock_anim(void* handle) { (void)handle; }
-
 /* ====================================================================== *
  * anim_add_bitmap_draw
  * ----------------------------------------------------------------------------
@@ -353,7 +349,7 @@ int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
 	uint8_t bitmap_idx = (uint8_t)(entry->species_packed & 0x7Fu);
 
 	int16_t scale;
-	void* handle;
+	LandruHandle handle;
 	const uint8_t* blob;
 	uint32_t tbl_off;
 	uint32_t sub_off;
@@ -387,8 +383,8 @@ int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
 	scale = rotscale_calcscale(entry->eye_z, species_table[species_idx].bound_hwidth, entry->scale_factor);
 
 	handle = species_table[species_idx].model_handle;
-	blob = (const uint8_t*)xmemhdl_lock_anim(handle);
-	xmemhdl_unlock_anim(handle);
+	blob = (const uint8_t*)xmemhdl_Lock_Handle(handle);
+	xmemhdl_Unlock_Handle(handle);
 	if (!blob)
 		return 0;
 
@@ -415,7 +411,7 @@ void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
 	const uint8_t species_idx = (uint8_t)((entry->species_packed & 0x7FFFu) >> 7);
 	const uint8_t bitmap_idx = (uint8_t)(entry->species_packed & 0x7Fu);
 	uint16_t scale;
-	void* handle;
+	LandruHandle handle;
 	const uint8_t* blob;
 	uint32_t table_offset;
 	uint32_t frame_offset;
@@ -438,8 +434,8 @@ void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
 	scale = (uint16_t)rotscale_calcscale(entry->eye_z, species_table[species_idx].bound_hwidth,
 										 entry->scale_factor);
 	handle = species_table[species_idx].model_handle;
-	blob = (const uint8_t*)xmemhdl_lock_anim(handle);
-	xmemhdl_unlock_anim(handle);
+	blob = (const uint8_t*)xmemhdl_Lock_Handle(handle);
+	xmemhdl_Unlock_Handle(handle);
 	table_offset = *(const uint32_t*)(blob + 16);
 	frame_offset = *(const uint32_t*)(blob + table_offset + 4 * bitmap_idx);
 	if (TieClassicDisplay_UsesDx5() && g_useHardware3D) {
@@ -1344,7 +1340,10 @@ void anim_dohyperspace(void) {
 			hypertemp2 = drawdebrisflag;
 			drawbackdropflag = 0;
 			drawdebrisflag = 0;
-			hyperstarlength = 32256;
+			if (TieProfile_UsesTie98Logic())
+				g_hyperspaceStreakLength = 32256;
+			else
+				hyperstarlength = 32256;
 			pstate.player->world_x = 0;
 			fullupdateflag = 1;
 			if (TieProfile_UsesTie98Logic())
@@ -1377,16 +1376,22 @@ void anim_dohyperspace(void) {
 
 		case 3:
 			if (hyperticks < 0x588u) {
-				/* Clamp the unsigned wrapped endpoint inside (0x7E00, 0x8200). */
-				uint16_t s = (uint16_t)(*(int16_t*)&hyperstardata[12] - tilt_speed);
-				hyperstarlength = s;
-				if (s > 0x7E00u && s < 0x8200u)
-					hyperstarlength = (uint16_t)-32256;
-				*(int16_t*)&hyperstardata[12] = (int16_t)hyperstarlength;
+				if (TieProfile_UsesTie98Logic()) {
+					g_hyperspaceStreakLength += 224 * (uint32_t)frameticks;
+				} else {
+					/* Clamp the unsigned wrapped endpoint inside (0x7E00, 0x8200). */
+					uint16_t s = (uint16_t)(*(int16_t*)&hyperstardata[12] - tilt_speed);
+					hyperstarlength = s;
+					if (s > 0x7E00u && s < 0x8200u)
+						hyperstarlength = (uint16_t)-32256;
+					*(int16_t*)&hyperstardata[12] = (int16_t)hyperstarlength;
+				}
 			} else {
 				pstate.player->world_y += 224 * frameticks;
-				*(int16_t*)&hyperstardata[12] = -32256;
-				*(int16_t*)&hyperstardata[6] = 32272;
+				if (!TieProfile_UsesTie98Logic()) {
+					*(int16_t*)&hyperstardata[12] = -32256;
+					*(int16_t*)&hyperstardata[6] = 32272;
+				}
 			}
 			if (hyperticks >= 0x674u) {
 				hyperticks = 1652;
@@ -1442,6 +1447,10 @@ void anim_dohyperspace(void) {
 		case 5:
 			if (hyperticks < 0x84Cu) {
 				pstate.player->world_y -= 224 * frameticks;
+			} else if (TieProfile_UsesTie98Logic()) {
+				g_hyperspaceStreakLength -= 224 * (uint32_t)frameticks;
+				if (g_hyperspaceStreakLength < 0x8200u)
+					g_hyperspaceStreakLength = 0x8200u;
 			} else {
 				/* Preserve the unsigned endpoint wrap while retracting the streak. */
 				uint16_t s = (uint16_t)(tilt_speed + *(int16_t*)&hyperstardata[12]);

@@ -263,7 +263,8 @@ void replay_drawreplaybutton(uint16_t btn_id) {
 		/* Stand-alone viewer remaps 0..0x11 -> 0x12..0x23. */
 		if (btn_id < 0x12u)
 			idx = btn_id + 18;
-		if (tie_is_high_resolution_flight()) {
+		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 			res = 1;
 			track_name_left = 278;
 			track_name_right = 423;
@@ -507,7 +508,8 @@ void replay_outputclipname(void) {
 			cx = 341;
 			cy = 13;
 		}
-	} else if (tie_is_high_resolution_flight()) {
+	} else if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			   flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 		festring_setbound(260, 360, 339, 373);
 		cx = 260;
 		cy = 360;
@@ -765,7 +767,8 @@ uint16_t replay_savereplay(void) {
 	}
 	if (continuation->phase == REPLAY_SAVE_PHASE_EDIT_NAME) {
 #endif
-		if (tie_is_high_resolution_flight())
+		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
 			replay_editstring(126, 456, 8, name_input, 0x2C);
 		else
 			replay_editstring(74, 190, 8, name_input, 0x2C);
@@ -1255,7 +1258,9 @@ void replay_doreplayscreen(void) {
 							cx = 464;
 							cy = 402;
 						}
-					} else if (tie_is_high_resolution_flight()) {
+					} else if (flightResolution == TIE_FLIGHT_RES_SVGA ||
+							   flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+							   flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 						festring_setbound(484, 400, 556, 412);
 						cx = 484;
 						cy = 400;
@@ -1289,7 +1294,9 @@ void replay_doreplayscreen(void) {
 							cx = 464;
 							cy = 436;
 						}
-					} else if (tie_is_high_resolution_flight()) {
+					} else if (flightResolution == TIE_FLIGHT_RES_SVGA ||
+							   flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+							   flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 						festring_setbound(484, 437, 556, 448);
 						cx = 484;
 						cy = 437;
@@ -1348,7 +1355,9 @@ void replay_doreplayscreen(void) {
 					pct_cx = 314;
 					pct_cy = 13;
 				}
-			} else if (tie_is_high_resolution_flight()) {
+			} else if (flightResolution == TIE_FLIGHT_RES_SVGA ||
+					   flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+					   flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 				festring_setbound(230, 360, 251, 373);
 				pct_cx = 234;
 				pct_cy = 360;
@@ -1379,7 +1388,9 @@ void replay_doreplayscreen(void) {
 				if (replaymsgtimer) {
 					festring_setbackcolor(0x2C);
 					/* Retail widens the clear rect to 640x480 in SVGA. */
-					if (tie_is_high_resolution_flight()) {
+					if (flightResolution == TIE_FLIGHT_RES_SVGA ||
+						flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+						flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 						festring_setbound(0, 457, 640, 480);
 					} else {
 						festring_setbound(0, 190, 320, 200);

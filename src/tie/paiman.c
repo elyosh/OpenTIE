@@ -720,7 +720,8 @@ int16_t paiman_headonattackmaneuver(void) {
 
 /* ---- MODE_FollowLeader (10) ---------------------------------------- */
 
-void paiman_initfollowleadermaneuver(void) { /* No-op: the runtime step re-initialises every frame. */ }
+// FUNCTION: TIE95 0x39F1C
+void paiman_initfollowleadermaneuver(void) {}
 
 // FUNCTION: TIE95 0x39F20
 int16_t paiman_followleadermaneuver(void) {
@@ -1138,8 +1139,17 @@ int16_t paiman_outofhyperspacemaneuver(void) {
 	if (!done)
 		return 0;
 
-	mapped_order = (cd->leader_obj_idx == 0xFFu) ? create_getleaderorder(fg_array[ai.fg_idx].ai[0].order)
-												 : create_getfollowerorder(fg_array[ai.fg_idx].ai[0].order);
+#ifdef TIE_MODERN
+	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+	if (fg_array[ai.fg_idx].ai[0].order >= sizeof(ordersldr))
+		mapped_order = 0;
+	else
+		mapped_order = (cd->leader_obj_idx == 0xFFu) ? ordersldr[fg_array[ai.fg_idx].ai[0].order]
+													 : ordersflw[fg_array[ai.fg_idx].ai[0].order];
+#else
+	mapped_order = (cd->leader_obj_idx == 0xFFu) ? ordersldr[fg_array[ai.fg_idx].ai[0].order]
+												 : ordersflw[fg_array[ai.fg_idx].ai[0].order];
+#endif
 
 	cd->flight_flag = 0;
 	cd->ai_target_ref = (int16_t)0xFF; /* clear maneuver target ref */
@@ -1159,7 +1169,8 @@ int16_t paiman_outofhyperspacemaneuver(void) {
 
 /* ---- MODE_Escort (17) ---------------------------------------------- */
 
-void paiman_initescortmaneuver(void) { /* No-op: the runtime step is fully self-initialising. */ }
+// FUNCTION: TIE95 0x3AD6C
+void paiman_initescortmaneuver(void) {}
 
 // FUNCTION: TIE95 0x3AD70
 int16_t paiman_escortmaneuver(void) {
@@ -1362,8 +1373,17 @@ int16_t paiman_outofhangarmaneuver(void) {
 		return 0;
 
 	/* The plan VM reads exithangarplan[3] as the next order. */
-	mapped_order = (cd->leader_obj_idx == 0xFFu) ? create_getleaderorder(fg_array[ai.fg_idx].ai[0].order)
-												 : create_getfollowerorder(fg_array[ai.fg_idx].ai[0].order);
+#ifdef TIE_MODERN
+	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+	if (fg_array[ai.fg_idx].ai[0].order >= sizeof(ordersldr))
+		mapped_order = 0;
+	else
+		mapped_order = (cd->leader_obj_idx == 0xFFu) ? ordersldr[fg_array[ai.fg_idx].ai[0].order]
+													 : ordersflw[fg_array[ai.fg_idx].ai[0].order];
+#else
+	mapped_order = (cd->leader_obj_idx == 0xFFu) ? ordersldr[fg_array[ai.fg_idx].ai[0].order]
+												 : ordersflw[fg_array[ai.fg_idx].ai[0].order];
+#endif
 	exithangarplan[3] = mapped_order;
 
 	cd->formation_separation = 2;
@@ -1394,10 +1414,8 @@ void paiman_initwaitmaneuver(void) {
 	cd->maneuver_timer = 1180 * (int32_t)var0;
 }
 
-int16_t paiman_avoidstarshipmaneuver(void) {
-	/* Shared null body; returns 0 so the plan VM stays in its slot. */
-	return 0;
-}
+// FUNCTION: TIE95 0x3C8BC
+int16_t paiman_avoidstarshipmaneuver(void) { return 0; }
 
 /* ---- MODE_DropOff (30) --------------------------------------------- */
 

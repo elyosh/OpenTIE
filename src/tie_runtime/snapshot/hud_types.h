@@ -248,8 +248,8 @@ typedef struct TieHudState {
 		uint8_t active;          /* mission.train_craft_type != 0 */
 		uint8_t level;           /* mission.train_level */
 		uint8_t player_spec_num; /* pstate.player_spec_num */
-		uint8_t timer_min;       /* mtimer_min */
-		uint8_t timer_sec;       /* mtimer_sec */
+		uint8_t timer_min;       /* timeleft.minute */
+		uint8_t timer_sec;       /* timeleft.second */
 		/* gate.c's bonus_countdown_active — true only while the
 		 * per-section countdown task is running. HD bonus bar
 		 * emits exclusively when set; outside this window the

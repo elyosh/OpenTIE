@@ -39,7 +39,6 @@
 #include "landru/vesa.h"
 #include "landru/view.h"
 #include "landru/viewadd.h"
-#include "tie/rand.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
 #include "tie/soundext.h"
@@ -977,22 +976,22 @@ static void combat_user_Combat_Light(Actor* the_actor, int32_t time) {
 
 	if (time == 0) {
 		xactor_Show_Actor(the_actor);
-		the_actor->var2 = (rand_rand() & 0xF) + 2;
+		the_actor->var2 = (rand() & 0xF) + 2;
 	}
 
 	if (the_actor->var2 & 0x4000) {
 		int16_t countdown;
 		if (time & 1)
-			the_actor->state = rand_rand() % the_actor->arraySize;
+			the_actor->state = rand() % the_actor->arraySize;
 		countdown = the_actor->var2 & 0x3FFF;
 		if (countdown == 1) {
-			the_actor->var2 = (rand_rand() & 0xF) + 2;
+			the_actor->var2 = (rand() & 0xF) + 2;
 			return;
 		}
 	} else {
-		the_actor->state = rand_rand() % the_actor->arraySize;
+		the_actor->state = rand() % the_actor->arraySize;
 		if (the_actor->var1 == 1) {
-			the_actor->var2 = (rand_rand() & 0xF) + 0x4002;
+			the_actor->var2 = (rand() & 0xF) + 0x4002;
 			return;
 		}
 	}
@@ -1228,7 +1227,7 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	}
 
 	combat_time = 0;
-	combat_round = rand_rand() & 3;
+	combat_round = rand() & 3;
 #ifdef TIE_MODERN
 	combat_monitor_needs_clear = combat_svga;
 #elif defined(TIE98)

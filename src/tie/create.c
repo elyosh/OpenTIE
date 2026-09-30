@@ -20,7 +20,6 @@
 #include "tie/msg.h"
 #include "tie/pai.h"
 #include "tie/panel.h"
-#include "tie/rand.h"
 #include "tie/score.h"
 #include "tie/shell.h"
 #include "tie/shipext.h"
@@ -41,6 +40,7 @@
 #include "tie_runtime/storage/storage.h"
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 /* ------------------------------------------------------------------ */
@@ -816,10 +816,6 @@ int16_t create_loadmission(const char* filename) {
 #endif
 	if (mission_file_header.num_msg < 0 || mission_file_header.num_goals < 0)
 		shell_programexit("Mission file has a negative message or goal count");
-	mfile_time_min = mission_file_header.mission.time_min;
-	mfile_time_sec = mission_file_header.mission.time_sec;
-	/* The signed backdrop byte is the skybox RNG seed. */
-	mfile_rnd_seed = (int16_t)(int8_t)mission_file_header.mission.backdrop;
 
 	/* Stage the FG records as the on-disk byte image, then decode each
 	 * into the natively-aligned fg_array. The .TIE format hard-caps
@@ -888,7 +884,8 @@ int16_t create_loadmission(const char* filename) {
 	/* Backdrop: reseed RNG with the mission's stored seed so skybox is
 	 * deterministic, then restore the live seed. */
 	saved_seed = math2_randomseed;
-	math2_randomseed = mfile_rnd_seed;
+	/* The signed backdrop byte is the skybox RNG seed. */
+	math2_randomseed = (int16_t)(int8_t)mission_file_header.mission.backdrop;
 	create_createbackdrop();
 	math2_randomseed = saved_seed;
 
@@ -952,24 +949,24 @@ int16_t create_loadmission(const char* filename) {
 	_date.minute = 0;
 	_date.second = 0;
 	_date.subsec = 0;
-	mtimer_state = 0;
+	timeleft.hour = 0;
 
 	if (mission.train_craft_type) {
 		/* Training mode: swap in the player's chosen training ship. */
 		fg_array[0].species = mission.train_craft_type_src;
 		species_table[speciesconvert[mission.train_craft_type_src]].load_flags |= 0x10u;
-		mtimer_sec = 59;
-		mtimer_min = (uint8_t)(10 - mission.train_level);
+		timeleft.second = 59;
+		timeleft.minute = (uint8_t)(10 - mission.train_level);
 	} else {
 		/* Default the mission timer to 20:mission.time_sec when the
 		 * .TIE record has time_min==0 && time_sec==0; otherwise use
 		 * the file's specified time_min. Matches the binary's
 		 * `time_min + time_sec` zero check at 0x16A85. */
-		if (mfile_time_min + mfile_time_sec)
-			mtimer_min = mfile_time_min;
+		if (mission_file_header.mission.time_min + mission_file_header.mission.time_sec)
+			timeleft.minute = mission_file_header.mission.time_min;
 		else
-			mtimer_min = 20;
-		mtimer_sec = mfile_time_sec;
+			timeleft.minute = 20;
+		timeleft.second = mission_file_header.mission.time_sec;
 	}
 
 	fgcnt = saved_fgcnt;
@@ -993,15 +990,15 @@ void create_createbackdrop(void) {
 
 	/* 22 tile-direction descriptors: each is 16*lo_nibble + hi_nibble
 	 * where each nibble is (rand & 0xE) + 4 looped until <= 0xC.
-	 * Retail CREATE_createbackdrop uses RAND_rand (cosmetic starfield
+	 * Retail CREATE_createbackdrop uses the C library rand() (cosmetic starfield
 	 * RNG), not MATH2_getrandom (mission-deterministic RNG). */
 	for (i = 0; i < 22; i++) {
 		int hi, lo;
 		do {
-			hi = (rand_rand() & 0xE) + 4;
+			hi = (rand() & 0xE) + 4;
 		} while (hi > 0xC);
 		do {
-			lo = (rand_rand() & 0xE) + 4;
+			lo = (rand() & 0xE) + 4;
 		} while (lo > 0xC);
 		backdropposition[i] = (uint8_t)(hi + 16 * lo);
 	}
@@ -1009,7 +1006,7 @@ void create_createbackdrop(void) {
 	/* backdropspecies[0..21]: weighted pick -- 3/32 → planet (117),
 	 * 9/32 → ramp 117..122, 20/32 → misc planets 125/126. */
 	for (i = 0; i < 22; i++) {
-		const int r = rand_rand() & 0x1F;
+		const int r = rand() & 0x1F;
 		int pick;
 		if (r < 3)
 			pick = 117;
@@ -1270,7 +1267,12 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 			int k;
 
 			for (k = 0; k < 3; k++) {
-				if (create_getleaderorder(f->ai[k].order) == 19)
+#ifdef TIE_MODERN
+				// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+				if (f->ai[k].order < sizeof(ordersldr) && ordersldr[f->ai[k].order] == 19)
+#else
+				if (ordersldr[f->ai[k].order] == 19)
+#endif
 					adjust_if_hostile = 0;
 			}
 		}
@@ -1780,8 +1782,14 @@ uint16_t create_createcraft(void) {
 
 	/* AI orders: leader + follower both indexed by ai[0].order.
 	 * Hyper/hangar states override with fixed opcodes 52/50. */
-	order_ldr = create_getleaderorder(f->ai[0].order);
-	order_flw = create_getfollowerorder(f->ai[0].order);
+#ifdef TIE_MODERN
+	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+	order_ldr = f->ai[0].order < sizeof(ordersldr) ? ordersldr[f->ai[0].order] : 0;
+	order_flw = f->ai[0].order < sizeof(ordersflw) ? ordersflw[f->ai[0].order] : 0;
+#else
+	order_ldr = ordersldr[f->ai[0].order];
+	order_flw = ordersflw[f->ai[0].order];
+#endif
 	c->default_order_ldr = order_ldr;
 	if (fghyperspace)
 		c->current_order = 52;

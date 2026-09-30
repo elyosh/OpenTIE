@@ -75,7 +75,8 @@ uint16_t pending_voice_id;
 uint16_t msg_messageinit(void) {
 	uint16_t prev;
 
-	if (tie_is_high_resolution_flight()) {
+	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 		msgLineTop = 456;
 		msgLineBottom = 480;
 		msgLineRight = 596;
@@ -290,6 +291,8 @@ void msg_messageprintf(MsgTemplate template_id) {
 		lasthistorymsg++;
 		if (lasthistorymsg == MSG_HISTORY_SLOTS)
 			lasthistorymsg = 0;
+		messagehistory = (MsgHistoryEntry*)xmemhdl_Lock_Handle(messageloghandle);
+		xmemhdl_Unlock_Handle(messageloghandle);
 		memcpy(&messagehistory[lasthistorymsg], &entry, sizeof(MsgHistoryEntry));
 	}
 

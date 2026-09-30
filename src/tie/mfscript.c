@@ -937,9 +937,6 @@ static ChangeRef* mfscript_GetDefaultChangeRef(void) {
 
 /* Unreferenced in retail. */
 // FUNCTION: TIE95 0x8883C
-#if defined(__GNUC__)
-__attribute__((unused))
-#endif
 static int16_t mfscript_GetRandom(int16_t lo, int16_t hi) {
 	int i, c;
 

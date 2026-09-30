@@ -28,6 +28,14 @@ int16_t math2_randomseed = 0x2357;
 // GLOBAL: TIE95 0xD4C68
 // GLOBAL: TIE98 0x584CF8
 static int16_t randomnumber;
+#if defined(TIE_MODERN) || defined(TIE98)
+/* TIE98 carries a second, independent LFSR state pair next to the gameplay
+ * one; only TIE_simulator's CD start-track pick consumes it. */
+// GLOBAL: TIE98 0x4E4C9C
+static int16_t math2_altrandomseed = 0x2357;
+// GLOBAL: TIE98 0x584CF4
+static int16_t altrandomnumber;
+#endif
 
 /*
  * Radar boundary tables. The radar display is an ellipse (320×200) or
@@ -132,6 +140,23 @@ uint16_t math2_longpercentage(uint32_t a, uint32_t b) {
 	}
 	return (uint16_t)((a << 16) / b);
 }
+
+#if defined(TIE_MODERN) || defined(TIE98)
+/* Same 16-bit LFSR as math2_getrandom on its own state, without the replay
+ * return-address synchronisation, so it never perturbs the gameplay stream. */
+// FUNCTION: TIE98 0x454070
+int16_t math2_getrandomalt(void) {
+	int i;
+
+	for (i = 16; i != 0; i--) {
+		int seed_sign = (math2_altrandomseed & 0x8000) != 0;
+		int carry_out = (((math2_altrandomseed >> 8) & 0x80) ^ ((math2_altrandomseed & 0x40) << 1)) != 0;
+		math2_altrandomseed = (int16_t)((uint16_t)math2_altrandomseed * 2 + carry_out);
+		altrandomnumber = (int16_t)((uint16_t)altrandomnumber * 2 + seed_sign);
+	}
+	return altrandomnumber;
+}
+#endif
 
 /* 16-bit LFSR pseudo-random number generator */
 // FUNCTION: TIE95 0x32054

@@ -962,7 +962,9 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 			if (component_explosion_type1)
 				damage = (int16_t)starship_damagecomponent(target_obj_idx, component_idx, collision_radius);
 		} else {
-			uint8_t* model_data = (uint8_t*)species_table[objects[target_obj_idx].ship_idx].model_handle;
+			uint8_t* model_data =
+				(uint8_t*)xmemhdl_Lock_Handle(species_table[objects[target_obj_idx].ship_idx].model_handle);
+			xmemhdl_Unlock_Handle(species_table[objects[target_obj_idx].ship_idx].model_handle);
 			if (model_data) {
 				comp_record = &model_data[64 * (uint16_t)component_idx - 30 + 6 * model_data[31]];
 				component_explosion_type1 = (uint8_t)((*(uint16_t*)(comp_record + 2) & 1) != 0);

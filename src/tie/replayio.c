@@ -69,7 +69,7 @@ void* savearrayptrs[68] = {
 	crafts,        /* [ 2] CraftData[NUM_CRAFTS]        */
 	warheads,      /* [ 3] WarheadRecord[...]           */
 	&_date,        /* [ 4] mission clock (8 bytes)      */
-	timeleft,      /* [ 5] mission time-left (8 bytes)  */
+	&timeleft,     /* [ 5] mission time-left (8 bytes)  */
 #ifdef TIE_MODERN
 	TieReplayMissionHeaderImage, /* [6] native encoded mission header */
 #else
@@ -549,7 +549,8 @@ int replayio_restorereplaybuffer(void) {
  * -------------------------------------------------------------------------- */
 // FUNCTION: TIE95 0x483E4
 void replayio_setreturnview(void) {
-	farbufferptr = (uint8_t*)panelpartsptr;
+	farbufferptr = (uint8_t*)xmemhdl_Lock_Handle(panelpartshandle);
+	xmemhdl_Unlock_Handle(panelpartshandle);
 	{
 		size_t n = 0;
 		size_t s;
@@ -648,7 +649,8 @@ void replayio_replayscreen(void) {
 					{
 						uint32_t dc;
 
-						farbufferptr = (uint8_t*)panelpartsptr;
+						farbufferptr = (uint8_t*)xmemhdl_Lock_Handle(panelpartshandle);
+						xmemhdl_Unlock_Handle(panelpartshandle);
 						{
 							size_t n = 0;
 							size_t s;
@@ -691,7 +693,8 @@ void replayio_replayscreen(void) {
 					{
 						uint32_t dc;
 
-						farbufferptr = (uint8_t*)panelpartsptr;
+						farbufferptr = (uint8_t*)xmemhdl_Lock_Handle(panelpartshandle);
+						xmemhdl_Unlock_Handle(panelpartshandle);
 						{
 							size_t n = 0;
 							size_t s;
@@ -746,10 +749,13 @@ void replayio_replayscreen(void) {
 				fsfx_loadvoicelfd();
 				msg_messageinit();
 				{
-					if (tie_is_high_resolution_flight()) {
+					if (flightResolution == TIE_FLIGHT_RES_SVGA ||
+						flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+						flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 						uint32_t dc;
 
-						farbufferptr = (uint8_t*)panelpartsptr;
+						farbufferptr = (uint8_t*)xmemhdl_Lock_Handle(panelpartshandle);
+						xmemhdl_Unlock_Handle(panelpartshandle);
 						{
 							size_t n = 0;
 							size_t s;
@@ -790,7 +796,8 @@ void replayio_replayscreen(void) {
 					} else {
 						uint32_t dc;
 
-						farbufferptr = (uint8_t*)panelpartsptr;
+						farbufferptr = (uint8_t*)xmemhdl_Lock_Handle(panelpartshandle);
+						xmemhdl_Unlock_Handle(panelpartshandle);
 						{
 							size_t n = 0;
 							size_t s;
@@ -902,7 +909,8 @@ void replayio_replayscreen(void) {
 			if (!reentersimflag) {
 				if (tie98_display)
 					FlightSurface_Lock();
-				if (tie_is_high_resolution_flight())
+				if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+					flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
 					festring_setbound(28, 16, 611, 315);
 				else
 					festring_setbound(14, 8, 306, 131);
@@ -960,10 +968,12 @@ void replayio_replayscreen(void) {
 		replayio_copyfromsave(replaystartfile);
 		msg_messageinit();
 		{
-			if (tie_is_high_resolution_flight()) {
+			if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+				flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 				uint32_t dc;
 
-				farbufferptr = (uint8_t*)panelpartsptr;
+				farbufferptr = (uint8_t*)xmemhdl_Lock_Handle(panelpartshandle);
+				xmemhdl_Unlock_Handle(panelpartshandle);
 				{
 					size_t n = 0;
 					size_t s;
@@ -1004,7 +1014,8 @@ void replayio_replayscreen(void) {
 			} else {
 				uint32_t dc;
 
-				farbufferptr = (uint8_t*)panelpartsptr;
+				farbufferptr = (uint8_t*)xmemhdl_Lock_Handle(panelpartshandle);
+				xmemhdl_Unlock_Handle(panelpartshandle);
 				{
 					size_t n = 0;
 					size_t s;

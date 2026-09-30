@@ -176,10 +176,6 @@ static LandruHandle stringdatahandle;
 static char* stringdata_base;
 #endif
 
-/* Per-species model allocation size used by the classic renderer's
- * internal bounds checks. */
-uint32_t species_model_handle_sizes[NUM_SPECIES];
-
 // GLOBAL: TIE98 0x50F858
 static uint8_t tie98_flight_inverse_palette[0x10000];
 
@@ -842,8 +838,6 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 	panelpartshandle = xmemhdl_Alloc_Handle(0x1ADB0, LANDRU_MEMORY_DEFAULT);
 	if (!panelpartshandle)
 		fail = 1;
-	/* PORT: panel code keeps this pointer instead of relocking the handle. */
-	panelpartsptr = xmemhdl_Lock_Handle(panelpartshandle);
 
 	maproomiconshandle = xmemhdl_Alloc_Handle(31060, LANDRU_MEMORY_DEFAULT);
 	if (!maproomiconshandle)
@@ -902,7 +896,8 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 		unblank();
 	}
 
-	if (tie_is_high_resolution_flight()) {
+	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 		fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "tiny64.fnt", fontptrtiny);
 		fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "micro64.fnt", fontptrmicro);
 	} else {
@@ -989,13 +984,12 @@ void fediskio_RelockGlobals(void) {
 	xtransdataptr = xmemhdl_Lock_Handle(log2handle);
 	loadbuffer = xtransdataptr;
 	replaybufferstart = xmemhdl_Lock_Handle(replaybufferhandle);
-	/* panelpartsptr is bound once at allocation time; retail relock
-	 * doesn't touch panelpartshandle either. */
 }
 
 // FUNCTION: TIE95 0x213F0
 void fediskio_FreeFlightHandles(void) {
 	uint16_t i;
+	uint16_t j;
 
 	if (musicenabled && TieMusicPolicy_UsesImuse())
 		xmemhdl_Unlock_Handle(musichandle);
@@ -1029,36 +1023,31 @@ void fediskio_FreeFlightHandles(void) {
 	xmemhdl_Free_Handle(flightbuf_small_handle);
 	xmemhdl_Free_Handle(flightbuf_big_handle);
 #ifdef TIE_MODERN
-	/* PORT: BPFLIGHT checks these handles before allocating preview pools. */
+	/* PORT: clear the released handles so a later release is a no-op. */
 	flightbuf_small_handle = LANDRU_NULL_HANDLE;
 	flightbuf_big_handle = LANDRU_NULL_HANDLE;
 #endif
 	xmemhdl_Free_Handle(panelpartshandle);
-	panelpartsptr = NULL;
 	TiePanelViewBuffers_FreeAll();
 	xmemhdl_Free_Handle(maproomiconshandle);
 	xmemhdl_Free_Handle(rundiffhandle);
 	xmemhdl_Free_Handle(replaybufferhandle);
 	xmemhdl_Free_Handle(messageloghandle);
 
-	/* Free species model blobs. fediskio_loadspecies shares one malloc
-	 * across every species[] entry that maps to the same lfd_file +
-	 * lfd_entry (matching the binary's XMEMHDL_Free_Handle refcount
-	 * dedup). To free each unique pointer exactly once, free the slot
-	 * then null out every slot that aliased it. */
+	/* Free each species handle once; aliases held by earlier entries
+	 * were already released. */
 	for (i = 0; i < NUM_SPECIES; i++) {
-		void* p = species_table[i].model_handle;
-		uint16_t j;
-
-		if (!p)
-			continue;
-		free(p);
-
-		for (j = i; j < NUM_SPECIES; j++) {
-			if (species_table[j].model_handle == p)
-				species_table[j].model_handle = NULL;
+		if (species_table[i].model_handle) {
+			for (j = 0; j < i; j++) {
+				if (species_table[j].model_handle == species_table[i].model_handle)
+					break;
+			}
+			if (j >= i)
+				xmemhdl_Free_Handle(species_table[i].model_handle);
 		}
 	}
+	for (i = 0; i < NUM_SPECIES; i++)
+		species_table[i].model_handle = LANDRU_NULL_HANDLE;
 }
 
 /* String-table consumers: declarations live in their owning headers
@@ -1229,13 +1218,8 @@ void fediskio_loadspecies(void) {
 	if (TieProfile_UsesTie98Logic())
 		g_hardwarePixelFormatAvailable = 1;
 
-	/* Zero all species model handles + per-species blob sizes. */
-	for (i = 0; i < NUM_SPECIES; i++) {
-		species_table[i].model_handle = NULL;
-		species_model_handle_sizes[i] = 0;
-	}
-
-	/* Binary calls UnlockGlobals here; with malloc this is a no-op */
+	for (i = 0; i < NUM_SPECIES; i++)
+		species_table[i].model_handle = LANDRU_NULL_HANDLE;
 
 	for (lfd_idx = 0; lfd_idx < 3; lfd_idx++) {
 		/* Retail FEDISKIO_loadspecies selects its LFD directory based
@@ -1243,7 +1227,11 @@ void fediskio_loadspecies(void) {
 		 * for anything else (typically 19 = 320x200). This differs from
 		 * the default `resourcedir` ("RESOURCE/") used by the rest of
 		 * the disk I/O surface. */
-		const char* species_dir = tie_is_high_resolution_flight() ? "RES640/" : "RES320/";
+		const char* species_dir =
+			(flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			 flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
+				? "RES640/"
+				: "RES320/";
 		uint32_t dir_size;
 		int num_entries;
 		int file_offset;
@@ -1299,6 +1287,7 @@ void fediskio_loadspecies(void) {
 			entry_size = dir_entry[3];
 
 			if (found) {
+				LandruHandle species_handle;
 				void* species_buf;
 				uint32_t rgb_v39, rgb_v38;
 
@@ -1307,6 +1296,7 @@ void fediskio_loadspecies(void) {
 					FrontendDisplay_PresentFrame();
 				}
 
+				species_handle = LANDRU_NULL_HANDLE;
 				species_buf = NULL;
 				rgb_v39 = 0;
 				rgb_v38 = 0;
@@ -1340,9 +1330,13 @@ void fediskio_loadspecies(void) {
 
 					tie98_16bpp = TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2;
 					palette_entry_size = tie98_16bpp ? 2u : (size_t)bytesPerPixel;
-					species_buf = malloc(rgb_v39 + palette_entry_size * rgb_v38);
-					if (!species_buf)
+					fediskio_UnlockGlobals();
+					species_handle = xmemhdl_Alloc_Handle((uint32_t)(rgb_v39 + palette_entry_size * rgb_v38),
+														  LANDRU_MEMORY_DEFAULT);
+					fediskio_RelockGlobals();
+					if (!species_handle)
 						fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
+					species_buf = xmemhdl_Lock_Handle(species_handle);
 
 					((uint32_t*)species_buf)[0] = rgb_v39;
 					((uint32_t*)species_buf)[1] = rgb_v38;
@@ -1354,10 +1348,12 @@ void fediskio_loadspecies(void) {
 				}
 
 				if (!species_buf) {
-					/* Allocate buffer for plain species data */
-					species_buf = malloc(entry_size);
-					if (!species_buf)
+					fediskio_UnlockGlobals();
+					species_handle = xmemhdl_Alloc_Handle(entry_size, LANDRU_MEMORY_DEFAULT);
+					fediskio_RelockGlobals();
+					if (!species_handle)
 						fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
+					species_buf = xmemhdl_Lock_Handle(species_handle);
 
 					if (file_offset) {
 						TieStorage_Seek(fileptr, file_offset, TIE_SEEK_CUR);
@@ -1366,7 +1362,7 @@ void fediskio_loadspecies(void) {
 					fediskio_readfileblock(species_buf, entry_size, 1, fileptr);
 				}
 
-				/* Share one buffer across aliases; shutdown frees each unique pointer once. */
+				/* Entries naming the same LFD resource share one handle. */
 				for (i = 0; i < NUM_SPECIES; i++) {
 					if (!(species_table[i].flags & 2))
 						continue;
@@ -1379,8 +1375,7 @@ void fediskio_loadspecies(void) {
 					if ((species_table[i].load_flags & 0x40) && !mission.train_craft_type)
 						continue;
 
-					species_table[i].model_handle = species_buf;
-					species_model_handle_sizes[i] = entry_size;
+					species_table[i].model_handle = species_handle;
 
 					if (entry_flags & 1) {
 						if (TieProfile_UsesTie98Logic())
@@ -1389,9 +1384,7 @@ void fediskio_loadspecies(void) {
 							fediskio_fillinspec(species_buf, species_table[i].spec_num, (uint8_t)i);
 					}
 				}
-				/* DO NOT free here -- the buffer must outlive load and
-				 * stay reachable for ANIM/DRAW/STATIC rendering. Freed
-				 * in FreeFlightHandles with dedup. */
+				xmemhdl_Unlock_Handle(species_handle);
 				if (TieClassicDisplay_UsesDx5()) {
 					FrontendDisplay_BlitOffscreenToRenderSurface();
 					FrontendDisplay_PresentFrame();

@@ -70,7 +70,7 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
  *     * bumps radar_target1 past dead meshes if it was locked on this one
  *     * in training mode (mission.train_craft_type != 0): mission.train_targets++,
  *       +50 mission_score (+100 if the mesh has a non-zero rotation byte, i.e.
- *       it's a rotating turret), mtimer_sec += 2 with minute carry
+ *       it's a rotating turret), timeleft.second += 2 with minute carry
  *     * FSFX_triggersfx(19..22) random explosion sound
  *
  *   The mesh's flags bit 1 (0x0002) gates whether the explosion FlightObject

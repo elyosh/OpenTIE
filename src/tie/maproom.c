@@ -745,7 +745,8 @@ int32_t maproom_maproom(void) {
 			FlightSurface_Lock();
 		/* --- Stage 1: layout setup based on resolution --- */
 		mapScreenLeft = 0;
-		if (tie_is_high_resolution_flight()) {
+		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
 			mapScreenRight = 640;
 			mapScreenTop = 41;
 			mapScreenBottom = 442;

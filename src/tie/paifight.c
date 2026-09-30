@@ -595,7 +595,12 @@ int16_t paifight_checkforfuturetargets(uint16_t ai_entry) {
 // FUNCTION: TIE95 0x37570
 int16_t paifight_scanfortargetswitch(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
-	uint8_t order_class = create_getleaderorder(cur_ai->order);
+#ifdef TIE_MODERN
+	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+	uint8_t order_class = cur_ai->order < sizeof(ordersldr) ? ordersldr[cur_ai->order] : 0;
+#else
+	uint8_t order_class = ordersldr[cur_ai->order];
+#endif
 
 	int16_t result;
 
@@ -615,7 +620,12 @@ int16_t paifight_scanfortargetswitch(uint16_t ai_entry) {
 // FUNCTION: TIE95 0x37624
 int16_t paifight_scanfortargetsallgone(uint16_t ai_entry) {
 	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
-	uint8_t order_class = create_getleaderorder(cur_ai->order);
+#ifdef TIE_MODERN
+	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+	uint8_t order_class = cur_ai->order < sizeof(ordersldr) ? ordersldr[cur_ai->order] : 0;
+#else
+	uint8_t order_class = ordersldr[cur_ai->order];
+#endif
 
 	int16_t result;
 

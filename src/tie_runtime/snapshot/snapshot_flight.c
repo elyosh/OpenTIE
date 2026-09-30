@@ -162,10 +162,10 @@ static uint8_t TieFlightSnapshot_LightningState(const FlightObject* obj) {
 	if (TieProfile_UsesTie98Logic()) {
 		nm = modelmesh_getcount(obj->ship_idx);
 	} else {
-		const SpeciesEntry* spec = &species_table[obj->ship_idx];
-		if (!spec->model_handle)
+		const uint8_t* model = (const uint8_t*)xmemhdl_Lock_Handle(species_table[obj->ship_idx].model_handle);
+		if (!model)
 			return 0xFFu;
-		const ShipModelData* mdl = (const ShipModelData*)((const uint8_t*)spec->model_handle + 2);
+		const ShipModelData* mdl = (const ShipModelData*)(model + 2);
 		nm = mdl->num_meshes;
 	}
 	if (nm >= 40)
@@ -185,10 +185,11 @@ static uint16_t TieFlightSnapshot_EmitComponents(const FlightObject* obj, uint16
 	if (!is_static && !TieFlightSnapshot_HasCraftData(obj))
 		return 0;
 	const bool tie98 = TieProfile_UsesTie98Logic();
-	const SpeciesEntry* spec = &species_table[obj->ship_idx];
-	if (!tie98 && !spec->model_handle)
+	const uint8_t* model =
+		tie98 ? NULL : (const uint8_t*)xmemhdl_Lock_Handle(species_table[obj->ship_idx].model_handle);
+	if (!tie98 && !model)
 		return 0;
-	const ShipModelData* mdl = tie98 ? NULL : (const ShipModelData*)((const uint8_t*)spec->model_handle + 2);
+	const ShipModelData* mdl = tie98 ? NULL : (const ShipModelData*)(model + 2);
 	uint8_t nm = tie98 ? modelmesh_getcount(obj->ship_idx) : mdl->num_meshes;
 	if (!tie98 && nm > 40)
 		nm = 40;

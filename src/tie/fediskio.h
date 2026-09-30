@@ -85,8 +85,6 @@ extern char* fatalerrstr[2];
 extern char** fatalerrstrings;
 /* acceleratedtimesetting is tie.c-owned per watdbg; declared in tie.h. */
 
-extern uint32_t species_model_handle_sizes[NUM_SPECIES];
-
 extern uint32_t rankscores[5];
 extern uint32_t secretscores[12];
 extern uint8_t secretcompletioncnts[12];

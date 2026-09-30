@@ -35,7 +35,6 @@
 #include "tie/msgroom.h"
 #include "tie/pai.h"
 #include "tie/panel.h"
-#include "tie/rand.h"
 #include "tie/render_scene_tie98.h"
 #include "tie/render_texture_tie98.h"
 #include "tie/replay.h"

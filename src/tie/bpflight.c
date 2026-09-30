@@ -10,7 +10,6 @@
 #include "tie/fview.h"
 #include "tie/logbuf2.h"
 #include "tie/matrix.h"
-#include "tie/rand.h"
 #include "tie/render_scene_tie98.h"
 #include "tie/render_texture_tie98.h"
 #include "tie/rtsvga2.h"
@@ -187,9 +186,6 @@ static Matrix* matrix;
 // GLOBAL: TIE95 0xD0E18
 // GLOBAL: TIE98 0x50A9D0
 static void* xtransdata;
-
-/* True when BPFLIGHT owns the shared edge-pool allocations. */
-static int flightbufs_owned_by_bpflight;
 
 /* Per-viewport camera state arrays (3 slots). Originally 16-bit Q16.0
  * for angles (0x10000 ≈ 360°) and Q16.16 signed for positions. */
@@ -391,18 +387,10 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	/* XTRANS2 scanline scratch. Big enough for a full-screen viewport. */
 	xtransdata = malloc(65000);
 
-	/* Blueprint, training, and combat previews may run before FEDISKIO. */
-	flightbufs_owned_by_bpflight = 0;
-	if (!flightbuf_small_handle) {
-		flightbuf_small_handle = xmemhdl_Alloc_Handle(
-			(uint32_t)(TRACE2_EDGEINFO_CAP * sizeof(trace2_EdgeInfo)), LANDRU_MEMORY_RESOURCE);
-		flightbufs_owned_by_bpflight = 1;
-	}
-	if (!flightbuf_big_handle) {
-		flightbuf_big_handle = xmemhdl_Alloc_Handle(
-			(uint32_t)(TRACE2_EDGEHEADER_CAP * sizeof(trace2_EdgeHeader)), LANDRU_MEMORY_RESOURCE);
-		flightbufs_owned_by_bpflight = 1;
-	}
+	flightbuf_small_handle = xmemhdl_Alloc_Handle((uint32_t)(TRACE2_EDGEINFO_CAP * sizeof(trace2_EdgeInfo)),
+												  LANDRU_MEMORY_RESOURCE);
+	flightbuf_big_handle = xmemhdl_Alloc_Handle((uint32_t)(TRACE2_EDGEHEADER_CAP * sizeof(trace2_EdgeHeader)),
+												LANDRU_MEMORY_RESOURCE);
 
 	/* Object-buffer heaps differ per scene:
 	 *   scene 3        : 33000 bytes (blueprint has the largest models)
@@ -469,8 +457,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	/* Seed 256 (pos, brightness) pairs at stride 2 into the tie.c-owned
 	 * stars[512] buffer. pos is 6-bit (0..63), brightness is 3-bit (0..7). */
 	for (i = 0; i < 511; i += 2) {
-		stars[i] = (uint8_t)(rand_rand() & 0x3F);
-		stars[i + 1] = (uint8_t)(rand_rand() & 0x07);
+		stars[i] = (uint8_t)(rand() & 0x3F);
+		stars[i + 1] = (uint8_t)(rand() & 0x07);
 	}
 
 	/* Default camera pose per active viewport:
@@ -544,13 +532,13 @@ void bpflight_Close_Flight_Engine(void) {
 		free(bpflight_fltobj_data_obstacle);
 		bpflight_fltobj_data_obstacle = NULL;
 	}
-	if (flightbufs_owned_by_bpflight) {
-		xmemhdl_Free_Handle(flightbuf_small_handle);
-		flightbuf_small_handle = LANDRU_NULL_HANDLE;
-		xmemhdl_Free_Handle(flightbuf_big_handle);
-		flightbuf_big_handle = LANDRU_NULL_HANDLE;
-		flightbufs_owned_by_bpflight = 0;
-	}
+	xmemhdl_Free_Handle(flightbuf_small_handle);
+	xmemhdl_Free_Handle(flightbuf_big_handle);
+#ifdef TIE_MODERN
+	/* PORT: clear the released handles so a later release is a no-op. */
+	flightbuf_small_handle = LANDRU_NULL_HANDLE;
+	flightbuf_big_handle = LANDRU_NULL_HANDLE;
+#endif
 	if (matrix) {
 		matrix_Free_Matrix(matrix);
 		matrix = NULL;

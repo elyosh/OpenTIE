@@ -3,7 +3,6 @@
 #include "tie/bpflight.h"
 #include "tie/create.h"
 #include "tie/drawpol.h"
-#include "tie/fediskio.h" /* species_model_handle_sizes (model-buffer bounds) */
 #include "tie/fview.h"
 #include "tie/laser.h"   /* WEAPON_SPECIES_COUNT, WEAPON_SPECIES_BASE */
 #include "tie/logbuf2.h" /* pixelsdeep */
@@ -18,7 +17,6 @@
 #include "tie/transfm2.h"
 #include "tie/trig2.h"
 #include "tie/xtrans2.h"                              /* flatobjnum */
-#include "tie_runtime/diagnostics/diagnostics.h"      /* TieDiagnostics_Log (polydepthsort OOB diagnostic) */
 #include "tie_runtime/snapshot/snapshot_billboards.h" /* SNAPSHOT-ONLY billboard capture */
 
 #include <stddef.h>
@@ -55,10 +53,6 @@ int16_t relativez;
 
 /* staticobjects[NUM_STATIC_OBJECTS] is owned by create.c (see tie.h). */
 
-/* Model handles are direct pointers, so locking is an identity operation. */
-static inline void* xmemhdl_lock(void* handle) { return handle; }
-static inline void xmemhdl_unlock(void* handle) { (void)handle; }
-
 /* PolyFace moved to draw.h (cross-module shared with drawpol.c). */
 
 /* ============================================================================
@@ -74,12 +68,12 @@ static inline void xmemhdl_unlock(void* handle) { (void)handle; }
  * ========================================================================== */
 // FUNCTION: TIE95 0x1AF50
 int draw_lockshipfileptrs(uint16_t ship_idx) {
-	void* handle = species_table[ship_idx].model_handle;
-	void* raw = xmemhdl_lock(handle);
+	LandruHandle handle = species_table[ship_idx].model_handle;
+	void* raw = xmemhdl_Lock_Handle(handle);
 	ShipModelData* base;
 	int compblock_offset;
 
-	xmemhdl_unlock(handle);
+	xmemhdl_Unlock_Handle(handle);
 
 	if (!raw)
 		return 0;
@@ -321,27 +315,34 @@ static HyperspaceStreakQuadFaceDataTIE98 g_hyperspaceStreakQuadFaceData = {
 	{ { { 1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } } },
 };
 
+// GLOBAL: TIE98 0x4E3D40
 static Tie98OptNode g_hyperspaceStreakQuadVertsNode = {
 	NULL, TIE98_OPT_NODE_MESH_VERTICES, 0, NULL, 4, g_hyperspaceStreakQuadVertices,
 };
+// GLOBAL: TIE98 0x4E3D78
 static Tie98OptNode g_hyperspaceStreakQuadTexCoordsNode = {
 	NULL, TIE98_OPT_NODE_TEXTURE_COORDINATES, 0, NULL, 4, g_hyperspaceStreakQuadTexCoords,
 };
+// GLOBAL: TIE98 0x4E3DA0
 static Tie98OptNode g_hyperspaceStreakQuadVertNormalsNode = {
 	NULL, TIE98_OPT_NODE_VERTEX_NORMALS, 0, NULL, 1, g_hyperspaceStreakQuadVertNormals,
 };
+// GLOBAL: TIE98 0x4E3E20
 static Tie98OptNode g_hyperspaceStreakQuadFaceNode = {
 	NULL, TIE98_OPT_NODE_FACE_DATA, 0, NULL, 1, &g_hyperspaceStreakQuadFaceData,
 };
+// GLOBAL: TIE98 0x4E3E38
 static Tie98OptNode* g_hyperspaceStreakQuadRootChildren[4] = {
 	&g_hyperspaceStreakQuadVertsNode,
 	&g_hyperspaceStreakQuadTexCoordsNode,
 	&g_hyperspaceStreakQuadVertNormalsNode,
 	&g_hyperspaceStreakQuadFaceNode,
 };
+// GLOBAL: TIE98 0x4E3E48
 static Tie98OptNode g_hyperspaceStreakQuadRootNode = {
 	NULL, TIE98_OPT_NODE_GROUP, 4, g_hyperspaceStreakQuadRootChildren, 4, g_hyperspaceStreakQuadRootChildren,
 };
+// GLOBAL: TIE98 0x4E3E60
 static Tie98OptNode* g_hyperspaceStreakQuadRootNodes[1] = {
 	&g_hyperspaceStreakQuadRootNode,
 };
@@ -352,36 +353,7 @@ static Tie98OptimizedPolyObject g_hyperspaceModelHeaderPatch = {
 };
 
 // GLOBAL: TIE98 0x591E30
-static uint32_t g_tie98HyperspaceStreakLength = 32256;
-
-/* PORT: the simulation still runs TIE95 ANIM_dohyperspace. Both versions
- * use the same phase timer, so derive the TIE98 animation global at the
- * renderer-selection boundary without changing either recovered body. */
-void draw_sync_tie98_hyperstar_state(void) {
-	const uint32_t outbound_start = 0x49C;
-	const uint32_t outbound_end = 0x588;
-	const uint32_t inbound_shrink_start = 0x84C;
-	const uint32_t minimum_length = 0x8200;
-	const uint32_t maximum_length = 32256 + 224 * (outbound_end - outbound_start);
-
-	if (hyperspaceflag == 3) {
-		uint32_t ticks = hyperticks;
-		if (ticks < outbound_start)
-			ticks = outbound_start;
-		if (ticks > outbound_end)
-			ticks = outbound_end;
-		g_tie98HyperspaceStreakLength = 32256 + 224 * (ticks - outbound_start);
-	} else if (hyperspaceflag == 5) {
-		if (hyperticks <= inbound_shrink_start) {
-			g_tie98HyperspaceStreakLength = maximum_length;
-		} else {
-			const uint32_t elapsed = hyperticks - inbound_shrink_start;
-			const uint32_t reduction = 224 * elapsed;
-			g_tie98HyperspaceStreakLength =
-				reduction < maximum_length - minimum_length ? maximum_length - reduction : minimum_length;
-		}
-	}
-}
+uint32_t g_hyperspaceStreakLength;
 
 // FUNCTION: TIE98 0x42F990
 // DRAW_drawhyperstar
@@ -390,7 +362,7 @@ void draw_drawhyperstar_tie98(int16_t star_idx) {
 	FlightObject saved_object = objects[0];
 	const Tie98OptimizedPolyObject* saved_model_override = g_flightModelOverride;
 
-	g_hyperspaceStreakQuadVertices[1].y = (float)(g_tie98HyperspaceStreakLength >> 1);
+	g_hyperspaceStreakQuadVertices[1].y = (float)(g_hyperspaceStreakLength >> 1);
 	g_hyperspaceStreakQuadVertices[2].y = g_hyperspaceStreakQuadVertices[1].y;
 	g_bilinearEnabled = 0;
 
@@ -422,7 +394,7 @@ void draw_drawhyperstar_tie98(int16_t star_idx) {
  * ========================================================================== */
 // FUNCTION: TIE95 0x1BB70
 uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
-	void* handle;
+	LandruHandle handle;
 	const uint8_t* bitmap_base;
 	uint32_t tbl_off;
 	uint32_t sub_off;
@@ -431,8 +403,8 @@ uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t scr
 	reverseflag = 1;
 	worldz = 0x100000;
 	handle = species_table[ship_idx].model_handle;
-	bitmap_base = (const uint8_t*)xmemhdl_lock(handle);
-	xmemhdl_unlock(handle);
+	bitmap_base = (const uint8_t*)xmemhdl_Lock_Handle(handle);
+	xmemhdl_Unlock_Handle(handle);
 	if (!bitmap_base)
 		return 0;
 
@@ -449,7 +421,7 @@ uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t scr
 // FUNCTION: TIE98 0x417FF0
 // DRAW_drawbackdropimage
 uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
-	void* handle;
+	LandruHandle handle;
 	const uint8_t* bitmap_base;
 	uint32_t table_offset;
 	uint32_t image_offset;
@@ -459,8 +431,8 @@ uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16
 	worldz = 0x100000;
 	objecteyez = 0x7FFFFFFF;
 	handle = species_table[ship_idx].model_handle;
-	bitmap_base = (const uint8_t*)xmemhdl_lock(handle);
-	xmemhdl_unlock(handle);
+	bitmap_base = (const uint8_t*)xmemhdl_Lock_Handle(handle);
+	xmemhdl_Unlock_Handle(handle);
 	if (!bitmap_base)
 		return 0;
 
@@ -971,60 +943,6 @@ void draw_process_object_components_tie98(uint16_t object_ref) {
 typedef char CheckLODRecordSize[sizeof(LODRecord) == 6 ? 1 : -1];
 typedef char CheckShipModelMeshSize[sizeof(ShipModelMesh) == 64 ? 1 : -1];
 
-/* Resolve the model format's 0x7F00 vertex back-references. The original
- * shared arena allowed references beyond one locked model; separate model
- * allocations do not. When bounds are available, an invalid reference is
- * logged once and clamped before the caller dereferences it. */
-typedef struct {
-	uint16_t ship_idx;             /* loser_ship_idx: ship whose model is locked */
-	const uint8_t* buf_lo;         /* model buffer base (model_handle), NULL = unknown */
-	const uint8_t* buf_hi;         /* model buffer end (base + size) */
-	const uint8_t* b_detail_ptr;   /* selected LOD detail header */
-	const uint8_t* b_poly_list;    /* poly/vertex table base */
-	const uint8_t* edge_list_base; /* plane + vlist_offset */
-	uint16_t a_face_info;          /* clamped face index */
-	uint16_t b_rot_angle;          /* b_detail_ptr[2] */
-	uint8_t b_numpolys;            /* b_detail_ptr[4] */
-	uint8_t edge_idx;              /* edge_list_base[1] (vertex index) */
-} PolyDepthDiag;
-
-static int s_polydepthsort_oob_logged;
-
-static const int16_t* draw_polydepth_walk(const uint8_t* start, int axis, const PolyDepthDiag* d) {
-	const int16_t* p = (const int16_t*)start;
-
-	if (!d->buf_lo) {
-		/* Bounds unknown -- replicate the original unchecked walk. */
-		while (((*p) & 0xFF00) == 0x7F00)
-			p -= 3 * (((int)(uint8_t)*p) >> 1);
-		return p;
-	}
-
-	while ((const uint8_t*)p >= d->buf_lo && (const uint8_t*)p + 2 <= d->buf_hi && ((*p) & 0xFF00) == 0x7F00)
-		p -= 3 * (((int)(uint8_t)*p) >> 1);
-
-	if ((const uint8_t*)p < d->buf_lo || (const uint8_t*)p + 2 > d->buf_hi) {
-		if (!s_polydepthsort_oob_logged) {
-			s_polydepthsort_oob_logged = 1;
-			TieDiagnostics_Log(TIE_LOG_WARN,
-							   "[draw_polydepthsort] vertex-walk OOB on axis %d: ship_idx=%u "
-							   "model_buf=[%p..%p) size=%ld | detail@+%ld b_numpolys=%u "
-							   "a_face_info=%u b_rot_angle=%u | poly_list@+%ld "
-							   "edge_list_base@+%ld edge_idx=%u | start@+%ld final@+%ld "
-							   "(over-run %ld)\n",
-							   axis, (unsigned)d->ship_idx, (const void*)d->buf_lo, (const void*)d->buf_hi,
-							   (long)(d->buf_hi - d->buf_lo), (long)(d->b_detail_ptr - d->buf_lo),
-							   (unsigned)d->b_numpolys, (unsigned)d->a_face_info, (unsigned)d->b_rot_angle,
-							   (long)(d->b_poly_list - d->buf_lo), (long)(d->edge_list_base - d->buf_lo),
-							   (unsigned)d->edge_idx, (long)(start - d->buf_lo),
-							   (long)((const uint8_t*)p - d->buf_lo), (long)((const uint8_t*)p - d->buf_hi));
-		}
-		/* Clamp to a guaranteed in-bounds slot so the caller's deref is safe. */
-		p = (const int16_t*)d->buf_lo;
-	}
-	return p;
-}
-
 /* Resolve ambiguous XTRANS2 depth ordering. Category flags handle fixed
  * priority cases; mesh overlaps compare the camera vector against both
  * polygon planes after resolving 0x7F00 vertex back-references. */
@@ -1090,8 +1008,9 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 	int b_world_y, b_world_z, b_world_x, a_world_y;
 	int owner_world_x, owner_world_z, owner_world_y;
 	int v_eyex, v_eyey;
-	const uint8_t* model_lo;
-	const uint8_t* model_hi;
+	const int16_t* i;
+	const int16_t* j;
+	const int16_t* k;
 	int16_t edge_pt_x, edge_pt_y, edge_pt_z;
 
 	(void)a_obj_id_field;
@@ -1421,59 +1340,19 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 	plane_normal_z = plane->normal_z;
 	edge_list_base = (const uint8_t*)plane + plane->vlist_offset;
 
-	/* Bounds of the locked model buffer (loser_ship_idx is the ship whose
-	 * model was locked above). Used only by the diagnostic walk below. */
-	model_lo = NULL;
-	model_hi = NULL;
-	if (loser_ship_idx < NUM_SPECIES) {
-		model_lo = (const uint8_t*)species_table[loser_ship_idx].model_handle;
-		if (model_lo)
-			model_hi = model_lo + species_model_handle_sizes[loser_ship_idx];
-	}
-
-	if (model_lo &&
-		((const uint8_t*)edge_list_base + 1 < model_lo || (const uint8_t*)edge_list_base + 1 >= model_hi)) {
-		/* The face's vlist_offset placed edge_list_base itself outside the
-		 * model buffer (a bad plane lookup). Log the inputs once and use
-		 * zero edge points (a deterministic, arbitrary depth tiebreak). */
-		if (!s_polydepthsort_oob_logged) {
-			s_polydepthsort_oob_logged = 1;
-			TieDiagnostics_Log(TIE_LOG_WARN,
-							   "[draw_polydepthsort] edge_list_base OOB: ship_idx=%u "
-							   "model_buf=[%p..%p) size=%ld | detail@+%ld b_numpolys=%u "
-							   "a_face_info=%u b_rot_angle=%u | poly_list@+%ld plane@+%ld "
-							   "vlist_offset=%d edge_list_base@+%ld\n",
-							   (unsigned)loser_ship_idx, (const void*)model_lo, (const void*)model_hi,
-							   (long)(model_hi - model_lo), (long)(b_detail_ptr - model_lo),
-							   (unsigned)b_numpolys, (unsigned)a_face_info, (unsigned)b_rot_angle,
-							   (long)(b_poly_list - model_lo), (long)((const uint8_t*)plane - model_lo),
-							   (int)plane->vlist_offset, (long)(edge_list_base - model_lo));
-		}
-		edge_pt_x = edge_pt_y = edge_pt_z = 0;
-	} else {
-		PolyDepthDiag diag;
-		const int16_t* i;
-		const int16_t* j;
-		const int16_t* k;
-
-		diag.ship_idx = loser_ship_idx;
-		diag.buf_lo = model_lo;
-		diag.buf_hi = model_hi;
-		diag.b_detail_ptr = b_detail_ptr;
-		diag.b_poly_list = b_poly_list;
-		diag.edge_list_base = edge_list_base;
-		diag.a_face_info = a_face_info;
-		diag.b_rot_angle = b_rot_angle;
-		diag.b_numpolys = b_numpolys;
-		diag.edge_idx = edge_list_base[1];
-		i = draw_polydepth_walk(b_poly_list + 6 * diag.edge_idx, 0, &diag);
-
-		edge_pt_x = (int16_t)((int)*i >> final_shift);
-		j = draw_polydepth_walk(b_poly_list + 6 * diag.edge_idx + 2, 1, &diag);
-		edge_pt_y = (int16_t)((int)*j >> final_shift);
-		k = draw_polydepth_walk(b_poly_list + 6 * diag.edge_idx + 4, 2, &diag);
-		edge_pt_z = (int16_t)((int)*k >> final_shift);
-	}
+	/* 0x7F00 entries refer back to an earlier vertex component. */
+	for (i = (const int16_t*)(b_poly_list + 6 * edge_list_base[1]); (*i & 0xFF00) == 0x7F00;
+		 i -= 3 * ((int)(uint8_t)*i >> 1))
+		;
+	edge_pt_x = (int16_t)((int)*i >> final_shift);
+	for (j = (const int16_t*)(b_poly_list + 6 * edge_list_base[1] + 2); (*j & 0xFF00) == 0x7F00;
+		 j -= 3 * ((int)(uint8_t)*j >> 1))
+		;
+	edge_pt_y = (int16_t)((int)*j >> final_shift);
+	for (k = (const int16_t*)(b_poly_list + 6 * edge_list_base[1] + 4); (*k & 0xFF00) == 0x7F00;
+		 k -= 3 * ((int)(uint8_t)*k >> 1))
+		;
+	edge_pt_z = (int16_t)((int)*k >> final_shift);
 
 	cam_proj_side_dx = (int16_t)(cam_proj_side_hi - edge_pt_x);
 	other_proj_side_dx = (int16_t)(other_proj_side_hi - edge_pt_x);

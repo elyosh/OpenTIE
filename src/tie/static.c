@@ -1,5 +1,6 @@
 #include "tie/static.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
+#include "tie_runtime/flight_assets/model_access.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
@@ -34,41 +35,6 @@
 #include <stdint.h>
 #include <string.h>
 
-/* ------------------------------------------------------------------
- * Local helpers
- * ------------------------------------------------------------------ */
-
-/* Model handles are direct pointers and require no locking. */
-static inline void* xmemhdl_lock(void* handle) { return handle; }
-static inline void xmemhdl_unlock(void* handle) { (void)handle; }
-
-// PORT: TIE98 aliases StaticObject storage through its unified render-object layout.
-static FlightObject static_render_objects_tie98[NUM_STATIC_OBJECTS];
-
-static FlightObject* static_get_render_object_tie98(uint16_t slot_idx) {
-	const StaticObject* source = &staticobjects[slot_idx];
-	FlightObject* object = &static_render_objects_tie98[slot_idx];
-	memset(object, 0, sizeof *object);
-	object->genus = source->ship_class;
-	object->ship_idx = source->species;
-	object->world_x = (int32_t)source->world_x << 8;
-	object->world_y = (int32_t)source->world_y << 8;
-	object->world_z = (int32_t)source->world_z << 8;
-	object->self_idx = (int16_t)(slot_idx + OBJ_REF_STATIC_BASE);
-	return object;
-}
-
-/* Watcom clamp to ±(2^30 - 0x10000). Matches the `cmp eax, 0x40000000; mov
- * eax, 0x3FFF0000` / `cmp eax, -0x40000000; mov eax, -0x3FFF0000` idiom
- * emitted for saturating Q30 multiplies before the >>15 shift. */
-static inline int32_t clamp_q30(int32_t v) {
-	if (v >= 0x40000000)
-		return 0x3FFF0000;
-	if (v <= -0x40000000)
-		return -0x3FFF0000;
-	return v;
-}
-
 /* ============================================================================
  * static_drawstaticobject
  * ----------------------------------------------------------------------------
@@ -91,7 +57,7 @@ void static_drawstaticobject(uint16_t slot_idx) {
 
 	AnimOp frame_code;
 	int32_t eyex, eyey, eyez;
-	void* handle;
+	LandruHandle handle;
 	ShipModelData* model;
 	ShipMeshLOD* component;
 	const uint16_t* lod;
@@ -179,11 +145,11 @@ void static_drawstaticobject(uint16_t slot_idx) {
 	eyez = objecteyez;
 	handle = species_table[sp_idx].model_handle;
 	/* Skip the 2-byte file-size prefix — matches retail's v48=a1+2. */
-	model = (ShipModelData*)((uint8_t*)xmemhdl_lock(handle) + 2);
+	model = (ShipModelData*)((uint8_t*)xmemhdl_Lock_Handle(handle) + 2);
 	component = draw_getcomponentptr(model, 0);
 	lod = draw_getdetailptr(component, eyez);
 	drawpol_drawpolyobject(lod, eyex, eyey, eyez);
-	xmemhdl_unlock(handle);
+	xmemhdl_Unlock_Handle(handle);
 }
 
 // FUNCTION: TIE98 0x487F20
@@ -200,13 +166,14 @@ void static_drawstaticobject_tie98(uint16_t slot_idx) {
 			static_drawstaticobject(slot_idx);
 			return;
 		}
-		FlightModel_Draw_Object_Mesh(static_get_render_object_tie98(slot_idx), 0);
+		/* PORT: TIE98 passes the StaticObject itself as the draw object. */
+		FlightModel_Draw_Object_Mesh(TieFlightAssets_StaticRenderObject(slot_idx), 0);
 		return;
 	}
 
 	if (object->anim_frame == 0) {
 		draw_process_object_components_tie98((uint16_t)(slot_idx + OBJ_REF_STATIC_BASE));
-		FlightModel_Draw_Object(static_get_render_object_tie98(slot_idx));
+		FlightModel_Draw_Object(TieFlightAssets_StaticRenderObject(slot_idx));
 	}
 }
 
@@ -257,7 +224,7 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 	int32_t x_loc2;
 	int32_t y_loc2;
 	int32_t z_loc2;
-	void* handle;
+	LandruHandle handle;
 	ShipModelData* model;
 	ShipMeshLOD* component;
 	uint8_t* comp_base;
@@ -339,13 +306,43 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 
 	/* Transform the two endpoints into the static's local frame and
 	 * saturate to ±Q30 before the final >>15 normalisation. */
-	x_loc1 = clamp_q30(gatez1 * craftS3 + gatey1 * craftS2 + gatex1 * craftS1) >> 15;
-	y_loc1 = clamp_q30(gatez1 * craftU3 + gatey1 * craftU2 + gatex1 * craftU1) >> 15;
-	z_loc1 = clamp_q30(gatez1 * craftf3 + gatey1 * craftf2 + gatex1 * craftf1) >> 15;
+	x_loc1 = gatez1 * craftS3 + gatey1 * craftS2 + gatex1 * craftS1;
+	if (x_loc1 >= 0x40000000)
+		x_loc1 = 0x3FFF0000;
+	if (x_loc1 <= -0x40000000)
+		x_loc1 = -0x3FFF0000;
+	x_loc1 >>= 15;
+	y_loc1 = gatez1 * craftU3 + gatey1 * craftU2 + gatex1 * craftU1;
+	if (y_loc1 >= 0x40000000)
+		y_loc1 = 0x3FFF0000;
+	if (y_loc1 <= -0x40000000)
+		y_loc1 = -0x3FFF0000;
+	y_loc1 >>= 15;
+	z_loc1 = gatez1 * craftf3 + gatey1 * craftf2 + gatex1 * craftf1;
+	if (z_loc1 >= 0x40000000)
+		z_loc1 = 0x3FFF0000;
+	if (z_loc1 <= -0x40000000)
+		z_loc1 = -0x3FFF0000;
+	z_loc1 >>= 15;
 
-	x_loc2 = clamp_q30(gatez2 * craftS3 + gatey2 * craftS2 + gatex2 * craftS1) >> 15;
-	y_loc2 = clamp_q30(gatez2 * craftU3 + gatey2 * craftU2 + gatex2 * craftU1) >> 15;
-	z_loc2 = clamp_q30(gatez2 * craftf3 + gatey2 * craftf2 + gatex2 * craftf1) >> 15;
+	x_loc2 = gatez2 * craftS3 + gatey2 * craftS2 + gatex2 * craftS1;
+	if (x_loc2 >= 0x40000000)
+		x_loc2 = 0x3FFF0000;
+	if (x_loc2 <= -0x40000000)
+		x_loc2 = -0x3FFF0000;
+	x_loc2 >>= 15;
+	y_loc2 = gatez2 * craftU3 + gatey2 * craftU2 + gatex2 * craftU1;
+	if (y_loc2 >= 0x40000000)
+		y_loc2 = 0x3FFF0000;
+	if (y_loc2 <= -0x40000000)
+		y_loc2 = -0x3FFF0000;
+	y_loc2 >>= 15;
+	z_loc2 = gatez2 * craftf3 + gatey2 * craftf2 + gatex2 * craftf1;
+	if (z_loc2 >= 0x40000000)
+		z_loc2 = 0x3FFF0000;
+	if (z_loc2 <= -0x40000000)
+		z_loc2 = -0x3FFF0000;
+	z_loc2 >>= 15;
 
 	if (TieProfile_UsesTie98Logic()) {
 		/* TIE98 tests mesh 0's authored descriptor bounds in OPT axis order
@@ -381,9 +378,9 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 	/* Resolve mesh pointer via the species's model handle. */
 	handle = species_table[sp_idx].model_handle;
 	/* Skip the 2-byte file-size prefix — matches retail's v48=a1+2. */
-	model = (ShipModelData*)((uint8_t*)xmemhdl_lock(handle) + 2);
+	model = (ShipModelData*)((uint8_t*)xmemhdl_Lock_Handle(handle) + 2);
 	component = draw_getcomponentptr(model, 0);
-	xmemhdl_unlock(handle);
+	xmemhdl_Unlock_Handle(handle);
 
 	/* From the component LOD header, follow the self-relative offset at
 	 * +4 (read as the top 16 bits of an unaligned dword at +2) to the

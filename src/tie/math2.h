@@ -14,6 +14,9 @@ int16_t math2_divide(uint16_t a, uint16_t b);
 uint16_t math2_percentage(uint16_t a, uint16_t b);
 uint16_t math2_longpercentage(uint32_t a, uint32_t b);
 int16_t math2_getrandom(void);
+#if defined(TIE_MODERN) || defined(TIE98)
+int16_t math2_getrandomalt(void);
+#endif
 void math2_setrandomseed(void);
 uint16_t math2_mphconvert(int16_t speed, uint16_t divisor);
 uint16_t math2_calcratio(uint16_t a, uint16_t b, uint16_t c);

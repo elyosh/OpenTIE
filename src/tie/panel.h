@@ -206,9 +206,6 @@ extern uint8_t searchpartsflag;
 extern uint8_t panelpartsflag;
 extern uint8_t panelmirrorflag;
 
-/* Panel bitmap storage. */
-extern void* panelpartsptr;
-
 /* ------------------------------------------------------------------ */
 /* PANEL API (44 functions)                                           */
 /* ------------------------------------------------------------------ */

@@ -1269,9 +1269,16 @@ int16_t paiorder_completegootherorder(void) {
 	craftptr->ai_state_1C = (uint8_t)new_entry;
 
 	new_order = fg_array[ai.fg_idx].ai[new_entry].order;
-	craftptr->default_order_ldr = create_getleaderorder(new_order);
-	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? create_getleaderorder(new_order)
-															  : create_getfollowerorder(new_order);
+#ifdef TIE_MODERN
+	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+	if (new_order >= sizeof(ordersldr)) {
+		craftptr->default_order_ldr = 0;
+		ai.staged_next_order = 0;
+		return 1;
+	}
+#endif
+	craftptr->default_order_ldr = ordersldr[new_order];
+	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? ordersldr[new_order] : ordersflw[new_order];
 	return 1;
 }
 
@@ -1291,9 +1298,16 @@ int16_t paiorder_completefolloworder(void) {
 	craftptr->ai_state_1C = leader_entry;
 
 	new_order = fg_array[ai.fg_idx].ai[leader_entry].order;
-	craftptr->default_order_ldr = create_getleaderorder(new_order);
-	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? create_getleaderorder(new_order)
-															  : create_getfollowerorder(new_order);
+#ifdef TIE_MODERN
+	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+	if (new_order >= sizeof(ordersldr)) {
+		craftptr->default_order_ldr = 0;
+		ai.staged_next_order = 0;
+		return 1;
+	}
+#endif
+	craftptr->default_order_ldr = ordersldr[new_order];
+	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? ordersldr[new_order] : ordersflw[new_order];
 	return 1;
 }
 
@@ -1328,9 +1342,16 @@ int16_t paiorder_waitgootherorder(void) {
 
 	order = fg_array[ai.fg_idx].ai[picked].order;
 	craftptr->ai_state_1C = picked;
-	craftptr->default_order_ldr = create_getleaderorder(order);
-	ai.staged_next_order =
-		(craftptr->leader_obj_idx == 0xFF) ? create_getleaderorder(order) : create_getfollowerorder(order);
+#ifdef TIE_MODERN
+	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+	if (order >= sizeof(ordersldr)) {
+		craftptr->default_order_ldr = 0;
+		ai.staged_next_order = 0;
+		return 1;
+	}
+#endif
+	craftptr->default_order_ldr = ordersldr[order];
+	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? ordersldr[order] : ordersflw[order];
 	return 1;
 }
 
@@ -1358,7 +1379,12 @@ int16_t paiorder_orderswitchorder(void) {
 			continue;
 
 		order = fg_array[ai.fg_idx].ai[scan].order;
-		mapped = create_getleaderorder(order);
+#ifdef TIE_MODERN
+		// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+		mapped = order < sizeof(ordersldr) ? ordersldr[order] : 0;
+#else
+		mapped = ordersldr[order];
+#endif
 
 		if (mapped < 0x1Cu) {
 			if (mapped < 7 || (mapped > 9 && mapped != 19))
@@ -1382,9 +1408,16 @@ int16_t paiorder_orderswitchorder(void) {
 	picked = (uint8_t)scan;
 	order = fg_array[ai.fg_idx].ai[picked].order;
 	craftptr->ai_state_1C = picked;
-	craftptr->default_order_ldr = create_getleaderorder(order);
-	ai.staged_next_order =
-		(craftptr->leader_obj_idx == 0xFF) ? create_getleaderorder(order) : create_getfollowerorder(order);
+#ifdef TIE_MODERN
+	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+	if (order >= sizeof(ordersldr)) {
+		craftptr->default_order_ldr = 0;
+		ai.staged_next_order = 0;
+		return 1;
+	}
+#endif
+	craftptr->default_order_ldr = ordersldr[order];
+	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? ordersldr[order] : ordersflw[order];
 	return 1;
 }
 

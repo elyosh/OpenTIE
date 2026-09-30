@@ -310,8 +310,8 @@ static void TieHudSnapshot_CaptureHud(void) {
 		if (oldinstruments[i] != -2)
 			hud->instruments[i].value = oldinstruments[i];
 	}
-	const uint8_t clock_minutes = mission.train_craft_type ? mtimer_min : _date.minute;
-	const uint8_t clock_seconds = mission.train_craft_type ? mtimer_sec : _date.second;
+	const uint8_t clock_minutes = mission.train_craft_type ? timeleft.minute : _date.minute;
+	const uint8_t clock_seconds = mission.train_craft_type ? timeleft.second : _date.second;
 	snprintf(hud->mission_clock_text, sizeof hud->mission_clock_text, "%2u:%02u", (unsigned)clock_minutes,
 			 (unsigned)clock_seconds);
 	hud->instruments[TIE_HUDI_CLOCK_DIGITS].color = flightResolution == TIE_FLIGHT_RES_VGA ? 0x4D : 0x4E;
@@ -352,7 +352,11 @@ static void TieHudSnapshot_CaptureHud(void) {
 
 	/* Engine's classic-px radar disc radius. SVGA = 44 (math2.c:196
 	 * `trig2_sinewordmult(44, ...)`), VGA = 18 (radarmax320[1]). */
-	hud->radar_classic_radius = tie_is_high_resolution_flight() ? 44u : 18u;
+	hud->radar_classic_radius =
+		(flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		 flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
+			? 44u
+			: 18u;
 }
 
 static void TieHudSnapshot_CaptureCockpit(void) {
@@ -602,8 +606,8 @@ static void TieHudSnapshot_CaptureCockpit(void) {
 		hud->training.active = 1;
 		hud->training.level = (uint8_t)mission.train_level;
 		hud->training.player_spec_num = (uint8_t)pstate.player_spec_num;
-		hud->training.timer_min = mtimer_min;
-		hud->training.timer_sec = mtimer_sec;
+		hud->training.timer_min = timeleft.minute;
+		hud->training.timer_sec = timeleft.second;
 		hud->training.bonus_active = bonus_countdown_active;
 		hud->training.player_object_slot = pstate.object_idx < NUM_OBJECTS ? pstate.object_idx : UINT16_MAX;
 		hud->training.gates_remaining = (uint16_t)mission.train_gates_remaining;

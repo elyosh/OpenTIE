@@ -108,7 +108,11 @@ static bool TieRecoveredData_SpeciesLfdLocation(uint16_t species_idx, uint8_t ex
 		return false;
 
 	out->entry = entry->lfd_entry;
-	out->resource_set = tie_is_high_resolution_flight() ? TIE_SPECIES_LFD_RES640 : TIE_SPECIES_LFD_RES320;
+	out->resource_set =
+		(flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		 flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
+			? TIE_SPECIES_LFD_RES640
+			: TIE_SPECIES_LFD_RES320;
 	out->lfd_file = entry->lfd_file;
 	return true;
 }
