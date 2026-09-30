@@ -2745,7 +2745,9 @@ void tie_simulator(int replay_mode) {
 	int16_t i;
 #ifdef TIE_MODERN
 	TieSimulatorTask* continuation = landru_task_top();
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
+	/* Re-read after INIT activates the flight display: the frontend display
+	 * is still active on entry. */
+	bool tie98_display = TieClassicDisplay_UsesDx5();
 	const bool tie98_logic = TieProfile_UsesTie98Logic();
 	saved_drawbackdrop = continuation->saved_drawbackdrop;
 	saved_drawdebris = continuation->saved_drawdebris;
@@ -2765,6 +2767,7 @@ void tie_simulator(int replay_mode) {
 			continuation->next_step = LANDRU_TASK_STEP_DONE;
 			return;
 		}
+		tie98_display = TieClassicDisplay_UsesDx5();
 #endif
 		deadflag_EB76C = 0;
 		deadflag_EB774 = 1;
