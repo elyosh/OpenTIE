@@ -2,6 +2,7 @@
 
 #include "tie/anim.h"
 #include "tie/backdrp2.h"
+#include "tie/draw.h"
 #include "tie/drawpol.h"
 #include "tie/fediskio.h"
 #include "tie/gate.h"
@@ -746,12 +747,24 @@ static void TieFlightSnapshot_CaptureWorld(void) {
 		TieHyperspaceState* hs = TieSnapshotBuilder_HyperspaceMut();
 		hs->phase = hyperspaceflag;
 		hs->abort_flag = hyperabortflag;
-		hs->hyperstar_length = (int16_t)hyperstarlength;
 		/* hyperstardata polymesh: header (5 + pad 1) + point[0] at +6,
 		 * point[1] at +12. The first int16 of each point is the
 		 * animated x coord that anim_dohyperspace mutates. */
 		hs->hyperstar_p0_x = *(const int16_t*)(hyperstardata + 6);
-		hs->hyperstar_p1_x = *(const int16_t*)(hyperstardata + 12);
+		if (TieProfile_UsesTie98Logic()) {
+			/* TIE98 animates g_hyperspaceStreakLength instead of the far
+			 * endpoint. Both start at 32256 and move by 224 * frameticks per
+			 * frame, so express the TIE98 length as the equivalent TIE95 far
+			 * endpoint, including TIE95's (0x7E00, 0x8200) clamp. */
+			uint16_t far_endpoint = (uint16_t)(0xFC00u - (uint16_t)g_hyperspaceStreakLength);
+			if (far_endpoint > 0x7E00u && far_endpoint < 0x8200u)
+				far_endpoint = 0x8200u;
+			hs->hyperstar_length = (int16_t)far_endpoint;
+			hs->hyperstar_p1_x = (int16_t)far_endpoint;
+		} else {
+			hs->hyperstar_length = (int16_t)hyperstarlength;
+			hs->hyperstar_p1_x = *(const int16_t*)(hyperstardata + 12);
+		}
 		hs->hyperspacedetail = (uint16_t)hyperspacedetail;
 		hs->hyperticks = hyperticks;
 	}
