@@ -90,6 +90,6 @@ void TieBrief_Begin(SceneHeadStruct* scene_head) {
 		return;
 	task->scene_head = scene_head;
 	task->notice = NULL;
-	task->svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+	task->svga = TieProfile_UsesTie98Frontend();
 	task->phase = BRIEF_BEGIN;
 }

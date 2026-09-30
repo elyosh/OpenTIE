@@ -20,6 +20,7 @@ typedef struct TieFrontendProfile {
 const TieFrontendProfile* TieProfile_Frontend(void);
 void TieProfile_SetFrontend(TieFrontendProfileId id);
 TieFrontendProfileId TieProfile_FrontendId(void);
+bool TieProfile_UsesTie98Frontend(void);
 void TieProfile_SetFlight(const TieFlightProfile* profile);
 const TieFlightProfile* TieProfile_Flight(void);
 bool TieProfile_RequestFlight(const TieFlightProfile* profile);

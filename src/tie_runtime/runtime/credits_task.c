@@ -27,7 +27,7 @@ static LandruTaskStepResult credits_step(void* self) {
 	if (task->started)
 		return LANDRU_TASK_STEP_DONE;
 
-	const bool tie98 = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+	const bool tie98 = TieProfile_UsesTie98Frontend();
 	task->previous_surface = xsurface_Get_Surface_Set();
 	if (tie98) {
 		if (!xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA)) {

@@ -48,17 +48,16 @@ bool TieShell_PrepareScene(int16_t scene) {
 	TieSnapshotBuilder_SetSceneKind(TIE_SCENE_FRONTEND);
 	TieSnapshotBuilder_SetActiveFilm(NULL, NULL);
 	TieSnapshotBuilder_SetRedrawModel(TIE_REDRAW_INCREMENTAL);
-	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 &&
-		!xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA)) {
+	if (TieProfile_UsesTie98Frontend() && !xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA)) {
 		TieDiagnostics_Log(TIE_LOG_ERROR, "[SHELL] could not select VGA Landru surface for scene %d\n",
 						   scene);
 		xerror_Set_Landru_Error(7);
 		return false;
 	}
-	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
+	if (TieProfile_UsesTie98Frontend())
 		xview_Init_View(xview_Get_Current_View());
 
-	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 &&
+	if (TieProfile_UsesTie98Frontend() &&
 		(scene == SCENE_FLIGHT_COMBAT || scene == SCENE_FLIGHT_BATTLE || scene == SCENE_TRAIN_A ||
 		 scene == SCENE_TRAIN_MAP || scene == SCENE_COMBAT_A || scene == SCENE_COMBAT_MAP_A ||
 		 scene == SCENE_COMBAT_MAP_B || scene == SCENE_FILM_VIEWER || scene == SCENE_BRIEF_MAP ||

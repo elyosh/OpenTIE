@@ -778,7 +778,7 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 #ifdef TIE_MODERN
 	/* TIE98 leaves the TOTRAIN and TOCOMBAT transitions on the
 	 * native SVGA target; every other PLAY1 film uses VGA. */
-	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 &&
+	if (TieProfile_UsesTie98Frontend() &&
 		(scene == SCENE_TRAIN_TRANSITION || scene == SCENE_COMBAT_TRANSITION)) {
 		surface_set = LANDRU_SURFACE_SVGA;
 		(void)xsurface_Select_Surface_Set(surface_set);

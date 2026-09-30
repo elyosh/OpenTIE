@@ -96,7 +96,7 @@ bool TieRuntime_Init(const TieRuntimeConfig* config, char* error, size_t error_c
 
 	const bool initialize_tie98_display = TieProfile_UsesDx5() || TieFlightAssets_Tie98Available();
 	uint16_t initial_mode =
-		TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? TieProfile_Frontend()->vesa_mode
+		TieProfile_UsesTie98Frontend() ? TieProfile_Frontend()->vesa_mode
 		: config->flight_profile.version == TIE_GAME_VERSION_TIE98 &&
 				config->flight_profile.tie98_original_renderer == TIE98_ORIGINAL_RENDERER_D3D
 			? TIE98_DISPLAY_MODE_HARDWARE_FLIGHT

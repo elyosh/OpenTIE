@@ -51,7 +51,7 @@ const TieFramebuffer* TieClassicFramebuffer_Current(void) {
 void TieClassicFramebuffer_CapturePresentedVga(void) {
 	LandruVideoTarget target;
 	s_presented_vga_valid = false;
-	if (!TieClassicDisplay_FrontendActive() || TieProfile_FrontendId() != TIE_FRONTEND_PROFILE_TIE98 ||
+	if (!TieClassicDisplay_FrontendActive() || !TieProfile_UsesTie98Frontend() ||
 		!(landru_video_flags_gbl & LANDRU_VIDEO_VGA_COMPAT) || !xsurface_Get_Active_Video_Target(&target) ||
 		!target.pixels || target.width != TIE_PRESENTED_VGA_WIDTH ||
 		target.height != TIE_PRESENTED_VGA_HEIGHT || target.stride < TIE_PRESENTED_VGA_WIDTH)
@@ -66,8 +66,7 @@ void TieClassicFramebuffer_CapturePresentedVga(void) {
 void TieClassicFramebuffer_InvalidatePresentedVga(void) { s_presented_vga_valid = false; }
 
 const TieFramebuffer* TieClassicFramebuffer_PresentedVga(void) {
-	if (!s_presented_vga_valid || !TieClassicDisplay_FrontendActive() ||
-		TieProfile_FrontendId() != TIE_FRONTEND_PROFILE_TIE98)
+	if (!s_presented_vga_valid || !TieClassicDisplay_FrontendActive() || !TieProfile_UsesTie98Frontend())
 		return NULL;
 	s_presented_vga_framebuffer = (TieFramebuffer) {
 		.pixels = s_presented_vga_pixels,

@@ -450,7 +450,7 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 	/* TIE98 0x490067/0x4909E6: retain slot 2 for the
 	 * SVGA frontend font and place the VGA title font in slot 4. */
 #ifdef TIE_MODERN
-	title_font = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 4 : 2;
+	title_font = TieProfile_UsesTie98Frontend() ? 4 : 2;
 #elif defined(TIE98)
 	title_font = 2;
 #else

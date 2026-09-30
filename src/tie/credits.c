@@ -275,7 +275,7 @@ int16_t credits_Credits(SceneHeadStruct* scene_head) {
 	ResFile* credit_res;
 #ifdef TIE_MODERN
 	ResFile* text_res = NULL;
-	bool tie98 = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+	bool tie98 = TieProfile_UsesTie98Frontend();
 #else
 	ResFile* text_res;
 #endif

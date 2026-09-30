@@ -385,8 +385,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	int16_t i;
 
 #ifdef TIE_MODERN
-	active_spec = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? &mainmenu_layout_tie98
-																		: &mainmenu_layout_tie95;
+	active_spec = TieProfile_UsesTie98Frontend() ? &mainmenu_layout_tie98 : &mainmenu_layout_tie95;
 #endif
 #ifdef TIE_MODERN
 	xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);

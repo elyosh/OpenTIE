@@ -115,5 +115,5 @@ void TieMainMenu_Begin(SceneHeadStruct* scene_head) {
 	if (!task)
 		return;
 	task->scene_head = scene_head;
-	task->tie98 = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+	task->tie98 = TieProfile_UsesTie98Frontend();
 }

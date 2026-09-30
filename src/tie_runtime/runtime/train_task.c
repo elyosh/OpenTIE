@@ -22,7 +22,7 @@ static LandruTaskStepResult train_step(void* self) {
 	TrainTask* task = self;
 	if (!task->started) {
 		task->started = true;
-		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98) {
+		if (TieProfile_UsesTie98Frontend()) {
 			(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_SVGA);
 			xview_Init_View(xview_Get_Current_View());
 			xvesa_Erase_Video(16);

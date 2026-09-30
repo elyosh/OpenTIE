@@ -113,7 +113,7 @@ int32_t shell_Shell(int32_t scene, int32_t script) {
 #ifdef TIE_MODERN
 		sHead_gbl = &continuation->the_head;
 		if (TieProfile_UsesDx5())
-			g_frontendDisplayWndProcMode = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 1 : -1;
+			g_frontendDisplayWndProcMode = TieProfile_UsesTie98Frontend() ? 1 : -1;
 		frontResolution = (int16_t)TieProfile_Frontend()->vesa_mode;
 #else
 		sHead_gbl = &the_head;
@@ -255,8 +255,7 @@ int32_t shell_Shell(int32_t scene, int32_t script) {
 #ifdef TIE_MODERN
 				TieSnapshotBuilder_SetSceneKind(TIE_SCENE_FRONTEND);
 				if (TieProfile_UsesDx5())
-					g_frontendDisplayWndProcMode =
-						TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 1 : -1;
+					g_frontendDisplayWndProcMode = TieProfile_UsesTie98Frontend() ? 1 : -1;
 #endif
 				shipext_Reset_Battle_Results();
 				xstream_Init_Stream_Engine(0, 2 * 1024 * 1024, 3 * 1024 * 1024 / 2);

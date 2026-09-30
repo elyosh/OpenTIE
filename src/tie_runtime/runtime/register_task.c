@@ -102,7 +102,7 @@ void TieRegister_Begin(SceneHeadStruct* head) {
 	if (!task)
 		return;
 	task->scene_head = head;
-	task->tie98 = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+	task->tie98 = TieProfile_UsesTie98Frontend();
 }
 
 void TieRegister_SetCopyProtection(bool enabled) { copy_protection_enabled = enabled; }

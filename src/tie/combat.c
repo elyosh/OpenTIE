@@ -39,6 +39,7 @@
 #include "landru/vesa.h"
 #include "landru/view.h"
 #include "landru/viewadd.h"
+#include "tie/edition.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
 #include "tie/soundext.h"
@@ -110,9 +111,6 @@ static int16_t combat_num_scores;
 // GLOBAL: TIE95 0xF5912
 // GLOBAL: TIE98 0x50AA74
 static int16_t combat_score_id;
-#ifdef TIE_MODERN
-static bool combat_svga;
-#endif
 // GLOBAL: TIE98 0x50AA68
 static int32_t combat_monitor_needs_clear;
 
@@ -178,7 +176,7 @@ static int16_t combat_film_Combat_Callback(Film* the_film, FilmObject* film_obje
 	int16_t var1;
 
 #ifdef TIE_MODERN
-	if (combat_svga && film_object->id == FTC_PALETTE) {
+	if (TieProfile_UsesTie98Frontend() && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
 		return 0;
 	}
@@ -266,7 +264,8 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 		/* Start button */
 		if (mouseState == 3 || prevMouseState == 3) {
 #ifdef TIE_MODERN
-			xactor_Set_Actor_State(button[combat_svga ? tie98_button_index : 1], combat_svga ? 0 : 2, 0);
+			xactor_Set_Actor_State(button[TieProfile_UsesTie98Frontend() ? tie98_button_index : 1],
+								   TieProfile_UsesTie98Frontend() ? 0 : 2, 0);
 #elif defined(TIE98)
 			xactor_Set_Actor_State(button[tie98_button_index], 0, 0);
 #else
@@ -277,7 +276,8 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 			if (mouseState == 1 || prevMouseState == 1)
 				soundext_Play_SFX(sfxButton, 80);
 #ifdef TIE_MODERN
-			xactor_Set_Actor_State(button[combat_svga ? tie98_button_index : 1], combat_svga ? 1 : 3, 0);
+			xactor_Set_Actor_State(button[TieProfile_UsesTie98Frontend() ? tie98_button_index : 1],
+								   TieProfile_UsesTie98Frontend() ? 1 : 3, 0);
 #elif defined(TIE98)
 			xactor_Set_Actor_State(button[tie98_button_index], 1, 0);
 #else
@@ -288,7 +288,7 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 		/* Exit door */
 		if (mouseState == 3 || prevMouseState == 3) {
 #ifdef TIE_MODERN
-			xactor_Set_Actor_State(button[combat_svga ? tie98_button_index : 0], 0, 0);
+			xactor_Set_Actor_State(button[TieProfile_UsesTie98Frontend() ? tie98_button_index : 0], 0, 0);
 #elif defined(TIE98)
 			xactor_Set_Actor_State(button[tie98_button_index], 0, 0);
 #else
@@ -299,7 +299,7 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 			if (mouseState == 1 || prevMouseState == 1)
 				soundext_Play_SFX(sfxButton, 80);
 #ifdef TIE_MODERN
-			xactor_Set_Actor_State(button[combat_svga ? tie98_button_index : 0], 1, 0);
+			xactor_Set_Actor_State(button[TieProfile_UsesTie98Frontend() ? tie98_button_index : 0], 1, 0);
 #elif defined(TIE98)
 			xactor_Set_Actor_State(button[tie98_button_index], 1, 0);
 #else
@@ -312,7 +312,7 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 			xinpattr_Clear_Input_Flag1(input);
 			xinpattr_Selected_Input(input);
 #ifdef TIE_MODERN
-			if (combat_svga)
+			if (TieProfile_UsesTie98Frontend())
 				xactor_Set_Actor_State(button[tie98_button_index], 0, 0);
 			else
 				xactor_Hide_Actor(arrow_actor);
@@ -326,7 +326,7 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 			soundext_Play_SFX(sfxButton, 80);
 			xinpattr_Set_Input_Flag1(input);
 #ifdef TIE_MODERN
-			if (combat_svga)
+			if (TieProfile_UsesTie98Frontend())
 				xactor_Set_Actor_State(button[tie98_button_index], 1, 0);
 			else {
 				xactor_Show_Actor(arrow_actor);
@@ -360,49 +360,25 @@ static void combat_iuser_Combat(Input* input, int32_t time) {
 			shipext_Last_Combat_Ship();
 			combat_time = (combat_time >= 384) ? 0 : 128;
 			bpflight_Stop_Movie_Engine();
-#ifdef TIE_MODERN
-			combat_monitor_needs_clear = combat_svga;
-#elif defined(TIE98)
-			combat_monitor_needs_clear = true;
-#else
-			combat_monitor_needs_clear = false;
-#endif
+			combat_monitor_needs_clear = TIE_EDITION(false, true);
 			break;
 		case 2:
 			shipext_Next_Combat_Ship();
 			combat_time = (combat_time >= 256) ? 0 : 128;
 			bpflight_Stop_Movie_Engine();
-#ifdef TIE_MODERN
-			combat_monitor_needs_clear = combat_svga;
-#elif defined(TIE98)
-			combat_monitor_needs_clear = true;
-#else
-			combat_monitor_needs_clear = false;
-#endif
+			combat_monitor_needs_clear = TIE_EDITION(false, true);
 			break;
 		case 3:
 			shipext_Last_Combat_Mission();
 			combat_time = (combat_time >= 256) ? 0 : 128;
 			bpflight_Stop_Movie_Engine();
-#ifdef TIE_MODERN
-			combat_monitor_needs_clear = combat_svga;
-#elif defined(TIE98)
-			combat_monitor_needs_clear = true;
-#else
-			combat_monitor_needs_clear = false;
-#endif
+			combat_monitor_needs_clear = TIE_EDITION(false, true);
 			break;
 		case 4:
 			shipext_Next_Combat_Mission();
 			combat_time = (combat_time >= 256) ? 0 : 128;
 			bpflight_Stop_Movie_Engine();
-#ifdef TIE_MODERN
-			combat_monitor_needs_clear = combat_svga;
-#elif defined(TIE98)
-			combat_monitor_needs_clear = true;
-#else
-			combat_monitor_needs_clear = false;
-#endif
+			combat_monitor_needs_clear = TIE_EDITION(false, true);
 			break;
 		case 5:
 			if (!helmet->var2)
@@ -508,26 +484,14 @@ static void combat_iuser_Combat_Screen(Input* input, int32_t time) {
 	if (combat_time == 0) {
 		combat_time = 1;
 		combat_mode = 0;
-#ifdef TIE_MODERN
-		combat_monitor_needs_clear = combat_svga;
-#elif defined(TIE98)
-		combat_monitor_needs_clear = true;
-#else
-		combat_monitor_needs_clear = false;
-#endif
+		combat_monitor_needs_clear = TIE_EDITION(false, true);
 		return;
 	}
 
 	if (combat_time == 256) {
 		combat_time++;
 		combat_mode = 1;
-#ifdef TIE_MODERN
-		combat_monitor_needs_clear = combat_svga;
-#elif defined(TIE98)
-		combat_monitor_needs_clear = true;
-#else
-		combat_monitor_needs_clear = false;
-#endif
+		combat_monitor_needs_clear = TIE_EDITION(false, true);
 		return;
 	}
 
@@ -570,15 +534,9 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 	t = combat_time;
 	num_lines = shipext_Num_Combat_Mission_Text_Lines();
 
+	font_id = TIE_EDITION(0, 2);
 #ifdef TIE_MODERN
-	font_id = combat_svga ? 2 : 0;
-#elif defined(TIE98)
-	font_id = 2;
-#else
-	font_id = 0;
-#endif
-#ifdef TIE_MODERN
-	line_height = combat_svga ? (int16_t)xfont_Get_FontID_Height(font_id) : 10;
+	line_height = TieProfile_UsesTie98Frontend() ? (int16_t)xfont_Get_FontID_Height(font_id) : 10;
 #elif defined(TIE98)
 	line_height = (int16_t)xfont_Get_FontID_Height(font_id);
 #else
@@ -586,16 +544,10 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 #endif
 	dst.top += (dst.bottom - dst.top - (line_height * num_lines + 18)) >> 1;
 
-#ifdef TIE_MODERN
-	text_x = dst.left + (combat_svga ? 4 : 2);
-#elif defined(TIE98)
-	text_x = dst.left + (4);
-#else
-	text_x = dst.left + (2);
-#endif
+	text_x = dst.left + (TIE_EDITION(2, 4));
 	text_y = dst.top + 10;
 #ifdef TIE_MODERN
-	dst.bottom = dst.top + (combat_svga ? 9 + line_height : 18);
+	dst.bottom = dst.top + (TieProfile_UsesTie98Frontend() ? 9 + line_height : 18);
 #elif defined(TIE98)
 	dst.bottom = dst.top + (9 + line_height);
 #else
@@ -614,39 +566,15 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 			max_width = w;
 	}
 	text_left = ((dst.right - dst.left - max_width) >> 1) + text_x;
-#ifdef TIE_MODERN
-	full_bar = combat_svga ? 390 : 195;
-#elif defined(TIE98)
-	full_bar = 390;
-#else
-	full_bar = 195;
-#endif
-#ifdef TIE_MODERN
-	half_bar = combat_svga ? 198 : 99;
-#elif defined(TIE98)
-	half_bar = 198;
-#else
-	half_bar = 99;
-#endif
-#ifdef TIE_MODERN
-	bar_step = combat_svga ? 12 : 6;
-#elif defined(TIE98)
-	bar_step = 12;
-#else
-	bar_step = 6;
-#endif
+	full_bar = TIE_EDITION(195, 390);
+	half_bar = TIE_EDITION(99, 198);
+	bar_step = TIE_EDITION(6, 12);
 
 	/* Animated horizontal bars: header strip is framed by two parallel bars
 	 * (top of header at dst.top+1, bottom of header at dst.bottom-1). Both
 	 * grow outward from the centre as `t` ramps 0..16, then snap full at 195. */
 	if (t >= 16) {
-#ifdef TIE_MODERN
-		header_x = dst.left + (combat_svga ? 6 : 3);
-#elif defined(TIE98)
-		header_x = dst.left + (6);
-#else
-		header_x = dst.left + (3);
-#endif
+		header_x = dst.left + (TIE_EDITION(3, 6));
 		header_w = full_bar;
 	} else {
 		header_x = dst.left + half_bar - bar_step * t;
@@ -657,13 +585,7 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 
 	bar_y = dst.bottom + line_height * num_lines + 2;
 	if (t >= line_height * num_lines) {
-#ifdef TIE_MODERN
-		xpaint_Horiz_Clipped_Line(dst.left + (combat_svga ? 6 : 3), bar_y, full_bar, 2);
-#elif defined(TIE98)
-		xpaint_Horiz_Clipped_Line(dst.left + (6), bar_y, full_bar, 2);
-#else
-		xpaint_Horiz_Clipped_Line(dst.left + (3), bar_y, full_bar, 2);
-#endif
+		xpaint_Horiz_Clipped_Line(dst.left + (TIE_EDITION(3, 6)), bar_y, full_bar, 2);
 	} else {
 		int16_t bt = t - (line_height * num_lines - 16);
 		if (bt >= 0)
@@ -722,71 +644,29 @@ static void combat_Draw_Combat_Screen_Score(Rect* src) {
 
 	if (mi >= combat_num_scores || !combat_score_data[mi].name[0]) {
 		textext_Copy_Text(string, txtCombatHighScore);
-#ifdef TIE_MODERN
-		xfont_Print_Clipped_Text(string, src->left + (combat_svga ? 128 : 64),
-								 src->top + (combat_svga ? 24 : 10), combat_svga ? 2 : 0, 31);
-#elif defined(TIE98)
-		xfont_Print_Clipped_Text(string, src->left + (128), src->top + (24), 2, 31);
-#else
-		xfont_Print_Clipped_Text(string, src->left + (64), src->top + (10), 0, 31);
-#endif
+		xfont_Print_Clipped_Text(string, src->left + (TIE_EDITION(64, 128)), src->top + (TIE_EDITION(10, 24)),
+								 TIE_EDITION(0, 2), 31);
 		return;
 	}
 
 	t = combat_time - 256;
-#ifdef TIE_MODERN
-	border = combat_svga ? ((t >= 32) ? 4 : 260 - 8 * t) : ((t >= 32) ? 2 : 130 - 4 * t);
-#elif defined(TIE98)
-	border = ((t >= 32) ? 4 : 260 - 8 * t);
-#else
-	border = ((t >= 32) ? 2 : 130 - 4 * t);
-#endif
+	border = ((t >= 32) ? TIE_EDITION(2, 4) : TIE_EDITION(130, 260) - TIE_EDITION(4, 8) * t);
 	width = (src->right - src->left) - 2 * border;
 
 	/* Horizontal bars */
 	xpaint_Horiz_Clipped_Line(border + src->left, src->top + 6, width, 2);
 	xpaint_Horiz_Clipped_Line(border + src->left, src->bottom - 6, width, 2);
 
-#ifdef TIE_MODERN
-	name_x = src->left + (combat_svga ? 8 : 4);
-#elif defined(TIE98)
-	name_x = src->left + (8);
-#else
-	name_x = src->left + (4);
-#endif
-#ifdef TIE_MODERN
-	score_x = src->left + (combat_svga ? 150 : 64);
-#elif defined(TIE98)
-	score_x = src->left + (150);
-#else
-	score_x = src->left + (64);
-#endif
-#ifdef TIE_MODERN
-	kills_x = src->left + (combat_svga ? 280 : 144);
-#elif defined(TIE98)
-	kills_x = src->left + (280);
-#else
-	kills_x = src->left + (144);
-#endif
-#ifdef TIE_MODERN
-	y = src->top + (combat_svga ? 24 : 10);
-#elif defined(TIE98)
-	y = src->top + (24);
-#else
-	y = src->top + (10);
-#endif
-#ifdef TIE_MODERN
-	font_id = combat_svga ? 3 : 0;
-#elif defined(TIE98)
-	font_id = 3;
-#else
-	font_id = 0;
-#endif
+	name_x = src->left + (TIE_EDITION(4, 8));
+	score_x = src->left + (TIE_EDITION(64, 150));
+	kills_x = src->left + (TIE_EDITION(144, 280));
+	y = src->top + (TIE_EDITION(10, 24));
+	font_id = TIE_EDITION(0, 3);
 
 	rec = &combat_score_data[mi];
 
 #ifdef TIE_MODERN
-	displayed_scores = combat_svga ? GAME_SCORE_ENTRY_COUNT : 8;
+	displayed_scores = TieProfile_UsesTie98Frontend() ? GAME_SCORE_ENTRY_COUNT : 8;
 #elif defined(TIE98)
 	displayed_scores = GAME_SCORE_ENTRY_COUNT;
 #else
@@ -808,7 +688,7 @@ static void combat_Draw_Combat_Screen_Score(Rect* src) {
 		}
 
 #ifdef TIE_MODERN
-		y += combat_svga ? xfont_Get_FontID_Height(2) + 2 : 12;
+		y += TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(2) + 2 : 12;
 #elif defined(TIE98)
 		y += xfont_Get_FontID_Height(2) + 2;
 #else
@@ -843,27 +723,9 @@ static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
 	int16_t t = combat_time - 384;
 
 	xrect_Copy_Rect(&dst, src);
-#ifdef TIE_MODERN
-	dst.top = dst.bottom - (combat_svga ? 58 : 24);
-#elif defined(TIE98)
-	dst.top = dst.bottom - (58);
-#else
-	dst.top = dst.bottom - (24);
-#endif
-#ifdef TIE_MODERN
-	dst.bottom = dst.top + (combat_svga ? 24 : 10);
-#elif defined(TIE98)
-	dst.bottom = dst.top + (24);
-#else
-	dst.bottom = dst.top + (10);
-#endif
-#ifdef TIE_MODERN
-	font_id = combat_svga ? 2 : 0;
-#elif defined(TIE98)
-	font_id = 2;
-#else
-	font_id = 0;
-#endif
+	dst.top = dst.bottom - (TIE_EDITION(24, 58));
+	dst.bottom = dst.top + (TIE_EDITION(10, 24));
+	font_id = TIE_EDITION(0, 2);
 
 	/* Name fade: hidden outside [16..207]; ramps in 16..47, hold 48..191,
 	 * ramps out 192..207. */
@@ -953,13 +815,7 @@ static int16_t combat_draw_Combat_Help(Actor* the_actor, Rect* draw_rect, Rect* 
 			xactor_Get_Actor_Bounds(the_actor, &bounds);
 			xfont_Enable_FontID_Shadow(0);
 			textext_Copy_Text(text, (int16_t)(combat_help + 84));
-#ifdef TIE_MODERN
-			xfont_Print_Centered_Text(text, &bounds, 15, combat_svga ? 2 : 0);
-#elif defined(TIE98)
-			xfont_Print_Centered_Text(text, &bounds, 15, 2);
-#else
-			xfont_Print_Centered_Text(text, &bounds, 15, 0);
-#endif
+			xfont_Print_Centered_Text(text, &bounds, 15, TIE_EDITION(0, 2));
 			xfont_Disable_FontID_Shadow(0);
 		}
 		combat_help = 0;
@@ -1055,23 +911,14 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	Rect frame;
 	char mission_name[64];
 	int16_t i;
-#ifdef TIE_MODERN
-	combat_svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
-#endif
 
-#ifdef TIE_MODERN
-	xio_Set_Mouse_Position(combat_svga ? 536 : 268, combat_svga ? 354 : 152);
-#elif defined(TIE98)
-	xio_Set_Mouse_Position(536, 354);
-#else
-	xio_Set_Mouse_Position(268, 152);
-#endif
+	xio_Set_Mouse_Position(TIE_EDITION(268, 536), TIE_EDITION(152, 354));
 
 	combat_score_id = -1;
 	combat_Load_Combat_High_Scores();
 
 #ifdef TIE_MODERN
-	train_file = combat_svga ? NULL : shellext_Open_Empire_Resource(combat_str[1]);
+	train_file = TieProfile_UsesTie98Frontend() ? NULL : shellext_Open_Empire_Resource(combat_str[1]);
 #elif !defined(TIE98)
 	train_file = shellext_Open_Empire_Resource(combat_str[1]);
 #endif
@@ -1079,13 +926,7 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 
-#ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, 0, 0, combat_svga ? 640 : 320, combat_svga ? 480 : 200);
-#elif defined(TIE98)
-	xrect_Set_Rect(&frame, 0, 0, 640, 480);
-#else
-	xrect_Set_Rect(&frame, 0, 0, 320, 200);
-#endif
+	xrect_Set_Rect(&frame, 0, 0, TIE_EDITION(320, 640), TIE_EDITION(200, 480));
 	combat_film = xfilm_Res_Callback_Film(combat_str[2], &frame, 0, 0, 0, combat_film_Combat_Callback);
 	xfilm_Set_Film_Def_Palette(combat_film, the_head->def_palette);
 
@@ -1098,26 +939,12 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	}
 #endif
 	/* World input */
-#ifdef TIE_MODERN
-	xrect_Set_Rect(&frame, 0, 0, combat_svga ? 640 : 320, combat_svga ? 480 : 200);
-#elif defined(TIE98)
-	xrect_Set_Rect(&frame, 0, 0, 640, 480);
-#else
-	xrect_Set_Rect(&frame, 0, 0, 320, 200);
-#endif
+	xrect_Set_Rect(&frame, 0, 0, TIE_EDITION(320, 640), TIE_EDITION(200, 480));
 	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 	/* Monitor screen input */
-#ifdef TIE_MODERN
-	if (combat_svga)
-		xrect_Set_Rect(&frame, 124, 7, 516, 272);
-	else
-		xrect_Set_Rect(&frame, 59, 2, 262, 115);
-#elif defined(TIE98)
-	xrect_Set_Rect(&frame, 124, 7, 516, 272);
-#else
-	xrect_Set_Rect(&frame, 59, 2, 262, 115);
-#endif
+	xrect_Set_Rect(&frame, TIE_EDITION(59, 124), TIE_EDITION(2, 7), TIE_EDITION(262, 516),
+				   TIE_EDITION(115, 272));
 	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(monitor_input, combat_iupdate_Combat_Screen);
 	xinpattr_Set_Input_User_Function(monitor_input, combat_iuser_Combat_Screen);
@@ -1125,7 +952,7 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	xinpattr_Refreshable_Input(monitor_input);
 	monitor_input->id = 0;
 #ifdef TIE_MODERN
-	if (combat_svga) {
+	if (TieProfile_UsesTie98Frontend()) {
 		Actor* monitor_back = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 30);
 		xactor_Set_Actor_Draw_Function(monitor_back, combat_draw_Combat_Back);
 	}
@@ -1134,84 +961,36 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	for (i = 0; i < 8; i++) {
 		switch (i) {
 			case 0:
-#ifdef TIE_MODERN
-				xrect_Set_Rect(&frame, combat_svga ? 88 : 32, combat_svga ? 336 : 142, combat_svga ? 136 : 54,
-							   combat_svga ? 373 : 156);
-#elif defined(TIE98)
-				xrect_Set_Rect(&frame, 88, 336, 136, 373);
-#else
-				xrect_Set_Rect(&frame, 32, 142, 54, 156);
-#endif
+				xrect_Set_Rect(&frame, TIE_EDITION(32, 88), TIE_EDITION(142, 336), TIE_EDITION(54, 136),
+							   TIE_EDITION(156, 373));
 				break;
 			case 1:
-#ifdef TIE_MODERN
-				xrect_Set_Rect(&frame, combat_svga ? 211 : 124, combat_svga ? 336 : 142,
-							   combat_svga ? 255 : 146, combat_svga ? 373 : 156);
-#elif defined(TIE98)
-				xrect_Set_Rect(&frame, 211, 336, 255, 373);
-#else
-				xrect_Set_Rect(&frame, 124, 142, 146, 156);
-#endif
+				xrect_Set_Rect(&frame, TIE_EDITION(124, 211), TIE_EDITION(142, 336), TIE_EDITION(146, 255),
+							   TIE_EDITION(156, 373));
 				break;
 			case 2:
-#ifdef TIE_MODERN
-				xrect_Set_Rect(&frame, combat_svga ? 70 : 22, combat_svga ? 370 : 160, combat_svga ? 120 : 44,
-							   combat_svga ? 409 : 174);
-#elif defined(TIE98)
-				xrect_Set_Rect(&frame, 70, 370, 120, 409);
-#else
-				xrect_Set_Rect(&frame, 22, 160, 44, 174);
-#endif
+				xrect_Set_Rect(&frame, TIE_EDITION(22, 70), TIE_EDITION(160, 370), TIE_EDITION(44, 120),
+							   TIE_EDITION(174, 409));
 				break;
 			case 3:
-#ifdef TIE_MODERN
-				xrect_Set_Rect(&frame, combat_svga ? 206 : 124, combat_svga ? 370 : 160,
-							   combat_svga ? 250 : 146, combat_svga ? 409 : 174);
-#elif defined(TIE98)
-				xrect_Set_Rect(&frame, 206, 370, 250, 409);
-#else
-				xrect_Set_Rect(&frame, 124, 160, 146, 174);
-#endif
+				xrect_Set_Rect(&frame, TIE_EDITION(124, 206), TIE_EDITION(160, 370), TIE_EDITION(146, 250),
+							   TIE_EDITION(174, 409));
 				break;
 			case 4:
-#ifdef TIE_MODERN
-				xrect_Set_Rect(&frame, combat_svga ? 514 : 254, combat_svga ? 337 : 142,
-							   combat_svga ? 577 : 280, combat_svga ? 389 : 158);
-#elif defined(TIE98)
-				xrect_Set_Rect(&frame, 514, 337, 577, 389);
-#else
-				xrect_Set_Rect(&frame, 254, 142, 280, 158);
-#endif
+				xrect_Set_Rect(&frame, TIE_EDITION(254, 514), TIE_EDITION(142, 337), TIE_EDITION(280, 577),
+							   TIE_EDITION(158, 389));
 				break;
 			case 5:
-#ifdef TIE_MODERN
-				xrect_Set_Rect(&frame, combat_svga ? 0 : 10, combat_svga ? 406 : 176, combat_svga ? 72 : 38,
-							   combat_svga ? 466 : 200);
-#elif defined(TIE98)
-				xrect_Set_Rect(&frame, 0, 406, 72, 466);
-#else
-				xrect_Set_Rect(&frame, 10, 176, 38, 200);
-#endif
+				xrect_Set_Rect(&frame, TIE_EDITION(10, 0), TIE_EDITION(176, 406), TIE_EDITION(38, 72),
+							   TIE_EDITION(200, 466));
 				break;
 			case 6:
-#ifdef TIE_MODERN
-				xrect_Set_Rect(&frame, combat_svga ? 134 : 55, combat_svga ? 344 : 146,
-							   combat_svga ? 209 : 124, combat_svga ? 363 : 156);
-#elif defined(TIE98)
-				xrect_Set_Rect(&frame, 134, 344, 209, 363);
-#else
-				xrect_Set_Rect(&frame, 55, 146, 124, 156);
-#endif
+				xrect_Set_Rect(&frame, TIE_EDITION(55, 134), TIE_EDITION(146, 344), TIE_EDITION(124, 209),
+							   TIE_EDITION(156, 363));
 				break;
 			case 7:
-#ifdef TIE_MODERN
-				xrect_Set_Rect(&frame, combat_svga ? 128 : 47, combat_svga ? 378 : 164,
-							   combat_svga ? 201 : 122, combat_svga ? 400 : 176);
-#elif defined(TIE98)
-				xrect_Set_Rect(&frame, 128, 378, 201, 400);
-#else
-				xrect_Set_Rect(&frame, 47, 164, 122, 176);
-#endif
+				xrect_Set_Rect(&frame, TIE_EDITION(47, 128), TIE_EDITION(164, 378), TIE_EDITION(122, 201),
+							   TIE_EDITION(176, 400));
 				break;
 		}
 		button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
@@ -1228,13 +1007,7 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 
 	combat_time = 0;
 	combat_round = rand() & 3;
-#ifdef TIE_MODERN
-	combat_monitor_needs_clear = combat_svga;
-#elif defined(TIE98)
-	combat_monitor_needs_clear = true;
-#else
-	combat_monitor_needs_clear = false;
-#endif
+	combat_monitor_needs_clear = TIE_EDITION(false, true);
 
 	shipext_Get_Combat_Mission_Name(mission_name);
 	shipext_Set_Mission_Name(mission_name);
@@ -1245,7 +1018,7 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 	shipext_Show_Combat_Ship_Name();
 	xview_Set_View_Update_Function(combat_end_Combat_View);
 #ifdef TIE_MODERN
-	TieCombat_RunView(combat_file, train_file, combat_svga);
+	TieCombat_RunView(combat_file, train_file, TieProfile_UsesTie98Frontend());
 	return 0;
 #else
 	shellext_Handle_TIE_View();

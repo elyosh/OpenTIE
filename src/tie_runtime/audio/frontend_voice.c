@@ -5,14 +5,13 @@
 
 TieFile* TieFrontendVoice_Open(const char* path, TieFrontendVoiceSource* source) {
 	if (source)
-		*source = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? TIE_FRONTEND_VOICE_SOURCE_TIE98
-																		: TIE_FRONTEND_VOICE_SOURCE_TIE95;
+		*source = TieProfile_UsesTie98Frontend() ? TIE_FRONTEND_VOICE_SOURCE_TIE98
+												 : TIE_FRONTEND_VOICE_SOURCE_TIE95;
 	if (!path)
 		return NULL;
 
 	/* TIE95 ships higher-rate copies under the same frontend voice paths. */
-	if (TieAudio_Config()->prefer_tie95_frontend_voices &&
-		TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98) {
+	if (TieAudio_Config()->prefer_tie95_frontend_voices && TieProfile_UsesTie98Frontend()) {
 		TieFile* file = TieStorage_OpenTie95Voice(path);
 		if (file) {
 			if (source)

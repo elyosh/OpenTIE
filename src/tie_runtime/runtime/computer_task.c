@@ -78,7 +78,7 @@ void TieComputer_Fail(ResFile* open_resource, const char* missing_resource) {
 void TieComputer_Begin(void) {
 	ComputerDialogState* task = landru_task_push(&computer_vtable);
 	if (task)
-		task->tie98 = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+		task->tie98 = TieProfile_UsesTie98Frontend();
 }
 
 static void after_confirm_dialog(int16_t result, void* unused) {

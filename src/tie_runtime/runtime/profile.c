@@ -74,6 +74,8 @@ void TieProfile_SetFrontend(TieFrontendProfileId id) {
 
 TieFrontendProfileId TieProfile_FrontendId(void) { return selected_profile; }
 
+bool TieProfile_UsesTie98Frontend(void) { return selected_profile == TIE_FRONTEND_PROFILE_TIE98; }
+
 const TieFrontendProfile* TieProfile_Frontend(void) {
 	return &profiles[selected_profile == TIE_FRONTEND_PROFILE_TIE98 ? 1 : 0];
 }

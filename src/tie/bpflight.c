@@ -8,6 +8,7 @@
 #include "tie/backdrp2.h"
 #include "tie/draw.h"
 #include "tie/drawpol.h"
+#include "tie/edition.h"
 #include "tie/fediskio.h" /* flightbuf_small_handle / flightbuf_big_handle */
 #include "tie/flight_surface_tie98.h"
 #include "tie/fview.h"
@@ -307,10 +308,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		matrix = matrix_Res_Matrix(rf, "trnfly1");
 		xres_Close_Resource(rf);
 
-		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-			xrect_Set_Rect(&r, 144, 60, 500, 300);
-		else
-			xrect_Set_Rect(&r, 62, 4, 256, 116);
+		xrect_Set_Rect(&r, TIE_EDITION(62, 144), TIE_EDITION(4, 60), TIE_EDITION(256, 500),
+					   TIE_EDITION(116, 300));
 		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
 		xactor_Set_Actor_User_Function(engine[0], bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
@@ -318,10 +317,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		bpused[0] = 1;
 		bpid[0] = 0;
 
-		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-			xrect_Set_Rect(&r, 176, 340, 358, 449);
-		else
-			xrect_Set_Rect(&r, 85, 131, 182, 178);
+		xrect_Set_Rect(&r, TIE_EDITION(85, 176), TIE_EDITION(131, 340), TIE_EDITION(182, 358),
+					   TIE_EDITION(178, 449));
 		engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
 		xactor_Set_Actor_User_Function(engine[1], bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
@@ -339,10 +336,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		matrix = matrix_Res_Matrix(rf, "cmbtfly1");
 		xres_Close_Resource(rf);
 
-		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-			xrect_Set_Rect(&r, 124, 7, 516, 272);
-		else
-			xrect_Set_Rect(&r, 59, 2, 260, 115);
+		xrect_Set_Rect(&r, TIE_EDITION(59, 124), TIE_EDITION(2, 7), TIE_EDITION(260, 516),
+					   TIE_EDITION(115, 272));
 		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
 		xactor_Set_Actor_User_Function(engine[0], bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
@@ -350,10 +345,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		bpid[0] = 0;
 		bpused[0] = 1;
 
-		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-			xrect_Set_Rect(&r, 297, 313, 485, 440);
-		else
-			xrect_Set_Rect(&r, 146, 130, 247, 179);
+		xrect_Set_Rect(&r, TIE_EDITION(146, 297), TIE_EDITION(130, 313), TIE_EDITION(247, 485),
+					   TIE_EDITION(179, 440));
 		engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
 		xactor_Set_Actor_User_Function(engine[1], bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
@@ -368,10 +361,8 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	} else if (scene == 3) {
 		/* Blueprint viewer: single full-area viewport, no orbit matrix.
 		 * Z plane 20 places it above the UI chrome. */
-		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
-			xrect_Set_Rect(&r, 222, 75, 570, 310);
-		else
-			xrect_Set_Rect(&r, 131, 30, 278, 200);
+		xrect_Set_Rect(&r, TIE_EDITION(131, 222), TIE_EDITION(30, 75), TIE_EDITION(278, 570),
+					   TIE_EDITION(200, 310));
 		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 20);
 		xactor_Set_Actor_User_Function(engine[0], bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
@@ -493,7 +484,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	}
 
 	/* Per-frame render flags. */
-	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
+	if (TieProfile_UsesTie98Frontend())
 		g_flightInitialTextureCacheFlushPending = 1;
 	stardetaillevel = 1;
 	drawmarkingsflag = 1;
@@ -523,7 +514,7 @@ void bpflight_Close_Flight_Engine(void) {
 	TieFlightAssets_ClearPreviewModels();
 #ifdef TIE_MODERN
 	/* The host cache owns TIE98 preview models beyond the active pointers. */
-	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
+	if (TieProfile_UsesTie98Frontend())
 		TieFlightRuntime_ReleaseRecoveredResources();
 #endif
 	free(xtransdata);
@@ -845,7 +836,7 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 
 	int i;
 
-	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
+	if (TieProfile_UsesTie98Frontend())
 		return bpflight_draw_Engine_tie98(actor, clip, dest, xoff, yoff, refresh);
 	(void)dest;
 	(void)xoff;
@@ -1245,15 +1236,10 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 
 	/* Primary viewport adds the skybox + star-field over the edge list. */
 	if (actor->id == 0) {
-		uint16_t star_width = 0x140;
-		uint16_t star_height = 0xC8;
+		uint16_t star_width = TIE_EDITION(0x140, 0x280);
+		uint16_t star_height = TIE_EDITION(0xC8, 0x1E0);
 		uint16_t fullupdate_save;
 
-		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98) {
-			/* TIE98 BPFLIGHT_draw_Engine 0x405B36. */
-			star_width = 0x280;
-			star_height = 0x1E0;
-		}
 		drawbackdropflag = 0;
 		backdrp2_backdrop();
 		rtsvga2_setvgapointers(xtrans2_videobaseptr, star_width, star_height);
@@ -1528,7 +1514,7 @@ int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16
 	char name[16];
 	size_t upper;
 
-	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98) {
+	if (TieProfile_UsesTie98Frontend()) {
 		bpflight_Load_Flight_Craft_tie98(lfd_name, shp_name, mode, cur_flight_scene);
 		return 1;
 	}

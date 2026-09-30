@@ -3288,7 +3288,7 @@ void tie_simulator(int replay_mode) {
 		fediskio_FreeFlightHandles();
 #ifdef TIE_MODERN
 		TieFlightRuntime_ReleaseRecoveredResources();
-		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
+		if (TieProfile_UsesTie98Frontend())
 			maingameflag = 0;
 		if (!TieClassicDisplay_ActivateFrontend())
 			xerror_Set_Landru_Error(12);

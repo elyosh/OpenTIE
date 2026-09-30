@@ -68,7 +68,7 @@ void shellext_Open_Landru(void* extern_mem, int16_t use_timer, int16_t use_scrip
 	if (xerror_Is_Landru_Error())
 		return;
 	/* Retail front-end: Alt+O (key 0x1800) in xio_Poll_Input dumps a PCX. */
-	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
+	if (TieProfile_UsesTie98Frontend())
 		xio_Set_Screenshot_Hook((void (*)(void))FrontendDisplay_CaptureScreenshot);
 	else
 		xio_Set_Screenshot_Hook((void (*)(void))rtsvga2_takeScreenshot);
