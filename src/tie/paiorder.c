@@ -53,7 +53,10 @@ int16_t paiorder_nullorder(void) { return 0; }
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x3D534
-int16_t paiorder_updatecourseorder(void) { return paiman_updatemaneuver(); }
+int16_t paiorder_updatecourseorder(void) {
+	_manvrfunctionptr = _manvrfunctionptrs[craftptr->mode_byte];
+	return _manvrfunctionptr();
+}
 
 /* ======================================================================
  *                   Slot 2 — underattackorder
@@ -770,6 +773,7 @@ int16_t paiorder_abortboardorder(void) {
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x3E960
+// FUNCTION: TIE98 0x4621B0
 int16_t paiorder_returnboardorder(void) {
 	pai_targetdistance();
 	return (trig2_polardistance < 0x4000) ? 1 : 0; /* retail: 16384, demo had 4096 */
@@ -830,6 +834,8 @@ int16_t paiorder_makedisabledorder(void) {
  *                   Slot 29 — neartargetorder
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x3E960 FOLDED
+// FUNCTION: TIE98 0x4622C0
 int16_t paiorder_neartargetorder(void) {
 	pai_targetdistance();
 	return (trig2_polardistance < 0x4000) ? 1 : 0;

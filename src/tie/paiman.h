@@ -12,6 +12,7 @@ extern "C" {
 /* Maneuver-function signature: no args, returns non-zero to indicate the
  * maneuver has completed (plan VM should advance to the next order). */
 typedef int16_t (*ManeuverFunc)(void);
+typedef void (*ManeuverInitFunc)(void);
 
 /* CraftData.mode_byte values — index both dispatch tables. 31 total. */
 typedef enum {
@@ -56,11 +57,6 @@ typedef enum {
  * hit_count, mode_subbyte, then dispatches through _initmanvrfunctionptrs.
  * Called by PAI_initplan and every PAIORDER_* that forces a new maneuver. */
 void paiman_initmaneuver(void);
-
-/* Runtime dispatch — called every tick by PAIORDER_updatecourseorder.
- * Reads _manvrfunctionptrs[craftptr->mode_byte] and returns its verdict
- * (1 = complete, 0 = keep going). */
-int16_t paiman_updatemaneuver(void);
 
 /* ---- Individual init handlers (slot comment = mode_byte index) ---- */
 
@@ -173,13 +169,11 @@ void paiman_gonextwaypoint(void);
 
 /* 31-entry dispatch tables. Exposed so PAIORDER_updatecourseorder can
  * reach them without importing the whole maneuver API. */
-extern const ManeuverFunc _initmanvrfunctionptrs[MODE_COUNT];
+extern const ManeuverInitFunc _initmanvrfunctionptrs[MODE_COUNT];
 extern const ManeuverFunc _manvrfunctionptrs[MODE_COUNT];
 
-/* Cached "currently-selected" dispatch slot. Mirrors the binary's 4-byte
- * function-pointer globals at 0xE3B4C / 0xE3B50; lets a debugger identify
- * the last-invoked maneuver. */
-extern ManeuverFunc _initmanvrfunctionptr;
+/* Last-selected initializer and runtime maneuver. */
+extern ManeuverInitFunc _initmanvrfunctionptr;
 extern ManeuverFunc _manvrfunctionptr;
 
 /* Formation position tables. 13 formations × 6 slots each, indexed as
@@ -202,8 +196,7 @@ extern const int16_t _escortfwdpos[27];
  * inits and by rendezvous/cruise to reload throttle each tick. */
 extern const uint16_t _throttleconvert[12];
 
-/* 11-entry speed profile for outofhyperspacemaneuver's deceleration
- * ladder (3600 -> 900 -> 132 over 11 phases). */
+/* Original eleven-entry hyperspace-exit speed table; the maneuver uses phases 0..8. */
 extern const uint16_t _stagevel[11];
 
 /* Per-skill-tier hold time between turn-inside / turn-away re-orients
