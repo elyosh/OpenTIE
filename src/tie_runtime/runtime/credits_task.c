@@ -4,20 +4,24 @@
 #include "tie_runtime/snapshot/snapshot_internal.h"
 
 #include <landru/error.h>
+#include <landru/memhdl.h>
+#include <landru/paragrp.h>
 #include <landru/surface.h>
 #include <landru/task.h>
+#include <landru/timer.h>
+#include <landru/view.h>
 #include <landru/viewadd.h>
 
 typedef struct CreditsTask {
 	SceneHeadStruct* scene_head;
-	CreditsSceneResources resources;
+	ResFile* credit_res;
+	ResFile* text_res;
+	bool view_configured;
 	LandruSurfaceSet previous_surface;
 	bool started;
 	bool restore_surface;
 } CreditsTask;
 
-// ORIGINAL_FUNCTION: TIE95 0x71090
-// ORIGINAL_FUNCTION: TIE98 0x414620
 static LandruTaskStepResult credits_step(void* self) {
 	CreditsTask* task = self;
 	if (task->started)
@@ -33,24 +37,48 @@ static LandruTaskStepResult credits_step(void* self) {
 		task->restore_surface = true;
 	}
 	task->started = true;
-	if (!credits_OpenScene(task->scene_head, &task->resources, tie98)) {
-		xerror_Set_Landru_Error(6);
-		return LANDRU_TASK_STEP_DONE;
-	}
-	TieSnapshotBuilder_SetActiveFilm("CREDITS", "credits");
-	xviewadd_Push_Handle_View_Task();
+	credits_Credits(task->scene_head);
 	return LANDRU_TASK_STEP_CONTINUE;
 }
 
 static void credits_end(void* self) {
 	CreditsTask* task = self;
-	if (task->started)
-		credits_CloseScene(&task->resources);
+	if (task->started) {
+		if (task->view_configured) {
+			xtimer_Set_Frame_Rate(20);
+			xview_Enable_Global_View_Erase();
+			xview_Clear_View_Update_Function();
+			task->view_configured = 0;
+		}
+		xmemhdl_Free_Handle(credits_star_buffer);
+		credits_star_buffer = LANDRU_NULL_HANDLE;
+		xparagrp_Free_Paragraph(credits_text);
+		credits_text = LANDRU_NULL_HANDLE;
+		if (task->text_res)
+			xres_Close_Resource(task->text_res);
+		if (task->credit_res)
+			xres_Close_Resource(task->credit_res);
+		task->text_res = NULL;
+		task->credit_res = NULL;
+	}
 	if (task->restore_surface)
 		xsurface_Select_Surface_Set(task->previous_surface);
 }
 
 static const LandruTaskVtable credits_vtable = { credits_step, credits_end, NULL, NULL };
+
+void TieCredits_RunView(ResFile* credit_res, ResFile* text_res, bool ready) {
+	CreditsTask* task = landru_task_top();
+	task->credit_res = credit_res;
+	task->text_res = text_res;
+	task->view_configured = ready;
+	if (!ready) {
+		xerror_Set_Landru_Error(6);
+		return;
+	}
+	TieSnapshotBuilder_SetActiveFilm("CREDITS", "credits");
+	xviewadd_Push_Handle_View_Task();
+}
 
 void TieCredits_Begin(SceneHeadStruct* scene_head) {
 	CreditsTask* task = landru_task_push(&credits_vtable);

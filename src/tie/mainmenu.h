@@ -10,10 +10,7 @@
 extern "C" {
 #endif
 
-/* Returns the missing resource name on failure, NULL on success.
- * CloseScene also releases a partially opened scene. */
-const char* mainmenu_OpenScene(SceneHeadStruct* scene_head, const MainMenuLayout* layout, ResFile** resource);
-void mainmenu_CloseScene(ResFile* resource);
+int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head);
 
 #ifdef __cplusplus
 }

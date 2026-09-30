@@ -1,6 +1,7 @@
 #ifndef TIE_TITLE_H
 #define TIE_TITLE_H
 
+#include "landru/bitmap.h"
 #include "tie/shellext.h"
 
 #include <stdint.h>
@@ -11,13 +12,9 @@ extern "C" {
 
 enum { TITLE_MAX_LINES = 18 };
 
-typedef struct TitleSceneResources {
-	ResFile* file;
-	char film_name[16];
-} TitleSceneResources;
+extern BitmapStruct title_background;
 
-int16_t title_OpenScene(SceneHeadStruct* scene_head, TitleSceneResources* resources, int16_t font_slot);
-void title_CloseScene(TitleSceneResources* resources);
+int16_t title_Title(SceneHeadStruct* scene_head);
 
 extern int16_t title_num_lines;
 extern LandruHandle title_text;

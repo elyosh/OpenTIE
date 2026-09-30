@@ -5,4 +5,6 @@
 
 void TieMainMenu_Begin(SceneHeadStruct* scene_head);
 
+void TieMainMenu_RunView(ResFile* resource, const char* missing_resource);
+
 #endif

@@ -5,4 +5,6 @@
 
 void TieLogo_Begin(SceneHeadStruct* scene_head);
 
+void TieLogo_RunView(ResFile* resource, bool ready);
+
 #endif

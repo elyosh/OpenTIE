@@ -9,15 +9,10 @@
 extern "C" {
 #endif
 
-typedef struct CreditsSceneResources {
-	ResFile* credit_res;
-	ResFile* text_res;
-	int16_t view_configured;
-} CreditsSceneResources;
+extern LandruHandle credits_star_buffer;
+extern LandruHandle credits_text;
 
-/* Resources must be zero-initialized. Close also releases partial setup. */
-int16_t credits_OpenScene(SceneHeadStruct* scene_head, CreditsSceneResources* resources, int16_t tie98);
-void credits_CloseScene(CreditsSceneResources* resources);
+int16_t credits_Credits(SceneHeadStruct* scene_head);
 
 #ifdef __cplusplus
 }

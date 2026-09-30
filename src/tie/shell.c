@@ -12,6 +12,11 @@
 SceneHeadStruct* sHead_gbl;
 int16_t digital_exists;
 
+#if defined(TIE95) && !defined(TIE_MODERN)
+// GLOBAL: TIE95 0xF5700
+uint8_t install_cfg_mode;
+#endif
+
 // FUNCTION: TIE95 0x67EFA
 void shell_programexit(const char* str) {
 	shellext_Close_Landru(0);

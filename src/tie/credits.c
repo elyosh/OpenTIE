@@ -1,4 +1,8 @@
 #include "tie/credits.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/credits_task.h"
+#include "tie_runtime/runtime/profile.h"
+#endif
 #include "tie/credits_internal.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
@@ -49,7 +53,7 @@ int16_t credits_text_len; /* hold duration per credit (130) */
 int16_t credits_film_time; /* current frame counter */
 // GLOBAL: TIE95 0xf5e06
 // GLOBAL: TIE98 0x50f7c8
-static LandruHandle credits_star_buffer; /* 320x100 star pixel cache */
+LandruHandle credits_star_buffer; /* 320x100 star pixel cache */
 // GLOBAL: TIE95 0xf5e08
 // GLOBAL: TIE98 0x50f7c0
 int16_t credits_num_credit_lines; /* paragraph count in credit text */
@@ -265,7 +269,16 @@ static int16_t draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff,
  * ================================================================ */
 
 /* The original blocking scene is split at its modal-view call. */
-int16_t credits_OpenScene(SceneHeadStruct* scene_head, CreditsSceneResources* resources, int16_t tie98) {
+// FUNCTION: TIE95 0x71090
+// FUNCTION: TIE98 0x414620
+int16_t credits_Credits(SceneHeadStruct* scene_head) {
+	ResFile* credit_res;
+#ifdef TIE_MODERN
+	ResFile* text_res = NULL;
+	bool tie98 = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+#else
+	ResFile* text_res;
+#endif
 	Rect r;
 	Palette* pal;
 
@@ -274,71 +287,113 @@ int16_t credits_OpenScene(SceneHeadStruct* scene_head, CreditsSceneResources* re
 	else
 		credits_next_scene = shipext_Next_Battle_Cutscene();
 
-	resources->credit_res = shellext_Open_Empire_Resource("credits.lfd");
-	if (!resources->credit_res)
+	credit_res = shellext_Open_Empire_Resource("credits.lfd");
+#ifdef TIE_MODERN
+	if (!credit_res) {
+		TieCredits_RunView(credit_res, text_res, false);
 		return 0;
-	resources->text_res = shellext_Open_Empire_Resource("tietext0.lfd");
-	if (!resources->text_res)
+	}
+#endif
+	text_res = shellext_Open_Empire_Resource("tietext0.lfd");
+#ifdef TIE_MODERN
+	if (!text_res) {
+		TieCredits_RunView(credit_res, text_res, false);
 		return 0;
-	credits_text = xparagrp_Res_Paragraph(resources->text_res, "credits");
-	if (!credits_text)
+	}
+#endif
+	credits_text = xparagrp_Res_Paragraph(text_res, "credits");
+#ifdef TIE_MODERN
+	if (!credits_text) {
+		TieCredits_RunView(credit_res, text_res, false);
 		return 0;
+	}
+#endif
 
 	xrect_Set_Rect(&r, 0, 0, 320, 200);
 	credits_star_buffer = xmemhdl_Alloc_Clear_Handle(32000, LANDRU_MEMORY_RESOURCE);
-	if (!credits_star_buffer)
+#ifdef TIE_MODERN
+	if (!credits_star_buffer) {
+		TieCredits_RunView(credit_res, text_res, false);
 		return 0;
+	}
+#endif
 	credits_stars_actor = xactdelt_Res_Delta_Actor("stars", &r, 0, 0, 100);
-	if (!credits_stars_actor)
+#ifdef TIE_MODERN
+	if (!credits_stars_actor) {
+		TieCredits_RunView(credit_res, text_res, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_Time(credits_stars_actor, 0, 0);
 	credits_red_bar = xactdelt_Res_Delta_Actor("redbar", &r, 0, 0, 100);
-	if (!credits_red_bar)
+#ifdef TIE_MODERN
+	if (!credits_red_bar) {
+		TieCredits_RunView(credit_res, text_res, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_Time(credits_red_bar, 0, 0);
 	credits_blue_bar = xactdelt_Res_Delta_Actor("bluebar", &r, 0, 0, 100);
-	if (!credits_blue_bar)
+#ifdef TIE_MODERN
+	if (!credits_blue_bar) {
+		TieCredits_RunView(credit_res, text_res, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_Time(credits_blue_bar, 0, 0);
 	Credit_Actor_To_Buffer(credits_stars_actor, credits_star_buffer);
 
 	credits_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 0);
-	if (!credits_actor)
+#ifdef TIE_MODERN
+	if (!credits_actor) {
+		TieCredits_RunView(credit_res, text_res, false);
 		return 0;
+	}
+#endif
+#ifdef TIE_MODERN
 	xactor_Set_Actor_Draw_Function(credits_actor, tie98 ? credits_draw_Credit_tie98 : draw_Credit);
+#elif defined(TIE98)
+	xactor_Set_Actor_Draw_Function(credits_actor, credits_draw_Credit_tie98);
+#else
+	xactor_Set_Actor_Draw_Function(credits_actor, draw_Credit);
+#endif
 	pal = xpal_Res_Palette("colors");
-	if (!pal)
+#ifdef TIE_MODERN
+	if (!pal) {
+		TieCredits_RunView(credit_res, text_res, false);
 		return 0;
+	}
+#endif
 	xpal_Set_Dest_Palette(pal);
 	xpal_Set_Dest_Palette(scene_head->def_palette);
 
+#ifdef TIE_MODERN
 	if (tie98)
 		credits_Init_Credit_Info_tie98();
 	else
 		Init_Credit_Info();
+#elif defined(TIE98)
+	credits_Init_Credit_Info_tie98();
+#else
+	Init_Credit_Info();
+#endif
 	xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
 	xview_Set_View_Update_Function(end_View);
 	xview_Disable_Global_View_Erase();
 	xtimer_Set_Frame_Rate(12);
-	resources->view_configured = 1;
-	return 1;
-}
 
-void credits_CloseScene(CreditsSceneResources* resources) {
-	if (resources->view_configured) {
-		xtimer_Set_Frame_Rate(20);
-		xview_Enable_Global_View_Erase();
-		xview_Clear_View_Update_Function();
-		resources->view_configured = 0;
-	}
+#ifdef TIE_MODERN
+	TieCredits_RunView(credit_res, text_res, true);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
+	xtimer_Set_Frame_Rate(20);
+	xview_Enable_Global_View_Erase();
+	xview_Clear_View_Update_Function();
 	xmemhdl_Free_Handle(credits_star_buffer);
-	credits_star_buffer = LANDRU_NULL_HANDLE;
 	xparagrp_Free_Paragraph(credits_text);
-	credits_text = LANDRU_NULL_HANDLE;
-	if (resources->text_res)
-		xres_Close_Resource(resources->text_res);
-	if (resources->credit_res)
-		xres_Close_Resource(resources->credit_res);
-	resources->text_res = NULL;
-	resources->credit_res = NULL;
+	xres_Close_Resource(text_res);
+	xres_Close_Resource(credit_res);
+	return xerror_Get_Landru_Exit();
+#endif
 }

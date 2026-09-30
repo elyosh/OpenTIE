@@ -1,6 +1,7 @@
 #ifndef TIE_TIELOGO_H
 #define TIE_TIELOGO_H
 
+#include "landru/bitmap.h"
 #include "tie/shellext.h"
 
 #include <stdint.h>
@@ -9,9 +10,9 @@
 extern "C" {
 #endif
 
-/* CloseScene also releases resources acquired by a failed setup. */
-int16_t tielogo_OpenScene(SceneHeadStruct* scene_head, ResFile** resource);
-void tielogo_CloseScene(ResFile* resource);
+extern BitmapStruct tielogo_background;
+
+int16_t tielogo_TieLogo(SceneHeadStruct* scene_head);
 
 extern Actor* tie_actor;
 extern Actor* fighter_actor;

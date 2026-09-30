@@ -5,4 +5,6 @@
 
 void TieTitle_Begin(SceneHeadStruct* scene_head);
 
+void TieTitle_RunView(ResFile* resource, const char* film_name, bool ready);
+
 #endif

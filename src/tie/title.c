@@ -1,5 +1,11 @@
 #include "tie/title.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/title_task.h"
+#endif
+#include "landru/stream.h"
 #include "landru/viewadd.h"
+#include "tie/shell.h"
 #include "tie/shellext.h"
 #include "tie/tie.h"
 #ifdef TIE_MODERN
@@ -43,7 +49,7 @@ enum {
 };
 
 static int16_t line_drawn[MAX_LINES];
-static BitmapStruct background;
+BitmapStruct title_background;
 static Actor* starwars_actor;
 static int16_t buff_y[MAX_LINES];
 static Actor* back_actor;
@@ -249,7 +255,7 @@ static int16_t draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, in
 	if (!refresh)
 		return 1;
 
-	dataptr = (char*)xbitmap_Lock_Bitmap(&background);
+	dataptr = (char*)xbitmap_Lock_Bitmap(&title_background);
 
 	for (i = 0; i < title_num_lines; i++) {
 		int16_t y, by, yf, j;
@@ -279,7 +285,7 @@ static int16_t draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, in
 		}
 	}
 
-	xbitmap_Unlock_Bitmap(&background);
+	xbitmap_Unlock_Bitmap(&title_background);
 	return 1;
 }
 
@@ -329,7 +335,7 @@ static int16_t draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int
 	if (!refresh)
 		return 1;
 
-	xcanvas_Push_Canvas(&background);
+	xcanvas_Push_Canvas(&title_background);
 
 	for (i = 0; i < title_num_lines; i++) {
 		if (!line_drawn[i] && line_y[i] <= 200) {
@@ -348,38 +354,63 @@ static int16_t draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int
 	return 1;
 }
 
-/* The native task owns the view wait, stream selection, and snapshot tags. */
-int16_t title_OpenScene(SceneHeadStruct* scene_head, TitleSceneResources* resources, int16_t font_slot) {
+// FUNCTION: TIE95 0x668A0
+// FUNCTION: TIE98 0x48FF80
+int16_t title_Title(SceneHeadStruct* scene_head) {
+	ResFile* resource;
+	char film_name[16];
 	Rect frame;
 	Palette* pal;
 	int16_t i;
 
 	/* Load resources */
-	resources->file = shellext_Open_Empire_Resource("title.lfd");
-	if (!resources->file)
+	resource = shellext_Open_Empire_Resource("title.lfd");
+#ifdef TIE_MODERN
+	if (!resource) {
+		TieTitle_RunView(resource, NULL, false);
 		return 0;
+	}
+#endif
 
 	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
-		strcpy(resources->film_name, "title");
+		strcpy(film_name, "title");
 	} else {
-		strcpy(resources->film_name, "todtxt1");
-		resources->film_name[6] = pilot_record.cur_battle + '1';
+		strcpy(film_name, "todtxt1");
+		film_name[6] = pilot_record.cur_battle + '1';
 	}
-	title_text = xparagrp_Res_Paragraph(resources->file, resources->film_name);
-	if (!title_text)
+	title_text = xparagrp_Res_Paragraph(resource, film_name);
+#ifdef TIE_MODERN
+	if (!title_text) {
+		TieTitle_RunView(resource, NULL, false);
 		return 0;
+	}
+#endif
 
 	/* Load font */
 	/* TIE98 0x490067/0x4909E6: retain slot 2 for the
 	 * SVGA frontend font and place the VGA title font in slot 4. */
-	title_font = font_slot;
+#ifdef TIE_MODERN
+	title_font = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 4 : 2;
+#elif defined(TIE98)
+	title_font = 2;
+#else
+	title_font = 2;
+#endif
+#if defined(TIE98) && !defined(TIE_MODERN)
+	xfont_Res_Font("helv-20", 4);
+#else
 	xfont_Res_Font("helv-20", (uint16_t)title_font);
+#endif
 
 	/* Initialize state */
 	base_color = 0;
 	scale_amount = 12;
 	scale_amount_f = 0;
+#if defined(TIE98) && !defined(TIE_MODERN)
+	film_time = (shellext_Get_Cur_Scene() == SCENE_TITLE) ? 0 : 103;
+#else
 	film_time = (shellext_Get_Cur_Scene() == SCENE_TITLE) ? 0 : 99;
+#endif
 
 	/* Build scale lookup tables */
 	for (i = 0; i <= 320; i++) {
@@ -394,20 +425,38 @@ int16_t title_OpenScene(SceneHeadStruct* scene_head, TitleSceneResources* resour
 
 	/* Allocate background bitmap */
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
-	xbitmap_Init_Bitmap(&background);
-	if (!xbitmap_Alloc_Bitmap(&background, 320, 200))
+	xbitmap_Init_Bitmap(&title_background);
+#ifdef TIE_MODERN
+	if (!xbitmap_Alloc_Bitmap(&title_background, 320, 200)) {
+		TieTitle_RunView(resource, NULL, false);
 		return 0;
+	}
+#else
+	xbitmap_Alloc_Bitmap(&title_background, 320, 200);
+#endif
 
 	/* Create actors (scene 8 only: along + starwars) */
 	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
 		along_actor = xactdelt_Res_Delta_Actor("along", &frame, 0, 0, 20);
-		if (!along_actor)
+#ifdef TIE_MODERN
+		if (!along_actor) {
+			TieTitle_RunView(resource, NULL, false);
 			return 0;
+		}
+#endif
+#if defined(TIE98) && !defined(TIE_MODERN)
+		xactor_Set_Actor_Time(along_actor, 0, 42);
+#else
 		xactor_Set_Actor_Time(along_actor, 0, 38);
+#endif
 
 		starwars_actor = xactdelt_Res_Delta_Actor("starwars", &frame, 30, 32, 20);
-		if (!starwars_actor)
+#ifdef TIE_MODERN
+		if (!starwars_actor) {
+			TieTitle_RunView(resource, NULL, false);
 			return 0;
+		}
+#endif
 		if (xio_Is_System_Slower_Than(2))
 			xactor_Set_Actor_User_Function(starwars_actor, user_Slow_StarWars);
 		else
@@ -415,26 +464,42 @@ int16_t title_OpenScene(SceneHeadStruct* scene_head, TitleSceneResources* resour
 	}
 
 	stars_actor = xactdelt_Res_Delta_Actor("stars", &frame, 0, 0, 100);
-	if (!stars_actor)
+#ifdef TIE_MODERN
+	if (!stars_actor) {
+		TieTitle_RunView(resource, NULL, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_User_Function(stars_actor, user_Stars);
 
 	back_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 10);
-	if (!back_actor)
+#ifdef TIE_MODERN
+	if (!back_actor) {
+		TieTitle_RunView(resource, NULL, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_User_Function(back_actor, user_Back);
 	xactor_Set_Actor_Draw_Function(back_actor, draw_Back);
 
 	title_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
-	if (!title_actor)
+#ifdef TIE_MODERN
+	if (!title_actor) {
+		TieTitle_RunView(resource, NULL, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_User_Function(title_actor, user_Title);
 	xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
 
 	/* Set palettes */
 	pal = xpal_Res_Palette("title");
-	if (!pal)
+#ifdef TIE_MODERN
+	if (!pal) {
+		TieTitle_RunView(resource, NULL, false);
 		return 0;
+	}
+#endif
 	xpal_Set_Dest_Palette(pal);
 	xpal_Set_Dest_Palette(scene_head->def_palette);
 
@@ -442,21 +507,25 @@ int16_t title_OpenScene(SceneHeadStruct* scene_head, TitleSceneResources* resour
 	xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
 	xview_Set_View_Update_Function(end_View);
 	xview_Disable_Global_View_Erase();
-	return 1;
-}
-
-void title_CloseScene(TitleSceneResources* resources) {
-	Rect frame;
+#ifdef TIE_MODERN
+	TieTitle_RunView(resource, film_name, true);
+	return 0;
+#else
+#ifdef TIE95
+	if (install_cfg_mode <= 1)
+		xstream_Chain_Stream_File(0, "\\astream\\os1-v3.wrk");
+	else if (install_cfg_mode == 2)
+		xstream_Chain_Stream_File(0, "astream\\os1-v3.wrk");
+#endif
+	shellext_Handle_TIE_View();
 	xview_Enable_Global_View_Erase();
 	xview_Clear_View_Update_Function();
-	xbitmap_Free_Bitmap(&background);
+	xbitmap_Free_Bitmap(&title_background);
 	xparagrp_Free_Paragraph(title_text);
-	title_text = LANDRU_NULL_HANDLE;
-	title_num_lines = 0;
-	if (resources->file)
-		xres_Close_Resource(resources->file);
-	resources->file = NULL;
+	xres_Close_Resource(resource);
 	xcanvas_Get_Drawing_Canvas_Bounds(&frame);
 	xview_Set_View_Frame(0, &frame);
 	xview_Set_View_Pos(0, 0, 0);
+	return xerror_Get_Landru_Exit();
+#endif
 }

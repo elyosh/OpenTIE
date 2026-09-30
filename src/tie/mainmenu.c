@@ -1,4 +1,9 @@
 #include "tie/mainmenu.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/mainmenu_task.h"
+#include "tie_runtime/runtime/profile.h"
+#endif
+#include "landru/vesa.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
 #include "tie/soundext.h"
@@ -52,7 +57,13 @@ const MainMenuLayout mainmenu_layout_tie95 = {
 	4,
 };
 
+#ifdef TIE_MODERN
 static const MainMenuLayout* active_spec;
+#elif defined(TIE98)
+static const MainMenuLayout* const active_spec = &mainmenu_layout_tie98;
+#else
+static const MainMenuLayout* const active_spec = &mainmenu_layout_tie95;
+#endif
 
 /* ---- Static globals ---- */
 
@@ -278,88 +289,298 @@ static void user_Door(Actor* actor, int32_t time) {
  * Entry point
  * ================================================================ */
 
-/* Setup and teardown bracket the original modal view. */
-const char* mainmenu_OpenScene(SceneHeadStruct* scene_head, const MainMenuLayout* layout,
-							   ResFile** resource) {
+// FUNCTION: TIE95 0x70820
+// FUNCTION: TIE98 0x44CEB0
+int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
+	ResFile* resource;
 	Rect frame;
 	int16_t i;
 
-	active_spec = layout;
+#ifdef TIE_MODERN
+	active_spec = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? &mainmenu_layout_tie98
+																		: &mainmenu_layout_tie95;
+#endif
+#ifdef TIE_MODERN
 	xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+#elif defined(TIE98)
+	xio_Set_Mouse_Position(387, 387);
+#else
+	xio_Set_Mouse_Position(190, 100);
+#endif
 
-	*resource = shellext_Open_Empire_Resource(active_spec->archive);
-	if (!*resource)
-		return active_spec->archive;
+#ifdef TIE_MODERN
+	resource = shellext_Open_Empire_Resource(active_spec->archive);
+#elif defined(TIE98)
+	resource = shellext_Open_Empire_Resource("mm640.lfd");
+#else
+	resource = shellext_Open_Empire_Resource("mainmenu.lfd");
+#endif
+#ifdef TIE_MODERN
+	if (!resource) {
+		TieMainMenu_RunView(resource, active_spec->archive);
+		return 0;
+	}
+#endif
+#ifdef TIE_MODERN
 	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 0, 0, 640, 480);
+#else
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
+#endif
 
+#ifdef TIE_MODERN
 	mainmenu_film = xfilm_Res_Film(active_spec->film, &frame, 0, 0, 0);
-	if (!mainmenu_film)
-		return active_spec->film;
+#elif defined(TIE98)
+	mainmenu_film = xfilm_Res_Film("main_00", &frame, 0, 0, 0);
+#else
+	mainmenu_film = xfilm_Res_Film("mainmenu", &frame, 0, 0, 0);
+#endif
+#ifdef TIE_MODERN
+	if (!mainmenu_film) {
+		TieMainMenu_RunView(resource, active_spec->film);
+		return 0;
+	}
+#endif
 	xfilm_Set_Film_Def_Palette(mainmenu_film, scene_head->def_palette);
 
+#ifdef TIE_MODERN
 	/* Find the background actor */
 	mainmenu_actor = active_spec->background ? xactor_Find_Actor(FOURCC_DELT, active_spec->background) : NULL;
-	if (active_spec->background && !mainmenu_actor)
-		return active_spec->background;
+#ifdef TIE_MODERN
+	if (active_spec->background && !mainmenu_actor) {
+		TieMainMenu_RunView(resource, active_spec->background);
+		return 0;
+	}
+#endif
 	if (mainmenu_actor)
 		xactor_Non_Refreshable_Actor(mainmenu_actor);
 
-	/* Find the 8 door actors */
+#elif defined(TIE98)
+
+#else
+	mainmenu_actor = xactor_Find_Actor(FOURCC_DELT, "main-1");
+	xactor_Non_Refreshable_Actor(mainmenu_actor);
+#endif
+
+#ifdef TIE_MODERN
 	for (i = 0; i < 8; i++) {
 		door[i] = xactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[i]);
-		if (!door[i])
-			return active_spec->door_names[i];
+		if (!door[i]) {
+			TieMainMenu_RunView(resource, active_spec->door_names[i]);
+			return 0;
+		}
+	}
+#elif defined(TIE98)
+	door[0] = xactor_Find_Actor(FOURCC_ANIM, "hr_mhngr");
+	door[1] = xactor_Find_Actor(FOURCC_ANIM, "hr_md3_1");
+	door[2] = xactor_Find_Actor(FOURCC_ANIM, "hr_md2_1");
+	door[3] = xactor_Find_Actor(FOURCC_ANIM, "hr_md1_2");
+	door[4] = xactor_Find_Actor(FOURCC_ANIM, "hr_md1_3");
+	door[5] = xactor_Find_Actor(FOURCC_ANIM, "hr_md1_1");
+	door[6] = xactor_Find_Actor(FOURCC_ANIM, "hr_md2_2");
+	door[7] = xactor_Find_Actor(FOURCC_ANIM, "hr_md2_3");
+#else
+	door[0] = xactor_Find_Actor(FOURCC_ANIM, "m-hang-d");
+	door[1] = xactor_Find_Actor(FOURCC_ANIM, "m-door-1");
+	door[2] = xactor_Find_Actor(FOURCC_ANIM, "m-door-2");
+	door[3] = xactor_Find_Actor(FOURCC_ANIM, "m-door-3");
+	door[4] = xactor_Find_Actor(FOURCC_ANIM, "m-door-4");
+	door[5] = xactor_Find_Actor(FOURCC_ANIM, "m-door-5");
+	door[6] = xactor_Find_Actor(FOURCC_ANIM, "m-door-6");
+	door[7] = xactor_Find_Actor(FOURCC_ANIM, "m-door-7");
+#endif
+	for (i = 0; i < 8; i++) {
 		xactor_Set_Actor_User_Function(door[i], (xactorCallback)user_Door);
 		door[i]->id = i;
 	}
 
 	/* Create title text overlay */
 	title_actor = xactdelt_Res_Delta_Actor("title", &frame, 0, 0, 0);
-	if (!title_actor)
-		return "title";
+#ifdef TIE_MODERN
+	if (!title_actor) {
+		TieMainMenu_RunView(resource, "title");
+		return 0;
+	}
+#endif
 	xactor_Set_Actor_User_Function(title_actor, (xactorCallback)user_Title);
 	xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
 
 	/* Create XINPUT button regions */
 	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
-	if (!parent)
-		return "main-menu input root";
+#ifdef TIE_MODERN
+	if (!parent) {
+		TieMainMenu_RunView(resource, "main-menu input root");
+		return 0;
+	}
+#endif
 
 	/* Tour Battle button (only if current battle is active) */
 	if (pilot_record.battle_status[pilot_record.cur_battle] == 1) {
+#ifdef TIE_MODERN
 		const int16_t* b = active_spec->button_bounds[0];
 		xrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
+#elif defined(TIE98)
+		xrect_Set_Rect(&frame, 19, 66, 340, 142);
+#else
+		xrect_Set_Rect(&frame, 14, 28, 170, 64);
+#endif
 		tour_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-		if (!tour_input)
-			return "tour input";
+#ifdef TIE_MODERN
+		if (!tour_input) {
+			TieMainMenu_RunView(resource, "tour input");
+			return 0;
+		}
+#endif
 		xinpattr_Set_Input_Update_Function(tour_input, iupdate_MainMenu);
 		xinpattr_Set_Input_User_Function(tour_input, iuser_MainMenu);
 		tour_input->mouseUsage = allInput;
 		tour_input->id = 0;
 	}
 
-	for (i = 2; i < 8; i++) {
-		const int16_t* b = active_spec->button_bounds[i];
+#ifdef TIE_MODERN
+	{
+		const int16_t* b = active_spec->button_bounds[2];
 		xrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
-		menu_input[i] = xinput_Alloc_Input(parent, &frame, 0, 0);
-		if (!menu_input[i])
-			return "main-menu input";
-		xinpattr_Set_Input_Update_Function(menu_input[i], iupdate_MainMenu);
-		xinpattr_Set_Input_User_Function(menu_input[i], iuser_MainMenu);
-		menu_input[i]->mouseUsage = allInput;
-		menu_input[i]->id = i;
 	}
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 172, 163, 248, 210);
+#else
+	xrect_Set_Rect(&frame, 82, 64, 128, 90);
+#endif
+	menu_input[2] = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE_MODERN
+	if (!menu_input[2]) {
+		TieMainMenu_RunView(resource, "main-menu input");
+		return 0;
+	}
+#endif
+	xinpattr_Set_Input_Update_Function(menu_input[2], iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(menu_input[2], iuser_MainMenu);
+	menu_input[2]->mouseUsage = allInput;
+	menu_input[2]->id = 2;
+#ifdef TIE_MODERN
+	{
+		const int16_t* b = active_spec->button_bounds[3];
+		xrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
+	}
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 104, 237, 154, 299);
+#else
+	xrect_Set_Rect(&frame, 220, 64, 260, 90);
+#endif
+	menu_input[3] = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE_MODERN
+	if (!menu_input[3]) {
+		TieMainMenu_RunView(resource, "main-menu input");
+		return 0;
+	}
+#endif
+	xinpattr_Set_Input_Update_Function(menu_input[3], iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(menu_input[3], iuser_MainMenu);
+	menu_input[3]->mouseUsage = allInput;
+	menu_input[3]->id = 3;
+#ifdef TIE_MODERN
+	{
+		const int16_t* b = active_spec->button_bounds[4];
+		xrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
+	}
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 266, 212, 331, 260);
+#else
+	xrect_Set_Rect(&frame, 272, 68, 304, 94);
+#endif
+	menu_input[4] = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE_MODERN
+	if (!menu_input[4]) {
+		TieMainMenu_RunView(resource, "main-menu input");
+		return 0;
+	}
+#endif
+	xinpattr_Set_Input_Update_Function(menu_input[4], iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(menu_input[4], iuser_MainMenu);
+	menu_input[4]->mouseUsage = allInput;
+	menu_input[4]->id = 4;
+#ifdef TIE_MODERN
+	{
+		const int16_t* b = active_spec->button_bounds[5];
+		xrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
+	}
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 0, 268, 55, 357);
+#else
+	xrect_Set_Rect(&frame, 0, 110, 34, 146);
+#endif
+	menu_input[5] = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE_MODERN
+	if (!menu_input[5]) {
+		TieMainMenu_RunView(resource, "main-menu input");
+		return 0;
+	}
+#endif
+	xinpattr_Set_Input_Update_Function(menu_input[5], iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(menu_input[5], iuser_MainMenu);
+	menu_input[5]->mouseUsage = allInput;
+	menu_input[5]->id = 5;
+#ifdef TIE_MODERN
+	{
+		const int16_t* b = active_spec->button_bounds[6];
+		xrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
+	}
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 433, 159, 512, 215);
+#else
+	xrect_Set_Rect(&frame, 44, 96, 82, 126);
+#endif
+	menu_input[6] = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE_MODERN
+	if (!menu_input[6]) {
+		TieMainMenu_RunView(resource, "main-menu input");
+		return 0;
+	}
+#endif
+	xinpattr_Set_Input_Update_Function(menu_input[6], iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(menu_input[6], iuser_MainMenu);
+	menu_input[6]->mouseUsage = allInput;
+	menu_input[6]->id = 6;
+#ifdef TIE_MODERN
+	{
+		const int16_t* b = active_spec->button_bounds[7];
+		xrect_Set_Rect(&frame, b[0], b[1], b[2], b[3]);
+	}
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 549, 168, 604, 226);
+#else
+	xrect_Set_Rect(&frame, 130, 86, 168, 106);
+#endif
+	menu_input[7] = xinput_Alloc_Input(parent, &frame, 0, 0);
+#ifdef TIE_MODERN
+	if (!menu_input[7]) {
+		TieMainMenu_RunView(resource, "main-menu input");
+		return 0;
+	}
+#endif
+	xinpattr_Set_Input_Update_Function(menu_input[7], iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(menu_input[7], iuser_MainMenu);
+	menu_input[7]->mouseUsage = allInput;
+	menu_input[7]->id = 7;
+
 	xview_Set_View_Update_Function(end_View);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
-	return NULL;
-}
-
-void mainmenu_CloseScene(ResFile* resource) {
+#ifdef TIE_MODERN
+	TieMainMenu_RunView(resource, NULL);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
 	xview_Enable_All_View_Erase();
 	xview_Clear_View_Update_Function();
 	if (xcursor_Is_Cursor_Visible())
 		xcursor_Hide_Cursor();
-	if (resource)
-		xres_Close_Resource(resource);
+	xres_Close_Resource(resource);
+#ifdef TIE98
+	xvesa_Erase_Video(16);
+#endif
+	return xerror_Get_Landru_Exit();
+#endif
 }

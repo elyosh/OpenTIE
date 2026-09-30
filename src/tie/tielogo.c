@@ -1,4 +1,8 @@
 #include "tie/tielogo.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/tielogo_task.h"
+#endif
 #include "tie/shellext.h"
 #include "tie/soundext.h"
 #ifdef TIE_MODERN
@@ -82,7 +86,7 @@ Actor* fighter_actor;
 
 // GLOBAL: TIE95 0xf5fd4
 // GLOBAL: TIE98 0x58a3e8
-static BitmapStruct background;
+BitmapStruct tielogo_background;
 // GLOBAL: TIE95 0xf5fe8
 // GLOBAL: TIE98 0x58a3a4
 static Actor* close_actor;
@@ -104,7 +108,7 @@ static int16_t film_Actor_To_Background(Actor* actor) {
 	int result = 0;
 
 	xcanvas_Get_Drawing_Canvas_Bounds(&canvas_bounds);
-	xcanvas_Push_Canvas(&background);
+	xcanvas_Push_Canvas(&tielogo_background);
 	if (actor->draw) {
 		xrect_Copy_Rect(&clip, &actor->frame);
 		xcanvas_Set_Drawing_Canvas_Clip(&clip);
@@ -132,7 +136,7 @@ static int16_t draw_Backdrop(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int
 		return 0;
 
 	xrect_Set_Rect(&ra, 0, 0, 320, 200);
-	xcanvas_Copy_Bitmap_Portion_To_Canvas(&background, &ra, 0, 0);
+	xcanvas_Copy_Bitmap_Portion_To_Canvas(&tielogo_background, &ra, 0, 0);
 	return 1;
 }
 
@@ -345,63 +349,99 @@ static void end_View(int32_t frame_num) {
 		xerror_Set_Landru_Exit(exit_id);
 }
 
-/* Scene setup and cleanup bracket the original modal-view call. */
-int16_t tielogo_OpenScene(SceneHeadStruct* scene_head, ResFile** resource) {
+// FUNCTION: TIE95 0x72780
+// FUNCTION: TIE98 0x48F830
+int16_t tielogo_TieLogo(SceneHeadStruct* scene_head) {
+	ResFile* resource;
 	Rect frame;
 
-	*resource = shellext_Open_Empire_Resource("tielogo.lfd");
-	if (!*resource)
+	resource = shellext_Open_Empire_Resource("tielogo.lfd");
+#ifdef TIE_MODERN
+	if (!resource) {
+		TieLogo_RunView(resource, false);
 		return 0;
+	}
+#endif
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
-	xbitmap_Init_Bitmap(&background);
-	if (!xbitmap_Alloc_Bitmap(&background, 320, 200))
+	xbitmap_Init_Bitmap(&tielogo_background);
+#ifdef TIE_MODERN
+	if (!xbitmap_Alloc_Bitmap(&tielogo_background, 320, 200)) {
+		TieLogo_RunView(resource, false);
 		return 0;
-	xbitmap_Erase_Bitmap(&background);
+	}
+#else
+	xbitmap_Alloc_Bitmap(&tielogo_background, 320, 200);
+#endif
+	xbitmap_Erase_Bitmap(&tielogo_background);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 	xcanvas_Invalid_Screen_Diff();
 
 	tielogo_film = xfilm_Res_Callback_Film("logo", &frame, 0, 0, 0, film_Callback);
-	if (!tielogo_film)
+#ifdef TIE_MODERN
+	if (!tielogo_film) {
+		TieLogo_RunView(resource, false);
 		return 0;
+	}
+#endif
 	tie_actor = xactor_Find_Actor(FOURCC_ANIM, "tie3");
-	if (!tie_actor)
+#ifdef TIE_MODERN
+	if (!tie_actor) {
+		TieLogo_RunView(resource, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_User_Function(tie_actor, user_Tie);
 	tie_actor->id = 0;
 
 	fighter_actor = xactanim_Res_Anim_Actor("fighter", &frame, 0, 0, 0);
-	if (!fighter_actor)
+#ifdef TIE_MODERN
+	if (!fighter_actor) {
+		TieLogo_RunView(resource, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_Time(fighter_actor, -1, -1);
 	fighter2_actor = xactanim_Res_Anim_Actor("fighter2", &frame, 0, 0, 0);
-	if (!fighter2_actor)
+#ifdef TIE_MODERN
+	if (!fighter2_actor) {
+		TieLogo_RunView(resource, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_User_Function(fighter2_actor, user_Fighter);
 	xactor_Set_Actor_Draw_Function(fighter2_actor, draw_Fighter);
 
 	close_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, -200);
-	if (!close_actor)
+#ifdef TIE_MODERN
+	if (!close_actor) {
+		TieLogo_RunView(resource, false);
 		return 0;
+	}
+#endif
 	xactor_Set_Actor_User_Function(close_actor, user_Close);
 	xactor_Set_Actor_Draw_Function(close_actor, draw_Close);
 	xfilm_Set_Film_Def_Palette(tielogo_film, scene_head->def_palette);
 	xview_Set_View_Update_Function(end_View);
 	if (xcursor_Is_Cursor_Visible())
 		xcursor_Hide_Cursor();
-	return 1;
-}
-
-void tielogo_CloseScene(ResFile* resource) {
-	Rect frame;
+#ifdef TIE_MODERN
+	TieLogo_RunView(resource, true);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
 	xview_Clear_View_Update_Function();
 	xview_Enable_All_View_Erase();
+#ifdef TIE98
+	xrect_Set_Rect(&frame, 0, 0, 640, 480);
+#else
 	xcanvas_Get_Drawing_Canvas_Bounds(&frame);
+#endif
 	xview_Set_View_Frame(0, &frame);
 	xview_Set_View_Pos(0, frame.left, frame.top);
-	xbitmap_Free_Bitmap(&background);
-	if (resource)
-		xres_Close_Resource(resource);
-	fighter2_actor = NULL;
+	xbitmap_Free_Bitmap(&tielogo_background);
+	xres_Close_Resource(resource);
 	xtimer_Set_Frame_Rate(20);
+	return xerror_Get_Landru_Exit();
+#endif
 }
