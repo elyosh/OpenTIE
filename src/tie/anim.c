@@ -14,6 +14,7 @@
 #include "tie/create.h"
 #include "tie/draw.h"
 #include "tie/drawpol.h"
+#include "tie/edition.h"
 #include "tie/fsfx.h"
 #include "tie/fview.h"
 #include "tie/gate.h"
@@ -438,7 +439,7 @@ void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
 	xmemhdl_Unlock_Handle(handle);
 	table_offset = *(const uint32_t*)(blob + 16);
 	frame_offset = *(const uint32_t*)(blob + table_offset + 4 * bitmap_idx);
-	if (TieClassicDisplay_UsesDx5() && g_useHardware3D) {
+	if (TIE_DISPLAY_DX5 && g_useHardware3D) {
 		RenderQuad_DrawRotatedSprite(entry->angle, entry->screen_x, entry->screen_y, scale,
 									 blob + frame_offset);
 	} else {
@@ -878,7 +879,7 @@ void anim_updateanimation(void) {
 	uint16_t static_packed;
 	uint16_t s;
 
-	if (TieProfile_UsesTie98Logic()) {
+	if (TIE_FLIGHT_TIE98) {
 		anim_updateanimation_tie98();
 		return;
 	}
@@ -1340,13 +1341,13 @@ void anim_dohyperspace(void) {
 			hypertemp2 = drawdebrisflag;
 			drawbackdropflag = 0;
 			drawdebrisflag = 0;
-			if (TieProfile_UsesTie98Logic())
+			if (TIE_FLIGHT_TIE98)
 				g_hyperspaceStreakLength = 32256;
 			else
 				hyperstarlength = 32256;
 			pstate.player->world_x = 0;
 			fullupdateflag = 1;
-			if (TieProfile_UsesTie98Logic())
+			if (TIE_FLIGHT_TIE98)
 				g_flightInitialTextureCacheFlushPending = 1;
 			pstate.player->world_y = 0;
 			hyperspaceflag = 3;
@@ -1376,7 +1377,7 @@ void anim_dohyperspace(void) {
 
 		case 3:
 			if (hyperticks < 0x588u) {
-				if (TieProfile_UsesTie98Logic()) {
+				if (TIE_FLIGHT_TIE98) {
 					g_hyperspaceStreakLength += 224 * (uint32_t)frameticks;
 				} else {
 					/* Clamp the unsigned wrapped endpoint inside (0x7E00, 0x8200). */
@@ -1388,7 +1389,7 @@ void anim_dohyperspace(void) {
 				}
 			} else {
 				pstate.player->world_y += 224 * frameticks;
-				if (!TieProfile_UsesTie98Logic()) {
+				if (!TIE_FLIGHT_TIE98) {
 					*(int16_t*)&hyperstardata[12] = -32256;
 					*(int16_t*)&hyperstardata[6] = 32272;
 				}
@@ -1447,7 +1448,7 @@ void anim_dohyperspace(void) {
 		case 5:
 			if (hyperticks < 0x84Cu) {
 				pstate.player->world_y -= 224 * frameticks;
-			} else if (TieProfile_UsesTie98Logic()) {
+			} else if (TIE_FLIGHT_TIE98) {
 				g_hyperspaceStreakLength -= 224 * (uint32_t)frameticks;
 				if (g_hyperspaceStreakLength < 0x8200u)
 					g_hyperspaceStreakLength = 0x8200u;

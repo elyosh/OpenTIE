@@ -3,6 +3,7 @@
 #include "tie/collide.h"
 #include "tie/create.h"
 #include "tie/draw.h"
+#include "tie/edition.h"
 #include "tie/fediskio.h"
 #include "tie/festring.h"
 #include "tie/fsfx.h"
@@ -1314,7 +1315,7 @@ void panel_addbliptoradar(uint16_t target_obj) {
 	int16_t blip_off_x;
 	int16_t blip_off_y;
 
-	if (TieProfile_UsesTie98Logic()) {
+	if (TIE_FLIGHT_TIE98) {
 		int32_t dx_world, dy_world, dz_world;
 		FlightObject* pl = pstate.player;
 		if (target_obj < 0x3800u) {
@@ -2262,7 +2263,7 @@ void panel_updatecmd(void) {
 
 	festring_setbackcolor(0x30);
 	/* TIE98 renders the CRT later from TIE_Update_Screen for both backends. */
-	if (!TieProfile_UsesTie98Logic()) {
+	if (!TIE_FLIGHT_TIE98) {
 		panel_update3Dcrt(instruments[2].x, instruments[2].y, instruments[2].param1, instruments[2].param2,
 						  force_redraw);
 	}
@@ -2394,11 +2395,10 @@ void panel_updatecmd(void) {
 				const uint8_t model_type = objects[pstate.target_obj_idx].ship_idx;
 				uint16_t mt;
 
-				if (!TieProfile_UsesTie98Logic())
+				if (!TIE_FLIGHT_TIE98)
 					draw_lockshipfileptrs(model_type);
-				mt = TieProfile_UsesTie98Logic()
-						 ? modelmesh_gettype(model_type, pstate.radar_target1)
-						 : componentblockptr[(uint16_t)pstate.radar_target1].mesh_type;
+				mt = TIE_FLIGHT_EDITION(componentblockptr[(uint16_t)pstate.radar_target1].mesh_type,
+										modelmesh_gettype(model_type, pstate.radar_target1));
 				/* Fighters display mesh type 7 with component label 26. */
 				if (objects[pstate.target_obj_idx].genus == GENUS_FIGHTER && mt == 7)
 					mt = 26;
@@ -2549,7 +2549,6 @@ void panel_loadpanelviewdefs(char* base_name) {
 // FUNCTION: TIE95 0x43710
 // FUNCTION: TIE98 0x466B70
 void panel_dosetnewpilotview(uint16_t view_idx) {
-	const bool tie98 = TieProfile_UsesTie98Logic();
 	uint16_t panel_x;
 	uint16_t dest;
 
@@ -2590,12 +2589,12 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
 
 		if (camera.pilotview == 18) {
 			festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)maxPixelsDeep);
-			if (tie98)
+			if (TIE_FLIGHT_TIE98)
 				backcolor = deepspacecolor;
 			else
 				festring_setbackcolor(0);
 			clearwindow();
-			if (tie98)
+			if (TIE_FLIGHT_TIE98)
 				logbuf2_setbufferdimensions_tie98((uint16_t)screenXRes, (uint16_t)maxPixelsDeep, 0, 0);
 			else
 				logbuf2_setbufferdimensions((uint16_t)screenXRes, (uint16_t)maxPixelsDeep, 0);
@@ -2614,7 +2613,7 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
 			/* TIE98 leaves palette index 0 transparent over a deep-space clear;
 			 * TIE95 cockpit shapes use palette index 253 as their skip color. */
 			skip_color = 253;
-			if (tie98) {
+			if (TIE_FLIGHT_TIE98) {
 				backcolor = deepspacecolor;
 				festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)maxPixelsDeep);
 				clearwindow();
@@ -2626,7 +2625,7 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
 			/* displaycorner is the full framebuffer offset of the viewport origin:
 			 * bytes for TIE98 and pixels for TIE95. */
 			displaycorner_off = calcposition(panelviewdefs[geom].pos_x, panelviewdefs[geom].pos_y);
-			if (tie98)
+			if (TIE_FLIGHT_TIE98)
 				logbuf2_setbufferdimensions_tie98(panelviewdefs[geom].width, panelviewdefs[geom].depth, 0,
 												  displaycorner_off);
 			else
@@ -2644,7 +2643,7 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
 			lastpilotpaneldraw = (int16_t)dest;
 
 		panel_initpanel();
-		if (tie98)
+		if (TIE_FLIGHT_TIE98)
 			g_flightInitialTextureCacheFlushPending = 1;
 		fullupdateflag = 1;
 		festring_showscreen();
@@ -2950,7 +2949,7 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 	sub_world_z = 0;
 	if (pstate.radar_enable && pstate.target_obj_idx < NUM_CRAFTS) {
 		const uint8_t model_type = objects[pstate.target_obj_idx].ship_idx;
-		if (TieProfile_UsesTie98Logic()) {
+		if (TIE_FLIGHT_TIE98) {
 			const int target_id = modelmesh_gettargetid(model_type, pstate.radar_target1);
 
 			if (target_id != 0 &&

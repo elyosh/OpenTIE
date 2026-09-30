@@ -1,6 +1,7 @@
 #include "tie/paiman.h"
 #include "tie/create.h"
 #include "tie/draw.h"
+#include "tie/edition.h"
 #include "tie/fsfx.h"
 #include "tie/laser.h"
 #include "tie/math2.h"
@@ -1451,12 +1452,12 @@ int16_t paiman_dropoffmaneuver(void) {
 
 	create_getdropposition(tgt_fg_idx, craft_index, anchor_obj);
 	model_type = objects[ai.active_obj_idx].ship_idx;
-	if (!TieProfile_UsesTie98Logic())
+	if (!TIE_FLIGHT_TIE98)
 		draw_lockshipfileptrs(model_type);
 
 	{
-		int32_t shield_hi = TieProfile_UsesTie98Logic() ? -modelbounds_getminz(model_type)
-														: (objectblockptr->shield_default >> 16);
+		int32_t shield_hi =
+			TIE_FLIGHT_EDITION((objectblockptr->shield_default >> 16), -modelbounds_getminz(model_type));
 		dx = worldlocx - objects[ai.active_obj_idx].world_x;
 		dy = worldlocy - objects[ai.active_obj_idx].world_y;
 		dz = (worldlocz + (-shield_hi >> 1)) - objects[ai.active_obj_idx].world_z;

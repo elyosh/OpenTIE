@@ -484,7 +484,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	}
 
 	/* Per-frame render flags. */
-	if (TieProfile_UsesTie98Frontend())
+	if (TIE_FRONTEND_TIE98)
 		g_flightInitialTextureCacheFlushPending = 1;
 	stardetaillevel = 1;
 	drawmarkingsflag = 1;
@@ -514,7 +514,7 @@ void bpflight_Close_Flight_Engine(void) {
 	TieFlightAssets_ClearPreviewModels();
 #ifdef TIE_MODERN
 	/* The host cache owns TIE98 preview models beyond the active pointers. */
-	if (TieProfile_UsesTie98Frontend())
+	if (TIE_FRONTEND_TIE98)
 		TieFlightRuntime_ReleaseRecoveredResources();
 #endif
 	free(xtransdata);
@@ -836,7 +836,7 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 
 	int i;
 
-	if (TieProfile_UsesTie98Frontend())
+	if (TIE_FRONTEND_TIE98)
 		return bpflight_draw_Engine_tie98(actor, clip, dest, xoff, yoff, refresh);
 	(void)dest;
 	(void)xoff;
@@ -1514,7 +1514,7 @@ int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16
 	char name[16];
 	size_t upper;
 
-	if (TieProfile_UsesTie98Frontend()) {
+	if (TIE_FRONTEND_TIE98) {
 		bpflight_Load_Flight_Craft_tie98(lfd_name, shp_name, mode, cur_flight_scene);
 		return 1;
 	}

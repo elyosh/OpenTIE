@@ -2,6 +2,7 @@
 #ifdef TIE_MODERN
 #include "tie_runtime/storage/pilot_storage.h"
 #endif
+#include "tie/edition.h"
 #include "tie/fmusic.h"
 #include "tie/fscript.h"
 #include "tie/rtsvga2.h" /* rtsvga2_remapRGBImage */
@@ -296,7 +297,7 @@ int8_t fediskio_displayerror(void) {
 // FUNCTION: TIE95 0x229CC
 // FUNCTION: TIE98 0x41C910
 int16_t fediskio_tryopenfile(TieFileRoot root, const char* name, const char* mode, int16_t fatal) {
-	int16_t attempt_count = TieProfile_UsesTie98Logic() ? 2 : 4;
+	int16_t attempt_count = TIE_FLIGHT_EDITION(4, 2);
 
 	int16_t attempt;
 
@@ -793,9 +794,8 @@ void fediskio_loadbufferdata(const char* filename, uint16_t buf_index, int16_t n
 void fediskio_Init_Buffers_and_Fonts(void) {
 	int fail = 0;
 	char path[64];
-	const int dx5_display = TieClassicDisplay_UsesDx5();
-	const size_t screen_buffer_size =
-		dx5_display ? (size_t)screenYRes * g_surfacePitch : (size_t)bytesPerPixel * screenYRes * screenXRes;
+	const size_t screen_buffer_size = TIE_DISPLAY_EDITION((size_t)bytesPerPixel * screenYRes * screenXRes,
+														  (size_t)screenYRes * g_surfacePitch);
 
 	/* Error formatting depends on stringdata; later allocation failures can
 	 * be accumulated and reported after it loads. */
@@ -889,7 +889,7 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 	loadbuffer = xtransdataptr;
 
 	replaybufferstart = xmemhdl_Lock_Handle(replaybufferhandle);
-	if (TieProfile_UsesTie98Logic()) {
+	if (TIE_FLIGHT_TIE98) {
 		memset(newbuf, 0x40, (size_t)screenXRes * screenYRes * g_flight16bppBytesPerPixel);
 		fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "vga.pac", xtransdataptr);
 		buildpalette(xtransdataptr, 64, 192);
@@ -1165,7 +1165,7 @@ void fediskio_loadspecies(void) {
 	int lfd_idx, entry_idx;
 	uint16_t i;
 
-	if (TieProfile_UsesTie98Logic() && !g_useHardware3D && g_flight16bppBytesPerPixel == 1) {
+	if (TIE_FLIGHT_TIE98 && !g_useHardware3D && g_flight16bppBytesPerPixel == 1) {
 		/* TIE98 8-bpp flight: load the mission's .inv table, then NEWPAL.INV,
 		 * else build it. The mission extension is swapped in place. */
 		size_t name_length = strlen(missionfilename);
@@ -1207,13 +1207,13 @@ void fediskio_loadspecies(void) {
 		RenderTexture_ResetSoftwareShadeTableCache();
 	}
 
-	if (TieProfile_UsesTie98Logic()) {
+	if (TIE_FLIGHT_TIE98) {
 		char error[768];
 		TieFlightModelApi models = TieFlightAssets_ModelApi();
 		if (!models.begin_generation(models.context, error, sizeof error))
 			shell_programexit(error);
 	}
-	if (TieProfile_UsesTie98Logic())
+	if (TIE_FLIGHT_TIE98)
 		g_hardwarePixelFormatAvailable = 1;
 
 	for (i = 0; i < NUM_SPECIES; i++)
@@ -1289,7 +1289,7 @@ void fediskio_loadspecies(void) {
 				void* species_buf;
 				uint32_t rgb_v39, rgb_v38;
 
-				if (TieClassicDisplay_UsesDx5()) {
+				if (TIE_DISPLAY_DX5) {
 					FrontendDisplay_BlitOffscreenToRenderSurface();
 					FrontendDisplay_PresentFrame();
 				}
@@ -1326,7 +1326,7 @@ void fediskio_loadspecies(void) {
 					TieStorage_Read(&rgb_v38, 4, 1, fileptr);
 					entry_size -= 8;
 
-					tie98_16bpp = TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2;
+					tie98_16bpp = TIE_FLIGHT_TIE98 && g_flight16bppBytesPerPixel == 2;
 					palette_entry_size = tie98_16bpp ? 2u : (size_t)bytesPerPixel;
 					fediskio_UnlockGlobals();
 					species_handle = xmemhdl_Alloc_Handle((uint32_t)(rgb_v39 + palette_entry_size * rgb_v38),
@@ -1376,14 +1376,14 @@ void fediskio_loadspecies(void) {
 					species_table[i].model_handle = species_handle;
 
 					if (entry_flags & 1) {
-						if (TieProfile_UsesTie98Logic())
+						if (TIE_FLIGHT_TIE98)
 							fediskio_fillinspec_tie98(species_table[i].spec_num, (uint8_t)i);
 						else
 							fediskio_fillinspec(species_buf, species_table[i].spec_num, (uint8_t)i);
 					}
 				}
 				xmemhdl_Unlock_Handle(species_handle);
-				if (TieClassicDisplay_UsesDx5()) {
+				if (TIE_DISPLAY_DX5) {
 					FrontendDisplay_BlitOffscreenToRenderSurface();
 					FrontendDisplay_PresentFrame();
 				}
@@ -1396,7 +1396,7 @@ void fediskio_loadspecies(void) {
 	}
 
 	fediskio_RelockGlobals();
-	if (TieProfile_UsesTie98Logic()) {
+	if (TIE_FLIGHT_TIE98) {
 		uint8_t deep_space_index;
 
 		const uint8_t deep_space_rgb[3] = { 0, 0, 2 };

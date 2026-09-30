@@ -2,6 +2,7 @@
 #ifdef TIE_MODERN
 #include "tie_runtime/storage/mission_records.h"
 #endif
+#include "tie/edition.h"
 #include "tie/feinput.h"
 #include "tie/paiman.h"
 #include "tie_runtime/runtime/inflight_state.h"
@@ -416,16 +417,16 @@ uint16_t create_createember(uint16_t parent_obj) {
 // FUNCTION: TIE95 0x198A4
 int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 	FlightObject* parent = &objects[obj_idx];
-	const bool tie98 = TieProfile_UsesTie98Logic();
 	uint16_t num_meshes;
 	int16_t result;
 	CraftData* cp;
 	uint16_t mi;
 
-	if (!tie98)
+	if (!TIE_FLIGHT_TIE98)
 		draw_lockshipfileptrs(parent->ship_idx);
 
-	num_meshes = tie98 ? (uint16_t)modelmesh_getcount(parent->ship_idx) : objectblockptr->num_meshes;
+	num_meshes =
+		TIE_FLIGHT_EDITION(objectblockptr->num_meshes, (uint16_t)modelmesh_getcount(parent->ship_idx));
 	result = (int16_t)num_meshes;
 	if (num_meshes <= 1)
 		return result;
@@ -445,7 +446,7 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 
 		if (cp->mesh_state[mi] != MESH_STATE_VISIBLE)
 			continue;
-		if (tie98) {
+		if (TIE_FLIGHT_TIE98) {
 			if (!modelmesh_isobjecttypemeshdamageable(parent->ship_idx, mi))
 				continue;
 		} else if (!(componentblockptr[mi].flags & 2)) {
@@ -720,7 +721,7 @@ int16_t create_createmission(void) {
 	camera.view_target_obj = pstate.object_idx;
 	thrustmastertopflag = 0;
 	framerate = 15;
-	if (TieProfile_UsesTie98Logic())
+	if (TIE_FLIGHT_TIE98)
 		g_flightInitialTextureCacheFlushPending = 1;
 	fullupdateflag = 1;
 	calcframerate = 1;
@@ -1734,7 +1735,7 @@ uint16_t create_createcraft(void) {
 		c->mesh_state[k] = MESH_STATE_VISIBLE;
 		c->mesh_rotation[k] = 0;
 	}
-	if (TieProfile_UsesTie98Logic()) {
+	if (TIE_FLIGHT_TIE98) {
 		int mesh_count;
 		int mesh;
 
@@ -1995,10 +1996,10 @@ int create_getdropposition(uint16_t fg_idx, uint16_t craft_index, uint16_t ancho
 
 	int16_t z_drop;
 
-	if (!TieProfile_UsesTie98Logic())
+	if (!TIE_FLIGHT_TIE98)
 		draw_lockshipfileptrs(species_idx);
-	z_drop = TieProfile_UsesTie98Logic() ? (int16_t)modelbounds_getmaxz(species_idx)
-										 : (int16_t)(objectblockptr->speed_default >> 17);
+	z_drop = TIE_FLIGHT_EDITION((int16_t)(objectblockptr->speed_default >> 17),
+								(int16_t)modelbounds_getmaxz(species_idx));
 	create_getworldposition(OBJ_REF_WAYPOINT_BASE, fg_idx);
 
 	if (species_table[species_idx].side & 0x80) {

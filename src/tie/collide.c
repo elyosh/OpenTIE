@@ -1,6 +1,7 @@
 #include "tie/collide.h"
 #include "tie/create.h"
 #include "tie/draw.h"
+#include "tie/edition.h"
 #include "tie/fediskio.h"
 #include "tie/fscript.h"
 #include "tie/fsfx.h"
@@ -954,7 +955,7 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 
 	/* Step 2: per-mesh component damage routing. */
 	if (component_idx != -1) {
-		if (TieProfile_UsesTie98Logic()) {
+		if (TIE_FLIGHT_TIE98) {
 			const uint16_t model_type = objects[target_obj_idx].ship_idx;
 			const int mesh_index = component_idx - 1;
 			component_explosion_type1 = (uint8_t)modelmesh_hasexplosiontype1(model_type, mesh_index);
@@ -1214,7 +1215,6 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 
 		if (bw <= 0x578u) {
 			/* Small/medium ship death path. */
-			bool tie98;
 
 			if (target_obj_idx == pstate.object_idx && !(pstate.player_craft->status_flags & 2u)) {
 				/* Player non-rescued explosion. */
@@ -1249,12 +1249,11 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 			}
 
 			/* Spawn a wing/component blow-off. */
-			tie98 = TieProfile_UsesTie98Logic();
-			if (!tie98)
+			if (!TIE_FLIGHT_TIE98)
 				draw_lockshipfileptrs(tgt_ship);
 			{
 				uint16_t num_meshes =
-					tie98 ? (uint16_t)modelmesh_getcount(tgt_ship) : objectblockptr->num_meshes;
+					TIE_FLIGHT_EDITION(objectblockptr->num_meshes, (uint16_t)modelmesh_getcount(tgt_ship));
 				int32_t pitch_kick = 0;
 				int32_t spin_kick = 0;
 				int16_t k = 0;
@@ -1269,11 +1268,11 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 						if (tgt_craft->mesh_state[mesh_idx] != MESH_STATE_VISIBLE)
 							continue;
 						/* Both fixed and rotating wing meshes are eligible. */
-						mesh_type = tie98 ? modelmesh_gettype(tgt_ship, mesh_idx)
-										  : componentblockptr[mesh_idx].mesh_type;
+						mesh_type = TIE_FLIGHT_EDITION(componentblockptr[mesh_idx].mesh_type,
+													   modelmesh_gettype(tgt_ship, mesh_idx));
 						if (mesh_type == TIE_MESH_WING || mesh_type == TIE_MESH_ROTARY_WING) {
-							const int center_x = tie98 ? modelmesh_getcenterx(tgt_ship, mesh_idx)
-													   : componentblockptr[mesh_idx].center_side;
+							const int center_x = TIE_FLIGHT_EDITION(componentblockptr[mesh_idx].center_side,
+																	modelmesh_getcenterx(tgt_ship, mesh_idx));
 							if (side_pick) {
 								if (center_x < 0)
 									break;

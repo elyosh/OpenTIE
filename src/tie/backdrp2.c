@@ -8,6 +8,7 @@
 
 #include "tie/backdrp2.h"
 #include "tie/draw.h"
+#include "tie/edition.h"
 #include "tie/logbuf2.h"
 #include "tie/math2_wide.h"
 #include "tie/render_scene_tie98.h"
@@ -335,7 +336,7 @@ void backdrp2_backdrawbitmap(int32_t x, int32_t y, int32_t z, uint16_t angle, in
 		screeny = -(int32_t)math2_project_u32((uint32_t)-y, perspShift, halfPerspFactor, (uint32_t)z);
 	}
 
-	if (TieProfile_UsesTie98Logic())
+	if (TIE_FLIGHT_TIE98)
 		draw_drawbackdropimage_tie98(
 			backdropspecies[tile_idx - 1], (int16_t)(halfpixelswide + screenx),
 			(int16_t)(pixelsdeep - (transfm2_screenyoffset + halfpixelsdeep + screeny)), angle);

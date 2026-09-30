@@ -11,6 +11,7 @@
 
 #include "tie/drawpol.h" /* worldx, worldy, parentobject, objectnum,
                         * layervalue, flatobjnum                */
+#include "tie/edition.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/logbuf2.h" /* buffer_ptr, pixelswide(min1), pixelsdeep(min1) */
 #include "tie/render_scene_tie98.h"
@@ -334,7 +335,7 @@ void rotscale_prepare_color(const char* palette_entries) {
 		count = 64; /* clamp to table size */
 	src = hdr + *(const int32_t*)(hdr + 12);
 
-	if (TieProfile_UsesTie98Logic()) {
+	if (TIE_FLIGHT_TIE98) {
 		if (g_flight16bppBytesPerPixel == 2) {
 			int k;
 
@@ -2681,7 +2682,7 @@ int16_t rotscale_rotate_scale_image(int16_t screen_x, int16_t screen_y, uint16_t
 	quad[6] = adjustplotx + screen_x;
 	quad[7] = adjustploty + screen_y;
 
-	if (TieProfile_UsesTie98Logic())
+	if (TIE_FLIGHT_TIE98)
 		return composite_to_tie98_scene(quad);
 	return scantoxtrans(quad);
 }

@@ -1,5 +1,6 @@
 #include "tie/rtsvga2.h"
 #include "landru/vesa.h" /* vesa_buff_gbl — the scanout buffer vgapointer aliases */
+#include "tie/edition.h"
 #include "tie/frontend_display_tie98.h"
 #include "tie/logbuf2.h" /* pixelswide / pixelsdeep / halfpixels / displaycorner / deepspacecolor */
 #include "tie/math2.h"
@@ -274,7 +275,7 @@ void rtsvga2_initgraphVGA(void) {
 		starposbuf2[i] = -1;
 	}
 
-	if (TieClassicDisplay_UsesDx5()) {
+	if (TIE_DISPLAY_DX5) {
 		int32_t y;
 
 		for (y = 0; y < screenYRes; ++y)
@@ -1002,7 +1003,7 @@ static void rtsvga2_drawmonoshapeVGA_tie98(const uint8_t* shape, uint16_t x, uin
 // FUNCTION: TIE98 0x47AF80
 void rtsvga2_drawmonoshapeVGA(const uint8_t* shape, uint16_t x, uint16_t y, uint16_t skip_color,
 							  uint8_t color) {
-	if (TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2) {
+	if (TIE_FLIGHT_TIE98 && g_flight16bppBytesPerPixel == 2) {
 		rtsvga2_drawmonoshapeVGA_tie98(shape, x, y, skip_color, color);
 		return;
 	}
@@ -1629,7 +1630,7 @@ static void rtsvga2_removeblipsVGA_tie98(struct RadarBlip* blips, uint16_t count
 void rtsvga2_drawblipsVGA(struct RadarBlip* blips, uint16_t count) {
 	uint16_t i;
 
-	if (TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2) {
+	if (TIE_FLIGHT_TIE98 && g_flight16bppBytesPerPixel == 2) {
 		rtsvga2_drawblipsVGA_tie98(blips, count);
 		return;
 	}
@@ -1666,7 +1667,7 @@ void rtsvga2_drawblipsVGA(struct RadarBlip* blips, uint16_t count) {
 void rtsvga2_removeblipsVGA(struct RadarBlip* blips, uint16_t count) {
 	uint16_t i;
 
-	if (TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2) {
+	if (TIE_FLIGHT_TIE98 && g_flight16bppBytesPerPixel == 2) {
 		rtsvga2_removeblipsVGA_tie98(blips, count);
 		return;
 	}
@@ -1724,7 +1725,7 @@ static void rtsvga2_removebracket_tie98(void) {
 void rtsvga2_drawbracket(void) {
 	uint32_t i;
 
-	if (TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2) {
+	if (TIE_FLIGHT_TIE98 && g_flight16bppBytesPerPixel == 2) {
 		rtsvga2_drawbracket_tie98();
 		return;
 	}
@@ -1751,7 +1752,7 @@ void rtsvga2_drawbracket(void) {
 void rtsvga2_removebracket(void) {
 	uint32_t i;
 
-	if (TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2) {
+	if (TIE_FLIGHT_TIE98 && g_flight16bppBytesPerPixel == 2) {
 		rtsvga2_removebracket_tie98();
 		return;
 	}

@@ -17,6 +17,7 @@
 #include "tie/draw.h"
 #include "tie/drawpol.h"
 #include "tie/dynamix.h"
+#include "tie/edition.h"
 #include "tie/fediskio.h"
 #include "tie/feinput.h"
 #include "tie/festring.h"
@@ -1161,7 +1162,6 @@ static bool tie_doframe_tie98(void);
 // FUNCTION: TIE95 0x56048
 // FUNCTION: TIE98 0x48D850
 void tie_initflightresolution(void) {
-	const bool dx5_display = TieClassicDisplay_UsesDx5();
 	/* PORT: display ownership and mode selection happen at the simulator,
 	 * replay or frontend-preview boundary before this recovered geometry setup. */
 	if (flightResolution == TIE_FLIGHT_RES_SVGA_16 || flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
@@ -1209,7 +1209,7 @@ void tie_initflightresolution(void) {
 		 * Leaving screenMemWidth at 1024 would overrun the 640x480 buffer
 		 * by ~180 KB/frame and clobber whatever follows it on the heap. */
 		rtsvga2_setvesascanlinelength(0x400u); /* retained for parity */
-		if (dx5_display)
+		if (TIE_DISPLAY_DX5)
 			screenMemWidth = (int32_t)g_surfacePitch;
 		else
 			screenMemWidth = 640;
@@ -2232,7 +2232,7 @@ bool tie_doframe(void) {
 	TieFlightCadence animation_cadence;
 	bool rendered;
 
-	if (TieProfile_UsesTie98Logic())
+	if (TIE_FLIGHT_TIE98)
 		return tie_doframe_tie98();
 
 	/* Step 1 — refresh frameticks/framerate. */
@@ -2313,10 +2313,10 @@ bool tie_doframe(void) {
 			if (frameticks > (uint16_t)fastforwardtimer) {
 				fastforwardtimer += 236;
 				if (acceleratedtimesetting <= 1u) {
-					if (TieClassicDisplay_UsesDx5())
+					if (TIE_DISPLAY_DX5)
 						FlightSurface_Lock();
 					tie_updatescreen();
-					if (TieClassicDisplay_UsesDx5())
+					if (TIE_DISPLAY_DX5)
 						FlightSurface_Unlock();
 					rendered = true;
 				} else {
@@ -2325,10 +2325,10 @@ bool tie_doframe(void) {
 						tickcounter += (uint16_t)xtimer_time_elapsed();
 						tickcounter += frameticks;
 					} else {
-						if (TieClassicDisplay_UsesDx5())
+						if (TIE_DISPLAY_DX5)
 							FlightSurface_Lock();
 						tie_updatescreen();
-						if (TieClassicDisplay_UsesDx5())
+						if (TIE_DISPLAY_DX5)
 							FlightSurface_Unlock();
 						rendered = true;
 						acceleratedtimectr = acceleratedtimesetting;
@@ -2339,10 +2339,10 @@ bool tie_doframe(void) {
 			fastforwardtimer -= (int16_t)frameticks;
 		} else {
 			if (acceleratedtimesetting <= 1u) {
-				if (TieClassicDisplay_UsesDx5())
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Lock();
 				tie_updatescreen();
-				if (TieClassicDisplay_UsesDx5())
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Unlock();
 				rendered = true;
 			} else {
@@ -2351,10 +2351,10 @@ bool tie_doframe(void) {
 					tickcounter += (uint16_t)xtimer_time_elapsed();
 					tickcounter += frameticks;
 				} else {
-					if (TieClassicDisplay_UsesDx5())
+					if (TIE_DISPLAY_DX5)
 						FlightSurface_Lock();
 					tie_updatescreen();
-					if (TieClassicDisplay_UsesDx5())
+					if (TIE_DISPLAY_DX5)
 						FlightSurface_Unlock();
 					rendered = true;
 					acceleratedtimectr = acceleratedtimesetting;
@@ -2364,11 +2364,11 @@ bool tie_doframe(void) {
 		}
 	} else {
 		if (acceleratedtimesetting <= 1u) {
-			if (TieClassicDisplay_UsesDx5())
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 			tie_updatescreen();
 			panel_updatepanel();
-			if (TieClassicDisplay_UsesDx5())
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Unlock();
 			rendered = true;
 		} else {
@@ -2377,11 +2377,11 @@ bool tie_doframe(void) {
 				tickcounter += (uint16_t)xtimer_time_elapsed();
 				tickcounter += frameticks;
 			} else {
-				if (TieClassicDisplay_UsesDx5())
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Lock();
 				tie_updatescreen();
 				panel_updatepanel();
-				if (TieClassicDisplay_UsesDx5())
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Unlock();
 				rendered = true;
 				acceleratedtimectr = acceleratedtimesetting;
@@ -2419,7 +2419,7 @@ bool tie_doframe(void) {
 			fsfx_checkblastqueue();
 		fsfx_checktieflyby();
 	}
-	if (rendered && TieClassicDisplay_UsesDx5()) {
+	if (rendered && TIE_DISPLAY_DX5) {
 		FrontendDisplay_PresentFrame();
 		FrontendDisplay_BlitOffscreenToRenderSurface();
 	}
@@ -2437,7 +2437,7 @@ void tie_updatescreen(void) {
 	int16_t i;
 
 #ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Logic()) {
+	if (TIE_FLIGHT_TIE98) {
 		/* PORT: keep host-only frame state outside recovered TIE98 TIE_Update_Screen. */
 		TieBillboardCapture_BeginTick();
 		/* PORT: TIE98 rebuilds its hardware palette table when DirectDraw's
@@ -2619,7 +2619,7 @@ void tie_updatescreen(void) {
 				if (genus_v == GENUS_GATE)
 					lightflag = 0;
 				fview_newcalcrotate(obj->roll, obj->heading, obj->pitch, 0, obj);
-				if (TieProfile_UsesTie98Logic()) {
+				if (TIE_FLIGHT_TIE98) {
 					/* PORT: native OPT craft are emitted through the snapshot. */
 				} else if (genus_v == GENUS_GATE) {
 					gate_drawtraininggate((uint16_t)obj_iter);
@@ -2745,21 +2745,11 @@ void tie_simulator(int replay_mode) {
 	int16_t i;
 #ifdef TIE_MODERN
 	TieSimulatorTask* continuation = landru_task_top();
-	/* Re-read after INIT activates the flight display: the frontend display
-	 * is still active on entry. */
-	bool tie98_display = TieClassicDisplay_UsesDx5();
-	const bool tie98_logic = TieProfile_UsesTie98Logic();
 	saved_drawbackdrop = continuation->saved_drawbackdrop;
 	saved_drawdebris = continuation->saved_drawdebris;
 	saved_master_vol = continuation->saved_master_vol;
 	post_mission_ui = continuation->post_mission_ui;
 	if (continuation->phase == TIE_SIM_PHASE_INIT)
-#elif defined(TIE98)
-	const bool tie98_display = true;
-	const bool tie98_logic = true;
-#else
-	const bool tie98_display = false;
-	const bool tie98_logic = false;
 #endif
 	{
 #ifdef TIE_MODERN
@@ -2767,7 +2757,6 @@ void tie_simulator(int replay_mode) {
 			continuation->next_step = LANDRU_TASK_STEP_DONE;
 			return;
 		}
-		tie98_display = TieClassicDisplay_UsesDx5();
 #endif
 		deadflag_EB76C = 0;
 		deadflag_EB774 = 1;
@@ -2787,10 +2776,10 @@ void tie_simulator(int replay_mode) {
 
 		tie_initflightresolution();
 		rtsvga2_blankVGA();
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Lock();
 		rtsvga2_initgraphVGA();
-		if (tie98_display) {
+		if (TIE_DISPLAY_DX5) {
 			FlightSurface_Unlock();
 		}
 		feinput_setupgraphics(3u);
@@ -2800,26 +2789,26 @@ void tie_simulator(int replay_mode) {
 		palette_cycle_user = 1;
 		colorcycleuserflag = 1;
 
-		if (tie98_display) {
+		if (TIE_DISPLAY_DX5) {
 			maingameflag = 1;
 			FlightSurface_Lock();
 		}
 		fediskio_Init_Buffers_and_Fonts();
-		if (tie98_display) {
+		if (TIE_DISPLAY_DX5) {
 			FlightSurface_Unlock();
 			maingameflag = 0;
 			FrontendDisplay_BlitOffscreenToRenderSurface();
 			FrontendDisplay_PresentFrame();
 		}
 		mapiconsloaded = 0;
-		if (!tie98_logic) {
+		if (!TIE_FLIGHT_TIE98) {
 			fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "VGA.PAC", xtransdataptr);
 			buildpalette(xtransdataptr, 64, 192);
 		}
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Lock();
 		feinput_setupinputdevices();
-		if (tie98_display)
+		if (TIE_DISPLAY_DX5)
 			FlightSurface_Unlock();
 
 		if (special_features_flag) {
@@ -2841,7 +2830,7 @@ void tie_simulator(int replay_mode) {
 		lightX = 18000;
 		lightY = -18000;
 
-		lightZ = tie98_logic ? 18000 : -18000;
+		lightZ = TIE_FLIGHT_EDITION(-18000, 18000);
 		colorcycleflag = 1;
 #ifdef TIE_MODERN
 		TieInflightOptions_Apply();
@@ -2858,7 +2847,7 @@ void tie_simulator(int replay_mode) {
 			hyperspaceflag = 0;
 			entercombatflag = 0;
 			colorcycleuserflag = 0;
-			if (tie98_display) {
+			if (TIE_DISPLAY_DX5) {
 #ifdef TIE_MODERN
 				Tie98StarColors_Invalidate();
 #endif
@@ -2893,17 +2882,17 @@ void tie_simulator(int replay_mode) {
 			panelflag = 0;
 			replayavailable = 0;
 
-			if (tie98_display)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 			create_loadmission(missionfilename);
-			if (tie98_display) {
+			if (TIE_DISPLAY_DX5) {
 				FlightSurface_Unlock();
 				FrontendDisplay_BlitOffscreenToRenderSurface();
 				FrontendDisplay_PresentFrame();
 			}
 			fediskio_loadspecies();
 			gamesnd_game_Open_iMuse();
-			if (tie98_display) {
+			if (TIE_DISPLAY_DX5) {
 #ifdef TIE_MODERN
 				Tie98StarColors_Invalidate();
 #endif
@@ -2954,10 +2943,10 @@ void tie_simulator(int replay_mode) {
 					transitions_on && spec_data[pstate.player_spec_num].has_hyperdrive) {
 					saved_drawbackdrop = drawbackdropflag;
 					saved_drawdebris = drawdebrisflag;
-					if (tie98_display)
+					if (TIE_DISPLAY_DX5)
 						FlightSurface_Lock();
 					create_createhyperin();
-					if (tie98_display)
+					if (TIE_DISPLAY_DX5)
 						FlightSurface_Unlock();
 					hyperspaceflag = 2;
 					colorcycleuserflag = 0;
@@ -2979,10 +2968,10 @@ void tie_simulator(int replay_mode) {
 				species_table[115].load_flags &= ~0x10u;
 				species_table[116].load_flags &= ~0x10u;
 				hyperspaceflag = 0;
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Lock();
 				create_loadmission(missionfilename);
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Unlock();
 #endif
 				}
@@ -2995,15 +2984,15 @@ void tie_simulator(int replay_mode) {
 				species_table[115].load_flags &= ~0x10u;
 				species_table[116].load_flags &= ~0x10u;
 				hyperspaceflag = 0;
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Lock();
 				create_loadmission(missionfilename);
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Unlock();
 			}
 #endif
 
-			if (tie98_display)
+			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
 #ifdef TIE_MODERN
 			TIE_FLIGHT_TRACE_BEGIN_MISSION(missionfilename);
@@ -3012,7 +3001,7 @@ void tie_simulator(int replay_mode) {
 #ifdef TIE_MODERN
 			TieFlightRuntime_ResetTiming();
 #endif
-			if (tie98_display) {
+			if (TIE_DISPLAY_DX5) {
 				FlightSurface_Unlock();
 				FrontendDisplay_BlitOffscreenToRenderSurface();
 				FrontendDisplay_PresentFrame();
@@ -3021,11 +3010,11 @@ void tie_simulator(int replay_mode) {
 
 			colorcycleuserflag = 0;
 			if (mission.train_craft_type) {
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Lock();
 				gate_createtraininggates();
 				gate_settraininglevel(mission.train_level);
-				if (tie98_display)
+				if (TIE_DISPLAY_DX5)
 					FlightSurface_Unlock();
 			}
 #ifdef TIE_MODERN
@@ -3136,7 +3125,7 @@ void tie_simulator(int replay_mode) {
 					int32_t bottom;
 					imuse_set_master_vol(im, 0);
 					imuse_pause(im);
-					if (tie98_display)
+					if (TIE_DISPLAY_DX5)
 						FlightSurface_Lock();
 					festring_setfontsize(1);
 					top = (screenYRes >> 1) - (int32_t)fontheight - (screenYRes >> 3);
@@ -3156,7 +3145,7 @@ void tie_simulator(int replay_mode) {
 					festring_setcursor((int16_t)(margin + 1), (int16_t)(top + (int32_t)fontheight / 2));
 					festring_outstringcenter((const uint8_t*)viewfilmstr);
 					unblank();
-					if (tie98_display) {
+					if (TIE_DISPLAY_DX5) {
 						FlightSurface_Unlock();
 						FrontendDisplay_BlitOffscreenToRenderSurface();
 						FrontendDisplay_PresentFrame();
@@ -3263,7 +3252,7 @@ void tie_simulator(int replay_mode) {
 #endif
 	imuse_stop_all_sounds(im);
 	imuse_filelist_unload_all(im);
-	if (tie98_logic) {
+	if (TIE_FLIGHT_TIE98) {
 		colorcycleflag = 0;
 		fediskio_FreeFlightHandles();
 #ifdef TIE_MODERN
@@ -3288,7 +3277,7 @@ void tie_simulator(int replay_mode) {
 		fediskio_FreeFlightHandles();
 #ifdef TIE_MODERN
 		TieFlightRuntime_ReleaseRecoveredResources();
-		if (TieProfile_UsesTie98Frontend())
+		if (TIE_FRONTEND_TIE98)
 			maingameflag = 0;
 		if (!TieClassicDisplay_ActivateFrontend())
 			xerror_Set_Landru_Error(12);

@@ -1,6 +1,7 @@
 #include "tie/shellext.h"
 #include "tie/asl.h"
 #include "tie/computer.h"
+#include "tie/edition.h"
 #include "tie/shell.h"
 #include "tie/tie.h"
 #include "tie_runtime/audio/imuse_session.h"
@@ -68,7 +69,7 @@ void shellext_Open_Landru(void* extern_mem, int16_t use_timer, int16_t use_scrip
 	if (xerror_Is_Landru_Error())
 		return;
 	/* Retail front-end: Alt+O (key 0x1800) in xio_Poll_Input dumps a PCX. */
-	if (TieProfile_UsesTie98Frontend())
+	if (TIE_FRONTEND_TIE98)
 		xio_Set_Screenshot_Hook((void (*)(void))FrontendDisplay_CaptureScreenshot);
 	else
 		xio_Set_Screenshot_Hook((void (*)(void))rtsvga2_takeScreenshot);

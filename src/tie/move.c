@@ -3,6 +3,7 @@
 #include "tie/collide.h"
 #include "tie/create.h"
 #include "tie/draw.h"
+#include "tie/edition.h"
 #include "tie/fview.h"
 #include "tie/gate.h"
 #include "tie/laser.h"
@@ -168,7 +169,7 @@ void move_moveobjects(void) {
 						 * ember. No RNG consumption in retail. */
 						uint16_t bound = species_table[obj->ship_idx].bound_hwidth;
 						if (bound > 0x578) {
-							if (TieProfile_UsesTie98Logic()) {
+							if (TIE_FLIGHT_TIE98) {
 								collide_makeobjectexplosion(i, (char)130);
 								obj->damage_state = (uint8_t)(modelbounds_getmaxextent(obj->ship_idx) >> 9);
 							} else {
@@ -482,7 +483,7 @@ void move_moveobjects(void) {
 						rotatedx = worldlocx;
 						rotatedy = worldlocy;
 						rotatedz = worldlocz;
-					} else if (TieProfile_UsesTie98Logic()) {
+					} else if (TIE_FLIGHT_TIE98) {
 						/* TIE98 0x455942-0x455A70. */
 						if (sub_obj != 0xFFFF) {
 							const uint8_t model_type = objects[target_idx].ship_idx;

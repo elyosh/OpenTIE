@@ -2,6 +2,7 @@
 #include "tie/collide.h"
 #include "tie/create.h"
 #include "tie/draw.h"
+#include "tie/edition.h"
 #include "tie/laser.h"
 #include "tie/math2.h"
 #include "tie/mission.h"
@@ -140,12 +141,12 @@ int16_t paifight_gethullcomponent(uint16_t target_obj_idx) {
 		return 0;
 
 	model_type = objects[target_obj_idx].ship_idx;
-	if (!TieProfile_UsesTie98Logic())
+	if (!TIE_FLIGHT_TIE98)
 		draw_lockshipfileptrs(model_type);
-	num_meshes = TieProfile_UsesTie98Logic() ? modelmesh_getcount(model_type) : objectblockptr->num_meshes;
+	num_meshes = TIE_FLIGHT_EDITION(objectblockptr->num_meshes, modelmesh_getcount(model_type));
 	for (m = 0; m < num_meshes; ++m) {
 		uint16_t mesh_type =
-			TieProfile_UsesTie98Logic() ? modelmesh_gettype(model_type, m) : componentblockptr[m].mesh_type;
+			TIE_FLIGHT_EDITION(componentblockptr[m].mesh_type, modelmesh_gettype(model_type, m));
 		if (mesh_type == 1 || mesh_type == 3) {
 			if (hull_count < sizeof(hull_list))
 				hull_list[hull_count] = (uint8_t)m;
