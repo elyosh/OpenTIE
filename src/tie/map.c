@@ -502,10 +502,11 @@ static void Set_VR_Talk_To_Text(int16_t person) {
 
 // FUNCTION: TIE95 0x769DC
 // FUNCTION: TIE98 0x44FBE0
-int16_t Count_VR_Debrief_Header(void) { return 1; }
-// FUNCTION: TIE95 0x769DC FOLDED
+static int16_t Count_VR_Debrief_Header(void) { return 1; }
+/* TIE95 has no separate body: its callers use Count_VR_Debrief_Header's
+ * identical code at 0x769DC. */
 // FUNCTION: TIE98 0x450280
-int16_t Count_VR_Debrief_Goals(void) { return 1; }
+static int16_t Count_VR_Debrief_Goals(void) { return 1; }
 
 // FUNCTION: TIE95 0x770BC
 // FUNCTION: TIE98 0x450590

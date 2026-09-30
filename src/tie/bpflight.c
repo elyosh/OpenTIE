@@ -1,5 +1,7 @@
 #include "tie/bpflight.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/runtime/flight_task.h"
+#endif
 
 #include "landru/vesa.h"
 #include "tie/backdrp2.h"
@@ -521,9 +523,11 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 // FUNCTION: TIE95 0x79414
 void bpflight_Close_Flight_Engine(void) {
 	TieFlightAssets_ClearPreviewModels();
+#ifdef TIE_MODERN
 	/* The host cache owns TIE98 preview models beyond the active pointers. */
 	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98)
 		TieFlightRuntime_ReleaseRecoveredResources();
+#endif
 	free(xtransdata);
 	xtransdata = NULL;
 	free(bpflight_fltobj_data);

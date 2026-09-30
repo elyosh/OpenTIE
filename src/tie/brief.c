@@ -101,15 +101,32 @@ static void iuser_Notice(Input* input, int32_t time);
  * View update callback
  * ================================================================ */
 
-/* Show the cursor on the first view update. */
+/* On the first view update, show the cursor and the pilot-restored notice. */
 // FUNCTION: TIE95 0x7316C
 // FUNCTION: TIE98 0x406520
 void brief_end_View(int32_t frame_num) {
-	if (frame_num)
-		return;
-
-	if (!xcursor_Is_Cursor_Visible())
-		xcursor_Show_Cursor();
+	if (frame_num == 0) {
+		if (!xcursor_Is_Cursor_Visible())
+			xcursor_Show_Cursor();
+#ifndef TIE_MODERN
+		/* Modern builds open the notice through the briefing task. */
+		if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
+			Input* notice = Build_Notice(NULL);
+#ifdef TIE98
+			xio_Set_Mouse_Position(330, 260);
+#else
+			xio_Set_Mouse_Position(190, 110);
+#endif
+			xdialog_Handle_Dialog_View(notice);
+			xdialog_Clear_Dialog_Exit();
+#ifdef TIE98
+			xio_Set_Mouse_Position(416, 302);
+#else
+			xio_Set_Mouse_Position(218, 126);
+#endif
+		}
+#endif
+	}
 }
 
 /* ================================================================

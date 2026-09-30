@@ -13,7 +13,9 @@
 #include "tie_runtime/flight_assets/model_types.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/runtime/flight_task.h"
+#endif
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/runtime/replay_format.h"
 #include "tie_runtime/runtime/replay_viewer_task.h"

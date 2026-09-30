@@ -834,7 +834,8 @@ int16_t paiorder_makedisabledorder(void) {
  *                   Slot 29 — neartargetorder
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x3E960 FOLDED
+/* TIE95 has no separate body: its order table points slot 29 at
+ * paiorder_returnboardorder's identical code at 0x3E960. */
 // FUNCTION: TIE98 0x4622C0
 int16_t paiorder_neartargetorder(void) {
 	pai_targetdistance();
