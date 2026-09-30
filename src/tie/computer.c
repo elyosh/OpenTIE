@@ -852,16 +852,8 @@ static void xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 
 	/* Current pilot info */
 	xrect_Copy_Rect(&tr, (Rect*)&backup_rect[7]);
-#ifdef TIE_MODERN
-	tr.top += TieProfile_UsesTie98Frontend() ? 5 : 2;
-	tr.bottom = tr.top + (TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(font_id) : 8);
-#elif defined(TIE98)
-	tr.top += 5;
-	tr.bottom = tr.top + xfont_Get_FontID_Height(font_id);
-#else
-	tr.top += 2;
-	tr.bottom = tr.top + 8;
-#endif
+	tr.top += TIE_FRONTEND_EDITION(2, 5);
+	tr.bottom = tr.top + TIE_FRONTEND_EDITION(8, xfont_Get_FontID_Height(font_id));
 
 	textext_Copy_Text(name, pilot_record.rank + txtCompRankCadet);
 	strcat(name, " ");
@@ -936,13 +928,7 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 	strcat(str1, str2);
 	xfont_Print_Centered_Text(str1, r, color, font_id);
 	xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
-#ifdef TIE_MODERN
-	xrect_Offset_Rect(r, 0, TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(font_id) + 2 : 10);
-#elif defined(TIE98)
-	xrect_Offset_Rect(r, 0, xfont_Get_FontID_Height(font_id) + 2);
-#else
-	xrect_Offset_Rect(r, 0, 10 + 0);
-#endif
+	xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id) + 2));
 
 	/* Score + Skill */
 	textext_Copy_Text(str1, txtCompInfoScore);
@@ -1038,13 +1024,7 @@ static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color
 		shipext_Get_Ship_Name(str1, i, 0, 0);
 		xfont_Print_Centered_Text(str1, r, color, font_id);
 		xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
-#ifdef TIE_MODERN
-		xrect_Offset_Rect(r, 0, TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(font_id) + 2 : 10);
-#elif defined(TIE98)
-		xrect_Offset_Rect(r, 0, xfont_Get_FontID_Height(font_id) + 2);
-#else
-		xrect_Offset_Rect(r, 0, 10 + 0);
-#endif
+		xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id) + 2));
 
 		if (pilot_record.train_score[i]) {
 			if (pilot_record.train_max_level[i] < 4)
@@ -1109,13 +1089,7 @@ static void Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color
 		textext_Cat_Text(str1, pilot_record.battle_status[i] + txtCompInfoBattle);
 		xfont_Print_Centered_Text(str1, r, color, font_id);
 		xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
-#ifdef TIE_MODERN
-		xrect_Offset_Rect(r, 0, TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(font_id) + 2 : 10);
-#elif defined(TIE98)
-		xrect_Offset_Rect(r, 0, xfont_Get_FontID_Height(font_id) + 2);
-#else
-		xrect_Offset_Rect(r, 0, 10 + 0);
-#endif
+		xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id) + 2));
 
 		max_missions = pilot_record.battle_cursor[i] + 1;
 		if (shipext_Get_Tour_Battle_Size(i) < max_missions)
@@ -1180,14 +1154,7 @@ static void Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color)
 			textext_Copy_Text(str1, txtCompInfoVictories);
 			xfont_Print_Centered_Text(str1, r, color, font_id);
 			xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
-#ifdef TIE_MODERN
-			xrect_Offset_Rect(r, 0,
-							  TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(font_id) + 2 : 10);
-#elif defined(TIE98)
-			xrect_Offset_Rect(r, 0, xfont_Get_FontID_Height(font_id) + 2);
-#else
-			xrect_Offset_Rect(r, 0, 10 + 0);
-#endif
+			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id) + 2));
 			count++;
 		}
 
@@ -1224,16 +1191,8 @@ static void xdraw_Computer_Info(Rect* r, Rect* clip_r) {
 				   TIE_FRONTEND_EDITION(273, 547), TIE_FRONTEND_EDITION(117, 290));
 	xcanvas_Set_Drawing_Canvas_Clip(&clip_tr);
 	xrect_Copy_Rect(&tr, &clip_tr);
-#ifdef TIE_MODERN
-	tr.bottom = tr.top + (TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(2) : 10);
-	xrect_Offset_Rect(&tr, 0, -(TieProfile_UsesTie98Frontend() ? 273 : 110) * pilot_info_page);
-#elif defined(TIE98)
-	tr.bottom = tr.top + xfont_Get_FontID_Height(2);
-	xrect_Offset_Rect(&tr, 0, -273 * pilot_info_page);
-#else
-	tr.bottom = tr.top + 10;
-	xrect_Offset_Rect(&tr, 0, -110 * pilot_info_page);
-#endif
+	tr.bottom = tr.top + TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2));
+	xrect_Offset_Rect(&tr, 0, -TIE_FRONTEND_EDITION(110, 273) * pilot_info_page);
 	start_top = tr.top;
 
 	Draw_Computer_Header_Info(&tr, color, back_color);

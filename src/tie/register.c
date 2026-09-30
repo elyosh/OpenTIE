@@ -1340,16 +1340,8 @@ static void Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 		xfont_Print_Centered_Text(display_name, &tr, ci + 248, 1);
 #endif
 
-#ifdef TIE_MODERN
-		status_offset = (TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(3) : 6);
-		status_phase = TieProfile_UsesTie98Frontend() ? status_offset + 1 : 6;
-#elif defined(TIE98)
-		status_offset = xfont_Get_FontID_Height(3);
-		status_phase = status_offset + 1;
-#else
-		status_offset = 6;
-		status_phase = 6;
-#endif
+		status_offset = TIE_FRONTEND_EDITION(6, xfont_Get_FontID_Height(3));
+		status_phase = TIE_FRONTEND_EDITION(6, status_offset + 1);
 		if (phase >= 16 && pilot_record.exit_status && inner_phase >= status_phase) {
 			xrect_Offset_Rect(&tr, 0, status_offset);
 			xfont_Print_Centered_Text(textext_Get_Text((TIEText)(pilot_record.exit_status + 10)), &tr,
