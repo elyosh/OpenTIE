@@ -169,6 +169,8 @@ int user_is_paused(void);
 void user_inputforplane(void);
 
 /* Replay-playback tick (advance counters, page/stop buffer). */
+int32_t user_inflightinfo(int32_t screen_id);
+
 void user_nextreplaycount(void);
 
 /* Replay-record tick (spool / abort on full buffer). */

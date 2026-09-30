@@ -1,4 +1,10 @@
 #include "tie/user.h"
+#include "tie/help.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/help_task.h"
+#include "tie_runtime/runtime/inflight_info_task.h"
+#include "tie_runtime/runtime/wingman_task.h"
+#endif
 #ifdef TIE_MODERN
 #include "tie_runtime/storage/string_table.h"
 #endif
@@ -79,6 +85,9 @@
 #include "tie_runtime/runtime/flight_screen.h"
 #include "tie_runtime/timing/flight_timing.h"
 
+#ifdef TIE_MODERN
+#include <landru/task.h>
+#endif
 #include <imuse/hilevel.h>
 #include <imuse/lolevel.h>
 #include <math.h>
@@ -1712,22 +1721,357 @@ void user_userinterface(void) {
  *                  user_inflightinfo (info/options room)              *
  * ================================================================== */
 
-/* Task form of user_inflightinfo. screen_id ∈ {0 goals, 1 map,
- * 2 messages, 3 damage, 4 wingmen, 5 help, 6 options}. Binary
- * 0x5F5E4. Phases:
- *   BEGIN       — simulator-mission gate (returns 0xFFFF cancel for
- *                 screens 0..4 in simulator missions); replay viewmode
- *                 deserializes the 4 side-payload records and exits;
- *                 otherwise pauses iMUSE and falls through to DISPATCH.
- *   DISPATCH    — load + paint the panel for `screen`, push the
- *                 appropriate sub-room task; transition AFTER_SUB.
- *   AFTER_SUB   — read user_submodal_result, fold mission.end_flag /
- *                 sub == 0 / sub == 0xFFFF / sub != 1 / sub == 1 into
- *                 the screen carousel state machine; loop to DISPATCH
- *                 or fall through to FINISH.
- *   FINISH      — blank + (if recording) write 4 side-payload records
- *                 + restore pilotview / iMUSE; pop with the final
- *                 screen index latched in user_submodal_result. */
+// FUNCTION: TIE95 0x61544
+// FUNCTION: TIE98 0x498430
+int32_t user_inflightinfo(int32_t screen_id) {
+	uint16_t saved_master_vol;
+	uint16_t old_target = 0;
+	int16_t retreat_flag;
+	int16_t exit_flag;
+	int32_t screen;
+	uint16_t sub;
+#ifdef TIE_MODERN
+	InflightInfoTask* continuation = landru_task_top();
+	const bool tie98_display = TieClassicDisplay_UsesDx5();
+	const bool tie98_logic = TieProfile_UsesTie98Logic();
+	saved_master_vol = continuation->saved_master_vol;
+	retreat_flag = continuation->retreat_flag;
+	exit_flag = continuation->exit_flag;
+	screen = continuation->screen;
+	old_target = continuation->old_target;
+	if (continuation->phase == INFLIGHT_PHASE_BEGIN)
+#elif defined(TIE98)
+	const bool tie98_display = true;
+	const bool tie98_logic = true;
+#else
+	const bool tie98_display = false;
+	const bool tie98_logic = false;
+#endif
+	{
+		if (mission.train_craft_type && (uint16_t)screen_id <= 4u) {
+			rtsvga2_invalidatepagecache();
+#ifdef TIE_MODERN
+			continuation->finished = true;
+#endif
+			return 0xFFFF;
+		}
+		if (replayviewmode) {
+#ifdef TIE_MODERN
+			continuation->finished = true;
+			return TieInflightInfo_ReadReplay();
+#else
+
+			uint16_t* record = (uint16_t*)replayptr;
+			uint16_t i;
+			uint16_t value;
+			int32_t recorded_screen = (int16_t)record[3];
+			pstate.radar_target0 = (int16_t)record[0];
+			pstate.target_obj_idx = record[1];
+			inputkey = (int16_t)record[2];
+			replayptr = record + 4;
+			user_nextreplaycount();
+			for (i = 0; i < 10; i += 2) {
+				value = *(uint16_t*)replayptr;
+				pstate.subsystem_repair_priority[i] = (uint8_t)(value >> 8);
+				pstate.subsystem_repair_priority[i + 1] = (uint8_t)value;
+				replayptr = (uint16_t*)replayptr + 1;
+				if (((i + 2) & 7) == 0)
+					user_nextreplaycount();
+			}
+			if (i & 7) {
+				while (i & 7) {
+					replayptr = (uint16_t*)replayptr + 1;
+					i += 2;
+				}
+				user_nextreplaycount();
+			}
+			record = (uint16_t*)replayptr;
+			starshipexplodetail = record[0];
+			value = record[1];
+			drawdebrisflag = value & 15;
+			value >>= 4;
+			drawbackdropflag = value & 15;
+			value >>= 4;
+			stardetaillevel = value & 15;
+			starshipdetail = value >> 4;
+			value = record[2];
+			gouraudflag = (uint8_t)value;
+			value >>= 8;
+			drawmarkingsflag = value & 15;
+			shipdetailvalue = value >> 4;
+			value = record[3];
+			hyperspacedetail = (uint8_t)value;
+			shipdetailpolycnt = value >> 8;
+			replayptr = record + 4;
+			user_nextreplaycount();
+			record = (uint16_t*)replayptr;
+			value = record[0];
+			cheatingflag = value & 15;
+			value >>= 4;
+			inflight_unlimited = value & 15;
+			value >>= 4;
+			inflight_invulnerable = value & 15;
+			inflight_collision = value >> 4;
+			soundvolflag = (uint8_t)record[1];
+			inflight_sound_vol = (int8_t)(record[1] >> 8);
+			musicvolflag = (uint8_t)record[2];
+			inflight_music_vol = (int8_t)(record[2] >> 8);
+			inflight_speech_vol = (int8_t)record[3];
+			replayptr = record + 4;
+			user_nextreplaycount();
+			rtsvga2_invalidatepagecache();
+			return recorded_screen;
+
+#endif
+		}
+		saved_master_vol = (uint16_t)imuse_get_master_vol(im);
+		retreat_flag = 0;
+		exit_flag = 0;
+		screen = screen_id;
+		if (tie98_logic) {
+			mapflag = 1;
+			FSFX_UpdatePlayerEngineSound();
+			mapflag = 0;
+		}
+		imuse_set_master_vol(im, 0);
+		imuse_pause(im);
+#ifdef TIE_MODERN
+		continuation->saved_master_vol = saved_master_vol;
+		continuation->retreat_flag = retreat_flag;
+		continuation->exit_flag = exit_flag;
+		continuation->screen = screen;
+		continuation->old_target = old_target;
+		continuation->phase = INFLIGHT_PHASE_DISPATCH;
+		return 0;
+#endif
+	}
+	while (!exit_flag) {
+#ifdef TIE_MODERN
+		if (continuation->phase == INFLIGHT_PHASE_DISPATCH)
+#endif
+		{
+			int panel_idx;
+#ifdef TIE_MODERN
+			if (screen == 6) {
+				TieRuntime_RequestSettingsMenu();
+				continuation->exit_flag = 1;
+				continuation->phase = INFLIGHT_PHASE_FINISH;
+				return 0;
+			}
+			TieFlightScreen_SetActive(screen < 0 || screen > 6 ? TIE_FLIGHT_SCREEN_NORMAL
+															   : (TieFlightScreen)(screen + 1));
+#endif
+			if (tie98_display)
+				FlightSurface_Lock();
+			panel_idx = (int)(uint16_t)(screen + 21);
+			if (!panelviewptrs[panel_idx].handle) {
+				temppanelptr = newbuf;
+				panel_loadcontrolpanel(panelviewdefs[panel_idx].name, &panelviewptrs[panel_idx].image, 3u);
+			}
+			buildpalette((const uint8_t*)panelviewptrs[panel_idx].palette, 0, 64);
+			drawshape(panelviewptrs[panel_idx].image, 0, 0, 253, 0);
+			festring_showscreen();
+			if (tie98_display)
+				FlightSurface_Unlock();
+			sub = 0;
+#ifdef TIE_MODERN
+			user_submodal_result = 0;
+#endif
+			switch ((int16_t)screen) {
+				case 0:
+					if (!mission.train_craft_type) {
+#ifdef TIE_MODERN
+						TieGoals_Begin();
+#else
+						sub = (uint16_t)goals_missiongoalsroom();
+#endif
+					}
+					break;
+				case 1:
+					if (!mission.train_craft_type) {
+						old_target = pstate.target_obj_idx;
+#ifdef TIE_MODERN
+						TieMaproom_Begin();
+#else
+						sub = (uint16_t)maproom_maproom();
+#endif
+					}
+					break;
+				case 2:
+					if (!mission.train_craft_type) {
+#ifdef TIE_MODERN
+						TieMsgRoom_Begin();
+#else
+						sub = (uint16_t)msgroom_messageroom();
+#endif
+					}
+					break;
+				case 3:
+					if (!mission.train_craft_type) {
+#ifdef TIE_MODERN
+						TieDamage_Begin();
+#else
+						sub = (uint16_t)damage_damageroom();
+#endif
+					}
+					break;
+				case 4:
+					if (!mission.train_craft_type) {
+#ifdef TIE_MODERN
+						TieWingman_Begin();
+#else
+						sub = (uint16_t)wingman_wingmanroom();
+#endif
+					}
+					break;
+				case 5:
+#ifdef TIE_MODERN
+					TieHelp_Begin(retreat_flag);
+#else
+					sub = (uint16_t)help_helproom(retreat_flag);
+#endif
+					break;
+				case 6:
+#ifndef TIE_MODERN
+					sub = (uint16_t)option_optionsroom(0);
+#endif
+					break;
+				default:
+					break;
+			}
+#ifdef TIE_MODERN
+			continuation->saved_master_vol = saved_master_vol;
+			continuation->retreat_flag = retreat_flag;
+			continuation->exit_flag = exit_flag;
+			continuation->screen = screen;
+			continuation->old_target = old_target;
+			continuation->phase = INFLIGHT_PHASE_AFTER_SUB;
+			return 0;
+#endif
+		}
+#ifdef TIE_MODERN
+		sub = (uint16_t)user_submodal_result;
+#endif
+		if (screen == 1 && !mission.train_craft_type && old_target != pstate.target_obj_idx) {
+			uint16_t new_target = pstate.target_obj_idx;
+			pstate.target_obj_idx = old_target;
+			user_setnewtarget(new_target);
+		}
+		if (mission.end_flag) {
+			festring_setfontsize(2);
+			imuse_set_master_vol(im, saved_master_vol);
+			imuse_resume(im);
+			rtsvga2_invalidatepagecache();
+#ifdef TIE_MODERN
+			continuation->finished = true;
+#endif
+			return screen;
+		}
+		if (sub == 0) {
+			exit_flag = 1;
+		} else if (sub == 0xFFFF) {
+			--screen;
+			if (screen & 0x8000)
+				screen = 6;
+			if (mission.train_craft_type && screen == 4)
+				screen = 6;
+			retreat_flag = 1;
+		} else if (sub != 1) {
+			screen = -1;
+			exit_flag = 1;
+		} else {
+			if (++screen > 6)
+				screen = mission.train_craft_type ? 5 : 0;
+			retreat_flag = 0;
+		}
+#ifdef TIE_MODERN
+		continuation->saved_master_vol = saved_master_vol;
+		continuation->retreat_flag = retreat_flag;
+		continuation->exit_flag = exit_flag;
+		continuation->screen = screen;
+		continuation->old_target = old_target;
+		continuation->phase = exit_flag ? INFLIGHT_PHASE_FINISH : INFLIGHT_PHASE_DISPATCH;
+		return 0;
+#endif
+	}
+	blank();
+#ifdef TIE_MODERN
+	TieInflightInfo_RecordRoom(screen);
+#else
+
+	if (recordingreplay) {
+		uint16_t* record = (uint16_t*)replayptr;
+		uint16_t i;
+		record[0] = (uint16_t)pstate.radar_target0;
+		record[1] = pstate.target_obj_idx;
+		record[2] = (uint16_t)inputkey;
+		record[3] = (uint16_t)screen;
+		replayptr = record + 4;
+		user_nextreplaystore();
+		for (i = 0; i < 10; i += 2) {
+			*(uint16_t*)replayptr = (uint16_t)(pstate.subsystem_repair_priority[i + 1] +
+											   (pstate.subsystem_repair_priority[i] << 8));
+			replayptr = (uint16_t*)replayptr + 1;
+			if (((i + 2) & 7) == 0)
+				user_nextreplaystore();
+		}
+		if (i & 7) {
+			while (i & 7) {
+				*(uint16_t*)replayptr = 0;
+				replayptr = (uint16_t*)replayptr + 1;
+				i += 2;
+			}
+			user_nextreplaystore();
+		}
+		record = (uint16_t*)replayptr;
+		record[0] = starshipexplodetail;
+		record[1] = (uint16_t)(drawdebrisflag +
+							   16 * (drawbackdropflag + 16 * (stardetaillevel + 16 * starshipdetail)));
+		record[2] = (uint16_t)(gouraudflag + ((drawmarkingsflag + 16 * shipdetailvalue) << 8));
+		record[3] = (uint16_t)(hyperspacedetail + (shipdetailpolycnt << 8));
+		replayptr = record + 4;
+		user_nextreplaystore();
+		record = (uint16_t*)replayptr;
+		record[0] = (uint16_t)(cheatingflag + 16 * (inflight_unlimited +
+													16 * (inflight_invulnerable + 16 * inflight_collision)));
+		record[1] = (uint16_t)(soundvolflag + (inflight_sound_vol << 8));
+		record[2] = (uint16_t)(musicvolflag + (inflight_music_vol << 8));
+		record[3] = (uint16_t)(int16_t)inflight_speech_vol;
+		replayptr = record + 4;
+		user_nextreplaystore();
+	}
+
+#endif
+	{
+		uint16_t pilotview_restore;
+		festring_setfontsize(2);
+		if (camera.view_zoom_flag) {
+			camera.pilotview = 0xFF;
+			lastpilotpaneldraw = -1;
+			pilotview_restore = camera.view_heading_offset ? 20u : 18u;
+		} else {
+			pilotview_restore = (camera.view_target_obj == pstate.object_idx) ? camera.pilotview : 18u;
+			lastpilotpaneldraw = -1;
+			camera.pilotview = 0xFF;
+		}
+		panelrts_setnewpilotview(pilotview_restore);
+		msg_messageinit();
+		msg_messagerestore();
+		if (tie98_logic)
+			g_flightInitialTextureCacheFlushPending = 1;
+		fullupdateflag = 1;
+		imuse_set_master_vol(im, (int16_t)saved_master_vol);
+		imuse_resume(im);
+		/* Retail USER_inflightinfo @ 0x61a53: force the next
+		 * rtsvga2_setcurrentpage to re-program the VESA bank so the
+		 * cockpit panel and HUD regain their pages after the info room. */
+		rtsvga2_invalidatepagecache();
+	}
+#ifdef TIE_MODERN
+	continuation->finished = true;
+#endif
+	return screen;
+}
 
 /* ================================================================== *
  *              user_inputforplane  key-cluster helpers                *

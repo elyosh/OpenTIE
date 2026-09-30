@@ -21,7 +21,7 @@ extern uint8_t TieReplayMissionHeaderImage[456];
  *
  * Fronts both the per-mission input spool (`input.spl`, written by
  * `replayio_spoolreplayinput`) and the saved replay clip (`*.clp`,
- * written by `replay_savereplay_file`). The header rejects records created with
+ * written by `replay_savereplay`). The header rejects records created with
  * an incompatible payload or model index space.
  *
  * Layout (all little-endian, 16 bytes total):

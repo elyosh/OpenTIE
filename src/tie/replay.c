@@ -3,6 +3,9 @@
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/inflight_info_task.h"
 #include "tie_runtime/runtime/replay_save_task.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/replay_viewer_task.h"
+#endif
 
 #include "tie/create.h"
 #include "tie/fediskio.h"
@@ -48,6 +51,12 @@
 #include <imuse/hilevel.h>
 #include <imuse/lolevel.h>
 #include <stdint.h>
+#include <stdio.h>
+#ifdef TIE_MODERN
+#include <landru/task.h>
+#else
+#include <conio.h>
+#endif
 #include <string.h>
 
 /* --------------------------------------------------------------------------
@@ -772,11 +781,88 @@ void replay_calcreplayview(void) {
 
 // FUNCTION: TIE95 0x45078
 // FUNCTION: TIE98 0x4724E0
-// (file-write portion)
-uint16_t replay_savereplay_file(const uint8_t* name_input, const char* filename) {
+uint16_t replay_savereplay(void) {
+#ifdef TIE_MODERN
+	ReplaySaveTask* continuation = landru_task_top();
+	uint8_t* name_input = continuation->name_input;
+	char* filename = continuation->filename;
+#else
+	uint8_t name_input[40];
+	char filename[16];
+#endif
 	TieFile* clip_fp;
 	size_t i;
 	size_t m;
+#ifdef TIE_MODERN
+	continuation->waiting = false;
+	if (continuation->phase == REPLAY_SAVE_PHASE_BEGIN) {
+#endif
+		replay_replaymessage(MSG_ENTER_FILENAME);
+		name_input[0] = 0;
+		festring_setfontsize(1);
+#ifdef TIE_MODERN
+		continuation->phase = REPLAY_SAVE_PHASE_EDIT_NAME;
+	}
+	if (continuation->phase == REPLAY_SAVE_PHASE_EDIT_NAME) {
+#endif
+		if (tie_is_high_resolution_flight())
+			replay_editstring(126, 456, 8, name_input, 0x2C);
+		else
+			replay_editstring(74, 190, 8, name_input, 0x2C);
+#ifdef TIE_MODERN
+		if (continuation->editor_active || continuation->waiting)
+			return TIE_REPLAY_SAVE_PENDING;
+#endif
+		festring_setfontsize(2);
+		if (!name_input[0])
+			return MSG_REPLAY_NOT_SAVED;
+		strcpy(filename, (const char*)name_input);
+		strcat(filename, ".clp");
+#ifdef TIE_MODERN
+		continuation->phase = REPLAY_SAVE_PHASE_CHECK_FILE;
+	}
+	if (continuation->phase == REPLAY_SAVE_PHASE_CHECK_FILE) {
+		TieFile* existing = TieStorage_Open(TIE_FILE_ROOT_USER, filename, "rb");
+		if (existing) {
+			TieStorage_Close(existing);
+			if (TieClassicDisplay_UsesDx5())
+				FlightSurface_Lock();
+			replay_replaymessage(MSG_FILE_REPLACE);
+			if (TieClassicDisplay_UsesDx5()) {
+				FlightSurface_Unlock();
+				FrontendDisplay_PresentFrontSurface();
+				FrontendDisplay_PresentFrame();
+			}
+			continuation->phase = REPLAY_SAVE_PHASE_CONFIRM_REPLACE;
+			return TIE_REPLAY_SAVE_PENDING;
+		}
+		continuation->phase = REPLAY_SAVE_PHASE_WRITE;
+		return TIE_REPLAY_SAVE_PENDING;
+	}
+	if (continuation->phase == REPLAY_SAVE_PHASE_CONFIRM_REPLACE) {
+		int key;
+		if (!TieInput_KeyPending()) {
+			continuation->waiting = true;
+			return TIE_REPLAY_SAVE_PENDING;
+		}
+		key = TieInput_ReadKey();
+		if (key != 'y' && key != 'Y')
+			return MSG_REPLAY_NOT_SAVED;
+		continuation->phase = REPLAY_SAVE_PHASE_WRITE;
+		return TIE_REPLAY_SAVE_PENDING;
+	}
+#else
+	if (fediskio_tryopenfile(TIE_FILE_ROOT_USER, filename, "rb", 0)) {
+		int key;
+		fclose(fileptr);
+		replay_replaymessage(MSG_FILE_REPLACE);
+		key = (char)getch();
+		if (key != 'y' && key != 'Y')
+			return MSG_REPLAY_NOT_SAVED;
+	}
+#endif
+
+#ifdef TIE_MODERN
 
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, filename, "wb", 0))
 		return MSG_FILE_ERROR;
@@ -873,6 +959,88 @@ uint16_t replay_savereplay_file(const uint8_t* name_input, const char* filename)
 		++m;
 	}
 	return MSG_REPLAY_SAVED;
+#else
+
+	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, filename, "wb", 0))
+		return MSG_FILE_ERROR;
+
+	/* Clip preamble: little-endian u32 frame count + u16 seed. */
+	fputc((int)(replaytotalcnt & 0xFF), fileptr);
+	fputc((int)((replaytotalcnt >> 8) & 0xFF), fileptr);
+	fputc((int)((replaytotalcnt >> 16) & 0xFF), fileptr);
+	fputc((int)((replaytotalcnt >> 24) & 0xFF), fileptr);
+	fputc(replayrandomseed & 0xFF, fileptr);
+	fputc((replayrandomseed >> 8) & 0xFF, fileptr);
+
+	clip_fp = fileptr;
+	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, replaystartfile, "rb", 0)) {
+		fclose(fileptr);
+		fclose(clip_fp);
+		fediskio_delfile(filename);
+		return MSG_FILE_ERROR;
+	}
+
+	/* Retail walks savearraysizes as u32[] — full iteration, all 67 slots. */
+	for (i = 0; savearraysizes[i]; ++i) {
+		if (!replay_copybytesinfile((uint16_t)savearraysizes[i], fileptr, clip_fp)) {
+			fediskio_delfile(filename);
+			return MSG_FILE_ERROR;
+		}
+	}
+	if (!replay_copybytesinfile(0x36C0, fileptr, clip_fp) ||
+		!replay_copybytesinfile(0x5A0, fileptr, clip_fp) || !replay_copybytesinfile(0x70, fileptr, clip_fp) ||
+		!replay_copybytesinfile(0x900, fileptr, clip_fp) || !replay_copybytesinfile(0xA1, fileptr, clip_fp) ||
+		!replay_copybytesinfile(0x198, fileptr, clip_fp)) {
+		fediskio_delfile(filename);
+		return MSG_FILE_ERROR;
+	}
+	fclose(fileptr);
+
+	/* Input stream — N fixed-size versioned records.
+	 * When pulling from input.spl skip past the format header before
+	 * copying records. */
+	if (replayspoolflag) {
+		uint32_t i;
+
+		if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, inputspoolfile, "rb", 0)) {
+			fclose(clip_fp);
+			fediskio_delfile(filename);
+			return MSG_FILE_ERROR;
+		}
+		for (i = 0; i < (uint32_t)replaytotalcnt; ++i) {
+			if (!replay_copybytesinfile(8, fileptr, clip_fp)) {
+				fediskio_delfile(filename);
+				return MSG_FILE_ERROR;
+			}
+		}
+		fclose(fileptr);
+	} else {
+		const uint8_t* bufp = (const uint8_t*)replaybufferstart;
+		uint32_t i;
+
+		for (i = 0; i < (uint32_t)replaytotalcnt; ++i) {
+			if (fwrite(bufp, 1, 8, clip_fp) != 8) {
+				fclose(clip_fp);
+				fediskio_delfile(filename);
+				return MSG_FILE_ERROR;
+			}
+			bufp += 8;
+		}
+	}
+
+	if (fclose(clip_fp) == -1) {
+		fediskio_delfile(filename);
+		return MSG_FILE_ERROR;
+	}
+
+	memset(replayclipname, 0, sizeof(replayclipname));
+	m = 0;
+	while (m < sizeof(replayclipname) - 1 && name_input[m]) {
+		replayclipname[m] = (char)name_input[m];
+		++m;
+	}
+	return MSG_REPLAY_SAVED;
+#endif
 }
 
 // FUNCTION: TIE95 0x455B4
@@ -976,256 +1144,317 @@ int replay_loadreplay(void) {
 	}
 }
 
-void replay_InitScreen(ReplayScreenState* t) {
-	TieReplayTiming_Reset();
-	t->last_chase_status = 0xFFFF;
-	t->last_track_status = 0xFFFF;
-
-	pstate.target_obj_idx = pstate.object_idx;
-	replaycam.view_zoom_flag = 1;
-	replaycam.view_zoom = 1280;
-	replaycam.view_pitch_offset = 0;
-	replaycam.up_angle = 0;
-	replaycam.side_angle = 0;
-	fullupdateflag = 1;
-	trackobject = 0xFFFFu;
-	if (TieProfile_UsesTie98Logic())
-		g_flightInitialTextureCacheFlushPending = 1;
-	tie_updatescreen();
-	if (TieClassicDisplay_UsesDx5())
-		FlightSurface_Lock();
-	updateactionflag = 0;
-	fastforwardflag = 0;
-	fastforwardtimer = 0;
-	replay_drawreplaybutton(0xA);
-	replay_drawreplaybutton(0x11);
-	replay_drawreplaybutton(0xC);
-	replay_drawreplaybutton(0xE);
-	replay_outputclipname();
-	if (TieClassicDisplay_UsesDx5())
-		FlightSurface_Unlock();
-	exitflag = 0;
-}
-
-bool replay_UpdateScreen(ReplayScreenState* t) {
-	uint16_t last_chase_status = t->last_chase_status;
-	uint16_t last_track_status = t->last_track_status;
-	bool advance_message_timer = false;
-	bool pushed_subtask = false;
+// FUNCTION: TIE95 0x4646C
+// FUNCTION: TIE98 0x473AA0
+void replay_doreplayscreen(void) {
+	uint16_t last_chase_status;
+	uint16_t last_track_status;
+#ifdef TIE_MODERN
+	ReplayScreenState* continuation = landru_task_top();
 	const bool tie98_display = TieClassicDisplay_UsesDx5();
-
+	const bool tie98_logic = TieProfile_UsesTie98Logic();
+	last_chase_status = continuation->last_chase_status;
+	last_track_status = continuation->last_track_status;
+	continuation->pushed_subtask = false;
+	if (!continuation->started)
+#elif defined(TIE98)
+	const bool tie98_display = true;
+	const bool tie98_logic = true;
+#else
+	const bool tie98_display = false;
+	const bool tie98_logic = false;
+#endif
 	{
-		bool save_requested;
-		bool advance_replay;
-		int16_t pct_cx, pct_cy;
-		uint16_t pct_fwd;
-		uint16_t pct;
+#ifdef TIE_MODERN
+		TieReplayTiming_Reset();
+#endif
+		last_chase_status = 0xFFFF;
+		last_track_status = 0xFFFF;
 
+		pstate.target_obj_idx = pstate.object_idx;
+		replaycam.view_zoom_flag = 1;
+		replaycam.view_zoom = 1280;
+		replaycam.view_pitch_offset = 0;
+		replaycam.up_angle = 0;
+		replaycam.side_angle = 0;
+		fullupdateflag = 1;
+		trackobject = 0xFFFFu;
+		if (tie98_logic)
+			g_flightInitialTextureCacheFlushPending = 1;
+		tie_updatescreen();
 		if (tie98_display)
 			FlightSurface_Lock();
-		save_requested = replay_replayinput();
-		if (save_requested) {
-			if (tie98_display)
-				FlightSurface_Unlock();
-			if (TieReplaySave_Begin())
-				return true;
-			if (tie98_display)
-				FlightSurface_Lock();
-		}
-
-		if (!updateactionflag || fastforwardflag) {
-			if (replaymusic == 1) {
-				replaymusic = 0;
-				replayvolume = (int16_t)imuse_get_master_vol(im);
-				imuse_set_master_vol(im, 0);
-				imuse_pause(im);
-			}
-		} else if (!replaymusic) {
-			replaymusic = 1;
-			imuse_set_master_vol(im, (uint16_t)replayvolume);
-			imuse_resume(im);
-		}
-
-		advance_replay = updateactionflag && TieReplayTiming_IsFrameDue();
-		if (advance_replay) {
-			int32_t info_screen;
-
-			advance_message_timer = true;
-			/* In replay mode tie_doframe never returns false (the
-			 * tickcounter budget gate is bypassed by the replayviewmode
-			 * branch); cast to void to acknowledge the unused result. */
-			if (tie98_display)
-				FlightSurface_Unlock();
-			(void)tie_doframe();
-			TieReplayTiming_ConsumeFrame();
-			info_screen = user_consume_info_room_request();
-			if (info_screen >= 0) {
-				TieInflightInfo_Begin(info_screen);
-				pushed_subtask = true;
-			}
-			if (tie98_display)
-				FlightSurface_Lock();
-			if (cameraposstate) {
-				int16_t cx, cy;
-				uint16_t st;
-
-				festring_setbackcolor(0x40);
-
-				if (maingameflag) {
-					if (flightResolution == TIE_FLIGHT_RES_VGA) {
-						festring_setbound(230, 167, 268, 172);
-						cx = 230;
-						cy = 167;
-					} else {
-						festring_setbound(464, 402, 532, 411);
-						cx = 464;
-						cy = 402;
-					}
-				} else if (tie_is_high_resolution_flight()) {
-					festring_setbound(484, 400, 556, 412);
-					cx = 484;
-					cy = 400;
-				} else {
-					festring_setbound(241, 167, 279, 172);
-					cx = 241;
-					cy = 167;
-				}
-				festring_setcursor(cx, cy);
-				st = (uint16_t)replay_getstatusnum(pstate.target_obj_idx);
-				if (st != last_chase_status) {
-					clearwindow();
-					festring_settextcolor(0x4E);
-					last_chase_status = st;
-					festring_outstringcenter((const uint8_t*)((const char**)statusstrings)[st]);
-				}
-			}
-			if (trackobject != 0xFFFFu) {
-				int16_t cx, cy;
-				uint16_t st;
-
-				festring_setbackcolor(0x40);
-
-				if (maingameflag) {
-					if (flightResolution == TIE_FLIGHT_RES_VGA) {
-						festring_setbound(230, 181, 268, 186);
-						cx = 230;
-						cy = 181;
-					} else {
-						festring_setbound(464, 436, 532, 445);
-						cx = 464;
-						cy = 436;
-					}
-				} else if (tie_is_high_resolution_flight()) {
-					festring_setbound(484, 437, 556, 448);
-					cx = 484;
-					cy = 437;
-				} else {
-					festring_setbound(241, 181, 279, 186);
-					cx = 241;
-					cy = 181;
-				}
-				festring_setcursor(cx, cy);
-				st = (uint16_t)replay_getstatusnum(trackobject);
-				if (st != last_track_status) {
-					clearwindow();
-					festring_settextcolor(0x4E);
-					last_track_status = st;
-					festring_outstringcenter((const uint8_t*)((const char**)statusstrings)[st]);
-				}
-			}
-		} else if (!updateactionflag) {
-			uint16_t t0;
-
-			advance_message_timer = true;
-			/* Paused branch: repaint once, recompute framerate from
-			 * XTIMER delta spent repainting. */
-			t0 = tickcounter;
-			if (tie98_display)
-				FlightSurface_Unlock();
-			tie_updatescreen();
-			if (tie98_display) {
-				FrontendDisplay_PresentFrame();
-				if (g_useHardware3D)
-					RenderScene_ClearFrameBuffers();
-				else
-					FrontendDisplay_BlitOffscreenToRenderSurface();
-				FlightSurface_Lock();
-			}
-			tickcounter += (uint16_t)xtimer_time_elapsed();
-			frameticks = tickcounter - t0;
-			if (tickcounter == t0)
-				frameticks = 1;
-			framerate = 236 / frameticks;
-			if (!framerate)
-				framerate = 1;
-		}
-
-		festring_setfontsize(2);
-
-		if (maingameflag) {
-			if (flightResolution == TIE_FLIGHT_RES_VGA) {
-				festring_setbound(154, 5, 165, 11);
-				pct_cx = 156;
-				pct_cy = 5;
-			} else {
-				festring_setbound(310, 13, 327, 22);
-				pct_cx = 314;
-				pct_cy = 13;
-			}
-		} else if (tie_is_high_resolution_flight()) {
-			festring_setbound(230, 360, 251, 373);
-			pct_cx = 234;
-			pct_cy = 360;
-		} else {
-			festring_setbound(115, 150, 126, 155);
-			pct_cx = 117;
-			pct_cy = 150;
-		}
-		festring_setcursor(pct_cx, pct_cy);
-		festring_setbackcolor(0x40);
-
-		pct_fwd = math2_longpercentage(replaytotalcntdown, (uint32_t)replaymaxcnt);
-		pct = 100 - math2_fraction(100, pct_fwd);
-		if (pct > 99)
-			pct = 99;
-		if (pct != replaypercent) {
-			replaypercent = (int16_t)pct;
-			clearwindow();
-			festring_settextcolor(0x43);
-			panelrts_outnum(pct, 2, 2);
-		}
-
-		if (advance_message_timer && frameticks >= (uint16_t)replaymsgtimer) {
-			if (replaymsgtimer) {
-				festring_setbackcolor(0x2C);
-				/* Retail widens the clear rect to 640x480 in SVGA. */
-				if (tie_is_high_resolution_flight()) {
-					festring_setbound(0, 457, 640, 480);
-				} else {
-					festring_setbound(0, 190, 320, 200);
-				}
-				clearwindow();
-			}
-			replaymsgtimer = 0;
-		} else if (advance_message_timer) {
-			replaymsgtimer -= frameticks;
-		}
+		updateactionflag = 0;
+		fastforwardflag = 0;
+		fastforwardtimer = 0;
+		replay_drawreplaybutton(0xA);
+		replay_drawreplaybutton(0x11);
+		replay_drawreplaybutton(0xC);
+		replay_drawreplaybutton(0xE);
+		replay_outputclipname();
+		if (tie98_display)
+			FlightSurface_Unlock();
+		exitflag = 0;
+#ifdef TIE_MODERN
+		continuation->last_chase_status = last_chase_status;
+		continuation->last_track_status = last_track_status;
+		continuation->started = true;
+		return;
+#endif
 	}
-	if (tie98_display)
-		FlightSurface_Unlock();
+	while (!exitflag) {
+#ifdef TIE_MODERN
+		bool advance_message_timer = false;
+		bool pushed_subtask = false;
+#endif
 
-	t->last_chase_status = last_chase_status;
-	t->last_track_status = last_track_status;
-	return pushed_subtask;
+		{
+#ifdef TIE_MODERN
+			bool save_requested;
+#endif
+			bool advance_replay;
+			int16_t pct_cx, pct_cy;
+			uint16_t pct_fwd;
+			uint16_t pct;
+
+			if (tie98_display)
+				FlightSurface_Lock();
+#ifdef TIE_MODERN
+			replay_replayinput();
+			save_requested = continuation->save_requested;
+			if (save_requested) {
+				if (tie98_display)
+					FlightSurface_Unlock();
+				if (TieReplaySave_Begin()) {
+					continuation->pushed_subtask = true;
+					return;
+				}
+				if (tie98_display)
+					FlightSurface_Lock();
+			}
+
+#else
+			replay_replayinput();
+#endif
+			if (!updateactionflag || fastforwardflag) {
+				if (replaymusic == 1) {
+					replaymusic = 0;
+					replayvolume = (int16_t)imuse_get_master_vol(im);
+					imuse_set_master_vol(im, 0);
+					imuse_pause(im);
+				}
+			} else if (!replaymusic) {
+				replaymusic = 1;
+				imuse_set_master_vol(im, (uint16_t)replayvolume);
+				imuse_resume(im);
+			}
+
+#ifdef TIE_MODERN
+			advance_replay = updateactionflag && TieReplayTiming_IsFrameDue();
+#else
+			advance_replay = updateactionflag != 0;
+#endif
+			if (advance_replay) {
+#ifdef TIE_MODERN
+				int32_t info_screen;
+#endif
+
+#ifdef TIE_MODERN
+				advance_message_timer = true;
+#endif
+				/* In replay mode tie_doframe never returns false (the
+				 * tickcounter budget gate is bypassed by the replayviewmode
+				 * branch); cast to void to acknowledge the unused result. */
+				if (tie98_display)
+					FlightSurface_Unlock();
+				(void)tie_doframe();
+#ifdef TIE_MODERN
+				TieReplayTiming_ConsumeFrame();
+				info_screen = user_consume_info_room_request();
+				if (info_screen >= 0) {
+					TieInflightInfo_Begin(info_screen);
+					pushed_subtask = true;
+				}
+#endif
+				if (tie98_display)
+					FlightSurface_Lock();
+				if (cameraposstate) {
+					int16_t cx, cy;
+					uint16_t st;
+
+					festring_setbackcolor(0x40);
+
+					if (maingameflag) {
+						if (flightResolution == TIE_FLIGHT_RES_VGA) {
+							festring_setbound(230, 167, 268, 172);
+							cx = 230;
+							cy = 167;
+						} else {
+							festring_setbound(464, 402, 532, 411);
+							cx = 464;
+							cy = 402;
+						}
+					} else if (tie_is_high_resolution_flight()) {
+						festring_setbound(484, 400, 556, 412);
+						cx = 484;
+						cy = 400;
+					} else {
+						festring_setbound(241, 167, 279, 172);
+						cx = 241;
+						cy = 167;
+					}
+					festring_setcursor(cx, cy);
+					st = (uint16_t)replay_getstatusnum(pstate.target_obj_idx);
+					if (st != last_chase_status) {
+						clearwindow();
+						festring_settextcolor(0x4E);
+						last_chase_status = st;
+						festring_outstringcenter((const uint8_t*)((const char**)statusstrings)[st]);
+					}
+				}
+				if (trackobject != 0xFFFFu) {
+					int16_t cx, cy;
+					uint16_t st;
+
+					festring_setbackcolor(0x40);
+
+					if (maingameflag) {
+						if (flightResolution == TIE_FLIGHT_RES_VGA) {
+							festring_setbound(230, 181, 268, 186);
+							cx = 230;
+							cy = 181;
+						} else {
+							festring_setbound(464, 436, 532, 445);
+							cx = 464;
+							cy = 436;
+						}
+					} else if (tie_is_high_resolution_flight()) {
+						festring_setbound(484, 437, 556, 448);
+						cx = 484;
+						cy = 437;
+					} else {
+						festring_setbound(241, 181, 279, 186);
+						cx = 241;
+						cy = 181;
+					}
+					festring_setcursor(cx, cy);
+					st = (uint16_t)replay_getstatusnum(trackobject);
+					if (st != last_track_status) {
+						clearwindow();
+						festring_settextcolor(0x4E);
+						last_track_status = st;
+						festring_outstringcenter((const uint8_t*)((const char**)statusstrings)[st]);
+					}
+				}
+			} else if (!updateactionflag) {
+				uint16_t t0;
+
+#ifdef TIE_MODERN
+				advance_message_timer = true;
+#endif
+				/* Paused branch: repaint once, recompute framerate from
+				 * XTIMER delta spent repainting. */
+				t0 = tickcounter;
+				if (tie98_display)
+					FlightSurface_Unlock();
+				tie_updatescreen();
+				if (tie98_display) {
+					FrontendDisplay_PresentFrame();
+					if (g_useHardware3D)
+						RenderScene_ClearFrameBuffers();
+					else
+						FrontendDisplay_BlitOffscreenToRenderSurface();
+					FlightSurface_Lock();
+				}
+				tickcounter += (uint16_t)xtimer_time_elapsed();
+				frameticks = tickcounter - t0;
+				if (tickcounter == t0)
+					frameticks = 1;
+				framerate = 236 / frameticks;
+				if (!framerate)
+					framerate = 1;
+			}
+
+			festring_setfontsize(2);
+
+			if (maingameflag) {
+				if (flightResolution == TIE_FLIGHT_RES_VGA) {
+					festring_setbound(154, 5, 165, 11);
+					pct_cx = 156;
+					pct_cy = 5;
+				} else {
+					festring_setbound(310, 13, 327, 22);
+					pct_cx = 314;
+					pct_cy = 13;
+				}
+			} else if (tie_is_high_resolution_flight()) {
+				festring_setbound(230, 360, 251, 373);
+				pct_cx = 234;
+				pct_cy = 360;
+			} else {
+				festring_setbound(115, 150, 126, 155);
+				pct_cx = 117;
+				pct_cy = 150;
+			}
+			festring_setcursor(pct_cx, pct_cy);
+			festring_setbackcolor(0x40);
+
+			pct_fwd = math2_longpercentage(replaytotalcntdown, (uint32_t)replaymaxcnt);
+			pct = 100 - math2_fraction(100, pct_fwd);
+			if (pct > 99)
+				pct = 99;
+			if (pct != replaypercent) {
+				replaypercent = (int16_t)pct;
+				clearwindow();
+				festring_settextcolor(0x43);
+				panelrts_outnum(pct, 2, 2);
+			}
+
+#ifdef TIE_MODERN
+			if (advance_message_timer && frameticks >= (uint16_t)replaymsgtimer) {
+#else
+			if (frameticks >= (uint16_t)replaymsgtimer) {
+#endif
+				if (replaymsgtimer) {
+					festring_setbackcolor(0x2C);
+					/* Retail widens the clear rect to 640x480 in SVGA. */
+					if (tie_is_high_resolution_flight()) {
+						festring_setbound(0, 457, 640, 480);
+					} else {
+						festring_setbound(0, 190, 320, 200);
+					}
+					clearwindow();
+				}
+				replaymsgtimer = 0;
+#ifdef TIE_MODERN
+			} else if (advance_message_timer) {
+#else
+			} else {
+#endif
+				replaymsgtimer -= frameticks;
+			}
+		}
+		if (tie98_display)
+			FlightSurface_Unlock();
+
+#ifdef TIE_MODERN
+		continuation->last_chase_status = last_chase_status;
+		continuation->last_track_status = last_track_status;
+		continuation->pushed_subtask = pushed_subtask;
+		return;
+#endif
+	}
 }
 
 /* replay_replayinput — read one hardware tick of input and dispatch. */
-/* PORT: the boolean return is the child-task handoff; retail returns void. */
 // FUNCTION: TIE95 0x46928
 // FUNCTION: TIE98 0x474040
-bool replay_replayinput(void) {
-	bool save_requested = false;
+void replay_replayinput(void) {
 	int16_t btn_val;
+#ifdef TIE_MODERN
+	ReplayScreenState* continuation = landru_task_top();
+	continuation->save_requested = false;
+#endif
 
 	feinput_getrawinput();
 	feinput_checkinput();
@@ -1353,10 +1582,22 @@ bool replay_replayinput(void) {
 			case KEY_S:
 			case KEY_s:
 				if (maingameflag) {
-					/* PORT: the recovered save dialog blocks for keyboard input.
-					 * Let ReplayScreenState push its non-blocking child task after
-					 * releasing the flight surface. */
-					save_requested = true;
+#ifdef TIE_MODERN
+					continuation->save_requested = true;
+#else
+					uint16_t result;
+					if (replaymusic == 1) {
+						replaymusic = 0;
+						replayvolume = (int16_t)imuse_get_master_vol(im);
+						imuse_set_master_vol(im, 0);
+						imuse_pause(im);
+					}
+					replay_drawreplaybutton(7);
+					result = replay_savereplay();
+					replay_replaymessage(result);
+					replay_drawreplaybutton(6);
+					replay_outputclipname();
+#endif
 				} else {
 					/* Retail: ship_idx 12 (TIE Advanced) joined 5..9 + 16 as
 					 * valid "re-enter simulator" types. */
@@ -1452,5 +1693,102 @@ bool replay_replayinput(void) {
 		replaycam.up_angle += user_framerateadjust(inputdeltax);
 		replaycam.side_angle += user_framerateadjust(inputdeltay);
 	}
-	return save_requested;
+}
+
+// FUNCTION: TIE95 0x476CC
+// FUNCTION: TIE98 0x474CA0
+void replay_editstring(int16_t x, int16_t y, uint8_t limit, uint8_t* text, uint8_t background) {
+	uint8_t position;
+#ifdef TIE_MODERN
+	ReplaySaveTask* continuation = landru_task_top();
+	position = continuation->position;
+	if (!continuation->editor_active) {
+#endif
+		festring_setautofill(1);
+		for (position = 0; text[position] && text[position] != '\n' && position < limit; ++position)
+			;
+		festring_setcursor(x, y);
+		festring_outstring(text);
+		festring_setbackcolor(0x4A);
+		outchar(' ');
+		festring_setbackcolor(background);
+		outchar('\n');
+#ifdef TIE_MODERN
+		continuation->position = position;
+		continuation->editor_active = 1;
+		if (TieClassicDisplay_UsesDx5()) {
+			FlightSurface_Unlock();
+			FrontendDisplay_PresentFrontSurface();
+			FrontendDisplay_PresentFrame();
+		}
+		return;
+	}
+	if (!TieInput_KeyPending()) {
+		continuation->waiting = true;
+		return;
+	}
+#endif
+	do {
+		feinput_getinput();
+		if (keypress == 1)
+			keypress = 8;
+		if (keypress == 8 && position)
+			--position;
+		if (keypress >= 48) {
+			if ((keypress < 65 && keypress >= 58) || (keypress < 97 && keypress >= 91) || keypress >= 123)
+				keypress = 1;
+		} else if (keypress != 13 && keypress != 45 && keypress != 0) {
+			keypress = 1;
+		}
+		if (keypress != 1 && keypress != 13 && keypress != 0 && position < limit) {
+			text[position] = (uint8_t)keypress;
+			if (text[position] >= 'a' && text[position] <= 'z')
+				text[position] -= 32;
+			++position;
+		}
+		text[position] = 0;
+		if (keypress) {
+#ifdef TIE_MODERN
+			if (TieClassicDisplay_UsesDx5())
+				FlightSurface_Lock();
+#endif
+			festring_setcursor(x, y);
+			festring_outstring(text);
+			festring_setbackcolor(0x4A);
+			outchar(' ');
+			festring_setbackcolor(background);
+			outchar('\n');
+#ifdef TIE_MODERN
+			if (TieClassicDisplay_UsesDx5()) {
+				FlightSurface_Unlock();
+				FrontendDisplay_PresentFrontSurface();
+				FrontendDisplay_PresentFrame();
+			}
+#endif
+		}
+#ifdef TIE_MODERN
+		continuation->position = position;
+		if (keypress != 13)
+			return;
+#endif
+	} while (keypress != 13);
+#ifdef TIE_MODERN
+	if (TieClassicDisplay_UsesDx5())
+		FlightSurface_Lock();
+#endif
+	festring_setcursor(x, y);
+	festring_outstring(text);
+	outchar('\n');
+#ifdef TIE_MODERN
+	if (TieClassicDisplay_UsesDx5())
+		FlightSurface_Unlock();
+#endif
+	festring_setautofill(0);
+#ifdef TIE_MODERN
+	continuation->editor_active = 0;
+	if (TieClassicDisplay_UsesDx5()) {
+		FrontendDisplay_PresentFrontSurface();
+		FrontendDisplay_PresentFrame();
+	}
+#endif
 }

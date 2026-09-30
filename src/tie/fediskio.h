@@ -39,6 +39,10 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected);
 
 int16_t fediskio_tryopenfile(TieFileRoot root, const char* name, const char* mode, int16_t fatal);
 int16_t fediskio_tryclosefile(int16_t delete_on_error);
+#ifndef TIE_MODERN
+/* Original installation-relative deletion entry. */
+int32_t fediskio_delfile(const char* name);
+#endif
 int16_t fediskio_readfileblock(void* buf, unsigned int size, unsigned int count, TieFile* fp);
 int16_t fediskio_writefileblock(void* buf, unsigned int size, int count, TieFile* fp);
 int8_t fediskio_displayerror(void);

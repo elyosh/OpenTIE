@@ -11,9 +11,6 @@
 extern "C" {
 #endif
 
-void replayio_LoadStandalonePanel(void);
-bool replayio_RestoreGraphics(int16_t saved_resolution);
-void replayio_LoadInitialPanel(void);
 int16_t replayio_copytosave(const char* fname);
 int16_t replayio_copyfromsave(const char* fname);
 int replayio_openreplayinputfile(void);
@@ -30,7 +27,7 @@ void replayio_setreturnview(void);
  *
  * NOTE: the binary reads these two different ways:
  *   - replayio_copytosave / copyfromsave use u32 stride (full iteration).
- *   - replay_savereplay_file / loadreplay use u16 stride, so they effec-
+ *   - replay_savereplay / loadreplay use u16 stride, so they effec-
  *     tively consume only the first entry (objects[]) before terminating.
  *     That's reproduced explicitly in replay.c (single hardcoded copy)
  *     rather than kept as a trick on this table. */
@@ -41,6 +38,8 @@ extern uint32_t savearraysizes[68];
  * actively read by any shipping code path; kept here so linkers that need
  * the symbol don't complain. */
 extern uint8_t replayviewptr[16];
+
+void replayio_replayscreen(void);
 
 #ifdef __cplusplus
 }

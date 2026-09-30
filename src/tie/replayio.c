@@ -1,5 +1,8 @@
 #include "tie/replayio.h"
 #ifdef TIE_MODERN
+#include "tie_runtime/runtime/replay_session_task.h"
+#endif
+#ifdef TIE_MODERN
 #include "tie_runtime/storage/mission_records.h"
 #endif
 #include "tie_runtime/audio/config.h"
@@ -43,6 +46,9 @@
 #include <imuse/hilevel.h>
 #include <imuse/lolevel.h>
 #include <landru/error.h>
+#ifdef TIE_MODERN
+#include <landru/task.h>
+#endif
 #include <stdint.h>
 #include <string.h>
 
@@ -539,108 +545,16 @@ int replayio_restorereplaybuffer(void) {
  * -------------------------------------------------------------------------- */
 
 /* Build panelname = cockpitdir + infix + ".PNL". */
-static void build_panel_path(const char* infix) {
-	size_t n = 0;
-	size_t s;
-	const char* pnl;
-
-	while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
-		panelname[n] = cockpitdir[n];
-		++n;
-	}
-	s = 0;
-	while (n + 1 < sizeof(panelname) && infix[s]) {
-		panelname[n++] = infix[s++];
-	}
-	pnl = ".PNL";
-	s = 0;
-	while (n + 1 < sizeof(panelname) && pnl[s]) {
-		panelname[n++] = pnl[s++];
-	}
-	panelname[n] = '\0';
-}
 
 /* Load the camera-viewer panel.
  *   panel_name is "CAMERA" (cockpit) or "FILM" (stand-alone viewer).
  *   panel_x / panel_y / panel_depth / panel_width drive the viewport.
  * The displaycorner value is derived directly via rtsvga2_calcpositionVGA
  * (= panel_y * screenMemWidth + panel_x). */
-static void load_viewer_panel(const char* infix, const char* panel_name, uint16_t panel_x, uint16_t panel_y,
-							  uint16_t panel_depth, uint16_t panel_width) {
-	uint32_t dc;
-
-	farbufferptr = (uint8_t*)panelpartsptr;
-	build_panel_path(infix);
-	fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
-	temppanelptr = newbuf;
-	panel_loadcontrolpanel((char*)panel_name, section_ptrs, 3);
-
-	buildpalette((uint8_t*)section_ptrs[2], 0, 64);
-	if (TieProfile_UsesTie98Logic()) {
-		festring_setbackcolor(deepspacecolor);
-		festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
-		clearwindow();
-	}
-	drawshape(section_ptrs[0], 0, 0, 253, 0);
-
-	dc = rtsvga2_calcpositionVGA(panel_x, panel_y);
-	logbuf2_setbufferdimensions(panel_width, panel_depth, dc);
-
-	panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
-	transfm2_screenyoffset = 0;
-}
-
-void replayio_LoadStandalonePanel(void) {
-	if (tie_is_high_resolution_flight())
-		load_viewer_panel("camerap", "FILM", 28, 16, 298, 584);
-	else
-		load_viewer_panel("camerap", "FILM", 0, 8, 123, 320);
-}
 
 /* Resolution-change detection on exit: retail saves flightResolution at
  * viewer entry; on return to sim, if the user changed it (via the
  * viewer's OPTION row hook), re-init graphics + reload scaled fonts. */
-bool replayio_RestoreGraphics(int16_t saved_res) {
-	if (flightResolution == saved_res)
-		return true;
-	flightResolution = saved_res;
-	if (!TieClassicDisplay_ActivateFlight())
-		return false;
-	tie_initflightresolution();
-	rtsvga2_initgraphVGA();
-	feinput_setupgraphics((uint8_t)detaillevel);
-	fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "xtiny64.fnt", fontptrtiny);
-	fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "dmicro64.fnt", fontptrmicro);
-	festring_setfontsize(1);
-	return true;
-}
-
-void replayio_LoadInitialPanel(void) {
-	if (maingameflag) {
-		memset(replayclipname, 0, sizeof(replayclipname));
-		strncpy(replayclipname, "UNTITLED", sizeof(replayclipname) - 1);
-		if (flightResolution == TIE_FLIGHT_RES_VGA) {
-			load_viewer_panel("camerap", "CAMERA", 0, 17, 135, 320);
-		} else {
-			load_viewer_panel("camerap", "CAMERA", 0, 40, 325, 640);
-		}
-		msg_messageinit();
-	} else {
-		/* Stand-alone viewer uses "FILM" (retail) instead of demo's
-		 * "XFILM1". TIE98 adds a separate SVGA layout. */
-		replay_loadreplay();
-		replayio_copyfromsave(replaystartfile);
-		fediskio_loadspecies();
-		panel_loadpaneldata();
-		/* Per-mission voice .LFD load. Retail calls FSFX_loadvoicelfd
-		 * here in the stand-alone viewer path (not in the in-flight
-		 * replay branch — the live mission's voice cues are still
-		 * resident in soundhandles from create_createmission). */
-		fsfx_loadvoicelfd();
-		msg_messageinit();
-		replayio_LoadStandalonePanel();
-	}
-}
 
 /* --------------------------------------------------------------------------
  * replayio_setreturnview -- restore the cockpit when re-entering the live
@@ -649,7 +563,26 @@ void replayio_LoadInitialPanel(void) {
 // FUNCTION: TIE95 0x483E4
 void replayio_setreturnview(void) {
 	farbufferptr = (uint8_t*)panelpartsptr;
-	build_panel_path(parts);
+	{
+		size_t n = 0;
+		size_t s;
+		const char* pnl;
+
+		while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
+			panelname[n] = cockpitdir[n];
+			++n;
+		}
+		s = 0;
+		while (n + 1 < sizeof(panelname) && parts[s]) {
+			panelname[n++] = parts[s++];
+		}
+		pnl = ".PNL";
+		s = 0;
+		while (n + 1 < sizeof(panelname) && pnl[s]) {
+			panelname[n++] = pnl[s++];
+		}
+		panelname[n] = '\0';
+	}
 	fediskio_loadbufferdata(panelname, 0, parts[9] + (uint8_t)parts[10], 0);
 
 	if (camera.view_zoom_flag) {
@@ -669,4 +602,472 @@ void replayio_setreturnview(void) {
 		panelrts_setnewpilotview(0x12);
 	}
 	msg_messageinit();
+}
+
+// FUNCTION: TIE95 0x47CF4
+// FUNCTION: TIE98 0x475350
+void replayio_replayscreen(void) {
+	int16_t saved_res;
+#ifdef TIE_MODERN
+	ReplayioTask* continuation = landru_task_top();
+	const bool tie98_display = TieClassicDisplay_UsesDx5();
+	const bool tie98_logic = TieProfile_UsesTie98Logic();
+	saved_res = continuation->saved_res;
+	if (continuation->phase == REPLAYIO_PHASE_PREPARE)
+#elif defined(TIE98)
+	const bool tie98_display = true;
+	const bool tie98_logic = true;
+#else
+	const bool tie98_display = false;
+	const bool tie98_logic = false;
+#endif
+	{
+		saved_res = (int16_t)flightResolution;
+		if (tie98_logic) {
+			uint8_t saved_mapflag = mapflag;
+			mapflag = 1;
+			FSFX_UpdatePlayerEngineSound();
+			mapflag = saved_mapflag;
+		}
+		replayvolume = (int16_t)imuse_get_master_vol(im);
+		imuse_set_master_vol(im, 0);
+		imuse_pause(im);
+		replaymusic = 0;
+#ifdef TIE_MODERN
+		continuation->saved_res = saved_res;
+		continuation->phase = REPLAYIO_PHASE_ENTER;
+		return;
+#endif
+	}
+#ifdef TIE_MODERN
+	if (continuation->phase == REPLAYIO_PHASE_ENTER)
+#endif
+	{
+		if (maingameflag && !replayio_copytosave(replaysavegamefile)) {
+#ifdef TIE_MODERN
+			continuation->finished = true;
+#endif
+			return;
+		}
+		recordingreplay = 0;
+		replayviewmode = 1;
+		if (tie98_display)
+			FlightSurface_Lock();
+		{
+			if (maingameflag) {
+				memset(replayclipname, 0, sizeof(replayclipname));
+				strncpy(replayclipname, "UNTITLED", sizeof(replayclipname) - 1);
+				if (flightResolution == TIE_FLIGHT_RES_VGA) {
+					{
+						uint32_t dc;
+
+						farbufferptr = (uint8_t*)panelpartsptr;
+						{
+							size_t n = 0;
+							size_t s;
+							const char* pnl;
+
+							while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
+								panelname[n] = cockpitdir[n];
+								++n;
+							}
+							s = 0;
+							while (n + 1 < sizeof(panelname) && "camerap"[s]) {
+								panelname[n++] = "camerap"[s++];
+							}
+							pnl = ".PNL";
+							s = 0;
+							while (n + 1 < sizeof(panelname) && pnl[s]) {
+								panelname[n++] = pnl[s++];
+							}
+							panelname[n] = '\0';
+						}
+						fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
+						temppanelptr = newbuf;
+						panel_loadcontrolpanel((char*)"CAMERA", section_ptrs, 3);
+
+						buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+						if (tie98_logic) {
+							festring_setbackcolor(deepspacecolor);
+							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
+							clearwindow();
+						}
+						drawshape(section_ptrs[0], 0, 0, 253, 0);
+
+						dc = rtsvga2_calcpositionVGA(0, 17);
+						logbuf2_setbufferdimensions(320, 135, dc);
+
+						panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+						transfm2_screenyoffset = 0;
+					}
+				} else {
+					{
+						uint32_t dc;
+
+						farbufferptr = (uint8_t*)panelpartsptr;
+						{
+							size_t n = 0;
+							size_t s;
+							const char* pnl;
+
+							while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
+								panelname[n] = cockpitdir[n];
+								++n;
+							}
+							s = 0;
+							while (n + 1 < sizeof(panelname) && "camerap"[s]) {
+								panelname[n++] = "camerap"[s++];
+							}
+							pnl = ".PNL";
+							s = 0;
+							while (n + 1 < sizeof(panelname) && pnl[s]) {
+								panelname[n++] = pnl[s++];
+							}
+							panelname[n] = '\0';
+						}
+						fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
+						temppanelptr = newbuf;
+						panel_loadcontrolpanel((char*)"CAMERA", section_ptrs, 3);
+
+						buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+						if (tie98_logic) {
+							festring_setbackcolor(deepspacecolor);
+							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
+							clearwindow();
+						}
+						drawshape(section_ptrs[0], 0, 0, 253, 0);
+
+						dc = rtsvga2_calcpositionVGA(0, 40);
+						logbuf2_setbufferdimensions(640, 325, dc);
+
+						panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+						transfm2_screenyoffset = 0;
+					}
+				}
+				msg_messageinit();
+			} else {
+				/* Stand-alone viewer uses "FILM" (retail) instead of demo's
+				 * "XFILM1". TIE98 adds a separate SVGA layout. */
+				replay_loadreplay();
+				replayio_copyfromsave(replaystartfile);
+				fediskio_loadspecies();
+				panel_loadpaneldata();
+				/* Per-mission voice .LFD load. Retail calls FSFX_loadvoicelfd
+				 * here in the stand-alone viewer path (not in the in-flight
+				 * replay branch — the live mission's voice cues are still
+				 * resident in soundhandles from create_createmission). */
+				fsfx_loadvoicelfd();
+				msg_messageinit();
+				{
+					if (tie_is_high_resolution_flight()) {
+						uint32_t dc;
+
+						farbufferptr = (uint8_t*)panelpartsptr;
+						{
+							size_t n = 0;
+							size_t s;
+							const char* pnl;
+
+							while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
+								panelname[n] = cockpitdir[n];
+								++n;
+							}
+							s = 0;
+							while (n + 1 < sizeof(panelname) && "camerap"[s]) {
+								panelname[n++] = "camerap"[s++];
+							}
+							pnl = ".PNL";
+							s = 0;
+							while (n + 1 < sizeof(panelname) && pnl[s]) {
+								panelname[n++] = pnl[s++];
+							}
+							panelname[n] = '\0';
+						}
+						fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
+						temppanelptr = newbuf;
+						panel_loadcontrolpanel((char*)"FILM", section_ptrs, 3);
+
+						buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+						if (tie98_logic) {
+							festring_setbackcolor(deepspacecolor);
+							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
+							clearwindow();
+						}
+						drawshape(section_ptrs[0], 0, 0, 253, 0);
+
+						dc = rtsvga2_calcpositionVGA(28, 16);
+						logbuf2_setbufferdimensions(584, 298, dc);
+
+						panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+						transfm2_screenyoffset = 0;
+					} else {
+						uint32_t dc;
+
+						farbufferptr = (uint8_t*)panelpartsptr;
+						{
+							size_t n = 0;
+							size_t s;
+							const char* pnl;
+
+							while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
+								panelname[n] = cockpitdir[n];
+								++n;
+							}
+							s = 0;
+							while (n + 1 < sizeof(panelname) && "camerap"[s]) {
+								panelname[n++] = "camerap"[s++];
+							}
+							pnl = ".PNL";
+							s = 0;
+							while (n + 1 < sizeof(panelname) && pnl[s]) {
+								panelname[n++] = pnl[s++];
+							}
+							panelname[n] = '\0';
+						}
+						fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
+						temppanelptr = newbuf;
+						panel_loadcontrolpanel((char*)"FILM", section_ptrs, 3);
+
+						buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+						if (tie98_logic) {
+							festring_setbackcolor(deepspacecolor);
+							festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
+							clearwindow();
+						}
+						drawshape(section_ptrs[0], 0, 0, 253, 0);
+
+						dc = rtsvga2_calcpositionVGA(0, 8);
+						logbuf2_setbufferdimensions(320, 123, dc);
+
+						panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+						transfm2_screenyoffset = 0;
+					}
+				}
+			}
+		}
+		replay_rewindreplay();
+		if (tie98_display)
+			FlightSurface_Unlock();
+#ifdef TIE_MODERN
+		continuation->phase = REPLAYIO_PHASE_VIEW;
+#endif
+	}
+	for (;;) {
+#ifdef TIE_MODERN
+		if (continuation->phase == REPLAYIO_PHASE_VIEW)
+#endif
+		{
+			reentersimflag = 0;
+			festring_showscreen();
+			if (tie98_display) {
+				FrontendDisplay_BlitOffscreenToRenderSurface();
+				FrontendDisplay_PresentFrame();
+				FrontendDisplay_BlitOffscreenToRenderSurface();
+			}
+#ifdef TIE_MODERN
+			continuation->phase = REPLAYIO_PHASE_AFTER_VIEWER;
+			TieReplayViewer_Begin();
+			return;
+#else
+			replay_doreplayscreen();
+#endif
+		}
+#ifdef TIE_MODERN
+		if (continuation->phase == REPLAYIO_PHASE_AFTER_VIEWER)
+#endif
+		{
+			if (replaymusic) {
+				replayvolume = (int16_t)imuse_get_master_vol(im);
+				imuse_set_master_vol(im, 0);
+				imuse_pause(im);
+				replaymusic = 0;
+			}
+			replayviewmode = 0;
+			if (maingameflag) {
+				if (flightResolution != saved_res) {
+					flightResolution = saved_res;
+#ifdef TIE_MODERN
+					if (!TieClassicDisplay_ActivateFlight()) {
+						xerror_Set_Landru_Error(12);
+						continuation->finished = true;
+						return;
+					}
+#endif
+					tie_initflightresolution();
+					rtsvga2_initgraphVGA();
+					feinput_setupgraphics((uint8_t)detaillevel);
+					fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "xtiny64.fnt", fontptrtiny);
+					fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "dmicro64.fnt", fontptrmicro);
+					festring_setfontsize(1);
+				}
+				replayio_copyfromsave(replaysavegamefile);
+				replayio_setreturnview();
+				if (!replaymusic) {
+					imuse_set_master_vol(im, (uint16_t)replayvolume);
+					imuse_resume(im);
+					replaymusic = 1;
+				}
+#ifdef TIE_MODERN
+				continuation->finished = true;
+#endif
+				return;
+			}
+			if (!reentersimflag) {
+				if (tie98_display)
+					FlightSurface_Lock();
+				if (tie_is_high_resolution_flight())
+					festring_setbound(28, 16, 611, 315);
+				else
+					festring_setbound(14, 8, 306, 131);
+				festring_setbackcolor(0x40);
+				clearwindow();
+				if (tie98_display)
+					FlightSurface_Unlock();
+				if (!replaymusic) {
+					imuse_set_master_vol(im, (uint16_t)replayvolume);
+					imuse_resume(im);
+					replaymusic = 1;
+				}
+#ifdef TIE_MODERN
+				continuation->finished = true;
+#endif
+				return;
+			}
+			blank();
+			recordingreplay = 0;
+			numhistorymsgs = 0;
+			camera.view_zoom_flag = 0;
+			camera.up_angle = 0;
+			mission.end_flag = 0;
+			camera.view_target_obj = pstate.object_idx;
+			camera.pilotview = 0;
+			camera.side_angle = 0;
+			camera.view_dir_dirty = 0;
+			blastcount = 0;
+			msg_clearmessagequeue();
+			replayio_setreturnview();
+			if (!replaymusic) {
+				imuse_set_master_vol(im, (uint16_t)replayvolume);
+				imuse_resume(im);
+				replaymusic = 1;
+			}
+#ifdef TIE_MODERN
+			continuation->phase = REPLAYIO_PHASE_AFTER_REENTERSIM;
+			TieFlightTask_BeginMission();
+			return;
+#else
+			while (!mission.end_flag)
+				tie_doframe();
+#endif
+		}
+		replayvolume = (int16_t)imuse_get_master_vol(im);
+		imuse_set_master_vol(im, 0);
+		imuse_pause(im);
+		replaymusic = 0;
+		blank();
+		recordingreplay = 0;
+		replayviewmode = 1;
+		if (tie98_display)
+			FlightSurface_Lock();
+		replay_loadreplay();
+		replayio_copyfromsave(replaystartfile);
+		msg_messageinit();
+		{
+			if (tie_is_high_resolution_flight()) {
+				uint32_t dc;
+
+				farbufferptr = (uint8_t*)panelpartsptr;
+				{
+					size_t n = 0;
+					size_t s;
+					const char* pnl;
+
+					while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
+						panelname[n] = cockpitdir[n];
+						++n;
+					}
+					s = 0;
+					while (n + 1 < sizeof(panelname) && "camerap"[s]) {
+						panelname[n++] = "camerap"[s++];
+					}
+					pnl = ".PNL";
+					s = 0;
+					while (n + 1 < sizeof(panelname) && pnl[s]) {
+						panelname[n++] = pnl[s++];
+					}
+					panelname[n] = '\0';
+				}
+				fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
+				temppanelptr = newbuf;
+				panel_loadcontrolpanel((char*)"FILM", section_ptrs, 3);
+
+				buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+				if (tie98_logic) {
+					festring_setbackcolor(deepspacecolor);
+					festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
+					clearwindow();
+				}
+				drawshape(section_ptrs[0], 0, 0, 253, 0);
+
+				dc = rtsvga2_calcpositionVGA(28, 16);
+				logbuf2_setbufferdimensions(584, 298, dc);
+
+				panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+				transfm2_screenyoffset = 0;
+			} else {
+				uint32_t dc;
+
+				farbufferptr = (uint8_t*)panelpartsptr;
+				{
+					size_t n = 0;
+					size_t s;
+					const char* pnl;
+
+					while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
+						panelname[n] = cockpitdir[n];
+						++n;
+					}
+					s = 0;
+					while (n + 1 < sizeof(panelname) && "camerap"[s]) {
+						panelname[n++] = "camerap"[s++];
+					}
+					pnl = ".PNL";
+					s = 0;
+					while (n + 1 < sizeof(panelname) && pnl[s]) {
+						panelname[n++] = pnl[s++];
+					}
+					panelname[n] = '\0';
+				}
+				fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
+				temppanelptr = newbuf;
+				panel_loadcontrolpanel((char*)"FILM", section_ptrs, 3);
+
+				buildpalette((uint8_t*)section_ptrs[2], 0, 64);
+				if (tie98_logic) {
+					festring_setbackcolor(deepspacecolor);
+					festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
+					clearwindow();
+				}
+				drawshape(section_ptrs[0], 0, 0, 253, 0);
+
+				dc = rtsvga2_calcpositionVGA(0, 8);
+				logbuf2_setbufferdimensions(320, 123, dc);
+
+				panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
+				transfm2_screenyoffset = 0;
+			}
+		}
+		replay_rewindreplay();
+		if (tie98_display)
+			FlightSurface_Unlock();
+		if (!reentersimflag) {
+#ifdef TIE_MODERN
+			continuation->finished = true;
+#endif
+			return;
+		}
+#ifdef TIE_MODERN
+		continuation->phase = REPLAYIO_PHASE_VIEW;
+#endif
+	}
 }

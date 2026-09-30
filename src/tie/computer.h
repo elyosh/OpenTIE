@@ -18,17 +18,7 @@ typedef enum {
 	COMP_MODE_OPTIONS = 3,
 } ComputerMode;
 
-typedef struct ComputerDialogState {
-	Input* the_dialog;
-	bool tie98;
-	LandruSurfaceSet saved_surface_set;
-	Rect saved_view_frame;
-	Rect saved_view_clip;
-} ComputerDialogState;
-
-void computer_PrepareDialog(ComputerDialogState* state);
-bool computer_OpenDialog(ComputerDialogState* state);
-void computer_CloseDialog(ComputerDialogState* state);
+int16_t computer_Do_Computer_Dialog(void);
 
 #ifdef __cplusplus
 }

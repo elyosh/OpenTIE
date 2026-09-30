@@ -98,17 +98,12 @@ int16_t replay_loadreplayinput(void);
 void replay_calcreplayview(void);
 void replay_movecambehind(uint16_t obj_id);
 
-typedef struct ReplayScreenState {
-	uint16_t last_chase_status;
-	uint16_t last_track_status;
-} ReplayScreenState;
+uint16_t replay_savereplay(void);
+void replay_editstring(int16_t x, int16_t y, uint8_t limit, uint8_t* text, uint8_t background);
 
-uint16_t replay_savereplay_file(const uint8_t* name_input, const char* filename);
-
-void replay_InitScreen(ReplayScreenState* state);
-bool replay_UpdateScreen(ReplayScreenState* state);
+void replay_doreplayscreen(void);
 /* Returns true when the port must suspend playback and push the save task. */
-bool replay_replayinput(void);
+void replay_replayinput(void);
 
 /* Clip load (from .CLP files in persistent user storage). */
 int replay_loadreplay(void);
