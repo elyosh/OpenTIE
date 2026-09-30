@@ -242,9 +242,9 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 	spec_num = spec_getspecnum(shooter_ship_idx);
 
 	proj->side = shooter->side;
-	proj->heading = shooter->heading;
-	proj->roll = shooter->roll;
 	proj->pitch = shooter->pitch;
+	proj->roll = shooter->roll;
+	proj->heading = shooter->heading;
 
 	/* Species-indexed weapon tables: projectilevelocity / projectileweight
 	 * / projectilelife are keyed by (species - WEAPON_SPECIES_BASE).
@@ -289,17 +289,17 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 
 	if (is_warhead_type && capship) {
 		/* Capship turret branch: projectile fires straight up or
-		 * down (heading forced to 0 / 0x8000); world_z offset by
+		 * down (pitch forced to 0 / 0x8000); world_z offset by
 		 * the species' muzzle length. */
 		int16_t mlen = (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[spec_idx];
 		/* Capship turret muzzle: hp_y < 0 means the gun is mounted in the
 		 * negative-up direction (turret on the underside) -> projectile
-		 * inherits a flipped heading (0x8000) and world_z is offset by
+		 * points straight down (pitch 0x8000) and world_z is offset by
 		 * -mlen instead of +mlen. Binary tests v33 = hp.y at LASER_createprojectile
 		 * 0x2e304. */
 		int32_t new_z = (hp_y < 0) ? (muzzle_z - mlen) : (muzzle_z + mlen);
 
-		proj->heading = (hp_y < 0) ? (int16_t)0x8000 : (int16_t)0;
+		proj->pitch = (hp_y < 0) ? (int16_t)0x8000 : (int16_t)0;
 		proj->orient_dirty = 1;
 		proj->move_dirty = 1;
 		proj->world_x = muzzle_x;
@@ -419,9 +419,9 @@ uint16_t laser_createprojectilefromstatic(uint16_t static_obj_idx, uint16_t shoo
 	p->self_idx = (int16_t)(static_obj_idx + 0x3800);
 	p->ship_type_override = staticobjects[static_obj_idx].species;
 	p->side = fg_array[fg_idx].side;
-	p->heading = 0;
-	p->roll = 0;
 	p->pitch = 0;
+	p->roll = 0;
+	p->heading = 0;
 
 	ptype_idx = ptype - WEAPON_SPECIES_BASE;
 	proj_speed = (int16_t)projectilevelocity[ptype_idx];

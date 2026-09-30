@@ -2469,17 +2469,17 @@ void tie_updatescreen(void) {
 			trig2_ctop(pstate.player->world_x - camera.x, pstate.player->world_y - camera.y,
 					   pstate.player->world_z - camera.z);
 			camera.roll = 0;
-			camera.cam_heading = trig2_zangle;
-			camera.cam_pitch = trig2_xyangle;
+			camera.cam_pitch = trig2_zangle;
+			camera.cam_heading = trig2_xyangle;
 		}
-		fview_newcalcview(camera.roll, camera.cam_heading, camera.cam_pitch, 0, (int16_t)camera.side_angle,
+		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
 						  (int16_t)camera.up_angle, NULL);
 		TieFlightSnapshot_RecordCameraBasis();
 	} else if ((camera.view_zoom_flag && camera.view_heading_offset == 0) ||
 			   (camera.view_heading_offset != 0 && camera.view_pitch_offset != 0)) {
 		TieChaseCamera_Update();
 
-		fview_newcalcview(camera.roll, camera.cam_heading, camera.cam_pitch, 0, (int16_t)camera.side_angle,
+		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
 						  (int16_t)camera.up_angle, NULL);
 		TieFlightSnapshot_RecordCameraBasis();
 
@@ -2525,9 +2525,9 @@ void tie_updatescreen(void) {
 		/* Default: camera follows camera.view_target_obj's exact position+orient. */
 		FlightObject* o = &objects[camera.view_target_obj];
 		camera.roll = o->roll;
-		camera.cam_heading = o->heading;
 		camera.cam_pitch = o->pitch;
-		fview_newcalcview(camera.roll, camera.cam_heading, camera.cam_pitch, camera.bank,
+		camera.cam_heading = o->heading;
+		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, camera.yaw,
 						  (int16_t)camera.side_angle, (int16_t)camera.up_angle, o);
 		TieFlightSnapshot_RecordCameraBasis();
 		camera.x = o->world_x;
@@ -2618,7 +2618,7 @@ void tie_updatescreen(void) {
 
 				if (genus_v == GENUS_GATE)
 					lightflag = 0;
-				fview_newcalcrotate(obj->roll, obj->heading, obj->pitch, 0, obj);
+				fview_newcalcrotate(obj->roll, obj->pitch, obj->heading, 0, obj);
 				if (TIE_FLIGHT_TIE98) {
 					/* PORT: native OPT craft are emitted through the snapshot. */
 				} else if (genus_v == GENUS_GATE) {
@@ -2635,7 +2635,7 @@ void tie_updatescreen(void) {
 			case GENUS_PROJECTILE_PLAYER:
 			case GENUS_PROJECTILE_NPC:
 				if (tie_checkobjecteyexyz((uint16_t)obj_iter, bound)) {
-					fview_newcalcrotate(obj->roll, obj->heading, obj->pitch, 0, obj);
+					fview_newcalcrotate(obj->roll, obj->pitch, obj->heading, 0, obj);
 					draw_drawlaser((uint16_t)obj_iter);
 				}
 				break;
@@ -2651,7 +2651,7 @@ void tie_updatescreen(void) {
 			case GENUS_DEBRIS:    /* 11 */
 			case GENUS_EXPLOSION: /* 13 */
 				if (tie_checkobjecteyexyz((uint16_t)obj_iter, bound)) {
-					fview_newcalcrotate(obj->roll, obj->heading, obj->pitch, 0, obj);
+					fview_newcalcrotate(obj->roll, obj->pitch, obj->heading, 0, obj);
 					anim_drawverysimpleobject((uint16_t)obj_iter);
 				}
 				break;
@@ -2705,12 +2705,12 @@ void tie_updatescreen(void) {
 					uint16_t f =
 						TieFlightTiming_IsHighRate() ? TieFlightTiming_CompatibilityTicks() : frameticks;
 					s->roll_byte = (uint8_t)((int)s->roll_byte + (((int)f * (i >> 4)) >> 4));
-					s->yaw_byte = (uint8_t)((int)s->yaw_byte + (((int)f * (i >> 3)) >> 5));
-					s->pitch_byte = (uint8_t)((int)s->pitch_byte + (((int)f * (4 - (i >> 4))) >> 4));
+					s->pitch_byte = (uint8_t)((int)s->pitch_byte + (((int)f * (i >> 3)) >> 5));
+					s->heading_byte = (uint8_t)((int)s->heading_byte + (((int)f * (4 - (i >> 4))) >> 4));
 				}
 				fview_newcalcrotate((int16_t)((uint16_t)s->roll_byte << 8),
-									(int16_t)((uint16_t)s->yaw_byte << 8),
-									(int16_t)((uint16_t)s->pitch_byte << 8), 0, NULL);
+									(int16_t)((uint16_t)s->pitch_byte << 8),
+									(int16_t)((uint16_t)s->heading_byte << 8), 0, NULL);
 				static_drawstaticobject((uint16_t)i);
 			}
 		}

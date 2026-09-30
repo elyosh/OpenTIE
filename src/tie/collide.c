@@ -678,7 +678,7 @@ uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx
 	tot_speed = (int16_t)(proj_speed + shooter->current_speed);
 	shoot_mph = math2_mphconvert(tot_speed, framerate);
 	if (shooter->move_dirty)
-		fview_calcrotatemove(shooter->heading, shooter->pitch, shooter);
+		fview_calcrotatemove(shooter->pitch, shooter->heading, shooter);
 
 	/* Watcom unaligned: '*(int*)&move_dirty >>16' = moveX, etc. */
 	laserx = laserxold + lookahead_3frame * ((shoot_mph * shooter->moveX) >> 15);
@@ -696,7 +696,7 @@ uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx
 	/* Watcom unaligned: HIWORD(*(DWORD*)&spin_rate) = current_speed. */
 	tgt_mph = math2_mphconvert(tgt->current_speed, framerate);
 	if (tgt->move_dirty)
-		fview_calcrotatemove(tgt->heading, tgt->pitch, tgt);
+		fview_calcrotatemove(tgt->pitch, tgt->heading, tgt);
 
 	craftx = craftxold + lookahead_3frame * ((tgt_mph * tgt->moveX) >> 15);
 	crafty = craftyold + lookahead_3frame * ((tgt_mph * tgt->moveY) >> 15);
@@ -719,7 +719,7 @@ uint16_t collide_craftstarshipcollision(uint16_t craft_obj_idx, int16_t lookahea
 	laserzold = atk->world_z;
 	atk_speed = math2_mphconvert(atk->current_speed, framerate);
 	if (atk->move_dirty)
-		fview_calcrotatemove(atk->heading, atk->pitch, atk);
+		fview_calcrotatemove(atk->pitch, atk->heading, atk);
 
 	laserx = laserxold + lookahead_ticks * ((atk_speed * atk->moveX) >> 15);
 	lasery = laseryold + lookahead_ticks * ((atk_speed * atk->moveY) >> 15);
@@ -744,7 +744,7 @@ uint16_t collide_craftstarshipcollision(uint16_t craft_obj_idx, int16_t lookahea
 		craftzold = tgt->world_z;
 		tgt_speed = math2_mphconvert(tgt->current_speed, framerate);
 		if (tgt->move_dirty)
-			fview_calcrotatemove(tgt->heading, tgt->pitch, tgt);
+			fview_calcrotatemove(tgt->pitch, tgt->heading, tgt);
 
 		craftx = craftxold + lookahead_ticks * ((tgt_speed * tgt->moveX) >> 15);
 		crafty = craftyold + lookahead_ticks * ((tgt_speed * tgt->moveY) >> 15);
@@ -802,7 +802,7 @@ char collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
 	if (target_obj_idx == pstate.object_idx) {
 		FlightObject* pl = pstate.player;
 		if (pl->orient_dirty) {
-			fview_calcrotatemove(pl->heading, pl->pitch, pl);
+			fview_calcrotatemove(pl->pitch, pl->heading, pl);
 			fview_calcrotateorient(pl->roll, 0, pl);
 		}
 		/* Dot product of laser delta and player forward vector;
@@ -870,8 +870,8 @@ char collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
 		expl_obj->damage_state = 0;
 		expl_obj->anim_frame = 2;
 		expl_obj->current_speed = objects[target_obj_idx].current_speed;
-		expl_obj->heading = objects[target_obj_idx].heading;
 		expl_obj->pitch = objects[target_obj_idx].pitch;
+		expl_obj->heading = objects[target_obj_idx].heading;
 		expl_obj->roll = 0;
 		expl_obj->orient_dirty = 1;
 		expl_obj->move_dirty = 1;
@@ -1254,7 +1254,7 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 			{
 				uint16_t num_meshes =
 					TIE_FLIGHT_EDITION(objectblockptr->num_meshes, (uint16_t)modelmesh_getcount(tgt_ship));
-				int32_t pitch_kick = 0;
+				int32_t heading_kick = 0;
 				int32_t spin_kick = 0;
 				int16_t k = 0;
 				uint16_t mesh_idx = 0;
@@ -1287,13 +1287,13 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 							int32_t r0 = math2_getrandom();
 							int32_t r1 = math2_getrandom();
 							spin_kick = (int16_t)(((r0 >> 8) & 0x3F) + 64) << 8;
-							pitch_kick = (int16_t)(((r1 >> 8) & 7) + 8) << 8;
+							heading_kick = (int16_t)(((r1 >> 8) & 7) + 8) << 8;
 							if (k) {
-								pitch_kick = -pitch_kick;
+								heading_kick = -heading_kick;
 								spin_kick = -spin_kick;
 							}
 							objects[comp_obj].spin_rate = (int16_t)spin_kick;
-							objects[comp_obj].pitch = (int16_t)(pitch_kick + objects[comp_obj].pitch);
+							objects[comp_obj].heading = (int16_t)(heading_kick + objects[comp_obj].heading);
 							objects[comp_obj].orient_dirty = 1;
 							objects[comp_obj].move_dirty = 1;
 							objects[comp_obj].anim_frame_alt = 2;
@@ -1316,8 +1316,8 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 					if ((uint16_t)spin_kick < 0x8000u)
 						spin_main = -spin_main;
 					objects[target_obj_idx].spin_rate = (int16_t)spin_main;
-					if (pitch_kick) {
-						objects[target_obj_idx].pitch -= (int16_t)((uint16_t)pitch_kick / 2);
+					if (heading_kick) {
+						objects[target_obj_idx].heading -= (int16_t)((uint16_t)heading_kick / 2);
 						objects[target_obj_idx].orient_dirty = 1;
 						objects[target_obj_idx].move_dirty = 1;
 					}
@@ -1666,9 +1666,9 @@ void collide_collisions(void) {
 								pl->world_y = pl->world_y_prev = gatepreviousy[3];
 								pl->world_z = pl->world_z_prev = gatepreviousz[3];
 								pl->roll = gatepreviousroll[3];
-								pl->heading = gatepreviouspitch[3]; /* binary's storage swap */
-								pc->orient_heading = gatepreviouspitch[3];
-								pl->pitch = gatepreviousheading[3]; /* binary's storage swap */
+								pl->pitch = gatepreviouspitch[3];
+								pc->orient_pitch = gatepreviouspitch[3];
+								pl->heading = gatepreviousheading[3];
 								pl->move_dirty = 1;
 								pl->orient_dirty = 1;
 								fsfx_triggersfx(((uint16_t)math2_getrandom() & 0x8000u) ? 0x1C : 0x1D,
@@ -1695,7 +1695,7 @@ void collide_collisions(void) {
 															   TIE_TRACE_COLLISION_CRAFT, hit_offset);
 									collide_damagecraft(target_idx, hit_offset, 0, pstate.object_idx);
 									if (pl->orient_dirty) {
-										fview_calcrotatemove(pl->heading, pl->pitch, pl);
+										fview_calcrotatemove(pl->pitch, pl->heading, pl);
 										fview_calcrotateorient(pl->roll, 0, pl);
 									}
 									dot = (int16_t)(craftx - craftxold) * (int32_t)pl->fwd_x +

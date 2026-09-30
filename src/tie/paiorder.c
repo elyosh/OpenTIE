@@ -27,7 +27,7 @@ static const uint32_t noticeplaneranges[3] = { 0x2000, 0x3000, 0x4000 };
 // GLOBAL: TIE98 0x4E6778
 static const uint32_t noticemissileranges[3] = { 0x400, 0x800, 0x1000 };
 
-/* Pitch-difference octants: head-on (0), side (1), or tail (2). */
+/* Heading-difference octants: head-on (0), side (1), or tail (2). */
 // GLOBAL: TIE95 0xC5C80
 // GLOBAL: TIE98 0x4E6788
 static const uint8_t approachtable[8] = { 0, 1, 1, 2, 2, 1, 1, 0 };
@@ -105,7 +105,7 @@ int16_t paiorder_underattackorder(void) {
 				craftptr->attacker_idx = miss_i;
 				pai_distancebetween(a_ref, miss_i);
 				craftptr->mode_byte =
-					approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[a_ref].pitch) >> 13] ? 1 : 24;
+					approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[a_ref].heading) >> 13] ? 1 : 24;
 				paiman_initmaneuver();
 				return 0;
 			}
@@ -117,8 +117,8 @@ int16_t paiorder_underattackorder(void) {
 			uint16_t fj;
 
 			for (fj = 0; fj < NUM_CRAFTS; ++fj) {
+				uint16_t heading_delta;
 				uint16_t pitch_delta;
-				uint16_t head_delta;
 
 				if (fj == pstate.object_idx)
 					continue;
@@ -134,13 +134,13 @@ int16_t paiorder_underattackorder(void) {
 					continue;
 
 				pai_distancebetween(fj, a_ref);
-				pitch_delta = (uint16_t)((int16_t)trig2_xyangle - objects[fj].pitch);
+				heading_delta = (uint16_t)((int16_t)trig2_xyangle - objects[fj].heading);
+				if (heading_delta >= 0x8000u)
+					heading_delta = (uint16_t)-heading_delta;
+				pitch_delta = (uint16_t)((int16_t)trig2_zangle - objects[fj].pitch);
 				if (pitch_delta >= 0x8000u)
 					pitch_delta = (uint16_t)-pitch_delta;
-				head_delta = (uint16_t)((int16_t)trig2_zangle - objects[fj].heading);
-				if (head_delta >= 0x8000u)
-					head_delta = (uint16_t)-head_delta;
-				if (pitch_delta < 0x2000u && head_delta < 0x2000u) {
+				if (heading_delta < 0x2000u && pitch_delta < 0x2000u) {
 					craftptr->attacker_idx = fj;
 					break;
 				}
@@ -155,7 +155,7 @@ int16_t paiorder_underattackorder(void) {
 
 	pai_distancebetween(a_ref, attacker);
 	my_speed = spec_data[craftptr->species_idx].max_speed;
-	bucket = approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[a_ref].pitch) >> 13];
+	bucket = approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[a_ref].heading) >> 13];
 	att_speed =
 		objects[attacker].category ? 900 : spec_data[objects[attacker].craft_ptr->species_idx].max_speed;
 	rnd16 = (uint16_t)math2_getrandom();
@@ -496,7 +496,7 @@ int16_t paiorder_ontailorder(void) {
 		return 0;
 
 	pai_distancebetween(ai.active_obj_idx, attacker);
-	if (approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[ai.active_obj_idx].pitch) >> 13] != 2)
+	if (approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[ai.active_obj_idx].heading) >> 13] != 2)
 		return 0; /* not on tail */
 
 	rnd = (uint16_t)((uint8_t)math2_getrandom() & 3);
@@ -564,8 +564,8 @@ int16_t paiorder_hyperspaceorder(void) {
 			craftptr->current_order = 51;
 			craftptr->flight_flag = 5;
 			craftptr->ai_roll_state = 0;
-			craftptr->ai_heading_state = 0;
 			craftptr->ai_pitch_state = 0;
+			craftptr->ai_heading_state = 0;
 			craftptr->mode_byte = 21;
 			craftptr->push_accum_x = 0;
 			craftptr->mode_subbyte = 1;
@@ -931,7 +931,8 @@ int16_t paiorder_avoidhitorder(void) {
 				craftptr->attacker_idx = mi;
 				pai_distancebetween(active, mi);
 				craftptr->mode_byte =
-					approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[active].pitch) >> 13] ? 1 : 24;
+					approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[active].heading) >> 13] ? 1
+																									  : 24;
 				paiman_initmaneuver();
 				return 0;
 			}
@@ -949,8 +950,8 @@ int16_t paiorder_avoidhitorder(void) {
 			enemy_side = objects[active].side ^ 1;
 
 			for (fj = 0; fj < NUM_CRAFTS; ++fj) {
+				uint16_t heading_delta;
 				uint16_t pitch_delta;
-				uint16_t head_delta;
 
 				if (!objects[fj].ship_idx)
 					continue;
@@ -964,13 +965,13 @@ int16_t paiorder_avoidhitorder(void) {
 					continue;
 
 				pai_distancebetween(fj, active);
-				pitch_delta = (uint16_t)((int16_t)trig2_xyangle - objects[fj].pitch);
+				heading_delta = (uint16_t)((int16_t)trig2_xyangle - objects[fj].heading);
+				if (heading_delta >= 0x8000u)
+					heading_delta = (uint16_t)-heading_delta;
+				pitch_delta = (uint16_t)((int16_t)trig2_zangle - objects[fj].pitch);
 				if (pitch_delta >= 0x8000u)
 					pitch_delta = (uint16_t)-pitch_delta;
-				head_delta = (uint16_t)((int16_t)trig2_zangle - objects[fj].heading);
-				if (head_delta >= 0x8000u)
-					head_delta = (uint16_t)-head_delta;
-				if (pitch_delta < 0x2000u && head_delta < 0x2000u) {
+				if (heading_delta < 0x2000u && pitch_delta < 0x2000u) {
 					craftptr->attacker_idx = fj;
 					break;
 				}
@@ -1135,8 +1136,8 @@ int16_t paiorder_avoidstarshiporder(void) {
 	uint8_t saved_mode_byte;
 	uint16_t threat;
 	uint8_t mode_byte;
+	uint16_t new_heading;
 	uint16_t new_pitch;
-	uint16_t new_head;
 
 	if (craftptr->mode_byte == 28) {
 		return (craftptr->ai_plan_state == 0) ? 1 : 0;
@@ -1164,15 +1165,15 @@ int16_t paiorder_avoidstarshiporder(void) {
 		return 0;
 
 	/* Evasive orientation. craft_idx_in_fg parity picks the side; the
-	 * heading sign flips based on where our current target_heading sits. */
-	new_pitch = (craftptr->craft_idx_in_fg & 1) ? (uint16_t)(objects[ai.active_obj_idx].pitch + 0x4000)
-												: (uint16_t)(objects[ai.active_obj_idx].pitch - 0x4000);
-	craftptr->ai_target_pitch = new_pitch;
+	 * pitch sign flips based on where our current target pitch sits. */
+	new_heading = (craftptr->craft_idx_in_fg & 1) ? (uint16_t)(objects[ai.active_obj_idx].heading + 0x4000)
+												  : (uint16_t)(objects[ai.active_obj_idx].heading - 0x4000);
+	craftptr->ai_target_heading = new_heading;
 
-	new_head = (craftptr->ai_target_heading <= 0x4000u)
-				   ? (uint16_t)(objects[ai.active_obj_idx].heading + 0x4000)
-				   : (uint16_t)(objects[ai.active_obj_idx].heading - 0x4000);
-	craftptr->ai_target_heading = new_head;
+	new_pitch = (craftptr->ai_target_pitch <= 0x4000u)
+					? (uint16_t)(objects[ai.active_obj_idx].pitch + 0x4000)
+					: (uint16_t)(objects[ai.active_obj_idx].pitch - 0x4000);
+	craftptr->ai_target_pitch = new_pitch;
 
 	craftptr->mode_byte = 28;
 	paiman_initmaneuver();

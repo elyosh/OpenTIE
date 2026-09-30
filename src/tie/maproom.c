@@ -543,7 +543,7 @@ void maproom_drawmapitem(uint16_t obj_idx, uint16_t selected_obj_ref, char num_l
 		int32_t prev_eyex, prev_eyey, prev_eyez;
 
 		if (objects[obj_idx].orient_dirty) {
-			fview_calcrotatemove(objects[obj_idx].heading, objects[obj_idx].pitch, &objects[obj_idx]);
+			fview_calcrotatemove(objects[obj_idx].pitch, objects[obj_idx].heading, &objects[obj_idx]);
 			fview_calcrotateorient(objects[obj_idx].roll, 0, &objects[obj_idx]);
 		}
 
@@ -701,8 +701,8 @@ int32_t maproom_maproom(void) {
 	uint16_t view_mode;
 	uint16_t view_transition_progress;
 	int view_transition_active;
-	int16_t view_heading;
 	int16_t view_pitch;
+	int16_t view_heading;
 	int32_t camera_distance;
 	int8_t page_delta;
 	int buffer_toggle;
@@ -713,8 +713,8 @@ int32_t maproom_maproom(void) {
 	view_mode = continuation->view_mode;
 	view_transition_progress = continuation->view_transition_progress;
 	view_transition_active = continuation->view_transition_active;
-	view_heading = continuation->view_heading;
 	view_pitch = continuation->view_pitch;
+	view_heading = continuation->view_heading;
 	camera_distance = continuation->camera_distance;
 	page_delta = continuation->page_delta;
 	buffer_toggle = continuation->buffer_toggle;
@@ -800,7 +800,7 @@ int32_t maproom_maproom(void) {
 			logbuf2_setbufferdimensions((uint16_t)mapScreenWidth, (uint16_t)mapScreenHeight,
 										buffer_line_offset);
 
-		fview_newcalcview(0, 0x7FFF, pstate.player->pitch, 0, 0, 0, NULL);
+		fview_newcalcview(0, 0x7FFF, pstate.player->heading, 0, 0, 0, NULL);
 
 		maproom_setcamerafocus(pstate.object_idx, MAP_CAMERA_DEFAULT);
 		if (TIE_FLIGHT_TIE98)
@@ -813,8 +813,8 @@ int32_t maproom_maproom(void) {
 		view_mode = 0; /* 0 = side, 1 = top-down */
 		view_transition_active = 1;
 		view_transition_progress = 236;
-		view_heading = 0x4800; /* initial side-on heading */
-		view_pitch = pstate.player->pitch;
+		view_pitch = 0x4800; /* initial side-on pitch, just below level */
+		view_heading = pstate.player->heading;
 		camera_distance = MAP_CAMERA_DEFAULT;
 		page_delta = 0;
 		buffer_toggle = 1;
@@ -861,17 +861,17 @@ int32_t maproom_maproom(void) {
 				int32_t origin_x;
 				int32_t origin_y;
 
-				/* View transition: animates camera heading between 0x4800
+				/* View transition: animates camera pitch between 0x4800
 				 * (side-on) and 0x7FFF (top-down) over 118 ticks. Mid-transition
 				 * the camera is translated away from the focus by
 				 * `camera_distance` along the eye-Z axis, the view matrix is
-				 * recomputed at the interpolated heading, then the camera is
+				 * recomputed at the interpolated pitch, then the camera is
 				 * translated back so the focus point stays anchored on screen. */
 				if (view_transition_active) {
 					int32_t remaining = camera_distance;
 					int stepback = 0;
-					int16_t anim_heading;
 					int16_t anim_pitch;
+					int16_t anim_heading;
 
 					while (remaining > 0x7FFF) {
 						stepback++;
@@ -890,28 +890,28 @@ int32_t maproom_maproom(void) {
 					if (view_mode) {
 						/* Top -> Side transition. */
 						if (view_transition_progress >= 0x76u) {
-							fview_newcalcview(0, view_heading, view_pitch, 0, 0, 0, NULL);
+							fview_newcalcview(0, view_pitch, view_heading, 0, 0, 0, NULL);
 							view_transition_active = 0;
 						} else {
-							anim_heading = (int16_t)(((MAP_VIEW_TRANSITION - view_transition_progress) *
-													  (0x7FFF - (uint16_t)view_heading)) /
-														 MAP_VIEW_TRANSITION +
-													 view_heading);
-							anim_pitch = view_pitch;
-							fview_newcalcview(0, anim_heading, anim_pitch, 0, 0, 0, NULL);
+							anim_pitch = (int16_t)(((MAP_VIEW_TRANSITION - view_transition_progress) *
+													(0x7FFF - (uint16_t)view_pitch)) /
+													   MAP_VIEW_TRANSITION +
+												   view_pitch);
+							anim_heading = view_heading;
+							fview_newcalcview(0, anim_pitch, anim_heading, 0, 0, 0, NULL);
 						}
 					} else {
 						/* Side -> Top transition. */
 						if (view_transition_progress >= 0x76u) {
-							fview_newcalcview(0, 0x7FFF, view_pitch, 0, 0, 0, NULL);
+							fview_newcalcview(0, 0x7FFF, view_heading, 0, 0, 0, NULL);
 							view_transition_active = 0;
 						} else {
-							anim_pitch = view_pitch;
-							anim_heading =
+							anim_heading = view_heading;
+							anim_pitch =
 								(int16_t)(0x7FFF - ((MAP_VIEW_TRANSITION - view_transition_progress) *
-													(0x7FFF - (uint16_t)view_heading)) /
+													(0x7FFF - (uint16_t)view_pitch)) /
 													   MAP_VIEW_TRANSITION);
-							fview_newcalcview(0, anim_heading, anim_pitch, 0, 0, 0, NULL);
+							fview_newcalcview(0, anim_pitch, anim_heading, 0, 0, 0, NULL);
 						}
 					}
 
@@ -1603,7 +1603,7 @@ int32_t maproom_maproom(void) {
 
 			/* Pan / rotate handling: in side-mode (or with Ctrl held / numpad
 			 * keys) the deltas pan the camera in world XY; otherwise (top-mode
-			 * and not Ctrl, not numpad) they rotate heading/pitch. */
+			 * and not Ctrl, not numpad) they rotate the view heading (X) and pitch (Y). */
 			if (inputdeltax || inputdeltay) {
 				const int16_t dx_adj = user_framerateadjust(inputdeltax);
 				const int16_t dy_adj = user_framerateadjust(inputdeltay);
@@ -1621,8 +1621,8 @@ int32_t maproom_maproom(void) {
 						camera.z += scratch * ((worldeyeC2 * (int16_t)dy_adj) >> 15);
 					} else {
 						view_transition_active = 1;
-						view_pitch = (int16_t)(view_pitch + (int16_t)dx_adj);
-						view_heading = (int16_t)(view_heading - (int16_t)dy_adj);
+						view_heading = (int16_t)(view_heading + (int16_t)dx_adj);
+						view_pitch = (int16_t)(view_pitch - (int16_t)dy_adj);
 					}
 					frame_dirty = 1;
 				}

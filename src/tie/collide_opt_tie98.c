@@ -223,7 +223,7 @@ uint16_t collide_checksweptmodelcollision(uint16_t source_object_index, uint16_t
 
 	craftptr = target->craft_ptr;
 	if (target->orient_dirty) {
-		fview_calcrotatemove(target->heading, target->pitch, target);
+		fview_calcrotatemove(target->pitch, target->heading, target);
 		fview_calcrotateorient(target->roll, 0, target);
 	}
 

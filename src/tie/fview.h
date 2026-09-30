@@ -10,18 +10,24 @@
 extern "C" {
 #endif
 
-/* Camera view matrix from Euler angles with side/up offsets */
-void fview_newcalcview(int16_t roll, int16_t heading, int16_t pitch, int16_t bank, int16_t side_angle,
+/* Engine angles are 16-bit binary angles. Heading is the world-frame angle in
+ * the XY plane and pitch the angle of the forward vector from world +Z:
+ * 0 is straight up, 0x4000 level and 0x8000 straight down. Yaw and roll turn
+ * the resulting basis about its own up and forward axes. */
+
+/* Camera view matrix from Euler angles, then look offsets about the view's
+ * side axis (look pitch) and up axis (look yaw) */
+void fview_newcalcview(int16_t roll, int16_t pitch, int16_t heading, int16_t yaw, int16_t side_angle,
 					   int16_t up_angle, FlightObject* craft);
 
 /* Craft rotation from Euler angles with optional cached orientation */
-void fview_newcalcrotate(int16_t roll, int16_t heading, int16_t pitch, int16_t bank, FlightObject* craft);
+void fview_newcalcrotate(int16_t roll, int16_t pitch, int16_t heading, int16_t yaw, FlightObject* craft);
 
-/* Build S/f/U basis vectors from heading + pitch */
-void fview_calcrotatemove(int16_t heading, int16_t pitch, FlightObject* craft);
+/* Build S/f/U basis vectors from pitch + heading */
+void fview_calcrotatemove(int16_t pitch, int16_t heading, FlightObject* craft);
 
-/* Apply roll + bank rotations to craft orientation */
-void fview_calcrotateorient(int16_t roll, int16_t bank, FlightObject* craft);
+/* Apply yaw + roll rotations to craft orientation */
+void fview_calcrotateorient(int16_t roll, int16_t yaw, FlightObject* craft);
 
 /* Matrix multiply rotworldeye = worldeye * calc + light transform */
 void fview_calcrotworldeye(void);

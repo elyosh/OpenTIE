@@ -484,9 +484,9 @@ void trig2_ptoc2dim(void) {
 }
 
 // FUNCTION: TIE95 0x5C024
-void trig2_movexyz(uint16_t distance, int16_t pitch, uint16_t heading) {
-	trig2_phi = heading;
-	trig2_theta = 0x4000 - pitch;
+void trig2_movexyz(uint16_t distance, int16_t heading, uint16_t pitch) {
+	trig2_phi = pitch;
+	trig2_theta = 0x4000 - heading;
 	trig2_rho = distance;
 	/* ptoc3dim body, expanded in place in the retail function. */
 	trig2_zoffset = trig2_sinedwordmult(trig2_rho, trig2_phi);

@@ -138,8 +138,8 @@ static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t compone
 	ember->age_ticks = 0;
 	ember->death_timer = 0;
 	ember->current_speed = parent->current_speed;
-	ember->heading = parent->heading;
 	ember->pitch = parent->pitch;
+	ember->heading = parent->heading;
 	ember->roll = 0;
 	ember->orient_dirty = 1;
 	ember->move_dirty = 1;
@@ -221,7 +221,7 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 
 	/* Rebuild local orientation matrix if dirty */
 	if (craft->orient_dirty) {
-		fview_calcrotatemove(craft->heading, craft->pitch, craft);
+		fview_calcrotatemove(craft->pitch, craft->heading, craft);
 		fview_calcrotateorient(craft->roll, 0, craft);
 	}
 
@@ -599,8 +599,8 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
 	ember->age_ticks = 0;
 	ember->death_timer = 0;
 	ember->current_speed = parent->current_speed;
-	ember->heading = parent->heading;
 	ember->pitch = parent->pitch;
+	ember->heading = parent->heading;
 	ember->roll = 0;
 	ember->orient_dirty = 1;
 	ember->move_dirty = 1;
@@ -662,8 +662,8 @@ static uint16_t starship_makestarshipcompexplo_tie98(FlightObject* craft, uint16
 	ember->death_timer = 0;
 	ember->damage_state = (uint8_t)(effect_size >> 6);
 	ember->current_speed = 0;
-	ember->heading = 0;
 	ember->pitch = 0;
+	ember->heading = 0;
 	ember->roll = 0;
 	ember->orient_dirty = 1;
 	ember->move_dirty = 1;
@@ -687,7 +687,7 @@ static void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_sh
 	craft = &objects[obj_idx];
 	craftptr = craft->craft_ptr;
 	if (craft->orient_dirty)
-		fview_newcalcrotate(craft->roll, craft->heading, craft->pitch, 0, craft);
+		fview_newcalcrotate(craft->roll, craft->pitch, craft->heading, 0, craft);
 
 	model_type = craft->ship_idx;
 
@@ -743,7 +743,7 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 	craftptr = craft->craft_ptr;
 
 	if (craft->orient_dirty) {
-		fview_newcalcrotate(craft->roll, craft->heading, craft->pitch, 0, craft);
+		fview_newcalcrotate(craft->roll, craft->pitch, craft->heading, 0, craft);
 	}
 
 	draw_lockshipfileptrs(craft->ship_idx);
@@ -883,8 +883,8 @@ uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_
 	 * heavily-LOD'd ships, big blast on non-LOD ships. */
 	ember->damage_state = (uint8_t)((int32_t)size >> (6 - model_scale_shift));
 	ember->current_speed = 0;
-	ember->heading = 0;
 	ember->pitch = 0;
+	ember->heading = 0;
 	ember->orient_dirty = 1;
 	ember->move_dirty = 1;
 
@@ -944,8 +944,8 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	int32_t aim_wx;
 	int32_t aim_wy;
 	int32_t aim_wz;
-	int16_t pitch;
 	int16_t heading;
+	int16_t pitch;
 	uint16_t new_obj;
 	FlightObject* laser;
 	int is_turbo;
@@ -1169,8 +1169,8 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	}
 
 	trig2_ctop(aim_wx - gun_wx, aim_wy - gun_wy, aim_wz - gun_wz);
-	pitch = trig2_xyangle;
-	heading = trig2_zangle;
+	heading = trig2_xyangle;
+	pitch = trig2_zangle;
 	(void)math2_getrandom(); /* binary burns one RNG value for parity */
 
 	new_obj = create_findslot(7);
@@ -1205,8 +1205,8 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	laser->age_ticks = 1;
 	laser->self_idx = (int16_t)craft_obj_idx;
 	laser->ship_type_override = craft->ship_idx;
-	laser->heading = heading;
 	laser->pitch = pitch;
+	laser->heading = heading;
 	laser->current_speed = (int16_t)projectilevelocity[proj_type];
 	laser->collision_radius = (int16_t)projectileweight[proj_type];
 	laser->roll = 0;
@@ -1214,7 +1214,7 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	laser->move_dirty = 1;
 	laser->death_timer = (int16_t)(708 * projectilelife[proj_type]);
 
-	fview_calcrotatemove(heading, pitch, laser);
+	fview_calcrotatemove(pitch, heading, laser);
 
 	/* Apply craft-velocity push to the gun position before placing the
 	 * bolt -- gives a "fired from a moving platform" trail. The push

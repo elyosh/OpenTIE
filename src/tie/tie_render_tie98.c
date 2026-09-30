@@ -82,17 +82,17 @@ void tie_updatescreen_tie98(void) {
 			trig2_ctop(pstate.player->world_x - camera.x, pstate.player->world_y - camera.y,
 					   pstate.player->world_z - camera.z);
 			camera.roll = 0;
-			camera.cam_heading = trig2_zangle;
-			camera.cam_pitch = trig2_xyangle;
+			camera.cam_pitch = trig2_zangle;
+			camera.cam_heading = trig2_xyangle;
 		}
-		fview_newcalcview(camera.roll, camera.cam_heading, camera.cam_pitch, 0, (int16_t)camera.side_angle,
+		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
 						  (int16_t)camera.up_angle, NULL);
 	} else if ((camera.view_zoom_flag && camera.view_heading_offset == 0) ||
 			   (camera.view_heading_offset != 0 && camera.view_pitch_offset != 0)) {
 		uint8_t model_type;
 
 		TieChaseCamera_Update();
-		fview_newcalcview(camera.roll, camera.cam_heading, camera.cam_pitch, 0, (int16_t)camera.side_angle,
+		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
 						  (int16_t)camera.up_angle, NULL);
 		if (hyperspaceflag == 4 || hyperspaceflag == 6) {
 			camera.z = 0;
@@ -121,9 +121,9 @@ void tie_updatescreen_tie98(void) {
 	} else {
 		FlightObject* object = &objects[camera.view_target_obj];
 		camera.roll = object->roll;
-		camera.cam_heading = object->heading;
 		camera.cam_pitch = object->pitch;
-		fview_newcalcview(camera.roll, camera.cam_heading, camera.cam_pitch, camera.bank,
+		camera.cam_heading = object->heading;
+		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, camera.yaw,
 						  (int16_t)camera.side_angle, (int16_t)camera.up_angle, object);
 		camera.x = object->world_x;
 		camera.y = object->world_y;
@@ -236,12 +236,12 @@ void tie_updatescreen_tie98(void) {
 			const uint16_t rotation_ticks =
 				TieFlightTiming_IsHighRate() ? TieFlightTiming_CompatibilityTicks() : frameticks;
 			object->roll_byte += rotation_ticks * (static_index >> 4) / 16;
-			object->yaw_byte += rotation_ticks * (static_index >> 3) / 32;
-			object->pitch_byte += rotation_ticks * (4 - (static_index >> 4)) / 16;
+			object->pitch_byte += rotation_ticks * (static_index >> 3) / 32;
+			object->heading_byte += rotation_ticks * (4 - (static_index >> 4)) / 16;
 		}
 		fview_newcalcrotate((int16_t)((uint16_t)object->roll_byte << 8),
-							(int16_t)((uint16_t)object->yaw_byte << 8),
-							(int16_t)((uint16_t)object->pitch_byte << 8), 0, NULL);
+							(int16_t)((uint16_t)object->pitch_byte << 8),
+							(int16_t)((uint16_t)object->heading_byte << 8), 0, NULL);
 		RenderList_QueueObject(static_index + OBJ_REF_STATIC_BASE, objecteyez);
 		localLightCnt = 0;
 	}
@@ -263,7 +263,7 @@ void tie_updatescreen_tie98(void) {
 					tie_getobjecteyexyz_tie98(object_index);
 					if (object->genus == GENUS_GATE)
 						lightflag = 0;
-					fview_newcalcrotate(object->roll, object->heading, object->pitch, 0, object);
+					fview_newcalcrotate(object->roll, object->pitch, object->heading, 0, object);
 					if (object->genus == GENUS_GATE) {
 						gate_drawtraininggate_tie98(object_index);
 					} else {
@@ -277,13 +277,13 @@ void tie_updatescreen_tie98(void) {
 				case GENUS_PROJECTILE_PLAYER:
 				case GENUS_PROJECTILE_NPC:
 					tie_getobjecteyexyz_tie98(object_index);
-					fview_newcalcrotate(object->roll, object->heading, object->pitch, 0, object);
+					fview_newcalcrotate(object->roll, object->pitch, object->heading, 0, object);
 					draw_drawlaser_tie98(object_index);
 					break;
 				case GENUS_DEBRIS:
 				case GENUS_EXPLOSION:
 					tie_getobjecteyexyz_tie98(object_index);
-					fview_newcalcrotate(object->roll, object->heading, object->pitch, 0, object);
+					fview_newcalcrotate(object->roll, object->pitch, object->heading, 0, object);
 					anim_drawverysimpleobject_tie98(object_index);
 					break;
 				default:
@@ -295,8 +295,8 @@ void tie_updatescreen_tie98(void) {
 			if (object->ship_class >= 8 && object->ship_class <= 11) {
 				tie_getstaticobjecteyeposition(static_index);
 				fview_newcalcrotate((int16_t)((uint16_t)object->roll_byte << 8),
-									(int16_t)((uint16_t)object->yaw_byte << 8),
-									(int16_t)((uint16_t)object->pitch_byte << 8), 0, NULL);
+									(int16_t)((uint16_t)object->pitch_byte << 8),
+									(int16_t)((uint16_t)object->heading_byte << 8), 0, NULL);
 				static_drawstaticobject_tie98(static_index);
 				localLightCnt = 0;
 			}

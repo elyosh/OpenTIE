@@ -6,7 +6,7 @@
  *
  * Runs each frame from TIE_doframe (after PAI_updateplaneai and
  * LASER_weaponsfire). Iterates objects[0..NUM_CRAFTS-1] and:
- *   1) drives the three orientation autopilots (roll, heading, pitch)
+ *   1) drives the three orientation autopilots (roll, pitch, heading)
  *      whose state / target / step fields live in CraftData;
  *   2) handles altitude recovery (climb-to-waypoint-z, dive pullout);
  *   3) slews current_speed toward a target value determined by
@@ -16,7 +16,7 @@
  * Setters for the ai_*_state / ai_target_* / ai_*_step fields live in
  * PAIMAN_* (initimmelmann, cruisemaneuver, attackmaneuver, etc.). The
  * speed/rate caps come from SpecData (max_accel, decel_gain_frac,
- * roll_per_pitch_frac, spec_20/24/26_cache).
+ * roll_per_heading_frac, and the heading/roll/pitch rates at +0x20/+0x24/+0x26).
  */
 
 #include "tie/tie.h"
@@ -65,13 +65,13 @@ void dynamix_adjustvelocity(uint16_t obj_idx, int16_t target_speed, int16_t allo
  * dynamix_pulloutdive -- altitude-recovery autopilot.
  *
  * altitude = obj.world_z - craftptr->waypoint_z_cache.
- * If altitude <= 256  : snap orient_heading to level (0x4000),
- *                       clear ai_heading_state, mark ai_dive_state = 2 (done).
+ * If altitude <= 256  : snap orient_pitch to level (0x4000),
+ *                       clear ai_pitch_state, mark ai_dive_state = 2 (done).
  * Else                : estimate Z descent per frame from obj.moveZ * framerate
  *                       (2x scale for genus != 0, 3x for genus == 0).
  *                       If one frame would overshoot the target, start levelling
- *                       by halving the heading offset from 0x4000 and flipping
- *                       ai_heading_state = 1 (turn left).
+ *                       by halving the pitch offset from 0x4000 and setting
+ *                       ai_pitch_state = 1 (nose up).
  */
 void dynamix_pulloutdive(uint16_t obj_idx);
 

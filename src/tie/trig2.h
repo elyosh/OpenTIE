@@ -38,7 +38,7 @@ void trig2_calcarctan(int32_t a, int32_t b, int16_t* out_ratio, int16_t* out_ang
 /* Polar ↔ Cartesian conversions (operate on globals) */
 void trig2_ptoc3dim(void);
 void trig2_ptoc2dim(void);
-void trig2_movexyz(uint16_t distance, int16_t pitch, uint16_t heading);
+void trig2_movexyz(uint16_t distance, int16_t heading, uint16_t pitch);
 void trig2_ctop(int32_t x, int32_t y, int32_t z);
 void trig2_ctop2dim(int32_t x, int32_t y);
 void trig2_ctoptwodim(int32_t a, int32_t b);

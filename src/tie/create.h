@@ -18,7 +18,7 @@ extern "C" {
 int16_t create_loadmission(const char* filename);
 
 /* Hyperspace-in transition: rebuild mission state and clear non-player
- * FlightObjects + static slots. Resets player to heading=0x4000, pitch=0.
+ * FlightObjects + static slots. Resets player to pitch=0x4000, heading=0.
  * Returns player_craft pointer. */
 CraftData* create_createhyperin(void);
 
@@ -81,7 +81,7 @@ void create_getworldposition(uint16_t obj_or_kind, int fg_idx);
 void create_createbackdrop(void);
 
 /* Detach a random un-damaged flag-bit-2 mesh of obj_idx's craft; spawns
- * debris via create_createcomponent, applies random spin/pitch/heading,
+ * debris via create_createcomponent, applies random spin/heading/pitch,
  * marks mesh as MESH_STATE_BLOWN_OFF. stop_after_first == 0 means process all such
  * meshes; otherwise stop on first detach (always 1 in shipped code). */
 int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first);
@@ -90,7 +90,7 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first);
  * death_timer = 236 * (rand&7 + 4) ticks. Returns slot or 0xFFFF. */
 uint16_t create_createcomponent(uint16_t parent_obj, uint8_t mesh_idx);
 
-/* Spawn a genus-13 flame ember: clones parent, jitters pitch/heading,
+/* Spawn a genus-13 flame ember: clones parent, jitters heading/pitch,
  * bumps speed. death_timer = 236 * (rand&3 + 1). Returns slot or 0xFFFF. */
 uint16_t create_createember(uint16_t parent_obj);
 
@@ -166,8 +166,8 @@ extern int32_t fglocz;
 extern int16_t staging_static_x;
 extern int16_t staging_static_y;
 extern int16_t staging_static_z;
+extern int8_t staging_static_heading;
 extern int8_t staging_static_pitch;
-extern int8_t staging_static_yaw;
 extern int8_t staging_static_roll;
 extern uint16_t craftcnt;
 extern uint16_t fgcnt;

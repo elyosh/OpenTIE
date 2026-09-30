@@ -7,8 +7,8 @@ typedef struct MaproomState {
 	uint16_t view_mode;
 	uint16_t view_transition_progress;
 	int view_transition_active;
-	int16_t view_heading;
 	int16_t view_pitch;
+	int16_t view_heading;
 	int32_t camera_distance;
 	int8_t page_delta;
 	int buffer_toggle;

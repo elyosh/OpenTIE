@@ -30,9 +30,7 @@
 /* outchar is declared in tie.h as a function-pointer global. */
 
 /* Player-pose history rings. 4-slot ring; slot [3] is the snapshot pose
- * used by collide_collisions on a briefing/training/combat collision.
- * NOTE: the binary writes player->heading into gatepreviouspitch[0] and
- * player->pitch into gatepreviousheading[0] (swap); readers compensate. */
+ * used by collide_collisions on a briefing/training/combat collision. */
 // GLOBAL: TIE95 0xD4AFC
 // GLOBAL: TIE98 0x6258A8
 int16_t gatepreviousroll[4];
@@ -145,14 +143,9 @@ void gate_savegatelastpos(void) {
 	gatepreviousy[0] = pstate.player->world_y_prev;
 	gatepreviousz[0] = pstate.player->world_z_prev;
 	gatepreviousroll[0] = pstate.player->roll;
-	gatepreviouspitch[0] = pstate.player->heading; /* Binary writes heading here; see note. */
-	gatepreviousheading[0] =
-		pstate.player->pitch; /* And pitch here -- the two names are swapped vs their uses. */
+	gatepreviouspitch[0] = pstate.player->pitch;
+	gatepreviousheading[0] = pstate.player->heading;
 }
-/* Note on the field swap: the binary assigns player->heading into
- * gatepreviouspitch[0] and player->pitch into gatepreviousheading[0]. It is
- * consistent between writer and readers (collide / user), so both sides see
- * the same swap. Preserved verbatim to match the binary. */
 
 /* -------------------------------------------------------------------------
  * gate_outdnum  (0x298a8)
@@ -279,7 +272,7 @@ void gate_drawtraininggate_tie98(uint16_t object_index) {
  * gate_createtraininggates  (0x27e60)
  *
  * Build the 12-gate training course: zero each gate's FlightObject /
- * CraftData, assign ship_idx / heading / pitch / roll from a hard-coded
+ * CraftData, assign ship_idx / pitch / heading / roll from a hard-coded
  * per-gate init table, call FVIEW_calcrotatemove / calcrotateorient to
  * populate the craftS/f/U basis vectors, and place the gate at a running
  * cumulative world position. Called once at mission start from
@@ -292,8 +285,8 @@ void gate_drawtraininggate_tie98(uint16_t object_index) {
 #endif
 typedef struct {
 	uint16_t ship_idx[14]; /* slots 0 and 13 unused */
-	int16_t heading[14];
 	int16_t pitch[14];
+	int16_t heading[14];
 	int16_t roll[14];
 } GATE_InitTable;
 #ifdef __WATCOMC__
@@ -324,27 +317,27 @@ void gate_createtraininggates(void) {
 	init.ship_idx[11] = 98;
 	init.ship_idx[12] = 99;
 
-	/* Heading table (radians-as-int16, 0x4000 = 90 deg). */
-	init.heading[1] = 0x4000;
-	init.heading[2] = 0x4000;
-	init.heading[5] = 0x4000;
-	init.heading[6] = 0x4000;
-	init.heading[7] = (int16_t)0x8000;
-	init.heading[8] = (int16_t)0x8000;
-	init.heading[9] = 0x4000;
-	init.heading[10] = 0x4000;
-	init.heading[11] = 0x4000;
-	init.heading[12] = 0x4000;
-
-	/* Pitch table. */
-	init.pitch[4] = 0x4000;
-	init.pitch[5] = (int16_t)0xC000; /* -0x4000 == -90 deg */
-	init.pitch[6] = (int16_t)0xC000;
+	/* Pitch table (binary angle, 0x4000 = 90 deg = level). */
+	init.pitch[1] = 0x4000;
+	init.pitch[2] = 0x4000;
+	init.pitch[5] = 0x4000;
+	init.pitch[6] = 0x4000;
+	init.pitch[7] = (int16_t)0x8000;
 	init.pitch[8] = (int16_t)0x8000;
-	init.pitch[9] = (int16_t)0x8000;
-	init.pitch[10] = (int16_t)0x8000;
+	init.pitch[9] = 0x4000;
+	init.pitch[10] = 0x4000;
 	init.pitch[11] = 0x4000;
 	init.pitch[12] = 0x4000;
+
+	/* Heading table. */
+	init.heading[4] = 0x4000;
+	init.heading[5] = (int16_t)0xC000; /* -0x4000 == -90 deg */
+	init.heading[6] = (int16_t)0xC000;
+	init.heading[8] = (int16_t)0x8000;
+	init.heading[9] = (int16_t)0x8000;
+	init.heading[10] = (int16_t)0x8000;
+	init.heading[11] = 0x4000;
+	init.heading[12] = 0x4000;
 
 	/* Roll table. */
 	init.roll[6] = (int16_t)0x8000;
@@ -439,10 +432,10 @@ void gate_createtraininggates(void) {
 			draw_lockshipfileptrs(ship_idx);
 
 		/* Apply orientation. */
-		obj->heading = init.heading[gate_idx];
 		obj->pitch = init.pitch[gate_idx];
+		obj->heading = init.heading[gate_idx];
 		obj->roll = init.roll[gate_idx];
-		fview_calcrotatemove(obj->heading, obj->pitch, obj);
+		fview_calcrotatemove(obj->pitch, obj->heading, obj);
 		fview_calcrotateorient(obj->roll, 0, obj);
 
 		/* TIE95 derives 16-bit offsets from its object block and doubles the

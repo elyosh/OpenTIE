@@ -118,14 +118,14 @@ int16_t paiman_dropoffmaneuver(void);         /* 30 */
 /* ---- Internal helpers (called by the maneuver handlers) ----------- */
 
 /* Point the AI craft's flight vector at craftptr->waypoint_*_cache.
- *   pitch_bias: added to xyangle before writing ai_target_pitch.
- *   drive_heading: non-zero = also update target_heading / ai_heading_state. */
-void paiman_setflighttotarget(uint16_t pitch_bias, int16_t drive_heading);
+ *   heading_bias: added to xyangle before writing ai_target_heading.
+ *   drive_pitch: non-zero = also update ai_target_pitch / ai_pitch_state. */
+void paiman_setflighttotarget(uint16_t heading_bias, int16_t drive_pitch);
 
-/* Drive or snap objects[ai.active_obj_idx].pitch toward ai_target_pitch.
- * Small residual (|delta| <= 0x300): snap immediately (pitch_state=3).
- * Large residual: pitch_state=2 + pitch_step=arg. */
-void paiman_setturn(int16_t pitch_step);
+/* Drive or snap objects[ai.active_obj_idx].heading toward ai_target_heading.
+ * Small residual (|delta| <= 0x300): snap immediately (heading_state=3).
+ * Large residual: heading_state=2 + heading_step=arg. */
+void paiman_setturn(int16_t heading_step);
 
 /* Set throttle_speed directly. */
 void paiman_setpower(uint16_t throttle);
@@ -134,8 +134,8 @@ void paiman_setpower(uint16_t throttle);
  * the shield/beam/laser power-balance margin and the craft's max_speed_cache. */
 void paiman_setspeed(uint16_t obj_idx, uint16_t desired_speed);
 
-/* Level-the-wings helper: roll to 0, freeze pitch, clear climb/dive,
- * target_heading = 0x4000 with short-way heading_state. */
+/* Level-the-wings helper: roll to 0, freeze heading, clear climb/dive,
+ * target_pitch = 0x4000 with short-way pitch_state. */
 void paiman_controlplane(void);
 
 /* Per-frame formation-follow offset: rotate formposx/y/z[6*formation +
@@ -149,17 +149,17 @@ void paiman_calcplanelead(uint16_t tgt_obj_idx);
 
 /* Core target-turn helper used by initsetupattackmaneuver /
  * setupattackmaneuver. Resolves waypoint (static -> settarget, live ->
- * calcplanelead), sets ai_target_pitch = xyangle + pitch_bias, requests
- * a turn, drives heading to zangle. */
-void paiman_attacktarget(int16_t pitch_bias);
+ * calcplanelead), sets ai_target_heading = xyangle + heading_bias, requests
+ * a turn, drives pitch to zangle. */
+void paiman_attacktarget(int16_t heading_bias);
 
 /* Turn-inside / turn-away sub-helpers: reload ai_plan_state countdown
  * with a per-skill-tier delay and aim 180° from the attacker. */
 uint16_t paiman_setnewturninside(uint16_t own_obj_idx);
 uint16_t paiman_setnewturnaway(uint16_t own_obj_idx);
 
-/* Random ±Z jink for speed-away — sets push_accum_z, rotates target
- * pitch, and kicks a 180° turn. */
+/* Random ±Z jink for speed-away — sets push_accum_z, offsets target
+ * heading, and kicks a turn. */
 void paiman_setjink(uint16_t self_idx);
 
 /* Cycle to the next waypoint on a cruise/patrol loop. */

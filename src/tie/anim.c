@@ -769,7 +769,7 @@ void anim_updateanimation_tie98(void) {
 					worldlocy -= object->world_y;
 					worldlocz -= object->world_z;
 					if (object->orient_dirty) {
-						fview_calcrotatemove(object->heading, object->pitch, object);
+						fview_calcrotatemove(object->pitch, object->heading, object);
 						fview_calcrotateorient(object->roll, 0, object);
 					}
 
@@ -991,7 +991,7 @@ void anim_updateanimation(void) {
 				worldlocy = rel_y;
 
 				if (parent->orient_dirty) {
-					fview_calcrotatemove(parent->heading, parent->pitch, parent);
+					fview_calcrotatemove(parent->pitch, parent->heading, parent);
 					fview_calcrotateorient(parent->roll, 0, parent);
 				}
 
@@ -1170,14 +1170,14 @@ void anim_dohyperspace(void) {
 	switch (hyperspaceflag) {
 		case 1: {
 			uint16_t roll = (uint16_t)pstate.player->roll;
-			uint16_t pitch = (uint16_t)pstate.player->pitch;
 			uint16_t heading = (uint16_t)pstate.player->heading;
+			uint16_t pitch = (uint16_t)pstate.player->pitch;
 
-			if (roll || heading != 0x4000u || pstate.player->pitch != 0) {
+			if (roll || pitch != 0x4000u || pstate.player->heading != 0) {
 				/* Still leveling -- nudge each axis toward its target. */
 				int16_t lvl = (int16_t)(20 * frameticks);
 				int16_t src_roll = pstate.player->roll;
-				int16_t src_pitch = pstate.player->pitch;
+				int16_t src_heading = pstate.player->heading;
 
 				if (roll >= 0x8000u) {
 					roll = (uint16_t)(roll + lvl);
@@ -1188,26 +1188,26 @@ void anim_dohyperspace(void) {
 					if ((uint16_t)(src_roll - lvl) >= 0x8000u)
 						roll = 0;
 				}
-				if (pitch >= 0x8000u) {
-					pitch = (uint16_t)(pitch + lvl);
-					if ((uint16_t)(lvl + src_pitch) < 0x8000u)
-						pitch = 0;
-				} else {
-					pitch = (uint16_t)(pitch - lvl);
-					if ((uint16_t)(src_pitch - lvl) >= 0x8000u)
-						pitch = 0;
-				}
-				if (heading >= 0xC000u || (uint16_t)pstate.player->heading <= 0x4000u) {
-					if (heading != 0x4000u) {
-						uint32_t h = (uint16_t)(lvl + heading);
-						heading = (uint16_t)h;
-						if ((uint16_t)h > 0x4000u && h < 49152u)
-							heading = 0x4000u;
-					}
+				if (heading >= 0x8000u) {
+					heading = (uint16_t)(heading + lvl);
+					if ((uint16_t)(lvl + src_heading) < 0x8000u)
+						heading = 0;
 				} else {
 					heading = (uint16_t)(heading - lvl);
-					if ((uint16_t)(pstate.player->heading - lvl) < 0x4000u)
-						heading = 0x4000u;
+					if ((uint16_t)(src_heading - lvl) >= 0x8000u)
+						heading = 0;
+				}
+				if (pitch >= 0xC000u || (uint16_t)pstate.player->pitch <= 0x4000u) {
+					if (pitch != 0x4000u) {
+						uint32_t p = (uint16_t)(lvl + pitch);
+						pitch = (uint16_t)p;
+						if ((uint16_t)p > 0x4000u && p < 49152u)
+							pitch = 0x4000u;
+					}
+				} else {
+					pitch = (uint16_t)(pitch - lvl);
+					if ((uint16_t)(pstate.player->pitch - lvl) < 0x4000u)
+						pitch = 0x4000u;
 				}
 			} else if (hyperticks < 0x49Cu) {
 				if (hyperticks >= 0x2C4u) {
@@ -1289,10 +1289,10 @@ void anim_dohyperspace(void) {
 
 			pstate.player->orient_dirty = 1;
 			pstate.player->roll = (int16_t)roll;
-			pstate.player->pitch = (int16_t)pitch;
 			pstate.player->heading = (int16_t)heading;
+			pstate.player->pitch = (int16_t)pitch;
 			pstate.player->move_dirty = pstate.player->orient_dirty;
-			pstate.player_craft->orient_heading = heading;
+			pstate.player_craft->orient_pitch = pitch;
 			break;
 		}
 

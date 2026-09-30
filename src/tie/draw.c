@@ -247,7 +247,7 @@ void draw_drawlaser_tie98(uint16_t laser_obj_idx) {
 	saved_roll = object->roll;
 	object->roll += (int16_t)(trig2_arctan(up_dot, side_dot) - 0x4000);
 	object->orient_dirty = 1;
-	fview_newcalcrotate(object->roll, object->heading, object->pitch, 0, object);
+	fview_newcalcrotate(object->roll, object->pitch, object->heading, 0, object);
 	FlightModel_Draw_Object(object);
 	object->roll = saved_roll;
 	object->orient_dirty = 1;
@@ -368,8 +368,8 @@ void draw_drawhyperstar_tie98(int16_t star_idx) {
 	objects[0].genus = GENUS_PROJECTILE_NPC;
 	objects[0].roll =
 		(int16_t)(trig2_arctan(objects[0].world_z - camera.z, objects[0].world_x - camera.x) + 0x4000);
-	objects[0].pitch = 0;
-	objects[0].heading = 0x4000;
+	objects[0].heading = 0;
+	objects[0].pitch = 0x4000;
 	objects[0].orient_dirty = 1;
 	fview_newcalcrotate(objects[0].roll, 0x4000, 0, 0, &objects[0]);
 	g_flightModelOverride = &g_hyperspaceModelHeaderPatch;
@@ -1316,7 +1316,7 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 	/* --- Full polygon-plane test. */
 	draw_lockshipfileptrs(loser_ship_idx);
 	b_mesh = &componentblockptr[owner_obj_id_field];
-	fview_newcalcrotate(owner_obj->roll, owner_obj->heading, owner_obj->pitch, 0, owner_obj);
+	fview_newcalcrotate(owner_obj->roll, owner_obj->pitch, owner_obj->heading, 0, owner_obj);
 	b_detail_marker = (int8_t)craftptr->mesh_rotation[owner_obj_id_field];
 	if (b_detail_marker && (b_mesh->rotation_offset || mission.train_craft_type))
 		fview_componentrotation((int16_t)((int)b_detail_marker << 8), b_mesh);

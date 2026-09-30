@@ -488,7 +488,7 @@ static uint32_t world_hash(void) {
 		hash_u32(&hash, (uint32_t)o->world_x_prev);
 		hash_u32(&hash, (uint32_t)o->world_y_prev);
 		hash_u32(&hash, (uint32_t)o->world_z_prev);
-		hash_u32(&hash, (uint32_t)(uint16_t)o->pitch | ((uint32_t)(uint16_t)o->heading << 16));
+		hash_u32(&hash, (uint32_t)(uint16_t)o->heading | ((uint32_t)(uint16_t)o->pitch << 16));
 		hash_u32(&hash, (uint32_t)(uint16_t)o->roll | ((uint32_t)(uint16_t)o->current_speed << 16));
 		hash_u32(&hash, (uint32_t)(uint16_t)o->collision_radius);
 		if (i < NUM_CRAFTS && o->ship_idx && o->craft_ptr) {

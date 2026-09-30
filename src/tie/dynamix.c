@@ -175,8 +175,8 @@ void dynamix_pulloutdive(uint16_t obj_idx) {
 
 	if (altitude <= 256) {
 		/* At target altitude: level off and mark the dive as done. */
-		craftptr->orient_heading = 0x4000;
-		craftptr->ai_heading_state = 0;
+		craftptr->orient_pitch = 0x4000;
+		craftptr->ai_pitch_state = 0;
 		craftptr->ai_dive_state = 2;
 		return;
 	}
@@ -184,7 +184,7 @@ void dynamix_pulloutdive(uint16_t obj_idx) {
 	/* Re-derive move basis if the cached one is stale (obj orientation
 	 * changed since last FVIEW_transformcraft). */
 	if (obj->move_dirty) {
-		fview_calcrotatemove(obj->heading, obj->pitch, obj);
+		fview_calcrotatemove(obj->pitch, obj->heading, obj);
 	}
 
 	if (obj->genus) {
@@ -197,10 +197,10 @@ void dynamix_pulloutdive(uint16_t obj_idx) {
 		/* One frame would overshoot: start levelling. Halve the
 		 * current offset from 0x4000 so we approach the horizon
 		 * smoothly instead of snapping to it. */
-		uint16_t oh = craftptr->orient_heading;
-		if (oh > 0x4000u) {
-			craftptr->ai_heading_state = 1;
-			craftptr->ai_target_heading = (uint16_t)(((oh - 0x4000u) / 2) + 0x4000u);
+		uint16_t op = craftptr->orient_pitch;
+		if (op > 0x4000u) {
+			craftptr->ai_pitch_state = 1;
+			craftptr->ai_target_pitch = (uint16_t)(((op - 0x4000u) / 2) + 0x4000u);
 		}
 	}
 }
@@ -226,7 +226,7 @@ enum {
 };
 
 /* Per-axis autopilot helpers factor out the shared "step toward target"
- * scaffolding used by roll / heading / pitch. They work on objects[i]
+ * scaffolding used by roll / pitch / heading. They work on objects[i]
  * via the supplied pointers to keep the body of planedynamics readable. */
 
 // FUNCTION: TIE95 0x1F4FC
@@ -235,9 +235,9 @@ void dynamix_planedynamics(void) {
 
 	for (i = 0; i < NUM_CRAFTS; i++) {
 		FlightObject* obj = &objects[i];
-		int16_t saved_heading;
-		int16_t saved_roll;
 		int16_t saved_pitch;
+		int16_t saved_roll;
+		int16_t saved_heading;
 		uint16_t throttle_frac;
 		uint16_t link;
 
@@ -251,15 +251,15 @@ void dynamix_planedynamics(void) {
 			TieDynamicsTimingState* state = TieFlightTimingState_Dynamics(i);
 			if (craftptr->ai_roll_state < 1 || craftptr->ai_roll_state > 3)
 				state->autopilot_remainder[0] = 0;
-			if (!craftptr->ai_heading_state)
+			if (!craftptr->ai_pitch_state)
 				state->autopilot_remainder[1] = 0;
-			if (craftptr->flight_flag == 2 || !craftptr->ai_pitch_state)
+			if (craftptr->flight_flag == 2 || !craftptr->ai_heading_state)
 				state->autopilot_remainder[2] = 0;
 		}
 #endif
-		saved_heading = obj->heading;
-		saved_roll = obj->roll;
 		saved_pitch = obj->pitch;
+		saved_roll = obj->roll;
+		saved_heading = obj->heading;
 		pspecnum = craftptr->species_idx;
 
 		/* Throttle fraction driven from the cockpit throttle_speed when
@@ -315,10 +315,10 @@ void dynamix_planedynamics(void) {
 				}
 			}
 
-			/* ---- Heading autopilot ---- */
-			if (craftptr->ai_heading_state) {
+			/* ---- Pitch autopilot ---- */
+			if (craftptr->ai_pitch_state) {
 				/* |delta|, with underflow-test idiom. */
-				int32_t d = (int16_t)(craftptr->ai_target_heading - craftptr->orient_heading);
+				int32_t d = (int16_t)(craftptr->ai_target_pitch - craftptr->orient_pitch);
 				uint16_t step;
 
 				if ((uint16_t)d >= 0x8000u) {
@@ -327,103 +327,104 @@ void dynamix_planedynamics(void) {
 
 #ifdef TIE_MODERN
 				if (TieFlightTiming_IsHighRate())
-					step = TieFlightIntegration_AutopilotStep(
-						i, 1, craftptr->heading_rate_cache, craftptr->ai_target_b, craftptr->ai_heading_step);
+					step = TieFlightIntegration_AutopilotStep(i, 1, craftptr->pitch_rate_cache,
+															  craftptr->ai_target_b, craftptr->ai_pitch_step);
 				else
 #endif
 					step = math2_fraction(
-						math2_fraction((uint16_t)((uint16_t)craftptr->heading_rate_cache / framerate),
+						math2_fraction((uint16_t)((uint16_t)craftptr->pitch_rate_cache / framerate),
 									   (uint16_t)craftptr->ai_target_b),
-						craftptr->ai_heading_step);
+						craftptr->ai_pitch_step);
 
-				if (craftptr->ai_heading_state == 1) {
-					/* Turn left: decrement orient_heading. */
-					if ((uint16_t)d > step || craftptr->ai_heading_force) {
-						craftptr->orient_heading -= step;
-						if (craftptr->orient_heading >= 0xE000u) {
+				if (craftptr->ai_pitch_state == 1) {
+					/* Nose up: decrement orient_pitch toward 0 (straight up). */
+					if ((uint16_t)d > step || craftptr->ai_pitch_force) {
+						craftptr->orient_pitch -= step;
+						if (craftptr->orient_pitch >= 0xE000u) {
 							/* Crossed upper pole: mirror
 							 * attitude and flip direction. */
-							craftptr->orient_heading = (uint16_t)-craftptr->orient_heading;
-							obj->pitch ^= (int16_t)0x8000;
+							craftptr->orient_pitch = (uint16_t)-craftptr->orient_pitch;
+							obj->heading ^= (int16_t)0x8000;
 							obj->roll ^= (int16_t)0x8000;
-							craftptr->ai_heading_force = 0;
-							craftptr->ai_heading_state = 2;
+							craftptr->ai_pitch_force = 0;
+							craftptr->ai_pitch_state = 2;
 						}
 					} else {
 						/* Within one step: snap to target. */
-						craftptr->orient_heading = craftptr->ai_target_heading;
-						craftptr->ai_heading_state = 3;
+						craftptr->orient_pitch = craftptr->ai_target_pitch;
+						craftptr->ai_pitch_state = 3;
 					}
-				} else if (craftptr->ai_heading_state == 2) {
-					/* Turn right: increment. */
-					if ((uint16_t)d > step || craftptr->ai_heading_force) {
-						uint16_t nh = (uint16_t)(craftptr->orient_heading + step);
-						craftptr->orient_heading = nh;
-						if (nh >= 0x8000u) {
-							craftptr->orient_heading = (uint16_t)-nh;
-							obj->pitch ^= (int16_t)0x8000;
+				} else if (craftptr->ai_pitch_state == 2) {
+					/* Nose down: increment toward 0x8000 (straight down). */
+					if ((uint16_t)d > step || craftptr->ai_pitch_force) {
+						uint16_t np = (uint16_t)(craftptr->orient_pitch + step);
+						craftptr->orient_pitch = np;
+						if (np >= 0x8000u) {
+							craftptr->orient_pitch = (uint16_t)-np;
+							obj->heading ^= (int16_t)0x8000;
 							obj->roll ^= (int16_t)0x8000;
-							craftptr->ai_heading_force = 0;
-							craftptr->ai_heading_state = 1;
+							craftptr->ai_pitch_force = 0;
+							craftptr->ai_pitch_state = 1;
 						}
 					} else {
-						craftptr->orient_heading = craftptr->ai_target_heading;
-						craftptr->ai_heading_state = 3;
+						craftptr->orient_pitch = craftptr->ai_target_pitch;
+						craftptr->ai_pitch_state = 3;
 					}
 				}
 			}
 
-			/* ---- Pitch autopilot ---- */
-			if (craftptr->flight_flag != 2 && craftptr->ai_pitch_state) {
-				uint16_t delta_pitch = (uint16_t)(craftptr->ai_target_pitch - obj->pitch);
-				if (delta_pitch) {
-					uint16_t pitch_step;
+			/* ---- Heading autopilot ---- */
+			if (craftptr->flight_flag != 2 && craftptr->ai_heading_state) {
+				uint16_t delta_heading = (uint16_t)(craftptr->ai_target_heading - obj->heading);
+				if (delta_heading) {
+					uint16_t heading_step;
 					uint16_t step_for_bleed;
 					bool stepped = false;
 					uint8_t rs;
 
 #ifdef TIE_MODERN
 					if (TieFlightTiming_IsHighRate())
-						pitch_step = TieFlightIntegration_AutopilotStep(
-							i, 2, craftptr->pitch_rate_cache, craftptr->ai_target_d, craftptr->ai_pitch_step);
+						heading_step = TieFlightIntegration_AutopilotStep(i, 2, craftptr->heading_rate_cache,
+																		  craftptr->ai_target_d,
+																		  craftptr->ai_heading_step);
 					else
 #endif
-						pitch_step = math2_fraction(
-							math2_fraction((uint16_t)((uint16_t)craftptr->pitch_rate_cache / framerate),
+						heading_step = math2_fraction(
+							math2_fraction((uint16_t)((uint16_t)craftptr->heading_rate_cache / framerate),
 										   (uint16_t)craftptr->ai_target_d),
-							craftptr->ai_pitch_step);
-					step_for_bleed = pitch_step;
+							craftptr->ai_heading_step);
+					step_for_bleed = heading_step;
 
-					if (delta_pitch >= 0x8000u) {
-						/* target < current: pitch down */
-						if ((uint16_t)-delta_pitch > pitch_step) {
-							obj->pitch -= pitch_step;
+					if (delta_heading >= 0x8000u) {
+						/* target < current: decrement heading */
+						if ((uint16_t)-delta_heading > heading_step) {
+							obj->heading -= heading_step;
 							stepped = true;
 						}
 					} else {
-						/* target > current: pitch up */
-						if (delta_pitch > pitch_step) {
-							obj->pitch += pitch_step;
+						/* target > current: increment heading */
+						if (delta_heading > heading_step) {
+							obj->heading += heading_step;
 							stepped = true;
 						}
 					}
 
 					if (!stepped) {
 						/* Within one step of target: snap there. */
-						obj->pitch = craftptr->ai_target_pitch;
-						craftptr->ai_pitch_state = 3;
+						obj->heading = craftptr->ai_target_heading;
+						craftptr->ai_heading_state = 3;
 						step_for_bleed = 0;
 					}
 
-					/* Pitch->roll visual coupling: only when the roll
-					 * autopilot isn't actively steering. */
+					/* Heading->roll visual coupling (bank into the turn):
+					 * only when the roll autopilot isn't actively steering. */
 					rs = craftptr->ai_roll_state;
 					if (rs == 0 || rs == 4) {
 						const SpecData* sp = &spec_data[pspecnum];
 						uint16_t roll_bleed =
-							math2_fraction(step_for_bleed, (uint16_t)sp->roll_per_pitch_frac);
-						if (delta_pitch >= 0x8000u) {
-							/* pitching down -> bank one way */
+							math2_fraction(step_for_bleed, (uint16_t)sp->roll_per_heading_frac);
+						if (delta_heading >= 0x8000u) {
+							/* decreasing heading -> bank one way */
 							obj->roll += roll_bleed;
 						} else {
 							obj->roll -= roll_bleed;
@@ -439,7 +440,7 @@ void dynamix_planedynamics(void) {
 			/* Climb finished once we cross the target altitude. */
 			if (craftptr->waypoint_z_cache <= obj->world_z) {
 				craftptr->ai_climb_state = 0;
-				craftptr->orient_heading = 0x4000;
+				craftptr->orient_pitch = 0x4000;
 			}
 		}
 		if (i != pstate.object_idx && craftptr->ai_dive_state == 1 && (craftptr->status_flags & CSF_ALIVE) &&
@@ -462,7 +463,7 @@ void dynamix_planedynamics(void) {
 				uint16_t scaled;
 				uint16_t target;
 
-				obj->heading = craftptr->orient_heading;
+				obj->pitch = craftptr->orient_pitch;
 				cap = craftptr->max_speed_cache;
 				margin =
 					(int16_t)(6 - (craftptr->laser_power + craftptr->beam_power + craftptr->shield_power));
@@ -491,7 +492,7 @@ void dynamix_planedynamics(void) {
 				craftptr->ai_climb_state = 0;
 				craftptr->ai_dive_state = 0;
 				craftptr->ai_roll_state = 0;
-				craftptr->ai_heading_state = 0;
+				craftptr->ai_pitch_state = 0;
 				break;
 			case 2:
 				/* Coast: bleed speed if still moving. */
@@ -523,9 +524,9 @@ void dynamix_planedynamics(void) {
 				break;
 		}
 
-		/* Mirror the (possibly-updated) pitch back to the craft shadow. */
-		craftptr->orient_pitch = obj->pitch;
-		if (saved_heading != obj->heading || saved_pitch != obj->pitch || saved_roll != obj->roll) {
+		/* Mirror the (possibly-updated) heading back to the craft shadow. */
+		craftptr->orient_heading = obj->heading;
+		if (saved_pitch != obj->pitch || saved_heading != obj->heading || saved_roll != obj->roll) {
 			obj->move_dirty = 1;
 			obj->orient_dirty = 1;
 		}
@@ -536,10 +537,10 @@ void dynamix_planedynamics(void) {
 		link = (uint16_t)craftptr->tow_slave_ref;
 		if (link != 0xFFFFu && link < OBJ_REF_STATIC_BASE) {
 			FlightObject* bud = &objects[link];
-			bud->heading = obj->heading;
 			bud->pitch = obj->pitch;
+			bud->heading = obj->heading;
 			bud->roll = obj->roll;
-			bud->craft_ptr->orient_heading = craftptr->orient_heading;
+			bud->craft_ptr->orient_pitch = craftptr->orient_pitch;
 			bud->move_dirty = 1;
 			bud->orient_dirty = 1;
 		}

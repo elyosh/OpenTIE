@@ -1330,7 +1330,7 @@ void panel_addbliptoradar(uint16_t target_obj) {
 		}
 
 		if (pl->orient_dirty) {
-			fview_calcrotatemove(pl->heading, pl->pitch, pl);
+			fview_calcrotatemove(pl->pitch, pl->heading, pl);
 			fview_calcrotateorient(pl->roll, 0, pl);
 		}
 
@@ -1359,7 +1359,7 @@ void panel_addbliptoradar(uint16_t target_obj) {
 		}
 
 		if (pl->orient_dirty) {
-			fview_calcrotatemove(pl->heading, pl->pitch, pl);
+			fview_calcrotatemove(pl->pitch, pl->heading, pl);
 			fview_calcrotateorient(pl->roll, 0, pl);
 		}
 
@@ -3031,8 +3031,8 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 		uint16_t sc = staticobjects[si].ship_class;
 		if (sc >= 8 && sc <= 11) {
 			fview_newcalcrotate((int16_t)(staticobjects[si].roll_byte << 8),
-								(int16_t)(staticobjects[si].yaw_byte << 8),
-								(int16_t)(staticobjects[si].pitch_byte << 8), 0, NULL);
+								(int16_t)(staticobjects[si].pitch_byte << 8),
+								(int16_t)(staticobjects[si].heading_byte << 8), 0, NULL);
 			lightflag = 1;
 			static_drawstaticobject(si);
 		}
@@ -3046,12 +3046,12 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 			case GENUS_STARSHIP:
 			case GENUS_PLATFORM:
 				craftptr = op->craft_ptr;
-				fview_newcalcrotate(op->roll, op->heading, op->pitch, 0, op);
+				fview_newcalcrotate(op->roll, op->pitch, op->heading, 0, op);
 				draw_drawcomplexobject(pstate.target_obj_idx);
 				break;
 			case GENUS_PROJECTILE_PLAYER:
 			case GENUS_PROJECTILE_NPC:
-				fview_newcalcrotate(op->roll, op->heading, op->pitch, 0, op);
+				fview_newcalcrotate(op->roll, op->pitch, op->heading, 0, op);
 				draw_drawlaser(pstate.target_obj_idx);
 				break;
 			default:
@@ -3203,8 +3203,8 @@ void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int c
 		StaticObject* object = &staticobjects[static_index];
 		if (object->ship_class >= 8 && object->ship_class <= 11) {
 			fview_newcalcrotate((int16_t)((uint16_t)object->roll_byte << 8),
-								(int16_t)((uint16_t)object->yaw_byte << 8),
-								(int16_t)((uint16_t)object->pitch_byte << 8), 0, NULL);
+								(int16_t)((uint16_t)object->pitch_byte << 8),
+								(int16_t)((uint16_t)object->heading_byte << 8), 0, NULL);
 			lightflag = 1;
 			static_drawstaticobject_tie98(static_index);
 		}
@@ -3218,13 +3218,13 @@ void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int c
 			case GENUS_STARSHIP:
 			case GENUS_PLATFORM:
 				craftptr = object->craft_ptr;
-				fview_newcalcrotate(object->roll, object->heading, object->pitch, 0, object);
+				fview_newcalcrotate(object->roll, object->pitch, object->heading, 0, object);
 				draw_process_object_components_tie98(pstate.target_obj_idx);
 				FlightModel_Draw_Object(object);
 				break;
 			case GENUS_PROJECTILE_PLAYER:
 			case GENUS_PROJECTILE_NPC:
-				fview_newcalcrotate(object->roll, object->heading, object->pitch, 0, object);
+				fview_newcalcrotate(object->roll, object->pitch, object->heading, 0, object);
 				draw_drawlaser_tie98(pstate.target_obj_idx);
 				break;
 			default:
@@ -3420,7 +3420,7 @@ void panel_pointcamera_tie98(uint16_t target_obj, int16_t use_hud_size) {
 	y = (int16_t)(delta_y >> 1);
 	z = (int16_t)(delta_z >> 1);
 	if (player->orient_dirty) {
-		fview_calcrotatemove(player->heading, player->pitch, player);
+		fview_calcrotatemove(player->pitch, player->heading, player);
 		fview_calcrotateorient(player->roll, 0, player);
 	}
 	dot = (uint32_t)((int32_t)player->side_z * z);
@@ -3460,7 +3460,7 @@ void panel_pointcamera_tie98(uint16_t target_obj, int16_t use_hud_size) {
 	else
 		up = -((-value + 0x7fff) / 0x8000);
 	trig2_ctop(side, forward, up);
-	fview_newcalcview(player->roll, player->heading, player->pitch, 0, (int16_t)(0x4000 - trig2_zangle),
+	fview_newcalcview(player->roll, player->pitch, player->heading, 0, (int16_t)(0x4000 - trig2_zangle),
 					  trig2_xyangle, NULL);
 
 	if (target_obj >= OBJ_REF_STATIC_BASE) {
@@ -3592,7 +3592,7 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 
 	trig2_ctop(side_proj, fwd_proj, up_proj);
 
-	fview_newcalcview(pl->roll, pl->heading, pl->pitch, 0, (int16_t)(0x4000 - trig2_zangle),
+	fview_newcalcview(pl->roll, pl->pitch, pl->heading, 0, (int16_t)(0x4000 - trig2_zangle),
 					  (uint16_t)trig2_xyangle, NULL);
 
 	if (target_obj >= 0x3800u) {

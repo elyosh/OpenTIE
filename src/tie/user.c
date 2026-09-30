@@ -263,8 +263,8 @@ void user_resetview(void) {
 		panelrts_setnewpilotview(view_idx);
 		for (i = 0; i < 60; ++i) {
 			camera.cam_chase_roll_hist[i] = camera.roll;
-			camera.cam_chase_heading_hist[i] = (int16_t)camera.cam_heading;
 			camera.cam_chase_pitch_hist[i] = (int16_t)camera.cam_pitch;
+			camera.cam_chase_heading_hist[i] = (int16_t)camera.cam_heading;
 		}
 		TieChaseCamera_Reset();
 	} else {
@@ -578,7 +578,7 @@ int16_t user_targetincross(uint16_t obj_idx, int32_t strict) {
 	}
 
 	if (pl->orient_dirty) {
-		fview_calcrotatemove(pl->heading, pl->pitch, pl);
+		fview_calcrotatemove(pl->pitch, pl->heading, pl);
 		fview_calcrotateorient(pl->roll, 0, pl);
 	}
 
@@ -708,7 +708,7 @@ int16_t user_targetonscreen(uint16_t obj_or_kind) {
 	}
 
 	if (pl->orient_dirty) {
-		fview_calcrotatemove(pl->heading, pl->pitch, pl);
+		fview_calcrotatemove(pl->pitch, pl->heading, pl);
 		fview_calcrotateorient(pl->roll, 0, pl);
 	}
 
@@ -973,8 +973,9 @@ void user_setnewtarget(uint16_t new_obj) {
 
 /* Quaternion pitch decomposition remains controllable at the world ±Z poles.
  *
- * TIE basis (columns S, U, f in world frame) at (β=heading polar from -Z,
- * α=pitch azimuth, γ=roll around forward):
+ * TIE basis (columns S, U, f in world frame; f is the negated forward vector)
+ * at (β=pitch, the forward vector's polar angle from +Z, α=heading azimuth,
+ * γ=roll around forward):
  *     S_0 = ( cos α, -sin α, 0)
  *     U_0 = (-cos β sin α, -cos β cos α, sin β)
  *     f   = (-sin β sin α, -sin β cos α, -cos β)
@@ -982,9 +983,9 @@ void user_setnewtarget(uint16_t new_obj) {
  */
 
 /*
- * user_calcdeltapitch -- rotate craft's forward vector by (dheading,
- * dpitch) and decompose back to Euler, writing pitch/heading/roll into
- * objects[obj_idx]. Binary 0x5EAF8.
+ * user_calcdeltapitch -- rotate the craft basis by dpitch about its side
+ * axis and dyaw about its up axis, then decompose back to Euler, writing
+ * heading/pitch/roll into objects[obj_idx]. Binary 0x5EAF8.
  *
  * With TIE_USER_GIMBAL_LOCK_FIX: float matrix → quaternion →
  * Euler-with-gimbal-branch round-trip. Without it, Q15 decomposition
@@ -996,21 +997,21 @@ void user_setnewtarget(uint16_t new_obj) {
  * code.
  */
 // FUNCTION: TIE95 0x60A4C
-void user_calcdeltapitch(int16_t dheading, int16_t dpitch, uint16_t obj_idx, CraftData* cp) {
+void user_calcdeltapitch(int16_t dpitch, int16_t dyaw, uint16_t obj_idx, CraftData* cp) {
 	FlightObject* o = &objects[obj_idx];
 
-	uint16_t new_heading;
-	int16_t new_pitch;
-	int16_t cos_p;
-	int16_t sin_p;
+	uint16_t new_pitch;
+	int16_t new_heading;
 	int16_t cos_h;
 	int16_t sin_h;
-	int32_t cH_sP;
-	int32_t sH_sP;
-	int32_t cH_cP;
-	int32_t sH_cP;
-	int32_t neg_sin_p;
+	int16_t cos_p;
+	int16_t sin_p;
+	int32_t cP_sH;
+	int32_t sP_sH;
+	int32_t cP_cH;
+	int32_t sP_cH;
 	int32_t neg_sin_h;
+	int32_t neg_sin_p;
 	int32_t S1;
 	int32_t S2;
 	int32_t S3;
@@ -1023,12 +1024,12 @@ void user_calcdeltapitch(int16_t dheading, int16_t dpitch, uint16_t obj_idx, Cra
 	int16_t new_roll;
 
 	if (TieOrientationHook_Enabled()) {
-		int16_t new_heading, new_pitch, new_roll;
-		TieOrientationHook_Apply(o->heading, o->pitch, o->roll, dheading, dpitch, (inputbuttons & 0xE) != 2,
-								 &new_heading, &new_pitch, &new_roll);
-		cp->orient_heading = (uint16_t)new_heading;
-		o->heading = new_heading;
+		int16_t new_pitch, new_heading, new_roll;
+		TieOrientationHook_Apply(o->pitch, o->heading, o->roll, dpitch, dyaw, (inputbuttons & 0xE) != 2,
+								 &new_pitch, &new_heading, &new_roll);
+		cp->orient_pitch = (uint16_t)new_pitch;
 		o->pitch = new_pitch;
+		o->heading = new_heading;
 		o->roll = new_roll;
 		return;
 	}
@@ -1038,7 +1039,7 @@ void user_calcdeltapitch(int16_t dheading, int16_t dpitch, uint16_t obj_idx, Cra
 	 * both inputs are near zero.  All `*(int*)&obj->field >> 16` Watcom
 	 * unaligned loads are rewritten here. */
 	if (o->orient_dirty) {
-		fview_calcrotatemove(o->heading, o->pitch, o);
+		fview_calcrotatemove(o->pitch, o->heading, o);
 		fview_calcrotateorient(o->roll, 0, o);
 	}
 	calcf1 = -o->fwd_x;
@@ -1051,39 +1052,39 @@ void user_calcdeltapitch(int16_t dheading, int16_t dpitch, uint16_t obj_idx, Cra
 	calcS2 = o->side_y;
 	calcS3 = o->side_z;
 
-	fview_transformaxes(calcS1, calcS2, calcS3, dheading);
+	fview_transformaxes(calcS1, calcS2, calcS3, dpitch);
 	if ((inputbuttons & 0xE) != 2)
-		fview_transformaxes(calcU1, calcU2, calcU3, dpitch);
+		fview_transformaxes(calcU1, calcU2, calcU3, dyaw);
 
-	new_heading = (uint16_t)trig2_arccos(-(int16_t)calcf3);
-	cp->orient_heading = new_heading;
-	new_pitch = (int16_t)-trig2_arctan((int16_t)calcf1, -(int16_t)calcf2);
+	new_pitch = (uint16_t)trig2_arccos(-(int16_t)calcf3);
+	cp->orient_pitch = new_pitch;
+	new_heading = (int16_t)-trig2_arctan((int16_t)calcf1, -(int16_t)calcf2);
 
-	cos_p = trig2_getsignedcos(new_pitch);
-	sin_p = trig2_getsignedsin(new_pitch);
-	cos_h = trig2_getsignedcos((int16_t)new_heading);
-	sin_h = trig2_getsignedsin((int16_t)new_heading);
+	cos_h = trig2_getsignedcos(new_heading);
+	sin_h = trig2_getsignedsin(new_heading);
+	cos_p = trig2_getsignedcos((int16_t)new_pitch);
+	sin_p = trig2_getsignedsin((int16_t)new_pitch);
 
-	cH_sP = (cos_h * sin_p) >> 15;
-	sH_sP = (sin_h * sin_p) >> 15;
-	cH_cP = (cos_h * cos_p) >> 15;
-	sH_cP = (sin_h * cos_p) >> 15;
-	neg_sin_p = -(int32_t)sin_p;
+	cP_sH = (cos_p * sin_h) >> 15;
+	sP_sH = (sin_p * sin_h) >> 15;
+	cP_cH = (cos_p * cos_h) >> 15;
+	sP_cH = (sin_p * cos_h) >> 15;
 	neg_sin_h = -(int32_t)sin_h;
+	neg_sin_p = -(int32_t)sin_p;
 
 	/* Rotate each of the three basis vectors (S, U, f) by the new euler. */
 
-	S1 = neg_sin_p * calcS2 + (int32_t)cos_p * calcS1;
+	S1 = neg_sin_h * calcS2 + (int32_t)cos_h * calcS1;
 	if (S1 >= 0x40000000)
 		S1 = 0x3FFF0000;
 	if (S1 <= -0x40000000)
 		S1 = -0x3FFF0000;
-	S2 = neg_sin_h * calcS3 + (int16_t)cH_cP * calcS2 + (int16_t)cH_sP * calcS1;
+	S2 = neg_sin_p * calcS3 + (int16_t)cP_cH * calcS2 + (int16_t)cP_sH * calcS1;
 	if (S2 >= 0x40000000)
 		S2 = 0x3FFF0000;
 	if (S2 <= -0x40000000)
 		S2 = -0x3FFF0000;
-	S3 = (int32_t)cos_h * calcS3 + (int16_t)sH_cP * calcS2 + (int16_t)sH_sP * calcS1;
+	S3 = (int32_t)cos_p * calcS3 + (int16_t)sP_cH * calcS2 + (int16_t)sP_sH * calcS1;
 	if (S3 >= 0x40000000)
 		S3 = 0x3FFF0000;
 	if (S3 <= -0x40000000)
@@ -1092,17 +1093,17 @@ void user_calcdeltapitch(int16_t dheading, int16_t dpitch, uint16_t obj_idx, Cra
 	calcS2 = (int16_t)(S2 >> 15);
 	calcS3 = (int16_t)(S3 >> 15);
 
-	U1 = neg_sin_p * calcU2 + (int32_t)cos_p * calcU1;
+	U1 = neg_sin_h * calcU2 + (int32_t)cos_h * calcU1;
 	if (U1 >= 0x40000000)
 		U1 = 0x3FFF0000;
 	if (U1 <= -0x40000000)
 		U1 = -0x3FFF0000;
-	U2 = neg_sin_h * calcU3 + (int16_t)cH_cP * calcU2 + (int16_t)cH_sP * calcU1;
+	U2 = neg_sin_p * calcU3 + (int16_t)cP_cH * calcU2 + (int16_t)cP_sH * calcU1;
 	if (U2 >= 0x40000000)
 		U2 = 0x3FFF0000;
 	if (U2 <= -0x40000000)
 		U2 = -0x3FFF0000;
-	U3 = (int32_t)cos_h * calcU3 + (int16_t)sH_cP * calcU2 + (int16_t)sH_sP * calcU1;
+	U3 = (int32_t)cos_p * calcU3 + (int16_t)sP_cH * calcU2 + (int16_t)sP_sH * calcU1;
 	if (U3 >= 0x40000000)
 		U3 = 0x3FFF0000;
 	if (U3 <= -0x40000000)
@@ -1111,17 +1112,17 @@ void user_calcdeltapitch(int16_t dheading, int16_t dpitch, uint16_t obj_idx, Cra
 	calcU2 = (int16_t)(U2 >> 15);
 	calcU3 = (int16_t)(U3 >> 15);
 
-	F1 = neg_sin_p * calcf2 + (int32_t)cos_p * calcf1;
+	F1 = neg_sin_h * calcf2 + (int32_t)cos_h * calcf1;
 	if (F1 >= 0x40000000)
 		F1 = 0x3FFF0000;
 	if (F1 <= -0x40000000)
 		F1 = -0x3FFF0000;
-	F2 = neg_sin_h * calcf3 + (int16_t)cH_cP * calcf2 + (int16_t)cH_sP * calcf1;
+	F2 = neg_sin_p * calcf3 + (int16_t)cP_cH * calcf2 + (int16_t)cP_sH * calcf1;
 	if (F2 >= 0x40000000)
 		F2 = 0x3FFF0000;
 	if (F2 <= -0x40000000)
 		F2 = -0x3FFF0000;
-	F3 = (int32_t)cos_h * calcf3 + (int16_t)sH_cP * calcf2 + (int16_t)sH_sP * calcf1;
+	F3 = (int32_t)cos_p * calcf3 + (int16_t)sP_cH * calcf2 + (int16_t)sP_sH * calcf1;
 	if (F3 >= 0x40000000)
 		F3 = 0x3FFF0000;
 	if (F3 <= -0x40000000)
@@ -1132,7 +1133,7 @@ void user_calcdeltapitch(int16_t dheading, int16_t dpitch, uint16_t obj_idx, Cra
 
 	new_roll = trig2_arctan((int16_t)calcS2, (int16_t)calcS1);
 	o->roll = (int16_t)-new_roll;
-	o->pitch = new_pitch;
+	o->heading = new_heading;
 }
 
 /*
@@ -3447,7 +3448,7 @@ void user_inputforplane(void) {
 			x_input = (int16_t)(((math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1) *
 								 (uint16_t)inputdeltax) >>
 								15);
-			y_input = (int16_t)(((math2_percentage(pstate.player_craft->heading_rate_cache, 0x1000u) >> 1) *
+			y_input = (int16_t)(((math2_percentage(pstate.player_craft->pitch_rate_cache, 0x1000u) >> 1) *
 								 (uint16_t)inputdeltay) >>
 								15);
 			/* Analog roll input from the second-stick axis. Uses roll_rate_cache

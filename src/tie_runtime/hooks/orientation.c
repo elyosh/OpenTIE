@@ -25,10 +25,10 @@ static int16_t TieOrientationHook_RadToBam(float radians) {
 	return (int16_t)lrintf(bam);
 }
 
-static void TieOrientationHook_MatrixFromEuler(int16_t heading, int16_t pitch, int16_t roll,
+static void TieOrientationHook_MatrixFromEuler(int16_t pitch, int16_t heading, int16_t roll,
 											   float matrix[3][3]) {
-	const float beta = TieOrientationHook_BamToRad(heading);
-	const float alpha = TieOrientationHook_BamToRad(pitch);
+	const float beta = TieOrientationHook_BamToRad(pitch);
+	const float alpha = TieOrientationHook_BamToRad(heading);
 	const float gamma = TieOrientationHook_BamToRad(roll);
 	const float cb = cosf(beta), sb = sinf(beta);
 	const float ca = cosf(alpha), sa = sinf(alpha);
@@ -134,21 +134,21 @@ static void TieOrientationHook_QuaternionToEuler(const float q[4], float* beta, 
 	}
 }
 
-void TieOrientationHook_Apply(int16_t heading, int16_t pitch, int16_t roll, int16_t delta_heading,
-							  int16_t delta_pitch, bool allow_yaw, int16_t* out_heading, int16_t* out_pitch,
+void TieOrientationHook_Apply(int16_t pitch, int16_t heading, int16_t roll, int16_t delta_pitch,
+							  int16_t delta_yaw, bool allow_yaw, int16_t* out_pitch, int16_t* out_heading,
 							  int16_t* out_roll) {
 	float matrix[3][3];
-	TieOrientationHook_MatrixFromEuler(heading, pitch, roll, matrix);
-	TieOrientationHook_RotateLocal(matrix, 0, TieOrientationHook_BamToRad(delta_heading));
+	TieOrientationHook_MatrixFromEuler(pitch, heading, roll, matrix);
+	TieOrientationHook_RotateLocal(matrix, 0, TieOrientationHook_BamToRad(delta_pitch));
 	if (allow_yaw)
-		TieOrientationHook_RotateLocal(matrix, 1, TieOrientationHook_BamToRad(delta_pitch));
+		TieOrientationHook_RotateLocal(matrix, 1, TieOrientationHook_BamToRad(delta_yaw));
 	float quaternion[4];
 	TieOrientationHook_MatrixToQuaternion(matrix, quaternion);
 	float beta, alpha, gamma;
 	TieOrientationHook_QuaternionToEuler(quaternion, &beta, &alpha, &gamma);
-	*out_heading = TieOrientationHook_RadToBam(beta);
-	if (*out_heading < 0)
-		*out_heading = 0;
-	*out_pitch = TieOrientationHook_RadToBam(alpha);
+	*out_pitch = TieOrientationHook_RadToBam(beta);
+	if (*out_pitch < 0)
+		*out_pitch = 0;
+	*out_heading = TieOrientationHook_RadToBam(alpha);
 	*out_roll = TieOrientationHook_RadToBam(gamma);
 }

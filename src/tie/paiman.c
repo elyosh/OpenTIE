@@ -105,24 +105,24 @@ ManeuverFunc _manvrfunctionptr = 0;
 
 /* ---- Helpers ------------------------------------------------------- */
 
-/* Snap or drive craftptr->ai_pitch toward ai_target_pitch. Threshold
+/* Snap or drive the craft heading toward ai_target_heading. Threshold
  * 0x300 (~4.2°) distinguishes "close enough, snap now" from "rotate
  * over time". */
 // FUNCTION: TIE95 0x3D3B4
-void paiman_setturn(int16_t pitch_step) {
+void paiman_setturn(int16_t heading_step) {
 	CraftData* cd = craftptr;
-	uint16_t delta = (uint16_t)(objects[ai.active_obj_idx].pitch - cd->ai_target_pitch);
+	uint16_t delta = (uint16_t)(objects[ai.active_obj_idx].heading - cd->ai_target_heading);
 	if (delta >= 0x8000u)
 		delta = (uint16_t)-delta;
 
 	if (delta > 0x300u) {
-		cd->ai_pitch_state = 2;
-		cd->ai_pitch_step = (uint16_t)pitch_step;
+		cd->ai_heading_state = 2;
+		cd->ai_heading_step = (uint16_t)heading_step;
 	} else {
-		objects[ai.active_obj_idx].pitch = (int16_t)cd->ai_target_pitch;
+		objects[ai.active_obj_idx].heading = (int16_t)cd->ai_target_heading;
 		objects[ai.active_obj_idx].orient_dirty = 1;
 		objects[ai.active_obj_idx].move_dirty = 1;
-		cd->ai_pitch_state = 3;
+		cd->ai_heading_state = 3;
 	}
 }
 
@@ -155,49 +155,49 @@ void paiman_setspeed(uint16_t obj_idx_param, uint16_t desired_speed) {
 /* Point the AI craft's flight vector at craftptr->waypoint_*_cache.
  * Uses the current PAI skill_value to pick turn rate. */
 // FUNCTION: TIE95 0x3CD04
-void paiman_setflighttotarget(uint16_t pitch_bias, int16_t drive_heading) {
+void paiman_setflighttotarget(uint16_t heading_bias, int16_t drive_pitch) {
 	CraftData* cd = craftptr;
 
 	trig2_ctop(cd->waypoint_x_cache - objects[ai.active_obj_idx].world_x,
 			   cd->waypoint_y_cache - objects[ai.active_obj_idx].world_y,
 			   cd->waypoint_z_cache - objects[ai.active_obj_idx].world_z);
 
-	cd->ai_target_pitch = (uint16_t)(trig2_xyangle + pitch_bias);
+	cd->ai_target_heading = (uint16_t)(trig2_xyangle + heading_bias);
 	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x4000));
 
-	if (drive_heading) {
-		cd->ai_heading_step = 0xFFFFu;
-		cd->ai_heading_force = 0;
-		cd->ai_target_heading = (uint16_t)trig2_zangle;
+	if (drive_pitch) {
+		cd->ai_pitch_step = 0xFFFFu;
+		cd->ai_pitch_force = 0;
+		cd->ai_target_pitch = (uint16_t)trig2_zangle;
 		cd->ai_climb_state = 0;
 		cd->ai_dive_state = 0;
-		cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+		cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 	}
 }
 
-/* Level-the-wings helper: roll to 0, freeze pitch, clear climb/dive,
- * heading → 0x4000 with short-way direction. */
+/* Level-the-wings helper: roll to 0, freeze heading, clear climb/dive,
+ * pitch → 0x4000 (level) with short-way direction. */
 // FUNCTION: TIE95 0x3CDC4
 void paiman_controlplane(void) {
 	CraftData* cd = craftptr;
 
 	cd->ai_dive_state = 0;
 	cd->ai_climb_state = 0;
-	cd->ai_target_heading = 0x4000;
-	cd->ai_heading_step = 0xFFFFu;
-	cd->ai_heading_force = 0;
+	cd->ai_target_pitch = 0x4000;
+	cd->ai_pitch_step = 0xFFFFu;
+	cd->ai_pitch_force = 0;
 
-	if (cd->orient_heading < 0x4000u)
-		cd->ai_heading_state = 2;
-	else if (cd->orient_heading > 0x4000u)
-		cd->ai_heading_state = 1;
+	if (cd->orient_pitch < 0x4000u)
+		cd->ai_pitch_state = 2;
+	else if (cd->orient_pitch > 0x4000u)
+		cd->ai_pitch_state = 1;
 	else
-		cd->ai_heading_state = 3;
+		cd->ai_pitch_state = 3;
 
 	cd->ai_roll_state = 1;
 	cd->ai_roll_step = 0xFFFFu;
 	cd->ai_target_roll = 0;
-	cd->ai_pitch_state = 0;
+	cd->ai_heading_state = 0;
 }
 
 /* Pick a new turn-inside target orientation and hold-timer. */
@@ -205,11 +205,11 @@ void paiman_controlplane(void) {
 uint16_t paiman_setnewturninside(uint16_t own_obj_idx) {
 	CraftData* cd = craftptr;
 	uint16_t ref_idx = (cd->attacker_idx == 0xFFu) ? own_obj_idx : cd->attacker_idx;
-	uint16_t away_pitch = (uint16_t)objects[ref_idx].pitch;
+	uint16_t away_heading = (uint16_t)objects[ref_idx].heading;
 	uint16_t hold_ticks;
 
-	away_pitch = (uint16_t)(away_pitch + 0x8000u); /* flip 180° */
-	cd->ai_target_pitch = away_pitch;
+	away_heading = (uint16_t)(away_heading + 0x8000u); /* flip 180° */
+	cd->ai_target_heading = away_heading;
 
 	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
 
@@ -218,20 +218,20 @@ uint16_t paiman_setnewturninside(uint16_t own_obj_idx) {
 	return hold_ticks;
 }
 
-/* Pick a new turn-away target orientation: face the attacker's own pitch
- * (not flipped), or flip our own pitch if there is no attacker. */
+/* Pick a new turn-away target orientation: face the attacker's own heading
+ * (not flipped), or flip our own heading if there is no attacker. */
 // FUNCTION: TIE95 0x3C8C0
 uint16_t paiman_setnewturnaway(uint16_t own_obj_idx) {
 	CraftData* cd = craftptr;
-	uint16_t new_target_pitch;
+	uint16_t new_target_heading;
 	uint16_t hold_ticks;
 
 	if (cd->attacker_idx == 0xFFu) {
-		new_target_pitch = (uint16_t)(objects[own_obj_idx].pitch + 0x8000u);
+		new_target_heading = (uint16_t)(objects[own_obj_idx].heading + 0x8000u);
 	} else {
-		new_target_pitch = (uint16_t)objects[cd->attacker_idx].pitch;
+		new_target_heading = (uint16_t)objects[cd->attacker_idx].heading;
 	}
-	cd->ai_target_pitch = new_target_pitch;
+	cd->ai_target_heading = new_target_heading;
 
 	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
 
@@ -245,12 +245,12 @@ uint16_t paiman_setnewturnaway(uint16_t own_obj_idx) {
 void paiman_setjink(uint16_t self_idx) {
 	CraftData* cd = craftptr;
 	int32_t push_z = (int32_t)(math2_getrandom() & 0x1F) + 50;
-	int32_t pitch_off = (int32_t)((uint8_t)math2_getrandom()) + 384;
+	int32_t heading_off = (int32_t)((uint8_t)math2_getrandom()) + 384;
 
 	/* Flip sign if the previous push was non-negative — alternates dir. */
 	if (cd->push_accum_z >= 0) {
 		push_z = -push_z;
-		pitch_off = -pitch_off;
+		heading_off = -heading_off;
 	}
 
 	/* Retail zero-extends the 16-bit value before storing into the
@@ -259,7 +259,7 @@ void paiman_setjink(uint16_t self_idx) {
 	 * produces a positive int32 around 65455..65486; apply_push_accum
 	 * reads the field as int32 so the sign matters. */
 	cd->push_accum_z = (int32_t)(uint16_t)push_z;
-	cd->ai_target_pitch = (uint16_t)(objects[self_idx].pitch + pitch_off);
+	cd->ai_target_heading = (uint16_t)(objects[self_idx].heading + heading_off);
 	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
 	cd->ai_plan_state = 118;
 }
@@ -293,7 +293,7 @@ void paiman_calcplanelead(uint16_t tgt_obj_idx) {
 		uint16_t laser_id;
 		int16_t closing_speed;
 		uint16_t tgt_speed_cap;
-		int32_t pitch_delta;
+		int32_t heading_delta;
 		uint16_t rel_closing;
 		uint16_t time_scale;
 
@@ -313,19 +313,19 @@ void paiman_calcplanelead(uint16_t tgt_obj_idx) {
 		closing_speed = (int16_t)((int16_t)projectilevelocity[laser_id - WEAPON_SPECIES_BASE] +
 								  objects[ai.active_obj_idx].current_speed);
 
-		/* Scale by cos(pitch_delta) between our pitch and target's. */
-		pitch_delta = (uint16_t)(objects[tgt_obj_idx].pitch - objects[ai.active_obj_idx].pitch);
-		if (pitch_delta >= 0x8000u)
-			pitch_delta = (uint16_t)-pitch_delta;
+		/* Scale by cos(heading_delta) between our heading and target's. */
+		heading_delta = (uint16_t)(objects[tgt_obj_idx].heading - objects[ai.active_obj_idx].heading);
+		if (heading_delta >= 0x8000u)
+			heading_delta = (uint16_t)-heading_delta;
 
 		tgt_speed_cap = (tgt_speed >= 0x384u) ? 900u : tgt_speed;
 
-		if ((uint16_t)pitch_delta >= 0x4000u)
-			rel_closing = (uint16_t)(trig2_cosinewordmult((int16_t)tgt_speed_cap, (uint16_t)pitch_delta) +
+		if ((uint16_t)heading_delta >= 0x4000u)
+			rel_closing = (uint16_t)(trig2_cosinewordmult((int16_t)tgt_speed_cap, (uint16_t)heading_delta) +
 									 closing_speed);
 		else
 			rel_closing = (uint16_t)(closing_speed -
-									 trig2_cosinewordmult((int16_t)tgt_speed_cap, (uint16_t)pitch_delta));
+									 trig2_cosinewordmult((int16_t)tgt_speed_cap, (uint16_t)heading_delta));
 
 		/* 18 * rel_closing + rel_closing/5 — Watcom idiom for "× 18.2". */
 		time_scale = (uint16_t)(18u * rel_closing + rel_closing / 5u);
@@ -389,9 +389,9 @@ void paiman_calcformation(void) {
 
 /* Core attack-target helper. Picks static-vs-live waypoint resolution,
  * computes angle, requests a 180°-class turn (with inverted-upright
- * special case), drives heading. */
+ * special case), drives pitch. */
 // FUNCTION: TIE95 0x3A2BC
-void paiman_attacktarget(int16_t pitch_bias) {
+void paiman_attacktarget(int16_t heading_bias) {
 	CraftData* cd = craftptr;
 	uint16_t target_ref = (uint16_t)cd->ai_target_ref;
 	uint16_t self_idx = ai.active_obj_idx;
@@ -404,15 +404,15 @@ void paiman_attacktarget(int16_t pitch_bias) {
 	trig2_ctop(cd->waypoint_x_cache - objects[self_idx].world_x,
 			   cd->waypoint_y_cache - objects[self_idx].world_y,
 			   cd->waypoint_z_cache - objects[self_idx].world_z);
-	cd->ai_target_pitch = (uint16_t)(trig2_xyangle + pitch_bias);
+	cd->ai_target_heading = (uint16_t)(trig2_xyangle + heading_bias);
 
 	{
 		bool want_turn = (cd->ai_roll_state != 2);
 		if (!want_turn) {
-			uint16_t pitch_delta = (uint16_t)(objects[self_idx].pitch - cd->ai_target_pitch);
-			if (pitch_delta >= 0x8000u)
-				pitch_delta = (uint16_t)-pitch_delta;
-			want_turn = (pitch_delta >= 0x2000u || trig2_polardistance < 0x10000);
+			uint16_t heading_delta = (uint16_t)(objects[self_idx].heading - cd->ai_target_heading);
+			if (heading_delta >= 0x8000u)
+				heading_delta = (uint16_t)-heading_delta;
+			want_turn = (heading_delta >= 0x2000u || trig2_polardistance < 0x10000);
 		}
 		if (want_turn)
 			paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
@@ -421,14 +421,14 @@ void paiman_attacktarget(int16_t pitch_bias) {
 	if (cd->ai_roll_state == 3)
 		cd->ai_roll_state = 0;
 
-	if ((uint16_t)trig2_zangle != cd->orient_heading) {
-		cd->ai_heading_step = 0xFFFFu;
+	if ((uint16_t)trig2_zangle != cd->orient_pitch) {
+		cd->ai_pitch_step = 0xFFFFu;
 		cd->throttle_speed = 0xFFFFu;
 		cd->ai_climb_state = 0;
-		cd->ai_target_heading = (uint16_t)trig2_zangle;
+		cd->ai_target_pitch = (uint16_t)trig2_zangle;
 		cd->ai_dive_state = 0;
-		cd->ai_heading_force = 0;
-		cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+		cd->ai_pitch_force = 0;
+		cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 	}
 }
 
@@ -462,16 +462,16 @@ void paiman_initsplitsmaneuver(void) {
 	cd->ai_roll_state = 1;
 	cd->ai_roll_step = 0xFFFFu;
 	cd->ai_target_roll = 0x8000;
-	cd->ai_pitch_state = 0;
-	cd->ai_heading_force = 1;
-	cd->ai_target_heading = 0x4000;
-	cd->ai_heading_state = 2;
-	cd->ai_heading_step = 0xFFFFu;
+	cd->ai_heading_state = 0;
+	cd->ai_pitch_force = 1;
+	cd->ai_target_pitch = 0x4000;
+	cd->ai_pitch_state = 2;
+	cd->ai_pitch_step = 0xFFFFu;
 }
 
 // FUNCTION: TIE95 0x397F8
 int16_t paiman_splitsmaneuver(void) {
-	return (craftptr->ai_roll_state == 4 && craftptr->ai_heading_state == 3) ? 1 : 0;
+	return (craftptr->ai_roll_state == 4 && craftptr->ai_pitch_state == 3) ? 1 : 0;
 }
 
 /* ---- MODE_Immelmann (3) -------------------------------------------- */
@@ -479,24 +479,24 @@ int16_t paiman_splitsmaneuver(void) {
 // FUNCTION: TIE95 0x39820
 void paiman_initimmelmannmaneuver(void) {
 	CraftData* cd = craftptr;
-	uint16_t cur_heading;
+	uint16_t cur_pitch;
 
 	cd->throttle_speed = 0xFFFFu;
 	cd->ai_roll_state = 1;
 	cd->ai_roll_step = 0xFFFFu;
 	cd->ai_target_roll = 0;
-	cd->ai_pitch_state = 0;
-	cd->ai_target_heading = 0x4000;
-	cd->ai_heading_step = 0xFFFFu;
-	cur_heading = cd->orient_heading;
-	cd->ai_heading_force = 0;
+	cd->ai_heading_state = 0;
+	cd->ai_target_pitch = 0x4000;
+	cd->ai_pitch_step = 0xFFFFu;
+	cur_pitch = cd->orient_pitch;
+	cd->ai_pitch_force = 0;
 
-	if (cur_heading < 0x4000u)
-		cd->ai_heading_state = 2;
-	else if (cur_heading > 0x4000u)
-		cd->ai_heading_state = 1;
+	if (cur_pitch < 0x4000u)
+		cd->ai_pitch_state = 2;
+	else if (cur_pitch > 0x4000u)
+		cd->ai_pitch_state = 1;
 	else
-		cd->ai_heading_state = 3;
+		cd->ai_pitch_state = 3;
 	cd->maneuver_timer = 0;
 }
 
@@ -506,27 +506,27 @@ int16_t paiman_immelmannmaneuver(void) {
 	uint8_t phase = cd->mode_subbyte;
 
 	if (phase == 0) {
-		if (cd->ai_heading_state == 3) {
-			cd->ai_heading_state = 1;
-			cd->ai_heading_step = 0xFFFFu;
-			cd->ai_heading_force = 1;
-			cd->ai_target_heading = 0x4000;
+		if (cd->ai_pitch_state == 3) {
+			cd->ai_pitch_state = 1;
+			cd->ai_pitch_step = 0xFFFFu;
+			cd->ai_pitch_force = 1;
+			cd->ai_target_pitch = 0x4000;
 			cd->mode_subbyte = 1;
 		}
 		return 0;
 	}
 	if (phase == 1) {
-		if (cd->ai_heading_state == 3) {
+		if (cd->ai_pitch_state == 3) {
 			cd->ai_roll_state = 1;
 			cd->ai_roll_step = 0xFFFFu;
 			cd->ai_target_roll = 0;
-			cd->ai_pitch_state = 0;
+			cd->ai_heading_state = 0;
 			cd->mode_subbyte = 2;
 		}
 		return 0;
 	}
 	if (phase == 2) {
-		if (cd->ai_roll_state == 4 && cd->ai_heading_state == 3)
+		if (cd->ai_roll_state == 4 && cd->ai_pitch_state == 3)
 			return 1;
 	}
 	return 0;
@@ -538,10 +538,10 @@ int16_t paiman_immelmannmaneuver(void) {
 void paiman_initscissorsmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint16_t ref_idx = (cd->attacker_idx == 0xFFu) ? ai.active_obj_idx : cd->attacker_idx;
-	uint16_t away_pitch = (uint16_t)(objects[ref_idx].pitch + 0x8000u);
+	uint16_t away_heading = (uint16_t)(objects[ref_idx].heading + 0x8000u);
 	uint16_t rnd_roll;
 
-	cd->ai_target_pitch = away_pitch;
+	cd->ai_target_heading = away_heading;
 	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
 
 	cd->ai_roll_state = 3;
@@ -561,12 +561,12 @@ int16_t paiman_scissorsmaneuver(void) {
 		return 1;
 	}
 	if (!cd->ai_plan_state) {
-		uint16_t flip_pitch = cd->ai_target_pitch;
+		uint16_t flip_heading = cd->ai_target_heading;
 		uint16_t tgt_roll_hi;
 
-		cd->ai_pitch_state = 1;
-		flip_pitch = (uint16_t)(flip_pitch + 0x8000u);
-		cd->ai_target_pitch = flip_pitch;
+		cd->ai_heading_state = 1;
+		flip_heading = (uint16_t)(flip_heading + 0x8000u);
+		cd->ai_target_heading = flip_heading;
 
 		tgt_roll_hi = (uint16_t)(((cd->ai_target_roll >> 8) ^ 0x80u) << 8);
 		cd->ai_target_roll = (uint16_t)((cd->ai_target_roll & 0x00FFu) | tgt_roll_hi);
@@ -632,14 +632,14 @@ int16_t paiman_cruisemaneuver(void) {
 				z_delta = -z_delta;
 			if (z_delta > 512) {
 				cd->ai_climb_state = 1;
-				cd->ai_target_heading = (uint16_t)trig2_zangle;
+				cd->ai_target_pitch = (uint16_t)trig2_zangle;
 				cd->throttle_speed = 0xC000u; /* -16384 as uint */
-				cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+				cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 			}
 		}
 		paiman_setflighttotarget(0, 1);
 		cd->ai_plan_state = 236;
-		if (cd->ai_pitch_state == 3 && objects[ai.active_obj_idx].roll) {
+		if (cd->ai_heading_state == 3 && objects[ai.active_obj_idx].roll) {
 			cd->ai_roll_state = 1;
 			cd->ai_roll_step = 0xFFFFu;
 			cd->ai_target_roll = 0;
@@ -648,13 +648,13 @@ int16_t paiman_cruisemaneuver(void) {
 
 	speed = fg_array[ai.fg_idx].ai[ai.ai_entry_count].speed;
 
-	/* For starships, damp throttle during an active pitch to tighten
+	/* For starships, damp throttle during an active heading turn to tighten
 	 * the turn; otherwise pipe speed through throttleconvert. */
 	if (objects[ai.active_obj_idx].genus == 4) {
-		uint16_t pd = (uint16_t)(objects[ai.active_obj_idx].pitch - cd->ai_target_pitch);
-		if (pd >= 0x8000u)
-			pd = (uint16_t)-pd;
-		if (cd->ai_pitch_state == 2 && pd >= 0x1000u) {
+		uint16_t hd = (uint16_t)(objects[ai.active_obj_idx].heading - cd->ai_target_heading);
+		if (hd >= 0x8000u)
+			hd = (uint16_t)-hd;
+		if (cd->ai_heading_state == 2 && hd >= 0x1000u) {
 			cd->throttle_speed = 0;
 			return 0;
 		}
@@ -745,14 +745,14 @@ int16_t paiman_followleadermaneuver(void) {
 			paiman_setflighttotarget(0, 1);
 			cd->throttle_speed = 0xFFFFu;
 		} else {
-			/* Match leader's pitch. Leader actively pitching → use their target;
-			 * otherwise match their current pitch. Skip a turn if we're already
+			/* Match leader's heading. Leader actively turning → use their target;
+			 * otherwise match their current heading. Skip a turn if we're already
 			 * aligned. */
-			if (ai.leader_craft->ai_pitch_state == 2) {
-				cd->ai_target_pitch = ai.leader_craft->ai_target_pitch;
+			if (ai.leader_craft->ai_heading_state == 2) {
+				cd->ai_target_heading = ai.leader_craft->ai_target_heading;
 				paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
-			} else if (objects[leader_idx].pitch != objects[self_idx].pitch) {
-				cd->ai_target_pitch = (uint16_t)objects[leader_idx].pitch;
+			} else if (objects[leader_idx].heading != objects[self_idx].heading) {
+				cd->ai_target_heading = (uint16_t)objects[leader_idx].heading;
 				paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
 			}
 
@@ -779,19 +779,19 @@ int16_t paiman_followleadermaneuver(void) {
 				cd->throttle_speed = ai.leader_craft->throttle_speed;
 			}
 
-			/* Match heading (snap if close, else short-way). */
+			/* Match pitch (snap if close, else short-way). */
 			{
-				uint16_t hd_delta = (uint16_t)(cd->orient_heading - ai.leader_craft->orient_heading);
-				if (hd_delta >= 0x8000u)
-					hd_delta = (uint16_t)-hd_delta;
-				if (hd_delta >= 0x400u) {
-					cd->ai_heading_step = 0xFFFFu;
-					cd->ai_target_heading = ai.leader_craft->orient_heading;
-					cd->ai_heading_force = 0;
-					cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+				uint16_t pd_delta = (uint16_t)(cd->orient_pitch - ai.leader_craft->orient_pitch);
+				if (pd_delta >= 0x8000u)
+					pd_delta = (uint16_t)-pd_delta;
+				if (pd_delta >= 0x400u) {
+					cd->ai_pitch_step = 0xFFFFu;
+					cd->ai_target_pitch = ai.leader_craft->orient_pitch;
+					cd->ai_pitch_force = 0;
+					cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 				} else {
-					cd->ai_heading_state = 0;
-					cd->orient_heading = ai.leader_craft->orient_heading;
+					cd->ai_pitch_state = 0;
+					cd->orient_pitch = ai.leader_craft->orient_pitch;
 				}
 			}
 
@@ -837,11 +837,11 @@ void paiman_initsetupattackmaneuver(void) {
 
 // FUNCTION: TIE95 0x3A2FC
 int16_t paiman_setupattackmaneuver(void) {
-	uint16_t pitch_delta;
+	uint16_t heading_delta;
 
 	paiman_attacktarget(0);
-	pitch_delta = (uint16_t)(objects[ai.active_obj_idx].pitch - craftptr->ai_target_pitch);
-	if (pitch_delta >= 0x3000u && pitch_delta <= 0xD000u)
+	heading_delta = (uint16_t)(objects[ai.active_obj_idx].heading - craftptr->ai_target_heading);
+	if (heading_delta >= 0x3000u && heading_delta <= 0xD000u)
 		craftptr->throttle_speed = 0x8000;
 	else
 		craftptr->throttle_speed = 0xFFFFu;
@@ -878,21 +878,21 @@ int16_t paiman_attackmaneuver(void) {
 			/* Capital ship: threshold 0x2000 only when approach angle is
 			 * off-axis (0x2800..0x5800). */
 			break_radius = 0x2000;
-			appr_angle = (uint16_t)((int16_t)trig2_xyangle - objects[target_ref].pitch);
+			appr_angle = (uint16_t)((int16_t)trig2_xyangle - objects[target_ref].heading);
 			if (appr_angle >= 0x8000u)
 				appr_angle = (uint16_t)-appr_angle;
 			if (!(appr_angle >= 0x2800u && appr_angle <= 0x5800u))
 				break_radius *= 2;
 		} else {
-			/* Fighter: threshold 5120 only when in pitch & heading alignment. */
-			uint32_t pitch_delta = (uint16_t)(objects[self_idx].pitch - objects[target_ref].pitch);
+			/* Fighter: threshold 5120 only when in heading & pitch alignment. */
 			uint32_t heading_delta = (uint16_t)(objects[self_idx].heading - objects[target_ref].heading);
-			if (pitch_delta >= 0x8000u)
-				pitch_delta = (uint16_t)-pitch_delta;
+			uint32_t pitch_delta = (uint16_t)(objects[self_idx].pitch - objects[target_ref].pitch);
 			if (heading_delta >= 0x8000u)
 				heading_delta = (uint16_t)-heading_delta;
+			if (pitch_delta >= 0x8000u)
+				pitch_delta = (uint16_t)-pitch_delta;
 			break_radius = 5120;
-			if (!(heading_delta <= 0x4000u && pitch_delta <= 0x4000u))
+			if (!(pitch_delta <= 0x4000u && heading_delta <= 0x4000u))
 				break_radius *= 2;
 		}
 	}
@@ -908,21 +908,21 @@ int16_t paiman_attackmaneuver(void) {
 	/* Preserve the low random byte while masking and biasing the high byte. */
 	{
 		uint16_t r1 = (uint16_t)math2_getrandom();
-		int32_t rnd_pitch_jink = (int32_t)((((((uint16_t)(r1 >> 8)) & 0x3Fu) + 0x30u) << 8) | (r1 & 0xFFu));
-		int32_t signed_jink = ((uint16_t)math2_getrandom() >= 0x8000u) ? -rnd_pitch_jink : rnd_pitch_jink;
-		int16_t rnd_heading = (int16_t)(math2_getrandom() & 0x7FFFu);
+		int32_t rnd_heading_jink = (int32_t)((((((uint16_t)(r1 >> 8)) & 0x3Fu) + 0x30u) << 8) | (r1 & 0xFFu));
+		int32_t signed_jink = ((uint16_t)math2_getrandom() >= 0x8000u) ? -rnd_heading_jink : rnd_heading_jink;
+		int16_t rnd_pitch = (int16_t)(math2_getrandom() & 0x7FFFu);
 
-		cd->ai_target_pitch = (uint16_t)(objects[self_idx].pitch + signed_jink);
+		cd->ai_target_heading = (uint16_t)(objects[self_idx].heading + signed_jink);
 		paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
 
 		cd->ai_climb_state = 0;
 		cd->ai_dive_state = 0;
-		cd->ai_heading_force = 0;
-		cd->ai_heading_step = 0xFFFFu;
-		cd->ai_target_heading = (uint16_t)rnd_heading;
+		cd->ai_pitch_force = 0;
+		cd->ai_pitch_step = 0xFFFFu;
+		cd->ai_target_pitch = (uint16_t)rnd_pitch;
 		cd->missile_count = 0;
 		cd->missile_count_total = 0;
-		cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+		cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 		cd->throttle_speed = 0xFFFFu;
 	}
 
@@ -957,16 +957,16 @@ void paiman_initzoommaneuver(void) {
 		uint8_t lo = (uint8_t)up_pitch_rnd;
 		uint8_t hi = (uint8_t)((((uint16_t)up_pitch_rnd >> 8) & 0xF) + 32);
 		uint16_t pitch16 = (uint16_t)((uint16_t)hi << 8) | lo;
-		cd->ai_target_heading = (uint16_t)(0x4000 - pitch16);
+		cd->ai_target_pitch = (uint16_t)(0x4000 - pitch16);
 	}
 
 	timer_mask = (uint16_t)((uint8_t)math2_getrandom()) & 3;
 	cd->ai_climb_state = 0;
 	cd->ai_dive_state = 0;
 	cd->maneuver_timer = 236 * (int32_t)(timer_mask + 3);
-	cd->ai_heading_force = 0;
-	cd->ai_heading_step = 0xFFFFu;
-	cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+	cd->ai_pitch_force = 0;
+	cd->ai_pitch_step = 0xFFFFu;
+	cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 }
 
 // FUNCTION: TIE95 0x3A760
@@ -985,11 +985,11 @@ void paiman_initdivemaneuver(void) {
 		down_pitch_rnd = (int16_t)(((uint16_t)hi << 8) | lo);
 	}
 	cd->ai_climb_state = 0;
-	cd->ai_heading_force = 0;
-	cd->ai_target_heading = (uint16_t)down_pitch_rnd;
-	cd->ai_heading_step = 0xFFFFu;
+	cd->ai_pitch_force = 0;
+	cd->ai_target_pitch = (uint16_t)down_pitch_rnd;
+	cd->ai_pitch_step = 0xFFFFu;
 	cd->maneuver_timer = 1180;
-	cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+	cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 }
 
 /* ---- MODE_SplitsDive (15) / MODE_SplitsDiveAlt (27) ---------------- */
@@ -997,25 +997,25 @@ void paiman_initdivemaneuver(void) {
 // FUNCTION: TIE95 0x3A7C4
 void paiman_initsplitsdivemaneuver(void) {
 	CraftData* cd = craftptr;
-	uint16_t hd_rnd = (uint16_t)math2_getrandom();
+	uint16_t pitch_rnd = (uint16_t)math2_getrandom();
 
 	cd->ai_roll_state = 1;
 	cd->ai_roll_step = 0xFFFFu;
 	cd->ai_target_roll = 0x8000;
-	cd->ai_pitch_state = 0;
-	cd->ai_heading_force = 1;
+	cd->ai_heading_state = 0;
+	cd->ai_pitch_force = 1;
 
 	/* Watcom: `and ah, 3Fh; add ah, 40h` — high byte masked/biased into
 	 * [0x40..0x7F], low byte stays as raw random. */
-	hd_rnd = (uint16_t)(((((hd_rnd >> 8) & 0x3Fu) + 0x40u) << 8) | (hd_rnd & 0xFFu));
-	cd->ai_heading_state = 2;
-	cd->ai_heading_step = 0xFFFFu;
-	cd->ai_target_heading = hd_rnd;
+	pitch_rnd = (uint16_t)(((((pitch_rnd >> 8) & 0x3Fu) + 0x40u) << 8) | (pitch_rnd & 0xFFu));
+	cd->ai_pitch_state = 2;
+	cd->ai_pitch_step = 0xFFFFu;
+	cd->ai_target_pitch = pitch_rnd;
 }
 
 // FUNCTION: TIE95 0x3A810
 int16_t paiman_splitsdivemaneuver(void) {
-	return (craftptr->ai_roll_state == 4 && craftptr->ai_heading_state == 3) ? 1 : 0;
+	return (craftptr->ai_roll_state == 4 && craftptr->ai_pitch_state == 3) ? 1 : 0;
 }
 
 /* ---- MODE_SpeedAway (16) ------------------------------------------- */
@@ -1025,7 +1025,7 @@ void paiman_initspeedawaymaneuver(void) {
 	CraftData* cd = craftptr;
 	cd->throttle_speed = 0xFFFFu;
 	cd->maneuver_timer = 4720;
-	cd->ai_target_pitch = (uint16_t)(objects[ai.active_obj_idx].pitch + (uint8_t)math2_getrandom());
+	cd->ai_target_heading = (uint16_t)(objects[ai.active_obj_idx].heading + (uint8_t)math2_getrandom());
 	paiman_setjink(ai.active_obj_idx);
 }
 
@@ -1034,7 +1034,7 @@ int16_t paiman_speedawaymaneuver(void) {
 	CraftData* cd = craftptr;
 
 	if (!cd->ai_plan_state) {
-		cd->ai_target_pitch = (uint16_t)-(int16_t)cd->ai_target_pitch;
+		cd->ai_target_heading = (uint16_t)-(int16_t)cd->ai_target_heading;
 		paiman_setjink(ai.active_obj_idx);
 	}
 	return cd->maneuver_timer == 0 ? 1 : 0;
@@ -1060,8 +1060,8 @@ int16_t paiman_intohyperspacemaneuver(void) {
 		if (trig2_polardistance < 0x4000) {
 			cd->flight_flag = 5;
 			cd->ai_roll_state = 0;
-			cd->ai_heading_state = 0;
 			cd->ai_pitch_state = 0;
+			cd->ai_heading_state = 0;
 			cd->mode_subbyte = 1;
 			cd->ai_plan_state = 944;
 			cd->maneuver_timer = 1652;
@@ -1217,12 +1217,12 @@ int16_t paiman_escortmaneuver(void) {
 		return 0;
 	}
 
-	/* (3) Match leader pitch. */
-	if (leader_cd->ai_pitch_state == 2) {
-		cd->ai_target_pitch = leader_cd->ai_target_pitch;
+	/* (3) Match leader heading. */
+	if (leader_cd->ai_heading_state == 2) {
+		cd->ai_target_heading = leader_cd->ai_target_heading;
 		paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
-	} else if (objects[leader_idx].pitch != objects[self_idx].pitch) {
-		cd->ai_target_pitch = (uint16_t)objects[leader_idx].pitch;
+	} else if (objects[leader_idx].heading != objects[self_idx].heading) {
+		cd->ai_target_heading = (uint16_t)objects[leader_idx].heading;
 		paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
 	}
 
@@ -1248,19 +1248,19 @@ int16_t paiman_escortmaneuver(void) {
 		}
 	}
 
-	/* (5) Match heading. */
+	/* (5) Match pitch. */
 	{
-		uint16_t hd_delta = (uint16_t)(cd->orient_heading - leader_cd->orient_heading);
-		if (hd_delta >= 0x8000u)
-			hd_delta = (uint16_t)-hd_delta;
-		if (hd_delta >= 0x400u) {
-			cd->ai_heading_step = 0xFFFFu;
-			cd->ai_target_heading = leader_cd->orient_heading;
-			cd->ai_heading_force = 0;
-			cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+		uint16_t pd_delta = (uint16_t)(cd->orient_pitch - leader_cd->orient_pitch);
+		if (pd_delta >= 0x8000u)
+			pd_delta = (uint16_t)-pd_delta;
+		if (pd_delta >= 0x400u) {
+			cd->ai_pitch_step = 0xFFFFu;
+			cd->ai_target_pitch = leader_cd->orient_pitch;
+			cd->ai_pitch_force = 0;
+			cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 		} else {
-			cd->ai_heading_state = 0;
-			cd->orient_heading = leader_cd->orient_heading;
+			cd->ai_pitch_state = 0;
+			cd->orient_pitch = leader_cd->orient_pitch;
 		}
 	}
 
@@ -1313,8 +1313,8 @@ int16_t paiman_escortmaneuver(void) {
 void paiman_initawaitboardmaneuver(void) {
 	CraftData* cd = craftptr;
 	cd->ai_roll_state = 0;
-	cd->ai_heading_state = 0;
 	cd->ai_pitch_state = 0;
+	cd->ai_heading_state = 0;
 	cd->throttle_speed = 0;
 }
 
@@ -1322,8 +1322,8 @@ void paiman_initawaitboardmaneuver(void) {
 int16_t paiman_awaitboardmaneuver(void) {
 	CraftData* cd = craftptr;
 	cd->ai_roll_state = 0;
-	cd->ai_heading_state = 0;
 	cd->ai_pitch_state = 0;
+	cd->ai_heading_state = 0;
 	cd->throttle_speed = 0;
 	return 0;
 }
@@ -1399,9 +1399,9 @@ void paiman_initavoidstarshipmaneuver(void) {
 	uint16_t rnd_ticks = (uint16_t)(236u * (uint32_t)((math2_getrandom() & 7) + 15));
 	cd->ai_plan_state = rnd_ticks;
 	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
-	cd->ai_heading_step = 0xFFFFu;
-	cd->ai_heading_force = 0;
-	cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+	cd->ai_pitch_step = 0xFFFFu;
+	cd->ai_pitch_force = 0;
+	cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 }
 
 // FUNCTION: TIE95 0x3CA2C
@@ -1409,8 +1409,8 @@ void paiman_initwaitmaneuver(void) {
 	CraftData* cd = craftptr;
 	uint8_t var0 = fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[0];
 	cd->ai_roll_state = 0;
-	cd->ai_heading_state = 0;
 	cd->ai_pitch_state = 0;
+	cd->ai_heading_state = 0;
 	cd->throttle_speed = 0;
 	cd->maneuver_timer = 1180 * (int32_t)var0;
 }
@@ -1474,10 +1474,10 @@ int16_t paiman_dropoffmaneuver(void) {
 			int32_t az = dz < 0 ? -dz : dz;
 
 			if (ay + ax > 256) {
-				if ((uint16_t)trig2_xyangle != (uint16_t)objects[ai.active_obj_idx].pitch) {
-					cd->ai_pitch_state = 2;
-					cd->ai_pitch_step = 0x8000;
-					cd->ai_target_pitch = (uint16_t)trig2_xyangle;
+				if ((uint16_t)trig2_xyangle != (uint16_t)objects[ai.active_obj_idx].heading) {
+					cd->ai_heading_state = 2;
+					cd->ai_heading_step = 0x8000;
+					cd->ai_target_heading = (uint16_t)trig2_xyangle;
 				}
 			}
 
@@ -1607,8 +1607,8 @@ int16_t paiman_boardmaneuver(void) {
 		case 1: { /* Close alignment + dock announcement. */
 			int32_t abs_dx, abs_dy, abs_dz;
 			uint16_t target_roll_align;
-			uint16_t target_heading_align;
 			uint16_t target_pitch_align;
+			uint16_t target_heading_align;
 			int32_t push_x, push_y, push_z;
 
 			if (target_ref >= 0x3800u) {
@@ -1620,8 +1620,8 @@ int16_t paiman_boardmaneuver(void) {
 				cd->push_accum_y = push_y;
 				cd->push_accum_z = push_z;
 				target_roll_align = 0;
-				target_pitch_align = 0;
-				target_heading_align = 0x4000u;
+				target_heading_align = 0;
+				target_pitch_align = 0x4000u;
 			} else {
 				int16_t offset_up;
 				if (objects[target_ref].genus && objects[target_ref].genus != GENUS_TRANSPORT) {
@@ -1644,8 +1644,8 @@ int16_t paiman_boardmaneuver(void) {
 				cd->push_accum_y = push_y;
 				cd->push_accum_z = push_z;
 				target_roll_align = (uint16_t)objects[target_ref].roll;
-				target_pitch_align = (uint16_t)objects[target_ref].pitch;
 				target_heading_align = (uint16_t)objects[target_ref].heading;
+				target_pitch_align = (uint16_t)objects[target_ref].pitch;
 			}
 
 			if ((int16_t)target_roll_align != objects[ai.active_obj_idx].roll) {
@@ -1653,16 +1653,16 @@ int16_t paiman_boardmaneuver(void) {
 				cd->ai_roll_step = 0x8000u;
 				cd->ai_target_roll = target_roll_align;
 			}
-			if ((int16_t)target_pitch_align != objects[ai.active_obj_idx].pitch) {
-				cd->ai_pitch_state = 2;
-				cd->ai_pitch_step = 0x8000u;
-				cd->ai_target_pitch = target_pitch_align;
-			}
-			if (objects[ai.active_obj_idx].heading != objects[target_ref].heading) {
+			if ((int16_t)target_heading_align != objects[ai.active_obj_idx].heading) {
+				cd->ai_heading_state = 2;
 				cd->ai_heading_step = 0x8000u;
 				cd->ai_target_heading = target_heading_align;
-				cd->ai_heading_force = 0;
-				cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+			}
+			if (objects[ai.active_obj_idx].pitch != objects[target_ref].pitch) {
+				cd->ai_pitch_step = 0x8000u;
+				cd->ai_target_pitch = target_pitch_align;
+				cd->ai_pitch_force = 0;
+				cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 			}
 
 			abs_dx = push_x < 0 ? -push_x : push_x;

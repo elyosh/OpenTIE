@@ -162,10 +162,7 @@ extern uint16_t gate_render_reference_object;
 
 /* 4-slot player-pose history ring. Written by gate_savegatelastpos each
  * physics tick; slot 0 is the newest pose, slot 3 is the pose used by
- * collide_collisions as the respawn snapshot on a training collision.
- * NOTE: the binary swaps pitch/heading on write -- gatepreviouspitch[0] is
- * set from player->heading and gatepreviousheading[0] from player->pitch;
- * readers compensate. */
+ * collide_collisions as the respawn snapshot on a training collision. */
 extern int16_t gatepreviousroll[4];
 extern int32_t gatepreviousx[4];
 extern int32_t gatepreviousy[4];

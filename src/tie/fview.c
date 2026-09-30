@@ -51,28 +51,28 @@ int32_t sfoiltempB3;
 #include <stdint.h>
 
 // FUNCTION: TIE95 0x263AC
-void fview_calcrotatemove(int16_t heading, int16_t pitch, FlightObject* craft) {
-	int16_t neg_pitch = -pitch;
-	int16_t adj_heading = -16384 - heading;
+void fview_calcrotatemove(int16_t pitch, int16_t heading, FlightObject* craft) {
+	int16_t neg_heading = -heading;
+	int16_t adj_pitch = -16384 - pitch;
 
-	int16_t cos_pitch = trig2_getsignedcos(neg_pitch);
-	int16_t cos_heading = trig2_getsignedcos(adj_heading);
-	int16_t sin_pitch = trig2_getsignedsin(neg_pitch);
-	int16_t sin_heading = trig2_getsignedsin(adj_heading);
+	int16_t cos_heading = trig2_getsignedcos(neg_heading);
+	int16_t cos_pitch = trig2_getsignedcos(adj_pitch);
+	int16_t sin_heading = trig2_getsignedsin(neg_heading);
+	int16_t sin_pitch = trig2_getsignedsin(adj_pitch);
 
-	calcS1 = cos_pitch;
-	calcS2 = sin_pitch;
+	calcS1 = cos_heading;
+	calcS2 = sin_heading;
 	calcS3 = 0;
-	calcf1 = (cos_heading * -sin_pitch) >> 15;
-	calcf2 = (cos_heading * cos_pitch) >> 15;
-	calcf3 = sin_heading;
-	calcU1 = -((sin_heading * sin_pitch) >> 15);
-	calcU2 = -((sin_heading * -cos_pitch) >> 15);
-	calcU3 = -cos_heading;
+	calcf1 = (cos_pitch * -sin_heading) >> 15;
+	calcf2 = (cos_pitch * cos_heading) >> 15;
+	calcf3 = sin_pitch;
+	calcU1 = -((sin_pitch * sin_heading) >> 15);
+	calcU2 = -((sin_pitch * -cos_heading) >> 15);
+	calcU3 = -cos_pitch;
 
 	craftmoveX = -calcf1;
 	craftmoveY = -calcf2;
-	craftmoveZ = -sin_heading;
+	craftmoveZ = -sin_pitch;
 
 	if (craft) {
 		craft->move_dirty = 0;
@@ -83,8 +83,8 @@ void fview_calcrotatemove(int16_t heading, int16_t pitch, FlightObject* craft) {
 }
 
 // FUNCTION: TIE95 0x264DC
-void fview_calcrotateorient(int16_t roll, int16_t bank, FlightObject* craft) {
-	fview_transformaxes(calcU1, calcU2, calcU3, bank);
+void fview_calcrotateorient(int16_t roll, int16_t yaw, FlightObject* craft) {
+	fview_transformaxes(calcU1, calcU2, calcU3, yaw);
 	fview_transformaxes(calcf1, calcf2, calcf3, roll);
 
 	craftS1 = calcS1;
@@ -384,12 +384,12 @@ void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, int16_t
 }
 
 // FUNCTION: TIE95 0x26140
-void fview_newcalcview(int16_t roll, int16_t heading, int16_t pitch, int16_t bank, int16_t side_angle,
+void fview_newcalcview(int16_t roll, int16_t pitch, int16_t heading, int16_t yaw, int16_t side_angle,
 					   int16_t up_angle, FlightObject* craft) {
 	int32_t neg_U1, neg_U2, neg_U3;
 
-	fview_calcrotatemove(heading, pitch, craft);
-	fview_calcrotateorient(roll, bank, craft);
+	fview_calcrotatemove(pitch, heading, craft);
+	fview_calcrotateorient(roll, yaw, craft);
 
 	calcf1 = -calcf1;
 	calcf2 = -calcf2;
@@ -417,11 +417,11 @@ void fview_newcalcview(int16_t roll, int16_t heading, int16_t pitch, int16_t ban
 }
 
 // FUNCTION: TIE95 0x26258
-void fview_newcalcrotate(int16_t roll, int16_t heading, int16_t pitch, int16_t bank, FlightObject* craft) {
+void fview_newcalcrotate(int16_t roll, int16_t pitch, int16_t heading, int16_t yaw, FlightObject* craft) {
 	if (craft) {
 		if (craft->orient_dirty) {
-			fview_calcrotatemove(heading, pitch, craft);
-			fview_calcrotateorient(roll, bank, craft);
+			fview_calcrotatemove(pitch, heading, craft);
+			fview_calcrotateorient(roll, yaw, craft);
 			fview_calcrotworldeye();
 			return;
 		}
@@ -446,8 +446,8 @@ void fview_newcalcrotate(int16_t roll, int16_t heading, int16_t pitch, int16_t b
 		calcU2 = craftU2;
 		calcU3 = craftU3;
 	} else {
-		fview_calcrotatemove(heading, pitch, NULL);
-		fview_calcrotateorient(roll, bank, NULL);
+		fview_calcrotatemove(pitch, heading, NULL);
+		fview_calcrotateorient(roll, yaw, NULL);
 	}
 	fview_calcrotworldeye();
 }

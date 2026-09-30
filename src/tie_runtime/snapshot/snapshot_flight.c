@@ -77,31 +77,31 @@ static uint16_t TieFlightSnapshot_FlightFlags(const FlightObject* obj) {
 
 /* Reconstructs the proper (side, stored-forward, up) craft basis produced by
  * fview_newcalcrotate for static objects. */
-static void TieFlightSnapshot_ByteEulersToMat(uint8_t roll_byte, uint8_t yaw_byte, uint8_t pitch_byte,
+static void TieFlightSnapshot_ByteEulersToMat(uint8_t roll_byte, uint8_t pitch_byte, uint8_t heading_byte,
 											  float m[9]) {
 	/* int16 angle = byte << 8; 65536 = 2π. */
 	const float k = 6.28318530717958647692f / 65536.0f;
-	const float yaw = (float)((uint16_t)yaw_byte << 8) * k;
 	const float pitch = (float)((uint16_t)pitch_byte << 8) * k;
+	const float heading = (float)((uint16_t)heading_byte << 8) * k;
 	const float roll = (float)((uint16_t)roll_byte << 8) * k;
 
-	const float sy = sinf(yaw), cy = cosf(yaw);
 	const float sp = sinf(pitch), cp = cosf(pitch);
+	const float sh = sinf(heading), ch = cosf(heading);
 	const float sr = sinf(roll), cr = cosf(roll);
 
-	/* fview builds side/up/forward from heading and pitch, then applies
+	/* fview builds side/up/forward from pitch and heading, then applies
 	 * roll around its negated-forward axis. Keep columns consistent with
 	 * the FlightObject snapshot path; the renderer applies the model-axis
 	 * reflection separately. */
-	m[0] = cr * cp - sr * cy * sp;
-	m[1] = sy * sp;
-	m[2] = -cr * cy * sp - sr * cp;
-	m[3] = -cr * sp - sr * cy * cp;
-	m[4] = sy * cp;
-	m[5] = -cr * cy * cp + sr * sp;
-	m[6] = sr * sy;
-	m[7] = cy;
-	m[8] = cr * sy;
+	m[0] = cr * ch - sr * cp * sh;
+	m[1] = sp * sh;
+	m[2] = -cr * cp * sh - sr * ch;
+	m[3] = -cr * sh - sr * cp * ch;
+	m[4] = sp * ch;
+	m[5] = -cr * cp * ch + sr * sh;
+	m[6] = sr * sp;
+	m[7] = cp;
+	m[8] = cr * sp;
 }
 
 /* Craft highlight encoding: 0 none, 1 beam target, 2 selected component,
@@ -657,11 +657,11 @@ static void TieFlightSnapshot_CaptureWorld(void) {
 		out->world_pos[0] = (int32_t)so->world_x * 256;
 		out->world_pos[1] = (int32_t)so->world_y * 256;
 		out->world_pos[2] = (int32_t)so->world_z * 256;
-		/* Compose the three Euler bytes (yaw, pitch, roll) into the
+		/* Compose the three Euler bytes (heading, pitch, roll) into the
 		 * same row-major basis convention used by FlightObject above
 		 * and pass through TieSnapshotBuilder_Mat3ToQuat. */
 		float m[9];
-		TieFlightSnapshot_ByteEulersToMat(so->roll_byte, so->yaw_byte, so->pitch_byte, m);
+		TieFlightSnapshot_ByteEulersToMat(so->roll_byte, so->pitch_byte, so->heading_byte, m);
 		TieSnapshotBuilder_Mat3ToQuat(m, out->ori);
 		out->status_flags = so->status_flags;
 		out->highlight = TieFlightSnapshot_CraftHighlight((uint16_t)(OBJ_REF_STATIC_BASE + i), so->species);

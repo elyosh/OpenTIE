@@ -21,7 +21,7 @@ static void TieChaseCamera_GetTargetAngles(int16_t* roll, int16_t* heading, int1
 	if (camera.view_target_obj >= OBJ_REF_STATIC_BASE) {
 		const StaticObject* object = &staticobjects[camera.view_target_obj - OBJ_REF_STATIC_BASE];
 		*roll = (int16_t)((uint16_t)object->roll_byte << 8);
-		*heading = (int16_t)((uint16_t)object->yaw_byte << 8);
+		*heading = (int16_t)((uint16_t)object->heading_byte << 8);
 		*pitch = (int16_t)((uint16_t)object->pitch_byte << 8);
 	} else {
 		const FlightObject* object = &objects[camera.view_target_obj];

@@ -903,7 +903,7 @@ void pai_setformation(uint16_t leader_obj_idx, uint8_t formation, uint8_t separa
 void pai_calcrotatedpoint(FlightObject* obj, int16_t side_arg, int16_t up_arg, int16_t fwd_arg) {
 	/* Refresh the local-frame basis from heading/pitch/roll if dirty. */
 	if (obj->orient_dirty) {
-		fview_calcrotatemove(obj->heading, obj->pitch, obj);
+		fview_calcrotatemove(obj->pitch, obj->heading, obj);
 		fview_calcrotateorient(obj->roll, 0, obj);
 	}
 
@@ -922,7 +922,7 @@ void pai_calcrotatedpoint(FlightObject* obj, int16_t side_arg, int16_t up_arg, i
 // FUNCTION: TIE98 0x45A3C0
 int32_t pai_RotateLocalVectorToWorldScratch(FlightObject* obj, int side_arg, int up_arg, int fwd_arg) {
 	if (obj->orient_dirty) {
-		fview_calcrotatemove(obj->heading, obj->pitch, obj);
+		fview_calcrotatemove(obj->pitch, obj->heading, obj);
 		fview_calcrotateorient(obj->roll, 0, obj);
 	}
 	rotatedx = math2_mul_q15(obj->side_x, side_arg);

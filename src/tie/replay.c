@@ -675,25 +675,25 @@ void replay_calcreplayview(void) {
 		camera.y = replaycam.y;
 		camera.z = replaycam.z;
 		camera.side_angle = 0;
-		fview_newcalcview(0, (int16_t)camera.cam_heading, (int16_t)camera.cam_pitch, 0, 0, 0, NULL);
+		fview_newcalcview(0, (int16_t)camera.cam_pitch, (int16_t)camera.cam_heading, 0, 0, 0, NULL);
 		TieFlightSnapshot_RecordCameraBasis();
 	} else {
-		uint16_t new_heading, new_pitch;
+		uint16_t new_pitch, new_heading;
 		if (pstate.target_obj_idx >= 0x3800u) {
 			replaycam.roll = (int16_t)(staticobjects[pstate.target_obj_idx - 14336].roll_byte << 8);
+			new_heading = (uint16_t)(staticobjects[pstate.target_obj_idx - 14336].heading_byte << 8);
 			new_pitch = (uint16_t)(staticobjects[pstate.target_obj_idx - 14336].pitch_byte << 8);
-			new_heading = (uint16_t)(staticobjects[pstate.target_obj_idx - 14336].yaw_byte << 8);
 		} else {
 			replaycam.roll = objects[pstate.target_obj_idx].roll;
-			new_pitch = (uint16_t)objects[pstate.target_obj_idx].pitch;
 			new_heading = (uint16_t)objects[pstate.target_obj_idx].heading;
+			new_pitch = (uint16_t)objects[pstate.target_obj_idx].pitch;
 		}
-		camera.cam_heading = new_heading;
 		camera.cam_pitch = new_pitch;
+		camera.cam_heading = new_heading;
 		camera.roll = replaycam.roll;
 		camera.up_angle = replaycam.up_angle;
 		camera.side_angle = replaycam.side_angle;
-		fview_newcalcview(replaycam.roll, (int16_t)new_heading, (int16_t)new_pitch, 0, replaycam.side_angle,
+		fview_newcalcview(replaycam.roll, (int16_t)new_pitch, (int16_t)new_heading, 0, replaycam.side_angle,
 						  replaycam.up_angle, NULL);
 		TieFlightSnapshot_RecordCameraBasis();
 		replay_movecambehind(pstate.target_obj_idx);
@@ -710,8 +710,8 @@ void replay_calcreplayview(void) {
 			trig2_ctop(worldlocx - camera.x, worldlocy - camera.y, worldlocz - camera.z);
 			camera.roll = 0;
 			replaycam.roll = 0;
-			camera.cam_heading = (uint16_t)trig2_zangle;
-			camera.cam_pitch = (uint16_t)trig2_xyangle;
+			camera.cam_pitch = (uint16_t)trig2_zangle;
+			camera.cam_heading = (uint16_t)trig2_xyangle;
 			camera.up_angle = 0;
 			camera.side_angle = 0;
 			fview_newcalcview(0, trig2_zangle, trig2_xyangle, 0, 0, 0, NULL);
@@ -1489,8 +1489,8 @@ void replay_replayinput(void) {
 					replaycam.view_pitch_offset = 1;
 					create_getworldposition(pstate.target_obj_idx, 0);
 					trig2_ctop(worldlocx - camera.x, worldlocy - camera.y, worldlocz - camera.z);
-					camera.cam_heading = (uint16_t)trig2_zangle;
-					camera.cam_pitch = (uint16_t)trig2_xyangle;
+					camera.cam_pitch = (uint16_t)trig2_zangle;
+					camera.cam_heading = (uint16_t)trig2_xyangle;
 					replaycam.roll = 0;
 					replay_replaymessage(MSG_CAMERA_FREE);
 					replay_drawreplaybutton(0xB);
@@ -1625,7 +1625,7 @@ void replay_replayinput(void) {
 		int16_t dy;
 		int16_t dz;
 
-		fview_calcrotatemove((int16_t)camera.cam_heading, (int16_t)camera.cam_pitch, NULL);
+		fview_calcrotatemove((int16_t)camera.cam_pitch, (int16_t)camera.cam_heading, NULL);
 		rate = user_framerateadjust(replaycam.view_zoom_rate);
 		dx = (int16_t)((craftmoveX * rate) >> 15);
 		dy = (int16_t)((craftmoveY * rate) >> 15);
@@ -1652,8 +1652,8 @@ void replay_replayinput(void) {
 			if (replaycam.z > 0x1000000)
 				replaycam.z = 0x1000000;
 		}
-		camera.cam_pitch += (uint16_t)user_framerateadjust(inputdeltax);
-		camera.cam_heading -= (uint16_t)user_framerateadjust(inputdeltay);
+		camera.cam_heading += (uint16_t)user_framerateadjust(inputdeltax);
+		camera.cam_pitch -= (uint16_t)user_framerateadjust(inputdeltay);
 	} else {
 		replaycam.up_angle += user_framerateadjust(inputdeltax);
 		replaycam.side_angle += user_framerateadjust(inputdeltay);

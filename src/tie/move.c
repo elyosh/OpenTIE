@@ -39,7 +39,7 @@ static const uint8_t homingindex[24] = {
 	0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0, 0, 14, 21, 28, 14, 14, 14, 0, 0, 0, 0, 0, 0,
 };
 
-/* Pitch/heading angular slew rate for genus 6/7 missiles, indexed by
+/* Heading/pitch angular slew rate for genus 6/7 missiles, indexed by
  *    idx = homingindex[ship_idx - WEAPON_SPECIES_BASE] + wh->homing_tier
  * i.e. five 7-entry tiers selected by homingindex (0, 7, 14, 21, 28). */
 // GLOBAL: TIE95 0xC57C4
@@ -318,7 +318,7 @@ void move_moveobjects(void) {
 				uint16_t link_idx;
 
 				if (obj->move_dirty)
-					fview_calcrotatemove(obj->heading, obj->pitch, obj);
+					fview_calcrotatemove(obj->pitch, obj->heading, obj);
 
 #ifdef TIE_MODERN
 				if (TieFlightTiming_IsHighRate()) {
@@ -458,12 +458,12 @@ void move_moveobjects(void) {
 					uint16_t target_idx = wh->target_obj;
 					uint16_t sub_obj;
 					uint32_t idx;
-					int16_t pitch_delta;
-					int16_t pitch_rate;
-					int16_t abs_pd;
-					int16_t heading_rate;
 					int16_t heading_delta;
+					int16_t heading_rate;
 					int16_t abs_hd;
+					int16_t pitch_rate;
+					int16_t pitch_delta;
+					int16_t abs_pd;
 #ifdef TIE_MODERN
 					TieMoveTimingState* high_rate;
 #endif
@@ -547,20 +547,20 @@ void move_moveobjects(void) {
 					rotatedy -= worldlocy;
 					trig2_ctop(rotatedx, rotatedy, rotatedz);
 
-					/* Pitch slew. xyangle = angle to target in X-Y (vertical) plane. */
-					pitch_delta = (int16_t)(trig2_xyangle - obj->pitch);
+					/* Heading slew. xyangle = angle to target in the horizontal X-Y plane. */
+					heading_delta = (int16_t)(trig2_xyangle - obj->heading);
 #ifdef TIE_MODERN
 					high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_Move(i, obj) : NULL;
 					if (high_rate)
-						pitch_rate = (int16_t)TieFlightTiming_ScaleWithRemainder(
+						heading_rate = (int16_t)TieFlightTiming_ScaleWithRemainder(
 							maxhomingrate[idx], frameticks, 236, &high_rate->homing_remainder[0]);
 					else
 #endif
-						pitch_rate = (int16_t)(maxhomingrate[idx] / framerate);
-					abs_pd = (pitch_delta < 0) ? (int16_t)-pitch_delta : pitch_delta;
-					if (abs_pd > pitch_rate) {
-						int16_t step = (pitch_delta < 0) ? (int16_t)-pitch_rate : pitch_rate;
-						obj->pitch = (int16_t)(obj->pitch + step);
+						heading_rate = (int16_t)(maxhomingrate[idx] / framerate);
+					abs_hd = (heading_delta < 0) ? (int16_t)-heading_delta : heading_delta;
+					if (abs_hd > heading_rate) {
+						int16_t step = (heading_delta < 0) ? (int16_t)-heading_rate : heading_rate;
+						obj->heading = (int16_t)(obj->heading + step);
 						/* 200 is the missile homing-decel floor: while off-track and
 						 * above the floor, bleed speed; clamp back up on overshoot. */
 						if ((uint16_t)obj->current_speed > 200) {
@@ -584,7 +584,7 @@ void move_moveobjects(void) {
 								obj->current_speed = 200;
 						}
 					} else {
-						obj->pitch = trig2_xyangle;
+						obj->heading = trig2_xyangle;
 #ifdef TIE_MODERN
 						if (high_rate)
 							high_rate->homing_remainder[0] = 0;
@@ -607,21 +607,21 @@ void move_moveobjects(void) {
 						}
 					}
 
-					/* Heading slew. zangle = angle in horizontal plane. */
+					/* Pitch slew. zangle = angle to target from +Z. */
 #ifdef TIE_MODERN
 					if (high_rate)
-						heading_rate = (int16_t)TieFlightTiming_ScaleWithRemainder(
+						pitch_rate = (int16_t)TieFlightTiming_ScaleWithRemainder(
 							maxhomingrate[idx], frameticks, 236, &high_rate->homing_remainder[1]);
 					else
 #endif
-						heading_rate = (int16_t)(maxhomingrate[idx] / framerate);
-					heading_delta = (int16_t)(trig2_zangle - obj->heading);
-					abs_hd = (heading_delta < 0) ? (int16_t)-heading_delta : heading_delta;
-					if (abs_hd > heading_rate) {
-						int16_t step = (heading_delta < 0) ? (int16_t)-heading_rate : heading_rate;
-						obj->heading = (int16_t)(obj->heading + step);
+						pitch_rate = (int16_t)(maxhomingrate[idx] / framerate);
+					pitch_delta = (int16_t)(trig2_zangle - obj->pitch);
+					abs_pd = (pitch_delta < 0) ? (int16_t)-pitch_delta : pitch_delta;
+					if (abs_pd > pitch_rate) {
+						int16_t step = (pitch_delta < 0) ? (int16_t)-pitch_rate : pitch_rate;
+						obj->pitch = (int16_t)(obj->pitch + step);
 					} else {
-						obj->heading = trig2_zangle;
+						obj->pitch = trig2_zangle;
 #ifdef TIE_MODERN
 						if (high_rate)
 							high_rate->homing_remainder[1] = 0;
@@ -630,14 +630,14 @@ void move_moveobjects(void) {
 
 					obj->orient_dirty = 1;
 					obj->move_dirty = obj->orient_dirty;
-					fview_calcrotatemove(obj->heading, obj->pitch, obj);
+					fview_calcrotatemove(obj->pitch, obj->heading, obj);
 					obj->moveX = (int16_t)craftmoveX;
 					obj->moveY = (int16_t)craftmoveY;
 					obj->moveZ = (int16_t)craftmoveZ;
 				}
 
 				if (obj->move_dirty)
-					fview_calcrotatemove(obj->heading, obj->pitch, obj);
+					fview_calcrotatemove(obj->pitch, obj->heading, obj);
 #ifdef TIE_MODERN
 				if (TieFlightTiming_IsHighRate()) {
 					TieFlightIntegration_Move(i, obj);
@@ -655,7 +655,7 @@ void move_moveobjects(void) {
 			case GENUS_DEBRIS:
 			case GENUS_EXPLOSION:
 				if (obj->move_dirty)
-					fview_calcrotatemove(obj->heading, obj->pitch, obj);
+					fview_calcrotatemove(obj->pitch, obj->heading, obj);
 #ifdef TIE_MODERN
 				if (TieFlightTiming_IsHighRate()) {
 					TieFlightIntegration_Move(i, obj);

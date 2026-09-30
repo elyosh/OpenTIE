@@ -840,14 +840,14 @@ int16_t paifight_fightershootorder(void) {
 		return 0;
 	}
 
-	/* --- Aim-cone range (tightens as pitch delta to target grows). --- */
+	/* --- Aim-cone range (tightens as the heading delta to the target grows). --- */
 	aim_range = frwdgunnerranges[(uint16_t)ai.skill_tier];
 	if (target < NUM_OBJECTS) {
-		uint16_t pitch_delta = (uint16_t)(objects[ai.active_obj_idx].pitch - objects[target].pitch);
-		if (pitch_delta >= 0x8000u)
-			pitch_delta = (uint16_t)-(int16_t)pitch_delta;
-		if (pitch_delta >= 0x2000u) {
-			if (pitch_delta < 0x5000u)
+		uint16_t heading_delta = (uint16_t)(objects[ai.active_obj_idx].heading - objects[target].heading);
+		if (heading_delta >= 0x8000u)
+			heading_delta = (uint16_t)-(int16_t)heading_delta;
+		if (heading_delta >= 0x2000u) {
+			if (heading_delta < 0x5000u)
 				aim_range -= 0x2000u;
 		} else {
 			aim_range -= 0x4000u;
@@ -856,10 +856,10 @@ int16_t paifight_fightershootorder(void) {
 
 	/* --- Line-up + burst tier computation. --- */
 	pai_distancebetween(ai.active_obj_idx, target);
-	xy_delta = (uint16_t)(trig2_xyangle - objects[ai.active_obj_idx].pitch);
+	xy_delta = (uint16_t)(trig2_xyangle - objects[ai.active_obj_idx].heading);
 	if (xy_delta >= 0x8000u)
 		xy_delta = (uint16_t)-(int16_t)xy_delta;
-	z_delta = (uint16_t)(trig2_zangle - craftptr->orient_heading);
+	z_delta = (uint16_t)(trig2_zangle - craftptr->orient_pitch);
 	if (z_delta >= 0x8000u)
 		z_delta = (uint16_t)-(int16_t)z_delta;
 

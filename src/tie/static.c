@@ -197,7 +197,7 @@ void static_drawstaticobject_tie98(uint16_t slot_idx) {
  * test at radius = bound_hwidth*3/8, via craft{x,y,z}{,old} globals.
  *
  * Large-object path: rotate both endpoints into the static's local frame
- * (using pitch/yaw/roll) via fview_calcrotatemove / fview_calcrotateorient,
+ * (using heading/pitch/roll) via fview_calcrotatemove / fview_calcrotateorient,
  * then AABB-reject against the mesh bbox, then run collide_checkhitpolygons
  * for a parametric hit fraction.
  * ========================================================================== */
@@ -296,7 +296,7 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 	gatey2 = dy_old;
 	gatez2 = dz_old;
 
-	fview_calcrotatemove((int16_t)((uint16_t)so->yaw_byte << 8), (int16_t)((uint16_t)so->pitch_byte << 8),
+	fview_calcrotatemove((int16_t)((uint16_t)so->pitch_byte << 8), (int16_t)((uint16_t)so->heading_byte << 8),
 						 NULL);
 	fview_calcrotateorient((int16_t)((uint16_t)so->roll_byte << 8), 0, NULL);
 
@@ -523,8 +523,8 @@ int16_t static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
 	objects[proj_idx].roll = 0;
 	objects[proj_idx].current_speed = 0;
 	objects[proj_idx].death_timer = 0;
-	objects[proj_idx].heading = 0;
 	objects[proj_idx].pitch = 0;
+	objects[proj_idx].heading = 0;
 	objects[proj_idx].orient_dirty = 1;
 	objects[proj_idx].move_dirty = 1;
 
@@ -775,7 +775,7 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 	p->self_idx = (int16_t)(slot_idx + OBJ_REF_STATIC_BASE);
 	p->ship_type_override = 0;
 	p->side = fg_array[so->fg_idx].side;
-	p->pitch = aim_xy;
+	p->heading = aim_xy;
 	p->orient_dirty = 1;
 	p->move_dirty = 1;
 
@@ -785,7 +785,7 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 	p->collision_radius = (int16_t)projectileweight[ptype];
 	p->roll = 0;
 	p->death_timer = (int16_t)(236 * projectilelife[ptype]);
-	p->heading = aim_z;
+	p->pitch = aim_z;
 
 	fview_calcrotatemove(aim_z, aim_xy, p);
 

@@ -108,8 +108,8 @@ typedef struct {
 					  *         for skill-tiered behaviour (AI skill tier, turret cooldown, lead jitter).
 					  *         Was misidentified as 'missile_sub_obj'; no reader treats it as an obj idx. */
 	uint16_t missile_target; /* +0x004: missile's target obj idx (0xFFFF = no target) */
-	uint16_t orient_heading; /* +0x006: yaw mirror of FlightObject.heading; was misnamed missile_min_speed */
-	uint16_t orient_pitch;   /* +0x008: pitch mirror of FlightObject.pitch; first u16 of original field_008 */
+	uint16_t orient_pitch;   /* +0x006: pitch mirror of FlightObject.pitch; was misnamed missile_min_speed */
+	uint16_t orient_heading; /* +0x008: heading mirror of FlightObject.heading; first u16 of old field_008 */
 	uint8_t pad_00A[4];      /* +0x00A..+0x00D: unused padding; never read or written */
 	/* Per-frame eye-space (camera-space) position cache (3 × int32).
 	 * Written every render frame by TIE_getobjecteyexyz (called from
@@ -241,14 +241,14 @@ typedef struct {
 							 *         DYNAMIX_planedynamics clears to 0 on reach */
 	uint8_t ai_dive_state;  /* +0x06F: 1 = diving, triggers DYNAMIX_pulloutdive;
 							 *         pulloutdive sets to 2 on recovery */
-	/* Heading (yaw) autopilot: pointed toward ai_target_heading at a rate
-	 * derived from heading_rate_cache / framerate * ai_target_b * ai_heading_step. */
-	int16_t heading_rate_cache; /* +0x070: cached spec.heading_rate (max yaw rate) */
-	int16_t ai_target_b;        /* +0x072: yaw pacing scale (init 0xFFFF) */
-	uint8_t ai_heading_state;   /* +0x074: 0=idle, 1=dec orient_heading, 2=inc, 3=reached */
-	uint8_t ai_heading_force;   /* +0x075: bypass the "delta<step" exit test */
-	uint16_t ai_target_heading; /* +0x076: target yaw angle (orient_heading goal) */
-	uint16_t ai_heading_step;   /* +0x078: 0..0xFFFF scale into per-tick step */
+	/* Pitch autopilot: pointed toward ai_target_pitch at a rate
+	 * derived from pitch_rate_cache / framerate * ai_target_b * ai_pitch_step. */
+	int16_t pitch_rate_cache; /* +0x070: cached spec.pitch_rate (max pitch rate) */
+	int16_t ai_target_b;      /* +0x072: pitch pacing scale (init 0xFFFF) */
+	uint8_t ai_pitch_state;   /* +0x074: 0=idle, 1=dec orient_pitch, 2=inc, 3=reached */
+	uint8_t ai_pitch_force;   /* +0x075: bypass the "delta<step" exit test */
+	uint16_t ai_target_pitch; /* +0x076: target pitch angle (orient_pitch goal) */
+	uint16_t ai_pitch_step;   /* +0x078: 0..0xFFFF scale into per-tick step */
 	/* Roll autopilot. */
 	int16_t roll_rate_cache; /* +0x07A: cached spec.roll_rate */
 	int16_t ai_target_c;     /* +0x07C: roll pacing scale (init 0xFFFF) */
@@ -256,13 +256,13 @@ typedef struct {
 	uint8_t pad_07F;         /* +0x07F: single pad byte */
 	uint16_t ai_target_roll; /* +0x080: target roll angle (objects[i].roll goal) */
 	uint16_t ai_roll_step;   /* +0x082: 0..0xFFFF scale into per-tick step */
-	/* Pitch autopilot. */
-	int16_t pitch_rate_cache;     /* +0x084: cached spec.pitch_rate */
-	int16_t ai_target_d;          /* +0x086: pitch pacing scale (init 0xFFFF) */
-	uint8_t ai_pitch_state;       /* +0x088: 0=idle, nonzero=active, 3=reached */
+	/* Heading autopilot. */
+	int16_t heading_rate_cache;   /* +0x084: cached spec.heading_rate */
+	int16_t ai_target_d;          /* +0x086: heading pacing scale (init 0xFFFF) */
+	uint8_t ai_heading_state;     /* +0x088: 0=idle, nonzero=active, 3=reached */
 	uint8_t pad_089;              /* +0x089: single pad byte */
-	uint16_t ai_target_pitch;     /* +0x08A: target pitch angle */
-	uint16_t ai_pitch_step;       /* +0x08C: 0..0xFFFF scale into per-tick step */
+	uint16_t ai_target_heading;   /* +0x08A: target heading angle */
+	uint16_t ai_heading_step;     /* +0x08C: 0..0xFFFF scale into per-tick step */
 	uint8_t formation;            /* +0x08E: = fgformation */
 	uint8_t formation_separation; /* +0x08F: = fgseparation (cleared if hangar-spawn) */
 	uint8_t craft_idx_in_fg;      /* +0x090: = craftcnt (this craft's index 0..count-1 within FG) */
@@ -503,8 +503,8 @@ typedef struct FlightObject {
 	int32_t world_x_prev;  /* +0x12: previous-frame X (for interpolation) */
 	int32_t world_y_prev;  /* +0x16: previous-frame Y */
 	int32_t world_z_prev;  /* +0x1A: previous-frame Z */
-	int16_t pitch;         /* +0x1E */
-	int16_t heading;       /* +0x20 */
+	int16_t heading;       /* +0x1E: world-frame angle in the XY plane */
+	int16_t pitch;         /* +0x20: angle from world +Z; 0x4000 is level */
 	int16_t roll;          /* +0x22 */
 	int16_t spin_rate;     /* +0x24: death-spin angular rate; decays at 4096/framerate per tick, adds
 							  (rate/framerate)*4 to roll */
@@ -578,8 +578,8 @@ typedef struct {
 	int16_t world_x;       /* +0x04: world coord / 256 (real pos = world_x << 8) */
 	int16_t world_y;       /* +0x06 */
 	int16_t world_z;       /* +0x08 */
-	uint8_t pitch_byte;    /* +0x0A: unsigned 8-bit angle (<<8 for 16-bit rotation) */
-	uint8_t yaw_byte;      /* +0x0B */
+	uint8_t heading_byte;  /* +0x0A: unsigned 8-bit angle (<<8 for 16-bit rotation) */
+	uint8_t pitch_byte;    /* +0x0B */
 	uint8_t roll_byte;     /* +0x0C */
 	uint8_t fg_idx;        /* +0x0D: owning FlightGroup index */
 	uint16_t status_flags; /* +0x0E: 10-bit systems-online bitfield. Init = 0x3FF (all online); disruptor
@@ -841,12 +841,12 @@ typedef struct {
 	int32_t y;                          /* +0x04 world Y */
 	int32_t z;                          /* +0x08 world Z */
 	uint16_t view_target_obj;           /* +0x0C 0xFFFF = free; else object slot */
-	uint16_t cam_heading;               /* +0x0E view heading angle (16-bit BAM) */
-	uint16_t cam_pitch;                 /* +0x10 view pitch angle */
+	uint16_t cam_pitch;                 /* +0x0E view pitch angle (16-bit BAM; 0x4000 level) */
+	uint16_t cam_heading;               /* +0x10 view heading angle */
 	int16_t roll;                       /* +0x12 view roll */
-	int16_t bank;                       /* +0x14 stick-bank input (live cam only) */
-	int16_t side_angle;                 /* +0x16 view-yaw offset */
-	int16_t up_angle;                   /* +0x18 view-pitch offset */
+	int16_t yaw;                        /* +0x14 view yaw about its own up axis (live cam only) */
+	int16_t side_angle;                 /* +0x16 look pitch about the view's side axis */
+	int16_t up_angle;                   /* +0x18 look yaw about the view's up axis */
 	uint8_t pilotview;                  /* +0x1A current pilot view (0..21) */
 	uint8_t pilotview_save;             /* +0x1B saved view across forced switches */
 	uint8_t view_dir_dirty;             /* +0x1C 1 = view rebuild needed */
@@ -860,8 +860,8 @@ typedef struct {
 	int16_t view_zoom;                  /* +0x2A zoom factor 48..5120 (high half) */
 	int16_t view_heading_offset;        /* +0x2C target-pointed view heading offset */
 	int16_t cam_chase_roll_hist[60];    /* +0x2E rolling 60-tick chase-cam history */
-	int16_t cam_chase_heading_hist[60]; /* +0xA6 */
-	int16_t cam_chase_pitch_hist[60];   /* +0x11E */
+	int16_t cam_chase_pitch_hist[60];   /* +0xA6 */
+	int16_t cam_chase_heading_hist[60]; /* +0x11E */
 	int16_t cam_chase_slot;             /* +0x196 ring-buffer write index */
 } Camera;                               /* sizeof = 0x198 (408) */
 
@@ -1186,25 +1186,27 @@ typedef struct {
 	int16_t decel_gain_frac; /* +0x1E: proportional-feedback gain (0..0xFFFF
 							  *         fraction) applied to velocity overshoot
 							  *         to compute per-frame braking rate. */
-	/* Species base PITCH angular rate. CREATE_createcraft copies into
-	 * CraftData.pitch_rate_cache. DYNAMIX_planedynamics computes per-tick
-	 * pitch_step = frac(frac(pitch_rate/framerate, ai_target_d), ai_pitch_step)
-	 * to drive pitch toward ai_target_pitch. */
-	int16_t pitch_rate;          /* +0x20 */
-	int16_t roll_per_pitch_frac; /* +0x22: 0..0xFFFF fraction; each frame of the pitch
-								  *         autopilot, a fraction of pitch_step is bled
-								  *         into roll (opposite sign) as a visual bank. */
+	/* Species base HEADING angular rate. CREATE_createcraft copies into
+	 * CraftData.heading_rate_cache. DYNAMIX_planedynamics computes per-tick
+	 * heading_step = frac(frac(heading_rate/framerate, ai_target_d), ai_heading_step)
+	 * to drive heading toward ai_target_heading. */
+	int16_t heading_rate;          /* +0x20 */
+	int16_t roll_per_heading_frac; /* +0x22: 0..0xFFFF fraction; each frame of the heading
+									*         autopilot, a fraction of heading_step is bled
+									*         into roll (opposite sign) as a visual bank. */
 	/* Species base ROLL angular rate. CREATE_createcraft copies into
 	 * CraftData.roll_rate_cache. DYNAMIX_planedynamics drives roll toward
 	 * ai_target_roll at roll_rate/framerate*ai_target_c*ai_roll_step per tick.
 	 * USER_inputforplane scales it as percentage(roll_rate, 0x3000)/2 to set
 	 * the player's roll responsiveness. */
 	int16_t roll_rate; /* +0x24 */
-	/* Species base HEADING (yaw) angular rate. CREATE_createcraft copies
-	 * into CraftData.heading_rate_cache. DYNAMIX_planedynamics drives
-	 * orient_heading toward ai_target_heading at heading_rate/framerate*
-	 * ai_target_b*ai_heading_step per tick (with pole-wrap attitude flip). */
-	int16_t heading_rate; /* +0x26 */
+	/* Species base PITCH angular rate. CREATE_createcraft copies
+	 * into CraftData.pitch_rate_cache. DYNAMIX_planedynamics drives
+	 * orient_pitch toward ai_target_pitch at pitch_rate/framerate*
+	 * ai_target_b*ai_pitch_step per tick (with pole-wrap attitude flip).
+	 * USER_inputforplane scales it as percentage(pitch_rate, 0x1000)/2 to
+	 * set the player's pitch responsiveness. */
+	int16_t pitch_rate; /* +0x26 */
 	/* Maximum death-spin rate cap. COLLIDE_damagecraft generates a random
 	 * initial spin (HIBYTE|0x20..0x5F) then halves it repeatedly until it
 	 * fits within max_spin_rate; the resulting value is stored in

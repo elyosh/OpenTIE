@@ -145,10 +145,10 @@ int16_t staging_static_y;
 int16_t staging_static_z;
 // GLOBAL: TIE95 0xD3572
 // GLOBAL: TIE98 0x626976
-int8_t staging_static_pitch;
+int8_t staging_static_heading;
 // GLOBAL: TIE95 0xD3573
 // GLOBAL: TIE98 0x626977
-int8_t staging_static_yaw;
+int8_t staging_static_pitch;
 // GLOBAL: TIE95 0xD3574
 // GLOBAL: TIE98 0x626978
 int8_t staging_static_roll;
@@ -309,8 +309,8 @@ int create_createstaticobject(uint16_t fg_idx, uint8_t ship_class, uint8_t speci
 	s->world_x = staging_static_x;
 	s->world_y = staging_static_y;
 	s->world_z = staging_static_z;
+	s->heading_byte = staging_static_heading;
 	s->pitch_byte = staging_static_pitch;
-	s->yaw_byte = staging_static_yaw;
 	s->roll_byte = staging_static_roll;
 	s->idnumber = idnumber;
 	s->ship_class = ship_class;
@@ -359,11 +359,11 @@ uint16_t create_createember(uint16_t parent_obj) {
 	const uint16_t slot = create_findslot(GENUS_EXPLOSION);
 	FlightObject* n;
 	const FlightObject* p;
-	uint16_t rp;
-	int16_t pitch_delta;
 	uint16_t rh;
 	int16_t heading_delta;
-	int32_t new_heading;
+	uint16_t rp;
+	int16_t pitch_delta;
+	int32_t new_pitch;
 	uint8_t rand_speed;
 
 	if (slot == 0xFFFF)
@@ -380,27 +380,27 @@ uint16_t create_createember(uint16_t parent_obj) {
 	n->ship_idx = (uint8_t)((math2_getrandom() & 1) + 0x85);
 	n->ship_type_override = p->ship_idx;
 
-	/* Pitch/heading jitter. Watcom pattern is:
+	/* Heading/pitch jitter. Watcom pattern is:
 	 *     LOWORD(delta) = random16;
 	 *     BYTE1(delta)  = (BYTE1(delta) & 7) + 1;
 	 * which yields a 32-bit value whose low byte is a random 0..255 and
 	 * whose byte 1 is 1..8 (with bytes 2-3 = 0). Net range: [256..2303]. */
-	rp = (uint16_t)math2_getrandom();
-	pitch_delta = (int16_t)((rp & 0xFF) | ((((rp >> 8) & 7) + 1) << 8));
 	rh = (uint16_t)math2_getrandom();
 	heading_delta = (int16_t)((rh & 0xFF) | ((((rh >> 8) & 7) + 1) << 8));
-	if (math2_getrandom() & 1)
-		pitch_delta = -pitch_delta;
+	rp = (uint16_t)math2_getrandom();
+	pitch_delta = (int16_t)((rp & 0xFF) | ((((rp >> 8) & 7) + 1) << 8));
 	if (math2_getrandom() & 1)
 		heading_delta = -heading_delta;
+	if (math2_getrandom() & 1)
+		pitch_delta = -pitch_delta;
 
-	n->pitch += pitch_delta;
-	new_heading = (int32_t)n->heading + heading_delta;
-	n->heading = (int16_t)new_heading;
-	if ((uint16_t)n->heading >= 0x8000u) {
-		/* Wrap-around: mirror pitch by +180° to keep yaw range signed. */
-		n->heading = (int16_t)-(int32_t)(uint16_t)new_heading;
-		n->pitch = (int16_t)(n->pitch + 0x8000);
+	n->heading += heading_delta;
+	new_pitch = (int32_t)n->pitch + pitch_delta;
+	n->pitch = (int16_t)new_pitch;
+	if ((uint16_t)n->pitch >= 0x8000u) {
+		/* Pitched past a pole: reflect the pitch and turn the heading by 180°. */
+		n->pitch = (int16_t)-(int32_t)(uint16_t)new_pitch;
+		n->heading = (int16_t)(n->heading + 0x8000);
 	}
 
 	n->orient_dirty = 1;
@@ -437,12 +437,12 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 		uint16_t debris;
 		uint16_t rs;
 		int16_t spin;
+		uint16_t rdh;
+		int16_t dheading;
 		uint16_t rdp;
 		int16_t dpitch;
-		uint16_t rdh;
-		int16_t dhead;
 		FlightObject* d;
-		int16_t pitch_n;
+		int16_t heading_n;
 
 		if (cp->mesh_state[mi] != MESH_STATE_VISIBLE)
 			continue;
@@ -462,25 +462,25 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 		 * random_lo | ((random_hi_masked + K) << 8). */
 		rs = (uint16_t)math2_getrandom();
 		spin = (int16_t)((rs & 0xFF) | ((((rs >> 8) & 0x3F) + 64) << 8));
-		rdp = (uint16_t)math2_getrandom();
-		dpitch = (int16_t)((rdp & 0xFF) | ((((rdp >> 8) & 0x07) + 4) << 8));
 		rdh = (uint16_t)math2_getrandom();
-		dhead = (int16_t)((rdh & 0xFF) | ((((rdh >> 8) & 0x0F) + 4) << 8));
+		dheading = (int16_t)((rdh & 0xFF) | ((((rdh >> 8) & 0x07) + 4) << 8));
+		rdp = (uint16_t)math2_getrandom();
+		dpitch = (int16_t)((rdp & 0xFF) | ((((rdp >> 8) & 0x0F) + 4) << 8));
 		if (math2_getrandom() & 1) {
 			spin = -spin;
-			dpitch = -dpitch;
+			dheading = -dheading;
 		}
 		if (math2_getrandom() & 1)
-			dhead = -dhead;
+			dpitch = -dpitch;
 
 		d = &objects[debris];
 		d->spin_rate = spin;
-		pitch_n = (int16_t)(d->pitch + dpitch);
-		d->heading = (int16_t)(d->heading + dhead);
-		d->pitch = pitch_n;
-		if ((uint16_t)d->heading >= 0x8000u) {
-			d->heading = (int16_t)-(int32_t)(uint16_t)d->heading;
-			d->pitch = (int16_t)(d->pitch + 0x8000);
+		heading_n = (int16_t)(d->heading + dheading);
+		d->pitch = (int16_t)(d->pitch + dpitch);
+		d->heading = heading_n;
+		if ((uint16_t)d->pitch >= 0x8000u) {
+			d->pitch = (int16_t)-(int32_t)(uint16_t)d->pitch;
+			d->heading = (int16_t)(d->heading + 0x8000);
 		}
 		d->orient_dirty = 1;
 		d->move_dirty = 1;
@@ -547,7 +547,7 @@ void create_checkdebris(void) {
 	o->category = 3;
 
 	if (pl->orient_dirty) {
-		fview_calcrotatemove(pl->heading, pl->pitch, pl);
+		fview_calcrotatemove(pl->pitch, pl->heading, pl);
 		fview_calcrotateorient(pl->roll, 0, pl);
 	}
 
@@ -599,10 +599,10 @@ CraftData* create_createhyperin(void) {
 		staticobjects[i].species = 0;
 
 	pstate.player->roll = 0;
-	pstate.player->heading = 0x4000;
-	pstate.player_craft->orient_heading = 0x4000;
+	pstate.player->pitch = 0x4000;
+	pstate.player_craft->orient_pitch = 0x4000;
 	mission_file_header.num_fg = 0;
-	pstate.player->pitch = 0;
+	pstate.player->heading = 0;
 	return pstate.player_craft;
 }
 
@@ -1464,10 +1464,10 @@ uint16_t create_createcraft(void) {
 	c->installed_subsystems = 0x1FFF;
 
 	/* Pose. */
-	o->pitch = fgheadingxy;
-	c->orient_pitch = (uint16_t)fgheadingxy;
-	o->heading = fgheadingz;
-	c->orient_heading = (uint16_t)fgheadingz;
+	o->heading = fgheadingxy;
+	c->orient_heading = (uint16_t)fgheadingxy;
+	o->pitch = fgheadingz;
+	c->orient_pitch = (uint16_t)fgheadingz;
 	o->roll = 0;
 	o->spin_rate = 0;
 	o->orient_dirty = 1;
@@ -1475,16 +1475,16 @@ uint16_t create_createcraft(void) {
 
 	/* AI var clears. */
 	c->ai_roll_state = 0;
-	c->ai_heading_state = c->ai_climb_state = 0;
-	c->ai_dive_state = c->ai_heading_force = 0;
-	c->ai_pitch_state = 0;
+	c->ai_pitch_state = c->ai_climb_state = 0;
+	c->ai_dive_state = c->ai_pitch_force = 0;
+	c->ai_heading_state = 0;
 	c->ai_target_a = c->ai_target_b = c->ai_target_c = c->ai_target_d = -1;
 
 	/* Cached spec stats (queried each AI tick; readonly after createcraft). */
 	sp = &spec_data[spec_num];
 	c->roll_rate_cache = sp->roll_rate;
-	c->heading_rate_cache = sp->heading_rate;
 	c->pitch_rate_cache = sp->pitch_rate;
+	c->heading_rate_cache = sp->heading_rate;
 	c->max_speed_cache = sp->max_speed;
 
 	/* Skill tier used by AI, turret cooldowns, and targeting jitter. */
@@ -1885,8 +1885,8 @@ int create_createstaticflightgroup(int16_t craft_slot) {
 		staging_static_x = f->way_x[0];
 		staging_static_y = (int16_t)(-f->way_y[0]);
 		staging_static_z = f->way_z[0];
-		staging_static_pitch = (int8_t)f->heading;
-		staging_static_yaw = (int8_t)f->pitch;
+		staging_static_heading = (int8_t)f->heading;
+		staging_static_pitch = (int8_t)f->pitch;
 		staging_static_roll = (int8_t)f->rotation;
 		create_createstaticobject(fgcnt, 9, species_idx);
 	} else if (ship_class == 8) {
@@ -1917,8 +1917,8 @@ int create_createstaticflightgroup(int16_t craft_slot) {
 		x_base = (int16_t)(f->way_x[0] - side_m1 * step_x / 2);
 		y_base = (int16_t)(-f->way_y[0] - side_m1 * step_y / 2);
 		z_base = (int16_t)(f->way_z[0] - side_m1 * step_z / 2 - side_m1 * step_z2 / 2);
-		staging_static_pitch = (int8_t)f->heading;
-		staging_static_yaw = (int8_t)f->pitch;
+		staging_static_heading = (int8_t)f->heading;
+		staging_static_pitch = (int8_t)f->pitch;
 		staging_static_roll = (int8_t)f->rotation;
 
 		obj_seq = 0;
@@ -1972,8 +1972,8 @@ int create_createstaticflightgroup(int16_t craft_slot) {
 			staging_static_x = ax;
 			staging_static_y = ay;
 			staging_static_z = az;
+			staging_static_heading = 0;
 			staging_static_pitch = 0;
-			staging_static_yaw = 0;
 			staging_static_roll = 0;
 			r_species = (uint8_t)((uint16_t)math2_getrandom() % 6 + 100);
 			create_createstaticobject(fgcnt, 10, r_species);
