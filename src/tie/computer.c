@@ -1357,39 +1357,18 @@ static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 
 		if (id < 6) {
 			xactor_Set_Actor_State(medal_actor[7], id, 0);
-#ifdef TIE_MODERN
-			xactanim_Draw_Anim_Actor(medal_actor[7], r, clip_r,
-									 r->left + (TieProfile_UsesTie98Frontend() ? 68 : 34),
-									 r->top + (TieProfile_UsesTie98Frontend() ? -120 : -50), 1);
-#elif defined(TIE98)
-			xactanim_Draw_Anim_Actor(medal_actor[7], r, clip_r, r->left + 68, r->top - 120, 1);
-#else
-			xactanim_Draw_Anim_Actor(medal_actor[7], r, clip_r, r->left + 34, r->top - 50, 1);
-#endif
+			xactanim_Draw_Anim_Actor(medal_actor[7], r, clip_r, r->left + TIE_FRONTEND_EDITION(34, 68),
+									 r->top - TIE_FRONTEND_EDITION(50, 120), 1);
 		} else {
 			if (shipext_Is_Mission_Disk1()) {
 				xactor_Set_Actor_State(medal_actor2[3], 0, 0);
-#ifdef TIE_MODERN
-				xactanim_Draw_Anim_Actor(medal_actor2[3], r, clip_r,
-										 r->left + (TieProfile_UsesTie98Frontend() ? 68 : 34),
-										 r->top + (TieProfile_UsesTie98Frontend() ? -120 : -50), 1);
-#elif defined(TIE98)
-				xactanim_Draw_Anim_Actor(medal_actor2[3], r, clip_r, r->left + 68, r->top - 120, 1);
-#else
-				xactanim_Draw_Anim_Actor(medal_actor2[3], r, clip_r, r->left + 34, r->top - 50, 1);
-#endif
+				xactanim_Draw_Anim_Actor(medal_actor2[3], r, clip_r, r->left + TIE_FRONTEND_EDITION(34, 68),
+										 r->top - TIE_FRONTEND_EDITION(50, 120), 1);
 			}
 			if (shipext_Is_Mission_Disk2()) {
 				xactor_Set_Actor_State(medal_actor2[8], 0, 0);
-#ifdef TIE_MODERN
-				xactanim_Draw_Anim_Actor(medal_actor2[8], r, clip_r,
-										 r->left + (TieProfile_UsesTie98Frontend() ? 68 : 34),
-										 r->top + (TieProfile_UsesTie98Frontend() ? -120 : -50), 1);
-#elif defined(TIE98)
-				xactanim_Draw_Anim_Actor(medal_actor2[8], r, clip_r, r->left + 68, r->top - 120, 1);
-#else
-				xactanim_Draw_Anim_Actor(medal_actor2[8], r, clip_r, r->left + 34, r->top - 50, 1);
-#endif
+				xactanim_Draw_Anim_Actor(medal_actor2[8], r, clip_r, r->left + TIE_FRONTEND_EDITION(34, 68),
+										 r->top - TIE_FRONTEND_EDITION(50, 120), 1);
 			}
 		}
 	} else if (type == 2) {
@@ -1700,20 +1679,15 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 		switch (computer_mode) {
 			case COMP_MODE_MEDALS:
 				xpal_Screen_To_Dest_Palette(0, 0, 255);
-#ifdef TIE_MODERN
-				for (i = 0; i < 5; i++) {
-					if (TieProfile_UsesTie98Frontend() ? i < 4 : i != 1)
+				if (TIE_FRONTEND_TIE98) {
+					for (i = 0; i < 4; i++)
 						xpal_Set_Dest_Palette(computer_palettes[i]);
+				} else {
+					for (i = 0; i < 5; i++) {
+						if (i != 1)
+							xpal_Set_Dest_Palette(computer_palettes[i]);
+					}
 				}
-#elif defined(TIE98)
-				for (i = 0; i < 4; i++)
-					xpal_Set_Dest_Palette(computer_palettes[i]);
-#else
-				for (i = 0; i < 5; i++) {
-					if (i != 1)
-						xpal_Set_Dest_Palette(computer_palettes[i]);
-				}
-#endif
 				xfade_Start_Full_Fade(FADE_WIPE_INSTANT, FADE_COLOR_CROSSFADE, 1, 0, 0);
 				xinpattr_Hide_Input(next_info_input);
 				xinpattr_Hide_Input(last_info_input);
@@ -1801,20 +1775,15 @@ static void iuser_Computer(Input* input, int32_t time) {
 		screen_pal = xpal_Get_Screen_Palette();
 		xpal_Copy_Palette(screen_pal, computer_palette, 0, 32, 0);
 		xpal_Put_Screen_Pal_Range(0, 32);
-#ifdef TIE_MODERN
-		for (i = 0; i < 5; i++) {
-			if (TieProfile_UsesTie98Frontend() ? i < 4 : i != 1)
+		if (TIE_FRONTEND_TIE98) {
+			for (i = 0; i < 4; i++)
 				xpal_Set_Screen_Palette(computer_palettes[i]);
+		} else {
+			for (i = 0; i < 5; i++) {
+				if (i != 1)
+					xpal_Set_Screen_Palette(computer_palettes[i]);
+			}
 		}
-#elif defined(TIE98)
-		for (i = 0; i < 4; i++)
-			xpal_Set_Screen_Palette(computer_palettes[i]);
-#else
-		for (i = 0; i < 5; i++) {
-			if (i != 1)
-				xpal_Set_Screen_Palette(computer_palettes[i]);
-		}
-#endif
 	}
 
 	if (xinpattr_Get_Input_Selected(input)) {
@@ -1927,8 +1896,8 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 
 				/* Draw actor: use shifted version (actor i+2) for the medal display overlay,
 				 * except when on medals tab with no battle medal */
-#ifdef TIE_MODERN
-				if (TieProfile_UsesTie98Frontend()) {
+				if (TIE_FRONTEND_TIE98) {
+					/* TIE98 draws the medal-display overlay layer unshifted. */
 					if (i == 2) {
 						if (computer_mode || pilot_medal_type[pilot_medal_page])
 							xactdelt_Draw_Delta_Actor(computer_actors[4], r, clip_r, 0, 0, 1);
@@ -1945,40 +1914,14 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 					xactdelt_Draw_Delta_Actor(computer_actors[i], r, clip_r, scroll_x + computer_x[i],
 											  scroll_y + computer_y[i], 1);
 				}
-#elif defined(TIE98)
-				/* TIE98 draws the medal-display overlay layer unshifted. */
-				if (i == 2) {
-					if (computer_mode || pilot_medal_type[pilot_medal_page])
-						xactdelt_Draw_Delta_Actor(computer_actors[4], r, clip_r, 0, 0, 1);
-					else
-						xactdelt_Draw_Delta_Actor(computer_actors[2], r, clip_r, 0, 0, 1);
-				} else {
-					xactdelt_Draw_Delta_Actor(computer_actors[i], r, clip_r, scroll_x + computer_x[i],
-											  scroll_y + computer_y[i], 1);
-				}
-#else
-				if (i == 2 && (computer_mode || pilot_medal_type[pilot_medal_page])) {
-					xactdelt_Draw_Delta_Actor(computer_actors[i + 2], r, clip_r,
-											  scroll_x + computer_x[i] - 41, scroll_y + computer_y[i], 1);
-				} else {
-					xactdelt_Draw_Delta_Actor(computer_actors[i], r, clip_r, scroll_x + computer_x[i],
-											  scroll_y + computer_y[i], 1);
-				}
-#endif
 			}
 
 			/* Draw tab indicators */
 			for (i = 0; i < 4; i++) {
-#ifdef TIE_MODERN
-				if (TieProfile_UsesTie98Frontend())
+				if (TIE_FRONTEND_TIE98)
 					xactor_Set_Actor_State(computer_actors[6], computer_mode == i ? 2 * i + 1 : 2 * i, 0);
 				else
 					xactor_Set_Actor_State(computer_actors[6], computer_mode == i ? i + 4 : i, 0);
-#elif defined(TIE98)
-				xactor_Set_Actor_State(computer_actors[6], computer_mode == i ? 2 * i + 1 : 2 * i, 0);
-#else
-				xactor_Set_Actor_State(computer_actors[6], computer_mode == i ? i + 4 : i, 0);
-#endif
 				xactanim_Draw_Anim_Actor(computer_actors[6], r, clip_r, 0, 0, 1);
 			}
 

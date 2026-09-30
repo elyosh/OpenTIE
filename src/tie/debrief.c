@@ -140,28 +140,14 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 
 				case 5:
 					/* TIE98 reverses the officer-specific door variants 5 and 6. */
-#ifdef TIE_MODERN
-					if (TieProfile_UsesTie98Frontend())
-						return (shipext_Get_Mission_Officer() == 2) ? 1 : 0;
-					return (shipext_Get_Mission_Officer() == 2) ? 0 : 1;
-#elif defined(TIE98)
-					return (shipext_Get_Mission_Officer() == 2) ? 1 : 0;
-#else
-					return (shipext_Get_Mission_Officer() == 2) ? 0 : 1;
-#endif
+					return (shipext_Get_Mission_Officer() == 2) ? TIE_FRONTEND_EDITION(0, 1)
+																: TIE_FRONTEND_EDITION(1, 0);
 
 				case 6:
-#ifdef TIE_MODERN
-					if (TieProfile_UsesTie98Frontend())
+					/* TIE95 hides this variant when the mission is officer-only. */
+					if (TIE_FRONTEND_TIE98)
 						return (shipext_Get_Mission_Officer() == 1) ? 1 : 0;
 					return (shipext_Get_Mission_Officer() != 1) ? 1 : 0;
-#elif defined(TIE98)
-					return (shipext_Get_Mission_Officer() == 1) ? 1 : 0;
-#else
-					/* Binary @ 0x7024F: return mission_officer != 1.
-					 * Hide this variant when mission is officer-only. */
-					return (shipext_Get_Mission_Officer() != 1) ? 1 : 0;
-#endif
 
 				case 8:
 					/* Binary @ 0x7021F: hide when mission_officer == 1. */

@@ -74,10 +74,8 @@ static Actor* title_actor;
 // GLOBAL: TIE95 0xF60C8
 // GLOBAL: TIE98 0x58AA70
 static Actor* buttons;
-#if defined(TIE98) || defined(TIE_MODERN)
 // GLOBAL: TIE98 0x58AA74
 static Actor* down_button; /* previous-battle arrow */
-#endif
 // GLOBAL: TIE95 0xF60CC
 // GLOBAL: TIE98 0x58AA78
 static Actor* galaxy_actor; /* galaxy display custom actor */
@@ -152,22 +150,11 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 	if (left != 3 && right != 3) {
 		/* Button hover state for next/prev arrows */
 		if (left || right) {
-#ifdef TIE_MODERN
 			if (input->id == 2)
-				xactor_Set_Actor_State(buttons, TieProfile_UsesTie98Frontend() ? 0 : 2, 0);
+				xactor_Set_Actor_State(buttons, TIE_FRONTEND_EDITION(2, 0), 0);
 			else if (input->id == 3)
-				xactor_Set_Actor_State(down_button, TieProfile_UsesTie98Frontend() ? 1 : 0, 0);
-#elif defined(TIE98)
-			if (input->id == 2)
-				xactor_Set_Actor_State(buttons, 0, 0);
-			else if (input->id == 3)
-				xactor_Set_Actor_State(down_button, 1, 0);
-#else
-			if (input->id == 2)
-				xactor_Set_Actor_State(buttons, 2, 0);
-			else if (input->id == 3)
-				xactor_Set_Actor_State(buttons, 0, 0);
-#endif
+				xactor_Set_Actor_State(TIE_FRONTEND_EDITION(buttons, down_button), TIE_FRONTEND_EDITION(0, 1),
+									   0);
 		}
 		return 1;
 	}
@@ -190,13 +177,7 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 				galaxy_art_actor[pilot_record.cur_battle] = shipext_Get_Battle_Galaxy_Image();
 			break;
 		case 3: /* Previous battle */
-#ifdef TIE_MODERN
-			xactor_Set_Actor_State(down_button, TieProfile_UsesTie98Frontend() ? 0 : 1, 0);
-#elif defined(TIE98)
-			xactor_Set_Actor_State(down_button, 0, 0);
-#else
-			xactor_Set_Actor_State(buttons, 1, 0);
-#endif
+			xactor_Set_Actor_State(TIE_FRONTEND_EDITION(buttons, down_button), TIE_FRONTEND_EDITION(1, 0), 0);
 			soundext_Play_SFX(sfxButton, 80);
 			shipext_Last_Battle();
 			tour_time = 0;
@@ -644,20 +625,12 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 		door[i]->id = i;
 	}
 
-#ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend()) {
+	if (TIE_FRONTEND_TIE98) {
 		buttons = xactor_Find_Actor(FOURCC_ANIM, "upbutton");
 		down_button = xactor_Find_Actor(FOURCC_ANIM, "dnbutton");
 	} else {
 		buttons = xactor_Find_Actor(FOURCC_ANIM, "todbttn");
-		down_button = buttons;
 	}
-#elif defined(TIE98)
-	buttons = xactor_Find_Actor(FOURCC_ANIM, "upbutton");
-	down_button = xactor_Find_Actor(FOURCC_ANIM, "dnbutton");
-#else
-	buttons = xactor_Find_Actor(FOURCC_ANIM, "todbttn");
-#endif
 
 	/* Title label */
 	title_actor = xactdelt_Res_Delta_Actor("title", &frame, 0, 0, 0);
@@ -665,16 +638,8 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
 
 	/* Battle text custom actor */
-#ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend())
-		xrect_Set_Rect(&frame, 169, 33, 512, 90);
-	else
-		xrect_Set_Rect(&frame, 72, 7, 256, 33);
-#elif defined(TIE98)
-	xrect_Set_Rect(&frame, 169, 33, 512, 90);
-#else
-	xrect_Set_Rect(&frame, 72, 7, 256, 33);
-#endif
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(72, 169), TIE_FRONTEND_EDITION(7, 33),
+				   TIE_FRONTEND_EDITION(256, 512), TIE_FRONTEND_EDITION(33, 90));
 	battle_text_actor =
 		xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, TIE_FRONTEND_EDITION(50, 30));
 	xactor_Set_Actor_Draw_Function(battle_text_actor, draw_Battle_Text);

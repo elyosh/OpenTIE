@@ -793,15 +793,10 @@ static int16_t iupdate_Pilot_List(Input* input, Rect* bounds, Rect* clip, int16_
 	if (btn != 3)
 		return 1;
 
-#ifdef TIE_MODERN
-	row = (mouse_y + (TieProfile_UsesTie98Frontend() ? 0 : 6)) /
-			  (xfont_Get_FontID_Height(TieProfile_UsesTie98Frontend() ? 3 : 1) + 1) -
-		  (TieProfile_UsesTie98Frontend() ? 0 : 1);
-#elif defined(TIE98)
-	row = mouse_y / (xfont_Get_FontID_Height(3) + 1);
-#else
-	row = (mouse_y + 6) / (xfont_Get_FontID_Height(1) + 1) - 1;
-#endif
+	if (TIE_FRONTEND_TIE98)
+		row = mouse_y / (xfont_Get_FontID_Height(3) + 1);
+	else
+		row = (mouse_y + 6) / (xfont_Get_FontID_Height(1) + 1) - 1;
 	if (row < 0)
 		row = 0;
 	if (row >= TIE_FRONTEND_EDITION(10, 12))
@@ -890,26 +885,14 @@ static void iuser_Pilot_Button(Input* input, int32_t time) {
 
 	/* TIE98 0x470950 shares the page-button actor. The TIE95 branch
 	 * below uses three distinct actor state formulas. */
-#ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend()) {
+	if (TIE_FRONTEND_TIE98)
 		xactor_Set_Actor_State(reg_button[id == 0 ? 0 : 1], btn->pressed, 0);
-	} else if (id == 0) {
-		xactor_Set_Actor_State(reg_button[0], 2 * btn->pressed, 0);
-	} else if (id == 1) {
-		xactor_Set_Actor_State(reg_button[1], 2 * btn->pressed + 1, 0);
-	} else if (id == 2) {
-		xactor_Set_Actor_State(reg_button[2], btn->pressed + 4, 0);
-	}
-#elif defined(TIE98)
-	xactor_Set_Actor_State(reg_button[id == 0 ? 0 : 1], btn->pressed, 0);
-#else
-	if (id == 0)
+	else if (id == 0)
 		xactor_Set_Actor_State(reg_button[0], 2 * btn->pressed, 0);
 	else if (id == 1)
 		xactor_Set_Actor_State(reg_button[1], 2 * btn->pressed + 1, 0);
 	else if (id == 2)
 		xactor_Set_Actor_State(reg_button[2], btn->pressed + 4, 0);
-#endif
 
 	if (!xinpattr_Get_Input_Selected(&btn->header))
 		return;
@@ -1176,40 +1159,18 @@ static void Draw_Pilot_Title(Rect* frame, int16_t phase) {
 		c2 = len2 + 240;
 		if (c2 > 247)
 			c2 = 247;
-#ifdef TIE_MODERN
-		database_x = TieProfile_UsesTie98Frontend() ? 26 : 10;
-		database_y = (TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(3) + 1 : 7);
+		database_x = TIE_FRONTEND_EDITION(10, 26);
+		database_y = TIE_FRONTEND_EDITION(7, xfont_Get_FontID_Height(3) + 1);
 		xfont_Print_Clipped_Text(buf, frame->left + database_x, frame->top + database_y,
-								 TieProfile_UsesTie98Frontend() ? 3 : 1, c2);
-#elif defined(TIE98)
-		database_x = 26;
-		database_y = xfont_Get_FontID_Height(3) + 1;
-		xfont_Print_Clipped_Text(buf, frame->left + database_x, frame->top + database_y, 3, c2);
-#else
-		database_x = 10;
-		database_y = 7;
-		xfont_Print_Clipped_Text(buf, frame->left + database_x, frame->top + database_y, 1, c2);
-#endif
+								 TIE_FRONTEND_EDITION(1, 3), c2);
 	}
 
 	if (phase < 16) {
-#ifdef TIE_MODERN
-		int16_t access_x = TieProfile_UsesTie98Frontend() ? 20 : 10;
-		int16_t access_y = TieProfile_UsesTie98Frontend() ? (frame->bottom - frame->top) / 2 : 36;
+		int16_t access_x = TIE_FRONTEND_EDITION(10, 20);
+		int16_t access_y = TIE_FRONTEND_EDITION(36, (frame->bottom - frame->top) / 2);
 		xfont_Print_Clipped_Text(textext_Get_Text(txtRegInfoAccess), frame->left + access_x,
-								 frame->top + access_y, TieProfile_UsesTie98Frontend() ? 3 : 1,
+								 frame->top + access_y, TIE_FRONTEND_EDITION(1, 3),
 								 4 * ((phase >> 1) & 3) + 19);
-#elif defined(TIE98)
-		int16_t access_x = 20;
-		int16_t access_y = (frame->bottom - frame->top) / 2;
-		xfont_Print_Clipped_Text(textext_Get_Text(txtRegInfoAccess), frame->left + access_x,
-								 frame->top + access_y, 3, 4 * ((phase >> 1) & 3) + 19);
-#else
-		int16_t access_x = 10;
-		int16_t access_y = 36;
-		xfont_Print_Clipped_Text(textext_Get_Text(txtRegInfoAccess), frame->left + access_x,
-								 frame->top + access_y, 1, 4 * ((phase >> 1) & 3) + 19);
-#endif
 	}
 }
 

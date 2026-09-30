@@ -173,15 +173,7 @@ static int16_t film_Callback(Film* film, FilmObject* fo) {
 			return shipext_Get_Mission_Officer() != 2;
 
 		case 8: /* Additional TIE98 officer-room actor variant. */
-#ifdef TIE_MODERN
-			if (TieProfile_UsesTie98Frontend())
-				return shipext_Get_Mission_Officer() != 2;
-			return 0;
-#elif defined(TIE98)
-			return shipext_Get_Mission_Officer() != 2;
-#else
-			return 0;
-#endif
+			return TIE_FRONTEND_EDITION(0, shipext_Get_Mission_Officer() != 2);
 
 		default:
 			return 0;

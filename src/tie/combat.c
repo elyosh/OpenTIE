@@ -279,33 +279,20 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 		if (mouseState == 3 || prevMouseState == 3) {
 			xinpattr_Clear_Input_Flag1(input);
 			xinpattr_Selected_Input(input);
-#ifdef TIE_MODERN
-			if (TieProfile_UsesTie98Frontend())
+			if (TIE_FRONTEND_TIE98)
 				xactor_Set_Actor_State(button[tie98_button_index], 0, 0);
 			else
 				xactor_Hide_Actor(arrow_actor);
-#elif defined(TIE98)
-			xactor_Set_Actor_State(button[tie98_button_index], 0, 0);
-#else
-			xactor_Hide_Actor(arrow_actor);
-#endif
 		}
 		if (mouseState == 1 || prevMouseState == 1) {
 			soundext_Play_SFX(sfxButton, 80);
 			xinpattr_Set_Input_Flag1(input);
-#ifdef TIE_MODERN
-			if (TieProfile_UsesTie98Frontend())
+			if (TIE_FRONTEND_TIE98) {
 				xactor_Set_Actor_State(button[tie98_button_index], 1, 0);
-			else {
+			} else {
 				xactor_Show_Actor(arrow_actor);
 				xactor_Set_Actor_State(arrow_actor, 2 * (input->id - 1) + 1, 0);
 			}
-#elif defined(TIE98)
-			xactor_Set_Actor_State(button[tie98_button_index], 1, 0);
-#else
-			xactor_Show_Actor(arrow_actor);
-			xactor_Set_Actor_State(arrow_actor, 2 * (input->id - 1) + 1, 0);
-#endif
 		}
 	}
 	return 1;
