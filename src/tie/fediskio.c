@@ -1,4 +1,7 @@
 #include "tie/fediskio.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/storage/pilot_storage.h"
+#endif
 #include "tie/fmusic.h"
 #include "tie/fscript.h"
 #include "tie/rtsvga2.h" /* rtsvga2_remapRGBImage */
@@ -392,7 +395,12 @@ int16_t fediskio_writepilotrecord(const char* name) {
 
 // FUNCTION: TIE95 0x204DC
 void fediskio_createpilotrecord(void) {
-	PilotRecord pilot;
+#ifdef TIE_MODERN
+	PilotRecord pilot_value;
+	PilotRecord* pilot = &pilot_value;
+#else
+	PilotRecord* pilot;
+#endif
 	int i;
 
 	if (!fediskio_readpilotrecord(pilotname)) {
@@ -406,16 +414,20 @@ void fediskio_createpilotrecord(void) {
 			fediskio_writepilotrecord(pilotname);
 	}
 
-	PilotRecord_decode(&pilot, (const uint8_t*)loadbuffer);
-	mission.difficulty = pilot.game_level;
+#ifdef TIE_MODERN
+	PilotRecord_decode(pilot, (const uint8_t*)loadbuffer);
+#else
+	pilot = (PilotRecord*)loadbuffer;
+#endif
+	mission.difficulty = pilot->game_level;
 
 	if (mission.mission_mode == 4) {
-		memcpy(mission.mission_linked_data, pilot.linked_data, 256);
-		currentbattle = pilot.cur_battle;
-		currentmission = pilot.battle_cursor[currentbattle];
+		memcpy(mission.mission_linked_data, pilot->linked_data, 256);
+		currentbattle = pilot->cur_battle;
+		currentmission = pilot->battle_cursor[currentbattle];
 		/* Snapshot tour cursor for fsfx_loadvoicelfd. */
-		voice_tour_battle = pilot.cur_battle;
-		voice_tour_mission = pilot.battle_cursor[voice_tour_battle];
+		voice_tour_battle = pilot->cur_battle;
+		voice_tour_mission = pilot->battle_cursor[voice_tour_battle];
 	} else {
 		const uint8_t* raw;
 
@@ -430,7 +442,7 @@ void fediskio_createpilotrecord(void) {
 		 * offset because the retail function addresses this field from
 		 * the serialized pilot image. */
 		raw = (const uint8_t*)loadbuffer;
-		voice_id_a = pilot.cur_combat_ship;
+		voice_id_a = pilot->cur_combat_ship;
 		voice_id_b = raw[0x67 + voice_id_a];
 	}
 }
@@ -457,8 +469,12 @@ static uint16_t train_craft_type_to_ship_idx(uint8_t train_craft_type) {
 
 // FUNCTION: TIE95 0x20668
 int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
+#ifdef TIE_MODERN
 	PilotRecord pilot;
 	PilotRecord* p = &pilot;
+#else
+	PilotRecord* p;
+#endif
 	CraftData* craft;
 	int score, total_score, score_quarter;
 	uint16_t ship_idx, i;
@@ -478,7 +494,11 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 	 * -- the in-memory struct's natural-alignment padding shifts every
 	 * field after secret_score by 4 bytes (cur_battle in-mem +0x26C vs
 	 * disk +0x268, battle_cursor[0] in-mem +0x281 vs disk +0x27D). */
+#ifdef TIE_MODERN
 	PilotRecord_decode(p, (const uint8_t*)loadbuffer);
+#else
+	p = (PilotRecord*)loadbuffer;
+#endif
 
 	/* --- Training mode (train_craft_type nonzero = training mission) --- */
 	if (mission.train_craft_type) {
@@ -672,7 +692,9 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 
 write_and_exit:
 	/* Preserve the pre-mission backup slot for automatic pilot restore. */
+#ifdef TIE_MODERN
 	PilotRecord_encode((uint8_t*)loadbuffer, p);
+#endif
 
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, pilotname, "wb", 1))
 		return 0;

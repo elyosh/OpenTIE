@@ -321,7 +321,11 @@ static void iuser_ArmShip(Input* input, int32_t time) {
 			if (shellext_Get_Last_Scene() == SCENE_DEBRIEF) {
 				char name[36];
 				xerror_Set_Landru_Exit(SCENE_DEBRIEF);
+#ifdef TIE_MODERN
 				shipext_Get_Pilot_Name(name, sizeof(name));
+#else
+				shipext_Get_Pilot_Name(name);
+#endif
 				shipext_Load_Pilot(name);
 			} else {
 				xerror_Set_Landru_Exit(SCENE_BRIEF);

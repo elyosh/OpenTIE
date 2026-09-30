@@ -26,175 +26,10 @@
 #include "tie/fediskio.h"
 #include "tie/tie.h"
 
-#include "../util/binio.h"
-
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-/* --------------------------------------------------------------------------
- * PilotRecord codec.
- *
- * The .tfr file stores two 1928-byte slots back-to-back (primary at +0,
- * backup at +1928). Each slot is the canonical little-endian record
- * documented field-by-field in shipext.h. The runtime PilotRecord is
- * naturally aligned and may be wider on the host; always go through the
- * codec at file-format boundaries.
- *
- * Field layout:
- *   +0x000 version, exit_status, rank, game_level (4 x u8)
- *   +0x004 score (i32)
- *   +0x008 avg_score (u16)
- *   +0x00A secret_order_rank, reserved_0b (2 x u8)
- *   +0x00C secret_completions (u16), secret_score (i32)
- *   +0x012 reserved_12[10]
- *   +0x01C cur_train_ship, train_level[12], reserved_29
- *   +0x02A train_score[12] (i32 x 12)
- *   +0x05A train_max_level[12]
- *   +0x066 cur_combat_ship, combat_course_cursor[32], reserved_87
- *   +0x088 combat_score[12][8] (i32 x 96)
- *   +0x208 combat_complete[12][8]
- *   +0x268 cur_battle, battle_status[20], battle_cursor[20]
- *   +0x291 linked_data[256]
- *   +0x391 secret_complete_bits[20], mission_bonus_bits[20]
- *   +0x3B9 reserved_3b9[29], reserved_3d6[4]
- *   +0x3DA tour_score[20][8] (i32 x 160)
- *   +0x65A total_kills, total_captures (u16 x 2), reserved_65e[2]
- *   +0x660 kills_by_ship_type[69], captures_by_ship_type[69] (u16 x 138)
- *   +0x774 laser_total, laser_hits (i32 x 2), reserved_77c[4]
- *   +0x780 warhead_total, warhead_hits (u16 x 2), reserved_784[2]
- *   +0x786 ejection_count (u16)
- * -------------------------------------------------------------------------- */
-
-void PilotRecord_decode(PilotRecord* dst, const uint8_t* src) {
-	int i;
-	int s;
-	int c;
-	int b;
-	int m;
-
-	dst->version = src[0x000];
-	dst->exit_status = src[0x001];
-	dst->rank = src[0x002];
-	dst->game_level = src[0x003];
-	dst->score = br_i32le(src + 0x004);
-	dst->avg_score = br_u16le(src + 0x008);
-	dst->secret_order_rank = src[0x00A];
-	dst->reserved_0b = src[0x00B];
-	dst->secret_completions = br_u16le(src + 0x00C);
-	dst->secret_score = br_i32le(src + 0x00E);
-	memcpy(dst->reserved_12, src + 0x012, 10);
-
-	dst->cur_train_ship = src[0x01C];
-	memcpy(dst->train_level, src + 0x01D, NUM_SHIPS);
-	dst->reserved_29 = src[0x029];
-	for (i = 0; i < NUM_SHIPS; ++i)
-		dst->train_score[i] = br_i32le(src + 0x02A + i * 4);
-	memcpy(dst->train_max_level, src + 0x05A, NUM_SHIPS);
-
-	dst->cur_combat_ship = src[0x066];
-	memcpy(dst->combat_course_cursor, src + 0x067, SHIP_INFO_SIZE);
-	dst->reserved_87 = src[0x087];
-	for (s = 0; s < NUM_SHIPS; ++s)
-		for (c = 0; c < 8; ++c)
-			dst->combat_score[s][c] = br_i32le(src + 0x088 + (s * 8 + c) * 4);
-	for (s = 0; s < NUM_SHIPS; ++s)
-		memcpy(dst->combat_complete[s], src + 0x208 + s * 8, 8);
-
-	dst->cur_battle = src[0x268];
-	memcpy(dst->battle_status, src + 0x269, NUM_BATTLES);
-	memcpy(dst->battle_cursor, src + 0x27D, NUM_BATTLES);
-	memcpy(dst->linked_data, src + 0x291, 256);
-	memcpy(dst->secret_complete_bits, src + 0x391, NUM_BATTLES);
-	memcpy(dst->mission_bonus_bits, src + 0x3A5, NUM_BATTLES);
-	memcpy(dst->reserved_3b9, src + 0x3B9, 29);
-	memcpy(dst->reserved_3d6, src + 0x3D6, 4);
-
-	for (b = 0; b < NUM_BATTLES; ++b)
-		for (m = 0; m < 8; ++m)
-			dst->tour_score[b][m] = br_i32le(src + 0x3DA + (b * 8 + m) * 4);
-
-	dst->total_kills = br_u16le(src + 0x65A);
-	dst->total_captures = br_u16le(src + 0x65C);
-	memcpy(dst->reserved_65e, src + 0x65E, 2);
-	for (i = 0; i < 69; ++i)
-		dst->kills_by_ship_type[i] = br_u16le(src + 0x660 + i * 2);
-	for (i = 0; i < 69; ++i)
-		dst->captures_by_ship_type[i] = br_u16le(src + 0x6EA + i * 2);
-
-	dst->laser_total = br_i32le(src + 0x774);
-	dst->laser_hits = br_i32le(src + 0x778);
-	memcpy(dst->reserved_77c, src + 0x77C, 4);
-	dst->warhead_total = br_u16le(src + 0x780);
-	dst->warhead_hits = br_u16le(src + 0x782);
-	memcpy(dst->reserved_784, src + 0x784, 2);
-	dst->ejection_count = br_u16le(src + 0x786);
-}
-
-void PilotRecord_encode(uint8_t* dst, const PilotRecord* src) {
-	int i;
-	int s;
-	int c;
-	int b;
-	int m;
-
-	dst[0x000] = src->version;
-	dst[0x001] = src->exit_status;
-	dst[0x002] = src->rank;
-	dst[0x003] = src->game_level;
-	bw_i32le(dst + 0x004, src->score);
-	bw_u16le(dst + 0x008, src->avg_score);
-	dst[0x00A] = src->secret_order_rank;
-	dst[0x00B] = src->reserved_0b;
-	bw_u16le(dst + 0x00C, src->secret_completions);
-	bw_i32le(dst + 0x00E, src->secret_score);
-	memcpy(dst + 0x012, src->reserved_12, 10);
-
-	dst[0x01C] = src->cur_train_ship;
-	memcpy(dst + 0x01D, src->train_level, NUM_SHIPS);
-	dst[0x029] = src->reserved_29;
-	for (i = 0; i < NUM_SHIPS; ++i)
-		bw_i32le(dst + 0x02A + i * 4, src->train_score[i]);
-	memcpy(dst + 0x05A, src->train_max_level, NUM_SHIPS);
-
-	dst[0x066] = src->cur_combat_ship;
-	memcpy(dst + 0x067, src->combat_course_cursor, SHIP_INFO_SIZE);
-	dst[0x087] = src->reserved_87;
-	for (s = 0; s < NUM_SHIPS; ++s)
-		for (c = 0; c < 8; ++c)
-			bw_i32le(dst + 0x088 + (s * 8 + c) * 4, src->combat_score[s][c]);
-	for (s = 0; s < NUM_SHIPS; ++s)
-		memcpy(dst + 0x208 + s * 8, src->combat_complete[s], 8);
-
-	dst[0x268] = src->cur_battle;
-	memcpy(dst + 0x269, src->battle_status, NUM_BATTLES);
-	memcpy(dst + 0x27D, src->battle_cursor, NUM_BATTLES);
-	memcpy(dst + 0x291, src->linked_data, 256);
-	memcpy(dst + 0x391, src->secret_complete_bits, NUM_BATTLES);
-	memcpy(dst + 0x3A5, src->mission_bonus_bits, NUM_BATTLES);
-	memcpy(dst + 0x3B9, src->reserved_3b9, 29);
-	memcpy(dst + 0x3D6, src->reserved_3d6, 4);
-
-	for (b = 0; b < NUM_BATTLES; ++b)
-		for (m = 0; m < 8; ++m)
-			bw_i32le(dst + 0x3DA + (b * 8 + m) * 4, src->tour_score[b][m]);
-
-	bw_u16le(dst + 0x65A, src->total_kills);
-	bw_u16le(dst + 0x65C, src->total_captures);
-	memcpy(dst + 0x65E, src->reserved_65e, 2);
-	for (i = 0; i < 69; ++i)
-		bw_u16le(dst + 0x660 + i * 2, src->kills_by_ship_type[i]);
-	for (i = 0; i < 69; ++i)
-		bw_u16le(dst + 0x6EA + i * 2, src->captures_by_ship_type[i]);
-
-	bw_i32le(dst + 0x774, src->laser_total);
-	bw_i32le(dst + 0x778, src->laser_hits);
-	memcpy(dst + 0x77C, src->reserved_77c, 4);
-	bw_u16le(dst + 0x780, src->warhead_total);
-	bw_u16le(dst + 0x782, src->warhead_hits);
-	memcpy(dst + 0x784, src->reserved_784, 2);
-	bw_u16le(dst + 0x786, src->ejection_count);
-}
 
 /* mission.player_status values:
  *   0 = DEAD       -> scene 240
@@ -208,19 +43,24 @@ enum {
 
 /* --- Module globals --- */
 
+// GLOBAL: TIE95 0xFABC8
+// GLOBAL: TIE98 0x5F2B40
 PilotRecord pilot_record;
 
 // GLOBAL: TIE95 0xFB3A8
 static LandruHandle ship_info[SHIP_INFO_SIZE]; /* paragraph handles */
-// PORT: widened runtime storage required by TIE98 registration.
+/* Native registration supports the shared 16-character pilot-name policy. */
+#ifdef TIE_MODERN
+// GLOBAL: TIE95 0xD14D6
 static char pilot_name[TIE_PILOT_NAME_CAPACITY];
-/* Matches the "__temp__.tfr" literal the retail binary passes directly
- * to each temp-pilot open/delete call (no runtime setter; it's a fixed
- * filename). RE of the buffer was incomplete — callers asserted in
- * xfile_Open_File when scene 100 ran Delete_Temp_Pilot on startup. */
-static char temp_pilot_name[16] = "__temp__.tfr";
+#else
+// GLOBAL: TIE95 0xD14D6
+static char pilot_name[14];
+#endif
+// GLOBAL: TIE95 0xD14E4
+static const char temp_pilot_name[14] = "__temp__.tfr";
 // GLOBAL: TIE95 0xFB3E8
-static char mission_name[12];
+static char mission_name[14];
 // GLOBAL: TIE95 0xD14D0
 static int16_t mission_ship;
 // GLOBAL: TIE95 0xD14D2
@@ -244,7 +84,8 @@ static int16_t num_battle_cutscenes;
 // GLOBAL: TIE95 0xD14F4
 static int16_t cur_battle_cutscene;
 // GLOBAL: TIE95 0xFB350
-static int16_t battle_cutscene[32];
+// GLOBAL: TIE98 0x589AA8
+static int16_t battle_cutscene[12];
 
 /* --- Lifecycle --- */
 
@@ -387,21 +228,37 @@ void shipext_Init_Pilot(void) {
 }
 
 // FUNCTION: TIE95 0x801F4
+// FUNCTION: TIE98 0x4813F0
 // PORT: bounded copy into the widened runtime pilot name.
 void shipext_Set_Pilot_Name(const char* name) {
+#ifdef TIE_MODERN
 	if (!name)
 		name = "";
 	strncpy(pilot_name, name, sizeof(pilot_name) - 1);
 	pilot_name[sizeof(pilot_name) - 1] = '\0';
+#else
+	strcpy(pilot_name, name);
+#endif
 }
 
+// PORT: native callers retain the bounded name-copy API.
+#ifdef TIE_MODERN
 // FUNCTION: TIE95 0x8021C
-// PORT: bounded host API.
+// FUNCTION: TIE98 0x481420
 void shipext_Get_Pilot_Name(char* out, size_t capacity) {
+#else
+// FUNCTION: TIE95 0x8021C
+// FUNCTION: TIE98 0x481420
+void shipext_Get_Pilot_Name(char* out) {
+#endif
+#ifdef TIE_MODERN
 	if (!out || !capacity)
 		return;
 	strncpy(out, pilot_name, capacity - 1);
 	out[capacity - 1] = '\0';
+#else
+	strcpy(out, pilot_name);
+#endif
 }
 
 // FUNCTION: TIE95 0x80324
@@ -429,9 +286,13 @@ int16_t shipext_Write_Temp_Pilot(void) {
 	pilot_record.game_level = options_gbl.game_level;
 	fp = xfile_Open_File(LANDRU_FILE_ROOT_TEMP, temp_pilot_name, "wb");
 	if (fp) {
+#ifdef TIE_MODERN
 		uint8_t buf[PILOTRECORD_DISK_SIZE];
 		PilotRecord_encode(buf, &pilot_record);
 		xfile_Write_Data_To_File(fp, buf, PILOTRECORD_DISK_SIZE);
+#else
+		xfile_Write_Data_To_File(fp, &pilot_record, PILOTRECORD_DISK_SIZE);
+#endif
 		xfile_Close_File(fp);
 		return 1;
 	}
@@ -471,6 +332,8 @@ LandruFile* shipext_Open_Pilot_File(char* name, char* mode) {
 // FUNCTION: TIE95 0x822B4
 void shipext_Set_Mission_Name(const char* name) { strcpy(mission_name, name); }
 
+// FUNCTION: TIE95 0x822DC
+// FUNCTION: TIE98 0x4837D0
 const char* shipext_Get_Mission_Name(void) { return mission_name; }
 
 /* --- Mission state getters/setters --- */
@@ -489,6 +352,8 @@ void shipext_Set_Mission_Outcome(int16_t val) { mission_outcome = val; }
 int16_t shipext_Get_Mission_Outcome(void) { return mission_outcome; }
 // FUNCTION: TIE95 0x820E4
 void shipext_Set_Mission_Officer(int16_t val) { mission_officer = val; }
+// FUNCTION: TIE95 0x820EC
+// FUNCTION: TIE98 0x483500
 int16_t shipext_Get_Mission_Officer(void) { return mission_officer; }
 
 // FUNCTION: TIE95 0x82048
@@ -516,6 +381,8 @@ bool shipext_Is_Player_OK(void) {
 
 // FUNCTION: TIE95 0x81FF8
 void shipext_Set_TOD_Medal(int16_t val) { battle_medal = val; }
+// FUNCTION: TIE95 0x82000
+// FUNCTION: TIE98 0x4833C0
 int16_t shipext_Get_TOD_Medal(void) { return battle_medal; }
 // FUNCTION: TIE95 0x82008
 void shipext_Set_Secret_Medal(int16_t val) { battle_secret_medal = val; }
@@ -526,8 +393,12 @@ int16_t shipext_Get_Secret_Medal(void) { return battle_secret_medal; }
 
 // FUNCTION: TIE95 0x80A58
 int16_t shipext_Get_Blueprint_Ship(void) { return blueprint_ship; }
+// FUNCTION: TIE95 0x80A60
+// FUNCTION: TIE98 0x481CA0
 void shipext_Set_Blueprint_Ship(int16_t val) { blueprint_ship = val; }
 
+// FUNCTION: TIE95 0x7FED0
+// FUNCTION: TIE98 0x480E60
 void shipext_Reset_Battle_Results(void) {
 	blueprint_component = 0;
 	battle_medal = 0;
@@ -562,6 +433,8 @@ uint8_t shipext_Get_Train_Level(void) { return pilot_record.train_level[pilot_re
 // FUNCTION: TIE95 0x81070
 void shipext_Get_Train_Mission_Text(char* buf, int16_t line) { textext_Get_Train_Text(buf, line); }
 
+// FUNCTION: TIE95 0x81078
+// FUNCTION: TIE98 0x482380
 int16_t shipext_Num_Train_Mission_Text_Lines(void) { return textext_Count_Train_Text_Lines(); }
 
 /* --- Combat --- */
@@ -603,6 +476,8 @@ int16_t shipext_Num_Combat_Mission_Text_Lines(void) {
 
 /* --- Battle/Tour --- */
 
+// FUNCTION: TIE95 0x820F4
+// FUNCTION: TIE98 0x483510
 void shipext_Clear_Battle_Cutscenes(void) {
 	cur_battle_cutscene = 0;
 	num_battle_cutscenes = 0;
@@ -658,60 +533,34 @@ void shipext_Get_Battle_Galaxy_Name(char* out) {
 }
 
 /* Ship name actor slots (for Show_Train/Combat_Ship_Name) */
-static Actor* ship_name_actors[SHIP_INFO_SIZE];
+// GLOBAL: TIE95 0xFB378
+// GLOBAL: TIE98 0x589BD0
+static Actor* ship_name_actors[NUM_SHIPS];
 
 /* Blueprint data */
+// GLOBAL: TIE95 0xFB370
+// GLOBAL: TIE98 0x589898
 static LandruHandle blueprint_info[4];
+// GLOBAL: TIE95 0xFB368
+// GLOBAL: TIE98 0x589AC0
 static int16_t blueprint_count[4];
+// GLOBAL: TIE95 0xFB402
+// GLOBAL: TIE98 0x589890
 static int16_t num_blueprint_ships;
 
 /* Secret battle scene table: (battle, mission) pairs */
 /* Secret battle scenes: (battle, mission) pairs that trigger secret cutscenes 21-28.
  * Entries with -1 are unused sentinels. */
-static struct {
+typedef struct SecretBattleScene {
 	int16_t battle;
 	int16_t mission;
-} secret_battle_scene[8] = {
+} SecretBattleScene;
+
+// GLOBAL: TIE95 0xD14F6
+// GLOBAL: TIE98 0x4EB9C0
+static const SecretBattleScene secret_battle_scene[8] = {
 	{ 4, 1 }, { 5, 1 }, { 6, 0 }, { 9, 2 }, { 12, 2 }, { -1, -1 }, { -1, -1 }, { -1, -1 },
 };
-
-/* --- Helper: parse space-separated integers from a paragraph string --- */
-__attribute__((unused)) static void parse_position(const char* str, int32_t* out_x, int32_t* out_y,
-												   int32_t* out_z) {
-	int16_t pos = 0;
-	while (str[pos] == ' ')
-		pos++;
-	*out_x = atol(&str[pos]);
-	while (str[pos] && str[pos] != ' ')
-		pos++;
-	while (str[pos] == ' ')
-		pos++;
-	*out_y = atol(&str[pos]);
-	while (str[pos] && str[pos] != ' ')
-		pos++;
-	while (str[pos] == ' ')
-		pos++;
-	*out_z = atol(&str[pos]);
-}
-
-/* --- Helper: find blueprint category and offset for a blueprint_ship >= NUM_SHIPS --- */
-static void find_blueprint_cat(int16_t ship_offset, int16_t* out_cat, int16_t* out_offset) {
-	int16_t cat = 0;
-	int16_t remaining = ship_offset - NUM_SHIPS;
-	*out_cat = 0;
-	*out_offset = 0;
-	while (cat < 4) {
-		if (remaining < blueprint_count[cat]) {
-			if (blueprint_info[cat]) {
-				*out_cat = cat;
-				*out_offset = remaining;
-			}
-			break;
-		}
-		remaining -= blueprint_count[cat];
-		cat++;
-	}
-}
 
 /* --- Pilot save/load --- */
 
@@ -720,7 +569,9 @@ bool shipext_Load_Pilot(const char* name) {
 	char path[40];
 	LandruFile* fp;
 
+#ifdef TIE_MODERN
 	uint8_t buf[PILOTRECORD_DISK_SIZE];
+#endif
 
 	strcpy(path, name);
 	strcat(path, ".tfr");
@@ -729,9 +580,14 @@ bool shipext_Load_Pilot(const char* name) {
 	if (!fp)
 		return false;
 
+#ifdef TIE_MODERN
 	xfile_Read_Data_From_File(fp, buf, PILOTRECORD_DISK_SIZE);
 	xfile_Close_File(fp);
 	PilotRecord_decode(&pilot_record, buf);
+#else
+	xfile_Read_Data_From_File(fp, &pilot_record, PILOTRECORD_DISK_SIZE);
+	xfile_Close_File(fp);
+#endif
 	shipext_Set_Pilot_Name(name);
 	options_gbl.game_level = pilot_record.game_level;
 	return true;
@@ -778,11 +634,21 @@ void shipext_Save_Pilot_Data(const char* name) {
 		buf[TFR_BACKUP_OFFSET + TFR_GAME_LEVEL_OFFSET] = options_gbl.game_level;
 	} else {
 		/* No existing file -- mirror current record into backup slot */
+
+#ifdef TIE_MODERN
 		PilotRecord_encode(buf + TFR_BACKUP_OFFSET, &pilot_record);
+#else
+		memcpy(buf + TFR_BACKUP_OFFSET, &pilot_record, PILOTRECORD_DISK_SIZE);
+#endif
 	}
 
 	/* Encode current record into primary slot */
+
+#ifdef TIE_MODERN
 	PilotRecord_encode(buf, &pilot_record);
+#else
+	memcpy(buf, &pilot_record, PILOTRECORD_DISK_SIZE);
+#endif
 
 	fp = xfile_Open_File(LANDRU_FILE_ROOT_USER, path, "wb");
 	if (fp) {
@@ -801,8 +667,17 @@ void shipext_Backup_Pilot(void) {
 	strcat(path, ".tfr");
 	pilot_record.game_level = options_gbl.game_level;
 
+#ifdef TIE_MODERN
 	PilotRecord_encode(buf, &pilot_record);
+#else
+	memcpy(buf, &pilot_record, PILOTRECORD_DISK_SIZE);
+#endif
+
+#ifdef TIE_MODERN
 	PilotRecord_encode(buf + TFR_BACKUP_OFFSET, &pilot_record);
+#else
+	memcpy(buf + TFR_BACKUP_OFFSET, &pilot_record, PILOTRECORD_DISK_SIZE);
+#endif
 
 	fp = xfile_Open_File(LANDRU_FILE_ROOT_USER, path, "wb");
 	if (fp) {
@@ -831,7 +706,11 @@ void shipext_Restore_Pilot(void) {
 	 * into the live pilot_record. */
 	buf[TFR_BACKUP_OFFSET + TFR_GAME_LEVEL_OFFSET] = buf[TFR_GAME_LEVEL_OFFSET];
 	memcpy(buf, buf + TFR_BACKUP_OFFSET, PILOTRECORD_DISK_SIZE);
+#ifdef TIE_MODERN
 	PilotRecord_decode(&pilot_record, buf + TFR_BACKUP_OFFSET);
+#else
+	memcpy(&pilot_record, buf + TFR_BACKUP_OFFSET, PILOTRECORD_DISK_SIZE);
+#endif
 
 	fp = xfile_Open_File(LANDRU_FILE_ROOT_USER, path, "wb");
 	if (fp) {
@@ -847,8 +726,12 @@ bool shipext_Read_Temp_Pilot(void) {
 	pilot_record.game_level = options_gbl.game_level;
 	fp = xfile_Open_File(LANDRU_FILE_ROOT_TEMP, temp_pilot_name, "rb");
 	if (fp) {
+#ifdef TIE_MODERN
 		uint8_t buf[PILOTRECORD_DISK_SIZE];
 		if (!xfile_Read_Data_From_File(fp, buf, PILOTRECORD_DISK_SIZE)) {
+#else
+		if (!xfile_Read_Data_From_File(fp, &pilot_record, PILOTRECORD_DISK_SIZE)) {
+#endif
 			/* Read failed -- reload from the .tfr file */
 			char name_buf[TIE_PILOT_NAME_CAPACITY];
 			xfile_Close_File(fp);
@@ -856,7 +739,9 @@ bool shipext_Read_Temp_Pilot(void) {
 			shipext_Load_Pilot(name_buf);
 			return false;
 		}
+#ifdef TIE_MODERN
 		PilotRecord_decode(&pilot_record, buf);
+#endif
 		xfile_Close_File(fp);
 		return true;
 	}
@@ -917,7 +802,7 @@ void shipext_Next_Blueprint_Ship(void) {
 			if (shipext_Is_Ship_Available(blueprint_ship))
 				break;
 		} else {
-			find_blueprint_cat(blueprint_ship, &cat, &offset);
+			shipext_Get_Blueprint_Index(&cat, &offset);
 			if (blueprint_info[cat])
 				break;
 		}
@@ -935,7 +820,7 @@ void shipext_Last_Blueprint_Ship(void) {
 			if (shipext_Is_Ship_Available(blueprint_ship))
 				break;
 		} else {
-			find_blueprint_cat(blueprint_ship, &cat, &offset);
+			shipext_Get_Blueprint_Index(&cat, &offset);
 			if (blueprint_info[cat])
 				break;
 		}
@@ -954,7 +839,7 @@ void shipext_Get_Blueprint_Ship_SHP(void) {
 		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], lfd_name, 3, 0);
 		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], shp_name, 3, 1);
 	} else {
-		find_blueprint_cat(blueprint_ship, &cat, &offset);
+		shipext_Get_Blueprint_Index(&cat, &offset);
 		if (!blueprint_info[cat])
 			return;
 		if (cat)
@@ -976,7 +861,7 @@ void shipext_Get_Blueprint_Ship_Name(char* out) {
 		else
 			*out = '\0';
 	} else {
-		find_blueprint_cat(blueprint_ship, &cat, &offset);
+		shipext_Get_Blueprint_Index(&cat, &offset);
 		if (blueprint_info[cat])
 			xparagrp_Get_Paragraph_String(blueprint_info[cat], out, offset, 0);
 		else
@@ -992,7 +877,7 @@ void shipext_Get_Blueprint_Ship_Line(char* out, int16_t line) {
 	if (blueprint_ship < NUM_SHIPS) {
 		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], out, 3, str_idx);
 	} else {
-		find_blueprint_cat(blueprint_ship, &cat, &offset);
+		shipext_Get_Blueprint_Index(&cat, &offset);
 		xparagrp_Get_Paragraph_String(blueprint_info[cat], out, offset, str_idx);
 	}
 }
@@ -1005,7 +890,7 @@ int16_t shipext_Get_Num_Blueprint_Ship_Lines(void) {
 	if (blueprint_ship < NUM_SHIPS)
 		total = xparagrp_Count_Paragraph_Strings(ship_info[blueprint_ship], 3);
 	else {
-		find_blueprint_cat(blueprint_ship, &cat, &offset);
+		shipext_Get_Blueprint_Index(&cat, &offset);
 		total = xparagrp_Count_Paragraph_Strings(blueprint_info[cat], offset);
 	}
 	/* Drop the 2 leading paragraphs (ship name + class) that the caller
@@ -1014,8 +899,23 @@ int16_t shipext_Get_Num_Blueprint_Ship_Lines(void) {
 }
 
 // FUNCTION: TIE95 0x80CD4
-void shipext_Get_Blueprint_Index(int16_t* out_category, int16_t* out_offset) {
-	find_blueprint_cat(blueprint_ship, out_category, out_offset);
+// FUNCTION: TIE98 0x481F60
+void shipext_Get_Blueprint_Index(int16_t* out_cat, int16_t* out_offset) {
+	int16_t cat = 0;
+	int16_t remaining = blueprint_ship - NUM_SHIPS;
+	*out_cat = 0;
+	*out_offset = 0;
+	while (cat < 4) {
+		if (remaining < blueprint_count[cat]) {
+			if (blueprint_info[cat]) {
+				*out_cat = cat;
+				*out_offset = remaining;
+			}
+			break;
+		}
+		remaining -= blueprint_count[cat];
+		cat++;
+	}
 }
 
 /* --- Training --- */
@@ -1129,29 +1029,9 @@ void shipext_Get_Train_Ship_SHP(void) {
 void shipext_Get_Train_Course_SHP(void) { bpflight_Load_Flight_Craft("species.lfd", "obstrt", 1); }
 
 // FUNCTION: TIE95 0x8104C
+// FUNCTION: TIE98 0x482330
 void shipext_Get_Train_Ship_Pos(int32_t* out_x, int32_t* out_y, int32_t* out_z) {
-	char buf[40];
-	int16_t cat, offset;
-
-	if (pilot_record.cur_train_ship < NUM_SHIPS) {
-		if (!ship_info[pilot_record.cur_train_ship]) {
-			*out_x = 0;
-			*out_y = 0;
-			*out_z = 30;
-			return;
-		}
-		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_train_ship], buf, 1, 2);
-	} else {
-		find_blueprint_cat(pilot_record.cur_train_ship, &cat, &offset);
-		if (!blueprint_info[cat]) {
-			*out_x = 0;
-			*out_y = 0;
-			*out_z = 30;
-			return;
-		}
-		xparagrp_Get_Paragraph_String(blueprint_info[cat], buf, offset, 2);
-	}
-	parse_position(buf, out_x, out_y, out_z);
+	shipext_Get_Ship_Pos(pilot_record.cur_train_ship, 1, 2, out_x, out_y, out_z);
 }
 
 /* --- Combat --- */
@@ -1272,30 +1152,10 @@ void shipext_Get_Combat_Ship_SHP(void) {
 	}
 }
 
-// FUNCTION: TIE95 0x82148
+// FUNCTION: TIE95 0x8142C
+// FUNCTION: TIE98 0x4827C0
 void shipext_Get_Combat_Ship_Pos(int32_t* out_x, int32_t* out_y, int32_t* out_z) {
-	char buf[40];
-	int16_t cat, offset;
-
-	if (mission_ship < NUM_SHIPS) {
-		if (!ship_info[mission_ship]) {
-			*out_x = 0;
-			*out_y = 0;
-			*out_z = 30;
-			return;
-		}
-		xparagrp_Get_Paragraph_String(ship_info[mission_ship], buf, 2, 2);
-	} else {
-		find_blueprint_cat(mission_ship, &cat, &offset);
-		if (!blueprint_info[cat]) {
-			*out_x = 0;
-			*out_y = 0;
-			*out_z = 30;
-			return;
-		}
-		xparagrp_Get_Paragraph_String(blueprint_info[cat], buf, offset, 2);
-	}
-	parse_position(buf, out_x, out_y, out_z);
+	shipext_Get_Ship_Pos(shipext_Get_Mission_Ship(), 2, 2, out_x, out_y, out_z);
 }
 
 // FUNCTION: TIE95 0x811C4
@@ -1432,6 +1292,42 @@ void shipext_Get_Battle_Galaxy_Rect(Rect* out) {
 	out->bottom = atoi(&buf[pos]);
 }
 
+// FUNCTION: TIE95 0x81828
+// FUNCTION: TIE98 0x482CA0
+int16_t shipext_Find_Battle(void) {
+	int16_t start = pilot_record.cur_battle;
+	int16_t valid = shipext_Valid_Incomplete_Battle(start);
+	if (!valid) {
+		do {
+			pilot_record.cur_battle = (pilot_record.cur_battle + 1) % NUM_BATTLES;
+			valid = shipext_Valid_Incomplete_Battle(pilot_record.cur_battle);
+		} while (pilot_record.cur_battle != start && !valid);
+	}
+	return valid;
+}
+
+// FUNCTION: TIE95 0x81884
+// FUNCTION: TIE98 0x482D00
+int16_t shipext_Next_Battle(void) {
+	int16_t valid;
+	do {
+		pilot_record.cur_battle = (pilot_record.cur_battle + 1) % NUM_BATTLES;
+		valid = shipext_Valid_Battle(pilot_record.cur_battle);
+	} while (!valid);
+	return valid;
+}
+
+// FUNCTION: TIE95 0x818DC
+// FUNCTION: TIE98 0x482D60
+int16_t shipext_Last_Battle(void) {
+	int16_t valid;
+	do {
+		pilot_record.cur_battle = (pilot_record.cur_battle + NUM_BATTLES - 1) % NUM_BATTLES;
+		valid = shipext_Valid_Battle(pilot_record.cur_battle);
+	} while (!valid);
+	return valid;
+}
+
 /* Battle prerequisite gate. Tour-progress chain:
  *   battle > 6  -> requires battle_status[6] == 3 (Tour 1 final)
  *   battle > 9  -> requires battle_status[9] == 3 (Tour 2 final)
@@ -1447,13 +1343,14 @@ void shipext_Get_Battle_Galaxy_Rect(Rect* out) {
  *   case 15   : chain && battles 13+14 complete
  *   default   : chain only
  */
-static bool battle_prereqs_with_status_gate(int16_t battle, bool cur_status_ok) {
+// FUNCTION: TIE95 0x81968
+// FUNCTION: TIE98 0x482DC0
+int16_t shipext_Valid_Incomplete_Battle(int16_t battle) {
 	bool chain;
-
 	if (!ship_info[battle + NUM_SHIPS])
-		return false;
-	if (!cur_status_ok)
-		return false;
+		return 0;
+	if (pilot_record.battle_status[pilot_record.cur_battle] >= 2)
+		return 0;
 
 	chain = true;
 	if (battle > 6)
@@ -1485,48 +1382,44 @@ static bool battle_prereqs_with_status_gate(int16_t battle, bool cur_status_ok) 
 	}
 }
 
-static bool check_battle_prereqs(int16_t battle) {
-	int16_t cur = pilot_record.cur_battle;
-	return battle_prereqs_with_status_gate(battle, pilot_record.battle_status[cur] != 2);
-}
-
-static bool check_battle_incomplete(int16_t battle) {
-	int16_t cur = pilot_record.cur_battle;
-	return battle_prereqs_with_status_gate(battle, pilot_record.battle_status[cur] < 2);
-}
-
-// FUNCTION: TIE95 0x81828
-int16_t shipext_Find_Battle(void) {
-	int16_t start = pilot_record.cur_battle;
-	if (check_battle_incomplete(start))
-		return 1;
-	do {
-		pilot_record.cur_battle = (pilot_record.cur_battle + 1) % NUM_BATTLES;
-	} while (pilot_record.cur_battle != start && !check_battle_incomplete(pilot_record.cur_battle));
-	return check_battle_incomplete(pilot_record.cur_battle);
-}
-
-// FUNCTION: TIE95 0x81884
-bool shipext_Next_Battle(void) {
-	do {
-		pilot_record.cur_battle = (pilot_record.cur_battle + 1) % NUM_BATTLES;
-	} while (!check_battle_prereqs(pilot_record.cur_battle));
-	return check_battle_prereqs(pilot_record.cur_battle);
-}
-
-// FUNCTION: TIE95 0x818DC
-bool shipext_Last_Battle(void) {
-	do {
-		pilot_record.cur_battle = (pilot_record.cur_battle + NUM_BATTLES - 1) % NUM_BATTLES;
-	} while (!check_battle_prereqs(pilot_record.cur_battle));
-	return check_battle_prereqs(pilot_record.cur_battle);
-}
-
-// FUNCTION: TIE95 0x81968
-bool shipext_Valid_Incomplete_Battle(int16_t battle) { return check_battle_incomplete(battle); }
-
 // FUNCTION: TIE95 0x81BAC
-bool shipext_Valid_Battle(int16_t battle) { return check_battle_prereqs(battle); }
+// FUNCTION: TIE98 0x482FA0
+int16_t shipext_Valid_Battle(int16_t battle) {
+	bool chain;
+	if (!ship_info[battle + NUM_SHIPS])
+		return 0;
+	if (pilot_record.battle_status[pilot_record.cur_battle] == 2)
+		return 0;
+
+	chain = true;
+	if (battle > 6)
+		chain = (pilot_record.battle_status[6] == 3);
+	if (battle > 9)
+		chain = (pilot_record.battle_status[9] == 3);
+
+	switch (battle) {
+		case 4:
+			return pilot_record.battle_status[0] == 3 && pilot_record.battle_status[1] == 3;
+		case 5:
+			return pilot_record.battle_status[2] == 3 && pilot_record.battle_status[3] == 3;
+		case 6:
+			return pilot_record.battle_status[4] == 3 && pilot_record.battle_status[5] == 3;
+		case 7:
+		case 8: {
+			uint8_t s7 = pilot_record.battle_status[7];
+			uint8_t s8 = pilot_record.battle_status[8];
+			return chain || s7 == 3 || s8 == 3 || s7 == 1 || s8 == 1;
+		}
+		case 9:
+			return pilot_record.battle_status[7] == 3 && pilot_record.battle_status[8] == 3;
+		case 12:
+			return chain && pilot_record.battle_status[10] == 3 && pilot_record.battle_status[11] == 3;
+		case 15:
+			return chain && pilot_record.battle_status[13] == 3 && pilot_record.battle_status[14] == 3;
+		default:
+			return chain;
+	}
+}
 
 // FUNCTION: TIE95 0x81E14
 int16_t shipext_Set_Tour_Battle(void) {
@@ -1628,9 +1521,12 @@ int16_t shipext_Set_Tourdesk_Cutscene(void) {
 	return result;
 }
 
+// FUNCTION: TIE95 0x82148
+// FUNCTION: TIE98 0x483560
 void shipext_Get_Ship_Pos(int16_t ship, int16_t para_idx, int16_t str_idx, int32_t* out_x, int32_t* out_y,
 						  int32_t* out_z) {
-	char buf[40];
+	char buf[32];
+	int16_t pos;
 	int16_t cat, offset;
 
 	if (ship < NUM_SHIPS) {
@@ -1642,7 +1538,7 @@ void shipext_Get_Ship_Pos(int16_t ship, int16_t para_idx, int16_t str_idx, int32
 		}
 		xparagrp_Get_Paragraph_String(ship_info[ship], buf, para_idx, str_idx);
 	} else {
-		find_blueprint_cat(blueprint_ship, &cat, &offset);
+		shipext_Get_Blueprint_Index(&cat, &offset);
 		if (!blueprint_info[cat]) {
 			*out_x = 0;
 			*out_y = 0;
@@ -1651,7 +1547,32 @@ void shipext_Get_Ship_Pos(int16_t ship, int16_t para_idx, int16_t str_idx, int32
 		}
 		xparagrp_Get_Paragraph_String(blueprint_info[cat], buf, offset, 2);
 	}
-	parse_position(buf, out_x, out_y, out_z);
+	pos = 0;
+	while (isspace(buf[pos]))
+		pos++;
+#if defined(TIE_MODERN) || defined(_MSC_VER)
+	*out_x = (int32_t)atol(&buf[pos]);
+#else
+	*out_x = atoi(&buf[pos]);
+#endif
+	while (!isspace(buf[pos]))
+		pos++;
+	while (isspace(buf[pos]))
+		pos++;
+#if defined(TIE_MODERN) || defined(_MSC_VER)
+	*out_y = (int32_t)atol(&buf[pos]);
+#else
+	*out_y = atoi(&buf[pos]);
+#endif
+	while (!isspace(buf[pos]))
+		pos++;
+	while (isspace(buf[pos]))
+		pos++;
+#if defined(TIE_MODERN) || defined(_MSC_VER)
+	*out_z = (int32_t)atol(&buf[pos]);
+#else
+	*out_z = atoi(&buf[pos]);
+#endif
 }
 
 /* --- Mission flow --- */

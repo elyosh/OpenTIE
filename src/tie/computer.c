@@ -466,8 +466,11 @@ static int16_t Find_Backup_Pilot_Info(void) {
 
 	backup_pilot_rank = 0;
 	backup_pilot_points = 0;
-
+#ifdef TIE_MODERN
 	shipext_Get_Pilot_Name(file_name, sizeof(file_name));
+#else
+	shipext_Get_Pilot_Name(file_name);
+#endif
 	strcat(file_name, ".tfr");
 
 	the_file = xfile_Open_File(LANDRU_FILE_ROOT_USER, file_name, "rb");
@@ -927,7 +930,11 @@ static void xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 
 	textext_Copy_Text(name, pilot_record.rank + txtCompRankCadet);
 	strcat(name, " ");
+#ifdef TIE_MODERN
 	shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
+#else
+	shipext_Get_Pilot_Name(pilot_name);
+#endif
 	strcat(name, pilot_name);
 	xfont_Print_Centered_Text(name, &tr, color, active_spec->content_font);
 
@@ -1004,7 +1011,11 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 	/* Rank + Name header */
 	textext_Copy_Text(str1, pilot_record.rank + 1);
 	strcat(str1, " ");
+#ifdef TIE_MODERN
 	shipext_Get_Pilot_Name(str2, sizeof(str2));
+#else
+	shipext_Get_Pilot_Name(str2);
+#endif
 	strcat(str1, str2);
 	xfont_Print_Centered_Text(str1, r, color, active_spec->content_font);
 	xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
@@ -1705,7 +1716,11 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 	new_mode = computer_mode;
 	for (i = 0; i < 4; i++) {
 		if (xrect_Point_In_Rect((Rect*)&computer_mode_rect[i], x + r->left, y + r->top)) {
+#ifdef TIE_MODERN
 			shipext_Get_Pilot_Name(name, sizeof(name));
+#else
+			shipext_Get_Pilot_Name(name);
+#endif
 			if (i == 3 || name[0])
 				new_mode = i;
 			if (i == 0 && !pilot_medal_num_pages)
@@ -1936,7 +1951,11 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 			}
 
 			/* Tab labels */
+#ifdef TIE_MODERN
 			shipext_Get_Pilot_Name(name, sizeof(name));
+#else
+			shipext_Get_Pilot_Name(name);
+#endif
 
 			/* Options tab (always accessible) */
 			tab_color = (computer_mode == COMP_MODE_OPTIONS) ? 14 : 15;

@@ -952,8 +952,11 @@ static void Update_Debrief_Train_Scores(void) {
 
 	change = 0;
 	index = 0;
-
+#ifdef TIE_MODERN
 	shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
+#else
+	shipext_Get_Pilot_Name(pilot_name);
+#endif
 
 	for (i = 0; i < TRAIN_SCORE_ENTRY_COUNT && !change; i++) {
 		if (debrief_train_scores[i].score < mission.mission_score) {
@@ -1011,7 +1014,11 @@ static void Update_Debrief_Combat_Scores(void) {
 		kills += pstate.player_kills_per_species[i];
 
 	strcpy(mission_name, shipext_Get_Mission_Name());
+#ifdef TIE_MODERN
 	shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
+#else
+	shipext_Get_Pilot_Name(pilot_name);
+#endif
 
 	/* Find or create mission slot */
 	index = 0;

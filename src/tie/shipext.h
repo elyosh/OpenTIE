@@ -254,8 +254,12 @@ typedef struct {
  * which differs from the on-disk layout (PILOTRECORD_DISK_SIZE = 1928) by
  * the 4-byte i32 pads compiler-inserted before secret_score (+0x0E),
  * combat_score (+0x088), and the trailing alignment. Never raw-cast a
- * disk byte buffer as `PilotRecord *`; always go through PilotRecord_decode
- * / _encode at file boundaries. */
+ * disk byte buffer as `PilotRecord *` in native builds; use the runtime
+ * pilot-storage codec at file boundaries. Matching builds retain the retail
+ * two-byte packing. */
+#ifndef TIE_MODERN
+#pragma pack(push, 2)
+#endif
 typedef struct {
 	uint8_t version;                              /* +0x000: record version (always 1) */
 	uint8_t exit_status;                          /* +0x001: last mission exit code */
@@ -315,11 +319,11 @@ typedef struct {
 												   *         u16 ejection_count; no readers. */
 	uint16_t ejection_count;                      /* +0x786: times ejected */
 } PilotRecord;
+#ifndef TIE_MODERN
+#pragma pack(pop)
+#endif
 
 #define PILOTRECORD_DISK_SIZE 1928u
-
-void PilotRecord_decode(PilotRecord* dst, const uint8_t* src);
-void PilotRecord_encode(uint8_t* dst, const PilotRecord* src);
 
 extern PilotRecord pilot_record;
 
@@ -342,7 +346,11 @@ void shipext_Get_Weapon_Select_Name(char* out);
 void shipext_Init_Pilot(void);
 void shipext_Set_Pilot_Name(const char* name);
 /* PORT: capacity parameter is absent from the recovered getter. */
+#ifdef TIE_MODERN
 void shipext_Get_Pilot_Name(char* out, size_t capacity);
+#else
+void shipext_Get_Pilot_Name(char* out);
+#endif
 bool shipext_Load_Pilot(const char* name);
 bool shipext_Create_Pilot(const char* name);
 void shipext_Revive_Pilot(char* name);
@@ -385,7 +393,7 @@ int16_t shipext_Get_Secret_Medal(void);
 
 /* Clear scratch state shared across flights: blueprint_component,
  * battle_medal, battle_secret_medal, blueprint_ship. Mirrors retail
- * SHELL_Reset_Battle_Results (0x7fed0); called once between flights. */
+ * SHIPEXT reset entry at 0x7FED0; called once between flights. */
 void shipext_Reset_Battle_Results(void);
 
 /* --- Blueprint browsing --- */
@@ -457,10 +465,10 @@ Actor* shipext_Get_Battle_Galaxy_Image(void);
 void shipext_Get_Battle_Galaxy_Name(char* out);
 void shipext_Get_Battle_Galaxy_Rect(Rect* out);
 int16_t shipext_Find_Battle(void);
-bool shipext_Next_Battle(void);
-bool shipext_Last_Battle(void);
-bool shipext_Valid_Incomplete_Battle(int16_t battle);
-bool shipext_Valid_Battle(int16_t battle);
+int16_t shipext_Next_Battle(void);
+int16_t shipext_Last_Battle(void);
+int16_t shipext_Valid_Incomplete_Battle(int16_t battle);
+int16_t shipext_Valid_Battle(int16_t battle);
 int16_t shipext_Set_Tourdesk_Cutscene(void);
 void shipext_Get_Ship_Pos(int16_t ship, int16_t para_idx, int16_t str_idx, int32_t* out_x, int32_t* out_y,
 						  int32_t* out_z);

@@ -341,8 +341,11 @@ void shellext_Load_Preferences(void) {
 		flightResolution = TIE_FLIGHT_RES_SVGA;
 	else
 		flightResolution = TIE_FLIGHT_RES_VGA;
-
+#ifdef TIE_MODERN
 	shipext_Get_Pilot_Name(name, sizeof(name));
+#else
+	shipext_Get_Pilot_Name(name);
+#endif
 	if (name[0])
 		options_gbl.game_level = pilot_record.game_level;
 

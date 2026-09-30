@@ -6,6 +6,9 @@ static int copy_protection_enabled = 0;
 void register_set_copy_protection(int enabled) { copy_protection_enabled = enabled ? 1 : 0; }
 
 #include "tie/register.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/storage/pilot_storage.h"
+#endif
 #include "tie/rand.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
@@ -512,7 +515,12 @@ static void Build_Fast_Pilot_Record(void) {
 			continue;
 
 		if (Read_Pilot_Data(f, cur_pilot, PILOTRECORD_DISK_SIZE)) {
-			PilotRecord pr;
+#ifdef TIE_MODERN
+			PilotRecord decoded;
+			const PilotRecord* pr = &decoded;
+#else
+			const PilotRecord* pr = (const PilotRecord*)cur_pilot;
+#endif
 
 			strncpy(rec->name, dst, sizeof(rec->name) - 1);
 			rec->name[sizeof(rec->name) - 1] = 0;
@@ -520,11 +528,13 @@ static void Build_Fast_Pilot_Record(void) {
 			 * the score / cur_battle / etc. reads go through the
 			 * canonical LE codec instead of host-endian byte fishing. */
 
-			PilotRecord_decode(&pr, cur_pilot);
-			rec->lost_status = pr.exit_status;
-			rec->rank = pr.rank;
-			rec->cur_battle = pr.cur_battle;
-			rec->score = pr.score;
+#ifdef TIE_MODERN
+			PilotRecord_decode(&decoded, cur_pilot);
+#endif
+			rec->lost_status = pr->exit_status;
+			rec->rank = pr->rank;
+			rec->cur_battle = pr->cur_battle;
+			rec->score = pr->score;
 			num_pilots++;
 		}
 		TieStorage_Close(f);
@@ -610,8 +620,11 @@ static void Set_Your_Reg_Pilot(void) {
 		char current_name[TIE_PILOT_NAME_CAPACITY];
 		FastPilotRecord* rec;
 		int16_t i;
-
+#ifdef TIE_MODERN
 		shipext_Get_Pilot_Name(current_name, sizeof(current_name));
+#else
+		shipext_Get_Pilot_Name(current_name);
+#endif
 
 		rec = (FastPilotRecord*)fast_pilot_record;
 		for (i = 0; i < num_loaded_pilots; i++, rec++) {
