@@ -175,18 +175,10 @@ static int16_t combat_film_Combat_Callback(Film* the_film, FilmObject* film_obje
 	Actor* the_actor;
 	int16_t var1;
 
-#ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend() && film_object->id == FTC_PALETTE) {
+	if (TIE_FRONTEND_TIE98 && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
 		return 0;
 	}
-#elif defined(TIE98)
-	if (film_object->id == FTC_PALETTE) {
-		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
-		return 0;
-	}
-#else
-#endif
 	if (film_object->id != 3)
 		return 0;
 

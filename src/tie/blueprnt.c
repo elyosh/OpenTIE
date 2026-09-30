@@ -132,18 +132,10 @@ static int16_t blueprnt_film_Blueprint_Callback(Film* the_film, FilmObject* film
 	Actor* the_actor;
 	int16_t var1;
 
-#ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend() && film_object->id == FTC_PALETTE) {
+	if (TIE_FRONTEND_TIE98 && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
 		return 0;
 	}
-#elif defined(TIE98)
-	if (film_object->id == FTC_PALETTE) {
-		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
-		return 0;
-	}
-#else
-#endif
 	if (film_object->id != 3)
 		return 0;
 
@@ -204,14 +196,8 @@ static int16_t blueprnt_iupdate_Blueprint(Input* input, Rect* draw_rect, Rect* c
 			xinpattr_Set_Input_Flag1(input);
 			xactor_Show_Actor(arrow_actor);
 			xactor_Set_Actor_State(arrow_actor, input->id - 1, 0);
-#ifdef TIE_MODERN
-			if (!TieProfile_UsesTie98Frontend())
+			if (!TIE_FRONTEND_TIE98)
 				arrow_actor->x = input->id > 2 ? 19 : -32;
-#elif defined(TIE98)
-
-#else
-			arrow_actor->x = input->id > 2 ? 19 : -32;
-#endif
 			soundext_Play_SFX(sfxButton, 80);
 		}
 	} else {

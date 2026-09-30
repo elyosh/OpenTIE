@@ -167,17 +167,10 @@ static void train_end_Train_View(int32_t time) {
 static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object) {
 	Actor* the_actor;
 	int16_t var1;
-#ifdef TIE_MODERN
 	if (TIE_FRONTEND_TIE98 && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
 		return 0;
 	}
-#elif defined(TIE98)
-	if (film_object->id == FTC_PALETTE) {
-		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
-		return 0;
-	}
-#endif
 
 	if (film_object->id != 3)
 		return 0;
@@ -345,13 +338,8 @@ static void train_iuser_Train(Input* input, int32_t time) {
 			break;
 	}
 
-#ifdef TIE_MODERN
 	if (TIE_FRONTEND_TIE98 && input->id <= 4)
 		train_monitor_needs_clear = 1;
-#elif defined(TIE98)
-	if (input->id <= 4)
-		train_monitor_needs_clear = 1;
-#endif
 }
 
 /* ------------------------------------------------------------------ */

@@ -1669,13 +1669,8 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 			return 1;
 		}
 		/* TIE98 consumes other keys while its options page is active. */
-#ifdef TIE_MODERN
-		if (TieProfile_UsesTie98Frontend() && computer_mode == COMP_MODE_OPTIONS)
+		if (TIE_FRONTEND_TIE98 && computer_mode == COMP_MODE_OPTIONS)
 			return 1;
-#elif defined(TIE98)
-		if (computer_mode == COMP_MODE_OPTIONS)
-			return 1;
-#endif
 		return 0;
 	}
 
