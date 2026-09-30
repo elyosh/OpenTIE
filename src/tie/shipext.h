@@ -258,7 +258,11 @@ typedef struct {
  * pilot-storage codec at file boundaries. Matching builds retain the retail
  * two-byte packing. */
 #ifndef TIE_MODERN
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 #endif
 typedef struct {
 	uint8_t version;                              /* +0x000: record version (always 1) */
@@ -320,7 +324,11 @@ typedef struct {
 	uint16_t ejection_count;                      /* +0x786: times ejected */
 } PilotRecord;
 #ifndef TIE_MODERN
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 #endif
 
 #define PILOTRECORD_DISK_SIZE 1928u
