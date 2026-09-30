@@ -19,21 +19,7 @@ extern int8_t inflight_collision;
 
 enum { OPTION_ROW_COUNT = 14 };
 
-typedef struct OptionRoomState {
-	uint8_t values[OPTION_ROW_COUNT];
-	uint8_t max_values[OPTION_ROW_COUNT];
-	uint8_t kind_offsets[OPTION_ROW_COUNT];
-	uint16_t prev_buttons;
-	int16_t selection;
-	int16_t previous_selection;
-	int16_t redraw_all;
-	int16_t exit_code;
-} OptionRoomState;
-
-void option_OpenRoom(OptionRoomState* state);
-void option_RenderRows(OptionRoomState* state);
-/* Poll result: 0 idle, 1 exit, 2 redraw. */
-int option_PollOnce(OptionRoomState* state);
+int32_t option_optionsroom(int16_t load_settings);
 void option_ApplyFlightValues(const uint8_t* values);
 void option_ApplyValues(const uint8_t* values);
 

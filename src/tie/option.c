@@ -1,11 +1,27 @@
 #include "tie/option.h"
+#include "tie/fediskio.h"
+#include "tie/flight_surface_tie98.h"
+#include "tie/frontend_display_tie98.h"
+#include "tie_runtime/audio/imuse_session.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/diagnostics/diagnostics.h"
+#include "tie_runtime/display/classic_display.h"
+#include "tie_runtime/runtime/inflight_state.h"
+#include "tie_runtime/runtime/options_task.h"
+#endif
 #include "tie/feinput.h"
 #include "tie/festring.h"
 #include "tie/rtsvga2.h"
 #include "tie/tie.h"
 #include "tie/user.h"
 
+#include <imuse/hilevel.h>
+#include <stdbool.h>
+#include <stdio.h>
 #include <string.h>
+#ifdef TIE_MODERN
+#include <landru/task.h>
+#endif
 
 /* In-flight audio and gameplay settings persisted across missions. */
 // GLOBAL: TIE95 0xc1550
@@ -115,105 +131,6 @@ static void out_volume_bar(uint16_t vol, int16_t y) {
 
 /* --- Static helpers for the main routine ------------------------------ */
 
-/*
- * Pick the layout-specific top/bottom pixels. Mirrors the three-branch
- * block at the head of OPTION_optionsroom.
- */
-static void pick_layout(void) {
-	if (flightResolution == TIE_FLIGHT_RES_VGA) {
-		option_top = 21;
-		option_bottom = 182;
-	} else if (tie_is_high_resolution_flight()) {
-		option_top = 51;
-		option_bottom = 436;
-	} else {
-		option_top = 21;
-		option_bottom = 182;
-	}
-}
-
-/*
- * Initial row-colour-band render. Walks option_color[] and flushes a
- * filled rectangle for each run of equal colour. The final rectangle
- * extends from the last colour change down to option_bottom.
- */
-static void paint_row_bands(void) {
-	const int row_step = fontheight + 2;
-	const int16_t right = (int16_t)((int)screenXRes - 2);
-
-	int16_t run_top = (int16_t)option_top;
-	int16_t y = run_top;
-	uint16_t color = option_color[0];
-	int i;
-
-	for (i = 0; i < OPTION_ROW_COUNT; i++) {
-		if (option_color[i] != color) {
-			festring_setbound(2, (int16_t)(run_top - 1), right, (int16_t)(y - 1));
-			festring_setbackcolor(color);
-			clearwindow();
-			y = (int16_t)(y + 2);
-			run_top = y;
-			color = option_color[i];
-		}
-		y = (int16_t)(y + row_step);
-	}
-
-	festring_setbound(2, (int16_t)(run_top - 1), right, (int16_t)option_bottom);
-	festring_setbackcolor(color);
-	clearwindow();
-}
-
-/* Draw only changed rows after the initial full render. */
-void option_RenderRows(OptionRoomState* t) {
-	int16_t cursor_y = (int16_t)option_top;
-	uint8_t prev_color = option_color[0];
-	int16_t row;
-
-	festring_setbound(2, 0, (int16_t)(screenXRes - 2), (int16_t)screenYRes);
-	for (row = 0; row < OPTION_ROW_COUNT; row++) {
-		const uint16_t bg = row == t->selection ? CURSOR_COLOUR : option_color[row];
-		if (option_color[row] != prev_color) {
-			prev_color = option_color[row];
-			cursor_y = (int16_t)(cursor_y + 2);
-		}
-		festring_setbackcolor(bg);
-		if (t->redraw_all || row == t->selection || row == t->previous_selection) {
-			const int kind = t->kind_offsets[row];
-			festring_setcursor(2, cursor_y);
-			festring_outstring((const uint8_t*)optionstrings[row]);
-			outchar('\n');
-			festring_setcursor(0, cursor_y);
-			if (kind == VOLUME_KIND)
-				out_volume_bar(t->values[row], cursor_y);
-			else
-				festring_outstringright((const uint8_t*)settingstrings[kind + t->values[row]]);
-		}
-		cursor_y = (int16_t)(cursor_y + fontheight + 2);
-	}
-	t->previous_selection = t->selection;
-	t->redraw_all = 0;
-}
-
-/*
- * Cycle the current row's value forward with wrap.
- *   v == max -> 0
- *   else        -> v + 1
- */
-static void cycle_forward(uint8_t* values, const uint8_t* max_values, int16_t selection) {
-	const uint8_t cur = values[selection];
-	values[selection] = (cur == max_values[selection]) ? 0 : (uint8_t)(cur + 1);
-}
-
-/*
- * Cycle the current row's value backward with wrap.
- *   v == 0 -> max
- *   else   -> v - 1
- */
-static void cycle_backward(uint8_t* values, const uint8_t* max_values, int16_t selection) {
-	const uint8_t cur = values[selection];
-	values[selection] = cur ? (uint8_t)(cur - 1) : max_values[selection];
-}
-
 static void apply_visual_to_globals(const uint8_t* values) {
 	gouraudflag = (uint8_t)(values[0] << 6);
 	shipdetailvalue = (int16_t)(1 - values[1]);
@@ -247,131 +164,407 @@ void option_ApplyValues(const uint8_t* values) {
 	option_ApplyFlightValues(values);
 }
 
-/* Single input-poll iteration. 1 = exit_after_write fires (caller
- * persists + applies + DONE), 2 = redraw needed, 0 = no input. */
-int option_PollOnce(OptionRoomState* t) {
-	uint16_t key;
-	uint16_t cur_buttons;
-	int redraw = 0;
-	int exit_room = 0;
-
-	feinput_getrawinput();
-	feinput_checkinput();
-	feinput_degitterinput();
-	inputdeltay = (int16_t)(inputdeltay * 2);
-
-	key = (uint16_t)inputkey;
-
-	if (key == 1) {
-		/* LEFT */
-		if (t->kind_offsets[t->selection] == VOLUME_KIND) {
-			if (t->values[t->selection])
-				t->values[t->selection]--;
-			redraw = 1;
+// FUNCTION: TIE95 0x34C40
+int32_t option_optionsroom(int16_t load_settings) {
+	uint8_t values[OPTION_ROW_COUNT];
+	uint8_t max_values[OPTION_ROW_COUNT];
+	uint8_t kind_offsets[OPTION_ROW_COUNT];
+	uint16_t prev_buttons;
+	int16_t selection;
+	int16_t previous_selection;
+	int16_t redraw_all;
+	int16_t exit_code;
+	int render_again = 1;
+#ifdef TIE_MODERN
+	OptionRoomState* continuation;
+	const bool uses_dx5 = TieClassicDisplay_UsesDx5();
+	if (load_settings) {
+		TieInflightOptions_Apply();
+		return 0;
+	}
+	continuation = landru_task_top();
+	memcpy(values, continuation->values, sizeof values);
+	memcpy(max_values, continuation->max_values, sizeof max_values);
+	memcpy(kind_offsets, continuation->kind_offsets, sizeof kind_offsets);
+	prev_buttons = continuation->prev_buttons;
+	selection = continuation->selection;
+	previous_selection = continuation->previous_selection;
+	redraw_all = continuation->redraw_all;
+	exit_code = continuation->exit_code;
+	render_again = continuation->render;
+#else
+	const bool uses_dx5 = false;
+	{
+		if (flightResolution == TIE_FLIGHT_RES_VGA) {
+			option_top = 21;
+			option_bottom = 182;
+		} else if (tie_is_high_resolution_flight()) {
+			option_top = 51;
+			option_bottom = 436;
 		} else {
-			t->exit_code = -1;
-			exit_room = 1;
+			option_top = 21;
+			option_bottom = 182;
 		}
-	} else if (key == 2) {
-		/* RIGHT */
-		if (t->kind_offsets[t->selection] == VOLUME_KIND) {
-			if (t->values[t->selection] < t->max_values[t->selection])
-				t->values[t->selection]++;
-			redraw = 1;
+	}
+#endif
+	if (!load_settings) {
+#ifdef TIE_MODERN
+		if (!continuation->started)
+#endif
+		{
+			if (uses_dx5)
+				FlightSurface_Lock();
+
+#ifdef TIE_MODERN
+			{
+				if (flightResolution == TIE_FLIGHT_RES_VGA) {
+					option_top = 21;
+					option_bottom = 182;
+				} else if (tie_is_high_resolution_flight()) {
+					option_top = 51;
+					option_bottom = 436;
+				} else {
+					option_top = 21;
+					option_bottom = 182;
+				}
+			}
+#endif
+
+			dropflag = 1;
+			festring_setlinewrap(0);
+			festring_setautofill(1);
+			festring_setfontsize(1);
+			festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
+			festring_setbackcolor(BG_DEFAULT);
+			festring_settextcolor(TEXT_COLOUR);
+
+			{
+				const int row_step = fontheight + 2;
+				const int16_t right = (int16_t)((int)screenXRes - 2);
+
+				int16_t run_top = (int16_t)option_top;
+				int16_t y = run_top;
+				uint16_t color = option_color[0];
+				int i;
+
+				for (i = 0; i < OPTION_ROW_COUNT; i++) {
+					if (option_color[i] != color) {
+						festring_setbound(2, (int16_t)(run_top - 1), right, (int16_t)(y - 1));
+						festring_setbackcolor(color);
+						clearwindow();
+						y = (int16_t)(y + 2);
+						run_top = y;
+						color = option_color[i];
+					}
+					y = (int16_t)(y + row_step);
+				}
+
+				festring_setbound(2, (int16_t)(run_top - 1), right, (int16_t)option_bottom);
+				festring_setbackcolor(color);
+				clearwindow();
+			}
+			festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
+			festring_setbackcolor(BG_DEFAULT);
+
+			/* Pack owning globals into values[0..13]. values[1]/values[7]
+			 * invert the stored range (higher index = more detail on-screen). */
+			values[0] = (uint8_t)(gouraudflag != 0);
+			values[1] = (uint8_t)(1 - shipdetailvalue);
+			values[2] = (uint8_t)(starshipdetail - 1);
+			values[3] = drawmarkingsflag;
+			values[4] = drawbackdropflag;
+			values[5] = drawdebrisflag;
+			values[6] = palette_cycle_user;
+			values[7] = (uint8_t)(2 - stardetaillevel);
+			values[8] = (uint8_t)inflight_collision;
+			values[9] = (uint8_t)inflight_invulnerable;
+			values[10] = (uint8_t)inflight_unlimited;
+			values[11] = (uint8_t)inflight_sound_vol;
+			values[12] = (uint8_t)inflight_music_vol;
+			values[13] = (uint8_t)inflight_speech_vol;
+
+			max_values[0] = 1;
+			max_values[1] = 2;
+			max_values[2] = 3;
+			max_values[3] = 1;
+			max_values[4] = 1;
+			max_values[5] = 1;
+			max_values[6] = 1;
+			max_values[7] = 1;
+			max_values[8] = 1;
+			max_values[9] = 1;
+			max_values[10] = 1;
+			max_values[11] = 16;
+			max_values[12] = 16;
+			max_values[13] = 16;
+			kind_offsets[0] = 0;
+			kind_offsets[1] = 4;
+			kind_offsets[2] = 7;
+			kind_offsets[3] = 0;
+			kind_offsets[4] = 0;
+			kind_offsets[5] = 0;
+			kind_offsets[6] = 0;
+			kind_offsets[7] = 2;
+			kind_offsets[8] = 0;
+			kind_offsets[9] = 11;
+			kind_offsets[10] = 13;
+			kind_offsets[11] = 15;
+			kind_offsets[12] = 15;
+			kind_offsets[13] = 15;
+
+			prev_buttons = 0;
+			selection = 0;
+			exit_code = 0;
+			previous_selection = 0;
+			redraw_all = 1;
+			if (uses_dx5)
+				FlightSurface_Unlock();
+#ifdef TIE_MODERN
+			memcpy(continuation->values, values, sizeof values);
+			memcpy(continuation->max_values, max_values, sizeof max_values);
+			memcpy(continuation->kind_offsets, kind_offsets, sizeof kind_offsets);
+			continuation->prev_buttons = prev_buttons;
+			continuation->selection = selection;
+			continuation->previous_selection = previous_selection;
+			continuation->redraw_all = redraw_all;
+			continuation->exit_code = exit_code;
+			continuation->started = true;
+			continuation->render = true;
+			return 0;
+#endif
+		}
+		for (;;) {
+			if (render_again) {
+				if (uses_dx5)
+					FlightSurface_Lock();
+				{
+					int16_t cursor_y = (int16_t)option_top;
+					uint8_t prev_color = option_color[0];
+					int16_t row;
+
+					festring_setbound(2, 0, (int16_t)(screenXRes - 2), (int16_t)screenYRes);
+					for (row = 0; row < OPTION_ROW_COUNT; row++) {
+						const uint16_t bg = row == selection ? CURSOR_COLOUR : option_color[row];
+						if (option_color[row] != prev_color) {
+							prev_color = option_color[row];
+							cursor_y = (int16_t)(cursor_y + 2);
+						}
+						festring_setbackcolor(bg);
+						if (redraw_all || row == selection || row == previous_selection) {
+							const int kind = kind_offsets[row];
+							festring_setcursor(2, cursor_y);
+							festring_outstring((const uint8_t*)optionstrings[row]);
+							outchar('\n');
+							festring_setcursor(0, cursor_y);
+							if (kind == VOLUME_KIND)
+								out_volume_bar(values[row], cursor_y);
+							else
+								festring_outstringright((const uint8_t*)settingstrings[kind + values[row]]);
+						}
+						cursor_y = (int16_t)(cursor_y + fontheight + 2);
+					}
+					previous_selection = selection;
+					redraw_all = 0;
+				}
+				if (uses_dx5) {
+					FlightSurface_Unlock();
+					FrontendDisplay_BlitOffscreenToRenderSurface();
+					FrontendDisplay_PresentFrame();
+				}
+#ifdef TIE_MODERN
+				memcpy(continuation->values, values, sizeof values);
+				memcpy(continuation->max_values, max_values, sizeof max_values);
+				memcpy(continuation->kind_offsets, kind_offsets, sizeof kind_offsets);
+				continuation->prev_buttons = prev_buttons;
+				continuation->selection = selection;
+				continuation->previous_selection = previous_selection;
+				continuation->redraw_all = redraw_all;
+				continuation->exit_code = exit_code;
+				continuation->render = false;
+				return 0;
+#endif
+			}
+			{
+				uint16_t key;
+				uint16_t cur_buttons;
+				int redraw = 0;
+				int exit_room = 0;
+
+				feinput_getrawinput();
+				feinput_checkinput();
+				feinput_degitterinput();
+				inputdeltay = (int16_t)(inputdeltay * 2);
+
+				key = (uint16_t)inputkey;
+
+				if (key == 1) {
+					/* LEFT */
+					if (kind_offsets[selection] == VOLUME_KIND) {
+						if (values[selection])
+							values[selection]--;
+						redraw = 1;
+					} else {
+						exit_code = -1;
+						exit_room = 1;
+					}
+				} else if (key == 2) {
+					/* RIGHT */
+					if (kind_offsets[selection] == VOLUME_KIND) {
+						if (values[selection] < max_values[selection])
+							values[selection]++;
+						redraw = 1;
+					} else {
+						exit_code = 1;
+						exit_room = 1;
+					}
+				} else if (key == 3 || key == 0x38 /* '8' */) {
+					/* UP */
+					selection = selection ? (int16_t)(selection - 1) : (int16_t)(OPTION_ROW_COUNT - 1);
+					redraw = 1;
+				} else if (key == 4 || key == 0x32 /* '2' */) {
+					/* DOWN */
+					selection = (int16_t)(selection + 1);
+					if (selection == OPTION_ROW_COUNT)
+						selection = 0;
+					redraw = 1;
+				} else if (key == 0x0D    /* CR / '\r' */
+						   || key == 0x20 /* ' ' */
+						   || key == 0x2B /* '+' */
+						   || key == 0x3D /* '=' */) {
+					{
+						const uint8_t cur = values[selection];
+						values[selection] = (cur == max_values[selection]) ? 0 : (uint8_t)(cur + 1);
+					}
+					redraw = 1;
+				} else if (key == 0x2D /* '-' */) {
+					{
+						const uint8_t cur = values[selection];
+						values[selection] = cur ? (uint8_t)(cur - 1) : max_values[selection];
+					}
+					redraw = 1;
+				} else if (key == 0x1B    /* ESC */
+						   || key == 0x51 /* 'Q' */
+						   || key == 0x71 /* 'q' */) {
+					exit_code = 2;
+					exit_room = 1;
+				}
+
+#ifndef TIE_MODERN
+				if (key == 0xB0) {
+					brightness_setting += 64;
+					if (brightness_setting == 768)
+						brightness_setting = 256;
+					unblank();
+				}
+#endif
+
+				/* Mouse: edge-detect a button-1 or button-2 release.
+				 * Button 1 release -> selection++ (wrap).
+				 * Button 2 release -> cycle current value forward. */
+				cur_buttons = (uint16_t)(inputbuttons & 0x0F);
+				if ((prev_buttons == 1 || prev_buttons == 2) && cur_buttons == 0) {
+					if (prev_buttons == 1) {
+						selection = (int16_t)(selection + 1);
+						if (selection == OPTION_ROW_COUNT)
+							selection = 0;
+					} else {
+						{
+							const uint8_t cur = values[selection];
+							values[selection] = (cur == max_values[selection]) ? 0 : (uint8_t)(cur + 1);
+						}
+					}
+					redraw = 1;
+				}
+				prev_buttons = cur_buttons;
+
+				if (exit_room)
+					break;
+				render_again = redraw;
+			}
+#ifdef TIE_MODERN
+			memcpy(continuation->values, values, sizeof values);
+			memcpy(continuation->max_values, max_values, sizeof max_values);
+			memcpy(continuation->kind_offsets, kind_offsets, sizeof kind_offsets);
+			continuation->prev_buttons = prev_buttons;
+			continuation->selection = selection;
+			continuation->previous_selection = previous_selection;
+			continuation->redraw_all = redraw_all;
+			continuation->exit_code = exit_code;
+			continuation->render = render_again != 0;
+			return 0;
+#endif
+		}
+#ifdef TIE_MODERN
+		{
+			char error[128];
+			TieInflightOptions_StoreLegacy(values);
+			if (!TieInflightOptions_Flush(error, sizeof error))
+				TieDiagnostics_Log(TIE_LOG_ERROR, "%s\n", error);
+		}
+#else
+		if (fediskio_tryopenfile(TIE_FILE_ROOT_USER, "options.cfg", "wb", 0)) {
+			int16_t i;
+			for (i = 0; i < OPTION_ROW_COUNT; ++i)
+				fputc(values[i], fileptr);
+			fputc((brightness_setting - 256) >> 6, fileptr);
+			fediskio_tryclosefile(0);
+		}
+#endif
+	} else {
+#ifndef TIE_MODERN
+		int16_t i;
+		exit_code = 0;
+		if (fediskio_tryopenfile(TIE_FILE_ROOT_USER, "options.cfg", "rb", 0)) {
+			for (i = 0; i < OPTION_ROW_COUNT; ++i)
+				values[i] = (uint8_t)fgetc(fileptr);
+			brightness_setting = fgetc(fileptr);
+			if (brightness_setting > 7)
+				brightness_setting = 7;
+			brightness_setting = (brightness_setting << 6) + 256;
+			fediskio_tryclosefile(0);
 		} else {
-			t->exit_code = 1;
-			exit_room = 1;
+			for (i = 0; i < OPTION_ROW_COUNT; ++i)
+				values[i] = 1;
+			values[1] = 2;
+			values[2] = 3;
+			values[9] = 0;
+			values[10] = 0;
+			values[11] = 15;
+			values[12] = 12;
+			values[13] = 15;
+			brightness_setting = 256;
 		}
-	} else if (key == 3 || key == 0x38 /* '8' */) {
-		/* UP */
-		t->selection = t->selection ? (int16_t)(t->selection - 1) : (int16_t)(OPTION_ROW_COUNT - 1);
-		redraw = 1;
-	} else if (key == 4 || key == 0x32 /* '2' */) {
-		/* DOWN */
-		t->selection = (int16_t)(t->selection + 1);
-		if (t->selection == OPTION_ROW_COUNT)
-			t->selection = 0;
-		redraw = 1;
-	} else if (key == 0x0D    /* CR / '\r' */
-			   || key == 0x20 /* ' ' */
-			   || key == 0x2B /* '+' */
-			   || key == 0x3D /* '=' */) {
-		cycle_forward(t->values, t->max_values, t->selection);
-		redraw = 1;
-	} else if (key == 0x2D /* '-' */) {
-		cycle_backward(t->values, t->max_values, t->selection);
-		redraw = 1;
-	} else if (key == 0x1B    /* ESC */
-			   || key == 0x51 /* 'Q' */
-			   || key == 0x71 /* 'q' */) {
-		t->exit_code = 2;
-		exit_room = 1;
+#endif
 	}
 
-	/* Mouse: edge-detect a button-1 or button-2 release.
-	 * Button 1 release -> selection++ (wrap).
-	 * Button 2 release -> cycle current value forward. */
-	cur_buttons = (uint16_t)(inputbuttons & 0x0F);
-	if ((t->prev_buttons == 1 || t->prev_buttons == 2) && cur_buttons == 0) {
-		if (t->prev_buttons == 1) {
-			t->selection = (int16_t)(t->selection + 1);
-			if (t->selection == OPTION_ROW_COUNT)
-				t->selection = 0;
-		} else {
-			cycle_forward(t->values, t->max_values, t->selection);
-		}
-		redraw = 1;
-	}
-	t->prev_buttons = cur_buttons;
+	gouraudflag = (uint8_t)(values[0] << 6);
+	shipdetailvalue = (int16_t)(1 - values[1]);
+	shipdetailpolycnt = (uint16_t)(4 * values[1] + 8);
+	starshipdetail = (uint16_t)(values[2] + 1);
+	starshipexplodetail = (uint16_t)(((uint32_t)4096 << values[1]) - 1);
+	drawmarkingsflag = values[3];
+	drawbackdropflag = values[4];
+	drawdebrisflag = values[5];
+	palette_cycle_user = values[6];
+	stardetaillevel = (uint16_t)(2 - values[7]);
+	hyperspacedetail = (int16_t)(75 - 25 * (2 - values[7]));
+	inflight_collision = (int8_t)values[8];
+	inflight_invulnerable = (int8_t)values[9];
+	inflight_unlimited = (int8_t)values[10];
+	inflight_sound_vol = (int8_t)values[11];
+	inflight_music_vol = (int8_t)values[12];
+	inflight_speech_vol = (int8_t)values[13];
 
-	return exit_room ? 1 : (redraw ? 2 : 0);
-}
-
-void option_OpenRoom(OptionRoomState* t) {
-	static const uint8_t max_values[OPTION_ROW_COUNT] = {
-		1, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1, 16, 16, 16,
-	};
-	static const uint8_t kind_offsets[OPTION_ROW_COUNT] = {
-		0, 4, 7, 0, 0, 0, 0, 2, 0, 11, 13, VOLUME_KIND, VOLUME_KIND, VOLUME_KIND,
-	};
-
-	pick_layout();
-
-	dropflag = 1;
-	festring_setlinewrap(0);
-	festring_setautofill(1);
-	festring_setfontsize(1);
-	festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
-	festring_setbackcolor(BG_DEFAULT);
-	festring_settextcolor(TEXT_COLOUR);
-
-	paint_row_bands();
-	festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
-	festring_setbackcolor(BG_DEFAULT);
-
-	/* Pack owning globals into values[0..13]. values[1]/values[7]
-	 * invert the stored range (higher index = more detail on-screen). */
-	t->values[0] = (uint8_t)(gouraudflag != 0);
-	t->values[1] = (uint8_t)(1 - shipdetailvalue);
-	t->values[2] = (uint8_t)(starshipdetail - 1);
-	t->values[3] = drawmarkingsflag;
-	t->values[4] = drawbackdropflag;
-	t->values[5] = drawdebrisflag;
-	t->values[6] = palette_cycle_user;
-	t->values[7] = (uint8_t)(2 - stardetaillevel);
-	t->values[8] = (uint8_t)inflight_collision;
-	t->values[9] = (uint8_t)inflight_invulnerable;
-	t->values[10] = (uint8_t)inflight_unlimited;
-	t->values[11] = (uint8_t)inflight_sound_vol;
-	t->values[12] = (uint8_t)inflight_music_vol;
-	t->values[13] = (uint8_t)inflight_speech_vol;
-
-	memcpy(t->max_values, max_values, sizeof max_values);
-	memcpy(t->kind_offsets, kind_offsets, sizeof kind_offsets);
-
-	t->prev_buttons = 0;
-	t->selection = 0;
-	t->exit_code = 0;
-	t->previous_selection = 0;
-	t->redraw_all = 1;
+	soundvolflag = (uint8_t)(inflight_speech_vol + inflight_sound_vol);
+	musicvolflag = (uint8_t)inflight_music_vol;
+	cheatingflag = (uint8_t)(cheatingflag | (uint8_t)inflight_invulnerable | (uint8_t)inflight_unlimited);
+#ifdef TIE_MODERN
+	TieInflightOptions_ApplyAudio();
+	continuation->finished = true;
+#else
+	imuse_set_sfx_vol(im, inflight_sound_vol ? inflight_sound_vol * 8 - 1 : 0);
+	imuse_set_voice_vol(im, inflight_speech_vol ? inflight_speech_vol * 8 - 1 : 0);
+	imuse_set_music_vol(im, inflight_music_vol ? inflight_music_vol * 8 - 1 : 0);
+#endif
+	return exit_code;
 }

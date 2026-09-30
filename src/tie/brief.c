@@ -10,6 +10,9 @@
  */
 
 #include "tie/brief.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/brief_task.h"
+#endif
 #include "tie/player.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
@@ -140,7 +143,13 @@ static const BriefSpec brief_specs[] = {
 	},
 };
 
+#ifdef TIE_MODERN
 static const BriefSpec* active_spec;
+#elif defined(TIE98)
+static const BriefSpec* const active_spec = &brief_specs[1];
+#else
+static const BriefSpec* const active_spec = &brief_specs[0];
+#endif
 
 /* ---- Static globals ---- */
 
@@ -192,7 +201,7 @@ static void iuser_Notice(Input* input, int32_t time);
 /* Show the cursor on the first view update. */
 // FUNCTION: TIE95 0x7316C
 // FUNCTION: TIE98 0x406520
-static void end_View(int32_t frame_num) {
+void brief_end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
 
@@ -493,21 +502,28 @@ static void iuser_Notice(Input* input, int32_t time) {
  * Entry point
  * ================================================================ */
 
-bool brief_OpenScene(SceneHeadStruct* scene_head, bool svga, Input** notice) {
+// FUNCTION: TIE95 0x72E20
+// FUNCTION: TIE98 0x405FF0
+int16_t brief_Brief(SceneHeadStruct* scene_head) {
+#ifdef TIE_MODERN
+	bool svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+	Input* notice = NULL;
+#endif
 	int16_t mouse_x, mouse_y, last;
 	ResFile* brief_res;
 	ResFile* player_res;
 	Poly p;
+#ifdef TIE_MODERN
 	const int16_t* poly;
+#endif
 	Rect frame;
+#ifdef TIE_MODERN
 	const int16_t* bounds;
+#endif
 
+#ifdef TIE_MODERN
 	active_spec = &brief_specs[svga ? 1 : 0];
-	if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-		(void)xsurface_Select_Surface_Set(active_spec->surface_set);
-		xview_Init_View(xview_Get_Current_View());
-		xvesa_Erase_Video(16);
-	}
+#endif
 
 	/* Position mouse based on last scene and officer type */
 	last = shellext_Get_Last_Scene();
@@ -515,37 +531,97 @@ bool brief_OpenScene(SceneHeadStruct* scene_head, bool svga, Input** notice) {
 	if (last == SCENE_TALK_BRIEF_OFFICER) {
 		/* From officer */
 		if (shipext_Get_Mission_Officer() == 1) {
+#ifdef TIE_MODERN
 			mouse_x = active_spec->officer_mouse_x;
 			mouse_y = active_spec->officer_mouse_y;
+#elif defined(TIE98)
+			mouse_x = 416;
+			mouse_y = 302;
+#else
+			mouse_x = 218;
+			mouse_y = 126;
+#endif
 		} else {
+#ifdef TIE_MODERN
 			mouse_x = active_spec->priest_mouse_x;
 			mouse_y = active_spec->priest_mouse_y;
+#elif defined(TIE98)
+			mouse_x = 564;
+			mouse_y = 180;
+#else
+			mouse_x = 282;
+			mouse_y = 90;
+#endif
 		}
 	} else if (last == SCENE_BRIEF_MAP) {
 		/* From map */
 		if (shipext_Get_Mission_Officer() != 2) {
+#ifdef TIE_MODERN
 			mouse_x = active_spec->map_mouse_x;
 			mouse_y = active_spec->map_mouse_y;
+#elif defined(TIE98)
+			mouse_x = 265;
+			mouse_y = 190;
+#else
+			mouse_x = 160;
+			mouse_y = 90;
+#endif
 		} else {
+#ifdef TIE_MODERN
 			mouse_x = active_spec->priest_mouse_x;
 			mouse_y = active_spec->priest_mouse_y;
+#elif defined(TIE98)
+			mouse_x = 564;
+			mouse_y = 180;
+#else
+			mouse_x = 282;
+			mouse_y = 90;
+#endif
 		}
 	} else if (last == SCENE_TALK_BRIEF_PRIEST) {
 		/* From priest */
+#ifdef TIE_MODERN
 		mouse_x = active_spec->officer_mouse_x;
 		mouse_y = active_spec->officer_mouse_y;
+#elif defined(TIE98)
+		mouse_x = 416;
+		mouse_y = 302;
+#else
+		mouse_x = 218;
+		mouse_y = 126;
+#endif
 	} else {
 		/* Default */
+#ifdef TIE_MODERN
 		mouse_x = active_spec->default_mouse_x;
 		mouse_y = active_spec->default_mouse_y;
+#elif defined(TIE98)
+		mouse_x = 156;
+		mouse_y = 160;
+#else
+		mouse_x = 78;
+		mouse_y = 80;
+#endif
 	}
 	xio_Set_Mouse_Position(mouse_x, mouse_y);
 
 	/* Load resources */
+#ifdef TIE_MODERN
 	brief_res = shellext_Open_Empire_Resource(active_spec->archive);
+#elif defined(TIE98)
+	brief_res = shellext_Open_Empire_Resource("brief640.lfd");
+#else
+	brief_res = shellext_Open_Empire_Resource("brief.lfd");
+#endif
 	player_res = shellext_Open_Empire_Resource("player.lfd");
 
+#ifdef TIE_MODERN
 	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 0, 0, 640, 480);
+#else
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
+#endif
 
 	/* Load brief film. Tag the snapshot with the (lfd, film) tuple
 	 * so the cutscene compositor can resolve a remaster bundle for
@@ -565,8 +641,14 @@ bool brief_OpenScene(SceneHeadStruct* scene_head, bool svga, Input** notice) {
 	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 	/* Main menu button (id=0) */
+#ifdef TIE_MODERN
 	bounds = active_spec->input_bounds[0];
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 123, 329, 184, 459);
+#else
+	xrect_Set_Rect(&frame, 84, 132, 122, 172);
+#endif
 	mainmenu_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(mainmenu_input, iupdate_Brief);
 	xinpattr_Set_Input_User_Function(mainmenu_input, iuser_Brief);
@@ -574,8 +656,14 @@ bool brief_OpenScene(SceneHeadStruct* scene_head, bool svga, Input** notice) {
 	mainmenu_input->id = 0;
 
 	/* Enter mission button (id=1) */
+#ifdef TIE_MODERN
 	bounds = active_spec->input_bounds[1];
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 385, 256, 448, 350);
+#else
+	xrect_Set_Rect(&frame, 190, 118, 248, 138);
+#endif
 	mission_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(mission_input, iupdate_Brief);
 	xinpattr_Set_Input_User_Function(mission_input, iuser_Brief);
@@ -583,8 +671,14 @@ bool brief_OpenScene(SceneHeadStruct* scene_head, bool svga, Input** notice) {
 	mission_input->id = 1;
 
 	/* Map area (id=2) */
+#ifdef TIE_MODERN
 	bounds = active_spec->input_bounds[2];
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 50, 80, 230, 290);
+#else
+	xrect_Set_Rect(&frame, 28, 46, 128, 124);
+#endif
 	map_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(map_input, iupdate_Brief);
 	xinpattr_Set_Input_User_Function(map_input, iuser_Brief);
@@ -593,8 +687,14 @@ bool brief_OpenScene(SceneHeadStruct* scene_head, bool svga, Input** notice) {
 
 	/* Officer door (id=3) — skip if priest only */
 	if (shipext_Get_Mission_Officer() != 2) {
+#ifdef TIE_MODERN
 		bounds = active_spec->input_bounds[3];
 		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+		xrect_Set_Rect(&frame, 230, 157, 274, 251);
+#else
+		xrect_Set_Rect(&frame, 140, 66, 174, 114);
+#endif
 		officer_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(officer_input, iupdate_Brief);
 		xinpattr_Set_Input_User_Function(officer_input, iuser_Brief);
@@ -604,8 +704,14 @@ bool brief_OpenScene(SceneHeadStruct* scene_head, bool svga, Input** notice) {
 
 	/* Priest door (id=4) — skip if officer only */
 	if (shipext_Get_Mission_Officer() != 1) {
+#ifdef TIE_MODERN
 		bounds = active_spec->input_bounds[4];
 		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+		xrect_Set_Rect(&frame, 498, 125, 604, 220);
+#else
+		xrect_Set_Rect(&frame, 242, 66, 314, 102);
+#endif
 		priest_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(priest_input, iupdate_Brief);
 		xinpattr_Set_Input_User_Function(priest_input, iuser_Brief);
@@ -617,40 +723,33 @@ bool brief_OpenScene(SceneHeadStruct* scene_head, bool svga, Input** notice) {
 	xres_Close_Resource(brief_res);
 
 	/* Initialize the briefing map with polygon projection */
+#ifdef TIE_MODERN
 	poly = active_spec->map_poly;
 	xrect_Set_Poly(&p, poly[0], poly[1], poly[2], poly[3], poly[4], poly[5], poly[6], poly[7]);
+#elif defined(TIE98)
+	xrect_Set_Poly(&p, 56, 83, 223, 93, 225, 244, 67, 277);
+#else
+	xrect_Set_Poly(&p, 34, 50, 127, 58, 125, 106, 36, 120);
+#endif
 	player_Init_Brief_Display(map_input, &p);
+#ifdef TIE_MODERN
+
 	if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
-		*notice = Build_Notice(NULL);
+		notice = Build_Notice(NULL);
 		xio_Set_Mouse_Position(active_spec->notice_mouse_x, active_spec->notice_mouse_y);
-		return true;
 	}
-	return false;
-}
-
-void brief_CloseNotice(Input* notice) {
-	xdialog_Clear_Dialog_Exit();
-	xinput_Free_Inputs(notice);
-	xio_Set_Mouse_Position(active_spec->notice_return_mouse_x, active_spec->notice_return_mouse_y);
-}
-
-void brief_PrepareView(void) {
-	xview_Set_View_Update_Function(end_View);
+	TieBrief_RunView(notice, svga, active_spec->notice_return_mouse_x, active_spec->notice_return_mouse_y);
+	return 0;
+#else
+	xview_Set_View_Update_Function(brief_end_View);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
-}
-
-void brief_CloseScene(bool svga) {
+	shellext_Handle_TIE_View();
 	player_Free_Brief_Display();
 	xview_Enable_All_View_Erase();
 	xview_Clear_View_Update_Function();
-
 	if (xcursor_Is_Cursor_Visible())
 		xcursor_Hide_Cursor();
-
-	if (svga) {
-		xvesa_Erase_Video(16);
-		xviewadd_Clear_View();
-		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
-	}
+	return xerror_Get_Landru_Exit();
+#endif
 }

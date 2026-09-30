@@ -10,10 +10,8 @@
 extern "C" {
 #endif
 
-bool brief_OpenScene(SceneHeadStruct* scene_head, bool svga, Input** notice);
-void brief_CloseNotice(Input* notice);
-void brief_PrepareView(void);
-void brief_CloseScene(bool svga);
+int16_t brief_Brief(SceneHeadStruct* scene_head);
+void brief_end_View(int32_t time);
 
 #ifdef __cplusplus
 }

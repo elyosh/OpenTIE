@@ -1,6 +1,7 @@
 #ifndef TIE_REGISTER_H
 #define TIE_REGISTER_H
 
+#include "landru/filedir.h"
 #include "landru/input.h"
 #include "tie/shellext.h"
 #include "tie_runtime/storage/pilot_storage.h"
@@ -30,26 +31,12 @@ typedef struct {
 	int32_t score;
 } FastPilotRecord;
 
-/* Registration scene setup reports whether a protection dialog is needed. */
-typedef enum RegisterOpenResult {
-	REGISTER_OPEN_FAILED,
-	REGISTER_OPEN_READY,
-	REGISTER_OPEN_PROTECT,
-} RegisterOpenResult;
-
-typedef struct RegisterSceneState {
-	SceneHeadStruct* scene_head;
-	ResFile* rf;
-	bool tie98;
-	bool view_pushed;
-} RegisterSceneState;
-
-void register_PrepareScene(RegisterSceneState* state, SceneHeadStruct* head);
-RegisterOpenResult register_OpenScene(RegisterSceneState* state);
+int16_t register_Register(SceneHeadStruct* scene_head);
+void register_end_View(int32_t time);
+extern Directory register_directory;
+extern void* register_fast_pilot_record;
 Input* register_OpenProtection(void);
 void register_CloseProtection(void);
-void register_PrepareView(void);
-void register_CloseScene(RegisterSceneState* state);
 
 /* Clear the is_protected flag on the active pilot's FastPilotRecord.
  * Called by COMPUTER after a pilot restore. */

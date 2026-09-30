@@ -5,4 +5,6 @@
 
 void TieRegister_Begin(SceneHeadStruct* head);
 
+void TieRegister_RunView(ResFile* resource, bool protect, const char* missing_resource);
+
 #endif

@@ -11,6 +11,9 @@
  */
 
 #include "tie/play1.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/film_task.h"
+#endif
 #include "landru/actor.h"
 #include "landru/bitmap.h"
 #include "landru/canvas.h"
@@ -93,39 +96,6 @@ static const char* play1_tie98_music_path(int16_t scene) {
 		return battle_path;
 	}
 	return NULL;
-}
-
-static bool play1_tie98_music_ends_after_scene(int16_t scene) {
-	if (scene >= 251 && scene <= 263)
-		return true;
-
-	switch (scene) {
-		case 90:
-		case 210:
-		case 230:
-		case 240:
-		case 270:
-		case 420:
-		case 500:
-		case 510:
-		case 520:
-		case 531:
-		case 550:
-		case 573:
-		case 581:
-		case 591:
-		case 603:
-		case 610:
-		case 623:
-		case 700:
-		case 710:
-		case 720:
-		case 730:
-		case 740:
-			return true;
-		default:
-			return false;
-	}
 }
 
 /* Wrap table for 320-wide scanline offsets (used by rendering subsystems) */
@@ -502,13 +472,13 @@ static const char mission_disk2_resource[14] = "secarm2.lfd";
 
 static int16_t play1_id;
 static Film* play1_film;
-static int16_t is_streaming;
+int16_t play1_is_streaming;
 static int16_t read_state;
 static int16_t stream_actor_frames_to_go;
-static LandruHandle read_buffer;
+LandruHandle play1_read_buffer;
 static uint8_t use_chain_successful;
-static BitmapStruct last_frame;
-static BitmapStruct current_frame;
+BitmapStruct play1_last_frame;
+BitmapStruct play1_current_frame;
 
 /* Forward declarations */
 static void play1_user_Play_Arm(Actor* the_actor, int32_t time);
@@ -614,27 +584,27 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 		if (!p->stream_str[play1_id][0] || !use_chain_successful)
 			return 1;
 
-		read_buffer = xmemhdl_Alloc_Handle(STREAM_BUFFER_SIZE, LANDRU_MEMORY_DEFAULT);
-		if (!read_buffer)
+		play1_read_buffer = xmemhdl_Alloc_Handle(STREAM_BUFFER_SIZE, LANDRU_MEMORY_DEFAULT);
+		if (!play1_read_buffer)
 			return 1;
 
-		xbitmap_Init_Bitmap(&last_frame);
-		xbitmap_Init_Bitmap(&current_frame);
+		xbitmap_Init_Bitmap(&play1_last_frame);
+		xbitmap_Init_Bitmap(&play1_current_frame);
 
-		ok = xbitmap_Alloc_Bitmap(&last_frame, 320, 200);
+		ok = xbitmap_Alloc_Bitmap(&play1_last_frame, 320, 200);
 		if (ok)
-			ok = xbitmap_Alloc_Bitmap(&current_frame, 320, 200);
+			ok = xbitmap_Alloc_Bitmap(&play1_current_frame, 320, 200);
 
 		if (!ok) {
-			xmemhdl_Free_Handle(read_buffer);
-			read_buffer = LANDRU_NULL_HANDLE;
-			xbitmap_Free_Bitmap(&last_frame);
-			xbitmap_Free_Bitmap(&current_frame);
+			xmemhdl_Free_Handle(play1_read_buffer);
+			play1_read_buffer = LANDRU_NULL_HANDLE;
+			xbitmap_Free_Bitmap(&play1_last_frame);
+			xbitmap_Free_Bitmap(&play1_current_frame);
 			return 1;
 		}
 
-		xbitmap_Erase_Bitmap(&last_frame);
-		xbitmap_Erase_Bitmap(&current_frame);
+		xbitmap_Erase_Bitmap(&play1_last_frame);
+		xbitmap_Erase_Bitmap(&play1_current_frame);
 		xactor_Set_Actor_Update_Function(the_actor, (xactorUpdateFunc)play1_Update_Stream_Actor);
 		xactor_Set_Actor_Draw_Function(the_actor, play1_Draw_Stream_Actor);
 		xactor_Set_Actor_ZPlane(the_actor, 12700);
@@ -643,7 +613,7 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 #ifdef TIE_MODERN
 		xrect_Clear_Rect(&textext_bounds);
 #endif
-		is_streaming = 1;
+		play1_is_streaming = 1;
 		read_state = 0;
 	}
 
@@ -829,7 +799,7 @@ static void play1_Update_Stream_Actor(Actor* the_actor) {
 
 	if (!xactor_Is_Actor_Visible(the_actor))
 		return;
-	if (!is_streaming)
+	if (!play1_is_streaming)
 		return;
 	if (xfilm_Is_Film_Fade())
 		return;
@@ -837,14 +807,14 @@ static void play1_Update_Stream_Actor(Actor* the_actor) {
 	if (read_state == 0) {
 		const uint8_t* data;
 
-		if (xstream_Read_From_Stream_Buffer(0, read_buffer, 0, 16, 1) != 16) {
+		if (xstream_Read_From_Stream_Buffer(0, play1_read_buffer, 0, 16, 1) != 16) {
 			read_state = 0;
 			xactor_Deactivate_Actor(the_actor);
 			return;
 		}
-		data = xmemhdl_Lock_Handle(read_buffer);
+		data = xmemhdl_Lock_Handle(play1_read_buffer);
 		stream_actor_frames_to_go = br_i16le(data + 2);
-		xmemhdl_Unlock_Handle(read_buffer);
+		xmemhdl_Unlock_Handle(play1_read_buffer);
 		read_state = 1;
 	}
 
@@ -857,35 +827,35 @@ static void play1_Update_Stream_Actor(Actor* the_actor) {
 		return;
 	}
 
-	if (xstream_Read_From_Stream_Buffer(0, read_buffer, 0, 4, 1) != 4) {
+	if (xstream_Read_From_Stream_Buffer(0, play1_read_buffer, 0, 4, 1) != 4) {
 		read_state = 0;
 		xactor_Deactivate_Actor(the_actor);
 		return;
 	}
-	data = xmemhdl_Lock_Handle(read_buffer);
+	data = xmemhdl_Lock_Handle(play1_read_buffer);
 	size = br_u32le(data);
-	xmemhdl_Unlock_Handle(read_buffer);
+	xmemhdl_Unlock_Handle(play1_read_buffer);
 
 	if (size == 0 || size > STREAM_BUFFER_SIZE ||
-		xstream_Read_From_Stream_Buffer(0, read_buffer, 0, size, 1) != (int32_t)size) {
+		xstream_Read_From_Stream_Buffer(0, play1_read_buffer, 0, size, 1) != (int32_t)size) {
 		read_state = 0;
 		xactor_Deactivate_Actor(the_actor);
 		return;
 	}
 
-	prev_pixels = xbitmap_Lock_Bitmap(&last_frame);
-	cur_pixels = xbitmap_Lock_Bitmap(&current_frame);
-	data = xmemhdl_Lock_Handle(read_buffer);
+	prev_pixels = xbitmap_Lock_Bitmap(&play1_last_frame);
+	cur_pixels = xbitmap_Lock_Bitmap(&play1_current_frame);
+	data = xmemhdl_Lock_Handle(play1_read_buffer);
 	drawstrm_Convert_Frame_To_Palette(prev_pixels, data, cur_pixels);
-	xmemhdl_Unlock_Handle(read_buffer);
-	xbitmap_Unlock_Bitmap(&last_frame);
-	xbitmap_Unlock_Bitmap(&current_frame);
+	xmemhdl_Unlock_Handle(play1_read_buffer);
+	xbitmap_Unlock_Bitmap(&play1_last_frame);
+	xbitmap_Unlock_Bitmap(&play1_current_frame);
 	stream_actor_frames_to_go--;
 }
 
 /* ------------------------------------------------------------------ */
 
-/* Stream actor draw callback. Copies current_frame to canvas. */
+/* Stream actor draw callback. Copies play1_current_frame to canvas. */
 // FUNCTION: TIE95 0x78D2C
 static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
 									   int16_t refresh) {
@@ -896,7 +866,7 @@ static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, 
 	(void)off_y;
 	if (!refresh)
 		return 0;
-	xcanvas_Copy_Bitmap_To_Canvas(&current_frame, 0, 0);
+	xcanvas_Copy_Bitmap_To_Canvas(&play1_current_frame, 0, 0);
 	xdirty_Max_Dirty_List();
 	return 1;
 }
@@ -957,10 +927,17 @@ static void play1_Chain_Scene(void) {
  *   +emperor   = 24fps + film + file2 = "emperor.lfd" (resource[4])
  *   +awards    = copy film + file2 = "awards.lfd" (resource[27])
  */
-bool play1_OpenScene(Play1SceneState* t) {
+// FUNCTION: TIE95 0x77CE0
+// FUNCTION: TIE98 0x4682D0
+int16_t play1_Play1(SceneHeadStruct* the_head) {
 	char name[16];
 	Rect r;
+#ifdef TIE_MODERN
 	const play1_data_set_t* p = play1_data_set();
+	LandruSurfaceSet surface_set = LANDRU_SURFACE_VGA;
+#else
+	const play1_data_set_t* p = &play1_set_retail;
+#endif
 
 	int i;
 	int16_t scene;
@@ -975,27 +952,27 @@ bool play1_OpenScene(Play1SceneState* t) {
 
 	scene = shellext_Get_Cur_Scene();
 	if (scene == SCENE_CUT_900)
-		return false;
-	t->scene = scene;
+		return 0;
 
+#ifdef TIE_MODERN
 	/* TIE98 leaves the TOTRAIN and TOCOMBAT transitions on the
 	 * native SVGA target; every other PLAY1 film uses VGA. */
 	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 &&
 		(scene == SCENE_TRAIN_TRANSITION || scene == SCENE_COMBAT_TRANSITION)) {
-		t->surface_set = LANDRU_SURFACE_SVGA;
-		(void)xsurface_Select_Surface_Set(t->surface_set);
+		surface_set = LANDRU_SURFACE_SVGA;
+		(void)xsurface_Select_Surface_Set(surface_set);
 		xview_Init_View(xview_Get_Current_View());
 	}
+
+#endif
 
 	for (play1_id = 0; scene != p->cur_scene[play1_id] && p->cur_scene[play1_id]; play1_id++)
 		;
 	if (!p->cur_scene[play1_id])
-		return false;
+		return 0;
 
-	t->file = shellext_Open_Empire_Resource(p->resource_str[play1_id]);
-	t->file2 = NULL;
-	file = t->file; /* shadow for the existing switch body */
-	file2 = t->file2;
+	file = shellext_Open_Empire_Resource(p->resource_str[play1_id]);
+	file2 = NULL;
 	xcanvas_Get_Drawing_Canvas_Bounds(&r);
 
 	cur = p->cur_scene[play1_id];
@@ -1135,12 +1112,7 @@ bool play1_OpenScene(Play1SceneState* t) {
 			break;
 	}
 
-	/* Sync file/file2 back to the task struct (the switch above may
-	 * have rebound them). */
-	t->file = file;
-	t->file2 = file2;
-	t->rate_changed = rate_changed;
-
+#ifdef TIE_MODERN
 	/* Tag the snapshot with the (LFD basename, film name) tuple so a
 	 * cutscene compositor on the host side can locate its remaster
 	 * asset bundle. The basename is the resource_str entry minus the
@@ -1153,22 +1125,24 @@ bool play1_OpenScene(Play1SceneState* t) {
 		for (; i + 1 < sizeof lfd_base && res[i] && res[i] != '.'; ++i)
 			lfd_base[i] = res[i];
 		lfd_base[i] = '\0';
-#ifdef TIE_MODERN
 		TieSnapshotBuilder_SetActiveFilm(lfd_base, name);
-#endif
 	}
 
+#endif
 	play1_Chain_Scene();
+#ifdef TIE_MODERN
 	TieDiagnostics_Log(TIE_LOG_INFO, "[PLAY1] scene=%d film='%s' resource='%s' stream='%s'\n", play1_id, name,
 					   p->resource_str[play1_id],
 					   p->stream_str[play1_id][0] ? p->stream_str[play1_id] : "(none)");
+#endif
 	play1_film = xfilm_Res_Callback_Film(name, &r, 0, 0, 0, play1_film_Callback);
+#ifdef TIE_MODERN
 	if (!play1_film) {
-		if (t->file2)
-			xres_Close_Resource(t->file2);
-		xres_Close_Resource(t->file);
+		if (file2)
+			xres_Close_Resource(file2);
+		xres_Close_Resource(file);
 		xerror_Set_Landru_Exit(p->next_scene[play1_id]);
-		return false;
+		return 0;
 	}
 	if (TieMusicPolicy_UsesTie98()) {
 		const char* music_path = play1_tie98_music_path(scene);
@@ -1176,7 +1150,8 @@ bool play1_OpenScene(Play1SceneState* t) {
 			FrontendWaveStream_PlayWaveFile(music_path, 0);
 	}
 
-	xfilm_Set_Film_Def_Palette(play1_film, t->the_head->def_palette);
+#endif
+	xfilm_Set_Film_Def_Palette(play1_film, the_head->def_palette);
 	xview_Set_View_Update_Function(play1_end_View);
 
 	if (xcursor_Is_Cursor_Visible())
@@ -1191,50 +1166,35 @@ bool play1_OpenScene(Play1SceneState* t) {
 				xpal_Start_Cycle(pal);
 		}
 	}
-
-	/* Snapshot the streaming flag for the cleanup phase — is_streaming
-	 * is module-static and may flip during the modal view; remember
-	 * what it was set to here so cleanup tears down what setup built. */
-	t->is_streaming_active = is_streaming;
-
-	/* Push the modal view task */
-	return true;
-}
-
-void play1_CloseScene(Play1SceneState* t) {
-	/* CLEANUP */
-	if (TieMusicPolicy_UsesTie98() && play1_tie98_music_ends_after_scene(t->scene))
-		FrontendWaveStream_Shutdown();
+#ifdef TIE_MODERN
+	TieFilm_RunView(file, file2, scene, rate_changed, play1_is_streaming != 0, surface_set);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
 	/* Restore frame rate to 20fps for scenes that changed it */
-	if (t->rate_changed)
+	if (rate_changed)
 		xtimer_Set_Frame_Rate(20);
 
 	/* Tear down streaming */
-	if (t->is_streaming_active && is_streaming) {
+	if (play1_is_streaming) {
 		xstream_Unchain_Current_Stream_File(0);
-		is_streaming = 0;
-		if (read_buffer) {
-			xmemhdl_Free_Handle(read_buffer);
-			read_buffer = LANDRU_NULL_HANDLE;
+		play1_is_streaming = 0;
+		if (play1_read_buffer) {
+			xmemhdl_Free_Handle(play1_read_buffer);
+			play1_read_buffer = LANDRU_NULL_HANDLE;
 		}
-		if (last_frame.data)
-			xbitmap_Free_Bitmap(&last_frame);
-		if (current_frame.data)
-			xbitmap_Free_Bitmap(&current_frame);
+		if (play1_last_frame.data)
+			xbitmap_Free_Bitmap(&play1_last_frame);
+		if (play1_current_frame.data)
+			xbitmap_Free_Bitmap(&play1_current_frame);
 	}
 
 	xview_Clear_View_Update_Function();
-	if (t->file2)
-		xres_Close_Resource(t->file2);
-	if (t->file)
-		xres_Close_Resource(t->file);
+	if (file2)
+		xres_Close_Resource(file2);
+	if (file)
+		xres_Close_Resource(file);
 
-	/* Drop the active-film tag — the compositor will fall back to
-	 * classic rendering for whatever scene runs next until another
-	 * PLAY1 push re-tags. */
-#ifdef TIE_MODERN
-	TieSnapshotBuilder_SetActiveFilm(NULL, NULL);
+	return xerror_Get_Landru_Exit();
 #endif
-	if (t->surface_set == LANDRU_SURFACE_SVGA)
-		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 }

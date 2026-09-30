@@ -3,6 +3,7 @@
 
 #include "tie/shellext.h"
 
+#include <landru/bitmap.h>
 #include <landru/surface.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -11,19 +12,11 @@
 extern "C" {
 #endif
 
-/* Resources and presentation state retained for one film scene. */
-typedef struct Play1SceneState {
-	SceneHeadStruct* the_head;
-	ResFile* file;
-	ResFile* file2;
-	int16_t scene;
-	bool rate_changed;
-	bool is_streaming_active; /* mirrors module-static is_streaming for cleanup */
-	LandruSurfaceSet surface_set;
-} Play1SceneState;
-
-bool play1_OpenScene(Play1SceneState* state);
-void play1_CloseScene(Play1SceneState* state);
+int16_t play1_Play1(SceneHeadStruct* the_head);
+extern int16_t play1_is_streaming;
+extern LandruHandle play1_read_buffer;
+extern BitmapStruct play1_last_frame;
+extern BitmapStruct play1_current_frame;
 
 #ifdef __cplusplus
 }

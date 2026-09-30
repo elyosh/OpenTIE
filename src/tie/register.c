@@ -7,6 +7,9 @@ void register_set_copy_protection(int enabled) { copy_protection_enabled = enabl
 
 #include "tie/register.h"
 #ifdef TIE_MODERN
+#include "tie_runtime/runtime/register_task.h"
+#endif
+#ifdef TIE_MODERN
 #include "tie_runtime/storage/pilot_storage.h"
 #endif
 #include "tie/rand.h"
@@ -240,7 +243,13 @@ static const RegisterSpec register_specs[] = {
 	},
 };
 
+#ifdef TIE_MODERN
 static const RegisterSpec* active_spec;
+#elif defined(TIE98)
+static const RegisterSpec* const active_spec = &register_specs[1];
+#else
+static const RegisterSpec* const active_spec = &register_specs[0];
+#endif
 
 /* ---- Static globals ---- */
 
@@ -255,7 +264,7 @@ static int16_t pilot_offset; /* first visible pilot in list */
 static int16_t num_pilots; /* count of valid (non-deleted) pilots */
 // GLOBAL: TIE95 0xD1202
 // GLOBAL: TIE98 0x58978C
-static int16_t num_loaded_pilots; /* total directory entries */
+static int16_t num_loaded_pilots; /* total register_directory entries */
 static int16_t pilot_loaded;
 
 static char reg_prot_name[72];                   /* protect dialog button label buffers */
@@ -287,7 +296,7 @@ static Input* pilot_list;
 // GLOBAL: TIE95 0xF6DF4
 // GLOBAL: TIE98 0x588E70
 static Actor* reg_bak;
-static Directory directory;
+Directory register_directory;
 // GLOBAL: TIE95 0xF6E46
 static int16_t protect_state[3];
 // GLOBAL: TIE95 0xF6E4C
@@ -299,7 +308,7 @@ static int16_t protect_index;
 static int16_t num_pages;
 // GLOBAL: TIE95 0xF6E52
 // GLOBAL: TIE98 0x588E74
-static void* fast_pilot_record; /* HANDLE → void* adapted */
+void* register_fast_pilot_record; /* HANDLE → void* adapted */
 static int16_t cur_page;
 static int16_t pilot_delete_status;
 
@@ -335,10 +344,10 @@ static int16_t Index_To_Pilot(int16_t logical_idx, int16_t* out_slot) {
 	int16_t logical_count;
 	int16_t i;
 
-	if (!fast_pilot_record)
+	if (!register_fast_pilot_record)
 		return 0;
 
-	rec = (FastPilotRecord*)fast_pilot_record;
+	rec = (FastPilotRecord*)register_fast_pilot_record;
 	*out_slot = -1;
 	logical_count = 0;
 
@@ -364,10 +373,10 @@ static int16_t Index_To_Pilot_Record(int16_t logical_idx, FastPilotRecord* out_r
 	int16_t logical_count;
 	int16_t i;
 
-	if (!fast_pilot_record)
+	if (!register_fast_pilot_record)
 		return 0;
 
-	rec = (FastPilotRecord*)fast_pilot_record;
+	rec = (FastPilotRecord*)register_fast_pilot_record;
 	found_slot = -1;
 	logical_count = 0;
 
@@ -386,22 +395,22 @@ static int16_t Index_To_Pilot_Record(int16_t logical_idx, FastPilotRecord* out_r
 	return found_slot != -1;
 }
 
-/* Copy the idx-th directory entry name into dst. */
+/* Copy the idx-th register_directory entry name into dst. */
 // FUNCTION: TIE95 0x7C770
 // FUNCTION: TIE98 0x472390
 // PORT: capacity parameter supports the wider TIE98 pilot name.
-// HARDENING: validates the destination and directory storage.
+// HARDENING: validates the destination and register_directory storage.
 static int16_t Find_Reg_Dir_Name(char* dst, size_t capacity, int16_t idx) {
 	const DirEntry* entries;
 
-	if (!dst || !capacity || !directory.entries || idx < 0 || idx >= directory.count)
+	if (!dst || !capacity || !register_directory.entries || idx < 0 || idx >= register_directory.count)
 		return 0;
-	entries = xmemhdl_Lock_Handle(directory.entries);
+	entries = xmemhdl_Lock_Handle(register_directory.entries);
 	if (!entries)
 		return 0;
 	strncpy(dst, entries[idx].name, capacity - 1);
 	dst[capacity - 1] = 0;
-	xmemhdl_Unlock_Handle(directory.entries);
+	xmemhdl_Unlock_Handle(register_directory.entries);
 	return 1;
 }
 
@@ -493,10 +502,10 @@ static void Build_Fast_Pilot_Record(void) {
 	if (!num_loaded_pilots)
 		return;
 
-	fast_pilot_record = calloc(num_loaded_pilots, sizeof(FastPilotRecord));
-	if (!fast_pilot_record)
+	register_fast_pilot_record = calloc(num_loaded_pilots, sizeof(FastPilotRecord));
+	if (!register_fast_pilot_record)
 		return;
-	rec = (FastPilotRecord*)fast_pilot_record;
+	rec = (FastPilotRecord*)register_fast_pilot_record;
 	num_pilots = 0;
 
 	for (i = 0; i < num_loaded_pilots; i++, rec++) {
@@ -549,10 +558,10 @@ static void Delete_Pilot_Record(void) {
 	int16_t deleted;
 	int16_t i;
 
-	if (!fast_pilot_record)
+	if (!register_fast_pilot_record)
 		return;
 
-	rec = (FastPilotRecord*)fast_pilot_record;
+	rec = (FastPilotRecord*)register_fast_pilot_record;
 	logical_count = 0;
 	deleted = 0;
 
@@ -600,9 +609,9 @@ void register_Revive_Pilot_Info(void) {
 	int16_t logical_count;
 	int16_t i;
 
-	if (!fast_pilot_record)
+	if (!register_fast_pilot_record)
 		return;
-	rec = (FastPilotRecord*)fast_pilot_record;
+	rec = (FastPilotRecord*)register_fast_pilot_record;
 	logical_count = 0;
 	for (i = 0; i < num_loaded_pilots; i++, rec++) {
 		if (rec->name[0]) {
@@ -616,7 +625,7 @@ void register_Revive_Pilot_Info(void) {
 // FUNCTION: TIE95 0x7C078
 // FUNCTION: TIE98 0x471A90
 static void Set_Your_Reg_Pilot(void) {
-	if (fast_pilot_record) {
+	if (register_fast_pilot_record) {
 		char current_name[TIE_PILOT_NAME_CAPACITY];
 		FastPilotRecord* rec;
 		int16_t i;
@@ -626,7 +635,7 @@ static void Set_Your_Reg_Pilot(void) {
 		shipext_Get_Pilot_Name(current_name);
 #endif
 
-		rec = (FastPilotRecord*)fast_pilot_record;
+		rec = (FastPilotRecord*)register_fast_pilot_record;
 		for (i = 0; i < num_loaded_pilots; i++, rec++) {
 			if (pilot_active != -1)
 				break;
@@ -1944,7 +1953,7 @@ static void idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, int16_t r
 
 // FUNCTION: TIE95 0x7A93C
 // FUNCTION: TIE98 0x4700D0
-static void end_View(int32_t phase) {
+void register_end_View(int32_t phase) {
 	char typed[TIE_PILOT_NAME_CAPACITY];
 
 	if (!phase) {
@@ -1960,9 +1969,9 @@ static void end_View(int32_t phase) {
 		soundext_Play_Speech(speechRegisterGuard);
 
 	if (!phase) {
-		/* Load pilot directory and build FPR cache */
-		xfiledir_Read_Directory(&directory);
-		num_loaded_pilots = directory.count;
+		/* Load pilot register_directory and build FPR cache */
+		xfiledir_Read_Directory(&register_directory);
+		num_loaded_pilots = register_directory.count;
 		xcursor_Set_Cursor(1); /* waitCursor */
 		Build_Fast_Pilot_Record();
 		xcursor_Set_Cursor(0); /* mainCursor */
@@ -2010,27 +2019,13 @@ static void end_View(int32_t phase) {
  * Entry point
  * ================================================================ */
 
-// PORT: adapts recovered edition data to the shared Rect API.
-static void register_set_rect(Rect* rect, const int16_t bounds[4]) {
-	xrect_Set_Rect(rect, bounds[0], bounds[1], bounds[2], bounds[3]);
-}
-
-// HARDENING: clean failure path for missing or incompatible resources.
-static RegisterOpenResult register_setup_failed(const char* resource) {
-	TieDiagnostics_Log(TIE_LOG_ERROR, "[REGISTER] missing frontend resource: %s\n",
-					   resource ? resource : "unknown");
-	xerror_Set_Landru_Error(6);
-	return REGISTER_OPEN_FAILED;
-}
-
-void register_PrepareScene(RegisterSceneState* state, SceneHeadStruct* head) {
-	state->scene_head = head;
-	state->rf = NULL;
-	state->view_pushed = false;
-	state->tie98 = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
-}
-
-RegisterOpenResult register_OpenScene(RegisterSceneState* t) {
+// FUNCTION: TIE95 0x7A4C0
+// FUNCTION: TIE98 0x46FBC0
+int16_t register_Register(SceneHeadStruct* scene_head) {
+	ResFile* rf;
+#ifdef TIE_MODERN
+	bool tie98 = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+#endif
 	Rect frame;
 
 	int16_t i;
@@ -2038,10 +2033,9 @@ RegisterOpenResult register_OpenScene(RegisterSceneState* t) {
 	PushButton* next;
 	char del_label[32];
 
-	active_spec = &register_specs[t->tie98 ? 1 : 0];
-	if (!xsurface_Select_Surface_Set(active_spec->surface_set))
-		return register_setup_failed("surface set");
-	xview_Init_View(xview_Get_Current_View());
+#ifdef TIE_MODERN
+	active_spec = &register_specs[tie98 ? 1 : 0];
+#endif
 
 	shipext_Delete_Temp_Pilot();
 	pilot_active = -1;
@@ -2049,7 +2043,7 @@ RegisterOpenResult register_OpenScene(RegisterSceneState* t) {
 	num_pilots = 0;
 	num_loaded_pilots = 0;
 	cur_page = 0;
-	fast_pilot_record = NULL;
+	register_fast_pilot_record = NULL;
 	num_pages = 1;
 	register_film = NULL;
 	reg_bak = NULL;
@@ -2061,15 +2055,37 @@ RegisterOpenResult register_OpenScene(RegisterSceneState* t) {
 	pilot_name_input = NULL;
 	pilot_info = NULL;
 	pilot_delete = NULL;
-	directory.entries = LANDRU_NULL_HANDLE;
+	register_directory.entries = LANDRU_NULL_HANDLE;
 	memset(reg_button, 0, sizeof(reg_button));
 
+#ifdef TIE_MODERN
 	xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+#elif defined(TIE98)
+	xio_Set_Mouse_Position(536, 274);
+#else
+	xio_Set_Mouse_Position(124, 106);
+#endif
 
-	t->rf = shellext_Open_Empire_Resource(active_spec->archive);
-	if (!t->rf)
-		return register_setup_failed(active_spec->archive);
+#ifdef TIE_MODERN
+	rf = shellext_Open_Empire_Resource(active_spec->archive);
+#elif defined(TIE98)
+	rf = shellext_Open_Empire_Resource("reg640.lfd");
+#else
+	rf = shellext_Open_Empire_Resource("register.lfd");
+#endif
+#ifdef TIE_MODERN
+	if (!rf) {
+		TieRegister_RunView(rf, false, active_spec->archive);
+		return 0;
+	}
+#endif
+#ifdef TIE_MODERN
 	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 0, 0, 640, 480);
+#else
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
+#endif
 
 	/* Load film. Tag the snapshot with the (lfd, film) tuple so
 	 * the cutscene compositor can resolve a remaster bundle for
@@ -2088,125 +2104,294 @@ RegisterOpenResult register_OpenScene(RegisterSceneState* t) {
 		TieSnapshotBuilder_SetActiveFilm(active_spec->snapshot_lfd, "reg2");
 #endif
 	}
-	if (!register_film)
-		return register_setup_failed(shellext_Get_Cur_Scene() == SCENE_REGISTER ? "register" : "reg2");
-	for (i = 0; i < active_spec->button_actor_count; i++) {
-		if (!reg_button[i])
-			return register_setup_failed("registration button actor");
+#ifdef TIE_MODERN
+	if (!register_film) {
+		TieRegister_RunView(rf, false, shellext_Get_Cur_Scene() == SCENE_REGISTER ? "register" : "reg2");
+		return 0;
 	}
+#endif
+#ifdef TIE_MODERN
+	for (i = 0; i < active_spec->button_actor_count; i++) {
+#ifdef TIE_MODERN
+		if (!reg_button[i]) {
+			TieRegister_RunView(rf, false, "registration button actor");
+			return 0;
+		}
+#endif
+	}
+#endif
 	/* Default redraw model (INCREMENTAL) is correct for register
 	 * — dirty-rect refresh, persistent RT. No explicit setter
 	 * needed; left as-is from shellext_Begin_Close_Landru_Scene. */
 
-	xfilm_Set_Film_Def_Palette(register_film, t->scene_head->def_palette);
+	xfilm_Set_Film_Def_Palette(register_film, scene_head->def_palette);
 
+#ifdef TIE_MODERN
 	/* TIE95 0x7A593 loads reg-bak1; TIE98 has no equivalent actor. */
 	if (active_spec->use_background) {
 		Actor* bak1 = xactor_Find_Actor(FOURCC_DELT, active_spec->background);
-		if (!bak1)
-			return register_setup_failed(active_spec->background);
+#ifdef TIE_MODERN
+		if (!bak1) {
+			TieRegister_RunView(rf, false, active_spec->background);
+			return 0;
+		}
+#endif
 		xactor_Non_Refreshable_Actor(bak1);
 		xactor_Refresh_Actor(bak1);
 	}
 
+#elif defined(TIE98)
+
+#else
+	{
+		Actor* bak1 = xactor_Find_Actor(FOURCC_DELT, "reg-bak1");
+		xactor_Non_Refreshable_Actor(bak1);
+		xactor_Refresh_Actor(bak1);
+	}
+#endif
+#ifdef TIE_MODERN
 	reg_bak = xactor_Find_Actor(FOURCC_DELT, active_spec->back_panel);
-	if (!reg_bak)
-		return register_setup_failed(active_spec->back_panel);
+#else
+	reg_bak = xactor_Find_Actor(FOURCC_DELT, "reg-bak2");
+#endif
+#ifdef TIE_MODERN
+	if (!reg_bak) {
+		TieRegister_RunView(rf, false, active_spec->back_panel);
+		return 0;
+	}
+#endif
 	xactor_Set_Actor_Draw_Function(reg_bak, draw_Register_Back);
 
+#ifdef TIE_MODERN
 	reg_door = xactor_Find_Actor(FOURCC_ANIM, active_spec->door);
-	if (!reg_door)
-		return register_setup_failed(active_spec->door);
+#else
+	reg_door = xactor_Find_Actor(FOURCC_ANIM, "reg-dora");
+#endif
+#ifdef TIE_MODERN
+	if (!reg_door) {
+		TieRegister_RunView(rf, false, active_spec->door);
+		return 0;
+	}
+#endif
 	xactor_Set_Actor_User_Function(reg_door, (xactorCallback)user_Door);
 
+#ifdef TIE_MODERN
 	reg_troop = xactor_Find_Actor(FOURCC_ANIM, active_spec->troop);
-	if (!reg_troop)
-		return register_setup_failed(active_spec->troop);
+#else
+	reg_troop = xactor_Find_Actor(FOURCC_ANIM, "reg-trpa");
+#endif
+#ifdef TIE_MODERN
+	if (!reg_troop) {
+		TieRegister_RunView(rf, false, active_spec->troop);
+		return 0;
+	}
+#endif
 	xactor_Set_Actor_User_Function(reg_troop, (xactorCallback)user_Troop);
 
-	/* Init directory and symbol actor */
-	xfiledir_Init_Directory(&directory, ".tfr", 0);
-	if (!directory.entries)
-		return register_setup_failed("pilot directory");
-	xfiledir_Set_Name_Length(&directory, active_spec->directory_name_length);
+	/* Init register_directory and symbol actor */
+	xfiledir_Init_Directory(&register_directory, ".tfr", 0);
+#ifdef TIE_MODERN
+	if (!register_directory.entries) {
+		TieRegister_RunView(rf, false, "pilot directory");
+		return 0;
+	}
+#endif
+#ifdef TIE_MODERN
+	xfiledir_Set_Name_Length(&register_directory, active_spec->directory_name_length);
+#endif
 	// TIE95 0x7A616; the copy-protection actor is absent from TIE98.
+#ifdef TIE_MODERN
 	if (active_spec->load_symbols) {
 		symbols = xactanim_Res_Anim_Actor("symbols", &frame, 0, 0, 0);
-		if (!symbols)
-			return register_setup_failed("symbols");
+#ifdef TIE_MODERN
+		if (!symbols) {
+			TieRegister_RunView(rf, false, "symbols");
+			return 0;
+		}
+#endif
 		xactor_Set_Actor_Time(symbols, 0, 0);
 	}
 
+#elif defined(TIE98)
+
+#else
+	symbols = xactanim_Res_Anim_Actor("symbols", &frame, 0, 0, 0);
+	xactor_Set_Actor_Time(symbols, 0, 0);
+#endif
 	/* Build input tree */
 	reg_parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
-	if (!reg_parent)
-		return register_setup_failed("registration input root");
+#ifdef TIE_MODERN
+	if (!reg_parent) {
+		TieRegister_RunView(rf, false, "registration input root");
+		return 0;
+	}
+#endif
 
-	register_set_rect(&frame, active_spec->door_bounds);
+#ifdef TIE_MODERN
+	xrect_Set_Rect(&frame, active_spec->door_bounds[0], active_spec->door_bounds[1],
+				   active_spec->door_bounds[2], active_spec->door_bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 486, 188, 621, 356);
+#else
+	xrect_Set_Rect(&frame, 240, 80, 320, 150);
+#endif
 	door_input = xinput_Alloc_Input(reg_parent, &frame, 0, 0);
-	if (!door_input)
-		return register_setup_failed("registration door input");
+#ifdef TIE_MODERN
+	if (!door_input) {
+		TieRegister_RunView(rf, false, "registration door input");
+		return 0;
+	}
+#endif
 	xinpattr_Set_Input_Update_Function(door_input, iupdate_Register);
 	xinpattr_Set_Input_User_Function(door_input, iuser_Register);
 	door_input->mouseUsage = allInput;
 	door_input->id = 0;
 
-	register_set_rect(&frame, active_spec->list_bounds);
+#ifdef TIE_MODERN
+	xrect_Set_Rect(&frame, active_spec->list_bounds[0], active_spec->list_bounds[1],
+				   active_spec->list_bounds[2], active_spec->list_bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 170, 247, 271, 414);
+#else
+	xrect_Set_Rect(&frame, 75, 102, 127, 174);
+#endif
 	pilot_list = xinput_Alloc_Input(reg_parent, &frame, 0, 0);
-	if (!pilot_list)
-		return register_setup_failed("pilot list input");
+#ifdef TIE_MODERN
+	if (!pilot_list) {
+		TieRegister_RunView(rf, false, "pilot list input");
+		return 0;
+	}
+#endif
 	xinpattr_Set_Input_Update_Function(pilot_list, iupdate_Pilot_List);
 	xinpattr_Set_Input_Draw_Function(pilot_list, idraw_Pilot_List);
 	xinpattr_Refreshable_Input(pilot_list);
 	pilot_list->id = 0;
 
 	/* Pilot name input (RegStringButton, filename mode) */
-	register_set_rect(&frame, active_spec->name_bounds);
+#ifdef TIE_MODERN
+	xrect_Set_Rect(&frame, active_spec->name_bounds[0], active_spec->name_bounds[1],
+				   active_spec->name_bounds[2], active_spec->name_bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 170, 424, 271, 445);
+#else
+	xrect_Set_Rect(&frame, 75, 176, 127, 186);
+#endif
 	pilot_name_input = Alloc_Input_Reg_String_Button(reg_parent, &frame, 0, iuser_Pilot_Name, "", 1, 0);
-	if (!pilot_name_input)
-		return register_setup_failed("pilot name input");
+#ifdef TIE_MODERN
+	if (!pilot_name_input) {
+		TieRegister_RunView(rf, false, "pilot name input");
+		return 0;
+	}
+#endif
 	xinpattr_Set_Input_Draw_Function(&pilot_name_input->header, idraw_Pilot_Name);
 	xinpattr_Refreshable_Input(&pilot_name_input->header);
 
 	/* Prev/Next buttons */
-	register_set_rect(&frame, active_spec->prev_bounds);
+#ifdef TIE_MODERN
+	xrect_Set_Rect(&frame, active_spec->prev_bounds[0], active_spec->prev_bounds[1],
+				   active_spec->prev_bounds[2], active_spec->prev_bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 167, 452, 186, 475);
+#else
+	xrect_Set_Rect(&frame, 75, 189, 85, 197);
+#endif
 	prev = xbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, NULL, 0);
-	if (!prev)
-		return register_setup_failed("previous-page input");
+#ifdef TIE_MODERN
+	if (!prev) {
+		TieRegister_RunView(rf, false, "previous-page input");
+		return 0;
+	}
+#endif
 	xinpattr_Set_Input_Draw_Function(&prev->header, (InputDrawFunc)0);
 	xinpattr_Refreshable_Input(&prev->header);
 
-	register_set_rect(&frame, active_spec->next_bounds);
+#ifdef TIE_MODERN
+	xrect_Set_Rect(&frame, active_spec->next_bounds[0], active_spec->next_bounds[1],
+				   active_spec->next_bounds[2], active_spec->next_bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 255, 452, 276, 475);
+#else
+	xrect_Set_Rect(&frame, 117, 189, 127, 197);
+#endif
 	next = xbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, NULL, 1);
-	if (!next)
-		return register_setup_failed("next-page input");
+#ifdef TIE_MODERN
+	if (!next) {
+		TieRegister_RunView(rf, false, "next-page input");
+		return 0;
+	}
+#endif
 	xinpattr_Set_Input_Draw_Function(&next->header, (InputDrawFunc)0);
 	xinpattr_Refreshable_Input(&next->header);
 
 	/* Pilot info display */
-	register_set_rect(&frame, active_spec->info_bounds);
+#ifdef TIE_MODERN
+	xrect_Set_Rect(&frame, active_spec->info_bounds[0], active_spec->info_bounds[1],
+				   active_spec->info_bounds[2], active_spec->info_bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 308, 247, 408, 450);
+#else
+	xrect_Set_Rect(&frame, 149, 102, 201, 188);
+#endif
 	pilot_info = xinput_Alloc_Input(reg_parent, &frame, 0, 0);
-	if (!pilot_info)
-		return register_setup_failed("pilot info input");
+#ifdef TIE_MODERN
+	if (!pilot_info) {
+		TieRegister_RunView(rf, false, "pilot info input");
+		return 0;
+	}
+#endif
 	xinpattr_Set_Input_User_Function(pilot_info, iuser_Pilot_Info);
 	xinpattr_Set_Input_Draw_Function(pilot_info, idraw_Pilot_Info);
 	xinpattr_Refreshable_Input(pilot_info);
 	pilot_info->id = 0;
 
 	/* Delete button (initially hidden) */
-	register_set_rect(&frame, active_spec->delete_bounds);
+#ifdef TIE_MODERN
+	xrect_Set_Rect(&frame, active_spec->delete_bounds[0], active_spec->delete_bounds[1],
+				   active_spec->delete_bounds[2], active_spec->delete_bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 304, 452, 413, 478);
+#else
+	xrect_Set_Rect(&frame, 148, 189, 200, 198);
+#endif
 
 	strcpy(del_label, textext_Get_Text(txtRegBtnDeletePilot));
 	pilot_delete =
 		(Input*)xbtnpush_Alloc_Small_Button(reg_parent, &frame, 0, iuser_Pilot_Button, del_label, 2);
-	if (!pilot_delete)
-		return register_setup_failed("delete-pilot input");
+#ifdef TIE_MODERN
+	if (!pilot_delete) {
+		TieRegister_RunView(rf, false, "delete-pilot input");
+		return 0;
+	}
+#endif
 	xinpattr_Set_Input_Draw_Function(pilot_delete, idraw_Pilot_Button);
 	xinpattr_Refreshable_Input(pilot_delete);
 	xinpattr_Hide_Input(pilot_delete);
-	if (active_spec->load_symbols && copy_protection_enabled && shellext_Get_Cur_Scene() == SCENE_REGISTER)
-		return REGISTER_OPEN_PROTECT;
-	return REGISTER_OPEN_READY;
+
+#ifdef TIE_MODERN
+	TieRegister_RunView(rf,
+						active_spec->load_symbols && copy_protection_enabled &&
+							shellext_Get_Cur_Scene() == SCENE_REGISTER,
+						NULL);
+	return 0;
+#else
+	xview_Set_View_Update_Function(register_end_View);
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
+	xcanvas_Invalid_Screen_Diff();
+	xio_Set_Key_Buttons();
+	shellext_Handle_TIE_View();
+	xio_Clear_Key_Buttons();
+	xview_Enable_All_View_Erase();
+	xview_Clear_View_Update_Function();
+	xfiledir_Free_Directory(&register_directory);
+	if (register_fast_pilot_record)
+		free(register_fast_pilot_record);
+	register_fast_pilot_record = NULL;
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
+	xres_Close_Resource(rf);
+	return xerror_Get_Landru_Exit();
+#endif
 }
 
 void register_CloseProtection(void) {
@@ -2217,38 +2402,4 @@ void register_CloseProtection(void) {
 	if (result != 2)
 		xerror_Set_Landru_Exit(0);
 	xio_Set_Mouse_Position(160, 130);
-}
-
-void register_PrepareView(void) {
-	xview_Set_View_Update_Function(end_View);
-	xviewadd_Clear_View();
-	xview_Disable_All_View_Erase();
-	xcanvas_Invalid_Screen_Diff();
-	xio_Set_Key_Buttons();
-}
-
-void register_CloseScene(RegisterSceneState* t) {
-	/* CLEANUP */
-	xio_Clear_Key_Buttons();
-	xview_Enable_All_View_Erase();
-	xview_Clear_View_Update_Function();
-
-	if (!t->view_pushed) {
-		xview_Free_All_From_View(xview_Get_Current_View());
-		xview_Init_View(xview_Get_Current_View());
-	}
-
-	xfiledir_Free_Directory(&directory);
-	if (fast_pilot_record)
-		free(fast_pilot_record);
-	fast_pilot_record = NULL;
-
-	if (xcursor_Is_Cursor_Visible())
-		xcursor_Hide_Cursor();
-
-	if (t->rf)
-		xres_Close_Resource(t->rf);
-	t->rf = NULL;
-	if (register_specs[t->tie98 ? 1 : 0].surface_set == LANDRU_SURFACE_SVGA)
-		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 }
