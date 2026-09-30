@@ -13,52 +13,57 @@
 #include <stdint.h>
 #include <string.h>
 
-/* --- External references (globals owned by other modules) --- */
-
-/* last-set speaker side for MsgHistoryEntry.side */
-/* template substitution slots */
-/* mission elapsed clock now lives in
- * _date (MissionClock) declared in tie.h */
-/* timers[TIMER_SPACE_CONFIRM] = auto-cancel for the prompt below */
-/* pending SPACE-bar action queued by laser/collision/input prompts */
-
-/* --- Module globals (watdbg: msg.c ownership) --- */
-
+// GLOBAL: TIE95 0xC5850
+// GLOBAL: TIE98 0x4E62F0
 uint8_t fontcolors[32] = { 0x2C, 0x2D, 0x2E, 0x2F, 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36,
 						   0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0xD5, 0xD5,
 						   0xD4, 0xD3, 0x2C, 0x2D, 0x2E, 0x2F, 0x2C, 0x2D, 0x2E, 0x2F };
+// GLOBAL: TIE95 0xC5870
+// GLOBAL: TIE98 0x4E6310
 uint8_t fontcolorconvert[8] = { 0x42, 0x4A, 0x46, 0x4E, 0x52, 0x45, 0x42, 0x52 };
+// GLOBAL: TIE95 0xC5878
+// GLOBAL: TIE98 0x4E6318
 uint8_t radiosidecolors[6] = { 0x4A, 0x52, 0x46, 0x56, 0x4A, 0x56 };
+// GLOBAL: TIE95 0xC587E
+// GLOBAL: TIE98 0x4E6320
 uint8_t eventsidecolors[6] = { 0x52, 0x4A, 0x46, 0x56, 0x4A, 0x56 };
-int32_t frameticksmsgflag;
+// GLOBAL: TIE95 0xC5884
+// GLOBAL: TIE98 0x584D10
+uint8_t frameticksmsgflag;
 // GLOBAL: TIE95 0xD4C6C
+// GLOBAL: TIE98 0x5FD220
 char* messageptrs[4];
 // GLOBAL: TIE95 0xD4C80
+// GLOBAL: TIE98 0x5FD230
 int32_t msgLineRight;
 // GLOBAL: TIE95 0xD4C7C
 // GLOBAL: TIE98 0x5FD20C
 char** messagetable;
+// GLOBAL: TIE95 0xD4C84
+// GLOBAL: TIE98 0x5FD214
 int32_t msgLineBottom;
 // GLOBAL: TIE95 0xD4C88
+// GLOBAL: TIE98 0x5FD200
 int32_t msgLineTop;
 // GLOBAL: TIE95 0xD4C8C
+// GLOBAL: TIE98 0x5FCE60
 MsgHistoryEntry messagequeue[MSG_QUEUE_SLOTS];
+// GLOBAL: TIE95 0xD5028
+// GLOBAL: TIE98 0x5FD1FC
 uint16_t dxtticks;
+// GLOBAL: TIE95 0xD502A
+// GLOBAL: TIE98 0x5FD210
 uint16_t oxtticks;
 // GLOBAL: TIE95 0xD502E
+// GLOBAL: TIE98 0x5FD206
 uint16_t currentmessagesave;
 // GLOBAL: TIE95 0xD5030
+// GLOBAL: TIE98 0x5FD208
 uint8_t messagecnt;
 
-/* Pending voice-clip id selector for the next msg_messageprintf call.
- * Set by callers (score.c radio-message poll, objective-complete branches)
- * to the soundhandles[] index that pairs with the message text; consumed
- * by msg_messageprintf only for template_id 174 (MSG_GENERIC_STAR_INFO)
- * or 161 (MSG_GENERIC_STAR), and packed into entry.aux_flags_hi. Other
- * templates get aux_flags_hi = 0 regardless. msg_messagedisplay fires
- * fsfx_triggervoicesfx(aux_flags_hi) when the message first renders, so
- * a stale value would mis-trigger; callers reset to 0 after their last
- * paired msg_messageprintf. Retail's word_D502C at 0xD502C. */
+/* Cue selected by SCORE for the next voiced message. */
+// GLOBAL: TIE95 0xD502C
+// GLOBAL: TIE98 0x5FD204
 uint16_t pending_voice_id;
 
 /* --- msg_messageinit -- */
@@ -127,15 +132,9 @@ void msg_messagedisplay(void) {
 
 	msg_readymessage();
 
-	/* On the first display of a message, fire the paired voice clip.
-	 * The voice id lives in aux_flags_hi (entry +0x02), populated by
-	 * msg_messageprintf from pending_voice_id only for templates 174
-	 * and 161 (the radio-message and objective-complete generic-star
-	 * templates that pair with a soundhandles[] cue). display_count==0
-	 * gates this to once per message; aux_flags_hi==0 covers every
-	 * non-voiced template. */
-	if (messagequeue[0].aux_flags_hi && !messagequeue[0].display_count)
-		fsfx_triggervoicesfx(messagequeue[0].aux_flags_hi);
+	/* Play a queued voice cue only on the first display. */
+	if (messagequeue[0].voice_id && !messagequeue[0].display_count)
+		fsfx_triggervoicesfx(messagequeue[0].voice_id);
 
 	type_byte = (uint8_t)messagequeue[0].body[0];
 
@@ -186,7 +185,7 @@ void msg_messagedisplay(void) {
 
 // FUNCTION: TIE95 0x330CC
 void msg_messageprintf(MsgTemplate template_id) {
-	/* Temporary 82-byte staging buffer for the entry. */
+	/* Retail queue and history share this record. */
 	MsgHistoryEntry entry;
 	const uint8_t* message_template;
 	const uint8_t* tpl;
@@ -200,15 +199,13 @@ void msg_messageprintf(MsgTemplate template_id) {
 	memset(&entry, 0, sizeof(entry));
 
 	entry.template_idx = template_id;
-	/* aux_flags_hi carries the voice id for templates 174 (radio-msg
-	 * generic-star) and 161 (objective-complete generic-star). Every
-	 * other template sets it to zero so msg_messagedisplay won't fire
-	 * a stray voice clip. Mirrors retail MSG_messageprintf at 0x33131. */
+	/* Only the generic radio/objective templates carry a voice cue. */
 	if (template_id == 174 || template_id == 161)
-		entry.aux_flags_hi = pending_voice_id;
+		entry.voice_id = pending_voice_id;
 	else
-		entry.aux_flags_hi = 0;
+		entry.voice_id = 0;
 	/* Stamp the mission clock. */
+	entry.subsecond = _date.subsec;
 	entry.seconds = _date.second;
 	entry.minutes = _date.minute;
 	entry.hours = _date.hour;
@@ -274,9 +271,7 @@ void msg_messageprintf(MsgTemplate template_id) {
 		}
 	}
 
-	/* NUL-terminate if room. (When body_len >= 0x46, the writer leaves the
-	 * trailing two bytes untouched in the source buffer; since memset zeroed
-	 * the staging, the tail is already 0 either way.) */
+	/* A full 70-byte body has no room for a terminator. */
 	if (body_len < 70)
 		entry.body[body_len] = 0;
 
@@ -347,6 +342,7 @@ void msg_messageprintf(MsgTemplate template_id) {
 /* --- msg_movecurrentmessageinqueue -- */
 
 // FUNCTION: TIE95 0x33544
+// FUNCTION: TIE98 0x4563E0
 void msg_movecurrentmessageinqueue(void) {
 	int16_t i;
 
@@ -366,14 +362,14 @@ void msg_movecurrentmessageinqueue(void) {
 }
 
 // FUNCTION: TIE95 0x335B8
-int16_t msg_getmessagefromqueue(void) {
+// FUNCTION: TIE98 0x456450
+void msg_getmessagefromqueue(void) {
 	const uint8_t old_cnt = messagecnt;
 	uint16_t i;
 	for (i = 0; i < old_cnt; i++) {
 		memcpy(&messagequeue[i], &messagequeue[i + 1], sizeof(MsgHistoryEntry));
 	}
 	messagecnt = (uint8_t)(old_cnt - 1);
-	return (int16_t)i;
 }
 
 /* --- msg_readymessage -- */
@@ -452,7 +448,7 @@ void msg_messageupdate(void) {
 	}
 
 	/* Debug frame-timing overlay. */
-	if ((uint8_t)frameticksmsgflag) {
+	if (frameticksmsgflag) {
 		festring_setbackcolor(0x2C);
 		festring_setbound((int16_t)msgLineRight, (int16_t)msgLineTop, (int16_t)screenXRes,
 						  (int16_t)screenYRes);
@@ -466,12 +462,14 @@ void msg_messageupdate(void) {
 		panelrts_outnum(dxtticks, 2, 2);
 		festring_setcursor((int16_t)(msgLineRight + fontheight), (int16_t)msgLineTop);
 		panelrts_outnum(oxtticks, 2, 2);
+		festring_setfontsize(2);
 	}
 }
 
 /* --- msg_clearmessagequeue -- */
 
 // FUNCTION: TIE95 0x339E8
+// FUNCTION: TIE98 0x4568D0
 void msg_clearmessagequeue(void) {
 	messagecnt = 0;
 	messagequeue[0].template_idx = 0xFFFF;
@@ -480,6 +478,7 @@ void msg_clearmessagequeue(void) {
 /* --- msg_updatemessageage -- */
 
 // FUNCTION: TIE95 0x33A00
+// FUNCTION: TIE98 0x4568F0
 void msg_updatemessageage(void) {
 	if (messagequeue[0].template_idx != 0xFFFF)
 		messagequeue[0].age++;
@@ -666,130 +665,133 @@ void msg_reportmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template
 }
 
 /* --- msg_createobjectname -- Compose a printable object label.
- * Inline strcat loops (not calls to msg_msgstrcat) matching the binary. */
-
-/* Internal helper: strcat one char* onto buf, returning the NUL position. */
-static char* str_append(char* buf, const char* src) {
-	while (*buf)
-		buf++;
-	while (*src)
-		*buf++ = *src++;
-	*buf = 0;
-	return buf;
-}
+ * TIE95 inlines the string and character append operations. */
 
 // FUNCTION: TIE95 0x33FA8
-int16_t msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_buf) {
+void msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_buf) {
 	uint8_t ship_idx;
 
-	char* p;
-
 	*out_buf = 0;
+	if (obj_idx < 0x3800) {
+		ship_idx = objects[obj_idx].ship_idx;
+		if (objects[obj_idx].category == 0) {
+			CraftData* craft = objects[obj_idx].craft_ptr;
+			const char* src;
+			char* dst;
 
-	if (obj_idx >= 0x3800) {
-		/* Static-object path. */
-		const uint16_t sidx = (uint16_t)(obj_idx - 14336);
-		const uint8_t species = staticobjects[sidx].species;
-		const char* base = ((char**)buoystr)[species - 70];
-		uint8_t fg_idx;
+			if (use_official) {
+				src = spec_name_ptrs[craft->species_idx];
+				dst = out_buf;
+				while (*dst)
+					dst++;
+				while (*src)
+					*dst++ = *src++;
+				*dst = 0;
+			} else {
+				src = spec_data[craft->species_idx].short_name;
+				dst = out_buf;
+				while (*dst)
+					dst++;
+				while (*src)
+					*dst++ = *src++;
+				*dst = 0;
+			}
 
-		char* p;
+			if (fg_array[objects[obj_idx].fg_idx].name[0]) {
+				dst = out_buf;
+				while (*dst)
+					dst++;
+				*dst++ = ' ';
+				*dst = 0;
 
-		str_append(out_buf, base);
+				src = fg_array[objects[obj_idx].fg_idx].name;
+				dst = out_buf;
+				while (*dst)
+					dst++;
+				while (*src)
+					*dst++ = *src++;
+				*dst = 0;
+			}
 
-		fg_idx = staticobjects[sidx].fg_idx;
-		if (fg_array[fg_idx].name[0]) {
-			char* p = out_buf;
-			while (*p)
-				p++;
-			*p++ = ' ';
-			*p = 0;
-			/* Inline append of fg.name -- up to 12 bytes, NUL-terminated. */
-			str_append(out_buf, fg_array[fg_idx].name);
+			if ((int8_t)fg_array[objects[obj_idx].fg_idx].count > 1) {
+				dst = out_buf;
+				while (*dst)
+					dst++;
+				*dst++ = ' ';
+				*dst = 0;
+
+				dst = out_buf;
+				while (*dst)
+					dst++;
+				*dst++ = (char)(craft->craft_idx_in_fg + '1');
+				*dst = 0;
+			}
+		} else if (ship_idx >= 0x8F && ship_idx <= 0x9A) {
+			const char* src = ((char**)warheadstrings)[ship_idx - 143];
+			char* dst = out_buf;
+			while (*dst)
+				dst++;
+			while (*src)
+				*dst++ = *src++;
+			*dst = 0;
+		} else if (ship_idx >= 0x46 && ship_idx <= 0x54) {
+			const char* src = ((char**)buoystr)[ship_idx - 70];
+			char* dst = out_buf;
+			while (*dst)
+				dst++;
+			while (*src)
+				*dst++ = *src++;
+			*dst = 0;
 		}
-		/* Return the final end-pointer (low 16 bits); callers ignore. */
-		p = out_buf;
-		while (*p)
-			p++;
-		return (int16_t)(uintptr_t)p;
-	}
+	} else {
+		uint16_t static_idx = (uint16_t)(obj_idx - 0x3800);
+		const char* src = ((char**)buoystr)[staticobjects[static_idx].species - 70];
+		char* dst = out_buf;
 
-	/* Regular object path. */
-	ship_idx = objects[obj_idx].ship_idx;
-	if (objects[obj_idx].category == 0) {
-		/* Craft path. */
-		CraftData* craft_ptr = objects[obj_idx].craft_ptr;
-		const char* base = use_official ? spec_name_ptrs[craft_ptr->species_idx]
-										: spec_data[craft_ptr->species_idx].short_name;
-		uint8_t fg_idx;
+		while (*dst)
+			dst++;
+		while (*src)
+			*dst++ = *src++;
+		*dst = 0;
 
-		char* p;
+		if (fg_array[staticobjects[static_idx].fg_idx].name[0]) {
+			dst = out_buf;
+			while (*dst)
+				dst++;
+			*dst++ = ' ';
+			*dst = 0;
 
-		str_append(out_buf, base);
-
-		fg_idx = objects[obj_idx].fg_idx;
-		if (fg_array[fg_idx].name[0]) {
-			char* p = out_buf;
-			while (*p)
-				p++;
-			*p++ = ' ';
-			*p = 0;
-			str_append(out_buf, fg_array[fg_idx].name);
+			src = fg_array[staticobjects[static_idx].fg_idx].name;
+			dst = out_buf;
+			while (*dst)
+				dst++;
+			while (*src)
+				*dst++ = *src++;
+			*dst = 0;
 		}
-
-		if ((int8_t)fg_array[fg_idx].count > 1) {
-			char* p = out_buf;
-			while (*p)
-				p++;
-			*p++ = ' ';
-			*p = 0;
-			p = out_buf;
-			while (*p)
-				p++;
-			*p++ = (char)(craft_ptr->craft_idx_in_fg + '1');
-			*p = 0;
-		}
-		p = out_buf;
-		while (*p)
-			p++;
-		return (int16_t)(uintptr_t)p;
 	}
-
-	/* Non-craft object. */
-	if (ship_idx >= 0x8F && ship_idx <= 0x9A) {
-		const char* base = ((char**)warheadstrings)[ship_idx - 143];
-		str_append(out_buf, base);
-	} else if (ship_idx >= 0x46 && ship_idx <= 0x54) {
-		const char* base = ((char**)buoystr)[ship_idx - 70];
-		str_append(out_buf, base);
-	}
-	p = out_buf;
-	while (*p)
-		p++;
-	return (int16_t)(uintptr_t)p;
 }
 
-/* --- msg_msgstrcat --
- * Appends src to dst in place. Returns src + strlen(src) (Watcom quirk). */
+/* Append a string to the end of dst. */
 
 // FUNCTION: TIE95 0x34300
-char* msg_msgstrcat(char* src, char* dst) {
+// FUNCTION: TIE98 0x457070
+void msg_msgstrcat(const char* src, char* dst) {
 	while (*dst)
 		dst++;
 	while (*src) {
 		*dst++ = *src++;
 	}
 	*dst = 0;
-	return src;
 }
 
-/* --- msg_msgstradd -- Append single char, NUL-terminate, return char. */
+/* Append a character and terminate dst. */
 
 // FUNCTION: TIE95 0x34324
-char msg_msgstradd(char ch, char* dst) {
+// FUNCTION: TIE98 0x4570A0
+void msg_msgstradd(char ch, char* dst) {
 	while (*dst)
 		dst++;
 	*dst++ = ch;
 	*dst = 0;
-	return ch;
 }

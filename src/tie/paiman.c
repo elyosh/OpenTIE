@@ -720,98 +720,97 @@ int16_t paiman_followleadermaneuver(void) {
 	uint16_t self_idx = ai.active_obj_idx;
 	uint8_t leader_idx = cd->leader_obj_idx;
 
-	/* Self-led (no leader) — typically the same-frame aftermath of
-	 * paiorder_leaderdeadorder promoting this craft (sets leader_obj_idx
-	 * to 0xFF) before PAI_initplan moves mode_byte off FollowLeader. The
-	 * binary OOB-reads objects[0xFF] for distance/world/pitch/roll and
-	 * almost always lands in the polardistance>0x10000 branch (garbage
-	 * coords are far away), which copies garbage into the waypoint cache
-	 * and ramps throttle to max before zeroing push. Skip the body and
-	 * just zero the push — the corruption is meaningless and the next
-	 * tick re-runs PAI_initplan with the correct mode_byte. */
-	if (leader_idx == 0xFF) {
-		goto zero_push;
-	}
-
-	pai_distancebetween(leader_idx, self_idx);
-
-	/* Far from leader: teleport waypoint + full throttle chase. */
-	if (trig2_polardistance > 0x10000) {
-		cd->waypoint_x_cache = objects[leader_idx].world_x;
-		cd->waypoint_y_cache = objects[leader_idx].world_y;
-		cd->waypoint_z_cache = objects[leader_idx].world_z;
-		paiman_setflighttotarget(0, 1);
-		cd->throttle_speed = 0xFFFFu;
-		goto zero_push;
-	}
-
-	/* Match leader's pitch. Leader actively pitching → use their target;
-	 * otherwise match their current pitch. Skip a turn if we're already
-	 * aligned. */
-	if (ai.leader_craft->ai_pitch_state == 2) {
-		cd->ai_target_pitch = ai.leader_craft->ai_target_pitch;
-		paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
-	} else if (objects[leader_idx].pitch != objects[self_idx].pitch) {
-		cd->ai_target_pitch = (uint16_t)objects[leader_idx].pitch;
-		paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
-	}
-
-	/* Throttle: chase player leader by speed delta (50 units/frame slew,
-	 * saturating); mirror NPC leader's throttle. */
-	if (leader_idx == (uint8_t)pstate.object_idx) {
-		uint16_t leader_speed = (uint16_t)objects[leader_idx].current_speed;
-		uint16_t our_speed = (uint16_t)objects[self_idx].current_speed;
-
-		if (leader_speed > our_speed) {
-			uint32_t bump = 50u * (uint32_t)(leader_speed - our_speed);
-			uint32_t nth = (uint32_t)cd->throttle_speed + bump;
-			cd->throttle_speed = (nth > 0xFFFFu) ? 0xFFFFu : (uint16_t)nth;
-		} else if (leader_speed < our_speed) {
-			uint32_t brake = 50u * (uint32_t)(our_speed - leader_speed);
-			cd->throttle_speed = (brake >= cd->throttle_speed) ? 0u : (uint16_t)(cd->throttle_speed - brake);
-		}
-	} else {
-		cd->throttle_speed = ai.leader_craft->throttle_speed;
-	}
-
-	/* Match heading (snap if close, else short-way). */
+#ifdef TIE_MODERN
+	/* A newly promoted craft can retain this maneuver until its next plan update. */
+	if (leader_idx != 0xFF)
+#endif
 	{
-		uint16_t hd_delta = abs_angle_delta(cd->orient_heading, ai.leader_craft->orient_heading);
-		if (hd_delta >= 0x400u) {
-			cd->ai_heading_step = 0xFFFFu;
-			cd->ai_target_heading = ai.leader_craft->orient_heading;
-			cd->ai_heading_force = 0;
-			cd->ai_heading_state = pick_heading_state(cd->ai_target_heading, cd->orient_heading);
+		pai_distancebetween(leader_idx, self_idx);
+
+		/* Far from leader: teleport waypoint + full throttle chase. */
+		if (trig2_polardistance > 0x10000) {
+			cd->waypoint_x_cache = objects[leader_idx].world_x;
+			cd->waypoint_y_cache = objects[leader_idx].world_y;
+			cd->waypoint_z_cache = objects[leader_idx].world_z;
+			paiman_setflighttotarget(0, 1);
+			cd->throttle_speed = 0xFFFFu;
 		} else {
-			cd->ai_heading_state = 0;
-			cd->orient_heading = ai.leader_craft->orient_heading;
+			/* Match leader's pitch. Leader actively pitching → use their target;
+			 * otherwise match their current pitch. Skip a turn if we're already
+			 * aligned. */
+			if (ai.leader_craft->ai_pitch_state == 2) {
+				cd->ai_target_pitch = ai.leader_craft->ai_target_pitch;
+				paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
+			} else if (objects[leader_idx].pitch != objects[self_idx].pitch) {
+				cd->ai_target_pitch = (uint16_t)objects[leader_idx].pitch;
+				paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
+			}
+
+			/* Adjust player-led throttle from the speed difference; mirror NPC throttle. */
+			if (leader_idx == (uint8_t)pstate.object_idx) {
+				uint16_t leader_speed = (uint16_t)objects[leader_idx].current_speed;
+				uint16_t our_speed = (uint16_t)objects[self_idx].current_speed;
+
+				uint16_t previous_throttle = cd->throttle_speed;
+
+				/* Retail narrows the scaled delta and result before detecting wrap. */
+				if (leader_speed > our_speed) {
+					uint16_t bump = (uint16_t)(50u * (uint32_t)(leader_speed - our_speed));
+					cd->throttle_speed = (uint16_t)(previous_throttle + bump);
+					if (cd->throttle_speed < previous_throttle)
+						cd->throttle_speed = 0xFFFFu;
+				} else if (leader_speed < our_speed) {
+					uint16_t brake = (uint16_t)(50u * (uint32_t)(our_speed - leader_speed));
+					cd->throttle_speed = (uint16_t)(previous_throttle - brake);
+					if (cd->throttle_speed > previous_throttle)
+						cd->throttle_speed = 0;
+				}
+			} else {
+				cd->throttle_speed = ai.leader_craft->throttle_speed;
+			}
+
+			/* Match heading (snap if close, else short-way). */
+			{
+				uint16_t hd_delta = (uint16_t)(cd->orient_heading - ai.leader_craft->orient_heading);
+				if (hd_delta >= 0x8000u)
+					hd_delta = (uint16_t)-hd_delta;
+				if (hd_delta >= 0x400u) {
+					cd->ai_heading_step = 0xFFFFu;
+					cd->ai_target_heading = ai.leader_craft->orient_heading;
+					cd->ai_heading_force = 0;
+					cd->ai_heading_state = (uint8_t)((cd->ai_target_heading > cd->orient_heading) + 1);
+				} else {
+					cd->ai_heading_state = 0;
+					cd->orient_heading = ai.leader_craft->orient_heading;
+				}
+			}
+
+			/* Match roll — but only once leader's spin has settled. */
+			if (ai.leader_craft->spin_done_flag == 0xFFFFu) {
+				uint16_t roll_delta = (uint16_t)(objects[self_idx].roll - objects[ai.leader_obj_idx].roll);
+				if (roll_delta >= 0x8000u)
+					roll_delta = (uint16_t)-roll_delta;
+				if (roll_delta >= 0x400u) {
+					cd->ai_roll_step = 0xFFFFu;
+					cd->ai_roll_state = 1;
+					cd->ai_target_roll = (uint16_t)objects[ai.leader_obj_idx].roll;
+				} else {
+					objects[self_idx].roll = objects[ai.leader_obj_idx].roll;
+					objects[self_idx].orient_dirty = 1;
+					cd->ai_roll_state = 0;
+				}
+			}
+
+			/* Formation follow. Skip (hold position) when our leader is the
+			 * player and is nearly stationary. */
+			if (cd->leader_obj_idx != (uint8_t)pstate.object_idx ||
+				(uint16_t)pstate.player->current_speed > 0xAu) {
+				paiman_calcformation();
+				return 0;
+			}
 		}
 	}
 
-	/* Match roll — but only once leader's spin has settled. */
-	if (ai.leader_craft->spin_done_flag == 0xFFFFu) {
-		uint16_t roll_delta =
-			abs_angle_delta((uint16_t)objects[self_idx].roll, (uint16_t)objects[ai.leader_obj_idx].roll);
-		if (roll_delta >= 0x400u) {
-			cd->ai_roll_step = 0xFFFFu;
-			cd->ai_roll_state = 1;
-			cd->ai_target_roll = (uint16_t)objects[ai.leader_obj_idx].roll;
-		} else {
-			objects[self_idx].roll = objects[ai.leader_obj_idx].roll;
-			objects[self_idx].orient_dirty = 1;
-			cd->ai_roll_state = 0;
-		}
-	}
-
-	/* Formation follow. Skip (hold position) when our leader is the
-	 * player and is nearly stationary. */
-	if (cd->leader_obj_idx == (uint8_t)pstate.object_idx && (uint16_t)pstate.player->current_speed <= 0xAu) {
-		goto zero_push;
-	}
-	paiman_calcformation();
-	return 0;
-
-zero_push:
 	cd->push_accum_x = 0;
 	cd->push_accum_y = 0;
 	cd->push_accum_z = 0;

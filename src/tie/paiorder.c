@@ -16,67 +16,27 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-/* (mission elapsed clock fields read via `_date` in tie.h.) */
+/* Per-skill awareness radii. Retail stores three dwords per table. */
+// GLOBAL: TIE95 0xC5C5C
+// GLOBAL: TIE98 0x4E6758
+static const uint32_t planeranges[3] = { 0x8000, 0xC000, 0xE000 };
+// GLOBAL: TIE95 0xC5C68
+// GLOBAL: TIE98 0x4E6768
+static const uint32_t noticeplaneranges[3] = { 0x2000, 0x3000, 0x4000 };
+// GLOBAL: TIE95 0xC5C74
+// GLOBAL: TIE98 0x4E6778
+static const uint32_t noticemissileranges[3] = { 0x400, 0x800, 0x1000 };
 
-/* ======================================================================
- *                 Module-owned LUTs (PAIORDER tables)
- *
- * Addresses from the binary: 0xD5524..0xD555C, all sitting between the
- * PAIMAN stage-velocity tables and the ordersfunctionptrs table. None
- * of them are referenced outside paiorder.c; keep them static.
- * ====================================================================== */
-
-/* _planeranges[3] @ 0xD5524 — rough proximity radius by AI skill tier
- * for PAIORDER_stillattackorder's "attacker still a threat?" test. */
-static const uint16_t planeranges[3] = { 0x8000, 0xC000, 0xE000 };
-
-/* _noticeplaneranges[3] @ 0xD5530 — enemy-fighter awareness radius by
- * AI skill tier. Consumed by underattackorder / avoidhitorder. */
-static const uint16_t noticeplaneranges[3] = { 0x2000, 0x3000, 0x4000 };
-
-/* _noticemissileranges[3] @ 0xD553C — incoming-missile awareness radius
- * by AI skill tier. Tripled when ship_idx == 144 (heavy warhead).
- * Consumed by underattackorder / avoidhitorder. */
-static const uint16_t noticemissileranges[3] = { 0x400, 0x800, 0x1000 };
-
-/* _approachtable[8] @ 0xD5548 — bucket classifier for the angle
- * (trig2_xyangle - obj.pitch) >> 13. Value 0 = head-on, 1 = off-angle,
- * 2 = on tail.  Layout:
- *   [0]=0  [1]=1  [2]=1  [3]=2  [4]=2  [5]=1  [6]=1  [7]=0
- */
+/* Pitch-difference octants: head-on (0), side (1), or tail (2). */
+// GLOBAL: TIE95 0xC5C80
+// GLOBAL: TIE98 0x4E6788
 static const uint8_t approachtable[8] = { 0, 1, 1, 2, 2, 1, 1, 0 };
-
-/* _sidemaneuvers[4] @ 0xD5550 — maneuver codes chosen at random for the
- * off-angle / head-on evasive response in underattackorder. */
+// GLOBAL: TIE95 0xC5C88
+// GLOBAL: TIE98 0x4E6790
 static const uint8_t sidemaneuvers[4] = { 0x0D, 0x0E, 0x0F, 0x03 };
-
-/* _sternmaneuvers[8] @ 0xD5554 — maneuver codes chosen at random for the
- * on-tail evasive response in underattackorder. */
+// GLOBAL: TIE95 0xC5C8C
+// GLOBAL: TIE98 0x4E6798
 static const uint8_t sternmaneuvers[8] = { 0x01, 0x04, 0x01, 0x03, 0x01, 0x04, 0x0F, 0x04 };
-
-/* ======================================================================
- *                   Small helpers (internal)
- * ====================================================================== */
-
-/* Angle bucket used by several handlers to classify an attacker's
- * approach relative to our nose. */
-static inline uint8_t approach_bucket(uint16_t our_obj_idx) {
-	uint16_t delta = (uint16_t)((int16_t)trig2_xyangle - objects[our_obj_idx].pitch);
-	return approachtable[delta >> 13];
-}
-
-/* Apply a single random-signed per-axis push fraction scaled by the
- * craft's current throttle ratio (used by avoidhitorder). */
-static int16_t random_push_component(uint16_t speed_pct) {
-	/* rnd_mag = (random byte | 0x100) — decompile pattern
-	 *   LOBYTE(rnd) = MATH2_getrandom(); HIBYTE(rnd) = 1; */
-	uint16_t rnd_mag = (uint16_t)((uint8_t)math2_getrandom() | 0x100);
-	int32_t mag = (int32_t)math2_fraction(rnd_mag, speed_pct);
-	/* Sign flip on another random MSB. */
-	if ((int16_t)(math2_getrandom() & 0xFF00) < 0)
-		mag = -mag;
-	return (int16_t)mag;
-}
 
 /* ======================================================================
  *                   Slot 0 — nullorder (stub)
@@ -141,7 +101,8 @@ int16_t paiorder_underattackorder(void) {
 			if (pai_roughproximitycheck(miss_i, eff_range) == 1) {
 				craftptr->attacker_idx = miss_i;
 				pai_distancebetween(a_ref, miss_i);
-				craftptr->mode_byte = approach_bucket(a_ref) ? 1 : 24;
+				craftptr->mode_byte =
+					approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[a_ref].pitch) >> 13] ? 1 : 24;
 				paiman_initmaneuver();
 				return 0;
 			}
@@ -191,7 +152,7 @@ int16_t paiorder_underattackorder(void) {
 
 	pai_distancebetween(a_ref, attacker);
 	my_speed = spec_data[craftptr->species_idx].max_speed;
-	bucket = approach_bucket(a_ref);
+	bucket = approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[a_ref].pitch) >> 13];
 	att_speed =
 		objects[attacker].category ? 900 : spec_data[objects[attacker].craft_ptr->species_idx].max_speed;
 	rnd16 = (uint16_t)math2_getrandom();
@@ -532,7 +493,7 @@ int16_t paiorder_ontailorder(void) {
 		return 0;
 
 	pai_distancebetween(ai.active_obj_idx, attacker);
-	if (approach_bucket(ai.active_obj_idx) != 2)
+	if (approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[ai.active_obj_idx].pitch) >> 13] != 2)
 		return 0; /* not on tail */
 
 	rnd = (uint16_t)((uint8_t)math2_getrandom() & 3);
@@ -932,6 +893,8 @@ int16_t paiorder_avoidhitorder(void) {
 	uint8_t genus = objects[active].genus;
 
 	uint16_t speed_pct;
+	uint16_t random_magnitude;
+	int32_t push;
 
 	if (genus == 3 || genus == 4 || craftptr->mode_byte != ai.plan_order)
 		return 0;
@@ -960,7 +923,8 @@ int16_t paiorder_avoidhitorder(void) {
 			if (pai_roughproximitycheck(mi, eff) == 1) {
 				craftptr->attacker_idx = mi;
 				pai_distancebetween(active, mi);
-				craftptr->mode_byte = approach_bucket(active) ? 1 : 24;
+				craftptr->mode_byte =
+					approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[active].pitch) >> 13] ? 1 : 24;
 				paiman_initmaneuver();
 				return 0;
 			}
@@ -970,44 +934,42 @@ int16_t paiorder_avoidhitorder(void) {
 		if (mode_byte == 12 || mode_byte == 23) {
 			/* Scissors/evasive already — only jink at long range. */
 			pai_targetdistance();
-			if (trig2_polardistance >= 0x6000)
-				goto apply_jink;
-			return 0;
-		}
+			if (trig2_polardistance < 0x6000)
+				return 0;
+		} else {
 
-		plane_range = (int32_t)noticeplaneranges[(uint16_t)ai.skill_tier];
-		enemy_side = objects[active].side ^ 1;
+			plane_range = (int32_t)noticeplaneranges[(uint16_t)ai.skill_tier];
+			enemy_side = objects[active].side ^ 1;
 
-		for (fj = 0; fj < NUM_CRAFTS; ++fj) {
-			uint16_t pitch_delta;
-			uint16_t head_delta;
+			for (fj = 0; fj < NUM_CRAFTS; ++fj) {
+				uint16_t pitch_delta;
+				uint16_t head_delta;
 
-			if (!objects[fj].ship_idx)
-				continue;
-			if (enemy_side != objects[fj].side)
-				continue;
-			if (craftptr->flight_flag)
-				continue;
-			if (objects[fj].genus != GENUS_FIGHTER)
-				continue;
-			if (pai_roughproximitycheck(fj, plane_range) != 1)
-				continue;
+				if (!objects[fj].ship_idx)
+					continue;
+				if (enemy_side != objects[fj].side)
+					continue;
+				if (craftptr->flight_flag)
+					continue;
+				if (objects[fj].genus != GENUS_FIGHTER)
+					continue;
+				if (pai_roughproximitycheck(fj, plane_range) != 1)
+					continue;
 
-			pai_distancebetween(fj, active);
-			pitch_delta = (uint16_t)((int16_t)trig2_xyangle - objects[fj].pitch);
-			if (pitch_delta >= 0x8000u)
-				pitch_delta = (uint16_t)-pitch_delta;
-			head_delta = (uint16_t)((int16_t)trig2_zangle - objects[fj].heading);
-			if (head_delta >= 0x8000u)
-				head_delta = (uint16_t)-head_delta;
-			if (pitch_delta < 0x2000u && head_delta < 0x2000u) {
-				craftptr->attacker_idx = fj;
-				break;
+				pai_distancebetween(fj, active);
+				pitch_delta = (uint16_t)((int16_t)trig2_xyangle - objects[fj].pitch);
+				if (pitch_delta >= 0x8000u)
+					pitch_delta = (uint16_t)-pitch_delta;
+				head_delta = (uint16_t)((int16_t)trig2_zangle - objects[fj].heading);
+				if (head_delta >= 0x8000u)
+					head_delta = (uint16_t)-head_delta;
+				if (pitch_delta < 0x2000u && head_delta < 0x2000u) {
+					craftptr->attacker_idx = fj;
+					break;
+				}
 			}
 		}
 	}
-
-apply_jink:
 	/* Retail gates jink on (attacker_idx != 0xFF && active.genus != 2) —
 	 * utility craft (tugs) don't jink even when an attacker is locked. */
 	if (craftptr->attacker_idx == 0xFF)
@@ -1016,9 +978,24 @@ apply_jink:
 		return 0;
 
 	speed_pct = math2_percentage(objects[active].current_speed, craftptr->max_speed_cache);
-	craftptr->push_accum_x = random_push_component(speed_pct);
-	craftptr->push_accum_y = random_push_component(speed_pct);
-	craftptr->push_accum_z = random_push_component(speed_pct);
+
+	random_magnitude = (uint16_t)((uint8_t)math2_getrandom() | 0x100);
+	push = math2_fraction(random_magnitude, speed_pct);
+	if (((uint16_t)math2_getrandom() & 0x8000u) != 0)
+		push = -push;
+	craftptr->push_accum_x = (int16_t)push;
+
+	random_magnitude = (uint16_t)((uint8_t)math2_getrandom() | 0x100);
+	push = math2_fraction(random_magnitude, speed_pct);
+	if (((uint16_t)math2_getrandom() & 0x8000u) != 0)
+		push = -push;
+	craftptr->push_accum_y = (int16_t)push;
+
+	random_magnitude = (uint16_t)((uint8_t)math2_getrandom() | 0x100);
+	push = math2_fraction(random_magnitude, speed_pct);
+	if (((uint16_t)math2_getrandom() & 0x8000u) != 0)
+		push = -push;
+	craftptr->push_accum_z = (int16_t)push;
 	return 0;
 }
 
