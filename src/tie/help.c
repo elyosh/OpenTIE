@@ -1,16 +1,11 @@
-#include <stddef.h>
-#include <stdint.h>
-
+#include "tie/help.h"
 #include "tie/feinput.h"
 #include "tie/festring.h"
-#include "tie/flight_surface_tie98.h"
-#include "tie/frontend_display_tie98.h"
-#include "tie/help.h"
 #include "tie/tie.h"
-#include "tie/user.h" /* user_submodal_result */
-#include "tie_runtime/display/classic_display.h"
-#include "tie_runtime/runtime/profile.h"
-#include <landru/task.h>
+#include "tie/user.h" /* normalized input key codes */
+
+#include <stddef.h>
+#include <stdint.h>
 
 /* --- Module-owned globals (watdbg: help.c) ----------------------------- */
 
@@ -22,40 +17,49 @@
  * Accessed as an unsigned byte array by both the strip painter and the row
  * render loop.
  */
+// GLOBAL: TIE95 0xC53FC
+// GLOBAL: TIE98 0x4E3CE0
 const uint8_t commandcolor[48] = {
 	0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x44, 0x44, 0x48, 0x48, 0x48, 0x48, 0x48,
 	0x48, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x50, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48,
 	0x48, 0x44, 0x44, 0x44, 0x50, 0x50, 0x50, 0x50, 0x50, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48, 0x48,
 };
 
-/*
- * Dead data: 48 would-be scan codes (zero xrefs in the binary). Emitted for
- * parity with the Watcom build; remove if the final link strips unused
- * objects.
- */
+/* Unused DOS scan-code table retained in the TIE95 binary. */
+// GLOBAL: TIE95 0xC53CC
 const uint8_t commandkey[48] = {
 	0x2B, 0x2D, 0x5B, 0x5D, 0x08, 0x5C, 0x68, 0x92, 0x71, 0x63, 0x76, 0x5F, 0x2E, 0xBB, 0xBC, 0xBD,
 	0xBE, 0x7A, 0xAE, 0x99, 0xAF, 0xA0, 0xB2, 0x9F, 0x74, 0x75, 0x72, 0x65, 0x61, 0x2C, 0x5F, 0x5F,
 	0x77, 0x78, 0x62, 0x6D, 0x6C, 0x67, 0x64, 0x5A, 0x3F, 0x1B, 0xC2, 0xC3, 0x3B, 0xC4, 0xDD, 0x73,
 };
 
+// GLOBAL: TIE95 0xD4BD0
+// GLOBAL: TIE98 0x5FE818
 int32_t helpTop;
+// GLOBAL: TIE95 0xD4BD8
+// GLOBAL: TIE98 0x5FE814
 int32_t helpBottom;
 
 /*
  * 48-element char* tables. Filled by fediskio_loadstringdata to point into
  * the relocated stringdata_buf.
  */
+// GLOBAL: TIE95 0xD4BCC
+// GLOBAL: TIE98 0x5FE80C
 char** helpkeystrings;
+// GLOBAL: TIE95 0xD4BD4
+// GLOBAL: TIE98 0x5FE810
 char** helpscreenstrings;
 
 /* --- Local constants --------------------------------------------------- */
 
-#define HELP_ROWS_PER_COL 24
-#define HELP_TOTAL_ENTRIES 48
-#define HELP_BG_DEFAULT 0x44    /* margin colour outside the grid */
-#define HELP_TEXT_COLOUR 0x43   /* default foreground */
-#define HELP_CURSOR_COLOUR 0x46 /* background for the selected row */
+enum {
+	HELP_ROWS_PER_COL = 24,
+	HELP_TOTAL_ENTRIES = 48,
+	HELP_BG_DEFAULT = 0x44,    /* margin colour outside the grid */
+	HELP_TEXT_COLOUR = 0x43,   /* default foreground */
+	HELP_CURSOR_COLOUR = 0x46, /* background for the selected row */
+};
 
 /*
  * inputkey dispatch targets. The values below are post-FEINPUT remap:
@@ -96,131 +100,91 @@ static int help_classify_key(uint16_t key) {
 	}
 }
 
-/* --- Phase 1 helper: paint colour-banded background strips ------------- */
-
-/*
- * Emit a strip rectangle and clear it to `colour`. The strip covers rows
- * top..bottom of the column whose left/width are left/width. festring_setbound
- * expects inclusive top/bottom; clearwindow() uses the currently-installed
- * backcolor (the compiler's `mov eax, new_strip_color; call clearwindow`
- * leftover in EAX is unused by the real entry point).
- */
-static void help_paint_strip(int16_t left, int16_t top_m1, int16_t right, int16_t bottom, uint16_t colour) {
-	festring_setbound(left, top_m1, right, bottom);
+/* Paint the colour groups, including the extra spacing in SVGA modes. */
+static void help_paint_strip(int16_t left, int16_t top, int16_t right, int16_t bottom, uint16_t colour) {
+	festring_setbound(left, top, right, bottom);
 	festring_setbackcolor(colour);
 	clearwindow();
 }
 
-static void help_paint_background(void) {
-	const int row_step = fontheight + 2;
+static void help_paint_background(const HelpRoomState* t) {
 	const int16_t col_width = (int16_t)((screenXRes >> 1) - 2);
-	int16_t col_left = 1;                   /* left column x origin */
-	int16_t strip_y = (int16_t)helpTop;     /* current row's top Y  */
-	int16_t last_y = strip_y;               /* top of the current run */
-	uint16_t strip_color = commandcolor[0]; /* colour of the run    */
+	int16_t col_left = 1;
+	int16_t strip_y = (int16_t)(helpTop + t->group_gap);
+	int16_t last_y = strip_y;
+	uint16_t strip_color = commandcolor[0];
+	int i;
 
-	for (int i = 0; i < HELP_TOTAL_ENTRIES; i++) {
+	for (i = 0; i < HELP_TOTAL_ENTRIES; i++) {
 		const uint16_t this_color = commandcolor[i];
-
-		/* Flush the previous run on a colour change. */
 		if (this_color != strip_color) {
-			/* When strip_y has just been wrapped to the top of the right
-			 * column (see the end-of-iteration wrap below), the emitted
-			 * rect needs to stop one pixel above helpBottom, not at it. */
-			const int16_t top_m1 = (int16_t)(last_y - 1);
-			const int16_t bot = (strip_y == (int16_t)helpBottom) ? (int16_t)(strip_y - 1) : strip_y;
-			help_paint_strip(col_left, top_m1, col_left + col_width, bot, strip_color);
+			const int16_t top = (int16_t)(last_y - t->group_gap / 4 - 1);
+			const int16_t bottom = strip_y == helpBottom ? (int16_t)(strip_y - 1) : strip_y;
+			help_paint_strip(col_left, top, (int16_t)(col_left + col_width), bottom, strip_color);
+			if (strip_y != helpBottom) {
+				strip_y = (int16_t)(strip_y + t->group_gap);
+				last_y = strip_y;
+			}
 			strip_color = this_color;
-			last_y = strip_y;
 		}
-
-		/* Column wrap: left bottom -> right top. */
-		if (strip_y == (int16_t)helpBottom) {
-			strip_y = (int16_t)helpTop;
+		if (strip_y == helpBottom) {
+			strip_y = (int16_t)(helpTop + t->group_gap);
 			last_y = strip_y;
 			col_left = (int16_t)((screenXRes >> 1) + 1);
 		}
-
-		strip_y = (int16_t)(strip_y + row_step);
+		strip_y = (int16_t)(strip_y + t->row_step);
 	}
-
-	/* Trailing strip from the last colour change down to the bottom. */
-	help_paint_strip(col_left, (int16_t)(last_y - 1), (int16_t)(col_left + col_width),
+	help_paint_strip(col_left, (int16_t)(last_y - t->group_gap / 4 - 1), (int16_t)(col_left + col_width),
 					 (int16_t)(helpBottom - 1), strip_color);
 }
 
-/* --- Phase 2 helper: draw the 48 text rows ----------------------------- */
-
-static void help_render_rows(int16_t cursor_idx) {
+void help_render_rows(HelpRoomState* t) {
 	int16_t cur_x = 1;
-	int16_t cur_y = (int16_t)helpTop;
+	int16_t cur_y = (int16_t)(helpTop + t->group_gap);
+	uint16_t previous_color = commandcolor[0];
+	int16_t row;
 
-	/* Start with the left column's clip box. */
 	festring_setbound(0, 0, (int16_t)((screenXRes >> 1) - 1), (int16_t)(helpBottom - 1));
-
-	for (int16_t row = 0; row < HELP_TOTAL_ENTRIES; row++) {
-		const uint16_t bg = (row == cursor_idx) ? HELP_CURSOR_COLOUR : commandcolor[row];
-		festring_setbackcolor(bg);
+	for (row = 0; row < HELP_TOTAL_ENTRIES; row++) {
+		const uint16_t color = commandcolor[row];
+		festring_setbackcolor(row == t->cursor_idx ? HELP_CURSOR_COLOUR : color);
+		if (color != previous_color) {
+			previous_color = color;
+			cur_y = (int16_t)(cur_y + t->group_gap);
+		}
 		festring_setcursor(cur_x, cur_y);
-		festring_outstring((const uint8_t*)helpkeystrings[row]);
-
-		/*
-		 * Five-way newline injection around the cursor. The binary emits one
-		 * outchar('\n') for each of these predicates, and a cell can match
-		 * more than one (e.g. row == cursor AND cursor == 47 wraps). That
-		 * stacking is intentional -- it creates the visible gap that the
-		 * highlight rectangle needs against the colour-banded background.
-		 */
-		const int16_t delta = (int16_t)(row - cursor_idx);
-		if (delta > -2 && delta < 2)
+		if (t->redraw_all || row == t->cursor_idx || row == t->previous_cursor) {
+			festring_outstring((const uint8_t*)helpkeystrings[row]);
 			outchar('\n');
-		if (row == 0 && cursor_idx >= HELP_TOTAL_ENTRIES - 1)
-			outchar('\n');
-		if (row + HELP_ROWS_PER_COL == cursor_idx)
-			outchar('\n');
-		if (row - HELP_ROWS_PER_COL == cursor_idx)
-			outchar('\n');
-		if (row == HELP_TOTAL_ENTRIES - 1 && cursor_idx <= 0)
-			outchar('\n');
-
-		festring_setcursor(cur_x, cur_y);
-		festring_outstringright((const uint8_t*)helpscreenstrings[row]);
-
-		cur_y = (int16_t)(cur_y + fontheight + 2);
-		if (cur_y == (int16_t)helpBottom) {
-			/* Wrap from the left column to the right column. */
+			festring_setcursor(cur_x, cur_y);
+			festring_outstringright((const uint8_t*)helpscreenstrings[row]);
+		}
+		cur_y = (int16_t)(cur_y + t->row_step);
+		if (cur_y == helpBottom) {
 			cur_y = (int16_t)helpTop;
 			cur_x = (int16_t)((screenXRes >> 1) + 1);
 			festring_setbound((int16_t)(screenXRes >> 1), 0, (int16_t)(screenXRes - 1),
 							  (int16_t)(helpBottom - 1));
 		}
 	}
+	t->previous_cursor = t->cursor_idx;
+	t->redraw_all = 0;
 }
-
-/* --- Public entry point ------------------------------------------------ */
-
-typedef enum {
-	HELP_PHASE_RENDER = 0,
-	HELP_PHASE_POLL,
-} HelpPhase;
-
-typedef struct HelpTask {
-	int16_t cursor_idx;
-	int16_t page_delta;
-	uint16_t prev_buttons;
-	HelpPhase phase;
-} HelpTask;
 
 /* Single input-poll iteration. 1 = exit fired, 2 = cursor moved
  * (page redraw needed), 0 = no input. */
-static int help_poll_once(HelpTask* t) {
+int help_poll_once(HelpRoomState* t) {
+	int action;
+	int redraw = 0;
+	int exit_room = 0;
+	uint16_t cur_buttons;
+
 	feinput_getrawinput();
 	feinput_checkinput();
 	feinput_degitterinput();
 	inputdeltay *= 2; /* leftover scaler; value not consumed here */
 
-	const int action = help_classify_key((uint16_t)inputkey);
-	int redraw = 0;
+	action = help_classify_key((uint16_t)inputkey);
 
 	switch (action) {
 		case HA_PREVIOUS_COLUMN:
@@ -229,7 +193,7 @@ static int help_poll_once(HelpTask* t) {
 				redraw = 1;
 			} else {
 				t->page_delta = -1;
-				return 1;
+				exit_room = 1;
 			}
 			break;
 		case HA_NEXT_COLUMN:
@@ -240,7 +204,7 @@ static int help_poll_once(HelpTask* t) {
 				redraw = 1;
 			} else {
 				t->page_delta = 1;
-				return 1;
+				exit_room = 1;
 			}
 			break;
 		case HA_PREVIOUS_ITEM:
@@ -255,7 +219,8 @@ static int help_poll_once(HelpTask* t) {
 			break;
 		case HA_EXIT:
 			t->page_delta = 0;
-			return 1;
+			exit_room = 1;
+			break;
 		default:
 			break;
 	}
@@ -264,7 +229,7 @@ static int help_poll_once(HelpTask* t) {
 	 * is 0). Button bit 0 (LMB) steps right, bit 1 (RMB) steps left.
 	 * inputbuttons is masked to the low nibble -- the Thrustmaster
 	 * top-hat bits live higher up. */
-	const uint16_t cur_buttons = (uint16_t)(inputbuttons & 0x0F);
+	cur_buttons = (uint16_t)(inputbuttons & 0x0F);
 	if ((t->prev_buttons == 1 || t->prev_buttons == 2) && cur_buttons == 0) {
 		if (t->prev_buttons == 1) {
 			t->cursor_idx = (int16_t)(t->cursor_idx + 1);
@@ -277,71 +242,36 @@ static int help_poll_once(HelpTask* t) {
 	}
 	t->prev_buttons = cur_buttons;
 
-	return redraw ? 2 : 0;
+	return exit_room ? 1 : (redraw ? 2 : 0);
 }
 
-// ORIGINAL_FUNCTION: TIE95 0x2C7F0
-// ORIGINAL_FUNCTION: TIE98 0x42F390
-// (task-split recovery)
-static LandruTaskStepResult help_task_step(void* self) {
-	HelpTask* t = (HelpTask*)self;
-
-	if (t->phase == HELP_PHASE_RENDER) {
-		const bool tie98_display = TieClassicDisplay_UsesDx5();
-		if (tie98_display)
-			FlightSurface_Lock();
-		help_render_rows(t->cursor_idx);
-		if (tie98_display) {
-			FlightSurface_Unlock();
-			FrontendDisplay_BlitOffscreenToRenderSurface();
-			FrontendDisplay_PresentFrame();
-		}
-		t->phase = HELP_PHASE_POLL;
-		return LANDRU_TASK_STEP_CONTINUE;
-	}
-
-	int r = help_poll_once(t);
-	if (r == 1) {
-		user_submodal_result = (int32_t)t->page_delta;
-		return LANDRU_TASK_STEP_DONE;
-	}
-	if (r == 2)
-		t->phase = HELP_PHASE_RENDER;
-	return LANDRU_TASK_STEP_CONTINUE;
-}
-
-static const LandruTaskVtable help_task_vt = {
-	.step = help_task_step,
-};
-
-void help_Push_HelpRoom_Task(int32_t start_right_col) {
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
-	if (tie98_display)
-		FlightSurface_Lock();
-	/* 1. Layout. The 640x480 flight modes use a bigger top margin. */
-	helpTop = tie_is_high_resolution_flight() ? 44 : 18;
+void help_OpenRoom(HelpRoomState* t, int32_t start_right_col) {
 	festring_setfontsize(2);
-	helpBottom = helpTop + HELP_ROWS_PER_COL * (fontheight + 2);
-	dropflag = 0;
-
+	if (tie_is_high_resolution_flight()) {
+		helpTop = 44;
+		t->row_step = (int16_t)(fontheight + 5);
+		t->group_gap = 12;
+		dropflag = 1;
+	} else {
+		helpTop = 18;
+		t->row_step = (int16_t)(fontheight + 2);
+		t->group_gap = 0;
+		dropflag = 0;
+	}
+	helpBottom = helpTop + HELP_ROWS_PER_COL * t->row_step + 4 * t->group_gap;
 	festring_setlinewrap(0);
 	festring_setautofill(1);
 	festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 	festring_setbackcolor(HELP_BG_DEFAULT);
 	festring_settextcolor(HELP_TEXT_COLOUR);
 
-	/* 2. Paint background + clamp the text region for text rendering. */
-	help_paint_background();
+	help_paint_background(t);
 	festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)(helpBottom - 1));
 	festring_setbackcolor(HELP_BG_DEFAULT);
-	if (tie98_display)
-		FlightSurface_Unlock();
 
-	HelpTask* t = (HelpTask*)landru_task_push(&help_task_vt);
-	if (!t)
-		return;
 	t->cursor_idx = start_right_col ? HELP_ROWS_PER_COL : 0;
+	t->previous_cursor = t->cursor_idx;
+	t->redraw_all = 1;
 	t->page_delta = 0;
 	t->prev_buttons = 0;
-	t->phase = HELP_PHASE_RENDER;
 }

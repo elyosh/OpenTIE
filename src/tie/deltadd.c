@@ -12,16 +12,18 @@
  * covered destination pixel.
  */
 
-#include <stdint.h>
-#include <string.h>
-
+#include "tie/deltadd.h"
 #include "landru/actor.h"
 #include "landru/bitmap.h"
 #include "landru/canvas.h"
 #include "landru/rect.h"
-#include "tie/deltadd.h"
 
-#define SCREEN_WIDTH 320
+#include <stdint.h>
+#include <string.h>
+
+enum {
+	SCREEN_WIDTH = 320,
+};
 
 /* Delta image header: 4 WORDs defining the bounding box offsets */
 typedef struct {
@@ -32,12 +34,14 @@ typedef struct {
 } DeltaHeader;
 
 static void add_color_run(uint8_t* dst, int16_t count, uint8_t color) {
-	for (int16_t i = 0; i < count; i++)
+	int16_t i;
+	for (i = 0; i < count; i++)
 		dst[i] = dst[i] + color;
 }
 
 static void copy_transparent(uint8_t* dst, const uint8_t* src, int16_t count) {
-	for (int16_t i = 0; i < count; i++) {
+	int16_t i;
+	for (i = 0; i < count; i++) {
 		if (src[i])
 			dst[i] = src[i];
 	}
@@ -83,6 +87,7 @@ static const uint8_t* process_scanline_add_clipped(const uint8_t* src, uint8_t* 
 	/* First pass: add color to scratch buffer at the scanline's x position */
 	uint8_t* scratch_row = &scratch[scan_x];
 	uint8_t* canvas_src = &canvas_pixels[scan_y * SCREEN_WIDTH + scan_x];
+	int16_t i;
 
 	if (compressed) {
 		int16_t remaining = pixel_count;
@@ -94,14 +99,14 @@ static const uint8_t* process_scanline_add_clipped(const uint8_t* src, uint8_t* 
 			} else {
 				src += pack_len;
 			}
-			for (int16_t i = 0; i < pack_len; i++)
+			for (i = 0; i < pack_len; i++)
 				scratch_row[i] = color + canvas_src[i];
 			scratch_row += pack_len;
 			canvas_src += pack_len;
 			remaining -= pack_len;
 		}
 	} else {
-		for (int16_t i = 0; i < pixel_count; i++)
+		for (i = 0; i < pixel_count; i++)
 			scratch_row[i] = color + canvas_src[i];
 		src += pixel_count;
 	}
@@ -110,12 +115,13 @@ static const uint8_t* process_scanline_add_clipped(const uint8_t* src, uint8_t* 
 	if (scan_y >= clip_top && scan_y <= clip_bottom) {
 		int16_t x_start = scan_x;
 		int16_t width = pixel_count;
+		int16_t x_end;
 
 		if (x_start < clip_left) {
 			width -= (clip_left - x_start);
 			x_start = clip_left;
 		}
-		int16_t x_end = scan_x + pixel_count;
+		x_end = scan_x + pixel_count;
 		if (x_end > clip_right)
 			width -= (x_end - clip_right);
 
@@ -162,13 +168,17 @@ static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t
 static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t off_y, uint8_t color,
 								   int16_t clip_left, int16_t clip_top, int16_t clip_right,
 								   int16_t clip_bottom) {
+	BitmapStruct* bm;
+	uint8_t* canvas;
+	uint16_t length;
 	uint8_t scratch[SCREEN_WIDTH];
+
 	memset(scratch, 0, sizeof(scratch));
 
-	BitmapStruct* bm = xcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* canvas = (uint8_t*)xbitmap_Lock_Bitmap(bm);
+	bm = xcanvas_Get_Current_Canvas_Bitmap();
+	canvas = (uint8_t*)xbitmap_Lock_Bitmap(bm);
 
-	uint16_t length = *data++;
+	length = *data++;
 	while (length) {
 		int16_t scan_x = off_x + (int16_t)*data++;
 		int16_t scan_y = off_y + (int16_t)*data++;
@@ -193,6 +203,22 @@ static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t 
 // FUNCTION: TIE95 0x64C10
 int16_t deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 									 int16_t off_y, int16_t refresh) {
+	LandruHandle frame_handle;
+	const void* frame_data;
+	uint8_t color;
+	Rect canvas_clip;
+	int16_t clip_left;
+	int16_t clip_top;
+	int16_t clip_w;
+	int16_t clip_h;
+	const uint16_t* hdr;
+	int16_t dest_left;
+	int16_t dest_top;
+	int16_t dest_right;
+	int16_t dest_bottom;
+	const uint16_t* data;
+	int drawn;
+
 	(void)draw_rect;
 	(void)clip_rect;
 
@@ -200,30 +226,29 @@ int16_t deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_r
 		return 0;
 
 	/* Get the delta image handle for the current animation state */
-	LandruHandle frame_handle = xactor_Get_Actor_Array_Data(actor, actor->state);
-	const void* frame_data = xmemhdl_Lock_Handle(frame_handle);
+	frame_handle = xactor_Get_Actor_Array_Data(actor, actor->state);
+	frame_data = xmemhdl_Lock_Handle(frame_handle);
 	if (!frame_data)
 		return 0;
 
-	uint8_t color = (uint8_t)actor->foreColor;
+	color = (uint8_t)actor->foreColor;
 
 	/* Get canvas clip rect */
-	Rect canvas_clip;
 	xcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
-	int16_t clip_left = canvas_clip.left;
-	int16_t clip_top = canvas_clip.top;
-	int16_t clip_w = canvas_clip.right - canvas_clip.left;
-	int16_t clip_h = canvas_clip.bottom - canvas_clip.top;
+	clip_left = canvas_clip.left;
+	clip_top = canvas_clip.top;
+	clip_w = canvas_clip.right - canvas_clip.left;
+	clip_h = canvas_clip.bottom - canvas_clip.top;
 
 	/* Read delta header */
-	const uint16_t* hdr = (const uint16_t*)frame_data;
-	int16_t dest_left = off_x + (int16_t)hdr[0];
-	int16_t dest_top = off_y + (int16_t)hdr[1];
-	int16_t dest_right = off_x + (int16_t)hdr[2];
-	int16_t dest_bottom = off_y + (int16_t)hdr[3];
-	const uint16_t* data = hdr + 4;
+	hdr = (const uint16_t*)frame_data;
+	dest_left = off_x + (int16_t)hdr[0];
+	dest_top = off_y + (int16_t)hdr[1];
+	dest_right = off_x + (int16_t)hdr[2];
+	dest_bottom = off_y + (int16_t)hdr[3];
+	data = hdr + 4;
 
-	int drawn = 1;
+	drawn = 1;
 
 	/* Check if fully inside canvas clip */
 	if (clip_left <= dest_left && clip_top <= dest_top && dest_right < clip_left + clip_w &&

@@ -1,10 +1,5 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "tie/goals.h"
 #include "tie/map.h"
+#include "tie/goals.h"
 #include "tie/mission.h"
 #include "tie/player.h"
 #include "tie/shade.h"
@@ -14,11 +9,11 @@
 #include "tie/talk.h"
 #include "tie/textext.h"
 #include "tie/tie.h"
-#include "tie_runtime/snapshot/snapshot.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/snapshot/snapshot_internal.h"
+#endif
 #include "tie_runtime/storage/pilot_storage.h"
 #include "tie_runtime/storage/score_tables.h"
-#include <landru/task.h>
 
 #include "landru/actanim.h"
 #include "landru/actdelt.h"
@@ -40,6 +35,11 @@
 #include "landru/res.h"
 #include "landru/view.h"
 #include "landru/viewadd.h"
+
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* ======================================================================
  * Static data
@@ -140,7 +140,9 @@ static void Get_VR_Debrief_Line(char* string, int16_t line);
  * ====================================================================== */
 
 static void replace_italic_codes(char* str) {
-	for (int16_t i = 0; str[i]; i++) {
+	int16_t i;
+
+	for (i = 0; str[i]; i++) {
 		if (str[i] == '1')
 			str[i] = 1;
 		if (str[i] == '2')
@@ -194,9 +196,11 @@ static int16_t draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int
 	xactdelt_Draw_Delta_Actor(actor, r, clip_r, x, y, refresh);
 
 	if (map_text != -1) {
-		xactdelt_Draw_Delta_Actor(title_actor, r, clip_r, x, y, refresh);
 		Rect tr;
 		char name[48];
+
+		xactdelt_Draw_Delta_Actor(title_actor, r, clip_r, x, y, refresh);
+
 		xrect_Set_Rect(&tr, 60, 158, 260, 170);
 		textext_Copy_Text(name, map_text);
 		xfont_Enable_FontID_Shadow(0);
@@ -217,13 +221,17 @@ static int16_t draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int
  * ====================================================================== */
 
 static void Check_VR_Talk_Questions(void) {
-	for (int16_t i = 0; i < 5; i++) {
+	int16_t i;
+
+	for (i = 0; i < 5; i++) {
 		int16_t status = 0;
 		char* data = (char*)talk_brief->talk_data[5 * talk_person + i];
 		if (data) {
 			if (data[0]) {
+				int16_t j;
+
 				status = 1;
-				for (int16_t j = 0; data[j] && data[j] != '\n'; j++) {
+				for (j = 0; data[j] && data[j] != '\n'; j++) {
 					if (data[j] == 4 || data[j] == 5) {
 						int8_t param = data[j + 1];
 						status = (data[j] == 4) ? param + 1 : param + 3;
@@ -241,22 +249,27 @@ static void Check_VR_Talk_Questions(void) {
  * ====================================================================== */
 
 static void Get_VR_Talk_Question(char* string, int16_t question) {
+	int16_t qid;
+	char* data;
+	int16_t out_len;
+	int16_t i;
+
 	*string = '\0';
 	if (question < 0 || question >= num_talk_questions)
 		return;
 
-	int16_t qid = talk_win_id[question];
+	qid = talk_win_id[question];
 	if (qid == 5) {
 		textext_Copy_Text(string, txtTalkDebrief);
 		return;
 	}
 
-	char* data = (char*)talk_brief->talk_data[5 * talk_person + qid];
+	data = (char*)talk_brief->talk_data[5 * talk_person + qid];
 	if (!data)
 		return;
 
-	int16_t out_len = 0;
-	for (int16_t i = 0; data[i] && data[i] != '\n'; i++) {
+	out_len = 0;
+	for (i = 0; data[i] && data[i] != '\n'; i++) {
 		if (data[i] == 4 || data[i] == 5)
 			i++;
 		else
@@ -267,28 +280,33 @@ static void Get_VR_Talk_Question(char* string, int16_t question) {
 
 static void Get_VR_Talk_Paragraph(char* string, int16_t line) {
 	int16_t bold = 0;
+	int16_t qid;
+	char* data;
+	int16_t pos;
+	int16_t line_idx;
+
 	*string = '\0';
 
 	if (cur_talk_question < 0 || cur_talk_question >= num_talk_questions)
 		return;
 
-	int16_t qid = talk_win_id[cur_talk_question];
+	qid = talk_win_id[cur_talk_question];
 	if (qid == 5) {
 		Get_VR_Debrief_Line(string, line);
 		return;
 	}
 
-	char* data = (char*)talk_brief->talk_data[5 * talk_person + qid];
+	data = (char*)talk_brief->talk_data[5 * talk_person + qid];
 	if (!data)
 		return;
 
 	/* Skip first line (question title) */
-	int16_t pos = 0;
+	pos = 0;
 	while (data[pos] && data[pos] != '\n')
 		pos++;
 	pos++;
 
-	int16_t line_idx = 0;
+	line_idx = 0;
 	while (data[pos] && line_idx <= line) {
 		if (line_idx == line) {
 			int16_t out_len = 0;
@@ -322,26 +340,31 @@ static void Get_VR_Talk_Paragraph(char* string, int16_t line) {
 }
 
 static void Set_VR_Talk_Paragraph(void) {
+	int16_t qid;
+	char* data;
+	int16_t pos;
+	int16_t line_count;
+
 	if (cur_talk_question < 0 || cur_talk_question >= num_talk_questions)
 		return;
 
-	int16_t qid = talk_win_id[cur_talk_question];
+	qid = talk_win_id[cur_talk_question];
 	if (qid == 5) {
 		num_talk_paragraphs = Count_VR_Debrief_Pages();
 		cur_talk_paragraph = 0;
 		return;
 	}
 
-	char* data = (char*)talk_brief->talk_data[5 * talk_person + qid];
+	data = (char*)talk_brief->talk_data[5 * talk_person + qid];
 	if (!data)
 		return;
 
-	int16_t pos = 0;
+	pos = 0;
 	while (data[pos] && data[pos] != '\n')
 		pos++;
 	pos++;
 
-	int16_t line_count = 0;
+	line_count = 0;
 	while (data[pos]) {
 		while (data[pos] && data[pos] != '\n')
 			pos++;
@@ -355,6 +378,8 @@ static void Set_VR_Talk_Paragraph(void) {
 }
 
 static void Set_VR_Talk_To_Text(int16_t person) {
+	int16_t i;
+
 	num_talk_questions = 0;
 	cur_talk_question = 0;
 	num_talk_paragraphs = 0;
@@ -366,7 +391,7 @@ static void Set_VR_Talk_To_Text(int16_t person) {
 
 	Check_VR_Talk_Questions();
 
-	for (int16_t i = 0; i < 5; i++) {
+	for (i = 0; i < 5; i++) {
 		int16_t show = 0;
 		switch (talk_win_status[i]) {
 			case 1:
@@ -418,8 +443,12 @@ static int16_t Count_VR_Debrief_Goals(void) { return 1; }
 
 static int16_t Count_VR_Debrief_Kills(void) {
 	int16_t count = 0;
-	for (int16_t i = 0; i < (int16_t)NUM_SPEC; i++) {
-		for (int16_t j = 0; j < 6; j++) {
+	int16_t i;
+
+	for (i = 0; i < (int16_t)NUM_SPEC; i++) {
+		int16_t j;
+
+		for (j = 0; j < 6; j++) {
 			if (player_Is_Side_Enemy(j) && mission.kills_losses[j][i]) {
 				count++;
 				break;
@@ -433,8 +462,12 @@ static int16_t Count_VR_Debrief_Kills(void) {
 
 static int16_t Count_VR_Debrief_Losses(void) {
 	int16_t count = 0;
-	for (int16_t i = 0; i < (int16_t)NUM_SPEC; i++) {
-		for (int16_t j = 0; j < 6; j++) {
+	int16_t i;
+
+	for (i = 0; i < (int16_t)NUM_SPEC; i++) {
+		int16_t j;
+
+		for (j = 0; j < 6; j++) {
 			if (!player_Is_Side_Enemy(j) && mission.kills_losses[j][i]) {
 				count++;
 				break;
@@ -446,7 +479,9 @@ static int16_t Count_VR_Debrief_Losses(void) {
 
 static int16_t Count_VR_Debrief_Captures(void) {
 	int16_t count = 0;
-	for (int16_t i = 0; i < (int16_t)NUM_SPEC; i++) {
+	int16_t i;
+
+	for (i = 0; i < (int16_t)NUM_SPEC; i++) {
 		if (mission.captures_by_type[i])
 			count++;
 	}
@@ -569,7 +604,9 @@ static void Get_VR_Debrief_Header(char* string, int16_t line) {
 
 static void Find_VR_Debrief_Header(char* string, int16_t line) {
 	int16_t skip = line;
-	for (int16_t i = 0; i < max_paragraph_size; i++) {
+	int16_t i;
+
+	for (i = 0; i < max_paragraph_size; i++) {
 		if (i >= 3)
 			Get_VR_Debrief_Header(string, i);
 		else
@@ -652,7 +689,9 @@ static void Get_VR_Debrief_Goals(char* string, int16_t line) {
 
 static void Find_VR_Debrief_Goals(char* string, int16_t line) {
 	int16_t skip = line;
-	for (int16_t i = 0; i < max_paragraph_size; i++) {
+	int16_t i;
+
+	for (i = 0; i < max_paragraph_size; i++) {
 		if (i >= 3)
 			Get_VR_Debrief_Goals(string, i);
 		else
@@ -671,8 +710,12 @@ static void Find_VR_Debrief_Goals(char* string, int16_t line) {
 static void Get_VR_Debrief_Kill_Title(char* string) {
 	uint16_t total = 0, player_total = 0;
 	char fmt[40], buf[80];
-	for (uint16_t i = 0; i < NUM_SPEC; i++) {
-		for (uint16_t j = 0; j < 6; j++) {
+	uint16_t i;
+
+	for (i = 0; i < NUM_SPEC; i++) {
+		uint16_t j;
+
+		for (j = 0; j < 6; j++) {
 			if (player_Is_Side_Enemy(j))
 				total += mission.kills_losses[j][i];
 		}
@@ -691,7 +734,9 @@ static void Get_VR_Debrief_Kills(char* string, int16_t craft_idx) {
 	if (craft_idx >= (int16_t)NUM_SPEC) {
 		count = pstate.player_total_kills;
 	} else {
-		for (int16_t j = 0; j < 6; j++) {
+		int16_t j;
+
+		for (j = 0; j < 6; j++) {
 			if (player_Is_Side_Enemy(j))
 				count += mission.kills_losses[j][craft_idx];
 		}
@@ -718,7 +763,9 @@ static void Find_VR_Debrief_Kills(char* string, int16_t page, int16_t line) {
 		center_line = 1;
 	} else {
 		int16_t skip = line - 2 * (page + 1);
-		for (int16_t i = 0; i <= (int16_t)NUM_SPEC; i++) {
+		int16_t i;
+
+		for (i = 0; i <= (int16_t)NUM_SPEC; i++) {
 			Get_VR_Debrief_Kills(string, i);
 			if (*string) {
 				if (!skip)
@@ -735,8 +782,12 @@ static void Find_VR_Debrief_Kills(char* string, int16_t page, int16_t line) {
 static void Get_VR_Debrief_Loss_Title(char* string) {
 	uint16_t total = 0;
 	char fmt[40], buf[80];
-	for (uint16_t i = 0; i < NUM_SPEC; i++) {
-		for (uint16_t j = 0; j < 6; j++) {
+	uint16_t i;
+
+	for (i = 0; i < NUM_SPEC; i++) {
+		uint16_t j;
+
+		for (j = 0; j < 6; j++) {
 			if (!player_Is_Side_Enemy(j))
 				total += mission.kills_losses[j][i];
 		}
@@ -752,7 +803,9 @@ static void Get_VR_Debrief_Losses(char* string, int16_t craft_idx) {
 	uint16_t count = 0;
 	char name[40], buf[80];
 	if (craft_idx < (int16_t)NUM_SPEC) {
-		for (int16_t j = 0; j < 6; j++) {
+		int16_t j;
+
+		for (j = 0; j < 6; j++) {
 			if (!player_Is_Side_Enemy(j))
 				count += mission.kills_losses[j][craft_idx];
 		}
@@ -773,7 +826,9 @@ static void Find_VR_Debrief_Losses(char* string, int16_t page, int16_t line) {
 		center_line = 1;
 	} else {
 		int16_t skip = line - 2 * (page + 1);
-		for (int16_t i = 0; i < (int16_t)NUM_SPEC; i++) {
+		int16_t i;
+
+		for (i = 0; i < (int16_t)NUM_SPEC; i++) {
 			Get_VR_Debrief_Losses(string, i);
 			if (*string) {
 				if (!skip)
@@ -790,7 +845,9 @@ static void Find_VR_Debrief_Losses(char* string, int16_t page, int16_t line) {
 static void Get_VR_Debrief_Capture_Title(char* string) {
 	uint16_t total = 0;
 	char fmt[40], buf[80];
-	for (uint16_t i = 0; i < NUM_SPEC; i++)
+	uint16_t i;
+
+	for (i = 0; i < NUM_SPEC; i++)
 		total += mission.captures_by_type[i];
 	textext_Copy_Text(fmt, txtTalkCaptured);
 	replace_italic_codes(fmt);
@@ -818,7 +875,9 @@ static void Find_VR_Debrief_Captures(char* string, int16_t page, int16_t line) {
 		center_line = 1;
 	} else {
 		int16_t skip = line - 2 * (page + 1);
-		for (int16_t i = 0; i < (int16_t)NUM_SPEC; i++) {
+		int16_t i;
+
+		for (i = 0; i < (int16_t)NUM_SPEC; i++) {
 			Get_VR_Debrief_Captures(string, i);
 			if (*string) {
 				if (!skip)
@@ -835,10 +894,12 @@ static void Find_VR_Debrief_Captures(char* string, int16_t page, int16_t line) {
 static void Get_VR_Debrief_Line(char* string, int16_t line) {
 	int16_t abs_line = line;
 	int16_t section_page = line / max_paragraph_size;
+	int16_t s;
+
 	*string = '\0';
 	center_line = 0;
 
-	for (int16_t s = 0; s < 5 && section_page >= 0; s++) {
+	for (s = 0; s < 5 && section_page >= 0; s++) {
 		int16_t pages;
 		switch (s) {
 			case 0:
@@ -877,14 +938,19 @@ static void Get_VR_Debrief_Line(char* string, int16_t line) {
  * ====================================================================== */
 
 static void Update_Debrief_Train_Scores(void) {
+	int16_t change, index;
+	char pilot_name[TIE_PILOT_NAME_CAPACITY];
+	int16_t i;
+
 	if (!TieScoreTables_LoadTraining("train.hgh", debrief_train_scores))
 		memset(debrief_train_scores, 0, sizeof(debrief_train_scores));
 
-	int16_t change = 0, index = 0;
-	char pilot_name[TIE_PILOT_NAME_CAPACITY];
+	change = 0;
+	index = 0;
+
 	shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
 
-	for (int16_t i = 0; i < TRAIN_SCORE_ENTRY_COUNT && !change; i++) {
+	for (i = 0; i < TRAIN_SCORE_ENTRY_COUNT && !change; i++) {
 		if (debrief_train_scores[i].score < mission.mission_score) {
 			change = 1;
 			index = i;
@@ -892,7 +958,9 @@ static void Update_Debrief_Train_Scores(void) {
 	}
 
 	if (change) {
-		for (int16_t i = TRAIN_SCORE_ENTRY_COUNT - 1; i > index; i--)
+		int16_t i;
+
+		for (i = TRAIN_SCORE_ENTRY_COUNT - 1; i > index; i--)
 			debrief_train_scores[i] = debrief_train_scores[i - 1];
 		snprintf(debrief_train_scores[index].name, sizeof(debrief_train_scores[index].name), "%s",
 				 pilot_name);
@@ -903,9 +971,16 @@ static void Update_Debrief_Train_Scores(void) {
 }
 
 static void Update_Debrief_Combat_Scores(void) {
+	char mission_name[16], pilot_name[TIE_PILOT_NAME_CAPACITY];
 	uint8_t ship_idx = shipext_Get_Combat_Ship();
 	char file_name[16];
 	int16_t missions;
+
+	GameScoreHead* scores;
+	int16_t num_scores;
+	int16_t kills;
+	int16_t i;
+	int16_t index;
 
 	if (ship_idx < 12) {
 		strcpy(file_name, "shipxx.hgh");
@@ -919,23 +994,22 @@ static void Update_Debrief_Combat_Scores(void) {
 		missions = 20;
 	}
 
-	GameScoreHead* scores = (GameScoreHead*)calloc(missions, sizeof(GameScoreHead));
+	scores = (GameScoreHead*)calloc(missions, sizeof(GameScoreHead));
 	if (!scores)
 		return;
-	int16_t num_scores = 0;
+	num_scores = 0;
 	TieScoreTables_LoadGame(file_name, scores, missions, &num_scores);
 
 	/* Count player kills */
-	int16_t kills = 0;
-	for (int16_t i = 0; i < (int16_t)NUM_SPEC; i++)
+	kills = 0;
+	for (i = 0; i < (int16_t)NUM_SPEC; i++)
 		kills += pstate.player_kills_per_species[i];
 
-	char mission_name[16], pilot_name[TIE_PILOT_NAME_CAPACITY];
 	strcpy(mission_name, shipext_Get_Mission_Name());
 	shipext_Get_Pilot_Name(pilot_name, sizeof(pilot_name));
 
 	/* Find or create mission slot */
-	int16_t index = 0;
+	index = 0;
 	while (index < missions && scores[index].name[0] && strcmp(scores[index].name, mission_name))
 		index++;
 
@@ -946,7 +1020,9 @@ static void Update_Debrief_Combat_Scores(void) {
 
 	if (index < missions) {
 		int16_t change = 0, score_index = 0;
-		for (int16_t i = 0; i < GAME_SCORE_ENTRY_COUNT && !change; i++) {
+		int16_t i;
+
+		for (i = 0; i < GAME_SCORE_ENTRY_COUNT && !change; i++) {
 			if (scores[index].scores[i].score < mission.mission_score) {
 				change = 1;
 				score_index = i;
@@ -954,7 +1030,9 @@ static void Update_Debrief_Combat_Scores(void) {
 		}
 
 		if (change) {
-			for (int16_t i = GAME_SCORE_ENTRY_COUNT - 1; i > score_index; i--)
+			int16_t i;
+
+			for (i = GAME_SCORE_ENTRY_COUNT - 1; i > score_index; i--)
 				scores[index].scores[i] = scores[index].scores[i - 1];
 			snprintf(scores[index].scores[score_index].name, sizeof(scores[index].scores[score_index].name),
 					 "%s", pilot_name);
@@ -981,17 +1059,20 @@ static void Update_Debrief_Scores(void) {
 
 static int16_t iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
 						   int16_t x, int16_t y) {
+	uint8_t button;
+	PushButton* btn;
+
 	(void)clip_r;
 	if (key)
 		return 0;
 
-	uint8_t button = 0;
+	button = 0;
 	if (left)
 		button = left;
 	if (right)
 		button = right;
 
-	PushButton* btn = (PushButton*)input;
+	btn = (PushButton*)input;
 	if (button < 2) {
 		if (button == 1)
 			btn->pressed = 1;
@@ -1242,14 +1323,19 @@ static void iuser_Map(Input* input, int32_t time) {
 }
 
 static void idraw_Map(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+	PushButton* btn;
+	int16_t down;
+	int16_t x;
+	int16_t y;
+	int16_t id, down_id;
+
 	if (!refresh)
 		return;
 
-	PushButton* btn = (PushButton*)input;
-	int16_t down = 0;
-	int16_t x = cmbticons->x;
-	int16_t y = cmbticons->y;
-	int16_t id, down_id;
+	btn = (PushButton*)input;
+	down = 0;
+	x = cmbticons->x;
+	y = cmbticons->y;
 
 	if (shellext_Get_Cur_Scene() == SCENE_BRIEF_MAP) {
 		y += input->frame.top - 175;
@@ -1320,14 +1406,17 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 
 	if (shellext_Get_Cur_Scene() == SCENE_TRAIN_MAP) {
 		/* Training stats display */
+		int16_t saved_bold;
+		uint8_t train_ship;
+
 		xfont_Enable_FontID_Shadow(0);
-		int16_t saved_bold = xfont_Get_FontID_Bold_Color(0);
+		saved_bold = xfont_Get_FontID_Bold_Color(0);
 		xfont_Set_FontID_Bold_Color(0, 231);
 
 		tr.top += 40;
 		tr.bottom = tr.top + 10;
 
-		uint8_t train_ship = shipext_Get_Train_Ship();
+		train_ship = shipext_Get_Train_Ship();
 		shipext_Get_Ship_Name(buf, train_ship, 0, 0);
 		textext_Copy_Text(fmt, txtMapTrainLevel);
 		snprintf(str1, sizeof(str1), fmt, mission.train_level);
@@ -1382,6 +1471,11 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		xfont_Disable_FontID_Shadow(0);
 	} else {
 		/* Combat/briefing talk text display */
+		char page_str[16], of_str[16];
+		int16_t first_line;
+		int16_t saved_bold;
+		int16_t i;
+
 		xfont_Enable_FontID_Shadow(0);
 		tr.top += 2;
 		tr.bottom = tr.top + 10;
@@ -1410,7 +1504,7 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		xrect_Offset_Rect(&tr, 0, 10);
 
 		/* Paragraph text */
-		int16_t first_line = max_paragraph_size * cur_talk_paragraph;
+		first_line = max_paragraph_size * cur_talk_paragraph;
 		tr.top += 2;
 		xrect_Inset_Rect(&tr, 46, 0);
 		tr.bottom = tr.top + 78;
@@ -1418,10 +1512,10 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		tr.top += 4;
 		tr.bottom = tr.top + 10;
 
-		int16_t saved_bold = xfont_Get_FontID_Bold_Color(0);
+		saved_bold = xfont_Get_FontID_Bold_Color(0);
 		xfont_Set_FontID_Bold_Color(0, 231);
 
-		for (int16_t i = first_line; i < first_line + max_paragraph_size; i++) {
+		for (i = first_line; i < first_line + max_paragraph_size; i++) {
 			center_line = 0;
 			Get_VR_Talk_Paragraph(buf, i);
 			if (center_line)
@@ -1434,7 +1528,6 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		xfont_Set_FontID_Bold_Color(0, saved_bold);
 
 		/* Page indicator */
-		char page_str[16], of_str[16];
 		strcpy(page_str, textext_Get_Text(txtMapPage));
 		strcpy(of_str, textext_Get_Text(txtMapOf));
 		snprintf(buf, sizeof(buf), "%s %d %s %d", page_str, cur_talk_paragraph + 1, of_str,
@@ -1452,275 +1545,252 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
  * map_Map — main entry point
  * ====================================================================== */
 
-typedef enum {
-	MAP_PHASE_BEGIN = 0,
-	MAP_PHASE_CLEANUP = 1,
-} MapPhase;
+void map_OpenScene(SceneHeadStruct* scene_head) {
+	ResFile *file, *pfile;
+	Palette* the_palette;
+	Input *parent, *the_input;
+	Actor* the_actor;
+	Rect r;
+	int16_t scene, index, i;
 
-typedef struct MapTask {
-	SceneHeadStruct* scene_head;
-	MapPhase phase;
-} MapTask;
+	scene = shellext_Get_Cur_Scene();
+	map_uses_battle_voice = 0;
+	map_is_post_mission = 0;
+	map_text = -1;
+	map_text_count = 0;
 
-static LandruTaskStepResult map_task_step(void* self) {
-	MapTask* mt = (MapTask*)self;
-	SceneHeadStruct* scene_head = mt->scene_head;
-
-	if (mt->phase != MAP_PHASE_BEGIN)
-		goto cleanup;
-
-	{
-		ResFile *file, *pfile;
-		Palette* the_palette;
-		Input *parent, *the_input;
-		Actor* the_actor;
-		Rect r;
-		int16_t scene, index, i;
-
-		scene = shellext_Get_Cur_Scene();
-		map_uses_battle_voice = 0;
-		map_is_post_mission = 0;
-		map_text = -1;
-		map_text_count = 0;
-
-		/* Scene-specific init */
-		if (scene == SCENE_TRAIN_MAP) {
-			train_pilot_medal_status =
-				(train_pilot_medal_status < 4 && pilot_record.train_max_level[shipext_Get_Train_Ship()] >= 4);
-			talk_voice_mood = 'd';
-			map_is_post_mission = 1;
-			xio_Set_Mouse_Position(276, 180);
-		} else if (scene == SCENE_COMBAT_MAP_A) {
-			if (!shipext_Is_Combat_Ship_Tour()) {
-				combat_pilot_medal_init = 0;
-				for (i = 0; i < 8; i++) {
-					if (pilot_record.combat_complete[shipext_Get_Combat_Ship()][i])
-						combat_pilot_medal_init++;
-				}
+	/* Scene-specific init */
+	if (scene == SCENE_TRAIN_MAP) {
+		train_pilot_medal_status =
+			(train_pilot_medal_status < 4 && pilot_record.train_max_level[shipext_Get_Train_Ship()] >= 4);
+		talk_voice_mood = 'd';
+		map_is_post_mission = 1;
+		xio_Set_Mouse_Position(276, 180);
+	} else if (scene == SCENE_COMBAT_MAP_A) {
+		if (!shipext_Is_Combat_Ship_Tour()) {
+			combat_pilot_medal_init = 0;
+			for (i = 0; i < 8; i++) {
+				if (pilot_record.combat_complete[shipext_Get_Combat_Ship()][i])
+					combat_pilot_medal_init++;
 			}
-			talk_voice_mood = 'b';
-			xio_Set_Mouse_Position(240, 180);
-		} else if (scene == SCENE_COMBAT_MAP_B) {
-			if (!shipext_Is_Combat_Ship_Tour()) {
-				index = 0;
-				for (i = 0; i < 8; i++) {
-					if (pilot_record.combat_complete[shipext_Get_Combat_Ship()][i])
-						index++;
-				}
-				if (index <= combat_pilot_medal_init)
-					combat_pilot_medal_status = 0;
-				else if (index >= 2 && index <= 4)
-					combat_pilot_medal_status = index - 1;
-				else
-					combat_pilot_medal_status = 0;
-				combat_pilot_medal_init = index;
-			} else {
+		}
+		talk_voice_mood = 'b';
+		xio_Set_Mouse_Position(240, 180);
+	} else if (scene == SCENE_COMBAT_MAP_B) {
+		if (!shipext_Is_Combat_Ship_Tour()) {
+			index = 0;
+			for (i = 0; i < 8; i++) {
+				if (pilot_record.combat_complete[shipext_Get_Combat_Ship()][i])
+					index++;
+			}
+			if (index <= combat_pilot_medal_init)
 				combat_pilot_medal_status = 0;
-			}
-			map_is_post_mission = 1;
-			if (shipext_Is_Combat_Mission_Success()) {
-				talk_voice_mood = 'd';
-				xio_Set_Mouse_Position(112, 180);
-			} else {
-				talk_voice_mood = 'h';
-				xio_Set_Mouse_Position(250, 180);
-			}
-		} else if (scene == SCENE_BRIEF_MAP) {
-			xio_Set_Mouse_Position(240, 180);
-			last_voiced_paragraph = 0;
-			talk_voice_question = 0;
-			talk_voice_mood = 0;
-			talk_voice_officer = 'i';
-			map_uses_battle_voice = 1;
-			/* Tag the snapshot with (lfd, film) so the cutscene compositor
-			 * can resolve a remaster bundle for this screen. The bundle key
-			 * MAP/brief points at output/MAP/films/brief/manifest.yaml,
-			 * which lists the chrome actors (brfmap1/2, brfpnl, pnlhldr,
-			 * brfbutns) and chains to PLAYER + EMPIRE for icons + stars.
-			 * Auto-cleared at the next scene transition by
-			 * shell_run_scene_dispatch. */
-			TieSnapshotBuilder_SetActiveFilm("MAP", "brief");
-		}
-
-		Update_Debrief_Scores();
-
-		/* Load resources */
-		file = shellext_Open_Empire_Resource(map_str[MAP_LFD]);
-		pfile = shellext_Open_Empire_Resource(map_str[MAP_PLAYER_LFD]);
-		xrect_Set_Rect(&r, 0, 0, 320, 200);
-
-		if (scene == SCENE_BRIEF_MAP) {
-			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG], &r, 0, 0, 50);
-			/* Classic FB optimization: brfmap1 paints once at scene start
-			 * and the diff bitmap restores its pixels on dirty-rect refresh,
-			 * so it doesn't need to re-emit. The HD cutscene RT has no
-			 * diff bitmap — leaving brfmap1 Non_Refreshable means moving
-			 * actors (brfpanel slide) leave trails on the persistent RT
-			 * because nothing repaints the underlying background. Re-
-			 * enabling refresh costs one extra delta blit per classic-FB
-			 * tick — negligible — and lets HD render correctly. */
-			/* xactor_Non_Refreshable_Actor(the_actor); */
-			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG2], &r, 0, 0, 50);
-			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_PANEL], &r, 0, 0, 20);
-			xactor_Set_Actor_User_Function(the_actor, user_Map_Panel);
-			the_actor->id = 0;
-			the_actor = xactanim_Res_Anim_Actor(map_str[MAP_PANEL_HANDLE], &r, 0, 0, 20);
-			xactor_Set_Actor_User_Function(the_actor, user_Map_Panel);
-			the_actor->id = 1;
-			cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BRIEF_BUTTONS], &r, 0, 12, 0);
-		} else if (scene == SCENE_TRAIN_MAP) {
-			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_OVERLAY], &r, 0, 0, 0);
-			xactor_Set_Actor_Draw_Function(the_actor, draw_Map_Text);
-			the_actor->id = 1;
-			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_TEXT], &r, 0, 0, 0);
-			xactor_Non_Refreshable_Actor(the_actor);
-			cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BUTTON_ICONS], &r, 0, 0, 0);
-			title_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_TITLE], &r, 0, 0, 0);
-			xactor_Set_Actor_Time(title_actor, 0, 0);
+			else if (index >= 2 && index <= 4)
+				combat_pilot_medal_status = index - 1;
+			else
+				combat_pilot_medal_status = 0;
+			combat_pilot_medal_init = index;
 		} else {
-			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_TEXT], &r, 0, 0, 0);
-			xactor_Set_Actor_Draw_Function(the_actor, draw_Map_Text);
-			the_actor->id = 1;
-			the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_BG], &r, 0, 0, 0);
-			xactor_Non_Refreshable_Actor(the_actor);
-			cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BUTTON_ICONS], &r, 0, 0, 0);
-			title_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_TITLE], &r, 0, 0, 0);
-			xactor_Set_Actor_Time(title_actor, 0, 0);
+			combat_pilot_medal_status = 0;
 		}
-
-		xactor_Set_Actor_Time(cmbticons, -1, -1);
-		parent = xinput_Alloc_Input(NULL, &r, 0, 0);
-		index = (scene == SCENE_BRIEF_MAP) ? 6 : 0;
-		max_paragraph_size = 10;
-
-		/* Create buttons (not for training scene) */
-		if (scene != SCENE_TRAIN_MAP) {
-			/* Stop */
-			the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index], 0, iuser_Map, NULL, 0);
-			xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-			xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
-			xinpattr_Refreshable_Input(the_input);
-			the_input->mouseUsage = allInput;
-			stop_input = the_input;
-
-			/* Play */
-			the_input =
-				(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 1], 0, iuser_Map, NULL, 1);
-			xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-			xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
-			xinpattr_Refreshable_Input(the_input);
-			the_input->mouseUsage = allInput;
-			play_input = the_input;
-
-			/* Skip */
-			the_input =
-				(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 2], 0, iuser_Map, NULL, 2);
-			xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-			xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
-			xinpattr_Refreshable_Input(the_input);
-			the_input->mouseUsage = allInput;
+		map_is_post_mission = 1;
+		if (shipext_Is_Combat_Mission_Success()) {
+			talk_voice_mood = 'd';
+			xio_Set_Mouse_Position(112, 180);
+		} else {
+			talk_voice_mood = 'h';
+			xio_Set_Mouse_Position(250, 180);
 		}
+	} else if (scene == SCENE_BRIEF_MAP) {
+		xio_Set_Mouse_Position(240, 180);
+		last_voiced_paragraph = 0;
+		talk_voice_question = 0;
+		talk_voice_mood = 0;
+		talk_voice_officer = 'i';
+		map_uses_battle_voice = 1;
+		/* Tag the snapshot with (lfd, film) so the cutscene compositor
+		 * can resolve a remaster bundle for this screen. The bundle key
+		 * MAP/brief points at output/MAP/films/brief/manifest.yaml,
+		 * which lists the chrome actors (brfmap1/2, brfpnl, pnlhldr,
+		 * brfbutns) and chains to PLAYER + EMPIRE for icons + stars.
+		 * Auto-cleared at the next scene transition by
+		 * shell_run_scene_dispatch. */
+#ifdef TIE_MODERN
+		TieSnapshotBuilder_SetActiveFilm("MAP", "brief");
+#endif
+	}
 
-		/* Exit (always present) */
-		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 3], 0, iuser_Map, NULL, 5);
+	Update_Debrief_Scores();
+
+	/* Load resources */
+	file = shellext_Open_Empire_Resource(map_str[MAP_LFD]);
+	pfile = shellext_Open_Empire_Resource(map_str[MAP_PLAYER_LFD]);
+	xrect_Set_Rect(&r, 0, 0, 320, 200);
+
+	if (scene == SCENE_BRIEF_MAP) {
+		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG], &r, 0, 0, 50);
+		/* Classic FB optimization: brfmap1 paints once at scene start
+		 * and the diff bitmap restores its pixels on dirty-rect refresh,
+		 * so it doesn't need to re-emit. The HD cutscene RT has no
+		 * diff bitmap — leaving brfmap1 Non_Refreshable means moving
+		 * actors (brfpanel slide) leave trails on the persistent RT
+		 * because nothing repaints the underlying background. Re-
+		 * enabling refresh costs one extra delta blit per classic-FB
+		 * tick — negligible — and lets HD render correctly. */
+		/* xactor_Non_Refreshable_Actor(the_actor); */
+		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG2], &r, 0, 0, 50);
+		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_PANEL], &r, 0, 0, 20);
+		xactor_Set_Actor_User_Function(the_actor, user_Map_Panel);
+		the_actor->id = 0;
+		the_actor = xactanim_Res_Anim_Actor(map_str[MAP_PANEL_HANDLE], &r, 0, 0, 20);
+		xactor_Set_Actor_User_Function(the_actor, user_Map_Panel);
+		the_actor->id = 1;
+		cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BRIEF_BUTTONS], &r, 0, 12, 0);
+	} else if (scene == SCENE_TRAIN_MAP) {
+		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_OVERLAY], &r, 0, 0, 0);
+		xactor_Set_Actor_Draw_Function(the_actor, draw_Map_Text);
+		the_actor->id = 1;
+		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_TEXT], &r, 0, 0, 0);
+		xactor_Non_Refreshable_Actor(the_actor);
+		cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BUTTON_ICONS], &r, 0, 0, 0);
+		title_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_TITLE], &r, 0, 0, 0);
+		xactor_Set_Actor_Time(title_actor, 0, 0);
+	} else {
+		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_TEXT], &r, 0, 0, 0);
+		xactor_Set_Actor_Draw_Function(the_actor, draw_Map_Text);
+		the_actor->id = 1;
+		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_BG], &r, 0, 0, 0);
+		xactor_Non_Refreshable_Actor(the_actor);
+		cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BUTTON_ICONS], &r, 0, 0, 0);
+		title_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_TITLE], &r, 0, 0, 0);
+		xactor_Set_Actor_Time(title_actor, 0, 0);
+	}
+
+	xactor_Set_Actor_Time(cmbticons, -1, -1);
+	parent = xinput_Alloc_Input(NULL, &r, 0, 0);
+	index = (scene == SCENE_BRIEF_MAP) ? 6 : 0;
+	max_paragraph_size = 10;
+
+	/* Create buttons (not for training scene) */
+	if (scene != SCENE_TRAIN_MAP) {
+		/* Stop */
+		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index], 0, iuser_Map, NULL, 0);
 		xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
 		xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
 		xinpattr_Refreshable_Input(the_input);
 		the_input->mouseUsage = allInput;
+		stop_input = the_input;
 
-		/* Combat: Enter Mission + ViewOfficer/ViewPriest buttons */
-		if (scene == SCENE_COMBAT_MAP_A || scene == SCENE_COMBAT_MAP_B) {
-			if (scene == SCENE_COMBAT_MAP_A || !shipext_Get_Mission_Officer()) {
-				the_input =
-					(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 4], 0, iuser_Map, NULL, 3);
-				xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-				xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
-				xinpattr_Refreshable_Input(the_input);
-				the_input->mouseUsage = allInput;
-			}
+		/* Play */
+		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 1], 0, iuser_Map, NULL, 1);
+		xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
+		xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+		xinpattr_Refreshable_Input(the_input);
+		the_input->mouseUsage = allInput;
+		play_input = the_input;
+
+		/* Skip */
+		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 2], 0, iuser_Map, NULL, 2);
+		xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
+		xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+		xinpattr_Refreshable_Input(the_input);
+		the_input->mouseUsage = allInput;
+	}
+
+	/* Exit (always present) */
+	the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 3], 0, iuser_Map, NULL, 5);
+	xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
+	xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+	xinpattr_Refreshable_Input(the_input);
+	the_input->mouseUsage = allInput;
+
+	/* Combat: Enter Mission + ViewOfficer/ViewPriest buttons */
+	if (scene == SCENE_COMBAT_MAP_A || scene == SCENE_COMBAT_MAP_B) {
+		if (scene == SCENE_COMBAT_MAP_A || !shipext_Get_Mission_Officer()) {
 			the_input =
-				(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 5], 0, iuser_Map, NULL, 4);
+				(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 4], 0, iuser_Map, NULL, 3);
 			xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
 			xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
 			xinpattr_Refreshable_Input(the_input);
 			the_input->mouseUsage = allInput;
 		}
-
-		/* Map + talk display areas */
-		if (scene == SCENE_BRIEF_MAP)
-			xrect_Set_Rect(&r, 13, 18, 307, 167);
-		else
-			xrect_Set_Rect(&r, 13, 6, 307, 155);
-
-		map_input = xinput_Alloc_Input(parent, &r, 0, 0);
-		talk_input = xinput_Alloc_Input(parent, &r, 0, 0);
-		xinpattr_Set_Input_Draw_Function(talk_input, idraw_Talk);
-
-		/* Palette setup */
-		if (scene == SCENE_COMBAT_MAP_A) {
-			xpal_Set_Dest_Pal_Color(1, 255, 6, 6, 6);
-			xpal_Dest_To_Screen_Palette(1, 1, 255);
-		}
-		xpal_Set_Dest_Palette(scene_head->def_palette);
-		the_palette = xpal_Res_Palette("range");
-		xpal_Set_Dest_Palette(the_palette);
-		the_palette = xpal_Res_Palette((scene == SCENE_COMBAT_MAP_A) ? map_str[MAP_COMBAT_PAL]
-																	 : map_str[MAP_BRIEF_PAL]);
-		xpal_Set_Dest_Palette(the_palette);
-
-		if (scene == SCENE_COMBAT_MAP_A)
-			xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_PAL_TO_PAL, 1, 0, 0);
-		else
-			xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
-
-		xres_Close_Resource(pfile);
-		xres_Close_Resource(file);
-
-		/* Init talk mode */
-		if (scene == SCENE_COMBAT_MAP_B || scene == SCENE_TRAIN_MAP) {
-			xinpattr_Hide_Input(map_input);
-			if (shipext_Get_Mission_Officer() == 2) {
-				next_mode = 2;
-				talk_voice_officer = 'p';
-				talk_voice_question = 1;
-				talk_mode = 2;
-			} else {
-				talk_mode = 1;
-				talk_voice_question = 1;
-				talk_voice_officer = 'o';
-				if (shipext_Get_Mission_Officer() == 1)
-					next_mode = 1;
-				else
-					next_mode = 2;
-			}
-		} else {
-			xinpattr_Hide_Input(talk_input);
-			talk_mode = 0;
-			last_voiced_paragraph = 0;
-			talk_voice_officer = 'i';
-			next_mode = (shipext_Get_Mission_Officer() == 2) ? 2 : 1;
-		}
-
-		player_Init_Brief_Display(map_input, NULL);
-		talk_brief = player_Fetch_Brief();
-		talk_fgroup = player_Fetch_FGroup();
-		Set_VR_Talk_To_Text(talk_mode == 2 ? 1 : 0);
-
-		/* Push the modal view task */
-		xview_Set_View_Update_Function(end_View);
-		xviewadd_Clear_View();
-		xview_Disable_All_View_Erase();
-		Set_Voice_Species_Mission();
-		talk_Alloc_Speech_Sound();
-		talk_paragraph_timer = 0x7FFFFFFF;
-		xviewadd_Push_Handle_View_Task();
-
-		mt->phase = MAP_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 5], 0, iuser_Map, NULL, 4);
+		xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
+		xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+		xinpattr_Refreshable_Input(the_input);
+		the_input->mouseUsage = allInput;
 	}
 
-cleanup:
-	/* CLEANUP — view popped */
+	/* Map + talk display areas */
+	if (scene == SCENE_BRIEF_MAP)
+		xrect_Set_Rect(&r, 13, 18, 307, 167);
+	else
+		xrect_Set_Rect(&r, 13, 6, 307, 155);
+
+	map_input = xinput_Alloc_Input(parent, &r, 0, 0);
+	talk_input = xinput_Alloc_Input(parent, &r, 0, 0);
+	xinpattr_Set_Input_Draw_Function(talk_input, idraw_Talk);
+
+	/* Palette setup */
+	if (scene == SCENE_COMBAT_MAP_A) {
+		xpal_Set_Dest_Pal_Color(1, 255, 6, 6, 6);
+		xpal_Dest_To_Screen_Palette(1, 1, 255);
+	}
+	xpal_Set_Dest_Palette(scene_head->def_palette);
+	the_palette = xpal_Res_Palette("range");
+	xpal_Set_Dest_Palette(the_palette);
+	the_palette =
+		xpal_Res_Palette((scene == SCENE_COMBAT_MAP_A) ? map_str[MAP_COMBAT_PAL] : map_str[MAP_BRIEF_PAL]);
+	xpal_Set_Dest_Palette(the_palette);
+
+	if (scene == SCENE_COMBAT_MAP_A)
+		xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_PAL_TO_PAL, 1, 0, 0);
+	else
+		xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
+
+	xres_Close_Resource(pfile);
+	xres_Close_Resource(file);
+
+	/* Init talk mode */
+	if (scene == SCENE_COMBAT_MAP_B || scene == SCENE_TRAIN_MAP) {
+		xinpattr_Hide_Input(map_input);
+		if (shipext_Get_Mission_Officer() == 2) {
+			next_mode = 2;
+			talk_voice_officer = 'p';
+			talk_voice_question = 1;
+			talk_mode = 2;
+		} else {
+			talk_mode = 1;
+			talk_voice_question = 1;
+			talk_voice_officer = 'o';
+			if (shipext_Get_Mission_Officer() == 1)
+				next_mode = 1;
+			else
+				next_mode = 2;
+		}
+	} else {
+		xinpattr_Hide_Input(talk_input);
+		talk_mode = 0;
+		last_voiced_paragraph = 0;
+		talk_voice_officer = 'i';
+		next_mode = (shipext_Get_Mission_Officer() == 2) ? 2 : 1;
+	}
+
+	player_Init_Brief_Display(map_input, NULL);
+	talk_brief = player_Fetch_Brief();
+	talk_fgroup = player_Fetch_FGroup();
+	Set_VR_Talk_To_Text(talk_mode == 2 ? 1 : 0);
+
+	/* Push the modal view task */
+	xview_Set_View_Update_Function(end_View);
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
+	Set_Voice_Species_Mission();
+	talk_Alloc_Speech_Sound();
+	talk_paragraph_timer = 0x7FFFFFFF;
+}
+
+void map_CloseScene(void) {
 	talk_Free_Speech_Sound();
 	player_Free_Brief_Display();
 	xview_Enable_All_View_Erase();
@@ -1728,18 +1798,4 @@ cleanup:
 
 	if (xcursor_Is_Cursor_Visible())
 		xcursor_Hide_Cursor();
-
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static const LandruTaskVtable map_task_vt = {
-	.step = map_task_step,
-};
-
-void map_Push_Map_Task(SceneHeadStruct* scene_head) {
-	MapTask* t = (MapTask*)landru_task_push(&map_task_vt);
-	if (!t)
-		return;
-	t->scene_head = scene_head;
-	t->phase = MAP_PHASE_BEGIN;
 }

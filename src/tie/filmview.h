@@ -1,10 +1,15 @@
-#ifndef __FILMVIEW_H__
-#define __FILMVIEW_H__
+#ifndef TIE_FILMVIEW_H
+#define TIE_FILMVIEW_H
 
 #include "landru/filedir.h"
 #include "landru/input.h"
 #include "tie/shellext.h"
+
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* FileDialog — file selection dialog state, wraps a Directory with
  * dialog-specific UI fields. From watdbg FileDialogStruct. */
@@ -19,7 +24,15 @@ typedef struct {
 	int16_t read;        /* needs-read flag */
 } FileDialog;
 
-/* Push the Film Room scene as a tie_core task. */
-void filmview_Push_FilmView_Task(SceneHeadStruct* scene_head);
+int16_t filmview_OpenScene(SceneHeadStruct* scene_head, ResFile** resource);
+void filmview_CloseScene(ResFile* resource);
+int16_t filmview_PrepareFileDialog(FileDialog* dialog, Input** root);
+void filmview_ApplySelectedFile(int16_t result);
+Input* filmview_BuildDeleteDialog(void);
+void filmview_CompleteDelete(Input* input);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

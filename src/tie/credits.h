@@ -1,11 +1,26 @@
-#ifndef __CREDITS_H__
-#define __CREDITS_H__
+#ifndef TIE_CREDITS_H
+#define TIE_CREDITS_H
 
 #include "tie/shellext.h"
+
 #include <stdint.h>
 
-/* Push the credits scene as a tie_core task. Used by ShellTask in
- * shell.c — the host loop drives the scene via the task stack. */
-void credits_Push_Credits_Task(SceneHeadStruct* scene_head);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct CreditsSceneResources {
+	ResFile* credit_res;
+	ResFile* text_res;
+	int16_t view_configured;
+} CreditsSceneResources;
+
+/* Resources must be zero-initialized. Close also releases partial setup. */
+int16_t credits_OpenScene(SceneHeadStruct* scene_head, CreditsSceneResources* resources, int16_t tie98);
+void credits_CloseScene(CreditsSceneResources* resources);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

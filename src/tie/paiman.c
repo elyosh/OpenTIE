@@ -1,6 +1,4 @@
-#include <stdint.h>
-#include <stdlib.h>
-
+#include "tie/paiman.h"
 #include "tie/create.h"
 #include "tie/draw.h"
 #include "tie/fsfx.h"
@@ -12,7 +10,6 @@
 #include "tie/msg.h"
 #include "tie/msg_templates.h"
 #include "tie/pai.h"
-#include "tie/paiman.h"
 #include "tie/paiorder.h"
 #include "tie/panel.h"
 #include "tie/score.h"
@@ -21,6 +18,9 @@
 #include "tie/trig2.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/timing/ai_lead.h"
+
+#include <stdint.h>
+#include <stdlib.h>
 
 /* ---- External globals referenced by PAIMAN ------------------------- */
 
@@ -572,8 +572,10 @@ int16_t paiman_scissorsmaneuver(void) {
 
 // FUNCTION: TIE95 0x39A14
 void paiman_initrendezvousmaneuver(void) {
+	uint16_t t;
+
 	paiman_setflighttotarget(0, 1);
-	uint16_t t = _throttleconvert[fg_array[ai.fg_idx].ai[ai.ai_entry_count].speed];
+	t = _throttleconvert[fg_array[ai.fg_idx].ai[ai.ai_entry_count].speed];
 	if (!t)
 		t = 0xFFFF; /* retail: 0 -> full throttle, never stopped */
 	craftptr->throttle_speed = t;
@@ -581,8 +583,10 @@ void paiman_initrendezvousmaneuver(void) {
 
 // FUNCTION: TIE95 0x39A7C
 int16_t paiman_rendezvousmaneuver(void) {
+	uint16_t t;
+
 	paiman_setflighttotarget(0, 1);
-	uint16_t t = _throttleconvert[fg_array[ai.fg_idx].ai[ai.ai_entry_count].speed];
+	t = _throttleconvert[fg_array[ai.fg_idx].ai[ai.ai_entry_count].speed];
 	if (!t)
 		t = 0xFFFF;
 	craftptr->throttle_speed = t;
@@ -1333,13 +1337,14 @@ void paiman_initoutofhangarmaneuver(void) { craftptr->maneuver_timer = 2360; }
 // FUNCTION: TIE95 0x3C95C
 int16_t paiman_outofhangarmaneuver(void) {
 	CraftData* cd = craftptr;
+	uint8_t mapped_order;
+
 	if (cd->maneuver_timer)
 		return 0;
 
 	/* The plan VM reads exithangarplan[3] as the next order. */
-	uint8_t mapped_order = (cd->leader_obj_idx == 0xFFu)
-							   ? create_getleaderorder(fg_array[ai.fg_idx].ai[0].order)
-							   : create_getfollowerorder(fg_array[ai.fg_idx].ai[0].order);
+	mapped_order = (cd->leader_obj_idx == 0xFFu) ? create_getleaderorder(fg_array[ai.fg_idx].ai[0].order)
+												 : create_getfollowerorder(fg_array[ai.fg_idx].ai[0].order);
 	exithangarplan[3] = mapped_order;
 
 	cd->formation_separation = 2;
@@ -1387,6 +1392,8 @@ int16_t paiman_dropoffmaneuver(void) {
 	uint16_t i;
 	int32_t dx, dy, dz;
 
+	uint8_t model_type;
+
 	if (cd->mode_subbyte) {
 		if (!cd->maneuver_timer) {
 			active_waypoint_idx = cd->active_waypoint_idx;
@@ -1406,7 +1413,7 @@ int16_t paiman_dropoffmaneuver(void) {
 	}
 
 	create_getdropposition(tgt_fg_idx, craft_index, anchor_obj);
-	const uint8_t model_type = objects[ai.active_obj_idx].ship_idx;
+	model_type = objects[ai.active_obj_idx].ship_idx;
 	if (!TieProfile_UsesTie98Logic())
 		draw_lockshipfileptrs(model_type);
 
@@ -1680,7 +1687,9 @@ static void board_phase2_run_transfer(CraftData* cd, CraftData* tgt_cd, uint16_t
 	switch (order_ldr) {
 		case 0x1C: /* Unload to target. */
 			if (target_ref < 0x3800u) {
-				for (int k = 0; k < 16; ++k)
+				int k;
+
+				for (k = 0; k < 16; ++k)
 					tgt_cd->cargo[k] = cd->cargo[k];
 				tgt_cd->boarding_state = 2;
 			}
@@ -1689,7 +1698,9 @@ static void board_phase2_run_transfer(CraftData* cd, CraftData* tgt_cd, uint16_t
 			break;
 		case 0x1D: /* Load from target. */
 			if (target_ref < 0x3800u) {
-				for (int k = 0; k < 16; ++k)
+				int k;
+
+				for (k = 0; k < 16; ++k)
 					cd->cargo[k] = tgt_cd->cargo[k];
 				tgt_cd->cargo[0] = 0;
 				tgt_cd->boarding_state = 1;
@@ -1698,7 +1709,9 @@ static void board_phase2_run_transfer(CraftData* cd, CraftData* tgt_cd, uint16_t
 			break;
 		case 0x1E: /* Swap. */
 			if (target_ref < 0x3800u) {
-				for (int k = 0; k < 16; ++k) {
+				int k;
+
+				for (k = 0; k < 16; ++k) {
 					char tmp = cd->cargo[k];
 					cd->cargo[k] = tgt_cd->cargo[k];
 					tgt_cd->cargo[k] = tmp;
@@ -1940,7 +1953,9 @@ static int16_t board_phase2(CraftData* cd, uint16_t target_ref, uint8_t tgt_spec
 	/* First missing capability bit. */
 	{
 		uint16_t bit = 1;
-		for (uint16_t m = 0; m < 13; ++m) {
+		uint16_t m;
+
+		for (m = 0; m < 13; ++m) {
 			if ((bit & tgt_cd->installed_subsystems) != 0) {
 				if ((bit & tgt_cd->working_subsystems) == 0) {
 					changed_flag = true;
@@ -1954,7 +1969,9 @@ static int16_t board_phase2(CraftData* cd, uint16_t target_ref, uint8_t tgt_spec
 	/* First missing status bit. */
 	{
 		uint16_t bit = 1;
-		for (uint16_t m = 0; m < 10; ++m) {
+		uint16_t m;
+
+		for (m = 0; m < 10; ++m) {
 			if ((bit & tgt_cd->subsystem_active) != 0) {
 				if ((bit & tgt_cd->status_flags) == 0) {
 					changed_flag = true;

@@ -1,7 +1,7 @@
 #ifndef TIE_STORAGE_H
 #define TIE_STORAGE_H
 
-#include "aeron/vfs.h"
+typedef struct AeronVfs AeronVfs;
 #include "tie_runtime/runtime/profile_types.h"
 
 #include <stdbool.h>
@@ -59,6 +59,8 @@ size_t TieStorage_Write(const void* buffer, size_t size, size_t count, TieFile* 
 int TieStorage_WriteAllAtomic(TieFileRoot root, const char* path, const void* data, size_t size);
 int TieStorage_Seek(TieFile* file, long offset, int whence);
 long TieStorage_Tell(TieFile* file);
+/* Query a game asset's length without moving its cursor; zero on failure. */
+int32_t TieStorage_FileLength(TieFile* file);
 int TieStorage_Close(TieFile* file);
 int TieStorage_Remove(TieFileRoot root, const char* path);
 TieDir* TieStorage_DirOpen(TieFileRoot root, const char* path);

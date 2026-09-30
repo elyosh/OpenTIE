@@ -1,3 +1,12 @@
+#ifndef TIE_MAPROOM_H
+#define TIE_MAPROOM_H
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * MAPROOM — in-flight tactical map screen (USER_inflightinfo page 1).
  *
@@ -14,29 +23,29 @@
  * matching the help / goals / damage / message rooms.
  */
 
-#ifndef TIE_MAPROOM_H
-#define TIE_MAPROOM_H
-
-#include <stdint.h>
-
 /* --- Public entry point --------------------------------------------------- */
 
-/*
- * Push the tactical map as a tie_core task. The task latches a
- * USER_inflightinfo navigation code into `user_submodal_result`
- * before pop:
- *   -1 = page backward (previous tab)
- *    0 = exit / pick (Esc / 'm' / 'M' / Q)
- *   +1 = page forward (next tab)
- *
- * The task temporarily replaces the global farbufferptrs[] table with
- * the maproom icon-shape pointers and restores it on the FINISH
- * branch; sets up its own camera (centered on object_idx, distance
- * 0x40000), runs RENDER + POLL phases on the task stack at a 4-PIT-
- * tick frame budget, and double-buffers between newbuf and
- * xtransdataptr each frame.
- */
-void maproom_Push_MapRoom_Task(void);
+/* Room operations own icon buffers, camera transitions, drawing, and input.
+ * The runtime paces drawing at four PIT ticks and handles the page_delta
+ * navigation result (-1 previous, 0 exit, +1 next). */
+enum { MAP_FRAME_TICKS = 4 };
+
+typedef struct MaproomState {
+	uint16_t view_mode;
+	uint16_t view_transition_progress;
+	int view_transition_active;
+	int16_t view_heading;
+	int16_t view_pitch;
+	int32_t camera_distance;
+	int8_t page_delta;
+	int buffer_toggle;
+	uint16_t focus_obj_ref;
+} MaproomState;
+
+void maproom_OpenRoom(MaproomState* state);
+void maproom_DrawRoom(MaproomState* state);
+int maproom_PollRoom(MaproomState* state);
+void maproom_CloseRoom(void);
 
 /* --- Internal helpers (watdbg module-scope) ------------------------------ */
 
@@ -187,4 +196,8 @@ extern void** mapfarbufferptrs;
  */
 extern uint8_t mapiconsloaded;
 
-#endif /* TIE_MAPROOM_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

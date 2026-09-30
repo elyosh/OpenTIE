@@ -1,6 +1,4 @@
-#include <stddef.h>
-#include <stdint.h>
-
+#include "tie/gate.h"
 #include "tie/draw.h"
 #include "tie/drawpol.h"
 #include "tie/festring.h"
@@ -8,7 +6,7 @@
 #include "tie/frontend_display_tie98.h"
 #include "tie/fsfx.h"
 #include "tie/fview.h"
-#include "tie/gate.h"
+#include "tie/math2_wide.h"
 #include "tie/mission.h"
 #include "tie/modelbounds.h"
 #include "tie/modelmesh.h"
@@ -19,8 +17,11 @@
 #include "tie/tie.h"
 #include "tie/xtimer.h"
 #include "tie_runtime/display/classic_display.h"
+#include "tie_runtime/runtime/bonus_countdown_task.h"
 #include "tie_runtime/runtime/profile.h"
-#include <landru/task.h>
+
+#include <stddef.h>
+#include <stdint.h>
 
 /* outchar is declared in tie.h as a function-pointer global. */
 
@@ -62,10 +63,20 @@ uint32_t powersof10[9] = {
 
 /* String pointers to the CRT labels. Populated by fediskio_loadstringdata
  * from strings.dat; this module only reads them. */
+// GLOBAL: TIE95 0xD4B50
+// GLOBAL: TIE98 0x6258B8
 void* gatelevelstr;
+// GLOBAL: TIE95 0xD4B48
+// GLOBAL: TIE98 0x6258D8
 void* gateremainstr;
+// GLOBAL: TIE95 0xD4B54
+// GLOBAL: TIE98 0x6258A0
 void* gatepassedstr;
+// GLOBAL: TIE95 0xD4B4C
+// GLOBAL: TIE98 0x6258B0
 void* targetshitstr;
+// GLOBAL: TIE95 0xD4B44
+// GLOBAL: TIE98 0x6258B4
 void* scorestr;
 
 /* Animation timers: [0] = cargopod, [1] = wing, [2] = antenna. */
@@ -102,10 +113,6 @@ static inline int32_t clamp_dot_30(int32_t v) {
 	return v;
 }
 
-static inline int32_t gate_mul_q15(int16_t axis, int32_t distance) {
-	return (int32_t)(((int64_t)axis * distance) >> 15);
-}
-
 /* -------------------------------------------------------------------------
  * gate_savegatelastpos  (0x27c90)
  *
@@ -117,7 +124,9 @@ static inline int32_t gate_mul_q15(int16_t axis, int32_t distance) {
 // FUNCTION: TIE95 0x28FD0
 void gate_savegatelastpos(void) {
 	/* Shift rings: [3]=[2], [2]=[1], [1]=[0] (i = 2, 1, 0). */
-	for (int i = 2; i >= 0; --i) {
+	int i;
+
+	for (i = 2; i >= 0; --i) {
 		gatepreviousx[i + 1] = gatepreviousx[i];
 		gatepreviousy[i + 1] = gatepreviousy[i];
 		gatepreviousz[i + 1] = gatepreviousz[i];
@@ -158,9 +167,10 @@ void gate_outdnum(int32_t value, uint16_t num_digits, uint16_t min_digits) {
 		/* Binary does: value -= (uint16_t)(value/divisor) * divisor.
 		 * The uint16_t cast is deliberate: it discards quotient overflow
 		 * beyond 16 bits before computing the remainder. */
+		uint8_t ch;
+
 		value -= (int32_t)((uint16_t)digit) * (int32_t)divisor;
 
-		uint8_t ch;
 		if (started || pos <= min_digits || (uint16_t)digit != 0) {
 			started = 1;
 			if ((uint16_t)digit > 9)
@@ -188,6 +198,8 @@ void gate_drawtraininggate(uint16_t obj_idx) {
 	int32_t eye_x, eye_y, eye_z;
 	const uint16_t* poly_detail;
 
+	int16_t saved_target;
+
 	if (obj_idx == currentgate || obj_idx == (uint16_t)(currentgate + 1)) {
 		/* Binary has a `if (obj_idx < currentgate) bluetarget = obj_idx;`
 		 * here; given the outer condition that branch is unreachable
@@ -209,7 +221,7 @@ void gate_drawtraininggate(uint16_t obj_idx) {
 	solidindex = (int16_t)i;
 
 	/* Save and optionally override the current-target highlight. */
-	int16_t saved_target = (int16_t)currenttarget;
+	saved_target = (int16_t)currenttarget;
 	if (obj_idx < currentgate) {
 		currenttarget = parentobject;
 		highlightcolor = 1;
@@ -227,6 +239,10 @@ void gate_drawtraininggate(uint16_t obj_idx) {
 // FUNCTION: TIE98 0x425590
 void gate_drawtraininggate_tie98(uint16_t object_index) {
 	FlightObject* object = &objects[object_index];
+	uint16_t main_hull_mesh_index;
+	int mesh_count;
+	uint16_t saved_current_target;
+
 	if (object_index == gate_render_reference_object ||
 		object_index == (uint16_t)(gate_render_reference_object + 1)) {
 		if (object_index < currentgate)
@@ -237,13 +253,13 @@ void gate_drawtraininggate_tie98(uint16_t object_index) {
 		parentobject = (uint16_t)(object_index + 0x7000);
 	}
 
-	uint16_t main_hull_mesh_index = 0;
-	const int mesh_count = modelmesh_getcount(object->ship_idx);
+	main_hull_mesh_index = 0;
+	mesh_count = modelmesh_getcount(object->ship_idx);
 	while (main_hull_mesh_index < mesh_count - 1 &&
 		   modelmesh_gettype(object->ship_idx, main_hull_mesh_index) != TIE_MESH_MAIN_HULL)
 		++main_hull_mesh_index;
 
-	const uint16_t saved_current_target = currenttarget;
+	saved_current_target = currenttarget;
 	solidindex = (int16_t)main_hull_mesh_index;
 	if (object_index < currentgate) {
 		highlightcolor = 1;
@@ -263,14 +279,22 @@ void gate_drawtraininggate_tie98(uint16_t object_index) {
  * cumulative world position. Called once at mission start from
  * tie_simulator.
  * ---------------------------------------------------------------------- */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct {
 	uint16_t ship_idx[14]; /* slots 0 and 13 unused */
 	int16_t heading[14];
 	int16_t pitch[14];
 	int16_t roll[14];
 } GATE_InitTable;
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 // FUNCTION: TIE95 0x291A0
 void gate_createtraininggates(void) {
@@ -278,6 +302,9 @@ void gate_createtraininggates(void) {
 
 	/* Per-gate ship_idx -- alternates base post (98 = 'b') / crossbar
 	 * (99 = 'c') across gates 1..12. */
+	int32_t cum_x, cum_y, cum_z;
+	uint16_t gate_idx;
+
 	init.ship_idx[1] = 98;
 	init.ship_idx[2] = 99;
 	init.ship_idx[3] = 98;
@@ -321,14 +348,32 @@ void gate_createtraininggates(void) {
 	mission.mission_score = 0;
 	mission.train_targets = 0;
 
-	int32_t cum_x = 0, cum_y = 0, cum_z = 0;
+	cum_x = 0;
+	cum_y = 0;
+	cum_z = 0;
 
-	for (uint16_t gate_idx = 1; gate_idx < 13; ++gate_idx) {
+	for (gate_idx = 1; gate_idx < 13; ++gate_idx) {
 		uint16_t ship_idx = init.ship_idx[gate_idx];
 		FlightObject* obj = &objects[gate_idx];
 		CraftData* craft = &crafts[gate_idx];
 
 		/* --- FlightObject scalar init --- */
+		uint16_t component_count;
+		uint16_t m;
+		bool tie98;
+		int32_t fwd_step;
+		int32_t up_step_gate;
+		int32_t side_step;
+		int32_t up_step_advance;
+		int32_t fwd_advance;
+		int32_t geometry_scale;
+		int32_t dx_gate;
+		int32_t dy_gate;
+		int32_t dz_gate;
+		int32_t dx_adv;
+		int32_t dy_adv;
+		int32_t dz_adv;
+
 		obj->ship_idx = (uint8_t)ship_idx;
 		obj->spin_rate = 0;
 		obj->current_speed = 0;
@@ -356,12 +401,12 @@ void gate_createtraininggates(void) {
 		fg_array[1].version = 5;
 
 		/* --- CraftData per-mesh init (mesh_state / mesh_rotation / mesh_component_hp) --- */
-		uint16_t component_count = 40;
+		component_count = 40;
 		if (TieProfile_UsesTie98Logic()) {
 			modelmesh_require_craft_capacity(ship_idx);
 			component_count = (uint16_t)modelmesh_getcount(ship_idx) + 1;
 		}
-		for (uint16_t m = 0; m < component_count; ++m) {
+		for (m = 0; m < component_count; ++m) {
 			craft->mesh_state[m] = MESH_STATE_VISIBLE;
 			craft->mesh_rotation[m] = 0;
 			craft->mesh_component_hp[m] = 0xFF; /* -1 as uint8_t */
@@ -385,7 +430,7 @@ void gate_createtraininggates(void) {
 
 		/* Publish craftptr for model-dependent code below. */
 		craftptr = craft;
-		const bool tie98 = TieProfile_UsesTie98Logic();
+		tie98 = TieProfile_UsesTie98Logic();
 		if (!tie98)
 			draw_lockshipfileptrs(ship_idx);
 
@@ -398,12 +443,11 @@ void gate_createtraininggates(void) {
 
 		/* TIE95 derives 16-bit offsets from its object block and doubles the
 		 * resulting geometry. TIE98 uses unscaled 32-bit OPT bounds. */
-		int32_t fwd_step =
-			tie98 ? -modelbounds_getmaxy(ship_idx) : (int16_t)-(int16_t)objectblockptr->speed_default;
-		int32_t up_step_gate = 0;
-		int32_t side_step = 0;
-		int32_t up_step_advance = 0;
-		int32_t fwd_advance = 0;
+		fwd_step = tie98 ? -modelbounds_getmaxy(ship_idx) : (int16_t)-(int16_t)objectblockptr->speed_default;
+		up_step_gate = 0;
+		side_step = 0;
+		up_step_advance = 0;
+		fwd_advance = 0;
 
 		if (tie98 && ship_idx == 98) {
 			fwd_advance = modelbounds_getsizey(ship_idx);
@@ -427,10 +471,10 @@ void gate_createtraininggates(void) {
 		}
 
 		/* Gate position = cumulative minus the model-local placement offset. */
-		const int32_t geometry_scale = tie98 ? 1 : 2;
-		int32_t dx_gate = gate_mul_q15(craftf1, fwd_step) + gate_mul_q15(craftU1, up_step_gate);
-		int32_t dy_gate = gate_mul_q15(craftf2, fwd_step) + gate_mul_q15(craftU2, up_step_gate);
-		int32_t dz_gate = gate_mul_q15(craftf3, fwd_step) + gate_mul_q15(craftU3, up_step_gate);
+		geometry_scale = tie98 ? 1 : 2;
+		dx_gate = math2_mul_q15(craftf1, fwd_step) + math2_mul_q15(craftU1, up_step_gate);
+		dy_gate = math2_mul_q15(craftf2, fwd_step) + math2_mul_q15(craftU2, up_step_gate);
+		dz_gate = math2_mul_q15(craftf3, fwd_step) + math2_mul_q15(craftU3, up_step_gate);
 
 		obj->world_x = cum_x - geometry_scale * dx_gate;
 		obj->world_y = cum_y - geometry_scale * dy_gate;
@@ -439,12 +483,12 @@ void gate_createtraininggates(void) {
 		obj->world_y_prev = obj->world_y;
 		obj->world_z_prev = obj->world_z;
 
-		int32_t dx_adv = gate_mul_q15(craftf1, fwd_advance) + gate_mul_q15(craftU1, up_step_advance) +
-						 gate_mul_q15(craftS1, side_step);
-		int32_t dy_adv = gate_mul_q15(craftf2, fwd_advance) + gate_mul_q15(craftU2, up_step_advance) +
-						 gate_mul_q15(craftS2, side_step);
-		int32_t dz_adv = gate_mul_q15(craftf3, fwd_advance) + gate_mul_q15(craftU3, up_step_advance) +
-						 gate_mul_q15(craftS3, side_step);
+		dx_adv = math2_mul_q15(craftf1, fwd_advance) + math2_mul_q15(craftU1, up_step_advance) +
+				 math2_mul_q15(craftS1, side_step);
+		dy_adv = math2_mul_q15(craftf2, fwd_advance) + math2_mul_q15(craftU2, up_step_advance) +
+				 math2_mul_q15(craftS2, side_step);
+		dz_adv = math2_mul_q15(craftf3, fwd_advance) + math2_mul_q15(craftU3, up_step_advance) +
+				 math2_mul_q15(craftS3, side_step);
 
 		cum_x += geometry_scale * dx_adv;
 		cum_y += geometry_scale * dy_adv;
@@ -463,6 +507,12 @@ void gate_createtraininggates(void) {
  * ---------------------------------------------------------------------- */
 // FUNCTION: TIE95 0x297D8
 void gate_settraininglevel(uint16_t level) {
+	uint8_t speed_wing;
+	uint8_t speed_gun;
+	uint8_t speed_pod;
+	CraftData* craft;
+	uint16_t obj_idx;
+
 	currentgate = 1;
 	mission.train_gates_remaining = 12;
 	mission.train_gates_passed = 0;
@@ -475,27 +525,30 @@ void gate_settraininglevel(uint16_t level) {
 		mtimer_sec = (uint8_t)(60 - 5 * (level - 8));
 	}
 
-	uint8_t speed_wing = (uint8_t)(24 * level);
-	uint8_t speed_gun = (uint8_t)(2 * level);
-	uint8_t speed_pod = (uint8_t)(3 * level);
+	speed_wing = (uint8_t)(24 * level);
+	speed_gun = (uint8_t)(2 * level);
+	speed_pod = (uint8_t)(3 * level);
 
-	CraftData* craft = craftptr;
-	for (uint16_t obj_idx = 0; obj_idx < NUM_CRAFTS; ++obj_idx) {
+	craft = craftptr;
+	for (obj_idx = 0; obj_idx < NUM_CRAFTS; ++obj_idx) {
 		uint16_t ship_idx = objects[obj_idx].ship_idx;
+		bool tie98;
+		uint16_t mesh_count;
+		uint16_t mesh_idx;
+
 		if ((uint8_t)ship_idx == 0 || objects[obj_idx].genus != 14 /* GENUS_GATE */)
 			continue;
 
 		craftptr = objects[obj_idx].craft_ptr;
-		const bool tie98 = TieProfile_UsesTie98Logic();
+		tie98 = TieProfile_UsesTie98Logic();
 		if (tie98)
 			modelmesh_require_craft_capacity(ship_idx);
 		else
 			draw_lockshipfileptrs(ship_idx);
 		craft = craftptr;
 
-		const uint16_t mesh_count =
-			tie98 ? (uint16_t)modelmesh_getcount(ship_idx) : (uint16_t)objectblockptr->num_meshes;
-		for (uint16_t mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
+		mesh_count = tie98 ? (uint16_t)modelmesh_getcount(ship_idx) : (uint16_t)objectblockptr->num_meshes;
+		for (mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
 			uint16_t mesh_type = tie98 ? (uint16_t)modelmesh_gettype(ship_idx, mesh_idx)
 									   : componentblockptr[mesh_idx].mesh_type;
 
@@ -604,10 +657,28 @@ int gate_checkgateedge(uint16_t obj_idx) {
 	uint8_t ship_idx = obj->ship_idx;
 
 	const bool tie98 = TieProfile_UsesTie98Logic();
+	int32_t base_offset;
+	int32_t fwd_offset;
+	int32_t geometry_scale;
+	int32_t plane_x;
+	int32_t plane_y;
+	int32_t plane_z;
+	int32_t dx_cur;
+	int32_t dy_cur;
+	int32_t dz_cur;
+	int32_t dx_prev;
+	int32_t dy_prev;
+	int32_t dz_prev;
+	int32_t cur_signed;
+	int32_t prev_signed;
+	int cur_neg;
+	int prev_neg;
+	int cur_pos;
+	int prev_pos;
+
 	if (!tie98)
 		draw_lockshipfileptrs(ship_idx);
 
-	int32_t base_offset;
 	if (ship_idx == 98) {
 		base_offset =
 			tie98 ? -modelbounds_getmaxy(ship_idx) : (int16_t)(-(int16_t)objectblockptr->speed_default);
@@ -615,20 +686,19 @@ int gate_checkgateedge(uint16_t obj_idx) {
 		base_offset = 0;
 	}
 
-	int32_t fwd_offset;
 	if (tie98)
 		fwd_offset = (obj_idx == currentgate) ? base_offset - 1024 : base_offset + 32;
 	else
 		fwd_offset = (obj_idx == currentgate) ? (int16_t)(base_offset - 1024) : (int16_t)(base_offset + 32);
 
-	const int32_t geometry_scale = tie98 ? 1 : 2;
-	int32_t plane_x = obj->world_x + geometry_scale * gate_mul_q15(obj->fwd_x, fwd_offset);
-	int32_t plane_y = obj->world_y + geometry_scale * gate_mul_q15(obj->fwd_y, fwd_offset);
-	int32_t plane_z = obj->world_z + geometry_scale * gate_mul_q15(obj->fwd_z, fwd_offset);
+	geometry_scale = tie98 ? 1 : 2;
+	plane_x = obj->world_x + geometry_scale * math2_mul_q15(obj->fwd_x, fwd_offset);
+	plane_y = obj->world_y + geometry_scale * math2_mul_q15(obj->fwd_y, fwd_offset);
+	plane_z = obj->world_z + geometry_scale * math2_mul_q15(obj->fwd_z, fwd_offset);
 
-	int32_t dx_cur = pstate.player->world_x - plane_x;
-	int32_t dy_cur = pstate.player->world_y - plane_y;
-	int32_t dz_cur = pstate.player->world_z - plane_z;
+	dx_cur = pstate.player->world_x - plane_x;
+	dy_cur = pstate.player->world_y - plane_y;
+	dz_cur = pstate.player->world_z - plane_z;
 
 	/* Fast reject on the current-tick position. */
 	if (dx_cur > 0x4000 || dx_cur < -0x4000)
@@ -638,37 +708,37 @@ int gate_checkgateedge(uint16_t obj_idx) {
 	if (dz_cur > 0x4000 || dz_cur < -0x4000)
 		return 0;
 
-	int32_t dx_prev = pstate.player->world_x_prev - plane_x;
-	int32_t dy_prev = pstate.player->world_y_prev - plane_y;
-	int32_t dz_prev = pstate.player->world_z_prev - plane_z;
+	dx_prev = pstate.player->world_x_prev - plane_x;
+	dy_prev = pstate.player->world_y_prev - plane_y;
+	dz_prev = pstate.player->world_z_prev - plane_z;
 
 	if (dx_prev > 0x4000 || dx_prev < -0x4000 || dy_prev > 0x4000 || dy_prev < -0x4000 || dz_prev > 0x4000 ||
 		dz_prev < -0x4000)
 		return 0;
 
-	int32_t cur_signed;
-	int32_t prev_signed;
 	if (tie98) {
-		cur_signed = gate_mul_q15(obj->fwd_x, dx_cur) + gate_mul_q15(obj->fwd_y, dy_cur) +
-					 gate_mul_q15(obj->fwd_z, dz_cur);
-		prev_signed = gate_mul_q15(obj->fwd_x, dx_prev) + gate_mul_q15(obj->fwd_y, dy_prev) +
-					  gate_mul_q15(obj->fwd_z, dz_prev);
+		cur_signed = math2_mul_q15(obj->fwd_x, dx_cur) + math2_mul_q15(obj->fwd_y, dy_cur) +
+					 math2_mul_q15(obj->fwd_z, dz_cur);
+		prev_signed = math2_mul_q15(obj->fwd_x, dx_prev) + math2_mul_q15(obj->fwd_y, dy_prev) +
+					  math2_mul_q15(obj->fwd_z, dz_prev);
 	} else {
 		int32_t dot_cur = (int32_t)obj->fwd_z * (int16_t)dz_cur + (int32_t)obj->fwd_y * (int16_t)dy_cur +
 						  (int32_t)obj->fwd_x * (int16_t)dx_cur;
+		int32_t dot_prev;
+
 		cur_signed = clamp_dot_30(dot_cur) >> 15;
-		int32_t dot_prev = (int32_t)obj->fwd_z * (int16_t)dz_prev + (int32_t)obj->fwd_y * (int16_t)dy_prev +
-						   (int32_t)obj->fwd_x * (int16_t)dx_prev;
+		dot_prev = (int32_t)obj->fwd_z * (int16_t)dz_prev + (int32_t)obj->fwd_y * (int16_t)dy_prev +
+				   (int32_t)obj->fwd_x * (int16_t)dx_prev;
 		prev_signed = clamp_dot_30(dot_prev) >> 15;
 	}
 
 	/* Same-sign on both ticks = no crossing. The binary encodes this as
 	 * two OR'd sign/polarity checks; the truth-table collapse is:
 	 * return 0 if sign(cur) == sign(prev). */
-	int cur_neg = ((uint16_t)cur_signed & 0x8000u) != 0;
-	int prev_neg = ((uint16_t)prev_signed & 0x8000u) != 0;
-	int cur_pos = (int16_t)cur_signed > 0;
-	int prev_pos = (int16_t)prev_signed > 0;
+	cur_neg = ((uint16_t)cur_signed & 0x8000u) != 0;
+	prev_neg = ((uint16_t)prev_signed & 0x8000u) != 0;
+	cur_pos = (int16_t)cur_signed > 0;
+	prev_pos = (int16_t)prev_signed > 0;
 
 	if ((cur_neg || prev_pos) && (cur_pos || prev_neg))
 		return 0;
@@ -749,7 +819,7 @@ void gate_updatecourseprogress(void) {
 	} else {
 		gate_updatebonuspoints();
 	}
-	gate_Push_Bonus_Countdown_Task();
+	TieBonusCountdown_Begin();
 }
 
 /* -------------------------------------------------------------------------
@@ -771,20 +841,29 @@ void gate_updategateanimations(void) {
 	int16_t delta_cargopod = 0;
 	int16_t delta_wing = 0;
 	int16_t delta_antenna = 0;
-	int16_t* deltas[3] = { &delta_cargopod, &delta_wing, &delta_antenna };
+	int16_t* deltas[3];
 
 	CraftData* saved_craft = craftptr;
 
 	/* Phase 1: timers. */
-	for (uint16_t timer_idx = 0; timer_idx < 3; ++timer_idx) {
+	uint16_t timer_idx;
+	uint16_t j;
+
+	deltas[0] = &delta_cargopod;
+	deltas[1] = &delta_wing;
+	deltas[2] = &delta_antenna;
+	for (timer_idx = 0; timer_idx < 3; ++timer_idx) {
 		int16_t new_timer = (int16_t)(gatetimer[timer_idx] - (int16_t)frameticks);
+		uint16_t period;
+		int16_t negated;
+		int16_t steps;
+
 		gatetimer[timer_idx] = new_timer;
 		if (new_timer >= 0) {
 			*deltas[timer_idx] = 0;
 			continue;
 		}
 
-		uint16_t period;
 		if (timer_idx == 2) {
 			/* Binary uses *((word*)&off_D4C28 + train_level + 1), which
 			 * evaluates to gatespeed[train_level - 1] since off_D4C28
@@ -805,25 +884,29 @@ void gate_updategateanimations(void) {
 		 * Watcom compiler emitted a load-base pattern that made the memory
 		 * read overlap with gatetimer through the preceding string
 		 * pointers. Resolved directly here. */
-		int16_t negated = (int16_t)(-new_timer);
-		int16_t steps = (int16_t)((uint16_t)negated / period + 1);
+		negated = (int16_t)(-new_timer);
+		steps = (int16_t)((uint16_t)negated / period + 1);
 		gatetimer[timer_idx] = (int16_t)(gatetimer[timer_idx] + (int16_t)(steps * period));
 		*deltas[timer_idx] = steps;
 	}
 
 	/* Phase 2: apply deltas to each gate's meshes. */
-	for (uint16_t j = 1; j < 13; ++j) {
+	for (j = 1; j < 13; ++j) {
 		uint16_t ship_idx = objects[j].ship_idx;
+		bool tie98;
+		CraftData* craft;
+		uint16_t num_meshes;
+		uint16_t mesh_idx;
+
 		craftptr = saved_craft;
-		const bool tie98 = TieProfile_UsesTie98Logic();
+		tie98 = TieProfile_UsesTie98Logic();
 		if (!tie98)
 			draw_lockshipfileptrs(ship_idx);
 
-		CraftData* craft = objects[j].craft_ptr;
-		uint16_t num_meshes =
-			tie98 ? (uint16_t)modelmesh_getcount(ship_idx) : (uint16_t)objectblockptr->num_meshes;
+		craft = objects[j].craft_ptr;
+		num_meshes = tie98 ? (uint16_t)modelmesh_getcount(ship_idx) : (uint16_t)objectblockptr->num_meshes;
 
-		for (uint16_t mesh_idx = 0; mesh_idx < num_meshes; ++mesh_idx) {
+		for (mesh_idx = 0; mesh_idx < num_meshes; ++mesh_idx) {
 			uint16_t mesh_type = tie98 ? (uint16_t)modelmesh_gettype(ship_idx, mesh_idx)
 									   : componentblockptr[mesh_idx].mesh_type;
 			int16_t delta = 0;
@@ -854,78 +937,12 @@ void gate_updategateanimations(void) {
 	gate_updatecourseprogress();
 }
 
-/* The host advances the simulation clock between runtime ticks, so the
- * countdown must yield instead of waiting synchronously for its next tick. */
-
-typedef struct BonusCountdownTask {
-	uint16_t tickbudget; /* accumulated PIT ticks since last decrement */
-} BonusCountdownTask;
-
 /* Set while the countdown task is on the stack. Mirrors the window
  * during which `gate_updatebonuspoints` overdraws the bonus-bar
  * region every step — outside that window panel_updatepanel's
  * cockpit-bitmap paint leaves the region bare. Host renderers read
  * via gate.h to gate the bonus-bar emission to the same window. */
 uint8_t bonus_countdown_active;
-
-static LandruTaskStepResult bonus_countdown_step(void* self) {
-	BonusCountdownTask* t = (BonusCountdownTask*)self;
-
-	if (!mtimer_min && !mtimer_sec) {
-		argtable[0] = (uint16_t)mission.train_bonus;
-		msg_messageprintf(MSG_BONUS_AWARDED);
-		if (TieClassicDisplay_UsesDx5())
-			FlightSurface_Lock();
-		gate_settraininglevel(++mission.train_level);
-		if (TieClassicDisplay_UsesDx5())
-			FlightSurface_Unlock();
-		bonus_countdown_active = 0;
-		return LANDRU_TASK_STEP_DONE;
-	}
-
-	t->tickbudget = (uint16_t)(t->tickbudget + (uint16_t)xtimer_time_elapsed());
-	if (t->tickbudget < 4)
-		return LANDRU_TASK_STEP_YIELD; /* xtimer cursor advances between tie_ticks */
-	t->tickbudget = 0;
-
-	/* One iteration of the original loop body. */
-	if (mtimer_sec) {
-		--mtimer_sec;
-	} else {
-		mtimer_sec = 59;
-		--mtimer_min;
-	}
-
-	mission.mission_score += 10;
-	mission.train_bonus += 10;
-
-	if ((mission.mission_score % 100) == 0)
-		fsfx_triggersfx(0x21, 0xFFFF);
-
-	if (TieClassicDisplay_UsesDx5()) {
-		g_flightDrawToOffscreenSurface = 0;
-		FlightSurface_Lock();
-		gate_updatebonuspoints();
-		FlightSurface_Unlock();
-		g_flightDrawToOffscreenSurface = 1;
-		FrontendDisplay_PresentFrame();
-	} else {
-		gate_updatebonuspoints();
-	}
-	return LANDRU_TASK_STEP_CONTINUE;
-}
-
-static const LandruTaskVtable bonus_countdown_task_vt = {
-	.step = bonus_countdown_step,
-};
-
-void gate_Push_Bonus_Countdown_Task(void) {
-	BonusCountdownTask* t = (BonusCountdownTask*)landru_task_push(&bonus_countdown_task_vt);
-	if (!t)
-		return;
-	t->tickbudget = 0;
-	bonus_countdown_active = 1;
-}
 
 /* -------------------------------------------------------------------------
  * gate_trainingupdatecrt  (0x2948c)
@@ -941,6 +958,12 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 	int16_t y;
 	int16_t level_label_x, level_value_x, score_label_x, block_width;
 	int16_t gates_col_x, score_col_x;
+
+	uint32_t spec_plus_1;
+	int draw_right;
+	int16_t crt_x;
+	uint8_t fh;
+	int16_t y_plus_1;
 
 	if (tie_is_high_resolution_flight()) {
 		x_origin += 10;
@@ -966,8 +989,8 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 	}
 
 	/* Choose left-or-right-of-origin based on the player's ship type. */
-	uint32_t spec_plus_1 = (uint32_t)pstate.player_spec_num + 1;
-	int draw_right;
+	spec_plus_1 = (uint32_t)pstate.player_spec_num + 1;
+
 	if (spec_plus_1 < 12) {
 		if (spec_plus_1 < 8 || spec_plus_1 > 9)
 			draw_right = 0;
@@ -978,7 +1001,7 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 	} else {
 		draw_right = 0;
 	}
-	int16_t crt_x;
+
 	if (TieProfile_UsesTie98Logic() && tie_is_high_resolution_flight() && pstate.player_spec_num == 4)
 		crt_x = x_origin;
 	else
@@ -991,8 +1014,10 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 		 * call. Caching the pre-call height left the dynamic-value block
 		 * using the size-2 fontheight, which compressed the value rows
 		 * vertically and ran them up over the static label column. */
+		uint8_t fh;
+
 		festring_setfontsize(1);
-		uint8_t fh = fontheight;
+		fh = fontheight;
 		festring_setbound((int16_t)(crt_x + side_offset), y, (int16_t)(crt_x + 10 * side_offset),
 						  (int16_t)(y + fh));
 		festring_setautofill(1);
@@ -1030,7 +1055,7 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 	 * setfontsize(1) so this block doesn't depend on whatever fontsize
 	 * the caller chain left in place. */
 	festring_setfontsize(1);
-	uint8_t fh = fontheight;
+	fh = fontheight;
 	festring_setbound(crt_x, (int16_t)(y + fh + 1), (int16_t)(crt_x + block_width),
 					  (int16_t)(y + 1 + 5 * fh));
 	festring_setautofill(1);
@@ -1041,7 +1066,7 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 	panelrts_outnum((uint16_t)mission.train_gates_remaining, 3, 1);
 	outchar(' ');
 
-	int16_t y_plus_1 = (int16_t)(y + 1);
+	y_plus_1 = (int16_t)(y + 1);
 	festring_setcursor((int16_t)(crt_x + gates_col_x), (int16_t)(y_plus_1 + 2 * fh));
 	panelrts_outnum((uint16_t)mission.train_gates_passed, 3, 1);
 	outchar(' ');

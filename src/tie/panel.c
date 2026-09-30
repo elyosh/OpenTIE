@@ -1,27 +1,21 @@
-#include <math.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
+#include "tie/panel.h"
 #include "../util/binio.h"
 #include "tie/collide.h"
 #include "tie/create.h"
 #include "tie/draw.h"
 #include "tie/fediskio.h"
 #include "tie/festring.h"
-#include "tie/filelen.h"
 #include "tie/fsfx.h"
 #include "tie/fview.h"
 #include "tie/gate.h"
 #include "tie/laser.h" /* WarheadRecord, projectile_is_warhead_type — for PIP missile name path */
 #include "tie/logbuf2.h"
 #include "tie/math2.h"
+#include "tie/math2_wide.h"
 #include "tie/modelmesh.h"
 #include "tie/msg.h"
 #include "tie/msg_templates.h"
 #include "tie/pai.h"
-#include "tie/panel.h"
 #include "tie/render_scene_tie98.h"
 #include "tie/rtsvga2.h"
 #include "tie/spec.h" /* spec_data — for target ship short_name */
@@ -44,9 +38,7 @@
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
-#include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_hud.h"
-#include "tie_runtime/snapshot/snapshot_internal.h"
 #include "tie_runtime/storage/storage.h"
 #include "util/binio.h"
 
@@ -65,7 +57,6 @@ char separator_period[4] = { '0', '0', '.', '\0' };          /* engine 0xC0588 *
 /* user.c-owned. */
 void user_resetview(void);
 
-#define FARBUFF(i) ((const void*)farbufferptrs[(i)])
 
 /* ------------------------------------------------------------------ */
 /* PANEL-owned globals                                                */
@@ -89,6 +80,12 @@ char beamcolors[4] = { 0x30, 0x2D, 0x31, 0x32 };
 
 /* CMD-CRT occlusion masks used by panel_update3Dcrt. */
 #include "tie_formats/cockpit_masks.h"
+
+#include <math.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 char panelfilename[32];
 char panelname[32];
@@ -155,23 +152,59 @@ uint8_t panelmirrorflag;
 void* panelpartsptr;
 
 /* String-table pointers (filled by fediskio_loadstringdata). */
+// GLOBAL: TIE95 0xD5AC0
+// GLOBAL: TIE98 0x5FC008
 char** waypointstrings;
+// GLOBAL: TIE95 0xD5AEC
+// GLOBAL: TIE98 0x5FBFF0
 void* diststring;
+// GLOBAL: TIE95 0xD5ACC
+// GLOBAL: TIE98 0x5FCE20
 void* shieldstring;
+// GLOBAL: TIE95 0xD5AE8
+// GLOBAL: TIE98 0x5FCE24
 void* hullstring;
+// GLOBAL: TIE95 0xD5AC8
+// GLOBAL: TIE98 0x5FBFEC
 void* sysstring;
+// GLOBAL: TIE95 0xD5AD8
+// GLOBAL: TIE98 0x5FCAFC
 void* targetstring;
+// GLOBAL: TIE95 0xD5AB8
+// GLOBAL: TIE98 0x5FC890
 void* nonestring;
+// GLOBAL: TIE95 0xD5AF4
+// GLOBAL: TIE98 0x5FBFF8
 void* ourstring;
+// GLOBAL: TIE95 0xD5AD4
+// GLOBAL: TIE98 0x5FBFE0
 void* currentorderstring;
+// GLOBAL: TIE95 0xD5AD0
+// GLOBAL: TIE98 0x5FC880
 void* notargetstring;
+// GLOBAL: TIE95 0xD5AE4
+// GLOBAL: TIE98 0x5FC8A4
 void* curtargetstring;
+// GLOBAL: TIE95 0xD5ADC
+// GLOBAL: TIE98 0x5FC840
 void* curdeststring;
+// GLOBAL: TIE95 0xD5AC4
+// GLOBAL: TIE98 0x5FC83C
 void* distfromtargetstring;
+// GLOBAL: TIE95 0xD5AF0
+// GLOBAL: TIE98 0x5FC674
 void* disttodeststring;
+// GLOBAL: TIE95 0xD5AE0
+// GLOBAL: TIE98 0x5FC884
 void* componentnames;
+// GLOBAL: TIE95 0xD5AF8
+// GLOBAL: TIE98 0x5FC268
 void* timeremstring;
+// GLOBAL: TIE95 0xD5ABC
+// GLOBAL: TIE98 0x5FC26C
 void* timetotargetstring;
+// GLOBAL: TIE95 0xD5AB4
+// GLOBAL: TIE98 0x5FC888
 void* timetodeststring;
 
 /* ================================================================== */
@@ -193,17 +226,21 @@ static void str_copy_bounded(char* dst, size_t dst_size, const uint8_t* src) {
  * compositor. Plain bytes are unchanged; 0xFE color operands are converted
  * from engine-logical colors to post-remap palette indices. */
 static void str_copy_festring_remapped(char* dst, size_t dst_size, const uint8_t* src) {
+	size_t out;
+
 	if (dst_size == 0)
 		return;
 
-	size_t out = 0;
+	out = 0;
 	while (*src && out + 1 < dst_size) {
 		uint8_t ch = *src++;
 		if (ch == 0xFEu) {
+			uint8_t color;
+
 			if (!*src || out + 2 >= dst_size)
 				break;
 			dst[out++] = (char)ch;
-			uint8_t color = *src++;
+			color = *src++;
 			dst[out++] = (char)((color >= 0x40u) ? color_remap_table[color] : color);
 		} else {
 			dst[out++] = (char)ch;
@@ -218,9 +255,11 @@ static void str_copy_festring_remapped(char* dst, size_t dst_size, const uint8_t
  */
 // FUNCTION: TIE95 0x3FA80
 void panel_initpanel(void) {
+	int i;
+
 	initpanelflag = 1;
 
-	for (int i = 0; i < 95; ++i)
+	for (i = 0; i < 95; ++i)
 		oldinstruments[i] = -2;
 
 	replaypercent = -2;
@@ -343,8 +382,10 @@ void panel_updateforwardpanel(void) {
 	panel_updateclock();
 
 	if ((pstate.player_craft->working_subsystems & 0x40) != 0) {
+		uint16_t pct;
+
 		festring_setbackcolor(0x40);
-		uint16_t pct = math2_fraction((uint16_t)pstate.player->current_speed, 0x71C7u);
+		pct = math2_fraction((uint16_t)pstate.player->current_speed, 0x71C7u);
 		panel_updatevalue(TIE_HUDI_SPEED_DIGITS, pct, 1);
 	}
 
@@ -400,17 +441,27 @@ void panel_updateweaponwarnings(void) {
 	uint16_t warn_incoming = 0;
 	uint16_t warn_lock = 0;
 
-	for (uint16_t i = 0; i < NUM_CRAFTS; ++i) {
+	uint16_t i;
+	int16_t best_count;
+	uint16_t k;
+	uint16_t v44_val;
+
+	for (i = 0; i < NUM_CRAFTS; ++i) {
+		CraftData* cp;
+		uint8_t fg_status;
+
 		if (!objects[i].ship_idx)
 			continue;
 		if (objects[i].category != 0)
 			continue;
-		CraftData* cp = objects[i].craft_ptr;
+		cp = objects[i].craft_ptr;
 
 		/* Incoming-fire LED: only crafts whose ai_target_ref points at
 		 * the player are considered. */
 		if ((uint16_t)cp->ai_target_ref == pstate.object_idx) {
-			for (uint8_t g = 0; g < cp->laser_group_cnt; ++g) {
+			uint8_t g;
+
+			for (g = 0; g < cp->laser_group_cnt; ++g) {
 				uint8_t t = cp->laser_type[g];
 				if ((t == 0x8B || t == 0x89) && cp->laser_owner_player[g])
 					warn_incoming = 1;
@@ -419,9 +470,11 @@ void panel_updateweaponwarnings(void) {
 
 		/* Lock-on LED: gated on the FG-status byte at fg_array[].version
 		 * != 5 (matches retail's `byte at fg_array[fg_idx]+0x34`). */
-		uint8_t fg_status = fg_array[objects[i].fg_idx].version;
+		fg_status = fg_array[objects[i].fg_idx].version;
 		if (fg_status != 5) {
-			for (uint8_t g = 0; g < cp->weapon_group_cnt; ++g) {
+			uint8_t g;
+
+			for (g = 0; g < cp->weapon_group_cnt; ++g) {
 				if (cp->weapon_slots[g].type == 2 && cp->weapon_slots[g].target_obj == pstate.object_idx)
 					warn_lock = 1;
 			}
@@ -433,23 +486,25 @@ void panel_updateweaponwarnings(void) {
 
 	/* Impact-countdown: max missile_count_total across crafts in
 	 * maneuver 23 targeting the player. */
-	int16_t best_count = 0;
-	for (uint16_t k = 0; k < NUM_CRAFTS; ++k) {
+	best_count = 0;
+	for (k = 0; k < NUM_CRAFTS; ++k) {
+		CraftData* cp;
+		int16_t mc;
+
 		if (!objects[k].ship_idx)
 			continue;
 		if (objects[k].category != 0)
 			continue;
-		CraftData* cp = objects[k].craft_ptr;
+		cp = objects[k].craft_ptr;
 		if ((uint16_t)cp->ai_target_ref != pstate.object_idx)
 			continue;
 		if (cp->mode_byte != 23)
 			continue;
-		int16_t mc = (int16_t)cp->missile_count_total;
+		mc = (int16_t)cp->missile_count_total;
 		if (best_count < mc)
 			best_count = mc;
 	}
 
-	uint16_t v44_val;
 	if (best_count > 944)
 		v44_val = 2;
 	else if (best_count > 0)
@@ -472,7 +527,7 @@ void panel_updatelever(uint16_t idx, uint16_t value) {
 	if (value == (uint16_t)oldinstruments[idx])
 		return;
 	oldinstruments[idx] = (int16_t)value;
-	drawshape(FARBUFF(instruments[idx].param1 + value), instruments[idx].x, instruments[idx].y,
+	drawshape(farbufferptrs[instruments[idx].param1 + value], instruments[idx].x, instruments[idx].y,
 			  instruments[idx].param2, 0);
 }
 
@@ -485,8 +540,9 @@ void panel_updatemonolever(uint16_t idx, uint16_t value) {
 	if (value == (uint16_t)oldinstruments[idx])
 		return;
 	oldinstruments[idx] = (int16_t)value;
-	rtsvga2_drawmonoshapeVGA((const uint8_t*)FARBUFF(instruments[idx].param1), (int16_t)instruments[idx].x,
-							 (int16_t)instruments[idx].y, instruments[idx].param2, (uint8_t)value);
+	rtsvga2_drawmonoshapeVGA((const uint8_t*)farbufferptrs[instruments[idx].param1],
+							 (int16_t)instruments[idx].x, (int16_t)instruments[idx].y,
+							 instruments[idx].param2, (uint8_t)value);
 }
 
 /*
@@ -496,21 +552,27 @@ void panel_updatemonolever(uint16_t idx, uint16_t value) {
  */
 // FUNCTION: TIE95 0x434B0
 void panel_updatevalue(uint16_t idx, uint16_t value, uint16_t flags) {
+	uint16_t left;
+	uint16_t y;
+	uint16_t digit_count;
+	int16_t glyph_w;
+	uint16_t bottom;
+	uint16_t col;
+
 	if (value == (uint16_t)oldinstruments[idx])
 		return;
 
-	uint16_t left = instruments[idx].x;
-	uint16_t y = instruments[idx].y;
-	uint16_t digit_count = instruments[idx].param1;
+	left = instruments[idx].x;
+	y = instruments[idx].y;
+	digit_count = instruments[idx].param1;
 
-	int16_t glyph_w = (flightResolution == TIE_FLIGHT_RES_VGA) ? 4 : 8;
-	uint16_t bottom = y + fontheight;
+	glyph_w = (flightResolution == TIE_FLIGHT_RES_VGA) ? 4 : 8;
+	bottom = y + fontheight;
 
 	oldinstruments[idx] = (int16_t)value;
 	festring_setbound((int16_t)left, (int16_t)y, (int16_t)(left + digit_count * glyph_w + 1),
 					  (int16_t)bottom);
 
-	uint16_t col;
 	if (value == 0 && (idx == 61 || idx == 58 || idx == 77)) {
 		col = 74; /* CRITICAL (red) */
 	} else if (value <= 0x32u && (idx == 61 || idx == 58 || idx == 62 || idx == 77 || idx == 78)) {
@@ -535,17 +597,22 @@ void panel_updatevalue(uint16_t idx, uint16_t value, uint16_t flags) {
  */
 // FUNCTION: TIE95 0x422AC
 void panel_updatesetting(uint16_t value, uint16_t idx, uint16_t count, int16_t step) {
+	uint16_t y;
+	uint16_t x;
+	uint16_t shape_base;
+	uint16_t rung;
+
 	if (value == (uint16_t)oldinstruments[idx])
 		return;
 
 	oldinstruments[idx] = (int16_t)value;
 
-	uint16_t y = instruments[idx].y;
-	uint16_t x = instruments[idx].x;
-	uint16_t shape_base = instruments[idx].param1;
+	y = instruments[idx].y;
+	x = instruments[idx].x;
+	shape_base = instruments[idx].param1;
 
-	for (uint16_t rung = 0; rung < count; ++rung) {
-		const void* shape = FARBUFF(shape_base + (rung < value ? 1 : 0));
+	for (rung = 0; rung < count; ++rung) {
+		const void* shape = farbufferptrs[shape_base + (rung < value ? 1 : 0)];
 		drawshape(shape, (int)x, (int)y, 253, 0);
 		y = (uint16_t)((int16_t)y - step);
 	}
@@ -584,12 +651,16 @@ void panel_updatecovers(void) {
  */
 // FUNCTION: TIE95 0x426A8
 void panel_updatecockpitdamage(void) {
+	uint16_t mask;
+	uint16_t idx;
+	int i;
+
 	if (camera.pilotview)
 		return;
 
-	uint16_t mask = 1;
-	uint16_t idx = 45;
-	for (int i = 0; i < 13; ++i) {
+	mask = 1;
+	idx = 45;
+	for (i = 0; i < 13; ++i) {
 		uint16_t frame = (mask & pstate.player_craft->working_subsystems) ? 0 : 13;
 		if (mask & pstate.player_craft->installed_subsystems)
 			panel_updatelever(idx, frame);
@@ -605,13 +676,17 @@ void panel_updatecockpitdamage(void) {
  */
 // FUNCTION: TIE95 0x42518
 void panel_updatereplaystuff(void) {
+	uint16_t x;
+	uint16_t y;
+	int16_t w;
+
 	panel_updatelever(TIE_HUDI_REC_LED, (uint16_t)recordingreplay);
 
-	uint16_t x = instruments[TIE_HUDI_REC_PCT].x;
-	uint16_t y = instruments[TIE_HUDI_REC_PCT].y;
+	x = instruments[TIE_HUDI_REC_PCT].x;
+	y = instruments[TIE_HUDI_REC_PCT].y;
 	festring_setfontsize(2);
 
-	int16_t w = (flightResolution == TIE_FLIGHT_RES_VGA) ? 12 : 18;
+	w = (flightResolution == TIE_FLIGHT_RES_VGA) ? 12 : 18;
 	festring_setbound((int16_t)x, (int16_t)y, (int16_t)(x + w), (int16_t)(y + fontheight));
 	festring_setcursor((int16_t)x, (int16_t)y);
 	festring_setbackcolor(0x40);
@@ -643,10 +718,12 @@ void panel_updatereplaystuff(void) {
  */
 // FUNCTION: TIE95 0x41F00
 void panel_updatespeed(void) {
+	uint16_t pct;
+
 	if ((pstate.player_craft->working_subsystems & 0x40) == 0)
 		return;
 	festring_setbackcolor(0x40);
-	uint16_t pct = math2_fraction((uint16_t)pstate.player->current_speed, 0x71C7u);
+	pct = math2_fraction((uint16_t)pstate.player->current_speed, 0x71C7u);
 	panel_updatevalue(TIE_HUDI_SPEED_DIGITS, pct, 1);
 }
 
@@ -656,10 +733,12 @@ void panel_updatespeed(void) {
  */
 // FUNCTION: TIE95 0x41F54
 void panel_updatethrottle(void) {
+	uint16_t raw;
+
 	if ((pstate.player_craft->working_subsystems & 0x40) == 0)
 		return;
 	festring_setbackcolor(0x40);
-	uint16_t raw = (uint16_t)(pstate.player_craft->throttle_speed / 655u);
+	raw = (uint16_t)(pstate.player_craft->throttle_speed / 655u);
 	if (!pstate.player_craft->slam_active)
 		raw *= 2;
 	panel_updatevalue(TIE_HUDI_THROTTLE_DIGITS, raw, 1);
@@ -674,6 +753,11 @@ void panel_updatethrottle(void) {
 void panel_updateclock(void) {
 	uint8_t min_v, sec_v;
 
+	int16_t total_secs;
+	uint8_t clock_color;
+	int16_t glyph_w;
+	int16_t x_bump;
+
 	if (mission.train_craft_type) {
 		min_v = mtimer_min;
 		sec_v = mtimer_sec;
@@ -682,7 +766,7 @@ void panel_updateclock(void) {
 		sec_v = _date.second;
 	}
 
-	int16_t total_secs = (int16_t)(60 * min_v + sec_v);
+	total_secs = (int16_t)(60 * min_v + sec_v);
 	if (total_secs == oldinstruments[TIE_HUDI_CLOCK_DIGITS])
 		return;
 	oldinstruments[TIE_HUDI_CLOCK_DIGITS] = total_secs;
@@ -692,7 +776,7 @@ void panel_updateclock(void) {
 	festring_setbackcolor(0x40);
 	/* VGA uses palette index 77 (0x4D) for the clock digits; SVGA's 8-bit
 	 * paletted mode shifts everything by 1 and uses 78 (0x4E). */
-	const uint8_t clock_color = (flightResolution == TIE_FLIGHT_RES_VGA) ? 0x4D : 0x4E;
+	clock_color = (flightResolution == TIE_FLIGHT_RES_VGA) ? 0x4D : 0x4E;
 	festring_settextcolor(clock_color);
 	dropflag = 0;
 
@@ -702,8 +786,8 @@ void panel_updateclock(void) {
 
 	/* SVGA needs a 1-pixel x-bump after the colon glyph; VGA's narrower
 	 * font already lands the SS digits flush with the colon. */
-	int16_t glyph_w = sys2_calclength((uint8_t*)separator_colon);
-	int16_t x_bump = (flightResolution == TIE_FLIGHT_RES_VGA) ? 0 : 1;
+	glyph_w = sys2_calclength((uint8_t*)separator_colon);
+	x_bump = (flightResolution == TIE_FLIGHT_RES_VGA) ? 0 : 1;
 	festring_setcursor((int16_t)(instruments[TIE_HUDI_CLOCK_DIGITS].x + glyph_w + x_bump),
 					   (int16_t)instruments[TIE_HUDI_CLOCK_DIGITS].y);
 	panelrts_outnum((int32_t)sec_v, 2, 2);
@@ -759,29 +843,42 @@ void panel_updatepower(void) {
  */
 // FUNCTION: TIE95 0x41418
 void panel_updatelasers(void) {
+	uint16_t species_idx;
+	uint16_t weapon_groups;
+	uint16_t idx;
+	uint16_t g;
+
 	lockflag = 0;
 
-	uint16_t species_idx = pstate.player_craft->species_idx;
-	uint16_t weapon_groups = pstate.player_craft->weapon_group_cnt;
+	species_idx = pstate.player_craft->species_idx;
+	weapon_groups = pstate.player_craft->weapon_group_cnt;
 	if (!weapon_groups)
 		return;
 
-	uint16_t idx = 37;
+	idx = 37;
 
-	for (uint16_t g = 0; g < weapon_groups; ++g) {
+	for (g = 0; g < weapon_groups; ++g) {
 		/* Per-group row coords. */
 		uint16_t row_idx = g + 3;
 		uint16_t x0 = instruments[row_idx].x;
 		uint16_t y0 = instruments[row_idx].y;
+		uint16_t shape_base;
+		int16_t charge;
+		int16_t led_count_new;
+		int16_t empty_frame, filled_frame;
+		uint8_t bank;
+		int16_t status_val;
+
 		if (!(x0 + y0)) {
 			++idx;
 			continue;
 		}
 
-		uint16_t shape_base = instruments[row_idx].param1;
-		int16_t charge = (int8_t)pstate.player_craft->weapon_slots[g].charge;
-		int16_t led_count_new = 0;
-		int16_t empty_frame = 0, filled_frame = 0;
+		shape_base = instruments[row_idx].param1;
+		charge = (int8_t)pstate.player_craft->weapon_slots[g].charge;
+		led_count_new = 0;
+		empty_frame = 0;
+		filled_frame = 0;
 
 		if (!camera.pilotview && (pstate.player_craft->working_subsystems & 2) &&
 			(pstate.player_craft->working_subsystems & 4)) {
@@ -801,17 +898,22 @@ void panel_updatelasers(void) {
 			}
 
 			if (led_count_new != oldinstruments[3 + g]) {
+				int16_t step;
+				uint8_t flip;
+				int16_t led_x;
+				int16_t l;
+
 				oldinstruments[3 + g] = led_count_new;
-				int16_t step = (flightResolution == TIE_FLIGHT_RES_VGA) ? 3 : 6;
-				uint8_t flip = 0;
+				step = (flightResolution == TIE_FLIGHT_RES_VGA) ? 3 : 6;
+				flip = 0;
 				if (instruments[row_idx].param2) {
 					step = (int16_t)-step;
 					flip = 1;
 				}
-				int16_t led_x = (int16_t)x0;
-				for (int16_t l = 0; l < 10; ++l) {
+				led_x = (int16_t)x0;
+				for (l = 0; l < 10; ++l) {
 					int16_t shape_frame = (l >= led_count_new) ? empty_frame : filled_frame;
-					drawshape(FARBUFF(shape_base + shape_frame), led_x, (int16_t)y0, 253, flip);
+					drawshape(farbufferptrs[shape_base + shape_frame], led_x, (int16_t)y0, 253, flip);
 					led_x = (int16_t)(led_x + step);
 				}
 
@@ -825,8 +927,8 @@ void panel_updatelasers(void) {
 
 		/* The active weapon bank gates the lever; uncharged, missile-mode,
 		 * and wrong-bank groups show the off state. */
-		uint8_t bank = (g > spec_data[species_idx].laser_end[0]) ? 1u : 0u;
-		int16_t status_val;
+		bank = (g > spec_data[species_idx].laser_end[0]) ? 1u : 0u;
+
 		if (charge <= 0 || !(pstate.player_craft->status_flags & 0x10)) {
 			status_val = 0;
 		} else if (pstate.player_weapon_mode || pstate.player_weapon_group != bank) {
@@ -902,10 +1004,14 @@ void panel_updateweapons(void) {
 // FUNCTION: TIE95 0x4194C
 void panel_updatehardpoint(uint16_t slot, uint16_t hp_idx, uint16_t flags) {
 	uint16_t ammo = 0;
+	uint16_t lever_val;
+
 	if (pstate.player_craft->missile_group_cnt)
 		ammo = pstate.player_craft->weapon_slots[slot].ammo;
 
 	if (ammo != (uint16_t)oldinstruments[15 + hp_idx]) {
+		uint16_t digits;
+
 		oldinstruments[15 + hp_idx] = (int16_t)ammo;
 		festring_setfontsize(2);
 		festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
@@ -914,13 +1020,12 @@ void panel_updatehardpoint(uint16_t slot, uint16_t hp_idx, uint16_t flags) {
 		festring_settextcolor(0x4A);
 		dropflag = 0;
 
-		uint16_t digits = (pstate.player_spec_num == spec_getspecnum(12)) ? 2 : 1;
+		digits = (pstate.player_spec_num == spec_getspecnum(12)) ? 2 : 1;
 		panelrts_outnum((int32_t)ammo, digits, 1);
 
 		TieHudSnapshot_RecordInstrumentDisplay((uint16_t)(15 + hp_idx), (int16_t)ammo, 0x4A, (uint8_t)digits);
 	}
 
-	uint16_t lever_val;
 	if (ammo && (pstate.player_craft->status_flags & 8)) {
 		if (pstate.player_weapon_mode && pstate.player_weapon_group == flags) {
 			uint8_t armed = pstate.player_craft->missile_armed[pstate.player_weapon_group];
@@ -952,14 +1057,18 @@ void panel_updatehardpoint(uint16_t slot, uint16_t hp_idx, uint16_t flags) {
 static void panel_shield_onehalf(int16_t shield_hp, uint16_t normal_idx, uint16_t over_idx,
 								 int16_t flash_match) {
 	int16_t hp = (shield_hp < 0) ? 0 : shield_hp;
+	int16_t sp;
+	uint16_t lo_leds, hi_leds;
+
 	if ((pstate.player_craft->status_flags & 1) == 0)
 		hp = 0;
 
-	int16_t sp = spec_data[pstate.player_spec_num].shield_points;
+	sp = spec_data[pstate.player_spec_num].shield_points;
 	if (!mission.difficulty)
 		sp *= 2;
 
-	uint16_t lo_leds = 0, hi_leds = 0;
+	lo_leds = 0;
+	hi_leds = 0;
 	if (hp < sp) {
 		uint16_t pct = math2_percentage((uint16_t)hp, (uint16_t)sp);
 		hi_leds = 0;
@@ -984,6 +1093,8 @@ static void panel_shield_onehalf(int16_t shield_hp, uint16_t normal_idx, uint16_
 
 // FUNCTION: TIE95 0x41ADC
 void panel_updateshields(void) {
+	uint16_t balance_val;
+
 	if ((pstate.player_craft->working_subsystems & 0x20) == 0)
 		return;
 
@@ -992,7 +1103,6 @@ void panel_updateshields(void) {
 	panel_shield_onehalf(pstate.player_craft->rear_shield, TIE_HUDI_SHIELD_REAR_NORMAL,
 						 TIE_HUDI_SHIELD_REAR_OVER, 1);
 
-	uint16_t balance_val;
 	if (timers[TIMER_SHIELD_OVERLOAD]) {
 		balance_val = 3;
 	} else {
@@ -1011,16 +1121,22 @@ void panel_updateshields(void) {
  */
 // FUNCTION: TIE95 0x41D7C
 void panel_updatebeam(void) {
+	int16_t beam_charge;
+	uint8_t fire;
+	TieHudState* hud;
+	int16_t step_rev;
+	int i;
+
 	if ((pstate.player_craft->working_subsystems & 0x10) == 0)
 		return;
 
-	int16_t beam_charge = pstate.player_craft->beam_charge;
+	beam_charge = pstate.player_craft->beam_charge;
 	if (beam_charge < 0)
 		beam_charge = 0;
 	if ((pstate.player_craft->status_flags & 0x100) == 0)
 		beam_charge = 0;
 
-	uint8_t fire = ((pstate.player_craft->beam_state & 0x80) != 0) ? 1 : 0;
+	fire = ((pstate.player_craft->beam_state & 0x80) != 0) ? 1 : 0;
 	if ((pstate.player_craft->status_flags & 0x100) == 0)
 		fire = 0;
 	panel_updatelever(TIE_HUDI_BEAM_FIRE, fire);
@@ -1028,11 +1144,13 @@ void panel_updatebeam(void) {
 	if ((uint16_t)oldinstruments[TIE_HUDI_BEAM_ARC] == (uint16_t)beam_charge)
 		return;
 	oldinstruments[TIE_HUDI_BEAM_ARC] = beam_charge;
-	TieHudState* hud = TieSnapshotBuilder_HudMut();
+	hud = TieSnapshotBuilder_HudMut();
 
-	int16_t step_rev = 8;
-	for (int i = 0; i < 9; ++i) {
+	step_rev = 8;
+	for (i = 0; i < 9; ++i) {
 		uint8_t led_color;
+		int16_t led_x, led_y;
+
 		if (beam_charge <= 1000 * (i + 1)) {
 			int16_t excess = (int16_t)(beam_charge - 1000 * i);
 			if (excess < 0) {
@@ -1048,7 +1166,6 @@ void panel_updatebeam(void) {
 
 		hud->beam_arc_led_colors[i] = led_color;
 
-		int16_t led_x, led_y;
 		if (tie_is_high_resolution_flight()) {
 			led_x = (int16_t)(3 * step_rev + instruments[TIE_HUDI_BEAM_ARC].x);
 			led_y = (int16_t)(3 * step_rev + instruments[TIE_HUDI_BEAM_ARC].y);
@@ -1059,8 +1176,8 @@ void panel_updatebeam(void) {
 
 		--step_rev;
 
-		rtsvga2_drawmonoshapeVGA((const uint8_t*)FARBUFF(i + instruments[TIE_HUDI_BEAM_ARC].param1), led_x,
-								 led_y, instruments[TIE_HUDI_BEAM_ARC].param2, led_color);
+		rtsvga2_drawmonoshapeVGA((const uint8_t*)farbufferptrs[i + instruments[TIE_HUDI_BEAM_ARC].param1],
+								 led_x, led_y, instruments[TIE_HUDI_BEAM_ARC].param2, led_color);
 	}
 }
 
@@ -1103,6 +1220,10 @@ void panel_updategunsight(void) {
  */
 // FUNCTION: TIE95 0x3FE50
 void panel_updateradar(void) {
+	uint16_t i;
+	uint16_t j;
+	uint16_t k;
+
 	if (!(pstate.player_craft->working_subsystems & 0x80) ||
 		!(pstate.player_craft->working_subsystems & 0x100))
 		return;
@@ -1127,7 +1248,7 @@ void panel_updateradar(void) {
 	}
 
 	/* Dynamic craft [0..NUM_CRAFTS) except self. */
-	for (uint16_t i = 0; i < NUM_CRAFTS; ++i) {
+	for (i = 0; i < NUM_CRAFTS; ++i) {
 		if (i == pstate.object_idx)
 			continue;
 		if (!(species_table[objects[i].ship_idx].side & 1))
@@ -1138,14 +1259,14 @@ void panel_updateradar(void) {
 	}
 
 	/* Warheads [NUM_CRAFTS..WARHEAD_SLOT_END). */
-	for (uint16_t j = NUM_CRAFTS; j < WARHEAD_SLOT_END; ++j) {
+	for (j = NUM_CRAFTS; j < WARHEAD_SLOT_END; ++j) {
 		if (!(species_table[objects[j].ship_idx].side & 1))
 			continue;
 		panel_addbliptoradar(j);
 	}
 
 	/* Static objects (mapped to 0x3800..0x383F). */
-	for (uint16_t k = 0; k < 0x40u; ++k) {
+	for (k = 0; k < 0x40u; ++k) {
 		if (!(species_table[staticobjects[k].species].side & 1))
 			continue;
 		panel_addbliptoradar((uint16_t)(14336 + k));
@@ -1184,6 +1305,11 @@ void panel_updateradar(void) {
 void panel_addbliptoradar(uint16_t target_obj) {
 	int32_t eye_x, eye_y_neg, eye_z;
 
+	int is_forward;
+	int32_t rough;
+	int16_t blip_off_x;
+	int16_t blip_off_y;
+
 	if (TieProfile_UsesTie98Logic()) {
 		int32_t dx_world, dy_world, dz_world;
 		FlightObject* pl = pstate.player;
@@ -1203,18 +1329,19 @@ void panel_addbliptoradar(uint16_t target_obj) {
 			fview_calcrotateorient(pl->roll, 0, pl);
 		}
 
-		eye_z = (int32_t)(((int64_t)pl->fwd_x * dx_world) >> 15) +
-				(int32_t)(((int64_t)pl->fwd_y * dy_world) >> 15) +
-				(int32_t)(((int64_t)pl->fwd_z * dz_world) >> 15);
-		eye_x = (int32_t)(((int64_t)pl->side_x * dx_world) >> 15) +
-				(int32_t)(((int64_t)pl->side_y * dy_world) >> 15) +
-				(int32_t)(((int64_t)pl->side_z * dz_world) >> 15);
-		eye_y_neg = -((int32_t)(((int64_t)pl->up_x * dx_world) >> 15) +
-					  (int32_t)(((int64_t)pl->up_y * dy_world) >> 15) +
-					  (int32_t)(((int64_t)pl->up_z * dz_world) >> 15));
+		eye_z = math2_mul_q15(pl->fwd_x, dx_world) + math2_mul_q15(pl->fwd_y, dy_world) +
+				math2_mul_q15(pl->fwd_z, dz_world);
+		eye_x = math2_mul_q15(pl->side_x, dx_world) + math2_mul_q15(pl->side_y, dy_world) +
+				math2_mul_q15(pl->side_z, dz_world);
+		eye_y_neg = -(math2_mul_q15(pl->up_x, dx_world) + math2_mul_q15(pl->up_y, dy_world) +
+					  math2_mul_q15(pl->up_z, dz_world));
 	} else if (target_obj >= NUM_CRAFTS) {
 		int32_t dx_world, dy_world, dz_world;
 		FlightObject* pl = pstate.player;
+		int16_t dx;
+		int16_t dy;
+		int16_t dz;
+
 		if (target_obj < 0x3800u) {
 			dx_world = (objects[target_obj].world_x - pl->world_x) >> 8;
 			dy_world = (objects[target_obj].world_y - pl->world_y) >> 8;
@@ -1231,9 +1358,9 @@ void panel_addbliptoradar(uint16_t target_obj) {
 			fview_calcrotateorient(pl->roll, 0, pl);
 		}
 
-		int16_t dx = (int16_t)dx_world;
-		int16_t dy = (int16_t)dy_world;
-		int16_t dz = (int16_t)dz_world;
+		dx = (int16_t)dx_world;
+		dy = (int16_t)dy_world;
+		dz = (int16_t)dz_world;
 
 		/* Rotate by player orientation: dot product with (fwd/side/up). */
 		eye_z = ((int32_t)pl->fwd_z * dz + (int32_t)pl->fwd_y * dy + (int32_t)pl->fwd_x * dx) >> 15;
@@ -1248,7 +1375,7 @@ void panel_addbliptoradar(uint16_t target_obj) {
 		eye_z = cp->eye_z_cache;
 	}
 
-	int is_forward = (eye_z >= 0);
+	is_forward = (eye_z >= 0);
 	if (!is_forward)
 		eye_z = -eye_z;
 
@@ -1276,7 +1403,7 @@ void panel_addbliptoradar(uint16_t target_obj) {
 
 	/* Distance fade. */
 	pai_roughdistancebetween(pstate.object_idx, target_obj);
-	int32_t rough = roughdistance;
+	rough = roughdistance;
 	if (rough > 122166) {
 		if (blipcolor == 47)
 			blipcolor = 45;
@@ -1301,13 +1428,15 @@ void panel_addbliptoradar(uint16_t target_obj) {
 	 * blip / bracket fields; the engine path below adds the disc
 	 * anchor in-place to produce the absolute classic coords it
 	 * draws to the FB. */
-	const int16_t blip_off_x = radarx;
-	const int16_t blip_off_y = radary;
+	blip_off_x = radarx;
+	blip_off_y = radary;
 
 	if (is_forward) {
+		RadarBlip* entry;
+
 		radary = (int16_t)(radary + instruments[TIE_HUDI_RADAR_LEFT].y);
 		radarx = (int16_t)(radarx + instruments[TIE_HUDI_RADAR_LEFT].x);
-		RadarBlip* entry = &newleftbliplist[newleftlistsize];
+		entry = &newleftbliplist[newleftlistsize];
 		entry->x = (uint16_t)radarx;
 		entry->y = (uint16_t)radary;
 		entry->color = (uint16_t)blipcolor;
@@ -1318,8 +1447,10 @@ void panel_addbliptoradar(uint16_t target_obj) {
 			newleftlistsize = (int16_t)(newleftlistsize + 1);
 	} else {
 		int16_t right_y = (int16_t)(instruments[TIE_HUDI_RADAR_RIGHT].y + radary);
+		RadarBlip* entry;
+
 		radarx = (int16_t)(radarx + instruments[TIE_HUDI_RADAR_RIGHT].x);
-		RadarBlip* entry = &newrightbliplist[newrightlistsize];
+		entry = &newrightbliplist[newrightlistsize];
 		entry->x = (uint16_t)radarx;
 		entry->y = (uint16_t)right_y;
 		entry->color = (uint16_t)blipcolor;
@@ -1364,13 +1495,21 @@ static char pick_color_secondary(uint8_t side) {
 
 // FUNCTION: TIE95 0x40E94
 void panel_buildobjectname(uint16_t target_obj, uint8_t flags) {
+	uint8_t ship_idx;
+
 	tempstring[0] = 0;
 
 	if (target_obj >= 0x3800u) {
+		uint16_t si;
+		uint16_t species_id;
+		uint8_t fg_side;
+
 		if ((int16_t)target_obj < 0) { /* waypoint: ref with high bit set */
+			uint16_t wp;
+
 			if ((flags & 1) == 0)
 				return;
-			uint16_t wp = target_obj + 0x8000u; /* clear msb */
+			wp = target_obj + 0x8000u; /* clear msb */
 			festring_farstradd((char)0xFE);
 			festring_farstradd((char)0x43); /* 'C' */
 			if (waypointstrings && waypointstrings[wp])
@@ -1378,11 +1517,11 @@ void panel_buildobjectname(uint16_t target_obj, uint8_t flags) {
 			return;
 		}
 
-		uint16_t si = target_obj - 14336;
-		uint16_t species_id = staticobjects[si].species;
+		si = target_obj - 14336;
+		species_id = staticobjects[si].species;
 
 		festring_farstradd((char)0xFE);
-		uint8_t fg_side = fg_array[staticobjects[si].fg_idx].side;
+		fg_side = fg_array[staticobjects[si].fg_idx].side;
 		festring_farstradd(pick_color_primary(fg_side));
 
 		if ((flags & 1) && species_id >= 0x46u && species_id <= 0x55u) {
@@ -1403,7 +1542,7 @@ void panel_buildobjectname(uint16_t target_obj, uint8_t flags) {
 	}
 
 	/* Dynamic-object branch. */
-	uint8_t ship_idx = objects[target_obj].ship_idx;
+	ship_idx = objects[target_obj].ship_idx;
 
 	festring_farstradd((char)0xFE);
 	festring_farstradd(pick_color_primary(objects[target_obj].side));
@@ -1453,6 +1592,8 @@ void panel_buildobjectname(uint16_t target_obj, uint8_t flags) {
 // FUNCTION: TIE95 0x41288
 uint16_t panel_getcraftstatus(uint16_t target_obj) {
 	CraftData* cp = objects[target_obj].craft_ptr;
+	uint8_t order;
+
 	if (!cp->status_flags)
 		return 2;
 	if (cp->dock_state_flags)
@@ -1465,7 +1606,7 @@ uint16_t panel_getcraftstatus(uint16_t target_obj) {
 	if (spec_data[cp->species_idx].has_shields && (cp->forward_shield + cp->rear_shield) == 0) {
 		return 6;
 	}
-	uint8_t order = cp->current_order;
+	order = cp->current_order;
 	if (order == 44 || order == 64)
 		return 8;
 	return 0;
@@ -1505,6 +1646,9 @@ static uint16_t threat_blink_phase(void) {
 void panel_updatethreatweapons(void) {
 	uint16_t shield_pct = 0;
 
+	uint16_t hull_pct;
+	uint16_t ion, torp, missile, beam;
+
 	if (pstate.target_obj_idx < NUM_CRAFTS) {
 		CraftData* cp = objects[pstate.target_obj_idx].craft_ptr;
 		uint16_t shield_avg = (uint16_t)(cp->rear_shield + cp->forward_shield) >> 1;
@@ -1532,7 +1676,7 @@ void panel_updatethreatweapons(void) {
 	}
 	panel_updatevalue(TIE_HUDI_THREAT_SHIELD_PCT, shield_pct, 1);
 
-	uint16_t hull_pct = 0;
+	hull_pct = 0;
 	if (pstate.target_obj_idx < NUM_CRAFTS) {
 		CraftData* cp = objects[pstate.target_obj_idx].craft_ptr;
 		hull_pct = math2_percentage((uint16_t)(cp->hull_max - cp->hull_damage), cp->hull_max) / 0x28Fu;
@@ -1540,10 +1684,15 @@ void panel_updatethreatweapons(void) {
 	panel_updatevalue(TIE_HUDI_THREAT_HULL_PCT, hull_pct, 1);
 
 	/* Ion (137/139) / torp (141) / missile / beam levers. */
-	uint16_t ion = 0, torp = 0, missile = 0, beam = 0;
+	ion = 0;
+	torp = 0;
+	missile = 0;
+	beam = 0;
 	if (pstate.target_obj_idx < NUM_CRAFTS) {
 		CraftData* cp = objects[pstate.target_obj_idx].craft_ptr;
-		for (uint8_t i = 0; i < cp->laser_group_cnt; ++i) {
+		uint8_t i;
+
+		for (i = 0; i < cp->laser_group_cnt; ++i) {
 			uint8_t t = cp->laser_type[i];
 			if (t == 139 || t == 137)
 				ion = cp->laser_owner_player[i] ? (uint16_t)(threat_blink_phase() + 1u) : 1;
@@ -1551,7 +1700,9 @@ void panel_updatethreatweapons(void) {
 				torp = cp->laser_owner_player[i] ? (uint16_t)(threat_blink_phase() + 1u) : 1;
 		}
 		if (cp->mode_byte == 23) {
-			for (uint8_t k = 0; k < cp->missile_group_cnt; ++k) {
+			uint8_t k;
+
+			for (k = 0; k < cp->missile_group_cnt; ++k) {
 				if (cp->warhead_type[k]) {
 					missile =
 						((int16_t)cp->missile_count_total <= 0) ? 1u : (uint16_t)(threat_blink_phase() + 1u);
@@ -1568,11 +1719,33 @@ void panel_updatethreatweapons(void) {
 
 // FUNCTION: TIE95 0x42734
 void panel_updatethreatname(void) {
+	int16_t left, right;
+	int force_name_repaint;
+	int16_t prev_target;
+	int16_t dx;
+	int16_t dy;
+	int16_t fw;
+	int32_t scaled;
+	uint16_t km_int;
+	uint16_t km_frac;
+	TieHudInstrument* distance_int;
+	TieHudInstrument* distance_frac;
+	int16_t cargo_kind;
+	const char* cargo_str;
+	CraftData* cp;
+	uint16_t cur_order;
+	int16_t link;
+	int16_t ew;
+	uint16_t ey;
+	uint16_t ex;
+	int16_t cur_speed;
+	uint16_t secs, mins;
+	TieHudState* hud_e;
+
 	dropflag = 0;
 	festring_setbackcolor(0x2C);
 	festring_setfontsize(2);
 
-	int16_t left, right;
 	if (flightResolution == TIE_FLIGHT_RES_VGA) {
 		left = 66;
 		right = 246;
@@ -1581,9 +1754,12 @@ void panel_updatethreatname(void) {
 		right = 492;
 	}
 
-	int force_name_repaint = 0;
-	int16_t prev_target = lasttargetnum;
+	force_name_repaint = 0;
+	prev_target = lasttargetnum;
 	if (lasttargetnum != (int16_t)pstate.target_obj_idx) {
+		TieHudState* hud;
+		int16_t name_w;
+
 		lasttargetnum = (int16_t)pstate.target_obj_idx;
 
 		oldinstruments[70] = -1;
@@ -1594,7 +1770,7 @@ void panel_updatethreatname(void) {
 		oldinstruments[81] = -1;
 		oldinstruments[82] = -1;
 
-		TieHudState* hud = TieSnapshotBuilder_HudMut();
+		hud = TieSnapshotBuilder_HudMut();
 		hud->target_order_text[0] = '\0';
 		hud->target_link_target_label[0] = '\0';
 		hud->target_link_name[0] = '\0';
@@ -1603,7 +1779,7 @@ void panel_updatethreatname(void) {
 		hud->target_eta_label[0] = '\0';
 		hud->target_eta_text[0] = '\0';
 
-		int16_t name_w = (flightResolution == TIE_FLIGHT_RES_VGA) ? 76 : 114;
+		name_w = (flightResolution == TIE_FLIGHT_RES_VGA) ? 76 : 114;
 		festring_setbound((int16_t)instruments[69].x, (int16_t)instruments[69].y,
 						  (int16_t)(instruments[69].x + name_w),
 						  (int16_t)(instruments[69].y + fontheight + 1));
@@ -1632,8 +1808,8 @@ void panel_updatethreatname(void) {
 		return;
 
 	/* Target distance line. */
-	int16_t dx = (int16_t)instruments[71].x;
-	int16_t dy = (int16_t)instruments[71].y;
+	dx = (int16_t)instruments[71].x;
+	dy = (int16_t)instruments[71].y;
 	if (prev_target == -1) {
 		festring_setcursor(dx, dy);
 		festring_settextcolor(0x49);
@@ -1641,23 +1817,23 @@ void panel_updatethreatname(void) {
 	}
 	pai_distancebetween(pstate.object_idx, (uint16_t)lasttargetnum);
 
-	int16_t fw = (flightResolution == TIE_FLIGHT_RES_VGA) ? 54 : 81;
+	fw = (flightResolution == TIE_FLIGHT_RES_VGA) ? 54 : 81;
 	festring_setbound(dx, dy, (int16_t)(dx + fw), (int16_t)(dy + fontheight + 1));
 	festring_settextcolor(0x4A);
 
-	int32_t scaled = (trig2_polardistance * 161) >> 16;
+	scaled = (trig2_polardistance * 161) >> 16;
 	if ((uint32_t)(trig2_polardistance >> 16) >= 0x2710u)
 		scaled = 9999;
 
-	uint16_t km_int = (uint16_t)scaled / 100u;
-	uint16_t km_frac = (uint16_t)scaled % 100u;
+	km_int = (uint16_t)scaled / 100u;
+	km_frac = (uint16_t)scaled % 100u;
 	/* These fields bypass panel_updatevalue in the classic renderer, so
 	 * publish their numeric metadata explicitly for the HD text pass. */
-	TieHudInstrument* distance_int = &TieSnapshotBuilder_HudMut()->instruments[TIE_HUDI_THREAT_DIST_KM_INT];
+	distance_int = &TieSnapshotBuilder_HudMut()->instruments[TIE_HUDI_THREAT_DIST_KM_INT];
 	distance_int->value = (int16_t)km_int;
 	distance_int->color = 0x4A;
 	distance_int->digits = 2;
-	TieHudInstrument* distance_frac = &TieSnapshotBuilder_HudMut()->instruments[TIE_HUDI_THREAT_DIST_KM_FRAC];
+	distance_frac = &TieSnapshotBuilder_HudMut()->instruments[TIE_HUDI_THREAT_DIST_KM_FRAC];
 	distance_frac->value = (int16_t)km_frac;
 	distance_frac->color = 0x4A;
 	distance_frac->digits = 2;
@@ -1667,15 +1843,17 @@ void panel_updatethreatname(void) {
 		panelrts_outnum((int32_t)km_int, 2, 1);
 	}
 	if ((int16_t)km_frac != oldinstruments[72]) {
+		int16_t sep_w;
+
 		oldinstruments[72] = (int16_t)km_frac;
-		int16_t sep_w = sys2_calclength((uint8_t*)&separator_period[0]);
+		sep_w = sys2_calclength((uint8_t*)&separator_period[0]);
 		festring_setcursor((int16_t)(dx + sep_w + 1), dy);
 		panelrts_outnum((int32_t)km_frac, 2, 2);
 	}
 
 	/* Cargo / species tag. */
-	int16_t cargo_kind = 2;
-	const char* cargo_str = (const char*)nonestring;
+	cargo_kind = 2;
+	cargo_str = (const char*)nonestring;
 	if (pstate.target_obj_idx < NUM_CRAFTS) {
 		CraftData* cp = objects[pstate.target_obj_idx].craft_ptr;
 		if (spec_data[cp->species_idx].has_cargo) {
@@ -1694,15 +1872,18 @@ void panel_updatethreatname(void) {
 		}
 	}
 	if (cargo_kind != oldinstruments[70]) {
+		int16_t cw;
+		TieHudState* hud;
+
 		oldinstruments[70] = cargo_kind;
-		int16_t cw = (flightResolution == TIE_FLIGHT_RES_VGA) ? 50 : 75;
+		cw = (flightResolution == TIE_FLIGHT_RES_VGA) ? 50 : 75;
 		festring_setbound((int16_t)instruments[70].x, (int16_t)instruments[70].y,
 						  (int16_t)(instruments[70].x + cw), (int16_t)(instruments[70].y + fontheight + 1));
 		clearwindow();
 		festring_setcursor((int16_t)instruments[70].x, (int16_t)instruments[70].y);
 		festring_settextcolor(0x46);
 		festring_outstring((const uint8_t*)cargo_str);
-		TieHudState* hud = TieSnapshotBuilder_HudMut();
+		hud = TieSnapshotBuilder_HudMut();
 		str_copy_bounded(hud->threat_cargo, sizeof hud->threat_cargo, (const uint8_t*)cargo_str);
 		hud->instruments[70].color = 0x46;
 	}
@@ -1711,8 +1892,8 @@ void panel_updatethreatname(void) {
 	if (pstate.target_obj_idx >= NUM_CRAFTS)
 		return;
 
-	CraftData* cp = objects[pstate.target_obj_idx].craft_ptr;
-	uint16_t cur_order = cp->current_order;
+	cp = objects[pstate.target_obj_idx].craft_ptr;
+	cur_order = cp->current_order;
 	if (!cp->status_flags) {
 		cur_order = 42;
 	} else if (!objects[pstate.target_obj_idx].current_speed) {
@@ -1721,9 +1902,17 @@ void panel_updatethreatname(void) {
 	}
 
 	if ((int16_t)cur_order != oldinstruments[79]) {
+		int16_t ow;
+		uint16_t yy;
+		const uint8_t* order_text;
+		int16_t eta_w;
+		uint16_t eta_y;
+		const uint8_t* eta_label;
+		TieHudState* hud;
+
 		oldinstruments[79] = (int16_t)cur_order;
-		int16_t ow = (flightResolution == TIE_FLIGHT_RES_VGA) ? 190 : 285;
-		uint16_t yy = instruments[79].y;
+		ow = (flightResolution == TIE_FLIGHT_RES_VGA) ? 190 : 285;
+		yy = instruments[79].y;
 		festring_setbound(left, (int16_t)yy, (int16_t)(left + ow), (int16_t)(yy + fontheight + 1));
 		clearwindow();
 		festring_setcursor(left, (int16_t)yy);
@@ -1731,17 +1920,16 @@ void panel_updatethreatname(void) {
 		festring_outstring((const uint8_t*)currentorderstring);
 		festring_settextcolor(0x4E);
 
-		const uint8_t* order_text = (const uint8_t*)messagetable[convertmessage[cur_order]];
+		order_text = (const uint8_t*)messagetable[convertmessage[cur_order]];
 		festring_outstring(order_text);
 
-		int16_t eta_w = (flightResolution == TIE_FLIGHT_RES_VGA) ? 100 : 150;
-		uint16_t eta_y = instruments[82].y;
+		eta_w = (flightResolution == TIE_FLIGHT_RES_VGA) ? 100 : 150;
+		eta_y = instruments[82].y;
 		festring_setbound(left, (int16_t)eta_y, (int16_t)(left + eta_w), (int16_t)(eta_y + fontheight + 1));
 		clearwindow();
 		festring_setcursor(left, (int16_t)eta_y);
 		festring_settextcolor(0x45);
 
-		const uint8_t* eta_label;
 		if (objects[pstate.target_obj_idx].current_speed) {
 			eta_label = ((uint16_t)cp->ai_target_ref >= 0x8000u) ? (const uint8_t*)timetodeststring
 																 : (const uint8_t*)timetotargetstring;
@@ -1750,37 +1938,44 @@ void panel_updatethreatname(void) {
 		}
 		festring_outstring(eta_label);
 
-		TieHudState* hud = TieSnapshotBuilder_HudMut();
+		hud = TieSnapshotBuilder_HudMut();
 		str_copy_bounded(hud->target_order_text, sizeof hud->target_order_text, order_text);
 		str_copy_bounded(hud->target_eta_label, sizeof hud->target_eta_label, eta_label);
 		hud->instruments[79].color = 0x4E;
 	}
 
-	int16_t link = cp->status_flags ? cp->ai_target_ref : -1;
+	link = cp->status_flags ? cp->ai_target_ref : -1;
 	if (link != oldinstruments[80]) {
+		const uint8_t* link_target_label;
+		const uint8_t* link_dist_label;
+		int16_t name_w;
+		uint16_t nx;
+		const uint8_t* link_name;
+		TieHudState* hud;
+
 		oldinstruments[80] = link;
 		festring_settextcolor(0x45);
 		festring_setbound(left, (int16_t)instruments[80].y, right, (int16_t)(instruments[80].y + fontheight));
 		clearwindow();
 		festring_setcursor(left, (int16_t)instruments[80].y);
-		const uint8_t* link_target_label =
+		link_target_label =
 			((uint16_t)link >= 0x8000u) ? (const uint8_t*)curdeststring : (const uint8_t*)curtargetstring;
 		festring_outstring(link_target_label);
 		festring_setbound(left, (int16_t)instruments[81].y, right, (int16_t)(instruments[81].y + fontheight));
 		clearwindow();
 		festring_setcursor(left, (int16_t)instruments[81].y);
-		const uint8_t* link_dist_label = ((uint16_t)link >= 0x8000u) ? (const uint8_t*)disttodeststring
-																	 : (const uint8_t*)distfromtargetstring;
+		link_dist_label = ((uint16_t)link >= 0x8000u) ? (const uint8_t*)disttodeststring
+													  : (const uint8_t*)distfromtargetstring;
 		festring_outstring(link_dist_label);
 
 		/* Link target name. */
-		int16_t name_w = (flightResolution == TIE_FLIGHT_RES_VGA) ? 100 : 150;
-		uint16_t nx = instruments[80].x;
+		name_w = (flightResolution == TIE_FLIGHT_RES_VGA) ? 100 : 150;
+		nx = instruments[80].x;
 		festring_setbound((int16_t)nx, (int16_t)instruments[80].y, (int16_t)(nx + name_w),
 						  (int16_t)(instruments[80].y + fontheight + 1));
 		clearwindow();
 		festring_setcursor((int16_t)nx, (int16_t)instruments[80].y);
-		const uint8_t* link_name;
+
 		if (link == 0xFF || link == -1) {
 			link_name = (const uint8_t*)notargetstring;
 		} else {
@@ -1789,7 +1984,7 @@ void panel_updatethreatname(void) {
 		}
 		festring_outstring(link_name);
 
-		TieHudState* hud = TieSnapshotBuilder_HudMut();
+		hud = TieSnapshotBuilder_HudMut();
 		str_copy_bounded(hud->target_link_target_label, sizeof hud->target_link_target_label,
 						 link_target_label);
 		str_copy_bounded(hud->target_link_dist_label, sizeof hud->target_link_dist_label, link_dist_label);
@@ -1801,31 +1996,41 @@ void panel_updatethreatname(void) {
 	 * (instruments[82]) -- mirrors decomp branches. Numeric cache slots
 	 * are threat_cache_tgt_dist_frac (81) and threat_cache_eta_secs (82). */
 	if (link != -1) {
+		int16_t tx;
+		int16_t ty;
+		int32_t saved_polar;
+		int16_t tw;
+		int32_t t_scaled;
+		uint16_t t_int;
+		uint16_t t_frac;
+
 		ai.active_obj_idx = pstate.target_obj_idx;
 		craftptr = (cp->mode_byte == 10) ? objects[cp->leader_obj_idx].craft_ptr : cp;
 		pai_targetdistance();
 
-		int16_t tx = (int16_t)instruments[81].x;
-		int16_t ty = (int16_t)instruments[81].y;
-		int32_t saved_polar = trig2_polardistance;
+		tx = (int16_t)instruments[81].x;
+		ty = (int16_t)instruments[81].y;
+		saved_polar = trig2_polardistance;
 
-		int16_t tw = (flightResolution == TIE_FLIGHT_RES_VGA) ? 54 : 81;
+		tw = (flightResolution == TIE_FLIGHT_RES_VGA) ? 54 : 81;
 		festring_setbound(tx, ty, (int16_t)(tx + tw), (int16_t)(ty + fontheight + 1));
 		festring_settextcolor(0x4A);
 
-		int32_t t_scaled = (trig2_polardistance * 161) >> 16;
+		t_scaled = (trig2_polardistance * 161) >> 16;
 		if ((uint32_t)(trig2_polardistance >> 16) >= 0x2710u)
 			t_scaled = 9999;
-		uint16_t t_int = (uint16_t)t_scaled / 100u;
-		uint16_t t_frac = (uint16_t)t_scaled % 100u;
+		t_int = (uint16_t)t_scaled / 100u;
+		t_frac = (uint16_t)t_scaled % 100u;
 		if ((int16_t)t_frac != oldinstruments[81]) {
+			TieHudState* hud;
+
 			oldinstruments[81] = (int16_t)t_frac;
 			festring_setcursor(tx, ty);
 			panelrts_outnum((int32_t)t_int, 2, 1);
 			outchar('.');
 			panelrts_outnum((int32_t)t_frac, 2, 2);
 
-			TieHudState* hud = TieSnapshotBuilder_HudMut();
+			hud = TieSnapshotBuilder_HudMut();
 			snprintf(hud->target_link_dist_text, sizeof hud->target_link_dist_text, "%u.%02u",
 					 (unsigned)t_int, (unsigned)t_frac);
 			hud->instruments[81].color = 0x4A;
@@ -1834,25 +2039,29 @@ void panel_updatethreatname(void) {
 	}
 
 	/* ETA clock -- mm:ss (instruments[82]). */
-	int16_t ew = (flightResolution == TIE_FLIGHT_RES_VGA) ? 54 : 81;
-	uint16_t ey = instruments[82].y;
-	uint16_t ex = instruments[82].x;
+	ew = (flightResolution == TIE_FLIGHT_RES_VGA) ? 54 : 81;
+	ey = instruments[82].y;
+	ex = instruments[82].x;
 	festring_setbound((int16_t)ex, (int16_t)ey, (int16_t)(ex + ew), (int16_t)(ey + fontheight + 1));
 	festring_settextcolor(0x52);
 	festring_setcursor((int16_t)ex, (int16_t)ey);
 
-	int16_t cur_speed = objects[pstate.target_obj_idx].current_speed;
-	uint16_t secs, mins;
+	cur_speed = objects[pstate.target_obj_idx].current_speed;
+
 	if (cur_speed) {
 		uint16_t tot = (uint16_t)(trig2_polardistance / (uint16_t)(18 * cur_speed));
 		mins = tot / 60u;
 		secs = tot % 60u;
 	} else {
 		uint16_t ord = cp->current_order;
+		uint16_t tot;
+
 		if (ord != 35 && ord != 66) {
 
+			TieHudState* hud_u;
+
 			festring_outstring((const uint8_t*)unknownstring);
-			TieHudState* hud_u = TieSnapshotBuilder_HudMut();
+			hud_u = TieSnapshotBuilder_HudMut();
 			str_copy_bounded(hud_u->target_eta_text, sizeof hud_u->target_eta_text,
 							 (const uint8_t*)unknownstring);
 			hud_u->instruments[82].color = 0x52;
@@ -1861,7 +2070,7 @@ void panel_updatethreatname(void) {
 		/* Hyperspace countdown: the shared maneuver_timer (ticks at the
 		 * PIT rate of ~236 Hz) is the one PAIMAN_intohyperspacemaneuver
 		 * seeded at 0x674. Divide by 236 for seconds, then mm:ss. */
-		uint16_t tot = (uint16_t)((uint32_t)cp->maneuver_timer / 236u);
+		tot = (uint16_t)((uint32_t)cp->maneuver_timer / 236u);
 		mins = tot / 60u;
 		secs = tot % 60u;
 	}
@@ -1874,7 +2083,7 @@ void panel_updatethreatname(void) {
 	outchar(':');
 	panelrts_outnum((int32_t)secs, 2, 2);
 
-	TieHudState* hud_e = TieSnapshotBuilder_HudMut();
+	hud_e = TieSnapshotBuilder_HudMut();
 	snprintf(hud_e->target_eta_text, sizeof hud_e->target_eta_text, "%02u:%02u", (unsigned)mins,
 			 (unsigned)secs);
 	hud_e->instruments[82].color = 0x52;
@@ -1887,6 +2096,15 @@ void panel_updatethreatname(void) {
  */
 // FUNCTION: TIE95 0x40530
 void panel_updatecmd(void) {
+	int16_t force_redraw;
+	int16_t text_width, name_width;
+	CraftData* tgt;
+	uint16_t shield_pct;
+	uint16_t hull_pct;
+	uint16_t sys_pct;
+	int16_t cargo_kind;
+	const uint8_t* cargo_str;
+
 	dropflag = 0;
 	if (mission.train_craft_type) {
 		gate_trainingupdatecrt((int16_t)instruments[2].x, (int16_t)instruments[2].y);
@@ -1896,8 +2114,8 @@ void panel_updatecmd(void) {
 	if ((pstate.player_craft->working_subsystems & 1) == 0)
 		return;
 
-	int16_t force_redraw = 0;
-	int16_t text_width, name_width;
+	force_redraw = 0;
+
 	if (flightResolution == TIE_FLIGHT_RES_VGA) {
 		text_width = 40;
 		name_width = 80;
@@ -1928,9 +2146,12 @@ void panel_updatecmd(void) {
 			 * 0x46 (SVGA) — see PANEL_updatecmd at 0x40696. The two
 			 * remap to different physical palette entries so SVGA
 			 * fidelity needs the 0x46 branch. */
+			uint8_t label_color;
+			TieHudInstrument* hi;
+
 			festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 			festring_setcursor((int16_t)instruments[88].x, (int16_t)instruments[88].y);
-			const uint8_t label_color = (flightResolution == TIE_FLIGHT_RES_VGA) ? 0x45 : 0x46;
+			label_color = (flightResolution == TIE_FLIGHT_RES_VGA) ? 0x45 : 0x46;
 			festring_settextcolor(label_color);
 			festring_outstring((const uint8_t*)shieldstring);
 			festring_setcursor((int16_t)(instruments[61].x + sys2_calclength((uint8_t*)separator_3_spaces)),
@@ -1955,7 +2176,7 @@ void panel_updatecmd(void) {
 							   (int16_t)instruments[58].y);
 			outchar('%');
 
-			TieHudInstrument* hi = TieSnapshotBuilder_HudMut()->instruments;
+			hi = TieSnapshotBuilder_HudMut()->instruments;
 			hi[86].color = label_color;
 			hi[87].color = label_color;
 			hi[88].color = label_color;
@@ -2028,10 +2249,10 @@ void panel_updatecmd(void) {
 						  force_redraw);
 	}
 
-	CraftData* tgt = (pstate.target_obj_idx < 0x3800u) ? objects[pstate.target_obj_idx].craft_ptr : NULL;
+	tgt = (pstate.target_obj_idx < 0x3800u) ? objects[pstate.target_obj_idx].craft_ptr : NULL;
 
 	/* Shield % (0x3D). */
-	uint16_t shield_pct = 0;
+	shield_pct = 0;
 	if (pstate.target_obj_idx < NUM_CRAFTS && tgt) {
 		uint16_t sum = (uint16_t)(tgt->rear_shield + tgt->forward_shield);
 		uint16_t sp = (uint16_t)(2 * spec_data[tgt->species_idx].shield_points);
@@ -2056,7 +2277,7 @@ void panel_updatecmd(void) {
 	panel_updatevalue(TIE_HUDI_TARGET_SHIELD_PCT, shield_pct, 1);
 
 	/* Hull % (0x3E). */
-	uint16_t hull_pct;
+
 	if (pstate.target_obj_idx >= NUM_CRAFTS) {
 		hull_pct = 100;
 	} else if (tgt && tgt->hull_damage <= tgt->hull_max) {
@@ -2069,7 +2290,7 @@ void panel_updatecmd(void) {
 	panel_updatevalue(TIE_HUDI_TARGET_HULL_PCT, hull_pct, 1);
 
 	/* Subsystem % (0x3A). */
-	uint16_t sys_pct;
+
 	if (pstate.target_obj_idx >= NUM_CRAFTS) {
 		sys_pct =
 			(pstate.target_obj_idx < 0x3800u || staticobjects[pstate.target_obj_idx - 14336].status_flags)
@@ -2079,7 +2300,9 @@ void panel_updatecmd(void) {
 		uint16_t capable = 0, alive = 0;
 		uint16_t cap_mask = tgt->subsystem_active;
 		uint16_t stat_mask = tgt->status_flags;
-		for (int b = 0; b < 16; ++b) {
+		int b;
+
+		for (b = 0; b < 16; ++b) {
 			if (cap_mask & 1)
 				++capable;
 			if (stat_mask & 1)
@@ -2101,8 +2324,8 @@ void panel_updatecmd(void) {
 	/* Cargo display (0x3F -> instrument[63]). Initial string is
 	 * componentnames[32] (retail @ 0x40c87..0x40c99); the fighter
 	 * if-body overrides for craft targets only. */
-	int16_t cargo_kind = 2;
-	const uint8_t* cargo_str = (const uint8_t*)((char**)componentnames)[32];
+	cargo_kind = 2;
+	cargo_str = (const uint8_t*)((char**)componentnames)[32];
 	if (pstate.target_obj_idx < NUM_CRAFTS && !objects[pstate.target_obj_idx].category && tgt) {
 		if (tgt->inspected) {
 			cargo_str = (const uint8_t*)tgt->cargo;
@@ -2138,6 +2361,8 @@ void panel_updatecmd(void) {
 		int16_t focus = (pstate.target_obj_idx >= NUM_CRAFTS) ? 40 : pstate.radar_target1;
 		festring_settextcolor(0x4E);
 		if (focus != oldinstruments[65]) {
+			const uint8_t* s;
+
 			oldinstruments[65] = focus;
 			festring_setbound((int16_t)instruments[65].x, (int16_t)instruments[65].y,
 							  (int16_t)(instruments[65].x + text_width),
@@ -2145,16 +2370,17 @@ void panel_updatecmd(void) {
 			clearwindow();
 			festring_setcursor((int16_t)instruments[65].x, (int16_t)instruments[65].y);
 
-			const uint8_t* s;
 			if (focus == 40) {
 				s = ((const uint8_t**)componentnames)[32];
 			} else {
 				const uint8_t model_type = objects[pstate.target_obj_idx].ship_idx;
+				uint16_t mt;
+
 				if (!TieProfile_UsesTie98Logic())
 					draw_lockshipfileptrs(model_type);
-				uint16_t mt = TieProfile_UsesTie98Logic()
-								  ? modelmesh_gettype(model_type, pstate.radar_target1)
-								  : componentblockptr[(uint16_t)pstate.radar_target1].mesh_type;
+				mt = TieProfile_UsesTie98Logic()
+						 ? modelmesh_gettype(model_type, pstate.radar_target1)
+						 : componentblockptr[(uint16_t)pstate.radar_target1].mesh_type;
 				/* Fighters display mesh type 7 with component label 26. */
 				if (objects[pstate.target_obj_idx].genus == GENUS_FIGHTER && mt == 7)
 					mt = 26;
@@ -2207,29 +2433,38 @@ void panel_forcenewviewdir(uint16_t view_idx) {
  */
 // FUNCTION: TIE95 0x43B6C
 void panel_loadcontrolpanel(char* name, void** section_ptrs, uint16_t count) {
+	uint16_t i;
+
 	strcpy(panelfilename, cockpitdir);
 	strcat(panelfilename, name);
 	strcat(panelfilename, ".LFD");
 
 	fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, panelfilename, _readmode, 1);
 
-	for (uint16_t i = 0; i < count; ++i) {
+	for (i = 0; i < count; ++i) {
 		uint8_t header[16];
+		int is_palt;
+		int j;
+		uint32_t size;
+		uint8_t* end;
+
 		section_ptrs[i] = temppanelptr;
 
 		fediskio_readfileblock(header, 16, 1, fileptr);
-		int is_palt = 1;
-		for (int j = 0; j < 4; ++j)
+		is_palt = 1;
+		for (j = 0; j < 4; ++j)
 			if (header[j] != (uint8_t)xpal_id[j])
 				is_palt = 0;
 
-		uint32_t size = br_u32le(header + 12); /* size field at +0x0C */
+		size = br_u32le(header + 12); /* size field at +0x0C */
 		fediskio_readfileblock(temppanelptr, size, 1, fileptr);
 
-		uint8_t* end = (uint8_t*)temppanelptr + size;
+		end = (uint8_t*)temppanelptr + size;
 		if (is_palt) {
 			uint8_t* p = (uint8_t*)temppanelptr;
-			for (uint32_t n = size; n--; ++p)
+			uint32_t n;
+
+			for (n = size; n--; ++p)
 				*p >>= 2;
 			section_ptrs[i] = (uint8_t*)section_ptrs[i] + 2;
 		}
@@ -2245,7 +2480,9 @@ void panel_loadcontrolpanel(char* name, void** section_ptrs, uint16_t count) {
 void panel_tryEMSforpanels(void) {
 	/* Binary: XMEMHDL_Alloc_Handle -> malloc; Lock/Unlock -> no-op.
 	 * handle field repurposed as a "loaded" flag (1 = loaded, 0 = empty). */
-	for (uint16_t i = 0; i < PANEL_NUM_VIEWS; ++i) {
+	uint16_t i;
+
+	for (i = 0; i < PANEL_NUM_VIEWS; ++i) {
 		panelviewptrs[i].handle = 0;
 		if (panelviewdefs[i].flags == 1) {
 			strcpy(panelfilename, cockpitdir);
@@ -2254,10 +2491,12 @@ void panel_tryEMSforpanels(void) {
 
 			fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, panelfilename, _readmode, 1);
 			if (fileptr) {
-				int32_t sz = filelen_filelength(fileptr);
+				int32_t sz = TieStorage_FileLength(fileptr);
+				void* buf;
+
 				fediskio_tryclosefile(0);
 				fediskio_UnlockGlobals();
-				void* buf = malloc((size_t)sz);
+				buf = malloc((size_t)sz);
 				fediskio_RelockGlobals();
 				if (buf) {
 					panelviewptrs[i].handle = 1;
@@ -2274,7 +2513,9 @@ void panel_tryEMSforpanels(void) {
 /* Release every preloaded panel-view buffer. Called from fediskio's
  * FreeFlightHandles teardown path. */
 void panel_freeviewbufs(void) {
-	for (uint16_t i = 0; i < PANEL_NUM_VIEWS; ++i) {
+	uint16_t i;
+
+	for (i = 0; i < PANEL_NUM_VIEWS; ++i) {
 		free(panel_view_bufs[i]);
 		panel_view_bufs[i] = NULL;
 		panelviewptrs[i].handle = 0;
@@ -2338,17 +2579,21 @@ void HudInstrument_decode(HudInstrument* dst, const uint8_t* src) {
 /* Decode .INT records without relying on host alignment or byte order. */
 // FUNCTION: TIE95 0x43F4C
 void panel_loadpanelviewdefs(char* base_name) {
+	uint8_t views_buf[PANEL_NUM_VIEWS * PANELVIEWDEF_DISK_SIZE];
+	int i;
+	uint8_t instr_buf[PANEL_NUM_INSTRUMENTS * HUDINSTRUMENT_DISK_SIZE];
+
 	strcpy(panelfilename, base_name);
 	strcat(panelfilename, ".INT");
 
 	fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, panelfilename, _readmode, 1);
-	uint8_t views_buf[PANEL_NUM_VIEWS * PANELVIEWDEF_DISK_SIZE];
+
 	fediskio_readfileblock(views_buf, PANELVIEWDEF_DISK_SIZE, PANEL_NUM_VIEWS, fileptr);
-	for (int i = 0; i < PANEL_NUM_VIEWS; ++i)
+	for (i = 0; i < PANEL_NUM_VIEWS; ++i)
 		PanelViewDef_decode(&panelviewdefs[i], views_buf + i * PANELVIEWDEF_DISK_SIZE);
-	uint8_t instr_buf[PANEL_NUM_INSTRUMENTS * HUDINSTRUMENT_DISK_SIZE];
+
 	fediskio_readfileblock(instr_buf, HUDINSTRUMENT_DISK_SIZE, PANEL_NUM_INSTRUMENTS, fileptr);
-	for (int i = 0; i < PANEL_NUM_INSTRUMENTS; ++i)
+	for (i = 0; i < PANEL_NUM_INSTRUMENTS; ++i)
 		HudInstrument_decode(&instruments[i], instr_buf + i * HUDINSTRUMENT_DISK_SIZE);
 	fediskio_readfileblock(parts, 11, 1, fileptr);
 	fediskio_tryclosefile(0);
@@ -2363,9 +2608,12 @@ void panel_loadpanelviewdefs(char* base_name) {
 // FUNCTION: TIE98 0x466B70
 void panel_dosetnewpilotview(uint16_t view_idx) {
 	const bool tie98 = TieProfile_UsesTie98Logic();
+	uint16_t panel_x;
+	uint16_t dest;
+
 	panelmirrorflag = 0;
-	uint16_t panel_x = 0;
-	uint16_t dest = view_idx;
+	panel_x = 0;
+	dest = view_idx;
 
 	if (view_idx != 18) {
 		uint8_t f = panelviewdefs[view_idx].flags;
@@ -2411,6 +2659,10 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
 			panel_clearmaskdata(pixelswide, pixelsdeep);
 			transfm2_screenyoffset = 0;
 		} else {
+			uint16_t skip_color;
+			uint16_t geom;
+			uint32_t displaycorner_off;
+
 			if (!panelviewptrs[dest].handle || !panelsloadedflag) {
 				temppanelptr = newbuf;
 				panel_loadcontrolpanel(panelviewdefs[dest].name, &panelviewptrs[dest].image, 3);
@@ -2418,7 +2670,7 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
 			buildpalette((const uint8_t*)panelviewptrs[dest].palette, 0, 64);
 			/* TIE98 leaves palette index 0 transparent over a deep-space clear;
 			 * TIE95 cockpit shapes use palette index 253 as their skip color. */
-			uint16_t skip_color = 253;
+			skip_color = 253;
 			if (tie98) {
 				backcolor = deepspacecolor;
 				festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)maxPixelsDeep);
@@ -2427,10 +2679,10 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
 			}
 			drawshape(panelviewptrs[dest].image, panel_x, 0, skip_color, panelmirrorflag);
 
-			uint16_t geom = (panelmirrorflag == 1) ? view_idx : dest;
+			geom = (panelmirrorflag == 1) ? view_idx : dest;
 			/* displaycorner is the full framebuffer offset of the viewport origin:
 			 * bytes for TIE98 and pixels for TIE95. */
-			uint32_t displaycorner_off = calcposition(panelviewdefs[geom].pos_x, panelviewdefs[geom].pos_y);
+			displaycorner_off = calcposition(panelviewdefs[geom].pos_x, panelviewdefs[geom].pos_y);
 			if (tie98)
 				logbuf2_setbufferdimensions_tie98(panelviewdefs[geom].width, panelviewdefs[geom].depth, 0,
 												  displaycorner_off);
@@ -2457,11 +2709,16 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
 	}
 
 	if (dest == 17) {
+		int16_t y;
+		int16_t y2;
+		uint16_t half;
+		uint16_t hw;
+
 		festring_setfontsize(2);
-		int16_t y = (int16_t)instruments[33].y;
-		int16_t y2 = (int16_t)(instruments[33].y + fontheight + 1);
-		uint16_t half = (uint16_t)screenXRes >> 1;
-		uint16_t hw = panel_AdjustXForRes(40);
+		y = (int16_t)instruments[33].y;
+		y2 = (int16_t)(instruments[33].y + fontheight + 1);
+		half = (uint16_t)screenXRes >> 1;
+		hw = panel_AdjustXForRes(40);
 		festring_setbound((int16_t)(half - hw), y, (int16_t)(half + hw), y2);
 		festring_setbackcolor(0x40);
 		clearwindow();
@@ -2491,7 +2748,9 @@ void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint8_t
 	uint8_t* out = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
 	int is_svga = (screenXRes != 320);
 
-	for (uint16_t row = 0; row < height; ++row) {
+	uint16_t row;
+
+	for (row = 0; row < height; ++row) {
 		if (mirror) {
 			/* Mirror: build a rearranged scratch buffer, then walk it
 			 * backwards. Retail's trick is to swap each escape group's
@@ -2513,9 +2772,12 @@ void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint8_t
 					pos += 255;
 					if (is_svga && b == 0) {
 						/* Triple [0, 0, Y]: store [Y+1, 0, 0]. */
+						uint8_t b2;
+						uint8_t adj;
+
 						pos += 256;
-						uint8_t b2 = *mask_src++;
-						uint8_t adj = (uint8_t)(b2 + 1);
+						b2 = *mask_src++;
+						adj = (uint8_t)(b2 + 1);
 						*sp++ = adj;
 						*sp++ = 0;
 						*sp++ = 0;
@@ -2562,18 +2824,24 @@ void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint8_t
 			}
 		} else {
 			uint8_t first = *mask_src++;
+			uint16_t pos;
+
 			*out++ = first;
-			uint16_t pos = 0;
+			pos = 0;
 			while (pos < width) {
 				uint8_t r = *mask_src++;
 				if (!r) {
+					uint8_t b;
+
 					*out++ = 0;
 					pos += 255;
-					uint8_t b = *mask_src++;
+					b = *mask_src++;
 					if (is_svga && b == 0) {
+						uint8_t b2;
+
 						*out++ = 0;
 						pos += 256;
-						uint8_t b2 = *mask_src++;
+						b2 = *mask_src++;
 						*out++ = (uint8_t)(b2 + 1);
 						pos += (uint8_t)(b2 + 1);
 					} else if (is_svga && b == 0xFF) {
@@ -2608,7 +2876,9 @@ void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint8_t
 // FUNCTION: TIE95 0x441EC
 void panel_clearmaskdata(uint16_t width, uint16_t height) {
 	uint8_t* out = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
-	for (uint16_t row = 0; row < height; ++row) {
+	uint16_t row;
+
+	for (row = 0; row < height; ++row) {
 		*out++ = 1;
 		if (width >= 256) {
 			*out++ = 0;
@@ -2651,8 +2921,11 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 	int32_t save_camera_z = camera.z;
 	int16_t save_currenttarget = (int16_t)currenttarget;
 
+	uint32_t pos;
+	int32_t sub_world_x, sub_world_y, sub_world_z;
+
 	transfm2_screenyoffset = 0;
-	uint32_t pos = rtsvga2_calcpositionVGA(x, y);
+	pos = rtsvga2_calcpositionVGA(x, y);
 	logbuf2_startPIP(width, depth, clear_runs, pos);
 
 	if (clear_runs) {
@@ -2662,6 +2935,8 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 		 * the VGA path collapses 7|8 into a single mask. */
 		const uint8_t* src;
 		if (flightResolution == TIE_FLIGHT_RES_VGA) {
+			uint8_t* dst;
+
 			switch (pstate.player_spec_num) {
 				case 15:
 					src = gunboatcmdmaskdata;
@@ -2677,9 +2952,11 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 					src = cmdmaskdata;
 					break;
 			}
-			uint8_t* dst = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
+			dst = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
 			memcpy(dst, src, 200);
 		} else {
+			uint8_t* dst;
+
 			switch (pstate.player_spec_num) {
 				case 15:
 					src = gunboatcmd640maskdata;
@@ -2703,7 +2980,7 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 					src = cmd640maskdata;
 					break;
 			}
-			uint8_t* dst = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
+			dst = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
 			memcpy(dst, src, 480);
 		}
 	}
@@ -2725,7 +3002,9 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 	worldy = worldlocy - camera.y;
 	worldz = worldlocz - camera.z;
 
-	int32_t sub_world_x = 0, sub_world_y = 0, sub_world_z = 0;
+	sub_world_x = 0;
+	sub_world_y = 0;
+	sub_world_z = 0;
 	if (pstate.radar_enable && pstate.target_obj_idx < NUM_CRAFTS) {
 		const uint8_t model_type = objects[pstate.target_obj_idx].ship_idx;
 		if (TieProfile_UsesTie98Logic()) {
@@ -2735,9 +3014,13 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 			sub_world_z = worldlocz + rotatedz - camera.z;
 			TieHudSnapshot_RecordPipSubsystem(pstate.target_obj_idx);
 		} else {
-			draw_lockshipfileptrs(model_type);
-			ShipModelMesh* mesh = &componentblockptr[(uint16_t)pstate.radar_target1];
+			ShipModelMesh* mesh;
 			int16_t side, up, fwd_neg;
+			uint8_t shift;
+
+			draw_lockshipfileptrs(model_type);
+			mesh = &componentblockptr[(uint16_t)pstate.radar_target1];
+
 			/* Binary uses unaligned dword-HIWORD reads; each >>17 decodes
 			 * to the NEXT int16 field, shifted right by 1. Direct accesses
 			 * (resolved via side/fwd/up names matching the LFD CRFT order):
@@ -2760,7 +3043,7 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 			/* Watcom emitted SAR-on-unaligned-dword to extract the model_scale_shift byte
 			 * at +0x1E; read the field directly. Shifts run in the unsigned domain
 			 * so a negative coordinate doesn't trip the C left-shift UB rule. */
-			uint8_t shift = objectblockptr->model_scale_shift;
+			shift = objectblockptr->model_scale_shift;
 			rotatedx = (int32_t)((uint32_t)rotatedx << shift);
 			rotatedy = (int32_t)((uint32_t)rotatedy << shift);
 			rotatedz = (int32_t)((uint32_t)rotatedz << shift);
@@ -2813,11 +3096,14 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 	}
 
 	if (pstate.radar_enable && pstate.target_obj_idx < NUM_CRAFTS) {
+		int16_t sx;
+		int16_t sy;
+
 		objecteyex = transfm2_geteyex(sub_world_x, sub_world_y, sub_world_z);
 		objecteyey = transfm2_geteyey(sub_world_x, sub_world_y, sub_world_z);
 		objecteyez = transfm2_geteyez(sub_world_x, sub_world_y, sub_world_z);
-		int16_t sx = (int16_t)transfm2_getscreencoordx(objecteyex, objecteyez);
-		int16_t sy = (int16_t)transfm2_getscreencoordy(objecteyey, objecteyez) - 2;
+		sx = (int16_t)transfm2_getscreencoordx(objecteyex, objecteyez);
+		sy = (int16_t)transfm2_getscreencoordy(objecteyey, objecteyez) - 2;
 		panel_drawboxinxtrans((int16_t)(sx - 2), sy, 4, 4, 0xCE);
 	}
 
@@ -2842,8 +3128,13 @@ void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int c
 	int32_t save_camera_z = camera.z;
 	uint16_t save_currenttarget = currenttarget;
 
+	uint32_t position;
+	int32_t target_world_x;
+	int32_t target_world_y;
+	int32_t target_world_z;
+
 	transfm2_screenyoffset = 0;
-	uint32_t position = rtsvga2_calcpositionVGA_tie98((uint16_t)x, (uint16_t)y);
+	position = rtsvga2_calcpositionVGA_tie98((uint16_t)x, (uint16_t)y);
 	logbuf2_startPIP_tie98(width, depth, clear_runs, position);
 
 	if ((uint16_t)clear_runs != 0) {
@@ -2908,9 +3199,9 @@ void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int c
 	worldx = worldlocx - camera.x;
 	worldy = worldlocy - camera.y;
 	worldz = worldlocz - camera.z;
-	int32_t target_world_x = y;
-	int32_t target_world_y = y;
-	int32_t target_world_z = y;
+	target_world_x = y;
+	target_world_y = y;
+	target_world_z = y;
 	if (pstate.radar_enable && pstate.target_obj_idx < NUM_CRAFTS) {
 		FlightObject* target = &objects[pstate.target_obj_idx];
 		const int mesh_index = pstate.radar_target1;
@@ -2960,11 +3251,14 @@ void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int c
 
 	RenderScene_DrawVisibleFaces();
 	if (pstate.radar_enable && pstate.target_obj_idx < NUM_CRAFTS) {
+		int screen_x;
+		int screen_y;
+
 		objecteyex = transfm2_geteyex(target_world_x, target_world_y, target_world_z);
 		objecteyey = transfm2_geteyey(target_world_x, target_world_y, target_world_z);
 		objecteyez = transfm2_geteyez(target_world_x, target_world_y, target_world_z);
-		const int screen_x = transfm2_getscreencoordx(objecteyex, objecteyez);
-		const int screen_y = transfm2_getscreencoordy(objecteyey, objecteyez);
+		screen_x = transfm2_getscreencoordx(objecteyex, objecteyez);
+		screen_y = transfm2_getscreencoordy(objecteyey, objecteyez);
 		panel_drawboxinxtrans_tie98(screen_x - 2, screen_y - 2, 4, 4, 0xce);
 	}
 	RenderScene_UnlockSceneBuffers_tie98();
@@ -3017,6 +3311,12 @@ int16_t panel_drawboxinxtrans_tie98(int x, int y, int width, int height, uint8_t
 // FUNCTION: TIE95 0x447F8
 void panel_drawboxinxtrans(int16_t left_x, int16_t top_y, uint16_t width, uint16_t height, uint8_t color) {
 	uint16_t n = flatobjnum;
+	int16_t lx;
+	int16_t top, span;
+	int16_t xc;
+	int16_t ty;
+	int16_t sp;
+
 	flatcolors[n] = color;
 	flatx[n] = 0;
 	flaty[n] = 0;
@@ -3033,8 +3333,9 @@ void panel_drawboxinxtrans(int16_t left_x, int16_t top_y, uint16_t width, uint16
 	if (top_y >= (int16_t)pixelsdeep)
 		return;
 
-	int16_t lx = (left_x < 0) ? 0 : left_x;
-	int16_t top = top_y, span = (int16_t)height;
+	lx = (left_x < 0) ? 0 : left_x;
+	top = top_y;
+	span = (int16_t)height;
 	if (top_y < 0) {
 		top = 0;
 		span = top_y + (int16_t)height;
@@ -3042,11 +3343,11 @@ void panel_drawboxinxtrans(int16_t left_x, int16_t top_y, uint16_t width, uint16
 	if (span > 0)
 		trace2_enterflatvertical(lx, top, span);
 
-	int16_t xc = (int16_t)(left_x + 1);
+	xc = (int16_t)(left_x + 1);
 	if (xc < 0)
 		xc = 0;
-	int16_t ty = (int16_t)(top_y + 1);
-	int16_t sp = (int16_t)(height - 2);
+	ty = (int16_t)(top_y + 1);
+	sp = (int16_t)(height - 2);
 	if (ty < 0) {
 		sp += ty;
 		ty = 0;
@@ -3057,6 +3358,8 @@ void panel_drawboxinxtrans(int16_t left_x, int16_t top_y, uint16_t width, uint16
 	if (left_x + (int16_t)width <= (int16_t)pixelswide) {
 		int16_t tyb = (int16_t)(top_y + 1);
 		int16_t sp2 = (int16_t)(height - 2);
+		int16_t rx;
+
 		if (tyb < 0) {
 			sp2 += tyb;
 			tyb = 0;
@@ -3064,7 +3367,7 @@ void panel_drawboxinxtrans(int16_t left_x, int16_t top_y, uint16_t width, uint16
 		if (sp2 > 0)
 			trace2_enterflatvertical((int16_t)(left_x + width), tyb, sp2);
 
-		int16_t rx = (int16_t)(width + left_x + 1);
+		rx = (int16_t)(width + left_x + 1);
 		if (rx <= (int16_t)pixelswide) {
 			int16_t topb = top_y;
 			int16_t sp3 = (int16_t)height;
@@ -3083,10 +3386,12 @@ void panel_drawboxinxtrans(int16_t left_x, int16_t top_y, uint16_t width, uint16
  * blocks in the recovered TIE98 PANEL_pointcamera. */
 static int32_t panel_tie98_clamped_dot(int16_t axis_x, int16_t axis_y, int16_t axis_z, int16_t x, int16_t y,
 									   int16_t z) {
-	uint32_t bits = (uint32_t)((int64_t)axis_z * z);
-	bits += (uint32_t)((int64_t)axis_y * y);
-	bits += (uint32_t)((int64_t)axis_x * x);
-	int64_t value = bits <= INT32_MAX ? bits : (int64_t)bits - 0x100000000LL;
+	uint32_t bits = (uint32_t)((int32_t)axis_z * z);
+	int32_t value;
+
+	bits += (uint32_t)((int32_t)axis_y * y);
+	bits += (uint32_t)((int32_t)axis_x * x);
+	value = (int32_t)bits;
 	if (value >= 0x40000000)
 		value = 0x3fffffff;
 	if (value <= -0x40000000)
@@ -3107,9 +3412,7 @@ static int32_t panel_tie98_double_delta(int32_t left, int32_t right) {
 
 /* RECOVERY HELPER: removes the repeated arithmetic-right-shift expression
  * used for the three TIE98 camera deltas. */
-static int32_t panel_tie98_sar1(int32_t value) {
-	return value >= 0 ? value / 2 : -(int32_t)((-(int64_t)value + 1) / 2);
-}
+static int32_t panel_tie98_sar1(int32_t value) { return value >> 1; }
 
 static void calculate_tie98_pip_subsystem_offset(FlightObject* target, int mesh_index) {
 	const int model_type = target->ship_idx;
@@ -3137,14 +3440,34 @@ static void calculate_tie98_pip_subsystem_offset(FlightObject* target, int mesh_
 // PANEL_pointcamera
 void panel_pointcamera_tie98(uint16_t target_obj, int16_t use_hud_size) {
 	FlightObject* player = pstate.player;
+	int32_t delta_x;
+	int32_t delta_y;
+	int32_t delta_z;
+	int32_t magnitude_x;
+	int32_t magnitude_y;
+	int32_t magnitude_z;
+	int16_t x;
+	int16_t y;
+	int16_t z;
+	int32_t side;
+	int32_t forward;
+	int32_t up;
+	uint32_t bound_hwidth;
+	uint16_t pixels;
+	uint32_t distance;
+	uint8_t shift;
+	int32_t offset_x;
+	int32_t offset_y;
+	int32_t offset_z;
+
 	create_getworldposition(target_obj, 0);
 
-	int32_t delta_x = panel_tie98_double_delta(worldlocx, player->world_x);
-	int32_t delta_y = panel_tie98_double_delta(worldlocy, player->world_y);
-	int32_t delta_z = panel_tie98_double_delta(worldlocz, player->world_z);
-	int32_t magnitude_x = (int16_t)((uint32_t)delta_x >> 16);
-	int32_t magnitude_y = (int16_t)((uint32_t)delta_y >> 16);
-	int32_t magnitude_z = (int16_t)((uint32_t)delta_z >> 16);
+	delta_x = panel_tie98_double_delta(worldlocx, player->world_x);
+	delta_y = panel_tie98_double_delta(worldlocy, player->world_y);
+	delta_z = panel_tie98_double_delta(worldlocz, player->world_z);
+	magnitude_x = (int16_t)((uint32_t)delta_x >> 16);
+	magnitude_y = (int16_t)((uint32_t)delta_y >> 16);
+	magnitude_z = (int16_t)((uint32_t)delta_z >> 16);
 	if (magnitude_x < 0)
 		magnitude_x = -magnitude_x;
 	if (magnitude_y < 0)
@@ -3162,21 +3485,20 @@ void panel_pointcamera_tie98(uint16_t target_obj, int16_t use_hud_size) {
 		} while ((uint16_t)magnitude_x != 0);
 	} while ((uint16_t)magnitude_y != 0 || (uint16_t)magnitude_z != 0);
 
-	const int16_t x = (int16_t)panel_tie98_sar1(delta_x);
-	const int16_t y = (int16_t)panel_tie98_sar1(delta_y);
-	const int16_t z = (int16_t)panel_tie98_sar1(delta_z);
+	x = (int16_t)panel_tie98_sar1(delta_x);
+	y = (int16_t)panel_tie98_sar1(delta_y);
+	z = (int16_t)panel_tie98_sar1(delta_z);
 	if (player->orient_dirty) {
 		fview_calcrotatemove(player->heading, player->pitch, player);
 		fview_calcrotateorient(player->roll, 0, player);
 	}
-	const int32_t side = panel_tie98_clamped_dot(player->side_x, player->side_y, player->side_z, x, y, z);
-	const int32_t forward = panel_tie98_clamped_dot(player->fwd_x, player->fwd_y, player->fwd_z, x, y, z);
-	const int32_t up = panel_tie98_clamped_dot(player->up_x, player->up_y, player->up_z, x, y, z);
+	side = panel_tie98_clamped_dot(player->side_x, player->side_y, player->side_z, x, y, z);
+	forward = panel_tie98_clamped_dot(player->fwd_x, player->fwd_y, player->fwd_z, x, y, z);
+	up = panel_tie98_clamped_dot(player->up_x, player->up_y, player->up_z, x, y, z);
 	trig2_ctop(side, forward, up);
 	fview_newcalcview(player->roll, player->heading, player->pitch, 0, (int16_t)(0x4000 - trig2_zangle),
 					  trig2_xyangle, NULL);
 
-	uint32_t bound_hwidth;
 	if (target_obj >= OBJ_REF_STATIC_BASE) {
 		bound_hwidth = species_table[staticobjects[target_obj - OBJ_REF_STATIC_BASE].species].bound_hwidth;
 	} else {
@@ -3202,20 +3524,18 @@ void panel_pointcamera_tie98(uint16_t target_obj, int16_t use_hud_size) {
 		bound_hwidth <<= spec->model_scale_shift;
 	}
 
-	const uint16_t pixels = use_hud_size                             ? instruments[2].param2
-							: flightResolution == TIE_FLIGHT_RES_VGA ? 60
-																	 : 144;
-	uint32_t distance = (bound_hwidth << perspShift) / pixels;
-	uint8_t shift = 0;
+	pixels = use_hud_size ? instruments[2].param2 : flightResolution == TIE_FLIGHT_RES_VGA ? 60 : 144;
+	distance = (bound_hwidth << perspShift) / pixels;
+	shift = 0;
 	while (distance > 0x3fff) {
 		distance >>= 1;
 		++shift;
 	}
 	if (flightResolution != TIE_FLIGHT_RES_VGA)
 		distance += distance >> 2;
-	const int32_t offset_x = (int32_t)(((int64_t)worldeyeA3 * distance) >> 15);
-	const int32_t offset_y = (int32_t)(((int64_t)worldeyeB3 * distance) >> 15);
-	const int32_t offset_z = (int32_t)(((int64_t)worldeyeC3 * distance) >> 15);
+	offset_x = math2_mul_q15(worldeyeA3, distance);
+	offset_y = math2_mul_q15(worldeyeB3, distance);
+	offset_z = math2_mul_q15(worldeyeC3, distance);
 	camera.x = worldlocx - (int32_t)((uint32_t)offset_x << shift);
 	camera.y = worldlocy - (int32_t)((uint32_t)offset_y << shift);
 	camera.z = worldlocz - (int32_t)((uint32_t)offset_z << shift);
@@ -3228,20 +3548,41 @@ void panel_pointcamera_tie98(uint16_t target_obj, int16_t use_hud_size) {
 // FUNCTION: TIE95 0x4499C
 void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 	FlightObject* pl = pstate.player;
+	int32_t dx;
+	int32_t dy;
+	int32_t dz;
+	int32_t ax;
+	int32_t ay;
+	int32_t az;
+	int32_t ex;
+	int32_t ey;
+	int32_t ez;
+	int32_t side_proj;
+	int32_t fwd_proj;
+	int32_t up_proj;
+	uint32_t bound_hwidth;
+	uint16_t pix;
+	uint8_t species_special;
+	uint16_t z;
+	uint8_t s;
+	int32_t off_x;
+	int32_t off_y;
+	int32_t off_z;
+
 	create_getworldposition(target_obj, 0);
 
-	int32_t dx = 2 * (worldlocx - pl->world_x);
-	int32_t dy = 2 * (worldlocy - pl->world_y);
-	int32_t dz = 2 * (worldlocz - pl->world_z);
+	dx = 2 * (worldlocx - pl->world_x);
+	dy = 2 * (worldlocy - pl->world_y);
+	dz = 2 * (worldlocz - pl->world_z);
 
 	/* Track the high-word magnitude of each axis before reducing the vector. */
-	int32_t ax = (int16_t)(dx >> 16);
+	ax = (int16_t)(dx >> 16);
 	if (ax < 0)
 		ax = -ax;
-	int32_t ay = (int16_t)(dy >> 16);
+	ay = (int16_t)(dy >> 16);
 	if (ay < 0)
 		ay = -ay;
-	int32_t az = (int16_t)(dz >> 16);
+	az = (int16_t)(dz >> 16);
 	if (az < 0)
 		az = -az;
 
@@ -3255,30 +3596,30 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 		dz >>= 1;
 	}
 
-	int32_t ex = (int16_t)(dx >> 1);
-	int32_t ey = (int16_t)(dy >> 1);
-	int32_t ez = (int16_t)(dz >> 1);
+	ex = (int16_t)(dx >> 1);
+	ey = (int16_t)(dy >> 1);
+	ez = (int16_t)(dz >> 1);
 
 	/* Project the player->target delta onto the player's body axes.
 	 * trig2_ctop(x, y, z) computes xyangle = atan2(x, y) (with a fixed
 	 * +90 deg offset), so the bearing-to-target the binary feeds in is
 	 * (side, fwd, up) -- not (fwd, side, up). Swapping these two
 	 * rotates the PIP camera 90 deg around the player's up axis. */
-	int32_t side_proj = (int32_t)pl->side_z * ez + (int32_t)pl->side_y * ey + (int32_t)pl->side_x * ex;
+	side_proj = (int32_t)pl->side_z * ez + (int32_t)pl->side_y * ey + (int32_t)pl->side_x * ex;
 	if (side_proj >= 0x40000000)
 		side_proj = 0x3FFF0000;
 	if (side_proj <= -0x40000000)
 		side_proj = -0x3FFF0000;
 	side_proj >>= 15;
 
-	int32_t fwd_proj = (int32_t)pl->fwd_z * ez + (int32_t)pl->fwd_y * ey + (int32_t)pl->fwd_x * ex;
+	fwd_proj = (int32_t)pl->fwd_z * ez + (int32_t)pl->fwd_y * ey + (int32_t)pl->fwd_x * ex;
 	if (fwd_proj >= 0x40000000)
 		fwd_proj = 0x3FFF0000;
 	if (fwd_proj <= -0x40000000)
 		fwd_proj = -0x3FFF0000;
 	fwd_proj >>= 15;
 
-	int32_t up_proj = (int32_t)pl->up_z * ez + (int32_t)pl->up_y * ey + (int32_t)pl->up_x * ex;
+	up_proj = (int32_t)pl->up_z * ez + (int32_t)pl->up_y * ey + (int32_t)pl->up_x * ex;
 	if (up_proj >= 0x40000000)
 		up_proj = 0x3FFF0000;
 	if (up_proj <= -0x40000000)
@@ -3290,7 +3631,6 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 	fview_newcalcview(pl->roll, pl->heading, pl->pitch, 0, (int16_t)(0x4000 - trig2_zangle),
 					  (uint16_t)trig2_xyangle, NULL);
 
-	uint32_t bound_hwidth;
 	if (target_obj >= 0x3800u) {
 		bound_hwidth = species_table[staticobjects[target_obj - 14336].species].bound_hwidth;
 	} else {
@@ -3320,7 +3660,6 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 		bound_hwidth = (uint32_t)(((int32_t)small_a + (int32_t)small_b) >> 1) << sp->model_scale_shift;
 	}
 
-	uint16_t pix;
 	if (use_hud_size)
 		pix = instruments[2].param2;
 	else if (flightResolution == TIE_FLIGHT_RES_VGA)
@@ -3329,20 +3668,20 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 		pix = 144;
 
 	/* Species 52 uses tighter framing. Static targets never use this adjustment. */
-	uint8_t species_special = 0;
+	species_special = 0;
 	if (target_obj < NUM_CRAFTS && objects[target_obj].craft_ptr &&
 		objects[target_obj].craft_ptr->species_idx == 52)
 		species_special = 1;
-	uint16_t z = (uint16_t)(((bound_hwidth << perspShift) / pix) >> (species_special + 4));
+	z = (uint16_t)(((bound_hwidth << perspShift) / pix) >> (species_special + 4));
 	/* The 640x480 flight modes shift the framing back another 1.25x. */
 	if (tie_is_high_resolution_flight())
 		z = (uint16_t)((z >> 2) + z);
-	uint8_t s = (uint8_t)(species_special + 4);
+	s = (uint8_t)(species_special + 4);
 
 	/* Back-step along the world-space camera Z basis. */
-	int32_t off_x = (worldeyeA3 * z) >> 15;
-	int32_t off_y = (worldeyeB3 * z) >> 15;
-	int32_t off_z = (worldeyeC3 * z) >> 15;
+	off_x = (worldeyeA3 * z) >> 15;
+	off_y = (worldeyeB3 * z) >> 15;
+	off_z = (worldeyeC3 * z) >> 15;
 
 	/* Shift in the unsigned domain: the binary emits a bitwise SHL on
 	 * EDX so a negative offset stays well-defined; signed << of a

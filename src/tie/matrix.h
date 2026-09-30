@@ -1,9 +1,13 @@
-#ifndef __MATRIX_H__
-#define __MATRIX_H__
+#ifndef TIE_MATRIX_H
+#define TIE_MATRIX_H
+
+#include "landru/res.h"
 
 #include <stdint.h>
 
-#include "landru/res.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define MATRIX_MAX_JOINTS 4
 
@@ -33,5 +37,9 @@ void matrix_Init_Matrix(Matrix* m);
 Matrix* matrix_Res_Matrix(ResFile* rf, const char* name);
 void matrix_Free_Matrix(Matrix* m);
 int16_t matrix_Get_Matrix_Frame(Matrix* m, MatrixFrame* dest, int16_t frame);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

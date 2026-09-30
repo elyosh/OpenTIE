@@ -9,10 +9,6 @@
  * 11 functions. Recovered from the TIE95 and TIE98 executables.
  */
 
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "tie/brief.h"
 #include "tie/player.h"
 #include "tie/shellext.h"
@@ -21,10 +17,10 @@
 #include "tie/textext.h"
 #include "tie/tie.h"
 #include "tie_runtime/runtime/profile.h"
-#include "tie_runtime/snapshot/snapshot.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/snapshot/snapshot_internal.h"
+#endif
 #include "tie_runtime/snapshot/snapshot_map.h"
-#include <landru/task.h>
 
 #include "landru/actdelt.h"
 #include "landru/actor.h"
@@ -45,6 +41,10 @@
 #include "landru/vesa.h"
 #include "landru/view.h"
 #include "landru/viewadd.h"
+
+#include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* ---- Edition data ---- */
 
@@ -70,54 +70,74 @@ typedef struct BriefSpec {
 
 /* DATA: TIE95 BRIEF_Brief 0x72E20; TIE98 0x405FF0. */
 static const BriefSpec brief_specs[] = {
-    {
-        .surface_set = LANDRU_SURFACE_VGA,
-        .archive = "brief.lfd", .snapshot_lfd = "BRIEF",
-        .width = 320, .height = 200,
-        .default_mouse_x = 78, .default_mouse_y = 80,
-        .officer_mouse_x = 218, .officer_mouse_y = 126,
-        .map_mouse_x = 160, .map_mouse_y = 90,
-        .priest_mouse_x = 282, .priest_mouse_y = 90,
-        .notice_mouse_x = 190, .notice_mouse_y = 110,
-        .notice_return_mouse_x = 218, .notice_return_mouse_y = 126,
-        .input_bounds = {
-            {84, 132, 122, 172},
-            {190, 118, 248, 138},
-            {28, 46, 128, 124},
-            {140, 66, 174, 114},
-            {242, 66, 314, 102},
-        },
-        .map_poly = {34, 50, 127, 58, 125, 106, 36, 120},
-        .title_font = 0,
-        .notice_width = 180, .notice_height = 40,
-        .notice_text_height = 20,
-        .notice_font = 0,
-        .film_actor_case_8 = false,
-    },
-    {
-        .surface_set = LANDRU_SURFACE_SVGA,
-        .archive = "brief640.lfd", .snapshot_lfd = "BRIEF640",
-        .width = 640, .height = 480,
-        .default_mouse_x = 156, .default_mouse_y = 160,
-        .officer_mouse_x = 416, .officer_mouse_y = 302,
-        .map_mouse_x = 265, .map_mouse_y = 190,
-        .priest_mouse_x = 564, .priest_mouse_y = 180,
-        .notice_mouse_x = 330, .notice_mouse_y = 260,
-        .notice_return_mouse_x = 416, .notice_return_mouse_y = 302,
-        .input_bounds = {
-            {123, 329, 184, 459},
-            {385, 256, 448, 350},
-            {50, 80, 230, 290},
-            {230, 157, 274, 251},
-            {498, 125, 604, 220},
-        },
-        .map_poly = {56, 83, 223, 93, 225, 244, 67, 277},
-        .title_font = 2,
-        .notice_width = 280, .notice_height = 60,
-        .notice_text_height = 30,
-        .notice_font = 2,
-        .film_actor_case_8 = true,
-    },
+	{
+		/* surface_set */ LANDRU_SURFACE_VGA,
+		/* archive */ "brief.lfd",
+		/* snapshot_lfd */ "BRIEF",
+		/* width */ 320,
+		/* height */ 200,
+		/* default_mouse_x */ 78,
+		/* default_mouse_y */ 80,
+		/* officer_mouse_x */ 218,
+		/* officer_mouse_y */ 126,
+		/* map_mouse_x */ 160,
+		/* map_mouse_y */ 90,
+		/* priest_mouse_x */ 282,
+		/* priest_mouse_y */ 90,
+		/* notice_mouse_x */ 190,
+		/* notice_mouse_y */ 110,
+		/* notice_return_mouse_x */ 218,
+		/* notice_return_mouse_y */ 126,
+		/* input_bounds */
+		{
+			{ 84, 132, 122, 172 },
+			{ 190, 118, 248, 138 },
+			{ 28, 46, 128, 124 },
+			{ 140, 66, 174, 114 },
+			{ 242, 66, 314, 102 },
+		},
+		/* map_poly */ { 34, 50, 127, 58, 125, 106, 36, 120 },
+		/* title_font */ 0,
+		/* notice_width */ 180,
+		/* notice_height */ 40,
+		/* notice_text_height */ 20,
+		/* notice_font */ 0,
+		/* film_actor_case_8 */ false,
+	},
+	{
+		/* surface_set */ LANDRU_SURFACE_SVGA,
+		/* archive */ "brief640.lfd",
+		/* snapshot_lfd */ "BRIEF640",
+		/* width */ 640,
+		/* height */ 480,
+		/* default_mouse_x */ 156,
+		/* default_mouse_y */ 160,
+		/* officer_mouse_x */ 416,
+		/* officer_mouse_y */ 302,
+		/* map_mouse_x */ 265,
+		/* map_mouse_y */ 190,
+		/* priest_mouse_x */ 564,
+		/* priest_mouse_y */ 180,
+		/* notice_mouse_x */ 330,
+		/* notice_mouse_y */ 260,
+		/* notice_return_mouse_x */ 416,
+		/* notice_return_mouse_y */ 302,
+		/* input_bounds */
+		{
+			{ 123, 329, 184, 459 },
+			{ 385, 256, 448, 350 },
+			{ 50, 80, 230, 290 },
+			{ 230, 157, 274, 251 },
+			{ 498, 125, 604, 220 },
+		},
+		/* map_poly */ { 56, 83, 223, 93, 225, 244, 67, 277 },
+		/* title_font */ 2,
+		/* notice_width */ 280,
+		/* notice_height */ 60,
+		/* notice_text_height */ 30,
+		/* notice_font */ 2,
+		/* film_actor_case_8 */ true,
+	},
 };
 
 static const BriefSpec* active_spec;
@@ -187,11 +207,12 @@ static void end_View(int32_t frame_num) {
 // FUNCTION: TIE95 0x731E0
 // FUNCTION: TIE98 0x406580
 static int16_t film_Callback(Film* film, FilmObject* fo) {
+	Actor* actor;
 	if (fo->id != 3)
 		return 0; /* type_code: 3 = actor */
 
 	xfilm_Rewind_Actor_Film(film, fo, (void*)((char*)fo + sizeof(FilmObject)));
-	Actor* actor = (Actor*)fo->object;
+	actor = (Actor*)fo->object;
 
 	switch (actor->var1) {
 		case 1: /* Hide if officer type is not 1 (officer-only actor) */
@@ -299,6 +320,7 @@ static int16_t iupdate_Brief(Input* input, Rect* bounds, Rect* clip, int16_t key
 // FUNCTION: TIE95 0x73410
 // FUNCTION: TIE98 0x4067F0
 static void iuser_Brief(Input* input, int32_t time) {
+	int16_t scene;
 	(void)time;
 
 	/* Map widget (id=2) drives the briefing map animation */
@@ -311,7 +333,7 @@ static void iuser_Brief(Input* input, int32_t time) {
 	if (!input->var1)
 		return; /* exit_pending */
 
-	int16_t scene = input->var2; /* exit_code */
+	scene = input->var2; /* exit_code */
 
 	/* Scenes 270, 4, 275: save pilot state before launching */
 	if (scene == SCENE_CUT_BATTLE_270 || scene == SCENE_FLIGHT_BATTLE || scene == SCENE_ARM_SHIP) {
@@ -348,19 +370,19 @@ static void user_Title(Actor* actor, int32_t time) {
 // FUNCTION: TIE98 0x4068B0
 static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 						  int16_t refresh) {
+	int16_t offx, offy;
+	Rect r;
+	char label[32];
+	TIEText text_id;
 	if (!refresh)
 		return 0;
 
 	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
 
-	int16_t offx, offy;
 	xactor_Get_Actor_Offset(actor, &offx, &offy);
 
-	Rect r;
 	xrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
 
-	char label[32];
-	TIEText text_id;
 	switch (actor->var2) {
 		case 0:
 			text_id = txtBriefMainMenu;
@@ -421,18 +443,20 @@ static void user_Door(Actor* actor, int32_t time) {
 // FUNCTION: TIE95 0x73668
 // FUNCTION: TIE98 0x406A70
 static Input* Build_Notice(const char* text) {
-	(void)text;
 	Rect r;
+	Input* dlg;
+	PushButton* btn;
+	(void)text;
 
 	xrect_Set_Rect(&r, 0, 0, active_spec->notice_width, active_spec->notice_height);
-	Input* dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
+	dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
 	xinpattr_Set_Input_Draw_Function(dlg, idraw_Notice);
 	xinpattr_Set_Input_Allign(dlg, 1, 1);
 	xinpattr_Start_Input(dlg);
 
 	textext_Copy_Text(notice_str, txtRegProtOK); /* "OK" */
 	xrect_Set_Rect(&r, 0, 4, 80, 20);
-	PushButton* btn = xbtnpush_Alloc_Button(dlg, &r, 0, iuser_Notice, notice_str, 1);
+	btn = xbtnpush_Alloc_Button(dlg, &r, 0, iuser_Notice, notice_str, 1);
 	xinpattr_Set_Input_Allign(&btn->header, 1, 2);
 
 	return dlg;
@@ -441,10 +465,10 @@ static Input* Build_Notice(const char* text) {
 // FUNCTION: TIE95 0x7370C
 // FUNCTION: TIE98 0x406B20
 static void idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh) {
+	Rect tr;
 	if (!refresh)
 		return;
 
-	Rect tr;
 	xrect_Copy_Rect(&tr, r);
 	xstyle_Style_Paint_Border(r, 0);
 	tr.bottom = tr.top + active_spec->notice_text_height;
@@ -469,188 +493,154 @@ static void iuser_Notice(Input* input, int32_t time) {
  * Entry point
  * ================================================================ */
 
-typedef enum {
-	BRIEF_PHASE_BEGIN = 0,
-	BRIEF_PHASE_NOTICE_DIALOG, /* SCENE_BRIEF_PRE: notice dialog pushed; resume on its pop */
-	BRIEF_PHASE_PUSH_VIEW,     /* push the modal view task */
-	BRIEF_PHASE_CLEANUP,
-} BriefPhase;
+bool brief_OpenScene(SceneHeadStruct* scene_head, bool svga, Input** notice) {
+	int16_t mouse_x, mouse_y, last;
+	ResFile* brief_res;
+	ResFile* player_res;
+	Poly p;
+	const int16_t* poly;
+	Rect frame;
+	const int16_t* bounds;
 
-typedef struct BriefTask {
-	SceneHeadStruct* scene_head;
-	Input* notice_dlg; /* allocated for the SCENE_BRIEF_PRE branch */
-	BriefPhase phase;
-	const BriefSpec* spec;
-} BriefTask;
+	active_spec = &brief_specs[svga ? 1 : 0];
+	if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
+		(void)xsurface_Select_Surface_Set(active_spec->surface_set);
+		xview_Init_View(xview_Get_Current_View());
+		xvesa_Erase_Video(16);
+	}
 
-/* PORT: asynchronous adaptation of TIE95 BRIEF_Brief (0x72E20)
- * and TIE98 BRIEF_Brief (0x405FF0). */
-static LandruTaskStepResult brief_task_step(void* self) {
-	BriefTask* t = (BriefTask*)self;
+	/* Position mouse based on last scene and officer type */
+	last = shellext_Get_Last_Scene();
 
-	if (t->phase == BRIEF_PHASE_BEGIN) {
-		Rect frame;
-		const int16_t* bounds;
-
-		active_spec = t->spec;
-		if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-			(void)xsurface_Select_Surface_Set(active_spec->surface_set);
-			xview_Init_View(xview_Get_Current_View());
-			xvesa_Erase_Video(16);
-		}
-
-		/* Position mouse based on last scene and officer type */
-		int16_t mouse_x, mouse_y;
-		int16_t last = shellext_Get_Last_Scene();
-
-		if (last == SCENE_TALK_BRIEF_OFFICER) {
-			/* From officer */
-			if (shipext_Get_Mission_Officer() == 1) {
-				mouse_x = active_spec->officer_mouse_x;
-				mouse_y = active_spec->officer_mouse_y;
-			} else {
-				mouse_x = active_spec->priest_mouse_x;
-				mouse_y = active_spec->priest_mouse_y;
-			}
-		} else if (last == SCENE_BRIEF_MAP) {
-			/* From map */
-			if (shipext_Get_Mission_Officer() != 2) {
-				mouse_x = active_spec->map_mouse_x;
-				mouse_y = active_spec->map_mouse_y;
-			} else {
-				mouse_x = active_spec->priest_mouse_x;
-				mouse_y = active_spec->priest_mouse_y;
-			}
-		} else if (last == SCENE_TALK_BRIEF_PRIEST) {
-			/* From priest */
+	if (last == SCENE_TALK_BRIEF_OFFICER) {
+		/* From officer */
+		if (shipext_Get_Mission_Officer() == 1) {
 			mouse_x = active_spec->officer_mouse_x;
 			mouse_y = active_spec->officer_mouse_y;
 		} else {
-			/* Default */
-			mouse_x = active_spec->default_mouse_x;
-			mouse_y = active_spec->default_mouse_y;
+			mouse_x = active_spec->priest_mouse_x;
+			mouse_y = active_spec->priest_mouse_y;
 		}
-		xio_Set_Mouse_Position(mouse_x, mouse_y);
-
-		/* Load resources */
-		ResFile* brief_res = shellext_Open_Empire_Resource(active_spec->archive);
-		ResFile* player_res = shellext_Open_Empire_Resource("player.lfd");
-
-		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
-
-		/* Load brief film. Tag the snapshot with the (lfd, film) tuple
-		 * so the cutscene compositor can resolve a remaster bundle for
-		 * this screen. Default INCREMENTAL redraw model is correct —
-		 * dirty-rect refresh, persistent RT (only the briefing map
-		 * polygon animates). The tag covers both SCENE_BRIEF_PRE
-		 * (notice-dialog branch) and SCENE_BRIEF, since both run the
-		 * same film. Auto-cleared at the next scene transition by
-		 * shell_run_scene_dispatch. */
-		brief_film = xfilm_Res_Callback_Film("brief", &frame, 0, 0, 0, film_Callback);
-		TieSnapshotBuilder_SetActiveFilm(active_spec->snapshot_lfd, "brief");
-		xfilm_Set_Film_Def_Palette(brief_film, t->scene_head->def_palette);
-
-		/* Create XINPUT widgets */
-		parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
-
-		/* Main menu button (id=0) */
-		bounds = active_spec->input_bounds[0];
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		mainmenu_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(mainmenu_input, iupdate_Brief);
-		xinpattr_Set_Input_User_Function(mainmenu_input, iuser_Brief);
-		mainmenu_input->mouseUsage = allInput;
-		mainmenu_input->id = 0;
-
-		/* Enter mission button (id=1) */
-		bounds = active_spec->input_bounds[1];
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		mission_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(mission_input, iupdate_Brief);
-		xinpattr_Set_Input_User_Function(mission_input, iuser_Brief);
-		mission_input->mouseUsage = allInput;
-		mission_input->id = 1;
-
-		/* Map area (id=2) */
-		bounds = active_spec->input_bounds[2];
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		map_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(map_input, iupdate_Brief);
-		xinpattr_Set_Input_User_Function(map_input, iuser_Brief);
-		map_input->mouseUsage = allInput;
-		map_input->id = 2;
-
-		/* Officer door (id=3) — skip if priest only */
+	} else if (last == SCENE_BRIEF_MAP) {
+		/* From map */
 		if (shipext_Get_Mission_Officer() != 2) {
-			bounds = active_spec->input_bounds[3];
-			xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-			officer_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-			xinpattr_Set_Input_Update_Function(officer_input, iupdate_Brief);
-			xinpattr_Set_Input_User_Function(officer_input, iuser_Brief);
-			officer_input->mouseUsage = allInput;
-			officer_input->id = 3;
+			mouse_x = active_spec->map_mouse_x;
+			mouse_y = active_spec->map_mouse_y;
+		} else {
+			mouse_x = active_spec->priest_mouse_x;
+			mouse_y = active_spec->priest_mouse_y;
 		}
+	} else if (last == SCENE_TALK_BRIEF_PRIEST) {
+		/* From priest */
+		mouse_x = active_spec->officer_mouse_x;
+		mouse_y = active_spec->officer_mouse_y;
+	} else {
+		/* Default */
+		mouse_x = active_spec->default_mouse_x;
+		mouse_y = active_spec->default_mouse_y;
+	}
+	xio_Set_Mouse_Position(mouse_x, mouse_y);
 
-		/* Priest door (id=4) — skip if officer only */
-		if (shipext_Get_Mission_Officer() != 1) {
-			bounds = active_spec->input_bounds[4];
-			xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-			priest_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-			xinpattr_Set_Input_Update_Function(priest_input, iupdate_Brief);
-			xinpattr_Set_Input_User_Function(priest_input, iuser_Brief);
-			priest_input->mouseUsage = allInput;
-			priest_input->id = 4;
-		}
+	/* Load resources */
+	brief_res = shellext_Open_Empire_Resource(active_spec->archive);
+	player_res = shellext_Open_Empire_Resource("player.lfd");
 
-		xres_Close_Resource(player_res);
-		xres_Close_Resource(brief_res);
+	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
 
-		/* Initialize the briefing map with polygon projection */
-		Poly p;
-		const int16_t* poly = active_spec->map_poly;
-		xrect_Set_Poly(&p, poly[0], poly[1], poly[2], poly[3], poly[4], poly[5], poly[6], poly[7]);
-		player_Init_Brief_Display(map_input, &p);
+	/* Load brief film. Tag the snapshot with the (lfd, film) tuple
+	 * so the cutscene compositor can resolve a remaster bundle for
+	 * this screen. Default INCREMENTAL redraw model is correct —
+	 * dirty-rect refresh, persistent RT (only the briefing map
+	 * polygon animates). The tag covers both SCENE_BRIEF_PRE
+	 * (notice-dialog branch) and SCENE_BRIEF, since both run the
+	 * same film. Auto-cleared at the next scene transition by
+	 * shell_run_scene_dispatch. */
+	brief_film = xfilm_Res_Callback_Film("brief", &frame, 0, 0, 0, film_Callback);
+#ifdef TIE_MODERN
+	TieSnapshotBuilder_SetActiveFilm(active_spec->snapshot_lfd, "brief");
+#endif
+	xfilm_Set_Film_Def_Palette(brief_film, scene_head->def_palette);
 
-		/* Scene 179 = restore path: show "pilot restored" notice
-		 * BEFORE pushing the view (was inside end_View at frame 0).
-		 * The notice dialog runs as a sub-task; once it pops, we
-		 * fall through to PUSH_VIEW. */
-		if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
-			t->notice_dlg = Build_Notice(NULL);
-			xio_Set_Mouse_Position(active_spec->notice_mouse_x, active_spec->notice_mouse_y);
-			xdialog_Push_Dialog_View_Task(t->notice_dlg);
-			t->phase = BRIEF_PHASE_NOTICE_DIALOG;
-			return LANDRU_TASK_STEP_CONTINUE;
-		}
+	/* Create XINPUT widgets */
+	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
-		t->phase = BRIEF_PHASE_PUSH_VIEW;
-		return LANDRU_TASK_STEP_CONTINUE;
+	/* Main menu button (id=0) */
+	bounds = active_spec->input_bounds[0];
+	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	mainmenu_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(mainmenu_input, iupdate_Brief);
+	xinpattr_Set_Input_User_Function(mainmenu_input, iuser_Brief);
+	mainmenu_input->mouseUsage = allInput;
+	mainmenu_input->id = 0;
+
+	/* Enter mission button (id=1) */
+	bounds = active_spec->input_bounds[1];
+	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	mission_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(mission_input, iupdate_Brief);
+	xinpattr_Set_Input_User_Function(mission_input, iuser_Brief);
+	mission_input->mouseUsage = allInput;
+	mission_input->id = 1;
+
+	/* Map area (id=2) */
+	bounds = active_spec->input_bounds[2];
+	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	map_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(map_input, iupdate_Brief);
+	xinpattr_Set_Input_User_Function(map_input, iuser_Brief);
+	map_input->mouseUsage = allInput;
+	map_input->id = 2;
+
+	/* Officer door (id=3) — skip if priest only */
+	if (shipext_Get_Mission_Officer() != 2) {
+		bounds = active_spec->input_bounds[3];
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		officer_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(officer_input, iupdate_Brief);
+		xinpattr_Set_Input_User_Function(officer_input, iuser_Brief);
+		officer_input->mouseUsage = allInput;
+		officer_input->id = 3;
 	}
 
-	if (t->phase == BRIEF_PHASE_NOTICE_DIALOG) {
-		/* Notice dialog popped — clean up its Input chain, reposition
-		 * the cursor for the brief view, fall through to PUSH_VIEW. */
-		xdialog_Clear_Dialog_Exit();
-		xinput_Free_Inputs(t->notice_dlg);
-		t->notice_dlg = NULL;
-		xio_Set_Mouse_Position(active_spec->notice_return_mouse_x, active_spec->notice_return_mouse_y);
-		t->phase = BRIEF_PHASE_PUSH_VIEW;
-		return LANDRU_TASK_STEP_CONTINUE;
+	/* Priest door (id=4) — skip if officer only */
+	if (shipext_Get_Mission_Officer() != 1) {
+		bounds = active_spec->input_bounds[4];
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		priest_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(priest_input, iupdate_Brief);
+		xinpattr_Set_Input_User_Function(priest_input, iuser_Brief);
+		priest_input->mouseUsage = allInput;
+		priest_input->id = 4;
 	}
 
-	if (t->phase == BRIEF_PHASE_PUSH_VIEW) {
-		/* Push the modal view task */
-		xview_Set_View_Update_Function(end_View);
-		xviewadd_Clear_View();
-		xview_Disable_All_View_Erase();
+	xres_Close_Resource(player_res);
+	xres_Close_Resource(brief_res);
 
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = BRIEF_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+	/* Initialize the briefing map with polygon projection */
+	poly = active_spec->map_poly;
+	xrect_Set_Poly(&p, poly[0], poly[1], poly[2], poly[3], poly[4], poly[5], poly[6], poly[7]);
+	player_Init_Brief_Display(map_input, &p);
+	if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
+		*notice = Build_Notice(NULL);
+		xio_Set_Mouse_Position(active_spec->notice_mouse_x, active_spec->notice_mouse_y);
+		return true;
 	}
+	return false;
+}
 
-	/* CLEANUP */
+void brief_CloseNotice(Input* notice) {
+	xdialog_Clear_Dialog_Exit();
+	xinput_Free_Inputs(notice);
+	xio_Set_Mouse_Position(active_spec->notice_return_mouse_x, active_spec->notice_return_mouse_y);
+}
+
+void brief_PrepareView(void) {
+	xview_Set_View_Update_Function(end_View);
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
+}
+
+void brief_CloseScene(bool svga) {
 	player_Free_Brief_Display();
 	xview_Enable_All_View_Erase();
 	xview_Clear_View_Update_Function();
@@ -658,25 +648,9 @@ static LandruTaskStepResult brief_task_step(void* self) {
 	if (xcursor_Is_Cursor_Visible())
 		xcursor_Hide_Cursor();
 
-	if (t->spec->surface_set == LANDRU_SURFACE_SVGA) {
+	if (svga) {
 		xvesa_Erase_Video(16);
 		xviewadd_Clear_View();
 		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 	}
-
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static const LandruTaskVtable brief_task_vt = {
-	.step = brief_task_step,
-};
-
-void brief_Push_Brief_Task(SceneHeadStruct* scene_head) {
-	BriefTask* t = (BriefTask*)landru_task_push(&brief_task_vt);
-	if (!t)
-		return;
-	t->scene_head = scene_head;
-	t->notice_dlg = NULL;
-	t->phase = BRIEF_PHASE_BEGIN;
-	t->spec = &brief_specs[TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 1 : 0];
 }

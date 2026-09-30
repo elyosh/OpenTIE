@@ -1,9 +1,13 @@
-#ifndef __MOVE_H__
-#define __MOVE_H__
+#ifndef TIE_MOVE_H
+#define TIE_MOVE_H
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct FlightObject;
 
@@ -23,10 +27,8 @@ struct FlightObject;
 void move_updatexyz(struct FlightObject* obj);
 void move_moveobjects(void);
 
-/* Logical flight-frame counter — incremented once per move_moveobjects
- * (one position-integration step), independent of host-tick rate.
- * Stamped into TieSnapshot.flight_frame so consumers can detect whether
- * the sim advanced between two host-tick snapshots. */
-uint32_t move_flight_frame(void);
+#ifdef __cplusplus
+}
+#endif
 
 #endif

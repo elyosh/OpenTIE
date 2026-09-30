@@ -1,7 +1,5 @@
-#ifndef __DRAWPOL_H__
-#define __DRAWPOL_H__
-
-#include <stdint.h>
+#ifndef TIE_DRAWPOL_H
+#define TIE_DRAWPOL_H
 
 /*
  * DRAWPOL — polygon-rendering front-end.
@@ -26,6 +24,12 @@
 
 /* PolyFace is defined in draw.h (cross-module shared). */
 #include "tie/draw.h"
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* 5-byte header for every poly_data block. The 'type' byte selects format:
  *   0xFF         = billboard/sprite (numedges field holds scale: 0/8/16)
@@ -66,12 +70,20 @@ typedef struct PolyVert {
  * tail fallback). A zero/negative value terminates the current walk;
  * `node + 3` skips the header to the body.
  */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct BSPFaceNode {
 	uint8_t face_idx;
 	int16_t next_off;
 } BSPFaceNode;
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /* Eye-space vertex (12 bytes: 3 int32). Output of TRANSFM2_geteyecoords;
  * stored contiguously in _eyexyzdata (xtrans2.c owned). */
@@ -284,5 +296,9 @@ void drawpol_drawsurfacepoly(int32_t* scratch, char color_code);
  * accesses it as both byte stream (header/face_colors) and word array
  * (point triples / vertex stream). */
 void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t obj_y, int32_t obj_z);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

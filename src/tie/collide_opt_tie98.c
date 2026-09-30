@@ -1,5 +1,4 @@
 #include "tie/collide_opt.h"
-
 #include "tie/fview.h"
 #include "tie/gate.h"
 #include "tie/modelmesh.h"
@@ -63,6 +62,10 @@ static int collide_intersectsegmentwithfaceplane(const TieModelVec3f* normal,
 static int collide_pointinfacepolygon(const TieModelVec3f* normal, const TieModelVec3f* vertices,
 									  const int32_t indices[4], const TieModelVec3f* point) {
 	const float absolute[3] = { fabsf(normal->x), fabsf(normal->y), fabsf(normal->z) };
+	float projected[3];
+	int vertex_count;
+	float first_cross;
+	int edge;
 	int axis_u;
 	int axis_v;
 	if (absolute[2] >= absolute[1] && absolute[2] >= absolute[0]) {
@@ -76,10 +79,12 @@ static int collide_pointinfacepolygon(const TieModelVec3f* normal, const TieMode
 		axis_v = 2;
 	}
 
-	const float projected[3] = { point->x, point->y, point->z };
-	const int vertex_count = indices[3] == -1 ? 3 : 4;
-	float first_cross = 0.0f;
-	for (int edge = 0; edge < vertex_count; ++edge) {
+	projected[0] = point->x;
+	projected[1] = point->y;
+	projected[2] = point->z;
+	vertex_count = indices[3] == -1 ? 3 : 4;
+	first_cross = 0.0f;
+	for (edge = 0; edge < vertex_count; ++edge) {
 		const TieModelVec3f* a = &vertices[indices[edge]];
 		const TieModelVec3f* b = &vertices[indices[(edge + 1) % vertex_count]];
 		const float av[3] = { a->x, a->y, a->z };
@@ -115,7 +120,8 @@ static void rotate_point(TieModelVec3f* point, const TieModelRotationScale* rota
 }
 
 static int collision_face_indices_valid(const TieModelCollisionFace* face, uint32_t vertex_count) {
-	for (int i = 0; i < 3; ++i) {
+	int i;
+	for (i = 0; i < 3; ++i) {
 		if (face->vertex_indices[i] < 0 || (uint32_t)face->vertex_indices[i] >= vertex_count)
 			return 0;
 	}
@@ -127,9 +133,12 @@ static int collision_face_indices_valid(const TieModelCollisionFace* face, uint3
 // COLLIDE_testsweepagainstoptnode; OpenXWA counterpart
 // collide_TestSweepAgainstOptNode.
 static int collide_testsweepagainstoptnode(OptCollisionContext* context, int node_index) {
+	const TieModelCollisionNode* node;
+	uint16_t child;
+
 	if (node_index < 0 || (uint32_t)node_index >= context->model->collision_node_count)
 		return 0;
-	const TieModelCollisionNode* node = &context->model->collision_nodes[node_index];
+	node = &context->model->collision_nodes[node_index];
 	if (node->kind == 7)
 		return collide_testsweepagainstoptnode(context, node->reference_target);
 
@@ -163,27 +172,28 @@ static int collide_testsweepagainstoptnode(OptCollisionContext* context, int nod
 			   (uint32_t)context->current_vertex_set < context->model->collision_vertex_set_count) {
 		const TieModelCollisionVertexSet* set =
 			&context->model->collision_vertex_sets[context->current_vertex_set];
-		for (uint32_t i = 0; i < node->face_count; ++i) {
+		uint32_t i;
+		for (i = 0; i < node->face_count; ++i) {
 			const uint32_t face_index = node->first_face + i;
+			const TieModelCollisionFace* face;
+			float fraction;
+			TieModelVec3f point;
 			if (face_index >= context->model->collision_face_count)
 				break;
-			const TieModelCollisionFace* face = &context->model->collision_faces[face_index];
+			face = &context->model->collision_faces[face_index];
 			if (!collision_face_indices_valid(face, set->vertex_count))
 				continue;
-			float fraction;
 			if (!collide_intersectsegmentwithfaceplane(&face->normal, &set->vertices[face->vertex_indices[0]],
 													   &context->segment_start, &context->segment_end,
 													   &fraction) ||
 				fraction >= context->nearest_fraction)
 				continue;
-			TieModelVec3f point = {
-				.x =
-					context->segment_start.x + (context->segment_end.x - context->segment_start.x) * fraction,
-				.y =
-					context->segment_start.y + (context->segment_end.y - context->segment_start.y) * fraction,
-				.z =
-					context->segment_start.z + (context->segment_end.z - context->segment_start.z) * fraction,
-			};
+			point.x =
+				context->segment_start.x + (context->segment_end.x - context->segment_start.x) * fraction;
+			point.y =
+				context->segment_start.y + (context->segment_end.y - context->segment_start.y) * fraction;
+			point.z =
+				context->segment_start.z + (context->segment_end.z - context->segment_start.z) * fraction;
 			if (collide_pointinfacepolygon(&face->normal, set->vertices, face->vertex_indices, &point)) {
 				context->nearest_fraction = fraction;
 				context->hit_mesh_one_based = context->current_mesh_one_based;
@@ -196,7 +206,7 @@ static int collide_testsweepagainstoptnode(OptCollisionContext* context, int nod
 	if (node->kind == 21) {
 		return collide_testsweepagainstoptnode(context, node->first_child);
 	}
-	for (uint16_t child = 0; child < node->child_count; ++child) {
+	for (child = 0; child < node->child_count; ++child) {
 		if (collide_testsweepagainstoptnode(context, node->first_child + child))
 			return 1;
 	}
@@ -217,66 +227,66 @@ static void set_collision_offsets(float fraction) {
 // collide_CheckSweptModelCollision.
 uint16_t collide_checksweptmodelcollision(uint16_t source_object_index, uint16_t target_object_index) {
 	FlightObject* target = &objects[target_object_index];
+	int32_t current[3], previous[3];
+	TieModelVec3f local_start, local_end;
+	OptCollisionContext context = { 0 };
+	uint16_t mesh_index;
+
 	craftptr = target->craft_ptr;
 	if (target->orient_dirty) {
 		fview_calcrotatemove(target->heading, target->pitch, target);
 		fview_calcrotateorient(target->roll, 0, target);
 	}
 
-	const int32_t current[3] = {
-		laserx - target->world_x,
-		lasery - target->world_y,
-		laserz - target->world_z,
-	};
-	const int32_t previous[3] = {
-		laserxold - target->world_x,
-		laseryold - target->world_y,
-		laserzold - target->world_z,
-	};
-	const TieModelVec3f local_end = {
-		.x = (float)(((int64_t)current[0] * target->side_x >> 15) +
-					 ((int64_t)current[1] * target->side_y >> 15) +
-					 ((int64_t)current[2] * target->side_z >> 15)),
-		.y = (float)-(((int64_t)current[0] * target->fwd_x >> 15) +
-					  ((int64_t)current[1] * target->fwd_y >> 15) +
-					  ((int64_t)current[2] * target->fwd_z >> 15)),
-		.z = (float)(((int64_t)current[0] * target->up_x >> 15) + ((int64_t)current[1] * target->up_y >> 15) +
-					 ((int64_t)current[2] * target->up_z >> 15)),
-	};
-	const TieModelVec3f local_start = {
-		.x = (float)(((int64_t)previous[0] * target->side_x >> 15) +
-					 ((int64_t)previous[1] * target->side_y >> 15) +
-					 ((int64_t)previous[2] * target->side_z >> 15)),
-		.y = (float)-(((int64_t)previous[0] * target->fwd_x >> 15) +
-					  ((int64_t)previous[1] * target->fwd_y >> 15) +
-					  ((int64_t)previous[2] * target->fwd_z >> 15)),
-		.z = (float)(((int64_t)previous[0] * target->up_x >> 15) +
-					 ((int64_t)previous[1] * target->up_y >> 15) +
-					 ((int64_t)previous[2] * target->up_z >> 15)),
-	};
+	current[0] = laserx - target->world_x;
+	current[1] = lasery - target->world_y;
+	current[2] = laserz - target->world_z;
+	previous[0] = laserxold - target->world_x;
+	previous[1] = laseryold - target->world_y;
+	previous[2] = laserzold - target->world_z;
+	local_end.x =
+		(float)(((int64_t)current[0] * target->side_x >> 15) + ((int64_t)current[1] * target->side_y >> 15) +
+				((int64_t)current[2] * target->side_z >> 15));
+	local_end.y =
+		(float)-(((int64_t)current[0] * target->fwd_x >> 15) + ((int64_t)current[1] * target->fwd_y >> 15) +
+				 ((int64_t)current[2] * target->fwd_z >> 15));
+	local_end.z =
+		(float)(((int64_t)current[0] * target->up_x >> 15) + ((int64_t)current[1] * target->up_y >> 15) +
+				((int64_t)current[2] * target->up_z >> 15));
+	local_start.x = (float)(((int64_t)previous[0] * target->side_x >> 15) +
+							((int64_t)previous[1] * target->side_y >> 15) +
+							((int64_t)previous[2] * target->side_z >> 15));
+	local_start.y =
+		(float)-(((int64_t)previous[0] * target->fwd_x >> 15) + ((int64_t)previous[1] * target->fwd_y >> 15) +
+				 ((int64_t)previous[2] * target->fwd_z >> 15));
+	local_start.z =
+		(float)(((int64_t)previous[0] * target->up_x >> 15) + ((int64_t)previous[1] * target->up_y >> 15) +
+				((int64_t)previous[2] * target->up_z >> 15));
 
-	OptCollisionContext context = {
-		.model = modelmesh_require_model(target->ship_idx),
-		.saved_start = local_start,
-		.saved_end = local_end,
-		.nearest_fraction = 2.0f,
-		.current_vertex_set = -1,
-	};
-	for (uint16_t mesh_index = 0; mesh_index < context.model->mesh_count; ++mesh_index) {
+	context.model = modelmesh_require_model(target->ship_idx);
+	context.saved_start = local_start;
+	context.saved_end = local_end;
+	context.nearest_fraction = 2.0f;
+	context.current_vertex_set = -1;
+	for (mesh_index = 0; mesh_index < context.model->mesh_count; ++mesh_index) {
+		int mesh_type;
+		uint8_t rotation;
+		const TieModelMeshView* mesh;
+
 		context.current_mesh_one_based = mesh_index + 1;
 		context.rotation_radians = 0.0f;
 		if (craftptr->mesh_component_hp[mesh_index] == 0)
 			continue;
-		const int mesh_type = modelmesh_gettype(target->ship_idx, mesh_index);
+		mesh_type = modelmesh_gettype(target->ship_idx, mesh_index);
 		if (source_object_index == target_object_index &&
 			(mesh_type == TIE_MESH_GUN_TURRET || mesh_type == TIE_MESH_SMALL_GUN ||
 			 mesh_type == TIE_MESH_ROTARY_GUN_TURRET))
 			continue;
 
-		const uint8_t rotation = craftptr->mesh_rotation[mesh_index];
+		rotation = craftptr->mesh_rotation[mesh_index];
 		if (rotation)
 			context.rotation_radians = rotation * 0.024543693f;
-		const TieModelMeshView* mesh = &context.model->meshes[mesh_index];
+		mesh = &context.model->meshes[mesh_index];
 		if (!rotation && mesh->has_descriptor) {
 			if ((local_start.x < mesh->bounds.min.x && local_end.x < mesh->bounds.min.x) ||
 				(local_start.y < mesh->bounds.min.y && local_end.y < mesh->bounds.min.y) ||
@@ -306,14 +316,17 @@ uint16_t collide_checksweptmodelmeshcollision(uint8_t model_type, uint16_t mesh_
 											  int32_t start_y, int32_t start_z, int32_t end_x, int32_t end_y,
 											  int32_t end_z) {
 	const TieFlightModelView* model = modelmesh_require_model(model_type);
-	OptCollisionContext context = {
-		.model = model,
-		.segment_start = { (float)start_x, (float)start_y, (float)start_z },
-		.segment_end = { (float)end_x, (float)end_y, (float)end_z },
-		.nearest_fraction = 2.0f,
-		.current_vertex_set = -1,
-		.current_mesh_one_based = mesh_index + 1,
-	};
+	OptCollisionContext context = { 0 };
+	context.model = model;
+	context.segment_start.x = (float)start_x;
+	context.segment_start.y = (float)start_y;
+	context.segment_start.z = (float)start_z;
+	context.segment_end.x = (float)end_x;
+	context.segment_end.y = (float)end_y;
+	context.segment_end.z = (float)end_z;
+	context.nearest_fraction = 2.0f;
+	context.current_vertex_set = -1;
+	context.current_mesh_one_based = mesh_index + 1;
 	context.saved_start = context.segment_start;
 	context.saved_end = context.segment_end;
 	if (mesh_index < model->mesh_count)

@@ -1,8 +1,9 @@
 #include "tie/render_list_tie98.h"
-
 #include <stddef.h>
 
-#define TIE98_RENDER_OBJECT_LIST_CAPACITY 184
+enum {
+	TIE98_RENDER_OBJECT_LIST_CAPACITY = 184,
+};
 
 // GLOBAL: TIE98 0x591904
 static int g_renderObjectListCount;
@@ -21,10 +22,12 @@ void RenderList_Reset(void) {
 
 // FUNCTION: TIE98 0x48DCE0
 void RenderList_QueueObject(int objectIdx, int sortDepth) {
+	RenderObjectListEntryTIE98* entry;
+
 	if (g_renderObjectListCount >= TIE98_RENDER_OBJECT_LIST_CAPACITY)
 		return;
 
-	RenderObjectListEntryTIE98* entry = &g_renderObjectListEntries[g_renderObjectListCount];
+	entry = &g_renderObjectListEntries[g_renderObjectListCount];
 	entry->sortDepth = sortDepth;
 	entry->objectIdx = objectIdx;
 	entry->next = g_renderListHead;
@@ -49,6 +52,8 @@ void RenderList_SortDepthAscending(void) {
 		if (object_count > processed_count) {
 			for (;;) {
 				int left_count = 0;
+				int right_count;
+
 				while (run_length > 0) {
 					if (right_run == NULL)
 						break;
@@ -61,7 +66,7 @@ void RenderList_SortDepthAscending(void) {
 				if (right_run == NULL)
 					break;
 
-				int right_count = 0;
+				right_count = 0;
 				if (run_length > 0) {
 					while (right_run != NULL) {
 						const int right_depth = right_run->sortDepth;

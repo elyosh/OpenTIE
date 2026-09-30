@@ -1,7 +1,11 @@
-#ifndef __XTRANS2_H__
-#define __XTRANS2_H__
+#ifndef TIE_XTRANS2_H
+#define TIE_XTRANS2_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * XTRANS2 — translucent / per-edge run-table rendering engine.
@@ -85,7 +89,11 @@ typedef enum {
  * face_flags[2*f] is the material/shade slot for face f (high bit
  * encodes solid-fill vs Gouraud-interpolated).
  */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct xtrans2_ObjectRecord {
 	int16_t bbox_xmin;        /* +0x00 */
 	int16_t bbox_ymin;        /* +0x02 */
@@ -101,7 +109,11 @@ typedef struct xtrans2_ObjectRecord {
 	int32_t face_ypos[128];   /* +0x18 — last y pos per face (-1 = never) */
 	uint8_t face_flags[256];  /* +0x218 — 2 bytes per face: [0]=shade, [1]=rt-edge */
 } xtrans2_ObjectRecord;       /* sizeof = 0x318 = 792 bytes */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /* --- Globals ---------------------------------------------------------- */
 
@@ -244,5 +256,9 @@ void xtrans2_openobject(void);
 void xtrans2_outputxt(void);
 uint16_t xtrans2_findnearest(void);
 uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

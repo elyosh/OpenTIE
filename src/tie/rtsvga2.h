@@ -1,7 +1,11 @@
-#ifndef __RTSVGA2_H__
-#define __RTSVGA2_H__
+#ifndef TIE_RTSVGA2_H
+#define TIE_RTSVGA2_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Low-resolution 8-bit renderer using a linear framebuffer. VESA page
  * selection is a no-op. */
@@ -137,5 +141,9 @@ void Tie98StarColors_Invalidate(void);
 
 /* Retail-only screenshot */
 int rtsvga2_takeScreenshot(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

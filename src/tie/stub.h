@@ -1,9 +1,13 @@
-#ifndef __STUB_H__
-#define __STUB_H__
+#ifndef TIE_STUB_H
+#define TIE_STUB_H
+
+#include "landru/rect.h"
 
 #include <stdint.h>
 
-#include "landru/rect.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Copy a rectangular region FROM a flat buffer TO the drawing canvas.
  * The buffer is treated as a bitmap of (buf_w × buf_h) pixels.
@@ -26,5 +30,9 @@ int stub_Copy_To_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, 
  * src_stride is the source image width in bytes (passed through to Map_Image). */
 void stub_Map_Clipped_Image(void* src_data, int16_t* dst_poly, Rect* src_rect, int16_t src_stride,
 							int16_t map_mode);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

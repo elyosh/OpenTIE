@@ -1,8 +1,14 @@
-#ifndef __PANEL_H__
-#define __PANEL_H__
+#ifndef TIE_PANEL_H
+#define TIE_PANEL_H
 
+#include "tie/panelrts.h"
 #include "tie/tie.h"
+
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Cockpit panel and HUD state. panel_updatepanel is the per-frame entry point. */
 
@@ -104,26 +110,42 @@ void PanelViewDef_decode(PanelViewDef* dst, const uint8_t* src);
  *   mask     : occlusion mask (panel_copymaskdata source)
  *   palette  : 64-entry palette for this view
  */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct {
 	uint16_t handle;
 	void* image;
 	void* mask;
 	void* palette;
 } PanelViewPtrs; /* 14 bytes */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /*
  * RadarBlip -- one entry in the radar display buffers.
  * 3 words each (6 bytes). 48 per hemisphere list.
  */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct RadarBlip {
 	uint16_t x;
 	uint16_t y;
 	uint16_t color;
 } RadarBlip; /* 6 bytes */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Panel-owned globals (defined in panel.c)                           */
@@ -261,7 +283,6 @@ void panel_pointcamera_tie98(uint16_t obj_idx, int16_t use_hud_size);
 uint16_t panel_AdjustXForRes(uint16_t x);
 
 /* PANELRTS support routines (in panelrts.c). */
-#include "tie/panelrts.h"
 
 /* String tables (populated by fediskio_loadstringdata). */
 extern char** waypointstrings;
@@ -290,5 +311,9 @@ extern char separator_3_spaces[4]; /* "   \0"   — engine 0xC057C */
 extern char separator_2_spaces[4]; /* "  \0\x1c" — engine 0xC0580 */
 extern char separator_colon[4];    /* "00:\0"   — engine 0xC0584 */
 extern char separator_period[4];   /* "00.\0"   — engine 0xC0588 */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,7 +1,11 @@
-#ifndef __MISSION_H__
-#define __MISSION_H__
+#ifndef TIE_MISSION_H
+#define TIE_MISSION_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Runtime mission state — 1030 bytes.
  * NOT the .TIE file header (EMissionStruct, 450 bytes) — that is loaded
@@ -10,7 +14,11 @@
  *
  * Field names verified against FEDISKIO_updatepilotrecord, PANEL_update*,
  * COLLIDE_*, SCORE_*, and TALK/MAP debrief functions. */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct RUNTIME_MissionStateStruct {
 	/* Training-craft selector enum. 0 = combat mission (no training
 	 * craft selected); nonzero = a CraftType enum value identifying
@@ -61,6 +69,14 @@ typedef struct RUNTIME_MissionStateStruct {
 	uint8_t beam_used;                /* +0x404 */
 	uint8_t torp_used;                /* +0x405 */
 } RUNTIME_MissionState;               /* 1030 bytes (0x406) */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

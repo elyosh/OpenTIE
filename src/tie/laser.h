@@ -1,9 +1,13 @@
-#ifndef __LASER_H__
-#define __LASER_H__
+#ifndef TIE_LASER_H
+#define TIE_LASER_H
 
 #include "tie_runtime/species_id.h"
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Projectile physics and weapon-fire dispatch. Parameter tables use
  * `(weapon_species - WEAPON_SPECIES_BASE)` and retain six zero padding slots. */
@@ -65,7 +69,11 @@ static inline unsigned int laser_species_idx(unsigned int species) { return spec
  * creators -- leftover values from the slot's previous use may be
  * read. In the demo they zero-init on first use.
  */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct {
 	uint8_t homing_tier;  /* +0: 0 skips homing; 3..6 selects a tier */
 	uint8_t reserved_1;   /* +1: not read by any ported code */
@@ -73,7 +81,11 @@ typedef struct {
 	uint16_t target_obj;  /* +4: target FlightObject idx (0xFFFF = none) */
 	uint16_t min_speed;   /* +6: homing min-speed floor */
 } WarheadRecord;          /* 8 bytes */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 #define NUM_WARHEAD_SLOTS 49
 
@@ -172,4 +184,8 @@ void laser_fireplayerweapon(void);
  */
 void laser_weaponsfire(void);
 
-#endif /* __LASER_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

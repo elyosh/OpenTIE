@@ -1,6 +1,4 @@
-#include <stddef.h>
-#include <stdint.h>
-
+#include "tie/score.h"
 #include "tie/create.h" /* speciesconvert, genusconvert, familyconvert, diffmask, fgdiffmask */
 #include "tie/fediskio.h"
 #include "tie/fscript.h"
@@ -9,11 +7,13 @@
 #include "tie/mission.h" /* RUNTIME_MissionState */
 #include "tie/msg.h"
 #include "tie/msg_templates.h"
-#include "tie/score.h"
 #include "tie/shipext.h" /* EFGStruct, EAIStruct */
 #include "tie/tie.h"
 #include "tie/user.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
+
+#include <stddef.h>
+#include <stdint.h>
 
 /* --- Module-owned globals (watdbg: score.c) -------------------------- */
 
@@ -32,9 +32,6 @@ uint8_t conditiongrouprelated[26] = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1,
  * memory is actually EMissionStruct.win_msg1[2][64] (primary-complete),
  * win_msg2[2][64] (secondary-complete) and loss_msg[2][64]
  * (objectives-failed). */
-#define PRI_COMPLETE_NAME(k) ((const uint8_t*)&mission_file_header.mission.win_msg1[(k)][0])
-#define SEC_COMPLETE_NAME(k) ((const uint8_t*)&mission_file_header.mission.win_msg2[(k)][0])
-#define OBJ_FAILED_NAME(k) ((const uint8_t*)&mission_file_header.mission.loss_msg[(k)][0])
 
 /* ====================================================================
  * score_fgmemberofgroup
@@ -82,6 +79,9 @@ int8_t score_objectmemberofgroup(uint16_t obj_idx, uint8_t group_type, uint8_t g
 	uint16_t fg_idx;
 	CraftData* craft_ptr = NULL;
 
+	const EFGStruct* f;
+	uint8_t fg_spec;
+
 	if (obj_idx >= 0x3800u) {
 		fg_idx = staticobjects[obj_idx - 0x3800u].fg_idx;
 	} else {
@@ -89,8 +89,8 @@ int8_t score_objectmemberofgroup(uint16_t obj_idx, uint8_t group_type, uint8_t g
 		craft_ptr = objects[obj_idx].craft_ptr;
 	}
 
-	const EFGStruct* const f = &fg_array[fg_idx];
-	const uint8_t fg_spec = speciesconvert[f->species];
+	f = &fg_array[fg_idx];
+	fg_spec = speciesconvert[f->species];
 
 	switch (group_type) {
 		case GTT_FG:
@@ -154,11 +154,13 @@ int8_t score_objectmemberofgroup(uint16_t obj_idx, uint8_t group_type, uint8_t g
 
 // FUNCTION: TIE95 0x52A9C
 void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kind) {
-	TIE_FLIGHT_TRACE_FG_EXIT(obj_idx, exit_kind);
+	uint16_t j;
 	FGStatus* const fs = &fgstatus[fg_idx];
 	const EFGStruct* const f = &fg_array[fg_idx];
 	CraftData* const cd = objects[obj_idx].craft_ptr;
 	const uint8_t special = f->special_craft;
+
+	TIE_FLIGHT_TRACE_FG_EXIT(obj_idx, exit_kind);
 
 	/* Primary bucket (byte-indexed via exit_kind). */
 	((&fs->cond[0].count))[exit_kind]++;
@@ -167,25 +169,42 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
 
 /* Conditional buckets: each bumps its own cond[N].count when the
  * craft's flag is CLEAR (i.e. the exit qualifies for that bucket). */
-#define BUMP(flag_expr, slot)                                                                                \
-	if (!(flag_expr)) {                                                                                      \
-		fs->cond[(slot)].count++;                                                                            \
-		if (cd->craft_idx_in_fg == special)                                                                  \
-			fs->cond_id[(slot)].count = 1;                                                                   \
+	if (!cd->inspected) {
+		fs->cond[5].count++;
+		if (cd->craft_idx_in_fg == special)
+			fs->cond_id[5].count = 1;
 	}
-
-	BUMP(cd->inspected, 5)
-	BUMP(cd->pad_0B6, 8)
-	BUMP(cd->dock_state_flags, 4)
-	BUMP(cd->was_hit_flag, 3)
-	BUMP(cd->board_count, 6)
-	BUMP(cd->capture_count, 7)
-
-#undef BUMP
+	if (!cd->pad_0B6) {
+		fs->cond[8].count++;
+		if (cd->craft_idx_in_fg == special)
+			fs->cond_id[8].count = 1;
+	}
+	if (!cd->dock_state_flags) {
+		fs->cond[4].count++;
+		if (cd->craft_idx_in_fg == special)
+			fs->cond_id[4].count = 1;
+	}
+	if (!cd->was_hit_flag) {
+		fs->cond[3].count++;
+		if (cd->craft_idx_in_fg == special)
+			fs->cond_id[3].count = 1;
+	}
+	if (!cd->board_count) {
+		fs->cond[6].count++;
+		if (cd->craft_idx_in_fg == special)
+			fs->cond_id[6].count = 1;
+	}
+	if (!cd->capture_count) {
+		fs->cond[7].count++;
+		if (cd->craft_idx_in_fg == special)
+			fs->cond_id[7].count = 1;
+	}
 
 	/* Destruction (exit_kind == 2): link-code tick + propagation to other FGs
 	 * whose arrival depends on this one. */
 	if (exit_kind == 2) {
+		uint16_t i;
+
 		if (f->link_flag) {
 			uint8_t linked = mission.mission_linked_data[f->link_code] + 1;
 			mission.mission_linked_data[f->link_code] = linked;
@@ -193,7 +212,11 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
 				mission.mission_linked_data[f->link_code] = 0xFFu; /* -1 */
 		}
 
-		for (uint16_t i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
+		for (i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
+			FGStatus* cs;
+			int8_t d_cnt;
+			int8_t d_cid;
+
 			if (i == fg_idx)
 				continue;
 			if (!fg_array[i].start_fg_used)
@@ -201,9 +224,9 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
 			if (fg_array[i].start_fg != (uint8_t)fg_idx)
 				continue;
 
-			FGStatus* const cs = &fgstatus[i];
-			const int8_t d_cnt = (int8_t)(cs->cond[0].count - cs->cond[0].detail);
-			const int8_t d_cid = (int8_t)(cs->cond_id[0].count - cs->cond_id[0].detail);
+			cs = &fgstatus[i];
+			d_cnt = (int8_t)(cs->cond[0].count - cs->cond[0].detail);
+			d_cid = (int8_t)(cs->cond_id[0].count - cs->cond_id[0].detail);
 
 			/* Propagate both deltas across cond[1/3/4/5/6/8]. The binary
 			 * interleaves the 12 writes; here we emit them in a cleaner
@@ -228,10 +251,12 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
 	}
 
 	/* Clear any craft's attacker_idx that was targeting the exiting obj. */
-	for (uint16_t j = 0; j < NUM_CRAFTS; j++) {
+	for (j = 0; j < NUM_CRAFTS; j++) {
+		CraftData* oc;
+
 		if (!objects[j].ship_idx)
 			continue;
-		CraftData* oc = objects[j].craft_ptr;
+		oc = objects[j].craft_ptr;
 		if (obj_idx == oc->attacker_idx)
 			oc->attacker_idx = 255;
 	}
@@ -254,7 +279,9 @@ static int craft_pred_live(uint8_t cond, const CraftData* cd) {
 			return cd->hull_damage <= (uint16_t)(cd->hull_max / 2);
 		case 23: {
 			uint16_t ammo = 0;
-			for (int k = 0; k < (int)cd->missile_group_cnt; k++) {
+			int k;
+
+			for (k = 0; k < (int)cd->missile_group_cnt; k++) {
 				ammo = (uint16_t)(ammo + cd->weapon_slots[spec_data[cd->species_idx].missile_end[k]].ammo +
 								  cd->weapon_slots[spec_data[cd->species_idx].missile_start[k]].ammo);
 			}
@@ -328,6 +355,17 @@ static int8_t check_mission_level(uint8_t cond) {
 // FUNCTION: TIE95 0x51698
 int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id, uint8_t amount_op,
 							int8_t exclude_player) {
+	uint16_t total_craft;
+	uint16_t destroyed_total;
+	uint16_t specific_total;
+	uint16_t cond_count;
+	uint16_t cond_specific_total;
+	uint16_t cond_destroyed_count;
+	uint16_t cond_destroyed_specific;
+	uint16_t player_matched;
+	uint16_t fg_idx;
+	int8_t INCOMPLETE;
+
 	if (!conditiongrouprelated[cond])
 		return check_mission_level(cond);
 
@@ -335,23 +373,25 @@ int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id
 		return 2; /* No target -> failed. */
 
 	/* Accumulators (all uint16 running totals across the FG loop). */
-	uint16_t total_craft = 0;             /* sum(cond[0].count)    */
-	uint16_t destroyed_total = 0;         /* sum(cond[0].detail)   */
-	uint16_t specific_total = 0;          /* sum(cond_id[0].count) */
-	uint16_t cond_count = 0;              /* cond-specific count bucket */
-	uint16_t cond_specific_total = 0;     /* parallel cond_id counter   */
-	uint16_t cond_destroyed_count = 0;    /* "remainder" bucket          */
-	uint16_t cond_destroyed_specific = 0; /* parallel cond_id remainder  */
-	uint16_t player_matched = 0;
+	total_craft = 0;             /* sum(cond[0].count)    */
+	destroyed_total = 0;         /* sum(cond[0].detail)   */
+	specific_total = 0;          /* sum(cond_id[0].count) */
+	cond_count = 0;              /* cond-specific count bucket */
+	cond_specific_total = 0;     /* parallel cond_id counter   */
+	cond_destroyed_count = 0;    /* "remainder" bucket          */
+	cond_destroyed_specific = 0; /* parallel cond_id remainder  */
+	player_matched = 0;
 
-	for (uint16_t fg_idx = 0; fg_idx < (uint16_t)mission_file_header.num_fg; fg_idx++) {
+	for (fg_idx = 0; fg_idx < (uint16_t)mission_file_header.num_fg; fg_idx++) {
 		const EFGStruct* const f = &fg_array[fg_idx];
+		const FGStatus* fs;
+
 		if (!f->species)
 			continue;
 		if (!score_fgmemberofgroup(fg_idx, target_type, target_id))
 			continue;
 
-		const FGStatus* const fs = &fgstatus[fg_idx];
+		fs = &fgstatus[fg_idx];
 		total_craft = (uint16_t)(total_craft + fs->cond[0].count);
 		specific_total = (uint16_t)(specific_total + fs->cond_id[0].count);
 		destroyed_total = (uint16_t)(destroyed_total + fs->cond[0].detail);
@@ -445,13 +485,18 @@ int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id
 			 * (++cond_count + ++player_matched) fires on the OPPOSITE
 			 * condition, so we walk the alive branch into
 			 * cond_destroyed_count and the dead branch into cond_count. */
-			for (uint16_t i = 0; i < NUM_CRAFTS; i++) {
+			uint16_t i;
+
+			for (i = 0; i < NUM_CRAFTS; i++) {
+				const CraftData* cd;
+				int alive;
+
 				if (!objects[i].ship_idx)
 					continue;
 				if ((uint16_t)objects[i].fg_idx != fg_idx)
 					continue;
-				const CraftData* cd = objects[i].craft_ptr;
-				const int alive = craft_pred_live(cond, cd);
+				cd = objects[i].craft_ptr;
+				alive = craft_pred_live(cond, cd);
 				if (!alive) {
 					cond_count++;
 					if (cd->craft_idx_in_fg == f->special_craft)
@@ -467,7 +512,7 @@ int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id
 		}
 	}
 
-	const int8_t INCOMPLETE = 4;
+	INCOMPLETE = 4;
 	if (total_craft == 0)
 		return INCOMPLETE;
 
@@ -577,20 +622,22 @@ static void play_objectives_complete(uint16_t cooldown_set, MsgTemplate complete
 									 uint16_t voice_id_first, uint16_t speak_voice, int16_t script_seq,
 									 int16_t* cooldown_slot) {
 	if (*cooldown_slot == 0) {
+		uint16_t k;
+
 		*cooldown_slot = (int16_t)cooldown_set;
 		msg_messageprintf(complete_msg);
 		/* The first name-list line carries the edition-specific primary
 		 * or secondary objective voice cue; the second
 		 * line plays silently. Bonus passes voice_id_first=0 because
 		 * MSG_BONUS_COMPLETE doesn't pair with a per-mission cue. */
-		for (uint16_t k = 0; k < 2u; k++) {
+		for (k = 0; k < 2u; k++) {
 			const uint8_t* p = NULL;
 			switch (name_kind) {
 				case NAME_LIST_PRI:
-					p = PRI_COMPLETE_NAME(k);
+					p = (const uint8_t*)mission_file_header.mission.win_msg1[k];
 					break;
 				case NAME_LIST_SEC:
-					p = SEC_COMPLETE_NAME(k);
+					p = (const uint8_t*)mission_file_header.mission.win_msg2[k];
 					break;
 				case NAME_LIST_NONE:
 					break;
@@ -609,6 +656,13 @@ static void play_objectives_complete(uint16_t cooldown_set, MsgTemplate complete
 // FUNCTION: TIE95 0x50A70
 int8_t score_checkobjective(void) {
 	int8_t ret_al = (int8_t)mission.player_status;
+	int16_t pri_all_ok;
+	int16_t any_pri_goal;
+	int16_t sec_all_ok;
+	int16_t any_sec_goal;
+	int16_t bonus_all_ok;
+	int16_t any_bonus_goal;
+
 	if (mission.player_status != 3)
 		return ret_al;
 
@@ -617,16 +671,23 @@ int8_t score_checkobjective(void) {
 
 	ret_al = 0;
 
-	int16_t pri_all_ok = 1;
-	int16_t any_pri_goal = 0;
-	int16_t sec_all_ok = 1;
-	int16_t any_sec_goal = 0;
-	int16_t bonus_all_ok = 1;
-	int16_t any_bonus_goal = 0;
+	pri_all_ok = 1;
+	any_pri_goal = 0;
+	sec_all_ok = 1;
+	any_sec_goal = 0;
+	bonus_all_ok = 1;
+	any_bonus_goal = 0;
 
 	if (!timers[TIMER_PRIMARY_CHECK] || mission.end_flag) {
 		/* --- Phase 1: per-FG evaluation ---------------------------- */
-		for (uint16_t fg_idx = 0; fg_idx < (uint16_t)mission_file_header.num_fg; fg_idx++) {
+		uint16_t fg_idx;
+		const EMissionGoal* pri;
+		int16_t pri_mission_status;
+		const EMissionGoal* sec;
+		int16_t sec_mission_status;
+		const EMissionGoal* bonus;
+
+		for (fg_idx = 0; fg_idx < (uint16_t)mission_file_header.num_fg; fg_idx++) {
 			const EFGStruct* const f = &fg_array[fg_idx];
 
 			/* Diffmask filter keys off f->difficulty (byte at +0x49), NOT
@@ -653,9 +714,11 @@ int8_t score_checkobjective(void) {
 						mission.primary_complete = 2;
 				} else if (pri_status) {
 					if (f->pri_win_cond && f->pri_win_cond != 10) {
+						int8_t r;
+
 						any_pri_goal = 1;
-						const int8_t r = score_checkcondition(f->pri_win_cond, GTT_FG, (uint8_t)fg_idx,
-															  (uint8_t)percentcon[f->pri_win_pct], 0);
+						r = score_checkcondition(f->pri_win_cond, GTT_FG, (uint8_t)fg_idx,
+												 (uint8_t)percentcon[f->pri_win_pct], 0);
 						if (r == 2 && !mission.primary_complete)
 							mission.primary_complete = 2;
 						if (r == 1) {
@@ -683,9 +746,11 @@ int8_t score_checkobjective(void) {
 						mission.secondary_complete = 2;
 				} else if (sec_status) {
 					if (f->sec_win_cond && f->sec_win_cond != 10) {
+						int8_t r;
+
 						any_sec_goal = 1;
-						const int8_t r = score_checkcondition(f->sec_win_cond, GTT_FG, (uint8_t)fg_idx,
-															  (uint8_t)percentcon[f->sec_win_pct], 0);
+						r = score_checkcondition(f->sec_win_cond, GTT_FG, (uint8_t)fg_idx,
+												 (uint8_t)percentcon[f->sec_win_pct], 0);
 						if (r == 2 && !mission.secondary_complete)
 							mission.secondary_complete = 2;
 						if (r == 1) {
@@ -713,9 +778,11 @@ int8_t score_checkobjective(void) {
 						mission.bonus_complete = 2;
 				} else if (fgc) {
 					if (f->bonus_cond && f->bonus_cond != 10) {
+						int8_t r;
+
 						any_bonus_goal = 1;
-						const int8_t r = score_checkcondition(f->bonus_cond, GTT_FG, (uint8_t)fg_idx,
-															  (uint8_t)percentcon[f->bonus_pct], 0);
+						r = score_checkcondition(f->bonus_cond, GTT_FG, (uint8_t)fg_idx,
+												 (uint8_t)percentcon[f->bonus_pct], 0);
 						if (fgstatus[fg_idx].fg_complete == 2 && !mission.bonus_complete &&
 							f->bonus_points >= 0)
 							mission.bonus_complete = 2;
@@ -737,17 +804,20 @@ int8_t score_checkobjective(void) {
 		}
 
 		/* --- Phase 2: mission-level primary aggregate -------------- */
-		const EMissionGoal* const pri = &cut[0];
-		int16_t pri_mission_status;
+		pri = &cut[0];
+
 		if (pri->subcond[0].cond == 10 && pri->subcond[1].cond == 10) {
 			pri_mission_status = 1;
 			mission.primary_global = 0;
 		} else {
+			int8_t pri_a;
+			int8_t pri_b;
+
 			any_pri_goal = 1;
-			const int8_t pri_a = score_checkcondition(pri->subcond[0].cond, pri->subcond[0].type,
-													  pri->subcond[0].id, pri->subcond[0].pct, 0);
-			const int8_t pri_b = score_checkcondition(pri->subcond[1].cond, pri->subcond[1].type,
-													  pri->subcond[1].id, pri->subcond[1].pct, 0);
+			pri_a = score_checkcondition(pri->subcond[0].cond, pri->subcond[0].type, pri->subcond[0].id,
+										 pri->subcond[0].pct, 0);
+			pri_b = score_checkcondition(pri->subcond[1].cond, pri->subcond[1].type, pri->subcond[1].id,
+										 pri->subcond[1].pct, 0);
 			pri_mission_status = combine_subconds(pri_a, pri_b, pri->or_joined == 1);
 			mission.primary_global = (uint8_t)pri_mission_status;
 		}
@@ -769,8 +839,8 @@ int8_t score_checkobjective(void) {
 		}
 
 		/* --- Phase 3: secondary aggregate -------------------------- */
-		const EMissionGoal* const sec = &cut[1];
-		int16_t sec_mission_status;
+		sec = &cut[1];
+
 		{
 			const int8_t sec_a = score_checkcondition(sec->subcond[0].cond, sec->subcond[0].type,
 													  sec->subcond[0].id, sec->subcond[0].pct, 0);
@@ -797,7 +867,7 @@ int8_t score_checkobjective(void) {
 		}
 
 		/* --- Phase 4: bonus aggregate ------------------------------ */
-		const EMissionGoal* const bonus = &cut[2];
+		bonus = &cut[2];
 		{
 			const int8_t bonus_a = score_checkcondition(bonus->subcond[0].cond, bonus->subcond[0].type,
 														bonus->subcond[0].id, bonus->subcond[0].pct, 0);
@@ -825,10 +895,12 @@ int8_t score_checkobjective(void) {
 		/* "Objectives failed" banner when primary fails mid-flight. */
 		ret_al = (int8_t)mission.primary_complete;
 		if (mission.primary_complete == 2 && !hyperspaceflag && !timers[TIMER_OBJECTIVES_FAILED]) {
+			uint16_t k;
+
 			msg_messageprintf(MSG_OBJECTIVES_FAILED);
 			timers[TIMER_OBJECTIVES_FAILED] = 21240;
-			for (uint16_t k = 0; k < 2u; k++) {
-				const uint8_t* p = OBJ_FAILED_NAME(k);
+			for (k = 0; k < 2u; k++) {
+				const uint8_t* p = (const uint8_t*)mission_file_header.mission.loss_msg[k];
 				if (*p) {
 					msg_addmessageptr(0, (char*)p);
 					/* First failure-name line carries the edition-specific
@@ -848,9 +920,17 @@ int8_t score_checkobjective(void) {
 	/* --- Phase 5: radio-message trigger poll ---------------------- */
 	if (timers[TIMER_RADIOMSG_POLL] <= 0) {
 		const uint16_t msg_count = (uint16_t)mission_file_header.num_msg;
-		for (uint16_t j = 0; j < msg_count; j++) {
+		uint16_t j;
+
+		for (j = 0; j < msg_count; j++) {
+			uint8_t* rec;
+			int8_t sa;
+			int8_t sb;
+			int8_t combined;
+			uint8_t cd_seed;
+
 			ret_al = (int8_t)j;
-			uint8_t* const rec = &radiomsg[90u * j];
+			rec = &radiomsg[90u * j];
 
 			if (mission.radiomsg_triggered[j]) {
 				uint8_t cur = mission.radiomsg_countdown[j];
@@ -869,14 +949,14 @@ int8_t score_checkobjective(void) {
 			}
 
 			/* Evaluate both subconditions. */
-			const int8_t sa = score_checkcondition(rec[64], rec[65], rec[66], rec[67], 0);
-			const int8_t sb = score_checkcondition(rec[68], rec[69], rec[70], rec[71], 0);
-			const int8_t combined = (rec[89] == 1) ? (int8_t)(sb | sa) : (int8_t)(sb & sa);
+			sa = score_checkcondition(rec[64], rec[65], rec[66], rec[67], 0);
+			sb = score_checkcondition(rec[68], rec[69], rec[70], rec[71], 0);
+			combined = (rec[89] == 1) ? (int8_t)(sb | sa) : (int8_t)(sb & sa);
 			if ((combined & 1) == 0)
 				continue;
 
 			mission.radiomsg_triggered[j] = 1;
-			const uint8_t cd_seed = rec[88];
+			cd_seed = rec[88];
 			mission.radiomsg_countdown[j] = cd_seed;
 			if (cd_seed == 0) {
 				msg_addmessageptr(0, (char*)rec);

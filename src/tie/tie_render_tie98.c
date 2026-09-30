@@ -1,6 +1,5 @@
 #include "tie/tie_render_tie98.h"
-
-#include "anim.h"
+#include "tie/anim.h"
 #include "tie/backdrp2.h"
 #include "tie/create.h"
 #include "tie/draw.h"
@@ -70,6 +69,12 @@ static int tie_getstaticobjecteyeposition(uint16_t static_object_index) {
 // FUNCTION: TIE98 0x48DF40
 // TIE_Update_Screen
 void tie_updatescreen_tie98(void) {
+	RenderObjectListEntryTIE98* entry;
+	uint16_t final_draw_ticks;
+
+	int16_t object_index;
+	int16_t static_index;
+
 	if (replayviewmode) {
 		replay_calcreplayview();
 	} else if (camera.view_target_obj == 0xFFFFu) {
@@ -84,6 +89,8 @@ void tie_updatescreen_tie98(void) {
 						  (int16_t)camera.up_angle, NULL);
 	} else if ((camera.view_zoom_flag && camera.view_heading_offset == 0) ||
 			   (camera.view_heading_offset != 0 && camera.view_pitch_offset != 0)) {
+		uint8_t model_type;
+
 		TieChaseCamera_Update();
 		fview_newcalcview(camera.roll, camera.cam_heading, camera.cam_pitch, 0, (int16_t)camera.side_angle,
 						  (int16_t)camera.up_angle, NULL);
@@ -100,7 +107,7 @@ void tie_updatescreen_tie98(void) {
 		camera.x -= (worldeyeA3 * camera.view_zoom) >> 15;
 		camera.y -= (worldeyeB3 * camera.view_zoom) >> 15;
 		camera.z -= (worldeyeC3 * camera.view_zoom) >> 15;
-		uint8_t model_type;
+
 		if (camera.view_target_obj >= OBJ_REF_STATIC_BASE)
 			model_type = staticobjects[camera.view_target_obj - OBJ_REF_STATIC_BASE].species;
 		else
@@ -148,12 +155,14 @@ void tie_updatescreen_tie98(void) {
 	}
 
 	RenderList_Reset();
-	for (int16_t object_index = 0; object_index < NUM_OBJECTS; ++object_index) {
+	for (object_index = 0; object_index < NUM_OBJECTS; ++object_index) {
+		FlightObject* object;
+
 		if (object_index == DEBRIS_FIRST_SLOT && !(drawdebrisflag && mission.train_craft_type == 0))
 			break;
 		if (object_index == (int16_t)camera.view_target_obj && !camera.view_zoom_flag && !replayviewmode)
 			continue;
-		FlightObject* object = &objects[object_index];
+		object = &objects[object_index];
 		if (object->ship_idx == 0)
 			continue;
 		objectsize = (int16_t)species_table[object->ship_idx].bound_hwidth;
@@ -181,7 +190,7 @@ void tie_updatescreen_tie98(void) {
 		}
 	}
 
-	for (int16_t static_index = 0; static_index < NUM_STATIC_OBJECTS; ++static_index) {
+	for (static_index = 0; static_index < NUM_STATIC_OBJECTS; ++static_index) {
 		StaticObject* object = &staticobjects[static_index];
 		if (hyperspaceflag == 3 || hyperspaceflag == 5) {
 			if (static_index < hyperspacedetail) {
@@ -238,7 +247,7 @@ void tie_updatescreen_tie98(void) {
 	}
 
 	RenderList_SortDepthAscending();
-	for (RenderObjectListEntryTIE98* entry = g_renderListHead; entry != NULL; entry = entry->next) {
+	for (entry = g_renderListHead; entry != NULL; entry = entry->next) {
 		if (entry->objectIdx < NUM_OBJECTS) {
 			const uint16_t object_index = (uint16_t)entry->objectIdx;
 			FlightObject* object = &objects[object_index];
@@ -320,7 +329,7 @@ void tie_updatescreen_tie98(void) {
 	if (!replayviewmode)
 		PANEL_Update3DCrtIfVisible();
 	deepspacecolor = 0;
-	const uint16_t final_draw_ticks = (uint16_t)xtimer_time_elapsed();
+	final_draw_ticks = (uint16_t)xtimer_time_elapsed();
 	g_flightDrawToOffscreenSurface = 1;
 	tickcounter += final_draw_ticks;
 	deepspacecolor = (uint8_t)-5;

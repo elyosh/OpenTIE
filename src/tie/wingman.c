@@ -2,42 +2,45 @@
  * of each STRINGS.DAT entry. Returns -1/+1 for adjacent screens and +2 for
  * cancellation; selection updates inputkey and raises dropflag. */
 
-#include <stdint.h>
-
+#include "tie/wingman.h"
 #include "tie/feinput.h"
 #include "tie/festring.h"
-#include "tie/flight_surface_tie98.h"
-#include "tie/frontend_display_tie98.h"
 #include "tie/tie.h"
-#include "tie/user.h" /* user_submodal_result */
-#include "tie/wingman.h"
-#include "tie_runtime/display/classic_display.h"
-#include "tie_runtime/runtime/profile.h"
-#include <landru/task.h>
 
-#define NUM_WINGMAN_CMDS 10
+#include <stdint.h>
+
+enum {
+	NUM_WINGMAN_CMDS = 10,
+};
 
 /* Row background colors (match DAMAGE/MSGROOM rooms in the same family). */
-#define COLOR_BG_NORMAL 0x44
-#define COLOR_BG_SELECTED 0x46
-#define COLOR_TEXT_DEFAULT 0x52
+enum {
+	COLOR_BG_NORMAL = 0x44,
+	COLOR_BG_SELECTED = 0x46,
+	COLOR_TEXT_DEFAULT = 0x52,
+};
 
-/* Keyboard codes (post-remap). Arrows 1..4 ordering is UP/DOWN/RIGHT/LEFT. */
-#define K_LEFT 0x01
-#define K_RIGHT 0x02
-#define K_UP 0x03
-#define K_DOWN 0x04
-#define K_ENTER 0x0D
-#define K_ESC 0x1B
-#define K_SPACE 0x20
-#define K_KP2 0x32 /* keypad '2' (down) */
-#define K_KP8 0x38 /* keypad '8' (up)   */
-#define K_Q_UPPER 0x51
-#define K_Q_LOWER 0x71
-#define K_W_LOWER 0x77 /* this page's own hotkey (toggles wingman off)  */
-#define K_F1 0xBB      /* F1 scancode + 0x80 (FEINPUT extended-remap)   */
+/* Keyboard codes after FEINPUT remaps DOS extended keys. */
+enum {
+	K_LEFT = 0x01,
+	K_RIGHT = 0x02,
+	K_UP = 0x03,
+	K_DOWN = 0x04,
+	K_ENTER = 0x0D,
+	K_ESC = 0x1B,
+	K_SPACE = 0x20,
+	K_KP2 = 0x32, /* keypad '2' (down) */
+	K_KP8 = 0x38, /* keypad '8' (up)   */
+	K_Q_UPPER = 0x51,
+	K_Z_UPPER = 0x5A,
+	K_Q_LOWER = 0x71,
+	K_W_LOWER = 0x77, /* this page's own hotkey (toggles wingman off)  */
+	K_F1 = 0xBB,      /* F1 scancode + 0x80 (FEINPUT extended-remap)   */
+};
 
 /* Array of 10 string pointers. Populated in fediskio_loadstringdata. */
+// GLOBAL: TIE95 0xEC20C
+// GLOBAL: TIE98 0x58DFEC
 const char** wingmanstrings;
 
 /* Is this inputkey one of the 10 direct-select command hotkeys?
@@ -61,25 +64,14 @@ static int is_command_hotkey(uint16_t key) {
 	return 0;
 }
 
-typedef enum {
-	WINGMAN_PHASE_RENDER = 0,
-	WINGMAN_PHASE_POLL,
-} WingmanPhase;
-
-typedef struct WingmanTask {
-	int16_t selected_idx;
-	int16_t prev_buttons;
-	int16_t ret_delta;
-	WingmanPhase phase;
-} WingmanTask;
-
-static void wingman_render_page(int16_t selected_idx) {
+void wingman_render_page(int16_t selected_idx) {
 	/* 20-line visible grid in 320x200, 50-line in the 640x480 modes. */
 	const int16_t margin = tie_is_high_resolution_flight() ? 51 : 21;
 	const uint32_t row_spacing = (uint32_t)(screenYRes - 2 * margin) / NUM_WINGMAN_CMDS;
 
 	int16_t y = margin;
-	for (int i = 0; i < NUM_WINGMAN_CMDS; i++) {
+	int i;
+	for (i = 0; i < NUM_WINGMAN_CMDS; i++) {
 		festring_setbackcolor((uint16_t)(i == selected_idx ? COLOR_BG_SELECTED : COLOR_BG_NORMAL));
 		festring_setcursor(1, y);
 		festring_outstring((const uint8_t*)wingmanstrings[i]);
@@ -90,21 +82,25 @@ static void wingman_render_page(int16_t selected_idx) {
 
 /* Single input-poll iteration. 1 = exit fired, 2 = selection moved
  * (page redraw needed), 0 = no input. */
-static int wingman_poll_once(WingmanTask* t) {
+int wingman_poll_once(WingmanRoomState* t) {
+	uint16_t key;
+	int mouse_btn;
+	int redraw = 0;
+	int exit_room = 0;
+
 	feinput_getrawinput();
 	feinput_checkinput();
 	feinput_degitterinput();
 	inputdeltay = (int16_t)(inputdeltay * 2);
 
-	const uint16_t key = (uint16_t)inputkey;
-	int redraw = 0;
+	key = (uint16_t)inputkey;
 
 	if (key == K_LEFT) {
 		t->ret_delta = -1;
-		return 1;
+		exit_room = 1;
 	} else if (key == K_RIGHT) {
 		t->ret_delta = 1;
-		return 1;
+		exit_room = 1;
 	} else if (key == K_UP || key == K_KP8) {
 		/* Move up (wrap 0 <-> 9). */
 		t->selected_idx = (int16_t)(t->selected_idx ? t->selected_idx - 1 : NUM_WINGMAN_CMDS - 1);
@@ -120,19 +116,20 @@ static int wingman_poll_once(WingmanTask* t) {
 		 * which uses +6. */
 		inputkey = (int16_t)(int8_t)wingmanstrings[t->selected_idx][7];
 		t->ret_delta = 0;
-		return 1;
-	} else if (key == K_ESC || key == K_Q_UPPER || key == K_Q_LOWER || key == K_W_LOWER || key == K_F1) {
+		exit_room = 1;
+	} else if (key == K_ESC || key == K_Q_UPPER || key == K_Q_LOWER || key == K_Z_UPPER || key == K_W_LOWER ||
+			   key == K_F1) {
 		t->ret_delta = 2;
-		return 1;
+		exit_room = 1;
 	} else if (is_command_hotkey(key)) {
 		/* Direct-select: leave inputkey as the typed letter so the
 		 * caller can dispatch on it (same contract as Enter above). */
 		t->ret_delta = 0;
-		return 1;
+		exit_room = 1;
 	}
 
 	/* Mouse edge-trigger on release of buttons 1 or 2. */
-	const int mouse_btn = inputbuttons & 0xF;
+	mouse_btn = inputbuttons & 0xF;
 	if ((t->prev_buttons == 1 || t->prev_buttons == 2) && mouse_btn == 0) {
 		if (t->prev_buttons == 1) {
 			t->selected_idx = (int16_t)((t->selected_idx + 1) % NUM_WINGMAN_CMDS);
@@ -140,50 +137,15 @@ static int wingman_poll_once(WingmanTask* t) {
 		} else {
 			inputkey = (int16_t)(int8_t)wingmanstrings[t->selected_idx][6];
 			t->ret_delta = 0;
-			t->prev_buttons = (int16_t)mouse_btn;
-			return 1;
+			exit_room = 1;
 		}
 	}
 	t->prev_buttons = (int16_t)mouse_btn;
 
-	return redraw ? 2 : 0;
+	return exit_room ? 1 : (redraw ? 2 : 0);
 }
 
-// ORIGINAL_FUNCTION: TIE95 0x61F70
-// ORIGINAL_FUNCTION: TIE98 0x499310
-// (task-split recovery)
-static LandruTaskStepResult wingman_task_step(void* self) {
-	WingmanTask* t = (WingmanTask*)self;
-
-	if (t->phase == WINGMAN_PHASE_RENDER) {
-		const bool tie98_display = TieClassicDisplay_UsesDx5();
-		if (tie98_display)
-			FlightSurface_Lock();
-		wingman_render_page(t->selected_idx);
-		if (tie98_display) {
-			FlightSurface_Unlock();
-			FrontendDisplay_BlitOffscreenToRenderSurface();
-			FrontendDisplay_PresentFrame();
-		}
-		t->phase = WINGMAN_PHASE_POLL;
-		return LANDRU_TASK_STEP_CONTINUE;
-	}
-
-	int r = wingman_poll_once(t);
-	if (r == 1) {
-		user_submodal_result = (int32_t)t->ret_delta;
-		return LANDRU_TASK_STEP_DONE;
-	}
-	if (r == 2)
-		t->phase = WINGMAN_PHASE_RENDER;
-	return LANDRU_TASK_STEP_CONTINUE;
-}
-
-static const LandruTaskVtable wingman_task_vt = {
-	.step = wingman_task_step,
-};
-
-void wingman_Push_WingmanRoom_Task(void) {
+void wingman_OpenRoom(WingmanRoomState* t) {
 	dropflag = 1;
 	festring_setlinewrap(0);
 	festring_setautofill(1);
@@ -192,11 +154,7 @@ void wingman_Push_WingmanRoom_Task(void) {
 	festring_setbackcolor(COLOR_BG_NORMAL);
 	festring_settextcolor(COLOR_TEXT_DEFAULT);
 
-	WingmanTask* t = (WingmanTask*)landru_task_push(&wingman_task_vt);
-	if (!t)
-		return;
 	t->selected_idx = 0;
 	t->prev_buttons = 0;
 	t->ret_delta = 0;
-	t->phase = WINGMAN_PHASE_RENDER;
 }

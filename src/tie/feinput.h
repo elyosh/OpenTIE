@@ -1,7 +1,11 @@
-#ifndef __FEINPUT_H__
-#define __FEINPUT_H__
+#ifndef TIE_FEINPUT_H
+#define TIE_FEINPUT_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void feinput_checkinput(void);
 void feinput_degitterinput(void);
@@ -20,5 +24,9 @@ int8_t FlightInput_GetChar(void);
 extern void* graphroutines[39];
 extern int16_t buffer256flag;
 extern int16_t thrustmastertopflag;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

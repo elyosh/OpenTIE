@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "aeron/aeron.h"
+#include "tie_runtime/presentation/aspect_ratio.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -11,11 +12,6 @@ extern "C" {
 
 #define TIE_PRESENTATION_INITIAL_WIDTH 1440
 #define TIE_PRESENTATION_LOGICAL_HEIGHT 1080
-
-typedef struct TieAspectRatio {
-	int width;
-	int height;
-} TieAspectRatio;
 
 typedef struct TiePresentationLayout {
 	AeronRectI frame;

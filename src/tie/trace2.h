@@ -1,7 +1,11 @@
-#ifndef __TRACE2_H__
-#define __TRACE2_H__
+#ifndef TIE_TRACE2_H
+#define TIE_TRACE2_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Converts projected polygons into per-scanline edges consumed by XTRANS2.
  * The edge pools are bound to FEDISKIO flight buffers by xtrans2_initxtrans. */
@@ -98,5 +102,9 @@ void trace2_xdownleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t sl
 void trace2_xdownright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
 void trace2_xupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
 void trace2_xupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

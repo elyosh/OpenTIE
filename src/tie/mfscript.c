@@ -3,7 +3,6 @@
 
 #include <imuse/filelist.h>
 #include <imuse/lolevel.h>
-
 #include <string.h>
 
 /* Interactive music transition opcodes:
@@ -15,20 +14,22 @@
  *   7 = ChgJumpOnBeat + second hook
  */
 
-#define NUM_STATES 23
-#define NUM_SOUND_NAMES 39
-#define MAX_STATE_CHANGES 7
-#define MAX_SEQ_CHANGES 2
+enum {
+	NUM_STATES = 23,
+	NUM_SOUND_NAMES = 39,
+	MAX_STATE_CHANGES = 7,
+	MAX_SEQ_CHANGES = 2,
+};
 
-#define IM_PARAM_PRIORITY 0x100
-#define IM_PARAM_VOLUME 0x200
-#define IMUSE_PARAM_SOUND_GROUP 0x400
-#define IM_PARAM_VOLALT 0x600
-#define IM_PARAM_CHUNK 0xB00
-#define IM_PARAM_MEASURE 0xC00
-#define IM_PARAM_TICK 0xE00
-#define IM_PARAM_ATTR 0xF00
-#define IMUSE_GROUP_DIPPED 4
+enum {
+	IM_PARAM_PRIORITY = 0x100,
+	IM_PARAM_VOLUME = 0x200,
+	IM_PARAM_VOLALT = 0x600,
+	IM_PARAM_CHUNK = 0xB00,
+	IM_PARAM_MEASURE = 0xC00,
+	IM_PARAM_TICK = 0xE00,
+	IM_PARAM_ATTR = 0xF00,
+};
 
 static char soundNames[NUM_SOUND_NAMES][9] = {
 	"",         "drone",    "POINK",    "title",    "tocity",   "battle",   "stately", "bridge",
@@ -629,37 +630,33 @@ static void ChgJumpMrk(void* sound1, void* sound2, int16_t jumpHook1, int16_t ma
 
 	if (sound2 && sound1 != sound2) {
 		if (sound1) {
+			ImuseCmd t_start = { 0 };
+			ImuseCmd t_group = { 0 };
+			ImuseCmd t_fade = { 0 };
 			imuse_pause(im);
 			/* When sound1 hits `marker`: start sound2, route to DIPPED
 			 * group, fade sound1 to silence over 60 ticks, optionally
 			 * arm a hook on sound2. Each trigger packs a different
 			 * IMUSE_CMD_* opcode + replay args. */
-			ImuseCmd t_start = {
-				.opcode = IMUSE_CMD_START_SOUND,
-				.args[0] = (intptr_t)sound2,
-			};
-			ImuseCmd t_group = {
-				.opcode = IMUSE_CMD_SET_PARAM,
-				.args[0] = (intptr_t)sound2,
-				.args[1] = IMUSE_PARAM_SOUND_GROUP,
-				.args[2] = IMUSE_GROUP_DIPPED,
-			};
-			ImuseCmd t_fade = {
-				.opcode = IMUSE_CMD_FADE_PARAM,
-				.args[0] = (intptr_t)sound1,
-				.args[1] = IM_PARAM_VOLALT,
-				.args[2] = 0,
-				.args[3] = 60,
-			};
+			t_start.opcode = IMUSE_CMD_START_SOUND;
+			t_start.args[0] = (intptr_t)sound2;
+			t_group.opcode = IMUSE_CMD_SET_PARAM;
+			t_group.args[0] = (intptr_t)sound2;
+			t_group.args[1] = IMUSE_PARAM_SOUND_GROUP;
+			t_group.args[2] = IMUSE_GROUP_DIPPED;
+			t_fade.opcode = IMUSE_CMD_FADE_PARAM;
+			t_fade.args[0] = (intptr_t)sound1;
+			t_fade.args[1] = IM_PARAM_VOLALT;
+			t_fade.args[2] = 0;
+			t_fade.args[3] = 60;
 			imuse_set_trigger(im, (intptr_t)sound1, marker, &t_start);
 			imuse_set_trigger(im, (intptr_t)sound1, marker, &t_group);
 			imuse_set_trigger(im, (intptr_t)sound1, marker, &t_fade);
 			if (jumpHook2) {
-				ImuseCmd t_hook = {
-					.opcode = IMUSE_CMD_SET_HOOK,
-					.args[0] = (intptr_t)sound2,
-					.args[1] = jumpHook2,
-				};
+				ImuseCmd t_hook = { 0 };
+				t_hook.opcode = IMUSE_CMD_SET_HOOK;
+				t_hook.args[0] = (intptr_t)sound2;
+				t_hook.args[1] = jumpHook2;
 				imuse_set_trigger(im, (intptr_t)sound1, marker, &t_hook);
 			}
 		} else {
@@ -683,25 +680,22 @@ static void ChgJumpOnBeat(void* sound1, void* sound2, int16_t endChunk, int16_t 
 
 	if (sound2 && sound1 != sound2) {
 		if (sound1) {
+			ImuseCmd t_start = { 0 };
+			ImuseCmd t_group = { 0 };
 			imuse_pause(im);
-			ImuseCmd t_start = {
-				.opcode = IMUSE_CMD_START_SOUND,
-				.args[0] = (intptr_t)sound2,
-			};
-			ImuseCmd t_group = {
-				.opcode = IMUSE_CMD_SET_PARAM,
-				.args[0] = (intptr_t)sound2,
-				.args[1] = IMUSE_PARAM_SOUND_GROUP,
-				.args[2] = IMUSE_GROUP_DIPPED,
-			};
+			t_start.opcode = IMUSE_CMD_START_SOUND;
+			t_start.args[0] = (intptr_t)sound2;
+			t_group.opcode = IMUSE_CMD_SET_PARAM;
+			t_group.args[0] = (intptr_t)sound2;
+			t_group.args[1] = IMUSE_PARAM_SOUND_GROUP;
+			t_group.args[2] = IMUSE_GROUP_DIPPED;
 			imuse_set_trigger(im, (intptr_t)sound1, marker, &t_start);
 			imuse_set_trigger(im, (intptr_t)sound1, marker, &t_group);
 			if (jumpHook2) {
-				ImuseCmd t_hook = {
-					.opcode = IMUSE_CMD_SET_HOOK,
-					.args[0] = (intptr_t)sound2,
-					.args[1] = jumpHook2,
-				};
+				ImuseCmd t_hook = { 0 };
+				t_hook.opcode = IMUSE_CMD_SET_HOOK;
+				t_hook.args[0] = (intptr_t)sound2;
+				t_hook.args[1] = jumpHook2;
 				imuse_set_trigger(im, (intptr_t)sound1, marker, &t_hook);
 			}
 		} else {
@@ -753,12 +747,11 @@ static void DoChange(ChangeRef* cgp, void* sound1, void* sound2) {
 			case 4:
 				ChgXfade(s1, sound2, cgp->arg1, cgp->arg2);
 				{
-					ImuseCmd t_attr = {
-						.opcode = IMUSE_CMD_SET_PARAM,
-						.args[0] = (intptr_t)sound2,
-						.args[1] = IM_PARAM_ATTR,
-						.args[2] = 0,
-					};
+					ImuseCmd t_attr = { 0 };
+					t_attr.opcode = IMUSE_CMD_SET_PARAM;
+					t_attr.args[0] = (intptr_t)sound2;
+					t_attr.args[1] = IM_PARAM_ATTR;
+					t_attr.args[2] = 0;
 					imuse_set_trigger(im, (intptr_t)sound2, 1, &t_attr);
 				}
 				break;
@@ -873,12 +866,20 @@ static ChangeRef* GetDefaultChangeRef(void) {
 	return &stateRefs[0].seqChanges[0];
 }
 
-__attribute__((unused)) static void DoCallback(void) {
+#if defined(__GNUC__)
+__attribute__((unused))
+#endif
+static void DoCallback(void) {
 	/* empty stub — placeholder for user callback mechanism */
 }
 
-__attribute__((unused)) static int16_t GetRandom(int16_t lo, int16_t hi) {
+#if defined(__GNUC__)
+__attribute__((unused))
+#endif
+static int16_t GetRandom(int16_t lo, int16_t hi) {
 	int i, c;
+
+	uint16_t raw;
 
 	for (i = 0; i < 23; i++) {
 		c = ((rseed2 & 0x20000000) == 0) ^ ((rseed1 & 0x40000000) != 0);
@@ -889,6 +890,6 @@ __attribute__((unused)) static int16_t GetRandom(int16_t lo, int16_t hi) {
 		rseed2 = rseed2 * 2 + c;
 	}
 
-	uint16_t raw = (uint16_t)(rseed1 + rseed2);
+	raw = (uint16_t)(rseed1 + rseed2);
 	return (int16_t)(((uint32_t)raw * (hi - lo + 1)) >> 16) + lo;
 }

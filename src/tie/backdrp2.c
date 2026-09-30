@@ -6,17 +6,18 @@
  * three visible walls of the skybox cube.
  */
 
-#include <stdint.h>
-
 #include "tie/backdrp2.h"
 #include "tie/draw.h"
 #include "tie/logbuf2.h"
+#include "tie/math2_wide.h"
 #include "tie/render_scene_tie98.h"
 #include "tie/rtsvga2.h"
 #include "tie/tie.h"
 #include "tie/transfm2.h"
 #include "tie/trig2.h"
 #include "tie_runtime/runtime/profile.h"
+
+#include <stdint.h>
 
 /* Debug tile-cull counters (file-local). Updated per backdrawbitmap call;
  * read externally via debugger. */
@@ -45,18 +46,26 @@ static void draw_wall(int start, int count, uint16_t angle, const int32_t* prim_
 					  const int32_t* prim_z, const int32_t* sec_x, const int32_t* sec_y, const int32_t* sec_z,
 					  int32_t out_x, int32_t out_y, int32_t out_z) {
 	int pos = start;
-	for (int i = 0; i < count; i++, pos++) {
+	int i;
+
+	for (i = 0; i < count; i++, pos++) {
 		uint8_t bits = backdropposition[pos];
 		int pi = bits & 0x07;
 		int32_t px = prim_x[pi], py = prim_y[pi], pz = prim_z[pi];
+		int si;
+		int32_t ex, ey, ez;
+		int32_t wx;
+		int32_t wy;
+		int32_t wz;
+
 		if (bits & 0x08) {
 			px = -px;
 			py = -py;
 			pz = -pz;
 		}
 
-		int si = (bits >> 4) & 0x07;
-		int32_t ex, ey, ez;
+		si = (bits >> 4) & 0x07;
+
 		if (bits & 0x80) {
 			ex = px - sec_x[si];
 			ey = py - sec_y[si];
@@ -67,9 +76,9 @@ static void draw_wall(int start, int count, uint16_t angle, const int32_t* prim_
 			ez = pz + sec_z[si];
 		}
 
-		int32_t wx = ex + out_x;
-		int32_t wy = ey + out_y;
-		int32_t wz = ez + out_z;
+		wx = ex + out_x;
+		wy = ey + out_y;
+		wz = ez + out_z;
 		if (wz >= 0)
 			backdrp2_backdrawbitmap(wx, wy, wz, angle, pos);
 	}
@@ -82,7 +91,14 @@ void backdrp2_backdrop(void) {
 	int32_t a1 = 0, a2 = 0, a3 = 0;
 	int32_t b1 = 0, b2 = 0, b3 = 0;
 	int32_t c1 = 0, c2 = 0, c3 = 0;
-	for (int i = 0; i < 16; i++) {
+	int i;
+	int s;
+	int32_t ax;
+	int32_t ay;
+	int32_t az;
+	int nx;
+
+	for (i = 0; i < 16; i++) {
 		shiftA1mul[i] = a1 >> 5;
 		shiftA2mul[i] = a2 >> 5;
 		shiftA3mul[i] = a3 >> 5;
@@ -106,19 +122,23 @@ void backdrp2_backdrop(void) {
 	/* 2) Refresh 5x5x5 parallax-star grid in eye space:
 	 *      stareye[s] = (nx*A + ny*B + nz*C) >> 7,
 	 *      nx,ny,nz in [-2..2]. 125 populated slots. */
-	int s = 0;
-	int32_t ax = -2 * worldeyeA1;
-	int32_t ay = -2 * worldeyeA2;
-	int32_t az = -2 * worldeyeA3;
-	for (int nx = -2; nx <= 2; nx++) {
+	s = 0;
+	ax = -2 * worldeyeA1;
+	ay = -2 * worldeyeA2;
+	az = -2 * worldeyeA3;
+	for (nx = -2; nx <= 2; nx++) {
 		int32_t bx = ax + -2 * worldeyeB1;
 		int32_t by = ay + -2 * worldeyeB2;
 		int32_t bz = az + -2 * worldeyeB3;
-		for (int ny = -2; ny <= 2; ny++) {
+		int ny;
+
+		for (ny = -2; ny <= 2; ny++) {
 			int32_t cx = bx + -2 * worldeyeC1;
 			int32_t cy = by + -2 * worldeyeC2;
 			int32_t cz = bz + -2 * worldeyeC3;
-			for (int nz = -2; nz <= 2; nz++) {
+			int nz;
+
+			for (nz = -2; nz <= 2; nz++) {
 				stareyex[s] = cx >> 7;
 				stareyey[s] = cy >> 7;
 				stareyez[s] = cz >> 7;
@@ -190,35 +210,36 @@ void backdrp2_backdrop(void) {
  *   else:                quot = 0x7FFFFF00
  *   screen = (n >= 0) ? quot : -quot  */
 static int32_t project_axis(int32_t n, int32_t z) {
-	const int32_t abs_n = (n >= 0) ? n : -n;
-	const uint64_t num = (uint32_t)halfPerspFactor + ((uint64_t)(uint32_t)abs_n << (perspShift & 0x1F));
-	int32_t q;
-	if ((uint32_t)(num >> 32) < (uint32_t)z)
-		q = (int32_t)(num / (uint32_t)z);
-	else
-		q = 0x7FFFFF00;
-	return (n >= 0) ? q : -q;
+	const uint32_t magnitude = n < 0 ? 0u - (uint32_t)n : (uint32_t)n;
+	const uint32_t q = math2_project_u32(magnitude, perspShift, halfPerspFactor, (uint32_t)z);
+	return (int32_t)(n < 0 ? 0u - q : q);
 }
 
 // FUNCTION: TIE95 0x125D4
 void backdrp2_backdrawbitmap(int32_t x, int32_t y, int32_t z, uint16_t angle, int tile_idx) {
 	/* Frustum cull (symmetric 90° FOV in the eye XY plane). */
 	const int32_t ax = (x >= 0) ? x : -x;
+	int32_t ay;
+	int32_t proj_x;
+	int32_t proj_y;
+	int32_t sx;
+	int32_t sy;
+
 	if (ax > z) {
 		g_dbg_bd_tiles_culled_x++;
 		return;
 	}
-	const int32_t ay = (y >= 0) ? y : -y;
+	ay = (y >= 0) ? y : -y;
 	if (ay > z) {
 		g_dbg_bd_tiles_culled_y++;
 		return;
 	}
 
-	const int32_t proj_x = project_axis(x, z);
-	const int32_t proj_y = project_axis(y, z);
+	proj_x = project_axis(x, z);
+	proj_y = project_axis(y, z);
 
-	const int32_t sx = (int32_t)halfpixelswide + proj_x;
-	const int32_t sy = (int32_t)pixelsdeep - ((int32_t)halfpixelsdeep + transfm2_screenyoffset + proj_y);
+	sx = (int32_t)halfpixelswide + proj_x;
+	sy = (int32_t)pixelsdeep - ((int32_t)halfpixelsdeep + transfm2_screenyoffset + proj_y);
 
 	g_dbg_bd_tiles_drawn++;
 	if (TieProfile_UsesTie98Logic())

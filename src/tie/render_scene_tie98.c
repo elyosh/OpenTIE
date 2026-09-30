@@ -1,6 +1,5 @@
 #include "tie/render_scene_tie98.h"
-
-#include "anim.h"
+#include "tie/anim.h"
 #include "tie/drawpol.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/logbuf2.h"
@@ -18,16 +17,20 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(TIE_MODERN) && !defined(_MSC_VER)
 #include <strings.h>
+#endif
 
-#define TIE98_SCENE_FACE_MAX 5000
-#define TIE98_MESH_QUEUE_MAX 500
-#define TIE98_SCENE_SPAN_MAX 20000
-#define TIE98_SCENE_PHONG_DATA_BYTES 0x1806C
-#define TIE98_SCENE_SPAN_BYTES 24
-#define TIE98_EXEC_VERTEX_BUDGET_BYTES 64
-#define TIE98_EXEC_TRIANGLE_BUDGET_BYTES 24
-#define TIE98_OPT_INDEXED_SHADE_TABLE_BYTES 4096
+enum {
+	TIE98_SCENE_FACE_MAX = 5000,
+	TIE98_MESH_QUEUE_MAX = 500,
+	TIE98_SCENE_SPAN_MAX = 20000,
+	TIE98_SCENE_PHONG_DATA_BYTES = 0x1806C,
+	TIE98_SCENE_SPAN_BYTES = 24,
+	TIE98_EXEC_VERTEX_BUDGET_BYTES = 64,
+	TIE98_EXEC_TRIANGLE_BUDGET_BYTES = 24,
+	TIE98_OPT_INDEXED_SHADE_TABLE_BYTES = 4096,
+};
 
 enum {
 	TIE98_HARDWARE_VERTEX_CAPACITY = 7500,
@@ -268,10 +271,12 @@ static OptTextureDataTIE98* g_curTextureDesc;
 
 /* PORT: fallback material for host OPT nodes without a texture node. */
 static OptTextureDataTIE98 g_defaultMaterial = {
-	.paletteAddress = 256,
-	.paletteType = 16,
-	.width = 8,
-	.height = 8,
+	256, /* paletteAddress */
+	16,  /* paletteType */
+	0,   /* textureSize */
+	0,   /* dataSize */
+	8,   /* width */
+	8,   /* height */
 };
 /* PORT: host-owned storage backing the fallback material. */
 static uint8_t g_defaultTextureData[64 + 4096 + 8192];
@@ -287,6 +292,8 @@ static int FlightModel_IsLightSegmentBlocked(FlightObject* object, const Vec3f* 
  * face-data and texture-node cases in FlightModel_Draw_OPT_Node. */
 static void FlightModel_BindTextureData(const Tie98OptimizedPolyObject* model, SceneMeshTIE98* mesh,
 										OptTextureDataTIE98* material) {
+	uint8_t* shade_table;
+
 	mesh->pMaterial = material;
 	if (material == &g_defaultMaterial) {
 		mesh->pTexels = g_defaultTextureData;
@@ -296,12 +303,14 @@ static void FlightModel_BindTextureData(const Tie98OptimizedPolyObject* model, S
 	}
 
 	mesh->pTexels = (uint8_t*)material + sizeof *material;
-	uint8_t* shade_table;
+
 	if (material->paletteType == 0) {
 		shade_table = (uint8_t*)TieNativeOpt_ResolveAddress(model, material->paletteAddress, 1);
 	} else {
+		int base_size;
+
 		shade_table = mesh->pTexels;
-		const int base_size = material->width * material->height;
+		base_size = material->width * material->height;
 		if (base_size == material->textureSize)
 			shade_table += material->dataSize;
 		else
@@ -339,6 +348,10 @@ static void Math_SetFpuExtendedPrecisionMode(void) {
 
 // FUNCTION: TIE98 0x42AF00
 static void RenderScene_InitHardwareFrame(void) {
+	int max_vertices;
+	int max_triangles;
+	uint32_t remaining;
+
 	if (g_powerVrSceneWorkaround && g_std3DStartScenePending) {
 		Math_SetFpuExtendedPrecisionMode();
 		std3D_StartScene();
@@ -354,15 +367,15 @@ static void RenderScene_InitHardwareFrame(void) {
 	g_flightVpOriginX = (float)displaycorner_columns;
 	g_flightVpOriginY = (float)displaycorner_lines;
 	/* PORT: dynamic host storage replaces the original shared scene-span allocation. */
-	int max_vertices = TIE98_SCENE_SPAN_BYTES * TIE98_SCENE_SPAN_MAX / 128;
-	int max_triangles = TIE98_SCENE_SPAN_BYTES * TIE98_SCENE_SPAN_MAX / 80;
+	max_vertices = TIE98_SCENE_SPAN_BYTES * TIE98_SCENE_SPAN_MAX / 128;
+	max_triangles = TIE98_SCENE_SPAN_BYTES * TIE98_SCENE_SPAN_MAX / 80;
 	if (max_vertices > (int)g_pStd3DCurDevice->caps.maxVertexCount)
 		max_vertices = (int)g_pStd3DCurDevice->caps.maxVertexCount;
 	if (max_vertices > 256)
 		max_vertices = 256;
 	if (max_triangles > 256)
 		max_triangles = 256;
-	const uint32_t remaining =
+	remaining =
 		g_pStd3DCurDevice->caps.maxBufferSize - (uint32_t)(max_vertices * TIE98_EXEC_VERTEX_BUDGET_BYTES);
 	if (max_triangles > (int)(remaining / TIE98_EXEC_TRIANGLE_BUDGET_BYTES))
 		max_triangles = (int)(remaining / TIE98_EXEC_TRIANGLE_BUDGET_BYTES);
@@ -391,6 +404,11 @@ void RenderScene_Initialize_tie98(int reset_flag) {
 	g_sw3dCockpitMaskSentinelFace.gradients[7] = 0.0f;
 	g_sw3dCockpitMaskSentinelFace.gradients[8] = 1.0e32f;
 	if (reset_flag) {
+		int viewport_width;
+		int viewport_height;
+		const uint8_t* mask;
+		int scan_y;
+
 		g_sceneSpanPtrAvail = TIE98_SCENE_SPAN_MAX;
 		g_pSceneSpanDataCur = g_sceneSpanData;
 		g_pSceneSpanDataEnd = &g_sceneSpanData[TIE98_SCENE_SPAN_MAX - 1];
@@ -399,14 +417,17 @@ void RenderScene_Initialize_tie98(int reset_flag) {
 		g_meshQueueIndex = 0;
 		g_phongSlotIndex = 0;
 
-		const int viewport_width = (uint16_t)pixelswide;
-		const int viewport_height = (uint16_t)pixelsdeep;
-		const uint8_t* mask = (const uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
-		for (int scan_y = 0; scan_y < viewport_height; ++scan_y) {
+		viewport_width = (uint16_t)pixelswide;
+		viewport_height = (uint16_t)pixelsdeep;
+		mask = (const uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
+		for (scan_y = 0; scan_y < viewport_height; ++scan_y) {
 			SceneSpanTIE98* previous = NULL;
+			int run_visible;
+			int scan_x;
+
 			g_scanlineSpanHeads[scan_y] = NULL;
-			int run_visible = (int8_t)*mask++;
-			int scan_x = 0;
+			run_visible = (int8_t)*mask++;
+			scan_x = 0;
 			while (scan_x < viewport_width) {
 				int run_length = *mask++;
 				if (run_length == 0) {
@@ -451,6 +472,8 @@ void RenderScene_UnlockSceneBuffers_tie98(void) {
 static void RenderScene_ComputeVertexLighting(SceneMeshTIE98* mesh, ProjVertexTIE98* output,
 											  const Vec3f* normal, const Vec3f* position,
 											  const Vec3f* eye_position) {
+	int i;
+
 	if (mesh->pObject->genus == GENUS_PROJECTILE_PLAYER || mesh->pObject->genus == GENUS_PROJECTILE_NPC) {
 		output->lightIntensity = 1.0f;
 		return;
@@ -475,7 +498,7 @@ static void RenderScene_ComputeVertexLighting(SceneMeshTIE98* mesh, ProjVertexTI
 		output->lightIntensity = 0.4f;
 	}
 
-	for (int i = 0; i < localLightCnt; ++i) {
+	for (i = 0; i < localLightCnt; ++i) {
 		const float dx = (float)localLights[i].x - position->x;
 		const float dy = (float)localLights[i].y - position->y;
 		const float dz = (float)localLights[i].z - position->z;
@@ -485,12 +508,24 @@ static void RenderScene_ComputeVertexLighting(SceneMeshTIE98* mesh, ProjVertexTI
 			(float)localLights[i].y,
 			(float)localLights[i].z,
 		};
+		float absolute_x;
+		float absolute_y;
+		float absolute_z;
+		float distance;
+		float diffuse;
+		float half_x;
+		float half_y;
+		float half_z;
+		float half_dot;
+		float specular;
+		float contribution;
+
 		if (FlightModel_IsLightSegmentBlocked(mesh->pObject, position, &light_position))
 			continue;
-		const float absolute_x = fabsf(dx);
-		const float absolute_y = fabsf(dy);
-		const float absolute_z = fabsf(dz);
-		float distance;
+		absolute_x = fabsf(dx);
+		absolute_y = fabsf(dy);
+		absolute_z = fabsf(dz);
+
 		if (absolute_x >= absolute_y && absolute_x >= absolute_z)
 			distance = absolute_x + (absolute_y + absolute_z) * 0.2941f;
 		else if (absolute_y >= absolute_x && absolute_y >= absolute_z)
@@ -500,25 +535,27 @@ static void RenderScene_ComputeVertexLighting(SceneMeshTIE98* mesh, ProjVertexTI
 		if (light_dot / distance < -0.3f)
 			continue;
 		light_dot = distance * 0.5f;
-		const float diffuse = light_dot / (distance * distance);
+		diffuse = light_dot / (distance * distance);
 
-		const float half_x = eye_position->x - position->x + dx;
-		const float half_y = eye_position->y - position->y + dy;
-		const float half_z = eye_position->z - position->z + dz;
-		const float half_dot = (half_x * normal->x + half_y * normal->y + half_z * normal->z) * 0.5f;
-		float specular = 0.0f;
+		half_x = eye_position->x - position->x + dx;
+		half_y = eye_position->y - position->y + dy;
+		half_z = eye_position->z - position->z + dz;
+		half_dot = (half_x * normal->x + half_y * normal->y + half_z * normal->z) * 0.5f;
+		specular = 0.0f;
 		if (g_specularLightingEnabled) {
 			const float absolute_half_x = fabsf(half_x);
 			const float absolute_half_y = fabsf(half_y);
 			const float absolute_half_z = fabsf(half_z);
 			float half_distance;
+			float cosine;
+
 			if (absolute_half_x >= absolute_half_y && absolute_half_x >= absolute_half_z)
 				half_distance = absolute_half_x * 0.4632f + (absolute_half_y + absolute_half_z) * 0.1936f;
 			else if (absolute_half_y >= absolute_half_x && absolute_half_y >= absolute_half_z)
 				half_distance = absolute_half_y * 0.4632f + (absolute_half_x + absolute_half_z) * 0.1936f;
 			else
 				half_distance = absolute_half_z * 0.4632f + (absolute_half_x + absolute_half_y) * 0.1936f;
-			const float cosine = half_dot / half_distance;
+			cosine = half_dot / half_distance;
 			if (cosine >= 0.5f) {
 				const float cosine6 = cosine * (cosine * cosine) * (cosine * (cosine * cosine));
 				const float cosine12 = cosine6 * cosine6;
@@ -526,7 +563,7 @@ static void RenderScene_ComputeVertexLighting(SceneMeshTIE98* mesh, ProjVertexTI
 				specular = cosine24 * cosine24;
 			}
 		}
-		const float contribution = (diffuse + specular) * (float)localLights[i].range;
+		contribution = (diffuse + specular) * (float)localLights[i].range;
 		if (contribution > 0.0f) {
 			output->lightIntensity += contribution;
 			if (output->lightIntensity >= 1.0f) {
@@ -549,17 +586,22 @@ static void RenderScene_TransformFaceTextureGradients(SceneFaceTIE98* face,
 
 // FUNCTION: TIE98 0x430F70
 static int RenderScene_CullMeshFacesFromView(SceneMeshTIE98* mesh) {
+	SceneFaceTIE98* output;
+	int face_index;
+
 	mesh->faceBaseIndex = g_visFaceCount;
 	g_meshEyePos = mesh->pos;
 	if (g_bBackdropMeshMode) {
-		g_meshEyePos = (Vec3f) { 0.0f, 0.0f, -100000.0f };
+		g_meshEyePos.x = 0.0f;
+		g_meshEyePos.y = 0.0f;
+		g_meshEyePos.z = -100000.0f;
 		Math3D_RotateVec3(&g_meshEyePos, &mesh->orient);
 		g_meshEyePos.x += mesh->pos.x;
 		g_meshEyePos.y += mesh->pos.y;
 		g_meshEyePos.z += mesh->pos.z;
 	}
-	SceneFaceTIE98* output = &g_visFaceList[g_visFaceCount];
-	for (int face_index = 0; face_index < mesh->faceCount; ++face_index) {
+	output = &g_visFaceList[g_visFaceCount];
+	for (face_index = 0; face_index < mesh->faceCount; ++face_index) {
 		const FaceRecordTIE98* record = &mesh->pFaceGeom[face_index];
 		const Vec3f* vertex = &mesh->pModelVerts[record->vertexIdx[0]];
 		const Vec3f view = {
@@ -587,28 +629,40 @@ static int RenderScene_CullMeshFacesFromView(SceneMeshTIE98* mesh) {
 static int RenderScene_ProjectMeshVertices(SceneMeshTIE98* mesh) {
 	SceneFaceTIE98* face = &g_visFaceList[mesh->faceBaseIndex];
 	ProjVertexTIE98* output = &g_projVertList[g_projVertCount];
+	int i;
+	int face_iter;
+
 	mesh->vertBaseIndex = g_projVertCount;
 	mesh->projVertCursor = 0;
-	for (int i = 0; i < mesh->vertexCount; ++i)
+	for (i = 0; i < mesh->vertexCount; ++i)
 		g_vertexRemap[i] = -1;
 
-	for (int face_iter = 0; face_iter < mesh->visFaceCount; ++face_iter, ++face) {
+	for (face_iter = 0; face_iter < mesh->visFaceCount; ++face_iter, ++face) {
+		const FaceRecordTIE98* record;
+		float face_w_total;
+		int corner;
+
 		RenderScene_TransformFaceTextureGradients(face, &mesh->pFaceTexturing[face->faceIndex], mesh);
-		const FaceRecordTIE98* record = &mesh->pFaceGeom[face->faceIndex];
+		record = &mesh->pFaceGeom[face->faceIndex];
 		face->maxVertW = 0.0f;
 		face->minVertW = (float)perspFactor;
 		face->nearClipState = 0;
-		float face_w_total = 0.0f;
-		for (int corner = 0; corner < 4; ++corner) {
+		face_w_total = 0.0f;
+		for (corner = 0; corner < 4; ++corner) {
 			const int vertex_index = record->vertexIdx[corner];
+			int remapped;
+			float face_w;
+
 			if (vertex_index == -1)
 				break;
-			int remapped = g_vertexRemap[vertex_index];
-			float face_w;
+			remapped = g_vertexRemap[vertex_index];
+
 			if (remapped == -1) {
+				Vec3f position;
+
 				remapped = mesh->projVertCursor++;
 				g_vertexRemap[vertex_index] = remapped;
-				Vec3f position = mesh->pModelVerts[vertex_index];
+				position = mesh->pModelVerts[vertex_index];
 				Math3D_RotateVec3(&position, &mesh->viewOrient);
 				position.x += mesh->viewPos.x;
 				position.y += mesh->viewPos.y;
@@ -649,37 +703,49 @@ static int RenderScene_ProjectMeshVertices(SceneMeshTIE98* mesh) {
 		if (mesh->pUVs) {
 			const int uv_index = record->uvIdx[0];
 			Vec3f position = mesh->pModelVerts[record->vertexIdx[0]];
+			float u;
+			float v;
+			float c00;
+			float c01;
+			float c20;
+			float c02;
+			float c10;
+			float c11;
+			float c12;
+			float c21;
+			float c22;
+			float inverse;
+			float scaled;
+			float center_x;
+			float center_y;
+			float area;
+			float corner_count;
+			float lod_scale;
+
 			Math3D_RotateVec3(&position, &mesh->viewOrient);
 			position.x += mesh->viewPos.x;
 			position.y += mesh->viewPos.y;
 			position.z += mesh->viewPos.z;
-			const float u = mesh->pUVs[uv_index].u;
-			const float v = mesh->pUVs[uv_index].v;
+			u = mesh->pUVs[uv_index].u;
+			v = mesh->pUVs[uv_index].v;
 			face->gradients[6] = position.x - face->gradients[0] * u - v * face->gradients[3];
 			face->gradients[7] = position.y - face->gradients[1] * u - v * face->gradients[4];
 			face->gradients[8] = position.z - face->gradients[2] * u - v * face->gradients[5];
 
-			const float c00 =
-				face->gradients[8] * face->gradients[4] - face->gradients[5] * face->gradients[7];
-			const float c01 =
-				face->gradients[5] * face->gradients[6] - face->gradients[8] * face->gradients[3];
-			float c20 = face->gradients[5] * face->gradients[1] - face->gradients[2] * face->gradients[4];
-			const float c02 =
-				face->gradients[7] * face->gradients[3] - face->gradients[4] * face->gradients[6];
-			const float c10 =
-				face->gradients[2] * face->gradients[7] - face->gradients[8] * face->gradients[1];
-			const float c11 =
-				face->gradients[8] * face->gradients[0] - face->gradients[2] * face->gradients[6];
-			const float c12 =
-				face->gradients[1] * face->gradients[6] - face->gradients[7] * face->gradients[0];
-			float c21 = face->gradients[2] * face->gradients[3] - face->gradients[5] * face->gradients[0];
-			float c22 = face->gradients[4] * face->gradients[0] - face->gradients[1] * face->gradients[3];
+			c00 = face->gradients[8] * face->gradients[4] - face->gradients[5] * face->gradients[7];
+			c01 = face->gradients[5] * face->gradients[6] - face->gradients[8] * face->gradients[3];
+			c20 = face->gradients[5] * face->gradients[1] - face->gradients[2] * face->gradients[4];
+			c02 = face->gradients[7] * face->gradients[3] - face->gradients[4] * face->gradients[6];
+			c10 = face->gradients[2] * face->gradients[7] - face->gradients[8] * face->gradients[1];
+			c11 = face->gradients[8] * face->gradients[0] - face->gradients[2] * face->gradients[6];
+			c12 = face->gradients[1] * face->gradients[6] - face->gradients[7] * face->gradients[0];
+			c21 = face->gradients[2] * face->gradients[3] - face->gradients[5] * face->gradients[0];
+			c22 = face->gradients[4] * face->gradients[0] - face->gradients[1] * face->gradients[3];
 			if (c20 == 0.0f && c21 == 0.0f && c22 == 0.0f)
 				c22 = 1.0f;
 
-			const float inverse =
-				1.0f / (c21 * face->gradients[7] + c22 * face->gradients[8] + c20 * face->gradients[6]);
-			const float scaled = inverse * g_invProjScale;
+			inverse = 1.0f / (c21 * face->gradients[7] + c22 * face->gradients[8] + c20 * face->gradients[6]);
+			scaled = inverse * g_invProjScale;
 			face->gradients[0] = scaled * c00;
 			face->gradients[1] = scaled * c01;
 			face->gradients[2] = inverse * c02;
@@ -689,16 +755,16 @@ static int RenderScene_ProjectMeshVertices(SceneMeshTIE98* mesh) {
 			face->gradients[6] = scaled * c20;
 			face->gradients[7] = scaled * c21;
 			face->gradients[8] = inverse * c22;
-			const float center_x = (float)halfpixelswide;
-			const float center_y = (float)(transfm2_screenyoffset + halfpixelsdeep);
+			center_x = (float)halfpixelswide;
+			center_y = (float)(transfm2_screenyoffset + halfpixelsdeep);
 			face->gradients[2] -= center_x * face->gradients[0] + center_y * face->gradients[1];
 			face->gradients[5] -= center_x * face->gradients[3] + center_y * face->gradients[4];
 			face->gradients[8] -= center_x * face->gradients[6] + center_y * face->gradients[7];
-			float area = face->gradients[0] * face->gradients[4] - face->gradients[3] * face->gradients[1];
+			area = face->gradients[0] * face->gradients[4] - face->gradients[3] * face->gradients[1];
 			if (area < 0.0f)
 				area = -area;
-			const float corner_count = record->vertexIdx[3] == -1 ? 3.0f : 4.0f;
-			const float lod_scale = corner_count / face_w_total * (float)perspFactor;
+			corner_count = record->vertexIdx[3] == -1 ? 3.0f : 4.0f;
+			lod_scale = corner_count / face_w_total * (float)perspFactor;
 			face->mipLevel = (int)((float)((mesh->pMaterial->width * mesh->pMaterial->height) << 8) *
 								   (lod_scale * lod_scale * area));
 		}
@@ -712,26 +778,38 @@ static int RenderScene_ProjectDistantMeshVertices(SceneMeshTIE98* mesh) {
 	const float project_scale = (float)perspFactor / mesh->viewPos.z * 100000.0f;
 	SceneFaceTIE98* face = &g_visFaceList[mesh->faceBaseIndex];
 	ProjVertexTIE98* output = &g_projVertList[g_projVertCount];
+	int i;
+	int face_iter;
+
 	mesh->vertBaseIndex = g_projVertCount;
 	mesh->projVertCursor = 0;
-	for (int i = 0; i < mesh->vertexCount; ++i)
+	for (i = 0; i < mesh->vertexCount; ++i)
 		g_vertexRemap[i] = -1;
 
-	for (int face_iter = 0; face_iter < mesh->visFaceCount; ++face_iter, ++face) {
+	for (face_iter = 0; face_iter < mesh->visFaceCount; ++face_iter, ++face) {
 		const FaceRecordTIE98* record = &mesh->pFaceGeom[face->faceIndex];
+		int corner;
+
 		face->maxVertW = 0.0f;
 		face->minVertW = (float)perspFactor;
-		for (int corner = 0; corner < 4; ++corner) {
+		for (corner = 0; corner < 4; ++corner) {
 			const int vertex_index = record->vertexIdx[corner];
+			int uv_index;
+			int normal_index;
+			int remapped;
+			float w;
+
 			if (vertex_index == -1)
 				break;
-			const int uv_index = record->uvIdx[corner];
-			const int normal_index = record->normalIdx[corner];
-			int remapped = g_vertexRemap[vertex_index];
-			float w;
+			uv_index = record->uvIdx[corner];
+			normal_index = record->normalIdx[corner];
+			remapped = g_vertexRemap[vertex_index];
+
 			if (remapped == -1) {
+				Vec3f position;
+
 				g_vertexRemap[vertex_index] = mesh->projVertCursor++;
-				Vec3f position = mesh->pModelVerts[vertex_index];
+				position = mesh->pModelVerts[vertex_index];
 				Math3D_RotateVec3(&position, &mesh->viewOrient);
 				position.x += mesh->viewPos.x;
 				position.y += mesh->viewPos.y;
@@ -762,28 +840,41 @@ static int RenderScene_ProjectDistantMeshVertices(SceneMeshTIE98* mesh) {
 static void sw3d_ProjectMeshVertices(SceneMeshTIE98* mesh) {
 	SceneFaceTIE98* face = &g_visFaceList[mesh->faceBaseIndex];
 	ProjVertexTIE98* output = &g_projVertList[g_projVertCount];
+	int face_index;
+
+	int vertex_index;
+
 	mesh->vertBaseIndex = g_projVertCount;
 	mesh->projVertCursor = 0;
-	for (int vertex_index = 0; vertex_index < mesh->vertexCount; ++vertex_index)
+	for (vertex_index = 0; vertex_index < mesh->vertexCount; ++vertex_index)
 		g_vertexRemap[vertex_index] = -1;
 
-	for (int face_index = 0; face_index < mesh->visFaceCount; ++face_index, ++face) {
+	for (face_index = 0; face_index < mesh->visFaceCount; ++face_index, ++face) {
+		const FaceRecordTIE98* record;
+		float face_w_total;
+		int corner;
+
 		RenderScene_TransformFaceTextureGradients(face, &mesh->pFaceTexturing[face->faceIndex], mesh);
-		const FaceRecordTIE98* record = &mesh->pFaceGeom[face->faceIndex];
+		record = &mesh->pFaceGeom[face->faceIndex];
 		face->maxVertW = 0.0f;
 		face->minVertW = (float)perspFactor;
 		face->nearClipState = 0;
-		float face_w_total = 0.0f;
-		for (int corner = 0; corner < 4; ++corner) {
+		face_w_total = 0.0f;
+		for (corner = 0; corner < 4; ++corner) {
 			const int vertex_index = record->vertexIdx[corner];
+			int remapped;
+			float face_w;
+
 			if (vertex_index == -1)
 				break;
-			int remapped = g_vertexRemap[vertex_index];
-			float face_w;
+			remapped = g_vertexRemap[vertex_index];
+
 			if (remapped == -1) {
+				Vec3f position;
+
 				remapped = mesh->projVertCursor++;
 				g_vertexRemap[vertex_index] = remapped;
-				Vec3f position = mesh->pModelVerts[vertex_index];
+				position = mesh->pModelVerts[vertex_index];
 				Math3D_RotateVec3(&position, &mesh->viewOrient);
 				position.x += mesh->viewPos.x;
 				position.y += mesh->viewPos.y;
@@ -823,37 +914,49 @@ static void sw3d_ProjectMeshVertices(SceneMeshTIE98* mesh) {
 		if (mesh->pUVs) {
 			const int uv_index = record->uvIdx[0];
 			Vec3f position = mesh->pModelVerts[record->vertexIdx[0]];
+			float u;
+			float v;
+			float c00;
+			float c01;
+			float c20;
+			float c02;
+			float c10;
+			float c11;
+			float c12;
+			float c21;
+			float c22;
+			float inverse;
+			float scaled;
+			float center_x;
+			float center_y;
+			float area;
+			float corner_count;
+			float lod_scale;
+
 			Math3D_RotateVec3(&position, &mesh->viewOrient);
 			position.x += mesh->viewPos.x;
 			position.y += mesh->viewPos.y;
 			position.z += mesh->viewPos.z;
-			const float u = mesh->pUVs[uv_index].u;
-			const float v = mesh->pUVs[uv_index].v;
+			u = mesh->pUVs[uv_index].u;
+			v = mesh->pUVs[uv_index].v;
 			face->gradients[6] = position.x - face->gradients[0] * u - face->gradients[3] * v;
 			face->gradients[7] = position.y - face->gradients[1] * u - face->gradients[4] * v;
 			face->gradients[8] = position.z - face->gradients[2] * u - face->gradients[5] * v;
 
-			const float c00 =
-				face->gradients[8] * face->gradients[4] - face->gradients[5] * face->gradients[7];
-			const float c01 =
-				face->gradients[5] * face->gradients[6] - face->gradients[8] * face->gradients[3];
-			float c20 = face->gradients[5] * face->gradients[1] - face->gradients[2] * face->gradients[4];
-			const float c02 =
-				face->gradients[7] * face->gradients[3] - face->gradients[4] * face->gradients[6];
-			const float c10 =
-				face->gradients[2] * face->gradients[7] - face->gradients[8] * face->gradients[1];
-			const float c11 =
-				face->gradients[8] * face->gradients[0] - face->gradients[2] * face->gradients[6];
-			const float c12 =
-				face->gradients[1] * face->gradients[6] - face->gradients[7] * face->gradients[0];
-			float c21 = face->gradients[2] * face->gradients[3] - face->gradients[5] * face->gradients[0];
-			float c22 = face->gradients[4] * face->gradients[0] - face->gradients[1] * face->gradients[3];
+			c00 = face->gradients[8] * face->gradients[4] - face->gradients[5] * face->gradients[7];
+			c01 = face->gradients[5] * face->gradients[6] - face->gradients[8] * face->gradients[3];
+			c20 = face->gradients[5] * face->gradients[1] - face->gradients[2] * face->gradients[4];
+			c02 = face->gradients[7] * face->gradients[3] - face->gradients[4] * face->gradients[6];
+			c10 = face->gradients[2] * face->gradients[7] - face->gradients[8] * face->gradients[1];
+			c11 = face->gradients[8] * face->gradients[0] - face->gradients[2] * face->gradients[6];
+			c12 = face->gradients[1] * face->gradients[6] - face->gradients[7] * face->gradients[0];
+			c21 = face->gradients[2] * face->gradients[3] - face->gradients[5] * face->gradients[0];
+			c22 = face->gradients[4] * face->gradients[0] - face->gradients[1] * face->gradients[3];
 			if (c20 == 0.0f && c21 == 0.0f && c22 == 0.0f)
 				c22 = 1.0f;
 
-			const float inverse =
-				1.0f / (c20 * face->gradients[6] + c21 * face->gradients[7] + c22 * face->gradients[8]);
-			const float scaled = inverse * g_invProjScale;
+			inverse = 1.0f / (c20 * face->gradients[6] + c21 * face->gradients[7] + c22 * face->gradients[8]);
+			scaled = inverse * g_invProjScale;
 			face->gradients[0] = scaled * c00;
 			face->gradients[1] = scaled * c01;
 			face->gradients[2] = inverse * c02;
@@ -863,16 +966,16 @@ static void sw3d_ProjectMeshVertices(SceneMeshTIE98* mesh) {
 			face->gradients[6] = scaled * c20;
 			face->gradients[7] = scaled * c21;
 			face->gradients[8] = inverse * c22;
-			const float center_x = (float)halfpixelswide;
-			const float center_y = (float)(transfm2_screenyoffset + halfpixelsdeep);
+			center_x = (float)halfpixelswide;
+			center_y = (float)(transfm2_screenyoffset + halfpixelsdeep);
 			face->gradients[2] -= center_x * face->gradients[0] + center_y * face->gradients[1];
 			face->gradients[5] -= center_x * face->gradients[3] + center_y * face->gradients[4];
 			face->gradients[8] -= center_x * face->gradients[6] + center_y * face->gradients[7];
-			float area = face->gradients[0] * face->gradients[4] - face->gradients[3] * face->gradients[1];
+			area = face->gradients[0] * face->gradients[4] - face->gradients[3] * face->gradients[1];
 			if (area < 0.0f)
 				area = -area;
-			const float corner_count = record->vertexIdx[3] == -1 ? 3.0f : 4.0f;
-			const float lod_scale = corner_count / face_w_total * (float)perspFactor;
+			corner_count = record->vertexIdx[3] == -1 ? 3.0f : 4.0f;
+			lod_scale = corner_count / face_w_total * (float)perspFactor;
 			face->mipLevel = (int)((float)((mesh->pMaterial->width * mesh->pMaterial->height) << 8) *
 								   (lod_scale * lod_scale * area));
 		}
@@ -885,26 +988,38 @@ static void sw3d_ProjectMeshVerticesDistant(SceneMeshTIE98* mesh) {
 	const float project_scale = (float)perspFactor / mesh->viewPos.z * 100000.0f;
 	SceneFaceTIE98* face = &g_visFaceList[mesh->faceBaseIndex];
 	ProjVertexTIE98* output = &g_projVertList[g_projVertCount];
+	int face_index;
+
+	int vertex_index;
+
 	mesh->vertBaseIndex = g_projVertCount;
 	mesh->projVertCursor = 0;
-	for (int vertex_index = 0; vertex_index < mesh->vertexCount; ++vertex_index)
+	for (vertex_index = 0; vertex_index < mesh->vertexCount; ++vertex_index)
 		g_vertexRemap[vertex_index] = -1;
 
-	for (int face_index = 0; face_index < mesh->visFaceCount; ++face_index, ++face) {
+	for (face_index = 0; face_index < mesh->visFaceCount; ++face_index, ++face) {
+		const FaceRecordTIE98* record;
+		int corner;
+
 		RenderScene_TransformFaceTextureGradients(face, &mesh->pFaceTexturing[face->faceIndex], mesh);
-		const FaceRecordTIE98* record = &mesh->pFaceGeom[face->faceIndex];
+		record = &mesh->pFaceGeom[face->faceIndex];
 		face->maxVertW = 0.0f;
 		face->minVertW = (float)perspFactor;
-		for (int corner = 0; corner < 4; ++corner) {
+		for (corner = 0; corner < 4; ++corner) {
 			const int vertex_index = record->vertexIdx[corner];
+			int remapped;
+			float w;
+
 			if (vertex_index == -1)
 				break;
-			int remapped = g_vertexRemap[vertex_index];
-			float w;
+			remapped = g_vertexRemap[vertex_index];
+
 			if (remapped == -1) {
+				Vec3f position;
+
 				remapped = mesh->projVertCursor++;
 				g_vertexRemap[vertex_index] = remapped;
-				Vec3f position = mesh->pModelVerts[vertex_index];
+				position = mesh->pModelVerts[vertex_index];
 				Math3D_RotateVec3(&position, &mesh->viewOrient);
 				position.x += mesh->viewPos.x;
 				position.y += mesh->viewPos.y;
@@ -929,37 +1044,49 @@ static void sw3d_ProjectMeshVerticesDistant(SceneMeshTIE98* mesh) {
 		if (mesh->pUVs) {
 			const int uv_index = record->uvIdx[0];
 			Vec3f position = mesh->pModelVerts[record->vertexIdx[0]];
+			float u;
+			float v;
+			float c00;
+			float c01;
+			float c20;
+			float c02;
+			float c10;
+			float c11;
+			float c12;
+			float c21;
+			float c22;
+			float inverse;
+			float scaled;
+			float center_x;
+			float center_y;
+			float texture_area;
+			float mip_x;
+			float mip_y;
+
 			Math3D_RotateVec3(&position, &mesh->viewOrient);
 			position.x += mesh->viewPos.x;
 			position.y += mesh->viewPos.y;
 			position.z += mesh->viewPos.z + 100000.0f;
-			const float u = mesh->pUVs[uv_index].u;
-			const float v = mesh->pUVs[uv_index].v;
+			u = mesh->pUVs[uv_index].u;
+			v = mesh->pUVs[uv_index].v;
 			face->gradients[6] = position.x - face->gradients[0] * u - face->gradients[3] * v;
 			face->gradients[7] = position.y - face->gradients[1] * u - face->gradients[4] * v;
 			face->gradients[8] = position.z - face->gradients[2] * u - face->gradients[5] * v;
 
-			const float c00 =
-				face->gradients[8] * face->gradients[4] - face->gradients[5] * face->gradients[7];
-			const float c01 =
-				face->gradients[5] * face->gradients[6] - face->gradients[8] * face->gradients[3];
-			float c20 = face->gradients[5] * face->gradients[1] - face->gradients[2] * face->gradients[4];
-			const float c02 =
-				face->gradients[7] * face->gradients[3] - face->gradients[4] * face->gradients[6];
-			const float c10 =
-				face->gradients[2] * face->gradients[7] - face->gradients[8] * face->gradients[1];
-			const float c11 =
-				face->gradients[8] * face->gradients[0] - face->gradients[2] * face->gradients[6];
-			const float c12 =
-				face->gradients[1] * face->gradients[6] - face->gradients[7] * face->gradients[0];
-			float c21 = face->gradients[2] * face->gradients[3] - face->gradients[5] * face->gradients[0];
-			float c22 = face->gradients[4] * face->gradients[0] - face->gradients[1] * face->gradients[3];
+			c00 = face->gradients[8] * face->gradients[4] - face->gradients[5] * face->gradients[7];
+			c01 = face->gradients[5] * face->gradients[6] - face->gradients[8] * face->gradients[3];
+			c20 = face->gradients[5] * face->gradients[1] - face->gradients[2] * face->gradients[4];
+			c02 = face->gradients[7] * face->gradients[3] - face->gradients[4] * face->gradients[6];
+			c10 = face->gradients[2] * face->gradients[7] - face->gradients[8] * face->gradients[1];
+			c11 = face->gradients[8] * face->gradients[0] - face->gradients[2] * face->gradients[6];
+			c12 = face->gradients[1] * face->gradients[6] - face->gradients[7] * face->gradients[0];
+			c21 = face->gradients[2] * face->gradients[3] - face->gradients[5] * face->gradients[0];
+			c22 = face->gradients[4] * face->gradients[0] - face->gradients[1] * face->gradients[3];
 			if (c20 == 0.0f && c21 == 0.0f && c22 == 0.0f)
 				c22 = 1.0f;
 
-			const float inverse =
-				1.0f / (c20 * face->gradients[6] + c21 * face->gradients[7] + c22 * face->gradients[8]);
-			const float scaled = inverse / project_scale;
+			inverse = 1.0f / (c20 * face->gradients[6] + c21 * face->gradients[7] + c22 * face->gradients[8]);
+			scaled = inverse / project_scale;
 			face->gradients[0] = scaled * c00;
 			face->gradients[1] = scaled * c01;
 			face->gradients[2] = inverse * c02;
@@ -969,14 +1096,14 @@ static void sw3d_ProjectMeshVerticesDistant(SceneMeshTIE98* mesh) {
 			face->gradients[6] = scaled * c20;
 			face->gradients[7] = scaled * c21;
 			face->gradients[8] = inverse * c22;
-			const float center_x = (float)halfpixelswide;
-			const float center_y = (float)(transfm2_screenyoffset + halfpixelsdeep);
+			center_x = (float)halfpixelswide;
+			center_y = (float)(transfm2_screenyoffset + halfpixelsdeep);
 			face->gradients[2] -= center_x * face->gradients[0] + center_y * face->gradients[1];
 			face->gradients[5] -= center_x * face->gradients[3] + center_y * face->gradients[4];
 			face->gradients[8] -= center_x * face->gradients[6] + center_y * face->gradients[7];
-			const float texture_area = (float)((mesh->pMaterial->width * mesh->pMaterial->height) << 8);
-			float mip_x = face->gradients[0] * position.z * position.z * face->gradients[4];
-			float mip_y = position.z * position.z * face->gradients[1] * face->gradients[3];
+			texture_area = (float)((mesh->pMaterial->width * mesh->pMaterial->height) << 8);
+			mip_x = face->gradients[0] * position.z * position.z * face->gradients[4];
+			mip_y = position.z * position.z * face->gradients[1] * face->gradients[3];
 			if (mip_x < 0.0f)
 				mip_x = -mip_x;
 			if (mip_y < 0.0f)
@@ -995,23 +1122,29 @@ static int RenderScene_HardwareStagingHasCapacity(int vertex_count, int triangle
 
 // FUNCTION: TIE98 0x42B130
 static int RenderScene_EmitFlightVertex(int vertex_index, ProjVertexTIE98* vertices) {
+	ProjVertexTIE98* source;
+	float w;
+	float depth;
+	D3DTLVERTEX* output;
+	int intensity;
+
 	if (!RenderScene_HardwareStagingHasCapacity(1, 0))
 		return -1;
-	ProjVertexTIE98* source = &vertices[vertex_index];
-	float w = source->w;
+	source = &vertices[vertex_index];
+	w = source->w;
 	if (w < 0.0f)
 		w = (float)perspFactor;
-	float depth = 1.0f / ((float)perspFactor / w * (1.0f / 2048.0f) + 1.0f);
+	depth = 1.0f / ((float)perspFactor / w * (1.0f / 2048.0f) + 1.0f);
 	if (g_std3DZBufferBitDepth == 2)
 		depth = 1.0f - depth;
-	D3DTLVERTEX* output = &g_flightVertexBuffer[g_d3dVertexCount];
+	output = &g_flightVertexBuffer[g_d3dVertexCount];
 	output->sx = source->sx + g_flightVpOriginX;
 	output->sy = source->sy + g_flightVpOriginY;
 	output->sz = depth;
 	output->rhw = w;
 	output->tu = source->tu;
 	output->tv = source->tv;
-	int intensity = 48 + (int)(source->lightIntensity * 320.0f);
+	intensity = 48 + (int)(source->lightIntensity * 320.0f);
 	if (intensity > 255)
 		intensity = 255;
 	output->color = (uint32_t)(65793 * intensity - (g_capVertexAlpha ? 0x2000000 : 0x1000000));
@@ -1023,19 +1156,37 @@ static int RenderScene_EmitFlightVertex(int vertex_index, ProjVertexTIE98* verti
 static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 	ProjVertexTIE98* vertices = &g_projVertList[mesh->vertBaseIndex];
 	const int projection_end = mesh->vertBaseIndex + mesh->projVertCursor;
-	g_clipVertCursor = projection_end;
-	for (int i = 0; i < projection_end; ++i)
-		g_emittedVertexByProjection[i] = -1;
-	SceneFaceTIE98* face = &g_visFaceList[mesh->faceBaseIndex];
-	const uint8_t* previous_texels = NULL;
-	Std3DTextureSurface* opaque = NULL;
-	Std3DTextureSurface* color_key = NULL;
+	SceneFaceTIE98* face;
+	const uint8_t* previous_texels;
+	Std3DTextureSurface* opaque;
+	Std3DTextureSurface* color_key;
+	int face_iter;
 
-	for (int face_iter = 0; face_iter < mesh->visFaceCount; ++face_iter, ++face) {
+	int i;
+
+	g_clipVertCursor = projection_end;
+	for (i = 0; i < projection_end; ++i)
+		g_emittedVertexByProjection[i] = -1;
+	face = &g_visFaceList[mesh->faceBaseIndex];
+	previous_texels = NULL;
+	opaque = NULL;
+	color_key = NULL;
+
+	for (face_iter = 0; face_iter < mesh->visFaceCount; ++face_iter, ++face) {
 		const FaceRecordTIE98* record = &mesh->pFaceGeom[face->faceIndex];
+		float u_scale;
+		float v_scale;
+		int corner;
+		int previous;
+		int triangles_per_pass;
+		int additional_vertices;
+		int additional_triangles;
+
+		int i;
+
 		g_clipCountA = record->edgeIdx[3] != -1 ? 4 : 3;
-		float u_scale = 1.0f;
-		float v_scale = 1.0f;
+		u_scale = 1.0f;
+		v_scale = 1.0f;
 		if (g_pStd3DCurDevice->caps.bSquareOnlyTexture) {
 			int width = mesh->pMaterial->width;
 			int height = mesh->pMaterial->height;
@@ -1051,11 +1202,14 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 				}
 			}
 		}
-		for (int corner = 0; corner < g_clipCountA; ++corner) {
+		for (corner = 0; corner < g_clipCountA; ++corner) {
 			int projected = g_vertexRemap[record->vertexIdx[corner]];
+			ProjVertexTIE98* vertex;
+			OptTexCoordTIE98 uv;
+
 			g_clipIdxA[corner] = projected;
-			ProjVertexTIE98* vertex = &vertices[projected];
-			OptTexCoordTIE98 uv = mesh->pUVs[record->uvIdx[corner]];
+			vertex = &vertices[projected];
+			uv = mesh->pUVs[record->uvIdx[corner]];
 			uv.u *= u_scale;
 			uv.v *= v_scale;
 			if (vertex->tu != uv.u || vertex->tv != uv.v) {
@@ -1067,14 +1221,15 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 			}
 		}
 
-		int previous;
 		if (face->nearClipState == -1) {
 			memcpy(g_clipIdxB, g_clipIdxA, (size_t)g_clipCountA * sizeof *g_clipIdxA);
 			g_clipCountB = g_clipCountA;
 			g_clipCountA = 0;
 			if (g_clipCountB > 0) {
+				int i;
+
 				previous = g_clipIdxB[g_clipCountB - 1];
-				for (int i = 0; i < g_clipCountB; ++i) {
+				for (i = 0; i < g_clipCountB; ++i) {
 					const int current = g_clipIdxB[i];
 					RenderClip_ClipPolyNear(previous, current, vertices);
 					previous = current;
@@ -1083,9 +1238,12 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 		}
 		g_clipCountB = 0;
 		if (g_clipCountA > 0) {
+			int count;
+			int i;
+
 			previous = g_clipIdxA[g_clipCountA - 1];
-			const int count = g_clipCountA;
-			for (int i = 0; i < count; ++i) {
+			count = g_clipCountA;
+			for (i = 0; i < count; ++i) {
 				const int current = g_clipIdxA[i];
 				RenderClip_ClipPolyTop(previous, current, vertices);
 				previous = current;
@@ -1093,9 +1251,12 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 		}
 		g_clipCountA = 0;
 		if (g_clipCountB > 0) {
+			int count;
+			int i;
+
 			previous = g_clipIdxB[g_clipCountB - 1];
-			const int count = g_clipCountB;
-			for (int i = 0; i < count; ++i) {
+			count = g_clipCountB;
+			for (i = 0; i < count; ++i) {
 				const int current = g_clipIdxB[i];
 				RenderClip_ClipPolyBottom(previous, current, vertices);
 				previous = current;
@@ -1103,9 +1264,12 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 		}
 		g_clipCountB = 0;
 		if (g_clipCountA > 0) {
+			int count;
+			int i;
+
 			previous = g_clipIdxA[g_clipCountA - 1];
-			const int count = g_clipCountA;
-			for (int i = 0; i < count; ++i) {
+			count = g_clipCountA;
+			for (i = 0; i < count; ++i) {
 				const int current = g_clipIdxA[i];
 				RenderClip_ClipPolyLeft(previous, current, vertices);
 				previous = current;
@@ -1113,16 +1277,19 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 		}
 		g_clipCountA = 0;
 		if (g_clipCountB > 0) {
+			int count;
+			int i;
+
 			previous = g_clipIdxB[g_clipCountB - 1];
-			const int count = g_clipCountB;
-			for (int i = 0; i < count; ++i) {
+			count = g_clipCountB;
+			for (i = 0; i < count; ++i) {
 				const int current = g_clipIdxB[i];
 				RenderClip_ClipPolyRight(previous, current, vertices);
 				previous = current;
 			}
 		}
 		face->nearClipState = pixelsdeep;
-		for (int i = 0; i < g_clipCountA; ++i) {
+		for (i = 0; i < g_clipCountA; ++i) {
 			const int projected = g_clipIdxA[i];
 			int emitted;
 			if (projected < projection_end) {
@@ -1143,6 +1310,8 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 			int texture_height = mesh->pMaterial->height;
 			int texel_offset = 0;
 			int mip = (int)((float)face->mipLevel * g_mipLodScale);
+			uint8_t* texels;
+
 			if (texture_width * texture_height == mesh->pMaterial->textureSize) {
 				while (mip > 256 && texture_width != 8 && texture_height != 8) {
 					mip >>= 2;
@@ -1151,10 +1320,12 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 					texture_height >>= 1;
 				}
 			}
-			uint8_t* texels = mesh->pTexels + texel_offset;
+			texels = mesh->pTexels + texel_offset;
 			if (texels != previous_texels) {
+				uint16_t* palette;
+
 				previous_texels = texels;
-				uint16_t* palette = (uint16_t*)(mesh->pPalette1 + 4096);
+				palette = (uint16_t*)(mesh->pPalette1 + 4096);
 				opaque = RenderTexture_GetOrCreateOpaque(texture_width, texture_height, palette, texels);
 				color_key = NULL;
 				if (palette[256] != 0) {
@@ -1172,20 +1343,22 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 			}
 		}
 
-		const int triangles_per_pass = g_clipCountA > 2 ? g_clipCountA - 2 : 0;
-		const int additional_vertices = color_key ? g_clipCountA : 0;
-		const int additional_triangles = triangles_per_pass * (color_key ? 2 : 1);
+		triangles_per_pass = g_clipCountA > 2 ? g_clipCountA - 2 : 0;
+		additional_vertices = color_key ? g_clipCountA : 0;
+		additional_triangles = triangles_per_pass * (color_key ? 2 : 1);
 		if (!RenderScene_HardwareStagingHasCapacity(additional_vertices, additional_triangles))
 			return;
 
 		if (color_key) {
 			int color_key_indices[32];
-			for (int i = 0; i < g_clipCountA; ++i) {
+			int i;
+
+			for (i = 0; i < g_clipCountA; ++i) {
 				g_flightVertexBuffer[g_d3dVertexCount] = g_flightVertexBuffer[g_clipIdxA[i]];
 				g_flightVertexBuffer[g_d3dVertexCount].color = 0xffffffffu;
 				color_key_indices[i] = g_d3dVertexCount++;
 			}
-			for (int i = 2; i < g_clipCountA; ++i) {
+			for (i = 2; i < g_clipCountA; ++i) {
 				Std3DRenderTri* triangle = &g_triBuffer[g_d3dIndexCount++];
 				triangle->v0 = color_key_indices[0];
 				triangle->v1 = color_key_indices[i - 1];
@@ -1194,7 +1367,7 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 				triangle->flags = (Std3DRenderStateFlags)(38931 + (g_bilinearEnabled ? 384 : 0) + 512);
 			}
 		}
-		for (int i = 2; i < g_clipCountA; ++i) {
+		for (i = 2; i < g_clipCountA; ++i) {
 			Std3DRenderTri* triangle = &g_triBuffer[g_d3dIndexCount++];
 			triangle->v0 = g_clipIdxA[0];
 			triangle->v1 = g_clipIdxA[i - 1];
@@ -1210,14 +1383,17 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 
 // FUNCTION: TIE98 0x42AD90
 static void RenderScene_DrawMesh(SceneMeshTIE98* mesh) {
+	int saved_visible_face_count;
+	SceneMeshTIE98* queued;
+
 	g_projVertCount = 0;
 	g_sceneEdgeCursor = 0;
-	const int saved_visible_face_count = g_visFaceCount;
+	saved_visible_face_count = g_visFaceCount;
 	if (g_meshQueueIndex == TIE98_MESH_QUEUE_MAX || g_visFaceCount + mesh->faceCount > TIE98_SCENE_FACE_MAX ||
 		mesh->vertexCount > g_projVertCapacity || mesh->edgeCount > g_sceneEdgeCapacity)
 		return;
 	g_meshQueue[g_meshQueueIndex] = *mesh;
-	SceneMeshTIE98* queued = &g_meshQueue[g_meshQueueIndex];
+	queued = &g_meshQueue[g_meshQueueIndex];
 	RenderScene_CullMeshFacesFromView(queued);
 	if (queued->visFaceCount != 0) {
 		if (g_d3dVertexCount + 8 * queued->visFaceCount > g_maxBatchVerts ||
@@ -1248,6 +1424,10 @@ static void RenderScene_DrawMesh(SceneMeshTIE98* mesh) {
 // FUNCTION: TIE98 0x432CE0
 static int sw3d_SetupEdge(SceneEdgeTIE98* edge, ProjVertexTIE98* first, ProjVertexTIE98* second) {
 	int first_y;
+	int second_y;
+	float inverse_height;
+	float first_row_offset;
+
 	if (first->sy < 0.0f) {
 		first_y = 0;
 	} else {
@@ -1255,7 +1435,7 @@ static int sw3d_SetupEdge(SceneEdgeTIE98* edge, ProjVertexTIE98* first, ProjVert
 		if ((float)first_y != first->sy)
 			++first_y;
 	}
-	int second_y;
+
 	if (second->sy < 0.0f) {
 		second_y = 0;
 	} else {
@@ -1267,9 +1447,11 @@ static int sw3d_SetupEdge(SceneEdgeTIE98* edge, ProjVertexTIE98* first, ProjVert
 		return -1;
 	if (first_y > second_y) {
 		ProjVertexTIE98* swap_vertex = first;
+		int swap_y;
+
 		first = second;
 		second = swap_vertex;
-		const int swap_y = first_y;
+		swap_y = first_y;
 		first_y = second_y;
 		second_y = swap_y;
 	}
@@ -1279,11 +1461,11 @@ static int sw3d_SetupEdge(SceneEdgeTIE98* edge, ProjVertexTIE98* first, ProjVert
 		second_y = (uint16_t)pixelsdeep;
 
 	edge->yEnd = second_y;
-	const float inverse_height = 1.0f / (second->sy - first->sy);
+	inverse_height = 1.0f / (second->sy - first->sy);
 	edge->dxdy = (second->sx - first->sx) * inverse_height;
 	edge->dLightIntensityDy = (second->lightIntensity - first->lightIntensity) * inverse_height;
 	edge->pClipVert = NULL;
-	const float first_row_offset = (float)first_y - first->sy;
+	first_row_offset = (float)first_y - first->sy;
 	if (first_y != 0 || first_row_offset <= second->sy) {
 		edge->x = first->sx + first_row_offset * edge->dxdy;
 		edge->lightIntensity = first->lightIntensity + first_row_offset * edge->dLightIntensityDy;
@@ -1313,20 +1495,27 @@ static int sw3d_SetupClippedEdge(SceneMeshTIE98* mesh, SceneEdgeTIE98* edge, Pro
 	}
 
 	if (outside->w < 0.0f) {
+		float inside_inverse_w;
+		float inside_x;
+		float inside_y;
+		float inside_z;
+		float t;
+		float clipped_x;
+		float clipped_y;
+
 		g_sw3dClipBottom = g_sw3dClipTop;
 		g_sw3dClipTop = &g_projVertList[mesh->vertBaseIndex + mesh->projVertCursor];
 		g_sw3dGeneratedClipVertex = g_sw3dClipTop;
 		++mesh->projVertCursor;
 		++g_projVertCount;
 
-		const float inside_inverse_w = 1.0f / inside->w;
-		const float inside_x = (inside->sx - (float)halfpixelswide) * inside_inverse_w;
-		const float inside_y =
-			(inside->sy - (float)(transfm2_screenyoffset + halfpixelsdeep)) * inside_inverse_w;
-		const float inside_z = (float)perspFactor * inside_inverse_w;
-		const float t = outside->w / (outside->w + 1.0f - inside_z);
-		const float clipped_x = outside->sx + (inside_x - outside->sx) * t;
-		const float clipped_y = outside->sy + (inside_y - outside->sy) * t;
+		inside_inverse_w = 1.0f / inside->w;
+		inside_x = (inside->sx - (float)halfpixelswide) * inside_inverse_w;
+		inside_y = (inside->sy - (float)(transfm2_screenyoffset + halfpixelsdeep)) * inside_inverse_w;
+		inside_z = (float)perspFactor * inside_inverse_w;
+		t = outside->w / (outside->w + 1.0f - inside_z);
+		clipped_x = outside->sx + (inside_x - outside->sx) * t;
+		clipped_y = outside->sy + (inside_y - outside->sy) * t;
 		g_sw3dClipTop->sx = (float)halfpixelswide + clipped_x * (float)perspFactor;
 		g_sw3dClipTop->sy = (float)(transfm2_screenyoffset + halfpixelsdeep) + clipped_y * (float)perspFactor;
 		g_sw3dClipTop->w = (float)perspFactor;
@@ -1344,7 +1533,18 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
 	SceneEdgeTIE98* left = face->edges[0];
 	SceneEdgeTIE98* bottom = left;
-	for (int edge_index = 1; edge_index < face->edgeCount; ++edge_index) {
+	int span_count;
+	SceneEdgeTIE98* right;
+	int scan_y;
+	int remaining_edges;
+	float left_start_x;
+	float right_start_x;
+	float left_start_light;
+	float right_start_light;
+
+	int edge_index;
+
+	for (edge_index = 1; edge_index < face->edgeCount; ++edge_index) {
 		SceneEdgeTIE98* edge = face->edges[edge_index];
 		if (edge->yStart < left->yStart)
 			left = edge;
@@ -1353,7 +1553,7 @@ static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
 	}
 	face->yTop = left->yStart;
 	face->yBot = bottom->yEnd;
-	const int span_count = face->yBot - face->yTop;
+	span_count = face->yBot - face->yTop;
 	if (g_sceneSpanPtrAvail <= span_count) {
 		face->yBot = face->yTop;
 		return;
@@ -1361,8 +1561,8 @@ static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
 	g_sceneSpanPtrAvail -= span_count;
 	face->pSpans = &g_sceneSpanPtrList[g_sceneSpanPtrAvail];
 
-	SceneEdgeTIE98* right = NULL;
-	for (int edge_index = 0; edge_index < face->edgeCount; ++edge_index) {
+	right = NULL;
+	for (edge_index = 0; edge_index < face->edgeCount; ++edge_index) {
 		SceneEdgeTIE98* edge = face->edges[edge_index];
 		if (edge != left && edge->yStart == left->yStart) {
 			right = edge;
@@ -1379,12 +1579,12 @@ static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
 		right = swap;
 	}
 	face->pScanEdge = left;
-	int scan_y = left->yStart;
-	int remaining_edges = face->edgeCount;
-	float left_start_x = left->x;
-	float right_start_x = right->x;
-	float left_start_light = left->lightIntensity;
-	float right_start_light = right->lightIntensity;
+	scan_y = left->yStart;
+	remaining_edges = face->edgeCount;
+	left_start_x = left->x;
+	right_start_x = right->x;
+	left_start_light = left->lightIntensity;
+	right_start_light = right->lightIntensity;
 
 	while (remaining_edges > 0) {
 		const int run_end = left->yEnd < right->yEnd ? left->yEnd : right->yEnd;
@@ -1415,6 +1615,8 @@ static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
 		}
 
 		if (left->yEnd == right->yEnd) {
+			int edge_index;
+
 			remaining_edges -= 2;
 			if (remaining_edges == 0)
 				break;
@@ -1424,7 +1626,7 @@ static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
 			right->lightIntensity = right_start_light;
 			left = NULL;
 			right = NULL;
-			for (int edge_index = 0; edge_index < face->edgeCount; ++edge_index) {
+			for (edge_index = 0; edge_index < face->edgeCount; ++edge_index) {
 				SceneEdgeTIE98* edge = face->edges[edge_index];
 				if (edge->yStart != scan_y)
 					continue;
@@ -1452,10 +1654,12 @@ static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
 		} else {
 			--remaining_edges;
 			if (scan_y == left->yEnd) {
+				int edge_index;
+
 				left->x = left_start_x;
 				left->lightIntensity = left_start_light;
 				left = NULL;
-				for (int edge_index = 0; edge_index < face->edgeCount; ++edge_index) {
+				for (edge_index = 0; edge_index < face->edgeCount; ++edge_index) {
 					if (face->edges[edge_index]->yStart == scan_y) {
 						left = face->edges[edge_index];
 						break;
@@ -1471,10 +1675,12 @@ static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
 				right->x += right->dxdy;
 				right->lightIntensity += right->dLightIntensityDy;
 			} else {
+				int edge_index;
+
 				right->x = right_start_x;
 				right->lightIntensity = right_start_light;
 				right = NULL;
-				for (int edge_index = 0; edge_index < face->edgeCount; ++edge_index) {
+				for (edge_index = 0; edge_index < face->edgeCount; ++edge_index) {
 					if (face->edges[edge_index]->yStart == scan_y) {
 						right = face->edges[edge_index];
 						break;
@@ -1514,9 +1720,12 @@ static SceneSpanTIE98* sw3d_UnlinkSpan(SceneSpanTIE98** link, SceneSpanTIE98* sp
 /* RECOVERY HELPER: removes the repeated start-edge adjustment and ordered
  * reinsertion sequence in sw3d_InsertSpan. */
 static int sw3d_MoveSpanStart(SceneSpanTIE98** link, SceneSpanTIE98* span, int start_x, int scan_y) {
+	SceneSpanTIE98* next;
+	SceneSpanTIE98** insert_link;
+
 	span->startLightIntensity += (float)(start_x - span->startX) * span->dLightIntensityDx;
 	span->startX = start_x;
-	SceneSpanTIE98* next = span->next;
+	next = span->next;
 	if (!next || next->startX >= span->startX)
 		return 0;
 
@@ -1525,7 +1734,7 @@ static int sw3d_MoveSpanStart(SceneSpanTIE98** link, SceneSpanTIE98* span, int s
 		span->startLightIntensity += (float)(next->endX - span->startX) * span->dLightIntensityDx;
 		span->startX = next->endX;
 	}
-	SceneSpanTIE98** insert_link = &next->next;
+	insert_link = &next->next;
 	while (*insert_link && (*insert_link)->startX < span->startX) {
 		if (span->startX < (*insert_link)->endX) {
 			span->startLightIntensity +=
@@ -1547,11 +1756,17 @@ static int sw3d_MoveSpanStart(SceneSpanTIE98** link, SceneSpanTIE98* span, int s
 
 // FUNCTION: TIE98 0x43E2C0
 static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTIE98* face) {
+	int start_x;
+	int end_x;
+	SceneSpanTIE98** link;
+	SceneSpanTIE98* current;
+	SceneSpanTIE98* span;
+
 	face->pSpans[scan_y - face->yTop] = NULL;
-	int start_x = left_x < 0.0f ? 0 : (int)left_x;
+	start_x = left_x < 0.0f ? 0 : (int)left_x;
 	if (left_x >= 0.0f && (float)start_x != left_x)
 		++start_x;
-	int end_x = right_x < 0.0f ? 0 : (int)right_x;
+	end_x = right_x < 0.0f ? 0 : (int)right_x;
 	if (right_x >= 0.0f && (float)end_x != right_x)
 		++end_x;
 	if (end_x > (uint16_t)pixelswide)
@@ -1559,9 +1774,23 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 	if (end_x <= start_x || start_x >= (uint16_t)pixelswide || (g_sw3dSkipOddScanlines && (scan_y & 1)))
 		return;
 
-	SceneSpanTIE98** link = &g_scanlineSpanHeads[scan_y];
-	SceneSpanTIE98* current = *link;
+	link = &g_scanlineSpanHeads[scan_y];
+	current = *link;
 	while (current) {
+		SceneFaceTIE98* current_face;
+		float new_depth;
+		float old_depth;
+		float new_slope;
+		float current_slope;
+		int crossing_from_right;
+		int current_left_width;
+		int new_left_width;
+		int new_right_width;
+
+		int overlap_width;
+		float new_end_depth;
+		float current_end_depth;
+
 		if (current->endX <= start_x) {
 			link = &current->next;
 			current = current->next;
@@ -1570,7 +1799,7 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 		if (current->startX > start_x)
 			break;
 
-		SceneFaceTIE98* current_face = current->pFace;
+		current_face = current->pFace;
 		if (face->maxVertW <= current_face->minVertW) {
 			start_x = current->endX;
 			if (start_x >= end_x)
@@ -1595,12 +1824,12 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 			continue;
 		}
 
-		const float new_depth =
+		new_depth =
 			face->gradients[6] * (float)start_x + face->gradients[7] * (float)scan_y + face->gradients[8];
-		const float old_depth = current_face->gradients[6] * (float)start_x +
-								current_face->gradients[7] * (float)scan_y + current_face->gradients[8];
-		const float new_slope = face->gradients[6];
-		const float current_slope = current_face->gradients[6];
+		old_depth = current_face->gradients[6] * (float)start_x + current_face->gradients[7] * (float)scan_y +
+					current_face->gradients[8];
+		new_slope = face->gradients[6];
+		current_slope = current_face->gradients[6];
 		if (new_depth <= old_depth) {
 			if (new_slope > current_slope) {
 				const int overlap_end = current->endX < end_x ? current->endX : end_x;
@@ -1666,9 +1895,9 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 			continue;
 		}
 
-		const int overlap_width = current->endX - start_x;
-		const float new_end_depth = new_depth + (float)overlap_width * new_slope;
-		const float current_end_depth = old_depth + (float)overlap_width * current_slope;
+		overlap_width = current->endX - start_x;
+		new_end_depth = new_depth + (float)overlap_width * new_slope;
+		current_end_depth = old_depth + (float)overlap_width * current_slope;
 		if (new_end_depth >= current_end_depth) {
 			current->endX = start_x;
 			if (current->endX == current->startX)
@@ -1680,14 +1909,14 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 			continue;
 		}
 
-		int crossing_from_right = (int)((new_end_depth - current_end_depth) / (new_slope - current_slope));
+		crossing_from_right = (int)((new_end_depth - current_end_depth) / (new_slope - current_slope));
 		if (crossing_from_right < 0)
 			crossing_from_right = 0;
 		if (crossing_from_right > overlap_width)
 			crossing_from_right = overlap_width;
-		const int current_left_width = start_x - current->startX;
-		const int new_left_width = overlap_width - crossing_from_right;
-		const int new_right_width = end_x - current->endX;
+		current_left_width = start_x - current->startX;
+		new_left_width = overlap_width - crossing_from_right;
+		new_right_width = end_x - current->endX;
 
 		if (crossing_from_right <= current_left_width && crossing_from_right <= new_left_width &&
 			crossing_from_right <= new_right_width) {
@@ -1721,7 +1950,7 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 	if (start_x >= end_x)
 		return;
 
-	SceneSpanTIE98* span = g_pSceneSpanDataCur++;
+	span = g_pSceneSpanDataCur++;
 	if (g_pSceneSpanDataCur == g_pSceneSpanDataEnd)
 		g_pSceneSpanDataCur = g_pSceneSpanDataEnd;
 	span->startX = start_x;
@@ -1742,6 +1971,19 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 	current = *link;
 	while (current && current->startX < span->endX) {
 		SceneFaceTIE98* current_face = current->pFace;
+		int overlap_start;
+		float new_depth;
+		float current_depth;
+		float new_slope;
+		float current_slope;
+		int moved_width;
+
+		int overlap_width;
+		float new_end_depth;
+		float current_end_depth;
+		int crossing_from_right;
+		int moved_start;
+
 		if (face->maxVertW <= current_face->minVertW) {
 			if (current->endX >= span->endX) {
 				span->endX = current->startX;
@@ -1765,14 +2007,22 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 			continue;
 		}
 
-		const int overlap_start = current->startX;
-		const float new_depth = face->gradients[6] * (float)overlap_start +
-								face->gradients[7] * (float)scan_y + face->gradients[8];
-		const float current_depth = current_face->gradients[6] * (float)overlap_start +
-									current_face->gradients[7] * (float)scan_y + current_face->gradients[8];
-		const float new_slope = face->gradients[6];
-		const float current_slope = current_face->gradients[6];
+		overlap_start = current->startX;
+		new_depth = face->gradients[6] * (float)overlap_start + face->gradients[7] * (float)scan_y +
+					face->gradients[8];
+		current_depth = current_face->gradients[6] * (float)overlap_start +
+						current_face->gradients[7] * (float)scan_y + current_face->gradients[8];
+		new_slope = face->gradients[6];
+		current_slope = current_face->gradients[6];
 		if (new_depth <= current_depth) {
+			int new_visible_width;
+			int current_right_width;
+
+			int overlap_width;
+			float new_end_depth;
+			float current_end_depth;
+			int crossing_from_right;
+
 			if (new_slope <= current_slope) {
 				if (current->endX >= span->endX) {
 					span->endX = current->startX;
@@ -1787,12 +2037,14 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 				const int overlap_width = current->endX - overlap_start;
 				const float new_end_depth = new_depth + (float)overlap_width * new_slope;
 				const float current_end_depth = current_depth + (float)overlap_width * current_slope;
+				int crossing_from_right;
+
 				if (new_end_depth <= current_end_depth) {
 					link = &current->next;
 					current = current->next;
 					continue;
 				}
-				int crossing_from_right =
+				crossing_from_right =
 					(int)((new_end_depth - current_end_depth) / (new_slope - current_slope));
 				if (crossing_from_right < 0)
 					crossing_from_right = 0;
@@ -1806,21 +2058,20 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 				continue;
 			}
 
-			const int overlap_width = span->endX - overlap_start;
-			const float new_end_depth = new_depth + (float)overlap_width * new_slope;
-			const float current_end_depth = current_depth + (float)overlap_width * current_slope;
+			overlap_width = span->endX - overlap_start;
+			new_end_depth = new_depth + (float)overlap_width * new_slope;
+			current_end_depth = current_depth + (float)overlap_width * current_slope;
 			if (new_end_depth <= current_end_depth) {
 				span->endX = current->startX;
 				return;
 			}
-			int crossing_from_right =
-				(int)((new_end_depth - current_end_depth) / (new_slope - current_slope));
+			crossing_from_right = (int)((new_end_depth - current_end_depth) / (new_slope - current_slope));
 			if (crossing_from_right < 0)
 				crossing_from_right = 0;
 			if (crossing_from_right > overlap_width)
 				crossing_from_right = overlap_width;
-			const int new_visible_width = overlap_width - crossing_from_right;
-			const int current_right_width = current->endX - span->endX;
+			new_visible_width = overlap_width - crossing_from_right;
+			current_right_width = current->endX - span->endX;
 			if (crossing_from_right < new_visible_width && crossing_from_right < current_right_width) {
 				span->endX = current->startX;
 				return;
@@ -1883,20 +2134,20 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 			continue;
 		}
 
-		const int overlap_width = current->endX - overlap_start;
-		const float new_end_depth = new_depth + (float)overlap_width * new_slope;
-		const float current_end_depth = current_depth + (float)overlap_width * current_slope;
+		overlap_width = current->endX - overlap_start;
+		new_end_depth = new_depth + (float)overlap_width * new_slope;
+		current_end_depth = current_depth + (float)overlap_width * current_slope;
 		if (new_end_depth >= current_end_depth) {
 			current = sw3d_UnlinkSpan(link, current, scan_y);
 			continue;
 		}
-		int crossing_from_right = (int)((new_end_depth - current_end_depth) / (new_slope - current_slope));
+		crossing_from_right = (int)((new_end_depth - current_end_depth) / (new_slope - current_slope));
 		if (crossing_from_right < 0)
 			crossing_from_right = 0;
-		int moved_width = current->endX - crossing_from_right - current->startX;
+		moved_width = current->endX - crossing_from_right - current->startX;
 		if (moved_width < 0)
 			moved_width = 0;
-		const int moved_start = current->startX + moved_width;
+		moved_start = current->startX + moved_width;
 		if (moved_start >= current->endX) {
 			current = sw3d_UnlinkSpan(link, current, scan_y);
 			continue;
@@ -1914,26 +2165,36 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 static void sw3d_RasterizeMeshFaces(SceneMeshTIE98* mesh) {
 	ProjVertexTIE98* vertices = &g_projVertList[mesh->vertBaseIndex];
 	SceneFaceTIE98* face = &g_visFaceList[mesh->faceBaseIndex];
+	SceneEdgeTIE98* first_edge;
+	SceneEdgeTIE98* output_edge;
+	int edge_index;
+	int face_index;
+
 	mesh->edgeBaseIndex = g_sceneEdgeCursor;
 	mesh->clippedEdgeCount = 0;
-	SceneEdgeTIE98* first_edge = &g_sceneEdgeList[g_sceneEdgeCursor];
-	SceneEdgeTIE98* output_edge = first_edge;
-	for (int edge_index = 0; edge_index < mesh->edgeCount; ++edge_index)
+	first_edge = &g_sceneEdgeList[g_sceneEdgeCursor];
+	output_edge = first_edge;
+	for (edge_index = 0; edge_index < mesh->edgeCount; ++edge_index)
 		g_sceneEdgeFlags[edge_index] = -1;
 
-	for (int face_index = 0; face_index < mesh->visFaceCount; ++face_index, ++face) {
+	for (face_index = 0; face_index < mesh->visFaceCount; ++face_index, ++face) {
 		const FaceRecordTIE98* record = &mesh->pFaceGeom[face->faceIndex];
 		const int corner_count = record->edgeIdx[3] != -1 ? 4 : 3;
 		int output_count = 0;
 		if (face->nearClipState == -1) {
+			int current_corner;
+			int previous_corner;
+
 			face->nearClipState = (uint16_t)pixelsdeep;
 			g_sw3dClipTop = NULL;
 			g_sw3dClipBottom = NULL;
-			int current_corner = 0;
-			for (int previous_corner = corner_count - 1; previous_corner >= 0; --previous_corner) {
+			current_corner = 0;
+			for (previous_corner = corner_count - 1; previous_corner >= 0; --previous_corner) {
 				const int source_edge = record->edgeIdx[previous_corner];
+				int existing_edge;
+
 				g_sw3dGeneratedClipVertex = NULL;
-				const int existing_edge = g_sceneEdgeFlags[source_edge];
+				existing_edge = g_sceneEdgeFlags[source_edge];
 				if (existing_edge == -1) {
 					if (sw3d_SetupClippedEdge(
 							mesh, output_edge, &vertices[g_vertexRemap[record->vertexIdx[previous_corner]]],
@@ -1962,9 +2223,12 @@ static void sw3d_RasterizeMeshFaces(SceneMeshTIE98* mesh) {
 				++mesh->clippedEdgeCount;
 			}
 		} else {
+			int current_corner;
+			int previous_corner;
+
 			face->nearClipState = (uint16_t)pixelsdeep;
-			int current_corner = 0;
-			for (int previous_corner = corner_count - 1; previous_corner >= 0; --previous_corner) {
+			current_corner = 0;
+			for (previous_corner = corner_count - 1; previous_corner >= 0; --previous_corner) {
 				const int source_edge = record->edgeIdx[previous_corner];
 				const int existing_edge = g_sceneEdgeFlags[source_edge];
 				if (existing_edge == -1) {
@@ -2005,8 +2269,10 @@ static void RenderScene_DrawSceneMesh(SceneMeshTIE98* mesh) {
 		if (g_meshQueueIndex != TIE98_MESH_QUEUE_MAX &&
 			g_visFaceCount + mesh->faceCount <= TIE98_SCENE_FACE_MAX &&
 			mesh->vertexCount <= g_projVertCapacity && mesh->edgeCount <= g_sceneEdgeCapacity) {
+			SceneMeshTIE98* queued;
+
 			g_meshQueue[g_meshQueueIndex] = *mesh;
-			SceneMeshTIE98* queued = &g_meshQueue[g_meshQueueIndex];
+			queued = &g_meshQueue[g_meshQueueIndex];
 			RenderScene_CullMeshFacesFromView(queued);
 			if (queued->visFaceCount != 0) {
 				if (g_bBackdropMeshMode)
@@ -2026,6 +2292,9 @@ static int16_t Hud_EmitBoxOverlayQuadHW(float left, float top, float right, floa
 										uint32_t color, int vertical) {
 	const int base_vertex = g_d3dVertexCount;
 	D3DTLVERTEX* vertices = &g_flightVertexBuffer[base_vertex];
+	int i;
+	Std3DRenderTri* triangles;
+
 	vertices[0].sx = g_flightVpOriginX + left;
 	vertices[0].sy = g_flightVpOriginY + top;
 	if (vertical) {
@@ -2043,7 +2312,7 @@ static int16_t Hud_EmitBoxOverlayQuadHW(float left, float top, float right, floa
 		vertices[3].sx = g_flightVpOriginX + left;
 		vertices[3].sy = g_flightVpOriginY + bottom;
 	}
-	for (int i = 0; i < 4; ++i) {
+	for (i = 0; i < 4; ++i) {
 		vertices[i].sz = depth;
 		vertices[i].rhw = depth;
 		vertices[i].color = color;
@@ -2051,7 +2320,7 @@ static int16_t Hud_EmitBoxOverlayQuadHW(float left, float top, float right, floa
 		vertices[i].tu = 0.0f;
 		vertices[i].tv = 0.0f;
 	}
-	Std3DRenderTri* triangles = &g_triBuffer[g_d3dIndexCount];
+	triangles = &g_triBuffer[g_d3dIndexCount];
 	triangles[0].v0 = base_vertex;
 	triangles[0].v1 = base_vertex + 1;
 	triangles[0].v2 = base_vertex + 2;
@@ -2075,7 +2344,9 @@ static void FlightMap_DrawObjectBoxSpan(int start_x, int end_x, int y, uint8_t c
 	if (g_flight16bppBytesPerPixel == 2) {
 		uint16_t* pixels = (uint16_t*)row;
 		const uint16_t color = g_flightTextPalette[color_index];
-		for (int x = start_x; x < end_x; ++x)
+		int x;
+
+		for (x = start_x; x < end_x; ++x)
 			pixels[x] = color;
 	} else {
 		memset(row + start_x, color_index, (size_t)(end_x - start_x));
@@ -2086,11 +2357,15 @@ static void FlightMap_DrawObjectBoxSpan(int start_x, int end_x, int y, uint8_t c
 void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, uint8_t color_index) {
 	const int right = x + width;
 	const int bottom = y + height;
+	int corner_width;
+	int corner_height;
+	int row;
+
 	if (bottom <= 0 || right <= 0 || x >= pixelswide || y >= pixelsdeep || height <= 0 || width <= 0)
 		return;
 
-	int corner_width = width >> 3;
-	int corner_height = height >> 3;
+	corner_width = width >> 3;
+	corner_height = height >> 3;
 	if (corner_width < 3)
 		corner_width = 3;
 	if (corner_height < 3)
@@ -2144,7 +2419,7 @@ void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, uint8_t
 		}
 	}
 
-	for (int row = 1; row < corner_height; ++row) {
+	for (row = 1; row < corner_height; ++row) {
 		const int screen_y = y + row;
 		if (screen_y < 0 || screen_y >= pixelsdeep)
 			continue;
@@ -2153,7 +2428,7 @@ void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, uint8_t
 		if (right <= pixelswide)
 			FlightMap_DrawObjectBoxSpan(right - 1, right, screen_y, color_index);
 	}
-	for (int row = height - corner_height; row < height - 1; ++row) {
+	for (row = height - corner_height; row < height - 1; ++row) {
 		const int screen_y = y + row;
 		if (row < corner_height || screen_y < 0 || screen_y >= pixelsdeep)
 			continue;
@@ -2168,6 +2443,15 @@ void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, uint8_t
 
 // FUNCTION: TIE98 0x42C190
 int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_index, int depth) {
+	int right;
+	int bottom;
+	int corner_width;
+	int corner_height;
+	const uint8_t* rgb;
+	uint32_t color;
+	float screen_depth;
+	int16_t result;
+
 	if (depth == 1 && width == 4 && height == 4) {
 		int start = x;
 		int end = x + 4;
@@ -2176,8 +2460,10 @@ int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_inde
 		if (end > pixelswide)
 			end = pixelswide;
 		if (start < end) {
+			int row;
+
 			FlightSurface_Lock();
-			for (int row = 0; row < 4; ++row) {
+			for (row = 0; row < 4; ++row) {
 				const int screen_y = y + row;
 				if (screen_y >= 0 && screen_y < pixelsdeep)
 					FlightMap_DrawObjectBoxSpan(start, end, screen_y, color_index);
@@ -2203,10 +2489,10 @@ int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_inde
 		g_d3dVertexCount = 0;
 	}
 
-	const int right = x + width;
-	const int bottom = y + height;
-	int corner_width = width >> 3;
-	int corner_height = height >> 3;
+	right = x + width;
+	bottom = y + height;
+	corner_width = width >> 3;
+	corner_height = height >> 3;
 	if (corner_width < 3)
 		corner_width = 3;
 	if (corner_height < 3)
@@ -2215,16 +2501,15 @@ int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_inde
 		corner_width = width;
 	if (corner_height > height)
 		corner_height = height;
-	const uint8_t* rgb = &rtsvga2_vgapalette[3 * (uint8_t)color_index];
-	const uint32_t color =
-		0xff000000u | ((uint32_t)rgb[0] << 18) | ((uint32_t)rgb[1] << 10) | ((uint32_t)rgb[2] << 2);
+	rgb = &rtsvga2_vgapalette[3 * (uint8_t)color_index];
+	color = 0xff000000u | ((uint32_t)rgb[0] << 18) | ((uint32_t)rgb[1] << 10) | ((uint32_t)rgb[2] << 2);
 	if (depth < 1)
 		depth = 1;
-	float screen_depth = 1.0f / ((float)depth * (1.0f / 2048.0f) + 1.0f);
+	screen_depth = 1.0f / ((float)depth * (1.0f / 2048.0f) + 1.0f);
 	if (g_std3DZBufferBitDepth == 2)
 		screen_depth = 1.0f - screen_depth;
 
-	int16_t result = (int16_t)g_d3dVertexCount;
+	result = (int16_t)g_d3dVertexCount;
 	if (y >= 0 && y < pixelsdeep) {
 		int start = x < 0 ? 0 : x;
 		int end = x + corner_width;
@@ -2294,11 +2579,15 @@ int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_inde
 
 // FUNCTION: TIE98 0x44A4D0
 static void sw3d_CopySpanPixels(const uint8_t* source_base, int start_x, int count) {
+	int bytes_per_pixel;
+	const uint8_t* source;
+	uint8_t* destination;
+
 	if (count <= 0)
 		return;
-	const int bytes_per_pixel = g_flight16bppBytesPerPixel;
-	const uint8_t* source = source_base + bytes_per_pixel * start_x;
-	uint8_t* destination = xtrans2_videobaseptr + g_sw3dScanlineByteOffset + bytes_per_pixel * start_x;
+	bytes_per_pixel = g_flight16bppBytesPerPixel;
+	source = source_base + bytes_per_pixel * start_x;
+	destination = xtrans2_videobaseptr + g_sw3dScanlineByteOffset + bytes_per_pixel * start_x;
 	if (bytes_per_pixel == 2) {
 		do {
 			destination[0] = source[0];
@@ -2318,12 +2607,16 @@ void sw3d_BlitOccludedSpan(const uint8_t* source, int start_x, int end_x, int sc
 	const int bytes_per_pixel = g_flight16bppBytesPerPixel;
 	const uint8_t* source_base = source - bytes_per_pixel * start_x;
 	int draw_x = start_x;
+	SceneSpanTIE98* span;
+
 	g_sw3dScanlineByteOffset =
 		bytes_per_pixel * displaycorner_columns + (int)g_surfacePitch * (scan_y + displaycorner_lines);
 
-	SceneSpanTIE98* span = g_scanlineSpanHeads[scan_y];
+	span = g_scanlineSpanHeads[scan_y];
 	while (span) {
 		const int span_end = span->endX;
+		SceneFaceTIE98* face;
+
 		if (span_end <= draw_x) {
 			span = span->next;
 			continue;
@@ -2331,7 +2624,7 @@ void sw3d_BlitOccludedSpan(const uint8_t* source, int start_x, int end_x, int sc
 		if (span->startX > draw_x)
 			break;
 
-		SceneFaceTIE98* face = span->pFace;
+		face = span->pFace;
 		if (depth <= face->minVertW) {
 			draw_x = span_end;
 			start_x = draw_x;
@@ -2348,10 +2641,13 @@ void sw3d_BlitOccludedSpan(const uint8_t* source, int start_x, int end_x, int sc
 						return;
 				} else {
 					int limit_x = span_end;
+					int delta_x;
+					float limit_depth;
+
 					if (limit_x >= end_x)
 						limit_x = end_x;
-					const int delta_x = limit_x - draw_x;
-					const float limit_depth = (float)delta_x * face->gradients[6] + span_depth;
+					delta_x = limit_x - draw_x;
+					limit_depth = (float)delta_x * face->gradients[6] + span_depth;
 					if (depth <= limit_depth) {
 						if (span_end >= end_x)
 							return;
@@ -2380,9 +2676,11 @@ void sw3d_BlitOccludedSpan(const uint8_t* source, int start_x, int end_x, int sc
 
 	while (span) {
 		const int span_start = span->startX;
+		SceneFaceTIE98* face;
+
 		if (span_start >= end_x)
 			break;
-		SceneFaceTIE98* face = span->pFace;
+		face = span->pFace;
 		if (depth <= face->minVertW) {
 			sw3d_CopySpanPixels(source_base, draw_x, span_start - draw_x);
 			draw_x = span->endX;
@@ -2446,16 +2744,23 @@ void sw3d_BlitOccludedSpan(const uint8_t* source, int start_x, int end_x, int sc
 // FUNCTION: TIE98 0x44A550
 int16_t Hud_DrawBoxInXTrans(int x, int y, int width, int height, int color_index, int depth) {
 	const int bottom = y + height;
+	int right;
+	int corner_width;
+	int corner_height;
+	uint8_t* span;
+	float span_depth;
+	int row_offset;
+
 	if (bottom <= 0)
 		return 0;
-	const int right = x + width;
+	right = x + width;
 	if (right <= 0 || x >= pixelswide || y >= pixelsdeep || height <= 0 || width <= 0)
 		return 0;
 	if (g_useHardware3D)
 		return Hud_DrawBoxOverlayHW(x, y, width, height, color_index, depth);
 
-	int corner_width = width >> 3;
-	int corner_height = height >> 3;
+	corner_width = width >> 3;
+	corner_height = height >> 3;
 	if (corner_width < 3)
 		corner_width = 3;
 	if (corner_height < 3)
@@ -2465,19 +2770,21 @@ int16_t Hud_DrawBoxInXTrans(int x, int y, int width, int height, int color_index
 	if (corner_height > height)
 		corner_height = height;
 
-	uint8_t* span = g_panelBoxSpanScratch;
+	span = g_panelBoxSpanScratch;
 	if (x > 0)
 		span += g_flight16bppBytesPerPixel * x;
 	if (g_flight16bppBytesPerPixel == 2) {
 		const uint16_t color = g_flightTextPalette[(uint8_t)color_index];
-		for (int i = 0; i < corner_width; ++i)
+		int i;
+
+		for (i = 0; i < corner_width; ++i)
 			((uint16_t*)span)[i] = color;
 	} else {
 		memset(span, (uint8_t)color_index, (size_t)corner_width);
 	}
 	if (depth < 1)
 		depth = 1;
-	const float span_depth = (float)(uint32_t)perspFactor / (float)depth;
+	span_depth = (float)(uint32_t)perspFactor / (float)depth;
 	if (!g_flightSurfaceAlreadyLocked)
 		FlightSurface_Lock();
 
@@ -2537,7 +2844,7 @@ int16_t Hud_DrawBoxInXTrans(int x, int y, int width, int height, int color_index
 		} while (--remaining != 0);
 	}
 
-	int row_offset = height - corner_height;
+	row_offset = height - corner_height;
 	if (row_offset < height - 1) {
 		int scan_y = row_offset + y;
 		do {
@@ -2560,6 +2867,7 @@ int16_t Hud_DrawBoxInXTrans(int x, int y, int width, int height, int color_index
 // FUNCTION: TIE98 0x42B980
 void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_t screen_scale,
 								  const uint8_t* texture_level) {
+	ProjVertexTIE98 vertices[32];
 	static const uint32_t explosion_colors[32] = {
 		0xffffffff, 0xe0ffffff, 0xf0ffffff, 0xf0ffffff, 0xe0ffffff, 0xd0ffffff, 0xb0ffffff, 0x90ffffff,
 		0x70ffffff, 0x50ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff,
@@ -2567,10 +2875,27 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 		0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff,
 	};
 	uint32_t color = 0xffffffff;
+	float depth;
+	int source_width;
+	int source_height;
+	int width;
+	int height;
+	float u_max;
+	float v_max;
+	int half_height;
+	int half_width;
+	int screen_y_flipped;
+	int previous;
+	uint32_t pixels_offset;
+	uint32_t palette_offset;
+	int rle_format;
+	Std3DTextureSurface* texture;
+
+	int i;
+
 	if (parentobject < NUM_OBJECTS && objects[parentobject].genus == GENUS_EXPLOSION)
 		color = explosion_colors[objects[parentobject].anim_frame & 0x1f];
 
-	float depth;
 	if ((uint32_t)objecteyez <= 0x1000000) {
 		depth = 1.0f / ((float)objecteyez * (1.0f / 2048.0f) + 1.0f);
 		if (g_std3DZBufferBitDepth == 2)
@@ -2582,12 +2907,12 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 			depth = 0.99987793f;
 	}
 
-	const int source_width = *(const int32_t*)(texture_level + 16);
-	const int source_height = *(const int32_t*)(texture_level + 20);
-	int width = 2;
+	source_width = *(const int32_t*)(texture_level + 16);
+	source_height = *(const int32_t*)(texture_level + 20);
+	width = 2;
 	while (width < source_width && width < 256)
 		width *= 2;
-	int height = 2;
+	height = 2;
 	while (height < source_height && height < 256)
 		height *= 2;
 	if (g_pStd3DCurDevice->caps.minTextureWidth) {
@@ -2597,12 +2922,12 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 			width = height;
 	}
 
-	const float u_max = (float)source_width / (float)width;
-	const float v_max = (float)source_height / (float)height;
-	const int half_height = (screen_scale * source_height) >> 9;
-	const int half_width = (screen_scale * source_width) >> 9;
-	const int screen_y_flipped = pixelsdeep - screen_y;
-	ProjVertexTIE98 vertices[32] = { 0 };
+	u_max = (float)source_width / (float)width;
+	v_max = (float)source_height / (float)height;
+	half_height = (screen_scale * source_height) >> 9;
+	half_width = (screen_scale * source_width) >> 9;
+	screen_y_flipped = pixelsdeep - screen_y;
+	memset(vertices, 0, sizeof vertices);
 	vertices[0].sx = (float)(screen_x + trig2_cosinedwordmult(half_width, angle) +
 							 trig2_sinedwordmult(half_height, angle));
 	vertices[0].sy = (float)(screen_y_flipped + trig2_cosinedwordmult(half_height, angle) -
@@ -2630,20 +2955,23 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 
 	g_clipCountA = 4;
 	g_clipVertCursor = 4;
-	for (int i = 0; i < 4; ++i)
+	for (i = 0; i < 4; ++i)
 		g_clipIdxA[i] = i;
 	g_clipCountB = 0;
-	int previous = g_clipIdxA[g_clipCountA - 1];
-	for (int i = 0; i < g_clipCountA; ++i) {
+	previous = g_clipIdxA[g_clipCountA - 1];
+	for (i = 0; i < g_clipCountA; ++i) {
 		const int current = g_clipIdxA[i];
 		RenderClip_ClipPolyTop(previous, current, vertices);
 		previous = current;
 	}
 	g_clipCountA = 0;
 	if (g_clipCountB > 0) {
+		int count;
+		int i;
+
 		previous = g_clipIdxB[g_clipCountB - 1];
-		const int count = g_clipCountB;
-		for (int i = 0; i < count; ++i) {
+		count = g_clipCountB;
+		for (i = 0; i < count; ++i) {
 			const int current = g_clipIdxB[i];
 			RenderClip_ClipPolyBottom(previous, current, vertices);
 			previous = current;
@@ -2651,9 +2979,12 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 	}
 	g_clipCountB = 0;
 	if (g_clipCountA > 0) {
+		int count;
+		int i;
+
 		previous = g_clipIdxA[g_clipCountA - 1];
-		const int count = g_clipCountA;
-		for (int i = 0; i < count; ++i) {
+		count = g_clipCountA;
+		for (i = 0; i < count; ++i) {
 			const int current = g_clipIdxA[i];
 			RenderClip_ClipPolyLeft(previous, current, vertices);
 			previous = current;
@@ -2661,9 +2992,12 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 	}
 	g_clipCountA = 0;
 	if (g_clipCountB > 0) {
+		int count;
+		int i;
+
 		previous = g_clipIdxB[g_clipCountB - 1];
-		const int count = g_clipCountB;
-		for (int i = 0; i < count; ++i) {
+		count = g_clipCountB;
+		for (i = 0; i < count; ++i) {
 			const int current = g_clipIdxB[i];
 			RenderClip_ClipPolyRight(previous, current, vertices);
 			previous = current;
@@ -2692,7 +3026,7 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 		color = 0xfeffffff;
 		g_capVertexAlpha = 0;
 	}
-	for (int i = 0; i < g_clipCountA; ++i) {
+	for (i = 0; i < g_clipCountA; ++i) {
 		const ProjVertexTIE98* source = &vertices[g_clipIdxA[i]];
 		D3DTLVERTEX* destination = &g_flightVertexBuffer[g_d3dVertexCount];
 		destination->sx = source->sx + g_flightVpOriginX;
@@ -2705,13 +3039,12 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 		destination->tv = source->tv;
 		g_clipIdxA[i] = g_d3dVertexCount++;
 	}
-	const uint32_t pixels_offset = *(const uint32_t*)(texture_level + 8);
-	const uint32_t palette_offset = *(const uint32_t*)(texture_level + 12);
-	const int rle_format = *(const int32_t*)(texture_level + 32);
-	Std3DTextureSurface* texture =
-		RenderTexture_GetOrCreateBitmap(width, height, (uint16_t*)(texture_level + palette_offset),
-										texture_level + pixels_offset + 16, rle_format);
-	for (int i = 2; i < g_clipCountA; ++i) {
+	pixels_offset = *(const uint32_t*)(texture_level + 8);
+	palette_offset = *(const uint32_t*)(texture_level + 12);
+	rle_format = *(const int32_t*)(texture_level + 32);
+	texture = RenderTexture_GetOrCreateBitmap(width, height, (uint16_t*)(texture_level + palette_offset),
+											  texture_level + pixels_offset + 16, rle_format);
+	for (i = 2; i < g_clipCountA; ++i) {
 		Std3DRenderTri* triangle = &g_triBuffer[g_d3dIndexCount++];
 		triangle->v0 = g_clipIdxA[0];
 		triangle->v1 = g_clipIdxA[i - 1];
@@ -2723,11 +3056,21 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 
 // FUNCTION: TIE98 0x43AEC0
 static const Tie98OptNode* OptModel_FindNodeByName(const Tie98OptNode* node, const char* name) {
+	int i;
+
 	if (!node)
 		return NULL;
-	if (node->name && strcasecmp(node->name, name) == 0)
-		return node;
-	for (int i = 0; i < node->child_count; ++i) {
+	if (node->name) {
+		int name_compare;
+#if defined(TIE_MODERN) && !defined(_MSC_VER)
+		name_compare = strcasecmp(node->name, name);
+#else
+		name_compare = _strcmpi(node->name, name);
+#endif
+		if (name_compare == 0)
+			return node;
+	}
+	for (i = 0; i < node->child_count; ++i) {
 		const Tie98OptNode* result = OptModel_FindNodeByName(node->children[i], name);
 		if (result)
 			return result;
@@ -2738,7 +3081,9 @@ static const Tie98OptNode* OptModel_FindNodeByName(const Tie98OptNode* node, con
 // FUNCTION: TIE98 0x43AE80
 static const Tie98OptNode* OptModel_FindNodeByNameInModel(const Tie98OptimizedPolyObject* model,
 														  const char* name) {
-	for (int i = 0; i < model->root_node_count; ++i) {
+	int i;
+
+	for (i = 0; i < model->root_node_count; ++i) {
 		const Tie98OptNode* result = OptModel_FindNodeByName(model->root_nodes[i], name);
 		if (result)
 			return result;
@@ -2749,24 +3094,50 @@ static const Tie98OptNode* OptModel_FindNodeByNameInModel(const Tie98OptimizedPo
 // FUNCTION: TIE98 0x435180
 static int FlightModel_TestLightSegmentAgainstFaces(SceneMeshTIE98* mesh, const Vec3f* segment_start,
 													const Vec3f* segment_end) {
-	for (int face_index = 0; face_index < mesh->faceCount; ++face_index) {
+	int face_index;
+
+	for (face_index = 0; face_index < mesh->faceCount; ++face_index) {
+		float start[3];
+		float end[3];
 		const FaceRecordTIE98* face = &mesh->pFaceGeom[face_index];
 		const int vertex_count = face->vertexIdx[3] == -1 ? 3 : 4;
 		float vertices[4][3];
-		for (int corner = 0; corner < vertex_count; ++corner) {
+		int separated;
+		int axis;
+		const Vec3f* normal;
+		float start_distance;
+		float direction_dot;
+		float fraction;
+		int axis_u;
+		int axis_v;
+		float projected_u;
+		float projected_v;
+		float first_cross;
+		int outside;
+		int edge;
+
+		int corner;
+
+		for (corner = 0; corner < vertex_count; ++corner) {
 			const Vec3f* vertex = &mesh->pModelVerts[face->vertexIdx[corner]];
 			vertices[corner][0] = vertex->x;
 			vertices[corner][1] = vertex->y;
 			vertices[corner][2] = vertex->z;
 		}
 
-		const float start[3] = { segment_start->x, segment_start->y, segment_start->z };
-		const float end[3] = { segment_end->x, segment_end->y, segment_end->z };
-		int separated = 0;
-		for (int axis = 0; axis < 3; ++axis) {
+		start[0] = segment_start->x;
+		start[1] = segment_start->y;
+		start[2] = segment_start->z;
+		end[0] = segment_end->x;
+		end[1] = segment_end->y;
+		end[2] = segment_end->z;
+		separated = 0;
+		for (axis = 0; axis < 3; ++axis) {
 			int all_above = 1;
 			int all_below = 1;
-			for (int corner = 0; corner < vertex_count; ++corner) {
+			int corner;
+
+			for (corner = 0; corner < vertex_count; ++corner) {
 				if (vertices[corner][axis] < start[axis] || vertices[corner][axis] < end[axis])
 					all_above = 0;
 				if (vertices[corner][axis] > start[axis] || vertices[corner][axis] > end[axis])
@@ -2780,12 +3151,11 @@ static int FlightModel_TestLightSegmentAgainstFaces(SceneMeshTIE98* mesh, const 
 		if (separated)
 			continue;
 
-		const Vec3f* normal = &mesh->pFaceNormals[face_index];
-		const float start_distance = (start[0] - vertices[0][0]) * normal->x +
-									 (start[1] - vertices[0][1]) * normal->y +
-									 (start[2] - vertices[0][2]) * normal->z;
-		const float direction_dot = (end[0] - start[0]) * normal->x + (end[1] - start[1]) * normal->y +
-									(end[2] - start[2]) * normal->z;
+		normal = &mesh->pFaceNormals[face_index];
+		start_distance = (start[0] - vertices[0][0]) * normal->x + (start[1] - vertices[0][1]) * normal->y +
+						 (start[2] - vertices[0][2]) * normal->z;
+		direction_dot = (end[0] - start[0]) * normal->x + (end[1] - start[1]) * normal->y +
+						(end[2] - start[2]) * normal->z;
 		if (start_distance < 0.0f) {
 			if (start_distance > -40.0f || direction_dot <= 0.0f)
 				continue;
@@ -2793,9 +3163,8 @@ static int FlightModel_TestLightSegmentAgainstFaces(SceneMeshTIE98* mesh, const 
 			continue;
 		}
 
-		const float fraction = -start_distance / direction_dot;
-		int axis_u;
-		int axis_v;
+		fraction = -start_distance / direction_dot;
+
 		if (normal->z > normal->x && normal->z > normal->y) {
 			axis_u = 0;
 			axis_v = 1;
@@ -2806,11 +3175,11 @@ static int FlightModel_TestLightSegmentAgainstFaces(SceneMeshTIE98* mesh, const 
 			axis_u = 1;
 			axis_v = 2;
 		}
-		const float projected_u = start[axis_u] + (end[axis_u] - start[axis_u]) * fraction;
-		const float projected_v = start[axis_v] + (end[axis_v] - start[axis_v]) * fraction;
-		float first_cross = 0.0f;
-		int outside = 0;
-		for (int edge = 0; edge < vertex_count; ++edge) {
+		projected_u = start[axis_u] + (end[axis_u] - start[axis_u]) * fraction;
+		projected_v = start[axis_v] + (end[axis_v] - start[axis_v]) * fraction;
+		first_cross = 0.0f;
+		outside = 0;
+		for (edge = 0; edge < vertex_count; ++edge) {
 			const int next = (edge + 1) % vertex_count;
 			const float cross =
 				(projected_u - vertices[edge][axis_u]) * (vertices[next][axis_v] - vertices[edge][axis_v]) -
@@ -2833,6 +3202,9 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 												   const Tie98OptNode* input_node, SceneMeshTIE98* mesh,
 												   const Vec3f* segment_start, const Vec3f* segment_end) {
 	const Tie98OptNode* node = input_node;
+	SceneMeshTIE98 child_mesh;
+	int i;
+
 	if (!node)
 		return 0;
 	while (node->type == TIE98_OPT_NODE_REFERENCE) {
@@ -2848,16 +3220,19 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 			case TIE98_OPT_NODE_FACE_DATA_16:
 			case TIE98_OPT_NODE_FACE_DATA_17: {
 				const uint8_t* face_data = node->param2;
+				Vec3f* inline_vertex_normals;
+
 				mesh->faceCount = (int)node->param1;
 				memcpy(&mesh->edgeCount, face_data, sizeof mesh->edgeCount);
 				mesh->pFaceGeom = (FaceRecordTIE98*)(face_data + 4);
 				mesh->pFaceNormals = (Vec3f*)(mesh->pFaceGeom + mesh->faceCount);
 				mesh->pFaceTexturing = (FaceTextureGradientsTIE98*)(mesh->pFaceNormals + mesh->faceCount);
-				Vec3f* inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + mesh->faceCount);
+				inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + mesh->faceCount);
 				if (!mesh->pVertNormals) {
+					int blocked;
+
 					mesh->pVertNormals = inline_vertex_normals;
-					const int blocked =
-						FlightModel_TestLightSegmentAgainstFaces(mesh, segment_start, segment_end);
+					blocked = FlightModel_TestLightSegmentAgainstFaces(mesh, segment_start, segment_end);
 					mesh->pVertNormals = NULL;
 					if (blocked)
 						return 1;
@@ -2897,6 +3272,10 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 				break;
 			case TIE98_OPT_NODE_SCALE: {
 				Vec3f* scale = (Vec3f*)node->param2;
+				float inverse_x;
+				float inverse_y;
+				float inverse_z;
+
 				mesh->viewOrient.m[0] *= scale->x;
 				mesh->viewOrient.m[1] *= scale->y;
 				mesh->viewOrient.m[2] *= scale->z;
@@ -2909,9 +3288,9 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 				mesh->viewPos.x *= scale->x;
 				mesh->viewPos.y *= scale->y;
 				mesh->viewPos.z *= scale->z;
-				const float inverse_x = 1.0f / scale->x;
-				const float inverse_y = 1.0f / scale->y;
-				const float inverse_z = 1.0f / scale->z;
+				inverse_x = 1.0f / scale->x;
+				inverse_y = 1.0f / scale->y;
+				inverse_z = 1.0f / scale->z;
 				mesh->orient.m[0] *= inverse_x;
 				mesh->orient.m[1] *= inverse_x;
 				mesh->orient.m[2] *= inverse_x;
@@ -2938,14 +3317,14 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 
 	if (node->child_count == 0)
 		return 0;
-	SceneMeshTIE98 child_mesh = *mesh;
+	child_mesh = *mesh;
 	g_modelNodeWalkUnusedScratch0 = 0;
 	g_modelNodeWalkUnusedScratch1 = 0;
 	g_curVertNormals = 0;
 	g_modelNodeWalkUnusedScratch2 = 0;
 	g_curMeshFlags = 0;
 	g_curVertexCount = 0;
-	for (int i = 0; i < node->child_count; ++i) {
+	for (i = 0; i < node->child_count; ++i) {
 		if (FlightModel_TestLightSegmentAgainstNode(model, node->children[i], &child_mesh, segment_start,
 													segment_end))
 			return 1;
@@ -2956,15 +3335,18 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 // FUNCTION: TIE98 0x434BF0
 static int FlightModel_IsLightSegmentBlocked(FlightObject* object, const Vec3f* segment_start,
 											 const Vec3f* segment_end) {
+	const Tie98OptimizedPolyObject* model;
+	SceneMeshTIE98 mesh;
+	int i;
+
 	if (!g_modelSelfOcclusionEnabled)
 		return 0;
 	// PORT: the host supplies the already-adjusted native OPT tree in place of the
 	// original handle unlock/lock and pointer-adjustment sequence.
-	const Tie98OptimizedPolyObject* model = TieNativeOpt_Acquire(object->ship_idx);
+	model = TieNativeOpt_Acquire(object->ship_idx);
 	if (!model)
 		return 0;
 
-	SceneMeshTIE98 mesh;
 	memset(&mesh, 0, sizeof mesh);
 	mesh.pObject = object;
 	mesh.viewOrient.m[0] = 1.0f;
@@ -2979,7 +3361,7 @@ static int FlightModel_IsLightSegmentBlocked(FlightObject* object, const Vec3f* 
 	g_modelNodeWalkUnusedScratch2 = 0;
 	g_curMeshFlags = 0;
 	g_curVertexCount = 0;
-	for (int i = 0; i < model->root_node_count; ++i) {
+	for (i = 0; i < model->root_node_count; ++i) {
 		if (FlightModel_TestLightSegmentAgainstNode(model, model->root_nodes[i], &mesh, segment_start,
 													segment_end))
 			return 1;
@@ -2991,9 +3373,11 @@ static int FlightModel_IsLightSegmentBlocked(FlightObject* object, const Vec3f* 
 static void FlightModel_Apply_BWing_Bridge_Rotation(const Tie98OptimizedPolyObject* model,
 													FlightObject* object, SceneMeshTIE98* mesh,
 													int bridge_mesh_index) {
-	(void)model;
-	float axis_angle[4];
 	Matrix3x3 rotation;
+
+	float axis_angle[4];
+
+	(void)model;
 
 	axis_angle[0] = 0.0f;
 	axis_angle[1] = -1.0f;
@@ -3009,6 +3393,12 @@ static void FlightModel_Apply_BWing_Bridge_Rotation(const Tie98OptimizedPolyObje
 static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, const Tie98OptNode* input_node,
 									  SceneMeshTIE98* mesh) {
 	const Tie98OptNode* node = input_node;
+	int selected_lod;
+	int selected_switch;
+	int selected;
+	SceneMeshTIE98 child_mesh;
+	int i;
+
 	if (!node)
 		return;
 	while (node->type == TIE98_OPT_NODE_REFERENCE) {
@@ -3020,8 +3410,8 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 			return;
 	}
 
-	int selected_lod = 0;
-	int selected_switch = 0;
+	selected_lod = 0;
+	selected_switch = 0;
 	if (node->param2) {
 		switch (node->type) {
 			case TIE98_OPT_NODE_FACE_DATA:
@@ -3029,6 +3419,8 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 			case TIE98_OPT_NODE_FACE_DATA_16:
 			case TIE98_OPT_NODE_FACE_DATA_17: {
 				const uint8_t* face_data = node->param2;
+				Vec3f* inline_vertex_normals;
+
 				mesh->faceCount = (int)node->param1;
 				memcpy(&mesh->edgeCount, face_data, sizeof mesh->edgeCount);
 				if (mesh->edgeCount * 4 > g_sceneEdgeCapacity) {
@@ -3041,7 +3433,7 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 				mesh->pFaceGeom = (FaceRecordTIE98*)(face_data + 4);
 				mesh->pFaceNormals = (Vec3f*)(mesh->pFaceGeom + mesh->faceCount);
 				mesh->pFaceTexturing = (FaceTextureGradientsTIE98*)(mesh->pFaceNormals + mesh->faceCount);
-				Vec3f* inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + mesh->faceCount);
+				inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + mesh->faceCount);
 				if (!mesh->pMaterial)
 					FlightModel_BindTextureData(model, mesh, g_curTextureDesc);
 				if (mesh->pVertNormals) {
@@ -3084,6 +3476,10 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 				break;
 			case TIE98_OPT_NODE_SCALE: {
 				Vec3f* scale = (Vec3f*)node->param2;
+				float inverse_x;
+				float inverse_y;
+				float inverse_z;
+
 				mesh->viewOrient.m[0] *= scale->x;
 				mesh->viewOrient.m[1] *= scale->y;
 				mesh->viewOrient.m[2] *= scale->z;
@@ -3096,9 +3492,9 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 				mesh->viewPos.x *= scale->x;
 				mesh->viewPos.y *= scale->y;
 				mesh->viewPos.z *= scale->z;
-				const float inverse_x = 1.0f / scale->x;
-				const float inverse_y = 1.0f / scale->y;
-				const float inverse_z = 1.0f / scale->z;
+				inverse_x = 1.0f / scale->x;
+				inverse_y = 1.0f / scale->y;
+				inverse_z = 1.0f / scale->z;
 				mesh->orient.m[0] *= inverse_x;
 				mesh->orient.m[1] *= inverse_x;
 				mesh->orient.m[2] *= inverse_x;
@@ -3154,10 +3550,12 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 				selected_lod = g_forcedLodLevel;
 				if (objecteyez > 0 && selected_lod == 0) {
 					float threshold = 1.0f;
+					const float* thresholds;
+
 					if (g_lodDistanceScale > 0.0f)
 						threshold = 1.0f / ((float)objecteyez * g_lodDistanceScale);
 					selected_lod = 1;
-					const float* thresholds = node->param2;
+					thresholds = node->param2;
 					while (selected_lod <= node->child_count && thresholds[selected_lod - 1] > threshold)
 						++selected_lod;
 					if (selected_lod > node->child_count)
@@ -3170,23 +3568,26 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 				break;
 			}
 			case TIE98_OPT_NODE_ROTATION_SCALE: {
+				float axis_angle[4];
+				Vec3f* pivot;
+				Vec3f* axis;
+				Matrix3x3 rotation;
+
 				if (mesh->rotAngle == 0.0f)
 					break;
-				Vec3f* pivot = (Vec3f*)node->param2;
-				Vec3f* axis = pivot + 1;
+				pivot = (Vec3f*)node->param2;
+				axis = pivot + 1;
 				mesh->pos.x -= pivot->x;
 				mesh->pos.y -= pivot->y;
 				mesh->pos.z -= pivot->z;
 				mesh->viewPos.x += Math3D_RotateVec3X(pivot, &mesh->viewOrient);
 				mesh->viewPos.y += Math3D_RotateVec3Y(pivot, &mesh->viewOrient);
 				mesh->viewPos.z += Math3D_RotateVec3Z(pivot, &mesh->viewOrient);
-				float axis_angle[4] = {
-					axis->x * 0.000030517578f,
-					axis->y * 0.000030517578f,
-					axis->z * 0.000030517578f,
-					mesh->rotAngle,
-				};
-				Matrix3x3 rotation;
+				axis_angle[0] = axis->x * 0.000030517578f;
+				axis_angle[1] = axis->y * 0.000030517578f;
+				axis_angle[2] = axis->z * 0.000030517578f;
+				axis_angle[3] = mesh->rotAngle;
+
 				Math3D_BuildAxisAngleMatrix(&rotation, axis_angle);
 				Math3D_MulMatrix3x3(&mesh->orient, &rotation);
 				Math3D_RotateVec3(&mesh->pos, &rotation);
@@ -3224,7 +3625,7 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 
 	if (node->child_count == 0)
 		return;
-	int selected = selected_switch ? selected_switch : selected_lod;
+	selected = selected_switch ? selected_switch : selected_lod;
 	if (selected == -1)
 		return;
 	if (selected != 0) {
@@ -3232,14 +3633,14 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 		FlightModel_Draw_OPT_Node(model, node->children[selected - 1], mesh);
 		return;
 	}
-	SceneMeshTIE98 child_mesh = *mesh;
+	child_mesh = *mesh;
 	g_modelNodeWalkUnusedScratch0 = 0;
 	g_modelNodeWalkUnusedScratch1 = 0;
 	g_curVertNormals = 0;
 	g_modelNodeWalkUnusedScratch2 = 0;
 	g_curMeshFlags = 0;
 	g_curVertexCount = 0;
-	for (int i = 0; i < node->child_count; ++i) {
+	for (i = 0; i < node->child_count; ++i) {
 		++g_curLayerId;
 		FlightModel_Draw_OPT_Node(model, node->children[i], &child_mesh);
 	}
@@ -3249,6 +3650,9 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
  * TIE98 FlightModel_Draw_Object and FlightModel_Draw_Object_Mesh. */
 static void FlightModel_Init_Object_Mesh(SceneMeshTIE98* mesh, FlightObject* object,
 										 int full_width_position) {
+	int row;
+	int column;
+
 	memset(mesh, 0, sizeof *mesh);
 	mesh->pObject = object;
 	/* PORT: when full_width_position is false, TIE98 reads a compact position
@@ -3278,8 +3682,8 @@ static void FlightModel_Init_Object_Mesh(SceneMeshTIE98* mesh, FlightObject* obj
 	mesh->viewOrient.m[6] = (float)rotworldeyeC1 / 32768.0f;
 	mesh->viewOrient.m[7] = (float)rotworldeyeC2 / 32768.0f;
 	mesh->viewOrient.m[8] = (float)rotworldeyeC3 / 32768.0f;
-	for (int row = 0; row < 3; ++row)
-		for (int column = 0; column < 3; ++column)
+	for (row = 0; row < 3; ++row)
+		for (column = 0; column < 3; ++column)
 			mesh->orient.m[row * 3 + column] = mesh->viewOrient.m[column * 3 + row];
 	mesh->pos.x = -mesh->viewPos.x;
 	mesh->pos.y = -mesh->viewPos.y;
@@ -3296,12 +3700,16 @@ static void FlightModel_Init_Object_Mesh(SceneMeshTIE98* mesh, FlightObject* obj
 void FlightModel_Draw_Object(FlightObject* object) {
 	const uint16_t model_type = object->ship_idx;
 	const int model_has_component_state = tie98_model_variant_enabled[model_type] != 0;
+	const Tie98OptimizedPolyObject* model;
+	SceneMeshTIE98 mesh;
+	int mesh_ordinal;
+	int root;
+
 	g_nodeSwitchIndex = model_has_component_state ? object->decal_color : 0;
-	const Tie98OptimizedPolyObject* model =
-		g_flightModelOverride ? g_flightModelOverride : TieNativeOpt_Acquire(model_type);
+	model = g_flightModelOverride ? g_flightModelOverride : TieNativeOpt_Acquire(model_type);
 	if (!model)
 		return;
-	SceneMeshTIE98 mesh;
+
 	FlightModel_Init_Object_Mesh(&mesh, object, model_type == 0 || model_has_component_state);
 	g_curTextureDesc = &g_defaultMaterial;
 	g_modelNodeWalkUnusedScratch0 = 0;
@@ -3310,12 +3718,15 @@ void FlightModel_Draw_Object(FlightObject* object) {
 	g_modelNodeWalkUnusedScratch2 = 0;
 	g_curMeshFlags = 0;
 	g_curVertexCount = 0;
-	int mesh_ordinal = 0;
-	for (int root = 0; root < model->root_node_count; ++root) {
+	mesh_ordinal = 0;
+	for (root = 0; root < model->root_node_count; ++root) {
 		const Tie98OptNode* node = model->root_nodes[root];
-		mesh.rotAngle = 0.0f;
-		int restore_mesh = 0;
+		int restore_mesh;
 		SceneMeshTIE98 saved_mesh;
+
+		mesh.rotAngle = 0.0f;
+		restore_mesh = 0;
+
 		if (node && node->type != TIE98_OPT_NODE_TEXTURE) {
 			++mesh_ordinal;
 			if (object->genus == GENUS_PROJECTILE_PLAYER || object->genus == GENUS_PROJECTILE_NPC) {
@@ -3346,13 +3757,17 @@ void FlightModel_Draw_Object(FlightObject* object) {
 // FUNCTION: TIE98 0x433980
 void FlightModel_Draw_Object_Mesh(FlightObject* object, int mesh_index) {
 	uint16_t model_type = object->ship_idx;
+	const Tie98OptimizedPolyObject* model;
+	SceneMeshTIE98 mesh;
+	int root;
+
 	if (model_type == 89)
 		model_type = object->ship_type_override;
-	const Tie98OptimizedPolyObject* model = TieNativeOpt_Acquire(model_type);
+	model = TieNativeOpt_Acquire(model_type);
 	if (!model)
 		return;
 	g_nodeSwitchIndex = object->decal_color;
-	SceneMeshTIE98 mesh;
+
 	FlightModel_Init_Object_Mesh(&mesh, object, 1);
 	g_curTextureDesc = &g_defaultMaterial;
 	g_modelNodeWalkUnusedScratch0 = 0;
@@ -3361,7 +3776,7 @@ void FlightModel_Draw_Object_Mesh(FlightObject* object, int mesh_index) {
 	g_modelNodeWalkUnusedScratch2 = 0;
 	g_curMeshFlags = 0;
 	g_curVertexCount = 0;
-	for (int root = 0; root < model->root_node_count; ++root) {
+	for (root = 0; root < model->root_node_count; ++root) {
 		const Tie98OptNode* node = model->root_nodes[root];
 		if (node && node->type == TIE98_OPT_NODE_TEXTURE) {
 			++g_curLayerId;
@@ -3414,11 +3829,20 @@ static void FlightLight_ResetSoftwareFaceSampleCache(void) {
 // FUNCTION: TIE98 0x41F7E0
 static float FlightLight_ComputeSoftwareFaceSampleIntensity(SceneFaceTIE98* face, int screen_x, int screen_y,
 															float view_z) {
+	Vec3f position;
 	SceneMeshTIE98* mesh = face->pMesh;
+	float position_z;
+	float screen_scale;
+	float intensity;
+
+	int light_index;
+
 	if (g_swFaceLightCachedObject != mesh->pObject) {
+		int light_index;
+
 		g_swFaceLightCount = tie_makelocallights_tie98(mesh->pObject);
 		g_swFaceLightCachedObject = mesh->pObject;
-		for (int light_index = 0; light_index < g_swFaceLightCount; ++light_index) {
+		for (light_index = 0; light_index < g_swFaceLightCount; ++light_index) {
 			Vec3f light = {
 				(float)localLights[light_index].x,
 				(float)localLights[light_index].y,
@@ -3431,29 +3855,26 @@ static float FlightLight_ComputeSoftwareFaceSampleIntensity(SceneFaceTIE98* face
 			g_swFaceLightPositions[light_index] = light;
 			g_swFaceLightIntensities[light_index] = (float)localLights[light_index].range;
 		}
-		g_swFaceDirectionalLight = (Vec3f) {
-			(float)rotlightX * (1.0f / 32768.0f),
-			(float)rotlightY * (1.0f / 32768.0f),
-			(float)rotlightZ * (1.0f / 32768.0f),
-		};
+		g_swFaceDirectionalLight.x = (float)rotlightX * (1.0f / 32768.0f);
+		g_swFaceDirectionalLight.y = (float)rotlightY * (1.0f / 32768.0f);
+		g_swFaceDirectionalLight.z = (float)rotlightZ * (1.0f / 32768.0f);
 		Math3D_RotateVec3(&g_swFaceDirectionalLight, &mesh->viewOrient);
 	}
 
-	const float position_z = 1.0f / view_z;
-	const float screen_scale = position_z * g_invProjScale;
-	const Vec3f position = {
-		(float)(screen_x - ((uint16_t)pixelswide >> 1)) * screen_scale,
-		(float)(screen_y - ((uint16_t)pixelsdeep >> 1) - transfm2_screenyoffset) * screen_scale,
-		position_z,
-	};
+	position_z = 1.0f / view_z;
+	screen_scale = position_z * g_invProjScale;
+	position.x = (float)(screen_x - ((uint16_t)pixelswide >> 1)) * screen_scale;
+	position.y = (float)(screen_y - ((uint16_t)pixelsdeep >> 1) - transfm2_screenyoffset) * screen_scale;
+	position.z = position_z;
 	if (g_swFaceLightCachedFace != face) {
 		g_swFaceLightCachedFace = face;
 		g_swFaceLightCachedNormal = mesh->pFaceNormals[face->faceIndex];
 		Math3D_RotateVec3(&g_swFaceLightCachedNormal, &mesh->viewOrient);
 	}
 
-	float intensity = 0.0f;
+	intensity = 0.0f;
 	if (g_specularLightingEnabled) {
+		Vec3f halfway;
 		const float eye_x = -position.x;
 		const float eye_y = -position.y;
 		const float eye_z = -position.z;
@@ -3461,21 +3882,21 @@ static float FlightLight_ComputeSoftwareFaceSampleIntensity(SceneFaceTIE98* face
 		const float abs_y = fabsf(eye_y);
 		const float abs_z = fabsf(eye_z);
 		float eye_length;
+		float inverse_eye_length;
+		float cosine;
+
 		if (abs_x >= abs_y && abs_x >= abs_z)
 			eye_length = abs_x * 0.9264f + (abs_y + abs_z) * 0.3872f;
 		else if (abs_y >= abs_x && abs_y >= abs_z)
 			eye_length = abs_y * 0.9264f + (abs_x + abs_z) * 0.3872f;
 		else
 			eye_length = abs_z * 0.9264f + (abs_x + abs_y) * 0.3872f;
-		const float inverse_eye_length = 1.0f / eye_length;
-		const Vec3f halfway = {
-			eye_x * inverse_eye_length + g_swFaceDirectionalLight.x,
-			eye_y * inverse_eye_length + g_swFaceDirectionalLight.y,
-			eye_z * inverse_eye_length + g_swFaceDirectionalLight.z,
-		};
-		const float cosine = halfway.x * g_swFaceLightCachedNormal.x +
-							 halfway.y * g_swFaceLightCachedNormal.y +
-							 halfway.z * g_swFaceLightCachedNormal.z;
+		inverse_eye_length = 1.0f / eye_length;
+		halfway.x = eye_x * inverse_eye_length + g_swFaceDirectionalLight.x;
+		halfway.y = eye_y * inverse_eye_length + g_swFaceDirectionalLight.y;
+		halfway.z = eye_z * inverse_eye_length + g_swFaceDirectionalLight.z;
+		cosine = halfway.x * g_swFaceLightCachedNormal.x + halfway.y * g_swFaceLightCachedNormal.y +
+				 halfway.z * g_swFaceLightCachedNormal.z;
 		if (cosine > 0.0f) {
 			const float half_cosine = cosine * 0.5f;
 			const float cosine3 = half_cosine * half_cosine * half_cosine;
@@ -3488,7 +3909,7 @@ static float FlightLight_ComputeSoftwareFaceSampleIntensity(SceneFaceTIE98* face
 		}
 	}
 
-	for (int light_index = 0; light_index < g_swFaceLightCount; ++light_index) {
+	for (light_index = 0; light_index < g_swFaceLightCount; ++light_index) {
 		const Vec3f delta = {
 			g_swFaceLightPositions[light_index].x - position.x,
 			g_swFaceLightPositions[light_index].y - position.y,
@@ -3496,19 +3917,25 @@ static float FlightLight_ComputeSoftwareFaceSampleIntensity(SceneFaceTIE98* face
 		};
 		const float facing = delta.x * g_swFaceLightCachedNormal.x + delta.y * g_swFaceLightCachedNormal.y +
 							 delta.z * g_swFaceLightCachedNormal.z;
+		float abs_x;
+		float abs_y;
+		float abs_z;
+		float distance;
+		float contribution;
+
 		if (facing <= 0.0f)
 			continue;
-		const float abs_x = fabsf(delta.x);
-		const float abs_y = fabsf(delta.y);
-		const float abs_z = fabsf(delta.z);
-		float distance;
+		abs_x = fabsf(delta.x);
+		abs_y = fabsf(delta.y);
+		abs_z = fabsf(delta.z);
+
 		if (abs_x >= abs_y && abs_x >= abs_z)
 			distance = abs_x + (abs_y + abs_z) * 0.2941f;
 		else if (abs_y >= abs_x && abs_y >= abs_z)
 			distance = abs_y + (abs_x + abs_z) * 0.2941f;
 		else
 			distance = abs_z + (abs_x + abs_y) * 0.2941f;
-		float contribution = facing / (distance * distance);
+		contribution = facing / (distance * distance);
 		if (g_specularLightingEnabled) {
 			const Vec3f halfway = {
 				delta.x - position.x,
@@ -3519,16 +3946,17 @@ static float FlightLight_ComputeSoftwareFaceSampleIntensity(SceneFaceTIE98* face
 			const float half_y = fabsf(halfway.y);
 			const float half_z = fabsf(halfway.z);
 			float half_length;
+			float half_facing;
+
 			if (half_x >= half_y && half_x >= half_z)
 				half_length = half_x * 0.4632f + (half_y + half_z) * 0.1936f;
 			else if (half_y >= half_x && half_y >= half_z)
 				half_length = half_y * 0.4632f + (half_x + half_z) * 0.1936f;
 			else
 				half_length = half_z * 0.4632f + (half_x + half_y) * 0.1936f;
-			const float half_facing =
-				(halfway.x * g_swFaceLightCachedNormal.x + halfway.y * g_swFaceLightCachedNormal.y +
-				 halfway.z * g_swFaceLightCachedNormal.z) *
-				0.5f / half_length;
+			half_facing = (halfway.x * g_swFaceLightCachedNormal.x + halfway.y * g_swFaceLightCachedNormal.y +
+						   halfway.z * g_swFaceLightCachedNormal.z) *
+						  0.5f / half_length;
 			if (half_facing >= 0.0f) {
 				const float cosine3 = half_facing * half_facing * half_facing;
 				const float cosine6 = cosine3 * cosine3;
@@ -3557,17 +3985,22 @@ static void sw3d_DrawTexturedShadeSpanKernel(void) {
 		width_shift >= 3 && width_shift <= 8 && height_shift >= 3 && height_shift <= 8;
 	const uint32_t u_mask = use_specialized_wrap ? (1u << width_shift) - 1u : 0;
 	const uint32_t v_mask = use_specialized_wrap ? (1u << height_shift) - 1u : 0;
-	for (int index = 0; index < g_sw3dSpanLength; ++index) {
+	int index;
+
+	for (index = 0; index < g_sw3dSpanLength; ++index) {
 		const uint32_t integer_u = (uint32_t)g_sw3dSpanUQ8 >> 8;
 		const uint32_t integer_v = (uint32_t)g_sw3dSpanVQ8 >> 8;
 		uint32_t texel_index;
+		uint8_t texel;
+		unsigned shade;
+
 		if (use_specialized_wrap) {
 			texel_index = ((integer_v & v_mask) << width_shift) | (integer_u & u_mask);
 		} else {
 			texel_index = ((integer_v << width_shift) + integer_u) & (uint32_t)g_sw3dSpanTexelMask;
 		}
-		const uint8_t texel = g_sw3dSpanTexels[texel_index];
-		const unsigned shade = (unsigned)(g_sw3dSpanShadeDitherAccum + g_sw3dSpanShadeQ8);
+		texel = g_sw3dSpanTexels[texel_index];
+		shade = (unsigned)(g_sw3dSpanShadeDitherAccum + g_sw3dSpanShadeQ8);
 		g_sw3dSpanShadeDitherAccum = (uint8_t)shade;
 		if (g_flight16bppBytesPerPixel == 2) {
 			const uint16_t* colors = (const uint16_t*)(g_sw3dSpanShadeTable + 4096);
@@ -3598,16 +4031,42 @@ static void sw3d_DrawTexturedShadeSpan(int start_x, int end_x, float start_view_
 	float light_intensity =
 		face->pScanEdge->lightIntensity + ((float)start_x - face->pScanEdge->x) * face->spanLightIntensityDx;
 
+	int start_block;
+	int end_block;
+	int within_block_x;
+	int within_block_y;
+	int block_start_x;
+	int block_start_y;
+	SoftwareLightSampleTIE98* left_sample;
+	int stamp_delta;
+	float left_light;
+	int boundary_x;
+	float boundary_view_z;
+	int block;
+	SoftwareLightSampleTIE98* right_sample;
+	float right_light;
+	float right_u;
+	float right_v;
+	float u_numerator_step;
+	float v_numerator_step;
+	float view_z_step;
+	float light_at_end;
+	float light_block_step;
+	int end_shade;
+	int shade_delta;
+	int next_u;
+	int next_v;
+
 	g_sw3dSpanShadeDitherAccum = (g_sw3dCurrentScanY & 1) ? 128 : 0;
-	const int start_block = start_x >> g_sw3dLightSampleBlockShift;
-	const int end_block = (end_x - 1) >> g_sw3dLightSampleBlockShift;
+	start_block = start_x >> g_sw3dLightSampleBlockShift;
+	end_block = (end_x - 1) >> g_sw3dLightSampleBlockShift;
 	g_sw3dSpanStartX = start_x;
-	const int within_block_x = start_x & g_sw3dLightSampleBlockMask;
-	const int within_block_y = g_sw3dCurrentScanY & g_sw3dLightSampleBlockMask;
-	const int block_start_x = start_x - within_block_x;
-	const int block_start_y = g_sw3dCurrentScanY - within_block_y;
-	SoftwareLightSampleTIE98* left_sample = &samples[start_block];
-	int stamp_delta = g_sw3dCurrentLightSampleCacheStamp - left_sample->stamp;
+	within_block_x = start_x & g_sw3dLightSampleBlockMask;
+	within_block_y = g_sw3dCurrentScanY & g_sw3dLightSampleBlockMask;
+	block_start_x = start_x - within_block_x;
+	block_start_y = g_sw3dCurrentScanY - within_block_y;
+	left_sample = &samples[start_block];
+	stamp_delta = g_sw3dCurrentLightSampleCacheStamp - left_sample->stamp;
 	if (stamp_delta != 0) {
 		if (stamp_delta != 1) {
 			left_sample->stamp = g_sw3dCurrentLightSampleCacheStamp;
@@ -3625,16 +4084,16 @@ static void sw3d_DrawTexturedShadeSpan(int start_x, int end_x, float start_view_
 										g_sw3dLightSampleRowsToNextBlockFloat * face->gradients[7]) -
 								left_sample->intensity;
 	}
-	float left_light = left_sample->intensity + g_sw3dLightSampleSubrowLerpT * left_sample->rowDelta;
+	left_light = left_sample->intensity + g_sw3dLightSampleSubrowLerpT * left_sample->rowDelta;
 
-	int boundary_x = (start_block + 1) << g_sw3dLightSampleBlockShift;
+	boundary_x = (start_block + 1) << g_sw3dLightSampleBlockShift;
 	g_sw3dSpanLength = boundary_x - g_sw3dSpanStartX;
 	u_numerator = (float)boundary_x * face->gradients[0] + u_at_y;
 	v_numerator = (float)boundary_x * face->gradients[3] + v_at_y;
-	float boundary_view_z = (float)boundary_x * face->gradients[6] + view_z_at_y;
-	int block = start_block + 1;
+	boundary_view_z = (float)boundary_x * face->gradients[6] + view_z_at_y;
+	block = start_block + 1;
 	inverse_view_z = 1.0f / boundary_view_z;
-	SoftwareLightSampleTIE98* right_sample = &samples[block];
+	right_sample = &samples[block];
 	stamp_delta = g_sw3dCurrentLightSampleCacheStamp - right_sample->stamp;
 	if (stamp_delta != 0) {
 		if (stamp_delta != 1) {
@@ -3650,40 +4109,40 @@ static void sw3d_DrawTexturedShadeSpan(int start_x, int end_x, float start_view_
 				face, boundary_x, block_start_y + g_sw3dLightSampleBlockSize, boundary_view_z) -
 			right_sample->intensity;
 	}
-	float right_light = right_sample->intensity + g_sw3dLightSampleSubrowLerpT * right_sample->rowDelta;
+	right_light = right_sample->intensity + g_sw3dLightSampleSubrowLerpT * right_sample->rowDelta;
 	left_light += (right_light - left_light) * ((float)within_block_x / (float)g_sw3dLightSampleBlockSize);
-	float right_u = inverse_view_z * u_numerator;
-	float right_v = inverse_view_z * v_numerator;
+	right_u = inverse_view_z * u_numerator;
+	right_v = inverse_view_z * v_numerator;
 	g_sw3dSpanStepUQ8 = (int)lrintf((right_u - u) / (float)g_sw3dSpanLength *
 									(float)(1 << (g_sw3dSpanTextureWidthShift + 8)));
 	g_sw3dSpanStepVQ8 = (int)lrintf((right_v - v) / (float)g_sw3dSpanLength *
 									(float)(1 << (g_sw3dSpanTextureHeightShift + 8)));
 
-	const float u_numerator_step = face->gradients[0] * 16.0f;
-	const float v_numerator_step = face->gradients[3] * 16.0f;
-	const float view_z_step = face->gradients[6] * 16.0f;
+	u_numerator_step = face->gradients[0] * 16.0f;
+	v_numerator_step = face->gradients[3] * 16.0f;
+	view_z_step = face->gradients[6] * 16.0f;
 	if (block > end_block)
 		g_sw3dSpanLength = end_x - g_sw3dSpanStartX;
-	float light_at_end = (float)g_sw3dSpanLength * face->spanLightIntensityDx + light_intensity;
-	const float light_block_step = face->spanLightIntensityDx * 16.0f;
+	light_at_end = (float)g_sw3dSpanLength * face->spanLightIntensityDx + light_intensity;
+	light_block_step = face->spanLightIntensityDx * 16.0f;
 	g_sw3dSpanShadeQ8 = (int)lrintf((left_light + light_intensity) * 15.0f * 256.0f);
 	if (g_sw3dSpanShadeQ8 < 0)
 		g_sw3dSpanShadeQ8 = 0;
 	if (g_sw3dSpanShadeQ8 > 0xEFF)
 		g_sw3dSpanShadeQ8 = 0xEFF;
-	int end_shade = (int)lrintf((right_light + light_at_end) * 15.0f * 256.0f);
+	end_shade = (int)lrintf((right_light + light_at_end) * 15.0f * 256.0f);
 	if (end_shade < 0)
 		end_shade = 0;
 	if (end_shade > 0xEFF)
 		end_shade = 0xEFF;
-	int shade_delta = end_shade - g_sw3dSpanShadeQ8;
+	shade_delta = end_shade - g_sw3dSpanShadeQ8;
 	if (shade_delta < 0)
 		shade_delta += g_sw3dLightSampleBlockSize;
 	g_sw3dSpanShadeStepQ8 = (int)lrintf((float)shade_delta / (float)g_sw3dSpanLength);
 	g_sw3dSpanUQ8 = (int)lrintf(u * (float)(1 << (g_sw3dSpanTextureWidthShift + 8)));
 	g_sw3dSpanVQ8 = (int)lrintf(v * (float)(1 << (g_sw3dSpanTextureHeightShift + 8)));
-	int next_u = (int)lrintf(right_u * (float)(1 << (g_sw3dSpanTextureWidthShift + 8)));
-	int next_v = (int)lrintf(right_v * (float)(1 << (g_sw3dSpanTextureHeightShift + 8)));
+	next_u = (int)lrintf(right_u * (float)(1 << (g_sw3dSpanTextureWidthShift + 8)));
+	next_v = (int)lrintf(right_v * (float)(1 << (g_sw3dSpanTextureHeightShift + 8)));
 
 	while (1) {
 		if (block <= end_block) {
@@ -3744,6 +4203,8 @@ static void sw3d_DrawTexturedShadeSpan(int start_x, int end_x, float start_view_
 
 // FUNCTION: TIE98 0x43DF20
 void RenderScene_DrawVisibleFaces(void) {
+	int face_index;
+
 	if (g_useHardware3D) {
 		RenderScene_EffectsPass();
 		return;
@@ -3752,15 +4213,22 @@ void RenderScene_DrawVisibleFaces(void) {
 	if (!g_flightSurfaceAlreadyLocked)
 		FlightSurface_Lock();
 	g_sw3dSpanSceneMesh = NULL;
-	for (int face_index = g_visFaceDrawStartIndex; face_index < g_visFaceCount; ++face_index) {
+	for (face_index = g_visFaceDrawStartIndex; face_index < g_visFaceCount; ++face_index) {
 		int mip_offset = 0;
+		SceneEdgeTIE98 scan_edge;
+		SceneFaceTIE98* face;
+		int texture_width;
+		int texture_height;
+		float scanline_view_z;
+		int scanline;
+
 		g_sw3dCurrentFace = &g_visFaceList[face_index];
 		g_sw3dCurrentScanY = g_sw3dCurrentFace->yTop;
-		SceneEdgeTIE98 scan_edge;
+
 		g_sw3dCurrentFace->pScanEdge = &scan_edge;
-		SceneFaceTIE98* face = g_sw3dCurrentFace;
-		int texture_width = face->pMesh->pMaterial->width;
-		int texture_height = face->pMesh->pMaterial->height;
+		face = g_sw3dCurrentFace;
+		texture_width = face->pMesh->pMaterial->width;
+		texture_height = face->pMesh->pMaterial->height;
 		if (g_sw3dMipmapEnabled && texture_width * texture_height == face->pMesh->pMaterial->textureSize) {
 			int lod = (int)((float)face->mipLevel * g_mipLodScale);
 			while (lod > 256 && texture_width != 8 && texture_height != 8) {
@@ -3778,15 +4246,20 @@ void RenderScene_DrawVisibleFaces(void) {
 		g_sw3dSpanShadeTable = face->pMesh->pPalette0;
 		g_sw3dSpanTexels = face->pMesh->pTexels + mip_offset;
 		g_sw3dSpanSceneMesh = face->pMesh;
-		float scanline_view_z = (float)(uint32_t)g_sw3dCurrentScanY * face->gradients[7] + face->gradients[8];
+		scanline_view_z = (float)(uint32_t)g_sw3dCurrentScanY * face->gradients[7] + face->gradients[8];
 		g_sw3dScanlineByteOffset = g_flight16bppBytesPerPixel * displaycorner_columns +
 								   (int)g_surfacePitch * (g_sw3dCurrentScanY + displaycorner_lines);
 
-		for (int scanline = 0; (uint32_t)g_sw3dCurrentScanY < (uint32_t)face->yBot;
+		for (scanline = 0; (uint32_t)g_sw3dCurrentScanY < (uint32_t)face->yBot;
 			 ++scanline, ++g_sw3dCurrentScanY) {
 			SceneSpanTIE98* span = face->pSpans[scanline];
 			if (span) {
 				const int sample_subrow = g_sw3dCurrentScanY & g_sw3dLightSampleBlockMask;
+				int start_x;
+				int end_x;
+				int draw_start_x;
+				SceneSpanTIE98* clip_span;
+
 				if (sample_subrow) {
 					g_sw3dLightSampleSubrowFloat = (float)sample_subrow;
 					g_sw3dLightSampleRowsToNextBlockFloat =
@@ -3799,13 +4272,13 @@ void RenderScene_DrawVisibleFaces(void) {
 				}
 				g_sw3dCurrentLightSampleCacheStamp = g_sw3dLightSampleCacheSceneStampBase +
 													 (g_sw3dCurrentScanY >> g_sw3dLightSampleBlockShift);
-				int start_x = span->startX;
-				const int end_x = span->endX;
-				int draw_start_x = start_x;
+				start_x = span->startX;
+				end_x = span->endX;
+				draw_start_x = start_x;
 				scan_edge.x = (float)draw_start_x;
 				scan_edge.lightIntensity = span->startLightIntensity;
 				face->spanLightIntensityDx = span->dLightIntensityDx;
-				SceneSpanTIE98* clip_span = span->next;
+				clip_span = span->next;
 				while (clip_span && clip_span->startX < end_x) {
 					if (clip_span->startX > start_x) {
 						sw3d_DrawTexturedShadeSpan(start_x, clip_span->startX,

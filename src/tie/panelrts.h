@@ -1,7 +1,11 @@
-#ifndef __PANELRTS_H__
-#define __PANELRTS_H__
+#ifndef TIE_PANELRTS_H
+#define TIE_PANELRTS_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * PANELRTS -- panel real-time helpers.
@@ -57,4 +61,8 @@ uint16_t panelrts_setnewpilotview(uint16_t view_idx);
  */
 void panelrts_outnum(int32_t value, uint16_t ndigits, uint16_t minpad);
 
-#endif /* __PANELRTS_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

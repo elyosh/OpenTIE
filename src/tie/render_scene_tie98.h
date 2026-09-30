@@ -8,6 +8,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct FlightObject FlightObject;
 
 typedef struct OptTexCoordTIE98 {
@@ -127,5 +131,9 @@ extern int g_powerVrSceneWorkaround;
 extern int g_bilinearEnabled;
 extern int g_flightSurfaceAlreadyLocked;
 extern const Tie98OptimizedPolyObject* g_flightModelOverride;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

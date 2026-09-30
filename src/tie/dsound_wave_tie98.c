@@ -1,5 +1,4 @@
 #include "tie/dsound_wave_tie98.h"
-
 #include "tie/filestream_tie98.h"
 #include "tie_runtime/storage/storage.h"
 
@@ -41,21 +40,27 @@ static uint32_t read_u32(const uint8_t* p) {
 static int parse_wave_prefix(const uint8_t* bytes, size_t size, WaveFormat* format) {
 	size_t offset = 12;
 	int have_format = 0;
+	uint64_t riff_end;
+
 	if (!bytes || !format || size < 12 || memcmp(bytes, "RIFF", 4) || memcmp(bytes + 8, "WAVE", 4))
 		return 0;
-	uint64_t riff_end = (uint64_t)read_u32(bytes + 4) + 8;
+	riff_end = (uint64_t)read_u32(bytes + 4) + 8;
 	if (riff_end < 12)
 		return 0;
 	memset(format, 0, sizeof *format);
 	while (offset <= size && size - offset >= 8) {
 		uint32_t chunk_size = read_u32(bytes + offset + 4);
 		size_t payload = offset + 8;
+		uint64_t next;
+
 		if (payload > riff_end || chunk_size > riff_end - payload)
 			return 0;
 		if (!memcmp(bytes + offset, "fmt ", 4)) {
+			DSWaveFormat* pcm;
+
 			if (chunk_size < 16 || chunk_size > size - payload || read_u16(bytes + payload) != 1)
 				return 0;
-			DSWaveFormat* pcm = &format->pcm;
+			pcm = &format->pcm;
 			pcm->wFormatTag = 1;
 			pcm->nChannels = read_u16(bytes + payload + 2);
 			pcm->nSamplesPerSec = read_u32(bytes + payload + 4);
@@ -77,7 +82,7 @@ static int parse_wave_prefix(const uint8_t* bytes, size_t size, WaveFormat* form
 		}
 		if (chunk_size > size - payload)
 			return 0;
-		uint64_t next = (uint64_t)payload + chunk_size + (chunk_size & 1u);
+		next = (uint64_t)payload + chunk_size + (chunk_size & 1u);
 		if (next > size)
 			return 0;
 		offset = (size_t)next;
@@ -86,9 +91,12 @@ static int parse_wave_prefix(const uint8_t* bytes, size_t size, WaveFormat* form
 }
 
 int TieDirectSound_Init(void* window) {
+	DSBufferDesc desc = { 0 };
+	void* device;
+
 	if (direct_sound)
 		return 1;
-	void* device = NULL;
+	device = NULL;
 	if (DirectSoundCreate(NULL, &device, NULL) != 0)
 		return 0;
 	direct_sound = (IDirectSound*)device;
@@ -96,7 +104,6 @@ int TieDirectSound_Init(void* window) {
 		TieDirectSound_Shutdown();
 		return 0;
 	}
-	DSBufferDesc desc = { 0 };
 	desc.dwSize = 20;
 	desc.dwFlags = DSBCAPS_PRIMARYBUFFER;
 	if (direct_sound->lpVtbl->CreateSoundBuffer(direct_sound, &desc, &primary_buffer, NULL) != 0) {
@@ -117,18 +124,20 @@ void TieDirectSound_Shutdown(void) {
 // FUNCTION: TIE98 0x419310
 int DirectSound_CreateWaveBuffer(IDirectSoundBuffer** out_buffer, uint32_t buffer_bytes, DSWaveFormat* format,
 								 int alternate_capabilities) {
+	DSBufferDesc desc = { 0 };
+	DSWaveFormat default_format = { 1, 1, 22050, 22050, 1, 8, 0 };
+	int result;
+
 	if (!out_buffer)
 		return -1;
 	*out_buffer = NULL;
 	if (!direct_sound)
 		return -1;
-	DSBufferDesc desc = { 0 };
-	DSWaveFormat default_format = { 1, 1, 22050, 22050, 1, 8, 0 };
 	desc.dwSize = 20;
 	desc.dwFlags = alternate_capabilities ? 194u : 234u;
 	desc.dwBufferBytes = buffer_bytes;
 	desc.lpwfxFormat = format ? format : &default_format;
-	int result = direct_sound->lpVtbl->CreateSoundBuffer(direct_sound, &desc, out_buffer, NULL);
+	result = direct_sound->lpVtbl->CreateSoundBuffer(direct_sound, &desc, out_buffer, NULL);
 	if (result < 0)
 		*out_buffer = NULL;
 	return result;
@@ -154,15 +163,21 @@ int DirectSound_CopyWaveDataToBuffer(IDirectSoundBuffer* buffer, const void* sam
 // FUNCTION: TIE98 0x4189D0
 IDirectSoundBuffer* DirectSound_LoadWaveBuffer(IDirectSound* device, const char* path,
 											   int alternate_capabilities) {
-	if (!device || !path)
-		return NULL;
-	TieFile* file = TieStorage_Open(TIE_FILE_ROOT_TIE98_MEDIA, path, "rb");
-	if (!file)
-		return NULL;
-	IDirectSoundBuffer* buffer = NULL;
-	uint8_t* bytes = NULL;
+	DSBufferDesc desc = { 0 };
+	TieFile* file;
+	IDirectSoundBuffer* buffer;
+	uint8_t* bytes;
 	long file_size;
 	WaveFormat format;
+
+	if (!device || !path)
+		return NULL;
+	file = TieStorage_Open(TIE_FILE_ROOT_TIE98_MEDIA, path, "rb");
+	if (!file)
+		return NULL;
+	buffer = NULL;
+	bytes = NULL;
+
 	if (TieStorage_Seek(file, 0, TIE_SEEK_END) != 0 || (file_size = TieStorage_Tell(file)) < 12 ||
 		(uint64_t)file_size > UINT32_MAX || TieStorage_Seek(file, 0, TIE_SEEK_SET) != 0)
 		goto done;
@@ -172,7 +187,6 @@ IDirectSoundBuffer* DirectSound_LoadWaveBuffer(IDirectSound* device, const char*
 		(uint64_t)read_u32(bytes + 4) + 8 > (uint64_t)file_size ||
 		format.data_size > (size_t)file_size - format.data_offset)
 		goto done;
-	DSBufferDesc desc = { 0 };
 	desc.dwSize = 20;
 	desc.dwFlags = alternate_capabilities ? 194u : 234u;
 	desc.dwBufferBytes = format.data_size;
@@ -200,12 +214,19 @@ IDirectSoundBuffer* DirectSound_LoadWaveBufferIntoPtr(IDirectSoundBuffer** out_b
 // FUNCTION: TIE98 0x419690
 int DirectSound_CreateStreamingWaveBuffer(IDirectSoundBuffer** out_buffer, uint32_t buffer_bytes,
 										  uint32_t* data_offset, int file_stream_channel) {
-	if (!out_buffer)
-		return -1;
-	*out_buffer = NULL;
 	uint8_t header[DIRECTSOUND_WAVE_HEADER_BYTES];
 	WaveFormat format;
 	int got;
+	uint32_t initial_bytes;
+	void* first;
+	void* second;
+	uint32_t first_bytes;
+	uint32_t second_bytes;
+	uint32_t copy_bytes;
+
+	if (!out_buffer)
+		return -1;
+	*out_buffer = NULL;
 	do {
 		got = FrontendFileStream_ReadBytes(file_stream_channel, header, 0, sizeof header, 1);
 	} while (got == -1);
@@ -216,18 +237,15 @@ int DirectSound_CreateStreamingWaveBuffer(IDirectSoundBuffer** out_buffer, uint3
 		return -1;
 	if (data_offset)
 		*data_offset = format.data_offset;
-	uint32_t initial_bytes = (uint32_t)sizeof header - format.data_offset;
+	initial_bytes = (uint32_t)sizeof header - format.data_offset;
 	if (!initial_bytes)
 		return 0;
-	void* first;
-	void* second;
-	uint32_t first_bytes;
-	uint32_t second_bytes;
+
 	if ((*out_buffer)
 			->lpVtbl->Lock(*out_buffer, 0, initial_bytes, &first, &first_bytes, &second, &second_bytes, 0) <
 		0)
 		return -1;
-	uint32_t copy_bytes = first_bytes < initial_bytes ? first_bytes : initial_bytes;
+	copy_bytes = first_bytes < initial_bytes ? first_bytes : initial_bytes;
 	/* The original copies the locked region into the temporary WAV prefix. */
 	memcpy(header + format.data_offset, first, copy_bytes);
 	(*out_buffer)->lpVtbl->Unlock(*out_buffer, first, copy_bytes, second, 0);

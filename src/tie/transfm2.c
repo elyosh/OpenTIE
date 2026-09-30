@@ -10,12 +10,9 @@
  * - Edge classification for the polygon rasterizer
  */
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
-
-#include "tie/math2.h"
 #include "tie/transfm2.h"
+#include "tie/math2.h"
+#include "tie/math2_wide.h"
 #include "tie/xtrans2.h"
 
 /* ---- Module-owned globals (from watdbg "static") ---- */
@@ -61,24 +58,25 @@ static uint8_t offleftcnt, offrightcnt, offscreencnt, validcnt, slivercnt;
 #include "tie/tie.h"     /* yAspect (watdbg-owned by tie.c) */
 #include "tie/trace2.h"  /* someznegflag */
 
-/* ---- Helper: 32×32 fixed-point multiply with 15-bit shift ---- */
-static inline int32_t fpmul15(int32_t a, int32_t b) { return (int32_t)(((int64_t)a * b) >> 15); }
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 /* ================================================================== */
 
 // FUNCTION: TIE95 0x59D20
 int32_t transfm2_geteyex(int32_t x, int32_t y, int32_t z) {
-	return fpmul15(x, worldeyeA1) + fpmul15(y, worldeyeB1) + fpmul15(z, worldeyeC1);
+	return math2_mul_q15(x, worldeyeA1) + math2_mul_q15(y, worldeyeB1) + math2_mul_q15(z, worldeyeC1);
 }
 
 // FUNCTION: TIE95 0x59D68
 int32_t transfm2_geteyey(int32_t x, int32_t y, int32_t z) {
-	return fpmul15(x, worldeyeA2) + fpmul15(y, worldeyeB2) + fpmul15(z, worldeyeC2);
+	return math2_mul_q15(x, worldeyeA2) + math2_mul_q15(y, worldeyeB2) + math2_mul_q15(z, worldeyeC2);
 }
 
 // FUNCTION: TIE95 0x59DB0
 int32_t transfm2_geteyez(int32_t x, int32_t y, int32_t z) {
-	return fpmul15(x, worldeyeA3) + fpmul15(y, worldeyeB3) + fpmul15(z, worldeyeC3);
+	return math2_mul_q15(x, worldeyeA3) + math2_mul_q15(y, worldeyeB3) + math2_mul_q15(z, worldeyeC3);
 }
 
 /* ================================================================== */
@@ -114,6 +112,10 @@ int32_t* transfm2_geteyecoords(const int16_t* source, int32_t* dest) {
 		int32_t multIndex = ptIndex & 0xF;
 		int32_t xCoord = source[0];
 
+		int32_t yCoord;
+		int32_t zCoord;
+		int32_t eyez;
+
 		if ((xCoord & 0xFF00) == 0x7F00) {
 			int32_t ref = (2 * (uint8_t)ptIndex + (uint8_t)xCoord) & 0x1F;
 			lastA1mul[multIndex] = lastA1mul[ref >> 1];
@@ -125,7 +127,7 @@ int32_t* transfm2_geteyecoords(const int16_t* source, int32_t* dest) {
 			lastA3mul[multIndex] = rotworldeyeA3 * xCoord;
 		}
 
-		int32_t yCoord = source[1];
+		yCoord = source[1];
 		if ((yCoord & 0xFF00) == 0x7F00) {
 			int32_t ref = (2 * (uint8_t)ptIndex + (uint8_t)yCoord) & 0x1F;
 			lastB1mul[multIndex] = lastB1mul[ref >> 1];
@@ -137,7 +139,7 @@ int32_t* transfm2_geteyecoords(const int16_t* source, int32_t* dest) {
 			lastB3mul[multIndex] = rotworldeyeB3 * yCoord;
 		}
 
-		int32_t zCoord = source[2];
+		zCoord = source[2];
 		if ((zCoord & 0xFF00) == 0x7F00) {
 			int32_t ref = (2 * (uint8_t)ptIndex + (uint8_t)zCoord) & 0x1F;
 			lastC1mul[multIndex] = lastC1mul[ref >> 1];
@@ -155,7 +157,7 @@ int32_t* transfm2_geteyecoords(const int16_t* source, int32_t* dest) {
 		dest[1] =
 			objecty +
 			(int16_t)((uint32_t)(lastA2mul[multIndex] + lastB2mul[multIndex] + lastC2mul[multIndex]) >> 16);
-		int32_t eyez =
+		eyez =
 			objectz +
 			(int16_t)((uint32_t)(lastA3mul[multIndex] + lastB3mul[multIndex] + lastC3mul[multIndex]) >> 16);
 		if (eyez >= 0)
@@ -180,6 +182,10 @@ int32_t* transfm2_geteyecoordsS2(const int16_t* source, int32_t* dest) {
 		int32_t multIndex = ptIndex & 0xF;
 		int32_t xCoord = source[0];
 
+		int32_t yCoord;
+		int32_t zCoord;
+		int32_t eyez;
+
 		if ((xCoord & 0xFF00) == 0x7F00) {
 			int32_t ref = (2 * (uint8_t)ptIndex + (uint8_t)xCoord) & 0x1F;
 			lastA1mul[multIndex] = lastA1mul[ref >> 1];
@@ -191,7 +197,7 @@ int32_t* transfm2_geteyecoordsS2(const int16_t* source, int32_t* dest) {
 			lastA3mul[multIndex] = rotworldeyeA3 * xCoord;
 		}
 
-		int32_t yCoord = source[1];
+		yCoord = source[1];
 		if ((yCoord & 0xFF00) == 0x7F00) {
 			int32_t ref = (2 * (uint8_t)ptIndex + (uint8_t)yCoord) & 0x1F;
 			lastB1mul[multIndex] = lastB1mul[ref >> 1];
@@ -203,7 +209,7 @@ int32_t* transfm2_geteyecoordsS2(const int16_t* source, int32_t* dest) {
 			lastB3mul[multIndex] = rotworldeyeB3 * yCoord;
 		}
 
-		int32_t zCoord = source[2];
+		zCoord = source[2];
 		if ((zCoord & 0xFF00) == 0x7F00) {
 			int32_t ref = (2 * (uint8_t)ptIndex + (uint8_t)zCoord) & 0x1F;
 			lastC1mul[multIndex] = lastC1mul[ref >> 1];
@@ -217,7 +223,7 @@ int32_t* transfm2_geteyecoordsS2(const int16_t* source, int32_t* dest) {
 
 		dest[0] = objectx + ((lastA1mul[multIndex] + lastB1mul[multIndex] + lastC1mul[multIndex]) >> 14);
 		dest[1] = objecty + ((lastA2mul[multIndex] + lastB2mul[multIndex] + lastC2mul[multIndex]) >> 14);
-		int32_t eyez = objectz + ((lastA3mul[multIndex] + lastB3mul[multIndex] + lastC3mul[multIndex]) >> 14);
+		eyez = objectz + ((lastA3mul[multIndex] + lastB3mul[multIndex] + lastC3mul[multIndex]) >> 14);
 		if (eyez >= 0)
 			numeyezpos++;
 		dest[2] = eyez;
@@ -234,12 +240,16 @@ int32_t* transfm2_geteyecoordsS2(const int16_t* source, int32_t* dest) {
 /* Z=0 plane transforms: 2D points (x,y), z assumed 0 */
 // FUNCTION: TIE95 0x5A9E0
 int32_t* transfm2_geteyecoordsZ0(const int16_t* source, int32_t* dest) {
-	for (int32_t count = (uint16_t)numpoints; count; count--) {
+	int32_t count;
+
+	for (count = (uint16_t)numpoints; count; count--) {
 		int32_t x = source[0];
 		int32_t y = source[1];
+		int32_t coord;
+
 		dest[0] = objectx + ((rotworldeyeA1 * x + rotworldeyeB1 * y + 0x4000) >> 15);
 		dest[1] = objecty + ((rotworldeyeA2 * x + rotworldeyeB2 * y + 0x4000) >> 15);
-		int32_t coord = objectz + ((rotworldeyeA3 * x + rotworldeyeB3 * y + 0x4000) >> 15);
+		coord = objectz + ((rotworldeyeA3 * x + rotworldeyeB3 * y + 0x4000) >> 15);
 		if (coord >= 0)
 			numeyezpos++;
 		dest[2] = coord;
@@ -251,12 +261,16 @@ int32_t* transfm2_geteyecoordsZ0(const int16_t* source, int32_t* dest) {
 
 // FUNCTION: TIE95 0x5AA94
 int32_t* transfm2_geteyecoordsZ0s16(const int16_t* source, int32_t* dest) {
-	for (int32_t count = (uint16_t)numpoints; count; count--) {
+	int32_t count;
+
+	for (count = (uint16_t)numpoints; count; count--) {
 		int32_t x = source[0];
 		int32_t y = source[1];
+		int32_t coord;
+
 		dest[0] = objectx + 2 * (rotworldeyeA1 * x + rotworldeyeB1 * y + 0x4000);
 		dest[1] = objecty + 2 * (rotworldeyeA2 * x + rotworldeyeB2 * y + 0x4000);
-		int32_t coord = objectz + 2 * (rotworldeyeA3 * x + rotworldeyeB3 * y + 0x4000);
+		coord = objectz + 2 * (rotworldeyeA3 * x + rotworldeyeB3 * y + 0x4000);
 		if (coord >= 0)
 			numeyezpos++;
 		dest[2] = coord;
@@ -268,12 +282,16 @@ int32_t* transfm2_geteyecoordsZ0s16(const int16_t* source, int32_t* dest) {
 
 // FUNCTION: TIE95 0x5AB44
 int32_t* transfm2_geteyecoordsZ0s8(const int16_t* source, int32_t* dest) {
-	for (int32_t count = (uint16_t)numpoints; count; count--) {
+	int32_t count;
+
+	for (count = (uint16_t)numpoints; count; count--) {
 		int32_t x = source[0];
 		int32_t y = source[1];
+		int32_t coord;
+
 		dest[0] = objectx + ((rotworldeyeA1 * x + rotworldeyeB1 * y + 0x4000) >> 7);
 		dest[1] = objecty + ((rotworldeyeA2 * x + rotworldeyeB2 * y + 0x4000) >> 7);
-		int32_t coord = objectz + ((rotworldeyeA3 * x + rotworldeyeB3 * y + 0x4000) >> 7);
+		coord = objectz + ((rotworldeyeA3 * x + rotworldeyeB3 * y + 0x4000) >> 7);
 		if (coord >= 0)
 			numeyezpos++;
 		dest[2] = coord;
@@ -296,8 +314,7 @@ int32_t transfm2_getscreenx(int32_t eyex, int32_t eyez) {
 	bool neg = (eyex < 0);
 	uint32_t mag = neg ? -(uint32_t)eyex : (uint32_t)eyex;
 
-	uint64_t prod = (uint32_t)halfPerspFactor + ((uint64_t)mag << (perspShift & 0x1F));
-	uint32_t result = ((prod >> 32) >= (uint32_t)eyez) ? 0x7FFFFF00u : (uint32_t)(prod / (uint32_t)eyez);
+	uint32_t result = math2_project_u32(mag, perspShift, halfPerspFactor, (uint32_t)eyez);
 	if (neg)
 		result = -result;
 	return (int32_t)(halfpixelswide + result);
@@ -308,8 +325,7 @@ int32_t transfm2_getscreeny(int32_t eyey, int32_t eyez) {
 	bool neg = (eyey < 0);
 	uint32_t mag = neg ? -(uint32_t)eyey : (uint32_t)eyey;
 
-	uint64_t prod = (uint32_t)halfPerspFactor + ((uint64_t)mag << (perspShift & 0x1F));
-	uint32_t result = ((prod >> 32) >= (uint32_t)eyez) ? 0x7FFFFF00u : (uint32_t)(prod / (uint32_t)eyez);
+	uint32_t result = math2_project_u32(mag, perspShift, halfPerspFactor, (uint32_t)eyez);
 	if (neg)
 		result = -result;
 
@@ -358,9 +374,11 @@ int32_t* transfm2_getscreencoords(int32_t* source, int32_t* dest) {
 		int32_t eyez = source[2];
 		if (eyez >= 0) {
 			int32_t sx = transfm2_getscreenx(source[0], eyez);
+			int32_t sy;
+
 			dest[0] = sx;
 			transfm2_doxminmax(sx, dest);
-			int32_t sy = transfm2_getscreeny(source[1], eyez);
+			sy = transfm2_getscreeny(source[1], eyez);
 			dest[1] = sy;
 			transfm2_doyminmax(sy, dest);
 			dest += 2;
@@ -396,19 +414,25 @@ static void compute_zratio(int32_t z1, int32_t z2) {
  * Clamps to avoid overflow.
  */
 static void project_clipped_x(const int32_t* source1, const int32_t* source2, int32_t* out) {
+	int32_t diff;
+	int32_t interp;
+	int32_t val;
+	int32_t limit;
+	int32_t screen;
+
 	eyexsign = 0;
-	int32_t diff = *source2 - *source1;
+	diff = *source2 - *source1;
 	if (diff < 0) {
 		eyexsign = 1;
 		diff = -diff;
 	}
-	int32_t interp = math2_longfraction(diff, zratio);
+	interp = math2_longfraction(diff, zratio);
 	if (eyexsign)
 		interp = -interp;
-	int32_t val = *source1 + interp;
+	val = *source1 + interp;
 
-	int32_t limit = 0x7FFFFFFF >> perspShift;
-	int32_t screen;
+	limit = 0x7FFFFFFF >> perspShift;
+
 	if (val > limit)
 		screen = 0x7FFFFFFF - perspFactor;
 	else if (val < -limit)
@@ -423,16 +447,22 @@ static void project_clipped_x(const int32_t* source1, const int32_t* source2, in
 }
 
 static void project_clipped_y(const int32_t* source1, const int32_t* source2, int32_t* out) {
+	int32_t diff;
+	int32_t interp;
+	int32_t val;
+	int32_t limit;
+	int32_t screen;
+
 	eyeysign = 0;
-	int32_t diff = source2[1] - source1[1];
+	diff = source2[1] - source1[1];
 	if (diff < 0) {
 		eyeysign = 1;
 		diff = -diff;
 	}
-	int32_t interp = math2_longfraction(diff, zratio);
+	interp = math2_longfraction(diff, zratio);
 	if (eyeysign)
 		interp = -interp;
-	int32_t val = source1[1] + interp;
+	val = source1[1] + interp;
 
 	if (yAspect) {
 		eyeysign = 0;
@@ -445,8 +475,8 @@ static void project_clipped_y(const int32_t* source1, const int32_t* source2, in
 			val = -val;
 	}
 
-	int32_t limit = 0x7FFFFFFF >> perspShift;
-	int32_t screen;
+	limit = 0x7FFFFFFF >> perspShift;
+
 	if (val > limit)
 		screen = 0x7FFFFFFF - perspFactor;
 	else if (val < -limit)
@@ -501,12 +531,17 @@ int32_t* transfm2_clipeyez(int32_t* source, int32_t* dest) {
 // FUNCTION: TIE95 0x5B090
 int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, int32_t* source2,
 								 int32_t* dest) {
+	int16_t lightVal;
+
 	compute_zratio(source1[2], source2[2]);
 
 	/* Vertex lighting (if face has lighting flag 0x40) */
-	int16_t lightVal = 0;
+	lightVal = 0;
 	if (*(firstvertptr - 1) & 0x40) {
 		/* Compute lighting for negV if not cached */
+		int16_t negLight;
+		int16_t posLight;
+
 		if ((int16_t)vertexlight[negV] == -1) {
 			PolyVert* norm = &firstvertnorm[negV];
 			int32_t dot = rotlightX * norm->x + rotlightY * norm->y + rotlightZ * norm->z;
@@ -533,8 +568,8 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 		}
 
 		/* Interpolate lighting at clip point */
-		int16_t negLight = (int16_t)vertexlight[negV];
-		int16_t posLight = (int16_t)vertexlight[posV];
+		negLight = (int16_t)vertexlight[negV];
+		posLight = (int16_t)vertexlight[posV];
 		lightVal = negLight + (int16_t)(((int32_t)(zratio >> 1) * (posLight - negLight)) >> 15);
 	}
 
@@ -559,10 +594,16 @@ int32_t* transfm2_calclinepts(const uint8_t* source) {
 	uint8_t idx1 = source[2];
 	int32_t* dest = calcflag[idx1];
 
+	int32_t* dest2;
+	int eyez2;
+	uint8_t idx2;
+
 	if (!dest) {
+		int eyez;
+
 		dest = newscreenxy;
 		newscreenxy += 2;
-		int eyez = firsteyexyz[idx1].z;
+		eyez = firsteyexyz[idx1].z;
 
 		if (eyez >= 0) {
 			dest[0] = transfm2_getscreenx(firsteyexyz[idx1].x, eyez);
@@ -579,13 +620,13 @@ int32_t* transfm2_calclinepts(const uint8_t* source) {
 
 	point1ptr = dest;
 
-	uint8_t idx2 = source[3];
+	idx2 = source[3];
 	if (calcflag[idx2])
 		return calcflag[idx2];
 
-	int32_t* dest2 = newscreenxy;
+	dest2 = newscreenxy;
 	newscreenxy += 2;
-	int eyez2 = firsteyexyz[idx2].z;
+	eyez2 = firsteyexyz[idx2].z;
 
 	if (eyez2 < 0) {
 		return transfm2_facezintersect(idx2, idx1, (int32_t*)&firsteyexyz[idx2],
@@ -614,7 +655,9 @@ int16_t transfm2_getfacescreenxy(uint16_t ptCnt) {
 		return 4;
 
 	if (someznegflag) {
-		for (int32_t i = 0; i < (uint16_t)numpoints; i++) {
+		int32_t i;
+
+		for (i = 0; i < (uint16_t)numpoints; i++) {
 			if (!calcflag[firstvertptr[2 * i]])
 				return 4;
 		}
@@ -626,12 +669,24 @@ int16_t transfm2_getfacescreenxy(uint16_t ptCnt) {
 
 // FUNCTION: TIE95 0x5B658
 int16_t transfm2_classifyedges(void) {
-	for (uint8_t i = 0;; i++) {
+	uint8_t i;
+
+	for (i = 0;; i++) {
+		uint8_t edgeNum;
+		uint8_t edgeFlag;
+		uint8_t idx;
+		int32_t* pt1;
+		uint8_t idx2;
+		int32_t* pt2;
+		int32_t* ptPtr;
+		uint32_t ydiff;
+		uint32_t xdiff;
+
 		if (i >= (uint16_t)numpoints)
 			return 1;
 
-		uint8_t edgeNum = firstvertptr[2 * i + 1];
-		uint8_t edgeFlag = edgeflags[edgeNum];
+		edgeNum = firstvertptr[2 * i + 1];
+		edgeFlag = edgeflags[edgeNum];
 
 		if (edgeFlag == 0x80) {
 			offrightcnt++;
@@ -640,10 +695,12 @@ int16_t transfm2_classifyedges(void) {
 
 		/* Pre-classified edge flags: reverse direction and count */
 		if (edgeFlag & 1) {
+			int32_t* tmp;
+
 			offrightcnt++;
 			edgexsign[edgeNum] = -edgexsign[edgeNum];
 			edgeysign[edgeNum] = -edgeysign[edgeNum];
-			int32_t* tmp = edgept2[edgeNum];
+			tmp = edgept2[edgeNum];
 			edgept2[edgeNum] = edgept1[edgeNum];
 			edgept1[edgeNum] = tmp;
 			if (!++offscreencnt)
@@ -651,9 +708,11 @@ int16_t transfm2_classifyedges(void) {
 			continue;
 		}
 		if (edgeFlag & 2) {
+			int32_t* tmp;
+
 			edgexsign[edgeNum] = -edgexsign[edgeNum];
 			edgeysign[edgeNum] = -edgeysign[edgeNum];
-			int32_t* tmp = edgept2[edgeNum];
+			tmp = edgept2[edgeNum];
 			edgept2[edgeNum] = edgept1[edgeNum];
 			edgept1[edgeNum] = tmp;
 			if (!++offleftcnt)
@@ -661,9 +720,11 @@ int16_t transfm2_classifyedges(void) {
 			continue;
 		}
 		if (edgeFlag & 4) {
+			int32_t* tmp;
+
 			edgexsign[edgeNum] = -edgexsign[edgeNum];
 			edgeysign[edgeNum] = -edgeysign[edgeNum];
-			int32_t* tmp = edgept2[edgeNum];
+			tmp = edgept2[edgeNum];
 			edgept2[edgeNum] = edgept1[edgeNum];
 			edgept1[edgeNum] = tmp;
 			if (!++offscreencnt)
@@ -671,9 +732,11 @@ int16_t transfm2_classifyedges(void) {
 			continue;
 		}
 		if (edgeFlag & 8) {
+			int32_t* tmp;
+
 			edgexsign[edgeNum] = -edgexsign[edgeNum];
 			edgeysign[edgeNum] = -edgeysign[edgeNum];
-			int32_t* tmp = edgept2[edgeNum];
+			tmp = edgept2[edgeNum];
 			edgept2[edgeNum] = edgept1[edgeNum];
 			edgept1[edgeNum] = tmp;
 			validcnt++;
@@ -681,8 +744,8 @@ int16_t transfm2_classifyedges(void) {
 		}
 
 		/* New edge: project both vertices */
-		uint8_t idx = firstvertptr[2 * i];
-		int32_t* pt1 = calcflag[idx];
+		idx = firstvertptr[2 * i];
+		pt1 = calcflag[idx];
 
 		if (!pt1) {
 			int32_t eyex = firsteyexyz[idx].x;
@@ -696,12 +759,14 @@ int16_t transfm2_classifyedges(void) {
 				pt1[1] = transfm2_getscreeny(firsteyexyz[idx].y, eyez);
 			} else {
 				uint8_t nextIdx = firstvertptr[2 * i + 2];
+				int32_t* tmp;
+
 				if (firsteyexyz[nextIdx].z < 0) {
 					edgeflags[edgeNum] = 0x80;
 					offrightcnt++;
 					continue;
 				}
-				int32_t* tmp = newscreenxy;
+				tmp = newscreenxy;
 				newscreenxy += 2;
 				pt1 = transfm2_facezintersect(idx, nextIdx, (int32_t*)&firsteyexyz[idx],
 											  (int32_t*)&firsteyexyz[nextIdx], tmp);
@@ -710,8 +775,8 @@ int16_t transfm2_classifyedges(void) {
 
 		edgept1[edgeNum] = pt1;
 
-		uint8_t idx2 = firstvertptr[2 * i + 2];
-		int32_t* pt2 = calcflag[idx2];
+		idx2 = firstvertptr[2 * i + 2];
+		pt2 = calcflag[idx2];
 
 		if (!pt2) {
 			int32_t eyex2 = firsteyexyz[idx2].x;
@@ -725,12 +790,14 @@ int16_t transfm2_classifyedges(void) {
 				pt2[1] = transfm2_getscreeny(firsteyexyz[idx2].y, eyez2);
 			} else {
 				uint8_t prevIdx = firstvertptr[2 * i];
+				int32_t* tmp;
+
 				if (firsteyexyz[prevIdx].z < 0) {
 					edgeflags[edgeNum] = 0x80;
 					offrightcnt++;
 					continue;
 				}
-				int32_t* tmp = newscreenxy;
+				tmp = newscreenxy;
 				newscreenxy += 2;
 				pt2 = transfm2_facezintersect(idx2, prevIdx, (int32_t*)&firsteyexyz[idx2],
 											  (int32_t*)&firsteyexyz[prevIdx], tmp);
@@ -740,7 +807,7 @@ int16_t transfm2_classifyedges(void) {
 		/* Classify the new edge */
 		edgeflags[edgeNum] = 0;
 		edgept2[edgeNum] = pt2;
-		int32_t* ptPtr = edgept1[edgeNum];
+		ptPtr = edgept1[edgeNum];
 
 		/* Retail emits `sub esi, [edx]` then sign-tests SF and `neg esi`
 		 * — both modular 32-bit ops. C signed `-` is UB on overflow. When
@@ -751,7 +818,7 @@ int16_t transfm2_classifyedges(void) {
 		 * mathematical value, which feeds the X/Y-bounds classifier
 		 * below). Use uint32 to match `sub`/`neg` bit-exactly. */
 		edgeysign[edgeNum] = 1;
-		uint32_t ydiff = (uint32_t)pt2[1] - (uint32_t)ptPtr[1];
+		ydiff = (uint32_t)pt2[1] - (uint32_t)ptPtr[1];
 		if ((int32_t)ydiff < 0) {
 			edgeysign[edgeNum] = -edgeysign[edgeNum];
 			ydiff = -ydiff;
@@ -759,7 +826,7 @@ int16_t transfm2_classifyedges(void) {
 		edgeydiff[edgeNum] = (int32_t)ydiff;
 
 		edgexsign[edgeNum] = 1;
-		uint32_t xdiff = (uint32_t)pt2[0] - (uint32_t)ptPtr[0];
+		xdiff = (uint32_t)pt2[0] - (uint32_t)ptPtr[0];
 		if ((int32_t)xdiff < 0) {
 			edgexsign[edgeNum] = -edgexsign[edgeNum];
 			xdiff = -xdiff;

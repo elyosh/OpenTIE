@@ -1,9 +1,10 @@
-#include <stdint.h>
-#include <string.h>
+#include "tie/create.h"
+#include "tie/feinput.h"
+#include "tie/paiman.h"
+#include "tie_runtime/runtime/inflight_state.h"
 
 #include "tie/backdrp2.h"
 #include "tie/collide.h"
-#include "tie/create.h"
 #include "tie/draw.h"
 #include "tie/fediskio.h"
 #include "tie/fscript.h"
@@ -35,6 +36,9 @@
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
+
+#include <stdint.h>
+#include <string.h>
 
 /* ------------------------------------------------------------------ */
 /* CREATE-owned globals (watdbg: D:\GAMES\XTIE\CODE\create.c)         */
@@ -121,10 +125,6 @@ uint16_t fgsidecreated;
 
 /* watdbg owner msg.c; kept here for clarity */
 
-#include "tie/feinput.h"
-#include "tie/paiman.h"
-#include "tie_runtime/runtime/inflight_state.h"
-
 /* trig2 working globals (angular conversions write these). */
 
 /* ============================================================== */
@@ -140,9 +140,11 @@ uint16_t create_maxrandom(uint16_t max) {
 
 // FUNCTION: TIE95 0x19CEC
 uint16_t create_findslot(uint16_t genus_idx) {
-	const uint16_t start = genus[genus_idx];
-	const uint16_t end = genus_limit[genus_idx];
-	for (uint16_t i = start; i < end; i++) {
+	const uint16_t start = genus_table[genus_idx].start;
+	const uint16_t end = genus_table[genus_idx].limit;
+	uint16_t i;
+
+	for (i = start; i < end; i++) {
 		if (!objects[i].ship_idx) {
 			objects[i].self_idx = 0;
 			objects[i].damage_state = 0;
@@ -154,7 +156,9 @@ uint16_t create_findslot(uint16_t genus_idx) {
 
 // FUNCTION: TIE95 0x19D44
 uint16_t create_findstaticslot(void) {
-	for (uint16_t i = 0; i < NUM_STATIC_OBJECTS; i++)
+	uint16_t i;
+
+	for (i = 0; i < NUM_STATIC_OBJECTS; i++)
 		if (!staticobjects[i].species)
 			return i;
 	return 0xFFFF;
@@ -187,14 +191,17 @@ void create_getworldposition(uint16_t obj_or_kind, int fg_idx) {
 		 * itself encoded the same way). Any other value encodes the
 		 * specific waypoint index in the low bits. */
 		uint16_t wp_code = obj_or_kind;
+		uint16_t wp;
+		const EFGStruct* f;
+
 		if (wp_code == OBJ_REF_WAYPOINT_BASE)
 			wp_code = fgstatus[fg_idx].world_position;
 		/* Binary subtracts 0x8000 (HIBYTE += 0x80). Equivalent to the
 		 * mask only when wp_code >= 0x8000; we preserve the subtract
 		 * form so an out-of-range world_position (from a buggy FG state)
 		 * resolves the same way the original code did. */
-		const uint16_t wp = (uint16_t)(wp_code - OBJ_REF_WAYPOINT_BASE); /* 0..14 */
-		const EFGStruct* f = &fg_array[fg_idx];
+		wp = (uint16_t)(wp_code - OBJ_REF_WAYPOINT_BASE); /* 0..14 */
+		f = &fg_array[fg_idx];
 		/* * 256 instead of << 8 to avoid signed left-shift UB. Y is
 		 * negated to match the binary's trailing `neg edx`. */
 		wx = (int32_t)f->way_x[wp] * 256;
@@ -213,10 +220,12 @@ void create_getworldposition(uint16_t obj_or_kind, int fg_idx) {
 // FUNCTION: TIE95 0x195D0
 int create_createstaticobject(uint16_t fg_idx, uint8_t ship_class, uint8_t species_idx) {
 	const uint16_t slot = create_findstaticslot();
+	StaticObject* s;
+
 	if (slot == 0xFFFF)
 		return 0xFFFF;
 
-	StaticObject* s = &staticobjects[slot];
+	s = &staticobjects[slot];
 	s->world_x = staging_static_x;
 	s->world_y = staging_static_y;
 	s->world_z = staging_static_z;
@@ -243,11 +252,14 @@ int create_createstaticobject(uint16_t fg_idx, uint8_t ship_class, uint8_t speci
 // FUNCTION: TIE95 0x19A6C
 uint16_t create_createcomponent(uint16_t parent_obj, uint8_t mesh_idx) {
 	const uint16_t slot = create_findslot(11);
+	FlightObject* n;
+	const FlightObject* p;
+
 	if (slot == 0xFFFF)
 		return 0xFFFF;
 
-	FlightObject* n = &objects[slot];
-	const FlightObject* p = &objects[parent_obj];
+	n = &objects[slot];
+	p = &objects[parent_obj];
 	memcpy(n, p, sizeof(FlightObject));
 
 	n->category = 3;
@@ -265,11 +277,20 @@ uint16_t create_createcomponent(uint16_t parent_obj, uint8_t mesh_idx) {
 // FUNCTION: TIE95 0x19B48
 uint16_t create_createember(uint16_t parent_obj) {
 	const uint16_t slot = create_findslot(GENUS_EXPLOSION);
+	FlightObject* n;
+	const FlightObject* p;
+	uint16_t rp;
+	int16_t pitch_delta;
+	uint16_t rh;
+	int16_t heading_delta;
+	int32_t new_heading;
+	uint8_t rand_speed;
+
 	if (slot == 0xFFFF)
 		return 0xFFFF;
 
-	FlightObject* n = &objects[slot];
-	const FlightObject* p = &objects[parent_obj];
+	n = &objects[slot];
+	p = &objects[parent_obj];
 	memcpy(n, p, sizeof(FlightObject));
 
 	n->category = 5;
@@ -284,17 +305,17 @@ uint16_t create_createember(uint16_t parent_obj) {
 	 *     BYTE1(delta)  = (BYTE1(delta) & 7) + 1;
 	 * which yields a 32-bit value whose low byte is a random 0..255 and
 	 * whose byte 1 is 1..8 (with bytes 2-3 = 0). Net range: [256..2303]. */
-	uint16_t rp = (uint16_t)math2_getrandom();
-	int16_t pitch_delta = (int16_t)((rp & 0xFF) | ((((rp >> 8) & 7) + 1) << 8));
-	uint16_t rh = (uint16_t)math2_getrandom();
-	int16_t heading_delta = (int16_t)((rh & 0xFF) | ((((rh >> 8) & 7) + 1) << 8));
+	rp = (uint16_t)math2_getrandom();
+	pitch_delta = (int16_t)((rp & 0xFF) | ((((rp >> 8) & 7) + 1) << 8));
+	rh = (uint16_t)math2_getrandom();
+	heading_delta = (int16_t)((rh & 0xFF) | ((((rh >> 8) & 7) + 1) << 8));
 	if (math2_getrandom() & 1)
 		pitch_delta = -pitch_delta;
 	if (math2_getrandom() & 1)
 		heading_delta = -heading_delta;
 
 	n->pitch += pitch_delta;
-	int32_t new_heading = (int32_t)n->heading + heading_delta;
+	new_heading = (int32_t)n->heading + heading_delta;
 	n->heading = (int16_t)new_heading;
 	if ((uint16_t)n->heading >= 0x8000u) {
 		/* Wrap-around: mirror pitch by +180° to keep yaw range signed. */
@@ -305,7 +326,7 @@ uint16_t create_createember(uint16_t parent_obj) {
 	n->orient_dirty = 1;
 	n->move_dirty = 1;
 
-	const uint8_t rand_speed = (uint8_t)math2_getrandom();
+	rand_speed = (uint8_t)math2_getrandom();
 	n->age_ticks = 0;
 	n->current_speed = (int16_t)(p->current_speed + rand_speed + 50);
 	n->anim_frame = 0;
@@ -317,18 +338,32 @@ uint16_t create_createember(uint16_t parent_obj) {
 int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 	FlightObject* parent = &objects[obj_idx];
 	const bool tie98 = TieProfile_UsesTie98Logic();
+	uint16_t num_meshes;
+	int16_t result;
+	CraftData* cp;
+	uint16_t mi;
+
 	if (!tie98)
 		draw_lockshipfileptrs(parent->ship_idx);
 
-	const uint16_t num_meshes =
-		tie98 ? (uint16_t)modelmesh_getcount(parent->ship_idx) : objectblockptr->num_meshes;
-	int16_t result = (int16_t)num_meshes;
+	num_meshes = tie98 ? (uint16_t)modelmesh_getcount(parent->ship_idx) : objectblockptr->num_meshes;
+	result = (int16_t)num_meshes;
 	if (num_meshes <= 1)
 		return result;
 
-	CraftData* cp = parent->craft_ptr;
+	cp = parent->craft_ptr;
 
-	for (uint16_t mi = 0; mi < num_meshes; ++mi) {
+	for (mi = 0; mi < num_meshes; ++mi) {
+		uint16_t debris;
+		uint16_t rs;
+		int16_t spin;
+		uint16_t rdp;
+		int16_t dpitch;
+		uint16_t rdh;
+		int16_t dhead;
+		FlightObject* d;
+		int16_t pitch_n;
+
 		if (cp->mesh_state[mi] != MESH_STATE_VISIBLE)
 			continue;
 		if (tie98) {
@@ -338,19 +373,19 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 			continue;
 		}
 
-		const uint16_t debris = create_createcomponent(obj_idx, (uint8_t)mi);
+		debris = create_createcomponent(obj_idx, (uint8_t)mi);
 		result = (int16_t)debris;
 		if (debris == 0xFFFF)
 			break;
 
 		/* Same LOWORD/BYTE1 pattern as createember: the delta is
 		 * random_lo | ((random_hi_masked + K) << 8). */
-		uint16_t rs = (uint16_t)math2_getrandom();
-		int16_t spin = (int16_t)((rs & 0xFF) | ((((rs >> 8) & 0x3F) + 64) << 8));
-		uint16_t rdp = (uint16_t)math2_getrandom();
-		int16_t dpitch = (int16_t)((rdp & 0xFF) | ((((rdp >> 8) & 0x07) + 4) << 8));
-		uint16_t rdh = (uint16_t)math2_getrandom();
-		int16_t dhead = (int16_t)((rdh & 0xFF) | ((((rdh >> 8) & 0x0F) + 4) << 8));
+		rs = (uint16_t)math2_getrandom();
+		spin = (int16_t)((rs & 0xFF) | ((((rs >> 8) & 0x3F) + 64) << 8));
+		rdp = (uint16_t)math2_getrandom();
+		dpitch = (int16_t)((rdp & 0xFF) | ((((rdp >> 8) & 0x07) + 4) << 8));
+		rdh = (uint16_t)math2_getrandom();
+		dhead = (int16_t)((rdh & 0xFF) | ((((rdh >> 8) & 0x0F) + 4) << 8));
 		if (math2_getrandom() & 1) {
 			spin = -spin;
 			dpitch = -dpitch;
@@ -358,9 +393,9 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 		if (math2_getrandom() & 1)
 			dhead = -dhead;
 
-		FlightObject* d = &objects[debris];
+		d = &objects[debris];
 		d->spin_rate = spin;
-		int16_t pitch_n = (int16_t)(d->pitch + dpitch);
+		pitch_n = (int16_t)(d->pitch + dpitch);
 		d->heading = (int16_t)(d->heading + dhead);
 		d->pitch = pitch_n;
 		if ((uint16_t)d->heading >= 0x8000u) {
@@ -392,14 +427,31 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 // FUNCTION: TIE95 0x19D74
 void create_checkdebris(void) {
 	const uint16_t slot = currentdebrisslot++;
+	FlightObject* o;
+	FlightObject* pl;
+	int32_t dx;
+	int32_t dy;
+	int32_t dz;
+	int16_t ra;
+	int16_t rb;
+	int32_t sx_scaled;
+	int32_t sy_scaled;
+	int32_t sz_scaled;
+	int32_t ux_scaled;
+	int32_t uy_scaled;
+	int32_t uz_scaled;
+	int32_t below_x;
+	int32_t below_y;
+	int32_t below_z;
+
 	if (currentdebrisslot == NUM_OBJECTS)
 		currentdebrisslot = DEBRIS_FIRST_SLOT;
 
-	FlightObject* o = &objects[slot];
-	FlightObject* pl = pstate.player;
-	int32_t dx = o->world_x - pl->world_x;
-	int32_t dy = o->world_y - pl->world_y;
-	int32_t dz = o->world_z - pl->world_z;
+	o = &objects[slot];
+	pl = pstate.player;
+	dx = o->world_x - pl->world_x;
+	dy = o->world_y - pl->world_y;
+	dz = o->world_z - pl->world_z;
 	if (dx < 0)
 		dx = -dx;
 	if (dy < 0)
@@ -423,23 +475,23 @@ void create_checkdebris(void) {
 	 * signed int16 where the high byte is masked to 2 bits. `rand - 512`
 	 * biases it around 0. Applied as a Q15 multiplier against the
 	 * player's fwd/side/up vectors. */
-	int16_t ra = (int16_t)(math2_getrandom() & 0x03FF); /* HIBYTE & 3 */
+	ra = (int16_t)(math2_getrandom() & 0x03FF); /* HIBYTE & 3 */
 	ra = (int16_t)(ra - 512);
-	int16_t rb = (int16_t)(math2_getrandom() & 0x03FF);
+	rb = (int16_t)(math2_getrandom() & 0x03FF);
 	rb = (int16_t)(rb - 512);
 
 	/* Scatter perpendicular to fwd: side*ra + up*rb. */
-	const int32_t sx_scaled = ((int32_t)pl->side_x * ra) >> 15;
-	const int32_t sy_scaled = ((int32_t)pl->side_y * ra) >> 15;
-	const int32_t sz_scaled = ((int32_t)pl->side_z * ra) >> 15;
-	const int32_t ux_scaled = ((int32_t)pl->up_x * rb) >> 15;
-	const int32_t uy_scaled = ((int32_t)pl->up_y * rb) >> 15;
-	const int32_t uz_scaled = ((int32_t)pl->up_z * rb) >> 15;
+	sx_scaled = ((int32_t)pl->side_x * ra) >> 15;
+	sy_scaled = ((int32_t)pl->side_y * ra) >> 15;
+	sz_scaled = ((int32_t)pl->side_z * ra) >> 15;
+	ux_scaled = ((int32_t)pl->up_x * rb) >> 15;
+	uy_scaled = ((int32_t)pl->up_y * rb) >> 15;
+	uz_scaled = ((int32_t)pl->up_z * rb) >> 15;
 
 	/* Forward displacement scaled 1/16 of the forward vector. */
-	const int32_t below_x = pl->fwd_x >> 4;
-	const int32_t below_y = pl->fwd_y >> 4;
-	const int32_t below_z = pl->fwd_z >> 4;
+	below_x = pl->fwd_x >> 4;
+	below_y = pl->fwd_y >> 4;
+	below_z = pl->fwd_z >> 4;
 
 	o->world_x = pl->world_x + (int16_t)(below_x + sx_scaled + ux_scaled);
 	o->world_y = pl->world_y + (int16_t)(below_y + sy_scaled + uy_scaled);
@@ -453,15 +505,17 @@ void create_checkdebris(void) {
 
 // FUNCTION: TIE95 0x16B04
 CraftData* create_createhyperin(void) {
+	uint16_t i;
+
 	create_createmission();
-	for (uint16_t i = 0; i < NUM_OBJECTS; i++) {
+	for (i = 0; i < NUM_OBJECTS; i++) {
 		if (i == pstate.object_idx)
 			continue;
 		objects[i].ship_idx = 0;
 		objects[i].age_ticks = 0;
 		objects[i].death_timer = 0;
 	}
-	for (uint16_t i = 0; i < NUM_STATIC_OBJECTS; i++)
+	for (i = 0; i < NUM_STATIC_OBJECTS; i++)
 		staticobjects[i].species = 0;
 
 	pstate.player->roll = 0;
@@ -475,21 +529,30 @@ CraftData* create_createhyperin(void) {
 // FUNCTION: TIE95 0x16B8C
 // FUNCTION: TIE98 0x411200
 int16_t create_createmission(void) {
+	uint16_t saved_fgcnt;
+	int i;
+	int si;
+
 	idnumber = 0;
 
 	for (fgcnt = 0; fgcnt < (uint16_t)mission_file_header.num_fg; fgcnt++) {
+		FGStatus* st;
+		EFGStruct* f;
+		uint8_t sidx;
+		uint16_t count;
+
 		mission.primary_fg[fgcnt] = 0;
 		mission.secondary_fg[fgcnt] = 0;
 		mission.bonus_fg[fgcnt] = 0;
 
-		FGStatus* st = &fgstatus[fgcnt];
+		st = &fgstatus[fgcnt];
 		st->active = 0;
 		st->arrival_triggered = 0;
 		st->waves_remaining = 0;
 
-		EFGStruct* f = &fg_array[fgcnt];
-		const uint8_t sidx = speciesconvert[f->species];
-		uint16_t count = f->count;
+		f = &fg_array[fgcnt];
+		sidx = speciesconvert[f->species];
+		count = f->count;
 		if (species_table[sidx].ship_class == 8)
 			count = (uint16_t)(count * count);
 		if (f->link_flag) {
@@ -526,7 +589,7 @@ int16_t create_createmission(void) {
 		panel_loadpaneldata();
 	}
 
-	const uint16_t saved_fgcnt = fgcnt;
+	saved_fgcnt = fgcnt;
 	currentdebrisslot = DEBRIS_FIRST_SLOT;
 	acceleratedtimesetting = 1;
 	hyperspaceflag = 0;
@@ -541,17 +604,17 @@ int16_t create_createmission(void) {
 	/* Preserve object_idx, which was bound while creating the player's craft. */
 	pstate.target_obj_idx = 0xFFFFu;
 	pstate.radar_target0 = pstate.radar_target1 = pstate.radar_target2 = -1;
-	for (int i = 0; i < 4; i++)
+	for (i = 0; i < 4; i++)
 		pstate.target_presets[i] = 0xFFFFu;
 	pstate.radar_subtarget_state = 0;
 	pstate.radio_target = -1;
 
-	for (int i = 0; i < 10; i++) {
+	for (i = 0; i < 10; i++) {
 		pstate.subsystem_repair_priority[i] = (uint8_t)i;
 		pstate.subsystem_health_percent[i] = 100;
 		pstate.subsystem_repair_seconds[i] = 0;
 	}
-	for (int i = 0; i < 20; i++)
+	for (i = 0; i < 20; i++)
 		timers[i] = 0;
 
 	camera.view_dir_dirty = 0;
@@ -587,13 +650,15 @@ int16_t create_createmission(void) {
 	tickcounter = 0;
 	messagecnt = 0;
 
-	for (int si = 0; si < NUM_SPEC; si++) {
-		for (int row = 0; row < 6; row++)
+	for (si = 0; si < NUM_SPEC; si++) {
+		int row;
+
+		for (row = 0; row < 6; row++)
 			mission.kills_losses[row][si] = 0;
 		mission.kills_by_type[si] = 0;
 		mission.captures_by_type[si] = 0;
 	}
-	for (int i = 0; i < 16; i++)
+	for (i = 0; i < 16; i++)
 		mission.radiomsg_triggered[i] = 0;
 
 	mission.mission_new_rank = 0;
@@ -617,31 +682,42 @@ int16_t create_createmission(void) {
 
 // FUNCTION: TIE95 0x165C0
 int16_t create_loadmission(const char* filename) {
+	uint16_t i, species_index;
+	uint8_t mfh_buf[MISSIONFILE_DISK_SIZE];
+	uint8_t fg_buf[48 * EFGSTRUCT_DISK_SIZE];
+	uint16_t wall_offsets[6];
 	uint16_t saved_fgcnt = fgcnt;
+	uint16_t n_fg;
+	int16_t file_num_msg;
+	uint16_t num_msg;
+	int16_t file_num_goals;
+	uint16_t num_goals;
+	int16_t saved_seed;
+
 	mission.train_craft_type = mission.train_craft_type_src;
 	framerate = baseframerate;
 	pstate.object_idx = 0xFF;
 	playerside = 1;
 
-	for (uint16_t i = 0; i < NUM_OBJECTS; i++) {
+	for (i = 0; i < NUM_OBJECTS; i++) {
 		objects[i].ship_idx = 0;
 		objects[i].death_timer = 0;
 		objects[i].age_ticks = 0;
 		objects[i].orient_dirty = 0;
 	}
-	for (uint16_t i = 0; i < NUM_STATIC_OBJECTS; i++)
+	for (i = 0; i < NUM_STATIC_OBJECTS; i++)
 		staticobjects[i].species = 0;
-	for (uint16_t i = 0; i < NUM_CRAFTS; i++) /* craft slot side reset */
+	for (i = 0; i < NUM_CRAFTS; i++) /* craft slot side reset */
 		objects[i].side = (uint8_t)-1;
 
-	for (uint16_t sp = 0; sp < NUM_SPECIES; sp++)
-		if (!species_table[sp].flags)
-			species_table[sp].load_flags &= ~0x10u;
+	for (species_index = 0; species_index < NUM_SPECIES; species_index++)
+		if (!species_table[species_index].flags)
+			species_table[species_index].load_flags &= ~0x10u;
 
 	/* Pre-clear the active flag on every radiomsg slot so the upcoming
 	 * fediskio_readfileblock load doesn't carry over previous-mission
 	 * stale entries when the new mission has fewer cut/radio cues. */
-	for (int i = 0; i < 16; i++)
+	for (i = 0; i < 16; i++)
 		radiomsg[90 * i] = 0;
 
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, filename, "rb", 1)) {
@@ -652,7 +728,6 @@ int16_t create_loadmission(const char* filename) {
 	fediskio_readfileblock(&missionversion, 2, 1, fileptr);
 	if ((int16_t)missionversion > 0)
 		TieStorage_Seek(fileptr, 0, TIE_SEEK_SET);
-	uint8_t mfh_buf[MISSIONFILE_DISK_SIZE];
 	fediskio_readfileblock(mfh_buf, MISSIONFILE_DISK_SIZE, 1, fileptr);
 	MissionFile_decode(&mission_file_header, mfh_buf);
 	if (mission_file_header.num_msg < 0 || mission_file_header.num_goals < 0)
@@ -666,19 +741,18 @@ int16_t create_loadmission(const char* filename) {
 	 * into the natively-aligned fg_array. The .TIE format hard-caps
 	 * num_fg at 48; clamp here so a malformed file cannot overrun the
 	 * buffer or fg_array (the original binary trusted num_fg blindly). */
-	uint16_t n_fg = (uint16_t)mission_file_header.num_fg;
+	n_fg = (uint16_t)mission_file_header.num_fg;
 	if (n_fg > 48u)
 		n_fg = 48u;
-	uint8_t fg_buf[48 * EFGSTRUCT_DISK_SIZE];
 	fediskio_readfileblock(fg_buf, EFGSTRUCT_DISK_SIZE, n_fg, fileptr);
-	for (uint16_t i = 0; i < n_fg; ++i)
+	for (i = 0; i < n_fg; ++i)
 		EFGStruct_decode(&fg_array[i], fg_buf + i * EFGSTRUCT_DISK_SIZE);
 	mission_file_header.num_fg = (int16_t)n_fg;
 
 	/* Mission files store messages before goals. Clamp both counts and skip
 	 * excess message records so goal decoding remains aligned. */
-	int16_t file_num_msg = mission_file_header.num_msg;
-	uint16_t num_msg = (uint16_t)file_num_msg;
+	file_num_msg = mission_file_header.num_msg;
+	num_msg = (uint16_t)file_num_msg;
 	if (num_msg > 16u)
 		num_msg = 16u;
 	fediskio_readfileblock(radiomsg, 0x5A, num_msg, fileptr);
@@ -686,8 +760,8 @@ int16_t create_loadmission(const char* filename) {
 		TieStorage_Seek(fileptr, (long)((uint16_t)file_num_msg - num_msg) * 0x5A, TIE_SEEK_CUR);
 	mission_file_header.num_msg = (int16_t)num_msg;
 
-	int16_t file_num_goals = mission_file_header.num_goals;
-	uint16_t num_goals = (uint16_t)file_num_goals;
+	file_num_goals = mission_file_header.num_goals;
+	num_goals = (uint16_t)file_num_goals;
 	if (num_goals > 4u)
 		num_goals = 4u;
 	fediskio_readfileblock(cut, 0x1C, num_goals, fileptr);
@@ -696,12 +770,14 @@ int16_t create_loadmission(const char* filename) {
 	math2_getrandom();
 
 	pstate.player_fg_idx = 0xFF;
-	for (uint16_t i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
+	for (i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
 		EFGStruct* f = &fg_array[i];
 		const uint8_t sp = speciesconvert[f->species];
 		species_table[sp].load_flags |= 0x10u;
 		if (sp == 100) { /* expansion-pack capital family */
-			for (int k = 101; k <= 0x69; k++)
+			int k;
+
+			for (k = 101; k <= 0x69; k++)
 				species_table[k].load_flags |= 0x10u;
 		}
 		/* First flight group flagged as the player wins; later
@@ -723,13 +799,12 @@ int16_t create_loadmission(const char* filename) {
 
 	/* Backdrop: reseed RNG with the mission's stored seed so skybox is
 	 * deterministic, then restore the live seed. */
-	const int16_t saved_seed = math2_randomseed;
+	saved_seed = math2_randomseed;
 	math2_randomseed = mfile_rnd_seed;
 	create_createbackdrop();
 	math2_randomseed = saved_seed;
 
 	/* Start offsets for [front, back, left, right, top, bottom] backdrop tiles. */
-	uint16_t wall_offsets[6];
 	wall_offsets[0] = 0;
 	wall_offsets[1] = backdropfrontcnt;
 	wall_offsets[2] = (uint16_t)(backdropfrontcnt + backdropbackcnt);
@@ -737,21 +812,28 @@ int16_t create_loadmission(const char* filename) {
 	wall_offsets[4] = (uint16_t)(wall_offsets[3] + backdroprightcnt);
 	wall_offsets[5] = (uint16_t)(wall_offsets[4] + backdroptopcnt);
 
-	for (uint16_t i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
+	for (i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
 		EFGStruct* f = &fg_array[i];
+		uint16_t sp;
+		uint16_t wall_kind;
+		uint8_t tile_byte;
+		uint16_t slot;
+
 		if (!f->species)
 			continue;
 
-		uint16_t sp = speciesconvert[f->species];
+		sp = speciesconvert[f->species];
 		if (!(species_table[sp].side & 0x20))
 			continue;
 
 		if (sp == 87) {
 			/* Planet version selects both the resource variant and palette. */
 			uint16_t p = 114;
+			uint8_t version;
+
 			while (p < NUM_OBJECTS && (species_table[p].load_flags & 0x10))
 				p++;
-			const uint8_t version = f->version;
+			version = f->version;
 			if ((int8_t)version < 8) {
 				species_table[p].lfd_entry = (uint8_t)(version + species_table[sp].lfd_entry);
 				species_table[p].bitmap_data = planetpalptrs[version];
@@ -762,11 +844,11 @@ int16_t create_loadmission(const char* filename) {
 		species_table[sp].load_flags |= 0x10u;
 
 		/* way_z[0] in the file is re-interpreted here as wall id (0..5). */
-		uint16_t wall_kind = (uint16_t)f->way_z[0];
+		wall_kind = (uint16_t)f->way_z[0];
 		if (wall_kind > 5)
 			wall_kind = 5;
-		const uint8_t tile_byte = (uint8_t)((f->way_x[0] & 0x0F) | (((-(int8_t)f->way_y[0]) & 0x0F) << 4));
-		const uint16_t slot = wall_offsets[wall_kind];
+		tile_byte = (uint8_t)((f->way_x[0] & 0x0F) | (((-(int8_t)f->way_y[0]) & 0x0F) << 4));
+		slot = wall_offsets[wall_kind];
 		backdropspecies[slot] = (uint8_t)sp;
 		backdropposition[slot] = tile_byte;
 		wall_offsets[wall_kind] = (uint16_t)(slot + 1);
@@ -812,6 +894,8 @@ int16_t create_loadmission(const char* filename) {
 
 // FUNCTION: TIE95 0x197B4
 void create_createbackdrop(void) {
+	uint16_t i;
+
 	backdropfrontcnt = 4;
 	backdropbackcnt = 4;
 	backdropleftcnt = 4;
@@ -823,7 +907,7 @@ void create_createbackdrop(void) {
 	 * where each nibble is (rand & 0xE) + 4 looped until <= 0xC.
 	 * Retail CREATE_createbackdrop uses RAND_rand (cosmetic starfield
 	 * RNG), not MATH2_getrandom (mission-deterministic RNG). */
-	for (uint16_t i = 0; i < 22; i++) {
+	for (i = 0; i < 22; i++) {
 		int hi, lo;
 		do {
 			hi = (rand_rand() & 0xE) + 4;
@@ -836,7 +920,7 @@ void create_createbackdrop(void) {
 
 	/* backdropspecies[0..21]: weighted pick -- 3/32 → planet (117),
 	 * 9/32 → ramp 117..122, 20/32 → misc planets 125/126. */
-	for (uint16_t i = 0; i < 22; i++) {
+	for (i = 0; i < 22; i++) {
 		const int r = rand_rand() & 0x1F;
 		int pick;
 		if (r < 3)
@@ -855,8 +939,10 @@ void create_createbackdrop(void) {
 
 // FUNCTION: TIE95 0x1706C
 int create_startflightgroup(int16_t craft_slot, int16_t fg_idx) {
+	uint8_t sp;
+
 	fgstatus[fgcnt].active = 1;
-	const uint8_t sp = speciesconvert[fg_array[fgcnt].species];
+	sp = speciesconvert[fg_array[fgcnt].species];
 
 	if (species_table[sp].side & 0x80) {
 		create_createstaticflightgroup(craft_slot);
@@ -869,9 +955,12 @@ int create_startflightgroup(int16_t craft_slot, int16_t fg_idx) {
 }
 
 uint16_t create_reinforceflightgroup(int16_t fg_idx) {
+	uint16_t new_fg;
+	uint8_t wr;
+
 	create_createflightgroup(-1, fg_idx);
-	const uint16_t new_fg = fgcnt;
-	const uint8_t wr = fgstatus[new_fg].waves_remaining;
+	new_fg = fgcnt;
+	wr = fgstatus[new_fg].waves_remaining;
 	if (wr)
 		fgstatus[fgcnt].waves_remaining = (uint8_t)(wr - 1);
 	return (uint16_t)(new_fg * 48);
@@ -886,26 +975,34 @@ void create_updatefgstatus(void) {
 	CraftData* saved_cp = craftptr;
 
 	if (!timers[TIMER_FG_ARRIVAL]) {
+		uint16_t i;
+
 		timers[TIMER_FG_ARRIVAL] = 236;
-		for (uint16_t i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
+		for (i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
 			FGStatus* st = &fgstatus[i];
 			EFGStruct* f = &fg_array[i];
 
 			if (!st->active && !st->arrival_triggered) {
 				/* Arrival-condition check for dormant FG. */
 				const uint8_t m = (uint8_t)(diffmask[mission.difficulty] & fgdiffmask[f->difficulty]);
+				const ECondStruct* c0;
+				const ECondStruct* c1;
+				int8_t ok0;
+				int8_t ok1;
+				int8_t combined;
+
 				craftptr = saved_cp;
 				if (!m || !st->cond[0].count)
 					continue;
 
 				/* start_cond holds two ECondStruct records; start_op == 1
 				 * selects OR, anything else selects AND. */
-				const ECondStruct* c0 = &f->start_cond[0];
-				const ECondStruct* c1 = &f->start_cond[1];
+				c0 = &f->start_cond[0];
+				c1 = &f->start_cond[1];
 				fgcnt = i;
-				const int8_t ok0 = score_checkcondition(c0->cond, c0->type, c0->id, c0->pct, 1);
-				const int8_t ok1 = score_checkcondition(c1->cond, c1->type, c1->id, c1->pct, 1);
-				const int8_t combined = (f->start_op == 1) ? (ok0 | ok1) : (ok0 & ok1);
+				ok0 = score_checkcondition(c0->cond, c0->type, c0->id, c0->pct, 1);
+				ok1 = score_checkcondition(c1->cond, c1->type, c1->id, c1->pct, 1);
+				combined = (f->start_op == 1) ? (ok0 | ok1) : (ok0 & ok1);
 				i = fgcnt;
 				if (combined & 1) {
 					const int16_t delay = (int16_t)(60 * f->start_delay_min + f->start_delay_sec);
@@ -915,12 +1012,16 @@ void create_updatefgstatus(void) {
 			} else {
 				/* Live FG: respawn its wave when every craft is dead. */
 				const uint8_t wr = st->waves_remaining;
+				int all_dead;
+				uint16_t j;
+				uint8_t new_wr;
+
 				craftptr = saved_cp;
 				if (!wr || !st->cond[0].count)
 					continue;
 
-				int all_dead = 1;
-				for (uint16_t j = 0; j < NUM_CRAFTS; j++) {
+				all_dead = 1;
+				for (j = 0; j < NUM_CRAFTS; j++) {
 					if (objects[j].ship_idx && objects[j].fg_idx == i) {
 						all_dead = 0;
 						break;
@@ -932,7 +1033,7 @@ void create_updatefgstatus(void) {
 				fgcnt = i;
 				create_createflightgroup(-1, (int16_t)i);
 				i = fgcnt;
-				const uint8_t new_wr = fgstatus[fgcnt].waves_remaining;
+				new_wr = fgstatus[fgcnt].waves_remaining;
 				if (new_wr)
 					fgstatus[fgcnt].waves_remaining = (uint8_t)(new_wr - 1);
 			}
@@ -940,10 +1041,14 @@ void create_updatefgstatus(void) {
 	}
 
 	if (!timers[TIMER_FG_SPAWN]) {
+		uint16_t i;
+
 		timers[TIMER_FG_SPAWN] = 236;
-		for (uint16_t i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
+		for (i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
+			FGStatus* st;
+
 			fgcnt = i;
-			FGStatus* st = &fgstatus[i];
+			st = &fgstatus[i];
 			craftptr = saved_cp;
 			if (st->active)
 				continue;
@@ -966,6 +1071,9 @@ void create_updatefgstatus(void) {
 // FUNCTION: TIE95 0x17460
 int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 	EFGStruct* f = &fg_array[fgcnt];
+	uint8_t mission_clock_started;
+	uint8_t form_spacing;
+
 	fghyperspace = 0;
 	fghangar = 0;
 
@@ -976,15 +1084,19 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 	 * true forever. Semantic: arriving FGs run their hyperspace-in /
 	 * hangar-launch animation only after the mission clock has started
 	 * (i.e. not on the very first frame). */
-	const uint8_t mission_clock_started = (uint8_t)(_date.hour | _date.minute | _date.second |
-													(uint8_t)_date.subsec | (uint8_t)(_date.subsec >> 8));
-	uint8_t form_spacing;
+	mission_clock_started = (uint8_t)(_date.hour | _date.minute | _date.second | (uint8_t)_date.subsec |
+									  (uint8_t)(_date.subsec >> 8));
 
 	/* Branch 1: carrier-spawn via a fleet leader FG (hangar launch). */
 	if (f->start_fg_used && mission_clock_started && !mission.train_craft_type && craft_slot == -1) {
 		const int16_t carrier_fg = (int16_t)(int8_t)f->start_fg;
 		uint16_t anchor = 0xFFFF;
-		for (uint16_t j = 0; j < NUM_CRAFTS; j++) {
+		uint16_t j;
+		FlightObject* ao;
+		uint16_t sidx;
+		const SpecData* sp;
+
+		for (j = 0; j < NUM_CRAFTS; j++) {
 			if (!objects[j].ship_idx)
 				continue;
 			craftptr = objects[j].craft_ptr;
@@ -996,9 +1108,9 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 		if (anchor == 0xFFFF)
 			return 0;
 
-		FlightObject* ao = &objects[anchor];
-		const uint16_t sidx = ao->craft_ptr->species_idx;
-		const SpecData* sp = &spec_data[sidx];
+		ao = &objects[anchor];
+		sidx = ao->craft_ptr->species_idx;
+		sp = &spec_data[sidx];
 		craftptr = ao->craft_ptr;
 
 		/* Two rotated points relative to the carrier: drop anchor
@@ -1026,12 +1138,13 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 	} else {
 		/* Branch 2: waypoint-anchored spawn. Use waypoint 0 (live) and
 		 * heading derived from waypoint 4 when set; else default heading. */
+		int16_t z_angle;
+
 		create_getworldposition(OBJ_REF_WAYPOINT_BASE, fgcnt);
 		fglocx = worldlocx;
 		fglocy = worldlocy;
 		fglocz = worldlocz;
 
-		int16_t z_angle;
 		if (f->way_used[4]) {
 			create_getworldposition(0x8004, fgcnt);
 			trig2_ctop(worldlocx - fglocx, worldlocy - fglocy, worldlocz - fglocz);
@@ -1078,7 +1191,9 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 		if (fggenus == GENUS_STARSHIP || fggenus == GENUS_PLATFORM) {
 			adjust_if_hostile = 1;
 		} else if (fggenus == GENUS_FIGHTER) {
-			for (int k = 0; k < 3; k++) {
+			int k;
+
+			for (k = 0; k < 3; k++) {
 				if (create_getleaderorder(f->ai[k].order) == 19)
 					adjust_if_hostile = 0;
 			}
@@ -1125,9 +1240,10 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 	 * silent and only later arrivals are announced. */
 	if (mission_clock_started && craft_slot == -1) {
 		const uint16_t spec_num = spec_getspecnum(fgspecies);
+		int16_t seq;
+
 		msg_reportfgcreation(fgcnt, spec_num);
 
-		int16_t seq;
 		if (fgsidecreated) {
 			if (fgsidecreated == 1 || fgsidecreated == 4)
 				seq = (fggenus == GENUS_STARSHIP) ? 10 : 11;
@@ -1148,14 +1264,32 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 
 // FUNCTION: TIE95 0x17BF8
 uint16_t create_createcraft(void) {
+	int k;
+	SpecData* sp;
 	EFGStruct* f = &fg_array[fgcnt];
 	const uint16_t ship_idx = speciesconvert[f->species];
+	uint16_t gstart;
+	uint16_t gend;
+	uint16_t obj_slot;
+	FlightObject* o;
+	CraftData* c;
+	uint16_t hw;
+	uint8_t spec_num;
+	uint8_t laser_total;
+	int bank;
+	uint8_t order_ldr;
+	uint8_t order_flw;
+	uint16_t throttle;
+	uint16_t init_speed;
+
+	int32_t form_x, form_y, form_z;
+
 	fgspecies = (uint8_t)ship_idx;
 
 	/* Find a free FlightObject slot in the genus range. */
-	const uint16_t gstart = genus[fggenus];
-	const uint16_t gend = genus_limit[fggenus];
-	uint16_t obj_slot;
+	gstart = genus_table[fggenus].start;
+	gend = genus_table[fggenus].limit;
+
 	for (obj_slot = gstart; obj_slot < gend; obj_slot++)
 		if (!objects[obj_slot].ship_idx)
 			break;
@@ -1168,18 +1302,18 @@ uint16_t create_createcraft(void) {
 		pstate.player = &objects[obj_slot];
 	}
 
-	FlightObject* o = &objects[obj_slot];
-	CraftData* c = &crafts[obj_slot];
+	o = &objects[obj_slot];
+	c = &crafts[obj_slot];
 
 	o->ship_idx = (uint8_t)ship_idx;
 	o->idnumber = idnumber++;
 	o->craft_ptr = c;
 	craftptr = c;
 
-	const uint16_t hw = species_table[ship_idx].bound_hwidth;
+	hw = species_table[ship_idx].bound_hwidth;
 	o->collision_radius = (hw >= 0x2000u) ? 0x7FFF : (int16_t)(4 * hw);
 
-	const uint8_t spec_num = (uint8_t)spec_getspecnum(ship_idx);
+	spec_num = (uint8_t)spec_getspecnum(ship_idx);
 	c->species_idx = spec_num;
 	fgsidecreated = fgside;
 	o->side = fgside;
@@ -1200,7 +1334,9 @@ uint16_t create_createcraft(void) {
 	c->push_accum_x = c->push_accum_y = c->push_accum_z = 0;
 
 	/* Formation-relative spawn offset from leader craft. */
-	int32_t form_x = 0, form_y = 0, form_z = 0;
+	form_x = 0;
+	form_y = 0;
+	form_z = 0;
 	if (c->leader_obj_idx != 0xFF) {
 		const SpecData* sp = &spec_data[spec_num];
 		const int form_idx = craftcnt + 6 * fgformation; /* 0..77 */
@@ -1238,7 +1374,9 @@ uint16_t create_createcraft(void) {
 	 * get cargo[0] (group name). */
 	{
 		const char* src = (craftcnt == f->special_craft) ? f->contents[1] : f->contents[0];
-		for (int k = 0; k < 16; k++)
+		int k;
+
+		for (k = 0; k < 16; k++)
 			c->cargo[k] = src[k];
 	}
 
@@ -1264,7 +1402,7 @@ uint16_t create_createcraft(void) {
 	c->ai_target_a = c->ai_target_b = c->ai_target_c = c->ai_target_d = -1;
 
 	/* Cached spec stats (queried each AI tick; readonly after createcraft). */
-	const SpecData* sp = &spec_data[spec_num];
+	sp = &spec_data[spec_num];
 	c->roll_rate_cache = sp->roll_rate;
 	c->heading_rate_cache = sp->heading_rate;
 	c->pitch_rate_cache = sp->pitch_rate;
@@ -1275,8 +1413,12 @@ uint16_t create_createcraft(void) {
 
 	/* Laser banks. */
 	c->laser_group_cnt = 0;
-	uint8_t laser_total = 0;
-	for (int bank = 0; bank < 2; bank++) {
+	laser_total = 0;
+	for (bank = 0; bank < 2; bank++) {
+		uint8_t start;
+		uint8_t end;
+		uint8_t k;
+
 		c->laser_type[bank] = sp->laser_type[bank];
 		c->laser_owner_player[bank] = (uint8_t)(obj_slot == pstate.object_idx);
 		c->laser_burst_remaining[bank] = 0;
@@ -1286,14 +1428,14 @@ uint16_t create_createcraft(void) {
 		if (!c->laser_type[bank])
 			continue;
 
-		const uint8_t start = sp->laser_start[bank];
-		const uint8_t end = sp->laser_end[bank];
+		start = sp->laser_start[bank];
+		end = sp->laser_end[bank];
 		laser_total = (uint8_t)(laser_total + sp->laser_count[bank]);
 		if (sp->laser_fire_mode[bank] != 2) {
 			c->laser_group_cnt++;
 			c->laser_first_slot[bank] = start;
 		}
-		for (uint8_t k = start; k <= end; k++) {
+		for (k = start; k <= end; k++) {
 			c->weapon_slots[k].type = (uint8_t)((sp->laser_fire_mode[bank] == 2) ? 2 : c->laser_type[bank]);
 			c->weapon_slots[k].charge = 127;
 			c->weapon_slots[k].ammo = 0;
@@ -1307,8 +1449,12 @@ uint16_t create_createcraft(void) {
 
 	/* Missile banks. */
 	c->missile_group_cnt = 0;
-	for (int bank = 0; bank < 2; bank++) {
+	for (bank = 0; bank < 2; bank++) {
 		/* Only missile-boat (spec 12) gets two missile banks. */
+		uint8_t ms;
+		uint8_t me;
+		uint8_t k;
+
 		if (bank == 1 && spec_getspecnum(0x0C) != spec_num) {
 			c->warhead_type[bank] = 0;
 		} else if (obj_slot == pstate.object_idx && mission.mission_mode == 4) {
@@ -1327,11 +1473,15 @@ uint16_t create_createcraft(void) {
 			continue;
 		c->missile_group_cnt++;
 
-		const uint8_t ms = sp->missile_start[bank];
-		const uint8_t me = sp->missile_end[bank];
-		for (uint8_t k = ms; k <= me; k++) {
+		ms = sp->missile_start[bank];
+		me = sp->missile_end[bank];
+		for (k = ms; k <= me; k++) {
 			const uint8_t warhead = c->warhead_type[bank];
 			WeaponSlot* ws = &c->weapon_slots[k];
+			uint8_t base;
+			uint8_t torp;
+			uint8_t count;
+
 			ws->target_obj = 0xFFFF;
 			ws->charge = 127;
 			ws->type = warhead;
@@ -1341,15 +1491,15 @@ uint16_t create_createcraft(void) {
 			 * BSS-zero. math2_fraction(0, ...) returns 0 and the
 			 * `if (!count) count = 1` fallback below substitutes 1.
 			 * Retail reads byte_C7AFB[species*236 + bank] here. */
-			const uint8_t base = sp->missile_fire_mode[bank];
-			uint8_t torp;
+			base = sp->missile_fire_mode[bank];
+
 			if (pstate.object_idx == obj_slot && mission.mission_mode == 4)
 				torp = mission.torp_used;
 			else
 				torp = f->warhead;
 			if (bank == 1 && spec_getspecnum(0x0C) == spec_num)
 				torp = 5;
-			uint8_t count = (uint8_t)math2_fraction(base, warheadadjust[torp]);
+			count = (uint8_t)math2_fraction(base, warheadadjust[torp]);
 			if (!count)
 				count = 1;
 			if (fgversion == 1)
@@ -1501,15 +1651,18 @@ uint16_t create_createcraft(void) {
 	 * initialdamagestate[mesh_type]; fgversion 5 marks beam turrets as
 	 * already destroyed; capital-class (genus 5, special range) destroys
 	 * an explicit componentsgone[] list. */
-	for (int k = 0; k < 40; k++) {
+	for (k = 0; k < 40; k++) {
 		c->mesh_component_hp[k] = 0xFF;
 		c->mesh_state[k] = MESH_STATE_VISIBLE;
 		c->mesh_rotation[k] = 0;
 	}
 	if (TieProfile_UsesTie98Logic()) {
+		int mesh_count;
+		int mesh;
+
 		modelmesh_require_craft_capacity(ship_idx);
-		const int mesh_count = modelmesh_getcount(ship_idx);
-		for (int mesh = 0; mesh < mesh_count; ++mesh) {
+		mesh_count = modelmesh_getcount(ship_idx);
+		for (mesh = 0; mesh < mesh_count; ++mesh) {
 			const int mesh_type = modelmesh_gettype(ship_idx, mesh);
 			if (modelmesh_isobjecttypemeshdamageable(ship_idx, mesh))
 				c->mesh_component_hp[mesh] = TieRecoveredData_MeshTypeInitialHp(mesh_type);
@@ -1520,9 +1673,12 @@ uint16_t create_createcraft(void) {
 			}
 		}
 	} else {
+		ShipModelMesh* cb;
+		uint16_t mi;
+
 		draw_lockshipfileptrs((uint16_t)ship_idx);
-		ShipModelMesh* cb = componentblockptr;
-		for (uint16_t mi = 0; mi < objectblockptr->num_meshes; mi++, cb++) {
+		cb = componentblockptr;
+		for (mi = 0; mi < objectblockptr->num_meshes; mi++, cb++) {
 			if (cb->flags & 2)
 				c->mesh_component_hp[mi] = initialdamagestate[cb->mesh_type];
 			if (fgversion == 5 && (cb->mesh_type == 4 || cb->mesh_type == 5 || cb->mesh_type == 21)) {
@@ -1534,7 +1690,9 @@ uint16_t create_createcraft(void) {
 	if (fggenus == GENUS_PLATFORM && fgspecies >= 0x3C && fgspecies < 0x41 && f->beam) {
 		const int base = 12 * (fgspecies - 60);
 		const int len = (f->count == 1) ? 6 : 12;
-		for (int k = base; k < base + len; k++) {
+		int k;
+
+		for (k = base; k < base + len; k++) {
 			const uint8_t comp = componentsgone[k];
 			if (comp == 0xFF)
 				continue;
@@ -1545,8 +1703,8 @@ uint16_t create_createcraft(void) {
 
 	/* AI orders: leader + follower both indexed by ai[0].order.
 	 * Hyper/hangar states override with fixed opcodes 52/50. */
-	const uint8_t order_ldr = create_getleaderorder(f->ai[0].order);
-	const uint8_t order_flw = create_getfollowerorder(f->ai[0].order);
+	order_ldr = create_getleaderorder(f->ai[0].order);
+	order_flw = create_getfollowerorder(f->ai[0].order);
 	c->default_order_ldr = order_ldr;
 	if (fghyperspace)
 		c->current_order = 52;
@@ -1560,7 +1718,7 @@ uint16_t create_createcraft(void) {
 	/* Throttle: pick from _throttleconvert[ai[0].speed] unless order is
 	 * 20 (hold position -> full thrust). Orders 0..2 and order 42 stop
 	 * at the start waypoint (throttle = 0) EXCEPT for the player. */
-	uint16_t throttle;
+
 	if ((order_ldr > 2 && order_ldr != 42) || obj_slot == pstate.object_idx)
 		throttle = (order_ldr == 20) ? 0x8000u : _throttleconvert[f->ai[0].speed];
 	else
@@ -1570,7 +1728,7 @@ uint16_t create_createcraft(void) {
 	c->slam_active = 0xFFFF;
 	c->throttle_speed = throttle;
 
-	const uint16_t init_speed = math2_fraction((uint16_t)sp->max_speed, throttle);
+	init_speed = math2_fraction((uint16_t)sp->max_speed, throttle);
 	o->current_speed = (int16_t)init_speed;
 	o->speed_remainder = 0;
 
@@ -1583,7 +1741,7 @@ uint16_t create_createcraft(void) {
 	}
 
 	/* Clear the 6 AI-preamble bytes. */
-	for (int k = 0; k < 3; k++) {
+	for (k = 0; k < 3; k++) {
 		c->ai_complete_state[k] = 0;
 		c->ai_goal_progress[k] = 0;
 	}
@@ -1618,19 +1776,23 @@ uint16_t create_createcraft(void) {
 int create_createstaticflightgroup(int16_t craft_slot) {
 	int result = fgcnt;
 	FGStatus* st = &fgstatus[fgcnt];
+	EFGStruct* f;
+	uint8_t species_idx;
+	uint8_t ship_class;
+
 	if (!st->cond[0].count) {
 		st->waves_remaining = 0;
 		return result * 48;
 	}
 
-	EFGStruct* f = &fg_array[fgcnt];
-	const uint8_t species_idx = speciesconvert[f->species];
+	f = &fg_array[fgcnt];
+	species_idx = speciesconvert[f->species];
 	if (!(species_table[species_idx].side & 0x80)) {
 		st->waves_remaining = 0;
 		return result * 48;
 	}
 
-	const uint8_t ship_class = species_table[species_idx].ship_class;
+	ship_class = species_table[species_idx].ship_class;
 
 	if (ship_class == 9) {
 		/* Planet: single object anchored on waypoint 0 (negated Y). */
@@ -1645,6 +1807,15 @@ int create_createstaticflightgroup(int16_t craft_slot) {
 		/* Mine grid: count x count cube oriented per fg.version & 3. */
 		int16_t step_x = 0, step_y = 0, step_z = 0, step_z2 = 0;
 		const uint8_t axis_pair = (uint8_t)(f->version & 3);
+		int16_t side_m1;
+		int16_t x_base;
+		int16_t y_base;
+		int16_t z_base;
+		int obj_seq;
+		uint16_t row;
+
+		int16_t y_accum, z_accum;
+
 		if (!axis_pair) {
 			step_x = 64;
 			step_y = 64;
@@ -1656,18 +1827,21 @@ int create_createstaticflightgroup(int16_t craft_slot) {
 			step_z2 = 64;
 		}
 
-		const int16_t side_m1 = (int16_t)(f->count - 1);
-		const int16_t x_base = (int16_t)(f->way_x[0] - side_m1 * step_x / 2);
-		const int16_t y_base = (int16_t)(-f->way_y[0] - side_m1 * step_y / 2);
-		const int16_t z_base = (int16_t)(f->way_z[0] - side_m1 * step_z / 2 - side_m1 * step_z2 / 2);
+		side_m1 = (int16_t)(f->count - 1);
+		x_base = (int16_t)(f->way_x[0] - side_m1 * step_x / 2);
+		y_base = (int16_t)(-f->way_y[0] - side_m1 * step_y / 2);
+		z_base = (int16_t)(f->way_z[0] - side_m1 * step_z / 2 - side_m1 * step_z2 / 2);
 		staging_static_pitch = (int8_t)f->heading;
 		staging_static_yaw = (int8_t)f->pitch;
 		staging_static_roll = (int8_t)f->rotation;
 
-		int obj_seq = 0;
-		int16_t y_accum = 0, z_accum = 0;
-		for (uint16_t row = 0; row < f->count; row++) {
-			for (uint16_t col = 0; col < f->count; col++) {
+		obj_seq = 0;
+		y_accum = 0;
+		z_accum = 0;
+		for (row = 0; row < f->count; row++) {
+			uint16_t col;
+
+			for (col = 0; col < f->count; col++) {
 				if ((craft_slot == -1 || craft_slot == obj_seq) && st->cond[0].detail < st->cond[0].count) {
 					staging_static_x = (int16_t)(x_base + col * step_x);
 					staging_static_y = (int16_t)(y_base + y_accum);
@@ -1686,15 +1860,21 @@ int create_createstaticflightgroup(int16_t craft_slot) {
 		const int16_t anchor_y = (int16_t)(-f->way_y[0]);
 		const int16_t anchor_z = f->way_z[0];
 
-		for (uint16_t ast = 0; ast < f->count; ast++) {
+		uint16_t ast;
+
+		for (ast = 0; ast < f->count; ast++) {
 			int16_t ax, ay, az;
 			int collision;
+			uint8_t r_species;
+
 			do {
+				int j;
+
 				ax = (int16_t)(anchor_x + (math2_getrandom() & 0x01FF) - 256);
 				ay = (int16_t)(anchor_y + (math2_getrandom() & 0x01FF) - 256);
 				az = (int16_t)(anchor_z + (math2_getrandom() & 0x01FF) - 256);
 				collision = 0;
-				for (int j = 0; j < NUM_STATIC_OBJECTS; j++) {
+				for (j = 0; j < NUM_STATIC_OBJECTS; j++) {
 					const StaticObject* s = &staticobjects[j];
 					if (s->species && ax == s->world_x && ay == s->world_y && az == s->world_z) {
 						collision = 1;
@@ -1709,7 +1889,7 @@ int create_createstaticflightgroup(int16_t craft_slot) {
 			staging_static_pitch = 0;
 			staging_static_yaw = 0;
 			staging_static_roll = 0;
-			const uint8_t r_species = (uint8_t)((uint16_t)math2_getrandom() % 6 + 100);
+			r_species = (uint8_t)((uint16_t)math2_getrandom() % 6 + 100);
 			create_createstaticobject(fgcnt, 10, r_species);
 		}
 	}
@@ -1728,10 +1908,12 @@ int create_getdropposition(uint16_t fg_idx, uint16_t craft_index, uint16_t ancho
 	const uint16_t species_idx = speciesconvert[f->species];
 	const uint8_t spec_num = species_table[species_idx].spec_num;
 
+	int16_t z_drop;
+
 	if (!TieProfile_UsesTie98Logic())
 		draw_lockshipfileptrs(species_idx);
-	const int16_t z_drop = TieProfile_UsesTie98Logic() ? (int16_t)modelbounds_getmaxz(species_idx)
-													   : (int16_t)(objectblockptr->speed_default >> 17);
+	z_drop = TieProfile_UsesTie98Logic() ? (int16_t)modelbounds_getmaxz(species_idx)
+										 : (int16_t)(objectblockptr->speed_default >> 17);
 	create_getworldposition(OBJ_REF_WAYPOINT_BASE, fg_idx);
 
 	if (species_table[species_idx].side & 0x80) {
@@ -1745,6 +1927,13 @@ int create_getdropposition(uint16_t fg_idx, uint16_t craft_index, uint16_t ancho
 			/* Mine grid: walk to the requested index within count*count. */
 			int16_t step_x = 0, step_y = 0, step_z = 0, step_z2 = 0;
 			const uint8_t axis_pair = (uint8_t)(f->version & 3);
+			int16_t side_m1;
+			int16_t x_base;
+			int16_t y_base;
+			int16_t z_base;
+			int seq;
+			uint16_t r;
+
 			if (!axis_pair) {
 				step_x = 64;
 				step_y = 64;
@@ -1756,13 +1945,15 @@ int create_getdropposition(uint16_t fg_idx, uint16_t craft_index, uint16_t ancho
 				step_z2 = 64;
 			}
 
-			const int16_t side_m1 = (int16_t)(f->count - 1);
-			const int16_t x_base = (int16_t)(f->way_x[0] - side_m1 * step_x / 2);
-			const int16_t y_base = (int16_t)(-f->way_y[0] - side_m1 * step_y / 2);
-			const int16_t z_base = (int16_t)(f->way_z[0] - side_m1 * step_z / 2 - side_m1 * step_z2 / 2);
-			int seq = 0;
-			for (uint16_t r = 0; r < f->count; r++) {
-				for (uint16_t col = 0; col < f->count; col++) {
+			side_m1 = (int16_t)(f->count - 1);
+			x_base = (int16_t)(f->way_x[0] - side_m1 * step_x / 2);
+			y_base = (int16_t)(-f->way_y[0] - side_m1 * step_y / 2);
+			z_base = (int16_t)(f->way_z[0] - side_m1 * step_z / 2 - side_m1 * step_z2 / 2);
+			seq = 0;
+			for (r = 0; r < f->count; r++) {
+				uint16_t col;
+
+				for (col = 0; col < f->count; col++) {
 					if (seq == craft_index) {
 						worldlocx = (int32_t)(x_base + col * step_x) << 8;
 						worldlocy = (int32_t)(r * step_y + y_base) << 8;

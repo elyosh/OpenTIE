@@ -1,14 +1,18 @@
-#ifndef __BPFLIGHT_H__
-#define __BPFLIGHT_H__
-
-#include <stdbool.h>
-#include <stdint.h>
+#ifndef TIE_BPFLIGHT_H
+#define TIE_BPFLIGHT_H
 
 #include "landru/actor.h"
 #include "landru/fourcc.h"
 #include "landru/rect.h"
 #include "landru/res.h"
 #include "tie/matrix.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * BPFLIGHT — 3D ship viewer for blueprint, training, and combat rooms.
@@ -125,4 +129,8 @@ void bpflight_setcombatcolors(int16_t apply_forward);
 /* Swap materialcolors[] with the 720-byte bp_materialcolors[] backup. */
 void bpflight_swapbpmaterials(void);
 
-#endif /* __BPFLIGHT_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

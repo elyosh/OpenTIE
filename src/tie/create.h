@@ -1,8 +1,13 @@
-#ifndef __CREATE_H__
-#define __CREATE_H__
+#ifndef TIE_CREATE_H
+#define TIE_CREATE_H
 
 #include "tie/tie.h"
+
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* --- Public API (20 functions, 1:1 with binary CREATE_*) --- */
 
@@ -95,7 +100,7 @@ uint16_t create_createcomponent(uint16_t parent_obj, uint8_t mesh_idx);
 uint16_t create_createember(uint16_t parent_obj);
 
 /* Find first unallocated FlightObject slot in the per-genus range
- * [genus[g], genus_limit[g]). Returns slot or 0xFFFF. Side-effect:
+ * [genus_table[g].start, genus_table[g].limit). Returns slot or 0xFFFF. Side-effect:
  * zeros the slot's self_idx / damage_state fields. */
 uint16_t create_findslot(uint16_t genus);
 
@@ -189,5 +194,9 @@ extern uint8_t fgflightflag;
 extern uint8_t fgskill;
 extern uint8_t fgside;
 extern uint16_t fgsidecreated;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,3 +1,6 @@
+#ifndef TIE_GOALS_H
+#define TIE_GOALS_H
+
 /*
  * GOALS -- mission-objectives screen and goal-text formatter.
  *
@@ -14,19 +17,25 @@
  * titles and each qualifying subcondition via goals_outputgoal.
  */
 
-#ifndef __GOALS_H__
-#define __GOALS_H__
+#include "tie/score.h" /* GoalTargetType enum (shared with SCORE) */
 
 #include <stdint.h>
 
-#include "tie/score.h" /* GoalTargetType enum (shared with SCORE) */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-/* Push the scrollable mission-goals display as a tie_core task. The
- * task parks the navigation hint in `user_submodal_result` before pop:
- *   -1  previous mission
- *    0  stay / plain exit
- *   +1  next mission */
-void goals_Push_MissionGoalsRoom_Task(void);
+/* State shared by room rendering and input processing. */
+typedef struct GoalsRoomState {
+	int16_t scroll_y;
+	int16_t content_height;
+	int16_t nav_code;
+} GoalsRoomState;
+
+void goals_OpenRoom(GoalsRoomState* state);
+void goals_render_page(int16_t scroll_y, int16_t* content_height);
+/* Poll result: 0 idle, 1 exit, 2 redraw. */
+int goals_poll_once(GoalsRoomState* state);
 
 /* Render one goal line with right-margin word-wrap. Accumulates line-height
  * including any added wrap lines and returns that total so callers can
@@ -88,4 +97,8 @@ extern void* goal_comma_string;   /* const char *     ", "                */
 extern void* goalgenusstrings;    /* const char *[16] genus-category      */
 extern void* goalallfgstring;     /* const char *     "all FG"            */
 
-#endif /* __GOALS_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

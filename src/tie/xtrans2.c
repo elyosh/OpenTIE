@@ -1,6 +1,4 @@
-#include <stdint.h>
-#include <string.h>
-
+#include "tie/xtrans2.h"
 #include "tie/draw.h"
 #include "tie/drawpol.h"
 #include "tie/fediskio.h" /* flightbuf_small / flightbuf_big (retail pool storage) */
@@ -8,7 +6,6 @@
 #include "tie/rtsvga2.h"
 #include "tie/tie.h"
 #include "tie/trace2.h"
-#include "tie/xtrans2.h"
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
@@ -18,6 +15,9 @@
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
+
+#include <stdint.h>
+#include <string.h>
 
 /* ============================================================================
  * Module-owned globals (watdbg-attributed to xtrans2.c).
@@ -264,8 +264,10 @@ void xtrans2_clearruntable(void) {
 			uint8_t g_nxt = (rgb565_nxt >> 5) & 0x3F;
 			uint8_t b_nxt2 = 2 * (rgb565_nxt & 0x1F);
 
-			out_off = rgb_out_base;
 			int blend_step;
+
+			out_off = rgb_out_base;
+
 			for (blend_step = 0; blend_step < 64; ++blend_step) {
 				uint8_t g_interp = (uint8_t)(((blend_step * (g_nxt - g_cur)) >> 6) + g_cur);
 				uint8_t r_interp = (uint8_t)(((blend_step * (r_nxt2 - r_cur2)) >> 6) + r_cur2);
@@ -306,6 +308,8 @@ void xtrans2_clearruntable(void) {
 void xtrans2_initxtrans(void) {
 	uint16_t pd = pixelsdeep;
 
+	int row;
+
 	pixwideshft7 = (uint16_t)(pixelswide << 7);
 	twicepixelsdeep = (uint16_t)(2 * pixelsdeep);
 	halfpixelsdeep = (uint16_t)((int)pixelsdeep >> 1);
@@ -315,7 +319,7 @@ void xtrans2_initxtrans(void) {
 	pixdeepshft24 = (uint32_t)pixelsdeep << 24;
 	pixelswidemin1 = (uint16_t)(pixelswide - 1);
 
-	for (int row = 0; row < pd; ++row)
+	for (row = 0; row < pd; ++row)
 		trace2_rowheaders[row] = NULL;
 
 	/* Root the pool pointers on the fediskio-owned flight buffers.
@@ -354,6 +358,9 @@ uint16_t xtrans2_findnearest(void) {
 	uint16_t new_lastheap = lastheap;
 	uint16_t result;
 
+	uint16_t lh;
+	uint16_t winner_pos16;
+
 	if (lastheap == 0) {
 		lastheap = new_lastheap;
 		return 0;
@@ -368,8 +375,8 @@ uint16_t xtrans2_findnearest(void) {
 		} while (i != 0);
 	}
 
-	uint16_t lh = lastheap;
-	uint16_t winner_pos16 = objflag[result]; /* unsigned byte, widened */
+	lh = lastheap;
+	winner_pos16 = objflag[result]; /* unsigned byte, widened */
 
 	if ((uint8_t)winner_pos16 == (uint8_t)lastheap) {
 		if (popflag)
@@ -399,6 +406,23 @@ uint16_t xtrans2_findnearest(void) {
  * ========================================================================== */
 // FUNCTION: TIE95 0x64720
 uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b) {
+	xtrans2_ObjectRecord* ra;
+	xtrans2_ObjectRecord* rb;
+	int i;
+	int16_t b_xmax;
+	int16_t a_xmax;
+	int16_t b_ymax;
+	int16_t a_ymin;
+	int16_t b_ymin;
+	int16_t a_ymax;
+	int16_t b_zmax;
+	int16_t a_zmin;
+	int16_t b_zmin;
+	int16_t a_zmax;
+	uint16_t a_face_info;
+	uint16_t b_face_info;
+	uint16_t winner;
+
 	if (obj_a == 128)
 		return obj_b;
 	if (obj_b == 128)
@@ -408,6 +432,9 @@ uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b) {
 		/* Mixed mesh/flat, or two flats, or two 'special' objects. */
 		uint16_t mesh_obj;
 		uint16_t flat_idx;
+
+		xtrans2_ObjectRecord* rec;
+		int16_t fx;
 
 		if (obj_a <= 0x80) {
 			if (obj_b > 0x80) {
@@ -440,7 +467,7 @@ uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b) {
 		if (flatz[flat_idx] == (int16_t)0x8000)
 			return mesh_obj;
 
-		xtrans2_ObjectRecord* rec = obj_record(mesh_obj);
+		rec = obj_record(mesh_obj);
 
 		if (objflag[128]) {
 			/* Upper byte of parent_category is the mesh's category flag;
@@ -461,7 +488,7 @@ uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b) {
 		}
 
 		/* Axis-aligned containment tests against the mesh bbox. */
-		int16_t fx = flatx[flat_idx];
+		fx = flatx[flat_idx];
 		if (fx > rec->bbox_xmin) {
 			int16_t xmax = rec->bbox_xmax;
 			if (fx < xmax) {
@@ -496,62 +523,62 @@ uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b) {
 	}
 
 	/* Two meshes. */
-	xtrans2_ObjectRecord* ra = obj_record(obj_a);
-	xtrans2_ObjectRecord* rb = obj_record(obj_b);
+	ra = obj_record(obj_a);
+	rb = obj_record(obj_b);
 
 	if (ra->parent_category == rb->parent_category)
 		return (obj_a < obj_b) ? obj_a : obj_b;
 
 	/* face_covers cache: a 5-slot list of ids whose bbox is known to
 	 * entirely occlude / be occluded by this one. */
-	for (int i = 0; i < 5; ++i)
+	for (i = 0; i < 5; ++i)
 		if ((uint16_t)rb->face_covers[i] == obj_a)
 			return obj_b;
-	for (int i = 0; i < 5; ++i)
+	for (i = 0; i < 5; ++i)
 		if ((uint16_t)ra->face_covers[i] == obj_b)
 			return obj_a;
 
 	/* Six axis-aligned separating-plane tests. */
-	int16_t b_xmax = rb->bbox_xmax;
+	b_xmax = rb->bbox_xmax;
 	if (b_xmax <= ra->bbox_xmin) {
 		if (ra->bbox_xmin < 0)
 			return obj_a;
 		if (b_xmax >= 0)
 			return obj_b;
 	}
-	int16_t a_xmax = ra->bbox_xmax;
+	a_xmax = ra->bbox_xmax;
 	if (rb->bbox_xmin >= a_xmax) {
 		if (a_xmax >= 0)
 			return obj_a;
 		if (rb->bbox_xmin < 0)
 			return obj_b;
 	}
-	int16_t b_ymax = rb->bbox_ymax;
-	int16_t a_ymin = ra->bbox_ymin;
+	b_ymax = rb->bbox_ymax;
+	a_ymin = ra->bbox_ymin;
 	if (b_ymax <= a_ymin) {
 		if (a_ymin < 0)
 			return obj_a;
 		if (b_ymax >= 0)
 			return obj_b;
 	}
-	int16_t b_ymin = rb->bbox_ymin;
-	int16_t a_ymax = ra->bbox_ymax;
+	b_ymin = rb->bbox_ymin;
+	a_ymax = ra->bbox_ymax;
 	if (b_ymin >= a_ymax) {
 		if (a_ymax >= 0)
 			return obj_a;
 		if (b_ymin < 0)
 			return obj_b;
 	}
-	int16_t b_zmax = rb->bbox_zmax;
-	int16_t a_zmin = ra->bbox_zmin;
+	b_zmax = rb->bbox_zmax;
+	a_zmin = ra->bbox_zmin;
 	if (b_zmax <= a_zmin) {
 		if (a_zmin < 0)
 			return obj_a;
 		if (b_zmax >= 0)
 			return obj_b;
 	}
-	int16_t b_zmin = rb->bbox_zmin;
-	int16_t a_zmax = ra->bbox_zmax;
+	b_zmin = rb->bbox_zmin;
+	a_zmax = ra->bbox_zmax;
 	if (b_zmin >= a_zmax) {
 		if (a_zmax >= 0)
 			return obj_a;
@@ -565,10 +592,10 @@ uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b) {
 	 * for 1-indexed facenumber N is face_flags[2*(N-1)]. Same base-1 trick
 	 * as materialcolors. Processedge writes via the same 0x216 base, so
 	 * they stay coherent; the read here must use (minface - 1). */
-	uint16_t a_face_info = ra->face_flags[2 * (objectminface[obj_a] - 1) + 1];
-	uint16_t b_face_info = rb->face_flags[2 * (objectminface[obj_b] - 1) + 1];
-	uint16_t winner = draw_polydepthsort(a_face_info, obj_a, ra->obj_id_field, ra->parent_category, obj_a,
-										 obj_b, b_face_info, obj_b, rb->parent_category, rb->obj_id_field);
+	a_face_info = ra->face_flags[2 * (objectminface[obj_a] - 1) + 1];
+	b_face_info = rb->face_flags[2 * (objectminface[obj_b] - 1) + 1];
+	winner = draw_polydepthsort(a_face_info, obj_a, ra->obj_id_field, ra->parent_category, obj_a, obj_b,
+								b_face_info, obj_b, rb->parent_category, rb->obj_id_field);
 	return (winner != obj_a) ? obj_b : winner;
 }
 
@@ -588,9 +615,11 @@ void xtrans2_closeobject(void) {
 	if (removed == cur) {
 		/* Removing the frontmost. */
 		if (popflag) {
+			uint16_t top_pos;
+
 			if (maskflag >= 0)
 				xtrans2_outputxt();
-			uint16_t top_pos = lastheap;
+			top_pos = lastheap;
 			curobjid = objheap[lastheap];
 			objflag[curobjid] = 0xFF;
 			lastheap = (uint16_t)(top_pos - 1);
@@ -656,6 +685,9 @@ void xtrans2_openobject(void) {
 	uint16_t cur = curobjid;
 
 	/* Empty heap — first object in. */
+	uint32_t new_id;
+	uint16_t new_pos;
+
 	if (cur == 0) {
 		objflag[0] = 0;
 		if (maskflag >= 0)
@@ -687,8 +719,8 @@ void xtrans2_openobject(void) {
 	}
 
 	/* Newcomer stays behind: push it onto the heap. */
-	uint32_t new_id = objid;
-	uint16_t new_pos = (uint16_t)(lastheap + 1);
+	new_id = objid;
+	new_pos = (uint16_t)(lastheap + 1);
 	lastheap = new_pos;
 	popflag = 0;
 	objflag[new_id] = (uint8_t)new_pos;
@@ -698,13 +730,17 @@ void xtrans2_openobject(void) {
 	 * in front — findnearest + getinfront re-evaluates in case the flat
 	 * should demote the current front. */
 	if (new_id == 128 && new_pos != 1 && cur != 0xFFFF) {
+		uint16_t demoted;
+		uint16_t fwin;
+		uint16_t pos2;
+
 		curobjid = cur;
 		popflag = 0;
-		uint16_t demoted = xtrans2_findnearest();
+		demoted = xtrans2_findnearest();
 		objid = demoted;
-		uint16_t fwin = xtrans2_getinfront(demoted, curobjid);
+		fwin = xtrans2_getinfront(demoted, curobjid);
 		cur = curobjid;
-		uint16_t pos2 = (uint16_t)(lastheap + 1);
+		pos2 = (uint16_t)(lastheap + 1);
 		if (fwin != (uint16_t)objid) {
 			++lastheap;
 			objflag[objid] = (uint8_t)pos2;
@@ -738,14 +774,23 @@ void xtrans2_openobject(void) {
 // FUNCTION: TIE95 0x633DC
 void xtrans2_processedge(void) {
 	/* --- Branch 1: marking-list handling for objid >= 0xF0. */
+	xtrans2_ObjectRecord* rec;
+
 	if (objid >= 0xF0) {
 		uint16_t cur_pos = (uint16_t)(256 - objid);
 		uint8_t* mark = (uint8_t*)xtransdataptr + markingptr[edgeid];
 		uint8_t* mark_base = mark;
 
+		uint8_t mark_obj;
+		uint8_t* face_flag_ptr;
+		uint8_t* slot_ptr;
+		uint8_t sb;
+
 		if ((uint16_t)(256 - objid) < mark[18]) {
 			/* Walk chain; insert cur_pos at sorted position. */
 			uint16_t nxt_cur;
+			uint8_t chain_byte;
+
 			do {
 				do {
 					nxt_cur = mark[19];
@@ -759,7 +804,7 @@ void xtrans2_processedge(void) {
 					return;
 			} while (1);
 			/* After break: skip duplicate; slide remainder. */
-			uint8_t chain_byte;
+
 			do {
 				chain_byte = mark[19];
 				mark[18] = chain_byte;
@@ -772,12 +817,14 @@ void xtrans2_processedge(void) {
 			if (mark[19]) {
 				uint8_t slot_next = mark[19];
 				uint8_t nxt_byte;
+				uint8_t tmp;
+
 				do {
 					nxt_byte = mark[19];
 					mark[18] = nxt_byte;
 					++mark;
 				} while (nxt_byte);
-				uint8_t tmp = mark_base[cur_pos + 1];
+				tmp = mark_base[cur_pos + 1];
 				mark_base[cur_pos + 1] = mark_base[slot_next + 1];
 				mark_base[slot_next + 1] = tmp;
 			} else {
@@ -795,8 +842,10 @@ void xtrans2_processedge(void) {
 				cur_pos = nxt_b;
 			} while (nxt_b);
 			if (slot_a) {
+				uint8_t tmp;
+
 				cur_pos = slot_a;
-				uint8_t tmp = mark_base[slot_a + 1];
+				tmp = mark_base[slot_a + 1];
 				mark_base[slot_a + 1] = mark_base[slot_b + 1];
 				mark_base[slot_b + 1] = tmp;
 			} else {
@@ -806,13 +855,13 @@ void xtrans2_processedge(void) {
 			}
 		}
 
-		uint8_t mark_obj = mark_base[0];
+		mark_obj = mark_base[0];
 		if (curobjid == mark_obj && objectminface[mark_obj] == mark_base[1])
 			xtrans2_outputxt();
 
-		uint8_t* face_flag_ptr = (uint8_t*)xtransdataptr + 2 * mark_base[1] + objectptrs[mark_base[0]] + 534;
-		uint8_t* slot_ptr = &mark_base[cur_pos];
-		uint8_t sb = slot_ptr[1];
+		face_flag_ptr = (uint8_t*)xtransdataptr + 2 * mark_base[1] + objectptrs[mark_base[0]] + 534;
+		slot_ptr = &mark_base[cur_pos];
+		sb = slot_ptr[1];
 		slot_ptr[1] = *face_flag_ptr;
 		*face_flag_ptr = sb;
 		return;
@@ -829,7 +878,7 @@ void xtrans2_processedge(void) {
 	}
 
 	/* --- Branch 3: regular mesh face transition. */
-	xtrans2_ObjectRecord* rec = obj_record(objid);
+	rec = obj_record(objid);
 
 	if (!objectcount[objid]) {
 		/* First time we see this object this scanline. */
@@ -905,11 +954,15 @@ void xtrans2_processedge(void) {
 	/* objectcount >= 2 : more than one face already open. */
 	if (currentypos == rec->face_ypos[face1]) {
 		/* Closing face1. */
+		uint32_t minf;
+
 		rec->face_ypos[face1] = currentypos - 1;
-		uint32_t minf = objectminface[objid];
+		minf = objectminface[objid];
 		--objectcount[objid];
 
 		if (minf == face1) {
+			uint16_t fit;
+
 			if (curobjid == objid && maskflag >= 0)
 				xtrans2_outputxt();
 
@@ -923,8 +976,10 @@ void xtrans2_processedge(void) {
 
 			/* Rescan for the next-lowest open face owned by this obj.
 			 * First range: [face1, face2) — stop on a shared edge. */
-			uint16_t fit = (uint16_t)face1;
+			fit = (uint16_t)face1;
 			if (face2) {
+				uint8_t oc_m;
+
 				while (fit < face2) {
 					if (currentypos == rec->face_ypos[fit]) {
 						trace2_EdgeHeader* hdr = (trace2_EdgeHeader*)headerlist;
@@ -952,15 +1007,17 @@ void xtrans2_processedge(void) {
 				}
 
 				if (currentypos != rec->face_ypos[face2]) {
+					uint8_t oc;
+
 					rec->face_ypos[face2] = currentypos;
-					uint8_t oc = objectcount[objid];
+					oc = objectcount[objid];
 					objectminface[objid] = (uint8_t)face2;
 					objectminedgeptr[objid] = currentedgeptr;
 					objectcount[objid] = (uint8_t)(oc + 1);
 					return;
 				}
 				rec->face_ypos[face2] = currentypos - 1;
-				uint8_t oc_m = (uint8_t)(objectcount[objid] - 1);
+				oc_m = (uint8_t)(objectcount[objid] - 1);
 				objectcount[objid] = oc_m;
 				if (!oc_m) {
 					xtrans2_closeobject();
@@ -1002,13 +1059,17 @@ void xtrans2_processedge(void) {
 
 	if (face2) {
 		if (currentypos == rec->face_ypos[face2]) {
+			uint32_t minf;
+
 			rec->face_ypos[face2] = currentypos - 1;
-			uint32_t minf = objectminface[objid];
+			minf = objectminface[objid];
 			--objectcount[objid];
 			if (minf == face2) {
+				uint16_t fit;
+
 				if (curobjid == objid && maskflag >= 0)
 					xtrans2_outputxt();
-				for (uint16_t fit = (uint16_t)face2; fit < 0x80; ++fit) {
+				for (fit = (uint16_t)face2; fit < 0x80; ++fit) {
 					if (currentypos == rec->face_ypos[fit]) {
 						trace2_EdgeHeader* hdr = (trace2_EdgeHeader*)headerlist;
 						while (hdr) {
@@ -1058,13 +1119,16 @@ void xtrans2_processedge(void) {
 void xtrans2_outputxt(void) {
 	trace2_EdgeHeader* right_edge = (trace2_EdgeHeader*)currptr2;
 
+	uint8_t c;
+	int solid_fill;
+
 	if (endx <= startx_mod_54) {
 		currptr2 = right_edge;
 		return;
 	}
 
-	uint8_t c = 0;
-	int solid_fill = 1;
+	c = 0;
+	solid_fill = 1;
 
 	if (curobjid == 0) {
 		c = deepspacecolor;
@@ -1112,6 +1176,17 @@ void xtrans2_outputxt(void) {
 
 		int32_t right_lt, right_x;
 
+		int32_t left_x_fixed;
+		int32_t left_lt_raw;
+		int32_t dx_span;
+		int32_t left_x;
+		int32_t inv_left_lt;
+		int32_t lt_cursor;
+		int32_t dlt;
+		uint8_t* vga_dst;
+		uint8_t* vga_end;
+		int32_t odd_row;
+
 		if (curobjid == (uint16_t)objid &&
 			(objectminface[curobjid] == face1 || objectminface[curobjid] == face2)) {
 			right_lt = newlt;
@@ -1141,17 +1216,17 @@ void xtrans2_outputxt(void) {
 			}
 		}
 
-		int32_t left_x_fixed = left_edge->info->x;
-		int32_t left_lt_raw = left_edge->info->lt;
-		int32_t dx_span = right_x - (left_x_fixed >> 8);
-		int32_t left_x = left_x_fixed >> 8;
-		int32_t inv_left_lt = (63 - ((left_lt_raw >> 9) & 0x3F)) << 9;
-		int32_t lt_cursor = inv_left_lt;
-		int32_t dlt = ((63 - ((right_lt >> 8) & 0x3F)) << 9) - inv_left_lt;
+		left_x_fixed = left_edge->info->x;
+		left_lt_raw = left_edge->info->lt;
+		dx_span = right_x - (left_x_fixed >> 8);
+		left_x = left_x_fixed >> 8;
+		inv_left_lt = (63 - ((left_lt_raw >> 9) & 0x3F)) << 9;
+		lt_cursor = inv_left_lt;
+		dlt = ((63 - ((right_lt >> 8) & 0x3F)) << 9) - inv_left_lt;
 
-		uint8_t* vga_dst = xtrans2_videobaseptr + videoypos + startx_mod_54;
-		uint8_t* vga_end = xtrans2_videobaseptr + videoypos + endx;
-		int32_t odd_row = currentypos & 1;
+		vga_dst = xtrans2_videobaseptr + videoypos + startx_mod_54;
+		vga_end = xtrans2_videobaseptr + videoypos + endx;
+		odd_row = currentypos & 1;
 
 #if 0
 		/* PIP-bounds probe: log any run that escapes [0, pixelswide) on x
@@ -1182,6 +1257,10 @@ void xtrans2_outputxt(void) {
 			uint8_t* ve = vga_end + endx;
 
 			if (dlt) {
+				uint8_t saved_lo;
+				uint8_t saved_hi;
+				int32_t dith;
+
 				if (dx_span)
 					dlt /= dx_span;
 				if (left_x < startx_mod_54)
@@ -1190,12 +1269,12 @@ void xtrans2_outputxt(void) {
 				/* Guard against a 64-step index spill: the inner loop
 				 * can compute index 64 when lt_cursor exits at the top
 				 * step; stash slot 63 into slot 64 for the run. */
-				uint8_t saved_lo = lo_base[64];
-				uint8_t saved_hi = hi_base[64];
+				saved_lo = lo_base[64];
+				saved_hi = hi_base[64];
 				lo_base[64] = lo_base[63];
 				hi_base[64] = hi_base[63];
 
-				int32_t dith = odd_row << 8;
+				dith = odd_row << 8;
 				while (vp < ve) {
 					int32_t idx = (lt_cursor + dith) >> 9;
 					dith = (uint16_t)(lt_cursor + dith) & 0x1FF;
@@ -1229,6 +1308,8 @@ void xtrans2_outputxt(void) {
 			uint8_t* shade = &materialcolors[16 * c - 16];
 
 			if (dlt) {
+				int32_t dith;
+
 				if (dx_span)
 					dlt /= dx_span;
 				if (left_x < startx_mod_54)
@@ -1244,11 +1325,13 @@ void xtrans2_outputxt(void) {
 				 * loop. We achieve the same per-pixel result by clamping
 				 * the index here -- avoids the 1-byte OOB write when
 				 * c == 45 (the brightest highlight-remap output). */
-				int32_t dith = odd_row << 10;
+				dith = odd_row << 10;
 				while (vga_dst < vga_end) {
 					int32_t comb = lt_cursor + dith;
+					int32_t idx;
+
 					dith = comb & 0x7FF;
-					int32_t idx = comb >> 11;
+					idx = comb >> 11;
 					*vga_dst = shade[idx > 15 ? 15 : idx];
 					++vga_dst;
 					lt_cursor += dlt;
@@ -1355,6 +1438,12 @@ void xtrans2_drawxtrans(void) {
 	mask_cursor = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
 
 	while ((int32_t)pixelsdeep > currentypos) {
+		uint8_t* mask_cur;
+		trace2_EdgeHeader* row_edge;
+		int8_t mask_first;
+		int32_t cur_x;
+		int done_flag;
+
 		maskptr = mask_cursor;
 
 		if (videoypos >= vesa_page_size) {
@@ -1365,13 +1454,15 @@ void xtrans2_drawxtrans(void) {
 
 		saved_tempptr = tempptr;
 		saved_currptr = NULL; /* matches "currptr = row_edge" init */
-		uint8_t* mask_cur = maskptr;
+		mask_cur = maskptr;
 
 		/* --- 2. Age active-edge list. */
 		{
 			trace2_EdgeHeader* walk = (trace2_EdgeHeader*)headerlist;
 			if (walk) {
 				/* Drop dead head(s). */
+				trace2_EdgeHeader* nxt;
+
 				while (1) {
 					if (--walk->numscanlines)
 						break;
@@ -1384,7 +1475,7 @@ void xtrans2_drawxtrans(void) {
 				++walk->info;
 				headerlist = walk;
 				lastptr = walk;
-				trace2_EdgeHeader* nxt = walk->next;
+				nxt = walk->next;
 				while (nxt) {
 					if (--nxt->numscanlines) {
 						++nxt->info;
@@ -1403,9 +1494,11 @@ void xtrans2_drawxtrans(void) {
 		if (headerlist && ((trace2_EdgeHeader*)headerlist)->next) {
 			int swapped;
 			do {
+				trace2_EdgeHeader* sort_cur;
+
 				swapped = 0;
 				saved_tempptr = NULL;
-				trace2_EdgeHeader* sort_cur = ((trace2_EdgeHeader*)headerlist)->next;
+				sort_cur = ((trace2_EdgeHeader*)headerlist)->next;
 				lastptr = (trace2_EdgeHeader*)headerlist;
 				while (sort_cur) {
 					trace2_EdgeHeader* sort_last = (trace2_EdgeHeader*)lastptr;
@@ -1424,8 +1517,10 @@ void xtrans2_drawxtrans(void) {
 							saved_tempptr = sort_cur;
 							sort_cur = sort_last->next;
 						} else {
+							trace2_EdgeHeader* nxt;
+
 							headerlist = sort_cur;
-							trace2_EdgeHeader* nxt = sort_cur->next;
+							nxt = sort_cur->next;
 							saved_tempptr = sort_cur;
 							((trace2_EdgeHeader*)lastptr)->next = nxt;
 							sort_cur = nxt;
@@ -1437,20 +1532,22 @@ void xtrans2_drawxtrans(void) {
 		}
 
 		/* --- 4. Merge rowheaders[y] in sorted order. */
-		trace2_EdgeHeader* row_edge = trace2_rowheaders[currentypos];
+		row_edge = trace2_rowheaders[currentypos];
 		while (row_edge) {
 			trace2_EdgeHeader* rcur = (trace2_EdgeHeader*)headerlist;
 			lastptr = NULL;
 
 			if (headerlist) {
 				trace2_EdgeHeader* re_save = row_edge;
+				trace2_EdgeHeader* after;
+
 				while (rcur->info->x < row_edge->info->x) {
 					lastptr = rcur;
 					rcur = rcur->next;
 					if (!rcur)
 						goto merge_tail;
 				}
-				trace2_EdgeHeader* after;
+
 				if (lastptr) {
 					after = ((trace2_EdgeHeader*)lastptr)->next;
 					((trace2_EdgeHeader*)lastptr)->next = row_edge;
@@ -1476,21 +1573,23 @@ void xtrans2_drawxtrans(void) {
 		}
 
 		/* --- 5. Read first mask run for this scanline. */
-		int8_t mask_first = (int8_t)*mask_cur;
+		mask_first = (int8_t)*mask_cur;
 		lastheap = 0;
 		curobjid = 0;
 		popflag = 0;
 		maskflag = mask_first;
 		mask_cursor = mask_cur + 1;
-		int32_t cur_x = mask_read_delta(&mask_cursor);
-		int done_flag = 0;
+		cur_x = mask_read_delta(&mask_cursor);
+		done_flag = 0;
 
 		if (maskflag >= 0 || (startx_mod_54 = cur_x, (int32_t)pixelswide > cur_x)) {
 			/* --- Left-edge skip: advance past runs entirely to the left
 			 * of headerlist's first active edge's x. */
 			if (headerlist) {
+				int32_t left_val;
+
 				runx = ((trace2_EdgeHeader*)headerlist)->info->x >> 8;
-				int32_t left_val = leftside[currentypos];
+				left_val = leftside[currentypos];
 				if (runx <= left_val || (int32_t)pixelswide <= left_val) {
 					if ((int32_t)pixelswide < runx)
 						runx = pixelswide;
@@ -1561,6 +1660,8 @@ void xtrans2_drawxtrans(void) {
 			}
 
 			if (maskflag >= 0 || (startx_mod_54 = cur_x, (int32_t)pixelswide > cur_x)) {
+				int32_t cur_mx2;
+
 				maskptr = mask_cursor;
 				maskx = cur_x;
 				currptr = row_edge;
@@ -1571,17 +1672,21 @@ void xtrans2_drawxtrans(void) {
 				for (currentedgeptr = (trace2_EdgeHeader*)headerlist; currentedgeptr;
 					 currentedgeptr = ((trace2_EdgeHeader*)currentedgeptr)->next) {
 					trace2_EdgeHeader* ce = (trace2_EdgeHeader*)currentedgeptr;
+					int32_t left_x;
+					int32_t left_lt;
+					int32_t cur_mx;
+
 					objid = ce->objectid;
 					edgeid = ce->edgeid;
 					face1 = ce->face1;
 					face2 = ce->face2;
 
-					int32_t left_x = ce->info->x;
-					int32_t left_lt = ce->info->lt;
+					left_x = ce->info->x;
+					left_lt = ce->info->lt;
 					endx = left_x >> 8;
 					newx = endx;
 					newlt = left_lt >> 1;
-					int32_t cur_mx = maskx;
+					cur_mx = maskx;
 					runx = endx;
 
 					/* Catch up mask stream to the edge's x. */
@@ -1598,6 +1703,8 @@ void xtrans2_drawxtrans(void) {
 							saved_tempptr = tempptr;
 							cur_mx = mask_read_delta(&mask_cursor) + maskx;
 						} else {
+							int32_t d;
+
 							endx = cur_mx;
 							maskx = cur_mx;
 							xtrans2_outputxt();
@@ -1609,7 +1716,7 @@ void xtrans2_drawxtrans(void) {
 								break;
 							}
 							saved_tempptr = tempptr;
-							int32_t d = mask_read_delta(&mask_cursor);
+							d = mask_read_delta(&mask_cursor);
 							startx_mod_54 += d;
 							cur_mx = d + maskx;
 							if (cur_mx >= (int32_t)pixelswide) {
@@ -1629,7 +1736,7 @@ void xtrans2_drawxtrans(void) {
 				}
 				saved_tempptr = tempptr;
 				saved_currptr = currptr;
-				int32_t cur_mx2 = maskx;
+				cur_mx2 = maskx;
 
 				/* --- 6b. Tail: scanline end. */
 				if (done_flag) {
@@ -1730,21 +1837,30 @@ void xtrans2_drawxtrans(void) {
 
 				/* --- 7. Clear marking records dirtied this scanline. */
 				if (markcnt) {
+					int mark_i;
+
 					markcnt = 0;
-					int mark_i = nummarks;
+					mark_i = nummarks;
 					if (nummarks) {
 						int mark_i2 = nummarks;
 						do {
 							if (markingnumber[mark_i]) {
+								uint8_t* mp;
+								uint8_t cb;
+								int j;
+								uintptr_t rec;
+								uint8_t* swap_src;
+								uint8_t tmp;
+
 								markingnumber[mark_i] = 0;
-								uint8_t* mp = (uint8_t*)xtransdataptr + markingptr[mark_i2];
-								uint8_t cb = mp[18];
+								mp = (uint8_t*)xtransdataptr + markingptr[mark_i2];
+								cb = mp[18];
 								/* Clear eight words at mp+18..mp+32. */
-								for (int j = 9; j <= 16; ++j)
+								for (j = 9; j <= 16; ++j)
 									((uint16_t*)mp)[j] = 0;
-								uintptr_t rec = (uintptr_t)xtransdataptr + 2 * mp[1] + objectptrs[mp[0]];
-								uint8_t* swap_src = &mp[cb];
-								uint8_t tmp = swap_src[1];
+								rec = (uintptr_t)xtransdataptr + 2 * mp[1] + objectptrs[mp[0]];
+								swap_src = &mp[cb];
+								tmp = swap_src[1];
 								swap_src[1] = ((uint8_t*)rec)[534];
 								((uint8_t*)rec)[534] = tmp;
 							}

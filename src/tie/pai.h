@@ -1,9 +1,13 @@
-#ifndef __PAI_H__
-#define __PAI_H__
+#ifndef TIE_PAI_H
+#define TIE_PAI_H
+
+#include "tie/tie.h"
 
 #include <stdint.h>
 
-#include "tie/tie.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* ---- Order-handler dispatch table type. -------------------------------
  * Each entry returns non-zero to tell the plan VM "consume the following
@@ -120,7 +124,11 @@ char pai_isobjectvalidtarget(uint16_t obj_ref);
  * global. PAIMAN_boardmaneuver / PAIMAN_dropoffmaneuver snapshot+restore
  * the whole block when they temporarily re-home craftptr to a docked
  * target craft. */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct AiContext {
 	/* active_obj_idx — FlightObject slot of the craft currently being
 	 * processed by the PAI tick. Set by pai_setupcraftaivars(obj_idx)
@@ -162,7 +170,11 @@ typedef struct AiContext {
 	int32_t search_y;     /* +0x2C */
 	int32_t search_z;     /* +0x30 */
 } AiContext;              /* 52 bytes (0x34) */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 extern AiContext ai;
 
@@ -195,4 +207,8 @@ extern int8_t pai_friendly_separation;
  * A few modules refer to the older "tie.c owns roughdistance" shim
  * interface (pai.h comment blocks). Kept as-is so no includes break. */
 
-#endif /* __PAI_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

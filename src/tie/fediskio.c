@@ -29,10 +29,6 @@
 #include "tie/shell.h"
 #include "tie_runtime/runtime/profile.h"
 
-#include <stdio.h> /* snprintf */
-#include <stdlib.h>
-#include <string.h>
-
 #include "tie/damage.h" /* systemstrings owner */
 #include "tie/gate.h"
 #include "tie/logbuf2.h"
@@ -40,7 +36,6 @@
 #include "tie/panel.h"
 #include "tie/panelrts.h" /* buoystr / unknownstring / statusstrings / warheadstrings */
 #include "tie_runtime/runtime/inflight_state.h"
-#include "tie_runtime/snapshot/snapshot.h" /* TieTextSnapshot_StringCell */
 
 /* --- Unimplemented module functions (forward declarations) --- */
 
@@ -53,6 +48,10 @@
 #include "tie/trace2.h"  /* TRACE2_{EDGEINFO,EDGEHEADER}_CAP + record sizes */
 #include "tie/wingman.h" /* wingmanstrings */
 #include "util/binio.h"
+
+#include <stdio.h> /* snprintf */
+#include <stdlib.h>
+#include <string.h>
 
 /* --- Static data --- */
 
@@ -76,6 +75,8 @@ uint8_t currentmission;
 uint8_t currentbattle;
 
 char resourcedir[10];
+// GLOBAL: TIE95 0xC1D0C
+// GLOBAL: TIE98 0x4DFFF0
 char** fatalerrstrings;
 // GLOBAL: TIE95 0xC1E08
 // GLOBAL: TIE98 0x4E00FC
@@ -246,11 +247,13 @@ int8_t fediskio_displayerror(void) {
 int16_t fediskio_tryopenfile(TieFileRoot root, const char* name, const char* mode, int16_t fatal) {
 	int16_t attempt_count = TieProfile_UsesTie98Logic() ? 2 : 4;
 
+	int16_t attempt;
+
 	strcpy(openfilename, name);
 	openfileroot = root;
 	/* MODERN ADAPTATION: the VFS root replaces TIE98's final
 	 * install-drive pathname attempt. Removable-media retries are obsolete. */
-	for (int16_t attempt = 0; attempt < attempt_count; ++attempt) {
+	for (attempt = 0; attempt < attempt_count; ++attempt) {
 		fileptr = TieStorage_Open(root, name, mode);
 		if (fileptr)
 			return 1;
@@ -401,6 +404,8 @@ void fediskio_createpilotrecord(void) {
 		voice_tour_battle = pilot.cur_battle;
 		voice_tour_mission = pilot.battle_cursor[voice_tour_battle];
 	} else {
+		const uint8_t* raw;
+
 		for (i = 0; i < 256; i++)
 			mission.mission_linked_data[i] = 0;
 		/* Snapshot combat-sim ship/course for fsfx_loadvoicelfd. In
@@ -411,7 +416,7 @@ void fediskio_createpilotrecord(void) {
 		 * combat_course_cursor[voice_id_a]. Read via the raw disk-byte
 		 * offset because the retail function addresses this field from
 		 * the serialized pilot image. */
-		const uint8_t* raw = (const uint8_t*)loadbuffer;
+		raw = (const uint8_t*)loadbuffer;
 		voice_id_a = pilot.cur_combat_ship;
 		voice_id_b = raw[0x67 + voice_id_a];
 	}
@@ -464,12 +469,14 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 
 	/* --- Training mode (train_craft_type nonzero = training mission) --- */
 	if (mission.train_craft_type) {
+		uint8_t prev_level;
+
 		ship_idx = train_craft_type_to_ship_idx(mission.train_craft_type_src);
 
 		if ((uint32_t)mission.mission_score > (uint32_t)p->train_score[ship_idx])
 			p->train_score[ship_idx] = mission.mission_score;
 
-		uint8_t prev_level = mission.train_level - 1;
+		prev_level = mission.train_level - 1;
 		if (prev_level > p->train_max_level[ship_idx])
 			p->train_max_level[ship_idx] = prev_level;
 
@@ -539,6 +546,8 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 
 	/* --- Battle mode (mode 4): accumulate career stats --- */
 	if (mission.mission_mode == 4) {
+		uint32_t avg;
+
 		p->exit_status = (uint8_t)exit_status;
 
 		p->laser_total += craft->laser_fired;
@@ -558,7 +567,7 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 			p->ejection_count++;
 
 		p->score += total_score;
-		uint32_t avg = ((uint32_t)p->score) / 4;
+		avg = ((uint32_t)p->score) / 4;
 		if (avg > 0xFFFF)
 			avg = 0xFFFF;
 		if ((uint16_t)avg > p->avg_score)
@@ -581,11 +590,15 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 			p->combat_score[ship][course] = total_score;
 
 		if (mission.primary_complete == 1 && !p->combat_complete[ship][course]) {
+			uint16_t won;
+			uint16_t s;
+			uint16_t c;
+
 			p->combat_complete[ship][course] = 1;
 
-			uint16_t won = 0;
-			for (uint16_t s = 0; s < NUM_SHIPS; s++)
-				for (uint16_t c = 0; c < 8; c++)
+			won = 0;
+			for (s = 0; s < NUM_SHIPS; s++)
+				for (c = 0; c < 8; c++)
 					if (p->combat_complete[s][c])
 						won++;
 
@@ -621,13 +634,16 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 					p->linked_data[i] = mission.mission_linked_data[i];
 
 				if (mission.secondary_complete == 1 && mis_var2 != 2) {
+					uint32_t sec_total;
+					uint8_t sec_rank;
+
 					p->secret_complete_bits[battle] |= battlemask[cur_mis];
 
 					p->secret_completions++;
-					uint32_t sec_total = total_score + p->secret_score;
+					sec_total = total_score + p->secret_score;
 					p->secret_score = sec_total;
 
-					uint8_t sec_rank = p->secret_order_rank;
+					sec_rank = p->secret_order_rank;
 					if (sec_rank < 9 && sec_total >= secretscores[sec_rank] &&
 						p->secret_completions >= secretcompletioncnts[sec_rank]) {
 						p->secret_order_rank++;
@@ -683,11 +699,12 @@ void fediskio_loadbufferdata(const char* filename, uint16_t buf_index, int16_t n
 	fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, filename, "rb", 1);
 
 	while (num_entries > 0) {
+		int ch;
+
 		farbufferptrs[buf_index] = farbufferptr;
 		if (line_idx >= (int16_t)skip_count)
 			buf_index++;
 
-		int ch;
 		while ((ch = TieStorage_Getc(fileptr)) != -1 && ch != 0xFF) {
 			if (line_idx >= (int16_t)skip_count)
 				*farbufferptr++ = (uint8_t)ch;
@@ -950,10 +967,12 @@ void fediskio_FreeFlightHandles(void) {
 	 * then null out every slot that aliased it. */
 	for (i = 0; i < NUM_SPECIES; i++) {
 		void* p = species_table[i].model_handle;
+		uint16_t j;
+
 		if (!p)
 			continue;
 		free(p);
-		uint16_t j;
+
 		for (j = i; j < NUM_SPECIES; j++) {
 			if (species_table[j].model_handle == p)
 				species_table[j].model_handle = NULL;
@@ -975,16 +994,21 @@ const char* TieTextSnapshot_StringCell(int cell) {
 int TieTextSnapshot_StringCount(void) { return (int)sdata_resolved_count; }
 
 // FUNCTION: TIE95 0x215B0
+// FUNCTION: TIE98 0x41B300
 void fediskio_loadstringdata(void) {
-	void** p;
 	int i;
+
+	const int32_t* offsets;
+	size_t n_offsets;
+	size_t k;
+	char** base_pp;
 
 	fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "strings.dat", stringdata_buf);
 
 	/* File layout: 32-bit file offsets (null-terminated), then string data.
 	 * Count entries in the offset header without relocating in place. */
-	const int32_t* offsets = (const int32_t*)stringdata_buf;
-	size_t n_offsets = 0;
+	offsets = (const int32_t*)stringdata_buf;
+	n_offsets = 0;
 	while (offsets[n_offsets])
 		++n_offsets;
 
@@ -995,12 +1019,12 @@ void fediskio_loadstringdata(void) {
 			fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
 		sdata_resolved_cap = n_offsets;
 	}
-	for (size_t k = 0; k < n_offsets; ++k)
+	for (k = 0; k < n_offsets; ++k)
 		sdata_resolved[k] = (char*)stringdata_buf + (uint32_t)offsets[k];
 	sdata_resolved_count = n_offsets;
 
 	/* `base + N` byte offsets in retail are `N/4` into the pointer table. */
-	char** base_pp = sdata_resolved;
+	base_pp = sdata_resolved;
 
 	systemstrings = base_pp;          /* base + 0    */
 	fatalerrstrings = base_pp + 10;   /* base + 40   */
@@ -1008,121 +1032,68 @@ void fediskio_loadstringdata(void) {
 	condstrings = base_pp + 28;       /* base + 112  */
 	condverbstrings = base_pp + 49;   /* base + 196  */
 
-	p = (void**)(base_pp + 69); /* base + 276  */
-	percentstrings = p;
-	p += 16;                 /* p = base + 85  */
-	goaloperatorstrings = p; /* base + 85  */
-	p += 2;                  /* p = base + 87  */
-	goaltitlestrings = p;    /* base + 87  */
-	p += 9;                  /* p = base + 96  */
+	percentstrings = (void**)(base_pp + 69);
+	goaloperatorstrings = (void**)(base_pp + 85);
+	goaltitlestrings = (void**)(base_pp + 87);
+	gatelevelstr = base_pp[22];
+	gateremainstr = base_pp[23];
+	gatepassedstr = base_pp[24];
+	targetshitstr = base_pp[25];
+	scorestr = base_pp[26];
+	goalescapestr = base_pp[27];
+	goal_of_string = base_pp[96];
+	goal_ofall_string = base_pp[97];
+	goalskillstrings = (void**)(base_pp + 103);
+	goal_group_string = base_pp[98];
+	goalaistrings = (void**)(base_pp + 109);
+	goal_allbut_string = base_pp[99];
+	goalsidestrings = (void**)(base_pp + 139);
+	goal_and_string = base_pp[100];
+	goalfamilystrings = (void**)(base_pp + 142);
+	goal_comma_string = base_pp[101];
+	goalgenusstrings = (void**)(base_pp + 149);
+	goalallfgstring = base_pp[102];
+	helpkeystrings = base_pp + 165;
+	helpscreenstrings = base_pp + 213;
+	NHIstatusstrings = (const char**)(base_pp + 261);
+	maproomhelpstrings = (const char**)(base_pp + 267);
+	messagetable = base_pp + 270;
+	optionstrings = base_pp + 485;
+	settingstrings = base_pp + 499;
+	hostilestr = base_pp[264];
+	imperialstr = base_pp[265];
+	neutralstr = base_pp[266];
+	diststring = base_pp[514];
+	shieldstring = base_pp[515];
+	hullstring = base_pp[516];
+	sysstring = base_pp[517];
+	targetstring = base_pp[518];
+	nonestring = base_pp[519];
+	ourstring = base_pp[520];
+	currentorderstring = base_pp[521];
+	notargetstring = base_pp[522];
+	curtargetstring = base_pp[523];
+	curdeststring = base_pp[524];
+	distfromtargetstring = base_pp[525];
+	waypointstrings = base_pp + 530;
+	disttodeststring = base_pp[526];
+	componentnames = (void**)(base_pp + 544);
+	timeremstring = base_pp[527];
+	statusstrings = (void**)(base_pp + 577);
+	timetotargetstring = base_pp[528];
+	warheadstrings = (void**)(base_pp + 586);
+	timetodeststring = base_pp[529];
+	unknownstring = base_pp[598];
+	buoystr = (void**)(base_pp + 599);
 
-	gatelevelstr = *(p - 74);
-	p++;
-	gateremainstr = *(p - 74);
-	p++;
-	gatepassedstr = *(p - 74);
-	p++;
-	targetshitstr = *(p - 74);
-	p++;
-	scorestr = *(p - 74);
-	p++;
-	goalescapestr = *(p - 74);
-	p++;
-
-	goal_of_string = *(p - 6);
-	p++;
-	goal_ofall_string = *(p - 6);
-	goalskillstrings = p;
-	p += 6;
-	goal_group_string = *(p - 11);
-	goalaistrings = p;
-	p += 30;
-	goal_allbut_string = *(p - 40);
-	goalsidestrings = p;
-	p += 3;
-	goal_and_string = *(p - 42);
-	goalfamilystrings = p;
-	p += 7;
-	goal_comma_string = *(p - 48);
-	goalgenusstrings = p;
-	p += 16;
-	goalallfgstring = *(p - 63);
-
-	helpkeystrings = (char**)p;                   /* base + 660  */
-	helpscreenstrings = (char**)(p + 48);         /* base + 852  */
-	NHIstatusstrings = (const char**)(p + 96);    /* base + 1044 */
-	maproomhelpstrings = (const char**)(p + 102); /* base + 1068 */
-	messagetable = (char**)(p + 105);             /* base + 1080 */
-	optionstrings = (char**)(p + 320);            /* base + 1940 */
-	settingstrings = (char**)(p + 334);           /* base + 1996 */
-	p += 350;                                     /* p now base + 2060 (index 515) */
-
-	hostilestr = *(p - 251);
-	p++; /* base + 1056 (index 264) */
-	imperialstr = *(p - 251);
-	p++; /* base + 1060 (index 265) */
-	neutralstr = *(p - 251);
-	p++; /* base + 1064 (index 266) */
-
-	diststring = *(p - 4);
-	p++;
-	shieldstring = *(p - 4);
-	p++;
-	hullstring = *(p - 4);
-	p++;
-	sysstring = *(p - 4);
-	p++;
-	targetstring = *(p - 4);
-	p++;
-	nonestring = *(p - 4);
-	p++;
-	ourstring = *(p - 4);
-	p++;
-	currentorderstring = *(p - 4);
-	p++;
-	notargetstring = *(p - 4);
-	p++;
-	curtargetstring = *(p - 4);
-	p++;
-	curdeststring = *(p - 4);
-	p++;
-
-	distfromtargetstring = *(p - 4);
-	waypointstrings = (char**)(p + 1);
-	disttodeststring = *(p - 3);
-	componentnames = p + 15;
-	timeremstring = *(p - 2);
-	statusstrings = p + 48;
-	timetotargetstring = *(p - 1);
-	warheadstrings = p + 57;
-	timetodeststring = *p;
-	p += 69;
-
-	unknownstring = *p;
-	buoystr = p + 1;
-
-	/* Store species names in a side table because the packed 32-bit field
-	 * cannot hold host pointers on LP64.
-	 *
-	 * Retail starts the loop with i = base+2460 (index 615) and
-	 * increments i before each `*(i-1)` store, so iteration v25=k reads
-	 * the pointer at base[615 + k]. After 69 iterations i ends at
-	 * base[684]; retail's `v26 = *i` becomes viewfilmstr and
-	 * `result = i + 1` (base[685]) becomes wingmanstrings. With p at
-	 * base[598] here, name_ptr = p + 18 (= base[616]) lets
-	 * `*(name_ptr - 1)` read base[615..683] for spec indices 0..68. */
-	void** name_ptr = p + 18;
+	/* Retail cells 615..683 name the 69 species; the following cells
+	 * contain the film label and the wingman command table. */
 	for (i = 0; i < NUM_SPEC_DATA; i++) {
-		spec_name_ptrs[i] = (const char*)*(name_ptr - 1);
-		/* Keep the struct field's low-32 bits populated for any
-		 * legacy reader that still inspects the layout directly. */
-		spec_data[i].name_ptr = (int32_t)(uintptr_t)*(name_ptr - 1);
-		name_ptr++;
+		spec_name_ptrs[i] = base_pp[615 + i];
+		spec_data[i].name_ptr = (int32_t)(uintptr_t)base_pp[615 + i];
 	}
-	/* name_ptr now points one past the last spec slot (= retail i+1
-	 * after break); *(name_ptr - 1) is retail's `v26 = *i`. */
-	viewfilmstr = *(name_ptr - 1);
-	wingmanstrings = (const char**)name_ptr;
+	viewfilmstr = base_pp[684];
+	wingmanstrings = (const char**)(base_pp + 685);
 }
 
 /* Monotonically-increasing counter bumped after fediskio_loadspecies
@@ -1134,9 +1105,11 @@ static uint32_t s_mission_load_generation;
 /* PORT: optional exact-size asset read replacing the original FILE-based
  * mission/newpal inverse-table loading branches. */
 static int fediskio_try_load_tie98_inverse_palette(const char* filename) {
+	size_t bytes_read;
+
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, filename, "rb", 0))
 		return 0;
-	const size_t bytes_read =
+	bytes_read =
 		TieStorage_Read(tie98_flight_inverse_palette, 1, sizeof tie98_flight_inverse_palette, fileptr);
 	fediskio_tryclosefile(0);
 	if (bytes_read == sizeof tie98_flight_inverse_palette)
@@ -1150,12 +1123,16 @@ static int fediskio_try_load_tie98_inverse_palette(const char* filename) {
 static void fediskio_prepare_tie98_inverse_palette(void) {
 	char inverse_filename[sizeof missionfilename];
 	int loaded = 0;
+	size_t mission_name_length;
+
 	g_inversePaletteTable = tie98_flight_inverse_palette;
 
-	const size_t mission_name_length = strlen(missionfilename);
+	mission_name_length = strlen(missionfilename);
 	if (mission_name_length < sizeof inverse_filename) {
+		char* extension;
+
 		memcpy(inverse_filename, missionfilename, mission_name_length + 1);
-		char* extension = strrchr(inverse_filename, '.');
+		extension = strrchr(inverse_filename, '.');
 		if (extension && (size_t)(extension - inverse_filename) + sizeof ".inv" <= sizeof inverse_filename) {
 			memcpy(extension, ".inv", sizeof ".inv");
 			loaded = fediskio_try_load_tie98_inverse_palette(inverse_filename);
@@ -1206,6 +1183,10 @@ void fediskio_loadspecies(void) {
 		 * the default `resourcedir` ("RESOURCE/") used by the rest of
 		 * the disk I/O surface. */
 		const char* species_dir = tie_is_high_resolution_flight() ? "RES640/" : "RES320/";
+		uint32_t dir_size;
+		int num_entries;
+		int file_offset;
+
 		snprintf(path, sizeof(path), "%s%s.lfd", species_dir, specieslfds[lfd_idx]);
 
 		fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, path, "rb", 1);
@@ -1219,19 +1200,24 @@ void fediskio_loadspecies(void) {
 		 * dword lives at offset +12, not +8. Every other LFD parser in
 		 * the codebase (fsfx, fmusic, landru/res)
 		 * reads it from +12 — this one was wrong. */
-		uint32_t dir_size = br_u32le(lfd_header + 12);
+		dir_size = br_u32le(lfd_header + 12);
 		fediskio_readfileblock(loadbuffer, dir_size, 1, fileptr);
 
 		/* Number of directory entries (16 bytes each) */
-		int num_entries = (uint16_t)dir_size >> 4;
-		int file_offset = 0;
+		num_entries = (uint16_t)dir_size >> 4;
+		file_offset = 0;
 
 		for (entry_idx = 0; entry_idx < num_entries; entry_idx++) {
+			int found;
+			int entry_flags;
+			uint32_t* dir_entry;
+			uint32_t entry_size;
+
 			file_offset += 16;
 
 			/* Check if any species entry references this LFD file + entry */
-			int found = 0;
-			int entry_flags = 0;
+			found = 0;
+			entry_flags = 0;
 
 			for (i = 0; i < NUM_SPECIES; i++) {
 				if (!(species_table[i].flags & 2))
@@ -1249,17 +1235,21 @@ void fediskio_loadspecies(void) {
 			}
 
 			/* Get entry data size from directory */
-			uint32_t* dir_entry = (uint32_t*)((uint8_t*)loadbuffer + 16 * entry_idx);
-			uint32_t entry_size = dir_entry[3];
+			dir_entry = (uint32_t*)((uint8_t*)loadbuffer + 16 * entry_idx);
+			entry_size = dir_entry[3];
 
 			if (found) {
+				void* species_buf;
+				uint32_t rgb_v39, rgb_v38;
+
 				if (TieClassicDisplay_UsesDx5()) {
 					FrontendDisplay_BlitOffscreenToRenderSurface();
 					FrontendDisplay_PresentFrame();
 				}
 
-				void* species_buf = NULL;
-				uint32_t rgb_v39 = 0, rgb_v38 = 0;
+				species_buf = NULL;
+				rgb_v39 = 0;
+				rgb_v38 = 0;
 
 				/* Read orientation header if present */
 				if (entry_flags & 1) {
@@ -1277,6 +1267,9 @@ void fediskio_loadspecies(void) {
 					 * then (entry_size-8) bytes of input payload loaded at
 					 * buffer+8. The converter appends either VGA indices or
 					 * RGB565 palette entries at buffer[v39]. */
+					bool tie98_16bpp;
+					size_t palette_entry_size;
+
 					if (file_offset) {
 						TieStorage_Seek(fileptr, file_offset, TIE_SEEK_CUR);
 						file_offset = 0;
@@ -1285,8 +1278,8 @@ void fediskio_loadspecies(void) {
 					TieStorage_Read(&rgb_v38, 4, 1, fileptr);
 					entry_size -= 8;
 
-					const bool tie98_16bpp = TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2;
-					const size_t palette_entry_size = tie98_16bpp ? 2u : (size_t)bytesPerPixel;
+					tie98_16bpp = TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2;
+					palette_entry_size = tie98_16bpp ? 2u : (size_t)bytesPerPixel;
 					species_buf = malloc(rgb_v39 + palette_entry_size * rgb_v38);
 					if (!species_buf)
 						fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
@@ -1353,10 +1346,11 @@ void fediskio_loadspecies(void) {
 
 	fediskio_RelockGlobals();
 	if (TieProfile_UsesTie98Logic()) {
-		g_hardwarePixelFormatAvailable = 0;
+		uint8_t deep_space_index;
+
 		const uint8_t deep_space_rgb[3] = { 0, 0, 2 };
-		const uint8_t deep_space_index =
-			(uint8_t)rtsvga2_findNearestColor(deep_space_rgb, rtsvga2_vgapalette, 0, 256);
+		g_hardwarePixelFormatAvailable = 0;
+		deep_space_index = (uint8_t)rtsvga2_findNearestColor(deep_space_rgb, rtsvga2_vgapalette, 0, 256);
 		g_flightColorKeyIndex = deep_space_index;
 		deepspacecolor = deep_space_index;
 	}
@@ -1372,12 +1366,14 @@ uint32_t TieRecoveredData_MissionLoadGeneration(void) { return s_mission_load_ge
 
 static bool tie_species_lfd_location(uint16_t species_idx, uint8_t expected_source,
 									 TieSpeciesLfdLocation* out) {
+	const SpeciesEntry* entry;
+
 	if (out)
 		memset(out, 0, sizeof *out);
 	if (!out || species_idx >= NUM_SPECIES)
 		return false;
 
-	const SpeciesEntry* entry = &species_table[species_idx];
+	entry = &species_table[species_idx];
 	if (!(entry->flags & 2) || !(entry->load_flags & 0x18) || (entry->load_flags & 3) != expected_source ||
 		((entry->load_flags & 0x40) && !mission.train_craft_type) || !entry->model_handle ||
 		entry->lfd_file >= 3)
@@ -1405,11 +1401,15 @@ static uint8_t fediskio_fillinspec_tie98_appendweapongroup(uint8_t result, SpecD
 	const int mesh_count = modelmesh_getcount(model_type);
 	const int target_type = (uint8_t)(weapon_type + 120);
 	const uint8_t start = result;
-	for (int mesh = 0; mesh < mesh_count && result < 16; ++mesh) {
+	int mesh;
+
+	for (mesh = 0; mesh < mesh_count && result < 16; ++mesh) {
 		const int mesh_type = modelmesh_gettype(model_type, mesh);
 		int paired = -1;
 		const int count = modelmesh_counthardpoints(model_type, mesh);
-		for (int hardpoint = 0; hardpoint < count && result < 16; ++hardpoint) {
+		int hardpoint;
+
+		for (hardpoint = 0; hardpoint < count && result < 16; ++hardpoint) {
 			int type, x, y, z;
 			modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
 			if (type != target_type)
@@ -1452,18 +1452,30 @@ static uint8_t fediskio_fillinspec_tie98_appendweapongroup(uint8_t result, SpecD
 // FEDISKIO_fillinspec
 // PORT: writes the recovered TIE95 runtime SpecData layout from OPT metadata.
 void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
+	int extent;
+	SpecData* spec;
+	int width;
+	int depth;
+	int height;
+	int shift;
+	int mesh_count;
+	int mesh;
+	uint8_t result;
+
+	int slot;
+
 	modelmesh_require_craft_capacity(model_type);
-	const int extent = modelbounds_getmaxextent(model_type);
+	extent = modelbounds_getmaxextent(model_type);
 	species_table[model_type].bound_hwidth = extent;
 	species_table[model_type].bound_qdepth = extent >> 1;
 	if (spec_index == 255)
 		return;
 
-	SpecData* spec = &spec_data[spec_index];
-	int width = modelbounds_getsizex(model_type);
-	int depth = modelbounds_getsizey(model_type);
-	int height = modelbounds_getsizez(model_type);
-	int shift = 0;
+	spec = &spec_data[spec_index];
+	width = modelbounds_getsizex(model_type);
+	depth = modelbounds_getsizey(model_type);
+	height = modelbounds_getsizez(model_type);
+	shift = 0;
 	while (width > 640 || depth > 640 || height > 640) {
 		width >>= 1;
 		depth >>= 1;
@@ -1483,14 +1495,22 @@ void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
 		spec->dock_passive_heavy = modelbounds_getmaxz(model_type);
 	}
 
-	const int mesh_count = modelmesh_getcount(model_type);
-	for (int mesh = 0; mesh < mesh_count; ++mesh) {
+	mesh_count = modelmesh_getcount(model_type);
+	for (mesh = 0; mesh < mesh_count; ++mesh) {
 		const int mesh_type = modelmesh_gettype(model_type, mesh);
 		const int hardpoint_count = modelmesh_counthardpoints(model_type, mesh);
-		for (int hardpoint = 0; hardpoint < hardpoint_count; ++hardpoint) {
+		int hardpoint;
+
+		for (hardpoint = 0; hardpoint < hardpoint_count; ++hardpoint) {
 			int type, x, y, z;
+			int special_hardpoint;
+			uint8_t weapon_type;
+			int known_weapon_type;
+
+			int slot;
+
 			modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
-			int special_hardpoint = 1;
+			special_hardpoint = 1;
 			switch (type) {
 				case 25:
 					spec->cockpit_x = x;
@@ -1529,9 +1549,9 @@ void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
 			if (special_hardpoint)
 				continue;
 
-			const uint8_t weapon_type = (uint8_t)(type - 120);
-			int known_weapon_type = 0;
-			for (int slot = 0; slot < 2; ++slot) {
+			weapon_type = (uint8_t)(type - 120);
+			known_weapon_type = 0;
+			for (slot = 0; slot < 2; ++slot) {
 				if (spec->laser_type[slot] == weapon_type || spec->missile_type[slot] == weapon_type) {
 					known_weapon_type = 1;
 					break;
@@ -1563,8 +1583,8 @@ void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
 		}
 	}
 
-	uint8_t result = 0;
-	for (int slot = 0; slot < 2; ++slot) {
+	result = 0;
+	for (slot = 0; slot < 2; ++slot) {
 		if (result == 16) {
 			spec->laser_type[slot] = 0;
 			spec->laser_fire_mode[slot] = 0;
@@ -1573,7 +1593,7 @@ void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
 		result = fediskio_fillinspec_tie98_appendweapongroup(result, spec, spec->laser_type[slot], true,
 															 model_type);
 	}
-	for (int slot = 0; slot < 2; ++slot) {
+	for (slot = 0; slot < 2; ++slot) {
 		if (result == 16) {
 			spec->missile_type[slot] = 0;
 			continue;
@@ -1597,6 +1617,8 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 
 	/* Set species bounding half-length */
 	uint16_t half_length = model->length >> 1;
+	uint16_t slot;
+
 	species_table[species_idx].bound_hwidth = half_length;
 	if (model->model_scale_shift) {
 		species_table[species_idx].bound_hwidth = species_table[species_idx].bound_hwidth
@@ -1656,7 +1678,9 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 		if (cur_mesh->num_hardpoints) {
 			ShipModelHardpoint* hp = (ShipModelHardpoint*)((uint8_t*)cur_mesh + cur_mesh->hardpoint_offset);
 
-			for (uint16_t hp_scan = 0; hp_scan < cur_mesh->num_hardpoints; hp_scan++, hp++) {
+			uint16_t hp_scan;
+
+			for (hp_scan = 0; hp_scan < cur_mesh->num_hardpoints; hp_scan++, hp++) {
 				int16_t matched = 0;
 
 				switch (hp->type) {
@@ -1724,9 +1748,12 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 								for (free_slot = 0; free_slot < 2 && spec->laser_type[free_slot]; free_slot++)
 									;
 								if (free_slot < 2) {
+									uint16_t mesh_type;
+									uint8_t craft_class;
+
 									spec->laser_type[free_slot] = weapon_id;
-									uint16_t mesh_type = cur_mesh->mesh_type;
-									uint8_t craft_class = species_table[species_idx].ship_class;
+									mesh_type = cur_mesh->mesh_type;
+									craft_class = species_table[species_idx].ship_class;
 									if (mesh_type == 4 || mesh_type == 21 || mesh_type == 5 ||
 										craft_class == 5 || craft_class == 4) {
 										spec->laser_fire_mode[free_slot] = 2;
@@ -1757,23 +1784,30 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 
 	/* Build laser hardpoint position tables (up to 16 total) */
 	result = 0;
-	for (uint16_t slot = 0; slot < 2; slot++) {
+	for (slot = 0; slot < 2; slot++) {
+		ShipModelMesh* mesh;
+		uint8_t target_id;
+		uint8_t start_hp;
+		uint16_t mi;
+
 		if (result == 16) {
 			spec->laser_type[slot] = 0;
 			spec->laser_fire_mode[slot] = 0;
 			continue;
 		}
 
-		ShipModelMesh* mesh = (ShipModelMesh*)&model->lod_records[model->num_lods];
-		uint8_t target_id = spec->laser_type[slot] + 120;
-		uint8_t start_hp = result;
+		mesh = (ShipModelMesh*)&model->lod_records[model->num_lods];
+		target_id = spec->laser_type[slot] + 120;
+		start_hp = result;
 
-		for (uint16_t mi = 0; mi < model->num_meshes; mi++) {
+		for (mi = 0; mi < model->num_meshes; mi++) {
 			if (mesh->num_hardpoints) {
 				int16_t paired = 255;
 				ShipModelHardpoint* hp = (ShipModelHardpoint*)((uint8_t*)mesh + mesh->hardpoint_offset);
 
-				for (uint16_t hp_idx = 0; hp_idx < mesh->num_hardpoints; hp_idx++, hp++) {
+				uint16_t hp_idx;
+
+				for (hp_idx = 0; hp_idx < mesh->num_hardpoints; hp_idx++, hp++) {
 					if (hp->type != target_id)
 						continue;
 					if (paired == 255) {
@@ -1806,21 +1840,28 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 	}
 
 	/* Build missile/warhead hardpoint position tables */
-	for (uint16_t slot = 0; slot < 2; slot++) {
+	for (slot = 0; slot < 2; slot++) {
+		ShipModelMesh* mesh;
+		uint8_t target_id;
+		uint8_t start_hp;
+		uint16_t mi;
+
 		if (result == 16) {
 			spec->missile_type[slot] = 0;
 			continue;
 		}
 
-		ShipModelMesh* mesh = (ShipModelMesh*)&model->lod_records[model->num_lods];
-		uint8_t target_id = spec->missile_type[slot] + 120;
-		uint8_t start_hp = result;
+		mesh = (ShipModelMesh*)&model->lod_records[model->num_lods];
+		target_id = spec->missile_type[slot] + 120;
+		start_hp = result;
 
-		for (uint16_t mi = 0; mi < model->num_meshes; mi++) {
+		for (mi = 0; mi < model->num_meshes; mi++) {
 			if (mesh->num_hardpoints) {
 				ShipModelHardpoint* hp = (ShipModelHardpoint*)((uint8_t*)mesh + mesh->hardpoint_offset);
 
-				for (uint16_t hp_idx = 0; hp_idx < mesh->num_hardpoints; hp_idx++, hp++) {
+				uint16_t hp_idx;
+
+				for (hp_idx = 0; hp_idx < mesh->num_hardpoints; hp_idx++, hp++) {
 					if (hp->type != target_id)
 						continue;
 					/* Missile hardpoint coords: v0=X, v1=Y, v2=Z. */

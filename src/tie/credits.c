@@ -1,13 +1,7 @@
-#include <stdlib.h>
-#include <string.h>
-
-#include "landru/viewadd.h"
 #include "tie/credits.h"
+#include "tie/credits_internal.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
-#include "tie_runtime/snapshot/snapshot.h"
-#include "tie_runtime/snapshot/snapshot_internal.h"
-#include <landru/task.h>
 
 #include "landru/actcust.h"
 #include "landru/actdelt.h"
@@ -29,82 +23,106 @@
 
 /* ---- Static globals ---- */
 
-static Rect credit_dirty_rect;
-static Actor* red_bar;
-static Actor* blue_bar;
-static Actor* credit_actor; /* custom draw actor for the credits */
-static Actor* stars_actor;
-static int16_t next_credit_scene;
-// GLOBAL: TIE95 0xF5E02
-static int16_t credit_text_len; /* hold duration per credit (130) */
-static int16_t film_time;       /* current frame counter */
-// GLOBAL: TIE95 0xF5E06
-static void* star_buffer; /* 320x100 star pixel cache */
-// GLOBAL: TIE95 0xF5E08
-static int16_t num_credit_lines; /* paragraph count in credit text */
-// GLOBAL: TIE95 0xF5E0A
-static int16_t credit_film_len; /* total animation length */
-// GLOBAL: TIE95 0xF5E0C
-static LandruHandle credit_text; /* paragraph data from tietext0.lfd */
+// GLOBAL: TIE95 0xf5de8
+// GLOBAL: TIE98 0x50f7a8
+Rect credits_dirty_rect;
+// GLOBAL: TIE95 0xf5df0
+// GLOBAL: TIE98 0x50f7b4
+Actor* credits_red_bar;
+// GLOBAL: TIE95 0xf5df4
+// GLOBAL: TIE98 0x50f7d4
+Actor* credits_blue_bar;
+// GLOBAL: TIE95 0xf5df8
+// GLOBAL: TIE98 0x50f7d8
+static Actor* credits_actor; /* custom draw actor for the credits */
+// GLOBAL: TIE95 0xf5dfc
+// GLOBAL: TIE98 0x50f7b8
+static Actor* credits_stars_actor;
+// GLOBAL: TIE95 0xf5e00
+// GLOBAL: TIE98 0x50f7a0
+static int16_t credits_next_scene;
+// GLOBAL: TIE95 0xf5e02
+// GLOBAL: TIE98 0x50f7b0
+int16_t credits_text_len; /* hold duration per credit (130) */
+// GLOBAL: TIE95 0xf5e04
+// GLOBAL: TIE98 0x50f7bc
+int16_t credits_film_time; /* current frame counter */
+// GLOBAL: TIE95 0xf5e06
+// GLOBAL: TIE98 0x50f7c8
+static LandruHandle credits_star_buffer; /* 320x100 star pixel cache */
+// GLOBAL: TIE95 0xf5e08
+// GLOBAL: TIE98 0x50f7c0
+int16_t credits_num_credit_lines; /* paragraph count in credit text */
+// GLOBAL: TIE95 0xf5e0a
+// GLOBAL: TIE98 0x50f7cc
+int16_t credits_film_len; /* total animation length */
+// GLOBAL: TIE95 0xf5e0c
+// GLOBAL: TIE98 0x50f7d0
+LandruHandle credits_text; /* paragraph data from tietext0.lfd */
 
 /* ================================================================
  * Helpers
  * ================================================================ */
 
-/* Copy 320x100 star buffer to canvas twice (y=0 and y=100) to tile
- * a 320x200 star background.
- *
- * Also emits two stars draws_2D records for the HD snapshot. The
- * stars actor's own draw is NOT invoked — classic FB already has the
- * starfield from the buffer copies above. The emits exist only so
- * the cutscene compositor can render the HD `stars` sprite at the
- * same two positions; the buffer-copy → black+sparse-delta wipe
- * that erases last frame's bar/text trails on classic is mirrored
- * in HD by the opaque HD stars sprite drawn before bars and text in
- * z order. */
-static void Credit_Stars_To_Back(void) {
+/* Tile the cached star image over the 320x200 credits background. */
+// FUNCTION: TIE95 0x715C0
+// FUNCTION: TIE98 0x414BE0
+void credits_Credit_Stars_To_Back(void) {
 	Rect r;
+	void* pixels = xmemhdl_Lock_Handle(credits_star_buffer);
 	xrect_Set_Rect(&r, 0, 0, 320, 100);
-	stub_Copy_From_Clipped_Buffer(star_buffer, &r, 0, 0, 320, 100);
-	stub_Copy_From_Clipped_Buffer(star_buffer, &r, 0, 100, 320, 100);
+	stub_Copy_From_Clipped_Buffer(pixels, &r, 0, 0, 320, 100);
+	stub_Copy_From_Clipped_Buffer(pixels, &r, 0, 100, 320, 100);
 
-	xactor_emit_draw(stars_actor, 0, 0);
-	xactor_emit_draw(stars_actor, 0, 100);
+	xmemhdl_Unlock_Handle(credits_star_buffer);
+#ifdef TIE_MODERN
+	/* Snapshot capture mirrors the two buffer copies without drawing again. */
+	xactor_emit_draw(credits_stars_actor, 0, 0);
+	xactor_emit_draw(credits_stars_actor, 0, 100);
+#endif
 }
 
 /* Render a star actor into the 320x100 star buffer. Fills with black,
  * calls the actor's draw, copies canvas to buffer. */
-static void Credit_Actor_To_Buffer(Actor* actor, void* buffer) {
+// FUNCTION: TIE95 0x7161C
+// FUNCTION: TIE98 0x414C40
+static void Credit_Actor_To_Buffer(Actor* actor, LandruHandle buffer) {
 	Rect r;
+	void* pixels;
 	xrect_Set_Rect(&r, 0, 0, 320, 100);
 	if (actor->draw) {
 		xpaint_Paint_Clipped_Rect(&r, 0);
 		actor->draw(actor, &r, &r, actor->x, actor->y, 1);
 	}
-	stub_Copy_To_Clipped_Buffer(buffer, &r, 0, 0, 320, 100);
+	pixels = xmemhdl_Lock_Handle(buffer);
+	stub_Copy_To_Clipped_Buffer(pixels, &r, 0, 0, 320, 100);
+	xmemhdl_Unlock_Handle(buffer);
 }
 
 /* Initialize credit display state: dirty rect, paragraph count,
  * text hold duration, total film length. */
+// FUNCTION: TIE95 0x71290
 static void Init_Credit_Info(void) {
-	xrect_Set_Rect(&credit_dirty_rect, 40, 40, 280, 160);
-	num_credit_lines = xparagrp_Count_Paragraphs(credit_text);
-	credit_text_len = 130;
-	film_time = 0;
-	credit_film_len = 90 * (num_credit_lines - 1) + 138;
+	xrect_Set_Rect(&credits_dirty_rect, 40, 40, 280, 160);
+	credits_num_credit_lines = xparagrp_Count_Paragraphs(credits_text);
+	credits_text_len = 130;
+	credits_film_time = 0;
+	credits_film_len = 90 * (credits_num_credit_lines - 1) + 138;
 }
 
 /* ================================================================
  * View update callback
  * ================================================================ */
 
+// FUNCTION: TIE95 0x71244
+// FUNCTION: TIE98 0x414850
 static void end_View(int32_t frame_num) {
-	(void)frame_num;
 	int16_t exit_id;
-	int16_t done = (film_time == credit_film_len) ? 1 : 0;
-	if (shellext_Check_Scene_Exit(&exit_id, next_credit_scene, next_credit_scene, done))
+	int16_t done = (credits_film_time == credits_film_len) ? 1 : 0;
+	(void)frame_num;
+	if (shellext_Check_Scene_Exit(&exit_id, credits_next_scene, credits_next_scene, done))
 		xerror_Set_Landru_Exit(exit_id);
-	film_time++;
+	credits_film_time++;
 }
 
 /* ================================================================
@@ -118,11 +136,16 @@ static void end_View(int32_t frame_num) {
  * time_offset 60..99:  hold     — red/blue bars animate in
  * time_offset 100..129: fade out — text_y rises, color fades
  *
- * base_y = film_time + 96, decremented by 90 per paragraph.
+ * base_y = credits_film_time + 96, decremented by 90 per paragraph.
  * color = palette index for the text (ramps 167..239 range).
  * text_y = vertical position for text block. */
+// FUNCTION: TIE95 0x712EC
 static int16_t draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 						   int16_t refresh) {
+	int16_t time_offset;
+	int16_t credit_idx = 0;
+	int16_t base_y;
+
 	(void)actor;
 	(void)xoff;
 	(void)yoff;
@@ -131,7 +154,7 @@ static int16_t draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff,
 		return 1;
 
 	/* Film ended: black screen */
-	if (credit_film_len <= film_time) {
+	if (credits_film_len <= credits_film_time) {
 		Rect r;
 		xrect_Set_Rect(&r, 0, 0, 320, 200);
 		xpaint_Paint_Clipped_Rect(&r, 0);
@@ -141,21 +164,23 @@ static int16_t draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff,
 	}
 
 	/* Draw tiled star background */
-	Credit_Stars_To_Back();
+	credits_Credit_Stars_To_Back();
 
-	int16_t time_offset = film_time;
-	int16_t credit_idx = 0;
-	int16_t base_y = film_time + 96;
+	time_offset = credits_film_time;
+	base_y = credits_film_time + 96;
 
 	/* Walk through each credit paragraph */
-	while (credit_idx < num_credit_lines) {
+	while (credit_idx < credits_num_credit_lines) {
 		if (time_offset < 0)
 			break;
 
-		if (time_offset < credit_text_len) {
+		if (time_offset < credits_text_len) {
 			/* This paragraph is visible */
 			int16_t color;
 			int16_t text_y;
+			int16_t num_strings;
+			int16_t i;
+			Rect text_rect;
 
 			if (time_offset < 60) {
 				/* Fade-in phase */
@@ -179,7 +204,7 @@ static int16_t draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff,
 				}
 			}
 
-			int16_t num_strings = xparagrp_Count_Paragraph_Strings(credit_text, credit_idx);
+			num_strings = xparagrp_Count_Paragraph_Strings(credits_text, credit_idx);
 
 			/* Draw red/blue bar decorations during hold phase */
 			if (time_offset >= 45) {
@@ -196,34 +221,32 @@ static int16_t draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff,
 				}
 
 				if (bar_width != -1) {
-					xactdelt_Draw_Delta_Actor(red_bar, bounds, clip, bar_width - 240, 79, refresh);
-
 					Rect saved_clip;
+					Rect bar_clip;
+					xactdelt_Draw_Delta_Actor(credits_red_bar, bounds, clip, bar_width - 240, 79, refresh);
+
 					xcanvas_Get_Drawing_Canvas_Clip(&saved_clip);
 
-					Rect bar_clip;
 					xrect_Set_Rect(&bar_clip, 0, 0, 320, 10 * (num_strings - 1) + 93);
 					xrect_Clip_Rect(&bar_clip, clip);
 					xcanvas_Set_Drawing_Canvas_Clip(&bar_clip);
 
-					xactdelt_Draw_Delta_Actor(blue_bar, &bar_clip, &bar_clip, 320 - bar_width, 91, refresh);
+					xactdelt_Draw_Delta_Actor(credits_blue_bar, &bar_clip, &bar_clip, 320 - bar_width, 91,
+											  refresh);
 
 					xcanvas_Set_Drawing_Canvas_Clip(&saved_clip);
 				}
 			}
 
 			/* Draw text lines */
-			Rect text_rect;
 			xrect_Set_Rect(&text_rect, 0, text_y, 320, text_y + 10);
 
-			int16_t i;
 			for (i = 0; i < num_strings; i++) {
 				char line_buf[80];
-				xparagrp_Get_Paragraph_String(credit_text, line_buf, credit_idx, i);
+				xparagrp_Get_Paragraph_String(credits_text, line_buf, credit_idx, i);
 				xfont_Print_Centered_Text(line_buf, &text_rect, color, 0);
 
-				int16_t spacing = i ? 10 : 12;
-				xrect_Offset_Rect(&text_rect, 0, spacing);
+				xrect_Offset_Rect(&text_rect, 0, i ? 10 : 12);
 			}
 		}
 
@@ -233,7 +256,7 @@ static int16_t draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff,
 		credit_idx++;
 	}
 
-	xdirty_Dirty_Rect(&credit_dirty_rect);
+	xdirty_Dirty_Rect(&credits_dirty_rect);
 	return 1;
 }
 
@@ -241,115 +264,81 @@ static int16_t draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff,
  * Entry point
  * ================================================================ */
 
-typedef enum {
-	CREDITS_PHASE_BEGIN = 0,
-	CREDITS_PHASE_CLEANUP = 1,
-} CreditsPhase;
+/* The original blocking scene is split at its modal-view call. */
+int16_t credits_OpenScene(SceneHeadStruct* scene_head, CreditsSceneResources* resources, int16_t tie98) {
+	Rect r;
+	Palette* pal;
 
-typedef struct CreditsTask {
-	SceneHeadStruct* scene_head;
-	ResFile* credit_res;
-	ResFile* text_res;
-	CreditsPhase phase;
-} CreditsTask;
+	if (shellext_Get_Cur_Scene() == SCENE_CREDITS)
+		credits_next_scene = SCENE_REGISTER;
+	else
+		credits_next_scene = shipext_Next_Battle_Cutscene();
 
-static LandruTaskStepResult credits_task_step(void* self) {
-	CreditsTask* t = (CreditsTask*)self;
+	resources->credit_res = shellext_Open_Empire_Resource("credits.lfd");
+	if (!resources->credit_res)
+		return 0;
+	resources->text_res = shellext_Open_Empire_Resource("tietext0.lfd");
+	if (!resources->text_res)
+		return 0;
+	credits_text = xparagrp_Res_Paragraph(resources->text_res, "credits");
+	if (!credits_text)
+		return 0;
 
-	if (t->phase == CREDITS_PHASE_BEGIN) {
-		Rect r;
+	xrect_Set_Rect(&r, 0, 0, 320, 200);
+	credits_star_buffer = xmemhdl_Alloc_Clear_Handle(32000, LANDRU_MEMORY_RESOURCE);
+	if (!credits_star_buffer)
+		return 0;
+	credits_stars_actor = xactdelt_Res_Delta_Actor("stars", &r, 0, 0, 100);
+	if (!credits_stars_actor)
+		return 0;
+	xactor_Set_Actor_Time(credits_stars_actor, 0, 0);
+	credits_red_bar = xactdelt_Res_Delta_Actor("redbar", &r, 0, 0, 100);
+	if (!credits_red_bar)
+		return 0;
+	xactor_Set_Actor_Time(credits_red_bar, 0, 0);
+	credits_blue_bar = xactdelt_Res_Delta_Actor("bluebar", &r, 0, 0, 100);
+	if (!credits_blue_bar)
+		return 0;
+	xactor_Set_Actor_Time(credits_blue_bar, 0, 0);
+	Credit_Actor_To_Buffer(credits_stars_actor, credits_star_buffer);
 
-		/* Determine next scene after credits */
-		if (shellext_Get_Cur_Scene() == SCENE_CREDITS)
-			next_credit_scene = SCENE_REGISTER;
-		else
-			next_credit_scene = shipext_Next_Battle_Cutscene();
+	credits_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 0);
+	if (!credits_actor)
+		return 0;
+	xactor_Set_Actor_Draw_Function(credits_actor, tie98 ? credits_draw_Credit_tie98 : draw_Credit);
+	pal = xpal_Res_Palette("colors");
+	if (!pal)
+		return 0;
+	xpal_Set_Dest_Palette(pal);
+	xpal_Set_Dest_Palette(scene_head->def_palette);
 
-		/* Load resources */
-		t->credit_res = shellext_Open_Empire_Resource("credits.lfd");
-		t->text_res = shellext_Open_Empire_Resource("tietext0.lfd");
-		credit_text = xparagrp_Res_Paragraph(t->text_res, "credits");
-
-		/* Allocate star buffer and render star background */
-		xrect_Set_Rect(&r, 0, 0, 320, 200);
-		star_buffer = calloc(1, 32000);
-
-		stars_actor = xactdelt_Res_Delta_Actor("stars", &r, 0, 0, 100);
-		xactor_Set_Actor_Time(stars_actor, 0, 0);
-
-		red_bar = xactdelt_Res_Delta_Actor("redbar", &r, 0, 0, 100);
-		xactor_Set_Actor_Time(red_bar, 0, 0);
-
-		blue_bar = xactdelt_Res_Delta_Actor("bluebar", &r, 0, 0, 100);
-		xactor_Set_Actor_Time(blue_bar, 0, 0);
-
-		Credit_Actor_To_Buffer(stars_actor, star_buffer);
-
-		credit_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 0);
-		xactor_Set_Actor_Draw_Function(credit_actor, draw_Credit);
-
-		Palette* pal = xpal_Res_Palette("colors");
-		xpal_Set_Dest_Palette(pal);
-		xpal_Set_Dest_Palette(t->scene_head->def_palette);
-
+	if (tie98)
+		credits_Init_Credit_Info_tie98();
+	else
 		Init_Credit_Info();
+	xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
+	xview_Set_View_Update_Function(end_View);
+	xview_Disable_Global_View_Erase();
+	xtimer_Set_Frame_Rate(12);
+	resources->view_configured = 1;
+	return 1;
+}
 
-		xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
-
-		xview_Set_View_Update_Function(end_View);
-		xview_Disable_Global_View_Erase();
-		xtimer_Set_Frame_Rate(12);
-
-		/* Tag the scene for the HD compositor: bundle key
-		 * (CREDITS, credits) resolves the remaster manifest at
-		 * <root>/CREDITS/films/credits/. INCREMENTAL is the right
-		 * cadence — draw_Credit's per-frame redraw inside
-		 * credit_dirty_rect emits stars/bars/text records that
-		 * persist on the RT (LOAD load_op); the stars emits in
-		 * Credit_Stars_To_Back cover the previous frame's bars
-		 * and text. SCENE_CREDITS_ALT shares the same bundle. */
-		TieSnapshotBuilder_SetActiveFilm("CREDITS", "credits");
-
-		/* Push the view modal task. The runner steps IT on
-		 * subsequent ticks; we do not run again until it pops. */
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = CREDITS_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+void credits_CloseScene(CreditsSceneResources* resources) {
+	if (resources->view_configured) {
+		xtimer_Set_Frame_Rate(20);
+		xview_Enable_Global_View_Erase();
+		xview_Clear_View_Update_Function();
+		resources->view_configured = 0;
 	}
-
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static void credits_task_end(void* self) {
-	CreditsTask* t = (CreditsTask*)self;
-	if (t->phase == CREDITS_PHASE_BEGIN)
-		return;
-
-	/* CLEANUP — view task popped; do teardown. */
-	xtimer_Set_Frame_Rate(20);
-	xview_Enable_Global_View_Erase();
-	xview_Clear_View_Update_Function();
-
-	free(star_buffer);
-	star_buffer = NULL;
-	xparagrp_Free_Paragraph(credit_text);
-	credit_text = LANDRU_NULL_HANDLE;
-	xres_Close_Resource(t->text_res);
-	xres_Close_Resource(t->credit_res);
-}
-
-static const LandruTaskVtable credits_task_vt = {
-	.step = credits_task_step,
-	.end = credits_task_end,
-};
-
-void credits_Push_Credits_Task(SceneHeadStruct* scene_head) {
-	CreditsTask* t = (CreditsTask*)landru_task_push(&credits_task_vt);
-	if (!t)
-		return;
-	t->scene_head = scene_head;
-	t->credit_res = NULL;
-	t->text_res = NULL;
-	t->phase = CREDITS_PHASE_BEGIN;
+	xmemhdl_Free_Handle(credits_star_buffer);
+	credits_star_buffer = LANDRU_NULL_HANDLE;
+	xparagrp_Free_Paragraph(credits_text);
+	credits_text = LANDRU_NULL_HANDLE;
+	if (resources->text_res)
+		xres_Close_Resource(resources->text_res);
+	if (resources->credit_res)
+		xres_Close_Resource(resources->credit_res);
+	resources->text_res = NULL;
+	resources->credit_res = NULL;
 }

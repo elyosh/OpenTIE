@@ -1,17 +1,25 @@
 /* PANELRTS -- panel real-time helpers (2 functions + 5 globals). */
 
-#include <stdint.h>
-
+#include "tie/panelrts.h"
 #include "tie/festring.h"
 #include "tie/panel.h"
-#include "tie/panelrts.h"
 #include "tie/tie.h"
+
+#include <stdint.h>
 
 /* Runtime-loaded string table pointers. Written by fediskio_loadstringdata
  * during front-end boot; read by PANEL/MSG/GOALS/USER/REPLAY. */
+// GLOBAL: TIE95 0xD5E48
+// GLOBAL: TIE98 0x5FBF98
 void* buoystr;
+// GLOBAL: TIE95 0xD5E4C
+// GLOBAL: TIE98 0x5FBFA0
 void* warheadstrings;
+// GLOBAL: TIE95 0xD5E50
+// GLOBAL: TIE98 0x5FBF94
 void* unknownstring;
+// GLOBAL: TIE95 0xD5E54
+// GLOBAL: TIE98 0x5FBF9C
 void* statusstrings;
 
 /* Place-value table, 6 entries matching the 12-byte binary layout.
@@ -36,6 +44,7 @@ uint16_t panelrts_setnewpilotview(uint16_t view_idx) {
 
 // FUNCTION: TIE95 0x44E8C
 void panelrts_outnum(int32_t value, uint16_t ndigits, uint16_t minpad) {
+	uint16_t rolling, pos, leading_nonzero;
 	/* "unknown" placeholder: draw ndigits '0' glyphs in color 0x40 with the
 	 * drop-shadow disabled, then restore the previous drop / text state.
 	 * Matches the binary's 32-bit compare on eax (only exactly 0xFFFF). */
@@ -59,16 +68,16 @@ void panelrts_outnum(int32_t value, uint16_t ndigits, uint16_t minpad) {
 
 	/* The binary only consumes the low 16 bits of eax for the digit loop
 	 * (after the 0xFFFF sentinel check on the full 32-bit register). */
-	uint16_t rolling = (uint16_t)value;
-	uint16_t pos = ndigits;
-	uint16_t leading_nonzero = 0;
+	rolling = (uint16_t)value;
+	pos = ndigits;
+	leading_nonzero = 0;
 
 	do {
+		uint8_t out_ch;
 		const uint16_t divisor = placevalue[pos];
 		uint16_t digit = (uint16_t)(rolling / divisor);
 		rolling = (uint16_t)(rolling - digit * divisor);
 
-		uint8_t out_ch;
 		if (leading_nonzero || pos <= minpad || digit != 0) {
 			leading_nonzero = 1;
 			if (digit > 9)

@@ -3,10 +3,39 @@
 
 #include <stdint.h>
 
-/* In-flight options. Configuration loading is synchronous; the editor runs
- * as a task and writes its result to user_submodal_result. */
-void option_apply_options_cfg(void);
-void option_Push_OptionsRoom_Task(void);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Options, replay capture, and flight logic share this per-mission state.
+ * Storage is owned by option.c. */
+
+extern int8_t inflight_music_vol;
+extern int8_t inflight_sound_vol;
+extern int8_t inflight_speech_vol;
+extern int8_t inflight_unlimited;
+extern int8_t inflight_invulnerable;
+extern int8_t inflight_collision;
+
+enum { OPTION_ROW_COUNT = 14 };
+
+typedef struct OptionRoomState {
+	uint8_t values[OPTION_ROW_COUNT];
+	uint8_t max_values[OPTION_ROW_COUNT];
+	uint8_t kind_offsets[OPTION_ROW_COUNT];
+	uint16_t prev_buttons;
+	int16_t selection;
+	int16_t previous_selection;
+	int16_t redraw_all;
+	int16_t exit_code;
+} OptionRoomState;
+
+void option_OpenRoom(OptionRoomState* state);
+void option_RenderRows(OptionRoomState* state);
+/* Poll result: 0 idle, 1 exit, 2 redraw. */
+int option_PollOnce(OptionRoomState* state);
+void option_ApplyFlightValues(const uint8_t* values);
+void option_ApplyValues(const uint8_t* values);
 
 /*
  * Pointer tables into stringdata_buf (filled by fediskio_loadstringdata):
@@ -18,4 +47,8 @@ void option_Push_OptionsRoom_Task(void);
 extern char** optionstrings;
 extern char** settingstrings;
 
-#endif /* TIE_OPTION_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

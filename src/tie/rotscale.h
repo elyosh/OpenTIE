@@ -1,7 +1,11 @@
-#ifndef __ROTSCALE_H__
-#define __ROTSCALE_H__
+#ifndef TIE_ROTSCALE_H
+#define TIE_ROTSCALE_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Rotated and scaled RLE sprite renderer used by bitmaps and reticles. */
 
@@ -26,5 +30,9 @@ void rotscale_prepare_color(const char* palette_entries);
 
 int16_t rotscale_rotate_scale_image(int16_t screen_x, int16_t screen_y, uint16_t scale,
 									const uint8_t* image_hdr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

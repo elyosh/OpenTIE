@@ -10,12 +10,7 @@
  * blending, medal arm animation, and CD FMV streaming.
  */
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
+#include "tie/play1.h"
 #include "landru/actor.h"
 #include "landru/bitmap.h"
 #include "landru/canvas.h"
@@ -32,7 +27,6 @@
 #include "landru/timer.h"
 #include "landru/view.h"
 #include "landru/viewadd.h"
-#include "tie/play1.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
 #include "tie/textext.h"
@@ -46,16 +40,24 @@
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
-#include "tie_runtime/snapshot/snapshot.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/snapshot/snapshot_internal.h"
+#endif
 #include "tie_runtime/storage/storage.h"
 #include "util/binio.h"
-#include <landru/task.h>
 
 #include "tie/deltadd.h"
 #include "tie/drawstrm.h"
 
-#define STREAM_BUFFER_SIZE 128000
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+enum {
+	STREAM_BUFFER_SIZE = 128000,
+};
 
 static const char* play1_tie98_music_path(int16_t scene) {
 	switch (scene) {
@@ -448,23 +450,23 @@ typedef struct {
 } play1_data_set_t;
 
 static const play1_data_set_t play1_set_demo = {
-	.name = "demo",
-	.cur_scene = play1_cur_scene_demo,
-	.next_scene = play1_next_scene_demo,
-	.skip_scene = play1_skip_scene_demo,
-	.resource_str = play1_resource_str_demo,
-	.film_str = play1_film_str_demo,
-	.stream_str = play1_stream_str_demo,
+	/* name */ "demo",
+	/* cur_scene */ play1_cur_scene_demo,
+	/* next_scene */ play1_next_scene_demo,
+	/* skip_scene */ play1_skip_scene_demo,
+	/* resource_str */ play1_resource_str_demo,
+	/* film_str */ play1_film_str_demo,
+	/* stream_str */ play1_stream_str_demo,
 };
 
 static const play1_data_set_t play1_set_retail = {
-	.name = "retail",
-	.cur_scene = play1_cur_scene_retail,
-	.next_scene = play1_next_scene_retail,
-	.skip_scene = play1_skip_scene_retail,
-	.resource_str = play1_resource_str_retail,
-	.film_str = play1_film_str_retail,
-	.stream_str = play1_stream_str_retail,
+	/* name */ "retail",
+	/* cur_scene */ play1_cur_scene_retail,
+	/* next_scene */ play1_next_scene_retail,
+	/* skip_scene */ play1_skip_scene_retail,
+	/* resource_str */ play1_resource_str_retail,
+	/* film_str */ play1_film_str_retail,
+	/* stream_str */ play1_stream_str_retail,
 };
 
 /*
@@ -525,10 +527,16 @@ static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, 
  */
 // FUNCTION: TIE95 0x78500
 static void play1_end_View(int32_t time) {
+	const play1_data_set_t* p;
+	int16_t next_scene;
+	int16_t skip_scene;
+	int16_t scene;
+	bool at_end;
+
 	(void)time;
-	const play1_data_set_t* p = play1_data_set();
-	int16_t next_scene = p->next_scene[play1_id];
-	int16_t skip_scene = p->skip_scene[play1_id];
+	p = play1_data_set();
+	next_scene = p->next_scene[play1_id];
+	skip_scene = p->skip_scene[play1_id];
 
 	/* Retail data skips scene 7. Demo data enters it only when LOBO.LFD exists. */
 	if (next_scene == 7) {
@@ -543,8 +551,7 @@ static void play1_end_View(int32_t time) {
 		}
 	}
 
-	int16_t scene;
-	bool at_end = (play1_film->cur_cel == play1_film->cels);
+	at_end = (play1_film->cur_cel == play1_film->cels);
 	if (shellext_Check_Scene_Exit(&scene, next_scene, skip_scene, at_end)) {
 		if (scene == 910)
 			scene = shipext_Next_Battle_Cutscene();
@@ -566,16 +573,19 @@ static void play1_end_View(int32_t time) {
 static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 	int16_t retval = 0;
 
+	Actor* the_actor;
+	int16_t cur_scene;
+
 	if (film_object->id != 3)
 		return retval;
 
 	xfilm_Rewind_Actor_Film(the_film, film_object, (void*)(film_object + 1));
-	Actor* the_actor = (Actor*)film_object->object;
+	the_actor = (Actor*)film_object->object;
 
 	if (the_actor->var2 == 25)
 		play1_Make_Literal_Actor(the_actor);
 
-	int16_t cur_scene = shellext_Get_Cur_Scene();
+	cur_scene = shellext_Get_Cur_Scene();
 
 	if (cur_scene == SCENE_COMBAT_TRANSITION) {
 		if (the_actor->var1 == 15) {
@@ -599,6 +609,8 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 
 	if (the_actor->var1 == 123) {
 		const play1_data_set_t* p = play1_data_set();
+		int16_t ok;
+
 		if (!p->stream_str[play1_id][0] || !use_chain_successful)
 			return 1;
 
@@ -609,7 +621,7 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 		xbitmap_Init_Bitmap(&last_frame);
 		xbitmap_Init_Bitmap(&current_frame);
 
-		int16_t ok = xbitmap_Alloc_Bitmap(&last_frame, 320, 200);
+		ok = xbitmap_Alloc_Bitmap(&last_frame, 320, 200);
 		if (ok)
 			ok = xbitmap_Alloc_Bitmap(&current_frame, 320, 200);
 
@@ -664,7 +676,9 @@ static void play1_user_Play_Arm(Actor* the_actor, int32_t time) {
  * expansion if 0 < literal_size < 48000. Avoids wasting memory when
  * the literal would be larger than the original delta encoding.
  */
-#define LITERAL_MAX_SIZE 48000
+enum {
+	LITERAL_MAX_SIZE = 48000,
+};
 
 // FUNCTION: TIE95 0x78800
 static void play1_Make_Literal_Actor(Actor* the_actor) {
@@ -691,12 +705,18 @@ static void play1_Make_Literal_Actor(Actor* the_actor) {
 		int16_t num_frames = the_actor->arraySize;
 		if (the_actor->array) {
 			LandruHandle* arr = xmemhdl_Lock_Handle(the_actor->array);
-			for (int16_t i = 0; i < num_frames; i++) {
+			int16_t i;
+
+			for (i = 0; i < num_frames; i++) {
+				const uint8_t* image;
+				int size;
+				LandruHandle new_data;
+
 				if (!arr[i])
 					continue;
 
-				const uint8_t* image = xmemhdl_Lock_Handle(arr[i]);
-				int size = play1_Literal_Image(temp_buffer, image);
+				image = xmemhdl_Lock_Handle(arr[i]);
+				size = play1_Literal_Image(temp_buffer, image);
 				xmemhdl_Unlock_Handle(arr[i]);
 
 				if (size <= 0 || size >= LITERAL_MAX_SIZE) {
@@ -704,7 +724,7 @@ static void play1_Make_Literal_Actor(Actor* the_actor) {
 					continue;
 				}
 
-				LandruHandle new_data = xmemhdl_Data_To_Handle(temp_buffer, size, LANDRU_MEMORY_DEFAULT);
+				new_data = xmemhdl_Data_To_Handle(temp_buffer, size, LANDRU_MEMORY_DEFAULT);
 				if (!new_data) {
 					memset(temp_buffer, 0, 64000);
 					break;
@@ -734,10 +754,12 @@ static void play1_Make_Literal_Actor(Actor* the_actor) {
 static int play1_Literal_Image(uint8_t* buffer, const uint8_t* image) {
 	int32_t index, bindex;
 
+	int16_t length;
+
 	for (index = 0; index < 8; index++)
 		buffer[index] = image[index];
 
-	int16_t length = *(const int16_t*)(image + 8);
+	length = *(const int16_t*)(image + 8);
 	buffer[index] = image[8] & 0xFE;
 	buffer[index + 1] = image[9];
 	bindex = 10;
@@ -797,6 +819,12 @@ static int play1_Literal_Image(uint8_t* buffer, const uint8_t* image) {
  */
 // FUNCTION: TIE95 0x78B70
 static void play1_Update_Stream_Actor(Actor* the_actor) {
+	uint32_t size;
+	void* prev_pixels;
+	void* cur_pixels;
+
+	uint8_t* data;
+
 	if (!xactor_Is_Actor_Visible(the_actor))
 		return;
 	if (!is_streaming)
@@ -805,12 +833,14 @@ static void play1_Update_Stream_Actor(Actor* the_actor) {
 		return;
 
 	if (read_state == 0) {
+		const uint8_t* data;
+
 		if (xstream_Read_From_Stream_Buffer(0, read_buffer, 0, 16, 1) != 16) {
 			read_state = 0;
 			xactor_Deactivate_Actor(the_actor);
 			return;
 		}
-		const uint8_t* data = xmemhdl_Lock_Handle(read_buffer);
+		data = xmemhdl_Lock_Handle(read_buffer);
 		stream_actor_frames_to_go = br_i16le(data + 2);
 		xmemhdl_Unlock_Handle(read_buffer);
 		read_state = 1;
@@ -830,8 +860,8 @@ static void play1_Update_Stream_Actor(Actor* the_actor) {
 		xactor_Deactivate_Actor(the_actor);
 		return;
 	}
-	uint8_t* data = xmemhdl_Lock_Handle(read_buffer);
-	uint32_t size = br_u32le(data);
+	data = xmemhdl_Lock_Handle(read_buffer);
+	size = br_u32le(data);
 	xmemhdl_Unlock_Handle(read_buffer);
 
 	if (size == 0 || size > STREAM_BUFFER_SIZE ||
@@ -841,8 +871,8 @@ static void play1_Update_Stream_Actor(Actor* the_actor) {
 		return;
 	}
 
-	void* prev_pixels = xbitmap_Lock_Bitmap(&last_frame);
-	void* cur_pixels = xbitmap_Lock_Bitmap(&current_frame);
+	prev_pixels = xbitmap_Lock_Bitmap(&last_frame);
+	cur_pixels = xbitmap_Lock_Bitmap(&current_frame);
 	data = xmemhdl_Lock_Handle(read_buffer);
 	drawstrm_Convert_Frame_To_Palette(prev_pixels, data, cur_pixels);
 	xmemhdl_Unlock_Handle(read_buffer);
@@ -878,6 +908,10 @@ static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, 
 // FUNCTION: TIE95 0x78D54
 static void play1_Chain_Scene(void) {
 	const play1_data_set_t* p = play1_data_set();
+	int16_t next_id;
+	int16_t target;
+	int16_t i;
+
 	use_chain_successful = 0;
 
 	if (p->stream_str[play1_id][0]) {
@@ -893,9 +927,9 @@ static void play1_Chain_Scene(void) {
 	 * cur_scene's 0 sentinel; retail bounded by next_scene[i] which has
 	 * no sentinel and only terminated by accident of adjacent-global
 	 * memory layout (ASan redzones break that coincidence). */
-	int16_t next_id = 0;
-	int16_t target = p->next_scene[play1_id];
-	for (int16_t i = 0; p->cur_scene[i]; i++) {
+	next_id = 0;
+	target = p->next_scene[play1_id];
+	for (i = 0; p->cur_scene[i]; i++) {
 		if (p->cur_scene[i] == target) {
 			next_id = i;
 			break;
@@ -921,271 +955,251 @@ static void play1_Chain_Scene(void) {
  *   +emperor   = 24fps + film + file2 = "emperor.lfd" (resource[4])
  *   +awards    = copy film + file2 = "awards.lfd" (resource[27])
  */
-typedef enum {
-	PLAY1_PHASE_BEGIN = 0,
-	PLAY1_PHASE_CLEANUP = 1,
-} Play1Phase;
+bool play1_OpenScene(Play1SceneState* t) {
+	char name[16];
+	Rect r;
+	const play1_data_set_t* p = play1_data_set();
 
-typedef struct Play1Task {
-	SceneHeadStruct* the_head;
+	int i;
+	int16_t scene;
 	ResFile* file;
 	ResFile* file2;
-	int16_t scene;
+	int16_t cur;
 	bool rate_changed;
-	bool is_streaming_active; /* mirrors module-static is_streaming for cleanup */
-	LandruSurfaceSet surface_set;
-	Play1Phase phase;
-} Play1Task;
 
-/* PORT: asynchronous adaptation of TIE95 PLAY1_Play1 and
- * TIE98 PLAY1_Play1 (0x4682D0). */
-static LandruTaskStepResult play1_task_step(void* self) {
-	Play1Task* t = (Play1Task*)self;
+	for (i = 0; i < 205; i++)
+		wrap_table[i] = 320 * i;
+	wrap = 312;
 
-	if (t->phase == PLAY1_PHASE_BEGIN) {
-		char name[16];
-		Rect r;
-		const play1_data_set_t* p = play1_data_set();
+	scene = shellext_Get_Cur_Scene();
+	if (scene == SCENE_CUT_900)
+		return false;
+	t->scene = scene;
 
-		for (int i = 0; i < 205; i++)
-			wrap_table[i] = 320 * i;
-		wrap = 312;
-
-		int16_t scene = shellext_Get_Cur_Scene();
-		if (scene == SCENE_CUT_900)
-			return LANDRU_TASK_STEP_DONE;
-		t->scene = scene;
-
-		/* TIE98 leaves the TOTRAIN and TOCOMBAT transitions on the
-		 * native SVGA target; every other PLAY1 film uses VGA. */
-		if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 &&
-			(scene == SCENE_TRAIN_TRANSITION || scene == SCENE_COMBAT_TRANSITION)) {
-			t->surface_set = LANDRU_SURFACE_SVGA;
-			(void)xsurface_Select_Surface_Set(t->surface_set);
-			xview_Init_View(xview_Get_Current_View());
-		}
-
-		for (play1_id = 0; scene != p->cur_scene[play1_id] && p->cur_scene[play1_id]; play1_id++)
-			;
-		if (!p->cur_scene[play1_id])
-			return LANDRU_TASK_STEP_DONE;
-
-		t->file = shellext_Open_Empire_Resource(p->resource_str[play1_id]);
-		t->file2 = NULL;
-		ResFile* file = t->file; /* shadow for the existing switch body */
-		ResFile* file2 = t->file2;
-		xcanvas_Get_Drawing_Canvas_Bounds(&r);
-
-		int16_t cur = p->cur_scene[play1_id];
-		bool rate_changed = false;
-
-		switch (cur) {
-			/* 24fps, standard film */
-			case 30:
-			case 31:
-			case 32:
-			case 50:
-			case 70:
-			case 500:
-			case 510:
-			case 530:
-			case 531:
-			case 550:
-			case 560:
-			case 570:
-			case 571:
-			case 572:
-			case 573:
-			case 700:
-			case 710:
-			case 720:
-				xtimer_Set_Frame_Rate(24);
-				strcpy(name, p->film_str[play1_id]);
-				rate_changed = true;
-				break;
-
-			/* 20fps, standard film */
-			case 10:
-			case 60:
-			case 61:
-			case 71:
-			case 72:
-			case 600:
-			case 601:
-			case 602:
-			case 603:
-			case 610:
-			case 620:
-			case 621:
-			case 622:
-				xtimer_Set_Frame_Rate(20);
-				strcpy(name, p->film_str[play1_id]);
-				rate_changed = true;
-				break;
-
-			/* 24fps + file2 = "bridge.lfd" (resource[6]) */
-			case 520:
-			case 581:
-				xtimer_Set_Frame_Rate(24);
-				strcpy(name, p->film_str[play1_id]);
-				file2 = shellext_Open_Empire_Resource(p->resource_str[6]);
-				rate_changed = true;
-				break;
-
-			/* 24fps + file2 = "emperor.lfd" (resource[4]) */
-			case 590:
-			case 591:
-			case 730:
-				xtimer_Set_Frame_Rate(24);
-				strcpy(name, p->film_str[play1_id]);
-				file2 = shellext_Open_Empire_Resource(p->resource_str[4]);
-				rate_changed = true;
-				break;
-
-			/* 20fps + file2 = "scene10.lfd" (resource[80]) — retail-only */
-			case 623:
-				xtimer_Set_Frame_Rate(20);
-				strcpy(name, p->film_str[play1_id]);
-				file2 = shellext_Open_Empire_Resource(p->resource_str[80]);
-				rate_changed = true;
-				break;
-
-			/* 20fps + file2 = "emperor.lfd" (resource[4]) — retail-only */
-			case 740:
-				xtimer_Set_Frame_Rate(20);
-				strcpy(name, p->film_str[play1_id]);
-				file2 = shellext_Open_Empire_Resource(p->resource_str[4]);
-				rate_changed = true;
-				break;
-
-			/* 24fps + file2 from peer resource */
-			case 580:
-				xtimer_Set_Frame_Rate(24);
-				strcpy(name, p->film_str[play1_id]);
-				file2 = shellext_Open_Empire_Resource(p->resource_str[play1_id - 11]);
-				rate_changed = true;
-				break;
-
-			/* Award scenes 258-263: film + file2 = "awards.lfd" */
-			case 258:
-			case 259:
-			case 260:
-			case 261:
-			case 262:
-			case 263:
-				strcpy(name, p->film_str[play1_id]);
-				file2 = shellext_Open_Empire_Resource(p->resource_str[27]);
-				break;
-
-			/* Scene 270: launch ship resource */
-			case 270:
-				file2 = file;
-				shipext_Get_Launch_Name(name);
-				file = (ResFile*)(intptr_t)shipext_Open_Launch_Resource();
-				break;
-
-			/* Scene 390: secret medal film */
-			case 390: {
-				int16_t medal = shipext_Get_Secret_Medal();
-				strcpy(name, secret_film_str[medal - 1]);
-				break;
-			}
-
-			/* Scene 420: mission disk resource swapping. The mission-disk
-			 * arming cutscene uses film "secarm2f" (only present in
-			 * secarm{1,2}.lfd), not the base "secarm_f" from secarm.lfd. */
-			case 420:
-				strcpy(name, p->film_str[play1_id]);
-				if (shipext_Is_Mission_Disk1() || shipext_Is_Mission_Disk2()) {
-					strcpy(name, "secarm2f");
-					xres_Close_Resource(file);
-					if (shipext_Is_Mission_Disk2())
-						file = shellext_Open_Empire_Resource(mission_disk2_resource);
-					else if (shipext_Is_Mission_Disk1())
-						file = shellext_Open_Empire_Resource(mission_disk1_resource);
-					file2 = shellext_Open_Empire_Resource(p->resource_str[play1_id]);
-				}
-				break;
-
-			/* Default: copy film name, no frame rate change */
-			default:
-				strcpy(name, p->film_str[play1_id]);
-				break;
-		}
-
-		/* Sync file/file2 back to the task struct (the switch above may
-		 * have rebound them). */
-		t->file = file;
-		t->file2 = file2;
-		t->rate_changed = rate_changed;
-
-		/* Tag the snapshot with the (LFD basename, film name) tuple so a
-		 * cutscene compositor on the host side can locate its remaster
-		 * asset bundle. The basename is the resource_str entry minus the
-		 * ".lfd" extension; the setter uppercases to match retail asset
-		 * directory conventions. Cleared in PLAY1_PHASE_CLEANUP. */
-		{
-			char lfd_base[16];
-			const char* res = p->resource_str[play1_id];
-			size_t i = 0;
-			for (; i + 1 < sizeof lfd_base && res[i] && res[i] != '.'; ++i)
-				lfd_base[i] = res[i];
-			lfd_base[i] = '\0';
-			TieSnapshotBuilder_SetActiveFilm(lfd_base, name);
-		}
-
-		play1_Chain_Scene();
-		TieDiagnostics_Log(TIE_LOG_INFO, "[PLAY1] scene=%d film='%s' resource='%s' stream='%s'\n", play1_id,
-						   name, p->resource_str[play1_id],
-						   p->stream_str[play1_id][0] ? p->stream_str[play1_id] : "(none)");
-		play1_film = xfilm_Res_Callback_Film(name, &r, 0, 0, 0, play1_film_Callback);
-		if (!play1_film) {
-			if (t->file2)
-				xres_Close_Resource(t->file2);
-			xres_Close_Resource(t->file);
-			xerror_Set_Landru_Exit(p->next_scene[play1_id]);
-			return LANDRU_TASK_STEP_DONE;
-		}
-		if (TieMusicPolicy_UsesTie98()) {
-			const char* music_path = play1_tie98_music_path(scene);
-			if (music_path)
-				FrontendWaveStream_PlayWaveFile(music_path, 0);
-		}
-
-		xfilm_Set_Film_Def_Palette(play1_film, t->the_head->def_palette);
-		xview_Set_View_Update_Function(play1_end_View);
-
-		if (xcursor_Is_Cursor_Visible())
-			xcursor_Hide_Cursor();
-
-		/* Start palette cycling for scenes 20 and 25 */
-		if (scene == 20 || scene == 25) {
-			for (Palette* pal = xpal_Ask_Palette_List(); pal; pal = pal->next) {
-				if (pal->cycle_active)
-					xpal_Start_Cycle(pal);
-			}
-		}
-
-		/* Snapshot the streaming flag for the cleanup phase — is_streaming
-		 * is module-static and may flip during the modal view; remember
-		 * what it was set to here so cleanup tears down what setup built. */
-		t->is_streaming_active = is_streaming;
-
-		/* Push the modal view task */
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = PLAY1_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+	/* TIE98 leaves the TOTRAIN and TOCOMBAT transitions on the
+	 * native SVGA target; every other PLAY1 film uses VGA. */
+	if (TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 &&
+		(scene == SCENE_TRAIN_TRANSITION || scene == SCENE_COMBAT_TRANSITION)) {
+		t->surface_set = LANDRU_SURFACE_SVGA;
+		(void)xsurface_Select_Surface_Set(t->surface_set);
+		xview_Init_View(xview_Get_Current_View());
 	}
 
-	return LANDRU_TASK_STEP_DONE;
+	for (play1_id = 0; scene != p->cur_scene[play1_id] && p->cur_scene[play1_id]; play1_id++)
+		;
+	if (!p->cur_scene[play1_id])
+		return false;
+
+	t->file = shellext_Open_Empire_Resource(p->resource_str[play1_id]);
+	t->file2 = NULL;
+	file = t->file; /* shadow for the existing switch body */
+	file2 = t->file2;
+	xcanvas_Get_Drawing_Canvas_Bounds(&r);
+
+	cur = p->cur_scene[play1_id];
+	rate_changed = false;
+
+	switch (cur) {
+		/* 24fps, standard film */
+		case 30:
+		case 31:
+		case 32:
+		case 50:
+		case 70:
+		case 500:
+		case 510:
+		case 530:
+		case 531:
+		case 550:
+		case 560:
+		case 570:
+		case 571:
+		case 572:
+		case 573:
+		case 700:
+		case 710:
+		case 720:
+			xtimer_Set_Frame_Rate(24);
+			strcpy(name, p->film_str[play1_id]);
+			rate_changed = true;
+			break;
+
+		/* 20fps, standard film */
+		case 10:
+		case 60:
+		case 61:
+		case 71:
+		case 72:
+		case 600:
+		case 601:
+		case 602:
+		case 603:
+		case 610:
+		case 620:
+		case 621:
+		case 622:
+			xtimer_Set_Frame_Rate(20);
+			strcpy(name, p->film_str[play1_id]);
+			rate_changed = true;
+			break;
+
+		/* 24fps + file2 = "bridge.lfd" (resource[6]) */
+		case 520:
+		case 581:
+			xtimer_Set_Frame_Rate(24);
+			strcpy(name, p->film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(p->resource_str[6]);
+			rate_changed = true;
+			break;
+
+		/* 24fps + file2 = "emperor.lfd" (resource[4]) */
+		case 590:
+		case 591:
+		case 730:
+			xtimer_Set_Frame_Rate(24);
+			strcpy(name, p->film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(p->resource_str[4]);
+			rate_changed = true;
+			break;
+
+		/* 20fps + file2 = "scene10.lfd" (resource[80]) — retail-only */
+		case 623:
+			xtimer_Set_Frame_Rate(20);
+			strcpy(name, p->film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(p->resource_str[80]);
+			rate_changed = true;
+			break;
+
+		/* 20fps + file2 = "emperor.lfd" (resource[4]) — retail-only */
+		case 740:
+			xtimer_Set_Frame_Rate(20);
+			strcpy(name, p->film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(p->resource_str[4]);
+			rate_changed = true;
+			break;
+
+		/* 24fps + file2 from peer resource */
+		case 580:
+			xtimer_Set_Frame_Rate(24);
+			strcpy(name, p->film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(p->resource_str[play1_id - 11]);
+			rate_changed = true;
+			break;
+
+		/* Award scenes 258-263: film + file2 = "awards.lfd" */
+		case 258:
+		case 259:
+		case 260:
+		case 261:
+		case 262:
+		case 263:
+			strcpy(name, p->film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(p->resource_str[27]);
+			break;
+
+		/* Scene 270: launch ship resource */
+		case 270:
+			file2 = file;
+			shipext_Get_Launch_Name(name);
+			file = shipext_Open_Launch_Resource();
+			break;
+
+		/* Scene 390: secret medal film */
+		case 390: {
+			int16_t medal = shipext_Get_Secret_Medal();
+			strcpy(name, secret_film_str[medal - 1]);
+			break;
+		}
+
+		/* Scene 420: mission disk resource swapping. The mission-disk
+		 * arming cutscene uses film "secarm2f" (only present in
+		 * secarm{1,2}.lfd), not the base "secarm_f" from secarm.lfd. */
+		case 420:
+			strcpy(name, p->film_str[play1_id]);
+			if (shipext_Is_Mission_Disk1() || shipext_Is_Mission_Disk2()) {
+				strcpy(name, "secarm2f");
+				xres_Close_Resource(file);
+				if (shipext_Is_Mission_Disk2())
+					file = shellext_Open_Empire_Resource(mission_disk2_resource);
+				else if (shipext_Is_Mission_Disk1())
+					file = shellext_Open_Empire_Resource(mission_disk1_resource);
+				file2 = shellext_Open_Empire_Resource(p->resource_str[play1_id]);
+			}
+			break;
+
+		/* Default: copy film name, no frame rate change */
+		default:
+			strcpy(name, p->film_str[play1_id]);
+			break;
+	}
+
+	/* Sync file/file2 back to the task struct (the switch above may
+	 * have rebound them). */
+	t->file = file;
+	t->file2 = file2;
+	t->rate_changed = rate_changed;
+
+	/* Tag the snapshot with the (LFD basename, film name) tuple so a
+	 * cutscene compositor on the host side can locate its remaster
+	 * asset bundle. The basename is the resource_str entry minus the
+	 * ".lfd" extension; the setter uppercases to match retail asset
+	 * directory conventions. Cleared in PLAY1_PHASE_CLEANUP. */
+	{
+		char lfd_base[16];
+		const char* res = p->resource_str[play1_id];
+		size_t i = 0;
+		for (; i + 1 < sizeof lfd_base && res[i] && res[i] != '.'; ++i)
+			lfd_base[i] = res[i];
+		lfd_base[i] = '\0';
+#ifdef TIE_MODERN
+		TieSnapshotBuilder_SetActiveFilm(lfd_base, name);
+#endif
+	}
+
+	play1_Chain_Scene();
+	TieDiagnostics_Log(TIE_LOG_INFO, "[PLAY1] scene=%d film='%s' resource='%s' stream='%s'\n", play1_id, name,
+					   p->resource_str[play1_id],
+					   p->stream_str[play1_id][0] ? p->stream_str[play1_id] : "(none)");
+	play1_film = xfilm_Res_Callback_Film(name, &r, 0, 0, 0, play1_film_Callback);
+	if (!play1_film) {
+		if (t->file2)
+			xres_Close_Resource(t->file2);
+		xres_Close_Resource(t->file);
+		xerror_Set_Landru_Exit(p->next_scene[play1_id]);
+		return false;
+	}
+	if (TieMusicPolicy_UsesTie98()) {
+		const char* music_path = play1_tie98_music_path(scene);
+		if (music_path)
+			FrontendWaveStream_PlayWaveFile(music_path, 0);
+	}
+
+	xfilm_Set_Film_Def_Palette(play1_film, t->the_head->def_palette);
+	xview_Set_View_Update_Function(play1_end_View);
+
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
+
+	/* Start palette cycling for scenes 20 and 25 */
+	if (scene == 20 || scene == 25) {
+		Palette* pal;
+
+		for (pal = xpal_Ask_Palette_List(); pal; pal = pal->next) {
+			if (pal->cycle_active)
+				xpal_Start_Cycle(pal);
+		}
+	}
+
+	/* Snapshot the streaming flag for the cleanup phase — is_streaming
+	 * is module-static and may flip during the modal view; remember
+	 * what it was set to here so cleanup tears down what setup built. */
+	t->is_streaming_active = is_streaming;
+
+	/* Push the modal view task */
+	return true;
 }
 
-static void play1_task_end(void* self) {
-	Play1Task* t = (Play1Task*)self;
-	if (t->phase == PLAY1_PHASE_BEGIN)
-		return;
-
+void play1_CloseScene(Play1SceneState* t) {
 	/* CLEANUP */
 	if (TieMusicPolicy_UsesTie98() && play1_tie98_music_ends_after_scene(t->scene))
 		FrontendWaveStream_Shutdown();
@@ -1216,34 +1230,9 @@ static void play1_task_end(void* self) {
 	/* Drop the active-film tag — the compositor will fall back to
 	 * classic rendering for whatever scene runs next until another
 	 * PLAY1 push re-tags. */
+#ifdef TIE_MODERN
 	TieSnapshotBuilder_SetActiveFilm(NULL, NULL);
+#endif
 	if (t->surface_set == LANDRU_SURFACE_SVGA)
 		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
-}
-
-static const LandruTaskVtable play1_task_vt = {
-	.step = play1_task_step,
-	.end = play1_task_end,
-};
-
-void play1_Push_Play1_Task(SceneHeadStruct* the_head) {
-	/* Tag the snapshot before pushing so the cutscene compositor in
-	 * the host can recognise this scene as a film-only cinematic.
-	 * Re-tagged on the next scene push when PLAY1 pops. */
-	TieSnapshotBuilder_SetSceneKind(TIE_SCENE_CUTSCENE);
-	/* Cutscenes redraw every actor every tick — RT clears per frame
-	 * to avoid trails from moving sprites. UI scenes (default) keep
-	 * INCREMENTAL where the RT persists across frames. */
-	TieSnapshotBuilder_SetRedrawModel(TIE_REDRAW_FULL_FRAME);
-
-	Play1Task* t = (Play1Task*)landru_task_push(&play1_task_vt);
-	if (!t)
-		return;
-	t->the_head = the_head;
-	t->file = NULL;
-	t->file2 = NULL;
-	t->rate_changed = false;
-	t->is_streaming_active = false;
-	t->surface_set = LANDRU_SURFACE_VGA;
-	t->phase = PLAY1_PHASE_BEGIN;
 }

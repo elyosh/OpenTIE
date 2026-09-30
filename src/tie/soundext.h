@@ -1,9 +1,13 @@
-#ifndef __SOUNDEXT_H__
-#define __SOUNDEXT_H__
+#ifndef TIE_SOUNDEXT_H
+#define TIE_SOUNDEXT_H
+
+#include "landru/sound.h"
 
 #include <stdint.h>
 
-#include "landru/sound.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* SoundSFXType — from watdbg debug info (1-based into Sound_SFX_Name[19]) */
 typedef enum {
@@ -53,5 +57,9 @@ void soundext_Action_iMuse(int16_t state, Sound* the_sound, int16_t var1, int16_
 void* soundext_TIE_Load_Sound(const char* name);
 void soundext_TIE_Unload_Sound(void* sound);
 void soundext_TIE_Print_Msg(const char* ptr);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

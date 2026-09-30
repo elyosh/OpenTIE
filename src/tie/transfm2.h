@@ -1,7 +1,11 @@
-#ifndef __TRANSFM2_H__
-#define __TRANSFM2_H__
+#ifndef TIE_TRANSFM2_H
+#define TIE_TRANSFM2_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* World-to-eye rotation matrix (set by FVIEW) */
 extern int32_t worldeyeA1, worldeyeA2, worldeyeA3;
@@ -54,5 +58,9 @@ int32_t* transfm2_facezintersect(int16_t negV, int16_t posV, int32_t* source1, i
 int32_t* transfm2_calclinepts(const uint8_t* source);
 int16_t transfm2_getfacescreenxy(uint16_t ptCnt);
 int16_t transfm2_classifyedges(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,10 +1,16 @@
-#ifndef __REGISTER_H__
-#define __REGISTER_H__
+#ifndef TIE_REGISTER_H
+#define TIE_REGISTER_H
 
 #include "landru/input.h"
 #include "tie/shellext.h"
 #include "tie_runtime/storage/pilot_storage.h"
+
+#include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* PORT: shared native representation of TIE95 REGISTER_Alloc_Input_Reg_
  * String_Button (0x7C148) and TIE98 counterpart (0x471BB0). */
@@ -24,16 +30,40 @@ typedef struct {
 	int32_t score;
 } FastPilotRecord;
 
-/* PORT: task entry replacing the original synchronous REGISTER_Register. */
-void register_Push_Register_Task(SceneHeadStruct* scene_head);
+/* Registration scene setup reports whether a protection dialog is needed. */
+typedef enum RegisterOpenResult {
+	REGISTER_OPEN_FAILED,
+	REGISTER_OPEN_READY,
+	REGISTER_OPEN_PROTECT,
+} RegisterOpenResult;
+
+typedef struct RegisterSceneState {
+	SceneHeadStruct* scene_head;
+	ResFile* rf;
+	bool tie98;
+	bool view_pushed;
+} RegisterSceneState;
+
+void register_PrepareScene(RegisterSceneState* state, SceneHeadStruct* head);
+RegisterOpenResult register_OpenScene(RegisterSceneState* state);
+Input* register_OpenProtection(void);
+void register_CloseProtection(void);
+void register_PrepareView(void);
+void register_CloseScene(RegisterSceneState* state);
 
 /* Clear the is_protected flag on the active pilot's FastPilotRecord.
  * Called by COMPUTER after a pilot restore. */
+/* Recovered callback retained for whole-translation-unit matching. */
+void Revive_Pilot_Record(Input* input, int32_t time);
 void register_Revive_Pilot_Info(void);
 
 /* Enable/disable the copy-protection symbol challenge shown by the
  * register scene. Disabled by default (matches retail). Non-zero
  * restores the original 29-symbol password prompt. */
 void register_set_copy_protection(int enabled);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -29,6 +29,8 @@ int stub_Copy_From_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x
 	int16_t copy_w, copy_h;
 	int16_t dest_x, dest_y;
 
+	Rect copy_rect;
+
 	xcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
 	clip_w = canvas_clip.right - canvas_clip.left;
 	clip_h = canvas_clip.bottom - canvas_clip.top;
@@ -75,7 +77,6 @@ int stub_Copy_From_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x
 	bm.offset = 0;
 	bm.data = buffer;
 
-	Rect copy_rect;
 	xrect_Set_Rect(&copy_rect, buf_left, buf_top, copy_w + buf_left, buf_top + copy_h);
 	xcanvas_Copy_Bitmap_Portion_To_Canvas(&bm, &copy_rect, dest_x, dest_y);
 	return 1;
@@ -90,6 +91,8 @@ int stub_Copy_To_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, 
 	int16_t buf_left, buf_top;
 	int16_t copy_w, copy_h;
 	int16_t src_x, src_y;
+
+	Rect copy_rect;
 
 	xcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
 	clip_w = canvas_clip.right - canvas_clip.left;
@@ -137,7 +140,6 @@ int stub_Copy_To_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, 
 	bm.offset = 0;
 	bm.data = buffer;
 
-	Rect copy_rect;
 	xrect_Set_Rect(&copy_rect, buf_left, buf_top, copy_w + buf_left, buf_top + copy_h);
 	xcanvas_Copy_Canvas_Portion_To_Bitmap(&bm, &copy_rect, src_x, src_y);
 	return 1;
@@ -168,11 +170,18 @@ void stub_Map_Clipped_Image(void* src_data, int16_t* dst_poly, Rect* src_rect, i
 	int16_t table_b[600];
 	int16_t *left_table, *right_table;
 
+	int16_t* poly_x;
+	int16_t* poly_y;
+	int16_t v;
+	int16_t step;
+	int16_t diff;
+	int16_t s;
+
 	(void)map_mode; /* passed through to Map_Image but never read there */
 
 	/* Access dst_poly as a Poly: x[0..3] at offsets 0..3, y[0..3] at offsets 4..7 */
-	int16_t* poly_x = dst_poly;
-	int16_t* poly_y = dst_poly + 4;
+	poly_x = dst_poly;
+	poly_y = dst_poly + 4;
 
 	/* Build source-space polygon from src_rect corners (TL, TR, BR, BL) */
 	xrect_Set_Poly(&src_poly, src_rect->left, src_rect->top, src_rect->right - 1, src_rect->top,
@@ -181,7 +190,7 @@ void stub_Map_Clipped_Image(void* src_data, int16_t* dst_poly, Rect* src_rect, i
 	/* Find min/max Y vertices */
 	min_y_idx = 0;
 	max_y_idx = 0;
-	for (int16_t v = 1; v < 4; v++) {
+	for (v = 1; v < 4; v++) {
 		if (poly_y[v] < poly_y[min_y_idx])
 			min_y_idx = v;
 		if (poly_y[v] > poly_y[max_y_idx])
@@ -197,19 +206,24 @@ void stub_Map_Clipped_Image(void* src_data, int16_t* dst_poly, Rect* src_rect, i
 	 * Pass 1 (step=+1, CW): writes to table_b (tentative right)
 	 * Pass 2 (step=-1, CCW): writes to table_a (tentative left)
 	 */
-	int16_t step = 3; /* starts at 3, decremented by 2 each pass → 1, -1 */
+	step = 3; /* starts at 3, decremented by 2 each pass → 1, -1 */
 	while (step > -1) {
-		step -= 2;
 		int16_t* dest;
+		int16_t cur;
+
+		step -= 2;
+
 		if (step == 1)
 			dest = table_b;
 		else
 			dest = table_a;
 
-		int16_t cur = min_y_idx;
+		cur = min_y_idx;
 		while (cur != max_y_idx) {
 			/* Advance to the next vertex with a different Y */
 			int16_t next;
+			int16_t edge_h;
+
 			for (next = (cur + step) & 3; poly_y[cur] == poly_y[next] && cur != max_y_idx;
 				 next = (next + step) & 3) {
 				cur = next;
@@ -218,7 +232,7 @@ void stub_Map_Clipped_Image(void* src_data, int16_t* dst_poly, Rect* src_rect, i
 			if (cur == max_y_idx)
 				break;
 
-			int16_t edge_h = poly_y[next] - poly_y[cur];
+			edge_h = poly_y[next] - poly_y[cur];
 			/* x: screen x along this edge */
 			rotpoly_Build_Ratio(dest, edge_h, poly_x[cur], poly_x[next]);
 			/* u: source x along this edge */
@@ -238,8 +252,8 @@ void stub_Map_Clipped_Image(void* src_data, int16_t* dst_poly, Rect* src_rect, i
 
 	/* Determine winding: find first scanline where table_a and table_b differ */
 	num_scanlines = poly_y[max_y_idx] - poly_y[min_y_idx] + 1;
-	int16_t diff = 0;
-	for (int16_t s = 0; s < num_scanlines; s++) {
+	diff = 0;
+	for (s = 0; s < num_scanlines; s++) {
 		diff = table_a[s] - table_b[s];
 		if (diff)
 			break;

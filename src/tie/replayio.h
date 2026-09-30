@@ -4,9 +4,16 @@
 /* Replay spooling, mission checkpoints, and viewer entry. */
 
 #include "tie/tie.h"
+
 #include <stdint.h>
 
-void replayio_Push_ReplayScreen_Task(void);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void replayio_LoadStandalonePanel(void);
+bool replayio_RestoreGraphics(int16_t saved_resolution);
+void replayio_LoadInitialPanel(void);
 int16_t replayio_copytosave(const char* fname);
 int16_t replayio_copyfromsave(const char* fname);
 int replayio_openreplayinputfile(void);
@@ -35,4 +42,8 @@ extern uint32_t savearraysizes[68];
  * the symbol don't complain. */
 extern uint8_t replayviewptr[16];
 
-#endif /* TIE_REPLAYIO_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

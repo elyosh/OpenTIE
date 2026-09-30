@@ -9,7 +9,8 @@
 #include "tie_runtime/snapshot/snapshot_billboards.h"
 
 #include "tie/anim.h" /* animop_is_bitmap, animop_bitmap_species/index */
-#include "tie/tie.h"  /* NUM_OBJECTS, NUM_CRAFTS */
+#include "tie/rotscale.h"
+#include "tie/tie.h" /* NUM_OBJECTS, NUM_CRAFTS */
 
 #include <string.h>
 
@@ -21,8 +22,8 @@ void TieBillboardCapture_BeginTick(void) {
 	memset(s_lightning_capture, 0, sizeof s_lightning_capture);
 }
 
-void TieBillboardCapture_Flight(uint16_t obj_slot, uint16_t op, uint16_t pixel_scale_q8,
-								uint16_t bound_hwidth, int16_t rotation_bam) {
+void TieBillboardCapture_Flight(uint16_t obj_slot, uint16_t op, int32_t eye_depth, uint16_t scale_q8,
+								int16_t rotation_bam) {
 	if (obj_slot >= NUM_OBJECTS)
 		return;
 	if (!animop_is_bitmap((AnimOp)op))
@@ -36,6 +37,8 @@ void TieBillboardCapture_Flight(uint16_t obj_slot, uint16_t op, uint16_t pixel_s
 	if (species_idx == TIE_SPECIES_NONE)
 		return;
 
+	const uint16_t bound_hwidth = species_table[species_idx].bound_hwidth;
+	const uint16_t pixel_scale_q8 = (uint16_t)rotscale_calcscale(eye_depth, bound_hwidth, scale_q8);
 	TieBillboardCaptureFlight* out = &s_flight_capture[obj_slot];
 	out->species_idx = species_idx;
 	out->bitmap_idx = animop_bitmap_index((AnimOp)op);

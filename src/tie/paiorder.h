@@ -1,8 +1,13 @@
-#ifndef __PAIORDER_H__
-#define __PAIORDER_H__
+#ifndef TIE_PAIORDER_H
+#define TIE_PAIORDER_H
 
 #include "tie/pai.h" /* OrderFunc typedef */
+
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* AI plan handlers return zero to remain on the current order and nonzero
  * to consume the following transition byte. */
@@ -48,4 +53,8 @@ int16_t paiorder_mothershipreadyorder(void); /* Retail sub_3F934, slot 46 */
 /* Indexed by the plan VM opcode. Some handlers are defined in paifight.c. */
 extern OrderFunc ordersfunctionptrs[47];
 
-#endif /* __PAIORDER_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

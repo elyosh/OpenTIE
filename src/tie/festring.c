@@ -1,9 +1,9 @@
 #include "tie/festring.h"
 #include "tie/tie.h"
 
-#include <string.h>
-
 #include "tie/sys2.h"
+
+#include <string.h>
 
 /* --- Remap helper --- */
 

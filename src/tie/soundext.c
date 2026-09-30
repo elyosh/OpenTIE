@@ -20,23 +20,22 @@
 #include "landru/res.h"
 #include "landru/sound.h"
 
+/* --- External modules --- */
+
+#include "tie/mfscript.h"
+
+#include "landru/memcom.h"
+
+#include "tie/shipext.h"
+
 #include <ctype.h>
+#include <imuse/hilevel.h>
+#include <imuse/lolevel.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef AUDIO_TRACE
 #include <stdio.h>
 #endif
-
-/* --- External modules --- */
-
-#include "tie/mfscript.h"
-
-#include <imuse/hilevel.h>
-#include <imuse/lolevel.h>
-
-#include "landru/memcom.h"
-
-#include "tie/shipext.h"
 
 /* XFILE */
 /* XFILE — included via landru/file.h below */

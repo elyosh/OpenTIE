@@ -17,15 +17,13 @@
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
-#include "tie_runtime/timing/sim_clock.h"
+
+#include "landru/sound.h"
 
 #include <imuse/commands.h>
 #include <imuse/filelist.h>
 #include <imuse/lolevel.h>
 #include <imuse/midi_backend.h>
-
-#include "landru/sound.h"
-
 #include <limits.h>
 #include <stdint.h>
 #include <string.h>
@@ -59,6 +57,8 @@ static bool audio_output_started;
  *                   buffer (id - 500 is the track index).
  */
 static void* GetSoundAddr(intptr_t soundId) {
+	uint16_t track;
+
 	if (frontendflag == 1) {
 		Sound* snd = (Sound*)soundId;
 		if (snd && snd->data) {
@@ -78,7 +78,7 @@ static void* GetSoundAddr(intptr_t soundId) {
 			return NULL;
 		return soundhandles[idx];
 	}
-	uint16_t track = (uint16_t)(soundId - 500);
+	track = (uint16_t)(soundId - 500);
 	fmusic_PageSound(track);
 	return fmusic_GetPagedSound(track);
 }
@@ -102,8 +102,8 @@ __attribute__((unused)) static void CopySoundRange(void* dest, void* sound, int3
  * pre-formats messages and tags each with a level — we add a
  * matching prefix so stderr output stays grep-friendly. */
 static void gamesnd_imuse_log(void* user, ImuseLogLevel level, const char* msg) {
-	(void)user;
 	const char* tag;
+	(void)user;
 	switch (level) {
 		case IMUSE_LOG_TRACE:
 			tag = "trace";
@@ -133,7 +133,9 @@ static void gamesnd_imuse_log(void* user, ImuseLogLevel level, const char* msg) 
  * on the audio thread and optionally applies the SB16 reconstruction
  * filter. Aeron accepts this 44100 Hz mix and resamples it to its fixed
  * device rate. */
-#define GAMESND_AUDIO_RATE 44100
+enum {
+	GAMESND_AUDIO_RATE = 44100,
+};
 
 static void gamesnd_RenderAudio(void* userdata, int16_t* frames, size_t frame_count) {
 	imuse_t* session = (imuse_t*)userdata;
@@ -147,28 +149,26 @@ static void gamesnd_RenderAudio(void* userdata, int16_t* frames, size_t frame_co
 
 // FUNCTION: TIE95 0x88905
 int16_t gamesnd_Open_Pre_iMuse(void) {
+	ImuseHost host = { 0 };
+	ImuseConfig cfg = { 0 };
 	const TieAudioConfig* audio_config = TieAudio_Config();
 	ImuseMidiBackend* midiBackend = TieMidiBackend_Create(&audio_config->midi_backend);
 	if (!midiBackend && audio_config->midi_backend.kind != TIE_MIDI_BACKEND_NONE)
 		TieDiagnostics_Log(TIE_LOG_WARN, "GAMESND: MIDI backend unavailable; synthesis disabled\n");
 
 	/* Host callbacks (where data comes from, where logs go). */
-	ImuseHost host = {
-		.getSoundPtrFunc = GetSoundAddr,
-		.logFunc = gamesnd_imuse_log,
-		.logUser = NULL,
-	};
+	host.getSoundPtrFunc = GetSoundAddr;
+	host.logFunc = gamesnd_imuse_log;
+	host.logUser = NULL;
 
 	/* Engine settings. The original services iMUSE every 8 ms while each service
 	 * advances its logical clock by 8060 us. The host's imuse_advance call
 	 * rate is decoupled from that cadence. */
-	ImuseConfig cfg = {
-		.outputSampleRate = GAMESND_AUDIO_RATE,
-		.waveSpeed = 1,
-		.waveMixCount = 4,
-		.waveOutputFilter =
-			audio_config->sb16_filter_enabled ? IMUSE_WAVE_OUTPUT_FILTER_SB16 : IMUSE_WAVE_OUTPUT_FILTER_NONE,
-	};
+	cfg.outputSampleRate = GAMESND_AUDIO_RATE;
+	cfg.waveSpeed = 1;
+	cfg.waveMixCount = 4;
+	cfg.waveOutputFilter =
+		audio_config->sb16_filter_enabled ? IMUSE_WAVE_OUTPUT_FILTER_SB16 : IMUSE_WAVE_OUTPUT_FILTER_NONE;
 
 	/* imuse_create takes ownership of midiBackend unconditionally:
 	 * on failure it has already released it, so we don't need any
@@ -205,7 +205,9 @@ void gamesnd_Close_Pre_iMuse(void) {
 
 /* Keep one large host delta from advancing the recovered engine through an
  * unbounded number of internal ticks. Time beyond this bound is dropped. */
-#define GAMESND_MAX_ADVANCE_US (8000 * 8)
+enum {
+	GAMESND_MAX_ADVANCE_US = (8000 * 8),
+};
 
 void gamesnd_AdvanceAudio(int32_t elapsed_us) {
 	if (!im || elapsed_us <= 0)
@@ -234,101 +236,6 @@ bool gamesnd_SetMusicDuckingVolumePercent(int percent) {
 	/* iMUSE uses a /128 fixed-point multiplier. Rounded conversion keeps the
 	 * original 37% default at its exact factor of 47. */
 	return imuse_set_music_ducking_factor(im, (percent * 128 + 50) / 100) == 0;
-}
-
-/* Five-phase glow animation rewrites palette slots 0xF8..0xFA every 18 or
- * 36 PIT ticks when color cycling is enabled. */
-
-static const uint8_t s_glow_table[45] = {
-	/* slot 0xF8 — green pulse */
-	0x00,
-	0x3F,
-	0x00,
-	0x00,
-	0x30,
-	0x00,
-	0x00,
-	0x22,
-	0x00,
-	0x00,
-	0x14,
-	0x00,
-	0x00,
-	0x06,
-	0x00,
-	/* slot 0xF9 — pink pulse */
-	0x3F,
-	0x20,
-	0x1F,
-	0x3F,
-	0x1A,
-	0x15,
-	0x3F,
-	0x14,
-	0x0E,
-	0x3F,
-	0x1A,
-	0x15,
-	0x3F,
-	0x20,
-	0x1F,
-	/* slot 0xFA — blue pulse */
-	0x1A,
-	0x39,
-	0x3F,
-	0x11,
-	0x32,
-	0x3F,
-	0x08,
-	0x29,
-	0x3F,
-	0x11,
-	0x32,
-	0x3F,
-	0x1A,
-	0x39,
-	0x3F,
-};
-
-static TieSimClockCursor s_glow_cursor;
-static int s_glow_cursor_init;
-static int s_glow_countdown; /* PIT ticks remaining */
-static int s_glow_phase;     /* 0..4 */
-
-void gamesnd_drive_palette_cycle(void) {
-	if (!s_glow_cursor_init) {
-		TieSimClock_CursorInit(&s_glow_cursor);
-		s_glow_cursor_init = 1;
-		/* countdown = 0 + phase = 0 from BSS; the first non-empty call
-		 * will fall straight into the reload+fire branch, matching the
-		 * retail ISR's behavior right after init when D2B15 starts at 0. */
-		return;
-	}
-
-	int32_t pit_ticks = TieSimClock_CursorConsumePitTicks(&s_glow_cursor);
-	while (pit_ticks > 0) {
-		if (s_glow_countdown > 0) {
-			int step = pit_ticks < s_glow_countdown ? pit_ticks : s_glow_countdown;
-			s_glow_countdown -= step;
-			pit_ticks -= step;
-			if (s_glow_countdown > 0)
-				break;
-		}
-
-		/* Reload runs unconditionally so cadence is preserved even
-		 * when the gate is closed (matches retail 88af0..88b0f). */
-		s_glow_countdown = colorcycleuserflag ? 36 : 18;
-
-		int gate = ((palette_cycle_user & colorcycleflag) != 0) || (colorcycleuserflag != 0);
-		if (!gate)
-			continue;
-
-		s_glow_phase = (s_glow_phase + 1) % 5;
-		int off = s_glow_phase * 3;
-		TieClassicFramebuffer_SetPalette(&s_glow_table[0 + off], 0xF8, 1);
-		TieClassicFramebuffer_SetPalette(&s_glow_table[15 + off], 0xF9, 1);
-		TieClassicFramebuffer_SetPalette(&s_glow_table[30 + off], 0xFA, 1);
-	}
 }
 
 /* Adapters bridging fmusic's int16_t-id API to iMUSE's (void *handle)

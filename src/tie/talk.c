@@ -1,8 +1,5 @@
+#include "tie/talk.h"
 #include "tie_runtime/audio/imuse_session.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "tie/goals.h"
 #include "tie/mission.h"
@@ -11,7 +8,6 @@
 #include "tie/shade.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
-#include "tie/talk.h"
 #include "tie/textext.h"
 #include "tie/tie.h"
 #include "tie_runtime/audio/config.h"
@@ -24,10 +20,11 @@
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
+#endif
 #include "tie_runtime/storage/storage.h"
-#include <landru/task.h>
 
 #include "landru/actanim.h"
 #include "landru/actdelt.h"
@@ -52,6 +49,10 @@
 #include "landru/viewadd.h"
 
 #include <imuse/lolevel.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* ======================================================================
  * Static data — resource name table (16 entries × 14 chars)
@@ -124,7 +125,9 @@ int16_t talk_voice_question = 0;
 uint8_t talk_voice_officer = 0; /* 'o', 'p', 'i' */
 uint8_t talk_voice_mood = 0;    /* 'b', 'd', 'h', 'o', etc. */
 
-#define TALK_SPEECH_BUF_SIZE 2048000 /* matches retail allocation */
+enum {
+	TALK_SPEECH_BUF_SIZE = 2048000, /* matches retail allocation */
+};
 
 // GLOBAL: TIE95 0xF5708
 static int32_t talk_speech_pos = 0;
@@ -137,7 +140,9 @@ static uint8_t talk_speech_streaming = 0;
  * ====================================================================== */
 
 static void replace_italic_codes(char* str) {
-	for (int16_t i = 0; str[i]; i++) {
+	int16_t i;
+
+	for (i = 0; str[i]; i++) {
 		if (str[i] == '1')
 			str[i] = 1;
 		if (str[i] == '2')
@@ -194,9 +199,13 @@ static int16_t Count_Debrief_Header(void) { return 1; }
 
 static int16_t Count_Debrief_Kills(void) {
 	int16_t count = 0;
-	for (int16_t craft = 0; craft < 69; craft++) {
+	int16_t craft;
+
+	for (craft = 0; craft < 69; craft++) {
 		int16_t has_kill = 0;
-		for (int16_t side = 0; side < 6; side++) {
+		int16_t side;
+
+		for (side = 0; side < 6; side++) {
 			if (player_Is_Side_Enemy(side) && mission.kills_losses[side][craft])
 				has_kill = 1;
 		}
@@ -210,9 +219,13 @@ static int16_t Count_Debrief_Kills(void) {
 
 static int16_t Count_Debrief_Losses(void) {
 	int16_t count = 0;
-	for (int16_t craft = 0; craft < 69; craft++) {
+	int16_t craft;
+
+	for (craft = 0; craft < 69; craft++) {
 		int16_t has_loss = 0;
-		for (int16_t side = 0; side < 6; side++) {
+		int16_t side;
+
+		for (side = 0; side < 6; side++) {
 			if (!player_Is_Side_Enemy(side) && mission.kills_losses[side][craft])
 				has_loss = 1;
 		}
@@ -224,7 +237,9 @@ static int16_t Count_Debrief_Losses(void) {
 
 static int16_t Count_Debrief_Captures(void) {
 	int16_t count = 0;
-	for (int16_t craft = 0; craft < 69; craft++) {
+	int16_t craft;
+
+	for (craft = 0; craft < 69; craft++) {
 		if (mission.captures_by_type[craft])
 			count++;
 	}
@@ -251,7 +266,9 @@ static void Get_Debrief_Kills(char* string, int16_t craft_idx) {
 	if (craft_idx >= 69) {
 		count = pstate.player_total_kills;
 	} else {
-		for (int16_t side = 0; side < 6; side++) {
+		int16_t side;
+
+		for (side = 0; side < 6; side++) {
 			if (player_Is_Side_Enemy(side))
 				count += mission.kills_losses[side][craft_idx];
 		}
@@ -275,7 +292,9 @@ static void Get_Debrief_Losses(char* string, int16_t craft_idx) {
 	char buf[80];
 
 	if (craft_idx < 69) {
-		for (int16_t side = 0; side < 6; side++) {
+		int16_t side;
+
+		for (side = 0; side < 6; side++) {
 			if (!player_Is_Side_Enemy(side))
 				count += mission.kills_losses[side][craft_idx];
 		}
@@ -306,8 +325,12 @@ static void Get_Debrief_Kill_Title(char* string) {
 	uint16_t total_kills = 0, player_total = 0;
 	char fmt[40], buf[80];
 
-	for (uint16_t craft = 0; craft < 69; craft++) {
-		for (uint16_t side = 0; side < 6; side++) {
+	uint16_t craft;
+
+	for (craft = 0; craft < 69; craft++) {
+		uint16_t side;
+
+		for (side = 0; side < 6; side++) {
 			if (player_Is_Side_Enemy(side))
 				total_kills += mission.kills_losses[side][craft];
 		}
@@ -324,8 +347,12 @@ static void Get_Debrief_Loss_Title(char* string) {
 	uint16_t total = 0;
 	char fmt[40], buf[80];
 
-	for (uint16_t craft = 0; craft < 69; craft++) {
-		for (uint16_t side = 0; side < 6; side++) {
+	uint16_t craft;
+
+	for (craft = 0; craft < 69; craft++) {
+		uint16_t side;
+
+		for (side = 0; side < 6; side++) {
 			if (!player_Is_Side_Enemy(side))
 				total += mission.kills_losses[side][craft];
 		}
@@ -341,7 +368,9 @@ static void Get_Debrief_Capture_Title(char* string) {
 	uint16_t total = 0;
 	char fmt[40], buf[80];
 
-	for (uint16_t craft = 0; craft < 69; craft++)
+	uint16_t craft;
+
+	for (craft = 0; craft < 69; craft++)
 		total += mission.captures_by_type[craft];
 
 	textext_Copy_Text(fmt, txtTalkCaptured);
@@ -365,7 +394,9 @@ static void Find_Debrief_Kills(char* string, int16_t page, int16_t line) {
 		center_line = 1;
 	} else {
 		int16_t skip = line - 2 * (page + 1);
-		for (int16_t craft = 0; craft <= 69; craft++) {
+		int16_t craft;
+
+		for (craft = 0; craft <= 69; craft++) {
 			Get_Debrief_Kills(string, craft);
 			if (*string) {
 				if (!skip)
@@ -387,7 +418,9 @@ static void Find_Debrief_Losses(char* string, int16_t page, int16_t line) {
 		center_line = 1;
 	} else {
 		int16_t skip = line - 2 * (page + 1);
-		for (int16_t craft = 0; craft < 69; craft++) {
+		int16_t craft;
+
+		for (craft = 0; craft < 69; craft++) {
 			Get_Debrief_Losses(string, craft);
 			if (*string) {
 				if (!skip)
@@ -409,7 +442,9 @@ static void Find_Debrief_Captures(char* string, int16_t page, int16_t line) {
 		center_line = 1;
 	} else {
 		int16_t skip = line - 2 * (page + 1);
-		for (int16_t craft = 0; craft < 69; craft++) {
+		int16_t craft;
+
+		for (craft = 0; craft < 69; craft++) {
 			Get_Debrief_Captures(string, craft);
 			if (*string) {
 				if (!skip)
@@ -437,9 +472,11 @@ static void render_header_line(char* string, int16_t line_idx) {
 			center_line = 1;
 			return;
 		case 1: {
+			int16_t mission_num;
+
 			textext_Copy_Text(fmt, txtTalkBattle);
 			replace_italic_codes(fmt);
-			int16_t mission_num;
+
 			if (shipext_Is_Mission_Success())
 				mission_num = pilot_record.battle_cursor[cur_battle];
 			else
@@ -499,9 +536,11 @@ static void render_header_line(char* string, int16_t line_idx) {
 			return;
 		}
 		case 9: {
+			uint16_t pct;
+
 			if (pstate.player_warhead_hit > pstate.player_warhead_fired)
 				pstate.player_warhead_fired = pstate.player_warhead_hit;
-			uint16_t pct =
+			pct =
 				pstate.player_warhead_hit ? 100 * pstate.player_warhead_hit / pstate.player_warhead_fired : 0;
 			textext_Copy_Text(fmt, txtCompInfoRocket);
 			snprintf(buf, sizeof(buf), fmt, pstate.player_warhead_hit, pstate.player_warhead_fired, pct);
@@ -513,7 +552,9 @@ static void render_header_line(char* string, int16_t line_idx) {
 
 static void Find_Debrief_Header(char* string, int16_t line, int16_t max_size) {
 	int16_t skip = line;
-	for (int16_t i = 0; i < max_paragraph_size; i++) {
+	int16_t i;
+
+	for (i = 0; i < max_paragraph_size; i++) {
 		render_header_line(string, i);
 		if (*string) {
 			if (!skip)
@@ -541,9 +582,11 @@ static void render_goals_line(char* string, int16_t line_idx) {
 			textext_Cat_Text(string, mission.difficulty + txtTalkEasy);
 			break;
 		case 1: {
+			int16_t mn;
+
 			textext_Copy_Text(fmt, txtTalkBattle);
 			replace_italic_codes(fmt);
-			int16_t mn;
+
 			if (shipext_Is_Mission_Success())
 				mn = pilot_record.battle_cursor[cur_battle];
 			else
@@ -633,7 +676,9 @@ static void render_goals_line(char* string, int16_t line_idx) {
 
 static void Find_Debrief_Goals(char* string, int16_t line, int16_t max_size) {
 	int16_t skip = line;
-	for (int16_t i = 0; i < max_paragraph_size; i++) {
+	int16_t i;
+
+	for (i = 0; i < max_paragraph_size; i++) {
 		render_goals_line(string, i);
 		if (*string) {
 			if (!skip)
@@ -654,10 +699,12 @@ static void Get_Debrief_Line(char* string, int16_t line, int16_t max_size) {
 	int16_t abs_line = line;
 	int16_t section_page = line / max_paragraph_size;
 
+	int16_t section;
+
 	*string = '\0';
 	center_line = 0;
 
-	for (int16_t section = 0; section < 5 && section_page >= 0; section++) {
+	for (section = 0; section < 5 && section_page >= 0; section++) {
 		int16_t section_pages;
 		switch (section) {
 			case 0:
@@ -706,10 +753,13 @@ static void user_Talk_Eyes(Actor* actor, int32_t time) {
 
 	if (actor->id == 0) {
 		/* Officer face: separate eye + mouth actors */
+		int16_t blink;
+		int16_t mouth_st;
+
 		if (!xactor_Is_Actor_Visible(actor))
 			return;
-		int16_t blink = officer_mood_blink[mood];
-		int16_t mouth_st = officer_mood_mouth[mood];
+		blink = officer_mood_blink[mood];
+		mouth_st = officer_mood_mouth[mood];
 
 		if (time && actor->var1 > 0) {
 			int16_t eye = officer_mood_eye[mood];
@@ -725,10 +775,13 @@ static void user_Talk_Eyes(Actor* actor, int32_t time) {
 		xactor_Set_Actor_State(mouth_actor, mouth_st, 0);
 	} else if (actor->id == 1) {
 		/* Priest face: single actor with eye states */
+		int16_t eye;
+		int16_t blink;
+
 		if (!xactor_Is_Actor_Visible(actor))
 			return;
-		int16_t eye = priest_mood_eye[mood];
-		int16_t blink = priest_mood_blink[mood];
+		eye = priest_mood_eye[mood];
+		blink = priest_mood_blink[mood];
 
 		if (time && actor->var1 > 0) {
 			actor->var1--;
@@ -750,14 +803,18 @@ static void user_Talk_Eyes(Actor* actor, int32_t time) {
 void talk_Get_Talk_Question(char* out, int16_t id) {
 	if (id >= 0 && id < num_talk_questions) {
 		int16_t question_id = talk_win_id[id];
+		char* data;
+
 		if (question_id == 5) {
 			strcpy(out, textext_Get_Text(txtTalkDebrief));
 			return;
 		}
-		char* data = (char*)talk_brief->talk_data[5 * talk_mode + question_id];
+		data = (char*)talk_brief->talk_data[5 * talk_mode + question_id];
 		if (data) {
 			int16_t buf_len = 0;
-			for (int16_t i = 0; data[i] && data[i] != '\n'; i++) {
+			int16_t i;
+
+			for (i = 0; data[i] && data[i] != '\n'; i++) {
 				if (data[i] == 4 || data[i] == 5)
 					i++; /* skip control code + param */
 				else
@@ -778,22 +835,32 @@ void talk_Get_Talk_Question(char* out, int16_t id) {
 
 // FUNCTION: TIE95 0x69868
 void talk_Get_Talk_Paragraph(char* out, int16_t line) {
+	int16_t italic;
+	int16_t question_id;
+	char* data;
+	int16_t pos;
+	int16_t line_idx;
+
 	*out = '\0';
-	int16_t italic = 0;
+	italic = 0;
 	officer_mood_val[0] = 0;
 
 	if (cur_talk_question < 0 || cur_talk_question >= num_talk_questions)
 		return;
 
-	int16_t question_id = talk_win_id[cur_talk_question];
+	question_id = talk_win_id[cur_talk_question];
 	if (question_id == 5) {
 		/* Debrief mode: dispatch to section renderers */
+		int16_t rem_line;
+		int16_t section_page;
+		int16_t section;
+
 		*out = '\0';
 		center_line = 0;
-		int16_t rem_line = line;
-		int16_t section_page = line / max_paragraph_size;
+		rem_line = line;
+		section_page = line / max_paragraph_size;
 
-		for (int16_t section = 0; section < 5 && section_page >= 0; section++) {
+		for (section = 0; section < 5 && section_page >= 0; section++) {
 			int16_t section_pages;
 			switch (section) {
 				case 0:
@@ -835,17 +902,17 @@ void talk_Get_Talk_Paragraph(char* out, int16_t line) {
 	}
 
 	/* Normal talk data: parse line-by-line */
-	char* data = (char*)talk_brief->talk_data[5 * talk_mode + question_id];
+	data = (char*)talk_brief->talk_data[5 * talk_mode + question_id];
 	if (!data)
 		return;
 
 	/* Skip the question line (first line) */
-	int16_t pos = 0;
+	pos = 0;
 	while (data[pos] && data[pos] != '\n')
 		pos++;
 	pos++; /* skip newline */
 
-	int16_t line_idx = 0;
+	line_idx = 0;
 	while (data[pos] && line_idx <= line) {
 		if (line_idx == line) {
 			int16_t out_len = 0;
@@ -887,20 +954,25 @@ void talk_Get_Talk_Paragraph(char* out, int16_t line) {
  * ====================================================================== */
 
 void talk_Set_Talk_Paragraph(void) {
+	int16_t question_id;
+	char* data;
+	int16_t pos;
+	int16_t line_count;
+
 	if (cur_talk_question < 0 || cur_talk_question >= num_talk_questions) {
 		cur_talk_paragraph = -1;
 		num_talk_paragraphs = 0;
 		return;
 	}
 
-	int16_t question_id = talk_win_id[cur_talk_question];
+	question_id = talk_win_id[cur_talk_question];
 	if (question_id == 5) {
 		cur_talk_paragraph = 0;
 		num_talk_paragraphs = Count_Debrief_Pages();
 		return;
 	}
 
-	char* data = (char*)talk_brief->talk_data[5 * talk_mode + question_id];
+	data = (char*)talk_brief->talk_data[5 * talk_mode + question_id];
 	if (!data) {
 		cur_talk_paragraph = -1;
 		num_talk_paragraphs = 0;
@@ -908,12 +980,12 @@ void talk_Set_Talk_Paragraph(void) {
 	}
 
 	/* Skip question line */
-	int16_t pos = 0;
+	pos = 0;
 	while (data[pos] && data[pos] != '\n')
 		pos++;
 	pos++;
 
-	int16_t line_count = 0;
+	line_count = 0;
 	while (data[pos]) {
 		while (data[pos] && data[pos] != '\n')
 			pos++;
@@ -931,6 +1003,13 @@ void talk_Set_Talk_Paragraph(void) {
  * ====================================================================== */
 
 void talk_Set_Talk_To_Text(void) {
+	int16_t i;
+	int16_t total_h, max_w;
+	int16_t q;
+	Rect r;
+
+	char question_buf[80];
+
 	active_talk_question = -1;
 	cur_talk_question = -1;
 	num_talk_paragraphs = 0;
@@ -941,7 +1020,7 @@ void talk_Set_Talk_To_Text(void) {
 	Check_Talk_Questions();
 
 	/* Build filtered question list */
-	for (int16_t i = 0; i < 5; i++) {
+	for (i = 0; i < 5; i++) {
 		int16_t status = talk_win_status[i];
 		int16_t show = 0;
 		switch (status) {
@@ -981,20 +1060,23 @@ void talk_Set_Talk_To_Text(void) {
 	/* Add exit entry and size the talk widget */
 	talk_win_id[num_talk_questions] = 6;
 
-	int16_t total_h = 0, max_w = 0;
-	char question_buf[80];
-	for (int16_t q = 0; q <= num_talk_questions; q++) {
+	total_h = 0;
+	max_w = 0;
+
+	for (q = 0; q <= num_talk_questions; q++) {
+		int16_t saved_font;
+		int16_t w;
+
 		talk_Get_Talk_Question(question_buf, q);
-		int16_t saved_font = xfont_Get_Font();
+		saved_font = xfont_Get_Font();
 		xfont_Set_Font(0);
-		int16_t w = xfont_Get_String_Width(question_buf);
+		w = xfont_Get_String_Width(question_buf);
 		xfont_Set_Font(saved_font);
 		if (max_w < w)
 			max_w = w;
 		total_h += 10;
 	}
 
-	Rect r;
 	xrect_Set_Rect(&r, 318 - (max_w + 6), 198 - (total_h + 3), 318, 198);
 	xinpattr_Set_Input_Frame(talk_input, &r);
 }
@@ -1005,13 +1087,15 @@ void talk_Set_Talk_To_Text(void) {
 
 static int16_t iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
 							int16_t x, int16_t y) {
+	uint8_t button;
+
 	(void)r;
 	(void)clip_r;
 
 	if (key)
 		return 0;
 
-	uint8_t button = left ? left : right;
+	button = left ? left : right;
 
 	if (button <= 2) {
 		int16_t hover;
@@ -1075,10 +1159,12 @@ static void iuser_Talk(Input* input, int32_t time) {
 					/* Count lines in talk data */
 					char* data = (char*)talk_brief->talk_data[5 * talk_mode + qid];
 					int16_t pos = 0;
+					int16_t line_count;
+
 					while (data[pos] && data[pos] != '\n')
 						pos++;
 					pos++;
-					int16_t line_count = 0;
+					line_count = 0;
 					while (data[pos]) {
 						while (data[pos] && data[pos] != '\n')
 							pos++;
@@ -1122,25 +1208,32 @@ static void iuser_Talk(Input* input, int32_t time) {
 }
 
 static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+	Rect tr;
+	int16_t y_offset;
+	int16_t q;
+
+	char question_buf[80];
+
 	if (!refresh)
 		return;
 
 	shade_Draw_Talk_Shade_Rect(r);
-	Rect tr;
+
 	xrect_Copy_Rect(&tr, r);
 	tr.bottom = tr.top + 10 * num_talk_questions + 4;
 	xfont_Enable_FontID_Shadow(0);
 
-	char question_buf[80];
-	int16_t y_offset = 0;
-	for (int16_t q = 0; q <= num_talk_questions; q++) {
+	y_offset = 0;
+	for (q = 0; q <= num_talk_questions; q++) {
 		int16_t color;
+		int16_t qid;
+
 		if (q == active_talk_question)
 			color = input->var1 ? 14 : 28;
 		else
 			color = (q == cur_talk_question) ? 9 : 24;
 
-		int16_t qid = talk_win_id[q];
+		qid = talk_win_id[q];
 		if (qid == 6) {
 			strcpy(question_buf, textext_Get_Text(txtTalkExit));
 		} else if (qid == 5) {
@@ -1150,7 +1243,9 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 			char* data = (char*)talk_brief->talk_data[5 * talk_mode + qid];
 			if (data) {
 				int16_t len = 0;
-				for (int16_t i = 0; data[i] && data[i] != '\n'; i++) {
+				int16_t i;
+
+				for (i = 0; data[i] && data[i] != '\n'; i++) {
 					if (data[i] == 4 || data[i] == 5)
 						i++;
 					else
@@ -1172,6 +1267,8 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 
 static int16_t iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
 							  int16_t x, int16_t y) {
+	uint8_t button;
+
 	(void)r;
 	(void)clip_r;
 	(void)x;
@@ -1180,7 +1277,7 @@ static int16_t iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t key, 
 	if (key)
 		return 0;
 
-	uint8_t button = left ? left : right;
+	button = left ? left : right;
 	if (cur_talk_question != -1 && button) {
 		if (button <= 1) {
 			input->var1 = 1;
@@ -1215,10 +1312,12 @@ static void talk_Speech_User_Func(Sound* snd, int32_t time) {
  * allocated returns the existing sound. */
 // FUNCTION: TIE95 0x6B363
 void talk_Alloc_Speech_Sound(void) {
+	LandruHandle data;
+
 	if (talk_speech_sound)
 		return;
 
-	LandruHandle data = xmemhdl_Alloc_Clear_Handle(TALK_SPEECH_BUF_SIZE, LANDRU_MEMORY_DEFAULT);
+	data = xmemhdl_Alloc_Clear_Handle(TALK_SPEECH_BUF_SIZE, LANDRU_MEMORY_DEFAULT);
 	if (!data)
 		return;
 	talk_speech_sound = xsound_Alloc_Sound(data, 0, 0);
@@ -1275,6 +1374,8 @@ void talk_Free_Speech_Sound(void) {
 static int talk_Build_Voc_Path(char* out, size_t cap) {
 	char sp[8] = { 0 };
 
+	int n;
+
 	if (talk_voice_species >= 0) {
 		/* Numeric species (1m1, 2m1, ...) */
 		snprintf(sp, sizeof(sp), "%d", talk_voice_species);
@@ -1291,7 +1392,6 @@ static int talk_Build_Voc_Path(char* out, size_t cap) {
 		}
 	}
 
-	int n;
 	if (talk_voice_officer == 'i') {
 		/* Briefing-officer voiceover: no mood character. Retail
 		 * shaves one off the idx for missions whose name ends in
@@ -1329,12 +1429,20 @@ static int talk_Build_Voc_Path(char* out, size_t cap) {
  * missing — the screen still works without voice. */
 // FUNCTION: TIE95 0x6AFF9
 void talk_Start_Speech_Stream(void) {
+	TieFrontendVoiceSource voice_source;
+	TieFile* fp;
+	uint8_t* data;
+	size_t bytes_read;
+	uint32_t source_rate_hz;
+	TieVocCompatResult voc_compat;
+
+	char path[64];
+
 	if (!talk_speech_sound || !talk_speech_sound->data)
 		return;
 	if (!options_gbl.speech_active)
 		return;
 
-	char path[64];
 	if (!talk_Build_Voc_Path(path, sizeof(path)))
 		return;
 
@@ -1343,8 +1451,7 @@ void talk_Start_Speech_Stream(void) {
 	talk_speech_streaming = 0;
 	talk_speech_pos = 0;
 
-	TieFrontendVoiceSource voice_source;
-	TieFile* fp = TieFrontendVoice_Open(path, &voice_source);
+	fp = TieFrontendVoice_Open(path, &voice_source);
 	if (!fp) {
 		TieDiagnostics_Log(TIE_LOG_INFO, "[talk-voice] missing %s\n", path);
 		return;
@@ -1352,18 +1459,18 @@ void talk_Start_Speech_Stream(void) {
 	TieDiagnostics_Log(TIE_LOG_INFO, "[talk-voice] play %s source=%s\n", path,
 					   TieFrontendVoice_SourceName(voice_source));
 
-	uint8_t* data = xmemhdl_Lock_Handle(talk_speech_sound->data);
+	data = xmemhdl_Lock_Handle(talk_speech_sound->data);
 	if (!data) {
 		TieStorage_Close(fp);
 		return;
 	}
 	memset(data, 0, TALK_SPEECH_BUF_SIZE);
-	size_t bytes_read = TieStorage_Read(data, 1, TALK_SPEECH_BUF_SIZE, fp);
+	bytes_read = TieStorage_Read(data, 1, TALK_SPEECH_BUF_SIZE, fp);
 	TieStorage_Close(fp);
-	uint32_t source_rate_hz = 0;
+	source_rate_hz = 0;
 	/* MODERN ADAPTATION: TIE98 ships VOC 1.20/type-9 PCM, while the
 	 * recovered TIE95 iMUSE dispatcher consumes VOC 1.10/type-1 blocks. */
-	const TieVocCompatResult voc_compat = TieVocCompat_PrepareImuse(data, &bytes_read, &source_rate_hz);
+	voc_compat = TieVocCompat_PrepareImuse(data, &bytes_read, &source_rate_hz);
 	xmemhdl_Unlock_Handle(talk_speech_sound->data);
 	if (voc_compat == TIE_VOC_COMPAT_INVALID) {
 		TieDiagnostics_Log(TIE_LOG_WARN, "[talk-voice] unsupported VOC format in %s\n", path);
@@ -1450,21 +1557,30 @@ static void iuser_Answer(Input* input, int32_t time) {
 }
 
 static void idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+	Rect dst;
+	int16_t first_line;
+	int16_t text_color;
+	int16_t y_off;
+	int16_t cur_line;
+
+	char line_buf[80];
+	char page_buf[40];
+
 	if (!refresh)
 		return;
 	if (cur_talk_paragraph == -1)
 		goto dirty_check;
 
-	Rect dst;
 	xrect_Copy_Rect(&dst, r);
-	int16_t first_line = max_paragraph_size * cur_talk_paragraph;
-	int16_t text_color = input->var1 ? 1 : 9;
+	first_line = max_paragraph_size * cur_talk_paragraph;
+	text_color = input->var1 ? 1 : 9;
 
 	xfont_Enable_FontID_Shadow(0);
 
-	char line_buf[80];
-	int16_t y_off = 0;
-	for (int16_t cur_line = first_line; cur_line < first_line + max_paragraph_size; cur_line++) {
+	y_off = 0;
+	for (cur_line = first_line; cur_line < first_line + max_paragraph_size; cur_line++) {
+		int16_t line_y;
+
 		line_buf[0] = '\0';
 		center_line = 0;
 		talk_Set_Officer_Mood(0);
@@ -1478,7 +1594,7 @@ static void idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 			}
 		}
 
-		int16_t line_y = y_off + dst.top;
+		line_y = y_off + dst.top;
 		if (center_line) {
 			Rect line_rect;
 			xrect_Set_Rect(&line_rect, dst.left, line_y, dst.right, line_y + 10);
@@ -1490,7 +1606,7 @@ static void idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	}
 
 	/* Page indicator */
-	char page_buf[40];
+
 	textext_Copy_Text(line_buf, txtTalkOf);
 	snprintf(page_buf, sizeof(page_buf), line_buf, cur_talk_paragraph + 1, num_talk_paragraphs);
 	textext_Copy_Text(line_buf, txtMapPage);
@@ -1520,226 +1636,217 @@ static void end_View(int32_t refresh) {
  * talk_Talk — main entry point
  * ====================================================================== */
 
-typedef enum {
-	TALK_PHASE_BEGIN = 0,
-	TALK_PHASE_CLEANUP = 1,
-} TalkPhase;
+ResFile* talk_OpenScene(SceneHeadStruct* scene_head) {
+	ResFile* resource;
+	Rect frame;
+	int16_t talk_type = 0;
+	int16_t i;
 
-typedef struct TalkTask {
-	SceneHeadStruct* scene_head;
-	ResFile* res_file;
-	TalkPhase phase;
-} TalkTask;
+	int16_t scene;
+	Actor* delt;
+	int16_t total_h, max_w;
+	char question_buf[80];
+	Rect r;
 
-static LandruTaskStepResult talk_task_step(void* self) {
-	TalkTask* t = (TalkTask*)self;
+	resource = shellext_Open_Empire_Resource(talk_str[0]);
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
 
-	if (t->phase != TALK_PHASE_BEGIN)
-		goto cleanup;
-
-	{
-		Rect frame;
-		int16_t talk_type = 0;
-		int16_t i;
-
-		t->res_file = shellext_Open_Empire_Resource(talk_str[0]);
-		xrect_Set_Rect(&frame, 0, 0, 320, 200);
-
-		int16_t scene = shellext_Get_Cur_Scene();
-		switch (scene) {
-			case SCENE_TALK_BRIEF_OFFICER:
-				max_paragraph_size = 10;
-				talk_type = 1;
-				break;
-			case SCENE_TALK_BRIEF_PRIEST:
-				talk_type = 2;
-				max_paragraph_size = 10;
-				break;
-			case SCENE_TALK_DEBRIEF_OFFICER:
-				talk_type = 3;
-				max_paragraph_size = 10;
-				break;
-			case SCENE_TALK_DEBRIEF_PRIEST:
-				talk_type = 4;
-				max_paragraph_size = 10;
-				break;
-		}
-
-		talk_mode = talk_type - 1;
-
-		/* Load talk film. Tag the snapshot with the (lfd, film) tuple so
-		 * the cutscene compositor can resolve a remaster bundle for this
-		 * screen. One tag call covers all four scenes — talk_str[talk_type]
-		 * picks the right film name (brf_off / brf_ss / dbrf_off / dbrf_ss).
-		 * Default INCREMENTAL redraw model is correct (face-anim + text
-		 * scroll under dirty-rect refresh, persistent RT). The tag is
-		 * auto-cleared at the next scene transition by
-		 * shell_run_scene_dispatch. */
-		talk_film = xfilm_Res_Film(talk_str[talk_type], &frame, 0, 0, 0);
-		TieSnapshotBuilder_SetActiveFilm("TALK", talk_str[talk_type]);
-		xfilm_Set_Film_Def_Palette(talk_film, t->scene_head->def_palette);
-
-		/* Find and disable the text overlay delta actor */
-		Actor* delt = xactor_Find_Actor(FOURCC_DELT, talk_str[talk_type + 6]);
-		// xactor_Non_Refreshable_Actor(delt);
-
-		/* Set up face animation actors and voice-over filename chars.
-		 * Retail TALK_Talk seeds officer/mood directly: 'o','b' for brief
-		 * officer, 'p','b' for brief priest, 'o','d' for debrief officer,
-		 * 'p','d' for debrief priest. */
-		scene = shellext_Get_Cur_Scene();
-		switch (scene) {
-			case SCENE_TALK_BRIEF_OFFICER:
-				eye_actor = xactor_Find_Actor(FOURCC_ANIM, "eyes");
-				mouth_actor = xactor_Find_Actor(FOURCC_ANIM, "mouth");
-				xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
-				eye_actor->id = 0;
-				talk_voice_officer = 'o';
-				talk_voice_mood = 'b';
-				break;
-			case SCENE_TALK_DEBRIEF_OFFICER:
-				eye_actor = xactor_Find_Actor(FOURCC_ANIM, "eyes");
-				mouth_actor = xactor_Find_Actor(FOURCC_ANIM, "mouth");
-				xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
-				eye_actor->id = 0;
-				talk_voice_officer = 'o';
-				talk_voice_mood = 'd';
-				break;
-			case SCENE_TALK_BRIEF_PRIEST:
-				eye_actor = xactor_Find_Actor(FOURCC_ANIM, "ssface");
-				mouth_actor = NULL;
-				xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
-				eye_actor->id = 1;
-				talk_voice_officer = 'p';
-				talk_voice_mood = 'b';
-				break;
-			case SCENE_TALK_DEBRIEF_PRIEST:
-				eye_actor = xactor_Find_Actor(FOURCC_ANIM, "ssface");
-				mouth_actor = NULL;
-				xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
-				eye_actor->id = 1;
-				talk_voice_officer = 'p';
-				talk_voice_mood = 'd';
-				break;
-		}
-
-		/* Build the input widget tree */
-		parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
-
-		xrect_Set_Rect(&frame, 122, 116 - 10 * (max_paragraph_size + 1), 318, 116);
-		answer = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(answer, iupdate_Answer);
-		xinpattr_Set_Input_User_Function(answer, iuser_Answer);
-		xinpattr_Set_Input_Draw_Function(answer, idraw_Answer);
-		xinpattr_Refreshable_Input(answer);
-		answer->mouseUsage = allInput;
-		answer->id = 0;
-
-		xrect_Set_Rect(&frame, 122, 135, 318, 195);
-		talk_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(talk_input, iupdate_Talk);
-		xinpattr_Set_Input_User_Function(talk_input, iuser_Talk);
-		xinpattr_Set_Input_Draw_Function(talk_input, idraw_Talk);
-		xinpattr_Refreshable_Input(talk_input);
-		talk_input->mouseUsage = allInput;
-		talk_input->id = 0;
-
-		/* Initialize talk state */
-		player_Init_Brief_For_Talk();
-		talk_brief = player_Fetch_Brief();
-		talk_fgroup = player_Fetch_FGroup();
-
-		num_talk_questions = 0;
-		num_talk_paragraphs = 0;
-		active_talk_question = -1;
-		cur_talk_question = -1;
-		cur_talk_paragraph = -1;
-
-		Check_Talk_Questions();
-
-		/* Build filtered question list */
-		for (i = 0; i < 5; i++) {
-			int16_t show = 0;
-			switch (talk_win_status[i]) {
-				case 1:
-					show = 1;
-					break;
-				case 2:
-					show = (mission.primary_complete == 1);
-					break;
-				case 3:
-					show = (mission.secondary_complete == 1);
-					break;
-				case 4:
-					show = (mission.primary_complete != 1);
-					break;
-				case 5:
-					show = (mission.secondary_complete != 1);
-					break;
-			}
-			if (show)
-				talk_win_id[num_talk_questions++] = i;
-		}
-
-		/* For debrief scenes, add debrief question */
-		if (shellext_Get_Cur_Scene() == SCENE_TALK_DEBRIEF_OFFICER ||
-			shellext_Get_Cur_Scene() == SCENE_TALK_DEBRIEF_PRIEST) {
-			if (num_talk_questions == 5)
-				talk_win_id[4] = 5;
-			else
-				talk_win_id[num_talk_questions++] = 5;
-			cur_talk_question = num_talk_questions - 1;
-			active_talk_question = num_talk_questions - 1;
-			num_talk_paragraphs = Count_Debrief_Pages();
-			cur_talk_paragraph = 0;
-		}
-
-		/* Add exit entry and size the talk widget */
-		talk_win_id[num_talk_questions] = 6;
-
-		int16_t total_h = 0, max_w = 0;
-		char question_buf[80];
-		for (i = 0; i <= num_talk_questions; i++) {
-			talk_Get_Talk_Question(question_buf, i);
-			int16_t saved_font = xfont_Get_Font();
-			xfont_Set_Font(0);
-			int16_t w = xfont_Get_String_Width(question_buf);
-			xfont_Set_Font(saved_font);
-			if (max_w < w)
-				max_w = w;
-			total_h += 10;
-		}
-
-		Rect r;
-		xrect_Set_Rect(&r, 318 - (max_w + 6), 198 - (total_h + 3), 318, 198);
-		xinpattr_Set_Input_Frame(talk_input, &r);
-		officer_mood_val[0] = 0;
-
-		/* Position mouse */
-		scene = shellext_Get_Cur_Scene();
-		if (scene == SCENE_TALK_BRIEF_OFFICER || scene == SCENE_TALK_BRIEF_PRIEST)
-			xio_Set_Mouse_Position(260, 192 - 10 * num_talk_questions);
-		else if (scene == SCENE_TALK_DEBRIEF_OFFICER || scene == SCENE_TALK_DEBRIEF_PRIEST)
-			xio_Set_Mouse_Position(260, 182);
-
-		/* Resolve species/mission and arm the streaming speech sound.
-		 * Retail does the same dance: TALK_Set_Voice_Species_Mission
-		 * (sub_6AF31) then TALK_Alloc_Speech_Sound (sub_6B363). */
-		talk_Set_Voice_Species_Mission();
-		talk_Alloc_Speech_Sound();
-
-		/* Push the modal view task */
-		xview_Set_View_Update_Function(end_View);
-		xviewadd_Clear_View();
-		xview_Disable_All_View_Erase();
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = TALK_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+	scene = shellext_Get_Cur_Scene();
+	switch (scene) {
+		case SCENE_TALK_BRIEF_OFFICER:
+			max_paragraph_size = 10;
+			talk_type = 1;
+			break;
+		case SCENE_TALK_BRIEF_PRIEST:
+			talk_type = 2;
+			max_paragraph_size = 10;
+			break;
+		case SCENE_TALK_DEBRIEF_OFFICER:
+			talk_type = 3;
+			max_paragraph_size = 10;
+			break;
+		case SCENE_TALK_DEBRIEF_PRIEST:
+			talk_type = 4;
+			max_paragraph_size = 10;
+			break;
 	}
 
-cleanup:
-	/* CLEANUP — view popped */
+	talk_mode = talk_type - 1;
+
+	/* Load talk film. Tag the snapshot with the (lfd, film) tuple so
+	 * the cutscene compositor can resolve a remaster bundle for this
+	 * screen. One tag call covers all four scenes — talk_str[talk_type]
+	 * picks the right film name (brf_off / brf_ss / dbrf_off / dbrf_ss).
+	 * Default INCREMENTAL redraw model is correct (face-anim + text
+	 * scroll under dirty-rect refresh, persistent RT). The tag is
+	 * auto-cleared at the next scene transition by
+	 * shell_run_scene_dispatch. */
+	talk_film = xfilm_Res_Film(talk_str[talk_type], &frame, 0, 0, 0);
+#ifdef TIE_MODERN
+	TieSnapshotBuilder_SetActiveFilm("TALK", talk_str[talk_type]);
+#endif
+	xfilm_Set_Film_Def_Palette(talk_film, scene_head->def_palette);
+
+	/* Find and disable the text overlay delta actor */
+	delt = xactor_Find_Actor(FOURCC_DELT, talk_str[talk_type + 6]);
+	// xactor_Non_Refreshable_Actor(delt);
+
+	/* Set up face animation actors and voice-over filename chars.
+	 * Retail TALK_Talk seeds officer/mood directly: 'o','b' for brief
+	 * officer, 'p','b' for brief priest, 'o','d' for debrief officer,
+	 * 'p','d' for debrief priest. */
+	scene = shellext_Get_Cur_Scene();
+	switch (scene) {
+		case SCENE_TALK_BRIEF_OFFICER:
+			eye_actor = xactor_Find_Actor(FOURCC_ANIM, "eyes");
+			mouth_actor = xactor_Find_Actor(FOURCC_ANIM, "mouth");
+			xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
+			eye_actor->id = 0;
+			talk_voice_officer = 'o';
+			talk_voice_mood = 'b';
+			break;
+		case SCENE_TALK_DEBRIEF_OFFICER:
+			eye_actor = xactor_Find_Actor(FOURCC_ANIM, "eyes");
+			mouth_actor = xactor_Find_Actor(FOURCC_ANIM, "mouth");
+			xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
+			eye_actor->id = 0;
+			talk_voice_officer = 'o';
+			talk_voice_mood = 'd';
+			break;
+		case SCENE_TALK_BRIEF_PRIEST:
+			eye_actor = xactor_Find_Actor(FOURCC_ANIM, "ssface");
+			mouth_actor = NULL;
+			xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
+			eye_actor->id = 1;
+			talk_voice_officer = 'p';
+			talk_voice_mood = 'b';
+			break;
+		case SCENE_TALK_DEBRIEF_PRIEST:
+			eye_actor = xactor_Find_Actor(FOURCC_ANIM, "ssface");
+			mouth_actor = NULL;
+			xactor_Set_Actor_User_Function(eye_actor, user_Talk_Eyes);
+			eye_actor->id = 1;
+			talk_voice_officer = 'p';
+			talk_voice_mood = 'd';
+			break;
+	}
+
+	/* Build the input widget tree */
+	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
+
+	xrect_Set_Rect(&frame, 122, 116 - 10 * (max_paragraph_size + 1), 318, 116);
+	answer = xinput_Alloc_Input(parent, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(answer, iupdate_Answer);
+	xinpattr_Set_Input_User_Function(answer, iuser_Answer);
+	xinpattr_Set_Input_Draw_Function(answer, idraw_Answer);
+	xinpattr_Refreshable_Input(answer);
+	answer->mouseUsage = allInput;
+	answer->id = 0;
+
+	xrect_Set_Rect(&frame, 122, 135, 318, 195);
+	talk_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(talk_input, iupdate_Talk);
+	xinpattr_Set_Input_User_Function(talk_input, iuser_Talk);
+	xinpattr_Set_Input_Draw_Function(talk_input, idraw_Talk);
+	xinpattr_Refreshable_Input(talk_input);
+	talk_input->mouseUsage = allInput;
+	talk_input->id = 0;
+
+	/* Initialize talk state */
+	player_Init_Brief_For_Talk();
+	talk_brief = player_Fetch_Brief();
+	talk_fgroup = player_Fetch_FGroup();
+
+	num_talk_questions = 0;
+	num_talk_paragraphs = 0;
+	active_talk_question = -1;
+	cur_talk_question = -1;
+	cur_talk_paragraph = -1;
+
+	Check_Talk_Questions();
+
+	/* Build filtered question list */
+	for (i = 0; i < 5; i++) {
+		int16_t show = 0;
+		switch (talk_win_status[i]) {
+			case 1:
+				show = 1;
+				break;
+			case 2:
+				show = (mission.primary_complete == 1);
+				break;
+			case 3:
+				show = (mission.secondary_complete == 1);
+				break;
+			case 4:
+				show = (mission.primary_complete != 1);
+				break;
+			case 5:
+				show = (mission.secondary_complete != 1);
+				break;
+		}
+		if (show)
+			talk_win_id[num_talk_questions++] = i;
+	}
+
+	/* For debrief scenes, add debrief question */
+	if (shellext_Get_Cur_Scene() == SCENE_TALK_DEBRIEF_OFFICER ||
+		shellext_Get_Cur_Scene() == SCENE_TALK_DEBRIEF_PRIEST) {
+		if (num_talk_questions == 5)
+			talk_win_id[4] = 5;
+		else
+			talk_win_id[num_talk_questions++] = 5;
+		cur_talk_question = num_talk_questions - 1;
+		active_talk_question = num_talk_questions - 1;
+		num_talk_paragraphs = Count_Debrief_Pages();
+		cur_talk_paragraph = 0;
+	}
+
+	/* Add exit entry and size the talk widget */
+	talk_win_id[num_talk_questions] = 6;
+
+	total_h = 0;
+	max_w = 0;
+
+	for (i = 0; i <= num_talk_questions; i++) {
+		int16_t saved_font;
+		int16_t w;
+
+		talk_Get_Talk_Question(question_buf, i);
+		saved_font = xfont_Get_Font();
+		xfont_Set_Font(0);
+		w = xfont_Get_String_Width(question_buf);
+		xfont_Set_Font(saved_font);
+		if (max_w < w)
+			max_w = w;
+		total_h += 10;
+	}
+
+	xrect_Set_Rect(&r, 318 - (max_w + 6), 198 - (total_h + 3), 318, 198);
+	xinpattr_Set_Input_Frame(talk_input, &r);
+	officer_mood_val[0] = 0;
+
+	/* Position mouse */
+	scene = shellext_Get_Cur_Scene();
+	if (scene == SCENE_TALK_BRIEF_OFFICER || scene == SCENE_TALK_BRIEF_PRIEST)
+		xio_Set_Mouse_Position(260, 192 - 10 * num_talk_questions);
+	else if (scene == SCENE_TALK_DEBRIEF_OFFICER || scene == SCENE_TALK_DEBRIEF_PRIEST)
+		xio_Set_Mouse_Position(260, 182);
+
+	/* Resolve species/mission and arm the streaming speech sound.
+	 * Retail does the same dance: TALK_Set_Voice_Species_Mission
+	 * (sub_6AF31) then TALK_Alloc_Speech_Sound (sub_6B363). */
+	talk_Set_Voice_Species_Mission();
+	talk_Alloc_Speech_Sound();
+
+	/* Push the modal view task */
+	xview_Set_View_Update_Function(end_View);
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
+	return resource;
+}
+
+void talk_CloseScene(ResFile* resource) {
 	talk_Free_Speech_Sound();
 	xview_Enable_All_View_Erase();
 	xview_Clear_View_Update_Function();
@@ -1748,19 +1855,5 @@ cleanup:
 		xcursor_Hide_Cursor();
 
 	player_Free_Display_Map();
-	xres_Close_Resource(t->res_file);
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static const LandruTaskVtable talk_task_vt = {
-	.step = talk_task_step,
-};
-
-void talk_Push_Talk_Task(SceneHeadStruct* scene_head) {
-	TalkTask* t = (TalkTask*)landru_task_push(&talk_task_vt);
-	if (!t)
-		return;
-	t->scene_head = scene_head;
-	t->res_file = NULL;
-	t->phase = TALK_PHASE_BEGIN;
+	xres_Close_Resource(resource);
 }

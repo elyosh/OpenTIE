@@ -1,5 +1,6 @@
 #include "tie_runtime/runtime/runtime.h"
 #include "tie_runtime/display/classic_framebuffer.h"
+#include <landru/host_timing.h>
 
 #include "tie/dsound_wave_tie98.h"
 #include "tie/fediskio.h"
@@ -16,6 +17,7 @@
 #include "tie/wavestream_tie98.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/audio/music_policy.h"
+#include "tie_runtime/display/palette_cycle.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/flight_assets/service.h"
@@ -23,6 +25,7 @@
 #include "tie_runtime/runtime/flight_screen.h"
 #include "tie_runtime/runtime/inflight_state.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/shell_task.h"
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_flight.h"
 #include "tie_runtime/snapshot/snapshot_frontend.h"
@@ -116,7 +119,7 @@ bool TieRuntime_Init(const TieRuntimeConfig* config, char* error, size_t error_c
 	g_playerEngineSoundUpdateEnabled = TieProfile_Flight()->player_engine_sound_enabled ? 1 : 0;
 	strcpy(resourcedir, "RESOURCE/");
 
-	shell_session_begin(6, 1);
+	TieShell_Begin(6, 1);
 	return true;
 }
 
@@ -205,7 +208,7 @@ static void TieRuntime_AdvanceEngineTime(uint64_t delta_us) {
 		TieMusicPolicy_AdvanceTime(step_us);
 
 		gamesnd_AdvanceAudio(step_us);
-		gamesnd_drive_palette_cycle();
+		TiePaletteCycle_Tick();
 		delta_us -= (uint32_t)step_us;
 	}
 }

@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * SDP (Sound Design Program) record — 62 bytes.
  * Forms a linked chain: name[0]==0 marks end of chain.
@@ -44,5 +48,9 @@ extern int16_t attributes[2];
  * current buildup value). 6-entry intro ramp + 7-entry waiting hold. */
 extern uint16_t introBuildup[6];
 extern uint16_t waitingBuildup[7];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

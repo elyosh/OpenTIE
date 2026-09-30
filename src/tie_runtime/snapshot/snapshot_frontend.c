@@ -8,6 +8,8 @@
 
 #include "tie_runtime/integration/landru_adapter.h"
 #include "tie_runtime/snapshot/capture_views.h"
+#include "tie_runtime/snapshot/logo.h"
+#include "tie_runtime/snapshot/title.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 
 void TieFrontendSnapshot_CaptureText(void) {
@@ -33,7 +35,7 @@ void TieFrontendSnapshot_CaptureText(void) {
 }
 
 void TieFrontendSnapshot_CaptureTitle(void) {
-	const int count = TieRecoveredTitle_SnapshotLineCount();
+	const int count = TieTitleSnapshot_LineCount();
 	if (count <= 0)
 		return;
 	TieSnapshotBuilder_SetSceneClock(xview_Get_View_Time(), xtimer_Frame_Progress(),
@@ -42,7 +44,7 @@ void TieFrontendSnapshot_CaptureTitle(void) {
 		TieTitleCrawlLine* output = TieSnapshotBuilder_AllocTitleCrawlLine();
 		if (!output)
 			break;
-		if (!TieRecoveredTitle_ReadSnapshotLine(index, output->text, sizeof output->text, &output->initial_y))
+		if (!TieTitleSnapshot_ReadLine(index, output->text, sizeof output->text, &output->initial_y))
 			break;
 		output->font_id = 2;
 		output->font_domain = TIE_FONT_DOMAIN_TITLE;
@@ -51,7 +53,7 @@ void TieFrontendSnapshot_CaptureTitle(void) {
 
 void TieFrontendSnapshot_CaptureLogo(void) {
 	LandruActorRenderState actors[128];
-	const int count = TieRecoveredLogo_ReadSnapshotActors(actors, 128);
+	const int count = TieLogoSnapshot_ReadActors(actors, 128);
 	for (int index = 0; index < count; ++index) {
 		if (!TieLandruAdapter_EmitActorState(&actors[index]))
 			break;

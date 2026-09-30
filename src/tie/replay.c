@@ -1,9 +1,8 @@
 #include "tie/replay.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/input/input.h"
-
-#include <stdint.h>
-#include <string.h>
+#include "tie_runtime/runtime/inflight_info_task.h"
+#include "tie_runtime/runtime/replay_save_task.h"
 
 #include "tie/create.h"
 #include "tie/fediskio.h"
@@ -34,7 +33,6 @@
 #include "tie_runtime/runtime/replay_format.h"
 #include "tie_runtime/timing/flight_checkpoint.h"
 #include "tie_runtime/timing/replay_timing.h"
-#include <landru/task.h>
 
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
@@ -45,10 +43,12 @@
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/flight_screen.h"
 #include "tie_runtime/runtime/profile.h"
-#include "tie_runtime/snapshot/snapshot_internal.h"
 #include "tie_runtime/storage/storage.h"
+
 #include <imuse/hilevel.h>
 #include <imuse/lolevel.h>
+#include <stdint.h>
+#include <string.h>
 
 /* --------------------------------------------------------------------------
  * Module-owned globals (watdbg: replay.c's OBJ).
@@ -167,11 +167,13 @@ void ReplayInputFrame_encode(uint8_t* dst, const ReplayInputFrame* src) {
  * 16-byte caller buffer. */
 static void build_clip_filename(char out[16]) {
 	size_t n = 0;
+	size_t s;
+
 	while (n < sizeof(replayclipname) && replayclipname[n]) {
 		out[n] = replayclipname[n];
 		++n;
 	}
-	size_t s = 0;
+	s = 0;
 	while (n + 1 < 16 && kClipSuffix[s]) {
 		out[n++] = kClipSuffix[s++];
 	}
@@ -190,10 +192,14 @@ static void build_clip_filename(char out[16]) {
 // FUNCTION: TIE95 0x475F4
 // FUNCTION: TIE98 0x474BC0
 void replay_replaymessage(uint16_t msg_id) {
+	const unsigned char* p;
+	unsigned char tag;
+	unsigned char last;
+
 	msg_readymessage();
 
-	const unsigned char* p = (const unsigned char*)messagetable[msg_id];
-	unsigned char tag = *p;
+	p = (const unsigned char*)messagetable[msg_id];
+	tag = *p;
 	if (tag < 8) {
 		festring_settextcolor(fontcolorconvert[tag]);
 		++p;
@@ -201,7 +207,7 @@ void replay_replaymessage(uint16_t msg_id) {
 		festring_settextcolor(0x42);
 	}
 
-	unsigned char last = 'x';
+	last = 'x';
 	while (*p) {
 		unsigned char c = *p;
 		if (c == '[') {
@@ -342,21 +348,24 @@ void replay_drawreplaybutton(uint16_t btn_id) {
 		clearwindow();
 	}
 	if (idx == 15 || idx == 33) {
+		uint8_t sp;
+		int st;
+
 		festring_setbound(track_name_left, track_name_y, track_name_right, track_name_h);
 		festring_setbackcolor(0x40);
 		clearwindow();
 		festring_setcursor(track_name_left, track_name_y);
 		replay_outputobjectname(trackobject);
 
-		uint8_t sp = (trackobject >= 0x3800u) ? staticobjects[trackobject - 14336].species
-											  : objects[trackobject].ship_idx;
+		sp = (trackobject >= 0x3800u) ? staticobjects[trackobject - 14336].species
+									  : objects[trackobject].ship_idx;
 		trackspecies = sp;
 
 		festring_setbound(track_stat_left, track_stat_y, track_stat_right, track_stat_h);
 		clearwindow();
 		festring_setcursor(track_stat_left, track_stat_y);
 		festring_settextcolor(0x4E);
-		int st = replay_getstatusnum(trackobject);
+		st = replay_getstatusnum(trackobject);
 		festring_outstringcenter((const uint8_t*)((const char**)statusstrings)[st]);
 	}
 	if (idx == 16 || idx == 34) {
@@ -368,21 +377,24 @@ void replay_drawreplaybutton(uint16_t btn_id) {
 		cameraposstate = 0;
 	}
 	if (idx == 17 || idx == 35) {
+		uint8_t sp;
+		int st;
+
 		festring_setbound(chase_name_left, chase_name_y, chase_name_right, chase_name_h);
 		festring_setbackcolor(0x40);
 		clearwindow();
 		festring_setcursor(chase_name_left, chase_name_y);
 		replay_outputobjectname(pstate.target_obj_idx);
 
-		uint8_t sp = (pstate.target_obj_idx >= 0x3800u) ? staticobjects[pstate.target_obj_idx - 14336].species
-														: objects[pstate.target_obj_idx].ship_idx;
+		sp = (pstate.target_obj_idx >= 0x3800u) ? staticobjects[pstate.target_obj_idx - 14336].species
+												: objects[pstate.target_obj_idx].ship_idx;
 		chasespecies = sp;
 
 		festring_setbound(chase_stat_left, chase_stat_y, chase_stat_right, chase_stat_h);
 		clearwindow();
 		festring_setcursor(chase_stat_left, chase_stat_y);
 		festring_settextcolor(0x4E);
-		int st = replay_getstatusnum(pstate.target_obj_idx);
+		st = replay_getstatusnum(pstate.target_obj_idx);
 		festring_outstringcenter((const uint8_t*)((const char**)statusstrings)[st]);
 		cameraposstate = 1;
 	}
@@ -404,6 +416,9 @@ void replay_drawreplaybutton(uint16_t btn_id) {
  * below: staticobjects[].species is in the buoy range (70..84). */
 // FUNCTION: TIE95 0x462BC
 int replay_getstatusnum(uint16_t obj_id) {
+	uint16_t species;
+	CraftData* craft_ptr;
+
 	if (obj_id >= 0x3800u) {
 		uint16_t species = staticobjects[obj_id - 14336].species;
 		if (species == 144 || species == 143)
@@ -413,8 +428,8 @@ int replay_getstatusnum(uint16_t obj_id) {
 		return 0;
 	}
 
-	uint16_t species = objects[obj_id].ship_idx;
-	CraftData* craft_ptr = objects[obj_id].craft_ptr;
+	species = objects[obj_id].ship_idx;
+	craft_ptr = objects[obj_id].craft_ptr;
 
 	if (species == 144 || species == 143) {
 		return craft_ptr->species_idx ? 5 : 4;
@@ -440,9 +455,17 @@ int replay_getstatusnum(uint16_t obj_id) {
  * and outstring-center it. Identical to demo. */
 // FUNCTION: TIE95 0x46094
 void replay_outputobjectname(uint16_t obj_id) {
+	uint8_t side;
+	uint16_t head_color;
+	CraftData* cp;
+	uint8_t s;
+	char tag;
+
 	if (obj_id >= 0x3800u) {
+		uint16_t species;
+
 		festring_settextcolor(0x43);
-		uint16_t species = staticobjects[obj_id - 14336].species;
+		species = staticobjects[obj_id - 14336].species;
 		if (species >= 70 && species <= 84) {
 			festring_farstrcpy(((char**)buoystr)[species - 70]);
 		}
@@ -450,8 +473,8 @@ void replay_outputobjectname(uint16_t obj_id) {
 		return;
 	}
 
-	uint8_t side = objects[obj_id].side;
-	uint16_t head_color;
+	side = objects[obj_id].side;
+
 	if (side == 0)
 		head_color = 'Q';
 	else if (side == 1 || side == 4)
@@ -471,14 +494,14 @@ void replay_outputobjectname(uint16_t obj_id) {
 		return;
 	}
 
-	CraftData* cp = objects[obj_id].craft_ptr;
+	cp = objects[obj_id].craft_ptr;
 	festring_farstrcpy(spec_data[cp->species_idx].short_name);
 	festring_farstradd(':');
 	festring_farstradd(' ');
 	festring_farstradd((char)254);
 
-	uint8_t s = objects[obj_id].side;
-	char tag;
+	s = objects[obj_id].side;
+
 	if (s == 0)
 		tag = 'R';
 	else if (s == 1 || s == 4)
@@ -501,8 +524,10 @@ void replay_outputobjectname(uint16_t obj_id) {
  * info strip. Retail added an SVGA cockpit strip (341, 13, 411, 22). */
 // FUNCTION: TIE95 0x463BC
 void replay_outputclipname(void) {
-	festring_setbackcolor(0x40);
 	int16_t cx, cy;
+
+	festring_setbackcolor(0x40);
+
 	if (maingameflag) {
 		if (flightResolution == TIE_FLIGHT_RES_VGA) {
 			festring_setbound(169, 5, 206, 11);
@@ -579,12 +604,19 @@ void replay_rewindreplay(void) {
  * Preserves fileptr across the call. */
 // FUNCTION: TIE95 0x44F70
 int16_t replay_loadreplayinput(void) {
+	TieFile* saved;
+	uint8_t* bufp;
+	long frame_offset;
+	uint32_t remaining;
+	uint16_t frames_to_read;
+	uint16_t frame;
+
 	replay_replaymessage(MSG_CAMERA_LOADING);
 	if (replaytotalcnt <= 0 || replaytotalcntdown >= (uint32_t)replaytotalcnt)
 		return 0;
 
-	TieFile* saved = fileptr;
-	uint8_t* bufp = (uint8_t*)replaybufferstart;
+	saved = fileptr;
+	bufp = (uint8_t*)replaybufferstart;
 	memset(bufp, 0, REPLAY_INPUT_BUFFER_BYTES);
 
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, inputspoolfile, "rb", 1)) {
@@ -600,7 +632,7 @@ int16_t replay_loadreplayinput(void) {
 		return 0;
 	}
 
-	long frame_offset =
+	frame_offset =
 		(long)REPLAY_FORMAT_HEADER_SIZE + (long)REPLAYINPUTFRAME_DISK_SIZE * (long)replaytotalcntdown;
 	if (TieStorage_Seek(fileptr, frame_offset, TIE_SEEK_SET)) {
 		TieStorage_Close(fileptr);
@@ -608,10 +640,10 @@ int16_t replay_loadreplayinput(void) {
 		return 0;
 	}
 
-	const uint32_t remaining = (uint32_t)replaytotalcnt - replaytotalcntdown;
-	const uint16_t frames_to_read =
+	remaining = (uint32_t)replaytotalcnt - replaytotalcntdown;
+	frames_to_read =
 		(uint16_t)(remaining < REPLAY_INPUT_CHUNK_FRAMES ? remaining : REPLAY_INPUT_CHUNK_FRAMES);
-	for (uint16_t frame = 0; frame < frames_to_read; ++frame) {
+	for (frame = 0; frame < frames_to_read; ++frame) {
 		size_t n = TieStorage_Read(bufp, 1, REPLAYINPUTFRAME_DISK_SIZE, fileptr);
 		bufp += n;
 		if (n != REPLAYINPUTFRAME_DISK_SIZE) {
@@ -631,20 +663,23 @@ int16_t replay_loadreplayinput(void) {
 
 // FUNCTION: TIE95 0x474B4
 void replay_movecambehind(uint16_t obj_id) {
+	uint16_t sp;
+	uint16_t quarter_w;
+	int32_t push_x;
+	int32_t push_y;
+	int32_t push_z;
+
 	create_getworldposition(obj_id, 0);
 	replaycam.x = worldlocx;
 	replaycam.y = worldlocy;
 	replaycam.z = worldlocz;
 
-	uint16_t sp = (obj_id >= 0x3800u) ? staticobjects[obj_id - 14336].species : objects[obj_id].ship_idx;
-	uint16_t quarter_w = species_table[sp].bound_hwidth >> 2;
+	sp = (obj_id >= 0x3800u) ? staticobjects[obj_id - 14336].species : objects[obj_id].ship_idx;
+	quarter_w = species_table[sp].bound_hwidth >> 2;
 
-	int32_t push_x =
-		((worldeyeA3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeA3 * (int32_t)quarter_w) >> 15);
-	int32_t push_y =
-		((worldeyeB3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeB3 * (int32_t)quarter_w) >> 15);
-	int32_t push_z =
-		((worldeyeC3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeC3 * (int32_t)quarter_w) >> 15);
+	push_x = ((worldeyeA3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeA3 * (int32_t)quarter_w) >> 15);
+	push_y = ((worldeyeB3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeB3 * (int32_t)quarter_w) >> 15);
+	push_z = ((worldeyeC3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeC3 * (int32_t)quarter_w) >> 15);
 	replaycam.x -= push_x;
 	replaycam.y -= push_y;
 	replaycam.z -= push_z;
@@ -718,246 +753,6 @@ void replay_calcreplayview(void) {
 }
 
 /* --------------------------------------------------------------------------
- * Modal text entry
- * -------------------------------------------------------------------------- */
-
-typedef enum ReplaySavePhase {
-	REPLAY_SAVE_PHASE_BEGIN = 0,
-	REPLAY_SAVE_PHASE_EDIT_NAME,
-	REPLAY_SAVE_PHASE_CHECK_FILE,
-	REPLAY_SAVE_PHASE_CONFIRM_REPLACE,
-	REPLAY_SAVE_PHASE_WRITE,
-	REPLAY_SAVE_PHASE_FINISH,
-} ReplaySavePhase;
-
-typedef struct ReplaySaveTask {
-	uint8_t name_input[40];
-	char filename[16];
-	int16_t prompt_cx;
-	int16_t prompt_cy;
-	uint16_t result;
-	uint8_t position;
-	uint8_t editor_active;
-	uint8_t front_surface_route;
-	ReplaySavePhase phase;
-} ReplaySaveTask;
-
-static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* filename);
-
-static void replay_save_present_front(void) {
-	if (!TieClassicDisplay_UsesDx5())
-		return;
-	FrontendDisplay_PresentFrontSurface();
-	FrontendDisplay_PresentFrame();
-}
-
-static void replay_save_draw_editor(const ReplaySaveTask* t) {
-	festring_setcursor(t->prompt_cx, t->prompt_cy);
-	festring_outstring(t->name_input);
-	festring_setbackcolor(0x4A);
-	outchar(' ');
-	festring_setbackcolor(0x2C);
-	outchar('\n');
-}
-
-// ORIGINAL_FUNCTION: TIE95 0x476CC
-// ORIGINAL_FUNCTION: TIE98 0x474CA0
-/* task-split recovery
- * PORT: the original polls inside REPLAY_editstring until Enter. Host input is
- * queued once per application frame, so this state machine consumes one key
- * per step and yields whenever the queue is empty. */
-static bool replay_save_edit_name_step(ReplaySaveTask* t) {
-	feinput_getinput();
-
-	if (keypress == 1)
-		keypress = 8;
-	if (keypress == 8 && t->position > 0)
-		--t->position;
-
-	if (keypress >= 48) {
-		if ((keypress < 65 && keypress >= 58) || (keypress < 97 && keypress >= 91) || (keypress >= 123))
-			keypress = 1;
-	} else if (keypress != 13 && keypress != 45 && keypress != 0) {
-		keypress = 1;
-	}
-
-	if (keypress != 1 && keypress != 13 && keypress != 0 && t->position < 8) {
-		uint8_t ch = (uint8_t)keypress;
-		if (ch >= 'a' && ch <= 'z')
-			ch -= 32;
-		t->name_input[t->position++] = ch;
-	}
-	t->name_input[t->position] = 0;
-
-	if (keypress) {
-		if (TieClassicDisplay_UsesDx5())
-			FlightSurface_Lock();
-		replay_save_draw_editor(t);
-		if (TieClassicDisplay_UsesDx5())
-			FlightSurface_Unlock();
-		replay_save_present_front();
-	}
-	return keypress == 13;
-}
-
-static void replay_save_finish_editor(ReplaySaveTask* t) {
-	if (TieClassicDisplay_UsesDx5())
-		FlightSurface_Lock();
-	festring_setcursor(t->prompt_cx, t->prompt_cy);
-	festring_outstring(t->name_input);
-	outchar('\n');
-	if (TieClassicDisplay_UsesDx5())
-		FlightSurface_Unlock();
-	festring_setautofill(0);
-	festring_setfontsize(2);
-	t->editor_active = 0;
-	replay_save_present_front();
-}
-
-static void replay_save_build_filename(ReplaySaveTask* t) {
-	size_t n = 0;
-	while (n < sizeof(t->filename) - 1 && t->name_input[n]) {
-		t->filename[n] = (char)t->name_input[n];
-		++n;
-	}
-	size_t s = 0;
-	while (n < sizeof(t->filename) - 1 && kClipSuffix[s])
-		t->filename[n++] = kClipSuffix[s++];
-	t->filename[n] = '\0';
-}
-
-static LandruTaskStepResult replay_save_task_step(void* self) {
-	ReplaySaveTask* t = (ReplaySaveTask*)self;
-	const bool tie98_display = TieClassicDisplay_UsesDx5();
-
-	switch (t->phase) {
-		case REPLAY_SAVE_PHASE_BEGIN:
-			if (replaymusic == 1) {
-				replaymusic = 0;
-				replayvolume = (int16_t)imuse_get_master_vol(im);
-				imuse_set_master_vol(im, 0);
-				imuse_pause(im);
-			}
-			if (tie98_display) {
-				FrontendDisplay_PresentFrame();
-				FrontendDisplay_PresentFrontSurface();
-				g_flightDrawToOffscreenSurface = 0;
-				t->front_surface_route = 1;
-				FlightSurface_Lock();
-			}
-			replay_drawreplaybutton(7);
-			replay_replaymessage(MSG_ENTER_FILENAME);
-			festring_setfontsize(1);
-			festring_setautofill(1);
-			t->editor_active = 1;
-			if (tie_is_high_resolution_flight()) {
-				t->prompt_cx = 126;
-				t->prompt_cy = 456;
-			} else {
-				t->prompt_cx = 74;
-				t->prompt_cy = 190;
-			}
-			replay_save_draw_editor(t);
-			if (tie98_display)
-				FlightSurface_Unlock();
-			replay_save_present_front();
-			t->phase = REPLAY_SAVE_PHASE_EDIT_NAME;
-			return LANDRU_TASK_STEP_CONTINUE;
-
-		case REPLAY_SAVE_PHASE_EDIT_NAME:
-			if (!TieInput_KeyPending())
-				return LANDRU_TASK_STEP_YIELD;
-			if (!replay_save_edit_name_step(t))
-				return LANDRU_TASK_STEP_CONTINUE;
-			replay_save_finish_editor(t);
-			if (!t->name_input[0]) {
-				t->result = MSG_REPLAY_NOT_SAVED;
-				t->phase = REPLAY_SAVE_PHASE_FINISH;
-				return LANDRU_TASK_STEP_CONTINUE;
-			}
-			replay_save_build_filename(t);
-			t->phase = REPLAY_SAVE_PHASE_CHECK_FILE;
-			return LANDRU_TASK_STEP_CONTINUE;
-
-		case REPLAY_SAVE_PHASE_CHECK_FILE: {
-			TieFile* existing = TieStorage_Open(TIE_FILE_ROOT_USER, t->filename, "rb");
-			if (!existing) {
-				t->phase = REPLAY_SAVE_PHASE_WRITE;
-				return LANDRU_TASK_STEP_CONTINUE;
-			}
-			TieStorage_Close(existing);
-			if (tie98_display)
-				FlightSurface_Lock();
-			replay_replaymessage(MSG_FILE_REPLACE);
-			if (tie98_display)
-				FlightSurface_Unlock();
-			replay_save_present_front();
-			t->phase = REPLAY_SAVE_PHASE_CONFIRM_REPLACE;
-			return LANDRU_TASK_STEP_CONTINUE;
-		}
-
-		case REPLAY_SAVE_PHASE_CONFIRM_REPLACE: {
-			if (!TieInput_KeyPending())
-				return LANDRU_TASK_STEP_YIELD;
-			const int key = TieInput_ReadKey();
-			if (key != 'y' && key != 'Y') {
-				t->result = MSG_REPLAY_NOT_SAVED;
-				t->phase = REPLAY_SAVE_PHASE_FINISH;
-			} else {
-				t->phase = REPLAY_SAVE_PHASE_WRITE;
-			}
-			return LANDRU_TASK_STEP_CONTINUE;
-		}
-
-		case REPLAY_SAVE_PHASE_WRITE:
-			t->result = replay_savereplay_file(t->name_input, t->filename);
-			t->phase = REPLAY_SAVE_PHASE_FINISH;
-			return LANDRU_TASK_STEP_CONTINUE;
-
-		case REPLAY_SAVE_PHASE_FINISH:
-			if (t->front_surface_route) {
-				g_flightDrawToOffscreenSurface = 1;
-				t->front_surface_route = 0;
-				FlightSurface_Lock();
-			}
-			replay_replaymessage(t->result);
-			if (!tie98_display)
-				replay_drawreplaybutton(6);
-			replay_outputclipname();
-			if (tie98_display)
-				FlightSurface_Unlock();
-			return LANDRU_TASK_STEP_DONE;
-	}
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static void replay_save_task_end(void* self) {
-	ReplaySaveTask* t = (ReplaySaveTask*)self;
-	/* PORT: forced task-stack teardown must not leave the recovered renderer
-	 * routed to the TIE98 front surface or retain modal text state. */
-	if (t->front_surface_route)
-		g_flightDrawToOffscreenSurface = 1;
-	if (t->editor_active) {
-		festring_setautofill(0);
-		festring_setfontsize(2);
-	}
-}
-
-static const LandruTaskVtable replay_save_task_vt = {
-	.step = replay_save_task_step,
-	.end = replay_save_task_end,
-};
-
-static bool replay_Push_SaveReplay_Task(void) {
-	ReplaySaveTask* t = (ReplaySaveTask*)landru_task_push(&replay_save_task_vt);
-	if (!t)
-		return false;
-	memset(t, 0, sizeof *t);
-	t->phase = REPLAY_SAVE_PHASE_BEGIN;
-	return true;
-}
-
-/* --------------------------------------------------------------------------
  * Replay clip save / load (.clp files)
  *
  * Retail file format:
@@ -978,7 +773,11 @@ static bool replay_Push_SaveReplay_Task(void) {
 // FUNCTION: TIE95 0x45078
 // FUNCTION: TIE98 0x4724E0
 // (file-write portion)
-static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* filename) {
+uint16_t replay_savereplay_file(const uint8_t* name_input, const char* filename) {
+	TieFile* clip_fp;
+	size_t i;
+	size_t m;
+
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, filename, "wb", 0))
 		return MSG_FILE_ERROR;
 
@@ -997,7 +796,7 @@ static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* fi
 	TieStorage_Putc(replayrandomseed & 0xFF, fileptr);
 	TieStorage_Putc((replayrandomseed >> 8) & 0xFF, fileptr);
 
-	TieFile* clip_fp = fileptr;
+	clip_fp = fileptr;
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, replaystartfile, "rb", 0)) {
 		TieStorage_Close(fileptr);
 		TieStorage_Close(clip_fp);
@@ -1006,7 +805,7 @@ static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* fi
 	}
 
 	/* Retail walks savearraysizes as u32[] — full iteration, all 67 slots. */
-	for (size_t i = 0; savearrayptrs[i]; ++i) {
+	for (i = 0; savearrayptrs[i]; ++i) {
 		if (!replay_copybytesinfile((uint16_t)savearraysizes[i], fileptr, clip_fp)) {
 			TieStorage_Remove(TIE_FILE_ROOT_USER, filename);
 			return MSG_FILE_ERROR;
@@ -1026,6 +825,8 @@ static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* fi
 	 * When pulling from input.spl skip past the format header before
 	 * copying records. */
 	if (replayspoolflag) {
+		uint32_t i;
+
 		if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, inputspoolfile, "rb", 0)) {
 			TieStorage_Close(clip_fp);
 			TieStorage_Remove(TIE_FILE_ROOT_USER, filename);
@@ -1038,7 +839,7 @@ static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* fi
 			TieStorage_Remove(TIE_FILE_ROOT_USER, filename);
 			return MSG_FILE_ERROR;
 		}
-		for (uint32_t i = 0; i < (uint32_t)replaytotalcnt; ++i) {
+		for (i = 0; i < (uint32_t)replaytotalcnt; ++i) {
 			if (!replay_copybytesinfile(REPLAYINPUTFRAME_DISK_SIZE, fileptr, clip_fp)) {
 				TieStorage_Remove(TIE_FILE_ROOT_USER, filename);
 				return MSG_FILE_ERROR;
@@ -1047,7 +848,9 @@ static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* fi
 		TieStorage_Close(fileptr);
 	} else {
 		const uint8_t* bufp = (const uint8_t*)replaybufferstart;
-		for (uint32_t i = 0; i < (uint32_t)replaytotalcnt; ++i) {
+		uint32_t i;
+
+		for (i = 0; i < (uint32_t)replaytotalcnt; ++i) {
 			if (TieStorage_Write(bufp, 1, REPLAYINPUTFRAME_DISK_SIZE, clip_fp) !=
 				REPLAYINPUTFRAME_DISK_SIZE) {
 				TieStorage_Close(clip_fp);
@@ -1064,7 +867,7 @@ static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* fi
 	}
 
 	memset(replayclipname, 0, sizeof(replayclipname));
-	size_t m = 0;
+	m = 0;
 	while (m < sizeof(replayclipname) - 1 && name_input[m]) {
 		replayclipname[m] = (char)name_input[m];
 		++m;
@@ -1075,6 +878,11 @@ static uint16_t replay_savereplay_file(const uint8_t* name_input, const char* fi
 // FUNCTION: TIE95 0x455B4
 int replay_loadreplay(void) {
 	char filename[16];
+	uint8_t preamble[6];
+	uint32_t cnt;
+	TieFile* clip_fp;
+	size_t i;
+
 	build_clip_filename(filename);
 	if (!filename[0])
 		return 0;
@@ -1089,12 +897,11 @@ int replay_loadreplay(void) {
 		return 0;
 	}
 
-	uint8_t preamble[6];
 	if (TieStorage_Read(preamble, 1, sizeof preamble, fileptr) != sizeof preamble) {
 		TieStorage_Close(fileptr);
 		return 0;
 	}
-	uint32_t cnt = br_u32le(preamble);
+	cnt = br_u32le(preamble);
 	if (!cnt || cnt > REPLAY_MAX_TOTAL_RECORDS) {
 		TieStorage_Close(fileptr);
 		return 0;
@@ -1102,14 +909,14 @@ int replay_loadreplay(void) {
 	replaytotalcnt = (int32_t)cnt;
 	replayrandomseed = br_u16le(preamble + 4);
 
-	TieFile* clip_fp = fileptr;
+	clip_fp = fileptr;
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, replaystartfile, "wb", 0)) {
 		TieStorage_Close(clip_fp);
 		return 0;
 	}
 
 	/* Retail: full u32-stride iteration. */
-	for (size_t i = 0; savearrayptrs[i]; ++i) {
+	for (i = 0; savearrayptrs[i]; ++i) {
 		if (!replay_copybytesinfile((uint16_t)savearraysizes[i], clip_fp, fileptr)) {
 			return 0;
 		}
@@ -1130,6 +937,9 @@ int replay_loadreplay(void) {
 		/* Reconstitute input.spl from the clip's input stream — open
 		 * fresh and prefix with the current header so subsequent
 		 * spool/load goes through the standard format path. */
+		uint32_t i;
+		int rc;
+
 		if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, inputspoolfile, "wb", 0)) {
 			TieStorage_Close(clip_fp);
 			return 0;
@@ -1139,19 +949,21 @@ int replay_loadreplay(void) {
 			TieStorage_Close(clip_fp);
 			return 0;
 		}
-		for (uint32_t i = 0; i < (uint32_t)replaytotalcnt; ++i) {
+		for (i = 0; i < (uint32_t)replaytotalcnt; ++i) {
 			if (!replay_copybytesinfile(REPLAYINPUTFRAME_DISK_SIZE, clip_fp, fileptr)) {
 				return 0;
 			}
 		}
-		int rc = (TieStorage_Close(fileptr) == 0);
+		rc = (TieStorage_Close(fileptr) == 0);
 		TieStorage_Close(clip_fp);
 		return rc;
 	} else {
 		uint8_t* bufp = (uint8_t*)replaybufferstart;
+		uint32_t i;
+
 		if ((uint32_t)replaytotalcnt > REPLAY_INPUT_CHUNK_FRAMES)
 			replaytotalcnt = REPLAY_INPUT_CHUNK_FRAMES;
-		for (uint32_t i = 0; i < (uint32_t)replaytotalcnt; ++i) {
+		for (i = 0; i < (uint32_t)replaytotalcnt; ++i) {
 			int16_t got = fediskio_readfileblock(bufp, 1, REPLAYINPUTFRAME_DISK_SIZE, clip_fp);
 			bufp += got;
 			if ((uint16_t)got != REPLAYINPUTFRAME_DISK_SIZE) {
@@ -1164,19 +976,7 @@ int replay_loadreplay(void) {
 	}
 }
 
-typedef enum {
-	REPLAY_DOSCREEN_PHASE_INIT = 0,
-	REPLAY_DOSCREEN_PHASE_POLL,
-} ReplayDoScreenPhase;
-
-typedef struct ReplayDoScreenTask {
-	uint16_t last_chase_status;
-	uint16_t last_track_status;
-	TieFlightScreen previous_screen;
-	ReplayDoScreenPhase phase;
-} ReplayDoScreenTask;
-
-static void replay_doreplayscreen_init(ReplayDoScreenTask* t) {
+void replay_InitScreen(ReplayScreenState* t) {
 	TieReplayTiming_Reset();
 	t->last_chase_status = 0xFFFF;
 	t->last_track_status = 0xFFFF;
@@ -1207,7 +1007,7 @@ static void replay_doreplayscreen_init(ReplayDoScreenTask* t) {
 	exitflag = 0;
 }
 
-static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
+bool replay_UpdateScreen(ReplayScreenState* t) {
 	uint16_t last_chase_status = t->last_chase_status;
 	uint16_t last_track_status = t->last_track_status;
 	bool advance_message_timer = false;
@@ -1215,13 +1015,19 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 	const bool tie98_display = TieClassicDisplay_UsesDx5();
 
 	{
+		bool save_requested;
+		bool advance_replay;
+		int16_t pct_cx, pct_cy;
+		uint16_t pct_fwd;
+		uint16_t pct;
+
 		if (tie98_display)
 			FlightSurface_Lock();
-		const bool save_requested = replay_replayinput();
+		save_requested = replay_replayinput();
 		if (save_requested) {
 			if (tie98_display)
 				FlightSurface_Unlock();
-			if (replay_Push_SaveReplay_Task())
+			if (TieReplaySave_Begin())
 				return true;
 			if (tie98_display)
 				FlightSurface_Lock();
@@ -1240,8 +1046,10 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 			imuse_resume(im);
 		}
 
-		const bool advance_replay = updateactionflag && TieReplayTiming_IsFrameDue();
+		advance_replay = updateactionflag && TieReplayTiming_IsFrameDue();
 		if (advance_replay) {
+			int32_t info_screen;
+
 			advance_message_timer = true;
 			/* In replay mode tie_doframe never returns false (the
 			 * tickcounter budget gate is bypassed by the replayviewmode
@@ -1250,16 +1058,19 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 				FlightSurface_Unlock();
 			(void)tie_doframe();
 			TieReplayTiming_ConsumeFrame();
-			const int32_t info_screen = user_consume_info_room_request();
+			info_screen = user_consume_info_room_request();
 			if (info_screen >= 0) {
-				user_Push_InflightInfo_Task(info_screen);
+				TieInflightInfo_Begin(info_screen);
 				pushed_subtask = true;
 			}
 			if (tie98_display)
 				FlightSurface_Lock();
 			if (cameraposstate) {
-				festring_setbackcolor(0x40);
 				int16_t cx, cy;
+				uint16_t st;
+
+				festring_setbackcolor(0x40);
+
 				if (maingameflag) {
 					if (flightResolution == TIE_FLIGHT_RES_VGA) {
 						festring_setbound(230, 167, 268, 172);
@@ -1280,7 +1091,7 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 					cy = 167;
 				}
 				festring_setcursor(cx, cy);
-				uint16_t st = (uint16_t)replay_getstatusnum(pstate.target_obj_idx);
+				st = (uint16_t)replay_getstatusnum(pstate.target_obj_idx);
 				if (st != last_chase_status) {
 					clearwindow();
 					festring_settextcolor(0x4E);
@@ -1289,8 +1100,11 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 				}
 			}
 			if (trackobject != 0xFFFFu) {
-				festring_setbackcolor(0x40);
 				int16_t cx, cy;
+				uint16_t st;
+
+				festring_setbackcolor(0x40);
+
 				if (maingameflag) {
 					if (flightResolution == TIE_FLIGHT_RES_VGA) {
 						festring_setbound(230, 181, 268, 186);
@@ -1311,7 +1125,7 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 					cy = 181;
 				}
 				festring_setcursor(cx, cy);
-				uint16_t st = (uint16_t)replay_getstatusnum(trackobject);
+				st = (uint16_t)replay_getstatusnum(trackobject);
 				if (st != last_track_status) {
 					clearwindow();
 					festring_settextcolor(0x4E);
@@ -1320,10 +1134,12 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 				}
 			}
 		} else if (!updateactionflag) {
+			uint16_t t0;
+
 			advance_message_timer = true;
 			/* Paused branch: repaint once, recompute framerate from
 			 * XTIMER delta spent repainting. */
-			uint16_t t0 = tickcounter;
+			t0 = tickcounter;
 			if (tie98_display)
 				FlightSurface_Unlock();
 			tie_updatescreen();
@@ -1345,7 +1161,7 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 		}
 
 		festring_setfontsize(2);
-		int16_t pct_cx, pct_cy;
+
 		if (maingameflag) {
 			if (flightResolution == TIE_FLIGHT_RES_VGA) {
 				festring_setbound(154, 5, 165, 11);
@@ -1368,8 +1184,8 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 		festring_setcursor(pct_cx, pct_cy);
 		festring_setbackcolor(0x40);
 
-		uint16_t pct_fwd = math2_longpercentage(replaytotalcntdown, (uint32_t)replaymaxcnt);
-		uint16_t pct = 100 - math2_fraction(100, pct_fwd);
+		pct_fwd = math2_longpercentage(replaytotalcntdown, (uint32_t)replaymaxcnt);
+		pct = 100 - math2_fraction(100, pct_fwd);
 		if (pct > 99)
 			pct = 99;
 		if (pct != replaypercent) {
@@ -1403,68 +1219,14 @@ static bool replay_doreplayscreen_body(ReplayDoScreenTask* t) {
 	return pushed_subtask;
 }
 
-// ORIGINAL_FUNCTION: TIE95 0x4646C
-// ORIGINAL_FUNCTION: TIE98 0x473AA0
-// (task-split recovery)
-static LandruTaskStepResult replay_doreplayscreen_task_step(void* self) {
-	ReplayDoScreenTask* t = (ReplayDoScreenTask*)self;
-
-	if (t->phase == REPLAY_DOSCREEN_PHASE_INIT) {
-		replay_doreplayscreen_init(t);
-		t->phase = REPLAY_DOSCREEN_PHASE_POLL;
-		return LANDRU_TASK_STEP_CONTINUE;
-	}
-
-	if (exitflag)
-		return LANDRU_TASK_STEP_DONE;
-
-	const bool pushed_subtask = replay_doreplayscreen_body(t);
-	if (pushed_subtask)
-		return LANDRU_TASK_STEP_CONTINUE;
-
-	/* YIELD to keep replay paced at one body-call per TieRuntime_Tick
-	 * (one body invocation reads + applies one replay packet). Under
-	 * the multi-step run_frame driver, returning CONTINUE here would
-	 * fast-forward through recorded packets within a single TieRuntime_Tick. */
-	return exitflag ? LANDRU_TASK_STEP_DONE : LANDRU_TASK_STEP_YIELD;
-}
-
-static uint64_t TieReplay_NextWakeDelayUs(const void* self) {
-	(void)self;
-	return TieReplayTiming_NextWakeDelayUs();
-}
-
-static void replay_doreplayscreen_task_end(void* self) {
-	ReplayDoScreenTask* t = (ReplayDoScreenTask*)self;
-	TieFlightScreen_SetActive(t->previous_screen);
-}
-
-static const LandruTaskVtable replay_doreplayscreen_task_vt = {
-	.step = replay_doreplayscreen_task_step,
-	.end = replay_doreplayscreen_task_end,
-	.next_wake_delay_us = TieReplay_NextWakeDelayUs,
-};
-
-void replay_Push_DoReplayScreen_Task(void) {
-	ReplayDoScreenTask* t = (ReplayDoScreenTask*)landru_task_push(&replay_doreplayscreen_task_vt);
-	if (!t)
-		return;
-	/* PORT: Film Room playback bypasses the mission task that normally
-	 * marks the snapshot as flight-owned. The replay screen's classic
-	 * fallback remains selected through its TieFlightScreen value. */
-	TieSnapshotBuilder_SetSceneKind(TIE_SCENE_FLIGHT);
-	t->previous_screen = TieFlightScreen_SetActive(TIE_FLIGHT_SCREEN_REPLAY_VIEWER);
-	t->last_chase_status = 0xFFFF;
-	t->last_track_status = 0xFFFF;
-	t->phase = REPLAY_DOSCREEN_PHASE_INIT;
-}
-
 /* replay_replayinput — read one hardware tick of input and dispatch. */
 /* PORT: the boolean return is the child-task handoff; retail returns void. */
 // FUNCTION: TIE95 0x46928
 // FUNCTION: TIE98 0x474040
 bool replay_replayinput(void) {
 	bool save_requested = false;
+	int16_t btn_val;
+
 	feinput_getrawinput();
 	feinput_checkinput();
 
@@ -1502,8 +1264,10 @@ bool replay_replayinput(void) {
 			case KEY_c: {
 				uint16_t saved = pstate.object_idx;
 				uint16_t cur = pstate.target_obj_idx;
+				int32_t dir;
+
 				pstate.object_idx = 0xFFFEu;
-				int32_t dir = (inputkey == KEY_C) ? -1 : +1;
+				dir = (inputkey == KEY_C) ? -1 : +1;
 				pstate.target_obj_idx = user_picknexttarget(cur, dir);
 				pstate.object_idx = saved;
 				replay_drawreplaybutton(0x11);
@@ -1553,8 +1317,10 @@ bool replay_replayinput(void) {
 			case KEY_O:
 			case KEY_o: {
 				uint16_t saved = pstate.object_idx;
+				int32_t dir;
+
 				pstate.object_idx = 0xFFFEu;
-				int32_t dir = (inputkey == KEY_O) ? -1 : +1;
+				dir = (inputkey == KEY_O) ? -1 : +1;
 				trackobject = user_picknexttarget(trackobject, dir);
 				pstate.object_idx = saved;
 				replay_drawreplaybutton(0xD);
@@ -1588,7 +1354,7 @@ bool replay_replayinput(void) {
 			case KEY_s:
 				if (maingameflag) {
 					/* PORT: the recovered save dialog blocks for keyboard input.
-					 * Let ReplayDoScreenTask push its non-blocking child task after
+					 * Let ReplayScreenState push its non-blocking child task after
 					 * releasing the flight surface. */
 					save_requested = true;
 				} else {
@@ -1629,7 +1395,7 @@ bool replay_replayinput(void) {
 	}
 
 	/* Mouse translation: unchanged between demo and retail. */
-	int16_t btn_val = inputbuttons & 0xF;
+	btn_val = inputbuttons & 0xF;
 	if (btn_val == 1 || btn_val == 2) {
 		replaycam.view_zoom_rate += 128;
 		if ((uint16_t)replaycam.view_zoom_rate > 0x6000u)
@@ -1648,11 +1414,16 @@ bool replay_replayinput(void) {
 	}
 
 	if (replaycam.view_pitch_offset) {
+		int16_t rate;
+		int16_t dx;
+		int16_t dy;
+		int16_t dz;
+
 		fview_calcrotatemove((int16_t)camera.cam_heading, (int16_t)camera.cam_pitch, NULL);
-		int16_t rate = user_framerateadjust(replaycam.view_zoom_rate);
-		int16_t dx = (int16_t)((craftmoveX * rate) >> 15);
-		int16_t dy = (int16_t)((craftmoveY * rate) >> 15);
-		int16_t dz = (int16_t)((craftmoveZ * rate) >> 15);
+		rate = user_framerateadjust(replaycam.view_zoom_rate);
+		dx = (int16_t)((craftmoveX * rate) >> 15);
+		dy = (int16_t)((craftmoveY * rate) >> 15);
+		dz = (int16_t)((craftmoveZ * rate) >> 15);
 		if (btn_val == 2) {
 			dx = -dx;
 			dy = -dy;

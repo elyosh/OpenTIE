@@ -1,7 +1,3 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "tie/player.h"
 #include "tie/shellext.h"
 #include "tie/soundext.h"
@@ -16,10 +12,12 @@
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/snapshot/capture_views.h"
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 #include "tie_runtime/snapshot/snapshot_map.h"
+#endif
 #include "tie_runtime/storage/storage.h"
 
 #include "landru/actanim.h"
@@ -39,6 +37,10 @@
 
 #include "../util/binio.h"
 
+#include <ctype.h>
+#include <stdlib.h>
+#include <string.h>
+
 /* ---- EBriefPage on-disk codec ---- */
 
 /* Decode an 810-byte little-endian page record into the natively
@@ -46,12 +48,14 @@
  * followed by commands[400] at +0x0A. Read-only at runtime so no
  * encoder is provided. */
 void TieRecoveredBrief_DecodePage(EBriefPage* dst, const uint8_t* src) {
+	int i;
+
 	dst->len = br_i16le(src + 0x00);
 	dst->time = br_i16le(src + 0x02);
 	dst->index = br_i16le(src + 0x04);
 	dst->size = br_i16le(src + 0x06);
 	dst->tile = br_i16le(src + 0x08);
-	for (int i = 0; i < 400; ++i)
+	for (i = 0; i < 400; ++i)
 		dst->commands[i] = br_i16le(src + 0x0A + i * 2);
 }
 
@@ -288,9 +292,11 @@ int16_t player_Move_To_Value(int16_t current, int16_t target, int16_t step) {
 // FUNCTION: TIE95 0x7E990
 void player_Map_To_Screen_Pos(Rect* view_rect, int16_t map_x, int16_t map_y, int16_t* out_x, int16_t* out_y) {
 	int32_t sx = (int32_t)(map_x - map_center_x) * map_scale_x;
+	int32_t sy;
+
 	*out_x = sdiv256(sx) + view_rect->left + ((view_rect->right - view_rect->left) >> 1);
 
-	int32_t sy = (int32_t)(map_y - map_center_y) * map_scale_y;
+	sy = (int32_t)(map_y - map_center_y) * map_scale_y;
 	*out_y = sdiv256(sy) + view_rect->top + ((view_rect->bottom - view_rect->top) >> 1);
 }
 
@@ -310,24 +316,29 @@ int16_t player_Find_Ship_On_Screen(Rect* bounds, int16_t screen_x, int16_t scree
 	int16_t scr_x, scr_y;
 
 	for (i = 0; i < fgroup.num_fgs; i++) {
+		int32_t sx;
+		int32_t sy;
+		int16_t dx;
+		int16_t dy;
+		int16_t chebyshev;
+
 		if (!fgroup.fg[i].way_used[14])
 			continue;
 
-		int32_t sx = (int32_t)(fgroup.fg[i].way_x[14] - map_center_x) * map_scale_x;
+		sx = (int32_t)(fgroup.fg[i].way_x[14] - map_center_x) * map_scale_x;
 		scr_x = sdiv256(sx) + bounds->left + ((bounds->right - bounds->left) >> 1);
 
-		int32_t sy = (int32_t)(fgroup.fg[i].way_y[14] - map_center_y) * map_scale_y;
+		sy = (int32_t)(fgroup.fg[i].way_y[14] - map_center_y) * map_scale_y;
 		scr_y = sdiv256(sy) + bounds->top + ((bounds->bottom - bounds->top) >> 1);
 
-		int16_t dx = screen_x - scr_x;
+		dx = screen_x - scr_x;
 		if (abs16(dx) >= min_dist)
 			continue;
 
-		int16_t dy = screen_y - scr_y;
+		dy = screen_y - scr_y;
 		if (abs16(dy) >= min_dist)
 			continue;
 
-		int16_t chebyshev;
 		if (abs16(dx) >= abs16(dy))
 			chebyshev = dx;
 		else
@@ -390,12 +401,14 @@ void player_Step_Page(int16_t flag) {
 	brief.seek_on = 0;
 
 	while (cmd_time <= brief.page.time) {
+		int16_t opcode;
+		int16_t j;
+
 		saved_index = cmd_index;
 		cmd_time = brief.page.commands[cmd_index];
-		int16_t opcode = brief.page.commands[cmd_index + 1];
+		opcode = brief.page.commands[cmd_index + 1];
 		cmd_index += 2;
 
-		int16_t j;
 		for (j = 0; j < map_cmd_size[opcode]; j++)
 			params[j] = brief.page.commands[cmd_index++];
 
@@ -465,13 +478,15 @@ void player_Step_Page(int16_t flag) {
 			case BCMD_SHOW_TARGET0 + 5:
 			case BCMD_SHOW_TARGET0 + 6:
 			case BCMD_SHOW_TARGET7: {
+				int16_t slot;
+
 				if (!flag) {
 					int16_t side = fgroup.fg[params[0]].side;
 					if (side > 2)
 						side = 2;
 					soundext_Play_SFX(side == 1 ? sfxTarget2 : sfxTarget1, sfx_volume);
 				}
-				int16_t slot = opcode - BCMD_SHOW_TARGET0;
+				slot = opcode - BCMD_SHOW_TARGET0;
 				brief.target_on[slot] = 1;
 				brief.target_state[slot] = flag ? 80 : 0;
 				brief.target_id[slot] = params[0];
@@ -492,19 +507,23 @@ void player_Step_Page(int16_t flag) {
 			case BCMD_SHOW_TEXT0 + 5:
 			case BCMD_SHOW_TEXT0 + 6:
 			case BCMD_SHOW_TEXT7: {
+				int16_t slot;
+
 				if (!flag) {
 					char text_buf[40];
 					char* src = (char*)brief.text_data[params[0]];
 					if (src) {
+						int16_t text_len;
+
 						strcpy(text_buf, src);
-						int16_t text_len = (int16_t)strlen(text_buf);
+						text_len = (int16_t)strlen(text_buf);
 						if (text_len) {
 							soundext_Play_SFX(sfxText, 0);
 							soundext_Fade_SFX(sfxText, 0, 4 * text_len);
 						}
 					}
 				}
-				int16_t slot = opcode - BCMD_SHOW_TEXT0;
+				slot = opcode - BCMD_SHOW_TEXT0;
 				brief.text_on[slot] = 1;
 				brief.text_state[slot] = flag ? 80 : 0;
 				brief.text_id[slot] = params[0];
@@ -551,6 +570,12 @@ void player_Clear_Page_Commands(void) {
 void player_Rewind_Page(void) {
 	int16_t i;
 
+	int16_t cmd_index;
+	int16_t cmd_time;
+	int16_t saved_index;
+
+	int16_t params[4];
+
 	map_target_x = 0;
 	map_target_y = 0;
 	map_scale_x = 16;
@@ -562,12 +587,12 @@ void player_Rewind_Page(void) {
 
 	clear_brief_state();
 
-	int16_t cmd_index = 0;
+	cmd_index = 0;
 	brief.page.index = 0;
-	int16_t cmd_time = brief.page.commands[0];
+	cmd_time = brief.page.commands[0];
 	brief.page.time = 0;
-	int16_t saved_index = 0;
-	int16_t params[4];
+	saved_index = 0;
+
 	brief.para_off = 0;
 	brief.target_off = 0;
 	brief.text_off = 0;
@@ -576,9 +601,11 @@ void player_Rewind_Page(void) {
 	brief.seek_on = 0;
 
 	while (cmd_time <= brief.page.time) {
+		int16_t opcode;
+
 		saved_index = cmd_index;
 		cmd_time = brief.page.commands[cmd_index];
-		int16_t opcode = brief.page.commands[cmd_index + 1];
+		opcode = brief.page.commands[cmd_index + 1];
 		cmd_index += 2;
 
 		for (i = 0; i < map_cmd_size[opcode]; i++)
@@ -675,6 +702,8 @@ void player_Rewind_Page(void) {
 
 void player_Reseek_Page(void) {
 	int16_t time = brief.page.time;
+	int16_t target_time;
+
 	if (!time)
 		time = 1;
 
@@ -693,7 +722,7 @@ void player_Reseek_Page(void) {
 	brief.page.index = 0;
 	player_Step_Page(1);
 
-	int16_t target_time = time - 1;
+	target_time = time - 1;
 	if (target_time != brief.page.time - 1) {
 		if (target_time < brief.page.time)
 			player_Rewind_Page();
@@ -737,6 +766,10 @@ void player_Seek_Page_Section(void) {
 	int16_t has_para = 0;
 	int16_t i;
 
+	int16_t next_opcode;
+	int16_t time_val;
+	int16_t next_cmd;
+
 	map_center_x = 0;
 	map_center_y = 0;
 	map_target_x = 0;
@@ -752,7 +785,7 @@ void player_Seek_Page_Section(void) {
 	brief.page.index = 0;
 	player_Step_Page(1);
 
-	int16_t next_opcode = 0;
+	next_opcode = 0;
 	while (!section_done) {
 		if (next_opcode == BCMD_END_PAGE)
 			break;
@@ -779,8 +812,7 @@ void player_Seek_Page_Section(void) {
 	}
 
 	/* Determine the time to seek to */
-	int16_t time_val;
-	int16_t next_cmd;
+
 	if (brief.seek_on || para_count == 1) {
 		time_val = brief.page.time;
 		next_cmd = 0;
@@ -824,10 +856,18 @@ void player_Move_Display_Map(void) {
 	/* Compute scale step speed */
 	int16_t scale_dx = abs16(map_scale_x - map_scale_target_x);
 	int16_t scale_dy = abs16(map_scale_y - map_scale_target_y);
+	int16_t scale_speed;
+	int16_t pixels_per_unit;
+	int16_t move_dx;
+	int16_t move_dy;
+	int16_t move_dist;
+	int16_t move_speed;
+	int16_t i;
+
 	if (scale_dx < scale_dy)
 		scale_dx = scale_dy;
 
-	int16_t scale_speed = 2;
+	scale_speed = 2;
 	if (scale_dx >= 12)
 		scale_speed = 8;
 	if (map_scale_x < 10)
@@ -837,15 +877,15 @@ void player_Move_Display_Map(void) {
 	map_scale_y = player_Move_To_Value(map_scale_y, map_scale_target_y, scale_speed);
 
 	/* Compute move step speed */
-	int16_t pixels_per_unit = map_scale_x ? (256 / map_scale_x + 1) : 1;
+	pixels_per_unit = map_scale_x ? (256 / map_scale_x + 1) : 1;
 
-	int16_t move_dx = abs16(map_center_x - map_target_x);
-	int16_t move_dy = abs16(map_center_y - map_target_y);
+	move_dx = abs16(map_center_x - map_target_x);
+	move_dy = abs16(map_center_y - map_target_y);
 	if (move_dx < move_dy)
 		move_dx = move_dy;
 
-	int16_t move_dist = (int16_t)(move_dx / pixels_per_unit);
-	int16_t move_speed = 2 * pixels_per_unit;
+	move_dist = (int16_t)(move_dx / pixels_per_unit);
+	move_speed = 2 * pixels_per_unit;
 	if (move_dist >= 16)
 		move_speed *= 2;
 
@@ -853,7 +893,7 @@ void player_Move_Display_Map(void) {
 	map_center_y = player_Move_To_Value(map_center_y, map_target_y, move_speed);
 
 	/* Advance target/text animation state */
-	int16_t i;
+
 	for (i = 0; i < 8; i++) {
 		if (brief.target_on[i])
 			brief.target_state[i]++;
@@ -865,6 +905,14 @@ void player_Move_Display_Map(void) {
 }
 
 void player_Step_Display_Map(void) {
+	int16_t cmd_index;
+	int16_t cmd_time;
+	int16_t saved_index;
+	int16_t sfx_volume;
+	int16_t i;
+
+	int16_t params[4];
+
 	if (brief.page.len <= brief.page.time) {
 		/* Page ended — reset */
 		map_target_x = 0;
@@ -885,12 +933,11 @@ void player_Step_Display_Map(void) {
 	}
 
 	/* Process page commands for current time */
-	int16_t cmd_index = brief.page.index;
-	int16_t cmd_time = brief.page.commands[cmd_index];
-	int16_t saved_index = cmd_index;
-	int16_t params[4];
-	int16_t sfx_volume = brief_poly_used ? 48 : 70;
-	int16_t i;
+	cmd_index = brief.page.index;
+	cmd_time = brief.page.commands[cmd_index];
+	saved_index = cmd_index;
+
+	sfx_volume = brief_poly_used ? 48 : 70;
 
 	brief.para_off = 0;
 	brief.target_off = 0;
@@ -900,9 +947,11 @@ void player_Step_Display_Map(void) {
 	brief.seek_on = 0;
 
 	while (cmd_time <= brief.page.time) {
+		int16_t opcode;
+
 		saved_index = cmd_index;
 		cmd_time = brief.page.commands[cmd_index];
-		int16_t opcode = brief.page.commands[cmd_index + 1];
+		opcode = brief.page.commands[cmd_index + 1];
 		cmd_index += 2;
 
 		for (i = 0; i < map_cmd_size[opcode]; i++)
@@ -961,10 +1010,12 @@ void player_Step_Display_Map(void) {
 			case BCMD_SHOW_TARGET0 + 6:
 			case BCMD_SHOW_TARGET7: {
 				int16_t side = fgroup.fg[params[0]].side;
+				int16_t slot;
+
 				if (side > 2)
 					side = 2;
 				soundext_Play_SFX(side == 1 ? sfxTarget2 : sfxTarget1, sfx_volume);
-				int16_t slot = opcode - BCMD_SHOW_TARGET0;
+				slot = opcode - BCMD_SHOW_TARGET0;
 				brief.target_on[slot] = 1;
 				brief.target_state[slot] = 0;
 				brief.target_id[slot] = params[0];
@@ -984,6 +1035,8 @@ void player_Step_Display_Map(void) {
 			case BCMD_SHOW_TEXT0 + 6:
 			case BCMD_SHOW_TEXT7: {
 				char* locked = (char*)brief.text_data[params[0]];
+				int16_t slot;
+
 				if (locked) {
 					int16_t len = (int16_t)strlen(locked);
 					if (len) {
@@ -991,7 +1044,7 @@ void player_Step_Display_Map(void) {
 						soundext_Fade_SFX(sfxText, 0, 4 * len);
 					}
 				}
-				int16_t slot = opcode - BCMD_SHOW_TEXT0;
+				slot = opcode - BCMD_SHOW_TEXT0;
 				brief.text_on[slot] = 1;
 				brief.text_state[slot] = 0;
 				brief.text_id[slot] = params[0];
@@ -1017,23 +1070,28 @@ void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
 	int16_t scr_x, scr_y;
 	int16_t i;
 
+	int16_t found;
+
 	xrect_Copy_Rect(&map_rect, &map_src_rect);
 
 	for (i = 0; i < fgroup.num_fgs; i++) {
+		int16_t dx;
+		int16_t dy;
+		int16_t chebyshev;
+
 		if (!fgroup.fg[i].way_used[14])
 			continue;
 
 		player_Map_To_Screen_Pos(&map_rect, fgroup.fg[i].way_x[14], fgroup.fg[i].way_y[14], &scr_x, &scr_y);
 
-		int16_t dx = mouse_x - scr_x;
+		dx = mouse_x - scr_x;
 		if (abs16(dx) >= min_dist)
 			continue;
 
-		int16_t dy = mouse_y - scr_y;
+		dy = mouse_y - scr_y;
 		if (abs16(dy) >= min_dist)
 			continue;
 
-		int16_t chebyshev;
 		if (abs16(dx) >= abs16(dy))
 			chebyshev = dx;
 		else
@@ -1043,7 +1101,7 @@ void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
 		closest_fg = i;
 	}
 
-	int16_t found = 0;
+	found = 0;
 	if (min_dist != 999) {
 		selected_fg_idx = closest_fg;
 		found = 1;
@@ -1059,18 +1117,25 @@ void player_Update_Display_Map(int16_t mouse_x, int16_t mouse_y) {
 // FUNCTION: TIE95 0x7FA14
 void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_t x, int16_t index,
 							  int16_t state) {
+	int16_t str_len;
+	int16_t base_ramp;
+
+	char str[64];
+
 	if (index < 0)
 		return;
 
-	int16_t str_len = (int16_t)strlen(text);
-	char str[64];
+	str_len = (int16_t)strlen(text);
+
 	strcpy(str, text);
 
-	int16_t base_ramp = 8 * state + 224;
+	base_ramp = 8 * state + 224;
 
 	if (index >= str_len + 2) {
-		strcpy(str, text);
 		int16_t final_color;
+
+		strcpy(str, text);
+
 		if (index >= str_len + 5)
 			final_color = base_ramp + 4;
 		else
@@ -1078,19 +1143,25 @@ void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_
 		xfont_Print_Clipped_Text((const char*)str, y, x, color, final_color);
 	} else {
 		int16_t char_count = index;
+		int16_t ramp_steps;
+		int16_t ramp_color;
+		int16_t saved_font;
+		int16_t text_width;
+		Rect r;
+
 		if (str_len < index)
 			char_count = str_len;
 		else
 			str[index] = 0;
 
-		int16_t ramp_steps = index;
+		ramp_steps = index;
 		if (ramp_steps > 3)
 			ramp_steps = 3;
-		int16_t ramp_color = base_ramp + 6 - 2 * ramp_steps;
+		ramp_color = base_ramp + 6 - 2 * ramp_steps;
 
-		int16_t saved_font = xfont_Get_Font();
+		saved_font = xfont_Get_Font();
 		xfont_Set_Font(color);
-		int16_t text_width = xfont_Get_String_Width((const char*)str);
+		text_width = xfont_Get_String_Width((const char*)str);
 		xfont_Set_Font(saved_font);
 
 		while (ramp_color <= base_ramp + 6 && char_count > 0) {
@@ -1099,7 +1170,6 @@ void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_
 			xfont_Print_Clipped_Text((const char*)str, y, x, color, loop_color);
 		}
 
-		Rect r;
 		xrect_Set_Rect(&r, text_width + y + 2, x, text_width + y + 8, x + 6);
 		if (index < str_len)
 			xpaint_Paint_Clipped_Rect(&r, base_ramp + 7);
@@ -1109,22 +1179,30 @@ void player_Draw_Readout_Text(const char* text, int16_t color, int16_t y, int16_
 // FUNCTION: TIE95 0x7F9E8
 void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t screen_x, int16_t screen_y,
 									 int16_t text_y, int16_t text_state) {
+	int16_t anim_progress;
+	int16_t str_len;
+	int16_t base_ramp;
+
+	char str[64];
+
 	if (text_y < 0)
 		return;
 
-	int16_t anim_progress = 2 * text_y;
+	anim_progress = 2 * text_y;
 	if (anim_progress < 0)
 		return;
 
-	int16_t str_len = (int16_t)strlen(text);
-	char str[64];
+	str_len = (int16_t)strlen(text);
+
 	strcpy(str, text);
 
-	int16_t base_ramp = 8 * text_state + 224;
+	base_ramp = 8 * text_state + 224;
 
 	if (anim_progress >= str_len + 2) {
-		strcpy(str, text);
 		int16_t final_color;
+
+		strcpy(str, text);
+
 		if (anim_progress >= str_len + 5)
 			final_color = base_ramp + 4;
 		else
@@ -1132,6 +1210,12 @@ void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t sc
 		xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, color, final_color);
 	} else {
 		int16_t char_count;
+		int16_t ramp_steps;
+		int16_t ramp_color;
+		int16_t saved_font;
+		int16_t text_width;
+		Rect r;
+
 		if (anim_progress > str_len)
 			char_count = str_len;
 		else {
@@ -1139,14 +1223,14 @@ void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t sc
 			str[anim_progress] = 0;
 		}
 
-		int16_t ramp_steps = anim_progress;
+		ramp_steps = anim_progress;
 		if (ramp_steps > 3)
 			ramp_steps = 3;
-		int16_t ramp_color = base_ramp + 6 - 2 * ramp_steps;
+		ramp_color = base_ramp + 6 - 2 * ramp_steps;
 
-		int16_t saved_font = xfont_Get_Font();
+		saved_font = xfont_Get_Font();
 		xfont_Set_Font(color);
-		int16_t text_width = xfont_Get_String_Width((const char*)str);
+		text_width = xfont_Get_String_Width((const char*)str);
 		xfont_Set_Font(saved_font);
 
 		while (ramp_color <= base_ramp + 6 && char_count > 0) {
@@ -1155,7 +1239,6 @@ void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t sc
 			xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, color, loop_color);
 		}
 
-		Rect r;
 		xrect_Set_Rect(&r, text_width + screen_x + 2, screen_y, text_width + screen_x + 8, screen_y + 6);
 		if (anim_progress < str_len)
 			xpaint_Paint_Clipped_Rect(&r, base_ramp + 7);
@@ -1169,28 +1252,41 @@ void player_Draw_Double_Readout_Text(const char* text, int16_t color, int16_t sc
 // FUNCTION: TIE95 0x7F624
 void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 	Rect text_rect;
+	int16_t avail_width;
+	char* text_data;
+	int16_t char_idx;
+	int16_t line_start;
+	int16_t line_end_pos;
+	int16_t text_width_idx;
+	int16_t word_pos;
+	int16_t done;
+
+	char line_buf[128];
+
 	xrect_Copy_Rect(&text_rect, clip);
 	text_rect.bottom = text_rect.top + 10;
-	int16_t avail_width = text_rect.right - text_rect.left;
+	avail_width = text_rect.right - text_rect.left;
 
-	char* text_data = (char*)handle;
+	text_data = (char*)handle;
 	if (!text_data)
 		return;
 
-	char line_buf[128];
 	line_buf[0] = 0;
-	int16_t char_idx = 0;
-	int16_t line_start = -1;
-	int16_t line_end_pos = -1;
-	int16_t text_width_idx = 0;
-	int16_t word_pos = 0;
-	int16_t done = 0;
+	char_idx = 0;
+	line_start = -1;
+	line_end_pos = -1;
+	text_width_idx = 0;
+	word_pos = 0;
+	done = 0;
 
 	xfont_Enable_FontID_Shadow(0);
 
 	do {
 		int ch = (unsigned char)text_data[char_idx];
 		if (ch != '$' && ch != 0) {
+			int16_t saved_font;
+			int16_t str_width;
+
 			if (ch == ' ')
 				word_pos = char_idx;
 
@@ -1215,9 +1311,9 @@ void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 			line_buf[char_idx - text_width_idx] = 0;
 
 			/* Check if line overflows */
-			int16_t saved_font = xfont_Get_Font();
+			saved_font = xfont_Get_Font();
 			xfont_Set_Font(0);
-			int16_t str_width = xfont_Get_String_Width(line_buf);
+			str_width = xfont_Get_String_Width(line_buf);
 			xfont_Set_Font(saved_font);
 
 			if (str_width >= avail_width) {
@@ -1303,39 +1399,52 @@ void player_Draw_Map_Paragraph(Rect* clip, void* handle, int16_t flag) {
 // FUNCTION: TIE95 0x7EE58
 void player_Draw_Display_Grid(Rect* clip) {
 	Rect clip_rect;
+	int16_t major_color;
+	int16_t minor_color;
+	int16_t col_idx;
+	int16_t frac_x;
+	int16_t start_x;
+	int16_t row_idx;
+	int16_t frac_y;
+	int16_t start_y;
+	int16_t save_col_idx;
+	int16_t save_row_idx;
+	int16_t grid_y;
+	int16_t grid_x;
+
 	xrect_Copy_Rect(&clip_rect, clip);
 	xpaint_Frame_Clipped_Rect(&clip_rect, 232);
 
-	int16_t major_color = 234;
-	int16_t minor_color = 232;
+	major_color = 234;
+	minor_color = 232;
 
 	/* Compute grid origin from map center */
-	int16_t col_idx = map_center_x / 256;
+	col_idx = map_center_x / 256;
 	if (map_center_x > 0 && (map_center_x & 0xFF))
 		col_idx++;
 
-	int16_t frac_x = (int16_t)(((uint8_t)(-map_center_x) * map_scale_x) >> 8);
-	int16_t start_x = clip_rect.left + ((clip_rect.right - clip_rect.left) >> 1) + frac_x;
+	frac_x = (int16_t)(((uint8_t)(-map_center_x) * map_scale_x) >> 8);
+	start_x = clip_rect.left + ((clip_rect.right - clip_rect.left) >> 1) + frac_x;
 	while (start_x > clip_rect.left) {
 		col_idx--;
 		start_x -= map_scale_x;
 	}
 
-	int16_t row_idx = map_center_y / 256;
+	row_idx = map_center_y / 256;
 	if (map_center_y > 0 && (map_center_y & 0xFF))
 		row_idx++;
 
-	int16_t frac_y = (int16_t)(((uint8_t)(-map_center_y) * map_scale_y) >> 8);
-	int16_t start_y = clip_rect.top + ((clip_rect.bottom - clip_rect.top) >> 1) + frac_y;
+	frac_y = (int16_t)(((uint8_t)(-map_center_y) * map_scale_y) >> 8);
+	start_y = clip_rect.top + ((clip_rect.bottom - clip_rect.top) >> 1) + frac_y;
 	while (start_y > clip_rect.top) {
 		row_idx--;
 		start_y -= map_scale_y;
 	}
 
-	int16_t save_col_idx = col_idx;
-	int16_t save_row_idx = row_idx;
-	int16_t grid_y = start_y;
-	int16_t grid_x = start_x;
+	save_col_idx = col_idx;
+	save_row_idx = row_idx;
+	grid_y = start_y;
+	grid_x = start_x;
 
 	/* Minor grid lines (drawn if scale >= 16) */
 	if (map_scale_x >= 16) {
@@ -1344,6 +1453,9 @@ void player_Draw_Display_Grid(Rect* clip) {
 		/* Vertical minor lines */
 		int16_t x = start_x;
 		int16_t ci = col_idx;
+		int16_t y;
+		int16_t ri;
+
 		while (x < clip_rect.right) {
 			int16_t m = ci & 3;
 			if (m != 0 && (m == 2 || show_minor)) {
@@ -1367,8 +1479,8 @@ void player_Draw_Display_Grid(Rect* clip) {
 		}
 
 		/* Horizontal minor lines */
-		int16_t y = start_y;
-		int16_t ri = row_idx;
+		y = start_y;
+		ri = row_idx;
 		while (y < clip_rect.bottom) {
 			int16_t m = ri & 3;
 			if (m != 0 && (m == 2 || show_minor)) {
@@ -1434,23 +1546,31 @@ void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t targ
 	int16_t side = fgroup.fg[fg_index].side;
 	int16_t target_color = side_to_color(side);
 
+	int32_t sx;
+	int16_t screen_x;
+	int32_t sy;
+	int16_t screen_y;
+	Rect r;
+	int16_t offx, offy;
+	int16_t anim_size, anim_count, base_color;
+	int16_t i;
+
 	if (map_scale_x < 32)
 		species += 88;
 	if (species < 0)
 		return;
 
 	/* Compute screen position */
-	int32_t sx = (int32_t)(way_x - map_center_x) * map_scale_x;
-	int16_t screen_x = sdiv256(sx) + clip->left + ((clip->right - clip->left) >> 1);
+	sx = (int32_t)(way_x - map_center_x) * map_scale_x;
+	screen_x = sdiv256(sx) + clip->left + ((clip->right - clip->left) >> 1);
 
-	int32_t sy = (int32_t)(way_y - map_center_y) * map_scale_y;
-	int16_t screen_y = sdiv256(sy) + clip->top + ((clip->bottom - clip->top) >> 1);
+	sy = (int32_t)(way_y - map_center_y) * map_scale_y;
+	screen_y = sdiv256(sy) + clip->top + ((clip->bottom - clip->top) >> 1);
 
-	Rect r;
 	xrect_Set_Rect(&r, screen_x - 4, screen_y - 4, screen_x + 5, screen_y + 5);
 
 	xactor_Set_Actor_State(icon_actors[0], species, 0);
-	int16_t offx, offy;
+
 	xactor_Get_Actor_Offset(icon_actors[0], &offx, &offy);
 	screen_x -= offx + (icon_actors[0]->w / 2);
 	screen_y -= offy + (icon_actors[0]->h / 2);
@@ -1464,7 +1584,6 @@ void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t targ
 		return;
 	}
 
-	int16_t anim_size, anim_count, base_color;
 	if (target_id < 4) {
 		anim_size = 16;
 		anim_count = target_id + 1;
@@ -1485,7 +1604,6 @@ void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t targ
 		xpaint_Frame_Clipped_Rect(&r, target_color + target_id - 6);
 	}
 
-	int16_t i;
 	for (i = 0; i < anim_count; i++) {
 		icon_actors[0]->foreColor = base_color;
 		xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, screen_x - anim_size, screen_y - anim_size, 1);
@@ -1505,47 +1623,60 @@ void player_Draw_Map_Zoom(Rect* clip, Rect* dest, int16_t fg_index, int16_t targ
 
 void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 	Rect dst;
-	xrect_Copy_Rect(&dst, clip);
 	int16_t i;
+	int16_t fg;
+
+	xrect_Copy_Rect(&dst, clip);
 
 	/* Draw target highlighting for active targets */
 	for (i = 0; i < 8; i++) {
+		int16_t fg_idx;
+		int16_t way_x;
+		int16_t way_y;
+		int16_t species;
+		int16_t side;
+		int16_t target_color;
+		int16_t scr_x, scr_y;
+		Rect r;
+		int16_t offx, offy;
+		int16_t state;
+
 		if (!brief.target_on[i])
 			continue;
 
-		int16_t fg_idx = brief.target_id[i];
-		int16_t way_x = fgroup.fg[fg_idx].way_x[14];
-		int16_t way_y = fgroup.fg[fg_idx].way_y[14];
-		int16_t species = fgroup.fg[fg_idx].species - 1;
-		int16_t side = fgroup.fg[fg_idx].side;
-		int16_t target_color = side_to_color(side);
+		fg_idx = brief.target_id[i];
+		way_x = fgroup.fg[fg_idx].way_x[14];
+		way_y = fgroup.fg[fg_idx].way_y[14];
+		species = fgroup.fg[fg_idx].species - 1;
+		side = fgroup.fg[fg_idx].side;
+		target_color = side_to_color(side);
 
 		if (map_scale_x < 32)
 			species += 88;
 		if (species < 0)
 			continue;
 
-		int16_t scr_x, scr_y;
 		player_Map_To_Screen_Pos(clip, way_x, way_y, &scr_x, &scr_y);
 
-		Rect r;
 		xrect_Set_Rect(&r, scr_x - 4, scr_y - 4, scr_x + 5, scr_y + 5);
 
 		xactor_Set_Actor_State(icon_actors[0], species, 0);
-		int16_t offx, offy;
+
 		xactor_Get_Actor_Offset(icon_actors[0], &offx, &offy);
 		scr_x -= offx + (icon_actors[0]->w / 2);
 		scr_y -= offy + (icon_actors[0]->h / 2);
 
 		icon_actors[0]->flags |= AF_REMAP_COLOR;
 
-		int16_t state = brief.target_state[i];
+		state = brief.target_state[i];
 		if (state >= 12) {
 			xrect_Inset_Rect(&r, -2, -2);
 			xpaint_Paint_Clipped_Rect(&r, target_color + 2);
 			xpaint_Frame_Clipped_Rect(&r, target_color + 6);
 		} else {
 			int16_t anim_size, anim_count, base_color;
+			int16_t j;
+
 			if (state < 4) {
 				base_color = target_color + 7 - 2 * state;
 				anim_count = state + 1;
@@ -1566,7 +1697,6 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 				xpaint_Frame_Clipped_Rect(&r, target_color + state - 6);
 			}
 
-			int16_t j;
 			for (j = 0; j < anim_count; j++) {
 				icon_actors[0]->foreColor = base_color;
 				xactanim_Draw_Anim_Actor(icon_actors[0], clip, dest, scr_x - anim_size, scr_y - anim_size, 1);
@@ -1583,25 +1713,36 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 
 	/* Draw text labels for active text overlays */
 	for (i = 0; i < 8; i++) {
+		int16_t text_id;
+		int16_t tx;
+		int16_t screen_x;
+		int16_t ty;
+		int16_t screen_y;
+		char* text_ptr;
+		int16_t m;
+		int16_t state;
+
+		char str[43];
+
 		if (!brief.text_on[i])
 			continue;
 
-		int16_t text_id = brief.text_id[i];
-		int16_t tx = (int16_t)(map_scale_x * (brief.text_x[i] - map_center_x) / 256);
-		int16_t screen_x = (dst.right - dst.left) / 2 + dst.left + tx;
+		text_id = brief.text_id[i];
+		tx = (int16_t)(map_scale_x * (brief.text_x[i] - map_center_x) / 256);
+		screen_x = (dst.right - dst.left) / 2 + dst.left + tx;
 
-		int16_t ty = (int16_t)((brief.text_y[i] - map_center_y) * map_scale_y / 256);
-		int16_t screen_y = dst.top + (dst.bottom - dst.top) / 2 + ty;
+		ty = (int16_t)((brief.text_y[i] - map_center_y) * map_scale_y / 256);
+		screen_y = dst.top + (dst.bottom - dst.top) / 2 + ty;
 
-		char* text_ptr = (char*)brief.text_data[text_id];
-		char str[43];
+		text_ptr = (char*)brief.text_data[text_id];
+
 		if (text_ptr)
 			strcpy(str, text_ptr);
 		else
 			str[0] = 0;
 
 		/* Replace [ ] with color control codes */
-		int16_t m;
+
 		for (m = 0; str[m]; m++) {
 			if (str[m] == '[')
 				str[m] = 2;
@@ -1609,35 +1750,45 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 				str[m] = 1;
 		}
 
-		int16_t state = brief.text_state[i];
+		state = brief.text_state[i];
 		if (state >= 0)
 			player_Draw_Readout_Text(str, 1, screen_x, screen_y, 2 * state, brief.text_color[i]);
 	}
 
 	/* Draw all flight group ship icons */
-	int16_t fg;
+
 	for (fg = 0; fg < fgroup.num_fgs; fg++) {
+		int16_t way_x;
+		int16_t way_y;
+		int16_t species;
+		int16_t icon_idx;
+		int32_t sx;
+		int16_t scr_x;
+		int32_t sy;
+		int16_t scr_y;
+		int16_t offx, offy;
+
 		if (!fgroup.fg[fg].way_used[14])
 			continue;
 
-		int16_t way_x = fgroup.fg[fg].way_x[14];
-		int16_t way_y = fgroup.fg[fg].way_y[14];
-		int16_t species = fgroup.fg[fg].species - 1;
-		int16_t icon_idx = side_to_icon(fgroup.fg[fg].side);
+		way_x = fgroup.fg[fg].way_x[14];
+		way_y = fgroup.fg[fg].way_y[14];
+		species = fgroup.fg[fg].species - 1;
+		icon_idx = side_to_icon(fgroup.fg[fg].side);
 
 		if (map_scale_x < 32)
 			species += 88;
 		if (species < 0)
 			continue;
 
-		int32_t sx = (int32_t)(way_x - map_center_x) * map_scale_x;
-		int16_t scr_x = sdiv256(sx) + (dst.right - dst.left) / 2 + dst.left;
+		sx = (int32_t)(way_x - map_center_x) * map_scale_x;
+		scr_x = sdiv256(sx) + (dst.right - dst.left) / 2 + dst.left;
 
-		int32_t sy = (int32_t)(way_y - map_center_y) * map_scale_y;
-		int16_t scr_y = sdiv256(sy) + (dst.bottom - dst.top) / 2 + dst.top;
+		sy = (int32_t)(way_y - map_center_y) * map_scale_y;
+		scr_y = sdiv256(sy) + (dst.bottom - dst.top) / 2 + dst.top;
 
 		xactor_Set_Actor_State(icon_actors[icon_idx], species, 0);
-		int16_t offx, offy;
+
 		xactor_Get_Actor_Offset(icon_actors[icon_idx], &offx, &offy);
 
 		scr_x -= offx + (icon_actors[icon_idx]->w / 2);
@@ -1654,10 +1805,15 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 	Rect dst, map_area, draw_clip;
 
+	int16_t i;
+	Rect ship_rect;
+
 	player_Stars_To_Back(view_rect->top);
 
 	if (!brief_poly_used) {
 		/* Top paragraph area */
+		Rect src;
+
 		xrect_Copy_Rect(&dst, &map_src_rect);
 		xrect_Offset_Rect(&dst, view_rect->left, view_rect->top);
 		dst.bottom = dst.top + 12;
@@ -1667,7 +1823,7 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 			player_Draw_Map_Paragraph(&dst, brief.para_data[brief.para_id[0]], 0);
 
 		/* Bottom status area */
-		Rect src;
+
 		xrect_Copy_Rect(&src, &map_src_rect);
 		xrect_Offset_Rect(&src, view_rect->left, view_rect->top);
 		src.top = src.bottom - 22;
@@ -1695,15 +1851,17 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 	player_Draw_Display_Ship(&map_area, &draw_clip);
 
 	/* Draw target zoom animations */
-	int16_t i;
-	Rect ship_rect;
+
 	xrect_Copy_Rect(&ship_rect, &map_area);
 
 	for (i = 0; i < 8; i++) {
+		int16_t fg_idx;
+		int16_t scr_x, scr_y;
+
 		if (!brief.target_on[i])
 			continue;
-		int16_t fg_idx = brief.target_id[i];
-		int16_t scr_x, scr_y;
+		fg_idx = brief.target_id[i];
+
 		player_Map_To_Screen_Pos(&ship_rect, fgroup.fg[fg_idx].way_x[14], fgroup.fg[fg_idx].way_y[14], &scr_x,
 								 &scr_y);
 		player_Draw_Map_Zoom(&map_area, &draw_clip, fg_idx, brief.target_state[i]);
@@ -1711,20 +1869,23 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 
 	/* Draw text labels */
 	for (i = 0; i < 8; i++) {
+		int16_t scr_x, scr_y;
+		char* txt;
+		int16_t m;
+
+		char text_buf[40];
+
 		if (!brief.text_on[i])
 			continue;
 
-		int16_t scr_x, scr_y;
 		player_Map_To_Screen_Pos(&ship_rect, brief.text_x[i], brief.text_y[i], &scr_x, &scr_y);
 
-		char text_buf[40];
-		char* txt = (char*)brief.text_data[brief.text_id[i]];
+		txt = (char*)brief.text_data[brief.text_id[i]];
 		if (txt)
 			strcpy(text_buf, txt);
 		else
 			text_buf[0] = 0;
 
-		int16_t m;
 		for (m = 0; text_buf[m]; m++) {
 			if (text_buf[m] == '[')
 				text_buf[m] = 2;
@@ -1737,22 +1898,26 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 
 	/* Draw all flight group icons */
 	for (i = 0; i < fgroup.num_fgs; i++) {
+		int16_t species;
+		int16_t icon_idx;
+		int16_t scr_x, scr_y;
+		int16_t offx, offy;
+
 		if (!fgroup.fg[i].way_used[14])
 			continue;
 
-		int16_t species = fgroup.fg[i].species - 1;
-		int16_t icon_idx = side_to_icon(fgroup.fg[i].side);
+		species = fgroup.fg[i].species - 1;
+		icon_idx = side_to_icon(fgroup.fg[i].side);
 
 		if (map_scale_x < 32)
 			species += 88;
 		if (species < 0)
 			continue;
 
-		int16_t scr_x, scr_y;
 		player_Map_To_Screen_Pos(&ship_rect, fgroup.fg[i].way_x[14], fgroup.fg[i].way_y[14], &scr_x, &scr_y);
 
 		xactor_Set_Actor_State(icon_actors[icon_idx], species, 0);
-		int16_t offx, offy;
+
 		xactor_Get_Actor_Offset(icon_actors[icon_idx], &offx, &offy);
 		scr_x -= offx + (icon_actors[icon_idx]->w / 2);
 		scr_y -= offy + (icon_actors[icon_idx]->h / 2);
@@ -1767,10 +1932,12 @@ void player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect) {
 
 static int16_t iupdate_Map(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left, uint8_t right,
 						   int16_t mouse_x, int16_t mouse_y) {
+	Rect inset_bounds, clipped_rect, map_rect;
+
 	(void)input;
 	(void)left;
 	(void)right;
-	Rect inset_bounds, clipped_rect, map_rect;
+
 	xrect_Copy_Rect(&inset_bounds, bounds);
 	xrect_Inset_Rect(&inset_bounds, 1, 1);
 	xrect_Copy_Rect(&clipped_rect, clip);
@@ -1787,18 +1954,27 @@ static int16_t iupdate_Map(Input* input, Rect* bounds, Rect* clip, int16_t key, 
 }
 
 static void iuser_Map(Input* input, int32_t time) {
+	int16_t scale_dx;
+	int16_t scale_dy;
+	int16_t scale_speed;
+	int16_t pixels_per_unit;
+	int16_t move_dx;
+	int16_t move_dy;
+	int16_t move_speed;
+	int16_t i;
+
 	(void)input;
 	(void)time;
 	if (!map_playing)
 		return;
 
 	/* Animate scale toward target */
-	int16_t scale_dx = abs16(map_scale_x - map_scale_target_x);
-	int16_t scale_dy = abs16(map_scale_y - map_scale_target_y);
+	scale_dx = abs16(map_scale_x - map_scale_target_x);
+	scale_dy = abs16(map_scale_y - map_scale_target_y);
 	if (scale_dx < scale_dy)
 		scale_dx = scale_dy;
 
-	int16_t scale_speed = 2;
+	scale_speed = 2;
 	if (scale_dx >= 12)
 		scale_speed = 8;
 	if (map_scale_x < 10)
@@ -1808,14 +1984,14 @@ static void iuser_Map(Input* input, int32_t time) {
 	map_scale_y = player_Move_To_Value(map_scale_y, map_scale_target_y, scale_speed);
 
 	/* Animate center toward target */
-	int16_t pixels_per_unit = map_scale_x ? (256 / map_scale_x + 1) : 1;
+	pixels_per_unit = map_scale_x ? (256 / map_scale_x + 1) : 1;
 
-	int16_t move_dx = abs16(map_center_x - map_target_x);
-	int16_t move_dy = abs16(map_center_y - map_target_y);
+	move_dx = abs16(map_center_x - map_target_x);
+	move_dy = abs16(map_center_y - map_target_y);
 	if (move_dx < move_dy)
 		move_dx = move_dy;
 
-	int16_t move_speed = 2 * pixels_per_unit;
+	move_speed = 2 * pixels_per_unit;
 	if ((int16_t)(move_dx / pixels_per_unit) >= 16)
 		move_speed *= 2;
 
@@ -1823,7 +1999,7 @@ static void iuser_Map(Input* input, int32_t time) {
 	map_center_y = player_Move_To_Value(map_center_y, map_target_y, move_speed);
 
 	/* Advance animation state */
-	int16_t i;
+
 	for (i = 0; i < 8; i++) {
 		if (brief.target_on[i])
 			brief.target_state[i]++;
@@ -1839,12 +2015,20 @@ static void iuser_Map(Input* input, int32_t time) {
 	else
 		player_Step_Page(0);
 
+#ifdef TIE_MODERN
 	TieMapSnapshot_Capture();
+#endif
 }
 
 static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
-	(void)refresh;
 	Rect draw_clip, map_area, r;
+	Rect dest;
+#ifdef TIE_MODERN
+	TieMapHeader* map_h;
+#endif
+
+	(void)refresh;
+#ifdef TIE_MODERN
 
 	/* Stamp `start_z` so the merge dispatch knows where to slot the
 	 * brief-map quad: at this z, before any widget content the engine
@@ -1855,9 +2039,10 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 	 * are routed onto the source RT; the rect quad slot still anchors
 	 * the polygon-warp quad at the right point in the cutscene-RT
 	 * draw order. */
-	TieMapHeader* map_h = TieSnapshotBuilder_MapMut();
+	map_h = TieSnapshotBuilder_MapMut();
 	if (map_h && map_h->active)
 		map_h->start_z = TieSnapshotBuilder_NextEmitZ();
+#endif
 
 	if (brief_poly_used) {
 		/* Bypass the canvas-leak gate that normally suppresses emits
@@ -1888,6 +2073,8 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 	} else {
 		/* Top paragraph */
 		Rect dst;
+		Rect status_rect;
+
 		xrect_Copy_Rect(&dst, &map_src_rect);
 		xrect_Offset_Rect(&dst, r.left, r.top);
 		dst.bottom = dst.top + 12;
@@ -1897,7 +2084,7 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 			player_Draw_Map_Paragraph(&dst, brief.para_data[brief.para_id[0]], 0);
 
 		/* Bottom status */
-		Rect status_rect;
+
 		xrect_Copy_Rect(&status_rect, &map_src_rect);
 		xrect_Offset_Rect(&status_rect, r.left, r.top);
 		status_rect.top = status_rect.bottom - 22;
@@ -1913,7 +2100,6 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 		map_area.bottom -= 22;
 	}
 
-	Rect dest;
 	xrect_Copy_Rect(&dest, &draw_clip);
 	xrect_Clip_Rect(&dest, &map_area);
 	xcanvas_Set_Drawing_Canvas_Clip(&dest);
@@ -1922,11 +2108,14 @@ static void idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh) {
 	player_Draw_Display_Ship(&map_area, &dest);
 
 	if (brief_poly_used) {
-		xcanvas_Pop_Canvas();
 		Rect src_rect;
+		char* pixels;
+
+		xcanvas_Pop_Canvas();
+
 		xrect_Copy_Rect(&src_rect, &map_src_rect);
 		xrect_Inset_Rect(&src_rect, 32, 16);
-		char* pixels = (char*)xbitmap_Lock_Bitmap(&brief_buffer);
+		pixels = (char*)xbitmap_Lock_Bitmap(&brief_buffer);
 		stub_Map_Clipped_Image(pixels, brief_poly.x, &src_rect, 320, 150);
 		xbitmap_Unlock_Bitmap(&brief_buffer);
 		/* Restore the canvas-leak gate so subsequent scratch-canvas
@@ -2029,10 +2218,17 @@ void player_Load_Display_Map(void) {
 	uint8_t event_discard[90];
 	uint8_t object_discard[28];
 
+	TieFile* fp;
+	int16_t i;
+
+	uint8_t mis_buf[EMISSIONSTRUCT_DISK_SIZE];
+	uint8_t fg_buf[EFGSTRUCT_DISK_SIZE];
+	uint8_t page_buf[EBRIEFPAGE_DISK_SIZE];
+
 	shipext_Get_Mission_Path(name);
 	memset(&fgroup, 0, sizeof(fgroup));
 
-	TieFile* fp = TieStorage_Open(TIE_FILE_ROOT_FLIGHT_ASSET, name, "rb");
+	fp = TieStorage_Open(TIE_FILE_ROOT_FLIGHT_ASSET, name, "rb");
 	if (!fp)
 		return;
 
@@ -2047,13 +2243,11 @@ void player_Load_Display_Map(void) {
 	TieStorage_Read(&event_count, 2, 1, fp);
 	TieStorage_Read(&object_count, 2, 1, fp);
 	fgroup.num_fgs = fg_count;
-	uint8_t mis_buf[EMISSIONSTRUCT_DISK_SIZE];
+
 	TieStorage_Read(mis_buf, EMISSIONSTRUCT_DISK_SIZE, 1, fp);
 	EMissionStruct_decode(&fgroup.mission, mis_buf);
 	shipext_Set_Mission_Ship(0);
 
-	int16_t i;
-	uint8_t fg_buf[EFGSTRUCT_DISK_SIZE];
 	for (i = 0; i < fgroup.num_fgs; i++) {
 		TieStorage_Read(fg_buf, EFGSTRUCT_DISK_SIZE, 1, fp);
 		EFGStruct_decode(&fgroup.fg[i], fg_buf);
@@ -2101,7 +2295,7 @@ void player_Load_Display_Map(void) {
 		TieStorage_Read(object_discard, 28, 1, fp);
 
 	/* Read briefing page commands */
-	uint8_t page_buf[EBRIEFPAGE_DISK_SIZE];
+
 	TieStorage_Read(page_buf, EBRIEFPAGE_DISK_SIZE, 1, fp);
 	TieRecoveredBrief_DecodePage(&brief.page, page_buf);
 
@@ -2152,6 +2346,10 @@ void player_Load_Display_Map(void) {
 void player_Init_Brief_Display(Input* input, void* poly) {
 	int16_t i;
 
+	ResFile* player_res;
+	Rect r;
+	int16_t player_fg;
+
 	map_playing = 1;
 	selected_fg_idx = 0;
 	map_center_x = 0;
@@ -2194,8 +2392,8 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 	}
 
 	/* Load icon actors from player.lfd */
-	ResFile* player_res = shellext_Open_Empire_Resource("player.lfd");
-	Rect r;
+	player_res = shellext_Open_Empire_Resource("player.lfd");
+
 	xrect_Set_Rect(&r, 0, 0, draw_bm_gbl->w, draw_bm_gbl->h);
 
 	icon_actors[0] = xactanim_Res_Anim_Actor("iconsgrn", &r, 0, 0, 0);
@@ -2281,14 +2479,15 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 	mission.beam_used = 0;
 	mission.torp_used = 0;
 
-	int16_t player_fg;
 	for (player_fg = 0; player_fg < fgroup.num_fgs; player_fg++) {
 		if (fgroup.fg[player_fg].player_flag) {
+			uint8_t battle;
+
 			mission.torp_used = fgroup.fg[player_fg].warhead;
 			mission.beam_used = fgroup.fg[player_fg].beam;
 			beam_level = mission.beam_used;
 
-			uint8_t battle = shipext_Get_Tour_Battle();
+			battle = shipext_Get_Tour_Battle();
 			if (battle <= 3)
 				weapon_level = 4;
 			else
@@ -2374,14 +2573,17 @@ void player_Free_Brief_Display(void) {
 	}
 }
 
+#ifdef TIE_MODERN
 bool TieRecoveredMap_ReadSnapshotView(TieRecoveredMapSnapshotView* out) {
+	int16_t scene;
+
 	if (!out)
 		return false;
 	memset(out, 0, sizeof *out);
 	if (!map_emit_widget || !map_playing)
 		return true;
 
-	const int16_t scene = shellext_Get_Cur_Scene();
+	scene = shellext_Get_Cur_Scene();
 	out->active = true;
 	out->background_kind = scene == SCENE_COMBAT_MAP_A   ? TIE_MAP_BG_COMBAT
 						   : scene == SCENE_COMBAT_MAP_B ? TIE_MAP_BG_COMBAT_DEBRIEF
@@ -2391,7 +2593,9 @@ bool TieRecoveredMap_ReadSnapshotView(TieRecoveredMapSnapshotView* out) {
 	out->source_width = (int16_t)(map_src_rect.right - map_src_rect.left);
 	out->source_height = (int16_t)(map_src_rect.bottom - map_src_rect.top);
 	if (out->has_polygon) {
-		for (int index = 0; index < 4; ++index) {
+		int index;
+
+		for (index = 0; index < 4; ++index) {
 			out->polygon_x[index] = brief_poly.x[index];
 			out->polygon_y[index] = brief_poly.y[index];
 		}
@@ -2404,3 +2608,4 @@ bool TieRecoveredMap_ReadSnapshotView(TieRecoveredMapSnapshotView* out) {
 	out->scene_time = brief.page.time;
 	return true;
 }
+#endif

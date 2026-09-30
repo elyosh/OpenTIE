@@ -1,4 +1,5 @@
 #include "tie_runtime/flight_assets/assets.h"
+#include "aeron/vfs.h"
 
 #include "aeron/config_file.h"
 #include "tie_runtime/audio/config.h"

@@ -1,14 +1,15 @@
+#include "tie/drawstrm.h"
 #include <stdint.h>
 #include <string.h>
 
-#include "tie/drawstrm.h"
-
-#define SCREEN_WIDTH 320
-#define SCREEN_HEIGHT 200
-#define SCREEN_SIZE (SCREEN_WIDTH * SCREEN_HEIGHT)
-#define BLOCK_SIZE 8
-#define BLOCKS_X (SCREEN_WIDTH / BLOCK_SIZE)
-#define BLOCKS_Y (SCREEN_HEIGHT / BLOCK_SIZE)
+enum {
+	SCREEN_WIDTH = 320,
+	SCREEN_HEIGHT = 200,
+	SCREEN_SIZE = (SCREEN_WIDTH * SCREEN_HEIGHT),
+	BLOCK_SIZE = 8,
+	BLOCKS_X = (SCREEN_WIDTH / BLOCK_SIZE),
+	BLOCKS_Y = (SCREEN_HEIGHT / BLOCK_SIZE),
+};
 
 /* 4-bit pixel bitmask tables for the DIFF block decoder.
  * Each nibble value (0-15) selects which of the 4 pixels in a half-row
@@ -37,6 +38,7 @@ static void diff_apply_nibble(uint8_t* dst, const uint8_t* ref, uint8_t nibble) 
  */
 // FUNCTION: TIE95 0x89600
 void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void* cur_frame) {
+	int by, bx, row;
 	uint8_t* prev = (uint8_t*)prev_frame;
 	const uint8_t* stream = (const uint8_t*)stream_data;
 	uint8_t* cur = (uint8_t*)cur_frame;
@@ -44,9 +46,11 @@ void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void
 	uint8_t* dst_base = cur;
 	uint8_t* prev_base = prev;
 
-	for (int by = 0; by < BLOCKS_Y; by++) {
-		for (int bx = 0; bx < BLOCKS_X; bx++) {
+	for (by = 0; by < BLOCKS_Y; by++) {
+		for (bx = 0; bx < BLOCKS_X; bx++) {
 			uint8_t* dst = dst_base;
+			uint8_t* mix_ref;
+			int pixels_done, col;
 
 			int16_t cmd = *(const int16_t*)stream;
 			stream += 2;
@@ -61,9 +65,10 @@ void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void
 			if (cmd == 0x7FFD) {
 				/* COPY: copy 8x8 from prev_frame at block-relative offset */
 				int16_t offset = *(const int16_t*)stream;
+				uint8_t* src;
 				stream += 2;
-				uint8_t* src = &prev_base[offset];
-				for (int row = 0; row < BLOCK_SIZE; row++) {
+				src = &prev_base[offset];
+				for (row = 0; row < BLOCK_SIZE; row++) {
 					memcpy(dst, src, BLOCK_SIZE);
 					dst += SCREEN_WIDTH;
 					src += SCREEN_WIDTH;
@@ -76,9 +81,10 @@ void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void
 			if (cmd == 0x7FFF) {
 				/* DIFF: per-row bitmask differential */
 				int16_t offset = *(const int16_t*)stream;
+				uint8_t* src;
 				stream += 2;
-				uint8_t* src = &prev_base[offset];
-				for (int row = 0; row < BLOCK_SIZE; row++) {
+				src = &prev_base[offset];
+				for (row = 0; row < BLOCK_SIZE; row++) {
 					uint8_t mask = *stream++;
 					uint8_t lo_nibble = mask & 0x0F;
 					uint8_t hi_nibble = (mask >> 4) & 0x0F;
@@ -97,9 +103,9 @@ void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void
 			}
 
 			/* MIXED: RLE-encoded block with reference at cmd offset */
-			uint8_t* mix_ref = &prev_base[cmd];
-			int pixels_done = 0;
-			int col = 0; /* column within the 8-pixel row */
+			mix_ref = &prev_base[cmd];
+			pixels_done = 0;
+			col = 0; /* column within the 8-pixel row */
 
 			while (pixels_done < BLOCK_SIZE * BLOCK_SIZE) {
 				uint8_t opcode = *stream++;
@@ -107,8 +113,9 @@ void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void
 				if ((opcode & 1) == 0) {
 					/* Raw copy: count = opcode >> 1, pixels follow in stream */
 					int count = opcode >> 1;
+					const uint8_t* src_pixels;
 					pixels_done += count;
-					const uint8_t* src_pixels = stream;
+					src_pixels = stream;
 					stream += count;
 
 					while (count > 0) {

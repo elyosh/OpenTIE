@@ -1,6 +1,7 @@
 #ifndef TIE_RUNTIME_SNAPSHOT_INTERNAL_H
 #define TIE_RUNTIME_SNAPSHOT_INTERNAL_H
 
+#include "tie_runtime/snapshot/snapshot_hud.h"
 #include "tie_runtime/snapshot/snapshot_types.h"
 
 #ifdef __cplusplus
@@ -61,7 +62,6 @@ void TieSnapshotBuilder_SetSceneTag(const char* tag);
 void TieSnapshotBuilder_SetRedrawModel(TieRedrawModel model);
 
 TieCameraState* TieSnapshotBuilder_CameraMut(void);
-TieHudState* TieSnapshotBuilder_HudMut(void);
 TieCursorState* TieSnapshotBuilder_CursorMut(void);
 TieFadeState* TieSnapshotBuilder_FadeMut(void);
 TieCockpitState* TieSnapshotBuilder_CockpitMut(void);
@@ -81,7 +81,7 @@ void TieSnapshotBuilder_SetLegacyRenderConvention(TieFlightLegacyRenderConventio
 void TieSnapshotBuilder_SetLandruPresentation(uint16_t w, uint16_t h, uint8_t pixel_aspect,
 											  uint8_t profile_id, uint32_t generation);
 
-/* Stamp the logical flight-frame counter (move_flight_frame()) into the
+/* Stamp the logical flight-frame counter (TieFlightIntegration_Frame()) into the
  * in-progress slot. Written once per tick by TieFlightSnapshot_Capture;
  * lets consumers detect whether the sim advanced between snapshots. */
 void TieSnapshotBuilder_SetFlightFrame(uint32_t frame);

@@ -1,5 +1,4 @@
 #include "tie/flight_surface_tie98.h"
-
 #include "tie/frontend_display_tie98.h"
 #include "tie/logbuf2.h"
 #include "tie/replay.h"
@@ -7,7 +6,6 @@
 #include "tie/xtrans2.h"
 
 #include <landru/vesa.h>
-
 #include <string.h>
 
 // GLOBAL: TIE98 0x4F3D9C
@@ -53,6 +51,8 @@ void FlightSurface_Lock(void) {
 			g_flightOffscreenSurface->lpVtbl->GetSurfaceDesc(g_flightOffscreenSurface, &descriptor);
 			g_flightPrimaryPitch = descriptor.lPitch;
 		} else {
+			size_t offset;
+
 			memset(&descriptor, 0, sizeof descriptor);
 			descriptor.dwSize = 108;
 			while (g_lpRenderSurface->lpVtbl->Lock(g_lpRenderSurface, NULL, &descriptor,
@@ -67,13 +67,14 @@ void FlightSurface_Lock(void) {
 			descriptor.dwSize = 108;
 			g_lpRenderSurface->lpVtbl->GetSurfaceDesc(g_lpRenderSurface, &descriptor);
 			g_flightPrimaryPitch = descriptor.lPitch;
-			const size_t offset =
-				(size_t)descriptor.lPitch * ((uint32_t)(g_displayHeight - g_surfaceHeight) >> 1) +
-				(size_t)g_flight16bppBytesPerPixel * ((uint32_t)(g_displayWidth - g_surfaceWidth) >> 1);
+			offset = (size_t)descriptor.lPitch * ((uint32_t)(g_displayHeight - g_surfaceHeight) >> 1) +
+					 (size_t)g_flight16bppBytesPerPixel * ((uint32_t)(g_displayWidth - g_surfaceWidth) >> 1);
 			vgapointer += offset;
 			xtrans2_videobaseptr += offset;
 		}
 	} else {
+		size_t offset;
+
 		memset(&descriptor, 0, sizeof descriptor);
 		descriptor.dwSize = 108;
 		while (g_landruSurface->lpVtbl->Lock(g_landruSurface, NULL, &descriptor,
@@ -87,9 +88,8 @@ void FlightSurface_Lock(void) {
 		descriptor.dwSize = 108;
 		g_landruSurface->lpVtbl->GetSurfaceDesc(g_landruSurface, &descriptor);
 		g_flightPrimaryPitch = descriptor.lPitch;
-		const size_t offset =
-			(size_t)descriptor.lPitch * ((uint32_t)(g_displayHeight - g_surfaceHeight) >> 1) +
-			(size_t)g_flight16bppBytesPerPixel * ((uint32_t)(g_displayWidth - g_surfaceWidth) >> 1);
+		offset = (size_t)descriptor.lPitch * ((uint32_t)(g_displayHeight - g_surfaceHeight) >> 1) +
+				 (size_t)g_flight16bppBytesPerPixel * ((uint32_t)(g_displayWidth - g_surfaceWidth) >> 1);
 		vgapointer += offset;
 		xtrans2_videobaseptr += offset;
 	}

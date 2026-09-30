@@ -1,12 +1,10 @@
-#ifndef __FEDISKIO_H__
-#define __FEDISKIO_H__
+#ifndef TIE_FEDISKIO_H
+#define TIE_FEDISKIO_H
 
-/* Watcom C has no __attribute__; annotations here are advisory. */
-#if defined(__WATCOMC__)
+/* Compiler annotations are advisory when GNU attributes are unavailable. */
+#if defined(__WATCOMC__) || (defined(_MSC_VER) && !defined(__clang__))
 #define __attribute__(x)
 #endif
-
-#include <stdint.h>
 
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
@@ -22,6 +20,12 @@
 #include "tie/shipext.h"
 #include "tie/string_table_ids.h"
 #include "tie/tie.h"
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* --- Pilot record I/O --- */
 
@@ -93,5 +97,9 @@ extern void* maproomicons_buf;
  * the TRACE2 overflow clamps. NULL before init / after FreeFlightHandles. */
 extern void* flightbuf_small; /* 0x3C000 B */
 extern void* flightbuf_big;   /* 0xCB200 B */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

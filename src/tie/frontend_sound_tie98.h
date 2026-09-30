@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Recovered TIE98 FrontendSound subset used by the flight engine loop. */
 int FrontendSound_QueueSound(const char* name, int start_mode, int loop, int priority, int volume, int pan,
 							 int use_voice_volume);
@@ -20,4 +24,8 @@ int LOLEVEL_ImGetParam(uint16_t sound_id, int param);
 int LOLEVEL_ImStopSound(uint16_t sound_id);
 int LOLEVEL_ImSetParamByName(const char* name, int param, int value);
 
-#endif /* TIE_FRONTEND_SOUND_TIE98_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

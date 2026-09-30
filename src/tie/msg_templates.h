@@ -1,9 +1,13 @@
+#ifndef TIE_MSG_TEMPLATES_H
+#define TIE_MSG_TEMPLATES_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Auto-generated from STRINGS.DAT messagetable[214].
  * Each value is the template_id passed to msg_messageprintf and indexes
  * messagetable[]. See docs/strings-dat-messagetable.md for the full text. */
-
-#ifndef TIE_MSG_TEMPLATES_H
-#define TIE_MSG_TEMPLATES_H
 
 typedef enum MsgTemplate {
 	MSG_TIE_VERSION = 0,                /* <C6>TIE Fighter [Final V2.0] 11/28/94 */
@@ -223,4 +227,8 @@ typedef enum MsgTemplate {
 	MSG_BRIGHTNESS_SET = 214,           /* retail only: <C6>Screen brightness level * */
 } MsgTemplate;
 
-#endif /* TIE_MSG_TEMPLATES_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

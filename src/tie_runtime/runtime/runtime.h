@@ -31,8 +31,10 @@ bool TieRuntime_SetMusicDuckingVolumePercent(int percent);
 /* Advances one host-visible tick using the supplied synthetic-clock delta. */
 void TieRuntime_Tick(int32_t delta_us);
 
+#ifdef TIE_MODERN
 /* UINT64_MAX means no task deadline precedes the presentation cadence. */
 uint64_t TieRuntime_NextWakeDelayUs(void);
+#endif
 void TieRuntime_RequestFlightResourceRelease(void);
 bool TieRuntime_FlightResourceReleaseRequested(void);
 void TieRuntime_CompleteFlightResourceRelease(void);

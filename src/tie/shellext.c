@@ -3,7 +3,7 @@
 #include "tie/shell.h"
 #include "tie/tie.h"
 #include "tie_runtime/audio/imuse_session.h"
-#include "tie_runtime/snapshot/snapshot.h"
+#include "tie_runtime/runtime/computer_task.h"
 
 #include "landru/actanim.h"
 #include "landru/actor.h"
@@ -29,8 +29,6 @@
 #include "tie/rtsvga2.h"
 #include "tie_runtime/runtime/profile.h"
 
-#include <string.h>
-
 /* --- Globals --- */
 
 FrontOptionsStruct options_gbl;
@@ -46,6 +44,7 @@ static int16_t transition_check[] = { 120, 121, 130, 131, 270, 4, 0 };
 #include "tie/shipext.h"
 
 #include <imuse/hilevel.h>
+#include <string.h>
 
 /* --- Functions --- */
 
@@ -144,7 +143,7 @@ void shellext_Open_Landru_Scene(int16_t scene) {
 	sHead_gbl->cur_scene = scene;
 	sHead_gbl->sudden_end = 0;
 	/* Snapshot scene tagging is NOT reset here. shell_dispatch_converted
-	 * pushes the scene task (which calls e.g. play1_Push_Play1_Task →
+	 * pushes the scene task (which calls e.g. TieFilm_Begin →
 	 * set_scene_kind(CUTSCENE), or a non-cutscene scene's Push that
 	 * tags itself) BEFORE shellext_Open_Landru_Scene runs — see
 	 * shell.c:439-451. Resetting here would clobber the push-time
@@ -267,9 +266,11 @@ int16_t shellext_Is_Sudden_Scene_End(void) { return sHead_gbl->sudden_end; }
  * pops, matching the pre/post cursor state of the original
  * synchronous shellext_Back_Stage_To_VGA. */
 void shellext_Push_Back_Stage_To_VGA_Task(int16_t dialog) {
+	bool cursor_was_visible;
+
 	Rect r;
 	xcanvas_Get_Drawing_Canvas_Bounds(&r);
-	bool cursor_was_visible = xcursor_Is_Cursor_Visible();
+	cursor_was_visible = xcursor_Is_Cursor_Visible();
 	if (cursor_was_visible)
 		xcursor_Cursor_To_Back();
 	(void)xfade_Push_Fade_To_Video_Screen_Task(
@@ -300,7 +301,7 @@ int16_t shellext_escape_TIE(void) {
 	 * escape mechanism leaves landru_exit_gbl alone — the dialog's
 	 * exit value already populated it. */
 	if (!xdialog_Is_Active_Dialog() && !xfade_Fade_Active() && xview_Get_View_Time() > 0) {
-		computer_Push_Computer_Dialog_Task();
+		TieComputer_Begin();
 		return -1;
 	}
 	return xerror_Get_Landru_Exit();

@@ -20,9 +20,14 @@
  */
 
 #include "tie/tie.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Module-owned global: species index of the craft currently being
  * processed by planedynamics. Consumed by drawpol_setmarkingcolors
@@ -70,4 +75,8 @@ void dynamix_adjustvelocity(uint16_t obj_idx, int16_t target_speed, int16_t allo
  */
 void dynamix_pulloutdive(uint16_t obj_idx);
 
-#endif /* TIE_DYNAMIX_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

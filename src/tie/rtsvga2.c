@@ -1,15 +1,11 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
+#include "tie/rtsvga2.h"
 #include "landru/vesa.h" /* vesa_buff_gbl — the scanout buffer vgapointer aliases */
 #include "tie/frontend_display_tie98.h"
 #include "tie/logbuf2.h" /* pixelswide / pixelsdeep / halfpixels / displaycorner / deepspacecolor */
 #include "tie/math2.h"
+#include "tie/math2_wide.h"
 #include "tie/panel.h" /* RadarBlip (x, y, color) */
 #include "tie/render_texture_tie98.h"
-#include "tie/rtsvga2.h"
 #include "tie/tie.h"
 #include "tie/transfm2.h" /* transfm2_screenyoffset, worldeye* */
 #include "tie/xtrans2.h"
@@ -22,6 +18,11 @@
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
+
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* ------------------------------------------------------------------ */
 /* Module-local static state (watdbg "static" in demo; retail matches) */
@@ -154,6 +155,7 @@ __attribute__((weak)) int int386(int int_no, const void* inregs, void* outregs) 
 /* Update the emulated VESA page cache; redundant requests are skipped. */
 // FUNCTION: TIE95 0x4E5D4
 void rtsvga2_setcurrentpage(uint8_t window, uint16_t page) {
+	uint32_t regs[7];
 	uint32_t prev_page = (window == 1) ? lastpageB : lastpageA;
 
 	if (window == 1)
@@ -165,7 +167,6 @@ void rtsvga2_setcurrentpage(uint8_t window, uint16_t page) {
 		return;
 
 	/* VESA INT 10h AX=4F05h parameters retained for the weak platform hook. */
-	uint32_t regs[7];
 	regs[0] = 0x4F05;
 	regs[1] = window;
 	regs[2] = 0;
@@ -228,7 +229,9 @@ void rtsvga2_initgraphVGA(void) {
 	}
 
 	if (TieClassicDisplay_UsesDx5()) {
-		for (int32_t y = 0; y < screenYRes; ++y)
+		int32_t y;
+
+		for (y = 0; y < screenYRes; ++y)
 			lineaddressVGA[y] = (int32_t)g_surfacePitch * y;
 		memset(vgapointer, 0, (size_t)screenYRes * g_surfacePitch);
 		if (tie_is_high_resolution_flight()) {
@@ -286,12 +289,16 @@ void rtsvga2_initgraphVGA(void) {
 // FUNCTION: TIE95 0x4BA64
 void rtsvga2_setvgapointers(void* vga_ptr, uint16_t mem_width, uint16_t num_lines) {
 	if (vga_ptr) {
+		int y;
+
 		vgapointer = (uint8_t*)vga_ptr;
-		for (int y = 0; y < num_lines; ++y)
+		for (y = 0; y < num_lines; ++y)
 			lineaddressVGA[y] = (int32_t)mem_width * y;
 	} else {
+		int y;
+
 		vgapointer = vesa_buff_gbl;
-		for (int y = 0; y < screenYRes; ++y)
+		for (y = 0; y < screenYRes; ++y)
 			lineaddressVGA[y] = screenMemWidth * y;
 	}
 }
@@ -309,31 +316,42 @@ void rtsvga2_applyBrightness(const uint8_t* rgb_src, uint8_t* rgb_dst, uint16_t 
 	const uint8_t* s = rgb_src + 3 * start_idx;
 	uint8_t* d = rgb_dst + 3 * start_idx;
 
+	uint16_t i;
+
 	if (brightness_setting == 256) {
 		memcpy(d, s, (size_t)count * 3);
 		return;
 	}
 
-	for (uint16_t i = 0; i < count; ++i, s += 3, d += 3) {
+	for (i = 0; i < count; ++i, s += 3, d += 3) {
 		uint8_t r = s[0], g = s[1], b = s[2];
 
 		/* v_max = max(r, g, b) */
 		uint8_t v_max;
+		uint8_t v_min;
+		uint8_t hsv_s;
+		uint8_t hue_frac;
+		uint8_t hue_sext;
+		uint32_t v_scaled32;
+		uint8_t v_scaled;
+
+		uint8_t out_r, out_g, out_b;
+
 		if (r < g || r < b)
 			v_max = (g < r || g < b) ? b : g;
 		else
 			v_max = r;
 
 		/* v_min = min(r, g, b) */
-		uint8_t v_min;
+
 		if (r > g || r > b)
 			v_min = (g > r || g > b) ? b : g;
 		else
 			v_min = r;
 
-		uint8_t hsv_s = v_max ? (uint8_t)(63u * (v_max - v_min) / v_max) : 0;
-		uint8_t hue_frac = 0;
-		uint8_t hue_sext = 0;
+		hsv_s = v_max ? (uint8_t)(63u * (v_max - v_min) / v_max) : 0;
+		hue_frac = 0;
+		hue_sext = 0;
 
 		if (hsv_s) {
 			if (r == v_max) {
@@ -361,10 +379,9 @@ void rtsvga2_applyBrightness(const uint8_t* rgb_src, uint8_t* rgb_dst, uint16_t 
 			}
 		}
 
-		uint32_t v_scaled32 = (brightness_setting * v_max) >> 8;
-		uint8_t v_scaled = (v_scaled32 > 0x3F) ? 63 : (uint8_t)v_scaled32;
+		v_scaled32 = (brightness_setting * v_max) >> 8;
+		v_scaled = (v_scaled32 > 0x3F) ? 63 : (uint8_t)v_scaled32;
 
-		uint8_t out_r, out_g, out_b;
 		if (hsv_s) {
 			/* Intermediate: fall-off term for the "mid" channel. */
 			uint32_t mid_hi = (63u - (uint32_t)hsv_s * (63u - hue_frac) / 63u) * v_scaled / 63u;
@@ -465,7 +482,9 @@ void rtsvga2_clearflightdisplay(void) {
  * -- the caller pushes to hardware via XPAL/unblank. */
 // FUNCTION: TIE95 0x4BF88
 void rtsvga2_buildpaletteVGA(const uint8_t* rgb_src, uint16_t start_idx, uint16_t count) {
-	for (uint16_t i = start_idx; i < start_idx + count; ++i, rgb_src += 3) {
+	uint16_t i;
+
+	for (i = start_idx; i < start_idx + count; ++i, rgb_src += 3) {
 		uint32_t off = 3u * i;
 		rtsvga2_vgapalette[off] = rgb_src[0];
 		rtsvga2_vgapalette[off + 1] = rgb_src[1];
@@ -511,7 +530,9 @@ uint32_t rtsvga2_findNearestColor(const uint8_t* rgb_target, const uint8_t* pale
 	int tgt_b = rgb_target[2];
 
 	const uint8_t* p = palette + 3 * start_idx;
-	for (uint32_t i = start_idx; i < end_idx; ++i, p += 3) {
+	uint32_t i;
+
+	for (i = start_idx; i < end_idx; ++i, p += 3) {
 		int dr = tgt_r - p[0], dg = tgt_g - p[1], db = tgt_b - p[2];
 		int dist_sq = dr * dr + dg * dg + db * db;
 		if (dist_sq < best_dist_sq) {
@@ -548,10 +569,14 @@ void rtsvga2_remapRGBImage(uint32_t* image_header) {
 	uint8_t* out_px = (uint8_t*)image_header + image_header[0];
 	uint8_t rgb_target[3];
 
+	uint32_t h;
+
 	if (image_header[11] == 24) {
 		const uint8_t* rgb_src = (const uint8_t*)image_header + image_header[3];
+		uint32_t i;
+
 		image_header[5] = image_header[0];
-		for (uint32_t i = 0; i < image_header[12]; ++i, rgb_src += 4, ++out_px) {
+		for (i = 0; i < image_header[12]; ++i, rgb_src += 4, ++out_px) {
 			rgb_target[0] = (uint8_t)((int)rgb_src[0] >> 2);
 			rgb_target[1] = (uint8_t)((int)rgb_src[1] >> 2);
 			rgb_target[2] = (uint8_t)((int)rgb_src[2] >> 2);
@@ -559,13 +584,15 @@ void rtsvga2_remapRGBImage(uint32_t* image_header) {
 		}
 	}
 
-	for (uint32_t h = 0; h < image_header[6]; ++h) {
+	for (h = 0; h < image_header[6]; ++h) {
 		uint32_t* sub = (uint32_t*)((uint8_t*)image_header +
 									*((uint32_t*)((uint8_t*)image_header + image_header[4]) + h));
 		sub[3] = (uint32_t)(out_px - (uint8_t*)sub);
 		if (sub[9] == 24) {
 			const uint8_t* rgb_src = (const uint8_t*)sub + sub[1];
-			for (uint32_t i = 0; i < sub[10]; ++i, rgb_src += 4, ++out_px) {
+			uint32_t i;
+
+			for (i = 0; i < sub[10]; ++i, rgb_src += 4, ++out_px) {
 				rgb_target[0] = (uint8_t)((int)rgb_src[0] >> 2);
 				rgb_target[1] = (uint8_t)((int)rgb_src[1] >> 2);
 				rgb_target[2] = (uint8_t)((int)rgb_src[2] >> 2);
@@ -580,8 +607,10 @@ void rtsvga2_applyBrightness16_tie98(const uint8_t* rgb6, uint16_t* output, uint
 									 uint32_t count) {
 	uint8_t adjusted[3 * 1024];
 
+	uint32_t i;
+
 	rtsvga2_applyBrightness(rgb6, adjusted, (uint16_t)start_idx, (uint16_t)count);
-	for (uint32_t i = start_idx; i < start_idx + count; ++i) {
+	for (i = start_idx; i < start_idx + count; ++i) {
 		const uint8_t* color = &adjusted[3 * i];
 		if (FrontendDisplay_GetPixelFormat555()) {
 			output[i] = (uint16_t)(((uint16_t)(color[0] >> 1) << 10) | ((uint16_t)(color[1] >> 1) << 5) |
@@ -595,16 +624,19 @@ void rtsvga2_applyBrightness16_tie98(const uint8_t* rgb6, uint16_t* output, uint
 
 // FUNCTION: TIE98 0x47AAE0
 void rtsvga2_buildpaletteVGA_tie98(const uint8_t* rgb_src, uint16_t start_idx, uint16_t count) {
-	for (uint16_t index = start_idx; index < start_idx + count; ++index) {
-		rtsvga2_vgapalette[3 * index] = *rgb_src++;
-		rtsvga2_vgapalette[3 * index + 1] = *rgb_src++;
-		rtsvga2_vgapalette[3 * index + 2] = *rgb_src++;
+	uint16_t palette_index;
+	for (palette_index = start_idx; palette_index < start_idx + count; ++palette_index) {
+		rtsvga2_vgapalette[3 * palette_index] = *rgb_src++;
+		rtsvga2_vgapalette[3 * palette_index + 1] = *rgb_src++;
+		rtsvga2_vgapalette[3 * palette_index + 2] = *rgb_src++;
 	}
 	if (g_flight16bppBytesPerPixel == 2) {
 		rtsvga2_applyBrightness16_tie98(rtsvga2_vgapalette, g_flightTextPalette, start_idx, count);
 		if (start_idx == 0 && count == 64) {
 			const uint16_t transparent_color = g_flightTextPalette[deepspacecolor];
-			for (uint16_t index = 0; index < 64; ++index) {
+			uint16_t index;
+
+			for (index = 0; index < 64; ++index) {
 				if (g_flightTextPalette[index] == transparent_color)
 					g_flightTextPalette[index] = 0;
 			}
@@ -627,12 +659,16 @@ void rtsvga2_remapRGBImage_tie98(uint32_t* image_header) {
 	uint16_t* output = (uint16_t*)((uint8_t*)image_header + image_header[0]);
 	uint8_t rgb6[3 * 1024];
 
+	uint32_t h;
+
 	if (image_header[11] == 24) {
 		const uint32_t count = image_header[12];
 		const uint8_t* source = (const uint8_t*)image_header + image_header[3];
 		image_header[5] = image_header[0];
 		if (count < 1024) {
-			for (uint32_t i = 0; i < count; ++i, source += 4) {
+			uint32_t i;
+
+			for (i = 0; i < count; ++i, source += 4) {
 				rgb6[3 * i] = source[0] >> 2;
 				rgb6[3 * i + 1] = source[1] >> 2;
 				rgb6[3 * i + 2] = source[2] >> 2;
@@ -642,7 +678,7 @@ void rtsvga2_remapRGBImage_tie98(uint32_t* image_header) {
 		}
 	}
 
-	for (uint32_t h = 0; h < image_header[6]; ++h) {
+	for (h = 0; h < image_header[6]; ++h) {
 		uint32_t* sub = (uint32_t*)((uint8_t*)image_header +
 									*((uint32_t*)((uint8_t*)image_header + image_header[4]) + h));
 		sub[3] = (uint32_t)((uint8_t*)output - (uint8_t*)sub);
@@ -650,7 +686,9 @@ void rtsvga2_remapRGBImage_tie98(uint32_t* image_header) {
 			const uint32_t count = sub[10];
 			const uint8_t* source = (const uint8_t*)sub + sub[1];
 			if (count < 1024) {
-				for (uint32_t i = 0; i < count; ++i, source += 4) {
+				uint32_t i;
+
+				for (i = 0; i < count; ++i, source += 4) {
 					rgb6[3 * i] = source[0] >> 2;
 					rgb6[3 * i + 1] = source[1] >> 2;
 					rgb6[3 * i + 2] = source[2] >> 2;
@@ -755,9 +793,8 @@ void rtsvga2__lowdrawshapeVGA(const uint8_t* shape, uint16_t x, uint16_t y, uint
 						int cnt = 0;
 						if (run_len) {
 							do {
-								++dst;
+								*dst++ = color;
 								++cnt;
-								*(dst - 1) = color;
 							} while ((uint16_t)cnt < run_len);
 						}
 					}
@@ -786,9 +823,11 @@ void rtsvga2__lowdrawshapeVGA(const uint8_t* shape, uint16_t x, uint16_t y, uint
 			uint8_t dbl_color = *shape;
 			const uint8_t* after_col = shape + 1;
 			int dbl_cnt = (int)(uint8_t)*after_col;
+			int dbl_rem;
+
 			shape = after_col + 1;
 
-			int dbl_rem = dbl_cnt + 1;
+			dbl_rem = dbl_cnt + 1;
 			while ((int16_t)dbl_rem > 0) {
 				*dst = dbl_color;
 				if (flip_x)
@@ -810,9 +849,9 @@ void rtsvga2__lowdrawshapeVGA(const uint8_t* shape, uint16_t x, uint16_t y, uint
 
 		if (op == 253) {
 			/* 0xFD: explicit (count, color) run -- rejoin pixel-run code. */
+			run_raw = (int16_t)shape[0];
+			color = shape[1];
 			shape += 2;
-			color = *(shape - 1);
-			run_raw = (int16_t)*(shape - 2);
 			goto label_10;
 		}
 
@@ -851,6 +890,9 @@ static void rtsvga2__lowdrawshapeVGA_tie98(const uint8_t* shape, uint16_t x, uin
 			uint8_t opcode = *shape++;
 			uint8_t color_index;
 			uint16_t run_length;
+
+			uint16_t color;
+			uint16_t pixel;
 
 			if (opcode < 0xFB) {
 				color_index = opcode >> 2;
@@ -891,8 +933,8 @@ static void rtsvga2__lowdrawshapeVGA_tie98(const uint8_t* shape, uint16_t x, uin
 			}
 			if (mono)
 				color_index = basecolor;
-			const uint16_t color = g_flightTextPalette[color_index];
-			for (uint16_t pixel = 0; pixel < run_length; ++pixel) {
+			color = g_flightTextPalette[color_index];
+			for (pixel = 0; pixel < run_length; ++pixel) {
 				*destination = color;
 				destination += flip_x ? -1 : 1;
 			}
@@ -966,6 +1008,15 @@ void rtsvga2_drawdotVGA(uint16_t x, uint16_t y, uint8_t color) {
 void rtsvga2_outcharVGA(uint8_t ch) {
 	/* Every visible glyph lands in vesa_buff_gbl; see the note on
 	 * rtsvga2__lowdrawshapeVGA above. */
+	const uint8_t* glyph;
+	uint8_t glyph_width;
+	uint8_t glyph_height;
+	const uint8_t* row_ptr;
+	int32_t newx;
+	uint8_t prev_row;
+	int16_t y;
+	int i;
+
 	vesa_dirty_gbl = true;
 
 	if (ch == '\n') {
@@ -981,12 +1032,12 @@ void rtsvga2_outcharVGA(uint8_t ch) {
 	if (fontflag && !fontlowercase && ch >= 'a' && ch <= 'z')
 		ch -= 32;
 
-	const uint8_t* glyph = (const uint8_t*)curfontptr + (size_t)(uint8_t)(ch - 32) * (uint16_t)fontcharsize;
-	uint8_t glyph_width = glyph[0];
-	uint8_t glyph_height = glyph[1];
-	const uint8_t* row_ptr = glyph + 2;
+	glyph = (const uint8_t*)curfontptr + (size_t)(uint8_t)(ch - 32) * (uint16_t)fontcharsize;
+	glyph_width = glyph[0];
+	glyph_height = glyph[1];
+	row_ptr = glyph + 2;
 
-	int32_t newx = (int32_t)cursorx + glyph_width;
+	newx = (int32_t)cursorx + glyph_width;
 	if (newx >= rightmargin && lwrapflag) {
 		if (autofillflag)
 			rtsvga2_autofillVGA();
@@ -994,15 +1045,19 @@ void rtsvga2_outcharVGA(uint8_t ch) {
 		cursory += (int16_t)glyph_height;
 	}
 
-	uint8_t prev_row = 0;
-	int16_t y = cursory;
-	for (int i = 0; i < glyph_height; ++i, ++y) {
+	prev_row = 0;
+	y = cursory;
+	for (i = 0; i < glyph_height; ++i, ++y) {
+		int row_width;
+		int16_t row_x;
+		uint8_t row_bits;
+
 		if (y >= bottommargin)
 			break;
 
-		int row_width = glyph_width;
-		int16_t row_x = cursorx;
-		uint8_t row_bits = row_ptr[0];
+		row_width = glyph_width;
+		row_x = cursorx;
+		row_bits = row_ptr[0];
 
 		if (dropflag)
 			++row_width;
@@ -1017,13 +1072,16 @@ void rtsvga2_outcharVGA(uint8_t ch) {
 		}
 
 		if (y >= topmargin) {
+			uint8_t* dst;
+			int px;
+
 			if (row_x + row_width > rightmargin) {
 				row_width = rightmargin - row_x;
 				if (row_width <= 0)
 					break;
 			}
-			uint8_t* dst = vgapointer + lineaddressVGA[y] + row_x;
-			for (int px = 0; px < row_width; ++px) {
+			dst = vgapointer + lineaddressVGA[y] + row_x;
+			for (px = 0; px < row_width; ++px) {
 				if (row_bits & 0x80) {
 					*dst++ = textcolor;
 				} else if (dropflag && (int8_t)prev_row < 0) {
@@ -1059,6 +1117,16 @@ void rtsvga2_outcharVGA(uint8_t ch) {
 // FUNCTION: TIE95 0x4C994
 void rtsvga2_outchar32VGA(uint8_t ch) {
 	/* 32-bit glyph path -- same dirty invariant as outcharVGA. */
+	const uint8_t* glyph;
+	uint8_t glyph_width;
+	uint8_t glyph_height;
+	const uint32_t* row_ptr;
+	int32_t newx;
+	uint8_t saved_dropflag;
+	uint32_t prev_row;
+	int16_t y;
+	int i;
+
 	vesa_dirty_gbl = true;
 
 	if (ch == '\n') {
@@ -1074,12 +1142,12 @@ void rtsvga2_outchar32VGA(uint8_t ch) {
 	if (fontflag && !fontlowercase && ch >= 'a' && ch <= 'z')
 		ch -= 32;
 
-	const uint8_t* glyph = (const uint8_t*)curfontptr + (size_t)(uint8_t)(ch - 32) * (uint16_t)fontcharsize;
-	uint8_t glyph_width = glyph[0];
-	uint8_t glyph_height = glyph[1];
-	const uint32_t* row_ptr = (const uint32_t*)(glyph + 2);
+	glyph = (const uint8_t*)curfontptr + (size_t)(uint8_t)(ch - 32) * (uint16_t)fontcharsize;
+	glyph_width = glyph[0];
+	glyph_height = glyph[1];
+	row_ptr = (const uint32_t*)(glyph + 2);
 
-	int32_t newx = (int32_t)cursorx + glyph_width;
+	newx = (int32_t)cursorx + glyph_width;
 	if (newx >= rightmargin && lwrapflag) {
 		if (autofillflag)
 			rtsvga2_autofillVGA();
@@ -1087,17 +1155,21 @@ void rtsvga2_outchar32VGA(uint8_t ch) {
 		cursory += (int16_t)glyph_height;
 	}
 
-	uint8_t saved_dropflag = dropflag;
-	uint32_t prev_row = 0;
-	int16_t y = cursory;
+	saved_dropflag = dropflag;
+	prev_row = 0;
+	y = cursory;
 
-	for (int i = 0; i < glyph_height; ++i, ++y) {
+	for (i = 0; i < glyph_height; ++i, ++y) {
+		int row_width;
+		int16_t row_x;
+		uint32_t row_bits;
+
 		if (y >= bottommargin)
 			break;
 
-		int row_width = glyph_width;
-		int16_t row_x = cursorx;
-		uint32_t row_bits = row_ptr[0];
+		row_width = glyph_width;
+		row_x = cursorx;
+		row_bits = row_ptr[0];
 
 		if (saved_dropflag)
 			++row_width;
@@ -1112,13 +1184,16 @@ void rtsvga2_outchar32VGA(uint8_t ch) {
 		}
 
 		if (y >= topmargin) {
+			uint8_t* dst;
+			int px;
+
 			if (row_x + row_width > rightmargin) {
 				row_width = rightmargin - row_x;
 				if (row_width <= 0)
 					break;
 			}
-			uint8_t* dst = vgapointer + lineaddressVGA[y] + row_x;
-			for (int px = 0; px < row_width; ++px) {
+			dst = vgapointer + lineaddressVGA[y] + row_x;
+			for (px = 0; px < row_width; ++px) {
 				if (row_bits & 0x80000000u) {
 					*dst++ = textcolor;
 				} else if (saved_dropflag && (prev_row & 0x80000000u)) {
@@ -1147,6 +1222,13 @@ void rtsvga2_outchar32VGA(uint8_t ch) {
 
 // FUNCTION: TIE98 0x479710
 void rtsvga2_outchar32VGA_tie98(uint8_t ch) {
+	const uint8_t* glyph;
+	uint8_t glyph_width;
+	uint8_t glyph_height;
+	const uint8_t* row_data;
+	uint32_t shadow_bits;
+	int16_t y;
+
 	if (ch == '\n') {
 		if (autofillflag)
 			rtsvga2_autofillVGA_tie98();
@@ -1159,10 +1241,10 @@ void rtsvga2_outchar32VGA_tie98(uint8_t ch) {
 	if (fontflag && !fontlowercase && ch >= 'a' && ch <= 'z')
 		ch -= 32;
 
-	const uint8_t* glyph = (const uint8_t*)curfontptr + (size_t)(uint8_t)(ch - 32) * (uint16_t)fontcharsize;
-	const uint8_t glyph_width = glyph[0];
-	const uint8_t glyph_height = glyph[1];
-	const uint8_t* row_data = glyph + 2;
+	glyph = (const uint8_t*)curfontptr + (size_t)(uint8_t)(ch - 32) * (uint16_t)fontcharsize;
+	glyph_width = glyph[0];
+	glyph_height = glyph[1];
+	row_data = glyph + 2;
 	if ((int32_t)cursorx + glyph_width >= rightmargin && lwrapflag) {
 		if (autofillflag)
 			rtsvga2_autofillVGA_tie98();
@@ -1170,13 +1252,16 @@ void rtsvga2_outchar32VGA_tie98(uint8_t ch) {
 		cursory += glyph_height;
 	}
 
-	uint32_t shadow_bits = 0;
-	for (int16_t y = cursory; y < cursory + glyph_height; ++y, row_data += 8) {
+	shadow_bits = 0;
+	for (y = cursory; y < cursory + glyph_height; ++y, row_data += 8) {
 		uint32_t row_bits;
 		/* PORT: glyph rows are serialized at two-byte alignment. */
+		int width;
+		int16_t x;
+
 		memcpy(&row_bits, row_data, sizeof row_bits);
-		int width = glyph_width + (dropflag != 0);
-		int16_t x = cursorx;
+		width = glyph_width + (dropflag != 0);
+		x = cursorx;
 		if (cursorx < leftmargin) {
 			const int clipped = leftmargin - cursorx;
 			if (clipped >= width) {
@@ -1190,13 +1275,16 @@ void rtsvga2_outchar32VGA_tie98(uint8_t ch) {
 		if (y >= bottommargin)
 			break;
 		if (y >= topmargin && width > 0) {
+			uint16_t* destination;
+			int pixel;
+
 			if (x + width > rightmargin) {
 				width = rightmargin - x;
 				if (width <= 0)
 					break;
 			}
-			uint16_t* destination = (uint16_t*)(vgapointer + lineaddressVGA[y] + 2 * x);
-			for (int pixel = 0; pixel < width; ++pixel) {
+			destination = (uint16_t*)(vgapointer + lineaddressVGA[y] + 2 * x);
+			for (pixel = 0; pixel < width; ++pixel) {
 				uint8_t color_index;
 				if ((int32_t)row_bits < 0)
 					color_index = textcolor;
@@ -1252,9 +1340,11 @@ void rtsvga2_fillrectangleVGA(void) {
 	starty = topfill;
 	while (rows_remaining) {
 		int run_len = rightfill - leftfill;
+		uint8_t* dst;
+
 		if (run_len <= 0)
 			break;
-		uint8_t* dst = vgapointer + lineaddressVGA[(uint16_t)starty] + (uint16_t)leftfill;
+		dst = vgapointer + lineaddressVGA[(uint16_t)starty] + (uint16_t)leftfill;
 		memset(dst, backcolor, (size_t)run_len);
 		--rows_remaining;
 		++starty;
@@ -1290,10 +1380,14 @@ void rtsvga2_fillboxVGA(uint16_t left, uint16_t top, uint16_t right, uint16_t bo
 // FUNCTION: TIE98 0x479A40
 void rtsvga2_fillrectangleVGA_tie98(void) {
 	const uint16_t color = g_flightTextPalette[backcolor];
-	for (int16_t y = topfill; y < bottomfill; ++y) {
+	int16_t y;
+
+	for (y = topfill; y < bottomfill; ++y) {
 		uint16_t* destination =
 			(uint16_t*)(vgapointer + lineaddressVGA[(uint16_t)y] + 2 * (uint16_t)leftfill);
-		for (int16_t x = leftfill; x < rightfill; ++x)
+		int16_t x;
+
+		for (x = leftfill; x < rightfill; ++x)
 			*destination++ = color;
 	}
 }
@@ -1380,9 +1474,11 @@ void rtsvga2_autofillVGA_tie98(void) {
 void rtsvga2_scrollbufferVGA(uint8_t* buffer, uint16_t num_rows, int16_t scroll_up) {
 	size_t total_bytes = (size_t)screenYRes * (size_t)screenXRes;
 	size_t scroll_bytes = (size_t)screenXRes * num_rows;
+	size_t move_count;
+
 	if (scroll_bytes >= total_bytes)
 		return;
-	size_t move_count = total_bytes - scroll_bytes;
+	move_count = total_bytes - scroll_bytes;
 
 	if (scroll_up)
 		memmove(buffer, buffer + scroll_bytes, move_count);
@@ -1400,7 +1496,9 @@ void rtsvga2_scrollbufferVGA(uint8_t* buffer, uint16_t num_rows, int16_t scroll_
  * due to a manual-naming swap -- see memory note.) */
 // FUNCTION: TIE95 0x4D2A4
 void rtsvga2_saveboxVGA(uint8_t* dst, uint16_t x, uint16_t y, uint16_t width, uint16_t height) {
-	for (uint16_t row = 0; row < height; ++row) {
+	uint16_t row;
+
+	for (row = 0; row < height; ++row) {
 		const uint8_t* src = vgapointer + lineaddressVGA[y + row] + x;
 		memcpy(dst, src, width);
 		dst += width;
@@ -1409,7 +1507,9 @@ void rtsvga2_saveboxVGA(uint8_t* dst, uint16_t x, uint16_t y, uint16_t width, ui
 
 // FUNCTION: TIE98 0x479CC0
 void rtsvga2_saveboxVGA_tie98(uint8_t* dst, uint16_t x, uint16_t y, uint16_t width, uint16_t height) {
-	for (uint16_t row = 0; row < height; ++row) {
+	uint16_t row;
+
+	for (row = 0; row < height; ++row) {
 		const uint8_t* source = vgapointer + lineaddressVGA[y + row] + 2 * x;
 		memcpy(dst, source, (size_t)width * sizeof(uint16_t));
 		dst += (size_t)width * sizeof(uint16_t);
@@ -1424,7 +1524,9 @@ void rtsvga2_saveboxVGA_tie98(uint8_t* dst, uint16_t x, uint16_t y, uint16_t wid
  * (x, y). Inverse of saveboxVGA. */
 // FUNCTION: TIE95 0x4D37C
 void rtsvga2_restoreboxVGA(const uint8_t* src, uint16_t x, uint16_t y, uint16_t width, uint16_t height) {
-	for (uint16_t row = 0; row < height; ++row) {
+	uint16_t row;
+
+	for (row = 0; row < height; ++row) {
 		uint8_t* dst = vgapointer + lineaddressVGA[y + row] + x;
 		memcpy(dst, src, width);
 		src += width;
@@ -1434,7 +1536,9 @@ void rtsvga2_restoreboxVGA(const uint8_t* src, uint16_t x, uint16_t y, uint16_t 
 // FUNCTION: TIE98 0x479DA0
 void rtsvga2_restoreboxVGA_tie98(const uint8_t* src, uint16_t x, uint16_t y, uint16_t width,
 								 uint16_t height) {
-	for (uint16_t row = 0; row < height; ++row) {
+	uint16_t row;
+
+	for (row = 0; row < height; ++row) {
 		uint8_t* destination = vgapointer + lineaddressVGA[y + row] + 2 * x;
 		memcpy(destination, src, (size_t)width * sizeof(uint16_t));
 		src += (size_t)width * sizeof(uint16_t);
@@ -1447,7 +1551,9 @@ void rtsvga2_restoreboxVGA_tie98(const uint8_t* src, uint16_t x, uint16_t y, uin
 
 // FUNCTION: TIE98 0x479E80
 static void rtsvga2_drawblipsVGA_tie98(struct RadarBlip* blips, uint16_t count) {
-	for (uint16_t index = 0; index < count; ++index, ++blips) {
+	uint16_t index;
+
+	for (index = 0; index < count; ++index, ++blips) {
 		uint16_t* destination = (uint16_t*)(vgapointer + lineaddressVGA[blips->y] + 2 * blips->x);
 		if (*destination == g_flightTextPalette[44])
 			*destination = g_flightTextPalette[(uint8_t)blips->color];
@@ -1458,7 +1564,9 @@ static void rtsvga2_drawblipsVGA_tie98(struct RadarBlip* blips, uint16_t count) 
 
 // FUNCTION: TIE98 0x479F50
 static void rtsvga2_removeblipsVGA_tie98(struct RadarBlip* blips, uint16_t count) {
-	for (uint16_t index = 0; index < count; ++index, ++blips) {
+	uint16_t index;
+
+	for (index = 0; index < count; ++index, ++blips) {
 		if ((uint8_t)blips->color != 0) {
 			uint16_t* destination = (uint16_t*)(vgapointer + lineaddressVGA[blips->y] + 2 * blips->x);
 			*destination = g_flightTextPalette[44];
@@ -1478,11 +1586,13 @@ static void rtsvga2_removeblipsVGA_tie98(struct RadarBlip* blips, uint16_t count
 // FUNCTION: TIE95 0x4D444
 // FUNCTION: TIE98 0x47C1D0
 void rtsvga2_drawblipsVGA(struct RadarBlip* blips, uint16_t count) {
+	uint16_t i;
+
 	if (TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2) {
 		rtsvga2_drawblipsVGA_tie98(blips, count);
 		return;
 	}
-	for (uint16_t i = 0; i < count; ++i, ++blips) {
+	for (i = 0; i < count; ++i, ++blips) {
 		uint8_t color_in = (uint8_t)blips->color;
 		uint8_t* dst_prim = vgapointer + lineaddressVGA[blips->y] + blips->x;
 		if (*dst_prim == 44) {
@@ -1513,11 +1623,13 @@ void rtsvga2_drawblipsVGA(struct RadarBlip* blips, uint16_t count) {
 // FUNCTION: TIE95 0x4D5A0
 // FUNCTION: TIE98 0x47C320
 void rtsvga2_removeblipsVGA(struct RadarBlip* blips, uint16_t count) {
+	uint16_t i;
+
 	if (TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2) {
 		rtsvga2_removeblipsVGA_tie98(blips, count);
 		return;
 	}
-	for (uint16_t i = 0; i < count; ++i, ++blips) {
+	for (i = 0; i < count; ++i, ++blips) {
 		uint16_t status = blips->color;
 		uint8_t* dst_prim = vgapointer + lineaddressVGA[blips->y] + blips->x;
 		if (status & 1)
@@ -1536,7 +1648,9 @@ void rtsvga2_removeblipsVGA(struct RadarBlip* blips, uint16_t count) {
 
 // FUNCTION: TIE98 0x479FF0
 static void rtsvga2_drawbracket_tie98(void) {
-	for (uint16_t index = 0; index < 10; ++index) {
+	uint16_t index;
+
+	for (index = 0; index < 10; ++index) {
 		const int8_t dx = bracketdef_10pt[2 * index];
 		const int8_t dy = bracketdef_10pt[2 * index + 1];
 		uint16_t* destination = (uint16_t*)(vgapointer + lineaddressVGA[(uint16_t)(brackety + dy)] +
@@ -1548,7 +1662,9 @@ static void rtsvga2_drawbracket_tie98(void) {
 
 // FUNCTION: TIE98 0x47A0D0
 static void rtsvga2_removebracket_tie98(void) {
-	for (uint16_t index = 0; index < 10; ++index) {
+	uint16_t index;
+
+	for (index = 0; index < 10; ++index) {
 		const int8_t dx = bracketdef_10pt[2 * index];
 		const int8_t dy = bracketdef_10pt[2 * index + 1];
 		uint16_t* destination = (uint16_t*)(vgapointer + lineaddressVGA[(uint16_t)(oldbrackety + dy)] +
@@ -1565,13 +1681,15 @@ static void rtsvga2_removebracket_tie98(void) {
 // FUNCTION: TIE95 0x4D6B8
 // FUNCTION: TIE98 0x47C440
 void rtsvga2_drawbracket(void) {
+	uint32_t i;
+
 	if (TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2) {
 		rtsvga2_drawbracket_tie98();
 		return;
 	}
 	if (bracketdef_count == 0)
 		return;
-	for (uint32_t i = 0; i < bracketdef_count; ++i) {
+	for (i = 0; i < bracketdef_count; ++i) {
 		int8_t dx = (int8_t)bracketdef_ptr[2 * i];
 		int8_t dy = (int8_t)bracketdef_ptr[2 * i + 1];
 		uint32_t off = lineaddressVGA[(uint16_t)(brackety + dy)] + (uint16_t)(bracketx + dx);
@@ -1590,13 +1708,15 @@ void rtsvga2_drawbracket(void) {
 // FUNCTION: TIE95 0x4D79C
 // FUNCTION: TIE98 0x47C530
 void rtsvga2_removebracket(void) {
+	uint32_t i;
+
 	if (TieProfile_UsesTie98Logic() && g_flight16bppBytesPerPixel == 2) {
 		rtsvga2_removebracket_tie98();
 		return;
 	}
 	if (bracketdef_count == 0)
 		return;
-	for (uint32_t i = 0; i < bracketdef_count; ++i) {
+	for (i = 0; i < bracketdef_count; ++i) {
 		int8_t dx = (int8_t)bracketdef_ptr[2 * i];
 		int8_t dy = (int8_t)bracketdef_ptr[2 * i + 1];
 		uint32_t off = lineaddressVGA[(uint16_t)(oldbrackety + dy)] + (uint16_t)(oldbracketx + dx);
@@ -1611,7 +1731,9 @@ void rtsvga2_removebracket(void) {
 /* Draw the seven-point crosshair at (x, y). */
 // FUNCTION: TIE95 0x4D85C
 void rtsvga2_drawcross(uint16_t x, uint16_t y, uint8_t color) {
-	for (int i = 0; i < 7; ++i) {
+	int i;
+
+	for (i = 0; i < 7; ++i) {
 		int8_t dx = crossdef[2 * i];
 		int8_t dy = crossdef[2 * i + 1];
 		uint32_t off = lineaddressVGA[(uint16_t)(y + dy)] + (uint16_t)(x + dx);
@@ -1628,7 +1750,9 @@ void rtsvga2_drawcross(uint16_t x, uint16_t y, uint8_t color) {
 /* Erase the previously-drawn cross at (x, y) using crosssave. */
 // FUNCTION: TIE95 0x4D938
 void rtsvga2_removecross(uint16_t x, uint16_t y) {
-	for (int i = 0; i < 7; ++i) {
+	int i;
+
+	for (i = 0; i < 7; ++i) {
 		int8_t dx = crossdef[2 * i];
 		int8_t dy = crossdef[2 * i + 1];
 		uint32_t off = lineaddressVGA[(uint16_t)(y + dy)] + (uint16_t)(x + dx);
@@ -1668,16 +1792,13 @@ static inline int project_axis(int ax, int z, int* out_signed) {
 	/* Returns 1 if the axis projects successfully (|ax|<=z), 0 to cull.
 	 * *out_signed receives the projected signed screen delta. */
 	int abs_ax = (ax < 0) ? -ax : ax;
+	uint32_t q;
+
 	if (abs_ax > z)
 		return 0;
 
-	uint64_t num = (uint64_t)(uint32_t)halfPerspFactor + ((uint64_t)(uint32_t)abs_ax << (perspShift & 0x1F));
-	int32_t q;
-	if ((uint32_t)(num >> 32) < (uint32_t)z)
-		q = (int32_t)(num / (uint32_t)z);
-	else
-		q = 2147483392;
-	*out_signed = (ax < 0) ? -q : q;
+	q = math2_project_u32((uint32_t)abs_ax, perspShift, halfPerspFactor, (uint32_t)z);
+	*out_signed = (int32_t)(ax < 0 ? 0u - q : q);
 	return 1;
 }
 
@@ -1690,6 +1811,17 @@ int g_dbg_star_cull_screen_y;
 int g_dbg_star_cull_deepspace;
 int g_dbg_star_painted;
 static inline void try_draw_star(int eye_x, int eye_y, int eye_z, int star_off, int32_t** new_cursor) {
+	int screen_x;
+	int screen_y;
+	int32_t pix_off;
+	uint8_t* dst;
+	uint8_t palette_delta;
+	uint8_t shade;
+	uint32_t* hash32;
+	uint16_t h;
+
+	int sx, sy;
+
 	g_dbg_star_total++;
 	/* Mirror camera space so z >= 0. */
 	if (eye_z < 0) {
@@ -1698,7 +1830,6 @@ static inline void try_draw_star(int eye_x, int eye_y, int eye_z, int star_off, 
 		eye_z = -eye_z;
 	}
 
-	int sx, sy;
 	if (!project_axis(eye_x, eye_z, &sx)) {
 		g_dbg_star_cull_x++;
 		return;
@@ -1708,19 +1839,19 @@ static inline void try_draw_star(int eye_x, int eye_y, int eye_z, int star_off, 
 		return;
 	}
 
-	int screen_x = halfpixelswide + sx;
+	screen_x = halfpixelswide + sx;
 	if (screen_x < 0 || screen_x >= (int)pixelswide) {
 		g_dbg_star_cull_screen_x++;
 		return;
 	}
-	int screen_y = transfm2_screenyoffset + halfpixelsdeep + sy;
+	screen_y = transfm2_screenyoffset + halfpixelsdeep + sy;
 	if (screen_y < 0 || screen_y >= (int)pixelsdeep) {
 		g_dbg_star_cull_screen_y++;
 		return;
 	}
 
-	int32_t pix_off = lineaddressVGA[displaycorner_lines + screen_y] + (int)displaycorner_columns + screen_x;
-	uint8_t* dst = vgapointer + (uint32_t)pix_off;
+	pix_off = lineaddressVGA[displaycorner_lines + screen_y] + (int)displaycorner_columns + screen_x;
+	dst = vgapointer + (uint32_t)pix_off;
 	if (*dst < deepspacecolor) {
 		g_dbg_star_cull_deepspace++;
 		return;
@@ -1729,15 +1860,15 @@ static inline void try_draw_star(int eye_x, int eye_y, int eye_z, int star_off, 
 
 	/* stars[] is stride-2: stars[2k]=index, stars[2k+1]=palette delta.
 	 * star_off is the byte offset into stars[]. */
-	uint8_t palette_delta = stars[star_off + 1];
-	uint8_t shade = (uint8_t)(starcol1 + palette_delta);
+	palette_delta = stars[star_off + 1];
+	shade = (uint8_t)(starcol1 + palette_delta);
 	if (shade > 3)
 		shade = 3;
 	*dst = (uint8_t)(shade - 4);
 
 	/* Linear-probe into starhashtable (512 dwords, mask 0x1FF). */
-	uint32_t* hash32 = (uint32_t*)starhashtable;
-	uint16_t h = (uint16_t)pix_off;
+	hash32 = (uint32_t*)starhashtable;
+	h = (uint16_t)pix_off;
 	do {
 		h = (h + 1) & 0x1FF;
 	} while (hash32[h]);
@@ -1748,6 +1879,23 @@ static inline void try_draw_star(int eye_x, int eye_y, int eye_z, int star_off, 
 
 // FUNCTION: TIE95 0x4D9F8
 void rtsvga2_drawstars(void) {
+	int32_t* new_cursor;
+	int32_t* prev_old;
+	int32_t base_x;
+	int32_t base_y;
+	int32_t base_z;
+	int32_t base_x_saved;
+	int32_t base_y_saved;
+	int32_t base_z_saved;
+	uint32_t* hash32;
+	int32_t* m;
+
+	int A_outer, A_star_off;
+	int B_outer, B_star_off;
+	int32_t base_xB, base_yB, base_zB;
+	int C_outer, C_star_off;
+	int32_t base_xC, base_yC, base_zC;
+
 	g_dbg_star_total = 0;
 	g_dbg_star_cull_z = 0;
 	g_dbg_star_cull_x = 0;
@@ -1758,8 +1906,8 @@ void rtsvga2_drawstars(void) {
 	g_dbg_star_painted = 0;
 	memset(starhashtable, 0, 2048);
 
-	int32_t* new_cursor = oldstarptr;
-	int32_t* prev_old = oldstarptr;
+	new_cursor = oldstarptr;
+	prev_old = oldstarptr;
 	oldstarptr = newstarptr;
 	newstarptr = prev_old;
 
@@ -1767,18 +1915,21 @@ void rtsvga2_drawstars(void) {
 		*oldstarptr = -1;
 
 	/* Cube-origin eye-space coords = sum of (negated) eye-basis rows shifted. */
-	int32_t base_x = (-worldeyeA1 - worldeyeB1 - worldeyeC1) >> 2;
-	int32_t base_y = (-worldeyeA2 - worldeyeB2 - worldeyeC2) >> 2;
-	int32_t base_z = (-worldeyeA3 - worldeyeB3 - worldeyeC3) >> 2;
+	base_x = (-worldeyeA1 - worldeyeB1 - worldeyeC1) >> 2;
+	base_y = (-worldeyeA2 - worldeyeB2 - worldeyeC2) >> 2;
+	base_z = (-worldeyeA3 - worldeyeB3 - worldeyeC3) >> 2;
 
-	const int32_t base_x_saved = base_x;
-	const int32_t base_y_saved = base_y;
-	const int32_t base_z_saved = base_z;
+	base_x_saved = base_x;
+	base_y_saved = base_y;
+	base_z_saved = base_z;
 
 	/* Lobe A: inner shiftA, outer shiftB. */
-	int A_outer = 0, A_star_off = 0;
+	A_outer = 0;
+	A_star_off = 0;
 	do {
-		for (int i = 0; i < 16; i += stardetaillevel) {
+		int i;
+
+		for (i = 0; i < 16; i += stardetaillevel) {
 			int s = stars[A_star_off];
 			try_draw_star(stareyex[s] + shiftA1mul[i] + base_x, stareyey[s] + shiftA2mul[i] + base_y,
 						  stareyez[s] + shiftA3mul[i] + base_z, A_star_off, &new_cursor);
@@ -1791,10 +1942,15 @@ void rtsvga2_drawstars(void) {
 	} while (A_outer < 16);
 
 	/* Lobe B: inner shiftA, outer shiftC. */
-	int B_outer = 0, B_star_off = 0;
-	int32_t base_xB = base_x_saved, base_yB = base_y_saved, base_zB = base_z_saved;
+	B_outer = 0;
+	B_star_off = 0;
+	base_xB = base_x_saved;
+	base_yB = base_y_saved;
+	base_zB = base_z_saved;
 	do {
-		for (int j = 0; j < 16; j += stardetaillevel) {
+		int j;
+
+		for (j = 0; j < 16; j += stardetaillevel) {
 			int s = stars[B_star_off];
 			try_draw_star(stareyex[s] + shiftA1mul[j] + base_xB, stareyey[s] + shiftA2mul[j] + base_yB,
 						  stareyez[s] + shiftA3mul[j] + base_zB, B_star_off, &new_cursor);
@@ -1807,10 +1963,15 @@ void rtsvga2_drawstars(void) {
 	} while (B_outer < 16);
 
 	/* Lobe C: inner shiftB, outer shiftC. */
-	int C_outer = 0, C_star_off = 0;
-	int32_t base_xC = base_x_saved, base_yC = base_y_saved, base_zC = base_z_saved;
+	C_outer = 0;
+	C_star_off = 0;
+	base_xC = base_x_saved;
+	base_yC = base_y_saved;
+	base_zC = base_z_saved;
 	do {
-		for (int k = 0; k < 16; k += stardetaillevel) {
+		int k;
+
+		for (k = 0; k < 16; k += stardetaillevel) {
 			int s = stars[C_star_off];
 			try_draw_star(stareyex[s] + shiftB1mul[k] + base_xC, stareyey[s] + shiftB2mul[k] + base_yC,
 						  stareyez[s] + shiftB3mul[k] + base_zC, C_star_off, &new_cursor);
@@ -1827,18 +1988,22 @@ void rtsvga2_drawstars(void) {
 	/* Erase pass: anything in the old list whose pixel is still a star
 	 * colour and isn't found in this frame's hashtable gets overwritten
 	 * with deepspacecolor. */
-	uint32_t* hash32 = (uint32_t*)starhashtable;
-	int32_t* m = oldstarptr;
+	hash32 = (uint32_t*)starhashtable;
+	m = oldstarptr;
 	while (*m != -1) {
 		uint32_t pix_off = (uint32_t)*m;
 		int32_t key = *m;
+		uint8_t* dst;
+
 		++m;
-		uint8_t* dst = vgapointer + pix_off;
+		dst = vgapointer + pix_off;
 		if (*dst > deepspacecolor) {
 			uint16_t h = (uint16_t)key;
 			for (;;) {
+				uint32_t v;
+
 				h = (h + 1) & 0x1FF;
-				uint32_t v = hash32[h];
+				v = hash32[h];
 				if ((int32_t)v == key)
 					break;
 				if (!v) {
@@ -1868,22 +2033,41 @@ void Tie98StarColors_Invalidate(void) {
 // FUNCTION: TIE98 0x47C7F0
 // RTSVGA2_drawstars
 void rtsvga2_drawstars_tie98(void) {
+	float steps[3][3];
+	float base[3];
+	static const int inner_axis[3] = { 0, 0, 1 };
+	static const int outer_axis[3] = { 1, 2, 2 };
+	int grid_size;
+	float reciprocal;
+	uint16_t background_color16;
+	int star_index;
+	int lobe;
+
 	if (g_flight16bppBytesPerPixel == 2 && !tie98_star_color16_initialized) {
 		const uint16_t gray_step = FrontendDisplay_GetPixelFormat555() ? 1057 : 2113;
-		for (int i = 0; i < 3072; ++i)
+		int i;
+
+		for (i = 0; i < 3072; ++i)
 			tie98_star_color16[i] = (uint16_t)(gray_step * ((math2_getrandom() & 0xF) + 8));
 		tie98_star_color16_initialized = 1;
 	} else if (g_flight16bppBytesPerPixel != 2 && !tie98_star_color8_initialized) {
-		for (int i = 0; i < 3072; ++i) {
+		int i;
+
+		for (i = 0; i < 3072; ++i) {
 			const uint8_t brightness = (uint8_t)((math2_getrandom() & 0xF) + 8);
-			const uint8_t rgb[3] = { brightness, brightness, brightness };
+			uint8_t rgb[3];
+			rgb[0] = brightness;
+			rgb[1] = brightness;
+			rgb[2] = brightness;
 			tie98_star_color8[i] = (uint8_t)rtsvga2_findNearestColor(rgb, rtsvga2_vgapalette, 0x40, 0x100);
 		}
 		tie98_star_color8_initialized = 1;
 	}
 
 	if (!tie98_star_positions_initialized) {
-		for (int i = 0; i < 3072; ++i) {
+		int i;
+
+		for (i = 0; i < 3072; ++i) {
 			uint16_t index;
 			do {
 				index = (uint16_t)math2_getrandom() & 0x7F;
@@ -1893,37 +2077,38 @@ void rtsvga2_drawstars_tie98(void) {
 		tie98_star_positions_initialized = 1;
 	}
 
-	const int grid_size = 32 / stardetaillevel;
-	const float reciprocal = 1.0f / (float)grid_size;
-	const float steps[3][3] = {
-		{ (float)(worldeyeA1 >> 1) * reciprocal, (float)(worldeyeA2 >> 1) * reciprocal,
-		  (float)(worldeyeA3 >> 1) * reciprocal },
-		{ (float)(worldeyeB1 >> 1) * reciprocal, (float)(worldeyeB2 >> 1) * reciprocal,
-		  (float)(worldeyeB3 >> 1) * reciprocal },
-		{ (float)(worldeyeC1 >> 1) * reciprocal, (float)(worldeyeC2 >> 1) * reciprocal,
-		  (float)(worldeyeC3 >> 1) * reciprocal },
-	};
-	const float base[3] = {
-		(float)(-(worldeyeA1 + worldeyeB1 + worldeyeC1) >> 2),
-		(float)(-(worldeyeA2 + worldeyeB2 + worldeyeC2) >> 2),
-		(float)(-(worldeyeA3 + worldeyeB3 + worldeyeC3) >> 2),
-	};
-	const int inner_axis[3] = { 0, 0, 1 };
-	const int outer_axis[3] = { 1, 2, 2 };
-	const uint16_t background_color16 = g_flightTextPalette[deepspacecolor];
-	int star_index = 0;
+	grid_size = 32 / stardetaillevel;
+	reciprocal = 1.0f / (float)grid_size;
+	steps[0][0] = (float)(worldeyeA1 >> 1) * reciprocal;
+	steps[0][1] = (float)(worldeyeA2 >> 1) * reciprocal;
+	steps[0][2] = (float)(worldeyeA3 >> 1) * reciprocal;
+	steps[1][0] = (float)(worldeyeB1 >> 1) * reciprocal;
+	steps[1][1] = (float)(worldeyeB2 >> 1) * reciprocal;
+	steps[1][2] = (float)(worldeyeB3 >> 1) * reciprocal;
+	steps[2][0] = (float)(worldeyeC1 >> 1) * reciprocal;
+	steps[2][1] = (float)(worldeyeC2 >> 1) * reciprocal;
+	steps[2][2] = (float)(worldeyeC3 >> 1) * reciprocal;
+	base[0] = (float)(-(worldeyeA1 + worldeyeB1 + worldeyeC1) >> 2);
+	base[1] = (float)(-(worldeyeA2 + worldeyeB2 + worldeyeC2) >> 2);
+	base[2] = (float)(-(worldeyeA3 + worldeyeB3 + worldeyeC3) >> 2);
+	background_color16 = g_flightTextPalette[deepspacecolor];
+	star_index = 0;
 
-	for (int lobe = 0; lobe < 3; ++lobe) {
+	for (lobe = 0; lobe < 3; ++lobe) {
 		float row_x = base[0];
 		float row_y = base[1];
 		float row_z = base[2];
 		const float* inner_step = steps[inner_axis[lobe]];
 		const float* outer_step = steps[outer_axis[lobe]];
-		for (int row = 0; row < grid_size; ++row) {
+		int row;
+
+		for (row = 0; row < grid_size; ++row) {
 			float eye_x = row_x;
 			float eye_y = row_y;
 			float eye_z = row_z;
-			for (int column = 0; column < grid_size; ++column, ++star_index) {
+			int column;
+
+			for (column = 0; column < grid_size; ++column, ++star_index) {
 				const uint8_t position_index = tie98_star_position_index[star_index];
 				float x = (float)stareyex[position_index] + eye_x;
 				float y = (float)stareyey[position_index] + eye_y;
@@ -1969,11 +2154,15 @@ void rtsvga2_drawstars_tie98(void) {
 /* Write the framebuffer and active palette as PCX. */
 static int write_pcx(const char* path, const uint8_t* img, uint16_t width, uint16_t height,
 					 const uint8_t* pal_768) {
+	uint8_t header[128];
 	TieFile* f = TieStorage_Open(TIE_FILE_ROOT_USER, path, "wb");
+	int i;
+	uint16_t bpl;
+	uint16_t row;
+
 	if (!f)
 		return 0;
 
-	uint8_t header[128];
 	memset(header, 0, sizeof header);
 	header[0] = 0x0A; /* ZSoft PCX */
 	header[1] = 5;    /* version */
@@ -1989,11 +2178,11 @@ static int write_pcx(const char* path, const uint8_t* img, uint16_t width, uint1
 	header[14] = (uint8_t)(height & 0xFF);
 	header[15] = (uint8_t)((height >> 8) & 0xFF);
 	/* 48-byte 16-color palette placeholder: retail writes 0, 1, .. 47. */
-	for (int i = 0; i < 48; ++i)
+	for (i = 0; i < 48; ++i)
 		header[16 + i] = (uint8_t)i;
 	header[64] = 0; /* reserved */
 	header[65] = 1; /* 1 plane */
-	uint16_t bpl = (uint16_t)(width + (width & 1));
+	bpl = (uint16_t)(width + (width & 1));
 	header[66] = (uint8_t)(bpl & 0xFF);
 	header[67] = (uint8_t)((bpl >> 8) & 0xFF);
 	/* Remainder (palette info + padding) = 0. */
@@ -2003,7 +2192,7 @@ static int write_pcx(const char* path, const uint8_t* img, uint16_t width, uint1
 	}
 
 	/* RLE-encode each scanline and write. */
-	for (uint16_t row = 0; row < height; ++row) {
+	for (row = 0; row < height; ++row) {
 		const uint8_t* line = img + (size_t)row * width;
 		uint16_t x = 0;
 		while (x < bpl) {
@@ -2022,7 +2211,7 @@ static int write_pcx(const char* path, const uint8_t* img, uint16_t width, uint1
 
 	/* 256-color palette trailer: marker 0x0C then 768 bytes RGB (8-bit). */
 	TieStorage_Putc(0x0C, f);
-	for (int i = 0; i < 768; ++i)
+	for (i = 0; i < 768; ++i)
 		TieStorage_Putc((uint8_t)(pal_768[i] << 2), f); /* 6-bit DAC -> 8-bit */
 
 	TieStorage_Close(f);
@@ -2031,20 +2220,24 @@ static int write_pcx(const char* path, const uint8_t* img, uint16_t width, uint1
 
 // FUNCTION: TIE95 0x4E670
 int rtsvga2_takeScreenshot(void) {
+	char path[64];
+	size_t sz;
+	uint8_t* buf;
+	int ok;
+
 	return 0;
 
 	if (!vgapointer || screenXRes <= 0 || screenYRes <= 0)
 		return 0;
-	size_t sz = (size_t)screenXRes * (size_t)screenYRes;
-	uint8_t* buf = (uint8_t*)malloc(sz);
+	sz = (size_t)screenXRes * (size_t)screenYRes;
+	buf = (uint8_t*)malloc(sz);
 	if (!buf)
 		return 0;
 
 	rtsvga2_saveboxVGA(buf, 0, 0, (uint16_t)screenXRes, (uint16_t)screenYRes);
 
-	char path[64];
 	snprintf(path, sizeof path, "screenshots/screen%d.pcx", screenshot_seq++);
-	int ok = write_pcx(path, buf, (uint16_t)screenXRes, (uint16_t)screenYRes, rtsvga2_vgapalette);
+	ok = write_pcx(path, buf, (uint16_t)screenXRes, (uint16_t)screenYRes, rtsvga2_vgapalette);
 	free(buf);
 	return ok;
 }

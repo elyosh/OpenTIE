@@ -1,10 +1,14 @@
-#ifndef __FVIEW_H__
-#define __FVIEW_H__
-
-#include <stdint.h>
+#ifndef TIE_FVIEW_H
+#define TIE_FVIEW_H
 
 /* Full definition in tie.h — include it for FlightObject */
 #include "tie/tie.h"
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Camera view matrix from Euler angles with side/up offsets */
 void fview_newcalcview(int16_t roll, int16_t heading, int16_t pitch, int16_t bank, int16_t side_angle,
@@ -88,5 +92,9 @@ extern int32_t fview_sfoiltemplightX, fview_sfoiltemplightY, fview_sfoiltempligh
 
 /* Saved objecteye position (Q15) */
 extern int32_t fview_sfoiltempx, fview_sfoiltempy, fview_sfoiltempz;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

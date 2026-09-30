@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <string.h>
-
 #include "tie/armship.h"
 #include "tie/player.h"
 #include "tie/shade.h"
@@ -8,7 +5,6 @@
 #include "tie/shipext.h"
 #include "tie/soundext.h"
 #include "tie/textext.h"
-#include <landru/task.h>
 
 #include "landru/actcust.h"
 #include "landru/actor.h"
@@ -26,31 +22,54 @@
 #include "landru/view.h"
 #include "landru/viewadd.h"
 
+#include <stdint.h>
+#include <string.h>
+
 /* ======================================================================
  * Static data
  * ====================================================================== */
 
 /* Torpedo type → actor state mapping (indexed by torp_used - 1) */
+// GLOBAL: TIE95 0xce730
+// GLOBAL: TIE98 0x4df190
 static const int16_t torp_state[7] = { 2, 3, 4, 0, 5, 1, 6 };
 
+// GLOBAL: TIE95 0xce73e
+// GLOBAL: TIE98 0x4df1a0
 static const char armship_str[] = "launch.lfd";
 
 /* ======================================================================
  * Static BSS globals
  * ====================================================================== */
 
+// GLOBAL: TIE95 0xf59a8
+// GLOBAL: TIE98 0x4fa4a8
 static Input* button_input[6];
+// GLOBAL: TIE95 0xf59c0
+// GLOBAL: TIE98 0x4fa4a0
 static Input* world_input;
+// GLOBAL: TIE95 0xf59c4
+// GLOBAL: TIE98 0x4fa490
 static Actor* torp_name_actor;
+// GLOBAL: TIE95 0xf59c8
+// GLOBAL: TIE98 0x4fa494
 static Actor* beam_name_actor;
+// GLOBAL: TIE95 0xf59cc
+// GLOBAL: TIE98 0x4fa498
 static Film* armship_film;
+// GLOBAL: TIE95 0xf59d0
+// GLOBAL: TIE98 0x4fa49c
 static ResFile* armship_file;
+// GLOBAL: TIE95 0xf59d4
+// GLOBAL: TIE98 0x4fa4a4
 static Input* info_input;
 
 /* ======================================================================
  * end_ArmShip_View — cursor show callback
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6ee3c
+// FUNCTION: TIE98 0x402a50
 static void end_ArmShip_View(int32_t refresh) {
 	if (refresh)
 		return;
@@ -63,6 +82,8 @@ static void end_ArmShip_View(int32_t refresh) {
  * user_ArmShip — actor callback for weapon selector highlights
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6f208
+// FUNCTION: TIE98 0x402e80
 static void user_ArmShip(Actor* actor, int32_t time) {
 	int16_t id = actor->var1;
 	(void)time;
@@ -76,7 +97,8 @@ static void user_ArmShip(Actor* actor, int32_t time) {
 			return;
 		case 3: { /* Button hover highlight (beam/torp buttons 0-3) */
 			int16_t hover = 0;
-			for (int16_t i = 0; i < 4; i++) {
+			int16_t i;
+			for (i = 0; i < 4; i++) {
 				if (button_input[i] && xinpattr_Is_Input_Flag1(button_input[i])) {
 					hover = i + 1;
 					break;
@@ -92,7 +114,8 @@ static void user_ArmShip(Actor* actor, int32_t time) {
 		}
 		case 6: { /* Enter/exit button hover (buttons 4-5) */
 			int16_t hover = 0;
-			for (int16_t i = 0; i < 2; i++) {
+			int16_t i;
+			for (i = 0; i < 2; i++) {
 				if (button_input[i + 4] && xinpattr_Is_Input_Flag1(button_input[i + 4])) {
 					hover = i + 1;
 					break;
@@ -113,8 +136,10 @@ static void user_ArmShip(Actor* actor, int32_t time) {
  * draw_ArmShip — actor draw callback for weapon name labels
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6f340
+// FUNCTION: TIE98 0x402f80
 static int16_t draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
-	char line1[16], line2[16];
+	char line1[32], line2[16];
 	Rect dst;
 	(void)clip_r;
 	(void)x;
@@ -189,13 +214,16 @@ static int16_t draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int16_t x, 
  * film_ArmShip_Callback — conditional actor visibility
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6ee68
+// FUNCTION: TIE98 0x402a70
 static int16_t film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
+	Actor* actor;
 	/* Only process actor rewind events (type 3) */
 	if ((int16_t)film_obj->id != 3)
 		return 0;
 
 	xfilm_Rewind_Actor_Film(film, film_obj, (char*)film_obj + sizeof(FilmObject));
-	Actor* actor = (Actor*)film_obj->object;
+	actor = (Actor*)film_obj->object;
 
 	switch (actor->var1) {
 		case 1: /* Beam selector — skip if no beam equipped */
@@ -224,14 +252,16 @@ static int16_t film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
  * iupdate_ArmShip — click tracking for weapon buttons
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6eee8
+// FUNCTION: TIE98 0x402b30
 static int16_t iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
 							   int16_t x, int16_t y) {
+	uint8_t button = 0;
 	(void)clip_r;
 
 	if (key)
 		return 0;
 
-	uint8_t button = 0;
 	if (left)
 		button = left;
 	if (right)
@@ -258,6 +288,8 @@ static int16_t iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int16_t key,
  * iuser_ArmShip — weapon button actions
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6efb4
+// FUNCTION: TIE98 0x402c00
 static void iuser_ArmShip(Input* input, int32_t time) {
 	(void)time;
 
@@ -287,8 +319,8 @@ static void iuser_ArmShip(Input* input, int32_t time) {
 			break;
 		case 6: { /* Exit */
 			if (shellext_Get_Last_Scene() == SCENE_DEBRIEF) {
-				xerror_Set_Landru_Exit(SCENE_DEBRIEF);
 				char name[36];
+				xerror_Set_Landru_Exit(SCENE_DEBRIEF);
 				shipext_Get_Pilot_Name(name, sizeof(name));
 				shipext_Load_Pilot(name);
 			} else {
@@ -303,6 +335,8 @@ static void iuser_ArmShip(Input* input, int32_t time) {
  * iuser_Arm_Info — info panel init callback
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6f0a0
+// FUNCTION: TIE98 0x402d20
 static void iuser_Arm_Info(Input* input, int32_t time) {
 	(void)input;
 	if (!time)
@@ -313,9 +347,12 @@ static void iuser_Arm_Info(Input* input, int32_t time) {
  * idraw_Arm_Info — weapon description text panel
  * ====================================================================== */
 
+// FUNCTION: TIE95 0x6f0ac
+// FUNCTION: TIE98 0x402d30
 static void idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	char text_buf[80];
 	Rect dst;
+	int16_t i;
 
 	(void)input;
 	(void)clip_r;
@@ -330,7 +367,7 @@ static void idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 		shade_Draw_Talk_Shade_Rect(&dst);
 		dst.bottom = dst.top + 12;
 		dst.top += 2;
-		for (int16_t i = 0; i < 3; i++) {
+		for (i = 0; i < 3; i++) {
 			int16_t beam = player_Get_Beam_Used();
 			textext_Get_Weapon_Select_Text(text_buf, 3 * (beam + 6) + i);
 			xfont_Print_Centered_Text(text_buf, &dst, 15, 0);
@@ -345,7 +382,7 @@ static void idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 		shade_Draw_Talk_Shade_Rect(&dst);
 		dst.bottom = dst.top + 12;
 		dst.top += 2;
-		for (int16_t i = 0; i < 3; i++) {
+		for (i = 0; i < 3; i++) {
 			int16_t torp = player_Get_Torp_Used();
 			textext_Get_Weapon_Select_Text(text_buf, 3 * (torp - 1) + i);
 			xfont_Print_Centered_Text(text_buf, &dst, 15, 0);
@@ -358,124 +395,110 @@ static void idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
  * armship_ArmShip — main entry point
  * ====================================================================== */
 
-typedef enum {
-	ARMSHIP_PHASE_BEGIN = 0,
-	ARMSHIP_PHASE_CLEANUP = 1,
-} ArmShipPhase;
+/* The runtime task owns the modal-view wait and calls CloseScene on exit. */
+int16_t armship_OpenScene(SceneHeadStruct* scene_head, ResFile** launch_resource) {
+	Rect frame;
+	char name[32];
+	int16_t i;
 
-typedef struct ArmShipTask {
-	SceneHeadStruct* scene_head;
-	ResFile* launch_res;
-	ArmShipPhase phase;
-} ArmShipTask;
+	xio_Set_Mouse_Position(44, 166);
+	armship_file = shellext_Open_Empire_Resource(armship_str);
+	if (!armship_file)
+		return 0;
+	*launch_resource = shipext_Open_Launch_Resource();
+	if (!*launch_resource)
+		return 0;
 
-static LandruTaskStepResult armship_task_step(void* self) {
-	ArmShipTask* t = (ArmShipTask*)self;
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
 
-	if (t->phase == ARMSHIP_PHASE_BEGIN) {
-		Rect frame;
-		char name[32];
-		int16_t i;
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
+	shipext_Get_Weapon_Select_Name(name);
+	armship_film = xfilm_Res_Callback_Film(name, &frame, 0, 0, 0, film_ArmShip_Callback);
+	if (!armship_film)
+		return 0;
+	xfilm_Set_Film_Def_Palette(armship_film, scene_head->def_palette);
 
-		xio_Set_Mouse_Position(44, 166);
-		armship_file = shellext_Open_Empire_Resource(armship_str);
-		t->launch_res = (ResFile*)(uintptr_t)shipext_Open_Launch_Resource();
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
+	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
+	if (!world_input)
+		return 0;
 
-		xviewadd_Clear_View();
-		xview_Disable_All_View_Erase();
-
-		xrect_Set_Rect(&frame, 0, 0, 320, 200);
-		shipext_Get_Weapon_Select_Name(name);
-		armship_film = xfilm_Res_Callback_Film(name, &frame, 0, 0, 0, film_ArmShip_Callback);
-		xfilm_Set_Film_Def_Palette(armship_film, t->scene_head->def_palette);
-
-		xrect_Set_Rect(&frame, 0, 0, 320, 200);
-		world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
-
-		/* Create 6 weapon buttons */
-		for (i = 0; i < 6; i++) {
-			switch (i) {
-				case 0:
-					xrect_Set_Rect(&frame, 13, 66, 46, 78);
-					break;
-				case 1:
-					xrect_Set_Rect(&frame, 46, 66, 79, 78);
-					break;
-				case 2:
-					xrect_Set_Rect(&frame, 13, 82, 46, 94);
-					break;
-				case 3:
-					xrect_Set_Rect(&frame, 46, 82, 79, 94);
-					break;
-				case 4:
-					xrect_Set_Rect(&frame, 2, 157, 89, 172);
-					break;
-				case 5:
-					xrect_Set_Rect(&frame, 2, 174, 89, 189);
-					break;
-			}
-
-			/* Only create beam buttons (0-1) if beam is equipped */
-			if (player_Get_Beam_Used() || i >= 2) {
-				button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
-				xinpattr_Set_Input_Update_Function(button_input[i], iupdate_ArmShip);
-				xinpattr_Set_Input_User_Function(button_input[i], iuser_ArmShip);
-				button_input[i]->id = i + 1;
-				button_input[i]->mouseUsage = downMoveUpInput;
-			} else {
-				button_input[i] = NULL;
-			}
+	/* Create 6 weapon buttons */
+	for (i = 0; i < 6; i++) {
+		switch (i) {
+			case 0:
+				xrect_Set_Rect(&frame, 13, 66, 46, 78);
+				break;
+			case 1:
+				xrect_Set_Rect(&frame, 46, 66, 79, 78);
+				break;
+			case 2:
+				xrect_Set_Rect(&frame, 13, 82, 46, 94);
+				break;
+			case 3:
+				xrect_Set_Rect(&frame, 46, 82, 79, 94);
+				break;
+			case 4:
+				xrect_Set_Rect(&frame, 2, 157, 89, 172);
+				break;
+			case 5:
+				xrect_Set_Rect(&frame, 2, 174, 89, 189);
+				break;
 		}
 
-		/* Info panel for weapon description text */
-		xrect_Set_Rect(&frame, 92, 12, 260, 152);
-		info_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
-		xinpattr_Set_Input_User_Function(info_input, iuser_Arm_Info);
-		xinpattr_Set_Input_Draw_Function(info_input, idraw_Arm_Info);
-		xinpattr_Refreshable_Input(info_input);
-
-		/* Beam name label actor */
-		xrect_Set_Rect(&frame, 12, 45, 81, 58);
-		beam_name_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
-		xactor_Set_Actor_Draw_Function(beam_name_actor, draw_ArmShip);
-		beam_name_actor->id = 10;
-
-		/* Torpedo name label actor */
-		xrect_Set_Rect(&frame, 12, 101, 81, 114);
-		torp_name_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
-		xactor_Set_Actor_Draw_Function(torp_name_actor, draw_ArmShip);
-		torp_name_actor->id = 11;
-
-		/* Push the modal view task */
-		xview_Set_View_Update_Function(end_ArmShip_View);
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = ARMSHIP_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+		/* Only create beam buttons (0-1) if beam is equipped */
+		if (player_Get_Beam_Used() || i >= 2) {
+			button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
+			if (!button_input[i])
+				return 0;
+			xinpattr_Set_Input_Update_Function(button_input[i], iupdate_ArmShip);
+			xinpattr_Set_Input_User_Function(button_input[i], iuser_ArmShip);
+			button_input[i]->id = i + 1;
+			button_input[i]->mouseUsage = downMoveUpInput;
+		} else {
+			button_input[i] = NULL;
+		}
 	}
 
-	/* CLEANUP */
+	/* Info panel for weapon description text */
+	xrect_Set_Rect(&frame, 92, 12, 260, 152);
+	info_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
+	if (!info_input)
+		return 0;
+	xinpattr_Set_Input_User_Function(info_input, iuser_Arm_Info);
+	xinpattr_Set_Input_Draw_Function(info_input, idraw_Arm_Info);
+	xinpattr_Refreshable_Input(info_input);
+
+	/* Beam name label actor */
+	xrect_Set_Rect(&frame, 12, 45, 81, 58);
+	beam_name_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
+	if (!beam_name_actor)
+		return 0;
+	xactor_Set_Actor_Draw_Function(beam_name_actor, draw_ArmShip);
+	beam_name_actor->id = 10;
+
+	/* Torpedo name label actor */
+	xrect_Set_Rect(&frame, 12, 101, 81, 114);
+	torp_name_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
+	if (!torp_name_actor)
+		return 0;
+	xactor_Set_Actor_Draw_Function(torp_name_actor, draw_ArmShip);
+	torp_name_actor->id = 11;
+
+	xview_Set_View_Update_Function(end_ArmShip_View);
+	return 1;
+}
+
+void armship_CloseScene(ResFile* launch_resource) {
 	xinpcall_Clear_Active_Input();
 	xview_Clear_View_Update_Function();
 	xview_Enable_All_View_Erase();
-
 	if (xcursor_Is_Cursor_Visible())
 		xcursor_Hide_Cursor();
-
-	xres_Close_Resource(t->launch_res);
-	xres_Close_Resource(armship_file);
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static const LandruTaskVtable armship_task_vt = {
-	.step = armship_task_step,
-};
-
-void armship_Push_ArmShip_Task(SceneHeadStruct* scene_head) {
-	ArmShipTask* t = (ArmShipTask*)landru_task_push(&armship_task_vt);
-	if (!t)
-		return;
-	t->scene_head = scene_head;
-	t->launch_res = NULL;
-	t->phase = ARMSHIP_PHASE_BEGIN;
+	if (launch_resource)
+		xres_Close_Resource(launch_resource);
+	if (armship_file)
+		xres_Close_Resource(armship_file);
+	armship_file = NULL;
 }

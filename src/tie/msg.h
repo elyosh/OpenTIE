@@ -1,11 +1,20 @@
-#ifndef __MSG_H__
-#define __MSG_H__
+#ifndef TIE_MSG_H
+#define TIE_MSG_H
 
 #include "tie/msg_templates.h"
 #include "tie/tie.h"
+
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 /*
  * MsgHistoryEntry — one message slot (in the 10-entry queue or the
  * 300-slot history ring). 82 bytes.
@@ -32,7 +41,11 @@ typedef struct MsgHistoryEntry {
 							*        For msg_type==1, body[1] may be a '0'..'3' sub-side
 							*        selector that's also consumed before emission. */
 } MsgHistoryEntry;         /* 82 bytes */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 #define MSG_QUEUE_SLOTS 11 /* slot 0 = current, slots 1..9 pending, slot 10 = transient overflow */
 #define MSG_HISTORY_SLOTS 300
@@ -147,5 +160,9 @@ extern uint16_t currentmessagesave; /* 0xE3B1E - saved template_idx for msg_mess
  * display. Retail: word_D502C at 0xD502C. */
 extern uint16_t pending_voice_id;
 extern uint8_t messagecnt; /* 0xE3B20 - queue fill level (0..9) */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

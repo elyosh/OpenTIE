@@ -8,9 +8,6 @@
  * 9 functions. Recovered from the TIE95 and TIE98 executables.
  */
 
-#include <stdlib.h>
-#include <string.h>
-
 #include "tie/debrief.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
@@ -18,9 +15,9 @@
 #include "tie/textext.h"
 #include "tie/tie.h"
 #include "tie_runtime/runtime/profile.h"
-#include "tie_runtime/snapshot/snapshot.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/snapshot/snapshot_internal.h"
-#include <landru/task.h>
+#endif
 
 #include "landru/actdelt.h"
 #include "landru/actor.h"
@@ -36,6 +33,9 @@
 #include "landru/surface.h"
 #include "landru/view.h"
 #include "landru/viewadd.h"
+
+#include <stdlib.h>
+#include <string.h>
 
 /* ---- Edition data ---- */
 
@@ -59,40 +59,50 @@ typedef struct DebriefSpec {
 
 /* DATA: TIE95 DEBRIEF_Debrief 0x6FE60; TIE98 0x4155F0. */
 static const DebriefSpec debrief_specs[] = {
-    {
-        .surface_set = LANDRU_SURFACE_VGA,
-        .actor_variants = DEBRIEF_ACTORS_VGA,
-        .width = 320, .height = 200,
-        .success_mouse_x = 180, .success_mouse_y = 100,
-        .talk_mouse_x = 280, .talk_mouse_y = 120,
-        .failure_mouse_x = 74, .failure_mouse_y = 100,
-        .input_bounds = {
-            {133, 56, 193, 107},
-            {85, 35, 133, 150},
-            {248, 51, 290, 128},
-            {0, 0, 70, 200},
-        },
-        .title_font = 0,
-        .officer_side_max_state = 2,
-        .title_variants = true,
-    },
-    {
-        .surface_set = LANDRU_SURFACE_SVGA,
-        .actor_variants = DEBRIEF_ACTORS_SVGA,
-        .width = 640, .height = 480,
-        .success_mouse_x = 360, .success_mouse_y = 200,
-        .talk_mouse_x = 540, .talk_mouse_y = 240,
-        .failure_mouse_x = 108, .failure_mouse_y = 200,
-        .input_bounds = {
-            {298, 129, 420, 288},
-            {226, 102, 296, 322},
-            {500, 134, 572, 316},
-            {56, 26, 145, 345},
-        },
-        .title_font = 2,
-        .officer_side_max_state = 3,
-        .title_variants = false,
-    },
+	{
+		/* surface_set */ LANDRU_SURFACE_VGA,
+		/* actor_variants */ DEBRIEF_ACTORS_VGA,
+		/* width */ 320,
+		/* height */ 200,
+		/* success_mouse_x */ 180,
+		/* success_mouse_y */ 100,
+		/* talk_mouse_x */ 280,
+		/* talk_mouse_y */ 120,
+		/* failure_mouse_x */ 74,
+		/* failure_mouse_y */ 100,
+		/* input_bounds */
+		{
+			{ 133, 56, 193, 107 },
+			{ 85, 35, 133, 150 },
+			{ 248, 51, 290, 128 },
+			{ 0, 0, 70, 200 },
+		},
+		/* title_font */ 0,
+		/* officer_side_max_state */ 2,
+		/* title_variants */ true,
+	},
+	{
+		/* surface_set */ LANDRU_SURFACE_SVGA,
+		/* actor_variants */ DEBRIEF_ACTORS_SVGA,
+		/* width */ 640,
+		/* height */ 480,
+		/* success_mouse_x */ 360,
+		/* success_mouse_y */ 200,
+		/* talk_mouse_x */ 540,
+		/* talk_mouse_y */ 240,
+		/* failure_mouse_x */ 108,
+		/* failure_mouse_y */ 200,
+		/* input_bounds */
+		{
+			{ 298, 129, 420, 288 },
+			{ 226, 102, 296, 322 },
+			{ 500, 134, 572, 316 },
+			{ 56, 26, 145, 345 },
+		},
+		/* title_font */ 2,
+		/* officer_side_max_state */ 3,
+		/* title_variants */ false,
+	},
 };
 
 static const DebriefSpec* active_spec;
@@ -137,11 +147,13 @@ static void end_View(int32_t frame_num) {
 // FUNCTION: TIE95 0x7012C
 // FUNCTION: TIE98 0x415940
 static int16_t film_Callback(Film* film, FilmObject* film_object) {
+	Actor* actor;
+
 	if (film_object->id != 3) /* type_code: 3 = actor */
 		return 0;
 
 	xfilm_Rewind_Actor_Film(film, film_object, (void*)((char*)film_object + sizeof(FilmObject)));
-	Actor* actor = (Actor*)film_object->object;
+	actor = (Actor*)film_object->object;
 
 	switch (actor->var1) {
 		case 1: /* Background */
@@ -226,6 +238,8 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 // FUNCTION: TIE98 0x415AA0
 static int16_t iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 							   uint8_t right, int16_t mouse_x, int16_t mouse_y) {
+	int16_t widget_id;
+
 	(void)bounds;
 	(void)clip;
 	(void)mouse_x;
@@ -235,7 +249,7 @@ static int16_t iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, int16_t k
 		return 0;
 
 	/* Open the door actor for brief (id=0) and fly-again (id=3) */
-	int16_t widget_id = input->id;
+	widget_id = input->id;
 	if (widget_id == 0)
 		door_actors[0]->var1 = 1;
 	else if (widget_id == 3)
@@ -281,11 +295,13 @@ static int16_t iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, int16_t k
 // FUNCTION: TIE95 0x703B4
 // FUNCTION: TIE98 0x415B90
 static void iuser_Debrief(Input* input, int32_t time) {
+	int16_t scene;
+
 	(void)time;
 	if (!input->var1)
 		return; /* exit_pending */
 
-	int16_t scene = input->var2; /* exit_code */
+	scene = input->var2; /* exit_code */
 
 	if (scene == SCENE_BRIEF) {
 		/* Tour battle — commit and check if done */
@@ -331,19 +347,20 @@ static void user_Title(Actor* actor, int32_t time) {
 // FUNCTION: TIE98 0x415CB0
 static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 						  int16_t refresh) {
+	int16_t offx, offy;
+	Rect r;
+	char label[32];
+	TIEText text_id;
+
 	if (!refresh)
 		return 0;
 
 	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
 
-	int16_t offx, offy;
 	xactor_Get_Actor_Offset(actor, &offx, &offy);
 
-	Rect r;
 	xrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
 
-	char label[32];
-	TIEText text_id;
 	switch (actor->var2) {
 		case 0:
 			text_id = shipext_Is_Tour_Battle_End() ? txtBriefMainMenu : txtDebriefBrief;
@@ -407,12 +424,14 @@ static void user_Door(Actor* actor, int32_t time) {
 // FUNCTION: TIE95 0x7063C
 // FUNCTION: TIE98 0x415E70
 static void user_Officer(Actor* actor, int32_t time) {
+	int16_t char_id, anim_state, zplane;
+
 	if (!time) {
 		actor->var2 = 0;
 		actor->var1 = 0;
 	}
 
-	int16_t char_id = actor->id;
+	char_id = actor->id;
 
 	switch (char_id) {
 		case 0: {                      /* Officer facing */
@@ -425,13 +444,12 @@ static void user_Officer(Actor* actor, int32_t time) {
 					actor->var1--;
 			}
 
-			int16_t anim_state;
 			if (actor->var1 <= 5)
 				anim_state = 0;
 			else
 				anim_state = actor->var1 / 2 - 2;
 
-			int16_t zplane = anim_state ? 15 : 30;
+			zplane = anim_state ? 15 : 30;
 			xactor_Set_Actor_ZPlane(actor, zplane);
 			xactor_Set_Actor_State(actor, anim_state, 0);
 			break;
@@ -446,7 +464,6 @@ static void user_Officer(Actor* actor, int32_t time) {
 					actor->var1--;
 			}
 
-			int16_t anim_state;
 			if (actor->var1 <= 5)
 				anim_state = 0;
 			else
@@ -467,7 +484,6 @@ static void user_Officer(Actor* actor, int32_t time) {
 					actor->var1--;
 			}
 
-			int16_t anim_state;
 			if (actor->var1 >= 4)
 				anim_state = 3;
 			else
@@ -499,135 +515,100 @@ static void user_Officer(Actor* actor, int32_t time) {
  * Entry point
  * ================================================================ */
 
-typedef enum {
-	DEBRIEF_PHASE_BEGIN = 0,
-	DEBRIEF_PHASE_CLEANUP = 1,
-} DebriefPhase;
+ResFile* debrief_OpenScene(SceneHeadStruct* scene_head, bool svga) {
+	Rect frame;
+	ResFile* resource;
+	int16_t mouse_x, mouse_y;
+	const int16_t* bounds;
 
-typedef struct DebriefTask {
-	SceneHeadStruct* scene_head;
-	ResFile* res_file;
-	DebriefPhase phase;
-	const DebriefSpec* spec;
-} DebriefTask;
-
-/* PORT: asynchronous adaptation of TIE95 DEBRIEF_Debrief (0x6FE60)
- * and TIE98 DEBRIEF_Debrief (0x4155F0). */
-static LandruTaskStepResult debrief_task_step(void* self) {
-	DebriefTask* t = (DebriefTask*)self;
-
-	if (t->phase == DEBRIEF_PHASE_BEGIN) {
-		Rect frame;
-		const int16_t* bounds;
-
-		active_spec = t->spec;
-		if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-			(void)xsurface_Select_Surface_Set(active_spec->surface_set);
-			xview_Init_View(xview_Get_Current_View());
-		}
-
-		/* Position mouse based on outcome and officer type */
-		int16_t mouse_x, mouse_y;
-		if (shipext_Is_Mission_Success()) {
-			if (shellext_Get_Last_Scene() != SCENE_TALK_DEBRIEF_OFFICER ||
-				shipext_Get_Mission_Officer() == 1) {
-				mouse_x = active_spec->success_mouse_x;
-				mouse_y = active_spec->success_mouse_y;
-			} else {
-				mouse_x = active_spec->talk_mouse_x;
-				mouse_y = active_spec->talk_mouse_y;
-			}
-		} else {
-			mouse_x = active_spec->failure_mouse_x;
-			mouse_y = active_spec->failure_mouse_y;
-		}
-		xio_Set_Mouse_Position(mouse_x, mouse_y);
-
-		/* Load resources */
-		t->res_file = shellext_Open_Empire_Resource("debrief.lfd");
-		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
-
-		debrief_film = xfilm_Res_Callback_Film("debrief", &frame, 0, 0, 0, film_Callback);
-		TieSnapshotBuilder_SetActiveFilm("DEBRIEF", "debrief");
-		xfilm_Set_Film_Def_Palette(debrief_film, t->scene_head->def_palette);
-
-		/* Create XINPUT widgets */
-		parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
-
-		/* Brief door (id=0) */
-		bounds = active_spec->input_bounds[0];
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		brief_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(brief_input, iupdate_Debrief);
-		xinpattr_Set_Input_User_Function(brief_input, iuser_Debrief);
-		brief_input->mouseUsage = allInput;
-		brief_input->id = 0;
-
-		/* Officer door (id=1) — skip if priest only */
-		if (shipext_Get_Mission_Officer() != 2) {
-			bounds = active_spec->input_bounds[1];
-			xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-			officer = xinput_Alloc_Input(parent, &frame, 0, 0);
-			xinpattr_Set_Input_Update_Function(officer, iupdate_Debrief);
-			xinpattr_Set_Input_User_Function(officer, iuser_Debrief);
-			officer->mouseUsage = allInput;
-			officer->id = 1;
-		}
-
-		/* Priest door (id=2) — skip if officer only */
-		if (shipext_Get_Mission_Officer() != 1) {
-			bounds = active_spec->input_bounds[2];
-			xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-			priest = xinput_Alloc_Input(parent, &frame, 0, 0);
-			xinpattr_Set_Input_Update_Function(priest, iupdate_Debrief);
-			xinpattr_Set_Input_User_Function(priest, iuser_Debrief);
-			priest->mouseUsage = allInput;
-			priest->id = 2;
-		}
-
-		/* Fly-again area (id=3) */
-		bounds = active_spec->input_bounds[3];
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		flyagain = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(flyagain, iupdate_Debrief);
-		xinpattr_Set_Input_User_Function(flyagain, iuser_Debrief);
-		flyagain->mouseUsage = allInput;
-		flyagain->id = 3;
-
-		/* Push the modal view task */
-		xview_Set_View_Update_Function(end_View);
-		xviewadd_Clear_View();
-		xview_Disable_All_View_Erase();
-
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = DEBRIEF_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+	active_spec = &debrief_specs[svga ? 1 : 0];
+	if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
+		(void)xsurface_Select_Surface_Set(active_spec->surface_set);
+		xview_Init_View(xview_Get_Current_View());
 	}
 
-	/* CLEANUP */
+	/* Position mouse based on outcome and officer type */
+	if (shipext_Is_Mission_Success()) {
+		if (shellext_Get_Last_Scene() != SCENE_TALK_DEBRIEF_OFFICER || shipext_Get_Mission_Officer() == 1) {
+			mouse_x = active_spec->success_mouse_x;
+			mouse_y = active_spec->success_mouse_y;
+		} else {
+			mouse_x = active_spec->talk_mouse_x;
+			mouse_y = active_spec->talk_mouse_y;
+		}
+	} else {
+		mouse_x = active_spec->failure_mouse_x;
+		mouse_y = active_spec->failure_mouse_y;
+	}
+	xio_Set_Mouse_Position(mouse_x, mouse_y);
+
+	/* Load resources */
+	resource = shellext_Open_Empire_Resource("debrief.lfd");
+	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+
+	debrief_film = xfilm_Res_Callback_Film("debrief", &frame, 0, 0, 0, film_Callback);
+#ifdef TIE_MODERN
+	TieSnapshotBuilder_SetActiveFilm("DEBRIEF", "debrief");
+#endif
+	xfilm_Set_Film_Def_Palette(debrief_film, scene_head->def_palette);
+
+	/* Create XINPUT widgets */
+	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
+
+	/* Brief door (id=0) */
+	bounds = active_spec->input_bounds[0];
+	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	brief_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(brief_input, iupdate_Debrief);
+	xinpattr_Set_Input_User_Function(brief_input, iuser_Debrief);
+	brief_input->mouseUsage = allInput;
+	brief_input->id = 0;
+
+	/* Officer door (id=1) — skip if priest only */
+	if (shipext_Get_Mission_Officer() != 2) {
+		bounds = active_spec->input_bounds[1];
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		officer = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(officer, iupdate_Debrief);
+		xinpattr_Set_Input_User_Function(officer, iuser_Debrief);
+		officer->mouseUsage = allInput;
+		officer->id = 1;
+	}
+
+	/* Priest door (id=2) — skip if officer only */
+	if (shipext_Get_Mission_Officer() != 1) {
+		bounds = active_spec->input_bounds[2];
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		priest = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(priest, iupdate_Debrief);
+		xinpattr_Set_Input_User_Function(priest, iuser_Debrief);
+		priest->mouseUsage = allInput;
+		priest->id = 2;
+	}
+
+	/* Fly-again area (id=3) */
+	bounds = active_spec->input_bounds[3];
+	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	flyagain = xinput_Alloc_Input(parent, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(flyagain, iupdate_Debrief);
+	xinpattr_Set_Input_User_Function(flyagain, iuser_Debrief);
+	flyagain->mouseUsage = allInput;
+	flyagain->id = 3;
+
+	xview_Set_View_Update_Function(end_View);
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
+	return resource;
+}
+
+void debrief_CloseScene(ResFile* resource, bool svga) {
 	xview_Enable_All_View_Erase();
 	xview_Clear_View_Update_Function();
 
 	if (xcursor_Is_Cursor_Visible())
 		xcursor_Hide_Cursor();
 
-	xres_Close_Resource(t->res_file);
-	if (t->spec->surface_set == LANDRU_SURFACE_SVGA)
+	xres_Close_Resource(resource);
+	if (svga)
 		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static const LandruTaskVtable debrief_task_vt = {
-	.step = debrief_task_step,
-};
-
-void debrief_Push_Debrief_Task(SceneHeadStruct* scene_head) {
-	DebriefTask* t = (DebriefTask*)landru_task_push(&debrief_task_vt);
-	if (!t)
-		return;
-	t->scene_head = scene_head;
-	t->res_file = NULL;
-	t->phase = DEBRIEF_PHASE_BEGIN;
-	t->spec = &debrief_specs[TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 1 : 0];
 }

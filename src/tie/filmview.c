@@ -1,21 +1,10 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "landru/viewadd.h"
 #include "tie/filmview.h"
+#include "landru/viewadd.h"
 #include "tie/shellext.h"
 #include "tie/textext.h"
-#include "tie_runtime/audio/config.h"
-#include "tie_runtime/diagnostics/diagnostics.h"
-#include "tie_runtime/display/classic_display.h"
-#include "tie_runtime/display/classic_framebuffer.h"
-#include "tie_runtime/flight_assets/model_types.h"
-#include "tie_runtime/input/input.h"
-#include "tie_runtime/runtime/exports.h"
+#include "tie_runtime/runtime/filmview_task.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
-#include <landru/task.h>
 
 #include "landru/btnpush.h"
 #include "landru/dialog.h"
@@ -34,9 +23,11 @@
 #include "landru/view.h"
 #include "tie/tie.h"
 
-/* ---- Static data (initialized from binary .data segment) ---- */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-static const char film_str[3][18] = { "filmview.lfd", "filmview", "filmload" };
+/* ---- Static data (initialized from binary .data segment) ---- */
 
 /* ---- Static globals ---- */
 
@@ -62,7 +53,7 @@ static int16_t iupdate_FV_File(Input* input, Rect* r, Rect* clip_r, int16_t key,
 static void iuser_FV_File(Input* input, int32_t time);
 static void Select_Active_FV_File(Input* input, Rect* r, int16_t x, int16_t y);
 static void Set_Active_FV_File(FileDialog* the_dialog, int16_t file, int16_t hit);
-static Input* Build_Delete_Dialog(void);
+
 static int16_t iupdate_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
 									uint8_t right, int16_t x, int16_t y);
 static void iuser_Delete_Input(Input* input, int32_t time);
@@ -72,26 +63,6 @@ static void idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t refr
  * View update callback
  * ================================================================ */
 
-/* Deferred sub-dialog contexts. Both sites are single-shot per
- * scene-life, so module-static slots are sufficient. */
-typedef struct FvFileCtx {
-	Input* sub_dlg;
-	FileDialog file_dlg;
-	int16_t was_key_buttons;
-} FvFileCtx;
-
-typedef struct FvDeleteCtx {
-	Input* sub_dlg;
-	Input* file_input; /* the file-list input that triggered the delete */
-} FvDeleteCtx;
-
-static FvFileCtx s_fv_file_ctx;
-static FvDeleteCtx s_fv_delete_ctx;
-
-static void after_fv_file_dialog(int16_t result, void* ctx);
-static void after_fv_delete_dialog(int16_t result, void* ctx);
-static void schedule_fv_file_dialog(void);
-
 static void end_View(int32_t time) {
 	(void)time;
 
@@ -99,7 +70,7 @@ static void end_View(int32_t time) {
 	 * sub-dialog. ViewAddTask drains the request after this
 	 * callback returns and pushes the dialog task. */
 	if (filmview_film->cur_cel == filmview_film->cels - 1) {
-		schedule_fv_file_dialog();
+		TieFilmView_RequestFiles();
 	}
 
 	/* Last frame: play the clip selected by the Film Room dialog. */
@@ -111,55 +82,25 @@ static void end_View(int32_t time) {
  * File dialog
  * ================================================================ */
 
-static void schedule_fv_file_dialog(void) {
-	s_fv_file_ctx.was_key_buttons = xio_Is_Key_Buttons();
-	if (!s_fv_file_ctx.was_key_buttons)
-		xio_Set_Key_Buttons();
-
-	memset(&s_fv_file_ctx.file_dlg, 0, sizeof(s_fv_file_ctx.file_dlg));
-	s_fv_file_ctx.file_dlg.read = 1;
+int16_t filmview_PrepareFileDialog(FileDialog* dialog, Input** root) {
+	int16_t built;
+	dialog->read = 1;
 	filmview_name[0] = 0;
-
-	xfiledir_Init_Directory(&s_fv_file_ctx.file_dlg.the_head, ".CLP", 0);
-	xfiledir_Read_Directory(&s_fv_file_ctx.file_dlg.the_head);
-
-	num_pages = (s_fv_file_ctx.file_dlg.the_head.count + 15) / 16;
+	xfiledir_Init_Directory(&dialog->the_head, ".CLP", 0);
+	xfiledir_Read_Directory(&dialog->the_head);
+	num_pages = (dialog->the_head.count + 15) / 16;
 	if (!num_pages)
 		num_pages = 1;
-
-	Input* the_input = NULL;
-	int16_t built = Build_FV_File_Dialog(&the_input, &s_fv_file_ctx.file_dlg, "Load Mission Film");
-	s_fv_file_ctx.file_dlg.dialog = the_input;
-
-	if (s_fv_file_ctx.file_dlg.the_head.count) {
-		Set_Active_FV_File(&s_fv_file_ctx.file_dlg, 0, 1);
-		s_fv_file_ctx.file_dlg.active_hits = 0;
+	built = Build_FV_File_Dialog(root, dialog, "Load Mission Film");
+	dialog->dialog = *root;
+	if (built && dialog->the_head.count) {
+		Set_Active_FV_File(dialog, 0, 1);
+		dialog->active_hits = 0;
 	}
-
-	if (built) {
-		s_fv_file_ctx.sub_dlg = the_input;
-		xdialog_Schedule_Sub_Dialog(the_input, after_fv_file_dialog, &s_fv_file_ctx);
-	} else {
-		/* Build failed (no entries / alloc failure). Skip the
-		 * dialog and fall back to MAIN_MENU. */
-		xfiledir_Free_Directory(&s_fv_file_ctx.file_dlg.the_head);
-		if (!s_fv_file_ctx.was_key_buttons)
-			xio_Clear_Key_Buttons();
-		xerror_Set_Landru_Exit(SCENE_MAIN_MENU);
-	}
+	return built;
 }
 
-static void after_fv_file_dialog(int16_t result, void* ctx) {
-	FvFileCtx* c = (FvFileCtx*)ctx;
-	xfiledir_Free_Directory(&c->file_dlg.the_head);
-	xinput_Free_Inputs(c->sub_dlg);
-	c->sub_dlg = NULL;
-
-	if (!c->was_key_buttons)
-		xio_Clear_Key_Buttons();
-
-	/* result == 1 → user picked a clip; otherwise drop back to
-	 * the main menu. */
+void filmview_ApplySelectedFile(int16_t result) {
 	if (result == 1 && filmview_name[0])
 		strcpy(replayclipname, filmview_name);
 	else
@@ -180,6 +121,8 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
 	else
 		xrect_Set_Rect(&r, 0, 14, 180, 148);
 	the_input = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
+	if (!the_input)
+		return 0;
 	xinpattr_Set_Input_Draw_Function(the_input, idraw_FV_File);
 	xinpattr_Set_Input_Allign(the_input, TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 0 : 1, 0);
 	the_input->varptr = (void*)string;
@@ -188,6 +131,10 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
 	/* File list area */
 	xrect_Set_Rect(&r, 4, 12, 176, 77);
 	child_input = xinput_Alloc_Dialog_Input(the_input, &r, 0, 0);
+	if (!child_input) {
+		xinput_Free_Inputs(the_input);
+		return 0;
+	}
 	xinpattr_Set_Input_Draw_Function(child_input, idraw_FV_File);
 	xinpattr_Set_Input_Update_Function(child_input, iupdate_FV_File);
 	xinpattr_Set_Input_User_Function(child_input, iuser_FV_File);
@@ -198,6 +145,10 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
 	/* Left page button */
 	xrect_Set_Rect(&r, 4, 36, 18, 52);
 	child_input = (Input*)xbtnpush_Alloc_Button(the_input, &r, 0, iuser_FilmView_Button, NULL, 0);
+	if (!child_input) {
+		xinput_Free_Inputs(the_input);
+		return 0;
+	}
 	xinpattr_Set_Input_Draw_Function(child_input, idraw_FilmView_Button);
 	xinpattr_Set_Input_Allign(child_input, 0, 2);
 	child_input->varptr = (void*)the_dialog;
@@ -205,6 +156,10 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
 	/* Right page button */
 	xrect_Set_Rect(&r, 4, 36, 18, 52);
 	child_input = (Input*)xbtnpush_Alloc_Button(the_input, &r, 0, iuser_FilmView_Button, NULL, 1);
+	if (!child_input) {
+		xinput_Free_Inputs(the_input);
+		return 0;
+	}
 	xinpattr_Set_Input_Draw_Function(child_input, idraw_FilmView_Button);
 	xinpattr_Set_Input_Allign(child_input, 2, 2);
 	child_input->varptr = (void*)the_dialog;
@@ -212,6 +167,10 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
 	/* Page counter display */
 	xrect_Set_Rect(&r, 0, 37, 140, 51);
 	child_input = xinput_Alloc_Input(the_input, &r, 0, 0);
+	if (!child_input) {
+		xinput_Free_Inputs(the_input);
+		return 0;
+	}
 	xinpattr_Set_Input_Draw_Function(child_input, idraw_FilmView_Page);
 	xinpattr_Set_Input_Allign(child_input, 1, 2);
 	child_input->id = 1;
@@ -220,6 +179,10 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
 	if (the_dialog->the_head.count) {
 		xrect_Set_Rect(&r, 4, 4, 88, 18);
 		child_input = (Input*)xbtnpush_Alloc_Button(the_input, &r, 0, iuser_FV_File, film_name_str[2], 2);
+		if (!child_input) {
+			xinput_Free_Inputs(the_input);
+			return 0;
+		}
 		xinpattr_Set_Input_Draw_Function(child_input, idraw_FV_File);
 		xinpattr_Set_Input_Allign(child_input, 0, 2);
 		load_input = child_input;
@@ -230,6 +193,10 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
 	/* Exit button */
 	xrect_Set_Rect(&r, 4, 4, 88, 18);
 	child_input = (Input*)xbtnpush_Alloc_Button(the_input, &r, 0, iuser_FV_File, film_name_str[3], 3);
+	if (!child_input) {
+		xinput_Free_Inputs(the_input);
+		return 0;
+	}
 	xinpattr_Set_Input_Draw_Function(child_input, idraw_FV_File);
 	xinpattr_Set_Input_Allign(child_input, 2, 2);
 
@@ -237,6 +204,10 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
 	if (the_dialog->the_head.count) {
 		xrect_Set_Rect(&r, 4, 20, 88, 34);
 		child_input = (Input*)xbtnpush_Alloc_Button(the_input, &r, 0, iuser_FV_File, film_name_str[0], 4);
+		if (!child_input) {
+			xinput_Free_Inputs(the_input);
+			return 0;
+		}
 		xinpattr_Set_Input_Draw_Function(child_input, idraw_FV_File);
 		xinpattr_Set_Input_Allign(child_input, 0, 2);
 		child_input->varptr = (void*)the_dialog;
@@ -249,6 +220,10 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
 	if (replayclipname[0]) {
 		xrect_Set_Rect(&r, 4, 20, 88, 34);
 		child_input = (Input*)xbtnpush_Alloc_Button(the_input, &r, 0, iuser_FV_File, film_name_str[4], 5);
+		if (!child_input) {
+			xinput_Free_Inputs(the_input);
+			return 0;
+		}
 		xinpattr_Set_Input_Draw_Function(child_input, idraw_FV_File);
 		xinpattr_Set_Input_Allign(child_input, 2, 2);
 	}
@@ -262,8 +237,8 @@ static int16_t Build_FV_File_Dialog(Input** file, FileDialog* the_dialog, const 
  * ================================================================ */
 
 static void iuser_FilmView_Button(Input* input, int32_t time) {
-	(void)time;
 	FileDialog* the_dialog = (FileDialog*)input->varptr;
+	(void)time;
 
 	if (!xinpattr_Get_Input_Selected(input))
 		return;
@@ -292,13 +267,15 @@ static void iuser_FilmView_Button(Input* input, int32_t time) {
 }
 
 static void idraw_FilmView_Button(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+	PushButton* btn;
+	uint8_t icon;
 	if (!refresh)
 		return;
 
-	PushButton* btn = (PushButton*)input;
+	btn = (PushButton*)input;
 	xstyle_Style_Paint_Border(r, btn->pressed);
 
-	uint8_t icon = input->id ? iconRightArrow : iconLeftArrow;
+	icon = input->id ? iconRightArrow : iconLeftArrow;
 	xstyle_Style_Draw_Centered_Icon(icon, r, clip_r, btn->pressed);
 
 	if (xinpattr_Is_Input_Dirty(input))
@@ -306,13 +283,13 @@ static void idraw_FilmView_Button(Input* input, Rect* r, Rect* clip_r, int16_t r
 }
 
 static void idraw_FilmView_Page(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+	char string[32];
 	(void)clip_r;
 	if (!refresh)
 		return;
 
 	xstyle_Style_Paint_TextField(r);
 
-	char string[32];
 	snprintf(string, sizeof(string), "Page %d/%d", cur_page + 1, num_pages);
 	xfont_Print_Centered_Text(string, r, 15, 1);
 
@@ -325,10 +302,10 @@ static void idraw_FilmView_Page(Input* input, Rect* r, Rect* clip_r, int16_t ref
  * ================================================================ */
 
 static void idraw_FV_File(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+	Rect dr;
 	if (!refresh)
 		return;
 
-	Rect dr;
 	xrect_Copy_Rect(&dr, r);
 
 	switch (input->id) {
@@ -340,25 +317,26 @@ static void idraw_FV_File(Input* input, Rect* r, Rect* clip_r, int16_t refresh) 
 			break;
 
 		case 1: {
-			/* File list (two columns, 8 per column) */
+			FileDialog* the_dialog = (FileDialog*)input->varptr;
+			const DirEntry* entries;
+			int16_t off_y, off_x, half, count;
+
+			/* File list: two columns of eight entries. */
 			xstyle_Style_Paint_TextField(r);
 			xstyle_Style_Trim_TextField(&dr);
-
-			FileDialog* the_dialog = (FileDialog*)input->varptr;
-			const DirEntry* entries = xmemhdl_Lock_Handle(the_dialog->the_head.entries);
+			entries = xmemhdl_Lock_Handle(the_dialog->the_head.entries);
 			if (!entries)
 				break;
-
-			int16_t off_y = dr.top;
-			int16_t off_x = dr.left;
-			int16_t half = ((dr.right - dr.left) >> 1) - 1;
-			int16_t count;
+			off_y = dr.top;
+			off_x = dr.left;
+			half = ((dr.right - dr.left) >> 1) - 1;
 
 			xpaint_Vert_Clipped_Line(dr.left + half, dr.top, dr.bottom - dr.top, 2);
 
 			for (count = the_dialog->name_offset;
 				 count < the_dialog->name_offset + 16 && count < the_dialog->the_head.count; count++) {
-				int16_t color;
+				int16_t color, old_font, width;
+				char size_str[16];
 				if (count == the_dialog->active_name) {
 					Rect dr2;
 					xrect_Set_Rect(&dr2, off_x, off_y, half + off_x, off_y + 7);
@@ -370,12 +348,11 @@ static void idraw_FV_File(Input* input, Rect* r, Rect* clip_r, int16_t refresh) 
 
 				xfont_Print_Clipped_Text(entries[count].name, off_x + 4, off_y + 1, 1, color);
 
-				char size_str[16];
 				snprintf(size_str, sizeof(size_str), "%uK", (unsigned)entries[count].size_kb);
 
-				int16_t old_font = xfont_Get_Font();
+				old_font = xfont_Get_Font();
 				xfont_Set_Font(1);
-				int16_t width = xfont_Get_String_Width(size_str) + 8;
+				width = xfont_Get_String_Width(size_str) + 8;
 				xfont_Set_Font(old_font);
 
 				xfont_Print_Clipped_Text(size_str, half + off_x - width, off_y + 1, 1, color);
@@ -454,12 +431,7 @@ static void iuser_FV_File(Input* input, int32_t time) {
 			if (!xinpattr_Get_Input_Selected(input) || !filmview_name[0])
 				break;
 
-			/* Open delete-confirmation as a deferred sub-dialog. The
-			 * file-list input pointer is captured into the context so
-			 * the handler can locate the active file and remove it. */
-			s_fv_delete_ctx.sub_dlg = Build_Delete_Dialog();
-			s_fv_delete_ctx.file_input = input;
-			xdialog_Schedule_Sub_Dialog(s_fv_delete_ctx.sub_dlg, after_fv_delete_dialog, &s_fv_delete_ctx);
+			TieFilmView_RequestDelete(input);
 			break;
 		}
 
@@ -551,34 +523,25 @@ static int16_t Clip_Active_FV_File(FileDialog* the_dialog) {
  * Delete confirmation dialog
  * ================================================================ */
 
-static void after_fv_delete_dialog(int16_t result, void* ctx) {
-	FvDeleteCtx* c = (FvDeleteCtx*)ctx;
-	xinput_Free_Inputs(c->sub_dlg);
-	c->sub_dlg = NULL;
-
-	if (result == 2) {
-		/* Cancelled */
-		return;
-	}
-
-	Input* input = c->file_input;
+void filmview_CompleteDelete(Input* input) {
 	FileDialog* the_dialog = (FileDialog*)input->varptr;
 	int16_t idx = the_dialog->active_name;
+	DirEntry* entries;
+	char file_name[16];
+	int16_t j;
 
 	if (idx < 0 || idx >= the_dialog->the_head.count)
 		return;
-	DirEntry* entries = xmemhdl_Lock_Handle(the_dialog->the_head.entries);
+	entries = xmemhdl_Lock_Handle(the_dialog->the_head.entries);
 	if (!entries)
 		return;
 
 	/* Remove the file */
-	char file_name[16];
 	strcpy(file_name, filmview_name);
 	strcat(file_name, ".clp");
 	TieStorage_Remove(TIE_FILE_ROOT_USER, file_name);
 
 	/* Shift remaining entries down */
-	int16_t j;
 	for (j = idx; j < the_dialog->the_head.count - 1; j++)
 		entries[j] = entries[j + 1];
 	xmemhdl_Unlock_Handle(the_dialog->the_head.entries);
@@ -601,12 +564,14 @@ static void after_fv_delete_dialog(int16_t result, void* ctx) {
 	xview_Refresh_View();
 }
 
-static Input* Build_Delete_Dialog(void) {
+Input* filmview_BuildDeleteDialog(void) {
 	Rect r;
 	Input *parent_input, *input;
 
 	xrect_Set_Rect(&r, 0, 0, 180, 46);
 	parent_input = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
+	if (!parent_input)
+		return NULL;
 	xinpattr_Set_Input_Update_Function(parent_input, iupdate_Delete_Input);
 	xinpattr_Set_Input_Draw_Function(parent_input, idraw_Delete_Input);
 	xinpattr_Set_Input_Allign(parent_input, 1, 1);
@@ -616,11 +581,19 @@ static Input* Build_Delete_Dialog(void) {
 	/* Delete button */
 	xrect_Set_Rect(&r, 4, 4, 76, 20);
 	input = (Input*)xbtnpush_Alloc_Button(parent_input, &r, 0, iuser_Delete_Input, film_name_str[0], 1);
+	if (!input) {
+		xinput_Free_Inputs(parent_input);
+		return NULL;
+	}
 	xinpattr_Set_Input_Allign(input, 0, 2);
 
 	/* Cancel button */
 	xrect_Set_Rect(&r, 4, 4, 76, 20);
 	input = (Input*)xbtnpush_Alloc_Button(parent_input, &r, 0, iuser_Delete_Input, film_name_str[1], 2);
+	if (!input) {
+		xinput_Free_Inputs(parent_input);
+		return NULL;
+	}
 	xinpattr_Set_Input_Allign(input, 2, 2);
 
 	return parent_input;
@@ -641,20 +614,21 @@ static int16_t iupdate_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t
 }
 
 static void iuser_Delete_Input(Input* input, int32_t time) {
+	int16_t id;
 	(void)time;
 	if (!xinpattr_Get_Input_Selected(input))
 		return;
 
-	int16_t id = input->id;
+	id = input->id;
 	if (id >= 1 && id <= 2)
 		xdialog_Set_Dialog_Exit(id);
 }
 
 static void idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+	char string[32];
 	if (!refresh)
 		return;
 
-	char string[32];
 	strcpy(string, film_name_str[0]); /* "Delete" */
 	strcat(string, " ");
 	strcat(string, filmview_name);
@@ -680,69 +654,32 @@ static void idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t refr
  * Entry point
  * ================================================================ */
 
-typedef enum {
-	FILMVIEW_PHASE_BEGIN = 0,
-	FILMVIEW_PHASE_CLEANUP = 1,
-} FilmViewPhase;
+int16_t filmview_OpenScene(SceneHeadStruct* scene_head, ResFile** resource) {
+	Rect r;
+	int16_t i;
 
-typedef struct FilmViewTask {
-	SceneHeadStruct* scene_head;
-	ResFile* res_file;
-	FilmViewPhase phase;
-} FilmViewTask;
-
-static LandruTaskStepResult filmview_task_step(void* self) {
-	FilmViewTask* t = (FilmViewTask*)self;
-
-	if (t->phase == FILMVIEW_PHASE_BEGIN) {
-		Rect r;
-
-		cur_page = 0;
-		num_pages = 1;
-
-		/* If last scene was 110, clear the replay clip name */
-		if (t->scene_head->last_scene == SCENE_MAIN_MENU)
-			replayclipname[0] = 0;
-
-		/* Load resources */
-		t->res_file = shellext_Open_Empire_Resource(film_str[0]);
-
-		xrect_Set_Rect(&r, 0, 0, 320, 200);
-
-		/* Fill button label strings from TEXTEXT */
-		int16_t i;
-		for (i = 0; i < 5; i++) {
-			const char* text = textext_Get_Text((TIEText)(txtFilmDelete + i));
-			strcpy(film_name_str[i], text);
-		}
-
-		/* Load the film room film */
-		filmview_film = xfilm_Res_Film(film_str[1], &r, 0, 0, 0);
-		xfilm_Set_Film_Def_Palette(filmview_film, t->scene_head->def_palette);
-
-		/* Push the modal view task */
-		xview_Set_View_Update_Function(end_View);
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = FILMVIEW_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+	cur_page = 0;
+	num_pages = 1;
+	if (scene_head->last_scene == SCENE_MAIN_MENU)
+		replayclipname[0] = 0;
+	*resource = shellext_Open_Empire_Resource("filmview.lfd");
+	if (!*resource)
+		return 0;
+	xrect_Set_Rect(&r, 0, 0, 320, 200);
+	for (i = 0; i < 5; i++) {
+		const char* text = textext_Get_Text((TIEText)(txtFilmDelete + i));
+		strcpy(film_name_str[i], text);
 	}
-
-	/* CLEANUP */
-	xview_Clear_View_Update_Function();
-	xres_Close_Resource(t->res_file);
-	return LANDRU_TASK_STEP_DONE;
+	filmview_film = xfilm_Res_Film("filmview", &r, 0, 0, 0);
+	if (!filmview_film)
+		return 0;
+	xfilm_Set_Film_Def_Palette(filmview_film, scene_head->def_palette);
+	xview_Set_View_Update_Function(end_View);
+	return 1;
 }
 
-static const LandruTaskVtable filmview_task_vt = {
-	.step = filmview_task_step,
-};
-
-void filmview_Push_FilmView_Task(SceneHeadStruct* scene_head) {
-	FilmViewTask* t = (FilmViewTask*)landru_task_push(&filmview_task_vt);
-	if (!t)
-		return;
-	t->scene_head = scene_head;
-	t->res_file = NULL;
-	t->phase = FILMVIEW_PHASE_BEGIN;
+void filmview_CloseScene(ResFile* resource) {
+	xview_Clear_View_Update_Function();
+	if (resource)
+		xres_Close_Resource(resource);
 }

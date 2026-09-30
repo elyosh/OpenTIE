@@ -1,12 +1,12 @@
-#include <stdint.h>
-#include <string.h>
-
-#include "landru/vesa.h"
 #include "tie/logbuf2.h"
+#include "landru/vesa.h"
 #include "tie/math2.h"
 #include "tie/render_texture_tie98.h"
 #include "tie/transfm2.h"
 #include "tie/xtrans2.h"
+
+#include <stdint.h>
+#include <string.h>
 
 /* --- Module-owned globals ----------------------------------------- */
 
@@ -130,6 +130,9 @@ void logbuf2_clearbuffer(void) {
 
 // FUNCTION: TIE98 0x44C330
 void logbuf2_clearbuffer_tie98(void) {
+	uint16_t* dst;
+	uint16_t color;
+	size_t count, i;
 	if (!buffer_ptr)
 		return;
 	if (g_flight16bppBytesPerPixel != 2) {
@@ -137,22 +140,23 @@ void logbuf2_clearbuffer_tie98(void) {
 		return;
 	}
 
-	uint16_t* dst = buffer_ptr;
-	const uint16_t color = g_flightTextPalette[deepspacecolor];
-	const size_t count = (size_t)pixelswide * pixelsdeep;
-	for (size_t i = 0; i < count; ++i)
+	dst = buffer_ptr;
+	color = g_flightTextPalette[deepspacecolor];
+	count = (size_t)pixelswide * pixelsdeep;
+	for (i = 0; i < count; ++i)
 		dst[i] = color;
 }
 
 // FUNCTION: TIE95 0x2E89C
 void logbuf2_outbuffer(const void* src) {
+	uint16_t line;
 	uint8_t* dst = video_base() + displaycorner;
 	const uint8_t* s = src;
 	const uint16_t w = pixelswide;
 	const uint16_t h = pixelsdeep;
 	const int32_t pitch = screen_mem_width();
 
-	for (uint16_t line = 0; line < h; ++line) {
+	for (line = 0; line < h; ++line) {
 		memcpy(dst, s, w);
 		s += w;
 		dst += pitch;
@@ -161,11 +165,12 @@ void logbuf2_outbuffer(const void* src) {
 
 // FUNCTION: TIE98 0x44C3B0
 void logbuf2_outbuffer_tie98(const void* src) {
+	uint16_t line;
 	uint8_t* dst = video_base() + displaycorner;
 	const uint8_t* s = src;
 	const size_t row_bytes = (size_t)g_flight16bppBytesPerPixel * pixelswide;
 
-	for (uint16_t line = 0; line < pixelsdeep; ++line) {
+	for (line = 0; line < pixelsdeep; ++line) {
 		memcpy(dst, s, row_bytes);
 		s += row_bytes;
 		dst += g_surfacePitch;
@@ -174,16 +179,21 @@ void logbuf2_outbuffer_tie98(const void* src) {
 
 // FUNCTION: TIE95 0x2E978
 void logbuf2_outdiffbuffer(const void* oldbuf, const void* newbuf) {
+	uint16_t line;
+	uint8_t* dst;
+	const uint8_t* s;
+	uint16_t w, h;
+	int32_t pitch;
 	/* Callers mirror newbuf into oldbuf after this copy. */
 	(void)oldbuf;
 
-	uint8_t* dst = video_base() + displaycorner;
-	const uint8_t* s = newbuf;
-	const uint16_t w = pixelswide;
-	const uint16_t h = pixelsdeep;
-	const int32_t pitch = screen_mem_width();
+	dst = video_base() + displaycorner;
+	s = newbuf;
+	w = pixelswide;
+	h = pixelsdeep;
+	pitch = screen_mem_width();
 
-	for (uint16_t line = 0; line < h; ++line) {
+	for (line = 0; line < h; ++line) {
 		memcpy(dst, s, w);
 		s += w;
 		dst += pitch;
@@ -219,18 +229,23 @@ static inline void logbuf2_write_pixel(uint8_t* dst, uint16_t color, uint8_t pix
 
 static void logbuf2_drawclippedline_impl(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color_index,
 										 uint8_t pixel_bytes) {
+	int32_t pw, pd, pwm1, pdm1, dx, dy_signed, dy, ystep, xspan, yspan, i;
+	uint8_t* buf;
+	uint8_t* p;
+	uint16_t color;
+	int going_up;
 	if (!buffer_ptr)
 		return;
 
-	const int32_t pw = (int32_t)pixelswide;
-	const int32_t pd = (int32_t)pixelsdeep;
-	const int32_t pwm1 = (int32_t)pixelswidemin1;
-	const int32_t pdm1 = (int32_t)pixelsdeepmin1;
-	uint8_t* buf = (uint8_t*)buffer_ptr;
-	const uint16_t color = pixel_bytes == 2 ? g_flightTextPalette[color_index] : color_index;
+	pw = (int32_t)pixelswide;
+	pd = (int32_t)pixelsdeep;
+	pwm1 = (int32_t)pixelswidemin1;
+	pdm1 = (int32_t)pixelsdeepmin1;
+	buf = (uint8_t*)buffer_ptr;
+	color = pixel_bytes == 2 ? g_flightTextPalette[color_index] : color_index;
 
 	/* --- Canonicalise so x1 <= x2 --- */
-	int32_t dx = x2 - x1;
+	dx = x2 - x1;
 	if (dx < 0) {
 		int32_t tx = x1, ty = y1;
 		x1 = x2;
@@ -242,6 +257,7 @@ static void logbuf2_drawclippedline_impl(int32_t x1, int32_t y1, int32_t x2, int
 
 	/* --- Vertical line fast path (x1 == x2) --- */
 	if (dx == 0) {
+		int32_t len;
 		if (x1 < 0 || x1 >= pw)
 			return;
 		if (y2 < y1) {
@@ -253,11 +269,11 @@ static void logbuf2_drawclippedline_impl(int32_t x1, int32_t y1, int32_t x2, int
 			y1 = 0;
 		if (y2 >= pd)
 			y2 = pdm1;
-		int32_t len = y2 - y1;
+		len = y2 - y1;
 		if (len <= 0)
 			return;
-		uint8_t* p = buf + pixel_bytes * (x1 + y1 * pw);
-		for (int32_t i = 0; i < len; ++i) {
+		p = buf + pixel_bytes * (x1 + y1 * pw);
+		for (i = 0; i < len; ++i) {
 			logbuf2_write_pixel(p, color, pixel_bytes);
 			p += pixel_bytes * pw;
 		}
@@ -270,15 +286,16 @@ static void logbuf2_drawclippedline_impl(int32_t x1, int32_t y1, int32_t x2, int
 
 	/* --- Horizontal line fast path (y1 == y2) --- */
 	if (y1 == y2) {
+		int32_t xa, xb, len;
 		if (y1 < 0 || y1 >= pd)
 			return;
-		int32_t xa = x1 < 0 ? 0 : x1;
-		int32_t xb = x2 >= pw ? pwm1 : x2;
-		int32_t len = xb - xa;
+		xa = x1 < 0 ? 0 : x1;
+		xb = x2 >= pw ? pwm1 : x2;
+		len = xb - xa;
 		if (len <= 0)
 			return;
-		uint8_t* p = buf + pixel_bytes * (xa + y1 * pw);
-		for (int32_t i = 0; i < len; ++i) {
+		p = buf + pixel_bytes * (xa + y1 * pw);
+		for (i = 0; i < len; ++i) {
 			logbuf2_write_pixel(p, color, pixel_bytes);
 			p += pixel_bytes;
 		}
@@ -286,9 +303,9 @@ static void logbuf2_drawclippedline_impl(int32_t x1, int32_t y1, int32_t x2, int
 	}
 
 	/* --- General Bresenham --- */
-	const int32_t dy_signed = y2 - y1;
-	const int32_t dy = dy_signed < 0 ? -dy_signed : dy_signed;
-	const int going_up = dy_signed < 0;
+	dy_signed = y2 - y1;
+	dy = dy_signed < 0 ? -dy_signed : dy_signed;
+	going_up = dy_signed < 0;
 
 	if (going_up) {
 		if (y1 < 0 || y2 >= pd)
@@ -330,16 +347,16 @@ static void logbuf2_drawclippedline_impl(int32_t x1, int32_t y1, int32_t x2, int
 			y2 = pdm1;
 	}
 
-	uint8_t* p = buf + pixel_bytes * (x1 + y1 * pw);
-	const int32_t ystep = going_up ? -pixel_bytes * pw : pixel_bytes * pw;
-	const int32_t xspan = x2 - x1;
-	const int32_t yspan = going_up ? (y1 - y2) : (y2 - y1);
+	p = buf + pixel_bytes * (x1 + y1 * pw);
+	ystep = going_up ? -pixel_bytes * pw : pixel_bytes * pw;
+	xspan = x2 - x1;
+	yspan = going_up ? (y1 - y2) : (y2 - y1);
 
 	if (dx < dy) {
 		/* Steep: one pixel per Y step, X accumulates. */
 		int32_t cols_left = xspan + 1;
 		int32_t err = dy >> 1;
-		for (int32_t i = 0; i < yspan; ++i) {
+		for (i = 0; i < yspan; ++i) {
 			logbuf2_write_pixel(p, color, pixel_bytes);
 			err -= dx;
 			p += ystep;
@@ -354,7 +371,7 @@ static void logbuf2_drawclippedline_impl(int32_t x1, int32_t y1, int32_t x2, int
 		/* Shallow: one pixel per X step, Y accumulates. */
 		int32_t rows_left = yspan + 1;
 		int32_t err = dx >> 1;
-		for (int32_t i = 0; i < xspan; ++i) {
+		for (i = 0; i < xspan; ++i) {
 			logbuf2_write_pixel(p, color, pixel_bytes);
 			p += pixel_bytes;
 			err -= dy;
@@ -412,6 +429,7 @@ void logbuf2_startPIP(uint16_t width, uint16_t depth, int16_t clear_runs, uint32
 
 // FUNCTION: TIE95 0x2F070
 void logbuf2_finishPIP(void) {
+	uint32_t smw;
 	worldeyeA1 = s_tempA1;
 	worldeyeA2 = s_tempA2;
 	worldeyeA3 = s_tempA3;
@@ -422,7 +440,7 @@ void logbuf2_finishPIP(void) {
 	worldeyeC2 = s_tempC2;
 	worldeyeC3 = s_tempC3;
 
-	const uint32_t smw = (uint32_t)screen_mem_width();
+	smw = (uint32_t)screen_mem_width();
 	pixelswide = s_temp_pw;
 	pixelswidemin1 = (uint16_t)(s_temp_pw - 1);
 	halfpixelswide = (uint16_t)(s_temp_pw / 2);

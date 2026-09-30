@@ -1,7 +1,11 @@
-#ifndef DSOUND_WAVE_TIE98_H
-#define DSOUND_WAVE_TIE98_H
+#ifndef TIE_DSOUND_WAVE_TIE98_H
+#define TIE_DSOUND_WAVE_TIE98_H
 
 #include <aeron/compat/dsound.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Runtime ownership of the TIE98 media device and primary buffer. */
 int TieDirectSound_Init(void* window);
@@ -24,5 +28,9 @@ void DirectSound_PlayBuffer(IDirectSoundBuffer* buffer, uint32_t cursor, int loo
 int DirectSound_StopBuffer(IDirectSoundBuffer* buffer);
 uint32_t DirectSound_GetPlayCursor(IDirectSoundBuffer* buffer);
 void DirectSound_ReleaseBuffer(IDirectSoundBuffer** buffer);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

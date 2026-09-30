@@ -1,7 +1,11 @@
-#ifndef __TRIG2_H__
-#define __TRIG2_H__
+#ifndef TIE_TRIG2_H
+#define TIE_TRIG2_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * Fixed-point trigonometry library.
@@ -46,5 +50,9 @@ extern int32_t trig2_cartesianxoffset, trig2_cartesianyoffset;
 extern int16_t trig2_theta, trig2_phi;
 extern int16_t trig2_xyangle, trig2_zangle, trig2_angleplane;
 extern int16_t trig2_signx, trig2_signy, trig2_signz;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

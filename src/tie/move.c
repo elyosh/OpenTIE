@@ -15,8 +15,12 @@
 #include "tie/starship.h"
 #include "tie/tie.h"
 #include "tie/trig2.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/timing/flight_integration.h"
 #include "tie_runtime/timing/flight_timing.h"
 #include "tie_runtime/timing/flight_timing_state.h"
+#endif
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -93,8 +97,10 @@ static const uint8_t homing_idx_lookup[256] = {
 /* tie.c: player craft spec_num */
 
 /* World-box clamp: +/- 2^24 world units (the playable cube). */
-#define WORLD_CLAMP_POS 0x01000000
-#define WORLD_CLAMP_NEG (-0x01000000)
+enum {
+	WORLD_CLAMP_POS = 0x01000000,
+	WORLD_CLAMP_NEG = (-0x01000000),
+};
 
 /* ------------------------------------------------------------------ */
 /* move_updatexyz                                                      */
@@ -132,16 +138,19 @@ void move_updatexyz(FlightObject* obj) {
 static void apply_push_accum(uint16_t obj_idx, unsigned int axis, int32_t* accum_ptr, int32_t cap,
 							 int32_t* out_vel) {
 	int32_t accum = *accum_ptr;
+	int32_t clamped;
+	int32_t step;
+
 	if (accum == 0)
 		return;
 
-	int32_t clamped = accum;
+	clamped = accum;
 	if (clamped > cap)
 		clamped = cap;
 	if (clamped < -cap)
 		clamped = -cap;
 
-	int32_t step;
+#ifdef TIE_MODERN
 	if (TieFlightTiming_IsHighRate()) {
 		TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, &objects[obj_idx]);
 		const int8_t sign = clamped < 0 ? -1 : 1;
@@ -152,7 +161,9 @@ static void apply_push_accum(uint16_t obj_idx, unsigned int axis, int32_t* accum
 		step = TieFlightTiming_ScaleWithRemainder(clamped, frameticks, 236, &state->push_remainder[axis]);
 		if ((accum > 0 && step > accum) || (accum < 0 && step < accum))
 			step = accum;
-	} else {
+	} else
+#endif
+	{
 		step = (int32_t)((int16_t)clamped / (int16_t)framerate);
 		if (step == 0)
 			step = accum;
@@ -160,11 +171,13 @@ static void apply_push_accum(uint16_t obj_idx, unsigned int axis, int32_t* accum
 
 	*out_vel += step;
 	*accum_ptr = accum - step;
+#ifdef TIE_MODERN
 	if (*accum_ptr == 0 && TieFlightTiming_IsHighRate()) {
 		TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, &objects[obj_idx]);
 		state->push_remainder[axis] = 0;
 		state->push_sign[axis] = 0;
 	}
+#endif
 }
 
 /* Destruction dispatch when obj->reserved_2c hits zero. Returns:
@@ -178,8 +191,10 @@ static int dispatch_death(uint16_t obj_idx, FlightObject* obj) {
 		case GENUS_FIGHTER: {
 			/* Retail order: blowoff first (which itself consumes RNG),
 			 * then read the random byte for the 127/128 ember pick. */
+			int16_t rnd;
+
 			create_blowoffcomponent(obj_idx, 1);
-			int16_t rnd = math2_getrandom();
+			rnd = math2_getrandom();
 			collide_makeobjectexplosion(obj_idx, (char)(127 + (rnd & 1)));
 			return 0;
 		}
@@ -198,10 +213,13 @@ static int dispatch_death(uint16_t obj_idx, FlightObject* obj) {
 					collide_makeobjectexplosion(obj_idx, (char)130);
 					obj->damage_state = (uint8_t)(modelbounds_getmaxextent(obj->ship_idx) >> 9);
 				} else {
+					int16_t length;
+					uint8_t lod;
+
 					draw_lockshipfileptrs(obj->ship_idx);
 					collide_makeobjectexplosion(obj_idx, (char)130);
-					int16_t length = (int16_t)objectblockptr->length;
-					uint8_t lod = objectblockptr->model_scale_shift;
+					length = (int16_t)objectblockptr->length;
+					lod = objectblockptr->model_scale_shift;
 					obj->damage_state = (uint8_t)(length >> (9 - lod));
 				}
 			} else {
@@ -239,8 +257,11 @@ static int dispatch_death(uint16_t obj_idx, FlightObject* obj) {
  * to obj->roll. */
 static void apply_roll_decay(uint16_t obj_idx, FlightObject* obj) {
 	int16_t spin = obj->spin_rate;
+	int16_t roll_delta;
+
 	if (spin == 0)
 		return;
+#ifdef TIE_MODERN
 	if (TieFlightTiming_IsHighRate()) {
 		TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, obj);
 		const int16_t sign = spin < 0 ? -1 : 1;
@@ -250,21 +271,26 @@ static void apply_roll_decay(uint16_t obj_idx, FlightObject* obj) {
 			state->spin_sign = sign;
 		}
 	}
+#endif
 
 	if (obj_idx < NUM_CRAFTS) {
 		CraftData* craft = objects[obj_idx].craft_ptr;
 
 		if (craft->spin_done_flag != 0xFFFF) {
 			int16_t step;
+			int16_t new_spin;
+			int crossed;
+
+#ifdef TIE_MODERN
 			if (TieFlightTiming_IsHighRate()) {
 				TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, obj);
 				step = (int16_t)TieFlightTiming_ScaleWithRemainder(4096, frameticks, 236,
 																   &state->spin_remainder[0]);
-			} else {
+			} else
+#endif
+			{
 				step = (int16_t)((uint16_t)4096 / framerate);
 			}
-			int16_t new_spin;
-			int crossed;
 
 			if ((spin & 0x8000) == 0) { /* spin > 0: decay toward 0 */
 				new_spin = (int16_t)(spin - step);
@@ -278,24 +304,29 @@ static void apply_roll_decay(uint16_t obj_idx, FlightObject* obj) {
 				obj->spin_rate = 0;
 				spin = 0; /* affect the roll update below */
 				craft->spin_done_flag = 0xFFFF;
+#ifdef TIE_MODERN
 				if (TieFlightTiming_IsHighRate()) {
 					TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, obj);
 					state->spin_remainder[0] = 0;
 					state->spin_remainder[1] = 0;
 					state->spin_sign = 0;
 				}
+#endif
 			}
 		}
 	}
 
 	/* Roll contribution uses the pre-decay spin value (or 0 if decay
 	 * just crossed zero). Matches the binary's common-tail semantics. */
-	int16_t roll_delta;
+
+#ifdef TIE_MODERN
 	if (TieFlightTiming_IsHighRate()) {
 		TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, obj);
 		roll_delta = (int16_t)TieFlightTiming_ScaleWithRemainder((int32_t)spin * 4, frameticks, 236,
 																 &state->spin_remainder[1]);
-	} else {
+	} else
+#endif
+	{
 		roll_delta = (int16_t)((spin / (int16_t)framerate) * 4);
 	}
 	obj->orient_dirty = 1;
@@ -315,10 +346,24 @@ static void apply_roll_decay(uint16_t obj_idx, FlightObject* obj) {
  */
 static int apply_homing(uint16_t obj_idx, FlightObject* obj, WarheadRecord* wh) {
 	/* homing_tier == 0 => craft-fired projectile with no homing. */
+	uint16_t target_idx_w;
+	uint32_t idx;
+	uint16_t target_idx;
+	uint16_t sub_obj;
+	int16_t pitch_delta;
+#ifdef TIE_MODERN
+	TieMoveTimingState* high_rate;
+#endif
+	int16_t pitch_rate;
+	int16_t abs_pd;
+	int16_t heading_rate;
+	int16_t heading_delta;
+	int16_t abs_hd;
+
 	if (wh->homing_tier == 0)
 		return 1;
 
-	uint16_t target_idx_w = wh->target_obj;
+	target_idx_w = wh->target_obj;
 	if (target_idx_w == 0xFFFF)
 		return 1;
 
@@ -327,10 +372,10 @@ static int apply_homing(uint16_t obj_idx, FlightObject* obj, WarheadRecord* wh) 
 		return -1;
 
 	/* ship_idx is a projectile type, not a species-table index. */
-	uint32_t idx = (uint32_t)homing_idx_lookup[obj->ship_idx] + wh->homing_tier;
+	idx = (uint32_t)homing_idx_lookup[obj->ship_idx] + wh->homing_tier;
 
-	uint16_t target_idx = target_idx_w;
-	uint16_t sub_obj = wh->sub_obj_idx;
+	target_idx = target_idx_w;
+	sub_obj = wh->sub_obj_idx;
 
 	create_getworldposition(target_idx, 0);
 
@@ -362,23 +407,29 @@ static int apply_homing(uint16_t obj_idx, FlightObject* obj, WarheadRecord* wh) 
 		rotatedy += worldlocy;
 		rotatedz += worldlocz;
 	} else {
+		ShipModelMesh* mesh;
+		int16_t ofs_side;
+		int16_t ofs_up;
+		int16_t ofs_fwd;
+		int shift;
+
 		draw_lockshipfileptrs(objects[target_idx].ship_idx);
-		ShipModelMesh* mesh = (sub_obj == 0xFFFF) ? &componentblockptr[-1] /* mirrors binary fallback */
-												  : &componentblockptr[sub_obj];
+		mesh = (sub_obj == 0xFFFF) ? &componentblockptr[-1] /* mirrors binary fallback */
+								   : &componentblockptr[sub_obj];
 		/* Unaligned dword loads in the binary:
 		 *   (dword at mesh+14) >> 17 = center_side >> 1
 		 *   (dword at mesh+18) >> 17 = center_up   >> 1
 		 *   (dword at mesh+16) >> 17 = center_fwd  >> 1
 		 * See CLAUDE.md 'Watcom unaligned dword load pattern'. */
-		int16_t ofs_side = (int16_t)(mesh->center_side >> 1);
-		int16_t ofs_up = (int16_t)(mesh->center_up >> 1);
-		int16_t ofs_fwd = (int16_t)(mesh->center_fwd >> 1);
+		ofs_side = (int16_t)(mesh->center_side >> 1);
+		ofs_up = (int16_t)(mesh->center_up >> 1);
+		ofs_fwd = (int16_t)(mesh->center_fwd >> 1);
 		pai_calcrotatedpoint(&objects[target_idx], ofs_side, ofs_up, (int16_t)-ofs_fwd);
 
 		/* ShipModelData.model_scale_shift byte scales the rotated offsets.
 		 * Binary emits `shl reg, cl` (sign-agnostic); shifting a
 		 * negative int32_t in C is UB, so route through uint32_t. */
-		const int shift = objectblockptr->model_scale_shift;
+		shift = objectblockptr->model_scale_shift;
 		rotatedy = (int32_t)((uint32_t)rotatedy << shift);
 		rotatedx = worldlocx + (int32_t)((uint32_t)rotatedx << shift);
 		rotatedy += worldlocy;
@@ -393,63 +444,84 @@ static int apply_homing(uint16_t obj_idx, FlightObject* obj, WarheadRecord* wh) 
 	trig2_ctop(rotatedx, rotatedy, rotatedz);
 
 	/* Pitch slew. xyangle = angle to target in X-Y (vertical) plane. */
-	int16_t pitch_delta = (int16_t)(trig2_xyangle - obj->pitch);
-	TieMoveTimingState* high_rate =
-		TieFlightTiming_IsHighRate() ? TieFlightTimingState_Move(obj_idx, obj) : NULL;
-	int16_t pitch_rate = high_rate ? (int16_t)TieFlightTiming_ScaleWithRemainder(
-										 maxhomingrate[idx], frameticks, 236, &high_rate->homing_remainder[0])
-								   : (int16_t)(maxhomingrate[idx] / framerate);
-	int16_t abs_pd = (pitch_delta < 0) ? (int16_t)-pitch_delta : pitch_delta;
+	pitch_delta = (int16_t)(trig2_xyangle - obj->pitch);
+#ifdef TIE_MODERN
+	high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_Move(obj_idx, obj) : NULL;
+	if (high_rate)
+		pitch_rate = (int16_t)TieFlightTiming_ScaleWithRemainder(maxhomingrate[idx], frameticks, 236,
+																 &high_rate->homing_remainder[0]);
+	else
+#endif
+		pitch_rate = (int16_t)(maxhomingrate[idx] / framerate);
+	abs_pd = (pitch_delta < 0) ? (int16_t)-pitch_delta : pitch_delta;
 	if (abs_pd > pitch_rate) {
 		int16_t step = (pitch_delta < 0) ? (int16_t)-pitch_rate : pitch_rate;
 		obj->pitch = (int16_t)(obj->pitch + step);
 		/* 200 is the missile homing-decel floor: while off-track and above
 		 * the floor, bleed speed; clamp back up if decel overshoots below. */
 		if ((uint16_t)obj->current_speed > 200) {
+			int16_t decel;
+			int16_t ns;
+
+#ifdef TIE_MODERN
 			if (high_rate && high_rate->homing_speed_sign != -1) {
 				high_rate->homing_remainder[2] = 0;
 				high_rate->homing_speed_sign = -1;
 			}
-			int16_t decel =
-				high_rate ? (int16_t)TieFlightTiming_ScaleWithRemainder(maxdeccelrate[idx], frameticks, 236,
-																		&high_rate->homing_remainder[2])
-						  : (int16_t)(maxdeccelrate[idx] / framerate);
-			int16_t ns = (int16_t)(obj->current_speed - decel);
+			if (high_rate)
+				decel = (int16_t)TieFlightTiming_ScaleWithRemainder(maxdeccelrate[idx], frameticks, 236,
+																	&high_rate->homing_remainder[2]);
+			else
+#endif
+				decel = (int16_t)(maxdeccelrate[idx] / framerate);
+			ns = (int16_t)(obj->current_speed - decel);
 			obj->current_speed = ns;
 			if ((uint16_t)ns < 200)
 				obj->current_speed = 200;
 		}
 	} else {
 		obj->pitch = trig2_xyangle;
+#ifdef TIE_MODERN
 		if (high_rate)
 			high_rate->homing_remainder[0] = 0;
+#endif
 		if ((uint16_t)obj->current_speed < wh->min_speed) {
+			int16_t accel;
+
+#ifdef TIE_MODERN
 			if (high_rate && high_rate->homing_speed_sign != 1) {
 				high_rate->homing_remainder[2] = 0;
 				high_rate->homing_speed_sign = 1;
 			}
-			const int16_t accel =
-				high_rate ? (int16_t)TieFlightTiming_ScaleWithRemainder(maxdeccelrate[idx], frameticks, 236,
-																		&high_rate->homing_remainder[2])
-						  : (int16_t)(maxdeccelrate[idx] / framerate);
+			if (high_rate)
+				accel = (int16_t)TieFlightTiming_ScaleWithRemainder(maxdeccelrate[idx], frameticks, 236,
+																	&high_rate->homing_remainder[2]);
+			else
+#endif
+				accel = (int16_t)(maxdeccelrate[idx] / framerate);
 			obj->current_speed = (int16_t)(obj->current_speed + accel);
 		}
 	}
 
 	/* Heading slew. zangle = angle in horizontal plane. */
-	int16_t heading_rate =
-		high_rate ? (int16_t)TieFlightTiming_ScaleWithRemainder(maxhomingrate[idx], frameticks, 236,
-																&high_rate->homing_remainder[1])
-				  : (int16_t)(maxhomingrate[idx] / framerate);
-	int16_t heading_delta = (int16_t)(trig2_zangle - obj->heading);
-	int16_t abs_hd = (heading_delta < 0) ? (int16_t)-heading_delta : heading_delta;
+#ifdef TIE_MODERN
+	if (high_rate)
+		heading_rate = (int16_t)TieFlightTiming_ScaleWithRemainder(maxhomingrate[idx], frameticks, 236,
+																   &high_rate->homing_remainder[1]);
+	else
+#endif
+		heading_rate = (int16_t)(maxhomingrate[idx] / framerate);
+	heading_delta = (int16_t)(trig2_zangle - obj->heading);
+	abs_hd = (heading_delta < 0) ? (int16_t)-heading_delta : heading_delta;
 	if (abs_hd > heading_rate) {
 		int16_t step = (heading_delta < 0) ? (int16_t)-heading_rate : heading_rate;
 		obj->heading = (int16_t)(obj->heading + step);
 	} else {
 		obj->heading = trig2_zangle;
+#ifdef TIE_MODERN
 		if (high_rate)
 			high_rate->homing_remainder[1] = 0;
+#endif
 	}
 
 	obj->orient_dirty = 1;
@@ -462,23 +534,15 @@ static int apply_homing(uint16_t obj_idx, FlightObject* obj, WarheadRecord* wh) 
 }
 
 static void compute_move_distances(uint16_t obj_idx, FlightObject* obj, uint16_t speed_per_tick) {
-	if (!TieFlightTiming_IsHighRate()) {
-		trig2_xmovedist = ((int32_t)speed_per_tick * obj->moveX) >> 15;
-		trig2_ymovedist = ((int32_t)speed_per_tick * obj->moveY) >> 15;
-		trig2_zmovedist = ((int32_t)speed_per_tick * obj->moveZ) >> 15;
+#ifdef TIE_MODERN
+	if (TieFlightTiming_IsHighRate()) {
+		TieFlightIntegration_Move(obj_idx, obj);
 		return;
 	}
-
-	TieMoveTimingState* state = TieFlightTimingState_Move(obj_idx, obj);
-	const int64_t speed = ((int64_t)4660 * obj->current_speed + 128) >> 8;
-	const int64_t divisor = (int64_t)236 << 15;
-	const int16_t axes[3] = { obj->moveX, obj->moveY, obj->moveZ };
-	int32_t* distances[3] = { &trig2_xmovedist, &trig2_ymovedist, &trig2_zmovedist };
-	for (unsigned int axis = 0; axis < 3; ++axis) {
-		const int64_t numerator = speed * frameticks * axes[axis] + state->position_remainder[axis];
-		*distances[axis] = (int32_t)(numerator / divisor);
-		state->position_remainder[axis] = numerator % divisor;
-	}
+#endif
+	trig2_xmovedist = ((int32_t)speed_per_tick * obj->moveX) >> 15;
+	trig2_ymovedist = ((int32_t)speed_per_tick * obj->moveY) >> 15;
+	trig2_zmovedist = ((int32_t)speed_per_tick * obj->moveZ) >> 15;
 }
 
 /* Shared integration tail for genus 6/7, 11, 13. */
@@ -495,6 +559,8 @@ static void integrate_from_move_vec(uint16_t obj_idx, FlightObject* obj, uint16_
  * pins a linked slave craft (tow_slave_ref) to a fixed world-frame offset. */
 static void dispatch_craft(uint16_t obj_idx, FlightObject* obj, uint16_t speed_per_tick) {
 	CraftData* craft = obj->craft_ptr;
+
+	uint16_t link_idx;
 
 	if (obj->move_dirty)
 		fview_calcrotatemove(obj->heading, obj->pitch, obj);
@@ -520,11 +586,13 @@ static void dispatch_craft(uint16_t obj_idx, FlightObject* obj, uint16_t speed_p
 	/* Linked slave craft: pin to a fixed offset behind the leader.
 	 * tow_slave_ref is an obj-ref (see OBJ_REF_* in tie.h); only FlightObject
 	 * slot refs are valid leaders — static refs would index past the array. */
-	uint16_t link_idx = (uint16_t)craft->tow_slave_ref;
+	link_idx = (uint16_t)craft->tow_slave_ref;
 	if (link_idx < OBJ_REF_STATIC_BASE) {
 		CraftData* tgt_craft = objects[link_idx].craft_ptr;
 		int16_t ofs_z;
 		/* genus > GENUS_UTILITY: tgt is freighter or larger -> use cap-ship offset table. */
+		FlightObject* slave;
+
 		if (objects[link_idx].genus > GENUS_UTILITY) {
 			if (objects[obj_idx].genus > GENUS_UTILITY)
 				ofs_z = (int16_t)(spec_data[craft->species_idx].dock_active_heavy -
@@ -538,7 +606,7 @@ static void dispatch_craft(uint16_t obj_idx, FlightObject* obj, uint16_t speed_p
 		}
 		pai_calcrotatedpoint(obj, 0, ofs_z, spec_data[tgt_craft->species_idx].dock_fwd);
 
-		FlightObject* slave = &objects[link_idx];
+		slave = &objects[link_idx];
 		slave->world_x_prev = slave->world_x;
 		slave->world_y_prev = slave->world_y;
 		slave->world_z_prev = slave->world_z;
@@ -552,107 +620,13 @@ static void dispatch_craft(uint16_t obj_idx, FlightObject* obj, uint16_t speed_p
 /* move_moveobjects                                                    */
 /* ------------------------------------------------------------------ */
 
-/* Flight-sim frame counter. Incremented once per move_moveobjects call,
- * i.e. once per logical flight frame (one position-integration step) —
- * not per host tick. Exposed via move_flight_frame() so the snapshot
- * emitter can stamp it; consumers compare it across snapshots to tell
- * whether the sim actually advanced (see TieSnapshot.flight_frame). */
-static uint32_t s_flight_frame = 0;
-
-uint32_t move_flight_frame(void) { return s_flight_frame; }
-
-/* Deterministic integer sqrt (Newton). Avoids float in the sim path. */
-static int32_t move_isqrt(int64_t n) {
-	if (n <= 0)
-		return 0;
-	int64_t x = n, y = (x + 1) / 2;
-	while (y < x) {
-		x = y;
-		y = (x + n / x) / 2;
-	}
-	return (int32_t)x;
-}
-
-/* OPTIONAL (pai_friendly_separation, default on): gently push apart same-FG
- * AI craft whose hulls overlap, so wingmen ganging up on one target don't
- * interpenetrate. Position-only -- heading/velocity are untouched, so guns
- * stay on target. The player is never moved. Runs after integration so it
- * works on final positions; both world_* and world_*_prev are shifted by the
- * same nudge, so no spurious velocity is introduced. Diverges from the binary
- * by design (the original has no fighter-vs-fighter separation). */
-static void move_separate_friendly_overlap(void) {
-	if (!pai_friendly_separation)
-		return;
-
-	for (uint16_t a = 0; a < NUM_CRAFTS; ++a) {
-		uint8_t ga = objects[a].genus;
-		if (!objects[a].ship_idx || objects[a].category)
-			continue;
-		if (ga != GENUS_FIGHTER && ga != GENUS_TRANSPORT && ga != GENUS_UTILITY)
-			continue;
-		if (a == (uint16_t)pstate.object_idx)
-			continue;
-
-		for (uint16_t b = (uint16_t)(a + 1); b < NUM_CRAFTS; ++b) {
-			uint8_t gb = objects[b].genus;
-			if (!objects[b].ship_idx || objects[b].category)
-				continue;
-			if (gb != GENUS_FIGHTER && gb != GENUS_TRANSPORT && gb != GENUS_UTILITY)
-				continue;
-			if (b == (uint16_t)pstate.object_idx)
-				continue;
-			if (objects[a].fg_idx != objects[b].fg_idx)
-				continue;
-
-			int64_t dx = (int64_t)objects[a].world_x - objects[b].world_x;
-			int64_t dy = (int64_t)objects[a].world_y - objects[b].world_y;
-			int64_t dz = (int64_t)objects[a].world_z - objects[b].world_z;
-			int64_t d2 = dx * dx + dy * dy + dz * dz;
-
-			/* Minimum centre spacing = sum of hull half-extents
-			 * (collision_radius/4 each), i.e. just touching. */
-			int32_t min_sep = (objects[a].collision_radius + objects[b].collision_radius) / 4;
-			if (min_sep <= 0 || d2 >= (int64_t)min_sep * min_sep)
-				continue;
-
-			int32_t d = move_isqrt(d2);
-			if (d == 0) {
-				/* Exactly coincident: shove along +X so they part. */
-				dx = 1;
-				dy = 0;
-				dz = 0;
-				d = 1;
-			}
-
-			/* Resolve half the overlap per craft, clamped per frame so the
-			 * correction is gradual rather than a teleport. */
-			int32_t push = (min_sep - d) / 2;
-			if (push > 256)
-				push = 256;
-
-			int32_t nx = (int32_t)(dx * push / d);
-			int32_t ny = (int32_t)(dy * push / d);
-			int32_t nz = (int32_t)(dz * push / d);
-
-			objects[a].world_x += nx;
-			objects[a].world_x_prev += nx;
-			objects[a].world_y += ny;
-			objects[a].world_y_prev += ny;
-			objects[a].world_z += nz;
-			objects[a].world_z_prev += nz;
-			objects[b].world_x -= nx;
-			objects[b].world_x_prev -= nx;
-			objects[b].world_y -= ny;
-			objects[b].world_y_prev -= ny;
-			objects[b].world_z -= nz;
-			objects[b].world_z_prev -= nz;
-		}
-	}
-}
-
 // FUNCTION: TIE95 0x32448
 void move_moveobjects(void) {
-	s_flight_frame++;
+	uint16_t i;
+
+#ifdef TIE_MODERN
+	TieFlightIntegration_BeginFrame();
+#endif
 
 	/* Step 1: snapshot the player's rotated laser-muzzle offset in world
 	 * frame. laser_origin_d{x,y,z}_prev holds last frame; _d{x,y,z} is new.
@@ -668,13 +642,16 @@ void move_moveobjects(void) {
 	pstate.laser_origin_dz = rotatedz;
 
 	/* Step 2: per-object integration. */
-	for (uint16_t i = 0; i < (uint16_t)NUM_OBJECTS; i++) {
+	for (i = 0; i < (uint16_t)NUM_OBJECTS; i++) {
 		FlightObject* obj = &objects[i];
+		int16_t dt;
+		uint16_t speed_per_tick;
+
 		if (obj->ship_idx == 0)
 			continue;
 
 		/* Death countdown. */
-		int16_t dt = obj->death_timer;
+		dt = obj->death_timer;
 		if (dt != 0) {
 			int16_t new_dt = (int16_t)(dt - (int16_t)frameticks);
 			if (new_dt < 0)
@@ -700,9 +677,12 @@ void move_moveobjects(void) {
 		apply_roll_decay(i, obj);
 
 		/* Per-tick distance per unit move vector. */
-		uint16_t speed_per_tick = obj->current_speed && !TieFlightTiming_IsHighRate()
-									  ? math2_mphconvert(obj->current_speed, framerate)
-									  : 0;
+#ifdef TIE_MODERN
+		if (TieFlightTiming_IsHighRate())
+			speed_per_tick = 0;
+		else
+#endif
+			speed_per_tick = obj->current_speed ? math2_mphconvert(obj->current_speed, framerate) : 0;
 
 		/* Genus dispatch -- different integration paths. */
 		switch (obj->genus) {
@@ -739,6 +719,8 @@ void move_moveobjects(void) {
 		}
 	}
 
+#ifdef TIE_MODERN
 	if (TieFlightTiming_LegacyDue())
-		move_separate_friendly_overlap();
+		TieFlightIntegration_SeparateFriendly();
+#endif
 }

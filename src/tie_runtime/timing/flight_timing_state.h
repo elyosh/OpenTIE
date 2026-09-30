@@ -7,6 +7,7 @@
 
 #include "tie/tie.h"
 
+#ifdef TIE_MODERN
 typedef struct TieMoveTimingState {
 	uint16_t idnumber;
 	int64_t position_remainder[3];
@@ -24,6 +25,8 @@ typedef struct TieDynamicsTimingState {
 	int32_t velocity_remainder;
 	uint64_t autopilot_remainder[3];
 } TieDynamicsTimingState;
+
+#endif
 
 typedef struct TieStaticWeaponTimingState {
 	uint16_t idnumber;
@@ -57,8 +60,10 @@ typedef enum TieFlightTimingBlock {
 } TieFlightTimingBlock;
 
 void TieFlightTimingState_Reset(void);
+#ifdef TIE_MODERN
 TieMoveTimingState* TieFlightTimingState_Move(uint16_t object_index, const FlightObject* object);
 TieDynamicsTimingState* TieFlightTimingState_Dynamics(uint16_t object_index);
+#endif
 uint32_t TieFlightTimingState_AccumulateVelocityDelta(uint16_t object_index, uint16_t rate, int direction,
 													  uint16_t elapsed_ticks);
 TieStaticWeaponTimingState* TieFlightTimingState_StaticWeapon(uint16_t slot, uint16_t idnumber);

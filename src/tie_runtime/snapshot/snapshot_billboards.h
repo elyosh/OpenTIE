@@ -38,12 +38,10 @@ typedef struct TieBillboardCaptureLightning {
 /* Reset the cache for a new tick. Called by TieSnapshotBuilder_BeginTick. */
 void TieBillboardCapture_BeginTick(void);
 
-/* Called from anim_drawverysimpleobject's bitmap branch with the
- * rotscale_calcscale output and the engine-derived rotation. Safe to
- * call with `op` that isn't an is_bitmap opcode — the call is then a
- * no-op. */
-void TieBillboardCapture_Flight(uint16_t obj_slot, uint16_t op, uint16_t pixel_scale_q8,
-								uint16_t bound_hwidth, int16_t rotation_bam);
+/* Capture a flight sprite using its current eye depth, animation scale,
+ * and rotation. Non-bitmap opcodes are ignored. */
+void TieBillboardCapture_Flight(uint16_t obj_slot, uint16_t op, int32_t eye_depth, uint16_t scale_q8,
+								int16_t rotation_bam);
 
 /* Called from draw_drawcraft's lightning emit branch. */
 void TieBillboardCapture_Lightning(uint16_t craft_slot, uint16_t op, uint16_t pixel_scale_q8,

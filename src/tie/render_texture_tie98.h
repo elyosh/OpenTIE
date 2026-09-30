@@ -5,6 +5,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern uint16_t g_flightTextPalette[256];
 extern uint8_t g_flightColorKeyIndex;
 extern int g_renderTextureCacheCursor;
@@ -23,5 +27,9 @@ void Color_BuildRgb565ToPaletteIndexTable(uint8_t* dst, unsigned int first_index
 const uint8_t* RenderTexture_GetSoftwareShadeTable(const uint16_t* rgb565_shades);
 void RenderTexture_ResetSoftwareShadeTableCache(void);
 uint16_t* RenderTexture_GetHardwareShadeTables(const uint16_t* rgb565_shades);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

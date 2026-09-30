@@ -1,7 +1,14 @@
-#ifndef __COMPUTER_H__
-#define __COMPUTER_H__
+#ifndef TIE_COMPUTER_H
+#define TIE_COMPUTER_H
 
+#include <landru/input.h>
+#include <landru/surface.h>
+#include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Computer mode tabs */
 typedef enum {
@@ -11,10 +18,20 @@ typedef enum {
 	COMP_MODE_OPTIONS = 3,
 } ComputerMode;
 
-/* Push the in-flight Computer (options/medal/backup/record) screen
- * as a sub-task. Caller-task yields after this; the dialog itself
- * sets landru_exit_gbl on its way out via xerror_Set_Landru_Exit
- * (read by callers on the next step or via xerror_Get_Landru_Exit). */
-void computer_Push_Computer_Dialog_Task(void);
+typedef struct ComputerDialogState {
+	Input* the_dialog;
+	bool tie98;
+	LandruSurfaceSet saved_surface_set;
+	Rect saved_view_frame;
+	Rect saved_view_clip;
+} ComputerDialogState;
+
+void computer_PrepareDialog(ComputerDialogState* state);
+bool computer_OpenDialog(ComputerDialogState* state);
+void computer_CloseDialog(ComputerDialogState* state);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

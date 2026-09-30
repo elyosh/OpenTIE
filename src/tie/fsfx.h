@@ -1,7 +1,11 @@
-#ifndef __FSFX_H__
-#define __FSFX_H__
+#ifndef TIE_FSFX_H
+#define TIE_FSFX_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* In-flight SFX and voice dispatcher. Sound-ID map:
  *   [4..50]    main RMAP sound bank
@@ -196,4 +200,8 @@ extern uint8_t g_playerEngineSoundUpdateEnabled;
 extern int16_t g_engineSoundPreviousPlayerSpecies;
 void FSFX_UpdatePlayerEngineSound(void);
 
-#endif /* __FSFX_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

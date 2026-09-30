@@ -1,10 +1,15 @@
-#ifndef __STARSHIP_H__
-#define __STARSHIP_H__
+#ifndef TIE_STARSHIP_H
+#define TIE_STARSHIP_H
 
 #include "tie/tie.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * STARSHIP -- capital-ship combat layer (6 public functions).
@@ -151,5 +156,9 @@ extern const uint16_t bigexplo_obj_first;
 #define PROJ_SHIP_AMMO_LASER 141u /* +0 standard, +1 turbo */
 #define PROJ_SHIP_REBEL_TURBO 145u
 #define PROJ_SHIP_EMPIRE_TURBO 146u
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

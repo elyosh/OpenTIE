@@ -32,10 +32,7 @@ typedef struct TieRecoveredTextSnapshotLine {
 } TieRecoveredTextSnapshotLine;
 
 bool TieRecoveredMap_ReadSnapshotView(TieRecoveredMapSnapshotView* out);
-int TieRecoveredTitle_SnapshotLineCount(void);
-bool TieRecoveredTitle_ReadSnapshotLine(int index, char* text, size_t capacity, float* initial_y);
 int TieRecoveredText_SnapshotLineCount(void);
 bool TieRecoveredText_ReadSnapshotLine(int index, TieRecoveredTextSnapshotLine* out);
-int TieRecoveredLogo_ReadSnapshotActors(LandruActorRenderState* actors, int capacity);
 
 #endif

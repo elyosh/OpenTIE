@@ -1,3 +1,6 @@
+#ifndef TIE_DAMAGE_H
+#define TIE_DAMAGE_H
+
 /*
  * DAMAGE — in-flight damage-report room (USER_inflightinfo page 3).
  *
@@ -5,11 +8,13 @@
  * against IDA's DAMAGE_damageroom / DAMAGE_nextsystem / DAMAGE_outputsystem.
  */
 
-#ifndef TIE_DAMAGE_H
-#define TIE_DAMAGE_H
-
 #include "tie/string_table_ids.h"
+
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * System-status bitmask. One bit per subsystem, lives in CraftData::subsystem_active
@@ -35,14 +40,17 @@ typedef enum SubsystemFlags {
  */
 extern char** systemstrings;
 
-/*
- * Push the damage-assessment room as a tie_core task: three groups in
- * repair-priority order (under repair -> operational -> not fitted),
- * with one selectable row whose priority can be bumped to the top via
- * Enter/Space or RMB. The task latches the navigation hint
- * (-1/0/+1) into `user_submodal_result` before pop.
- */
-void damage_Push_DamageRoom_Task(void);
+/* State shared by room rendering and input processing. */
+typedef struct DamageRoomState {
+	int16_t sel_sys;    /* -1 until first present row picks it up */
+	int16_t mouse_prev; /* edge-detect on LMB/RMB release */
+	int16_t ret_dir;
+} DamageRoomState;
+
+void damage_OpenRoom(DamageRoomState* state);
+void damage_render_page(int16_t* selection);
+/* Poll result: 0 idle, 1 exit, 2 redraw. */
+int damage_poll_once(DamageRoomState* state);
 
 /*
  * Move the current selection one step forward (direction == +1) or backward
@@ -64,4 +72,8 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction);
  */
 void damage_outputsystem(SystemStringId system_id, int16_t y);
 
-#endif /* TIE_DAMAGE_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

@@ -32,7 +32,9 @@ uint16_t TieFlightTiming_StepTicks(void);
 uint16_t TieFlightTiming_CompatibilityTicks(void);
 bool TieFlightTiming_IsHighRate(void);
 uint32_t TieFlightTiming_RecordFrameLimit(void);
+#ifdef TIE_MODERN
 uint64_t TieFlightTiming_RecordDurationLimitUs(void);
+#endif
 int32_t TieFlightTiming_ScaleWithRemainder(int32_t value, uint16_t elapsed_ticks, int32_t divisor,
 										   int32_t* remainder);
 

@@ -1,11 +1,32 @@
-#ifndef __PLAY1_H__
-#define __PLAY1_H__
-
-#include <stdint.h>
+#ifndef TIE_PLAY1_H
+#define TIE_PLAY1_H
 
 #include "tie/shellext.h"
 
-/* Push the play1 cutscene as a tie_core task. */
-void play1_Push_Play1_Task(SceneHeadStruct* the_head);
+#include <landru/surface.h>
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Resources and presentation state retained for one film scene. */
+typedef struct Play1SceneState {
+	SceneHeadStruct* the_head;
+	ResFile* file;
+	ResFile* file2;
+	int16_t scene;
+	bool rate_changed;
+	bool is_streaming_active; /* mirrors module-static is_streaming for cleanup */
+	LandruSurfaceSet surface_set;
+} Play1SceneState;
+
+bool play1_OpenScene(Play1SceneState* state);
+void play1_CloseScene(Play1SceneState* state);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

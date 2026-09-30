@@ -1,5 +1,4 @@
 #include "tie/render_clip_tie98.h"
-
 #include "tie/logbuf2.h"
 #include "tie/tie.h"
 #include "tie/transfm2.h"
@@ -220,15 +219,20 @@ void RenderClip_ClipPolyNear(int prev_vert, int cur_vert, ProjVertexTIE98* vert_
 	int output;
 
 	if (previous_w < 0.0f) {
+		float current_scale;
+		float current_x;
+		float current_y;
+		float t;
+
 		if (current_w < 0.0f)
 			return;
 		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
-		const float current_scale = (float)perspFactor / current_w;
-		const float current_x = (current->sx - (float)halfpixelswide) * current_scale * g_invProjScale;
-		const float current_y =
+		current_scale = (float)perspFactor / current_w;
+		current_x = (current->sx - (float)halfpixelswide) * current_scale * g_invProjScale;
+		current_y =
 			(current->sy - (float)(transfm2_screenyoffset + halfpixelsdeep)) * current_scale * g_invProjScale;
-		const float t = previous_w / (current_scale - previous_w - 1.0f);
+		t = previous_w / (current_scale - previous_w - 1.0f);
 		vert_buf[output].sx = previous->sx - (current_x - previous->sx) * t;
 		vert_buf[output].sy = previous->sy - (current_y - previous->sy) * t;
 		vert_buf[output].lightIntensity =
@@ -236,13 +240,18 @@ void RenderClip_ClipPolyNear(int prev_vert, int cur_vert, ProjVertexTIE98* vert_
 		vert_buf[output].tu = previous->tu - (current->tu - previous->tu) * t;
 		vert_buf[output].tv = previous->tv - (current->tv - previous->tv) * t;
 	} else if (current_w < 0.0f) {
+		float previous_scale;
+		float previous_x;
+		float previous_y;
+		float t;
+
 		g_clipOccurred = 1;
 		output = g_clipVertCursor++;
-		const float previous_scale = (float)perspFactor / previous_w;
-		const float previous_x = (previous->sx - (float)halfpixelswide) * previous_scale * g_invProjScale;
-		const float previous_y = (previous->sy - (float)(transfm2_screenyoffset + halfpixelsdeep)) *
-								 previous_scale * g_invProjScale;
-		const float t = current_w / (current_w - previous_scale + 1.0f);
+		previous_scale = (float)perspFactor / previous_w;
+		previous_x = (previous->sx - (float)halfpixelswide) * previous_scale * g_invProjScale;
+		previous_y = (previous->sy - (float)(transfm2_screenyoffset + halfpixelsdeep)) * previous_scale *
+					 g_invProjScale;
+		t = current_w / (current_w - previous_scale + 1.0f);
 		vert_buf[output].sx = current->sx - (current->sx - previous_x) * t;
 		vert_buf[output].sy = current->sy - (current->sy - previous_y) * t;
 		vert_buf[output].lightIntensity =

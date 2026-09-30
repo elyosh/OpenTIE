@@ -1,11 +1,19 @@
-#ifndef __COMBAT_H__
-#define __COMBAT_H__
-
-#include <stdint.h>
+#ifndef TIE_COMBAT_H
+#define TIE_COMBAT_H
 
 #include "tie/shellext.h"
 
-/* Push the combat scene as a tie_core task. */
-void combat_Push_Combat_Task(SceneHeadStruct* the_head);
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void combat_OpenScene(SceneHeadStruct* the_head);
+void combat_CloseScene(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

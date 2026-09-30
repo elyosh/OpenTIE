@@ -1,11 +1,12 @@
 #ifndef TIE_RUNTIME_INPUT_INPUT_H
 #define TIE_RUNTIME_INPUT_INPUT_H
 
-#include "aeron/aeron.h"
-#include "tie_runtime/snapshot/snapshot.h"
-
 #include <stdbool.h>
 #include <stdint.h>
+
+typedef struct AeronRectI AeronRectI;
+typedef struct AeronInputSnapshot AeronInputSnapshot;
+typedef struct TieSnapshot TieSnapshot;
 
 enum { TIE_INPUT_AXIS_MAX = 16 };
 

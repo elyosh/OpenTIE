@@ -1,11 +1,22 @@
-#ifndef __MAINMENU_H__
-#define __MAINMENU_H__
+#ifndef TIE_MAINMENU_H
+#define TIE_MAINMENU_H
 
+#include "tie/menudata.h"
 #include "tie/shellext.h"
+
 #include <stdint.h>
 
-/* Push the main-menu scene as a tie_core task. Used by ShellTask in
- * shell.c — the host loop drives the scene via the task stack. */
-void mainmenu_Push_Main_Menu_Task(SceneHeadStruct* scene_head);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Returns the missing resource name on failure, NULL on success.
+ * CloseScene also releases a partially opened scene. */
+const char* mainmenu_OpenScene(SceneHeadStruct* scene_head, const MainMenuLayout* layout, ResFile** resource);
+void mainmenu_CloseScene(ResFile* resource);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

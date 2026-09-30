@@ -1,23 +1,10 @@
-#include <stdlib.h>
-#include <string.h>
-
+#include "tie/title.h"
 #include "landru/viewadd.h"
 #include "tie/shellext.h"
 #include "tie/tie.h"
-#include "tie/title.h"
-#include "tie_runtime/audio/config.h"
-#include "tie_runtime/diagnostics/diagnostics.h"
-#include "tie_runtime/display/classic_display.h"
-#include "tie_runtime/display/classic_framebuffer.h"
-#include "tie_runtime/flight_assets/model_types.h"
-#include "tie_runtime/input/input.h"
-#include "tie_runtime/runtime/exports.h"
-#include "tie_runtime/runtime/profile.h"
-#include "tie_runtime/snapshot/capture_views.h"
-#include "tie_runtime/snapshot/snapshot.h"
-#include "tie_runtime/snapshot/snapshot_internal.h"
-#include "tie_runtime/storage/storage.h"
-#include <landru/task.h>
+#ifdef TIE_MODERN
+#include "tie_runtime/snapshot/title.h"
+#endif
 
 #include "landru/actcust.h"
 #include "landru/actdelt.h"
@@ -34,11 +21,13 @@
 #include "landru/paragrp.h"
 #include "landru/rect.h"
 #include "landru/res.h"
-#include "landru/stream.h"
 #include "landru/timer.h"
 #include "landru/view.h"
 
 #include "tie/slant.h"
+
+#include <stdlib.h>
+#include <string.h>
 
 /* ---- Static data (from binary .data segment) ---- */
 
@@ -47,13 +36,11 @@
 static const int16_t scale_table[20] = { 276, 116, 238, 38, 188, 132, 248, 70,  260, 100,
 										 228, 54,  178, 22, 214, 148, 164, 202, 6,   86 };
 
-/* Resource name strings */
-static const char title_str[7][14] = { "title.lfd", "helv-20", "along",  "starwars",
-									   "stars",     "title",   "todtxt1" };
-
 /* ---- Static globals ---- */
 
-#define MAX_LINES 18
+enum {
+	MAX_LINES = 18,
+};
 
 static int16_t line_drawn[MAX_LINES];
 static BitmapStruct background;
@@ -69,11 +56,6 @@ static int16_t line_used[MAX_LINES];
 static Actor* along_actor;
 static Actor* stars_actor;
 static int16_t line_yvf[MAX_LINES];
-/* Snapshot of each line's INITIAL y captured at scene start. The HD
- * application needs the constant per-line origin to drive its own time-
- * based scroll independent of tie_core's per-frame state; we save it
- * here in user_Back when the engine populates line_y[]. */
-static int16_t line_y_initial_arr[MAX_LINES];
 static Actor* smallsw_actor;
 static int16_t scale_skipf[321];
 static int16_t scale_skip[321];
@@ -81,8 +63,8 @@ static int16_t film_time;
 static int16_t base_color;
 static int16_t scale_amount_f;
 static int16_t scale_amount;
-static int16_t num_lines;
-static LandruHandle title_text; /* paragraph data */
+int16_t title_num_lines;
+LandruHandle title_text; /* paragraph data */
 static int16_t title_font;
 
 /* ================================================================
@@ -90,6 +72,7 @@ static int16_t title_font;
  * ================================================================ */
 
 static void end_View(int32_t time) {
+	int16_t i;
 	(void)time;
 
 	/* Scene 8: check for exit at time 690 */
@@ -113,7 +96,7 @@ static void end_View(int32_t time) {
 
 	/* Time 689: clear all lines before loop */
 	if (film_time == 689) {
-		for (int16_t i = 0; i < num_lines; i++)
+		for (i = 0; i < title_num_lines; i++)
 			line_used[i] = 0;
 	}
 
@@ -220,10 +203,11 @@ static void user_Stars(Actor* actor, int32_t time) {
 
 /* Per-frame: advance each active line's Y position with deceleration */
 static void user_Title(Actor* actor, int32_t time) {
+	int16_t i;
 	(void)actor;
 	(void)time;
 
-	for (int16_t i = 0; i < num_lines; i++) {
+	for (i = 0; i < title_num_lines; i++) {
 		if (!line_used[i])
 			continue;
 
@@ -254,6 +238,8 @@ static void user_Title(Actor* actor, int32_t time) {
 /* Draw: render each active line with perspective horizontal scaling */
 static int16_t draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
 						  int16_t refresh) {
+	char* dataptr;
+	int16_t i;
 	(void)actor;
 	(void)r;
 	(void)clip_r;
@@ -263,19 +249,20 @@ static int16_t draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, in
 	if (!refresh)
 		return 1;
 
-	char* dataptr = (char*)xbitmap_Lock_Bitmap(&background);
+	dataptr = (char*)xbitmap_Lock_Bitmap(&background);
 
-	for (int16_t i = 0; i < num_lines; i++) {
+	for (i = 0; i < title_num_lines; i++) {
+		int16_t y, by, yf, j;
 		if (!line_used[i])
 			continue;
 
-		int16_t y = line_y[i];
-		int16_t by = buff_y[i];
-		int16_t yf = 2 * (y - 40);
+		y = line_y[i];
+		by = buff_y[i];
+		yf = 2 * (y - 40);
 		if (line_yf[i] >= 2048)
 			yf--;
 
-		for (int16_t j = 0; j < 20; j++) {
+		for (j = 0; j < 20; j++) {
 			if (scale_table[j] <= yf) {
 				int16_t w = 320 - 2 * (200 - y);
 				int16_t color = ((y - 40) >> 1) + 96 - base_color;
@@ -302,9 +289,9 @@ static int16_t draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, in
 
 /* At time 0: initialize 18 text lines with staggered positions */
 static void user_Back(Actor* actor, int32_t time) {
-	(void)actor;
-
 	int16_t start = 100;
+	int16_t i;
+	(void)actor;
 	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
 		if (xio_Is_System_Slower_Than(2))
 			start = 60;
@@ -315,11 +302,13 @@ static void user_Back(Actor* actor, int32_t time) {
 	if (time)
 		return;
 
-	num_lines = MAX_LINES;
-	for (int16_t i = 0; i < num_lines; i++) {
+	title_num_lines = MAX_LINES;
+	for (i = 0; i < title_num_lines; i++) {
 		buff_y[i] = 20 * (i % 10);
 		line_y[i] = start + 28 * i + 200;
-		line_y_initial_arr[i] = line_y[i];
+#ifdef TIE_MODERN
+		TieTitleSnapshot_SetOrigin(i, line_y[i]);
+#endif
 		line_yf[i] = 0;
 		line_yv[i] = 1;
 		line_yvf[i] = 0;
@@ -330,6 +319,7 @@ static void user_Back(Actor* actor, int32_t time) {
 
 /* Draw: render text lines into background bitmap as they come into view */
 static int16_t draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y, int16_t refresh) {
+	int16_t i;
 	(void)actor;
 	(void)r;
 	(void)clip_r;
@@ -341,13 +331,13 @@ static int16_t draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int
 
 	xcanvas_Push_Canvas(&background);
 
-	for (int16_t i = 0; i < num_lines; i++) {
+	for (i = 0; i < title_num_lines; i++) {
 		if (!line_drawn[i] && line_y[i] <= 200) {
 			Rect tr;
+			char string[64];
 			xrect_Set_Rect(&tr, 0, buff_y[i], 320, buff_y[i] + 20);
 			xpaint_Paint_Clipped_Rect(&tr, 0);
 
-			char string[64];
 			xparagrp_Get_Paragraph_String(title_text, string, 0, i);
 			xfont_Print_Centered_Text(string, &tr, 15, title_font);
 			line_drawn[i] = 1;
@@ -358,176 +348,115 @@ static int16_t draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int
 	return 1;
 }
 
-/* ================================================================
- * Snapshot emit — HD compositor channel
- * ================================================================
- *
- * Scene-start one-shot: the snapshot ships the static text + initial-y
- * for all 18 lines while the title task is alive. The application pre-renders
- * the whole stack to a texture once per scene and scrolls that texture
- * at a known rate using its own wall clock — no per-frame engine→application
- * y sync. The snapshot's only job is to deliver text + scene-start /
- * scene-end signaling (via scene_tag transitions handled in shell.c). */
-int TieRecoveredTitle_SnapshotLineCount(void) { return title_text && num_lines > 0 ? num_lines : 0; }
+/* The native task owns the view wait, stream selection, and snapshot tags. */
+int16_t title_OpenScene(SceneHeadStruct* scene_head, TitleSceneResources* resources, int16_t font_slot) {
+	Rect frame;
+	Palette* pal;
+	int16_t i;
 
-bool TieRecoveredTitle_ReadSnapshotLine(int index, char* text, size_t capacity, float* initial_y) {
-	if (!title_text || !text || !capacity || !initial_y || index < 0 || index >= num_lines)
-		return false;
-	text[0] = '\0';
-	xparagrp_Get_Paragraph_String(title_text, text, 0, index);
-	text[capacity - 1] = '\0';
-	*initial_y = (float)line_y_initial_arr[index];
-	return true;
-}
+	/* Load resources */
+	resources->file = shellext_Open_Empire_Resource("title.lfd");
+	if (!resources->file)
+		return 0;
 
-typedef enum {
-	TITLE_PHASE_BEGIN = 0,
-	TITLE_PHASE_CLEANUP = 1,
-} TitlePhase;
+	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
+		strcpy(resources->film_name, "title");
+	} else {
+		strcpy(resources->film_name, "todtxt1");
+		resources->film_name[6] = pilot_record.cur_battle + '1';
+	}
+	title_text = xparagrp_Res_Paragraph(resources->file, resources->film_name);
+	if (!title_text)
+		return 0;
 
-typedef struct TitleTask {
-	SceneHeadStruct* scene_head;
-	ResFile* file;
-	TitlePhase phase;
-} TitleTask;
+	/* Load font */
+	/* TIE98 0x490067/0x4909E6: retain slot 2 for the
+	 * SVGA frontend font and place the VGA title font in slot 4. */
+	title_font = font_slot;
+	xfont_Res_Font("helv-20", (uint16_t)title_font);
 
-static LandruTaskStepResult title_task_step(void* self) {
-	TitleTask* t = (TitleTask*)self;
+	/* Initialize state */
+	base_color = 0;
+	scale_amount = 12;
+	scale_amount_f = 0;
+	film_time = (shellext_Get_Cur_Scene() == SCENE_TITLE) ? 0 : 99;
 
-	if (t->phase == TITLE_PHASE_BEGIN) {
-		Rect frame;
-
-		/* Load resources */
-		t->file = shellext_Open_Empire_Resource(title_str[0]); /* "title.lfd" */
-
-		/* Resolve the paragraph / scene name. SCENE_TITLE uses the
-		 * "title" paragraph (Star Wars opening crawl); other scenes
-		 * use the per-battle "todtxtN" variant. We use the same string
-		 * to load text and to tag the snapshot for the HD compositor's
-		 * bundle lookup. */
-		char film_name[16];
-		if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
-			strcpy(film_name, title_str[5]); /* "title" */
+	/* Build scale lookup tables */
+	for (i = 0; i <= 320; i++) {
+		if (i) {
+			scale_skip[i] = 320 / i - 1;
+			scale_skipf[i] = (int16_t)(((320 % i) << 16) / i);
 		} else {
-			strcpy(film_name, title_str[6]); /* "todtxt1" */
-			film_name[6] = pilot_record.cur_battle + '1';
+			scale_skip[0] = 0;
+			scale_skipf[0] = 0;
 		}
-		title_text = xparagrp_Res_Paragraph(t->file, film_name);
-
-		/* Load font */
-		/* TIE98 0x490067/0x4909E6: retain slot 2 for the
-		 * SVGA frontend font and place the VGA title font in slot 4. */
-		title_font = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 4 : 2;
-		xfont_Res_Font(title_str[1], (uint16_t)title_font); /* "helv-20" */
-
-		/* Initialize state */
-		base_color = 0;
-		scale_amount = 12;
-		scale_amount_f = 0;
-		film_time = (shellext_Get_Cur_Scene() == SCENE_TITLE) ? 0 : 99;
-
-		/* Build scale lookup tables */
-		for (int16_t i = 0; i <= 320; i++) {
-			if (i) {
-				scale_skip[i] = 320 / i - 1;
-				scale_skipf[i] = (int16_t)(((320 % i) << 16) / i);
-			} else {
-				scale_skip[0] = 0;
-				scale_skipf[0] = 0;
-			}
-		}
-
-		/* Allocate background bitmap */
-		xrect_Set_Rect(&frame, 0, 0, 320, 200);
-		xbitmap_Init_Bitmap(&background);
-		xbitmap_Alloc_Bitmap(&background, 320, 200);
-
-		/* Create actors (scene 8 only: along + starwars) */
-		if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
-			along_actor = xactdelt_Res_Delta_Actor(title_str[2], &frame, 0, 0, 20); /* "along" */
-			xactor_Set_Actor_Time(along_actor, 0, 38);
-
-			starwars_actor = xactdelt_Res_Delta_Actor(title_str[3], &frame, 30, 32, 20); /* "starwars" */
-			if (xio_Is_System_Slower_Than(2))
-				xactor_Set_Actor_User_Function(starwars_actor, user_Slow_StarWars);
-			else
-				xactor_Set_Actor_User_Function(starwars_actor, user_StarWars);
-		}
-
-		stars_actor = xactdelt_Res_Delta_Actor(title_str[4], &frame, 0, 0, 100); /* "stars" */
-		xactor_Set_Actor_User_Function(stars_actor, user_Stars);
-
-		back_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 10);
-		xactor_Set_Actor_User_Function(back_actor, user_Back);
-		xactor_Set_Actor_Draw_Function(back_actor, draw_Back);
-
-		title_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
-		xactor_Set_Actor_User_Function(title_actor, user_Title);
-		xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
-
-		/* Set palettes */
-		Palette* pal = xpal_Res_Palette(title_str[5]); /* "title" */
-		xpal_Set_Dest_Palette(pal);
-		xpal_Set_Dest_Palette(t->scene_head->def_palette);
-
-		/* Start fade and push the modal view task */
-		xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
-		xview_Set_View_Update_Function(end_View);
-		xview_Disable_Global_View_Erase();
-
-		const char* path = (TieStorage_IsDirectory(TIE_FILE_ROOT_FRONTEND_ASSET, "astream") ||
-							TieStorage_IsDirectory(TIE_FILE_ROOT_FRONTEND_ASSET, "ASTREAM"))
-							   ? "astream\\os1-v3.wrk"
-							   : "stream\\os1-v3.wrk";
-		xstream_Chain_Stream_File(0, path);
-
-		/* Tag the scene for the HD compositor: bundle key (TITLE, <film>)
-		 * resolves the remaster manifest at <root>/TITLE/films/<film>/.
-		 * FULL_FRAME because the crawl + logo zoom move every tick;
-		 * INCREMENTAL would leave trails on the persistent RT. Both are
-		 * cleared by shell_task_step before the next scene's Push. */
-		TieSnapshotBuilder_SetActiveFilm("TITLE", film_name);
-		TieSnapshotBuilder_SetRedrawModel(TIE_REDRAW_FULL_FRAME);
-
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = TITLE_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
-	return LANDRU_TASK_STEP_DONE;
+	/* Allocate background bitmap */
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
+	xbitmap_Init_Bitmap(&background);
+	if (!xbitmap_Alloc_Bitmap(&background, 320, 200))
+		return 0;
+
+	/* Create actors (scene 8 only: along + starwars) */
+	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
+		along_actor = xactdelt_Res_Delta_Actor("along", &frame, 0, 0, 20);
+		if (!along_actor)
+			return 0;
+		xactor_Set_Actor_Time(along_actor, 0, 38);
+
+		starwars_actor = xactdelt_Res_Delta_Actor("starwars", &frame, 30, 32, 20);
+		if (!starwars_actor)
+			return 0;
+		if (xio_Is_System_Slower_Than(2))
+			xactor_Set_Actor_User_Function(starwars_actor, user_Slow_StarWars);
+		else
+			xactor_Set_Actor_User_Function(starwars_actor, user_StarWars);
+	}
+
+	stars_actor = xactdelt_Res_Delta_Actor("stars", &frame, 0, 0, 100);
+	if (!stars_actor)
+		return 0;
+	xactor_Set_Actor_User_Function(stars_actor, user_Stars);
+
+	back_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 10);
+	if (!back_actor)
+		return 0;
+	xactor_Set_Actor_User_Function(back_actor, user_Back);
+	xactor_Set_Actor_Draw_Function(back_actor, draw_Back);
+
+	title_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
+	if (!title_actor)
+		return 0;
+	xactor_Set_Actor_User_Function(title_actor, user_Title);
+	xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
+
+	/* Set palettes */
+	pal = xpal_Res_Palette("title");
+	if (!pal)
+		return 0;
+	xpal_Set_Dest_Palette(pal);
+	xpal_Set_Dest_Palette(scene_head->def_palette);
+
+	/* Start fade and push the modal view task */
+	xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
+	xview_Set_View_Update_Function(end_View);
+	xview_Disable_Global_View_Erase();
+	return 1;
 }
 
-static void title_task_end(void* self) {
-	TitleTask* t = (TitleTask*)self;
-	if (t->phase == TITLE_PHASE_BEGIN)
-		return;
-
-	/* CLEANUP */
+void title_CloseScene(TitleSceneResources* resources) {
 	Rect frame;
 	xview_Enable_Global_View_Erase();
 	xview_Clear_View_Update_Function();
 	xbitmap_Free_Bitmap(&background);
 	xparagrp_Free_Paragraph(title_text);
-	title_text = LANDRU_NULL_HANDLE; /* mute TieRecoveredTitle_CaptureSnapshot once we leave */
-	num_lines = 0;
-	xres_Close_Resource(t->file);
-
+	title_text = LANDRU_NULL_HANDLE;
+	title_num_lines = 0;
+	if (resources->file)
+		xres_Close_Resource(resources->file);
+	resources->file = NULL;
 	xcanvas_Get_Drawing_Canvas_Bounds(&frame);
 	xview_Set_View_Frame(0, &frame);
 	xview_Set_View_Pos(0, 0, 0);
-}
-
-static const LandruTaskVtable title_task_vt = {
-	.step = title_task_step,
-	.end = title_task_end,
-};
-
-void title_Push_Title_Task(SceneHeadStruct* scene_head) {
-	TitleTask* t = (TitleTask*)landru_task_push(&title_task_vt);
-	if (!t)
-		return;
-	t->scene_head = scene_head;
-	t->file = NULL;
-	t->phase = TITLE_PHASE_BEGIN;
 }

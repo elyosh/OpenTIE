@@ -1,8 +1,5 @@
-#include <stddef.h>
-#include <stdint.h>
-
-#include "tie/collide.h"
 #include "tie/damage.h"
+#include "tie/collide.h"
 #include "tie/feinput.h"
 #include "tie/festring.h"
 #include "tie/flight_surface_tie98.h"
@@ -11,41 +8,51 @@
 #include "tie/user.h" /* user_submodal_result */
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/profile.h"
-#include <landru/task.h>
+
+#include <stddef.h>
+#include <stdint.h>
 
 /* --- Module-owned global (watdbg: damage.c) ---------------------------- */
 
 /* Set by fediskio_loadstringdata to point into the relocated string table;
  * carries 10 C-string pointers (the SystemStringId labels). */
+// GLOBAL: TIE95 0xD358C
+// GLOBAL: TIE98 0x62696C
 char** systemstrings;
 
 /* --- Local helpers ---------------------------------------------------- */
 
-#define NUM_SYSTEMS 10
+enum {
+	NUM_SYSTEMS = 10,
+};
 
 /* Color indices (front-end palette). */
-#define COLOR_BG_NORMAL 0x44    /* unselected row background          */
-#define COLOR_BG_SELECTED 0x46  /* highlighted row background         */
-#define COLOR_TEXT_NAME 0x43    /* default name-column text color     */
-#define COLOR_TEXT_NA 0x41      /* "N/A" (subsystem not installed)    */
-#define COLOR_TEXT_TIME 0x4A    /* "MM:SS" repair countdown          */
-#define COLOR_TEXT_PARTIAL 0x4E /* partial system health              */
-#define COLOR_TEXT_HEALTHY 0x52 /* "100%" (fully operational)        */
+enum {
+	COLOR_BG_NORMAL = 0x44,    /* unselected row background          */
+	COLOR_BG_SELECTED = 0x46,  /* highlighted row background         */
+	COLOR_TEXT_NAME = 0x43,    /* default name-column text color     */
+	COLOR_TEXT_NA = 0x41,      /* "N/A" (subsystem not installed)    */
+	COLOR_TEXT_TIME = 0x4A,    /* "MM:SS" repair countdown          */
+	COLOR_TEXT_PARTIAL = 0x4E, /* partial system health              */
+	COLOR_TEXT_HEALTHY = 0x52, /* "100%" (fully operational)        */
+};
 
 /* Post-FEINPUT arrow codes: left/right/up/down are 1/2/3/4. */
-#define K_LEFT 0x01
-#define K_RIGHT 0x02
-#define K_UP 0x03
-#define K_DOWN 0x04
-#define K_ENTER 0x0D
-#define K_ESC 0x1B
-#define K_SPACE 0x20
-#define K_KP2 0x32 /* keypad '2' (down) */
-#define K_KP8 0x38 /* keypad '8' (up)   */
-#define K_Q_UPPER 0x51
-#define K_Q_LOWER 0x71
-#define K_D_LOWER 100 /* 'd' -- this page's hotkey (damage) */
-#define K_F1 0xBB     /* F1 scancode + 0x80 offset */
+enum {
+	K_LEFT = 0x01,
+	K_RIGHT = 0x02,
+	K_UP = 0x03,
+	K_DOWN = 0x04,
+	K_ENTER = 0x0D,
+	K_ESC = 0x1B,
+	K_SPACE = 0x20,
+	K_KP2 = 0x32, /* keypad '2' (down) */
+	K_KP8 = 0x38, /* keypad '8' (up)   */
+	K_Q_UPPER = 0x51,
+	K_Q_LOWER = 0x71,
+	K_D_LOWER = 100, /* 'd' -- this page's hotkey (damage) */
+	K_F1 = 0xBB,     /* F1 scancode + 0x80 offset */
+};
 
 /* Output formatters: write an ASCII-decoded field to `dst` and terminate. */
 static void format_pct(char* dst, uint16_t health_percent) {
@@ -69,7 +76,9 @@ static void format_time(char* dst, uint16_t ticks) {
 }
 
 static void build_priority_to_system(uint8_t* priority_to_system) {
-	for (int i = 0; i < NUM_SYSTEMS; i++)
+	int i;
+
+	for (i = 0; i < NUM_SYSTEMS; i++)
 		priority_to_system[pstate.subsystem_repair_priority[i]] = (uint8_t)i;
 }
 
@@ -78,7 +87,9 @@ static void build_priority_to_system(uint8_t* priority_to_system) {
  * Enter/Space/RMB code. */
 static void promote_to_top(uint16_t sel_sys) {
 	const uint8_t selected_priority = pstate.subsystem_repair_priority[sel_sys];
-	for (int i = 0; i < NUM_SYSTEMS; i++) {
+	int i;
+
+	for (i = 0; i < NUM_SYSTEMS; i++) {
 		const uint8_t priority = pstate.subsystem_repair_priority[i];
 		if (selected_priority > priority)
 			pstate.subsystem_repair_priority[i] = (uint8_t)(priority + 1);
@@ -147,13 +158,18 @@ void damage_outputsystem(SystemStringId system_id, int16_t y) {
 
 // FUNCTION: TIE95 0x1ABB4
 uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
+	int k;
 	uint8_t priority_to_system[NUM_SYSTEMS];
+	int16_t last_repair;
+	int j;
+	int16_t last_operational;
+
 	build_priority_to_system(priority_to_system);
 
-	int16_t last_repair = -1;
+	last_repair = -1;
 
 	/* -- Pass 1: systems under repair (health == 0). ----------------- */
-	for (int j = 0; j < NUM_SYSTEMS; j++) {
+	for (j = 0; j < NUM_SYSTEMS; j++) {
 		const uint8_t sys = priority_to_system[j];
 		if (pstate.subsystem_health_percent[sys])
 			continue;
@@ -166,11 +182,13 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
 		/* Matched cur_sys inside pass 1. */
 		if ((uint16_t)direction == 0xFFFF) {
 			/* Backward. */
+			int k;
+
 			if (last_repair != -1)
 				return (uint8_t)last_repair;
 			/* No previous repair -- wrap into the operational group from
 			 * priority 9 down. */
-			for (int k = NUM_SYSTEMS - 1; k >= 0; k--) {
+			for (k = NUM_SYSTEMS - 1; k >= 0; k--) {
 				if (pstate.subsystem_health_percent[priority_to_system[k]])
 					return priority_to_system[k];
 			}
@@ -178,15 +196,15 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
 		}
 
 		/* Forward. */
-		for (int k = j + 1; k < NUM_SYSTEMS; k++) {
+		for (k = j + 1; k < NUM_SYSTEMS; k++) {
 			if (!pstate.subsystem_health_percent[priority_to_system[k]])
 				return priority_to_system[k];
 		}
-		for (int k = 0; k < NUM_SYSTEMS; k++) {
+		for (k = 0; k < NUM_SYSTEMS; k++) {
 			if (pstate.subsystem_health_percent[priority_to_system[k]])
 				return priority_to_system[k];
 		}
-		for (int k = 0; k < NUM_SYSTEMS; k++) {
+		for (k = 0; k < NUM_SYSTEMS; k++) {
 			if (!pstate.subsystem_health_percent[priority_to_system[k]])
 				return priority_to_system[k];
 		}
@@ -195,9 +213,11 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
 
 	/* -- Pass 2: operational systems (health != 0). ----------------- */
 	/* Most recent operational system seen before cur_sys. */
-	int16_t last_operational = -1;
-	for (int j = 0; j < NUM_SYSTEMS; j++) {
+	last_operational = -1;
+	for (j = 0; j < NUM_SYSTEMS; j++) {
 		const uint8_t sys = priority_to_system[j];
+		int k;
+
 		if (!pstate.subsystem_health_percent[sys])
 			continue;
 
@@ -215,15 +235,15 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
 		}
 
 		/* Forward. */
-		for (int k = j + 1; k < NUM_SYSTEMS; k++) {
+		for (k = j + 1; k < NUM_SYSTEMS; k++) {
 			if (pstate.subsystem_health_percent[priority_to_system[k]])
 				return priority_to_system[k];
 		}
-		for (int k = 0; k < NUM_SYSTEMS; k++) {
+		for (k = 0; k < NUM_SYSTEMS; k++) {
 			if (!pstate.subsystem_health_percent[priority_to_system[k]])
 				return priority_to_system[k];
 		}
-		for (int k = 0; k < NUM_SYSTEMS; k++) {
+		for (k = 0; k < NUM_SYSTEMS; k++) {
 			if (pstate.subsystem_health_percent[priority_to_system[k]])
 				return priority_to_system[k];
 		}
@@ -235,29 +255,21 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
 	return 0;
 }
 
-typedef enum {
-	DAMAGE_PHASE_RENDER = 0,
-	DAMAGE_PHASE_POLL,
-} DamagePhase;
-
-typedef struct DamageTask {
-	int16_t sel_sys;    /* -1 until first present row picks it up */
-	int16_t mouse_prev; /* edge-detect on LMB/RMB release */
-	int16_t ret_dir;
-	DamagePhase phase;
-} DamageTask;
-
-static void damage_render_page(int16_t* sel_sys) {
+void damage_render_page(int16_t* sel_sys) {
 	uint8_t priority_to_system[NUM_SYSTEMS];
+	int16_t y;
+	uint32_t line_step;
+	int i;
+
 	build_priority_to_system(priority_to_system);
 
 	/* 20-line layout in 320x200, 50-line in 640x480; line spacing
 	 * derived from remaining vertical space. */
-	int16_t y = tie_is_high_resolution_flight() ? 51 : 21;
-	const uint32_t line_step = (uint32_t)(screenYRes - 2 * y) / NUM_SYSTEMS;
+	y = tie_is_high_resolution_flight() ? 51 : 21;
+	line_step = (uint32_t)(screenYRes - 2 * y) / NUM_SYSTEMS;
 
 	/* -- Draw group A: present and under repair (health == 0). ---- */
-	for (int i = 0; i < NUM_SYSTEMS; i++) {
+	for (i = 0; i < NUM_SYSTEMS; i++) {
 		const uint8_t sys = priority_to_system[i];
 		if (pstate.subsystem_health_percent[sys])
 			continue;
@@ -273,7 +285,7 @@ static void damage_render_page(int16_t* sel_sys) {
 	}
 
 	/* -- Draw group B: present and operational (health != 0). ---- */
-	for (int i = 0; i < NUM_SYSTEMS; i++) {
+	for (i = 0; i < NUM_SYSTEMS; i++) {
 		const uint8_t sys = priority_to_system[i];
 		if (!pstate.subsystem_health_percent[sys])
 			continue;
@@ -289,7 +301,7 @@ static void damage_render_page(int16_t* sel_sys) {
 	}
 
 	/* -- Draw group C: subsystem not installed. ----------------- */
-	for (int i = 0; i < NUM_SYSTEMS; i++) {
+	for (i = 0; i < NUM_SYSTEMS; i++) {
 		const uint8_t sys = priority_to_system[i];
 		if ((systemmask[sys] & pstate.player_craft->subsystem_active) != 0)
 			continue;
@@ -306,15 +318,20 @@ static void damage_render_page(int16_t* sel_sys) {
 /* Single input-poll iteration. Returns 1 if exit-class fires (caller
  * latches user_submodal_result), 2 if selection moved (page needs
  * redraw), 0 if nothing was consumed. */
-static int damage_poll_once(DamageTask* t) {
+int damage_poll_once(DamageRoomState* t) {
+	enum { ACT_NONE, ACT_NEXT, ACT_PREV, ACT_TOP, ACT_EXIT } action;
+	uint16_t key;
+	int redraw;
+	int mouse_btn;
+
 	feinput_getrawinput();
 	feinput_checkinput();
 	feinput_degitterinput();
 	inputdeltay = (int16_t)(inputdeltay * 2);
 
-	const uint16_t key = (uint16_t)inputkey;
-	enum { ACT_NONE, ACT_NEXT, ACT_PREV, ACT_TOP, ACT_EXIT } action = ACT_NONE;
-	int redraw = 0;
+	key = (uint16_t)inputkey;
+	action = ACT_NONE;
+	redraw = 0;
 
 	switch (key) {
 		case K_LEFT:
@@ -375,7 +392,7 @@ static int damage_poll_once(DamageTask* t) {
 	 * was held last frame. Binary semantics:
 	 *   LMB released -> next system (like '2'/Left)
 	 *   RMB released -> promote to top (like Enter/Space) */
-	const int mouse_btn = inputbuttons & 0xF;
+	mouse_btn = inputbuttons & 0xF;
 	if ((t->mouse_prev == 1 || t->mouse_prev == 2) && mouse_btn == 0) {
 		if (t->mouse_prev == 1) {
 			do {
@@ -391,41 +408,7 @@ static int damage_poll_once(DamageTask* t) {
 	return redraw ? 2 : 0;
 }
 
-// ORIGINAL_FUNCTION: TIE95 0x1A600
-// ORIGINAL_FUNCTION: TIE98 0x414CC0
-// (task-split recovery)
-static LandruTaskStepResult damage_task_step(void* self) {
-	DamageTask* t = (DamageTask*)self;
-
-	if (t->phase == DAMAGE_PHASE_RENDER) {
-		const bool tie98_display = TieClassicDisplay_UsesDx5();
-		if (tie98_display)
-			FlightSurface_Lock();
-		damage_render_page(&t->sel_sys);
-		if (tie98_display) {
-			FlightSurface_Unlock();
-			FrontendDisplay_BlitOffscreenToRenderSurface();
-			FrontendDisplay_PresentFrame();
-		}
-		t->phase = DAMAGE_PHASE_POLL;
-		return LANDRU_TASK_STEP_CONTINUE;
-	}
-
-	int r = damage_poll_once(t);
-	if (r == 1) {
-		user_submodal_result = (int32_t)t->ret_dir;
-		return LANDRU_TASK_STEP_DONE;
-	}
-	if (r == 2)
-		t->phase = DAMAGE_PHASE_RENDER;
-	return LANDRU_TASK_STEP_CONTINUE;
-}
-
-static const LandruTaskVtable damage_task_vt = {
-	.step = damage_task_step,
-};
-
-void damage_Push_DamageRoom_Task(void) {
+void damage_OpenRoom(DamageRoomState* t) {
 	dropflag = 1;
 	festring_setlinewrap(0);
 	festring_setautofill(1);
@@ -434,11 +417,7 @@ void damage_Push_DamageRoom_Task(void) {
 	festring_setbackcolor(COLOR_BG_NORMAL);
 	festring_settextcolor(COLOR_TEXT_NAME);
 
-	DamageTask* t = (DamageTask*)landru_task_push(&damage_task_vt);
-	if (!t)
-		return;
 	t->sel_sys = -1; /* no selection yet; set on first present row */
 	t->mouse_prev = 0;
 	t->ret_dir = 0;
-	t->phase = DAMAGE_PHASE_RENDER;
 }

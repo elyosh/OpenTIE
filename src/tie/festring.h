@@ -1,7 +1,11 @@
-#ifndef __FESTRING_H__
-#define __FESTRING_H__
+#ifndef TIE_FESTRING_H
+#define TIE_FESTRING_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void festring_setcursor(int16_t x, int16_t y);
 void festring_setbound(int16_t left, int16_t top, int16_t right, int16_t bottom);
@@ -20,5 +24,9 @@ void festring_outstringright(const uint8_t* s);
 void festring_clearscreen(void);
 void festring_hidescreen(void);
 void festring_showscreen(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

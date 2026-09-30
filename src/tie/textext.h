@@ -1,9 +1,13 @@
-#ifndef __TEXTEXT_H__
-#define __TEXTEXT_H__
+#ifndef TIE_TEXTEXT_H
+#define TIE_TEXTEXT_H
+
+#include "landru/rect.h"
 
 #include <stdint.h>
 
-#include "landru/rect.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* TextFadeEnum — from watdbg debug info */
 typedef enum {
@@ -333,5 +337,9 @@ Rect* textext_Get_Prev_Text_Bounds_Rect(void);
 void textext_Clear_Prev_Text_Bounds_Rect(void);
 Rect* textext_Get_Text_Bounds_Rect(void);
 void textext_Clear_Text_Bounds_Rect(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

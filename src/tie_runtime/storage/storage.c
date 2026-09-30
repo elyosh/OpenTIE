@@ -1,4 +1,5 @@
 #include "tie_runtime/storage/storage.h"
+#include "aeron/vfs.h"
 
 #include "aeron/log.h"
 
@@ -139,6 +140,11 @@ int TieStorage_Seek(TieFile* file, long offset, int whence) {
 }
 
 long TieStorage_Tell(TieFile* file) { return file ? (long)AeronVfs_Tell((AeronFile*)file) : -1; }
+
+int32_t TieStorage_FileLength(TieFile* file) {
+	int64_t size = AeronVfs_GetSize((AeronFile*)file);
+	return size >= 0 && size <= INT32_MAX ? (int32_t)size : 0;
+}
 
 int TieStorage_Close(TieFile* file) { return file && AeronVfs_Close((AeronFile*)file) ? 0 : -1; }
 

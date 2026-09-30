@@ -1,7 +1,11 @@
-#ifndef __ANIM_H__
-#define __ANIM_H__
+#ifndef TIE_ANIM_H
+#define TIE_ANIM_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Bitmap queue, frame-list animation, and hyperspace transition state. */
 
@@ -157,5 +161,9 @@ void anim_updateanimation_tie98(void);
  * are no-ops. Per-phase behaviour documented in anim.c.
  */
 void anim_dohyperspace(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

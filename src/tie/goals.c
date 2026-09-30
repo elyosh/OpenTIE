@@ -1,11 +1,9 @@
-#include <stdint.h>
-
+#include "tie/goals.h"
 #include "tie/create.h" /* diffmask, fgdiffmask, genusconvert, familyconvert */
 #include "tie/feinput.h"
 #include "tie/festring.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/frontend_display_tie98.h"
-#include "tie/goals.h"
 #include "tie/mission.h" /* RUNTIME_MissionState */
 #include "tie/score.h"
 #include "tie/shipext.h" /* EFGStruct, MissionFile */
@@ -15,34 +13,71 @@
 #include "tie/user.h" /* user_submodal_result */
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/profile.h"
-#include <landru/task.h>
 
 /* --- External globals populated by fediskio_loadstringdata ----------- */
 
 /* All eight *string pointers below are singletons (each a char* to a single
  * string in stringdata_buf). The *strings variants are base addresses of
  * 2..30-entry char* arrays also inside stringdata_buf. */
+// GLOBAL: TIE95 0xD4BB8
+// GLOBAL: TIE98 0x5FE848
 void* condstrings;         /* const char *[21] */
+// GLOBAL: TIE95 0xD4BB0
+// GLOBAL: TIE98 0x5FE81C
 void* condverbstrings;     /* const char *[20] */
+// GLOBAL: TIE95 0xD4BC0
+// GLOBAL: TIE98 0x5FE858
 void* percentstrings;      /* const char *[16] */
+// GLOBAL: TIE95 0xD4BC4
+// GLOBAL: TIE98 0x5FE83C
 void* goaloperatorstrings; /* const char *[2]  (GOP_AND=0, GOP_OR=1)   */
+// GLOBAL: TIE95 0xD4BAC
+// GLOBAL: TIE98 0x5FE844
 void* goaltitlestrings;    /* const char *[9]  (3 cats x 3 status)     */
+// GLOBAL: TIE95 0xD4BB4
+// GLOBAL: TIE98 0x5FE87C
 void* goalescapestr;       /* const char *     "[ESC]" banner          */
+// GLOBAL: TIE95 0xD4BC8
+// GLOBAL: TIE98 0x5FE84C
 void* goal_of_string;      /* const char *     " of "                  */
+// GLOBAL: TIE95 0xD4BBC
+// GLOBAL: TIE98 0x5FE870
 void* goal_ofall_string;   /* const char *     " of all "              */
+// GLOBAL: TIE95 0xD4B64
+// GLOBAL: TIE98 0x5FE878
 void* goalskillstrings;    /* const char *[6]  skill-level names       */
+// GLOBAL: TIE95 0xD4B94
+// GLOBAL: TIE98 0x5FE880
 void* goal_group_string;   /* const char *     " group "               */
+// GLOBAL: TIE95 0xD4B7C
+// GLOBAL: TIE98 0x5FE854
 void* goalaistrings;       /* const char *[30] AI-order names          */
+// GLOBAL: TIE95 0xD4B68
+// GLOBAL: TIE98 0x5FE888
 void* goal_allbut_string;  /* const char *     "all but "              */
+// GLOBAL: TIE95 0xD4B78
+// GLOBAL: TIE98 0x5FE884
 void* goalsidestrings;     /* const char *[3]  rebel/imperial/craft    */
+// GLOBAL: TIE95 0xD4B6C
+// GLOBAL: TIE98 0x5FE820
 void* goal_and_string;     /* const char *     " and "                 */
+// GLOBAL: TIE95 0xD4B98
+// GLOBAL: TIE98 0x5FE85C
 void* goalfamilystrings;   /* const char *[7]  family-category names   */
+// GLOBAL: TIE95 0xD4B70
+// GLOBAL: TIE98 0x5FE850
 void* goal_comma_string;   /* const char *     ", "                    */
+// GLOBAL: TIE95 0xD4B8C
+// GLOBAL: TIE98 0x5FE86C
 void* goalgenusstrings;    /* const char *[16] genus-category names    */
+// GLOBAL: TIE95 0xD4B74
+// GLOBAL: TIE98 0x5FE874
 void* goalallfgstring;     /* const char *     "all FG"                */
 
 /* buoy/navigation names (species 70..84) come from panelrts.c globals. */
 #include "tie/panelrts.h"
+
+#include <stdint.h>
 
 /* --- Module-owned globals (watdbg: goals.c) -------------------------- */
 
@@ -102,6 +137,8 @@ uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 	const uint8_t* name_ptr;
 	const uint16_t spec_num = spec_getspecnum(species_idx);
 
+	uint8_t wrap;
+
 	if (spec_num == 0xFF) {
 		/* Species not in spec_data[]; fall back to the buoy/navigation
 		 * strings. Only species 70..84 are valid indices into buoystr[15].
@@ -114,7 +151,7 @@ uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 		name_ptr = (const uint8_t*)spec_name_ptrs[spec_num];
 	}
 
-	const uint8_t wrap = goals_checkwrap(name_ptr);
+	wrap = goals_checkwrap(name_ptr);
 	festring_outstring(name_ptr);
 	if (outchar)
 		outchar(plural_flag ? 's' : ' ');
@@ -136,11 +173,13 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 	if (target_type == 1) {
 		if (op == 6) {
 			/* "species FG_name N" -- craft-specific reference. */
+			int ch;
+
 			total += goals_outputspeciesname(fg_array[target].species, 0);
 			festring_outstring((const uint8_t*)&fg_array[target]);
 			if (outchar)
 				outchar(' ');
-			const int ch = fgstatus[target].cond_id[4].detail ? (fg_array[target].special_craft + '1') : '?';
+			ch = fgstatus[target].cond_id[4].detail ? (fg_array[target].special_craft + '1') : '?';
 			if (outchar)
 				outchar(ch);
 			tense_offset = 0;
@@ -180,6 +219,10 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 	}
 	/* ----- target_type == 8: all FGs in set = target --------------- */
 	else if (target_type == 8) {
+		uint16_t in_set;
+		uint16_t i;
+		uint16_t j;
+
 		festring_outstring(((const uint8_t**)percentstrings)[op]);
 		festring_outstring((const uint8_t*)goal_of_string);
 		festring_outstring((const uint8_t*)goalallfgstring);
@@ -188,15 +231,15 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 
 		/* First pass: count matching FGs to decide " and " placement and
 		 * tense_offset (single match -> 0, multiple -> 10). */
-		uint16_t in_set = 0;
-		for (uint16_t i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
+		in_set = 0;
+		for (i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
 			if (fg_array[i].set == (uint8_t)target)
 				in_set++;
 		}
 		tense_offset = (in_set == 1) ? 0 : 10;
 
 		/* Second pass: emit each FG, with ", " / " and " separators. */
-		for (uint16_t j = 0; j < (uint16_t)mission_file_header.num_fg; j++) {
+		for (j = 0; j < (uint16_t)mission_file_header.num_fg; j++) {
 			if (fg_array[j].set != (uint8_t)target)
 				continue;
 
@@ -232,10 +275,12 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
 	}
 	/* ----- Category targets (species/genus/family/side/ai/skill) --- */
 	else {
+		const uint8_t* cat_name;
+
 		festring_outstring(((const uint8_t**)percentstrings)[op]);
 		festring_outstring((const uint8_t*)goal_ofall_string);
 
-		const uint8_t* cat_name = NULL;
+		cat_name = NULL;
 		switch (target_type) {
 			case 2:
 				/* Species-category (plural): species name with trailing 's'. */
@@ -323,36 +368,33 @@ static int16_t emit_goal_title(uint16_t category, uint16_t status_prio, int16_t 
 	return (int16_t)fontheight;
 }
 
-typedef enum {
-	GOALS_PHASE_RENDER = 0,
-	GOALS_PHASE_POLL,
-} GoalsPhase;
-
-typedef struct GoalsTask {
-	int16_t scroll_y;
-	int16_t content_height;
-	int16_t nav_code;
-	GoalsPhase phase;
-} GoalsTask;
-
 /* Walk all goals + per-FG entries, emit a single page-render of the
  * goals view at scroll_y. Updates *out_content_height in pixels.
  * Identical to the original outer-loop body's render block. */
-static void goals_render_page(int16_t scroll_y, int16_t* out_content_height) {
+void goals_render_page(int16_t scroll_y, int16_t* out_content_height) {
 	int16_t cur_y = scroll_y;
+	uint16_t category;
+
 	festring_settextcolor(0x4E);
-	for (uint16_t category = 0; category < 3; category++) {
+	for (category = 0; category < 3; category++) {
 		goalsCompletedCount[category] = 0;
 		goalsCount[category] = 0;
 	}
 
-	for (uint16_t category = 0; category < 3; category++) {
-		for (uint16_t status_prio = 0; status_prio < 3; status_prio++) {
+	for (category = 0; category < 3; category++) {
+		uint16_t status_prio;
+
+		for (status_prio = 0; status_prio < 3; status_prio++) {
 			int16_t title_pending = 1;
 
 			/* -- Category-level mission status + complete cache --- */
 			uint16_t goal_status;
 			uint16_t cat_complete_cache;
+			const EMissionGoal* g;
+			const ECondStruct* a;
+			const ECondStruct* b;
+			int16_t fg_idx;
+
 			if (category == 0) {
 				goal_status = mission.primary_global;
 				cat_complete_cache = mission.primary_complete;
@@ -366,9 +408,9 @@ static void goals_render_page(int16_t scroll_y, int16_t* out_content_height) {
 				cat_complete_cache = mission.bonus_complete;
 			}
 
-			const EMissionGoal* const g = &cut[category];
-			const ECondStruct* const a = &g->subcond[0];
-			const ECondStruct* const b = &g->subcond[1];
+			g = &cut[category];
+			a = &g->subcond[0];
+			b = &g->subcond[1];
 
 			/* -- Category subconditions --------------------------- */
 			if (g->or_joined == 1) {
@@ -423,6 +465,8 @@ static void goals_render_page(int16_t scroll_y, int16_t* out_content_height) {
 			} else {
 				/* Independent subconditions: evaluate + render each. */
 				uint16_t pri_calc = (uint16_t)score_checkcondition(a->cond, a->type, a->id, a->pct, 0);
+				uint16_t sec_calc;
+
 				if (a->cond == 10)
 					pri_calc = 0;
 				if (a->cond == 9) {
@@ -450,7 +494,7 @@ static void goals_render_page(int16_t scroll_y, int16_t* out_content_height) {
 						goalsCompletedCount[category]++;
 				}
 
-				uint16_t sec_calc = (uint16_t)score_checkcondition(b->cond, b->type, b->id, b->pct, 0);
+				sec_calc = (uint16_t)score_checkcondition(b->cond, b->type, b->id, b->pct, 0);
 				if (b->cond == 10)
 					sec_calc = 0;
 				if (b->cond == 9) {
@@ -483,16 +527,17 @@ static void goals_render_page(int16_t scroll_y, int16_t* out_content_height) {
 			}
 
 			/* -- Per-FG goals in this (category, status_prio) cell - */
-			for (int16_t fg_idx = 0; fg_idx < mission_file_header.num_fg; fg_idx++) {
+			for (fg_idx = 0; fg_idx < mission_file_header.num_fg; fg_idx++) {
 				/* Watcom unaligned-dword pattern: binary reads
 				 * dword at fg.link_flag and shifts right 24, which
 				 * extracts the byte at offset +3 = `difficulty`. */
-				if ((diffmask[mission.difficulty] & fgdiffmask[fg_array[fg_idx].difficulty]) == 0)
-					continue;
-
 				uint16_t fg_status;
 				uint16_t fg_cond;
 				uint8_t fg_pct;
+
+				if ((diffmask[mission.difficulty] & fgdiffmask[fg_array[fg_idx].difficulty]) == 0)
+					continue;
+
 				if (category == 0) {
 					fg_status = fgstatus[fg_idx].primary_status;
 					fg_cond = fg_array[fg_idx].pri_win_cond;
@@ -554,14 +599,7 @@ static void goals_render_page(int16_t scroll_y, int16_t* out_content_height) {
 /* Single input-poll iteration. Returns 1 if exit_room fires (caller
  * pops with nav_code latched), 2 if scroll changed (page needs
  * redraw), 0 if nothing happened. */
-static int goals_poll_once(GoalsTask* t) {
-	feinput_getrawinput();
-	feinput_checkinput();
-	feinput_degitterinput();
-	inputdeltay = (int16_t)(inputdeltay * 2);
-
-	const uint16_t key = (uint16_t)inputkey;
-	/* Directions describe the viewport, not movement of the rendered text. */
+int goals_poll_once(GoalsRoomState* t) {
 	enum {
 		ACT_NONE,
 		ACT_SCROLL_DOWN_1,
@@ -572,7 +610,18 @@ static int goals_poll_once(GoalsTask* t) {
 		ACT_NAV_NEXT,
 		ACT_EXIT_0,
 		ACT_ACCEPT_IF_END
-	} action = ACT_NONE;
+	} action;
+	uint16_t key;
+	int redraw;
+
+	feinput_getrawinput();
+	feinput_checkinput();
+	feinput_degitterinput();
+	inputdeltay = (int16_t)(inputdeltay * 2);
+
+	key = (uint16_t)inputkey;
+	/* Directions describe the viewport, not movement of the rendered text. */
+	action = ACT_NONE;
 
 	switch (key) {
 		case KEY_LEFT_ARROW:
@@ -615,7 +664,7 @@ static int goals_poll_once(GoalsTask* t) {
 			break;
 	}
 
-	int redraw = 0;
+	redraw = 0;
 	switch (action) {
 		case ACT_NAV_PREV:
 			t->nav_code = -1;
@@ -673,42 +722,7 @@ static int goals_poll_once(GoalsTask* t) {
 	return redraw ? 2 : 0;
 }
 
-// ORIGINAL_FUNCTION: TIE95 0x2AD90
-// ORIGINAL_FUNCTION: TIE98 0x42DCA0
-// (task-split recovery)
-static LandruTaskStepResult goals_task_step(void* self) {
-	GoalsTask* t = (GoalsTask*)self;
-
-	if (t->phase == GOALS_PHASE_RENDER) {
-		const bool tie98_display = TieClassicDisplay_UsesDx5();
-		if (tie98_display)
-			FlightSurface_Lock();
-		goals_render_page(t->scroll_y, &t->content_height);
-		if (tie98_display) {
-			FlightSurface_Unlock();
-			FrontendDisplay_BlitOffscreenToRenderSurface();
-			FrontendDisplay_PresentFrame();
-		}
-		t->phase = GOALS_PHASE_POLL;
-		return LANDRU_TASK_STEP_CONTINUE;
-	}
-
-	int r = goals_poll_once(t);
-	if (r == 1) {
-		/* TIE95 returns the 16-bit room result zero-extended in EAX. */
-		user_submodal_result = (uint16_t)t->nav_code;
-		return LANDRU_TASK_STEP_DONE;
-	}
-	if (r == 2)
-		t->phase = GOALS_PHASE_RENDER;
-	return LANDRU_TASK_STEP_CONTINUE;
-}
-
-static const LandruTaskVtable goals_task_vt = {
-	.step = goals_task_step,
-};
-
-void goals_Push_MissionGoalsRoom_Task(void) {
+void goals_OpenRoom(GoalsRoomState* t) {
 	const bool tie98_display = TieClassicDisplay_UsesDx5();
 	if (tie98_display)
 		FlightSurface_Lock();
@@ -757,11 +771,7 @@ void goals_Push_MissionGoalsRoom_Task(void) {
 	if (tie98_display)
 		FlightSurface_Unlock();
 
-	GoalsTask* t = (GoalsTask*)landru_task_push(&goals_task_vt);
-	if (!t)
-		return;
 	t->scroll_y = (int16_t)goalsTop;
 	t->content_height = 0;
 	t->nav_code = 0;
-	t->phase = GOALS_PHASE_RENDER;
 }

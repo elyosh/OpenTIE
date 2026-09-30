@@ -5,7 +5,6 @@
 #include <imuse/filelist.h>
 #include <imuse/hilevel.h>
 #include <imuse/lolevel.h>
-
 #include <stdint.h>
 #include <string.h>
 
@@ -15,11 +14,13 @@ static inline void imuse_ImPrintf(imuse_t* im, const char* fmt, ...) {
 	(void)fmt;
 }
 
-#define NUM_STATES 12
-#define SDP_STRIDE 62
-#define SDP_TERMINAL 0x0C
-#define SEQ_SMALLWIN 2
-#define PARAM_MARKER 256
+enum {
+	NUM_STATES = 12,
+	SDP_STRIDE = 62,
+	SDP_TERMINAL = 0x0C,
+	SEQ_SMALLWIN = 2,
+	PARAM_MARKER = 256,
+};
 
 /* Full bitmask table: full_masks[n] = (1 << n) - 1, for n = 0..7 */
 static const uint8_t full_masks[8] = { 0x00, 0x01, 0x03, 0x07, 0x0F, 0x1F, 0x3F, 0x7F };
@@ -258,10 +259,7 @@ static char sequenceData[18][10] = { "",         "s-win-lg", "        ", "s-los-
 static int32_t sequencePriorities[18] = { 0, 10, 2, 9, 1, 15, 14, 13, 12, 11, 8, 5, 7, 4, 6, 3, 20, 20 };
 
 /* SmallWin SDP record: 4 random destinations */
-static SdpRecord smallWin = {
-	.num_dests = 4,
-	.dest_names = { "s-win-1", "s-win-2", "s-win-3", "s-win-4" },
-};
+static SdpRecord smallWin = { "", "", 4, 0, { "s-win-1", "s-win-2", "s-win-3", "s-win-4" } };
 
 /* Channel buildup bitmasks — indexed by attributes[0] (buildup level).
  * Each bit enables a MIDI channel. Used by CbSetChannels in fcallbk.c. */
@@ -415,22 +413,34 @@ int16_t fscript_MsSetAttribute(int16_t attr_id, int16_t value) {
  *       target, preload it, swap next sound under pause.
  */
 static void change_state(int new_state) {
+	char* snd_name;
+	void* new_handle;
+
+	SdpRecord* chain;
+	SdpRecord* p;
+	SdpRecord* selected;
+
 	if (currentState == 0) {
 		/* Case 1: from idle — enter new state */
+		SdpRecord* chain;
+		SdpRecord* p;
+		SdpRecord* selected;
+		SdpRecord* next_sdp;
+
 		currentState = new_state;
-		SdpRecord* chain = sdpArrays[new_state];
+		chain = sdpArrays[new_state];
 		if (!chain)
 			return;
 
 		/* Walk to end of named records */
-		SdpRecord* p = sdp_chain_end(chain);
+		p = sdp_chain_end(chain);
 
 		/* Find first playable or terminal record past the chain end */
 		while (p->sound_name[0] && (uint8_t)p->sound_name[0] != SDP_TERMINAL)
 			p++;
 
 		currentSdp = p;
-		SdpRecord* selected = select_sdp(p, new_state);
+		selected = select_sdp(p, new_state);
 		currentSdp = selected;
 
 		/* Load current sound */
@@ -444,7 +454,7 @@ static void change_state(int new_state) {
 		}
 
 		/* Select and preload next sound */
-		SdpRecord* next_sdp = select_sdp(selected, new_state);
+		next_sdp = select_sdp(selected, new_state);
 		currentSdp = next_sdp;
 		nextID = imuse_filelist_load(im, next_sdp->sound_name);
 		if (!nextID) {
@@ -459,7 +469,8 @@ static void change_state(int new_state) {
 		imuse_start_music(im, currentID);
 		imuse_filelist_unload(im, currentID);
 		{
-			ImuseCmd cb = { .opcode = (intptr_t)fcallbk_CbDoCallback };
+			ImuseCmd cb = { 0 };
+			cb.opcode = (intptr_t)fcallbk_CbDoCallback;
 			imuse_set_trigger(im, (intptr_t)currentID, 0, &cb);
 		}
 		playingState = currentState;
@@ -483,22 +494,22 @@ static void change_state(int new_state) {
 
 	/* Active-state transition: search the new state's chain for the
 	 * outgoing state or the generic terminal. */
-	SdpRecord* chain = sdpArrays[new_state];
+	chain = sdpArrays[new_state];
 
 	/* Walk to end of named records in the NEW state's chain */
-	SdpRecord* p = sdp_chain_end(chain);
+	p = sdp_chain_end(chain);
 
 	/* Find transition record matching the OUTGOING state or generic terminal */
 	while ((uint8_t)p->sound_name[0] != (uint8_t)currentState && (uint8_t)p->sound_name[0] != SDP_TERMINAL)
 		p++;
 
-	SdpRecord* selected = select_sdp(p, new_state);
+	selected = select_sdp(p, new_state);
 	if (selected == currentSdp)
 		selected = select_sdp(selected, new_state);
 
 	/* Load the transition sound */
-	char* snd_name = selected->sound_name;
-	void* new_handle = imuse_filelist_load(im, snd_name);
+	snd_name = selected->sound_name;
+	new_handle = imuse_filelist_load(im, snd_name);
 	if (!new_handle) {
 		imuse_stop_all_sounds(im);
 		currentState = 0;
@@ -523,6 +534,9 @@ static void change_state(int new_state) {
  * up the next SDP continuation sound.
  */
 static void play_sequence(int seq_id) {
+	char* seq_name;
+	void* handle;
+
 	imuse_pause(im);
 	if (sequenceID) {
 		if (sequencePri >= sequencePriorities[seq_id]) {
@@ -535,8 +549,8 @@ static void play_sequence(int seq_id) {
 	}
 	imuse_resume(im);
 
-	char* seq_name = select_sequence(seq_id);
-	void* handle = imuse_filelist_load(im, seq_name);
+	seq_name = select_sequence(seq_id);
+	handle = imuse_filelist_load(im, seq_name);
 	if (!handle) {
 		imuse_stop_all_sounds(im);
 		currentState = 0;
@@ -557,16 +571,20 @@ static void play_sequence(int seq_id) {
 	/* For intro (1) or waiting (2) states, set up continuation */
 	if (currentState == 1 || currentState == 2) {
 		SdpRecord* chain = sdpArrays[currentState];
+		SdpRecord* p;
+		SdpRecord* cont;
+		void* cont_handle;
+
 		if (!chain)
 			return;
 
 		/* Walk to chain end, then find terminal (0x0D = 13) record */
-		SdpRecord* p = sdp_chain_end(chain);
+		p = sdp_chain_end(chain);
 		while ((uint8_t)p->sound_name[0] != 13)
 			p++;
 
-		SdpRecord* cont = select_sdp(p, currentState);
-		void* cont_handle = imuse_filelist_load(im, cont->sound_name);
+		cont = select_sdp(p, currentState);
+		cont_handle = imuse_filelist_load(im, cont->sound_name);
 		if (!cont_handle) {
 			imuse_stop_all_sounds(im);
 			currentState = 0;
@@ -589,16 +607,21 @@ static void play_sequence(int seq_id) {
  * a random destination, then searches the chain for a matching name.
  */
 static SdpRecord* select_sdp(SdpRecord* sdp, int state) {
+	int dest_idx;
+	const char* dest_name;
+	SdpRecord* chain;
+	SdpRecord* p;
+
 	if (!sdp->num_dests) {
 		imuse_ImPrintf(im, "Script err: no destinations\n");
 		return sdp;
 	}
 
-	int dest_idx = choose_dest(sdp);
-	const char* dest_name = &sdp->dest_names[dest_idx][0];
+	dest_idx = choose_dest(sdp);
+	dest_name = &sdp->dest_names[dest_idx][0];
 
-	SdpRecord* chain = sdpArrays[state];
-	SdpRecord* p = chain;
+	chain = sdpArrays[state];
+	p = chain;
 	while (p->name[0]) {
 		if (strcmp(p->name, dest_name) == 0)
 			return p;
@@ -631,24 +654,31 @@ static char* select_sequence(int seq_id) {
  */
 static int choose_dest(SdpRecord* sdp) {
 	/* Initialize mask on first use */
+	int16_t avail;
+	uint8_t mask;
+	int i;
+	int pick;
+	uint8_t pick_mask;
+	int result;
+
 	if (!sdp->used_mask)
 		sdp->used_mask = full_masks[sdp->num_dests];
 
 	/* Count available destinations */
-	int16_t avail = 0;
-	uint8_t mask = 1;
-	for (int i = 0; i < sdp->num_dests; i++) {
+	avail = 0;
+	mask = 1;
+	for (i = 0; i < sdp->num_dests; i++) {
 		if (mask & sdp->used_mask)
 			avail++;
 		mask <<= 1;
 	}
 
 	/* Pick a random index among available */
-	int pick = get_random(0, avail - 1);
+	pick = get_random(0, avail - 1);
 
 	/* Walk destinations, counting only available ones */
-	uint8_t pick_mask = 1;
-	int result;
+	pick_mask = 1;
+
 	for (result = 0; result < sdp->num_dests; result++) {
 		if (pick_mask & sdp->used_mask) {
 			if (pick == 0) {
@@ -681,16 +711,19 @@ static int16_t get_random(int16_t lo, int16_t hi) {
 	 * with modular wraparound — signed `2 * rseed` is UB once the
 	 * value exceeds INT32_MAX/2, which is reached almost immediately
 	 * because the seeds at init are 32-bit-truncated host pointers. */
-	for (int i = 0; i < 23; i++)
+	int i;
+	uint16_t raw;
+
+	for (i = 0; i < 23; i++)
 		rseed1 = (int32_t)(2u * (uint32_t)rseed1 +
 						   (uint32_t)(((rseed2 & 0x20000000) == 0) ^ ((rseed1 & 0x40000000) != 0)));
 
-	for (int i = 0; i < 37; i++)
+	for (i = 0; i < 37; i++)
 		rseed2 = (int32_t)(2u * (uint32_t)rseed2 +
 						   (uint32_t)(((rseed1 & 0x20000000) == 0) ^ ((rseed2 & 0x40000000) != 0)));
 
 	/* Sum in uint32 -- signed int32+int32 routinely overflows once
 	 * the LFSR has spun. Modular wraparound matches the binary. */
-	uint16_t raw = (uint16_t)((uint32_t)rseed2 + (uint32_t)rseed1);
+	raw = (uint16_t)((uint32_t)rseed2 + (uint32_t)rseed1);
 	return (int16_t)(((uint32_t)raw * (hi - lo + 1)) >> 16) + lo;
 }

@@ -1,8 +1,13 @@
-#ifndef __SHADE_H__
-#define __SHADE_H__
+#ifndef TIE_SHADE_H
+#define TIE_SHADE_H
 
 #include "landru/rect.h"
+
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 void shade_Build_Shaded_Palette(void);
 void shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, int16_t target_r, int16_t target_g,
@@ -13,5 +18,9 @@ void shade_Shadow_Line_List(const uint8_t* palette, int16_t x, int16_t y, int16_
 
 /* SHADE global */
 extern uint8_t shade_palette[256];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

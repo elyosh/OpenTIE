@@ -1,7 +1,11 @@
-#ifndef __MFSCRIPT_H__
-#define __MFSCRIPT_H__
+#ifndef TIE_MFSCRIPT_H
+#define TIE_MFSCRIPT_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* ChangeRef — describes a single music transition operation */
 typedef struct {
@@ -35,5 +39,9 @@ int16_t mfscript_MfSetState(int16_t state);
 int16_t mfscript_MfSetSequence(int16_t sequence);
 int16_t mfscript_MfSetCuePoint(int16_t cuePoint);
 int16_t mfscript_MfSetAttribute(int16_t number, int16_t val);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

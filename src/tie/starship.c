@@ -7,16 +7,16 @@
 #include "tie/fview.h"
 #include "tie/laser.h"
 #include "tie/math2.h"
+#include "tie/math2_wide.h"
 #include "tie/modelbounds.h"
 #include "tie/modelmesh.h"
 #include "tie/pai.h"
 #include "tie/panel.h"
 #include "tie/tie.h"
 #include "tie/trig2.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/timing/flight_timing_state.h"
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
+#endif
 
 /* --- external globals referenced by the module --- */
 
@@ -32,6 +32,10 @@
 
 #include "tie/user.h" /* user_validcomponent */
 
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
+
 /* ---------------------------------------------------------------- *
  * Local helpers
  * ---------------------------------------------------------------- */
@@ -41,10 +45,12 @@
  * high byte of a record is 0x7F, the low byte N is a back-reference count
  * and we skip N*3 bytes backward to retry. */
 static inline int16_t starship_coord_walk(const uint8_t* p) {
+	int16_t v;
+
 	while (p[1] == 0x7F) {
 		p -= 3 * (int)p[0];
 	}
-	int16_t v;
+
 	memcpy(&v, p, sizeof v);
 	return v;
 }
@@ -64,11 +70,11 @@ static inline int32_t rot_clamp(int32_t v) {
 
 /* RECOVERY HELPER: removes the repeated defined-C saturating shift used for
  * both coordinates rotated by TIE98 STARSHIP_damagecomponent. */
-static int32_t starship_damagecomponent_tie98_rotclamp(int64_t value) {
-	if (value >= 0x40000000LL)
-		value = 1073676288;
-	if (value <= -0x40000000LL)
-		value = -1073676288;
+static int32_t starship_damagecomponent_tie98_rotclamp(int32_t value) {
+	if (value >= 0x40000000)
+		value = 0x3fffffff;
+	if (value <= -0x40000000)
+		value = -0x3fff0000;
 	return (int32_t)(value >> 15);
 }
 
@@ -77,10 +83,20 @@ static int32_t starship_damagecomponent_tie98_rotclamp(int64_t value) {
 static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t component_plus1, uint16_t damage) {
 	const uint16_t component_idx = (uint16_t)(component_plus1 - 1);
 	const uint8_t hp = craftptr->mesh_component_hp[component_idx];
+	uint16_t damage_units;
+	uint16_t model_type;
+	uint16_t new_obj;
+	FlightObject* parent;
+	FlightObject* ember;
+	int center_x;
+	int center_y;
+	int center_z;
+	int effect_size;
+
 	if (hp == 0 || hp == 0xFF)
 		return damage;
 
-	uint16_t damage_units = damage >> 4;
+	damage_units = damage >> 4;
 	if (damage_units == 0)
 		damage_units = 1;
 	if (hp > damage_units) {
@@ -90,7 +106,7 @@ static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t compone
 
 	damage = (uint16_t)(16 * (damage_units - hp));
 	craftptr->mesh_component_hp[component_idx] = 0;
-	const uint16_t model_type = objects[obj_idx].ship_idx;
+	model_type = objects[obj_idx].ship_idx;
 	if (!modelmesh_isobjecttypemeshdamageable(model_type, component_idx))
 		return damage;
 
@@ -116,28 +132,28 @@ static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t compone
 		}
 	}
 
-	const uint16_t new_obj = create_findslot(GENUS_EXPLOSION);
+	new_obj = create_findslot(GENUS_EXPLOSION);
 	if (new_obj == 0xFFFF)
 		return damage;
 
-	FlightObject* parent = &objects[obj_idx];
-	FlightObject* ember = &objects[new_obj];
+	parent = &objects[obj_idx];
+	ember = &objects[new_obj];
 	ember->world_x = parent->world_x;
 	ember->world_y = parent->world_y;
 	ember->world_z = parent->world_z;
 
-	int center_x = modelmesh_getcenterx(model_type, component_idx);
-	const int center_y = modelmesh_getcentery(model_type, component_idx);
-	int center_z = modelmesh_getcenterz(model_type, component_idx);
+	center_x = modelmesh_getcenterx(model_type, component_idx);
+	center_y = modelmesh_getcentery(model_type, component_idx);
+	center_z = modelmesh_getcenterz(model_type, component_idx);
 	if (mission.train_craft_type && craftptr->mesh_rotation[component_idx]) {
 		const uint16_t angle = (uint16_t)craftptr->mesh_rotation[component_idx] << 8;
 		const int32_t sine = trig2_getsignedsin(angle);
 		const int32_t cosine = trig2_getsignedcos((int16_t)angle);
 		const int old_x = center_x;
-		center_x =
-			starship_damagecomponent_tie98_rotclamp((int64_t)center_z * -sine + (int64_t)old_x * cosine);
-		center_z =
-			starship_damagecomponent_tie98_rotclamp((int64_t)center_z * cosine + (int64_t)old_x * sine);
+		center_x = starship_damagecomponent_tie98_rotclamp(
+			(int32_t)((uint32_t)center_z * (0u - (uint32_t)sine) + (uint32_t)old_x * (uint32_t)cosine));
+		center_z = starship_damagecomponent_tie98_rotclamp(
+			(int32_t)((uint32_t)center_z * (uint32_t)cosine + (uint32_t)old_x * (uint32_t)sine));
 	}
 	pai_calcrotatedpoint(parent, (int16_t)center_x, (int16_t)center_z, (int16_t)-center_y);
 
@@ -159,7 +175,7 @@ static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t compone
 	ember->move_dirty = 1;
 	fsfx_triggersfx((uint16_t)((math2_getrandom() & 3) + 19), new_obj);
 
-	int effect_size = modelmesh_getcomponentmaxextent(model_type, component_idx) >> 9;
+	effect_size = modelmesh_getcomponentmaxextent(model_type, component_idx) >> 9;
 	if (effect_size > 255)
 		effect_size = 255;
 	ember->damage_state = (uint8_t)effect_size;
@@ -172,8 +188,8 @@ static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t compone
  * ---------------------------------------------------------------- */
 
 /* First of 5 reserved big-ship-explosion FlightObject slots. Retail
- * reads this from genus[13] (= 96, ember range start). Demo had 92.
- * Must match genus[13] in species.c and NUM_CRAFTS/NUM_WARHEADS in tie.h. */
+ * reads this from genus_table[13].start (= 96, ember range start). Demo had 92.
+ * Must match genus_table[13].start in species.c and NUM_CRAFTS/NUM_WARHEADS in tie.h. */
 const uint16_t bigexplo_obj_first = 96;
 
 /* ---------------------------------------------------------------- *
@@ -188,24 +204,49 @@ int16_t starship_getcoordvalue(const uint8_t* bsp_coord) { return starship_coord
 
 // FUNCTION: TIE95 0x52EDC
 uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj_idx) {
+	FlightObject* craft;
+	int32_t world_x;
+	int32_t world_y;
+	int32_t world_z;
+	uint8_t ship_idx;
+	int32_t dx;
+	int32_t dy;
+	int32_t dz;
+	int32_t dxold;
+	int32_t dyold;
+	int32_t dzold;
+	int32_t side_cur;
+	int32_t fwd_cur;
+	int32_t up_cur;
+	int32_t side_prev;
+	int32_t fwd_prev;
+	int32_t up_prev;
+	int32_t base_side_cur, base_up_cur, base_side_prev, base_up_prev;
+	int32_t scaled_fwd_cur, scaled_fwd_prev;
+	ShipModelMesh* mesh;
+	unsigned int num_meshes;
+	uint16_t hit_component;
+	int32_t best_frac;
+	unsigned int i;
+
 	if (TieProfile_UsesTie98Logic())
 		return collide_checksweptmodelcollision(shooter_obj_idx, target_obj_idx);
 
-	FlightObject* craft = &objects[target_obj_idx];
+	craft = &objects[target_obj_idx];
 	craftptr = craft->craft_ptr;
 
-	const int32_t world_x = craft->world_x;
-	const int32_t world_y = craft->world_y;
-	const int32_t world_z = craft->world_z;
-	const uint8_t ship_idx = craft->ship_idx;
+	world_x = craft->world_x;
+	world_y = craft->world_y;
+	world_z = craft->world_z;
+	ship_idx = craft->ship_idx;
 
 	/* Laser segment relative to the craft's world origin */
-	const int32_t dx = laserx - world_x;
-	const int32_t dy = lasery - world_y;
-	const int32_t dz = laserz - world_z;
-	const int32_t dxold = laserxold - world_x;
-	const int32_t dyold = laseryold - world_y;
-	const int32_t dzold = laserzold - world_z;
+	dx = laserx - world_x;
+	dy = lasery - world_y;
+	dz = laserz - world_z;
+	dxold = laserxold - world_x;
+	dyold = laseryold - world_y;
+	dzold = laserzold - world_z;
 
 	/* Rebuild local orientation matrix if dirty */
 	if (craft->orient_dirty) {
@@ -219,32 +260,24 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 	 * product against the craft's orientation vectors. The fwd axis result
 	 * is stored negated (matches the Watcom pipeline convention used by
 	 * PAI_calcrotatedpoint). */
-	const int32_t side_cur = (int32_t)(((int64_t)dx * craft->side_x) >> 15) +
-							 (int32_t)(((int64_t)dy * craft->side_y) >> 15) +
-							 (int32_t)(((int64_t)dz * craft->side_z) >> 15);
-	const int32_t fwd_cur =
-		-((int32_t)(((int64_t)dx * craft->fwd_x) >> 15) + (int32_t)(((int64_t)dy * craft->fwd_y) >> 15) +
-		  (int32_t)(((int64_t)dz * craft->fwd_z) >> 15));
-	const int32_t up_cur = (int32_t)(((int64_t)dx * craft->up_x) >> 15) +
-						   (int32_t)(((int64_t)dy * craft->up_y) >> 15) +
-						   (int32_t)(((int64_t)dz * craft->up_z) >> 15);
+	side_cur = math2_mul_q15(dx, craft->side_x) + math2_mul_q15(dy, craft->side_y) +
+			   math2_mul_q15(dz, craft->side_z);
+	fwd_cur = -(math2_mul_q15(dx, craft->fwd_x) + math2_mul_q15(dy, craft->fwd_y) +
+				math2_mul_q15(dz, craft->fwd_z));
+	up_cur = math2_mul_q15(dx, craft->up_x) + math2_mul_q15(dy, craft->up_y) + math2_mul_q15(dz, craft->up_z);
 
-	const int32_t side_prev = (int32_t)(((int64_t)dxold * craft->side_x) >> 15) +
-							  (int32_t)(((int64_t)dyold * craft->side_y) >> 15) +
-							  (int32_t)(((int64_t)dzold * craft->side_z) >> 15);
-	const int32_t fwd_prev = -((int32_t)(((int64_t)dxold * craft->fwd_x) >> 15) +
-							   (int32_t)(((int64_t)dyold * craft->fwd_y) >> 15) +
-							   (int32_t)(((int64_t)dzold * craft->fwd_z) >> 15));
-	const int32_t up_prev = (int32_t)(((int64_t)dxold * craft->up_x) >> 15) +
-							(int32_t)(((int64_t)dyold * craft->up_y) >> 15) +
-							(int32_t)(((int64_t)dzold * craft->up_z) >> 15);
+	side_prev = math2_mul_q15(dxold, craft->side_x) + math2_mul_q15(dyold, craft->side_y) +
+				math2_mul_q15(dzold, craft->side_z);
+	fwd_prev = -(math2_mul_q15(dxold, craft->fwd_x) + math2_mul_q15(dyold, craft->fwd_y) +
+				 math2_mul_q15(dzold, craft->fwd_z));
+	up_prev = math2_mul_q15(dxold, craft->up_x) + math2_mul_q15(dyold, craft->up_y) +
+			  math2_mul_q15(dzold, craft->up_z);
 
 	/* Scale by 2^(model_scale_shift - 1). model_scale_shift == 0 means the ship has no LOD
 	 * and the laser coords are left-shifted one bit (same effect as
 	 * model_scale_shift == 1 taking the default, but the branch exists in the binary
 	 * so we reproduce it). */
-	int32_t base_side_cur, base_up_cur, base_side_prev, base_up_prev;
-	int32_t scaled_fwd_cur, scaled_fwd_prev;
+
 	if (objectblockptr->model_scale_shift) {
 		const int shift = objectblockptr->model_scale_shift - 1;
 		base_side_cur = side_cur >> shift;
@@ -267,21 +300,40 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 	 * necessarily locked our ship; do it here. */
 	draw_lockshipfileptrs(ship_idx);
 
-	ShipModelMesh* mesh = componentblockptr;
-	const unsigned int num_meshes = objectblockptr->num_meshes;
+	mesh = componentblockptr;
+	num_meshes = objectblockptr->num_meshes;
 
-	uint16_t hit_component = 0;
-	int32_t best_frac = 0x7FFFFFFF;
+	hit_component = 0;
+	best_frac = 0x7FFFFFFF;
 
-	for (unsigned int i = 0; i < num_meshes; ++i, ++mesh) {
+	for (i = 0; i < num_meshes; ++i, ++mesh) {
+		int32_t side_cur_r;
+		int32_t up_cur_r;
+		int32_t side_prev_r;
+		int32_t up_prev_r;
+		int32_t is_main_hull_ship98;
+		uint8_t rot;
+		int32_t bbox_min_side;
+		int32_t bbox_min_fwd;
+		int32_t bbox_max_fwd;
+		int32_t bbox_min_up;
+		int32_t bbox_max_up;
+		int32_t bbox_max_side;
+		int in_bbox;
+		const uint8_t* lod_bytes;
+		int32_t distance;
+		uint16_t final_offset;
+		const uint8_t* poly_hdr;
+		int32_t hit_frac;
+
 		if (!craftptr->mesh_component_hp[i])
 			continue;
 
-		int32_t side_cur_r = base_side_cur;
-		int32_t up_cur_r = base_up_cur;
-		int32_t side_prev_r = base_side_prev;
-		int32_t up_prev_r = base_up_prev;
-		int32_t is_main_hull_ship98 = 0;
+		side_cur_r = base_side_cur;
+		up_cur_r = base_up_cur;
+		side_prev_r = base_side_prev;
+		up_prev_r = base_up_prev;
+		is_main_hull_ship98 = 0;
 
 		/* Mesh-rotation handling. Retail splits two paths:
 		 *   - mission.train_craft_type != 0 (training/preview): rotate
@@ -293,7 +345,7 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 		 *     entirely (avoids self-hit on the spinning Y-wing
 		 *     centerpiece etc.). Otherwise fall through and collide with
 		 *     unrotated coords. */
-		const uint8_t rot = craftptr->mesh_rotation[i];
+		rot = craftptr->mesh_rotation[i];
 		if (mission.train_craft_type) {
 			if (rot) {
 				const uint16_t angle = (uint16_t)(rot << 8);
@@ -315,19 +367,19 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 		/* Mesh AABB reject. The binary reads the bbox via unaligned-dword
 		 * loads at (field_addr - 2) >> 16; those resolve to the direct
 		 * field_{min,max}_{side,fwd,up} values (see top-of-file note). */
-		const int32_t bbox_min_side = mesh->bbox_min_side;
-		const int32_t bbox_min_fwd = mesh->bbox_min_fwd;
-		const int32_t bbox_max_fwd = mesh->bbox_max_fwd;
-		const int32_t bbox_min_up = mesh->bbox_min_up;
-		const int32_t bbox_max_up = mesh->bbox_max_up;
-		const int32_t bbox_max_side = mesh->bbox_max_side;
+		bbox_min_side = mesh->bbox_min_side;
+		bbox_min_fwd = mesh->bbox_min_fwd;
+		bbox_max_fwd = mesh->bbox_max_fwd;
+		bbox_min_up = mesh->bbox_min_up;
+		bbox_max_up = mesh->bbox_max_up;
+		bbox_max_side = mesh->bbox_max_side;
 
-		const int in_bbox = (bbox_min_side <= side_cur_r || bbox_min_side <= side_prev_r) &&
-							(bbox_min_fwd <= scaled_fwd_cur || bbox_min_fwd <= scaled_fwd_prev) &&
-							(up_cur_r >= bbox_min_up || up_prev_r >= bbox_min_up) &&
-							(bbox_max_side >= side_cur_r || bbox_max_side >= side_prev_r) &&
-							(scaled_fwd_cur <= bbox_max_fwd || bbox_max_fwd >= scaled_fwd_prev) &&
-							(up_cur_r <= bbox_max_up || up_prev_r <= bbox_max_up);
+		in_bbox = (bbox_min_side <= side_cur_r || bbox_min_side <= side_prev_r) &&
+				  (bbox_min_fwd <= scaled_fwd_cur || bbox_min_fwd <= scaled_fwd_prev) &&
+				  (up_cur_r >= bbox_min_up || up_prev_r >= bbox_min_up) &&
+				  (bbox_max_side >= side_cur_r || bbox_max_side >= side_prev_r) &&
+				  (scaled_fwd_cur <= bbox_max_fwd || bbox_max_fwd >= scaled_fwd_prev) &&
+				  (up_cur_r <= bbox_max_up || up_prev_r <= bbox_max_up);
 		if (!in_bbox)
 			continue;
 
@@ -338,14 +390,16 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 		 * the Super Star Destroyer) for this LOD to be selected;
 		 * otherwise advance 6 bytes to the next record. The chain
 		 * terminates with distance = 0x7FFFFFFF. */
-		const uint8_t* lod_bytes = (const uint8_t*)mesh + mesh->render_offset;
-		int32_t distance;
+		lod_bytes = (const uint8_t*)mesh + mesh->render_offset;
+
 		memcpy(&distance, lod_bytes, sizeof distance);
 		if (distance != 0x7FFFFFFF) {
 			for (;;) {
 				uint16_t offset;
+				uint8_t budget;
+
 				memcpy(&offset, lod_bytes + 4, sizeof offset);
-				const uint8_t budget = lod_bytes[offset + 4];
+				budget = lod_bytes[offset + 4];
 				if (budget < 0x10u)
 					break;
 				if (ship_idx == 28 && budget < 0x18u)
@@ -362,18 +416,18 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 		}
 
 		/* polygon data starts at (current LOD record) + offset */
-		uint16_t final_offset;
-		memcpy(&final_offset, lod_bytes + 4, sizeof final_offset);
-		const uint8_t* poly_hdr = lod_bytes + final_offset;
 
-		const int32_t hit_frac =
+		memcpy(&final_offset, lod_bytes + 4, sizeof final_offset);
+		poly_hdr = lod_bytes + final_offset;
+
+		hit_frac =
 			(int32_t)collide_checkhitpolygons(poly_hdr, side_cur_r, scaled_fwd_cur, up_cur_r, side_prev_r,
 											  scaled_fwd_prev, up_prev_r, is_main_hull_ship98);
 
 		if (hit_frac && hit_frac < best_frac) {
-			collidexoff = (int32_t)(((int64_t)(laserx - laserxold) * hit_frac) >> 15);
-			collideyoff = (int32_t)(((int64_t)(lasery - laseryold) * hit_frac) >> 15);
-			collidezoff = (int32_t)(((int64_t)(laserz - laserzold) * hit_frac) >> 15);
+			collidexoff = math2_mul_q15((laserx - laserxold), hit_frac);
+			collideyoff = math2_mul_q15((lasery - laseryold), hit_frac);
+			collidezoff = math2_mul_q15((laserz - laserzold), hit_frac);
 			best_frac = hit_frac;
 			hit_component = (uint16_t)(i + 1);
 		}
@@ -388,6 +442,21 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 
 // FUNCTION: TIE95 0x534E4
 uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, uint16_t damage) {
+	ShipModelData* model;
+	ShipModelMesh* meshes_base;
+	uint16_t component_idx;
+	uint8_t hp_current;
+	uint16_t damage_units;
+	uint8_t hp_remaining;
+	ShipModelMesh* mesh;
+	uint16_t new_obj;
+	FlightObject* ember;
+	FlightObject* parent;
+	int16_t center_side_half;
+	int16_t center_up_half;
+	int16_t center_fwd_half;
+	int32_t ds;
+
 	if (TieProfile_UsesTie98Logic())
 		return starship_damagecomponent_tie98(obj_idx_in, component_plus1, damage);
 
@@ -399,25 +468,24 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
 	 * objectblockptr happen to be parked on a different ship. This mirrors
 	 * the binary's XMEMHDL_Lock_Handle / model_base walk at 0x4FF26..0x4FF6B. */
 	/* Skip the 2-byte file-size prefix — matches retail's v48=a1+2. */
-	ShipModelData* model =
-		(ShipModelData*)((uint8_t*)species_table[objects[obj_idx_in].ship_idx].model_handle + 2);
-	ShipModelMesh* meshes_base = (ShipModelMesh*)&model->lod_records[model->num_lods];
+	model = (ShipModelData*)((uint8_t*)species_table[objects[obj_idx_in].ship_idx].model_handle + 2);
+	meshes_base = (ShipModelMesh*)&model->lod_records[model->num_lods];
 
-	const uint16_t component_idx = (uint16_t)(component_plus1 - 1);
+	component_idx = (uint16_t)(component_plus1 - 1);
 
 	/* HP gate: 0 = already dead, 255 = indestructible. Either way pass the
 	 * damage straight through. */
-	const uint8_t hp_current = craftptr->mesh_component_hp[component_idx];
+	hp_current = craftptr->mesh_component_hp[component_idx];
 	if (hp_current == 0 || hp_current == 255)
 		return damage;
 
 	/* Damage scaled to 1/16-HP units, clamped up to 1. */
-	uint16_t damage_units = (uint16_t)(damage >> 4);
+	damage_units = (uint16_t)(damage >> 4);
 	if (damage_units == 0)
 		damage_units = 1;
 
 	/* Partial-absorb path: still alive after the hit. */
-	const uint8_t hp_remaining = craftptr->mesh_component_hp[component_idx];
+	hp_remaining = craftptr->mesh_component_hp[component_idx];
 	if (hp_remaining > damage_units) {
 		craftptr->mesh_component_hp[component_idx] = (uint8_t)(hp_remaining - damage_units);
 		return 0;
@@ -428,7 +496,7 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
 	damage = (uint16_t)(16 * (damage_units - hp_remaining));
 
 	/* This mesh must be explodable to trigger the visual spawn. */
-	ShipModelMesh* mesh = &meshes_base[component_idx];
+	mesh = &meshes_base[component_idx];
 	if ((mesh->flags & STARSHIP_MESH_FLAG_EXPLODABLE) == 0)
 		return damage;
 
@@ -461,12 +529,12 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
 	}
 
 	/* Allocate ember/debris slot (genus 13). */
-	const uint16_t new_obj = create_findslot(13);
+	new_obj = create_findslot(13);
 	if (new_obj == 0xFFFF)
 		return damage;
 
-	FlightObject* ember = &objects[new_obj];
-	FlightObject* parent = &objects[obj_idx_in];
+	ember = &objects[new_obj];
+	parent = &objects[obj_idx_in];
 	ember->world_x = parent->world_x;
 	ember->world_y = parent->world_y;
 	ember->world_z = parent->world_z;
@@ -474,9 +542,9 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
 	/* The binary reads the mesh center via the Watcom >>17 (=int16 >> 1)
 	 * pattern at (mesh_rec + {14,16,18}), which resolves to center_side,
 	 * center_fwd, center_up each divided by 2. */
-	int16_t center_side_half = (int16_t)(mesh->center_side >> 1);
-	int16_t center_up_half = (int16_t)(mesh->center_up >> 1);
-	const int16_t center_fwd_half = (int16_t)(mesh->center_fwd >> 1);
+	center_side_half = (int16_t)(mesh->center_side >> 1);
+	center_up_half = (int16_t)(mesh->center_up >> 1);
+	center_fwd_half = (int16_t)(mesh->center_fwd >> 1);
 
 	/* Apply per-mesh rotation in training mode (2D rotation in the side/up
 	 * plane by angle = -256 * mesh_rotation). */
@@ -537,7 +605,7 @@ uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, 
 	fsfx_triggersfx((uint16_t)(19 + (math2_getrandom() & 3)), new_obj);
 
 	/* damage_state derived from the per-mesh explosion_scale u16 (mesh+0x0A). */
-	int32_t ds = (int32_t)mesh->explosion_scale >> (9 - model->model_scale_shift);
+	ds = (int32_t)mesh->explosion_scale >> (9 - model->model_scale_shift);
 	if (ds > 255)
 		ds = -1; /* binary: LOBYTE(ds) = -1 <=> 0xFF */
 	ember->damage_state = (uint8_t)ds;
@@ -558,6 +626,9 @@ static uint16_t starship_makestarshipcompexplo_tie98(FlightObject* craft, uint16
 	int y;
 	int z;
 	int random_vertex_index = 0;
+	uint16_t new_obj;
+	FlightObject* ember;
+
 	if (use_random_vertex) {
 		random_vertex_index =
 			(uint16_t)math2_getrandom() % modelmesh_getvertexcount(model_type, component_idx);
@@ -571,11 +642,11 @@ static uint16_t starship_makestarshipcompexplo_tie98(FlightObject* craft, uint16
 	}
 	pai_calcrotatedpoint(craft, (int16_t)x, (int16_t)z, (int16_t)-y);
 
-	const uint16_t new_obj = create_findslot(GENUS_EXPLOSION);
+	new_obj = create_findslot(GENUS_EXPLOSION);
 	if (new_obj == 0xFFFF)
 		return new_obj;
 
-	FlightObject* ember = &objects[new_obj];
+	ember = &objects[new_obj];
 	ember->world_x = rotatedx + craft->world_x;
 	ember->world_y = rotatedy + craft->world_y;
 	ember->world_z = rotatedz + craft->world_z;
@@ -599,19 +670,27 @@ static uint16_t starship_makestarshipcompexplo_tie98(FlightObject* craft, uint16
 // FUNCTION: TIE98 0x487440
 // STARSHIP_createstarshipexplo
 static void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_ship) {
+	FlightObject* craft;
+	uint16_t model_type;
+	uint16_t num_main_hulls;
+	int mesh_count;
+	int i;
+
+	uint8_t main_hull_slots[16];
+
 	if ((uint16_t)math2_getrandom() >= starshipexplodetail && !full_ship)
 		return;
 
-	FlightObject* craft = &objects[obj_idx];
+	craft = &objects[obj_idx];
 	craftptr = craft->craft_ptr;
 	if (craft->orient_dirty)
 		fview_newcalcrotate(craft->roll, craft->heading, craft->pitch, 0, craft);
 
-	const uint16_t model_type = craft->ship_idx;
-	uint8_t main_hull_slots[16];
-	uint16_t num_main_hulls = 0;
-	const int mesh_count = modelmesh_getcount(model_type);
-	for (int i = 0; i < mesh_count; ++i) {
+	model_type = craft->ship_idx;
+
+	num_main_hulls = 0;
+	mesh_count = modelmesh_getcount(model_type);
+	for (i = 0; i < mesh_count; ++i) {
 		if (modelmesh_gettype(model_type, i) == TIE_MESH_MAIN_HULL)
 			main_hull_slots[num_main_hulls++] = (uint8_t)i;
 		if (num_main_hulls == 16)
@@ -636,6 +715,15 @@ static void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_sh
 
 // FUNCTION: TIE95 0x53A3C
 void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
+	uint16_t roll;
+	FlightObject* craft;
+	uint16_t num_main_hull;
+	ShipModelMesh* mesh;
+	unsigned int num_meshes;
+	unsigned int i;
+
+	uint8_t main_hull_slots[16];
+
 	if (TieProfile_UsesTie98Logic()) {
 		starship_createstarshipexplo_tie98(obj_idx_in, full_ship);
 		return;
@@ -644,11 +732,11 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 	/* Two gate conditions: full explosion forces through, otherwise the
 	 * RNG must be below starshipexplodetail (0x1000..0x7FFF depending on
 	 * the chosen detail level). */
-	const uint16_t roll = (uint16_t)math2_getrandom();
+	roll = (uint16_t)math2_getrandom();
 	if (roll >= starshipexplodetail && !full_ship)
 		return;
 
-	FlightObject* craft = &objects[obj_idx_in];
+	craft = &objects[obj_idx_in];
 	craftptr = craft->craft_ptr;
 
 	if (craft->orient_dirty) {
@@ -658,12 +746,12 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 	draw_lockshipfileptrs(craft->ship_idx);
 
 	/* Scan meshes for MESH_MainHull entries; record up to 16 indices. */
-	uint8_t main_hull_slots[16];
-	uint16_t num_main_hull = 0;
-	ShipModelMesh* mesh = componentblockptr;
-	const unsigned int num_meshes = objectblockptr->num_meshes;
 
-	for (unsigned int i = 0; i < num_meshes; ++i, ++mesh) {
+	num_main_hull = 0;
+	mesh = componentblockptr;
+	num_meshes = objectblockptr->num_meshes;
+
+	for (i = 0; i < num_meshes; ++i, ++mesh) {
 		if (mesh->mesh_type == 1 /* MESH_MainHull */) {
 			main_hull_slots[num_main_hull++] = (uint8_t)i;
 			if (num_main_hull == 16)
@@ -675,9 +763,11 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 		/* Retail only zeroes the head slot (the loop iterates exactly
 		 * once). The remaining big-explosion slots get reseeded by the
 		 * per-mesh explosions below. */
+		uint16_t k;
+
 		objects[bigexplo_obj_first].ship_idx = 0;
 
-		for (uint16_t k = 0; k < num_main_hull; ++k) {
+		for (k = 0; k < num_main_hull; ++k) {
 			starship_makestarshipcompexplo(craft, main_hull_slots[k],
 										   componentblockptr[main_hull_slots[k]].explosion_scale, 0);
 		}
@@ -702,12 +792,17 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 // FUNCTION: TIE95 0x53BFC
 uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_idx, uint16_t size,
 										int16_t use_bsp_random) {
+	ShipModelMesh* mesh;
+	int16_t c_side, c_fwd, c_up;
+	uint16_t new_obj;
+	int model_scale_shift;
+	FlightObject* ember;
+
 	if (TieProfile_UsesTie98Logic())
 		return starship_makestarshipcompexplo_tie98(craft, component_idx, size, use_bsp_random);
 
-	ShipModelMesh* mesh = &componentblockptr[component_idx];
+	mesh = &componentblockptr[component_idx];
 
-	int16_t c_side, c_fwd, c_up;
 	if (use_bsp_random) {
 		/* Walk into the mesh's first-LOD polygon block, pick a random
 		 * vertex, and resolve each of its 3 int16 coords via the back-ref
@@ -737,13 +832,13 @@ uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_
 		pai_calcrotatedpoint(craft, mesh->center_side, mesh->center_up, (int16_t)(-mesh->center_fwd));
 	}
 
-	const uint16_t new_obj = create_findslot(13);
+	new_obj = create_findslot(13);
 	if (new_obj == 0xFFFF)
 		return new_obj;
 
 	/* Scale the rotated offset by 2^(model_scale_shift - 1): left-shift when
 	 * model_scale_shift >= 2, half when model_scale_shift == 0, identity when == 1. */
-	const int model_scale_shift = objectblockptr->model_scale_shift;
+	model_scale_shift = objectblockptr->model_scale_shift;
 	if (model_scale_shift <= 1) {
 		if (model_scale_shift == 0) {
 			rotatedx >>= 1;
@@ -758,7 +853,7 @@ uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_
 		rotatedz = (int32_t)((uint32_t)rotatedz << shift);
 	}
 
-	FlightObject* ember = &objects[new_obj];
+	ember = &objects[new_obj];
 	ember->world_x = rotatedx + craft->world_x;
 	ember->world_y = rotatedy + craft->world_y;
 	ember->world_z = rotatedz + craft->world_z;
@@ -802,41 +897,82 @@ uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_
  * Valid N for gunner-fired shots is 138..146 (PROJ_SHIP_* constants below),
  * so the underlying type index is 1..9. Index 0 is unused by this path and
  * 18..23 are padding zeros in the tables. */
-#define PROJ_TYPE_SHIFT 137
+enum {
+	PROJ_TYPE_SHIFT = 137,
+};
 
 /* Warhead slot metadata lives in laser.c. We access it via the WarheadRecord
  * struct from laser.h. */
 
 // FUNCTION: TIE95 0x53EAC
 void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, uint16_t target_ref) {
+	bool tie98;
+	uint16_t species_idx;
+	uint8_t mesh_idx;
+	uint8_t link_byte;
+	FlightObject* craft;
+	uint8_t charge_now;
+	uint8_t divisor;
+#ifdef TIE_MODERN
+	TieTurretTimingState* cooldown;
+#endif
+	uint32_t numerator;
+	uint32_t decrement;
+	int32_t craft_wx;
+	int32_t craft_wy;
+	int32_t craft_wz;
+	ShipModelMesh* mesh;
+	int32_t gun_wx;
+	int32_t gun_wz;
+	int32_t gun_wy;
+	int32_t target_wx;
+	int32_t target_wy;
+	int32_t target_wz;
+	int16_t ammo;
+	int32_t aim_wx;
+	int32_t aim_wy;
+	int32_t aim_wz;
+	int16_t pitch;
+	int16_t heading;
+	uint16_t new_obj;
+	FlightObject* laser;
+	int is_turbo;
+	unsigned int b;
+	uint16_t projectile_idx;
+	uint16_t proj_type;
+	int32_t push;
+	unsigned int warhead_slot;
+
 	if (craftptr->status_flags == 0)
 		return;
-	const bool tie98 = TieProfile_UsesTie98Logic();
+	tie98 = TieProfile_UsesTie98Logic();
 
-	const uint16_t species_idx = craftptr->species_idx;
-	const uint8_t mesh_idx = spec_data[species_idx].hp[weapon_slot_idx].component;
-	const uint8_t link_byte = (uint8_t)spec_data[species_idx].hp[weapon_slot_idx].link;
+	species_idx = craftptr->species_idx;
+	mesh_idx = spec_data[species_idx].hp[weapon_slot_idx].component;
+	link_byte = (uint8_t)spec_data[species_idx].hp[weapon_slot_idx].link;
 
 	if (!craftptr->mesh_component_hp[mesh_idx])
 		return;
 
-	FlightObject* craft = &objects[craft_obj_idx];
+	craft = &objects[craft_obj_idx];
 
 	/* Charge / cooldown tick. Rate tiered on the craft's skill_value:
 	 *   >= 0xAAAA -> frameticks / 2  (fast)
 	 *   [0x5555, 0xAAAA) -> frameticks >> 2  (medium)
 	 *   < 0x5555  -> frameticks / 6  (slow) */
-	const uint8_t charge_now = (uint8_t)(craftptr->weapon_slots[weapon_slot_idx].charge & 0x7F);
-	const uint8_t divisor = craftptr->skill_value >= 0xAAAAu   ? 2u
-							: craftptr->skill_value >= 0x5555u ? 4u
-															   : 6u;
-	TieTurretTimingState* cooldown =
-		TieFlightTimingState_Turret(craft_obj_idx, weapon_slot_idx, craft->idnumber, divisor);
+	charge_now = (uint8_t)(craftptr->weapon_slots[weapon_slot_idx].charge & 0x7F);
+	divisor = craftptr->skill_value >= 0xAAAAu ? 2u : craftptr->skill_value >= 0x5555u ? 4u : 6u;
+#ifdef TIE_MODERN
+	cooldown = TieFlightTimingState_Turret(craft_obj_idx, weapon_slot_idx, craft->idnumber, divisor);
 	/* Retain sub-unit cooldown time so a four-tick frame can advance
 	 * the six-tick tier instead of repeatedly truncating to zero. */
-	const uint32_t numerator = frameticks + cooldown->remainder;
-	const uint32_t decrement = numerator / divisor;
+	numerator = frameticks + cooldown->remainder;
+	decrement = numerator / divisor;
 	cooldown->remainder = (uint8_t)(numerator % divisor);
+#else
+	decrement = frameticks / divisor;
+#endif
+
 	if (charge_now > decrement) {
 		craftptr->weapon_slots[weapon_slot_idx].charge -= (uint8_t)decrement;
 		return;
@@ -845,13 +981,15 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	/* Ready to fire: reset cooldown (preserving bit 7). */
 	craftptr->weapon_slots[weapon_slot_idx].charge =
 		(uint8_t)((craftptr->weapon_slots[weapon_slot_idx].charge & 0x80) | 0x3B);
+#ifdef TIE_MODERN
 	cooldown->remainder = 0;
+#endif
 
-	const int32_t craft_wx = craft->world_x;
-	const int32_t craft_wy = craft->world_y;
-	const int32_t craft_wz = craft->world_z;
+	craft_wx = craft->world_x;
+	craft_wy = craft->world_y;
+	craft_wz = craft->world_z;
 
-	ShipModelMesh* mesh = NULL;
+	mesh = NULL;
 	if (!tie98) {
 		draw_lockshipfileptrs(craft->ship_idx);
 		mesh = &componentblockptr[mesh_idx];
@@ -923,10 +1061,12 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 			 * past the mesh's named fields into the appended LOD/poly data. */
 			const uint8_t* mesh_bytes = (const uint8_t*)mesh;
 			uint16_t poly_off;
+			uint8_t skip_byte;
+			const uint8_t* base;
+
 			memcpy(&poly_off, mesh_bytes + 4 + mesh->render_offset, sizeof poly_off);
-			const uint8_t skip_byte = mesh_bytes[4 + mesh->render_offset + poly_off];
-			const uint8_t* base =
-				mesh_bytes + 0x10 + mesh->render_offset + poly_off + skip_byte + 1 + 6 * link_byte;
+			skip_byte = mesh_bytes[4 + mesh->render_offset + poly_off];
+			base = mesh_bytes + 0x10 + mesh->render_offset + poly_off + skip_byte + 1 + 6 * link_byte;
 
 			hp_side = (int16_t)(starship_coord_walk(base) >> 1);
 			hp_fwd_neg = (int16_t)(-(starship_coord_walk(base + 2) >> 1));
@@ -949,13 +1089,13 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 		rotatedz = (int32_t)((uint32_t)rotatedz << shift);
 	}
 
-	const int32_t gun_wx = rotatedx + craft_wx;
-	const int32_t gun_wz = rotatedz + craft_wz;
-	const int32_t gun_wy = rotatedy + craft_wy;
+	gun_wx = rotatedx + craft_wx;
+	gun_wz = rotatedz + craft_wz;
+	gun_wy = rotatedy + craft_wy;
 	create_getworldposition(target_ref, 0);
-	const int32_t target_wx = worldlocx;
-	const int32_t target_wy = worldlocy;
-	const int32_t target_wz = worldlocz;
+	target_wx = worldlocx;
+	target_wy = worldlocy;
+	target_wz = worldlocz;
 
 	/* Range gate: ~131072 world units. */
 	{
@@ -978,44 +1118,48 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	if (starship_checkstarshiphit(craft_obj_idx, craft_obj_idx))
 		return;
 
-	const int16_t ammo = craftptr->weapon_slots[weapon_slot_idx].ammo;
+	ammo = craftptr->weapon_slots[weapon_slot_idx].ammo;
 
 	/* Lead moving targets from their FlightObject history. Static targets
 	 * use the position returned by create_getworldposition directly. */
-	int32_t aim_wx = target_wx;
-	int32_t aim_wy = target_wy;
-	int32_t aim_wz = target_wz;
+	aim_wx = target_wx;
+	aim_wy = target_wy;
+	aim_wz = target_wz;
 	if (target_ref < OBJ_REF_STATIC_BASE) {
+		int32_t lead_scaled;
+		uint16_t lead_jitter;
+		uint16_t lead_fraction;
+
 		trig2_ctop(target_wx - gun_wx, target_wy - gun_wy, target_wz - gun_wz);
-		int32_t lead_scaled = (int32_t)framerate * trig2_polardistance;
+		lead_scaled = (int32_t)framerate * trig2_polardistance;
 		trig2_polardistance = (ammo != 0) ? (lead_scaled >> 15) : (lead_scaled >> 14);
 
-		uint16_t lead_jitter = (uint16_t)((math2_getrandom() & 3) + (int16_t)trig2_polardistance - 1);
+		lead_jitter = (uint16_t)((math2_getrandom() & 3) + (int16_t)trig2_polardistance - 1);
 		if (objects[target_ref].current_speed == 0)
 			lead_jitter = 0;
-		const uint16_t lead_fraction = math2_fraction(lead_jitter, craftptr->skill_value);
+		lead_fraction = math2_fraction(lead_jitter, craftptr->skill_value);
 		aim_wx += (int32_t)lead_fraction * (objects[target_ref].world_x - objects[target_ref].world_x_prev);
 		aim_wy += (int32_t)lead_fraction * (objects[target_ref].world_y - objects[target_ref].world_y_prev);
 		aim_wz += (int32_t)lead_fraction * (objects[target_ref].world_z - objects[target_ref].world_z_prev);
 	}
 
 	trig2_ctop(aim_wx - gun_wx, aim_wy - gun_wy, aim_wz - gun_wz);
-	const int16_t pitch = trig2_xyangle;
-	const int16_t heading = trig2_zangle;
+	pitch = trig2_xyangle;
+	heading = trig2_zangle;
 	(void)math2_getrandom(); /* binary burns one RNG value for parity */
 
-	const uint16_t new_obj = create_findslot(7);
+	new_obj = create_findslot(7);
 	if (new_obj == 0xFFFF)
 		return;
 
-	FlightObject* laser = &objects[new_obj];
+	laser = &objects[new_obj];
 	laser->category = 1;
 	laser->genus = GENUS_PROJECTILE_NPC;
 	laser->side = craft->side;
 
 	/* is_turbo: one of the species' laser banks fires type 145 or 146. */
-	int is_turbo = 0;
-	for (unsigned int b = 0; b < 2; ++b) {
+	is_turbo = 0;
+	for (b = 0; b < 2; ++b) {
 		if (weapon_slot_idx >= spec_data[species_idx].laser_start[b] &&
 			weapon_slot_idx <= spec_data[species_idx].laser_end[b]) {
 			const uint8_t t = spec_data[species_idx].laser_type[b];
@@ -1024,7 +1168,6 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 		}
 	}
 
-	uint16_t projectile_idx;
 	if (ammo) {
 		projectile_idx = (uint16_t)(PROJ_SHIP_AMMO_LASER + (is_turbo ? 1 : 0));
 	} else if (craft->side && craft->side != 2) {
@@ -1032,7 +1175,7 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	} else {
 		projectile_idx = is_turbo ? PROJ_SHIP_REBEL_TURBO : PROJ_SHIP_REBEL_LASER;
 	}
-	const uint16_t proj_type = (uint16_t)(projectile_idx - PROJ_TYPE_SHIFT);
+	proj_type = (uint16_t)(projectile_idx - PROJ_TYPE_SHIFT);
 	laser->ship_idx = (uint8_t)projectile_idx;
 	laser->age_ticks = 1;
 	laser->self_idx = (int16_t)craft_obj_idx;
@@ -1052,7 +1195,7 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	 * bolt -- gives a "fired from a moving platform" trail. The push
 	 * factor is the HIWORD of dword_D4C74[projectile_idx], which aliases
 	 * the projectile launch-offset table. */
-	const int32_t push = (int16_t)TieProjectileLaunchOffset_Get(proj_type);
+	push = (int16_t)TieProjectileLaunchOffset_Get(proj_type);
 	laser->world_x_prev = gun_wx;
 	laser->world_y_prev = gun_wy;
 	laser->world_z_prev = gun_wz;
@@ -1063,7 +1206,7 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	/* Install the warhead-record target so MOVE/COLLIDE can look up who
 	 * fired and what to track. Warhead slots start at FlightObject
 	 * NUM_CRAFTS (32 retail / 28 demo). */
-	const unsigned int warhead_slot = (unsigned int)(new_obj - NUM_CRAFTS);
+	warhead_slot = (unsigned int)(new_obj - NUM_CRAFTS);
 	warheads[warhead_slot].homing_tier = 0;
 	warheads[warhead_slot].target_obj = target_ref;
 	laser->craft_ptr = (CraftData*)&warheads[warhead_slot];

@@ -5,7 +5,13 @@
 
 #include <stdint.h>
 
-typedef enum Std3DRenderStateFlags {
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* These values occupy 32-bit slots in the original Win32 records. */
+typedef int32_t Std3DRenderStateFlags;
+enum {
 	STD3D_RS_FOG_ENABLE = 0x000040,
 	STD3D_RS_TEXTURE_MAG_LINEAR = 0x000080,
 	STD3D_RS_TEXTURE_MIN_LINEAR = 0x000100,
@@ -15,13 +21,14 @@ typedef enum Std3DRenderStateFlags {
 	STD3D_RS_Z_WRITE_ENABLE = 0x001000,
 	STD3D_RS_TEXTURE_ADDRESS_CLAMP = 0x002000,
 	STD3D_RS_MONO_DISABLE = 0x008000,
-} Std3DRenderStateFlags;
+};
 
-typedef enum StdColorMode {
+typedef int32_t StdColorMode;
+enum {
 	STDCOLOR_PAL = 0,
 	STDCOLOR_RGB = 1,
 	STDCOLOR_RGBA = 2,
-} StdColorMode;
+};
 
 typedef struct ColorInfo {
 	StdColorMode colorMode;
@@ -233,5 +240,9 @@ char std3D_CreateMipSurface(Std3DVBuffer* source, Std3DTextureSurface* surface, 
 							int alpha_mask);
 void std3D_FlushTextureCache(void);
 void std3D_CacheTextureSurface(Std3DTextureSurface* surface);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

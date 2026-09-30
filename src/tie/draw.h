@@ -1,8 +1,13 @@
-#ifndef __DRAW_H__
-#define __DRAW_H__
+#ifndef TIE_DRAW_H
+#define TIE_DRAW_H
 
 #include "tie/tie.h" /* ShipModelData / ShipModelMesh forward typedefs */
+
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * DRAW — mid-level 3D craft renderer. Sits above DRAWPOL (polygon emit)
@@ -34,14 +39,22 @@
  * site: DRAW_polydepthsort 0x1C4D8, DRAWPOL_dobsptree 0x1E3F9 / 0x1E4FB,
  * DRAWPOL_checknormal, DRAWPOL_drawpolyobject. DRAWPOL walks it as
  * vertices; DRAW_polydepthsort walks it as edges. */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct PolyFace {
 	int16_t normal_x;     /* +0x00 */
 	int16_t normal_y;     /* +0x02 */
 	int16_t normal_z;     /* +0x04 */
 	int16_t vlist_offset; /* +0x06: signed self-relative byte offset to vertex/edge list */
 } PolyFace;
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /* ---- DRAW-owned globals (per watdbg attribution to draw.c) ---- */
 extern uint16_t comp[40];       /* BSP-visible mesh indices, filled by gettreeorder */
@@ -104,5 +117,9 @@ uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16
 uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj_id_field,
 							uint16_t a_parent_category, int a_eyex, int a_eyey, uint16_t b_face_info,
 							uint16_t obj_b, uint16_t b_parent_category, uint16_t b_obj_id_field);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

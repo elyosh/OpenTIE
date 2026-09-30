@@ -1,12 +1,17 @@
-#ifndef __PLAYER_H__
-#define __PLAYER_H__
+#ifndef TIE_PLAYER_H
+#define TIE_PLAYER_H
 
 #include "landru/actor.h"
 #include "landru/bitmap.h"
 #include "landru/input.h"
 #include "landru/rect.h"
 #include "tie/shipext.h"
+
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Briefing page command opcodes.
  * Each command in the page buffer is: [time, opcode, params...].
@@ -163,5 +168,9 @@ int16_t player_iupdate_Map(Input* input, Rect* bounds, Rect* clip, int16_t key, 
 						   int16_t mouse_x, int16_t mouse_y);
 void player_iuser_Map(Input* input, int32_t time);
 void player_idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t refresh);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

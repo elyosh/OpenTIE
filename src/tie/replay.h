@@ -13,8 +13,13 @@
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
+
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* --------------------------------------------------------------------------
  * ReplayInputFrame -- 18-byte per-tick input packet (V6 wire format).
@@ -64,8 +69,9 @@ enum {
 	REPLAY_MAX_TOTAL_RECORDS = 0x20000 * 7,
 };
 
-_Static_assert(REPLAYINPUTFRAME_THROTTLE_OFFSET + 4 == REPLAYINPUTFRAME_DISK_SIZE,
-			   "Replay input wire offsets must cover one complete record");
+typedef char
+	ReplayInputFrameWireSizeCheck[(REPLAYINPUTFRAME_THROTTLE_OFFSET + 4 == REPLAYINPUTFRAME_DISK_SIZE) ? 1
+																									   : -1];
 
 void ReplayInputFrame_decode(ReplayInputFrame* dst, const uint8_t* src);
 void ReplayInputFrame_encode(uint8_t* dst, const ReplayInputFrame* src);
@@ -92,7 +98,15 @@ int16_t replay_loadreplayinput(void);
 void replay_calcreplayview(void);
 void replay_movecambehind(uint16_t obj_id);
 
-void replay_Push_DoReplayScreen_Task(void);
+typedef struct ReplayScreenState {
+	uint16_t last_chase_status;
+	uint16_t last_track_status;
+} ReplayScreenState;
+
+uint16_t replay_savereplay_file(const uint8_t* name_input, const char* filename);
+
+void replay_InitScreen(ReplayScreenState* state);
+bool replay_UpdateScreen(ReplayScreenState* state);
 /* Returns true when the port must suspend playback and push the save task. */
 bool replay_replayinput(void);
 
@@ -137,4 +151,8 @@ extern uint8_t reentersimflag; /* 1 = return to live sim from viewer */
 extern uint8_t exitflag;       /* 1 = exit current replay loop */
 extern int32_t cameraposstate; /* 0 = chase info hidden, 1 = visible */
 
-#endif /* TIE_REPLAY_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

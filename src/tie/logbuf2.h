@@ -1,7 +1,11 @@
-#ifndef __LOGBUF2_H__
-#define __LOGBUF2_H__
+#ifndef TIE_LOGBUF2_H
+#define TIE_LOGBUF2_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * LOGBUF2 — Logical drawing-buffer module.
@@ -51,5 +55,9 @@ void logbuf2_startPIP(uint16_t width, uint16_t depth, int16_t clear_runs, uint32
 void logbuf2_finishPIP(void);
 void logbuf2_startPIP_tie98(uint16_t width, uint16_t depth, int clear_runs, uint32_t displaycorner);
 void logbuf2_finishPIP_tie98(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,8 +1,13 @@
-#ifndef __COLLIDE_H__
-#define __COLLIDE_H__
+#ifndef TIE_COLLIDE_H
+#define TIE_COLLIDE_H
 
 #include "tie/tie.h" /* CraftData, FlightObject, swept-segment globals */
+
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Swept craft, projectile, and static-object collision and damage dispatch. */
 
@@ -197,4 +202,8 @@ void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx);
  */
 CraftData* collide_updatehits(uint16_t projectile_obj_idx);
 
-#endif /* __COLLIDE_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

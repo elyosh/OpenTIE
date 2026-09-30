@@ -1,5 +1,4 @@
 #include "tie/slant.h"
-
 #include "landru/bitmap.h"
 #include "landru/canvas.h"
 

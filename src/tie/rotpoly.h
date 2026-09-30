@@ -1,7 +1,11 @@
-#ifndef __ROTPOLY_H__
-#define __ROTPOLY_H__
+#ifndef TIE_ROTPOLY_H
+#define TIE_ROTPOLY_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Fill dest[0..count-1] with Bresenham-interpolated values from start to end. */
 void rotpoly_Build_Ratio(int16_t* dest, int16_t count, int16_t start, int16_t end);
@@ -12,5 +16,9 @@ void rotpoly_Build_Ratio(int16_t* dest, int16_t count, int16_t start, int16_t en
  * Non-transparent (nonzero) source pixels are copied. */
 void rotpoly_Map_Image(void* src_data, const int16_t* left_table, int16_t src_stride,
 					   const int16_t* right_table, int16_t num_scanlines, int16_t start_y);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

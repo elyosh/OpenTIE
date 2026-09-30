@@ -1,5 +1,4 @@
 #include "tie/filestream_tie98.h"
-
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
@@ -57,10 +56,13 @@ int FrontendFileStream_PopHead(int channel) {
 
 // FUNCTION: TIE98 0x4C0840
 int FrontendFileStream_StartNamedFile(int channel, const char* path) {
+	int match;
+	int index;
+
 	if (channel != 1 || !path)
 		return 0;
-	int match = -1;
-	for (int index = 0; index < wave_files.count; ++index) {
+	match = -1;
+	for (index = 0; index < wave_files.count; ++index) {
 		if (strncmp(path, wave_files.paths[index], strlen(path)) == 0) {
 			match = index;
 			break;

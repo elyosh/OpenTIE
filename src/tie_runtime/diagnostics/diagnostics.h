@@ -1,8 +1,8 @@
 #ifndef TIE_LOG_H
 #define TIE_LOG_H
 
-/* Watcom C has no __attribute__; annotations here are advisory. */
-#if defined(__WATCOMC__)
+/* Compiler annotations are advisory when GNU attributes are unavailable. */
+#if defined(__WATCOMC__) || (defined(_MSC_VER) && !defined(__clang__))
 #define __attribute__(x)
 #endif
 

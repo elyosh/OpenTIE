@@ -1,5 +1,4 @@
 #include "tie/render_texture_tie98.h"
-
 #include "tie/render_scene_tie98.h"
 #include "tie/rtsvga2.h"
 
@@ -7,12 +6,14 @@
 #include <stdint.h>
 #include <string.h>
 
-#define RENDER_TEXTURE_CACHE_SIZE 1024
-#define RENDER_TEXTURE_MAX_PIXELS 65536
-#define SOFTWARE_SHADE_TABLE_CACHE_SIZE 1024
-#define SOFTWARE_SHADE_TABLE_SIZE 4096
-#define HARDWARE_SHADE_TABLE_CACHE_SIZE 1024
-#define HARDWARE_SHADE_TABLE_ENTRIES (16 * 256)
+enum {
+	RENDER_TEXTURE_CACHE_SIZE = 1024,
+	RENDER_TEXTURE_MAX_PIXELS = 65536,
+	SOFTWARE_SHADE_TABLE_CACHE_SIZE = 1024,
+	SOFTWARE_SHADE_TABLE_SIZE = 4096,
+	HARDWARE_SHADE_TABLE_CACHE_SIZE = 1024,
+	HARDWARE_SHADE_TABLE_ENTRIES = (16 * 256),
+};
 
 typedef struct SoftwareShadeTableCacheEntry {
 	const uint16_t* rgb565_shades;
@@ -57,16 +58,19 @@ uint8_t g_flightColorKeyIndex = 0xFB;
 // PORT: TIE98 maintains the 16-bit table when its DirectDraw palette changes. The
 // portable host exposes the active flight palette as 6-bit RGB instead.
 void RenderTexture_SyncFlightPalette(void) {
+	unsigned int index;
+
 	unsigned int best_distance = UINT32_MAX;
-	for (unsigned int index = 0; index < 256; ++index) {
+	for (index = 0; index < 256; ++index) {
 		const uint8_t* rgb = &rtsvga2_vgapalette[3 * index];
 		const unsigned int red8 = rgb[0] * 255u / 63u;
 		const unsigned int green8 = rgb[1] * 255u / 63u;
 		const unsigned int blue8 = rgb[2] * 255u / 63u;
+		int blue_delta;
+		unsigned int distance;
 		g_flightTextPalette[index] = (uint16_t)(((red8 >> 3) << 11) | ((green8 >> 2) << 5) | (blue8 >> 3));
-		const int blue_delta = (int)rgb[2] - 2;
-		const unsigned int distance =
-			rgb[0] * rgb[0] + rgb[1] * rgb[1] + (unsigned int)(blue_delta * blue_delta);
+		blue_delta = (int)rgb[2] - 2;
+		distance = rgb[0] * rgb[0] + rgb[1] * rgb[1] + (unsigned int)(blue_delta * blue_delta);
 		if (distance < best_distance) {
 			best_distance = distance;
 			g_flightColorKeyIndex = (uint8_t)index;
@@ -76,7 +80,9 @@ void RenderTexture_SyncFlightPalette(void) {
 
 // FUNCTION: TIE98 0x47AEC0
 void Color_BuildRgb565ToPaletteIndexTable(uint8_t* dst, unsigned int first_index, unsigned int end_index) {
-	for (unsigned int value = 0; value < 0x10000; ++value) {
+	unsigned int value;
+
+	for (value = 0; value < 0x10000; ++value) {
 		const uint8_t rgb6[3] = {
 			(uint8_t)(2 * ((value >> 11) & 0x1F)),
 			(uint8_t)((value >> 5) & 0x3F),
@@ -90,23 +96,27 @@ void Color_BuildRgb565ToPaletteIndexTable(uint8_t* dst, unsigned int first_index
  * OptModel_BuildRuntimeHandle software branch without modifying the host-owned
  * serialized OPT image. */
 const uint8_t* RenderTexture_GetSoftwareShadeTable(const uint16_t* rgb565_shades) {
+	unsigned int count;
+	int index;
+	SoftwareShadeTableCacheEntry* entry;
+
 	unsigned int slot = ((uintptr_t)rgb565_shades >> 4) & (SOFTWARE_SHADE_TABLE_CACHE_SIZE - 1);
-	for (unsigned int count = 0; count < SOFTWARE_SHADE_TABLE_CACHE_SIZE; ++count) {
-		SoftwareShadeTableCacheEntry* entry = &g_softwareShadeTableCache[slot];
+	for (count = 0; count < SOFTWARE_SHADE_TABLE_CACHE_SIZE; ++count) {
+		entry = &g_softwareShadeTableCache[slot];
 		if (entry->rgb565_shades == rgb565_shades)
 			return entry->palette_indices;
 		if (entry->rgb565_shades == NULL) {
 			entry->rgb565_shades = rgb565_shades;
-			for (int index = 0; index < SOFTWARE_SHADE_TABLE_SIZE; ++index)
+			for (index = 0; index < SOFTWARE_SHADE_TABLE_SIZE; ++index)
 				entry->palette_indices[index] = g_inversePaletteTable[rgb565_shades[index]];
 			return entry->palette_indices;
 		}
 		slot = (slot + 1) & (SOFTWARE_SHADE_TABLE_CACHE_SIZE - 1);
 	}
 
-	SoftwareShadeTableCacheEntry* entry = &g_softwareShadeTableCache[slot];
+	entry = &g_softwareShadeTableCache[slot];
 	entry->rgb565_shades = rgb565_shades;
-	for (int index = 0; index < SOFTWARE_SHADE_TABLE_SIZE; ++index)
+	for (index = 0; index < SOFTWARE_SHADE_TABLE_SIZE; ++index)
 		entry->palette_indices[index] = g_inversePaletteTable[rgb565_shades[index]];
 	return entry->palette_indices;
 }
@@ -114,22 +124,28 @@ const uint8_t* RenderTexture_GetSoftwareShadeTable(const uint16_t* rgb565_shades
 /* PORT: changing the active indexed destination palette invalidates the
  * converted tables embedded in the original runtime OPT handles. */
 void RenderTexture_ResetSoftwareShadeTableCache(void) {
-	for (int index = 0; index < SOFTWARE_SHADE_TABLE_CACHE_SIZE; ++index)
+	int index;
+
+	for (index = 0; index < SOFTWARE_SHADE_TABLE_CACHE_SIZE; ++index)
 		g_softwareShadeTableCache[index].rgb565_shades = NULL;
 }
 
 void RenderTexture_ReleaseMissionCaches(void) {
+	int index;
+
 	if (g_useHardware3D && g_pStd3DCurDevice)
 		std3D_FlushTextureCache();
 	memset(g_renderTextureCacheKeys, 0, sizeof g_renderTextureCacheKeys);
 	g_renderTextureCacheCursor = -1;
 	RenderTexture_ResetSoftwareShadeTableCache();
-	for (int index = 0; index < HARDWARE_SHADE_TABLE_CACHE_SIZE; ++index)
+	for (index = 0; index < HARDWARE_SHADE_TABLE_CACHE_SIZE; ++index)
 		g_hardwareShadeTableCache[index].rgb565_shades = NULL;
 }
 
 // FUNCTION: TIE98 0x42DAE0
 static void RenderTexture_AnalyzeIlluminationShades(uint16_t* shades) {
+	int color;
+
 	/* Rewrites shade level 0 into the self-illumination overlay palette:
 	 * entries that are dark at the darkest level or that shade normally
 	 * across levels become 0 (transparent in the overlay); entries that stay
@@ -143,7 +159,7 @@ static void RenderTexture_AnalyzeIlluminationShades(uint16_t* shades) {
 	 * always uses the high-detail path. */
 	int first_zeroed = -1;
 	int zeroed_count = 0;
-	for (int color = 0; color < 256; ++color) {
+	for (color = 0; color < 256; ++color) {
 		uint16_t* entry = &shades[color];
 		const int red = (*entry >> 11) & 0x1F;
 		const int green = (*entry >> 6) & 0x1F;
@@ -176,6 +192,8 @@ static void RenderTexture_AnalyzeIlluminationShades(uint16_t* shades) {
 
 // FUNCTION: TIE98 0x437EF0
 static void RenderTexture_BuildHardwareShadeTables(uint16_t* shades) {
+	int chunk, i;
+
 	/* Illumination analysis first, then the brightness option is baked into
 	 * all 16 levels (including the analyzed level 0 and the metadata words,
 	 * matching the original's transform order). At the default brightness
@@ -187,8 +205,8 @@ static void RenderTexture_BuildHardwareShadeTables(uint16_t* shades) {
 	uint8_t rgb6[3 * 1024];
 
 	RenderTexture_AnalyzeIlluminationShades(shades);
-	for (int chunk = 0; chunk < HARDWARE_SHADE_TABLE_ENTRIES; chunk += 1024) {
-		for (int i = 0; i < 1024; ++i) {
+	for (chunk = 0; chunk < HARDWARE_SHADE_TABLE_ENTRIES; chunk += 1024) {
+		for (i = 0; i < 1024; ++i) {
 			const uint16_t value = shades[chunk + i];
 			rgb6[3 * i] = (uint8_t)(2 * (value >> 11));
 			rgb6[3 * i + 1] = (uint8_t)((value >> 5) & 0x3F);
@@ -205,9 +223,12 @@ static void RenderTexture_BuildHardwareShadeTables(uint16_t* shades) {
  * RenderTexture_GetOrCreateColorKey saves palette[0] through the remap slot,
  * exactly as the original mutated its handle. */
 uint16_t* RenderTexture_GetHardwareShadeTables(const uint16_t* rgb565_shades) {
+	unsigned int count;
+	HardwareShadeTableCacheEntry* entry;
+
 	unsigned int slot = ((uintptr_t)rgb565_shades >> 4) & (HARDWARE_SHADE_TABLE_CACHE_SIZE - 1);
-	for (unsigned int count = 0; count < HARDWARE_SHADE_TABLE_CACHE_SIZE; ++count) {
-		HardwareShadeTableCacheEntry* entry = &g_hardwareShadeTableCache[slot];
+	for (count = 0; count < HARDWARE_SHADE_TABLE_CACHE_SIZE; ++count) {
+		entry = &g_hardwareShadeTableCache[slot];
 		if (entry->rgb565_shades == rgb565_shades)
 			return entry->shades;
 		if (entry->rgb565_shades == NULL)
@@ -215,7 +236,7 @@ uint16_t* RenderTexture_GetHardwareShadeTables(const uint16_t* rgb565_shades) {
 		slot = (slot + 1) & (HARDWARE_SHADE_TABLE_CACHE_SIZE - 1);
 	}
 
-	HardwareShadeTableCacheEntry* entry = &g_hardwareShadeTableCache[slot];
+	entry = &g_hardwareShadeTableCache[slot];
 	entry->rgb565_shades = rgb565_shades;
 	memcpy(entry->shades, rgb565_shades, sizeof entry->shades);
 	RenderTexture_BuildHardwareShadeTables(entry->shades);
@@ -224,16 +245,19 @@ uint16_t* RenderTexture_GetHardwareShadeTables(const uint16_t* rgb565_shades) {
 
 // FUNCTION: TIE98 0x427250
 Std3DTextureSurface* RenderTexture_FindOrAllocateCacheEntry(const void* cache_key) {
+	uintptr_t key;
+	int slot, count, index;
+
 	if (g_renderTextureCacheCursor == -1) {
 		memset(g_renderTextureCacheKeys, 0, sizeof g_renderTextureCacheKeys);
-		for (int index = 0; index < RENDER_TEXTURE_CACHE_SIZE; ++index)
+		for (index = 0; index < RENDER_TEXTURE_CACHE_SIZE; ++index)
 			g_renderTextureCache[index].bCached = 0;
 	}
 
-	const uintptr_t key = (uintptr_t)cache_key;
-	int slot = (int)(key & (RENDER_TEXTURE_CACHE_SIZE - 1));
+	key = (uintptr_t)cache_key;
+	slot = (int)(key & (RENDER_TEXTURE_CACHE_SIZE - 1));
 	g_renderTextureCacheCursor = slot;
-	int count = 0;
+	count = 0;
 	while (count < RENDER_TEXTURE_CACHE_SIZE) {
 		if (g_renderTextureCacheKeys[slot] == key)
 			break;
@@ -265,13 +289,14 @@ Std3DTextureSurface* RenderTexture_FindOrAllocateCacheEntry(const void* cache_ke
 // FUNCTION: TIE98 0x4276D0
 Std3DTextureSurface* RenderTexture_GetOrCreateOpaque(int width, int height, const uint16_t* palette,
 													 const uint8_t* pixels) {
+	Std3DVBuffer source;
+
 	Std3DTextureSurface* surface = RenderTexture_FindOrAllocateCacheEntry(pixels);
 	if (surface->bCached) {
 		std3D_CacheTextureSurface(surface);
 		return surface;
 	}
 
-	Std3DVBuffer source;
 	memset(&source, 0, sizeof source);
 	source.storageType = 0;
 	source.raster.sourceType = 0;
@@ -287,35 +312,43 @@ Std3DTextureSurface* RenderTexture_GetOrCreateOpaque(int width, int height, cons
 // FUNCTION: TIE98 0x427340
 Std3DTextureSurface* RenderTexture_GetOrCreateBitmap(int width, int height, uint16_t* palette,
 													 const uint8_t* pixels, int rle_format) {
+	Std3DTextureSurface* surface;
+	const uint8_t* input;
+	uint8_t* output;
+	uint8_t base_color;
+	unsigned int max_color;
+	int row;
+	Std3DVBuffer source;
+	int saved_alpha_texture, created;
+
 	static const uint8_t run_length_masks[9] = { 0, 1, 3, 7, 15, 31, 63, 127, 255 };
 	static const uint8_t color_shifts[9] = { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
 	if (width * height > RENDER_TEXTURE_MAX_PIXELS)
 		return NULL;
 
-	Std3DTextureSurface* surface = RenderTexture_FindOrAllocateCacheEntry(pixels);
+	surface = RenderTexture_FindOrAllocateCacheEntry(pixels);
 	if (surface->bCached) {
 		std3D_CacheTextureSurface(surface);
 		return surface;
 	}
 
-	const uint8_t* input = pixels;
-	uint8_t* output = g_renderTextureDecodeScratch;
-	uint8_t base_color = 0;
-	unsigned int max_color = 0;
-	int row = 0;
+	input = pixels;
+	output = g_renderTextureDecodeScratch;
+	base_color = 0;
+	max_color = 0;
+	row = 0;
 	while (row < height && *input != 0xff) {
 		uint8_t* row_end = output + width;
 		int x = 0;
 		while (*input != 0xfe) {
 			const uint8_t opcode = *input;
+			uint8_t run_length, color;
 			if (opcode == 0xfb) {
 				base_color = input[1];
 				input += 3;
 				continue;
 			}
 
-			uint8_t run_length;
-			uint8_t color;
 			if (opcode == 0xfc) {
 				run_length = input[1] + 1;
 				color = 0;
@@ -350,7 +383,6 @@ Std3DTextureSurface* RenderTexture_GetOrCreateBitmap(int width, int height, uint
 	if (row < height)
 		memset(output, 0, (size_t)width * (height - row));
 
-	Std3DVBuffer source;
 	memset(&source, 0, sizeof source);
 	source.storageType = 0;
 	source.pixels = g_renderTextureDecodeScratch;
@@ -360,7 +392,7 @@ Std3DTextureSurface* RenderTexture_GetOrCreateBitmap(int width, int height, uint
 	source.raster.sourceType = 0;
 	source.raster.bitsPerPixel = 8;
 
-	const int saved_alpha_texture = g_pStd3DCurDevice->caps.bAlphaTexture;
+	saved_alpha_texture = g_pStd3DCurDevice->caps.bAlphaTexture;
 	if (g_pStd3DCurDevice->caps.bColorKeyTexture)
 		g_pStd3DCurDevice->caps.bAlphaTexture = 0;
 	palette[0] = g_flightTextPalette[g_flightColorKeyIndex];
@@ -368,7 +400,7 @@ Std3DTextureSurface* RenderTexture_GetOrCreateBitmap(int width, int height, uint
 		std3D_ConvertTexTo1555(palette, (int)max_color + 1);
 	else
 		std3D_CopyPaletteToScratch16(palette, (int)max_color + 1);
-	const int created = std3D_CreateMipSurface(&source, surface, 1, 0);
+	created = std3D_CreateMipSurface(&source, surface, 1, 0);
 	if (g_pStd3DCurDevice->caps.bColorKeyTexture)
 		g_pStd3DCurDevice->caps.bAlphaTexture = saved_alpha_texture;
 	return created ? surface : NULL;
@@ -377,16 +409,20 @@ Std3DTextureSurface* RenderTexture_GetOrCreateBitmap(int width, int height, uint
 // FUNCTION: TIE98 0x4277A0
 Std3DTextureSurface* RenderTexture_GetOrCreateColorKey(int width, int height, uint16_t* palette,
 													   const uint8_t* pixels) {
+	int replacement, has_color_key, pixel_count, i;
+	Std3DVBuffer source;
+	int saved_alpha_texture, created;
+
 	Std3DTextureSurface* surface = RenderTexture_FindOrAllocateCacheEntry(pixels + 1);
 	if (surface->bCached) {
 		std3D_CacheTextureSurface(surface);
 		return surface;
 	}
 
-	const int replacement = palette[256];
-	int has_color_key = 0;
-	const int pixel_count = width * height;
-	for (int i = 0; i < pixel_count; ++i) {
+	replacement = palette[256];
+	has_color_key = 0;
+	pixel_count = width * height;
+	for (i = 0; i < pixel_count; ++i) {
 		const uint8_t source = pixels[i];
 		if (palette[source] != 0) {
 			has_color_key = 1;
@@ -398,7 +434,6 @@ Std3DTextureSurface* RenderTexture_GetOrCreateColorKey(int width, int height, ui
 	if (!has_color_key)
 		return NULL;
 
-	Std3DVBuffer source;
 	memset(&source, 0, sizeof source);
 	source.storageType = 0;
 	source.pixels = g_renderTextureColorKeyScratch;
@@ -408,7 +443,7 @@ Std3DTextureSurface* RenderTexture_GetOrCreateColorKey(int width, int height, ui
 	source.raster.sourceType = 0;
 	source.raster.bitsPerPixel = 8;
 
-	const int saved_alpha_texture = g_pStd3DCurDevice->caps.bAlphaTexture;
+	saved_alpha_texture = g_pStd3DCurDevice->caps.bAlphaTexture;
 	if (g_pStd3DCurDevice->caps.bColorKeyTexture)
 		g_pStd3DCurDevice->caps.bAlphaTexture = 0;
 	palette[replacement] = palette[0];
@@ -419,7 +454,7 @@ Std3DTextureSurface* RenderTexture_GetOrCreateColorKey(int width, int height, ui
 		std3D_CopyPaletteToScratch16(palette, 256);
 	palette[0] = palette[replacement];
 	palette[replacement] = 0;
-	const int created = std3D_CreateMipSurface(&source, surface, 1, 0);
+	created = std3D_CreateMipSurface(&source, surface, 1, 0);
 	if (g_pStd3DCurDevice->caps.bColorKeyTexture)
 		g_pStd3DCurDevice->caps.bAlphaTexture = saved_alpha_texture;
 	return created ? surface : NULL;

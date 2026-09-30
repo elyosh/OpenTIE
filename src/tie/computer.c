@@ -1,7 +1,3 @@
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-
 #include "tie/computer.h"
 #include "tie/register.h"
 #include "tie/shellext.h"
@@ -11,7 +7,6 @@
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/runtime/runtime.h"
-#include <landru/task.h>
 
 #include "landru/actanim.h"
 #include "landru/actdelt.h"
@@ -36,11 +31,17 @@
 #include "landru/surface.h"
 #include "landru/view.h"
 
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
+
 /* Mouse button states (from watdbg MouseStateType) */
-#define MOUSE_NO_PRESS 0
-#define MOUSE_DOWN 1
-#define MOUSE_MOVE 2
-#define MOUSE_UP 3
+enum {
+	MOUSE_NO_PRESS = 0,
+	MOUSE_DOWN = 1,
+	MOUSE_MOVE = 2,
+	MOUSE_UP = 3,
+};
 
 /* ======================================================================
  * Static data — resource name tables
@@ -64,39 +65,41 @@ typedef struct ComputerResourceSpec {
 
 /* DATA: TIE95 COMPUTER_Do_Computer_Dialog 0x82AD0. */
 static const ComputerResourceSpec computer_vga_resources = {
-	.archive = "computer.lfd",
-	.delta = { "newtarm", "newtslev", "newtscrn", "computr", "medlbak" },
-	.anim = { "button01", "compicns", "tattoo" },
-	.palette = { "newtarm", "newtscrn", "computr", "medlbak" },
-	.palette_slot = { 0, 2, 3, 4 },
-	.awards_archive = "awards.lfd",
-	.award_actor = { "trnships", "medls-a", "strsnbrs", "sunrisea", "aniplnts", "star-1", "star-2", "coins",
-					 "starsbak", "mdl-bak1", "mdl-bak2", "ani1-sta", "trnships", "raptrhed" },
-	.award_palette = { "trnshps", "medlbak", "brnzpal", "slvrpal" },
-	.awards1_archive = "awards1.lfd",
-	.awards1 = { "mislboat", "a-medals", "amed-obj", "medpal", "coins", "comptat2" },
-	.awards2_archive = "awards2.lfd",
-	.awards2 = { "mislboat", "b-medals", "bmed-obj", "medpal", "coins", "comptat2" },
-	.load_expansion_palette = true,
+	/* archive */ "computer.lfd",
+	/* delta */ { "newtarm", "newtslev", "newtscrn", "computr", "medlbak" },
+	/* anim */ { "button01", "compicns", "tattoo" },
+	/* palette */ { "newtarm", "newtscrn", "computr", "medlbak" },
+	/* palette_slot */ { 0, 2, 3, 4 },
+	/* awards_archive */ "awards.lfd",
+	/* award_actor */
+	{ "trnships", "medls-a", "strsnbrs", "sunrisea", "aniplnts", "star-1", "star-2", "coins", "starsbak",
+	  "mdl-bak1", "mdl-bak2", "ani1-sta", "trnships", "raptrhed" },
+	/* award_palette */ { "trnshps", "medlbak", "brnzpal", "slvrpal" },
+	/* awards1_archive */ "awards1.lfd",
+	/* awards1 */ { "mislboat", "a-medals", "amed-obj", "medpal", "coins", "comptat2" },
+	/* awards2_archive */ "awards2.lfd",
+	/* awards2 */ { "mislboat", "b-medals", "bmed-obj", "medpal", "coins", "comptat2" },
+	/* load_expansion_palette */ true,
 };
 
 /* DATA: TIE98 COMPUTER_Do_Computer_Dialog 0x40BA40. The option and
  * joystick DELTs are intentionally absent because those controls are disabled. */
 static const ComputerResourceSpec computer_svga_resources = {
-	.archive = "computer.lfd",
-	.delta = { "arm", "sleeve", "newtscrn", "compface", "medlbak" },
-	.anim = { "buttons", "compicon", "tattoo" },
-	.palette = { "arm", "newtscrn", "computr", "medlbak" },
-	.palette_slot = { 0, 1, 2, 3 },
-	.awards_archive = "awardshr.lfd",
-	.award_actor = { "trnships", "medls-a", "strsnbrs", "sunrisea", "aniplnts", "star-1", "star-2", "coins",
-					 "starsbak", "mdl-bak1", "mdl-bak2", "ani1-sta", "trnships", "raptrhed" },
-	.award_palette = { "trnshps", "medlbak", "brnzpal", "slvrpal" },
-	.awards1_archive = "awards1h.lfd",
-	.awards1 = { "mislboat", "a-medals", "amed-obj", "medpal", "coins", "tattoo" },
-	.awards2_archive = "awards2h.lfd",
-	.awards2 = { "mislboat", "b-medals", "bmed-obj", "medpal", "coins", "tattoo" },
-	.load_expansion_palette = false,
+	/* archive */ "computer.lfd",
+	/* delta */ { "arm", "sleeve", "newtscrn", "compface", "medlbak" },
+	/* anim */ { "buttons", "compicon", "tattoo" },
+	/* palette */ { "arm", "newtscrn", "computr", "medlbak" },
+	/* palette_slot */ { 0, 1, 2, 3 },
+	/* awards_archive */ "awardshr.lfd",
+	/* award_actor */
+	{ "trnships", "medls-a", "strsnbrs", "sunrisea", "aniplnts", "star-1", "star-2", "coins", "starsbak",
+	  "mdl-bak1", "mdl-bak2", "ani1-sta", "trnships", "raptrhed" },
+	/* award_palette */ { "trnshps", "medlbak", "brnzpal", "slvrpal" },
+	/* awards1_archive */ "awards1h.lfd",
+	/* awards1 */ { "mislboat", "a-medals", "amed-obj", "medpal", "coins", "tattoo" },
+	/* awards2_archive */ "awards2h.lfd",
+	/* awards2 */ { "mislboat", "b-medals", "bmed-obj", "medpal", "coins", "tattoo" },
+	/* load_expansion_palette */ false,
 };
 
 /* ======================================================================
@@ -191,43 +194,43 @@ typedef struct ComputerMedalSpec {
 } ComputerMedalSpec;
 
 static const ComputerMedalSpec computer_vga_medal = {
-	.ship_x = 34,
-	.ship_y = -50,
-	.base_x = 22,
-	.base_y = -28,
-	.base_flip_x = 14,
-	.expansion1_flip_x = -5,
-	.expansion2_flip_x = -11,
-	.clip = { 77, 167, 102, 195 },
-	.tall_clip = { 77, 165, 108, 197 },
-	.text_rect = { 7, 92, 117, 273 },
-	.page2_xy = { { 16, -31 }, { -11, 22 }, { -10, 22 }, { 22, -28 } },
-	.page3_xy = { { 16, -31 }, { -37, 31 }, { -14, 29 }, { 23, -25 }, { 22, -28 } },
-	.expansion1_overlay_y = { -28, -28, -28 },
-	.pip_status_x = { -34, -54 },
-	.pip_bonus_x = { 76, 96 },
-	.pip_y = -80,
-	.pip_step = 16,
+	/* ship_x */ 34,
+	/* ship_y */ -50,
+	/* base_x */ 22,
+	/* base_y */ -28,
+	/* base_flip_x */ 14,
+	/* expansion1_flip_x */ -5,
+	/* expansion2_flip_x */ -11,
+	/* clip */ { 77, 167, 102, 195 },
+	/* tall_clip */ { 77, 165, 108, 197 },
+	/* text_rect */ { 7, 92, 117, 273 },
+	/* page2_xy */ { { 16, -31 }, { -11, 22 }, { -10, 22 }, { 22, -28 } },
+	/* page3_xy */ { { 16, -31 }, { -37, 31 }, { -14, 29 }, { 23, -25 }, { 22, -28 } },
+	/* expansion1_overlay_y */ { -28, -28, -28 },
+	/* pip_status_x */ { -34, -54 },
+	/* pip_bonus_x */ { 76, 96 },
+	/* pip_y */ -80,
+	/* pip_step */ 16,
 };
 
 static const ComputerMedalSpec computer_svga_medal = {
-	.ship_x = 68,
-	.ship_y = -120,
-	.base_x = 44,
-	.base_y = -67,
-	.base_flip_x = 28,
-	.expansion1_flip_x = -9,
-	.expansion2_flip_x = -21,
-	.clip = { 185, 334, 245, 390 },
-	.tall_clip = { 185, 334, 259, 390 },
-	.text_rect = { 17, 178, 290, 547 },
-	.page2_xy = { { 32, -74 }, { -22, 53 }, { -20, 53 }, { 44, -67 } },
-	.page3_xy = { { 32, -74 }, { -74, 75 }, { -26, 70 }, { 46, -60 }, { 44, -67 } },
-	.expansion1_overlay_y = { -67, -67, -57 },
-	.pip_status_x = { -68, -108 },
-	.pip_bonus_x = { 152, 192 },
-	.pip_y = -192,
-	.pip_step = 36,
+	/* ship_x */ 68,
+	/* ship_y */ -120,
+	/* base_x */ 44,
+	/* base_y */ -67,
+	/* base_flip_x */ 28,
+	/* expansion1_flip_x */ -9,
+	/* expansion2_flip_x */ -21,
+	/* clip */ { 185, 334, 245, 390 },
+	/* tall_clip */ { 185, 334, 259, 390 },
+	/* text_rect */ { 17, 178, 290, 547 },
+	/* page2_xy */ { { 32, -74 }, { -22, 53 }, { -20, 53 }, { 44, -67 } },
+	/* page3_xy */ { { 32, -74 }, { -74, 75 }, { -26, 70 }, { 46, -60 }, { 44, -67 } },
+	/* expansion1_overlay_y */ { -67, -67, -57 },
+	/* pip_status_x */ { -68, -108 },
+	/* pip_bonus_x */ { 152, 192 },
+	/* pip_y */ -192,
+	/* pip_step */ 36,
 };
 
 typedef struct ComputerSpec {
@@ -258,96 +261,96 @@ typedef struct ComputerSpec {
  * TIE95 callbacks at 0x83000-0x86B60 and TIE98 callbacks at 0x40C220-0x41088F. */
 static const ComputerSpec computer_specs[] = {
 	{
-		.surface_set = LANDRU_SURFACE_VGA,
-		.resources = &computer_vga_resources,
-		.medal = &computer_vga_medal,
-		.mode_rect = computer_vga_mode_rect,
-		.pref_rect = computer_vga_pref_rect,
-		.backup_rect = computer_vga_backup_rect,
-		.next_rect = { 124, 190, 136, 266 },
-		.last_rect = { 124, 104, 136, 180 },
-		.exit_rect = { 169, 96, 194, 152 },
-		.accept_rect = { 142, 96, 168, 152 },
-		.open_options_rect = { 116, 95, 128, 265 },
-		.info_clip = { 7, 86, 117, 273 },
-		.medal_hover = { { 37, 92, 103, 132 }, { 37, 223, 103, 263 } },
-		.secret_rect = { 80, 60, 104, 260 },
-		.confirm_rect = { 0, 0, 22, 160 },
-		.confirm_yes_rect = { 3, 80, 19, 116 },
-		.confirm_no_rect = { 3, 120, 19, 156 },
-		.width = 320,
-		.height = 200,
-		.actor_x = { 0, 0, 41, 0 },
-		.actor_y = { 0, 0, 0, 0 },
-		.tab_x = { 161, 195, 228, 261 },
-		.tab_y = 182,
-		.content_font = 0,
-		.tab_font = 1,
-		.toggle_label_font = 0,
-		.action_button_state = { { 1, 3 }, { 0, 2 } },
-		.tab_icon_state = { { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } },
-		.page_height = 110,
-		.line_height = 10,
-		.heading_extra = 0,
-		.kills_page_rows = 11,
-		.gauge_step = 4,
-		.gauge_left_inset = 1,
-		.exit_hover_x = 76,
-		.exit_hover_y = 88,
-		.exit_step = 60,
-		.exit_limit = 120,
-		.scroll_x_divisor = 4,
-		.scroll_y_multiplier = 1,
-		.confirm_text_x = 4,
-		.confirm_text_y = 7,
-		.confirm_mouse_x = 189,
-		.confirm_mouse_y = 104,
+		/* surface_set */ LANDRU_SURFACE_VGA,
+		/* resources */ &computer_vga_resources,
+		/* medal */ &computer_vga_medal,
+		/* mode_rect */ computer_vga_mode_rect,
+		/* pref_rect */ computer_vga_pref_rect,
+		/* backup_rect */ computer_vga_backup_rect,
+		/* next_rect */ { 124, 190, 136, 266 },
+		/* last_rect */ { 124, 104, 136, 180 },
+		/* exit_rect */ { 169, 96, 194, 152 },
+		/* accept_rect */ { 142, 96, 168, 152 },
+		/* open_options_rect */ { 116, 95, 128, 265 },
+		/* info_clip */ { 7, 86, 117, 273 },
+		/* medal_hover */ { { 37, 92, 103, 132 }, { 37, 223, 103, 263 } },
+		/* secret_rect */ { 80, 60, 104, 260 },
+		/* confirm_rect */ { 0, 0, 22, 160 },
+		/* confirm_yes_rect */ { 3, 80, 19, 116 },
+		/* confirm_no_rect */ { 3, 120, 19, 156 },
+		/* width */ 320,
+		/* height */ 200,
+		/* actor_x */ { 0, 0, 41, 0 },
+		/* actor_y */ { 0, 0, 0, 0 },
+		/* tab_x */ { 161, 195, 228, 261 },
+		/* tab_y */ 182,
+		/* content_font */ 0,
+		/* tab_font */ 1,
+		/* toggle_label_font */ 0,
+		/* action_button_state */ { { 1, 3 }, { 0, 2 } },
+		/* tab_icon_state */ { { 0, 4 }, { 1, 5 }, { 2, 6 }, { 3, 7 } },
+		/* page_height */ 110,
+		/* line_height */ 10,
+		/* heading_extra */ 0,
+		/* kills_page_rows */ 11,
+		/* gauge_step */ 4,
+		/* gauge_left_inset */ 1,
+		/* exit_hover_x */ 76,
+		/* exit_hover_y */ 88,
+		/* exit_step */ 60,
+		/* exit_limit */ 120,
+		/* scroll_x_divisor */ 4,
+		/* scroll_y_multiplier */ 1,
+		/* confirm_text_x */ 4,
+		/* confirm_text_y */ 7,
+		/* confirm_mouse_x */ 189,
+		/* confirm_mouse_y */ 104,
 	},
 	{
-		.surface_set = LANDRU_SURFACE_SVGA,
-		.resources = &computer_svga_resources,
-		.medal = &computer_svga_medal,
-		.mode_rect = computer_svga_mode_rect,
-		.pref_rect = computer_svga_pref_rect,
-		.backup_rect = computer_svga_backup_rect,
-		.next_rect = { 298, 380, 326, 532 },
-		.last_rect = { 298, 208, 326, 360 },
-		.exit_rect = { 400, 225, 466, 302 },
-		.accept_rect = { 350, 196, 402, 302 },
-		.open_options_rect = { 253, 190, 279, 530 },
-		.info_clip = { 17, 172, 290, 547 },
-		.medal_hover = { { 100, 196, 238, 266 }, { 100, 456, 238, 523 } },
-		.secret_rect = { 192, 120, 250, 520 },
-		.confirm_rect = { 0, 0, 53, 340 },
-		.confirm_yes_rect = { 7, 180, 46, 252 },
-		.confirm_no_rect = { 7, 260, 46, 332 },
-		.width = 640,
-		.height = 480,
-		.actor_x = { 0, 0, 41, 0 },
-		.actor_y = { 0, 0, 0, 0 },
-		.tab_x = { 320, 390, 453, 519 },
-		.tab_y = 439,
-		.content_font = 2,
-		.tab_font = 3,
-		.toggle_label_font = 3,
-		.action_button_state = { { 2, 3 }, { 0, 1 } },
-		.tab_icon_state = { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 } },
-		.page_height = 273,
-		.line_height = 0,
-		.heading_extra = 2,
-		.kills_page_rows = 14,
-		.gauge_step = 8,
-		.gauge_left_inset = 3,
-		.exit_hover_x = 119,
-		.exit_hover_y = 130,
-		.exit_step = 60,
-		.exit_limit = 120,
-		.scroll_x_divisor = 2,
-		.scroll_y_multiplier = 2,
-		.confirm_text_x = 8,
-		.confirm_text_y = 17,
-		.confirm_mouse_x = 365,
-		.confirm_mouse_y = 240,
+		/* surface_set */ LANDRU_SURFACE_SVGA,
+		/* resources */ &computer_svga_resources,
+		/* medal */ &computer_svga_medal,
+		/* mode_rect */ computer_svga_mode_rect,
+		/* pref_rect */ computer_svga_pref_rect,
+		/* backup_rect */ computer_svga_backup_rect,
+		/* next_rect */ { 298, 380, 326, 532 },
+		/* last_rect */ { 298, 208, 326, 360 },
+		/* exit_rect */ { 400, 225, 466, 302 },
+		/* accept_rect */ { 350, 196, 402, 302 },
+		/* open_options_rect */ { 253, 190, 279, 530 },
+		/* info_clip */ { 17, 172, 290, 547 },
+		/* medal_hover */ { { 100, 196, 238, 266 }, { 100, 456, 238, 523 } },
+		/* secret_rect */ { 192, 120, 250, 520 },
+		/* confirm_rect */ { 0, 0, 53, 340 },
+		/* confirm_yes_rect */ { 7, 180, 46, 252 },
+		/* confirm_no_rect */ { 7, 260, 46, 332 },
+		/* width */ 640,
+		/* height */ 480,
+		/* actor_x */ { 0, 0, 41, 0 },
+		/* actor_y */ { 0, 0, 0, 0 },
+		/* tab_x */ { 320, 390, 453, 519 },
+		/* tab_y */ 439,
+		/* content_font */ 2,
+		/* tab_font */ 3,
+		/* toggle_label_font */ 3,
+		/* action_button_state */ { { 2, 3 }, { 0, 1 } },
+		/* tab_icon_state */ { { 0, 1 }, { 2, 3 }, { 4, 5 }, { 6, 7 } },
+		/* page_height */ 273,
+		/* line_height */ 0,
+		/* heading_extra */ 2,
+		/* kills_page_rows */ 14,
+		/* gauge_step */ 8,
+		/* gauge_left_inset */ 3,
+		/* exit_hover_x */ 119,
+		/* exit_hover_y */ 130,
+		/* exit_step */ 60,
+		/* exit_limit */ 120,
+		/* scroll_x_divisor */ 2,
+		/* scroll_y_multiplier */ 2,
+		/* confirm_text_x */ 8,
+		/* confirm_text_y */ 17,
+		/* confirm_mouse_x */ 365,
+		/* confirm_mouse_y */ 240,
 	},
 };
 
@@ -2142,55 +2145,43 @@ static Input* Build_Computer_Dialog(void) {
 	return parent;
 }
 
-typedef enum {
-	COMP_TASK_PHASE_BEGIN = 0,
-	COMP_TASK_PHASE_AFTER_DIALOG,
-} ComputerTaskPhase;
+static void computer_release_resources(ComputerDialogState* t) {
+	int16_t i;
 
-typedef struct ComputerTask {
-	Input* the_dialog;
-	ComputerTaskPhase phase;
-	const ComputerSpec* spec;
-	LandruSurfaceSet saved_surface_set;
-	Rect saved_view_frame;
-	Rect saved_view_clip;
-} ComputerTask;
-
-static void computer_release_resources(ComputerTask* t) {
 	if (t->the_dialog) {
 		xinput_Free_Inputs(t->the_dialog);
 		t->the_dialog = NULL;
 	}
 
-	for (int16_t i = 0; i < 14; ++i) {
+	for (i = 0; i < 14; ++i) {
 		if (medal_actor[i]) {
 			xactor_Free_Actor_From_System(medal_actor[i]);
 			xactor_Free_Actor(medal_actor[i]);
 			medal_actor[i] = NULL;
 		}
 	}
-	for (int16_t i = 0; i < 10; ++i) {
+	for (i = 0; i < 10; ++i) {
 		if (medal_actor2[i]) {
 			xactor_Free_Actor_From_System(medal_actor2[i]);
 			xactor_Free_Actor(medal_actor2[i]);
 			medal_actor2[i] = NULL;
 		}
 	}
-	for (int16_t i = 0; i < 8; ++i) {
+	for (i = 0; i < 8; ++i) {
 		if (computer_actors[i]) {
 			xactor_Free_Actor_From_System(computer_actors[i]);
 			xactor_Free_Actor(computer_actors[i]);
 			computer_actors[i] = NULL;
 		}
 	}
-	for (int16_t i = 0; i < 4; ++i) {
+	for (i = 0; i < 4; ++i) {
 		if (medal_palette[i]) {
 			xpal_Free_Palette_From_System(medal_palette[i]);
 			xpal_Free_Palette(medal_palette[i]);
 			medal_palette[i] = NULL;
 		}
 	}
-	for (int16_t i = 0; i < 5; ++i) {
+	for (i = 0; i < 5; ++i) {
 		if (computer_palettes[i]) {
 			xpal_Free_Palette_From_System(computer_palettes[i]);
 			xpal_Free_Palette(computer_palettes[i]);
@@ -2211,15 +2202,14 @@ static void computer_release_resources(ComputerTask* t) {
 		xpal_Free_Palette(computer_palette);
 		computer_palette = NULL;
 	}
-	if (t->spec->surface_set == LANDRU_SURFACE_SVGA) {
+	if (computer_specs[t->tie98 ? 1 : 0].surface_set == LANDRU_SURFACE_SVGA) {
 		(void)xsurface_Select_Surface_Set(t->saved_surface_set);
 		xview_Set_View_Frame(0, &t->saved_view_frame);
 		xview_Set_Full_View_Clip_Frame(&t->saved_view_clip);
 	}
 }
 
-static LandruTaskStepResult computer_setup_failed(ComputerTask* t, ResFile* open_resource,
-												  const char* resource) {
+static bool computer_setup_failed(ComputerDialogState* t, ResFile* open_resource, const char* resource) {
 	if (open_resource)
 		xres_Close_Resource(open_resource);
 	TieDiagnostics_Log(TIE_LOG_ERROR, "[COMPUTER] missing frontend resource: %s\n",
@@ -2228,147 +2218,146 @@ static LandruTaskStepResult computer_setup_failed(ComputerTask* t, ResFile* open
 	shellext_Set_Prefs_Sound();
 	xsound_Resume_Sounds();
 	xerror_Set_Landru_Error(6);
-	return LANDRU_TASK_STEP_DONE;
+	return false;
 }
 
-/* PORT: asynchronous adaptation of TIE95 COMPUTER_Do_Computer_Dialog
- * (0x82AD0) and TIE98 COMPUTER_Do_Computer_Dialog (0x40BA40). */
-static LandruTaskStepResult computer_task_step(void* self) {
-	ComputerTask* t = (ComputerTask*)self;
+void computer_PrepareDialog(ComputerDialogState* state) {
+	state->the_dialog = NULL;
+	state->tie98 = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+}
 
-	if (t->phase == COMP_TASK_PHASE_BEGIN) {
-		const ComputerResourceSpec* resources = t->spec->resources;
-		ResFile* res_file;
-		Palette* src_palette;
-		Rect r;
-		int16_t i;
+bool computer_OpenDialog(ComputerDialogState* t) {
+	const ComputerSpec* spec = &computer_specs[t->tie98 ? 1 : 0];
+	const ComputerResourceSpec* resources = spec->resources;
+	ResFile* res_file;
+	Palette* src_palette;
+	Rect r;
+	int16_t i;
 
-		xsound_Pause_Sounds();
-		xio_Clear_Key();
-		active_spec = t->spec;
-		if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-			t->saved_surface_set = xsurface_Get_Surface_Set();
-			xview_Get_View_Frame(0, &t->saved_view_frame);
-			xview_Get_Full_View_Clip_Frame(&t->saved_view_clip);
-			(void)xsurface_Select_Surface_Set(active_spec->surface_set);
-			xrect_Set_Rect(&r, 0, 0, active_spec->width, active_spec->height);
-			xview_Set_View_Frame(0, &r);
-			xview_Set_Full_View_Clip_Frame(&r);
-		}
-
-		restore_pilot = 0;
-		computer_display = 1;
-		computer_mode = COMP_MODE_OPTIONS;
-		pilot_info_page = 0;
-		pilot_info_num_pages = 1;
-		Init_Computer_Medal();
-		Find_Backup_Pilot_Info();
-		memset(computer_actors, 0, sizeof computer_actors);
-		memset(medal_actor, 0, sizeof medal_actor);
-		memset(medal_actor2, 0, sizeof medal_actor2);
-		memset(computer_palettes, 0, sizeof computer_palettes);
-		memset(medal_palette, 0, sizeof medal_palette);
-		medal_palette2[0] = NULL;
-		medal_palette3[0] = NULL;
-		computer_palette = NULL;
-
-		computer_palette = xpal_Alloc_Palette(0, 256);
-		src_palette = xpal_Get_Screen_Palette();
-		if (!computer_palette || !src_palette)
-			return computer_setup_failed(t, NULL, "computer palette");
-		xpal_Copy_Palette(computer_palette, src_palette, 0, 256, 0);
-
-		res_file = shellext_Open_Empire_Resource(resources->archive);
-		if (!res_file)
-			return computer_setup_failed(t, NULL, resources->archive);
+	xsound_Pause_Sounds();
+	xio_Clear_Key();
+	active_spec = spec;
+	if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
+		t->saved_surface_set = xsurface_Get_Surface_Set();
+		xview_Get_View_Frame(0, &t->saved_view_frame);
+		xview_Get_Full_View_Clip_Frame(&t->saved_view_clip);
+		(void)xsurface_Select_Surface_Set(active_spec->surface_set);
 		xrect_Set_Rect(&r, 0, 0, active_spec->width, active_spec->height);
-
-		for (i = 0; i < 5; i++) {
-			computer_actors[i] = xactdelt_Res_Delta_Actor(resources->delta[i], &r, 0, 0, 0);
-			if (!computer_actors[i])
-				return computer_setup_failed(t, res_file, resources->delta[i]);
-			xactor_Set_Actor_Time(computer_actors[i], 0, 0);
-		}
-		for (i = 0; i < 3; i++) {
-			computer_actors[i + 5] = xactanim_Res_Anim_Actor(resources->anim[i], &r, 0, 0, 0);
-			if (!computer_actors[i + 5])
-				return computer_setup_failed(t, res_file, resources->anim[i]);
-			xactor_Set_Actor_Time(computer_actors[i + 5], 0, 0);
-		}
-		for (i = 0; i < 4; i++) {
-			uint8_t slot = resources->palette_slot[i];
-			computer_palettes[slot] = xpal_Res_Palette(resources->palette[i]);
-			if (!computer_palettes[slot])
-				return computer_setup_failed(t, res_file, resources->palette[i]);
-		}
-		xpal_Set_Screen_RGB(0, 255, 0, 0, 0);
-		xres_Close_Resource(res_file);
-
-		res_file = shellext_Open_Empire_Resource(resources->awards_archive);
-		if (!res_file)
-			return computer_setup_failed(t, NULL, resources->awards_archive);
-		for (i = 0; i < 14; i++) {
-			if (i >= 8)
-				medal_actor[i] = xactdelt_Res_Delta_Actor(resources->award_actor[i], &r, 0, 0, 0);
-			else
-				medal_actor[i] = xactanim_Res_Anim_Actor(resources->award_actor[i], &r, 0, 0, 0);
-			if (!medal_actor[i])
-				return computer_setup_failed(t, res_file, resources->award_actor[i]);
-		}
-		for (i = 0; i < 4; i++) {
-			medal_palette[i] = xpal_Res_Palette(resources->award_palette[i]);
-			if (!medal_palette[i])
-				return computer_setup_failed(t, res_file, resources->award_palette[i]);
-		}
-		xres_Close_Resource(res_file);
-
-		if (shipext_Is_Mission_Disk1()) {
-			res_file = shellext_Open_Empire_Resource(resources->awards1_archive);
-			if (!res_file)
-				return computer_setup_failed(t, NULL, resources->awards1_archive);
-			medal_actor2[0] = xactanim_Res_Anim_Actor(resources->awards1[0], &r, 0, 0, 0);
-			medal_actor2[1] = xactanim_Res_Anim_Actor(resources->awards1[1], &r, 0, 0, 0);
-			medal_actor2[2] = xactanim_Res_Anim_Actor(resources->awards1[2], &r, 0, 0, 0);
-			medal_actor2[3] = xactanim_Res_Anim_Actor(resources->awards1[4], &r, 0, 0, 0);
-			medal_actor2[4] = xactanim_Res_Anim_Actor(resources->awards1[5], &r, 0, 0, 0);
-			if (resources->load_expansion_palette)
-				medal_palette2[0] = xpal_Res_Palette(resources->awards1[3]);
-			for (i = 0; i < 5; ++i)
-				if (!medal_actor2[i])
-					return computer_setup_failed(t, res_file, resources->awards1[i < 3 ? i : i + 1]);
-			if (resources->load_expansion_palette && !medal_palette2[0])
-				return computer_setup_failed(t, res_file, resources->awards1[3]);
-			xres_Close_Resource(res_file);
-		}
-
-		if (shipext_Is_Mission_Disk2()) {
-			res_file = shellext_Open_Empire_Resource(resources->awards2_archive);
-			if (!res_file)
-				return computer_setup_failed(t, NULL, resources->awards2_archive);
-			medal_actor2[5] = xactanim_Res_Anim_Actor(resources->awards2[0], &r, 0, 0, 0);
-			medal_actor2[6] = xactanim_Res_Anim_Actor(resources->awards2[1], &r, 0, 0, 0);
-			medal_actor2[7] = xactanim_Res_Anim_Actor(resources->awards2[2], &r, 0, 0, 0);
-			medal_actor2[8] = xactanim_Res_Anim_Actor(resources->awards2[4], &r, 0, 0, 0);
-			medal_actor2[9] = xactanim_Res_Anim_Actor(resources->awards2[5], &r, 0, 0, 0);
-			if (resources->load_expansion_palette)
-				medal_palette3[0] = xpal_Res_Palette(resources->awards2[3]);
-			for (i = 5; i < 10; ++i)
-				if (!medal_actor2[i])
-					return computer_setup_failed(t, res_file, resources->awards2[i < 8 ? i - 5 : i - 4]);
-			if (resources->load_expansion_palette && !medal_palette3[0])
-				return computer_setup_failed(t, res_file, resources->awards2[3]);
-			xres_Close_Resource(res_file);
-		}
-
-		t->the_dialog = Build_Computer_Dialog();
-		if (!t->the_dialog)
-			return computer_setup_failed(t, NULL, "computer dialog");
-		xdialog_Push_Dialog_View_Task(t->the_dialog);
-		t->phase = COMP_TASK_PHASE_AFTER_DIALOG;
-		return LANDRU_TASK_STEP_CONTINUE;
+		xview_Set_View_Frame(0, &r);
+		xview_Set_Full_View_Clip_Frame(&r);
 	}
 
-	/* AFTER_DIALOG */
+	restore_pilot = 0;
+	computer_display = 1;
+	computer_mode = COMP_MODE_OPTIONS;
+	pilot_info_page = 0;
+	pilot_info_num_pages = 1;
+	Init_Computer_Medal();
+	Find_Backup_Pilot_Info();
+	memset(computer_actors, 0, sizeof computer_actors);
+	memset(medal_actor, 0, sizeof medal_actor);
+	memset(medal_actor2, 0, sizeof medal_actor2);
+	memset(computer_palettes, 0, sizeof computer_palettes);
+	memset(medal_palette, 0, sizeof medal_palette);
+	medal_palette2[0] = NULL;
+	medal_palette3[0] = NULL;
+	computer_palette = NULL;
+
+	computer_palette = xpal_Alloc_Palette(0, 256);
+	src_palette = xpal_Get_Screen_Palette();
+	if (!computer_palette || !src_palette)
+		return computer_setup_failed(t, NULL, "computer palette");
+	xpal_Copy_Palette(computer_palette, src_palette, 0, 256, 0);
+
+	res_file = shellext_Open_Empire_Resource(resources->archive);
+	if (!res_file)
+		return computer_setup_failed(t, NULL, resources->archive);
+	xrect_Set_Rect(&r, 0, 0, active_spec->width, active_spec->height);
+
+	for (i = 0; i < 5; i++) {
+		computer_actors[i] = xactdelt_Res_Delta_Actor(resources->delta[i], &r, 0, 0, 0);
+		if (!computer_actors[i])
+			return computer_setup_failed(t, res_file, resources->delta[i]);
+		xactor_Set_Actor_Time(computer_actors[i], 0, 0);
+	}
+	for (i = 0; i < 3; i++) {
+		computer_actors[i + 5] = xactanim_Res_Anim_Actor(resources->anim[i], &r, 0, 0, 0);
+		if (!computer_actors[i + 5])
+			return computer_setup_failed(t, res_file, resources->anim[i]);
+		xactor_Set_Actor_Time(computer_actors[i + 5], 0, 0);
+	}
+	for (i = 0; i < 4; i++) {
+		uint8_t slot = resources->palette_slot[i];
+		computer_palettes[slot] = xpal_Res_Palette(resources->palette[i]);
+		if (!computer_palettes[slot])
+			return computer_setup_failed(t, res_file, resources->palette[i]);
+	}
+	xpal_Set_Screen_RGB(0, 255, 0, 0, 0);
+	xres_Close_Resource(res_file);
+
+	res_file = shellext_Open_Empire_Resource(resources->awards_archive);
+	if (!res_file)
+		return computer_setup_failed(t, NULL, resources->awards_archive);
+	for (i = 0; i < 14; i++) {
+		if (i >= 8)
+			medal_actor[i] = xactdelt_Res_Delta_Actor(resources->award_actor[i], &r, 0, 0, 0);
+		else
+			medal_actor[i] = xactanim_Res_Anim_Actor(resources->award_actor[i], &r, 0, 0, 0);
+		if (!medal_actor[i])
+			return computer_setup_failed(t, res_file, resources->award_actor[i]);
+	}
+	for (i = 0; i < 4; i++) {
+		medal_palette[i] = xpal_Res_Palette(resources->award_palette[i]);
+		if (!medal_palette[i])
+			return computer_setup_failed(t, res_file, resources->award_palette[i]);
+	}
+	xres_Close_Resource(res_file);
+
+	if (shipext_Is_Mission_Disk1()) {
+		res_file = shellext_Open_Empire_Resource(resources->awards1_archive);
+		if (!res_file)
+			return computer_setup_failed(t, NULL, resources->awards1_archive);
+		medal_actor2[0] = xactanim_Res_Anim_Actor(resources->awards1[0], &r, 0, 0, 0);
+		medal_actor2[1] = xactanim_Res_Anim_Actor(resources->awards1[1], &r, 0, 0, 0);
+		medal_actor2[2] = xactanim_Res_Anim_Actor(resources->awards1[2], &r, 0, 0, 0);
+		medal_actor2[3] = xactanim_Res_Anim_Actor(resources->awards1[4], &r, 0, 0, 0);
+		medal_actor2[4] = xactanim_Res_Anim_Actor(resources->awards1[5], &r, 0, 0, 0);
+		if (resources->load_expansion_palette)
+			medal_palette2[0] = xpal_Res_Palette(resources->awards1[3]);
+		for (i = 0; i < 5; ++i)
+			if (!medal_actor2[i])
+				return computer_setup_failed(t, res_file, resources->awards1[i < 3 ? i : i + 1]);
+		if (resources->load_expansion_palette && !medal_palette2[0])
+			return computer_setup_failed(t, res_file, resources->awards1[3]);
+		xres_Close_Resource(res_file);
+	}
+
+	if (shipext_Is_Mission_Disk2()) {
+		res_file = shellext_Open_Empire_Resource(resources->awards2_archive);
+		if (!res_file)
+			return computer_setup_failed(t, NULL, resources->awards2_archive);
+		medal_actor2[5] = xactanim_Res_Anim_Actor(resources->awards2[0], &r, 0, 0, 0);
+		medal_actor2[6] = xactanim_Res_Anim_Actor(resources->awards2[1], &r, 0, 0, 0);
+		medal_actor2[7] = xactanim_Res_Anim_Actor(resources->awards2[2], &r, 0, 0, 0);
+		medal_actor2[8] = xactanim_Res_Anim_Actor(resources->awards2[4], &r, 0, 0, 0);
+		medal_actor2[9] = xactanim_Res_Anim_Actor(resources->awards2[5], &r, 0, 0, 0);
+		if (resources->load_expansion_palette)
+			medal_palette3[0] = xpal_Res_Palette(resources->awards2[3]);
+		for (i = 5; i < 10; ++i)
+			if (!medal_actor2[i])
+				return computer_setup_failed(t, res_file, resources->awards2[i < 8 ? i - 5 : i - 4]);
+		if (resources->load_expansion_palette && !medal_palette3[0])
+			return computer_setup_failed(t, res_file, resources->awards2[3]);
+		xres_Close_Resource(res_file);
+	}
+
+	t->the_dialog = Build_Computer_Dialog();
+	if (!t->the_dialog)
+		return computer_setup_failed(t, NULL, "computer dialog");
+	return true;
+}
+
+void computer_CloseDialog(ComputerDialogState* t) {
 	int16_t retval = xdialog_Get_Dialog_Exit();
 	xdialog_Clear_Dialog_Exit();
 
@@ -2415,18 +2404,4 @@ static LandruTaskStepResult computer_task_step(void* self) {
 	 * from shellext_escape_TIE in landru_exit_gbl, but we run
 	 * asynchronously, so set the exit directly. */
 	xerror_Set_Landru_Exit(retval);
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static const LandruTaskVtable computer_task_vt = {
-	.step = computer_task_step,
-};
-
-void computer_Push_Computer_Dialog_Task(void) {
-	ComputerTask* t = (ComputerTask*)landru_task_push(&computer_task_vt);
-	if (!t)
-		return;
-	t->the_dialog = NULL;
-	t->phase = COMP_TASK_PHASE_BEGIN;
-	t->spec = &computer_specs[TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 1 : 0];
 }

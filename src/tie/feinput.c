@@ -4,8 +4,6 @@
 #include "tie/tie.h"
 #include "tie_runtime/display/classic_framebuffer.h"
 
-#include <string.h>
-
 #include "tie_runtime/input/input.h"
 
 /* --- Unimplemented module functions --- */
@@ -18,6 +16,8 @@
 #include "tie/mouse2.h"
 #include "tie/rtsvga2.h"
 #include "tie/xtimer.h"
+
+#include <string.h>
 
 // FUNCTION: TIE98 0x49A2E0
 int8_t FlightInput_GetChar(void) {
@@ -138,16 +138,17 @@ void feinput_degitterinput(void) {
 	int16_t dx = inputdeltax;
 	int16_t dy = inputdeltay;
 	int16_t dr = inputdeltaroll;
+	int16_t abs_dy, abs_dr;
 
 	int16_t abs_dx = dx < 0 ? -dx : dx;
 	if (abs_dx <= 64)
 		dx = 0;
 
-	int16_t abs_dy = dy < 0 ? -dy : dy;
+	abs_dy = dy < 0 ? -dy : dy;
 	if (abs_dy <= 24)
 		dy = 0;
 
-	int16_t abs_dr = dr < 0 ? -dr : dr;
+	abs_dr = dr < 0 ? -dr : dr;
 	if (abs_dr <= 64)
 		dr = 0;
 
@@ -158,18 +159,20 @@ void feinput_degitterinput(void) {
 
 // FUNCTION: TIE95 0x22F08
 void feinput_getinput(void) {
+	int16_t abs_dx, abs_dy, abs_dr;
+
 	feinput_getrawinput();
 	feinput_checkinput();
 
-	int16_t abs_dx = inputdeltax < 0 ? -inputdeltax : inputdeltax;
+	abs_dx = inputdeltax < 0 ? -inputdeltax : inputdeltax;
 	if (abs_dx <= 2048)
 		inputdeltax = 0;
 
-	int16_t abs_dy = inputdeltay < 0 ? -inputdeltay : inputdeltay;
+	abs_dy = inputdeltay < 0 ? -inputdeltay : inputdeltay;
 	if (abs_dy <= 1536)
 		inputdeltay = 0;
 
-	int16_t abs_dr = inputdeltaroll < 0 ? -inputdeltaroll : inputdeltaroll;
+	abs_dr = inputdeltaroll < 0 ? -inputdeltaroll : inputdeltaroll;
 	if (abs_dr <= 2048)
 		inputdeltaroll = 0;
 }
@@ -266,14 +269,17 @@ uint16_t feinput_getrawinput(void) {
 	if (joystickflag) {
 		/* The host combines physical models into yaw, pitch, and roll. */
 		int16_t raw[3] = { 0 };
+		const TieInputMapping* mapping;
 		joybuttons = xjoy_Joystick_Read_Axes(raw, 3, 0);
-		const TieInputMapping* mapping = TieInput_Mapping();
+		mapping = TieInput_Mapping();
 		joystickx = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_YAW]);
 		joysticky = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_PITCH]);
 		joystickroll = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_ROLL]);
 	}
 
 	if (mouseflag) {
+		int32_t sx, sy;
+
 		mousebuttons = mouse2_readmouse(&mousex, &mousey);
 		mouse2_deltamouse(&deltamx, &deltamy);
 
@@ -293,8 +299,8 @@ uint16_t feinput_getrawinput(void) {
 
 		/* Clamp delta to ±191 / ±127 (matches binary's saturation cap;
 		 * inputdeltax = deltamx << 7 must stay within int16). */
-		int32_t sx = (int32_t)deltamx;
-		int32_t sy = (int32_t)deltamy;
+		sx = (int32_t)deltamx;
+		sy = (int32_t)deltamy;
 		if (sx < -191)
 			sx = -191;
 		if (sx > 191)

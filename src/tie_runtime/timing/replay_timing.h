@@ -14,6 +14,8 @@ void TieReplayTiming_Reset(void);
 int32_t TieReplayTiming_SelectEngineDeltaUs(int32_t host_delta_us);
 bool TieReplayTiming_IsFrameDue(void);
 void TieReplayTiming_ConsumeFrame(void);
+#ifdef TIE_MODERN
 uint64_t TieReplayTiming_NextWakeDelayUs(void);
+#endif
 
 #endif /* TIE_RUNTIME_TIMING_REPLAY_TIMING_H */

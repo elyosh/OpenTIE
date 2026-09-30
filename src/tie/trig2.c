@@ -13,10 +13,9 @@
  * etc.) making them non-reentrant. This matches the original binary.
  */
 
+#include "tie/trig2.h"
 #include <stdint.h>
 #include <stdlib.h>
-
-#include "tie/trig2.h"
 
 /* Half-wave sine table: 514 entries, sin(i * 180°/512) * 65534.
  * Entries 0..256 rise from 0 to 65534 (sin 0°..90°); entries 256..512
@@ -192,15 +191,18 @@ int16_t trig2_cosinewordmult(int16_t val, uint16_t angle) { return trig2_sinewor
 // FUNCTION: TIE95 0x5BE34
 int32_t trig2_sinedwordmult(int32_t val, uint16_t angle) {
 	int16_t sign = 0;
+	uint16_t idx;
+	uint16_t s;
+	int32_t result;
+
 	if (val < 0) {
 		sign = (int16_t)0x8000;
 		val = -val;
 	}
 	sign ^= (angle & 0x8000);
-	uint16_t idx = ((angle >> 5) & 0x3FE) >> 1; /* binary uses 0x3FE to reach sintable[256] at 90° */
-	uint16_t s = sintable[idx];
-	int32_t result =
-		(int32_t)((uint16_t)(val >> 16)) * s + (int32_t)(((uint32_t)s * (uint16_t)val + 0x8000) >> 16);
+	idx = ((angle >> 5) & 0x3FE) >> 1; /* binary uses 0x3FE to reach sintable[256] at 90° */
+	s = sintable[idx];
+	result = (int32_t)((uint16_t)(val >> 16)) * s + (int32_t)(((uint32_t)s * (uint16_t)val + 0x8000) >> 16);
 	if (sign)
 		result = -result;
 	return result;
@@ -238,9 +240,14 @@ int32_t trig2_cosinedwordmult(int32_t val, uint16_t angle) {
 int16_t trig2_arcsin(int16_t val) {
 	int16_t abs_val = (val < 0) ? -val : val;
 	uint16_t target = 2 * abs_val;
-
 	int16_t idx = 0;
 	int16_t remaining = 256;
+	uint16_t base;
+	uint16_t span;
+	uint32_t low_byte;
+	uint32_t pre;
+	int16_t result;
+
 	while (remaining > 0 && target > sintable[idx]) {
 		remaining--;
 		idx++;
@@ -249,16 +256,16 @@ int16_t trig2_arcsin(int16_t val) {
 	if (idx == 0)
 		return 0; /* arcsin(0) = 0 */
 
-	uint16_t base = sintable[idx - 1];
-	uint16_t span = (uint16_t)(sintable[idx] - base);
-	uint32_t low_byte = 0;
+	base = sintable[idx - 1];
+	span = (uint16_t)(sintable[idx] - base);
+	low_byte = 0;
 	if (span && target > base) {
 		uint32_t quot = ((uint32_t)(target - base) << 16) / span;
 		low_byte = quot >> 8;
 	}
 
-	uint32_t pre = ((uint32_t)(255 - remaining) << 8) + low_byte;
-	int16_t result = (int16_t)(pre / 4);
+	pre = ((uint32_t)(255 - remaining) << 8) + low_byte;
+	result = (int16_t)(pre / 4);
 	if (val < 0)
 		result = -result;
 	return result;
@@ -269,9 +276,14 @@ int16_t trig2_arcsin(int16_t val) {
 int16_t trig2_arccos(int16_t val) {
 	int16_t abs_val = (val < 0) ? -val : val;
 	uint16_t target = 2 * abs_val;
-
 	int16_t idx = 256;
 	int16_t remaining = 256;
+	uint16_t base;
+	int16_t diff;
+	uint16_t low_byte;
+	uint16_t low16;
+	int16_t result;
+
 	while (remaining > 0 && target < sintable[idx]) {
 		remaining--;
 		idx++;
@@ -282,8 +294,8 @@ int16_t trig2_arccos(int16_t val) {
 			uint16_t v = ((uint16_t)quot) >> 8; /* mov edx,eax; shr dx,8 */
 			v = (uint16_t)(-(int16_t)v);        /* neg edx (low 16 bits) */
 			if (v == 0)
-				return 0x4000;                  /* exactly 90° */
-			int16_t result = (int16_t)(v >> 2); /* shr dx, 2 (unsigned) */
+				return 0x4000;          /* exactly 90° */
+			result = (int16_t)(v >> 2); /* shr dx, 2 (unsigned) */
 			if (val < 0)
 				result = (int16_t)((uint16_t)(-result) + 0x8000u);
 			return result;
@@ -292,10 +304,10 @@ int16_t trig2_arccos(int16_t val) {
 
 	/* Interpolate from the previous interval with a signed delta. */
 	remaining--; /* `dec ebx` at 0x5BD8C */
-	uint16_t base = sintable[idx - 1];
-	int16_t diff = (int16_t)(target - base);
+	base = sintable[idx - 1];
+	diff = (int16_t)(target - base);
 
-	uint16_t low_byte = 0;
+	low_byte = 0;
 	if (diff != 0) {
 		uint16_t span = (uint16_t)(sintable[idx - 2] - base);
 		if (span) {
@@ -305,8 +317,8 @@ int16_t trig2_arccos(int16_t val) {
 		}
 	}
 
-	uint16_t low16 = (uint16_t)(((255 - remaining) << 8) - low_byte);
-	int16_t result = (int16_t)(low16 >> 2); /* `shr ax, 2` */
+	low16 = (uint16_t)(((255 - remaining) << 8) - low_byte);
+	result = (int16_t)(low16 >> 2); /* `shr ax, 2` */
 	if (val < 0)
 		result = (int16_t)((uint16_t)(-result) + 0x8000u);
 	return result;
@@ -324,8 +336,15 @@ int16_t trig2_arccos(int16_t val) {
  * arctantable[ratio+1]-arctantable[ratio] near the boundary is small
  * enough that the contribution is sub-tick. */
 static void calcarctan_core(int32_t a, int32_t b, int16_t* out_ratio, int16_t* out_angle) {
+	uint32_t frac;
+	uint16_t ratio;
+	int16_t base;
+	int16_t next;
+	int16_t delta;
+	int16_t interp;
+
 	trig2_signswap = 0;
-	uint32_t frac = 0;
+	frac = 0;
 
 	if ((uint32_t)a == (uint32_t)b) {
 		*out_ratio = 256;
@@ -360,11 +379,11 @@ static void calcarctan_core(int32_t a, int32_t b, int16_t* out_ratio, int16_t* o
 		}
 	}
 
-	uint16_t ratio = (uint16_t)*out_ratio;
-	int16_t base = (int16_t)arctantable[ratio];
-	int16_t next = (int16_t)arctantable[ratio + 1];
-	int16_t delta = (int16_t)(next - base);
-	int16_t interp = (int16_t)(((int32_t)(uint16_t)delta * (int32_t)frac) >> 16);
+	ratio = (uint16_t)*out_ratio;
+	base = (int16_t)arctantable[ratio];
+	next = (int16_t)arctantable[ratio + 1];
+	delta = (int16_t)(next - base);
+	interp = (int16_t)(((int32_t)(uint16_t)delta * (int32_t)frac) >> 16);
 	*out_angle = (int16_t)(base + interp);
 
 	if (trig2_signswap) {
@@ -375,6 +394,8 @@ static void calcarctan_core(int32_t a, int32_t b, int16_t* out_ratio, int16_t* o
 
 // FUNCTION: TIE95 0x5C3B4
 int16_t trig2_arctan(int32_t y, int32_t x) {
+	int16_t ratio, angle;
+
 	trig2_signy = 0;
 	if (y < 0) {
 		y = -y;
@@ -386,7 +407,6 @@ int16_t trig2_arctan(int32_t y, int32_t x) {
 		trig2_signx = 1;
 	}
 
-	int16_t ratio, angle;
 	calcarctan_core(x, y, &ratio, &angle);
 
 	if (trig2_signy)
@@ -411,11 +431,13 @@ void trig2_calcarctan(int32_t a, int32_t b) {
 /* Internal: 2D cartesian to polar using calcarctan + square root table */
 static void trig2_ctoptwodim_internal(int32_t a, int32_t b) {
 	int16_t ratio, angle;
+	uint16_t sqrt_val;
+
 	calcarctan_core(a, b, &ratio, &angle);
 	trig2_angleplane = angle;
 
 	/* Distance = divisorhilo * sqrt(1 + (ratio/256)²) */
-	uint16_t sqrt_val = squarerootable[(uint16_t)ratio];
+	sqrt_val = squarerootable[(uint16_t)ratio];
 	trig2_polardistance = trig2_divisorhilo +
 						  (int32_t)((uint32_t)sqrt_val * (uint16_t)trig2_divisorhilo + 0x8000) / 65536 +
 						  (int32_t)sqrt_val * (trig2_divisorhilo >> 16);
@@ -446,6 +468,8 @@ void trig2_movexyz(uint16_t distance, int16_t pitch, uint16_t heading) {
 
 // FUNCTION: TIE95 0x5C1D0
 void trig2_ctop2dim(int32_t x, int32_t y) {
+	int16_t angle;
+
 	trig2_signx = 0;
 	if (x < 0) {
 		x = -x;
@@ -459,7 +483,7 @@ void trig2_ctop2dim(int32_t x, int32_t y) {
 
 	trig2_ctoptwodim_internal(x, y);
 
-	int16_t angle = trig2_angleplane;
+	angle = trig2_angleplane;
 	if (trig2_signy)
 		angle = -angle;
 	if (trig2_signx) {

@@ -7,13 +7,14 @@
  * which uses TRIG2.
  */
 
-#include <stdint.h>
-#include <stdlib.h>
-
 #include "tie/math2.h"
+#include "tie/math2_wide.h"
 #include "tie/panel.h" /* radarx / radary */
 #include "tie/tie.h"
 #include "tie/trig2.h"
+
+#include <stdint.h>
+#include <stdlib.h>
 
 /* Globals */
 int16_t math2_remainder;
@@ -53,28 +54,25 @@ static int16_t cached_radar_resolution = -1;
 
 // FUNCTION: TIE95 0x31EE0
 int32_t math2_ABoverC32(int32_t a, int32_t b, int32_t c) {
+	uint32_t ua = (uint32_t)a;
+	uint32_t ub = (uint32_t)b;
+	uint32_t uc = (uint32_t)c;
+	uint32_t result;
 	int sign = 0;
 	if (a < 0) {
-		a = -a;
+		ua = 0u - ua;
 		sign = 1;
 	}
 	if (b < 0) {
-		b = -b;
+		ub = 0u - ub;
 		sign = !sign;
 	}
 	if (c < 0) {
-		c = -c;
+		uc = 0u - uc;
 		sign = !sign;
 	}
-
-	uint64_t prod = (uint64_t)(uint32_t)a * (uint32_t)b;
-	int32_t result;
-	if ((prod >> 32) >= (uint32_t)c)
-		result = 0x7FFFFFFF;
-	else
-		result = (int32_t)(prod / (uint32_t)c);
-
-	return sign ? -result : result;
+	result = math2_mul_div_u32(ua, ub, uc);
+	return (int32_t)(sign ? 0u - result : result);
 }
 
 // FUNCTION: TIE95 0x31F40
@@ -86,10 +84,13 @@ uint16_t math2_fraction(uint16_t val, uint16_t frac) {
 
 // FUNCTION: TIE95 0x31F68
 int32_t math2_longfraction(int32_t val, uint16_t frac) {
+	uint16_t lo;
+	uint16_t hi;
+
 	if (frac == 0xFFFF)
 		return val;
-	uint16_t lo = (uint16_t)val;
-	uint16_t hi = (uint16_t)(val >> 16);
+	lo = (uint16_t)val;
+	hi = (uint16_t)(val >> 16);
 	/* Retail rounds half-up via the +0x8000 bias before the >>16. */
 	return (int32_t)((uint32_t)frac * hi + (((uint32_t)frac * lo + 0x8000u) >> 16));
 }
@@ -126,7 +127,9 @@ uint16_t math2_longpercentage(uint32_t a, uint32_t b) {
 // FUNCTION: TIE95 0x32054
 int16_t math2_getrandom(void) {
 	uint16_t val = (uint16_t)randomnumber;
-	for (int i = 0; i < 16; i++) {
+	int i;
+
+	for (i = 0; i < 16; i++) {
 		uint16_t xor_bits = (math2_randomseed >> 8) ^ (2 * (math2_randomseed & 0xFF));
 		int carry_out = (xor_bits & 0x80) != 0;
 		int seed_sign = math2_randomseed < 0;
@@ -179,6 +182,14 @@ int16_t math2_halfplane(int32_t x1, int32_t y1, int32_t x2, int32_t y2) { return
 // FUNCTION: TIE95 0x321B4
 void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz) {
 	/* Rebuild radar boundary table if resolution changed */
+	int32_t ax;
+	int32_t ay;
+	int shift;
+	uint16_t nav_angle;
+	uint16_t table_idx;
+	uint8_t max_x;
+	uint8_t max_y;
+
 	if (cached_radar_resolution != flightResolution) {
 		if (flightResolution == TIE_FLIGHT_RES_VGA) {
 			/* 320×200: restore pre-baked elliptical boundary table.
@@ -186,7 +197,9 @@ void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz) {
 			 * address radarmax320 (randomseed sits 2 bytes before
 			 * radarmax320, so randomseed[2] = radarmax320[0]). */
 			int idx = 0;
-			for (int angle = 0; angle < 0x4000; angle += 443) {
+			int angle;
+
+			for (angle = 0; angle < 0x4000; angle += 443) {
 				radarmax[idx] = radarmax320[idx];
 				radarmax[idx + 1] = radarmax320[idx + 1];
 				idx += 2;
@@ -194,7 +207,9 @@ void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz) {
 		} else {
 			/* 640×480: compute circular boundary from sin/cos * 44 */
 			int idx = 0;
-			for (int angle = 0; angle < 0x4000; angle += 443) {
+			int angle;
+
+			for (angle = 0; angle < 0x4000; angle += 443) {
 				radarmax[idx] = (uint8_t)trig2_sinewordmult(44, (uint16_t)angle);
 				radarmax[idx + 1] = (uint8_t)trig2_cosinewordmult(44, (uint16_t)angle);
 				idx += 2;
@@ -204,9 +219,9 @@ void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz) {
 	}
 
 	/* Perspective projection: shift by (perspShift - 5), divide by dz */
-	int32_t ax = (dx < 0) ? -dx : dx;
-	int32_t ay = (dy < 0) ? -dy : dy;
-	int shift = perspShift - 5;
+	ax = (dx < 0) ? -dx : dx;
+	ay = (dy < 0) ? -dy : dy;
+	shift = perspShift - 5;
 
 	ax <<= shift;
 	if (dz)
@@ -227,20 +242,20 @@ void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz) {
 	trig2_calcarctan(ax, ay);
 
 	/* Convert to navigation angle: -angleplane + 90° */
-	uint16_t nav_angle = (uint16_t)(-trig2_angleplane + 0x4000);
+	nav_angle = (uint16_t)(-trig2_angleplane + 0x4000);
 
 	/* Look up radar boundary at this angle */
-	uint16_t table_idx = 2 * (nav_angle / 443);
+	table_idx = 2 * (nav_angle / 443);
 
 	/* Clip x to boundary */
-	uint8_t max_x = radarmax[table_idx];
+	max_x = radarmax[table_idx];
 	if (max_x < (uint16_t)radarx)
 		radarx = max_x;
 	if (dx < 0)
 		radarx = -radarx;
 
 	/* Clip y to boundary */
-	uint8_t max_y = radarmax[table_idx + 1];
+	max_y = radarmax[table_idx + 1];
 	if (max_y < (uint16_t)radary)
 		radary = max_y;
 	if (dy < 0)

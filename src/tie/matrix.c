@@ -14,13 +14,13 @@
  * Frame data size = (12 + 6*trans_count + 24*matrix_count) bytes/frame.
  */
 
+#include "tie/matrix.h"
+#include "landru/fourcc.h"
+#include "landru/res.h"
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "landru/fourcc.h"
-#include "landru/res.h"
-#include "tie/matrix.h"
 
 // FUNCTION: TIE95 0x89040
 Matrix* matrix_Alloc_Matrix(void) {
@@ -40,16 +40,19 @@ void matrix_Init_Matrix(Matrix* m) {
 
 // FUNCTION: TIE95 0x89074
 Matrix* matrix_Res_Matrix(ResFile* rf, const char* name) {
+	ResFile* stream;
+	Matrix* m;
+	int32_t frame_size, data_size;
 	int offset;
 	uint32_t total_size;
 	if (!xres_Get_Resource_Offset(rf, FOURCC_MTRX, name, &offset, &total_size))
 		return NULL;
 
-	ResFile* stream = xres_Open_Resource_Data(FOURCC_MTRX, name);
+	stream = xres_Open_Resource_Data(FOURCC_MTRX, name);
 	if (!stream)
 		return NULL;
 
-	Matrix* m = matrix_Alloc_Matrix();
+	m = matrix_Alloc_Matrix();
 	if (!m) {
 		xres_Close_Resource_Data(rf);
 		return NULL;
@@ -59,8 +62,8 @@ Matrix* matrix_Res_Matrix(ResFile* rf, const char* name) {
 	m->trans_count = xres_Read_Resource_Word(rf);
 	m->matrix_count = xres_Read_Resource_Word(rf);
 
-	int32_t frame_size = 12 + 6 * m->trans_count + 24 * m->matrix_count;
-	int32_t data_size = frame_size * m->frame_count;
+	frame_size = 12 + 6 * m->trans_count + 24 * m->matrix_count;
+	data_size = frame_size * m->frame_count;
 
 	m->data = xres_Read_Resource_Data(rf, data_size, LANDRU_MEMORY_DEFAULT);
 	xres_Close_Resource_Data(rf);
@@ -84,14 +87,18 @@ void matrix_Free_Matrix(Matrix* m) {
  */
 // FUNCTION: TIE95 0x89174
 int16_t matrix_Get_Matrix_Frame(Matrix* m, MatrixFrame* dest, int16_t frame) {
+	int32_t frame_size;
+	const uint8_t* data;
+	const int16_t* src;
+	int16_t t, j, r, p;
 	if (frame >= m->frame_count)
 		return 0;
 
-	int32_t frame_size = 12 + 6 * m->trans_count + 24 * m->matrix_count;
-	const uint8_t* data = xmemhdl_Lock_Handle(m->data);
+	frame_size = 12 + 6 * m->trans_count + 24 * m->matrix_count;
+	data = xmemhdl_Lock_Handle(m->data);
 	if (!data)
 		return 0;
-	const int16_t* src = (const int16_t*)(data + frame * frame_size);
+	src = (const int16_t*)(data + frame * frame_size);
 
 	/* Camera: 6 WORDs */
 	dest->cam_x = *src++;
@@ -103,17 +110,17 @@ int16_t matrix_Get_Matrix_Frame(Matrix* m, MatrixFrame* dest, int16_t frame) {
 
 	/* Translations: trans_count * 3 WORDs
 	 * Bug-for-bug: always writes to the same dest fields */
-	for (int16_t t = 0; t < m->trans_count; t++) {
+	for (t = 0; t < m->trans_count; t++) {
 		dest->trans_x = *src++;
 		dest->trans_y = *src++;
 		dest->trans_z = *src++;
 	}
 
 	/* Joint matrices: matrix_count * (9 rotation + 3 position) WORDs */
-	for (int16_t j = 0; j < m->matrix_count; j++) {
-		for (int16_t r = 0; r < 9; r++)
+	for (j = 0; j < m->matrix_count; j++) {
+		for (r = 0; r < 9; r++)
 			dest->joint_rot[j][r] = *src++;
-		for (int16_t p = 0; p < 3; p++)
+		for (p = 0; p < 3; p++)
 			dest->joint_pos[j][p] = *src++;
 	}
 

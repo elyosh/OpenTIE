@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <stdlib.h>
-
 #include "tie/collide.h"
 #include "tie/create.h"
 #include "tie/draw.h"
@@ -11,6 +8,7 @@
 #include "tie/gate.h"
 #include "tie/laser.h"
 #include "tie/math2.h"
+#include "tie/math2_wide.h"
 #include "tie/modelmesh.h"
 #include "tie/msg.h"
 #include "tie/msg_templates.h"
@@ -25,8 +23,13 @@
 #include "tie/user.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/runtime/inflight_state.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
+#endif
+
+#include <stdint.h>
+#include <stdlib.h>
 
 /* ---------- Module-private static state ---------- */
 
@@ -108,6 +111,7 @@ char collide_makeobjectexplosion(uint16_t obj_idx, uint8_t ship_variant) {
 	 * timer dispatch (move.c calls collide_makeobjectexplosion via
 	 * dispatch_death) and every direct kill path in collide.c. param0
 	 * encodes ship_variant so the renderer can pick the right effect. */
+#ifdef TIE_MODERN
 	{
 		TieEvent ev = {
 			.kind     = TIE_EVENT_EXPLOSION,
@@ -122,6 +126,7 @@ char collide_makeobjectexplosion(uint16_t obj_idx, uint8_t ship_variant) {
 		};
 		TieSnapshotBuilder_PushEvent(&ev);
 	}
+#endif
 
 	/* Random sfx in [19..22] (4 craft-explosion variants). */
 	return fsfx_triggersfx(((uint8_t)math2_getrandom() & 3) + 19, obj_idx);
@@ -156,10 +161,12 @@ CraftData* collide_updatehits(uint16_t projectile_obj_idx) {
 	uint16_t ship_idx = objects[projectile_obj_idx].ship_idx;
 
 	/* Static shooters use encoded references and have no craft hit counters. */
+	CraftData* result;
+
 	if (self_idx >= NUM_CRAFTS)
 		return NULL;
 
-	CraftData* result = objects[self_idx].craft_ptr;
+	result = objects[self_idx].craft_ptr;
 
 	if (ship_idx < 0x8Du) {
 		/* Laser projectile (ship_idx 0x89..0x8C). */
@@ -242,6 +249,8 @@ void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx) {
 		uint8_t victim_fg = objects[victim_obj_idx].fg_idx;
 		EFGStruct* vfg = &fg_array[victim_fg];
 
+		uint16_t cur;
+
 		voice_threshold = 0;
 		voice_threshold = apply_cut_threshold(voice_threshold, vfg->pri_win_cond);
 		voice_threshold = apply_cut_threshold(voice_threshold, vfg->sec_win_cond);
@@ -266,7 +275,7 @@ void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx) {
 		}
 
 		/* Player-side per-species kill increment. */
-		uint16_t cur = (uint16_t)(pstate.player_kills_per_species[victim_specnum] + 1);
+		cur = (uint16_t)(pstate.player_kills_per_species[victim_specnum] + 1);
 		pstate.player_kills_per_species[victim_specnum] = cur;
 		if (cur == 0)
 			pstate.player_kills_per_species[victim_specnum] = 0xFFu;
@@ -870,20 +879,28 @@ char collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
 // FUNCTION: TIE95 0x148F0
 char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_t weapon_group,
 						 uint16_t attacker_obj_idx) {
-	TIE_FLIGHT_TRACE_DAMAGE_BEFORE(target_obj_idx);
-	CraftData* tgt_craft = objects[target_obj_idx].craft_ptr;
+	CraftData* tgt_craft;
 	uint16_t atk_species;
 	int32_t collision_radius;
 	int16_t damage;
 	int16_t damagea;
-	uint8_t ret_no_panel_update = 1;
-	uint8_t panel_dirty = 0;
-	uint8_t* comp_record = NULL;
-	uint8_t component_explosion_type1 = 0;
-	uint8_t component_damageable = 0;
+	uint8_t ret_no_panel_update;
+	uint8_t panel_dirty;
+	uint8_t* comp_record;
+	uint8_t component_explosion_type1;
+	uint8_t component_damageable;
 	uint8_t genus;
 	int16_t* shield_slot;
 	int16_t shield_a;
+
+	TIE_FLIGHT_TRACE_DAMAGE_BEFORE(target_obj_idx);
+	tgt_craft = objects[target_obj_idx].craft_ptr;
+
+	ret_no_panel_update = 1;
+	panel_dirty = 0;
+	comp_record = NULL;
+	component_explosion_type1 = 0;
+	component_damageable = 0;
 
 	craftptr = tgt_craft;
 
@@ -1170,6 +1187,8 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 
 		if (bw <= 0x578u) {
 			/* Small/medium ship death path. */
+			bool tie98;
+
 			if (target_obj_idx == pstate.object_idx && !(pstate.player_craft->status_flags & 2u)) {
 				/* Player non-rescued explosion. */
 				FlightObject* o = &objects[target_obj_idx];
@@ -1203,7 +1222,7 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 			}
 
 			/* Spawn a wing/component blow-off. */
-			const bool tie98 = TieProfile_UsesTie98Logic();
+			tie98 = TieProfile_UsesTie98Logic();
 			if (!tie98)
 				draw_lockshipfileptrs(tgt_ship);
 			{
@@ -1218,11 +1237,13 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 					int16_t side_pick = (uint8_t)math2_getrandom() & 1;
 					k = side_pick;
 					for (; mesh_idx < num_meshes; ++mesh_idx) {
+						int mesh_type;
+
 						if (tgt_craft->mesh_state[mesh_idx] != MESH_STATE_VISIBLE)
 							continue;
 						/* Both fixed and rotating wing meshes are eligible. */
-						const int mesh_type = tie98 ? modelmesh_gettype(tgt_ship, mesh_idx)
-													: componentblockptr[mesh_idx].mesh_type;
+						mesh_type = tie98 ? modelmesh_gettype(tgt_ship, mesh_idx)
+										  : componentblockptr[mesh_idx].mesh_type;
 						if (mesh_type == TIE_MESH_WING || mesh_type == TIE_MESH_ROTARY_WING) {
 							const int center_x = tie98 ? modelmesh_getcenterx(tgt_ship, mesh_idx)
 													   : componentblockptr[mesh_idx].center_side;
@@ -1392,6 +1413,8 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
 		int axis_b_pick;
 		int half_first;
 
+		int32_t x_isect, y_isect, z_isect;
+
 		face_iter += 2;
 		if (remaining_edges == 2)
 			continue;
@@ -1400,15 +1423,15 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
 		vy0 = resolve_vert(vert_array + 3 * face_record[1] + 1);
 		vz0 = resolve_vert(vert_array + 3 * face_record[1] + 2);
 
-		side1 = ((int64_t)(x1 - vx0) * face_nx) >> 15;
-		side1 += ((int64_t)(y1 - vy0) * face_nz) >> 15;
-		side1 += ((int64_t)(z1 - vz0) * face_ny) >> 15;
+		side1 = math2_mul_q15(x1 - vx0, face_nx);
+		side1 += math2_mul_q15(y1 - vy0, face_nz);
+		side1 += math2_mul_q15(z1 - vz0, face_ny);
 		if (side1 > -10 && side1 < 10)
 			side1 = 0;
 
-		side2 = ((int64_t)(x2 - vx0) * face_nx) >> 15;
-		side2 += ((int64_t)(y2 - vy0) * face_nz) >> 15;
-		side2 += ((int64_t)(z2 - vz0) * face_ny) >> 15;
+		side2 = math2_mul_q15(x2 - vx0, face_nx);
+		side2 += math2_mul_q15(y2 - vy0, face_nz);
+		side2 += math2_mul_q15(z2 - vz0, face_ny);
 		if (side2 > -10 && side2 < 10)
 			side2 = 0;
 
@@ -1425,7 +1448,7 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
 		 * coords. Retail computes all three components and lets the
 		 * dominant-normal axis picker below choose two of them
 		 * (v29/v56/v80 at 0x15edb..0x15f0c, swap at 0x15f51..0x15f8b). */
-		int32_t x_isect, y_isect, z_isect;
+
 		if (side1) {
 			if (side2) {
 				int32_t num, den;
@@ -1554,11 +1577,14 @@ void collide_collisions(void) {
 	uint16_t target_idx;
 	uint16_t projectile_idx;
 
+	FlightObject* pl;
+	CraftData* pc;
+
 	if (hyperspaceflag && !hyperabortflag)
 		return;
 
-	FlightObject* pl = pstate.player;
-	CraftData* pc = pstate.player_craft;
+	pl = pstate.player;
+	pc = pstate.player_craft;
 	if (!pl->genus) {
 		/* Pass 1: player-vs-every-craft. */
 		laserx = pstate.laser_origin_dx + pl->world_x;

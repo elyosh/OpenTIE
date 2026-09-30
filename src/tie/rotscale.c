@@ -1,6 +1,3 @@
-#include <stdint.h>
-#include <string.h>
-
 #include "tie/rotscale.h"
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
@@ -22,6 +19,10 @@
 #include "tie/trace2.h"  /* TRACE2 edge pool + cursors                    */
 #include "tie/trig2.h"   /* trig2_getsine                                 */
 #include "tie/xtrans2.h" /* flatcolors / flatcomponentnum / flatparentobj
+
+#include <stdint.h>
+#include <string.h>
+
                         * / flatx / flaty / flatz                       */
 
 /* Debug counters (file-local). Sampled by an instrumented sxform clip
@@ -296,9 +297,11 @@ static int16_t GetUpdateIncrement(uint16_t pos, int16_t rate) {
 int16_t rotscale_calcscale(int32_t depth, uint16_t bound_hwidth, uint16_t factor) {
 	int32_t abs_depth = depth < 0 ? -depth : depth;
 	int32_t ratio = abs_depth >> 8;
+	int32_t scaled;
+
 	if (ratio)
 		ratio = bound_hwidth / ratio;
-	int32_t scaled = (factor * ratio) >> 8;
+	scaled = (factor * ratio) >> 8;
 	if (scaled > 1024)
 		return 1024;
 	return (int16_t)scaled;
@@ -322,20 +325,26 @@ void rotscale_prepare_color(const char* palette_entries) {
 	 * and write v1 entries from v2 into the conversion tables. */
 	const uint8_t* hdr = (const uint8_t*)palette_entries;
 	int32_t count = *(const int32_t*)(hdr + 40);
+	const uint8_t* src;
+
 	if (count <= 0)
 		return;
 	if (count > 64)
 		count = 64; /* clamp to table size */
-	const uint8_t* src = hdr + *(const int32_t*)(hdr + 12);
+	src = hdr + *(const int32_t*)(hdr + 12);
 
 	if (TieProfile_UsesTie98Logic()) {
 		if (g_flight16bppBytesPerPixel == 2) {
-			for (int k = 0; k < count; ++k) {
+			int k;
+
+			for (k = 0; k < count; ++k) {
 				paletteconvertlo[k] = *src++;
 				paletteconverthi[k] = *src++;
 			}
 		} else {
-			for (int k = 0; k < count; ++k)
+			int k;
+
+			for (k = 0; k < count; ++k)
 				paletteconvert[k] = *src++;
 		}
 		return;
@@ -350,7 +359,9 @@ void rotscale_prepare_color(const char* palette_entries) {
 		 *   packed = ecx | (ah << 8) | al
 		 * One sprite byte per entry: it serves as BOTH the stored
 		 * index (paletteconvert[k]) AND the vgapalette lookup key. */
-		for (int k = 0; k < count; ++k) {
+		int k;
+
+		for (k = 0; k < count; ++k) {
 			uint8_t idx = *src++;
 			const uint8_t* rgb = &rtsvga2_vgapalette[3 * idx];
 			uint8_t ah_val = (uint8_t)(((uint8_t)(rgb[2] >> 1)) << 2);
@@ -362,7 +373,9 @@ void rotscale_prepare_color(const char* palette_entries) {
 			paletteconverthi[k] = (uint8_t)(packed >> 8);
 		}
 	} else {
-		for (int k = 0; k < count; ++k)
+		int k;
+
+		for (k = 0; k < count; ++k)
 			paletteconvert[k] = *src++;
 	}
 }
@@ -371,6 +384,12 @@ void rotscale_prepare_color(const char* palette_entries) {
  * scalesetup - rebuild ScaleData lookup tables
  * ================================================================ */
 static void scalesetup(uint16_t scale, rotscale_line_data* line_data, rotscale_scale_data* sd) {
+	uint32_t sx;
+	uint32_t sy;
+	uint32_t step;
+	uint32_t acc;
+	int k;
+
 	sd->scale_req = scale;
 	if (bSquarePixels == 1) {
 		sd->aspect_x = 256;
@@ -383,13 +402,13 @@ static void scalesetup(uint16_t scale, rotscale_line_data* line_data, rotscale_s
 	}
 
 	/* Effective X scale = sin_quad * scale, optionally aspect-adjusted */
-	uint32_t sx = ((uint32_t)line_data->perp_sin * (uint32_t)scale) >> 16;
+	sx = ((uint32_t)line_data->perp_sin * (uint32_t)scale) >> 16;
 	sd->eff_scale_x = (uint16_t)sx;
 	if (line_data->case_type)
 		sd->eff_scale_x = (uint16_t)((sd->aspect_x * sx) >> 8);
 
 	/* Effective Y scale = X scale * (1 + perpfrac_inc), optionally aspected */
-	uint32_t sy = (sx * line_data->perpfrac_inc) >> 8;
+	sy = (sx * line_data->perpfrac_inc) >> 8;
 	sy += sx;
 	if (!line_data->perp_case_type)
 		sy = (sd->aspect_y * sy) >> 8;
@@ -403,9 +422,9 @@ static void scalesetup(uint16_t scale, rotscale_line_data* line_data, rotscale_s
 	sd->prev_eff_scale_x = sd->eff_scale_x;
 
 	/* Fill 256-entry linear accumulator: lookup[k] = (eff_scale_x * 8 * k) */
-	uint32_t step = (uint32_t)sd->eff_scale_x << 8;
-	uint32_t acc = step;
-	for (int k = 0; k < 256; ++k) {
+	step = (uint32_t)sd->eff_scale_x << 8;
+	acc = step;
+	for (k = 0; k < 256; ++k) {
 		sd->x_lookup_lo[k] = (uint16_t)(acc & 0xFFFF);
 		sd->x_lookup_hi[k] = (uint16_t)(acc >> 16);
 		acc += step;
@@ -427,41 +446,53 @@ static void adjustoffsets(rotscale_line_data* line_data, rotscale_scale_data* sd
 	int16_t saved_cox_sign = celoffsetx;
 	int16_t saved_coy_sign = celoffsety;
 
+	uint16_t cx_scaled;
+	uint32_t cy_aspect;
+	uint16_t cy_scaled;
+	uint16_t* rot_vec;
+	int32_t cos_x;
+	int32_t sin_y;
+	int32_t sin_x;
+	int32_t cos_y;
+	int32_t y_unaspected;
+	int16_t y_sign;
+	int32_t result;
+
 	if (celoffsetx < 0)
 		celoffsetx = (int16_t)-celoffsetx;
 	if (celoffsety < 0)
 		celoffsety = (int16_t)-celoffsety;
 
-	uint16_t cx_scaled = (uint16_t)(((uint32_t)celoffsetx * sd->scale_req + 128) >> 8);
+	cx_scaled = (uint16_t)(((uint32_t)celoffsetx * sd->scale_req + 128) >> 8);
 	/* Y is multiplied by aspect_y in addition to the scale. */
-	uint32_t cy_aspect = ((uint32_t)sd->aspect_y * (uint32_t)celoffsety + 128) >> 8;
-	uint16_t cy_scaled = (uint16_t)((sd->scale_req * cy_aspect + 128) >> 8);
+	cy_aspect = ((uint32_t)sd->aspect_y * (uint32_t)celoffsety + 128) >> 8;
+	cy_scaled = (uint16_t)((sd->scale_req * cy_aspect + 128) >> 8);
 
 	/* Read packed rotation vector from line_data: WORD index 1..4
 	 * = sin_quad, y_flip, cos_quad, x_quad_marker. */
-	uint16_t* rot_vec = &line_data->cached_angle;
+	rot_vec = &line_data->cached_angle;
 
 	/* X output: cos_x + sin_y, with quadrant sign flips */
-	int32_t cos_x = (int32_t)rot_vec[3] * (int32_t)(uint32_t)cx_scaled;
+	cos_x = (int32_t)rot_vec[3] * (int32_t)(uint32_t)cx_scaled;
 	if (((((uint16_t)(saved_cox_sign ^ rot_vec[4])) >> 8) & 0x80u) != 0)
 		cos_x = -cos_x;
-	int32_t sin_y = (int32_t)rot_vec[1] * (int32_t)(uint32_t)cy_scaled;
+	sin_y = (int32_t)rot_vec[1] * (int32_t)(uint32_t)cy_scaled;
 	if (((((uint16_t)(rot_vec[2] ^ saved_coy_sign)) >> 8) & 0x80u) != 0)
 		sin_y = -sin_y;
 	adjustplotx = (int16_t)((uint32_t)(sin_y + cos_x + 0x8000) >> 16);
 
 	/* Y output: -cos_y + sin_x (note opposite sign flip on cos_y) */
-	int32_t sin_x = (int32_t)rot_vec[1] * (int32_t)(uint32_t)cx_scaled;
+	sin_x = (int32_t)rot_vec[1] * (int32_t)(uint32_t)cx_scaled;
 	if (((((uint16_t)(saved_cox_sign ^ rot_vec[2])) >> 8) & 0x80u) != 0)
 		sin_x = -sin_x;
-	int32_t cos_y = (int32_t)rot_vec[3] * (int32_t)(uint32_t)cy_scaled;
+	cos_y = (int32_t)rot_vec[3] * (int32_t)(uint32_t)cy_scaled;
 	if (((((uint16_t)(rot_vec[4] ^ saved_coy_sign)) >> 8) & 0x80u) == 0)
 		cos_y = -cos_y;
-	int32_t y_unaspected = (int32_t)((uint32_t)(cos_y + sin_x + 0x8000) >> 16);
-	int16_t y_sign = (int16_t)y_unaspected;
+	y_unaspected = (int32_t)((uint32_t)(cos_y + sin_x + 0x8000) >> 16);
+	y_sign = (int16_t)y_unaspected;
 	if (y_sign < 0)
 		y_unaspected = -y_unaspected;
-	int32_t result = (y_unaspected * sd->aspect_x + 128) >> 8;
+	result = (y_unaspected * sd->aspect_x + 128) >> 8;
 	if (y_sign < 0)
 		result = -result;
 	adjustploty = (int16_t)result;
@@ -472,16 +503,45 @@ static void adjustoffsets(rotscale_line_data* line_data, rotscale_scale_data* sd
  * Called by preparefastdraw when the cached angle differs.
  * ================================================================ */
 static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
+	int idx;
 	int32_t saved_mem_width = nDrawBufferMemoryWidth;
+
+	uint16_t angle_lo;
+	uint16_t x_flip_flag;
+	uint16_t x_quad;
+	int32_t quad_angle;
+	int32_t perp_quad;
+	uint16_t case_type;
+	int16_t tan_rate;
+	uint16_t tan_arg;
+	int16_t tan_inc;
+	uint16_t perp_sin;
+	uint32_t inv_perp;
+	int32_t saved_mem_w_2;
+	uint16_t case_type2;
+	uint32_t frac;
+	int dy_bit;
+	uint16_t run_count;
+	int remaining;
+	int32_t perp_angle;
+	uint16_t perp_case_type;
+	int16_t perp_tan_rate;
+	int32_t saved_mem_w_3;
+	uint32_t perp_frac_inc;
+	uint16_t y_flip_b;
+	uint16_t y_first;
+	int last_pair;
+	int32_t dx;
+	int32_t dy;
+	int k;
 
 	line_data->cached_angle = angle;
 	line_data->y_flip = (uint16_t)(angle & 0x8000);
 	/* x_quad_marker = ((angle >> 8) + 64) & 0x80 ... <<8 */
 	line_data->x_quad_marker = (uint16_t)((((uint8_t)(angle >> 8) + 64) & 0x80) << 8);
 
-	uint16_t angle_lo = angle;
-	uint16_t x_flip_flag;
-	uint16_t x_quad;
+	angle_lo = angle;
+
 	if (angle < 0x8000u) {
 		x_flip_flag = 0;
 		x_quad = (angle < 0x4000u) ? 0 : 2;
@@ -494,15 +554,13 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 	line_data->major_axis_flag = x_quad;
 
 	/* Fold angle into the first quadrant for trig lookup */
-	int32_t quad_angle = (angle_lo < 0x4000u) ? angle_lo : (0x8000 - angle_lo);
+	quad_angle = (angle_lo < 0x4000u) ? angle_lo : (0x8000 - angle_lo);
 	nDrawBufferMemoryWidth = saved_mem_width;
 	line_data->sin_quad = trig2_getsine((uint16_t)quad_angle);
 	line_data->cos_quad = trig2_getsine((uint16_t)(quad_angle + 0x4000));
 
-	int32_t perp_quad = quad_angle;
-	uint16_t case_type;
-	int16_t tan_rate;
-	uint16_t tan_arg;
+	perp_quad = quad_angle;
+
 	if ((uint16_t)quad_angle >= (uint16_t)nDiagonalAngle) {
 		case_type = 4;
 		line_data->case_type = 4;
@@ -515,15 +573,15 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 		tan_rate = (bSquarePixels == 1) ? 100 : 91;
 		tan_arg = (uint16_t)quad_angle;
 	}
-	int16_t tan_inc = GetUpdateIncrement(tan_arg, tan_rate);
+	tan_inc = GetUpdateIncrement(tan_arg, tan_rate);
 
 	/* perpendicular sin */
 	perp_quad = (perp_quad & 0xFFFF00FFu) | ((((perp_quad >> 8) + 64) & 0xFFu) << 8);
-	uint16_t perp_sin = trig2_getsine((uint16_t)perp_quad);
+	perp_sin = trig2_getsine((uint16_t)perp_quad);
 	line_data->perp_sin = perp_sin;
 
 	/* 1/perp_sin, optionally aspect-corrected when on the cos-major case */
-	uint32_t inv_perp = (perp_sin == 0) ? 0u : (0x80000000u / perp_sin);
+	inv_perp = (perp_sin == 0) ? 0u : (0x80000000u / perp_sin);
 	if (case_type) {
 		if (!bSquarePixels) {
 			uint32_t lo = inv_perp & 0xFFFFu;
@@ -536,16 +594,22 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 	 * fractional counter; on rollover, advance the integer counter. */
 	line_data->dda[0] = 0;
 	line_data->dda[1] = 0;
-	int32_t saved_mem_w_2 = nDrawBufferMemoryWidth;
-	uint16_t case_type2 = line_data->case_type;
-	uint32_t frac = 0x8000;
+	saved_mem_w_2 = nDrawBufferMemoryWidth;
+	case_type2 = line_data->case_type;
+	frac = 0x8000;
 
 	if (case_type2) {
 		/* Y-major: scan_count = depth */
+		int n;
+		int idx;
+
+		uint16_t y_acc, x_acc;
+
 		line_data->scan_count = nDrawBufferDepth;
-		uint16_t y_acc = 0, x_acc = 0;
-		int n = nDrawBufferDepth - 1;
-		int idx = 1;
+		y_acc = 0;
+		x_acc = 0;
+		n = nDrawBufferDepth - 1;
+		idx = 1;
 		while (--n != -1) {
 			uint16_t prev = (uint16_t)frac;
 			frac += (uint16_t)tan_inc;
@@ -558,10 +622,16 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 		}
 	} else {
 		/* X-major: scan_count = width */
+		int n;
+		int idx;
+
+		uint16_t y_acc, x_acc;
+
 		line_data->scan_count = nDrawBufferWidth;
-		uint16_t y_acc = 0, x_acc = 0;
-		int n = nDrawBufferWidth - 1;
-		int idx = 1;
+		y_acc = 0;
+		x_acc = 0;
+		n = nDrawBufferWidth - 1;
+		idx = 1;
 		while (--n != -1) {
 			uint16_t prev = (uint16_t)frac;
 			frac += (uint16_t)tan_inc;
@@ -585,10 +655,10 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 	 * The original indexes line_data[24+v24] (absolute WORD index) which
 	 * is the same as dda[v24] in this struct.
 	 */
-	int dy_bit = (line_data->case_type == 0) ? 1 : 0;
-	uint16_t run_count = 0;
-	int idx = dy_bit;
-	int remaining = line_data->scan_count;
+	dy_bit = (line_data->case_type == 0) ? 1 : 0;
+	run_count = 0;
+	idx = dy_bit;
+	remaining = line_data->scan_count;
 	while (remaining) {
 		uint16_t run_len = 1;
 		uint16_t first_v = line_data->dda[idx];
@@ -603,15 +673,13 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 	line_data->num_run_lengths = run_count;
 
 	/* Perpendicular case selection (mirror of the major-case branch above) */
-	int32_t perp_angle = angle;
+	perp_angle = angle;
 	perp_angle = (perp_angle & 0xFFFF00FFu) | ((((perp_angle >> 8) + 64) & 0x7Fu) << 8);
 	if ((uint16_t)perp_angle >= 0x4000u) {
 		perp_angle = (perp_angle & 0xFFFF00FFu) | ((((perp_angle >> 8) + 0x80) & 0xFFu) << 8);
 		perp_angle = -perp_angle;
 	}
 
-	uint16_t perp_case_type;
-	int16_t perp_tan_rate;
 	if ((uint16_t)perp_angle >= (uint16_t)nDiagonalAngle) {
 		perp_case_type = 4;
 		nDrawBufferMemoryWidth = saved_mem_w_2;
@@ -625,7 +693,7 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 		perp_tan_rate = (bSquarePixels == 1) ? 100 : 91;
 	}
 	line_data->perp_update_inc = GetUpdateIncrement((uint16_t)perp_angle, perp_tan_rate);
-	int32_t saved_mem_w_3 = nDrawBufferMemoryWidth;
+	saved_mem_w_3 = nDrawBufferMemoryWidth;
 	line_data->perp_flag = 0;
 
 	/*
@@ -643,7 +711,7 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 	 * perpfrac_inc = (uint16_t)tan_inc >> 8 (matching the SAR EAX,8
 	 * after the zero-extending MOV AX, var_1C).
 	 */
-	uint32_t perp_frac_inc;
+
 	if (case_type2 != perp_case_type || bSquarePixels) {
 		uint32_t prod = (uint32_t)line_data->perp_update_inc * (uint32_t)(uint16_t)tan_inc + 0x800000u;
 		perp_frac_inc = prod >> 24;
@@ -659,16 +727,18 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 			perp_frac_inc = (uint32_t)(uint16_t)tan_inc >> 8;
 		} else {
 			/* 256 path */
+			uint32_t prod;
+
 			line_data->perp_update_inc = 256;
 			line_data->perp_flag = 256;
-			uint32_t prod = 55296u * (uint32_t)(uint16_t)tan_inc;
+			prod = 55296u * (uint32_t)(uint16_t)tan_inc;
 			perp_frac_inc = prod >> 24;
 		}
 	}
 	line_data->perpfrac_inc = (uint16_t)perp_frac_inc;
 
 	/* Pack octant case index */
-	uint16_t y_flip_b = line_data->major_axis_flag;
+	y_flip_b = line_data->major_axis_flag;
 	line_data->octant_case = (uint16_t)(y_flip_b | line_data->x_flip | line_data->case_type);
 	line_data->packed_octant_a = (uint16_t)((y_flip_b >> 1) + line_data->x_flip);
 
@@ -681,20 +751,20 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 	 * dx_abs/dy_abs = 0, defeats setstartcase's column clip, and
 	 * lets the 8-bit fast path write past the framebuffer end. */
 	line_data->linestart_x_init = line_data->dda[0];
-	uint16_t y_first = line_data->dda[1];
+	y_first = line_data->dda[1];
 	line_data->linestart_y_init = y_first;
 	line_data->linestart_y_inv = (uint16_t)(nDrawBufferDepthMin1 - y_first);
-	int last_pair = 2 * (line_data->scan_count - 1);
+	last_pair = 2 * (line_data->scan_count - 1);
 	line_data->lineend_x_init = line_data->dda[last_pair];
 	line_data->lineend_y_init = line_data->dda[last_pair + 1];
 	line_data->lineend_y_inv = (uint16_t)(nDrawBufferDepthMin1 - line_data->lineend_y_init);
 
 	/* dx_abs / dy_abs = magnitudes */
-	int32_t dx = (int16_t)line_data->lineend_x_init - (int16_t)line_data->linestart_x_init;
+	dx = (int16_t)line_data->lineend_x_init - (int16_t)line_data->linestart_x_init;
 	if (dx < 0)
 		dx = -dx;
 	line_data->dx_abs = (uint16_t)dx;
-	int32_t dy = (int16_t)line_data->lineend_y_inv - (int16_t)line_data->linestart_y_inv;
+	dy = (int16_t)line_data->lineend_y_inv - (int16_t)line_data->linestart_y_inv;
 	if (dy < 0)
 		dy = -dy;
 	line_data->dy_abs = (uint16_t)dy;
@@ -702,7 +772,7 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 	/* Per-column screen-buffer offsets:
 	 *   screen_offset[k] = bytesPerPixel * ±dx + nDrawBufferMemoryWidth * ±dy
 	 * with sign flips per the major/x-flip flags and orientation. */
-	for (int k = 0; k < line_data->scan_count; ++k) {
+	for (k = 0; k < line_data->scan_count; ++k) {
 		int32_t dx_i = (int32_t)(int16_t)line_data->dda[2 * k];
 		int32_t dy_i = (int32_t)(int16_t)line_data->dda[2 * k + 1];
 		if (line_data->major_axis_flag)
@@ -751,6 +821,9 @@ static uint16_t updateperp(void) {
 	uint16_t result = 0;
 	int16_t step = 1;
 
+	int16_t idx;
+	uint16_t* e;
+
 	if (perpendflag) {
 		perpendflag = 0;
 		startdrawpoint = new_startdraw;
@@ -767,14 +840,14 @@ static uint16_t updateperp(void) {
 		return result;
 	}
 
-	int16_t idx = startdrawpoint;
+	idx = startdrawpoint;
 	while (idx < 0)
 		idx = (int16_t)(idx + pCurrentLine->scan_count);
 	while (idx >= (int16_t)pCurrentLine->scan_count)
 		idx = (int16_t)(idx - pCurrentLine->scan_count);
 
 	new_startdraw = (int16_t)(startdrawpoint - step);
-	uint16_t* e = (uint16_t*)((uint8_t*)pCurrentLine + 4 * idx);
+	e = (uint16_t*)((uint8_t*)pCurrentLine + 4 * idx);
 
 	if (pCurrentLine->case_type) {
 		result = e[24];
@@ -833,6 +906,12 @@ static int setstartcase0(void) {
 	int16_t ploty_loc = ploty;
 	int16_t row_off = 0;
 
+	int16_t y_off;
+	int16_t lsy;
+	int16_t first_vp;
+	int16_t ley;
+	int16_t last_vp;
+
 	while (plotx_loc < 0) {
 		ploty_loc = (int16_t)(ploty_loc + pCurrentLine->dy_abs + 1);
 		plotx_loc = (int16_t)(plotx_loc + pCurrentLine->dx_abs + 1);
@@ -843,8 +922,8 @@ static int setstartcase0(void) {
 		plotx_loc = (int16_t)(plotx_loc - (pCurrentLine->dx_abs + 1));
 		row_off += nDrawBufferWidth;
 	}
-	int16_t y_off = (int16_t)pCurrentLine->dda[2 * plotx_loc + 1];
-	int16_t lsy = (int16_t)(ploty_loc - y_off);
+	y_off = (int16_t)pCurrentLine->dda[2 * plotx_loc + 1];
+	lsy = (int16_t)(ploty_loc - y_off);
 	if (lsy >= nDrawBufferDepth) {
 		linestarty = lsy;
 		lineendy = (int16_t)(pCurrentLine->dy_abs + lsy);
@@ -854,9 +933,11 @@ static int setstartcase0(void) {
 	}
 	linestartx = 0;
 	linestarty = lsy;
-	int16_t first_vp = 0;
+	first_vp = 0;
 	if (lsy < 0) {
 		int16_t neg = (int16_t)-lsy;
+		uint16_t i;
+
 		if (neg > (int16_t)pCurrentLine->dy_abs) {
 			/* Sprite is entirely above the screen (lineendy = dy_abs +
 			 * lsy = dy_abs - neg < 0 → lastvispoint = -1 → no render).
@@ -872,7 +953,7 @@ static int setstartcase0(void) {
 		}
 		firstyincoffset = neg;
 		first_vp = neg;
-		for (uint16_t i = 0; i <= pCurrentLine->dx_abs; ++i) {
+		for (i = 0; i <= pCurrentLine->dx_abs; ++i) {
 			uint16_t* e = pcl_word_at(4 * i);
 			if (neg == (int16_t)e[25]) {
 				first_vp = (int16_t)e[24];
@@ -883,14 +964,16 @@ static int setstartcase0(void) {
 	lineendx = (int16_t)(pCurrentLine->dx_abs + linestartx);
 	lastyincoffset = nDrawBufferDepth;
 	firstvispoint = first_vp;
-	int16_t ley = (int16_t)(pCurrentLine->dy_abs + linestarty);
+	ley = (int16_t)(pCurrentLine->dy_abs + linestarty);
 	lineendy = ley;
-	int16_t last_vp;
+
 	if (ley < 0) {
 		last_vp = -1;
 	} else if (ley >= nDrawBufferDepth) {
-		lastyincoffset = (int16_t)(nDrawBufferDepth - linestarty);
 		uint16_t k;
+
+		lastyincoffset = (int16_t)(nDrawBufferDepth - linestarty);
+
 		for (k = 0; k <= pCurrentLine->dx_abs && (uint16_t)lastyincoffset != pCurrentLine->dda[2 * k + 1];
 			 ++k)
 			;
@@ -910,8 +993,10 @@ static int updatecase0(void) {
 	int16_t fyi = firstyincoffset;
 	int16_t ley_local = lineendy;
 	int result;
+	int16_t lsy_new;
+
 	pDrawBuffer -= pCurrentLine->row_step;
-	int16_t lsy_new = (int16_t)(linestarty + 1);
+	lsy_new = (int16_t)(linestarty + 1);
 	if (linestarty == -1) {
 		fvp = 0;
 	} else if (lsy_new >= nDrawBufferDepth) {
@@ -927,9 +1012,11 @@ static int updatecase0(void) {
 	ley_local = (int16_t)(lineendy + 1);
 	if (lineendy == -1) {
 		int16_t lyi = (int16_t)(pCurrentLine->num_run_lengths - 1);
+		int16_t cand;
+
 		lastyincoffset = lyi;
 		lastvispoint = (int16_t)(pCurrentLine->scan_count - 1);
-		int16_t cand = (int16_t)(lastvispoint - (int16_t)pCurrentLine->run_lengths[lyi] + 1);
+		cand = (int16_t)(lastvispoint - (int16_t)pCurrentLine->run_lengths[lyi] + 1);
 		if (cand < 0)
 			cand = 0;
 		fvp = cand;
@@ -953,6 +1040,11 @@ static int setstartcase1(void) {
 	int16_t plotx_loc = plotx;
 	int16_t ploty_loc = ploty;
 	int16_t row_off = 0;
+	int16_t lsy;
+	int16_t first_vp;
+	int16_t ley;
+	int16_t last_vp;
+
 	while (plotx_loc < 0) {
 		ploty_loc = (int16_t)(ploty_loc - (pCurrentLine->dy_abs + 1));
 		plotx_loc = (int16_t)(plotx_loc + (pCurrentLine->dx_abs + 1));
@@ -963,17 +1055,19 @@ static int setstartcase1(void) {
 		plotx_loc = (int16_t)(plotx_loc - (pCurrentLine->dx_abs + 1));
 		row_off += nDrawBufferWidth;
 	}
-	int16_t lsy = (int16_t)(pCurrentLine->dda[2 * plotx_loc + 1] + ploty_loc);
+	lsy = (int16_t)(pCurrentLine->dda[2 * plotx_loc + 1] + ploty_loc);
 	linestarty = lsy;
 	linestartx = 0;
-	int16_t first_vp = -1;
+	first_vp = -1;
 	if (lsy >= 0) {
 		if (lsy >= nDrawBufferDepth) {
 			firstyincoffset = (int16_t)(lsy - nDrawBufferDepth);
 			if ((int16_t)(lsy - nDrawBufferDepth) + 1 > (int16_t)pCurrentLine->dx_abs) {
 				first_vp = -1;
 			} else {
-				for (uint16_t i = 0; i <= pCurrentLine->dx_abs; ++i) {
+				uint16_t i;
+
+				for (i = 0; i <= pCurrentLine->dx_abs; ++i) {
 					uint16_t* e = pcl_word_at(4 * i);
 					if ((uint16_t)(firstyincoffset + 1) == e[25]) {
 						first_vp = (int16_t)e[24];
@@ -988,15 +1082,17 @@ static int setstartcase1(void) {
 	lineendx = (int16_t)(pCurrentLine->dx_abs + linestartx);
 	lastyincoffset = nDrawBufferDepth;
 	firstvispoint = first_vp;
-	int16_t ley = (int16_t)(linestarty - pCurrentLine->dy_abs);
+	ley = (int16_t)(linestarty - pCurrentLine->dy_abs);
 	lineendy = ley;
 	if (ley >= nDrawBufferDepth) {
 		ploty = lsy;
 		plotx = plotx_loc;
 		return 0;
 	}
-	int16_t last_vp;
+
 	if (ley < 0 || ley >= nDrawBufferDepth) {
+		uint16_t k;
+
 		if (linestarty < 0) {
 			lastvispoint = -1;
 			startdrawpoint = (int16_t)(row_off + plotx_loc);
@@ -1005,7 +1101,7 @@ static int setstartcase1(void) {
 			return 1;
 		}
 		lastyincoffset = linestarty;
-		uint16_t k;
+
 		/* Original at 0x4a489 reads (pCurrentLine + 40) which is
 		 * linestart_y_init (byte 40), NOT packed_octant_a (byte 20). */
 		for (k = 0; k <= pCurrentLine->dx_abs && (uint16_t)(pCurrentLine->linestart_y_init + linestarty +
@@ -1025,8 +1121,11 @@ static int setstartcase1(void) {
 
 static int updatecase1(void) {
 	int16_t lvp = lastvispoint;
+	int16_t lsy_new;
+	int16_t ley_new;
+
 	pDrawBuffer -= pCurrentLine->row_step;
-	int16_t lsy_new = (int16_t)(linestarty + 1);
+	lsy_new = (int16_t)(linestarty + 1);
 	if (linestarty == -1) {
 		firstvispoint = 0;
 		lastyincoffset = 0;
@@ -1041,7 +1140,7 @@ static int updatecase1(void) {
 		 * is run_lengths[N], NOT dda[]. Same pattern below for lvp. */
 		firstvispoint = (int16_t)(firstvispoint + (int16_t)pCurrentLine->run_lengths[firstyincoffset]);
 	}
-	int16_t ley_new = (int16_t)(lineendy + 1);
+	ley_new = (int16_t)(lineendy + 1);
 	if (lineendy == -1) {
 		lvp = (int16_t)(pCurrentLine->scan_count - 1);
 	} else if (ley_new >= nDrawBufferDepth) {
@@ -1068,6 +1167,11 @@ static int setstartcase2(void) {
 	int16_t plotx_loc = plotx;
 	int16_t ploty_loc = ploty;
 	int16_t row_off = 0;
+	int16_t lsy;
+	int16_t first_vp;
+	int16_t x_pos;
+	int16_t last_vp;
+
 	while (plotx_loc < 0) {
 		ploty_loc = (int16_t)(ploty_loc - (pCurrentLine->dy_abs + 1));
 		plotx_loc = (int16_t)(plotx_loc + (pCurrentLine->dx_abs + 1));
@@ -1078,8 +1182,7 @@ static int setstartcase2(void) {
 		plotx_loc = (int16_t)(plotx_loc - (pCurrentLine->dx_abs + 1));
 		row_off -= nDrawBufferWidth;
 	}
-	int16_t lsy =
-		(int16_t)(ploty_loc - (int16_t)pCurrentLine->dda[2 * (nDrawBufferWidthMin1 - plotx_loc) + 1]);
+	lsy = (int16_t)(ploty_loc - (int16_t)pCurrentLine->dda[2 * (nDrawBufferWidthMin1 - plotx_loc) + 1]);
 	linestartx = nDrawBufferWidthMin1;
 	lineendx = (int16_t)(nDrawBufferWidthMin1 - pCurrentLine->dx_abs);
 	lineendy = (int16_t)(pCurrentLine->dy_abs + lsy);
@@ -1088,14 +1191,16 @@ static int setstartcase2(void) {
 	lastvispoint = -1;
 	firstyincoffset = -1;
 	lastyincoffset = nDrawBufferDepth;
-	int16_t first_vp = -1;
-	int16_t x_pos = (int16_t)(nDrawBufferWidthMin1 - plotx_loc);
+	first_vp = -1;
+	x_pos = (int16_t)(nDrawBufferWidthMin1 - plotx_loc);
 	if (lsy < 0) {
 		firstyincoffset = (int16_t)(-lsy - 1);
 		if ((int16_t)-lsy > (int16_t)pCurrentLine->dy_abs) {
 			first_vp = -1;
 		} else {
-			for (int16_t i = 0; i <= (int16_t)pCurrentLine->dx_abs; ++i) {
+			int16_t i;
+
+			for (i = 0; i <= (int16_t)pCurrentLine->dx_abs; ++i) {
 				uint16_t* e = pcl_word_at(4 * i);
 				if ((uint16_t)-lsy == e[25]) {
 					first_vp = (int16_t)e[24];
@@ -1112,11 +1217,13 @@ static int setstartcase2(void) {
 		first_vp = 0;
 	}
 	firstvispoint = first_vp;
-	int16_t last_vp = -1;
+	last_vp = -1;
 	if (lineendy >= 0) {
 		if (lineendy >= nDrawBufferDepth) {
-			lastyincoffset = (int16_t)(nDrawBufferDepth - linestarty - 1);
 			int16_t k;
+
+			lastyincoffset = (int16_t)(nDrawBufferDepth - linestarty - 1);
+
 			for (k = (int16_t)pCurrentLine->dx_abs; k >= 0; --k) {
 				uint16_t* e = pcl_word_at(4 * k);
 				if ((uint16_t)lastyincoffset == e[25]) {
@@ -1141,6 +1248,8 @@ static int setstartcase2(void) {
 static int updatecase2(void) {
 	int16_t lvp = lastvispoint;
 	int16_t lsy_new = (int16_t)(linestarty - 1);
+	int16_t ley_new;
+
 	pDrawBuffer += pCurrentLine->row_step;
 	if (lsy_new == nDrawBufferDepthMin1) {
 		firstvispoint = 0;
@@ -1152,7 +1261,7 @@ static int updatecase2(void) {
 		++firstyincoffset;
 		firstvispoint = (int16_t)(firstvispoint + (int16_t)pCurrentLine->run_lengths[firstyincoffset]);
 	}
-	int16_t ley_new = (int16_t)(lineendy - 1);
+	ley_new = (int16_t)(lineendy - 1);
 	if (lineendy - 1 == nDrawBufferDepthMin1) {
 		lvp = (int16_t)(pCurrentLine->scan_count - 1);
 	} else if (ley_new < 0) {
@@ -1175,6 +1284,10 @@ static int setstartcase3(void) {
 	int16_t plotx_loc = plotx;
 	int16_t ploty_loc = ploty;
 	int16_t row_off = 0;
+	int16_t lsy;
+	int16_t first_vp;
+	int16_t last_vp;
+
 	while (plotx_loc < 0) {
 		ploty_loc = (int16_t)(ploty_loc + (pCurrentLine->dy_abs + 1));
 		plotx_loc = (int16_t)(plotx_loc + (pCurrentLine->dx_abs + 1));
@@ -1185,7 +1298,7 @@ static int setstartcase3(void) {
 		plotx_loc = (int16_t)(plotx_loc - (pCurrentLine->dx_abs + 1));
 		row_off -= nDrawBufferWidth;
 	}
-	int16_t lsy = (int16_t)(pCurrentLine->dda[2 * (nDrawBufferWidthMin1 - plotx_loc) + 1] + ploty_loc);
+	lsy = (int16_t)(pCurrentLine->dda[2 * (nDrawBufferWidthMin1 - plotx_loc) + 1] + ploty_loc);
 	linestartx = nDrawBufferWidthMin1;
 	lineendx = (int16_t)(nDrawBufferWidthMin1 - pCurrentLine->dx_abs);
 	lineendy = (int16_t)(lsy - pCurrentLine->dy_abs);
@@ -1199,14 +1312,16 @@ static int setstartcase3(void) {
 		plotx = plotx_loc;
 		return 0;
 	}
-	int16_t first_vp;
+
 	if (lsy >= nDrawBufferDepth) {
 		firstyincoffset = (int16_t)(lsy - nDrawBufferDepthMin1);
 		if ((int16_t)(lsy - nDrawBufferDepthMin1) > (int16_t)pCurrentLine->dy_abs) {
 			first_vp = -1;
 		} else {
+			int16_t i;
+
 			first_vp = -1;
-			for (int16_t i = 0; i <= (int16_t)pCurrentLine->dx_abs; ++i) {
+			for (i = 0; i <= (int16_t)pCurrentLine->dx_abs; ++i) {
 				uint16_t* e = pcl_word_at(4 * i);
 				if ((uint16_t)(lsy - nDrawBufferDepthMin1) == e[25]) {
 					first_vp = (int16_t)e[24];
@@ -1218,13 +1333,15 @@ static int setstartcase3(void) {
 		first_vp = 0;
 	}
 	firstvispoint = first_vp;
-	int16_t last_vp;
+
 	if (lineendy >= nDrawBufferDepth) {
 		last_vp = -1;
 	} else if (lineendy < 0 || lineendy >= nDrawBufferDepth) {
 		int16_t off = (int16_t)(pCurrentLine->dy_abs + lineendy);
-		lastyincoffset = (int16_t)(off + 1);
 		int16_t k;
+
+		lastyincoffset = (int16_t)(off + 1);
+
 		last_vp = -1;
 		for (k = (int16_t)pCurrentLine->dx_abs; k >= 0; --k) {
 			uint16_t* e = pcl_word_at(4 * k);
@@ -1267,9 +1384,11 @@ static int updatecase3(void) {
 		}
 	}
 	if (ley_new == nDrawBufferDepthMin1) {
+		int16_t cand;
+
 		lyi = (int16_t)(pCurrentLine->num_run_lengths - 1);
 		lastvispoint = (int16_t)(pCurrentLine->scan_count - 1);
-		int16_t cand = (int16_t)(lastvispoint - (int16_t)pCurrentLine->run_lengths[lyi] + 1);
+		cand = (int16_t)(lastvispoint - (int16_t)pCurrentLine->run_lengths[lyi] + 1);
 		if (cand < 0)
 			cand = 0;
 		fvp = cand;
@@ -1290,6 +1409,9 @@ static int setstartcase4(void) {
 	int16_t ploty_loc = ploty;
 	int16_t plotx_loc = plotx;
 	int16_t row_off = 0;
+	int16_t lsx;
+	int16_t last_vp;
+
 	while (ploty_loc < 0) {
 		ploty_loc = (int16_t)(ploty_loc + (pCurrentLine->dy_abs + 1));
 		plotx_loc = (int16_t)(plotx_loc + (pCurrentLine->dx_abs + 1));
@@ -1300,17 +1422,21 @@ static int setstartcase4(void) {
 		plotx_loc = (int16_t)(plotx_loc - (pCurrentLine->dx_abs + 1));
 		row_off += nDrawBufferDepth;
 	}
-	int16_t lsx = (int16_t)(plotx_loc - (int16_t)pCurrentLine->dda[2 * ploty_loc]);
+	lsx = (int16_t)(plotx_loc - (int16_t)pCurrentLine->dda[2 * ploty_loc]);
 	linestarty = 0;
 	firstvispoint = 0;
 	firstxincoffset = -1;
 	linestartx = lsx;
 	lastxincoffset = nDrawBufferWidth;
 	if (lsx < 0) {
+		int16_t first_vp;
+
 		firstxincoffset = (int16_t)(-lsx - 1);
-		int16_t first_vp = -1;
+		first_vp = -1;
 		if ((int16_t)-lsx <= (int16_t)pCurrentLine->dx_abs) {
-			for (int16_t i = 0; i <= (int16_t)pCurrentLine->dy_abs; ++i) {
+			int16_t i;
+
+			for (i = 0; i <= (int16_t)pCurrentLine->dy_abs; ++i) {
 				uint16_t* e = pcl_word_at(4 * i);
 				if ((uint16_t)-lsx == e[24]) {
 					first_vp = (int16_t)e[25];
@@ -1327,14 +1453,16 @@ static int setstartcase4(void) {
 		ploty = ploty_loc;
 		return 0;
 	}
-	int16_t last_vp;
+
 	if (lineendx >= nDrawBufferWidth) {
 		if (nDrawBufferWidth <= linestartx) {
 			last_vp = -1;
 		} else {
+			int16_t k;
+
 			last_vp = -1;
 			lastxincoffset = (int16_t)(nDrawBufferWidth - linestartx - 1);
-			for (int16_t k = 0; k <= (int16_t)pCurrentLine->dy_abs; ++k) {
+			for (k = 0; k <= (int16_t)pCurrentLine->dy_abs; ++k) {
 				uint16_t* e = pcl_word_at(4 * k);
 				if ((uint16_t)(nDrawBufferWidth - linestartx) == e[24]) {
 					last_vp = (int16_t)(e[25] - 1);
@@ -1357,6 +1485,8 @@ static int updatecase4(void) {
 	int16_t lvp = lastvispoint;
 	int16_t lsx_new = (int16_t)(linestartx - 1);
 	int result;
+	int16_t lex_new;
+
 	pDrawBuffer -= bytesPerPixel;
 	if (lsx_new == nDrawBufferWidthMin1) {
 		lvp = -1;
@@ -1366,7 +1496,7 @@ static int updatecase4(void) {
 		++firstxincoffset;
 		firstvispoint = (int16_t)(firstvispoint + (int16_t)pCurrentLine->run_lengths[firstxincoffset]);
 	}
-	int16_t lex_new = (int16_t)(lineendx - 1);
+	lex_new = (int16_t)(lineendx - 1);
 	if (lex_new < 0) {
 		result = 0;
 	} else {
@@ -1390,6 +1520,9 @@ static int setstartcase5(void) {
 	int16_t ploty_loc = ploty;
 	int16_t plotx_loc = plotx;
 	int16_t row_off = 0;
+	int16_t lsx;
+	int16_t last_vp;
+
 	while (ploty_loc < 0) {
 		ploty_loc = (int16_t)(ploty_loc + (pCurrentLine->dy_abs + 1));
 		plotx_loc = (int16_t)(plotx_loc - (pCurrentLine->dx_abs + 1));
@@ -1400,7 +1533,7 @@ static int setstartcase5(void) {
 		plotx_loc = (int16_t)(plotx_loc + (pCurrentLine->dx_abs + 1));
 		row_off -= nDrawBufferDepth;
 	}
-	int16_t lsx = (int16_t)(plotx_loc - (int16_t)pCurrentLine->dda[2 * (nDrawBufferDepthMin1 - ploty_loc)]);
+	lsx = (int16_t)(plotx_loc - (int16_t)pCurrentLine->dda[2 * (nDrawBufferDepthMin1 - ploty_loc)]);
 	linestarty = nDrawBufferDepthMin1;
 	lineendy = (int16_t)(nDrawBufferDepthMin1 - pCurrentLine->dy_abs);
 	lineendx = (int16_t)(pCurrentLine->dx_abs + lsx);
@@ -1414,6 +1547,8 @@ static int setstartcase5(void) {
 		return 0;
 	}
 	if (lsx < 0) {
+		int16_t first_vp;
+
 		if (lineendx < 0) {
 			lastvispoint = -1;
 			startdrawpoint = (int16_t)(row_off + nDrawBufferDepthMin1 - ploty_loc);
@@ -1422,9 +1557,11 @@ static int setstartcase5(void) {
 			return 1;
 		}
 		firstxincoffset = (int16_t)-lsx;
-		int16_t first_vp = -1;
+		first_vp = -1;
 		if ((int16_t)-lsx <= (int16_t)pCurrentLine->dx_abs) {
-			for (int16_t k = 0; k <= (int16_t)pCurrentLine->dy_abs; ++k) {
+			int16_t k;
+
+			for (k = 0; k <= (int16_t)pCurrentLine->dy_abs; ++k) {
 				uint16_t* e = pcl_word_at(4 * k);
 				if ((uint16_t)-lsx == e[24]) {
 					first_vp = (int16_t)e[25];
@@ -1434,14 +1571,16 @@ static int setstartcase5(void) {
 		}
 		firstvispoint = first_vp;
 	}
-	int16_t last_vp;
+
 	if (lineendx >= nDrawBufferWidth || lineendx < 0) {
 		if (lineendx < nDrawBufferWidth || nDrawBufferWidth <= linestartx) {
 			last_vp = -1;
 		} else {
+			int16_t k;
+
 			lastxincoffset = (int16_t)(nDrawBufferWidth - linestartx);
 			last_vp = -1;
-			for (int16_t k = 0; k <= (int16_t)pCurrentLine->dy_abs; ++k) {
+			for (k = 0; k <= (int16_t)pCurrentLine->dy_abs; ++k) {
 				uint16_t* e = pcl_word_at(4 * k);
 				if ((uint16_t)(nDrawBufferWidth - linestartx) == e[24]) {
 					last_vp = (int16_t)(e[25] - 1);
@@ -1463,8 +1602,11 @@ static int updatecase5(void) {
 	int16_t fvp = firstvispoint;
 	int16_t fxi = firstxincoffset;
 	int16_t lex = lineendx;
+	int16_t lsx_new;
+	int16_t lex_new;
+
 	pDrawBuffer += bytesPerPixel;
-	int16_t lsx_new = (int16_t)(linestartx + 1);
+	lsx_new = (int16_t)(linestartx + 1);
 	if (linestartx == -1) {
 		fvp = 0;
 	} else if (lsx_new < 0) {
@@ -1489,7 +1631,7 @@ static int updatecase5(void) {
 		firstvispoint = fvp;
 		return 0;
 	}
-	int16_t lex_new = (int16_t)(lex + 1);
+	lex_new = (int16_t)(lex + 1);
 	if (lex == -1) {
 		fxi = (int16_t)(pCurrentLine->num_run_lengths - 1);
 		lastvispoint = (int16_t)(pCurrentLine->scan_count - 1);
@@ -1519,6 +1661,10 @@ static int setstartcase6(void) {
 	int16_t ploty_loc = ploty;
 	int16_t plotx_loc = plotx;
 	int16_t row_off = 0;
+	int16_t lsx;
+	int16_t first_vp;
+	int16_t last_vp;
+
 	while (ploty_loc < 0) {
 		ploty_loc = (int16_t)(ploty_loc + (pCurrentLine->dy_abs + 1));
 		plotx_loc = (int16_t)(plotx_loc - (pCurrentLine->dx_abs + 1));
@@ -1529,7 +1675,7 @@ static int setstartcase6(void) {
 		plotx_loc = (int16_t)(plotx_loc + (pCurrentLine->dx_abs + 1));
 		row_off += nDrawBufferDepth;
 	}
-	int16_t lsx = (int16_t)(pCurrentLine->dda[2 * ploty_loc] + plotx_loc);
+	lsx = (int16_t)(pCurrentLine->dda[2 * ploty_loc] + plotx_loc);
 	linestarty = 0;
 	lineendx = (int16_t)(lsx - pCurrentLine->dx_abs);
 	lineendy = (int16_t)pCurrentLine->dy_abs;
@@ -1543,14 +1689,16 @@ static int setstartcase6(void) {
 		ploty = ploty_loc;
 		return 0;
 	}
-	int16_t first_vp;
+
 	if (lsx >= nDrawBufferWidth) {
 		firstxincoffset = (int16_t)(lsx - nDrawBufferWidthMin1);
 		if ((int16_t)(lsx - nDrawBufferWidthMin1) > (int16_t)pCurrentLine->dx_abs) {
 			first_vp = -1;
 		} else {
+			int16_t i;
+
 			first_vp = -1;
-			for (int16_t i = 0; i <= (int16_t)pCurrentLine->dy_abs; ++i) {
+			for (i = 0; i <= (int16_t)pCurrentLine->dy_abs; ++i) {
 				uint16_t* e = pcl_word_at(4 * i);
 				if ((uint16_t)firstxincoffset == e[24]) {
 					first_vp = (int16_t)e[25];
@@ -1562,14 +1710,16 @@ static int setstartcase6(void) {
 		first_vp = 0;
 	}
 	firstvispoint = first_vp;
-	int16_t last_vp;
+
 	if (lineendx >= nDrawBufferWidth) {
 		last_vp = -1;
 	} else if (lineendx < 0 || lineendx >= nDrawBufferWidth) {
 		int16_t off = (int16_t)(pCurrentLine->dx_abs + lineendx);
+		int16_t k;
+
 		lastxincoffset = (int16_t)(off + 1);
 		last_vp = -1;
-		for (int16_t k = (int16_t)pCurrentLine->dy_abs; k >= 0; --k) {
+		for (k = (int16_t)pCurrentLine->dy_abs; k >= 0; --k) {
 			uint16_t* e = pcl_word_at(4 * k);
 			if ((uint16_t)off == e[24]) {
 				last_vp = (int16_t)e[25];
@@ -1634,6 +1784,10 @@ static int setstartcase7(void) {
 	int16_t ploty_loc = ploty;
 	int16_t plotx_loc = plotx;
 	int16_t row_off = 0;
+	int16_t lsx;
+	int16_t first_vp;
+	int16_t last_vp;
+
 	while (ploty_loc < 0) {
 		ploty_loc = (int16_t)(ploty_loc + (pCurrentLine->dy_abs + 1));
 		plotx_loc = (int16_t)(plotx_loc + (pCurrentLine->dx_abs + 1));
@@ -1644,14 +1798,14 @@ static int setstartcase7(void) {
 		plotx_loc = (int16_t)(plotx_loc - (pCurrentLine->dx_abs + 1));
 		row_off -= nDrawBufferDepth;
 	}
-	int16_t lsx = (int16_t)(pCurrentLine->dda[2 * (nDrawBufferDepthMin1 - ploty_loc)] + plotx_loc);
+	lsx = (int16_t)(pCurrentLine->dda[2 * (nDrawBufferDepthMin1 - ploty_loc)] + plotx_loc);
 	linestarty = nDrawBufferDepthMin1;
 	lineendx = (int16_t)(lsx - pCurrentLine->dx_abs);
 	lineendy = (int16_t)(nDrawBufferDepthMin1 - pCurrentLine->dy_abs);
 	linestartx = lsx;
 	firstxincoffset = -1;
 	lastxincoffset = nDrawBufferWidth;
-	int16_t first_vp;
+
 	if (lsx < 0) {
 		first_vp = -1;
 	} else if (lsx >= nDrawBufferWidth) {
@@ -1659,8 +1813,10 @@ static int setstartcase7(void) {
 		if ((int16_t)(lsx - nDrawBufferWidthMin1) > (int16_t)pCurrentLine->dx_abs) {
 			first_vp = -1;
 		} else {
+			int16_t i;
+
 			first_vp = -1;
-			for (int16_t i = 0; i <= (int16_t)pCurrentLine->dy_abs; ++i) {
+			for (i = 0; i <= (int16_t)pCurrentLine->dy_abs; ++i) {
 				uint16_t* e = pcl_word_at(4 * i);
 				if ((uint16_t)(lsx - nDrawBufferWidthMin1) == e[24]) {
 					first_vp = (int16_t)e[25];
@@ -1672,7 +1828,7 @@ static int setstartcase7(void) {
 		first_vp = 0;
 	}
 	firstvispoint = first_vp;
-	int16_t last_vp;
+
 	if (lineendx >= nDrawBufferWidth) {
 		plotx = lsx;
 		ploty = ploty_loc;
@@ -1682,9 +1838,11 @@ static int setstartcase7(void) {
 		if (lineendx >= 0 || linestartx < 0) {
 			last_vp = -1;
 		} else {
+			int16_t k;
+
 			lastxincoffset = (int16_t)(pCurrentLine->dx_abs + lineendx);
 			last_vp = -1;
-			for (int16_t k = (int16_t)pCurrentLine->dy_abs; k >= 0; --k) {
+			for (k = (int16_t)pCurrentLine->dy_abs; k >= 0; --k) {
 				uint16_t* e = pcl_word_at(4 * k);
 				if ((uint16_t)lastxincoffset == e[24]) {
 					last_vp = (int16_t)e[25];
@@ -1705,8 +1863,11 @@ static int setstartcase7(void) {
 static int updatecase7(void) {
 	int16_t lvp = lastvispoint;
 	int16_t fxi = firstxincoffset;
+	int16_t lsx_new;
+	int16_t lex_new;
+
 	pDrawBuffer += bytesPerPixel;
-	int16_t lsx_new = (int16_t)(linestartx + 1);
+	lsx_new = (int16_t)(linestartx + 1);
 	if (linestartx == -1) {
 		lvp = -1;
 		firstvispoint = 0;
@@ -1717,7 +1878,7 @@ static int updatecase7(void) {
 		++fxi;
 		firstvispoint = (int16_t)(firstvispoint + (int16_t)pCurrentLine->run_lengths[fxi]);
 	}
-	int16_t lex_new = (int16_t)(lineendx + 1);
+	lex_new = (int16_t)(lineendx + 1);
 	if (lineendx == -1) {
 		lvp = (int16_t)(pCurrentLine->scan_count - 1);
 	} else if (lex_new >= nDrawBufferWidth) {
@@ -1797,6 +1958,18 @@ static int updatecases(void) {
  * Runs are repeated according to the fractional Y accumulator while the
  * octant walker advances the rotated destination scanline. */
 static int rotatescale(const uint8_t* data, int32_t bit_split) {
+	uint8_t* buf_base;
+	int32_t mem_w;
+	uint8_t* buf_end;
+	int32_t row_step;
+	uint8_t acc_lo;
+	uint8_t acc_mid;
+	uint8_t acc_hi;
+	uint8_t mask_N;
+	uint8_t shift_N;
+	uint8_t step_lo;
+	uint8_t step_hi;
+
 	{
 		static int dbg_rs_frame = 0;
 		static int dbg_rs_seen = 0;
@@ -1821,10 +1994,10 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 	if (!setstartvars())
 		return 0;
 
-	uint8_t* buf_base = (uint8_t*)buffer_ptr;
-	int32_t mem_w = nDrawBufferMemoryWidth;
-	uint8_t* buf_end = buf_base + (size_t)mem_w * nDrawBufferDepth;
-	int32_t row_step;
+	buf_base = (uint8_t*)buffer_ptr;
+	mem_w = nDrawBufferMemoryWidth;
+	buf_end = buf_base + (size_t)mem_w * nDrawBufferDepth;
+
 	if (nDrawBufferOrientation <= 0) {
 		row_step = mem_w;
 		pCurrentLine->current_row_base =
@@ -1841,50 +2014,71 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 	/* 3-byte y-fractional accumulator (v65:v66:v67 in the retail asm).
 	 * Stepped per source-row by the eff_scale_y low/high bytes, the
 	 * delta vs. pre-step state gives the row replay count. */
-	uint8_t acc_lo = 0;
-	uint8_t acc_mid = 0;
-	uint8_t acc_hi = 0;
+	acc_lo = 0;
+	acc_mid = 0;
+	acc_hi = 0;
 
-	uint8_t mask_N = rotscale_run_mask[bit_split & 0x0F];
-	uint8_t shift_N = rotscale_run_shift[bit_split & 0x0F];
-	uint8_t step_lo = (uint8_t)(ScaleData.eff_scale_y & 0xFF);
-	uint8_t step_hi = (uint8_t)(ScaleData.eff_scale_y >> 8);
+	mask_N = rotscale_run_mask[bit_split & 0x0F];
+	shift_N = rotscale_run_shift[bit_split & 0x0F];
+	step_lo = (uint8_t)(ScaleData.eff_scale_y & 0xFF);
+	step_hi = (uint8_t)(ScaleData.eff_scale_y >> 8);
 
 	while (1) {
+		uint16_t pre_state;
+		uint8_t tmp_lo;
+		uint8_t tmp_mid;
+		uint8_t tmp_hi;
+		uint8_t tmp_mid_before;
+		uint16_t post_state;
+		int16_t row_count;
+		int n_runs;
+		int32_t x_cur;
+		uint16_t x_frac;
+		uint8_t base_color;
+		rotscale_run* p_run;
+		int16_t rem;
+		uint8_t prev_lo;
+		uint8_t prev_mid;
+
 		if (*data == 0xFF)
 			break;
 
 		/* Compute replay count for this source row: integer delta
 		 * between the pre-step and post-step 16-bit fractional state.
 		 * Matches the 498ae..49904 instruction sequence. */
-		uint16_t pre_state = (uint16_t)((acc_hi << 8) | acc_mid);
-		uint8_t tmp_lo = (uint8_t)(acc_lo + step_lo);
-		uint8_t tmp_mid = acc_mid;
-		uint8_t tmp_hi = acc_hi;
+		pre_state = (uint16_t)((acc_hi << 8) | acc_mid);
+		tmp_lo = (uint8_t)(acc_lo + step_lo);
+		tmp_mid = acc_mid;
+		tmp_hi = acc_hi;
 		if (tmp_lo < acc_lo) {
 			tmp_mid = (uint8_t)(acc_mid + 1);
 			if (acc_mid == 0xFF)
 				tmp_hi = (uint8_t)(acc_hi + 1);
 		}
-		uint8_t tmp_mid_before = tmp_mid;
+		tmp_mid_before = tmp_mid;
 		tmp_mid = (uint8_t)(tmp_mid + step_hi);
 		if (tmp_mid < tmp_mid_before)
 			tmp_hi = (uint8_t)(tmp_hi + 1);
-		uint16_t post_state = (uint16_t)((tmp_hi << 8) | tmp_mid);
-		int16_t row_count = (int16_t)((int32_t)post_state - (int32_t)pre_state);
+		post_state = (uint16_t)((tmp_hi << 8) | tmp_mid);
+		row_count = (int16_t)((int32_t)post_state - (int32_t)pre_state);
 
 		/* Parse the row's opcodes into runtable[]. retail's reverseflag
 		 * branch only fires when reverseflag == 1; the other path never
 		 * enters the inner loop (n_runs stays 0). The function's own
 		 * prologue forces reverseflag = 1 so we only model that path. */
-		int n_runs = 0;
-		int32_t x_cur = 0;
-		uint16_t x_frac = 0;
-		uint8_t base_color = 0;
-		rotscale_run* p_run = &runtable[0];
+		n_runs = 0;
+		x_cur = 0;
+		x_frac = 0;
+		base_color = 0;
+		p_run = &runtable[0];
 
 		while (1) {
 			uint8_t op = *data;
+			uint8_t run_len;
+			uint8_t run_color;
+			int32_t run_x_start;
+			uint16_t prev_frac;
+
 			if (op == 0xFE) {
 				data++;
 				break;
@@ -1897,8 +2091,10 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 			}
 			if (op == 0xFC) {
 				uint8_t idx = data[1];
+				uint16_t prev;
+
 				data += 2;
-				uint16_t prev = x_frac;
+				prev = x_frac;
 				x_frac = (uint16_t)(x_frac + ScaleData.x_lookup_lo[idx]);
 				x_cur += ScaleData.x_lookup_hi[idx];
 				if (x_frac < prev)
@@ -1906,8 +2102,6 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 				continue;
 			}
 
-			uint8_t run_len;
-			uint8_t run_color;
 			if (op == 0xFD) {
 				run_len = data[1];
 				run_color = data[2];
@@ -1918,8 +2112,8 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 				data += 1;
 			}
 
-			int32_t run_x_start = x_cur;
-			uint16_t prev_frac = x_frac;
+			run_x_start = x_cur;
+			prev_frac = x_frac;
 			x_frac = (uint16_t)(x_frac + ScaleData.x_lookup_lo[run_len]);
 			x_cur += ScaleData.x_lookup_hi[run_len];
 			if (x_frac < prev_frac)
@@ -1935,7 +2129,7 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 		}
 
 		/* Replay the parsed row row_count times. */
-		int16_t rem = row_count;
+		rem = row_count;
 		do {
 			if (n_runs && lastvispoint >= 0) {
 				int32_t first_end = startdrawpoint + x_cur;
@@ -1945,7 +2139,9 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 				if (!clipped) {
 					if (bytesPerPixel == 2) {
 						rotscale_run* r = &runtable[0];
-						for (int i = 0; i < n_runs; ++i, ++r) {
+						int i;
+
+						for (i = 0; i < n_runs; ++i, ++r) {
 							uint32_t xs = r->x_start + startdrawpoint;
 							uint8_t col = (uint8_t)r->color;
 							uint32_t ln = r->run_len;
@@ -1960,7 +2156,9 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 						}
 					} else {
 						rotscale_run* r = &runtable[0];
-						for (int i = 0; i < n_runs; ++i, ++r) {
+						int i;
+
+						for (i = 0; i < n_runs; ++i, ++r) {
 							uint32_t xs = r->x_start + startdrawpoint;
 							uint8_t col = (uint8_t)r->color;
 							uint32_t ln = r->run_len;
@@ -1973,7 +2171,9 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 					}
 				} else {
 					rotscale_run* r = &runtable[0];
-					for (int i = 0; i < n_runs; ++i, ++r) {
+					int i;
+
+					for (i = 0; i < n_runs; ++i, ++r) {
 						int32_t xs = (int32_t)r->x_start + startdrawpoint;
 						uint8_t col = (uint8_t)r->color;
 						int32_t ln = (int32_t)r->run_len;
@@ -2010,11 +2210,11 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 
 		/* Commit the fractional step back to (acc_lo, acc_mid, acc_hi).
 		 * Retail asm at 0x49d4f..0x49d83: prev > new signals wrap. */
-		uint8_t prev_lo = acc_lo;
+		prev_lo = acc_lo;
 		acc_lo = (uint8_t)(acc_lo + step_lo);
 		if (prev_lo > acc_lo)
 			acc_mid = (uint8_t)(acc_mid + 1);
-		uint8_t prev_mid = acc_mid;
+		prev_mid = acc_mid;
 		acc_mid = (uint8_t)(acc_mid + step_hi);
 		if (prev_mid > acc_mid)
 			acc_hi = (uint8_t)(acc_hi + 1);
@@ -2041,6 +2241,21 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 	trace2_EdgeHeader* p_ehdr = trace2_newedgeheader;
 	int32_t max_y = pixelsdeepmin1;
 
+	int i;
+	int16_t result;
+	int32_t ymax_clip;
+	uint8_t* p_pixel;
+	uint16_t obj_id;
+	int32_t row_step;
+	trace2_EdgeInfo* p_einfo_walker;
+	int32_t* p_x;
+	uint16_t next_obj;
+
+	int32_t xmin, xmax;
+	int32_t ymin, ymax;
+	int32_t ymin_clip, ymax_pad;
+	int32_t xmin_clip, xmax_clip;
+
 	g_dbg_sx_calls++;
 
 	/* Invert Y of each corner. */
@@ -2049,9 +2264,11 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 	quad_corners[5] = max_y - quad_corners[5];
 	quad_corners[7] = max_y - quad_corners[7];
 
-	int32_t xmin = quad_corners[0], xmax = quad_corners[0];
-	int32_t ymin = quad_corners[1], ymax = quad_corners[1];
-	for (int i = 1; i < 4; ++i) {
+	xmin = quad_corners[0];
+	xmax = quad_corners[0];
+	ymin = quad_corners[1];
+	ymax = quad_corners[1];
+	for (i = 1; i < 4; ++i) {
 		int32_t x = quad_corners[2 * i];
 		int32_t y = quad_corners[2 * i + 1];
 		if (x < xmin)
@@ -2067,9 +2284,11 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 	g_dbg_sx_last_xmax = xmax;
 	g_dbg_sx_last_ymin = ymin;
 	g_dbg_sx_last_ymax = ymax;
-	int32_t ymin_clip = ymin - 2, ymax_pad = ymax + 2;
-	int32_t xmin_clip = xmin - 2, xmax_clip = xmax + 2;
-	int16_t result = (int16_t)(xmin - 2);
+	ymin_clip = ymin - 2;
+	ymax_pad = ymax + 2;
+	xmin_clip = xmin - 2;
+	xmax_clip = xmax + 2;
+	result = (int16_t)(xmin - 2);
 	if (ymax_pad < 0) {
 		g_dbg_sx_early_ymax++;
 		goto done;
@@ -2098,9 +2317,9 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 		xmax_clip = nDrawBufferWidthMin1;
 	if (xmin_clip < 0)
 		xmin_clip = 0;
-	int32_t ymax_clip = ymax_pad;
+	ymax_clip = ymax_pad;
 
-	uint8_t* p_pixel = (uint8_t*)buffer_ptr + ymin_clip * nDrawBufferMemoryWidth + bytesPerPixel * xmin_clip;
+	p_pixel = (uint8_t*)buffer_ptr + ymin_clip * nDrawBufferMemoryWidth + bytesPerPixel * xmin_clip;
 
 	/* Deep diagnostic: for the first sx call of each frame, dump the
 	 * first 16 entries of paletteconvert (what prepare_color wrote)
@@ -2111,6 +2330,8 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 		static int dbg_sx_prints = 0;
 
 		if (g_dbg_sx_calls == 1 && dbg_sx_prints < 3) {
+			int k;
+
 			dbg_sx_prints++;
 			TieDiagnostics_Log(TIE_LOG_INFO,
 							   "[sx-deep] ymin=%d ymax=%d xmin=%d xmax=%d "
@@ -2119,17 +2340,17 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 							   (int)nDrawBufferWidth, (int)nDrawBufferDepth, (int)nDrawBufferMemoryWidth,
 							   buffer_ptr, (long)(p_pixel - (uint8_t*)buffer_ptr));
 			TieDiagnostics_Log(TIE_LOG_INFO, "[sx-deep] paletteconvert[0..15] =");
-			for (int k = 0; k < 16; k++)
+			for (k = 0; k < 16; k++)
 				TieDiagnostics_Log(TIE_LOG_INFO, " %02X", paletteconvert[k]);
 			TieDiagnostics_Log(TIE_LOG_INFO, "\n[sx-deep] row bytes (first 32):");
-			for (int k = 0; k < 32 && k < (xmax_clip - xmin_clip); k++)
+			for (k = 0; k < 32 && k < (xmax_clip - xmin_clip); k++)
 				TieDiagnostics_Log(TIE_LOG_INFO, " %02X", p_pixel[k]);
 			TieDiagnostics_Log(TIE_LOG_INFO, "\n");
 		}
 	}
 
-	uint16_t obj_id = flatobjnum;
-	int32_t row_step = nDrawBufferMemoryWidth - bytesPerPixel * (xmax_clip - xmin_clip);
+	obj_id = flatobjnum;
+	row_step = nDrawBufferMemoryWidth - bytesPerPixel * (xmax_clip - xmin_clip);
 
 	flatcolors[flatobjnum] = 0;
 	flatcomponentnum[obj_id] = (uint8_t)objectnum;
@@ -2142,14 +2363,14 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 	p_ehdr->next = trace2_rowheaders[ymin_clip];
 	trace2_rowheaders[ymin_clip] = p_ehdr;
 	p_ehdr->numscanlines = ymax_clip - ymin_clip;
+	p_ehdr->objectid = obj_id + 128;
+	p_ehdr->info = p_einfo;
+	p_ehdr->edgeid = layervalue;
 	++p_ehdr;
-	p_ehdr[-1].objectid = obj_id + 128;
-	p_ehdr[-1].info = p_einfo;
-	p_ehdr[-1].edgeid = layervalue;
 	if (p_ehdr > trace2_lastedgeheader)
 		p_ehdr = trace2_lastedgeheader;
 
-	trace2_EdgeInfo* p_einfo_walker = p_einfo;
+	p_einfo_walker = p_einfo;
 	p_einfo += (ymax_clip - ymin_clip);
 	if (p_einfo > trace2_lastedgeinfo)
 		p_einfo = trace2_lastedgeinfo;
@@ -2157,20 +2378,22 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 	p_ehdr->next = trace2_rowheaders[ymin_clip];
 	trace2_rowheaders[ymin_clip] = p_ehdr;
 	p_ehdr->numscanlines = ymax_clip - ymin_clip;
+	p_ehdr->objectid = flatobjnum + 128;
+	p_ehdr->info = p_einfo;
+	p_ehdr->edgeid = layervalue;
 	++p_ehdr;
-	p_ehdr[-1].objectid = flatobjnum + 128;
-	p_ehdr[-1].info = p_einfo;
-	p_ehdr[-1].edgeid = layervalue;
 	if (p_ehdr > trace2_lastedgeheader)
 		p_ehdr = trace2_lastedgeheader;
 
-	int32_t* p_x = &p_einfo->x;
+	p_x = &p_einfo->x;
 	p_einfo += (ymax_clip - ymin_clip);
 	if (p_einfo > trace2_lastedgeinfo)
 		p_einfo = trace2_lastedgeinfo;
 
 	if (bytesPerPixel == 2) {
-		for (int32_t y = ymin_clip; y < ymax_clip; ++y) {
+		int32_t y;
+
+		for (y = ymin_clip; y < ymax_clip; ++y) {
 			int32_t x = xmin_clip;
 			/* Left edge of first opaque run */
 			while (x < xmax_clip && p_pixel[1] != 0x80) {
@@ -2190,6 +2413,8 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 			p_x += 2;
 			/* Additional opaque runs in this row produce singleton-row edges */
 			while (x < xmax_clip) {
+				trace2_EdgeInfo* e_in;
+
 				while (x < xmax_clip && p_pixel[1] != 0x80) {
 					p_pixel += 2;
 					++x;
@@ -2198,14 +2423,14 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 					break;
 				p_ehdr->next = trace2_rowheaders[y];
 				trace2_rowheaders[y] = p_ehdr;
+				p_ehdr->numscanlines = 1;
+				p_ehdr->objectid = flatobjnum + 128;
+				p_ehdr->info = p_einfo;
+				p_ehdr->edgeid = layervalue;
 				++p_ehdr;
-				p_ehdr[-1].numscanlines = 1;
-				p_ehdr[-1].objectid = flatobjnum + 128;
-				p_ehdr[-1].info = p_einfo;
-				p_ehdr[-1].edgeid = layervalue;
 				if (p_ehdr > trace2_lastedgeheader)
 					p_ehdr = trace2_lastedgeheader;
-				trace2_EdgeInfo* e_in = p_einfo + 1;
+				e_in = p_einfo + 1;
 				p_einfo->x = x << 8;
 				if (e_in > trace2_lastedgeinfo)
 					e_in = trace2_lastedgeinfo;
@@ -2218,11 +2443,11 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 				}
 				p_ehdr->next = trace2_rowheaders[y];
 				trace2_rowheaders[y] = p_ehdr;
+				p_ehdr->numscanlines = 1;
+				p_ehdr->objectid = flatobjnum + 128;
+				p_ehdr->info = e_in;
+				p_ehdr->edgeid = layervalue;
 				++p_ehdr;
-				p_ehdr[-1].numscanlines = 1;
-				p_ehdr[-1].objectid = flatobjnum + 128;
-				p_ehdr[-1].info = e_in;
-				p_ehdr[-1].edgeid = layervalue;
 				if (p_ehdr > trace2_lastedgeheader)
 					p_ehdr = trace2_lastedgeheader;
 				p_einfo = e_in + 1;
@@ -2237,7 +2462,9 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 		 * palette entries); the demo used 0x10 (16 entries). Every
 		 * comparison against 0x10 in the original port needs to become
 		 * 0x40 to correctly classify retail bitmap bytes. */
-		for (int32_t y = ymin_clip; y < ymax_clip; ++y) {
+		int32_t y;
+
+		for (y = ymin_clip; y < ymax_clip; ++y) {
 			int32_t x = xmin_clip;
 			while (x < xmax_clip && *p_pixel >= 0x40) {
 				++p_pixel;
@@ -2249,13 +2476,14 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 				uint8_t c = *p_pixel;
 				if (c >= 0x40)
 					break;
-				++p_pixel;
+				*p_pixel++ = paletteconvert[c];
 				++x;
-				*(p_pixel - 1) = paletteconvert[c];
 			}
 			*p_x = x << 8;
 			p_x += 2;
 			while (x < xmax_clip) {
+				trace2_EdgeInfo* e_in;
+
 				while (x < xmax_clip && *p_pixel >= 0x40) {
 					++p_pixel;
 					++x;
@@ -2264,14 +2492,14 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 					break;
 				p_ehdr->next = trace2_rowheaders[y];
 				trace2_rowheaders[y] = p_ehdr;
+				p_ehdr->numscanlines = 1;
+				p_ehdr->objectid = flatobjnum + 128;
+				p_ehdr->info = p_einfo;
+				p_ehdr->edgeid = layervalue;
 				++p_ehdr;
-				p_ehdr[-1].numscanlines = 1;
-				p_ehdr[-1].objectid = flatobjnum + 128;
-				p_ehdr[-1].info = p_einfo;
-				p_ehdr[-1].edgeid = layervalue;
 				if (p_ehdr > trace2_lastedgeheader)
 					p_ehdr = trace2_lastedgeheader;
-				trace2_EdgeInfo* e_in = p_einfo + 1;
+				e_in = p_einfo + 1;
 				p_einfo->x = x << 8;
 				if (e_in > trace2_lastedgeinfo)
 					e_in = trace2_lastedgeinfo;
@@ -2279,17 +2507,16 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 					uint8_t c2 = *p_pixel;
 					if (c2 >= 0x40)
 						break;
-					++p_pixel;
+					*p_pixel++ = paletteconvert[c2];
 					++x;
-					*(p_pixel - 1) = paletteconvert[c2];
 				}
 				p_ehdr->next = trace2_rowheaders[y];
 				trace2_rowheaders[y] = p_ehdr;
+				p_ehdr->numscanlines = 1;
+				p_ehdr->objectid = flatobjnum + 128;
+				p_ehdr->info = e_in;
+				p_ehdr->edgeid = layervalue;
 				++p_ehdr;
-				p_ehdr[-1].numscanlines = 1;
-				p_ehdr[-1].objectid = flatobjnum + 128;
-				p_ehdr[-1].info = e_in;
-				p_ehdr[-1].edgeid = layervalue;
 				if (p_ehdr > trace2_lastedgeheader)
 					p_ehdr = trace2_lastedgeheader;
 				p_einfo = e_in + 1;
@@ -2301,7 +2528,7 @@ static int16_t scantoxtrans(int32_t* quad_corners) {
 		}
 	}
 
-	uint16_t next_obj = (uint16_t)(flatobjnum + 1);
+	next_obj = (uint16_t)(flatobjnum + 1);
 	result = (int16_t)next_obj;
 	++flatobjnum;
 	if (next_obj >= 0x70u)
@@ -2320,19 +2547,24 @@ static void composite_tie98_sprite_raster(uint8_t* pixel, int row_advance, int32
 	const int bytes_per_pixel = g_flight16bppBytesPerPixel;
 	const float depth = (float)(uint32_t)perspFactor / (float)objecteyez;
 	const int lock_surface = !g_flightSurfaceAlreadyLocked;
+	int32_t y;
+
 	if (lock_surface)
 		FlightSurface_Lock();
 
-	for (int32_t y = ymin; y < ymax; ++y) {
+	for (y = ymin; y < ymax; ++y) {
 		int32_t x = xmin;
 		if (bytes_per_pixel == 2) {
 			while (x < xmax) {
+				int32_t run_start;
+				uint8_t* run_pixels;
+
 				while (x < xmax && pixel[1] != 0x80) {
 					pixel += 2;
 					++x;
 				}
-				const int32_t run_start = x;
-				uint8_t* run_pixels = pixel;
+				run_start = x;
+				run_pixels = pixel;
 				while (x < xmax && pixel[1] == 0x80) {
 					const uint8_t color = *pixel;
 					*pixel++ = paletteconvertlo[color];
@@ -2344,12 +2576,15 @@ static void composite_tie98_sprite_raster(uint8_t* pixel, int row_advance, int32
 			}
 		} else {
 			while (x < xmax) {
+				int32_t run_start;
+				uint8_t* run_pixels;
+
 				while (x < xmax && *pixel >= 0x40) {
 					++pixel;
 					++x;
 				}
-				const int32_t run_start = x;
-				uint8_t* run_pixels = pixel;
+				run_start = x;
+				run_pixels = pixel;
 				while (x < xmax && *pixel < 0x40) {
 					*pixel = paletteconvert[*pixel];
 					++pixel;
@@ -2371,16 +2606,25 @@ static void composite_tie98_sprite_raster(uint8_t* pixel, int row_advance, int32
 // FUNCTION: TIE98 0x476340
 static int16_t composite_to_tie98_scene(int32_t* quad_corners) {
 	const int32_t max_y = pixelsdeepmin1;
+	int32_t xmin;
+	int32_t xmax;
+	int32_t ymin;
+	int32_t ymax;
+	int index;
+	int bytes_per_pixel;
+	uint8_t* pixel;
+	int row_advance;
+
 	quad_corners[1] = max_y - quad_corners[1];
 	quad_corners[3] = max_y - quad_corners[3];
 	quad_corners[5] = max_y - quad_corners[5];
 	quad_corners[7] = max_y - quad_corners[7];
 
-	int32_t xmin = quad_corners[0];
-	int32_t xmax = quad_corners[0];
-	int32_t ymin = quad_corners[1];
-	int32_t ymax = quad_corners[1];
-	for (int index = 1; index < 4; ++index) {
+	xmin = quad_corners[0];
+	xmax = quad_corners[0];
+	ymin = quad_corners[1];
+	ymax = quad_corners[1];
+	for (index = 1; index < 4; ++index) {
 		const int32_t x = quad_corners[2 * index];
 		const int32_t y = quad_corners[2 * index + 1];
 		if (x < xmin)
@@ -2408,9 +2652,9 @@ static int16_t composite_to_tie98_scene(int32_t* quad_corners) {
 	if (xmin < 0)
 		xmin = 0;
 
-	const int bytes_per_pixel = g_flight16bppBytesPerPixel;
-	uint8_t* pixel = (uint8_t*)buffer_ptr + ymin * nDrawBufferMemoryWidth + bytes_per_pixel * xmin;
-	const int row_advance = nDrawBufferMemoryWidth - bytes_per_pixel * (xmax - xmin);
+	bytes_per_pixel = g_flight16bppBytesPerPixel;
+	pixel = (uint8_t*)buffer_ptr + ymin * nDrawBufferMemoryWidth + bytes_per_pixel * xmin;
+	row_advance = nDrawBufferMemoryWidth - bytes_per_pixel * (xmax - xmin);
 	composite_tie98_sprite_raster(pixel, row_advance, xmin, ymin, xmax, ymax);
 	return 0;
 }
@@ -2438,26 +2682,30 @@ static int16_t composite_to_tie98_scene(int32_t* quad_corners) {
  * ================================================================ */
 int16_t rotscale_rotate_scale_image(int16_t screen_x, int16_t screen_y, uint16_t scale,
 									const uint8_t* image_hdr) {
+	int32_t quad[8];
 	uint32_t sub_off = *(const uint32_t*)(image_hdr + 8);
 	const uint8_t* sub = image_hdr + sub_off;
 
 	int16_t cox0;
+	int16_t coy0;
+	int16_t sprite_w;
+	int16_t sprite_h;
+	uint32_t bit_split;
+
 	if (reverseflag == 1)
 		cox0 = *(const int16_t*)(sub + 0);
 	else
 		cox0 = (int16_t)-(*(const int16_t*)(sub + 8));
-	int16_t coy0 = (int16_t)-(*(const int16_t*)(sub + 4));
+	coy0 = (int16_t)-(*(const int16_t*)(sub + 4));
 
-	int16_t sprite_w = *(const int16_t*)(image_hdr + 0x10);
-	int16_t sprite_h = *(const int16_t*)(image_hdr + 0x14);
-	uint32_t bit_split = *(const uint32_t*)(image_hdr + 0x20);
+	sprite_w = *(const int16_t*)(image_hdr + 0x10);
+	sprite_h = *(const int16_t*)(image_hdr + 0x14);
+	bit_split = *(const uint32_t*)(image_hdr + 0x20);
 
 	celoffsetx = cox0;
 	celoffsety = coy0;
 
 	scalesetup(scale, pCurrentLine, &ScaleData);
-
-	int32_t quad[8];
 
 	/* Corner 0: top-left of sprite at (cox0, coy0). */
 	adjustoffsets(pCurrentLine, &ScaleData);

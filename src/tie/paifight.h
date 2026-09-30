@@ -1,9 +1,13 @@
-#ifndef __PAIFIGHT_H__
-#define __PAIFIGHT_H__
+#ifndef TIE_PAIFIGHT_H
+#define TIE_PAIFIGHT_H
+
+#include "tie/score.h" /* GoalTargetType */
 
 #include <stdint.h>
 
-#include "tie/score.h" /* GoalTargetType */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* -- Public shooter state shared with STARSHIP / STATIC. Written by the
  *    gunner defense/offense handlers as "where did my turret fire from".
@@ -102,4 +106,8 @@ int16_t paifight_escorttargetorder(void);      /* plan slot 23 */
  *    (Escort) on the player's own craft. */
 void paifight_checkescortorder_entry(void);
 
-#endif /* __PAIFIGHT_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

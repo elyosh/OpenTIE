@@ -1,20 +1,19 @@
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-
+#include "tie/msgroom.h"
 #include "tie/feinput.h"
 #include "tie/festring.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/frontend_display_tie98.h"
 #include "tie/msg.h"
-#include "tie/msgroom.h"
 #include "tie/panelrts.h"
 #include "tie/sys2.h"
 #include "tie/tie.h"
 #include "tie/user.h" /* user_submodal_result */
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/profile.h"
-#include <landru/task.h>
+
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
 
 /* --- Module globals (watdbg: msgroom.c ownership) --- */
 
@@ -36,10 +35,12 @@ static const char TS_PAD_MS[] = "00:00 ";
 
 // FUNCTION: TIE95 0x34A54
 int16_t msgroom_scrollmsgs(int16_t cur_idx, int16_t delta) {
+	int16_t old_cur_idx;
+
 	if (numhistorymsgs == 0 || lasthistorymsg == -1)
 		return cur_idx;
 
-	const int16_t old_cur_idx = cur_idx;
+	old_cur_idx = cur_idx;
 	cur_idx = (int16_t)(cur_idx + delta);
 
 	if (numhistorymsgs < 300) {
@@ -70,32 +71,30 @@ int16_t msgroom_scrollmsgs(int16_t cur_idx, int16_t delta) {
 	return cur_idx;
 }
 
-typedef enum {
-	MSGROOM_PHASE_RENDER = 0,
-	MSGROOM_PHASE_POLL,
-} MsgRoomPhase;
-
-typedef struct MsgRoomTask {
-	int16_t cur_top_idx;
-	int16_t exit_dir;
-	MsgRoomPhase phase;
-} MsgRoomTask;
-
 /* Render one page of the message ring. */
-static void msgroom_render_page(int16_t cur_top_idx) {
+void msgroom_render_page(int16_t cur_top_idx) {
 	int16_t walk_idx = cur_top_idx;
-	for (int16_t i = 0; i < (int16_t)msgsPerPage; i++) {
+	int16_t i;
+
+	for (i = 0; i < (int16_t)msgsPerPage; i++) {
+		int16_t idx;
+		char* body;
+		uint8_t msg_type;
+		char last_ch;
+		int16_t ts_y;
+		uint16_t min_width;
+
 		if ((uint16_t)walk_idx == 0xFFFF) {
 			if (numhistorymsgs < 300)
 				break;
 			walk_idx = (int16_t)(walk_idx + 300);
 		}
-		const int16_t idx = walk_idx;
+		idx = walk_idx;
 
 		festring_setcursor(1, (int16_t)(((int)msgsPerPage - (i + 1)) * (fontheight + 3) + 2 * fontheight));
 
-		char* body = messagehistory[idx].body;
-		const uint8_t msg_type = (uint8_t)*body;
+		body = messagehistory[idx].body;
+		msg_type = (uint8_t)*body;
 
 		if (msg_type >= 8) {
 			/* Unknown / out-of-table: fallback color. */
@@ -117,7 +116,7 @@ static void msgroom_render_page(int16_t cur_top_idx) {
 		}
 
 		/* Body emitter with '[' / ']' color nudges, tracking last_ch. */
-		char last_ch = 0;
+		last_ch = 0;
 		while (*body) {
 			const uint8_t c = (uint8_t)*body;
 			if (c == '[') {
@@ -146,9 +145,8 @@ static void msgroom_render_page(int16_t cur_top_idx) {
 		festring_settextcolor(0x42);
 		festring_setbackcolor(0x44);
 
-		const int16_t ts_y = (int16_t)((fontheight + 3) * ((int)msgsPerPage - (i + 1)) + 2 * fontheight);
+		ts_y = (int16_t)((fontheight + 3) * ((int)msgsPerPage - (i + 1)) + 2 * fontheight);
 
-		uint16_t min_width;
 		if (messagehistory[idx].hours) {
 			const int16_t w = sys2_calclength((const uint8_t*)TS_PAD_HMS);
 			festring_setcursor((int16_t)(screenXRes - w), ts_y);
@@ -177,17 +175,24 @@ static void msgroom_render_page(int16_t cur_top_idx) {
  * page needs a redraw), 0 if nothing was consumed. The caller drives
  * the phase machine: any non-zero return means "a tick of work
  * happened"; a zero return means "no input ready, yield". */
-static int msgroom_poll_once(MsgRoomTask* t) {
+int msgroom_poll_once(MsgRoomRoomState* t) {
+	uint16_t k;
+	int handled;
+	int redraw;
+	int exited;
+	int16_t newtop;
+	int btn;
+
 	feinput_getrawinput();
 	feinput_checkinput();
 	feinput_degitterinput();
 	inputdeltay = (int16_t)(inputdeltay * 2);
 
-	const uint16_t k = (uint16_t)inputkey;
-	int handled = 0;
-	int redraw = 0;
-	int exited = 0;
-	int16_t newtop = t->cur_top_idx;
+	k = (uint16_t)inputkey;
+	handled = 0;
+	redraw = 0;
+	exited = 0;
+	newtop = t->cur_top_idx;
 
 	switch (k) {
 		case KEY_LEFT_ARROW: /* Previous information room */
@@ -260,7 +265,7 @@ static int msgroom_poll_once(MsgRoomTask* t) {
 
 	/* Mouse fallback: stacks on top of keyboard scroll (faithful to
 	 * the binary's fall-through). Left=-1, Right=+1. */
-	const int btn = inputbuttons & 0xF;
+	btn = inputbuttons & 0xF;
 	if (btn == 1 || btn == 2) {
 		newtop = msgroom_scrollmsgs(newtop, (btn == 1) ? -1 : 1);
 		handled = 1;
@@ -277,46 +282,7 @@ static int msgroom_poll_once(MsgRoomTask* t) {
 	return 0;
 }
 
-// ORIGINAL_FUNCTION: TIE95 0x34340
-// ORIGINAL_FUNCTION: TIE98 0x4570C0
-// (task-split recovery)
-static LandruTaskStepResult msgroom_task_step(void* self) {
-	MsgRoomTask* t = (MsgRoomTask*)self;
-
-	if (t->phase == MSGROOM_PHASE_RENDER) {
-		const bool tie98_display = TieClassicDisplay_UsesDx5();
-		if (tie98_display)
-			FlightSurface_Lock();
-		msgroom_render_page(t->cur_top_idx);
-		if (tie98_display) {
-			FlightSurface_Unlock();
-			FrontendDisplay_BlitOffscreenToRenderSurface();
-			FrontendDisplay_PresentFrame();
-		}
-		t->phase = MSGROOM_PHASE_POLL;
-		return LANDRU_TASK_STEP_CONTINUE;
-	}
-
-	/* POLL */
-	int r = msgroom_poll_once(t);
-	if (r == 1) {
-		user_submodal_result = (int32_t)t->exit_dir;
-		return LANDRU_TASK_STEP_DONE;
-	}
-	if (r == 2)
-		t->phase = MSGROOM_PHASE_RENDER;
-	return LANDRU_TASK_STEP_CONTINUE;
-}
-
-static const LandruTaskVtable msgroom_task_vt = {
-	.step = msgroom_task_step,
-};
-
-void msgroom_Push_MessageRoom_Task(void) {
-	MsgRoomTask* t = (MsgRoomTask*)landru_task_push(&msgroom_task_vt);
-	if (!t)
-		return;
-
+void msgroom_OpenRoom(MsgRoomRoomState* t) {
 	/* Static setup runs once at push time; this matches the legacy
 	 * synchronous prelude and reaches the first render with the
 	 * usual font/colour state. */
@@ -331,5 +297,4 @@ void msgroom_Push_MessageRoom_Task(void) {
 
 	t->cur_top_idx = lasthistorymsg;
 	t->exit_dir = 0;
-	t->phase = MSGROOM_PHASE_RENDER;
 }

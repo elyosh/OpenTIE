@@ -1,11 +1,16 @@
-#ifndef __TIE_H__
-#define __TIE_H__
+#ifndef TIE_TIE_H
+#define TIE_TIE_H
 
 #include "tie/mission.h"
 #include "tie/shipext.h"
 #include "tie_runtime/species_id.h"
+
 #include <stdbool.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Forward typedefs so module externs (below) can name pointers to these
  * structs before the full definitions appear later in this header. */
@@ -46,7 +51,11 @@ typedef struct {
  * (slots [missile_start..missile_end]). Consumed by USER_inputforplane,
  * STARSHIP_firelasergunner, ANIM_updateanimation, COLLIDE.
  */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct {
 	uint8_t type;        /* +0x00: laser/warhead type byte */
 	uint8_t charge;      /* +0x01: charge level; init = 127 (full) */
@@ -54,7 +63,11 @@ typedef struct {
 	uint8_t _pad_03;     /* +0x03 */
 	uint16_t target_obj; /* +0x04: target FlightObject slot; 0xFFFF = none */
 } WeaponSlot;
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /*
  * Per-mesh state byte (CraftData.mesh_state[mesh_idx]).
@@ -79,7 +92,11 @@ enum MeshState {
  * Field names from IDA RE of CREATE_createcraft + PAI_setupcraftaivars +
  * PAI_initplan + ANIM_updateanimation + PANEL_update* + FEDISKIO_updatepilotrecord.
  */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct {
 	uint8_t species_idx;    /* +0x000: species/craft type index */
 	uint8_t leader_obj_idx; /* +0x001: FG-leader's FlightObject slot; 255 = self is leader */
@@ -388,7 +405,11 @@ typedef struct {
 									* speed in this array instead (MainHull = 0xFF,
 									* others = 0). */
 } CraftData;                       /* 538 bytes (0x21A) */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /*
  * Genus -- runtime FlightObject.genus values. Used by COLLIDE for
@@ -462,7 +483,11 @@ enum Genus {
  * 88 bytes, 116 entries (_objects array). Contains angles, movement
  * direction, and cached orientation matrix (Side/Forward/Up).
  */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct FlightObject {
 	uint16_t idnumber;     /* +0x00: per-craft monotonic id */
 	uint8_t category;      /* +0x02: species.category */
@@ -524,7 +549,11 @@ typedef struct FlightObject {
 	int16_t up_z;           /* +0x52 */
 	CraftData* craft_ptr;   /* +0x54: per-ship runtime data pointer */
 } FlightObject;             /* 88 bytes (0x58) */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /*
  * StaticObject — environment object slot (mines, planets, asteroid fields).
@@ -534,7 +563,11 @@ typedef struct FlightObject {
  * Angle bytes at +0x0A..+0x0C are unsigned 0..255 mapping to 0..2π (engine loads
  * them with movzx and shifts <<8 for the 16-bit angle).
  */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct {
 	uint16_t idnumber;     /* +0x00: per-object monotonic id */
 	uint8_t ship_class;    /* +0x02: copy of species[].ship_class at creation time. 8=mine, 9=planet,
@@ -558,7 +591,11 @@ typedef struct {
 	uint8_t mine_cooldown; /* +0x11: mine-turret fire cooldown (only used when ship_class==8). Decremented by
 							  frameticks/2; reset to 236 after firing. */
 } StaticObject;            /* 18 bytes */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 #define NUM_SPECIES TIE_SPECIES_ID_COUNT
 /* NUM_CRAFTS = 32 (retail).
@@ -630,7 +667,11 @@ typedef struct {
  * Field names from IDA RE of CREATE_updatefgstatus, SCORE_craftexitscoring,
  * SCORE_checkcondition, and GOALS_missiongoalsroom.
  */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct {
 	uint8_t active;            /* +0x00: FG spawned/alive (0=not yet, 1=active) */
 	uint8_t waves_remaining;   /* +0x01: reinforcement waves left */
@@ -645,7 +686,11 @@ typedef struct {
 	uint8_t fg_complete;       /* +0x2E: bonus/completion status (1=complete) */
 	uint8_t _pad_2F;           /* +0x2F: unused */
 } FGStatus;                    /* 48 bytes (0x30) */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 extern FGStatus fgstatus[48];
 extern uint8_t* farbufferptr;
@@ -927,7 +972,11 @@ extern int16_t detaillevel;
 extern EFGStruct fg_array[48];
 
 /* Authoritative player flight state and replay save block. */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct PlayerInFlightState {
 	/* +0x000 */ FlightObject* player;           /* 4 */
 	/* +0x004 */ CraftData* player_craft;        /* 4 */
@@ -990,7 +1039,11 @@ typedef struct PlayerInFlightState {
 	/* +0x11B */ uint8_t _pad_friendly[7];              /* 7 */
 	/* +0x122 */ int16_t radio_target;                  /* 2 */
 } PlayerInFlightState;                                  /* 0x124 = 292 bytes */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 extern PlayerInFlightState pstate;
 
@@ -1008,14 +1061,22 @@ extern MissionFile mission_file_header;
  * saved with the mission but never consulted at runtime. They presumably
  * carry the mission-editor goal description text.
  */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct EMissionGoal {
 	ECondStruct subcond[2];  /* +0..+7  pair of goal subconditions       */
 	uint8_t editor_name[17]; /* +8..+24 editor-only string, never read   */
 	uint8_t or_joined;       /* +25     1 = subconds OR'd, else AND      */
 	uint8_t _pad[2];         /* +26..+27 editor-only padding             */
 } EMissionGoal;              /* 28 bytes total                           */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /* Active mission goal cache (_cut[112] = EMissionGoal[4] at 0xF4808 in the
  * binary). Owned by tie.c per watdbg. Populated by create_loadmission;
@@ -1047,7 +1108,11 @@ extern uint8_t radiomsg[1440];
  * All consumers feed (x, y, z) to pai_calcrotatedpoint(obj, side, up,
  * fwd) in that order.
  */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct {
 	int16_t x;         /* +0x00: HP.v0; local-X (side) */
 	int16_t y;         /* +0x02: HP.v1; local-Y (up)   */
@@ -1055,7 +1120,11 @@ typedef struct {
 	int8_t link;       /* +0x06: linked hardpoint index (-1 = none) */
 	uint8_t component; /* +0x07: ship component index */
 } HardpointPos;        /* 8 bytes */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /*
  * SpecData — per-species rendering/combat data.
@@ -1063,7 +1132,11 @@ typedef struct {
  * Field names from IDA RE of FEDISKIO_fillinspec, PANEL_update*,
  * COLLIDE_*, DRAW_*, and CREATE_createcraft.
  */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct {
 	char short_name[10];    /* +0x00: HUD/radio abbreviation ("X-W", "T/F", "MIS") */
 	int32_t name_ptr;       /* +0x0A: char* to species display name (from STRINGS.DAT) */
@@ -1185,7 +1258,11 @@ typedef struct {
 	int16_t bound_height;       /* +0xE8: bounding box half-height (from model height>>1) */
 	int16_t bound_depth;        /* +0xEA: bounding box half-depth (from model depth>>1) */
 } SpecData;                     /* 236 bytes (0xEC) */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 #define NUM_SPEC_DATA 69
 
@@ -1262,7 +1339,11 @@ typedef struct ShipModelMesh {
  * are a different inline structure embedded in polygon LOD records, NOT
  * this struct.
  */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct {
 	uint8_t type;      /* +0x00: 0x19..0x1F = component, else weapon_id + 120 */
 	uint8_t pad_01;    /* +0x01: unread */
@@ -1273,7 +1354,11 @@ typedef struct {
 	uint8_t link;      /* +0x0C: link byte for paired hardpoints */
 	uint8_t pad_0D[3]; /* +0x0D..+0x0F: alignment pad; unread */
 } ShipModelHardpoint;  /* 16 bytes (0x10) */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /*
  * LODRecord — ship-level LOD dispatch entry. 6 bytes each. Walked by
@@ -1284,12 +1369,20 @@ typedef struct {
  * not 4-aligned, so natural alignment would shift it to +4 and grow
  * sizeof from 6 to 8.
  */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct LODRecord {
 	uint16_t bsp_offset; /* +0x00: self-relative byte offset to BSP tree root */
 	uint32_t z_max;      /* +0x02: maximum eye-z for this LOD */
 } LODRecord;
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /*
  * ShipModelData — binary ship model format read from species LFD entries.
@@ -1311,7 +1404,11 @@ typedef struct LODRecord {
  * MUST stay packed: shield_default (i32) sits at +0x12, which is not
  * 4-aligned, so natural alignment would shift it forward by 2 bytes
  * and break every offset relative to the on-disk header. */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct ShipModelData {
 	uint16_t prefix;  /* +0x00: constant 0x0100 across all shipped ships (format magic / version). */
 	uint16_t _pad_02; /* +0x02: 2 bytes; retail does not read them. */
@@ -1346,19 +1443,31 @@ typedef struct ShipModelData {
 	 * (0x79b5d: add ecx, 20h after imul eax, 6 on the num_lods byte). */
 	struct LODRecord lod_records[]; /* +0x20: flexible array, num_lods entries */
 } ShipModelData;                    /* 32 bytes fixed header + variable data */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /*
  * ShipMeshLOD — per-mesh detail-LOD dispatch entry. 6 bytes each, located
  * at (ShipModelMesh + render_offset). Walked by draw_getdetailptr.
  * Terminator record has distance = INT_MAX (0x7FFFFFFF).
  */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct ShipMeshLOD {
 	int32_t distance; /* +0x00: max eye-z for this detail level */
 	uint16_t offset;  /* +0x04: self-relative byte offset to polygon header */
 } ShipMeshLOD;
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /*
  * BSPNode — binary-space-partition tree node used by draw_gettreeorder for
@@ -1374,7 +1483,11 @@ typedef struct ShipMeshLOD {
  *    normal/center fields are unused
  *    right_off    = mesh index (into componentblockptr[])
  */
+#ifdef __WATCOMC__
+#pragma pack(2)
+#else
 #pragma pack(push, 2)
+#endif
 typedef struct BSPNode {
 	int16_t normal_x;  /* +0x00 */
 	int16_t normal_y;  /* +0x02 */
@@ -1385,7 +1498,11 @@ typedef struct BSPNode {
 	int16_t left_off;  /* +0x0C: 0 marks a leaf */
 	int16_t right_off; /* +0x0E: at leaves, this is the mesh index */
 } BSPNode;
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 /* ------------------------------------------------------------------
  * Additional tie.c-owned globals (per watdbg). Ordered by functional
@@ -1488,34 +1605,10 @@ extern void (*fillbox)(uint16_t left, uint16_t top, uint16_t right, uint16_t bot
 extern void* savebox;
 extern void* restorebox;
 
-/* --------------------------------------------------------------------------
- * TIE module: per-frame engine driver (tie.c).
- * --------------------------------------------------------------------------
- *
- * Mirrors the binary's TIE_* functions. tie_Push_Simulator_Task owns the
- * lifecycle of one mission as a tie_core task; tie_doframe runs the
- * per-frame pipeline; tie_updatescreen paints the world; tie_updatetime
- * advances clocks and craft-state timers; tie_updatemusic re-evaluates
- * the iMUSE state machine; the three eye-space helpers
- * (tie_getobjecteyexyz / tie_check[static]objecteyexyz) project a world
- * point into camera space and cull it.
- *
- * tie_Push_Simulator_Task pushes the multi-phase simulator task on the
- * tie_core task stack. replay_mode = 0 selects a live mission, non-zero
- * selects replay-only playback. The task drives the hyperspace cinematic
- * and mission flight loops as sub-tasks; the host loop pumps TieRuntime_Tick
- * until the simulator task pops. */
-void tie_Push_Simulator_Task(int replay_mode);
-
-/* Release port-owned model and texture caches after a flight or BPFlight
- * viewer has stopped using them. */
-void TieFlightRuntime_ReleaseRecoveredResources(void);
-
-/* Push the live flight-mission task. Called from replayio's "re-enter
- * sim from viewer" path; tie_simulator's INIT phase also drives this
- * via the internal setup helper. The task pops when mission.end_flag
- * becomes non-zero. */
-void tie_Push_FlightMission_Task(void);
+/* Per-frame engine driver. Native mission scheduling is runtime-owned. */
+#ifdef TIE_MODERN
+void tie_start_tie98_mission_music(void);
+#endif
 
 void tie_initflightresolution(void);
 
@@ -1581,7 +1674,11 @@ extern int16_t lastcounter;
  * Layout parity with the binary is required: replayio.c serialises the
  * 8-byte block by &_date / sizeof(_date), and the static pointer table
  * at retail 0xC7354 dumps `(start=&_date, end=&_date+8)`. */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
 #pragma pack(push, 1)
+#endif
 typedef struct MissionClock {
 	uint8_t reserved_0; /* +0  no runtime readers in any function */
 	uint8_t reserved_1; /* +1  scanned; the binary preserves the   */
@@ -1592,7 +1689,11 @@ typedef struct MissionClock {
 	int16_t subsec;     /* +6  sub-second tick countdown; refilled */
 						/*     with 236 each second by tie_updatetime. */
 } MissionClock;         /* 8 bytes */
+#ifdef __WATCOMC__
+#pragma pack()
+#else
 #pragma pack(pop)
+#endif
 
 extern MissionClock _date;
 
@@ -1630,6 +1731,10 @@ extern uint8_t palette_cycle_user;
 extern int panels_in_ems;
 
 /* Write-only TIE_simulator initialization flags. */
+extern uint32_t special_features_flag;
+extern uint8_t graphicsinit;
+extern uint8_t panelflag;
+extern uint8_t mapiconsloaded;
 extern uint8_t deadflag_EB76C;
 extern uint8_t deadflag_EB774;
 
@@ -1651,5 +1756,9 @@ extern uint8_t colorcycleuserflag;
 
 /* "View Film" menu label pointer (resolved from strings.dat by fediskio). */
 extern void* viewfilmstr;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

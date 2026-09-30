@@ -1,9 +1,17 @@
-#ifndef __OVERLAY_H__
-#define __OVERLAY_H__
+#ifndef TIE_OVERLAY_H
+#define TIE_OVERLAY_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Raw iMUSE initialization descriptor passed through script interfaces. */
 extern uint8_t initData[72];
 
-#endif /* __OVERLAY_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

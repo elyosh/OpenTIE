@@ -1,5 +1,4 @@
 #include "tie/frontend_display_tie98.h"
-
 #include "tie/flight_surface_tie98.h"
 #include "tie/logbuf2.h"
 #include "tie/render_scene_tie98.h"
@@ -21,7 +20,6 @@
 #include <landru/cursor.h>
 #include <landru/vesa.h>
 #include <landru/video.h>
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -149,21 +147,30 @@ void Flight_PumpWindowMessages(void) {
 int FrontendDisplay_OnSurfaceRestored(void) { return 1; }
 
 // FUNCTION: TIE98 0x403E70
-static int Bitmap_WriteBmp24(const char* file_name, const void* pixels, int width, int height, int pitch,
-							 int bits_per_pixel, int pixel_format_555, const uint8_t* palette_bgra) {
+int Bitmap_WriteBmp24(const char* file_name, const void* pixels, int width, int height, int pitch,
+					  int bits_per_pixel, int pixel_format_555, const uint8_t* palette_bgra) {
+	Tie98BitmapFileHeader file_header = { 0 };
+	Tie98BitmapInfoHeader info_header = { 0 };
+	FILE* file;
+	uint32_t file_size;
+
 	if (bits_per_pixel == 8 && palette_bgra == NULL)
 		return 0;
 
-	FILE* file = fopen(file_name, "wb");
+	file = fopen(file_name, "wb");
 	if (file == NULL)
 		return 0;
 
 	fseek(file, 54, SEEK_SET);
-	uint32_t file_size = 54;
+	file_size = 54;
 	if (bits_per_pixel == 16) {
-		for (int y = height - 1; y >= 0; --y) {
+		int y;
+
+		for (y = height - 1; y >= 0; --y) {
 			const uint16_t* row = (const uint16_t*)((const uint8_t*)pixels + pitch * y);
-			for (int x = 0; x < width; ++x) {
+			int x;
+
+			for (x = 0; x < width; ++x) {
 				const uint16_t pixel = row[x];
 				uint8_t color[3];
 				color[0] = (uint8_t)(pixel << 3);
@@ -190,9 +197,13 @@ static int Bitmap_WriteBmp24(const char* file_name, const void* pixels, int widt
 			}
 		}
 	} else if (bits_per_pixel == 8) {
-		for (int y = height - 1; y >= 0; --y) {
+		int y;
+
+		for (y = height - 1; y >= 0; --y) {
 			const uint8_t* row = (const uint8_t*)pixels + pitch * y;
-			for (int x = 0; x < width; ++x) {
+			int x;
+
+			for (x = 0; x < width; ++x) {
 				const uint8_t* palette_color = palette_bgra + 4 * row[x];
 				uint8_t color[3];
 				color[0] = palette_color[0];
@@ -215,19 +226,15 @@ static int Bitmap_WriteBmp24(const char* file_name, const void* pixels, int widt
 		}
 	}
 
-	Tie98BitmapFileHeader file_header = {
-		.signature = 0x4D42,
-		.fileSize = file_size,
-		.pixelOffset = 54,
-	};
-	Tie98BitmapInfoHeader info_header = {
-		.headerSize = sizeof info_header,
-		.width = width + (width & 1),
-		.height = height,
-		.planes = 1,
-		.bitsPerPixel = 24,
-		.imageSize = file_size - 54,
-	};
+	file_header.signature = 0x4D42;
+	file_header.fileSize = file_size;
+	file_header.pixelOffset = 54;
+	info_header.headerSize = sizeof info_header;
+	info_header.width = width + (width & 1);
+	info_header.height = height;
+	info_header.planes = 1;
+	info_header.bitsPerPixel = 24;
+	info_header.imageSize = file_size - 54;
 	fseek(file, 0, SEEK_SET);
 	if (fwrite(&file_header, sizeof file_header, 1, file) != 1 ||
 		fwrite(&info_header, sizeof info_header, 1, file) != 1) {
@@ -247,34 +254,44 @@ int FrontendDisplay_GetPixelFormat555(void) {
 
 // FUNCTION: TIE98 0x49D180
 HRESULT FrontendDisplay_CaptureScreenshot(void) {
-	return DX_DD_OK;
+	int sequence;
+	int index;
+	int lock_count;
+	int saved_offscreen_route;
+	uint16_t saved_maingameflag;
+	HRESULT result;
 
 	char file_name[64];
-	int sequence = 0;
+	uint8_t palette_bgra[1024];
+
+	return DX_DD_OK;
+
+	sequence = 0;
 	for (;;) {
+		FILE* file;
+
 		sprintf(file_name, "tiescreen%d.bmp", sequence);
-		FILE* file = fopen(file_name, "rb");
+		file = fopen(file_name, "rb");
 		if (file == NULL)
 			break;
 		fclose(file);
 		++sequence;
 	}
 
-	uint8_t palette_bgra[1024];
-	for (int index = 0; index < 256; ++index) {
+	for (index = 0; index < 256; ++index) {
 		palette_bgra[4 * index] = g_directDrawPaletteEntries[index].blue;
 		palette_bgra[4 * index + 1] = g_directDrawPaletteEntries[index].green;
 		palette_bgra[4 * index + 2] = g_directDrawPaletteEntries[index].red;
 		palette_bgra[4 * index + 3] = 0;
 	}
 
-	int lock_count = FlightSurface_GetLockCount();
-	for (int index = 0; index < lock_count; ++index)
+	lock_count = FlightSurface_GetLockCount();
+	for (index = 0; index < lock_count; ++index)
 		FlightSurface_Unlock();
 	FrontendDisplay_PresentFrame();
 
-	const int saved_offscreen_route = g_flightDrawToOffscreenSurface;
-	const uint16_t saved_maingameflag = maingameflag;
+	saved_offscreen_route = g_flightDrawToOffscreenSurface;
+	saved_maingameflag = maingameflag;
 	g_flightDrawToOffscreenSurface = 0;
 	maingameflag = 1;
 	FlightSurface_Lock();
@@ -283,8 +300,8 @@ HRESULT FrontendDisplay_CaptureScreenshot(void) {
 	FlightSurface_Unlock();
 	g_flightDrawToOffscreenSurface = saved_offscreen_route;
 	maingameflag = saved_maingameflag;
-	HRESULT result = FrontendDisplay_PresentFrame();
-	for (int index = 0; index < lock_count; ++index)
+	result = FrontendDisplay_PresentFrame();
+	for (index = 0; index < lock_count; ++index)
 		FlightSurface_Lock();
 	return result;
 }
@@ -295,9 +312,11 @@ int FrontendDisplay_SaveBackBuffer(void) {
 		g_savedBackBufferPixels = malloc(size);
 		if (g_savedBackBufferPixels != NULL) {
 			DDSURFACEDESC descriptor;
+			HRESULT result;
+
 			memset(&descriptor, 0, sizeof descriptor);
 			descriptor.dwSize = 108;
-			HRESULT result;
+
 			do {
 				result = g_landruSurface->lpVtbl->Lock(g_landruSurface, NULL, &descriptor, 0, NULL);
 			} while (result == DX_DDERR_WASSTILLDRAWING);
@@ -318,9 +337,11 @@ int FrontendDisplay_RestoreBackBuffer(void) {
 	if (g_savedBackBufferPixels != NULL) {
 		if (g_landruSurface != NULL) {
 			DDSURFACEDESC descriptor;
+			HRESULT result;
+
 			memset(&descriptor, 0, sizeof descriptor);
 			descriptor.dwSize = 108;
-			HRESULT result;
+
 			do {
 				result = g_landruSurface->lpVtbl->Lock(g_landruSurface, NULL, &descriptor, 0, NULL);
 			} while (result == DX_DDERR_WASSTILLDRAWING);
@@ -353,7 +374,9 @@ const DxGuid* FrontendDisplay_LoadDriverGuid(void) {
 // FUNCTION: TIE98 0x49B3E0
 void FrontendDisplay_InitGrayscalePalette(void) {
 	if (!g_grayscalePaletteInitialized) {
-		for (int index = 0; index < 256; ++index) {
+		int index;
+
+		for (index = 0; index < 256; ++index) {
 			g_grayscalePaletteEntries[index].red = (uint8_t)index;
 			g_grayscalePaletteEntries[index].green = (uint8_t)index;
 			g_grayscalePaletteEntries[index].blue = (uint8_t)index;
@@ -365,6 +388,9 @@ void FrontendDisplay_InitGrayscalePalette(void) {
 // FUNCTION: TIE98 0x49B430
 void FrontendDisplay_SetPalette(const uint8_t* rgb6, int first_entry, int entry_count) {
 	Tie98PaletteEntry entries[256];
+	int lock_count;
+	int index;
+
 	while (!g_windowActive) {
 		if (g_quitRequested)
 			break;
@@ -372,10 +398,10 @@ void FrontendDisplay_SetPalette(const uint8_t* rgb6, int first_entry, int entry_
 	}
 	if (g_softwareCursorEnabled)
 		xcursor_Select_Contrast_Colors(rgb6);
-	const int lock_count = FlightSurface_GetLockCount();
-	for (int index = 0; index < lock_count; ++index)
+	lock_count = FlightSurface_GetLockCount();
+	for (index = 0; index < lock_count; ++index)
 		FlightSurface_Unlock();
-	for (int index = first_entry; index < first_entry + entry_count; ++index) {
+	for (index = first_entry; index < first_entry + entry_count; ++index) {
 		entries[index].red = (uint8_t)(rgb6[index * 3] << 2);
 		entries[index].green = (uint8_t)(rgb6[index * 3 + 1] << 2);
 		entries[index].blue = (uint8_t)(rgb6[index * 3 + 2] << 2);
@@ -384,12 +410,15 @@ void FrontendDisplay_SetPalette(const uint8_t* rgb6, int first_entry, int entry_
 	if (g_ddPalette)
 		g_ddPalette->lpVtbl->SetEntries(g_ddPalette, 0, (uint32_t)first_entry, (uint32_t)entry_count,
 										entries);
-	for (int index = 0; index < lock_count; ++index)
+	for (index = 0; index < lock_count; ++index)
 		FlightSurface_Lock();
 }
 
 // FUNCTION: TIE98 0x49B510
 void FrontendDisplay_UpdatePalette(const uint8_t* rgb6, int first_entry, int entry_count) {
+	int lock_count;
+	int index;
+
 	while (!g_windowActive) {
 		if (g_quitRequested)
 			break;
@@ -397,10 +426,10 @@ void FrontendDisplay_UpdatePalette(const uint8_t* rgb6, int first_entry, int ent
 	}
 	if (g_softwareCursorEnabled)
 		xcursor_Select_Contrast_Colors(rgb6);
-	const int lock_count = FlightSurface_GetLockCount();
-	for (int index = 0; index < lock_count; ++index)
+	lock_count = FlightSurface_GetLockCount();
+	for (index = 0; index < lock_count; ++index)
 		FlightSurface_Unlock();
-	for (int index = first_entry; index < first_entry + entry_count; ++index) {
+	for (index = first_entry; index < first_entry + entry_count; ++index) {
 		g_directDrawPaletteEntries[index].red = (uint8_t)(rgb6[index * 3] << 2);
 		g_directDrawPaletteEntries[index].green = (uint8_t)(rgb6[index * 3 + 1] << 2);
 		g_directDrawPaletteEntries[index].blue = (uint8_t)(rgb6[index * 3 + 2] << 2);
@@ -408,7 +437,7 @@ void FrontendDisplay_UpdatePalette(const uint8_t* rgb6, int first_entry, int ent
 	if (g_ddPalette)
 		g_ddPalette->lpVtbl->SetEntries(g_ddPalette, 0, (uint32_t)first_entry, (uint32_t)entry_count,
 										g_directDrawPaletteEntries);
-	for (int index = 0; index < lock_count; ++index)
+	for (index = 0; index < lock_count; ++index)
 		FlightSurface_Lock();
 }
 
@@ -418,6 +447,9 @@ static void Renderer_InitD3DDevice(void) {
 
 	/* PORT: Aeron's DX5 device is not a PowerVR PCX device, so the original
 	 * hardware/file probe has no compatible host device to select. */
+	unsigned int device_index;
+	const Std3DDeviceCaps* available;
+
 	g_powerVrSceneWorkaround = 0;
 	g_renderTextureCacheCursor = -1;
 	std3D_BuildRenderTargetDesc((unsigned int)g_displayWidth, (unsigned int)g_displayHeight,
@@ -430,13 +462,15 @@ static void Renderer_InitD3DDevice(void) {
 	required_caps.bTexturePerspective = 1;
 	required_caps.bHasZBuffer = 1;
 	required_caps.colorModelFlags = 2;
-	const unsigned int device_index = std3D_SelectBestDevice(&required_caps);
-	const Std3DDeviceCaps* available = &g_std3DDevices[device_index].caps;
+	device_index = std3D_SelectBestDevice(&required_caps);
+	available = &g_std3DDevices[device_index].caps;
 	if (available->bHardware && available->bTexturePerspective && available->bHasZBuffer) {
-		std3D_CreateDevice(device_index, 1);
+		HRESULT result;
+
 		DDSCAPS z_buffer_caps = { DDSCAPS_ZBUFFER };
-		HRESULT result = g_lpRenderSurface->lpVtbl->GetAttachedSurface(g_lpRenderSurface, &z_buffer_caps,
-																	   &g_rendererAttachedZBufferSurface);
+		std3D_CreateDevice(device_index, 1);
+		result = g_lpRenderSurface->lpVtbl->GetAttachedSurface(g_lpRenderSurface, &z_buffer_caps,
+															   &g_rendererAttachedZBufferSurface);
 		if (result != DX_DD_OK) {
 			/* PORT: the host logger replaces TIE98's DebugPrintf output. */
 			TieDiagnostics_Log(TIE_LOG_ERROR, "ERROR(%x)! Failed to get HW Zbuffer\n", (unsigned int)result);
@@ -679,7 +713,9 @@ int FrontendDisplay_InitSurfaces(void) {
 		return FrontendDisplay_ReportDirectDrawInitFailure(12);
 
 	if (g_flight16bppBytesPerPixel == 1) {
-		for (int index = 0; index < 256; ++index) {
+		int index;
+
+		for (index = 0; index < 256; ++index) {
 			g_directDrawPaletteEntries[index].red = (uint8_t)index;
 			g_directDrawPaletteEntries[index].green = (uint8_t)index;
 			g_directDrawPaletteEntries[index].blue = (uint8_t)index;
@@ -923,7 +959,9 @@ void FrontendDisplay_SetDisplayMode(uint16_t mode) {
 	}
 
 	if (g_flight16bppBytesPerPixel == 1) {
-		for (int index = 0; index < 256; ++index) {
+		int index;
+
+		for (index = 0; index < 256; ++index) {
 			g_directDrawPaletteEntries[index].red = (uint8_t)index;
 			g_directDrawPaletteEntries[index].green = (uint8_t)index;
 			g_directDrawPaletteEntries[index].blue = (uint8_t)index;
@@ -1001,6 +1039,9 @@ void tie98_display_shutdown(void) {
 
 // FUNCTION: TIE98 0x49CB10
 void FrontendDisplay_ClearSurface(IDirectDrawSurface* surface) {
+	DDBLTFX effects;
+	HRESULT result;
+
 	if (!surface)
 		return;
 	while (!g_windowActive) {
@@ -1008,10 +1049,10 @@ void FrontendDisplay_ClearSurface(IDirectDrawSurface* surface) {
 			break;
 		Flight_PumpWindowMessages();
 	}
-	DDBLTFX effects;
+
 	effects.dwSize = 100;
 	effects.dwFillColor = 0;
-	HRESULT result;
+
 	do {
 		result = surface->lpVtbl->Blt(surface, NULL, NULL, NULL, DDBLT_COLORFILL, &effects);
 		if (result == DX_DDERR_SURFACELOST) {
@@ -1103,7 +1144,9 @@ HRESULT FrontendDisplay_PresentFrame(void) {
 			g_lastVBlankTimeMs = TieSimClock_NowMs();
 			if (g_flightDirectDraw->lpVtbl->GetMonitorFrequency(g_flightDirectDraw,
 																&g_monitorRefreshTimingScale) != DX_DD_OK) {
-				for (int blank = 0; blank < 100; ++blank) {
+				int blank;
+
+				for (blank = 0; blank < 100; ++blank) {
 					while (in_vertical_blank && g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(
 													g_flightDirectDraw, &in_vertical_blank) == DX_DD_OK) {
 					}
@@ -1182,7 +1225,10 @@ HRESULT FrontendDisplay_BlitOffscreenToRenderSurface(void) {
 	destination.top = (g_displayHeight - g_surfaceHeight) >> 1;
 	destination.right = destination.left + g_surfaceWidth;
 	destination.bottom = destination.top + g_surfaceHeight;
-	source = (Tie98Rect) { 0, 0, g_surfaceWidth, g_surfaceHeight };
+	source.left = 0;
+	source.top = 0;
+	source.right = g_surfaceWidth;
+	source.bottom = g_surfaceHeight;
 	do {
 		result = g_lpRenderSurface->lpVtbl->Blt(g_lpRenderSurface, &destination, g_flightOffscreenSurface,
 												&source, DDBLT_ROP, &effects);
@@ -1197,6 +1243,11 @@ HRESULT FrontendDisplay_BlitOffscreenToRenderSurface(void) {
 
 // FUNCTION: TIE98 0x49BE50
 HRESULT DDRAW_Present_Landru_Frame(void) {
+	Tie98Rect source, destination;
+
+	DDBLTFX effects;
+	HRESULT result;
+
 	while (!g_windowActive) {
 		if (g_quitRequested)
 			break;
@@ -1212,10 +1263,14 @@ HRESULT DDRAW_Present_Landru_Frame(void) {
 			return FrontendDisplay_RestorePrimarySurface();
 		}
 		if (g_vgaCompatBorderClearFrames) {
+			uint8_t* upper;
+			uint8_t* lower;
+			int row;
+
 			--g_vgaCompatBorderClearFrames;
-			uint8_t* upper = descriptor.lpSurface;
-			uint8_t* lower = (uint8_t*)descriptor.lpSurface + 440 * g_surfacePitch;
-			for (int row = 0; row < 40; ++row) {
+			upper = descriptor.lpSurface;
+			lower = (uint8_t*)descriptor.lpSurface + 440 * g_surfacePitch;
+			for (row = 0; row < 40; ++row) {
 				memset(upper, 0, 640);
 				memset(lower, 0, 640);
 				upper += g_surfacePitch;
@@ -1227,17 +1282,18 @@ HRESULT DDRAW_Present_Landru_Frame(void) {
 		return g_lpRenderSurface->lpVtbl->Unlock(g_lpRenderSurface, descriptor.lpSurface);
 	}
 
-	DDBLTFX effects;
-	Tie98Rect source = { 0, 0, g_surfaceWidth, g_surfaceHeight };
-	Tie98Rect destination = {
-		(g_displayWidth - g_surfaceWidth) >> 1,
-		(g_displayHeight - g_surfaceHeight) >> 1,
-		(g_displayWidth + g_surfaceWidth) >> 1,
-		(g_displayHeight + g_surfaceHeight) >> 1,
-	};
+	source.left = 0;
+	source.top = 0;
+	source.right = g_surfaceWidth;
+	source.bottom = g_surfaceHeight;
+	destination.left = (g_displayWidth - g_surfaceWidth) >> 1;
+	destination.top = (g_displayHeight - g_surfaceHeight) >> 1;
+	destination.right = (g_displayWidth + g_surfaceWidth) >> 1;
+	destination.bottom = (g_displayHeight + g_surfaceHeight) >> 1;
+
 	effects.dwSize = 100;
 	effects.dwROP = DDROP_SRCCOPY;
-	HRESULT result;
+
 	do {
 		result = g_lpRenderSurface->lpVtbl->Blt(g_lpRenderSurface, &destination, g_landruSurface, &source,
 												DDBLT_ROP, &effects);

@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct TieFlightModelApi TieFlightModelApi;
 
 int modelbounds_getmaxextent(uint16_t model_type);
@@ -16,5 +20,9 @@ int modelbounds_getmaxz(uint16_t model_type);
 int modelbounds_getsizex(uint16_t model_type);
 int modelbounds_getsizey(uint16_t model_type);
 int modelbounds_getsizez(uint16_t model_type);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

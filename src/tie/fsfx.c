@@ -1,14 +1,10 @@
+#include "tie/fsfx.h"
 #include "tie_runtime/audio/imuse_session.h"
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 #include "tie/collide.h"
 #include "tie/create.h"
 #include "tie/fediskio.h" /* resourcedir */
 #include "tie/frontend_sound_tie98.h"
-#include "tie/fsfx.h"
 #include "tie/math2.h"
 #include "tie/mission.h"
 #include "tie/score.h"
@@ -26,8 +22,13 @@
 #include "tie_runtime/runtime/inflight_state.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
+
 #include <imuse/hilevel.h>
 #include <imuse/lolevel.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 /* --------------------------------------------------------------------------
  * FSFX-owned module globals.
@@ -118,10 +119,12 @@ const char* sfxgroupnameptrs[5] = {
 
 /* iMUSE parameter codes (see imuse/lolevel). Exposed here to keep the
  * FSFX call sites readable. */
-#define IM_PARAM_IS_PLAYING 0x100 /* ImGetParam only */
-#define IM_PARAM_PRIORITY 0x500
-#define IM_PARAM_VOLUME 0x600
-#define IM_PARAM_PAN 0x700
+enum {
+	IM_PARAM_IS_PLAYING = 0x100, /* ImGetParam only */
+	IM_PARAM_PRIORITY = 0x500,
+	IM_PARAM_VOLUME = 0x600,
+	IM_PARAM_PAN = 0x700,
+};
 
 /* Cast an integer SFX/voice index to the pointer-width soundId the
  * engine expects. getSoundPtrFunc indexes soundhandles[] to resolve. */
@@ -135,11 +138,11 @@ typedef struct FsfxSoundLayout {
 } FsfxSoundLayout;
 
 static FsfxSoundLayout fsfx_sound_layout(void) {
-	if (TieProfile_Flight()->version == TIE_GAME_VERSION_TIE98)
-		return (FsfxSoundLayout) { FSFX_TIE98_SOUND_TABLE_COUNT, FSFX_TIE98_MISSION_VOICE_BASE,
-								   FSFX_MISSION_VOICE_COUNT, 1 };
-	return (FsfxSoundLayout) { FSFX_TIE95_SOUND_TABLE_COUNT, FSFX_TIE95_MISSION_VOICE_BASE,
-							   FSFX_MISSION_VOICE_COUNT, 0 };
+	static const FsfxSoundLayout tie95 = { FSFX_TIE95_SOUND_TABLE_COUNT, FSFX_TIE95_MISSION_VOICE_BASE,
+										   FSFX_MISSION_VOICE_COUNT, 0 };
+	static const FsfxSoundLayout tie98 = { FSFX_TIE98_SOUND_TABLE_COUNT, FSFX_TIE98_MISSION_VOICE_BASE,
+										   FSFX_MISSION_VOICE_COUNT, 1 };
+	return TieProfile_Flight()->version == TIE_GAME_VERSION_TIE98 ? tie98 : tie95;
 }
 
 uint16_t fsfx_mission_voice_id(uint16_t logical_index) {
@@ -157,32 +160,42 @@ const char* fsfx_sound_name(uint16_t sound_id) {
 
 int fsfx_find_sound_id(const char* name) {
 	FsfxSoundLayout layout = fsfx_sound_layout();
+	uint16_t i;
+
 	if (!name)
 		return -1;
-	for (uint16_t i = 4; i < layout.table_count; ++i)
+	for (i = 4; i < layout.table_count; ++i)
 		if (soundnames[i][0] && strcmp(soundnames[i], name) == 0)
 			return i;
 	return -1;
 }
 
 static void store_sound_name(uint16_t sound_id, const char* bank_path, const uint8_t record_name[8]) {
+	const char* base;
+	const char* p;
+	size_t bank_len;
+	int i;
+
+	char bank[12];
+	char record[9];
+
 	if (sound_id >= FSFX_NUM_SOUND_HANDLES)
 		return;
-	const char* base = bank_path;
-	for (const char* p = bank_path; *p; ++p)
+	base = bank_path;
+	for (p = bank_path; *p; ++p)
 		if (*p == '/' || *p == '\\')
 			base = p + 1;
-	char bank[12];
-	size_t bank_len = 0;
+
+	bank_len = 0;
 	while (base[bank_len] && base[bank_len] != '.' && bank_len + 1 < sizeof bank) {
 		bank[bank_len] = base[bank_len];
 		++bank_len;
 	}
 	bank[bank_len] = '\0';
-	char record[9];
+
 	memcpy(record, record_name, 8);
 	record[8] = '\0';
-	for (int i = 7; i >= 0 && (record[i] == ' ' || record[i] == '\0'); --i)
+	for (i = 7; i >= 0 && (record[i] == ' ' || record[i] == '\0'); --i)
 		record[i] = '\0';
 	snprintf(soundnames[sound_id], sizeof soundnames[sound_id], "%s:%s", bank, record);
 }
@@ -204,11 +217,24 @@ static uint16_t player_engine_sound_id(int16_t species) {
 // FUNCTION: TIE98 0x422760
 void FSFX_UpdatePlayerEngineSound(void) {
 	const TieFlightProfile* profile = TieProfile_Flight();
+	uint16_t sound_id;
+	int16_t species;
+	CraftData* craft;
+	int16_t quotient;
+	uint32_t q16;
+	uint32_t base_frequency;
+	int frequency;
+	int original_volume;
+	int volume;
+	const char* name;
+
+	FlightObject* player;
+
 	if (profile->version != TIE_GAME_VERSION_TIE98 || !sfxenabled || !g_playerEngineSoundUpdateEnabled)
 		return;
 
-	uint16_t sound_id = UINT16_MAX;
-	int16_t species = -1;
+	sound_id = UINT16_MAX;
+	species = -1;
 	if (pstate.object_idx != UINT16_MAX && !mapflag && pstate.object_idx < NUM_OBJECTS) {
 		FlightObject* player = &objects[pstate.object_idx];
 		species = player->ship_idx;
@@ -223,21 +249,21 @@ void FSFX_UpdatePlayerEngineSound(void) {
 	}
 
 	g_engineSoundPreviousPlayerSpecies = species;
-	FlightObject* player = &objects[pstate.object_idx];
-	CraftData* craft = player->craft_ptr;
+	player = &objects[pstate.object_idx];
+	craft = player->craft_ptr;
 	if (!craft || pstate.hyperin_state == 1 || !(craft->status_flags & 0x0040u)) {
 		if (LOLEVEL_ImGetParam(sound_id, 0x100) != 0)
 			(void)LOLEVEL_ImStopSound(sound_id);
 		return;
 	}
 
-	int16_t quotient = math2_divide(craft->throttle_speed, UINT16_MAX);
-	uint32_t q16 = ((uint32_t)(uint16_t)quotient << 16) | (uint16_t)math2_remainder;
-	uint32_t base_frequency = sound_id == FSFX_PLAYER_ENGINE_TIE_ID ? 5500u : 11000u;
-	int frequency = (int)(base_frequency + 55u * (q16 / 655u));
-	int original_volume = 48 * inflight_sound_vol / 15;
-	int volume = original_volume * profile->player_engine_sound_volume_percent / 100;
-	const char* name = fsfx_sound_name(sound_id);
+	quotient = math2_divide(craft->throttle_speed, UINT16_MAX);
+	q16 = ((uint32_t)(uint16_t)quotient << 16) | (uint16_t)math2_remainder;
+	base_frequency = sound_id == FSFX_PLAYER_ENGINE_TIE_ID ? 5500u : 11000u;
+	frequency = (int)(base_frequency + 55u * (q16 / 655u));
+	original_volume = 48 * inflight_sound_vol / 15;
+	volume = original_volume * profile->player_engine_sound_volume_percent / 100;
+	name = fsfx_sound_name(sound_id);
 	if (!name)
 		return;
 
@@ -265,6 +291,8 @@ void fsfx_allocsfxbuffer(void) {
 // FUNCTION: TIE95 0x24744
 void fsfx_freesfx(void) {
 	FsfxSoundLayout layout = fsfx_sound_layout();
+	int i;
+
 	if (layout.has_player_engine_loops) {
 		const char* tie_name = fsfx_sound_name(FSFX_PLAYER_ENGINE_TIE_ID);
 		const char* rebel_name = fsfx_sound_name(FSFX_PLAYER_ENGINE_REBEL_ID);
@@ -273,7 +301,7 @@ void fsfx_freesfx(void) {
 		while (rebel_name && FrontendSound_CountPlaying(rebel_name))
 			FrontendSound_StopSoundByName(rebel_name);
 	}
-	for (int i = 4; i < layout.table_count; i++) {
+	for (i = 4; i < layout.table_count; i++) {
 		if (soundhandles[i]) {
 			free(soundhandles[i]);
 			soundhandles[i] = NULL;
@@ -287,6 +315,16 @@ void fsfx_freesfx(void) {
  * capping on the main file). Returns the number of handles allocated. */
 static int load_sound_bank(const char* filename, int start_idx, int end_idx, int max_records) {
 	TieFile* fp = TieStorage_Open(TIE_FILE_ROOT_FLIGHT_ASSET, filename, "rb");
+	uint32_t dir_size_dw;
+	uint16_t dir_size;
+	uint16_t num_records;
+	uint8_t* dir_buf;
+	int handle_idx;
+	long file_skip;
+	uint16_t i;
+
+	uint8_t header[16];
+
 	if (!fp) {
 		TieDiagnostics_Log(TIE_LOG_WARN, "fsfx: fopen(\"%s\") failed (SFX bank not loaded)\n", filename);
 		return 0;
@@ -294,22 +332,22 @@ static int load_sound_bank(const char* filename, int start_idx, int end_idx, int
 
 	/* 16-byte file header -- only the trailing dword 'dir_size' is
 	 * consulted; bytes 0..11 are unused format/magic. */
-	uint8_t header[16];
+
 	if (TieStorage_Read(header, 1, 16, fp) != 16) {
 		TieStorage_Close(fp);
 		return 0;
 	}
-	uint32_t dir_size_dw;
+
 	memcpy(&dir_size_dw, &header[12], 4);
-	uint16_t dir_size = (uint16_t)dir_size_dw;
-	uint16_t num_records = (uint16_t)(dir_size >> 4);
+	dir_size = (uint16_t)dir_size_dw;
+	num_records = (uint16_t)(dir_size >> 4);
 	if (max_records > 0 && num_records > max_records)
 		num_records = (uint16_t)max_records;
 	if (num_records > (uint16_t)(end_idx - start_idx))
 		num_records = (uint16_t)(end_idx - start_idx);
 
 	/* Read the directory block (num_records * 16 bytes of tag/name/size). */
-	uint8_t* dir_buf = (uint8_t*)malloc(dir_size ? dir_size : 16);
+	dir_buf = (uint8_t*)malloc(dir_size ? dir_size : 16);
 	if (!dir_buf) {
 		TieStorage_Close(fp);
 		return 0;
@@ -320,9 +358,9 @@ static int load_sound_bank(const char* filename, int start_idx, int end_idx, int
 		return 0;
 	}
 
-	int handle_idx = start_idx;
-	long file_skip = 0;
-	for (uint16_t i = 0; i < num_records; i++) {
+	handle_idx = start_idx;
+	file_skip = 0;
+	for (i = 0; i < num_records; i++) {
 		uint16_t rec_off = (uint16_t)(i * 16);
 
 		/* Each record's payload in the data section is preceded by a
@@ -333,18 +371,22 @@ static int load_sound_bank(const char* filename, int start_idx, int end_idx, int
 		 * land in the middle of the previous file's PCM data. Symptom
 		 * was iMUSE rejecting laser SFX with bad-magic on bytes that
 		 * happened to be VOC sample values (~0x80). */
+		uint32_t tag;
+		uint16_t sample_size;
+		uint32_t sample_size_dw;
+		void* handle;
+
 		file_skip += 16;
 
 		/* Directory records pack [tag(BE u32) | name(8) | size(u32)].
 		 * Byte-swap the tag in-place (binary parity). */
-		uint32_t tag;
+
 		memcpy(&tag, &dir_buf[rec_off], 4);
 		tag = fsfx_swapdword(tag);
 		memcpy(&dir_buf[rec_off], &tag, 4);
 
-		uint16_t sample_size;
 		memcpy(&sample_size, &dir_buf[rec_off + 12], 2);
-		uint32_t sample_size_dw;
+
 		memcpy(&sample_size_dw, &dir_buf[rec_off + 12], 4);
 
 		/* Allocate the slot (matches XMEMHDL_Alloc_Handle(size, 0)).
@@ -353,7 +395,7 @@ static int load_sound_bank(const char* filename, int start_idx, int end_idx, int
 		 * skip semantics even though we keep the allocated buffer
 		 * uninitialised -- this preserves the file cursor for the
 		 * next record. */
-		void* handle = malloc(sample_size ? sample_size : 1);
+		handle = malloc(sample_size ? sample_size : 1);
 		soundhandles[handle_idx] = handle;
 		if (handle) {
 			store_sound_name((uint16_t)handle_idx, filename, &dir_buf[rec_off + 4]);
@@ -388,18 +430,22 @@ int16_t fsfx_loadsfx(const char* filename) {
 
 	/* The port owns the loaded buffers. Stop name-based loops before
 	 * replacing the bank so no active track retains a freed VOC pointer. */
+	int main_cap;
+
+	char doe_path[32];
+
 	fsfx_freesfx();
 
 	/* Main SFX + voice file (SFX1.GMD / SFX2.GMD / ...). Capped at
 	 * 47 records when voice is disabled, so the voice slots [51..]
 	 * are never populated. */
-	int main_cap = voiceenabled ? 0 : 47;
+	main_cap = voiceenabled ? 0 : 47;
 	total += load_sound_bank(filename, 4, 107, main_cap);
 
 	/* SFXDOE.LFD adjunct -- fills [107..108]. Built via resourcedir
 	 * for platform-correct path separator (caller's `filename` arg
 	 * already follows the same convention). */
-	char doe_path[32];
+
 	snprintf(doe_path, sizeof(doe_path), "%sSFXDOE.LFD", resourcedir);
 	total += load_sound_bank(doe_path, 107, layout.mission_voice_base, 0);
 
@@ -460,7 +506,9 @@ static int build_voice_basename(char* out) {
 /* Clear and free the selected edition's owned mission-voice range. */
 static void clear_voice_slots(void) {
 	FsfxSoundLayout layout = fsfx_sound_layout();
-	for (int i = layout.mission_voice_base; i < layout.mission_voice_base + layout.mission_voice_count; i++) {
+	int i;
+
+	for (i = layout.mission_voice_base; i < layout.mission_voice_base + layout.mission_voice_count; i++) {
 		if (soundhandles[i]) {
 			free(soundhandles[i]);
 			soundhandles[i] = NULL;
@@ -490,6 +538,18 @@ int16_t fsfx_loadvoicelfd(void) {
 	char base[8];
 
 	/* Drop any voice cues left over from the previous mission. */
+	int n;
+	TieFile* fp;
+	uint32_t dir_size_dw;
+	uint32_t dir_size;
+	uint8_t* dir_buf;
+	uint32_t entry_idx;
+	int16_t loaded;
+	FsfxSoundLayout layout;
+	uint16_t logical_index;
+
+	uint8_t hdr[16];
+
 	clear_voice_slots();
 
 	/* Training: no in-flight voice. train_craft_type is set non-zero
@@ -506,14 +566,14 @@ int16_t fsfx_loadvoicelfd(void) {
 	 * directory's CD layout, where the asset folders ship as
 	 * VOICE/<NAME>/<NAME>.LFD (case preserved). */
 	build_voice_basename(base);
-	int n = (int)strlen(base);
+	n = (int)strlen(base);
 	memcpy(path, "VOICE/", 6);
 	memcpy(path + 6, base, (size_t)n);
 	path[6 + n] = '/';
 	memcpy(path + 7 + n, base, (size_t)n);
 	memcpy(path + 7 + 2 * n, ".LFD", 5); /* includes NUL */
 
-	TieFile* fp = TieStorage_Open(TIE_FILE_ROOT_FLIGHT_ASSET, path, "rb");
+	fp = TieStorage_Open(TIE_FILE_ROOT_FLIGHT_ASSET, path, "rb");
 	if (!fp) {
 		TieDiagnostics_Log(TIE_LOG_WARN, "fsfx: fopen(\"%s\") failed (voice bank not loaded)\n", path);
 		return 0;
@@ -521,20 +581,20 @@ int16_t fsfx_loadvoicelfd(void) {
 
 	/* LFD file header: 16 bytes; only the trailing dword 'dir_size'
 	 * (bytes 12..15) is consulted. Bytes 0..11 are format/magic. */
-	uint8_t hdr[16];
+
 	if (TieStorage_Read(hdr, 1, 16, fp) != 16) {
 		TieStorage_Close(fp);
 		return 0;
 	}
-	uint32_t dir_size_dw;
+
 	memcpy(&dir_size_dw, &hdr[12], 4);
-	uint32_t dir_size = dir_size_dw;
+	dir_size = dir_size_dw;
 	if (dir_size == 0 || dir_size > 0x4000u) {
 		TieStorage_Close(fp);
 		return 0;
 	}
 
-	uint8_t* dir_buf = (uint8_t*)malloc(dir_size);
+	dir_buf = (uint8_t*)malloc(dir_size);
 	if (!dir_buf) {
 		TieStorage_Close(fp);
 		return 0;
@@ -550,22 +610,27 @@ int16_t fsfx_loadvoicelfd(void) {
 	 * mission so directory order matches the active-slot sequence
 	 * (this is what the retail loader relies on -- entry_idx only
 	 * advances when a slot is loaded). */
-	uint32_t entry_idx = 0;
-	int16_t loaded = 0;
-	FsfxSoundLayout layout = fsfx_sound_layout();
-	for (uint16_t logical_index = 0; logical_index < layout.mission_voice_count; logical_index++) {
+	entry_idx = 0;
+	loaded = 0;
+	layout = fsfx_sound_layout();
+	for (logical_index = 0; logical_index < layout.mission_voice_count; logical_index++) {
 		uint16_t slot = (uint16_t)(layout.mission_voice_base + logical_index);
+		uint32_t entry_off;
+		uint32_t sample_size;
+
+		uint8_t sub[16];
+
 		if (!voice_slot_active(logical_index)) {
 			soundhandles[slot] = NULL;
 			continue;
 		}
 
-		uint32_t entry_off = entry_idx * 16u;
+		entry_off = entry_idx * 16u;
 		if (entry_off + 16u > dir_size) {
 			/* Truncated directory; drop remaining slots. */
 			break;
 		}
-		uint32_t sample_size;
+
 		memcpy(&sample_size, &dir_buf[entry_off + 12], 4);
 
 		soundhandles[slot] = malloc(sample_size ? sample_size : 1);
@@ -574,7 +639,7 @@ int16_t fsfx_loadvoicelfd(void) {
 
 		/* 16-byte sub-header before each payload (re-uses the file
 		 * header scratch in retail, ignored content). */
-		uint8_t sub[16];
+
 		if (TieStorage_Read(sub, 1, 16, fp) != 16) {
 			free(soundhandles[slot]);
 			soundhandles[slot] = NULL;
@@ -605,12 +670,20 @@ int16_t fsfx_loadvoicelfd(void) {
 // FUNCTION: TIE95 0x251B0
 int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id) {
 	/* 0xFFFF = "local / player" sound, max volume. */
+	uint16_t max_dist;
+	uint16_t max_vol;
+	int32_t dx, dy, dz;
+	uint32_t dist;
+	int16_t base;
+	int16_t span;
+	uint32_t denom;
+	int32_t interp;
+	int16_t vol;
+
 	if (src_obj == 0xFFFF) {
 		return (int16_t)((sound_id < 0x33u) ? fullvolume[sound_id] : 112);
 	}
 
-	uint16_t max_dist;
-	uint16_t max_vol;
 	if (sound_id < 0x33u) {
 		max_dist = sounddist[sound_id];
 		max_vol = fullvolume[sound_id];
@@ -619,7 +692,6 @@ int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id) {
 		max_vol = 112;
 	}
 
-	int32_t dx, dy, dz;
 	if (src_obj >= OBJ_REF_STATIC_BASE) {
 		/* Non-FlightObject refs (static objects, waypoints) resolve via
 		 * create_getworldposition -> worldlocx/y/z. */
@@ -636,7 +708,7 @@ int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id) {
 		dz = objects[src_obj].world_z_prev - camera.z;
 	}
 
-	uint32_t dist = (uint32_t)collide_roughdistance3d(dx, dy, dz);
+	dist = (uint32_t)collide_roughdistance3d(dx, dy, dz);
 
 	/* 4-tier falloff.
 	 *   dist >= max_dist*4  -> 0        (out of range)
@@ -650,19 +722,19 @@ int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id) {
 	if (dist >= max_dist)
 		return (int16_t)((int16_t)max_vol >> 2);
 
-	int16_t base = (int16_t)max_vol >> 2;
-	int16_t span = (int16_t)(max_vol - base);
+	base = (int16_t)max_vol >> 2;
+	span = (int16_t)(max_vol - base);
 	/* Denominator is (max_dist - max_dist/32) -- the 31/32 softening
 	 * present in the binary. max_dist is uint16_t so integer promotion
 	 * takes it to a non-negative int; `max_dist >> 5` is safe. */
-	uint32_t denom = max_dist - (max_dist >> 5);
+	denom = max_dist - (max_dist >> 5);
 	/* Cast the subtract to int32_t so the divide is signed (otherwise
 	 * the uint32_t denominator would drag everything into unsigned
 	 * arithmetic). The `(uint16_t)interp` truncation on the line below
 	 * replicates the binary's `(unsigned __int16)` narrowing before the
 	 * result is added back into base. */
-	int32_t interp = span * (int32_t)(max_dist - dist) / (int32_t)denom;
-	int16_t vol = (int16_t)(base + (uint16_t)interp);
+	interp = span * (int32_t)(max_dist - dist) / (int32_t)denom;
+	vol = (int16_t)(base + (uint16_t)interp);
 	if ((uint16_t)vol > 0x7Fu)
 		vol = 127;
 	return vol;
@@ -670,34 +742,44 @@ int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id) {
 
 // FUNCTION: TIE95 0x2530C
 int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr) {
+	int32_t dx;
+	int32_t dy;
+	int32_t dz;
+	int32_t eye_x;
+	int16_t eye_x_red;
+	int32_t eye_z;
+	int16_t eye_z_red;
+	int16_t pan_angle;
+	int32_t pan_out;
+
 	if (src_obj == 0xFFFF)
 		return 64;
 
-	int32_t dx = objects[src_obj].world_x_prev - camera.x;
-	int32_t dy = objects[src_obj].world_y_prev - camera.y;
-	int32_t dz = objects[src_obj].world_z_prev - camera.z;
+	dx = objects[src_obj].world_x_prev - camera.x;
+	dy = objects[src_obj].world_y_prev - camera.y;
+	dz = objects[src_obj].world_z_prev - camera.z;
 
 	/* Rotate into eye space. The matrix rows are stored as 32-bit
 	 * Q16.16 values; the binary narrows dx/dy/dz to int16 before
 	 * multiplying, which clamps large world deltas to the near
 	 * quadrant. Result ends up in a 32-bit space with ~30 bits of
 	 * usable range. */
-	int32_t eye_x = worldeyeC1 * (int16_t)dz + worldeyeB1 * (int16_t)dy + worldeyeA1 * (int16_t)dx;
+	eye_x = worldeyeC1 * (int16_t)dz + worldeyeB1 * (int16_t)dy + worldeyeA1 * (int16_t)dx;
 	if (eye_x >= 0x40000000)
 		eye_x = 1073676288;
 	if (eye_x <= -0x40000000)
 		eye_x = -1073676288;
-	int16_t eye_x_red = (int16_t)(eye_x >> 15);
+	eye_x_red = (int16_t)(eye_x >> 15);
 
-	int32_t eye_z = worldeyeC3 * (int16_t)dz + worldeyeB3 * (int16_t)dy + worldeyeA3 * (int16_t)dx;
+	eye_z = worldeyeC3 * (int16_t)dz + worldeyeB3 * (int16_t)dy + worldeyeA3 * (int16_t)dx;
 	if (eye_z >= 0x40000000)
 		eye_z = 1073676288;
 	if (eye_z <= -0x40000000)
 		eye_z = -1073676288;
-	int16_t eye_z_red = (int16_t)(eye_z >> 15);
+	eye_z_red = (int16_t)(eye_z >> 15);
 
-	int16_t pan_angle = trig2_arctan((int32_t)eye_x_red, (int32_t)eye_z_red);
-	int32_t pan_out = pan_angle;
+	pan_angle = trig2_arctan((int32_t)eye_x_red, (int32_t)eye_z_red);
+	pan_out = pan_angle;
 
 	/* Back-hemisphere: |pan_angle| >= 0x4000 ( >= 90 deg). Derive a
 	 * 2D "distance from directly behind" attenuation factor and
@@ -706,14 +788,25 @@ int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr) {
 	 * flipped. */
 	if (pan_angle >= 0x4000 || pan_angle <= -16384) {
 		int32_t eye_y = worldeyeC2 * (int16_t)dz + worldeyeB2 * (int16_t)dy + worldeyeA2 * (int16_t)dx;
+		int16_t vert_angle;
+		int32_t vert_dist_180;
+		int32_t pan_dist_180;
+		int16_t a;
+		int16_t b;
+		int16_t prod;
+		int16_t factor;
+		int16_t atten;
+		int16_t hi;
+		int16_t scaled;
+
 		if (eye_y >= 0x40000000)
 			eye_y = 1073676288;
 		if (eye_y <= -0x40000000)
 			eye_y = -1073676288;
-		int16_t vert_angle = trig2_arctan((int32_t)(eye_y >> 15), (int32_t)eye_z_red);
+		vert_angle = trig2_arctan((int32_t)(eye_y >> 15), (int32_t)eye_z_red);
 
-		int32_t vert_dist_180 = 0x8000 - (int32_t)vert_angle;
-		int32_t pan_dist_180 = 0x8000 - pan_out;
+		vert_dist_180 = 0x8000 - (int32_t)vert_angle;
+		pan_dist_180 = 0x8000 - pan_out;
 		pan_out = (uint16_t)(0x8000 - pan_out); /* mirror in LOWORD space */
 		if (vert_dist_180 & 0x8000)
 			vert_dist_180 = -vert_dist_180;
@@ -721,18 +814,18 @@ int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr) {
 			pan_dist_180 = -pan_dist_180;
 
 		/* a,b each in [-64, 64] after the >>8. */
-		int16_t a = (int16_t)(((int16_t)(0x4000 - (int16_t)vert_dist_180)) >> 8);
-		int16_t b = (int16_t)(((int16_t)(0x4000 - (int16_t)pan_dist_180)) >> 8);
-		int16_t prod = (int16_t)((int32_t)a * (int32_t)b);
+		a = (int16_t)(((int16_t)(0x4000 - (int16_t)vert_dist_180)) >> 8);
+		b = (int16_t)(((int16_t)(0x4000 - (int16_t)pan_dist_180)) >> 8);
+		prod = (int16_t)((int32_t)a * (int32_t)b);
 
 		/* Watcom emits a toward-zero division by 64 / 128. Match it
 		 * exactly: `prod - (prod >> 15 << N)` adds 2^N back when prod
 		 * is negative so the arithmetic right shift rounds toward 0. */
-		int16_t factor = (int16_t)((prod - (int16_t)((prod >> 15) << 6)) >> 6);
-		int16_t atten = (int16_t)((int32_t)(*volume_ptr) * (int32_t)factor);
-		int16_t hi = (int16_t)(((uint32_t)atten) >> 16);
+		factor = (int16_t)((prod - (int16_t)((prod >> 15) << 6)) >> 6);
+		atten = (int16_t)((int32_t)(*volume_ptr) * (int32_t)factor);
+		hi = (int16_t)(((uint32_t)atten) >> 16);
 		(void)hi;
-		int16_t scaled = (int16_t)((atten - (int16_t)((atten >> 15) << 7)) >> 7);
+		scaled = (int16_t)((atten - (int16_t)((atten >> 15) << 7)) >> 7);
 		*volume_ptr = (int16_t)(*volume_ptr - scaled);
 	}
 
@@ -750,6 +843,10 @@ int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr) {
 
 // FUNCTION: TIE95 0x24F5C
 int8_t fsfx_triggersfx(uint16_t sound_id, uint16_t src_obj) {
+	int16_t vol_buf;
+	int32_t pan;
+	uint16_t priority;
+
 	if (!sfxenabled)
 		return 0;
 	if (!soundhandles[sound_id])
@@ -757,14 +854,14 @@ int8_t fsfx_triggersfx(uint16_t sound_id, uint16_t src_obj) {
 	if (!inflight_sound_vol)
 		return 0;
 
-	int16_t vol_buf = fsfx_calcvolume(src_obj, sound_id);
+	vol_buf = fsfx_calcvolume(src_obj, sound_id);
 	if (!vol_buf)
 		return 0;
 
 	/* calcpan may reduce vol_buf further for back-hemisphere sounds. */
-	int32_t pan = fsfx_calcpan(src_obj, &vol_buf);
+	pan = fsfx_calcpan(src_obj, &vol_buf);
 
-	uint16_t priority = ((uint16_t)vol_buf < 0x7Eu) ? (uint16_t)vol_buf : 125;
+	priority = ((uint16_t)vol_buf < 0x7Eu) ? (uint16_t)vol_buf : 125;
 
 	/* Local-sound bump: sfx emitted by the player's craft (or a
 	 * child object that maps back to it via self_idx) wins the
@@ -792,13 +889,15 @@ int8_t fsfx_triggersfx(uint16_t sound_id, uint16_t src_obj) {
 
 // FUNCTION: TIE95 0x25108
 int8_t fsfx_triggerlasersfx(uint16_t projectile_obj) {
+	uint8_t weapon_species;
+	uint16_t sfx_id;
+
 	if (!sfxenabled)
 		return 0;
 	if (!inflight_sound_vol)
 		return 0;
 
-	uint8_t weapon_species = objects[projectile_obj].ship_idx;
-	uint16_t sfx_id;
+	weapon_species = objects[projectile_obj].ship_idx;
 
 	/* Laser / missile weapon-species mapping (ship_idx 0x89..0x9A). */
 	switch (weapon_species) {
@@ -871,21 +970,24 @@ int32_t fsfx_triggergunsightsfx(int16_t mode) {
 
 // FUNCTION: TIE95 0x25648
 int8_t fsfx_triggerbeamsfx(int32_t firing) {
+	uint16_t id;
+	int was_playing;
+
 	if (!sfxenabled || !inflight_sound_vol)
 		return (int8_t)firing;
 
 	if (!(uint16_t)firing) {
 		/* Release: stop whichever beam channel is active. */
+		int playing;
+
 		if (imuse_get_param(im, sfx_id(38), IM_PARAM_IS_PLAYING))
 			imuse_stop_sound(im, sfx_id(38));
-		int playing = imuse_get_param(im, sfx_id(37), IM_PARAM_IS_PLAYING);
+		playing = imuse_get_param(im, sfx_id(37), IM_PARAM_IS_PLAYING);
 		if (playing)
 			playing = imuse_stop_sound(im, sfx_id(37));
 		return (int8_t)playing;
 	}
 
-	uint16_t id;
-	int was_playing;
 	if (bluetarget == 0xFFFF) {
 		/* No locked target -- use the free-fire beam clip. */
 		if (imuse_get_param(im, sfx_id(38), IM_PARAM_IS_PLAYING))
@@ -938,15 +1040,19 @@ int8_t fsfx_triggervoicesfx(uint16_t voice_id) {
 
 // FUNCTION: TIE95 0x25824
 void fsfx_checkblastqueue(void) {
+	uint16_t next_voice;
+	uint8_t new_count;
+	uint8_t i;
+
 	if (!blastflag || !blastcount)
 		return;
 	if (currentdigital && imuse_get_param(im, sfx_id(currentdigital), IM_PARAM_IS_PLAYING))
 		return;
 
 	/* Dequeue head. */
-	uint16_t next_voice = blastqueue[0];
-	uint8_t new_count = (uint8_t)(blastcount - 1);
-	for (uint8_t i = 0; i < new_count; i++)
+	next_voice = blastqueue[0];
+	new_count = (uint8_t)(blastcount - 1);
+	for (i = 0; i < new_count; i++)
 		blastqueue[i] = blastqueue[i + 1];
 	blastcount = new_count;
 
@@ -966,10 +1072,17 @@ void fsfx_checkblastqueue(void) {
 int16_t fsfx_checktieflyby(void) {
 	uint16_t i;
 	for (i = 0; i < NUM_CRAFTS; i++) {
+		CraftData* craft;
+		uint16_t species;
+		uint16_t flyby_sound;
+		int32_t curr_dist;
+		int32_t prev_dist;
+		int32_t threshold;
+
 		if (i == pstate.object_idx)
 			continue;
 
-		CraftData* craft = objects[i].craft_ptr;
+		craft = objects[i].craft_ptr;
 		if (!craft)
 			continue;
 		if (craft->flight_flag)
@@ -979,8 +1092,8 @@ int16_t fsfx_checktieflyby(void) {
 		if (!objects[i].current_speed)
 			continue; /* not moving */
 
-		uint16_t species = objects[i].ship_idx;
-		uint16_t flyby_sound = 0xFFFF;
+		species = objects[i].ship_idx;
+		flyby_sound = 0xFFFF;
 		switch (species) {
 			case 1:
 			case 4:
@@ -1018,13 +1131,13 @@ int16_t fsfx_checktieflyby(void) {
 		 * is taken from world_x (current) and 'previous_dist' from
 		 * world_x_prev -- the labels in the binary are inverted; we
 		 * keep the physics right here. */
-		int32_t curr_dist = collide_roughdistance3d(objects[i].world_x - pstate.player->world_x,
-													objects[i].world_y - pstate.player->world_y,
-													objects[i].world_z - pstate.player->world_z);
-		int32_t prev_dist = collide_roughdistance3d(objects[i].world_x_prev - pstate.player->world_x_prev,
-													objects[i].world_y_prev - pstate.player->world_y_prev,
-													objects[i].world_z_prev - pstate.player->world_z_prev);
-		int32_t threshold = (int32_t)species_table[species].bound_hwidth + 1024;
+		curr_dist = collide_roughdistance3d(objects[i].world_x - pstate.player->world_x,
+											objects[i].world_y - pstate.player->world_y,
+											objects[i].world_z - pstate.player->world_z);
+		prev_dist = collide_roughdistance3d(objects[i].world_x_prev - pstate.player->world_x_prev,
+											objects[i].world_y_prev - pstate.player->world_y_prev,
+											objects[i].world_z_prev - pstate.player->world_z_prev);
+		threshold = (int32_t)species_table[species].bound_hwidth + 1024;
 
 		if (threshold > curr_dist && prev_dist >= threshold)
 			fsfx_triggersfx(flyby_sound, i);
@@ -1034,10 +1147,12 @@ int16_t fsfx_checktieflyby(void) {
 
 // FUNCTION: TIE95 0x25AAC
 int8_t fsfx_speakeravailable(void) {
+	uint16_t i;
+
 	if (!blastflag)
 		return 0;
 
-	for (uint16_t i = 0; i < NUM_CRAFTS; i++) {
+	for (i = 0; i < NUM_CRAFTS; i++) {
 		if (i == pstate.object_idx)
 			continue;
 		if (!objects[i].ship_idx)
@@ -1056,6 +1171,14 @@ int8_t fsfx_speakeravailable(void) {
 int8_t fsfx_speakobjectname(uint16_t obj_idx, uint16_t prefix_voice) {
 	/* Retail bails for obj_idx >= NUM_CRAFTS so warhead-slot CraftData*
 	 * (a WarheadRecord*) is never reinterpreted as a craft. */
+	CraftData* craft;
+	EFGStruct* fg_ptr;
+	uint16_t group_id;
+	uint16_t name_idx;
+	int found;
+	uint16_t wing_num;
+	char ch;
+
 	if (obj_idx >= NUM_CRAFTS)
 		return 0;
 	if (!objects[obj_idx].ship_idx)
@@ -1063,7 +1186,7 @@ int8_t fsfx_speakobjectname(uint16_t obj_idx, uint16_t prefix_voice) {
 	if (objects[obj_idx].category != 0)
 		return 0; /* only craft have FG names */
 
-	CraftData* craft = objects[obj_idx].craft_ptr;
+	craft = objects[obj_idx].craft_ptr;
 	if (!craft)
 		return 0;
 
@@ -1076,20 +1199,22 @@ int8_t fsfx_speakobjectname(uint16_t obj_idx, uint16_t prefix_voice) {
 	/* Case-insensitive prefix match against sfxgroupnameptrs[0..4].
 	 * The ASCII '+ 32' trick lets us accept both upper and lower-case
 	 * letters against an UPPER-case reference string. */
-	EFGStruct* fg_ptr = &fg_array[objects[obj_idx].fg_idx];
-	uint16_t group_id;
-	uint16_t name_idx = 0;
-	int found = 0;
+	fg_ptr = &fg_array[objects[obj_idx].fg_idx];
+
+	name_idx = 0;
+	found = 0;
 	for (group_id = 0; group_id < 5u; group_id++) {
 		const char* ref = sfxgroupnameptrs[group_id];
 		name_idx = 0;
 		found = 0;
 		while (name_idx < 0xCu) {
+			char fg_ch;
+
 			if (!*ref) {
 				found = 1;
 				break;
 			}
-			char fg_ch = fg_ptr->name[name_idx];
+			fg_ch = fg_ptr->name[name_idx];
 			if (fg_ch != *ref && (uint8_t)fg_ch != (uint8_t)*ref + 32)
 				break;
 			name_idx++;
@@ -1102,15 +1227,17 @@ int8_t fsfx_speakobjectname(uint16_t obj_idx, uint16_t prefix_voice) {
 		return 0;
 
 	/* Extract wing number from the name suffix. */
-	uint16_t wing_num;
-	char ch = fg_ptr->name[name_idx];
+
+	ch = fg_ptr->name[name_idx];
 	if (!ch) {
 		/* No explicit suffix -- fall back to craft's FG index. */
 		wing_num = (uint16_t)(craft->craft_idx_in_fg + 1);
 	} else {
+		uint8_t digit;
+
 		if (ch == ' ')
 			name_idx++;
-		uint8_t digit = (uint8_t)fg_ptr->name[name_idx];
+		digit = (uint8_t)fg_ptr->name[name_idx];
 		if (digit < '0' || digit > '9')
 			return 0; /* unrecognised suffix: don't speak */
 		wing_num = (uint16_t)(digit - '0');
@@ -1143,6 +1270,8 @@ int8_t fsfx_speakcongrats(void) {
 	/* Pick one of 3 kudos clips (76..78). */
 	uint16_t r = (uint16_t)math2_getrandom();
 	uint16_t kudos;
+	uint16_t excl;
+
 	if (r < 21845)
 		kudos = 76;
 	else if (r < 43690)
@@ -1153,7 +1282,7 @@ int8_t fsfx_speakcongrats(void) {
 
 	/* Pick one of 3 exclamations (79..81). */
 	r = (uint16_t)math2_getrandom();
-	uint16_t excl;
+
 	if (r < 21845)
 		excl = 79;
 	else if (r < 43690)
@@ -1196,6 +1325,8 @@ int8_t fsfx_speakoperation(uint16_t order_voice, uint16_t verb_voice) {
 // FUNCTION: TIE95 0x25DDC
 int8_t fsfx_speakobjectives(uint16_t objective_voice) {
 	/* 50% chance to prepend a kudos + "objective" + player name. */
+	uint16_t r;
+
 	if ((uint16_t)math2_getrandom() > 0x4000u) {
 		uint16_t r = (uint16_t)math2_getrandom();
 		uint16_t kudos;
@@ -1216,7 +1347,7 @@ int8_t fsfx_speakobjectives(uint16_t objective_voice) {
 	fsfx_triggervoicesfx(0x5Fu);     /* "mission" */
 
 	/* 25% chance to add "update". */
-	uint16_t r = (uint16_t)math2_getrandom();
+	r = (uint16_t)math2_getrandom();
 	if (r < 0x4000)
 		return fsfx_triggervoicesfx(0x60u);
 	return (int8_t)r;
@@ -1226,6 +1357,8 @@ int8_t fsfx_speakobjectives(uint16_t objective_voice) {
 int8_t fsfx_speakorderack(int32_t target_idx, int32_t order_char, uint16_t cmdr_mode) {
 	uint16_t target_obj = (uint16_t)target_idx;
 	uint16_t r = (uint16_t)math2_getrandom();
+
+	uint16_t order_voice;
 
 	if (r >= 36864) {
 		if (r >= 57344) {
@@ -1255,7 +1388,7 @@ int8_t fsfx_speakorderack(int32_t target_idx, int32_t order_char, uint16_t cmdr_
 
 	/* Order-specific tail clip. Default returns (order_char - 'p')
 	 * without playing, matching the binary. */
-	uint16_t order_voice;
+
 	switch ((char)order_char) {
 		case 'p':
 			order_voice = 73;
@@ -1297,22 +1430,28 @@ static int is_destroy_cond(uint8_t cond) { return cond == 7 || cond == 9 || cond
 int32_t fsfx_checkcriticalcraft(int32_t obj_idx_arg, uint16_t action_voice) {
 	uint16_t obj_idx_u16 = (uint16_t)obj_idx_arg;
 
+	uint8_t pri_win_cond;
+	int32_t is_critical;
+	const ECondStruct* sa;
+	const ECondStruct* sb;
+	uint16_t death_voice;
+
 	if (mission.primary_complete == 1)
 		return 0;
 
 	/* Auto-pass when the dead craft's FG has a destroy primary win
 	 * condition. No group match needed for this branch -- the
 	 * condition is "any craft in the FG with this kill-type goal". */
-	uint8_t pri_win_cond = fg_array[objects[obj_idx_u16].fg_idx].pri_win_cond;
-	int32_t is_critical = 0;
+	pri_win_cond = fg_array[objects[obj_idx_u16].fg_idx].pri_win_cond;
+	is_critical = 0;
 	if (is_destroy_cond(pri_win_cond))
 		is_critical = 1;
 
 	/* Match the dead craft against each of the primary goal's two
 	 * subconditions (cut[0].subcond[0] and [1]) via
 	 * score_objectmemberofgroup; OR into is_critical. */
-	const ECondStruct* const sa = &cut[0].subcond[0];
-	const ECondStruct* const sb = &cut[0].subcond[1];
+	sa = &cut[0].subcond[0];
+	sb = &cut[0].subcond[1];
 	if (is_destroy_cond(sa->cond))
 		is_critical |= score_objectmemberofgroup(obj_idx_u16, sa->type, sa->id);
 	if (is_destroy_cond(sb->cond))
@@ -1324,7 +1463,7 @@ int32_t fsfx_checkcriticalcraft(int32_t obj_idx_arg, uint16_t action_voice) {
 	 * destroyed + caller's action clip. */
 	fsfx_speakobjectname(pstate.object_idx, 0);
 	fsfx_triggervoicesfx(0x55u); /* "critical" */
-	uint16_t death_voice = (objects[obj_idx_u16].genus == GENUS_PLATFORM) ? 87 : 86;
+	death_voice = (objects[obj_idx_u16].genus == GENUS_PLATFORM) ? 87 : 86;
 	fsfx_triggervoicesfx(death_voice);
 	fsfx_triggervoicesfx(action_voice);
 	return 1;

@@ -5,7 +5,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "aeron/vfs.h"
+typedef struct AeronVfs AeronVfs;
 
 #ifdef __cplusplus
 extern "C" {

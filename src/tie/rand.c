@@ -1,3 +1,4 @@
+#include "tie/rand.h"
 /*
  * RAND — standard-C-style LCG. See rand.h for the retail pedigree.
  *
@@ -17,8 +18,6 @@
  * i.e. `next = next * 1103515245 + 12345` then return the top 15 bits of
  * the high 16-bit word.
  */
-
-#include "tie/rand.h"
 
 /* Retail initial value is 1 (verified from bytes at 0xD2B90 in
  * Z_TIE__.EXE: 01 00 00 00). */

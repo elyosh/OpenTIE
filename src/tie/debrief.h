@@ -1,10 +1,19 @@
-#ifndef __DEBRIEF_H__
-#define __DEBRIEF_H__
+#ifndef TIE_DEBRIEF_H
+#define TIE_DEBRIEF_H
 
 #include "tie/shellext.h"
+
 #include <stdint.h>
 
-/* Push the debrief scene as a tie_core task. */
-void debrief_Push_Debrief_Task(SceneHeadStruct* scene_head);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+ResFile* debrief_OpenScene(SceneHeadStruct* scene_head, bool svga);
+void debrief_CloseScene(ResFile* resource, bool svga);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -7,15 +7,12 @@
 #include "tie_runtime/flight_assets/model_types.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
+#include "tie_runtime/runtime/flight_task.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/runtime/replay_format.h"
+#include "tie_runtime/runtime/replay_viewer_task.h"
 #include "tie_runtime/storage/storage.h"
 #include "tie_runtime/timing/flight_checkpoint.h"
-#include <landru/error.h>
-#include <landru/task.h>
-
-#include <stdint.h>
-#include <string.h>
 
 #include "tie/backdrp2.h" /* backdrop* arrays */
 #include "tie/fediskio.h"
@@ -42,6 +39,9 @@
 
 #include <imuse/hilevel.h>
 #include <imuse/lolevel.h>
+#include <landru/error.h>
+#include <stdint.h>
+#include <string.h>
 
 /* --------------------------------------------------------------------------
  * Module-owned globals (watdbg: replayio.c's OBJ).
@@ -230,7 +230,9 @@ enum {
 
 static int write_raw_block(const void* src, size_t bytes, TieFile* fp) {
 	const uint8_t* p = (const uint8_t*)src;
-	for (size_t i = 0; i < bytes; ++i) {
+	size_t i;
+
+	for (i = 0; i < bytes; ++i) {
 		if (TieStorage_Putc(p[i], fp) == TIE_EOF)
 			return 0;
 	}
@@ -239,7 +241,9 @@ static int write_raw_block(const void* src, size_t bytes, TieFile* fp) {
 
 static int read_raw_block(void* dst, size_t bytes, TieFile* fp) {
 	uint8_t* p = (uint8_t*)dst;
-	for (size_t i = 0; i < bytes; ++i) {
+	size_t i;
+
+	for (i = 0; i < bytes; ++i) {
 		int c = TieStorage_Getc(fp);
 		if (c == TIE_EOF)
 			return 0;
@@ -251,7 +255,9 @@ static int read_raw_block(void* dst, size_t bytes, TieFile* fp) {
 /* PORT: retail checkpoints contain absolute addresses into fixed-image
  * globals. Rebuild those aliases after PIE/ASLR relocation. */
 static void replayio_port_rebind_checkpoint_pointers(void) {
-	for (size_t i = 0; i < NUM_OBJECTS; ++i) {
+	size_t i;
+
+	for (i = 0; i < NUM_OBJECTS; ++i) {
 		FlightObject* object = &objects[i];
 		if (!object->ship_idx) {
 			object->craft_ptr = NULL;
@@ -270,6 +276,9 @@ static void replayio_port_rebind_checkpoint_pointers(void) {
 
 // FUNCTION: TIE95 0x478A0
 int16_t replayio_copytosave(const char* fname) {
+	size_t i;
+	uint8_t fg_save_buf[48 * EFGSTRUCT_DISK_SIZE];
+
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, fname, "wb", 0))
 		return 0;
 
@@ -277,7 +286,7 @@ int16_t replayio_copytosave(const char* fname) {
 	 * the generic raw-byte loop emits the canonical 456-byte LE image. */
 	MissionFile_encode(mission_file_header_disk_image, &mission_file_header);
 
-	for (size_t i = 0; savearrayptrs[i]; ++i) {
+	for (i = 0; savearrayptrs[i]; ++i) {
 		uint32_t sz = savearraysizes[i];
 		int16_t n = fediskio_writefileblock(savearrayptrs[i], 1, (int)sz, fileptr);
 		if ((uint32_t)n != sz) {
@@ -289,8 +298,8 @@ int16_t replayio_copytosave(const char* fname) {
 	/* The save format expects fg_array as the on-disk 48 x 292-byte
 	 * little-endian image; encode through a buffer because the runtime
 	 * EFGStruct layout is naturally aligned and wider on most hosts. */
-	uint8_t fg_save_buf[48 * EFGSTRUCT_DISK_SIZE];
-	for (size_t i = 0; i < 48; ++i)
+
+	for (i = 0; i < 48; ++i)
 		EFGStruct_encode(fg_save_buf + i * EFGSTRUCT_DISK_SIZE, &fg_array[i]);
 	if (!write_raw_block(fg_save_buf, sizeof fg_save_buf, fileptr))
 		goto fail;
@@ -301,7 +310,7 @@ int16_t replayio_copytosave(const char* fname) {
 	if (!write_raw_block(fgstatus, 0x900, fileptr))
 		goto fail;
 
-	for (size_t i = 0; i < NUM_SPECIES; ++i) {
+	for (i = 0; i < NUM_SPECIES; ++i) {
 		if (TieStorage_Putc(species_table[i].load_flags, fileptr) == TIE_EOF)
 			goto fail;
 	}
@@ -321,10 +330,13 @@ fail:
 
 // FUNCTION: TIE95 0x47A08
 int16_t replayio_copyfromsave(const char* fname) {
+	size_t i;
+	uint8_t fg_load_buf[48 * EFGSTRUCT_DISK_SIZE];
+
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, fname, "rb", 1))
 		return 0;
 
-	for (size_t i = 0; savearrayptrs[i]; ++i) {
+	for (i = 0; savearrayptrs[i]; ++i) {
 		uint32_t sz = savearraysizes[i];
 		int16_t n = fediskio_readfileblock(savearrayptrs[i], 1, sz, fileptr);
 		if ((uint32_t)n != sz) {
@@ -340,12 +352,12 @@ int16_t replayio_copyfromsave(const char* fname) {
 	/* Read 48 x 292-byte fg records as a contiguous on-disk image,
 	 * then decode each into the runtime fg_array (whose element width
 	 * may differ from the disk size due to natural alignment). */
-	uint8_t fg_load_buf[48 * EFGSTRUCT_DISK_SIZE];
+
 	if (!read_raw_block(fg_load_buf, sizeof fg_load_buf, fileptr)) {
 		TieStorage_Close(fileptr);
 		return 0;
 	}
-	for (size_t i = 0; i < 48; ++i)
+	for (i = 0; i < 48; ++i)
 		EFGStruct_decode(&fg_array[i], fg_load_buf + i * EFGSTRUCT_DISK_SIZE);
 	if (!read_raw_block(radiomsg, 0x5A0, fileptr)) {
 		TieStorage_Close(fileptr);
@@ -360,7 +372,7 @@ int16_t replayio_copyfromsave(const char* fname) {
 		return 0;
 	}
 
-	for (size_t i = 0; i < NUM_SPECIES; ++i) {
+	for (i = 0; i < NUM_SPECIES; ++i) {
 		int c = TieStorage_Getc(fileptr);
 		if (c == TIE_EOF) {
 			TieStorage_Close(fileptr);
@@ -391,11 +403,14 @@ int replayio_openreplayinputfile(void) {
 	/* Drop any stale .spl, then create a fresh one prefixed with the
 	 * current versioned header. Subsequent replayio_spoolreplayinput calls
 	 * open with "ab" and append fixed-size records after the header. */
+	TieFile* fp;
+	int ok;
+
 	TieStorage_Remove(TIE_FILE_ROOT_TEMP, inputspoolfile);
-	TieFile* fp = TieStorage_Open(TIE_FILE_ROOT_TEMP, inputspoolfile, "wb");
+	fp = TieStorage_Open(TIE_FILE_ROOT_TEMP, inputspoolfile, "wb");
 	if (!fp)
 		return 0;
-	int ok = TieReplayFormat_WriteHeader(fp);
+	ok = TieReplayFormat_WriteHeader(fp);
 	if (TieStorage_Close(fp) != 0)
 		return 0;
 	return ok;
@@ -404,6 +419,10 @@ int replayio_openreplayinputfile(void) {
 /* replayio_spoolreplayinput — append the valid records in this chunk. */
 // FUNCTION: TIE95 0x47B3C
 int16_t replayio_spoolreplayinput(void) {
+	TieFile* saved;
+	const uint8_t* bufp;
+	uint16_t frame;
+
 	if (!replayspoolflag)
 		return 1;
 	if (!replaybuffercnt)
@@ -413,14 +432,14 @@ int16_t replayio_spoolreplayinput(void) {
 		msg_messageprintf(MSG_CAMERA_SAVING);
 	}
 
-	TieFile* saved = fileptr;
-	const uint8_t* bufp = (const uint8_t*)replaybufferstart;
+	saved = fileptr;
+	bufp = (const uint8_t*)replaybufferstart;
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, inputspoolfile, "ab", 0)) {
 		fileptr = saved;
 		return 0;
 	}
 
-	for (uint16_t frame = 0; frame < replaybuffercnt; ++frame) {
+	for (frame = 0; frame < replaybuffercnt; ++frame) {
 		if (TieStorage_Write(bufp, 1, REPLAYINPUTFRAME_DISK_SIZE, fileptr) != REPLAYINPUTFRAME_DISK_SIZE) {
 			TieStorage_Close(fileptr);
 			fileptr = saved;
@@ -441,15 +460,17 @@ int16_t replayio_spoolreplayinput(void) {
 
 // FUNCTION: TIE95 0x47C44
 int16_t replayio_savereplaybuffer(void) {
+	uint8_t header[REPLAY_BUFFER_TEMP_HEADER_SIZE] = { 'R', 'B', 'U', 'F' };
+	size_t valid_bytes;
+
 	if (replaybuffercnt > REPLAY_INPUT_CHUNK_FRAMES)
 		return 0;
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, kBufferTempFile, "wb", 0))
 		return 0;
-	uint8_t header[REPLAY_BUFFER_TEMP_HEADER_SIZE] = { 'R', 'B', 'U', 'F' };
 	header[4] = REPLAY_BUFFER_TEMP_VERSION;
 	header[6] = (uint8_t)replaybuffercnt;
 	header[7] = (uint8_t)(replaybuffercnt >> 8);
-	const size_t valid_bytes = (size_t)replaybuffercnt * REPLAYINPUTFRAME_DISK_SIZE;
+	valid_bytes = (size_t)replaybuffercnt * REPLAYINPUTFRAME_DISK_SIZE;
 	if (TieStorage_Write(header, 1, sizeof header, fileptr) != sizeof header ||
 		TieStorage_Write(replaybufferstart, 1, valid_bytes, fileptr) != valid_bytes) {
 		TieStorage_Close(fileptr);
@@ -460,20 +481,24 @@ int16_t replayio_savereplaybuffer(void) {
 
 // FUNCTION: TIE95 0x47CA4
 int replayio_restorereplaybuffer(void) {
+	uint8_t header[REPLAY_BUFFER_TEMP_HEADER_SIZE];
+	uint16_t frame_count;
+	size_t valid_bytes;
+
 	if (!fediskio_tryopenfile(TIE_FILE_ROOT_TEMP, kBufferTempFile, "rb", 1))
 		return 0;
-	uint8_t header[REPLAY_BUFFER_TEMP_HEADER_SIZE];
+
 	if (TieStorage_Read(header, 1, sizeof header, fileptr) != sizeof header ||
 		memcmp(header, "RBUF", 4) != 0 || header[4] != REPLAY_BUFFER_TEMP_VERSION || header[5] != 0) {
 		TieStorage_Close(fileptr);
 		return 0;
 	}
-	const uint16_t frame_count = (uint16_t)(header[6] | (uint16_t)header[7] << 8);
+	frame_count = (uint16_t)(header[6] | (uint16_t)header[7] << 8);
 	if (frame_count > REPLAY_INPUT_CHUNK_FRAMES) {
 		TieStorage_Close(fileptr);
 		return 0;
 	}
-	const size_t valid_bytes = (size_t)frame_count * REPLAYINPUTFRAME_DISK_SIZE;
+	valid_bytes = (size_t)frame_count * REPLAYINPUTFRAME_DISK_SIZE;
 	memset(replaybufferstart, 0, REPLAY_INPUT_BUFFER_BYTES);
 	if (TieStorage_Read(replaybufferstart, 1, valid_bytes, fileptr) != valid_bytes) {
 		TieStorage_Close(fileptr);
@@ -493,15 +518,18 @@ int replayio_restorereplaybuffer(void) {
 /* Build panelname = cockpitdir + infix + ".PNL". */
 static void build_panel_path(const char* infix) {
 	size_t n = 0;
+	size_t s;
+	const char* pnl;
+
 	while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
 		panelname[n] = cockpitdir[n];
 		++n;
 	}
-	size_t s = 0;
+	s = 0;
 	while (n + 1 < sizeof(panelname) && infix[s]) {
 		panelname[n++] = infix[s++];
 	}
-	const char* pnl = ".PNL";
+	pnl = ".PNL";
 	s = 0;
 	while (n + 1 < sizeof(panelname) && pnl[s]) {
 		panelname[n++] = pnl[s++];
@@ -516,6 +544,8 @@ static void build_panel_path(const char* infix) {
  * (= panel_y * screenMemWidth + panel_x). */
 static void load_viewer_panel(const char* infix, const char* panel_name, uint16_t panel_x, uint16_t panel_y,
 							  uint16_t panel_depth, uint16_t panel_width) {
+	uint32_t dc;
+
 	farbufferptr = (uint8_t*)panelpartsptr;
 	build_panel_path(infix);
 	fediskio_loadbufferdata(panelname, 0xE3, 38, 0);
@@ -530,14 +560,14 @@ static void load_viewer_panel(const char* infix, const char* panel_name, uint16_
 	}
 	drawshape(section_ptrs[0], 0, 0, 253, 0);
 
-	uint32_t dc = rtsvga2_calcpositionVGA(panel_x, panel_y);
+	dc = rtsvga2_calcpositionVGA(panel_x, panel_y);
 	logbuf2_setbufferdimensions(panel_width, panel_depth, dc);
 
 	panel_copymaskdata((char*)section_ptrs[1], pixelswide, pixelsdeep, 0);
 	transfm2_screenyoffset = 0;
 }
 
-static void load_standalone_viewer_panel(void) {
+void replayio_LoadStandalonePanel(void) {
 	if (tie_is_high_resolution_flight())
 		load_viewer_panel("camerap", "FILM", 28, 16, 298, 584);
 	else
@@ -547,7 +577,7 @@ static void load_standalone_viewer_panel(void) {
 /* Resolution-change detection on exit: retail saves flightResolution at
  * viewer entry; on return to sim, if the user changed it (via the
  * viewer's OPTION row hook), re-init graphics + reload scaled fonts. */
-static bool restore_graphics_if_changed(int16_t saved_res) {
+bool replayio_RestoreGraphics(int16_t saved_res) {
 	if (flightResolution == saved_res)
 		return true;
 	flightResolution = saved_res;
@@ -562,19 +592,7 @@ static bool restore_graphics_if_changed(int16_t saved_res) {
 	return true;
 }
 
-typedef enum {
-	REPLAYIO_PHASE_ENTER = 0,
-	REPLAYIO_PHASE_AFTER_VIEWER,
-	REPLAYIO_PHASE_AFTER_REENTERSIM,
-	REPLAYIO_PHASE_DONE,
-} ReplayioPhase;
-
-typedef struct ReplayioTask {
-	int16_t saved_res;
-	ReplayioPhase phase;
-} ReplayioTask;
-
-static void replayio_load_initial_panel(void) {
+void replayio_LoadInitialPanel(void) {
 	if (maingameflag) {
 		memset(replayclipname, 0, sizeof(replayclipname));
 		strncpy(replayclipname, "UNTITLED", sizeof(replayclipname) - 1);
@@ -597,192 +615,8 @@ static void replayio_load_initial_panel(void) {
 		 * resident in soundhandles from create_createmission). */
 		fsfx_loadvoicelfd();
 		msg_messageinit();
-		load_standalone_viewer_panel();
+		replayio_LoadStandalonePanel();
 	}
-}
-
-static void replayio_pause_imuse_save_volume(void) {
-	replayvolume = (int16_t)imuse_get_master_vol(im);
-	imuse_set_master_vol(im, 0);
-	imuse_pause(im);
-	replaymusic = 0;
-}
-
-static void replayio_resume_imuse_if_paused(void) {
-	if (!replaymusic) {
-		imuse_set_master_vol(im, (uint16_t)replayvolume);
-		imuse_resume(im);
-		replaymusic = 1;
-	}
-}
-
-// ORIGINAL_FUNCTION: TIE95 0x47CF4
-// ORIGINAL_FUNCTION: TIE98 0x475350
-// (task-split recovery)
-static LandruTaskStepResult replayio_task_step(void* self) {
-	ReplayioTask* t = (ReplayioTask*)self;
-
-	switch (t->phase) {
-
-		case REPLAYIO_PHASE_ENTER:
-			/* Bail-out check: in-flight ('maingameflag') invocations
-			 * checkpoint the live mission to disk first. If the disk
-			 * save fails, the entire viewer is skipped — iMUSE is
-			 * already silenced, so leave it that way and pop. */
-			if (maingameflag && !replayio_copytosave(replaysavegamefile))
-				return LANDRU_TASK_STEP_DONE;
-
-			recordingreplay = 0;
-			replayviewmode = 1;
-			if (TieClassicDisplay_UsesDx5())
-				FlightSurface_Lock();
-			replayio_load_initial_panel();
-			replay_rewindreplay();
-			if (TieClassicDisplay_UsesDx5())
-				FlightSurface_Unlock();
-
-			/* Fall through to the loop-top: clear reentersim, repaint
-			 * once, push the modal viewer task. */
-			reentersimflag = 0;
-			festring_showscreen();
-			if (TieClassicDisplay_UsesDx5()) {
-				FrontendDisplay_BlitOffscreenToRenderSurface();
-				FrontendDisplay_PresentFrame();
-				FrontendDisplay_BlitOffscreenToRenderSurface();
-			}
-			replay_Push_DoReplayScreen_Task();
-			t->phase = REPLAYIO_PHASE_AFTER_VIEWER;
-			return LANDRU_TASK_STEP_CONTINUE;
-
-		case REPLAYIO_PHASE_AFTER_VIEWER:
-			/* DoReplayScreen task popped. Decide which branch fires. */
-			if (replaymusic) {
-				replayvolume = (int16_t)imuse_get_master_vol(im);
-				imuse_set_master_vol(im, 0);
-				imuse_pause(im);
-				replaymusic = 0;
-			}
-			replayviewmode = 0;
-
-			if (maingameflag) {
-				/* Cockpit: return to in-flight. Retail restores the flight
-				 * resolution (if the user changed it inside the viewer)
-				 * before copyfromsave. */
-				if (!restore_graphics_if_changed(t->saved_res)) {
-					xerror_Set_Landru_Error(12);
-					return LANDRU_TASK_STEP_DONE;
-				}
-				replayio_copyfromsave(replaysavegamefile);
-				replayio_setreturnview();
-				replayio_resume_imuse_if_paused();
-				return LANDRU_TASK_STEP_DONE;
-			}
-
-			if (!reentersimflag) {
-				/* Stand-alone viewer: normal exit. */
-				if (TieClassicDisplay_UsesDx5())
-					FlightSurface_Lock();
-				if (tie_is_high_resolution_flight())
-					festring_setbound(28, 16, 611, 315);
-				else
-					festring_setbound(14, 8, 306, 131);
-				festring_setbackcolor(0x40);
-				clearwindow();
-				if (TieClassicDisplay_UsesDx5())
-					FlightSurface_Unlock();
-				replayio_resume_imuse_if_paused();
-				return LANDRU_TASK_STEP_DONE;
-			}
-
-			/* Stand-alone viewer + user pressed 's': re-enter the sim
-			 * for a second sortie. Retail adds msg_clearmessagequeue +
-			 * blastcount reset. */
-			blank();
-			recordingreplay = 0;
-			numhistorymsgs = 0;
-			camera.view_zoom_flag = 0;
-			camera.up_angle = 0;
-			mission.end_flag = 0;
-			camera.view_target_obj = pstate.object_idx;
-			camera.pilotview = 0;
-			camera.side_angle = 0;
-			camera.view_dir_dirty = 0;
-			blastcount = 0;
-			msg_clearmessagequeue();
-			replayio_setreturnview();
-			replayio_resume_imuse_if_paused();
-
-			tie_Push_FlightMission_Task();
-			t->phase = REPLAYIO_PHASE_AFTER_REENTERSIM;
-			return LANDRU_TASK_STEP_CONTINUE;
-
-		case REPLAYIO_PHASE_AFTER_REENTERSIM:
-			/* Flight task popped (mission.end_flag was set). Pause iMUSE,
-			 * reload the replay-start checkpoint, repaint the FILM panel,
-			 * and push DoReplayScreen again. The fidelity check
-			 * `if (!reentersimflag) return;` from the binary is preserved:
-			 * inside the inner sim nothing clears reentersimflag, so the
-			 * always-true branch loops back to AFTER_VIEWER which is what
-			 * actually decides exit on the next viewer dismissal. */
-			replayio_pause_imuse_save_volume();
-			blank();
-			recordingreplay = 0;
-			replayviewmode = 1;
-			if (TieClassicDisplay_UsesDx5())
-				FlightSurface_Lock();
-			replay_loadreplay();
-			replayio_copyfromsave(replaystartfile);
-			msg_messageinit();
-			load_standalone_viewer_panel();
-			replay_rewindreplay();
-			if (TieClassicDisplay_UsesDx5())
-				FlightSurface_Unlock();
-
-			if (!reentersimflag)
-				return LANDRU_TASK_STEP_DONE;
-
-			reentersimflag = 0;
-			festring_showscreen();
-			if (TieClassicDisplay_UsesDx5()) {
-				FrontendDisplay_BlitOffscreenToRenderSurface();
-				FrontendDisplay_PresentFrame();
-				FrontendDisplay_BlitOffscreenToRenderSurface();
-			}
-			replay_Push_DoReplayScreen_Task();
-			t->phase = REPLAYIO_PHASE_AFTER_VIEWER;
-			return LANDRU_TASK_STEP_CONTINUE;
-
-		case REPLAYIO_PHASE_DONE:
-			/* Unreachable — DONE is returned directly from the producing
-			 * phase, never set as a stored value. Kept exhaustive for the
-			 * compiler's switch-coverage check. */
-			return LANDRU_TASK_STEP_DONE;
-	}
-
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static const LandruTaskVtable replayio_task_vt = {
-	.step = replayio_task_step,
-};
-
-void replayio_Push_ReplayScreen_Task(void) {
-	ReplayioTask* t = (ReplayioTask*)landru_task_push(&replayio_task_vt);
-	if (!t)
-		return;
-	t->saved_res = (int16_t)flightResolution;
-	t->phase = REPLAYIO_PHASE_ENTER;
-	if (TieProfile_UsesTie98Logic()) {
-		uint8_t saved_mapflag = mapflag;
-		mapflag = 1;
-		FSFX_UpdatePlayerEngineSound();
-		mapflag = saved_mapflag;
-	}
-
-	/* Pause iMUSE up-front: retail does this before the disk-save
-	 * decision so that even the early-fail path leaves the mixer in
-	 * the silenced state the cockpit caller expects. */
-	replayio_pause_imuse_save_volume();
 }
 
 /* --------------------------------------------------------------------------

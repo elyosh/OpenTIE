@@ -27,6 +27,7 @@ int16_t sys2_calclength(const uint8_t* s) {
 
 	while (1) {
 		uint8_t ch = *s++;
+		uint8_t* font;
 
 		if (!ch || ch == 0x0A)
 			break;
@@ -44,7 +45,7 @@ int16_t sys2_calclength(const uint8_t* s) {
 			ch -= 32;
 
 		/* Look up character width from font data */
-		uint8_t* font = (uint8_t*)curfontptr;
+		font = (uint8_t*)curfontptr;
 		total_width += font[(ch - 32) * fontcharsize];
 	}
 

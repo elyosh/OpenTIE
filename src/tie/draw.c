@@ -1,16 +1,13 @@
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-
-#include "anim.h"
+#include "tie/draw.h"
+#include "tie/anim.h"
 #include "tie/bpflight.h"
 #include "tie/create.h"
-#include "tie/draw.h"
 #include "tie/drawpol.h"
 #include "tie/fediskio.h" /* species_model_handle_sizes (model-buffer bounds) */
 #include "tie/fview.h"
 #include "tie/laser.h"   /* WEAPON_SPECIES_COUNT, laser_species_idx */
 #include "tie/logbuf2.h" /* pixelsdeep */
+#include "tie/math2_wide.h"
 #include "tie/mission.h"
 #include "tie/modelmesh.h"
 #include "tie/render_scene_tie98.h"
@@ -23,6 +20,10 @@
 #include "tie/xtrans2.h"                              /* flatobjnum */
 #include "tie_runtime/diagnostics/diagnostics.h"      /* TieDiagnostics_Log (polydepthsort OOB diagnostic) */
 #include "tie_runtime/snapshot/snapshot_billboards.h" /* SNAPSHOT-ONLY billboard capture */
+
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
 
 /* ============================================================================
  * Module-owned globals (per watdbg attribution to draw.c).
@@ -280,17 +281,20 @@ static inline int32_t clamp_q30(int32_t v) {
 int draw_lockshipfileptrs(uint16_t ship_idx) {
 	void* handle = species_table[ship_idx].model_handle;
 	void* raw = xmemhdl_lock(handle);
+	ShipModelData* base;
+	int compblock_offset;
+
 	xmemhdl_unlock(handle);
 
 	if (!raw)
 		return 0;
 
 	/* Skip the two-byte file prefix. */
-	ShipModelData* base = (ShipModelData*)((uint8_t*)raw + 2);
+	base = (ShipModelData*)((uint8_t*)raw + 2);
 	shipimageptr = base;
 	objectblockptr = base;
 
-	int compblock_offset = 6 * base->num_lods;
+	compblock_offset = 6 * base->num_lods;
 	componentblockptr = (ShipModelMesh*)&base->lod_records[base->num_lods];
 	return compblock_offset;
 }
@@ -323,6 +327,10 @@ const uint16_t* draw_getcompdetailptr(ShipModelMesh* comp, int base_z) {
 	uint16_t saved_polycnt = shipdetailpolycnt;
 
 	int16_t side, fwd, up;
+	int rel_z;
+	ShipMeshLOD* lod;
+	const uint16_t* result;
+
 	if (comp->has_position) {
 		side = comp->pos_side;
 		fwd = comp->pos_fwd;
@@ -334,10 +342,10 @@ const uint16_t* draw_getcompdetailptr(ShipModelMesh* comp, int base_z) {
 		up = comp->center_up;
 	}
 
-	int rel_z = clamp_q30(rotworldeyeC3 * up + rotworldeyeB3 * fwd + rotworldeyeA3 * side);
+	rel_z = clamp_q30(rotworldeyeC3 * up + rotworldeyeB3 * fwd + rotworldeyeA3 * side);
 
-	ShipMeshLOD* lod = (ShipMeshLOD*)((uint8_t*)comp + comp->render_offset);
-	const uint16_t* result = draw_getdetailptr(lod, (rel_z >> 16) + base_z);
+	lod = (ShipMeshLOD*)((uint8_t*)comp + comp->render_offset);
+	result = draw_getdetailptr(lod, (rel_z >> 16) + base_z);
 	shipdetailpolycnt = saved_polycnt;
 	return result;
 }
@@ -364,12 +372,15 @@ const uint16_t* draw_getcompdetailptr(ShipModelMesh* comp, int base_z) {
 // FUNCTION: TIE95 0x1B0A8
 const uint16_t* draw_getdetailptr(ShipMeshLOD* lod_table, int z_threshold) {
 	int detail_mode = (uint16_t)shipdetailvalue;
+	ShipMeshLOD* p;
+	const uint8_t* poly_header;
+
 	if (shipdetailvalue == -1) {
 		z_threshold >>= 1;
 		detail_mode = 0;
 	}
 
-	ShipMeshLOD* p = lod_table;
+	p = lod_table;
 	while (z_threshold > p->distance)
 		++p;
 
@@ -380,7 +391,7 @@ const uint16_t* draw_getdetailptr(ShipMeshLOD* lod_table, int z_threshold) {
 	if (p->distance == 0x7FFFFFFF)
 		return (const uint16_t*)((uint8_t*)p + p->offset);
 
-	const uint8_t* poly_header = (const uint8_t*)p + p->offset;
+	poly_header = (const uint8_t*)p + p->offset;
 	if ((poly_header[0] & 0xFE) != 0x40 && poly_header[4] <= (int)shipdetailpolycnt)
 		return (const uint16_t*)((uint8_t*)p + p->offset);
 
@@ -399,35 +410,50 @@ const uint16_t* draw_getdetailptr(ShipMeshLOD* lod_table, int z_threshold) {
  * ========================================================================== */
 // FUNCTION: TIE95 0x1BAB4
 void draw_drawlaser(uint16_t laser_obj_idx) {
-	parentobject = laser_obj_idx;
-	uint16_t ship_idx = objects[laser_obj_idx].ship_idx;
+	uint16_t ship_idx;
+	ShipMeshLOD* poly_table;
+	const uint16_t* poly;
 
-	ShipMeshLOD* poly_table = (ShipMeshLOD*)laser_species_poly[laser_species_idx(ship_idx)];
+	int eyex, eyey, eyez;
+
+	parentobject = laser_obj_idx;
+	ship_idx = objects[laser_obj_idx].ship_idx;
+
+	poly_table = (ShipMeshLOD*)laser_species_poly[laser_species_idx(ship_idx)];
 	if (!poly_table) {
 		draw_lockshipfileptrs(ship_idx);
 		poly_table = (ShipMeshLOD*)((uint8_t*)componentblockptr + componentblockptr->render_offset);
 	}
 
-	int eyex = objecteyex, eyey = objecteyey, eyez = objecteyez;
-	const uint16_t* poly = draw_getdetailptr(poly_table, objecteyez);
+	eyex = objecteyex;
+	eyey = objecteyey;
+	eyez = objecteyez;
+	poly = draw_getdetailptr(poly_table, objecteyez);
 	drawpol_drawpolyobject(poly, eyex, eyey, eyez);
 }
 
 // FUNCTION: TIE98 0x417EC0
 void draw_drawlaser_tie98(uint16_t laser_obj_idx) {
 	FlightObject* object = &objects[laser_obj_idx];
+	int32_t camera_x;
+	int32_t camera_y;
+	int32_t camera_z;
+	int32_t up_dot;
+	int32_t side_dot;
+	int16_t saved_roll;
+
 	parentobject = laser_obj_idx;
-	const int32_t camera_x = camera.x - object->world_x;
-	const int32_t camera_y = camera.y - object->world_y;
-	const int32_t camera_z = camera.z - object->world_z;
-	const int32_t up_dot = (int32_t)(((int64_t)camera_x * object->up_x + (int64_t)camera_y * object->up_y +
-									  (int64_t)camera_z * object->up_z) >>
-									 15);
-	const int32_t side_dot =
-		(int32_t)(((int64_t)camera_x * object->side_x + (int64_t)camera_y * object->side_y +
-				   (int64_t)camera_z * object->side_z) >>
-				  15);
-	const int16_t saved_roll = object->roll;
+	camera_x = camera.x - object->world_x;
+	camera_y = camera.y - object->world_y;
+	camera_z = camera.z - object->world_z;
+	/* Retail shifts each full product before the wrapping 32-bit sum. */
+	up_dot = (int32_t)((uint32_t)math2_mul_q15(camera_x, object->up_x) +
+					   (uint32_t)math2_mul_q15(camera_y, object->up_y) +
+					   (uint32_t)math2_mul_q15(camera_z, object->up_z));
+	side_dot = (int32_t)((uint32_t)math2_mul_q15(camera_x, object->side_x) +
+						 (uint32_t)math2_mul_q15(camera_y, object->side_y) +
+						 (uint32_t)math2_mul_q15(camera_z, object->side_z));
+	saved_roll = object->roll;
 	object->roll += (int16_t)(trig2_arctan(up_dot, side_dot) - 0x4000);
 	object->orient_dirty = 1;
 	fview_newcalcrotate(object->roll, object->heading, object->pitch, 0, object);
@@ -460,13 +486,16 @@ static const size_t laser_species_poly_sizes[WEAPON_SPECIES_COUNT] = {
 };
 
 const void* tie_laser_species_poly(uint16_t species_idx, size_t* out_size) {
+	unsigned k;
+	const void* blob;
+
 	if (species_idx < WEAPON_SPECIES_BASE || species_idx >= WEAPON_SPECIES_BASE + WEAPON_SPECIES_COUNT) {
 		if (out_size)
 			*out_size = 0;
 		return NULL;
 	}
-	unsigned k = laser_species_idx(species_idx);
-	const void* blob = laser_species_poly[k];
+	k = laser_species_idx(species_idx);
+	blob = laser_species_poly[k];
 	if (out_size)
 		*out_size = blob ? laser_species_poly_sizes[k] : 0;
 	return blob;
@@ -482,9 +511,11 @@ const void* tie_laser_species_poly(uint16_t species_idx, size_t* out_size) {
  * ========================================================================== */
 // FUNCTION: TIE95 0x1BB28
 void draw_drawhyperstar(int16_t star_idx) {
+	uint16_t saved;
+
 	parentobject = (uint16_t)(star_idx + OBJ_REF_STATIC_BASE);
 	hyperstardata[0x14] = (uint8_t)((star_idx & 3) - 4);
-	uint16_t saved = flatobjnum;
+	saved = flatobjnum;
 	drawpol_drawpolyobject((const uint16_t*)hyperstardata, objecteyex, objecteyey, objecteyez);
 	flatobjnum = saved;
 }
@@ -633,18 +664,24 @@ void draw_drawhyperstar_tie98(int16_t star_idx) {
  * ========================================================================== */
 // FUNCTION: TIE95 0x1BB70
 uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
+	void* handle;
+	const uint8_t* bitmap_base;
+	uint32_t tbl_off;
+	uint32_t sub_off;
+	const uint8_t* v9;
+
 	reverseflag = 1;
 	worldz = 0x100000;
-	void* handle = species_table[ship_idx].model_handle;
-	const uint8_t* bitmap_base = (const uint8_t*)xmemhdl_lock(handle);
+	handle = species_table[ship_idx].model_handle;
+	bitmap_base = (const uint8_t*)xmemhdl_lock(handle);
 	xmemhdl_unlock(handle);
 	if (!bitmap_base)
 		return 0;
 
 	/* Retail bitmaps use a two-level offset to their palette and image data. */
-	uint32_t tbl_off = *(const uint32_t*)(bitmap_base + 16);
-	uint32_t sub_off = *(const uint32_t*)(bitmap_base + tbl_off);
-	const uint8_t* v9 = bitmap_base + sub_off;
+	tbl_off = *(const uint32_t*)(bitmap_base + 16);
+	sub_off = *(const uint32_t*)(bitmap_base + tbl_off);
+	v9 = bitmap_base + sub_off;
 
 	rotscale_prepare_fastdraw(angle);
 	rotscale_prepare_color((const char*)v9);
@@ -654,18 +691,24 @@ uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t scr
 // FUNCTION: TIE98 0x417FF0
 // DRAW_drawbackdropimage
 uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
+	void* handle;
+	const uint8_t* bitmap_base;
+	uint32_t table_offset;
+	uint32_t image_offset;
+	const uint8_t* image;
+
 	reverseflag = 1;
 	worldz = 0x100000;
 	objecteyez = 0x7FFFFFFF;
-	void* handle = species_table[ship_idx].model_handle;
-	const uint8_t* bitmap_base = (const uint8_t*)xmemhdl_lock(handle);
+	handle = species_table[ship_idx].model_handle;
+	bitmap_base = (const uint8_t*)xmemhdl_lock(handle);
 	xmemhdl_unlock(handle);
 	if (!bitmap_base)
 		return 0;
 
-	const uint32_t table_offset = *(const uint32_t*)(bitmap_base + 16);
-	const uint32_t image_offset = *(const uint32_t*)(bitmap_base + table_offset);
-	const uint8_t* image = bitmap_base + image_offset;
+	table_offset = *(const uint32_t*)(bitmap_base + 16);
+	image_offset = *(const uint32_t*)(bitmap_base + table_offset);
+	image = bitmap_base + image_offset;
 	if (g_useHardware3D) {
 		RenderQuad_DrawRotatedSprite(angle, screen_x, screen_y, 0x100, image);
 		return 0;
@@ -702,9 +745,18 @@ ShipModelMesh* draw_gettreeorder(int* bsp_node) {
 	BSPNode* node = (BSPNode*)bsp_node;
 	BSPNode* leaf_node = node;
 
+	int16_t leaf_mesh_idx;
+	ShipModelMesh* mesh;
+	int comp_eyez;
+
 	while (node->left_off != 0) { /* nonzero = branch */
-		leaf_node = node;
+		int plane_dot;
+		int next_off;
+
 		int pt_side, pt_fwd, pt_up;
+
+		leaf_node = node;
+
 		if (relativeshift >= 0) {
 			if (relativeshift == 0) {
 				pt_side = (int16_t)(relativex - node->center_x);
@@ -722,10 +774,9 @@ ShipModelMesh* draw_gettreeorder(int* bsp_node) {
 			pt_up = (relativez >> sh) - node->center_z;
 		}
 
-		int plane_dot = clamp_q30((int16_t)pt_up * node->normal_z + (int16_t)pt_fwd * node->normal_y +
-								  (int16_t)pt_side * node->normal_x);
+		plane_dot = clamp_q30((int16_t)pt_up * node->normal_z + (int16_t)pt_fwd * node->normal_y +
+							  (int16_t)pt_side * node->normal_x);
 
-		int next_off;
 		if (((plane_dot >> 15) & 0x8000) != 0) {
 			/* Camera on negative side: recurse RIGHT, tail-walk LEFT. */
 			draw_gettreeorder((int*)((uint8_t*)node + node->right_off));
@@ -739,9 +790,9 @@ ShipModelMesh* draw_gettreeorder(int* bsp_node) {
 
 	leaf_node = node;
 	/* At leaves, right_off field holds the mesh index. */
-	int16_t leaf_mesh_idx = node->right_off;
-	ShipModelMesh* mesh = &componentblockptr[leaf_mesh_idx];
-	int comp_eyez = objecteyez;
+	leaf_mesh_idx = node->right_off;
+	mesh = &componentblockptr[leaf_mesh_idx];
+	comp_eyez = objecteyez;
 
 	if (mesh->has_position) {
 		int rel = clamp_q30(rotworldeyeC3 * mesh->pos_up + rotworldeyeB3 * mesh->pos_fwd +
@@ -789,6 +840,22 @@ int draw_drawcomplexobject(int obj_idx) {
 	uint16_t obj_idx_u16 = (uint16_t)obj_idx;
 	uint16_t ship_idx;
 
+	LODRecord* lod;
+	uint8_t* bsp_root;
+	uint16_t i;
+	int dx_scaled;
+	int dy_scaled;
+	int dz_scaled;
+	int dx_abs;
+	int dy_abs;
+	int dz_abs;
+	uint16_t dx_abs_w;
+	uint16_t dy_abs_w;
+	uint16_t dz_abs_w;
+	int rel_side;
+	int rel_fwd;
+	int rel_up;
+
 	if (obj_idx_u16 < OBJ_REF_STATIC_BASE) {
 		ship_idx = objects[obj_idx_u16].ship_idx;
 		drawpol_setmarkingcolors(objects[obj_idx_u16].decal_color);
@@ -822,11 +889,9 @@ int draw_drawcomplexobject(int obj_idx) {
 
 	/* Walk the ship-level LOD dispatch table picking the BSP root for
 	 * the current eye-z distance. Each LODRecord is 6 bytes. */
-	_Static_assert(sizeof(LODRecord) == 6, "LODRecord must be 6 bytes");
-	_Static_assert(sizeof(ShipModelMesh) == 64, "ShipModelMesh must be 64 bytes");
-	LODRecord* lod = objectblockptr->lod_records;
-	uint8_t* bsp_root = (uint8_t*)lod;
-	for (uint16_t i = 0; i < objectblockptr->num_lods; ++i) {
+	lod = objectblockptr->lod_records;
+	bsp_root = (uint8_t*)lod;
+	for (i = 0; i < objectblockptr->num_lods; ++i) {
 		bsp_root = (uint8_t*)&lod[i] + lod[i].bsp_offset;
 		if ((int32_t)lod[i].z_max < objecteyez)
 			break;
@@ -834,13 +899,13 @@ int draw_drawcomplexobject(int obj_idx) {
 
 	create_getworldposition(obj_idx_u16, 0);
 
-	int dx_scaled = 2 * (camera.x - worldlocx);
-	int dy_scaled = 2 * (camera.y - worldlocy);
-	int dz_scaled = 2 * (camera.z - worldlocz);
+	dx_scaled = 2 * (camera.x - worldlocx);
+	dy_scaled = 2 * (camera.y - worldlocy);
+	dz_scaled = 2 * (camera.z - worldlocz);
 
-	int dx_abs = (int16_t)((camera.x - worldlocx) >> 15);
-	int dy_abs = (int16_t)((camera.y - worldlocy) >> 15);
-	int dz_abs = (int16_t)((camera.z - worldlocz) >> 15);
+	dx_abs = (int16_t)((camera.x - worldlocx) >> 15);
+	dy_abs = (int16_t)((camera.y - worldlocy) >> 15);
+	dz_abs = (int16_t)((camera.z - worldlocz) >> 15);
 	if ((((camera.x - worldlocx) >> 15) & 0x8000) != 0)
 		dx_abs = -dx_abs;
 	if ((dy_abs & 0x8000) != 0)
@@ -848,9 +913,9 @@ int draw_drawcomplexobject(int obj_idx) {
 	if ((dz_abs & 0x8000) != 0)
 		dz_abs = -dz_abs;
 
-	uint16_t dx_abs_w = (uint16_t)(2 * dx_abs);
-	uint16_t dy_abs_w = (uint16_t)(2 * dy_abs);
-	uint16_t dz_abs_w = (uint16_t)(2 * dz_abs);
+	dx_abs_w = (uint16_t)(2 * dx_abs);
+	dy_abs_w = (uint16_t)(2 * dy_abs);
+	dz_abs_w = (uint16_t)(2 * dz_abs);
 	relativeshift = -1;
 	do {
 		do {
@@ -864,15 +929,15 @@ int draw_drawcomplexobject(int obj_idx) {
 		} while (dx_abs_w);
 	} while (dy_abs_w || dz_abs_w);
 
-	int rel_side =
+	rel_side =
 		clamp_q30((int16_t)dz_scaled * craftS3 + (int16_t)dy_scaled * craftS2 + (int16_t)dx_scaled * craftS1);
 	relativex = (int16_t)(rel_side >> 15);
 
-	int rel_fwd =
+	rel_fwd =
 		clamp_q30((int16_t)dz_scaled * craftf3 + (int16_t)dy_scaled * craftf2 + (int16_t)dx_scaled * craftf1);
 	relativey = -(int16_t)(rel_fwd >> 15);
 
-	int rel_up =
+	rel_up =
 		clamp_q30((int16_t)dz_scaled * craftU3 + (int16_t)dy_scaled * craftU2 + (int16_t)dx_scaled * craftU1);
 	relativez = (int16_t)(rel_up >> 15);
 
@@ -894,6 +959,8 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 	int16_t bolt_angle_cached = 0;
 	int bolt_angle_set = 0;
 
+	uint16_t comp_iter;
+
 	parentobject = obj_idx_u16;
 	highlightcolor = 0;
 	if (obj_idx_u16 == bluetarget) {
@@ -912,10 +979,19 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 			currenttarget = (currenttarget & 0x00FF) | ((currenttarget + 0x7000) & 0xFF00);
 	}
 
-	for (uint16_t comp_iter = 0; comp_iter < numberofcomp; ++comp_iter) {
+	for (comp_iter = 0; comp_iter < numberofcomp; ++comp_iter) {
 		uint16_t comp_idx = comp[comp_iter];
 		ShipModelMesh* mesh = &componentblockptr[comp_idx];
 		int16_t mesh_type = (int16_t)mesh->mesh_type;
+		int16_t rot_angle;
+		uint8_t saved_drawmarkingsflag;
+		uint16_t saved_polycnt;
+		uint16_t saved_curtarget;
+		int eyez_arg;
+		int eyey_arg;
+		int eyex_arg;
+		const uint16_t* poly;
+
 		solidindex = comp_idx;
 
 		if (highlightcolor == 2)
@@ -923,12 +999,9 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 
 		/* Sub-component target highlight check. */
 		if (comp_idx == currenttargetcomp) {
-			if (highlightcolor)
-				goto label20;
-			highlightcolor = 2;
-			goto label20;
-		}
-		if (currenttargetcomp < (int)objectblockptr->num_meshes) {
+			if (!highlightcolor)
+				highlightcolor = 2;
+		} else if (currenttargetcomp < (int)objectblockptr->num_meshes) {
 			if (mesh->has_position > 1 || (mesh->has_position == 1 && mesh_type == 1 /*MESH_MainHull*/)) {
 				ShipModelMesh* tgt_comp = &componentblockptr[currenttargetcomp];
 				if (mesh->has_position == tgt_comp->has_position &&
@@ -937,8 +1010,7 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 				}
 			}
 		}
-	label20:;
-		int16_t rot_angle = 0;
+		rot_angle = 0;
 		if (obj_idx_u16 < NUM_CRAFTS) {
 			if (craftptr->mesh_state[comp_idx] != MESH_STATE_VISIBLE)
 				continue; /* hidden / blown off -- skip */
@@ -949,7 +1021,7 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 				rot_angle = 0;
 		}
 
-		uint8_t saved_drawmarkingsflag = drawmarkingsflag;
+		saved_drawmarkingsflag = drawmarkingsflag;
 		/* Species 17 wing meshes hide their insignia for non-friendly
 		 * craft. Binary @0x1b884: `a2 == 17` where a2 is ship_flag
 		 * (second arg, DX). Mirrors the parallel override in
@@ -957,16 +1029,16 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 		if (ship_flag == 17 && mesh_type == 2 /*MESH_Wing*/ && obj_idx_u16 < OBJ_REF_STATIC_BASE)
 			drawmarkingsflag = (objects[obj_idx_u16].side == 0);
 
-		uint16_t saved_polycnt = shipdetailpolycnt;
-		uint16_t saved_curtarget = currenttarget;
+		saved_polycnt = shipdetailpolycnt;
+		saved_curtarget = currenttarget;
 		if (currenttarget != 0xFFFFu && highlightcolor == 2 && (currenttarget & 0x200) != 0) {
 			currenttarget = parentobject;
 		}
 
-		int eyez_arg = objecteyez;
-		int eyey_arg = objecteyey;
-		int eyex_arg = objecteyex;
-		const uint16_t* poly = draw_getcompdetailptr(mesh, objecteyez);
+		eyez_arg = objecteyez;
+		eyey_arg = objecteyey;
+		eyex_arg = objecteyex;
+		poly = draw_getcompdetailptr(mesh, objecteyez);
 		drawpol_drawpolyobject(poly, eyex_arg, eyey_arg, eyez_arg);
 
 		shipdetailpolycnt = saved_polycnt;
@@ -982,9 +1054,16 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 			 * state range; the binary overlays it as the lightning anim
 			 * frame index (0..24 indexes lightning[25]). */
 			uint8_t last_state = craftptr->mesh_state[objectblockptr->num_meshes];
+			AnimOp lightning_obj;
+			int16_t roll_val;
+			uint32_t screen_x_full;
+			int16_t screen_x_w;
+			int screen_x_h;
+			int16_t bolt_angle;
+
 			if (last_state >= 25)
 				continue;
-			AnimOp lightning_obj = lightning[last_state];
+			lightning_obj = lightning[last_state];
 			if (!animop_is_bitmap(lightning_obj))
 				continue; /* on a header/jump frame -- no bolt this tick */
 			if (!bolt_angle_set) {
@@ -1004,16 +1083,20 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 					bolt_angle_cached = trig2_arctan(arc_dy, -arc_dx);
 				bolt_angle_set = 1;
 			}
-			int16_t roll_val = objects[obj_idx_u16].roll;
-			uint32_t screen_x_full = transfm2_getscreencoordx(objecteyex, objecteyez);
-			int16_t screen_x_w = (int16_t)screen_x_full;
-			int screen_x_h = (int)screen_x_full >> 16;
-			int16_t bolt_angle = (int16_t)(roll_val + bolt_angle_cached);
+			roll_val = objects[obj_idx_u16].roll;
+			screen_x_full = transfm2_getscreencoordx(objecteyex, objecteyez);
+			screen_x_w = (int16_t)screen_x_full;
+			screen_x_h = (int)screen_x_full >> 16;
+			bolt_angle = (int16_t)(roll_val + bolt_angle_cached);
 			if (screen_x_h <= 0 && screen_x_h >= -1) {
 				uint32_t screen_y_full = transfm2_getscreencoordy(objecteyey, objecteyez);
 				int sy_h = (int)screen_y_full >> 16;
 				if (sy_h <= 0 && sy_h >= -1) {
 					int half_pd = (int)pixelsdeep >> 1;
+					uint8_t lb_sp;
+					uint16_t lb_bw;
+					uint16_t lb_psc;
+
 					anim_add_bitmap_draw(parentobject, lightning_obj, 256, screen_x_w,
 										 (int16_t)(half_pd - ((int)screen_y_full - half_pd)), objecteyez,
 										 bolt_angle);
@@ -1023,9 +1106,9 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 					 * passes a fixed scale to anim_add_bitmap_draw).
 					 * Bolt is anchored at parent craft world origin in
 					 * anim_draw_bitmap; emit reads world_*_prev. */
-					uint8_t lb_sp = animop_bitmap_species(lightning_obj);
-					uint16_t lb_bw = species_table[lb_sp].bound_hwidth;
-					uint16_t lb_psc = (uint16_t)rotscale_calcscale(objecteyez, lb_bw, 256);
+					lb_sp = animop_bitmap_species(lightning_obj);
+					lb_bw = species_table[lb_sp].bound_hwidth;
+					lb_psc = (uint16_t)rotscale_calcscale(objecteyez, lb_bw, 256);
 					TieBillboardCapture_Lightning(obj_idx_u16, lightning_obj, lb_psc, lb_bw, bolt_angle);
 				}
 			}
@@ -1043,6 +1126,9 @@ static void draw_drawcraft_tie98(uint16_t object_ref, uint16_t model_type) {
 	int16_t bolt_angle = 0;
 	int bolt_angle_set = 0;
 
+	int mesh_count;
+	int mesh_index;
+
 	parentobject = object_ref;
 	highlightcolor = 0;
 	if (object_ref == bluetarget) {
@@ -1050,10 +1136,23 @@ static void draw_drawcraft_tie98(uint16_t object_ref, uint16_t model_type) {
 		highlightcolor = 1;
 	}
 
-	const int mesh_count = modelmesh_getcount(model_type);
-	for (int mesh_index = 0; mesh_index < mesh_count; ++mesh_index) {
+	mesh_count = modelmesh_getcount(model_type);
+	for (mesh_index = 0; mesh_index < mesh_count; ++mesh_index) {
+		int mesh_type;
+		CraftData* craft;
+		AnimOp lightning_op;
+		uint32_t screen_x;
+		int screen_x_high;
+		uint32_t screen_y;
+		int screen_y_high;
+		int half_height;
+		int16_t rotation;
+		uint8_t bitmap_species;
+		uint16_t bound_hwidth;
+		uint16_t pixel_scale;
+
 		solidindex = (int16_t)mesh_index;
-		const int mesh_type = modelmesh_gettype(model_type, mesh_index);
+		mesh_type = modelmesh_gettype(model_type, mesh_index);
 		if (highlightcolor == 2)
 			highlightcolor = 0;
 		if (currenttargetcomp == mesh_index && highlightcolor == 0)
@@ -1061,11 +1160,11 @@ static void draw_drawcraft_tie98(uint16_t object_ref, uint16_t model_type) {
 
 		if (object_ref >= NUM_CRAFTS)
 			continue;
-		CraftData* craft = objects[object_ref].craft_ptr;
+		craft = objects[object_ref].craft_ptr;
 		if (craft->mesh_state[mesh_index] != MESH_STATE_VISIBLE || mesh_type != TIE_MESH_FUSELAGE)
 			continue;
 
-		const AnimOp lightning_op = lightning[craft->mesh_state[mesh_count]];
+		lightning_op = lightning[craft->mesh_state[mesh_count]];
 		if (!animop_is_bitmap(lightning_op))
 			continue;
 		if (!bolt_angle_set) {
@@ -1084,21 +1183,21 @@ static void draw_drawcraft_tie98(uint16_t object_ref, uint16_t model_type) {
 			bolt_angle_set = 1;
 		}
 
-		const uint32_t screen_x = (uint32_t)transfm2_getscreencoordx(objecteyex, objecteyez);
-		const int screen_x_high = (int32_t)screen_x >> 16;
+		screen_x = (uint32_t)transfm2_getscreencoordx(objecteyex, objecteyez);
+		screen_x_high = (int32_t)screen_x >> 16;
 		if (screen_x_high > 0 || screen_x_high < -1)
 			continue;
-		const uint32_t screen_y = (uint32_t)transfm2_getscreencoordy(objecteyey, objecteyez);
-		const int screen_y_high = (int32_t)screen_y >> 16;
+		screen_y = (uint32_t)transfm2_getscreencoordy(objecteyey, objecteyez);
+		screen_y_high = (int32_t)screen_y >> 16;
 		if (screen_y_high > 0 || screen_y_high < -1)
 			continue;
-		const int half_height = pixelsdeep >> 1;
-		const int16_t rotation = (int16_t)(objects[object_ref].roll + bolt_angle);
+		half_height = pixelsdeep >> 1;
+		rotation = (int16_t)(objects[object_ref].roll + bolt_angle);
 		anim_add_bitmap_draw(parentobject, lightning_op, 0x100, (int16_t)screen_x,
 							 (int16_t)(2 * half_height - (int32_t)screen_y), objecteyez, rotation);
-		const uint8_t bitmap_species = animop_bitmap_species(lightning_op);
-		const uint16_t bound_hwidth = species_table[bitmap_species].bound_hwidth;
-		const uint16_t pixel_scale = (uint16_t)rotscale_calcscale(objecteyez, bound_hwidth, 0x100);
+		bitmap_species = animop_bitmap_species(lightning_op);
+		bound_hwidth = species_table[bitmap_species].bound_hwidth;
+		pixel_scale = (uint16_t)rotscale_calcscale(objecteyez, bound_hwidth, 0x100);
 		TieBillboardCapture_Lightning(object_ref, lightning_op, pixel_scale, bound_hwidth, rotation);
 	}
 	currenttarget = saved_current_target;
@@ -1111,6 +1210,9 @@ void draw_process_object_components_tie98(uint16_t object_ref) {
 									: objects[object_ref].ship_idx;
 	draw_drawcraft_tie98(object_ref, model_type);
 }
+
+typedef char CheckLODRecordSize[sizeof(LODRecord) == 6 ? 1 : -1];
+typedef char CheckShipModelMeshSize[sizeof(ShipModelMesh) == 64 ? 1 : -1];
 
 /* Resolve the model format's 0x7F00 vertex back-references. The original
  * shared arena allowed references beyond one locked model; separate model
@@ -1173,26 +1275,94 @@ static const int16_t* draw_polydepth_walk(const uint8_t* start, int axis, const 
 uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj_id_field,
 							uint16_t a_parent_category, int a_eyex, int a_eyey, uint16_t b_face_info,
 							uint16_t obj_b, uint16_t b_parent_category, uint16_t b_obj_id_field) {
+	uint16_t result_obj;
+	uint16_t mismatch_obj;
+	int via_special_70;
+	uint16_t a_cat_hi;
+	uint16_t b_cat_hi;
+	CraftData* b_craftptr;
+	int relationship;
+	uint16_t owner_obj_id_field;
+	FlightObject* owner_obj;
+	int other_dx;
+	int other_dy;
+	int camera_dx;
+	int camera_dy;
+	int other_dz;
+	int camera_dz;
+	int other_dx_abs;
+	int other_dy_abs;
+	int camera_dz_save;
+	int norm_shift;
+	int other_dz_abs;
+	int other_proj_side;
+	int other_proj_side_hi;
+	int other_proj_fwd;
+	int other_proj_fwd_neg_hi;
+	int other_proj_up;
+	int other_proj_up_hi;
+	int cam_proj_side;
+	int cam_proj_side_hi;
+	int cam_proj_fwd;
+	int cam_proj_fwd_neg_hi;
+	int cam_proj_up;
+	int cam_proj_up_hi;
+	int final_shift;
+	ShipModelMesh* b_mesh;
+	int8_t b_detail_marker;
+	const uint8_t* b_detail_ptr;
+	uint8_t b_numpolys;
+	const uint8_t* b_poly_list;
+	uint16_t b_rot_angle;
+	const PolyFace* plane;
+	int16_t plane_normal_x;
+	int16_t plane_normal_y;
+	int16_t plane_normal_z;
+	const uint8_t* edge_list_base;
+	int16_t cam_proj_side_dx;
+	int16_t other_proj_side_dx;
+	int16_t other_proj_fwd_dx;
+	int16_t cam_proj_fwd_dx;
+	int16_t cam_proj_up_dx;
+	int dot_a;
+	int dot_other_hi;
+	int dot_b;
+
+	uint16_t bound_hwidth, a_bound_size;
+	uint16_t loser_ship_idx, a_ship_idx, ship_idx;
+	int b_world_y, b_world_z, b_world_x, a_world_y;
+	int owner_world_x, owner_world_z, owner_world_y;
+	int v_eyex, v_eyey;
+	const uint8_t* model_lo;
+	const uint8_t* model_hi;
+	int16_t edge_pt_x, edge_pt_y, edge_pt_z;
+
 	(void)a_obj_id_field;
 	(void)b_obj_id_field;
 
 	if (bpflightflag)
 		return obj_a;
 
-	uint16_t result_obj = obj_b;
+	result_obj = obj_b;
 	/* Object returned by the mismatch path. */
-	uint16_t mismatch_obj = obj_a;
-	int via_special_70 = 0;
-	uint16_t bound_hwidth = 0, a_bound_size = 0;
-	uint16_t loser_ship_idx = 0, a_ship_idx = 0, ship_idx = 0;
-	int b_world_y = 0, b_world_z = 0, b_world_x = 0, a_world_y = 0;
+	mismatch_obj = obj_a;
+	via_special_70 = 0;
+	bound_hwidth = 0;
+	a_bound_size = 0;
+	loser_ship_idx = 0;
+	a_ship_idx = 0;
+	ship_idx = 0;
+	b_world_y = 0;
+	b_world_z = 0;
+	b_world_x = 0;
+	a_world_y = 0;
 	(void)b_world_y;
 	(void)b_world_z;
 	(void)b_world_x;
 	(void)a_world_y;
 
-	uint16_t a_cat_hi = (uint16_t)(a_parent_category >> 8) & 0xFF;
-	uint16_t b_cat_hi = (uint16_t)(b_parent_category >> 8) & 0xFF;
+	a_cat_hi = (uint16_t)(a_parent_category >> 8) & 0xFF;
+	b_cat_hi = (uint16_t)(b_parent_category >> 8) & 0xFF;
 
 	/* --- Step 1: A-side category dispatch + load A's world position. */
 	if (a_cat_hi < 0x30u) {
@@ -1252,10 +1422,12 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 			/* fall through to overlap test */
 		} else if (b_cat_hi == 0) {
 			uint16_t b_obj_byte = (uint8_t)b_parent_category;
+			uint16_t b_ship_idx;
+
 			b_world_x = objects[b_obj_byte].world_x;
 			b_world_y = objects[b_obj_byte].world_y;
 			b_world_z = objects[b_obj_byte].world_z;
-			uint16_t b_ship_idx = objects[b_obj_byte].ship_idx;
+			b_ship_idx = objects[b_obj_byte].ship_idx;
 			ship_idx = b_ship_idx;
 			if (b_ship_idx == 89)
 				ship_idx = objects[b_obj_byte].ship_type_override;
@@ -1270,10 +1442,12 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 		/* The original routes category 0x70 through the same object-data
 		 * load as category 0 before continuing with its special scaling. */
 		uint16_t b_obj_byte = (uint8_t)b_parent_category;
+		uint16_t b_ship_idx;
+
 		b_world_x = objects[b_obj_byte].world_x;
 		b_world_y = objects[b_obj_byte].world_y;
 		b_world_z = objects[b_obj_byte].world_z;
-		uint16_t b_ship_idx = objects[b_obj_byte].ship_idx;
+		b_ship_idx = objects[b_obj_byte].ship_idx;
 		ship_idx = b_ship_idx;
 		if (b_ship_idx == 89)
 			ship_idx = objects[b_obj_byte].ship_type_override;
@@ -1294,8 +1468,8 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 	}
 
 	craftptr = objects[(uint8_t)a_parent_category].craft_ptr;
-	CraftData* b_craftptr = objects[(uint8_t)b_parent_category].craft_ptr;
-	int relationship = 0;
+	b_craftptr = objects[(uint8_t)b_parent_category].craft_ptr;
+	relationship = 0;
 	if ((uint8_t)a_parent_category < NUM_CRAFTS) {
 		int16_t a_link = craftptr->tow_slave_ref;
 		if (a_link == (uint8_t)b_parent_category || a_link == (int16_t)b_parent_category ||
@@ -1311,10 +1485,13 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 			relationship = 2;
 	}
 
-	int owner_world_x = 0, owner_world_z = 0, owner_world_y = 0;
-	uint16_t owner_obj_id_field = 0;
-	FlightObject* owner_obj = NULL;
-	int v_eyex = a_eyex, v_eyey = a_eyey;
+	owner_world_x = 0;
+	owner_world_z = 0;
+	owner_world_y = 0;
+	owner_obj_id_field = 0;
+	owner_obj = NULL;
+	v_eyex = a_eyex;
+	v_eyey = a_eyey;
 
 	if (relationship == 2 ||
 		(relationship != 1 && a_cat_hi != 0x70u && (a_bound_size <= bound_hwidth || b_cat_hi == 0x70u))) {
@@ -1323,15 +1500,18 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 		 * without this swap the polygon-plane lookup below indexes B's
 		 * polygon list with A's face index, producing a wrong plane and
 		 * a heap-OOB on the edge_list_base[1]/i chain. */
+		uint16_t b_obj_byte;
+		uint16_t swap_tmp;
+
 		a_face_info = b_face_info;
 		loser_ship_idx = ship_idx;
 		ship_idx = a_ship_idx;
-		uint16_t b_obj_byte = (uint8_t)b_parent_category;
+		b_obj_byte = (uint8_t)b_parent_category;
 		craftptr = objects[b_obj_byte].craft_ptr;
 		owner_obj = &objects[b_obj_byte];
 		owner_world_y = b_world_y;
 		owner_obj_id_field = b_obj_id_field;
-		uint16_t swap_tmp = obj_a;
+		swap_tmp = obj_a;
 		owner_world_x = b_world_x;
 		owner_world_z = b_world_z;
 		result_obj = swap_tmp;
@@ -1354,17 +1534,17 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 	}
 
 	/* --- LABEL_68: relative-vector compute + bit-scaling normalize. */
-	int other_dx = v_eyex - owner_world_x;
-	int other_dy = a_world_y - owner_world_y;
-	int camera_dx = camera.x - owner_world_x;
-	int camera_dy = camera.y - owner_world_y;
-	int other_dz = v_eyey - owner_world_z;
-	int camera_dz = camera.z - owner_world_z;
-	int other_dx_abs = other_dx >> 14;
-	int other_dy_abs = other_dy >> 14;
-	int camera_dz_save = camera_dz;
-	int norm_shift = 0;
-	int other_dz_abs = other_dz >> 14;
+	other_dx = v_eyex - owner_world_x;
+	other_dy = a_world_y - owner_world_y;
+	camera_dx = camera.x - owner_world_x;
+	camera_dy = camera.y - owner_world_y;
+	other_dz = v_eyey - owner_world_z;
+	camera_dz = camera.z - owner_world_z;
+	other_dx_abs = other_dx >> 14;
+	other_dy_abs = other_dy >> 14;
+	camera_dz_save = camera_dz;
+	norm_shift = 0;
+	other_dz_abs = other_dz >> 14;
 	if ((other_dx_abs & 0x8000) != 0)
 		other_dx_abs = -other_dx_abs;
 	if ((other_dy_abs & 0x8000) != 0)
@@ -1389,48 +1569,50 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 	/* Watcom unaligned dword loads in the original decomp:
 	 *   *(int*)&owner_obj->X >> 16 reads the int16 at X+2 (the next field).
 	 * Translated below using the actual field, per CLAUDE.md guidance. */
-	int other_proj_side =
+	other_proj_side =
 		clamp_q30((int16_t)other_dz * owner_obj->side_z + (int16_t)other_dy * owner_obj->side_y +
 				  (int16_t)other_dx * owner_obj->side_x);
-	int other_proj_side_hi = other_proj_side >> 15;
+	other_proj_side_hi = other_proj_side >> 15;
 
-	int other_proj_fwd =
-		clamp_q30((int16_t)other_dz * owner_obj->fwd_z + (int16_t)other_dy * owner_obj->fwd_y +
-				  (int16_t)other_dx * owner_obj->fwd_x);
-	int other_proj_fwd_neg_hi = -(other_proj_fwd >> 15);
+	other_proj_fwd = clamp_q30((int16_t)other_dz * owner_obj->fwd_z + (int16_t)other_dy * owner_obj->fwd_y +
+							   (int16_t)other_dx * owner_obj->fwd_x);
+	other_proj_fwd_neg_hi = -(other_proj_fwd >> 15);
 
-	int other_proj_up = clamp_q30((int16_t)other_dz * owner_obj->up_z + (int16_t)other_dy * owner_obj->up_y +
-								  (int16_t)other_dx * owner_obj->up_x);
-	int other_proj_up_hi = other_proj_up >> 15;
+	other_proj_up = clamp_q30((int16_t)other_dz * owner_obj->up_z + (int16_t)other_dy * owner_obj->up_y +
+							  (int16_t)other_dx * owner_obj->up_x);
+	other_proj_up_hi = other_proj_up >> 15;
 
-	int cam_proj_side =
+	cam_proj_side =
 		clamp_q30((int16_t)camera_dz_save * owner_obj->side_z + (int16_t)camera_dy * owner_obj->side_y +
 				  (int16_t)camera_dx * owner_obj->side_x);
-	int cam_proj_side_hi = cam_proj_side >> 15;
+	cam_proj_side_hi = cam_proj_side >> 15;
 
-	int cam_proj_fwd =
-		clamp_q30((int16_t)camera_dz_save * owner_obj->fwd_z + (int16_t)camera_dy * owner_obj->fwd_y +
-				  (int16_t)camera_dx * owner_obj->fwd_x);
-	int cam_proj_fwd_neg_hi = -(cam_proj_fwd >> 15);
+	cam_proj_fwd = clamp_q30((int16_t)camera_dz_save * owner_obj->fwd_z +
+							 (int16_t)camera_dy * owner_obj->fwd_y + (int16_t)camera_dx * owner_obj->fwd_x);
+	cam_proj_fwd_neg_hi = -(cam_proj_fwd >> 15);
 
-	int cam_proj_up = clamp_q30((int16_t)camera_dz_save * owner_obj->up_z +
-								(int16_t)camera_dy * owner_obj->up_y + (int16_t)camera_dx * owner_obj->up_x);
-	int cam_proj_up_hi = cam_proj_up >> 15;
+	cam_proj_up = clamp_q30((int16_t)camera_dz_save * owner_obj->up_z + (int16_t)camera_dy * owner_obj->up_y +
+							(int16_t)camera_dx * owner_obj->up_x);
+	cam_proj_up_hi = cam_proj_up >> 15;
 
-	int final_shift = via_special_70 ? (norm_shift - 1) : (norm_shift + 1);
+	final_shift = via_special_70 ? (norm_shift - 1) : (norm_shift + 1);
 
 	/* --- Size-based fast reject if both species satisfy bound check.
 	 * Watcom unaligned dword loads in the original decomp:
 	 *   *(int*)&spec_data[N].dock_fwd >> 16 reads spec_data[N].dock_passive_light (next field).
 	 *   *(int*)&spec_data[N].dock_passive_heavy >> 16 reads spec_data[N].dock_active_light. */
 	if (relationship != 0) {
+		int speed_match;
+
 		draw_lockshipfileptrs(ship_idx);
-		int speed_match =
+		speed_match =
 			spec_data[spec_getspecnum(ship_idx)].dock_passive_light == (objectblockptr->speed_default >> 17);
 		if (speed_match) {
+			int d2lo_match;
+
 			draw_lockshipfileptrs(loser_ship_idx);
-			int d2lo_match = spec_data[spec_getspecnum(loser_ship_idx)].dock_active_light ==
-							 (objectblockptr->shield_default >> 17);
+			d2lo_match = spec_data[spec_getspecnum(loser_ship_idx)].dock_active_light ==
+						 (objectblockptr->shield_default >> 17);
 			if (d2lo_match) {
 				if (cam_proj_up_hi < (objectblockptr->shield_default >> 16 >> final_shift))
 					return result_obj;
@@ -1441,35 +1623,35 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 
 	/* --- Full polygon-plane test. */
 	draw_lockshipfileptrs(loser_ship_idx);
-	ShipModelMesh* b_mesh = &componentblockptr[owner_obj_id_field];
+	b_mesh = &componentblockptr[owner_obj_id_field];
 	fview_newcalcrotate(owner_obj->roll, owner_obj->heading, owner_obj->pitch, 0, owner_obj);
-	int8_t b_detail_marker = (int8_t)craftptr->mesh_rotation[owner_obj_id_field];
+	b_detail_marker = (int8_t)craftptr->mesh_rotation[owner_obj_id_field];
 	if (b_detail_marker && (b_mesh->rotation_offset || mission.train_craft_type))
 		fview_componentrotation((int16_t)((int)b_detail_marker << 8), b_mesh);
 
-	const uint8_t* b_detail_ptr = (const uint8_t*)draw_getcompdetailptr(b_mesh, craftptr->eye_z_cache);
-	uint8_t b_numpolys = b_detail_ptr[4];
+	b_detail_ptr = (const uint8_t*)draw_getcompdetailptr(b_mesh, craftptr->eye_z_cache);
+	b_numpolys = b_detail_ptr[4];
 	if (b_numpolys <= a_face_info)
 		a_face_info = (uint16_t)(b_numpolys - 1);
-	const uint8_t* b_poly_list = b_detail_ptr + b_numpolys + 17;
-	uint16_t b_rot_angle = b_detail_ptr[2];
-	const PolyFace* plane = (const PolyFace*)(b_poly_list + 8 * a_face_info + 12 * b_rot_angle);
+	b_poly_list = b_detail_ptr + b_numpolys + 17;
+	b_rot_angle = b_detail_ptr[2];
+	plane = (const PolyFace*)(b_poly_list + 8 * a_face_info + 12 * b_rot_angle);
 
-	int16_t plane_normal_x = plane->normal_x;
-	int16_t plane_normal_y = plane->normal_y;
-	int16_t plane_normal_z = plane->normal_z;
-	const uint8_t* edge_list_base = (const uint8_t*)plane + plane->vlist_offset;
+	plane_normal_x = plane->normal_x;
+	plane_normal_y = plane->normal_y;
+	plane_normal_z = plane->normal_z;
+	edge_list_base = (const uint8_t*)plane + plane->vlist_offset;
 
 	/* Bounds of the locked model buffer (loser_ship_idx is the ship whose
 	 * model was locked above). Used only by the diagnostic walk below. */
-	const uint8_t *model_lo = NULL, *model_hi = NULL;
+	model_lo = NULL;
+	model_hi = NULL;
 	if (loser_ship_idx < NUM_SPECIES) {
 		model_lo = (const uint8_t*)species_table[loser_ship_idx].model_handle;
 		if (model_lo)
 			model_hi = model_lo + species_model_handle_sizes[loser_ship_idx];
 	}
 
-	int16_t edge_pt_x, edge_pt_y, edge_pt_z;
 	if (model_lo &&
 		((const uint8_t*)edge_list_base + 1 < model_lo || (const uint8_t*)edge_list_base + 1 >= model_hi)) {
 		/* The face's vlist_offset placed edge_list_base itself outside the
@@ -1490,37 +1672,41 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 		}
 		edge_pt_x = edge_pt_y = edge_pt_z = 0;
 	} else {
-		PolyDepthDiag diag = {
-			.ship_idx = loser_ship_idx,
-			.buf_lo = model_lo,
-			.buf_hi = model_hi,
-			.b_detail_ptr = b_detail_ptr,
-			.b_poly_list = b_poly_list,
-			.edge_list_base = edge_list_base,
-			.a_face_info = a_face_info,
-			.b_rot_angle = b_rot_angle,
-			.b_numpolys = b_numpolys,
-			.edge_idx = edge_list_base[1],
-		};
-		const int16_t* i = draw_polydepth_walk(b_poly_list + 6 * diag.edge_idx, 0, &diag);
+		PolyDepthDiag diag;
+		const int16_t* i;
+		const int16_t* j;
+		const int16_t* k;
+
+		diag.ship_idx = loser_ship_idx;
+		diag.buf_lo = model_lo;
+		diag.buf_hi = model_hi;
+		diag.b_detail_ptr = b_detail_ptr;
+		diag.b_poly_list = b_poly_list;
+		diag.edge_list_base = edge_list_base;
+		diag.a_face_info = a_face_info;
+		diag.b_rot_angle = b_rot_angle;
+		diag.b_numpolys = b_numpolys;
+		diag.edge_idx = edge_list_base[1];
+		i = draw_polydepth_walk(b_poly_list + 6 * diag.edge_idx, 0, &diag);
+
 		edge_pt_x = (int16_t)((int)*i >> final_shift);
-		const int16_t* j = draw_polydepth_walk(b_poly_list + 6 * diag.edge_idx + 2, 1, &diag);
+		j = draw_polydepth_walk(b_poly_list + 6 * diag.edge_idx + 2, 1, &diag);
 		edge_pt_y = (int16_t)((int)*j >> final_shift);
-		const int16_t* k = draw_polydepth_walk(b_poly_list + 6 * diag.edge_idx + 4, 2, &diag);
+		k = draw_polydepth_walk(b_poly_list + 6 * diag.edge_idx + 4, 2, &diag);
 		edge_pt_z = (int16_t)((int)*k >> final_shift);
 	}
 
-	int16_t cam_proj_side_dx = (int16_t)(cam_proj_side_hi - edge_pt_x);
-	int16_t other_proj_side_dx = (int16_t)(other_proj_side_hi - edge_pt_x);
-	int16_t other_proj_fwd_dx = (int16_t)(other_proj_fwd_neg_hi - edge_pt_y);
-	int16_t cam_proj_fwd_dx = (int16_t)(cam_proj_fwd_neg_hi - edge_pt_y);
-	int16_t cam_proj_up_dx = (int16_t)(cam_proj_up_hi - edge_pt_z);
+	cam_proj_side_dx = (int16_t)(cam_proj_side_hi - edge_pt_x);
+	other_proj_side_dx = (int16_t)(other_proj_side_hi - edge_pt_x);
+	other_proj_fwd_dx = (int16_t)(other_proj_fwd_neg_hi - edge_pt_y);
+	cam_proj_fwd_dx = (int16_t)(cam_proj_fwd_neg_hi - edge_pt_y);
+	cam_proj_up_dx = (int16_t)(cam_proj_up_hi - edge_pt_z);
 
-	int dot_a = clamp_q30((int16_t)(other_proj_up_hi - edge_pt_z) * plane_normal_z +
-						  other_proj_fwd_dx * plane_normal_y + other_proj_side_dx * plane_normal_x);
-	int dot_other_hi = dot_a >> 15;
-	int dot_b = clamp_q30(cam_proj_up_dx * plane_normal_z + cam_proj_fwd_dx * plane_normal_y +
-						  cam_proj_side_dx * plane_normal_x);
+	dot_a = clamp_q30((int16_t)(other_proj_up_hi - edge_pt_z) * plane_normal_z +
+					  other_proj_fwd_dx * plane_normal_y + other_proj_side_dx * plane_normal_x);
+	dot_other_hi = dot_a >> 15;
+	dot_b = clamp_q30(cam_proj_up_dx * plane_normal_z + cam_proj_fwd_dx * plane_normal_y +
+					  cam_proj_side_dx * plane_normal_x);
 
 	if (((dot_other_hi ^ (dot_b >> 15)) & 0x8000) == 0)
 		return result_obj;

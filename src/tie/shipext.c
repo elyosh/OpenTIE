@@ -22,11 +22,12 @@
 
 #include "tie/fediskio.h"
 #include "tie/tie.h"
+
+#include "../util/binio.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include "../util/binio.h"
 
 /* --------------------------------------------------------------------------
  * On-disk codecs for the .TIE mission-file flight-group records.
@@ -91,6 +92,8 @@ void EAIStruct_encode(uint8_t* dst, const EAIStruct* src) {
 }
 
 void EFGStruct_decode(EFGStruct* dst, const uint8_t* src) {
+	int i;
+
 	memcpy(dst->name, src + 0x00, 12);
 	memcpy(dst->cmdr, src + 0x0C, 12);
 	memcpy(dst->contents[0], src + 0x18, 12);
@@ -162,13 +165,13 @@ void EFGStruct_decode(EFGStruct* dst, const uint8_t* src) {
 	dst->bonus_points = (int8_t)src[0xA6];
 	dst->bonus_unused = src[0xA7];
 
-	for (int i = 0; i < 15; ++i)
+	for (i = 0; i < 15; ++i)
 		dst->way_x[i] = br_i16le(src + 0xA8 + i * 2);
-	for (int i = 0; i < 15; ++i)
+	for (i = 0; i < 15; ++i)
 		dst->way_y[i] = br_i16le(src + 0xC6 + i * 2);
-	for (int i = 0; i < 15; ++i)
+	for (i = 0; i < 15; ++i)
 		dst->way_z[i] = br_i16le(src + 0xE4 + i * 2);
-	for (int i = 0; i < 15; ++i)
+	for (i = 0; i < 15; ++i)
 		dst->way_used[i] = br_i16le(src + 0x102 + i * 2);
 
 	dst->way_shown = src[0x120];
@@ -178,6 +181,8 @@ void EFGStruct_decode(EFGStruct* dst, const uint8_t* src) {
 }
 
 void EFGStruct_encode(uint8_t* dst, const EFGStruct* src) {
+	int i;
+
 	memcpy(dst + 0x00, src->name, 12);
 	memcpy(dst + 0x0C, src->cmdr, 12);
 	memcpy(dst + 0x18, src->contents[0], 12);
@@ -249,13 +254,13 @@ void EFGStruct_encode(uint8_t* dst, const EFGStruct* src) {
 	dst[0xA6] = (uint8_t)src->bonus_points;
 	dst[0xA7] = src->bonus_unused;
 
-	for (int i = 0; i < 15; ++i)
+	for (i = 0; i < 15; ++i)
 		bw_i16le(dst + 0xA8 + i * 2, src->way_x[i]);
-	for (int i = 0; i < 15; ++i)
+	for (i = 0; i < 15; ++i)
 		bw_i16le(dst + 0xC6 + i * 2, src->way_y[i]);
-	for (int i = 0; i < 15; ++i)
+	for (i = 0; i < 15; ++i)
 		bw_i16le(dst + 0xE4 + i * 2, src->way_z[i]);
-	for (int i = 0; i < 15; ++i)
+	for (i = 0; i < 15; ++i)
 		bw_i16le(dst + 0x102 + i * 2, src->way_used[i]);
 
 	dst[0x120] = src->way_shown;
@@ -361,6 +366,12 @@ void MissionFile_encode(uint8_t* dst, const MissionFile* src) {
  * -------------------------------------------------------------------------- */
 
 void PilotRecord_decode(PilotRecord* dst, const uint8_t* src) {
+	int i;
+	int s;
+	int c;
+	int b;
+	int m;
+
 	dst->version = src[0x000];
 	dst->exit_status = src[0x001];
 	dst->rank = src[0x002];
@@ -376,17 +387,17 @@ void PilotRecord_decode(PilotRecord* dst, const uint8_t* src) {
 	dst->cur_train_ship = src[0x01C];
 	memcpy(dst->train_level, src + 0x01D, NUM_SHIPS);
 	dst->reserved_29 = src[0x029];
-	for (int i = 0; i < NUM_SHIPS; ++i)
+	for (i = 0; i < NUM_SHIPS; ++i)
 		dst->train_score[i] = br_i32le(src + 0x02A + i * 4);
 	memcpy(dst->train_max_level, src + 0x05A, NUM_SHIPS);
 
 	dst->cur_combat_ship = src[0x066];
 	memcpy(dst->combat_course_cursor, src + 0x067, SHIP_INFO_SIZE);
 	dst->reserved_87 = src[0x087];
-	for (int s = 0; s < NUM_SHIPS; ++s)
-		for (int c = 0; c < 8; ++c)
+	for (s = 0; s < NUM_SHIPS; ++s)
+		for (c = 0; c < 8; ++c)
 			dst->combat_score[s][c] = br_i32le(src + 0x088 + (s * 8 + c) * 4);
-	for (int s = 0; s < NUM_SHIPS; ++s)
+	for (s = 0; s < NUM_SHIPS; ++s)
 		memcpy(dst->combat_complete[s], src + 0x208 + s * 8, 8);
 
 	dst->cur_battle = src[0x268];
@@ -398,16 +409,16 @@ void PilotRecord_decode(PilotRecord* dst, const uint8_t* src) {
 	memcpy(dst->reserved_3b9, src + 0x3B9, 29);
 	memcpy(dst->reserved_3d6, src + 0x3D6, 4);
 
-	for (int b = 0; b < NUM_BATTLES; ++b)
-		for (int m = 0; m < 8; ++m)
+	for (b = 0; b < NUM_BATTLES; ++b)
+		for (m = 0; m < 8; ++m)
 			dst->tour_score[b][m] = br_i32le(src + 0x3DA + (b * 8 + m) * 4);
 
 	dst->total_kills = br_u16le(src + 0x65A);
 	dst->total_captures = br_u16le(src + 0x65C);
 	memcpy(dst->reserved_65e, src + 0x65E, 2);
-	for (int i = 0; i < 69; ++i)
+	for (i = 0; i < 69; ++i)
 		dst->kills_by_ship_type[i] = br_u16le(src + 0x660 + i * 2);
-	for (int i = 0; i < 69; ++i)
+	for (i = 0; i < 69; ++i)
 		dst->captures_by_ship_type[i] = br_u16le(src + 0x6EA + i * 2);
 
 	dst->laser_total = br_i32le(src + 0x774);
@@ -420,6 +431,12 @@ void PilotRecord_decode(PilotRecord* dst, const uint8_t* src) {
 }
 
 void PilotRecord_encode(uint8_t* dst, const PilotRecord* src) {
+	int i;
+	int s;
+	int c;
+	int b;
+	int m;
+
 	dst[0x000] = src->version;
 	dst[0x001] = src->exit_status;
 	dst[0x002] = src->rank;
@@ -435,17 +452,17 @@ void PilotRecord_encode(uint8_t* dst, const PilotRecord* src) {
 	dst[0x01C] = src->cur_train_ship;
 	memcpy(dst + 0x01D, src->train_level, NUM_SHIPS);
 	dst[0x029] = src->reserved_29;
-	for (int i = 0; i < NUM_SHIPS; ++i)
+	for (i = 0; i < NUM_SHIPS; ++i)
 		bw_i32le(dst + 0x02A + i * 4, src->train_score[i]);
 	memcpy(dst + 0x05A, src->train_max_level, NUM_SHIPS);
 
 	dst[0x066] = src->cur_combat_ship;
 	memcpy(dst + 0x067, src->combat_course_cursor, SHIP_INFO_SIZE);
 	dst[0x087] = src->reserved_87;
-	for (int s = 0; s < NUM_SHIPS; ++s)
-		for (int c = 0; c < 8; ++c)
+	for (s = 0; s < NUM_SHIPS; ++s)
+		for (c = 0; c < 8; ++c)
 			bw_i32le(dst + 0x088 + (s * 8 + c) * 4, src->combat_score[s][c]);
-	for (int s = 0; s < NUM_SHIPS; ++s)
+	for (s = 0; s < NUM_SHIPS; ++s)
 		memcpy(dst + 0x208 + s * 8, src->combat_complete[s], 8);
 
 	dst[0x268] = src->cur_battle;
@@ -457,16 +474,16 @@ void PilotRecord_encode(uint8_t* dst, const PilotRecord* src) {
 	memcpy(dst + 0x3B9, src->reserved_3b9, 29);
 	memcpy(dst + 0x3D6, src->reserved_3d6, 4);
 
-	for (int b = 0; b < NUM_BATTLES; ++b)
-		for (int m = 0; m < 8; ++m)
+	for (b = 0; b < NUM_BATTLES; ++b)
+		for (m = 0; m < 8; ++m)
 			bw_i32le(dst + 0x3DA + (b * 8 + m) * 4, src->tour_score[b][m]);
 
 	bw_u16le(dst + 0x65A, src->total_kills);
 	bw_u16le(dst + 0x65C, src->total_captures);
 	memcpy(dst + 0x65E, src->reserved_65e, 2);
-	for (int i = 0; i < 69; ++i)
+	for (i = 0; i < 69; ++i)
 		bw_u16le(dst + 0x660 + i * 2, src->kills_by_ship_type[i]);
-	for (int i = 0; i < 69; ++i)
+	for (i = 0; i < 69; ++i)
 		bw_u16le(dst + 0x6EA + i * 2, src->captures_by_ship_type[i]);
 
 	bw_i32le(dst + 0x774, src->laser_total);
@@ -483,8 +500,10 @@ void PilotRecord_encode(uint8_t* dst, const PilotRecord* src) {
  *   1 = CAPTURED   -> scene 210
  *   2 = rescued/ok -> debrief/tour path (fall-through via goto LABEL_12)
  *   3 = mission ended normally -> debrief/tour */
-#define PLAYER_DEAD 0
-#define PLAYER_CAPTURED 1
+enum {
+	PLAYER_DEAD = 0,
+	PLAYER_CAPTURED = 1,
+};
 
 /* --- Module globals --- */
 
@@ -635,8 +654,9 @@ ResFile* shipext_Open_Ship_Resource(int16_t ship_idx) {
 }
 
 // FUNCTION: TIE95 0x807BC
-int16_t shipext_Open_Launch_Resource(void) {
-	return (int16_t)(intptr_t)shipext_Open_Ship_Resource(mission_ship);
+// FUNCTION: TIE98 0x481A40
+ResFile* shipext_Open_Launch_Resource(void) {
+	return shipext_Open_Ship_Resource(mission_ship);
 }
 
 // FUNCTION: TIE95 0x82284
@@ -1001,13 +1021,15 @@ bool shipext_Load_Pilot(const char* name) {
 	char path[40];
 	LandruFile* fp;
 
+	uint8_t buf[PILOTRECORD_DISK_SIZE];
+
 	strcpy(path, name);
 	strcat(path, ".tfr");
 	options_gbl.game_level = 1;
 	fp = xfile_Open_File(LANDRU_FILE_ROOT_USER, path, "rb");
 	if (!fp)
 		return false;
-	uint8_t buf[PILOTRECORD_DISK_SIZE];
+
 	xfile_Read_Data_From_File(fp, buf, PILOTRECORD_DISK_SIZE);
 	xfile_Close_File(fp);
 	PilotRecord_decode(&pilot_record, buf);
@@ -1029,11 +1051,15 @@ bool shipext_Create_Pilot(const char* name) {
 }
 
 /* Two-slot disk image: primary at +0, backup at +PILOTRECORD_DISK_SIZE. */
-#define TFR_FILE_SIZE (2u * PILOTRECORD_DISK_SIZE)
-#define TFR_BACKUP_OFFSET PILOTRECORD_DISK_SIZE
+enum {
+	TFR_FILE_SIZE = (2u * PILOTRECORD_DISK_SIZE),
+	TFR_BACKUP_OFFSET = PILOTRECORD_DISK_SIZE,
+};
 
 /* game_level lives at offset 3 within each PilotRecord slot. */
-#define TFR_GAME_LEVEL_OFFSET 3u
+enum {
+	TFR_GAME_LEVEL_OFFSET = 3u,
+};
 
 // FUNCTION: TIE95 0x80374
 void shipext_Save_Pilot_Data(const char* name) {
@@ -1668,10 +1694,13 @@ Actor* shipext_Get_Battle_Galaxy_Image(void) {
 	Rect bounds;
 	int16_t battle_idx = pilot_record.cur_battle + NUM_SHIPS;
 
+	ResFile* res;
+	Actor* actor;
+
 	xparagrp_Get_Paragraph_String(ship_info[battle_idx], name, 2, 0);
-	ResFile* res = shipext_Open_Ship_Resource(battle_idx);
+	res = shipext_Open_Ship_Resource(battle_idx);
 	xcanvas_Get_Drawing_Canvas_Bounds(&bounds);
-	Actor* actor = xactdelt_Res_Delta_Actor(name, &bounds, 0, 0, 0);
+	actor = xactdelt_Res_Delta_Actor(name, &bounds, 0, 0, 0);
 	xactor_Set_Actor_Time(actor, -1, -1);
 	xres_Close_Resource(res);
 	return actor;
@@ -1720,12 +1749,14 @@ void shipext_Get_Battle_Galaxy_Rect(Rect* out) {
  *   default   : chain only
  */
 static bool battle_prereqs_with_status_gate(int16_t battle, bool cur_status_ok) {
+	bool chain;
+
 	if (!ship_info[battle + NUM_SHIPS])
 		return false;
 	if (!cur_status_ok)
 		return false;
 
-	bool chain = true;
+	chain = true;
 	if (battle > 6)
 		chain = (pilot_record.battle_status[6] == 3);
 	if (battle > 9)
@@ -1843,11 +1874,14 @@ int16_t shipext_Get_Tour_Cutscene(void) {
 	int16_t cur = pilot_record.cur_battle;
 	int16_t result = 0;
 
+	int16_t battle_size;
+	int16_t cursor;
+
 	if (pilot_record.battle_status[cur] != 1)
 		return 0;
 
-	int16_t battle_size = shipext_Get_Tour_Battle_Size(cur);
-	int16_t cursor = pilot_record.battle_cursor[cur];
+	battle_size = shipext_Get_Tour_Battle_Size(cur);
+	cursor = pilot_record.battle_cursor[cur];
 
 	if (battle_size == cursor) {
 		/* Battle complete — award TOD medal for tours 1..13 */
@@ -1858,7 +1892,9 @@ int16_t shipext_Get_Tour_Cutscene(void) {
 	} else if (shipext_Is_Mission_Success()) {
 		/* Check for secret battle scene triggers */
 		int16_t scene_id = 21;
-		for (int16_t i = 0; i < 8; i++) {
+		int16_t i;
+
+		for (i = 0; i < 8; i++) {
 			if (cur == secret_battle_scene[i].battle && secret_battle_scene[i].mission == cursor - 1)
 				result = scene_id;
 			scene_id++;
@@ -1927,12 +1963,14 @@ void shipext_Mission_Enter(int16_t mission_type) {
 
 	if (mission_type == 2) {
 		/* Training mission */
+		int16_t craft_id;
+
 		if (!shipext_Is_Ship_Available(pilot_record.cur_train_ship)) {
 			pilot_record.train_level[pilot_record.cur_train_ship] = 0;
 			pilot_record.cur_train_ship = 0;
 		}
 		/* Map train ship index to flight craft ID */
-		int16_t craft_id = pilot_record.cur_train_ship;
+		craft_id = pilot_record.cur_train_ship;
 		switch (pilot_record.cur_train_ship) {
 			case 0:
 				craft_id = 5;
@@ -2128,6 +2166,9 @@ void shipext_Find_Mission_Ship(void) {
 	int16_t header_word;
 	int16_t dummy;
 
+	uint8_t mis_buf[EMISSIONSTRUCT_DISK_SIZE];
+	uint8_t fg_buf[EFGSTRUCT_DISK_SIZE];
+
 	shipext_Get_Mission_Path(path);
 	fp = xfile_Open_File(LANDRU_FILE_ROOT_AUXILIARY_ASSET, path, "rb");
 	if (!fp)
@@ -2146,7 +2187,7 @@ void shipext_Find_Mission_Ship(void) {
 	xfile_Read_Word_From_File(fp, &dummy); /* unknown */
 
 	/* Read 450-byte mission global data */
-	uint8_t mis_buf[EMISSIONSTRUCT_DISK_SIZE];
+
 	xfile_Read_Data_From_File(fp, mis_buf, EMISSIONSTRUCT_DISK_SIZE);
 	EMissionStruct_decode(&mission_data, mis_buf);
 
@@ -2157,7 +2198,7 @@ void shipext_Find_Mission_Ship(void) {
 	/* Scan flight groups to find the player's FG. Each on-disk record is
 	 * EFGSTRUCT_DISK_SIZE bytes; sizeof(EFGStruct) is host-dependent and
 	 * not safe to use as the read length. */
-	uint8_t fg_buf[EFGSTRUCT_DISK_SIZE];
+
 	for (fg_idx = 0; fg_idx < num_fgs; fg_idx++) {
 		xfile_Read_Data_From_File(fp, fg_buf, EFGSTRUCT_DISK_SIZE);
 		EFGStruct_decode(&fg, fg_buf);

@@ -1,11 +1,19 @@
-#ifndef __TRAIN_H__
-#define __TRAIN_H__
-
-#include <stdint.h>
+#ifndef TIE_TRAIN_H
+#define TIE_TRAIN_H
 
 #include "tie/shellext.h"
 
-/* Push the training scene as a tie_core task. */
-void train_Push_Train_Task(SceneHeadStruct* the_head);
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void train_OpenScene(SceneHeadStruct* the_head, bool svga);
+void train_CloseScene(bool svga);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,3 +1,10 @@
+#ifndef TIE_FCALLBK_H
+#define TIE_FCALLBK_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * FCALLBK -- iMUSE trigger callback bridge for the front-end music engine.
  *
@@ -8,11 +15,12 @@
  * channel-volume cache.
  */
 
-#ifndef __FCALLBK_H__
-#define __FCALLBK_H__
-
 void fcallbk_CbInitialize(void);
 int fcallbk_CbDoCallback(int marker_type);
 int fcallbk_CbSetChannels(void);
 
-#endif /* __FCALLBK_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

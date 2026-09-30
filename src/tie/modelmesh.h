@@ -1,9 +1,6 @@
 #ifndef TIE_MODELMESH_H
 #define TIE_MODELMESH_H
 
-#include <stdbool.h>
-#include <stdint.h>
-
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
@@ -13,6 +10,13 @@
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 enum TieModelMeshType {
 	TIE_MESH_DEFAULT = 0,
@@ -82,5 +86,9 @@ int modelmesh_findbridgeindex(uint16_t model_type);
 /* Point coordinates use the ModelMesh_GetHardpoint order above. */
 void modelmesh_applyanimatedmeshrotationtopoint(int angle, uint16_t model_type, int mesh_index, int x, int y,
 												int z, int* out_x, int* out_y, int* out_z);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

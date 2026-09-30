@@ -7,7 +7,6 @@
 #include "tie/gate.h"
 #include "tie/logbuf2.h"
 #include "tie/modelmesh.h"
-#include "tie/move.h"
 #include "tie/render_scene_tie98.h"
 #include "tie/rtsvga2.h"
 #include "tie/spec.h"
@@ -20,6 +19,7 @@
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/snapshot/snapshot_billboards.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
+#include "tie_runtime/timing/flight_integration.h"
 
 #include <math.h>
 #include <string.h>
@@ -431,7 +431,7 @@ static void TieFlightSnapshot_CaptureFrameState(void) {
 
 	/* Logical flight-frame counter — lets the renderer tell whether the
 	 * sim advanced between two host-tick snapshots (motion-blur velocity). */
-	TieSnapshotBuilder_SetFlightFrame(move_flight_frame());
+	TieSnapshotBuilder_SetFlightFrame(TieFlightIntegration_Frame());
 	TieSnapshotBuilder_SetMissionLoadGeneration(TieRecoveredData_MissionLoadGeneration());
 	TieFlightSnapshot_EmitRequiredAssets();
 

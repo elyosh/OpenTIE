@@ -1,3 +1,12 @@
+#ifndef TIE_SCORE_H
+#define TIE_SCORE_H
+
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * SCORE -- mission objective / condition evaluator.
  *
@@ -11,11 +20,6 @@
  * The condition evaluator returns one of:
  *   1 = met   2 = failed   4 = incomplete   0 = always-false placeholder.
  */
-
-#ifndef __SCORE_H__
-#define __SCORE_H__
-
-#include <stdint.h>
 
 /*
  * Goal target-type selector (same enum is used by GOALS). Passed to every
@@ -144,4 +148,8 @@ extern int16_t percentcon[5];
  */
 extern uint8_t conditiongrouprelated[26];
 
-#endif /* __SCORE_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

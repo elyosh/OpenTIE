@@ -1,7 +1,11 @@
-#ifndef __MATH2_H__
-#define __MATH2_H__
+#ifndef TIE_MATH2_H
+#define TIE_MATH2_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 int32_t math2_ABoverC32(int32_t a, int32_t b, int32_t c);
 uint16_t math2_fraction(uint16_t val, uint16_t frac);
@@ -25,5 +29,9 @@ extern int16_t math2_randomseed;
  * watdbg marks it static in math2.c, but MOVE_moveobjects reads it for
  * the missile homing-rate table index -- so exposed here. */
 extern const uint8_t radarmax320[74];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

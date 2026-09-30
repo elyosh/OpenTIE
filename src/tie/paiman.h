@@ -1,9 +1,13 @@
-#ifndef __PAIMAN_H__
-#define __PAIMAN_H__
+#ifndef TIE_PAIMAN_H
+#define TIE_PAIMAN_H
+
+#include "tie/tie.h"
 
 #include <stdint.h>
 
-#include "tie/tie.h"
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Maneuver-function signature: no args, returns non-zero to indicate the
  * maneuver has completed (plan VM should advance to the next order). */
@@ -206,4 +210,8 @@ extern const uint16_t _stagevel[11];
  * (9/6/3 units, scaled ×236 PIT ticks by the callers). */
 extern const uint16_t _delayturninside[3];
 
-#endif /* __PAIMAN_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

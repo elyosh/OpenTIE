@@ -1,3 +1,4 @@
+#include "tie/math2_wide.h"
 #include "tie/modelmesh.h"
 #include "tie_runtime/flight_assets/service.h"
 
@@ -8,7 +9,9 @@
 #include <limits.h>
 #include <stdio.h>
 
-#define MODEL_MESH_CRAFT_SLOTS 40
+enum {
+	MODEL_MESH_CRAFT_SLOTS = 40,
+};
 
 /* The original setters mutate the loaded OPT descriptor. Host model views are
  * immutable, so retain those process-lifetime descriptor bits alongside them. */
@@ -34,11 +37,13 @@ void modelmesh_require_craft_capacity(uint16_t model_type) {
 static bool modelmesh_has_opt(uint16_t model_type) { return (species_table[model_type].load_flags & 1) != 0; }
 
 static const TieModelMeshView* mesh_view(uint16_t model_type, int mesh_index) {
+	const TieFlightModelView* model;
+
 	if (mesh_index < 0)
 		return NULL;
 	if (!modelmesh_has_opt(model_type))
 		return NULL;
-	const TieFlightModelView* model = modelmesh_require_model(model_type);
+	model = modelmesh_require_model(model_type);
 	if (mesh_index >= model->mesh_count)
 		mesh_index = model->mesh_count - 1;
 	return model->mesh_count ? &model->meshes[mesh_index] : NULL;
@@ -167,9 +172,11 @@ int modelmesh_gettargetid(uint16_t model_type, int mesh_index) {
 
 static int component_focus(uint16_t model_type, int mesh_index, int axis) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
+	const TieModelVec3f* point;
+
 	if (!mesh || !mesh->has_descriptor)
 		return 0;
-	const TieModelVec3f* point = mesh->target_id ? &mesh->target : &mesh->center;
+	point = mesh->target_id ? &mesh->target : &mesh->center;
 	return axis == 0 ? (int)point->x : axis == 1 ? (int)point->y : (int)point->z;
 }
 
@@ -187,9 +194,11 @@ int modelmesh_getcomponentfocusz(uint16_t m, int i) { return component_focus(m, 
 // ModelMesh_GetComponentMaxExtent; same name in OpenXWA.
 int modelmesh_getcomponentmaxextent(uint16_t model_type, int mesh_index) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
+	float extent;
+
 	if (!mesh || !mesh->has_descriptor)
 		return 0;
-	float extent = mesh->span.x;
+	extent = mesh->span.x;
 	if (mesh->span.y > extent)
 		extent = mesh->span.y;
 	if (mesh->span.z > extent)
@@ -199,9 +208,11 @@ int modelmesh_getcomponentmaxextent(uint16_t model_type, int mesh_index) {
 
 static int explosion_type(uint16_t model_type, int mesh_index) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
+	int value;
+
 	if (!mesh || !mesh->has_descriptor)
 		return 0;
-	int value = mesh->explosion_type;
+	value = mesh->explosion_type;
 	if (model_type < TIE_SPECIES_COUNT && mesh_index >= 0 && mesh_index < MODEL_MESH_CRAFT_SLOTS)
 		value |= explosion_type_overrides[model_type][mesh_index];
 	return value;
@@ -262,11 +273,13 @@ int modelmesh_getalternatehardpointindex(uint16_t model_type, int mesh_index, in
 void modelmesh_gethardpoint(uint16_t model_type, int mesh_index, int hardpoint_index, int* type, int* x,
 							int* y, int* z) {
 	const TieModelMeshView* mesh = mesh_view(model_type, mesh_index);
+	const TieModelHardpoint* hardpoint;
+
 	if (!mesh || hardpoint_index < 0 || hardpoint_index >= (int)mesh->hardpoint_count) {
 		*type = *x = *y = *z = 0;
 		return;
 	}
-	const TieModelHardpoint* hardpoint = &mesh->hardpoints[hardpoint_index];
+	hardpoint = &mesh->hardpoints[hardpoint_index];
 	*type = hardpoint->type;
 	*x = (int)hardpoint->position.x;
 	*y = -(int)hardpoint->position.y;
@@ -281,10 +294,10 @@ int modelmesh_findbridgeindex(uint16_t model_type) {
 	return modelmesh_require_model(model_type)->bridge_mesh_index;
 }
 
-static int32_t clamp_q30(int64_t value) {
-	if (value >= 0x40000000LL)
+static int32_t clamp_q30(int32_t value) {
+	if (value >= 0x40000000)
 		return 0x3FFFFFFF;
-	if (value <= -0x40000000LL)
+	if (value <= -0x40000000)
 		return -0x3FFF0000;
 	return (int32_t)value;
 }
@@ -293,54 +306,73 @@ static int32_t clamp_q30(int64_t value) {
 // ModelMesh_ApplyAnimatedMeshRotationToPoint; same name in OpenXWA.
 void modelmesh_applyanimatedmeshrotationtopoint(int angle, uint16_t model_type, int mesh_index, int x, int y,
 												int z, int* out_x, int* out_y, int* out_z) {
+	const TieModelRotationScale* rotation;
+	int32_t ax, ay, az;
+	int32_t cosine, sine;
+	uint32_t sine_axis[3];
+	int32_t matrix[3][3];
+	int32_t axis[3];
+	int32_t point[3];
+	int32_t result[3];
+	int row, column;
+
 	*out_x = x;
 	*out_y = y;
 	*out_z = z;
-	const TieModelRotationScale* rotation = modelmesh_getrotscaledata(model_type, mesh_index);
+	rotation = modelmesh_getrotscaledata(model_type, mesh_index);
 	if (!rotation)
 		return;
 
-	const int32_t ax = (int32_t)rotation->rotation_axis.x;
-	const int32_t ay = (int32_t)rotation->rotation_axis.y;
-	const int32_t az = (int32_t)rotation->rotation_axis.z;
-	const int32_t cosine = trig2_getsignedcos((int16_t)angle);
-	const int32_t sine = trig2_getsignedsin((uint16_t)angle);
-	const int32_t one_minus_cosine = 0x7FFF - cosine;
-	int32_t matrix[3][3];
-	const int32_t axis[3] = { ax, ay, az };
-	for (int row = 0; row < 3; ++row) {
-		for (int column = 0; column < 3; ++column) {
-			int64_t value = one_minus_cosine * (((int64_t)axis[row] * axis[column]) >> 15);
+	ax = (int32_t)rotation->rotation_axis.x;
+	ay = (int32_t)rotation->rotation_axis.y;
+	az = (int32_t)rotation->rotation_axis.z;
+	cosine = trig2_getsignedcos((int16_t)angle);
+	sine = trig2_getsignedsin((uint16_t)angle);
+	axis[0] = ax;
+	axis[1] = ay;
+	axis[2] = az;
+	/* The sine terms are truncated to Q15 before being combined with
+	 * the Q30 axis products. All sums retain the original low 32 bits. */
+	for (row = 0; row < 3; ++row)
+		sine_axis[row] = (uint32_t)math2_mul_q15(sine, axis[row]) << 15;
+
+	for (row = 0; row < 3; ++row) {
+		for (column = 0; column < 3; ++column) {
+			const int32_t product = (int32_t)((uint32_t)axis[row] * (uint32_t)axis[column]);
+			uint32_t value;
+
+			if (cosine < 0)
+				value = (uint32_t)product + (uint32_t)(-cosine) * (uint32_t)(product >> 15);
+			else
+				value = (uint32_t)(0x7FFF - cosine) * (uint32_t)(product >> 15);
 			if (row == column)
-				value += (int64_t)cosine << 15;
+				value += (uint32_t)cosine << 15;
 			if (row == 0 && column == 1)
-				value -= (int64_t)sine * az;
+				value -= sine_axis[2];
 			if (row == 0 && column == 2)
-				value += (int64_t)sine * ay;
+				value += sine_axis[1];
 			if (row == 1 && column == 0)
-				value += (int64_t)sine * az;
+				value += sine_axis[2];
 			if (row == 1 && column == 2)
-				value -= (int64_t)sine * ax;
+				value -= sine_axis[0];
 			if (row == 2 && column == 0)
-				value -= (int64_t)sine * ay;
+				value -= sine_axis[1];
 			if (row == 2 && column == 1)
-				value += (int64_t)sine * ax;
-			matrix[row][column] = clamp_q30(value) >> 15;
+				value += sine_axis[0];
+			matrix[row][column] = clamp_q30((int32_t)value) >> 15;
 		}
 	}
 
-	const int32_t point[3] = {
-		x - (int32_t)rotation->pivot.x,
-		y + (int32_t)rotation->pivot.y,
-		z - (int32_t)rotation->pivot.z,
-	};
-	int32_t result[3];
-	for (int row = 0; row < 3; ++row) {
-		const int64_t value = (int64_t)matrix[row][0] * point[0] + (int64_t)matrix[row][1] * point[1] +
-							  (int64_t)matrix[row][2] * point[2];
-		result[row] = clamp_q30(value) >> 15;
+	point[0] = (int32_t)((uint32_t)x - (uint32_t)(int32_t)rotation->pivot.x);
+	point[1] = (int32_t)((uint32_t)y + (uint32_t)(int32_t)rotation->pivot.y);
+	point[2] = (int32_t)((uint32_t)z - (uint32_t)(int32_t)rotation->pivot.z);
+	for (row = 0; row < 3; ++row) {
+		const uint32_t value = (uint32_t)matrix[row][0] * (uint32_t)point[0] +
+							   (uint32_t)matrix[row][1] * (uint32_t)point[1] +
+							   (uint32_t)matrix[row][2] * (uint32_t)point[2];
+		result[row] = clamp_q30((int32_t)value) >> 15;
 	}
-	*out_x = (int32_t)rotation->pivot.x + result[0];
-	*out_y = result[1] - (int32_t)rotation->pivot.y;
-	*out_z = (int32_t)rotation->pivot.z + result[2];
+	*out_x = (int32_t)((uint32_t)(int32_t)rotation->pivot.x + (uint32_t)result[0]);
+	*out_y = (int32_t)((uint32_t)result[1] - (uint32_t)(int32_t)rotation->pivot.y);
+	*out_z = (int32_t)((uint32_t)(int32_t)rotation->pivot.z + (uint32_t)result[2]);
 }

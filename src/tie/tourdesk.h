@@ -1,10 +1,19 @@
-#ifndef __TOURDESK_H__
-#define __TOURDESK_H__
+#ifndef TIE_TOURDESK_H
+#define TIE_TOURDESK_H
 
 #include "tie/shellext.h"
+
 #include <stdint.h>
 
-/* Push the Tour-of-Duty battle-selection scene as a tie_core task. */
-void tourdesk_Push_TourDesk_Task(SceneHeadStruct* scene_head);
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+void tourdesk_OpenScene(SceneHeadStruct* scene_head, bool svga);
+void tourdesk_CloseScene(bool svga);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -5,10 +5,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "aeron/asset/flight_model.h"
 #include "tie_runtime/flight_assets/assets.h"
-#include "tie_runtime/presentation/presentation.h"
+#include "tie_runtime/presentation/aspect_ratio.h"
 #include "tie_runtime/runtime/profile_types.h"
+
+typedef struct AeronFlightModel AeronFlightModel;
 
 /* Immutable renderer-facing description of one selected asset source. Runtime
  * caches and archives remain owned by the private store referenced by store. */

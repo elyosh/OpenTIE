@@ -1,14 +1,21 @@
-#ifndef __SPECIES_H__
-#define __SPECIES_H__
+#ifndef TIE_SPECIES_H
+#define TIE_SPECIES_H
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Per-species data, bitmap palettes, and genus object-slot ranges. */
 
-/* Per-genus range [start, limit) within the objects[NUM_OBJECTS] table.
- * 16 genera max; only 14 populated in shipped demo. */
-extern uint16_t genus[16];
-extern uint16_t genus_limit[16];
+/* Per-genus half-open range in objects[]. */
+typedef struct GenusSlotRange {
+	uint16_t start;
+	uint16_t limit;
+} GenusSlotRange;
+
+extern GenusSlotRange genus_table[16];
 extern const uint8_t tie98_model_variant_enabled[161];
 
 /* 8 palette pointers (16 bytes each) used when painting planet sprites
@@ -38,5 +45,9 @@ extern uint8_t hyperstardata[24];
  * The demo binary has no consumers for this dispatch table.
  */
 extern const uint8_t* projectiledataptrs[18];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

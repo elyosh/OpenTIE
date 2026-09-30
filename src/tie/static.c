@@ -1,15 +1,15 @@
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-
 #include "tie/static.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
+#ifdef TIE_MODERN
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
+#endif
+#ifdef TIE_MODERN
 #include "tie_runtime/timing/flight_timing.h"
 #include "tie_runtime/timing/flight_timing_state.h"
+#endif
 
-#include "anim.h"
+#include "tie/anim.h"
 #include "tie/collide.h"
 #include "tie/collide_opt.h"
 #include "tie/create.h"
@@ -29,6 +29,10 @@
 #include "tie/tie.h"
 #include "tie/transfm2.h"
 #include "tie/trig2.h"
+
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
 
 /* ------------------------------------------------------------------
  * Local helpers
@@ -85,6 +89,13 @@ void static_drawstaticobject(uint16_t slot_idx) {
 	uint8_t sp_idx = so->species;
 	const AnimOp* frame_tab = (const AnimOp*)species_table[sp_idx].draw_data;
 
+	AnimOp frame_code;
+	int32_t eyex, eyey, eyez;
+	void* handle;
+	ShipModelData* model;
+	ShipMeshLOD* component;
+	const uint16_t* lod;
+
 	parentobject = self_idx;
 
 	if (!frame_tab) {
@@ -96,7 +107,7 @@ void static_drawstaticobject(uint16_t slot_idx) {
 		return;
 	}
 
-	AnimOp frame_code = frame_tab[so->anim_frame];
+	frame_code = frame_tab[so->anim_frame];
 
 	/* Skip header / jump / reset / delay / kill opcodes; only MESH and
 	 * BITMAP opcodes produce output here. */
@@ -105,15 +116,26 @@ void static_drawstaticobject(uint16_t slot_idx) {
 
 	if (animop_is_bitmap(frame_code)) {
 		/* Billboard sprite. Reject if behind the camera. */
+		int32_t abs_A3;
+		int32_t abs_B3;
+		int32_t axis_horz, axis_vert;
+		int16_t billboard_angle;
+		uint32_t sx_raw;
+		int32_t sx_hi;
+		uint32_t sy_raw;
+		int32_t sy_hi;
+		int32_t half;
+		int32_t y_flipped;
+
 		if (objecteyez < 0)
 			return;
 
 		/* Pick the world-to-eye row most orthogonal to the view
 		 * direction; its XY projection defines the sprite's billboard
 		 * rotation. */
-		int32_t abs_A3 = (rotworldeyeA3 < 0) ? -rotworldeyeA3 : rotworldeyeA3;
-		int32_t abs_B3 = (rotworldeyeB3 < 0) ? -rotworldeyeB3 : rotworldeyeB3;
-		int32_t axis_horz, axis_vert;
+		abs_A3 = (rotworldeyeA3 < 0) ? -rotworldeyeA3 : rotworldeyeA3;
+		abs_B3 = (rotworldeyeB3 < 0) ? -rotworldeyeB3 : rotworldeyeB3;
+
 		if (abs_A3 >= abs_B3) {
 			axis_horz = rotworldeyeB1;
 			axis_vert = rotworldeyeB2;
@@ -122,7 +144,6 @@ void static_drawstaticobject(uint16_t slot_idx) {
 			axis_vert = rotworldeyeA2;
 		}
 
-		int16_t billboard_angle;
 		if (axis_horz >= 0)
 			billboard_angle = (int16_t)(-(int32_t)trig2_arctan(axis_vert, axis_horz));
 		else
@@ -130,19 +151,19 @@ void static_drawstaticobject(uint16_t slot_idx) {
 
 		/* Project onto screen, require |high16| <= 1 on both axes
 		 * (i.e. within one screen-width of the visible rect). */
-		uint32_t sx_raw = (uint32_t)transfm2_getscreencoordx(objecteyex, objecteyez);
-		int32_t sx_hi = (int32_t)sx_raw >> 16;
+		sx_raw = (uint32_t)transfm2_getscreencoordx(objecteyex, objecteyez);
+		sx_hi = (int32_t)sx_raw >> 16;
 		if (sx_hi > 0 || sx_hi < -1)
 			return;
 
-		uint32_t sy_raw = (uint32_t)transfm2_getscreencoordy(objecteyey, objecteyez);
-		int32_t sy_hi = (int32_t)sy_raw >> 16;
+		sy_raw = (uint32_t)transfm2_getscreencoordy(objecteyey, objecteyez);
+		sy_hi = (int32_t)sy_raw >> 16;
 		if (sy_hi > 0 || sy_hi < -1)
 			return;
 
 		/* Y flip around the vertical midline: y' = half - (y - half). */
-		int32_t half = (int32_t)pixelsdeep >> 1;
-		int32_t y_flipped = half - ((int32_t)sy_raw - half);
+		half = (int32_t)pixelsdeep >> 1;
+		y_flipped = half - ((int32_t)sy_raw - half);
 
 		anim_add_bitmap_draw(parentobject, frame_code, 256, (int16_t)sx_raw, (int16_t)y_flipped, objecteyez,
 							 billboard_angle);
@@ -153,12 +174,14 @@ void static_drawstaticobject(uint16_t slot_idx) {
 		return;
 
 	/* Polygon mesh: locate LOD for this eyez and emit via DRAWPOL. */
-	int32_t eyex = objecteyex, eyey = objecteyey, eyez = objecteyez;
-	void* handle = species_table[sp_idx].model_handle;
+	eyex = objecteyex;
+	eyey = objecteyey;
+	eyez = objecteyez;
+	handle = species_table[sp_idx].model_handle;
 	/* Skip the 2-byte file-size prefix — matches retail's v48=a1+2. */
-	ShipModelData* model = (ShipModelData*)((uint8_t*)xmemhdl_lock(handle) + 2);
-	ShipMeshLOD* component = draw_getcomponentptr(model, 0);
-	const uint16_t* lod = draw_getdetailptr(component, eyez);
+	model = (ShipModelData*)((uint8_t*)xmemhdl_lock(handle) + 2);
+	component = draw_getcomponentptr(model, 0);
+	lod = draw_getdetailptr(component, eyez);
 	drawpol_drawpolyobject(lod, eyex, eyey, eyez);
 	xmemhdl_unlock(handle);
 }
@@ -215,11 +238,46 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 	uint16_t target_self_idx = (uint16_t)(target_slot + OBJ_REF_STATIC_BASE);
 	uint16_t shooter_self_idx = (uint16_t)objects[shooter_obj_idx].self_idx;
 
+	StaticObject* so;
+	uint8_t ship_class;
+	uint8_t sp_idx;
+	int32_t static_wx;
+	int32_t static_wy;
+	int32_t static_wz;
+	int32_t dx_cur;
+	int32_t dy_cur;
+	int32_t dz_cur;
+	int32_t dx_old;
+	int32_t dy_old;
+	int32_t dz_old;
+	uint16_t bound_hwidth;
+	int32_t x_loc1;
+	int32_t y_loc1;
+	int32_t z_loc1;
+	int32_t x_loc2;
+	int32_t y_loc2;
+	int32_t z_loc2;
+	void* handle;
+	ShipModelData* model;
+	ShipMeshLOD* component;
+	uint8_t* comp_base;
+	int32_t lod_dword;
+	uint8_t* mesh_base;
+	uint8_t num_faces;
+	const int16_t* bbox;
+	int16_t bbox_max_x;
+	int16_t bbox_max_z;
+	int16_t bbox_max_y;
+	int16_t bbox_min_x;
+	int16_t bbox_min_z;
+	int16_t bbox_min_y;
+	uint32_t hit_t;
+
 	if (shooter_self_idx >= target_self_idx)
 		return 0;
 
-	StaticObject* so = &staticobjects[target_slot];
-	uint8_t ship_class = so->ship_class;
+	so = &staticobjects[target_slot];
+	ship_class = so->ship_class;
 	if (ship_class == 14)
 		return 0;
 	if (ship_class == 11)
@@ -234,25 +292,25 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 			return 0;
 	}
 
-	uint8_t sp_idx = so->species;
+	sp_idx = so->species;
 	create_getworldposition(target_self_idx, 0);
-	int32_t static_wx = worldlocx;
-	int32_t static_wy = worldlocy;
-	int32_t static_wz = worldlocz;
+	static_wx = worldlocx;
+	static_wy = worldlocy;
+	static_wz = worldlocz;
 
-	int32_t dx_cur = laserx - static_wx;
-	int32_t dy_cur = lasery - static_wy;
-	int32_t dz_cur = laserz - static_wz;
+	dx_cur = laserx - static_wx;
+	dy_cur = lasery - static_wy;
+	dz_cur = laserz - static_wz;
 	if ((uint32_t)collide_roughdistance3d(dx_cur, dy_cur, dz_cur) > 0x20000u)
 		return 0;
 
-	int32_t dx_old = laserxold - static_wx;
-	int32_t dy_old = laseryold - static_wy;
-	int32_t dz_old = laserzold - static_wz;
+	dx_old = laserxold - static_wx;
+	dy_old = laseryold - static_wy;
+	dz_old = laserzold - static_wz;
 	if ((uint32_t)collide_roughdistance3d(dx_old, dy_old, dz_old) > 0x20000u)
 		return 0;
 
-	uint16_t bound_hwidth = species_table[sp_idx].bound_hwidth;
+	bound_hwidth = species_table[sp_idx].bound_hwidth;
 
 	if (bound_hwidth <= 0x578u) {
 		/* Small-object path: sphere test. */
@@ -281,13 +339,13 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 
 	/* Transform the two endpoints into the static's local frame and
 	 * saturate to ±Q30 before the final >>15 normalisation. */
-	int32_t x_loc1 = clamp_q30(gatez1 * craftS3 + gatey1 * craftS2 + gatex1 * craftS1) >> 15;
-	int32_t y_loc1 = clamp_q30(gatez1 * craftU3 + gatey1 * craftU2 + gatex1 * craftU1) >> 15;
-	int32_t z_loc1 = clamp_q30(gatez1 * craftf3 + gatey1 * craftf2 + gatex1 * craftf1) >> 15;
+	x_loc1 = clamp_q30(gatez1 * craftS3 + gatey1 * craftS2 + gatex1 * craftS1) >> 15;
+	y_loc1 = clamp_q30(gatez1 * craftU3 + gatey1 * craftU2 + gatex1 * craftU1) >> 15;
+	z_loc1 = clamp_q30(gatez1 * craftf3 + gatey1 * craftf2 + gatex1 * craftf1) >> 15;
 
-	int32_t x_loc2 = clamp_q30(gatez2 * craftS3 + gatey2 * craftS2 + gatex2 * craftS1) >> 15;
-	int32_t y_loc2 = clamp_q30(gatez2 * craftU3 + gatey2 * craftU2 + gatex2 * craftU1) >> 15;
-	int32_t z_loc2 = clamp_q30(gatez2 * craftf3 + gatey2 * craftf2 + gatex2 * craftf1) >> 15;
+	x_loc2 = clamp_q30(gatez2 * craftS3 + gatey2 * craftS2 + gatex2 * craftS1) >> 15;
+	y_loc2 = clamp_q30(gatez2 * craftU3 + gatey2 * craftU2 + gatex2 * craftU1) >> 15;
+	z_loc2 = clamp_q30(gatez2 * craftf3 + gatey2 * craftf2 + gatex2 * craftf1) >> 15;
 
 	if (TieProfile_UsesTie98Logic()) {
 		/* TIE98 tests mesh 0's authored descriptor bounds in OPT axis order
@@ -321,28 +379,28 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 	gatez2 = z_loc2 * 2;
 
 	/* Resolve mesh pointer via the species's model handle. */
-	void* handle = species_table[sp_idx].model_handle;
+	handle = species_table[sp_idx].model_handle;
 	/* Skip the 2-byte file-size prefix — matches retail's v48=a1+2. */
-	ShipModelData* model = (ShipModelData*)((uint8_t*)xmemhdl_lock(handle) + 2);
-	ShipMeshLOD* component = draw_getcomponentptr(model, 0);
+	model = (ShipModelData*)((uint8_t*)xmemhdl_lock(handle) + 2);
+	component = draw_getcomponentptr(model, 0);
 	xmemhdl_unlock(handle);
 
 	/* From the component LOD header, follow the self-relative offset at
 	 * +4 (read as the top 16 bits of an unaligned dword at +2) to the
 	 * poly-data header, then skip (PolyMeshHeader + face-color table) to
 	 * reach the bounding box: [max_x, max_z, max_y, min_x, min_z, min_y]. */
-	uint8_t* comp_base = (uint8_t*)component;
-	int32_t lod_dword = *(const int32_t*)(comp_base + 2);
-	uint8_t* mesh_base = comp_base + (lod_dword >> 16);
-	uint8_t num_faces = mesh_base[4]; /* PolyMeshHeader.numfaces */
-	const int16_t* bbox = (const int16_t*)(mesh_base + 5 + num_faces);
+	comp_base = (uint8_t*)component;
+	lod_dword = *(const int32_t*)(comp_base + 2);
+	mesh_base = comp_base + (lod_dword >> 16);
+	num_faces = mesh_base[4]; /* PolyMeshHeader.numfaces */
+	bbox = (const int16_t*)(mesh_base + 5 + num_faces);
 
-	int16_t bbox_max_x = bbox[0];
-	int16_t bbox_max_z = bbox[1];
-	int16_t bbox_max_y = bbox[2];
-	int16_t bbox_min_x = bbox[3];
-	int16_t bbox_min_z = bbox[4];
-	int16_t bbox_min_y = bbox[5];
+	bbox_max_x = bbox[0];
+	bbox_max_z = bbox[1];
+	bbox_max_y = bbox[2];
+	bbox_min_x = bbox[3];
+	bbox_min_z = bbox[4];
+	bbox_min_y = bbox[5];
 
 	/* Swept-segment vs AABB: reject when both endpoints are strictly on
 	 * the outside of any single face. */
@@ -359,7 +417,7 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 	if (bbox_min_z < gatez1 && bbox_min_z < gatez2)
 		return 0;
 
-	uint32_t hit_t = collide_checkhitpolygons(mesh_base, gatex1, gatey1, gatez1, gatex2, gatey2, gatez2, 0);
+	hit_t = collide_checkhitpolygons(mesh_base, gatex1, gatey1, gatez1, gatex2, gatey2, gatez2, 0);
 	if (hit_t == 0)
 		return 0;
 
@@ -391,6 +449,7 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
  * ========================================================================== */
 // FUNCTION: TIE95 0x54F6C
 int16_t static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
+	uint16_t sfx_id;
 	StaticObject* so = &staticobjects[target_slot];
 	int16_t explosion_ship_idx;
 	uint8_t proj_ship = objects[proj_idx].ship_idx;
@@ -475,6 +534,7 @@ int16_t static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
 	 * deflector flash (131) and ion sparkle (132) variants also fire
 	 * the event; the renderer picks the right effect from
 	 * param0 = explosion_ship_idx. */
+#ifdef TIE_MODERN
 	{
 		TieEvent ev = {
 			.kind     = TIE_EVENT_EXPLOSION,
@@ -489,11 +549,11 @@ int16_t static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
 		};
 		TieSnapshotBuilder_PushEvent(&ev);
 	}
+#endif
 
 	/* Both deflector (131) and ion (132) flashes use the dedicated zap
 	 * SFX 25; everything else picks one of the 4 generic explosion
 	 * sounds at random (19-22). */
-	uint16_t sfx_id;
 	if (explosion_ship_idx == 131 || explosion_ship_idx == 132)
 		sfx_id = 25;
 	else
@@ -508,23 +568,61 @@ int16_t static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
 int16_t static_updatemineguns(uint16_t slot_idx) {
 	StaticObject* so = &staticobjects[slot_idx];
 
+	int32_t half_ticks;
+#ifdef TIE_MODERN
+	TieStaticWeaponTimingState* high_rate;
+#endif
+	int32_t cooldown;
+	int32_t sx_w;
+	int32_t sy_w;
+	int32_t sz_w;
+	uint16_t fg_idx;
+	uint8_t sp_idx;
+	const EAIStruct* ai0;
+	uint16_t tgt;
+	int32_t tx;
+	int32_t ty;
+	int32_t tz;
+	uint32_t dist;
+	int32_t aim_world_x;
+	int32_t aim_world_y;
+	int32_t aim_world_z;
+	int16_t aim_xy;
+	int16_t aim_z;
+	uint16_t off;
+	uint16_t uzang;
+	uint16_t uxyang;
+	int16_t dist_clamped;
+	uint16_t target_speed;
+	uint16_t inv_dist;
+	uint16_t speed_factor;
+	uint16_t hit_prob;
+	uint16_t proj_slot;
+	FlightObject* p;
+	uint8_t proj_ship;
+	int ptype;
+	int32_t plen;
+	uint16_t wh_idx;
+
 	if (so->status_flags == 0)
 		return 0;
 
-	int32_t half_ticks;
-	TieStaticWeaponTimingState* high_rate = NULL;
+#ifdef TIE_MODERN
+	high_rate = NULL;
 	if (TieFlightTiming_IsHighRate()) {
+		uint16_t numerator;
+
 		high_rate = TieFlightTimingState_StaticWeapon(slot_idx, so->idnumber);
-		const uint16_t numerator = (uint16_t)(frameticks + high_rate->remainder);
+		numerator = (uint16_t)(frameticks + high_rate->remainder);
 		half_ticks = numerator / 2u;
 		high_rate->remainder = (uint8_t)(numerator % 2u);
-	} else {
+	} else
+#endif
 		half_ticks = (int32_t)(frameticks / 2u);
-	}
 	/* mine_cooldown is uint8_t: the "236" reset value is stored as 0xEC
 	 * and read back unsigned. The decompiler renders the reset as "-20"
 	 * because the compiler encodes the byte store via the signed form. */
-	int32_t cooldown = (int32_t)so->mine_cooldown;
+	cooldown = (int32_t)so->mine_cooldown;
 
 	if (cooldown > half_ticks) {
 		so->mine_cooldown = (uint8_t)(cooldown - half_ticks);
@@ -532,27 +630,29 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 	}
 
 	so->mine_cooldown = 236u;
+#ifdef TIE_MODERN
 	if (high_rate)
 		high_rate->remainder = 0;
+#endif
 
-	int32_t sx_w = (int32_t)so->world_x << 8;
-	int32_t sy_w = (int32_t)so->world_y << 8;
-	int32_t sz_w = (int32_t)so->world_z << 8;
+	sx_w = (int32_t)so->world_x << 8;
+	sy_w = (int32_t)so->world_y << 8;
+	sz_w = (int32_t)so->world_z << 8;
 	shooterx = sx_w;
 	shootery = sy_w;
 	shooterz = sz_w;
 
-	uint16_t fg_idx = so->fg_idx;
-	uint8_t sp_idx = so->species;
+	fg_idx = so->fg_idx;
+	sp_idx = so->species;
 	/* In the binary this is ai.live_target_only — a PAI scanner gate shared with the
 	 * target-select helpers. Mine turrets set it so the scanner requires
 	 * live/status-flagged targets for the current shot. */
 	ai.live_target_only = (uint8_t)(sp_idx == 76);
 
 	/* Target selection: extended quad first, primary pair fallback. */
-	const EAIStruct* ai0 = &fg_array[fg_idx].ai[0];
-	uint16_t tgt = paifight_findgunnertargetingroup(ai0->pri_type, ai0->pri_id, ai0->pri_sec_op,
-													ai0->sec_type, ai0->sec_id);
+	ai0 = &fg_array[fg_idx].ai[0];
+	tgt = paifight_findgunnertargetingroup(ai0->pri_type, ai0->pri_id, ai0->pri_sec_op, ai0->sec_type,
+										   ai0->sec_id);
 	if (tgt == 0xFFFFu)
 		tgt = paifight_findgunnertargetingroup(ai0->target_type[0], ai0->target_id[0], ai0->target_op,
 											   ai0->target_type[1], ai0->target_id[1]);
@@ -560,26 +660,30 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 		return 0;
 
 	create_getworldposition(tgt, 0);
-	int32_t tx = worldlocx;
-	int32_t ty = worldlocy;
-	int32_t tz = worldlocz;
+	tx = worldlocx;
+	ty = worldlocy;
+	tz = worldlocz;
 
-	uint32_t dist = (uint32_t)collide_roughdistance3d(tx - sx_w, ty - sy_w, tz - sz_w);
+	dist = (uint32_t)collide_roughdistance3d(tx - sx_w, ty - sy_w, tz - sz_w);
 	if (dist >= 0x10000u)
 		return 0;
 
-	int32_t aim_world_x = tx;
-	int32_t aim_world_y = ty;
-	int32_t aim_world_z = tz;
+	aim_world_x = tx;
+	aim_world_y = ty;
+	aim_world_z = tz;
 	if (tgt < OBJ_REF_STATIC_BASE) {
+		int32_t lead_raw;
+		int32_t shift;
+		int16_t lead_frames;
+		uint16_t lead_with_jitter;
+
 		trig2_ctop(tx - sx_w, ty - sy_w, tz - sz_w);
 
 		/* Lead time = polardistance * framerate >> (15 or 14). */
-		int32_t lead_raw = trig2_polardistance * (int32_t)framerate;
-		int32_t shift = (sp_idx == 76) ? 15 : 14;
-		int16_t lead_frames = (int16_t)(lead_raw >> shift);
-		uint16_t lead_with_jitter =
-			(uint16_t)(((uint16_t)math2_getrandom() & 3u) + (uint16_t)lead_frames - 1u);
+		lead_raw = trig2_polardistance * (int32_t)framerate;
+		shift = (sp_idx == 76) ? 15 : 14;
+		lead_frames = (int16_t)(lead_raw >> shift);
+		lead_with_jitter = (uint16_t)(((uint16_t)math2_getrandom() & 3u) + (uint16_t)lead_frames - 1u);
 
 		aim_world_x += (int32_t)lead_with_jitter * (objects[tgt].world_x - objects[tgt].world_x_prev);
 		aim_world_y += (int32_t)lead_with_jitter * (objects[tgt].world_y - objects[tgt].world_y_prev);
@@ -587,13 +691,13 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 	}
 	trig2_ctop(aim_world_x - sx_w, aim_world_y - sy_w, aim_world_z - sz_w);
 
-	int16_t aim_xy = trig2_xyangle;
-	int16_t aim_z = trig2_zangle;
-	uint16_t off = (sp_idx > 0x4Cu) ? (uint16_t)170 : (uint16_t)150;
+	aim_xy = trig2_xyangle;
+	aim_z = trig2_zangle;
+	off = (sp_idx > 0x4Cu) ? (uint16_t)170 : (uint16_t)150;
 
 	/* Barrel offset by aim octant (6 axis-aligned directions). */
-	uint16_t uzang = (uint16_t)aim_z;
-	uint16_t uxyang = (uint16_t)aim_xy;
+	uzang = (uint16_t)aim_z;
+	uxyang = (uint16_t)aim_xy;
 	if (uzang < 0x2000u) {
 		sz_w += off;
 	} else if (uzang > 0x6000u) {
@@ -615,27 +719,31 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 	}
 
 	/* Accuracy: wider scatter when target is moving fast. */
-	int16_t dist_clamped = (trig2_polardistance < 0x10000) ? (int16_t)trig2_polardistance : (int16_t)-1;
-	uint16_t target_speed = tgt < OBJ_REF_STATIC_BASE ? (uint16_t)objects[tgt].current_speed : 0;
-	uint16_t inv_dist = (uint16_t)~dist_clamped;
-	uint16_t speed_factor;
+	dist_clamped = (trig2_polardistance < 0x10000) ? (int16_t)trig2_polardistance : (int16_t)-1;
+	target_speed = tgt < OBJ_REF_STATIC_BASE ? (uint16_t)objects[tgt].current_speed : 0;
+	inv_dist = (uint16_t)~dist_clamped;
+
 	if (target_speed >= 0xBCu)
 		speed_factor = (uint16_t)(0xFFFFu - ((target_speed - 188u) << 7));
 	else
 		speed_factor = 0xFFFFu;
 
-	uint16_t hit_prob = math2_fraction(inv_dist, speed_factor);
+	hit_prob = math2_fraction(inv_dist, speed_factor);
 	if ((uint16_t)math2_getrandom() > hit_prob) {
 		/* Miss: perturb both aim angles by ±~3/256 of a full rotation. */
 		uint32_t rxy = (uint32_t)(uint16_t)math2_getrandom();
+		int32_t scatter_xy;
+		uint32_t rz;
+		int16_t scatter_z;
+
 		rxy = (rxy & 0xFFFF00FFu) | ((((rxy >> 8) + 3u) & 3u) << 8);
-		int32_t scatter_xy = (int32_t)(int16_t)(uint16_t)rxy;
+		scatter_xy = (int32_t)(int16_t)(uint16_t)rxy;
 		if ((uint16_t)math2_getrandom() >= 0x8000u)
 			scatter_xy = -scatter_xy;
 
-		uint32_t rz = (uint32_t)(uint16_t)math2_getrandom();
+		rz = (uint32_t)(uint16_t)math2_getrandom();
 		rz = (rz & 0xFFFF00FFu) | ((((rz >> 8) + 3u) & 3u) << 8);
-		int16_t scatter_z = (int16_t)rz;
+		scatter_z = (int16_t)rz;
 
 		aim_xy = (int16_t)(aim_xy + scatter_xy);
 		if ((uint16_t)math2_getrandom() < 0x8000u) {
@@ -649,16 +757,15 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 		}
 	}
 
-	uint16_t proj_slot = create_findslot(7u);
+	proj_slot = create_findslot(7u);
 	if (proj_slot == 0xFFFFu)
 		return 0;
 
 	/* Populate the projectile FlightObject. */
-	FlightObject* p = &objects[proj_slot];
+	p = &objects[proj_slot];
 	p->category = 1;
 	p->genus = GENUS_PROJECTILE_NPC;
 
-	uint8_t proj_ship;
 	if (sp_idx == 76) {
 		proj_ship = 142;
 	} else {
@@ -675,7 +782,7 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 	p->move_dirty = 1;
 
 	/* Projectile-type tables are indexed by (ship_idx - 137). */
-	int ptype = (int)proj_ship - 137;
+	ptype = (int)proj_ship - 137;
 	p->current_speed = (int16_t)projectilevelocity[ptype];
 	p->collision_radius = (int16_t)projectileweight[ptype];
 	p->roll = 0;
@@ -685,7 +792,7 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 	fview_calcrotatemove(aim_z, aim_xy, p);
 
 	/* Step from the muzzle to the projectile model origin. */
-	int32_t plen = (int32_t)TieProjectileLaunchOffset_Get((unsigned int)ptype);
+	plen = (int32_t)TieProjectileLaunchOffset_Get((unsigned int)ptype);
 	p->world_x_prev = sx_w;
 	p->world_y_prev = sy_w;
 	p->world_z_prev = sz_w;
@@ -696,7 +803,7 @@ int16_t static_updatemineguns(uint16_t slot_idx) {
 	fsfx_triggerlasersfx(proj_slot);
 
 	/* Register the homing target in the projectile's warhead slot. */
-	uint16_t wh_idx = (uint16_t)(proj_slot - NUM_CRAFTS);
+	wh_idx = (uint16_t)(proj_slot - NUM_CRAFTS);
 	warheads[wh_idx].homing_tier = 0;
 	warheads[wh_idx].target_obj = tgt;
 	p->craft_ptr = (CraftData*)&warheads[wh_idx];

@@ -1,14 +1,19 @@
-#ifndef __TALK_H__
-#define __TALK_H__
+#ifndef TIE_TALK_H
+#define TIE_TALK_H
 
 #include "tie/shellext.h"
+
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct Sound;
 
-/* Push the officer/priest talk scene as a tie_core task.
- * Scenes: 182/183 = briefing officer/priest, 191/192 = debrief officer/priest. */
-void talk_Push_Talk_Task(SceneHeadStruct* scene_head);
+/* Prepare and release the officer/priest talk scene. */
+ResFile* talk_OpenScene(SceneHeadStruct* scene_head);
+void talk_CloseScene(ResFile* resource);
 
 /* Officer/priest mood control (0-4). Drives face animation. */
 void talk_Set_Officer_Mood(int16_t mood);
@@ -42,5 +47,9 @@ void talk_Start_Speech_Stream(void);
 
 /* Set talk_voice_species + talk_voice_mission for TALK_Talk. */
 void talk_Set_Voice_Species_Mission(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,11 +1,15 @@
-#ifndef __USER_H__
-#define __USER_H__
+#ifndef TIE_USER_H
+#define TIE_USER_H
 
 #include "tie/tie.h" /* CraftData typedef */
-#include "tie_runtime/snapshot/snapshot.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Active craft-slot count used by in-flight target and enemy scans. */
 #define NUM_ACTIVE_CRAFT_SLOTS 32
@@ -256,7 +260,6 @@ void user_ejectcamera(void);
  * screen index (or 0xFFFF on retreat-cancel) into user_submodal_result
  * before popping, so its parent task (the flight task / tie_simulator
  * AFTER_MISSION phase) can consume the outcome. */
-void user_Push_InflightInfo_Task(int32_t screen_id);
 
 /* Sub-modal result handoff — single int32 channel shared by every leaf
  * sub-modal task (msgroom / goals / maproom / damage / wingman / help /
@@ -272,7 +275,7 @@ extern int32_t user_submodal_result;
 
 /* Info-room request channel. user_userinterface keybinds set this to
  * the requested screen index (0..6); the flight task step picks it up
- * AFTER tie_doframe returns, pushes user_Push_InflightInfo_Task, and
+ * AFTER tie_doframe returns, pushes TieInflightInfo_Begin, and
  * resets to -1. -1 means "no request". This decouples the synchronous
  * keybind handler from the asynchronous task push. */
 int32_t user_consume_info_room_request(void);
@@ -281,7 +284,7 @@ int32_t user_consume_info_room_request(void);
  * user_userinterface sets a pending flag after running the immediate
  * pre-empt bookkeeping (spool flush, blank, recording stop). The
  * flight task step picks it up AFTER tie_doframe returns, pushes
- * replayio_Push_ReplayScreen_Task, and clears the flag. The RESUMED
+ * TieReplaySession_Begin, and clears the flag. The RESUMED
  * banner is posted by the flight task once the viewer task pops.
  * Returns 1 if a request was pending (and consumes it), 0 otherwise. */
 int user_consume_replay_viewer_request(void);
@@ -335,4 +338,8 @@ extern uint8_t musicvolflag;
  * order code; result indexes messagetable[]. */
 extern uint8_t convertmessage[69];
 
-#endif /* __USER_H__ */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

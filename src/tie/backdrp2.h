@@ -1,7 +1,11 @@
-#ifndef __BACKDRP2_H__
-#define __BACKDRP2_H__
+#ifndef TIE_BACKDRP2_H
+#define TIE_BACKDRP2_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * BACKDRP2 — 3D skybox backdrop renderer.
@@ -59,5 +63,9 @@ void backdrp2_backdrop(void);
  * fixed-point (0..0xFFFF covering 360°). tile_idx is a 0-based index
  * into backdropposition[]/backdropspecies[]. */
 void backdrp2_backdrawbitmap(int32_t x, int32_t y, int32_t z, uint16_t angle, int tile_idx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,22 +1,13 @@
-/*
- * HELP — in-flight cockpit help room (USER_inflightinfo page 5).
- *
- * Port of help.c from the Watcom binary. Single public entry point plus the
- * module-owned globals that hold the 48-entry command reference table.
- */
-
 #ifndef TIE_HELP_H
 #define TIE_HELP_H
 
 #include <stdint.h>
 
-/*
- * Pixel Y bounds of the 24-row help grid. Set at the top of help_helproom:
- *   helpTop    = 44 in the 640x480 flight modes, 18 otherwise.
- *   helpBottom = helpTop + 24 * (fontheight + 2).
- * Exposed because watdbg lists them as extern (source-level) globals of
- * help.c; no other module currently reads them.
- */
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Bounds of the two-column command grid, including SVGA colour-group gaps. */
 extern int32_t helpTop;
 extern int32_t helpBottom;
 
@@ -29,18 +20,25 @@ extern int32_t helpBottom;
 extern char** helpkeystrings;
 extern char** helpscreenstrings;
 
-/*
- * Push the 48-entry command-reference grid as a tie_core task (2 cols x
- * 24 rows). The task latches a navigation code into
- * `user_submodal_result` before pop:
- *   -1 = page backward (up-exit from the left column)
- *    0 = pick / ESC (stay and return to caller's outer loop)
- *   +1 = page forward (down-exit from the right column)
- *
- * start_right_col != 0 seeds the cursor at row 24 (top of the right
- * column) so a user page-walking in from the previous screen lands on
- * the first entry they see.
- */
-void help_Push_HelpRoom_Task(int32_t start_right_col);
+typedef struct HelpRoomState {
+	int16_t cursor_idx;
+	int16_t previous_cursor;
+	int16_t redraw_all;
+	int16_t page_delta;
+	uint16_t prev_buttons;
+	int16_t row_step;
+	int16_t group_gap;
+} HelpRoomState;
 
-#endif /* TIE_HELP_H */
+/* Nonzero start_right_col selects row 24 at room entry. */
+void help_OpenRoom(HelpRoomState* state, int32_t start_right_col);
+void help_render_rows(HelpRoomState* state);
+/* Poll result: 0 idle, 1 exit, 2 redraw. On exit, page_delta is -1/+1
+ * for adjacent screens or 0 for cancellation. */
+int help_poll_once(HelpRoomState* state);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

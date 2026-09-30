@@ -1,15 +1,18 @@
-#ifndef __SHIPEXT_H__
-#define __SHIPEXT_H__
-
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
-#include <landru/file.h>
+#ifndef TIE_SHIPEXT_H
+#define TIE_SHIPEXT_H
 
 #include "landru/actor.h"
 #include "landru/rect.h"
 #include "landru/res.h"
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <landru/file.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define NUM_SHIPS 12
 #define NUM_BATTLES 20
@@ -346,7 +349,7 @@ bool shipext_Is_Ship_Available(int16_t ship_idx);
 bool shipext_Is_Mission_Disk1(void);
 bool shipext_Is_Mission_Disk2(void);
 ResFile* shipext_Open_Ship_Resource(int16_t ship_idx);
-int16_t shipext_Open_Launch_Resource(void);
+ResFile* shipext_Open_Launch_Resource(void);
 void shipext_Get_Ship_Name(char* out, int16_t ship_idx, int16_t para_type, int16_t para_idx);
 void shipext_Get_Launch_Name(char* out);
 void shipext_Get_Weapon_Select_Name(char* out);
@@ -477,5 +480,9 @@ bool shipext_Valid_Battle(int16_t battle);
 int16_t shipext_Set_Tourdesk_Cutscene(void);
 void shipext_Get_Ship_Pos(int16_t ship, int16_t para_idx, int16_t str_idx, int32_t* out_x, int32_t* out_y,
 						  int32_t* out_z);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

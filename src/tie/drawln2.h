@@ -1,7 +1,11 @@
-#ifndef __DRAWLN2_H__
-#define __DRAWLN2_H__
+#ifndef TIE_DRAWLN2_H
+#define TIE_DRAWLN2_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /*
  * DRAWLN2 — line-edge rasterization (1 function per watdbg).
@@ -41,5 +45,9 @@ extern int16_t linelight2;
  * lightincx, vertlight1/2, templight1/2, flatobjnum) -- see drawln2.c
  * for the full list and side-effect description. */
 void drawln2_tracelineedges(int32_t* pt2);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

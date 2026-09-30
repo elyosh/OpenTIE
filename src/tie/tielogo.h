@@ -1,17 +1,27 @@
-#ifndef __TIELOGO_H__
-#define __TIELOGO_H__
+#ifndef TIE_TIELOGO_H
+#define TIE_TIELOGO_H
 
 #include "tie/shellext.h"
+
 #include <stdint.h>
 
-/* Push the tielogo scene as a tie_core task. Used by ShellTask in
- * shell.c — the host loop drives the scene via the task stack. */
-void tielogo_Push_TieLogo_Task(SceneHeadStruct* scene_head);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-/* Per-tick HD-snapshot hook — appends the sticky stamp list to
- * actors_2d so the cutscene compositor renders the assembled-logo
- * accumulation that classic gets from draw_Backdrop's bitmap blit.
- * No-op outside SCENE_TIELOGO. Called from the runtime tick pipeline in port.c.
- * emit chain alongside xactor_emit_render_state et al. */
+/* CloseScene also releases resources acquired by a failed setup. */
+int16_t tielogo_OpenScene(SceneHeadStruct* scene_head, ResFile** resource);
+void tielogo_CloseScene(ResFile* resource);
+
+extern Actor* tie_actor;
+extern Actor* fighter_actor;
+extern Actor* fighter2_actor;
+extern int16_t tielogo_fight_x[32];
+extern int16_t tielogo_fight_y[32];
+extern int16_t tielogo_fight_state[32];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

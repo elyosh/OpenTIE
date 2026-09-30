@@ -140,10 +140,10 @@ set(TIE_RECOVERED_SOURCES
 		src/tie/wavestream_tie98.h
         src/tie/fediskio.c
         src/tie/fediskio.h
-		src/tie/modelmesh.c
+		src/tie/modelmesh_tie98.c
 		src/tie/modelmesh.h
 		src/tie/modelbounds.c
-		src/tie/collide_opt.c
+		src/tie/collide_opt_tie98.c
 		src/tie/collide_opt.h
 		src/tie/modelbounds.h
         src/tie/festring.c
@@ -171,8 +171,6 @@ set(TIE_RECOVERED_SOURCES
         src/tie/option.c
         src/tie/panelrts.c
         src/tie/user.c
-        src/tie/filelen.c
-        src/tie/filelen.h
         src/tie/wingman.c
         src/tie/wingman.h
         src/tie/shade.c
@@ -187,8 +185,12 @@ set(TIE_RECOVERED_SOURCES
         src/tie/tielogo.h
         src/tie/mainmenu.c
         src/tie/mainmenu.h
+        src/tie/menudata.h
+        src/tie/mainmenu_tie98.c
         src/tie/credits.c
         src/tie/credits.h
+        src/tie/credits_internal.h
+        src/tie/credits_tie98.c
         src/tie/filmview.c
         src/tie/filmview.h
         src/tie/debrief.c
@@ -296,6 +298,65 @@ set(TIE_RECOVERED_SOURCES
         src/tie/xtimer.h)
 
 set(TIE_RUNTIME_SOURCES
+    src/tie_runtime/timing/flight_integration.c
+    src/tie_runtime/timing/flight_integration.h
+    src/tie_runtime/display/palette_cycle.c
+    src/tie_runtime/display/palette_cycle.h
+    src/tie_runtime/runtime/brief_task.c
+    src/tie_runtime/runtime/brief_task.h
+    src/tie_runtime/runtime/tourdesk_task.c
+    src/tie_runtime/runtime/tourdesk_task.h
+    src/tie_runtime/runtime/train_task.c
+    src/tie_runtime/runtime/train_task.h
+    src/tie_runtime/runtime/debrief_task.c
+    src/tie_runtime/runtime/debrief_task.h
+    src/tie_runtime/runtime/blueprint_task.c
+    src/tie_runtime/runtime/blueprint_task.h
+    src/tie_runtime/runtime/combat_task.c
+    src/tie_runtime/runtime/combat_task.h
+    src/tie_runtime/runtime/damage_task.c
+    src/tie_runtime/runtime/wingman_task.c
+    src/tie_runtime/runtime/wingman_task.h
+    src/tie_runtime/runtime/inflight_options.c
+    src/tie_runtime/snapshot/title.c
+    src/tie_runtime/snapshot/title.h
+    src/tie_runtime/runtime/filmview_task.c
+    src/tie_runtime/runtime/filmview_task.h
+    src/tie_runtime/runtime/title_task.c
+    src/tie_runtime/runtime/title_task.h
+    src/tie_runtime/snapshot/logo.c
+    src/tie_runtime/snapshot/logo.h
+    src/tie_runtime/runtime/tielogo_task.c
+    src/tie_runtime/runtime/tielogo_task.h
+    src/tie_runtime/runtime/armship_task.c
+    src/tie_runtime/runtime/armship_task.h
+    src/tie_runtime/runtime/options_task.c
+    src/tie_runtime/runtime/options_task.h
+    src/tie_runtime/runtime/mainmenu_task.c
+    src/tie_runtime/runtime/mainmenu_task.h
+    src/tie_runtime/runtime/credits_task.c
+    src/tie_runtime/runtime/credits_task.h
+    src/tie_runtime/runtime/help_task.c
+    src/tie_runtime/runtime/help_task.h
+    src/tie_runtime/runtime/goals_task.c
+    src/tie_runtime/runtime/msgroom_task.c
+    src/tie_runtime/runtime/bonus_countdown_task.c
+    src/tie_runtime/runtime/computer_task.c
+    src/tie_runtime/runtime/talk_task.c
+    src/tie_runtime/runtime/replay_viewer_task.c
+    src/tie_runtime/runtime/replay_session_task.c
+    src/tie_runtime/runtime/replay_save_task.c
+    src/tie_runtime/runtime/map_task.c
+    src/tie_runtime/runtime/film_task.c
+    src/tie_runtime/runtime/maproom_task.c
+    src/tie_runtime/runtime/inflight_info_task.c
+    src/tie_runtime/runtime/register_task.c
+    src/tie_runtime/runtime/flight_task.c
+    src/tie_runtime/runtime/flight_task.h
+    src/tie_runtime/runtime/shell_task.c
+    src/tie_runtime/runtime/shell_task.h
+    src/tie_runtime/timing/flight_clock.c
+    src/tie_runtime/timing/flight_clock.h
     src/tie_runtime/snapshot/snapshot.h
     src/tie_runtime/snapshot/snapshot.c
     src/tie_runtime/snapshot/capture_views.h
@@ -432,6 +493,7 @@ tie_enable_warnings(tie_formats)
 
 add_library(tie_core STATIC ${TIE_RECOVERED_SOURCES} ${TIE_RUNTIME_SOURCES})
 target_include_directories(tie_core PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_compile_definitions(tie_core PUBLIC TIE_MODERN)
 target_compile_definitions(tie_core PRIVATE
     TIE_VERSION_STRING="${TIE_VERSION}"
     $<$<CONFIG:Debug>:TIE_ENABLE_FLIGHT_TRACE=1>)

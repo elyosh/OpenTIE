@@ -8,9 +8,9 @@
  */
 
 #include "tie/fview.h"
+#include "tie/math2_wide.h"
 #include "tie/transfm2.h"
 #include "tie/trig2.h"
-#include <stdint.h>
 
 /* Globals owned by fview.c — saved rotation state for component rotations */
 int32_t fview_sfoiltempA1, fview_sfoiltempA2, fview_sfoiltempA3;
@@ -22,6 +22,8 @@ int32_t fview_sfoiltempx, fview_sfoiltempy, fview_sfoiltempz;
 /* Globals from tie.c (declared centrally in tie.h). */
 #include "tie/drawpol.h"
 #include "tie/tie.h"
+
+#include <stdint.h>
 
 /* ---------- helpers ---------- */
 
@@ -478,23 +480,20 @@ void fview_componentrotation(int16_t angle, const ShipModelMesh* mesh) {
 	build_rodrigues(axis_y, axis_x, axis_z, angle, rot);
 
 	/* Compute pivot displacement: disp = pivot + R * (-pivot) */
-	disp_a = pivot_raw + (int32_t)(((int64_t)rot[0] * -pivot_raw) >> 15) +
-			 (int32_t)(((int64_t)rot[3] * -pivot_x) >> 15) + (int32_t)(((int64_t)rot[6] * -pivot_z) >> 15);
-	disp_b = pivot_x + (int32_t)(((int64_t)rot[1] * -pivot_raw) >> 15) +
-			 (int32_t)(((int64_t)rot[4] * -pivot_x) >> 15) + (int32_t)(((int64_t)rot[7] * -pivot_z) >> 15);
-	disp_c = pivot_z + (int32_t)(((int64_t)rot[2] * -pivot_raw) >> 15) +
-			 (int32_t)(((int64_t)rot[5] * -pivot_x) >> 15) + (int32_t)(((int64_t)rot[8] * -pivot_z) >> 15);
+	disp_a = pivot_raw + math2_mul_q15(rot[0], -pivot_raw) + math2_mul_q15(rot[3], -pivot_x) +
+			 math2_mul_q15(rot[6], -pivot_z);
+	disp_b = pivot_x + math2_mul_q15(rot[1], -pivot_raw) + math2_mul_q15(rot[4], -pivot_x) +
+			 math2_mul_q15(rot[7], -pivot_z);
+	disp_c = pivot_z + math2_mul_q15(rot[2], -pivot_raw) + math2_mul_q15(rot[5], -pivot_x) +
+			 math2_mul_q15(rot[8], -pivot_z);
 
 	/* Translate objecteye through rotworldeye */
-	objecteyex += (int32_t)(((int64_t)rotworldeyeA1 * disp_a) >> 15) +
-				  (int32_t)(((int64_t)rotworldeyeB1 * disp_b) >> 15) +
-				  (int32_t)(((int64_t)rotworldeyeC1 * disp_c) >> 15);
-	objecteyey += (int32_t)(((int64_t)rotworldeyeA2 * disp_a) >> 15) +
-				  (int32_t)(((int64_t)rotworldeyeB2 * disp_b) >> 15) +
-				  (int32_t)(((int64_t)rotworldeyeC2 * disp_c) >> 15);
-	objecteyez += (int32_t)(((int64_t)rotworldeyeA3 * disp_a) >> 15) +
-				  (int32_t)(((int64_t)rotworldeyeB3 * disp_b) >> 15) +
-				  (int32_t)(((int64_t)rotworldeyeC3 * disp_c) >> 15);
+	objecteyex += math2_mul_q15(rotworldeyeA1, disp_a) + math2_mul_q15(rotworldeyeB1, disp_b) +
+				  math2_mul_q15(rotworldeyeC1, disp_c);
+	objecteyey += math2_mul_q15(rotworldeyeA2, disp_a) + math2_mul_q15(rotworldeyeB2, disp_b) +
+				  math2_mul_q15(rotworldeyeC2, disp_c);
+	objecteyez += math2_mul_q15(rotworldeyeA3, disp_a) + math2_mul_q15(rotworldeyeB3, disp_b) +
+				  math2_mul_q15(rotworldeyeC3, disp_c);
 
 	/* Rotate rotworldeye = saved * R */
 	rotworldeyeA1 =

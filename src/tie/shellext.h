@@ -1,7 +1,10 @@
-#ifndef __SHELLEXT_H__
-#define __SHELLEXT_H__
+#ifndef TIE_SHELLEXT_H
+#define TIE_SHELLEXT_H
 
-#include <stdint.h>
+#include "landru/actor.h"
+#include "landru/file.h"
+#include "landru/pal.h"
+#include "landru/res.h"
 
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
@@ -12,6 +15,13 @@
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Scene IDs — used by Shell dispatch, Set_Landru_Exit, and scene transitions.
  * Numbering follows LucasArts structure: single-digit = core, 10-70 = intro
@@ -119,12 +129,6 @@ typedef enum {
 	SCENE_CUT_730 = 730,
 	SCENE_CUT_900 = 900,
 } TIEScene;
-#include <stdbool.h>
-
-#include "landru/actor.h"
-#include "landru/file.h"
-#include "landru/pal.h"
-#include "landru/res.h"
 
 typedef struct {
 	int16_t music_active;
@@ -184,5 +188,9 @@ int16_t shellext_escape_TIE(void);
 void shellext_Load_Preferences(void);
 int16_t shellext_Set_Prefs_Sound(void);
 int16_t shellext_Convert_Transition(int16_t scene, int16_t sudden);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

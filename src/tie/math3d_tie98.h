@@ -1,6 +1,10 @@
 #ifndef TIE_MATH3D_TIE98_H
 #define TIE_MATH3D_TIE98_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct Vec3f {
 	float x;
 	float y;
@@ -19,5 +23,9 @@ float Math3D_RotateVec3Z(Vec3f* vec, Matrix3x3* matrix);
 Matrix3x3* Math3D_MulMatrix3x3(Matrix3x3* dst, Matrix3x3* rhs);
 Matrix3x3* Math3D_MulMatrix3x3T(Matrix3x3* dst, Matrix3x3* rhs);
 Matrix3x3* Math3D_BuildAxisAngleMatrix(Matrix3x3* out, float* axis_angle);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

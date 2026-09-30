@@ -1,8 +1,4 @@
-#include <ctype.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-
+#include "tie/fmusic.h"
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
@@ -13,10 +9,17 @@
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
 
-#define FMUSIC_MAX_TRACKS 150
-#define FMUSIC_NUM_SLOTS 2
-#define FMUSIC_CHUNK_SIZE 64
-#define FMUSIC_ID_BASE 500
+#include <ctype.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
+enum {
+	FMUSIC_MAX_TRACKS = 150,
+	FMUSIC_NUM_SLOTS = 2,
+	FMUSIC_CHUNK_SIZE = 64,
+	FMUSIC_ID_BASE = 500,
+};
 
 /* Paging slot offsets into music_buffer (initialized data in the binary) */
 // GLOBAL: TIE95 0xC1F48
@@ -44,10 +47,12 @@ int16_t num_music; /* number of loaded tracks, -1 = not initialized */
  */
 // FUNCTION: TIE95 0x239B0
 int16_t fmusic_fmLoadSound(const char* name) {
+	uint16_t idx;
+
 	if (!num_music)
 		return 0;
 
-	for (uint16_t idx = 0; idx < (uint16_t)num_music; idx++) {
+	for (idx = 0; idx < (uint16_t)num_music; idx++) {
 		const char* entry = &music_name[9 * idx];
 		uint16_t i;
 		for (i = 0; name[i] && name[i] == entry[i]; i++)
@@ -70,10 +75,12 @@ int16_t fmusic_fmUnloadSound(void) { return 1; }
  */
 // FUNCTION: TIE95 0x23A30
 void* fmusic_GetPagedSound(uint16_t track_idx) {
+	uint16_t i;
+
 	if (track_idx >= (uint16_t)num_music)
 		return NULL;
 
-	for (uint16_t i = 0; i < FMUSIC_NUM_SLOTS; i++) {
+	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
 		if ((uint32_t)track_idx == (uint32_t)music_page_state[i])
 			return (uint8_t*)music_buffer + music_slot_offsets[i];
 	}
@@ -88,23 +95,25 @@ static int16_t pagemusic(int track_idx, int slot);
 
 // FUNCTION: TIE95 0x23A7C
 int16_t fmusic_PageSound(uint16_t track_idx) {
+	uint16_t i;
+
 	if (track_idx >= (uint16_t)num_music)
 		return -1;
 
 	/* Pass 1: already paged? */
-	for (uint16_t i = 0; i < FMUSIC_NUM_SLOTS; i++) {
+	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
 		if ((uint32_t)track_idx == (uint32_t)music_page_state[i])
 			return i;
 	}
 
 	/* Pass 2: empty slot? */
-	for (uint16_t i = 0; i < FMUSIC_NUM_SLOTS; i++) {
+	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
 		if (music_page_state[i] == -1)
 			return pagemusic(track_idx, i);
 	}
 
 	/* Pass 3: evict LRU (age == 0) */
-	for (uint16_t i = 0; i < FMUSIC_NUM_SLOTS; i++) {
+	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
 		if (!music_age[i])
 			return pagemusic(track_idx, i);
 	}
@@ -116,6 +125,8 @@ int16_t fmusic_PageSound(uint16_t track_idx) {
  * Copy track data into a paging slot. Reset all ages, mark this slot as used.
  */
 static int16_t pagemusic(int track_idx, int slot) {
+	int i;
+
 	if (!music_buffer)
 		return -1;
 
@@ -123,7 +134,7 @@ static int16_t pagemusic(int track_idx, int slot) {
 
 	music_page_state[slot] = track_idx;
 
-	for (int i = 0; i < FMUSIC_NUM_SLOTS; i++)
+	for (i = 0; i < FMUSIC_NUM_SLOTS; i++)
 		music_age[i] = 0;
 	music_age[slot] = 1;
 
@@ -136,8 +147,10 @@ static int16_t pagemusic(int track_idx, int slot) {
  */
 // FUNCTION: TIE95 0x23B90
 void fmusic_allocmusicbuffer(void) {
+	int i;
+
 	num_music = 0;
-	for (int i = 0; i < FMUSIC_NUM_SLOTS; i++) {
+	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
 		music_page_state[i] = -1;
 		music_age[i] = 0;
 	}
@@ -148,10 +161,12 @@ void fmusic_allocmusicbuffer(void) {
  * Returns non-zero on success, 0 on allocation failure.
  */
 static int16_t allocmusic(uint16_t size) {
+	int idx;
+
 	if (!music_buffer)
 		return 0;
 
-	int idx = (uint16_t)num_music;
+	idx = (uint16_t)num_music;
 	music_size[idx] = size;
 	music_data[idx] = malloc(size);
 	num_music++;
@@ -218,47 +233,57 @@ static int readfiledata(TieFile* fp, void* dest, uint16_t total) {
  */
 // FUNCTION: TIE95 0x23CB0
 int16_t fmusic_loadmusic(const char* filename) {
+	uint8_t header[16];
+	TieFile* fp;
+	int32_t data_size;
+	uint16_t track_count;
+	uint16_t loaded;
+
 	if (!music_buffer) {
 		TieDiagnostics_Log(TIE_LOG_WARN, "fmusic_loadmusic: music_buffer not allocated\n");
 		return 0;
 	}
 
-	TieFile* fp = TieStorage_Open(TIE_FILE_ROOT_FLIGHT_ASSET, filename, "rb");
+	fp = TieStorage_Open(TIE_FILE_ROOT_FLIGHT_ASSET, filename, "rb");
 	if (!fp) {
 		TieDiagnostics_Log(TIE_LOG_WARN, "fmusic_loadmusic: fopen(\"%s\") failed\n", filename);
 		return 0;
 	}
 
 	/* Read 16-byte master header */
-	uint8_t header[16];
 	TieStorage_Read(header, 1, 16, fp);
 
 	/* Bytes 12-15: directory data size (as 32-bit LE in memory after fread).
 	 * fseek uses the full 32-bit value; track count uses only the low 16 bits. */
-	int32_t data_size;
+
 	memcpy(&data_size, &header[12], 4);
 	TieStorage_Seek(fp, data_size, TIE_SEEK_CUR);
 
-	uint16_t track_count = (uint16_t)data_size / 16;
+	track_count = (uint16_t)data_size / 16;
 	if (!track_count) {
 		TieStorage_Close(fp);
 		return track_count;
 	}
 
-	for (uint16_t loaded = 0; loaded < track_count; loaded++) {
+	for (loaded = 0; loaded < track_count; loaded++) {
 		/* Read 16-byte track record */
 		uint8_t rec[16];
+		uint32_t tag;
+		int idx;
+		int c;
+		uint16_t track_size;
+
 		TieStorage_Read(rec, 1, 16, fp);
 
 		/* Byte-swap first DWORD (big-endian tag) */
-		uint32_t tag;
+
 		memcpy(&tag, &rec[0], 4);
 		tag = swapdword(tag);
 		(void)tag; /* tag is not used after swap — stored in binary but unused */
 
 		/* Copy 8-byte name, lowercasing A-Z */
-		int idx = (uint16_t)num_music;
-		for (int c = 0; c < 8; c++) {
+		idx = (uint16_t)num_music;
+		for (c = 0; c < 8; c++) {
 			char ch = rec[4 + c];
 			if (ch >= 'A' && ch <= 'Z')
 				ch += 32;
@@ -267,7 +292,7 @@ int16_t fmusic_loadmusic(const char* filename) {
 		music_name[9 * idx + 8] = '\0';
 
 		/* Track data size from bytes 12-13 of the record */
-		uint16_t track_size;
+
 		memcpy(&track_size, &rec[12], 2);
 
 		if (!allocmusic(track_size)) {

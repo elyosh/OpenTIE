@@ -1,5 +1,4 @@
 #include "tie/wavestream_tie98.h"
-
 #include "tie/dsound_wave_tie98.h"
 #include "tie/filestream_tie98.h"
 #include "tie/shellext.h"
@@ -105,12 +104,14 @@ static int FrontendWaveStream_EnsureBuffer(void) {
 
 // FUNCTION: TIE98 0x457B70
 static int FrontendWaveStream_StartFile(const char* path) {
+	int initial;
+
 	if (!FrontendFileStream_QueueFile(1, path) ||
 		(g_waveStreamLoop && !FrontendFileStream_QueueFile(1, path)))
 		goto error;
 	if (!FrontendFileStream_StartNamedFile(1, path))
 		goto error;
-	const int initial = FrontendWaveStream_EnsureBuffer();
+	initial = FrontendWaveStream_EnsureBuffer();
 	g_waveStreamWriteCursor = initial >= 0 ? (uint32_t)initial : 0;
 	g_waveStreamBytesPlayed = 0;
 	g_waveStreamPrevPlayCursor = 0;
@@ -135,19 +136,20 @@ static int FrontendWaveStream_StartFile(const char* path) {
 	g_waveStreamEnd = 0;
 	while (g_waveStreamWriteCursor < WAVE_STREAM_PREFILL_BYTES) {
 		uint32_t bytes = WAVE_STREAM_PREFILL_BYTES - g_waveStreamWriteCursor;
+		int got;
+		void* first;
+		void* second;
+		uint32_t first_bytes;
+		uint32_t second_bytes;
 		if (bytes > WAVE_STREAM_MAX_REFILL_BYTES)
 			bytes = WAVE_STREAM_MAX_REFILL_BYTES;
-		const int got = FrontendFileStream_ReadBytes(1, g_waveStreamStaging, 0, bytes, 1);
+		got = FrontendFileStream_ReadBytes(1, g_waveStreamStaging, 0, bytes, 1);
 		if (got == -1)
 			continue;
 		if (got == 0) {
 			g_waveStreamFilling = 0;
 			break;
 		}
-		void* first;
-		void* second;
-		uint32_t first_bytes;
-		uint32_t second_bytes;
 		if (DirectSound_LockBuffer(g_waveStreamBuffer, g_waveStreamWriteCursor, (uint32_t)got, &first,
 								   &first_bytes, &second, &second_bytes)) {
 			if (first && g_waveStreamStaging) {
@@ -176,6 +178,10 @@ error:
 
 // FUNCTION: TIE98 0x457F70
 static void FrontendWaveStream_Refill(void) {
+	void* first;
+	void* second;
+	uint32_t first_bytes;
+	uint32_t second_bytes;
 	const int got = FrontendFileStream_ReadBytes(1, g_waveStreamStaging, 0, g_waveStreamRefillThreshold, 0);
 	if (got == -1)
 		return;
@@ -201,19 +207,15 @@ static void FrontendWaveStream_Refill(void) {
 		return;
 	}
 	if (g_waveStreamLoop) {
+		int skipped;
 		if (!FrontendFileStream_RotateToNext(1))
 			return;
-		int skipped;
 		do {
 			skipped = FrontendFileStream_ReadBytes(1, g_waveStreamStaging, 0, g_waveStreamDataOffset, 0);
 		} while (skipped == -1);
 		return;
 	}
 
-	void* first;
-	void* second;
-	uint32_t first_bytes;
-	uint32_t second_bytes;
 	if (DirectSound_LockBuffer(g_waveStreamBuffer, g_waveStreamWriteCursor, 0, &first, &first_bytes, &second,
 							   &second_bytes)) {
 		tie98_wave_fill_silence(first, first_bytes, second, second_bytes);
@@ -225,10 +227,12 @@ static void FrontendWaveStream_Refill(void) {
 
 // FUNCTION: TIE98 0x4579E0
 int FrontendWaveStream_PlayWaveFile(const char* path, int loop) {
+	long file_size;
+
 	FrontendWaveStream_Shutdown();
 	g_waveStreamPauseDepth = 0;
 	g_waveStreamLoop = loop != 0;
-	const long file_size = tie98_wave_file_size(path);
+	file_size = tie98_wave_file_size(path);
 	if (file_size <= 0) {
 		TieDiagnostics_Log(TIE_LOG_WARN, "TIE98 wave music is missing or unreadable: %s\n",
 						   path ? path : "(null)");
@@ -258,16 +262,18 @@ int FrontendWaveStream_PlayWaveFile(const char* path, int loop) {
 
 // FUNCTION: TIE98 0x457E90
 uint32_t FrontendWaveStream_Update(void) {
+	uint32_t cursor, free_bytes, played_delta;
+
 	if (!g_waveStreamBuffer)
 		return g_waveStreamBytesPlayed;
-	const uint32_t cursor = DirectSound_GetPlayCursor(g_waveStreamBuffer);
+	cursor = DirectSound_GetPlayCursor(g_waveStreamBuffer);
 	g_waveStreamLastPlayCursor = cursor;
-	const uint32_t free_bytes = cursor > g_waveStreamWriteCursor
-									? cursor - g_waveStreamWriteCursor
-									: WAVE_STREAM_BUFFER_BYTES - g_waveStreamWriteCursor + cursor;
-	const uint32_t played_delta = cursor >= g_waveStreamPrevPlayCursor
-									  ? cursor - g_waveStreamPrevPlayCursor
-									  : WAVE_STREAM_BUFFER_BYTES - g_waveStreamPrevPlayCursor + cursor;
+	free_bytes = cursor > g_waveStreamWriteCursor
+					 ? cursor - g_waveStreamWriteCursor
+					 : WAVE_STREAM_BUFFER_BYTES - g_waveStreamWriteCursor + cursor;
+	played_delta = cursor >= g_waveStreamPrevPlayCursor
+					   ? cursor - g_waveStreamPrevPlayCursor
+					   : WAVE_STREAM_BUFFER_BYTES - g_waveStreamPrevPlayCursor + cursor;
 	g_waveStreamBytesPlayed += (uint32_t)played_delta;
 	g_waveStreamPrevPlayCursor = cursor;
 	if (g_waveStreamEnd == 1 && free_bytes < g_waveStreamPrevFreeBytes) {

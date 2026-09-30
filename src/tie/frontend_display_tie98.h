@@ -6,12 +6,20 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum Tie98DisplayMode {
 	TIE98_DISPLAY_MODE_VGA = 0x13,
 	TIE98_DISPLAY_MODE_SVGA = 0x101,
 	TIE98_DISPLAY_MODE_SOFTWARE_FLIGHT = 0x111,
 	TIE98_DISPLAY_MODE_HARDWARE_FLIGHT = 0x1FF,
 } Tie98DisplayMode;
+
+/* Recovered entry point retained for whole-translation-unit matching. */
+int Bitmap_WriteBmp24(const char* file_name, const void* pixels, int width, int height, int pitch,
+					  int bits_per_pixel, int pixel_format_555, const uint8_t* palette_bgra);
 
 extern IDirectDraw* g_flightDirectDraw;
 extern IDirectDrawSurface* g_primarySurface;
@@ -59,5 +67,9 @@ HRESULT FrontendDisplay_PresentFrontSurface(void);
 HRESULT FrontendDisplay_ClearAndPresentFrame(void);
 HRESULT FrontendDisplay_BlitOffscreenToRenderSurface(void);
 HRESULT DDRAW_Present_Landru_Frame(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -1,5 +1,4 @@
 #include "tie/math3d_tie98.h"
-
 #include <math.h>
 
 // FUNCTION: TIE98 0x420130

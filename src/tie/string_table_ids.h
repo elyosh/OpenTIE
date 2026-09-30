@@ -1,8 +1,12 @@
-/* Auto-generated from STRINGS.DAT — pointer-table indexing enums.
- * See docs/strings-dat-fulldump.md for the full string content. */
-
 #ifndef TIE_STRING_TABLE_IDS_H
 #define TIE_STRING_TABLE_IDS_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* Auto-generated from STRINGS.DAT — pointer-table indexing enums.
+ * See docs/strings-dat-fulldump.md for the full string content. */
 
 /* DAMAGE_outputsystem index (10 entries; cells 0..9) */
 typedef enum SystemStringId {
@@ -553,4 +557,8 @@ typedef enum WingmanStringId {
 	WMAN_SHIFT_W_WAIT_FOR_FURTHER_ORDERS = 9,      /*  SHIFT-W    Wait for further orders. */
 } WingmanStringId;
 
-#endif /* TIE_STRING_TABLE_IDS_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

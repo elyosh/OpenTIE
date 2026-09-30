@@ -15,12 +15,7 @@
  * 15=arrow, 16=light, 20=decorative.
  */
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
+#include "tie/train.h"
 #include "landru/actcust.h"
 #include "landru/actdelt.h"
 #include "landru/actor.h"
@@ -47,20 +42,26 @@
 #include "tie/shipext.h"
 #include "tie/soundext.h"
 #include "tie/textext.h"
-#include "tie/train.h"
 #include "tie_runtime/presentation/pilot_name.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/score_tables.h"
-#include <landru/task.h>
 
 #include "tie/bpflight.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static const char train_film_b[] = "trainbrf";
 static const char train_score_filename[] = "train.hgh";
 
-#define NUM_SCORE_ENTRIES TRAIN_SCORE_ENTRY_COUNT
-#define SCORE_NAME_LEN TRAIN_SCORE_NAME_CAPACITY
-#define VGA_SCORE_ENTRIES 8
+enum {
+	NUM_SCORE_ENTRIES = TRAIN_SCORE_ENTRY_COUNT,
+	SCORE_NAME_LEN = TRAIN_SCORE_NAME_CAPACITY,
+	VGA_SCORE_ENTRIES = 8,
+};
 
 typedef struct TrainSpec {
 	LandruSurfaceSet surface_set;
@@ -76,40 +77,48 @@ typedef struct TrainSpec {
 
 /* DATA: TIE95 TRAIN_Train; TIE98 0x491B30. */
 static const TrainSpec train_specs[] = {
-    {
-        .surface_set = LANDRU_SURFACE_VGA,
-        .archive = "train.lfd", .film_a = "train",
-        .width = 320, .height = 200,
-        .mouse_x = 220, .mouse_y = 190,
-        .monitor_bounds = {62, 6, 254, 116},
-        .input_bounds = {
-            {188, 138, 214, 154},
-            {214, 138, 240, 154},
-            {188, 154, 214, 170},
-            {214, 154, 240, 170},
-            {206, 184, 237, 200},
-            {49, 181, 79, 200},
-        },
-        .separate_button_actors = false,
-        .clear_monitor = false,
-    },
-    {
-        .surface_set = LANDRU_SURFACE_SVGA,
-        .archive = "train640.lfd", .film_a = "train640",
-        .width = 640, .height = 480,
-        .mouse_x = 235, .mouse_y = 465,
-        .monitor_bounds = {144, 56, 500, 300},
-        .input_bounds = {
-            {377, 336, 398, 346},
-            {398, 336, 422, 346},
-            {386, 454, 416, 468},
-            {416, 454, 446, 468},
-            {212, 455, 252, 474},
-            {453, 325, 522, 400},
-        },
-        .separate_button_actors = true,
-        .clear_monitor = true,
-    },
+	{
+		/* surface_set */ LANDRU_SURFACE_VGA,
+		/* archive */ "train.lfd",
+		/* film_a */ "train",
+		/* width */ 320,
+		/* height */ 200,
+		/* mouse_x */ 220,
+		/* mouse_y */ 190,
+		/* monitor_bounds */ { 62, 6, 254, 116 },
+		/* input_bounds */
+		{
+			{ 188, 138, 214, 154 },
+			{ 214, 138, 240, 154 },
+			{ 188, 154, 214, 170 },
+			{ 214, 154, 240, 170 },
+			{ 206, 184, 237, 200 },
+			{ 49, 181, 79, 200 },
+		},
+		/* separate_button_actors */ false,
+		/* clear_monitor */ false,
+	},
+	{
+		/* surface_set */ LANDRU_SURFACE_SVGA,
+		/* archive */ "train640.lfd",
+		/* film_a */ "train640",
+		/* width */ 640,
+		/* height */ 480,
+		/* mouse_x */ 235,
+		/* mouse_y */ 465,
+		/* monitor_bounds */ { 144, 56, 500, 300 },
+		/* input_bounds */
+		{
+			{ 377, 336, 398, 346 },
+			{ 398, 336, 422, 346 },
+			{ 386, 454, 416, 468 },
+			{ 416, 454, 446, 468 },
+			{ 212, 455, 252, 474 },
+			{ 453, 325, 522, 400 },
+		},
+		/* separate_button_actors */ true,
+		/* clear_monitor */ true,
+	},
 };
 
 static const TrainSpec* active_spec;
@@ -175,7 +184,7 @@ static int32_t train_time;
 static int32_t train_mode;
 // GLOBAL: TIE95 0xF57A8
 static int16_t train_help;
-// GLOBAL: TIE98 0x50B328
+// GLOBAL: TIE98 0x58AAEC
 static int32_t train_monitor_needs_clear;
 
 /* train_pilot_medal_status: snapshot of train_max_level[ship] BEFORE the
@@ -204,6 +213,8 @@ static void train_end_Train_View(int32_t time) {
 // FUNCTION: TIE95 0x6B800
 // FUNCTION: TIE98 0x491EE0
 static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object) {
+	Actor* the_actor;
+	int16_t var1;
 	if (active_spec->surface_set == LANDRU_SURFACE_SVGA && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
 		return 0;
@@ -213,8 +224,8 @@ static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object
 		return 0;
 
 	xfilm_Rewind_Actor_Film(the_film, film_object, (void*)(film_object + 1));
-	Actor* the_actor = (Actor*)film_object->object;
-	int16_t var1 = the_actor->var1;
+	the_actor = (Actor*)film_object->object;
+	var1 = the_actor->var1;
 
 	switch (var1) {
 		case 1:
@@ -250,6 +261,7 @@ static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object
 // FUNCTION: TIE98 0x491FF0
 static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 								   uint8_t mouseState, uint8_t prevMouseState, int16_t key, int16_t prevKey) {
+	int16_t id;
 	(void)draw_rect;
 	(void)clip_rect;
 	(void)key;
@@ -263,7 +275,7 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 	if (!mouseState && !prevMouseState)
 		return 1;
 
-	int16_t id = input->id;
+	id = input->id;
 
 	if (active_spec->separate_button_actors) {
 		Actor* input_actor;
@@ -374,13 +386,13 @@ static void train_iuser_Train(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x6BB60
 static void train_idraw_Train(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh) {
+	int16_t color, id, i;
 	char buf[48];
 
 	if (!refresh)
 		return;
 
 	/* Fade color based on helmet state: dim when visor is down */
-	int16_t color;
 	if (helmet->state >= 5)
 		color = 16;
 	else
@@ -389,12 +401,12 @@ static void train_idraw_Train(Input* input, Rect* draw_rect, Rect* clip_rect, in
 	if (color == 16)
 		return;
 
-	int16_t id = input->id;
+	id = input->id;
 
 	if (id == 6) {
 		/* Ship name (truncated at parenthesis) */
 		shipext_Get_Train_Ship_Name(buf);
-		for (int16_t i = 0; buf[i]; i++) {
+		for (i = 0; buf[i]; i++) {
 			if (buf[i] == '(') {
 				if (i > 0 && buf[i - 1] == ' ')
 					buf[i - 1] = '\0';
@@ -426,13 +438,14 @@ static void train_idraw_Train(Input* input, Rect* draw_rect, Rect* clip_rect, in
 // FUNCTION: TIE98 0x492200
 static int16_t train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 									 int16_t off_y, int16_t refresh) {
+
 	if (refresh) {
 		if (train_help && !helmet->state) {
-			xactdelt_Draw_Delta_Actor(the_actor, draw_rect, clip_rect, off_x, off_y, refresh);
 			Rect bounds;
+			char text[32];
+			xactdelt_Draw_Delta_Actor(the_actor, draw_rect, clip_rect, off_x, off_y, refresh);
 			xactor_Get_Actor_Bounds(the_actor, &bounds);
 			xfont_Enable_FontID_Shadow(0);
-			char text[32];
 			/* train_help 1-6 maps to txtTrainLastShip(74)..txtTrainExit(79) */
 			textext_Copy_Text(text, (int16_t)(train_help + 73));
 			xfont_Print_Centered_Text(text, &bounds, 15,
@@ -464,16 +477,18 @@ static void train_user_Train_Clam(Actor* the_actor, int32_t time) {
 // FUNCTION: TIE95 0x6BD1C
 // FUNCTION: TIE98 0x4922E0
 static void train_user_Train_Light(Actor* the_actor, int32_t time) {
+
 	if (time == 0) {
 		xactor_Show_Actor(the_actor);
 		the_actor->var2 = (rand_rand() & 0xF) + 2;
 	}
 
 	if (the_actor->var2 & 0x4000) {
+		int16_t countdown;
 		/* "On" phase: random state every other frame */
 		if (time & 1)
 			the_actor->state = rand_rand() % the_actor->arraySize;
-		int16_t countdown = the_actor->var2 & 0x3FFF;
+		countdown = the_actor->var2 & 0x3FFF;
 		if (countdown == 1) {
 			the_actor->var2 = (rand_rand() & 0xF) + 2;
 			return;
@@ -499,6 +514,7 @@ static void train_user_Train_Light(Actor* the_actor, int32_t time) {
 // FUNCTION: TIE95 0x6BDD0
 // FUNCTION: TIE98 0x492390
 static void train_user_Train_Helmet(Actor* the_actor, int32_t time) {
+
 	if (the_actor->var2) {
 		/* Entering training — close visor */
 		if (!xactor_Is_Actor_Visible(the_actor)) {
@@ -508,12 +524,13 @@ static void train_user_Train_Helmet(Actor* the_actor, int32_t time) {
 		} else {
 			int16_t next_state = the_actor->state + 1;
 			if (next_state == the_actor->arraySize) {
+				uint8_t ship;
 				/* Visor fully closed — enter training */
 				shipext_Update_Pilot();
 				xerror_Set_Landru_Exit(SCENE_FLIGHT_TRAIN);
 				soundext_Stop_SFX(sfxVisor);
 				soundext_Play_SFX(sfxVisorClick, 80);
-				uint8_t ship = shipext_Get_Train_Ship();
+				ship = shipext_Get_Train_Ship();
 				train_pilot_medal_status = pilot_record.train_max_level[ship];
 			} else {
 				xactor_Set_Actor_State(the_actor, next_state, 0);
@@ -626,6 +643,8 @@ static void train_iuser_Train_Screen(Input* input, int32_t time) {
 // FUNCTION: TIE95 0x6C078
 // FUNCTION: TIE98 0x4926A0
 static void train_Draw_Train_Screen_Mission(Rect* src) {
+	int16_t t, num_lines, text_x, text_y, max_width, text_left, bar_y;
+	int16_t line_idx, text_line, i;
 	Rect dst;
 	char string[48], buf[48], name[48];
 	bool svga = active_spec->surface_set == LANDRU_SURFACE_SVGA;
@@ -633,28 +652,29 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	int16_t font_height = svga ? xfont_Get_FontID_Height(2) : 10;
 
 	xrect_Copy_Rect(&dst, src);
-	int16_t t = train_time;
-	int16_t num_lines = shipext_Num_Train_Mission_Text_Lines();
+	t = train_time;
+	num_lines = shipext_Num_Train_Mission_Text_Lines();
 
 	/* Center vertically */
 	dst.top += (dst.bottom - dst.top - (font_height * num_lines + 18)) >> 1;
 
-	int16_t text_x = dst.left + (svga ? 4 : 2);
-	int16_t text_y = dst.top + 10;
+	text_x = dst.left + (svga ? 4 : 2);
+	text_y = dst.top + 10;
 	dst.bottom = dst.top + (svga ? font_height + 9 : 18);
 
 	/* Find max line width to center horizontally */
-	int16_t max_width = 0;
-	for (int16_t i = 0; i < num_lines; i++) {
+	max_width = 0;
+	for (i = 0; i < num_lines; i++) {
+		int16_t old_font, w;
 		shipext_Get_Train_Mission_Text(string, i);
-		int16_t old_font = xfont_Get_Font();
+		old_font = xfont_Get_Font();
 		xfont_Set_Font(font_id);
-		int16_t w = xfont_Get_String_Width(string);
+		w = xfont_Get_String_Width(string);
 		xfont_Set_Font(old_font);
 		if (w > max_width)
 			max_width = w;
 	}
-	int16_t text_left = ((dst.right - dst.left - max_width) >> 1) + text_x;
+	text_left = ((dst.right - dst.left - max_width) >> 1) + text_x;
 
 	/* Animated horizontal bars */
 	if (svga) {
@@ -675,7 +695,7 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 		}
 	}
 
-	int16_t bar_y = dst.bottom + font_height * num_lines + 2;
+	bar_y = dst.bottom + font_height * num_lines + 2;
 	if (svga) {
 		if (t >= font_height * num_lines) {
 			xpaint_Horiz_Clipped_Line(dst.left + 6, bar_y, 390, 2);
@@ -697,8 +717,8 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 	}
 
 	/* Draw header line (ship name + level) then mission text lines */
-	int16_t line_idx = 0;
-	int16_t text_line = -1;
+	line_idx = 0;
+	text_line = -1;
 	while (t >= 0) {
 		int16_t fade = (t <= 7) ? 2 * t + 16 : 31;
 
@@ -731,6 +751,7 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 // FUNCTION: TIE95 0x6C45C
 // FUNCTION: TIE98 0x492A40
 static void train_Draw_Train_Screen_Score(Rect* src) {
+	int16_t total_width, name_x, score_x, level_x, y, displayed_scores, i;
 	char string[40], str[40];
 	bool svga = active_spec->surface_set == LANDRU_SURFACE_SVGA;
 	int16_t font_id = svga ? 3 : 0;
@@ -741,7 +762,7 @@ static void train_Draw_Train_Screen_Score(Rect* src) {
 		border_offset = (t >= 32) ? 2 : 260 - 8 * t;
 	else
 		border_offset = (t >= 32) ? 2 : 130 - 4 * t;
-	int16_t total_width = 2 * border_offset;
+	total_width = 2 * border_offset;
 
 	/* Horizontal bars */
 	xpaint_Horiz_Clipped_Line(border_offset + src->left, src->top + 6, src->right - src->left - total_width,
@@ -749,13 +770,13 @@ static void train_Draw_Train_Screen_Score(Rect* src) {
 	xpaint_Horiz_Clipped_Line(border_offset + src->left, src->bottom - 6,
 							  src->right - src->left - total_width, 2);
 
-	int16_t name_x = src->left + (svga ? 8 : 4);
-	int16_t score_x = name_x + (svga ? 120 : 60);
-	int16_t level_x = name_x + (svga ? 280 : 140);
-	int16_t y = src->top + (svga ? 18 : 10);
+	name_x = src->left + (svga ? 8 : 4);
+	score_x = name_x + (svga ? 120 : 60);
+	level_x = name_x + (svga ? 280 : 140);
+	y = src->top + (svga ? 18 : 10);
 
-	const int16_t displayed_scores = svga ? NUM_SCORE_ENTRIES : VGA_SCORE_ENTRIES;
-	for (int16_t i = 0; i < displayed_scores && t >= 0; i++) {
+	displayed_scores = svga ? NUM_SCORE_ENTRIES : VGA_SCORE_ENTRIES;
+	for (i = 0; i < displayed_scores && t >= 0; i++) {
 		int16_t fade = (t + 16 > 31) ? 31 : t + 16;
 		char display_name[SCORE_NAME_LEN];
 		TiePilotName_CopyForDisplay(display_name, sizeof(display_name), train_score_name[i]);
@@ -781,6 +802,7 @@ static void train_Draw_Train_Screen_Score(Rect* src) {
 // FUNCTION: TIE95 0x6C644
 // FUNCTION: TIE98 0x492BE0
 static void train_Draw_Train_Screen_Flyby(Rect* src) {
+	int i;
 	int16_t t = train_time - 384;
 	char text[48];
 	bool svga = active_spec->surface_set == LANDRU_SURFACE_SVGA;
@@ -788,14 +810,13 @@ static void train_Draw_Train_Screen_Flyby(Rect* src) {
 
 	xfont_Enable_FontID_Shadow(font_id);
 
-	for (int i = 0; train_course_info[i].start_time != -1; i++) {
+	for (i = 0; train_course_info[i].start_time != -1; i++) {
 		const CourseInfoEntry* e = &train_course_info[i];
 		if (t >= e->start_time && t < e->end_time) {
+			int16_t px, py;
 			int16_t fade = t - e->start_time + 16;
 			if (fade > 31)
 				fade = 31;
-			int16_t px;
-			int16_t py;
 			if (svga) {
 				px = src->left + 2 * e->y_offset;
 				py = src->top + 2 * e->x_offset;
@@ -845,97 +866,76 @@ static void train_idraw_Train_Screen(Input* input, Rect* draw_rect, Rect* clip_r
 
 /* ------------------------------------------------------------------ */
 
-typedef enum {
-	TRAIN_PHASE_BEGIN = 0,
-	TRAIN_PHASE_CLEANUP = 1,
-} TrainPhase;
+void train_OpenScene(SceneHeadStruct* the_head, bool svga) {
+	Rect frame;
+	const char* film_name;
+	TrainingScoreEntry loaded_scores[TRAIN_SCORE_ENTRY_COUNT];
+	int16_t i;
+	const int16_t* bounds;
 
-typedef struct TrainTask {
-	SceneHeadStruct* the_head;
-	TrainPhase phase;
-	const TrainSpec* spec;
-} TrainTask;
-
-/* PORT: asynchronous adaptation of TIE95 TRAIN_Train and
- * TIE98 TRAIN_Train (0x491B30). */
-static LandruTaskStepResult train_task_step(void* self) {
-	TrainTask* t = (TrainTask*)self;
-
-	if (t->phase == TRAIN_PHASE_BEGIN) {
-		Rect frame;
-		const int16_t* bounds;
-
-		active_spec = t->spec;
-		if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-			(void)xsurface_Select_Surface_Set(active_spec->surface_set);
-			xview_Init_View(xview_Get_Current_View());
-			xvesa_Erase_Video(16);
-		}
-
-		xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
-
-		train_file = shellext_Open_Empire_Resource(active_spec->archive);
-		xviewadd_Clear_View();
-		xview_Disable_All_View_Erase();
-
-		/* Select film based on scene: entry A = first visit, B = return */
-		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
-		const char* film_name =
-			(shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? active_spec->film_a : train_film_b;
-		train_film = xfilm_Res_Callback_Film(film_name, &frame, 0, 0, 0, train_film_Train_Callback);
-		xfilm_Set_Film_Def_Palette(train_film, t->the_head->def_palette);
-
-		/* World input (full screen) */
-		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
-		world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
-
-		/* Monitor screen input */
-		bounds = active_spec->monitor_bounds;
-		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-		monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(monitor_input, train_iupdate_Train_Screen);
-		xinpattr_Set_Input_User_Function(monitor_input, train_iuser_Train_Screen);
-		xinpattr_Set_Input_Draw_Function(monitor_input, train_idraw_Train_Screen);
-		xinpattr_Refreshable_Input(monitor_input);
-		monitor_input->id = 0;
-
-		/* 6 navigation buttons */
-		for (int16_t i = 0; i < 6; i++) {
-			bounds = active_spec->input_bounds[i];
-			xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
-			button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
-			xinpattr_Set_Input_Update_Function(button_input[i], train_iupdate_Train);
-			xinpattr_Set_Input_User_Function(button_input[i], train_iuser_Train);
-			button_input[i]->mouseUsage = 4;
-			button_input[i]->id = i + 1;
-		}
-
-		train_time = 0;
-		train_help = 0;
-		train_monitor_needs_clear = active_spec->clear_monitor;
-
-		bpflight_Open_Flight_Engine(1);
-		bpflight_Stop_Movie_Engine();
-
-		/* Load either legacy TIE95 scores or the shared canonical format. */
-		TrainingScoreEntry loaded_scores[TRAIN_SCORE_ENTRY_COUNT];
-		if (TieScoreTables_LoadTraining(train_score_filename, loaded_scores)) {
-			for (int16_t i = 0; i < NUM_SCORE_ENTRIES; i++) {
-				snprintf(train_score_name[i], sizeof(train_score_name[i]), "%s", loaded_scores[i].name);
-				train_score_points[i] = loaded_scores[i].score;
-				train_score_level[i] = loaded_scores[i].level;
-			}
-		}
-
-		/* Push the modal view task */
-		xview_Set_View_Update_Function(train_end_Train_View);
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = TRAIN_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+	active_spec = &train_specs[svga ? 1 : 0];
+	if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
+		(void)xsurface_Select_Surface_Set(active_spec->surface_set);
+		xview_Init_View(xview_Get_Current_View());
+		xvesa_Erase_Video(16);
 	}
 
-	/* CLEANUP */
+	xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+
+	train_file = shellext_Open_Empire_Resource(active_spec->archive);
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
+
+	/* Select film based on scene: entry A = first visit, B = return */
+	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? active_spec->film_a : train_film_b;
+	train_film = xfilm_Res_Callback_Film(film_name, &frame, 0, 0, 0, train_film_Train_Callback);
+	xfilm_Set_Film_Def_Palette(train_film, the_head->def_palette);
+
+	/* World input (full screen) */
+	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
+
+	/* Monitor screen input */
+	bounds = active_spec->monitor_bounds;
+	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(monitor_input, train_iupdate_Train_Screen);
+	xinpattr_Set_Input_User_Function(monitor_input, train_iuser_Train_Screen);
+	xinpattr_Set_Input_Draw_Function(monitor_input, train_idraw_Train_Screen);
+	xinpattr_Refreshable_Input(monitor_input);
+	monitor_input->id = 0;
+
+	/* 6 navigation buttons */
+	for (i = 0; i < 6; i++) {
+		bounds = active_spec->input_bounds[i];
+		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+		button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(button_input[i], train_iupdate_Train);
+		xinpattr_Set_Input_User_Function(button_input[i], train_iuser_Train);
+		button_input[i]->mouseUsage = 4;
+		button_input[i]->id = i + 1;
+	}
+
+	train_time = 0;
+	train_help = 0;
+	train_monitor_needs_clear = active_spec->clear_monitor;
+
+	bpflight_Open_Flight_Engine(1);
+	bpflight_Stop_Movie_Engine();
+
+	/* Load either legacy TIE95 scores or the shared canonical format. */
+	if (TieScoreTables_LoadTraining(train_score_filename, loaded_scores)) {
+		for (i = 0; i < NUM_SCORE_ENTRIES; i++) {
+			snprintf(train_score_name[i], sizeof(train_score_name[i]), "%s", loaded_scores[i].name);
+			train_score_points[i] = loaded_scores[i].score;
+			train_score_level[i] = loaded_scores[i].level;
+		}
+	}
+	xview_Set_View_Update_Function(train_end_Train_View);
+}
+
+void train_CloseScene(bool svga) {
 	xinpcall_Clear_Active_Input();
 	xview_Clear_View_Update_Function();
 	bpflight_Close_Flight_Engine();
@@ -945,23 +945,9 @@ static LandruTaskStepResult train_task_step(void* self) {
 		xcursor_Hide_Cursor();
 
 	xres_Close_Resource(train_file);
-	if (t->spec->surface_set == LANDRU_SURFACE_SVGA) {
+	if (svga) {
 		xvesa_Erase_Video(16);
 		xviewadd_Clear_View();
 		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 	}
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static const LandruTaskVtable train_task_vt = {
-	.step = train_task_step,
-};
-
-void train_Push_Train_Task(SceneHeadStruct* the_head) {
-	TrainTask* t = (TrainTask*)landru_task_push(&train_task_vt);
-	if (!t)
-		return;
-	t->the_head = the_head;
-	t->phase = TRAIN_PHASE_BEGIN;
-	t->spec = &train_specs[TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98 ? 1 : 0];
 }

@@ -1,7 +1,11 @@
-#ifndef __GATE_H__
-#define __GATE_H__
+#ifndef TIE_GATE_H
+#define TIE_GATE_H
 
 #include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* Training-course gates, crossing detection, animation, scoring, and CRT output. */
 
@@ -107,18 +111,6 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin);
 void gate_updatebonuspoints(void);
 
 /*
- * Push the per-second bonus-countdown task. Called from
- * gate_updategateanimations when the player completes the final gate
- * of a training level. The task decrements mtimer_min/mtimer_sec one
- * step every 4 PIT ticks (gated via xtimer_time_elapsed reading from
- * sim_clock); when the timer reaches zero it posts MSG_BONUS_AWARDED,
- * bumps train_level, and pops. Replaces the original synchronous
- * `while (mtimer_min || mtimer_sec) { ... while (tickcounter<4); }`
- * spin which would deadlock under HOST_DRIVEN sim_clock.
- */
-void gate_Push_Bonus_Countdown_Task(void);
-
-/*
  * Print `value` to the current FESTRING cursor as a decimal integer,
  * right-justified in a field of `num_digits`, with at least `min_digits`
  * printed (leading positions above min are padded with spaces rather than
@@ -167,7 +159,7 @@ extern uint16_t currentgate;
 extern uint16_t gate_render_reference_object;
 
 /* Set while the per-section bonus countdown task is on the task stack
- * (gate_Push_Bonus_Countdown_Task → 1, bonus_countdown_step on DONE
+ * (TieBonusCountdown_Begin → 1, bonus_countdown_step on DONE
  * → 0). The classic cockpit bonus bar is only visible during this
  * window: `panel_updatepanel` redraws the cockpit bitmap every tick
  * and only the per-step `gate_updatebonuspoints` paints the timer +
@@ -187,5 +179,9 @@ extern int32_t gatepreviousy[4];
 extern int32_t gatepreviousz[4];
 extern int16_t gatepreviousheading[4];
 extern int16_t gatepreviouspitch[4];
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

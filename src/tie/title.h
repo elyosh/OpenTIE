@@ -1,14 +1,29 @@
-#ifndef __TITLE_H__
-#define __TITLE_H__
+#ifndef TIE_TITLE_H
+#define TIE_TITLE_H
 
 #include "tie/shellext.h"
+
 #include <stdint.h>
 
-/* Push the title scene as a tie_core task. */
-void title_Push_Title_Task(SceneHeadStruct* scene_head);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-/* Emit the live perspective text-crawl state into the snapshot's
- * title_crawl_lines channel. Called from the per-tick emit pipeline
- * in the runtime tick pipeline; no-op when no crawl is active. */
+enum { TITLE_MAX_LINES = 18 };
+
+typedef struct TitleSceneResources {
+	ResFile* file;
+	char film_name[16];
+} TitleSceneResources;
+
+int16_t title_OpenScene(SceneHeadStruct* scene_head, TitleSceneResources* resources, int16_t font_slot);
+void title_CloseScene(TitleSceneResources* resources);
+
+extern int16_t title_num_lines;
+extern LandruHandle title_text;
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  * RAND — retail's "standard" random number generator.
  *
@@ -24,4 +28,8 @@
  */
 int rand_rand(void);
 
-#endif /* TIE_RAND_H */
+#ifdef __cplusplus
+}
+#endif
+
+#endif

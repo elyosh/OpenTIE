@@ -1,5 +1,4 @@
 #include "tie/modelbounds.h"
-
 #include "tie/modelmesh.h"
 #include "tie/shell.h"
 #include "tie/tie.h"
@@ -31,10 +30,12 @@ int modelbounds_getmaxextent(uint16_t model_type) { return max_extent(bounds(mod
  * authored GLB models drive flight simulation. Query the model view owned by
  * that same stock repository without changing the recovered flight registry. */
 int modelbounds_getmaxextent_from_api(const TieFlightModelApi* models, uint16_t model_type) {
+	char error[768] = { 0 };
+	const TieFlightModelView* model;
+
 	if (!models || !models->acquire)
 		shell_programexit("TIE98 original model repository is unavailable");
-	char error[768] = { 0 };
-	const TieFlightModelView* model = models->acquire(models->context, model_type, error, sizeof error);
+	model = models->acquire(models->context, model_type, error, sizeof error);
 	if (!model)
 		shell_programexit(error[0] ? error : "TIE98 original model is unavailable");
 	return max_extent(&model->bounds);

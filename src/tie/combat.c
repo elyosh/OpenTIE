@@ -14,12 +14,7 @@
  * 12=helmet, 15=arrow, 20=decorative.
  */
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
+#include "tie/combat.h"
 #include "landru/actcust.h"
 #include "landru/actdelt.h"
 #include "landru/actor.h"
@@ -41,7 +36,6 @@
 #include "landru/vesa.h"
 #include "landru/view.h"
 #include "landru/viewadd.h"
-#include "tie/combat.h"
 #include "tie/rand.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
@@ -50,15 +44,22 @@
 #include "tie_runtime/presentation/pilot_name.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/score_tables.h"
-#include <landru/task.h>
 
 #include "tie/bpflight.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static const char combat_resource_str[] = "combat.lfd";
 static const char train_resource_str[] = "train.lfd";
 static const char combat_film_name[] = "combat";
 
-#define COMBAT_MAX_MISSIONS 8
+enum {
+	COMBAT_MAX_MISSIONS = 8,
+};
 
 /* Module state */
 static ResFile* combat_file;
@@ -105,11 +106,12 @@ static void combat_user_Combat_Helmet(Actor* the_actor, int32_t time);
  */
 // FUNCTION: TIE95 0x6DF54
 static void combat_Load_Combat_High_Scores(void) {
+	char filename[16];
+
 	int16_t ship = shipext_Get_Combat_Ship();
 	if (ship == combat_score_id)
 		return;
 
-	char filename[16];
 	if (ship < 12) {
 		strcpy(filename, "shipxx.hgh");
 		filename[4] = (char)(ship + 1) / 10 + '0';
@@ -145,6 +147,9 @@ static void combat_end_Combat_View(int32_t time) {
 // FUNCTION: TIE95 0x6CEAC
 // FUNCTION: TIE98 0x40A710
 static int16_t combat_film_Combat_Callback(Film* the_film, FilmObject* film_object) {
+	Actor* the_actor;
+	int16_t var1;
+
 	if (combat_svga && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
 		return 0;
@@ -153,8 +158,8 @@ static int16_t combat_film_Combat_Callback(Film* the_film, FilmObject* film_obje
 		return 0;
 
 	xfilm_Rewind_Actor_Film(the_film, film_object, (void*)(film_object + 1));
-	Actor* the_actor = (Actor*)film_object->object;
-	int16_t var1 = the_actor->var1;
+	the_actor = (Actor*)film_object->object;
+	var1 = the_actor->var1;
 
 	switch (var1) {
 		case 1:
@@ -203,6 +208,8 @@ static int16_t combat_draw_Combat_Back(Actor* the_actor, Rect* draw_rect, Rect* 
 static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 									 uint8_t mouseState, uint8_t prevMouseState, int16_t key,
 									 int16_t prevKey) {
+	int16_t id, tie98_button_index;
+
 	(void)draw_rect;
 	(void)clip_rect;
 	(void)key;
@@ -216,9 +223,9 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 	if (!mouseState && !prevMouseState)
 		return 1;
 
-	int16_t id = input->id;
+	id = input->id;
 	/* TIE98 film actor indices are zero-based; combat input IDs are one-based. */
-	const int16_t tie98_button_index = id - 1;
+	tie98_button_index = id - 1;
 
 	if (id == 5) {
 		/* Start button */
@@ -316,12 +323,13 @@ static void combat_iuser_Combat(Input* input, int32_t time) {
 // FUNCTION: TIE95 0x6D260
 // FUNCTION: TIE98 0x40AAD0
 static void combat_idraw_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh) {
+	int16_t color, id, i;
+
 	char buf[48];
 
 	if (!refresh)
 		return;
 
-	int16_t color;
 	if (helmet->state >= 5)
 		color = 16;
 	else
@@ -330,12 +338,12 @@ static void combat_idraw_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, 
 	if (color == 16)
 		return;
 
-	int16_t id = input->id;
+	id = input->id;
 
 	if (id == 7) {
 		/* Ship name (truncated at parenthesis) */
 		shipext_Get_Combat_Ship_Name(buf);
-		for (int16_t i = 0; buf[i]; i++) {
+		for (i = 0; buf[i]; i++) {
 			if (buf[i] == '(') {
 				if (i > 0 && buf[i - 1] == ' ')
 					buf[i - 1] = '\0';
@@ -441,40 +449,46 @@ static void combat_iuser_Combat_Screen(Input* input, int32_t time) {
 // FUNCTION: TIE95 0x6D52C
 // FUNCTION: TIE98 0x40ADE0
 static void combat_Draw_Combat_Screen_Mission(Rect* src) {
+	int16_t t, num_lines, line_height, text_x, text_y, max_width, text_left;
+	int16_t full_bar, half_bar, bar_step, header_x, header_w, bar_y;
+	int16_t line_idx, text_line, i;
+	uint16_t font_id;
+	const char* mission_label;
+
 	Rect dst;
 	char string[48], buf[48], name[48];
 
 	xrect_Copy_Rect(&dst, src);
-	int16_t t = combat_time;
-	int16_t num_lines = shipext_Num_Combat_Mission_Text_Lines();
+	t = combat_time;
+	num_lines = shipext_Num_Combat_Mission_Text_Lines();
 
-	const uint16_t font_id = combat_svga ? 2 : 0;
-	const int16_t line_height = combat_svga ? (int16_t)xfont_Get_FontID_Height(font_id) : 10;
+	font_id = combat_svga ? 2 : 0;
+	line_height = combat_svga ? (int16_t)xfont_Get_FontID_Height(font_id) : 10;
 	dst.top += (dst.bottom - dst.top - (line_height * num_lines + 18)) >> 1;
 
-	int16_t text_x = dst.left + (combat_svga ? 4 : 2);
-	int16_t text_y = dst.top + 10;
+	text_x = dst.left + (combat_svga ? 4 : 2);
+	text_y = dst.top + 10;
 	dst.bottom = dst.top + (combat_svga ? 9 + line_height : 18);
 
-	int16_t max_width = 0;
-	for (int16_t i = 0; i < num_lines; i++) {
+	max_width = 0;
+	for (i = 0; i < num_lines; i++) {
+		int16_t old_font, w;
 		shipext_Get_Combat_Mission_Text(string, i);
-		int16_t old_font = xfont_Get_Font();
+		old_font = xfont_Get_Font();
 		xfont_Set_Font(font_id);
-		int16_t w = xfont_Get_String_Width(string);
+		w = xfont_Get_String_Width(string);
 		xfont_Set_Font(old_font);
 		if (w > max_width)
 			max_width = w;
 	}
-	int16_t text_left = ((dst.right - dst.left - max_width) >> 1) + text_x;
-	const int16_t full_bar = combat_svga ? 390 : 195;
-	const int16_t half_bar = combat_svga ? 198 : 99;
-	const int16_t bar_step = combat_svga ? 12 : 6;
+	text_left = ((dst.right - dst.left - max_width) >> 1) + text_x;
+	full_bar = combat_svga ? 390 : 195;
+	half_bar = combat_svga ? 198 : 99;
+	bar_step = combat_svga ? 12 : 6;
 
 	/* Animated horizontal bars: header strip is framed by two parallel bars
 	 * (top of header at dst.top+1, bottom of header at dst.bottom-1). Both
 	 * grow outward from the centre as `t` ramps 0..16, then snap full at 195. */
-	int16_t header_x, header_w;
 	if (t >= 16) {
 		header_x = dst.left + (combat_svga ? 6 : 3);
 		header_w = full_bar;
@@ -485,7 +499,7 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 	xpaint_Horiz_Clipped_Line(header_x, dst.top + 1, header_w, 2);
 	xpaint_Horiz_Clipped_Line(header_x, dst.bottom - 1, header_w, 2);
 
-	int16_t bar_y = dst.bottom + line_height * num_lines + 2;
+	bar_y = dst.bottom + line_height * num_lines + 2;
 	if (t >= line_height * num_lines) {
 		xpaint_Horiz_Clipped_Line(dst.left + (combat_svga ? 6 : 3), bar_y, full_bar, 2);
 	} else {
@@ -495,9 +509,9 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 	}
 
 	/* Header + mission text lines */
-	int16_t line_idx = 0;
-	int16_t text_line = -1;
-	const char* mission_label = textext_Get_Text(txtCombatMission);
+	line_idx = 0;
+	text_line = -1;
+	mission_label = textext_Get_Text(txtCombatMission);
 	while (t >= 0) {
 		int16_t fade = (t <= 7) ? 2 * t + 16 : 31;
 
@@ -527,14 +541,19 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 // FUNCTION: TIE95 0x6D888
 // FUNCTION: TIE98 0x40B140
 static void combat_Draw_Combat_Screen_Score(Rect* src) {
+	const char* mission_name;
+	int16_t mi, t, border, width, name_x, score_x, kills_x, y, displayed_scores, i;
+	uint16_t font_id;
+	GameScoreHead* rec;
+
 	char fmt[40], string[40], name_buf[16];
 
 	combat_Load_Combat_High_Scores();
-	const char* mission_name = shipext_Get_Mission_Name();
+	mission_name = shipext_Get_Mission_Name();
 	strcpy(name_buf, mission_name);
 
 	/* Find the mission record matching the current mission name */
-	int16_t mi = 0;
+	mi = 0;
 	while (mi < combat_num_scores && combat_score_data[mi].name[0] &&
 		   strcmp(combat_score_data[mi].name, name_buf))
 		mi++;
@@ -546,24 +565,24 @@ static void combat_Draw_Combat_Screen_Score(Rect* src) {
 		return;
 	}
 
-	int16_t t = combat_time - 256;
-	int16_t border = combat_svga ? ((t >= 32) ? 4 : 260 - 8 * t) : ((t >= 32) ? 2 : 130 - 4 * t);
-	int16_t width = (src->right - src->left) - 2 * border;
+	t = combat_time - 256;
+	border = combat_svga ? ((t >= 32) ? 4 : 260 - 8 * t) : ((t >= 32) ? 2 : 130 - 4 * t);
+	width = (src->right - src->left) - 2 * border;
 
 	/* Horizontal bars */
 	xpaint_Horiz_Clipped_Line(border + src->left, src->top + 6, width, 2);
 	xpaint_Horiz_Clipped_Line(border + src->left, src->bottom - 6, width, 2);
 
-	int16_t name_x = src->left + (combat_svga ? 8 : 4);
-	int16_t score_x = src->left + (combat_svga ? 150 : 64);
-	int16_t kills_x = src->left + (combat_svga ? 280 : 144);
-	int16_t y = src->top + (combat_svga ? 24 : 10);
-	const uint16_t font_id = combat_svga ? 3 : 0;
+	name_x = src->left + (combat_svga ? 8 : 4);
+	score_x = src->left + (combat_svga ? 150 : 64);
+	kills_x = src->left + (combat_svga ? 280 : 144);
+	y = src->top + (combat_svga ? 24 : 10);
+	font_id = combat_svga ? 3 : 0;
 
-	GameScoreHead* rec = &combat_score_data[mi];
+	rec = &combat_score_data[mi];
 
-	const int16_t displayed_scores = combat_svga ? GAME_SCORE_ENTRY_COUNT : 8;
-	for (int16_t i = 0; i < displayed_scores && t >= 0; i++) {
+	displayed_scores = combat_svga ? GAME_SCORE_ENTRY_COUNT : 8;
+	for (i = 0; i < displayed_scores && t >= 0; i++) {
 		int16_t fade = (t + 16 > 31) ? 31 : t + 16;
 		char display_name[GAME_SCORE_NAME_CAPACITY];
 		TiePilotName_CopyForDisplay(display_name, sizeof(display_name), rec->scores[i].name);
@@ -600,6 +619,9 @@ static void combat_Draw_Combat_Screen_Score(Rect* src) {
 // FUNCTION: TIE95 0x6DBB0
 // FUNCTION: TIE98 0x40B480
 static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
+	uint16_t font_id;
+	int16_t fade, ship, old_bp;
+
 	Rect dst;
 	char str[48];
 	int16_t t = combat_time - 384;
@@ -607,11 +629,10 @@ static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
 	xrect_Copy_Rect(&dst, src);
 	dst.top = dst.bottom - (combat_svga ? 58 : 24);
 	dst.bottom = dst.top + (combat_svga ? 24 : 10);
-	const uint16_t font_id = combat_svga ? 2 : 0;
+	font_id = combat_svga ? 2 : 0;
 
 	/* Name fade: hidden outside [16..207]; ramps in 16..47, hold 48..191,
 	 * ramps out 192..207. */
-	int16_t fade;
 	if (t < 32 || t >= 208)
 		fade = 16;
 	else if (t < 48)
@@ -624,11 +645,11 @@ static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
 	if (fade == 16)
 		return;
 
-	int16_t ship = shipext_Get_Mission_Ship();
+	ship = shipext_Get_Mission_Ship();
 	shipext_Get_Ship_Name(str, ship, 0, 0);
 	xfont_Print_Centered_Text(str, &dst, fade, font_id);
 
-	int16_t old_bp = shipext_Get_Blueprint_Ship();
+	old_bp = shipext_Get_Blueprint_Ship();
 	shipext_Set_Blueprint_Ship(ship);
 	xrect_Offset_Rect(&dst, 0, xfont_Get_FontID_Height(font_id));
 
@@ -636,8 +657,8 @@ static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
 		int16_t line_idx = (t - 64) >> 5;
 		if (line_idx < shipext_Get_Num_Blueprint_Ship_Lines()) {
 			int16_t sub_t = t & 0x1F;
-			shipext_Get_Blueprint_Ship_Line(str, line_idx);
 			int16_t sub_fade;
+			shipext_Get_Blueprint_Ship_Line(str, line_idx);
 			if (sub_t < 8)
 				sub_fade = 2 * sub_t + 16;
 			else if (sub_t < 24)
@@ -689,13 +710,14 @@ static void combat_idraw_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip
 // FUNCTION: TIE98 0x40B5E0
 static int16_t combat_draw_Combat_Help(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 									   int16_t off_y, int16_t refresh) {
+
 	if (refresh) {
 		if (combat_help && !helmet->state) {
-			xactdelt_Draw_Delta_Actor(the_actor, draw_rect, clip_rect, off_x, off_y, refresh);
 			Rect bounds;
+			char text[32];
+			xactdelt_Draw_Delta_Actor(the_actor, draw_rect, clip_rect, off_x, off_y, refresh);
 			xactor_Get_Actor_Bounds(the_actor, &bounds);
 			xfont_Enable_FontID_Shadow(0);
-			char text[32];
 			textext_Copy_Text(text, (int16_t)(combat_help + 84));
 			xfont_Print_Centered_Text(text, &bounds, 15, combat_svga ? 2 : 0);
 			xfont_Disable_FontID_Shadow(0);
@@ -711,15 +733,17 @@ static int16_t combat_draw_Combat_Help(Actor* the_actor, Rect* draw_rect, Rect* 
 // FUNCTION: TIE95 0x6DD8C
 // FUNCTION: TIE98 0x40B690
 static void combat_user_Combat_Light(Actor* the_actor, int32_t time) {
+
 	if (time == 0) {
 		xactor_Show_Actor(the_actor);
 		the_actor->var2 = (rand_rand() & 0xF) + 2;
 	}
 
 	if (the_actor->var2 & 0x4000) {
+		int16_t countdown;
 		if (time & 1)
 			the_actor->state = rand_rand() % the_actor->arraySize;
-		int16_t countdown = the_actor->var2 & 0x3FFF;
+		countdown = the_actor->var2 & 0x3FFF;
 		if (countdown == 1) {
 			the_actor->var2 = (rand_rand() & 0xF) + 2;
 			return;
@@ -785,120 +809,102 @@ static void combat_user_Combat_Helmet(Actor* the_actor, int32_t time) {
 
 /* ------------------------------------------------------------------ */
 
-typedef enum {
-	COMBAT_PHASE_BEGIN = 0,
-	COMBAT_PHASE_CLEANUP = 1,
-} CombatPhase;
-
-typedef struct CombatTask {
-	SceneHeadStruct* the_head;
-	CombatPhase phase;
-} CombatTask;
-
-static LandruTaskStepResult combat_task_step(void* self) {
-	CombatTask* t = (CombatTask*)self;
-
-	if (t->phase == COMBAT_PHASE_BEGIN) {
-		Rect frame;
-		char mission_name[64];
-		combat_svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
-		const int16_t width = combat_svga ? 640 : 320;
-		const int16_t height = combat_svga ? 480 : 200;
-		if (combat_svga) {
-			(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_SVGA);
-			xview_Init_View(xview_Get_Current_View());
-			xvesa_Erase_Video(16);
-		}
-
-		xio_Set_Mouse_Position(combat_svga ? 536 : 268, combat_svga ? 354 : 152);
-
-		combat_score_id = -1;
-		combat_Load_Combat_High_Scores();
-
-		train_file = combat_svga ? NULL : shellext_Open_Empire_Resource(train_resource_str);
-		combat_file = shellext_Open_Empire_Resource(combat_resource_str);
-		xviewadd_Clear_View();
-		xview_Disable_All_View_Erase();
-
-		xrect_Set_Rect(&frame, 0, 0, width, height);
-		combat_film = xfilm_Res_Callback_Film(combat_film_name, &frame, 0, 0, 0, combat_film_Combat_Callback);
-		xfilm_Set_Film_Def_Palette(combat_film, t->the_head->def_palette);
-
-		/* World input */
-		xrect_Set_Rect(&frame, 0, 0, width, height);
-		world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
-
-		/* Monitor screen input */
-		if (combat_svga)
-			xrect_Set_Rect(&frame, 124, 7, 516, 272);
-		else
-			xrect_Set_Rect(&frame, 59, 2, 262, 115);
-		monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(monitor_input, combat_iupdate_Combat_Screen);
-		xinpattr_Set_Input_User_Function(monitor_input, combat_iuser_Combat_Screen);
-		xinpattr_Set_Input_Draw_Function(monitor_input, combat_idraw_Combat_Screen);
-		xinpattr_Refreshable_Input(monitor_input);
-		monitor_input->id = 0;
-		if (combat_svga) {
-			Actor* monitor_back = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 30);
-			xactor_Set_Actor_Draw_Function(monitor_back, combat_draw_Combat_Back);
-		}
-
-		/* Six navigation buttons followed by the ship and mission labels. */
-		Rect btn_rects[8];
-		if (combat_svga) {
-			xrect_Set_Rect(&btn_rects[0], 88, 336, 136, 373);
-			xrect_Set_Rect(&btn_rects[1], 211, 336, 255, 373);
-			xrect_Set_Rect(&btn_rects[2], 70, 370, 120, 409);
-			xrect_Set_Rect(&btn_rects[3], 206, 370, 250, 409);
-			xrect_Set_Rect(&btn_rects[4], 514, 337, 577, 389);
-			xrect_Set_Rect(&btn_rects[5], 0, 406, 72, 466);
-			xrect_Set_Rect(&btn_rects[6], 134, 344, 209, 363);
-			xrect_Set_Rect(&btn_rects[7], 128, 378, 201, 400);
-		} else {
-			xrect_Set_Rect(&btn_rects[0], 32, 142, 54, 156);
-			xrect_Set_Rect(&btn_rects[1], 124, 142, 146, 156);
-			xrect_Set_Rect(&btn_rects[2], 22, 160, 44, 174);
-			xrect_Set_Rect(&btn_rects[3], 124, 160, 146, 174);
-			xrect_Set_Rect(&btn_rects[4], 254, 142, 280, 158);
-			xrect_Set_Rect(&btn_rects[5], 10, 176, 38, 200);
-			xrect_Set_Rect(&btn_rects[6], 55, 146, 124, 156);
-			xrect_Set_Rect(&btn_rects[7], 47, 164, 122, 176);
-		}
-		for (int16_t i = 0; i < 8; i++) {
-			button_input[i] = xinput_Alloc_Input(world_input, &btn_rects[i], 0, 0);
-			if (i <= 5) {
-				button_input[i]->mouseUsage = 4;
-				xinpattr_Set_Input_Update_Function(button_input[i], combat_iupdate_Combat);
-				xinpattr_Set_Input_User_Function(button_input[i], combat_iuser_Combat);
-			} else {
-				xinpattr_Set_Input_Draw_Function(button_input[i], combat_idraw_Combat);
-				xinpattr_Refreshable_Input(button_input[i]);
-			}
-			button_input[i]->id = i + 1;
-		}
-
-		combat_time = 0;
-		combat_round = rand_rand() & 3;
-		combat_monitor_needs_clear = combat_svga;
-
-		shipext_Get_Combat_Mission_Name(mission_name);
-		shipext_Set_Mission_Name(mission_name);
-		shipext_Find_Mission_Ship();
-
-		bpflight_Open_Flight_Engine(2);
-		bpflight_Stop_Movie_Engine();
-		shipext_Show_Combat_Ship_Name();
-
-		/* Push the modal view task */
-		xview_Set_View_Update_Function(combat_end_Combat_View);
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = COMBAT_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+void combat_OpenScene(SceneHeadStruct* the_head) {
+	Rect frame;
+	Rect btn_rects[8];
+	char mission_name[64];
+	int16_t width, height, i;
+	combat_svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+	width = combat_svga ? 640 : 320;
+	height = combat_svga ? 480 : 200;
+	if (combat_svga) {
+		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_SVGA);
+		xview_Init_View(xview_Get_Current_View());
+		xvesa_Erase_Video(16);
 	}
 
-	/* CLEANUP */
+	xio_Set_Mouse_Position(combat_svga ? 536 : 268, combat_svga ? 354 : 152);
+
+	combat_score_id = -1;
+	combat_Load_Combat_High_Scores();
+
+	train_file = combat_svga ? NULL : shellext_Open_Empire_Resource(train_resource_str);
+	combat_file = shellext_Open_Empire_Resource(combat_resource_str);
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
+
+	xrect_Set_Rect(&frame, 0, 0, width, height);
+	combat_film = xfilm_Res_Callback_Film(combat_film_name, &frame, 0, 0, 0, combat_film_Combat_Callback);
+	xfilm_Set_Film_Def_Palette(combat_film, the_head->def_palette);
+
+	/* World input */
+	xrect_Set_Rect(&frame, 0, 0, width, height);
+	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
+
+	/* Monitor screen input */
+	if (combat_svga)
+		xrect_Set_Rect(&frame, 124, 7, 516, 272);
+	else
+		xrect_Set_Rect(&frame, 59, 2, 262, 115);
+	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(monitor_input, combat_iupdate_Combat_Screen);
+	xinpattr_Set_Input_User_Function(monitor_input, combat_iuser_Combat_Screen);
+	xinpattr_Set_Input_Draw_Function(monitor_input, combat_idraw_Combat_Screen);
+	xinpattr_Refreshable_Input(monitor_input);
+	monitor_input->id = 0;
+	if (combat_svga) {
+		Actor* monitor_back = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 30);
+		xactor_Set_Actor_Draw_Function(monitor_back, combat_draw_Combat_Back);
+	}
+
+	/* Six navigation buttons followed by the ship and mission labels. */
+	if (combat_svga) {
+		xrect_Set_Rect(&btn_rects[0], 88, 336, 136, 373);
+		xrect_Set_Rect(&btn_rects[1], 211, 336, 255, 373);
+		xrect_Set_Rect(&btn_rects[2], 70, 370, 120, 409);
+		xrect_Set_Rect(&btn_rects[3], 206, 370, 250, 409);
+		xrect_Set_Rect(&btn_rects[4], 514, 337, 577, 389);
+		xrect_Set_Rect(&btn_rects[5], 0, 406, 72, 466);
+		xrect_Set_Rect(&btn_rects[6], 134, 344, 209, 363);
+		xrect_Set_Rect(&btn_rects[7], 128, 378, 201, 400);
+	} else {
+		xrect_Set_Rect(&btn_rects[0], 32, 142, 54, 156);
+		xrect_Set_Rect(&btn_rects[1], 124, 142, 146, 156);
+		xrect_Set_Rect(&btn_rects[2], 22, 160, 44, 174);
+		xrect_Set_Rect(&btn_rects[3], 124, 160, 146, 174);
+		xrect_Set_Rect(&btn_rects[4], 254, 142, 280, 158);
+		xrect_Set_Rect(&btn_rects[5], 10, 176, 38, 200);
+		xrect_Set_Rect(&btn_rects[6], 55, 146, 124, 156);
+		xrect_Set_Rect(&btn_rects[7], 47, 164, 122, 176);
+	}
+	for (i = 0; i < 8; i++) {
+		button_input[i] = xinput_Alloc_Input(world_input, &btn_rects[i], 0, 0);
+		if (i <= 5) {
+			button_input[i]->mouseUsage = 4;
+			xinpattr_Set_Input_Update_Function(button_input[i], combat_iupdate_Combat);
+			xinpattr_Set_Input_User_Function(button_input[i], combat_iuser_Combat);
+		} else {
+			xinpattr_Set_Input_Draw_Function(button_input[i], combat_idraw_Combat);
+			xinpattr_Refreshable_Input(button_input[i]);
+		}
+		button_input[i]->id = i + 1;
+	}
+
+	combat_time = 0;
+	combat_round = rand_rand() & 3;
+	combat_monitor_needs_clear = combat_svga;
+
+	shipext_Get_Combat_Mission_Name(mission_name);
+	shipext_Set_Mission_Name(mission_name);
+	shipext_Find_Mission_Ship();
+
+	bpflight_Open_Flight_Engine(2);
+	bpflight_Stop_Movie_Engine();
+	shipext_Show_Combat_Ship_Name();
+	xview_Set_View_Update_Function(combat_end_Combat_View);
+}
+
+void combat_CloseScene(void) {
 	xinpcall_Clear_Active_Input();
 	xview_Clear_View_Update_Function();
 	bpflight_Close_Flight_Engine();
@@ -919,18 +925,4 @@ static LandruTaskStepResult combat_task_step(void* self) {
 		xviewadd_Clear_View();
 		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 	}
-
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static const LandruTaskVtable combat_task_vt = {
-	.step = combat_task_step,
-};
-
-void combat_Push_Combat_Task(SceneHeadStruct* the_head) {
-	CombatTask* t = (CombatTask*)landru_task_push(&combat_task_vt);
-	if (!t)
-		return;
-	t->the_head = the_head;
-	t->phase = COMBAT_PHASE_BEGIN;
 }

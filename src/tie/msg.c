@@ -8,6 +8,7 @@
 #include "tie/spec.h"     /* spec_name_ptrs[] (64-bit-safe side table) */
 #include "tie/tie.h"
 #include "tie/trig2.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -34,6 +35,8 @@ int32_t frameticksmsgflag;
 char* messageptrs[4];
 // GLOBAL: TIE95 0xD4C80
 int32_t msgLineRight;
+// GLOBAL: TIE95 0xD4C7C
+// GLOBAL: TIE98 0x5FD20C
 char** messagetable;
 int32_t msgLineBottom;
 // GLOBAL: TIE95 0xD4C88
@@ -62,6 +65,8 @@ uint16_t pending_voice_id;
 
 // FUNCTION: TIE95 0x32EE0
 uint16_t msg_messageinit(void) {
+	uint16_t prev;
+
 	if (tie_is_high_resolution_flight()) {
 		msgLineTop = 456;
 		msgLineBottom = 480;
@@ -92,7 +97,7 @@ uint16_t msg_messageinit(void) {
 	msg_timeout();
 	festring_settextcolor(0x43);
 
-	const uint16_t prev = messagequeue[0].template_idx;
+	prev = messagequeue[0].template_idx;
 	currentmessagesave = prev;
 	messagequeue[0].template_idx = 0xFFFF;
 	return prev;
@@ -112,6 +117,11 @@ void msg_messagerestore(void) {
 
 // FUNCTION: TIE95 0x33018
 void msg_messagedisplay(void) {
+	uint8_t type_byte;
+	const char* body;
+	char last_ch;
+	uint16_t chars_out;
+
 	if (messagequeue[0].template_idx == 0xFFFF)
 		return;
 
@@ -127,8 +137,7 @@ void msg_messagedisplay(void) {
 	if (messagequeue[0].aux_flags_hi && !messagequeue[0].display_count)
 		fsfx_triggervoicesfx(messagequeue[0].aux_flags_hi);
 
-	const uint8_t type_byte = (uint8_t)messagequeue[0].body[0];
-	const char* body;
+	type_byte = (uint8_t)messagequeue[0].body[0];
 
 	if (type_byte >= 8) {
 		festring_settextcolor(0x42);
@@ -150,8 +159,8 @@ void msg_messagedisplay(void) {
 	}
 
 	/* Walk body chars, honoring '[' dim / ']' brighten nudges, capped at 70. */
-	char last_ch = 0;
-	uint16_t chars_out = 0;
+	last_ch = 0;
+	chars_out = 0;
 	while (*body && chars_out < 0x46) {
 		const uint8_t c = (uint8_t)*body;
 		if (c == '[') {
@@ -179,6 +188,15 @@ void msg_messagedisplay(void) {
 void msg_messageprintf(MsgTemplate template_id) {
 	/* Temporary 82-byte staging buffer for the entry. */
 	MsgHistoryEntry entry;
+	const uint8_t* message_template;
+	const uint8_t* tpl;
+	uint16_t body_len;
+	uint16_t arg_idx;
+	uint8_t type_raw;
+	int16_t new_type;
+	int append = 0;
+	int preserve_current = 0;
+
 	memset(&entry, 0, sizeof(entry));
 
 	entry.template_idx = template_id;
@@ -199,20 +217,22 @@ void msg_messageprintf(MsgTemplate template_id) {
 	entry.display_count = 0;
 
 	/* Walk the template string, expanding '*' and '&N' opcodes into body[]. */
-	const uint8_t* message_template =
-		template_id == MSG_PAUSED
-			? (const uint8_t*)"\006Mission paused. Press your pause key or button to continue."
-			: (const uint8_t*)messagetable[template_id];
-	const uint8_t* tpl = message_template;
-	uint16_t body_len = 0;
-	uint16_t arg_idx = 0;
+	message_template = template_id == MSG_PAUSED
+						   ? (const uint8_t*)"\006Mission paused. Press your pause key or button to continue."
+						   : (const uint8_t*)messagetable[template_id];
+	tpl = message_template;
+	body_len = 0;
+	arg_idx = 0;
 
 	while (*tpl && body_len < 0x46) {
 		const uint8_t op = *tpl;
 		if (op == '*') {
-			tpl++;
-			const uint16_t spec = argtable[arg_idx++];
+			uint16_t spec;
 			const char* src;
+
+			tpl++;
+			spec = argtable[arg_idx++];
+
 			if (spec < 0x8000u)
 				src = messagetable[spec];
 			else
@@ -220,15 +240,21 @@ void msg_messageprintf(MsgTemplate template_id) {
 			while (*src && body_len < 0x46)
 				entry.body[body_len++] = *src++;
 		} else if (op == '&') {
+			uint16_t width;
+			uint16_t value;
+			uint16_t nonzero_seen;
+
 			tpl++;
-			uint16_t width = *tpl++;
-			uint16_t value = argtable[arg_idx++];
-			uint16_t nonzero_seen = 0;
+			width = *tpl++;
+			value = argtable[arg_idx++];
+			nonzero_seen = 0;
 			while (width) {
 				const uint16_t div = placevalue[width];
 				uint16_t digit = (uint16_t)(value / div);
-				value = (uint16_t)(value - digit * div);
 				char ch;
+
+				value = (uint16_t)(value - digit * div);
+
 				if (nonzero_seen || width <= 1 || digit) {
 					nonzero_seen = 1;
 					if (digit > 9)
@@ -255,10 +281,10 @@ void msg_messageprintf(MsgTemplate template_id) {
 		entry.body[body_len] = 0;
 
 	/* msg_type from raw template[0] byte, clamped >=8 -> 6. */
-	const uint8_t type_raw = message_template[0];
+	type_raw = message_template[0];
 	entry.msg_type = (type_raw >= 8) ? 6 : type_raw;
 
-	const int16_t new_type = entry.msg_type;
+	new_type = entry.msg_type;
 
 	/* History ring append (types 1 and 2 only, suppressed in replay view). */
 	if (!replayviewmode && (new_type == 2 || new_type == 1)) {
@@ -278,58 +304,42 @@ void msg_messageprintf(MsgTemplate template_id) {
 	}
 
 	switch (messagequeue[0].msg_type) {
-		case 1: {
-			/* Current is radio: append only if new is radio (1) or event (2);
-			 * otherwise preempt. */
-			if (new_type != 2 && new_type != 1)
-				goto preempt;
-			uint8_t slot = (uint8_t)(messagecnt + 1);
-			memcpy(&messagequeue[slot], &entry, sizeof(MsgHistoryEntry));
-			messagecnt = slot;
-			if (messagecnt >= 10)
-				messagecnt--;
-			return;
-		}
+		case 1:
+			/* Radio and event messages queue behind an existing radio message. */
+			append = new_type == 1 || new_type == 2;
+			preserve_current = !append;
+			break;
 		case 2:
-		case 5: {
-			/* Current is event or type-5 briefing: only type-2 appends. */
-			if (new_type == 2) {
-				uint8_t slot = (uint8_t)(messagecnt + 1);
-				memcpy(&messagequeue[slot], &entry, sizeof(MsgHistoryEntry));
-				messagecnt = (uint8_t)(messagecnt + 1);
-				if (messagecnt >= 10)
-					messagecnt--;
-				return;
-			}
-			goto preempt;
-		}
+		case 5:
+			/* Only events queue behind an event or briefing message. */
+			append = new_type == 2;
+			preserve_current = !append;
+			break;
 		case 3:
 		case 6:
 		case 7:
-			/* Always preempt. */
-			goto preempt_no_move;
+			break;
 		case 4:
-			/* Current is scroll/report: drop type-3 silently; preempt non-1/2. */
+			/* Reports discard type 3, queue radio/events, and yield to others. */
 			if (new_type == 3)
 				return;
-			if (new_type != 2 && new_type != 1)
-				goto preempt_no_move;
-			{
-				uint8_t slot = (uint8_t)(messagecnt + 1);
-				memcpy(&messagequeue[slot], &entry, sizeof(MsgHistoryEntry));
-				messagecnt = (uint8_t)(messagecnt + 1);
-				if (messagecnt >= 10)
-					messagecnt--;
-			}
-			return;
+			append = new_type == 1 || new_type == 2;
+			break;
 		default:
 			return;
 	}
 
-preempt:
-	msg_movecurrentmessageinqueue();
-	/* fallthrough */
-preempt_no_move:
+	if (append) {
+		uint8_t slot = (uint8_t)(messagecnt + 1);
+		memcpy(&messagequeue[slot], &entry, sizeof(MsgHistoryEntry));
+		messagecnt = slot;
+		if (messagecnt >= 10)
+			messagecnt--;
+		return;
+	}
+
+	if (preserve_current)
+		msg_movecurrentmessageinqueue();
 	memcpy(&messagequeue[0], &entry, sizeof(MsgHistoryEntry));
 	msg_messagedisplay();
 }
@@ -338,13 +348,15 @@ preempt_no_move:
 
 // FUNCTION: TIE95 0x33544
 void msg_movecurrentmessageinqueue(void) {
+	int16_t i;
+
 	if (messagequeue[0].display_count >= 2)
 		return;
 	if (messagequeue[0].age != 0)
 		return;
 
 	/* Shift queue[0..messagecnt] to queue[1..messagecnt+1]. */
-	int16_t i;
+
 	for (i = (int16_t)(messagecnt + 1); i > 0; i--) {
 		memcpy(&messagequeue[i], &messagequeue[i - 1], sizeof(MsgHistoryEntry));
 	}
@@ -499,8 +511,17 @@ void msg_timeout(void) {
 void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 	/* Locate the FG's lead object (leader_obj_idx == 255) or fall back to
 	 * CREATE_getworldposition(0x8000, fg_idx) anchor. */
+	int32_t dist;
+	int32_t clicks;
+	uint16_t count;
+	uint8_t side;
+	uint16_t abbrev_flag;
+	MsgTemplate tpl;
+
 	if (fg_array[fg_idx].start_fg_used) {
-		for (uint16_t i = 0; i < NUM_CRAFTS; i++) {
+		uint16_t i;
+
+		for (i = 0; i < NUM_CRAFTS; i++) {
 			if (objects[i].ship_idx && objects[i].fg_idx == fg_idx && objects[i].craft_ptr &&
 				objects[i].craft_ptr->leader_obj_idx == 255) {
 				create_getworldposition(i, fg_idx);
@@ -514,18 +535,17 @@ void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 	/* Convert world delta to polar, distance in game "clicks". */
 	trig2_ctop(worldlocx - pstate.player->world_x, worldlocy - pstate.player->world_y,
 			   worldlocz - pstate.player->world_z);
-	int32_t dist = trig2_polardistance * 161;
-	int32_t clicks = ((dist >> 16) + 50) / 100;
+	dist = trig2_polardistance * 161;
+	clicks = ((dist >> 16) + 50) / 100;
 	if ((int16_t)clicks == 0)
 		clicks = 1;
 
-	const uint16_t count = fg_array[fg_idx].count;
-	const uint8_t side = fg_array[fg_idx].side; /* Watcom read byte+3 of DWORD at version */
-	const uint16_t abbrev_flag = 0x8000;        /* ptr to messageptrs[0] */
+	count = fg_array[fg_idx].count;
+	side = fg_array[fg_idx].side; /* Watcom read byte+3 of DWORD at version */
+	abbrev_flag = 0x8000;         /* ptr to messageptrs[0] */
 
 	argtable[0] = count;
 
-	MsgTemplate tpl;
 	if (side == 1) {
 		/* Friendly/blue report. */
 		if (count == 1) {
@@ -558,8 +578,10 @@ void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 
 // FUNCTION: TIE95 0x33CF4
 uint16_t msg_addmessageptr(uint16_t slot_idx, char* ptr) {
+	uint16_t tagged;
+
 	messageptrs[slot_idx] = ptr;
-	const uint16_t tagged = (uint16_t)(slot_idx | 0x8000);
+	tagged = (uint16_t)(slot_idx | 0x8000);
 	argtable[slot_idx] = tagged;
 	return tagged;
 }
@@ -568,10 +590,12 @@ uint16_t msg_addmessageptr(uint16_t slot_idx, char* ptr) {
 
 // FUNCTION: TIE95 0x33D10
 void msg_craftmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id) {
+	uint8_t fg_idx;
+
 	messageside = objects[obj_idx].side;
 	argtable[0] = 0x8000;
 	messageptrs[0] = (char*)spec_name_ptrs[craft->species_idx];
-	const uint8_t fg_idx = objects[obj_idx].fg_idx;
+	fg_idx = objects[obj_idx].fg_idx;
 	argtable[1] = 0x8001;
 	messageptrs[1] = fg_array[fg_idx].name;
 
@@ -598,9 +622,11 @@ int8_t msg_radiomessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_templat
 		tpl = MSG_ACK_FG_PLAIN;
 		argtable[0] = 0x8000;
 	} else {
+		uint8_t fg_idx;
+
 		argtable[0] = 0x8000;
 		messageptrs[0] = spec_data[craft->species_idx].short_name;
-		const uint8_t fg_idx = objects[obj_idx].fg_idx;
+		fg_idx = objects[obj_idx].fg_idx;
 		messageptrs[1] = fg_array[fg_idx].name;
 		argtable[1] = 0x8001;
 		if ((int8_t)fg_array[fg_idx].count == 1) {
@@ -620,9 +646,11 @@ int8_t msg_radiomessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_templat
 
 // FUNCTION: TIE95 0x33EF4
 void msg_reportmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id) {
+	uint8_t fg_idx;
+
 	argtable[0] = 0x8000;
 	messageptrs[0] = spec_data[craft->species_idx].short_name;
-	const uint8_t fg_idx = objects[obj_idx].fg_idx;
+	fg_idx = objects[obj_idx].fg_idx;
 	argtable[1] = 0x8001;
 	/* messageptrs[1] points at the FG; char[0..11] inside is fg.name. */
 	messageptrs[1] = (char*)&fg_array[fg_idx];
@@ -652,6 +680,10 @@ static char* str_append(char* buf, const char* src) {
 
 // FUNCTION: TIE95 0x33FA8
 int16_t msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_buf) {
+	uint8_t ship_idx;
+
+	char* p;
+
 	*out_buf = 0;
 
 	if (obj_idx >= 0x3800) {
@@ -659,9 +691,13 @@ int16_t msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_b
 		const uint16_t sidx = (uint16_t)(obj_idx - 14336);
 		const uint8_t species = staticobjects[sidx].species;
 		const char* base = ((char**)buoystr)[species - 70];
+		uint8_t fg_idx;
+
+		char* p;
+
 		str_append(out_buf, base);
 
-		const uint8_t fg_idx = staticobjects[sidx].fg_idx;
+		fg_idx = staticobjects[sidx].fg_idx;
 		if (fg_array[fg_idx].name[0]) {
 			char* p = out_buf;
 			while (*p)
@@ -672,22 +708,26 @@ int16_t msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_b
 			str_append(out_buf, fg_array[fg_idx].name);
 		}
 		/* Return the final end-pointer (low 16 bits); callers ignore. */
-		char* p = out_buf;
+		p = out_buf;
 		while (*p)
 			p++;
 		return (int16_t)(uintptr_t)p;
 	}
 
 	/* Regular object path. */
-	const uint8_t ship_idx = objects[obj_idx].ship_idx;
+	ship_idx = objects[obj_idx].ship_idx;
 	if (objects[obj_idx].category == 0) {
 		/* Craft path. */
 		CraftData* craft_ptr = objects[obj_idx].craft_ptr;
 		const char* base = use_official ? spec_name_ptrs[craft_ptr->species_idx]
 										: spec_data[craft_ptr->species_idx].short_name;
+		uint8_t fg_idx;
+
+		char* p;
+
 		str_append(out_buf, base);
 
-		const uint8_t fg_idx = objects[obj_idx].fg_idx;
+		fg_idx = objects[obj_idx].fg_idx;
 		if (fg_array[fg_idx].name[0]) {
 			char* p = out_buf;
 			while (*p)
@@ -709,7 +749,7 @@ int16_t msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_b
 			*p++ = (char)(craft_ptr->craft_idx_in_fg + '1');
 			*p = 0;
 		}
-		char* p = out_buf;
+		p = out_buf;
 		while (*p)
 			p++;
 		return (int16_t)(uintptr_t)p;
@@ -723,7 +763,7 @@ int16_t msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_b
 		const char* base = ((char**)buoystr)[ship_idx - 70];
 		str_append(out_buf, base);
 	}
-	char* p = out_buf;
+	p = out_buf;
 	while (*p)
 		p++;
 	return (int16_t)(uintptr_t)p;

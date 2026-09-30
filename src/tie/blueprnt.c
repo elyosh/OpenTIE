@@ -12,11 +12,7 @@
  * 20=decorative, 25=title overlay.
  */
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <string.h>
-
+#include "tie/blueprnt.h"
 #include "landru/actcust.h"
 #include "landru/actdelt.h"
 #include "landru/actor.h"
@@ -35,20 +31,25 @@
 #include "landru/vesa.h"
 #include "landru/view.h"
 #include "landru/viewadd.h"
-#include "tie/blueprnt.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
 #include "tie/soundext.h"
 #include "tie/textext.h"
 #include "tie_runtime/runtime/profile.h"
-#include <landru/task.h>
 
 #include "tie/bpflight.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 /* Ship size scaling factor: the engine multiplies the raw dimension
  * by 1605/65536 before display. Result is in whatever unit the
  * "Ship Statistics" panel labels — not anchored in the engine. */
-#define SIZE_SCALE_FACTOR 1605
+enum {
+	SIZE_SCALE_FACTOR = 1605,
+};
 
 static const char blueprint_str[] = "blueprnt.lfd";
 static const char blueprint_film_name[] = "blueprnt";
@@ -82,20 +83,27 @@ static int16_t blueprnt_draw_Blueprint_Title(Actor* the_actor, Rect* draw_rect, 
 											 int16_t off_x, int16_t off_y, int16_t refresh);
 
 static int32_t scale_and_round_ship_size(int32_t extent) {
-	int32_t raw = (int32_t)(((int64_t)extent * SIZE_SCALE_FACTOR) >> 16);
+	/* Split the Q16 product so both terms fit in 32 bits. */
+	int32_t raw = (extent >> 16) * SIZE_SCALE_FACTOR +
+				  (int32_t)(((uint32_t)(uint16_t)extent * SIZE_SCALE_FACTOR) >> 16);
 	if (raw < 100)
 		return 5 * ((raw + 2) / 5);
 	return 50 * ((raw + 25) / 50);
 }
 
 static int32_t compute_ship_size(void) {
+	const uint8_t* data;
+	uint16_t dimension;
+	uint8_t shift;
+	int32_t extent;
+
 	if (blueprint_svga)
 		return scale_and_round_ship_size(tie98_preview_primary_model_max_extent());
 
-	const uint8_t* data = (const uint8_t*)bpflight_fltobj_data;
-	const uint16_t dimension = *(const uint16_t*)(data + 12);
-	const uint8_t shift = data[32];
-	const int32_t extent = (int32_t)((uint32_t)(dimension / 2) << shift);
+	data = (const uint8_t*)bpflight_fltobj_data;
+	dimension = *(const uint16_t*)(data + 12);
+	shift = data[32];
+	extent = (int32_t)((uint32_t)(dimension / 2) << shift);
 	return scale_and_round_ship_size(extent);
 }
 
@@ -112,6 +120,9 @@ static void blueprnt_end_Blueprint_View(int32_t time) {
 // FUNCTION: TIE95 0x6E3E4
 // FUNCTION: TIE98 0x4045B0
 static int16_t blueprnt_film_Blueprint_Callback(Film* the_film, FilmObject* film_object) {
+	Actor* the_actor;
+	int16_t var1;
+
 	if (blueprint_svga && film_object->id == FTC_PALETTE) {
 		xfilm_Rewind_Palette_Film(the_film, film_object, (void*)(film_object + 1));
 		return 0;
@@ -120,8 +131,8 @@ static int16_t blueprnt_film_Blueprint_Callback(Film* the_film, FilmObject* film
 		return 0;
 
 	xfilm_Rewind_Actor_Film(the_film, film_object, (void*)(film_object + 1));
-	Actor* the_actor = (Actor*)film_object->object;
-	int16_t var1 = the_actor->var1;
+	the_actor = (Actor*)film_object->object;
+	var1 = the_actor->var1;
 
 	switch (var1) {
 		case 3:
@@ -316,9 +327,10 @@ static void blueprnt_user_Blueprint_Door(Actor* the_actor, int32_t time) {
 // FUNCTION: TIE98 0x4049C0
 static int16_t blueprnt_draw_Blueprint_Text(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 											int16_t off_y, int16_t refresh) {
+	char text[76];
+
 	(void)off_x;
 	(void)off_y;
-	char text[76];
 
 	if (!refresh)
 		return 0;
@@ -369,26 +381,28 @@ static int16_t fade_clamp(int16_t raw, int16_t info_time) {
 // FUNCTION: TIE98 0x404A80
 static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 											int16_t off_y, int16_t refresh) {
+	char fmt[64], str[64];
+	Rect dst;
+	int16_t t_name, t_lines, line_height;
+	uint16_t font_id;
+
 	(void)the_actor;
 	(void)clip_rect;
 	(void)off_x;
 	(void)off_y;
 
-	char fmt[64];
-	char str[64];
-	Rect dst;
-
 	if (!refresh || blueprint_info_time > 148)
 		return 1;
 
-	int16_t t_name = blueprint_info_time - 8;
-	const uint16_t font_id = blueprint_svga ? 3 : 1;
-	const int16_t line_height = blueprint_svga ? xfont_Get_FontID_Height(font_id) : 8;
+	t_name = blueprint_info_time - 8;
+	font_id = blueprint_svga ? 3 : 1;
+	line_height = blueprint_svga ? xfont_Get_FontID_Height(font_id) : 8;
 	if (t_name >= 0) {
+		int16_t fade;
 		xrect_Copy_Rect(&dst, draw_rect);
 		dst.bottom = dst.top + line_height;
 
-		int16_t fade = fade_clamp(t_name, blueprint_info_time);
+		fade = fade_clamp(t_name, blueprint_info_time);
 		shipext_Get_Blueprint_Ship_Name((char*)str);
 		xfont_Print_Centered_Text(str, &dst, fade + 24, font_id);
 
@@ -402,9 +416,10 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 		}
 	}
 
-	int16_t t_lines = blueprint_info_time - 16;
+	t_lines = blueprint_info_time - 16;
 	if (t_lines >= 0) {
 		int16_t num_lines = shipext_Get_Num_Blueprint_Ship_Lines();
+		int16_t i;
 		xrect_Copy_Rect(&dst, draw_rect);
 		if (blueprint_svga) {
 			dst.bottom = 310;
@@ -415,10 +430,11 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 		}
 		xrect_Offset_Rect(&dst, 0, -line_height * (num_lines + 1));
 
-		for (int16_t i = 0; i < num_lines; i++) {
+		for (i = 0; i < num_lines; i++) {
+			int16_t fade;
 			if (t_lines < 0)
 				break;
-			int16_t fade = fade_clamp(t_lines, blueprint_info_time);
+			fade = fade_clamp(t_lines, blueprint_info_time);
 			shipext_Get_Blueprint_Ship_Line((char*)str, i);
 			xfont_Print_Centered_Text(str, &dst, fade + 24, font_id);
 			xrect_Offset_Rect(&dst, 0, line_height);
@@ -434,14 +450,16 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 // FUNCTION: TIE95 0x6EA5C
 static int16_t blueprnt_draw_Blueprint_Title(Actor* the_actor, Rect* draw_rect, Rect* clip_rect,
 											 int16_t off_x, int16_t off_y, int16_t refresh) {
+	Rect bounds;
+	const char* text;
+
 	if (!refresh || !the_actor->var2)
 		return 1;
 
 	xactdelt_Draw_Delta_Actor(the_actor, draw_rect, clip_rect, off_x, off_y, refresh);
 
-	Rect bounds;
 	xactor_Get_Actor_Bounds(the_actor, &bounds);
-	const char* text = textext_Get_Text(txtTourMainMenu);
+	text = textext_Get_Text(txtTourMainMenu);
 	xfont_Print_Centered_Text(text, &bounds, 15, blueprint_svga ? 2 : 0);
 
 	return 1;
@@ -454,114 +472,96 @@ int16_t blueprnt_Flight_Object_Size(void) { return (int16_t)compute_ship_size();
 
 /* ------------------------------------------------------------------ */
 
-typedef enum {
-	BLUEPRNT_PHASE_BEGIN = 0,
-	BLUEPRNT_PHASE_CLEANUP = 1,
-} BlueprntPhase;
-
-typedef struct BlueprntTask {
-	SceneHeadStruct* the_head;
-	BlueprntPhase phase;
-} BlueprntTask;
-
-static LandruTaskStepResult blueprnt_task_step(void* self) {
-	BlueprntTask* t = (BlueprntTask*)self;
-
-	if (t->phase == BLUEPRNT_PHASE_BEGIN) {
-		Rect frame;
-		blueprint_svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
-		const int16_t width = blueprint_svga ? 640 : 320;
-		const int16_t height = blueprint_svga ? 480 : 200;
-		if (blueprint_svga) {
-			(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_SVGA);
-			xview_Init_View(xview_Get_Current_View());
-			xvesa_Erase_Video(16);
-		}
-
-		xio_Set_Mouse_Position(blueprint_svga ? 512 : 256, blueprint_svga ? 352 : 156);
-
-		blueprint_file = shellext_Open_Empire_Resource(blueprint_str);
-		xviewadd_Clear_View();
-		xview_Disable_All_View_Erase();
-
-		xrect_Set_Rect(&frame, 0, 0, width, height);
-		blueprint_film =
-			xfilm_Res_Callback_Film(blueprint_film_name, &frame, 0, 0, 0, blueprnt_film_Blueprint_Callback);
-		xfilm_Set_Film_Def_Palette(blueprint_film, t->the_head->def_palette);
-
-		/* World input (full screen) */
-		xrect_Set_Rect(&frame, 0, 0, width, height);
-		world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
-
-		/* Navigation buttons: previous ship, pitch down, next ship, pitch up. */
-		Rect btn_rects[4];
-		if (blueprint_svga) {
-			xrect_Set_Rect(&btn_rects[0], 203, 350, 255, 380);
-			xrect_Set_Rect(&btn_rects[1], 203, 385, 255, 415);
-			xrect_Set_Rect(&btn_rects[2], 553, 350, 605, 380);
-			xrect_Set_Rect(&btn_rects[3], 553, 385, 605, 415);
-		} else {
-			xrect_Set_Rect(&btn_rects[0], 62, 150, 92, 164);
-			xrect_Set_Rect(&btn_rects[1], 62, 165, 92, 178);
-			xrect_Set_Rect(&btn_rects[2], 263, 150, 295, 164);
-			xrect_Set_Rect(&btn_rects[3], 263, 165, 295, 178);
-		}
-		for (int16_t i = 0; i < 4; i++) {
-			button_input[i] = xinput_Alloc_Input(world_input, &btn_rects[i], 0, 0);
-			xinpattr_Set_Input_Update_Function(button_input[i], blueprnt_iupdate_Blueprint);
-			xinpattr_Set_Input_User_Function(button_input[i], blueprnt_iuser_Blueprint);
-			button_input[i]->id = i + 1;
-		}
-
-		/* Door input (left panel) */
-		if (blueprint_svga)
-			xrect_Set_Rect(&frame, 0, 73, 159, 296);
-		else
-			xrect_Set_Rect(&frame, 0, 30, 80, 116);
-		door_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(door_input, blueprnt_iupdate_Blueprint_Door);
-		xinpattr_Set_Input_User_Function(door_input, blueprnt_iuser_Blueprint_Door);
-		door_input->mouseUsage = 4;
-
-		/* Ship name text actor */
-		if (blueprint_svga)
-			xrect_Set_Rect(&frame, 266, 355, 539, 375);
-		else
-			xrect_Set_Rect(&frame, 98, 153, 257, 161);
-		ship_name_actor = xactcust_Alloc_Custom_Actor(0, &frame, 0, 0, 0);
-		xactor_Set_Actor_Draw_Function(ship_name_actor, blueprnt_draw_Blueprint_Text);
-		ship_name_actor->id = 0;
-
-		/* Component text actor ("Rotate Craft") */
-		if (blueprint_svga)
-			xrect_Set_Rect(&frame, 266, 392, 539, 412);
-		else
-			xrect_Set_Rect(&frame, 98, 167, 257, 175);
-		ship_comp_actor = xactcust_Alloc_Custom_Actor(0, &frame, 0, 0, 0);
-		xactor_Set_Actor_Draw_Function(ship_comp_actor, blueprnt_draw_Blueprint_Text);
-		ship_comp_actor->id = 1;
-
-		/* Ship info overlay actor */
-		if (blueprint_svga)
-			xrect_Set_Rect(&frame, 222, 75, 570, 310);
-		else
-			xrect_Set_Rect(&frame, 131, 30, 278, 200);
-		ship_info_actor = xactcust_Alloc_Custom_Actor(0, &frame, 0, 0, 10);
-		xactor_Set_Actor_User_Function(ship_info_actor, blueprnt_user_Blueprint_Info);
-		xactor_Set_Actor_Draw_Function(ship_info_actor, blueprnt_draw_Blueprint_Info);
-
-		shipext_Open_Blueprint_Ships();
-		bpflight_Open_Flight_Engine(3);
-
-		/* Push the modal view task */
-		xview_Set_View_Update_Function(blueprnt_end_Blueprint_View);
-		xviewadd_Push_Handle_View_Task();
-
-		t->phase = BLUEPRNT_PHASE_CLEANUP;
-		return LANDRU_TASK_STEP_CONTINUE;
+void blueprnt_OpenScene(SceneHeadStruct* the_head) {
+	Rect frame;
+	Rect btn_rects[4];
+	int16_t width, height, i;
+	blueprint_svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+	width = blueprint_svga ? 640 : 320;
+	height = blueprint_svga ? 480 : 200;
+	if (blueprint_svga) {
+		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_SVGA);
+		xview_Init_View(xview_Get_Current_View());
+		xvesa_Erase_Video(16);
 	}
 
-	/* CLEANUP */
+	xio_Set_Mouse_Position(blueprint_svga ? 512 : 256, blueprint_svga ? 352 : 156);
+
+	blueprint_file = shellext_Open_Empire_Resource(blueprint_str);
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
+
+	xrect_Set_Rect(&frame, 0, 0, width, height);
+	blueprint_film =
+		xfilm_Res_Callback_Film(blueprint_film_name, &frame, 0, 0, 0, blueprnt_film_Blueprint_Callback);
+	xfilm_Set_Film_Def_Palette(blueprint_film, the_head->def_palette);
+
+	/* World input (full screen) */
+	xrect_Set_Rect(&frame, 0, 0, width, height);
+	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
+
+	/* Navigation buttons: previous ship, pitch down, next ship, pitch up. */
+	if (blueprint_svga) {
+		xrect_Set_Rect(&btn_rects[0], 203, 350, 255, 380);
+		xrect_Set_Rect(&btn_rects[1], 203, 385, 255, 415);
+		xrect_Set_Rect(&btn_rects[2], 553, 350, 605, 380);
+		xrect_Set_Rect(&btn_rects[3], 553, 385, 605, 415);
+	} else {
+		xrect_Set_Rect(&btn_rects[0], 62, 150, 92, 164);
+		xrect_Set_Rect(&btn_rects[1], 62, 165, 92, 178);
+		xrect_Set_Rect(&btn_rects[2], 263, 150, 295, 164);
+		xrect_Set_Rect(&btn_rects[3], 263, 165, 295, 178);
+	}
+	for (i = 0; i < 4; i++) {
+		button_input[i] = xinput_Alloc_Input(world_input, &btn_rects[i], 0, 0);
+		xinpattr_Set_Input_Update_Function(button_input[i], blueprnt_iupdate_Blueprint);
+		xinpattr_Set_Input_User_Function(button_input[i], blueprnt_iuser_Blueprint);
+		button_input[i]->id = i + 1;
+	}
+
+	/* Door input (left panel) */
+	if (blueprint_svga)
+		xrect_Set_Rect(&frame, 0, 73, 159, 296);
+	else
+		xrect_Set_Rect(&frame, 0, 30, 80, 116);
+	door_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(door_input, blueprnt_iupdate_Blueprint_Door);
+	xinpattr_Set_Input_User_Function(door_input, blueprnt_iuser_Blueprint_Door);
+	door_input->mouseUsage = 4;
+
+	/* Ship name text actor */
+	if (blueprint_svga)
+		xrect_Set_Rect(&frame, 266, 355, 539, 375);
+	else
+		xrect_Set_Rect(&frame, 98, 153, 257, 161);
+	ship_name_actor = xactcust_Alloc_Custom_Actor(0, &frame, 0, 0, 0);
+	xactor_Set_Actor_Draw_Function(ship_name_actor, blueprnt_draw_Blueprint_Text);
+	ship_name_actor->id = 0;
+
+	/* Component text actor ("Rotate Craft") */
+	if (blueprint_svga)
+		xrect_Set_Rect(&frame, 266, 392, 539, 412);
+	else
+		xrect_Set_Rect(&frame, 98, 167, 257, 175);
+	ship_comp_actor = xactcust_Alloc_Custom_Actor(0, &frame, 0, 0, 0);
+	xactor_Set_Actor_Draw_Function(ship_comp_actor, blueprnt_draw_Blueprint_Text);
+	ship_comp_actor->id = 1;
+
+	/* Ship info overlay actor */
+	if (blueprint_svga)
+		xrect_Set_Rect(&frame, 222, 75, 570, 310);
+	else
+		xrect_Set_Rect(&frame, 131, 30, 278, 200);
+	ship_info_actor = xactcust_Alloc_Custom_Actor(0, &frame, 0, 0, 10);
+	xactor_Set_Actor_User_Function(ship_info_actor, blueprnt_user_Blueprint_Info);
+	xactor_Set_Actor_Draw_Function(ship_info_actor, blueprnt_draw_Blueprint_Info);
+
+	shipext_Open_Blueprint_Ships();
+	bpflight_Open_Flight_Engine(3);
+	xview_Set_View_Update_Function(blueprnt_end_Blueprint_View);
+}
+
+void blueprnt_CloseScene(void) {
 	xinpcall_Clear_Active_Input();
 	xview_Clear_View_Update_Function();
 	bpflight_Close_Flight_Engine();
@@ -577,17 +577,4 @@ static LandruTaskStepResult blueprnt_task_step(void* self) {
 		xviewadd_Clear_View();
 		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
 	}
-	return LANDRU_TASK_STEP_DONE;
-}
-
-static const LandruTaskVtable blueprnt_task_vt = {
-	.step = blueprnt_task_step,
-};
-
-void blueprnt_Push_Blueprint_Task(SceneHeadStruct* the_head) {
-	BlueprntTask* t = (BlueprntTask*)landru_task_push(&blueprnt_task_vt);
-	if (!t)
-		return;
-	t->the_head = the_head;
-	t->phase = BLUEPRNT_PHASE_BEGIN;
 }

@@ -1,5 +1,4 @@
 #include "tie/cdaudio_tie98.h"
-
 #include "aeron/compat/mmsystem.h"
 #include "tie/frontend_display_tie98.h"
 
@@ -29,13 +28,15 @@ int CDAUDIO_Open_Device(void) {
 	MCI_SET_PARMS set_params = { 0 };
 	MCI_STATUS_PARMS status = { 0 };
 	uint32_t aux_volume;
+	uint32_t i;
+	int track;
 
 	if (!g_flightWindowHandle)
 		return 0;
 	if (cdaudio_device_id)
 		CDAUDIO_Close_Device();
 	CDAUDIO_Clear_State();
-	for (uint32_t i = 0; i < auxGetNumDevs(); ++i) {
+	for (i = 0; i < auxGetNumDevs(); ++i) {
 		AUXCAPSA caps;
 		if (auxGetDevCapsA(i, &caps, sizeof caps) == MMSYSERR_NOERROR &&
 			caps.wTechnology == AUXCAPS_CDAUDIO && (caps.dwSupport & AUXCAPS_VOLUME) &&
@@ -55,7 +56,7 @@ int CDAUDIO_Open_Device(void) {
 	if (mciSendCommandA(cdaudio_device_id, MCI_STATUS, MCI_STATUS_ITEM, &status) != MMSYSERR_NOERROR)
 		goto fail;
 	cdaudio_track_count = status.dwReturn > 30 ? 30 : (int)status.dwReturn;
-	for (int track = 1; track <= cdaudio_track_count; ++track) {
+	for (track = 1; track <= cdaudio_track_count; ++track) {
 		status.dwItem = MCI_STATUS_LENGTH;
 		status.dwTrack = (uint32_t)track;
 		if (mciSendCommandA(cdaudio_device_id, MCI_STATUS, MCI_STATUS_ITEM | MCI_TRACK, &status) !=
@@ -107,7 +108,8 @@ void CDAUDIO_Close_Device(void) {
 	CDAUDIO_Clear_State();
 	if (cdaudio_saved_aux_volume >= 0) {
 		const uint32_t volume = 0x10001u * (uint32_t)cdaudio_saved_aux_volume;
-		for (uint32_t i = 0; i < auxGetNumDevs(); ++i) {
+		uint32_t i;
+		for (i = 0; i < auxGetNumDevs(); ++i) {
 			AUXCAPSA caps;
 			if (auxGetDevCapsA(i, &caps, sizeof caps) == MMSYSERR_NOERROR &&
 				caps.wTechnology == AUXCAPS_CDAUDIO && (caps.dwSupport & AUXCAPS_VOLUME))
@@ -129,10 +131,12 @@ int32_t CDAUDIO_Track_Length_Ms(int track) {
 
 // FUNCTION: TIE98 0x46FA70
 void CDAUDIO_Set_Volume(uint32_t volume) {
+	uint32_t i;
+
 	if (volume > UINT16_MAX)
 		volume = UINT16_MAX;
 	volume *= 0x10001u;
-	for (uint32_t i = 0; i < auxGetNumDevs(); ++i) {
+	for (i = 0; i < auxGetNumDevs(); ++i) {
 		AUXCAPSA caps;
 		if (auxGetDevCapsA(i, &caps, sizeof caps) == MMSYSERR_NOERROR &&
 			caps.wTechnology == AUXCAPS_CDAUDIO && (caps.dwSupport & AUXCAPS_VOLUME))
