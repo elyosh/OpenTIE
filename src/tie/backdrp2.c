@@ -19,72 +19,35 @@
 
 #include <stdint.h>
 
-/* Debug tile-cull counters (file-local). Updated per backdrawbitmap call;
- * read externally via debugger. */
-static int g_dbg_bd_tiles_drawn;
-static int g_dbg_bd_tiles_culled_x;
-static int g_dbg_bd_tiles_culled_y;
-
 /* --- Module-owned globals --- */
 
-uint8_t backdropposition[64];
+// GLOBAL: TIE95 0xC16F4
+// GLOBAL: TIE98 0x4FA4C0
 uint8_t backdropspecies[64];
+// GLOBAL: TIE95 0xC1734
+// GLOBAL: TIE98 0x4FA500
+uint8_t backdropposition[64];
+// GLOBAL: TIE95 0xC1774
+// GLOBAL: TIE98 0x4FA540
 uint16_t backdropfrontcnt;
+// GLOBAL: TIE95 0xC1776
+// GLOBAL: TIE98 0x4FA544
 uint16_t backdropbackcnt;
+// GLOBAL: TIE95 0xC1778
+// GLOBAL: TIE98 0x4FA548
 uint16_t backdroptopcnt;
+// GLOBAL: TIE95 0xC177A
+// GLOBAL: TIE98 0x4FA54C
 uint16_t backdropbottomcnt;
+// GLOBAL: TIE95 0xC177C
+// GLOBAL: TIE98 0x4FA550
 uint16_t backdropleftcnt;
+// GLOBAL: TIE95 0xC177E
+// GLOBAL: TIE98 0x4FA554
 uint16_t backdroprightcnt;
 
-/* --- One wall's tile scan.
- *
- * primary* and secondary* are the two shift*mul tables selected for this
- * wall (see wall-to-axis mapping in backdrp2_backdrop). out_* is the
- * fixed outward offset (worldeye*_{1,2,3} >> 2, negated for the far wall
- * of each pair). */
-static void draw_wall(int start, int count, uint16_t angle, const int32_t* prim_x, const int32_t* prim_y,
-					  const int32_t* prim_z, const int32_t* sec_x, const int32_t* sec_y, const int32_t* sec_z,
-					  int32_t out_x, int32_t out_y, int32_t out_z) {
-	int pos = start;
-	int i;
-
-	for (i = 0; i < count; i++, pos++) {
-		uint8_t bits = backdropposition[pos];
-		int pi = bits & 0x07;
-		int32_t px = prim_x[pi], py = prim_y[pi], pz = prim_z[pi];
-		int si;
-		int32_t ex, ey, ez;
-		int32_t wx;
-		int32_t wy;
-		int32_t wz;
-
-		if (bits & 0x08) {
-			px = -px;
-			py = -py;
-			pz = -pz;
-		}
-
-		si = (bits >> 4) & 0x07;
-
-		if (bits & 0x80) {
-			ex = px - sec_x[si];
-			ey = py - sec_y[si];
-			ez = pz - sec_z[si];
-		} else {
-			ex = px + sec_x[si];
-			ey = py + sec_y[si];
-			ez = pz + sec_z[si];
-		}
-
-		wx = ex + out_x;
-		wy = ey + out_y;
-		wz = ez + out_z;
-		if (wz >= 0)
-			backdrp2_backdrawbitmap(wx, wy, wz, angle, pos);
-	}
-}
-
 // FUNCTION: TIE95 0x11C90
+// FUNCTION: TIE98 0x4034B0
 void backdrp2_backdrop(void) {
 	/* 1) Refresh shift tables:
 	 *      shift*Kmul[i] = (i * worldeye*K) >> 5,  i in [0..15]. */
@@ -97,6 +60,13 @@ void backdrp2_backdrop(void) {
 	int32_t ay;
 	int32_t az;
 	int nx;
+	int32_t x;
+	int32_t y;
+	int32_t z;
+	uint16_t count;
+	uint16_t index;
+	uint16_t angle;
+	uint8_t position;
 
 	for (i = 0; i < 16; i++) {
 		shiftA1mul[i] = a1 >> 5;
@@ -156,94 +126,221 @@ void backdrp2_backdrop(void) {
 		az += worldeyeA3;
 	}
 
-	if (!drawbackdropflag)
-		return;
-
-	/* front/back: primary=A, secondary=C, outward along world-Y (worldeyeB/4).
-	 * Sequence of arctan calls matters — trig2_arctan has global side
-	 * effects (trig2_xyangle, trig2_signx/y/z). The binary calls
-	 * arctan(A2,A1) both here AND again before the top/bottom pass so
-	 * post-return globals reflect world-X orientation. */
-	{
-		const uint16_t angle = (uint16_t)(-trig2_arctan(worldeyeA2, worldeyeA1));
-		const int back_face = (worldeyeB3 < 0);
-		const int sign = back_face ? -1 : +1;
-		const int count = back_face ? backdropbackcnt : backdropfrontcnt;
-		const int start = back_face ? backdropfrontcnt : 0;
-		draw_wall(start, count, angle, shiftA1mul, shiftA2mul, shiftA3mul, shiftC1mul, shiftC2mul, shiftC3mul,
-				  sign * (worldeyeB1 >> 2), sign * (worldeyeB2 >> 2), sign * (worldeyeB3 >> 2));
-	}
-
-	/* left/right: primary=B, secondary=C, outward along world-X (worldeyeA/4) */
-	{
-		const uint16_t angle = (uint16_t)(-trig2_arctan(worldeyeB2, worldeyeB1));
-		const int right_face = (worldeyeA3 < 0);
-		const int sign = right_face ? -1 : +1;
-		const int count = right_face ? backdroprightcnt : backdropleftcnt;
-		const int sides_base = backdropfrontcnt + backdropbackcnt;
-		const int start = sides_base + (right_face ? backdropleftcnt : 0);
-		draw_wall(start, count, angle, shiftB1mul, shiftB2mul, shiftB3mul, shiftC1mul, shiftC2mul, shiftC3mul,
-				  sign * (worldeyeA1 >> 2), sign * (worldeyeA2 >> 2), sign * (worldeyeA3 >> 2));
-	}
-
-	/* top/bottom: primary=B, secondary=A, outward along world-Z (worldeyeC/4).
-	 * Second arctan(A2,A1) call is intentional — see above. */
-	{
-		const uint16_t angle = (uint16_t)(-trig2_arctan(worldeyeA2, worldeyeA1));
-		const int bottom_face = (worldeyeC3 < 0);
-		const int sign = bottom_face ? -1 : +1;
-		const int count = bottom_face ? backdropbottomcnt : backdroptopcnt;
-		const int caps_base = backdropfrontcnt + backdropbackcnt + backdropleftcnt + backdroprightcnt;
-		const int start = caps_base + (bottom_face ? backdroptopcnt : 0);
-		draw_wall(start, count, angle, shiftB1mul, shiftB2mul, shiftB3mul, shiftA1mul, shiftA2mul, shiftA3mul,
-				  sign * (worldeyeC1 >> 2), sign * (worldeyeC2 >> 2), sign * (worldeyeC3 >> 2));
+	if (drawbackdropflag) {
+		/* Walls are stored front, back, left, right, top, bottom; only the
+		 * wall of each opposing pair that faces the eye is scanned. */
+		index = 0;
+		angle = (uint16_t)-trig2_arctan(worldeyeA2, worldeyeA1);
+		if (worldeyeB3 < 0) {
+			index += backdropfrontcnt;
+			count = backdropbackcnt;
+			while (count--) {
+				position = backdropposition[index++];
+				x = shiftA1mul[position & 7];
+				y = shiftA2mul[position & 7];
+				z = shiftA3mul[position & 7];
+				if (position & 0x08) {
+					x = -x;
+					y = -y;
+					z = -z;
+				}
+				if (position & 0x80) {
+					x -= shiftC1mul[(position >> 4) & 7];
+					y -= shiftC2mul[(position >> 4) & 7];
+					z -= shiftC3mul[(position >> 4) & 7];
+				} else {
+					x += shiftC1mul[(position >> 4) & 7];
+					y += shiftC2mul[(position >> 4) & 7];
+					z += shiftC3mul[(position >> 4) & 7];
+				}
+				x -= worldeyeB1 >> 2;
+				y -= worldeyeB2 >> 2;
+				z -= worldeyeB3 >> 2;
+				if (z >= 0)
+					backdrp2_backdrawbitmap(x, y, z, angle, index);
+			}
+		} else {
+			count = backdropfrontcnt;
+			while (count--) {
+				position = backdropposition[index++];
+				x = shiftA1mul[position & 7];
+				y = shiftA2mul[position & 7];
+				z = shiftA3mul[position & 7];
+				if (position & 0x08) {
+					x = -x;
+					y = -y;
+					z = -z;
+				}
+				if (position & 0x80) {
+					x -= shiftC1mul[(position >> 4) & 7];
+					y -= shiftC2mul[(position >> 4) & 7];
+					z -= shiftC3mul[(position >> 4) & 7];
+				} else {
+					x += shiftC1mul[(position >> 4) & 7];
+					y += shiftC2mul[(position >> 4) & 7];
+					z += shiftC3mul[(position >> 4) & 7];
+				}
+				x += worldeyeB1 >> 2;
+				y += worldeyeB2 >> 2;
+				z += worldeyeB3 >> 2;
+				if (z >= 0)
+					backdrp2_backdrawbitmap(x, y, z, angle, index);
+			}
+			index += backdropbackcnt;
+		}
+		angle = (uint16_t)-trig2_arctan(worldeyeB2, worldeyeB1);
+		if (worldeyeA3 < 0) {
+			index += backdropleftcnt;
+			count = backdroprightcnt;
+			while (count--) {
+				position = backdropposition[index++];
+				x = shiftB1mul[position & 7];
+				y = shiftB2mul[position & 7];
+				z = shiftB3mul[position & 7];
+				if (position & 0x08) {
+					x = -x;
+					y = -y;
+					z = -z;
+				}
+				if (position & 0x80) {
+					x -= shiftC1mul[(position >> 4) & 7];
+					y -= shiftC2mul[(position >> 4) & 7];
+					z -= shiftC3mul[(position >> 4) & 7];
+				} else {
+					x += shiftC1mul[(position >> 4) & 7];
+					y += shiftC2mul[(position >> 4) & 7];
+					z += shiftC3mul[(position >> 4) & 7];
+				}
+				x -= worldeyeA1 >> 2;
+				y -= worldeyeA2 >> 2;
+				z -= worldeyeA3 >> 2;
+				if (z >= 0)
+					backdrp2_backdrawbitmap(x, y, z, angle, index);
+			}
+		} else {
+			count = backdropleftcnt;
+			while (count--) {
+				position = backdropposition[index++];
+				x = shiftB1mul[position & 7];
+				y = shiftB2mul[position & 7];
+				z = shiftB3mul[position & 7];
+				if (position & 0x08) {
+					x = -x;
+					y = -y;
+					z = -z;
+				}
+				if (position & 0x80) {
+					x -= shiftC1mul[(position >> 4) & 7];
+					y -= shiftC2mul[(position >> 4) & 7];
+					z -= shiftC3mul[(position >> 4) & 7];
+				} else {
+					x += shiftC1mul[(position >> 4) & 7];
+					y += shiftC2mul[(position >> 4) & 7];
+					z += shiftC3mul[(position >> 4) & 7];
+				}
+				x += worldeyeA1 >> 2;
+				y += worldeyeA2 >> 2;
+				z += worldeyeA3 >> 2;
+				if (z >= 0)
+					backdrp2_backdrawbitmap(x, y, z, angle, index);
+			}
+			index += backdroprightcnt;
+		}
+		angle = (uint16_t)-trig2_arctan(worldeyeA2, worldeyeA1);
+		if (worldeyeC3 < 0) {
+			index += backdroptopcnt;
+			count = backdropbottomcnt;
+			while (count--) {
+				position = backdropposition[index++];
+				x = shiftB1mul[position & 7];
+				y = shiftB2mul[position & 7];
+				z = shiftB3mul[position & 7];
+				if (position & 0x08) {
+					x = -x;
+					y = -y;
+					z = -z;
+				}
+				if (position & 0x80) {
+					x -= shiftA1mul[(position >> 4) & 7];
+					y -= shiftA2mul[(position >> 4) & 7];
+					z -= shiftA3mul[(position >> 4) & 7];
+				} else {
+					x += shiftA1mul[(position >> 4) & 7];
+					y += shiftA2mul[(position >> 4) & 7];
+					z += shiftA3mul[(position >> 4) & 7];
+				}
+				x -= worldeyeC1 >> 2;
+				y -= worldeyeC2 >> 2;
+				z -= worldeyeC3 >> 2;
+				if (z >= 0)
+					backdrp2_backdrawbitmap(x, y, z, angle, index);
+			}
+		} else {
+			count = backdroptopcnt;
+			while (count--) {
+				position = backdropposition[index++];
+				x = shiftB1mul[position & 7];
+				y = shiftB2mul[position & 7];
+				z = shiftB3mul[position & 7];
+				if (position & 0x08) {
+					x = -x;
+					y = -y;
+					z = -z;
+				}
+				if (position & 0x80) {
+					x -= shiftA1mul[(position >> 4) & 7];
+					y -= shiftA2mul[(position >> 4) & 7];
+					z -= shiftA3mul[(position >> 4) & 7];
+				} else {
+					x += shiftA1mul[(position >> 4) & 7];
+					y += shiftA2mul[(position >> 4) & 7];
+					z += shiftA3mul[(position >> 4) & 7];
+				}
+				x += worldeyeC1 >> 2;
+				y += worldeyeC2 >> 2;
+				z += worldeyeC3 >> 2;
+				if (z >= 0)
+					backdrp2_backdrawbitmap(x, y, z, angle, index);
+			}
+		}
 	}
 }
 
-/* Project one axis (x or y) against the eye-space depth z. Returns the
- * signed screen offset, or a sentinel 0x7FFFFF00 when the 64-bit numerator
- * exceeds z (the binary's overflow clamp). Caller has already culled the
- * |n| > z case. Matches the Watcom asm:
- *
- *   num = halfPerspFactor + (|n| << perspShift)   (64-bit unsigned)
- *   if (num >> 32) < z:  quot = num / z   (unsigned)
- *   else:                quot = 0x7FFFFF00
- *   screen = (n >= 0) ? quot : -quot  */
-static int32_t project_axis(int32_t n, int32_t z) {
-	const uint32_t magnitude = n < 0 ? 0u - (uint32_t)n : (uint32_t)n;
-	const uint32_t q = math2_project_u32(magnitude, perspShift, halfPerspFactor, (uint32_t)z);
-	return (int32_t)(n < 0 ? 0u - q : q);
-}
-
+/* Project one backdrop tile and draw its species image. tile_idx has
+ * already been advanced past the tile's backdropposition[] entry. Each axis
+ * projects (|n| << perspShift) + halfPerspFactor over z, with 0x7FFFFF00 as
+ * the overflow result. */
 // FUNCTION: TIE95 0x125D4
+// FUNCTION: TIE98 0x403D20
 void backdrp2_backdrawbitmap(int32_t x, int32_t y, int32_t z, uint16_t angle, int tile_idx) {
-	/* Frustum cull (symmetric 90° FOV in the eye XY plane). */
-	const int32_t ax = (x >= 0) ? x : -x;
-	int32_t ay;
-	int32_t proj_x;
-	int32_t proj_y;
-	int32_t sx;
-	int32_t sy;
+	int32_t screenx;
+	int32_t screeny;
 
-	if (ax > z) {
-		g_dbg_bd_tiles_culled_x++;
-		return;
+	if (x >= 0) {
+		if (x > z)
+			return;
+		screenx = (int32_t)math2_project_u32((uint32_t)x, perspShift, halfPerspFactor, (uint32_t)z);
+	} else {
+		if (-x > z)
+			return;
+		screenx = -(int32_t)math2_project_u32((uint32_t)-x, perspShift, halfPerspFactor, (uint32_t)z);
 	}
-	ay = (y >= 0) ? y : -y;
-	if (ay > z) {
-		g_dbg_bd_tiles_culled_y++;
-		return;
+	if (y >= 0) {
+		if (y > z)
+			return;
+		screeny = (int32_t)math2_project_u32((uint32_t)y, perspShift, halfPerspFactor, (uint32_t)z);
+	} else {
+		if (-y > z)
+			return;
+		screeny = -(int32_t)math2_project_u32((uint32_t)-y, perspShift, halfPerspFactor, (uint32_t)z);
 	}
 
-	proj_x = project_axis(x, z);
-	proj_y = project_axis(y, z);
-
-	sx = (int32_t)halfpixelswide + proj_x;
-	sy = (int32_t)pixelsdeep - ((int32_t)halfpixelsdeep + transfm2_screenyoffset + proj_y);
-
-	g_dbg_bd_tiles_drawn++;
 	if (TieProfile_UsesTie98Logic())
-		draw_drawbackdropimage_tie98(backdropspecies[tile_idx], (int16_t)sx, (int16_t)sy, angle);
+		draw_drawbackdropimage_tie98(
+			backdropspecies[tile_idx - 1], (int16_t)(halfpixelswide + screenx),
+			(int16_t)(pixelsdeep - (transfm2_screenyoffset + halfpixelsdeep + screeny)), angle);
 	else
-		draw_drawbackdropimage(backdropspecies[tile_idx], (int16_t)sx, (int16_t)sy, angle);
+		draw_drawbackdropimage(backdropspecies[tile_idx - 1], (int16_t)(halfpixelswide + screenx),
+							   (int16_t)(pixelsdeep - (transfm2_screenyoffset + halfpixelsdeep + screeny)),
+							   angle);
 }

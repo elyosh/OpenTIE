@@ -111,10 +111,10 @@ void static_drawstaticobject(uint16_t slot_idx) {
 
 	/* Skip header / jump / reset / delay / kill opcodes; only MESH and
 	 * BITMAP opcodes produce output here. */
-	if (!animop_is_mesh(frame_code) && !animop_is_bitmap(frame_code))
+	if (frame_code >= 0xFF00u)
 		return;
 
-	if (animop_is_bitmap(frame_code)) {
+	if ((frame_code >= 0x8000u && frame_code < 0xFF00u)) {
 		/* Billboard sprite. Reject if behind the camera. */
 		int32_t abs_A3;
 		int32_t abs_B3;
@@ -194,9 +194,9 @@ void static_drawstaticobject_tie98(uint16_t slot_idx) {
 
 	if (draw_data != NULL) {
 		const AnimOp frame = draw_data[object->anim_frame];
-		if (!animop_is_mesh(frame) && !animop_is_bitmap(frame))
+		if (frame >= 0xFF00u)
 			return;
-		if (animop_is_bitmap(frame)) {
+		if ((frame >= 0x8000u && frame < 0xFF00u)) {
 			static_drawstaticobject(slot_idx);
 			return;
 		}

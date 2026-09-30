@@ -60,8 +60,8 @@ void backdrp2_backdrop(void);
 
 /* Project a single tile from eye space to screen and blit the rotated
  * sprite. Frustum-culls when |x| > z or |y| > z. angle is 16-bit
- * fixed-point (0..0xFFFF covering 360°). tile_idx is a 0-based index
- * into backdropposition[]/backdropspecies[]. */
+ * fixed-point (0..0xFFFF covering 360°). tile_idx is one past the tile's
+ * backdropposition[]/backdropspecies[] index (the caller's post-increment). */
 void backdrp2_backdrawbitmap(int32_t x, int32_t y, int32_t z, uint16_t angle, int tile_idx);
 
 #ifdef __cplusplus

@@ -88,21 +88,6 @@ typedef uint16_t AnimOp;
 #define ANIMOP_DELAY ((AnimOp)0xFFFE)
 #define ANIMOP_KILL ((AnimOp)0xFFFF)
 
-/* ---- classifiers ------------------------------------------------------ */
-static inline int animop_is_mesh(AnimOp op) { return op < 0x8000u; }
-static inline int animop_is_bitmap(AnimOp op) { return op >= 0x8000u && op < 0xFF00u; }
-static inline int animop_is_jump(AnimOp op) { return op >= 0xFF00u && op <= 0xFFFCu; }
-static inline int animop_is_reset(AnimOp op) { return op == ANIMOP_RESET; }
-static inline int animop_is_delay(AnimOp op) { return op == ANIMOP_DELAY; }
-static inline int animop_is_kill(AnimOp op) { return op == ANIMOP_KILL; }
-
-/* ---- operand accessors ------------------------------------------------ */
-/* Bitmap opcode: species and bitmap-within-species indices. */
-static inline uint8_t animop_bitmap_species(AnimOp op) { return (uint8_t)((op & 0x7FFFu) >> 7); }
-static inline uint8_t animop_bitmap_index(AnimOp op) { return (uint8_t)(op & 0x7Fu); }
-/* Jump opcode: destination frame index. */
-static inline uint8_t animop_jump_target(AnimOp op) { return (uint8_t)op; }
-
 extern AnimOp bigexplo[13];
 extern AnimOp sparks[7];
 extern AnimOp sparks2[8];
@@ -117,7 +102,6 @@ extern AnimOp debrischunk4[9];
 extern AnimOp bigexplo2[14];
 
 /* ANIM module globals. */
-extern void* animarrayptr;     /* unused in shipped binary */
 extern AnimOp* animptr;        /* current pattern ptr */
 extern uint16_t animindex;     /* current frame index */
 extern uint16_t hyperfgnumber; /* mission_file_header.num_fg saved across hyperspace */

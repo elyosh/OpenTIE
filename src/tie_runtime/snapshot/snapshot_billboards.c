@@ -8,7 +8,7 @@
 
 #include "tie_runtime/snapshot/snapshot_billboards.h"
 
-#include "tie/anim.h" /* animop_is_bitmap, animop_bitmap_species/index */
+#include "tie_runtime/snapshot/animop.h"
 #include "tie/rotscale.h"
 #include "tie/tie.h" /* NUM_OBJECTS, NUM_CRAFTS */
 

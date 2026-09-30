@@ -370,6 +370,7 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/snapshot/snapshot_map.h
     src/tie_runtime/snapshot/snapshot_billboards.c
     src/tie_runtime/snapshot/snapshot_billboards.h
+    src/tie_runtime/snapshot/animop.h
     src/tie_runtime/runtime/profile_types.h
     src/tie_runtime/runtime/exports.h
     src/tie_runtime/flight_assets/model_types.h

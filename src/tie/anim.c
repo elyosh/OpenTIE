@@ -51,6 +51,8 @@
 
 /* Big starfighter explosion: 11 bitmap frames (frame 6 doubled for extra
  * dwell on the mid-bloom) then kill. */
+// GLOBAL: TIE95 0xC15BC
+// GLOBAL: TIE98 0x4DF030
 AnimOp bigexplo[13] = {
 	ANIMOP_DELAY,
 	ANIMOP_JUMP(0),
@@ -68,6 +70,8 @@ AnimOp bigexplo[13] = {
 };
 
 /* Small spark burst -- one-shot kill. */
+// GLOBAL: TIE95 0xC15D6
+// GLOBAL: TIE98 0x4DF050
 AnimOp sparks[7] = {
 	ANIMOP_DELAY,
 	ANIMOP_JUMP(0),
@@ -79,17 +83,25 @@ AnimOp sparks[7] = {
 };
 
 /* Component-debris sparkle for the five-frame retail XACTSPARK09 asset. */
+// GLOBAL: TIE95 0xC15E4
+// GLOBAL: TIE98 0x4DF060
 AnimOp sparks2[8] = {
 	ANIMOP_DELAY,           ANIMOP_JUMP(0),         ANIMOP_BITMAP(0x84, 0), ANIMOP_BITMAP(0x84, 1),
 	ANIMOP_BITMAP(0x84, 2), ANIMOP_BITMAP(0x84, 3), ANIMOP_BITMAP(0x84, 4), ANIMOP_KILL,
 };
 
 /* Single-frame sprites that loop forever (no header; play from frame 0). */
+// GLOBAL: TIE95 0xC15F4
+// GLOBAL: TIE98 0x4DF070
 AnimOp ember[2] = { ANIMOP_BITMAP(0x85, 0), ANIMOP_JUMP(0) };
+// GLOBAL: TIE95 0xC15F8
+// GLOBAL: TIE98 0x4DF074
 AnimOp ember2[2] = { ANIMOP_BITMAP(0x86, 0), ANIMOP_JUMP(0) };
 
 /* Fire: 11 frames, ending with RESET (restart from frame 0, re-entering
  * the idle header -- effectively pauses until anim_frame is armed again). */
+// GLOBAL: TIE95 0xC15FC
+// GLOBAL: TIE98 0x4DF078
 AnimOp fire[14] = {
 	ANIMOP_DELAY,
 	ANIMOP_JUMP(0),
@@ -110,6 +122,8 @@ AnimOp fire[14] = {
 /* Lightning: 10 intro bolts on species 0x87, then 6 doubled bolts on
  * species 0x88 looping -- the double slots slow the loop for that dwell.
  * Used per-Fuselage by draw_drawcraft and anim_updateanimation. */
+// GLOBAL: TIE95 0xC1618
+// GLOBAL: TIE98 0x4DF098
 AnimOp lightning[25] = {
 	ANIMOP_DELAY,           ANIMOP_JUMP(0),         ANIMOP_BITMAP(0x87, 0), ANIMOP_BITMAP(0x87, 1),
 	ANIMOP_BITMAP(0x87, 2), ANIMOP_BITMAP(0x87, 3), ANIMOP_BITMAP(0x87, 4), ANIMOP_BITMAP(0x87, 5),
@@ -124,6 +138,8 @@ AnimOp lightning[25] = {
  * bitmap index is the sprite's flipped/unflipped pair (bit 6 of the 7-bit
  * index flips the blit). All four tables JUMP back to frame 2 to loop the
  * tumble body forever. */
+// GLOBAL: TIE95 0xC164A
+// GLOBAL: TIE98 0x4DF0D0
 AnimOp debrischunk1[9] = {
 	ANIMOP_DELAY,
 	ANIMOP_JUMP(0),
@@ -135,6 +151,8 @@ AnimOp debrischunk1[9] = {
 	ANIMOP_BITMAP(0x6E, 0x05),
 	ANIMOP_JUMP(2),
 };
+// GLOBAL: TIE95 0xC165C
+// GLOBAL: TIE98 0x4DF0E8
 AnimOp debrischunk2[11] = {
 	ANIMOP_DELAY,
 	ANIMOP_JUMP(0),
@@ -148,6 +166,8 @@ AnimOp debrischunk2[11] = {
 	ANIMOP_BITMAP(0x6F, 0x07),
 	ANIMOP_JUMP(2),
 };
+// GLOBAL: TIE95 0xC1672
+// GLOBAL: TIE98 0x4DF100
 AnimOp debrischunk3[11] = {
 	ANIMOP_DELAY,
 	ANIMOP_JUMP(0),
@@ -161,6 +181,8 @@ AnimOp debrischunk3[11] = {
 	ANIMOP_BITMAP(0x70, 0x07),
 	ANIMOP_JUMP(2),
 };
+// GLOBAL: TIE95 0xC1688
+// GLOBAL: TIE98 0x4DF118
 AnimOp debrischunk4[9] = {
 	ANIMOP_DELAY,
 	ANIMOP_JUMP(0),
@@ -174,6 +196,8 @@ AnimOp debrischunk4[9] = {
 };
 
 /* Starship explosion (large-craft variant): 10 bitmap frames then kill. */
+// GLOBAL: TIE95 0xC169A
+// GLOBAL: TIE98 0x4DF130
 AnimOp bigexplo2[14] = {
 	ANIMOP_DELAY,
 	ANIMOP_JUMP(0),
@@ -194,13 +218,18 @@ AnimOp bigexplo2[14] = {
  * ANIM module globals
  * ====================================================================== */
 
-void* animarrayptr; /* never read in shipped binary */
 // GLOBAL: TIE95 0xD3554
+// GLOBAL: TIE98 0x6269D4
 AnimOp* animptr; /* current pattern */
 // GLOBAL: TIE95 0xD355A
-uint16_t animindex;     /* current frame index */
+// GLOBAL: TIE98 0x6269CE
+uint16_t animindex; /* current frame index */
+// GLOBAL: TIE95 0xD3558
+// GLOBAL: TIE98 0x6269D0
 uint16_t hyperfgnumber; /* mission_file_header.num_fg saved across the warp */
-uint8_t curgenus;       /* genus byte cached during anim tick */
+// GLOBAL: TIE95 0xD355C
+// GLOBAL: TIE98 0x6269CC
+uint8_t curgenus; /* genus byte cached during anim tick */
 
 /* Static-ref encoding used by anim_add_bitmap_draw: static refs use
  * OBJ_REF_STATIC_BASE = 0x3800 (high byte 0x38). */
@@ -211,20 +240,6 @@ uint8_t curgenus;       /* genus byte cached during anim tick */
 /* Model handles are direct pointers; locking is an identity operation. */
 static inline void* xmemhdl_lock_anim(void* handle) { return handle; }
 static inline void xmemhdl_unlock_anim(void* handle) { (void)handle; }
-
-/* Helpers used by the 14336-or-flightobject branch in anim_draw_bitmap. */
-static inline int is_static_ref(uint16_t obj_ref) {
-	return (obj_ref & 0xFF00u) == OBJ_REF_STATIC_BASE; /* 0x3800 */
-}
-
-/* hyperstar point accessors. The polymesh format (see species.c
- * hyperstardata + drawpol.c line-object path): 4-byte header
- * {type, dedup, numpoints, numedges}, then numpoints PolyVerts (6 B,
- * i16 x/y/z), then numedges 5-byte edge records. Offsets 6 and 12 land
- * on the y-component of point[0] and point[1] respectively — those are
- * the streak's near/far endpoints that the state machine animates. */
-static inline int16_t* hyperstar_p0_x_ptr(void) { return (int16_t*)(hyperstardata + 6); }
-static inline int16_t* hyperstar_p1_x_ptr(void) { return (int16_t*)(hyperstardata + 12); }
 
 /* ====================================================================== *
  * anim_add_bitmap_draw
@@ -334,8 +349,8 @@ void anim_sort_and_draw_bitmaps_tie98(int draw_target) {
 int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
 	/* species_packed is the same bitfield emitted by ANIMOP_BITMAP;
 	 * decode with the shared accessors. */
-	uint8_t species_idx = animop_bitmap_species(entry->species_packed);
-	uint8_t bitmap_idx = animop_bitmap_index(entry->species_packed);
+	uint8_t species_idx = (uint8_t)((entry->species_packed & 0x7FFFu) >> 7);
+	uint8_t bitmap_idx = (uint8_t)(entry->species_packed & 0x7Fu);
 
 	int16_t scale;
 	void* handle;
@@ -347,7 +362,7 @@ int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
 	reverseflag = 1;
 	parentobject = entry->obj_idx;
 
-	if (is_static_ref(entry->obj_idx)) {
+	if ((entry->obj_idx & 0xFF00u) == OBJ_REF_STATIC_BASE) {
 		uint16_t static_slot = (uint16_t)(parentobject - OBJ_REF_STATIC_BASE);
 		int16_t sx = staticobjects[static_slot].world_x;
 		int16_t sy = staticobjects[static_slot].world_y;
@@ -397,8 +412,8 @@ int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
 
 // FUNCTION: TIE98 0x401410
 void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
-	const uint8_t species_idx = animop_bitmap_species(entry->species_packed);
-	const uint8_t bitmap_idx = animop_bitmap_index(entry->species_packed);
+	const uint8_t species_idx = (uint8_t)((entry->species_packed & 0x7FFFu) >> 7);
+	const uint8_t bitmap_idx = (uint8_t)(entry->species_packed & 0x7Fu);
 	uint16_t scale;
 	void* handle;
 	const uint8_t* blob;
@@ -408,7 +423,7 @@ void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
 	reverseflag = 1;
 	parentobject = entry->obj_idx;
 
-	if (is_static_ref(entry->obj_idx)) {
+	if ((entry->obj_idx & 0xFF00u) == OBJ_REF_STATIC_BASE) {
 		const uint16_t static_slot = (uint16_t)(parentobject - OBJ_REF_STATIC_BASE);
 		parentobject = (uint16_t)(static_slot + OBJ_REF_STATIC_BASE);
 		worldx += ((int32_t)(uint16_t)staticobjects[static_slot].world_x << 8) - camera.x;
@@ -473,7 +488,7 @@ int16_t anim_drawverysimpleobject(uint16_t obj_idx_arg) {
 	result = (int16_t)op;
 
 	/* MESH opcode -- draw the polymesh component through DRAWPOL. */
-	if (animop_is_mesh(op)) {
+	if (op < 0x8000u) {
 		uint16_t mesh_ship = ship_type;
 		int32_t saved_eyex;
 		int32_t saved_eyey;
@@ -514,7 +529,7 @@ int16_t anim_drawverysimpleobject(uint16_t obj_idx_arg) {
 	}
 
 	/* BITMAP opcode -- billboarded sprite at projected (screen_x, screen_y). */
-	if (animop_is_bitmap(op) && objecteyez >= 0) {
+	if ((op >= 0x8000u && op < 0xFF00u) && objecteyez >= 0) {
 		/* Pick the world-to-eye axis pair (A or B) most horizontal in
 		 * eye space; its planar atan2 gives the billboard rotation. */
 		int32_t abs_a3 = rotworldeyeA3 < 0 ? -rotworldeyeA3 : rotworldeyeA3;
@@ -598,7 +613,7 @@ void anim_drawverysimpleobject_tie98(uint16_t object_index) {
 	if (frame >= 0xFF00u)
 		return;
 
-	if (animop_is_mesh(frame)) {
+	if (frame < 0x8000u) {
 		solidindex = frame;
 		FlightModel_Draw_Object_Mesh(object, frame);
 		if (model_type == 89) {
@@ -606,7 +621,7 @@ void anim_drawverysimpleobject_tie98(uint16_t object_index) {
 			frame = sparks2[animindex];
 		}
 	}
-	if (!animop_is_bitmap(frame) || objecteyez < 0)
+	if (!(frame >= 0x8000u && frame < 0xFF00u) || objecteyez < 0)
 		return;
 
 	abs_a3 = rotworldeyeA3 < 0 ? -rotworldeyeA3 : rotworldeyeA3;
@@ -660,20 +675,20 @@ int16_t anim_updateanimstate(uint16_t obj_or_kind) {
 	next = (uint16_t)(animindex + 1);
 	op = animptr[next];
 
-	if (animop_is_reset(op)) {
+	if (op == ANIMOP_RESET) {
 		animindex = 0;
 		return (int16_t)op;
 	}
 
-	if (animop_is_kill(op)) {
+	if (op == ANIMOP_KILL) {
 		uint8_t slot = (uint8_t)obj_or_kind;
-		if (is_static_ref(obj_or_kind))
+		if ((obj_or_kind & 0xFF00u) == OBJ_REF_STATIC_BASE)
 			staticobjects[slot].species = 0;
 		else
 			objects[slot].ship_idx = 0;
 		/* Fall through: still advance past the KILL. */
-	} else if (animop_is_jump(op)) {
-		next = animop_jump_target(op);
+	} else if ((op >= 0xFF00u && op <= 0xFFFCu)) {
+		next = (uint8_t)op;
 	}
 	/* DELAY / MESH / BITMAP: advance, no side effect. */
 
@@ -1337,8 +1352,8 @@ void anim_dohyperspace(void) {
 			pstate.player->world_y = 0;
 			hyperspaceflag = 3;
 			pstate.player->world_z = 0;
-			*hyperstar_p0_x_ptr() = 32272;
-			*hyperstar_p1_x_ptr() = 32256;
+			*(int16_t*)&hyperstardata[6] = 32272;
+			*(int16_t*)&hyperstardata[12] = 32256;
 			fsfx_triggersfx(0x30u, 0xFFFFu);
 #ifdef TIE_MODERN
 			{
@@ -1363,15 +1378,15 @@ void anim_dohyperspace(void) {
 		case 3:
 			if (hyperticks < 0x588u) {
 				/* Clamp the unsigned wrapped endpoint inside (0x7E00, 0x8200). */
-				uint16_t s = (uint16_t)(*hyperstar_p1_x_ptr() - tilt_speed);
+				uint16_t s = (uint16_t)(*(int16_t*)&hyperstardata[12] - tilt_speed);
 				hyperstarlength = s;
 				if (s > 0x7E00u && s < 0x8200u)
 					hyperstarlength = (uint16_t)-32256;
-				*hyperstar_p1_x_ptr() = (int16_t)hyperstarlength;
+				*(int16_t*)&hyperstardata[12] = (int16_t)hyperstarlength;
 			} else {
 				pstate.player->world_y += 224 * frameticks;
-				*hyperstar_p1_x_ptr() = -32256;
-				*hyperstar_p0_x_ptr() = 32272;
+				*(int16_t*)&hyperstardata[12] = -32256;
+				*(int16_t*)&hyperstardata[6] = 32272;
 			}
 			if (hyperticks >= 0x674u) {
 				hyperticks = 1652;
@@ -1429,11 +1444,11 @@ void anim_dohyperspace(void) {
 				pstate.player->world_y -= 224 * frameticks;
 			} else {
 				/* Preserve the unsigned endpoint wrap while retracting the streak. */
-				uint16_t s = (uint16_t)(tilt_speed + *hyperstar_p1_x_ptr());
+				uint16_t s = (uint16_t)(tilt_speed + *(int16_t*)&hyperstardata[12]);
 				hyperstarlength = s;
 				if (s > 0x7E00u && s < 0x8200u)
 					hyperstarlength = (uint16_t)-32256;
-				*hyperstar_p1_x_ptr() = (int16_t)hyperstarlength;
+				*(int16_t*)&hyperstardata[12] = (int16_t)hyperstarlength;
 			}
 			if (hyperticks >= 0x938u) {
 				int32_t y;

@@ -17,6 +17,7 @@
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/snapshot/animop.h"
 #include "tie_runtime/snapshot/snapshot_billboards.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 #include "tie_runtime/timing/flight_integration.h"

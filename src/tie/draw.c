@@ -1064,7 +1064,7 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 			if (last_state >= 25)
 				continue;
 			lightning_obj = lightning[last_state];
-			if (!animop_is_bitmap(lightning_obj))
+			if (!(lightning_obj >= 0x8000u && lightning_obj < 0xFF00u))
 				continue; /* on a header/jump frame -- no bolt this tick */
 			if (!bolt_angle_set) {
 				int A3_abs = rotworldeyeA3 < 0 ? -rotworldeyeA3 : rotworldeyeA3;
@@ -1106,7 +1106,7 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 					 * passes a fixed scale to anim_add_bitmap_draw).
 					 * Bolt is anchored at parent craft world origin in
 					 * anim_draw_bitmap; emit reads world_*_prev. */
-					lb_sp = animop_bitmap_species(lightning_obj);
+					lb_sp = (uint8_t)((lightning_obj & 0x7FFFu) >> 7);
 					lb_bw = species_table[lb_sp].bound_hwidth;
 					lb_psc = (uint16_t)rotscale_calcscale(objecteyez, lb_bw, 256);
 					TieBillboardCapture_Lightning(obj_idx_u16, lightning_obj, lb_psc, lb_bw, bolt_angle);
@@ -1165,7 +1165,7 @@ static void draw_drawcraft_tie98(uint16_t object_ref, uint16_t model_type) {
 			continue;
 
 		lightning_op = lightning[craft->mesh_state[mesh_count]];
-		if (!animop_is_bitmap(lightning_op))
+		if (!(lightning_op >= 0x8000u && lightning_op < 0xFF00u))
 			continue;
 		if (!bolt_angle_set) {
 			int axis_x;
@@ -1195,7 +1195,7 @@ static void draw_drawcraft_tie98(uint16_t object_ref, uint16_t model_type) {
 		rotation = (int16_t)(objects[object_ref].roll + bolt_angle);
 		anim_add_bitmap_draw(parentobject, lightning_op, 0x100, (int16_t)screen_x,
 							 (int16_t)(2 * half_height - (int32_t)screen_y), objecteyez, rotation);
-		bitmap_species = animop_bitmap_species(lightning_op);
+		bitmap_species = (uint8_t)((lightning_op & 0x7FFFu) >> 7);
 		bound_hwidth = species_table[bitmap_species].bound_hwidth;
 		pixel_scale = (uint16_t)rotscale_calcscale(objecteyez, bound_hwidth, 0x100);
 		TieBillboardCapture_Lightning(object_ref, lightning_op, pixel_scale, bound_hwidth, rotation);
