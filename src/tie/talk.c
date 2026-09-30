@@ -1,4 +1,7 @@
 #include "tie/talk.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/talk_task.h"
+#endif
 #include "tie_runtime/audio/imuse_session.h"
 
 #include "tie/goals.h"
@@ -1645,7 +1648,9 @@ static void end_View(int32_t refresh) {
  * talk_Talk — main entry point
  * ====================================================================== */
 
-ResFile* talk_OpenScene(SceneHeadStruct* scene_head) {
+// FUNCTION: TIE95 0x67F89
+// FUNCTION: TIE98 0x489530
+int16_t talk_Talk(SceneHeadStruct* scene_head) {
 	ResFile* resource;
 	Rect frame;
 	int16_t talk_type = 0;
@@ -1851,10 +1856,11 @@ ResFile* talk_OpenScene(SceneHeadStruct* scene_head) {
 	xview_Set_View_Update_Function(end_View);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
-	return resource;
-}
-
-void talk_CloseScene(ResFile* resource) {
+#ifdef TIE_MODERN
+	TieTalk_RunView(resource);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
 	talk_Free_Speech_Sound();
 	xview_Enable_All_View_Erase();
 	xview_Clear_View_Update_Function();
@@ -1864,4 +1870,6 @@ void talk_CloseScene(ResFile* resource) {
 
 	player_Free_Display_Map();
 	xres_Close_Resource(resource);
+	return xerror_Get_Landru_Exit();
+#endif
 }

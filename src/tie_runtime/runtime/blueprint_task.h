@@ -5,4 +5,6 @@
 
 void TieBlueprint_Begin(SceneHeadStruct* scene_head);
 
+void TieBlueprint_RunView(ResFile* resource, bool svga);
+
 #endif

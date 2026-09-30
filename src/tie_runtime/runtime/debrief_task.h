@@ -5,4 +5,6 @@
 
 void TieDebrief_Begin(SceneHeadStruct* scene_head);
 
+void TieDebrief_RunView(ResFile* resource, bool svga);
+
 #endif

@@ -5,4 +5,6 @@
 
 void TieTalk_Begin(SceneHeadStruct* head);
 
+void TieTalk_RunView(ResFile* resource);
+
 #endif

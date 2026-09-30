@@ -162,6 +162,10 @@ extern int32_t f_res;
 void shellext_Open_Landru(void* extern_mem, int16_t use_timer, int16_t use_script);
 void shellext_Close_Landru(int16_t use_timer);
 void shellext_Open_Landru_Scene(int16_t scene);
+#ifndef TIE_MODERN
+/* Original synchronous entry; shared Landru loop recovery is pending. */
+void shellext_Handle_TIE_View(void);
+#endif
 /* Two-step scene close: shell task calls Begin to drain text/sound
  * scenes and read out the sudden_end flag, then optionally pushes
  * shellext_Push_Sudden_Scene_Fade_Task and yields, and finally calls

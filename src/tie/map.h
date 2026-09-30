@@ -9,10 +9,9 @@
 extern "C" {
 #endif
 
-/* Prepare and release the MAP/briefing display.
+/* MAP/briefing display.
  * Scenes: 123=training, 133/134=combat sim, 181=briefing. */
-void map_OpenScene(SceneHeadStruct* scene_head);
-void map_CloseScene(void);
+int16_t map_Map(SceneHeadStruct* scene_head);
 
 /* Training pilot medal status — extern per watdbg, set by MAP, read by SHELL */
 extern int16_t train_pilot_medal_status;

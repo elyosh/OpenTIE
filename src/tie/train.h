@@ -9,8 +9,7 @@
 extern "C" {
 #endif
 
-void train_OpenScene(SceneHeadStruct* the_head, bool svga);
-void train_CloseScene(bool svga);
+int16_t train_Train(SceneHeadStruct* scene_head);
 
 #ifdef __cplusplus
 }

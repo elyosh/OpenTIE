@@ -5,4 +5,6 @@
 
 void TieTrain_Begin(SceneHeadStruct* scene_head);
 
+void TieTrain_RunView(ResFile* resource, bool svga);
+
 #endif

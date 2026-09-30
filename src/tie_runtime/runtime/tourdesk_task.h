@@ -5,4 +5,6 @@
 
 void TieTourDesk_Begin(SceneHeadStruct* scene_head);
 
+void TieTourDesk_RunView(bool svga);
+
 #endif

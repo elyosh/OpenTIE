@@ -11,9 +11,8 @@ extern "C" {
 
 struct Sound;
 
-/* Prepare and release the officer/priest talk scene. */
-ResFile* talk_OpenScene(SceneHeadStruct* scene_head);
-void talk_CloseScene(ResFile* resource);
+/* Officer/priest talk scene. */
+int16_t talk_Talk(SceneHeadStruct* scene_head);
 
 /* Officer/priest mood control (0-4). Drives face animation. */
 void talk_Set_Officer_Mood(int16_t mood);

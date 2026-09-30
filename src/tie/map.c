@@ -1,4 +1,7 @@
 #include "tie/map.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/map_task.h"
+#endif
 #include "tie/goals.h"
 #include "tie/mission.h"
 #include "tie/player.h"
@@ -1557,7 +1560,9 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
  * map_Map — main entry point
  * ====================================================================== */
 
-void map_OpenScene(SceneHeadStruct* scene_head) {
+// FUNCTION: TIE95 0x745E0
+// FUNCTION: TIE98 0x44D870
+int16_t map_Map(SceneHeadStruct* scene_head) {
 	ResFile *file, *pfile;
 	Palette* the_palette;
 	Input *parent, *the_input;
@@ -1800,9 +1805,11 @@ void map_OpenScene(SceneHeadStruct* scene_head) {
 	Set_Voice_Species_Mission();
 	talk_Alloc_Speech_Sound();
 	talk_paragraph_timer = 0x7FFFFFFF;
-}
-
-void map_CloseScene(void) {
+#ifdef TIE_MODERN
+	TieMap_RunView();
+	return 0;
+#else
+	shellext_Handle_TIE_View();
 	talk_Free_Speech_Sound();
 	player_Free_Brief_Display();
 	xview_Enable_All_View_Erase();
@@ -1810,4 +1817,6 @@ void map_CloseScene(void) {
 
 	if (xcursor_Is_Cursor_Visible())
 		xcursor_Hide_Cursor();
+	return xerror_Get_Landru_Exit();
+#endif
 }

@@ -9,8 +9,7 @@
 extern "C" {
 #endif
 
-ResFile* debrief_OpenScene(SceneHeadStruct* scene_head, bool svga);
-void debrief_CloseScene(ResFile* resource, bool svga);
+int16_t debrief_Debrief(SceneHeadStruct* scene_head);
 
 #ifdef __cplusplus
 }

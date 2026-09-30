@@ -9,6 +9,9 @@
  */
 
 #include "tie/debrief.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/debrief_task.h"
+#endif
 #include "tie/shellext.h"
 #include "tie/shipext.h"
 #include "tie/soundext.h"
@@ -105,7 +108,13 @@ static const DebriefSpec debrief_specs[] = {
 	},
 };
 
+#ifdef TIE_MODERN
 static const DebriefSpec* active_spec;
+#elif defined(TIE98)
+static const DebriefSpec* const active_spec = &debrief_specs[1];
+#else
+static const DebriefSpec* const active_spec = &debrief_specs[0];
+#endif
 
 /* ---- Static globals ---- */
 
@@ -515,36 +524,71 @@ static void user_Officer(Actor* actor, int32_t time) {
  * Entry point
  * ================================================================ */
 
-ResFile* debrief_OpenScene(SceneHeadStruct* scene_head, bool svga) {
+// FUNCTION: TIE95 0x6FE60
+// FUNCTION: TIE98 0x4155F0
+int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
+#ifdef TIE_MODERN
+	bool svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+#endif
 	Rect frame;
 	ResFile* resource;
 	int16_t mouse_x, mouse_y;
+#ifdef TIE_MODERN
 	const int16_t* bounds;
+#endif
 
+#ifdef TIE_MODERN
 	active_spec = &debrief_specs[svga ? 1 : 0];
-	if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-		(void)xsurface_Select_Surface_Set(active_spec->surface_set);
-		xview_Init_View(xview_Get_Current_View());
-	}
+#endif
 
 	/* Position mouse based on outcome and officer type */
 	if (shipext_Is_Mission_Success()) {
 		if (shellext_Get_Last_Scene() != SCENE_TALK_DEBRIEF_OFFICER || shipext_Get_Mission_Officer() == 1) {
+#ifdef TIE_MODERN
 			mouse_x = active_spec->success_mouse_x;
 			mouse_y = active_spec->success_mouse_y;
+#elif defined(TIE98)
+			mouse_x = 360;
+			mouse_y = 200;
+#else
+			mouse_x = 180;
+			mouse_y = 100;
+#endif
 		} else {
+#ifdef TIE_MODERN
 			mouse_x = active_spec->talk_mouse_x;
 			mouse_y = active_spec->talk_mouse_y;
+#elif defined(TIE98)
+			mouse_x = 540;
+			mouse_y = 240;
+#else
+			mouse_x = 280;
+			mouse_y = 120;
+#endif
 		}
 	} else {
+#ifdef TIE_MODERN
 		mouse_x = active_spec->failure_mouse_x;
 		mouse_y = active_spec->failure_mouse_y;
+#elif defined(TIE98)
+		mouse_x = 108;
+		mouse_y = 200;
+#else
+		mouse_x = 74;
+		mouse_y = 100;
+#endif
 	}
 	xio_Set_Mouse_Position(mouse_x, mouse_y);
 
 	/* Load resources */
 	resource = shellext_Open_Empire_Resource("debrief.lfd");
+#ifdef TIE_MODERN
 	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 0, 0, 640, 480);
+#else
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
+#endif
 
 	debrief_film = xfilm_Res_Callback_Film("debrief", &frame, 0, 0, 0, film_Callback);
 #ifdef TIE_MODERN
@@ -556,8 +600,14 @@ ResFile* debrief_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 	/* Brief door (id=0) */
+#ifdef TIE_MODERN
 	bounds = active_spec->input_bounds[0];
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 298, 129, 420, 288);
+#else
+	xrect_Set_Rect(&frame, 133, 56, 193, 107);
+#endif
 	brief_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(brief_input, iupdate_Debrief);
 	xinpattr_Set_Input_User_Function(brief_input, iuser_Debrief);
@@ -566,8 +616,14 @@ ResFile* debrief_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 
 	/* Officer door (id=1) — skip if priest only */
 	if (shipext_Get_Mission_Officer() != 2) {
+#ifdef TIE_MODERN
 		bounds = active_spec->input_bounds[1];
 		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+		xrect_Set_Rect(&frame, 226, 102, 296, 322);
+#else
+		xrect_Set_Rect(&frame, 85, 35, 133, 150);
+#endif
 		officer = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(officer, iupdate_Debrief);
 		xinpattr_Set_Input_User_Function(officer, iuser_Debrief);
@@ -577,8 +633,14 @@ ResFile* debrief_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 
 	/* Priest door (id=2) — skip if officer only */
 	if (shipext_Get_Mission_Officer() != 1) {
+#ifdef TIE_MODERN
 		bounds = active_spec->input_bounds[2];
 		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+		xrect_Set_Rect(&frame, 500, 134, 572, 316);
+#else
+		xrect_Set_Rect(&frame, 248, 51, 290, 128);
+#endif
 		priest = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(priest, iupdate_Debrief);
 		xinpattr_Set_Input_User_Function(priest, iuser_Debrief);
@@ -587,8 +649,14 @@ ResFile* debrief_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 	}
 
 	/* Fly-again area (id=3) */
+#ifdef TIE_MODERN
 	bounds = active_spec->input_bounds[3];
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 56, 26, 145, 345);
+#else
+	xrect_Set_Rect(&frame, 0, 0, 70, 200);
+#endif
 	flyagain = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(flyagain, iupdate_Debrief);
 	xinpattr_Set_Input_User_Function(flyagain, iuser_Debrief);
@@ -598,10 +666,11 @@ ResFile* debrief_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 	xview_Set_View_Update_Function(end_View);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
-	return resource;
-}
-
-void debrief_CloseScene(ResFile* resource, bool svga) {
+#ifdef TIE_MODERN
+	TieDebrief_RunView(resource, svga);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
 	xview_Enable_All_View_Erase();
 	xview_Clear_View_Update_Function();
 
@@ -609,6 +678,6 @@ void debrief_CloseScene(ResFile* resource, bool svga) {
 		xcursor_Hide_Cursor();
 
 	xres_Close_Resource(resource);
-	if (svga)
-		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
+	return xerror_Get_Landru_Exit();
+#endif
 }

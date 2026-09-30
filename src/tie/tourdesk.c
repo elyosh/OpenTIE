@@ -10,6 +10,9 @@
  */
 
 #include "tie/tourdesk.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/tourdesk_task.h"
+#endif
 #include "tie/shade.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
@@ -132,7 +135,13 @@ static const TourDeskSpec tourdesk_specs[] = {
 	},
 };
 
+#ifdef TIE_MODERN
 static const TourDeskSpec* active_spec;
+#elif defined(TIE98)
+static const TourDeskSpec* const active_spec = &tourdesk_specs[1];
+#else
+static const TourDeskSpec* const active_spec = &tourdesk_specs[0];
+#endif
 
 /* ---- Static globals ---- */
 
@@ -644,24 +653,41 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
  * Entry point
  * ================================================================ */
 
-void tourdesk_OpenScene(SceneHeadStruct* scene_head, bool svga) {
+// FUNCTION: TIE95 0x73790
+// FUNCTION: TIE98 0x490A20
+int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
+#ifdef TIE_MODERN
+	bool svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+#endif
 	Rect frame;
 	ResFile* res_file;
 	Input* inp;
 	int16_t i;
+#ifdef TIE_MODERN
 	const int16_t* bounds;
+#endif
 
+#ifdef TIE_MODERN
 	active_spec = &tourdesk_specs[svga ? 1 : 0];
-	if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-		(void)xsurface_Select_Surface_Set(active_spec->surface_set);
-		xview_Init_View(xview_Get_Current_View());
-	}
+#endif
+#ifdef TIE_MODERN
 	xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+#elif defined(TIE98)
+	xio_Set_Mouse_Position(320, 415);
+#else
+	xio_Set_Mouse_Position(150, 158);
+#endif
 	cur_tour_battle = pilot_record.cur_battle;
 
 	/* Load resources */
 	res_file = shellext_Open_Empire_Resource("tourdesk.lfd");
+#ifdef TIE_MODERN
 	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 0, 0, 640, 480);
+#else
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
+#endif
 
 	tourdesk_film = xfilm_Res_Film("tourdesk", &frame, 0, 0, 0);
 	xfilm_Set_Film_Def_Palette(tourdesk_film, scene_head->def_palette);
@@ -680,17 +706,36 @@ void tourdesk_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 	tourdesk_actor = xactor_Find_Actor(FOURCC_DELT, "toddesk");
 	xactor_Non_Refreshable_Actor(tourdesk_actor);
 
+#ifdef TIE_MODERN
 	door[0] = xactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[0]);
+#elif defined(TIE98)
+	door[0] = xactor_Find_Actor(FOURCC_ANIM, "lhdor");
+#else
+	door[0] = xactor_Find_Actor(FOURCC_ANIM, "lhdoor");
+#endif
+#ifdef TIE_MODERN
 	door[1] = xactor_Find_Actor(FOURCC_ANIM, active_spec->door_names[1]);
+#elif defined(TIE98)
+	door[1] = xactor_Find_Actor(FOURCC_ANIM, "rhdor");
+#else
+	door[1] = xactor_Find_Actor(FOURCC_ANIM, "rhdoor");
+#endif
 	for (i = 0; i < 2; i++) {
 		xactor_Set_Actor_User_Function(door[i], (xactorCallback)user_Door);
 		door[i]->id = i;
 	}
 
+#ifdef TIE_MODERN
 	button_actor[0] = xactor_Find_Actor(FOURCC_ANIM, active_spec->button_names[0]);
 	button_actor[1] = active_spec->button_names[1]
 						  ? xactor_Find_Actor(FOURCC_ANIM, active_spec->button_names[1])
 						  : button_actor[0];
+#elif defined(TIE98)
+	button_actor[0] = xactor_Find_Actor(FOURCC_ANIM, "upbutton");
+	button_actor[1] = xactor_Find_Actor(FOURCC_ANIM, "dnbutton");
+#else
+	button_actor[0] = xactor_Find_Actor(FOURCC_ANIM, "todbttn");
+#endif
 
 	/* Title label */
 	title_actor = xactdelt_Res_Delta_Actor("title", &frame, 0, 0, 0);
@@ -698,16 +743,34 @@ void tourdesk_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 	xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
 
 	/* Battle text custom actor */
+#ifdef TIE_MODERN
 	bounds = active_spec->battle_text_bounds;
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 169, 33, 512, 90);
+#else
+	xrect_Set_Rect(&frame, 72, 7, 256, 33);
+#endif
+#ifdef TIE_MODERN
 	battle_text_actor =
 		xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, active_spec->battle_text_zplane);
+#elif defined(TIE98)
+	battle_text_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 30);
+#else
+	battle_text_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 50);
+#endif
 	xactor_Set_Actor_Draw_Function(battle_text_actor, draw_Battle_Text);
 	battle_text_actor->id = 0;
 
 	/* Galaxy display custom actor */
+#ifdef TIE_MODERN
 	bounds = active_spec->galaxy_bounds;
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 166, 116, 512, 291);
+#else
+	xrect_Set_Rect(&frame, 72, 45, 256, 120);
+#endif
 	galaxy_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 50);
 	xactor_Set_Actor_User_Function(galaxy_actor, (xactorCallback)user_Battle);
 	xactor_Set_Actor_Draw_Function(galaxy_actor, draw_Battle);
@@ -719,15 +782,29 @@ void tourdesk_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 	galaxy_art_actor[pilot_record.cur_battle] = shipext_Get_Battle_Galaxy_Image();
 
 	/* Create XINPUT widgets */
+#ifdef TIE_MODERN
 	parent = NULL;
 	if (active_spec->create_input_parent) {
+#ifdef TIE_MODERN
 		xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+#elif defined(TIE98)
+		xrect_Set_Rect(&frame, 0, 0, 640, 480);
+#else
+		xrect_Set_Rect(&frame, 0, 0, 320, 200);
+#endif
 		parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
 	}
+#endif
 
 	/* Main Menu (id=0) */
+#ifdef TIE_MODERN
 	bounds = active_spec->input_bounds[0];
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 0, 229, 137, 390);
+#else
+	xrect_Set_Rect(&frame, 0, 92, 54, 162);
+#endif
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
 	xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
@@ -735,8 +812,14 @@ void tourdesk_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 	inp->id = 0;
 
 	/* Join/Cutscene (id=1) */
+#ifdef TIE_MODERN
 	bounds = active_spec->input_bounds[1];
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 552, 147, 639, 302);
+#else
+	xrect_Set_Rect(&frame, 286, 64, 320, 120);
+#endif
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
 	xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
@@ -744,8 +827,14 @@ void tourdesk_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 	inp->id = 1;
 
 	/* Next battle (id=2) */
+#ifdef TIE_MODERN
 	bounds = active_spec->input_bounds[2];
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 306, 401, 338, 434);
+#else
+	xrect_Set_Rect(&frame, 130, 132, 180, 164);
+#endif
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
 	xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
@@ -753,8 +842,14 @@ void tourdesk_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 	inp->id = 2;
 
 	/* Previous battle (id=3) */
+#ifdef TIE_MODERN
 	bounds = active_spec->input_bounds[3];
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 307, 436, 338, 466);
+#else
+	xrect_Set_Rect(&frame, 130, 164, 180, 196);
+#endif
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
 	xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
@@ -766,17 +861,16 @@ void tourdesk_OpenScene(SceneHeadStruct* scene_head, bool svga) {
 	xview_Set_View_Update_Function(end_View);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
-}
-
-void tourdesk_CloseScene(bool svga) {
+#ifdef TIE_MODERN
+	TieTourDesk_RunView(svga);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
 	xview_Enable_All_View_Erase();
 	xview_Clear_View_Update_Function();
 
 	if (xcursor_Is_Cursor_Visible())
 		xcursor_Hide_Cursor();
-
-	if (svga) {
-		xvesa_Erase_Video(16);
-		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
-	}
+	return xerror_Get_Landru_Exit();
+#endif
 }

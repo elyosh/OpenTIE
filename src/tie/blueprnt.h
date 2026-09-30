@@ -9,8 +9,7 @@
 extern "C" {
 #endif
 
-void blueprnt_OpenScene(SceneHeadStruct* the_head);
-void blueprnt_CloseScene(void);
+int16_t blueprnt_Blueprint(SceneHeadStruct* scene_head);
 
 int32_t blueprnt_Flight_Object_Size(void);
 

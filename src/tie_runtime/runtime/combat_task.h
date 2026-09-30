@@ -5,4 +5,6 @@
 
 void TieCombat_Begin(SceneHeadStruct* scene_head);
 
+void TieCombat_RunView(ResFile* resource, ResFile* train_resource, bool svga);
+
 #endif

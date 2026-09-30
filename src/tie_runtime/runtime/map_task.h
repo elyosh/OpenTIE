@@ -5,4 +5,6 @@
 
 void TieMap_Begin(SceneHeadStruct* head);
 
+void TieMap_RunView(void);
+
 #endif

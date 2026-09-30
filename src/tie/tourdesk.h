@@ -9,8 +9,7 @@
 extern "C" {
 #endif
 
-void tourdesk_OpenScene(SceneHeadStruct* scene_head, bool svga);
-void tourdesk_CloseScene(bool svga);
+int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head);
 
 #ifdef __cplusplus
 }

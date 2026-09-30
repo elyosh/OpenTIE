@@ -16,6 +16,9 @@
  */
 
 #include "tie/train.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/train_task.h"
+#endif
 #include "landru/actcust.h"
 #include "landru/actdelt.h"
 #include "landru/actor.h"
@@ -121,7 +124,13 @@ static const TrainSpec train_specs[] = {
 	},
 };
 
+#ifdef TIE_MODERN
 static const TrainSpec* active_spec;
+#elif defined(TIE98)
+static const TrainSpec* const active_spec = &train_specs[1];
+#else
+static const TrainSpec* const active_spec = &train_specs[0];
+#endif
 
 /* The first eight defaults are shared by both originals; TIE98 adds two
  * empty slots and displays all ten entries. */
@@ -866,39 +875,79 @@ static void train_idraw_Train_Screen(Input* input, Rect* draw_rect, Rect* clip_r
 
 /* ------------------------------------------------------------------ */
 
-void train_OpenScene(SceneHeadStruct* the_head, bool svga) {
+// FUNCTION: TIE95 0x6B4E8
+// FUNCTION: TIE98 0x491B30
+int16_t train_Train(SceneHeadStruct* the_head) {
+#ifdef TIE_MODERN
+	bool svga = TieProfile_FrontendId() == TIE_FRONTEND_PROFILE_TIE98;
+#endif
 	Rect frame;
 	const char* film_name;
 	TrainingScoreEntry loaded_scores[TRAIN_SCORE_ENTRY_COUNT];
 	int16_t i;
+#ifdef TIE_MODERN
 	const int16_t* bounds;
+#endif
 
+#ifdef TIE_MODERN
 	active_spec = &train_specs[svga ? 1 : 0];
-	if (active_spec->surface_set == LANDRU_SURFACE_SVGA) {
-		(void)xsurface_Select_Surface_Set(active_spec->surface_set);
-		xview_Init_View(xview_Get_Current_View());
-		xvesa_Erase_Video(16);
-	}
+#endif
 
+#ifdef TIE_MODERN
 	xio_Set_Mouse_Position(active_spec->mouse_x, active_spec->mouse_y);
+#elif defined(TIE98)
+	xio_Set_Mouse_Position(235, 465);
+#else
+	xio_Set_Mouse_Position(220, 190);
+#endif
 
+#ifdef TIE_MODERN
 	train_file = shellext_Open_Empire_Resource(active_spec->archive);
+#elif defined(TIE98)
+	train_file = shellext_Open_Empire_Resource("train640.lfd");
+#else
+	train_file = shellext_Open_Empire_Resource("train.lfd");
+#endif
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 
 	/* Select film based on scene: entry A = first visit, B = return */
+#ifdef TIE_MODERN
 	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 0, 0, 640, 480);
+#else
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
+#endif
+#ifdef TIE_MODERN
 	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? active_spec->film_a : train_film_b;
+#elif defined(TIE98)
+	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? "train640" : train_film_b;
+#else
+	film_name = (shellext_Get_Cur_Scene() == SCENE_TRAIN_A) ? "train" : train_film_b;
+#endif
 	train_film = xfilm_Res_Callback_Film(film_name, &frame, 0, 0, 0, train_film_Train_Callback);
 	xfilm_Set_Film_Def_Palette(train_film, the_head->def_palette);
 
 	/* World input (full screen) */
+#ifdef TIE_MODERN
 	xrect_Set_Rect(&frame, 0, 0, active_spec->width, active_spec->height);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 0, 0, 640, 480);
+#else
+	xrect_Set_Rect(&frame, 0, 0, 320, 200);
+#endif
 	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
 	/* Monitor screen input */
+#ifdef TIE_MODERN
 	bounds = active_spec->monitor_bounds;
 	xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+	xrect_Set_Rect(&frame, 144, 56, 500, 300);
+#else
+	xrect_Set_Rect(&frame, 62, 6, 254, 116);
+#endif
 	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(monitor_input, train_iupdate_Train_Screen);
 	xinpattr_Set_Input_User_Function(monitor_input, train_iuser_Train_Screen);
@@ -908,8 +957,52 @@ void train_OpenScene(SceneHeadStruct* the_head, bool svga) {
 
 	/* 6 navigation buttons */
 	for (i = 0; i < 6; i++) {
+#ifdef TIE_MODERN
 		bounds = active_spec->input_bounds[i];
 		xrect_Set_Rect(&frame, bounds[0], bounds[1], bounds[2], bounds[3]);
+#elif defined(TIE98)
+		switch (i) {
+			case 0:
+				xrect_Set_Rect(&frame, 377, 336, 398, 346);
+				break;
+			case 1:
+				xrect_Set_Rect(&frame, 398, 336, 422, 346);
+				break;
+			case 2:
+				xrect_Set_Rect(&frame, 386, 454, 416, 468);
+				break;
+			case 3:
+				xrect_Set_Rect(&frame, 416, 454, 446, 468);
+				break;
+			case 4:
+				xrect_Set_Rect(&frame, 212, 455, 252, 474);
+				break;
+			case 5:
+				xrect_Set_Rect(&frame, 453, 325, 522, 400);
+				break;
+		}
+#else
+		switch (i) {
+			case 0:
+				xrect_Set_Rect(&frame, 188, 138, 214, 154);
+				break;
+			case 1:
+				xrect_Set_Rect(&frame, 214, 138, 240, 154);
+				break;
+			case 2:
+				xrect_Set_Rect(&frame, 188, 154, 214, 170);
+				break;
+			case 3:
+				xrect_Set_Rect(&frame, 214, 154, 240, 170);
+				break;
+			case 4:
+				xrect_Set_Rect(&frame, 206, 184, 237, 200);
+				break;
+			case 5:
+				xrect_Set_Rect(&frame, 49, 181, 79, 200);
+				break;
+		}
+#endif
 		button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(button_input[i], train_iupdate_Train);
 		xinpattr_Set_Input_User_Function(button_input[i], train_iuser_Train);
@@ -919,7 +1012,11 @@ void train_OpenScene(SceneHeadStruct* the_head, bool svga) {
 
 	train_time = 0;
 	train_help = 0;
+#ifdef TIE_MODERN
 	train_monitor_needs_clear = active_spec->clear_monitor;
+#elif defined(TIE98)
+	train_monitor_needs_clear = true;
+#endif
 
 	bpflight_Open_Flight_Engine(1);
 	bpflight_Stop_Movie_Engine();
@@ -933,9 +1030,11 @@ void train_OpenScene(SceneHeadStruct* the_head, bool svga) {
 		}
 	}
 	xview_Set_View_Update_Function(train_end_Train_View);
-}
-
-void train_CloseScene(bool svga) {
+#ifdef TIE_MODERN
+	TieTrain_RunView(train_file, svga);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
 	xinpcall_Clear_Active_Input();
 	xview_Clear_View_Update_Function();
 	bpflight_Close_Flight_Engine();
@@ -945,9 +1044,6 @@ void train_CloseScene(bool svga) {
 		xcursor_Hide_Cursor();
 
 	xres_Close_Resource(train_file);
-	if (svga) {
-		xvesa_Erase_Video(16);
-		xviewadd_Clear_View();
-		(void)xsurface_Select_Surface_Set(LANDRU_SURFACE_VGA);
-	}
+	return xerror_Get_Landru_Exit();
+#endif
 }
