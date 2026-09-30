@@ -1106,13 +1106,7 @@ static void idraw_Pilot_Name(Input* input, Rect* frame, Rect* clip, int16_t refr
 	if (xinpattr_Is_Input_Active(&btn->header) && (int)strlen(btn->name) < TIE_PILOT_NAME_MAX && xio_Blink())
 		caret_color = xstyle_Get_Style_Down_Color();
 
-#ifdef TIE_MODERN
-	caret_y = TieProfile_UsesTie98Frontend() ? frame->top + xfont_Get_FontID_Height(3) + 1 : frame->top + 7;
-#elif defined(TIE98)
-	caret_y = frame->top + xfont_Get_FontID_Height(3) + 1;
-#else
-	caret_y = frame->top + 7;
-#endif
+	caret_y = frame->top + TIE_FRONTEND_EDITION(7, xfont_Get_FontID_Height(3) + 1);
 	xpaint_Horiz_Clipped_Line(frame->left + str_width + 4, caret_y, 5, caret_color);
 
 	if (xinpattr_Is_Input_Dirty(&btn->header))
@@ -1545,13 +1539,7 @@ static void idraw_Pilot_Info(Input* input, Rect* frame, Rect* clip, int16_t refr
 			int16_t inner_max;
 
 			inner = phase - 15;
-#ifdef TIE_MODERN
-			inner_max = TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(3) + 1 : 6;
-#elif defined(TIE98)
-			inner_max = xfont_Get_FontID_Height(3) + 1;
-#else
-			inner_max = 6;
-#endif
+			inner_max = TIE_FRONTEND_EDITION(6, xfont_Get_FontID_Height(3) + 1);
 			if (inner > inner_max)
 				inner = inner_max;
 		}

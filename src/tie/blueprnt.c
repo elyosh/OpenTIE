@@ -406,16 +406,13 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 		return 1;
 
 	t_name = blueprint_info_time - 8;
-#ifdef TIE_MODERN
-	font_id = TieProfile_UsesTie98Frontend() ? 3 : 1;
-	line_height = TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(font_id) : 8;
-#elif defined(TIE98)
-	font_id = 3;
-	line_height = xfont_Get_FontID_Height(font_id);
-#else
-	font_id = 1;
-	line_height = 8;
-#endif
+	if (TIE_FRONTEND_TIE98) {
+		font_id = 3;
+		line_height = xfont_Get_FontID_Height(font_id);
+	} else {
+		font_id = 1;
+		line_height = 8;
+	}
 	if (t_name >= 0) {
 		int16_t fade;
 		xrect_Copy_Rect(&dst, draw_rect);
@@ -448,21 +445,13 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 		int16_t num_lines = shipext_Get_Num_Blueprint_Ship_Lines();
 		int16_t i;
 		xrect_Copy_Rect(&dst, draw_rect);
-#ifdef TIE_MODERN
-		if (TieProfile_UsesTie98Frontend()) {
+		if (TIE_FRONTEND_TIE98) {
 			dst.bottom = 310;
 			dst.top = dst.bottom - line_height;
 		} else {
 			dst.top = 152;
 			dst.bottom = 160;
 		}
-#elif defined(TIE98)
-		dst.bottom = 310;
-		dst.top = dst.bottom - line_height;
-#else
-		dst.top = 152;
-		dst.bottom = 160;
-#endif
 		xrect_Offset_Rect(&dst, 0, -line_height * (num_lines + 1));
 
 		for (i = 0; i < num_lines; i++) {
@@ -540,14 +529,7 @@ int32_t blueprnt_Flight_Object_Size(void) {
 int16_t blueprnt_Blueprint(SceneHeadStruct* the_head) {
 	Rect frame;
 	int16_t i;
-#ifdef TIE_MODERN
-	xio_Set_Mouse_Position(TieProfile_UsesTie98Frontend() ? 512 : 256,
-						   TieProfile_UsesTie98Frontend() ? 352 : 156);
-#elif defined(TIE98)
-	xio_Set_Mouse_Position(512, 352);
-#else
-	xio_Set_Mouse_Position(256, 156);
-#endif
+	xio_Set_Mouse_Position(TIE_FRONTEND_EDITION(256, 512), TIE_FRONTEND_EDITION(156, 352));
 
 	blueprint_file = shellext_Open_Empire_Resource(blueprint_str[0]);
 	xviewadd_Clear_View();

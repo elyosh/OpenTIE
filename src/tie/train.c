@@ -136,10 +136,8 @@ static int32_t train_mode;
 // GLOBAL: TIE95 0xF57A8
 // GLOBAL: TIE98 0x58AAF8
 static int16_t train_help;
-#if defined(TIE98) || defined(TIE_MODERN)
 // GLOBAL: TIE98 0x58AAEC
 static int32_t train_monitor_needs_clear;
-#endif
 
 /* train_pilot_medal_status: snapshot of train_max_level[ship] BEFORE the
  * training round so map.c (TRAIN_MAP scene) can detect a fresh max-level
@@ -576,24 +574,16 @@ static void train_iuser_Train_Screen(Input* input, int32_t time) {
 	if (train_time == 0) {
 		train_time = 1;
 		train_mode = 0;
-#ifdef TIE_MODERN
 		if (TIE_FRONTEND_TIE98)
 			train_monitor_needs_clear = 1;
-#elif defined(TIE98)
-		train_monitor_needs_clear = 1;
-#endif
 		return;
 	}
 
 	if (train_time == 256) {
 		train_time++;
 		train_mode = 1;
-#ifdef TIE_MODERN
 		if (TIE_FRONTEND_TIE98)
 			train_monitor_needs_clear = 1;
-#elif defined(TIE98)
-		train_monitor_needs_clear = 1;
-#endif
 		return;
 	}
 
@@ -602,24 +592,16 @@ static void train_iuser_Train_Screen(Input* input, int32_t time) {
 		bpflight_Open_New_Matrix("trnfly1");
 		train_mode = 2;
 		train_time++;
-#ifdef TIE_MODERN
 		if (TIE_FRONTEND_TIE98)
 			train_monitor_needs_clear = 1;
-#elif defined(TIE98)
-		train_monitor_needs_clear = 1;
-#endif
 		return;
 	}
 
 	if (train_time == 767) {
 		bpflight_Stop_Movie_Engine();
 		train_time = 0;
-#ifdef TIE_MODERN
 		if (TIE_FRONTEND_TIE98)
 			train_monitor_needs_clear = 1;
-#elif defined(TIE98)
-		train_monitor_needs_clear = 1;
-#endif
 		return;
 	}
 

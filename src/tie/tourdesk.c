@@ -119,12 +119,8 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
 static void end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
-#ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend())
+	if (TIE_FRONTEND_TIE98)
 		xactor_Set_Actor_ZPlane(tourdesk_actor, 40);
-#elif defined(TIE98)
-	xactor_Set_Actor_ZPlane(tourdesk_actor, 40);
-#endif
 	if (!xcursor_Is_Cursor_Visible())
 		xcursor_Show_Cursor();
 }
@@ -339,13 +335,7 @@ static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, 
 
 	xpaint_Paint_Clipped_Rect(r, 0);
 	xrect_Copy_Rect(&dst, r);
-#ifdef TIE_MODERN
-	line_height = TieProfile_UsesTie98Frontend() ? (int16_t)xfont_Get_FontID_Height(font_id) : 9;
-#elif defined(TIE98)
-	line_height = (int16_t)xfont_Get_FontID_Height(font_id);
-#else
-	line_height = 9;
-#endif
+	line_height = TIE_FRONTEND_EDITION(9, (int16_t)xfont_Get_FontID_Height(font_id));
 	dst.bottom = dst.top + line_height;
 
 	for (i = 0; i < 3; i++) {
@@ -483,12 +473,8 @@ static void Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int1
 	art = galaxy_art_actor[pilot_record.cur_battle];
 	xactor_Get_Actor_Bounds(art, &bounds);
 	xrect_Offset_Rect(&bounds, view_r->left, view_r->top);
-#ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend())
+	if (TIE_FRONTEND_TIE98)
 		xrect_Clip_Rect(&bounds, clip_r);
-#elif defined(TIE98)
-	xrect_Clip_Rect(&bounds, clip_r);
-#endif
 
 	t = time - 32;
 	if (!xrect_Empty_Rect(&bounds))
@@ -582,31 +568,19 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
 		return 0;
 
 	shipext_Get_Battle_Galaxy_Rect(&galaxy_rect);
-#ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend()) {
+	if (TIE_FRONTEND_TIE98) {
 		galaxy_rect.top *= 2;
 		galaxy_rect.left *= 2;
 		galaxy_rect.bottom *= 2;
 		galaxy_rect.right *= 2;
 	}
-#elif defined(TIE98)
-	galaxy_rect.top *= 2;
-	galaxy_rect.left *= 2;
-	galaxy_rect.bottom *= 2;
-	galaxy_rect.right *= 2;
-#endif
 	xrect_Offset_Rect(&galaxy_rect, r->left, r->top);
 
 	if (!galaxy_art_actor[pilot_record.cur_battle]) {
-#ifdef TIE_MODERN
-		if (TieProfile_UsesTie98Frontend()) {
+		if (TIE_FRONTEND_TIE98) {
 			xactor_Refresh_Actor(tourdesk_actor);
 			xactor_Dirty_Actor(tourdesk_actor);
 		}
-#elif defined(TIE98)
-		xactor_Refresh_Actor(tourdesk_actor);
-		xactor_Dirty_Actor(tourdesk_actor);
-#endif
 		xdirty_Dirty_Rect(r);
 		return 1;
 	}
@@ -619,15 +593,10 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
 	Draw_Battle_Four(&galaxy_rect, r, clip_r, t);
 	Draw_Battle_Five(r, clip_r, t);
 
-#ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend()) {
+	if (TIE_FRONTEND_TIE98) {
 		xactor_Refresh_Actor(tourdesk_actor);
 		xactor_Dirty_Actor(tourdesk_actor);
 	}
-#elif defined(TIE98)
-	xactor_Refresh_Actor(tourdesk_actor);
-	xactor_Dirty_Actor(tourdesk_actor);
-#endif
 	xdirty_Dirty_Rect(r);
 	return 1;
 }

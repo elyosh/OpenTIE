@@ -263,48 +263,24 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 	if (id == 5) {
 		/* Start button */
 		if (mouseState == 3 || prevMouseState == 3) {
-#ifdef TIE_MODERN
-			xactor_Set_Actor_State(button[TieProfile_UsesTie98Frontend() ? tie98_button_index : 1],
-								   TieProfile_UsesTie98Frontend() ? 0 : 2, 0);
-#elif defined(TIE98)
-			xactor_Set_Actor_State(button[tie98_button_index], 0, 0);
-#else
-			xactor_Set_Actor_State(button[1], 2, 0);
-#endif
+			xactor_Set_Actor_State(button[TIE_FRONTEND_EDITION(1, tie98_button_index)],
+								   TIE_FRONTEND_EDITION(2, 0), 0);
 			xinpattr_Selected_Input(input);
 		} else {
 			if (mouseState == 1 || prevMouseState == 1)
 				soundext_Play_SFX(sfxButton, 80);
-#ifdef TIE_MODERN
-			xactor_Set_Actor_State(button[TieProfile_UsesTie98Frontend() ? tie98_button_index : 1],
-								   TieProfile_UsesTie98Frontend() ? 1 : 3, 0);
-#elif defined(TIE98)
-			xactor_Set_Actor_State(button[tie98_button_index], 1, 0);
-#else
-			xactor_Set_Actor_State(button[1], 3, 0);
-#endif
+			xactor_Set_Actor_State(button[TIE_FRONTEND_EDITION(1, tie98_button_index)],
+								   TIE_FRONTEND_EDITION(3, 1), 0);
 		}
 	} else if (id == 6) {
 		/* Exit door */
 		if (mouseState == 3 || prevMouseState == 3) {
-#ifdef TIE_MODERN
-			xactor_Set_Actor_State(button[TieProfile_UsesTie98Frontend() ? tie98_button_index : 0], 0, 0);
-#elif defined(TIE98)
-			xactor_Set_Actor_State(button[tie98_button_index], 0, 0);
-#else
-			xactor_Set_Actor_State(button[0], 0, 0);
-#endif
+			xactor_Set_Actor_State(button[TIE_FRONTEND_EDITION(0, tie98_button_index)], 0, 0);
 			xinpattr_Selected_Input(input);
 		} else {
 			if (mouseState == 1 || prevMouseState == 1)
 				soundext_Play_SFX(sfxButton, 80);
-#ifdef TIE_MODERN
-			xactor_Set_Actor_State(button[TieProfile_UsesTie98Frontend() ? tie98_button_index : 0], 1, 0);
-#elif defined(TIE98)
-			xactor_Set_Actor_State(button[tie98_button_index], 1, 0);
-#else
-			xactor_Set_Actor_State(button[0], 1, 0);
-#endif
+			xactor_Set_Actor_State(button[TIE_FRONTEND_EDITION(0, tie98_button_index)], 1, 0);
 		}
 	} else {
 		/* Nav buttons 1-4 */
@@ -535,24 +511,12 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 	num_lines = shipext_Num_Combat_Mission_Text_Lines();
 
 	font_id = TIE_FRONTEND_EDITION(0, 2);
-#ifdef TIE_MODERN
-	line_height = TieProfile_UsesTie98Frontend() ? (int16_t)xfont_Get_FontID_Height(font_id) : 10;
-#elif defined(TIE98)
-	line_height = (int16_t)xfont_Get_FontID_Height(font_id);
-#else
-	line_height = 10;
-#endif
+	line_height = TIE_FRONTEND_EDITION(10, (int16_t)xfont_Get_FontID_Height(font_id));
 	dst.top += (dst.bottom - dst.top - (line_height * num_lines + 18)) >> 1;
 
 	text_x = dst.left + TIE_FRONTEND_EDITION(2, 4);
 	text_y = dst.top + 10;
-#ifdef TIE_MODERN
-	dst.bottom = dst.top + (TieProfile_UsesTie98Frontend() ? 9 + line_height : 18);
-#elif defined(TIE98)
-	dst.bottom = dst.top + (9 + line_height);
-#else
-	dst.bottom = dst.top + (18);
-#endif
+	dst.bottom = dst.top + (TIE_FRONTEND_EDITION(18, 9 + line_height));
 
 	max_width = 0;
 	for (i = 0; i < num_lines; i++) {
@@ -666,13 +630,7 @@ static void combat_Draw_Combat_Screen_Score(Rect* src) {
 
 	rec = &combat_score_data[mi];
 
-#ifdef TIE_MODERN
-	displayed_scores = TieProfile_UsesTie98Frontend() ? GAME_SCORE_ENTRY_COUNT : 8;
-#elif defined(TIE98)
-	displayed_scores = GAME_SCORE_ENTRY_COUNT;
-#else
-	displayed_scores = 8;
-#endif
+	displayed_scores = TIE_FRONTEND_EDITION(8, GAME_SCORE_ENTRY_COUNT);
 	for (i = 0; i < displayed_scores && t >= 0; i++) {
 		int16_t fade = (t + 16 > 31) ? 31 : t + 16;
 		char display_name[GAME_SCORE_NAME_CAPACITY];
@@ -688,13 +646,10 @@ static void combat_Draw_Combat_Screen_Score(Rect* src) {
 			xfont_Print_Clipped_Text(string, kills_x, y, font_id, fade);
 		}
 
-#ifdef TIE_MODERN
-		y += TieProfile_UsesTie98Frontend() ? xfont_Get_FontID_Height(2) + 2 : 12;
-#elif defined(TIE98)
-		y += xfont_Get_FontID_Height(2) + 2;
-#else
-		y += 12;
-#endif
+		if (TIE_FRONTEND_TIE98)
+			y += xfont_Get_FontID_Height(2) + 2;
+		else
+			y += 12;
 		t -= 4;
 	}
 }

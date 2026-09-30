@@ -6,6 +6,7 @@
 #include "tie/combat.h"
 #include "tie/credits.h"
 #include "tie/debrief.h"
+#include "tie/edition.h"
 #include "tie/filmview.h"
 #include "tie/frontend_display_tie98.h"
 #include "tie/mainmenu.h"
@@ -220,13 +221,7 @@ int32_t shell_Shell(int32_t scene, int32_t script) {
 #endif
 				if (cur_scene == SCENE_FILM_REPLAY) {
 					gamesnd_game_Set_Flight_Sound();
-#ifdef TIE_MODERN
-					flightResolution = TieProfile_UsesTie98Logic() ? TIE_FLIGHT_RES_SVGA : TIE_FLIGHT_RES_VGA;
-#elif defined(TIE98)
-					flightResolution = TIE_FLIGHT_RES_SVGA;
-#else
-				flightResolution = TIE_FLIGHT_RES_VGA;
-#endif
+					flightResolution = TIE_FLIGHT_EDITION(TIE_FLIGHT_RES_VGA, TIE_FLIGHT_RES_SVGA);
 					xstream_Exit_Stream_Engine(0);
 #ifdef TIE_MODERN
 					TieFlightTask_Begin(1);
