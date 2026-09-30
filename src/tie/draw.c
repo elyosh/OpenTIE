@@ -280,76 +280,70 @@ static Vec3f g_hyperspaceStreakQuadVertices[4] = {
 	{ -64.0f, 0.0f, 0.0f },
 };
 
-// GLOBAL: TIE98 0x4E3D58
-static OptTexCoordTIE98 g_hyperspaceStreakQuadTexCoords[4] = {
-	{ 1.0f, 0.0f },
-	{ 1.0f, 1.0f },
-	{ 0.0f, 1.0f },
-	{ 0.0f, 0.0f },
-};
+typedef struct HyperspaceStreakFacePayloadTIE98 {
+	int32_t edgeCount;
+	FaceRecordTIE98 face;
+	Vec3f faceNormal;
+	FaceTextureGradientsTIE98 textureGradients;
+} HyperspaceStreakFacePayloadTIE98;
 
-// GLOBAL: TIE98 0x4E3D90
-static Vec3f g_hyperspaceStreakQuadVertNormals[1] = {
-	{ 0.0f, 0.0f, 1.0f },
-};
-
-typedef struct HyperspaceStreakQuadFaceDataTIE98 {
-	int edgeCount;
-	FaceRecordTIE98 faces[1];
-	Vec3f faceNormals[1];
-	FaceTextureGradientsTIE98 faceTexturing[1];
-} HyperspaceStreakQuadFaceDataTIE98;
-
-// GLOBAL: TIE98 0x4E3DB8
-static HyperspaceStreakQuadFaceDataTIE98 g_hyperspaceStreakQuadFaceData = {
-	4,
-	{
-		{
-			{ 0, 1, 2, 3 },
-			{ 0, 1, 2, 3 },
-			{ 0, 0, 0, 0 },
-			{ 1, 2, 3, 0 },
-		},
-	},
-	{ { 0.0f, 0.0f, 1.0f } },
-	{ { { 1.0f, 1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } } },
-};
+/* The streak quad's OPT nodes and payloads form one contiguous block, as in
+ * OpenXvT. The face's vertex-normal indices run past the single normal into
+ * the following padding and node, as in the original. */
+typedef struct HyperspaceStreakEmbeddedModelDataTIE98 {
+	Tie98OptNode verticesNode;
+	OptTexCoordTIE98 texCoords[4];
+	Tie98OptNode texCoordsNode;
+	Vec3f normal;
+	int32_t normalNodePadding;
+	Tie98OptNode normalsNode;
+	HyperspaceStreakFacePayloadTIE98 facePayload;
+	Tie98OptNode faceNode;
+	Tie98OptNode* childNodes[4];
+	Tie98OptNode rootNode;
+	Tie98OptNode* rootNodes[1];
+	int32_t trailingPadding;
+} HyperspaceStreakEmbeddedModelDataTIE98;
 
 // GLOBAL: TIE98 0x4E3D40
-static Tie98OptNode g_hyperspaceStreakQuadVertsNode = {
-	NULL, TIE98_OPT_NODE_MESH_VERTICES, 0, NULL, 4, g_hyperspaceStreakQuadVertices,
-};
-// GLOBAL: TIE98 0x4E3D78
-static Tie98OptNode g_hyperspaceStreakQuadTexCoordsNode = {
-	NULL, TIE98_OPT_NODE_TEXTURE_COORDINATES, 0, NULL, 4, g_hyperspaceStreakQuadTexCoords,
-};
-// GLOBAL: TIE98 0x4E3DA0
-static Tie98OptNode g_hyperspaceStreakQuadVertNormalsNode = {
-	NULL, TIE98_OPT_NODE_VERTEX_NORMALS, 0, NULL, 1, g_hyperspaceStreakQuadVertNormals,
-};
-// GLOBAL: TIE98 0x4E3E20
-static Tie98OptNode g_hyperspaceStreakQuadFaceNode = {
-	NULL, TIE98_OPT_NODE_FACE_DATA, 0, NULL, 1, &g_hyperspaceStreakQuadFaceData,
-};
-// GLOBAL: TIE98 0x4E3E38
-static Tie98OptNode* g_hyperspaceStreakQuadRootChildren[4] = {
-	&g_hyperspaceStreakQuadVertsNode,
-	&g_hyperspaceStreakQuadTexCoordsNode,
-	&g_hyperspaceStreakQuadVertNormalsNode,
-	&g_hyperspaceStreakQuadFaceNode,
-};
-// GLOBAL: TIE98 0x4E3E48
-static Tie98OptNode g_hyperspaceStreakQuadRootNode = {
-	NULL, TIE98_OPT_NODE_GROUP, 4, g_hyperspaceStreakQuadRootChildren, 4, g_hyperspaceStreakQuadRootChildren,
-};
-// GLOBAL: TIE98 0x4E3E60
-static Tie98OptNode* g_hyperspaceStreakQuadRootNodes[1] = {
-	&g_hyperspaceStreakQuadRootNode,
+static HyperspaceStreakEmbeddedModelDataTIE98 g_hyperspaceStreakEmbeddedModelData = {
+	{ NULL, TIE98_OPT_NODE_MESH_VERTICES, 0, NULL, { 4 }, g_hyperspaceStreakQuadVertices },
+	{ { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.0f } },
+	{ NULL,
+	  TIE98_OPT_NODE_TEXTURE_COORDINATES,
+	  0,
+	  NULL,
+	  { 4 },
+	  g_hyperspaceStreakEmbeddedModelData.texCoords },
+	{ 0.0f, 0.0f, 1.0f },
+	0,
+	{ NULL, TIE98_OPT_NODE_VERTEX_NORMALS, 0, NULL, { 1 }, &g_hyperspaceStreakEmbeddedModelData.normal },
+	{
+		4,
+		{ { 0, 1, 2, 3 }, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, { 0, 1, 2, 3 } },
+		{ 0.0f, 0.0f, 1.0f },
+		{ { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+	},
+	{ NULL, TIE98_OPT_NODE_FACE_DATA, 0, NULL, { 1 }, &g_hyperspaceStreakEmbeddedModelData.facePayload },
+	{
+		&g_hyperspaceStreakEmbeddedModelData.verticesNode,
+		&g_hyperspaceStreakEmbeddedModelData.texCoordsNode,
+		&g_hyperspaceStreakEmbeddedModelData.normalsNode,
+		&g_hyperspaceStreakEmbeddedModelData.faceNode,
+	},
+	{ NULL,
+	  TIE98_OPT_NODE_GROUP,
+	  4,
+	  g_hyperspaceStreakEmbeddedModelData.childNodes,
+	  { 4 },
+	  g_hyperspaceStreakEmbeddedModelData.childNodes },
+	{ &g_hyperspaceStreakEmbeddedModelData.rootNode },
+	0,
 };
 
 // GLOBAL: TIE98 0x4E3E68
 static Tie98OptimizedPolyObject g_hyperspaceModelHeaderPatch = {
-	0, 1, g_hyperspaceStreakQuadRootNodes, NULL, 0, 0,
+	0, 1, g_hyperspaceStreakEmbeddedModelData.rootNodes, NULL, 0, 0,
 };
 
 // GLOBAL: TIE98 0x591E30

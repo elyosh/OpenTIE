@@ -67,7 +67,7 @@ extern int16_t bpflight_pivotroll[3];
 Actor* bpflight_Open_Flight_Engine(int16_t scene);
 
 /* Shut down the viewer. Frees xtransdata, fltobj_data, optional obstacle
- * heap, the orbit Matrix, restores flightResolution from tempRes, and
+ * heap, the orbit Matrix, rebuilds flightResolution from the f_res preference, and
  * resets the VESA video base pointer. Clears bpflightflag. */
 void bpflight_Close_Flight_Engine(void);
 

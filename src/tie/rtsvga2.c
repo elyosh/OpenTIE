@@ -69,13 +69,13 @@ static uint32_t lastpageA = 0xFFFFFFFFu;
 static uint32_t lastpageB = 0xFFFFFFFFu;
 
 /* fillrectangle / autofill scratch state (module-local in demo watdbg). */
-// GLOBAL: TIE95 0xDE772
-static int16_t topfill;
 // GLOBAL: TIE95 0xDE776
+static int16_t topfill;
+// GLOBAL: TIE95 0xDE772
 static int16_t bottomfill;
-// GLOBAL: TIE95 0xDE77A
-static int16_t leftfill;
 // GLOBAL: TIE95 0xDE77C
+static int16_t leftfill;
+// GLOBAL: TIE95 0xDE77A
 static int16_t rightfill;
 /* fillrectangle per-row y counter */
 // GLOBAL: TIE95 0xDE778

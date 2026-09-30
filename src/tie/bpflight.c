@@ -1,5 +1,6 @@
 #include "tie/bpflight.h"
 #ifdef TIE_MODERN
+#include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/flight_task.h"
 #endif
 
@@ -234,8 +235,6 @@ static int16_t bpid[3]; /* mode tag copied into actor->id */
 // GLOBAL: TIE95 0xF64F0
 // GLOBAL: TIE98 0x50A9C8
 static int fullstarupdate;
-// GLOBAL: TIE95 0xF6564
-static int16_t tempRes;
 // GLOBAL: TIE95 0xF6566
 // GLOBAL: TIE98 0x4FA668
 static int16_t cur_flight_scene;
@@ -296,7 +295,6 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	int i;
 	int j;
 
-	tempRes = flightResolution;
 	flightResolution = frontResolution;
 	tie_initflightresolution();
 	matrix = NULL;
@@ -548,7 +546,30 @@ void bpflight_Close_Flight_Engine(void) {
 		matrix = NULL;
 	}
 	bpflightflag = 0;
-	flightResolution = tempRes;
+#ifdef TIE_MODERN
+	/* PORT: the flight profile replaces the f_res preference. */
+	flightResolution = (int16_t)TieClassicDisplay_FlightMode();
+#elif defined(TIE98)
+	switch (f_res) {
+		case 0:
+			flightResolution = TIE_FLIGHT_RES_VGA;
+			break;
+		case 1:
+			flightResolution = TIE_FLIGHT_RES_SVGA;
+			break;
+		case 2:
+			flightResolution = TIE_FLIGHT_RES_SVGA_16;
+			break;
+		case 3:
+			flightResolution = TIE_FLIGHT_RES_SVGA_D3D;
+			break;
+	}
+#else
+	if (f_res == 0)
+		flightResolution = TIE_FLIGHT_RES_VGA;
+	else if (f_res == 1)
+		flightResolution = TIE_FLIGHT_RES_SVGA;
+#endif
 	/* Restore the framebuffer alias retail rebinds to 0xA0000 here.
 	 * In the SDL port that's vesa_buff_gbl (the Landru framebuffer that
 	 * the presenter scans out). Leaving it NULL would segfault every

@@ -69,15 +69,16 @@ bool TieClassicDisplay_ActivateFrontend(void) {
 	return TieClassicDisplay_Activate(TIE_CLASSIC_DISPLAY_OWNER_FRONTEND, version, (uint16_t)frontResolution);
 }
 
-bool TieClassicDisplay_ActivateFlight(void) {
+uint16_t TieClassicDisplay_FlightMode(void) {
 	const TieFlightProfile* profile = TieProfile_Flight();
-	uint16_t mode;
-	if (profile->version == TIE_GAME_VERSION_TIE98) {
-		mode = profile->tie98_original_renderer == TIE98_ORIGINAL_RENDERER_D3D ? TIE_FLIGHT_RES_SVGA_D3D
+	if (profile->version == TIE_GAME_VERSION_TIE98)
+		return profile->tie98_original_renderer == TIE98_ORIGINAL_RENDERER_D3D ? TIE_FLIGHT_RES_SVGA_D3D
 																			   : TIE_FLIGHT_RES_SVGA_16;
-	} else
-		mode = f_res == 1 ? TIE_FLIGHT_RES_SVGA : TIE_FLIGHT_RES_VGA;
-	return TieClassicDisplay_ActivateFlightMode(mode);
+	return f_res == 1 ? TIE_FLIGHT_RES_SVGA : TIE_FLIGHT_RES_VGA;
+}
+
+bool TieClassicDisplay_ActivateFlight(void) {
+	return TieClassicDisplay_ActivateFlightMode(TieClassicDisplay_FlightMode());
 }
 
 bool TieClassicDisplay_ActivateFlightMode(uint16_t mode) {

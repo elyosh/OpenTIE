@@ -11,6 +11,9 @@ typedef enum TieClassicOutputKind {
 
 bool TieClassicDisplay_InitializeFrontend(void);
 bool TieClassicDisplay_ActivateFrontend(void);
+/* flightResolution selected by the flight profile (the original derives it
+ * from the f_res preference). */
+uint16_t TieClassicDisplay_FlightMode(void);
 bool TieClassicDisplay_ActivateFlight(void);
 bool TieClassicDisplay_ActivateFlightMode(uint16_t mode);
 
