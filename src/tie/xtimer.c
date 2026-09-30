@@ -1,3 +1,4 @@
+// FLAGS: TIE95 -s
 #include "tie/xtimer.h"
 
 #ifdef TIE_MODERN

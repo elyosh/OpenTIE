@@ -1,3 +1,4 @@
+// FLAGS: TIE95 -od
 #include "tie/shell.h"
 #include "tie/armship.h"
 #include "tie/blueprnt.h"

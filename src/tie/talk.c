@@ -1,3 +1,4 @@
+// FLAGS: TIE95 -od
 #include "tie/talk.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/talk_task.h"

@@ -1,3 +1,4 @@
+// FLAGS: TIE95 -od
 #include "tie/gamesnd.h"
 #include "tie/cdaudio_tie98.h"
 #include "tie/fmusic.h"

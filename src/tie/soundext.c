@@ -1,3 +1,4 @@
+// FLAGS: TIE95 -od
 #include "tie/soundext.h"
 #include "tie/shellext.h"
 #include "tie/wavestream_tie98.h"
