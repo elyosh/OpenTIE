@@ -1036,8 +1036,6 @@ int32_t rotlightY;
 int32_t rotlightZ;
 // GLOBAL: TIE98 0x4F2A70
 int32_t g_localLightsEnabled = 1;
-// GLOBAL: TIE98 0x4F3C68
-int32_t g_explosionLightBase = 256;
 // GLOBAL: TIE95 0xEB144
 int16_t thicknessMultiple;
 
@@ -1143,10 +1141,6 @@ uint8_t mapiconsloaded;
  * transient runtime toggle. tie_simulator sets it to 1 at startup. */
 // GLOBAL: TIE95 0xEB766
 uint8_t palette_cycle_user;
-
-/* Always zero because the host does not use DOS expanded memory. */
-// GLOBAL: TIE95 0xD5B0C
-int panels_in_ems;
 
 /* Write-only simulator initialization flags. */
 // GLOBAL: TIE95 0xEB76C
@@ -1621,7 +1615,7 @@ int tie_makelocallights_tie98(FlightObject* src_obj) {
 			if (mission.train_craft_type)
 				out->range /= 8;
 		} else {
-			out->range = g_explosionLightBase - 256;
+			out->range = (int32_t)brightness_setting - 256;
 		}
 		out->range *= 8;
 
@@ -2780,7 +2774,7 @@ void tie_simulator(int replay_mode) {
 #else
 		replaymaxcnt = 0x20000;
 #endif
-		panels_in_ems = 0;
+		panelsloadedflag = 0;
 		blastcount = 0;
 #ifdef TIE_MODERN
 		g_engineSoundPreviousPlayerSpecies = -1;

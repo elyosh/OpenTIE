@@ -662,8 +662,8 @@ int16_t create_createmission(void) {
 		}
 	}
 
-	/* A live panel cache is retained across replay restoration. */
-	if (!panels_in_ems) {
+	/* A loaded panel cache is retained across replay restoration. */
+	if (!panelsloadedflag) {
 		fsfx_loadvoicelfd();
 		panel_loadpaneldata();
 	}

@@ -1617,7 +1617,6 @@ void tie_updatescreen(void);
 int tie_makelocallights(int obj_idx);
 int tie_makelocallights_tie98(FlightObject* source_object);
 extern int32_t g_localLightsEnabled;
-extern int32_t g_explosionLightBase;
 void tie_getobjecteyexyz(uint16_t obj_idx);
 int16_t tie_checkobjecteyexyz(uint16_t obj_idx, uint16_t bound);
 int16_t tie_checkstaticobjecteyexyz(int16_t wx, int16_t wy, int16_t wz, uint16_t bound);
@@ -1716,9 +1715,6 @@ extern int16_t blinkticks;
  * tie_simulator at start; toggled by OPTION_optionsroom row 6. Read by
  * GAMESND_Host_Int alongside colorcycleflag to gate palette cycling. */
 extern uint8_t palette_cycle_user;
-
-/* Always zero because the host does not use DOS expanded memory. */
-extern int panels_in_ems;
 
 /* Write-only TIE_simulator initialization flags. */
 extern uint32_t special_features_flag;

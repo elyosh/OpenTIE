@@ -929,8 +929,6 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 			festring_outstringcenter((const uint8_t*)banner);
 	}
 
-	/* Reset both panel-loaded signals. */
-	panels_in_ems = 0;
 	panelsloadedflag = 0;
 
 	if (voiceenabled | sfxenabled) {
