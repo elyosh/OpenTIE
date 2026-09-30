@@ -32,6 +32,7 @@
 #include "tie_runtime/snapshot/snapshot_hud.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 #include "tie_runtime/storage/storage.h"
+#include "tie_runtime/storage/string_table.h"
 #include "tie_runtime/timing/replay_timing.h"
 #include "tie_runtime/timing/sim_clock.h"
 
@@ -137,6 +138,7 @@ void TieRuntime_Shutdown(void) {
 	s_tie98_display_initialized = false;
 	TieAudio_Configure(NULL);
 	TieFlightAssets_Shutdown();
+	TieStringTable_Clear();
 	TieInflightOptions_Reset();
 	TieStorage_Shutdown();
 	s_quit_requested = false;

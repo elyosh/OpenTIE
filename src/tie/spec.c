@@ -982,10 +982,7 @@ static const uint8_t spec_data_retail_bytes[] = {
 
 SpecData spec_data[NUM_SPEC_DATA];
 
-/* Full-width name pointers cannot be stored in the packed 32-bit field. */
-const char* spec_name_ptrs[NUM_SPEC_DATA];
-
-/* Blob name pointers are invalid host addresses and are replaced during load. */
+/* Original packed species values; native display names are separate runtime data. */
 __attribute__((constructor)) static void spec_data_init_retail(void) {
 	_Static_assert(sizeof(spec_data) == sizeof(spec_data_retail_bytes),
 				   "spec_data size differs from Z_TIE__.EXE blob");

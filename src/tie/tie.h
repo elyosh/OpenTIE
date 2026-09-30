@@ -1138,8 +1138,12 @@ typedef struct {
 #pragma pack(push, 1)
 #endif
 typedef struct {
-	char short_name[10];    /* +0x00: HUD/radio abbreviation ("X-W", "T/F", "MIS") */
-	int32_t name_ptr;       /* +0x0A: char* to species display name (from STRINGS.DAT) */
+	char short_name[10]; /* +0x00: HUD/radio abbreviation ("X-W", "T/F", "MIS") */
+#ifdef TIE_MODERN
+	int32_t name_ptr; /* +0x0A: original-width pointer slot; native names live in runtime storage */
+#else
+	char* name_ptr; /* +0x0A: species display name from STRINGS.DAT */
+#endif
 	uint8_t kill_value;     /* +0x0E: kill score value for scoring */
 	uint8_t field_0F;       /* +0x0F */
 	uint8_t has_hyperdrive; /* +0x10: 0 = species has no hyperdrive.

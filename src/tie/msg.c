@@ -1,11 +1,14 @@
 #include "tie/msg.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/storage/string_table.h"
+#endif
 #include "tie/create.h"
 #include "tie/fediskio.h" /* acceleratedtimesetting */
 #include "tie/festring.h"
 #include "tie/fsfx.h"
 #include "tie/msgroom.h"
 #include "tie/panelrts.h" /* buoystr, warheadstrings, placevalue, panelrts_outnum */
-#include "tie/spec.h"     /* spec_name_ptrs[] (64-bit-safe side table) */
+#include "tie/spec.h"
 #include "tie/tie.h"
 #include "tie/trig2.h"
 
@@ -550,7 +553,11 @@ void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 		if (count == 1) {
 			messageptrs[1] = fg_array[fg_idx].name;
 			argtable[2] = (uint16_t)clicks;
-			messageptrs[0] = (char*)spec_name_ptrs[species_idx];
+#ifdef TIE_MODERN
+			messageptrs[0] = (char*)TieStringTable_SpeciesName(species_idx);
+#else
+			messageptrs[0] = (char*)spec_data[species_idx].name_ptr;
+#endif
 			argtable[0] = abbrev_flag;      /* overwrite the count */
 			argtable[1] = (uint16_t)0x8001; /* ptr to messageptrs[1] */
 			msg_messageprintf(MSG_CRAFT_ENTERING_AT);
@@ -559,13 +566,21 @@ void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 		messageptrs[2] = fg_array[fg_idx].name;
 		argtable[3] = (uint16_t)clicks;
 		argtable[2] = (uint16_t)0x8002; /* ptr to messageptrs[2] */
-		messageptrs[1] = (char*)spec_name_ptrs[species_idx];
+#ifdef TIE_MODERN
+		messageptrs[1] = (char*)TieStringTable_SpeciesName(species_idx);
+#else
+		messageptrs[1] = (char*)spec_data[species_idx].name_ptr;
+#endif
 		argtable[1] = (uint16_t)0x8001;
 		tpl = MSG_CRAFT_GROUP_ENTERING_AT;
 	} else {
 		/* Hostile sighting -- color line by side via messageside. */
 		messageside = side;
-		messageptrs[1] = (char*)spec_name_ptrs[species_idx];
+#ifdef TIE_MODERN
+		messageptrs[1] = (char*)TieStringTable_SpeciesName(species_idx);
+#else
+		messageptrs[1] = (char*)spec_data[species_idx].name_ptr;
+#endif
 		argtable[1] = (uint16_t)0x8001;
 		argtable[2] = (uint16_t)clicks;
 		tpl = (count == 1) ? MSG_NEW_CRAFT_ALERT : MSG_NEW_CRAFT_ALERT_PLURAL;
@@ -593,7 +608,11 @@ void msg_craftmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_
 
 	messageside = objects[obj_idx].side;
 	argtable[0] = 0x8000;
-	messageptrs[0] = (char*)spec_name_ptrs[craft->species_idx];
+#ifdef TIE_MODERN
+	messageptrs[0] = (char*)TieStringTable_SpeciesName(craft->species_idx);
+#else
+	messageptrs[0] = (char*)spec_data[craft->species_idx].name_ptr;
+#endif
 	fg_idx = objects[obj_idx].fg_idx;
 	argtable[1] = 0x8001;
 	messageptrs[1] = fg_array[fg_idx].name;
@@ -680,7 +699,11 @@ void msg_createobjectname(uint16_t obj_idx, int16_t use_official, char* out_buf)
 			char* dst;
 
 			if (use_official) {
-				src = spec_name_ptrs[craft->species_idx];
+#ifdef TIE_MODERN
+				src = TieStringTable_SpeciesName(craft->species_idx);
+#else
+				src = spec_data[craft->species_idx].name_ptr;
+#endif
 				dst = out_buf;
 				while (*dst)
 					dst++;

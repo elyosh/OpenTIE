@@ -417,6 +417,8 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/input/transform.h
     src/tie_runtime/storage/storage.c
     src/tie_runtime/storage/storage.h
+    src/tie_runtime/storage/string_table.c
+    src/tie_runtime/storage/string_table.h
     src/tie_runtime/storage/pilot_storage.h
     src/tie_runtime/storage/score_tables.c
     src/tie_runtime/storage/score_tables.h
@@ -477,6 +479,8 @@ set(TIE_RUNTIME_SOURCES
 add_library(tie_formats STATIC
 	 src/tie_formats/common.c
 	 src/tie_formats/lfd.c
+	 src/tie_formats/string_table.c
+	 src/tie_formats/string_table.h
 	 src/tie_formats/panel.c
 	 src/tie_formats/shape.c
 	 src/tie_formats/cockpit.c

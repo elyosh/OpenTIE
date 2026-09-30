@@ -10,6 +10,7 @@
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
 #include "tie_runtime/storage/storage.h"
+#include "tie_runtime/storage/string_table.h"
 #include "tie_runtime/timing/sim_clock.h"
 #include <landru/cursor.h> /* xcursor_get_bitmap */
 
@@ -600,3 +601,6 @@ void TiePaletteSnapshot_Capture(void) {
 		dst[i] = 0xFF000000u | (r8 << 16) | (g8 << 8) | b8;
 	}
 }
+
+const char* TieTextSnapshot_StringCell(int cell) { return TieStringTable_Cell(cell); }
+int TieTextSnapshot_StringCount(void) { return TieStringTable_Count(); }

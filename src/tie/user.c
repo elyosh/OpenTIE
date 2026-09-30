@@ -1,4 +1,7 @@
 #include "tie/user.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/storage/string_table.h"
+#endif
 #include "tie_runtime/runtime/damage_task.h"
 #include "tie_runtime/runtime/goals_task.h"
 #include "tie_runtime/runtime/maproom_task.h"
@@ -939,7 +942,11 @@ void user_setnewtarget(uint16_t new_obj) {
 		int fg_idx;
 		EFGStruct* fgp;
 
-		msg_addmessageptr(0, (char*)spec_name_ptrs[cp_t->species_idx]);
+#ifdef TIE_MODERN
+		msg_addmessageptr(0, (char*)TieStringTable_SpeciesName(cp_t->species_idx));
+#else
+		msg_addmessageptr(0, (char*)spec_data[cp_t->species_idx].name_ptr);
+#endif
 		fg_idx = objects[new_obj].fg_idx;
 		fgp = &fg_array[fg_idx];
 		/* Watcom unaligned load: `*(int*)&fg.special_craft >> 24` = fg.count. */

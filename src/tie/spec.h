@@ -14,12 +14,6 @@ extern "C" {
  */
 uint16_t spec_getspecnum(uint16_t species_idx);
 
-/* 64-bit-safe side table of species display-name pointers.
- * SpecData.name_ptr is int32_t (fixed by the retail blob layout) and
- * can't hold a host pointer on LP64. Consumers read spec_name_ptrs[i]
- * instead of casting the int32_t field back to a pointer. */
-extern const char* spec_name_ptrs[69];
-
 #ifdef __cplusplus
 }
 #endif

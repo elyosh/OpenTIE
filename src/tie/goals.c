@@ -1,4 +1,7 @@
 #include "tie/goals.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/storage/string_table.h"
+#endif
 #include "tie/create.h" /* diffmask, fgdiffmask, genusconvert, familyconvert */
 #include "tie/feinput.h"
 #include "tie/festring.h"
@@ -17,8 +20,8 @@
 /* --- External globals populated by fediskio_loadstringdata ----------- */
 
 /* All eight *string pointers below are singletons (each a char* to a single
- * string in stringdata_buf). The *strings variants are base addresses of
- * 2..30-entry char* arrays also inside stringdata_buf. */
+ * string in the loaded string table). The *strings variants are base addresses of
+ * 2..30-entry char* groups in that table. */
 // GLOBAL: TIE95 0xD4BB8
 // GLOBAL: TIE98 0x5FE848
 void* condstrings;         /* const char *[21] */
@@ -148,7 +151,11 @@ uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 		 * match the shipped behavior verbatim. */
 		name_ptr = (const uint8_t*)(((char**)buoystr)[species_idx - 70]);
 	} else {
-		name_ptr = (const uint8_t*)spec_name_ptrs[spec_num];
+#ifdef TIE_MODERN
+		name_ptr = (const uint8_t*)TieStringTable_SpeciesName(spec_num);
+#else
+		name_ptr = (const uint8_t*)spec_data[spec_num].name_ptr;
+#endif
 	}
 
 	wrap = goals_checkwrap(name_ptr);

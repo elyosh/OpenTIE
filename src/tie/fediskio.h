@@ -55,7 +55,8 @@ void fediskio_Init_Buffers_and_Fonts(void);
 void fediskio_UnlockGlobals(void);
 void fediskio_RelockGlobals(void);
 void fediskio_FreeFlightHandles(void);
-void fediskio_loadstringdata(void);
+/* Nonzero reads STRINGS.DAT; zero rebinds the existing relocated table. */
+void fediskio_loadstringdata(int read_file);
 void fediskio_loadspecies(void);
 void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx);
 void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type);

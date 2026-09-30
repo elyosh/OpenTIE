@@ -2,8 +2,8 @@
 #include "tie/fmusic.h"
 #include "tie/fscript.h"
 #include "tie/rtsvga2.h" /* rtsvga2_remapRGBImage */
-#include "tie/spec.h"    /* spec_name_ptrs[] */
-#include "tie/tie.h"     /* flightResolution */
+#include "tie/spec.h"
+#include "tie/tie.h" /* flightResolution */
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/audio/music_policy.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
@@ -48,6 +48,12 @@
 #include "tie/trace2.h"  /* TRACE2_{EDGEINFO,EDGEHEADER}_CAP + record sizes */
 #include "tie/wingman.h" /* wingmanstrings */
 #include "util/binio.h"
+
+#ifdef TIE_MODERN
+#include "tie_runtime/storage/string_table.h"
+#else
+#include <landru/memhdl.h>
+#endif
 
 #include <stdio.h> /* snprintf */
 #include <stdlib.h>
@@ -109,7 +115,14 @@ static const uint8_t tie98_hardpoint_weapon_class[40] = { 0, 1, 1, 1, 1, 1, 1, 2
 														  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 /* Module-owned asset buffers. */
-static void* stringdata_buf;
+#ifndef TIE_MODERN
+// GLOBAL: TIE95 0xEB6BA
+// GLOBAL: TIE98 0x592646
+static LandruHandle stringdatahandle;
+// GLOBAL: TIE95 0xD4194
+// GLOBAL: TIE98 0x50F84C
+static char* stringdata_base;
+#endif
 static void* font1_buf;
 static void* font2_buf;
 static void* log1_buf;
@@ -733,9 +746,11 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 
 	/* Error formatting depends on stringdata; later allocation failures can
 	 * be accumulated and reported after it loads. */
-	stringdata_buf = malloc(16000);
-	if (!stringdata_buf)
+#ifndef TIE_MODERN
+	stringdatahandle = xmemhdl_Alloc_Handle(16000, LANDRU_MEMORY_DEFAULT);
+	if (!stringdatahandle)
 		fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
+#endif
 
 	font1_buf = malloc(34600);
 	if (!font1_buf)
@@ -795,7 +810,7 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 		music_buffer = NULL;
 	}
 
-	fediskio_loadstringdata();
+	fediskio_loadstringdata(1);
 
 	if (fail)
 		fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
@@ -873,19 +888,18 @@ void fediskio_Init_Buffers_and_Fonts(void) {
 
 // FUNCTION: TIE95 0x212E4
 void fediskio_UnlockGlobals(void) {
-	/* In the binary: unlocks 7 XMEMHDL handles.
-	 * With malloc, pointers remain valid — nothing to do. */
+#ifndef TIE_MODERN
+	xmemhdl_Unlock_Handle(stringdatahandle);
+#endif
 }
 
 // FUNCTION: TIE95 0x21348
 void fediskio_RelockGlobals(void) {
-	/* In the binary: re-locks handles into global pointers.
-	 * With malloc, pointers are already valid. Just refresh string data
-	 * and reassign the buffer pointers. */
+	/* Rebind the string groups and active font/buffer pointers. */
 	if (musicenabled && TieMusicPolicy_UsesImuse())
 		music_buffer = music_handle_buf;
 
-	fediskio_loadstringdata();
+	fediskio_loadstringdata(0);
 
 	fontptrtiny = font1_buf;
 	fontptrmicro = font2_buf;
@@ -905,20 +919,12 @@ void fediskio_RelockGlobals(void) {
 	 * allocation time; retail relock doesn't touch it either. */
 }
 
-/* Resolved host-native pointer table built from strings.dat's 32-bit
- * offset table. Retail walked a void** cursor straight through the file
- * buffer; on LP64 that stride was wrong (sizeof(void*)=8 vs the file's
- * 4-byte entries) and pointer bits exceeding 32 got truncated by the
- * relocation pass. Build a parallel table of real host pointers so the
- * existing p + N / *(p - N) arithmetic works on 64-bit. Entries point INTO
- * stringdata_buf, so the table is invalidated when that buffer is freed. */
-static char** sdata_resolved;
-static size_t sdata_resolved_cap;
-static size_t sdata_resolved_count; /* valid entries from the last load */
-
 // FUNCTION: TIE95 0x213F0
 void fediskio_FreeFlightHandles(void) {
 	uint16_t i;
+#ifndef TIE_MODERN
+	xmemhdl_Unlock_Handle(stringdatahandle);
+#endif
 
 	if (musicenabled && TieMusicPolicy_UsesImuse()) {
 		free(music_handle_buf);
@@ -927,14 +933,11 @@ void fediskio_FreeFlightHandles(void) {
 	}
 	fsfx_freesfx();
 
-	free(stringdata_buf);
-	stringdata_buf = NULL;
-	/* sdata_resolved[] holds pointers INTO stringdata_buf; freeing the buffer
-	 * leaves them dangling. Invalidate the table so TieTextSnapshot_StringCell()
-	 * returns NULL until the next fediskio_loadstringdata rebuilds it --
-	 * otherwise a late HUD-text render (cockpit_text str_cell) reads freed
-	 * memory on flight exit. */
-	sdata_resolved_count = 0;
+#ifdef TIE_MODERN
+	TieStringTable_Clear();
+#else
+	xmemhdl_Free_Handle(stringdatahandle);
+#endif
 	free(font1_buf);
 	font1_buf = NULL;
 	free(font2_buf);
@@ -985,46 +988,36 @@ void fediskio_FreeFlightHandles(void) {
  * tie.h provides viewfilmstr). Local-only references below need no
  * extra forward declarations here. */
 
-/* Cell-indexed STRINGS.DAT accessors, exposed via snapshot.h. */
-const char* TieTextSnapshot_StringCell(int cell) {
-	if (cell < 0 || (size_t)cell >= sdata_resolved_count)
-		return NULL;
-	return sdata_resolved[cell];
-}
-int TieTextSnapshot_StringCount(void) { return (int)sdata_resolved_count; }
-
 // FUNCTION: TIE95 0x215B0
 // FUNCTION: TIE98 0x41B300
-void fediskio_loadstringdata(void) {
+void fediskio_loadstringdata(int read_file) {
+#ifndef TIE_MODERN
 	int i;
-
-	const int32_t* offsets;
-	size_t n_offsets;
-	size_t k;
+#endif
 	char** base_pp;
 
-	fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "strings.dat", stringdata_buf);
-
-	/* File layout: 32-bit file offsets (null-terminated), then string data.
-	 * Count entries in the offset header without relocating in place. */
-	offsets = (const int32_t*)stringdata_buf;
-	n_offsets = 0;
-	while (offsets[n_offsets])
-		++n_offsets;
-
-	if (n_offsets > sdata_resolved_cap) {
-		free(sdata_resolved);
-		sdata_resolved = (char**)malloc(n_offsets * sizeof(char*));
-		if (!sdata_resolved)
-			fediskio_fatalerror(FATAL_ERROR_NOT_ENOUGH_MEMORY_X0A);
-		sdata_resolved_cap = n_offsets;
+#ifdef TIE_MODERN
+	if (read_file) {
+		fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, "strings.dat", "rb", 1);
+		/* Cells 685..694 contain the ten wingman commands. */
+		base_pp = TieStringTable_Read(fileptr, 695);
+		fediskio_tryclosefile(0);
+	} else {
+		base_pp = TieStringTable_Current();
 	}
-	for (k = 0; k < n_offsets; ++k)
-		sdata_resolved[k] = (char*)stringdata_buf + (uint32_t)offsets[k];
-	sdata_resolved_count = n_offsets;
-
-	/* `base + N` byte offsets in retail are `N/4` into the pointer table. */
-	base_pp = sdata_resolved;
+	if (!base_pp)
+		shell_programexit("Error! Unable to load STRINGS.DAT.\n");
+#else
+	base_pp = (char**)xmemhdl_Lock_Handle(stringdatahandle);
+	if (read_file) {
+		fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "strings.dat", base_pp);
+		for (i = 0; ((uint32_t*)base_pp)[i]; ++i)
+			base_pp[i] = (char*)base_pp + ((uint32_t*)base_pp)[i];
+	} else {
+		for (i = 0; base_pp[i]; ++i)
+			base_pp[i] = (char*)base_pp + (base_pp[i] - stringdata_base);
+	}
+#endif
 
 	systemstrings = base_pp;          /* base + 0    */
 	fatalerrstrings = base_pp + 10;   /* base + 40   */
@@ -1088,12 +1081,15 @@ void fediskio_loadstringdata(void) {
 
 	/* Retail cells 615..683 name the 69 species; the following cells
 	 * contain the film label and the wingman command table. */
-	for (i = 0; i < NUM_SPEC_DATA; i++) {
-		spec_name_ptrs[i] = base_pp[615 + i];
-		spec_data[i].name_ptr = (int32_t)(uintptr_t)base_pp[615 + i];
-	}
+#ifndef TIE_MODERN
+	for (i = 0; i < NUM_SPEC_DATA; i++)
+		spec_data[i].name_ptr = base_pp[615 + i];
+#endif
 	viewfilmstr = base_pp[684];
 	wingmanstrings = (const char**)(base_pp + 685);
+#ifndef TIE_MODERN
+	stringdata_base = (char*)base_pp;
+#endif
 }
 
 /* Monotonically-increasing counter bumped after fediskio_loadspecies
