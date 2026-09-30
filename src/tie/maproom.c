@@ -1,4 +1,7 @@
 #include "tie/maproom.h"
+#ifdef TIE_MODERN
+#include "tie_runtime/runtime/maproom_task.h"
+#endif
 #include "tie/backdrp2.h"
 #include "tie/create.h"
 #include "tie/fediskio.h"
@@ -23,6 +26,10 @@
 #include "tie/xtimer.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/profile.h"
+#include <stdbool.h>
+#ifdef TIE_MODERN
+#include <landru/task.h>
+#endif
 
 #include <stddef.h>
 #include <stdint.h>
@@ -1242,455 +1249,549 @@ static void maproom_output_diff_buffer(bool tie98_display, const void* oldbuf, c
 
 // ORIGINAL_FUNCTION: TIE98 0x451470
 // Initialization portion of MAPROOM_maproom; the original also contains the task loop.
-void maproom_OpenRoom(MaproomState* t) {
-	bool tie98_display;
-	uint32_t buffer_line_offset;
 
-	if (TieProfile_UsesTie98Logic()) {
-		uint8_t saved_mapflag = mapflag;
-		mapflag = 1;
-		FSFX_UpdatePlayerEngineSound();
-		mapflag = saved_mapflag;
-	}
-	tie98_display = TieClassicDisplay_UsesDx5();
-	if (tie98_display)
-		FlightSurface_Lock();
-	/* --- Stage 1: layout setup based on resolution --- */
-	mapScreenLeft = 0;
-	if (tie_is_high_resolution_flight()) {
-		mapScreenRight = 640;
-		mapScreenTop = 41;
-		mapScreenBottom = 442;
-		maxMapIcons = 64;
-		species2icon = species2icon640;
-		iconxsize = iconxsize640;
-		iconysize = iconysize640;
-		iconfilename = iconfilename640;
-	} else {
-		mapScreenRight = 320;
-		mapScreenTop = 17;
-		mapScreenBottom = 184;
-		maxMapIcons = 66;
-		species2icon = species2icon320;
-		iconxsize = iconxsize320;
-		iconysize = iconysize320;
-		iconfilename = iconfilename320;
-	}
-	mapScreenWidth = mapScreenRight - mapScreenLeft;
-	mapScreenHeight = mapScreenBottom - mapScreenTop;
+// FUNCTION: TIE95 0x2F1BC
+// FUNCTION: TIE98 0x451470
+int32_t maproom_maproom(void) {
+	uint16_t view_mode;
+	uint16_t view_transition_progress;
+	int view_transition_active;
+	int16_t view_heading;
+	int16_t view_pitch;
+	int32_t camera_distance;
+	int8_t page_delta;
+	int buffer_toggle;
+	uint16_t focus_obj_ref;
+	int render_again = 1;
+#ifdef TIE_MODERN
+	MaproomState* continuation = landru_task_top();
+	const bool uses_dx5 = TieClassicDisplay_UsesDx5();
+	const bool uses_tie98_logic = TieProfile_UsesTie98Logic();
+	view_mode = continuation->view_mode;
+	view_transition_progress = continuation->view_transition_progress;
+	view_transition_active = continuation->view_transition_active;
+	view_heading = continuation->view_heading;
+	view_pitch = continuation->view_pitch;
+	camera_distance = continuation->camera_distance;
+	page_delta = continuation->page_delta;
+	buffer_toggle = continuation->buffer_toggle;
+	focus_obj_ref = continuation->focus_obj_ref;
+	render_again = continuation->render;
+	continuation->waiting = false;
+	if (!continuation->started)
+#elif defined(TIE98)
+	const bool uses_dx5 = true;
+	const bool uses_tie98_logic = true;
+#else
+	const bool uses_dx5 = false;
+	const bool uses_tie98_logic = false;
+#endif
+	{
+		bool tie98_display;
+		uint32_t buffer_line_offset;
 
-	/* --- Stage 2: take ownership of the icon buffer --- */
-	/* The binary locks/unlocks the same handle here; with malloc the
-	 * pointer is always valid. Layout: first 1060 bytes = 265-entry
-	 * pointer table (mapfarbufferptrs); rest = shape data area. */
-	mapfarbufferptrs = (void**)maproomicons_buf;
-	farbufferptr = (uint8_t*)maproomicons_buf + 1060;
-
-	if (mapiconsloaded) {
-		/* Subsequent entries: swap saved-icons<->panel-mode pointers. */
-		maproom_swap_buffer_ptrs(/*do_swap=*/1);
-	} else {
-		/* First entry: save current panel pointers, then load icons. */
-		char iconpath[32];
-		snprintf(iconpath, sizeof(iconpath), "%s%s", resourcedir, iconfilename);
-		maproom_swap_buffer_ptrs(/*do_swap=*/0);
-		fediskio_loadbufferdata(iconpath, 0, (int16_t)(4 * maxMapIcons), 0);
-		mapiconsloaded = 1;
-	}
-
-	/* --- Stage 3: reset display + initial camera --- */
-	festring_setfontsize(2);
-	dropflag = 0;
-
-	buffer_line_offset = calcposition((uint16_t)mapScreenLeft, (uint16_t)mapScreenTop);
-	if (tie98_display)
-		logbuf2_setbufferdimensions_tie98((uint16_t)mapScreenWidth, (uint16_t)mapScreenHeight, 1,
-										  buffer_line_offset);
-	else
-		logbuf2_setbufferdimensions((uint16_t)mapScreenWidth, (uint16_t)mapScreenHeight, buffer_line_offset);
-
-	fview_newcalcview(0, 0x7FFF, pstate.player->pitch, 0, 0, 0, NULL);
-
-	maproom_setcamerafocus(pstate.object_idx, MAP_CAMERA_DEFAULT);
-	if (TieProfile_UsesTie98Logic())
-		g_flightInitialTextureCacheFlushPending = 1;
-	fullupdateflag = 1;
-	logbuf2_selectbuffer(newbuf);
-	if (tie98_display)
-		FlightSurface_Unlock();
-
-	t->view_mode = 0; /* 0 = side, 1 = top-down */
-	t->view_transition_active = 1;
-	t->view_transition_progress = 236;
-	t->view_heading = 0x4800; /* initial side-on heading */
-	t->view_pitch = pstate.player->pitch;
-	t->camera_distance = MAP_CAMERA_DEFAULT;
-	t->page_delta = 0;
-	t->buffer_toggle = 1;
-	t->focus_obj_ref = pstate.object_idx;
-}
-
-/* One frame of maproom work: view-transition step + render. Called
- * by maproom_task_step once the 4-PIT-tick frame budget has elapsed
- * (frameticks pre-loaded). Input polling is split out into
- * maproom_poll_once so the host loop can interleave between frames. */
-void maproom_DrawRoom(MaproomState* t) {
-	bool tie98_display;
-	uint16_t buffer_stride;
-	uint8_t saved_backdrop;
-
-	if (t->view_transition_active) {
-		t->view_transition_active = maproom_view_transition(
-			t->camera_distance, t->view_mode, t->view_transition_progress, t->view_heading, t->view_pitch);
-	}
-
-	festring_setbound(0, 0, (int16_t)mapScreenWidth, (int16_t)mapScreenHeight);
-	backcolor = MAP_BG_COLOR;
-	festring_setfontsize(2);
-	festring_setlinewrap(0);
-	festring_setautofill(0);
-
-	/* Cluster pre-pass + z-sort. */
-	maproom_cluster_pass(s_map_fg_render_count, t->focus_obj_ref);
-	maproom_zsort(s_map_z_buf, s_map_sort_indices, &s_map_sort_count, s_map_fg_render_count,
-				  t->focus_obj_ref);
-
-	/* Render-buffer fill. */
-	tie98_display = TieClassicDisplay_UsesDx5();
-	maproom_clear_buffer(tie98_display);
-	buffer_stride = (uint16_t)(mapScreenWidth * (tie98_display ? g_flight16bppBytesPerPixel : 1u));
-	rtsvga2_setvgapointers(t->buffer_toggle ? newbuf : xtransdataptr, buffer_stride,
-						   (uint16_t)mapScreenHeight);
-
-	/* Backward pass: items behind the camera. */
-	maproom_render_pass(s_map_sort_indices, s_map_sort_count, s_map_z_buf, s_map_fg_render_count,
-						t->focus_obj_ref, /*side=*/-1);
-
-	/* World axes around the focus point. */
-	create_getworldposition(t->focus_obj_ref, 0);
-	maproom_draw_axis(0); /* X-axis ticks */
-	maproom_draw_axis(1); /* Y-axis ticks */
-
-	/* Forward pass: items in front of the camera. */
-	maproom_render_pass(s_map_sort_indices, s_map_sort_count, s_map_z_buf, s_map_fg_render_count,
-						t->focus_obj_ref, /*side=*/+1);
-
-	/* Status panels + page flip. */
-	maproom_drawNHIstatus(t->view_mode);
-	rtsvga2_setvgapointers(NULL, 0x140u, 0xC8u);
-
-	if (fullupdateflag) {
-		if (t->buffer_toggle) {
-			maproom_output_buffer(tie98_display, newbuf);
-			logbuf2_selectbuffer(xtransdataptr);
-			t->buffer_toggle = 0;
+		if (uses_tie98_logic) {
+			uint8_t saved_mapflag = mapflag;
+			mapflag = 1;
+			FSFX_UpdatePlayerEngineSound();
+			mapflag = saved_mapflag;
+		}
+		tie98_display = uses_dx5;
+		if (tie98_display)
+			FlightSurface_Lock();
+		/* --- Stage 1: layout setup based on resolution --- */
+		mapScreenLeft = 0;
+		if (tie_is_high_resolution_flight()) {
+			mapScreenRight = 640;
+			mapScreenTop = 41;
+			mapScreenBottom = 442;
+			maxMapIcons = 64;
+			species2icon = species2icon640;
+			iconxsize = iconxsize640;
+			iconysize = iconysize640;
+			iconfilename = iconfilename640;
 		} else {
-			maproom_output_buffer(tie98_display, xtransdataptr);
-			logbuf2_selectbuffer(newbuf);
-			t->buffer_toggle = 1;
+			mapScreenRight = 320;
+			mapScreenTop = 17;
+			mapScreenBottom = 184;
+			maxMapIcons = 66;
+			species2icon = species2icon320;
+			iconxsize = iconxsize320;
+			iconysize = iconysize320;
+			iconfilename = iconfilename320;
 		}
-		fullupdateflag = 0;
-	} else if (t->buffer_toggle) {
-		maproom_output_diff_buffer(tie98_display, xtransdataptr, newbuf);
-		logbuf2_selectbuffer(xtransdataptr);
-		t->buffer_toggle = 0;
-	} else {
-		maproom_output_diff_buffer(tie98_display, newbuf, xtransdataptr);
+		mapScreenWidth = mapScreenRight - mapScreenLeft;
+		mapScreenHeight = mapScreenBottom - mapScreenTop;
+
+		/* --- Stage 2: take ownership of the icon buffer --- */
+		/* The binary locks/unlocks the same handle here; with malloc the
+		 * pointer is always valid. Layout: first 1060 bytes = 265-entry
+		 * pointer table (mapfarbufferptrs); rest = shape data area. */
+		mapfarbufferptrs = (void**)maproomicons_buf;
+		farbufferptr = (uint8_t*)maproomicons_buf + 1060;
+
+		if (mapiconsloaded) {
+			/* Subsequent entries: swap saved-icons<->panel-mode pointers. */
+			maproom_swap_buffer_ptrs(/*do_swap=*/1);
+		} else {
+			/* First entry: save current panel pointers, then load icons. */
+			char iconpath[32];
+			snprintf(iconpath, sizeof(iconpath), "%s%s", resourcedir, iconfilename);
+			maproom_swap_buffer_ptrs(/*do_swap=*/0);
+			fediskio_loadbufferdata(iconpath, 0, (int16_t)(4 * maxMapIcons), 0);
+			mapiconsloaded = 1;
+		}
+
+		/* --- Stage 3: reset display + initial camera --- */
+		festring_setfontsize(2);
+		dropflag = 0;
+
+		buffer_line_offset = calcposition((uint16_t)mapScreenLeft, (uint16_t)mapScreenTop);
+		if (tie98_display)
+			logbuf2_setbufferdimensions_tie98((uint16_t)mapScreenWidth, (uint16_t)mapScreenHeight, 1,
+											  buffer_line_offset);
+		else
+			logbuf2_setbufferdimensions((uint16_t)mapScreenWidth, (uint16_t)mapScreenHeight,
+										buffer_line_offset);
+
+		fview_newcalcview(0, 0x7FFF, pstate.player->pitch, 0, 0, 0, NULL);
+
+		maproom_setcamerafocus(pstate.object_idx, MAP_CAMERA_DEFAULT);
+		if (uses_tie98_logic)
+			g_flightInitialTextureCacheFlushPending = 1;
+		fullupdateflag = 1;
 		logbuf2_selectbuffer(newbuf);
-		t->buffer_toggle = 1;
+		if (tie98_display)
+			FlightSurface_Unlock();
+
+		view_mode = 0; /* 0 = side, 1 = top-down */
+		view_transition_active = 1;
+		view_transition_progress = 236;
+		view_heading = 0x4800; /* initial side-on heading */
+		view_pitch = pstate.player->pitch;
+		camera_distance = MAP_CAMERA_DEFAULT;
+		page_delta = 0;
+		buffer_toggle = 1;
+		focus_obj_ref = pstate.object_idx;
+#ifdef TIE_MODERN
+		continuation->view_mode = view_mode;
+		continuation->view_transition_progress = view_transition_progress;
+		continuation->view_transition_active = view_transition_active;
+		continuation->view_heading = view_heading;
+		continuation->view_pitch = view_pitch;
+		continuation->camera_distance = camera_distance;
+		continuation->page_delta = page_delta;
+		continuation->buffer_toggle = buffer_toggle;
+		continuation->focus_obj_ref = focus_obj_ref;
+		continuation->started = true;
+		continuation->render = true;
+		return 0;
+#endif
 	}
-
-	/* Backdrop+stars (drawbackdropflag temporarily forced off so
-	 * BACKDRP2_backdrop only renders the parallax stars). TIE98 clears
-	 * the pending cache flush immediately before and after this pair. */
-	saved_backdrop = drawbackdropflag;
-	if (TieProfile_UsesTie98Logic())
-		g_flightInitialTextureCacheFlushPending = 0;
-	drawbackdropflag = 0;
-	backdrp2_backdrop();
-	drawbackdropflag = saved_backdrop;
-	rtsvga2_drawstars();
-	if (TieProfile_UsesTie98Logic())
-		g_flightInitialTextureCacheFlushPending = 0;
-	fullupdateflag = 0;
-}
-
-/* Single input-poll iteration. Returns 1 if exit fires (KEY_m or
- * exit-class key), 2 if frame_dirty (caller should re-render), 0 if
- * nothing happened. */
-int maproom_PollRoom(MaproomState* t) {
-	int frame_dirty = 0;
-
-	uint16_t key;
-	uint16_t mb;
-
-	tickcounter += xtimer_time_elapsed();
-	if (tickcounter >= (uint16_t)MAP_FRAME_TICKS) {
-		if (t->view_transition_progress < 0x76u) {
-			t->view_transition_progress = (uint16_t)(t->view_transition_progress + tickcounter);
-			frame_dirty = 1;
-		}
-		tickcounter = 0;
-	}
-	feinput_getrawinput();
-	feinput_checkinput();
-	feinput_degitterinput();
-	inputdeltay *= 2;
-
-	/* Key dispatch. The numeric ranges below match the IDA decompile
-	 * exactly; do NOT collapse without re-checking the asm. */
-	key = (uint16_t)inputkey;
-	switch (key) {
-		/* Page nav. */
-		case 1:
-			t->page_delta = -1;
-			inputkey = 109;
-			frame_dirty = 1;
-			break;
-		case 2:
-			t->page_delta = 1;
-			inputkey = 109;
-			frame_dirty = 1;
-			break;
-
-		/* Exit (Esc / 'M' / 'Q' / 'm' / 'q' / 0xBB). The binary
-		 * routes all of these to the same LABEL_245 (t->page_delta=0). */
-		case 27:
-		case 0x4D:
-		case 0x51:
-		case 0x6D:
-		case 0x71:
-		case 0xBB:
-			t->page_delta = 0;
-			inputkey = 109;
-			frame_dirty = 1;
-			break;
-
-		/* View toggle (Space / 0xBE = ',' KEY_PAGE-toggle). */
-		case 32:
-		case 190: {
-			t->view_mode = (t->view_mode == 0) ? 1 : 0;
-			t->view_transition_progress = 4;
-			t->view_transition_active = 1;
-			frame_dirty = 1;
-			break;
-		}
-
-		/* Numpad pan: 1..9 set inputdeltax/y. */
-		case '1':
-			inputdeltax = -MAP_PAN_DELTA;
-			inputdeltay = MAP_PAN_DELTA;
-			break;
-		case '2':
-			inputdeltax = 0;
-			inputdeltay = MAP_PAN_DELTA;
-			break;
-		case '3':
-			inputdeltax = MAP_PAN_DELTA;
-			inputdeltay = MAP_PAN_DELTA;
-			break;
-		case '4':
-			inputdeltax = -MAP_PAN_DELTA;
-			inputdeltay = 0;
-			break;
-		case '6':
-			inputdeltax = MAP_PAN_DELTA;
-			inputdeltay = 0;
-			break;
-		case '7':
-			inputdeltax = -MAP_PAN_DELTA;
-			inputdeltay = -MAP_PAN_DELTA;
-			break;
-		case '8':
-			inputdeltax = 0;
-			inputdeltay = -MAP_PAN_DELTA;
-			break;
-		case '9':
-			inputdeltax = MAP_PAN_DELTA;
-			inputdeltay = -MAP_PAN_DELTA;
-			break;
-
-		/* 'a': closest attacker of the current target. */
-		case 'a': {
-			const uint16_t v = user_findclosestattacker(pstate.target_obj_idx);
-			if (v != 0xFFFFu)
-				pstate.target_obj_idx = v;
-			frame_dirty = 1;
-			break;
-		}
-
-		/* 'c': center camera on target. */
-		case 'c': {
-			t->focus_obj_ref = pstate.target_obj_idx;
-			maproom_setcamerafocus(pstate.target_obj_idx, t->camera_distance);
-			frame_dirty = 1;
-			break;
-		}
-
-		/* 'e': closest attacker of the player. */
-		case 'e': {
-			const uint16_t v = user_findclosestattacker(pstate.object_idx);
-			if (v != 0xFFFFu)
-				pstate.target_obj_idx = v;
-			frame_dirty = 1;
-			break;
-		}
-
-		/* NHI / warhead filter cycles (0->1->2->0). */
-		case 'h':
-			hostileflag = (hostileflag == 2) ? 0 : (uint8_t)(hostileflag + 1);
-			frame_dirty = 1;
-			break;
-		case 'i':
-			imperialflag = (imperialflag == 2) ? 0 : (uint8_t)(imperialflag + 1);
-			frame_dirty = 1;
-			break;
-		case 'n':
-			neutralflag = (neutralflag == 2) ? 0 : (uint8_t)(neutralflag + 1);
-			frame_dirty = 1;
-			break;
-		case 'w':
-			warheadflag = (warheadflag == 2) ? 0 : (uint8_t)(warheadflag + 1);
-			frame_dirty = 1;
-			break;
-
-		/* 'r': closest live enemy at any distance. */
-		case 'r': {
-			const uint16_t v =
-				maproom_find_min(score_trig2_polardistance_to_player, filter_enemy_disabled_or_alive, NULL);
-			if (v != 0xFFFFu)
-				pstate.target_obj_idx = v;
-			frame_dirty = 1;
-			break;
-		}
-
-		/* 't': next radar target. */
-		case 't': {
-			if (pstate.target_obj_idx == 0xFFFFu)
-				pstate.target_obj_idx = (uint16_t)pstate.radar_target0;
-			pstate.target_obj_idx = user_picknexttarget(pstate.target_obj_idx, 1);
-			frame_dirty = 1;
-			break;
-		}
-
-		/* 'u': oldest unattended craft (no leader). */
-		case 'u': {
-			const uint16_t v = maproom_find_min(score_age_ticks, filter_unattended_other, NULL);
-			if (v != 0xFFFFu)
-				pstate.target_obj_idx = v;
-			frame_dirty = 1;
-			break;
-		}
-
-		/* 'y': previous radar target. */
-		case 'y': {
-			if (pstate.target_obj_idx == 0xFFFFu)
-				pstate.target_obj_idx = (uint16_t)pstate.radar_target0;
-			pstate.target_obj_idx = user_picknexttarget(pstate.target_obj_idx, -1);
-			frame_dirty = 1;
-			break;
-		}
-
-		default: {
-			/* Quick-recall (F5-F7 ext, engine key codes 0xBF..0xC1). */
-			if (key >= KEY_F5 && key <= KEY_F7) {
-				uint16_t target = pstate.target_presets[key - KEY_F5];
-				if (target != 0xFFFFu)
-					pstate.target_obj_idx = target;
-				frame_dirty = 1;
-				/* Quick-save (Shift-F5..F7, engine key codes 0xD8..0xDA). */
-			} else if (key >= KEY_SHIFT_F5 && key <= KEY_SHIFT_F7) {
-				if (pstate.target_obj_idx != 0xFFFFu)
-					pstate.target_presets[key - KEY_SHIFT_F5] = pstate.target_obj_idx;
+	for (;;) {
+		if (render_again) {
+			tickcounter += (uint16_t)xtimer_time_elapsed();
+			if (tickcounter < MAP_FRAME_TICKS) {
+#ifdef TIE_MODERN
+				continuation->waiting = true;
+				return 0;
+#else
+				continue;
+#endif
 			}
-			break;
-		}
-	}
+			frameticks = tickcounter;
+			if (uses_dx5)
+				FlightSurface_Lock();
+			{
+				bool tie98_display;
+				uint16_t buffer_stride;
+				uint8_t saved_backdrop;
 
-	/* Pan / rotate handling: in side-mode (or with Ctrl held / numpad
-	 * keys) the deltas pan the camera in world XY; otherwise (top-mode
-	 * and not Ctrl, not numpad) they rotate heading/pitch. */
-	if (inputdeltax || inputdeltay) {
-		const int16_t dx_adj = user_framerateadjust(inputdeltax);
-		const int16_t dy_adj = user_framerateadjust(inputdeltay);
-		if (dx_adj || dy_adj) {
-			const int is_numpad = (inputkey >= KEY_1 && inputkey <= KEY_9);
-			if (!t->view_mode || is_numpad || sys2_checkctrlkey()) {
-				int32_t scratch = t->camera_distance >> 14;
-				if (!scratch)
-					scratch = 1;
-				camera.x += ((worldeyeA1 * (int16_t)dx_adj) >> 15) * scratch;
-				camera.y += ((worldeyeB1 * (int16_t)dx_adj) >> 15) * scratch;
-				camera.z += scratch * ((worldeyeC1 * (int16_t)dx_adj) >> 15);
-				camera.x += ((worldeyeA2 * (int16_t)dy_adj) >> 15) * scratch;
-				camera.y += ((worldeyeB2 * (int16_t)dy_adj) >> 15) * scratch;
-				camera.z += scratch * ((worldeyeC2 * (int16_t)dy_adj) >> 15);
-			} else {
-				t->view_transition_active = 1;
-				t->view_pitch = (int16_t)(t->view_pitch + (int16_t)dx_adj);
-				t->view_heading = (int16_t)(t->view_heading - (int16_t)dy_adj);
-			}
-			frame_dirty = 1;
-		}
-	}
+				if (view_transition_active) {
+					view_transition_active = maproom_view_transition(
+						camera_distance, view_mode, view_transition_progress, view_heading, view_pitch);
+				}
 
-	/* Mouse button: 1 = zoom in, 2 = zoom out. */
-	mb = (uint16_t)(inputbuttons & 0x0F);
-	if (mb == 1 || mb == 2) {
-		int32_t step = t->camera_distance >> 8;
-		int16_t step_w;
-		int32_t dx;
-		int32_t dy;
-		int32_t dz;
+				festring_setbound(0, 0, (int16_t)mapScreenWidth, (int16_t)mapScreenHeight);
+				backcolor = MAP_BG_COLOR;
+				festring_setfontsize(2);
+				festring_setlinewrap(0);
+				festring_setautofill(0);
 
-		if (step > 0x7FFF)
-			step = 0x7FFF;
-		if (step < 32)
-			step = 32;
-		step_w = (int16_t)step;
-		step *= frameticks;
-		dx = frameticks * ((worldeyeA3 * step_w) >> 15);
-		dy = frameticks * ((worldeyeB3 * step_w) >> 15);
-		dz = ((worldeyeC3 * step_w) >> 15) * frameticks;
+				/* Cluster pre-pass + z-sort. */
+				maproom_cluster_pass(s_map_fg_render_count, focus_obj_ref);
+				maproom_zsort(s_map_z_buf, s_map_sort_indices, &s_map_sort_count, s_map_fg_render_count,
+							  focus_obj_ref);
 
-		if (mb == 1) {
-			/* Zoom in. */
-			if (t->camera_distance < step) {
-				t->camera_distance = MAP_CAMERA_NEAR;
-			} else {
-				t->camera_distance -= step;
-				if (t->camera_distance < MAP_CAMERA_NEAR) {
-					t->camera_distance += step;
+				/* Render-buffer fill. */
+				tie98_display = uses_dx5;
+				maproom_clear_buffer(tie98_display);
+				buffer_stride =
+					(uint16_t)(mapScreenWidth * (tie98_display ? g_flight16bppBytesPerPixel : 1u));
+				rtsvga2_setvgapointers(buffer_toggle ? newbuf : xtransdataptr, buffer_stride,
+									   (uint16_t)mapScreenHeight);
+
+				/* Backward pass: items behind the camera. */
+				maproom_render_pass(s_map_sort_indices, s_map_sort_count, s_map_z_buf, s_map_fg_render_count,
+									focus_obj_ref, /*side=*/-1);
+
+				/* World axes around the focus point. */
+				create_getworldposition(focus_obj_ref, 0);
+				maproom_draw_axis(0); /* X-axis ticks */
+				maproom_draw_axis(1); /* Y-axis ticks */
+
+				/* Forward pass: items in front of the camera. */
+				maproom_render_pass(s_map_sort_indices, s_map_sort_count, s_map_z_buf, s_map_fg_render_count,
+									focus_obj_ref, /*side=*/+1);
+
+				/* Status panels + page flip. */
+				maproom_drawNHIstatus(view_mode);
+				rtsvga2_setvgapointers(NULL, 0x140u, 0xC8u);
+
+				if (fullupdateflag) {
+					if (buffer_toggle) {
+						maproom_output_buffer(tie98_display, newbuf);
+						logbuf2_selectbuffer(xtransdataptr);
+						buffer_toggle = 0;
+					} else {
+						maproom_output_buffer(tie98_display, xtransdataptr);
+						logbuf2_selectbuffer(newbuf);
+						buffer_toggle = 1;
+					}
+					fullupdateflag = 0;
+				} else if (buffer_toggle) {
+					maproom_output_diff_buffer(tie98_display, xtransdataptr, newbuf);
+					logbuf2_selectbuffer(xtransdataptr);
+					buffer_toggle = 0;
 				} else {
-					camera.x += dx;
-					camera.y += dy;
-					camera.z += dz;
+					maproom_output_diff_buffer(tie98_display, newbuf, xtransdataptr);
+					logbuf2_selectbuffer(newbuf);
+					buffer_toggle = 1;
+				}
+
+				/* Backdrop+stars (drawbackdropflag temporarily forced off so
+				 * BACKDRP2_backdrop only renders the parallax stars). TIE98 clears
+				 * the pending cache flush immediately before and after this pair. */
+				saved_backdrop = drawbackdropflag;
+				if (uses_tie98_logic)
+					g_flightInitialTextureCacheFlushPending = 0;
+				drawbackdropflag = 0;
+				backdrp2_backdrop();
+				drawbackdropflag = saved_backdrop;
+				rtsvga2_drawstars();
+				if (uses_tie98_logic)
+					g_flightInitialTextureCacheFlushPending = 0;
+				fullupdateflag = 0;
+			}
+			if (uses_dx5) {
+				FlightSurface_Unlock();
+				FrontendDisplay_BlitOffscreenToRenderSurface();
+				FrontendDisplay_PresentFrame();
+			}
+#ifdef TIE_MODERN
+			continuation->view_mode = view_mode;
+			continuation->view_transition_progress = view_transition_progress;
+			continuation->view_transition_active = view_transition_active;
+			continuation->view_heading = view_heading;
+			continuation->view_pitch = view_pitch;
+			continuation->camera_distance = camera_distance;
+			continuation->page_delta = page_delta;
+			continuation->buffer_toggle = buffer_toggle;
+			continuation->focus_obj_ref = focus_obj_ref;
+			continuation->render = false;
+			return 0;
+#endif
+		}
+		{
+			int frame_dirty = 0;
+
+			uint16_t key;
+			uint16_t mb;
+
+			tickcounter += xtimer_time_elapsed();
+			if (tickcounter >= (uint16_t)MAP_FRAME_TICKS) {
+				if (view_transition_progress < 0x76u) {
+					view_transition_progress = (uint16_t)(view_transition_progress + tickcounter);
+					frame_dirty = 1;
+				}
+				tickcounter = 0;
+			}
+			feinput_getrawinput();
+			feinput_checkinput();
+			feinput_degitterinput();
+			inputdeltay *= 2;
+
+			/* Key dispatch. The numeric ranges below match the IDA decompile
+			 * exactly; do NOT collapse without re-checking the asm. */
+			key = (uint16_t)inputkey;
+			switch (key) {
+				/* Page nav. */
+				case 1:
+					page_delta = -1;
+					inputkey = 109;
+					frame_dirty = 1;
+					break;
+				case 2:
+					page_delta = 1;
+					inputkey = 109;
+					frame_dirty = 1;
+					break;
+
+				/* Exit (Esc / 'M' / 'Q' / 'm' / 'q' / 0xBB). The binary
+				 * routes all of these to the same LABEL_245 (page_delta=0). */
+				case 27:
+				case 0x4D:
+				case 0x51:
+				case 0x6D:
+				case 0x71:
+				case 0xBB:
+					page_delta = 0;
+					inputkey = 109;
+					frame_dirty = 1;
+					break;
+
+				/* View toggle (Space / 0xBE = ',' KEY_PAGE-toggle). */
+				case 32:
+				case 190: {
+					view_mode = (view_mode == 0) ? 1 : 0;
+					view_transition_progress = 4;
+					view_transition_active = 1;
+					frame_dirty = 1;
+					break;
+				}
+
+				/* Numpad pan: 1..9 set inputdeltax/y. */
+				case '1':
+					inputdeltax = -MAP_PAN_DELTA;
+					inputdeltay = MAP_PAN_DELTA;
+					break;
+				case '2':
+					inputdeltax = 0;
+					inputdeltay = MAP_PAN_DELTA;
+					break;
+				case '3':
+					inputdeltax = MAP_PAN_DELTA;
+					inputdeltay = MAP_PAN_DELTA;
+					break;
+				case '4':
+					inputdeltax = -MAP_PAN_DELTA;
+					inputdeltay = 0;
+					break;
+				case '6':
+					inputdeltax = MAP_PAN_DELTA;
+					inputdeltay = 0;
+					break;
+				case '7':
+					inputdeltax = -MAP_PAN_DELTA;
+					inputdeltay = -MAP_PAN_DELTA;
+					break;
+				case '8':
+					inputdeltax = 0;
+					inputdeltay = -MAP_PAN_DELTA;
+					break;
+				case '9':
+					inputdeltax = MAP_PAN_DELTA;
+					inputdeltay = -MAP_PAN_DELTA;
+					break;
+
+				/* 'a': closest attacker of the current target. */
+				case 'a': {
+					const uint16_t v = user_findclosestattacker(pstate.target_obj_idx);
+					if (v != 0xFFFFu)
+						pstate.target_obj_idx = v;
+					frame_dirty = 1;
+					break;
+				}
+
+				/* 'c': center camera on target. */
+				case 'c': {
+					focus_obj_ref = pstate.target_obj_idx;
+					maproom_setcamerafocus(pstate.target_obj_idx, camera_distance);
+					frame_dirty = 1;
+					break;
+				}
+
+				/* 'e': closest attacker of the player. */
+				case 'e': {
+					const uint16_t v = user_findclosestattacker(pstate.object_idx);
+					if (v != 0xFFFFu)
+						pstate.target_obj_idx = v;
+					frame_dirty = 1;
+					break;
+				}
+
+				/* NHI / warhead filter cycles (0->1->2->0). */
+				case 'h':
+					hostileflag = (hostileflag == 2) ? 0 : (uint8_t)(hostileflag + 1);
+					frame_dirty = 1;
+					break;
+				case 'i':
+					imperialflag = (imperialflag == 2) ? 0 : (uint8_t)(imperialflag + 1);
+					frame_dirty = 1;
+					break;
+				case 'n':
+					neutralflag = (neutralflag == 2) ? 0 : (uint8_t)(neutralflag + 1);
+					frame_dirty = 1;
+					break;
+				case 'w':
+					warheadflag = (warheadflag == 2) ? 0 : (uint8_t)(warheadflag + 1);
+					frame_dirty = 1;
+					break;
+
+				/* 'r': closest live enemy at any distance. */
+				case 'r': {
+					const uint16_t v = maproom_find_min(score_trig2_polardistance_to_player,
+														filter_enemy_disabled_or_alive, NULL);
+					if (v != 0xFFFFu)
+						pstate.target_obj_idx = v;
+					frame_dirty = 1;
+					break;
+				}
+
+				/* 't': next radar target. */
+				case 't': {
+					if (pstate.target_obj_idx == 0xFFFFu)
+						pstate.target_obj_idx = (uint16_t)pstate.radar_target0;
+					pstate.target_obj_idx = user_picknexttarget(pstate.target_obj_idx, 1);
+					frame_dirty = 1;
+					break;
+				}
+
+				/* 'u': oldest unattended craft (no leader). */
+				case 'u': {
+					const uint16_t v = maproom_find_min(score_age_ticks, filter_unattended_other, NULL);
+					if (v != 0xFFFFu)
+						pstate.target_obj_idx = v;
+					frame_dirty = 1;
+					break;
+				}
+
+				/* 'y': previous radar target. */
+				case 'y': {
+					if (pstate.target_obj_idx == 0xFFFFu)
+						pstate.target_obj_idx = (uint16_t)pstate.radar_target0;
+					pstate.target_obj_idx = user_picknexttarget(pstate.target_obj_idx, -1);
+					frame_dirty = 1;
+					break;
+				}
+
+				default: {
+					/* Quick-recall (F5-F7 ext, engine key codes 0xBF..0xC1). */
+					if (key >= KEY_F5 && key <= KEY_F7) {
+						uint16_t target = pstate.target_presets[key - KEY_F5];
+						if (target != 0xFFFFu)
+							pstate.target_obj_idx = target;
+						frame_dirty = 1;
+						/* Quick-save (Shift-F5..F7, engine key codes 0xD8..0xDA). */
+					} else if (key >= KEY_SHIFT_F5 && key <= KEY_SHIFT_F7) {
+						if (pstate.target_obj_idx != 0xFFFFu)
+							pstate.target_presets[key - KEY_SHIFT_F5] = pstate.target_obj_idx;
+					}
+					break;
 				}
 			}
-		} else {
-			/* Zoom out. */
-			t->camera_distance += step;
-			if (t->camera_distance <= MAP_CAMERA_FAR) {
-				camera.x -= dx;
-				camera.y -= dy;
-				camera.z -= dz;
-			} else {
-				t->camera_distance -= step;
+
+			/* Pan / rotate handling: in side-mode (or with Ctrl held / numpad
+			 * keys) the deltas pan the camera in world XY; otherwise (top-mode
+			 * and not Ctrl, not numpad) they rotate heading/pitch. */
+			if (inputdeltax || inputdeltay) {
+				const int16_t dx_adj = user_framerateadjust(inputdeltax);
+				const int16_t dy_adj = user_framerateadjust(inputdeltay);
+				if (dx_adj || dy_adj) {
+					const int is_numpad = (inputkey >= KEY_1 && inputkey <= KEY_9);
+					if (!view_mode || is_numpad || sys2_checkctrlkey()) {
+						int32_t scratch = camera_distance >> 14;
+						if (!scratch)
+							scratch = 1;
+						camera.x += ((worldeyeA1 * (int16_t)dx_adj) >> 15) * scratch;
+						camera.y += ((worldeyeB1 * (int16_t)dx_adj) >> 15) * scratch;
+						camera.z += scratch * ((worldeyeC1 * (int16_t)dx_adj) >> 15);
+						camera.x += ((worldeyeA2 * (int16_t)dy_adj) >> 15) * scratch;
+						camera.y += ((worldeyeB2 * (int16_t)dy_adj) >> 15) * scratch;
+						camera.z += scratch * ((worldeyeC2 * (int16_t)dy_adj) >> 15);
+					} else {
+						view_transition_active = 1;
+						view_pitch = (int16_t)(view_pitch + (int16_t)dx_adj);
+						view_heading = (int16_t)(view_heading - (int16_t)dy_adj);
+					}
+					frame_dirty = 1;
+				}
 			}
+
+			/* Mouse button: 1 = zoom in, 2 = zoom out. */
+			mb = (uint16_t)(inputbuttons & 0x0F);
+			if (mb == 1 || mb == 2) {
+				int32_t step = camera_distance >> 8;
+				int16_t step_w;
+				int32_t dx;
+				int32_t dy;
+				int32_t dz;
+
+				if (step > 0x7FFF)
+					step = 0x7FFF;
+				if (step < 32)
+					step = 32;
+				step_w = (int16_t)step;
+				step *= frameticks;
+				dx = frameticks * ((worldeyeA3 * step_w) >> 15);
+				dy = frameticks * ((worldeyeB3 * step_w) >> 15);
+				dz = ((worldeyeC3 * step_w) >> 15) * frameticks;
+
+				if (mb == 1) {
+					/* Zoom in. */
+					if (camera_distance < step) {
+						camera_distance = MAP_CAMERA_NEAR;
+					} else {
+						camera_distance -= step;
+						if (camera_distance < MAP_CAMERA_NEAR) {
+							camera_distance += step;
+						} else {
+							camera.x += dx;
+							camera.y += dy;
+							camera.z += dz;
+						}
+					}
+				} else {
+					/* Zoom out. */
+					camera_distance += step;
+					if (camera_distance <= MAP_CAMERA_FAR) {
+						camera.x -= dx;
+						camera.y -= dy;
+						camera.z -= dz;
+					} else {
+						camera_distance -= step;
+					}
+				}
+				frame_dirty = 1;
+			}
+
+			/* Exit conditions: any key that maps to KEY_m (109) closes the
+			 * room. The key dispatch above sets inputkey to 109 for ESC / 'M'
+			 * / 'Q' / nav keys, so a single equality check covers them all. */
+			if (inputkey == KEY_m) {
+
+				logbuf2_selectbuffer(newbuf);
+				maproom_swap_buffer_ptrs(1);
+#ifdef TIE_MODERN
+				continuation->finished = true;
+#endif
+				return page_delta;
+			}
+
+			render_again = frame_dirty;
 		}
-		frame_dirty = 1;
+#ifdef TIE_MODERN
+		continuation->view_mode = view_mode;
+		continuation->view_transition_progress = view_transition_progress;
+		continuation->view_transition_active = view_transition_active;
+		continuation->view_heading = view_heading;
+		continuation->view_pitch = view_pitch;
+		continuation->camera_distance = camera_distance;
+		continuation->page_delta = page_delta;
+		continuation->buffer_toggle = buffer_toggle;
+		continuation->focus_obj_ref = focus_obj_ref;
+		continuation->render = render_again != 0;
+		return 0;
+#endif
 	}
-
-	/* Exit conditions: any key that maps to KEY_m (109) closes the
-	 * room. The key dispatch above sets inputkey to 109 for ESC / 'M'
-	 * / 'Q' / nav keys, so a single equality check covers them all. */
-	if (inputkey == KEY_m)
-		return 1;
-
-	return frame_dirty ? 2 : 0;
-}
-
-void maproom_CloseRoom(void) {
-	logbuf2_selectbuffer(newbuf);
-	maproom_swap_buffer_ptrs(1);
 }

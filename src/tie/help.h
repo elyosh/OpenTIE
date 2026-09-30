@@ -20,22 +20,7 @@ extern int32_t helpBottom;
 extern char** helpkeystrings;
 extern char** helpscreenstrings;
 
-typedef struct HelpRoomState {
-	int16_t cursor_idx;
-	int16_t previous_cursor;
-	int16_t redraw_all;
-	int16_t page_delta;
-	uint16_t prev_buttons;
-	int16_t row_step;
-	int16_t group_gap;
-} HelpRoomState;
-
-/* Nonzero start_right_col selects row 24 at room entry. */
-void help_OpenRoom(HelpRoomState* state, int32_t start_right_col);
-void help_render_rows(HelpRoomState* state);
-/* Poll result: 0 idle, 1 exit, 2 redraw. On exit, page_delta is -1/+1
- * for adjacent screens or 0 for cancellation. */
-int help_poll_once(HelpRoomState* state);
+int32_t help_helproom(int32_t start_right_col);
 
 #ifdef __cplusplus
 }

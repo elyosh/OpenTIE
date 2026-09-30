@@ -25,18 +25,6 @@
 extern "C" {
 #endif
 
-/* State shared by room rendering and input processing. */
-typedef struct GoalsRoomState {
-	int16_t scroll_y;
-	int16_t content_height;
-	int16_t nav_code;
-} GoalsRoomState;
-
-void goals_OpenRoom(GoalsRoomState* state);
-void goals_render_page(int16_t scroll_y, int16_t* content_height);
-/* Poll result: 0 idle, 1 exit, 2 redraw. */
-int goals_poll_once(GoalsRoomState* state);
-
 /* Render one goal line with right-margin word-wrap. Accumulates line-height
  * including any added wrap lines and returns that total so callers can
  * advance cursor_y. See the implementation comment for `op` / `cond` /
@@ -96,6 +84,8 @@ extern void* goalfamilystrings;   /* const char *[7]  family-category     */
 extern void* goal_comma_string;   /* const char *     ", "                */
 extern void* goalgenusstrings;    /* const char *[16] genus-category      */
 extern void* goalallfgstring;     /* const char *     "all FG"            */
+
+int32_t goals_missiongoalsroom(void);
 
 #ifdef __cplusplus
 }

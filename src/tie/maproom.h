@@ -30,22 +30,7 @@ extern "C" {
  * navigation result (-1 previous, 0 exit, +1 next). */
 enum { MAP_FRAME_TICKS = 4 };
 
-typedef struct MaproomState {
-	uint16_t view_mode;
-	uint16_t view_transition_progress;
-	int view_transition_active;
-	int16_t view_heading;
-	int16_t view_pitch;
-	int32_t camera_distance;
-	int8_t page_delta;
-	int buffer_toggle;
-	uint16_t focus_obj_ref;
-} MaproomState;
-
-void maproom_OpenRoom(MaproomState* state);
-void maproom_DrawRoom(MaproomState* state);
-int maproom_PollRoom(MaproomState* state);
-void maproom_CloseRoom(void);
+int32_t maproom_maproom(void);
 
 /* --- Internal helpers (watdbg module-scope) ------------------------------ */
 

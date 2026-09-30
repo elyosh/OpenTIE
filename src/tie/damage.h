@@ -40,18 +40,6 @@ typedef enum SubsystemFlags {
  */
 extern char** systemstrings;
 
-/* State shared by room rendering and input processing. */
-typedef struct DamageRoomState {
-	int16_t sel_sys;    /* -1 until first present row picks it up */
-	int16_t mouse_prev; /* edge-detect on LMB/RMB release */
-	int16_t ret_dir;
-} DamageRoomState;
-
-void damage_OpenRoom(DamageRoomState* state);
-void damage_render_page(int16_t* selection);
-/* Poll result: 0 idle, 1 exit, 2 redraw. */
-int damage_poll_once(DamageRoomState* state);
-
 /*
  * Move the current selection one step forward (direction == +1) or backward
  * (direction == -1, encoded as 0xFFFF) through systems in repair-priority order. The
@@ -71,6 +59,8 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction);
  * Name is drawn left-justified through systemstrings[id]; value right-justified.
  */
 void damage_outputsystem(SystemStringId system_id, int16_t y);
+
+int32_t damage_damageroom(void);
 
 #ifdef __cplusplus
 }
