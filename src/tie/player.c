@@ -552,8 +552,8 @@ int16_t player_Seek_Page(int16_t time, int16_t flag) {
 void player_Seek_Page_Section(void) {
 	int16_t start_time = brief.page.time;
 	int16_t section_done = 0;
-	int16_t para_count = 0;
 	int16_t has_para = 0;
+	int16_t para_count = 0;
 	int16_t i;
 
 	int16_t next_opcode;
@@ -562,16 +562,15 @@ void player_Seek_Page_Section(void) {
 
 	player_Rewind_Page();
 
-	next_opcode = 0;
-	while (!section_done) {
+	for (next_opcode = 0; !section_done;) {
 		if (next_opcode == BCMD_END_PAGE)
 			break;
 
 		next_opcode = brief.page.commands[brief.page.index + 1];
 
 		if (brief.para_off) {
-			has_para = 0;
 			para_count = 0;
+			has_para = 0;
 		}
 		for (i = 0; i < 2; i++) {
 			if (brief.para_on[i])
@@ -581,7 +580,7 @@ void player_Seek_Page_Section(void) {
 			para_count++;
 
 		if ((brief.scale_on || brief.move_on || brief.seek_on || para_count == 1) &&
-			start_time <= brief.page.time) {
+			brief.page.time >= start_time) {
 			section_done = 1;
 		} else {
 			player_Step_Page(1);
