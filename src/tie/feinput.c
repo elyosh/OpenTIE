@@ -35,6 +35,7 @@ int8_t FlightInput_GetChar(void) {
  *   mode 1: SVGA 640x480    (RTSVGA2_*VGA, slot 8 swapped to outchar32VGA)
  *   mode 2: RGB  640x480x16 (TIE98 packed-pixel routines) */
 // GLOBAL: TIE95 0xC1EA4
+// GLOBAL: TIE98 0x4E02A0
 void* graphroutines[39] = {
 	/* --- mode 0: VGA 320x200 --- */
 	(void*)rtsvga2_initgraphVGA,      /* [0]  initgraph */

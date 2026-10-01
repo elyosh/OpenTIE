@@ -336,6 +336,7 @@ uint8_t drawmarkingsflag;
 /* --- Sound/input flags --- */
 
 // GLOBAL: TIE95 0xEB769
+// GLOBAL: TIE98 0x59271D
 uint8_t musicenabled;
 // GLOBAL: TIE95 0xEB76D
 uint8_t voiceenabled;
@@ -383,6 +384,7 @@ uint16_t missionversion; /* .TIE file version (0 = legacy) */
 // GLOBAL: TIE95 0xEB710
 uint16_t baseframerate = 20; /* mission base framerate (seeded by xtimer) */
 // GLOBAL: TIE95 0xEB71C
+// GLOBAL: TIE98 0x591E40
 uint16_t tickcounter;
 // GLOBAL: TIE95 0xEB720
 // GLOBAL: TIE98 0x592678
@@ -458,6 +460,7 @@ char replaysavegamefile[13] = "savegame.rpy";
 // GLOBAL: TIE95 0xCD1E6
 char inputspoolfile[10] = "input.spl";
 // GLOBAL: TIE95 0xEAC68
+// GLOBAL: TIE98 0x591FE4
 void* replayptr; /* write/read cursor into replaybuffer. */
 // GLOBAL: TIE95 0xEB6AA
 uint16_t replaybuffercnt; /* frames in the current 3071-slot page. */
@@ -565,10 +568,12 @@ int32_t approxdist;
 // GLOBAL: TIE98 0x595F64
 int16_t inputbuttons;
 // GLOBAL: TIE95 0xEB6E8
+// GLOBAL: TIE98 0x59223E
 int16_t inputkey;
 // GLOBAL: TIE95 0xEB6D2
 int16_t inputdeltax;
 // GLOBAL: TIE95 0xEB6CE
+// GLOBAL: TIE98 0x595FE4
 int16_t inputdeltay;
 // GLOBAL: TIE95 0xEB6DC
 int16_t mouseflag;
@@ -664,6 +669,7 @@ char temp2string[40];
 
 /* Graphics function pointers (assigned by FEINPUT_SetGraphicsPtrs) */
 // GLOBAL: TIE95 0xEB0D4
+// GLOBAL: TIE98 0x59267C
 void* initgraph;
 // GLOBAL: TIE95 0xEB0FC
 // GLOBAL: TIE98 0x591E50
@@ -672,14 +678,19 @@ void (*blank)(void);
 // GLOBAL: TIE98 0x591E3C
 void (*unblank)(void);
 // GLOBAL: TIE95 0xEB0CC
+// GLOBAL: TIE98 0x59268C
 void (*buildpalette)(const uint8_t* rgb_src, uint16_t start_idx, uint16_t count);
 // GLOBAL: TIE95 0xEB0D8
+// GLOBAL: TIE98 0x5A26DC
 void* savepalette;
 // GLOBAL: TIE95 0xEB0F8
+// GLOBAL: TIE98 0x596BA0
 void* restorepalette;
 // GLOBAL: TIE95 0xEB0C0
+// GLOBAL: TIE98 0x591E44
 uint32_t (*calcposition)(uint16_t, uint16_t);
 // GLOBAL: TIE95 0xEB0DC
+// GLOBAL: TIE98 0x59269C
 void (*drawshape)(const void*, int16_t, int16_t, int16_t, uint16_t);
 // GLOBAL: TIE95 0xEB0F4
 // GLOBAL: TIE98 0x5918E4
@@ -688,10 +699,13 @@ void (*outchar)(int ch);
 // GLOBAL: TIE98 0x59222C
 void (*clearwindow)(void);
 // GLOBAL: TIE95 0xEB0B4
+// GLOBAL: TIE98 0x595FE0
 void (*fillbox)(uint16_t, uint16_t, uint16_t, uint16_t);
 // GLOBAL: TIE95 0xEB0BC
+// GLOBAL: TIE98 0x5926C4
 void* savebox;
 // GLOBAL: TIE95 0xEB0B8
+// GLOBAL: TIE98 0x5A26C8
 void* restorebox;
 
 /* Color remap table. Indexed by FESTRING_set{text,back,drop}color for any
@@ -977,6 +991,7 @@ uint8_t* farbufferptr;
 // GLOBAL: TIE95 0xEAC80
 uint8_t* farbufferptrs[265];
 // GLOBAL: TIE95 0xEB0A4
+// GLOBAL: TIE98 0x5918F8
 void* fontptrtiny;
 // GLOBAL: TIE95 0xEB0AC
 // GLOBAL: TIE98 0x5A26AC
@@ -1018,6 +1033,7 @@ uint8_t blankcondition;
 
 /* Accelerated-game-clock gear shift (fediskio persists; xtimer uses it). */
 // GLOBAL: TIE95 0xCD184
+// GLOBAL: TIE98 0x4F2AD8
 uint8_t acceleratedtimesetting;
 
 /* Bitmap-draw queue populated by anim_add_bitmap_draw, consumed by
