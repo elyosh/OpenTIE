@@ -8,6 +8,8 @@ project(tie C)
 enable_language(CXX)
 set(CMAKE_CXX_STANDARD 17)
 
+include(cmake/CompilerCache.cmake)
+
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
