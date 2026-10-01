@@ -191,6 +191,7 @@ EBriefStruct* player_Fetch_Brief(void) { return &brief; }
 EFArrayStruct* player_Fetch_FGroup(void) { return &fgroup; }
 
 // FUNCTION: TIE95 0x7D99C
+// FUNCTION: TIE98 0x469A40
 int16_t player_Is_Side_Enemy(int16_t side) {
 	switch (side) {
 		case 0:
