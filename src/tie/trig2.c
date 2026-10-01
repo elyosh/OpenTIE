@@ -123,6 +123,7 @@ int32_t trig2_rho;
 // GLOBAL: TIE95 0xEC1B8
 int32_t trig2_cartesianyoffset;
 // GLOBAL: TIE95 0xEC1BC
+// GLOBAL: TIE98 0x58E024
 int32_t trig2_polardistance;
 // GLOBAL: TIE95 0xEC1C0
 int32_t trig2_cartesianxoffset;
