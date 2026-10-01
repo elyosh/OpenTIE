@@ -392,23 +392,23 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 		if (!play1_read_buffer)
 			return 1;
 
-		xbitmap_Init_Bitmap(&play1_last_frame);
-		xbitmap_Init_Bitmap(&play1_current_frame);
+		xbm_Init_Bitmap(&play1_last_frame);
+		xbm_Init_Bitmap(&play1_current_frame);
 
-		ok = xbitmap_Alloc_Bitmap(&play1_last_frame, 320, 200);
+		ok = xbm_Alloc_Bitmap(&play1_last_frame, 320, 200);
 		if (ok)
-			ok = xbitmap_Alloc_Bitmap(&play1_current_frame, 320, 200);
+			ok = xbm_Alloc_Bitmap(&play1_current_frame, 320, 200);
 
 		if (!ok) {
 			xmemhdl_Free_Handle(play1_read_buffer);
 			play1_read_buffer = LANDRU_NULL_HANDLE;
-			xbitmap_Free_Bitmap(&play1_last_frame);
-			xbitmap_Free_Bitmap(&play1_current_frame);
+			xbm_Free_Bitmap(&play1_last_frame);
+			xbm_Free_Bitmap(&play1_current_frame);
 			return 1;
 		}
 
-		xbitmap_Erase_Bitmap(&play1_last_frame);
-		xbitmap_Erase_Bitmap(&play1_current_frame);
+		xbm_Erase_Bitmap(&play1_last_frame);
+		xbm_Erase_Bitmap(&play1_current_frame);
 		xactor_Set_Actor_Update_Function(the_actor, (xactorUpdateFunc)play1_Update_Stream_Actor);
 		xactor_Set_Actor_Draw_Function(the_actor, play1_Draw_Stream_Actor);
 		xactor_Set_Actor_ZPlane(the_actor, 12700);
@@ -459,7 +459,7 @@ enum {
 // FUNCTION: TIE95 0x78800
 static void play1_Make_Literal_Actor(Actor* the_actor) {
 	BitmapStruct* canvas_bm = xcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* temp_buffer = (uint8_t*)xbitmap_Lock_Bitmap(canvas_bm);
+	uint8_t* temp_buffer = (uint8_t*)xbm_Lock_Bitmap(canvas_bm);
 	memset(temp_buffer, 0, 64000);
 
 	if (the_actor->res_type == FOURCC_DELT) {
@@ -514,7 +514,7 @@ static void play1_Make_Literal_Actor(Actor* the_actor) {
 		}
 	}
 
-	xbitmap_Unlock_Bitmap(canvas_bm);
+	xbm_Unlock_Bitmap(canvas_bm);
 }
 
 /* ------------------------------------------------------------------ */
@@ -647,13 +647,13 @@ static void play1_Update_Stream_Actor(Actor* the_actor) {
 		return;
 	}
 
-	prev_pixels = xbitmap_Lock_Bitmap(&play1_last_frame);
-	cur_pixels = xbitmap_Lock_Bitmap(&play1_current_frame);
+	prev_pixels = xbm_Lock_Bitmap(&play1_last_frame);
+	cur_pixels = xbm_Lock_Bitmap(&play1_current_frame);
 	data = xmemhdl_Lock_Handle(play1_read_buffer);
 	drawstrm_Convert_Frame_To_Palette(prev_pixels, data, cur_pixels);
 	xmemhdl_Unlock_Handle(play1_read_buffer);
-	xbitmap_Unlock_Bitmap(&play1_last_frame);
-	xbitmap_Unlock_Bitmap(&play1_current_frame);
+	xbm_Unlock_Bitmap(&play1_last_frame);
+	xbm_Unlock_Bitmap(&play1_current_frame);
 	stream_actor_frames_to_go--;
 }
 
@@ -1081,9 +1081,9 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 			play1_read_buffer = LANDRU_NULL_HANDLE;
 		}
 		if (play1_last_frame.data)
-			xbitmap_Free_Bitmap(&play1_last_frame);
+			xbm_Free_Bitmap(&play1_last_frame);
 		if (play1_current_frame.data)
-			xbitmap_Free_Bitmap(&play1_current_frame);
+			xbm_Free_Bitmap(&play1_current_frame);
 	}
 
 	xview_Clear_View_Update_Function();

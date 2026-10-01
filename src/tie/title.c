@@ -312,7 +312,7 @@ static int16_t title_draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off
 	if (!refresh)
 		return 1;
 
-	dataptr = (char*)xbitmap_Lock_Bitmap(&title_background);
+	dataptr = (char*)xbm_Lock_Bitmap(&title_background);
 
 	for (i = 0; i < title_num_lines; i++) {
 		int16_t y, by, yf, j;
@@ -342,7 +342,7 @@ static int16_t title_draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off
 		}
 	}
 
-	xbitmap_Unlock_Bitmap(&title_background);
+	xbm_Unlock_Bitmap(&title_background);
 	return 1;
 }
 
@@ -483,14 +483,14 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 
 	/* Allocate background bitmap */
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
-	xbitmap_Init_Bitmap(&title_background);
+	xbm_Init_Bitmap(&title_background);
 #ifdef TIE_MODERN
-	if (!xbitmap_Alloc_Bitmap(&title_background, 320, 200)) {
+	if (!xbm_Alloc_Bitmap(&title_background, 320, 200)) {
 		TieTitle_RunView(resource, NULL, false);
 		return 0;
 	}
 #else
-	xbitmap_Alloc_Bitmap(&title_background, 320, 200);
+	xbm_Alloc_Bitmap(&title_background, 320, 200);
 #endif
 
 	/* Create actors (scene 8 only: along + starwars) */
@@ -578,7 +578,7 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 	shellext_Handle_TIE_View();
 	xview_Enable_Global_View_Erase();
 	xview_Clear_View_Update_Function();
-	xbitmap_Free_Bitmap(&title_background);
+	xbm_Free_Bitmap(&title_background);
 	xparagrp_Free_Paragraph(title_text);
 	xres_Close_Resource(resource);
 	xcanvas_Get_Drawing_Canvas_Bounds(&frame);

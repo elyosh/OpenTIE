@@ -1377,9 +1377,9 @@ static void player_idraw_Map(Input* input, Rect* bounds, Rect* clip, int16_t ref
 
 		xrect_Copy_Rect(&src_rect, &map_state.source_rect);
 		xrect_Inset_Rect(&src_rect, 32, 16);
-		pixels = (char*)xbitmap_Lock_Bitmap(&brief_buffer);
+		pixels = (char*)xbm_Lock_Bitmap(&brief_buffer);
 		stub_Map_Clipped_Image(pixels, brief_poly.x, &src_rect, 320, 150);
-		xbitmap_Unlock_Bitmap(&brief_buffer);
+		xbm_Unlock_Bitmap(&brief_buffer);
 		/* Restore the canvas-leak gate so subsequent scratch-canvas
 		 * emits (tielogo / title backgrounds, etc.) stay suppressed. */
 
@@ -1667,8 +1667,8 @@ void player_Init_Brief_Display(Input* input, void* poly) {
 	xactor_Set_Actor_Time(stars_actor, 0, 0);
 
 	if (brief_poly_used) {
-		xbitmap_Init_Bitmap(&brief_buffer);
-		xbitmap_Alloc_Bitmap(&brief_buffer, 320, 200);
+		xbm_Init_Bitmap(&brief_buffer);
+		xbm_Alloc_Bitmap(&brief_buffer, 320, 200);
 	}
 
 	/* Allocate star buffer and render star background into it */
@@ -1748,7 +1748,7 @@ void player_Free_Brief_Display(void) {
 #endif
 
 	if (brief_poly_used)
-		xbitmap_Free_Bitmap(&brief_buffer);
+		xbm_Free_Bitmap(&brief_buffer);
 
 	player_Free_Display_Map();
 }

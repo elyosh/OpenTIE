@@ -38,7 +38,7 @@ static void title_end(void* self) {
 		return;
 	xview_Enable_Global_View_Erase();
 	xview_Clear_View_Update_Function();
-	xbitmap_Free_Bitmap(&title_background);
+	xbm_Free_Bitmap(&title_background);
 	xparagrp_Free_Paragraph(title_text);
 	title_text = LANDRU_NULL_HANDLE;
 	title_num_lines = 0;

@@ -39,7 +39,7 @@ static void tielogo_end(void* self) {
 	xcanvas_Get_Drawing_Canvas_Bounds(&frame);
 	xview_Set_View_Frame(0, &frame);
 	xview_Set_View_Pos(0, frame.left, frame.top);
-	xbitmap_Free_Bitmap(&tielogo_background);
+	xbm_Free_Bitmap(&tielogo_background);
 	if (task->resource)
 		xres_Close_Resource(task->resource);
 	fighter2_actor = NULL;

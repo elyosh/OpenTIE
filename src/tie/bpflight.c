@@ -719,7 +719,7 @@ static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, 
 
 	xtransdataptr = xtransdata;
 	bitmap = xcanvas_Get_Current_Canvas_Bitmap();
-	xtrans2_videobaseptr = (uint8_t*)xbitmap_Lock_Bitmap(bitmap);
+	xtrans2_videobaseptr = (uint8_t*)xbm_Lock_Bitmap(bitmap);
 	buffer_ptr = xtrans2_videobaseptr;
 	width = (uint16_t)(clip->right - clip->left);
 	height = (uint16_t)(clip->bottom - clip->top);
@@ -820,7 +820,7 @@ static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, 
 	g_flightSurfaceAlreadyLocked = 0;
 	RenderScene_UnlockSceneBuffers_tie98();
 	deepspacecolor = saved_deepspace_color;
-	xbitmap_Unlock_Bitmap(bitmap);
+	xbm_Unlock_Bitmap(bitmap);
 	return 0;
 }
 
@@ -889,7 +889,7 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 	/* Lock the XTRANS2 scratch + canvas; logbuf picks up videobaseptr. */
 	xtransdataptr = xtransdata;
 	bm = xcanvas_Get_Current_Canvas_Bitmap();
-	xtrans2_videobaseptr = (uint8_t*)xbitmap_Lock_Bitmap(bm);
+	xtrans2_videobaseptr = (uint8_t*)xbm_Lock_Bitmap(bm);
 	buffer_ptr = xtrans2_videobaseptr;
 
 	/* Re-fill the XTRANS2 mask buffer for this viewport. */
@@ -1290,7 +1290,7 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 	}
 	deepspacecolor = saved_deepspace;
 
-	xbitmap_Unlock_Bitmap(bm);
+	xbm_Unlock_Bitmap(bm);
 	return 0;
 }
 

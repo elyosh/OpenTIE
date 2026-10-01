@@ -83,9 +83,9 @@ static void film_end(void* self) {
 			play1_read_buffer = LANDRU_NULL_HANDLE;
 		}
 		if (play1_last_frame.data)
-			xbitmap_Free_Bitmap(&play1_last_frame);
+			xbm_Free_Bitmap(&play1_last_frame);
 		if (play1_current_frame.data)
-			xbitmap_Free_Bitmap(&play1_current_frame);
+			xbm_Free_Bitmap(&play1_current_frame);
 	}
 
 	xview_Clear_View_Update_Function();

@@ -6,7 +6,7 @@
 void slant_Scale_Line(void* bitmap_data, int16_t src_x, int16_t src_y, int16_t skip, int16_t skipf,
 					  int16_t dst_x, int16_t dst_y, int16_t width, uint8_t color) {
 	BitmapStruct* canvas_bm = xcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* canvas_pixels = (uint8_t*)xbitmap_Lock_Bitmap(canvas_bm);
+	uint8_t* canvas_pixels = (uint8_t*)xbm_Lock_Bitmap(canvas_bm);
 
 	uint8_t* dst = canvas_pixels + dst_y * 320 + dst_x;
 	uint8_t* src = (uint8_t*)bitmap_data + src_y * 320 + src_x;
@@ -33,5 +33,5 @@ void slant_Scale_Line(void* bitmap_data, int16_t src_x, int16_t src_y, int16_t s
 		} while (width > 0);
 	}
 
-	xbitmap_Unlock_Bitmap(canvas_bm);
+	xbm_Unlock_Bitmap(canvas_bm);
 }

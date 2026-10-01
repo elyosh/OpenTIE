@@ -49,7 +49,7 @@ static void deltadd_Copy_Transparent(uint8_t* dst, const uint8_t* src, int16_t c
 // FUNCTION: TIE95 0x650B0
 static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t off_y, uint8_t color) {
 	BitmapStruct* bm = xcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* canvas = (uint8_t*)xbitmap_Lock_Bitmap(bm);
+	uint8_t* canvas = (uint8_t*)xbm_Lock_Bitmap(bm);
 
 	uint16_t length = *data++;
 	while (length) {
@@ -86,7 +86,7 @@ static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t
 		length = *data++;
 	}
 
-	xbitmap_Unlock_Bitmap(bm);
+	xbm_Unlock_Bitmap(bm);
 }
 
 /*
@@ -105,7 +105,7 @@ static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t 
 	memset(scratch, 0, sizeof(scratch));
 
 	bm = xcanvas_Get_Current_Canvas_Bitmap();
-	canvas = (uint8_t*)xbitmap_Lock_Bitmap(bm);
+	canvas = (uint8_t*)xbm_Lock_Bitmap(bm);
 
 	length = *data++;
 	while (length) {
@@ -163,7 +163,7 @@ static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t 
 		length = *data++;
 	}
 
-	xbitmap_Unlock_Bitmap(bm);
+	xbm_Unlock_Bitmap(bm);
 }
 
 /*

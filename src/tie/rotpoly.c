@@ -50,7 +50,7 @@ void rotpoly_Map_Image(void* src_data, const int16_t* left_table, int16_t src_st
 	int16_t row;
 
 	canvas_bm = xcanvas_Get_Current_Canvas_Bitmap();
-	canvas_pixels = (uint8_t*)xbitmap_Lock_Bitmap(canvas_bm);
+	canvas_pixels = (uint8_t*)xbm_Lock_Bitmap(canvas_bm);
 
 	for (row = 0; row < num_scanlines; row++) {
 		uint8_t* dest;
@@ -161,5 +161,5 @@ void rotpoly_Map_Image(void* src_data, const int16_t* left_table, int16_t src_st
 		start_y++;
 	}
 
-	xbitmap_Unlock_Bitmap(canvas_bm);
+	xbm_Unlock_Bitmap(canvas_bm);
 }

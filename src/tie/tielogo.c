@@ -366,16 +366,16 @@ int16_t tielogo_TieLogo(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
-	xbitmap_Init_Bitmap(&tielogo_background);
+	xbm_Init_Bitmap(&tielogo_background);
 #ifdef TIE_MODERN
-	if (!xbitmap_Alloc_Bitmap(&tielogo_background, 320, 200)) {
+	if (!xbm_Alloc_Bitmap(&tielogo_background, 320, 200)) {
 		TieLogo_RunView(resource, false);
 		return 0;
 	}
 #else
-	xbitmap_Alloc_Bitmap(&tielogo_background, 320, 200);
+	xbm_Alloc_Bitmap(&tielogo_background, 320, 200);
 #endif
-	xbitmap_Erase_Bitmap(&tielogo_background);
+	xbm_Erase_Bitmap(&tielogo_background);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 	xcanvas_Invalid_Screen_Diff();
@@ -442,7 +442,7 @@ int16_t tielogo_TieLogo(SceneHeadStruct* scene_head) {
 #endif
 	xview_Set_View_Frame(0, &frame);
 	xview_Set_View_Pos(0, frame.left, frame.top);
-	xbitmap_Free_Bitmap(&tielogo_background);
+	xbm_Free_Bitmap(&tielogo_background);
 	xres_Close_Resource(resource);
 	xtimer_Set_Frame_Rate(20);
 	return xerror_Get_Landru_Exit();

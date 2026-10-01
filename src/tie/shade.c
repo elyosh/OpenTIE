@@ -208,7 +208,7 @@ void shade_Draw_Talk_Shade_Rect(Rect* r) {
 // FUNCTION: TIE95 0x8B270
 void shade_Shadow_Line_List(const uint8_t* palette, int16_t x, int16_t y, int16_t width, int16_t height) {
 	BitmapStruct* canvas = xcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* pixels = (uint8_t*)xbitmap_Lock_Bitmap(canvas);
+	uint8_t* pixels = (uint8_t*)xbm_Lock_Bitmap(canvas);
 	int16_t stride = canvas->w;
 
 	uint8_t* row = pixels + stride * y + x;
@@ -225,5 +225,5 @@ void shade_Shadow_Line_List(const uint8_t* palette, int16_t x, int16_t y, int16_
 		row += stride - width;
 	}
 
-	xbitmap_Unlock_Bitmap(canvas);
+	xbm_Unlock_Bitmap(canvas);
 }
