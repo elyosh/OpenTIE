@@ -266,9 +266,9 @@ void draw_drawhyperstar(int16_t star_idx) {
 	uint16_t saved;
 
 	parentobject = (uint16_t)(star_idx + OBJ_REF_STATIC_BASE);
-	hyperstardata[0x14] = (uint8_t)((star_idx & 3) - 4);
+	hyperstardata[0x14] = (star_idx & 3) + 0xFC;
 	saved = flatobjnum;
-	drawpol_drawpolyobject((const uint16_t*)hyperstardata, objecteyex, objecteyey, objecteyez);
+	drawpol_drawpolyobject((const uint16_t*)hyperstardata, objecteyey, objecteyex, objecteyez);
 	flatobjnum = saved;
 }
 

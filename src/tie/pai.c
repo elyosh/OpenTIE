@@ -443,11 +443,11 @@ OrderFunc ordersfunctionptrs[47] = {
 // FUNCTION: TIE95 0x35A34
 // FUNCTION: TIE98 0x459460
 int pai_getprof(uint16_t skill) {
-	if (skill < 0x8000u)
+	if (skill < 0x8000)
 		return 0;
-	if (skill >= 0xC000u)
-		return 2;
-	return 1;
+	if (skill < 0xC000)
+		return 1;
+	return 2;
 }
 
 /* Unused getter — hull_max of objects[obj_idx]'s craft. */

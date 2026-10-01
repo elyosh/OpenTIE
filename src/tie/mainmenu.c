@@ -85,10 +85,10 @@ static void mainmenu_end_View(int32_t frame_num);
 static int16_t mainmenu_iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 										 uint8_t right, int16_t mouse_x, int16_t mouse_y);
 static void mainmenu_iuser_MainMenu(Input* input, int32_t time);
-static void mainmenu_user_Title(Actor* actor, int32_t time);
+static int16_t mainmenu_user_Title(Actor* actor, int32_t time);
 static int16_t mainmenu_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								   int16_t refresh);
-static void mainmenu_user_Door(Actor* actor, int32_t time);
+static int16_t mainmenu_user_Door(Actor* actor, int32_t time);
 
 /* ================================================================
  * View update callback
@@ -224,7 +224,7 @@ static void mainmenu_iuser_MainMenu(Input* input, int32_t time) {
 		return; /* exit_pending */
 
 	if (input->var2 == 180) { /* exit_code == Tour Battle */
-		char name[68];
+		char name[64];
 		shipext_Get_Battle_Mission_Name(name);
 		shipext_Set_Mission_Name(name);
 	}
@@ -238,7 +238,7 @@ static void mainmenu_iuser_MainMenu(Input* input, int32_t time) {
 /* Title overlay: show on hover frame, hide otherwise. */
 // FUNCTION: TIE95 0x70e14
 // FUNCTION: TIE98 0x44d5a0
-static void mainmenu_user_Title(Actor* actor, int32_t time) {
+static int16_t mainmenu_user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
 		if (!xactor_Is_Actor_Visible(actor))
@@ -248,6 +248,7 @@ static void mainmenu_user_Title(Actor* actor, int32_t time) {
 		if (xactor_Is_Actor_Visible(actor))
 			xactor_Hide_Actor(actor);
 	}
+	return 1;
 }
 
 /* Title overlay draw: render the delta actor + centered text label. */
@@ -354,7 +355,7 @@ static int16_t mainmenu_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16
 /* Door animation: open when var1 set (hover), close when cleared. */
 // FUNCTION: TIE95 0x70ff8
 // FUNCTION: TIE98 0x44d7e0
-static void mainmenu_user_Door(Actor* actor, int32_t time) {
+static int16_t mainmenu_user_Door(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1) {
 		/* Opening */
@@ -371,6 +372,7 @@ static void mainmenu_user_Door(Actor* actor, int32_t time) {
 				soundext_Play_SFX(sfxSmallDoorShut, door_volume[actor->id]);
 		}
 	}
+	return 1;
 }
 
 /* ================================================================

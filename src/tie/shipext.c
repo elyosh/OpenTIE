@@ -180,7 +180,7 @@ bool shipext_Is_Ship_Available(int16_t ship_idx) {
 }
 
 // FUNCTION: TIE95 0x800C0
-bool shipext_Is_Mission_Disk1(void) { return ship_info[19] && ship_info[20] && ship_info[21]; }
+int shipext_Is_Mission_Disk1(void) { return ship_info[19] && ship_info[20] && ship_info[21]; }
 
 // FUNCTION: TIE95 0x800E8
 bool shipext_Is_Mission_Disk2(void) { return ship_info[22] && ship_info[23] && ship_info[24]; }
@@ -374,7 +374,7 @@ bool shipext_Is_Combat_Mission_Success(void) {
 }
 
 // FUNCTION: TIE95 0x820C4
-bool shipext_Is_Player_OK(void) {
+int shipext_Is_Player_OK(void) {
 	return mission.player_status != PLAYER_DEAD && mission.player_status != PLAYER_CAPTURED;
 }
 

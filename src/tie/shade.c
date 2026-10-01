@@ -67,8 +67,6 @@ void shade_Find_Shade_Cycles(uint8_t* mask) {
 void shade_Build_Shaded_Palette(void) {
 	Palette* dest_pal = xpal_Get_Dest_Palette();
 	uint8_t* pal_data = xmemhdl_Lock_Handle(dest_pal->colors);
-	if (!pal_data)
-		return;
 
 	if (shellext_Get_Cur_Scene() == SCENE_TOUR_DESK) {
 		/* Tour desk: shift toward red (63, 0, 0) */

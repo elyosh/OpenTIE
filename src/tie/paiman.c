@@ -1357,8 +1357,11 @@ int16_t paiman_turnawaymaneuver(void) {
 		return 1;
 	if (!craftptr->ai_plan_state)
 		paiman_setnewturnaway(ai.active_obj_idx);
-	return 0;
+	return paiman_avoidstarshipmaneuver();
 }
+
+// FUNCTION: TIE95 0x3C8BC
+int16_t paiman_avoidstarshipmaneuver(void) { return 0; }
 
 /* ---- MODE_OutOfHangar (26) ----------------------------------------- */
 
@@ -1414,9 +1417,6 @@ void paiman_initwaitmaneuver(void) {
 	cd->throttle_speed = 0;
 	cd->maneuver_timer = 1180 * (int32_t)var0;
 }
-
-// FUNCTION: TIE95 0x3C8BC
-int16_t paiman_avoidstarshipmaneuver(void) { return 0; }
 
 /* ---- MODE_DropOff (30) --------------------------------------------- */
 

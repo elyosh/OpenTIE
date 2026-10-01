@@ -158,13 +158,15 @@ static int16_t armship_draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int
 
 	if (actor->id == 10) {
 		/* Beam name label */
-		int16_t beam = player_Get_Beam_Used();
-		if (beam == 1) {
-			textext_Copy_Text(line1, txtArmTractor);
-			textext_Copy_Text(line2, txtArmBeam);
-		} else if (beam == 2) {
-			textext_Copy_Text(line1, txtArmJamming);
-			textext_Copy_Text(line2, txtArmBeam);
+		switch (player_Get_Beam_Used()) {
+			case 1:
+				textext_Copy_Text(line1, txtArmTractor);
+				textext_Copy_Text(line2, txtArmBeam);
+				break;
+			case 2:
+				textext_Copy_Text(line1, txtArmJamming);
+				textext_Copy_Text(line2, txtArmBeam);
+				break;
 		}
 	} else {
 		/* Torpedo name label */
@@ -200,11 +202,11 @@ static int16_t armship_draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int
 	}
 
 	if (line2[0]) {
-		/* Retail captures `top + 7` BEFORE incrementing top, so the
+		/* Retail derives bottom from the original top, so the
 		 * resulting bottom is new_top + 6, not new_top + 7. */
-		int16_t saved_bottom = dst.top + 7;
-		dst.top++;
-		dst.bottom = saved_bottom;
+		int16_t top = dst.top;
+		dst.top = top + 1;
+		dst.bottom = top + 7;
 	}
 	xfont_Print_Centered_Text(line1, &dst, 1, 15);
 	if (line2[0]) {

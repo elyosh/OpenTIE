@@ -17,10 +17,10 @@ void festring_setcursor(FestringCoord x, FestringCoord y) {
 // FUNCTION: TIE95 0x23680
 // FUNCTION: TIE98 0x41D480
 void festring_setbound(uint16_t left, uint16_t top, uint16_t right, uint16_t bottom) {
-	leftmargin = left;
 	topmargin = top;
-	rightmargin = right;
 	bottommargin = bottom;
+	leftmargin = left;
+	rightmargin = right;
 }
 
 /* --- Color setters (remap palette indices >= 0x40) --- */

@@ -809,10 +809,10 @@ static void map_Find_VR_Debrief_Goals(char* string, int16_t line) {
 	int16_t i;
 
 	for (i = 0; i < max_paragraph_size; i++) {
-		if (i >= 3)
-			map_Get_VR_Debrief_Goals(string, i);
-		else
+		if (i < 3)
 			map_Get_VR_Standard_Debrief_Header(string, i);
+		else
+			map_Get_VR_Debrief_Goals(string, i);
 		if (*string) {
 			if (!skip)
 				return;

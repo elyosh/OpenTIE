@@ -95,14 +95,14 @@ static void tourdesk_end_View(int32_t frame_num);
 static int16_t tourdesk_iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 										 uint8_t right, int16_t mouse_x, int16_t mouse_y);
 static void tourdesk_iuser_TourDesk(Input* input, int32_t time);
-static void tourdesk_user_Title(Actor* actor, int32_t time);
+static int tourdesk_user_Title(Actor* actor, int32_t time);
 static int16_t tourdesk_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								   int16_t refresh);
 static void tourdesk_user_Door(Actor* actor, int32_t time);
 static void tourdesk_user_Battle(Actor* actor, int32_t time);
 static int16_t tourdesk_draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
 										 int16_t refresh);
-static void tourdesk_Draw_Battle_One(Rect* galaxy_rect, int16_t tour_time);
+static int16_t tourdesk_Draw_Battle_One(Rect* galaxy_rect, int32_t tour_time);
 static void tourdesk_Draw_Battle_Two(Rect* galaxy_rect, int16_t tour_time, Rect* clip_r);
 static void tourdesk_Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t tour_time);
 static void tourdesk_Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int16_t tour_time);
@@ -213,7 +213,7 @@ static void tourdesk_iuser_TourDesk(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x73D04
 // FUNCTION: TIE98 0x491060
-static void tourdesk_user_Title(Actor* actor, int32_t time) {
+static int tourdesk_user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
 		if (!xactor_Is_Actor_Visible(actor))
@@ -223,6 +223,7 @@ static void tourdesk_user_Title(Actor* actor, int32_t time) {
 		if (xactor_Is_Actor_Visible(actor))
 			xactor_Hide_Actor(actor);
 	}
+	return 1;
 }
 
 // FUNCTION: TIE95 0x73D58
@@ -342,47 +343,47 @@ static int16_t tourdesk_draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, in
 /* Phase 0-7: zoom from center to galaxy rect */
 // FUNCTION: TIE95 0x73FA0
 // FUNCTION: TIE98 0x491360
-static void tourdesk_Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
+static int16_t tourdesk_Draw_Battle_One(Rect* galaxy_rect, int32_t time) {
 	Rect dst, ra;
 	char name[64];
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	bool dynamic_text_layout = TIE_FRONTEND_EDITION(false, true);
-	if (time >= 8)
-		return;
+	if (time < 8) {
+		xrect_Copy_Rect(&dst, galaxy_rect);
+		xrect_Copy_Rect(&ra, galaxy_rect);
 
-	xrect_Copy_Rect(&dst, galaxy_rect);
-	xrect_Copy_Rect(&ra, galaxy_rect);
+		/* Start from center point */
+		dst.left += (dst.right - dst.left) >> 1;
+		dst.top += (dst.bottom - dst.top) >> 1;
+		dst.right -= (dst.right - dst.left) >> 1;
+		dst.bottom -= (dst.bottom - dst.top) >> 1;
 
-	/* Start from center point */
-	dst.left += (dst.right - dst.left) >> 1;
-	dst.top += (dst.bottom - dst.top) >> 1;
-	dst.right -= (dst.right - dst.left) >> 1;
-	dst.bottom -= (dst.bottom - dst.top) >> 1;
+		/* Interpolate toward full rect */
+		dst.left += (time * (ra.left - dst.left)) >> 3;
+		dst.top += (time * (ra.top - dst.top)) >> 3;
+		dst.right += (time * (ra.right - dst.right)) >> 3;
+		dst.bottom += (time * (ra.bottom - dst.bottom)) >> 3;
 
-	/* Interpolate toward full rect */
-	dst.left += (time * (ra.left - dst.left)) >> 3;
-	dst.top += (time * (ra.top - dst.top)) >> 3;
-	dst.right += (time * (ra.right - dst.right)) >> 3;
-	dst.bottom += (time * (ra.bottom - dst.bottom)) >> 3;
+		if (!xrect_Empty_Rect(&dst))
+			shade_Draw_Talk_Shade_Rect(&dst);
 
-	if (!xrect_Empty_Rect(&dst))
-		shade_Draw_Talk_Shade_Rect(&dst);
+		xrect_Inset_Rect(&ra, -64, 0);
+		if (dynamic_text_layout) {
+			uint16_t font_height = (uint16_t)xfont_Get_FontID_Height(font_id);
+			ra.top = ra.bottom + (font_height >> 1);
+			ra.bottom = ra.top + (int16_t)xfont_Get_FontID_Height(font_id);
+		} else {
+			ra.top = ra.bottom + 2;
+			ra.bottom += 10;
+		}
+		xrect_Offset_Rect(&ra, -4, 0);
 
-	xrect_Inset_Rect(&ra, -64, 0);
-	if (dynamic_text_layout) {
-		int16_t font_height = (int16_t)xfont_Get_FontID_Height(font_id);
-		ra.top = ra.bottom + (font_height >> 1);
-		ra.bottom = ra.top + (int16_t)xfont_Get_FontID_Height(font_id);
-	} else {
-		ra.top = ra.bottom + 2;
-		ra.bottom += 10;
+		xfont_Enable_FontID_Shadow(font_id);
+		shipext_Get_Battle_Galaxy_Name(name);
+		xfont_Print_Centered_Text(name, &ra, font_id, 2 * time + 16);
+		xfont_Disable_FontID_Shadow(font_id);
 	}
-	xrect_Offset_Rect(&ra, -4, 0);
-
-	xfont_Enable_FontID_Shadow(font_id);
-	shipext_Get_Battle_Galaxy_Name(name);
-	xfont_Print_Centered_Text(name, &ra, font_id, 2 * time + 16);
-	xfont_Disable_FontID_Shadow(font_id);
+	return 1;
 }
 
 /* Phase 8-23: hold at galaxy rect */

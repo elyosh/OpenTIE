@@ -343,7 +343,10 @@ static void filmview_idraw_FilmView_Button(Input* input, Rect* r, Rect* clip_r, 
 	btn = (PushButton*)input;
 	xstyle_Style_Paint_Border(r, btn->pressed);
 
-	icon = input->id ? iconRightArrow : iconLeftArrow;
+	if (input->id == 0)
+		icon = iconLeftArrow;
+	else
+		icon = iconRightArrow;
 	xstyle_Style_Draw_Centered_Icon(icon, r, clip_r, btn->pressed);
 
 	if (xinpattr_Is_Input_Dirty(input))

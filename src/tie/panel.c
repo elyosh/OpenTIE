@@ -1228,6 +1228,7 @@ void panel_updateradar(void) {
 	uint16_t i;
 	uint16_t j;
 	uint16_t k;
+	uint16_t static_obj;
 
 	if (!(pstate.player_craft->working_subsystems & 0x80) ||
 		!(pstate.player_craft->working_subsystems & 0x100))
@@ -1271,10 +1272,11 @@ void panel_updateradar(void) {
 	}
 
 	/* Static objects (mapped to 0x3800..0x383F). */
-	for (k = 0; k < 0x40u; ++k) {
+	static_obj = 0x3800;
+	for (k = 0; k < 0x40; ++static_obj, ++k) {
 		if (!(species_table[staticobjects[k].species].side & 1))
 			continue;
-		panel_addbliptoradar((uint16_t)(14336 + k));
+		panel_addbliptoradar(static_obj);
 	}
 
 	if (bracketflag)
@@ -1290,11 +1292,11 @@ void panel_updateradar(void) {
 		rtsvga2_drawblipsVGA(newrightbliplist, (uint16_t)newrightlistsize);
 
 	blipboxflag = 0;
-	if (pstate.target_obj_idx == 0xFFFF) {
-		bracketflag = 0;
-	} else {
+	if (pstate.target_obj_idx != 0xFFFF) {
 		rtsvga2_drawbracket();
 		bracketflag = 1;
+	} else {
+		bracketflag = 0;
 	}
 	blipptrflag ^= 1u;
 }

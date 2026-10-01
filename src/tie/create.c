@@ -601,8 +601,8 @@ CraftData* create_createhyperin(void) {
 	pstate.player->roll = 0;
 	pstate.player->pitch = 0x4000;
 	pstate.player_craft->orient_pitch = 0x4000;
-	mission_file_header.num_fg = 0;
 	pstate.player->heading = 0;
+	mission_file_header.num_fg = 0;
 	return pstate.player_craft;
 }
 

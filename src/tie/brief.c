@@ -85,7 +85,7 @@ static Film* brief_film;
 
 /* ---- Forward declarations ---- */
 
-static void brief_user_Title(Actor* actor, int32_t time);
+static int16_t brief_user_Title(Actor* actor, int32_t time);
 static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								int16_t refresh);
 static int brief_user_Door(Actor* actor, int32_t time);
@@ -277,7 +277,7 @@ static void brief_iuser_Brief(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x73480
 // FUNCTION: TIE98 0x406860
-static void brief_user_Title(Actor* actor, int32_t time) {
+static int16_t brief_user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
 		if (!xactor_Is_Actor_Visible(actor))
@@ -287,6 +287,7 @@ static void brief_user_Title(Actor* actor, int32_t time) {
 		if (xactor_Is_Actor_Visible(actor))
 			xactor_Hide_Actor(actor);
 	}
+	return 1;
 }
 
 // FUNCTION: TIE95 0x734D8

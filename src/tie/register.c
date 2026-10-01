@@ -588,7 +588,11 @@ static int16_t register_draw_Register_Back(Actor* actor, Rect* bounds, Rect* cli
 		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(92, 187), TIE_FRONTEND_EDITION(192, 456),
 					   TIE_FRONTEND_EDITION(111, 255), TIE_FRONTEND_EDITION(196, 472));
 
+#ifdef TIE_MODERN
 		snprintf(buf, sizeof(buf), "%d:%d", cur_page + 1, num_pages);
+#else
+		sprintf(buf, "%d:%d", cur_page + 1, num_pages);
+#endif
 		xfont_Enable_FontID_Shadow(1);
 		xfont_Print_Centered_Text(buf, &r, TIE_FRONTEND_EDITION(1, 3), 15);
 		xfont_Disable_FontID_Shadow(1);
@@ -948,6 +952,7 @@ static void register_idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, i
 	PushButton* btn;
 	Rect tr;
 	int16_t color;
+	const char* text;
 
 	if (!refresh)
 		return;
@@ -956,9 +961,12 @@ static void register_idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, i
 	xrect_Copy_Rect(&tr, frame);
 	tr.top++;
 
-	color = btn->pressed ? 18 : 20;
-	xfont_Print_Centered_Text((const char*)xmemhdl_Lock_Handle(btn->name), &tr, TIE_FRONTEND_EDITION(1, 3),
-							  color);
+	if (btn->pressed)
+		color = 18;
+	else
+		color = 20;
+	text = (const char*)xmemhdl_Lock_Handle(btn->name);
+	xfont_Print_Centered_Text(text, &tr, TIE_FRONTEND_EDITION(1, 3), color);
 	xmemhdl_Unlock_Handle(btn->name);
 
 	if (xinpattr_Is_Input_Dirty(input))

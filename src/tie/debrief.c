@@ -70,7 +70,7 @@ static Input* officer; /* officer widget (id=1) */
 
 /* ---- Forward declarations ---- */
 
-static void debrief_user_Title(Actor* actor, int32_t time);
+static int16_t debrief_user_Title(Actor* actor, int32_t time);
 static int16_t debrief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								  int16_t refresh);
 static void debrief_user_Door(Actor* actor, int32_t time);
@@ -177,7 +177,7 @@ static int16_t debrief_film_Callback(Film* film, FilmObject* film_object) {
 					return 1;
 			}
 #endif
-			xactor_Set_Actor_User_Function(actor, debrief_user_Title);
+			xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Title);
 			xactor_Set_Actor_Draw_Function(actor, debrief_draw_Title);
 			title_actor = actor;
 			return 0;
@@ -288,7 +288,7 @@ static void debrief_iuser_Debrief(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x70440
 // FUNCTION: TIE98 0x415C60
-static void debrief_user_Title(Actor* actor, int32_t time) {
+static int16_t debrief_user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
 		if (!xactor_Is_Actor_Visible(actor))
@@ -298,6 +298,7 @@ static void debrief_user_Title(Actor* actor, int32_t time) {
 		if (xactor_Is_Actor_Visible(actor))
 			xactor_Hide_Actor(actor);
 	}
+	return 1;
 }
 
 // FUNCTION: TIE95 0x70494

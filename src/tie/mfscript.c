@@ -894,8 +894,6 @@ static CueRef* mfscript_GetSequence(void) {
 			return cut6Seq;
 		case 12:
 			return emperorSeq;
-		case 13:
-			return medicalSeq;
 		case 14:
 		case 15:
 			return cut7Seq;
@@ -903,6 +901,8 @@ static CueRef* mfscript_GetSequence(void) {
 		case 17:
 		case 18:
 			return medalsSeq;
+		case 13:
+			return medicalSeq;
 		case 19:
 			return capturedSeq;
 		case 20:
@@ -923,6 +923,7 @@ static CueRef* mfscript_GetSequence(void) {
 		case 27:
 			return cut14Seq;
 		default:
+			TieImuse_Printf("GET SEQ ERR!...");
 			return NULL;
 	}
 }

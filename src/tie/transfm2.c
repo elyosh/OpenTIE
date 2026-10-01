@@ -727,10 +727,12 @@ int16_t transfm2_getfacescreenxy(uint16_t ptCnt) {
 		return 4;
 
 	if (someznegflag) {
-		int32_t i;
+		int16_t i;
 
+		/* The original indexes from the record start, so it tests the
+		 * header byte and the preceding edge bytes rather than vertices. */
 		for (i = 0; i < (uint16_t)numpoints; i++) {
-			if (!calcflag[firstvertptr->body[2 * i]])
+			if (!calcflag[((uint8_t*)firstvertptr)[2 * i]])
 				return 4;
 		}
 	}

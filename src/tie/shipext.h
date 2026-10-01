@@ -342,7 +342,7 @@ void shipext_Close_Ships(void);
 /* --- Ship queries --- */
 bool shipext_Is_Ship(int16_t ship_idx);
 bool shipext_Is_Ship_Available(int16_t ship_idx);
-bool shipext_Is_Mission_Disk1(void);
+int shipext_Is_Mission_Disk1(void);
 bool shipext_Is_Mission_Disk2(void);
 ResFile* shipext_Open_Ship_Resource(int16_t ship_idx);
 ResFile* shipext_Open_Launch_Resource(void);
@@ -385,7 +385,7 @@ void shipext_Set_Mission_Name(const char* name);
 const char* shipext_Get_Mission_Name(void);
 bool shipext_Is_Mission_Success(void);
 bool shipext_Is_Combat_Mission_Success(void);
-bool shipext_Is_Player_OK(void);
+int shipext_Is_Player_OK(void);
 void shipext_Mission_Enter(int16_t mission_type);
 int16_t shipext_Mission_Exit(int16_t mission_type, int16_t exit_code);
 void shipext_Get_Mission_Path(char* out);

@@ -58,6 +58,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* The original TU calls the library abs() rather than the inline form. */
+#ifdef __WATCOMC__
+#pragma function(abs)
+#endif
+
 /* Resource names: [0] = combat LFD, [1] = train LFD, [2] = film, [3] = unused. */
 // GLOBAL: TIE95 0xCE6B6
 // GLOBAL: TIE98 0x4DF310
@@ -773,15 +778,15 @@ static void combat_user_Combat_Light(Actor* the_actor, int32_t time) {
 	if (the_actor->var2 & 0x4000) {
 		int16_t countdown;
 		if (time & 1)
-			the_actor->state = rand() % the_actor->arraySize;
+			the_actor->state = abs(rand()) % the_actor->arraySize;
 		countdown = the_actor->var2 & 0x3FFF;
 		if (countdown == 1) {
 			the_actor->var2 = (rand() & 0xF) + 2;
 			return;
 		}
 	} else {
-		the_actor->state = rand() % the_actor->arraySize;
-		if (the_actor->var1 == 1) {
+		the_actor->state = abs(rand()) % the_actor->arraySize;
+		if (the_actor->var2 == 1) {
 			the_actor->var2 = (rand() & 0xF) + 0x4002;
 			return;
 		}
