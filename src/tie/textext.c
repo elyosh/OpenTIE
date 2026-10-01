@@ -490,7 +490,7 @@ bool TieRecoveredText_ReadSnapshotLine(int index, TieRecoveredTextSnapshotLine* 
 #endif
 
 // FUNCTION: TIE95 0x6FC24
-const char* textext_Get_Text(int16_t id) {
+const char* textext_Get_Text(uint16_t id) {
 	int16_t res_id, str_idx;
 
 	strcpy(text_ext_string, "*");
@@ -504,10 +504,10 @@ const char* textext_Get_Text(int16_t id) {
 }
 
 // FUNCTION: TIE95 0x6FC7C
-void textext_Copy_Text(char* string, int16_t id) { strcpy(string, textext_Get_Text(id)); }
+void textext_Copy_Text(char* string, uint16_t id) { strcpy(string, textext_Get_Text(id)); }
 
 // FUNCTION: TIE95 0x6FCAC
-void textext_Cat_Text(char* string, int16_t id) { strcat(string, textext_Get_Text(id)); }
+void textext_Cat_Text(char* string, uint16_t id) { strcat(string, textext_Get_Text(id)); }
 
 // FUNCTION: TIE95 0x6FCE4
 void textext_Copy_Joy_Text(char* string, int16_t id) {
