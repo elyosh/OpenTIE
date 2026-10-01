@@ -106,6 +106,7 @@ CraftData crafts[NUM_CRAFTS];
 // GLOBAL: TIE95 0xE38BC
 FlightObject objects[NUM_OBJECTS];
 // GLOBAL: TIE95 0xEA6D4
+// GLOBAL: TIE98 0x596700
 StaticObject staticobjects[NUM_STATIC_OBJECTS];
 // GLOBAL: TIE95 0xEB70C
 uint16_t framerate = 20; /* populated by the frame-pacer; fallback value avoids divide-by-zero before init */
