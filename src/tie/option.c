@@ -3,6 +3,7 @@
 #include "tie/fediskio.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/frontend_display_tie98.h"
+#include "tie_runtime/audio/imuse_api.h"
 #include "tie_runtime/audio/imuse_session.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/diagnostics/diagnostics.h"
@@ -529,9 +530,9 @@ int32_t option_optionsroom(int16_t load_settings) {
 	TieInflightOptions_ApplyAudio();
 	continuation->finished = true;
 #else
-	imuse_set_sfx_vol(im, inflight_sound_vol ? inflight_sound_vol * 8 - 1 : 0);
-	imuse_set_voice_vol(im, inflight_speech_vol ? inflight_speech_vol * 8 - 1 : 0);
-	imuse_set_music_vol(im, inflight_music_vol ? inflight_music_vol * 8 - 1 : 0);
+	hilevel_ImSetSfxVol(inflight_sound_vol ? inflight_sound_vol * 8 - 1 : 0);
+	hilevel_ImSetVoiceVol(inflight_speech_vol ? inflight_speech_vol * 8 - 1 : 0);
+	hilevel_ImSetMusicVol(inflight_music_vol ? inflight_music_vol * 8 - 1 : 0);
 #endif
 	return exit_code;
 }

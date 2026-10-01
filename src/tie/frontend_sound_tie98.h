@@ -20,9 +20,9 @@ int FrontendSound_SetPriority(const char* name, int priority);
 int FrontendSound_GetPriority(const char* name);
 int FrontendSound_SetFrequency(const char* name, int frequency_hz);
 
-int lolevel_ImGetParam(uint16_t sound_id, int param);
-int lolevel_ImStopSound(uint16_t sound_id);
-int lolevel_ImSetParamByName(const char* name, int param, int value);
+int lolevel_ImGetParam_tie98(uint16_t sound_id, int param);
+int lolevel_ImStopSound_tie98(uint16_t sound_id);
+int lolevel_ImSetParamByName_tie98(const char* name, int param, int value);
 
 #ifdef __cplusplus
 }

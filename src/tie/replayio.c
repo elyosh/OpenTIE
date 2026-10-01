@@ -1,4 +1,5 @@
 #include "tie/replayio.h"
+#include "tie_runtime/audio/imuse_api.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/replay_session_task.h"
 #endif
@@ -612,9 +613,9 @@ void replayio_replayscreen(void) {
 			fsfx_UpdatePlayerEngineSound();
 			mapflag = saved_mapflag;
 		}
-		replayvolume = (int16_t)imuse_get_master_vol(im);
-		imuse_set_master_vol(im, 0);
-		imuse_pause(im);
+		replayvolume = (int16_t)hilevel_ImGetMasterVol();
+		hilevel_ImSetMasterVol(0);
+		lolevel_ImPause();
 		replaymusic = 0;
 #ifdef TIE_MODERN
 		continuation->saved_res = saved_res;
@@ -866,9 +867,9 @@ void replayio_replayscreen(void) {
 #endif
 		{
 			if (replaymusic) {
-				replayvolume = (int16_t)imuse_get_master_vol(im);
-				imuse_set_master_vol(im, 0);
-				imuse_pause(im);
+				replayvolume = (int16_t)hilevel_ImGetMasterVol();
+				hilevel_ImSetMasterVol(0);
+				lolevel_ImPause();
 				replaymusic = 0;
 			}
 			replayviewmode = 0;
@@ -892,8 +893,8 @@ void replayio_replayscreen(void) {
 				replayio_copyfromsave(replaysavegamefile);
 				replayio_setreturnview();
 				if (!replaymusic) {
-					imuse_set_master_vol(im, (uint16_t)replayvolume);
-					imuse_resume(im);
+					hilevel_ImSetMasterVol((uint16_t)replayvolume);
+					lolevel_ImResume();
 					replaymusic = 1;
 				}
 #ifdef TIE_MODERN
@@ -914,8 +915,8 @@ void replayio_replayscreen(void) {
 				if (TIE_DISPLAY_DX5)
 					FlightSurface_Unlock();
 				if (!replaymusic) {
-					imuse_set_master_vol(im, (uint16_t)replayvolume);
-					imuse_resume(im);
+					hilevel_ImSetMasterVol((uint16_t)replayvolume);
+					lolevel_ImResume();
 					replaymusic = 1;
 				}
 #ifdef TIE_MODERN
@@ -937,8 +938,8 @@ void replayio_replayscreen(void) {
 			msg_clearmessagequeue();
 			replayio_setreturnview();
 			if (!replaymusic) {
-				imuse_set_master_vol(im, (uint16_t)replayvolume);
-				imuse_resume(im);
+				hilevel_ImSetMasterVol((uint16_t)replayvolume);
+				lolevel_ImResume();
 				replaymusic = 1;
 			}
 #ifdef TIE_MODERN
@@ -950,9 +951,9 @@ void replayio_replayscreen(void) {
 				tie_doframe();
 #endif
 		}
-		replayvolume = (int16_t)imuse_get_master_vol(im);
-		imuse_set_master_vol(im, 0);
-		imuse_pause(im);
+		replayvolume = (int16_t)hilevel_ImGetMasterVol();
+		hilevel_ImSetMasterVol(0);
+		lolevel_ImPause();
 		replaymusic = 0;
 		blank();
 		recordingreplay = 0;

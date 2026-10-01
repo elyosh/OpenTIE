@@ -1,4 +1,5 @@
 #include "tie/fsfx.h"
+#include "tie_runtime/audio/imuse_api.h"
 #include "tie_runtime/audio/imuse_session.h"
 
 #include "tie/collide.h"
@@ -194,8 +195,8 @@ void fsfx_UpdatePlayerEngineSound(void) {
 				previous_id = FSFX_PLAYER_ENGINE_REBEL_ID;
 				break;
 		}
-		if (previous_id != UINT16_MAX && lolevel_ImGetParam(previous_id, 0x100) != 0)
-			(void)lolevel_ImStopSound(previous_id);
+		if (previous_id != UINT16_MAX && lolevel_ImGetParam_tie98(previous_id, 0x100) != 0)
+			(void)lolevel_ImStopSound_tie98(previous_id);
 		return;
 	}
 
@@ -203,8 +204,8 @@ void fsfx_UpdatePlayerEngineSound(void) {
 	player = &objects[pstate.object_idx];
 	craft = player->craft_ptr;
 	if (!craft || pstate.hyperin_state == 1 || !(craft->status_flags & 0x0040u)) {
-		if (lolevel_ImGetParam(sound_id, 0x100) != 0)
-			(void)lolevel_ImStopSound(sound_id);
+		if (lolevel_ImGetParam_tie98(sound_id, 0x100) != 0)
+			(void)lolevel_ImStopSound_tie98(sound_id);
 		return;
 	}
 
@@ -218,14 +219,14 @@ void fsfx_UpdatePlayerEngineSound(void) {
 	if (!name)
 		return;
 
-	if (lolevel_ImGetParam(sound_id, 0x100) != 0) {
-		(void)lolevel_ImSetParamByName(name, 0x777, frequency);
+	if (lolevel_ImGetParam_tie98(sound_id, 0x100) != 0) {
+		(void)lolevel_ImSetParamByName_tie98(name, 0x777, frequency);
 		if (FrontendSound_GetVolume(name) != volume)
-			(void)lolevel_ImSetParamByName(name, 0x600, volume);
+			(void)lolevel_ImSetParamByName_tie98(name, 0x600, volume);
 		return;
 	}
 
-	(void)lolevel_ImSetParamByName(name, 0x777, frequency);
+	(void)lolevel_ImSetParamByName_tie98(name, 0x777, frequency);
 	(void)FrontendSound_QueueSound(name, 1, 1, 127, volume, 64, 0);
 }
 
@@ -544,8 +545,9 @@ int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id) {
 	if (dist >= max_dist)
 		return max_vol >> 2;
 
-	vol = (uint16_t)((max_dist - dist) * (max_vol - (max_vol >> 2)) /
-	                 (uint32_t)(max_dist - (max_dist >> 5))) + (max_vol >> 2);
+	vol =
+		(uint16_t)((max_dist - dist) * (max_vol - (max_vol >> 2)) / (uint32_t)(max_dist - (max_dist >> 5))) +
+		(max_vol >> 2);
 	if (vol > 127)
 		vol = 127;
 	return vol;
@@ -682,19 +684,19 @@ int8_t fsfx_triggersfx(uint16_t sound_id, uint16_t src_obj) {
 		priority = 126;
 	}
 
-	if (imuse_get_param(im, sound_id, IM_PARAM_IS_PLAYING)) {
+	if (lolevel_ImGetParam(sound_id, IM_PARAM_IS_PLAYING)) {
 		/* Looping engine/laser SFX -- don't retrigger while alive. */
 		if (sound_id >= 0x2Au && sound_id <= 0x2Fu)
 			return 0;
-		if (imuse_get_param(im, sound_id, IM_PARAM_PRIORITY) > (int)priority)
+		if (lolevel_ImGetParam(sound_id, IM_PARAM_PRIORITY) > (int)priority)
 			return 0;
-		imuse_stop_sound(im, sound_id);
+		lolevel_ImStopSound(sound_id);
 	}
 
-	imuse_start_sfx(im, TieImuse_SoundHandle(sound_id));
-	imuse_set_param(im, sound_id, IM_PARAM_PRIORITY, priority);
-	imuse_set_param(im, sound_id, IM_PARAM_PAN, (int)pan);
-	imuse_set_param(im, sound_id, IM_PARAM_VOLUME, (uint16_t)vol_buf);
+	hilevel_ImStartSfx(sound_id, priority);
+	lolevel_ImSetParam(sound_id, IM_PARAM_PRIORITY, priority);
+	lolevel_ImSetParam(sound_id, IM_PARAM_PAN, (int)pan);
+	lolevel_ImSetParam(sound_id, IM_PARAM_VOLUME, (uint16_t)vol_buf);
 	return 1;
 }
 
@@ -785,27 +787,27 @@ int8_t fsfx_triggerbeamsfx(int32_t firing) {
 		/* Release: stop whichever beam channel is active. */
 		int playing;
 
-		if (imuse_get_param(im, 38, IM_PARAM_IS_PLAYING))
-			imuse_stop_sound(im, 38);
-		playing = imuse_get_param(im, 37, IM_PARAM_IS_PLAYING);
+		if (lolevel_ImGetParam(38, IM_PARAM_IS_PLAYING))
+			lolevel_ImStopSound(38);
+		playing = lolevel_ImGetParam(37, IM_PARAM_IS_PLAYING);
 		if (playing)
-			playing = imuse_stop_sound(im, 37);
+			playing = lolevel_ImStopSound(37);
 		return (int8_t)playing;
 	}
 
 	if (bluetarget == 0xFFFF) {
 		/* No locked target -- use the free-fire beam clip. */
-		if (imuse_get_param(im, 38, IM_PARAM_IS_PLAYING))
-			imuse_stop_sound(im, 38);
-		was_playing = imuse_get_param(im, 37, IM_PARAM_IS_PLAYING);
+		if (lolevel_ImGetParam(38, IM_PARAM_IS_PLAYING))
+			lolevel_ImStopSound(38);
+		was_playing = lolevel_ImGetParam(37, IM_PARAM_IS_PLAYING);
 		if (was_playing)
 			return (int8_t)was_playing;
 		id = 37;
 	} else {
 		/* Locked target -- use the aimed-beam clip. */
-		if (imuse_get_param(im, 37, IM_PARAM_IS_PLAYING))
-			imuse_stop_sound(im, 37);
-		was_playing = imuse_get_param(im, 38, IM_PARAM_IS_PLAYING);
+		if (lolevel_ImGetParam(37, IM_PARAM_IS_PLAYING))
+			lolevel_ImStopSound(37);
+		was_playing = lolevel_ImGetParam(38, IM_PARAM_IS_PLAYING);
 		if (was_playing)
 			return (int8_t)was_playing;
 		id = 38;
@@ -822,7 +824,7 @@ int8_t fsfx_triggervoicesfx(uint16_t voice_id) {
 	if (!inflight_speech_vol)
 		return 0;
 
-	if (imuse_get_param(im, currentdigital, IM_PARAM_IS_PLAYING) || blastcount) {
+	if (lolevel_ImGetParam(currentdigital, IM_PARAM_IS_PLAYING) || blastcount) {
 		/* Voice channel busy or queue non-empty -- preserve order. */
 		if (blastcount == FSFX_BLAST_QUEUE_SIZE)
 			return 0;
@@ -831,10 +833,10 @@ int8_t fsfx_triggervoicesfx(uint16_t voice_id) {
 		return 1;
 	}
 
-	imuse_start_voice(im, TieImuse_SoundHandle(voice_id));
-	imuse_set_param(im, voice_id, IM_PARAM_PRIORITY, 127);
-	imuse_set_param(im, voice_id, IM_PARAM_PAN, 64);
-	imuse_set_param(im, voice_id, IM_PARAM_VOLUME, 127);
+	hilevel_ImStartVoice(voice_id, 127);
+	lolevel_ImSetParam(voice_id, IM_PARAM_PRIORITY, 127);
+	lolevel_ImSetParam(voice_id, IM_PARAM_PAN, 64);
+	lolevel_ImSetParam(voice_id, IM_PARAM_VOLUME, 127);
 	currentdigital = (uint8_t)voice_id;
 	return 1;
 }
@@ -851,7 +853,7 @@ void fsfx_checkblastqueue(void) {
 
 	if (!blastflag || !blastcount)
 		return;
-	if (currentdigital && imuse_get_param(im, currentdigital, IM_PARAM_IS_PLAYING))
+	if (currentdigital && lolevel_ImGetParam(currentdigital, IM_PARAM_IS_PLAYING))
 		return;
 
 	/* Dequeue head. */
@@ -866,10 +868,10 @@ void fsfx_checkblastqueue(void) {
 	if (!soundhandles[next_voice])
 		return;
 
-	imuse_start_voice(im, TieImuse_SoundHandle(next_voice));
-	imuse_set_param(im, next_voice, IM_PARAM_PRIORITY, 127);
-	imuse_set_param(im, next_voice, IM_PARAM_PAN, 64);
-	imuse_set_param(im, next_voice, IM_PARAM_VOLUME, 127);
+	hilevel_ImStartVoice(next_voice, 127);
+	lolevel_ImSetParam(next_voice, IM_PARAM_PRIORITY, 127);
+	lolevel_ImSetParam(next_voice, IM_PARAM_PAN, 64);
+	lolevel_ImSetParam(next_voice, IM_PARAM_VOLUME, 127);
 	currentdigital = (uint8_t)next_voice;
 }
 

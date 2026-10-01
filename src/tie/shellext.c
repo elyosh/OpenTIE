@@ -5,6 +5,7 @@
 #include "tie/edition.h"
 #include "tie/shell.h"
 #include "tie/tie.h"
+#include "tie_runtime/audio/imuse_api.h"
 #include "tie_runtime/audio/imuse_session.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/computer_task.h"
@@ -326,19 +327,19 @@ void shellext_Load_Preferences(void) {
 // FUNCTION: TIE95 0x666A9
 int16_t shellext_Set_Prefs_Sound(void) {
 	if (options_gbl.music_active && options_gbl.music_volume)
-		imuse_set_music_vol(im, options_gbl.music_volume * 8 - 1);
+		hilevel_ImSetMusicVol(options_gbl.music_volume * 8 - 1);
 	else
-		imuse_set_music_vol(im, 0);
+		hilevel_ImSetMusicVol(0);
 
 	if (options_gbl.sound_active && options_gbl.sound_volume)
-		imuse_set_sfx_vol(im, options_gbl.sound_volume * 8 - 1);
+		hilevel_ImSetSfxVol(options_gbl.sound_volume * 8 - 1);
 	else
-		imuse_set_sfx_vol(im, 0);
+		hilevel_ImSetSfxVol(0);
 
 	if (options_gbl.speech_active && options_gbl.speech_volume)
-		imuse_set_voice_vol(im, options_gbl.speech_volume * 8 - 1);
+		hilevel_ImSetVoiceVol(options_gbl.speech_volume * 8 - 1);
 	else
-		imuse_set_voice_vol(im, 0);
+		hilevel_ImSetVoiceVol(0);
 
 	return 1;
 }

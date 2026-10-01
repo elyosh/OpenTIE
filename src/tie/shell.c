@@ -22,6 +22,7 @@
 #include "tie/tourdesk.h"
 #include "tie/train.h"
 #include "tie/wavestream_tie98.h"
+#include "tie_runtime/audio/imuse_api.h"
 #include "tie_runtime/audio/imuse_session.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/audio/music_policy.h"
@@ -131,9 +132,9 @@ int32_t shell_Shell(int32_t scene, int32_t script) {
 		gamesnd_Open_Pre_iMuse();
 		gamesnd_game_Set_Front_Sound();
 		shellext_Open_Landru(NULL, 0, (int16_t)script);
-		imuse_pause(im);
+		lolevel_ImPause();
 		xstream_Set_Stream_Tick_Counts();
-		imuse_resume(im);
+		lolevel_ImResume();
 		xstream_Init_Stream_Engine(0, 2 * 1024 * 1024, 3 * 1024 * 1024 / 2);
 		soundext_Prep_Sound_Scene((int16_t)scene);
 #ifdef TIE_MODERN

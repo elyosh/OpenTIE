@@ -1,6 +1,7 @@
 /* Flight-engine globals and per-frame driver. */
 
 #include "tie/tie.h"
+#include "tie_runtime/audio/imuse_api.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/flight_requests.h"
 #include "tie_runtime/runtime/flight_task.h"
@@ -3141,7 +3142,7 @@ void tie_simulator(int replay_mode) {
 				blank();
 #ifdef TIE_MODERN
 				if (replayavailable) {
-					continuation->saved_master_vol = (uint16_t)imuse_get_master_vol(im);
+					continuation->saved_master_vol = (uint16_t)hilevel_ImGetMasterVol();
 					continuation->previous_screen =
 						TieFlightScreen_SetActive(TIE_FLIGHT_SCREEN_REPLAY_PROMPT);
 					continuation->phase = TIE_SIM_PHASE_PROMPT_RENDER;
@@ -3168,15 +3169,15 @@ void tie_simulator(int replay_mode) {
 #ifdef TIE_MODERN
 				if (continuation->phase == TIE_SIM_PHASE_PROMPT_RENDER)
 #else
-				saved_master_vol = (uint16_t)imuse_get_master_vol(im);
+				saved_master_vol = (uint16_t)hilevel_ImGetMasterVol();
 #endif
 				{
 					int32_t margin = screenXRes / 10;
 					int32_t right = screenXRes - margin;
 					int32_t top;
 					int32_t bottom;
-					imuse_set_master_vol(im, 0);
-					imuse_pause(im);
+					hilevel_ImSetMasterVol(0);
+					lolevel_ImPause();
 					if (TIE_DISPLAY_DX5)
 						FlightSurface_Lock();
 					festring_setfontsize(1);
@@ -3226,15 +3227,15 @@ void tie_simulator(int replay_mode) {
 #endif
 						if (ch == 'y' || ch == 'Y') {
 							blank();
-							imuse_set_master_vol(im, saved_master_vol);
-							imuse_resume(im);
+							hilevel_ImSetMasterVol(saved_master_vol);
+							lolevel_ImResume();
 #ifdef TIE_MODERN
 							TieReplaySession_Begin();
 							continuation->phase = TIE_SIM_PHASE_PROMPT_AFTER_VIEWER;
 							return;
 #else
 #ifdef TIE98
-							imuse_stop_all_sounds(im);
+							lolevel_ImStopAllSounds();
 #endif
 							replayio_replayscreen();
 							blank();
@@ -3242,9 +3243,9 @@ void tie_simulator(int replay_mode) {
 #endif
 						}
 						if (ch == 'n' || ch == 'N') {
-							imuse_set_master_vol(im, saved_master_vol);
-							imuse_resume(im);
-							imuse_stop_all_sounds(im);
+							hilevel_ImSetMasterVol(saved_master_vol);
+							lolevel_ImResume();
+							lolevel_ImStopAllSounds();
 							break;
 						}
 #ifdef TIE_MODERN
@@ -3302,8 +3303,8 @@ void tie_simulator(int replay_mode) {
 #ifdef TIE_MODERN
 	TieFlightTiming_EndSession();
 #endif
-	imuse_stop_all_sounds(im);
-	imuse_filelist_unload_all(im);
+	lolevel_ImStopAllSounds();
+	filelist_ImUnloadAll();
 	if (TIE_FLIGHT_TIE98) {
 		colorcycleflag = 0;
 		fediskio_FreeFlightHandles();

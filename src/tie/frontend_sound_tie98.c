@@ -246,7 +246,7 @@ int FrontendSound_SetFrequency(const char* name, int frequency_hz) {
 }
 
 // FUNCTION: TIE98 0x42fd70
-int lolevel_ImGetParam(uint16_t sound_id, int param) {
+int lolevel_ImGetParam_tie98(uint16_t sound_id, int param) {
 	const char* name;
 	if (sound_id < 4 || sound_id >= FSFX_NUM_SOUND_HANDLES)
 		return param == 0x100 ? 0 : -1;
@@ -261,13 +261,13 @@ int lolevel_ImGetParam(uint16_t sound_id, int param) {
 }
 
 // FUNCTION: TIE98 0x42fe20
-int lolevel_ImStopSound(uint16_t sound_id) {
+int lolevel_ImStopSound_tie98(uint16_t sound_id) {
 	const char* name = TieFlightSound_Name(sound_id);
 	return name ? FrontendSound_StopSoundByName(name) : 0;
 }
 
 // FUNCTION: TIE98 0x4300f0
-int lolevel_ImSetParamByName(const char* name, int param, int value) {
+int lolevel_ImSetParamByName_tie98(const char* name, int param, int value) {
 	switch (param) {
 		case 0x500:
 			return FrontendSound_SetPriority(name, value);

@@ -1,6 +1,7 @@
 #include "tie/user.h"
 #include "tie/edition.h"
 #include "tie/help.h"
+#include "tie_runtime/audio/imuse_api.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/help_task.h"
 #include "tie_runtime/runtime/inflight_info_task.h"
@@ -1111,8 +1112,8 @@ int16_t user_checkradio(void) {
 		return 0;
 	if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS)
 		return 0;
-	if (objects[pstate.target_obj_idx].fg_idx != objects[pstate.object_idx].fg_idx
-		&& !fg_array[objects[pstate.target_obj_idx].fg_idx].camo_flag)
+	if (objects[pstate.target_obj_idx].fg_idx != objects[pstate.object_idx].fg_idx &&
+		!fg_array[objects[pstate.target_obj_idx].fg_idx].camo_flag)
 		return 0;
 	status = objects[pstate.target_obj_idx].craft_ptr->status_flags;
 	craftptr = objects[pstate.target_obj_idx].craft_ptr;
@@ -1437,29 +1438,29 @@ void user_userinterface(void) {
 				TieFlightPause_Enter();
 				return;
 #else
-				int16_t saved_vol = imuse_get_master_vol(im);
+				int16_t saved_vol = hilevel_ImGetMasterVol();
 
-				imuse_set_master_vol(im, 0);
-				imuse_pause(im);
+				hilevel_ImSetMasterVol(0);
+				lolevel_ImPause();
 				msg_messageprintf(MSG_PAUSED);
 				while (!feinput_getrawinput())
 					;
 				msg_messageprintf(MSG_RESUMED);
 				calcframerate = 0;
 				keypress = 0;
-				imuse_set_master_vol(im, saved_vol);
-				imuse_resume(im);
+				hilevel_ImSetMasterVol(saved_vol);
+				lolevel_ImResume();
 				rtsvga2_InvalidatePageCache();
 #endif
 			} else if (k < KEY_ALT_C) {
 				/* nothing */
 			} else if (k == KEY_ALT_C) {
 				/* Alt+C: pause + options menu. */
-				int16_t saved_vol = imuse_get_master_vol(im);
+				int16_t saved_vol = hilevel_ImGetMasterVol();
 				uint16_t next_view;
 
-				imuse_set_master_vol(im, 0);
-				imuse_pause(im);
+				hilevel_ImSetMasterVol(0);
+				lolevel_ImPause();
 				blank();
 
 				if (camera.view_zoom_flag) {
@@ -1473,8 +1474,8 @@ void user_userinterface(void) {
 				}
 				panelrts_setnewpilotview(next_view);
 				msg_messageinit();
-				imuse_set_master_vol(im, saved_vol);
-				imuse_resume(im);
+				hilevel_ImSetMasterVol(saved_vol);
+				lolevel_ImResume();
 			} else if (k == KEY_ALT_V) {
 				msg_messageprintf(MSG_TIE_VERSION);
 			} else if (k == KEY_ALT_B) {
@@ -1519,18 +1520,18 @@ void user_userinterface(void) {
 			TieFlightPause_Enter();
 			return;
 #else
-			int16_t saved_vol = imuse_get_master_vol(im);
+			int16_t saved_vol = hilevel_ImGetMasterVol();
 
-			imuse_set_master_vol(im, 0);
-			imuse_pause(im);
+			hilevel_ImSetMasterVol(0);
+			lolevel_ImPause();
 			msg_messageprintf(MSG_PAUSED);
 			while (!feinput_getrawinput())
 				;
 			msg_messageprintf(MSG_RESUMED);
 			calcframerate = 0;
 			keypress = 0;
-			imuse_set_master_vol(im, saved_vol);
-			imuse_resume(im);
+			hilevel_ImSetMasterVol(saved_vol);
+			lolevel_ImResume();
 			rtsvga2_InvalidatePageCache();
 #endif
 		} else if (k == KEY_v && !hyperspaceflag && maingameflag && !pstate.hyperin_state) {
@@ -1751,7 +1752,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 
 #endif
 		}
-		saved_master_vol = (uint16_t)imuse_get_master_vol(im);
+		saved_master_vol = (uint16_t)hilevel_ImGetMasterVol();
 		retreat_flag = 0;
 		exit_flag = 0;
 		screen = screen_id;
@@ -1760,8 +1761,8 @@ int32_t user_inflightinfo(int32_t screen_id) {
 			fsfx_UpdatePlayerEngineSound();
 			mapflag = 0;
 		}
-		imuse_set_master_vol(im, 0);
-		imuse_pause(im);
+		hilevel_ImSetMasterVol(0);
+		lolevel_ImPause();
 #ifdef TIE_MODERN
 		continuation->saved_master_vol = saved_master_vol;
 		continuation->retreat_flag = retreat_flag;
@@ -1886,8 +1887,8 @@ int32_t user_inflightinfo(int32_t screen_id) {
 		}
 		if (mission.end_flag) {
 			festring_setfontsize(2);
-			imuse_set_master_vol(im, saved_master_vol);
-			imuse_resume(im);
+			hilevel_ImSetMasterVol(saved_master_vol);
+			lolevel_ImResume();
 			rtsvga2_InvalidatePageCache();
 #ifdef TIE_MODERN
 			continuation->finished = true;
@@ -1987,8 +1988,8 @@ int32_t user_inflightinfo(int32_t screen_id) {
 		if (TIE_FLIGHT_TIE98)
 			g_flightInitialTextureCacheFlushPending = 1;
 		fullupdateflag = 1;
-		imuse_set_master_vol(im, (int16_t)saved_master_vol);
-		imuse_resume(im);
+		hilevel_ImSetMasterVol((int16_t)saved_master_vol);
+		lolevel_ImResume();
 		/* Retail USER_inflightinfo @ 0x61a53: force the next
 		 * rtsvga2_SetCurrentPage to re-program the VESA bank so the
 		 * cockpit panel and HUD regain their pages after the info room. */
@@ -2091,35 +2092,35 @@ void user_inputforplane(void) {
 				if (!pstate.space_confirm_action)
 					break;
 				switch (pstate.space_confirm_action) {
-				case 1:
-					pstate.target_obj_idx = (uint16_t)pstate.msg_arg_obj_idx;
-					if (!replayviewmode && camera.view_target_tracking)
-						camera.view_target_obj = pstate.target_obj_idx;
-					pstate.radar_subtarget_state = 0;
-					pstate.player_craft->missile_count_total = 0;
-					msg_messageprintf(MSG_WARHEAD_TARGETED);
-					pstate.space_confirm_action = 0;
-					break;
-				case 2:
-					if (recordingreplay) {
-						if (!replayio_spoolreplayinput())
-							replaytotalcnt -= replaybuffercnt;
-						replaybuffercnt = 0;
-						recordingreplay = 0;
-						msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
-						calcframerate = 0;
-					}
-					mission.end_flag = 1;
-					mission.player_status = 3;
-					break;
-				case 3:
-					mission.penalty_flag = 1;
-					msg_messageprintf(MSG_REINFORCE_ACK);
-					pstate.space_confirm_action = 0;
-					fsfx_triggervoicesfx(0x66u);
-					fsfx_triggervoicesfx(0x67u);
-					fsfx_triggervoicesfx(0x68u);
-					break;
+					case 1:
+						pstate.target_obj_idx = (uint16_t)pstate.msg_arg_obj_idx;
+						if (!replayviewmode && camera.view_target_tracking)
+							camera.view_target_obj = pstate.target_obj_idx;
+						pstate.radar_subtarget_state = 0;
+						pstate.player_craft->missile_count_total = 0;
+						msg_messageprintf(MSG_WARHEAD_TARGETED);
+						pstate.space_confirm_action = 0;
+						break;
+					case 2:
+						if (recordingreplay) {
+							if (!replayio_spoolreplayinput())
+								replaytotalcnt -= replaybuffercnt;
+							replaybuffercnt = 0;
+							recordingreplay = 0;
+							msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
+							calcframerate = 0;
+						}
+						mission.end_flag = 1;
+						mission.player_status = 3;
+						break;
+					case 3:
+						mission.penalty_flag = 1;
+						msg_messageprintf(MSG_REINFORCE_ACK);
+						pstate.space_confirm_action = 0;
+						fsfx_triggervoicesfx(0x66u);
+						fsfx_triggervoicesfx(0x67u);
+						fsfx_triggervoicesfx(0x68u);
+						break;
 				}
 				break;
 			}
@@ -3176,7 +3177,7 @@ void user_inputforplane(void) {
 			/* Alt+M: music volume toggle. */
 			case KEY_ALT_M:
 				if (musicvolflag) {
-					imuse_set_music_vol(im, 0);
+					hilevel_ImSetMusicVol(0);
 #if defined(TIE_MODERN) || defined(TIE98)
 #ifdef TIE_MODERN
 					if (TieMusicPolicy_UsesTie98())
@@ -3185,7 +3186,7 @@ void user_inputforplane(void) {
 #endif
 					musicvolflag = 0;
 				} else {
-					imuse_set_music_vol(im, inflight_music_vol ? inflight_music_vol * 8 - 1 : 0);
+					hilevel_ImSetMusicVol(inflight_music_vol ? inflight_music_vol * 8 - 1 : 0);
 #if defined(TIE_MODERN) || defined(TIE98)
 #ifdef TIE_MODERN
 					if (TieMusicPolicy_UsesTie98())
@@ -3198,13 +3199,13 @@ void user_inputforplane(void) {
 			/* Alt+S: sound volume toggle. */
 			case KEY_ALT_S:
 				if (soundvolflag) {
-					imuse_set_sfx_vol(im, 0);
-					imuse_set_voice_vol(im, 0);
+					hilevel_ImSetSfxVol(0);
+					hilevel_ImSetVoiceVol(0);
 					soundvolflag = 0;
 				} else {
 					/* Volume scaling: 0..16 -> iMUSE group volume. */
-					imuse_set_sfx_vol(im, inflight_sound_vol ? inflight_sound_vol * 8 - 1 : 0);
-					imuse_set_voice_vol(im, inflight_speech_vol ? inflight_speech_vol * 8 - 1 : 0);
+					hilevel_ImSetSfxVol(inflight_sound_vol ? inflight_sound_vol * 8 - 1 : 0);
+					hilevel_ImSetVoiceVol(inflight_speech_vol ? inflight_speech_vol * 8 - 1 : 0);
 					soundvolflag = 1;
 				}
 				break;

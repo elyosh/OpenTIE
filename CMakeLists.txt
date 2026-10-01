@@ -497,6 +497,8 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/audio/voc_compat.h
     src/tie_runtime/audio/imuse_session.c
     src/tie_runtime/audio/imuse_session.h
+    src/tie_runtime/audio/imuse_api.c
+    src/tie_runtime/audio/imuse_api.h
     src/tie_runtime/audio/config.c
     src/tie_runtime/audio/output.c
     src/tie_runtime/audio/output.h

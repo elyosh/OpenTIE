@@ -1,5 +1,6 @@
 // FLAGS: TIE95 -od
 #include "tie/talk.h"
+#include "tie_runtime/audio/imuse_api.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/talk_task.h"
 #endif
@@ -350,8 +351,7 @@ static void talk_Get_Debrief_Kills(char* string, int16_t craft_idx) {
 	if (count) {
 		if (craft_idx < 69) {
 			textext_Get_Ship_Text(name, craft_idx);
-			sprintf(buf, "  %s: %d(%d)", name, count,
-					pstate.player_kills_per_species[craft_idx]);
+			sprintf(buf, "  %s: %d(%d)", name, count, pstate.player_kills_per_species[craft_idx]);
 		} else {
 			textext_Get_Ship_Text(name, 84);
 			sprintf(buf, "  %s: %d", name, count);
@@ -1345,18 +1345,18 @@ static int16_t talk_iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t 
 		button = right;
 	if (cur_talk_question != -1) {
 		switch (button) {
-		case 1:
-			input->var1 = 1;
-			xinpattr_Refresh_Input(input);
-			xinpattr_Refresh_Input(talk_input);
-			break;
-		case 3:
-			input->var1 = 0;
-			input->var2 = (button == right);
-			xinpattr_Selected_Input(input);
-			xinpattr_Refresh_Input(input);
-			xinpattr_Refresh_Input(talk_input);
-			break;
+			case 1:
+				input->var1 = 1;
+				xinpattr_Refresh_Input(input);
+				xinpattr_Refresh_Input(talk_input);
+				break;
+			case 3:
+				input->var1 = 0;
+				input->var2 = (button == right);
+				xinpattr_Selected_Input(input);
+				xinpattr_Refresh_Input(input);
+				xinpattr_Refresh_Input(talk_input);
+				break;
 		}
 	}
 	return 1;
@@ -1581,9 +1581,9 @@ void talk_Start_Speech_Stream(void) {
 
 	xsound_Start_Speech(talk_speech_sound);
 	if (voc_compat == TIE_VOC_COMPAT_CONVERTED)
-		(void)imuse_set_param(im, TieImuse_SoundId(talk_speech_sound), IMUSE_PARAM_SOUND_FREQUENCY,
-							  (int)source_rate_hz);
-	imuse_set_param(im, TieImuse_SoundId(talk_speech_sound), 0x500, 100);
+		(void)lolevel_ImSetParam(TieImuse_SoundId(talk_speech_sound), IMUSE_PARAM_SOUND_FREQUENCY,
+								 (int)source_rate_hz);
+	lolevel_ImSetParam(TieImuse_SoundId(talk_speech_sound), 0x500, 100);
 }
 
 /* Initialize species/mission for a talk briefing/debrief. Mirrors

@@ -3,6 +3,7 @@
 #include "tie/shellext.h"
 #include "tie/wavestream_tie98.h"
 #include "tie_runtime/audio/config.h"
+#include "tie_runtime/audio/imuse_api.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/audio/music_policy.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
@@ -411,16 +412,16 @@ void soundext_Play_Speech(uint8_t sound_index) {
 		snd = xsound_Res_Digital_Sound(Sound_Speech_Name[sound_index - 1]);
 	if (snd) {
 		xsound_Start_Speech(snd);
-		imuse_set_param(im, TieImuse_SoundId(snd), 0x500, 4);
+		lolevel_ImSetParam((intptr_t)snd, 0x500, 4);
 	}
 }
 
 // FUNCTION: TIE95 0x659F7
 void soundext_compact_Sound(int16_t post_compaction) {
 	if (post_compaction)
-		imuse_resume(im);
+		lolevel_ImResume();
 	else
-		imuse_pause(im);
+		lolevel_ImPause();
 }
 
 // FUNCTION: TIE95 0x65A2E
@@ -449,38 +450,38 @@ void soundext_Action_iMuse(int16_t state, Sound* the_sound, int16_t var1, int16_
 		case 1:
 			if (TieMusicPolicy_UsesTie98())
 				FrontendWaveStream_Pause();
-			imuse_pause(im);
-			group_vol_gbl = imuse_set_group_volume(im, IMUSE_GROUP_MASTER, 0);
+			lolevel_ImPause();
+			group_vol_gbl = lolevel_ImSetGroupVol(IMUSE_GROUP_MASTER, 0);
 			break;
 		case 2:
-			imuse_set_group_volume(im, IMUSE_GROUP_MASTER, group_vol_gbl);
-			imuse_resume(im);
+			lolevel_ImSetGroupVol(IMUSE_GROUP_MASTER, group_vol_gbl);
+			lolevel_ImResume();
 			if (TieMusicPolicy_UsesTie98())
 				FrontendWaveStream_Resume();
 			break;
 		case 3:
-			imuse_start_music(im, the_sound);
+			hilevel_ImStartMusic((intptr_t)the_sound, 0);
 			break;
 		case 4:
-			imuse_start_sfx(im, the_sound);
+			hilevel_ImStartSfx((intptr_t)the_sound, 0);
 			break;
 		case 5:
-			imuse_start_voice(im, the_sound);
+			hilevel_ImStartVoice((intptr_t)the_sound, 0);
 			break;
 		case 6:
-			imuse_stop_sound(im, TieImuse_SoundId(the_sound));
+			lolevel_ImStopSound((intptr_t)the_sound);
 			break;
 		case 7:
-			imuse_set_param(im, TieImuse_SoundId(the_sound), 0x600, var1);
+			lolevel_ImSetParam((intptr_t)the_sound, 0x600, var1);
 			break;
 		case 8:
-			imuse_fade_param(im, TieImuse_SoundId(the_sound), 0x600, var1, var2);
+			lolevel_ImFadeParam((intptr_t)the_sound, 0x600, var1, var2);
 			break;
 		case 9:
-			imuse_set_param(im, TieImuse_SoundId(the_sound), 0x700, var1);
+			lolevel_ImSetParam((intptr_t)the_sound, 0x700, var1);
 			break;
 		case 10:
-			imuse_fade_param(im, TieImuse_SoundId(the_sound), 0x700, var1, var2);
+			lolevel_ImFadeParam((intptr_t)the_sound, 0x700, var1, var2);
 			break;
 	}
 }

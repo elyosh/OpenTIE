@@ -7,6 +7,7 @@
 #include "tie/soundext.h"
 #include "tie/tie.h" /* colorcycleflag, palette_cycle_user, colorcycleuserflag */
 #include "tie_runtime/audio/config.h"
+#include "tie_runtime/audio/imuse_api.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
@@ -109,20 +110,20 @@ void gamesnd_Set_CD_Volume(int volume) {
  * active sounds and swaps the filelist callback pair. */
 // FUNCTION: TIE95 0x88EF6
 void gamesnd_game_Open_iMuse(void) {
-	imuse_stop_all_sounds(im);
-	imuse_filelist_unload_all(im);
+	lolevel_ImStopAllSounds();
+	filelist_ImUnloadAll();
 	frontendflag = 0;
-	imuse_pause(im);
-	imuse_filelist_init(im, TieImuse_LoadFlightMusic, TieImuse_UnloadFlightMusic, NULL, NULL);
-	imuse_resume(im);
+	lolevel_ImPause();
+	filelist_ImInitFilelist(TieImuse_LoadFlightMusic, TieImuse_UnloadFlightMusic, NULL, NULL);
+	lolevel_ImResume();
 }
 
 // FUNCTION: TIE95 0x88E47
 void gamesnd_game_Set_Front_Sound(void) {
 	frontendflag = 1;
-	imuse_pause(im);
-	imuse_filelist_init(im, soundext_TIE_Load_Sound, soundext_TIE_Unload_Sound, NULL, NULL);
-	imuse_resume(im);
+	lolevel_ImPause();
+	filelist_ImInitFilelist(soundext_TIE_Load_Sound, soundext_TIE_Unload_Sound, NULL, NULL);
+	lolevel_ImResume();
 }
 
 // FUNCTION: TIE95 0x88E8C
@@ -131,8 +132,8 @@ void gamesnd_game_Set_Flight_Sound(void) { gamesnd_Transition_Sound(); }
 // FUNCTION: TIE95 0x88EB0
 // FUNCTION: TIE98 0x425440
 void gamesnd_Transition_Sound(void) {
-	imuse_stop_all_sounds(im);
-	imuse_filelist_unload_all(im);
-	imuse_clear_trigger(im, (intptr_t)-1, -1, -1);
+	lolevel_ImStopAllSounds();
+	filelist_ImUnloadAll();
+	lolevel_ImClearTrigger(-1, -1, -1);
 	frontendflag = 2;
 }

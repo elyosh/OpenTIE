@@ -8,6 +8,7 @@
  */
 
 #include "tie/anim.h"
+#include "tie_runtime/audio/imuse_api.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/display/classic_display.h"
 
@@ -1395,7 +1396,7 @@ void anim_dohyperspace(void) {
 				camera.side_angle = -2048;
 				camera.up_angle = -2048;
 				hyperspaceflag = 4;
-				imuse_stop_sound(im, (intptr_t)48);
+				lolevel_ImStopSound((intptr_t)48);
 				fsfx_triggersfx(0x31u, 0xFFFFu);
 				if (objects[pstate.object_idx].ship_idx == 16)
 					fsfx_triggersfx(0x2Cu, 0xFFFFu);

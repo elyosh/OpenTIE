@@ -1,4 +1,5 @@
 #include "tie/replay.h"
+#include "tie_runtime/audio/imuse_api.h"
 #include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/inflight_info_task.h"
@@ -524,9 +525,9 @@ void replay_stopreplay(void) {
 	replay_replaymessage(MSG_FILM_END);
 	replay_drawreplaybutton(2);
 	if (replaymusic == 1) {
-		replayvolume = (int16_t)imuse_get_master_vol(im);
-		imuse_set_master_vol(im, 0);
-		imuse_pause(im);
+		replayvolume = (int16_t)hilevel_ImGetMasterVol();
+		hilevel_ImSetMasterVol(0);
+		lolevel_ImPause();
 		replaymusic = 0;
 	}
 }
@@ -535,9 +536,9 @@ void replay_stopreplay(void) {
 void replay_rewindreplay(void) {
 	TieReplayTiming_Reset();
 	if (replaymusic == 1) {
-		replayvolume = (int16_t)imuse_get_master_vol(im);
-		imuse_set_master_vol(im, 0);
-		imuse_pause(im);
+		replayvolume = (int16_t)hilevel_ImGetMasterVol();
+		hilevel_ImSetMasterVol(0);
+		lolevel_ImPause();
 		replaymusic = 0;
 	}
 	replayio_copyfromsave(replaystartfile);
@@ -1184,14 +1185,14 @@ void replay_doreplayscreen(void) {
 			if (!updateactionflag || fastforwardflag) {
 				if (replaymusic == 1) {
 					replaymusic = 0;
-					replayvolume = (int16_t)imuse_get_master_vol(im);
-					imuse_set_master_vol(im, 0);
-					imuse_pause(im);
+					replayvolume = (int16_t)hilevel_ImGetMasterVol();
+					hilevel_ImSetMasterVol(0);
+					lolevel_ImPause();
 				}
 			} else if (!replaymusic) {
 				replaymusic = 1;
-				imuse_set_master_vol(im, (uint16_t)replayvolume);
-				imuse_resume(im);
+				hilevel_ImSetMasterVol((uint16_t)replayvolume);
+				lolevel_ImResume();
 			}
 
 #ifdef TIE_MODERN
@@ -1541,9 +1542,9 @@ void replay_replayinput(void) {
 					uint16_t result;
 					if (replaymusic == 1) {
 						replaymusic = 0;
-						replayvolume = (int16_t)imuse_get_master_vol(im);
-						imuse_set_master_vol(im, 0);
-						imuse_pause(im);
+						replayvolume = (int16_t)hilevel_ImGetMasterVol();
+						hilevel_ImSetMasterVol(0);
+						lolevel_ImPause();
 					}
 					replay_drawreplaybutton(7);
 					result = replay_savereplay();
