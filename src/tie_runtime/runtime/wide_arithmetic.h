@@ -46,4 +46,9 @@ static inline uint32_t math2_project_u32(uint32_t magnitude, uint32_t shift, uin
 	return (uint32_t)(numerator / divisor);
 }
 
+/* Three-term dot product, wrapping in 32 bits like the original's imul/add. */
+static inline int32_t math2_dot3(int32_t a1, int32_t b1, int32_t a2, int32_t b2, int32_t a3, int32_t b3) {
+	return (int32_t)((uint32_t)a1 * (uint32_t)b1 + (uint32_t)a2 * (uint32_t)b2 + (uint32_t)a3 * (uint32_t)b3);
+}
+
 #endif

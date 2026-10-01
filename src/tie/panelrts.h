@@ -55,11 +55,13 @@ uint16_t panelrts_setnewpilotview(uint16_t view_idx);
  * a digit only once a non-zero digit has been emitted, otherwise a space.
  * Digits are capped at 9 before the ASCII adjust.
  *
+ * Only the low 16 bits of the value are used.
+ *
  * Sentinel: value == 0xFFFF draws 'ndigits' literal '0' characters in color
  * 0x40 with dropflag temporarily cleared, then restores the previous drop and
  * text colors. Used by HUD fields to render an "unknown" placeholder.
  */
-void panelrts_outnum(int32_t value, uint16_t ndigits, uint16_t minpad);
+void panelrts_outnum(uint16_t value, uint16_t ndigits, uint16_t minpad);
 
 #ifdef __cplusplus
 }

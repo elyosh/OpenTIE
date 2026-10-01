@@ -4,7 +4,6 @@
 #include "tie/wavestream_tie98.h"
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/audio/imuse_api.h"
-#include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/audio/music_policy.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"

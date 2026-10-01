@@ -53,7 +53,7 @@ void* gamesnd_GetSoundAddr(intptr_t sound) {
 	uint16_t track;
 
 	if (frontendflag == 1) {
-		Sound* the_sound = TieImuse_SoundHandle(sound);
+		Sound* the_sound = (Sound*)sound;
 		if (the_sound && the_sound->data) {
 			void* data = xmemhdl_Lock_Handle(the_sound->data);
 			xmemhdl_Unlock_Handle(the_sound->data);
@@ -67,9 +67,17 @@ void* gamesnd_GetSoundAddr(intptr_t sound) {
 	/* frontendflag == 0: flight */
 	if (sound < 500) {
 		uint16_t idx = (uint16_t)sound;
+#ifdef TIE_MODERN
 		if (idx >= FSFX_NUM_SOUND_HANDLES)
 			return NULL;
 		return soundhandles[idx];
+#else
+		{
+			void* data = xmemhdl_Lock_Handle(soundhandles[idx]);
+			xmemhdl_Unlock_Handle(soundhandles[idx]);
+			return data;
+		}
+#endif
 	}
 	track = (uint16_t)(sound - 500);
 	fmusic_PageSound(track);

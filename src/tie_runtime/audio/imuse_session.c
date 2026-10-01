@@ -134,17 +134,9 @@ bool TieImuseSession_SetMusicDuckingVolumePercent(int percent) {
 	return imuse_set_music_ducking_factor(im, (percent * 128 + 50) / 100) == 0;
 }
 
-intptr_t TieImuse_SoundId(const void* sound) { return (intptr_t)sound; }
-
-void* TieImuse_SoundHandle(intptr_t sound_id) { return (void*)sound_id; }
-
-intptr_t TieImuse_CallbackOpcode(int (*callback)(int marker)) { return (intptr_t)callback; }
-
-void TieImuse_Printf(const char* text) { (void)text; }
-
 /* The fmusic id is carried pointer-width and never dereferenced by the
  * engine: getSoundPtrFunc resolves flight ids through fmusic paging. */
-void* TieImuse_LoadFlightMusic(const char* name) { return TieImuse_SoundHandle(fmusic_fmLoadSound(name)); }
+void* TieImuse_LoadFlightMusic(const char* name) { return (void*)(intptr_t)fmusic_fmLoadSound(name); }
 
 void TieImuse_UnloadFlightMusic(void* handle) {
 	(void)handle;

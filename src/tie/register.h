@@ -15,11 +15,23 @@ extern "C" {
 
 /* PORT: shared native representation of TIE95 REGISTER_Alloc_Input_Reg_
  * String_Button (0x7C148) and TIE98 counterpart (0x471BB0). */
+#if !defined(TIE_MODERN) && !defined(TIE98)
+/* TIE95 packs the 22-byte name and mode flag directly after the
+ * 51-byte Watcom input record. */
+#include <landru/pshpack1.h>
+typedef struct {
+	Input header;
+	char name[22];
+	int16_t is_filename_mode;
+} RegStringButton;
+#include <landru/poppack.h>
+#else
 typedef struct {
 	Input header;
 	char name[44];
 	int16_t is_filename_mode;
 } RegStringButton;
+#endif
 
 /* PORT: runtime representation of the edition-specific original handle
  * entries (20 bytes in TIE95, 43 bytes in TIE98); it has no on-disk ABI. */

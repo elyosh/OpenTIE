@@ -51,6 +51,18 @@ uint32_t math2_project_u32(uint32_t magnitude, uint32_t shift, uint32_t rounding
 	"pr_done:" \
 	parm [eax] [ecx] [esi] [ebx] value [eax] modify exact [eax edx];
 
+/* Three-term dot product, a1 * b1 + a2 * b2 + a3 * b3, wrapping in 32 bits.
+ * The original inlines this with the same registers at every use, so it
+ * was a helper of this form; its name is not known. */
+int32_t math2_dot3(int32_t a1, int32_t b1, int32_t a2, int32_t b2, int32_t a3, int32_t b3);
+#pragma aux math2_dot3 = \
+	"imul eax, edx" \
+	"imul ebx, esi" \
+	"imul ecx, edi" \
+	"add eax, ebx" \
+	"add eax, ecx" \
+	parm [eax] [edx] [ebx] [esi] [ecx] [edi] value [eax] modify exact [eax ebx ecx];
+
 // clang-format on
 
 #endif

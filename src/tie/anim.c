@@ -9,7 +9,6 @@
 
 #include "tie/anim.h"
 #include "tie_runtime/audio/imuse_api.h"
-#include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/display/classic_display.h"
 
 #include "tie/create.h"
@@ -402,7 +401,7 @@ int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
 	sub_off = *(const uint32_t*)(blob + tbl_off + 4 * bitmap_idx);
 	v12 = blob + sub_off;
 
-	rotscale_preparefastdraw((uint16_t)entry->angle);
+	rotscale_preparefastdraw((uint16_t)entry->angle, 2);
 	rotscale_preparecolor((const char*)v12);
 
 	return rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, (uint16_t)scale, v12);
@@ -444,7 +443,7 @@ void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
 		RenderQuad_DrawRotatedSprite(entry->angle, entry->screen_x, entry->screen_y, scale,
 									 blob + frame_offset);
 	} else {
-		rotscale_preparefastdraw((uint16_t)entry->angle);
+		rotscale_preparefastdraw((uint16_t)entry->angle, 2);
 		rotscale_preparecolor((const char*)(blob + frame_offset));
 		rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, scale, blob + frame_offset);
 	}

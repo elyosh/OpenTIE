@@ -200,68 +200,61 @@ void laser_chargeshields(uint16_t shooter_obj_idx, uint16_t shield_side, int16_t
 // FUNCTION: TIE95 0x2E0E4
 uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint16_t projectile_type) {
 	FlightObject* shooter;
-	FlightObject* proj;
-	uint8_t shooter_ship_idx;
+	uint16_t shooter_ship_idx;
 	uint16_t spec_num;
-	unsigned int spec_idx;
-	int16_t proj_speed;
+	uint16_t slot;
+	uint16_t radius;
 	int32_t world_x;
 	int32_t world_y;
 	int32_t world_z;
 	int16_t hp_x;
 	int16_t hp_y;
 	int16_t hp_z;
-	int32_t muzzle_x;
-	int32_t muzzle_y;
-	int32_t muzzle_z;
-	uint8_t is_warhead_type;
-	uint8_t s_genus;
-	int capship;
 	uint16_t wh;
 
 	/* Genus: 6 (GENUS_PROJECTILE_PLAYER) if shooter is the player, 7
 	 * (GENUS_PROJECTILE_NPC) otherwise. The game uses this to tag "player's
 	 * shots" vs "NPC shots" for scoring and collision routing. */
-	uint8_t proj_genus = (shooter_obj_idx == pstate.object_idx) ? 6 : 7;
+	uint16_t proj_genus = (shooter_obj_idx != pstate.object_idx) + 6;
 
-	uint16_t slot = create_findslot(proj_genus);
+	slot = create_findslot(proj_genus);
 	if (slot == 0xFFFF)
-		return 0xFFFF;
+		return slot;
 
 	shooter = &objects[shooter_obj_idx];
-	proj = &objects[slot];
 	shooter_ship_idx = shooter->ship_idx;
 
-	proj->genus = proj_genus;
-	proj->self_idx = shooter_obj_idx;
-	proj->category = 1;
-	proj->ship_idx = (uint8_t)projectile_type;
-	proj->ship_type_override = shooter_ship_idx;
-	proj->age_ticks = 1;
+	objects[slot].category = 1;
+	objects[slot].genus = proj_genus;
+	objects[slot].self_idx = shooter_obj_idx;
+	objects[slot].ship_type_override = (uint8_t)shooter_ship_idx;
+	objects[slot].ship_idx = (uint8_t)projectile_type;
+	objects[slot].age_ticks = 1;
 
 	spec_num = spec_getspecnum(shooter_ship_idx);
 
-	proj->side = shooter->side;
-	proj->pitch = shooter->pitch;
-	proj->roll = shooter->roll;
-	proj->heading = shooter->heading;
+	objects[slot].side = shooter->side;
+	objects[slot].pitch = shooter->pitch;
+	objects[slot].roll = shooter->roll;
+	objects[slot].heading = shooter->heading;
 
 	/* Species-indexed weapon tables: projectilevelocity / projectileweight
 	 * / projectilelife are keyed by (species - WEAPON_SPECIES_BASE).
 	 * Callers guarantee species in [137, 154] — matches retail contract;
 	 * no bounds check. */
-	spec_idx = projectile_type - WEAPON_SPECIES_BASE;
-
-	proj_speed = (int16_t)(projectilevelocity[spec_idx] + shooter->current_speed);
-	proj->current_speed = proj_speed;
+	objects[slot].current_speed = (int16_t)(shooter->current_speed + projectilevelocity[projectile_type - WEAPON_SPECIES_BASE]);
 
 	/* Cache initial speed into warheads[slot-NUM_CRAFTS].min_speed so
 	 * MOVE's homing floor has a value even before the warhead record is
 	 * otherwise written. */
-	warheads[slot - NUM_CRAFTS].min_speed = (uint16_t)proj_speed;
+	warheads[slot - NUM_CRAFTS].min_speed = (uint16_t)objects[slot].current_speed;
 
-	proj->collision_radius = (int16_t)(projectileweight[spec_idx] + shooter->current_speed);
-	proj->death_timer = (int16_t)(236 * projectilelife[spec_idx]);
+	/* The collision radius never drops below the weapon's base radius. */
+	radius = (uint16_t)(shooter->current_speed + projectileweight[projectile_type - WEAPON_SPECIES_BASE]);
+	objects[slot].collision_radius = (int16_t)radius;
+	if (radius < projectileweight[projectile_type - WEAPON_SPECIES_BASE])
+		objects[slot].collision_radius = (int16_t)projectileweight[projectile_type - WEAPON_SPECIES_BASE];
+	objects[slot].death_timer = (int16_t)(236 * projectilelife[projectile_type - WEAPON_SPECIES_BASE]);
 
 	world_x = shooter->world_x;
 	world_y = shooter->world_y;
@@ -270,72 +263,58 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 	hp_x = spec_data[spec_num].hp[hp_idx].x;
 	hp_y = spec_data[spec_num].hp[hp_idx].y;
 	hp_z = spec_data[spec_num].hp[hp_idx].z;
-
 	pai_calcrotatedpoint((struct FlightObject*)shooter, hp_x, hp_y, hp_z);
 
-	muzzle_x = rotatedx + world_x;
-	muzzle_y = rotatedy + world_y;
-	muzzle_z = rotatedz + world_z;
+	world_x += rotatedx;
+	world_y += rotatedy;
+	world_z += rotatedz;
 
-	proj->world_x_prev = muzzle_x;
-	proj->world_y_prev = muzzle_y;
-	proj->world_z_prev = muzzle_z;
+	objects[slot].world_x_prev = world_x;
+	objects[slot].world_y_prev = world_y;
+	objects[slot].world_z_prev = world_z;
 
-	/* "Explodes at death" flag + visual muzzle length: species-indexed. */
-	is_warhead_type = projectile_is_warhead_type[spec_idx];
-
-	s_genus = shooter->genus;
-	capship = (s_genus == 3 || s_genus == 4 || s_genus == 5);
-
-	if (is_warhead_type && capship) {
-		/* Capship turret branch: projectile fires straight up or
-		 * down (pitch forced to 0 / 0x8000); world_z offset by
-		 * the species' muzzle length. */
-		int16_t mlen = (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[spec_idx];
-		/* Capship turret muzzle: hp_y < 0 means the gun is mounted in the
-		 * negative-up direction (turret on the underside) -> projectile
-		 * points straight down (pitch 0x8000) and world_z is offset by
-		 * -mlen instead of +mlen. Binary tests v33 = hp.y at LASER_createprojectile
-		 * 0x2e304. */
-		int32_t new_z = (hp_y < 0) ? (muzzle_z - mlen) : (muzzle_z + mlen);
-
-		proj->pitch = (hp_y < 0) ? (int16_t)0x8000 : (int16_t)0;
-		proj->orient_dirty = 1;
-		proj->move_dirty = 1;
-		proj->world_x = muzzle_x;
-		proj->world_y = muzzle_y;
-		proj->world_z = new_z;
+	if (projectile_is_warhead_type[projectile_type - WEAPON_SPECIES_BASE] &&
+	    (shooter->genus == 4 || shooter->genus == 3 || shooter->genus == 5)) {
+		/* Capship turret branch: hp_y < 0 means the gun is mounted on the
+		 * underside -> projectile points straight down (pitch 0x8000) and
+		 * world_z is offset by -length instead of +length. */
+		if (hp_y >= 0) {
+			world_z += (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE];
+			objects[slot].pitch = 0;
+		} else {
+			world_z -= (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE];
+			objects[slot].pitch = (int16_t)0x8000;
+		}
+		objects[slot].orient_dirty = 1;
+		objects[slot].move_dirty = 1;
+		objects[slot].world_x = world_x;
+		objects[slot].world_z = world_z;
+		objects[slot].world_y = world_y;
 	} else {
 		/* Normal branch: inherit shooter's full rotation basis and
 		 * advance the spawn point by muzzle_length along the forward
-		 * vector (each axis scaled by fwd_component * length / 2^15).
-		 *
-		 * The binary reads fwd_x/y/z via the Watcom
-		 * unaligned-dword-load trick *(int*)&ff>>16; the port reads
-		 * them directly. */
-		int16_t mlen = (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[spec_idx];
-		int32_t ox = ((int32_t)shooter->fwd_x * mlen) >> 15;
-		int32_t oy = ((int32_t)shooter->fwd_y * mlen) >> 15;
-		int32_t oz = ((int32_t)shooter->fwd_z * mlen) >> 15;
+		 * vector (each axis scaled by fwd_component * length / 2^15). */
+		world_x += ((int32_t)(int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE] * shooter->fwd_x) >> 15;
+		world_y += ((int32_t)(int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE] * shooter->fwd_y) >> 15;
+		world_z += ((int32_t)(int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE] * shooter->fwd_z) >> 15;
 
-		proj->world_x = muzzle_x + ox;
-		proj->world_y = muzzle_y + oy;
-		proj->world_z = muzzle_z + oz;
-
-		proj->moveX = shooter->moveX;
-		proj->moveY = shooter->moveY;
-		proj->moveZ = shooter->moveZ;
-		proj->side_x = shooter->side_x;
-		proj->side_y = shooter->side_y;
-		proj->side_z = shooter->side_z;
-		proj->up_x = shooter->up_x;
-		proj->up_y = shooter->up_y;
-		proj->up_z = shooter->up_z;
-		proj->fwd_x = shooter->fwd_x;
-		proj->fwd_y = shooter->fwd_y;
-		proj->fwd_z = shooter->fwd_z;
-		proj->orient_dirty = 0;
-		proj->move_dirty = 0;
+		objects[slot].world_x = world_x;
+		objects[slot].world_z = world_z;
+		objects[slot].world_y = world_y;
+		objects[slot].moveX = shooter->moveX;
+		objects[slot].moveY = shooter->moveY;
+		objects[slot].moveZ = shooter->moveZ;
+		objects[slot].side_x = shooter->side_x;
+		objects[slot].side_y = shooter->side_y;
+		objects[slot].side_z = shooter->side_z;
+		objects[slot].up_x = shooter->up_x;
+		objects[slot].up_y = shooter->up_y;
+		objects[slot].up_z = shooter->up_z;
+		objects[slot].fwd_x = shooter->fwd_x;
+		objects[slot].fwd_y = shooter->fwd_y;
+		objects[slot].fwd_z = shooter->fwd_z;
+		objects[slot].orient_dirty = 0;
+		objects[slot].move_dirty = 0;
 	}
 
 	/* Pair the slot with a warhead record: no homing (tier 0), no
@@ -344,7 +323,7 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 	wh = slot - NUM_CRAFTS;
 	warheads[wh].homing_tier = 0;
 	warheads[wh].target_obj = 0xFFFF;
-	proj->craft_ptr = (CraftData*)&warheads[wh];
+	objects[slot].craft_ptr = (CraftData*)&warheads[wh];
 
 	/* actor_id identifies the projectile; param0 and param1 identify its
 	 * projectile type and shooter slot for the renderer's spawn effect. */
@@ -352,11 +331,11 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 	{
 		TieEvent ev = {
 			.kind     = TIE_EVENT_LASER_SPAWN,
-			.actor_id = proj->idnumber,
+			.actor_id = objects[slot].idnumber,
 			.world_pos = {
-				proj->world_x,
-				proj->world_y,
-				proj->world_z,
+				objects[slot].world_x,
+				objects[slot].world_y,
+				objects[slot].world_z,
 			},
 			.param0   = (int32_t)projectile_type,
 			.param1   = (int32_t)shooter_obj_idx,

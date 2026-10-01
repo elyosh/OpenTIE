@@ -914,12 +914,9 @@ uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_
  *   word_D4C46[N]            -> projectilelife    [N - 137]   (u16, life factor)
  *   SHIWORD(dword_D4C74[N])  -> launch offset     [N - 137]   (i16, velocity push)
  *
- * Valid N for gunner-fired shots is 138..146 (PROJ_SHIP_* constants below),
+ * Valid N for gunner-fired shots is 138..146 (PROJ_SHIP_* constants),
  * so the underlying type index is 1..9. Index 0 is unused by this path and
  * 18..23 are padding zeros in the tables. */
-enum {
-	PROJ_TYPE_SHIFT = 137,
-};
 
 /* Warhead slot metadata lives in laser.c. We access it via the WarheadRecord
  * struct from laser.h. */
@@ -927,40 +924,31 @@ enum {
 // FUNCTION: TIE95 0x53EAC
 void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, uint16_t target_ref) {
 	uint16_t species_idx;
-	uint8_t mesh_idx;
+	uint16_t mesh_idx;
 	uint8_t link_byte;
 	FlightObject* craft;
 	uint8_t charge_now;
-	uint8_t divisor;
-#ifdef TIE_MODERN
-	TieTurretTimingState* cooldown;
-#endif
-	uint32_t numerator;
-	uint32_t decrement;
-	int32_t craft_wx;
-	int32_t craft_wy;
-	int32_t craft_wz;
+	int decrement;
 	ShipModelMesh* mesh;
 	int32_t gun_wx;
-	int32_t gun_wz;
 	int32_t gun_wy;
+	int32_t gun_wz;
 	int32_t target_wx;
 	int32_t target_wy;
 	int32_t target_wz;
-	int16_t ammo;
+	int32_t delta_x;
+	int32_t delta_y;
+	int32_t delta_z;
+	uint16_t ammo;
 	int32_t aim_wx;
 	int32_t aim_wy;
 	int32_t aim_wz;
 	int16_t heading;
 	int16_t pitch;
 	uint16_t new_obj;
-	FlightObject* laser;
-	int is_turbo;
-	unsigned int b;
+	uint16_t is_turbo;
+	uint16_t b;
 	uint16_t projectile_idx;
-	uint16_t proj_type;
-	int32_t push;
-	unsigned int warhead_slot;
 
 	if (craftptr->status_flags == 0)
 		return;
@@ -969,43 +957,65 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	mesh_idx = spec_data[species_idx].hp[weapon_slot_idx].component;
 	link_byte = (uint8_t)spec_data[species_idx].hp[weapon_slot_idx].link;
 
-	if (!craftptr->mesh_component_hp[mesh_idx])
+	if (!craftptr->mesh_component_hp[spec_data[species_idx].hp[weapon_slot_idx].component])
 		return;
 
 	craft = &objects[craft_obj_idx];
 
 	/* Charge / cooldown tick. Rate tiered on the craft's skill_value:
 	 *   >= 0xAAAA -> frameticks / 2  (fast)
-	 *   [0x5555, 0xAAAA) -> frameticks >> 2  (medium)
+	 *   [0x5555, 0xAAAA) -> frameticks / 4  (medium)
 	 *   < 0x5555  -> frameticks / 6  (slow) */
 	charge_now = (uint8_t)(craftptr->weapon_slots[weapon_slot_idx].charge & 0x7F);
-	divisor = craftptr->skill_value >= 0xAAAAu ? 2u : craftptr->skill_value >= 0x5555u ? 4u : 6u;
 #ifdef TIE_MODERN
-	cooldown = TieFlightTimingState_Turret(craft_obj_idx, weapon_slot_idx, craft->idnumber, divisor);
-	/* Retain sub-unit cooldown time so a four-tick frame can advance
-	 * the six-tick tier instead of repeatedly truncating to zero. */
-	numerator = frameticks + cooldown->remainder;
-	decrement = numerator / divisor;
-	cooldown->remainder = (uint8_t)(numerator % divisor);
-#else
-	decrement = frameticks / divisor;
-#endif
+	{
+		const uint8_t divisor = craftptr->skill_value >= 0xAAAAu ? 2u : craftptr->skill_value >= 0x5555u ? 4u : 6u;
+		TieTurretTimingState* cooldown =
+			TieFlightTimingState_Turret(craft_obj_idx, weapon_slot_idx, craft->idnumber, divisor);
+		/* Retain sub-unit cooldown time so a four-tick frame can advance
+		 * the six-tick tier instead of repeatedly truncating to zero. */
+		const uint32_t numerator = frameticks + cooldown->remainder;
 
-	if (charge_now > decrement) {
-		craftptr->weapon_slots[weapon_slot_idx].charge -= (uint8_t)decrement;
-		return;
+		decrement = (int)(numerator / divisor);
+		cooldown->remainder = (uint8_t)(numerator % divisor);
+		if (charge_now > decrement) {
+			craftptr->weapon_slots[weapon_slot_idx].charge -= (uint8_t)decrement;
+			return;
+		}
+		cooldown->remainder = 0;
 	}
+#else
+	if (craftptr->skill_value >= 0xAAAA) {
+		decrement = frameticks / 2;
+		if (charge_now > decrement) {
+			craftptr->weapon_slots[weapon_slot_idx].charge =
+				(uint8_t)((int8_t)craftptr->weapon_slots[weapon_slot_idx].charge - decrement);
+			return;
+		}
+	} else if (craftptr->skill_value >= 0x5555) {
+		decrement = frameticks / 4;
+		if (charge_now > decrement) {
+			craftptr->weapon_slots[weapon_slot_idx].charge =
+				(uint8_t)((int8_t)craftptr->weapon_slots[weapon_slot_idx].charge - decrement);
+			return;
+		}
+	} else {
+		decrement = frameticks / 6;
+		if (charge_now > decrement) {
+			craftptr->weapon_slots[weapon_slot_idx].charge =
+				(uint8_t)((int8_t)craftptr->weapon_slots[weapon_slot_idx].charge - decrement);
+			return;
+		}
+	}
+#endif
 
 	/* Ready to fire: reset cooldown (preserving bit 7). */
 	craftptr->weapon_slots[weapon_slot_idx].charge =
 		(uint8_t)((craftptr->weapon_slots[weapon_slot_idx].charge & 0x80) | 0x3B);
-#ifdef TIE_MODERN
-	cooldown->remainder = 0;
-#endif
 
-	craft_wx = craft->world_x;
-	craft_wy = craft->world_y;
-	craft_wz = craft->world_z;
+	gun_wx = craft->world_x;
+	gun_wy = craft->world_y;
+	gun_wz = craft->world_z;
 
 	mesh = NULL;
 	if (!TIE_FLIGHT_TIE98) {
@@ -1056,87 +1066,80 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 		int16_t hp_side;
 		int16_t hp_fwd_neg;
 		int16_t hp_up;
-		if (link_byte == 0xFF || _date.subsec >= 118) {
-			const HardpointPos* hp = &spec_data[species_idx].hp[weapon_slot_idx];
-			hp_side = hp->x;
-			hp_fwd_neg = hp->z;
-			hp_up = hp->y;
-		} else {
-			/* BSP hardpoint walk.
-			 *
-			 * The Watcom expression is:
-			 *   &mesh->center_side + 6*link_byte + render_offset + X + Y + 1
-			 * where
-			 *   X = u16 at (mesh + 4 + render_offset)
-			 *       (polygon header start, 4 bytes into the LOD record at
-			 *        mesh + render_offset)
-			 *   Y = u8 at (mesh + 4 + render_offset + X)
-			 *       (skip byte one past the polygon header)
-			 *
-			 * Translated literally so the offsets match the binary; the +0x10
-			 * (&mesh->center_side) is just the compiler's chosen anchor. The
-			 * mesh+4 base is byte arithmetic only -- it intentionally walks
-			 * past the mesh's named fields into the appended LOD/poly data. */
-			const uint8_t* mesh_bytes = (const uint8_t*)mesh;
-			uint16_t poly_off;
-			uint8_t skip_byte;
-			const uint8_t* base;
+		if (link_byte != 0xFF && _date.subsec < 118) {
+			/* Resolve the hardpoint vertex from the first LOD's polygon
+			 * block: vertices start 17 + header[4] bytes in, 6 bytes each,
+			 * and each coordinate follows the 0x7F back-reference chain. */
+			const ShipMeshLOD* lod0 = (const ShipMeshLOD*)((const uint8_t*)mesh + mesh->render_offset);
+			const uint8_t* poly_hdr = (const uint8_t*)lod0 + lod0->offset;
+			const uint8_t* vertex = poly_hdr + (poly_hdr[4] + 17) + 6 * link_byte;
 			const uint8_t* coord;
 			int16_t coord_value;
 
-			memcpy(&poly_off, mesh_bytes + 4 + mesh->render_offset, sizeof poly_off);
-			skip_byte = mesh_bytes[4 + mesh->render_offset + poly_off];
-			base = mesh_bytes + 0x10 + mesh->render_offset + poly_off + skip_byte + 1 + 6 * link_byte;
-
-			coord = base;
+			coord = vertex;
 			while (coord[1] == 0x7F)
-				coord -= 3 * (int)coord[0];
+				coord -= 3 * coord[0];
+#ifdef TIE_MODERN
 			memcpy(&coord_value, coord, sizeof coord_value);
+#else
+			coord_value = *(const int16_t*)coord;
+#endif
 			hp_side = (int16_t)(coord_value >> 1);
-			coord = base + 2;
+			coord = vertex + 2;
 			while (coord[1] == 0x7F)
-				coord -= 3 * (int)coord[0];
+				coord -= 3 * coord[0];
+#ifdef TIE_MODERN
 			memcpy(&coord_value, coord, sizeof coord_value);
+#else
+			coord_value = *(const int16_t*)coord;
+#endif
 			hp_fwd_neg = (int16_t)(-(coord_value >> 1));
-			coord = base + 4;
+			coord = vertex + 4;
 			while (coord[1] == 0x7F)
-				coord -= 3 * (int)coord[0];
+				coord -= 3 * coord[0];
+#ifdef TIE_MODERN
 			memcpy(&coord_value, coord, sizeof coord_value);
+#else
+			coord_value = *(const int16_t*)coord;
+#endif
 			hp_up = (int16_t)(coord_value >> 1);
+		} else {
+			hp_side = spec_data[species_idx].hp[weapon_slot_idx].x;
+			hp_up = spec_data[species_idx].hp[weapon_slot_idx].y;
+			hp_fwd_neg = spec_data[species_idx].hp[weapon_slot_idx].z;
 		}
 
 		if (mesh->mesh_type == TIE_MESH_ROTARY_GUN_TURRET) {
-			fview_comprotatepoint((int16_t)(craftptr->mesh_rotation[mesh_idx] << 8), mesh, hp_side,
-								  (int16_t)(-hp_fwd_neg), hp_up);
-			pai_calcrotatedpoint(craft, (int16_t)rotatedx, (int16_t)rotatedz, (int16_t)(-rotatedy));
-		} else {
-			pai_calcrotatedpoint(craft, hp_side, hp_up, hp_fwd_neg);
+			fview_comprotatepoint((int16_t)(craftptr->mesh_rotation[mesh_idx] << 8), mesh, hp_side, -hp_fwd_neg,
+								  hp_up);
+			hp_side = (int16_t)rotatedx;
+			hp_fwd_neg = (int16_t)rotatedy;
+			hp_fwd_neg = (int16_t)(-hp_fwd_neg);
+			hp_up = (int16_t)rotatedz;
 		}
+		pai_calcrotatedpoint(craft, hp_side, hp_up, hp_fwd_neg);
 	}
 
 	if (!TIE_FLIGHT_TIE98 && objectblockptr->model_scale_shift) {
-		const int shift = objectblockptr->model_scale_shift;
-		rotatedx = (int32_t)((uint32_t)rotatedx << shift);
-		rotatedy = (int32_t)((uint32_t)rotatedy << shift);
-		rotatedz = (int32_t)((uint32_t)rotatedz << shift);
+		rotatedx = (int32_t)((uint32_t)rotatedx << (int8_t)objectblockptr->model_scale_shift);
+		rotatedy = (int32_t)((uint32_t)rotatedy << (int8_t)objectblockptr->model_scale_shift);
+		rotatedz = (int32_t)((uint32_t)rotatedz << (int8_t)objectblockptr->model_scale_shift);
 	}
 
-	gun_wx = rotatedx + craft_wx;
-	gun_wz = rotatedz + craft_wz;
-	gun_wy = rotatedy + craft_wy;
+	gun_wx += rotatedx;
+	gun_wy += rotatedy;
+	gun_wz += rotatedz;
 	create_getworldposition(target_ref, 0);
 	target_wx = worldlocx;
 	target_wy = worldlocy;
 	target_wz = worldlocz;
 
 	/* Range gate: ~131072 world units. */
-	{
-		const int32_t tdx = target_wx - gun_wx;
-		const int32_t tdy = target_wy - gun_wy;
-		const int32_t tdz = target_wz - gun_wz;
-		if ((uint32_t)collide_roughdistance3d(tdx, tdy, tdz) > 0x20000u)
-			return;
-	}
+	delta_x = target_wx - gun_wx;
+	delta_y = target_wy - gun_wy;
+	delta_z = target_wz - gun_wz;
+	if ((uint32_t)collide_roughdistance3d(delta_x, delta_y, delta_z) > 0x20000u)
+		return;
 
 	/* LOS test: temporarily repurpose the laser / laser*old globals to
 	 * represent the (gun -> target) segment and ask starship_checkstarshiphit
@@ -1144,35 +1147,38 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	laserx = target_wx;
 	laserxold = gun_wx;
 	lasery = target_wy;
-	laserz = target_wz;
 	laseryold = gun_wy;
+	laserz = target_wz;
 	laserzold = gun_wz;
 	if (starship_checkstarshiphit(craft_obj_idx, craft_obj_idx))
 		return;
 
 	ammo = craftptr->weapon_slots[weapon_slot_idx].ammo;
 
-	/* Lead moving targets from their FlightObject history. Static targets
-	 * use the position returned by create_getworldposition directly. */
-	aim_wx = target_wx;
-	aim_wy = target_wy;
-	aim_wz = target_wz;
-	if (target_ref < OBJ_REF_STATIC_BASE) {
-		int32_t lead_scaled;
-		uint16_t lead_jitter;
+	/* Lead moving targets by their last-frame displacement. Static
+	 * targets use the position returned by create_getworldposition. */
+	if (target_ref < 0x3800) {
+		uint16_t lead_ticks;
 		uint16_t lead_fraction;
 
-		trig2_ctop(target_wx - gun_wx, target_wy - gun_wy, target_wz - gun_wz);
-		lead_scaled = (int32_t)framerate * trig2_polardistance;
-		trig2_polardistance = (ammo != 0) ? (lead_scaled >> 15) : (lead_scaled >> 14);
+		trig2_ctop(delta_x, delta_y, delta_z);
+		trig2_polardistance *= framerate;
+		if (ammo)
+			trig2_polardistance >>= 15;
+		else
+			trig2_polardistance >>= 14;
 
-		lead_jitter = (uint16_t)((math2_getrandom() & 3) + (int16_t)trig2_polardistance - 1);
+		lead_ticks = (uint16_t)(trig2_polardistance + (math2_getrandom() & 3) - 1);
 		if (objects[target_ref].current_speed == 0)
-			lead_jitter = 0;
-		lead_fraction = math2_fraction(lead_jitter, craftptr->skill_value);
-		aim_wx += (int32_t)lead_fraction * (objects[target_ref].world_x - objects[target_ref].world_x_prev);
-		aim_wy += (int32_t)lead_fraction * (objects[target_ref].world_y - objects[target_ref].world_y_prev);
-		aim_wz += (int32_t)lead_fraction * (objects[target_ref].world_z - objects[target_ref].world_z_prev);
+			lead_ticks = 0;
+		lead_fraction = math2_fraction(lead_ticks, craftptr->skill_value);
+		aim_wx = lead_fraction * (target_wx - objects[target_ref].world_x_prev) + target_wx;
+		aim_wy = lead_fraction * (target_wy - objects[target_ref].world_y_prev) + target_wy;
+		aim_wz = lead_fraction * (target_wz - objects[target_ref].world_z_prev) + target_wz;
+	} else {
+		aim_wx = target_wx;
+		aim_wy = target_wy;
+		aim_wz = target_wz;
 	}
 
 	trig2_ctop(aim_wx - gun_wx, aim_wy - gun_wy, aim_wz - gun_wz);
@@ -1184,10 +1190,9 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	if (new_obj == 0xFFFF)
 		return;
 
-	laser = &objects[new_obj];
-	laser->category = 1;
-	laser->genus = GENUS_PROJECTILE_NPC;
-	laser->side = craft->side;
+	objects[new_obj].category = 1;
+	objects[new_obj].genus = GENUS_PROJECTILE_NPC;
+	objects[new_obj].side = craft->side;
 
 	/* is_turbo: one of the species' laser banks fires type 145 or 146. */
 	is_turbo = 0;
@@ -1201,47 +1206,45 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	}
 
 	if (ammo) {
-		projectile_idx = (uint16_t)(PROJ_SHIP_AMMO_LASER + (is_turbo ? 1 : 0));
-	} else if (craft->side && craft->side != 2) {
-		projectile_idx = is_turbo ? PROJ_SHIP_EMPIRE_TURBO : PROJ_SHIP_EMPIRE_LASER;
-	} else {
+		projectile_idx = (uint16_t)(PROJ_SHIP_AMMO_LASER + (is_turbo != 0));
+	} else if (craft->side == 0 || craft->side == 2) {
 		projectile_idx = is_turbo ? PROJ_SHIP_REBEL_TURBO : PROJ_SHIP_REBEL_LASER;
+	} else {
+		projectile_idx = is_turbo ? PROJ_SHIP_EMPIRE_TURBO : PROJ_SHIP_EMPIRE_LASER;
 	}
-	proj_type = (uint16_t)(projectile_idx - PROJ_TYPE_SHIFT);
-	laser->ship_idx = (uint8_t)projectile_idx;
-	laser->age_ticks = 1;
-	laser->self_idx = (int16_t)craft_obj_idx;
-	laser->ship_type_override = craft->ship_idx;
-	laser->pitch = pitch;
-	laser->heading = heading;
-	laser->current_speed = (int16_t)projectilevelocity[proj_type];
-	laser->collision_radius = (int16_t)projectileweight[proj_type];
-	laser->roll = 0;
-	laser->orient_dirty = 1;
-	laser->move_dirty = 1;
-	laser->death_timer = (int16_t)(708 * projectilelife[proj_type]);
+	objects[new_obj].ship_idx = (uint8_t)projectile_idx;
+	objects[new_obj].age_ticks = 1;
+	objects[new_obj].self_idx = (int16_t)craft_obj_idx;
+	objects[new_obj].ship_type_override = craft->ship_idx;
+	objects[new_obj].pitch = pitch;
+	objects[new_obj].roll = 0;
+	objects[new_obj].heading = heading;
+	objects[new_obj].current_speed = (int16_t)projectilevelocity[projectile_idx - WEAPON_SPECIES_BASE];
+	objects[new_obj].collision_radius = (int16_t)projectileweight[projectile_idx - WEAPON_SPECIES_BASE];
+	objects[new_obj].orient_dirty = 1;
+	objects[new_obj].move_dirty = 1;
+	objects[new_obj].death_timer = (int16_t)(708 * projectilelife[projectile_idx - WEAPON_SPECIES_BASE]);
 
-	fview_calcrotatemove(pitch, heading, laser);
+	fview_calcrotatemove(pitch, heading, &objects[new_obj]);
 
-	/* Apply craft-velocity push to the gun position before placing the
-	 * bolt -- gives a "fired from a moving platform" trail. The push
-	 * factor is the HIWORD of dword_D4C74[projectile_idx], which aliases
-	 * the projectile launch-offset table. */
-	push = (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[proj_type];
-	laser->world_x_prev = gun_wx;
-	laser->world_y_prev = gun_wy;
-	laser->world_z_prev = gun_wz;
-	laser->world_x = ((push * craftmoveX) >> 15) + gun_wx;
-	laser->world_y = ((push * craftmoveY) >> 15) + gun_wy;
-	laser->world_z = ((push * craftmoveZ) >> 15) + gun_wz;
+	/* Push the bolt forward by the projectile length scaled by the
+	 * platform's own motion so it leaves the muzzle cleanly. */
+	objects[new_obj].world_x_prev = gun_wx;
+	objects[new_obj].world_y_prev = gun_wy;
+	objects[new_obj].world_z_prev = gun_wz;
+	gun_wx += (craftmoveX * (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_idx - WEAPON_SPECIES_BASE]) >> 15;
+	gun_wy += (craftmoveY * (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_idx - WEAPON_SPECIES_BASE]) >> 15;
+	gun_wz += (craftmoveZ * (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_idx - WEAPON_SPECIES_BASE]) >> 15;
+	objects[new_obj].world_x = gun_wx;
+	objects[new_obj].world_y = gun_wy;
+	objects[new_obj].world_z = gun_wz;
 
 	/* Install the warhead-record target so MOVE/COLLIDE can look up who
 	 * fired and what to track. Warhead slots start at FlightObject
 	 * NUM_CRAFTS (32 retail / 28 demo). */
-	warhead_slot = (unsigned int)(new_obj - NUM_CRAFTS);
-	warheads[warhead_slot].homing_tier = 0;
-	warheads[warhead_slot].target_obj = target_ref;
-	laser->craft_ptr = (CraftData*)&warheads[warhead_slot];
+	warheads[(uint16_t)(new_obj - NUM_CRAFTS)].homing_tier = 0;
+	warheads[(uint16_t)(new_obj - NUM_CRAFTS)].target_obj = target_ref;
+	objects[new_obj].craft_ptr = (CraftData*)&warheads[(uint16_t)(new_obj - NUM_CRAFTS)];
 
 	fsfx_triggerlasersfx(new_obj);
 }

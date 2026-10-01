@@ -10,14 +10,14 @@ extern "C" {
 /* Rotated and scaled RLE sprite renderer used by bitmaps and reticles. */
 
 /* Module-public globals */
-extern uint16_t reverseflag;   /* 1 = horizontal-flip the sprite */
+extern uint32_t reverseflag;   /* 1 = horizontal-flip the sprite */
 extern uint16_t bSquarePixels; /* derived from yAspect == 0 */
 
 /* --- public API --------------------------------------------------- */
 
 int16_t rotscale_calcscale(int32_t depth, uint16_t bound_hwidth, uint16_t factor);
 
-void rotscale_preparefastdraw(uint16_t angle);
+void rotscale_preparefastdraw(uint16_t angle, int mode); /* mode is ignored by retail */
 
 extern int rotscale_linedata_built;
 

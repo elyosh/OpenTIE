@@ -105,7 +105,7 @@ int16_t instrumentdisable[] = { 0x200, 0x040, 0x020, 0x006, 0x400,  0x180, 0x010
 
 /* ---------- 1. collide_makeobjectexplosion ---------- */
 // FUNCTION: TIE95 0x15A24
-char collide_makeobjectexplosion(uint16_t obj_idx, uint8_t ship_variant) {
+char collide_makeobjectexplosion(uint16_t obj_idx, uint16_t ship_variant) {
 	TIE_FLIGHT_TRACE_EXPLOSION(obj_idx, ship_variant);
 
 	objects[obj_idx].ship_idx = ship_variant;
@@ -341,243 +341,245 @@ void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx) {
  * collide{x,y,z}off + returns 0xFFFF on hit, 0 on miss. */
 // FUNCTION: TIE95 0x138C4
 int32_t collide_checkboxcollision(int32_t radius) {
-	int32_t seg_dx = laserx - laserxold;
-	int32_t seg_dy = lasery - laseryold;
-	int32_t seg_dz = laserz - laserzold;
-	int32_t box_dx_old = craftxold - laserxold;
-	int32_t box_dy_old = craftyold - laseryold;
-	int32_t box_dz_old = craftzold - laserzold;
-	int32_t box_dx = craftx - craftxold - seg_dx;
-	int32_t box_dy_dy = crafty - craftyold;
-	int32_t box_dz_dz = craftz - craftzold;
-	int32_t rel_vel_x = box_dx;
-	int32_t rel_vel_y = box_dy_dy - seg_dy;
-	int32_t rel_vel_z = box_dz_dz - seg_dz;
-	int32_t far_x = radius - box_dx_old;
-	int32_t near_x;
-	int32_t relvel_x_save;
-	int32_t far_y;
-	int32_t near_y;
-	int32_t relvel_y_save;
-	int32_t far_z;
-	int32_t near_z;
-	int32_t relvel_z_save;
-	int32_t far_x_scaled, near_x_scaled;
-	int32_t far_y_scaled, near_y_scaled;
-	int32_t far_z_scaled, near_z_scaled;
-	int32_t t_enter, t_exit;
+	int32_t ydenom;
+	int32_t craftdz;
+	int32_t ymax;
+	int32_t xmin;
+	int32_t zdenom;
+	int32_t swap;
+	int32_t xvel;
+	int32_t ymin;
+	int32_t laserdx;
+	int32_t zmax;
+	int32_t laserdy;
+	int32_t zvel;
+	int32_t xdist;
+	int32_t xmax;
+	int32_t ydist;
+	int32_t yvel;
+	int32_t zmin;
+	int32_t craftdx;
+	int32_t zdist;
+	int32_t laserdz;
+	int32_t xdenom;
+	int32_t craftdy;
+	uint16_t scale;
 
-	/* X axis. */
-	if (box_dx_old <= radius) {
-		int32_t neg_radius_x = -radius;
-		int32_t near_x_neg = neg_radius_x - box_dx_old;
-		if (box_dx_old >= neg_radius_x) {
-			near_x = near_x_neg;
-			relvel_x_save = 0;
-		} else {
-			near_x = near_x_neg;
-			relvel_x_save = rel_vel_x;
-			if (rel_vel_x < 0)
-				return 0;
-			if (near_x_neg >= rel_vel_x)
-				return 0;
-		}
+	laserdx = laserx - laserxold;
+	laserdy = lasery - laseryold;
+	laserdz = laserz - laserzold;
+	craftdx = craftx - craftxold;
+	craftdy = crafty - craftyold;
+	craftdz = craftz - craftzold;
+
+	/* Clip the relative motion against the box slab on each axis. */
+	xdist = craftxold - laserxold;
+	if (xdist > radius) {
+		xmax = radius - xdist;
+		xvel = craftdx - laserdx;
+		if (xvel >= 0)
+			return 0;
+		if (xmax < xvel)
+			return 0;
+		xmin = -radius - xdist;
+	} else if (xdist < -radius) {
+		xmin = -radius - xdist;
+		xvel = craftdx - laserdx;
+		if (xvel < 0)
+			return 0;
+		if (xmin >= xvel)
+			return 0;
+		xmax = radius - xdist;
 	} else {
-		relvel_x_save = rel_vel_x;
-		if (rel_vel_x >= 0)
-			return 0;
-		if (far_x < rel_vel_x)
-			return 0;
-		near_x = -radius - box_dx_old;
+		xmax = radius - xdist;
+		xmin = -radius - xdist;
+		xvel = 0;
 	}
 
-	/* Y axis. */
-	if (box_dy_old <= radius) {
-		int32_t near_y_neg = -radius - box_dy_old;
-		if (box_dy_old >= -radius) {
-			far_y = radius - box_dy_old;
-			near_y = near_y_neg;
-			relvel_y_save = 0;
-		} else {
-			near_y = near_y_neg;
-			relvel_y_save = rel_vel_y;
-			if (rel_vel_y < 0)
-				return 0;
-			if (near_y_neg >= rel_vel_y)
-				return 0;
-			far_y = radius - box_dy_old;
-		}
+	ydist = craftyold - laseryold;
+	if (ydist > radius) {
+		ymax = radius - ydist;
+		yvel = craftdy - laserdy;
+		if (yvel >= 0)
+			return 0;
+		if (ymax < yvel)
+			return 0;
+		ymin = -radius - ydist;
+	} else if (ydist < -radius) {
+		ymin = -radius - ydist;
+		yvel = craftdy - laserdy;
+		if (yvel < 0)
+			return 0;
+		if (ymin >= yvel)
+			return 0;
+		ymax = radius - ydist;
 	} else {
-		far_y = radius - box_dy_old;
-		relvel_y_save = rel_vel_y;
-		if (rel_vel_y >= 0)
-			return 0;
-		if (far_y < rel_vel_y)
-			return 0;
-		near_y = -radius - box_dy_old;
+		ymax = radius - ydist;
+		ymin = -radius - ydist;
+		yvel = 0;
 	}
 
-	/* Z axis. */
-	if (box_dz_old <= radius) {
-		int32_t near_z_neg = -radius - box_dz_old;
-		if (box_dz_old >= -radius) {
-			near_z = near_z_neg;
-			far_z = radius - box_dz_old;
-			relvel_z_save = 0;
-		} else {
-			near_z = near_z_neg;
-			relvel_z_save = rel_vel_z;
-			if (rel_vel_z < 0)
-				return 0;
-			if (rel_vel_z <= near_z_neg)
-				return 0;
-			far_z = radius - box_dz_old;
-		}
+	zdist = craftzold - laserzold;
+	if (zdist > radius) {
+		zmax = radius - zdist;
+		zvel = craftdz - laserdz;
+		if (zvel >= 0)
+			return 0;
+		if (zmax < zvel)
+			return 0;
+		zmin = -radius - zdist;
+	} else if (zdist < -radius) {
+		zmin = -radius - zdist;
+		zvel = craftdz - laserdz;
+		if (zvel < 0)
+			return 0;
+		if (zvel <= zmin)
+			return 0;
+		zmax = radius - zdist;
 	} else {
-		far_z = radius - box_dz_old;
-		relvel_z_save = rel_vel_z;
-		if (rel_vel_z >= 0)
-			return 0;
-		if (far_z < rel_vel_z)
-			return 0;
-		near_z = -radius - box_dz_old;
+		zmax = radius - zdist;
+		zmin = -radius - zdist;
+		zvel = 0;
 	}
 
-	/* Scale to 8.7 fixed-point. Watcom emits `shl reg, 8`; perform the
-	 * shift in uint32_t to avoid UB on negative int32_t (the bit pattern
-	 * matches the original on two's-complement targets). */
-	far_x_scaled = (int32_t)((uint32_t)far_x << 8);
-	near_x_scaled = (int32_t)((uint32_t)near_x << 8);
-	near_y_scaled = (int32_t)((uint32_t)near_y << 8);
-	far_y_scaled = (int32_t)((uint32_t)far_y << 8);
-	near_z_scaled = (int32_t)((uint32_t)near_z << 8);
-	far_z_scaled = (int32_t)((uint32_t)far_z << 8);
+	/* Scale to 8.8 fixed point. Shift as unsigned to keep negative
+	 * values well defined. */
+	xmax = (int32_t)((uint32_t)xmax << 8);
+	xmin = (int32_t)((uint32_t)xmin << 8);
+	ymax = (int32_t)((uint32_t)ymax << 8);
+	ymin = (int32_t)((uint32_t)ymin << 8);
+	zmax = (int32_t)((uint32_t)zmax << 8);
+	zmin = (int32_t)((uint32_t)zmin << 8);
 
-	/* X-axis t_enter / t_exit. */
-	if (relvel_x_save) {
-		int32_t a = far_x_scaled / relvel_x_save;
-		int32_t b = near_x_scaled / relvel_x_save;
-		if (relvel_x_save < 0) {
-			t_enter = a;
-			t_exit = b;
-		} else {
-			t_enter = b;
-			t_exit = a;
-		}
-	} else {
-		int32_t denom = box_dx;
+	/* X axis entry/exit times. */
+	if (xvel == 0) {
+		xdenom = craftdx - laserdx;
 		if (craftx - laserx > radius) {
-			t_enter = 0;
-			t_exit = far_x_scaled / denom;
-		} else if (craftx - laserx >= -radius) {
-			t_enter = 0;
-			t_exit = 255;
+			xmin = xmax / xdenom;
+			xmax = 0;
+		} else if (craftx - laserx < -radius) {
+			xmin = xmin / xdenom;
+			xmax = 0;
 		} else {
-			t_enter = 0;
-			t_exit = near_x_scaled / denom;
-		}
-	}
-
-	/* Y-axis intersection. */
-	if (relvel_y_save) {
-		int32_t a = far_y_scaled / relvel_y_save;
-		if (relvel_y_save < 0) {
-			if (t_exit < a)
-				return 0;
-			if (t_enter < a)
-				t_enter = a;
-			{
-				int32_t b = near_y_scaled / relvel_y_save;
-				if (b < t_enter)
-					return 0;
-				if (b < t_exit)
-					t_exit = b;
-			}
-		} else {
-			if (t_enter > a)
-				return 0;
-			if (t_exit > a)
-				t_exit = a;
-			{
-				int32_t b = near_y_scaled / relvel_y_save;
-				if (b > t_exit)
-					return 0;
-				if (b > t_enter)
-					t_enter = b;
-			}
+			xmin = 255;
+			xmax = 0;
 		}
 	} else {
-		int32_t denom = box_dy_dy - seg_dy;
-		int32_t ty;
-		if (crafty - lasery > radius)
-			ty = far_y_scaled / denom;
-		else if (crafty - lasery < -radius)
-			ty = near_y_scaled / denom;
-		else
-			ty = 255;
-		if (t_exit < 0)
-			return 0;
-		if (t_enter < 0)
-			t_enter = 0;
-		if (ty < t_enter)
-			return 0;
-		if (ty < t_exit)
-			t_exit = ty;
-	}
-
-	/* Z-axis intersection. */
-	if (relvel_z_save) {
-		int32_t a = far_z_scaled / relvel_z_save;
-		if (relvel_z_save < 0) {
-			if (a > t_exit)
-				return 0;
-			if (a > t_enter)
-				t_enter = a;
-			{
-				int32_t b = near_z_scaled / relvel_z_save;
-				if (b < t_enter)
-					return 0;
-			}
-		} else {
-			if (a < t_enter)
-				return 0;
-			if (a < t_exit)
-				t_exit = a;
-			{
-				int32_t b = near_z_scaled / relvel_z_save;
-				if (b > t_exit)
-					return 0;
-				if (b > t_enter)
-					t_enter = b;
-			}
+		xmax = xmax / xvel;
+		xmin = xmin / xvel;
+		if (xvel >= 0) {
+			swap = xmax;
+			xmax = xmin;
+			xmin = swap;
 		}
-	} else {
-		int32_t denom = box_dz_dz - seg_dz;
-		int32_t tz;
-		if (craftz - laserz > radius)
-			tz = far_z_scaled / denom;
-		else if (craftz - laserz < -radius)
-			tz = near_z_scaled / denom;
-		else
-			tz = 255;
-		if (t_exit < 0)
-			return 0;
-		if (t_enter < 0)
-			t_enter = 0;
-		if (tz < t_enter)
-			return 0;
 	}
 
-	if (t_enter > 255)
+	/* Intersect with the Y axis interval. */
+	if (yvel == 0) {
+		ydenom = craftdy - laserdy;
+		if (crafty - lasery > radius) {
+			ymin = ymax / ydenom;
+			ymax = 0;
+		} else if (crafty - lasery < -radius) {
+			ymin = ymin / ydenom;
+			ymax = 0;
+		} else {
+			ymax = 0;
+			ymin = 255;
+		}
+		if (xmin < ymax)
+			return 0;
+		if (xmax < ymax)
+			xmax = ymax;
+		if (ymin < xmax)
+			return 0;
+		if (ymin < xmin)
+			xmin = ymin;
+	} else {
+		ymax = ymax / yvel;
+		if (yvel >= 0) {
+			if (xmax > ymax)
+				return 0;
+			if (xmin > ymax)
+				xmin = ymax;
+			ymin = ymin / yvel;
+			if (ymin > xmin)
+				return 0;
+			if (ymin > xmax)
+				xmax = ymin;
+		} else {
+			if (xmin < ymax)
+				return 0;
+			if (xmax < ymax)
+				xmax = ymax;
+			ymin = ymin / yvel;
+			if (ymin < xmax)
+				return 0;
+			if (ymin < xmin)
+				xmin = ymin;
+		}
+	}
+
+	/* Intersect with the Z axis interval. */
+	if (zvel == 0) {
+		zdenom = craftdz - laserdz;
+		if (craftz - laserz > radius) {
+			zmin = zmax / zdenom;
+			zmax = 0;
+		} else if (craftz - laserz < -radius) {
+			zmin = zmin / zdenom;
+			zmax = 0;
+		} else {
+			zmin = 255;
+			zmax = 0;
+		}
+		if (zmax > xmin)
+			return 0;
+		if (zmax > xmax)
+			xmax = zmax;
+		if (zmin < xmax)
+			return 0;
+		if (zmin < xmin)
+			xmin = zmin;
+	} else {
+		zmax = zmax / zvel;
+		if (zvel >= 0) {
+			if (zmax < xmax)
+				return 0;
+			if (zmax < xmin)
+				xmin = zmax;
+			zmin = zmin / zvel;
+			if (zmin > xmin)
+				return 0;
+			if (zmin > xmax)
+				xmax = zmin;
+		} else {
+			if (zmax > xmin)
+				return 0;
+			if (zmax > xmax)
+				xmax = zmax;
+			zmin = zmin / zvel;
+			if (zmin < xmax)
+				return 0;
+			if (zmin < xmin)
+				xmin = zmin;
+		}
+	}
+
+	if (xmax > 255)
 		return 0;
 
-	/* Impact offset = laser-direction * (t<<7) >> 15  (8.7 fixed-point). */
-	{
-		uint16_t scaled = (uint16_t)((t_enter & 0xFFFF) << 7);
-		collidexoff = (seg_dx * scaled) >> 15;
-		collideyoff = (seg_dy * scaled) >> 15;
-		collidezoff = (seg_dz * scaled) >> 15;
-	}
+	/* Impact offset = laser motion * tmin, in 8.7 fixed point. */
+	collidexoff = laserdx;
+	collideyoff = laserdy;
+	collidezoff = laserdz;
+	scale = (uint16_t)(xmax << 7);
+	collidexoff *= scale;
+	collidexoff >>= 15;
+	collideyoff *= scale;
+	collideyoff >>= 15;
+	collidezoff *= scale;
+	collidezoff >>= 15;
 	return 0xFFFF;
 }
 
@@ -772,135 +774,152 @@ uint16_t collide_craftstarshipcollision(uint16_t craft_obj_idx, int16_t lookahea
 
 /* ---------- 10. collide_laserhitcraft ---------- */
 // FUNCTION: TIE95 0x1433C
-char collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx, int16_t hit_offset) {
+void collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx, int16_t hit_offset) {
 	uint16_t self_idx;
-	CraftData* tgt_craft;
-	uint8_t prev_hit_status;
-	uint16_t head_on_flag = 0;
-	uint8_t is_craft_chunk_variant;
+	uint16_t head_on_flag;
 	char damage_result;
-	uint16_t sfx_id;
-	int32_t headon_dot;
 
 	self_idx = objects[projectile_obj_idx].self_idx;
 	if (self_idx == target_obj_idx)
-		return (char)projectile_obj_idx;
+		return;
 
-	tgt_craft = objects[target_obj_idx].craft_ptr;
-	craftptr = tgt_craft;
+	craftptr = objects[target_obj_idx].craft_ptr;
+	if (!craftptr->was_hit_flag) {
+		uint16_t fg_idx;
 
-	/* Track the first attacker. Sentinel 0x00FF (init by PAI_initplan as
-	 * a 16-bit write of 0xFF) means uninitialized. */
-	if (tgt_craft->attacker_idx == 0xFFu && self_idx < NUM_CRAFTS)
-		tgt_craft->attacker_idx = self_idx;
-
-	tgt_craft->hit_count++;
-
-	prev_hit_status = tgt_craft->was_hit_flag;
-	if (!prev_hit_status) {
-		uint8_t fg_idx;
-
-		tgt_craft->was_hit_flag = 1;
+		craftptr->was_hit_flag |= 1;
 		fg_idx = objects[target_obj_idx].fg_idx;
 		fgstatus[fg_idx].cond[2].detail++;
-
-		if (fg_array[fg_idx].special_craft == tgt_craft->craft_idx_in_fg)
+		if ((int8_t)fg_array[fg_idx].special_craft == craftptr->craft_idx_in_fg)
 			fgstatus[fg_idx].cond_id[2].detail = 1;
-
 		fsfx_checkcriticalcraft(target_obj_idx, 0x58);
 	}
 	if (self_idx == pstate.object_idx)
-		tgt_craft->was_hit_flag |= 0x80u;
+		craftptr->was_hit_flag |= 0x80;
+
+	/* Track the first attacker. Sentinel 0x00FF (init by PAI_initplan as
+	 * a 16-bit write of 0xFF) means uninitialized. Friendly fire from the
+	 * player accumulates in bits 4..6 of was_hit_flag (+1 per laser, +4
+	 * per warhead) and only marks the player as attacker from 5 on. */
+	if (craftptr->attacker_idx == 0xFFu && self_idx < NUM_CRAFTS) {
+		uint8_t assign_attacker = 1;
+
+		if (self_idx == pstate.object_idx && objects[target_obj_idx].side == objects[self_idx].side &&
+			objects[target_obj_idx].genus) {
+			uint8_t friendly_hits = (craftptr->was_hit_flag >> 4) & 7;
+
+			if (friendly_hits < 5) {
+				friendly_hits += (uint8_t)(
+					projectile_is_warhead_type[objects[projectile_obj_idx].ship_idx - WEAPON_SPECIES_BASE] == 0 ? 1 : 4);
+				if (friendly_hits > 7)
+					friendly_hits = 7;
+				craftptr->was_hit_flag = (friendly_hits << 4) | (craftptr->was_hit_flag & 0x8F);
+			}
+			if (friendly_hits < 5)
+				assign_attacker = 0;
+		}
+		if (assign_attacker == 1)
+			craftptr->attacker_idx = self_idx;
+	}
+	craftptr->hit_count++;
 
 	/* head-on flag only computed when target is the player. */
 	if (target_obj_idx == pstate.object_idx) {
-		FlightObject* pl = pstate.player;
-		if (pl->orient_dirty) {
-			fview_calcrotatemove(pl->pitch, pl->heading, pl);
-			fview_calcrotateorient(pl->roll, 0, pl);
+		int32_t delta_x;
+		int32_t delta_y;
+		int32_t delta_z;
+		int32_t headon_dot;
+
+		if (pstate.player->orient_dirty) {
+			fview_calcrotatemove(pstate.player->pitch, pstate.player->heading, pstate.player);
+			fview_calcrotateorient(pstate.player->roll, 0, pstate.player);
 		}
 		/* Dot product of laser delta and player forward vector;
 		 * positive = head-on. */
-		headon_dot = (int16_t)(laserx - laserxold) * (int32_t)pl->fwd_x +
-					 (int16_t)(lasery - laseryold) * (int32_t)pl->fwd_y +
-					 (int16_t)(laserz - laserzold) * (int32_t)pl->fwd_z;
+		delta_z = (int16_t)(laserz - laserzold);
+		delta_y = (int16_t)(lasery - laseryold);
+		delta_x = (int16_t)(laserx - laserxold);
+		headon_dot = pstate.player->fwd_x * delta_x + pstate.player->fwd_y * delta_y + pstate.player->fwd_z * delta_z;
 		if (headon_dot >= 0x40000000)
 			headon_dot = 0x3FFF0000;
 		if (headon_dot <= -0x40000000)
 			headon_dot = -0x3FFF0000;
-		head_on_flag = (((headon_dot >> 15) & 0x8000u) == 0) ? 1 : 0;
+		if ((int16_t)(headon_dot >> 15) < 0)
+			head_on_flag = 0;
+		else
+			head_on_flag = 1;
+	} else {
+		head_on_flag = 0;
 	}
 
-	/* ION CANNON projectile (ship_idx==152) drains weapon energy. */
-	if (objects[projectile_obj_idx].ship_idx == 152) {
+	if (objects[projectile_obj_idx].ship_idx != 152) {
+		/* skill==5 = invulnerable / no-damage marker. */
+		if ((int8_t)fg_array[objects[target_obj_idx].fg_idx].skill != 5)
+			damage_result = collide_damagecraft(target_obj_idx, hit_offset, projectile_obj_idx, head_on_flag);
+		else
+			damage_result = 1;
+	} else {
+		/* ION CANNON projectile drains weapon energy. */
+		uint16_t old_drain = craftptr->ion_drain_timer;
+
 		if (target_obj_idx == pstate.object_idx) {
 			uint16_t i;
 			for (i = 0; i < pstate.player_craft->weapon_group_cnt; i++)
 				pstate.player_craft->weapon_slots[i].charge = 0;
 			msg_messageprintf(MSG_WARHEAD_DRAINED_CANNON);
 		} else {
-			uint8_t genus = objects[target_obj_idx].genus;
-			/* Unarmed/cargo classes (fighter/transport/utility) drain
-			 * 2x as long as armed cap-ships; numbers from binary. */
-			uint16_t add = (genus <= GENUS_UTILITY) ? 4720 : 2360;
-			tgt_craft->ion_drain_timer += add;
+			uint16_t genus = objects[target_obj_idx].genus;
+			if (genus == GENUS_FIGHTER || genus == GENUS_TRANSPORT || genus == GENUS_UTILITY)
+				craftptr->ion_drain_timer += 4720;
+			else
+				craftptr->ion_drain_timer = old_drain + 7080;
 		}
-		damage_result = 1;
-	}
-	/* Watcom unaligned: *(int*)&fg.warhead >> 24 = fg.skill (offset 0x38).
-	 * skill==5 = invulnerable / no-damage marker. */
-	else if (fg_array[objects[target_obj_idx].fg_idx].skill != 5) {
-		damage_result = collide_damagecraft(target_obj_idx, hit_offset, head_on_flag, projectile_obj_idx);
-	} else {
+		/* Saturate instead of wrapping around. */
+		if (old_drain > craftptr->ion_drain_timer)
+			craftptr->ion_drain_timer = old_drain;
 		damage_result = 1;
 	}
 
-	/* Convert projectile slot to explosion at impact point. Retail
-	 * COLLIDE_makeobjectexplosion does NOT touch field_54 — the
-	 * craft_ptr keeps pointing at the original warheads[] entry so
-	 * downstream warhead-slot iterators (PAIORDER_avoidhitorder etc.)
-	 * can read it unconditionally; they filter on the warhead's own
-	 * fields (homing_tier / target_obj), not on a NULL ptr. */
-	{
-		FlightObject* expl_obj = &objects[projectile_obj_idx];
-		expl_obj->world_x = collidexoff + laserxold;
-		expl_obj->world_y = collideyoff + laseryold;
-		expl_obj->world_z = collidezoff + laserzold;
-
-		/* Retail byte_C5463[ship_idx] flags 'craft chunk' explosion
-		 * variants (0 = silent, 1/2 = chunk). Retained as a proper
-		 * species-indexed table in laser.c. */
-		is_craft_chunk_variant = projectile_is_warhead_type[expl_obj->ship_idx - WEAPON_SPECIES_BASE];
-
-		if (is_craft_chunk_variant)
-			expl_obj->ship_idx = (uint8_t)((math2_getrandom() & 1) + 127);
-		else
-			expl_obj->ship_idx = (uint8_t)(-125);
-
-		expl_obj->genus = GENUS_EXPLOSION;
-		expl_obj->category = 5;
-		expl_obj->age_ticks = 0;
-		expl_obj->death_timer = 0;
-		expl_obj->damage_state = 0;
-		expl_obj->anim_frame = 2;
-		expl_obj->current_speed = objects[target_obj_idx].current_speed;
-		expl_obj->pitch = objects[target_obj_idx].pitch;
-		expl_obj->heading = objects[target_obj_idx].heading;
-		expl_obj->roll = 0;
-		expl_obj->orient_dirty = 1;
-		expl_obj->move_dirty = 1;
-	}
+	/* Convert projectile slot to explosion at impact point. The craft_ptr
+	 * keeps pointing at the original warheads[] entry so downstream
+	 * warhead-slot iterators (PAIORDER_avoidhitorder etc.) can read it
+	 * unconditionally; they filter on the warhead's own fields
+	 * (homing_tier / target_obj), not on a NULL ptr. */
+	objects[projectile_obj_idx].world_x = laserxold + collidexoff;
+	objects[projectile_obj_idx].world_y = laseryold + collideyoff;
+	objects[projectile_obj_idx].world_z = laserzold + collidezoff;
+	if (projectile_is_warhead_type[objects[projectile_obj_idx].ship_idx - WEAPON_SPECIES_BASE])
+		objects[projectile_obj_idx].ship_idx = 129;
+	else if (objects[projectile_obj_idx].ship_idx == 141 || objects[projectile_obj_idx].ship_idx == 142)
+		objects[projectile_obj_idx].ship_idx = 132;
+	else
+		objects[projectile_obj_idx].ship_idx = 131;
+	objects[projectile_obj_idx].genus = GENUS_EXPLOSION;
+	objects[projectile_obj_idx].anim_frame = 2;
+	objects[projectile_obj_idx].category = 5;
+	objects[projectile_obj_idx].damage_state = 0;
+	objects[projectile_obj_idx].age_ticks = 0;
+	objects[projectile_obj_idx].death_timer = 0;
+	objects[projectile_obj_idx].current_speed = objects[target_obj_idx].current_speed;
+	objects[projectile_obj_idx].pitch = objects[target_obj_idx].pitch;
+	objects[projectile_obj_idx].heading = objects[target_obj_idx].heading;
+	objects[projectile_obj_idx].orient_dirty = 1;
+	objects[projectile_obj_idx].move_dirty = 1;
+	objects[projectile_obj_idx].roll = 0;
 
 	if (damage_result) {
-		if (target_obj_idx == pstate.object_idx)
+		uint16_t sfx_id;
+
+		if (target_obj_idx == pstate.object_idx) {
 			sfx_id = 26;
-		else if (objects[projectile_obj_idx].ship_idx == 131)
-			sfx_id = 25;
-		else
+		} else if (objects[projectile_obj_idx].ship_idx == 131 || objects[projectile_obj_idx].ship_idx == 132) {
+			fsfx_triggersfx(25, projectile_obj_idx);
+			return;
+		} else {
 			sfx_id = (uint16_t)((math2_getrandom() & 3) + 19);
-		return fsfx_triggersfx(sfx_id, projectile_obj_idx);
+		}
+		fsfx_triggersfx(sfx_id, projectile_obj_idx);
 	}
-	return 0;
 }
 
 /* ---------- 11. collide_damagecraft ----------
@@ -917,8 +936,8 @@ char collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
  *      component, trigger MsSetSequence cue, score the kill.
  */
 // FUNCTION: TIE95 0x148F0
-char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_t weapon_group,
-						 uint16_t attacker_obj_idx) {
+char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_t attacker_obj_idx,
+						 uint16_t weapon_group) {
 	CraftData* tgt_craft;
 	uint16_t atk_species;
 	int32_t collision_radius;
@@ -1707,7 +1726,7 @@ void collide_collisions(void) {
 									int32_t dot;
 									TIE_FLIGHT_TRACE_COLLISION(pstate.object_idx, target_idx,
 															   TIE_TRACE_COLLISION_CRAFT, hit_offset);
-									collide_damagecraft(target_idx, hit_offset, 0, pstate.object_idx);
+									collide_damagecraft(target_idx, hit_offset, pstate.object_idx, 0);
 									if (pl->orient_dirty) {
 										fview_calcrotatemove(pl->pitch, pl->heading, pl);
 										fview_calcrotateorient(pl->roll, 0, pl);
@@ -1719,8 +1738,8 @@ void collide_collisions(void) {
 										dot = 0x3FFF0000;
 									if (dot <= -0x40000000)
 										dot = -0x3FFF0000;
-									collide_damagecraft(pstate.object_idx, 0xFFFF,
-														(((dot >> 15) & 0x8000u) != 0) ? 1 : 0, target_idx);
+									collide_damagecraft(pstate.object_idx, 0xFFFF, target_idx,
+														(((dot >> 15) & 0x8000u) != 0) ? 1 : 0);
 								}
 							}
 						}
@@ -1798,7 +1817,7 @@ void collide_collisions(void) {
 					if (static_laserstaticcollide(pstate.object_idx, i)) {
 						TIE_FLIGHT_TRACE_COLLISION(pstate.object_idx, static_obj_off,
 												   TIE_TRACE_COLLISION_STATIC, -1);
-						collide_damagecraft(pstate.object_idx, 0xFFFF, 0, static_obj_off);
+						collide_damagecraft(pstate.object_idx, 0xFFFF, static_obj_off, 0);
 					}
 				}
 				static_obj_off++;
@@ -1874,8 +1893,8 @@ void collide_collisions(void) {
 						if (hit) {
 							TIE_FLIGHT_TRACE_COLLISION(projectile_idx, tgt_iter, TIE_TRACE_COLLISION_CRAFT,
 													   (int16_t)hit);
-							collide_damagecraft(projectile_idx, (int16_t)hit, 0, tgt_iter);
-							collide_damagecraft(tgt_iter, 0xFFFF, 0, projectile_idx);
+							collide_damagecraft(projectile_idx, (int16_t)hit, tgt_iter, 0);
+							collide_damagecraft(tgt_iter, 0xFFFF, projectile_idx, 0);
 						}
 					}
 				}

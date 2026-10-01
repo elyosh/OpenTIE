@@ -88,18 +88,12 @@ typedef struct BSPFaceNode {
 
 /* DRAWPOL_EyeVertex is declared in transfm2.h (TRANSFM2 produces it). */
 
-/* Face vertex record addressed by firstvertptr. flags is the face header
- * byte (count in the low six bits, DRAWPOL_FACE_GOURAUD, DRAWPOL_FACE_TWOSIDED).
- * For a polygon, body holds vertex/edge index pairs: vertex i at body[2 * i],
- * edge i at body[2 * i + 1], with the first vertex repeated at body[2 * n].
- * A two-vertex (line) face reuses the body as {u16 thickness; u8 vertex1;
- * u8 vertex2; u8 edge}; line objects (0x40/0x41) point firstvertptr at
- * their first 5-byte edge record, so flags is that record's thickness low
- * byte there. Each mesh face record spans 1 + 2 * n + 3 bytes. */
-typedef struct DRAWPOL_FaceRecord {
-	uint8_t flags;
-	uint8_t body[];
-} DRAWPOL_FaceRecord;
+/* A mesh face record is a header byte (count in the low six bits,
+ * DRAWPOL_FACE_GOURAUD, DRAWPOL_FACE_TWOSIDED) followed by 2 * n + 3 body
+ * bytes. A polygon body holds vertex/edge index pairs: vertex i at [2 * i],
+ * edge i at [2 * i + 1], with the first vertex repeated at [2 * n]. A
+ * two-vertex (line) face body is {u16 thickness; u8 vertex1; u8 vertex2;
+ * u8 edge}, the layout of a line object's (0x40/0x41) 5-byte edge record. */
 
 #define DRAWPOL_FACE_COUNT_MASK 0x3F
 #define DRAWPOL_FACE_GOURAUD 0x40
@@ -126,7 +120,7 @@ typedef enum MarkingMode {
  * ==================================================================== */
 extern TRANSFM2_ScreenPoint* calcflag[128]; /* NULL if vertex behind near plane, else its projected point */
 extern uint16_t vertexlight[128];           /* per-vertex light intensity (0xFFFF = not yet computed) */
-extern DRAWPOL_FaceRecord* firstvertptr;    /* vertex record of the current face */
+extern uint8_t* firstvertptr; /* body of the current face record; its header byte is firstvertptr[-1] */
 
 /* edgeflags[], edgept1[], edgept2[], flatx/y/z, flatcolors, flatcomponentnum,
  * flatparentobj, eyexyzdata are owned by xtrans2.c per watdbg -- see xtrans2.h. */

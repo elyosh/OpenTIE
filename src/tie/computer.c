@@ -523,10 +523,16 @@ static void computer_idraw_Exit(Input* input, Rect* r, Rect* clip_r, int16_t ref
 static void computer_iuser_Exit(Input* input, int32_t time) {
 	(void)time;
 
-	if (input->id == 1 && xinpattr_Get_Input_Selected(input))
-		xdialog_Set_Dialog_Exit(1);
-	else if (input->id == 2 && xinpattr_Get_Input_Selected(input))
-		xdialog_Set_Dialog_Exit(2);
+	switch (input->id) {
+		case 1:
+			if (xinpattr_Get_Input_Selected(input))
+				xdialog_Set_Dialog_Exit(1);
+			break;
+		case 2:
+			if (xinpattr_Get_Input_Selected(input))
+				xdialog_Set_Dialog_Exit(2);
+			break;
+	}
 }
 
 /* TIE98 keyboard shortcuts for the exit confirmation: Enter, 'y' or F7

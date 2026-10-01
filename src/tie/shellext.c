@@ -6,7 +6,6 @@
 #include "tie/shell.h"
 #include "tie/tie.h"
 #include "tie_runtime/audio/imuse_api.h"
-#include "tie_runtime/audio/imuse_session.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/computer_task.h"
 #include "tie_runtime/runtime/shell_task.h"

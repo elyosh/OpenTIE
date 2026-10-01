@@ -19,6 +19,9 @@ extern "C" {
 #endif
 
 /* lolevel.c */
+/* Debug output, formatted as printf. The engine prints nothing; TIE98's
+ * replacement returns 0 the same way. */
+int lolevel_ImPrintf(const char* format, ...);
 int lolevel_ImPause(void);
 int lolevel_ImResume(void);
 int lolevel_ImSetGroupVol(int group, int vol);
@@ -37,9 +40,11 @@ int lolevel_ImCheckTrigger(intptr_t sound, int marker, intptr_t opcode);
 int lolevel_ImClearTrigger(intptr_t sound, int marker, intptr_t opcode);
 
 /* Queue a command when the sound reaches a marker, or after a number of
- * ticks. The command is an engine opcode followed by that command's
- * arguments: sounds as intptr_t, every other argument as int. An opcode of
- * 30 or more is a callback, int (*)(int), and takes no arguments. */
+ * ticks. The command is an engine opcode followed by the arguments the
+ * original callers pass: sounds as intptr_t, every other argument as int.
+ * A start passes only the sound. On a trigger, an opcode of 30 or more is a
+ * callback, int (*)(int marker), and takes no arguments; deferred commands
+ * carry no callbacks, and checks and clears refuse them. */
 int lolevel_ImSetTrigger(intptr_t sound, int marker, intptr_t opcode, ...);
 int lolevel_ImDeferCommand(int ticks, intptr_t opcode, ...);
 

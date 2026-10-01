@@ -1,12 +1,12 @@
 #include "tie/fcallbk.h"
-#include "tie_runtime/audio/imuse_session.h"
+#include "tie_runtime/audio/imuse_api.h"
 
 #include "tie/fscript.h" /* current/next/sequenceID, attributes, *Buildup */
 
-#include <imuse/commands.h> /* imuse_set_param, ImuseCmd, ... */
+#include <imuse/commands.h> /* imuse_get_param, imuse_set_param, IMUSE_CMD_* */
 #include <imuse/filelist.h> /* imuse_filelist_unload, _find */
 #include <imuse/hilevel.h>  /* imuse_start_music */
-#include <imuse/lolevel.h>  /* imuse_set_trigger, imuse_defer_command */
+#include <imuse/lolevel.h>  /* imuse_share_parts */
 #include <stdint.h>
 
 /* Last buildup level and sound applied by CbSetChannels. Both live in
@@ -15,10 +15,9 @@
 // GLOBAL: TIE95 0xC1C90
 static int16_t cb_prev_attr;
 // GLOBAL: TIE95 0xC1C94
-static void* cb_last_sound_id;
+static intptr_t cb_last_sound_id;
 
 enum {
-	NUM_CHANNELS = 16,
 	PARAM_VOLUME = 0x0A00,    /* iMUSE master volume for a sound */
 	PARAM_CHAN_BASE = 0x1100, /* per-channel volume: 0x1100 + channel */
 	PARAM_HOOK = 0x0F00,      /* hook parameter */
@@ -26,7 +25,7 @@ enum {
 };
 
 /* Forward declaration */
-int fcallbk_CbSetChannels(void);
+void fcallbk_CbSetChannels(void);
 
 /* ================================================================ */
 
@@ -40,25 +39,20 @@ void fcallbk_CbInitialize(void) { /* No-op — all state lives in FSCRIPT global
 // FUNCTION: TIE95 0x1FFB4
 int fcallbk_CbDoCallback(int marker_type) {
 	int i;
-	ImuseCmd rearm = { 0 };
-	int16_t chan_vols[NUM_CHANNELS];
-
-	/* End-of-track callback rearms with `this fn-ptr` as the
-	 * opcode (interpreted as a callback because >= IM_OPCODE_MAX);
-	 * payload args are unused. */
+	int16_t chan_vols[FCALLBK_NUM_CHANNELS];
 	int16_t saved_volume;
 
-	rearm.opcode = TieImuse_CallbackOpcode(fcallbk_CbDoCallback);
-
-	imuse_set_trigger(im, TieImuse_SoundId(currentID), 0, &rearm);
+	/* Rearm on the next marker of the playing sound, with this function
+	 * as the callback. */
+	lolevel_ImSetTrigger((intptr_t)currentID, 0, (intptr_t)fcallbk_CbDoCallback);
 
 	/* Save channel volume state if the sound has a master volume */
-	saved_volume = imuse_get_param(im, TieImuse_SoundId(currentID), PARAM_VOLUME);
+	saved_volume = lolevel_ImGetParam(currentID, PARAM_VOLUME);
 	if (saved_volume) {
 		int i;
 
-		for (i = 0; i < NUM_CHANNELS; i++)
-			chan_vols[i] = imuse_get_param(im, TieImuse_SoundId(currentID), PARAM_CHAN_BASE + i);
+		for (i = 0; i < FCALLBK_NUM_CHANNELS; i++)
+			chan_vols[i] = lolevel_ImGetParam(currentID, PARAM_CHAN_BASE + i);
 	}
 
 	/* If the sequence that just ended IS the current sound, clear it */
@@ -68,22 +62,17 @@ int fcallbk_CbDoCallback(int marker_type) {
 	}
 
 	if (sequenceID) {
-		ImuseCmd rearm_seq = { 0 };
 		/* A sequence is queued — start it */
-		imuse_start_music(im, sequenceID);
-		imuse_filelist_unload(im, sequenceID);
+		hilevel_ImStartMusic(sequenceID, 0);
+		filelist_ImUnloadSound(sequenceID);
 		if (marker_type == 1) {
-			imuse_share_parts(im, TieImuse_SoundId(currentID), TieImuse_SoundId(sequenceID));
+			lolevel_ImShareParts(currentID, sequenceID);
 		} else {
-			ImuseCmd stop = { 0 };
-			/* Deferred IMUSE_CMD_STOP_SOUND on the outgoing track 9 ticks
-			 * out — the new track has time to ramp up first. */
-			stop.opcode = IMUSE_CMD_STOP_SOUND;
-			stop.args[0] = TieImuse_SoundId(currentID);
-			imuse_defer_command(im, 9, &stop);
+			/* Stop the outgoing track 9 ticks later, so the new track has
+			 * time to ramp up first. */
+			lolevel_ImDeferCommand(9, IMUSE_CMD_STOP_SOUND, (intptr_t)currentID);
 		}
-		rearm_seq.opcode = TieImuse_CallbackOpcode(fcallbk_CbDoCallback);
-		imuse_set_trigger(im, TieImuse_SoundId(sequenceID), 0, &rearm_seq);
+		lolevel_ImSetTrigger((intptr_t)sequenceID, 0, (intptr_t)fcallbk_CbDoCallback);
 		sequencePri = 0;
 		playingState = 0;
 		currentID = sequenceID;
@@ -92,20 +81,15 @@ int fcallbk_CbDoCallback(int marker_type) {
 		/* Stale self-reference — clear */
 		nextID = 0;
 	} else if (nextID && (marker_type == 1 || (marker_type == 2 && playingState != currentState))) {
-		ImuseCmd rearm_next = { 0 };
 		/* Transition to next track */
-		imuse_start_music(im, nextID);
-		imuse_filelist_unload(im, nextID);
+		hilevel_ImStartMusic(nextID, 0);
+		filelist_ImUnloadSound(nextID);
 		if (marker_type == 1) {
-			imuse_share_parts(im, TieImuse_SoundId(currentID), TieImuse_SoundId(nextID));
+			lolevel_ImShareParts(currentID, nextID);
 		} else {
-			ImuseCmd stop = { 0 };
-			stop.opcode = IMUSE_CMD_STOP_SOUND;
-			stop.args[0] = TieImuse_SoundId(currentID);
-			imuse_defer_command(im, 9, &stop);
+			lolevel_ImDeferCommand(9, IMUSE_CMD_STOP_SOUND, (intptr_t)currentID);
 		}
-		rearm_next.opcode = TieImuse_CallbackOpcode(fcallbk_CbDoCallback);
-		imuse_set_trigger(im, TieImuse_SoundId(nextID), 0, &rearm_next);
+		lolevel_ImSetTrigger((intptr_t)nextID, 0, (intptr_t)fcallbk_CbDoCallback);
 		currentID = nextID;
 		nextID = 0;
 		currentSequence = 0;
@@ -113,12 +97,14 @@ int fcallbk_CbDoCallback(int marker_type) {
 	}
 
 	/* Restore channel volume state */
-	if (!saved_volume)
-		return fcallbk_CbSetChannels();
+	if (!saved_volume) {
+		fcallbk_CbSetChannels();
+		return 0;
+	}
 
-	imuse_set_param(im, TieImuse_SoundId(currentID), PARAM_VOLUME, saved_volume);
-	for (i = 0; i < NUM_CHANNELS; i++)
-		imuse_set_param(im, TieImuse_SoundId(currentID), PARAM_CHAN_BASE + i, chan_vols[i]);
+	lolevel_ImSetParam(currentID, PARAM_VOLUME, saved_volume);
+	for (i = 0; i < FCALLBK_NUM_CHANNELS; i++)
+		lolevel_ImSetParam(currentID, PARAM_CHAN_BASE + i, chan_vols[i]);
 	return 0;
 }
 
@@ -128,62 +114,47 @@ int fcallbk_CbDoCallback(int marker_type) {
  * Waiting state: uses waitingBuildup[], immediate set.
  */
 // FUNCTION: TIE95 0x201C0
-int fcallbk_CbSetChannels(void) {
-	if (playingState == 1 && imuse_filelist_find(im, "tro-in") != currentID &&
-		imuse_filelist_find(im, "wait-seq") != currentID) {
-		uint16_t target = introBuildup[(uint16_t)attributes[0]];
+void fcallbk_CbSetChannels(void) {
+	uint16_t target;
+	uint16_t prev;
+	uint16_t mask;
+	uint16_t i;
 
-		int ch;
-
-		for (ch = 0; ch < NUM_CHANNELS; ch++) {
-			int bit = 1 << ch;
-			int vol_target = (bit & target) ? 127 : 0;
-
-			/* Determine what the channel was last set to */
-			uint16_t last_attr = (uint16_t)cb_prev_attr;
-			uint16_t other;
-			int vol_other;
-
-			if (last_attr == (uint16_t)attributes[0]) {
-				/* Same buildup level — check for special sounds */
-				if (imuse_filelist_find(im, "tro-in") == cb_last_sound_id) {
-					other = introBuildup[0];
-				} else if (cb_last_sound_id == currentID) {
-					/* Same level and sound ID advances without a parameter write. */
-					continue;
-				} else {
-					other = target;
-				}
-			} else {
-				other = introBuildup[last_attr];
+	if (playingState == 1 && filelist_ImFindSound("tro-in") != currentID &&
+		filelist_ImFindSound("wait-seq") != currentID) {
+		lolevel_ImSetParam(currentID, PARAM_HOOK, (uint16_t)attributes[0] + 0x80);
+		target = introBuildup[(uint16_t)attributes[0]];
+		for (i = 0; i < FCALLBK_NUM_CHANNELS; i++) {
+			if (cb_prev_attr != (uint16_t)attributes[0]) {
+				/* New buildup level: start from the previous level's
+				 * channels and fade those that change. */
+				prev = introBuildup[cb_prev_attr];
+				lolevel_ImSetParam(currentID, PARAM_CHAN_BASE + i, (prev & (1 << i)) ? 127 : 0);
+				if ((prev & (1 << i)) != (target & (1 << i)))
+					lolevel_ImFadeParam(currentID, PARAM_CHAN_BASE + i, (target & (1 << i)) ? 127 : 0,
+										FADE_TICKS);
+			} else if (filelist_ImFindSound("tro-in") == cb_last_sound_id) {
+				/* Same level after the intro: fade in from level 0. */
+				prev = introBuildup[0];
+				lolevel_ImSetParam(currentID, PARAM_CHAN_BASE + i, (prev & (1 << i)) ? 127 : 0);
+				if ((prev & (1 << i)) != (target & (1 << i)))
+					lolevel_ImFadeParam(currentID, PARAM_CHAN_BASE + i, (target & (1 << i)) ? 127 : 0,
+										FADE_TICKS);
+			} else if (cb_last_sound_id != currentID) {
+				/* Same level on a new sound: set the channels directly. */
+				lolevel_ImSetParam(currentID, PARAM_CHAN_BASE + i, (target & (1 << i)) ? 127 : 0);
 			}
-
-			/* Set the channel base volume */
-			vol_other = (bit & other) ? 127 : 0;
-			imuse_set_param(im, TieImuse_SoundId(currentID), PARAM_CHAN_BASE + ch, vol_other);
-
-			/* If target differs from other, fade to target */
-			if ((bit & other) != (bit & target))
-				imuse_fade_param(im, TieImuse_SoundId(currentID), PARAM_CHAN_BASE + ch, vol_target,
-								 FADE_TICKS);
 		}
-	}
-
-	if (playingState == 2 && imuse_filelist_find(im, "wait-in") != currentID &&
-		imuse_filelist_find(im, "wait-seq") != currentID) {
-		uint16_t mask = waitingBuildup[(uint16_t)attributes[0]];
-
-		int ch;
-
-		for (ch = 0; ch < NUM_CHANNELS; ch++) {
-			int vol = (mask & 1) ? 127 : 0;
+	} else if (playingState == 2 && filelist_ImFindSound("wait-in") != currentID &&
+			   filelist_ImFindSound("wait-seq") != currentID) {
+		mask = waitingBuildup[(uint16_t)attributes[0]];
+		for (i = 0; i < FCALLBK_NUM_CHANNELS; i++) {
+			lolevel_ImSetParam(currentID, PARAM_CHAN_BASE + i, (mask & 1) ? 127 : 0);
 			mask >>= 1;
-			imuse_set_param(im, TieImuse_SoundId(currentID), PARAM_CHAN_BASE + ch, vol);
 		}
 	}
 
-	/* Track current state for next call */
+	/* Remember the level and sound for the next call. */
 	cb_prev_attr = attributes[0];
 	cb_last_sound_id = currentID;
-	return 0;
 }

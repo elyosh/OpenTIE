@@ -292,11 +292,20 @@ static void register_Get_Reg_String_Button_Name(RegStringButton* btn, char* dst)
 
 // FUNCTION: TIE95 0x7C44C
 // FUNCTION: TIE98 0x471F30
-// PORT: bounded copy supports the shared enlarged runtime structure.
-static void register_Set_Reg_String_Button_Name(RegStringButton* btn, const char* src) {
-	strncpy(btn->name, src, sizeof(btn->name) - 1);
-	btn->name[sizeof(btn->name) - 1] = 0;
-	xinpattr_Refresh_Input(&btn->header);
+// HARDENING: modern builds bound the copy to the button name buffer.
+static void register_Set_Reg_String_Button_Name(Input* input, const char* src) {
+	RegStringButton* btn = (RegStringButton*)input;
+	int16_t i;
+
+	for (i = 0; src[i]; i++) {
+#ifdef TIE_MODERN
+		if (i >= (int16_t)(sizeof(btn->name) - 1))
+			break;
+#endif
+		btn->name[i] = src[i];
+	}
+	btn->name[i] = 0;
+	xinpattr_Refresh_Input(input);
 }
 
 // FUNCTION: TIE95 0x7C408
@@ -313,22 +322,36 @@ static int16_t register_Add_Key_To_Reg_String(RegStringButton* btn, char* s, int
 
 // FUNCTION: TIE95 0x7C148
 // FUNCTION: TIE98 0x471BB0
-// PORT: allocation uses the shared native RegStringButton size.
-// HARDENING: propagates allocation failure.
+// HARDENING: modern builds propagate allocation failure and bound the name copy.
 static RegStringButton* register_Alloc_Input_Reg_String_Button(Input* parent, Rect* r, int16_t zinput,
 															   InputUserFunc user_fn, const char* name,
 															   int16_t is_filename_mode, int16_t id) {
-	RegStringButton* btn =
-		(RegStringButton*)xinput_Alloc_Dialog_Input(parent, r, zinput, sizeof(*btn) - sizeof(btn->header));
-	if (!btn)
+	Input* input;
+	RegStringButton* btn;
+	int16_t i;
+
+	input = xinput_Alloc_Dialog_Input(parent, r, zinput, sizeof(*btn) - sizeof(btn->header));
+#ifdef TIE_MODERN
+	if (!input)
 		return NULL;
-	xinpattr_Set_Input_Draw_Function(&btn->header, register_idraw_Reg_String_Button);
-	xinpattr_Set_Input_Update_Function(&btn->header, register_iupdate_Reg_String_Button);
-	xinpattr_Set_Input_User_Function(&btn->header, user_fn);
-	btn->header.id = id;
-	register_Set_Reg_String_Button_Name(btn, name);
+#endif
+	xinpattr_Set_Input_Draw_Function(input, register_idraw_Reg_String_Button);
+	xinpattr_Set_Input_Update_Function(input, register_iupdate_Reg_String_Button);
+	xinpattr_Set_Input_User_Function(input, user_fn);
+	input->id = id;
+	btn = (RegStringButton*)input;
+	if (TIE_FRONTEND_TIE98)
+		memset(btn->name, 0, sizeof(btn->name));
+	for (i = 0; name[i]; i++) {
+#ifdef TIE_MODERN
+		if (i >= (int16_t)(sizeof(btn->name) - 1))
+			break;
+#endif
+		btn->name[i] = name[i];
+	}
+	btn->name[i] = 0;
 	btn->is_filename_mode = is_filename_mode;
-	return btn;
+	return (RegStringButton*)input;
 }
 
 /* ================================================================
@@ -511,7 +534,7 @@ static void register_Set_Your_Reg_Pilot(void) {
 
 		if (pilot_active != -1) {
 			register_Index_To_Pilot_Record(pilot_active, &shell_pilot);
-			register_Set_Reg_String_Button_Name(pilot_name_input, shell_pilot.name);
+			register_Set_Reg_String_Button_Name(&pilot_name_input->header, shell_pilot.name);
 			pilot_info->var1 = 1;
 		}
 	} else {
@@ -545,30 +568,29 @@ static int16_t register_film_Callback(Film* film, FilmObject* fo) {
 
 // FUNCTION: TIE95 0x7AB60
 // FUNCTION: TIE98 0x470380
-static void register_user_Door(Actor* door, int32_t time) {
+static int16_t register_user_Door(Actor* door, int32_t time) {
 	(void)time;
 	if (door->var1) {
-		if (!xactor_Is_Actor_Visible(door)) {
+		if (xactor_Is_Actor_Visible(door)) {
+			if (door->state < door->arraySize - 1)
+				xactor_Set_Actor_State(door, door->state + 1, 0);
+		} else {
 			if (!door->state)
 				soundext_Play_SFX(sfxSmallDoorOpen, 0);
 			xactor_Show_Actor(door);
 			xactor_Set_Actor_State(door, 0, 0);
-		} else {
-			if (door->state < door->arraySize - 1)
-				xactor_Set_Actor_State(door, door->state + 1, 0);
 		}
 		door->var1 = 0;
-	} else {
-		if (xactor_Is_Actor_Visible(door)) {
-			if (door->state <= 0) {
-				soundext_Play_SFX(sfxSmallDoorShut, 0);
-				xactor_Hide_Actor(door);
-				xactor_Refresh_Actor(reg_bak);
-			} else {
-				xactor_Set_Actor_State(door, door->state - 1, 0);
-			}
+	} else if (xactor_Is_Actor_Visible(door)) {
+		if (door->state > 0) {
+			xactor_Set_Actor_State(door, door->state - 1, 0);
+		} else {
+			soundext_Play_SFX(sfxSmallDoorShut, 0);
+			xactor_Hide_Actor(door);
+			xactor_Refresh_Actor(reg_bak);
 		}
 	}
+	return 1;
 }
 
 // FUNCTION: TIE95 0x7AC10
@@ -834,7 +856,7 @@ static int16_t register_iupdate_Pilot_List(Input* input, Rect* bounds, Rect* cli
 		return 1;
 
 	shipext_Set_Pilot_Name("");
-	register_Set_Reg_String_Button_Name(pilot_name_input, dir_name);
+	register_Set_Reg_String_Button_Name(&pilot_name_input->header, dir_name);
 	xinpattr_Refresh_Input(input);
 	pilot_active = pilot_offset + row;
 	pilot_info->var1 = 1;
@@ -1290,7 +1312,7 @@ static void register_Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_p
 				if (!shipext_Load_Pilot(dir_name)) {
 					pilot_active = -1;
 					typed[0] = 0;
-					register_Set_Reg_String_Button_Name(pilot_name_input, typed);
+					register_Set_Reg_String_Button_Name(&pilot_name_input->header, typed);
 					xinpattr_Refresh_Input(&pilot_name_input->header);
 				}
 			}

@@ -339,18 +339,26 @@ uint16_t feinput_getrawinput(void) {
 // FUNCTION: TIE95 0x23544
 // FUNCTION: TIE98 0x41D340
 void feinput_setupgraphics(uint8_t detail_level) {
-	uint8_t mode;
+	switch (flightResolution) {
+	case TIE_FLIGHT_RES_SVGA_16:
+#if defined(TIE98) || defined(TIE_MODERN)
+	case TIE_FLIGHT_RES_SVGA_D3D:
+#endif
+		graphicsmode = 2;
+		break;
+	case TIE_FLIGHT_RES_SVGA:
+		graphicsmode = 1;
+		break;
+	case TIE_FLIGHT_RES_VGA:
+		graphicsmode = 0;
+		break;
+	default:
+		graphicsmode = 0;
+		break;
+	}
 
-	if (flightResolution == TIE_FLIGHT_RES_SVGA)
-		mode = 1;
-	else if (flightResolution == TIE_FLIGHT_RES_SVGA_16 || flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
-		mode = 2;
-	else
-		mode = 0;
-
-	graphicsmode = mode;
 	buffer256flag = 1;
-	feinput_SetGraphicsPtrs(mode);
+	feinput_SetGraphicsPtrs(graphicsmode);
 	detaillevel = detail_level;
 }
 

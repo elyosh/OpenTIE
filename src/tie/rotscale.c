@@ -83,7 +83,7 @@ static const int16_t tangent110[122] = {
 };
 
 // GLOBAL: TIE95 0xC7898
-uint16_t reverseflag; /* 1 = horizontal-flip sprite */
+uint32_t reverseflag; /* 1 = horizontal-flip sprite */
 // GLOBAL: TIE95 0xC7880
 uint16_t bSquarePixels; /* set in preparefastdraw / rotscale_scalesetup */
 
@@ -801,7 +801,7 @@ static void rotscale_buildlinedata(uint16_t angle, rotscale_line_data* line_data
  * ================================================================ */
 // FUNCTION: TIE95 0x48D88
 // FUNCTION: TIE98 0x476480
-void rotscale_preparefastdraw(uint16_t angle) {
+void rotscale_preparefastdraw(uint16_t angle, int mode) {
 	nDrawBufferWidth = (int16_t)pixelswide;
 	nDrawBufferWidthMin1 = (int16_t)pixelswidemin1;
 	nDrawBufferDepth = (int16_t)pixelsdeep;

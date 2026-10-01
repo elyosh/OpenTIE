@@ -41,6 +41,7 @@
 #include "tie_runtime/storage/storage.h"
 
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -307,27 +308,22 @@ int create_createstaticobject(uint16_t fg_idx, uint8_t ship_class, uint8_t speci
 /* ============================================================== */
 
 // FUNCTION: TIE95 0x19A6C
-uint16_t create_createcomponent(uint16_t parent_obj, uint8_t mesh_idx) {
+uint16_t create_createcomponent(uint16_t parent_obj, uint16_t mesh_idx) {
 	const uint16_t slot = create_findslot(11);
-	FlightObject* n;
-	const FlightObject* p;
 
 	if (slot == 0xFFFF)
 		return 0xFFFF;
 
-	n = &objects[slot];
-	p = &objects[parent_obj];
-	memcpy(n, p, sizeof(FlightObject));
-
-	n->category = 3;
-	n->genus = GENUS_DEBRIS;
-	n->ship_idx = 89; /* sparks2 / mesh-debris base */
-	n->damage_state = 0;
-	n->ship_type_override = p->ship_idx;
-	n->age_ticks = 0;
-	n->death_timer = (int16_t)(236 * ((math2_getrandom() & 7) + 4));
-	n->anim_frame_alt = 0;
-	n->anim_frame = (uint8_t)(2 * mesh_idx);
+	objects[slot] = objects[parent_obj];
+	objects[slot].category = 3;
+	objects[slot].genus = GENUS_DEBRIS;
+	objects[slot].damage_state = 0;
+	objects[slot].ship_idx = 89; /* sparks2 / mesh-debris base */
+	objects[slot].ship_type_override = objects[parent_obj].ship_idx;
+	objects[slot].age_ticks = 0;
+	objects[slot].death_timer = (int16_t)(236 * ((math2_getrandom() & 7) + 4));
+	objects[slot].anim_frame_alt = 0;
+	objects[slot].anim_frame = (uint8_t)(2 * mesh_idx);
 	return slot;
 }
 
@@ -602,7 +598,7 @@ int16_t create_createmission(void) {
 		/* Immediate-spawn test: active, in-difficulty, no arrival trigger. */
 		if (f->species && (diffmask[mission.difficulty] & fgdiffmask[f->difficulty]) && st->cond[0].count &&
 			!f->start_cond[0].cond && !f->start_delay_min && !f->start_delay_sec) {
-			create_startflightgroup(-1, (int16_t)fgcnt);
+			create_startflightgroup(-1);
 		}
 	}
 
@@ -969,18 +965,14 @@ void create_createbackdrop(void) {
 /* ============================================================== */
 
 // FUNCTION: TIE95 0x1706C
-int create_startflightgroup(int16_t craft_slot, int16_t fg_idx) {
-	uint8_t sp;
-
+int create_startflightgroup(uint16_t craft_slot) {
 	fgstatus[fgcnt].active = 1;
-	sp = speciesconvert[fg_array[fgcnt].species];
-
-	if (species_table[sp].side & 0x80) {
+	if (!(species_table[speciesconvert[(int8_t)fg_array[fgcnt].species]].side & 0x80)) {
+		create_createflightgroup(craft_slot);
+		fgstatus[fgcnt].waves_remaining = fg_array[fgcnt].waves;
+	} else {
 		create_createstaticflightgroup(craft_slot);
 		fgstatus[fgcnt].waves_remaining = 0;
-	} else {
-		create_createflightgroup(craft_slot, fg_idx);
-		fgstatus[fgcnt].waves_remaining = fg_array[fgcnt].waves;
 	}
 	return 1;
 }
@@ -1050,7 +1042,7 @@ void create_updatefgstatus(void) {
 					continue;
 
 				fgcnt = i;
-				create_createflightgroup(-1, (int16_t)i);
+				create_createflightgroup(-1);
 				i = fgcnt;
 				new_wr = fgstatus[fgcnt].waves_remaining;
 				if (new_wr)
@@ -1076,7 +1068,7 @@ void create_updatefgstatus(void) {
 			if (st->arrival_delay)
 				st->arrival_delay--;
 			else
-				create_startflightgroup(-1, (int16_t)i);
+				create_startflightgroup(-1);
 		}
 	}
 
@@ -1088,7 +1080,7 @@ void create_updatefgstatus(void) {
 /* ============================================================== */
 
 // FUNCTION: TIE95 0x17460
-int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
+int create_createflightgroup(uint16_t craft_slot) {
 	EFGStruct* f = &fg_array[fgcnt];
 	uint8_t mission_clock_started;
 	uint8_t form_spacing;
@@ -1107,7 +1099,7 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 									  (uint8_t)(_date.subsec >> 8));
 
 	/* Branch 1: carrier-spawn via a fleet leader FG (hangar launch). */
-	if (f->start_fg_used && mission_clock_started && !mission.train_craft_type && craft_slot == -1) {
+	if (f->start_fg_used && mission_clock_started && !mission.train_craft_type && craft_slot == 0xFFFF) {
 		const int16_t carrier_fg = (int16_t)(int8_t)f->start_fg;
 		uint16_t anchor = 0xFFFF;
 		uint16_t j;
@@ -1180,7 +1172,7 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 		/* First-frame "hyper-in" arrival: step 8x further behind the FG
 		 * along the reversed approach vector so the jump-in animation has
 		 * travel distance. */
-		if (!mission.train_craft_type && !f->start_fg_used && mission_clock_started && craft_slot == -1) {
+		if (!mission.train_craft_type && !f->start_fg_used && mission_clock_started && craft_slot == 0xFFFF) {
 			trig2_xyangle = (int16_t)(trig2_xyangle + 0x8000);
 			trig2_zangle = (int16_t)(0x8000 - trig2_zangle);
 			trig2_movexyz(0xFFFF, trig2_xyangle, (uint16_t)trig2_zangle);
@@ -1232,7 +1224,7 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 	}
 
 	/* Spawn loop: either the whole FG, or just one craft index. */
-	if (craft_slot == -1) {
+	if (craft_slot == 0xFFFF) {
 		leaderflag = 0xFF;
 		for (craftcnt = 0; craftcnt < f->count; craftcnt++) {
 			FGStatus* st = &fgstatus[fgcnt];
@@ -1247,7 +1239,7 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 	} else {
 		FGStatus* st = &fgstatus[fgcnt];
 		if (st->cond[0].detail < st->cond[0].count) {
-			craftcnt = (uint16_t)craft_slot;
+			craftcnt = craft_slot;
 			if (create_createcraft() == 0xFFFF)
 				return 0;
 			st->cond[0].detail++;
@@ -1262,7 +1254,7 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 	 * for FGs that arrive AFTER the mission has been running for at
 	 * least one frame, so the initial-wave spawns at mission load are
 	 * silent and only later arrivals are announced. */
-	if (mission_clock_started && craft_slot == -1) {
+	if (mission_clock_started && craft_slot == 0xFFFF) {
 		const uint16_t spec_num = spec_getspecnum(fgspecies);
 		int16_t seq;
 
@@ -1277,7 +1269,6 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 			seq = (fggenus == GENUS_STARSHIP) ? 12 : 13;
 		}
 		fscript_MsSetSequence(seq);
-		(void)fg_idx;
 	}
 	return 1;
 }
@@ -1288,100 +1279,85 @@ int create_createflightgroup(int16_t craft_slot, int16_t fg_idx) {
 
 // FUNCTION: TIE95 0x17BF8
 uint16_t create_createcraft(void) {
-	int k;
-	SpecData* sp;
-	EFGStruct* f = &fg_array[fgcnt];
-	const uint16_t ship_idx = speciesconvert[f->species];
-	uint16_t gstart;
-	uint16_t gend;
+	uint16_t ship_idx;
 	uint16_t obj_slot;
-	FlightObject* o;
-	CraftData* c;
-	uint16_t hw;
-	uint8_t spec_num;
+	uint16_t gend;
+	uint16_t spec_num;
+	uint16_t bank;
+	uint16_t k;
 	uint8_t laser_total;
-	int bank;
-	uint8_t order_ldr;
-	uint8_t order_flw;
+	uint16_t order_ldr;
+	uint16_t order_flw;
 	uint16_t throttle;
-	uint16_t init_speed;
+	uint8_t field_0f;
 
-	int32_t form_x, form_y, form_z;
-
+	ship_idx = speciesconvert[fg_array[fgcnt].species];
 	fgspecies = (uint8_t)ship_idx;
 
 	/* Find a free FlightObject slot in the genus range. */
-	gstart = genus_table[fggenus].start;
 	gend = genus_table[fggenus].limit;
-
-	for (obj_slot = gstart; obj_slot < gend; obj_slot++)
+	for (obj_slot = genus_table[fggenus].start; obj_slot < gend; obj_slot++)
 		if (!objects[obj_slot].ship_idx)
 			break;
 	if (obj_slot >= gend)
 		return 0xFFFF;
 
 	/* Bind player if this is the training/player craft index. */
-	if (f->player_flag && craftcnt == (uint16_t)(f->player_flag - 1)) {
+	if (fg_array[fgcnt].player_flag && craftcnt == fg_array[fgcnt].player_flag - 1) {
 		pstate.object_idx = obj_slot;
 		pstate.player = &objects[obj_slot];
 	}
 
-	o = &objects[obj_slot];
-	c = &crafts[obj_slot];
+	objects[obj_slot].ship_idx = (uint8_t)ship_idx;
+	objects[obj_slot].idnumber = idnumber;
+	objects[obj_slot].craft_ptr = &crafts[obj_slot];
+	craftptr = &crafts[obj_slot];
+	idnumber++;
 
-	o->ship_idx = (uint8_t)ship_idx;
-	o->idnumber = idnumber++;
-	o->craft_ptr = c;
-	craftptr = c;
+	if (species_table[ship_idx].bound_hwidth < 0x2000)
+		objects[obj_slot].collision_radius = (int16_t)(4 * species_table[ship_idx].bound_hwidth);
+	else
+		objects[obj_slot].collision_radius = 0x7FFF;
 
-	hw = species_table[ship_idx].bound_hwidth;
-	o->collision_radius = (hw >= 0x2000u) ? 0x7FFF : (int16_t)(4 * hw);
-
-	spec_num = (uint8_t)spec_getspecnum(ship_idx);
-	c->species_idx = spec_num;
+	spec_num = craftptr->species_idx = (uint8_t)spec_getspecnum(ship_idx);
 	fgsidecreated = fgside;
-	o->side = fgside;
-	o->genus = fggenus;
-	o->category = species_table[ship_idx].category;
-	o->decal_color = f->camoflage;
-	o->self_idx = (int16_t)obj_slot;
-	o->ship_type_override = (uint8_t)ship_idx;
-	o->fg_idx = (uint8_t)fgcnt;
+	objects[obj_slot].side = fgside;
+	objects[obj_slot].genus = fggenus;
+	objects[obj_slot].category = species_table[ship_idx].category;
+	objects[obj_slot].age_ticks = 0;
+	objects[obj_slot].death_timer = 0;
+	objects[obj_slot].decal_color = fg_array[fgcnt].camoflage;
+	objects[obj_slot].self_idx = (int16_t)obj_slot;
+	objects[obj_slot].ship_type_override = (uint8_t)ship_idx;
+	objects[obj_slot].fg_idx = (uint8_t)fgcnt;
 
-	c->leader_obj_idx = leaderflag;
+	craftptr->leader_obj_idx = leaderflag;
 	if (leaderflag == 0xFF)
 		leaderflag = (uint8_t)obj_slot;
 
-	c->formation = fgformation;
-	c->craft_idx_in_fg = (uint8_t)craftcnt;
-	c->formation_separation = (uint8_t)(fghangar ? 0 : fgseparation);
-	c->push_accum_x = c->push_accum_y = c->push_accum_z = 0;
+	craftptr->formation = fgformation;
+	craftptr->craft_idx_in_fg = (uint8_t)craftcnt;
+	craftptr->formation_separation = fghangar ? 0 : fgseparation;
+	craftptr->push_accum_x = craftptr->push_accum_y = craftptr->push_accum_z = 0;
 
 	/* Formation-relative spawn offset from leader craft. */
-	form_x = 0;
-	form_y = 0;
-	form_z = 0;
-	if (c->leader_obj_idx != 0xFF) {
-		const SpecData* sp = &spec_data[spec_num];
-		const int form_idx = craftcnt + 6 * fgformation; /* 0..77 */
-		const int16_t sep = (int16_t)(c->formation_separation + 1);
-		form_x = (int16_t)(sep * _formposx[form_idx] * sp->bound_width);
-		form_y = (int16_t)(sep * _formposy[form_idx] * sp->bound_depth);
-		form_z = (int16_t)(sep * _formposz[form_idx] * sp->bound_height);
+	if (craftptr->leader_obj_idx != 0xFF) {
+		const int form_idx = craftptr->craft_idx_in_fg + 6 * craftptr->formation;
+		const int16_t sep = (int16_t)(craftptr->formation_separation + 1);
+		int16_t form_x = sep * _formposx[form_idx] * spec_data[spec_num].bound_width;
+		int16_t form_y = sep * _formposy[form_idx] * spec_data[spec_num].bound_depth;
+		int16_t form_z = sep * _formposz[form_idx] * spec_data[spec_num].bound_height;
+
 		if (sep == 1) {
-			/* Dense-formation refinement: add bound_* / 2 (x,z) or
-			 * bound_depth / 4 (y) times the same _formposx/y/z element
-			 * (Watcom's unaligned DWORD-HIWORD re-read collapses to a
-			 * direct re-access). */
-			form_x += (int32_t)_formposx[form_idx] * (sp->bound_width / 2);
-			form_z += (int32_t)_formposz[form_idx] * (sp->bound_height / 2);
-			form_y += (int32_t)_formposy[form_idx] * (sp->bound_depth / 4);
+			form_x += _formposx[form_idx] * (spec_data[spec_num].bound_width / 2);
+			form_z += _formposz[form_idx] * (spec_data[spec_num].bound_height / 2);
+			form_y += _formposy[form_idx] * (spec_data[spec_num].bound_depth / 4);
 		}
-		pai_calcrotatedpoint(&objects[c->leader_obj_idx], (int16_t)form_x, (int16_t)form_z, (int16_t)form_y);
-		if (sp->model_scale_shift) {
+		pai_calcrotatedpoint(&objects[craftptr->leader_obj_idx], form_x, form_z, form_y);
+		if (spec_data[spec_num].model_scale_shift) {
 			/* Binary emits `shl reg, cl` (sign-agnostic); shifting a
 			 * negative int32_t in C is UB, so route through uint32_t. */
-			const int shift = sp->model_scale_shift;
+			const int shift = spec_data[spec_num].model_scale_shift;
 			rotatedx = (int32_t)((uint32_t)rotatedx << shift);
 			rotatedy = (int32_t)((uint32_t)rotatedy << shift);
 			rotatedz = (int32_t)((uint32_t)rotatedz << shift);
@@ -1390,295 +1366,314 @@ uint16_t create_createcraft(void) {
 		rotatedx = rotatedy = rotatedz = 0;
 	}
 
-	o->world_x = o->world_x_prev = rotatedx + fglocx;
-	o->world_y = o->world_y_prev = rotatedy + fglocy;
-	o->world_z = o->world_z_prev = rotatedz + fglocz;
+	objects[obj_slot].world_x_prev = objects[obj_slot].world_x = fglocx + rotatedx;
+	objects[obj_slot].world_y_prev = objects[obj_slot].world_y = fglocy + rotatedy;
+	objects[obj_slot].world_z_prev = objects[obj_slot].world_z = fglocz + rotatedz;
 
 	/* Cargo: special_craft index picks cargo[1] (unique name); others
 	 * get cargo[0] (group name). */
 	{
-		const char* src = (craftcnt == f->special_craft) ? f->contents[1] : f->contents[0];
-		int k;
+		const char* src;
 
+		if (craftptr->craft_idx_in_fg == fg_array[fgcnt].special_craft)
+			src = fg_array[fgcnt].contents[1];
+		else
+			src = fg_array[fgcnt].contents[0];
 		for (k = 0; k < 16; k++)
-			c->cargo[k] = src[k];
+			craftptr->cargo[k] = src[k];
 	}
 
-	c->boarding_state = 0;
-	c->subsystem_active = 0x03FF;
-	c->installed_subsystems = 0x1FFF;
+	craftptr->boarding_state = 0;
+	craftptr->subsystem_active = 0x03FF;
+	craftptr->installed_subsystems = 0x1FFF;
 
 	/* Pose. */
-	o->heading = fgheadingxy;
-	c->orient_heading = (uint16_t)fgheadingxy;
-	o->pitch = fgheadingz;
-	c->orient_pitch = (uint16_t)fgheadingz;
-	o->roll = 0;
-	o->spin_rate = 0;
-	o->orient_dirty = 1;
-	o->move_dirty = 1;
+	objects[obj_slot].heading = fgheadingxy;
+	craftptr->orient_heading = (uint16_t)fgheadingxy;
+	objects[obj_slot].pitch = fgheadingz;
+	craftptr->orient_pitch = (uint16_t)fgheadingz;
+	objects[obj_slot].roll = 0;
+	objects[obj_slot].spin_rate = 0;
+	objects[obj_slot].orient_dirty = 1;
+	objects[obj_slot].move_dirty = 1;
 
 	/* AI var clears. */
-	c->ai_roll_state = 0;
-	c->ai_pitch_state = c->ai_climb_state = 0;
-	c->ai_dive_state = c->ai_pitch_force = 0;
-	c->ai_heading_state = 0;
-	c->ai_target_a = c->ai_target_b = c->ai_target_c = c->ai_target_d = -1;
+	craftptr->ai_roll_state = 0;
+	craftptr->ai_pitch_state = 0;
+	craftptr->ai_pitch_force = craftptr->ai_dive_state = craftptr->ai_climb_state = 0;
+	craftptr->ai_heading_state = 0;
+	craftptr->ai_target_a = -1;
+	craftptr->ai_target_c = -1;
+	craftptr->ai_target_b = -1;
+	craftptr->ai_target_d = -1;
 
 	/* Cached spec stats (queried each AI tick; readonly after createcraft). */
-	sp = &spec_data[spec_num];
-	c->roll_rate_cache = sp->roll_rate;
-	c->pitch_rate_cache = sp->pitch_rate;
-	c->heading_rate_cache = sp->heading_rate;
-	c->max_speed_cache = sp->max_speed;
+	craftptr->roll_rate_cache = spec_data[spec_num].roll_rate;
+	craftptr->pitch_rate_cache = spec_data[spec_num].pitch_rate;
+	craftptr->heading_rate_cache = spec_data[spec_num].heading_rate;
+	craftptr->max_speed_cache = spec_data[spec_num].max_speed;
 
 	/* Skill tier used by AI, turret cooldowns, and targeting jitter. */
-	c->skill_value = skilltranslate[fgskill];
+	craftptr->skill_value = skilltranslate[fgskill];
 
 	/* Laser banks. */
-	c->laser_group_cnt = 0;
+	craftptr->laser_group_cnt = 0;
 	laser_total = 0;
 	for (bank = 0; bank < 2; bank++) {
-		uint8_t start;
-		uint8_t end;
-		uint8_t k;
+		uint16_t start;
+		uint16_t end;
 
-		c->laser_type[bank] = sp->laser_type[bank];
-		c->laser_owner_player[bank] = (uint8_t)(obj_slot == pstate.object_idx);
-		c->laser_burst_remaining[bank] = 0;
-		c->laser_cooldown[bank] = 0;
-		c->laser_first_slot[bank] = 0;
+		craftptr->laser_type[bank] = spec_data[spec_num].laser_type[bank];
+		craftptr->laser_owner_player[bank] = (uint8_t)(obj_slot == pstate.object_idx);
+		craftptr->laser_burst_remaining[bank] = 0;
+		craftptr->laser_first_slot[bank] = 0;
+		craftptr->laser_cooldown[bank] = 0;
 
-		if (!c->laser_type[bank])
+		if (!craftptr->laser_type[bank])
 			continue;
 
-		start = sp->laser_start[bank];
-		end = sp->laser_end[bank];
-		laser_total = (uint8_t)(laser_total + sp->laser_count[bank]);
-		if (sp->laser_fire_mode[bank] != 2) {
-			c->laser_group_cnt++;
-			c->laser_first_slot[bank] = start;
+		laser_total += spec_data[spec_num].laser_count[bank];
+		start = spec_data[spec_num].laser_start[bank];
+		end = spec_data[spec_num].laser_end[bank];
+		if (spec_data[spec_num].laser_fire_mode[bank] != 2) {
+			craftptr->laser_group_cnt++;
+			craftptr->laser_first_slot[bank] = (uint8_t)start;
 		}
 		for (k = start; k <= end; k++) {
-			c->weapon_slots[k].type = (uint8_t)((sp->laser_fire_mode[bank] == 2) ? 2 : c->laser_type[bank]);
-			c->weapon_slots[k].charge = 127;
-			c->weapon_slots[k].ammo = 0;
-			c->weapon_slots[k].target_obj = 0xFFFF;
+			if (spec_data[spec_num].laser_fire_mode[bank] == 2)
+				craftptr->weapon_slots[k].type = 2;
+			else
+				craftptr->weapon_slots[k].type = craftptr->laser_type[bank];
+			craftptr->weapon_slots[k].charge = 127;
+			craftptr->weapon_slots[k].ammo = 0;
+			craftptr->weapon_slots[k].target_obj = 0xFFFF;
 		}
 	}
-	c->laser_power = 2;
-	c->weapon_group_cnt = laser_total;
-	if (!c->laser_group_cnt)
-		c->subsystem_active ^= 0x10u;
+	craftptr->laser_power = 2;
+	craftptr->weapon_group_cnt = laser_total;
+	if (!craftptr->laser_group_cnt)
+		craftptr->subsystem_active ^= 0x10u;
 
-	/* Missile banks. */
-	c->missile_group_cnt = 0;
+	/* Missile banks. Only the missile boat (spec 12) gets two. */
+	craftptr->missile_group_cnt = 0;
 	for (bank = 0; bank < 2; bank++) {
-		/* Only missile-boat (spec 12) gets two missile banks. */
-		uint8_t ms;
-		uint8_t me;
-		uint8_t k;
+		uint16_t start;
+		uint16_t end;
 
-		if (bank == 1 && spec_getspecnum(0x0C) != spec_num) {
-			c->warhead_type[bank] = 0;
+		if (special_features_flag) {
+			if (bank && spec_getspecnum(0x0C) != spec_num)
+				craftptr->warhead_type[bank] = 0;
+			else
+				craftptr->warhead_type[bank] = warheadconvert[fg_array[fgcnt].warhead];
+		} else if (bank && spec_getspecnum(0x0C) != spec_num) {
+			craftptr->warhead_type[bank] = 0;
 		} else if (obj_slot == pstate.object_idx && mission.mission_mode == 4) {
-			c->warhead_type[bank] = warheadconvert[mission.torp_used];
+			craftptr->warhead_type[bank] = warheadconvert[mission.torp_used];
 		} else {
-			/* Binary reads byte at EFG +0x35 (warhead), not species. */
-			c->warhead_type[bank] = warheadconvert[f->warhead];
+			craftptr->warhead_type[bank] = warheadconvert[fg_array[fgcnt].warhead];
 		}
-		/* Missile boat gets an override torpedo in bank 1 in combat mode. */
+		/* Missile boat gets a magpulse override in bank 1 in combat mode. */
 		if (bank == 1 && spec_getspecnum(0x0C) == spec_num && !mission.train_craft_type)
-			c->warhead_type[1] = (uint8_t)-107; /* 0x95 = magpulse */
-		c->missile_armed[bank] = 1;
-		c->missile_state[bank] = 0;
+			craftptr->warhead_type[bank] = 0x95;
+		craftptr->missile_armed[bank] = 1;
+		craftptr->missile_state[bank] = 0;
 
-		if (!c->warhead_type[bank])
+		if (!craftptr->warhead_type[bank])
 			continue;
-		c->missile_group_cnt++;
+		craftptr->missile_group_cnt++;
 
-		ms = sp->missile_start[bank];
-		me = sp->missile_end[bank];
-		for (k = ms; k <= me; k++) {
-			const uint8_t warhead = c->warhead_type[bank];
-			WeaponSlot* ws = &c->weapon_slots[k];
+		start = spec_data[spec_num].missile_start[bank];
+		end = spec_data[spec_num].missile_end[bank];
+		for (k = start; k <= end; k++) {
 			uint8_t base;
-			uint8_t torp;
+			uint16_t torp;
 			uint8_t count;
 
-			ws->target_obj = 0xFFFF;
-			ws->charge = 127;
-			ws->type = warhead;
+			craftptr->weapon_slots[k].target_obj = 0xFFFF;
+			craftptr->weapon_slots[k].charge = 127;
+			craftptr->weapon_slots[k].type = craftptr->warhead_type[bank];
 
 			/* missile_fire_mode mirrors laser_fire_mode but
 			 * FEDISKIO_fillinspec never populates it -- always
 			 * BSS-zero. math2_fraction(0, ...) returns 0 and the
-			 * `if (!count) count = 1` fallback below substitutes 1.
-			 * Retail reads byte_C7AFB[species*236 + bank] here. */
-			base = sp->missile_fire_mode[bank];
-
-			if (pstate.object_idx == obj_slot && mission.mission_mode == 4)
+			 * `if (!count) count = 1` fallback below substitutes 1. */
+			base = spec_data[spec_num].missile_fire_mode[bank];
+			if (!special_features_flag && obj_slot == pstate.object_idx && mission.mission_mode == 4)
 				torp = mission.torp_used;
 			else
-				torp = f->warhead;
+				torp = fg_array[fgcnt].warhead;
 			if (bank == 1 && spec_getspecnum(0x0C) == spec_num)
 				torp = 5;
 			count = (uint8_t)math2_fraction(base, warheadadjust[torp]);
 			if (!count)
 				count = 1;
 			if (fgversion == 1)
-				count = (uint8_t)(count * 2);
+				count *= 2;
 			else if (fgversion == 2)
-				count = (uint8_t)(count >> 1);
+				count >>= 1;
 			if (!count)
 				count = 1;
 			/* Player cap: 9 warheads except the missile boat. */
-			if (obj_slot == pstate.object_idx && count > 9 &&
-				pstate.player_spec_num != (uint8_t)spec_getspecnum(0x0C))
+			if (obj_slot == pstate.object_idx && count > 9 && pstate.player_spec_num != spec_getspecnum(0x0C))
 				count = 9;
-			ws->ammo = count;
+			craftptr->weapon_slots[k].ammo = count;
 		}
 	}
-	c->missile_count_total = 0;
-	if (!c->missile_group_cnt)
-		c->subsystem_active ^= 0x08u;
+	craftptr->missile_count_total = 0;
+	if (!craftptr->missile_group_cnt)
+		craftptr->subsystem_active ^= 0x08u;
 
 	/* Reset mission counters. */
-	c->laser_hit = c->missile_hit = c->warhead_hit = 0;
-	c->total_kills = 0;
-	c->laser_fired = c->laser_hit;
-	c->missile_fired = c->missile_hit;
-	c->warhead_fired = c->warhead_hit;
-	memset(c->kills_by_species, 0, sizeof(c->kills_by_species));
+	craftptr->laser_hit = 0;
+	craftptr->missile_hit = 0;
+	craftptr->warhead_hit = 0;
+	craftptr->total_kills = 0;
+	craftptr->laser_fired = craftptr->laser_hit;
+	craftptr->missile_fired = craftptr->missile_hit;
+	craftptr->warhead_fired = craftptr->warhead_hit;
+	for (k = 0; k < 69; k++)
+		craftptr->kills_by_species[k] = 0;
 
 	if (obj_slot == pstate.object_idx) {
 		pstate.player_laser_hit = 0;
-		pstate.player_laser_fired = (uint16_t)(pstate.object_idx ^ obj_slot); /* always 0; binary parity */
+		pstate.player_laser_fired = (int16_t)(pstate.object_idx ^ obj_slot); /* always 0; binary parity */
 		pstate.player_missile_hit = 0;
 		pstate.player_missile_fired = 0;
 		pstate.player_warhead_hit = 0;
 		pstate.player_warhead_fired = 0;
 		pstate.player_total_kills = 0;
 		pstate.friendly_kill_count = 0;
-		memset(pstate.player_kills_per_species, 0, sizeof(pstate.player_kills_per_species));
+		for (k = 0; k < 69; k++)
+			pstate.player_kills_per_species[k] = 0;
 	}
 
-	/* Shields. */
-	c->hull_max = (uint16_t)sp->hull_max;
-	c->hull_damage = 0;
-	c->dead_0B0 = 0;
-	c->ion_drain_timer = 0;
-	c->pad_0B4 = c->was_hit_flag = c->pad_0B6 = c->dock_state_flags = 0;
-	c->hull_strength = (uint16_t)sp->hull_strength;
-	c->ai_anim_flags = 0;
-	c->beam_state = 0;
+	/* Hull. */
+	craftptr->hull_max = (uint16_t)spec_data[spec_num].hull_max;
+	craftptr->hull_damage = 0;
+	craftptr->dead_0B0 = 0;
+	craftptr->ion_drain_timer = 0;
+	craftptr->pad_0B4 = 0;
+	craftptr->hull_strength = (uint16_t)spec_data[spec_num].hull_strength;
+	craftptr->was_hit_flag = 0;
+	craftptr->pad_0B6 = 0;
+	craftptr->dock_state_flags = 0;
+	craftptr->ai_anim_flags = 0;
+	craftptr->beam_state = 0;
 
 	/* Auto-identify: same-side craft are pre-known on IFF, and any
 	 * fighter (own or hostile) is identified by silhouette. Everything
 	 * else (freighters, transports, capital ships, neutrals) starts
 	 * un-inspected and must be scanned to reveal cargo + bump the
 	 * inspection counter. */
-	if (o->side != playerside && o->genus != GENUS_FIGHTER) {
-		c->inspected = 0;
-	} else {
-		c->inspected = 1;
+	if (objects[obj_slot].side == playerside || objects[obj_slot].genus == GENUS_FIGHTER) {
+		craftptr->inspected = 1;
 		fgstatus[fgcnt].cond[4].detail++;
-		if (craftcnt == f->special_craft)
+		if (craftcnt == fg_array[fgcnt].special_craft)
 			fgstatus[fgcnt].cond_id[4].detail++;
+	} else {
+		craftptr->inspected = 0;
 	}
 
 	if (obj_slot == pstate.object_idx && !mission.difficulty) {
-		c->hull_max = (uint16_t)(c->hull_max * 3);
-		c->hull_strength = (uint16_t)(c->hull_strength * 3);
+		craftptr->hull_max *= 3;
+		craftptr->hull_strength *= 3;
 	}
 
 	/* Hyperdrive subsystem gating: clear SF_HYPER_DRIVE (0x80) for species
 	 * without a hyperdrive, and for fg version 6 (no-hyper variant). */
-	if (!sp->has_hyperdrive && fgversion != 9)
-		c->subsystem_active ^= 0x80u;
+	if (!spec_data[spec_num].has_hyperdrive && fgversion != 9)
+		craftptr->subsystem_active ^= 0x80u;
 	if (fgversion == 6)
-		c->subsystem_active ^= 0x80u;
+		craftptr->subsystem_active ^= 0x80u;
 
-	c->forward_shield = sp->shield_points;
+	craftptr->forward_shield = spec_data[spec_num].shield_points;
 	if (obj_slot == pstate.object_idx) {
-		c->rear_shield = sp->shield_points;
-		c->is_player_craft = 1;
+		craftptr->rear_shield = spec_data[spec_num].shield_points;
+		craftptr->is_player_craft = 1;
 		if (!mission.difficulty) {
-			c->forward_shield = (int16_t)(c->forward_shield * 2);
-			c->rear_shield = (int16_t)(c->rear_shield * 2);
+			craftptr->forward_shield *= 2;
+			craftptr->rear_shield *= 2;
 		}
 	} else {
-		c->rear_shield = 0;
-		c->is_player_craft = 0;
-		c->forward_shield = (int16_t)(sp->shield_points + c->forward_shield);
+		craftptr->rear_shield = 0;
+		craftptr->is_player_craft = 0;
+		craftptr->forward_shield += spec_data[spec_num].shield_points;
 		if (!mission.difficulty) {
 			if (fgside == 1) {
 				/* +50%. */
-				c->forward_shield = (int16_t)(c->forward_shield + (c->forward_shield >> 1));
+				craftptr->forward_shield += craftptr->forward_shield >> 1;
 			} else if (fgside == 0 || fgside == 4) {
-				c->forward_shield = (int16_t)math2_fraction((uint16_t)c->forward_shield, 0xA000u);
+				craftptr->forward_shield = (int16_t)math2_fraction((uint16_t)craftptr->forward_shield, 0xA000u);
 			}
 		}
-		if (c->forward_shield < 0)
-			c->forward_shield = 30000;
+		if (craftptr->forward_shield < 0)
+			craftptr->forward_shield = 30000;
 	}
 
 	/* Per-version shield / subsystem adjustments. */
 	switch (fgversion) {
 		case 3:
-			c->forward_shield = 0;
-			c->rear_shield = 0;
-			c->subsystem_active ^= 0x01u;
+			craftptr->forward_shield = 0;
+			craftptr->rear_shield = 0;
+			craftptr->subsystem_active ^= 0x01u;
 			break;
 		case 4:
-			c->forward_shield = (int16_t)(c->forward_shield >> 1);
-			c->rear_shield = (int16_t)(c->rear_shield >> 1);
-			c->subsystem_active ^= 0x01u;
+			craftptr->forward_shield >>= 1;
+			craftptr->rear_shield >>= 1;
+			craftptr->subsystem_active ^= 0x01u;
 			break;
 		case 7:
-			c->forward_shield = 0;
-			c->rear_shield = 0;
+			craftptr->forward_shield = 0;
+			craftptr->rear_shield = 0;
 			break;
 	}
 
-	c->shield_power = 2;
+	craftptr->shield_power = 2;
 
 	/* Craft without a shield generator (has_shields == 0) zeroes the shield
 	 * capacity and clears SF_SHIELDS. fgversion 8 = override/bypass. */
-	if (!sp->has_shields && fgversion != 8) {
-		c->forward_shield = 0;
-		c->rear_shield = 0;
-		c->subsystem_active ^= 0x01u;
-		c->installed_subsystems ^= 0x0800u; /* HIBYTE ^= 8 */
+	if (!spec_data[spec_num].has_shields && fgversion != 8) {
+		craftptr->forward_shield = 0;
+		craftptr->rear_shield = 0;
+		craftptr->subsystem_active ^= 0x01u;
+		craftptr->installed_subsystems ^= 0x0800u;
 	}
 
 	/* Beam weapon selection + state init. */
-	c->beam_type = (obj_slot == pstate.object_idx) ? mission.beam_used : f->beam;
-	if (fggenus == GENUS_PLATFORM && fgspecies >= 0x3C && fgspecies < 0x41)
-		c->beam_type = 0; /* capital class: no beam */
-	c->beam_power = 2;
-	c->beam_charge = 9999;
-	if (!c->beam_type) {
-		c->beam_charge = 0;
-		c->subsystem_active ^= 0x0100u; /* HIBYTE ^= 1 */
-		c->installed_subsystems ^= 0x1010u;
+	if (!special_features_flag && obj_slot == pstate.object_idx)
+		craftptr->beam_type = mission.beam_used;
+	else
+		craftptr->beam_type = fg_array[fgcnt].beam;
+	if (fggenus == GENUS_PLATFORM && fgspecies >= 0x3C && fgspecies < 0x41) {
+		/* capital class: no beam */
+		if (special_features_flag && craftptr->beam_type)
+			printf("Warning! Platform has Beam Weapon Set!\n");
+		craftptr->beam_type = 0;
+	}
+	craftptr->beam_power = 2;
+	craftptr->beam_charge = 9999;
+	if (!craftptr->beam_type) {
+		craftptr->beam_charge = 0;
+		craftptr->installed_subsystems ^= 0x1000u;
+		craftptr->subsystem_active ^= 0x0100u;
+		craftptr->installed_subsystems ^= 0x0010u;
 	}
 
-	c->status_flags = c->subsystem_active;
-	c->working_subsystems = c->installed_subsystems;
+	craftptr->status_flags = craftptr->subsystem_active;
+	craftptr->working_subsystems = craftptr->installed_subsystems;
 
 	/* Sprite anim slots zero out. */
-	o->anim_frame = 0;
-	o->anim_frame_alt = 0;
+	objects[obj_slot].anim_frame = 0;
+	objects[obj_slot].anim_frame_alt = 0;
 
 	/* Mesh state: default damaged-capable meshes preloaded from
 	 * initialdamagestate[mesh_type]; fgversion 5 marks beam turrets as
 	 * already destroyed; capital-class (genus 5, special range) destroys
 	 * an explicit componentsgone[] list. */
 	for (k = 0; k < 40; k++) {
-		c->mesh_component_hp[k] = 0xFF;
-		c->mesh_state[k] = MESH_STATE_VISIBLE;
-		c->mesh_rotation[k] = 0;
+		craftptr->mesh_component_hp[k] = 0xFF;
+		craftptr->mesh_state[k] = MESH_STATE_VISIBLE;
+		craftptr->mesh_rotation[k] = 0;
 	}
 	if (TIE_FLIGHT_TIE98) {
 		int mesh_count;
@@ -1690,39 +1685,37 @@ uint16_t create_createcraft(void) {
 			const int mesh_type = modelmesh_gettype(ship_idx, mesh);
 			if (modelmesh_isobjecttypemeshdamageable(ship_idx, mesh))
 				// HARDENING: mesh types outside the table keep full damage state.
-				c->mesh_component_hp[mesh] = mesh_type < 32 ? initialdamagestate[mesh_type] : 0xFF;
+				craftptr->mesh_component_hp[mesh] = mesh_type < 32 ? initialdamagestate[mesh_type] : 0xFF;
 			if (fgversion == 5 && (mesh_type == TIE_MESH_GUN_TURRET || mesh_type == TIE_MESH_SMALL_GUN ||
 								   mesh_type == TIE_MESH_ROTARY_GUN_TURRET)) {
-				c->mesh_component_hp[mesh] = 0;
-				c->mesh_state[mesh] = MESH_STATE_BLOWN_OFF;
+				craftptr->mesh_component_hp[mesh] = 0;
+				craftptr->mesh_state[mesh] = MESH_STATE_BLOWN_OFF;
 			}
 		}
 	} else {
-		ShipModelMesh* cb;
-		uint16_t mi;
-
-		draw_Lockshipfileptrs((uint16_t)ship_idx);
-		cb = componentblockptr;
-		for (mi = 0; mi < objectblockptr->num_meshes; mi++, cb++) {
-			if (cb->flags & 2)
-				c->mesh_component_hp[mi] = initialdamagestate[cb->mesh_type];
-			if (fgversion == 5 && (cb->mesh_type == 4 || cb->mesh_type == 5 || cb->mesh_type == 21)) {
-				c->mesh_component_hp[mi] = 0;
-				c->mesh_state[mi] = MESH_STATE_BLOWN_OFF;
+		draw_Lockshipfileptrs(ship_idx);
+		for (k = 0; k < objectblockptr->num_meshes; k++) {
+			if (componentblockptr->flags & 2)
+				craftptr->mesh_component_hp[k] = initialdamagestate[componentblockptr->mesh_type];
+			if (fgversion == 5 && (componentblockptr->mesh_type == 4 || componentblockptr->mesh_type == 21 ||
+								   componentblockptr->mesh_type == 5)) {
+				craftptr->mesh_component_hp[k] = 0;
+				craftptr->mesh_state[k] = MESH_STATE_BLOWN_OFF;
 			}
+			componentblockptr++;
 		}
 	}
-	if (fggenus == GENUS_PLATFORM && fgspecies >= 0x3C && fgspecies < 0x41 && f->beam) {
-		const int base = 12 * (fgspecies - 60);
-		const int len = (f->count == 1) ? 6 : 12;
-		int k;
+	/* Capital-class platforms with a beam lose their componentsgone[]
+	 * meshes: the first 6 for beam type 1, all 12 otherwise. */
+	if (fggenus == GENUS_PLATFORM && fgspecies >= 0x3C && fgspecies < 0x41 && fg_array[fgcnt].beam) {
+		const uint16_t base = (uint16_t)(12 * (fgspecies - 60));
+		const uint16_t len = (fg_array[fgcnt].beam == 1) ? 6 : 12;
 
 		for (k = base; k < base + len; k++) {
-			const uint8_t comp = componentsgone[k];
-			if (comp == 0xFF)
+			if (componentsgone[k] == 0xFF)
 				continue;
-			c->mesh_component_hp[comp] = 0;
-			c->mesh_state[comp] = MESH_STATE_BLOWN_OFF;
+			craftptr->mesh_component_hp[componentsgone[k]] = 0;
+			craftptr->mesh_state[componentsgone[k]] = MESH_STATE_BLOWN_OFF;
 		}
 	}
 
@@ -1730,69 +1723,67 @@ uint16_t create_createcraft(void) {
 	 * Hyper/hangar states override with fixed opcodes 52/50. */
 #ifdef TIE_MODERN
 	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
-	order_ldr = f->ai[0].order < sizeof(ordersldr) ? ordersldr[f->ai[0].order] : 0;
-	order_flw = f->ai[0].order < sizeof(ordersflw) ? ordersflw[f->ai[0].order] : 0;
+	order_ldr = fg_array[fgcnt].ai[0].order < sizeof(ordersldr) ? ordersldr[fg_array[fgcnt].ai[0].order] : 0;
+	order_flw = fg_array[fgcnt].ai[0].order < sizeof(ordersflw) ? ordersflw[fg_array[fgcnt].ai[0].order] : 0;
 #else
-	order_ldr = ordersldr[f->ai[0].order];
-	order_flw = ordersflw[f->ai[0].order];
+	order_ldr = ordersldr[fg_array[fgcnt].ai[0].order];
+	order_flw = ordersflw[fg_array[fgcnt].ai[0].order];
 #endif
-	c->default_order_ldr = order_ldr;
+	craftptr->default_order_ldr = (uint8_t)order_ldr;
 	if (fghyperspace)
-		c->current_order = 52;
+		craftptr->current_order = 52;
 	else if (fghangar)
-		c->current_order = 50;
-	else if (c->leader_obj_idx == 0xFF)
-		c->current_order = order_ldr;
+		craftptr->current_order = 50;
+	else if (craftptr->leader_obj_idx == 0xFF)
+		craftptr->current_order = (uint8_t)order_ldr;
 	else
-		c->current_order = order_flw;
+		craftptr->current_order = (uint8_t)order_flw;
 
 	/* Throttle: pick from throttleconvert[ai[0].speed] unless order is
 	 * 20 (hold position -> full thrust). Orders 0..2 and order 42 stop
 	 * at the start waypoint (throttle = 0) EXCEPT for the player. */
-
 	if ((order_ldr > 2 && order_ldr != 42) || obj_slot == pstate.object_idx)
-		throttle = (order_ldr == 20) ? 0x8000u : throttleconvert[f->ai[0].speed];
+		throttle = (order_ldr == 20) ? 0x8000u : throttleconvert[fg_array[fgcnt].ai[0].speed];
 	else
 		throttle = 0;
 
-	c->flight_flag = fgflightflag;
-	c->slam_active = 0xFFFF;
-	c->throttle_speed = throttle;
-
-	init_speed = math2_fraction((uint16_t)sp->max_speed, throttle);
-	o->current_speed = (int16_t)init_speed;
-	o->speed_remainder = 0;
+	craftptr->flight_flag = fgflightflag;
+	craftptr->slam_active = 0xFFFF;
+	field_0f = spec_data[spec_num].field_0F;
+	craftptr->throttle_speed = throttle;
+	objects[obj_slot].current_speed = (int16_t)math2_fraction((uint16_t)spec_data[spec_num].max_speed, throttle);
+	objects[obj_slot].speed_remainder = 0;
 
 	if (obj_slot == pstate.object_idx) {
 		pstate.player_weapon_group = 0;
 		pstate.player_weapon_mode = 0;
-		pstate.player_spec_field_0F = sp->field_0F;
-		pstate.player_craft = c;
-		pstate.player_spec_num = spec_num;
+		pstate.player_spec_field_0F = field_0f;
+		pstate.player_craft = craftptr;
+		pstate.player_spec_num = (uint8_t)spec_num;
 	}
 
 	/* Clear the 6 AI-preamble bytes. */
 	for (k = 0; k < 3; k++) {
-		c->ai_complete_state[k] = 0;
-		c->ai_goal_progress[k] = 0;
+		craftptr->ai_complete_state[k] = 0;
+		craftptr->ai_goal_progress[k] = 0;
 	}
-	c->ai_state_1C = 0;
-	c->ai_target_ref = (int16_t)0xFF;
-	c->link_target_2E = -1;
-	c->spin_done_flag = 0xFFFF;
-	c->escortee_fg_idx = 0xFF;
-	c->special_order_flag = 0;
-	c->hit_count = 0;
-	c->board_count = 0;
-	c->capture_count = 0;
-	c->waypoint_x_cache = 0;
-	c->pending_radio_command = c->ai_target_ref;
-	c->tow_slave_ref = c->link_target_2E;
+	craftptr->ai_state_1C = 0;
+	craftptr->ai_target_ref = (int16_t)0xFF;
+	craftptr->link_target_2E = -1;
+	craftptr->spin_done_flag = 0xFFFF;
+	craftptr->escortee_fg_idx = 0xFF;
+	craftptr->special_order_flag = 0;
+	craftptr->hit_count = 0;
+	craftptr->board_count = 0;
+	craftptr->capture_count = 0;
+	craftptr->waypoint_x_cache = 0;
+	craftptr->pending_radio_command = craftptr->ai_target_ref;
+	craftptr->tow_slave_ref = craftptr->link_target_2E;
 	if (obj_slot == pstate.object_idx)
-		c->current_order = 0;
+		craftptr->current_order = 0;
 
-	c->active_waypoint_idx = 4;
-	c->ai_update_rate = aiupdatetranslate[fgskill];
+	craftptr->active_waypoint_idx = 4;
+	craftptr->ai_update_rate = aiupdatetranslate[fgskill];
 
 	pai_setupcraftaivars(obj_slot);
 	pai_initplan(obj_slot);
@@ -1804,7 +1795,7 @@ uint16_t create_createcraft(void) {
 /* ============================================================== */
 
 // FUNCTION: TIE95 0x19054
-int create_createstaticflightgroup(int16_t craft_slot) {
+int create_createstaticflightgroup(uint16_t craft_slot) {
 	int result = fgcnt;
 	FGStatus* st = &fgstatus[fgcnt];
 	EFGStruct* f;
@@ -1873,7 +1864,7 @@ int create_createstaticflightgroup(int16_t craft_slot) {
 			uint16_t col;
 
 			for (col = 0; col < f->count; col++) {
-				if ((craft_slot == -1 || craft_slot == obj_seq) && st->cond[0].detail < st->cond[0].count) {
+				if ((craft_slot == 0xFFFF || craft_slot == obj_seq) && st->cond[0].detail < st->cond[0].count) {
 					staging_static_x = (int16_t)(x_base + col * step_x);
 					staging_static_y = (int16_t)(y_base + y_accum);
 					staging_static_z = (int16_t)(z_base + col * step_z + z_accum);

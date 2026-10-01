@@ -1486,48 +1486,80 @@ void panel_addbliptoradar(uint16_t target_obj) {
  * bit 1 = FG name + group number suffix.
  */
 // FUNCTION: TIE95 0x40E94
-void panel_buildobjectname(uint16_t target_obj, uint8_t flags) {
-	uint8_t ship_idx;
-	char side_color;
+void panel_buildobjectname(uint16_t target_obj, uint16_t flags) {
+	uint16_t ship_idx;
+	CraftData* cp;
+	uint8_t fg_side;
 
 	tempstring[0] = 0;
 
-	if (target_obj >= 0x3800u) {
-		uint16_t si;
-		uint16_t species_id;
-		uint8_t fg_side;
+	if (target_obj < 0x3800) {
+		ship_idx = objects[target_obj].ship_idx;
 
-		if ((int16_t)target_obj < 0) { /* waypoint: ref with high bit set */
-			uint16_t wp;
+		festring_farstradd((char)0xFE);
+		if (objects[target_obj].side == 0)
+			festring_farstradd(0x51);
+		else if (objects[target_obj].side == 1 || objects[target_obj].side == 4)
+			festring_farstradd(0x49);
+		else if (objects[target_obj].side == 2)
+			festring_farstradd(0x45);
+		else
+			festring_farstradd(0x55);
 
-			if ((flags & 1) == 0)
-				return;
-			wp = target_obj + 0x8000u; /* clear msb */
-			festring_farstradd((char)0xFE);
-			festring_farstradd((char)0x43); /* 'C' */
-			if (waypointstrings && waypointstrings[wp])
-				festring_farstrcat(waypointstrings[wp]);
+		if (!objects[target_obj].category) {
+			cp = objects[target_obj].craft_ptr;
+			if (flags & 1)
+				festring_farstrcat(spec_data[cp->species_idx].short_name);
+
+			if ((flags & 3) == 3) {
+				festring_farstradd(':');
+				festring_farstradd(' ');
+			}
+
+			if (flags & 2) {
+				festring_farstradd((char)0xFE);
+				if (objects[target_obj].side == 0)
+					festring_farstradd(0x52);
+				else if (objects[target_obj].side == 1 || objects[target_obj].side == 4)
+					festring_farstradd(0x4A);
+				else if (objects[target_obj].side == 2)
+					festring_farstradd(0x46);
+				else
+					festring_farstradd(0x56);
+				festring_farstrcat(fg_array[objects[target_obj].fg_idx].name);
+
+				/* Multi-craft FG: append the 1-based craft index. */
+				if ((int8_t)fg_array[objects[target_obj].fg_idx].count > 1) {
+					festring_farstradd(' ');
+					festring_farstradd((char)(cp->craft_idx_in_fg + '1'));
+				}
+			}
 			return;
 		}
 
-		si = target_obj - 14336;
-		species_id = staticobjects[si].species;
+		if ((flags & 1) == 0)
+			return;
+		if (ship_idx >= 0x8F && ship_idx <= 0x9A)
+			festring_farstrcat(((char**)warheadstrings)[ship_idx - 0x8F]);
+		else if (ship_idx >= 0x46 && ship_idx <= 0x54)
+			festring_farstrcat(((char**)buoystr)[ship_idx - 70]);
+	} else if (target_obj < 0x8000) {
+		target_obj -= 0x3800;
+		ship_idx = staticobjects[target_obj].species;
 
 		festring_farstradd((char)0xFE);
-		fg_side = fg_array[staticobjects[si].fg_idx].side;
+		fg_side = fg_array[staticobjects[target_obj].fg_idx].side;
 		if (fg_side == 0)
-			side_color = 0x51;
+			festring_farstradd(0x51);
 		else if (fg_side == 1 || fg_side == 4)
-			side_color = 0x49;
+			festring_farstradd(0x49);
 		else if (fg_side == 2)
-			side_color = 0x45;
+			festring_farstradd(0x45);
 		else
-			side_color = 0x55;
-		festring_farstradd(side_color);
+			festring_farstradd(0x55);
 
-		if ((flags & 1) && species_id >= 0x46u && species_id <= 0x55u) {
-			festring_farstrcat(((char**)buoystr)[species_id - 70]);
-		}
+		if ((flags & 1) && ship_idx >= 0x46 && ship_idx <= 0x55)
+			festring_farstrcat(((char**)buoystr)[ship_idx - 70]);
 
 		if ((flags & 3) == 3) {
 			festring_farstradd(':');
@@ -1537,77 +1569,23 @@ void panel_buildobjectname(uint16_t target_obj, uint8_t flags) {
 		if (flags & 2) {
 			festring_farstradd((char)0xFE);
 			if (fg_side == 0)
-				side_color = 0x52;
+				festring_farstradd(0x52);
 			else if (fg_side == 1 || fg_side == 4)
-				side_color = 0x4A;
+				festring_farstradd(0x4A);
 			else if (fg_side == 2)
-				side_color = 0x46;
+				festring_farstradd(0x46);
 			else
-				side_color = 0x56;
-			festring_farstradd(side_color);
-			festring_farstrcat(fg_array[staticobjects[si].fg_idx].name);
+				festring_farstradd(0x56);
+				festring_farstrcat(fg_array[staticobjects[target_obj].fg_idx].name);
 		}
-		return;
-	}
-
-	/* Dynamic-object branch. */
-	ship_idx = objects[target_obj].ship_idx;
-
-	festring_farstradd((char)0xFE);
-	if (objects[target_obj].side == 0)
-		side_color = 0x51;
-	else if (objects[target_obj].side == 1 || objects[target_obj].side == 4)
-		side_color = 0x49;
-	else if (objects[target_obj].side == 2)
-		side_color = 0x45;
-	else
-		side_color = 0x55;
-	festring_farstradd(side_color);
-
-	if (!objects[target_obj].category) {
-		CraftData* cp = objects[target_obj].craft_ptr;
-		if (flags & 1)
-			festring_farstrcat(spec_data[cp->species_idx].short_name);
-
-		if ((flags & 3) == 3) {
-			festring_farstradd(':');
-			festring_farstradd(' ');
-		}
-
-		if (flags & 2) {
-			festring_farstradd((char)0xFE);
-			if (objects[target_obj].side == 0)
-				side_color = 0x52;
-			else if (objects[target_obj].side == 1 || objects[target_obj].side == 4)
-				side_color = 0x4A;
-			else if (objects[target_obj].side == 2)
-				side_color = 0x46;
-			else
-				side_color = 0x56;
-			festring_farstradd(side_color);
-			festring_farstrcat(fg_array[objects[target_obj].fg_idx].name);
-
-			/* Multi-craft FG: append 1-based index.
-			 * Binary reads `*(int *)&special_craft >> 24` -- that dword
-			 * starts at EFGStruct+0x30 and its top byte is EFGStruct.count
-			 * (at +0x33). So the test is "FG has more than one craft". */
-			if (fg_array[objects[target_obj].fg_idx].count > 1) {
-				festring_farstradd(' ');
-				festring_farstradd((char)(cp->craft_idx_in_fg + '1'));
-			}
-		}
-		return;
-	}
-
-	if ((flags & 1) == 0)
-		return;
-
-	if (ship_idx >= 0x8Fu && ship_idx <= 0x9Au) {
-		festring_farstrcat(((char**)warheadstrings)[ship_idx - 0x8F]);
-		return;
-	}
-	if (ship_idx >= 0x46u && ship_idx <= 0x54u) {
-		festring_farstrcat(((char**)buoystr)[ship_idx - 70]);
+	} else if (flags & 1) { /* waypoint: ref with high bit set */
+		festring_farstradd((char)0xFE);
+		festring_farstradd('C');
+		target_obj += 0x8000; /* clear msb */
+#ifdef TIE_MODERN
+		if (waypointstrings && waypointstrings[target_obj])
+#endif
+			festring_farstrcat(waypointstrings[target_obj]);
 	}
 }
 
@@ -1643,11 +1621,15 @@ uint16_t panel_getcraftstatus(uint16_t target_obj) {
  */
 // FUNCTION: TIE95 0x41334
 void panel_outputdistance(int32_t polar_dist) {
-	uint32_t scaled = (uint32_t)(161 * polar_dist) >> 16;
-	if (scaled >= 0x2710u)
+	uint16_t scaled;
+	uint16_t km;
+
+	scaled = (uint32_t)polar_dist * 161 >> 16;
+	if (scaled >= 10000)
 		scaled = 9999;
-	panel_updatevalue(0x3B, (uint16_t)(scaled / 100u), 1);
-	panel_updatevalue(0x3C, (uint16_t)(scaled % 100u), 2);
+	km = scaled / 100;
+	panel_updatevalue(0x3B, km, 1);
+	panel_updatevalue(0x3C, scaled - km * 100, 2);
 }
 
 /* ================================================================== */
@@ -2474,7 +2456,7 @@ void panel_loadcontrolpanel(char* name, void** section_ptrs, uint16_t count) {
 	strcat(panelfilename, name);
 	strcat(panelfilename, ".LFD");
 
-	fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, panelfilename, _readmode, 1);
+	fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, panelfilename, readmode, 1);
 
 	for (i = 0; i < count; ++i) {
 		uint8_t header[16];
@@ -2524,7 +2506,7 @@ void panel_tryEMSforpanels(void) {
 			strcat(panelfilename, panelviewdefs[i].name);
 			strcat(panelfilename, ".LFD");
 
-			fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, panelfilename, _readmode, 1);
+			fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, panelfilename, readmode, 1);
 			if (fileptr) {
 				int32_t sz = TieStorage_FileLength(fileptr);
 				void* buf;
@@ -2550,7 +2532,7 @@ void panel_loadpanelviewdefs(char* base_name) {
 	strcpy(panelfilename, base_name);
 	strcat(panelfilename, ".INT");
 
-	fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, panelfilename, _readmode, 1);
+	fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, panelfilename, readmode, 1);
 
 	fediskio_readfileblock(panelviewdefs, sizeof(PanelViewDef), PANEL_NUM_VIEWS, fileptr);
 	fediskio_readfileblock(instruments, sizeof(HudInstrument), PANEL_NUM_INSTRUMENTS, fileptr);
@@ -2703,117 +2685,118 @@ void panel_dosetnewpilotview(uint16_t view_idx) {
  * into another escape. VGA (320 px) skips the SVGA-only nested arms.
  */
 // FUNCTION: TIE95 0x44008
-void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint8_t mirror) {
+void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint16_t mirror) {
 	uint8_t* out = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
-	int is_svga = (screenXRes != 320);
-
+	uint8_t scratch[100];
+	uint8_t* sp;
 	uint16_t row;
 
-	for (row = 0; row < height; ++row) {
-		if (mirror) {
-			/* Mirror: build a rearranged scratch buffer, then walk it
-			 * backwards. Retail's trick is to swap each escape group's
-			 * byte order in-place ([0, X] → [X, 0], [0, 0, Y] → [Y, 0, 0])
-			 * so the reverse walk encounters the trailing 0 sentinel first
-			 * and can resolve back to the original group's byte order on
-			 * output. Single-byte segments (always non-zero, since 0 means
-			 * escape) need no rearrangement. */
-			uint8_t scratch[256];
-			uint8_t first = *mask_src++;
-			uint16_t pos = 0;
-			uint8_t* sp = scratch;
-			int seg = 0;
+	for (row = 0; row < height; row++) {
+		uint16_t pos;
+		uint8_t c;
 
-			while (pos < width) {
-				uint8_t r = *mask_src++;
-				if (!r) {
-					uint8_t b = *mask_src++;
+		if (!mirror) {
+			*out++ = *mask_src++;
+			for (pos = 0; pos < width;) {
+				c = *mask_src++;
+				if (c == 0) {
 					pos += 255;
-					if (is_svga && b == 0) {
-						/* Triple [0, 0, Y]: store [Y+1, 0, 0]. */
-						uint8_t b2;
-						uint8_t adj;
-
-						pos += 256;
-						b2 = *mask_src++;
-						adj = (uint8_t)(b2 + 1);
-						*sp++ = adj;
-						*sp++ = 0;
-						*sp++ = 0;
-						pos += adj;
-					} else if (is_svga && b == 0xFF) {
-						/* SVGA-only [0, 0xFF] special: store [0, 0, 0].
-						 * Equivalent to the Y+1==0 case of the triple. */
-						*sp++ = 0;
-						*sp++ = 0;
-						*sp++ = 0;
-						pos += 256;
+					*out++ = c;
+					c = *mask_src++;
+					if (screenXRes != 320) {
+						if (c == 0) {
+							pos += 256;
+							*out++ = c;
+							c = *mask_src++;
+							c++;
+						} else if (c == 0xFF) {
+							pos += 256;
+							*out++ = 0;
+							c = 0;
+						} else {
+							c++;
+						}
 					} else {
-						/* Pair [0, X]: store [X+1, 0]. */
-						uint8_t adj = (uint8_t)(b + 1);
-						*sp++ = adj;
-						*sp++ = 0;
-						pos += adj;
-					}
-					seg++;
-				} else {
-					*sp++ = r;
-					pos += r;
-					seg++;
-				}
-			}
-
-			/* State byte: negate when segment count is even so the
-			 * reversed-order run preserves the open/closed parity. */
-			*out++ = (seg & 1) ? first : (uint8_t)-first;
-
-			/* Reverse walk. A trailing 0 in scratch is always an escape
-			 * sentinel from a rearranged group; read 1 or 2 more bytes
-			 * to capture the data byte (and the inner 0 for triples). */
-			while (sp > scratch) {
-				uint8_t v24 = *--sp;
-				*out++ = v24;
-				if (v24 == 0) {
-					uint8_t v25 = *--sp;
-					*out++ = v25;
-					if (v25 == 0) {
-						*out++ = *--sp;
+						c++;
 					}
 				}
+				pos += c;
+				*out++ = c;
 			}
 		} else {
-			uint8_t first = *mask_src++;
-			uint16_t pos;
+			/* Mirror: copy the row into scratch, swap each escape group's
+			 * byte order ([0, X] -> [X, 0], [0, 0, Y] -> [Y, 0, 0]), then
+			 * walk it backwards so each group comes out in original order. */
+			uint16_t count;
+			uint16_t seg;
 
-			*out++ = first;
-			pos = 0;
-			while (pos < width) {
-				uint8_t r = *mask_src++;
-				if (!r) {
-					uint8_t b;
-
-					*out++ = 0;
+			sp = scratch;
+			*sp++ = *mask_src++;
+			for (pos = 0; pos < width;) {
+				c = *mask_src++;
+				if (c == 0) {
 					pos += 255;
-					b = *mask_src++;
-					if (is_svga && b == 0) {
-						uint8_t b2;
-
-						*out++ = 0;
-						pos += 256;
-						b2 = *mask_src++;
-						*out++ = (uint8_t)(b2 + 1);
-						pos += (uint8_t)(b2 + 1);
-					} else if (is_svga && b == 0xFF) {
-						*out++ = 0;
-						*out++ = 0;
-						pos += 256;
+					*sp++ = c;
+					c = *mask_src++;
+					if (screenXRes != 320) {
+						if (c == 0) {
+							pos += 256;
+							*sp++ = c;
+							c = *mask_src++;
+							c++;
+						} else if (c == 0xFF) {
+							pos += 256;
+							*sp++ = 0;
+							c = 0;
+						} else {
+							c++;
+						}
 					} else {
-						*out++ = (uint8_t)(b + 1);
-						pos += (uint8_t)(b + 1);
+						c++;
 					}
-				} else {
-					*out++ = r;
-					pos += r;
+				}
+				pos += c;
+				*sp++ = c;
+			}
+
+			sp = scratch;
+			*out = *sp++;
+			count = 0;
+			for (pos = 0; pos < width;) {
+				uint8_t* group = sp;
+
+				c = *sp++;
+				if (c == 0) {
+					c = *sp;
+					*sp++ = 0;
+					pos += 255;
+					*group = c;
+					if (c == 0) {
+						c = *sp;
+						*sp++ = 0;
+						pos += 256;
+						*group = c;
+					}
+				}
+				pos += c;
+				count++;
+			}
+			sp--;
+
+			/* Negate the state byte when the segment count is even so the
+			 * reversed run order preserves the open/closed parity. */
+			if ((count & 1) == 0)
+				*out = -*out;
+			out++;
+
+			for (seg = 0; seg < count; seg++) {
+				c = *sp--;
+				*out++ = c;
+				if (c == 0) {
+					c = *sp--;
+					*out++ = c;
+					if (c == 0)
+						*out++ = *sp--;
 				}
 			}
 		}
@@ -3309,74 +3292,80 @@ int16_t panel_drawboxinxtrans_tie98(int x, int y, int width, int height, uint8_t
  * are declared in xtrans2.h (already included). */
 
 // FUNCTION: TIE95 0x447F8
-void panel_drawboxinxtrans(int16_t left_x, int16_t top_y, uint16_t width, uint16_t height, uint8_t color) {
-	uint16_t n = flatobjnum;
-	int16_t lx;
-	int16_t top, span;
-	int16_t xc;
-	int16_t ty;
-	int16_t sp;
+void panel_drawboxinxtrans(int left_x, int top_y, uint16_t width, uint16_t height, uint8_t color) {
+	int16_t left;
+	int16_t top;
+	int16_t span;
+	int16_t inner_left;
+	int16_t inner_top;
+	int16_t inner_span;
+	int16_t right;
+	int16_t right_top;
+	int16_t right_span;
+	int16_t outer_top;
+	int16_t outer_span;
 
-	flatcolors[n] = color;
-	flatx[n] = 0;
-	flaty[n] = 0;
-	flatcomponentnum[n] = 0;
-	flatz[n] = 0;
-	flatparentobj[n] = 0x200;
+	flatcolors[flatobjnum] = color;
+	flatx[flatobjnum] = 0;
+	flaty[flatobjnum] = 0;
+	flatcomponentnum[flatobjnum] = 0;
+	flatz[flatobjnum] = 0;
+	flatparentobj[flatobjnum] = 0x200;
 
-	if (top_y + (int16_t)height < 0)
+	if (top_y + height < 0)
 		return;
-	if (left_x + (int16_t)width < 0)
+	if (left_x + width < 0)
 		return;
-	if (left_x >= (int16_t)pixelswide)
+	if (left_x >= pixelswide)
 		return;
-	if (top_y >= (int16_t)pixelsdeep)
+	if (top_y >= pixelsdeep)
 		return;
 
-	lx = (left_x < 0) ? 0 : left_x;
+	left = left_x;
+	if (left < 0)
+		left = 0;
 	top = top_y;
-	span = (int16_t)height;
-	if (top_y < 0) {
+	span = height;
+	if (top < 0) {
 		top = 0;
-		span = top_y + (int16_t)height;
+		span = height + top_y;
 	}
 	if (span > 0)
-		trace2_enterflatvertical(lx, top, span);
+		trace2_enterflatvertical(left, top, span);
 
-	xc = (int16_t)(left_x + 1);
-	if (xc < 0)
-		xc = 0;
-	ty = (int16_t)(top_y + 1);
-	sp = (int16_t)(height - 2);
-	if (ty < 0) {
-		sp += ty;
-		ty = 0;
+	inner_left = left_x + 1;
+	if (inner_left < 0)
+		inner_left = 0;
+	inner_top = top_y + 1;
+	inner_span = height - 2;
+	if (inner_top < 0) {
+		inner_top = 0;
+		inner_span += top_y + 1;
 	}
-	if (sp > 0)
-		trace2_enterflatvertical(xc, ty, sp);
+	if (inner_span > 0)
+		trace2_enterflatvertical(inner_left, inner_top, inner_span);
 
-	if (left_x + (int16_t)width <= (int16_t)pixelswide) {
-		int16_t tyb = (int16_t)(top_y + 1);
-		int16_t sp2 = (int16_t)(height - 2);
-		int16_t rx;
-
-		if (tyb < 0) {
-			sp2 += tyb;
-			tyb = 0;
+	right = left_x + width;
+	if (right <= pixelswide) {
+		right_top = top_y + 1;
+		right_span = height - 2;
+		if (right_top < 0) {
+			right_top = 0;
+			right_span += top_y + 1;
 		}
-		if (sp2 > 0)
-			trace2_enterflatvertical((int16_t)(left_x + width), tyb, sp2);
+		if (right_span > 0)
+			trace2_enterflatvertical(right, right_top, right_span);
 
-		rx = (int16_t)(width + left_x + 1);
-		if (rx <= (int16_t)pixelswide) {
-			int16_t topb = top_y;
-			int16_t sp3 = (int16_t)height;
-			if (top_y < 0) {
-				topb = 0;
-				sp3 = top_y + (int16_t)height;
+		right = left_x + width + 1;
+		if (right <= pixelswide) {
+			outer_top = top_y;
+			outer_span = height;
+			if (outer_top < 0) {
+				outer_top = 0;
+				outer_span = height + top_y;
 			}
-			if (sp3 > 0)
-				trace2_enterflatvertical(rx, topb, sp3);
+			if (outer_span > 0)
+				trace2_enterflatvertical(right, outer_top, outer_span);
 		}
 	}
 	++flatobjnum;

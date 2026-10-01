@@ -30,9 +30,9 @@ int16_t fscript_MsSetAttribute(int16_t attr_id, int16_t value);
 /* --- Module-owned globals (consumed by fcallbk.c) ----------------------
  * iMUSE soundIDs for the active / pending tracks plus the active sequence
  * head, sampled by CbDoCallback when a play marker fires. */
-extern void* currentID;
-extern void* nextID;
-extern void* sequenceID;
+extern intptr_t currentID;
+extern intptr_t nextID;
+extern intptr_t sequenceID;
 extern int32_t playingState;
 extern int32_t currentState;
 extern int32_t currentSequence;

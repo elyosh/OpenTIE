@@ -152,7 +152,7 @@ typedef struct {
 	uint8_t link_flag;         /* +0x46 */
 	uint8_t link_code;         /* +0x47 */
 	uint8_t link_unused;       /* +0x48 */
-	uint8_t difficulty;        /* +0x49 */
+	int8_t difficulty;         /* +0x49 */
 	ECondStruct start_cond[2]; /* +0x4A: arrival triggers (2 x 4 bytes) */
 	uint8_t start_op;          /* +0x52: 1 = arrival1 OR arrival2, else AND */
 	uint8_t start_unused;      /* +0x53 */

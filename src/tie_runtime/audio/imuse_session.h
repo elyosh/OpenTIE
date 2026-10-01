@@ -35,18 +35,6 @@ void TieImuseSession_Close(void);
 void TieImuseSession_Advance(int32_t elapsed_us);
 bool TieImuseSession_SetMusicDuckingVolumePercent(int percent);
 
-/* The original iMUSE identified sounds by 32-bit values that were either
- * small flight ids or Sound pointers. libimuse carries them as intptr_t;
- * these adapters convert recovered native handles at that boundary. */
-intptr_t TieImuse_SoundId(const void* sound);
-void* TieImuse_SoundHandle(intptr_t sound_id);
-/* Trigger callbacks are passed to libimuse as pointer-width opcodes. */
-intptr_t TieImuse_CallbackOpcode(int (*callback)(int marker));
-
-/* Replaces LOLEVEL_ImPrintf; libimuse has no driver debug console, so the
- * text is discarded as in the retail driver configuration. */
-void TieImuse_Printf(const char* text);
-
 /* Filelist adapters for flight music, whose original load callback returned
  * the fmusic track id as the file handle. */
 void* TieImuse_LoadFlightMusic(const char* name);

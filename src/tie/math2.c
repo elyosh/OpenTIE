@@ -12,8 +12,10 @@
 #include "tie/panel.h" /* radarx / radary */
 #include "tie/tie.h"
 #include "tie/trig2.h"
+#include "tie/user.h"
 
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 /* Globals */
@@ -121,13 +123,13 @@ int16_t math2_divide(uint16_t a, uint16_t b) {
 
 // FUNCTION: TIE95 0x31FE4
 uint16_t math2_percentage(uint16_t a, uint16_t b) {
-	if (a == b)
-		return 0xFFFF;
-	if (!b)
-		return 0;
-	if (a >= b)
-		return 0xFFFF;
-	return (uint16_t)(((uint32_t)a << 16) / b);
+	if (a != b) {
+		if (!b)
+			return 0;
+		if (a < b)
+			return (uint16_t)(((uint32_t)a << 16) / b);
+	}
+	return 0xFFFF;
 }
 
 // FUNCTION: TIE95 0x32014
@@ -158,21 +160,48 @@ int16_t math2_getrandomalt(void) {
 }
 #endif
 
+#ifdef __WATCOMC__
+/* Return address of the math2_getrandom caller, past its four saved
+ * registers. Replays log it to detect RNG call-order desyncs. */
+uint32_t math2_callersite(void);
+#pragma aux math2_callersite = "mov eax, [esp+16]" value[eax];
+#endif
+
 /* 16-bit LFSR pseudo-random number generator */
 // FUNCTION: TIE95 0x32054
 int16_t math2_getrandom(void) {
-	uint16_t val = (uint16_t)randomnumber;
-	int i;
+	uint16_t i;
+	uint16_t carry_out;
+	uint16_t seed_sign;
+
+	if (special_features_flag) {
+		if (recordingreplay) {
+#ifdef __WATCOMC__
+			*(uint32_t*)replayptr = math2_callersite();
+#else
+			*(uint32_t*)replayptr = 0;
+#endif
+			replayptr = (uint8_t*)replayptr + 8;
+			user_nextreplaystore();
+		} else if (replayviewmode) {
+#ifdef __WATCOMC__
+			if (math2_callersite() != *(uint32_t*)replayptr)
+#else
+			if (*(uint32_t*)replayptr != 0)
+#endif
+				printf("RETURN ADDRESS OUT OF SYNC IN GETRANDOM!\n");
+			replayptr = (uint8_t*)replayptr + 8;
+			user_nextreplaycount();
+		}
+	}
 
 	for (i = 0; i < 16; i++) {
-		uint16_t xor_bits = (math2_randomseed >> 8) ^ (2 * (math2_randomseed & 0xFF));
-		int carry_out = (xor_bits & 0x80) != 0;
-		int seed_sign = math2_randomseed < 0;
-		val = (val << 1) | seed_sign;
+		carry_out = ((uint8_t)((((uint16_t)math2_randomseed >> 8) & 0xFF) ^ (uint16_t)((uint8_t)math2_randomseed << 1)) & 0x80) != 0;
+		seed_sign = ((uint16_t)math2_randomseed & 0x8000) != 0;
 		math2_randomseed = (int16_t)((uint16_t)math2_randomseed * 2 + carry_out);
+		randomnumber = (int16_t)((uint16_t)randomnumber * 2 + seed_sign);
 	}
-	randomnumber = (int16_t)val;
-	return (int16_t)val;
+	return randomnumber;
 }
 
 /* Empty in retail; MATH2_getrandom shares its ret. */

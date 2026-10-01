@@ -43,50 +43,42 @@ uint16_t panelrts_setnewpilotview(uint16_t view_idx) {
 }
 
 // FUNCTION: TIE95 0x44E8C
-void panelrts_outnum(int32_t value, uint16_t ndigits, uint16_t minpad) {
-	uint16_t rolling, pos, leading_nonzero;
-	/* "unknown" placeholder: draw ndigits '0' glyphs in color 0x40 with the
-	 * drop-shadow disabled, then restore the previous drop / text state.
-	 * Matches the binary's 32-bit compare on eax (only exactly 0xFFFF). */
-	if ((uint32_t)value == 0xFFFFu) {
-		uint8_t saved_dropflag = dropflag;
-		uint8_t saved_textcolor = textcolor;
+void panelrts_outnum(uint16_t value, uint16_t ndigits, uint16_t minpad) {
+	uint16_t saved_textcolor;
+	uint16_t saved_dropflag;
+	uint16_t leading;
+	uint16_t digit;
 
+	/* "unknown" placeholder: draw ndigits '0' glyphs in color 0x40 with the
+	 * drop-shadow disabled, then restore the previous drop / text state. */
+	if (value == 0xFFFF) {
+		saved_textcolor = textcolor;
+		saved_dropflag = dropflag;
 		dropflag = 0;
 		festring_settextcolor(0x40);
-		while (ndigits) {
-			--ndigits;
+		while (ndigits > 0) {
+			ndigits--;
 			outchar('0');
 		}
 		dropflag = saved_dropflag;
 		textcolor = saved_textcolor;
-		return;
-	}
+	} else {
+		leading = 0;
+		while (ndigits > 0) {
+			uint16_t divisor = placevalue[ndigits];
 
-	if (ndigits == 0)
-		return;
-
-	/* The binary only consumes the low 16 bits of eax for the digit loop
-	 * (after the 0xFFFF sentinel check on the full 32-bit register). */
-	rolling = (uint16_t)value;
-	pos = ndigits;
-	leading_nonzero = 0;
-
-	do {
-		uint8_t out_ch;
-		const uint16_t divisor = placevalue[pos];
-		uint16_t digit = (uint16_t)(rolling / divisor);
-		rolling = (uint16_t)(rolling - digit * divisor);
-
-		if (leading_nonzero || pos <= minpad || digit != 0) {
-			leading_nonzero = 1;
-			if (digit > 9)
-				digit = 9;
-			out_ch = (uint8_t)('0' + digit);
-		} else {
-			out_ch = ' ';
+			digit = value / divisor;
+			value -= digit * divisor;
+			if (leading == 0 && ndigits > minpad && digit == 0) {
+				digit = ' ';
+			} else {
+				leading = 1;
+				if (digit > 9)
+					digit = 9;
+				digit += '0';
+			}
+			ndigits--;
+			outchar((uint8_t)digit);
 		}
-		--pos;
-		outchar(out_ch);
-	} while (pos);
+	}
 }

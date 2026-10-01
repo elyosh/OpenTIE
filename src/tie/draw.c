@@ -390,28 +390,21 @@ void draw_drawhyperstar_tie98(int16_t star_idx) {
  * ========================================================================== */
 // FUNCTION: TIE95 0x1BB70
 uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
-	LandruHandle handle;
 	const uint8_t* bitmap_base;
-	uint32_t tbl_off;
-	uint32_t sub_off;
-	const uint8_t* v9;
+	const uint8_t* image;
 
 	reverseflag = 1;
 	worldz = 0x100000;
-	handle = species_table[ship_idx].model_handle;
-	bitmap_base = (const uint8_t*)xmemhdl_Lock_Handle(handle);
-	xmemhdl_Unlock_Handle(handle);
-	if (!bitmap_base)
-		return 0;
+	bitmap_base = (const uint8_t*)xmemhdl_Lock_Handle(species_table[ship_idx].model_handle);
+	xmemhdl_Unlock_Handle(species_table[ship_idx].model_handle);
 
 	/* Retail bitmaps use a two-level offset to their palette and image data. */
-	tbl_off = *(const uint32_t*)(bitmap_base + 16);
-	sub_off = *(const uint32_t*)(bitmap_base + tbl_off);
-	v9 = bitmap_base + sub_off;
+	image = bitmap_base + *(const uint32_t*)(bitmap_base + 16);
+	image = bitmap_base + *(const uint32_t*)image;
 
-	rotscale_preparefastdraw(angle);
-	rotscale_preparecolor((const char*)v9);
-	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, v9);
+	rotscale_preparefastdraw(angle, 2);
+	rotscale_preparecolor((const char*)image);
+	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, image);
 }
 
 // FUNCTION: TIE98 0x417FF0
@@ -439,7 +432,7 @@ uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16
 		RenderQuad_DrawRotatedSprite(angle, screen_x, screen_y, 0x100, image);
 		return 0;
 	}
-	rotscale_preparefastdraw(angle);
+	rotscale_preparefastdraw(angle, 2);
 	rotscale_preparecolor((const char*)image);
 	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, image);
 }

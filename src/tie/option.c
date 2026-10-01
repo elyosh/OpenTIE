@@ -4,7 +4,6 @@
 #include "tie/flight_surface_tie98.h"
 #include "tie/frontend_display_tie98.h"
 #include "tie_runtime/audio/imuse_api.h"
-#include "tie_runtime/audio/imuse_session.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"

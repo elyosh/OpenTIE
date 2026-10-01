@@ -54,7 +54,7 @@ typedef enum {
 /* ---- Public entry points ------------------------------------------ */
 
 /* Kick off the maneuver matching craftptr->mode_byte. Zeros push_accum,
- * hit_count, mode_subbyte, then dispatches through _initmanvrfunctionptrs.
+ * hit_count, mode_subbyte, then dispatches through initmanvrfunctionptrs.
  * Called by PAI_initplan and every PAIORDER_* that forces a new maneuver. */
 void paiman_initmaneuver(void);
 
@@ -169,11 +169,11 @@ void paiman_gonextwaypoint(void);
 
 /* 31-entry dispatch tables. Exposed so PAIORDER_updatecourseorder can
  * reach them without importing the whole maneuver API. */
-extern const ManeuverInitFunc _initmanvrfunctionptrs[MODE_COUNT];
+extern const ManeuverInitFunc initmanvrfunctionptrs[MODE_COUNT];
 extern const ManeuverFunc _manvrfunctionptrs[MODE_COUNT];
 
 /* Last-selected initializer and runtime maneuver. */
-extern ManeuverInitFunc _initmanvrfunctionptr;
+extern ManeuverInitFunc initmanvrfunctionptr;
 extern ManeuverFunc _manvrfunctionptr;
 
 /* Formation position tables. 13 formations × 6 slots each, indexed as

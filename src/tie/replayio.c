@@ -7,7 +7,6 @@
 #include "tie_runtime/storage/mission_records.h"
 #endif
 #include "tie_runtime/audio/config.h"
-#include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
@@ -185,7 +184,7 @@ uint32_t savearraysizes[68] = {
 	sizeof(shipdetailvalue),        /* [34] = 2 */
 	sizeof(shipdetailpolycnt),      /* [35] = 2 */
 	sizeof(drawmarkingsflag),       /* [36] = 1 */
-	sizeof(detaillevel),            /* [37] = 2; host replay format */
+	sizeof(detaillevel),            /* [37] = 1; 2 in the host replay format */
 	sizeof(cheatingflag),           /* [38] = 1 */
 	sizeof(inflight_music_vol),     /* [39] = 1 */
 	sizeof(inflight_sound_vol),     /* [40] = 1 */

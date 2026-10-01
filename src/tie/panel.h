@@ -243,7 +243,7 @@ void panel_updategunsight(void);
 void panel_updateradar(void);
 void panel_addbliptoradar(uint16_t obj_idx);
 void panel_updatecmd(void);
-void panel_buildobjectname(uint16_t obj_idx, uint8_t flags);
+void panel_buildobjectname(uint16_t obj_idx, uint16_t flags);
 uint16_t panel_getcraftstatus(uint16_t obj_idx);
 void panel_outputdistance(int32_t polar_dist);
 void panel_updatethreatname(void);
@@ -258,10 +258,10 @@ void panel_tryEMSforpanels(void);
 void panel_loadpanelviewdefs(char* base_name);
 
 /* -- Mask / 3D CRT / camera -- */
-void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint8_t mirror);
+void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint16_t mirror);
 void panel_clearmaskdata(uint16_t width, uint16_t height);
 void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, int16_t clear_runs);
-void panel_drawboxinxtrans(int16_t left_x, int16_t top_y, uint16_t width, uint16_t height, uint8_t color);
+void panel_drawboxinxtrans(int left_x, int top_y, uint16_t width, uint16_t height, uint8_t color);
 void panel_pointcamera(uint16_t obj_idx, int16_t use_hud_size);
 void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int clear_runs);
 void panel_Update3DCrtIfVisible(void);

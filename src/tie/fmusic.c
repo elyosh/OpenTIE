@@ -109,7 +109,7 @@ void* fmusic_GetPagedSound(unsigned int track_idx) {
  * Ensure a track is paged into the music buffer. Returns slot index.
  * Three-pass search: (1) already paged, (2) empty slot, (3) LRU eviction.
  */
-static int16_t fmusic_pagemusic(int track_idx, int slot);
+static void fmusic_pagemusic(int track_idx, uint16_t slot);
 
 // FUNCTION: TIE95 0x23A7C
 // FUNCTION: TIE98 0x41EEE0
@@ -128,13 +128,19 @@ int16_t fmusic_PageSound(uint16_t track_idx) {
 	/* Pass 2: empty slot? */
 	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
 		if (music_page_state[i] == -1)
-			return fmusic_pagemusic(track_idx, i);
+		{
+			fmusic_pagemusic(track_idx, i);
+			return i;
+		}
 	}
 
 	/* Pass 3: evict LRU (age == 0) */
 	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
 		if (!music_age[i])
-			return fmusic_pagemusic(track_idx, i);
+		{
+			fmusic_pagemusic(track_idx, i);
+			return i;
+		}
 	}
 
 	return -1;
@@ -145,24 +151,20 @@ int16_t fmusic_PageSound(uint16_t track_idx) {
  */
 // FUNCTION: TIE95 0x23AF0
 // FUNCTION: TIE98 0x41EF60
-static int16_t fmusic_pagemusic(int track_idx, int slot) {
-	int i;
+static void fmusic_pagemusic(int track_idx, uint16_t slot) {
+	uint16_t i;
 	void* data;
 
-	if (!music_buffer)
-		return -1;
+	if (music_buffer) {
+		data = xmemhdl_Lock_Handle(music_handle[track_idx]);
+		memmove((uint8_t*)music_buffer + music_slot_offsets[slot], data, music_size[track_idx]);
+		xmemhdl_Unlock_Handle(music_handle[track_idx]);
 
-	data = xmemhdl_Lock_Handle(music_handle[track_idx]);
-	memmove((uint8_t*)music_buffer + music_slot_offsets[slot], data, music_size[track_idx]);
-	xmemhdl_Unlock_Handle(music_handle[track_idx]);
-
-	music_page_state[slot] = track_idx;
-
-	for (i = 0; i < FMUSIC_NUM_SLOTS; i++)
-		music_age[i] = 0;
-	music_age[slot] = 1;
-
-	return slot;
+		music_page_state[slot] = track_idx;
+		for (i = 0; i < 2; i++)
+			music_age[i] = 0;
+		music_age[slot] = 1;
+	}
 }
 
 /*
@@ -218,7 +220,7 @@ void fmusic_freemusic(void) {
  */
 // FUNCTION: TIE95 0x23C7C
 // FUNCTION: TIE98 0x41F0C0
-static uint32_t fmusic_swapdword(uint32_t val) {
+uint32_t fmusic_swapdword(uint32_t val) {
 	return ((val & 0xFF000000) >> 24) | ((val & 0x00FF0000) >> 8) | ((val & 0x0000FF00) << 8) |
 		   ((val & 0x000000FF) << 24);
 }
@@ -229,7 +231,7 @@ static uint32_t fmusic_swapdword(uint32_t val) {
  */
 // FUNCTION: TIE95 0x23E44
 // FUNCTION: TIE98 0x41F260
-static int16_t fmusic_readfiledata(TieFile* fp, uint8_t* dest, uint16_t total) {
+int16_t fmusic_readfiledata(TieFile* fp, uint8_t* dest, uint16_t total) {
 	uint8_t chunk[FMUSIC_CHUNK_SIZE];
 	uint16_t had_error = 0;
 	uint16_t remaining = total;

@@ -1,5 +1,6 @@
 #include "tie/fscript.h"
 #include "tie/fcallbk.h"
+#include "tie_runtime/audio/imuse_api.h"
 #include "tie_runtime/audio/imuse_session.h"
 
 #include <imuse/filelist.h>
@@ -283,11 +284,11 @@ int32_t currentState;
 // GLOBAL: TIE95 0xD4998
 int32_t playingState;
 // GLOBAL: TIE95 0xD49AC
-void* currentID;
+intptr_t currentID;
 // GLOBAL: TIE95 0xD49B0
-void* nextID;
+intptr_t nextID;
 // GLOBAL: TIE95 0xD499C
-void* sequenceID;
+intptr_t sequenceID;
 // GLOBAL: TIE95 0xD4994
 int32_t currentSequence;
 // GLOBAL: TIE95 0xD49A8
@@ -351,30 +352,30 @@ int16_t fscript_MsRefreshScript(void) {
 	if (currentState) {
 		if (!nextID) {
 			currentSdp = fscript_SelectSdp(currentSdp, currentState);
-			nextID = imuse_filelist_load(im, currentSdp->sound_name);
+			nextID = filelist_ImLoadSound(currentSdp->sound_name);
 			if (!nextID) {
-				imuse_stop_all_sounds(im);
+				lolevel_ImStopAllSounds();
 				currentState = 0;
-				TieImuse_Printf("Unable to load file ");
-				TieImuse_Printf(currentSdp->sound_name);
-				TieImuse_Printf("...");
+				lolevel_ImPrintf("Unable to load file ");
+				lolevel_ImPrintf(currentSdp->sound_name);
+				lolevel_ImPrintf("...");
 			}
 		}
-		imuse_filelist_flush(im);
+		filelist_ImFlushSounds();
 	}
 	return 0;
 }
 
 // FUNCTION: TIE95 0x2406C
 int16_t fscript_MsSetState(int16_t new_state) {
-	if (new_state >= 0 && new_state < NUM_STATES && new_state != currentState)
+	if (new_state >= 0 && new_state < 12 && new_state != currentState)
 		fscript_ChangeState(new_state);
 	return currentState;
 }
 
 // FUNCTION: TIE95 0x2408C
 int16_t fscript_MsSetSequence(int16_t seq_id) {
-	if (seq_id > 0 && imuse_get_param(im, TieImuse_SoundId(currentID), PARAM_MARKER) > 0)
+	if (seq_id > 0 && lolevel_ImGetParam(currentID, PARAM_MARKER) > 0)
 		fscript_PlaySequence(seq_id);
 	return currentSequence;
 }
@@ -403,7 +404,7 @@ int16_t fscript_MsSetAttribute(int16_t attr_id, int16_t value) {
 // FUNCTION: TIE95 0x240E4
 static void fscript_ChangeState(int new_state) {
 	char* snd_name;
-	void* new_handle;
+	intptr_t new_handle;
 
 	SdpRecord* chain;
 	SdpRecord* p;
@@ -435,35 +436,31 @@ static void fscript_ChangeState(int new_state) {
 		currentSdp = selected;
 
 		/* Load current sound */
-		currentID = imuse_filelist_load(im, selected->sound_name);
+		currentID = filelist_ImLoadSound(selected->sound_name);
 		if (!currentID) {
 			currentState = 0;
-			TieImuse_Printf("Unable to load file ");
-			TieImuse_Printf(selected->sound_name);
-			TieImuse_Printf("...");
+			lolevel_ImPrintf("Unable to load file ");
+			lolevel_ImPrintf(selected->sound_name);
+			lolevel_ImPrintf("...");
 			return;
 		}
 
 		/* Select and preload next sound */
 		next_sdp = fscript_SelectSdp(selected, new_state);
 		currentSdp = next_sdp;
-		nextID = imuse_filelist_load(im, next_sdp->sound_name);
+		nextID = filelist_ImLoadSound(next_sdp->sound_name);
 		if (!nextID) {
 			currentState = 0;
-			TieImuse_Printf("Unable to load file ");
-			TieImuse_Printf(next_sdp->sound_name);
-			TieImuse_Printf("...");
+			lolevel_ImPrintf("Unable to load file ");
+			lolevel_ImPrintf(next_sdp->sound_name);
+			lolevel_ImPrintf("...");
 			return;
 		}
 
 		/* Start current music and set trigger for callback-driven transition */
-		imuse_start_music(im, currentID);
-		imuse_filelist_unload(im, currentID);
-		{
-			ImuseCmd cb = { 0 };
-			cb.opcode = TieImuse_CallbackOpcode(fcallbk_CbDoCallback);
-			imuse_set_trigger(im, TieImuse_SoundId(currentID), 0, &cb);
-		}
+		hilevel_ImStartMusic(currentID, 0);
+		filelist_ImUnloadSound(currentID);
+		lolevel_ImSetTrigger((intptr_t)currentID, 0, (intptr_t)fcallbk_CbDoCallback);
 		playingState = currentState;
 		fcallbk_CbSetChannels();
 		return;
@@ -471,8 +468,8 @@ static void fscript_ChangeState(int new_state) {
 
 	if (new_state == 0) {
 		/* Case 2: from active to idle — stop everything */
-		imuse_stop_all_sounds(im);
-		imuse_filelist_unload_all(im);
+		lolevel_ImStopAllSounds();
+		filelist_ImUnloadAll();
 		nextID = 0;
 		sequenceID = 0;
 		currentID = 0;
@@ -502,23 +499,23 @@ static void fscript_ChangeState(int new_state) {
 
 	/* Load the transition sound */
 	snd_name = selected->sound_name;
-	new_handle = imuse_filelist_load(im, snd_name);
+	new_handle = filelist_ImLoadSound(snd_name);
 	if (!new_handle) {
-		imuse_stop_all_sounds(im);
+		lolevel_ImStopAllSounds();
 		currentState = 0;
-		TieImuse_Printf("Unable to load file ");
-		TieImuse_Printf(snd_name);
-		TieImuse_Printf("...");
+		lolevel_ImPrintf("Unable to load file ");
+		lolevel_ImPrintf(snd_name);
+		lolevel_ImPrintf("...");
 		return;
 	}
 
 	/* Swap next sound under pause */
-	imuse_pause(im);
-	imuse_filelist_unload(im, nextID);
+	lolevel_ImPause();
+	filelist_ImUnloadSound(nextID);
 	nextID = new_handle;
 	currentSdp = selected;
 	currentState = new_state;
-	imuse_resume(im);
+	lolevel_ImResume();
 }
 
 /*
@@ -529,33 +526,33 @@ static void fscript_ChangeState(int new_state) {
 // FUNCTION: TIE95 0x24370
 static void fscript_PlaySequence(int seq_id) {
 	char* seq_name;
-	void* handle;
+	intptr_t handle;
 
-	imuse_pause(im);
+	lolevel_ImPause();
 	if (sequenceID) {
 		if (sequencePri >= sequencePriorities[seq_id]) {
-			imuse_resume(im);
+			lolevel_ImResume();
 			return;
 		}
-		imuse_filelist_unload(im, sequenceID);
+		filelist_ImUnloadSound(sequenceID);
 		sequenceID = 0;
 		currentSequence = 0;
 	}
-	imuse_resume(im);
+	lolevel_ImResume();
 
 	seq_name = fscript_SelectSequence(seq_id);
-	handle = imuse_filelist_load(im, seq_name);
+	handle = filelist_ImLoadSound(seq_name);
 	if (!handle) {
-		imuse_stop_all_sounds(im);
+		lolevel_ImStopAllSounds();
 		currentState = 0;
-		TieImuse_Printf("Unable to load sequence ");
-		TieImuse_Printf(seq_name);
-		TieImuse_Printf("...");
+		lolevel_ImPrintf("Unable to load sequence ");
+		lolevel_ImPrintf(seq_name);
+		lolevel_ImPrintf("...");
 		return;
 	}
 
 	/* Only start if current sound isn't already at a marker */
-	if (imuse_get_param(im, TieImuse_SoundId(handle), PARAM_MARKER) > 0)
+	if (lolevel_ImGetParam(handle, PARAM_MARKER) > 0)
 		return;
 
 	sequenceID = handle;
@@ -567,7 +564,7 @@ static void fscript_PlaySequence(int seq_id) {
 		SdpRecord* chain = sdpArrays[currentState];
 		SdpRecord* p;
 		SdpRecord* cont;
-		void* cont_handle;
+		intptr_t cont_handle;
 
 		if (!chain)
 			return;
@@ -580,21 +577,21 @@ static void fscript_PlaySequence(int seq_id) {
 			p++;
 
 		cont = fscript_SelectSdp(p, currentState);
-		cont_handle = imuse_filelist_load(im, cont->sound_name);
+		cont_handle = filelist_ImLoadSound(cont->sound_name);
 		if (!cont_handle) {
-			imuse_stop_all_sounds(im);
+			lolevel_ImStopAllSounds();
 			currentState = 0;
-			TieImuse_Printf("Unable to load file ");
-			TieImuse_Printf(cont->sound_name);
-			TieImuse_Printf("...");
+			lolevel_ImPrintf("Unable to load file ");
+			lolevel_ImPrintf(cont->sound_name);
+			lolevel_ImPrintf("...");
 			return;
 		}
 
-		imuse_pause(im);
-		imuse_filelist_unload(im, nextID);
+		lolevel_ImPause();
+		filelist_ImUnloadSound(nextID);
 		nextID = cont_handle;
 		currentSdp = cont;
-		imuse_resume(im);
+		lolevel_ImResume();
 	}
 }
 
@@ -610,7 +607,7 @@ static SdpRecord* fscript_SelectSdp(SdpRecord* sdp, int state) {
 	SdpRecord* p;
 
 	if (!sdp->num_dests) {
-		TieImuse_Printf("Script Err: no dest count...");
+		lolevel_ImPrintf("Script Err: no dest count...");
 		return sdp;
 	}
 
@@ -625,9 +622,9 @@ static SdpRecord* fscript_SelectSdp(SdpRecord* sdp, int state) {
 		p++;
 	}
 
-	TieImuse_Printf("Unable to find sdp for ");
-	TieImuse_Printf(dest_name);
-	TieImuse_Printf("...");
+	lolevel_ImPrintf("Unable to find sdp for ");
+	lolevel_ImPrintf(dest_name);
+	lolevel_ImPrintf("...");
 	return sdp;
 }
 
@@ -695,7 +692,7 @@ static int fscript_ChooseDest(SdpRecord* sdp) {
 	}
 
 	if (pick) {
-		TieImuse_Printf("Script Err: couldn't find bit");
+		lolevel_ImPrintf("Script Err: couldn't find bit");
 		return 0;
 	}
 	return result;

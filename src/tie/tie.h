@@ -967,7 +967,11 @@ extern int16_t mousex;
 extern int16_t mousey;
 extern int16_t joystickcount;
 extern uint8_t graphicsmode;
-extern int16_t detaillevel;
+#ifdef TIE_MODERN
+extern int16_t detaillevel; /* widened for the host replay format */
+#else
+extern uint8_t detaillevel;
+#endif
 
 extern EFGStruct fg_array[48];
 
@@ -1700,7 +1704,7 @@ extern MissionClock timeleft;
 /* fopen mode literal "rb" — owned by tie.c, used by every module that
  * opens a binary asset file. Watcom kept it as a single global to share
  * its address across translation units. */
-extern const char _readmode[3];
+extern const char readmode[3];
 
 /* iMUSE per-frame evaluation state. tie_updatemusic updates them each
  * frame; held as globals for .bss persistence so the replay state-dump

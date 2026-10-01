@@ -560,7 +560,7 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 
 	/* Vertex lighting (if face has lighting flag 0x40) */
 	lightVal = 0;
-	if (firstvertptr->flags & DRAWPOL_FACE_GOURAUD) {
+	if (firstvertptr[-1] & DRAWPOL_FACE_GOURAUD) {
 		/* Compute lighting for negV if not cached */
 		int16_t negLight;
 		int16_t posLight;
@@ -574,7 +574,7 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 				dot = (int32_t)0xC0010000;
 			vertexlight[negV] = (uint16_t)(dot >> 15);
 			if ((int16_t)vertexlight[negV] < 0 &&
-				firstvertptr->flags != (DRAWPOL_FACE_TWOSIDED | DRAWPOL_FACE_GOURAUD | 2))
+				firstvertptr[-1] != (DRAWPOL_FACE_TWOSIDED | DRAWPOL_FACE_GOURAUD | 2))
 				vertexlight[negV] = 0;
 		}
 
@@ -588,7 +588,7 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 				dot = (int32_t)0xC0010000;
 			vertexlight[posV] = (uint16_t)(dot >> 15);
 			if ((int16_t)vertexlight[posV] < 0 &&
-				firstvertptr->flags != (DRAWPOL_FACE_TWOSIDED | DRAWPOL_FACE_GOURAUD | 2))
+				firstvertptr[-1] != (DRAWPOL_FACE_TWOSIDED | DRAWPOL_FACE_GOURAUD | 2))
 				vertexlight[posV] = 0;
 		}
 
@@ -682,7 +682,9 @@ TRANSFM2_ScreenPoint* transfm2_calclinepts(const uint8_t* source) {
 		if (eyez < 0) {
 			if (((int32_t*)firsteyexyz + (int16_t)(source[3] * 3))[2] < 0)
 				return NULL;
-			dest = transfm2_facezintersect(source[2], source[3], (DRAWPOL_EyeVertex*)e, (DRAWPOL_EyeVertex*)((int32_t*)firsteyexyz + (int16_t)(source[3] * 3)), dest);
+			dest = transfm2_facezintersect(
+				source[2], source[3], (DRAWPOL_EyeVertex*)e,
+				(DRAWPOL_EyeVertex*)((int32_t*)firsteyexyz + (int16_t)(source[3] * 3)), dest);
 		} else {
 			dest->xy[0] = transfm2_getscreenx(eyex, eyez);
 			calcflag[source[2]] = dest;
@@ -702,7 +704,9 @@ TRANSFM2_ScreenPoint* transfm2_calclinepts(const uint8_t* source) {
 	eyez = e[2];
 	eyex = e[0];
 	if (eyez < 0)
-		return transfm2_facezintersect(source[3], source[2], (DRAWPOL_EyeVertex*)e, (DRAWPOL_EyeVertex*)((int32_t*)firsteyexyz + (int16_t)(source[2] * 3)), dest);
+		return transfm2_facezintersect(source[3], source[2], (DRAWPOL_EyeVertex*)e,
+									   (DRAWPOL_EyeVertex*)((int32_t*)firsteyexyz + (int16_t)(source[2] * 3)),
+									   dest);
 
 	dest->xy[0] = transfm2_getscreenx(eyex, eyez);
 	calcflag[source[3]] = dest;
@@ -728,10 +732,8 @@ int16_t transfm2_getfacescreenxy(uint16_t ptCnt) {
 	if (someznegflag) {
 		int16_t i;
 
-		/* The original indexes from the record start, so it tests the
-		 * header byte and the preceding edge bytes rather than vertices. */
 		for (i = 0; i < (uint16_t)numpoints; i++) {
-			if (!calcflag[((uint8_t*)firstvertptr)[2 * i]])
+			if (!calcflag[firstvertptr[2 * i]])
 				return 4;
 		}
 	}
@@ -758,7 +760,7 @@ int16_t transfm2_classifyedges(void) {
 		if (i >= (uint16_t)numpoints)
 			return 1;
 
-		edgeNum = firstvertptr->body[2 * i + 1];
+		edgeNum = firstvertptr[2 * i + 1];
 		edgeFlag = edgeflags[edgeNum];
 
 		if (edgeFlag == 0x80) {
@@ -817,7 +819,7 @@ int16_t transfm2_classifyedges(void) {
 		}
 
 		/* New edge: project both vertices */
-		idx = firstvertptr->body[2 * i];
+		idx = firstvertptr[2 * i];
 		pt1 = calcflag[idx];
 
 		if (!pt1) {
@@ -831,7 +833,7 @@ int16_t transfm2_classifyedges(void) {
 				calcflag[idx] = pt1;
 				pt1->xy[1] = transfm2_getscreeny(firsteyexyz[idx].y, eyez);
 			} else {
-				uint8_t nextIdx = firstvertptr->body[2 * i + 2];
+				uint8_t nextIdx = firstvertptr[2 * i + 2];
 				TRANSFM2_ScreenPoint* tmp;
 
 				if (firsteyexyz[nextIdx].z < 0) {
@@ -847,7 +849,7 @@ int16_t transfm2_classifyedges(void) {
 
 		edgept1[edgeNum] = pt1;
 
-		idx2 = firstvertptr->body[2 * i + 2];
+		idx2 = firstvertptr[2 * i + 2];
 		pt2 = calcflag[idx2];
 
 		if (!pt2) {
@@ -861,7 +863,7 @@ int16_t transfm2_classifyedges(void) {
 				calcflag[idx2] = pt2;
 				pt2->xy[1] = transfm2_getscreeny(firsteyexyz[idx2].y, eyez2);
 			} else {
-				uint8_t prevIdx = firstvertptr->body[2 * i];
+				uint8_t prevIdx = firstvertptr[2 * i];
 				TRANSFM2_ScreenPoint* tmp;
 
 				if (firsteyexyz[prevIdx].z < 0) {

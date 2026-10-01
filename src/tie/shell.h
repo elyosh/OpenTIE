@@ -23,6 +23,9 @@ extern uint8_t install_cfg_mode;
 int32_t shell_Shell(int32_t scene, int32_t script);
 
 void shell_programexit(const char* str) __attribute__((noreturn));
+#ifdef __WATCOMC__
+#pragma aux shell_programexit aborts;
+#endif
 
 #ifdef __cplusplus
 }

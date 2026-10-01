@@ -157,29 +157,26 @@ void gate_savegatelastpos(void) {
  * ---------------------------------------------------------------------- */
 // FUNCTION: TIE95 0x2ABE8
 void gate_outdnum(int32_t value, uint16_t num_digits, uint16_t min_digits) {
-	int16_t started = 0;
-	uint16_t pos = num_digits;
+	uint16_t started = 0;
+	uint16_t digit;
 
-	while (pos) {
-		uint32_t divisor = powersof10[pos];
-		int32_t digit = value / (int32_t)divisor;
-		/* Binary does: value -= (uint16_t)(value/divisor) * divisor.
-		 * The uint16_t cast is deliberate: it discards quotient overflow
-		 * beyond 16 bits before computing the remainder. */
-		uint8_t ch;
+	while (num_digits > 0) {
+		int32_t divisor = powersof10[num_digits];
 
-		value -= (int32_t)((uint16_t)digit) * (int32_t)divisor;
-
-		if (started || pos <= min_digits || (uint16_t)digit != 0) {
-			started = 1;
-			if ((uint16_t)digit > 9)
-				digit = 9;
-			ch = (uint8_t)(digit + '0');
+		/* The quotient is truncated to 16 bits before the remainder is
+		 * computed, discarding any overflow beyond the field width. */
+		digit = value / divisor;
+		value -= digit * divisor;
+		if (started == 0 && num_digits > min_digits && digit == 0) {
+			digit = ' ';
 		} else {
-			ch = ' ';
+			started = 1;
+			if (digit > 9)
+				digit = 9;
+			digit += '0';
 		}
-		--pos;
-		outchar(ch);
+		num_digits--;
+		outchar((uint8_t)digit);
 	}
 }
 

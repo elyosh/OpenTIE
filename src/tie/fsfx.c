@@ -1,10 +1,10 @@
 #include "tie/fsfx.h"
 #include "tie_runtime/audio/imuse_api.h"
-#include "tie_runtime/audio/imuse_session.h"
 
 #include "tie/collide.h"
 #include "tie/create.h"
 #include "tie/fediskio.h" /* resourcedir */
+#include "tie/fmusic.h"
 #include "tie/frontend_sound_tie98.h"
 #include "tie/math2.h"
 #include "tie/mission.h"
@@ -39,8 +39,12 @@
 /* soundhandles[0..3] are unused (the binary reserves them for the music
  * bank reused in other builds). [4..50] SFX, [51..106] voice, and
  * [107..] follows the edition-specific SFXDOE/mission-voice layout. */
-// GLOBAL: TIE95 0xD49BC
+#ifdef TIE_MODERN
 void* soundhandles[FSFX_NUM_SOUND_HANDLES];
+#else
+// GLOBAL: TIE95 0xD49BC
+LandruHandle soundhandles[FSFX_TIE95_SOUND_TABLE_COUNT];
+#endif
 /* TIE98 per-slot sound names consumed by the name-based FrontendSound layer. */
 // GLOBAL: TIE98 0x6259E0
 char soundnames[FSFX_NUM_SOUND_HANDLES][FSFX_SOUND_NAME_CAPACITY];
@@ -134,6 +138,16 @@ const char* sfxgroupnameptrs[5] = {
 
 /* iMUSE parameter codes (see imuse/lolevel). Exposed here to keep the
  * FSFX call sites readable. */
+#ifndef TIE_MODERN
+/* Directory record shared by the SFX bank and SFXDOE.LFD. The tag is stored
+ * big-endian on disk. */
+typedef struct SfxRecord {
+	uint32_t tag;
+	char name[8];
+	uint32_t size;
+} SfxRecord;
+#endif
+
 enum {
 	IM_PARAM_IS_PLAYING = 0x100, /* ImGetParam only */
 	IM_PARAM_PRIORITY = 0x500,
@@ -242,6 +256,7 @@ void fsfx_allocsfxbuffer(void) {
 
 // FUNCTION: TIE95 0x24744
 void fsfx_freesfx(void) {
+#ifdef TIE_MODERN
 	TieFlightSoundLayout layout = TieFlightSound_Layout();
 	int i;
 
@@ -260,10 +275,33 @@ void fsfx_freesfx(void) {
 		}
 	}
 	memset(soundnames, 0, sizeof soundnames);
+#else
+	int i;
+
+	if (sfxenabled) {
+		for (i = 4; i < 51; i++) {
+			if (soundhandles[i])
+				xmemhdl_Free_Handle(soundhandles[i]);
+		}
+	}
+	if (voiceenabled) {
+		for (i = 51; i < 107; i++) {
+			if (soundhandles[i])
+				xmemhdl_Free_Handle(soundhandles[i]);
+		}
+	}
+	if (sfxenabled) {
+		for (i = 107; i < FSFX_TIE95_SOUND_TABLE_COUNT; i++) {
+			if (soundhandles[i])
+				xmemhdl_Free_Handle(soundhandles[i]);
+		}
+	}
+#endif
 }
 
 // FUNCTION: TIE95 0x247D8
 int16_t fsfx_loadsfx(const char* filename) {
+#ifdef TIE_MODERN
 	int total = 0;
 	TieFlightSoundLayout layout = TieFlightSound_Layout();
 
@@ -290,6 +328,96 @@ int16_t fsfx_loadsfx(const char* filename) {
 	total += TieFlightSound_LoadBank(doe_path, 107, layout.mission_voice_base, 0);
 
 	return (int16_t)total;
+#else
+	SfxRecord header;
+	uint16_t record_size;
+	uint16_t sfx_count;
+	uint16_t doe_count;
+	uint16_t doe_record;
+	uint16_t record;
+	int32_t skip;
+	uint16_t slot;
+	SfxRecord* records;
+	TieFile* fp;
+	uint16_t i;
+
+	for (i = 0; i < FSFX_TIE95_SOUND_TABLE_COUNT; i++)
+		soundhandles[i] = 0;
+
+	if (!fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, filename, readmode, 0))
+		return 0;
+
+	/* Main SFX + voice bank: header, directory, then packed samples. Only
+	 * the first 47 records are loaded when voice is disabled. */
+	record_size = sizeof(SfxRecord);
+	fp = fileptr;
+	fediskio_readfileblock(&header, 1, record_size, fp);
+	records = loadbuffer;
+	fmusic_readfiledata(fp, (uint8_t*)records, (uint16_t)header.size);
+	sfx_count = (uint16_t)header.size / 16;
+	skip = 0;
+	slot = 4;
+	if (!voiceenabled)
+		sfx_count = 47;
+	for (record = 0; record < sfx_count; record++) {
+		skip += record_size;
+		records[record].tag = fmusic_swapdword(records[record].tag);
+		fediskio_UnlockGlobals();
+		soundhandles[slot] = xmemhdl_Alloc_Handle((uint16_t)records[record].size, 0);
+		fediskio_RelockGlobals();
+		records = loadbuffer;
+		if (soundhandles[slot]) {
+			uint8_t* data;
+
+			if (skip) {
+				fseek(fp, skip, SEEK_CUR);
+				skip = 0;
+			}
+			data = xmemhdl_Lock_Handle(soundhandles[slot]);
+			fmusic_readfiledata(fp, data, records[record].size);
+			xmemhdl_Unlock_Handle(soundhandles[slot]);
+		} else {
+			skip += records[record].size;
+		}
+		slot++;
+		blastflag = 1;
+	}
+	fclose(fp);
+
+	/* SFXDOE.LFD adjunct fills [107..108]. */
+	if (fediskio_tryopenfile(TIE_FILE_ROOT_FLIGHT_ASSET, "RESOURCE\\SFXDOE.LFD", readmode, 0) == 1) {
+		fp = fileptr;
+		fediskio_readfileblock(&header, 1, record_size, fp);
+		records = loadbuffer;
+		fmusic_readfiledata(fp, (uint8_t*)records, (uint16_t)header.size);
+		doe_count = (uint16_t)header.size / record_size;
+		skip = 0;
+		slot = 107;
+		for (doe_record = 0; doe_record < doe_count; doe_record++) {
+			skip += record_size;
+			fediskio_UnlockGlobals();
+			soundhandles[slot] = xmemhdl_Alloc_Handle((uint16_t)records[doe_record].size, 0);
+			fediskio_RelockGlobals();
+			records = loadbuffer;
+			if (soundhandles[slot]) {
+				uint8_t* data;
+
+				if (skip) {
+					fseek(fp, skip, SEEK_CUR);
+					skip = 0;
+				}
+				data = xmemhdl_Lock_Handle(soundhandles[slot]);
+				fmusic_readfiledata(fp, data, records[doe_record].size);
+				xmemhdl_Unlock_Handle(soundhandles[slot]);
+			} else {
+				skip += records[doe_record].size;
+			}
+			slot++;
+		}
+	}
+	fclose(fp);
+	return slot - 4;
+#endif
 }
 
 /* --------------------------------------------------------------------------
@@ -319,8 +447,12 @@ int16_t fsfx_loadvoicelfd(void) {
 	layout = TieFlightSound_Layout();
 	for (i = layout.mission_voice_base; i < layout.mission_voice_base + layout.mission_voice_count; i++) {
 		if (soundhandles[i]) {
+#ifdef TIE_MODERN
 			free(soundhandles[i]);
-			soundhandles[i] = NULL;
+#else
+			xmemhdl_Free_Handle(soundhandles[i]);
+#endif
+			soundhandles[i] = 0;
 		}
 		soundnames[i][0] = '\0';
 	}
@@ -445,7 +577,7 @@ int16_t fsfx_loadvoicelfd(void) {
 		else
 			active = 0;
 		if (!active) {
-			soundhandles[slot] = NULL;
+			soundhandles[slot] = 0;
 			continue;
 		}
 
@@ -457,6 +589,7 @@ int16_t fsfx_loadvoicelfd(void) {
 
 		memcpy(&sample_size, &dir_buf[entry_off + 12], 4);
 
+#ifdef TIE_MODERN
 		soundhandles[slot] = malloc(sample_size ? sample_size : 1);
 		if (!soundhandles[slot])
 			break;
@@ -476,6 +609,27 @@ int16_t fsfx_loadvoicelfd(void) {
 			free(dir_buf);
 			return 0;
 		}
+#else
+		fediskio_UnlockGlobals();
+		soundhandles[slot] = xmemhdl_Alloc_Handle(sample_size, 0);
+		fediskio_RelockGlobals();
+		if (!soundhandles[slot])
+			break;
+
+		/* 16-byte sub-header before each payload (re-uses the file
+		 * header scratch in retail, ignored content). */
+
+		if (TieStorage_Read(sub, 1, 16, fp) != 16 ||
+			TieStorage_Read(xmemhdl_Lock_Handle(soundhandles[slot]), 1, sample_size, fp) != sample_size) {
+			xmemhdl_Unlock_Handle(soundhandles[slot]);
+			xmemhdl_Free_Handle(soundhandles[slot]);
+			soundhandles[slot] = 0;
+			TieStorage_Close(fp);
+			free(dir_buf);
+			return 0;
+		}
+		xmemhdl_Unlock_Handle(soundhandles[slot]);
+#endif
 		TieFlightSound_StoreName(slot, base, &dir_buf[entry_off + 4]);
 
 		entry_idx++;
@@ -848,8 +1002,7 @@ int8_t fsfx_triggervoicesfx(uint16_t voice_id) {
 // FUNCTION: TIE95 0x25824
 void fsfx_checkblastqueue(void) {
 	uint16_t next_voice;
-	uint8_t new_count;
-	uint8_t i;
+	uint16_t i;
 
 	if (!blastflag || !blastcount)
 		return;
@@ -858,10 +1011,9 @@ void fsfx_checkblastqueue(void) {
 
 	/* Dequeue head. */
 	next_voice = blastqueue[0];
-	new_count = (uint8_t)(blastcount - 1);
-	for (i = 0; i < new_count; i++)
+	blastcount--;
+	for (i = 0; i < blastcount; i++)
 		blastqueue[i] = blastqueue[i + 1];
-	blastcount = new_count;
 
 	if (!inflight_speech_vol)
 		return;

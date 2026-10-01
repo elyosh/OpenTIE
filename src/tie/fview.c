@@ -83,7 +83,7 @@ void fview_calcrotatemove(uint16_t pitch, uint16_t heading, FlightObject* craft)
 }
 
 // FUNCTION: TIE95 0x264DC
-void fview_calcrotateorient(int16_t roll, int16_t yaw, FlightObject* craft) {
+void fview_calcrotateorient(uint16_t roll, uint16_t yaw, FlightObject* craft) {
 	fview_transformaxes(calcU1, calcU2, calcU3, yaw);
 	fview_transformaxes(calcf1, calcf2, calcf3, roll);
 
@@ -196,7 +196,7 @@ void fview_calcrotworldeye(void) {
 }
 
 // FUNCTION: TIE95 0x287F4
-void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, int16_t angle) {
+void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, uint16_t angle) {
 	int32_t temp;
 	int32_t cos_a, sin_a;
 	int32_t rot[9];
@@ -205,8 +205,8 @@ void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, int16_t
 	if (!angle)
 		return;
 
-	cos_a = trig2_getsignedcos(angle);
-	sin_a = trig2_getsignedsin(angle);
+	cos_a = trig2_getsignedcos((int16_t)angle);
+	sin_a = trig2_getsignedsin((int16_t)angle);
 
 	if (cos_a >= 0) {
 		int32_t one_minus_cos = 0x7FFF - cos_a; /* 1 - cos in Q15 */
@@ -495,8 +495,8 @@ void fview_sfoilrotation(int16_t angle) {
 	sfoiltempy = objecteyey;
 	sfoiltempz = objecteyez;
 
-	sin_a = trig2_getsignedsin(angle);
-	cos_a = trig2_getsignedcos(angle);
+	sin_a = trig2_getsignedsin((int16_t)angle);
+	cos_a = trig2_getsignedcos((int16_t)angle);
 	neg_sin = -sin_a;
 
 	/* Rotate A and C rows around B axis */
@@ -559,8 +559,8 @@ void fview_corvettegunrotation(int16_t angle) {
 	sfoiltempy = objecteyey;
 	sfoiltempz = objecteyez;
 
-	sin_a = trig2_getsignedsin(angle);
-	cos_a = trig2_getsignedcos(angle);
+	sin_a = trig2_getsignedsin((int16_t)angle);
+	cos_a = trig2_getsignedcos((int16_t)angle);
 	neg_sin = -sin_a;
 
 	/* Rotate A and B rows around C axis */
@@ -687,8 +687,8 @@ void fview_bwingrotation(int16_t angle, uint16_t part_id) {
 	}
 
 	/* General angle case */
-	sin_a = trig2_getsignedsin(angle);
-	cos_a = trig2_getsignedcos(angle);
+	sin_a = trig2_getsignedsin((int16_t)angle);
+	cos_a = trig2_getsignedcos((int16_t)angle);
 	neg_sin = -sin_a;
 
 	if (part_id == 5) {
@@ -863,8 +863,8 @@ void fview_componentrotation(int16_t angle, const ShipModelMesh* mesh) {
 		}
 	}
 
-	cos_a = trig2_getsignedcos(angle);
-	sin_a = trig2_getsignedsin(angle);
+	cos_a = trig2_getsignedcos((int16_t)angle);
+	sin_a = trig2_getsignedsin((int16_t)angle);
 
 	if (cos_a >= 0) {
 		int32_t one_minus_cos = 0x7FFF - cos_a; /* 1 - cos in Q15 */
@@ -1091,8 +1091,8 @@ void fview_comprotatepoint(int16_t angle, const ShipModelMesh* mesh, int32_t poi
 	axis_x = rd->axis_x;
 	axis_z = rd->axis_z;
 
-	cos_a = trig2_getsignedcos(angle);
-	sin_a = trig2_getsignedsin(angle);
+	cos_a = trig2_getsignedcos((int16_t)angle);
+	sin_a = trig2_getsignedsin((int16_t)angle);
 
 	if (cos_a >= 0) {
 		int32_t one_minus_cos = 0x7FFF - cos_a; /* 1 - cos in Q15 */

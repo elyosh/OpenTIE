@@ -217,54 +217,52 @@ int16_t paiorder_stillattackorder(void) {
 // FUNCTION: TIE95 0x3D9D8
 int16_t paiorder_flyhomeorder(void) {
 	uint16_t mother;
-	EFGStruct* g;
-	uint8_t mom_species;
-	SpecData* ms;
 
 	craftptr->formation_separation = 1;
 
 	/* Mother lookup — same priority chain as enterhangarorder. */
 
-	g = &fg_array[ai.fg_idx];
 	if (craftptr->dock_state_flags) {
-		mother = pai_searchformother(g->capture_fg);
+		mother = pai_searchformother((int8_t)fg_array[ai.fg_idx].capture_fg);
 	} else {
-		mother = pai_searchformother(g->pri_stop_fg);
-		if (mother == 0xFFFFu)
-			mother = pai_searchformother(g->sec_stop_fg);
+		mother = pai_searchformother((int8_t)fg_array[ai.fg_idx].pri_stop_fg);
+		if (mother == 0xFFFF)
+			mother = pai_searchformother((int8_t)fg_array[ai.fg_idx].sec_stop_fg);
 	}
 
 	/* Don't fly home to ourselves. */
-	if (mother != 0xFFFFu && objects[mother].fg_idx == objects[pstate.object_idx].fg_idx)
-		mother = 0xFFFFu;
+	if (mother != 0xFFFF && objects[mother].fg_idx == objects[pstate.object_idx].fg_idx)
+		mother = 0xFFFF;
 
-	if (mother == 0xFFFFu) {
-		craftptr->ai_target_ref = g->way_used[13] ? (int16_t)0x800D : (int16_t)0x8000;
-		pai_settarget();
+	if (mother != 0xFFFF) {
+		/* Formation slot = mother + rotate(engine_x, engine_y, engine_z). */
+		craftptr->ai_target_ref = (int16_t)mother;
+		pai_calcrotatedpoint(&objects[mother],
+							 spec_data[objects[mother].craft_ptr->species_idx].engine_x, /* side */
+							 spec_data[objects[mother].craft_ptr->species_idx].engine_y, /* up   */
+							 spec_data[objects[mother].craft_ptr->species_idx].engine_z /* fwd  */);
+		craftptr->waypoint_x_cache = objects[mother].world_x + rotatedx;
+		craftptr->waypoint_y_cache = objects[mother].world_y + rotatedy;
+		craftptr->waypoint_z_cache = objects[mother].world_z + rotatedz;
+
+		pai_targetdistance();
+
+		if (trig2_polardistance < 0x10000)
+			paiman_setspeed(ai.active_obj_idx, 0x96);
+		if (trig2_polardistance < 0x8000)
+			paiman_setspeed(ai.active_obj_idx, 0x64);
+		if (trig2_polardistance < 0x4000)
+			paiman_setspeed(ai.active_obj_idx, 0x4B);
+		if (trig2_polardistance < 0x800)
+			return 1;
 		return 0;
 	}
 
-	/* Formation slot = mother + rotate(engine_x, engine_y, engine_z). */
-	craftptr->ai_target_ref = (int16_t)mother;
-	mom_species = objects[mother].craft_ptr->species_idx;
-	ms = &spec_data[mom_species];
-	pai_calcrotatedpoint(&objects[mother], ms->engine_x, /* side */
-						 ms->engine_y,                   /* up   */
-						 ms->engine_z /* fwd  */);
-	craftptr->waypoint_x_cache = rotatedx + objects[mother].world_x;
-	craftptr->waypoint_y_cache = rotatedy + objects[mother].world_y;
-	craftptr->waypoint_z_cache = rotatedz + objects[mother].world_z;
-
-	pai_targetdistance();
-
-	if (trig2_polardistance < 0x10000)
-		paiman_setspeed(ai.active_obj_idx, 0x96);
-	if (trig2_polardistance < 0x8000)
-		paiman_setspeed(ai.active_obj_idx, 0x64);
-	if (trig2_polardistance < 0x4000)
-		paiman_setspeed(ai.active_obj_idx, 0x4B);
-	if (trig2_polardistance < 0x800)
-		return 1;
+	if (fg_array[ai.fg_idx].way_used[13])
+		craftptr->ai_target_ref = (int16_t)0x800D;
+	else
+		craftptr->ai_target_ref = (int16_t)0x8000;
+	pai_settarget();
 	return 0;
 }
 
@@ -710,22 +708,24 @@ int16_t paiorder_mothershiporder(void) {
 
 // FUNCTION: TIE95 0x3E80C
 int16_t paiorder_lookfordisableorder(void) {
-	uint16_t cached = (uint16_t)craftptr->pending_radio_command;
-	uint16_t t;
+	uint16_t target;
 
-	if (cached != 0xFF && cached != 0xFB) {
-		if (pai_worthytarget(cached)) {
-			craftptr->ai_target_ref = (int16_t)cached;
+	if ((uint16_t)craftptr->pending_radio_command != 0xFF
+	    && (uint16_t)craftptr->pending_radio_command != 0xFB) {
+		target = craftptr->pending_radio_command;
+		if (pai_worthytarget(target)) {
+			craftptr->ai_target_ref = (int16_t)target;
 			return 1;
 		}
 		craftptr->pending_radio_command = 0xFF;
 	}
 
-	t = pai_checkfortargetstodisable(ai.ai_entry_count);
-	if (t == 0xFFFFu)
-		return 0;
-	craftptr->ai_target_ref = (int16_t)t;
-	return 1;
+	target = pai_checkfortargetstodisable(ai.ai_entry_count);
+	if (target != 0xFFFFu) {
+		craftptr->ai_target_ref = (int16_t)target;
+		return 1;
+	}
+	return 0;
 }
 
 /* ======================================================================
@@ -1274,27 +1274,27 @@ int16_t paiorder_completegootherorder(void) {
 
 // FUNCTION: TIE95 0x3F788
 int16_t paiorder_completefolloworder(void) {
-	uint8_t leader_entry = ai.leader_craft->ai_state_1C;
-	uint8_t new_order;
+	int16_t new_order;
 
-	if (ai.ai_entry_count == leader_entry)
-		return 0;
+	if (ai.ai_entry_count != ai.leader_craft->ai_state_1C) {
+		ai.ai_entry_count = ai.leader_craft->ai_state_1C;
+		craftptr->ai_state_1C = (uint8_t)ai.ai_entry_count;
 
-	ai.ai_entry_count = leader_entry;
-	craftptr->ai_state_1C = leader_entry;
-
-	new_order = fg_array[ai.fg_idx].ai[leader_entry].order;
+		new_order = (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].order;
 #ifdef TIE_MODERN
-	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
-	if (new_order >= sizeof(ordersldr)) {
-		craftptr->default_order_ldr = 0;
-		ai.staged_next_order = 0;
+		// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+		if ((uint16_t)new_order >= sizeof(ordersldr)) {
+			craftptr->default_order_ldr = 0;
+			ai.staged_next_order = 0;
+			return 1;
+		}
+#endif
+		craftptr->default_order_ldr = ordersldr[new_order];
+		ai.staged_next_order =
+			(ai.leader_obj_idx == 0xFF) ? ordersldr[(uint16_t)new_order] : ordersflw[(uint16_t)new_order];
 		return 1;
 	}
-#endif
-	craftptr->default_order_ldr = ordersldr[new_order];
-	ai.staged_next_order = (craftptr->leader_obj_idx == 0xFF) ? ordersldr[new_order] : ordersflw[new_order];
-	return 1;
+	return 0;
 }
 
 /* ======================================================================
@@ -1448,34 +1448,35 @@ int16_t paiorder_dropoffdestorder(void) {
  *                   (sec_stop_fg match if sec_stop_fg_used). */
 // FUNCTION: TIE95 0x3F934
 int16_t paiorder_mothershipreadyorder(void) {
-	EFGStruct* fg = &fg_array[ai.fg_idx];
-
+	uint8_t docked;
+	int16_t ready;
 	int16_t primary_ok;
 	int16_t secondary_ok;
 
-	if ((uint16_t)craftptr->ai_target_ref < 0x20u)
+	if ((uint16_t)craftptr->ai_target_ref < 0x20)
 		return 0;
 	if (!spec_data[craftptr->species_idx].has_hyperdrive)
 		return 0;
 
-	if (craftptr->dock_state_flags) {
-		if (fg->capture_fg_used) {
-			FGStatus* fs = &fgstatus[fg->capture_fg];
-			return fs->cond[0].count == fs->cond[0].detail;
+	docked = craftptr->dock_state_flags;
+	ready = 0;
+	if (docked) {
+		if (fg_array[ai.fg_idx].capture_fg_used) {
+			if (fgstatus[(int8_t)fg_array[ai.fg_idx].capture_fg].cond[0].count == fgstatus[(int8_t)fg_array[ai.fg_idx].capture_fg].cond[0].detail)
+				ready = 1;
 		}
-		return 0;
+	} else {
+		primary_ok = 1;
+		secondary_ok = 1;
+		if (fg_array[ai.fg_idx].pri_stop_fg_used) {
+			if (fgstatus[(int8_t)fg_array[ai.fg_idx].pri_stop_fg].cond[0].count != fgstatus[(int8_t)fg_array[ai.fg_idx].pri_stop_fg].cond[0].detail)
+				primary_ok = 0;
+		}
+		if (fg_array[ai.fg_idx].sec_stop_fg_used) {
+			if (fgstatus[(int8_t)fg_array[ai.fg_idx].sec_stop_fg].cond[0].count != fgstatus[(int8_t)fg_array[ai.fg_idx].sec_stop_fg].cond[0].detail)
+				secondary_ok = 0;
+		}
+		ready = primary_ok & secondary_ok;
 	}
-
-	primary_ok = 1;
-	secondary_ok = 1;
-	if (fg->pri_stop_fg_used) {
-		FGStatus* fs = &fgstatus[fg->pri_stop_fg];
-		primary_ok = (fs->cond[0].count == fs->cond[0].detail);
-	}
-	if (fg->sec_stop_fg_used) {
-		FGStatus* fs = &fgstatus[fg->sec_stop_fg];
-		if (fs->cond[0].count != fs->cond[0].detail)
-			secondary_ok = 0;
-	}
-	return secondary_ok & primary_ok;
+	return ready;
 }

@@ -11,6 +11,11 @@
 /* Each entry point returns -1 without a session, as the original stubs do
  * when no engine command function is installed. */
 
+int lolevel_ImPrintf(const char* format, ...) {
+	(void)format;
+	return 0;
+}
+
 int lolevel_ImPause(void) { return im ? imuse_pause(im) : -1; }
 
 int lolevel_ImResume(void) { return im ? imuse_resume(im) : -1; }
@@ -54,52 +59,68 @@ int lolevel_ImScanMidi(intptr_t sound, int chunk, int measure, int beat, int tic
 
 int lolevel_ImShareParts(intptr_t src, intptr_t dst) { return im ? imuse_share_parts(im, src, dst) : -1; }
 
+/* Callback opcodes start after the engine's commands. */
+enum { FIRST_CALLBACK_OPCODE = IMUSE_CMD_PANIC_INTERNAL + 1 };
+
+/* Checks and clears match commands by opcode. A queued callback is stored
+ * as call_game_callback (below), so a callback opcode cannot be matched
+ * and is refused; the game only checks and clears by command or -1. */
 int lolevel_ImCheckTrigger(intptr_t sound, int marker, intptr_t opcode) {
-	return im ? imuse_check_trigger(im, sound, marker, opcode) : -1;
+	if (!im || opcode >= FIRST_CALLBACK_OPCODE)
+		return -1;
+	return imuse_check_trigger(im, sound, marker, opcode);
 }
 
 int lolevel_ImClearTrigger(intptr_t sound, int marker, intptr_t opcode) {
-	return im ? imuse_clear_trigger(im, sound, marker, opcode) : -1;
+	if (!im || opcode >= FIRST_CALLBACK_OPCODE)
+		return -1;
+	return imuse_clear_trigger(im, sound, marker, opcode);
 }
 
-/* Argument kinds of each command a trigger or deferral can carry, indexed by
- * engine opcode: 's' is a sound (intptr_t), 'i' an int. The original stubs
- * copy ten stack words whatever the command; reading only the command's own
- * arguments keeps the variadic calls defined. */
-static const char* const command_arguments[IMUSE_CMD_PANIC_INTERNAL + 1] = {
-	[IMUSE_CMD_PAUSE] = "",
-	[IMUSE_CMD_RESUME] = "",
-	[IMUSE_CMD_SET_GROUP_VOL] = "ii",
-	[IMUSE_CMD_START_SOUND] = "si",
-	[IMUSE_CMD_STOP_SOUND] = "s",
-	[IMUSE_CMD_STOP_ALL_SOUNDS] = "",
-	[IMUSE_CMD_GET_NEXT_SOUND] = "s",
-	[IMUSE_CMD_SET_PARAM] = "sii",
-	[IMUSE_CMD_GET_PARAM] = "si",
-	[IMUSE_CMD_FADE_PARAM] = "siii",
-	[IMUSE_CMD_SET_HOOK] = "si",
-	[IMUSE_CMD_GET_HOOK] = "s",
-	[IMUSE_CMD_CHECK_TRIGGER] = "sii",
-	[IMUSE_CMD_CLEAR_TRIGGER] = "sii",
-	[IMUSE_CMD_JUMP_MIDI] = "siiiii",
-	[IMUSE_CMD_SCAN_MIDI] = "siiii",
-	[IMUSE_CMD_SEND_MIDI_MSG] = "siii",
-	[IMUSE_CMD_SHARE_PARTS] = "ss",
+/* The game's trigger callbacks take only the marker. The engine calls a
+ * callback with the marker and the trigger's ten argument words (libimuse's
+ * ImTriggerCallback), as the original engine did on the stack. The adapter
+ * queues this function in its place, with the game's callback as the first
+ * argument word, so each function is called through its own type. */
+typedef int (*GameTriggerCallback)(int marker);
+
+static void call_game_callback(int marker, intptr_t callback, intptr_t a1, intptr_t a2, intptr_t a3,
+							   intptr_t a4, intptr_t a5, intptr_t a6, intptr_t a7, intptr_t a8, intptr_t a9) {
+	(void)a1;
+	(void)a2;
+	(void)a3;
+	(void)a4;
+	(void)a5;
+	(void)a6;
+	(void)a7;
+	(void)a8;
+	(void)a9;
+	((GameTriggerCallback)callback)(marker);
+}
+
+/* Arguments the original callers pass for each command they queue, by
+ * engine opcode: 's' is a sound (intptr_t), 'i' an int. A start carries
+ * only the sound; its priority, which the original engine read from
+ * whatever followed on the caller's stack, is 0. Other opcodes are never
+ * queued and are refused, so no call reads arguments it was not given. */
+static const char* const command_arguments[FIRST_CALLBACK_OPCODE] = {
+	[IMUSE_CMD_START_SOUND] = "s",   [IMUSE_CMD_STOP_SOUND] = "s", [IMUSE_CMD_SET_PARAM] = "sii",
+	[IMUSE_CMD_FADE_PARAM] = "siii", [IMUSE_CMD_SET_HOOK] = "si",
 };
 
 /* Fill a command from the caller's variadic arguments; false for an opcode
- * the table does not describe. */
+ * the original never queues, including callbacks, which only triggers take. */
 static int read_command(ImuseCmd* cmd, intptr_t opcode, va_list args) {
-	const char* kinds = "";
+	const char* kinds;
 	int i;
 
 	memset(cmd, 0, sizeof(*cmd));
 	cmd->opcode = opcode;
-	if (opcode >= 0 && opcode <= IMUSE_CMD_PANIC_INTERNAL) {
-		kinds = command_arguments[opcode];
-		if (!kinds)
-			return 0;
-	}
+	if (opcode < 0 || opcode >= FIRST_CALLBACK_OPCODE)
+		return 0;
+	kinds = command_arguments[opcode];
+	if (!kinds)
+		return 0;
 	for (i = 0; kinds[i]; ++i)
 		cmd->args[i] = kinds[i] == 's' ? va_arg(args, intptr_t) : va_arg(args, int);
 	return 1;
@@ -110,9 +131,17 @@ int lolevel_ImSetTrigger(intptr_t sound, int marker, intptr_t opcode, ...) {
 	va_list args;
 	int ok;
 
-	va_start(args, opcode);
-	ok = read_command(&cmd, opcode, args);
-	va_end(args);
+	if (opcode >= FIRST_CALLBACK_OPCODE) {
+		/* A callback takes no arguments. */
+		memset(&cmd, 0, sizeof(cmd));
+		cmd.opcode = (intptr_t)call_game_callback;
+		cmd.args[0] = opcode;
+		ok = 1;
+	} else {
+		va_start(args, opcode);
+		ok = read_command(&cmd, opcode, args);
+		va_end(args);
+	}
 	if (!im || !ok)
 		return -1;
 	return imuse_set_trigger(im, sound, marker, &cmd);

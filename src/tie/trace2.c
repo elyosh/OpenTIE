@@ -1029,9 +1029,9 @@ void trace2_drawface(uint16_t numberOfVertices) {
 	vertexIndex = 0;
 	counter = (int16_t)(uint8_t)numberOfVertices;
 	while (counter > 0) {
-		const uint8_t vtx1 = firstvertptr->body[vertexIndex];
-		const uint8_t edgeIdx = firstvertptr->body[vertexIndex + 1];
-		const uint8_t vtx2 = firstvertptr->body[vertexIndex + 2];
+		const uint8_t vtx1 = firstvertptr[vertexIndex];
+		const uint8_t edgeIdx = firstvertptr[vertexIndex + 1];
+		const uint8_t vtx2 = firstvertptr[vertexIndex + 2];
 		TRANSFM2_ScreenPoint* edgePt;
 		uint8_t pt;
 
@@ -1184,25 +1184,24 @@ void trace2_drawface(uint16_t numberOfVertices) {
 	vi = 0;
 	edgePtc = NULL;
 
-	if (calcflag[firstvertptr->body[0]]) {
+	if (calcflag[firstvertptr[0]]) {
 		/* First vertex visible. Walk forward until we lose visibility. */
 		TRANSFM2_ScreenPoint* cf_prev;
 		TRANSFM2_ScreenPoint* cf_here;
 
 		do {
 			vi += 2;
-		} while (calcflag[firstvertptr->body[vi]]);
-		cf_prev = calcflag[firstvertptr->body[vi - 2]];
-		trace2_lastpointPtr = (cf_prev == edgept1[firstvertptr->body[vi - 1]])
-								  ? edgept2[firstvertptr->body[vi - 1]]
-								  : edgept1[firstvertptr->body[vi - 1]];
+		} while (calcflag[firstvertptr[vi]]);
+		cf_prev = calcflag[firstvertptr[vi - 2]];
+		trace2_lastpointPtr = (cf_prev == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
+																		 : edgept1[firstvertptr[vi - 1]];
 
 		do {
 			vi += 2;
-			cf_here = calcflag[firstvertptr->body[vi]];
+			cf_here = calcflag[firstvertptr[vi]];
 		} while (!cf_here);
-		edgePtc = (cf_here == edgept1[firstvertptr->body[vi - 1]]) ? edgept2[firstvertptr->body[vi - 1]]
-																   : edgept1[firstvertptr->body[vi - 1]];
+		edgePtc = (cf_here == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
+															 : edgept1[firstvertptr[vi - 1]];
 	} else {
 		/* First vertex invisible. Skip to first visible, then lose-and-regain. */
 		TRANSFM2_ScreenPoint* cf_here;
@@ -1211,17 +1210,17 @@ void trace2_drawface(uint16_t numberOfVertices) {
 
 		do {
 			vi += 2;
-			cf_here = calcflag[firstvertptr->body[vi]];
+			cf_here = calcflag[firstvertptr[vi]];
 		} while (!cf_here);
-		edgePta = (cf_here == edgept1[firstvertptr->body[vi - 1]]) ? edgept2[firstvertptr->body[vi - 1]]
-																   : edgept1[firstvertptr->body[vi - 1]];
+		edgePta = (cf_here == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
+															 : edgept1[firstvertptr[vi - 1]];
 		trace2_lastpointPtr = edgePta;
 		do {
 			vi += 2;
-		} while (calcflag[firstvertptr->body[vi]]);
-		cf_prev = calcflag[firstvertptr->body[vi - 2]];
-		edgePtc = (cf_prev == edgept1[firstvertptr->body[vi - 1]]) ? edgept2[firstvertptr->body[vi - 1]]
-																   : edgept1[firstvertptr->body[vi - 1]];
+		} while (calcflag[firstvertptr[vi]]);
+		cf_prev = calcflag[firstvertptr[vi - 2]];
+		edgePtc = (cf_prev == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
+															 : edgept1[firstvertptr[vi - 1]];
 	}
 
 	/* Both repair endpoints are near-plane clip points: each is the endpoint

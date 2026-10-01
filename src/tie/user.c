@@ -19,7 +19,6 @@
  */
 
 #include "tie_runtime/audio/config.h"
-#include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/display/classic_display.h"
@@ -54,6 +53,7 @@
 #include "tie/laser.h"
 #include "tie/logbuf2.h" /* pixelswide, pixelsdeep */
 #include "tie/math2.h"
+#include "tie/math2_wide.h"
 #include "tie/modelbounds.h"
 #include "tie/modelmesh.h"
 #include "tie/msg.h"
@@ -961,33 +961,28 @@ void user_setnewtarget(uint16_t new_obj) {
  * code.
  */
 // FUNCTION: TIE95 0x60A4C
-void user_calcdeltapitch(int16_t dpitch, int16_t dyaw, uint16_t obj_idx, CraftData* cp) {
-	FlightObject* o = &objects[obj_idx];
-
-	uint16_t new_pitch;
-	int16_t new_heading;
+void user_calcdeltapitch(uint16_t dpitch, uint16_t dyaw, uint16_t obj_idx, CraftData* cp) {
+	uint16_t pitch;
+	int16_t heading;
 	int16_t cos_h;
 	int16_t sin_h;
 	int16_t cos_p;
 	int16_t sin_p;
-	int32_t cP_sH;
-	int32_t sP_sH;
-	int32_t cP_cH;
-	int32_t sP_cH;
-	int32_t neg_sin_h;
-	int32_t neg_sin_p;
-	int32_t S1;
-	int32_t S2;
-	int32_t S3;
-	int32_t U1;
-	int32_t U2;
-	int32_t U3;
-	int32_t F1;
-	int32_t F2;
-	int32_t F3;
-	int16_t new_roll;
+	int32_t sh_cp;
+	int32_t sh_sp;
+	int32_t ch_cp;
+	int32_t ch_sp;
+	int32_t m00, m01, m02;
+	int32_t m10, m11, m12;
+	int32_t m20, m21, m22;
+	int32_t t;
+	int32_t S1, S2;
+	int32_t U1, U2;
+	int32_t F1, F2;
 
+#ifdef TIE_MODERN
 	if (TieOrientationHook_Enabled()) {
+		FlightObject* o = &objects[obj_idx];
 		int16_t new_pitch, new_heading, new_roll;
 		TieOrientationHook_Apply(o->pitch, o->heading, o->roll, dpitch, dyaw, (inputbuttons & 0xE) != 2,
 								 &new_pitch, &new_heading, &new_roll);
@@ -997,107 +992,124 @@ void user_calcdeltapitch(int16_t dpitch, int16_t dyaw, uint16_t obj_idx, CraftDa
 		o->roll = new_roll;
 		return;
 	}
+#endif
 
-	/* Faithful Q15 reverse-engineered binary 0x5EAF8.  Gimbal-locks at the
-	 * world ±Z poles: arctan(calcf1, -calcf2) below collapses to noise when
-	 * both inputs are near zero.  All `*(int*)&obj->field >> 16` Watcom
-	 * unaligned loads are rewritten here. */
-	if (o->orient_dirty) {
-		fview_calcrotatemove(o->pitch, o->heading, o);
-		fview_calcrotateorient(o->roll, 0, o);
+	/* Q15 path: gimbal-locks at the world +/-Z poles, where
+	 * arctan(calcf1, -calcf2) collapses to noise. */
+	if (objects[obj_idx].orient_dirty) {
+		fview_calcrotatemove(objects[obj_idx].pitch, objects[obj_idx].heading, &objects[obj_idx]);
+		fview_calcrotateorient(objects[obj_idx].roll, 0, &objects[obj_idx]);
 	}
-	calcf1 = -o->fwd_x;
-	calcf2 = -o->fwd_y;
-	calcf3 = -o->fwd_z;
-	calcU1 = o->up_x;
-	calcU2 = o->up_y;
-	calcU3 = o->up_z;
-	calcS1 = o->side_x;
-	calcS2 = o->side_y;
-	calcS3 = o->side_z;
+	calcf1 = objects[obj_idx].fwd_x;
+	calcf1 = -calcf1;
+	calcf2 = objects[obj_idx].fwd_y;
+	calcf3 = objects[obj_idx].fwd_z;
+	calcU1 = objects[obj_idx].up_x;
+	calcU2 = objects[obj_idx].up_y;
+	calcf2 = -calcf2;
+	calcU3 = objects[obj_idx].up_z;
+	calcf3 = -calcf3;
+	calcS1 = objects[obj_idx].side_x;
+	calcS2 = objects[obj_idx].side_y;
+	calcS3 = objects[obj_idx].side_z;
 
 	fview_transformaxes(calcS1, calcS2, calcS3, dpitch);
-	if ((inputbuttons & 0xE) != 2)
+	if ((uint16_t)(inputbuttons & 0xE) != 2)
 		fview_transformaxes(calcU1, calcU2, calcU3, dyaw);
 
-	new_pitch = (uint16_t)trig2_arccos(-(int16_t)calcf3);
-	cp->orient_pitch = new_pitch;
-	new_heading = (int16_t)-trig2_arctan((int16_t)calcf1, -(int16_t)calcf2);
+	pitch = trig2_arccos((uint16_t)-calcf3);
+	cp->orient_pitch = pitch;
+	heading = trig2_arctan(calcf1, -calcf2);
+	heading = -heading;
 
-	cos_h = trig2_getsignedcos(new_heading);
-	sin_h = trig2_getsignedsin(new_heading);
-	cos_p = trig2_getsignedcos((int16_t)new_pitch);
-	sin_p = trig2_getsignedsin((int16_t)new_pitch);
+	cos_h = trig2_getsignedcos(heading);
+	sin_h = trig2_getsignedsin(heading);
+	cos_p = trig2_getsignedcos((int16_t)pitch);
+	sin_p = trig2_getsignedsin((int16_t)pitch);
 
-	cP_sH = (cos_p * sin_h) >> 15;
-	sP_sH = (sin_p * sin_h) >> 15;
-	cP_cH = (cos_p * cos_h) >> 15;
-	sP_cH = (sin_p * cos_h) >> 15;
-	neg_sin_h = -(int32_t)sin_h;
-	neg_sin_p = -(int32_t)sin_p;
+	sh_cp = (sin_h * cos_p) >> 15;
+	sh_sp = (sin_h * sin_p) >> 15;
+	sin_h = -sin_h;
+	ch_cp = (cos_h * cos_p) >> 15;
+	ch_sp = (cos_h * sin_p) >> 15;
+	sin_p = -sin_p;
 
-	/* Rotate each of the three basis vectors (S, U, f) by the new euler. */
+	m00 = cos_h;
+	m01 = sin_h;
+	m02 = 0;
+	m10 = (int16_t)sh_cp;
+	m11 = (int16_t)ch_cp;
+	m12 = sin_p;
+	m20 = (int16_t)sh_sp;
+	m21 = (int16_t)ch_sp;
+	m22 = cos_p;
 
-	S1 = neg_sin_h * calcS2 + (int32_t)cos_h * calcS1;
-	if (S1 >= 0x40000000)
-		S1 = 0x3FFF0000;
-	if (S1 <= -0x40000000)
-		S1 = -0x3FFF0000;
-	S2 = neg_sin_p * calcS3 + (int16_t)cP_cH * calcS2 + (int16_t)cP_sH * calcS1;
-	if (S2 >= 0x40000000)
-		S2 = 0x3FFF0000;
-	if (S2 <= -0x40000000)
-		S2 = -0x3FFF0000;
-	S3 = (int32_t)cos_p * calcS3 + (int16_t)sP_cH * calcS2 + (int16_t)sP_sH * calcS1;
-	if (S3 >= 0x40000000)
-		S3 = 0x3FFF0000;
-	if (S3 <= -0x40000000)
-		S3 = -0x3FFF0000;
-	calcS1 = (int16_t)(S1 >> 15);
-	calcS2 = (int16_t)(S2 >> 15);
-	calcS3 = (int16_t)(S3 >> 15);
+	/* Rotate each of the three basis vectors (S, U, f) by the new Euler. */
+	t = math2_dot3(calcS1, m00, calcS2, m01, calcS3, m02);
+	if (t >= 0x40000000)
+		t = 0x3FFF0000;
+	if (t <= -0x40000000)
+		t = -0x3FFF0000;
+	S1 = t >> 15;
+	t = math2_dot3(calcS1, m10, calcS2, m11, calcS3, m12);
+	if (t >= 0x40000000)
+		t = 0x3FFF0000;
+	if (t <= -0x40000000)
+		t = -0x3FFF0000;
+	S2 = t >> 15;
+	t = math2_dot3(calcS1, m20, calcS2, m21, calcS3, m22);
+	if (t >= 0x40000000)
+		t = 0x3FFF0000;
+	if (t <= -0x40000000)
+		t = -0x3FFF0000;
+	calcS1 = (int16_t)S1;
+	calcS2 = (int16_t)S2;
+	calcS3 = (int16_t)(t >> 15);
 
-	U1 = neg_sin_h * calcU2 + (int32_t)cos_h * calcU1;
-	if (U1 >= 0x40000000)
-		U1 = 0x3FFF0000;
-	if (U1 <= -0x40000000)
-		U1 = -0x3FFF0000;
-	U2 = neg_sin_p * calcU3 + (int16_t)cP_cH * calcU2 + (int16_t)cP_sH * calcU1;
-	if (U2 >= 0x40000000)
-		U2 = 0x3FFF0000;
-	if (U2 <= -0x40000000)
-		U2 = -0x3FFF0000;
-	U3 = (int32_t)cos_p * calcU3 + (int16_t)sP_cH * calcU2 + (int16_t)sP_sH * calcU1;
-	if (U3 >= 0x40000000)
-		U3 = 0x3FFF0000;
-	if (U3 <= -0x40000000)
-		U3 = -0x3FFF0000;
-	calcU1 = (int16_t)(U1 >> 15);
-	calcU2 = (int16_t)(U2 >> 15);
-	calcU3 = (int16_t)(U3 >> 15);
+	t = math2_dot3(calcU1, m00, calcU2, m01, calcU3, m02);
+	if (t >= 0x40000000)
+		t = 0x3FFF0000;
+	if (t <= -0x40000000)
+		t = -0x3FFF0000;
+	U1 = t >> 15;
+	t = math2_dot3(calcU1, m10, calcU2, m11, calcU3, m12);
+	if (t >= 0x40000000)
+		t = 0x3FFF0000;
+	if (t <= -0x40000000)
+		t = -0x3FFF0000;
+	U2 = t >> 15;
+	t = math2_dot3(calcU1, m20, calcU2, m21, calcU3, m22);
+	if (t >= 0x40000000)
+		t = 0x3FFF0000;
+	if (t <= -0x40000000)
+		t = -0x3FFF0000;
+	calcU1 = (int16_t)U1;
+	calcU2 = (int16_t)U2;
+	calcU3 = (int16_t)(t >> 15);
 
-	F1 = neg_sin_h * calcf2 + (int32_t)cos_h * calcf1;
-	if (F1 >= 0x40000000)
-		F1 = 0x3FFF0000;
-	if (F1 <= -0x40000000)
-		F1 = -0x3FFF0000;
-	F2 = neg_sin_p * calcf3 + (int16_t)cP_cH * calcf2 + (int16_t)cP_sH * calcf1;
-	if (F2 >= 0x40000000)
-		F2 = 0x3FFF0000;
-	if (F2 <= -0x40000000)
-		F2 = -0x3FFF0000;
-	F3 = (int32_t)cos_p * calcf3 + (int16_t)sP_cH * calcf2 + (int16_t)sP_sH * calcf1;
-	if (F3 >= 0x40000000)
-		F3 = 0x3FFF0000;
-	if (F3 <= -0x40000000)
-		F3 = -0x3FFF0000;
-	calcf1 = (int16_t)(F1 >> 15);
-	calcf2 = (int16_t)(F2 >> 15);
-	calcf3 = (int16_t)(F3 >> 15);
+	t = math2_dot3(calcf1, m00, calcf2, m01, calcf3, m02);
+	if (t >= 0x40000000)
+		t = 0x3FFF0000;
+	if (t <= -0x40000000)
+		t = -0x3FFF0000;
+	F1 = t >> 15;
+	t = math2_dot3(calcf1, m10, calcf2, m11, calcf3, m12);
+	if (t >= 0x40000000)
+		t = 0x3FFF0000;
+	if (t <= -0x40000000)
+		t = -0x3FFF0000;
+	F2 = t >> 15;
+	t = math2_dot3(calcf1, m20, calcf2, m21, calcf3, m22);
+	if (t >= 0x40000000)
+		t = 0x3FFF0000;
+	if (t <= -0x40000000)
+		t = -0x3FFF0000;
+	calcf1 = (int16_t)F1;
+	calcf2 = (int16_t)F2;
+	calcf3 = (int16_t)(t >> 15);
 
-	new_roll = trig2_arctan((int16_t)calcS2, (int16_t)calcS1);
-	o->roll = (int16_t)-new_roll;
-	o->heading = new_heading;
+	objects[obj_idx].roll = -trig2_arctan(calcS2, calcS1);
+	objects[obj_idx].heading = heading;
 }
 
 /*
@@ -1318,23 +1330,24 @@ void user_ejectcamera(void) {
  */
 // FUNCTION: TIE95 0x5CC44
 void user_nextreplaycount(void) {
-	uint16_t new_bufcnt;
-
 	++replaytotalcntdown;
-	new_bufcnt = (uint16_t)(replaybuffercnt + 1);
-	replaybuffercnt = new_bufcnt;
-	if (replaytotalcntdown < (uint32_t)replaytotalcnt) {
-		if (new_bufcnt >= REPLAY_INPUT_CHUNK_FRAMES) {
-			if (!replay_loadreplayinput()) {
-				replaytotalcntdown = (uint32_t)replaytotalcnt;
-				replay_stopreplay();
-				return;
-			}
-			replaybuffercnt = 0;
-			replayptr = replaybufferstart;
-		}
-	} else {
+	++replaybuffercnt;
+	if (replaytotalcntdown >= (uint32_t)replaytotalcnt) {
 		replay_stopreplay();
+		return;
+	}
+	if (replaybuffercnt >= (int)REPLAY_INPUT_CHUNK_FRAMES) {
+#ifdef TIE_MODERN
+		if (!replay_loadreplayinput()) {
+			replaytotalcntdown = (uint32_t)replaytotalcnt;
+			replay_stopreplay();
+			return;
+		}
+#else
+		replay_loadreplayinput();
+#endif
+		replaybuffercnt = 0;
+		replayptr = replaybufferstart;
 	}
 }
 

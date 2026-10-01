@@ -4,7 +4,6 @@
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/talk_task.h"
 #endif
-#include "tie_runtime/audio/imuse_session.h"
 
 #include "tie/goals.h"
 #include "tie/mission.h"
@@ -1369,16 +1368,17 @@ static int16_t talk_iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t 
 /* Per-frame user callback on the streaming Sound: append the next 2 KB
  * chunk from the CD streamer. Our synchronous loader normally reads the
  * whole file up front, leaving talk_speech_streaming clear. */
-int32_t talk_test4(LandruHandle d, uint32_t o, uint32_t sz, int16_t b);
 // FUNCTION: TIE95 0x6B43F
-static void talk_Speech_User_Func(Sound* snd) {
+static void talk_Speech_User_Func(Sound* snd, int32_t time) {
 	int32_t bytes_read;
 
 	(void)snd;
+	(void)time;
 	if (talk_speech_streaming) {
 		if (talk_speech_sound) {
 			if (talk_speech_sound->data) {
-				bytes_read = talk_test4(talk_speech_sound->data, talk_speech_pos, 0x800, 0);
+				bytes_read =
+					xstream_Read_From_Stream_Buffer(0, talk_speech_sound->data, talk_speech_pos, 0x800, 0);
 				if (bytes_read != -1) {
 					if (bytes_read != 0x800)
 						talk_speech_streaming = 0;
@@ -1424,7 +1424,7 @@ void talk_Alloc_Speech_Sound(void) {
 	xsound_Clear_Sound_Keep(talk_speech_sound);
 	xsound_Clear_Sound_Keepable(talk_speech_sound);
 	xsound_Clear_Sound_User_Keep(talk_speech_sound);
-	xsound_Set_Sound_User_Function(talk_speech_sound, (SoundUserFunc)talk_Speech_User_Func);
+	xsound_Set_Sound_User_Function(talk_speech_sound, talk_Speech_User_Func);
 }
 
 /* Tear down the streaming state. Retail leaves the Sound and its
@@ -1438,54 +1438,26 @@ void talk_Free_Speech_Sound(void) {
 	talk_speech_streaming = 0;
 }
 
-/* Stop any running speech, build the next .voc filename, load the
- * file into the staging buffer, and start playback. Mirrors retail
- * TALK_Start_Speech_Stream (sub_6AFF9). Reads the file directly with
- * lfile rather than going through the lstream chain queue — retail's
- * 2 KB/frame streaming is unnecessary with synchronous I/O, and
- * lstream's chain queue is cumbersome when each click loads a fresh
- * file. Caller must ensure talk_speech_sound has been allocated.
- *
- * Falls back silently if speech is disabled or the .voc file is
+/* Stop any running speech, build the next .voc filename, chain it on
+ * the stream engine, prime the staging buffer, and start playback.
+ * The modern build reads the whole file synchronously instead, and
+ * falls back silently if speech is disabled or the .voc file is
  * missing — the screen still works without voice. */
 // FUNCTION: TIE95 0x6AFF9
 void talk_Start_Speech_Stream(void) {
-	TieFrontendVoiceSource voice_source;
-	TieFile* fp;
-	uint8_t* data;
-	size_t bytes_read;
-	uint32_t source_rate_hz;
-	TieVocCompatResult voc_compat;
-
-	char sp[8] = { 0 };
 	char path[64];
-	int n;
+	char sp[5];
 
-	if (!talk_speech_sound || !talk_speech_sound->data)
-		return;
+#ifdef TIE_MODERN
 	if (!options_gbl.speech_active)
 		return;
-
-	/* Build the .voc filename for the current talk_voice_* state. Retail
-	 * has three branches:
-	 *
-	 *   1. officer 'i' (info briefing) -- no mood char in filename.
-	 *      Mission name ending in 'w' (wraith variants) decrements idx.
-	 *
-	 *   2. mission-1 retry special case -- when species == "1", mission ==
-	 *      1, mood == 'h', primary_complete != 1, secondary_complete ==
-	 *      1, and idx is 1 or 2: use the hardcoded fallback paths.
-	 *
-	 *   3. default -- full sp/mission/officer/mood/idx filename.
-	 *
-	 * Path separators are forward slashes -- xfile_Open_File handles
-	 * cross-platform translation. */
-	if (talk_voice_species >= 0) {
-		/* Numeric species (1m1, 2m1, ...) */
-		snprintf(sp, sizeof(sp), "%d", talk_voice_species);
-	} else {
-		/* Character-encoded species (1=f, 2=i, 3=b, 4=a, 5=g, 6=d, 7=m) */
-		switch (-talk_voice_species) {
+#endif
+	memset(sp, 0, sizeof(sp));
+	/* Species prefix: numeric for tour battles, a letter for the
+	 * negative (character-encoded) training/historical species. */
+	if (talk_voice_species < 0) {
+		talk_voice_species = -talk_voice_species;
+		switch (talk_voice_species) {
 			case 1:
 				sp[0] = 'f';
 				break;
@@ -1508,82 +1480,118 @@ void talk_Start_Speech_Stream(void) {
 				sp[0] = 'm';
 				break;
 			default:
-				TieDiagnostics_Log(TIE_LOG_INFO, "talk_Start_Speech_Stream: species %d out of range\n",
-								   talk_voice_species);
+				printf("error with filename");
 				sp[0] = 'f';
 				break;
 		}
+		talk_voice_species = -talk_voice_species;
+	} else {
+		sprintf(sp, "%d", talk_voice_species);
 	}
 
 	if (talk_voice_officer == 'i') {
-		/* Briefing-officer voiceover: no mood character. Retail
-		 * shaves one off the idx for missions whose name ends in
-		 * 'w' -- those use a separate (one-shorter) voice list. */
-		const char* mission_name = shipext_Get_Mission_Name();
-		size_t mn_len = mission_name ? strlen(mission_name) : 0;
-		int16_t idx = talk_voice_question;
-		if (mn_len > 0 && mission_name[mn_len - 1] == 'w')
-			idx = (int16_t)(idx - 1);
-		n = snprintf(path, sizeof(path), "voice/%sm%d/%sm%d%c%d.voc", sp, talk_voice_mission, sp,
-					 talk_voice_mission, talk_voice_officer, idx);
+		/* Briefing-officer voiceover: no mood character. Missions whose
+		 * name ends in 'w' use a one-shorter voice list. */
+		char* mission_name = shipext_Get_Mission_Name();
+		if (mission_name[strlen(mission_name) - 1] == 'w')
+			sprintf(path, "\\voice\\%sm%d\\%sm%d%c%d.voc", sp, talk_voice_mission, sp, talk_voice_mission,
+					talk_voice_officer, talk_voice_question - 1);
+		else
+			sprintf(path, "\\voice\\%sm%d\\%sm%d%c%d.voc", sp, talk_voice_mission, sp, talk_voice_mission,
+					talk_voice_officer, talk_voice_question);
 	} else if (strcmp(sp, "1") == 0 && talk_voice_mission == 1 && talk_voice_mood == 'h' &&
-			   mission.primary_complete != 1 && mission.secondary_complete == 1 &&
-			   (talk_voice_question == 1 || talk_voice_question == 2)) {
-		/* mission-1 secondary-only retry: retail picks fixed files
-		 * for the first two questions. */
-		const char* fixed = (talk_voice_question == 1) ? "voice/1m1/1m1od2.voc" : "voice/1m1/1m1oh1.voc";
-		n = snprintf(path, sizeof(path), "%s", fixed);
+			   mission.primary_complete != 1 && mission.secondary_complete == 1) {
+		/* Mission-1 secondary-only retry: fixed files for the first
+		 * two questions. */
+		if (talk_voice_question == 1)
+			strcpy(path, "\\voice\\1m1\\1m1od2.voc");
+		else if (talk_voice_question == 2)
+			strcpy(path, "\\voice\\1m1\\1m1oh1.voc");
+#ifdef TIE_MODERN
+		/* Retail leaves the path unset for later questions. */
+		else
+			return;
+#endif
 	} else {
-		n = snprintf(path, sizeof(path), "voice/%sm%d/%sm%d%c%c%d.voc", sp, talk_voice_mission, sp,
-					 talk_voice_mission, talk_voice_officer, talk_voice_mood, talk_voice_question);
-	}
-	if (n <= 0 || (size_t)n >= sizeof(path))
-		return;
-
-	/* Stop any currently playing speech. */
-	xsound_Stop_Sound(talk_speech_sound);
-	talk_speech_streaming = 0;
-	talk_speech_pos = 0;
-
-	fp = TieFrontendVoice_Open(path, &voice_source);
-	if (!fp) {
-		TieDiagnostics_Log(TIE_LOG_INFO, "[talk-voice] missing %s\n", path);
-		return;
-	}
-	TieDiagnostics_Log(TIE_LOG_INFO, "[talk-voice] play %s source=%s\n", path,
-					   TieFrontendVoice_SourceName(voice_source));
-
-	data = xmemhdl_Lock_Handle(talk_speech_sound->data);
-	if (!data) {
-		TieStorage_Close(fp);
-		return;
-	}
-	memset(data, 0, TALK_SPEECH_BUF_SIZE);
-	bytes_read = TieStorage_Read(data, 1, TALK_SPEECH_BUF_SIZE, fp);
-	TieStorage_Close(fp);
-	source_rate_hz = 0;
-	/* MODERN ADAPTATION: TIE98 ships VOC 1.20/type-9 PCM, while the
-	 * recovered TIE95 iMUSE dispatcher consumes VOC 1.10/type-1 blocks. */
-	voc_compat = TieVocCompat_PrepareImuse(data, &bytes_read, &source_rate_hz);
-	xmemhdl_Unlock_Handle(talk_speech_sound->data);
-	if (voc_compat == TIE_VOC_COMPAT_INVALID) {
-		TieDiagnostics_Log(TIE_LOG_WARN, "[talk-voice] unsupported VOC format in %s\n", path);
-		talk_speech_sound->size = 0;
-		return;
+		sprintf(path, "\\voice\\%sm%d\\%sm%d%c%c%d.voc", sp, talk_voice_mission, sp, talk_voice_mission,
+				talk_voice_officer, talk_voice_mood, talk_voice_question);
 	}
 
-	talk_speech_pos = (int32_t)bytes_read;
-	talk_speech_sound->size = (int32_t)bytes_read;
-	talk_speech_streaming = (bytes_read >= TALK_SPEECH_BUF_SIZE);
+	if (talk_speech_sound && talk_speech_sound->data) {
+		xsound_Stop_Sound(talk_speech_sound);
+		talk_speech_streaming = 0;
+		talk_speech_pos = 0;
+#ifdef TIE_MODERN
+		{
+			/* MODERN ADAPTATION: load the whole file synchronously instead
+			 * of chaining it through the CD streamer. */
+			TieFrontendVoiceSource voice_source;
+			TieFile* fp;
+			uint8_t* data;
+			size_t bytes_read;
+			uint32_t source_rate_hz;
+			TieVocCompatResult voc_compat;
 
-	if (bytes_read == 0)
-		return;
+			fp = TieFrontendVoice_Open(path, &voice_source);
+			if (!fp) {
+				TieDiagnostics_Log(TIE_LOG_INFO, "[talk-voice] missing %s\n", path);
+				return;
+			}
+			TieDiagnostics_Log(TIE_LOG_INFO, "[talk-voice] play %s source=%s\n", path,
+							   TieFrontendVoice_SourceName(voice_source));
 
-	xsound_Start_Speech(talk_speech_sound);
-	if (voc_compat == TIE_VOC_COMPAT_CONVERTED)
-		(void)lolevel_ImSetParam(TieImuse_SoundId(talk_speech_sound), IMUSE_PARAM_SOUND_FREQUENCY,
-								 (int)source_rate_hz);
-	lolevel_ImSetParam(TieImuse_SoundId(talk_speech_sound), 0x500, 100);
+			data = xmemhdl_Lock_Handle(talk_speech_sound->data);
+			if (!data) {
+				TieStorage_Close(fp);
+				return;
+			}
+			memset(data, 0, TALK_SPEECH_BUF_SIZE);
+			bytes_read = TieStorage_Read(data, 1, TALK_SPEECH_BUF_SIZE, fp);
+			TieStorage_Close(fp);
+			source_rate_hz = 0;
+			/* TIE98 ships VOC 1.20/type-9 PCM, while the recovered TIE95
+			 * iMUSE dispatcher consumes VOC 1.10/type-1 blocks. */
+			voc_compat = TieVocCompat_PrepareImuse(data, &bytes_read, &source_rate_hz);
+			xmemhdl_Unlock_Handle(talk_speech_sound->data);
+			if (voc_compat == TIE_VOC_COMPAT_INVALID) {
+				TieDiagnostics_Log(TIE_LOG_WARN, "[talk-voice] unsupported VOC format in %s\n", path);
+				talk_speech_sound->size = 0;
+				return;
+			}
+
+			talk_speech_pos = (int32_t)bytes_read;
+			talk_speech_sound->size = (int32_t)bytes_read;
+			talk_speech_streaming = (bytes_read >= TALK_SPEECH_BUF_SIZE);
+			if (bytes_read == 0)
+				return;
+
+			xsound_Start_Speech(talk_speech_sound);
+			if (voc_compat == TIE_VOC_COMPAT_CONVERTED)
+				(void)lolevel_ImSetParam((intptr_t)talk_speech_sound, IMUSE_PARAM_SOUND_FREQUENCY,
+										 (int)source_rate_hz);
+			lolevel_ImSetParam((intptr_t)talk_speech_sound, 0x500, 100);
+		}
+#else
+		xstream_Unchain_Current_Stream_File(0);
+		if (xstream_Chain_Stream_File(0, path) && xstream_Use_Stream_File(0, path)) {
+			uint8_t* data;
+			int32_t bytes_read;
+
+			data = xmemhdl_Lock_Handle(talk_speech_sound->data);
+			memset(data, 0, TALK_SPEECH_BUF_SIZE);
+			xmemhdl_Unlock_Handle(talk_speech_sound->data);
+			bytes_read = xstream_Read_From_Stream_Buffer(0, talk_speech_sound->data, 0, TALK_SPEECH_BUF_SIZE, 1);
+			if (bytes_read == TALK_SPEECH_BUF_SIZE)
+				talk_speech_streaming = 1;
+			else
+				talk_speech_streaming = 0;
+			talk_speech_pos = bytes_read;
+			talk_speech_sound->size = bytes_read;
+			xsound_Start_Speech(talk_speech_sound);
+			lolevel_ImSetParam((intptr_t)talk_speech_sound, 0x500, 100);
+		}
+#endif
+	}
 }
 
 /* Initialize species/mission for a talk briefing/debrief. Mirrors

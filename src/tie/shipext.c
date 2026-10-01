@@ -1272,29 +1272,29 @@ Actor* shipext_Get_Battle_Galaxy_Image(void) {
 
 // FUNCTION: TIE95 0x81720
 void shipext_Get_Battle_Galaxy_Rect(Rect* out) {
-	char buf[44];
+	char buf[32];
 	int16_t pos;
 
-	xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_battle + NUM_SHIPS], buf, 2, 2);
+	xparagrp_Get_Paragraph_String(ship_info[(int16_t)(pilot_record.cur_battle + NUM_SHIPS)], buf, 2, 2);
 	pos = 0;
-	while (buf[pos] == ' ')
+	while ((isspace)((signed char)buf[pos]))
 		pos++;
-	out->left = atoi(&buf[pos]);
-	while (buf[pos] && buf[pos] != ' ')
+	out->left = atol(&buf[pos]);
+	while (!(isspace)((signed char)buf[pos]))
 		pos++;
-	while (buf[pos] == ' ')
+	while ((isspace)((signed char)buf[pos]))
 		pos++;
-	out->top = atoi(&buf[pos]);
-	while (buf[pos] && buf[pos] != ' ')
+	out->top = atol(&buf[pos]);
+	while (!(isspace)((signed char)buf[pos]))
 		pos++;
-	while (buf[pos] == ' ')
+	while ((isspace)((signed char)buf[pos]))
 		pos++;
-	out->right = atoi(&buf[pos]);
-	while (buf[pos] && buf[pos] != ' ')
+	out->right = atol(&buf[pos]);
+	while (!(isspace)((signed char)buf[pos]))
 		pos++;
-	while (buf[pos] == ' ')
+	while ((isspace)((signed char)buf[pos]))
 		pos++;
-	out->bottom = atoi(&buf[pos]);
+	out->bottom = atol(&buf[pos]);
 }
 
 // FUNCTION: TIE95 0x81828

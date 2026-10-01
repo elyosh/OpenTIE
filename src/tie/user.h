@@ -194,7 +194,7 @@ void user_resetview(void);
 /* Rotate the craft basis by dpitch about its side axis and dyaw about its up
  * axis, decompose back to Euler (heading, pitch, roll) and write into
  * objects[obj_idx]. */
-void user_calcdeltapitch(int16_t dpitch, int16_t dyaw, uint16_t obj_idx, CraftData* cp);
+void user_calcdeltapitch(uint16_t dpitch, uint16_t dyaw, uint16_t obj_idx, CraftData* cp);
 
 /* Install the detail preset tables into the runtime flags. */
 void user_setdetaillevel(uint16_t level);

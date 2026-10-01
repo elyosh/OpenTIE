@@ -44,6 +44,7 @@
 #ifdef __WATCOMC__
 #pragma function(strcpy)
 #pragma function(strlen)
+#pragma function(abs)
 #endif
 
 /* ---- Page command opcodes and parameter counts ---- */
@@ -627,16 +628,17 @@ void player_Seek_Page_Section(void) {
 // FUNCTION: TIE95 0x7EAC4
 // FUNCTION: TIE98 0x46AA10
 void player_Move_Display_Map(void) {
-	/* Compute scale step speed */
-	int16_t scale_dx = (int16_t)abs(map_state.scale_x - map_state.scale_target_x);
-	int16_t scale_dy = (int16_t)abs(map_state.scale_y - map_state.scale_target_y);
+	int16_t scale_dx;
+	int16_t scale_dy;
 	int16_t scale_speed;
-	int16_t pixels_per_unit;
 	int16_t move_dx;
 	int16_t move_dy;
-	int16_t move_dist;
 	int16_t move_speed;
 	int16_t i;
+
+	/* Compute scale step speed */
+	scale_dx = (int16_t)abs(map_state.scale_x - map_state.scale_target_x);
+	scale_dy = (int16_t)abs(map_state.scale_y - map_state.scale_target_y);
 
 	if (scale_dx < scale_dy)
 		scale_dx = scale_dy;
@@ -651,16 +653,19 @@ void player_Move_Display_Map(void) {
 	map_state.scale_y = player_Move_To_Value(map_state.scale_y, map_state.scale_target_y, scale_speed);
 
 	/* Compute move step speed */
-	pixels_per_unit = map_state.scale_x ? (256 / map_state.scale_x + 1) : 1;
+	if (map_state.scale_x)
+		move_speed = 256 / map_state.scale_x + 1;
+	else
+		move_speed = 1;
 
 	move_dx = (int16_t)abs(map_state.center_x - map_state.target_x);
 	move_dy = (int16_t)abs(map_state.center_y - map_state.target_y);
 	if (move_dx < move_dy)
 		move_dx = move_dy;
 
-	move_dist = (int16_t)(move_dx / pixels_per_unit);
-	move_speed = 2 * pixels_per_unit;
-	if (move_dist >= 16)
+	move_dx /= move_speed;
+	move_speed *= 2;
+	if (move_dx >= 16)
 		move_speed *= 2;
 
 	map_state.center_x = player_Move_To_Value(map_state.center_x, map_state.target_x, move_speed);

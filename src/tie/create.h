@@ -29,11 +29,11 @@ CraftData* create_createhyperin(void);
  * globals, message counters, camera view state. */
 int16_t create_createmission(void);
 
-/* Activate one flight group. Sets fgstatus[fg_idx].active=1, dispatches to
+/* Activate one flight group. Sets fgstatus[fgcnt].active=1, dispatches to
  * create_createstaticflightgroup (for static-class species) or
- * create_createflightgroup. craft_slot == -1 spawns the whole FG; otherwise
+ * create_createflightgroup. craft_slot == 0xFFFF spawns the whole FG; otherwise
  * just that craft index. Returns 1. */
-int create_startflightgroup(int16_t craft_slot, int16_t fg_idx);
+int create_startflightgroup(uint16_t craft_slot);
 
 /* Per-frame FG spawn/reinforce driver. Two 236-tick timers
  * (timers[TIMER_FG_ARRIVAL], timers[TIMER_FG_SPAWN]) pace
@@ -48,8 +48,8 @@ void create_updatefgstatus(void);
  * craftcnt=0..count calling create_createcraft. On first-frame-of-mission
  * dispatches MSG_reportfgcreation + FSCRIPT_MsSetSequence based on
  * fgside + fggenus.
- * craft_slot == -1 means spawn all; >= 0 spawns just that craft index. */
-int create_createflightgroup(int16_t craft_slot, int16_t fg_idx);
+ * craft_slot == 0xFFFF means spawn all; >= 0 spawns just that craft index. */
+int create_createflightgroup(uint16_t craft_slot);
 
 /* Full craft init: allocate a FlightObject slot for fggenus, set pose,
  * initialize all weapon banks (lasers/missiles/beam), shields (doubled
@@ -63,7 +63,7 @@ uint16_t create_createcraft(void);
  * species.ship_class: 8 = mine grid (count*count cube), 9 = single planet,
  * 10 = count asteroids placed randomly in ±256 cube around waypoint 0.
  * Returns fg_idx * 48 (byte offset to fgstatus row). */
-int create_createstaticflightgroup(int16_t craft_slot);
+int create_createstaticflightgroup(uint16_t craft_slot);
 
 /* Create one StaticObject from the staging_static_* globals. Bumps
  * idnumber and fgstatus[fg_idx].cond[0].detail. Returns slot index,
@@ -88,7 +88,7 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first);
 
 /* Spawn genus-11 mesh-debris FlightObject; clones parent's pose.
  * death_timer = 236 * (rand&7 + 4) ticks. Returns slot or 0xFFFF. */
-uint16_t create_createcomponent(uint16_t parent_obj, uint8_t mesh_idx);
+uint16_t create_createcomponent(uint16_t parent_obj, uint16_t mesh_idx);
 
 /* Spawn a genus-13 flame ember: clones parent, jitters heading/pitch,
  * bumps speed. death_timer = 236 * (rand&3 + 1). Returns slot or 0xFFFF. */

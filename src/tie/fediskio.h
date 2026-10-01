@@ -69,7 +69,7 @@ void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type);
 
 /* --- Fatal error --- */
 
-void fediskio_fatalerror(FatalErrId error_code) __attribute__((noreturn));
+void fediskio_fatalerror(uint16_t error_code) __attribute__((noreturn));
 
 /* --- FEDISKIO globals --- */
 

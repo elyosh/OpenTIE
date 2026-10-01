@@ -1,4 +1,5 @@
 #include "tie/mfscript.h"
+#include "tie_runtime/audio/imuse_api.h"
 #include "tie_runtime/audio/imuse_session.h"
 
 #include <imuse/filelist.h>
@@ -22,7 +23,6 @@ enum {
 };
 
 enum {
-	IM_PARAM_PRIORITY = 0x100,
 	IM_PARAM_VOLUME = 0x200,
 	IM_PARAM_VOLALT = 0x600,
 	IM_PARAM_CHUNK = 0xB00,
@@ -462,12 +462,12 @@ static int16_t currentState;
 static int16_t mfscript_GetRandom(int16_t lo, int16_t hi);
 static CueRef* mfscript_GetSequence(void);
 static ChangeRef* mfscript_GetDefaultChangeRef(void);
-static void mfscript_DoChange(ChangeRef* cgp, void* sound1, void* sound2);
-static void mfscript_DoJumpStart(ChangeRef* cgp, void* sound);
-static void mfscript_ChgXfade(void* sound1, void* sound2, int16_t fadeOut, int16_t fadeIn);
-static void mfscript_ChgJumpMrk(void* sound1, void* sound2, int16_t jumpHook1, int16_t marker,
+static void mfscript_DoChange(ChangeRef* cgp, intptr_t sound1, intptr_t sound2);
+static void mfscript_DoJumpStart(ChangeRef* cgp, intptr_t sound);
+static void mfscript_ChgXfade(intptr_t sound1, intptr_t sound2, int16_t fadeOut, int16_t fadeIn);
+static void mfscript_ChgJumpMrk(intptr_t sound1, intptr_t sound2, int16_t jumpHook1, int16_t marker,
 								int16_t jumpHook2);
-static void mfscript_ChgJumpOnBeat(void* sound1, void* sound2, int16_t endChunk, int16_t marker,
+static void mfscript_ChgJumpOnBeat(intptr_t sound1, intptr_t sound2, int16_t endChunk, int16_t marker,
 								   int16_t jumpHook2);
 
 /* --- Public API --- */
@@ -486,14 +486,15 @@ int16_t mfscript_MfStartScript(void* idp) {
 
 // FUNCTION: TIE95 0x87C28
 int16_t mfscript_MfStopScript(void) {
-	imuse_stop_all_sounds(im);
-	imuse_filelist_unload_all(im);
+	lolevel_ImPrintf("Stop script!...");
+	lolevel_ImStopAllSounds();
+	filelist_ImUnloadAll();
 	return 0;
 }
 
 // FUNCTION: TIE95 0x87C44
 int16_t mfscript_MfRefreshScript(void) {
-	imuse_filelist_flush(im);
+	filelist_ImFlushSounds();
 	return 0;
 }
 
@@ -507,7 +508,7 @@ int16_t mfscript_MfSetState(int16_t state) {
 		return currentState;
 
 	if (state > NUM_STATES - 1) {
-		imuse_stop_all_sounds(im);
+		lolevel_ImStopAllSounds();
 		currentState = state;
 		return state;
 	}
@@ -524,11 +525,11 @@ int16_t mfscript_MfSetState(int16_t state) {
 	if (newSrp->nameIndex) {
 		newSrp->sound = 0;
 		if (newSrp->nameIndex == oldSrp->nameIndex)
-			newSrp->sound = imuse_filelist_find(im, soundNames[newSrp->nameIndex]);
+			newSrp->sound = filelist_ImFindSound(soundNames[newSrp->nameIndex]);
 		if (!newSrp->sound)
-			newSrp->sound = imuse_filelist_load(im, soundNames[newSrp->nameIndex]);
+			newSrp->sound = filelist_ImLoadSound(soundNames[newSrp->nameIndex]);
 		if (!newSrp->sound) {
-			imuse_stop_all_sounds(im);
+			lolevel_ImStopAllSounds();
 			return currentState;
 		}
 	}
@@ -560,22 +561,25 @@ int16_t mfscript_MfSetSequence(int16_t sequence) {
 	} else if (currentSequence) {
 		/* End the current sequence — transition back to state */
 		if (currentCuePoint == -1) {
+			lolevel_ImPrintf("CUE ERR!...");
 			newState = currentState;
 		} else {
 			sqp = mfscript_GetSequence();
 			if (!sqp)
 				return currentSequence;
 			crp = &sqp[currentCuePoint];
+			lolevel_ImPrintf("Auto set state %lx...", (long)currentState);
 			srp = &stateRefs[currentState];
 
 			if (crp->cueChange.target) {
 				srp->sound = 0;
 				if (crp->nameIndex == srp->nameIndex)
-					srp->sound = imuse_filelist_find(im, soundNames[crp->nameIndex]);
+					srp->sound = filelist_ImFindSound(soundNames[crp->nameIndex]);
 				if (!srp->sound)
-					srp->sound = imuse_filelist_load(im, soundNames[srp->nameIndex]);
+					srp->sound = filelist_ImLoadSound(soundNames[srp->nameIndex]);
 				mfscript_DoChange(&crp->cueChange, crp->sound, srp->sound);
 			} else {
+				lolevel_ImPrintf("Force state...");
 				newState = currentState;
 			}
 		}
@@ -584,7 +588,7 @@ int16_t mfscript_MfSetSequence(int16_t sequence) {
 		currentCuePoint = -1;
 
 		if (newState) {
-			imuse_stop_all_sounds(im);
+			lolevel_ImStopAllSounds();
 			currentState = 0;
 			mfscript_MfSetState(newState);
 		}
@@ -596,13 +600,15 @@ int16_t mfscript_MfSetSequence(int16_t sequence) {
 int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 	CueRef *sqp, *crp, *nextCrp;
 	ChangeRef* cgp;
-	void* sound;
+	intptr_t sound;
 	int i;
 
 	if (cuePoint == -1 || !currentSequence)
 		return currentCuePoint;
 
 	if (cuePoint == currentCuePoint) {
+		if (currentCuePoint)
+			lolevel_ImPrintf("ERR: redundant Cue Point!...");
 		return currentCuePoint;
 	}
 
@@ -619,11 +625,14 @@ int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 		cgp = &crp->cueChange;
 
 		if (!crp->sound)
-			crp->sound = imuse_filelist_find(im, soundNames[crp->nameIndex]);
+			crp->sound = filelist_ImFindSound(soundNames[crp->nameIndex]);
 		sound = crp->sound;
 	} else {
 		/* Transition from state into sequence (cue 0) */
-		StateRef* srp = &stateRefs[currentState];
+		StateRef* srp;
+
+		lolevel_ImPrintf("Trans from state %lx...", (long)currentState);
+		srp = &stateRefs[currentState];
 		cgp = srp->seqChanges;
 		for (i = 0; i < MAX_SEQ_CHANGES && cgp->target != currentSequence && cgp->target; i++)
 			cgp++;
@@ -631,7 +640,7 @@ int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 		if (cgp->target == currentSequence)
 			sound = srp->sound;
 		else {
-			sound = NULL;
+			sound = 0;
 			cgp = mfscript_GetDefaultChangeRef();
 		}
 	}
@@ -639,12 +648,16 @@ int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 	/* Load the next cue's sound */
 	nextCrp = &sqp[cuePoint];
 	if (nextCrp->nameIndex) {
-		nextCrp->sound = imuse_filelist_find(im, soundNames[nextCrp->nameIndex]);
+		nextCrp->sound = filelist_ImFindSound(soundNames[nextCrp->nameIndex]);
 		if (!nextCrp->sound || nextCrp->sound != sound)
-			nextCrp->sound = imuse_filelist_load(im, soundNames[nextCrp->nameIndex]);
+			nextCrp->sound = filelist_ImLoadSound(soundNames[nextCrp->nameIndex]);
+		lolevel_ImPrintf("loading ");
+		lolevel_ImPrintf(soundNames[nextCrp->nameIndex]);
+		lolevel_ImPrintf("...");
 
 		if (!nextCrp->sound) {
-			imuse_stop_all_sounds(im);
+			lolevel_ImPrintf("Sound Load ERR 2!...");
+			lolevel_ImStopAllSounds();
 			return currentCuePoint;
 		}
 	}
@@ -666,123 +679,127 @@ int16_t mfscript_MfSetAttribute(int16_t number, int16_t val) {
 /* --- Transition implementations --- */
 
 // FUNCTION: TIE95 0x8810C
-static void mfscript_ChgXfade(void* sound1, void* sound2, int16_t fadeOut, int16_t fadeIn) {
+static void mfscript_ChgXfade(intptr_t sound1, intptr_t sound2, int16_t fadeOut, int16_t fadeIn) {
+	lolevel_ImPrintf("chg Xfade...");
 	if (sound1 != sound2) {
 		if (sound1)
-			imuse_fade_param(im, TieImuse_SoundId(sound1), IM_PARAM_VOLALT, 0, fadeOut);
+			lolevel_ImFadeParam((intptr_t)sound1, IM_PARAM_VOLALT, 0, fadeOut);
 		if (sound2) {
-			imuse_pause(im);
-			imuse_start_sound(im, TieImuse_SoundId(sound2), 0);
-			imuse_set_param(im, TieImuse_SoundId(sound2), IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
+			int16_t result;
+
+			lolevel_ImPause();
+			result = (int16_t)lolevel_ImStartSound((intptr_t)sound2, 0);
+			if (result)
+				lolevel_ImPrintf("ERR start sound returned %lx...", (long)result);
+			lolevel_ImSetParam((intptr_t)sound2, IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
 			if (fadeIn) {
-				imuse_set_param(im, TieImuse_SoundId(sound2), IM_PARAM_VOLALT, 0);
-				imuse_fade_param(im, TieImuse_SoundId(sound2), IM_PARAM_VOLALT, 127, fadeIn);
+				lolevel_ImSetParam((intptr_t)sound2, IM_PARAM_VOLALT, 0);
+				lolevel_ImFadeParam((intptr_t)sound2, IM_PARAM_VOLALT, 127, fadeIn);
 			}
-			imuse_resume(im);
+			lolevel_ImResume();
 		}
 	}
 }
 
 // FUNCTION: TIE95 0x881B4
-static void mfscript_ChgJumpMrk(void* sound1, void* sound2, int16_t jumpHook1, int16_t marker,
+static void mfscript_ChgJumpMrk(intptr_t sound1, intptr_t sound2, int16_t jumpHook1, int16_t marker,
 								int16_t jumpHook2) {
-	if (jumpHook1)
-		imuse_set_hook(im, TieImuse_SoundId(sound1), jumpHook1);
+	int16_t result;
 
-	if (sound2 && sound1 != sound2) {
-		if (sound1) {
-			ImuseCmd t_start = { 0 };
-			ImuseCmd t_group = { 0 };
-			ImuseCmd t_fade = { 0 };
-			imuse_pause(im);
-			/* When sound1 hits `marker`: start sound2, route to DIPPED
-			 * group, fade sound1 to silence over 60 ticks, optionally
-			 * arm a hook on sound2. Each trigger packs a different
-			 * IMUSE_CMD_* opcode + replay args. */
-			t_start.opcode = IMUSE_CMD_START_SOUND;
-			t_start.args[0] = TieImuse_SoundId(sound2);
-			t_group.opcode = IMUSE_CMD_SET_PARAM;
-			t_group.args[0] = TieImuse_SoundId(sound2);
-			t_group.args[1] = IMUSE_PARAM_SOUND_GROUP;
-			t_group.args[2] = IMUSE_GROUP_DIPPED;
-			t_fade.opcode = IMUSE_CMD_FADE_PARAM;
-			t_fade.args[0] = TieImuse_SoundId(sound1);
-			t_fade.args[1] = IM_PARAM_VOLALT;
-			t_fade.args[2] = 0;
-			t_fade.args[3] = 60;
-			imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_start);
-			imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_group);
-			imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_fade);
-			if (jumpHook2) {
-				ImuseCmd t_hook = { 0 };
-				t_hook.opcode = IMUSE_CMD_SET_HOOK;
-				t_hook.args[0] = TieImuse_SoundId(sound2);
-				t_hook.args[1] = jumpHook2;
-				imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_hook);
-			}
-		} else {
-			imuse_pause(im);
-			imuse_start_sound(im, TieImuse_SoundId(sound2), 0);
-			imuse_set_param(im, TieImuse_SoundId(sound2), IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
-			if (jumpHook2)
-				imuse_set_hook(im, TieImuse_SoundId(sound2), jumpHook2);
-		}
-		imuse_resume(im);
+	lolevel_ImPrintf("JumpMrk to %lx...", (intptr_t)sound2);
+	if (jumpHook1) {
+		lolevel_ImPrintf("Set 1st hook %lx...", (long)jumpHook1);
+		result = (int16_t)lolevel_ImSetHook((intptr_t)sound1, jumpHook1);
+		if (result)
+			lolevel_ImPrintf("Hook ERR %lx...", (long)result);
 	}
+
+	if (!sound2 || sound1 == sound2)
+		return;
+	if (!sound1) {
+		lolevel_ImPrintf("Start sound 2 with hook...");
+		lolevel_ImPause();
+		lolevel_ImStartSound((intptr_t)sound2, 0);
+		lolevel_ImSetParam((intptr_t)sound2, IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
+		if (jumpHook2) {
+			result = (int16_t)lolevel_ImSetHook((intptr_t)sound2, jumpHook2);
+			if (result)
+				lolevel_ImPrintf("Hook ERR %lx...", (long)result);
+		}
+		lolevel_ImResume();
+		return;
+	}
+
+	lolevel_ImPrintf("Set trig %lx...", (long)marker);
+	lolevel_ImPause();
+	/* When sound1 reaches the marker: start sound2 in the dipped group and
+	 * fade sound1 out over 60 ticks, then optionally set sound2's hook. */
+	lolevel_ImSetTrigger((intptr_t)sound1, marker, IMUSE_CMD_START_SOUND, (intptr_t)sound2);
+	lolevel_ImSetTrigger((intptr_t)sound1, marker, IMUSE_CMD_SET_PARAM, (intptr_t)sound2,
+						 IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
+	lolevel_ImSetTrigger((intptr_t)sound1, marker, IMUSE_CMD_FADE_PARAM, (intptr_t)sound1, IM_PARAM_VOLALT, 0,
+						 60);
+	if (jumpHook2) {
+		lolevel_ImPrintf("2nd hook %lx...", (long)jumpHook2);
+		lolevel_ImSetTrigger((intptr_t)sound1, marker, IMUSE_CMD_SET_HOOK, (intptr_t)sound2, jumpHook2);
+	}
+	lolevel_ImResume();
+	if (lolevel_ImGetParam((intptr_t)sound1, IMUSE_PARAM_SOUND_PLAY_COUNT) <= 0)
+		lolevel_ImPrintf("Sound 1 NOT PLAYING!!!!");
 }
 
 // FUNCTION: TIE95 0x88310
-static void mfscript_ChgJumpOnBeat(void* sound1, void* sound2, int16_t endChunk, int16_t marker,
+static void mfscript_ChgJumpOnBeat(intptr_t sound1, intptr_t sound2, int16_t endChunk, int16_t marker,
 								   int16_t jumpHook2) {
 	int16_t tick;
+	int16_t result;
 
-	imuse_pause(im);
-	tick = imuse_get_param(im, TieImuse_SoundId(sound1), IM_PARAM_TICK);
-	imuse_midi_jump(im, TieImuse_SoundId(sound1), endChunk, 1, 4, tick, 1);
-	imuse_resume(im);
+	lolevel_ImPrintf("JumpOnBeat to %lx...", (intptr_t)sound2);
+	lolevel_ImPause();
+	tick = (int16_t)lolevel_ImGetParam((intptr_t)sound1, IM_PARAM_TICK);
+	lolevel_ImPrintf("Jump to end chunk %lx...", (long)endChunk);
+	lolevel_ImJumpMidi((intptr_t)sound1, endChunk, 1, 4, tick, 1);
+	lolevel_ImResume();
 
-	if (sound2 && sound1 != sound2) {
-		if (sound1) {
-			ImuseCmd t_start = { 0 };
-			ImuseCmd t_group = { 0 };
-			imuse_pause(im);
-			t_start.opcode = IMUSE_CMD_START_SOUND;
-			t_start.args[0] = TieImuse_SoundId(sound2);
-			t_group.opcode = IMUSE_CMD_SET_PARAM;
-			t_group.args[0] = TieImuse_SoundId(sound2);
-			t_group.args[1] = IMUSE_PARAM_SOUND_GROUP;
-			t_group.args[2] = IMUSE_GROUP_DIPPED;
-			imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_start);
-			imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_group);
-			if (jumpHook2) {
-				ImuseCmd t_hook = { 0 };
-				t_hook.opcode = IMUSE_CMD_SET_HOOK;
-				t_hook.args[0] = TieImuse_SoundId(sound2);
-				t_hook.args[1] = jumpHook2;
-				imuse_set_trigger(im, TieImuse_SoundId(sound1), marker, &t_hook);
-			}
-		} else {
-			imuse_pause(im);
-			imuse_start_sound(im, TieImuse_SoundId(sound2), 0);
-			imuse_set_param(im, TieImuse_SoundId(sound2), IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
-			if (jumpHook2)
-				imuse_set_hook(im, TieImuse_SoundId(sound2), jumpHook2);
+	if (!sound2 || sound1 == sound2)
+		return;
+	if (!sound1) {
+		lolevel_ImPrintf("Start sound 2 with hook...");
+		lolevel_ImPause();
+		lolevel_ImStartSound((intptr_t)sound2, 0);
+		lolevel_ImSetParam((intptr_t)sound2, IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
+		if (jumpHook2) {
+			result = (int16_t)lolevel_ImSetHook((intptr_t)sound2, jumpHook2);
+			if (result)
+				lolevel_ImPrintf("Hook ERR %lx...", (long)result);
 		}
-		imuse_resume(im);
+		lolevel_ImResume();
+		return;
 	}
+
+	lolevel_ImPrintf("Set trig %lx...", (long)marker);
+	lolevel_ImPause();
+	lolevel_ImSetTrigger((intptr_t)sound1, marker, IMUSE_CMD_START_SOUND, (intptr_t)sound2);
+	lolevel_ImSetTrigger((intptr_t)sound1, marker, IMUSE_CMD_SET_PARAM, (intptr_t)sound2,
+						 IMUSE_PARAM_SOUND_GROUP, IMUSE_GROUP_DIPPED);
+	if (jumpHook2) {
+		lolevel_ImPrintf("2nd hook %lx...", (long)jumpHook2);
+		lolevel_ImSetTrigger((intptr_t)sound1, marker, IMUSE_CMD_SET_HOOK, (intptr_t)sound2, jumpHook2);
+	}
+	lolevel_ImResume();
 }
 
 // FUNCTION: TIE95 0x88470
-static void mfscript_DoChange(ChangeRef* cgp, void* sound1, void* sound2) {
+static void mfscript_DoChange(ChangeRef* cgp, intptr_t sound1, intptr_t sound2) {
 	if (!cgp->opcode) {
-		imuse_filelist_unload(im, sound2);
+		filelist_ImUnloadSound(sound2);
 		return;
 	}
 	{
 		/* Validate sound1 is playing */
-		if (sound1 && imuse_get_param(im, TieImuse_SoundId(sound1), IM_PARAM_PRIORITY) <= 0) {
-			TieImuse_Printf("ERR: Sound1 not playing...");
-			sound1 = NULL;
+		if (sound1 && lolevel_ImGetParam(sound1, IMUSE_PARAM_SOUND_PLAY_COUNT) <= 0) {
+			lolevel_ImPrintf("ERR: Sound1 not playing...");
+			sound1 = 0;
 		}
 
 		if (!sound1) {
@@ -791,20 +808,20 @@ static void mfscript_DoChange(ChangeRef* cgp, void* sound1, void* sound2) {
 			 * through `int` or the 64-bit sound-id truncation
 			 * creates a stable iteration point and the loop hangs. */
 			do {
-				sound1 = TieImuse_SoundHandle(imuse_next_sound(im, TieImuse_SoundId(sound1)));
-			} while (TieImuse_SoundId(sound1) > 0 && sound1 != sound2);
+				sound1 = lolevel_ImGetNextSound(sound1);
+			} while (sound1 > 0 && sound1 != sound2);
 
 			if (sound1 == sound2) {
-				TieImuse_Printf("doChange punt...");
-				imuse_set_hook(im, TieImuse_SoundId(sound2), 0);
+				lolevel_ImPrintf("doChange punt...");
+				lolevel_ImSetHook(sound2, 0);
 				return;
 			}
-			imuse_stop_all_sounds(im);
-			sound1 = NULL;
+			lolevel_ImStopAllSounds();
+			sound1 = 0;
 		}
 
-		imuse_set_hook(im, TieImuse_SoundId(sound1), 0);
-		imuse_clear_trigger(im, (intptr_t)-1, -1, -1);
+		lolevel_ImSetHook(sound1, 0);
+		lolevel_ImClearTrigger(-1, -1, -1);
 
 		switch (cgp->opcode) {
 			case 1:
@@ -821,30 +838,24 @@ static void mfscript_DoChange(ChangeRef* cgp, void* sound1, void* sound2) {
 				break;
 			case 4:
 				mfscript_ChgXfade(sound1, sound2, cgp->arg1, cgp->arg2);
-				{
-					ImuseCmd t_attr = { 0 };
-					t_attr.opcode = IMUSE_CMD_SET_PARAM;
-					t_attr.args[0] = TieImuse_SoundId(sound2);
-					t_attr.args[1] = IM_PARAM_ATTR;
-					t_attr.args[2] = 0;
-					imuse_set_trigger(im, TieImuse_SoundId(sound2), 1, &t_attr);
-				}
+				lolevel_ImSetTrigger((intptr_t)sound2, 1, IMUSE_CMD_SET_PARAM, (intptr_t)sound2,
+									 IM_PARAM_ATTR, 0);
 				break;
 			case 5:
-				TieImuse_Printf("resume...");
-				imuse_set_param(im, TieImuse_SoundId(sound1), IM_PARAM_ATTR, 64);
+				lolevel_ImPrintf("resume...");
+				lolevel_ImSetParam(sound1, IM_PARAM_ATTR, 64);
 				break;
 			default:
-				TieImuse_Printf("Default change!...");
+				lolevel_ImPrintf("Default change!...");
 				mfscript_ChgXfade(sound1, sound2, 100, 0);
 				break;
 		}
-		imuse_filelist_unload(im, sound2);
+		filelist_ImUnloadSound(sound2);
 	}
 }
 
 // FUNCTION: TIE95 0x88638
-static void mfscript_DoJumpStart(ChangeRef* cgp, void* sound) {
+static void mfscript_DoJumpStart(ChangeRef* cgp, intptr_t sound) {
 	/* arg3/arg4 each pack a (chunk, measure) byte pair:
 	 *   arg3 = (thresholdChunk << 8) | thresholdMeas
 	 *   arg4 = (scanTargetChunk << 8) | scanTargetMeas
@@ -857,21 +868,23 @@ static void mfscript_DoJumpStart(ChangeRef* cgp, void* sound) {
 	if (!cgp->arg3)
 		return;
 
-	chunk = imuse_get_param(im, TieImuse_SoundId(sound), IM_PARAM_CHUNK);
+	chunk = lolevel_ImGetParam(sound, IM_PARAM_CHUNK);
 	if (chunk < 0)
 		return;
-	meas = imuse_get_param(im, TieImuse_SoundId(sound), IM_PARAM_MEASURE);
+	meas = lolevel_ImGetParam(sound, IM_PARAM_MEASURE);
 	if (meas < 0)
 		return;
 
 	thresholdChunk = (int16_t)(int8_t)((cgp->arg3 >> 8) & 0xFF);
 	thresholdMeas = (int16_t)(uint8_t)(cgp->arg3 & 0xFF);
 	if (chunk <= thresholdChunk && meas <= thresholdMeas) {
-		imuse_set_param(im, TieImuse_SoundId(sound), IM_PARAM_VOLALT, 0);
+		lolevel_ImSetParam(sound, IM_PARAM_VOLALT, 0);
 		jsc = (int16_t)(int8_t)((cgp->arg4 >> 8) & 0xFF);
 		jsm = (int16_t)(uint8_t)(cgp->arg4 & 0xFF);
-		imuse_midi_scan(im, TieImuse_SoundId(sound), jsc, jsm, 1, 0);
-		imuse_fade_param(im, TieImuse_SoundId(sound), IM_PARAM_VOLALT, 127, 30);
+		lolevel_ImPrintf("Scan to chk %lx...", (long)jsc);
+		lolevel_ImPrintf("meas %lx...", (long)jsm);
+		lolevel_ImScanMidi(sound, jsc, jsm, 1, 0);
+		lolevel_ImFadeParam(sound, IM_PARAM_VOLALT, 127, 30);
 	}
 }
 
@@ -930,7 +943,7 @@ static CueRef* mfscript_GetSequence(void) {
 		case 27:
 			return cut14Seq;
 		default:
-			TieImuse_Printf("GET SEQ ERR!...");
+			lolevel_ImPrintf("GET SEQ ERR!...");
 			return NULL;
 	}
 }

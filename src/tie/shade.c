@@ -20,6 +20,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+enum {
+	SHADE_SCREEN_WIDTH = 320,
+};
+
 /* --- SHADE global --- */
 
 // GLOBAL: TIE95 0xF57AC
@@ -86,13 +90,13 @@ void shade_Build_Shaded_Palette(void) {
  * nearest available color (per the cycle mask) using the distance table.
  */
 // FUNCTION: TIE95 0x6C77C
-void shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, int16_t target_r, int16_t target_g,
-							  uint16_t target_b) {
-	uint16_t dist[256];
+int shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, uint16_t target_r, uint16_t target_g,
+							 uint16_t target_b) {
 	uint8_t weight[256];
+	uint16_t dist[256];
 	uint8_t cycle_mask[256];
-	int32_t inc = intensity;
-	int i, j;
+	int16_t inc = intensity;
+	int16_t i, j;
 
 	shade_Find_Shade_Cycles(cycle_mask);
 
@@ -100,33 +104,33 @@ void shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, int16_t targ
 	weight[0] = 0;
 	for (i = 1; i < 256; i++) {
 		dist[i] = dist[i - 1] + (2 * i - 1);
-		weight[i] = (uint8_t)(inc >> 8);
+		weight[i] = inc >> 8;
 		inc += intensity;
 	}
 
 	for (i = 0; i < 256; i++) {
-		uint8_t* src = &pal_data[3 * i];
-		int16_t r = src[0];
-		int16_t g = src[1];
-		int16_t b = src[2];
+		uint8_t* color = &pal_data[3 * i];
+		uint16_t r = color[0];
+		uint16_t g = color[1];
+		uint16_t b = color[2];
 		int16_t best_dist;
 		int16_t best_match;
 
 		/* Shift toward target */
-		if (r <= target_r)
-			r += weight[target_r - r];
-		else
+		if (r > target_r)
 			r -= weight[r - target_r];
-
-		if (g <= target_g)
-			g += weight[target_g - g];
 		else
+			r += weight[target_r - r];
+
+		if (g > target_g)
 			g -= weight[g - target_g];
-
-		if (b <= (int16_t)target_b)
-			b += weight[target_b - b];
 		else
+			g += weight[target_g - g];
+
+		if (b > target_b)
 			b -= weight[b - target_b];
+		else
+			b += weight[target_b - b];
 
 		/* Find nearest available color */
 		best_dist = 4095;
@@ -134,8 +138,8 @@ void shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, int16_t targ
 
 		for (j = 0; j < 256; j++) {
 			if (cycle_mask[j]) {
-				uint8_t* cand = &pal_data[3 * j];
-				int16_t d = dist[abs(r - cand[0])] + dist[abs(g - cand[1])] + dist[abs(b - cand[2])];
+				int16_t d = dist[abs(r - pal_data[3 * j])] + dist[abs(g - pal_data[3 * j + 1])] +
+							dist[abs(b - pal_data[3 * j + 2])];
 				if (d < best_dist) {
 					best_match = j;
 					best_dist = d;
@@ -145,6 +149,8 @@ void shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, int16_t targ
 
 		shade_palette[i] = best_match;
 	}
+
+	return 1;
 }
 
 // FUNCTION: TIE95 0x6CAC0
@@ -207,10 +213,7 @@ void shade_Draw_Talk_Shade_Rect(Rect* r) {
 void shade_Shadow_Line_List(const uint8_t* palette, int16_t x, int16_t y, int16_t width, int16_t height) {
 	BitmapStruct* canvas = xcanvas_Get_Current_Canvas_Bitmap();
 	uint8_t* pixels = (uint8_t*)xbm_Lock_Bitmap(canvas);
-	int16_t stride = canvas->w;
-
-	uint8_t* row = pixels + stride * y + x;
-
+	uint8_t* row = pixels + x + y * SHADE_SCREEN_WIDTH;
 	int16_t h;
 
 	for (h = height; h > 0; h--) {
@@ -220,7 +223,7 @@ void shade_Shadow_Line_List(const uint8_t* palette, int16_t x, int16_t y, int16_
 			*row = palette[*row];
 			row++;
 		}
-		row += stride - width;
+		row += SHADE_SCREEN_WIDTH - width;
 	}
 
 	xbm_Unlock_Bitmap(canvas);

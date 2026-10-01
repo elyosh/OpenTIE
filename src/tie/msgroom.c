@@ -11,6 +11,7 @@
 #include "tie/festring.h"
 #include "tie/msg.h"
 #include "tie/panelrts.h"
+#include "tie/rtsvga2.h"
 #include "tie/sys2.h"
 #include "tie/tie.h"
 #include "tie/user.h" /* user_submodal_result */
@@ -41,43 +42,73 @@ int32_t msgsPerPage;
 // GLOBAL: TIE98 0x5FCE54
 MsgHistoryEntry* messagehistory;
 
+extern int32_t msglineheight;    /* pixel pitch of one history line */
+extern uint16_t msgareabottom;   /* bottom scanline of the history text area */
+extern uint16_t msgareatop;      /* top scanline of the history text area */
+extern uint16_t msgscrollheight; /* scanlines exposed by the last one-line scroll */
+extern uint16_t msgscrolloffset; /* backing-store offset of the scrolled-in strip */
+
 /* --- msgroom_scrollmsgs -- */
 
 // FUNCTION: TIE95 0x34A54
 int16_t msgroom_scrollmsgs(int16_t cur_idx, int16_t delta) {
 	int16_t old_cur_idx;
+	int16_t step;
 
-	if (numhistorymsgs == 0 || lasthistorymsg == -1)
+	if (numhistorymsgs == 0 || lasthistorymsg == (int16_t)-1)
 		return cur_idx;
 
 	old_cur_idx = cur_idx;
 	cur_idx = (int16_t)(cur_idx + delta);
 
-	if (numhistorymsgs < 300) {
+	if (numhistorymsgs >= 300) {
+		/* Wrapped ring: two clamps (backward-at-seam, forward-at-newest)
+		 * then modular wrap into [0, 300). */
+		if (delta < 0) {
+			int16_t past_end = (int16_t)(lasthistorymsg + msgsPerPage);
+			if (past_end >= 300)
+				past_end = (int16_t)(past_end - 300);
+			if (old_cur_idx >= past_end && cur_idx < past_end)
+				cur_idx = past_end;
+		}
+		if (delta > 0 && old_cur_idx <= (uint16_t)lasthistorymsg && cur_idx > (uint16_t)lasthistorymsg)
+			cur_idx = lasthistorymsg;
+
+		if (cur_idx < 0)
+			cur_idx = (int16_t)(cur_idx + 300);
+		else if (cur_idx >= 300)
+			cur_idx = (int16_t)(cur_idx - 300);
+	} else {
 		/* Linear regime: clamp to [msgsPerPage-1, lasthistorymsg]. */
-		if (cur_idx < (int16_t)msgsPerPage)
+		if (cur_idx < msgsPerPage)
 			cur_idx = (int16_t)(msgsPerPage - 1);
-		if (cur_idx >= lasthistorymsg)
-			return lasthistorymsg;
-		return cur_idx;
+		if (cur_idx >= (uint16_t)lasthistorymsg)
+			cur_idx = lasthistorymsg;
 	}
 
-	/* Wrapped ring: two clamps (backward-at-seam, forward-at-newest)
-	 * then modular wrap into [0, 300). */
-	if (delta < 0) {
-		int16_t past_end = (int16_t)(msgsPerPage + lasthistorymsg);
-		if (past_end >= 300)
-			past_end = (int16_t)(past_end - 300);
-		if (old_cur_idx >= past_end && cur_idx < past_end)
-			cur_idx = past_end;
+#if !defined(TIE_MODERN)
+	/* A one-line scroll shifts the backing store and clips the redraw to
+	 * the newly exposed strip; anything else redraws the whole area.
+	 * The modern message room repaints every line, so it skips this. */
+	step = (int16_t)(cur_idx - old_cur_idx);
+	if (step == 1 || step == -1) {
+		if (step < 0) {
+			step = (int16_t)(-step * msglineheight);
+			msgscrolloffset = 0;
+			msgscrollheight = step;
+			rtsvga2_scrollbufferVGA(loadbuffer, step, 0);
+			festring_setbound(0, msgareatop, (uint16_t)screenXRes, (uint16_t)(msgareatop + msgscrollheight));
+		} else {
+			step = (int16_t)(step * msglineheight);
+			msgscrollheight = step;
+			msgscrolloffset = (uint16_t)(msgareabottom - msgareatop - step);
+			rtsvga2_scrollbufferVGA(loadbuffer, step, 1);
+			festring_setbound(0, (uint16_t)(msgareabottom - msgscrollheight), (uint16_t)screenXRes, msgareabottom);
+		}
+	} else {
+		festring_setbound(0, msgareatop, (uint16_t)screenXRes, msgareabottom);
 	}
-	if (delta > 0 && old_cur_idx <= lasthistorymsg && cur_idx > lasthistorymsg)
-		cur_idx = lasthistorymsg;
-
-	if (cur_idx < 0)
-		cur_idx = (int16_t)(cur_idx + 300);
-	else if (cur_idx >= 300)
-		cur_idx = (int16_t)(cur_idx - 300);
+#endif
 	return cur_idx;
 }
 

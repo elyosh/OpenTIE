@@ -27,13 +27,13 @@ void fview_newcalcrotate(uint16_t roll, uint16_t pitch, uint16_t heading, uint16
 void fview_calcrotatemove(uint16_t pitch, uint16_t heading, FlightObject* craft);
 
 /* Apply yaw + roll rotations to craft orientation */
-void fview_calcrotateorient(int16_t roll, int16_t yaw, FlightObject* craft);
+void fview_calcrotateorient(uint16_t roll, uint16_t yaw, FlightObject* craft);
 
 /* Matrix multiply rotworldeye = worldeye * calc + light transform */
 void fview_calcrotworldeye(void);
 
 /* Rodrigues rotation of calc S/U/f around arbitrary axis */
-void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, int16_t angle);
+void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, uint16_t angle);
 
 /* Per-component rotation data referenced from a ShipModelMesh's
  * rotation_offset. 12 bytes, naturally aligned (all int16). */

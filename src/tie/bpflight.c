@@ -272,7 +272,7 @@ static int16_t scene_camerayaw;
 
 /* ----- Forward decls for callbacks registered with the actor system. ----- */
 
-static void bpflight_user_Engine(Actor* actor, int32_t time);
+static int16_t bpflight_user_Engine(Actor* actor, int32_t time);
 static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
 									int16_t refresh);
 static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
@@ -308,7 +308,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(62, 144), TIE_FRONTEND_EDITION(4, 60),
 					   TIE_FRONTEND_EDITION(256, 500), TIE_FRONTEND_EDITION(116, 300));
 		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-		xactor_Set_Actor_User_Function(engine[0], bpflight_user_Engine);
+		xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
 		engine[0]->id = 0;
 		bpused[0] = 1;
@@ -317,7 +317,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(85, 176), TIE_FRONTEND_EDITION(131, 340),
 					   TIE_FRONTEND_EDITION(182, 358), TIE_FRONTEND_EDITION(178, 449));
 		engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-		xactor_Set_Actor_User_Function(engine[1], bpflight_user_Engine);
+		xactor_Set_Actor_User_Function(engine[1], (xactorCallback)bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
 		engine[1]->id = 1;
 		bpid[1] = 1;
@@ -336,7 +336,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(59, 124), TIE_FRONTEND_EDITION(2, 7),
 					   TIE_FRONTEND_EDITION(260, 516), TIE_FRONTEND_EDITION(115, 272));
 		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-		xactor_Set_Actor_User_Function(engine[0], bpflight_user_Engine);
+		xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
 		engine[0]->id = 0;
 		bpid[0] = 0;
@@ -345,7 +345,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(146, 297), TIE_FRONTEND_EDITION(130, 313),
 					   TIE_FRONTEND_EDITION(247, 485), TIE_FRONTEND_EDITION(179, 440));
 		engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-		xactor_Set_Actor_User_Function(engine[1], bpflight_user_Engine);
+		xactor_Set_Actor_User_Function(engine[1], (xactorCallback)bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
 		engine[1]->id = 1;
 		bpid[1] = 1;
@@ -361,7 +361,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(131, 222), TIE_FRONTEND_EDITION(30, 75),
 					   TIE_FRONTEND_EDITION(278, 570), TIE_FRONTEND_EDITION(200, 310));
 		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 20);
-		xactor_Set_Actor_User_Function(engine[0], bpflight_user_Engine);
+		xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
 		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
 		engine[0]->id = 2;
 		bpid[2] = 2;
@@ -608,56 +608,56 @@ void bpflight_Stop_Movie_Engine(void) {
 /* ----- BPFLIGHT_user_Engine (0x7AA5C) ----- */
 
 // FUNCTION: TIE95 0x79560
-static void bpflight_user_Engine(Actor* actor, int32_t time) {
+static int16_t bpflight_user_Engine(Actor* actor, int32_t time) {
 	/* Primary viewport frame 1 only: program 4 star palette slots
 	 * (VGA colors 252..255). Used to cross-fade the star colors. */
 	if (actor->id == 0 && time == 1) {
 		int16_t color_slot = 252;
-		int i;
+		int16_t i;
 
-		for (i = 0; i < 4; ++i) {
-			uint8_t r = starpal[i].r, g = starpal[i].g, b = starpal[i].b;
-			xpal_Set_Screen_RGB(color_slot, color_slot, r, g, b);
-			xpal_Set_Src_Pal_Color(color_slot, color_slot, r, g, b);
-			xpal_Set_Dest_Pal_Color(color_slot, color_slot, r, g, b);
-			++color_slot;
+		for (i = 0; i < 4; i++) {
+			xpal_Set_Screen_RGB(color_slot, color_slot, starpal[i].r, starpal[i].g, starpal[i].b);
+			xpal_Set_Src_Pal_Color(color_slot, color_slot, starpal[i].r, starpal[i].g, starpal[i].b);
+			xpal_Set_Dest_Pal_Color(color_slot, color_slot, starpal[i].r, starpal[i].g, starpal[i].b);
+			color_slot++;
 		}
 	}
 
 	/* Animate the active viewport(s). */
 	if (bpshipstate[actor->id]) {
-		int16_t id = actor->id;
-		if (id == 0) {
+		switch (actor->id) {
+		case 0:
 			/* Primary: play the orbit matrix, advance the frame cursor. */
-			fview_newcalcview(bpcameraroll[0], bpcamerapitch[0], bpcameraheading[0], bpcamerayaw[0],
-							  bpcameralookpitch[0], bpcameralookclock[0], NULL);
+			fview_newcalcview(bpcameraroll[actor->id], bpcamerapitch[actor->id], bpcameraheading[actor->id],
+							  bpcamerayaw[actor->id], bpcameralookpitch[actor->id], bpcameralookclock[actor->id],
+							  NULL);
 			actor->var1 = (int16_t)((actor->var1 + 1) % matrix->frame_count);
-		} else if (id == 1) {
-			/* Secondary thumbnail: slow heading drift. The binary
-			 * bumps the high byte (+=4 every 16 of 64 frames), which
-			 * is +0x400 on the full 16-bit angle. */
-			if ((time & 0x3F) < 0x10) {
-				uint16_t h = (uint16_t)bpflight_pivotheading[id];
-				h += 0x0400;
-				bpflight_pivotheading[id] = (int16_t)h;
-			}
-		} else if (id == 2) {
+			break;
+		case 1:
+			/* Secondary thumbnail: slow heading drift (+0x400 every
+			 * 16 of 64 frames). */
+			if ((time & 0x3F) < 0x10)
+				bpflight_pivotheading[actor->id] += 0x400;
+			break;
+		case 2:
 			/* Blueprint full-screen: fast heading spin (+0x1F0 / frame)
 			 * and pitch oscillation (+/-64 each 64-frame phase). */
-			bpflight_pivotheading[2] += 496;
+			bpflight_pivotheading[actor->id] = bpflight_pivotheading[actor->id] + 0x1F0;
 			if (time & 0x40)
 				bpflight_pivotpitch[actor->id] += 64;
 			else
 				bpflight_pivotpitch[actor->id] -= 64;
+			break;
 		}
 	}
 
 	/* Component-highlight blink: show the active component for 8 ticks,
 	 * hide for 8. Drives DRAWPOL's component-colour override. */
-	if ((time & 0x0F) >= 8)
-		bpflight_cur_component = -1;
-	else
+	if ((time & 0x0F) < 8)
 		bpflight_cur_component = bpflight_active_component;
+	else
+		bpflight_cur_component = -1;
+	return 0;
 }
 
 /* ----- BPFLIGHT_draw_Engine (0x7AC50) -----
@@ -1109,73 +1109,74 @@ uint8_t bpflight_getrelativexyz(void) {
 // FUNCTION: TIE95 0x79FD4
 void bpflight_drawtreeobject(void* node, int16_t pass_gated, int16_t pass_mainhull) {
 	BSPNode* n = (BSPNode*)node;
-	/* PORT: Watcom emits variable x86 SAR instructions here. Masking
-	 * the count preserves their behavior without invoking C UB. */
-	uint16_t bsp_shift = (uint16_t)relativeshift & 31u;
 
-	/* Walk internal nodes (left_off != 0). */
-	int16_t leaf;
-	ShipModelMesh* mesh;
-	uint16_t mesh_off;
-	ShipMeshLOD* lods;
-	int draw;
+	if (n->left_off == 0) {
+		/* Leaf: right_off is the mesh index into componentblockptr[]. */
+		int16_t leaf = n->right_off;
+		ShipModelMesh* mesh = &componentblockptr[leaf];
+		ShipMeshLOD* lods;
+		int16_t draw;
 
-	while (n->left_off != 0) {
-		int32_t dx = relativex - (n->center_x >> bsp_shift);
-		int32_t dy = relativey - (n->center_y >> bsp_shift);
-		int32_t dz = relativez - (n->center_z >> bsp_shift);
-		/* Plane dot-product sign selects which child is "far" (draw
-		 * first) and which is "near" (recurse into next). See the inline
-		 * version in draw_Engine for the clamp-equivalence note. */
-		int32_t plane_eq = (int32_t)(int16_t)dz * (n->normal_z >> bsp_shift) +
-						   (int32_t)(int16_t)dy * (n->normal_y >> bsp_shift) +
-						   (int32_t)(int16_t)dx * (n->normal_x >> bsp_shift);
-		if (plane_eq < 0) {
-			bpflight_drawtreeobject((uint8_t*)n + n->right_off, pass_gated, pass_mainhull);
-			n = (BSPNode*)((uint8_t*)n + n->left_off);
+		bluetarget = (uint16_t)-1;
+		lods = (ShipMeshLOD*)((uint8_t*)mesh + mesh->render_offset);
+		if (mesh->mesh_type == bpflight_cur_component) {
+			currenttargetcomp = leaf;
+			highlightcolor = 0;
+			currenttarget = parentobject;
 		} else {
-			bpflight_drawtreeobject((uint8_t*)n + n->left_off, pass_gated, pass_mainhull);
-			n = (BSPNode*)((uint8_t*)n + n->right_off);
+			currenttarget = 1024;
 		}
-	}
 
-	/* Leaf: right_off is the mesh index into componentblockptr[]. */
-	leaf = n->right_off;
-	mesh = &componentblockptr[leaf];
-	mesh_off = mesh->render_offset;
-	bluetarget = (uint16_t)-1;
-	lods = (ShipMeshLOD*)((uint8_t*)mesh + mesh_off);
-
-	if (mesh->mesh_type == (uint16_t)bpflight_cur_component) {
-		currenttargetcomp = leaf;
-		highlightcolor = 0;
-		currenttarget = parentobject;
-	} else {
-		currenttarget = 1024;
-	}
-
-	/* Filter:
-	 *   pass_gated == 0           → draw everything
-	 *   pass_gated, mh==0         → draw non-MainHull
-	 *   pass_gated, mh!=0         → draw only MainHull
-	 *   MiscHull / Antenna always hidden when pass_gated != 0 */
-
-	if (pass_gated) {
-		if (pass_mainhull)
-			draw = (mesh->mesh_type == 1 /* MESH_MainHull */);
-		else
-			draw = (mesh->mesh_type != 1 /* MESH_MainHull */);
-		if (mesh->mesh_type == 18 /* MESH_MiscHull */)
+		/* Filter:
+		 *   pass_gated == 0           → draw everything
+		 *   pass_gated, mh==0         → draw non-MainHull
+		 *   pass_gated, mh!=0         → draw only MainHull
+		 *   MiscHull / Antenna always hidden when pass_gated != 0 */
+		if (pass_gated) {
 			draw = 0;
-		if (mesh->mesh_type == 19 /* MESH_Antenna  */)
-			draw = 0;
-	} else {
-		draw = 1;
-	}
+			if (pass_mainhull && mesh->mesh_type == 1 /* MESH_MainHull */)
+				draw = 1;
+			if (!pass_mainhull && mesh->mesh_type != 1 /* MESH_MainHull */)
+				draw = 1;
+			if (mesh->mesh_type == 18 /* MESH_MiscHull */)
+				draw = 0;
+			if (mesh->mesh_type == 19 /* MESH_Antenna  */)
+				draw = 0;
+		} else {
+			draw = 1;
+		}
 
-	if (draw) {
-		const uint16_t* poly = draw_getdetailptr(lods, objecteyez);
-		drawpol_drawpolyobject(poly, objecteyex, objecteyey, objecteyez);
+		if (draw) {
+			const uint16_t* poly = draw_getdetailptr(lods, objecteyez);
+			drawpol_drawpolyobject(poly, objecteyex, objecteyey, objecteyez);
+		}
+	} else {
+		int16_t dx, dy, dz;
+		int32_t plane_eq;
+
+		dx = n->center_x;
+		dy = n->center_y;
+		dz = n->center_z;
+		dx >>= relativeshift;
+		dy >>= relativeshift;
+		dz >>= relativeshift;
+		dx = relativex - dx;
+		dy = relativey - dy;
+		dz = relativez - dz;
+		/* Plane dot-product sign selects which child is "far" (draw
+		 * first) and which is "near" (drawn last). */
+		plane_eq = (n->normal_x >> relativeshift) * dx + (n->normal_y >> relativeshift) * dy + (n->normal_z >> relativeshift) * dz;
+		if (plane_eq >= 0x40000000)
+			plane_eq = 0x3FFF0000;
+		if (plane_eq <= -0x40000000)
+			plane_eq = -0x3FFF0000;
+		if ((int16_t)(plane_eq >> 15) >= 0) {
+			bpflight_drawtreeobject((uint8_t*)n + n->left_off, pass_gated, pass_mainhull);
+			bpflight_drawtreeobject((uint8_t*)n + n->right_off, pass_gated, pass_mainhull);
+		} else {
+			bpflight_drawtreeobject((uint8_t*)n + n->right_off, pass_gated, pass_mainhull);
+			bpflight_drawtreeobject((uint8_t*)n + n->left_off, pass_gated, pass_mainhull);
+		}
 	}
 }
 

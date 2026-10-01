@@ -126,23 +126,23 @@ uint16_t collide_craftstarshipcollision(uint16_t craft_obj_idx, int16_t lookahea
  * hitting target craft target_obj_idx. Records first-attacker, bumps
  * hit counters / FG status, applies collide_damagecraft (with head-on
  * flag from velocity dot player.fwd), and converts the projectile
- * slot to an explosion (genus=13, ship_idx=127/128 for craft chunk
- * or -125 for missile fizz). Special-case ION CANNON (ship_idx==152)
- * drains target weapon power instead. Returns the FSFX trigger result.
+ * slot to an explosion (genus=13, ship_idx=129 for warheads, 132 for
+ * species 141/142, 131 otherwise). Special-case ION CANNON
+ * (ship_idx==152) drains target weapon power instead.
  */
-char collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx, int16_t hit_offset);
+void collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx, int16_t hit_offset);
 
 /*
  * Apply damage to target_obj_idx.
  *   component_idx (0xFFFF for non-mesh damage): mesh component index
+ *   attacker_obj_idx (0xFFFF=global, 0x3800+=static obj): attacker slot
  *   weapon_group  (0=fwd 1=rear): selects shield slot
  *                  (CraftData.forward_shield/rear_shield)
- *   attacker_obj_idx (0xFFFF=global, 0x3800+=static obj): attacker slot
  *
  * Returns 1 if cosmetic-only (cockpit-update flag), 0 if death scheduled.
  */
-char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_t weapon_group,
-						 uint16_t attacker_obj_idx);
+char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_t attacker_obj_idx,
+						 uint16_t weapon_group);
 
 /*
  * Convert FlightObject obj_idx into a generic explosion: sets
@@ -150,7 +150,7 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
  * category=5, anim_frame=2, clears speed/timers/orient, plays a random
  * sfx in [19..22].
  */
-char collide_makeobjectexplosion(uint16_t obj_idx, uint8_t ship_variant);
+char collide_makeobjectexplosion(uint16_t obj_idx, uint16_t ship_variant);
 
 /* Cheap 3D distance estimate (unsigned). max(|dx|,|dy|,|dz|) +
  * sum(other_two)/4. Inputs already absolute. */

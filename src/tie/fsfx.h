@@ -1,6 +1,8 @@
 #ifndef TIE_FSFX_H
 #define TIE_FSFX_H
 
+#include <landru/memhdl.h>
+
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -164,7 +166,12 @@ int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr);
 #define FSFX_BLAST_QUEUE_SIZE 32
 #define FSFX_NUM_DIST_ENTRIES 55
 
+#ifdef TIE_MODERN
 extern void* soundhandles[FSFX_NUM_SOUND_HANDLES];
+#else
+/* Retail keeps one memory handle per TIE95 sound-table slot. */
+extern LandruHandle soundhandles[FSFX_TIE95_SOUND_TABLE_COUNT];
+#endif
 /* Per-slot "BANK:RECORD" names for the TIE98 name-based FrontendSound layer. */
 extern char soundnames[FSFX_NUM_SOUND_HANDLES][FSFX_SOUND_NAME_CAPACITY];
 extern uint8_t currentdigital;

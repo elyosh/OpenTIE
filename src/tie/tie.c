@@ -62,7 +62,6 @@
 #include "tie/xtimer.h"
 #include "tie/xtrans2.h"
 #include "tie_runtime/audio/config.h"
-#include "tie_runtime/audio/imuse_session.h"
 #include "tie_runtime/audio/music_policy.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
@@ -517,7 +516,7 @@ MissionClock timeleft;
 /* TieStorage_Open(3) modes embedded in the binary as const char arrays; owned by tie.c
  * per watdbg. C stdlib fopen treats the first two chars the same way here. */
 // GLOBAL: TIE95 0xCD1C6
-const char _readmode[3] = { 'r', 'b', '\0' };
+const char readmode[3] = { 'r', 'b', '\0' };
 // GLOBAL: TIE95 0xCD1C9
 const char _writemode[3] = { 'w', 'b', '\0' };
 // GLOBAL: TIE95 0xCD1CC
@@ -607,8 +606,12 @@ int16_t mousey;
 int16_t joystickcount;
 // GLOBAL: TIE95 0xEB772
 uint8_t graphicsmode;
+#ifdef TIE_MODERN
+int16_t detaillevel; /* widened for the host replay format */
+#else
 // GLOBAL: TIE95 0xCD16C
-int16_t detaillevel;
+uint8_t detaillevel;
+#endif
 
 // GLOBAL: TIE95 0xEAB54
 // GLOBAL: TIE98 0x595F70
@@ -1874,197 +1877,173 @@ void tie_updatetime(void) {
  * state and intensity. */
 // FUNCTION: TIE95 0x57C7C
 void tie_updatemusic(void) {
-	uint16_t ships_per_side[6] = { 0 };
-	/* music_state / music_intensity are file-scope globals (see top of
-	 * tie.c); we seed them fresh at entry to match the binary's
-	 * per-frame reset semantics, but they persist in .bss so the replay
-	 * state-dump can capture them. */
+	uint16_t ships_per_side[6];
+	uint16_t i;
 	uint32_t min_distance;
-	int closest_enemy_obj;
-	uint32_t combat_thresh;
-	int has_missile_lock_on_player;
-	uint16_t primary_kill_count;
+	int16_t state;
+	uint16_t secondary_killed;
 	uint16_t secondary_total;
-	uint16_t secondary_kill_count;
-	uint16_t hostile_score;
-	int hostile_pct;
-	uint16_t obj_iter;
-	uint16_t slot;
+	uint16_t closest;
+	uint16_t intensity;
+	uint16_t missile_lock;
+	uint16_t primary_killed;
+	uint16_t primary_total;
 
-	music_state = 1;
-	music_intensity = 0;
-	min_distance = 0xFFFFFFFFu;
-	closest_enemy_obj = 0xFFFF;
-	combat_thresh = 0;
-	has_missile_lock_on_player = 0;
-	primary_kill_count = 0;
-	secondary_total = 0;
-	secondary_kill_count = 0;
-	hostile_score = 0;
-	hostile_pct = 0;
-
-	/* Bail if music disabled, no buffer, or cooldown active. */
 	if (!musicenabled || !music_buffer || timers[TIMER_MUSIC_CHANGE] != 0)
 		return;
+	intensity = 0;
 	timers[TIMER_MUSIC_CHANGE] = 59;
 
-	/* --- Training mission paths ---------------------------------------- */
 	if (mission.train_craft_type != 0) {
-		if (timeleft.minute || timeleft.second >= 20u) {
-			if ((uint16_t)mission.train_gates_remaining < 2u)
-				music_state = 9;
-			else if ((uint16_t)mission.train_gates_remaining < 3u)
-				music_state = 7;
-			else
-				music_state = 6;
-		} else {
-			music_state = 8;
-		}
-	} else if (mission.primary_complete == 2) { /* won */
-		/* --- Combat mission state ----------------------------------- */
-		music_state = 10;
+		/* Training: gate progress, or urgency once under 20 seconds. */
+		if (timeleft.minute == 0 && timeleft.second < 20)
+			state = 8;
+		else if ((uint16_t)mission.train_gates_remaining < 2)
+			state = 9;
+		else if ((uint16_t)mission.train_gates_remaining < 3)
+			state = 7;
+		else
+			state = 6;
+	} else if (mission.primary_complete == 2) {
+		state = 10; /* won */
 	} else if (timers[TIMER_PRI_COMPLETE] != 0 || timers[TIMER_SEC_COMPLETE] != 0) {
-		music_state = 11; /* objective hold */
+		state = 11; /* objective hold */
 	} else {
-		/* Tally ships per side weighted by genus + find the closest hostile. */
-		/* RETAIL: scan first NUM_CRAFTS (32) slots. */
-		for (obj_iter = 0; obj_iter < NUM_CRAFTS; ++obj_iter) {
-			FlightObject* obj = &objects[obj_iter];
-			uint8_t g;
+		closest = 0xFFFF;
+		min_distance = 0xFFFFFFFFu;
+		for (i = 0; i < 6; ++i)
+			ships_per_side[i] = 0;
 
-			if (obj->ship_idx == 0)
+		/* Tally ships per side weighted by genus and find the closest
+		 * hostile. RETAIL: scan first NUM_CRAFTS (32) slots. */
+		for (i = 0; i < NUM_CRAFTS; ++i) {
+			if (objects[i].ship_idx == 0)
 				continue;
-			g = obj->genus;
-			if (g == GENUS_STARSHIP || g == GENUS_PLATFORM)
-				ships_per_side[obj->side] += 4;
-			else if (g == GENUS_TRANSPORT || g == GENUS_FREIGHTER)
-				ships_per_side[obj->side] += 2;
+			if (objects[i].genus == GENUS_STARSHIP || objects[i].genus == GENUS_PLATFORM)
+				ships_per_side[objects[i].side] += 4;
+			else if (objects[i].genus == GENUS_TRANSPORT || objects[i].genus == GENUS_FREIGHTER)
+				ships_per_side[objects[i].side] += 2;
 			else
-				++ships_per_side[obj->side];
+				++ships_per_side[objects[i].side];
 
-			if (obj->side != pstate.player->side && obj->craft_ptr->status_flags != 0) {
-				uint32_t d;
-				pai_roughdistancebetween(obj_iter, pstate.object_idx);
-				d = (uint32_t)roughdistance;
-				/* Cap-ship and freighter weight: count them as closer. */
-				if (obj->genus == GENUS_STARSHIP)
-					d >>= 2;
-				if (obj->genus == GENUS_PLATFORM)
-					d >>= 2;
-				if (obj->genus == GENUS_FREIGHTER)
-					d >>= 1;
-				if (min_distance > d) {
-					min_distance = d;
-					closest_enemy_obj = obj_iter;
+			if (objects[i].side != pstate.player->side && objects[i].craft_ptr->status_flags != 0) {
+				pai_roughdistancebetween(i, pstate.object_idx);
+				/* Capital ships and freighters count as closer. */
+				if (objects[i].genus == GENUS_STARSHIP)
+					roughdistance >>= 2;
+				if (objects[i].genus == GENUS_PLATFORM)
+					roughdistance >>= 2;
+				if (objects[i].genus == GENUS_FREIGHTER)
+					roughdistance >>= 1;
+				if (min_distance > (uint32_t)roughdistance) {
+					min_distance = roughdistance;
+					closest = i;
 				}
 			}
 		}
 
-		if ((uint16_t)closest_enemy_obj == 0xFFFFu) {
+		if (closest == 0xFFFF) {
 			/* No hostile in range. */
 			if (mission.primary_complete == 1)
-				music_state = 11;
-			else if (entercombatflag)
-				music_state = 2;
+				state = 11;
+			else if (!entercombatflag)
+				state = 1;
 			else
-				music_state = 1;
+				state = 2;
 		} else {
-			/* Hostile in range — pick combat-near vs combat-far threshold. */
-			combat_thresh = entercombatflag ? 0x40000u : 0x20000u;
+			uint32_t combat_thresh;
+
+			/* Hostile present: pick the combat-far vs combat-near threshold. */
+			combat_thresh = !entercombatflag ? 0x20000u : 0x40000u;
 			if (min_distance > combat_thresh) {
 				/* Far away: ramp intensity 5 -> 0 as we go further. */
-				music_intensity = (uint16_t)(5 - ((min_distance - combat_thresh) >> 15));
-				music_state = 1;
-				if (music_intensity >= 0x8000u)
-					music_intensity = 0;
+				intensity = (uint16_t)(5 - ((min_distance - combat_thresh) >> 15));
+				state = 1;
+				if (intensity >= 0x8000)
+					intensity = 0;
 			} else {
-				/* Within attack range: scan AI fighter slots for missile lock
-				 * on player. RETAIL: slots 48..79 (32 wide). Demo was 44..75. */
+				/* Within attack range: scan AI fighter slots for a missile
+				 * lock on the player. RETAIL: slots 48..79. */
 				entercombatflag = 1;
-				for (slot = 48; slot < 80; ++slot) {
-					FlightObject* obj = &objects[slot];
-					CraftData* cp;
-					if (obj->ship_idx == 0)
-						continue;
-					cp = obj->craft_ptr;
-					if (cp->species_idx == 0)
-						continue;
-					if (pstate.object_idx == cp->missile_target) {
-						has_missile_lock_on_player = 1;
-						break;
-					}
+				missile_lock = 0;
+				for (i = 48; i < 80; ++i) {
+					if (objects[i].ship_idx != 0 && objects[i].craft_ptr->species_idx != 0 &&
+						objects[i].craft_ptr->missile_target == pstate.object_idx)
+						missile_lock = 1;
 				}
-				if (has_missile_lock_on_player) {
-					music_state = 8; /* urgent */
-				} else if (min_distance <= 0x10000u) {
-					/* Mid-to-close-range: walk the FG kill counts to detect
-					 * "almost wiped". */
-					uint16_t fg_iter = 0;
-					uint16_t total_primary = 0;
+				if (missile_lock) {
+					state = 8; /* urgent */
+				} else if (min_distance > 0x10000u) {
+					/* Mid-range default: pick by which sides are alive. */
+					if (ships_per_side[0])
+						state = 3;
+					else if (ships_per_side[4])
+						state = 5;
+					else
+						state = 4;
+				} else {
+					primary_total = 0;
+					primary_killed = 0;
+					secondary_total = 0;
+					secondary_killed = 0;
 
-					for (fg_iter = 0; fg_iter < (uint16_t)mission_file_header.num_fg; ++fg_iter) {
-						if (mission.primary_fg[fg_iter])
-							++total_primary;
-						if (mission.primary_fg[fg_iter] == 1)
-							++primary_kill_count;
-						if (mission.secondary_fg[fg_iter])
+					/* Detect a big primary or secondary goal with all but
+					 * one flight group done. */
+					for (i = 0; i < mission_file_header.num_fg; ++i) {
+						if (mission.primary_fg[i])
+							++primary_total;
+						if (mission.primary_fg[i] == 1)
+							++primary_killed;
+						if (mission.secondary_fg[i])
 							++secondary_total;
-						if (mission.secondary_fg[fg_iter] == 1)
-							++secondary_kill_count;
+						if (mission.secondary_fg[i] == 1)
+							++secondary_killed;
 					}
 
-					if ((total_primary > 3u && primary_kill_count + 1 == total_primary) ||
-						(secondary_total > 3u && secondary_kill_count + 1 == secondary_total)) {
-						/* Big primary or secondary FG with all but 1 dead. */
-						music_state = 9;
+					if ((primary_total > 3 && primary_killed + 1 == primary_total) ||
+						(secondary_total > 3 && secondary_killed + 1 == secondary_total)) {
+						state = 9;
+					} else if (min_distance < 0x8000 &&
+							   (objects[closest].genus == GENUS_STARSHIP ||
+								objects[closest].genus == GENUS_PLATFORM)) {
+						state = 8; /* outnumbered */
 					} else {
-						music_state = 8; /* outnumbered */
-						/* Compare hostile vs ally weighted score (sides 0/4
-						 * always count; sides 2/3/5 only count if their tag
-						 * string starts with '1'). */
-						if (min_distance >= 0x8000u ||
-							(objects[(uint16_t)closest_enemy_obj].genus != GENUS_STARSHIP &&
-							 objects[(uint16_t)closest_enemy_obj].genus != GENUS_PLATFORM)) {
-							hostile_score = (uint16_t)(ships_per_side[4] + ships_per_side[0]);
-							/* Sides 2/3/5 only count as hostile when their .TIE-file
-							 * IFF tag string starts with '1' (mission_file_header.
-							 * mission.neutral_name[side-2][0]). */
-							if (mission_file_header.mission.neutral_name[0][0] == '1')
-								hostile_score += ships_per_side[2];
-							if (mission_file_header.mission.neutral_name[1][0] == '1')
-								hostile_score += ships_per_side[3];
-							if (mission_file_header.mission.neutral_name[3][0] == '1')
-								hostile_score += ships_per_side[5];
+						uint16_t hostile_score;
+						uint16_t hostile_pct;
 
-							if (hostile_score <= ships_per_side[1]) {
-								music_state = 7; /* winning */
-							} else {
-								hostile_pct = math2_percentage(ships_per_side[1], hostile_score);
-								if (hostile_pct >= 57344) /* >= 87.5% */
-									music_state = 7;
-								else if (hostile_pct >= 0x8000) /* >= 50% */
-									music_state = 6;
-							}
+						/* Compare hostile vs ally weighted score. Sides 0/4
+						 * always count; sides 2/3/5 count when their IFF
+						 * name starts with '1'. */
+						hostile_score = ships_per_side[0] + ships_per_side[4];
+						if ((int8_t)mission_file_header.mission.neutral_name[0][0] == '1')
+							hostile_score += ships_per_side[2];
+						if ((int8_t)mission_file_header.mission.neutral_name[1][0] == '1')
+							hostile_score += ships_per_side[3];
+						if ((int8_t)mission_file_header.mission.neutral_name[3][0] == '1')
+							hostile_score += ships_per_side[5];
+
+						if (hostile_score <= ships_per_side[1]) {
+							state = 7; /* winning */
+						} else {
+							hostile_pct = math2_percentage(ships_per_side[1], hostile_score);
+							if (hostile_pct >= 0xE000) /* >= 87.5% */
+								state = 7;
+							else if (hostile_pct >= 0x8000) /* >= 50% */
+								state = 6;
+							else
+								state = 8;
 						}
 					}
-				} else if (ships_per_side[0]) {
-					/* Mid-range default: pick a music state based on which
-					 * sides are alive. */
-					music_state = 3;
-				} else if (ships_per_side[4]) {
-					music_state = 5;
-				} else {
-					music_state = 4;
 				}
 			}
 		}
 	}
 
-	if (music_intensity > 5u)
-		music_intensity = 5;
-	lastmusicstate = (uint8_t)music_state;
-	fscript_MsSetState(music_state);
-	fscript_MsSetAttribute(0, (int16_t)music_intensity);
+	if (intensity > 5)
+		intensity = 5;
+	lastmusicstate = (uint8_t)state;
+	fscript_MsSetState(state);
+	fscript_MsSetAttribute(0, (int16_t)intensity);
 	fscript_MsRefreshScript();
 }
 

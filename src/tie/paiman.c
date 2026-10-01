@@ -99,7 +99,7 @@ const uint16_t _delayturninside[3] = { 9, 6, 3 };
 
 /* Last-selected initializer and runtime maneuver. */
 // GLOBAL: TIE95 0xD5068
-ManeuverInitFunc _initmanvrfunctionptr = 0;
+ManeuverInitFunc initmanvrfunctionptr = 0;
 // GLOBAL: TIE95 0xD506C
 ManeuverFunc _manvrfunctionptr = 0;
 
@@ -819,8 +819,8 @@ int16_t paiman_followleadermaneuver(void) {
 	}
 
 	cd->push_accum_x = 0;
-	cd->push_accum_y = 0;
-	cd->push_accum_z = 0;
+	cd->push_accum_y = cd->push_accum_x;
+	cd->push_accum_z = cd->push_accum_x;
 	return 0;
 }
 
@@ -1016,21 +1016,21 @@ int16_t paiman_splitsdivemaneuver(void) {
 // FUNCTION: TIE95 0x3A838
 void paiman_initspeedawaymaneuver(void) {
 	CraftData* cd = craftptr;
+	int self_idx = ai.active_obj_idx;
+
 	cd->throttle_speed = 0xFFFFu;
 	cd->maneuver_timer = 4720;
-	cd->ai_target_heading = (uint16_t)(objects[ai.active_obj_idx].heading + (uint8_t)math2_getrandom());
-	paiman_setjink(ai.active_obj_idx);
+	craftptr->ai_target_heading = objects[self_idx].heading + (uint8_t)math2_getrandom();
+	paiman_setjink(self_idx);
 }
 
 // FUNCTION: TIE95 0x3A89C
 int16_t paiman_speedawaymaneuver(void) {
-	CraftData* cd = craftptr;
-
-	if (!cd->ai_plan_state) {
-		cd->ai_target_heading = (uint16_t)-(int16_t)cd->ai_target_heading;
+	if (!craftptr->ai_plan_state) {
+		craftptr->ai_target_heading = -craftptr->ai_target_heading;
 		paiman_setjink(ai.active_obj_idx);
 	}
-	return cd->maneuver_timer == 0 ? 1 : 0;
+	return craftptr->maneuver_timer == 0;
 }
 
 /* ---- MODE_IntoHyperspace (21) -------------------------------------- */
@@ -1479,7 +1479,7 @@ int16_t paiman_dropoffmaneuver(void) {
 				fgcnt = tgt_fg_idx;
 				saved_ai_ctx = ai;
 				leaderflag = (uint8_t)anchor_obj;
-				create_startflightgroup((int16_t)craft_index, (int16_t)0);
+				create_startflightgroup(craft_index);
 				ai = saved_ai_ctx;
 
 				cd->maneuver_timer = 1180;
@@ -2012,7 +2012,7 @@ int16_t paiman_boardmaneuver(void) {
 /* ---- Dispatch tables ----------------------------------------------- */
 
 // GLOBAL: TIE95 0xC59F4
-const ManeuverInitFunc _initmanvrfunctionptrs[MODE_COUNT] = {
+const ManeuverInitFunc initmanvrfunctionptrs[MODE_COUNT] = {
 	(ManeuverInitFunc)paiorder_nullorder, /*  0 None          */
 	paiman_initturninsidemaneuver,        /*  1 TurnInside    */
 	paiman_initsplitsmaneuver,            /*  2 Splits        */
@@ -2090,16 +2090,16 @@ void paiman_initmaneuver(void) {
 	cd->push_accum_x = 0;
 	cd->hit_count = 0;
 	cd->mode_subbyte = 0;
-	cd->push_accum_y = 0;
-	cd->push_accum_z = 0;
+	cd->push_accum_y = cd->push_accum_x;
+	cd->push_accum_z = cd->push_accum_x;
 
-	_initmanvrfunctionptr = _initmanvrfunctionptrs[cd->mode_byte];
+	initmanvrfunctionptr = initmanvrfunctionptrs[cd->mode_byte];
 #ifdef TIE_MODERN
 	/* The shared zero-return entry has a different prototype from the initializers. */
-	if (_initmanvrfunctionptr == (ManeuverInitFunc)paiorder_nullorder) {
-		((ManeuverFunc)_initmanvrfunctionptr)();
+	if (initmanvrfunctionptr == (ManeuverInitFunc)paiorder_nullorder) {
+		((ManeuverFunc)initmanvrfunctionptr)();
 		return;
 	}
 #endif
-	_initmanvrfunctionptr();
+	initmanvrfunctionptr();
 }

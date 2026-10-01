@@ -308,53 +308,40 @@ void maproom_drawNHIstatus(uint16_t page_idx) {
 	/* The status row sits along the bottom of the screen. mapScreenHeight
 	 * is the world-area height (= mapScreenBottom - mapScreenTop) but the
 	 * IDA decompile uses it as the absolute bottom Y; we mirror that. */
-	const int16_t panel_w = (int16_t)(screenXRes >> 2);
-	const int16_t bottom_y = (int16_t)mapScreenHeight;
-	const int16_t bottom_top = (int16_t)(mapScreenHeight - (fontheight + 1));
-	const int16_t bottom_curs = (int16_t)(mapScreenHeight - fontheight);
+	uint16_t panel_w;
+	uint16_t mid_left;
 
 	/* --- Bottom-left panel: Hostile counter --- */
-	int16_t mid_left;
-	int16_t mid_right;
-	int16_t right_left;
-	int16_t topbar_h;
-	int16_t topleft_str_w;
-	int16_t topright_str_w;
-	int16_t topright_left;
-
-	festring_setbound(0, bottom_top, panel_w, bottom_y);
+	panel_w = screenXRes >> 2;
+	festring_setbound(0, mapScreenHeight - (fontheight + 1), panel_w, mapScreenHeight);
 	festring_setbackcolor(MAP_PANEL_BG);
 	clearwindow();
-	festring_setcursor(2, bottom_curs);
+	festring_setcursor(2, mapScreenHeight - fontheight);
 	festring_settextcolor(MAP_TC_HOSTILE);
 	festring_outstring((const uint8_t*)hostilestr);
 	festring_outstringright((const uint8_t*)NHIstatusstrings[hostileflag]);
 
 	/* --- Bottom-center panel: Imperial counter --- */
-	mid_left = (int16_t)((screenXRes >> 1) - panel_w / 2);
-	mid_right = (int16_t)(panel_w + mid_left);
-	festring_setbound(mid_left, bottom_top, mid_right, bottom_y);
+	mid_left = (screenXRes >> 1) - panel_w / 2;
+	festring_setbound(mid_left, mapScreenHeight - (fontheight + 1), mid_left + panel_w, mapScreenHeight);
 	festring_setbackcolor(MAP_PANEL_BG);
 	clearwindow();
-	festring_setcursor((int16_t)(mid_left + 2), bottom_curs);
+	festring_setcursor(mid_left + 2, mapScreenHeight - fontheight);
 	festring_settextcolor(MAP_TC_IMPERIAL);
 	festring_outstring((const uint8_t*)imperialstr);
 	festring_outstringright((const uint8_t*)NHIstatusstrings[imperialflag]);
 
 	/* --- Bottom-right panel: Neutral counter --- */
-	right_left = (int16_t)(screenXRes - panel_w);
-	festring_setbound(right_left, bottom_top, (int16_t)screenXRes, bottom_y);
+	festring_setbound(screenXRes - panel_w, mapScreenHeight - (fontheight + 1), screenXRes, mapScreenHeight);
 	festring_setbackcolor(MAP_PANEL_BG);
 	clearwindow();
-	festring_setcursor((int16_t)(right_left + 2), bottom_curs);
+	festring_setcursor(screenXRes - panel_w + 2, mapScreenHeight - fontheight);
 	festring_settextcolor(MAP_TC_NEUTRAL);
 	festring_outstring((const uint8_t*)neutralstr);
 	festring_outstringright((const uint8_t*)NHIstatusstrings[neutralflag]);
 
 	/* --- Top-left help string for the active page --- */
-	topbar_h = (int16_t)(fontheight + 2);
-	topleft_str_w = sys2_calclength((const uint8_t*)maproomhelpstrings[0]);
-	festring_setbound(0, 0, (int16_t)(fontheight + topleft_str_w), topbar_h);
+	festring_setbound(0, 0, sys2_calclength((const uint8_t*)maproomhelpstrings[0]) + fontheight, fontheight + 2);
 	festring_setbackcolor(MAP_PANEL_BG);
 	clearwindow();
 	festring_setcursor(2, 1);
@@ -362,12 +349,11 @@ void maproom_drawNHIstatus(uint16_t page_idx) {
 	festring_outstring((const uint8_t*)maproomhelpstrings[page_idx]);
 
 	/* --- Top-right help string (always idx 2) --- */
-	topright_str_w = sys2_calclength((const uint8_t*)maproomhelpstrings[2]);
-	topright_left = (int16_t)(screenXRes - (fontheight + topright_str_w));
-	festring_setbound(topright_left, 0, (int16_t)screenXRes, topbar_h);
+	mid_left = screenXRes - (sys2_calclength((const uint8_t*)maproomhelpstrings[2]) + fontheight);
+	festring_setbound(mid_left, 0, screenXRes, fontheight + 2);
 	festring_setbackcolor(MAP_PANEL_BG);
 	clearwindow();
-	festring_setcursor((int16_t)(topright_left + 2), 1);
+	festring_setcursor(mid_left + 2, 1);
 	festring_settextcolor(MAP_TC_HELP);
 	festring_outstring((const uint8_t*)maproomhelpstrings[2]);
 }

@@ -15,9 +15,20 @@ extern "C" {
  * channel-volume cache.
  */
 
+/* iMUSE MIDI channels whose volumes follow the buildup level. */
+#define FCALLBK_NUM_CHANNELS 16
+
 void fcallbk_CbInitialize(void);
 int fcallbk_CbDoCallback(int marker_type);
-int fcallbk_CbSetChannels(void);
+#if !defined(TIE_MODERN) && !defined(TIE98)
+/* The iMUSE engine calls trigger callbacks with the marker and the
+ * trigger's arguments on the stack. The original takes the marker from the
+ * stack and pops it itself, keeping the default name. */
+// clang-format off
+#pragma aux fcallbk_CbDoCallback parm routine [];
+// clang-format on
+#endif
+void fcallbk_CbSetChannels(void);
 
 #ifdef __cplusplus
 }

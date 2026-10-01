@@ -303,11 +303,10 @@ int16_t fediskio_tryopenfile(TieFileRoot root, const char* name, const char* mod
 int16_t fediskio_tryclosefile(int16_t delete_on_error) {
 	int16_t had_error = 0;
 
-	/* ferror dropped — the host's fclose return code surfaces both
-	 * pending write errors and the close itself. */
-	if (TieStorage_Close(fileptr) != 0)
+	/* MODERN ADAPTATION: the original also failed on ferror(fileptr) and then
+	 * skipped fclose. The storage close reports pending write errors itself. */
+	if (TieStorage_Close(fileptr) == TIE_EOF)
 		had_error = 1;
-	fileptr = NULL;
 
 	if (delete_on_error && had_error)
 		TieStorage_RemoveOpenFile(openfilename);
@@ -317,14 +316,34 @@ int16_t fediskio_tryclosefile(int16_t delete_on_error) {
 
 // FUNCTION: TIE95 0x22C24
 int16_t fediskio_readfileblock(void* buf, unsigned int size, unsigned int count, TieFile* fp) {
-	int16_t result = (int16_t)TieStorage_Read(buf, size, count, fp);
-	if ((unsigned int)result == count) {
-		fileerror = 0;
-	} else {
-		fileerror = 1;
-		return 0;
+	int tries = 15;
+	unsigned int requested = count;
+
+	for (;;) {
+		int8_t response;
+
+		do {
+			unsigned int got = (unsigned int)TieStorage_Read(buf, size, count, fp);
+			buf = (uint8_t*)buf + size * got;
+			count -= got;
+			tries--;
+		} while (count && tries);
+		if (!count)
+			break;
+		while (count) {
+			response = fediskio_displayerror();
+			if (response == 'R' || response == 'r') {
+				tries = 5;
+				break;
+			} else if (response == 'F' || response == 'f') {
+				fileerror = 1;
+				fediskio_fatalerror(FATAL_ERROR_THE_FOLLOWING_FILE_IS_MISSING_);
+				return 0;
+			}
+		}
 	}
-	return result;
+	fileerror = 0;
+	return (int16_t)requested;
 }
 
 // FUNCTION: TIE95 0x22D38
@@ -340,26 +359,28 @@ int16_t fediskio_writefileblock(void* buf, unsigned int size, int count, TieFile
 }
 
 // FUNCTION: TIE95 0x22D60
-void fediskio_fatalerror(FatalErrId error_code) {
+void fediskio_fatalerror(uint16_t error_code) {
 	char str[128];
-	int i;
+	const char* message;
+	uint16_t i;
 
+	message = fatalerrstrings[error_code];
 	for (i = 0; i < 128; i++) {
-		str[i] = fatalerrstrings[error_code][i];
+		str[i] = message[i];
 		if (!str[i])
 			break;
 	}
 
-	if (error_code == 1) {
-		int j = 0;
+	if (error_code == FATAL_ERROR_THE_FOLLOWING_FILE_IS_MISSING_) {
+		uint16_t j = 0;
 		while (i < 128) {
 			str[i] = openfilename[j++];
 			if (!str[i])
 				break;
 			i++;
 		}
-		str[i] = '\n';
-		str[(uint16_t)(i + 1)] = '\0';
+		str[i++] = '\n';
+		str[i] = '\0';
 	}
 
 	shell_programexit(str);
@@ -370,22 +391,22 @@ void fediskio_fatalerror(FatalErrId error_code) {
 // FUNCTION: TIE95 0x204A0
 void fediskio_initpilotrecord(int16_t clear_name) {
 	uint8_t* raw;
+	uint16_t i;
 
 	if (clear_name)
 		pilotname[0] = '\0';
 
-	/* Initialize both disk slots (primary + backup) of the pilot record
-	 * in loadbuffer with version=1, game_level=1, everything else 0. The
-	 * version/game_level bytes happen to be at the same offsets (+0x000
-	 * and +0x003) in both the in-memory struct and the disk format, but
-	 * the rest of the layout differs -- always touch loadbuffer as raw
-	 * bytes, never cast it as PilotRecord *. */
+	/* Initialize the primary disk slot of the pilot record in loadbuffer
+	 * with version=1, game_level=1, everything else 0. The version and
+	 * game_level bytes happen to be at the same offsets (+0x000 and +0x003)
+	 * in both the in-memory struct and the disk format, but the rest of the
+	 * layout differs -- always touch loadbuffer as raw bytes, never cast it
+	 * as PilotRecord *. */
 	raw = (uint8_t*)loadbuffer;
-	memset(raw, 0, 2u * PILOTRECORD_DISK_SIZE);
-	raw[0x000] = 1;                         /* version (primary) */
-	raw[0x003] = 1;                         /* game_level (primary) */
-	raw[PILOTRECORD_DISK_SIZE + 0x000] = 1; /* version (backup) */
-	raw[PILOTRECORD_DISK_SIZE + 0x003] = 1; /* game_level (backup) */
+	for (i = 0; i < PILOTRECORD_DISK_SIZE; i++)
+		*raw++ = 0;
+	((uint8_t*)loadbuffer)[0x000] = 1; /* version */
+	((uint8_t*)loadbuffer)[0x003] = 1; /* game_level */
 }
 
 /* loadbuffer holds the raw disk-format pilot record (two PILOTRECORD_DISK_SIZE

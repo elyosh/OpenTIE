@@ -218,24 +218,24 @@ int16_t paifight_searchforclosestingroup(uint16_t pri_type, uint16_t pri_id, uin
 /* futuretargets -- look-ahead predicate: does any inactive/waves-
  * remaining FG match the selector under the current difficulty mask? */
 // FUNCTION: TIE95 0x395D8
-int16_t paifight_futuretargets(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
-							   uint8_t sec_id) {
+int16_t paifight_futuretargets(uint16_t pri_type, uint16_t pri_id, uint16_t op, uint16_t sec_type,
+							   uint16_t sec_id) {
 	uint16_t f;
 
-	for (f = 0; (int16_t)f < mission_file_header.num_fg; ++f) {
-		uint8_t diff_mask = diffmask[mission.difficulty];
-		/* Watcom unaligned-dword load: *(int*)&fg.link_flag >> 24 is
-		 * byte at link_flag+3 = fg.difficulty. */
-		uint8_t fg_mask = fgdiffmask[fg_array[f].difficulty];
-		int pri_hit;
-		int sec_hit;
+	for (f = 0; f < mission_file_header.num_fg; ++f) {
+		int16_t pri_hit;
+		int16_t sec_hit;
 
-		if ((diff_mask & fg_mask) == 0)
+		if ((fgdiffmask[fg_array[f].difficulty] & diffmask[mission.difficulty]) == 0)
 			continue;
 
 		pri_hit = score_fgmemberofgroup(f, pri_type, pri_id);
 		sec_hit = score_fgmemberofgroup(f, sec_type, sec_id);
-		if (!(op == 1 ? (pri_hit || sec_hit) : (pri_hit && sec_hit)))
+		if (op == 1)
+			pri_hit |= sec_hit;
+		else
+			pri_hit &= sec_hit;
+		if (pri_hit == 0)
 			continue;
 
 		if (!fgstatus[f].active)

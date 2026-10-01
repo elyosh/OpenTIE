@@ -23,7 +23,6 @@
 #include "tie/train.h"
 #include "tie/wavestream_tie98.h"
 #include "tie_runtime/audio/imuse_api.h"
-#include "tie_runtime/audio/imuse_session.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/audio/music_policy.h"
 #include "tie_runtime/runtime/armship_task.h"
