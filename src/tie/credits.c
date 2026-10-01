@@ -271,7 +271,7 @@ static int16_t credits_draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16
 /* The original blocking scene is split at its modal-view call. */
 // FUNCTION: TIE95 0x71090
 // FUNCTION: TIE98 0x414620
-int16_t credits_Credits(SceneHeadStruct* scene_head) {
+int credits_Credits(SceneHeadStruct* scene_head) {
 	ResFile* credit_res;
 #ifdef TIE_MODERN
 	ResFile* text_res = NULL;

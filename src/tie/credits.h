@@ -12,7 +12,7 @@ extern "C" {
 extern LandruHandle credits_star_buffer;
 extern LandruHandle credits_text;
 
-int16_t credits_Credits(SceneHeadStruct* scene_head);
+int credits_Credits(SceneHeadStruct* scene_head);
 
 #ifdef __cplusplus
 }
