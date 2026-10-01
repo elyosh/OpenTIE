@@ -40,7 +40,8 @@ typedef struct {
 	 * used by rotscale_preparecolor for this species' bitmap frames.
 	 * For planets, set from planetpalptrs[special_flag] at mission load. */
 	void* bitmap_data;
-	uint8_t side;      /* binary +0x12: IFF side (0=hostile, 1=imperial, 2=neutral) */
+	uint8_t side; /* binary +0x12: IFF side (0=hostile, 1=imperial, 2=neutral); TIE98 bit 0x40: per-object
+					 model variant */
 	uint8_t spec_num;  /* binary +0x13: species/spec number */
 	uint8_t lfd_file;  /* binary +0x14: which LFD file (0-2) */
 	uint8_t lfd_entry; /* binary +0x15: entry index within LFD */

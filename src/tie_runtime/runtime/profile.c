@@ -1,6 +1,7 @@
 #include "tie_runtime/runtime/profile.h"
 
 #include "tie/fsfx.h"
+#include "tie/species.h"
 #include "tie_runtime/audio/player_engine.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
 #include "tie_runtime/flight_assets/service.h"
@@ -84,6 +85,7 @@ void TieProfile_SetFlight(const TieFlightProfile* profile) {
 	if (!TieProfile_FlightProfileValid(profile))
 		return;
 	selected_flight_profile = *profile;
+	TieSpecies_ApplyFlightEdition(TieProfile_UsesTie98Logic());
 	flight_profile_pending = false;
 	tie98_original_renderer_pending = false;
 }
@@ -117,6 +119,7 @@ bool TieProfile_ApplyPendingFlight(void) {
 	if (!pending_flight_profile.player_engine_sound_enabled && g_playerEngineSoundUpdateEnabled)
 		TiePlayerEngineSound_StopActive();
 	selected_flight_profile = pending_flight_profile;
+	TieSpecies_ApplyFlightEdition(TieProfile_UsesTie98Logic());
 	g_playerEngineSoundUpdateEnabled = selected_flight_profile.player_engine_sound_enabled ? 1 : 0;
 	flight_profile_pending = false;
 	tie98_original_renderer_pending = false;

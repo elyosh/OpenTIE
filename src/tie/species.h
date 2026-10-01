@@ -1,6 +1,7 @@
 #ifndef TIE_SPECIES_H
 #define TIE_SPECIES_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -16,7 +17,6 @@ typedef struct GenusSlotRange {
 } GenusSlotRange;
 
 extern GenusSlotRange genus_table[16];
-extern const uint8_t tie98_model_variant_enabled[161];
 
 /* 8 palette pointers (16 bytes each) used when painting planet sprites
  * on the skybox. Selected via fg.special_flag at mission load. */
@@ -49,6 +49,12 @@ extern uint8_t magneticpulsedata[186];
 /* Projectile model table indexed by (ship_idx - 137); slot 13 is NULL and
  * later slots alias earlier models. */
 extern const uint8_t* projectiledataptrs[18];
+
+#ifdef TIE_MODERN
+/* PORT: apply the selected flight edition's model-variant bits to the species
+ * entries where TIE95 and TIE98 differ. */
+void TieSpecies_ApplyFlightEdition(bool tie98);
+#endif
 
 #ifdef __cplusplus
 }

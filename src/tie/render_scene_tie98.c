@@ -4040,7 +4040,7 @@ static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, con
 // FUNCTION: TIE98 0x433430
 void FlightModel_Draw_Object(FlightObject* object) {
 	const uint16_t model_type = object->ship_idx;
-	const int model_has_component_state = tie98_model_variant_enabled[model_type] != 0;
+	const int model_has_component_state = (species_table[model_type].side & 0x40) != 0;
 	const Tie98OptimizedPolyObject* model;
 	SceneMeshTIE98 mesh;
 	int mesh_ordinal;

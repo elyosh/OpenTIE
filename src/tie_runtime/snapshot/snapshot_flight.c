@@ -631,7 +631,7 @@ static void TieFlightSnapshot_CaptureWorld(void) {
 		out->lightning_state = TieFlightSnapshot_LightningState(obj);
 		out->decal_color = obj->decal_color;
 		out->model_variant = TieProfile_UsesTie98Logic()
-								 ? (tie98_model_variant_enabled[obj->ship_idx] ? obj->decal_color : 0)
+								 ? ((species_table[obj->ship_idx].side & 0x40) ? obj->decal_color : 0)
 								 : obj->decal_color;
 		out->anim_frame = obj->anim_frame;
 		/* Components follow the parent record. */

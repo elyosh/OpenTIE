@@ -34,16 +34,6 @@ GenusSlotRange genus_table[16] = {
 	{ 0, 0 },  { 0, 0 },  { 0, 0 },  { 80, 96 }, { 0, 0 },  { 96, 112 }, { 0, 0 },   { 0, 0 },
 };
 
-// GLOBAL: TIE98 0x4F0390
-// ModelTypeInfo_TIE98.model_index bit 0x40.
-const uint8_t tie98_model_variant_enabled[NUM_SPECIES] = {
-	0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
-	1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1,
-	1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
-};
-
 /*
  * Hyperspace starburst data uses the 0x40 line-object format consumed by
  * DRAWPOL_drawpolyobject's line path (drawpol.c): 4-byte header
@@ -161,6 +151,7 @@ uint8_t* planetpalptrs[8] = {
 /* ---- species_table (watdbg: species.c, 0xAE08, 161*22=3542 bytes) ---- */
 
 // GLOBAL: TIE95 0xCBBC4
+// GLOBAL: TIE98 0x4F0390
 SpeciesEntry species_table[NUM_SPECIES] = {
 	/* flags, load flags, category, class, bounds, model, animation, palette, side, species, LFD */
 	/*   0 */ { 0x00, 0x00, 0, 0, 0, 0, 0, NULL, NULL, 0x00, 255, 2, 0 },
@@ -300,6 +291,26 @@ SpeciesEntry species_table[NUM_SPECIES] = {
 	/* 134 */ { 0x03, 0x0A, 5, 13, 1280, 240, 0, ember2, emberpalette, 0x40, 255, 0, 66 },
 	/* 135 */ { 0x03, 0x0A, 5, 13, 1664, 240, 0, NULL, stdpalette, 0x40, 255, 0, 67 },
 	/* 136 */ { 0x03, 0x0A, 5, 13, 1664, 240, 0, lightning, lightpalette, 0x40, 255, 0, 68 },
+#if defined(TIE98) && !defined(TIE_MODERN)
+	/* 137 */ { 0x03, 0x09, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 3 },
+	/* 138 */ { 0x03, 0x09, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 6 },
+	/* 139 */ { 0x03, 0x09, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 4 },
+	/* 140 */ { 0x03, 0x09, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 7 },
+	/* 141 */ { 0x03, 0x09, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 5 },
+	/* 142 */ { 0x03, 0x09, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 8 },
+	/* 143 */ { 0x03, 0x09, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 10 },
+	/* 144 */ { 0x03, 0x09, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 9 },
+	/* 145 */ { 0x03, 0x09, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 6 },
+	/* 146 */ { 0x03, 0x09, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 7 },
+	/* 147 */ { 0x03, 0x09, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 8 },
+	/* 148 */ { 0x03, 0x09, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 10 },
+	/* 149 */ { 0x03, 0x09, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 9 },
+	/* 150 */ { 0x03, 0x29, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 0, 84 },
+	/* 151 */ { 0x03, 0x09, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 11 },
+	/* 152 */ { 0x03, 0x09, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 12 },
+	/* 153 */ { 0x03, 0x09, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 12 },
+	/* 154 */ { 0x03, 0x09, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 12 },
+#else
 	/* 137 */ { 0x01, 0x00, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 0 },
 	/* 138 */ { 0x01, 0x00, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 0 },
 	/* 139 */ { 0x01, 0x00, 1, 7, 2048, 1024, 0, NULL, NULL, 0x40, 255, 2, 0 },
@@ -318,6 +329,7 @@ SpeciesEntry species_table[NUM_SPECIES] = {
 	/* 152 */ { 0x01, 0x00, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 0 },
 	/* 153 */ { 0x01, 0x00, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 0 },
 	/* 154 */ { 0x01, 0x00, 1, 7, 2048, 256, 0, NULL, NULL, 0x43, 255, 2, 0 },
+#endif
 	/* 155 */ { 0x01, 0x00, 1, 7, 2048, 256, 0, NULL, NULL, 0x00, 255, 2, 0 },
 	/* 156 */ { 0x01, 0x00, 1, 7, 2048, 256, 0, NULL, NULL, 0x00, 255, 2, 0 },
 	/* 157 */ { 0x01, 0x00, 1, 7, 2048, 256, 0, NULL, NULL, 0x00, 255, 2, 0 },
@@ -509,3 +521,17 @@ const uint8_t* projectiledataptrs[18] = {
 	rocketdata,          magneticpulsedata,
 	magneticpulsedata,   magneticpulsedata,
 };
+
+#ifdef TIE_MODERN
+/* PORT: species 145-147 carry the TIE98 model-variant side bit (0x40) only in
+ * TIE98. The original editions compile it into the table; the port selects
+ * the flight edition at run time, so it sets the bit whenever the flight
+ * profile changes. TIE98's other species differences (flags, load flags and
+ * LFD entries of the projectile species) are not applied here. */
+void TieSpecies_ApplyFlightEdition(bool tie98) {
+	int16_t species;
+
+	for (species = 145; species <= 147; species++)
+		species_table[species].side = tie98 ? 0x40 : 0x00;
+}
+#endif
