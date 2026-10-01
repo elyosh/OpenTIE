@@ -160,7 +160,7 @@ uint8_t* planetpalptrs[8] = {
 
 /* ---- species_table (watdbg: species.c, 0xAE08, 161*22=3542 bytes) ---- */
 
-// GLOBAL: TIE95 0xCBBC8
+// GLOBAL: TIE95 0xCBBC4
 SpeciesEntry species_table[NUM_SPECIES] = {
 	/* flags, load flags, category, class, bounds, model, animation, palette, side, species, LFD */
 	/*   0 */ { 0x00, 0x00, 0, 0, 0, 0, 0, NULL, NULL, 0x00, 255, 2, 0 },
