@@ -126,18 +126,18 @@ static int16_t title_font;
 // FUNCTION: TIE98 0x490340
 static void title_end_View(int32_t time) {
 	int16_t i;
+	int16_t scene;
+	Rect r;
 	(void)time;
 
 	/* Scene 8: check for exit at time 690 */
 	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
-		int16_t scene;
 		if (shellext_Check_Scene_Exit(&scene, 10, 100, film_time == TIE_FRONTEND_EDITION(690, 694)))
 			xerror_Set_Landru_Exit(scene);
 	}
 
 	/* At time 100: reset view frame for the text crawl */
 	if (film_time == TIE_FRONTEND_EDITION(100, 104)) {
-		Rect r;
 		xrect_Set_Rect(&r, 0, 0, 320, 200);
 		xview_Set_View_Frame(0, &r);
 		xview_Set_View_Pos(0, r.left, r.top);
