@@ -30,7 +30,11 @@ typedef struct RUNTIME_MissionStateStruct {
 	uint8_t train_craft_type_src;  /* +0x001: source value set by Mission_Enter from the ship switch; copied
 									  into train_craft_type at mission start. */
 	uint8_t train_level;           /* +0x002: training level (set by Mission_Enter) */
-	uint8_t field_3;               /* +0x003 */
+#if !defined(TIE98) || defined(TIE_MODERN)
+	/* TIE98 has no byte here: its later fields sit one byte below the
+	 * offsets noted on them. The port keeps the TIE95 layout. */
+	uint8_t field_3; /* +0x003 */
+#endif
 	int32_t mission_score;         /* +0x004: calculated mission score */
 	uint8_t _gap_08[2];            /* +0x008 */
 	int16_t train_gates_passed;    /* +0x00A */
@@ -68,7 +72,7 @@ typedef struct RUNTIME_MissionStateStruct {
 	uint8_t mission_linked_data[256]; /* +0x304: battle mission linked data */
 	uint8_t beam_used;                /* +0x404 */
 	uint8_t torp_used;                /* +0x405 */
-} RUNTIME_MissionState;               /* 1030 bytes (0x406) */
+} RUNTIME_MissionState;               /* 1030 bytes (0x406); TIE98 1029 bytes (0x405) */
 #ifdef __WATCOMC__
 #pragma pack()
 #else

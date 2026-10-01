@@ -128,6 +128,7 @@ int32_t craftmoveZ;
 
 /* spec_data[] lives in spec.c (its watdbg owning module). */
 // GLOBAL: TIE95 0xEB29C
+// GLOBAL: TIE98 0x592240
 RUNTIME_MissionState mission;
 
 // GLOBAL: TIE95 0xEB72E
