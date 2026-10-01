@@ -315,11 +315,14 @@ int32_t gatex2;
 int32_t gatey2;
 // GLOBAL: TIE95 0xEAB6C
 int32_t gatez2;
-// GLOBAL: TIE95 0xEAB74
+// GLOBAL: TIE95 0xEAB7C
+// GLOBAL: TIE98 0x592694
 int32_t collidexoff;
 // GLOBAL: TIE95 0xEAB78
+// GLOBAL: TIE98 0x592238
 int32_t collideyoff;
-// GLOBAL: TIE95 0xEAB7C
+// GLOBAL: TIE95 0xEAB74
+// GLOBAL: TIE98 0x592200
 int32_t collidezoff;
 
 /* --- Targeting / damage state. tie.c. --- */
@@ -397,6 +400,7 @@ uint16_t fullupdateflag;
 // GLOBAL: TIE95 0xEB75D
 uint8_t hyperspaceflag;
 // GLOBAL: TIE95 0xEB765
+// GLOBAL: TIE98 0x596644
 uint8_t hyperabortflag;
 
 /* Hyperspace timing + state -- driven by anim_dohyperspace.
@@ -1191,8 +1195,10 @@ uint8_t palette_cycle_user;
 
 /* Write-only simulator initialization flags. */
 // GLOBAL: TIE95 0xEB76C
+// GLOBAL: TIE98 0x59716C
 uint8_t deadflag_EB76C;
 // GLOBAL: TIE95 0xEB774
+// GLOBAL: TIE98 0x5A269E
 uint8_t deadflag_EB774;
 
 /* Last iMUSE music state pushed by tie_updatemusic. Latched here so the

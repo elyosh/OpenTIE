@@ -75,6 +75,7 @@ static int16_t mission_officer;
 // GLOBAL: TIE98 0x589ACC
 static int16_t battle_medal;
 // GLOBAL: TIE95 0xFB3F6
+// GLOBAL: TIE98 0x589C00
 static int16_t battle_secret_medal;
 // GLOBAL: TIE95 0xFB3FE
 static int16_t blueprint_ship;

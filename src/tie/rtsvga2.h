@@ -25,11 +25,16 @@ extern uint8_t rtsvga2_vgapalette[768];
 /* Linear 8bpp framebuffer base. NULL until initgraph / setvgapointers. */
 extern uint8_t* vgapointer;
 
-/* Scanline-start LUT: lineaddressVGA[y] = y * screenMemWidth. Sized
- * one entry larger than screenYRes so drawshape's 0xFE-then-0xFF tail
- * (which reads one line past the last drawn row before terminating)
- * doesn't overrun the array. */
-extern int32_t lineaddressVGA[481];
+/* Scanline-start LUT: lineaddressVGA[y] = y * screenMemWidth. The
+ * originals hold 480 lines; drawshape's 0xFE-then-0xFF tail reads one line
+ * past the last drawn row before terminating, so the port keeps one more
+ * entry. */
+#ifdef TIE_MODERN
+#define RTSVGA2_LINE_ADDRESS_COUNT 481
+#else
+#define RTSVGA2_LINE_ADDRESS_COUNT 480
+#endif
+extern int32_t lineaddressVGA[RTSVGA2_LINE_ADDRESS_COUNT];
 
 /* Star double-buffer pointers: two int[768] lists of pixel-offsets;
  * swapped on every drawstars call. newstarptr is this frame's write

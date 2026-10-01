@@ -108,9 +108,10 @@ uint8_t* vgapointer;
  * icon whose last row sits on screenYRes-1 triggers a single trailing
  * read at index screenYRes. The retail database had the same 480 layout
  * and tolerated the OOB read because no write follows (the next opcode
- * is 0xFF which returns); we size [481] purely so UBSan doesn't trip. */
+ * is 0xFF which returns); the port adds one entry so UBSan doesn't trip. */
 // GLOBAL: TIE95 0xDBC94
-int32_t lineaddressVGA[481];
+// GLOBAL: TIE98 0x5F3BE0
+int32_t lineaddressVGA[RTSVGA2_LINE_ADDRESS_COUNT];
 
 /* Star double-buffer pair + the two underlying buffers. */
 // GLOBAL: TIE95 0xDD3E4
@@ -168,8 +169,10 @@ int32_t stareyez[128];
 // GLOBAL: TIE98 0x4EB740
 uint16_t stardetaillevel = 1;
 // GLOBAL: TIE95 0xDE774
+// GLOBAL: TIE98 0x5F3BC0
 int16_t drawshapex;
 // GLOBAL: TIE95 0xDE768
+// GLOBAL: TIE98 0x5F3BC2
 int16_t drawshapey;
 // GLOBAL: TIE95 0xDE770
 int16_t drawwidth;
@@ -177,6 +180,7 @@ int16_t drawwidth;
 // GLOBAL: TIE98 0x5F4460
 uint8_t basecolor;
 // GLOBAL: TIE95 0xDE786
+// GLOBAL: TIE98 0x5F4464
 int16_t skipcolorvga;
 
 /* ------------------------------------------------------------------ */
