@@ -8,7 +8,7 @@
 #include "landru/mouse.h"
 
 // FUNCTION: TIE95 0x323B0
-int16_t mouse2_checkformouse(void) { return xio_Is_Mouse_Input(); }
+int mouse2_checkformouse(void) { return xio_Is_Mouse_Input(); }
 
 // FUNCTION: TIE95 0x323B8
 int16_t mouse2_readmouse(int16_t* x, int16_t* y) {
