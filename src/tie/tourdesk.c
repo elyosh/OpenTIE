@@ -262,9 +262,9 @@ static int16_t tourdesk_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16
 	}
 
 	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, 16, font_id);
+	xfont_Print_Centered_Text(label, &r, font_id, 16);
 	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, 15, font_id);
+	xfont_Print_Centered_Text(label, &r, font_id, 15);
 	return 1;
 }
 
@@ -327,7 +327,7 @@ static int16_t tourdesk_draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, in
 		char buf[64];
 		shipext_Get_Battle_Title(buf, i);
 		color = i ? 2 : 15;
-		xfont_Print_Centered_Text(buf, &dst, color, font_id);
+		xfont_Print_Centered_Text(buf, &dst, font_id, color);
 		xrect_Offset_Rect(&dst, 0, line_height);
 	}
 
@@ -381,7 +381,7 @@ static void tourdesk_Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
 
 	xfont_Enable_FontID_Shadow(font_id);
 	shipext_Get_Battle_Galaxy_Name(name);
-	xfont_Print_Centered_Text(name, &ra, 2 * time + 16, font_id);
+	xfont_Print_Centered_Text(name, &ra, font_id, 2 * time + 16);
 	xfont_Disable_FontID_Shadow(font_id);
 }
 
@@ -414,7 +414,7 @@ static void tourdesk_Draw_Battle_Two(Rect* galaxy_rect, int16_t time, Rect* clip
 
 	xfont_Enable_FontID_Shadow(font_id);
 	shipext_Get_Battle_Galaxy_Name(name);
-	xfont_Print_Centered_Text(name, &ra, 31, font_id);
+	xfont_Print_Centered_Text(name, &ra, font_id, 31);
 	xfont_Disable_FontID_Shadow(font_id);
 }
 
@@ -497,7 +497,7 @@ static int tourdesk_Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 	/* Galaxy name with fade-in */
 	shipext_Get_Battle_Galaxy_Name(name);
 	name_color = (fade >= 8) ? 31 : 2 * fade + 16;
-	xfont_Print_Centered_Text(name, &art_bounds, name_color, font_id);
+	xfont_Print_Centered_Text(name, &art_bounds, font_id, name_color);
 
 	/* "Battle N" text */
 	xrect_Copy_Rect(&dst, r);
@@ -518,7 +518,7 @@ static int tourdesk_Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 		xrect_Offset_Rect(&dst, 0, 4);
 
 	battle_color = (fade >= 8) ? 31 : 2 * fade + 16;
-	xfont_Print_Centered_Text(buf, &dst, battle_color, font_id);
+	xfont_Print_Centered_Text(buf, &dst, font_id, battle_color);
 
 	/* "Mission N" text (only if battle not complete) */
 	line_height = dynamic_text_layout ? (int16_t)xfont_Get_FontID_Height(font_id) : 10;
@@ -529,7 +529,7 @@ static int tourdesk_Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 		snprintf(buf, sizeof(buf), "%s %d", mission_label,
 				 pilot_record.battle_cursor[pilot_record.cur_battle] + 1);
 		mission_color = (fade >= 8) ? 31 : 2 * fade + 16;
-		xfont_Print_Centered_Text(buf, &dst, mission_color, font_id);
+		xfont_Print_Centered_Text(buf, &dst, font_id, mission_color);
 	}
 
 	xfont_Disable_FontID_Shadow(font_id);

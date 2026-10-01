@@ -122,7 +122,7 @@ int16_t credits_draw_Credit_tie98(Actor* actor, Rect* bounds, Rect* clip, int16_
 			for (i = 0; i < num_strings; i++) {
 				char line_buf[80];
 				xparagrp_Get_Paragraph_String(credits_text, line_buf, credit_idx, i);
-				xfont_Print_Centered_Text(line_buf, &text_rect, color, 0);
+				xfont_Print_Centered_Text(line_buf, &text_rect, 0, color);
 
 				xrect_Offset_Rect(&text_rect, 0, i ? 10 : 12);
 			}

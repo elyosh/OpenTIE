@@ -206,10 +206,10 @@ static int16_t armship_draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int
 		dst.top++;
 		dst.bottom = saved_bottom;
 	}
-	xfont_Print_Centered_Text(line1, &dst, 15, 1);
+	xfont_Print_Centered_Text(line1, &dst, 1, 15);
 	if (line2[0]) {
 		xrect_Offset_Rect(&dst, 0, 6);
-		xfont_Print_Centered_Text(line2, &dst, 15, 1);
+		xfont_Print_Centered_Text(line2, &dst, 1, 15);
 	}
 	return 1;
 }
@@ -378,7 +378,7 @@ static void armship_idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t 
 		for (i = 0; i < 3; i++) {
 			int16_t beam = player_Get_Beam_Used();
 			textext_Get_Weapon_Select_Text(text_buf, 3 * (beam + 6) + i);
-			xfont_Print_Centered_Text(text_buf, &dst, 15, 0);
+			xfont_Print_Centered_Text(text_buf, &dst, 0, 15);
 			xrect_Offset_Rect(&dst, 0, 10);
 		}
 	}
@@ -393,7 +393,7 @@ static void armship_idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t 
 		for (i = 0; i < 3; i++) {
 			int16_t torp = player_Get_Torp_Used();
 			textext_Get_Weapon_Select_Text(text_buf, 3 * (torp - 1) + i);
-			xfont_Print_Centered_Text(text_buf, &dst, 15, 0);
+			xfont_Print_Centered_Text(text_buf, &dst, 0, 15);
 			xrect_Offset_Rect(&dst, 0, 10);
 		}
 	}

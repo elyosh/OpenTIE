@@ -1668,7 +1668,7 @@ static void talk_idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refre
 			if (center_line) {
 				Rect line_rect;
 				xrect_Set_Rect(&line_rect, dst.left, line_y, dst.right, line_y + 10);
-				xfont_Print_Centered_Text(line_buf, &line_rect, text_color, 0);
+				xfont_Print_Centered_Text(line_buf, &line_rect, 0, text_color);
 			} else {
 				xfont_Print_Clipped_Text(line_buf, dst.left, line_y, 0, text_color);
 			}

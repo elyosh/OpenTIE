@@ -252,7 +252,7 @@ static int16_t map_draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x,
 		xrect_Set_Rect(&tr, 60, 158, 260, 170);
 		textext_Copy_Text(name, map_text);
 		xfont_Enable_FontID_Shadow(0);
-		xfont_Print_Centered_Text(name, &tr, 28, 0);
+		xfont_Print_Centered_Text(name, &tr, 0, 28);
 		xfont_Disable_FontID_Shadow(0);
 	}
 
@@ -1581,14 +1581,14 @@ static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 		textext_Copy_Text(fmt, txtMapTrainLevel);
 		snprintf(str1, sizeof(str1), fmt, mission.train_level);
 		strcat(buf, str1);
-		xfont_Print_Centered_Text(buf, &tr, 228, 0);
+		xfont_Print_Centered_Text(buf, &tr, 0, 228);
 
 		xrect_Offset_Rect(&tr, 0, 14);
 		xpaint_Horiz_Clipped_Line(tr.left + 48, tr.top - 3, tr.right - tr.left - 96, 231);
 
 		textext_Copy_Text(fmt, txtMapTrainScore);
 		snprintf(buf, sizeof(buf), fmt, mission.mission_score);
-		xfont_Print_Centered_Text(buf, &tr, 228, 0);
+		xfont_Print_Centered_Text(buf, &tr, 0, 228);
 		xrect_Offset_Rect(&tr, 0, 10);
 
 		if (mission.mission_new_rank) {
@@ -1601,7 +1601,7 @@ static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 					str1[j] = 2;
 			}
 			snprintf(buf, sizeof(buf), str1, fmt);
-			xfont_Print_Centered_Text(buf, &tr, 228, 0);
+			xfont_Print_Centered_Text(buf, &tr, 0, 228);
 			xrect_Offset_Rect(&tr, 0, 10);
 		}
 
@@ -1613,28 +1613,28 @@ static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 				if (buf[j] == '2')
 					buf[j] = 2;
 			}
-			xfont_Print_Centered_Text(buf, &tr, 228, 0);
+			xfont_Print_Centered_Text(buf, &tr, 0, 228);
 			xrect_Offset_Rect(&tr, 0, 10);
 		}
 
 		textext_Copy_Text(fmt, txtMapTrainPassed);
 		snprintf(buf, sizeof(buf), fmt, (uint16_t)mission.train_gates_passed);
-		xfont_Print_Centered_Text(buf, &tr, 228, 0);
+		xfont_Print_Centered_Text(buf, &tr, 0, 228);
 		xrect_Offset_Rect(&tr, 0, 10);
 
 		textext_Copy_Text(fmt, txtMapTrainRemain);
 		snprintf(buf, sizeof(buf), fmt, (uint16_t)mission.train_gates_remaining);
-		xfont_Print_Centered_Text(buf, &tr, 228, 0);
+		xfont_Print_Centered_Text(buf, &tr, 0, 228);
 		xrect_Offset_Rect(&tr, 0, 10);
 
 		textext_Copy_Text(fmt, txtMapTrainTargets);
 		snprintf(buf, sizeof(buf), fmt, (uint16_t)mission.train_targets);
-		xfont_Print_Centered_Text(buf, &tr, 228, 0);
+		xfont_Print_Centered_Text(buf, &tr, 0, 228);
 
 		if (mission.training_badge_earned) {
 			xrect_Offset_Rect(&tr, 0, 10);
 			textext_Copy_Text(buf, txtMapTrainBadge);
-			xfont_Print_Centered_Text(buf, &tr, 228, 0);
+			xfont_Print_Centered_Text(buf, &tr, 0, 228);
 		}
 
 		xfont_Set_FontID_Bold_Color(0, saved_bold);
@@ -1662,7 +1662,7 @@ static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 			snprintf(str1, sizeof(str1), fmt, cur_talk_question + 1, num_talk_questions);
 		}
 		strcat(buf, str1);
-		xfont_Print_Centered_Text(buf, &tr, 14, 0);
+		xfont_Print_Centered_Text(buf, &tr, 0, 14);
 
 		xpaint_Horiz_Clipped_Line(tr.left + 8, tr.bottom + 1, tr.right - tr.left - 16, 24);
 		tr.top += 14;
@@ -1670,7 +1670,7 @@ static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 
 		/* Current question text */
 		map_Get_VR_Talk_Question(buf, cur_talk_question);
-		xfont_Print_Centered_Text(buf, &tr, 15, 0);
+		xfont_Print_Centered_Text(buf, &tr, 0, 15);
 		xrect_Offset_Rect(&tr, 0, 10);
 
 		/* Paragraph text */
@@ -1689,7 +1689,7 @@ static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 			center_line = 0;
 			map_Get_VR_Talk_Paragraph(buf, i);
 			if (center_line)
-				xfont_Print_Centered_Text(buf, &tr, 228, 0);
+				xfont_Print_Centered_Text(buf, &tr, 0, 228);
 			else
 				xfont_Print_Clipped_Text(buf, tr.left + 8, tr.top, 0, 228);
 			xrect_Offset_Rect(&tr, 0, 10);

@@ -361,7 +361,7 @@ static void filmview_idraw_FilmView_Page(Input* input, Rect* r, Rect* clip_r, in
 	xstyle_Style_Paint_TextField(r);
 
 	snprintf(string, sizeof(string), "Page %d/%d", cur_page + 1, num_pages);
-	xfont_Print_Centered_Text(string, r, 15, 1);
+	xfont_Print_Centered_Text(string, r, 1, 15);
 
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip_r);
@@ -748,7 +748,7 @@ static void filmview_idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int
 		xstyle_Style_Paint_Border(&dr, 0);
 		dr.bottom = dr.top + 14;
 		xfont_Enable_FontID_Shadow(0);
-		xfont_Print_Centered_Text(string, &dr, 15, 0);
+		xfont_Print_Centered_Text(string, &dr, 0, 15);
 		xfont_Disable_FontID_Shadow(0);
 	}
 

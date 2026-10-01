@@ -328,9 +328,9 @@ static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t 
 	}
 
 	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, 16, font_id);
+	xfont_Print_Centered_Text(label, &r, font_id, 16);
 	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, 15, font_id);
+	xfont_Print_Centered_Text(label, &r, font_id, 15);
 	return 1;
 }
 
@@ -396,7 +396,7 @@ static void brief_idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refres
 	tr.bottom = tr.top + TIE_FRONTEND_EDITION(20, 30);
 
 	xfont_Enable_FontID_Shadow(font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtBriefRestore), &tr, 15, font_id);
+	xfont_Print_Centered_Text(textext_Get_Text(txtBriefRestore), &tr, font_id, 15);
 	xfont_Disable_FontID_Shadow(font_id);
 
 	if (xinpattr_Is_Input_Dirty(input))

@@ -345,9 +345,9 @@ static int16_t mainmenu_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16
 
 	/* Drop shadow: dark color at (1,1) offset, then bright at (0,0) */
 	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, 16, font_id);
+	xfont_Print_Centered_Text(label, &r, font_id, 16);
 	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, 15, font_id);
+	xfont_Print_Centered_Text(label, &r, font_id, 15);
 	return 1;
 }
 

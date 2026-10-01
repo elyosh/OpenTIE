@@ -379,14 +379,14 @@ static void combat_idraw_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, 
 				break;
 			}
 		}
-		xfont_Print_Centered_Text(buf, draw_rect, color, 1);
+		xfont_Print_Centered_Text(buf, draw_rect, 1, color);
 	} else if (id == 8) {
 		/* "Mission N" */
 		const char* label = textext_Get_Text(txtCombatMission);
 		char fmt[32];
 		strcpy(fmt, label);
 		snprintf(buf, sizeof(buf), "%s %d", fmt, shipext_Get_Combat_Mission() + 1);
-		xfont_Print_Centered_Text(buf, draw_rect, color, 1);
+		xfont_Print_Centered_Text(buf, draw_rect, 1, color);
 	}
 
 	if (xinpattr_Is_Input_Dirty(input))
@@ -546,7 +546,7 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 			shipext_Get_Combat_Ship_Name(name);
 			/* Header format: ship name, mission label, and one-based mission number. */
 			snprintf(buf, sizeof(buf), "%s %s %d", name, mission_label, shipext_Get_Combat_Mission() + 1);
-			xfont_Print_Centered_Text(buf, &dst, fade, font_id);
+			xfont_Print_Centered_Text(buf, &dst, font_id, fade);
 		} else {
 			shipext_Get_Combat_Mission_Text(string, text_line);
 			xfont_Print_Clipped_Text(string, text_left, text_y, font_id, fade);
@@ -678,7 +678,7 @@ static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
 
 	ship = shipext_Get_Mission_Ship();
 	shipext_Get_Ship_Name(str, ship, 0, 0);
-	xfont_Print_Centered_Text(str, &dst, fade, font_id);
+	xfont_Print_Centered_Text(str, &dst, font_id, fade);
 
 	old_bp = shipext_Get_Blueprint_Ship();
 	shipext_Set_Blueprint_Ship(ship);
@@ -696,7 +696,7 @@ static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
 				sub_fade = 31;
 			else
 				sub_fade = 2 * (31 - sub_t) + 16;
-			xfont_Print_Centered_Text(str, &dst, sub_fade, font_id);
+			xfont_Print_Centered_Text(str, &dst, font_id, sub_fade);
 		}
 	}
 
@@ -750,7 +750,7 @@ static int16_t combat_draw_Combat_Help(Actor* the_actor, Rect* draw_rect, Rect* 
 			xactor_Get_Actor_Bounds(the_actor, &bounds);
 			xfont_Enable_FontID_Shadow(0);
 			textext_Copy_Text(text, (int16_t)(combat_help + 84));
-			xfont_Print_Centered_Text(text, &bounds, 15, TIE_FRONTEND_EDITION(0, 2));
+			xfont_Print_Centered_Text(text, &bounds, TIE_FRONTEND_EDITION(0, 2), 15);
 			xfont_Disable_FontID_Shadow(0);
 		}
 		combat_help = 0;

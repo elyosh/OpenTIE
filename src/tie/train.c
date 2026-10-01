@@ -375,13 +375,13 @@ static void train_idraw_Train(Input* input, Rect* draw_rect, Rect* clip_rect, in
 				break;
 			}
 		}
-		xfont_Print_Centered_Text(buf, draw_rect, color, 1);
+		xfont_Print_Centered_Text(buf, draw_rect, 1, color);
 	} else if (id == 7) {
 		/* "Level N" */
 		char fmt[32];
 		textext_Copy_Text(fmt, txtTrainLevel);
 		snprintf(buf, sizeof(buf), fmt, shipext_Get_Train_Level() + 1);
-		xfont_Print_Centered_Text(buf, draw_rect, color, 1);
+		xfont_Print_Centered_Text(buf, draw_rect, 1, color);
 	}
 
 	if (xinpattr_Is_Input_Dirty(input))
@@ -408,7 +408,7 @@ static int16_t train_draw_Train_Help(Actor* the_actor, Rect* draw_rect, Rect* cl
 			xfont_Enable_FontID_Shadow(0);
 			/* train_help 1-6 maps to txtTrainLastShip(74)..txtTrainExit(79) */
 			textext_Copy_Text(text, (int16_t)(train_help + 73));
-			xfont_Print_Centered_Text(text, &bounds, 15, TIE_FRONTEND_EDITION(0, 2));
+			xfont_Print_Centered_Text(text, &bounds, TIE_FRONTEND_EDITION(0, 2), 15);
 			xfont_Disable_FontID_Shadow(0);
 		}
 		train_help = 0;
@@ -687,7 +687,7 @@ static void train_Draw_Train_Screen_Mission(Rect* src) {
 			snprintf(buf, sizeof(buf), string, shipext_Get_Train_Level() + 1);
 			strcat(name, " ");
 			strcat(name, buf);
-			xfont_Print_Centered_Text(name, &dst, fade, font_id);
+			xfont_Print_Centered_Text(name, &dst, font_id, fade);
 		} else {
 			shipext_Get_Train_Mission_Text(string, text_line);
 			xfont_Print_Clipped_Text(string, text_left, text_y, font_id, fade);

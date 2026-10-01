@@ -406,7 +406,7 @@ static int16_t title_draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_
 			xpaint_Paint_Clipped_Rect(&tr, 0);
 
 			xparagrp_Get_Paragraph_String(title_text, string, 0, i);
-			xfont_Print_Centered_Text(string, &tr, 15, title_font);
+			xfont_Print_Centered_Text(string, &tr, title_font, 15);
 			line_drawn[i] = 1;
 		}
 	}

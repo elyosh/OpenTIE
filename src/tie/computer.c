@@ -442,8 +442,8 @@ static void computer_draw_Computer_On_Off(Rect* r, int16_t on) {
 		xpaint_Paint_Clipped_Rect(&tr2, 38);
 	}
 
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompGaugeOn), &tr1, 14, font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompGaugeOff), &tr2, 14, font_id);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompGaugeOn), &tr1, font_id, 14);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompGaugeOff), &tr2, font_id, 14);
 }
 
 // FUNCTION: TIE95 0x86498
@@ -476,9 +476,9 @@ static void computer_draw_Computer_Level(Rect* r, int16_t state) {
 	else if (state == 2)
 		xpaint_Paint_Clipped_Rect(&tr3, 38);
 
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompLevelEasy), &tr1, 14, font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompLevelMed), &tr2, 14, font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompLevelHard), &tr3, 14, font_id);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompLevelEasy), &tr1, font_id, 14);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompLevelMed), &tr2, font_id, 14);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompLevelHard), &tr3, font_id, 14);
 }
 
 // FUNCTION: TIE95 0x865F4
@@ -766,15 +766,15 @@ static void computer_draw_Computer_Prefs(Rect* r, Rect* clip_r) {
 	for (i = 0; i < 16; i++)
 		xpaint_Frame_Clipped_Rect((Rect*)&pref_rect[i], 38);
 
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefTitle), (Rect*)&pref_rect[0], 15, font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefMusic), (Rect*)&pref_rect[1], 15, font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSound), (Rect*)&pref_rect[4], 15, font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSpeech), (Rect*)&pref_rect[7], 15, font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefTrans), (Rect*)&pref_rect[10], 15,
-							  TIE_FRONTEND_EDITION(0, 3));
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSub), (Rect*)&pref_rect[12], 15,
-							  TIE_FRONTEND_EDITION(0, 3));
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefGame), (Rect*)&pref_rect[14], 15, font_id);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefTitle), (Rect*)&pref_rect[0], font_id, 15);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefMusic), (Rect*)&pref_rect[1], font_id, 15);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSound), (Rect*)&pref_rect[4], font_id, 15);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSpeech), (Rect*)&pref_rect[7], font_id, 15);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefTrans), (Rect*)&pref_rect[10],
+							  TIE_FRONTEND_EDITION(0, 3), 15);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSub), (Rect*)&pref_rect[12],
+							  TIE_FRONTEND_EDITION(0, 3), 15);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefGame), (Rect*)&pref_rect[14], font_id, 15);
 	computer_draw_Computer_On_Off((Rect*)&pref_rect[2], options_gbl.music_active);
 	computer_draw_Computer_On_Off((Rect*)&pref_rect[5], options_gbl.sound_active);
 	computer_draw_Computer_On_Off((Rect*)&pref_rect[8], options_gbl.speech_active);
@@ -892,11 +892,11 @@ static void computer_xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 	}
 
 	color = 15;
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompBackTitle), (Rect*)&backup_rect[0], 15, font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompBackAutoBackup), (Rect*)&backup_rect[1], color,
-							  font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtCompBackAutoRestore), (Rect*)&backup_rect[3], color,
-							  font_id);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompBackTitle), (Rect*)&backup_rect[0], font_id, 15);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompBackAutoBackup), (Rect*)&backup_rect[1], font_id,
+							  color);
+	xfont_Print_Centered_Text(textext_Get_Text(txtCompBackAutoRestore), (Rect*)&backup_rect[3], font_id,
+							  color);
 
 	/* Current pilot info */
 	xrect_Copy_Rect(&tr, (Rect*)&backup_rect[7]);
@@ -911,7 +911,7 @@ static void computer_xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 	shipext_Get_Pilot_Name(pilot_name);
 #endif
 	strcat(name, pilot_name);
-	xfont_Print_Centered_Text(name, &tr, color, font_id);
+	xfont_Print_Centered_Text(name, &tr, font_id, color);
 
 	xrect_Offset_Rect(&tr, 0, TIE_FRONTEND_EDITION(9, xfont_Get_FontID_Height(font_id)));
 	if (pilot_record.exit_status) {
@@ -924,7 +924,7 @@ static void computer_xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 	snprintf(points, sizeof(points), " %ld ", (long)pilot_record.score);
 	strcat(name, points);
 	textext_Cat_Text(name, txtCompNamePoints);
-	xfont_Print_Centered_Text(name, &tr, color, font_id);
+	xfont_Print_Centered_Text(name, &tr, font_id, color);
 
 	/* Backup pilot info */
 	if (TIE_FRONTEND_TIE98) {
@@ -937,14 +937,14 @@ static void computer_xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 	textext_Copy_Text(name, txtCompNameLast);
 	strcat(name, " ");
 	textext_Cat_Text(name, backup_pilot_rank + txtCompRankCadet);
-	xfont_Print_Centered_Text(name, &tr, 90, font_id);
+	xfont_Print_Centered_Text(name, &tr, font_id, 90);
 
 	xrect_Offset_Rect(&tr, 0, TIE_FRONTEND_EDITION(9, xfont_Get_FontID_Height(font_id)));
 	snprintf(points, sizeof(points), " %ld ", (long)backup_pilot_points);
 	textext_Copy_Text(name, txtCompNameWith);
 	strcat(name, points);
 	textext_Cat_Text(name, txtCompNamePoints);
-	xfont_Print_Centered_Text(name, &tr, 90, font_id);
+	xfont_Print_Centered_Text(name, &tr, font_id, 90);
 
 	computer_draw_Computer_On_Off((Rect*)&backup_rect[2], options_gbl.auto_backup);
 	computer_draw_Computer_On_Off((Rect*)&backup_rect[4], options_gbl.auto_restore);
@@ -974,7 +974,7 @@ static void computer_Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t b
 	shipext_Get_Pilot_Name(str2);
 #endif
 	strcat(str1, str2);
-	xfont_Print_Centered_Text(str1, r, color, font_id);
+	xfont_Print_Centered_Text(str1, r, font_id, color);
 	xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
 	xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id) + 2));
 
@@ -985,7 +985,7 @@ static void computer_Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t b
 	textext_Cat_Text(str1, txtCompInfoSkill);
 	snprintf(str2, sizeof(str2), " %u", (unsigned)pilot_record.avg_score);
 	strcat(str1, str2);
-	xfont_Print_Centered_Text(str1, r, color, font_id);
+	xfont_Print_Centered_Text(str1, r, font_id, color);
 	xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
 
 	/* Laser accuracy */
@@ -995,7 +995,7 @@ static void computer_Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t b
 		val = 0;
 	textext_Copy_Text(str2, txtCompInfoLaser);
 	snprintf(str1, sizeof(str1), str2, pilot_record.laser_hits, pilot_record.laser_total, (int16_t)val);
-	xfont_Print_Centered_Text(str1, r, color, font_id);
+	xfont_Print_Centered_Text(str1, r, font_id, color);
 	xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
 
 	/* Warhead accuracy */
@@ -1007,25 +1007,25 @@ static void computer_Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t b
 		val = 0;
 	textext_Copy_Text(str2, txtCompInfoRocket);
 	snprintf(str1, sizeof(str1), str2, pilot_record.warhead_hits, pilot_record.warhead_total, (int16_t)val);
-	xfont_Print_Centered_Text(str1, r, color, font_id);
+	xfont_Print_Centered_Text(str1, r, font_id, color);
 	xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
 
 	/* Total kills */
 	textext_Copy_Text(str2, txtCompInfoKills);
 	snprintf(str1, sizeof(str1), str2, pilot_record.total_kills);
-	xfont_Print_Centered_Text(str1, r, color, font_id);
+	xfont_Print_Centered_Text(str1, r, font_id, color);
 	xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
 
 	/* Total captures */
 	textext_Copy_Text(str2, txtCompInfoCaptures);
 	snprintf(str1, sizeof(str1), str2, pilot_record.total_captures);
-	xfont_Print_Centered_Text(str1, r, color, font_id);
+	xfont_Print_Centered_Text(str1, r, font_id, color);
 	xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
 
 	/* Craft lost */
 	textext_Copy_Text(str2, txtCompInfoCraftLost);
 	snprintf(str1, sizeof(str1), str2, pilot_record.ejection_count);
-	xfont_Print_Centered_Text(str1, r, color, font_id);
+	xfont_Print_Centered_Text(str1, r, font_id, color);
 	xrect_Offset_Rect(&page, 0, TIE_FRONTEND_EDITION(110, 273));
 	xrect_Copy_Rect(r, &page);
 }
@@ -1070,7 +1070,7 @@ static void computer_Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t b
 		xrect_Copy_Rect(&page, r);
 
 		shipext_Get_Ship_Name(str1, i, 0, 0);
-		xfont_Print_Centered_Text(str1, r, color, font_id);
+		xfont_Print_Centered_Text(str1, r, font_id, color);
 		xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
 		xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id) + 2));
 
@@ -1080,7 +1080,7 @@ static void computer_Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t b
 			else
 				textext_Copy_Text(str2, txtCompInfoTrainComplete);
 			snprintf(str1, sizeof(str1), str2, pilot_record.train_score[i]);
-			xfont_Print_Centered_Text(str1, r, color, font_id);
+			xfont_Print_Centered_Text(str1, r, font_id, color);
 			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
 		}
 
@@ -1091,7 +1091,7 @@ static void computer_Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t b
 				else
 					textext_Copy_Text(str2, txtCompInfoCombatIncomplete);
 				snprintf(str1, sizeof(str1), str2, j + 1, pilot_record.combat_score[i][j]);
-				xfont_Print_Centered_Text(str1, r, color, font_id);
+				xfont_Print_Centered_Text(str1, r, font_id, color);
 				xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
 			}
 		}
@@ -1135,7 +1135,7 @@ static void computer_Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t b
 		textext_Copy_Text(str2, txtCompInfoBattle);
 		snprintf(str1, sizeof(str1), str2, i + 1);
 		textext_Cat_Text(str1, pilot_record.battle_status[i] + txtCompInfoBattle);
-		xfont_Print_Centered_Text(str1, r, color, font_id);
+		xfont_Print_Centered_Text(str1, r, font_id, color);
 		xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
 		xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id) + 2));
 
@@ -1153,7 +1153,7 @@ static void computer_Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t b
 		for (j = 0; j < max_missions; j++) {
 			textext_Copy_Text(str2, txtCompInfoMissionPoints);
 			snprintf(str1, sizeof(str1), str2, j + 1, pilot_record.tour_score[i][j]);
-			xfont_Print_Centered_Text(str1, r, color, font_id);
+			xfont_Print_Centered_Text(str1, r, font_id, color);
 			total_score += pilot_record.tour_score[i][j];
 			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
 		}
@@ -1163,7 +1163,7 @@ static void computer_Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t b
 			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(0, 2));
 			textext_Copy_Text(str2, txtCompTotalScore);
 			snprintf(str1, sizeof(str1), str2, (long)total_score);
-			xfont_Print_Centered_Text(str1, r, color, font_id);
+			xfont_Print_Centered_Text(str1, r, font_id, color);
 			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
 		}
 
@@ -1200,7 +1200,7 @@ static void computer_Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t ba
 				xrect_Copy_Rect(r, &page);
 			}
 			textext_Copy_Text(str1, txtCompInfoVictories);
-			xfont_Print_Centered_Text(str1, r, color, font_id);
+			xfont_Print_Centered_Text(str1, r, font_id, color);
 			xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
 			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id) + 2));
 			count++;
@@ -1310,9 +1310,9 @@ static void computer_idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, i
 	xpaint_Frame_Clipped_Rect(r, 38);
 
 	if (input->id)
-		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoLast), r, 14, font_id);
+		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoLast), r, font_id, 14);
 	else
-		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoNext), r, 14, font_id);
+		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoNext), r, font_id, 14);
 
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip_r);
@@ -1334,9 +1334,9 @@ static void computer_idraw_Computer_Info(Input* input, Rect* r, Rect* clip_r, in
 	xpaint_Frame_Clipped_Rect(r, 38);
 
 	if (input->id)
-		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoLast), r, 14, font_id);
+		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoLast), r, font_id, 14);
 	else
-		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoNext), r, 14, font_id);
+		xfont_Print_Centered_Text(textext_Get_Text(txtCompInfoNext), r, font_id, 14);
 
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip_r);
@@ -1620,10 +1620,10 @@ static void computer_xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 		}
 		tr.bottom = tr.top + text_height;
 		xfont_Enable_FontID_Shadow(font_id);
-		xfont_Print_Centered_Text(name1, &tr, 15, font_id);
+		xfont_Print_Centered_Text(name1, &tr, font_id, 15);
 		if (string[0]) {
 			xrect_Offset_Rect(&tr, 0, text_step);
-			xfont_Print_Centered_Text(string, &tr, 15, font_id);
+			xfont_Print_Centered_Text(string, &tr, font_id, 15);
 		}
 		xfont_Disable_FontID_Shadow(font_id);
 	}
@@ -2081,8 +2081,8 @@ static void computer_idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t
 				break;
 			btn = (PushButton*)input;
 			xpaint_Paint_Clipped_Rect(r, btn->pressed ? 38 : 16);
-			xfont_Print_Centered_Text(textext_Get_Text(txtCompBackBackup), (Rect*)&backup_rect[5], 14,
-									  font_id);
+			xfont_Print_Centered_Text(textext_Get_Text(txtCompBackBackup), (Rect*)&backup_rect[5], font_id,
+									  14);
 			if (xinpattr_Is_Input_Dirty(input))
 				xdirty_Dirty_Rect(clip_r);
 			break;
@@ -2093,8 +2093,8 @@ static void computer_idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t
 				break;
 			btn = (PushButton*)input;
 			xpaint_Paint_Clipped_Rect(r, btn->pressed ? 38 : 16);
-			xfont_Print_Centered_Text(textext_Get_Text(txtCompBackRestore), (Rect*)&backup_rect[6], 14,
-									  font_id);
+			xfont_Print_Centered_Text(textext_Get_Text(txtCompBackRestore), (Rect*)&backup_rect[6], font_id,
+									  14);
 			if (xinpattr_Is_Input_Dirty(input))
 				xdirty_Dirty_Rect(clip_r);
 			break;
@@ -2107,7 +2107,7 @@ static void computer_idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t
 			btn = (PushButton*)input;
 			xpaint_Paint_Clipped_Rect(r, btn->pressed ? 38 : 16);
 			xpaint_Frame_Clipped_Rect(r, 38);
-			xfont_Print_Centered_Text("OpenTIE Options", r, 14, font_id);
+			xfont_Print_Centered_Text("OpenTIE Options", r, font_id, 14);
 			if (xinpattr_Is_Input_Dirty(input))
 				xdirty_Dirty_Rect(clip_r);
 			break;
@@ -2145,14 +2145,14 @@ static void computer_idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t
 			tr.bottom = tr.top + line_step;
 			if (pilot_record.secret_order_rank > 6)
 				xfont_Print_Centered_Text(
-					textext_Get_Text(pilot_record.secret_order_rank + txtComp2Secret7 - 7), &tr, 15, font_id);
+					textext_Get_Text(pilot_record.secret_order_rank + txtComp2Secret7 - 7), &tr, font_id, 15);
 			else
 				xfont_Print_Centered_Text(
-					textext_Get_Text(pilot_record.secret_order_rank + txtCompSecret1 - 1), &tr, 15, font_id);
+					textext_Get_Text(pilot_record.secret_order_rank + txtCompSecret1 - 1), &tr, font_id, 15);
 
 			tr.top = tr.bottom;
 			tr.bottom = tr.top + line_step;
-			xfont_Print_Centered_Text(textext_Get_Text(txtCompSecretOrder), &tr, 15, font_id);
+			xfont_Print_Centered_Text(textext_Get_Text(txtCompSecretOrder), &tr, font_id, 15);
 			xfont_Disable_FontID_Shadow(0);
 		}
 

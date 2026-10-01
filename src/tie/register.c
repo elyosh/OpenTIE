@@ -590,7 +590,7 @@ static int16_t register_draw_Register_Back(Actor* actor, Rect* bounds, Rect* cli
 
 		snprintf(buf, sizeof(buf), "%d:%d", cur_page + 1, num_pages);
 		xfont_Enable_FontID_Shadow(1);
-		xfont_Print_Centered_Text(buf, &r, 15, TIE_FRONTEND_EDITION(1, 3));
+		xfont_Print_Centered_Text(buf, &r, TIE_FRONTEND_EDITION(1, 3), 15);
 		xfont_Disable_FontID_Shadow(1);
 	}
 	return 1;
@@ -958,7 +958,7 @@ static void register_idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, i
 
 	color = btn->pressed ? 18 : 20;
 	if (btn->name) {
-		xfont_Print_Centered_Text(btn->name, &tr, color, TIE_FRONTEND_EDITION(1, 3));
+		xfont_Print_Centered_Text(btn->name, &tr, TIE_FRONTEND_EDITION(1, 3), color);
 	}
 
 	if (xinpattr_Is_Input_Dirty(input))
@@ -1293,15 +1293,15 @@ static void register_Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_p
 			tr.top = frame->top + 17;
 			tr.bottom = frame->top + 22;
 		}
-		xfont_Print_Centered_Text(display_name, &tr, ci + 248, TieProfile_UsesTie98Frontend() ? 3 : 1);
+		xfont_Print_Centered_Text(display_name, &tr, TieProfile_UsesTie98Frontend() ? 3 : 1, ci + 248);
 #elif defined(TIE98)
 		tr.top = frame->top + 2 * xfont_Get_FontID_Height(3) + 4;
 		tr.bottom = tr.top + xfont_Get_FontID_Height(3);
-		xfont_Print_Centered_Text(display_name, &tr, ci + 248, 3);
+		xfont_Print_Centered_Text(display_name, &tr, 3, ci + 248);
 #else
 		tr.top = frame->top + 17;
 		tr.bottom = frame->top + 22;
-		xfont_Print_Centered_Text(display_name, &tr, ci + 248, 1);
+		xfont_Print_Centered_Text(display_name, &tr, 1, ci + 248);
 #endif
 
 		status_offset = TIE_FRONTEND_EDITION(6, xfont_Get_FontID_Height(3));
@@ -1309,7 +1309,7 @@ static void register_Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_p
 		if (phase >= 16 && pilot_record.exit_status && inner_phase >= status_phase) {
 			xrect_Offset_Rect(&tr, 0, status_offset);
 			xfont_Print_Centered_Text(textext_Get_Text((TIEText)(pilot_record.exit_status + 10)), &tr,
-									  (phase & 7) / 2 + 252, TIE_FRONTEND_EDITION(1, 3));
+									  TIE_FRONTEND_EDITION(1, 3), (phase & 7) / 2 + 252);
 		}
 	}
 }
@@ -1659,18 +1659,18 @@ static void register_idraw_Delete_Input(Input* input, Rect* frame, Rect* clip, i
 		dst.bottom = dst.top + 14;
 	}
 	xfont_Enable_FontID_Shadow(TieProfile_UsesTie98Frontend() ? 2 : 0);
-	xfont_Print_Centered_Text(title, &dst, 15, TieProfile_UsesTie98Frontend() ? 2 : 0);
+	xfont_Print_Centered_Text(title, &dst, TieProfile_UsesTie98Frontend() ? 2 : 0, 15);
 	xfont_Disable_FontID_Shadow(TieProfile_UsesTie98Frontend() ? 2 : 0);
 #elif defined(TIE98)
 	dst.top += xfont_Get_FontID_Height(2);
 	dst.bottom = dst.top + xfont_Get_FontID_Height(2);
 	xfont_Enable_FontID_Shadow(2);
-	xfont_Print_Centered_Text(title, &dst, 15, 2);
+	xfont_Print_Centered_Text(title, &dst, 2, 15);
 	xfont_Disable_FontID_Shadow(2);
 #else
 	dst.bottom = dst.top + 14;
 	xfont_Enable_FontID_Shadow(0);
-	xfont_Print_Centered_Text(title, &dst, 15, 0);
+	xfont_Print_Centered_Text(title, &dst, 0, 15);
 	xfont_Disable_FontID_Shadow(0);
 #endif
 
@@ -1854,7 +1854,7 @@ static void register_idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, 
 		xfont_Enable_FontID_Shadow(0);
 
 		textext_Copy_Text(buf, txtRegProtCopy);
-		xfont_Print_Centered_Text(buf, &tr, 15, 0);
+		xfont_Print_Centered_Text(buf, &tr, 0, 15);
 		xfont_Disable_FontID_Shadow(0);
 	} else if (id == 3) {
 		/* Symbol challenge */
@@ -1878,7 +1878,7 @@ static void register_idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, 
 		textext_Copy_Text(fmt, txtRegProtManual);
 		snprintf(buf, sizeof(buf), fmt, protect_index + 4);
 		xfont_Enable_FontID_Shadow(0);
-		xfont_Print_Centered_Text(buf, frame, 15, 0);
+		xfont_Print_Centered_Text(buf, frame, 0, 15);
 		xfont_Disable_FontID_Shadow(0);
 	}
 

@@ -891,7 +891,7 @@ void player_Draw_Map_Paragraph(Rect* clip, LandruHandle handle, int16_t flag) {
 			 * Print_Centered_Text(v26, ...) call (v26 = unified+1). */
 			if (!flag && out[0] == '>') {
 				xrect_Offset_Rect(&text_rect, 0, 1);
-				xfont_Print_Centered_Text(out + 1, &text_rect, 14, 0);
+				xfont_Print_Centered_Text(out + 1, &text_rect, 0, 14);
 				xrect_Offset_Rect(&text_rect, 0, -1);
 			} else {
 				xfont_Print_Clipped_Text(out, text_rect.left + 2, text_rect.top + 2, 0, 31);

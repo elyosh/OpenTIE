@@ -349,7 +349,7 @@ static int16_t blueprnt_draw_Blueprint_Text(Actor* the_actor, Rect* draw_rect, R
 	else
 		shipext_Get_Blueprint_Ship_Name(text);
 
-	xfont_Print_Centered_Text(text, draw_rect, 15, TIE_FRONTEND_EDITION(0, 2));
+	xfont_Print_Centered_Text(text, draw_rect, TIE_FRONTEND_EDITION(0, 2), 15);
 
 	if (xactor_Is_Actor_Dirty(the_actor))
 		xdirty_Dirty_Rect(clip_rect);
@@ -410,7 +410,7 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 		if (blueprint_info_time >= 142)
 			fade = 148 - blueprint_info_time;
 		shipext_Get_Blueprint_Ship_Name((char*)str);
-		xfont_Print_Centered_Text(str, &dst, fade + 24, font_id);
+		xfont_Print_Centered_Text(str, &dst, font_id, fade + 24);
 
 		if (t_name >= 2) {
 			int16_t t_size = t_name - 2;
@@ -422,7 +422,7 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 				fade = 148 - blueprint_info_time;
 			textext_Copy_Text(fmt, txtBlueMeters);
 			snprintf((char*)str, sizeof(str), fmt, blueprint_info_size);
-			xfont_Print_Centered_Text(str, &dst, fade + 24, font_id);
+			xfont_Print_Centered_Text(str, &dst, font_id, fade + 24);
 		}
 	}
 
@@ -450,7 +450,7 @@ static int16_t blueprnt_draw_Blueprint_Info(Actor* the_actor, Rect* draw_rect, R
 			if (blueprint_info_time >= 142)
 				fade = 148 - blueprint_info_time;
 			shipext_Get_Blueprint_Ship_Line((char*)str, i);
-			xfont_Print_Centered_Text(str, &dst, fade + 24, font_id);
+			xfont_Print_Centered_Text(str, &dst, font_id, fade + 24);
 			xrect_Offset_Rect(&dst, 0, line_height);
 			t_lines -= 4;
 		}
@@ -474,7 +474,7 @@ static int16_t blueprnt_draw_Blueprint_Title(Actor* the_actor, Rect* draw_rect, 
 
 	xactor_Get_Actor_Bounds(the_actor, &bounds);
 	text = textext_Get_Text(txtTourMainMenu);
-	xfont_Print_Centered_Text(text, &bounds, 15, TIE_FRONTEND_EDITION(0, 2));
+	xfont_Print_Centered_Text(text, &bounds, TIE_FRONTEND_EDITION(0, 2), 15);
 
 	return 1;
 }
