@@ -11,12 +11,14 @@
 /* --- Module-owned globals ----------------------------------------- */
 
 // GLOBAL: TIE95 0xD4C1E
+// GLOBAL: TIE98 0x5FD290
 uint16_t pixelswide;
 // GLOBAL: TIE95 0xD4C1C
 uint16_t pixelswidemin1;
 // GLOBAL: TIE95 0xD4C18
 uint16_t halfpixelswide;
 // GLOBAL: TIE95 0xD4C20
+// GLOBAL: TIE98 0x5FD27E
 uint16_t pixelsdeep;
 // GLOBAL: TIE95 0xD4C1A
 uint16_t pixelsdeepmin1;

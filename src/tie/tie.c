@@ -246,6 +246,7 @@ int32_t craftU3;
  * (see Camera typedef in tie.h) is owned here. replaycam lives in
  * replay.c. --- */
 // GLOBAL: TIE95 0xE2D8C
+// GLOBAL: TIE98 0x590960
 Camera camera;
 
 // GLOBAL: TIE95 0xEB0C4

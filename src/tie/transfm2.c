@@ -57,6 +57,7 @@ int32_t worldeyeC2;
 // GLOBAL: TIE95 0xEC188
 int32_t worldeyeC3;
 // GLOBAL: TIE95 0xEC170
+// GLOBAL: TIE98 0x58E064
 int32_t transfm2_screenyoffset;
 
 /* Working state */
