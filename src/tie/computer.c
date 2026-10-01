@@ -236,6 +236,10 @@ static Input* last_info_input;
 // GLOBAL: TIE95 0xFB49C
 // GLOBAL: TIE98 0x50F770
 static Input* cancel_input;
+/* TIE98: the exit confirmation's Yes button, selected by its keyboard
+ * shortcuts. */
+// GLOBAL: TIE98 0x50F588
+static Input* exit_yes_input;
 // GLOBAL: TIE95 0xFB4A0
 // GLOBAL: TIE98 0x50F590
 static char comp_exit_str[2][6];
@@ -525,11 +529,46 @@ static void computer_iuser_Exit(Input* input, int32_t time) {
 		xdialog_Set_Dialog_Exit(2);
 }
 
+/* TIE98 keyboard shortcuts for the exit confirmation: Enter, 'y' or F7
+ * select Yes, 'n' selects No. Without a key the buttons update normally. */
+// FUNCTION: TIE98 0x4104B0
+static int16_t computer_iupdate_Exit_Yes(Input* input, Rect* r, Rect* clip_r, int16_t key,
+										 InputMouseEvent left, InputMouseEvent right, int16_t x, int16_t y) {
+	if (key) {
+		switch (key) {
+			case 13: /* Enter */
+				xinpattr_Selected_Input(exit_yes_input);
+				return 1;
+			case 'y':
+				xinpattr_Selected_Input(exit_yes_input);
+				return 1;
+			case 193: /* F7 */
+				xinpattr_Selected_Input(exit_yes_input);
+				return 1;
+		}
+		return 0;
+	}
+	return xbtnpush_iupdate_Button(input, r, clip_r, 0, left, right, x, y);
+}
+
+// FUNCTION: TIE98 0x410540
+static int16_t computer_iupdate_Exit_No(Input* input, Rect* r, Rect* clip_r, int16_t key,
+										InputMouseEvent left, InputMouseEvent right, int16_t x, int16_t y) {
+	if (key) {
+		if (key != 'n')
+			return 0;
+		xinpattr_Selected_Input(cancel_input);
+		return 1;
+	}
+	return xbtnpush_iupdate_Button(input, r, clip_r, 0, left, right, x, y);
+}
+
 // FUNCTION: TIE95 0x867F8
 // FUNCTION: TIE98 0x410350
 static Input* computer_Build_Exit(int16_t id) {
 	Rect r;
 	Input* the_input;
+	Input* button;
 
 	xrect_Set_Rect(&r, 0, 0, TIE_FRONTEND_EDITION(160, 340), TIE_FRONTEND_EDITION(22, 53));
 	the_input = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
@@ -545,11 +584,20 @@ static Input* computer_Build_Exit(int16_t id) {
 
 	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(80, 180), TIE_FRONTEND_EDITION(3, 7),
 				   TIE_FRONTEND_EDITION(116, 252), TIE_FRONTEND_EDITION(19, 46));
-	xbtnpush_Alloc_Button(the_input, &r, 0, computer_iuser_Exit, comp_exit_str[0], 1);
+	button = (Input*)xbtnpush_Alloc_Button(the_input, &r, 0, computer_iuser_Exit, comp_exit_str[0], 1);
+	if (TIE_FRONTEND_TIE98) {
+		exit_yes_input = button;
+		xinpattr_Set_Input_Update_Function(exit_yes_input, computer_iupdate_Exit_Yes);
+	}
 
 	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(120, 260), TIE_FRONTEND_EDITION(3, 7),
 				   TIE_FRONTEND_EDITION(156, 332), TIE_FRONTEND_EDITION(19, 46));
-	xbtnpush_Alloc_Button(the_input, &r, 0, computer_iuser_Exit, comp_exit_str[1], 2);
+	button = (Input*)xbtnpush_Alloc_Button(the_input, &r, 0, computer_iuser_Exit, comp_exit_str[1], 2);
+	if (TIE_FRONTEND_TIE98) {
+		/* The No button becomes the cancel target, so Esc answers No too. */
+		cancel_input = button;
+		xinpattr_Set_Input_Update_Function(cancel_input, computer_iupdate_Exit_No);
+	}
 
 	return the_input;
 }
