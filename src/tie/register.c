@@ -957,9 +957,9 @@ static void register_idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, i
 	tr.top++;
 
 	color = btn->pressed ? 18 : 20;
-	if (btn->name) {
-		xfont_Print_Centered_Text(btn->name, &tr, TIE_FRONTEND_EDITION(1, 3), color);
-	}
+	xfont_Print_Centered_Text((const char*)xmemhdl_Lock_Handle(btn->name), &tr, TIE_FRONTEND_EDITION(1, 3),
+							  color);
+	xmemhdl_Unlock_Handle(btn->name);
 
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip);

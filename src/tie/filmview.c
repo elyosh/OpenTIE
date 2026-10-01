@@ -449,7 +449,8 @@ static void filmview_idraw_FV_File(Input* input, Rect* r, Rect* clip_r, int16_t 
 			PushButton* btn = (PushButton*)input;
 			xstyle_Style_Paint_Border(r, btn->pressed);
 			if (btn->name) {
-				xstyle_Style_Button_Text(btn->name, r, btn->pressed);
+				xstyle_Style_Button_Text((const char*)xmemhdl_Lock_Handle(btn->name), r, btn->pressed);
+				xmemhdl_Unlock_Handle(btn->name);
 			}
 			break;
 		}
