@@ -17,14 +17,14 @@ extern uint16_t bSquarePixels; /* derived from yAspect == 0 */
 
 int16_t rotscale_calcscale(int32_t depth, uint16_t bound_hwidth, uint16_t factor);
 
-void rotscale_prepare_fastdraw(uint16_t angle);
+void rotscale_preparefastdraw(uint16_t angle);
 
 extern int rotscale_linedata_built;
 
-void rotscale_prepare_color(const char* palette_entries);
+void rotscale_preparecolor(const char* palette_entries);
 
-int16_t rotscale_rotate_scale_image(int16_t screen_x, int16_t screen_y, uint16_t scale,
-									const uint8_t* image_hdr);
+int16_t rotscale_rotatescaleimage(int16_t screen_x, int16_t screen_y, uint16_t scale,
+								  const uint8_t* image_hdr);
 
 #ifdef __cplusplus
 }

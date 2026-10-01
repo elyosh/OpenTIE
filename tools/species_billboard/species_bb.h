@@ -12,7 +12,7 @@
  *   Per sub-frame header at `main + subhdr_offsets[i]` (u32-indexed):
  *     [1]  rgb_data_off      relative offset to N×4-byte RGB triplets
  *     [2]  rle_sub_off       relative offset to RLE sub-header (the
- *                            same +8 field rotscale_rotate_scale_image
+ *                            same +8 field rotscale_rotatescaleimage
  *                            reads as `sub_off`)
  *     [3]  output_off        rewritten at load-time; stale on disk
  *     [4]  sprite_w

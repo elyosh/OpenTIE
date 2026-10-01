@@ -65,9 +65,9 @@ struct RadarBlip;
 /* Graphics init / VESA window management */
 void rtsvga2_initgraphVGA(void);
 void rtsvga2_setvgapointers(void* vga_ptr, uint16_t mem_width, uint16_t num_lines);
-void rtsvga2_setcurrentpage(uint8_t window, uint16_t page);
-void rtsvga2_invalidatepagecache(void);
-void rtsvga2_setvesascanlinelength(uint32_t width_px);
+void rtsvga2_SetCurrentPage(uint8_t window, uint16_t page);
+void rtsvga2_InvalidatePageCache(void);
+void rtsvga2_SetVESAScanLineLength(uint32_t width_px);
 
 /* Palette */
 void rtsvga2_blankVGA(void);

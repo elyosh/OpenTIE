@@ -1410,7 +1410,7 @@ void xtrans2_drawxtrans(void) {
 	lastheap = 0;
 	vesa_page = ((uint32_t)screenMemWidth * displaycorner_lines + displaycorner_columns) / vesa_page_size;
 	videoypos = ((uint32_t)screenMemWidth * displaycorner_lines + displaycorner_columns) % vesa_page_size;
-	rtsvga2_setcurrentpage(vesa_window, (uint16_t)vesa_page);
+	rtsvga2_SetCurrentPage(vesa_window, (uint16_t)vesa_page);
 	numlastrow = 0;
 	logbufbaseptr = (uint8_t*)buffer_ptr;
 	markcnt = 0;
@@ -1435,7 +1435,7 @@ void xtrans2_drawxtrans(void) {
 		if (videoypos >= vesa_page_size) {
 			++vesa_page;
 			videoypos -= vesa_page_size;
-			rtsvga2_setcurrentpage(vesa_window, (uint16_t)vesa_page);
+			rtsvga2_SetCurrentPage(vesa_window, (uint16_t)vesa_page);
 		}
 
 		saved_tempptr = tempptr;

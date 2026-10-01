@@ -914,7 +914,7 @@ void user_setnewtarget(uint16_t new_obj) {
 		int i;
 
 		if (!TIE_FLIGHT_TIE98)
-			draw_lockshipfileptrs(model_type);
+			draw_Lockshipfileptrs(model_type);
 		nm = TIE_FLIGHT_EDITION(objectblockptr->num_meshes, modelmesh_getcount(model_type));
 		for (i = 0; i < nm; ++i) {
 			int mt = TIE_FLIGHT_EDITION(componentblockptr[i].mesh_type, modelmesh_gettype(model_type, i));
@@ -1486,7 +1486,7 @@ void user_userinterface(void) {
 				keypress = 0;
 				imuse_set_master_vol(im, saved_vol);
 				imuse_resume(im);
-				rtsvga2_invalidatepagecache();
+				rtsvga2_InvalidatePageCache();
 #endif
 			} else if (k < KEY_ALT_C) {
 				/* nothing */
@@ -1568,7 +1568,7 @@ void user_userinterface(void) {
 			keypress = 0;
 			imuse_set_master_vol(im, saved_vol);
 			imuse_resume(im);
-			rtsvga2_invalidatepagecache();
+			rtsvga2_InvalidatePageCache();
 #endif
 		} else if (k == KEY_v && !hyperspaceflag && maingameflag && !pstate.hyperin_state) {
 			/* 'v': replay screen. The spool flush, recording stop,
@@ -1713,7 +1713,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 #endif
 	{
 		if (mission.train_craft_type && (uint16_t)screen_id <= 4u) {
-			rtsvga2_invalidatepagecache();
+			rtsvga2_InvalidatePageCache();
 #ifdef TIE_MODERN
 			continuation->finished = true;
 #endif
@@ -1783,7 +1783,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 			inflight_speech_vol = (int8_t)record[3];
 			replayptr = record + 4;
 			user_nextreplaycount();
-			rtsvga2_invalidatepagecache();
+			rtsvga2_InvalidatePageCache();
 			return recorded_screen;
 
 #endif
@@ -1925,7 +1925,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 			festring_setfontsize(2);
 			imuse_set_master_vol(im, saved_master_vol);
 			imuse_resume(im);
-			rtsvga2_invalidatepagecache();
+			rtsvga2_InvalidatePageCache();
 #ifdef TIE_MODERN
 			continuation->finished = true;
 #endif
@@ -2027,9 +2027,9 @@ int32_t user_inflightinfo(int32_t screen_id) {
 		imuse_set_master_vol(im, (int16_t)saved_master_vol);
 		imuse_resume(im);
 		/* Retail USER_inflightinfo @ 0x61a53: force the next
-		 * rtsvga2_setcurrentpage to re-program the VESA bank so the
+		 * rtsvga2_SetCurrentPage to re-program the VESA bank so the
 		 * cockpit panel and HUD regain their pages after the info room. */
-		rtsvga2_invalidatepagecache();
+		rtsvga2_InvalidatePageCache();
 	}
 #ifdef TIE_MODERN
 	continuation->finished = true;
@@ -2288,7 +2288,7 @@ void user_inputforplane(void) {
 			cp = objects[pstate.target_obj_idx].craft_ptr;
 			model_type = objects[pstate.target_obj_idx].ship_idx;
 			if (!TIE_FLIGHT_TIE98)
-				draw_lockshipfileptrs(model_type);
+				draw_Lockshipfileptrs(model_type);
 			nm = TIE_FLIGHT_EDITION(objectblockptr->num_meshes, modelmesh_getcount(model_type));
 			guard = nm;
 			do {

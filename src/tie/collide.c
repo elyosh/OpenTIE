@@ -1250,7 +1250,7 @@ char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_
 
 			/* Spawn a wing/component blow-off. */
 			if (!TIE_FLIGHT_TIE98)
-				draw_lockshipfileptrs(tgt_ship);
+				draw_Lockshipfileptrs(tgt_ship);
 			{
 				uint16_t num_meshes =
 					TIE_FLIGHT_EDITION(objectblockptr->num_meshes, (uint16_t)modelmesh_getcount(tgt_ship));

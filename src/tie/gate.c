@@ -207,7 +207,7 @@ void gate_drawtraininggate(uint16_t obj_idx) {
 			bluetarget = obj_idx;
 		draw_drawcomplexobject(obj_idx);
 	} else {
-		draw_lockshipfileptrs(objects[obj_idx].ship_idx);
+		draw_Lockshipfileptrs(objects[obj_idx].ship_idx);
 		/* Tag the parent-object with 0x7000 so the draw/pick pipeline
 		 * recognises it as a training gate rather than a regular ship. */
 		parentobject = (uint16_t)(obj_idx + 0x7000);
@@ -429,7 +429,7 @@ void gate_createtraininggates(void) {
 		/* Publish craftptr for model-dependent code below. */
 		craftptr = craft;
 		if (!TIE_FLIGHT_TIE98)
-			draw_lockshipfileptrs(ship_idx);
+			draw_Lockshipfileptrs(ship_idx);
 
 		/* Apply orientation. */
 		obj->pitch = init.pitch[gate_idx];
@@ -540,7 +540,7 @@ void gate_settraininglevel(uint16_t level) {
 		if (TIE_FLIGHT_TIE98)
 			modelmesh_require_craft_capacity(ship_idx);
 		else
-			draw_lockshipfileptrs(ship_idx);
+			draw_Lockshipfileptrs(ship_idx);
 		craft = craftptr;
 
 		mesh_count =
@@ -673,7 +673,7 @@ int gate_checkgateedge(uint16_t obj_idx) {
 	int prev_pos;
 
 	if (!TIE_FLIGHT_TIE98)
-		draw_lockshipfileptrs(ship_idx);
+		draw_Lockshipfileptrs(ship_idx);
 
 	if (ship_idx == 98) {
 		base_offset = TIE_FLIGHT_EDITION((int16_t)(-(int16_t)objectblockptr->speed_default),
@@ -918,9 +918,9 @@ void gate_updategateanimations(void) {
 			craftptr = saved_craft;
 #ifdef TIE_MODERN
 			if (!TIE_FLIGHT_TIE98)
-				draw_lockshipfileptrs(ship_idx);
+				draw_Lockshipfileptrs(ship_idx);
 #elif defined(TIE95)
-			draw_lockshipfileptrs(ship_idx);
+			draw_Lockshipfileptrs(ship_idx);
 #endif
 
 			craft = objects[j].craft_ptr;
@@ -1004,7 +1004,7 @@ void gate_updategateanimations(void) {
 #endif
 	}
 	while (timeleft.minute || timeleft.second) {
-		tickbudget = (uint16_t)(tickbudget + (uint16_t)xtimer_time_elapsed());
+		tickbudget = (uint16_t)(tickbudget + (uint16_t)xtimer_Time_Elapsed());
 		if (tickbudget < 4) {
 #ifdef TIE_MODERN
 			continuation->tickbudget = tickbudget;

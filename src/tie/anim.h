@@ -28,7 +28,7 @@ extern "C" {
  *   screen_x/y     : pixel coordinates passed straight to ROTSCALE.
  *   eye_z          : signed depth, used both for the depth sort and as
  *                    rotscale_calcscale's depth input.
- *   angle          : 16-bit rotation key passed to rotscale_prepare_fastdraw.
+ *   angle          : 16-bit rotation key passed to rotscale_preparefastdraw.
  */
 typedef struct BitmapDrawEntry {
 	uint16_t obj_idx;

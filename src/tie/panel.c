@@ -2396,7 +2396,7 @@ void panel_updatecmd(void) {
 				uint16_t mt;
 
 				if (!TIE_FLIGHT_TIE98)
-					draw_lockshipfileptrs(model_type);
+					draw_Lockshipfileptrs(model_type);
 				mt = TIE_FLIGHT_EDITION(componentblockptr[(uint16_t)pstate.radar_target1].mesh_type,
 										modelmesh_gettype(model_type, pstate.radar_target1));
 				/* Fighters display mesh type 7 with component label 26. */
@@ -2982,7 +2982,7 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, i
 			int16_t side, up, fwd_neg;
 			uint8_t shift;
 
-			draw_lockshipfileptrs(model_type);
+			draw_Lockshipfileptrs(model_type);
 			mesh = &componentblockptr[(uint16_t)pstate.radar_target1];
 
 			/* Binary uses unaligned dword-HIWORD reads; each >>17 decodes

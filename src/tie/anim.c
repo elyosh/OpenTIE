@@ -401,10 +401,10 @@ int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
 	sub_off = *(const uint32_t*)(blob + tbl_off + 4 * bitmap_idx);
 	v12 = blob + sub_off;
 
-	rotscale_prepare_fastdraw((uint16_t)entry->angle);
-	rotscale_prepare_color((const char*)v12);
+	rotscale_preparefastdraw((uint16_t)entry->angle);
+	rotscale_preparecolor((const char*)v12);
 
-	return rotscale_rotate_scale_image(entry->screen_x, entry->screen_y, (uint16_t)scale, v12);
+	return rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, (uint16_t)scale, v12);
 }
 
 // FUNCTION: TIE98 0x401410
@@ -443,9 +443,9 @@ void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
 		RenderQuad_DrawRotatedSprite(entry->angle, entry->screen_x, entry->screen_y, scale,
 									 blob + frame_offset);
 	} else {
-		rotscale_prepare_fastdraw((uint16_t)entry->angle);
-		rotscale_prepare_color((const char*)(blob + frame_offset));
-		rotscale_rotate_scale_image(entry->screen_x, entry->screen_y, scale, blob + frame_offset);
+		rotscale_preparefastdraw((uint16_t)entry->angle);
+		rotscale_preparecolor((const char*)(blob + frame_offset));
+		rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, scale, blob + frame_offset);
 	}
 }
 
@@ -495,7 +495,7 @@ int16_t anim_drawverysimpleobject(uint16_t obj_idx_arg) {
 
 		if (ship_type == 89)
 			mesh_ship = objects[obj_idx_arg].ship_type_override;
-		draw_lockshipfileptrs(mesh_ship);
+		draw_Lockshipfileptrs(mesh_ship);
 
 		saved_eyex = objecteyex;
 		saved_eyey = objecteyey;
@@ -930,7 +930,7 @@ void anim_updateanimation(void) {
 		if (curgenus > GENUS_PLATFORM)
 			continue;
 
-		draw_lockshipfileptrs(ship_idx_b);
+		draw_Lockshipfileptrs(ship_idx_b);
 		num_meshes = objectblockptr->num_meshes;
 		rotwing_animated = 0;
 		craftptr = objects[obj].craft_ptr;

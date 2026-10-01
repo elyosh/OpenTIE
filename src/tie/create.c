@@ -423,7 +423,7 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 	uint16_t mi;
 
 	if (!TIE_FLIGHT_TIE98)
-		draw_lockshipfileptrs(parent->ship_idx);
+		draw_Lockshipfileptrs(parent->ship_idx);
 
 	num_meshes =
 		TIE_FLIGHT_EDITION(objectblockptr->num_meshes, (uint16_t)modelmesh_getcount(parent->ship_idx));
@@ -727,7 +727,7 @@ int16_t create_createmission(void) {
 		g_flightInitialTextureCacheFlushPending = 1;
 	fullupdateflag = 1;
 	calcframerate = 1;
-	xtimer_time_elapsed();
+	xtimer_Time_Elapsed();
 	tickcounter = 0;
 	messagecnt = 0;
 
@@ -1758,7 +1758,7 @@ uint16_t create_createcraft(void) {
 		ShipModelMesh* cb;
 		uint16_t mi;
 
-		draw_lockshipfileptrs((uint16_t)ship_idx);
+		draw_Lockshipfileptrs((uint16_t)ship_idx);
 		cb = componentblockptr;
 		for (mi = 0; mi < objectblockptr->num_meshes; mi++, cb++) {
 			if (cb->flags & 2)
@@ -1999,7 +1999,7 @@ int create_getdropposition(uint16_t fg_idx, uint16_t craft_index, uint16_t ancho
 	int16_t z_drop;
 
 	if (!TIE_FLIGHT_TIE98)
-		draw_lockshipfileptrs(species_idx);
+		draw_Lockshipfileptrs(species_idx);
 	z_drop = TIE_FLIGHT_EDITION((int16_t)(objectblockptr->speed_default >> 17),
 								(int16_t)modelbounds_getmaxz(species_idx));
 	create_getworldposition(OBJ_REF_WAYPOINT_BASE, fg_idx);

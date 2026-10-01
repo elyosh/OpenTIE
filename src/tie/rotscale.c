@@ -320,7 +320,7 @@ int16_t rotscale_calcscale(int32_t depth, uint16_t bound_hwidth, uint16_t factor
  */
 // FUNCTION: TIE95 0x48E68
 // FUNCTION: TIE98 0x476540
-void rotscale_prepare_color(const char* palette_entries) {
+void rotscale_preparecolor(const char* palette_entries) {
 	/* Both retail implementations read:
 	 *   v1 = *(int32_t *)(a1 + 40)           -- entry count
 	 *   v2 = a1 + *(int32_t *)(a1 + 12)      -- source (offset inside a1)
@@ -796,7 +796,7 @@ static void rotscale_buildlinedata(uint16_t angle, rotscale_line_data* line_data
  * ================================================================ */
 // FUNCTION: TIE95 0x48D88
 // FUNCTION: TIE98 0x476480
-void rotscale_prepare_fastdraw(uint16_t angle) {
+void rotscale_preparefastdraw(uint16_t angle) {
 	nDrawBufferWidth = (int16_t)pixelswide;
 	nDrawBufferWidthMin1 = (int16_t)pixelswidemin1;
 	nDrawBufferDepth = (int16_t)pixelsdeep;
@@ -2625,8 +2625,8 @@ static int16_t composite_to_tie98_scene(int32_t* quad_corners) {
  * ================================================================ */
 // FUNCTION: TIE95 0x48530
 // FUNCTION: TIE98 0x4761A0
-int16_t rotscale_rotate_scale_image(int16_t screen_x, int16_t screen_y, uint16_t scale,
-									const uint8_t* image_hdr) {
+int16_t rotscale_rotatescaleimage(int16_t screen_x, int16_t screen_y, uint16_t scale,
+								  const uint8_t* image_hdr) {
 	int32_t quad[8];
 	uint32_t sub_off = *(const uint32_t*)(image_hdr + 8);
 	const uint8_t* sub = image_hdr + sub_off;

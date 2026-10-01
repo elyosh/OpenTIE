@@ -189,11 +189,11 @@ void feinput_clearinput(void) {
 		if ((joybuttons & 0xF) || mousebuttons) {
 			while ((joybuttons & 0xF) || mousebuttons)
 				feinput_getinput();
-			xtimer_time_elapsed();
+			xtimer_Time_Elapsed();
 			ticks = 0;
 		}
 		feinput_getinput();
-		ticks += (int16_t)(xtimer_time_elapsed() & 0xFFFF);
+		ticks += (int16_t)(xtimer_Time_Elapsed() & 0xFFFF);
 		if (ticks >= 2)
 			break;
 	}

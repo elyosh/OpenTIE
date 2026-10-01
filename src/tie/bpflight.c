@@ -297,7 +297,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	int j;
 
 	flightResolution = frontResolution;
-	tie_initflightresolution();
+	tie_InitFlightResolution();
 	matrix = NULL;
 	cur_flight_scene = scene;
 

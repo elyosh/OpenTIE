@@ -187,12 +187,12 @@ int16_t skipcolorvga;
 /* tie.c-ish: color cycle + blank bitmask (demo watdbg puts them in rts/tie). */
 
 /* ------------------------------------------------------------------ */
-/* rtsvga2_setcurrentpage (0x4E5D4)                                   */
+/* rtsvga2_SetCurrentPage (0x4E5D4)                                   */
 /* ------------------------------------------------------------------ */
 
 /* Update the emulated VESA page cache; redundant requests are skipped. */
 // FUNCTION: TIE95 0x4E5D4
-void rtsvga2_setcurrentpage(uint8_t window, uint16_t page) {
+void rtsvga2_SetCurrentPage(uint8_t window, uint16_t page) {
 	uint32_t regs[7];
 	uint32_t prev_page = (window == 1) ? lastpageB : lastpageA;
 
@@ -214,26 +214,26 @@ void rtsvga2_setcurrentpage(uint8_t window, uint16_t page) {
 }
 
 /* ------------------------------------------------------------------ */
-/* rtsvga2_invalidatepagecache (0x4E5C0)                              */
+/* rtsvga2_InvalidatePageCache (0x4E5C0)                              */
 /* ------------------------------------------------------------------ */
 
-/* Reset the lastpageA/B cache so the next rtsvga2_setcurrentpage issues
+/* Reset the lastpageA/B cache so the next rtsvga2_SetCurrentPage issues
  * the BIOS call even if the requested page matches the previously-cached
  * value. Called after pause/resume transitions that might have moved the
  * VESA window outside RTSVGA2's control. */
 // FUNCTION: TIE95 0x4E5C0
-void rtsvga2_invalidatepagecache(void) {
+void rtsvga2_InvalidatePageCache(void) {
 	lastpageA = 0xFFFFFFFFu;
 	lastpageB = 0xFFFFFFFFu;
 }
 
 /* ------------------------------------------------------------------ */
-/* rtsvga2_setvesascanlinelength (0x4E644)                            */
+/* rtsvga2_SetVESAScanLineLength (0x4E644)                            */
 /* ------------------------------------------------------------------ */
 
 /* VESA logical scanline-length call retained for the weak platform hook. */
 // FUNCTION: TIE95 0x4E644
-void rtsvga2_setvesascanlinelength(uint32_t width_px) {
+void rtsvga2_SetVESAScanLineLength(uint32_t width_px) {
 	uint32_t regs[7];
 	regs[0] = 0x4F06;
 	regs[1] = 0;        /* BL=0 = Set in pixels */

@@ -269,7 +269,7 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 	/* Make sure componentblockptr / objectblockptr / num_meshes reflect
 	 * this craft's model. The caller (collide_lasercraftcollide) hasn't
 	 * necessarily locked our ship; do it here. */
-	draw_lockshipfileptrs(ship_idx);
+	draw_Lockshipfileptrs(ship_idx);
 
 	mesh = componentblockptr;
 	num_meshes = objectblockptr->num_meshes;
@@ -746,7 +746,7 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 		fview_newcalcrotate(craft->roll, craft->pitch, craft->heading, 0, craft);
 	}
 
-	draw_lockshipfileptrs(craft->ship_idx);
+	draw_Lockshipfileptrs(craft->ship_idx);
 
 	/* Scan meshes for MESH_MainHull entries; record up to 16 indices. */
 
@@ -1002,7 +1002,7 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 
 	mesh = NULL;
 	if (!TIE_FLIGHT_TIE98) {
-		draw_lockshipfileptrs(craft->ship_idx);
+		draw_Lockshipfileptrs(craft->ship_idx);
 		mesh = &componentblockptr[mesh_idx];
 	}
 

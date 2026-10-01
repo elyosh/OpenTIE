@@ -9,9 +9,9 @@ extern "C" {
 
 /* Read and consume elapsed 4 ms PIT ticks. */
 #ifdef TIE_MODERN
-uint32_t xtimer_time_elapsed(void);
+uint32_t xtimer_Time_Elapsed(void);
 #else
-uint16_t xtimer_time_elapsed(void);
+uint16_t xtimer_Time_Elapsed(void);
 #endif
 
 #ifdef __cplusplus

@@ -37,7 +37,7 @@ typedef struct {
 	 * as a BSP mesh via draw_drawcomplexobject. */
 	void* draw_data;
 	/* binary +0x0E (int). Pointer to the 16-entry palette-remap LUT
-	 * used by rotscale_prepare_color for this species' bitmap frames.
+	 * used by rotscale_preparecolor for this species' bitmap frames.
 	 * For planets, set from planetpalptrs[special_flag] at mission load. */
 	void* bitmap_data;
 	uint8_t side;      /* binary +0x12: IFF side (0=hostile, 1=imperial, 2=neutral) */
@@ -1604,7 +1604,7 @@ extern void* restorebox;
 /* Per-frame engine driver. Native mission scheduling is runtime-owned. */
 void tie_simulator(int replay_mode);
 
-void tie_initflightresolution(void);
+void tie_InitFlightResolution(void);
 
 /* --- Input configuration --- */
 
@@ -1621,7 +1621,7 @@ bool tie_doframe(void);
 
 void tie_updatescreen(void);
 
-int tie_makelocallights(int obj_idx);
+int tie_MakeLocalLights(int obj_idx);
 int tie_makelocallights_tie98(FlightObject* source_object);
 extern int32_t g_localLightsEnabled;
 void tie_getobjecteyexyz(uint16_t obj_idx);

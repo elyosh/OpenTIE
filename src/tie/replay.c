@@ -1327,7 +1327,7 @@ void replay_doreplayscreen(void) {
 						FrontendDisplay_BlitOffscreenToRenderSurface();
 					FlightSurface_Lock();
 				}
-				tickcounter += (uint16_t)xtimer_time_elapsed();
+				tickcounter += (uint16_t)xtimer_Time_Elapsed();
 				frameticks = tickcounter - t0;
 				if (tickcounter == t0)
 					frameticks = 1;

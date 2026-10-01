@@ -110,7 +110,7 @@ enum {
  */
 // FUNCTION: TIE95 0x35504
 // FUNCTION: TIE98 0x458BE0
-static void out_volume_bar(uint16_t vol, int16_t y) {
+static void option_outvolumebar(uint16_t vol, int16_t y) {
 	const int half_fh = (int)(int8_t)fontheight >> 1;
 	const int16_t left = (int16_t)(screenXRes - 17 * half_fh);
 	uint16_t cell;
@@ -324,7 +324,7 @@ int32_t option_optionsroom(int16_t load_settings) {
 							outchar('\n');
 							festring_setcursor(0, cursor_y);
 							if (kind == VOLUME_KIND)
-								out_volume_bar(values[row], cursor_y);
+								option_outvolumebar(values[row], cursor_y);
 							else
 								festring_outstringright((const uint8_t*)settingstrings[kind + values[row]]);
 						}

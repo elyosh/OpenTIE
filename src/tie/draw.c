@@ -60,14 +60,14 @@ int16_t relativez;
  * ========================================================================== */
 
 /* ============================================================================
- * draw_lockshipfileptrs
+ * draw_Lockshipfileptrs
  * ----------------------------------------------------------------------------
  * Resolve ship_idx → ship file pointer. Set the three module-global
  * pointers used by DRAW/FVIEW/COLLIDE/etc. Returns the byte size of the
  * LOD-records sub-table (= 6 * num_lods).
  * ========================================================================== */
 // FUNCTION: TIE95 0x1AF50
-int draw_lockshipfileptrs(uint16_t ship_idx) {
+int draw_Lockshipfileptrs(uint16_t ship_idx) {
 	LandruHandle handle = species_table[ship_idx].model_handle;
 	void* raw = xmemhdl_Lock_Handle(handle);
 	ShipModelData* base;
@@ -212,7 +212,7 @@ void draw_drawlaser(uint16_t laser_obj_idx) {
 
 	poly_table = (ShipMeshLOD*)projectiledataptrs[ship_idx - WEAPON_SPECIES_BASE];
 	if (!poly_table) {
-		draw_lockshipfileptrs(ship_idx);
+		draw_Lockshipfileptrs(ship_idx);
 		poly_table = (ShipMeshLOD*)((uint8_t*)componentblockptr + componentblockptr->render_offset);
 	}
 
@@ -407,9 +407,9 @@ uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t scr
 	sub_off = *(const uint32_t*)(bitmap_base + tbl_off);
 	v9 = bitmap_base + sub_off;
 
-	rotscale_prepare_fastdraw(angle);
-	rotscale_prepare_color((const char*)v9);
-	return rotscale_rotate_scale_image(screen_x, screen_y, 0x100, v9);
+	rotscale_preparefastdraw(angle);
+	rotscale_preparecolor((const char*)v9);
+	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, v9);
 }
 
 // FUNCTION: TIE98 0x417FF0
@@ -437,9 +437,9 @@ uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16
 		RenderQuad_DrawRotatedSprite(angle, screen_x, screen_y, 0x100, image);
 		return 0;
 	}
-	rotscale_prepare_fastdraw(angle);
-	rotscale_prepare_color((const char*)image);
-	return rotscale_rotate_scale_image(screen_x, screen_y, 0x100, image);
+	rotscale_preparefastdraw(angle);
+	rotscale_preparecolor((const char*)image);
+	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, image);
 }
 
 /* ============================================================================
@@ -556,7 +556,7 @@ ShipModelMesh* draw_gettreeorder(int* bsp_node) {
  * 1. Resolve ship_idx (mesh objects: objects[i].field_0[4]; static
  *    objects >= OBJ_REF_STATIC_BASE: staticobjects[idx-OBJ_REF_STATIC_BASE].species.
  * 2. drawpol_setmarkingcolors for decals.
- * 3. draw_lockshipfileptrs to set object/component pointers.
+ * 3. draw_Lockshipfileptrs to set object/component pointers.
  * 4. Cull: if objecteyez >= ShipModelData.render_distance, bail.
  * 5. Walk lod_records to pick the BSP root for this distance.
  * 6. create_getworldposition; compute rel-vec; bit-scale into
@@ -596,7 +596,7 @@ int draw_drawcomplexobject(int obj_idx) {
 		uint16_t static_idx = obj_idx_u16 - OBJ_REF_STATIC_BASE;
 		ship_idx = (static_idx < NUM_STATIC_OBJECTS) ? staticobjects[static_idx].species : 0;
 	}
-	draw_lockshipfileptrs(ship_idx);
+	draw_Lockshipfileptrs(ship_idx);
 
 	if (!objectblockptr || objecteyez >= objectblockptr->render_distance)
 		return drawpol_setmarkingcolors(0), 0;
@@ -691,7 +691,7 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 		highlightcolor = 1;
 	}
 
-	draw_lockshipfileptrs(ship_flag);
+	draw_Lockshipfileptrs(ship_flag);
 	/* model_scale_shift==2 routes drawpol through transfm2_geteyecoordsS2
 	 * (>> 14 instead of >> 16, 4× eye-space contribution) by pushing
 	 * parentobject's HIBYTE past 0x50 — see drawpol.c:1265/1331-1334.
@@ -1296,13 +1296,13 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 	if (relationship != 0) {
 		int speed_match;
 
-		draw_lockshipfileptrs(ship_idx);
+		draw_Lockshipfileptrs(ship_idx);
 		speed_match =
 			spec_data[spec_getspecnum(ship_idx)].dock_passive_light == (objectblockptr->speed_default >> 17);
 		if (speed_match) {
 			int d2lo_match;
 
-			draw_lockshipfileptrs(loser_ship_idx);
+			draw_Lockshipfileptrs(loser_ship_idx);
 			d2lo_match = spec_data[spec_getspecnum(loser_ship_idx)].dock_active_light ==
 						 (objectblockptr->shield_default >> 17);
 			if (d2lo_match) {
@@ -1314,7 +1314,7 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj
 	}
 
 	/* --- Full polygon-plane test. */
-	draw_lockshipfileptrs(loser_ship_idx);
+	draw_Lockshipfileptrs(loser_ship_idx);
 	b_mesh = &componentblockptr[owner_obj_id_field];
 	fview_newcalcrotate(owner_obj->roll, owner_obj->pitch, owner_obj->heading, 0, owner_obj);
 	b_detail_marker = (int8_t)craftptr->mesh_rotation[owner_obj_id_field];

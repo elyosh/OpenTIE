@@ -882,7 +882,7 @@ void replayio_replayscreen(void) {
 						return;
 					}
 #endif
-					tie_initflightresolution();
+					tie_InitFlightResolution();
 					rtsvga2_initgraphVGA();
 					feinput_setupgraphics((uint8_t)detaillevel);
 					fediskio_readfiletofarmemory(TIE_FILE_ROOT_FLIGHT_ASSET, "xtiny64.fnt", fontptrtiny);

@@ -321,7 +321,7 @@ void tie_updatescreen_tie98(void) {
 
 	dxtticks = 0;
 	oxtticks = 0;
-	tickcounter += (uint16_t)xtimer_time_elapsed();
+	tickcounter += (uint16_t)xtimer_Time_Elapsed();
 	dxtticks = tickcounter;
 	RenderScene_UnlockSceneBuffers_tie98();
 	if (g_useHardware3D)
@@ -329,7 +329,7 @@ void tie_updatescreen_tie98(void) {
 	if (!replayviewmode)
 		panel_Update3DCrtIfVisible();
 	deepspacecolor = 0;
-	final_draw_ticks = (uint16_t)xtimer_time_elapsed();
+	final_draw_ticks = (uint16_t)xtimer_Time_Elapsed();
 	g_flightDrawToOffscreenSurface = 1;
 	tickcounter += final_draw_ticks;
 	deepspacecolor = (uint8_t)-5;

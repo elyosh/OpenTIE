@@ -305,7 +305,7 @@ void shellext_Load_Preferences(void) {
 	}
 
 	/* Retail SHELLEXT_Load_Preferences translates f_res (0 or 1) into the
-	 * VGA/VBE mode number that tie_initflightresolution later consumes.
+	 * VGA/VBE mode number that tie_InitFlightResolution later consumes.
 	 * Without this, flightResolution stays zero and feinput_SetGraphicsPtrs
 	 * silently falls back to mode 0 regardless of the user's preference. */
 	if (f_res == 1)

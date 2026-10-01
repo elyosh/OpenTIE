@@ -503,7 +503,7 @@ const char _writemode[3] = { 'w', 'b', '\0' };
 const char _appendmode[3] = { 'a', 'b', '\0' };
 
 /* Rendering scratch (owned by tie.c per watdbg). maxPixelsDeep is set by
- * tie_initflightresolution per video mode; numbitmaps and lightflag are
+ * tie_InitFlightResolution per video mode; numbitmaps and lightflag are
  * written each frame by the 3D pipeline (anim.c / draw.c / xtrans2.c). */
 // GLOBAL: TIE95 0xEB154
 int32_t maxPixelsDeep;
@@ -1166,7 +1166,7 @@ static bool tie_doframe_tie98(void);
  * corresponding CP320/CP640 cockpit asset directory. */
 // FUNCTION: TIE95 0x56048
 // FUNCTION: TIE98 0x48D850
-void tie_initflightresolution(void) {
+void tie_InitFlightResolution(void) {
 	/* PORT: display ownership and mode selection happen at the simulator,
 	 * replay or frontend-preview boundary before this recovered geometry setup. */
 	if (flightResolution == TIE_FLIGHT_RES_SVGA_16 || flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
@@ -1213,7 +1213,7 @@ void tie_initflightresolution(void) {
 		 * writes via vgapointer/lineaddressVGA stay inside vesa_buff_gbl.
 		 * Leaving screenMemWidth at 1024 would overrun the 640x480 buffer
 		 * by ~180 KB/frame and clobber whatever follows it on the heap. */
-		rtsvga2_setvesascanlinelength(0x400u); /* retained for parity */
+		rtsvga2_SetVESAScanLineLength(0x400u); /* retained for parity */
 		if (TIE_DISPLAY_DX5)
 			screenMemWidth = (int32_t)g_surfacePitch;
 		else
@@ -1357,7 +1357,7 @@ int16_t tie_checkstaticobjecteyexyz(int16_t wx, int16_t wy, int16_t wz, uint16_t
 /* Build up to eight explosion lights in the source craft's reflected local
  * basis (side, -forward, up). Returns and stores the emitted count. */
 // FUNCTION: TIE95 0x57158
-int tie_makelocallights(int obj_idx) {
+int tie_MakeLocalLights(int obj_idx) {
 	uint32_t max_distance_sq;
 
 	FlightObject* src_obj = &objects[obj_idx];
@@ -1369,7 +1369,7 @@ int tie_makelocallights(int obj_idx) {
 	int light_count;
 	uint16_t scan_idx;
 
-	draw_lockshipfileptrs(src_obj->ship_idx);
+	draw_Lockshipfileptrs(src_obj->ship_idx);
 	model_scale_shift = objectblockptr->model_scale_shift;
 
 	/* Light reach scales with source ship size:
@@ -2091,7 +2091,7 @@ static bool tie_doframe_tie98(void) {
 		 * accumulated. Consume the sampled interval as one bounded frame;
 		 * the task returns to the host before another logical frame runs. */
 		const uint16_t minimum_ticks = TieFlightTiming_StepTicks();
-		tickcounter += (uint16_t)xtimer_time_elapsed();
+		tickcounter += (uint16_t)xtimer_Time_Elapsed();
 		if (tickcounter < minimum_ticks)
 			return false;
 		lastcounter = (int16_t)tickcounter;
@@ -2149,7 +2149,7 @@ static bool tie_doframe_tie98(void) {
 					tie_updatescreen();
 					rendered = 1;
 				} else if (acceleratedtimectr != 0) {
-					tickcounter += (uint16_t)xtimer_time_elapsed();
+					tickcounter += (uint16_t)xtimer_Time_Elapsed();
 					tickcounter += frameticks;
 					--acceleratedtimectr;
 				} else {
@@ -2163,7 +2163,7 @@ static bool tie_doframe_tie98(void) {
 			tie_updatescreen();
 			rendered = 1;
 		} else if (acceleratedtimectr != 0) {
-			tickcounter += (uint16_t)xtimer_time_elapsed();
+			tickcounter += (uint16_t)xtimer_Time_Elapsed();
 			tickcounter += frameticks;
 			--acceleratedtimectr;
 		} else {
@@ -2178,7 +2178,7 @@ static bool tie_doframe_tie98(void) {
 		FlightSurface_Unlock();
 		rendered = 1;
 	} else if (acceleratedtimectr != 0) {
-		tickcounter += (uint16_t)xtimer_time_elapsed();
+		tickcounter += (uint16_t)xtimer_Time_Elapsed();
 		tickcounter += frameticks;
 		--acceleratedtimectr;
 	} else {
@@ -2254,7 +2254,7 @@ bool tie_doframe(void) {
 	} else {
 		/* xtimer advances between runtime ticks; return until a complete
 		 * simulation period has accumulated. */
-		tickcounter += (uint16_t)xtimer_time_elapsed();
+		tickcounter += (uint16_t)xtimer_Time_Elapsed();
 		if (tickcounter < TieFlightTiming_StepTicks())
 			return false;
 
@@ -2327,7 +2327,7 @@ bool tie_doframe(void) {
 				} else {
 					if (acceleratedtimectr) {
 						/* Skip the render — let the timer catch up. */
-						tickcounter += (uint16_t)xtimer_time_elapsed();
+						tickcounter += (uint16_t)xtimer_Time_Elapsed();
 						tickcounter += frameticks;
 					} else {
 						if (TIE_DISPLAY_DX5)
@@ -2353,7 +2353,7 @@ bool tie_doframe(void) {
 			} else {
 				if (acceleratedtimectr) {
 					/* Skip the render — let the timer catch up. */
-					tickcounter += (uint16_t)xtimer_time_elapsed();
+					tickcounter += (uint16_t)xtimer_Time_Elapsed();
 					tickcounter += frameticks;
 				} else {
 					if (TIE_DISPLAY_DX5)
@@ -2379,7 +2379,7 @@ bool tie_doframe(void) {
 		} else {
 			if (acceleratedtimectr) {
 				/* Skip the render — let the timer catch up. */
-				tickcounter += (uint16_t)xtimer_time_elapsed();
+				tickcounter += (uint16_t)xtimer_Time_Elapsed();
 				tickcounter += frameticks;
 			} else {
 				if (TIE_DISPLAY_DX5)
@@ -2629,7 +2629,7 @@ void tie_updatescreen(void) {
 				} else if (genus_v == GENUS_GATE) {
 					gate_drawtraininggate((uint16_t)obj_iter);
 				} else {
-					tie_makelocallights(obj_iter);
+					tie_MakeLocalLights(obj_iter);
 					draw_drawcomplexobject((uint16_t)obj_iter);
 					localLightCnt = 0;
 				}
@@ -2725,11 +2725,11 @@ void tie_updatescreen(void) {
 	anim_sort_and_draw_bitmaps();
 	dxtticks = 0;
 	oxtticks = 0;
-	tickcounter += (uint16_t)xtimer_time_elapsed();
+	tickcounter += (uint16_t)xtimer_Time_Elapsed();
 	dxtticks = tickcounter;
 
 	xtrans2_drawxtrans();
-	tickcounter += (uint16_t)xtimer_time_elapsed();
+	tickcounter += (uint16_t)xtimer_Time_Elapsed();
 	dxtticks = (uint16_t)(tickcounter - dxtticks);
 
 	deepspacecolor = (uint8_t)-5;
@@ -2779,7 +2779,7 @@ void tie_simulator(int replay_mode) {
 		rotscale_linedata_built = 0;
 		replayspoolflag = 1;
 
-		tie_initflightresolution();
+		tie_InitFlightResolution();
 		rtsvga2_blankVGA();
 		if (TIE_DISPLAY_DX5)
 			FlightSurface_Lock();
@@ -3063,7 +3063,7 @@ void tie_simulator(int replay_mode) {
 			return;
 #else
 			do {
-				tickcounter += xtimer_time_elapsed();
+				tickcounter += xtimer_Time_Elapsed();
 			} while (!tickcounter);
 			while (!mission.end_flag)
 				tie_doframe();

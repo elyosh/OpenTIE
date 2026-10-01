@@ -142,7 +142,7 @@ int16_t paifight_gethullcomponent(uint16_t target_obj_idx) {
 
 	model_type = objects[target_obj_idx].ship_idx;
 	if (!TIE_FLIGHT_TIE98)
-		draw_lockshipfileptrs(model_type);
+		draw_Lockshipfileptrs(model_type);
 	num_meshes = TIE_FLIGHT_EDITION(objectblockptr->num_meshes, modelmesh_getcount(model_type));
 	for (m = 0; m < num_meshes; ++m) {
 		uint16_t mesh_type =

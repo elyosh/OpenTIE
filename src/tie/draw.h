@@ -15,7 +15,7 @@ extern "C" {
  *
  * Per-frame flow when rendering a craft:
  *   draw_drawcomplexobject(obj_idx)
- *     draw_lockshipfileptrs(ship_idx)              -- resolve handle, set
+ *     draw_Lockshipfileptrs(ship_idx)              -- resolve handle, set
  *                                                     {ship,object,component}block_ptr
  *     pick LOD root by objecteyez vs ShipModelData.lod_records
  *     create_getworldposition(obj_idx, 0)
@@ -70,7 +70,7 @@ extern int16_t relativez;
 /* Lock species[ship_idx].model_handle to obtain ship file pointer. Sets
  * shipimageptr / objectblockptr / componentblockptr. Returns the byte
  * size of the LOD-records sub-table (= 6 * num_lods). */
-int draw_lockshipfileptrs(uint16_t ship_idx);
+int draw_Lockshipfileptrs(uint16_t ship_idx);
 
 /* Resolve a mesh by ship_base + comp_idx. Sets componentblockptr.
  * Returns &mesh.lod_table (per-mesh detail-LOD table base). */

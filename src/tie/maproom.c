@@ -836,7 +836,7 @@ int32_t maproom_maproom(void) {
 	}
 	for (;;) {
 		if (render_again) {
-			tickcounter += (uint16_t)xtimer_time_elapsed();
+			tickcounter += (uint16_t)xtimer_Time_Elapsed();
 			if (tickcounter < MAP_FRAME_TICKS) {
 #ifdef TIE_MODERN
 				continuation->waiting = true;
@@ -1379,7 +1379,7 @@ int32_t maproom_maproom(void) {
 			uint16_t key;
 			uint16_t mb;
 
-			tickcounter += xtimer_time_elapsed();
+			tickcounter += xtimer_Time_Elapsed();
 			if (tickcounter >= (uint16_t)MAP_FRAME_TICKS) {
 				if (view_transition_progress < 0x76u) {
 					view_transition_progress = (uint16_t)(view_transition_progress + tickcounter);

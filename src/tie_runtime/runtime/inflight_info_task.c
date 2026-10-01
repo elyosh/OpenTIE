@@ -110,7 +110,7 @@ int32_t TieInflightInfo_ReadReplay(void) {
 	replayptr = rp + REPLAYINPUTFRAME_DISK_SIZE;
 	user_nextreplaycount();
 
-	rtsvga2_invalidatepagecache();
+	rtsvga2_InvalidatePageCache();
 	TieReplayTiming_Reset();
 	return rep_return;
 

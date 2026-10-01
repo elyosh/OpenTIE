@@ -1453,7 +1453,7 @@ int16_t paiman_dropoffmaneuver(void) {
 	create_getdropposition(tgt_fg_idx, craft_index, anchor_obj);
 	model_type = objects[ai.active_obj_idx].ship_idx;
 	if (!TIE_FLIGHT_TIE98)
-		draw_lockshipfileptrs(model_type);
+		draw_Lockshipfileptrs(model_type);
 
 	{
 		int32_t shield_hi =

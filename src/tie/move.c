@@ -176,7 +176,7 @@ void move_moveobjects(void) {
 								int16_t length;
 								uint8_t lod;
 
-								draw_lockshipfileptrs(obj->ship_idx);
+								draw_Lockshipfileptrs(obj->ship_idx);
 								collide_makeobjectexplosion(i, (char)130);
 								length = (int16_t)objectblockptr->length;
 								lod = objectblockptr->model_scale_shift;
@@ -514,7 +514,7 @@ void move_moveobjects(void) {
 						int16_t ofs_fwd;
 						int shift;
 
-						draw_lockshipfileptrs(objects[target_idx].ship_idx);
+						draw_Lockshipfileptrs(objects[target_idx].ship_idx);
 						/* 0xFFFF selects the record slot immediately before the
 						 * component table (retail `sub ebx, 40h`). */
 						if (sub_obj == 0xFFFF)
