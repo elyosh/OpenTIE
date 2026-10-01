@@ -969,7 +969,7 @@ int16_t fsfx_checktieflyby(void) {
 }
 
 // FUNCTION: TIE95 0x25AAC
-int8_t fsfx_speakeravailable(void) {
+int16_t fsfx_speakeravailable(void) {
 	uint16_t i;
 
 	if (!blastflag)

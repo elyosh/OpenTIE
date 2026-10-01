@@ -83,7 +83,7 @@ int16_t fsfx_checktieflyby(void);
  * Returns nonzero if an ally (object on the player's side) is
  * present. Used to gate random voice callouts (congrats / kills).
  */
-int8_t fsfx_speakeravailable(void);
+int16_t fsfx_speakeravailable(void);
 
 /* Queue the localized group prefix and wing number for an object's FG name.
  * Voice clips exist only for wing numbers one and two. */
