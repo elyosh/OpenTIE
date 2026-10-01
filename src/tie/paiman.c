@@ -970,7 +970,7 @@ void paiman_initzoommaneuver(void) {
 }
 
 // FUNCTION: TIE95 0x3A760
-int16_t paiman_zoommaneuver(void) { return craftptr->maneuver_timer == 0 ? 1 : 0; }
+int16_t paiman_zoommaneuver(void) { return craftptr->maneuver_timer == 0; }
 
 // FUNCTION: TIE95 0x3A770
 void paiman_initdivemaneuver(void) {
