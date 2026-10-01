@@ -17,7 +17,10 @@ void TieFlightTrace_ObserveState(void);
 void TieFlightTrace_EndFrame(void);
 
 void TieFlightTrace_AiBefore(uint16_t obj_idx);
-void TieFlightTrace_AiAfter(uint16_t obj_idx, uint8_t transition_opcode);
+/* Records the plan opcode whose handler switched the current craft's order;
+ * the next AiAfter reports it with the AI change. */
+void TieFlightTrace_AiTransition(uint8_t opcode);
+void TieFlightTrace_AiAfter(uint16_t obj_idx);
 void TieFlightTrace_Board(uint16_t actor_ref, uint16_t target_ref, TieFlightTraceBoardKind kind,
 						  uint8_t order);
 void TieFlightTrace_WeaponSpawn(uint16_t projectile_ref, uint16_t shooter_ref, uint16_t target_ref);
@@ -41,7 +44,8 @@ void TieFlightTrace_FgExit(uint16_t obj_ref, uint16_t exit_kind);
 #define TIE_FLIGHT_TRACE_OBSERVE_STATE() TieFlightTrace_ObserveState()
 #define TIE_FLIGHT_TRACE_END_FRAME() TieFlightTrace_EndFrame()
 #define TIE_FLIGHT_TRACE_AI_BEFORE(ref) TieFlightTrace_AiBefore(ref)
-#define TIE_FLIGHT_TRACE_AI_AFTER(ref, opcode) TieFlightTrace_AiAfter((ref), (opcode))
+#define TIE_FLIGHT_TRACE_AI_TRANSITION(opcode) TieFlightTrace_AiTransition(opcode)
+#define TIE_FLIGHT_TRACE_AI_AFTER(ref) TieFlightTrace_AiAfter(ref)
 #define TIE_FLIGHT_TRACE_BOARD(actor, target, kind, order)                                                   \
 	TieFlightTrace_Board((actor), (target), (kind), (order))
 #define TIE_FLIGHT_TRACE_WEAPON_SPAWN(projectile, shooter, target)                                           \
@@ -69,7 +73,8 @@ void TieFlightTrace_FgExit(uint16_t obj_ref, uint16_t exit_kind);
 #define TIE_FLIGHT_TRACE_OBSERVE_STATE() ((void)0)
 #define TIE_FLIGHT_TRACE_END_FRAME() ((void)0)
 #define TIE_FLIGHT_TRACE_AI_BEFORE(ref) ((void)0)
-#define TIE_FLIGHT_TRACE_AI_AFTER(ref, opcode) ((void)sizeof(opcode))
+#define TIE_FLIGHT_TRACE_AI_TRANSITION(opcode) ((void)sizeof(opcode))
+#define TIE_FLIGHT_TRACE_AI_AFTER(ref) ((void)0)
 #define TIE_FLIGHT_TRACE_BOARD(actor, target, kind, order) ((void)0)
 #define TIE_FLIGHT_TRACE_WEAPON_SPAWN(projectile, shooter, target) ((void)0)
 #define TIE_FLIGHT_TRACE_TARGET_CHANGE(object, old_target, new_target) ((void)0)

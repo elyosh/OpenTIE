@@ -251,9 +251,9 @@ int32_t craftU3;
 Camera camera;
 
 // GLOBAL: TIE95 0xEB0C4
-int32_t worldlocx;
-// GLOBAL: TIE95 0xEB0C8
 int32_t worldlocy;
+// GLOBAL: TIE95 0xEB0C8
+int32_t worldlocx;
 // GLOBAL: TIE95 0xEB0D0
 int32_t worldlocz;
 // GLOBAL: TIE95 0xEAC40

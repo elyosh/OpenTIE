@@ -1807,7 +1807,7 @@ int16_t paiman_boardmaneuver(void) {
 								saved_ai_ctx = ai;
 								craftptr = tgt_cd;
 								pai_setupcraftaivars(target_ref);
-								pai_initplan();
+								pai_initplan(target_ref);
 								craftptr = cd_prev;
 								ai = saved_ai_ctx;
 								TIE_FLIGHT_TRACE_BOARD(ai.active_obj_idx, target_ref,
@@ -1828,7 +1828,7 @@ int16_t paiman_boardmaneuver(void) {
 									CraftData* cd_prev = craftptr;
 									craftptr = tgt_cd;
 									pai_setupcraftaivars(target_ref);
-									pai_initplan();
+									pai_initplan(target_ref);
 									craftptr = cd_prev;
 								}
 								ai = saved_ai_ctx;

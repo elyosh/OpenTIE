@@ -1076,14 +1076,12 @@ int16_t paiorder_waitforallcreateorder(void) {
 
 // FUNCTION: TIE95 0x3F0A0
 int16_t paiorder_evasiveorder(void) {
-	if (craftptr->mode_byte != ai.plan_order)
-		return 0;
-	if ((uint8_t)craftptr->pending_radio_command != 0xFB)
-		return 0;
-
-	craftptr->ai_target_ref = (int16_t)0xFF;
-	craftptr->pending_radio_command = 0xFF;
-	return 1;
+	if (craftptr->mode_byte == ai.plan_order && (uint16_t)craftptr->pending_radio_command == 0xFB) {
+		craftptr->ai_target_ref = (int16_t)0xFF;
+		craftptr->pending_radio_command = 0xFF;
+		return 1;
+	}
+	return 0;
 }
 
 /* ======================================================================

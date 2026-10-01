@@ -132,6 +132,7 @@ typedef struct FlightTraceRecorder {
 	TraceAiState ai_observed[NUM_CRAFTS];
 	TraceDamageState damage_before[NUM_CRAFTS];
 	uint8_t ai_before_valid[NUM_CRAFTS];
+	uint8_t ai_transition_opcode; /* set during the current craft's plan step */
 	uint8_t ai_observed_valid[NUM_CRAFTS];
 	uint8_t damage_before_valid[NUM_CRAFTS];
 } FlightTraceRecorder;
@@ -852,9 +853,18 @@ void TieFlightTrace_AiBefore(uint16_t obj_idx) {
 		return;
 	trace.ai_before[obj_idx] = capture_ai(obj_idx);
 	trace.ai_before_valid[obj_idx] = 1;
+	trace.ai_transition_opcode = 0;
 }
 
-void TieFlightTrace_AiAfter(uint16_t obj_idx, uint8_t transition_opcode) {
+void TieFlightTrace_AiTransition(uint8_t opcode) {
+	if (trace.active)
+		trace.ai_transition_opcode = opcode;
+}
+
+void TieFlightTrace_AiAfter(uint16_t obj_idx) {
+	const uint8_t transition_opcode = trace.ai_transition_opcode;
+
+	trace.ai_transition_opcode = 0;
 	if (!trace.active || obj_idx >= NUM_CRAFTS || !trace.ai_before_valid[obj_idx])
 		return;
 	const TraceAiState after = capture_ai(obj_idx);

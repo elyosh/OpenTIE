@@ -1334,6 +1334,7 @@ static void talk_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh
 static int16_t talk_iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
 								   uint8_t right, int16_t x, int16_t y) {
 	uint8_t button;
+	int16_t result;
 
 	(void)r;
 	(void)clip_r;
@@ -1343,19 +1344,24 @@ static int16_t talk_iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t 
 	if (key)
 		return 0;
 
-	button = left ? left : right;
-	if (cur_talk_question != -1 && button) {
-		if (button <= 1) {
+	button = left;
+	if (!button)
+		button = right;
+	if (cur_talk_question != -1) {
+		switch (button) {
+		case 1:
 			input->var1 = 1;
-		} else if (button == 3) {
+			xinpattr_Refresh_Input(input);
+			xinpattr_Refresh_Input(talk_input);
+			break;
+		case 3:
 			input->var1 = 0;
-			input->var2 = (right == 3);
+			input->var2 = (button == right);
 			xinpattr_Selected_Input(input);
-		} else {
-			return 1;
+			xinpattr_Refresh_Input(input);
+			xinpattr_Refresh_Input(talk_input);
+			break;
 		}
-		xinpattr_Refresh_Input(input);
-		xinpattr_Refresh_Input(talk_input);
 	}
 	return 1;
 }

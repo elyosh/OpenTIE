@@ -709,8 +709,8 @@ int pai_searchforcraftingroup(uint8_t group_type1, uint16_t group_id1, int16_t c
 }
 
 // FUNCTION: TIE95 0x35DB8
-char pai_lookfordisableswitch(uint16_t fg_idx) {
-	return (pai_checkfortargetstodisable(fg_idx) != 0xFFFFu) ? 1 : 0;
+int16_t pai_lookfordisableswitch(uint16_t fg_idx) {
+	return pai_checkfortargetstodisable(fg_idx) != 0xFFFFu;
 }
 
 // FUNCTION: TIE95 0x35DD4
@@ -866,7 +866,9 @@ uint16_t pai_finddisabledingroup(uint8_t group_type1, uint16_t group_id1, int16_
 
 // FUNCTION: TIE95 0x35F7C
 void pai_settarget(void) {
-	create_getworldposition((uint16_t)craftptr->ai_target_ref, objects[ai.active_obj_idx].fg_idx);
+	uint16_t obj_idx = ai.active_obj_idx;
+
+	create_getworldposition((uint16_t)craftptr->ai_target_ref, objects[obj_idx].fg_idx);
 	craftptr->waypoint_x_cache = worldlocx;
 	craftptr->waypoint_y_cache = worldlocy;
 	craftptr->waypoint_z_cache = worldlocz;
@@ -1005,56 +1007,53 @@ uint8_t* pai_setupcraftaivars(uint16_t obj_idx) {
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x356B0
-void pai_initplan(void) {
-	uint16_t co = craftptr->current_order;
+void pai_initplan(uint16_t obj_idx) {
 	const uint8_t* plan;
-	uint8_t wpt_sel;
+	uint16_t wpt_sel;
 	uint8_t init_mode;
+	unsigned target_ref;
 
-	if (co >= 69u) {
+#ifdef TIE_MODERN
+	if (craftptr->current_order >= 69u) {
 		TieDiagnostics_Log(TIE_LOG_INFO,
 						   "[pai] initplan: current_order=%u out of range (defaulting to nullplan)\n",
-						   (unsigned)co);
-		co = 0;
+						   (unsigned)craftptr->current_order);
 		craftptr->current_order = 0;
 	}
-	plan = planptrs[co];
-	wpt_sel = plan[0];
-	init_mode = plan[1];
+#endif
+	plan = planptrs[craftptr->current_order];
+	wpt_sel = *plan++;
 
 	/* 0xFF skips waypoint initialization but still starts the plan's
 	 * maneuver and resets its runtime state below. */
 	if (wpt_sel != 0xFF) {
-		switch (wpt_sel) {
-			case 0xFD: /* home waypoint, guarded by way_used[12]. */
-				if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[12])
-					craftptr->ai_target_ref = (int16_t)0x800C;
-				else
-					craftptr->ai_target_ref = (int16_t)0x8000;
-				break;
-			case 0xFE: /* hyper waypoint, guarded by way_used[13]. */
-				if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[13])
-					craftptr->ai_target_ref = (int16_t)0x800D;
-				else
-					craftptr->ai_target_ref = (int16_t)0x8000;
-				break;
-			case 0xF9: /* unconditional home-waypoint. */
+		if (wpt_sel == 0xFD) {
+			/* home waypoint, guarded by way_used[12]. */
+			if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[12])
 				craftptr->ai_target_ref = (int16_t)0x800C;
-				break;
-			default: {
-				/* Use this craft's current active_waypoint_idx if the FG has one. */
-				uint8_t wp = craftptr->active_waypoint_idx;
-				if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[wp])
-					craftptr->ai_target_ref = (int16_t)(0x8000 | wp);
-				else
-					craftptr->ai_target_ref = (int16_t)0x8000;
-				break;
-			}
+			else
+				craftptr->ai_target_ref = (int16_t)0x8000;
+		} else if (wpt_sel == 0xFE) {
+			/* hyper waypoint, guarded by way_used[13]. */
+			if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[13])
+				craftptr->ai_target_ref = (int16_t)0x800D;
+			else
+				craftptr->ai_target_ref = (int16_t)0x8000;
+		} else if (wpt_sel == 0xF9) {
+			/* unconditional home-waypoint. */
+			craftptr->ai_target_ref = (int16_t)0x800C;
+		} else {
+			/* Use this craft's current active_waypoint_idx if the FG has one. */
+			if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[craftptr->active_waypoint_idx])
+				craftptr->ai_target_ref = (uint16_t)(craftptr->active_waypoint_idx + 0x8000);
+			else
+				craftptr->ai_target_ref = (int16_t)0x8000;
 		}
 
 		/* Resolve the waypoint to a world position for the current tick. */
-		if ((uint16_t)craftptr->ai_target_ref != 0xFFu) {
-			create_getworldposition((uint16_t)craftptr->ai_target_ref, objects[ai.active_obj_idx].fg_idx);
+		target_ref = (uint16_t)craftptr->ai_target_ref;
+		if (target_ref != 0xFFu) {
+			create_getworldposition(target_ref, objects[ai.active_obj_idx].fg_idx);
 			craftptr->waypoint_x_cache = worldlocx;
 			craftptr->waypoint_y_cache = worldlocy;
 			craftptr->waypoint_z_cache = worldlocz;
@@ -1062,6 +1061,7 @@ void pai_initplan(void) {
 	}
 
 	craftptr->ai_plan_state = 0;
+	init_mode = *plan;
 	if (init_mode != 0xFF) {
 		craftptr->mode_byte = init_mode;
 		paiman_initmaneuver();
@@ -1071,28 +1071,28 @@ void pai_initplan(void) {
 }
 
 // FUNCTION: TIE95 0x35870
-uint8_t pai_updatecraftplan(void) {
+void pai_updatecraftplan(void) {
+	uint8_t opcode;
+
 	/* Player-craft escort override: re-evaluate escort targets before
 	 * running the handler loop. */
 	if (ai.active_obj_idx == pstate.object_idx && craftptr->default_order_ldr == 20) {
 		paifight_checkescortorder();
 	}
 
-	for (;;) {
-		uint8_t opcode = *ai.plan_ptr++;
-		int16_t transition;
+	while ((opcode = *ai.plan_ptr++) != 0) {
+		OrderFunc handler = ordersfunctionptrs[opcode];
 
-		if (!opcode)
-			return 0;
-
-		transition = ordersfunctionptrs[opcode]();
-		if (transition && *ai.plan_ptr) {
+		if (handler() && *ai.plan_ptr) {
 			/* 0x41 is the wildcard next-order = ai.staged_next_order. */
-			uint8_t next_order = (*ai.plan_ptr == 0x41) ? ai.staged_next_order : *ai.plan_ptr;
-			craftptr->current_order = next_order;
+			if (*ai.plan_ptr == 0x41)
+				craftptr->current_order = ai.staged_next_order;
+			else
+				craftptr->current_order = *ai.plan_ptr;
 			pai_setupcraftaivars(ai.active_obj_idx);
-			pai_initplan();
-			return opcode;
+			pai_initplan(ai.active_obj_idx);
+			TIE_FLIGHT_TRACE_AI_TRANSITION(opcode);
+			return;
 		}
 		/* No transition: skip the next_order byte. */
 		++ai.plan_ptr;
@@ -1109,7 +1109,6 @@ void pai_updateplaneai(void) {
 
 	for (i = 0; i < NUM_CRAFTS; ++i) {
 		CraftData* c;
-		uint8_t transition_opcode;
 
 		if (!objects[i].ship_idx)
 			continue;
@@ -1132,9 +1131,9 @@ void pai_updateplaneai(void) {
 
 		pai_setupcraftaivars(i);
 		TIE_FLIGHT_TRACE_AI_BEFORE(i);
-		transition_opcode = pai_updatecraftplan();
+		pai_updatecraftplan();
 		craftptr->ai_update_rate_copy += craftptr->ai_update_rate;
-		TIE_FLIGHT_TRACE_AI_AFTER(i, transition_opcode);
+		TIE_FLIGHT_TRACE_AI_AFTER(i);
 	}
 }
 

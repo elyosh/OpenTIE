@@ -1852,7 +1852,7 @@ uint16_t create_createcraft(void) {
 	c->ai_update_rate = aiupdatetranslate[fgskill];
 
 	pai_setupcraftaivars(obj_slot);
-	pai_initplan();
+	pai_initplan(obj_slot);
 	return obj_slot;
 }
 

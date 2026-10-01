@@ -1199,7 +1199,7 @@ void user_assigntarget(uint16_t new_target_obj, uint16_t msg_template_id) {
 		if (cur == 44) {
 			cp->current_order = cp->saved_current_order;
 			pai_setupcraftaivars(i);
-			pai_initplan();
+			pai_initplan(i);
 		}
 		cp->pending_radio_command = new_target_obj;
 		last_speaker_obj = i;
@@ -2498,7 +2498,7 @@ void user_inputforplane(void) {
 			if (craftptr->current_order == 44) {
 				craftptr->current_order = craftptr->saved_current_order;
 				pai_setupcraftaivars(pstate.target_obj_idx);
-				pai_initplan();
+				pai_initplan(pstate.target_obj_idx);
 			}
 			craftptr->pending_radio_command = 251;
 			msg_radiomessage(pstate.target_obj_idx, craftptr, 0x72u, 0);
@@ -2512,7 +2512,7 @@ void user_inputforplane(void) {
 			if (craftptr->current_order == 44) {
 				craftptr->current_order = craftptr->saved_current_order;
 				pai_setupcraftaivars(pstate.target_obj_idx);
-				pai_initplan();
+				pai_initplan(pstate.target_obj_idx);
 				msg_radiomessage(pstate.target_obj_idx, craftptr, 0x74u, 0);
 			}
 			break;
@@ -2527,7 +2527,7 @@ void user_inputforplane(void) {
 				craftptr->special_order_flag = 1;
 				craftptr->current_order = (objects[pstate.target_obj_idx].genus == GENUS_STARSHIP) ? 53 : 47;
 				pai_setupcraftaivars(pstate.target_obj_idx);
-				pai_initplan();
+				pai_initplan(pstate.target_obj_idx);
 			}
 			msg_radiomessage(pstate.target_obj_idx, craftptr, 0x70u, 0);
 			break;
@@ -2591,7 +2591,7 @@ void user_inputforplane(void) {
 				craftptr->saved_current_order = craftptr->current_order;
 				craftptr->current_order = (objects[pstate.target_obj_idx].genus == GENUS_STARSHIP) ? 64 : 44;
 				pai_setupcraftaivars(pstate.target_obj_idx);
-				pai_initplan();
+				pai_initplan(pstate.target_obj_idx);
 				msg_radiomessage(pstate.target_obj_idx, craftptr, 0x73u, 0);
 			}
 			break;

@@ -28,13 +28,13 @@ void pai_updateplaneai(void);
  * Consumes planptrs[craftptr->current_order][0..1] as (waypoint_selector,
  * initial_mode_byte) and sets up ai_target_ref / waypoint_*_cache /
  * ai_plan_state / mode_byte / attacker_idx / ai_update_rate_copy. */
-void pai_initplan(void);
+void pai_initplan(uint16_t obj_idx);
 
 /* One step of the plan VM. Reads opcode bytes from pai_plan_ptr; on a
  * true return from ordersfunctionptrs[opcode], consumes the next byte as
  * the new order (0x41 = wildcard pulled from pai_flag_6d) and reboots the
  * plan via pai_setupcraftaivars + pai_initplan. */
-uint8_t pai_updatecraftplan(void);
+void pai_updatecraftplan(void);
 
 /* Prime the per-craft PAI context from objects[obj_idx]. Returns the
  * plan body pointer (planptrs[current_order] + 2). Called once per tick
@@ -66,7 +66,7 @@ int pai_searchforcraftingroup(uint8_t group_type1, uint16_t group_id1, int16_t c
 							  uint8_t group_type2, uint16_t group_id2);
 
 /* True if the given FG has any craft currently available to be disabled. */
-char pai_lookfordisableswitch(uint16_t fg_idx);
+int16_t pai_lookfordisableswitch(uint16_t fg_idx);
 
 /* Find a disable target for the current AI entry; wraps
  * pai_finddisabledingroup twice: first using the AI entry's pri/sec
