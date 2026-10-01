@@ -134,17 +134,18 @@ void shipext_Open_Ships(void) {
 }
 
 // FUNCTION: TIE95 0x80034
+// FUNCTION: TIE98 0x481240
 void shipext_Close_Ships(void) {
 	int16_t i;
 
 	for (i = 0; i < NUM_SHIPS; i++) {
 		if (ship_info[i])
-			xparagrp_Free_Paragraph(ship_info[i]);
+			xmemhdl_Free_Handle(ship_info[i]);
 		ship_info[i] = LANDRU_NULL_HANDLE;
 	}
 	for (i = 0; i < NUM_BATTLES; i++) {
 		if (ship_info[i + NUM_SHIPS])
-			xparagrp_Free_Paragraph(ship_info[i + NUM_SHIPS]);
+			xmemhdl_Free_Handle(ship_info[i + NUM_SHIPS]);
 		ship_info[i + NUM_SHIPS] = LANDRU_NULL_HANDLE;
 	}
 }
@@ -783,11 +784,12 @@ void shipext_Open_Blueprint_Ships(void) {
 }
 
 // FUNCTION: TIE95 0x808D0
+// FUNCTION: TIE98 0x481B30
 void shipext_Close_Blueprint_Ships(void) {
 	int16_t i;
 	for (i = 0; i < 4; i++) {
 		if (blueprint_info[i])
-			xparagrp_Free_Paragraph(blueprint_info[i]);
+			xmemhdl_Free_Handle(blueprint_info[i]);
 		blueprint_info[i] = LANDRU_NULL_HANDLE;
 	}
 }
