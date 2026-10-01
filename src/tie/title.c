@@ -5,6 +5,7 @@
 #endif
 #include "landru/stream.h"
 #include "landru/viewadd.h"
+#include "tie/edition.h"
 #include "tie/shell.h"
 #include "tie/shellext.h"
 #include "tie/tie.h"
@@ -130,12 +131,12 @@ static void title_end_View(int32_t time) {
 	/* Scene 8: check for exit at time 690 */
 	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
 		int16_t scene;
-		if (shellext_Check_Scene_Exit(&scene, 10, 100, film_time == 690))
+		if (shellext_Check_Scene_Exit(&scene, 10, 100, film_time == TIE_FRONTEND_EDITION(690, 694)))
 			xerror_Set_Landru_Exit(scene);
 	}
 
 	/* At time 100: reset view frame for the text crawl */
-	if (film_time == 100) {
+	if (film_time == TIE_FRONTEND_EDITION(100, 104)) {
 		Rect r;
 		xrect_Set_Rect(&r, 0, 0, 320, 200);
 		xview_Set_View_Frame(0, &r);
@@ -143,19 +144,19 @@ static void title_end_View(int32_t time) {
 	}
 
 	/* Fade out: increment base_color every other frame after time 620 */
-	if (film_time >= 620 && (film_time & 1))
+	if (film_time >= TIE_FRONTEND_EDITION(620, 624) && (film_time & 1))
 		base_color++;
 
 	/* Time 689: clear all lines before loop */
-	if (film_time == 689) {
+	if (film_time == TIE_FRONTEND_EDITION(689, 693)) {
 		for (i = 0; i < title_num_lines; i++)
 			line_used[i] = 0;
 	}
 
 	/* Advance time; skip ahead on slow systems */
-	if (++film_time == 40) {
+	if (++film_time == TIE_FRONTEND_EDITION(40, 44)) {
 		if (xio_Is_System_Slower_Than(2))
-			film_time = 64;
+			film_time = TIE_FRONTEND_EDITION(64, 68);
 	}
 }
 
@@ -175,7 +176,7 @@ static void title_user_StarWars(Actor* actor, int32_t time) {
 	}
 
 	/* At time 84: capture palette and start fade to black */
-	if (film_time == 84) {
+	if (film_time == TIE_FRONTEND_EDITION(84, 88)) {
 		xpal_Screen_To_Src_Palette(0, 0, 255);
 		xpal_Screen_To_Dest_Palette(0, 0, 255);
 		xpal_Set_Dest_Pal_Color(81, 96, 0, 0, 0);
@@ -183,7 +184,7 @@ static void title_user_StarWars(Actor* actor, int32_t time) {
 	}
 
 	/* At time 39: show and set initial scale */
-	if (film_time == 39) {
+	if (film_time == TIE_FRONTEND_EDITION(39, 43)) {
 		xactor_Show_Actor(actor);
 		xactor_Set_Actor_Scale(actor, 460, 460);
 	}
@@ -198,7 +199,7 @@ static void title_user_StarWars(Actor* actor, int32_t time) {
 		actor->yscale = 1;
 
 	/* Decelerate scale speed between times 39-100 */
-	if (film_time > 39 && film_time < 100) {
+	if (film_time > TIE_FRONTEND_EDITION(39, 43) && film_time < TIE_FRONTEND_EDITION(100, 104)) {
 		scale_amount_f += 48;
 		if (scale_amount_f >= 256) {
 			scale_amount_f -= 256;
@@ -207,7 +208,7 @@ static void title_user_StarWars(Actor* actor, int32_t time) {
 	}
 
 	/* At time 100: hide */
-	if (film_time == 100)
+	if (film_time == TIE_FRONTEND_EDITION(100, 104))
 		xactor_Hide_Actor(actor);
 }
 
@@ -222,10 +223,10 @@ static void title_user_Slow_StarWars(Actor* actor, int32_t time) {
 		return;
 	}
 
-	if (film_time == 39)
+	if (film_time == TIE_FRONTEND_EDITION(39, 43))
 		xactor_Show_Actor(actor);
 
-	if (film_time == 84) {
+	if (film_time == TIE_FRONTEND_EDITION(84, 88)) {
 		xpal_Screen_To_Src_Palette(0, 0, 255);
 		xpal_Screen_To_Dest_Palette(0, 0, 255);
 		xpal_Set_Dest_Pal_Color(81, 96, 0, 0, 0);
@@ -248,9 +249,9 @@ static void title_user_Stars(Actor* actor, int32_t time) {
 	if (!film_time) {
 		xactor_Hide_Actor(actor);
 	} else {
-		if (film_time == 38)
+		if (film_time == TIE_FRONTEND_EDITION(38, 42))
 			xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
-		if (film_time == 39)
+		if (film_time == TIE_FRONTEND_EDITION(39, 43))
 			xactor_Show_Actor(actor);
 	}
 }
@@ -353,12 +354,12 @@ static int16_t title_draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off
 // FUNCTION: TIE95 0x67148
 // FUNCTION: TIE98 0x490870
 static void title_user_Back(Actor* actor, int32_t time) {
-	int16_t start = 100;
+	int16_t start = TIE_FRONTEND_EDITION(100, 104);
 	int16_t i;
 	(void)actor;
 	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
 		if (xio_Is_System_Slower_Than(2))
-			start = 60;
+			start = TIE_FRONTEND_EDITION(60, 64);
 	} else {
 		start = 1;
 	}
@@ -467,11 +468,7 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 	base_color = 0;
 	scale_amount = 12;
 	scale_amount_f = 0;
-#if defined(TIE98) && !defined(TIE_MODERN)
-	film_time = (shellext_Get_Cur_Scene() == SCENE_TITLE) ? 0 : 103;
-#else
-	film_time = (shellext_Get_Cur_Scene() == SCENE_TITLE) ? 0 : 99;
-#endif
+	film_time = (shellext_Get_Cur_Scene() == SCENE_TITLE) ? 0 : TIE_FRONTEND_EDITION(99, 103);
 
 	/* Build scale lookup tables */
 	for (i = 0; i <= 320; i++) {
