@@ -10,8 +10,8 @@
 // FUNCTION: TIE95 0x23670
 // FUNCTION: TIE98 0x41D460
 void festring_setcursor(FestringCoord x, FestringCoord y) {
-	cursorx = x;
 	cursory = y;
+	cursorx = x;
 }
 
 // FUNCTION: TIE95 0x23680
