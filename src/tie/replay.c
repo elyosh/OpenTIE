@@ -667,8 +667,8 @@ void replay_calcreplayview(void) {
 		replay_drawreplaybutton(0x11);
 	}
 
-	if (replaycam.view_pitch_offset) {
-		replaycam.view_pitch_offset = 1;
+	if (replaycam.view_camera_control) {
+		replaycam.view_camera_control = 1;
 		camera.x = replaycam.x;
 		camera.roll = 0;
 		camera.up_angle = 0;
@@ -1131,7 +1131,7 @@ void replay_doreplayscreen(void) {
 		pstate.target_obj_idx = pstate.object_idx;
 		replaycam.view_zoom_flag = 1;
 		replaycam.view_zoom = 1280;
-		replaycam.view_pitch_offset = 0;
+		replaycam.view_camera_control = 0;
 		replaycam.up_angle = 0;
 		replaycam.side_angle = 0;
 		fullupdateflag = 1;
@@ -1465,7 +1465,7 @@ void replay_replayinput(void) {
 				pstate.target_obj_idx = user_picknexttarget(cur, dir);
 				pstate.object_idx = saved;
 				replay_drawreplaybutton(0x11);
-				if (replaycam.view_pitch_offset) {
+				if (replaycam.view_camera_control) {
 					replay_movecambehind(pstate.target_obj_idx);
 				}
 			} break;
@@ -1480,13 +1480,13 @@ void replay_replayinput(void) {
 
 			case KEY_F:
 			case KEY_f:
-				if (replaycam.view_pitch_offset) {
-					replaycam.view_pitch_offset = 0;
+				if (replaycam.view_camera_control) {
+					replaycam.view_camera_control = 0;
 					replay_replaymessage(MSG_CAMERA_FOLLOW);
 					replay_drawreplaybutton(0xA);
 					replay_drawreplaybutton(0x11);
 				} else {
-					replaycam.view_pitch_offset = 1;
+					replaycam.view_camera_control = 1;
 					create_getworldposition(pstate.target_obj_idx, 0);
 					trig2_ctop(worldlocx - camera.x, worldlocy - camera.y, worldlocz - camera.z);
 					camera.cam_pitch = (uint16_t)trig2_zangle;
@@ -1619,7 +1619,7 @@ void replay_replayinput(void) {
 		replaycam.view_zoom_rate = 64;
 	}
 
-	if (replaycam.view_pitch_offset) {
+	if (replaycam.view_camera_control) {
 		int16_t rate;
 		int16_t dx;
 		int16_t dy;

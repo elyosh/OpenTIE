@@ -87,8 +87,8 @@ void tie_updatescreen_tie98(void) {
 		}
 		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
 						  (int16_t)camera.up_angle, NULL);
-	} else if ((camera.view_zoom_flag && camera.view_heading_offset == 0) ||
-			   (camera.view_heading_offset != 0 && camera.view_pitch_offset != 0)) {
+	} else if ((camera.view_zoom_flag && camera.view_target_tracking == 0) ||
+			   (camera.view_target_tracking != 0 && camera.view_camera_control != 0)) {
 		uint8_t model_type;
 
 		TieChaseCamera_Update();
@@ -116,7 +116,7 @@ void tie_updatescreen_tie98(void) {
 		camera.x -= (worldeyeA3 * (uint16_t)objectsize) >> 15;
 		camera.y -= (worldeyeB3 * (uint16_t)objectsize) >> 15;
 		camera.z -= (worldeyeC3 * (uint16_t)objectsize) >> 15;
-	} else if (camera.view_heading_offset != 0) {
+	} else if (camera.view_target_tracking != 0) {
 		panel_pointcamera_tie98(camera.view_target_obj, 0);
 	} else {
 		FlightObject* object = &objects[camera.view_target_obj];

@@ -187,7 +187,7 @@ void user_decreasepower(uint16_t delta);
 /* Pour shield energy from src_idx (0=front, 1=rear) to dst_idx. */
 void user_adjustshields(uint16_t dst_idx, uint16_t src_idx);
 
-/* Recenter the pilot view: clears camera.view_pitch_offset when not zoomed,
+/* Recenter the pilot view: clears camera.view_camera_control when not zoomed,
  * priming cam-chase history when zoomed. */
 void user_resetview(void);
 

@@ -832,7 +832,7 @@ extern int32_t craftU1, craftU2, craftU3;
  * Field offsets verified against TIE.EXE's per-field globals around
  * 0xED5D8 / 0xED770. replaycam re-uses some fields with different
  * semantics:
- *   replaycam.view_pitch_offset = lookat-mode flag
+ *   replaycam.view_camera_control = free-camera mode (input moves the camera)
  *   replaycam.view_zoom_rate    = current zoom-step rate
  *   replaycam.view_zoom_flag    = zoom seed pad (init 1)
  */
@@ -854,11 +854,12 @@ typedef struct {
 	int16_t reserved_1E;                /* +0x1E padding */
 	int16_t view_saved_side_angle;      /* +0x20 saved side-angle */
 	int16_t view_saved_up_angle;        /* +0x22 saved up-angle */
-	int16_t view_pitch_offset;          /* +0x24 (replaycam: lookat-mode flag) */
+	int16_t view_camera_control;        /* +0x24 1 = flight input steers the external camera
+										 *       (F4 / '*'); replaycam: free-camera mode */
 	int16_t view_zoom_rate;             /* +0x26 (replaycam: zoom step rate) */
 	int16_t view_zoom_flag;             /* +0x28 0/1 zoomed-flag (low half of dword) */
 	int16_t view_zoom;                  /* +0x2A zoom factor 48..5120 (high half) */
-	int16_t view_heading_offset;        /* +0x2C target-pointed view heading offset */
+	int16_t view_target_tracking;       /* +0x2C 1 = 'z' target view (pilotview 20) follows the target */
 	int16_t cam_chase_roll_hist[60];    /* +0x2E rolling 60-tick chase-cam history */
 	int16_t cam_chase_pitch_hist[60];   /* +0xA6 */
 	int16_t cam_chase_heading_hist[60]; /* +0x11E */

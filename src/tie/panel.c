@@ -330,7 +330,7 @@ void panel_updatepanel(void) {
 			if (camera.pilotview == 20) {
 				if (!replayviewmode) {
 					camera.view_zoom_flag = 0;
-					camera.view_heading_offset = 0;
+					camera.view_target_tracking = 0;
 					lasttargetnum = -2;
 					targetblinkflag = 0;
 					camera.view_target_obj = pstate.object_idx;

@@ -699,8 +699,8 @@ int16_t create_createmission(void) {
 	camera.view_dir_dirty = 0;
 	camera.side_angle = 0;
 	camera.up_angle = 0;
-	camera.view_pitch_offset = 0;
-	camera.view_heading_offset = 0;
+	camera.view_camera_control = 0;
+	camera.view_target_tracking = 0;
 	camera.view_zoom_flag = 0;
 	camera.view_zoom = 0x400;
 	panel_forcenewviewdir(0);

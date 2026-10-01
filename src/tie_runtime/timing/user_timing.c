@@ -85,7 +85,7 @@ int16_t TieUserTiming_SlewAxis(int16_t current, int16_t target, unsigned int axi
 
 bool TieUserTiming_ThrottleCommandEligible(void) {
 	return !pstate.hyperin_state && !hyperspaceflag && pstate.player_craft &&
-		   (pstate.player_craft->status_flags & 0x20) && !camera.view_pitch_offset &&
+		   (pstate.player_craft->status_flags & 0x20) && !camera.view_camera_control &&
 		   !TieReplayRecording_KeyStartsInfoPayload((uint16_t)inputkey);
 }
 

@@ -29,7 +29,7 @@ extern "C" {
  * `delta_us` is the complete admitted simulation interval. Playback routes
  * it to every synthetic-clock consumer before applying the frame.
  * `frameticks` is restored as the engine's elapsed PIT-tick count. When
- * camera.view_pitch_offset != 0 (zoom-out strategic view) the deltax /
+ * camera.view_camera_control != 0 (input steers the external camera) the deltax /
  * deltay / deltaroll / buttons fields are zeroed at write time so only
  * the key, delta_us, and tick count are effective; throttle carries no change.
  *

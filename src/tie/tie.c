@@ -2475,8 +2475,8 @@ void tie_updatescreen(void) {
 		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
 						  (int16_t)camera.up_angle, NULL);
 		TieFlightSnapshot_RecordCameraBasis();
-	} else if ((camera.view_zoom_flag && camera.view_heading_offset == 0) ||
-			   (camera.view_heading_offset != 0 && camera.view_pitch_offset != 0)) {
+	} else if ((camera.view_zoom_flag && camera.view_target_tracking == 0) ||
+			   (camera.view_target_tracking != 0 && camera.view_camera_control != 0)) {
 		TieChaseCamera_Update();
 
 		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
@@ -2518,7 +2518,7 @@ void tie_updatescreen(void) {
 			camera.y -= 4 * ((worldeyeB3 * (uint16_t)objectsize) >> 15);
 			camera.z -= 4 * ((worldeyeC3 * (uint16_t)objectsize) >> 15);
 		}
-	} else if (camera.view_heading_offset != 0) {
+	} else if (camera.view_target_tracking != 0) {
 		panel_pointcamera(camera.view_target_obj, 0);
 		TieFlightSnapshot_RecordCameraBasis();
 	} else {
@@ -2699,7 +2699,7 @@ void tie_updatescreen(void) {
 
 			if (shipcl >= 8u && shipcl <= 0xBu &&
 				tie_checkstaticobjecteyexyz(s->world_x, s->world_y, s->world_z, bound)) {
-				/* Planets (species 100..105) self-rotate per frame. */
+				/* Asteroids (species 100..105) tumble per frame. */
 				if (spec_idx >= 100 && spec_idx <= 105 &&
 					(!TieFlightTiming_IsHighRate() || TieFlightTiming_LegacyDue())) {
 					uint16_t f =

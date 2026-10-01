@@ -1559,7 +1559,7 @@ int16_t paiman_boardmaneuver(void) {
 				/* Live target: species-specific dock approach offset. */
 				int16_t dock_fwd = spec_data[tgt_species].dock_fwd;
 				int16_t cd_rspd;
-				int16_t tgt_heading_sel;
+				int16_t offset_up;
 				int16_t dock_active_heavy = spec_data[cd->species_idx].dock_active_heavy;
 
 				if (objects[target_ref].genus && objects[target_ref].genus != GENUS_TRANSPORT) {
@@ -1574,13 +1574,14 @@ int16_t paiman_boardmaneuver(void) {
 					cd_rspd = (int16_t)(spec_data[tgt_species].dock_passive_light -
 										spec_data[cd->species_idx].dock_active_light);
 				}
-				tgt_heading_sel =
+				/* Approach point along the target's up axis, above the docking offset. */
+				offset_up =
 					(int16_t)(spec_data[tgt_species].dock_passive_heavy - dock_active_heavy +
 							  spec_data[tgt_species].dock_passive_heavy - dock_active_heavy + cd_rspd);
-				if (tgt_heading_sel < 0)
-					tgt_heading_sel = 28672;
+				if (offset_up < 0)
+					offset_up = 28672;
 
-				pai_calcrotatedpoint(&objects[target_ref], 0, tgt_heading_sel, dock_fwd);
+				pai_calcrotatedpoint(&objects[target_ref], 0, offset_up, dock_fwd);
 				cd->waypoint_x_cache = rotatedx + objects[target_ref].world_x;
 				cd->waypoint_y_cache = rotatedy + objects[target_ref].world_y;
 				wp_z = rotatedz + objects[target_ref].world_z;

@@ -251,13 +251,13 @@ void user_adjustshields(uint16_t dst_idx, uint16_t src_idx) {
  * user_resetview -- recenter the view after threat-view zoom or after
  * a target change. When zoomed (camera.view_zoom_flag != 0) prime the 60-slot
  * cam-chase angle history ring to the current orientation; otherwise
- * zero the pitch offset and either restore the saved angles (if still
+ * leave camera-control mode and either restore the saved angles (if still
  * tracking the player) or default back to pilotview 18. Binary 0x5DDE4.
  */
 // FUNCTION: TIE95 0x5FD7C
 void user_resetview(void) {
 	if (camera.view_zoom_flag) {
-		uint16_t view_idx = camera.view_heading_offset ? 20u : 18u;
+		uint16_t view_idx = camera.view_target_tracking ? 20u : 18u;
 		int i;
 
 		panelrts_setnewpilotview(view_idx);
@@ -270,7 +270,7 @@ void user_resetview(void) {
 	} else {
 		uint16_t view_idx_out;
 
-		camera.view_pitch_offset = 0;
+		camera.view_camera_control = 0;
 
 		if (camera.view_target_obj == pstate.object_idx) {
 			camera.side_angle = camera.view_saved_side_angle;
@@ -924,7 +924,7 @@ void user_setnewtarget(uint16_t new_obj) {
 			}
 		}
 	}
-	if (!replayviewmode && camera.view_heading_offset)
+	if (!replayviewmode && camera.view_target_tracking)
 		camera.view_target_obj = pstate.target_obj_idx;
 	pstate.radar_subtarget_state = 0;
 	working_subsystems = pstate.player_craft->working_subsystems;
@@ -1331,7 +1331,7 @@ void user_ejectcamera(void) {
 	camera.x = pstate.player->world_x_prev;
 	camera.y = pstate.player->world_y_prev;
 	camera.z = pstate.player->world_z_prev;
-	camera.view_pitch_offset = 1;
+	camera.view_camera_control = 1;
 	camera.up_angle = 0;
 	camera.side_angle = 0;
 	msg_clearmessagequeue();
@@ -1616,7 +1616,7 @@ void user_userinterface(void) {
 				frame.delta_us = (uint32_t)frameticks * 4000u;
 				frame.key = (uint16_t)inputkey;
 				frame.frameticks = (uint8_t)frameticks;
-				if (camera.view_pitch_offset) {
+				if (camera.view_camera_control) {
 					frame.deltax = 0;
 					frame.deltay = 0;
 					frame.deltaroll = 0;
@@ -1650,7 +1650,7 @@ void user_userinterface(void) {
 				int16_t buttons_lo4 = (int16_t)(inputbuttons & 0xF);
 				int16_t prev_buttons_lo4 = (int16_t)(pstate.prev_inputbuttons & 0xF);
 
-				if ((inputbuttons & 0xD) == 1 && !camera.view_pitch_offset)
+				if ((inputbuttons & 0xD) == 1 && !camera.view_camera_control)
 					laser_fireplayerweapon();
 
 				/* Chord-release double-tap synthesis. */
@@ -2012,7 +2012,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 		if (camera.view_zoom_flag) {
 			camera.pilotview = 0xFF;
 			lastpilotpaneldraw = -1;
-			pilotview_restore = camera.view_heading_offset ? 20u : 18u;
+			pilotview_restore = camera.view_target_tracking ? 20u : 18u;
 		} else {
 			pilotview_restore = (camera.view_target_obj == pstate.object_idx) ? camera.pilotview : 18u;
 			lastpilotpaneldraw = -1;
@@ -2159,7 +2159,7 @@ void user_inputforplane(void) {
 				break;
 			if (pstate.space_confirm_action == 1) {
 				pstate.target_obj_idx = (uint16_t)pstate.msg_arg_obj_idx;
-				if (!replayviewmode && camera.view_heading_offset)
+				if (!replayviewmode && camera.view_target_tracking)
 					camera.view_target_obj = pstate.target_obj_idx;
 				pstate.radar_subtarget_state = 0;
 				pstate.player_craft->missile_count_total = 0;
@@ -2258,10 +2258,10 @@ void user_inputforplane(void) {
 			msg_messageprintf(MSG_XFER_CANNON_TO_SHIELDS);
 			break;
 		}
-		/* Toggle camera.view_pitch_offset when zoomed (LABEL_213). */
+		/* Toggle camera.view_camera_control when zoomed (LABEL_213). */
 		case KEY_ASTERISK:
 			if (!replayviewmode && camera.view_zoom_flag)
-				camera.view_pitch_offset = (camera.view_pitch_offset == 0);
+				camera.view_camera_control = (camera.view_camera_control == 0);
 			break;
 		/* Throttle up step. */
 		case KEY_PLUS:
@@ -2330,7 +2330,7 @@ void user_inputforplane(void) {
 		case KEY_F3: {
 			int was_zoomed_out;
 
-			if (replayviewmode || camera.view_heading_offset)
+			if (replayviewmode || camera.view_target_tracking)
 				break;
 			was_zoomed_out = !camera.view_zoom_flag;
 			camera.view_zoom_flag = !camera.view_zoom_flag;
@@ -2744,7 +2744,7 @@ void user_inputforplane(void) {
 			hyperabortflag = 1;
 			camera.view_zoom_flag = 0;
 			camera.view_target_obj = pstate.object_idx;
-			camera.view_pitch_offset = 0;
+			camera.view_camera_control = 0;
 			panelrts_setnewpilotview(0);
 			camera.side_angle = 0;
 			camera.up_angle = 0;
@@ -2822,11 +2822,11 @@ void user_inputforplane(void) {
 		 * the player's cockpit. */
 		case KEY_o:
 			pstate.target_obj_idx = 0xFFFF;
-			if (!replayviewmode && camera.view_heading_offset) {
-				camera.view_heading_offset = 0;
+			if (!replayviewmode && camera.view_target_tracking) {
+				camera.view_target_tracking = 0;
 				camera.view_zoom_flag = 0;
 				camera.view_zoom = 0;
-				camera.view_pitch_offset = 0;
+				camera.view_camera_control = 0;
 				camera.view_target_obj = pstate.object_idx;
 				panelrts_setnewpilotview(0);
 				camera.side_angle = 0;
@@ -3077,8 +3077,8 @@ void user_inputforplane(void) {
 		case KEY_z: {
 			if (replayviewmode)
 				break;
-			if (camera.view_heading_offset) {
-				camera.view_heading_offset = 0;
+			if (camera.view_target_tracking) {
+				camera.view_target_tracking = 0;
 				targetblinkflag = 0;
 				camera.view_zoom_flag = (camera.view_saved_idx == 18);
 				lasttargetnum = -2;
@@ -3093,7 +3093,7 @@ void user_inputforplane(void) {
 					camera.view_saved_up_angle = camera.up_angle;
 				}
 				camera.view_zoom_flag = 1;
-				camera.view_heading_offset = 1;
+				camera.view_target_tracking = 1;
 				camera.view_target_obj = pstate.target_obj_idx;
 				targetblinkflag = 1024;
 				user_resetview();
@@ -3218,10 +3218,10 @@ void user_inputforplane(void) {
 		/* F1: return to the forward cockpit. */
 		case KEY_F1:
 			if (!replayviewmode) {
-				camera.view_heading_offset = 0;
+				camera.view_target_tracking = 0;
 				camera.view_zoom_flag = 0;
 				camera.view_target_obj = pstate.object_idx;
-				camera.view_pitch_offset = 0;
+				camera.view_camera_control = 0;
 				panelrts_setnewpilotview(0);
 				camera.side_angle = 0;
 				camera.up_angle = 0;
@@ -3234,7 +3234,7 @@ void user_inputforplane(void) {
 			int k;
 
 			frameticksmsgflag = !frameticksmsgflag;
-			if (replayviewmode || camera.view_heading_offset)
+			if (replayviewmode || camera.view_target_tracking)
 				break;
 
 			scan = (camera.view_target_obj == pstate.object_idx) ? (uint16_t)(NUM_CRAFTS - 1)
@@ -3271,7 +3271,7 @@ void user_inputforplane(void) {
 		/* F4: toggle external-camera positioning controls (LABEL_213). */
 		case KEY_F4:
 			if (!replayviewmode && camera.view_zoom_flag)
-				camera.view_pitch_offset = (camera.view_pitch_offset == 0);
+				camera.view_camera_control = (camera.view_camera_control == 0);
 			break;
 		/* F8: beam-rate cycle. */
 		case KEY_F8: {
@@ -3386,7 +3386,7 @@ void user_inputforplane(void) {
 		int16_t y_per_tick;
 		int16_t roll_per_tick;
 
-		if (camera.view_pitch_offset) {
+		if (camera.view_camera_control) {
 			TieUserTimingState* high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_User() : NULL;
 			int16_t up_delta = high_rate
 								   ? TieUserTiming_ScaleValue(inputdeltax, &high_rate->view_remainder[0])
