@@ -219,7 +219,7 @@ void panel_updateforwardpanel(void);
 void panel_updatelever(uint16_t idx, uint16_t value);
 void panel_updatemonolever(uint16_t idx, uint16_t value);
 void panel_updatevalue(uint16_t idx, uint16_t value, uint16_t flags);
-void panel_updatesetting(uint16_t value, uint16_t idx, uint16_t count, int16_t step);
+void panel_updatesetting(uint16_t value, uint16_t idx, uint16_t count, uint16_t step);
 void panel_updatecovers(void);
 void panel_updatecockpitdamage(void);
 void panel_updatereplaystuff(void);

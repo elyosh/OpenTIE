@@ -584,7 +584,7 @@ void panel_updatevalue(uint16_t idx, uint16_t value, uint16_t flags) {
  * farbufferptrs[param1+1] (lit).
  */
 // FUNCTION: TIE95 0x422AC
-void panel_updatesetting(uint16_t value, uint16_t idx, uint16_t count, int16_t step) {
+void panel_updatesetting(uint16_t value, uint16_t idx, uint16_t count, uint16_t step) {
 	uint16_t y;
 	uint16_t x;
 	uint16_t shape_base;
@@ -602,7 +602,7 @@ void panel_updatesetting(uint16_t value, uint16_t idx, uint16_t count, int16_t s
 	for (rung = 0; rung < count; ++rung) {
 		const void* shape = farbufferptrs[shape_base + (rung < value ? 1 : 0)];
 		drawshape(shape, (int)x, (int)y, 253, 0);
-		y = (uint16_t)((int16_t)y - step);
+		y -= step;
 	}
 }
 
@@ -786,7 +786,7 @@ void panel_updateclock(void) {
  */
 // FUNCTION: TIE95 0x42114
 void panel_updatepower(void) {
-	int16_t step = (flightResolution == TIE_FLIGHT_RES_VGA) ? 2 : 6;
+	uint16_t step = (flightResolution == (int16_t)TIE_FLIGHT_RES_VGA) ? 2 : 6;
 
 	if (pstate.player_craft->working_subsystems & 0x200)
 		panel_updatesetting((uint16_t)(3 * pstate.player_craft->laser_power), TIE_HUDI_POWER_LASERS, 12,
@@ -800,12 +800,12 @@ void panel_updatepower(void) {
 		panel_updatesetting((uint16_t)(3 * pstate.player_craft->beam_power), TIE_HUDI_POWER_BEAM, 12, step);
 
 	if (pstate.player_craft->working_subsystems & 0x400) {
-		uint16_t v = (uint16_t)(2 - pstate.player_craft->laser_power + 6);
+		int16_t v = (int16_t)(2 - pstate.player_craft->laser_power + 6);
 		if (pstate.player_craft->subsystem_active & 1)
-			v += (uint16_t)(2 - pstate.player_craft->shield_power);
+			v += (int16_t)(2 - pstate.player_craft->shield_power);
 		if (pstate.player_craft->subsystem_active & 0x100)
-			v += (uint16_t)(2 - pstate.player_craft->beam_power);
-		panel_updatesetting(v, TIE_HUDI_POWER_BALANCE, 12, step);
+			v += (int16_t)(2 - pstate.player_craft->beam_power);
+		panel_updatesetting((uint16_t)v, TIE_HUDI_POWER_BALANCE, 12, step);
 	}
 }
 
