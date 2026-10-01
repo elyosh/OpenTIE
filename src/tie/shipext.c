@@ -52,9 +52,11 @@ static LandruHandle ship_info[SHIP_INFO_SIZE]; /* paragraph handles */
 /* Native registration supports the shared 16-character pilot-name policy. */
 #ifdef TIE_MODERN
 // GLOBAL: TIE95 0xD14D6
+// GLOBAL: TIE98 0x589C18
 static char pilot_name[TIE_PILOT_NAME_CAPACITY];
 #else
 // GLOBAL: TIE95 0xD14D6
+// GLOBAL: TIE98 0x589C18
 static char pilot_name[14];
 #endif
 // GLOBAL: TIE95 0xD14E4

@@ -132,6 +132,7 @@ static Actor* helmet;
 // GLOBAL: TIE98 0x58AB04
 static int32_t train_time;
 // GLOBAL: TIE95 0xF578C
+// GLOBAL: TIE98 0x58AB28
 static int32_t train_mode;
 // GLOBAL: TIE95 0xF57A8
 // GLOBAL: TIE98 0x58AAF8

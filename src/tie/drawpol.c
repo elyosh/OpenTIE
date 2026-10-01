@@ -120,6 +120,7 @@ int32_t lightY;
 // GLOBAL: TIE95 0xD401C
 int32_t lightX;
 // GLOBAL: TIE95 0xC1918
+// GLOBAL: TIE98 0x58A268
 int32_t localLightCnt;
 
 /* Current polygon context */

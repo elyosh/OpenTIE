@@ -72,10 +72,13 @@ static uint32_t lastpageB = 0xFFFFFFFFu;
 
 /* fillrectangle / autofill scratch state (module-local in demo watdbg). */
 // GLOBAL: TIE95 0xDE776
+// GLOBAL: TIE98 0x5897AC
 static int16_t topfill;
 // GLOBAL: TIE95 0xDE772
+// GLOBAL: TIE98 0x5897A0
 static int16_t bottomfill;
 // GLOBAL: TIE95 0xDE77C
+// GLOBAL: TIE98 0x5897A8
 static int16_t leftfill;
 // GLOBAL: TIE95 0xDE77A
 static int16_t rightfill;
@@ -171,6 +174,7 @@ int16_t drawshapey;
 // GLOBAL: TIE95 0xDE770
 int16_t drawwidth;
 // GLOBAL: TIE95 0xDE785
+// GLOBAL: TIE98 0x5F4460
 uint8_t basecolor;
 // GLOBAL: TIE95 0xDE786
 int16_t skipcolorvga;

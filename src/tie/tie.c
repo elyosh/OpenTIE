@@ -109,6 +109,7 @@ FlightObject objects[NUM_OBJECTS];
 // GLOBAL: TIE98 0x596700
 StaticObject staticobjects[NUM_STATIC_OBJECTS];
 // GLOBAL: TIE95 0xEB70C
+// GLOBAL: TIE98 0x5926A6
 uint16_t framerate = 20; /* populated by the frame-pacer; fallback value avoids divide-by-zero before init */
 // GLOBAL: TIE95 0xEB712
 uint16_t frameticks;
@@ -403,6 +404,7 @@ uint8_t hyperabortflag;
  *                       at the end of phase 5 so the post-warp scene comes
  *                       back with the same backdrop config) */
 // GLOBAL: TIE95 0xEB722
+// GLOBAL: TIE98 0x592212
 uint16_t hyperticks;
 // GLOBAL: TIE95 0xEB716
 uint16_t hyperstarlength;
@@ -415,6 +417,7 @@ uint16_t hypertemp2;
  * Cleared to 0 during the hyperspace warp; restored from hypertemp2 in
  * phase 5. Owned by tie.c per watdbg. */
 // GLOBAL: TIE95 0xEB776
+// GLOBAL: TIE98 0x5918F5
 uint8_t drawdebrisflag;
 
 /* timers[20] -- the global cooldown bank. tie_updatetime decrements every
@@ -422,6 +425,7 @@ uint8_t drawdebrisflag;
  * TimerSlot enum in tie.h; consumers reset their slot to a tick count
  * (e.g. timers[TIMER_ANIM_UPDATE] = 29). */
 // GLOBAL: TIE95 0xEB75C
+// GLOBAL: TIE98 0x5973A0
 uint8_t calcframerate;
 // GLOBAL: TIE95 0xEB75E
 uint8_t entercombatflag;
@@ -436,14 +440,18 @@ int16_t timers[20];
 // GLOBAL: TIE95 0xEB6A6
 int16_t replaypercent;
 // GLOBAL: TIE95 0xEB6CC
+// GLOBAL: TIE98 0x5A2734
 int16_t recordingreplay;
 // GLOBAL: TIE95 0xEAC50
+// GLOBAL: TIE98 0x592684
 int32_t replaytotalcnt;
 // GLOBAL: TIE95 0xEAC60
 int32_t replaymaxcnt;
 // GLOBAL: TIE95 0xCD1F0
+// GLOBAL: TIE98 0x4F2B70
 char replayclipname[14];
 // GLOBAL: TIE95 0xCD1DC
+// GLOBAL: TIE98 0x4F2B50
 char replaystartfile[10] = "start.rpy";
 // GLOBAL: TIE95 0xCD1CF
 char replaysavegamefile[13] = "savegame.rpy";
@@ -464,6 +472,7 @@ uint8_t replayspoolflag; /* 1 = auto-spool to disk when buffer fills. */
 // GLOBAL: TIE95 0xEB74F
 uint8_t endgamereplayflag;
 // GLOBAL: TIE95 0xEB751
+// GLOBAL: TIE98 0x591FD8
 uint8_t updateactionflag; /* 1 = replay is actively advancing */
 // GLOBAL: TIE95 0xEB6B4
 // GLOBAL: TIE98 0x592210
@@ -474,6 +483,7 @@ uint16_t replayavailable; /* 1 if a saved film is loadable. */
 /* Binary is u8 in both demo and retail. Readers only test for nonzero
  * and decrement, so the narrower type matches. */
 // GLOBAL: TIE95 0xEB770
+// GLOBAL: TIE98 0x5A26A8
 uint8_t acceleratedtimectr;
 // GLOBAL: TIE95 0xEB736
 int16_t hyperspacedetail;
@@ -523,6 +533,7 @@ int32_t roughdistance;
 // GLOBAL: TIE95 0xEB70E
 uint16_t messageside; /* sampled by MSG_*message writers */
 // GLOBAL: TIE95 0xDED54
+// GLOBAL: TIE98 0x5A2688
 uint16_t argtable[4]; /* 0xED560 -- '*' and '&N' substitution slots */
 // GLOBAL: TIE95 0xEB6BE
 // GLOBAL: TIE98 0x595FD8
@@ -551,6 +562,7 @@ int32_t approxdist;
 /* --- Input state (read/written by FEINPUT, consumed by screen modules) --- */
 
 // GLOBAL: TIE95 0xEB6DE
+// GLOBAL: TIE98 0x595F64
 int16_t inputbuttons;
 // GLOBAL: TIE95 0xEB6E8
 int16_t inputkey;
@@ -571,6 +583,7 @@ int16_t joybuttons;
 // GLOBAL: TIE95 0xEB6D8
 int16_t mousebuttons;
 // GLOBAL: TIE95 0xEB6FA
+// GLOBAL: TIE98 0x591E2E
 int16_t keypress;
 // GLOBAL: TIE95 0xEB6E2
 int16_t deltamx;
@@ -653,8 +666,10 @@ char temp2string[40];
 // GLOBAL: TIE95 0xEB0D4
 void* initgraph;
 // GLOBAL: TIE95 0xEB0FC
+// GLOBAL: TIE98 0x591E50
 void (*blank)(void);
 // GLOBAL: TIE95 0xEB0F0
+// GLOBAL: TIE98 0x591E3C
 void (*unblank)(void);
 // GLOBAL: TIE95 0xEB0CC
 void (*buildpalette)(const uint8_t* rgb_src, uint16_t start_idx, uint16_t count);
@@ -667,6 +682,7 @@ uint32_t (*calcposition)(uint16_t, uint16_t);
 // GLOBAL: TIE95 0xEB0DC
 void (*drawshape)(const void*, int16_t, int16_t, int16_t, uint16_t);
 // GLOBAL: TIE95 0xEB0F4
+// GLOBAL: TIE98 0x5918E4
 void (*outchar)(int ch);
 // GLOBAL: TIE95 0xEB100
 // GLOBAL: TIE98 0x59222C
@@ -955,6 +971,7 @@ uint8_t color_remap_table[256] = {
 /* --- Buffer pointers --- */
 
 // GLOBAL: TIE95 0xEAC74
+// GLOBAL: TIE98 0x5A2750
 uint8_t* farbufferptr;
 /* Shape pointer table shared with maproom_swap_buffer_ptrs. */
 // GLOBAL: TIE95 0xEAC80
@@ -962,6 +979,7 @@ uint8_t* farbufferptrs[265];
 // GLOBAL: TIE95 0xEB0A4
 void* fontptrtiny;
 // GLOBAL: TIE95 0xEB0AC
+// GLOBAL: TIE98 0x5A26AC
 void* fontptrmicro;
 // GLOBAL: TIE95 0xEAC7C
 // GLOBAL: TIE98 0x591E48
@@ -1015,6 +1033,7 @@ BitmapDrawEntry drawitems[ANIM_DRAWITEMS_MAX];
 // GLOBAL: TIE95 0xEB764
 uint8_t blastflag;
 // GLOBAL: TIE95 0xEB761
+// GLOBAL: TIE98 0x590E68
 uint8_t blastcount;
 // GLOBAL: TIE95 0xDED5C
 // GLOBAL: TIE98 0x5A2700
@@ -1055,6 +1074,7 @@ uint16_t gatecolor;
 /* .TIE file/path scratch. The binary sizes the buffer at 64 bytes to hold
  * a full DOS directory + filename. */
 // GLOBAL: TIE95 0xCD185
+// GLOBAL: TIE98 0x4F2AE0
 char missionfilename[64];
 
 /* Front-end vs flight resolution selectors. */
@@ -1075,8 +1095,10 @@ uint8_t mapflag;
  * counts the ticks left before the next render frame; tie_doframe drains
  * it by frameticks each call. Reloaded with +236 when a render fires. */
 // GLOBAL: TIE95 0xEB750
+// GLOBAL: TIE98 0x591FD7
 uint8_t fastforwardflag;
 // GLOBAL: TIE95 0xEB6BC
+// GLOBAL: TIE98 0x5926A2
 int16_t fastforwardtimer;
 
 /* Hyperspace-cinematic + reload-mission gate. Was the binary's

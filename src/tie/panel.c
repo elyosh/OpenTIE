@@ -133,6 +133,7 @@ RadarBlip* newrightbliplist;
 RadarBlip* newleftbliplist;
 
 // GLOBAL: TIE95 0xD5B10
+// GLOBAL: TIE98 0x5FC8C0
 HudInstrument instruments[PANEL_NUM_INSTRUMENTS];
 // GLOBAL: TIE95 0xD5D4A
 int16_t oldinstruments[PANEL_NUM_INSTRUMENTS];

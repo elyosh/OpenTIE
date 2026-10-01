@@ -141,6 +141,7 @@ static int32_t nDrawBufferMemoryWidth; /* bytes per scanline */
 // GLOBAL: TIE95 0xDBC7E
 static int16_t nDrawBufferWidth;
 // GLOBAL: TIE95 0xDBC80
+// GLOBAL: TIE98 0x5FBC1E
 static int16_t nDrawBufferDepth;
 // GLOBAL: TIE95 0xDBC82
 static int16_t nDrawBufferWidthMin1;
@@ -155,6 +156,7 @@ static int16_t nDiagonalAngle;
 // GLOBAL: TIE95 0xDBC8A
 static int16_t celoffsetx;
 // GLOBAL: TIE95 0xDBC8C
+// GLOBAL: TIE98 0x5F76E6
 static int16_t celoffsety;
 
 /* Per-row scan state (mutated by setstartcase / updatecase handlers) */
@@ -245,12 +247,14 @@ typedef struct rotscale_line_data {
 // GLOBAL: TIE98 0x5F7700
 static rotscale_line_data LineData;
 // GLOBAL: TIE95 0xDB844
+// GLOBAL: TIE98 0x5FBC14
 static rotscale_line_data* pCurrentLine;
 
 /* Cache-validity flag. The binary uses dword_C787C for the same gate;
  * tie_simulator clears it on mission start to force a rebuild on the
  * next preparefastdraw call. (Owned by rotscale.c per watdbg.) */
 // GLOBAL: TIE95 0xC787C
+// GLOBAL: TIE98 0x589798
 int rotscale_linedata_built;
 
 /* --- ScaleData (per-scale lookup tables) ------------------------ */
@@ -267,6 +271,7 @@ typedef struct rotscale_scale_data {
 } rotscale_scale_data;
 
 // GLOBAL: TIE95 0xDB84C
+// GLOBAL: TIE98 0x5FB800
 static rotscale_scale_data ScaleData;
 
 /* ===================================================================

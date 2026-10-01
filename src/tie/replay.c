@@ -100,8 +100,10 @@ const uint16_t replaybuttonleft[38][2] = {
 enum { REPLAY_BUTTON_SHAPE_BASE = 0xE3 };
 
 // GLOBAL: TIE95 0xC7340
+// GLOBAL: TIE98 0x4EB010
 uint8_t replaymusic;
 // GLOBAL: TIE95 0xD5E5C
+// GLOBAL: TIE98 0x5FBC4A
 int16_t replayvolume;
 // GLOBAL: TIE95 0xD5E58
 // GLOBAL: TIE98 0x5FBC3E
@@ -112,6 +114,7 @@ uint8_t chasespecies;
 // GLOBAL: TIE95 0xD5E5E
 uint8_t trackspecies;
 // GLOBAL: TIE95 0xD5E60
+// GLOBAL: TIE98 0x5FBC40
 uint16_t trackobject;
 // GLOBAL: TIE98 0x5FBC44
 uint8_t reentersimflag;

@@ -106,6 +106,7 @@ static BitmapStruct brief_buffer;
 
 /* Flight group data + briefing state */
 // GLOBAL: TIE95 0xF6EC0
+// GLOBAL: TIE98 0x584DF0
 static EFArrayStruct fgroup;
 // GLOBAL: TIE95 0xFA744
 // GLOBAL: TIE98 0x5886A8

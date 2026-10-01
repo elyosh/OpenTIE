@@ -41,6 +41,7 @@ uint8_t* xtrans2_videobaseptr;
  * If left at 0, drawpol's writes overlap and corrupt the mask before
  * drawxtrans runs. */
 // GLOBAL: TIE95 0xCDDE6
+// GLOBAL: TIE98 0x4E44B4
 int16_t maskbufptr = (int16_t)0xC000;
 
 // GLOBAL: TIE95 0xED210

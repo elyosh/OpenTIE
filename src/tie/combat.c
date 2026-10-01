@@ -109,6 +109,7 @@ static int32_t combat_mode;
 // GLOBAL: TIE98 0x50AA60
 static int32_t combat_round;
 // GLOBAL: TIE95 0xF5910
+// GLOBAL: TIE98 0x50AA78
 static int16_t combat_help;
 // GLOBAL: TIE95 0xF590C
 // GLOBAL: TIE98 0x50AAAC
