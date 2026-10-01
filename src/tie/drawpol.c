@@ -170,6 +170,8 @@ uint16_t parentobject;
 uint16_t solidindex;
 // GLOBAL: TIE95 0xD404E
 uint8_t lightval;
+// GLOBAL: TIE95 0xD404F
+uint8_t marktot;
 // GLOBAL: TIE95 0xD4050
 uint8_t markcnt;
 // GLOBAL: TIE95 0xD4051
@@ -341,22 +343,24 @@ int8_t markcoloroffset[72] = { 0 };
  * three modes. That's the "marking material" three-frame animation.
  * ================================================================== */
 // FUNCTION: TIE95 0x1D480
-void drawpol_setmarkingcolors(MarkingMode mode) {
-	uint8_t* dest = &materialcolors[208]; /* row 13, col 0 */
-	switch (mode) {
-		case MARKING_NORMAL:
-			markcoloroffset[14] = -1;
-			memcpy(dest, markingdefs[1], 16);
-			break;
-		case MARKING_ALT:
-			markcoloroffset[14] = 1;
-			memcpy(dest, markingdefs[2], 16);
-			break;
-		case MARKING_OFF:
-		default:
-			markcoloroffset[14] = 0;
-			memcpy(dest, markingdefs[0], 16);
-			break;
+void drawpol_setmarkingcolors(uint16_t mode) {
+	int i;
+
+	if (mode == MARKING_OFF) {
+		markcoloroffset[14] = 0;
+		for (i = 0; i < 16; i++) {
+			materialcolors[208 + i] = markingdefs[0][i];
+		}
+	} else if (mode == MARKING_NORMAL) {
+		markcoloroffset[14] = -1;
+		for (i = 0; i < 16; i++) {
+			materialcolors[208 + i] = markingdefs[1][i];
+		}
+	} else if (mode == MARKING_ALT) {
+		markcoloroffset[14] = 1;
+		for (i = 0; i < 16; i++) {
+			materialcolors[208 + i] = markingdefs[2][i];
+		}
 	}
 }
 
@@ -378,45 +382,46 @@ void drawpol_setmarkingcolors(MarkingMode mode) {
  * -- 0 means draw, 1 means back-facing (handled separately or culled).
  * dobsptree's jz after checknormal skips the face when 0 is returned.
  * ================================================================== */
+int32_t dot3x(int32_t, int32_t, int32_t, int32_t, int32_t, int32_t);
+#pragma aux dot3x = "imul eax, edx" "imul ebx, esi" "imul ecx, edi" "add eax, ebx" "add eax, ecx" parm [eax] [edx] [ebx] [esi] [ecx] [edi] value [eax] modify exact [eax ebx ecx];
 // FUNCTION: TIE95 0x1E674
 uint16_t drawpol_checknormal(uint16_t face_idx) {
 	PolyFace* face = &firstfaceoff[face_idx];
+	DRAWPOL_EyeVertex* v;
+	uint8_t vtx;
 	int32_t nx;
 	int32_t ny;
-	int32_t nz_pre;
-	uint8_t first_vtx_idx;
-	DRAWPOL_EyeVertex* v;
-	uint32_t dot;
+	int32_t nz;
+
+	/* First vertex of the face: byte at face + vlist_offset + 3 */
+	vtx = ((uint8_t*)face)[face->vlist_offset + 3];
+	v = &firsteyexyz[vtx];
 
 	/* Clamp each rotated Q30 normal component to +/-0x40000000 before
 	 * shifting down to Q15. */
-	nx = face->normal_x * rotworldeyeA1 + face->normal_y * rotworldeyeB1 + face->normal_z * rotworldeyeC1;
+	nx = dot3x(rotworldeyeA1, face->normal_x, rotworldeyeB1, face->normal_y, rotworldeyeC1, face->normal_z);
 	if (nx >= 0x40000000)
 		nx = 0x3FFF0000;
 	if (nx <= -0x40000000)
 		nx = -0x3FFF0000;
 	nx >>= 15;
-	ny = face->normal_x * rotworldeyeA2 + face->normal_y * rotworldeyeB2 + face->normal_z * rotworldeyeC2;
+	ny = dot3x(rotworldeyeA2, face->normal_x, rotworldeyeB2, face->normal_y, rotworldeyeC2, face->normal_z);
 	if (ny >= 0x40000000)
 		ny = 0x3FFF0000;
 	if (ny <= -0x40000000)
 		ny = -0x3FFF0000;
 	ny >>= 15;
-	nz_pre = face->normal_x * rotworldeyeA3 + face->normal_y * rotworldeyeB3 + face->normal_z * rotworldeyeC3;
-	if (nz_pre >= 0x40000000)
-		nz_pre = 0x3FFF0000;
-	if (nz_pre <= -0x40000000)
-		nz_pre = -0x3FFF0000;
-
-	/* First vertex of the face: byte at face + vlist_offset + 3 */
-	first_vtx_idx = ((uint8_t*)face)[face->vlist_offset + 3];
-	v = &firsteyexyz[first_vtx_idx];
+	nz = dot3x(rotworldeyeA3, face->normal_x, rotworldeyeB3, face->normal_y, rotworldeyeC3, face->normal_z);
+	if (nz >= 0x40000000)
+		nz = 0x3FFF0000;
+	if (nz <= -0x40000000)
+		nz = -0x3FFF0000;
+	nz >>= 15;
 
 	/* Retail adds the shifted products in a wrapping 32-bit accumulator. */
-	dot = (uint32_t)math2_mul_q15(v->x, nx);
-	dot += (uint32_t)math2_mul_q15(v->y, ny);
-	dot += (uint32_t)math2_mul_q15(v->z, nz_pre >> 15);
-	return (dot & 0x80000000u) ? 0 : 2;
+	if ((int32_t)((uint32_t)math2_mul_q15(nx, v->x) + (uint32_t)math2_mul_q15(ny, v->y) + (uint32_t)math2_mul_q15(nz, v->z)) >= 0)
+		return 2;
+	return 0;
 }
 
 /* ======================================================================
@@ -684,216 +689,196 @@ int16_t drawpol_getlightvalue(int16_t color_byte, uint16_t face_idx) {
  * other markings use screen-coordinate tracing. */
 // FUNCTION: TIE95 0x1EC68
 void drawpol_drawmarkings(uint16_t face_idx) {
-	int i;
 	uint16_t saved_flatobj = flatobjnum;
 	uint16_t saved_layerv = layervalue;
 	uint16_t marking_idx = markingnumber[face_idx];
-
 	uint8_t* mwalk;
-	uint8_t marktot;
-	uint8_t* base_src;
-	uint16_t obj_off;
-	uint8_t* out_ptr;
-	int n_colors;
-	uint8_t* src;
-	uint16_t newdef;
-	uint8_t* pad;
 
-	layervalue = (uint8_t)marking_idx;
-	mwalk = farmarkingptr[marking_idx];
+	layervalue = marking_idx;
+	mwalk = farmarkingptr[(uint8_t)marking_idx];
 	marktot = mwalk[0];
 	markcnt = marktot;
 	mwalk += marktot + 1;
 
-	if (newobjectdef + 32u * marktot > 0xC000u) {
-		flatobjnum = saved_flatobj;
-		layervalue = saved_layerv;
-		return;
-	}
+	if (newobjectdef + 32 * marktot <= 0xC000) {
+		uint8_t* src;
+		uint8_t* out;
+		int n_colors;
+		int i;
 
-	flatobjnum = 127;
-	while (markcnt != 0) {
-		/* Depth-cull record: 0xFF marker + i32 z-threshold. */
-		uint8_t raw_vcount;
-
-		if (*mwalk == 0xFF) {
-			int32_t z_cut = *(int32_t*)(mwalk + 1);
-			mwalk += 5;
-			if (firsteyexyz[firstvertptr->body[0]].z > z_cut)
-				break;
-		}
-
-		raw_vcount = mwalk[0];
-		numpoints = raw_vcount;
-		mwalk += 1;
-		if (raw_vcount > 16) {
-			thickness = (uint16_t)(raw_vcount - 16);
-			numpoints = 2;
-			counter = 2;
-			thickness = (uint16_t)(thickness * (uint16_t)thicknessMultiple);
-		} else {
-			counter = numpoints;
-		}
-
-		firstscreenxy = newscreenxy;
-		minscreenx = newscreenxy;
-		minscreeny = newscreenxy;
-		maxscreenx = newscreenxy;
-		maxscreeny = newscreenxy;
-		sameycnt = 0;
-		samexcnt = 0;
-
-		if (closerthansizeflag || numpoints == 2) {
-			/* Eye-space barycentric interpolation into markingeyedata.verts[].
-			 * firstvertptr->body holds the 2-byte-per-vertex face body; base_idx points
-			 * to the anchor vertex slot, and (base_idx-2)/(base_idx+2) are
-			 * the previous/next vertex entries in the parent face. w_edge/
-			 * w_diag are /32 barycentric weights toward those neighbours. */
-			int i;
-
-			for (i = 0; i < numpoints; ++i) {
-				uint8_t base_idx = mwalk[0];
-				uint8_t w_edge = mwalk[1];
-				uint8_t w_diag = mwalk[2];
-				DRAWPOL_EyeVertex* v0 = &firsteyexyz[firstvertptr->body[base_idx]];
-				DRAWPOL_EyeVertex* slot = &markingeyedata.verts[i];
-				slot->x = v0->x;
-				slot->y = v0->y;
-				slot->z = v0->z;
-				if (w_edge) {
-					DRAWPOL_EyeVertex* ve = &firsteyexyz[firstvertptr->body[base_idx - 2]];
-					slot->x += ((ve->x - v0->x) * w_edge) >> 5;
-					slot->y += ((ve->y - v0->y) * w_edge) >> 5;
-					slot->z += ((ve->z - v0->z) * w_edge) >> 5;
-				}
-				if (w_diag) {
-					DRAWPOL_EyeVertex* vd = &firsteyexyz[firstvertptr->body[base_idx + 2]];
-					slot->x += ((vd->x - v0->x) * w_diag) >> 5;
-					slot->y += ((vd->y - v0->y) * w_diag) >> 5;
-					slot->z += ((vd->z - v0->z) * w_diag) >> 5;
-				}
-				mwalk += 3;
+		flatobjnum = 127;
+		do {
+			/* Depth-cull record: 0xFF marker + i32 z-threshold. */
+			if (*mwalk == 0xFF) {
+				int32_t z_cut = *(int32_t*)(mwalk + 1);
+				mwalk += 5;
+				if (z_cut < firsteyexyz[firstvertptr->flags].z)
+					break;
 			}
-			if (numpoints == 2) {
-				/* Line marking: sentinel written to scratch.z and to
-				 * verts[numpoints].z (the polygon-close slot). Rendering
-				 * code treats these as 'no further endpoint'. */
-				markingeyedata.scratch.z = -1;
-				markingeyedata.verts[2].z = -1;
+
+			numpoints = *mwalk;
+			if (*mwalk++ > 16) {
+				thickness = numpoints - 16;
+				thickness = thicknessMultiple * thickness;
+				numpoints = 2;
+				counter = 2;
 			} else {
-				/* Close the polygon: append verts[0] as verts[numpoints]
-				 * so the wrap edge renders; stash last vertex into scratch
-				 * for the line-endpoint register used downstream. */
-				markingeyedata.verts[numpoints] = markingeyedata.verts[0];
-				markingeyedata.scratch = markingeyedata.verts[numpoints - 1];
+				counter = numpoints;
 			}
-			lastscreenxy = transfm2_getscreencoords(markingeyedata.verts, firstscreenxy);
-		} else {
-			/* Screen-space barycentric (calcflag[] holds projected pairs). */
-			int32_t* out = newscreenxy;
-			int j;
 
-			for (j = 0; j < numpoints; ++j) {
-				uint8_t base_idx = mwalk[0];
-				uint8_t w_edge = mwalk[1];
-				uint8_t w_diag = mwalk[2];
-				TRANSFM2_ScreenPoint* s0 = calcflag[firstvertptr->body[base_idx]];
-				out[0] = s0->xy[0];
-				out[1] = s0->xy[1];
-				if (w_edge) {
-					TRANSFM2_ScreenPoint* se = calcflag[firstvertptr->body[base_idx - 2]];
-					out[0] += ((se->xy[0] - s0->xy[0]) * w_edge) >> 5;
-					out[1] += ((se->xy[1] - s0->xy[1]) * w_edge) >> 5;
+			firstscreenxy = newscreenxy;
+			minscreenx = newscreenxy;
+			minscreeny = newscreenxy;
+			maxscreenx = newscreenxy;
+			maxscreeny = newscreenxy;
+			sameycnt = 0;
+			samexcnt = 0;
+
+			if (closerthansizeflag || (uint16_t)numpoints == 2) {
+				/* Eye-space barycentric interpolation into markingeyedata.verts[].
+				 * mwalk[0] is the byte offset of the anchor vertex index within
+				 * the parent face record; the previous/next vertex indices sit
+				 * two bytes either side. mwalk[1]/mwalk[2] are /32 barycentric
+				 * weights toward those neighbours. */
+				DRAWPOL_EyeVertex* slot;
+
+				for (i = 0; i < (uint16_t)numpoints; ++i) {
+					uint16_t prev_vtx = firstvertptr->body[mwalk[0] - 3];
+					uint16_t next_vtx = firstvertptr->body[mwalk[0] + 1];
+					DRAWPOL_EyeVertex* v0 = &firsteyexyz[firstvertptr->body[mwalk[0] - 1]];
+					DRAWPOL_EyeVertex* vn;
+
+					slot = &markingeyedata.verts[i];
+					slot->x = v0->x;
+					slot->y = v0->y;
+					slot->z = v0->z;
+					vn = &firsteyexyz[prev_vtx];
+					if (mwalk[1]) {
+						slot->x += ((vn->x - v0->x) * mwalk[1]) >> 5;
+						slot->y += ((vn->y - v0->y) * mwalk[1]) >> 5;
+						slot->z += ((vn->z - v0->z) * mwalk[1]) >> 5;
+					}
+					vn = &firsteyexyz[next_vtx];
+					if (mwalk[2]) {
+						slot->x += ((vn->x - v0->x) * mwalk[2]) >> 5;
+						slot->y += ((vn->y - v0->y) * mwalk[2]) >> 5;
+						slot->z += ((vn->z - v0->z) * mwalk[2]) >> 5;
+					}
+					mwalk += 3;
 				}
-				if (w_diag) {
-					TRANSFM2_ScreenPoint* sd = calcflag[firstvertptr->body[base_idx + 2]];
-					out[0] += (w_diag * (sd->xy[0] - s0->xy[0])) >> 5;
-					out[1] += (w_diag * (sd->xy[1] - s0->xy[1])) >> 5;
+				if ((uint16_t)numpoints == 2) {
+					/* Line marking: sentinel written to scratch.z and to the
+					 * polygon-close slot's z. */
+					markingeyedata.scratch.z = -1;
+					slot[1].z = -1;
+				} else {
+					/* Close the polygon: append verts[0] after the last vertex
+					 * and stash the last vertex into scratch. */
+					slot[1].x = markingeyedata.verts[0].x;
+					slot[1].y = markingeyedata.verts[0].y;
+					slot[1].z = markingeyedata.verts[0].z;
+					markingeyedata.scratch.x = slot->x;
+					markingeyedata.scratch.y = slot->y;
+					markingeyedata.scratch.z = slot->z;
 				}
-				transfm2_doxminmax(out[0], out);
-				mwalk += 3;
-				transfm2_doyminmax(out[1], out);
-				out += 2;
+				lastscreenxy = transfm2_getscreencoords(markingeyedata.verts, firstscreenxy);
+			} else {
+				/* Screen-space barycentric (calcflag[] holds projected pairs). */
+				int32_t* xy = newscreenxy;
+
+				for (i = 0; i < (uint16_t)numpoints; ++i) {
+					uint16_t next_vtx = firstvertptr->body[mwalk[0] + 1];
+					uint16_t prev_vtx = firstvertptr->body[mwalk[0] - 3];
+					TRANSFM2_ScreenPoint* s0 = calcflag[firstvertptr->body[mwalk[0] - 1]];
+					TRANSFM2_ScreenPoint* sn;
+
+					xy[0] = s0->xy[0];
+					xy[1] = s0->xy[1];
+					sn = calcflag[prev_vtx];
+					if (mwalk[1]) {
+						xy[0] += ((sn->xy[0] - s0->xy[0]) * mwalk[1]) >> 5;
+						xy[1] += ((sn->xy[1] - s0->xy[1]) * mwalk[1]) >> 5;
+					}
+					sn = calcflag[next_vtx];
+					if (mwalk[2]) {
+						xy[0] += ((sn->xy[0] - s0->xy[0]) * mwalk[2]) >> 5;
+						xy[1] += ((sn->xy[1] - s0->xy[1]) * mwalk[2]) >> 5;
+					}
+					transfm2_doxminmax(xy[0], xy);
+					mwalk += 3;
+					transfm2_doyminmax(xy[1], xy);
+					xy += 2;
+				}
+				lastscreenxy = xy;
 			}
-			lastscreenxy = out;
-		}
 
-		if (numpoints == 2) {
-			int32_t mid_z;
+			if ((uint16_t)numpoints == 2) {
+				int32_t mid_z;
 
-			polyidbyte = (uint16_t)(flatobjnum + 0x80);
-			edgeidbyte = layervalue;
-			objectedgeword = (uint16_t)((uint8_t)layervalue | (polyidbyte << 8));
-			/* Average z of the two marking endpoints: binary reads
-			 * dword_E24D8 (byte 32 = verts[1].z) and dword_E24CC
-			 * (byte 20 = verts[0].z) -- perspective-scales thickness. */
-			mid_z = (markingeyedata.verts[1].z + markingeyedata.verts[0].z) / 2;
-			if (mid_z > 0 && (mid_z >> 8) > 0)
-				thickness = thickness / (uint16_t)(mid_z >> 8);
-			point1ptr = firstscreenxy;
-			thickness++;
-			drawln2_tracelineedges(firstscreenxy + 2);
+				polyidbyte = flatobjnum + 0x80;
+				edgeidbyte = layervalue;
+				objectedgeword = (uint8_t)layervalue + (polyidbyte << 8);
+				/* Average z of the two endpoints perspective-scales thickness. */
+				mid_z = (markingeyedata.verts[0].z + markingeyedata.verts[1].z) / 2;
+				if (mid_z > 0 && (mid_z >> 8) > 0)
+					thickness = thickness / (uint16_t)(mid_z >> 8);
+				point1ptr = firstscreenxy;
+				thickness++;
+				drawln2_tracelineedges(firstscreenxy + 2);
+			} else {
+				trace2_drawscreencoords();
+			}
+			if (--markcnt == 0)
+				break;
+			flatobjnum = 127 - marktot + markcnt;
+		} while (markcnt != 0);
+
+		/* Build per-marking color table at xtransdataptr + newobjectdef. */
+		src = farmarkingptr[marking_idx];
+		markingptr[marking_idx] = newobjectdef;
+		out = (uint8_t*)xtransdataptr + markingptr[marking_idx];
+		out[0] = (uint8_t)objectnum;
+		out[1] = (uint8_t)facenumber;
+		out += 2;
+		n_colors = *src++;
+
+		if (currenttarget == parentobject) {
+			while (n_colors--) {
+				uint8_t mapped = *src & 0x3F;
+#ifdef TIE_MODERN
+				/* targetmapping is Watcom base-1 indexed; pin the degenerate
+				 * mapped == 0 input to idx 0 (see drawpol_getlightvalue). */
+				uint8_t idx = (mapped >= 1 && mapped <= 39) ? targetmapping[mapped - 1] : 0;
+#else
+				uint8_t idx = targetmapping[mapped - 1];
+#endif
+				/* materialcolors_base1 indexing (- 1). */
+				*out++ = materialcolors[(uint16_t)(16 * highlightmapping[3 * highlightcolor + idx] - lightval) - 1] -
+						 ((*src >> 6) & 3);
+				++src;
+			}
+		} else if (gauraudflag) {
+			while (n_colors--) {
+				*out++ = markcoloroffset[*src & 0x3F] + *src;
+				++src;
+			}
 		} else {
-			trace2_drawscreencoords();
+			while (n_colors--) {
+				/* materialcolors_base1 indexing (- 1). */
+				*out++ = materialcolors[(uint16_t)(16 * (*src & 0x3F) - lightval) - 1] - ((*src >> 6) & 3);
+				++src;
+			}
 		}
-		/* Update flatobjnum only after the termination check, matching the
-		 * loop's increment-clause ordering. */
-		if (!--markcnt)
-			break;
-		flatobjnum = (uint16_t)(markcnt + 127u - marktot);
-	}
 
-	/* Build per-marking color table at xtransdataptr + newobjectdef. */
-	base_src = farmarkingptr[marking_idx] + 1;
-	obj_off = newobjectdef;
-	markingptr[marking_idx] = obj_off;
-	out_ptr = (uint8_t*)xtransdataptr + obj_off;
-	out_ptr[0] = (uint8_t)objectnum;
-	out_ptr[1] = (uint8_t)facenumber;
-	out_ptr += 2;
-	n_colors = (int)base_src[-1];
-	src = base_src;
-
-	if (currenttarget == parentobject) {
-		while (--n_colors >= 0) {
-			uint8_t c = *src;
-			uint8_t mapped = (uint8_t)(c & 0x3F);
-			/* targetmapping is Watcom base-1 indexed; bypass with idx=0
-			 * for the degenerate mapped==0 input (see drawpol_getlightvalue). */
-			uint8_t idx = (mapped >= 1 && mapped <= 39) ? targetmapping[mapped - 1] : 0;
-			uint8_t remap = highlightmapping[3 * highlightcolor + idx];
-			/* materialcolors_base1 indexing (- 1). */
-			uint8_t shaded = (uint8_t)(materialcolors[16 * remap - lightval - 1] - ((c >> 6) & 3));
-			*out_ptr++ = shaded;
-			++src;
-		}
-	} else if (gauraudflag) {
-		while (--n_colors >= 0) {
-			uint8_t c = *src;
-			*out_ptr++ = (uint8_t)(markcoloroffset[c & 0x3F] + c);
-			++src;
-		}
-	} else {
-		while (--n_colors >= 0) {
-			uint8_t c = *src;
-			/* materialcolors_base1 indexing (- 1). */
-			uint8_t shaded = (uint8_t)(materialcolors[16 * (c & 0x3F) - lightval - 1] - ((c >> 6) & 3));
-			*out_ptr++ = shaded;
-			++src;
+		/* 8 pairs of zero padding. */
+		out = (uint8_t*)xtransdataptr + newobjectdef + 18;
+		newobjectdef += 18;
+		for (i = 0; i < 8; ++i) {
+			*out++ = 0;
+			*out++ = 0;
+			newobjectdef += 2;
 		}
 	}
-
-	/* 8 pairs of zero padding. */
-	newdef = newobjectdef + 18;
-	newobjectdef = newdef;
-	pad = (uint8_t*)xtransdataptr + newdef;
-	for (i = 0; i < 8; ++i) {
-		pad[0] = 0;
-		pad[1] = 0;
-		pad += 2;
-		newdef += 2;
-	}
-	newobjectdef = newdef;
 
 	flatobjnum = saved_flatobj;
 	layervalue = saved_layerv;

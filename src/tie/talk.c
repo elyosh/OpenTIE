@@ -49,6 +49,7 @@
 #include "landru/rect.h"
 #include "landru/res.h"
 #include "landru/sound.h"
+#include "landru/stream.h"
 #include "landru/view.h"
 #include "landru/viewadd.h"
 
@@ -334,27 +335,26 @@ static int16_t talk_Count_Debrief_Pages(void) {
 // FUNCTION: TIE98 0x48B730
 static void talk_Get_Debrief_Kills(char* string, int16_t craft_idx) {
 	uint16_t count = 0;
+	uint16_t side;
 	char name[40];
 	char buf[80];
 
-	if (craft_idx >= 69) {
-		count = pstate.player_total_kills;
-	} else {
-		int16_t side;
-
+	if (craft_idx < 69) {
 		for (side = 0; side < 6; side++) {
 			if (player_Is_Side_Enemy(side))
 				count += mission.kills_losses[side][craft_idx];
 		}
+	} else {
+		count += pstate.player_total_kills;
 	}
 	if (count) {
-		if (craft_idx >= 69) {
-			textext_Get_Ship_Text(name, 84);
-			snprintf(buf, sizeof(buf), "  %s: %d", name, count);
-		} else {
+		if (craft_idx < 69) {
 			textext_Get_Ship_Text(name, craft_idx);
-			snprintf(buf, sizeof(buf), "  %s: %d(%d)", name, count,
-					 pstate.player_kills_per_species[craft_idx]);
+			sprintf(buf, "  %s: %d(%d)", name, count,
+					pstate.player_kills_per_species[craft_idx]);
+		} else {
+			textext_Get_Ship_Text(name, 84);
+			sprintf(buf, "  %s: %d", name, count);
 		}
 		strcpy(string, buf);
 	}
@@ -707,8 +707,10 @@ static void talk_Find_Debrief_Header(char* string, int16_t line) {
 // FUNCTION: TIE95 0x6A0B5
 // FUNCTION: TIE98 0x48B090
 static void talk_Get_Debrief_Goals(char* string, int16_t line_idx) {
-	char buf[80], fmt[40], count_str[40];
+	char buf[80], count_str[40], fmt[40];
 	int16_t cur_battle = pilot_record.cur_battle;
+	int16_t fail;
+	int16_t done;
 	int16_t i;
 
 	switch (line_idx) {
@@ -717,9 +719,7 @@ static void talk_Get_Debrief_Goals(char* string, int16_t line_idx) {
 			strcpy(string, buf);
 			textext_Cat_Text(string, mission.difficulty + txtTalkEasy);
 			break;
-		case 1: {
-			int16_t mn;
-
+		case 1:
 			textext_Copy_Text(fmt, txtTalkBattle);
 			for (i = 0; fmt[i]; i++) {
 				if (fmt[i] == '1')
@@ -727,12 +727,10 @@ static void talk_Get_Debrief_Goals(char* string, int16_t line_idx) {
 				if (fmt[i] == '2')
 					fmt[i] = 2;
 			}
-
 			if (shipext_Is_Mission_Success())
-				mn = pilot_record.battle_cursor[cur_battle];
+				sprintf(buf, fmt, cur_battle + 1, pilot_record.battle_cursor[cur_battle]);
 			else
-				mn = pilot_record.battle_cursor[cur_battle] + 1;
-			snprintf(buf, sizeof(buf), fmt, cur_battle + 1, mn);
+				sprintf(buf, fmt, cur_battle + 1, pilot_record.battle_cursor[cur_battle] + 1);
 			strcpy(string, buf);
 			textext_Copy_Text(fmt, txtTalkScore);
 			for (i = 0; fmt[i]; i++) {
@@ -741,80 +739,77 @@ static void talk_Get_Debrief_Goals(char* string, int16_t line_idx) {
 				if (fmt[i] == '2')
 					fmt[i] = 2;
 			}
-			snprintf(buf, sizeof(buf), fmt, mission.mission_score);
+			sprintf(buf, fmt, mission.mission_score);
 			strcat(string, buf);
 			break;
-		}
 		case 2:
 			textext_Copy_Text(string, txtTalkDash);
 			break;
-		case 3: {
-			int16_t done = (uint16_t)goalsCompletedCount[0];
-			int16_t fail = (uint16_t)((uint16_t)goalsCount[0] - (uint16_t)goalsCompletedCount[0]);
-			if (!done && !fail) {
-				*string = '\0';
-				break;
-			}
-			if (mission.primary_complete == 1) {
-				textext_Copy_Text(string, txtTalkAllPri);
-			} else {
-				if (done) {
-					textext_Copy_Text(fmt, txtTalkOf);
-					snprintf(count_str, sizeof(count_str), fmt, done, done + fail);
+		case 3:
+			done = fail = 0;
+			done = goalsCompletedCount[0];
+			fail = goalsCount[0] - goalsCompletedCount[0];
+			if (done || fail) {
+				if (mission.primary_complete == 1) {
+					textext_Copy_Text(string, txtTalkAllPri);
 				} else {
-					textext_Copy_Text(count_str, txtTalkNo);
+					if (!done) {
+						textext_Copy_Text(count_str, txtTalkNo);
+					} else {
+						textext_Copy_Text(fmt, txtTalkOf);
+						sprintf(count_str, fmt, done, done + fail);
+					}
+					textext_Copy_Text(fmt, txtTalkSomePri);
+					sprintf(buf, fmt, count_str);
+					strcpy(string, buf);
 				}
-				textext_Copy_Text(fmt, txtTalkSomePri);
-				snprintf(buf, sizeof(buf), fmt, count_str);
-				strcpy(string, buf);
+			} else {
+				*string = '\0';
 			}
 			break;
-		}
-		case 4: {
-			int16_t done = (uint16_t)goalsCompletedCount[1];
-			int16_t fail = (uint16_t)((uint16_t)goalsCount[1] - (uint16_t)goalsCompletedCount[1]);
-			if (!done && !fail) {
-				*string = '\0';
-				break;
-			}
-			if (mission.secondary_complete == 1) {
-				textext_Copy_Text(string, txtTalkAllSec);
-			} else {
-				if (done) {
-					textext_Copy_Text(fmt, txtTalkOf);
-					snprintf(count_str, sizeof(count_str), fmt, done, done + fail);
+		case 4:
+			done = fail = 0;
+			done = goalsCompletedCount[1];
+			fail = goalsCount[1] - goalsCompletedCount[1];
+			if (done || fail) {
+				if (mission.secondary_complete == 1) {
+					textext_Copy_Text(string, txtTalkAllSec);
 				} else {
-					textext_Copy_Text(count_str, txtTalkNo);
+					if (!done) {
+						textext_Copy_Text(count_str, txtTalkNo);
+					} else {
+						textext_Copy_Text(fmt, txtTalkOf);
+						sprintf(count_str, fmt, done, done + fail);
+					}
+					textext_Copy_Text(fmt, txtTalkSomeSec);
+					sprintf(buf, fmt, count_str);
+					strcpy(string, buf);
 				}
-				textext_Copy_Text(fmt, txtTalkSomeSec);
-				snprintf(buf, sizeof(buf), fmt, count_str);
-				strcpy(string, buf);
+			} else {
+				*string = '\0';
 			}
 			break;
-		}
-		case 5: {
-			int16_t done = (uint16_t)goalsCompletedCount[2];
-			int16_t fail = (uint16_t)((uint16_t)goalsCount[2] - (uint16_t)goalsCompletedCount[2]);
-			if (!done && !fail) {
-				*string = '\0';
-				break;
-			}
-			if (mission.bonus_complete == 1) {
-				textext_Copy_Text(string, txtTalkAllBonus);
-			} else {
-				if (done) {
-					textext_Copy_Text(fmt, txtTalkOf);
-					snprintf(count_str, sizeof(count_str), fmt, done, done + fail);
+		case 5:
+			done = fail = 0;
+			done = goalsCompletedCount[2];
+			fail = goalsCount[2] - goalsCompletedCount[2];
+			if (done || fail) {
+				if (mission.bonus_complete == 1) {
+					textext_Copy_Text(string, txtTalkAllBonus);
 				} else {
-					textext_Copy_Text(count_str, txtTalkNo);
+					if (!done) {
+						textext_Copy_Text(count_str, txtTalkNo);
+					} else {
+						textext_Copy_Text(fmt, txtTalkOf);
+						sprintf(count_str, fmt, done, done + fail);
+					}
+					textext_Copy_Text(fmt, txtTalkSomeBonus);
+					sprintf(buf, fmt, count_str);
+					strcpy(string, buf);
 				}
-				textext_Copy_Text(fmt, txtTalkSomeBonus);
-				snprintf(buf, sizeof(buf), fmt, count_str);
-				strcpy(string, buf);
+			} else {
+				*string = '\0';
 			}
-			break;
-		}
-		default:
 			break;
 	}
 	center_line = 1;
@@ -898,51 +893,52 @@ static void talk_Get_Debrief_Line(char* string, int16_t line) {
 
 // FUNCTION: TIE95 0x68BC8
 // FUNCTION: TIE98 0x48A140
-static void talk_user_Talk_Eyes(Actor* actor, int32_t time) {
-	if (actor->id == 0) {
-		/* Officer face: separate eye + mouth actors */
-		int16_t eye;
-		int16_t blink;
-		int16_t mouth_st;
+static int talk_user_Talk_Eyes(Actor* actor, int32_t time) {
+	int16_t eye;
+	int16_t blink;
+	int16_t mouth_st;
 
-		if (!xactor_Is_Actor_Visible(actor))
-			return;
-		eye = officer_mood_eye[talk_Get_Officer_Mood()];
-		blink = officer_mood_blink[talk_Get_Officer_Mood()];
-		mouth_st = officer_mood_mouth[talk_Get_Officer_Mood()];
+	switch (actor->id) {
+		case 0:
+			/* Officer face: separate eye + mouth actors */
+			if (xactor_Is_Actor_Visible(actor)) {
+				eye = officer_mood_eye[talk_Get_Officer_Mood()];
+				blink = officer_mood_blink[talk_Get_Officer_Mood()];
+				mouth_st = officer_mood_mouth[talk_Get_Officer_Mood()];
 
-		if (time && actor->var1 > 0) {
-			actor->var1--;
-			xactor_Set_Actor_State(actor, eye, 0);
-		} else {
-			if (actor->var1 == -2)
-				actor->var1 = rand() & 0x5F;
-			else
-				actor->var1--;
-			xactor_Set_Actor_State(actor, blink, 0);
-		}
-		xactor_Set_Actor_State(mouth_actor, mouth_st, 0);
-	} else if (actor->id == 1) {
-		/* Priest face: single actor with eye states */
-		int16_t eye;
-		int16_t blink;
+				if (!time || actor->var1 <= 0) {
+					if (actor->var1 == -2)
+						actor->var1 = rand() & 0x5F;
+					else
+						actor->var1--;
+					xactor_Set_Actor_State(actor, blink, 0);
+				} else {
+					actor->var1--;
+					xactor_Set_Actor_State(actor, eye, 0);
+				}
+				xactor_Set_Actor_State(mouth_actor, mouth_st, 0);
+			}
+			break;
+		case 1:
+			/* Priest face: single actor with eye states */
+			if (xactor_Is_Actor_Visible(actor)) {
+				eye = priest_mood_eye[talk_Get_Officer_Mood()];
+				blink = priest_mood_blink[talk_Get_Officer_Mood()];
 
-		if (!xactor_Is_Actor_Visible(actor))
-			return;
-		eye = priest_mood_eye[talk_Get_Officer_Mood()];
-		blink = priest_mood_blink[talk_Get_Officer_Mood()];
-
-		if (time && actor->var1 > 0) {
-			actor->var1--;
-			xactor_Set_Actor_State(actor, eye, 0);
-		} else {
-			if (actor->var1 == -3)
-				actor->var1 = rand() & 0x5F;
-			else
-				actor->var1--;
-			xactor_Set_Actor_State(actor, blink, 0);
-		}
+				if (!time || actor->var1 <= 0) {
+					if (actor->var1 == -3)
+						actor->var1 = rand() & 0x5F;
+					else
+						actor->var1--;
+					xactor_Set_Actor_State(actor, blink, 0);
+				} else {
+					actor->var1--;
+					xactor_Set_Actor_State(actor, eye, 0);
+				}
+			}
+			break;
 	}
+	return 1;
 }
 
 /* ======================================================================
@@ -988,11 +984,11 @@ void talk_Get_Talk_Question(char* out, int16_t id) {
 // FUNCTION: TIE95 0x6943C
 // FUNCTION: TIE98 0x48A720
 void talk_Get_Talk_Paragraph(char* out, int16_t line) {
+	int pos;
 	int16_t italic;
-	int16_t question_id;
-	char* data;
-	int16_t pos;
+	int16_t out_len;
 	int16_t line_idx;
+	signed char* data;
 
 	italic = 0;
 	*out = '\0';
@@ -1001,60 +997,55 @@ void talk_Get_Talk_Paragraph(char* out, int16_t line) {
 	if (cur_talk_question < 0 || cur_talk_question >= num_talk_questions)
 		return;
 
-	question_id = talk_win_id[cur_talk_question];
-	if (question_id == 5) {
+	if (talk_win_id[cur_talk_question] != 5) {
+		/* Normal talk data: parse line-by-line */
+		data = (signed char*)xmemhdl_Lock_Handle(
+			talk_brief->talk_data[5 * talk_mode + talk_win_id[cur_talk_question]]);
+		line_idx = 0;
+
+		/* Skip the question line (first line) */
+		pos = 0;
+		while (data[pos] && data[pos] != '\n')
+			pos++;
+		pos++; /* skip newline */
+
+		while (data[pos] && line_idx <= line) {
+			if (line_idx == line) {
+				out_len = 0;
+				if (italic)
+					out[out_len++] = 2; /* italic on */
+				while (data[pos] && data[pos] != '\n') {
+					if (data[pos] == 3) {
+						talk_Set_Officer_Mood(data[pos + 1] - 1);
+						pos += 2;
+					} else {
+						out[out_len++] = data[pos++];
+					}
+				}
+				out[out_len] = '\0';
+			} else {
+				while (data[pos] && data[pos] != '\n') {
+					if (data[pos] == 2)
+						italic = 1;
+					if (data[pos] == 1)
+						italic = 0;
+					if (data[pos] == 3) {
+						talk_Set_Officer_Mood(data[pos + 1] - 1);
+						pos += 2;
+					} else {
+						pos++;
+					}
+				}
+			}
+			if (data[pos])
+				pos++;
+			line_idx++;
+		}
+		xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_mode + talk_win_id[cur_talk_question]]);
+	} else {
 		/* Debrief mode: dispatch to section renderers */
 		talk_Get_Debrief_Line(out, line);
-		return;
 	}
-
-	/* Normal talk data: parse line-by-line */
-	data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_mode + question_id]);
-	if (!data)
-		return;
-
-	/* Skip the question line (first line) */
-	pos = 0;
-	while (data[pos] && data[pos] != '\n')
-		pos++;
-	pos++; /* skip newline */
-
-	line_idx = 0;
-	while (data[pos] && line_idx <= line) {
-		if (line_idx == line) {
-			int16_t out_len = 0;
-			if (italic) {
-				out_len = 1;
-				out[0] = 2; /* italic on */
-			}
-			while (data[pos] && data[pos] != '\n') {
-				if (data[pos] == 3) {
-					talk_Set_Officer_Mood(data[pos + 1] - 1);
-					pos += 2;
-				} else {
-					out[out_len++] = data[pos++];
-				}
-			}
-			out[out_len] = '\0';
-		} else {
-			while (data[pos] && data[pos] != '\n') {
-				if (data[pos] == 2)
-					italic = 1;
-				if (data[pos] == 1)
-					italic = 0;
-				if (data[pos] == 3) {
-					talk_Set_Officer_Mood(data[pos + 1] - 1);
-					pos += 2;
-				} else {
-					pos++;
-				}
-			}
-		}
-		if (data[pos])
-			pos++;
-		line_idx++;
-	}
-	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_mode + question_id]);
 }
 
 /* ======================================================================
@@ -1116,71 +1107,66 @@ void talk_Set_Talk_Paragraph(void) {
 // FUNCTION: TIE95 0x68DC2
 // FUNCTION: TIE98 0x48A2B0
 void talk_Set_Talk_To_Text(void) {
+	int16_t saved_font;
 	int16_t i;
+	int16_t w;
 	int16_t total_h, max_w;
-	int16_t q;
 	Rect r;
-
 	char question_buf[80];
 
+	num_talk_questions = 0;
 	active_talk_question = -1;
 	cur_talk_question = -1;
 	num_talk_paragraphs = 0;
 	cur_talk_paragraph = -1;
-	num_talk_questions = 0;
 
 	/* Scan talk data slots for visibility status */
 	talk_Check_Talk_Questions();
 
 	/* Build filtered question list */
 	for (i = 0; i < 5; i++) {
-		int16_t status = talk_win_status[i];
-		int16_t show = 0;
-		switch (status) {
+		switch (talk_win_status[i]) {
 			case 1:
-				show = 1;
+				talk_win_id[num_talk_questions++] = i;
 				break;
 			case 2:
-				show = (mission.primary_complete == 1);
+				if (mission.primary_complete == 1)
+					talk_win_id[num_talk_questions++] = i;
 				break;
 			case 3:
-				show = (mission.secondary_complete == 1);
+				if (mission.secondary_complete == 1)
+					talk_win_id[num_talk_questions++] = i;
 				break;
 			case 4:
-				show = (mission.primary_complete != 1);
+				if (mission.primary_complete != 1)
+					talk_win_id[num_talk_questions++] = i;
 				break;
 			case 5:
-				show = (mission.secondary_complete != 1);
+				if (mission.secondary_complete != 1)
+					talk_win_id[num_talk_questions++] = i;
 				break;
 		}
-		if (show)
-			talk_win_id[num_talk_questions++] = i;
 	}
 
 	/* For debrief scenes, add debrief question */
 	if (shellext_Get_Cur_Scene() == SCENE_TALK_DEBRIEF_OFFICER ||
 		shellext_Get_Cur_Scene() == SCENE_TALK_DEBRIEF_PRIEST) {
 		if (num_talk_questions == 5)
-			talk_win_id[4] = 5; /* overwrite last slot */
+			talk_win_id[num_talk_questions - 1] = 5; /* overwrite last slot */
 		else
 			talk_win_id[num_talk_questions++] = 5;
 		cur_talk_question = num_talk_questions - 1;
-		active_talk_question = num_talk_questions - 1;
-		cur_talk_paragraph = 0;
+		active_talk_question = cur_talk_question;
 		num_talk_paragraphs = talk_Count_Debrief_Pages();
+		cur_talk_paragraph = 0;
 	}
 
 	/* Add exit entry and size the talk widget */
 	talk_win_id[num_talk_questions] = 6;
 
-	total_h = 0;
-	max_w = 0;
-
-	for (q = 0; q <= num_talk_questions; q++) {
-		int16_t saved_font;
-		int16_t w;
-
-		talk_Get_Talk_Question(question_buf, q);
+	max_w = total_h = 0;
+	for (i = 0; i <= num_talk_questions; i++) {
+		talk_Get_Talk_Question(question_buf, i);
 		saved_font = xfont_Get_Font();
 		xfont_Set_Font(0);
 		w = xfont_Get_String_Width(question_buf);
@@ -1189,9 +1175,19 @@ void talk_Set_Talk_To_Text(void) {
 			max_w = w;
 		total_h += 10;
 	}
+	max_w += 6;
+	total_h += 3;
 
-	xrect_Set_Rect(&r, 318 - (max_w + 6), 198 - (total_h + 3), 318, 198);
+	xrect_Set_Rect(&r, 318 - max_w, 198 - total_h, 318, 198);
 	xinpattr_Set_Input_Frame(talk_input, &r);
+
+	if (options_gbl.speech_active) {
+		if (talk_voice_mood == 'd' && cur_talk_question == num_talk_questions - 1)
+			talk_paragraph_timer = 0x7FFFFFFF;
+		else
+			talk_paragraph_timer = 264;
+	} else
+		talk_paragraph_timer = 0x7FFFFFFF;
 }
 
 /* ======================================================================
@@ -1370,13 +1366,28 @@ static int16_t talk_iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t 
  * Voice-over streaming
  * ====================================================================== */
 
-/* Per-frame user callback on the streaming Sound. Retail filled the
- * next 2 KB chunk from the CD streamer here; with our synchronous I/O
- * the file is fully loaded at trigger time so this is a no-op. */
+/* Per-frame user callback on the streaming Sound: append the next 2 KB
+ * chunk from the CD streamer. Our synchronous loader normally reads the
+ * whole file up front, leaving talk_speech_streaming clear. */
+int32_t talk_test4(LandruHandle d, uint32_t o, uint32_t sz, int16_t b);
 // FUNCTION: TIE95 0x6B43F
-static void talk_Speech_User_Func(Sound* snd, int32_t time) {
+static void talk_Speech_User_Func(Sound* snd) {
+	int32_t bytes_read;
+
 	(void)snd;
-	(void)time;
+	if (talk_speech_streaming) {
+		if (talk_speech_sound) {
+			if (talk_speech_sound->data) {
+				bytes_read = talk_test4(talk_speech_sound->data, talk_speech_pos, 0x800, 0);
+				if (bytes_read != -1) {
+					if (bytes_read != 0x800)
+						talk_speech_streaming = 0;
+					talk_speech_pos += bytes_read;
+					talk_speech_sound->size += bytes_read;
+				}
+			}
+		}
+	}
 }
 
 /* Allocate the talk-speech Sound + 2 MB streaming buffer. Mirrors
@@ -1413,7 +1424,7 @@ void talk_Alloc_Speech_Sound(void) {
 	xsound_Clear_Sound_Keep(talk_speech_sound);
 	xsound_Clear_Sound_Keepable(talk_speech_sound);
 	xsound_Clear_Sound_User_Keep(talk_speech_sound);
-	xsound_Set_Sound_User_Function(talk_speech_sound, talk_Speech_User_Func);
+	xsound_Set_Sound_User_Function(talk_speech_sound, (SoundUserFunc)talk_Speech_User_Func);
 }
 
 /* Tear down the streaming state. Retail leaves the Sound and its
@@ -1715,33 +1726,42 @@ static void talk_end_View(int32_t refresh) {
 
 // FUNCTION: TIE95 0x67F89
 // FUNCTION: TIE98 0x489530
-int16_t talk_Talk(SceneHeadStruct* scene_head) {
+int talk_Talk(SceneHeadStruct* scene_head) {
 	ResFile* resource;
 	Rect frame;
-	int16_t talk_type = 0;
-	int16_t scene;
+	int talk_type;
 	Actor* delt;
 
 	resource = shellext_Open_Empire_Resource(talk_str[0]);
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
 
-	scene = shellext_Get_Cur_Scene();
-	switch (scene) {
+	/* Retail TALK_Talk seeds the voice-over filename chars here:
+	 * 'o','b' for brief officer, 'p','b' for brief priest, 'o','d' for
+	 * debrief officer, 'p','d' for debrief priest. */
+	switch (shellext_Get_Cur_Scene()) {
 		case SCENE_TALK_BRIEF_OFFICER:
 			max_paragraph_size = 10;
 			talk_type = 1;
-			break;
-		case SCENE_TALK_BRIEF_PRIEST:
-			talk_type = 2;
-			max_paragraph_size = 10;
+			talk_voice_mood = 'b';
+			talk_voice_officer = 'o';
 			break;
 		case SCENE_TALK_DEBRIEF_OFFICER:
-			talk_type = 3;
 			max_paragraph_size = 10;
+			talk_type = 3;
+			talk_voice_mood = 'd';
+			talk_voice_officer = 'o';
+			break;
+		case SCENE_TALK_BRIEF_PRIEST:
+			max_paragraph_size = 10;
+			talk_type = 2;
+			talk_voice_mood = 'b';
+			talk_voice_officer = 'p';
 			break;
 		case SCENE_TALK_DEBRIEF_PRIEST:
-			talk_type = 4;
 			max_paragraph_size = 10;
+			talk_type = 4;
+			talk_voice_mood = 'd';
+			talk_voice_officer = 'p';
 			break;
 	}
 
@@ -1763,45 +1783,23 @@ int16_t talk_Talk(SceneHeadStruct* scene_head) {
 
 	/* Find and disable the text overlay delta actor */
 	delt = xactor_Find_Actor(FOURCC_DELT, talk_str[talk_type + 6]);
-	// xactor_Non_Refreshable_Actor(delt);
+	xactor_Non_Refreshable_Actor(delt);
 
-	/* Set up face animation actors and voice-over filename chars.
-	 * Retail TALK_Talk seeds officer/mood directly: 'o','b' for brief
-	 * officer, 'p','b' for brief priest, 'o','d' for debrief officer,
-	 * 'p','d' for debrief priest. */
-	scene = shellext_Get_Cur_Scene();
-	switch (scene) {
+	/* Set up face animation actors */
+	switch (shellext_Get_Cur_Scene()) {
 		case SCENE_TALK_BRIEF_OFFICER:
-			eye_actor = xactor_Find_Actor(FOURCC_ANIM, "eyes");
-			mouth_actor = xactor_Find_Actor(FOURCC_ANIM, "mouth");
-			xactor_Set_Actor_User_Function(eye_actor, talk_user_Talk_Eyes);
-			eye_actor->id = 0;
-			talk_voice_officer = 'o';
-			talk_voice_mood = 'b';
-			break;
 		case SCENE_TALK_DEBRIEF_OFFICER:
-			eye_actor = xactor_Find_Actor(FOURCC_ANIM, "eyes");
-			mouth_actor = xactor_Find_Actor(FOURCC_ANIM, "mouth");
-			xactor_Set_Actor_User_Function(eye_actor, talk_user_Talk_Eyes);
+			eye_actor = xactor_Find_Actor(FOURCC_ANIM, talk_str[5]);
+			mouth_actor = xactor_Find_Actor(FOURCC_ANIM, talk_str[15]);
+			xactor_Set_Actor_User_Function(eye_actor, (xactorCallback)talk_user_Talk_Eyes);
 			eye_actor->id = 0;
-			talk_voice_officer = 'o';
-			talk_voice_mood = 'd';
 			break;
 		case SCENE_TALK_BRIEF_PRIEST:
-			eye_actor = xactor_Find_Actor(FOURCC_ANIM, "ssface");
-			mouth_actor = NULL;
-			xactor_Set_Actor_User_Function(eye_actor, talk_user_Talk_Eyes);
-			eye_actor->id = 1;
-			talk_voice_officer = 'p';
-			talk_voice_mood = 'b';
-			break;
 		case SCENE_TALK_DEBRIEF_PRIEST:
-			eye_actor = xactor_Find_Actor(FOURCC_ANIM, "ssface");
+			eye_actor = xactor_Find_Actor(FOURCC_ANIM, talk_str[6]);
 			mouth_actor = NULL;
-			xactor_Set_Actor_User_Function(eye_actor, talk_user_Talk_Eyes);
+			xactor_Set_Actor_User_Function(eye_actor, (xactorCallback)talk_user_Talk_Eyes);
 			eye_actor->id = 1;
-			talk_voice_officer = 'p';
-			talk_voice_mood = 'd';
 			break;
 	}
 
@@ -1834,22 +1832,25 @@ int16_t talk_Talk(SceneHeadStruct* scene_head) {
 	officer_mood = 0;
 
 	/* Position mouse */
-	scene = shellext_Get_Cur_Scene();
-	if (scene == SCENE_TALK_BRIEF_OFFICER || scene == SCENE_TALK_BRIEF_PRIEST)
-		xio_Set_Mouse_Position(260, 192 - 10 * num_talk_questions);
-	else if (scene == SCENE_TALK_DEBRIEF_OFFICER || scene == SCENE_TALK_DEBRIEF_PRIEST)
-		xio_Set_Mouse_Position(260, 182);
-
-	/* Resolve species/mission and arm the streaming speech sound.
-	 * Retail does the same dance: TALK_Set_Voice_Species_Mission
-	 * (sub_6AF31) then TALK_Alloc_Speech_Sound (sub_6B363). */
-	talk_Set_Voice_Species_Mission();
-	talk_Alloc_Speech_Sound();
+	switch (shellext_Get_Cur_Scene()) {
+		case SCENE_TALK_BRIEF_OFFICER:
+		case SCENE_TALK_BRIEF_PRIEST:
+			xio_Set_Mouse_Position(260, 192 - 10 * num_talk_questions);
+			break;
+		case SCENE_TALK_DEBRIEF_OFFICER:
+		case SCENE_TALK_DEBRIEF_PRIEST:
+			xio_Set_Mouse_Position(260, 182);
+			break;
+	}
 
 	/* Push the modal view task */
 	xview_Set_View_Update_Function(talk_end_View);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
+
+	/* Resolve species/mission and arm the streaming speech sound. */
+	talk_Set_Voice_Species_Mission();
+	talk_Alloc_Speech_Sound();
 #ifdef TIE_MODERN
 	TieTalk_RunView(resource);
 	return 0;

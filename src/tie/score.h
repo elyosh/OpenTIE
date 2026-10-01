@@ -97,7 +97,7 @@ int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id
  * Invoked by score_checkcondition's FG-iteration path. See GoalTargetType
  * above for dispatch.
  */
-int8_t score_fgmemberofgroup(uint16_t fg_idx, uint8_t group_type, uint16_t group_id);
+int16_t score_fgmemberofgroup(uint16_t fg_idx, uint16_t group_type, uint16_t group_id);
 
 /*
  * Tests whether FlightObject or StaticObject `obj_idx` matches
@@ -109,7 +109,7 @@ int8_t score_fgmemberofgroup(uint16_t fg_idx, uint8_t group_type, uint16_t group
  * Consumed by fsfx_checkcriticalcraft to decide whether a destroyed craft
  * was mission-critical.
  */
-int8_t score_objectmemberofgroup(uint16_t obj_idx, uint8_t group_type, uint8_t group_id);
+int16_t score_objectmemberofgroup(uint16_t obj_idx, uint16_t group_type, uint16_t group_id);
 
 /*
  * Credit craft `obj_idx`'s exit to its FG's cond[]/cond_id[] tally buckets.

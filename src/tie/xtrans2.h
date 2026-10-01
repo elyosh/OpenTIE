@@ -129,7 +129,7 @@ extern uint8_t* xtrans2_videobaseptr;
 
 /* Mask buffer offset (16-bit signed). -16384 (0xC000) outside PIP,
  * -8192  (0xE000) while a PIP viewport is active. */
-extern int16_t maskbufptr;
+extern uint16_t maskbufptr;
 
 /* Current side-buffer slots. Pointer pair is switched between
  * leftsidedata1 / rightsidedata1 (main viewport) and

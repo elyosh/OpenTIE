@@ -72,9 +72,10 @@ extern int16_t relativez;
  * size of the LOD-records sub-table (= 6 * num_lods). */
 int draw_Lockshipfileptrs(uint16_t ship_idx);
 
-/* Resolve a mesh by ship_base + comp_idx. Sets componentblockptr.
+/* Resolve a mesh by locked ship file + comp_idx (the file pointer still
+ * includes its two-byte prefix). Sets componentblockptr.
  * Returns &mesh.lod_table (per-mesh detail-LOD table base). */
-ShipMeshLOD* draw_getcomponentptr(ShipModelData* ship_base, uint16_t comp_idx);
+ShipMeshLOD* draw_getcomponentptr(uint8_t* ship_file, uint16_t comp_idx);
 
 /* Pick the polygon-detail pointer for the given mesh at the given base z.
  * Anchors on comp->pos_xyz (if has_position) or comp->center_*; rotates

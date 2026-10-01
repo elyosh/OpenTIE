@@ -59,7 +59,6 @@ void static_drawstaticobject(uint16_t slot_idx) {
 	AnimOp frame_code;
 	int32_t eyex, eyey, eyez;
 	LandruHandle handle;
-	ShipModelData* model;
 	ShipMeshLOD* component;
 	const uint16_t* lod;
 
@@ -145,9 +144,7 @@ void static_drawstaticobject(uint16_t slot_idx) {
 	eyey = objecteyey;
 	eyez = objecteyez;
 	handle = species_table[sp_idx].model_handle;
-	/* Skip the 2-byte file-size prefix — matches retail's v48=a1+2. */
-	model = (ShipModelData*)((uint8_t*)xmemhdl_Lock_Handle(handle) + 2);
-	component = draw_getcomponentptr(model, 0);
+	component = draw_getcomponentptr(xmemhdl_Lock_Handle(handle), 0);
 	lod = draw_getdetailptr(component, eyez);
 	drawpol_drawpolyobject(lod, eyex, eyey, eyez);
 	xmemhdl_Unlock_Handle(handle);
@@ -226,7 +223,6 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 	int32_t y_loc2;
 	int32_t z_loc2;
 	LandruHandle handle;
-	ShipModelData* model;
 	ShipMeshLOD* component;
 	uint8_t* comp_base;
 	int32_t lod_dword;
@@ -378,9 +374,7 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 
 	/* Resolve mesh pointer via the species's model handle. */
 	handle = species_table[sp_idx].model_handle;
-	/* Skip the 2-byte file-size prefix — matches retail's v48=a1+2. */
-	model = (ShipModelData*)((uint8_t*)xmemhdl_Lock_Handle(handle) + 2);
-	component = draw_getcomponentptr(model, 0);
+	component = draw_getcomponentptr(xmemhdl_Lock_Handle(handle), 0);
 	xmemhdl_Unlock_Handle(handle);
 
 	/* From the component LOD header, follow the self-relative offset at

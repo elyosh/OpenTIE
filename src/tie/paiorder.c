@@ -899,111 +899,99 @@ int16_t paiorder_avoidhitorder(void) {
 	uint16_t active = ai.active_obj_idx;
 	uint8_t genus = objects[active].genus;
 
-	uint16_t speed_pct;
-	uint16_t random_magnitude;
-	int32_t push;
+	if (genus != 3 && genus != 4 && craftptr->mode_byte == ai.plan_order) {
+		uint16_t speed_pct;
+		int16_t push;
 
-	if (genus == 3 || genus == 4 || craftptr->mode_byte != ai.plan_order)
-		return 0;
+		/* ---- Threat acquisition -------------------------------------- */
+		if (craftptr->attacker_idx == 0xFF) {
+			int32_t miss_range = (int32_t)noticemissileranges[(uint16_t)ai.skill_tier];
+			uint16_t mi;
 
-	/* ---- Threat acquisition -------------------------------------- */
-	if (craftptr->attacker_idx == 0xFF) {
-		int32_t miss_range = (int32_t)noticemissileranges[(uint16_t)ai.skill_tier];
-		uint16_t mi;
-		uint8_t mode_byte;
-		int32_t plane_range;
-		uint8_t enemy_side;
-		uint16_t fj;
+			for (mi = NUM_CRAFTS; mi < WARHEAD_SLOT_END; ++mi) {
+				CraftData* mc;
 
-		for (mi = NUM_CRAFTS; mi < WARHEAD_SLOT_END; ++mi) {
-			CraftData* mc;
-			int32_t eff;
-
-			if (!objects[mi].ship_idx)
-				continue;
-			mc = objects[mi].craft_ptr;
-			if (!mc->species_idx)
-				continue;
-			if (mc->missile_target != active)
-				continue;
-			eff = (objects[mi].ship_idx == 144) ? 3 * miss_range : miss_range;
-			if (pai_roughproximitycheck(mi, eff) == 1) {
-				craftptr->attacker_idx = mi;
-				pai_distancebetween(active, mi);
-				craftptr->mode_byte =
-					approachtable[(uint16_t)((int16_t)trig2_xyangle - objects[active].heading) >> 13] ? 1
-																									  : 24;
-				paiman_initmaneuver();
-				return 0;
+				if (!objects[mi].ship_idx)
+					continue;
+				mc = objects[mi].craft_ptr;
+				if (!mc->species_idx)
+					continue;
+				if (mc->missile_target != active)
+					continue;
+				if (pai_roughproximitycheck(mi, (objects[mi].ship_idx == 144) ? 3 * miss_range : miss_range) == 1) {
+					craftptr->attacker_idx = mi;
+					pai_distancebetween(active, mi);
+					if (!approachtable[(uint16_t)(trig2_xyangle - objects[active].heading) >> 13])
+						craftptr->mode_byte = 24;
+					else
+						craftptr->mode_byte = 1;
+					paiman_initmaneuver();
+					return 0;
+				}
 			}
-		}
 
-		mode_byte = craftptr->mode_byte;
-		if (mode_byte == 12 || mode_byte == 23) {
-			/* Scissors/evasive already — only jink at long range. */
-			pai_targetdistance();
-			if (trig2_polardistance < 0x6000)
-				return 0;
-		} else {
+			if (craftptr->mode_byte == 12 || craftptr->mode_byte == 23) {
+				/* Scissors/evasive already — only jink at long range. */
+				pai_targetdistance();
+				if (trig2_polardistance < 0x6000)
+					return 0;
+			} else {
+				uint8_t enemy_side = objects[active].side ^ 1;
+				int32_t plane_range = (int32_t)noticeplaneranges[(uint16_t)ai.skill_tier];
+				uint16_t fj;
 
-			plane_range = (int32_t)noticeplaneranges[(uint16_t)ai.skill_tier];
-			enemy_side = objects[active].side ^ 1;
+				if (craftptr->attacker_idx == 0xFF) {
+					for (fj = 0; fj < NUM_CRAFTS; ++fj) {
+						uint16_t heading_delta;
+						uint16_t pitch_delta;
 
-			for (fj = 0; fj < NUM_CRAFTS; ++fj) {
-				uint16_t heading_delta;
-				uint16_t pitch_delta;
+						if (!objects[fj].ship_idx)
+							continue;
+						if (enemy_side != objects[fj].side)
+							continue;
+						if (craftptr->flight_flag)
+							continue;
+						if (objects[fj].genus != GENUS_FIGHTER)
+							continue;
+						if (pai_roughproximitycheck(fj, plane_range) != 1)
+							continue;
 
-				if (!objects[fj].ship_idx)
-					continue;
-				if (enemy_side != objects[fj].side)
-					continue;
-				if (craftptr->flight_flag)
-					continue;
-				if (objects[fj].genus != GENUS_FIGHTER)
-					continue;
-				if (pai_roughproximitycheck(fj, plane_range) != 1)
-					continue;
-
-				pai_distancebetween(fj, active);
-				heading_delta = (uint16_t)((int16_t)trig2_xyangle - objects[fj].heading);
-				if (heading_delta >= 0x8000u)
-					heading_delta = (uint16_t)-heading_delta;
-				pitch_delta = (uint16_t)((int16_t)trig2_zangle - objects[fj].pitch);
-				if (pitch_delta >= 0x8000u)
-					pitch_delta = (uint16_t)-pitch_delta;
-				if (heading_delta < 0x2000u && pitch_delta < 0x2000u) {
-					craftptr->attacker_idx = fj;
-					break;
+						pai_distancebetween(fj, active);
+						heading_delta = trig2_xyangle - objects[fj].heading;
+						if (heading_delta >= 0x8000)
+							heading_delta = -heading_delta;
+						pitch_delta = trig2_zangle - objects[fj].pitch;
+						if (pitch_delta >= 0x8000)
+							pitch_delta = -pitch_delta;
+						if (heading_delta < 0x2000 && pitch_delta < 0x2000) {
+							craftptr->attacker_idx = fj;
+							break;
+						}
+					}
 				}
 			}
 		}
+		/* Retail gates jink on (attacker_idx != 0xFF && active.genus != 2) —
+		 * utility craft (tugs) don't jink even when an attacker is locked. */
+		if (craftptr->attacker_idx != 0xFF && objects[active].genus != GENUS_UTILITY) {
+			speed_pct = math2_percentage(objects[ai.active_obj_idx].current_speed, craftptr->max_speed_cache);
+
+			push = math2_fraction((math2_getrandom() & 0xFF) + 0x100, speed_pct);
+			if ((uint16_t)math2_getrandom() & 0x8000)
+				push = -push;
+			craftptr->push_accum_x = push;
+
+			push = math2_fraction((math2_getrandom() & 0xFF) + 0x100, speed_pct);
+			if ((uint16_t)math2_getrandom() & 0x8000)
+				push = -push;
+			craftptr->push_accum_y = push;
+
+			push = math2_fraction((math2_getrandom() & 0xFF) + 0x100, speed_pct);
+			if ((uint16_t)math2_getrandom() & 0x8000)
+				push = -push;
+			craftptr->push_accum_z = push;
+		}
 	}
-	/* Retail gates jink on (attacker_idx != 0xFF && active.genus != 2) —
-	 * utility craft (tugs) don't jink even when an attacker is locked. */
-	if (craftptr->attacker_idx == 0xFF)
-		return 0;
-	if (objects[active].genus == GENUS_UTILITY)
-		return 0;
-
-	speed_pct = math2_percentage(objects[active].current_speed, craftptr->max_speed_cache);
-
-	random_magnitude = (uint16_t)((uint8_t)math2_getrandom() | 0x100);
-	push = math2_fraction(random_magnitude, speed_pct);
-	if (((uint16_t)math2_getrandom() & 0x8000u) != 0)
-		push = -push;
-	craftptr->push_accum_x = (int16_t)push;
-
-	random_magnitude = (uint16_t)((uint8_t)math2_getrandom() | 0x100);
-	push = math2_fraction(random_magnitude, speed_pct);
-	if (((uint16_t)math2_getrandom() & 0x8000u) != 0)
-		push = -push;
-	craftptr->push_accum_y = (int16_t)push;
-
-	random_magnitude = (uint16_t)((uint8_t)math2_getrandom() | 0x100);
-	push = math2_fraction(random_magnitude, speed_pct);
-	if (((uint16_t)math2_getrandom() & 0x8000u) != 0)
-		push = -push;
-	craftptr->push_accum_z = (int16_t)push;
 	return 0;
 }
 
@@ -1017,18 +1005,16 @@ int16_t paiorder_avoidhitorder(void) {
 // FUNCTION: TIE95 0x3EF24
 int16_t paiorder_waitforkidsorder(void) {
 	uint16_t fi;
+	uint16_t oi;
 
-	for (fi = 0; fi < (uint16_t)mission_file_header.num_fg; ++fi) {
-		EFGStruct* g = &fg_array[fi];
-		uint16_t oi;
-
-		if (!(diffmask[mission.difficulty] & fgdiffmask[g->difficulty]))
+	for (fi = 0; fi < mission_file_header.num_fg; ++fi) {
+		if (!(fgdiffmask[(int8_t)fg_array[fi].difficulty] & diffmask[mission.difficulty]))
 			continue;
 		if (fi == ai.fg_idx)
 			continue;
-		if (!g->pri_stop_fg_used)
+		if (!fg_array[fi].pri_stop_fg_used)
 			continue;
-		if (g->pri_stop_fg != (uint8_t)ai.fg_idx)
+		if ((int8_t)fg_array[fi].pri_stop_fg != ai.fg_idx)
 			continue;
 
 		if (!fgstatus[fi].active || fgstatus[fi].waves_remaining)
@@ -1183,7 +1169,7 @@ int16_t paiorder_avoidstarshiporder(void) {
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x3F2D4
-int16_t paiorder_checkhyperorder(void) { return fg_array[ai.fg_idx].pri_stop_fg_used ? 1 : 0; }
+int16_t paiorder_checkhyperorder(void) { return fg_array[ai.fg_idx].pri_stop_fg_used != 0; }
 
 /* ======================================================================
  *                   Slot 38 — stopgohomeorder

@@ -429,67 +429,52 @@ int replay_getstatusnum(uint16_t obj_id) {
  * and outstring-center it. Identical to demo. */
 // FUNCTION: TIE95 0x46094
 void replay_outputobjectname(uint16_t obj_id) {
-	uint8_t side;
-	uint16_t head_color;
 	CraftData* cp;
-	uint8_t s;
-	char tag;
+	uint16_t type;
 
-	if (obj_id >= 0x3800u) {
-		uint16_t species;
+	if (obj_id < 0x3800) {
+		if (objects[obj_id].side == 0)
+			festring_settextcolor('Q');
+		else if (objects[obj_id].side == 1 || objects[obj_id].side == 4)
+			festring_settextcolor('I');
+		else if (objects[obj_id].side == 2)
+			festring_settextcolor('E');
+		else
+			festring_settextcolor('U');
 
+		if (!objects[obj_id].category) {
+			cp = objects[obj_id].craft_ptr;
+			festring_farstrcpy(spec_data[cp->species_idx].short_name);
+			festring_farstradd(':');
+			festring_farstradd(' ');
+			festring_farstradd((char)254);
+
+			if (objects[obj_id].side == 0)
+				festring_farstradd('R');
+			else if (objects[obj_id].side == 1 || objects[obj_id].side == 4)
+				festring_farstradd('J');
+			else if (objects[obj_id].side == 2)
+				festring_farstradd('F');
+			else
+				festring_farstradd('V');
+
+			festring_farstrcat(fg_array[objects[obj_id].fg_idx].name);
+			if ((int8_t)fg_array[objects[obj_id].fg_idx].count > 1) {
+				festring_farstradd(' ');
+				festring_farstradd((char)(cp->craft_idx_in_fg + '1'));
+			}
+		} else {
+			type = objects[obj_id].ship_idx;
+			if (type >= 143 && type <= 154) {
+				festring_farstrcpy(((char**)warheadstrings)[type - 143]);
+			}
+		}
+	} else {
 		festring_settextcolor(0x43);
-		species = staticobjects[obj_id - 14336].species;
-		if (species >= 70 && species <= 84) {
-			festring_farstrcpy(((char**)buoystr)[species - 70]);
+		type = staticobjects[obj_id - 14336].species;
+		if (type >= 70 && type <= 84) {
+			festring_farstrcpy(((char**)buoystr)[type - 70]);
 		}
-		festring_outstringcenter((const uint8_t*)tempstring);
-		return;
-	}
-
-	side = objects[obj_id].side;
-
-	if (side == 0)
-		head_color = 'Q';
-	else if (side == 1 || side == 4)
-		head_color = 'I';
-	else if (side == 2)
-		head_color = 'E';
-	else
-		head_color = 'U';
-	festring_settextcolor(head_color);
-
-	if (objects[obj_id].category) {
-		uint16_t ship = objects[obj_id].ship_idx;
-		if (ship >= 143 && ship <= 154) {
-			festring_farstrcpy(((char**)warheadstrings)[ship - 143]);
-		}
-		festring_outstringcenter((const uint8_t*)tempstring);
-		return;
-	}
-
-	cp = objects[obj_id].craft_ptr;
-	festring_farstrcpy(spec_data[cp->species_idx].short_name);
-	festring_farstradd(':');
-	festring_farstradd(' ');
-	festring_farstradd((char)254);
-
-	s = objects[obj_id].side;
-
-	if (s == 0)
-		tag = 'R';
-	else if (s == 1 || s == 4)
-		tag = 'J';
-	else if (s == 2)
-		tag = 'F';
-	else
-		tag = 'V';
-	festring_farstradd(tag);
-
-	festring_farstrcat(fg_array[objects[obj_id].fg_idx].name);
-	if (fg_array[objects[obj_id].fg_idx].count > 1) {
-		festring_farstradd(' ');
-		festring_farstradd((char)(cp->craft_idx_in_fg + '1'));
 	}
 	festring_outstringcenter((const uint8_t*)tempstring);
 }

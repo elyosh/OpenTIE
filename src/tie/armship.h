@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-int16_t armship_ArmShip(SceneHeadStruct* scene_head);
+int armship_ArmShip(SceneHeadStruct* scene_head);
 extern ResFile* armship_file;
 
 #ifdef __cplusplus

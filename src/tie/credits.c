@@ -122,7 +122,7 @@ static void credits_Init_Credit_Info(void) {
 // FUNCTION: TIE98 0x414850
 static void credits_end_View(int32_t frame_num) {
 	int16_t exit_id;
-	int16_t done = (credits_film_time == credits_film_len) ? 1 : 0;
+	int16_t done = credits_film_time == credits_film_len;
 	(void)frame_num;
 	if (shellext_Check_Scene_Exit(&exit_id, credits_next_scene, credits_next_scene, done))
 		xerror_Set_Landru_Exit(exit_id);

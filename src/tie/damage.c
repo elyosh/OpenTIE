@@ -67,53 +67,51 @@ enum {
 /* --- damage_outputsystem --- */
 
 // FUNCTION: TIE95 0x1AD94
-void damage_outputsystem(SystemStringId system_id, int16_t y) {
-	const uint16_t idx = (uint16_t)system_id;
-	char buf[8];
+void damage_outputsystem(uint16_t system_id, int16_t y) {
+	char buf[6];
 
-	if ((systemmask[idx] & pstate.player_craft->subsystem_active) == 0) {
+	if ((pstate.player_craft->subsystem_active & (uint16_t)systemmask[system_id]) == 0) {
 		/* Subsystem not installed on this craft. */
 		festring_settextcolor(COLOR_TEXT_NA);
 		buf[0] = 'N';
 		buf[1] = '/';
 		buf[2] = 'A';
 		buf[3] = '\0';
-	} else {
-		const int16_t health_percent = (int16_t)pstate.subsystem_health_percent[idx];
-		if (health_percent != 0) {
-			if (health_percent == 100) {
-				festring_settextcolor(COLOR_TEXT_HEALTHY);
-				buf[0] = '1';
-				buf[1] = '0';
-				buf[2] = '0';
-				buf[3] = '%';
-				buf[4] = '\0';
-			} else {
-				/* "NN%" */
-				festring_settextcolor(COLOR_TEXT_PARTIAL);
-				buf[0] = (char)('0' + pstate.subsystem_health_percent[idx] / 10);
-				buf[1] = (char)('0' + pstate.subsystem_health_percent[idx] % 10);
-				buf[2] = '%';
-				buf[3] = '\0';
-			}
-		} else {
-			/* "MM:SS" from the repair time in seconds. */
-			const uint8_t minutes = (uint8_t)(pstate.subsystem_repair_seconds[idx] / 60);
-			const uint8_t seconds = (uint8_t)(pstate.subsystem_repair_seconds[idx] % 60);
+	} else if (pstate.subsystem_health_percent[system_id] == 0) {
+		/* "MM:SS" from the repair time in seconds. */
+		uint8_t minutes;
+		uint8_t seconds;
 
-			festring_settextcolor(COLOR_TEXT_TIME);
-			buf[0] = (char)('0' + minutes / 10);
-			buf[1] = (char)('0' + minutes % 10);
-			buf[2] = ':';
-			buf[3] = (char)('0' + seconds / 10);
-			buf[4] = (char)('0' + seconds % 10);
-			buf[5] = '\0';
-		}
+		festring_settextcolor(COLOR_TEXT_TIME);
+		minutes = (uint8_t)(pstate.subsystem_repair_seconds[system_id] / 60);
+		seconds = (uint8_t)(pstate.subsystem_repair_seconds[system_id] - minutes * 60);
+		buf[0] = (char)('0' + minutes / 10);
+		buf[1] = (char)(minutes - minutes / 10 * 10 + '0');
+		buf[2] = ':';
+		buf[3] = (char)('0' + seconds / 10);
+		buf[4] = (char)(seconds - seconds / 10 * 10 + '0');
+		buf[5] = '\0';
+	} else if (pstate.subsystem_health_percent[system_id] == 100) {
+		festring_settextcolor(COLOR_TEXT_HEALTHY);
+		buf[0] = '1';
+		buf[1] = '0';
+		buf[2] = '0';
+		buf[3] = '%';
+		buf[4] = '\0';
+	} else {
+		/* "NN%" */
+		uint8_t tens;
+
+		festring_settextcolor(COLOR_TEXT_PARTIAL);
+		tens = (uint8_t)(pstate.subsystem_health_percent[system_id] / 10);
+		buf[0] = (char)('0' + tens);
+		buf[1] = (char)('0' + (uint8_t)(pstate.subsystem_health_percent[system_id] - tens * 10));
+		buf[2] = '%';
+		buf[3] = '\0';
 	}
 
-	festring_outstring((const uint8_t*)systemstrings[idx]);
-	if (outchar)
-		outchar('\n');
+	festring_outstring((const uint8_t*)systemstrings[system_id]);
+	outchar('\n');
 	festring_setcursor(1, y);
 	festring_outstringright((const uint8_t*)buf);
 }
@@ -318,7 +316,7 @@ int32_t damage_damageroom(void) {
 						sel_sys = (int16_t)sys;
 					festring_setbackcolor(
 						(uint16_t)(sel_sys == (int16_t)sys ? COLOR_BG_SELECTED : COLOR_BG_NORMAL));
-					damage_outputsystem((SystemStringId)sys, y);
+					damage_outputsystem(sys, y);
 					y = (int16_t)(y + line_step);
 				}
 
@@ -335,7 +333,7 @@ int32_t damage_damageroom(void) {
 						sel_sys = (int16_t)sys;
 					festring_setbackcolor(
 						(uint16_t)(sel_sys == (int16_t)sys ? COLOR_BG_SELECTED : COLOR_BG_NORMAL));
-					damage_outputsystem((SystemStringId)sys, y);
+					damage_outputsystem(sys, y);
 					y = (int16_t)(y + line_step);
 				}
 
@@ -350,7 +348,7 @@ int32_t damage_damageroom(void) {
 						sel_sys = (int16_t)sys;
 					festring_setbackcolor(
 						(uint16_t)(sel_sys == (int16_t)sys ? COLOR_BG_SELECTED : COLOR_BG_NORMAL));
-					damage_outputsystem((SystemStringId)sys, y);
+					damage_outputsystem(sys, y);
 					y = (int16_t)(y + line_step);
 				}
 			}

@@ -58,7 +58,7 @@ void dynamix_subvelocity(uint16_t obj_idx, uint16_t decel);
  *
  * delta is tested via the unsigned wraparound idiom (>= 0x8000 = negative).
  */
-void dynamix_adjustvelocity(uint16_t obj_idx, int16_t target_speed, int16_t allow_decel,
+void dynamix_adjustvelocity(uint16_t obj_idx, uint16_t speed, uint16_t allow_decel,
 							uint16_t throttle_frac);
 
 /*

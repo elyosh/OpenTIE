@@ -91,15 +91,16 @@ int draw_Lockshipfileptrs(uint16_t ship_idx) {
 /* ============================================================================
  * draw_getcomponentptr
  * ----------------------------------------------------------------------------
- * Resolve mesh by ship_base + comp_idx. Sets componentblockptr.
+ * Resolve mesh by locked ship file + comp_idx. Sets componentblockptr.
  * Returns &mesh + mesh.render_offset (per-mesh detail-LOD table base).
  * ========================================================================== */
 // FUNCTION: TIE95 0x1AFB4
-ShipMeshLOD* draw_getcomponentptr(ShipModelData* ship_base, uint16_t comp_idx) {
-	ShipModelMesh* mesh_base = (ShipModelMesh*)&ship_base->lod_records[ship_base->num_lods];
-	ShipModelMesh* mesh = &mesh_base[comp_idx];
-	componentblockptr = mesh;
-	return (ShipMeshLOD*)((uint8_t*)mesh + mesh->render_offset);
+ShipMeshLOD* draw_getcomponentptr(uint8_t* ship_file, uint16_t comp_idx) {
+	ship_file += 2;
+	ship_file += ((ShipModelData*)ship_file)->num_lods * sizeof(struct LODRecord);
+	ship_file += sizeof(ShipModelData);
+	componentblockptr = (ShipModelMesh*)ship_file + comp_idx;
+	return (ShipMeshLOD*)((uint8_t*)componentblockptr + componentblockptr->render_offset);
 }
 
 /* ============================================================================
@@ -167,29 +168,31 @@ const uint16_t* draw_getdetailptr(ShipMeshLOD* lod_table, int z_threshold) {
 	int detail_mode = (uint16_t)shipdetailvalue;
 	ShipMeshLOD* p;
 	const uint8_t* poly_header;
+	ShipMeshLOD* cur;
 
-	if (shipdetailvalue == -1) {
+	if (detail_mode == 0xFFFF) {
 		z_threshold >>= 1;
 		detail_mode = 0;
 	}
 
-	p = lod_table;
-	while (z_threshold > p->distance)
-		++p;
+	cur = lod_table;
+	p = cur;
+	while (z_threshold > cur->distance) {
+		cur++;
+		p = cur;
+	}
 
 	if (detail_mode <= 0)
-		return (const uint16_t*)((uint8_t*)p + p->offset);
+		return (const uint16_t*)((uint8_t*)cur + cur->offset);
 
-	/* High-detail mode: probe the polygon header for validity. */
 	if (p->distance == 0x7FFFFFFF)
-		return (const uint16_t*)((uint8_t*)p + p->offset);
+		return (const uint16_t*)((uint8_t*)cur + cur->offset);
 
-	poly_header = (const uint8_t*)p + p->offset;
-	if ((poly_header[0] & 0xFE) != 0x40 && poly_header[4] <= (int)shipdetailpolycnt)
-		return (const uint16_t*)((uint8_t*)p + p->offset);
+	poly_header = (const uint8_t*)cur + cur->offset;
+	if ((poly_header[0] & 0xFE) == 0x40 || poly_header[4] > (int)shipdetailpolycnt)
+		++cur;
 
-	/* Probe failed -- use the higher-detail variant in p[1]. */
-	return (const uint16_t*)((uint8_t*)&p[1] + p[1].offset);
+	return (const uint16_t*)((uint8_t*)cur + cur->offset);
 }
 
 /* ============================================================================
@@ -204,7 +207,6 @@ void draw_drawlaser(uint16_t laser_obj_idx) {
 	uint16_t ship_idx;
 	ShipMeshLOD* poly_table;
 	const uint16_t* poly;
-
 	int eyex, eyey, eyez;
 
 	parentobject = laser_obj_idx;
@@ -216,8 +218,8 @@ void draw_drawlaser(uint16_t laser_obj_idx) {
 		poly_table = (ShipMeshLOD*)((uint8_t*)componentblockptr + componentblockptr->render_offset);
 	}
 
-	eyex = objecteyex;
 	eyey = objecteyey;
+	eyex = objecteyex;
 	eyez = objecteyez;
 	poly = draw_getdetailptr(poly_table, objecteyez);
 	drawpol_drawpolyobject(poly, eyex, eyey, eyez);
@@ -268,7 +270,7 @@ void draw_drawhyperstar(int16_t star_idx) {
 	parentobject = (uint16_t)(star_idx + OBJ_REF_STATIC_BASE);
 	hyperstardata[0x14] = (star_idx & 3) + 0xFC;
 	saved = flatobjnum;
-	drawpol_drawpolyobject((const uint16_t*)hyperstardata, objecteyey, objecteyex, objecteyez);
+	drawpol_drawpolyobject((const uint16_t*)hyperstardata, objecteyex, objecteyey, objecteyez);
 	flatobjnum = saved;
 }
 

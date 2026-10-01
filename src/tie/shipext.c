@@ -78,7 +78,7 @@ static int16_t battle_medal;
 // GLOBAL: TIE98 0x589C00
 static int16_t battle_secret_medal;
 // GLOBAL: TIE95 0xFB3FE
-static int16_t blueprint_ship;
+static int16_t blueprint_ship[1];
 // GLOBAL: TIE95 0xFB3FC
 static int16_t blueprint_component;
 // GLOBAL: TIE95 0xFB400
@@ -103,7 +103,7 @@ void shipext_Open_Ships(void) {
 	blueprint_component = 0;
 	battle_medal = 0;
 	battle_secret_medal = 0;
-	blueprint_ship = 0;
+	blueprint_ship[0] = 0;
 	memset(ship_info, 0, sizeof(ship_info));
 
 	/* Load ship paragraph resources (ship1.lfd .. ship12.lfd) */
@@ -160,34 +160,38 @@ void shipext_Close_Ships(void) {
 bool shipext_Is_Ship(int16_t ship_idx) { return ship_info[ship_idx] != LANDRU_NULL_HANDLE; }
 
 // FUNCTION: TIE95 0x80120
-bool shipext_Is_Ship_Available(int16_t ship_idx) {
+int16_t shipext_Is_Ship_Available(int16_t ship_idx) {
 	if (!ship_info[ship_idx])
-		return false;
+		return 0;
 
 	/* Battle ships require completion prerequisites */
 	if (ship_idx >= NUM_SHIPS) {
 		int16_t battle = ship_idx - NUM_SHIPS;
 		if (!pilot_record.battle_status[battle] || !pilot_record.battle_cursor[battle])
-			return false;
+			return 0;
 	}
 
 	/* Ship 5 (B-Wing) requires specific battle completion or expansion disks */
 	if (ship_idx == 5 && pilot_record.battle_status[5] != 3 && !shipext_Is_Mission_Disk1() &&
 		!shipext_Is_Mission_Disk2())
-		return false;
+		return 0;
 
 	/* Ship 6 requires battle 8 complete OR Mission Disk 2 mounted */
 	if (ship_idx == 6 && pilot_record.battle_status[8] != 3 && !shipext_Is_Mission_Disk2())
-		return false;
+		return 0;
 
-	return true;
+	return 1;
 }
 
 // FUNCTION: TIE95 0x800C0
-int shipext_Is_Mission_Disk1(void) { return ship_info[19] && ship_info[20] && ship_info[21]; }
+int16_t shipext_Is_Mission_Disk1(void) { return ship_info[19] && ship_info[20] && ship_info[21]; }
 
 // FUNCTION: TIE95 0x800E8
-bool shipext_Is_Mission_Disk2(void) { return ship_info[22] && ship_info[23] && ship_info[24]; }
+int16_t shipext_Is_Mission_Disk2(void) { return ship_info[22] && ship_info[23] && ship_info[24]; }
+
+// FUNCTION: TIE95 0x807BC
+// FUNCTION: TIE98 0x481A40
+ResFile* shipext_Open_Launch_Resource(void) { return shipext_Open_Ship_Resource(shipext_Get_Mission_Ship()); }
 
 // FUNCTION: TIE95 0x807C4
 ResFile* shipext_Open_Ship_Resource(int16_t ship_idx) {
@@ -199,10 +203,6 @@ ResFile* shipext_Open_Ship_Resource(int16_t ship_idx) {
 		snprintf(buf, sizeof(buf), "ship%d.lfd", ship_idx + 1);
 	return shellext_Open_Empire_Resource(buf);
 }
-
-// FUNCTION: TIE95 0x807BC
-// FUNCTION: TIE98 0x481A40
-ResFile* shipext_Open_Launch_Resource(void) { return shipext_Open_Ship_Resource(mission_ship); }
 
 // FUNCTION: TIE95 0x82284
 void shipext_Get_Ship_Name(char* out, int16_t ship_idx, int16_t para_type, int16_t para_idx) {
@@ -267,7 +267,7 @@ void shipext_Get_Pilot_Name(char* out) {
 }
 
 // FUNCTION: TIE95 0x80324
-void shipext_Revive_Pilot(char* name) {
+int16_t shipext_Revive_Pilot(char* name) {
 	int16_t i;
 
 	pilot_record.exit_status = 0;
@@ -276,6 +276,7 @@ void shipext_Revive_Pilot(char* name) {
 			pilot_record.battle_status[i] = 1;
 	}
 	shipext_Save_Pilot_Data(name);
+	return 1;
 }
 
 // FUNCTION: TIE95 0x80364
@@ -371,10 +372,11 @@ bool shipext_Is_Mission_Success(void) {
 }
 
 // FUNCTION: TIE95 0x82094
-bool shipext_Is_Combat_Mission_Success(void) {
-	if (mission_officer == 2)
-		return mission.secondary_complete == 1;
-	return mission.primary_complete == 1;
+int16_t shipext_Is_Combat_Mission_Success(void) {
+	int16_t success = mission.primary_complete == 1;
+	if (shipext_Get_Mission_Officer() == 2)
+		success = mission.secondary_complete == 1;
+	return success;
 }
 
 // FUNCTION: TIE95 0x820C4
@@ -397,10 +399,10 @@ int16_t shipext_Get_Secret_Medal(void) { return battle_secret_medal; }
 /* --- Blueprint browsing --- */
 
 // FUNCTION: TIE95 0x80A58
-int16_t shipext_Get_Blueprint_Ship(void) { return blueprint_ship; }
+int16_t shipext_Get_Blueprint_Ship(void) { return blueprint_ship[0]; }
 // FUNCTION: TIE95 0x80A60
 // FUNCTION: TIE98 0x481CA0
-void shipext_Set_Blueprint_Ship(int16_t val) { blueprint_ship = val; }
+void shipext_Set_Blueprint_Ship(int16_t val) { blueprint_ship[0] = val; }
 
 // FUNCTION: TIE95 0x7FED0
 // FUNCTION: TIE98 0x480E60
@@ -408,7 +410,7 @@ void shipext_Reset_Battle_Results(void) {
 	blueprint_component = 0;
 	battle_medal = 0;
 	battle_secret_medal = 0;
-	blueprint_ship = 0;
+	blueprint_ship[0] = 0;
 }
 
 // FUNCTION: TIE95 0x80A68
@@ -450,7 +452,7 @@ uint8_t shipext_Get_Combat_Mission(void) {
 }
 
 // FUNCTION: TIE95 0x811B4
-bool shipext_Is_Combat_Ship_Tour(void) { return pilot_record.cur_combat_ship >= NUM_SHIPS; }
+int16_t shipext_Is_Combat_Ship_Tour(void) { return pilot_record.cur_combat_ship >= NUM_SHIPS; }
 
 // FUNCTION: TIE95 0x81460
 int16_t shipext_Num_Combat_Missions(void) {
@@ -490,8 +492,7 @@ void shipext_Clear_Battle_Cutscenes(void) {
 
 // FUNCTION: TIE95 0x82108
 void shipext_Add_Battle_Cutscene(int16_t cutscene_id) {
-	battle_cutscene[num_battle_cutscenes] = cutscene_id;
-	num_battle_cutscenes++;
+	battle_cutscene[num_battle_cutscenes++] = cutscene_id;
 }
 
 // FUNCTION: TIE95 0x82128
@@ -800,37 +801,40 @@ void shipext_Close_Blueprint_Ships(void) {
 
 // FUNCTION: TIE95 0x80918
 void shipext_Next_Blueprint_Ship(void) {
-	int16_t total = num_blueprint_ships + NUM_SHIPS;
-	int16_t cat, offset;
-	do {
-		blueprint_ship = (blueprint_ship + 1) % total;
-		if (blueprint_ship < NUM_SHIPS) {
-			if (shipext_Is_Ship_Available(blueprint_ship))
-				break;
-		} else {
+	int16_t found;
+	int16_t offset, cat;
+	blueprint_ship[0] = (blueprint_ship[0] + 1) % (num_blueprint_ships + NUM_SHIPS);
+	found = 0;
+	while (!found) {
+		if (blueprint_ship[0] >= NUM_SHIPS) {
 			shipext_Get_Blueprint_Index(&cat, &offset);
 			if (blueprint_info[cat])
-				break;
+				found = 1;
+		} else {
+			found = shipext_Is_Ship_Available(blueprint_ship[0]);
 		}
-	} while (1);
+		if (!found)
+			blueprint_ship[0] = (blueprint_ship[0] + 1) % (num_blueprint_ships + NUM_SHIPS);
+	}
 	shipext_Get_Blueprint_Ship_SHP();
 }
 
 // FUNCTION: TIE95 0x809B8
 void shipext_Last_Blueprint_Ship(void) {
 	int16_t total = num_blueprint_ships + NUM_SHIPS;
+	int16_t found = 0;
 	int16_t cat, offset;
-	do {
-		blueprint_ship = (total + blueprint_ship - 1) % total;
-		if (blueprint_ship < NUM_SHIPS) {
-			if (shipext_Is_Ship_Available(blueprint_ship))
-				break;
-		} else {
+	blueprint_ship[0] = (blueprint_ship[0] + total - 1) % total;
+	while (!found) {
+		if (blueprint_ship[0] >= NUM_SHIPS) {
 			shipext_Get_Blueprint_Index(&cat, &offset);
 			if (blueprint_info[cat])
-				break;
-		}
-	} while (1);
+				found = 1;
+		} else
+			found = shipext_Is_Ship_Available(blueprint_ship[0]);
+		if (!found)
+			blueprint_ship[0] = (blueprint_ship[0] + total - 1) % total;
+	}
 	shipext_Get_Blueprint_Ship_SHP();
 }
 
@@ -839,11 +843,11 @@ void shipext_Get_Blueprint_Ship_SHP(void) {
 	char lfd_name[16], shp_name[16];
 	int16_t cat, offset;
 
-	if (blueprint_ship < NUM_SHIPS) {
-		if (!ship_info[blueprint_ship])
+	if (blueprint_ship[0] < NUM_SHIPS) {
+		if (!ship_info[blueprint_ship[0]])
 			return;
-		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], lfd_name, 3, 0);
-		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], shp_name, 3, 1);
+		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship[0]], lfd_name, 3, 0);
+		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship[0]], shp_name, 3, 1);
 	} else {
 		shipext_Get_Blueprint_Index(&cat, &offset);
 		if (!blueprint_info[cat])
@@ -861,9 +865,9 @@ void shipext_Get_Blueprint_Ship_SHP(void) {
 void shipext_Get_Blueprint_Ship_Name(char* out) {
 	int16_t cat, offset;
 
-	if (blueprint_ship < NUM_SHIPS) {
-		if (ship_info[blueprint_ship])
-			xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], out, 0, 0);
+	if (blueprint_ship[0] < NUM_SHIPS) {
+		if (ship_info[blueprint_ship[0]])
+			xparagrp_Get_Paragraph_String(ship_info[blueprint_ship[0]], out, 0, 0);
 		else
 			*out = '\0';
 	} else {
@@ -880,8 +884,8 @@ void shipext_Get_Blueprint_Ship_Line(char* out, int16_t line) {
 	int16_t cat, offset, str_idx;
 
 	str_idx = line + 2;
-	if (blueprint_ship < NUM_SHIPS) {
-		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship], out, 3, str_idx);
+	if (blueprint_ship[0] < NUM_SHIPS) {
+		xparagrp_Get_Paragraph_String(ship_info[blueprint_ship[0]], out, 3, str_idx);
 	} else {
 		shipext_Get_Blueprint_Index(&cat, &offset);
 		xparagrp_Get_Paragraph_String(blueprint_info[cat], out, offset, str_idx);
@@ -893,8 +897,8 @@ int16_t shipext_Get_Num_Blueprint_Ship_Lines(void) {
 	int16_t cat, offset;
 	int16_t total;
 
-	if (blueprint_ship < NUM_SHIPS)
-		total = xparagrp_Count_Paragraph_Strings(ship_info[blueprint_ship], 3);
+	if (blueprint_ship[0] < NUM_SHIPS)
+		total = xparagrp_Count_Paragraph_Strings(ship_info[blueprint_ship[0]], 3);
 	else {
 		shipext_Get_Blueprint_Index(&cat, &offset);
 		total = xparagrp_Count_Paragraph_Strings(blueprint_info[cat], offset);
@@ -908,7 +912,7 @@ int16_t shipext_Get_Num_Blueprint_Ship_Lines(void) {
 // FUNCTION: TIE98 0x481F60
 void shipext_Get_Blueprint_Index(int16_t* out_cat, int16_t* out_offset) {
 	int16_t cat = 0;
-	int16_t remaining = blueprint_ship - NUM_SHIPS;
+	int16_t remaining = blueprint_ship[0] - NUM_SHIPS;
 	*out_cat = 0;
 	*out_offset = 0;
 	while (cat < 4) {
@@ -963,7 +967,7 @@ void shipext_Last_Train_Ship(void) {
 }
 
 // FUNCTION: TIE95 0x80DEC
-uint8_t shipext_Get_Train_Ship(void) {
+int16_t shipext_Get_Train_Ship(void) {
 	if (!shipext_Is_Ship_Available(pilot_record.cur_train_ship)) {
 		pilot_record.train_level[pilot_record.cur_train_ship] = 0;
 		pilot_record.cur_train_ship = 0;
@@ -1043,12 +1047,7 @@ void shipext_Get_Train_Ship_Pos(int32_t* out_x, int32_t* out_y, int32_t* out_z) 
 /* --- Combat --- */
 
 // FUNCTION: TIE95 0x81448
-void shipext_Get_Combat_Ship_Name(char* out) {
-	if (ship_info[pilot_record.cur_combat_ship])
-		xparagrp_Get_Paragraph_String(ship_info[pilot_record.cur_combat_ship], out, 0, 0);
-	else
-		*out = '\0';
-}
+void shipext_Get_Combat_Ship_Name(char* out) { shipext_Get_Ship_Name(out, pilot_record.cur_combat_ship, 0, 0); }
 
 // FUNCTION: TIE95 0x81080
 void shipext_Next_Combat_Ship(void) {
@@ -1391,40 +1390,52 @@ int16_t shipext_Valid_Incomplete_Battle(int16_t battle) {
 // FUNCTION: TIE95 0x81BAC
 // FUNCTION: TIE98 0x482FA0
 int16_t shipext_Valid_Battle(int16_t battle) {
-	bool chain;
-	if (!ship_info[battle + NUM_SHIPS])
-		return 0;
-	if (pilot_record.battle_status[pilot_record.cur_battle] == 2)
-		return 0;
+	int16_t valid;
 
-	chain = true;
-	if (battle > 6)
-		chain = (pilot_record.battle_status[6] == 3);
-	if (battle > 9)
-		chain = (pilot_record.battle_status[9] == 3);
+	valid = ship_info[battle + NUM_SHIPS];
+	if (valid)
+		valid = pilot_record.battle_status[pilot_record.cur_battle] != 2;
+	if (valid) {
+		if (battle > 6)
+			valid = pilot_record.battle_status[6] == 3;
+		if (battle > 9)
+			valid = pilot_record.battle_status[9] == 3;
 
-	switch (battle) {
-		case 4:
-			return pilot_record.battle_status[0] == 3 && pilot_record.battle_status[1] == 3;
-		case 5:
-			return pilot_record.battle_status[2] == 3 && pilot_record.battle_status[3] == 3;
-		case 6:
-			return pilot_record.battle_status[4] == 3 && pilot_record.battle_status[5] == 3;
-		case 7:
-		case 8: {
-			uint8_t s7 = pilot_record.battle_status[7];
-			uint8_t s8 = pilot_record.battle_status[8];
-			return chain || s7 == 3 || s8 == 3 || s7 == 1 || s8 == 1;
+		switch (battle) {
+			case 4:
+				valid = pilot_record.battle_status[0] == 3;
+				valid = valid && pilot_record.battle_status[1] == 3;
+				break;
+			case 5:
+				valid = pilot_record.battle_status[2] == 3;
+				valid = valid && pilot_record.battle_status[3] == 3;
+				break;
+			case 6:
+				valid = pilot_record.battle_status[4] == 3;
+				valid = valid && pilot_record.battle_status[5] == 3;
+				break;
+			case 7:
+			case 8:
+				valid = valid || pilot_record.battle_status[7] == 3;
+				valid = valid || pilot_record.battle_status[8] == 3;
+				valid = valid || pilot_record.battle_status[7] == 1;
+				valid = valid || pilot_record.battle_status[8] == 1;
+				break;
+			case 9:
+				valid = pilot_record.battle_status[7] == 3;
+				valid &= valid && pilot_record.battle_status[8] == 3;
+				break;
+			case 12:
+				valid &= pilot_record.battle_status[10] == 3;
+				valid &= valid && pilot_record.battle_status[11] == 3;
+				break;
+			case 15:
+				valid &= pilot_record.battle_status[13] == 3;
+				valid &= valid && pilot_record.battle_status[14] == 3;
+				break;
 		}
-		case 9:
-			return pilot_record.battle_status[7] == 3 && pilot_record.battle_status[8] == 3;
-		case 12:
-			return chain && pilot_record.battle_status[10] == 3 && pilot_record.battle_status[11] == 3;
-		case 15:
-			return chain && pilot_record.battle_status[13] == 3 && pilot_record.battle_status[14] == 3;
-		default:
-			return chain;
 	}
+	return valid;
 }
 
 // FUNCTION: TIE95 0x81E14
@@ -1585,19 +1596,13 @@ void shipext_Get_Ship_Pos(int16_t ship, int16_t para_idx, int16_t str_idx, int32
 
 // FUNCTION: TIE95 0x82300
 void shipext_Mission_Enter(int16_t mission_type) {
-	char name_buf[40];
+	char name_buf[12];
 
 	if (mission_type == 2) {
-		/* Training mission */
-		int16_t craft_id;
+		/* Training mission: map train ship index to flight craft ID */
+		int craft_id = shipext_Get_Train_Ship();
 
-		if (!shipext_Is_Ship_Available(pilot_record.cur_train_ship)) {
-			pilot_record.train_level[pilot_record.cur_train_ship] = 0;
-			pilot_record.cur_train_ship = 0;
-		}
-		/* Map train ship index to flight craft ID */
-		craft_id = pilot_record.cur_train_ship;
-		switch (pilot_record.cur_train_ship) {
+		switch (craft_id) {
 			case 0:
 				craft_id = 5;
 				break;
@@ -1621,29 +1626,40 @@ void shipext_Mission_Enter(int16_t mission_type) {
 				break;
 		}
 		mission.train_craft_type_src = (uint8_t)craft_id;
-		mission.train_level = pilot_record.train_level[pilot_record.cur_train_ship] + 1;
+		mission.train_level = shipext_Get_Train_Level() + 1;
 		mission.torp_used = 0;
 		mission.beam_used = 0;
-		strcpy(mission_name, "TRAIN");
+		shipext_Set_Mission_Name("train");
 	} else {
 		mission.train_level = 0;
 		mission.train_craft_type_src = 0;
 	}
 
 	/* Set mission mode byte */
-	if (mission_type == 2)
-		mission.mission_mode = 0;
-	else if (mission_type == 3) {
-		if (pilot_record.cur_combat_ship < NUM_SHIPS)
-			mission.mission_mode = 1;
-		else
-			mission.mission_mode = 5;
-	} else if (mission_type == 4)
-		mission.mission_mode = 4;
+	switch (mission_type) {
+		case 2:
+			mission.mission_mode = 0;
+			break;
+		case 3:
+			if (shipext_Is_Combat_Ship_Tour())
+				mission.mission_mode = 5;
+			else
+				mission.mission_mode = 1;
+			break;
+		case 4:
+			mission.mission_mode = 4;
+			break;
+	}
 
 	shipext_Get_Mission_Path(missionfilename);
-	strcpy(name_buf, pilot_name);
+#ifdef TIE_MODERN
+	shipext_Get_Pilot_Name(name_buf, sizeof(name_buf));
 	snprintf(pilotname, sizeof(pilotname), "%s.tfr", name_buf);
+#else
+	shipext_Get_Pilot_Name(name_buf);
+	strcpy(pilotname, name_buf);
+	strcat(pilotname, ".tfr");
+#endif
 }
 
 // FUNCTION: TIE95 0x82434

@@ -646,7 +646,7 @@ extern uint16_t frameticks; /* ticks elapsed this frame */
 extern int16_t fileerror;
 extern RUNTIME_MissionState mission;
 
-extern uint8_t replayviewmode;
+extern int16_t replayviewmode;
 extern uint16_t maingameflag;
 extern uint8_t cheatingflag;
 extern uint16_t fullupdateflag;
@@ -1559,7 +1559,7 @@ extern uint16_t starshipexplodetail;
 /* Replay / clip-recording state (the rest live in replay.h). Watdbg owns
  * these here in tie.c; the higher-level orchestration + camera state is
  * in replay.c. */
-extern int16_t replaypercent;
+extern uint16_t replaypercent;
 extern int16_t recordingreplay;
 extern int32_t replaytotalcnt;
 extern int32_t replaymaxcnt;

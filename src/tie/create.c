@@ -247,50 +247,27 @@ uint16_t create_findstaticslot(void) {
 /* Resolve a 16-bit object reference to the worldlocx/y/z globals. See
  * header comment for the encoding ranges. */
 // FUNCTION: TIE95 0x196C0
-void create_getworldposition(uint16_t obj_or_kind, int fg_idx) {
-	int32_t wx, wy, wz;
+void create_getworldposition(uint16_t obj_or_kind, uint16_t fg_idx) {
+	int32_t wy;
 
-	if (obj_or_kind < OBJ_REF_STATIC_BASE) {
-		/* FlightObject slot: raw world XYZ (Q16.16). */
-		const FlightObject* o = &objects[obj_or_kind];
-		wx = o->world_x;
-		wy = o->world_y;
-		wz = o->world_z;
-	} else if (obj_or_kind < OBJ_REF_WAYPOINT_BASE) {
-		/* Static slot: (wx,wy,wz) = staticobjects[i].world_* << 8 (promote
-		 * int16 grid-coord to Q16.8 world units). */
-		const StaticObject* s = &staticobjects[obj_or_kind - OBJ_REF_STATIC_BASE];
-		/* * 256 instead of << 8: same numeric result as the binary's
-		 * `shl 8`, but well-defined for negative int16 coords. */
-		wx = (int32_t)s->world_x * 256;
-		wy = (int32_t)s->world_y * 256;
-		wz = (int32_t)s->world_z * 256;
+	if ((int)obj_or_kind < (int)OBJ_REF_STATIC_BASE) {
+		worldlocx = objects[obj_or_kind].world_x;
+		wy = objects[obj_or_kind].world_y;
+		worldlocz = objects[obj_or_kind].world_z;
+	} else if ((int)obj_or_kind < (int)OBJ_REF_WAYPOINT_BASE) {
+		obj_or_kind -= OBJ_REF_STATIC_BASE;
+		worldlocx = (int32_t)staticobjects[obj_or_kind].world_x * 256;
+		wy = (int32_t)staticobjects[obj_or_kind].world_y * 256;
+		worldlocz = (int32_t)staticobjects[obj_or_kind].world_z * 256;
 	} else {
-		/* Waypoint reference: OBJ_REF_WAYPOINT_BASE is the sentinel
-		 * "current waypoint" (indirects via fgstatus[fg].world_position,
-		 * itself encoded the same way). Any other value encodes the
-		 * specific waypoint index in the low bits. */
-		uint16_t wp_code = obj_or_kind;
-		uint16_t wp;
-		const EFGStruct* f;
-
-		if (wp_code == OBJ_REF_WAYPOINT_BASE)
-			wp_code = fgstatus[fg_idx].world_position;
-		/* Binary subtracts 0x8000 (HIBYTE += 0x80). Equivalent to the
-		 * mask only when wp_code >= 0x8000; we preserve the subtract
-		 * form so an out-of-range world_position (from a buggy FG state)
-		 * resolves the same way the original code did. */
-		wp = (uint16_t)(wp_code - OBJ_REF_WAYPOINT_BASE); /* 0..14 */
-		f = &fg_array[fg_idx];
-		/* * 256 instead of << 8 to avoid signed left-shift UB. Y is
-		 * negated to match the binary's trailing `neg edx`. */
-		wx = (int32_t)f->way_x[wp] * 256;
-		wy = -(int32_t)f->way_y[wp] * 256;
-		wz = (int32_t)f->way_z[wp] * 256;
+		if ((int)obj_or_kind == (int)OBJ_REF_WAYPOINT_BASE)
+			obj_or_kind = fgstatus[fg_idx].world_position;
+		obj_or_kind -= OBJ_REF_WAYPOINT_BASE;
+		worldlocx = (int32_t)fg_array[fg_idx].way_x[obj_or_kind] * 256;
+		wy = -((int32_t)fg_array[fg_idx].way_y[obj_or_kind] * 256);
+		worldlocz = (int32_t)fg_array[fg_idx].way_z[obj_or_kind] * 256;
 	}
-	worldlocx = wx;
 	worldlocy = wy;
-	worldlocz = wz;
 }
 
 /* ============================================================== */
@@ -357,60 +334,41 @@ uint16_t create_createcomponent(uint16_t parent_obj, uint8_t mesh_idx) {
 // FUNCTION: TIE95 0x19B48
 uint16_t create_createember(uint16_t parent_obj) {
 	const uint16_t slot = create_findslot(GENUS_EXPLOSION);
-	FlightObject* n;
-	const FlightObject* p;
-	uint16_t rh;
 	int16_t heading_delta;
-	uint16_t rp;
 	int16_t pitch_delta;
-	int32_t new_pitch;
-	uint8_t rand_speed;
 
 	if (slot == 0xFFFF)
 		return 0xFFFF;
 
-	n = &objects[slot];
-	p = &objects[parent_obj];
-	memcpy(n, p, sizeof(FlightObject));
+	objects[slot] = objects[parent_obj];
+	objects[slot].category = 5;
+	objects[slot].genus = GENUS_EXPLOSION;
+	objects[slot].damage_state = 0;
+	objects[slot].ship_idx = (uint8_t)((math2_getrandom() & 1) + 0x85);
+	objects[slot].ship_type_override = objects[parent_obj].ship_idx;
 
-	n->category = 5;
-	n->genus = GENUS_EXPLOSION;
-	n->damage_state = 0;
-	/* Binary does `and al,1 ; add al,0x85` -> ship_idx in {0x85, 0x86}. */
-	n->ship_idx = (uint8_t)((math2_getrandom() & 1) + 0x85);
-	n->ship_type_override = p->ship_idx;
-
-	/* Heading/pitch jitter. Watcom pattern is:
-	 *     LOWORD(delta) = random16;
-	 *     BYTE1(delta)  = (BYTE1(delta) & 7) + 1;
-	 * which yields a 32-bit value whose low byte is a random 0..255 and
-	 * whose byte 1 is 1..8 (with bytes 2-3 = 0). Net range: [256..2303]. */
-	rh = (uint16_t)math2_getrandom();
-	heading_delta = (int16_t)((rh & 0xFF) | ((((rh >> 8) & 7) + 1) << 8));
-	rp = (uint16_t)math2_getrandom();
-	pitch_delta = (int16_t)((rp & 0xFF) | ((((rp >> 8) & 7) + 1) << 8));
-	if (math2_getrandom() & 1)
+	/* Heading/pitch jitter in [256..2303], randomly negated. */
+	heading_delta = (math2_getrandom() & 0x7FF) + 0x100;
+	pitch_delta = (math2_getrandom() & 0x7FF) + 0x100;
+	if ((uint16_t)(math2_getrandom() & 1))
 		heading_delta = -heading_delta;
-	if (math2_getrandom() & 1)
+	if ((uint16_t)(math2_getrandom() & 1))
 		pitch_delta = -pitch_delta;
 
-	n->heading += heading_delta;
-	new_pitch = (int32_t)n->pitch + pitch_delta;
-	n->pitch = (int16_t)new_pitch;
-	if ((uint16_t)n->pitch >= 0x8000u) {
-		/* Pitched past a pole: reflect the pitch and turn the heading by 180°. */
-		n->pitch = (int16_t)-(int32_t)(uint16_t)new_pitch;
-		n->heading = (int16_t)(n->heading + 0x8000);
+	objects[slot].heading += heading_delta;
+	objects[slot].pitch += pitch_delta;
+	if ((uint16_t)objects[slot].pitch >= 0x8000) {
+		/* Pitched past a pole: reflect the pitch and turn the heading by 180 degrees. */
+		objects[slot].pitch = -objects[slot].pitch;
+		objects[slot].heading -= -0x8000;
 	}
 
-	n->orient_dirty = 1;
-	n->move_dirty = 1;
-
-	rand_speed = (uint8_t)math2_getrandom();
-	n->age_ticks = 0;
-	n->current_speed = (int16_t)(p->current_speed + rand_speed + 50);
-	n->anim_frame = 0;
-	n->death_timer = (int16_t)(236 * ((math2_getrandom() & 3) + 1));
+	objects[slot].orient_dirty = 1;
+	objects[slot].move_dirty = 1;
+	objects[slot].age_ticks = 0;
+	objects[slot].current_speed += (uint8_t)math2_getrandom() + 50;
+	objects[slot].death_timer = (int16_t)(236 * ((math2_getrandom() & 3) + 1));
+	objects[slot].anim_frame = 0;
 	return slot;
 }
 
@@ -507,31 +465,22 @@ int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first) {
 // FUNCTION: TIE95 0x19D74
 void create_checkdebris(void) {
 	const uint16_t slot = currentdebrisslot++;
-	FlightObject* o;
 	FlightObject* pl;
 	int32_t dx;
 	int32_t dy;
 	int32_t dz;
-	int16_t ra;
-	int16_t rb;
-	int32_t sx_scaled;
-	int32_t sy_scaled;
-	int32_t sz_scaled;
-	int32_t ux_scaled;
-	int32_t uy_scaled;
-	int32_t uz_scaled;
-	int32_t below_x;
-	int32_t below_y;
-	int32_t below_z;
+	int16_t r;
+	int16_t ox;
+	int16_t oy;
+	int16_t oz;
 
 	if (currentdebrisslot == NUM_OBJECTS)
 		currentdebrisslot = DEBRIS_FIRST_SLOT;
 
-	o = &objects[slot];
 	pl = pstate.player;
-	dx = o->world_x - pl->world_x;
-	dy = o->world_y - pl->world_y;
-	dz = o->world_z - pl->world_z;
+	dx = objects[slot].world_x - pl->world_x;
+	dy = objects[slot].world_y - pl->world_y;
+	dz = objects[slot].world_z - pl->world_z;
 	if (dx < 0)
 		dx = -dx;
 	if (dy < 0)
@@ -541,42 +490,36 @@ void create_checkdebris(void) {
 	if (collide_roughdistance3du(dx, dy, dz) <= 0x800)
 		return;
 
-	o->ship_idx = (uint8_t)((math2_getrandom() & 3) + 110);
-	o->genus = GENUS_DEBRIS;
-	o->fg_idx = (uint8_t)-1;
-	o->category = 3;
+	objects[slot].ship_idx = (uint8_t)((math2_getrandom() & 3) + 110);
+	objects[slot].genus = GENUS_DEBRIS;
+	objects[slot].category = 3;
+	objects[slot].fg_idx = (uint8_t)-1;
 
-	if (pl->orient_dirty) {
-		fview_calcrotatemove(pl->pitch, pl->heading, pl);
-		fview_calcrotateorient(pl->roll, 0, pl);
+	if (pstate.player->orient_dirty) {
+		fview_calcrotatemove(pstate.player->pitch, pstate.player->heading, pstate.player);
+		fview_calcrotateorient(pstate.player->roll, 0, pstate.player);
 	}
 
-	/* Two Q8.8 random scalars in [-512, 0x3FF+1-512]: rand produces a
-	 * signed int16 where the high byte is masked to 2 bits. `rand - 512`
-	 * biases it around 0. Applied as a Q15 multiplier against the
-	 * player's fwd/side/up vectors. */
-	ra = (int16_t)(math2_getrandom() & 0x03FF); /* HIBYTE & 3 */
-	ra = (int16_t)(ra - 512);
-	rb = (int16_t)(math2_getrandom() & 0x03FF);
-	rb = (int16_t)(rb - 512);
+	/* Scatter perpendicular to fwd: side*r1 + up*r2, with each random
+	 * scalar in [-512, 511] applied as a Q15 multiplier. */
+	r = (int16_t)((math2_getrandom() & 0x03FF) - 512);
+	ox = (int16_t)((pstate.player->side_x * r) >> 15);
+	oy = (int16_t)((pstate.player->side_y * r) >> 15);
+	oz = (int16_t)((pstate.player->side_z * r) >> 15);
+	r = (int16_t)((math2_getrandom() & 0x03FF) - 512);
+	ox += (int16_t)((pstate.player->up_x * r) >> 15);
+	oy += (int16_t)((pstate.player->up_y * r) >> 15);
+	oz += (int16_t)((pstate.player->up_z * r) >> 15);
 
-	/* Scatter perpendicular to fwd: side*ra + up*rb. */
-	sx_scaled = ((int32_t)pl->side_x * ra) >> 15;
-	sy_scaled = ((int32_t)pl->side_y * ra) >> 15;
-	sz_scaled = ((int32_t)pl->side_z * ra) >> 15;
-	ux_scaled = ((int32_t)pl->up_x * rb) >> 15;
-	uy_scaled = ((int32_t)pl->up_y * rb) >> 15;
-	uz_scaled = ((int32_t)pl->up_z * rb) >> 15;
+	/* Forward displacement: 1/16 of the forward vector. */
+	ox += pstate.player->fwd_x >> 4;
+	oy += pstate.player->fwd_y >> 4;
+	oz += pstate.player->fwd_z >> 4;
 
-	/* Forward displacement scaled 1/16 of the forward vector. */
-	below_x = pl->fwd_x >> 4;
-	below_y = pl->fwd_y >> 4;
-	below_z = pl->fwd_z >> 4;
-
-	o->world_x = pl->world_x + (int16_t)(below_x + sx_scaled + ux_scaled);
-	o->world_y = pl->world_y + (int16_t)(below_y + sy_scaled + uy_scaled);
-	o->world_z = pl->world_z + (int16_t)(below_z + sz_scaled + uz_scaled);
-	o->anim_frame = 2;
+	objects[slot].world_x = pstate.player->world_x + ox;
+	objects[slot].world_y = pstate.player->world_y + oy;
+	objects[slot].world_z = pstate.player->world_z + oz;
+	objects[slot].anim_frame = 2;
 }
 
 /* ============================================================== */
@@ -1803,12 +1746,12 @@ uint16_t create_createcraft(void) {
 	else
 		c->current_order = order_flw;
 
-	/* Throttle: pick from _throttleconvert[ai[0].speed] unless order is
+	/* Throttle: pick from throttleconvert[ai[0].speed] unless order is
 	 * 20 (hold position -> full thrust). Orders 0..2 and order 42 stop
 	 * at the start waypoint (throttle = 0) EXCEPT for the player. */
 
 	if ((order_ldr > 2 && order_ldr != 42) || obj_slot == pstate.object_idx)
-		throttle = (order_ldr == 20) ? 0x8000u : _throttleconvert[f->ai[0].speed];
+		throttle = (order_ldr == 20) ? 0x8000u : throttleconvert[f->ai[0].speed];
 	else
 		throttle = 0;
 

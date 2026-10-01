@@ -17,14 +17,14 @@ extern "C" {
 
 /* Camera view matrix from Euler angles, then look offsets about the view's
  * side axis (look pitch) and up axis (look yaw) */
-void fview_newcalcview(int16_t roll, int16_t pitch, int16_t heading, int16_t yaw, int16_t side_angle,
-					   int16_t up_angle, FlightObject* craft);
+void fview_newcalcview(uint16_t roll, uint16_t pitch, uint16_t heading, uint16_t yaw, uint16_t side_angle,
+					   uint16_t up_angle, FlightObject* craft);
 
 /* Craft rotation from Euler angles with optional cached orientation */
-void fview_newcalcrotate(int16_t roll, int16_t pitch, int16_t heading, int16_t yaw, FlightObject* craft);
+void fview_newcalcrotate(uint16_t roll, uint16_t pitch, uint16_t heading, uint16_t yaw, FlightObject* craft);
 
 /* Build S/f/U basis vectors from pitch + heading */
-void fview_calcrotatemove(int16_t pitch, int16_t heading, FlightObject* craft);
+void fview_calcrotatemove(uint16_t pitch, uint16_t heading, FlightObject* craft);
 
 /* Apply yaw + roll rotations to craft orientation */
 void fview_calcrotateorient(int16_t roll, int16_t yaw, FlightObject* craft);

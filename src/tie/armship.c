@@ -407,7 +407,7 @@ static void armship_idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t 
 
 // FUNCTION: TIE95 0x6EB48
 // FUNCTION: TIE98 0x402680
-int16_t armship_ArmShip(SceneHeadStruct* scene_head) {
+int armship_ArmShip(SceneHeadStruct* scene_head) {
 #ifdef TIE_MODERN
 	ResFile* launch_resource = NULL;
 #else

@@ -96,18 +96,17 @@ void dynamix_subvelocity(uint16_t obj_idx, uint16_t decel) {
 	}
 #endif
 	dv = math2_divide(decel, framerate);
-	dv_rem = (uint16_t)math2_remainder;
-	old_rem = obj->speed_remainder;
+	old_rem = objects[obj_idx].speed_remainder;
 
-	obj->speed_remainder = (uint16_t)(old_rem - dv_rem);
-	if (old_rem < dv_rem) {
+	objects[obj_idx].speed_remainder -= (uint16_t)math2_remainder;
+	if (old_rem < objects[obj_idx].speed_remainder) {
 		/* unsigned borrow */
-		obj->current_speed--;
+		objects[obj_idx].current_speed--;
 	}
-	obj->current_speed -= dv;
-	if ((uint16_t)obj->current_speed > 0x8000u) {
+	objects[obj_idx].current_speed -= dv;
+	if ((uint16_t)objects[obj_idx].current_speed > 0x8000) {
 		/* underflow: >0x8000 unsigned == negative when reinterpreted signed */
-		obj->current_speed = 0;
+		objects[obj_idx].current_speed = 0;
 	}
 }
 
@@ -119,46 +118,37 @@ void dynamix_subvelocity(uint16_t obj_idx, uint16_t decel) {
  * ================================================================== */
 
 // FUNCTION: TIE95 0x1FC78
-void dynamix_adjustvelocity(uint16_t obj_idx, int16_t target_speed, int16_t allow_decel,
+void dynamix_adjustvelocity(uint16_t obj_idx, uint16_t speed, uint16_t allow_decel,
 							uint16_t throttle_frac) {
-	FlightObject* obj = &objects[obj_idx];
-	const SpecData* sp = &spec_data[pspecnum];
+	uint16_t step;
 
-	uint16_t delta = (uint16_t)(target_speed - obj->current_speed);
-	if (delta == 0) {
+	/* speed becomes the 16-bit delta from the current speed */
+	speed -= objects[obj_idx].current_speed;
+	if (speed == 0) {
 		return;
 	}
 
-	if (delta >= 0x8000u) {
-		/* current > target: brake (only if caller opted in) */
-		uint16_t overshoot;
-		uint16_t step;
-
-		if (allow_decel != 1) {
-			return;
-		}
-		overshoot = (uint16_t)(obj->current_speed - target_speed);
-		step = math2_fraction(overshoot, (uint16_t)sp->decel_gain_frac);
+	if (speed < 0x8000) {
+		/* current < target: accelerate */
+		step = math2_fraction((uint16_t)spec_data[pspecnum].max_accel, 0x4000u);
 		if (step == 0) {
 			step = 1;
 		}
-		dynamix_subvelocity(obj_idx, step);
-	} else {
-		/* current < target: accelerate */
-		uint16_t base = math2_fraction((uint16_t)sp->max_accel, 0x4000u);
-		uint16_t step;
-
-		if (base == 0) {
-			base = 1;
+		step += math2_fraction((uint16_t)(spec_data[pspecnum].max_accel - step), throttle_frac);
+		if (!objects[obj_idx].craft_ptr->slam_active) {
+			step *= 3;
 		}
-		step = (uint16_t)(math2_fraction((uint16_t)(sp->max_accel - base), throttle_frac) + base);
-		if (!obj->craft_ptr->slam_active) {
-			step = (uint16_t)(step * 3);
+		if (speed >= step) {
+			speed = step;
 		}
-		if (delta >= step) {
-			delta = step;
+		dynamix_addvelocity(obj_idx, speed);
+	} else if (allow_decel == 1) {
+		/* current > target: brake (only if caller opted in) */
+		speed = math2_fraction((uint16_t)-speed, (uint16_t)spec_data[pspecnum].decel_gain_frac);
+		if (speed == 0) {
+			speed = 1;
 		}
-		dynamix_addvelocity(obj_idx, delta);
+		dynamix_subvelocity(obj_idx, speed);
 	}
 }
 

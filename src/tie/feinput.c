@@ -160,22 +160,22 @@ void feinput_degitterinput(void) {
 
 // FUNCTION: TIE95 0x22F08
 void feinput_getinput(void) {
-	int16_t abs_dx, abs_dy, abs_dr;
+	int abs_dx, abs_dy;
 
 	feinput_getrawinput();
 	feinput_checkinput();
 
-	abs_dx = inputdeltax < 0 ? -inputdeltax : inputdeltax;
-	if (abs_dx <= 2048)
+	abs_dx = (uint16_t)inputdeltax;
+	if (abs_dx >= 0x8000)
+		abs_dx = -abs_dx;
+	if ((int16_t)abs_dx <= 2048)
 		inputdeltax = 0;
 
-	abs_dy = inputdeltay < 0 ? -inputdeltay : inputdeltay;
-	if (abs_dy <= 1536)
+	abs_dy = (uint16_t)inputdeltay;
+	if (abs_dy >= 0x8000)
+		abs_dy = -abs_dy;
+	if ((int16_t)abs_dy <= 1536)
 		inputdeltay = 0;
-
-	abs_dr = inputdeltaroll < 0 ? -inputdeltaroll : inputdeltaroll;
-	if (abs_dr <= 2048)
-		inputdeltaroll = 0;
 }
 
 // FUNCTION: TIE95 0x22FD8

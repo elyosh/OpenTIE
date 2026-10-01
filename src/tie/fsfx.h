@@ -48,7 +48,7 @@ int8_t fsfx_triggerlasersfx(uint16_t object_idx);
  * mode 3 = red lock (sfx 36, stops sfx 35); other = green lock
  * (sfx 35, stops sfx 36). Guards against duplicate triggers.
  */
-int32_t fsfx_triggergunsightsfx(int16_t mode);
+int32_t fsfx_triggergunsightsfx(uint16_t mode);
 
 /*
  * Sustained beam-weapon SFX. firing==0 stops both beam channels.
@@ -87,14 +87,14 @@ int16_t fsfx_speakeravailable(void);
 
 /* Queue the localized group prefix and wing number for an object's FG name.
  * Voice clips exist only for wing numbers one and two. */
-int8_t fsfx_speakobjectname(uint16_t object_idx, uint16_t prefix_voice);
+void fsfx_speakobjectname(uint16_t object_idx, uint16_t prefix_voice);
 
 /*
  * Random congratulatory callout. Plays one of 3 kudos clips (76..78),
  * one of 3 exclamations (79..81), and optionally (50%) appends
  * the player's object name.
  */
-int8_t fsfx_speakcongrats(void);
+void fsfx_speakcongrats(void);
 
 /*
  * Speak an order/operation (random phrasing). verb_voice==63 picks

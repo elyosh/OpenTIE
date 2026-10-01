@@ -124,7 +124,7 @@ void anim_drawverysimpleobject_tie98(uint16_t obj_idx);
  * 0x38 = static slot). Return value is the next frame code (callers ignore;
  * the side effect on animindex is what matters).
  */
-int16_t anim_updateanimstate(uint16_t obj_or_kind);
+void anim_updateanimstate(uint16_t obj_or_kind);
 
 /*
  * Per-frame entry. Ticks GATE animations every call (if a training-style

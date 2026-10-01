@@ -278,7 +278,7 @@ void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz) {
 	radary = (int16_t)ay;
 
 	/* Compute angle via calcarctan(ax, ay) */
-	trig2_calcarctan(ax, ay, &ratio, &angle);
+	trig2_calcarctan(ax, ay, &angle, &ratio);
 
 	/* Convert to navigation angle: -angle + 90° */
 	nav_angle = (uint16_t)(-angle + 0x4000);

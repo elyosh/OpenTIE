@@ -259,6 +259,7 @@ extern uint8_t markingnumber[128];
 extern uint16_t markingptr[128];
 extern uint16_t objectptrs[128];
 extern DRAWPOL_MarkingEyeData markingeyedata;
+extern uint8_t marktot;
 extern uint8_t markcnt;
 extern uint16_t nummarks;
 /* gatecolor is tie.c-owned per watdbg; declared in tie.h. */
@@ -277,7 +278,7 @@ extern uint16_t solidindex;
 /* Install the 16-entry marking/decal palette row for this draw pass.
  * Copies markingdefs[mode*16 + 0..15] into materialcolors[208..223]
  * (marking-color materialcolors row) and sets markingstate. */
-void drawpol_setmarkingcolors(MarkingMode mode);
+void drawpol_setmarkingcolors(uint16_t mode);
 
 /* Backface-cull test for a single face. Returns 0 (front-facing) or 2
  * (back-facing); caller stores (ret >> 1) into facevisflag[face_idx]. */

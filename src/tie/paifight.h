@@ -59,8 +59,8 @@ int16_t paifight_findattackedtargetingroup(uint8_t pri_type, uint8_t pri_id, int
 uint16_t paifight_findgunnertargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 										  uint8_t sec_id);
 
-int16_t paifight_searchforclosestingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
-										 uint8_t sec_id);
+int16_t paifight_searchforclosestingroup(uint16_t pri_type, uint16_t pri_id, uint16_t op, uint16_t sec_type,
+										 uint16_t sec_id);
 
 int16_t paifight_futuretargets(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 							   uint8_t sec_id);

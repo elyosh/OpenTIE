@@ -197,9 +197,8 @@ int16_t user_framerateadjust(int16_t per_236) { return (int16_t)math2_ABoverC32(
 // FUNCTION: TIE95 0x5FC6C
 void user_increasepower(uint16_t delta) {
 	uint16_t cur = pstate.player_craft->throttle_speed;
-	uint16_t next = (uint16_t)(cur + delta);
-	pstate.player_craft->throttle_speed = next;
-	if (cur > next)
+	pstate.player_craft->throttle_speed += delta;
+	if (pstate.player_craft->throttle_speed < cur)
 		pstate.player_craft->throttle_speed = 0xFFFF;
 }
 
@@ -220,30 +219,26 @@ void user_decreasepower(uint16_t delta) {
  */
 // FUNCTION: TIE95 0x5FCCC
 void user_adjustshields(uint16_t dst_idx, uint16_t src_idx) {
-	int16_t* shields = &pstate.player_craft->forward_shield;
-	int16_t src_cur = shields[src_idx];
-	int16_t cap;
-	int16_t dst_cur;
+	int cap;
 	int16_t headroom;
 
-	if (src_cur <= 0)
+	if ((&pstate.player_craft->forward_shield)[src_idx] <= 0)
 		return;
 
-	cap = (int16_t)(2 * spec_data[pstate.player_spec_num].shield_points);
+	cap = (uint16_t)spec_data[pstate.player_spec_num].shield_points * 2;
 	if (!mission.difficulty)
-		cap = (int16_t)(4 * spec_data[pstate.player_spec_num].shield_points);
+		cap *= 2;
 
-	dst_cur = shields[dst_idx];
-	headroom = (int16_t)(cap - dst_cur);
+	headroom = (int16_t)(cap - (&pstate.player_craft->forward_shield)[dst_idx]);
 	if (headroom <= 0)
 		return;
 
-	if (headroom >= src_cur) {
-		shields[dst_idx] = (int16_t)(src_cur + dst_cur);
-		shields[src_idx] = 0;
+	if (headroom < (&pstate.player_craft->forward_shield)[src_idx]) {
+		(&pstate.player_craft->forward_shield)[dst_idx] += headroom;
+		(&pstate.player_craft->forward_shield)[src_idx] -= headroom;
 	} else {
-		shields[dst_idx] = (int16_t)(headroom + dst_cur);
-		shields[src_idx] = (int16_t)(src_cur - headroom);
+		(&pstate.player_craft->forward_shield)[dst_idx] += (&pstate.player_craft->forward_shield)[src_idx];
+		(&pstate.player_craft->forward_shield)[src_idx] = 0;
 	}
 }
 
@@ -456,75 +451,53 @@ uint16_t user_picktarget(void) {
  */
 // FUNCTION: TIE95 0x5FF78
 uint16_t user_picknexttarget(uint16_t start, int32_t step) {
-	/* Binary quirk preserved: the local craft_ptr persists across loop
-	 * iterations. If a prior iteration captured a hyperspacing craft's
-	 * pointer and then we exit on a static or category-set target, the
-	 * global craftptr inherits that last-seen craft pointer. */
-	CraftData* cp_local = craftptr;
-	int16_t step_local = (int16_t)step;
 	/* Total search budget = NUM_OBJECTS + NUM_STATIC_OBJECTS. Retail = 184
 	 * (120 + 64); demo was 180 (116 + 64). */
-	int iter = NUM_OBJECTS + NUM_STATIC_OBJECTS;
-	int found = 0;
+	int16_t iter = NUM_OBJECTS + NUM_STATIC_OBJECTS;
 
-	while ((int16_t)--iter != -1) {
-		uint8_t obj_species;
+	while (--iter != (int16_t)0xFFFF) {
+		uint16_t obj_species;
+		uint8_t flight;
 
-		start = (uint16_t)(start + step_local);
-		if (start < 0x8000u) {
-			switch (start) {
-				/* Underflow past first static (0x3800) -> last active flight
-				 * slot (NUM_OBJECTS - 1 = 119 retail / 115 demo). */
-				case 0x37FFu:
-					start = NUM_OBJECTS - 1;
-					break;
-				/* Overflow past last active flight slot -> first static. */
-				case NUM_OBJECTS:
-					start = 14336;
-					break;
-				/* Overflow past last static -> first active flight slot. */
-				case 0x3840u:
-					start = 0;
-					break;
-			}
-		} else {
+		start = (uint16_t)(start + step);
+		if (start >= 0x8000)
 			start = 14399;
-		}
+		/* Underflow past first static (0x3800) -> last active flight
+		 * slot (NUM_OBJECTS - 1 = 119 retail / 115 demo). */
+		else if (start == 0x37FF)
+			start = NUM_OBJECTS - 1;
+		/* Overflow past last active flight slot -> first static. */
+		else if (start == NUM_OBJECTS)
+			start = 14336;
+		/* Overflow past last static -> first active flight slot. */
+		else if (start == 0x3840)
+			start = 0;
 		if (start == pstate.object_idx)
 			continue;
 
-		obj_species = (start >= 0x3800u) ? staticobjects[start - 14336].species : objects[start].ship_idx;
+		if (start < 0x3800)
+			obj_species = objects[start].ship_idx;
+		else
+			obj_species = staticobjects[start - 14336].species;
 		if (!obj_species)
 			continue;
 		if ((species_table[obj_species].side & 1) == 0)
 			continue;
 
-		if (start >= NUM_ACTIVE_CRAFT_SLOTS) {
-			found = 1;
-			break;
-		}
-		if (objects[start].genus != GENUS_EXPLOSION) {
-			int flight;
-
-			if (objects[start].category) {
-				found = 1;
-				break;
-			}
-			cp_local = objects[start].craft_ptr;
-			flight = cp_local->flight_flag;
-			if (flight != 3 && flight != 4) {
-				found = 1;
-				break;
-			}
-			/* flight_flag 3 or 4 (hyperspace) -> continue loop, but
-			 * cp_local now carries this craft's ptr for the next exit. */
-		}
-		/* EXPLOSION genus or hyperspacing craft -> continue loop. */
+		if (start >= NUM_ACTIVE_CRAFT_SLOTS)
+			return start;
+		if (objects[start].genus == GENUS_EXPLOSION)
+			continue;
+		if (objects[start].category)
+			return start;
+		craftptr = objects[start].craft_ptr;
+		flight = craftptr->flight_flag;
+		/* flight_flag 3 or 4 (hyperspace) -> continue loop, but
+		 * craftptr now carries this craft's ptr for the next exit. */
+		if (flight != 3 && flight != 4)
+			return start;
 	}
-	if (!found)
-		start = 0xFFFF;
-	craftptr = cp_local;
-	return start;
+	return iter;
 }
 
 /*
@@ -893,81 +866,71 @@ void user_targetonscreen_tie98(uint16_t object_reference, int16_t mesh_index, ui
  */
 // FUNCTION: TIE95 0x60790
 void user_setnewtarget(uint16_t new_obj) {
+	uint16_t i;
 	uint16_t working_subsystems;
+	CraftData* cp_t;
 
-	if ((pstate.player_craft->status_flags & 4) == 0) {
+	if (pstate.player_craft->status_flags & 4) {
+		if (new_obj == 0xFFFF || new_obj == pstate.target_obj_idx)
+			return;
+
+		fsfx_triggersfx(0x22u, 0xFFFF);
+		pstate.target_obj_idx = new_obj;
+		pstate.radar_target1 = 0;
+
+		if (new_obj < NUM_ACTIVE_CRAFT_SLOTS) {
+			if (!TIE_FLIGHT_TIE98)
+				draw_Lockshipfileptrs(objects[new_obj].ship_idx);
+			for (i = 0; i < TIE_FLIGHT_EDITION(objectblockptr->num_meshes,
+											   modelmesh_getcount(objects[new_obj].ship_idx));
+				 ++i) {
+				int mt = TIE_FLIGHT_EDITION(componentblockptr[i].mesh_type,
+											modelmesh_gettype(objects[new_obj].ship_idx, i));
+				if (mt == 1 || mt == 3) {
+					pstate.radar_target1 = (int16_t)i;
+					break;
+				}
+			}
+		}
+		if (!replayviewmode && camera.view_target_tracking)
+			camera.view_target_obj = pstate.target_obj_idx;
+		pstate.radar_subtarget_state = 0;
+		working_subsystems = pstate.player_craft->working_subsystems;
+		pstate.player_craft->missile_count_total = 0;
+
+		if ((working_subsystems & 1) == 0 || camera.pilotview != 19)
+			return;
+
+		if (new_obj < NUM_ACTIVE_CRAFT_SLOTS) {
+			cp_t = objects[new_obj].craft_ptr;
+#ifdef TIE_MODERN
+			msg_addmessageptr(0, (char*)spec_name_ptrs[cp_t->species_idx]);
+#else
+			msg_addmessageptr(0, (char*)spec_data[cp_t->species_idx].name_ptr);
+#endif
+			if ((int8_t)fg_array[objects[new_obj].fg_idx].count > 1) {
+				argtable[1] = (uint16_t)(cp_t->craft_idx_in_fg + 1);
+				msg_addmessageptr(2, fg_array[objects[new_obj].fg_idx].name);
+				argtable[3] = 103;
+				msg_messageprintf(MSG_REPORT_FROM_FG);
+			} else {
+				msg_addmessageptr(1, fg_array[objects[new_obj].fg_idx].name);
+				argtable[2] = 103;
+				msg_messageprintf(MSG_REPORT_FROM);
+			}
+		} else if (new_obj >= 0x3800) {
+			new_obj -= 0x3800;
+			i = staticobjects[new_obj].species;
+			if (i >= 0x46 && i <= 0x54)
+				msg_addmessageptr(0, ((char**)buoystr)[i - 70]);
+			msg_addmessageptr(1, fg_array[staticobjects[new_obj].fg_idx].name);
+			argtable[2] = 103;
+			msg_messageprintf(MSG_REPORT_FROM);
+		}
+	} else {
 		argtable[0] = 33;
 		argtable[1] = 25;
 		msg_messageprintf(MSG_SYSTEM_STATUS);
-		return;
-	}
-	if (new_obj == 0xFFFF || new_obj == pstate.target_obj_idx)
-		return;
-
-	fsfx_triggersfx(0x22u, 0xFFFF);
-	pstate.target_obj_idx = new_obj;
-	pstate.radar_target1 = 0;
-
-	if (new_obj < NUM_ACTIVE_CRAFT_SLOTS) {
-		const uint8_t model_type = objects[new_obj].ship_idx;
-		int nm;
-		int i;
-
-		if (!TIE_FLIGHT_TIE98)
-			draw_Lockshipfileptrs(model_type);
-		nm = TIE_FLIGHT_EDITION(objectblockptr->num_meshes, modelmesh_getcount(model_type));
-		for (i = 0; i < nm; ++i) {
-			int mt = TIE_FLIGHT_EDITION(componentblockptr[i].mesh_type, modelmesh_gettype(model_type, i));
-			if (mt == 1 || mt == 3) {
-				pstate.radar_target1 = (int16_t)i;
-				break;
-			}
-		}
-	}
-	if (!replayviewmode && camera.view_target_tracking)
-		camera.view_target_obj = pstate.target_obj_idx;
-	pstate.radar_subtarget_state = 0;
-	working_subsystems = pstate.player_craft->working_subsystems;
-	pstate.player_craft->missile_count_total = 0;
-
-	if ((working_subsystems & 1) == 0)
-		return;
-	if (camera.pilotview != 19)
-		return;
-
-	if (new_obj < NUM_ACTIVE_CRAFT_SLOTS) {
-		CraftData* cp_t = objects[new_obj].craft_ptr;
-		int fg_idx;
-		EFGStruct* fgp;
-
-#ifdef TIE_MODERN
-		msg_addmessageptr(0, (char*)spec_name_ptrs[cp_t->species_idx]);
-#else
-		msg_addmessageptr(0, (char*)spec_data[cp_t->species_idx].name_ptr);
-#endif
-		fg_idx = objects[new_obj].fg_idx;
-		fgp = &fg_array[fg_idx];
-		/* Watcom unaligned load: `*(int*)&fg.special_craft >> 24` = fg.count. */
-		if (fgp->count <= 1) {
-			msg_addmessageptr(1, fgp->name);
-			argtable[2] = 103;
-			msg_messageprintf(MSG_REPORT_FROM);
-			return;
-		}
-		argtable[1] = (uint16_t)(cp_t->craft_idx_in_fg + 1);
-		msg_addmessageptr(2, fgp->name);
-		argtable[3] = 103;
-		msg_messageprintf(MSG_REPORT_FROM_FG);
-		return;
-	}
-	if (new_obj >= 0x3800u) {
-		uint16_t si = (uint16_t)(new_obj - 14336);
-		uint8_t species = staticobjects[si].species;
-		if (species >= 0x46u && species <= 0x54u)
-			msg_addmessageptr(0, ((char**)buoystr)[species - 70]);
-		msg_addmessageptr(1, fg_array[staticobjects[si].fg_idx].name);
-		argtable[2] = 103;
-		msg_messageprintf(MSG_REPORT_FROM);
 	}
 }
 
@@ -1142,19 +1105,20 @@ void user_calcdeltapitch(int16_t dpitch, int16_t dyaw, uint16_t obj_idx, CraftDa
  */
 // FUNCTION: TIE95 0x61070
 int16_t user_checkradio(void) {
-	uint8_t fg_idx;
 	uint16_t status;
 
 	if (pstate.target_obj_idx == 0xFFFF)
 		return 0;
 	if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS)
 		return 0;
-	fg_idx = objects[pstate.target_obj_idx].fg_idx;
-	if (fg_idx != objects[pstate.object_idx].fg_idx && !fg_array[fg_idx].camo_flag)
+	if (objects[pstate.target_obj_idx].fg_idx != objects[pstate.object_idx].fg_idx
+		&& !fg_array[objects[pstate.target_obj_idx].fg_idx].camo_flag)
 		return 0;
 	status = objects[pstate.target_obj_idx].craft_ptr->status_flags;
 	craftptr = objects[pstate.target_obj_idx].craft_ptr;
-	return status != 0;
+	if (!status)
+		return 0;
+	return 1;
 }
 
 /*
@@ -1265,14 +1229,12 @@ int16_t user_isrescued(uint16_t player_obj_idx) {
 	uint32_t nearest_hostile;
 	uint16_t i;
 
-	if (mission_file_header.mission.win_type & 1)
+	if ((int8_t)mission_file_header.mission.win_type & 1)
 		return 1;
 	nearest_friend = 0x1000000u;
 	nearest_hostile = 0x1000000u;
 
 	for (i = 0; i < NUM_ACTIVE_CRAFT_SLOTS; ++i) {
-		uint8_t side;
-
 		if (i == player_obj_idx)
 			continue;
 		if (!objects[i].ship_idx)
@@ -1282,18 +1244,19 @@ int16_t user_isrescued(uint16_t player_obj_idx) {
 		if (!objects[i].genus)
 			continue;
 
-		side = objects[i].side;
-		if (!side || side == 4) {
+		if (objects[i].side == 0 || objects[i].side == 4) {
 			pai_distancebetween(player_obj_idx, i);
 			if (nearest_friend > (uint32_t)trig2_polardistance)
 				nearest_friend = (uint32_t)trig2_polardistance;
-		} else if (side == 1) {
+		} else if (objects[i].side == 1) {
 			pai_distancebetween(player_obj_idx, i);
 			if (nearest_hostile > (uint32_t)trig2_polardistance)
 				nearest_hostile = (uint32_t)trig2_polardistance;
 		}
 	}
-	return (int16_t)((nearest_hostile / 2) < nearest_friend);
+	if (nearest_hostile / 2 < nearest_friend)
+		return 1;
+	return 0;
 }
 
 /*
@@ -2047,8 +2010,14 @@ int32_t user_inflightinfo(int32_t screen_id) {
  */
 // FUNCTION: TIE95 0x5CDA0
 void user_inputforplane(void) {
+	uint16_t screen;
+#ifdef TIE_MODERN
+	int32_t frame_key = -1;
+	int16_t room_key;
+#endif
+
 	/* Phase 0: hyperspace-abort on 'h'. */
-	if (hyperspaceflag < 2u && hyperabortflag && inputkey == KEY_h && hyperspaceflag) {
+	if (hyperspaceflag < 2 && hyperabortflag && (uint16_t)inputkey == KEY_h && hyperspaceflag) {
 		msg_messageprintf(MSG_HYPER_ABORTED);
 		hyperspaceflag = 0;
 		return;
@@ -2063,1318 +2032,1406 @@ void user_inputforplane(void) {
 	feinput_degitterinput();
 	inputdeltay = (int16_t)(inputdeltay * 2);
 
-	/* Mission-type gate: simulator missions skip many keys by
-	 * zeroing the key; skipping happens in a preamble for a dense
-	 * range near the top of the decompiler's binary search. */
-	if (mission.train_craft_type) {
-		uint16_t k = (uint16_t)inputkey;
-		int skip = 0;
-		if (k == KEY_a)
-			skip = 1;
-		else if (k == KEY_e)
-			skip = 1;
-		else if (k == KEY_r)
-			skip = 1;
-		else if (k == KEY_t || k == KEY_u)
-			skip = 1;
-		else if (k == KEY_y)
-			skip = 1;
-		else if (k >= KEY_F5 && k <= KEY_F7)
-			skip = 1;
-		if (skip)
-			inputkey = KEY_NONE;
-	}
-
-	switch ((uint16_t)inputkey) {
-		/* Left/right arrow: roll. */
-		case KEY_LEFT_ARROW:
-		case KEY_RIGHT_ARROW: {
-			int roll_pct = math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1;
-			int scale = (inputkey == 1) ? 53248 : 12288;
-			int q15 = (roll_pct * scale) >> 15;
-			int16_t rd = (int16_t)math2_ABoverC32((int16_t)q15, frameticks, 236);
-			objects[pstate.object_idx].roll = (int16_t)(objects[pstate.object_idx].roll - rd);
-			break;
-		}
-		/* Throttle full. */
-		case KEY_BACKSPACE:
-			pstate.player_craft->throttle_speed = 0xFFFF;
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			argtable[0] = 84;
-			msg_messageprintf(MSG_THROTTLE_SET);
-			break;
-		/* Match target speed. */
-		case KEY_ENTER: {
-			CraftData* pc = pstate.player_craft;
-			uint16_t cur;
-			uint16_t slack;
-			uint16_t maxs;
-			uint16_t match_speed;
-
-			if (pstate.target_obj_idx == 0xFFFF)
-				break;
-			if (pstate.target_obj_idx >= 0x3800u) {
-				pc->throttle_speed = 0;
-				break;
-			}
-			if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS) {
-				pc->throttle_speed = 0xFFFF;
-				break;
-			}
-			cur = (uint16_t)objects[pstate.target_obj_idx].current_speed;
-			slack = (uint16_t)(6 - (pc->shield_power + pc->beam_power + pc->laser_power));
-			maxs = (uint16_t)pc->max_speed_cache;
-
-			if (slack < 0x8000u) {
-				match_speed =
-					(uint16_t)((uint16_t)pc->max_speed_cache + math2_fraction((int16_t)(slack << 13), maxs));
-			} else {
-				uint16_t adj = math2_fraction((int16_t)(-8192 * slack), maxs);
-				match_speed = (uint16_t)(pc->max_speed_cache - adj);
-			}
-			if (cur < match_speed) {
-				uint16_t pct = math2_percentage(cur, match_speed);
-				pc->throttle_speed = pct;
-				msg_messageprintf(MSG_MATCHING_SPEED);
-			} else {
-				pc->throttle_speed = 0xFFFF;
-				msg_messageprintf(MSG_MATCHING_SPEED_MAX);
-			}
-			break;
-		}
-		/* In-flight options room. */
-		case KEY_ESCAPE:
+	/* An info room that closes on the wingmen screen (4) leaves the key
+	 * pressed there in inputkey, which is dispatched again. */
 #ifdef TIE_MODERN
-			if (replayviewmode)
-				TieFlightRequest_InfoRoom(6);
-			else
-				TieRuntime_RequestSettingsMenu();
-#else
-			(void)user_inflightinfo(6);
+	/* PORT: info rooms run as a task between frames, so a key left by the
+	 * wingmen screen arrives with the next frame: dispatch it first, then
+	 * this frame's own key. */
+	if (TieFlightRequest_ConsumeRoomKey(&room_key)) {
+		frame_key = (uint16_t)inputkey;
+		inputkey = room_key;
+	}
 #endif
-			break;
-		/* Confirm pending action. */
-		case KEY_SPACE: {
-			if (!pstate.space_confirm_action)
-				break;
-			if (pstate.space_confirm_action == 1) {
-				pstate.target_obj_idx = (uint16_t)pstate.msg_arg_obj_idx;
-				if (!replayviewmode && camera.view_target_tracking)
-					camera.view_target_obj = pstate.target_obj_idx;
-				pstate.radar_subtarget_state = 0;
-				pstate.player_craft->missile_count_total = 0;
-				msg_messageprintf(MSG_WARHEAD_TARGETED);
-				pstate.space_confirm_action = 0;
-			} else if (pstate.space_confirm_action == 2) {
-				if (recordingreplay) {
-					if (!replayio_spoolreplayinput())
-						replaytotalcnt -= replaybuffercnt;
-					replaybuffercnt = 0;
-					recordingreplay = 0;
-					msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
-					calcframerate = 0;
-				}
-				mission.end_flag = 1;
-				mission.player_status = 3;
-			} else if (pstate.space_confirm_action == 3) {
-				mission.penalty_flag = 1;
-				msg_messageprintf(MSG_REINFORCE_ACK);
-				pstate.space_confirm_action = 0;
-				fsfx_triggervoicesfx(0x66u);
-				fsfx_triggervoicesfx(0x67u);
-				fsfx_triggervoicesfx(0x68u);
+	do {
+		screen = 0xFFFF;
+		/* Training missions ignore the targeting and target-recall keys. */
+		if (mission.train_craft_type) {
+			switch ((uint16_t)inputkey) {
+				case KEY_a:
+				case KEY_e:
+				case KEY_r:
+				case KEY_t:
+				case KEY_u:
+				case KEY_y:
+				case KEY_F5:
+				case KEY_F6:
+				case KEY_F7:
+					inputkey = KEY_NONE;
+					break;
 			}
-			break;
 		}
-		/* Transfer cannon -> shields (also Shift+F10). */
-		case KEY_APOSTROPHE:
-		case KEY_SHIFT_F10: {
-			CraftData* pc = pstate.player_craft;
-			/* Bail if shields are offline. */
-			int16_t cap;
-			int16_t need;
-			int step, cycles;
-			int k;
-			int i;
 
-			if ((pc->subsystem_active & 1) == 0) {
-				argtable[0] = 35;
-				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+		switch ((uint16_t)inputkey) {
+			/* Alt+O: screenshot. */
+			case KEY_ALT_O:
+				if (TIE_DISPLAY_DX5)
+					FrontendDisplay_CaptureScreenshot();
+				else
+					rtsvga2_takeScreenshot();
 				break;
-			}
-			if ((pc->status_flags & 1) == 0) {
-				argtable[0] = 35;
-				argtable[1] = 25;
-				msg_messageprintf(MSG_SYSTEM_STATUS);
-				break;
-			}
-			cap = (int16_t)(2 * spec_data[pstate.player_spec_num].shield_points);
-			if (!mission.difficulty)
-				cap *= 2;
-
-			if (pc->is_player_craft) {
-				if (pc->is_player_craft == 2)
-					need = (int16_t)(cap - pc->rear_shield);
-				else {
-					need = (int16_t)(cap - pc->rear_shield + cap - pc->forward_shield);
-					if (need & 0x8000)
-						need = 800;
+			/* 'o': drop current target lock and reset external view back to
+			 * the player's cockpit. */
+			case KEY_o:
+				pstate.target_obj_idx = 0xFFFF;
+				if (!replayviewmode && camera.view_target_tracking) {
+					camera.view_target_tracking = 0;
+					camera.view_zoom_flag = 0;
+					camera.view_camera_control = 0;
+					camera.view_target_obj = pstate.object_idx;
+					panelrts_setnewpilotview(0);
+					camera.side_angle = 0;
+					camera.up_angle = 0;
+					targetblinkflag = 0;
+					lasttargetnum = -2;
 				}
-			} else {
-				need = (int16_t)(cap - pc->forward_shield);
-			}
-			if (need > 800)
-				need = 800;
-
-			if (pstate.player_spec_num == spec_getspecnum(0xCu)) {
-				cycles = need >> 5;
-				step = 32;
-			} else {
-				cycles = need >> 3;
-				step = 8;
-			}
-			if (cycles == 0)
 				break;
+			/* Confirm pending action. */
+			case KEY_SPACE: {
+				if (!pstate.space_confirm_action)
+					break;
+				switch (pstate.space_confirm_action) {
+				case 1:
+					pstate.target_obj_idx = (uint16_t)pstate.msg_arg_obj_idx;
+					if (!replayviewmode && camera.view_target_tracking)
+						camera.view_target_obj = pstate.target_obj_idx;
+					pstate.radar_subtarget_state = 0;
+					pstate.player_craft->missile_count_total = 0;
+					msg_messageprintf(MSG_WARHEAD_TARGETED);
+					pstate.space_confirm_action = 0;
+					break;
+				case 2:
+					if (recordingreplay) {
+						if (!replayio_spoolreplayinput())
+							replaytotalcnt -= replaybuffercnt;
+						replaybuffercnt = 0;
+						recordingreplay = 0;
+						msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
+						calcframerate = 0;
+					}
+					mission.end_flag = 1;
+					mission.player_status = 3;
+					break;
+				case 3:
+					mission.penalty_flag = 1;
+					msg_messageprintf(MSG_REINFORCE_ACK);
+					pstate.space_confirm_action = 0;
+					fsfx_triggervoicesfx(0x66u);
+					fsfx_triggervoicesfx(0x67u);
+					fsfx_triggervoicesfx(0x68u);
+					break;
+				}
+				break;
+			}
+			/* Toggle wing-level / high-angle view. */
+			case KEY_0: {
+				if (replayviewmode)
+					break;
+				if (camera.pilotview >= 16 && !camera.view_zoom_flag)
+					break;
+				camera.view_dir_dirty ^= 8u;
+				camera.side_angle = (uint16_t)camera.view_dir_dirty << 10;
+				if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
+					panelrts_setnewpilotview((uint8_t)(camera.pilotview ^ 8));
+				break;
+			}
+			/* Snap side view (center of numpad). */
+			case KEY_5: {
+				if (replayviewmode)
+					break;
+				camera.up_angle = 0;
+				camera.side_angle = 0x4000;
+				if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
+					panelrts_setnewpilotview(0x10u);
+				break;
+			}
+			/* Numpad camera angles 1..4 and 6..9. */
+			case KEY_1:
+			case KEY_2:
+			case KEY_3:
+			case KEY_4:
+			case KEY_6:
+			case KEY_7:
+			case KEY_8:
+			case KEY_9: {
+				if (replayviewmode)
+					break;
+				if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
+					panelrts_setnewpilotview(camera.view_dir_dirty +
+											 viewtranslate[(uint16_t)inputkey - KEY_0]);
+				camera.side_angle = (uint16_t)camera.view_dir_dirty << 10;
+				camera.up_angle = looktranslate[(uint16_t)inputkey - KEY_0];
+				break;
+			}
+			/* Toggle cockpit and recenter the view. */
+			case KEY_PERIOD:
+				if (!replayviewmode) {
+					if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
+						panelrts_setnewpilotview(camera.pilotview != 19 ? (uint16_t)19 : (uint16_t)0);
+					camera.side_angle = 0;
+					camera.up_angle = 0;
+				}
+				break;
+			/* F1: return to the forward cockpit. */
+			case KEY_F1:
+				if (!replayviewmode) {
+					camera.view_target_tracking = 0;
+					camera.view_zoom_flag = 0;
+					camera.view_target_obj = pstate.object_idx;
+					camera.view_camera_control = 0;
+					panelrts_setnewpilotview(0);
+					camera.side_angle = 0;
+					camera.up_angle = 0;
+				}
+				break;
+			/* F2: select or cycle warhead view. */
+			case KEY_F2: {
+				uint16_t scan;
+				uint16_t found;
+				int16_t k;
 
-			k = 0;
-			for (i = 0; i < 100 && cycles > 0; ++i) {
-				int8_t ch = (int8_t)pc->weapon_slots[k].charge;
-				if (ch > 0) {
-					pc->weapon_slots[k].charge = (int8_t)(ch - 1);
-					--cycles;
-					if (!pc->is_player_craft)
-						pc->forward_shield += (int16_t)step;
-					else if (pc->is_player_craft == 2)
-						pc->rear_shield += (int16_t)step;
-					else {
-						pc->forward_shield += (int16_t)(step / 2);
-						pc->rear_shield += (int16_t)(step / 2);
+				if (replayviewmode || camera.view_target_tracking)
+					break;
+				/* Follow the next of the player's warheads after the one in view. */
+				scan = (camera.view_target_obj == pstate.object_idx) ? (uint16_t)(NUM_CRAFTS - 1)
+																	 : camera.view_target_obj;
+				found = 0xFFFF;
+				for (k = NUM_CRAFTS; k < WARHEAD_SLOT_END; ++k) {
+					if (++scan >= WARHEAD_SLOT_END)
+						scan = NUM_CRAFTS;
+					if (objects[scan].genus == GENUS_PROJECTILE_PLAYER &&
+#ifdef TIE_MODERN
+						/* PORT: freed slots keep their genus after ship_idx is cleared,
+						 * which makes the original read before the table. */
+						(unsigned int)(objects[scan].ship_idx - WEAPON_SPECIES_BASE) < WARHEAD_TYPE_COUNT &&
+#endif
+						projectile_is_warhead_type[objects[scan].ship_idx - WEAPON_SPECIES_BASE]) {
+						if (pstate.object_idx == (uint16_t)objects[scan].self_idx)
+							found = scan;
+						break;
 					}
 				}
-				if ((uint16_t)++k >= (uint16_t)pc->weapon_group_cnt)
-					k = 0;
-			}
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			msg_messageprintf(MSG_XFER_CANNON_TO_SHIELDS);
-			break;
-		}
-		/* Toggle camera.view_camera_control when zoomed (LABEL_213). */
-		case KEY_ASTERISK:
-			if (!replayviewmode && camera.view_zoom_flag)
-				camera.view_camera_control = (camera.view_camera_control == 0);
-			break;
-		/* Throttle up step. */
-		case KEY_PLUS:
-		case KEY_EQUALS: {
-			uint16_t cur = pstate.player_craft->throttle_speed;
-			uint16_t nxt = (uint16_t)(cur + 0x800);
-			pstate.player_craft->throttle_speed = nxt;
-			if (cur > nxt)
-				pstate.player_craft->throttle_speed = 0xFFFF;
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* Radar subtarget forward (',') / back ('<'). */
-		case KEY_COMMA:
-		case KEY_LESS: {
-			int step = ((uint16_t)inputkey == KEY_COMMA) ? 1 : -1;
-			CraftData* cp;
-			uint8_t model_type;
-			int nm;
-			int guard;
-
-			if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS)
+				if (found != 0xFFFF) {
+					if (camera.view_target_obj == pstate.object_idx) {
+						camera.view_zoom_flag = 0;
+						camera.view_saved_idx = camera.pilotview;
+						camera.view_saved_side_angle = camera.side_angle;
+						camera.view_saved_up_angle = camera.up_angle;
+					}
+					camera.view_target_obj = scan;
+					user_resetview();
+				}
 				break;
-			cp = objects[pstate.target_obj_idx].craft_ptr;
-			model_type = objects[pstate.target_obj_idx].ship_idx;
-			if (!TIE_FLIGHT_TIE98)
-				draw_Lockshipfileptrs(model_type);
-			nm = TIE_FLIGHT_EDITION(objectblockptr->num_meshes, modelmesh_getcount(model_type));
-			guard = nm;
-			do {
-				int rt;
-
-				if (--guard < 0)
+			}
+			/* '/' or F3: toggle external camera (LABEL_207). */
+			case KEY_SLASH:
+			case KEY_F3:
+				if (replayviewmode || camera.view_target_tracking)
 					break;
-				rt = pstate.radar_target1 + step;
-				if (rt >= nm)
-					rt = 0;
-				if (rt < 0)
-					rt = nm - 1;
-				pstate.radar_target1 = (int16_t)rt;
-			} while (cp->mesh_state[pstate.radar_target1] != MESH_STATE_VISIBLE ||
-					 TIE_FLIGHT_EDITION(!user_validcomponent(pstate.radar_target1),
-										!user_validcomponent_tie98(model_type, pstate.radar_target1)));
-			break;
-		}
-		/* Throttle down step + ack beep (LABEL_479). */
-		case KEY_MINUS: {
-			uint16_t cur = pstate.player_craft->throttle_speed;
-			pstate.player_craft->throttle_speed = (uint16_t)(cur - 0x800);
-			if (cur < 0x800)
-				pstate.player_craft->throttle_speed = 0;
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* Toggle cockpit and recenter the view. */
-		case KEY_PERIOD:
-			if (!replayviewmode) {
-				if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
-					panelrts_setnewpilotview((camera.pilotview == 19) ? 0u : 19u);
-				camera.side_angle = 0;
-				camera.up_angle = 0;
-			}
-			break;
-		/* '/' or F3: toggle external camera (LABEL_207). */
-		case KEY_SLASH:
-		case KEY_F3: {
-			int was_zoomed_out;
-
-			if (replayviewmode || camera.view_target_tracking)
+				camera.view_zoom_flag = !camera.view_zoom_flag;
+				if (camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx) {
+					camera.view_saved_idx = camera.pilotview;
+					camera.view_saved_side_angle = camera.side_angle;
+					camera.view_saved_up_angle = camera.up_angle;
+				}
+				user_resetview();
 				break;
-			was_zoomed_out = !camera.view_zoom_flag;
-			camera.view_zoom_flag = !camera.view_zoom_flag;
-			if (was_zoomed_out && camera.view_target_obj == pstate.object_idx) {
-				camera.view_saved_idx = camera.pilotview;
-				camera.view_saved_side_angle = camera.side_angle;
-				camera.view_saved_up_angle = camera.up_angle;
-			}
-			user_resetview();
-			break;
-		}
-		/* Toggle wing-level / high-angle view. */
-		case KEY_0: {
-			if (replayviewmode)
+			/* '*' / F4: toggle external-camera positioning controls. */
+			case KEY_ASTERISK:
+			case KEY_F4:
+				if (replayviewmode)
+					break;
+				if (camera.view_zoom_flag)
+					camera.view_camera_control = (camera.view_camera_control == 0);
+				fsfx_triggersfx(0x21u, 0xFFFF);
 				break;
-			if (camera.pilotview >= 16u && !camera.view_zoom_flag)
-				break;
-			camera.view_dir_dirty ^= 8u;
-			camera.side_angle = ((int32_t)camera.view_dir_dirty) << 10;
-			if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
-				panelrts_setnewpilotview((uint8_t)(camera.pilotview ^ 8));
-			break;
-		}
-		/* Numpad camera angles 1..4 and 6..9. */
-		case KEY_1:
-		case KEY_2:
-		case KEY_3:
-		case KEY_4:
-		case KEY_6:
-		case KEY_7:
-		case KEY_8:
-		case KEY_9: {
-			if (replayviewmode)
-				break;
-			if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
-				panelrts_setnewpilotview(camera.view_dir_dirty + viewtranslate[(uint16_t)inputkey - KEY_0]);
-			camera.side_angle = ((int32_t)camera.view_dir_dirty) << 10;
-			camera.up_angle = looktranslate[(uint16_t)inputkey - KEY_0];
-			break;
-		}
-		/* Snap side view (center of numpad). */
-		case KEY_5: {
-			if (replayviewmode)
-				break;
-			camera.up_angle = 0;
-			camera.side_angle = 0x4000;
-			if (!camera.view_zoom_flag && camera.view_target_obj == pstate.object_idx)
-				panelrts_setnewpilotview(0x10u);
-			break;
-		}
-		/* Transfer shields -> cannon (also Shift+F9, synthesized from the
-		 * joystick chord-11 release in user_userinterface). */
-		case KEY_SEMICOLON:
-		case KEY_SHIFT_F9: {
-			CraftData* pc = pstate.player_craft;
-			int charge_sum;
-			int n;
-			int j;
-			int step;
-			int xfer_amount;
-			int xfer_total;
-			int pips;
-			int k;
-			int i;
-
-			if ((pc->subsystem_active & 1) == 0) {
-				argtable[0] = 35;
-				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+			/* 'z': target-viewer toggle. */
+			case KEY_z: {
+				if (replayviewmode)
+					break;
+				if (camera.view_target_tracking) {
+					camera.view_target_tracking = 0;
+					targetblinkflag = 0;
+					camera.view_zoom_flag = 0;
+					camera.view_camera_control = 0;
+					camera.view_target_obj = pstate.object_idx;
+					lasttargetnum = -2;
+					panelrts_setnewpilotview(0);
+					camera.side_angle = 0;
+					camera.up_angle = 0;
+				} else if (pstate.target_obj_idx != 0xFFFF) {
+					if (!camera.view_zoom_flag) {
+						camera.view_saved_idx = camera.pilotview;
+						camera.view_saved_side_angle = camera.side_angle;
+						camera.view_saved_up_angle = camera.up_angle;
+					}
+					camera.view_zoom_flag = 1;
+					camera.view_target_tracking = 1;
+					camera.view_target_obj = pstate.target_obj_idx;
+					targetblinkflag = 1024;
+					user_resetview();
+				} else {
+					msg_messageprintf(MSG_NO_TARGET);
+				}
 				break;
 			}
-			charge_sum = 0;
-			n = pc->weapon_group_cnt;
-			for (j = 0; j < n; ++j)
-				charge_sum += 127 - (int8_t)pc->weapon_slots[j].charge;
-			step = (pstate.player_spec_num == spec_getspecnum(0xCu)) ? 32 : 8;
-			if (charge_sum > 100)
-				charge_sum = 100;
-			xfer_amount = step * charge_sum;
-
-			if (!pc->is_player_craft) {
-				int16_t fwd = pc->forward_shield;
-				if (xfer_amount > fwd)
-					xfer_amount = fwd;
-				xfer_total = xfer_amount;
-				pc->forward_shield -= (int16_t)xfer_amount;
-			} else if (pc->is_player_craft == 2) {
-				int16_t rear = pc->rear_shield;
-				if (xfer_amount > rear)
-					xfer_amount = rear;
-				xfer_total = xfer_amount;
-				pc->rear_shield -= (int16_t)xfer_amount;
-			} else {
-				/* Balanced mode. The binary tests different quantities on the
-				 * forward vs rear halves:
-				 *   forward: if (half > fwd) half = fwd;
-				 *   rear:    if (xfer_amount > rear) tmp = rear;  (NOT half > rear)
-				 * The rear branch therefore drains rear completely when the full
-				 * xfer exceeds rear shield -- even though only half was intended. */
-				int16_t fwd = pc->forward_shield;
-				int half_fwd = xfer_amount >> 1;
-				int16_t rear;
-				int half_rear;
-
-				if (half_fwd > fwd)
-					half_fwd = fwd;
-				pc->forward_shield -= (int16_t)half_fwd;
-
-				rear = pc->rear_shield;
-				half_rear = xfer_amount >> 1;
-				if (xfer_amount > rear)
-					half_rear = rear;
-				pc->rear_shield -= (int16_t)half_rear;
-				xfer_total = half_fwd + half_rear;
-			}
-			pips = xfer_total / step;
-			if (!pips)
+			/* Throttle up step. */
+			case KEY_PLUS:
+			case KEY_EQUALS: {
+				uint16_t cur = pstate.player_craft->throttle_speed;
+				uint16_t nxt = (uint16_t)(cur + 0x800);
+				pstate.player_craft->throttle_speed = nxt;
+				if (cur > nxt)
+					pstate.player_craft->throttle_speed = 0xFFFF;
+				fsfx_triggersfx(0x21u, 0xFFFF);
 				break;
-			k = 0;
-			for (i = 0; i < 100 && pips > 0; ++i) {
-				/* Watcom unaligned load on weapon_slots[k]: +80 offset = ammo byte */
-				if ((int8_t)pc->weapon_slots[k].ammo != 127)
-					pc->weapon_slots[k].charge++;
-				++k;
-				--pips;
-				if (k >= pc->weapon_group_cnt)
-					k = 0;
 			}
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			msg_messageprintf(MSG_XFER_SHIELDS_TO_CANNON);
-			break;
-		}
-		/* 'A' (Shift+a): wingmen attack player's target. */
-		case KEY_A:
-			if (pstate.target_obj_idx != 0xFFFF) {
-				if (pstate.target_obj_idx == pstate.radio_target)
-					pstate.radio_target = -1;
-				user_assigntarget(pstate.target_obj_idx, 0x75u);
-			}
-			break;
-		/* 'B': wingman 'go home'. */
-		case KEY_B:
-			if (pstate.target_obj_idx < NUM_ACTIVE_CRAFT_SLOTS) {
-				craftptr = objects[pstate.target_obj_idx].craft_ptr;
-				pai_setupcraftaivars(pstate.target_obj_idx);
-				if (craftptr->current_order == 28 && pai_isobjectvalidtarget(pstate.object_idx)) {
-					craftptr->pending_radio_command = pstate.object_idx;
+			/* ']': throttle 2/3. */
+			case KEY_RBRACKET:
+				pstate.player_craft->throttle_speed = (uint16_t)(int16_t)-21846;
+				fsfx_triggersfx(0x21u, 0xFFFF);
+				argtable[0] = 83;
+				msg_messageprintf(MSG_THROTTLE_SET);
+				break;
+			/* Throttle down step + ack beep (LABEL_479). */
+			case KEY_MINUS: {
+				uint16_t cur = pstate.player_craft->throttle_speed;
+				uint16_t nxt = (uint16_t)(cur - 0x800);
+				pstate.player_craft->throttle_speed = nxt;
+				if (cur < nxt)
 					pstate.player_craft->throttle_speed = 0;
-					msg_radiomessage(pstate.target_obj_idx, craftptr, 0xC6u, 0);
-				}
-			}
-			break;
-		/* 'C': attack my attacker. */
-		case KEY_C: {
-			uint16_t a = user_findclosestattacker(pstate.object_idx);
-			if (a != 0xFFFF)
-				user_assigntarget(a, 0x71u);
-			break;
-		}
-		/* 'E': wingman 'wait'. */
-		case KEY_E:
-			if (!user_checkradio()) {
-				msg_messageprintf(MSG_CRAFT_NOT_RESPONDING);
+				fsfx_triggersfx(0x21u, 0xFFFF);
 				break;
 			}
-			if (craftptr->current_order == 44) {
-				craftptr->current_order = craftptr->saved_current_order;
-				pai_setupcraftaivars(pstate.target_obj_idx);
-				pai_initplan(pstate.target_obj_idx);
-			}
-			craftptr->pending_radio_command = 251;
-			msg_radiomessage(pstate.target_obj_idx, craftptr, 0x72u, 0);
-			break;
-		/* 'G': wingman 'return to base'. */
-		case KEY_G:
-			if (!user_checkradio()) {
-				msg_messageprintf(MSG_CRAFT_NOT_RESPONDING);
+			/* '[': throttle 1/3. */
+			case KEY_LBRACKET:
+				pstate.player_craft->throttle_speed = 21845;
+				fsfx_triggersfx(0x21u, 0xFFFF);
+				argtable[0] = 82;
+				msg_messageprintf(MSG_THROTTLE_SET);
 				break;
-			}
-			if (craftptr->current_order == 44) {
-				craftptr->current_order = craftptr->saved_current_order;
-				pai_setupcraftaivars(pstate.target_obj_idx);
-				pai_initplan(pstate.target_obj_idx);
-				msg_radiomessage(pstate.target_obj_idx, craftptr, 0x74u, 0);
-			}
-			break;
-		/* 'H': wingman 'attack starship'. */
-		case KEY_H:
-			if (!user_checkradio()) {
-				msg_messageprintf(MSG_CRAFT_NOT_RESPONDING);
+			/* '\\': throttle off. */
+			case KEY_BACKSLASH:
+				pstate.player_craft->throttle_speed = 0;
+				fsfx_triggersfx(0x21u, 0xFFFF);
+				argtable[0] = 81;
+				msg_messageprintf(MSG_THROTTLE_SET);
 				break;
-			}
-			craftptr = objects[pstate.target_obj_idx].craft_ptr;
-			if (craftptr->current_order != 47 && craftptr->current_order != 53) {
-				craftptr->special_order_flag = 1;
-				craftptr->current_order = (objects[pstate.target_obj_idx].genus == GENUS_STARSHIP) ? 53 : 47;
-				pai_setupcraftaivars(pstate.target_obj_idx);
-				pai_initplan(pstate.target_obj_idx);
-			}
-			msg_radiomessage(pstate.target_obj_idx, craftptr, 0x70u, 0);
-			break;
-		/* 'I': assign target to group. */
-		case KEY_I:
-			if (pstate.target_obj_idx != 0xFFFF) {
-				pstate.radio_target = pstate.target_obj_idx;
-				user_assigntarget(0xFFu, 0x76u);
-			}
-			break;
-		/* 'R': order report. */
-		case KEY_R:
-			if (pstate.target_obj_idx < NUM_ACTIVE_CRAFT_SLOTS && objects[pstate.target_obj_idx].side == 1) {
-				craftptr = objects[pstate.target_obj_idx].craft_ptr;
-				msg_reportmessage(pstate.target_obj_idx, craftptr, convertmessage[craftptr->current_order]);
-			}
-			break;
-		/* 'S': reinforce request. */
-		case KEY_S: {
-			int reinforce_avail;
-			uint16_t i;
+			/* Throttle full. */
+			case KEY_BACKSPACE:
+				pstate.player_craft->throttle_speed = 0xFFFF;
+				fsfx_triggersfx(0x21u, 0xFFFF);
+				argtable[0] = 84;
+				msg_messageprintf(MSG_THROTTLE_SET);
+				break;
+			/* Match target speed. */
+			case KEY_ENTER: {
+				uint16_t cur;
+				uint16_t slack;
+				uint16_t match_speed;
 
-			if (pstate.space_confirm_action)
-				break;
-			reinforce_avail = 0;
-			for (i = 0; i < (uint16_t)mission_file_header.num_fg; ++i) {
-				/* Watcom unaligned load on fg_array[i].link_code: the +3 byte is
-				 * start_cond[0].type (byte 0x4A), same byte both paths check. */
-				if (fg_array[i].link_code == 20 || fg_array[i].start_cond[0].type == 20) {
-					reinforce_avail = 1;
+				if (pstate.target_obj_idx == 0xFFFF)
+					break;
+				if (pstate.target_obj_idx >= 0x3800) {
+					pstate.player_craft->throttle_speed = 0;
 					break;
 				}
-			}
-			if (!reinforce_avail) {
-				msg_messageprintf(MSG_NO_REINFORCEMENTS);
-				fsfx_triggervoicesfx(0x66u);
-				fsfx_triggervoicesfx(0x67u);
-				fsfx_triggervoicesfx(0x69u);
-				break;
-			}
-			if (mission.penalty_flag) {
-				msg_messageprintf(MSG_REINFORCE_ALREADY_USED);
-				fsfx_triggervoicesfx(0x66u);
-				fsfx_triggervoicesfx(0x67u);
-				fsfx_triggervoicesfx(0x69u);
-			} else {
-				msg_messageprintf(MSG_REINFORCE_PROMPT);
-				pstate.space_confirm_action = 3;
-				timers[TIMER_SPACE_CONFIRM] = 1888;
-			}
-			break;
-		}
-		/* 'W': wait in place. */
-		case KEY_W:
-			if (!user_checkradio()) {
-				msg_messageprintf(MSG_CRAFT_NOT_RESPONDING);
-				break;
-			}
-			if (craftptr->current_order != 44 && craftptr->current_order != 51 &&
-				craftptr->current_order != 52) {
-				craftptr->saved_current_order = craftptr->current_order;
-				craftptr->current_order = (objects[pstate.target_obj_idx].genus == GENUS_STARSHIP) ? 64 : 44;
-				pai_setupcraftaivars(pstate.target_obj_idx);
-				pai_initplan(pstate.target_obj_idx);
-				msg_radiomessage(pstate.target_obj_idx, craftptr, 0x73u, 0);
-			}
-			break;
-		/* 'Z': wingmen info room. */
-		case KEY_Z:
-#ifdef TIE_MODERN
-			TieFlightRequest_InfoRoom(4);
-#else
-			(void)user_inflightinfo(4);
-#endif
-			break;
-		/* '[': throttle 1/3. */
-		case KEY_LBRACKET:
-			pstate.player_craft->throttle_speed = 21845;
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			argtable[0] = 82;
-			msg_messageprintf(MSG_THROTTLE_SET);
-			break;
-		/* '\\': throttle off. */
-		case KEY_BACKSLASH:
-			pstate.player_craft->throttle_speed = 0;
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			argtable[0] = 81;
-			msg_messageprintf(MSG_THROTTLE_SET);
-			break;
-		/* ']': throttle 2/3. */
-		case KEY_RBRACKET:
-			pstate.player_craft->throttle_speed = (uint16_t)(int16_t)-21846;
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			argtable[0] = 83;
-			msg_messageprintf(MSG_THROTTLE_SET);
-			break;
-		/* 'a': target closest attacker of current target. */
-		case KEY_a: {
-			uint16_t a = user_findclosestattacker(pstate.target_obj_idx);
-			user_setnewtarget(a);
-			break;
-		}
-		/* 'b': beam on/off. */
-		case KEY_b: {
-			CraftData* pc = pstate.player_craft;
-			if ((pc->subsystem_active & 0x100) == 0) {
-				argtable[0] = 32;
-				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
-				break;
-			}
-			if ((pc->status_flags & 0x100) == 0) {
-				argtable[0] = 32;
-				argtable[1] = 25;
-				msg_messageprintf(MSG_SYSTEM_STATUS);
-				break;
-			}
-			pc->beam_state ^= 0x80u;
-			argtable[0] = (uint16_t)(pc->beam_type + 192);
-			msg_messageprintf((pc->beam_state & 0x80) ? MSG_BEAM_ON : MSG_BEAM_OFF);
-			break;
-		}
-		/* 'd': damage info room. */
-		case KEY_d:
-#ifdef TIE_MODERN
-			TieFlightRequest_InfoRoom(3);
-#else
-			(void)user_inflightinfo(3);
-#endif
-			break;
-		/* 'e': target my closest attacker. */
-		case KEY_e: {
-			uint16_t a = user_findclosestattacker(pstate.object_idx);
-			user_setnewtarget(a);
-			break;
-		}
-		/* 'g': goals info room. */
-		case KEY_g:
-#ifdef TIE_MODERN
-			TieFlightRequest_InfoRoom(0);
-#else
-			(void)user_inflightinfo(0);
-#endif
-			break;
-		/* 'h': hyperspace. */
-		case KEY_h: {
-			int interdictor;
-			int i;
-
-			if ((pstate.player_craft->subsystem_active & 0x80) == 0) {
-				/* No hyperdrive: scan for the primary/secondary stop-FG
-				 * craft of the player's own FG and announce where to
-				 * return. */
-				EFGStruct* pfg = &fg_array[pstate.player_fg_idx];
-				uint16_t pri_stop_obj = 0xFFFF;
-				uint16_t sec_stop_obj = 0xFFFF;
-				uint16_t obj;
-
-				for (i = 0; i < NUM_ACTIVE_CRAFT_SLOTS; ++i) {
-					if (pfg->pri_stop_fg_used && objects[i].ship_idx && objects[i].fg_idx == pfg->pri_stop_fg)
-						pri_stop_obj = (uint16_t)i;
-					if (pfg->sec_stop_fg_used && objects[i].ship_idx && objects[i].fg_idx == pfg->sec_stop_fg)
-						sec_stop_obj = (uint16_t)i;
-				}
-
-				if (pri_stop_obj != 0xFFFF && sec_stop_obj != 0xFFFF) {
-					msg_createobjectname(pri_stop_obj, 0, tempstring);
-					msg_addmessageptr(0, tempstring);
-					msg_createobjectname(sec_stop_obj, 0, temp2string);
-					msg_addmessageptr(1u, temp2string);
-					msg_messageprintf(MSG_NO_HYPERDRIVE_RETURN_ALT);
+				if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS) {
+					pstate.player_craft->throttle_speed = 0xFFFF;
 					break;
 				}
-				obj = (pri_stop_obj != 0xFFFF) ? pri_stop_obj : sec_stop_obj;
-				if (obj == 0xFFFF)
-					break; /* neither found -> silent. */
-				msg_createobjectname(obj, 0, tempstring);
-				msg_addmessageptr(0, tempstring);
-				msg_messageprintf(MSG_NO_HYPERDRIVE_RETURN);
-				break;
-			}
-			if (mission.train_craft_type) {
-				if (recordingreplay) {
-					if (!replayio_spoolreplayinput())
-						replaytotalcnt -= replaybuffercnt;
-					replaybuffercnt = 0;
-					recordingreplay = 0;
-					msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
-					calcframerate = 0;
+				/* Top speed scales with the power left over by the shield,
+				 * beam and cannon settings. */
+				cur = (uint16_t)objects[pstate.target_obj_idx].current_speed;
+				slack = (uint16_t)(6 - (pstate.player_craft->beam_power + pstate.player_craft->shield_power +
+										pstate.player_craft->laser_power));
+				if (slack >= 0x8000)
+					match_speed = (uint16_t)(pstate.player_craft->max_speed_cache -
+											 math2_fraction((int16_t)(-slack << 13),
+															(uint16_t)pstate.player_craft->max_speed_cache));
+				else
+					match_speed = (uint16_t)(math2_fraction((int16_t)(slack << 13),
+															(uint16_t)pstate.player_craft->max_speed_cache) +
+											 pstate.player_craft->max_speed_cache);
+				if (cur >= match_speed) {
+					pstate.player_craft->throttle_speed = 0xFFFF;
+					msg_messageprintf(MSG_MATCHING_SPEED_MAX);
+				} else {
+					pstate.player_craft->throttle_speed = math2_percentage(cur, match_speed);
+					msg_messageprintf(MSG_MATCHING_SPEED);
 				}
-				mission.end_flag = 1;
-				mission.player_status = 3;
 				break;
 			}
-			if ((pstate.player_craft->status_flags & 0x80) == 0) {
-				argtable[0] = 36;
-				argtable[1] = 25;
-				msg_messageprintf(MSG_SYSTEM_STATUS);
-				break;
-			}
+			/* 'n': overdrive toggle. */
+			case KEY_n: {
+				int16_t has_charge;
+				uint16_t i;
 
-			interdictor = 0;
-			for (i = 0; i < NUM_CRAFTS; ++i) {
-				if (objects[i].ship_idx == 51 && objects[i].side != pstate.player->side)
-					interdictor = 1;
-			}
-			if (interdictor) {
-				msg_messageprintf(MSG_INTERDICTOR_BLOCK);
+				if (pstate.player_spec_num == spec_getspecnum(0xCu)) {
+					pstate.player_craft->slam_active ^= 0xFFFF;
+					if (!pstate.player_craft->slam_active) {
+						/* Engaging needs a charged cannon to drain. */
+						has_charge = 0;
+						for (i = 0; i < pstate.player_craft->weapon_group_cnt; ++i) {
+							if ((int8_t)pstate.player_craft->weapon_slots[i].charge > 0)
+								has_charge = 1;
+						}
+						if (has_charge) {
+							msg_messageprintf(MSG_OVERDRIVE_ENGAGED);
+							fsfx_triggersfx(0x6Bu, 0xFFFF);
+						} else {
+							pstate.player_craft->slam_active = 0xFFFF;
+							msg_messageprintf(MSG_OVERDRIVE_FAIL);
+						}
+					} else {
+						msg_messageprintf(MSG_OVERDRIVE_DISENGAGED);
+						fsfx_triggersfx(0x6Cu, 0xFFFF);
+					}
+				}
 				break;
 			}
-			fscript_MsSetSequence(17);
-			msg_clearmessagequeue();
-			msg_messageprintf(MSG_HYPER_PREP);
-			hyperspaceflag = 1;
-			hyperabortflag = 1;
-			camera.view_zoom_flag = 0;
-			camera.view_target_obj = pstate.object_idx;
-			camera.view_camera_control = 0;
-			panelrts_setnewpilotview(0);
-			camera.side_angle = 0;
-			camera.up_angle = 0;
-			hyperticks = 0;
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* 'i': radar toggle. */
-		case KEY_i: {
-			pstate.radar_enable ^= 1u;
-			argtable[0] = (uint16_t)(pstate.radar_enable + 86);
-			msg_messageprintf(MSG_CMD_TRACK_TOGGLE);
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* 'k': help info room. */
-		case KEY_k:
+			/* 'w': weapon group cycle. */
+			case KEY_w: {
+				uint8_t group = ++pstate.player_weapon_group;
+				uint16_t warhead_msg;
+				uint16_t msg;
+
 #ifdef TIE_MODERN
-			TieFlightRequest_InfoRoom(5);
-#else
-			(void)user_inflightinfo(5);
+				/* PORT: an unknown warhead type leaves this unset in the original. */
+				warhead_msg = 0;
 #endif
-			break;
-		/* 'l': messages info room. */
-		case KEY_l:
-#ifdef TIE_MODERN
-			TieFlightRequest_InfoRoom(2);
-#else
-			(void)user_inflightinfo(2);
-#endif
-			break;
-		/* 'm': map info room. */
-		case KEY_m:
-#ifdef TIE_MODERN
-			TieFlightRequest_InfoRoom(1);
-#else
-			(void)user_inflightinfo(1);
-#endif
-			break;
-		/* 'n': overdrive toggle. */
-		case KEY_n: {
-			CraftData* pc = pstate.player_craft;
-			int slam_was_off;
-			int has_charge;
-			int n;
-			int i;
-
-			if (pstate.player_spec_num != spec_getspecnum(0xCu))
-				break;
-			slam_was_off = (pc->slam_active == 0xFFFF);
-			pc->slam_active = (uint16_t)~pc->slam_active;
-			if (!slam_was_off) {
-				msg_messageprintf(MSG_OVERDRIVE_DISENGAGED);
-				fsfx_triggersfx(0x6Cu, 0xFFFF);
-				break;
-			}
-			has_charge = 0;
-			n = pc->weapon_group_cnt;
-			for (i = 0; i < n; ++i) {
-				if ((int8_t)pc->weapon_slots[i].charge > 0) {
-					has_charge = 1;
-					break;
-				}
-			}
-			if (has_charge) {
-				msg_messageprintf(MSG_OVERDRIVE_ENGAGED);
-				fsfx_triggersfx(0x6Bu, 0xFFFF);
-			} else {
-				pc->slam_active = 0xFFFF;
-				msg_messageprintf(MSG_OVERDRIVE_FAIL);
-			}
-			break;
-		}
-		/* 'o': drop current target lock and reset external view back to
-		 * the player's cockpit. */
-		case KEY_o:
-			pstate.target_obj_idx = 0xFFFF;
-			if (!replayviewmode && camera.view_target_tracking) {
-				camera.view_target_tracking = 0;
-				camera.view_zoom_flag = 0;
-				camera.view_zoom = 0;
-				camera.view_camera_control = 0;
-				camera.view_target_obj = pstate.object_idx;
-				panelrts_setnewpilotview(0);
-				camera.side_angle = 0;
-				camera.up_angle = 0;
-				lasttargetnum = -2;
-			}
-			break;
-		/* 'q': end-mission prompt. */
-		case KEY_q:
-			if (!pstate.space_confirm_action) {
-				msg_messageprintf(MSG_END_MISSION_PROMPT);
-				pstate.space_confirm_action = 2;
-				timers[TIMER_SPACE_CONFIRM] = 1888;
-			}
-			break;
-		/* 'r': find nearest enemy and target it. Also synthesized by
-		 * user_userinterface on button-chord-4 release. */
-		case KEY_r: {
-			uint32_t best_dist = 0xFFFFFFFFu;
-			uint16_t best_idx = 0xFFFF;
-
-			/* Pass 1: craft slots 0..NUM_CRAFTS-1. */
-			int16_t i;
-			uint16_t k;
-			int16_t m;
-
-			for (i = 0; i < NUM_CRAFTS; ++i) {
-				uint8_t side;
-				int g;
-				CraftData* cp;
-				uint8_t ff;
-
-				if (!objects[i].ship_idx)
-					continue;
-				if (i == pstate.object_idx)
-					continue;
-				side = objects[i].side;
-				if (side == objects[pstate.object_idx].side)
-					continue;
-				if (side == 2 && mission_file_header.mission.neutral_name[0][0] != '1')
-					continue;
-				if (side == 3 && mission_file_header.mission.neutral_name[1][0] != '1')
-					continue;
-				if (side == 5 && mission_file_header.mission.neutral_name[3][0] != '1')
-					continue;
-				g = objects[i].genus;
-				if (g == 3 || g == 4 || g == 5)
-					continue;
-				cp = objects[i].craft_ptr;
-				if (!cp->status_flags)
-					continue;
-				ff = cp->flight_flag;
-				if (ff && ff != 6)
-					continue;
-
-				pai_distancebetween(pstate.object_idx, i);
-				if (best_dist > (uint32_t)trig2_polardistance) {
-					best_idx = (uint16_t)i;
-					best_dist = (uint32_t)trig2_polardistance;
-				}
-			}
-
-			/* Pass 2: static mine-gun turrets (ship_class == 8). */
-			k = 14336;
-			for (m = 0; m < 64; ++m, ++k) {
-				uint8_t fg_side;
-
-				if (!staticobjects[m].species)
-					continue;
-				if (staticobjects[m].ship_class != 8)
-					continue;
-				if (!staticobjects[m].status_flags)
-					continue;
-				fg_side = fg_array[staticobjects[m].fg_idx].side;
-				if (fg_side == objects[pstate.object_idx].side)
-					continue;
-
-				pai_distancebetween(pstate.object_idx, k);
-				if (best_dist > (uint32_t)trig2_polardistance) {
-					best_idx = k;
-					best_dist = (uint32_t)trig2_polardistance;
-				}
-			}
-
-			user_setnewtarget(best_idx);
-			break;
-		}
-		/* 's': shield mode cycle. Also synthesized on button-chord-7
-		 * release. */
-		case KEY_s: {
-			CraftData* pc = pstate.player_craft;
-			uint8_t new_mode;
-
-			if ((pc->subsystem_active & 1) == 0) {
-				argtable[0] = 35;
-				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
-				break;
-			}
-			if ((pc->status_flags & 1) == 0) {
-				argtable[0] = 35;
-				argtable[1] = 25;
-				msg_messageprintf(MSG_SYSTEM_STATUS);
-				break;
-			}
-			new_mode = (uint8_t)(pc->is_player_craft + 1);
-			pc->is_player_craft = new_mode;
-			if (new_mode > 2) {
-				pc->is_player_craft = 0;
-				user_adjustshields(0, 1);
-			} else if (new_mode == 2) {
-				user_adjustshields(1, 0);
-			} else {
-				/* Balanced (mode 1): split evenly, honoring easy-diff 4x cap. */
-				int16_t cap_base = (int16_t)(2 * spec_data[pstate.player_spec_num].shield_points);
-				int16_t points = spec_data[pstate.player_spec_num].shield_points;
-				int16_t cap = cap_base;
-				uint16_t pct;
-				int16_t total;
-
-				if (!mission.difficulty) {
-					cap = (int16_t)(4 * spec_data[pstate.player_spec_num].shield_points);
-					points = cap_base;
-				}
-				pct = math2_percentage(points, cap);
-				total = (int16_t)(pc->forward_shield + pc->rear_shield);
-				if (total > 0) {
-					int16_t fwd = (int16_t)math2_fraction(total, pct);
-					pc->forward_shield = fwd;
-					pc->rear_shield = (int16_t)(total - fwd);
-				}
-			}
-			argtable[0] = (uint16_t)(pc->is_player_craft + 14);
-			msg_messageprintf(MSG_SHIELDS_SET);
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* 't' / 'y': target cycle forward / backward. */
-		case KEY_t:
-		case KEY_y: {
-			uint16_t start =
-				(pstate.target_obj_idx == 0xFFFF) ? (uint16_t)pstate.radar_target0 : pstate.target_obj_idx;
-			uint16_t pick = user_picknexttarget(start, ((uint16_t)inputkey == KEY_t) ? 1 : -1);
-			user_setnewtarget(pick);
-			break;
-		}
-		/* 'u': target newest craft in the area (QRC manual). */
-		case KEY_u: {
-			uint16_t best_obj = 0xFFFF;
-			uint16_t best_tick = 0xFFFF;
-			int16_t i;
-
-			for (i = 0; i < NUM_ACTIVE_CRAFT_SLOTS; ++i) {
-				CraftData* cp;
-				uint8_t ff;
-				uint16_t tick;
-
-				if (!objects[i].ship_idx)
-					continue;
-				if (i == pstate.object_idx)
-					continue;
-				cp = objects[i].craft_ptr;
-				if (cp->leader_obj_idx != 255)
-					continue;
-				/* Accept flight_flag in {0, 2, 6}; reject everything else. */
-				ff = cp->flight_flag;
-				if (ff && ff != 2 && ff != 6)
-					continue;
-				tick = (uint16_t)objects[i].age_ticks;
-				if (tick < best_tick) {
-					best_obj = (uint16_t)i;
-					best_tick = tick;
-				}
-			}
-			user_setnewtarget(best_obj);
-			break;
-		}
-		/* 'w': weapon group cycle. */
-		case KEY_w: {
-			CraftData* pc = pstate.player_craft;
-			uint8_t nwg = (++pstate.player_weapon_group);
-			MsgTemplate msg;
-
-			if (pstate.player_weapon_mode) {
-				if (nwg >= pc->missile_group_cnt) {
-					if (pc->laser_group_cnt)
+				if (!pstate.player_weapon_mode) {
+					if (group >= pstate.player_craft->laser_group_cnt) {
+						if (pstate.player_craft->missile_group_cnt)
+							pstate.player_weapon_mode = 1;
+						pstate.player_weapon_group = 0;
+					}
+				} else if (group >= pstate.player_craft->missile_group_cnt) {
+					if (pstate.player_craft->laser_group_cnt)
 						pstate.player_weapon_mode = 0;
 					pstate.player_weapon_group = 0;
 				}
-			} else if (nwg >= pc->laser_group_cnt) {
-				pstate.player_weapon_mode = (uint8_t)(pc->missile_group_cnt != 0);
-				pstate.player_weapon_group = 0;
-			}
 
-			argtable[1] = 25;
-
-			if (pstate.player_weapon_mode) {
-				if (pc->status_flags & 8) {
-					int32_t w = pc->warhead_type[pstate.player_weapon_group];
-					argtable[0] = (uint16_t)user_mapmissiletomessage((uint8_t)w, 0);
+				argtable[1] = 25;
+				if (!pstate.player_weapon_mode) {
+					if (pstate.player_craft->status_flags & 0x10) {
+						msg = (uint16_t)(pstate.player_weapon_group + 3);
+					} else {
+						argtable[0] = (uint16_t)(pstate.player_weapon_group + 29);
+						msg = MSG_SYSTEM_STATUS;
+					}
+				} else if (pstate.player_craft->status_flags & 8) {
+					switch ((uint16_t)pstate.player_craft->warhead_type[pstate.player_weapon_group]) {
+						case 0x8F:
+							warhead_msg = 8;
+							break;
+						case 0x90:
+							warhead_msg = 9;
+							break;
+						case 0x94:
+							warhead_msg = 184;
+							break;
+						case 0x95:
+							warhead_msg = 185;
+							break;
+						case 0x96:
+							warhead_msg = 186;
+							break;
+						case 0x97:
+							warhead_msg = 187;
+							break;
+						case 0x98:
+							warhead_msg = 188;
+							break;
+					}
+					argtable[0] = warhead_msg;
 					msg = MSG_LAUNCHERS_ARMED;
 				} else {
 					argtable[0] = 31;
 					msg = MSG_SYSTEM_STATUS;
 				}
-			} else if (pc->status_flags & 0x10) {
-				msg = (MsgTemplate)(pstate.player_weapon_group + 3);
-			} else {
-				argtable[0] = (uint16_t)(pstate.player_weapon_group + 29);
-				msg = MSG_SYSTEM_STATUS;
-			}
-			msg_messageprintf(msg);
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* 'x': weapon firing-mode cycle. */
-		case KEY_x: {
-			CraftData* pc = pstate.player_craft;
-			uint16_t nl;
-
-			if (pstate.player_weapon_mode) {
-				int32_t w;
-				MsgTemplate m;
-
-				pc->missile_armed[pstate.player_weapon_group] ^= 2u;
-				w = pc->warhead_type[pstate.player_weapon_group];
-				argtable[0] = (uint16_t)user_mapmissiletomessage((uint8_t)w, 0);
-				m = (MsgTemplate)(((pc->missile_armed[pstate.player_weapon_group] & 0x7F) >> 1) + 6);
-				msg_messageprintf(m);
-				break;
-			}
-			if (spec_data[pstate.player_spec_num].laser_count[pstate.player_weapon_group] == 1) {
+				msg_messageprintf((MsgTemplate)msg);
 				fsfx_triggersfx(0x21u, 0xFFFF);
 				break;
 			}
-			nl = (uint16_t)(pc->laser_owner_player[pstate.player_weapon_group] + 1);
-			if (nl > 3)
-				nl = 1;
-			if (spec_data[pstate.player_spec_num].laser_count[pstate.player_weapon_group] != 4 && nl == 2)
-				nl = 3;
-			pc->laser_owner_player[pstate.player_weapon_group] = (uint8_t)nl;
-			pc->laser_first_slot[pstate.player_weapon_group] =
-				spec_data[pstate.player_spec_num].laser_start[pstate.player_weapon_group];
-			msg_messageprintf((MsgTemplate)(nl + 9));
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* 'z': target-viewer toggle. */
-		case KEY_z: {
-			if (replayviewmode)
-				break;
-			if (camera.view_target_tracking) {
-				camera.view_target_tracking = 0;
-				targetblinkflag = 0;
-				camera.view_zoom_flag = (camera.view_saved_idx == 18);
-				lasttargetnum = -2;
-				camera.view_target_obj = pstate.object_idx;
-				user_resetview();
-			} else if (pstate.target_obj_idx == 0xFFFF) {
-				msg_messageprintf(MSG_NO_TARGET);
-			} else {
-				if (!camera.view_zoom_flag) {
-					camera.view_saved_idx = camera.pilotview;
-					camera.view_saved_side_angle = camera.side_angle;
-					camera.view_saved_up_angle = camera.up_angle;
+			/* 'x': cycle the laser linking or toggle the missile firing mode. */
+			case KEY_x: {
+				uint16_t nl;
+				uint16_t warhead_msg;
+
+#ifdef TIE_MODERN
+				/* PORT: an unknown warhead type leaves this unset in the original. */
+				warhead_msg = 0;
+#endif
+				if (!pstate.player_weapon_mode) {
+					if (spec_data[pstate.player_spec_num].laser_count[pstate.player_weapon_group] != 1) {
+						nl = (uint16_t)(pstate.player_craft->laser_owner_player[pstate.player_weapon_group] +
+										1);
+						if (nl > 3)
+							nl = 1;
+						if (spec_data[pstate.player_spec_num].laser_count[pstate.player_weapon_group] != 4 &&
+							nl == 2)
+							nl = 3;
+						pstate.player_craft->laser_owner_player[pstate.player_weapon_group] = (uint8_t)nl;
+						pstate.player_craft->laser_first_slot[pstate.player_weapon_group] =
+							spec_data[pstate.player_spec_num].laser_start[pstate.player_weapon_group];
+						msg_messageprintf((MsgTemplate)(nl + 9));
+					}
+				} else {
+					pstate.player_craft->missile_armed[pstate.player_weapon_group] ^= 2u;
+					switch ((uint16_t)pstate.player_craft->warhead_type[pstate.player_weapon_group]) {
+						case 0x8F:
+							warhead_msg = 8;
+							break;
+						case 0x90:
+							warhead_msg = 9;
+							break;
+						case 0x94:
+							warhead_msg = 184;
+							break;
+						case 0x95:
+							warhead_msg = 185;
+							break;
+						case 0x96:
+							warhead_msg = 186;
+							break;
+						case 0x97:
+							warhead_msg = 187;
+							break;
+						case 0x98:
+							warhead_msg = 188;
+							break;
+					}
+					argtable[0] = warhead_msg;
+					msg_messageprintf(
+						(MsgTemplate)(((pstate.player_craft->missile_armed[pstate.player_weapon_group] &
+										0x7F) >>
+									   1) +
+									  6));
 				}
-				camera.view_zoom_flag = 1;
-				camera.view_target_tracking = 1;
-				camera.view_target_obj = pstate.target_obj_idx;
-				targetblinkflag = 1024;
-				user_resetview();
+				fsfx_triggersfx(0x21u, 0xFFFF);
+				break;
 			}
-			break;
-		}
-		/* Alt+E: eject / surrender. */
-		case KEY_ALT_E: {
-			int16_t status;
-			int sp;
-			uint16_t spin;
-			uint16_t rnd;
+			/* F9: cannon-rate cycle. */
+			case KEY_F9: {
+				uint16_t msg;
 
-			if (mission.train_craft_type) {
-				if (recordingreplay) {
-					if (!replayio_spoolreplayinput())
-						replaytotalcnt -= replaybuffercnt;
-					replaybuffercnt = 0;
-					recordingreplay = 0;
-					msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
-					calcframerate = 0;
+				++pstate.player_craft->laser_power;
+				if (pstate.player_craft->laser_power >= 5)
+					pstate.player_craft->laser_power = 0;
+
+				if (pstate.player_craft->status_flags & 0x10) {
+					argtable[0] = (uint16_t)(pstate.player_craft->laser_power + 19);
+					msg = MSG_CANNON_RATE;
+				} else {
+					argtable[0] = 29;
+					argtable[1] = 25;
+					msg = MSG_SYSTEM_STATUS;
 				}
-				mission.end_flag = 1;
-				mission.player_status = 3;
+				msg_messageprintf((MsgTemplate)msg);
+				fsfx_triggersfx(0x21u, 0xFFFF);
 				break;
 			}
-			if ((pstate.player_craft->status_flags & 2) == 0) {
-				argtable[0] = 34;
-				argtable[1] = 25;
-				msg_messageprintf(MSG_SYSTEM_STATUS);
+			/* Transfer shields -> cannon (also Shift+F9, synthesized from the
+			 * joystick chord-11 release in user_userinterface). */
+			case KEY_SEMICOLON:
+			case KEY_SHIFT_F9: {
+				int16_t charge_sum;
+				uint16_t j;
+				int16_t step;
+				int16_t xfer;
+				int16_t half;
+				int16_t total;
+				int16_t pips;
+				uint16_t k;
+				int16_t i;
+
+				if (pstate.player_craft->subsystem_active & 1) {
+					charge_sum = 0;
+					for (j = 0; j < pstate.player_craft->weapon_group_cnt; ++j)
+						charge_sum += 127 - (int8_t)pstate.player_craft->weapon_slots[j].charge;
+					if (pstate.player_spec_num == spec_getspecnum(0xCu))
+						step = 32;
+					else
+						step = 8;
+					if (charge_sum > 100)
+						charge_sum = 100;
+					xfer = (int16_t)(charge_sum * step);
+
+					if (!pstate.player_craft->is_player_craft) {
+						if (xfer > pstate.player_craft->forward_shield)
+							xfer = pstate.player_craft->forward_shield;
+						pstate.player_craft->forward_shield -= xfer;
+						total = xfer;
+					} else if (pstate.player_craft->is_player_craft == 2) {
+						if (xfer > pstate.player_craft->rear_shield)
+							xfer = pstate.player_craft->rear_shield;
+						pstate.player_craft->rear_shield -= xfer;
+						total = xfer;
+					} else {
+						/* Each half takes from its own shield, but the rear half is
+						 * capped by comparing the whole transfer with the rear shield. */
+						half = (int16_t)(xfer >> 1);
+						if (half > pstate.player_craft->forward_shield)
+							half = pstate.player_craft->forward_shield;
+						pstate.player_craft->forward_shield -= half;
+						total = half;
+						half = (int16_t)(xfer >> 1);
+						if (xfer > pstate.player_craft->rear_shield)
+							half = pstate.player_craft->rear_shield;
+						pstate.player_craft->rear_shield -= half;
+						total += half;
+					}
+
+					/* Each pip recharges one cannon by one unit, cycling through them. */
+					pips = total / step;
+					if (!pips)
+						break;
+					k = 0;
+					i = 0;
+					while (pips > 0 && i < 100) {
+						if ((int8_t)pstate.player_craft->weapon_slots[k].charge < 127)
+							++pstate.player_craft->weapon_slots[k].charge;
+						++k;
+						--pips;
+						if (k >= pstate.player_craft->weapon_group_cnt)
+							k = 0;
+						++i;
+					}
+					fsfx_triggersfx(0x21u, 0xFFFF);
+					msg_messageprintf(MSG_XFER_SHIELDS_TO_CANNON);
+				} else {
+					argtable[0] = 35;
+					msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				}
 				break;
 			}
-			if (hyperspaceflag || replayviewmode)
+			/* 's': shield mode cycle. Also synthesized on button-chord-7
+			 * release. */
+			case KEY_s: {
+				int16_t cap;
+				uint16_t pct;
+				int16_t total;
+				int16_t fwd;
+
+				if (pstate.player_craft->subsystem_active & 1) {
+					if (pstate.player_craft->status_flags & 1) {
+						if (++pstate.player_craft->is_player_craft > 2) {
+							pstate.player_craft->is_player_craft = 0;
+							user_adjustshields(0, 1);
+						} else if (pstate.player_craft->is_player_craft == 2) {
+							user_adjustshields(1, 0);
+						} else {
+							/* Balanced: split the total by the forward share of the cap. */
+							cap = (int16_t)(2 * spec_data[pstate.player_spec_num].shield_points);
+							if (!mission.difficulty) {
+								cap *= 2;
+								pct = math2_percentage(
+									(uint16_t)(2 * spec_data[pstate.player_spec_num].shield_points),
+									(uint16_t)cap);
+							} else {
+								pct = math2_percentage(spec_data[pstate.player_spec_num].shield_points,
+													   (uint16_t)cap);
+							}
+							total = (int16_t)(pstate.player_craft->forward_shield +
+											  pstate.player_craft->rear_shield);
+							if (total > 0) {
+								fwd = (int16_t)math2_fraction(total, pct);
+								total -= fwd;
+								pstate.player_craft->forward_shield = fwd;
+								pstate.player_craft->rear_shield = total;
+							}
+						}
+						argtable[0] = (uint16_t)(pstate.player_craft->is_player_craft + 14);
+						msg_messageprintf(MSG_SHIELDS_SET);
+						fsfx_triggersfx(0x21u, 0xFFFF);
+					} else {
+						argtable[1] = 25;
+						argtable[0] = 35;
+						msg_messageprintf(MSG_SYSTEM_STATUS);
+					}
+				} else {
+					argtable[0] = 35;
+					msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				}
 				break;
-
-			if (user_isrescued(pstate.object_idx)) {
-				status = 0;
-				mission.player_status = 2;
-			} else {
-				status = 1;
-				mission.player_status = 1;
 			}
-			fediskio_updatepilotrecord(status, 1);
-			user_ejectcamera();
-			sp = pstate.player_craft->species_idx;
-			spin = (uint16_t)math2_getrandom();
-			spin = (uint16_t)(((uint8_t)((spin >> 8) & 0x3F) + 32) << 8);
-			while (spin > (uint16_t)spec_data[sp].max_spin_rate)
-				spin >>= 1;
-			pstate.player->spin_rate = (int16_t)spin;
-			pstate.player_craft->flight_flag = 3;
-			rnd = (uint16_t)math2_getrandom();
-			pstate.player->death_timer = (int16_t)(236 * ((rnd & 3) + 3));
-			TIE_FLIGHT_TRACE_DEATH(pstate.object_idx, 0xFFFFu, TIE_TRACE_DEATH_EJECTED,
-								   pstate.player->death_timer);
-			break;
-		}
-		/* Alt+O: screenshot. */
-		case KEY_ALT_O:
-			if (TIE_DISPLAY_DX5)
-				FrontendDisplay_CaptureScreenshot();
-			else
-				rtsvga2_takeScreenshot();
-			break;
-		/* Alt+T: time acceleration toggle. */
-		case KEY_ALT_T:
-			acceleratedtimesetting *= 2;
-			if (acceleratedtimesetting == 8) {
-				acceleratedtimesetting = 1;
-				msg_messageprintf(MSG_TIME_NORMAL);
-			} else {
-				argtable[0] = acceleratedtimesetting;
-				acceleratedtimectr = acceleratedtimesetting;
-				msg_messageprintf(MSG_TIME_ACCEL);
-			}
-			break;
-		/* Alt+S: sound volume toggle. */
-		case KEY_ALT_S:
-			if (soundvolflag) {
-				imuse_set_sfx_vol(im, 0);
-				imuse_set_voice_vol(im, 0);
-				soundvolflag = 0;
-			} else {
-				/* Volume scaling: 0..16 -> iMUSE group volume.
-				 * Binary used unaligned-dword-load anchors `*_vol_loadbase`
-				 * (base - 3) and `>> 24` to extract the inflight_*_vol byte;
-				 * the C port reads the named field directly. */
-				int16_t sfx_v = inflight_sound_vol ? (int16_t)(8 * inflight_sound_vol - 1) : 0;
-				int16_t voc_v = inflight_speech_vol ? (int16_t)(8 * inflight_speech_vol - 1) : 0;
-				imuse_set_sfx_vol(im, sfx_v);
-				imuse_set_voice_vol(im, voc_v);
-				soundvolflag = 1;
-			}
-			break;
-		/* Alt+D: detail level toggle. */
-		case KEY_ALT_D: {
-			uint8_t dl = (uint8_t)(detaillevel + 1);
-			if (dl >= 4)
-				dl = 0;
-			detaillevel = dl;
-			user_setdetaillevel(dl);
-			argtable[0] = (uint16_t)(dl + 38);
-			msg_messageprintf(MSG_GFX_DETAIL);
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* Alt+M: music volume toggle. */
-		case KEY_ALT_M:
-			if (musicvolflag) {
-				imuse_set_music_vol(im, 0);
-				if (TieMusicPolicy_UsesTie98())
-					gamesnd_Set_CD_Volume(0);
-				musicvolflag = 0;
-			} else {
-				int16_t v = inflight_music_vol ? (int16_t)(8 * inflight_music_vol - 1) : 0;
-				imuse_set_music_vol(im, v);
-				if (TieMusicPolicy_UsesTie98())
-					gamesnd_Set_CD_Volume(inflight_music_vol);
-				musicvolflag = 1;
-			}
-			break;
-		/* F1: return to the forward cockpit. */
-		case KEY_F1:
-			if (!replayviewmode) {
-				camera.view_target_tracking = 0;
-				camera.view_zoom_flag = 0;
-				camera.view_target_obj = pstate.object_idx;
-				camera.view_camera_control = 0;
-				panelrts_setnewpilotview(0);
-				camera.side_angle = 0;
-				camera.up_angle = 0;
-			}
-			break;
-		/* F2: select or cycle warhead view. */
-		case KEY_F2: {
-			uint16_t scan;
-			uint16_t found;
-			int k;
-
-			frameticksmsgflag = !frameticksmsgflag;
-			if (replayviewmode || camera.view_target_tracking)
+			/* F10: shield-rate cycle. */
+			case KEY_F10: {
+				if (pstate.player_craft->subsystem_active & 1) {
+					if (pstate.player_craft->status_flags & 1) {
+						++pstate.player_craft->shield_power;
+						if (pstate.player_craft->shield_power >= 5)
+							pstate.player_craft->shield_power = 0;
+						argtable[0] = (uint16_t)(pstate.player_craft->shield_power + 19);
+						msg_messageprintf(MSG_SHIELD_RATE);
+						fsfx_triggersfx(0x21u, 0xFFFF);
+					} else {
+						argtable[1] = 25;
+						argtable[0] = 35;
+						msg_messageprintf(MSG_SYSTEM_STATUS);
+					}
+				} else {
+					argtable[0] = 35;
+					msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				}
 				break;
+			}
+			/* Transfer cannon -> shields (also Shift+F10). */
+			case KEY_APOSTROPHE:
+			case KEY_SHIFT_F10: {
+				int16_t cap;
+				int16_t need;
+				int16_t cycles;
+				int16_t step;
+				uint16_t k;
+				int16_t i;
 
-			scan = (camera.view_target_obj == pstate.object_idx) ? (uint16_t)(NUM_CRAFTS - 1)
-																 : camera.view_target_obj;
-			found = 0xFFFF;
-			for (k = NUM_CRAFTS; k < WARHEAD_SLOT_END; ++k) {
-				unsigned int projectile_type_idx;
+				if (pstate.player_craft->subsystem_active & 1) {
+					if (pstate.player_craft->status_flags & 1) {
+						cap = (int16_t)(2 * spec_data[pstate.player_spec_num].shield_points);
+						if (!mission.difficulty)
+							cap *= 2;
+						if (!pstate.player_craft->is_player_craft) {
+							need = (int16_t)(cap - pstate.player_craft->forward_shield);
+						} else if (pstate.player_craft->is_player_craft == 2) {
+							need = (int16_t)(cap - pstate.player_craft->rear_shield);
+						} else {
+							need = (int16_t)((cap - pstate.player_craft->forward_shield) +
+											 (cap - pstate.player_craft->rear_shield));
+							if (need < 0)
+								need = 800;
+						}
+						if (need > 800)
+							need = 800;
 
-				scan = (uint16_t)(scan + 1);
-				if (scan >= WARHEAD_SLOT_END)
-					scan = NUM_CRAFTS;
-				projectile_type_idx = objects[scan].ship_idx - WEAPON_SPECIES_BASE;
-				/* Freed projectile slots retain their genus after ship_idx is cleared. */
-				if (objects[scan].genus == GENUS_PROJECTILE_PLAYER &&
-					projectile_type_idx < WARHEAD_TYPE_COUNT &&
-					projectile_is_warhead_type[projectile_type_idx]) {
-					if (pstate.object_idx == (uint16_t)objects[scan].self_idx)
-						found = scan;
+						/* Each cycle moves one unit of cannon charge into the shields. */
+						if (pstate.player_spec_num == spec_getspecnum(0xCu)) {
+							need /= 32;
+							cycles = need;
+							step = 32;
+						} else {
+							need /= 8;
+							cycles = need;
+							step = 8;
+						}
+						if (!cycles)
+							break;
+						k = 0;
+						i = 0;
+						while (cycles > 0 && i < 100) {
+							if ((int8_t)pstate.player_craft->weapon_slots[k].charge > 0) {
+								--pstate.player_craft->weapon_slots[k].charge;
+								--cycles;
+								if (!pstate.player_craft->is_player_craft) {
+									pstate.player_craft->forward_shield += step;
+								} else if (pstate.player_craft->is_player_craft == 2) {
+									pstate.player_craft->rear_shield += step;
+								} else {
+									pstate.player_craft->forward_shield += step / 2;
+									pstate.player_craft->rear_shield += step / 2;
+								}
+							}
+							if (++k >= pstate.player_craft->weapon_group_cnt)
+								k = 0;
+							++i;
+						}
+						fsfx_triggersfx(0x21u, 0xFFFF);
+						msg_messageprintf(MSG_XFER_CANNON_TO_SHIELDS);
+					} else {
+						argtable[0] = 35;
+						argtable[1] = 25;
+						msg_messageprintf(MSG_SYSTEM_STATUS);
+					}
+				} else {
+					argtable[0] = 35;
+					msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				}
+				break;
+			}
+			/* 'b': beam on/off. */
+			case KEY_b: {
+				if (pstate.player_craft->subsystem_active & 0x100) {
+					if (pstate.player_craft->status_flags & 0x100) {
+						pstate.player_craft->beam_state ^= 0x80u;
+						argtable[0] = (uint16_t)(pstate.player_craft->beam_type + 192);
+						if (pstate.player_craft->beam_state & 0x80)
+							msg_messageprintf(MSG_BEAM_ON);
+						else
+							msg_messageprintf(MSG_BEAM_OFF);
+					} else {
+						argtable[0] = 32;
+						argtable[1] = 25;
+						msg_messageprintf(MSG_SYSTEM_STATUS);
+					}
+				} else {
+					argtable[0] = 32;
+					msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				}
+				break;
+			}
+			/* F8: beam-rate cycle. */
+			case KEY_F8: {
+				if (pstate.player_craft->subsystem_active & 0x100) {
+					if (pstate.player_craft->status_flags & 0x100) {
+						++pstate.player_craft->beam_power;
+						if (pstate.player_craft->beam_power >= 5)
+							pstate.player_craft->beam_power = 0;
+						argtable[0] = (uint16_t)(pstate.player_craft->beam_power + 19);
+						msg_messageprintf(MSG_BEAM_RATE);
+						fsfx_triggersfx(0x21u, 0xFFFF);
+					} else {
+						argtable[0] = 32;
+						argtable[1] = 25;
+						msg_messageprintf(MSG_SYSTEM_STATUS);
+					}
+				} else {
+					argtable[0] = 32;
+					msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+				}
+				break;
+			}
+			/* Alt+1: auto-target. */
+			case KEY_ALT_1: {
+				uint16_t a = user_picktarget();
+				user_setnewtarget(a);
+				break;
+			}
+			/* 't': next target. */
+			case KEY_t:
+				if (pstate.target_obj_idx != 0xFFFF)
+					user_setnewtarget(user_picknexttarget(pstate.target_obj_idx, 1));
+				else
+					user_setnewtarget(user_picknexttarget((uint16_t)pstate.radar_target0, 1));
+				break;
+			/* 'y': previous target. */
+			case KEY_y:
+				if (pstate.target_obj_idx != 0xFFFF)
+					user_setnewtarget(user_picknexttarget(pstate.target_obj_idx, -1));
+				else
+					user_setnewtarget(user_picknexttarget((uint16_t)pstate.radar_target0, -1));
+				break;
+			/* 'u': target newest craft in the area (QRC manual). */
+			case KEY_u: {
+				uint16_t best_obj = 0xFFFF;
+				uint16_t best_tick = 0xFFFF;
+				int16_t i;
+
+				for (i = 0; i < NUM_ACTIVE_CRAFT_SLOTS; ++i) {
+					CraftData* cp;
+					uint8_t ff;
+					uint16_t tick;
+
+					if (!objects[i].ship_idx)
+						continue;
+					if (i == pstate.object_idx)
+						continue;
+					cp = objects[i].craft_ptr;
+					if (cp->leader_obj_idx != 255)
+						continue;
+					/* Accept flight_flag in {0, 2, 6}; reject everything else. */
+					ff = cp->flight_flag;
+					if (ff && ff != 2 && ff != 6)
+						continue;
+					tick = (uint16_t)objects[i].age_ticks;
+					if (best_tick > tick) {
+						best_obj = (uint16_t)i;
+						best_tick = tick;
+					}
+				}
+				user_setnewtarget(best_obj);
+				break;
+			}
+			/* 'r': find nearest enemy and target it. Also synthesized by
+			 * user_userinterface on button-chord-4 release. */
+			case KEY_r: {
+				uint32_t best_dist = 0xFFFFFFFFu;
+				uint16_t best_idx = 0xFFFF;
+
+				/* Pass 1: craft slots 0..NUM_CRAFTS-1. */
+				int16_t i;
+				uint16_t k;
+				int16_t m;
+
+				for (i = 0; i < NUM_CRAFTS; ++i) {
+					int g;
+					CraftData* cp;
+					uint8_t ff;
+
+					if (!objects[i].ship_idx)
+						continue;
+					if (i == pstate.object_idx)
+						continue;
+					if (objects[i].side == objects[pstate.object_idx].side)
+						continue;
+					if (objects[i].side == 2 && mission_file_header.mission.neutral_name[0][0] != '1')
+						continue;
+					if (objects[i].side == 3 && mission_file_header.mission.neutral_name[1][0] != '1')
+						continue;
+					if (objects[i].side == 5 && mission_file_header.mission.neutral_name[3][0] != '1')
+						continue;
+					g = objects[i].genus;
+					if (g == 4 || g == 3 || g == 5)
+						continue;
+					cp = objects[i].craft_ptr;
+					if (!cp->status_flags)
+						continue;
+					ff = cp->flight_flag;
+					if (ff && ff != 6)
+						continue;
+
+					pai_distancebetween(pstate.object_idx, i);
+					if (best_dist > (uint32_t)trig2_polardistance) {
+						best_idx = (uint16_t)i;
+						best_dist = (uint32_t)trig2_polardistance;
+					}
+				}
+
+				/* Pass 2: static mine-gun turrets (ship_class == 8). */
+				k = 14336;
+				for (m = 0; m < 64; ++k, ++m) {
+					uint8_t fg_side;
+
+					if (!staticobjects[m].species)
+						continue;
+					if (staticobjects[m].ship_class != 8)
+						continue;
+					if (!staticobjects[m].status_flags)
+						continue;
+					fg_side = fg_array[staticobjects[m].fg_idx].side;
+					if (fg_side == objects[pstate.object_idx].side)
+						continue;
+
+					pai_distancebetween(pstate.object_idx, k);
+					if (best_dist > (uint32_t)trig2_polardistance) {
+						best_idx = k;
+						best_dist = (uint32_t)trig2_polardistance;
+					}
+				}
+
+				user_setnewtarget(best_idx);
+				break;
+			}
+			/* 'e': target my closest attacker. */
+			case KEY_e: {
+				uint16_t a = user_findclosestattacker(pstate.object_idx);
+				user_setnewtarget(a);
+				break;
+			}
+			/* 'a': target closest attacker of current target. */
+			case KEY_a: {
+				uint16_t a = user_findclosestattacker(pstate.target_obj_idx);
+				user_setnewtarget(a);
+				break;
+			}
+			/* ',': next radar subtarget. */
+			case KEY_COMMA: {
+				CraftData* cp;
+				uint16_t guard;
+
+				if (pstate.target_obj_idx == 0xFFFF)
 					break;
+				if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS)
+					break;
+				cp = objects[pstate.target_obj_idx].craft_ptr;
+				if (!TIE_FLIGHT_TIE98)
+					draw_Lockshipfileptrs(objects[pstate.target_obj_idx].ship_idx);
+				/* Try each mesh once at most. */
+				for (guard = (uint16_t)(TIE_FLIGHT_EDITION(
+											objectblockptr->num_meshes,
+											modelmesh_getcount(objects[pstate.target_obj_idx].ship_idx)) -
+										1);
+					 guard != 0xFFFF; --guard) {
+					if ((uint16_t)++pstate.radar_target1 >=
+						TIE_FLIGHT_EDITION(objectblockptr->num_meshes,
+										   modelmesh_getcount(objects[pstate.target_obj_idx].ship_idx)))
+						pstate.radar_target1 = 0;
+					if (cp->mesh_state[pstate.radar_target1] == MESH_STATE_VISIBLE &&
+						TIE_FLIGHT_EDITION(user_validcomponent(pstate.radar_target1),
+										   user_validcomponent_tie98(objects[pstate.target_obj_idx].ship_idx,
+																	 pstate.radar_target1)))
+						break;
 				}
+				break;
 			}
-			if (found != 0xFFFF) {
-				if (camera.view_target_obj == pstate.object_idx) {
-					camera.view_saved_idx = camera.pilotview;
-					camera.view_saved_side_angle = camera.side_angle;
-					camera.view_saved_up_angle = camera.up_angle;
-					camera.view_zoom_flag = 0;
+			/* '<': previous radar subtarget. */
+			case KEY_LESS: {
+				CraftData* cp;
+				uint16_t guard;
+
+				if (pstate.target_obj_idx == 0xFFFF)
+					break;
+				if (pstate.target_obj_idx >= NUM_ACTIVE_CRAFT_SLOTS)
+					break;
+				cp = objects[pstate.target_obj_idx].craft_ptr;
+				if (!TIE_FLIGHT_TIE98)
+					draw_Lockshipfileptrs(objects[pstate.target_obj_idx].ship_idx);
+				/* Try each mesh once at most. */
+				for (guard = (uint16_t)(TIE_FLIGHT_EDITION(
+											objectblockptr->num_meshes,
+											modelmesh_getcount(objects[pstate.target_obj_idx].ship_idx)) -
+										1);
+					 guard != 0xFFFF; --guard) {
+					if ((uint16_t)--pstate.radar_target1 == 0xFFFF)
+						pstate.radar_target1 =
+							(int16_t)(TIE_FLIGHT_EDITION(
+										  objectblockptr->num_meshes,
+										  modelmesh_getcount(objects[pstate.target_obj_idx].ship_idx)) -
+									  1);
+					if (cp->mesh_state[pstate.radar_target1] == MESH_STATE_VISIBLE &&
+						TIE_FLIGHT_EDITION(user_validcomponent(pstate.radar_target1),
+										   user_validcomponent_tie98(objects[pstate.target_obj_idx].ship_idx,
+																	 pstate.radar_target1)))
+						break;
 				}
-				camera.view_target_obj = found;
-				user_resetview();
-			}
-			break;
-		}
-		/* F4: toggle external-camera positioning controls (LABEL_213). */
-		case KEY_F4:
-			if (!replayviewmode && camera.view_zoom_flag)
-				camera.view_camera_control = (camera.view_camera_control == 0);
-			break;
-		/* F8: beam-rate cycle. */
-		case KEY_F8: {
-			CraftData* pc = pstate.player_craft;
-			uint8_t nr;
-
-			if ((pc->subsystem_active & 0x100) == 0) {
-				argtable[0] = 32;
-				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
 				break;
 			}
-			if ((pc->status_flags & 0x100) == 0) {
-				argtable[0] = 32;
-				argtable[1] = 25;
-				msg_messageprintf(MSG_SYSTEM_STATUS);
+			/* 'i': radar toggle. */
+			case KEY_i: {
+				pstate.radar_enable ^= 1u;
+				argtable[0] = (uint16_t)(pstate.radar_enable + 86);
+				msg_messageprintf(MSG_CMD_TRACK_TOGGLE);
+				fsfx_triggersfx(0x21u, 0xFFFF);
 				break;
 			}
-			nr = (uint8_t)(pc->beam_power + 1);
-			pc->beam_power = nr;
-			if (nr >= 5)
-				pc->beam_power = 0;
-			argtable[0] = (uint16_t)(pc->beam_power + 19);
-			msg_messageprintf(MSG_BEAM_RATE);
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* F9: cannon-rate cycle. */
-		case KEY_F9: {
-			CraftData* pc = pstate.player_craft;
-			uint8_t nr = (uint8_t)(pc->laser_power + 1);
-			MsgTemplate msg;
-
-			pc->laser_power = nr;
-			if (nr >= 5)
-				pc->laser_power = 0;
-
-			if (pc->status_flags & 0x10) {
-				argtable[0] = (uint16_t)(pc->laser_power + 19);
-				msg = MSG_CANNON_RATE;
-			} else {
-				argtable[0] = 29;
-				argtable[1] = 25;
-				msg = MSG_SYSTEM_STATUS;
-			}
-			msg_messageprintf(msg);
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* F10: shield-rate cycle. */
-		case KEY_F10: {
-			CraftData* pc = pstate.player_craft;
-			uint8_t nr;
-
-			if ((pc->subsystem_active & 1) == 0) {
-				argtable[0] = 35;
-				msg_messageprintf(MSG_NO_SUCH_SYSTEM);
+			/* 'q': end-mission prompt. */
+			case KEY_q:
+				if (!pstate.space_confirm_action) {
+					msg_messageprintf(MSG_END_MISSION_PROMPT);
+					pstate.space_confirm_action = 2;
+					timers[TIMER_SPACE_CONFIRM] = 1888;
+				}
 				break;
-			}
-			if ((pc->status_flags & 1) == 0) {
-				argtable[0] = 35;
-				argtable[1] = 25;
-				msg_messageprintf(MSG_SYSTEM_STATUS);
-				break;
-			}
-			nr = (uint8_t)(pc->shield_power + 1);
-			pc->shield_power = nr;
-			if (nr >= 5)
-				pc->shield_power = 0;
-			argtable[0] = (uint16_t)(pc->shield_power + 19);
-			msg_messageprintf(MSG_SHIELD_RATE);
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		}
-		/* Shift+F5..F7: quicksave target recall slots. */
-		case KEY_SHIFT_F5:
-		case KEY_SHIFT_F6:
-		case KEY_SHIFT_F7:
-			if (pstate.target_obj_idx != 0xFFFF)
-				pstate.target_presets[(uint16_t)inputkey - KEY_SHIFT_F5] = pstate.target_obj_idx;
-			fsfx_triggersfx(0x21u, 0xFFFF);
-			break;
-		/* Alt+1: auto-target. */
-		case KEY_ALT_1: {
-			uint16_t a = user_picktarget();
-			user_setnewtarget(a);
-			break;
-		}
+			/* F5..F7: recall the saved target slots. */
+			case KEY_F5:
+			case KEY_F6:
+			case KEY_F7: {
+				uint16_t tgt;
 
-		default:
-			/* F5..F7: quick-recall slot keys. Binary 0x5CBBC. */
-			if ((uint16_t)inputkey >= KEY_F5 && (uint16_t)inputkey <= KEY_F7) {
-				uint16_t tgt = pstate.target_presets[(uint16_t)inputkey - KEY_F5];
-				if (tgt != 0xFFFFu) {
-					uint32_t idx = (tgt >= 0x3800u) ? (tgt - 14336) : tgt;
-					if (objects[idx].ship_idx)
+				if (pstate.target_presets[(uint16_t)inputkey - KEY_F5] != 0xFFFF) {
+					tgt = pstate.target_presets[(uint16_t)inputkey - KEY_F5];
+					if (objects[tgt < 0x3800 ? tgt : tgt - 0x3800].ship_idx)
 						user_setnewtarget(tgt);
 				}
 				break;
 			}
-			/* No binding for this key — no-op. */
-			break;
-	}
+			/* Shift+F5..F7: quicksave target recall slots. */
+			case KEY_SHIFT_F5:
+			case KEY_SHIFT_F6:
+			case KEY_SHIFT_F7:
+				if (pstate.target_obj_idx != 0xFFFF)
+					pstate.target_presets[(uint16_t)inputkey - KEY_SHIFT_F5] = pstate.target_obj_idx;
+				fsfx_triggersfx(0x21u, 0xFFFF);
+				break;
+			/* 'h': hyperspace. */
+			case KEY_h: {
+				int16_t interdictor;
+				int16_t i;
+				uint16_t obj;
+				uint16_t pri_stop_obj;
+				uint16_t sec_stop_obj;
 
+				if (pstate.player_craft->subsystem_active & 0x80) {
+					if (mission.train_craft_type) {
+						if (recordingreplay) {
+							if (!replayio_spoolreplayinput())
+								replaytotalcnt -= replaybuffercnt;
+							replaybuffercnt = 0;
+							recordingreplay = 0;
+							msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
+							calcframerate = 0;
+						}
+						mission.end_flag = 1;
+						mission.player_status = 3;
+					} else if (pstate.player_craft->status_flags & 0x80) {
+						/* An enemy Interdictor in the area blocks the jump. */
+						interdictor = 0;
+						for (i = 0; i < NUM_ACTIVE_CRAFT_SLOTS; ++i) {
+							if (objects[i].ship_idx == 51 && objects[i].side != pstate.player->side)
+								interdictor = 1;
+						}
+						if (interdictor) {
+							msg_messageprintf(MSG_INTERDICTOR_BLOCK);
+						} else {
+							fscript_MsSetSequence(17);
+							msg_clearmessagequeue();
+							msg_messageprintf(MSG_HYPER_PREP);
+							camera.view_target_tracking = 0;
+							hyperspaceflag = 1;
+							hyperabortflag = 1;
+							camera.view_zoom_flag = 0;
+							camera.view_target_obj = pstate.object_idx;
+							camera.view_camera_control = 0;
+							panelrts_setnewpilotview(0);
+							camera.side_angle = 0;
+							camera.up_angle = 0;
+							hyperticks = 0;
+							fsfx_triggersfx(0x21u, 0xFFFF);
+						}
+					} else {
+						argtable[1] = 25;
+						argtable[0] = 36;
+						msg_messageprintf(MSG_SYSTEM_STATUS);
+					}
+				} else {
+					/* No hyperdrive: name the motherships the player's flight group
+					 * departs to. */
+					pri_stop_obj = 0xFFFF;
+					sec_stop_obj = 0xFFFF;
+					for (obj = 0; obj < NUM_ACTIVE_CRAFT_SLOTS; ++obj) {
+						if (fg_array[pstate.player_fg_idx].pri_stop_fg_used && objects[obj].ship_idx &&
+							objects[obj].fg_idx == fg_array[pstate.player_fg_idx].pri_stop_fg)
+							pri_stop_obj = obj;
+						if (fg_array[pstate.player_fg_idx].sec_stop_fg_used && objects[obj].ship_idx &&
+							objects[obj].fg_idx == fg_array[pstate.player_fg_idx].sec_stop_fg)
+							sec_stop_obj = obj;
+					}
+					if (pri_stop_obj != 0xFFFF && sec_stop_obj != 0xFFFF) {
+						msg_createobjectname(pri_stop_obj, 0, tempstring);
+						msg_addmessageptr(0, tempstring);
+						msg_createobjectname(sec_stop_obj, 0, temp2string);
+						msg_addmessageptr(1u, temp2string);
+						msg_messageprintf(MSG_NO_HYPERDRIVE_RETURN_ALT);
+					} else if (pri_stop_obj != 0xFFFF) {
+						msg_createobjectname(pri_stop_obj, 0, tempstring);
+						msg_addmessageptr(0, tempstring);
+						msg_messageprintf(MSG_NO_HYPERDRIVE_RETURN);
+					} else if (sec_stop_obj != 0xFFFF) {
+						msg_createobjectname(sec_stop_obj, 0, tempstring);
+						msg_addmessageptr(0, tempstring);
+						msg_messageprintf(MSG_NO_HYPERDRIVE_RETURN);
+					}
+				}
+				break;
+			}
+			/* Alt+D: detail level toggle. */
+			case KEY_ALT_D: {
+				uint8_t dl = (uint8_t)(detaillevel + 1);
+				if (dl >= 4)
+					dl = 0;
+				detaillevel = dl;
+				user_setdetaillevel(dl);
+				argtable[0] = (uint16_t)(dl + 38);
+				msg_messageprintf(MSG_GFX_DETAIL);
+				fsfx_triggersfx(0x21u, 0xFFFF);
+				break;
+			}
+			/* Alt+T: time acceleration toggle. */
+			case KEY_ALT_T:
+				acceleratedtimesetting *= 2;
+				if (acceleratedtimesetting == 8) {
+					acceleratedtimesetting = 1;
+					msg_messageprintf(MSG_TIME_NORMAL);
+				} else {
+					argtable[0] = acceleratedtimesetting;
+					acceleratedtimectr = acceleratedtimesetting;
+					msg_messageprintf(MSG_TIME_ACCEL);
+				}
+				fsfx_triggersfx(0x21u, 0xFFFF);
+				break;
+			/* Alt+E: eject / surrender. */
+			case KEY_ALT_E: {
+				uint16_t species;
+				uint16_t spin;
+
+				if (mission.train_craft_type) {
+					if (recordingreplay) {
+						if (!replayio_spoolreplayinput())
+							replaytotalcnt -= replaybuffercnt;
+						replaybuffercnt = 0;
+						recordingreplay = 0;
+						msg_messageprintf(MSG_REPLAY_CAMERA_OFF);
+						calcframerate = 0;
+					}
+					mission.end_flag = 1;
+					mission.player_status = 3;
+				} else if (pstate.player_craft->status_flags & 2) {
+					if (!hyperspaceflag && !replayviewmode) {
+						if (user_isrescued(pstate.object_idx)) {
+							mission.player_status = 2;
+							fediskio_updatepilotrecord(0, 1);
+						} else {
+							mission.player_status = 1;
+							fediskio_updatepilotrecord(1, 1);
+						}
+						user_ejectcamera();
+						/* Tumble at a random rate within the craft's spin limit. */
+						species = pstate.player_craft->species_idx;
+						spin = (uint16_t)((math2_getrandom() & 0x3FFF) + 0x2000);
+						while (spin > (uint16_t)spec_data[species].max_spin_rate)
+							spin >>= 1;
+						pstate.player->spin_rate = (int16_t)spin;
+						pstate.player_craft->flight_flag = 3;
+						pstate.player->death_timer = (int16_t)(236 * ((math2_getrandom() & 3) + 3));
+						TIE_FLIGHT_TRACE_DEATH(pstate.object_idx, 0xFFFFu, TIE_TRACE_DEATH_EJECTED,
+											   pstate.player->death_timer);
+					}
+				} else {
+					argtable[0] = 34;
+					argtable[1] = 25;
+					msg_messageprintf(MSG_SYSTEM_STATUS);
+				}
+				break;
+			}
+			/* Alt+M: music volume toggle. */
+			case KEY_ALT_M:
+				if (musicvolflag) {
+					imuse_set_music_vol(im, 0);
+#if defined(TIE_MODERN) || defined(TIE98)
+#ifdef TIE_MODERN
+					if (TieMusicPolicy_UsesTie98())
+#endif
+						gamesnd_Set_CD_Volume(0);
+#endif
+					musicvolflag = 0;
+				} else {
+					imuse_set_music_vol(im, inflight_music_vol ? inflight_music_vol * 8 - 1 : 0);
+#if defined(TIE_MODERN) || defined(TIE98)
+#ifdef TIE_MODERN
+					if (TieMusicPolicy_UsesTie98())
+#endif
+						gamesnd_Set_CD_Volume(inflight_music_vol);
+#endif
+					musicvolflag = 1;
+				}
+				break;
+			/* Alt+S: sound volume toggle. */
+			case KEY_ALT_S:
+				if (soundvolflag) {
+					imuse_set_sfx_vol(im, 0);
+					imuse_set_voice_vol(im, 0);
+					soundvolflag = 0;
+				} else {
+					/* Volume scaling: 0..16 -> iMUSE group volume. */
+					imuse_set_sfx_vol(im, inflight_sound_vol ? inflight_sound_vol * 8 - 1 : 0);
+					imuse_set_voice_vol(im, inflight_speech_vol ? inflight_speech_vol * 8 - 1 : 0);
+					soundvolflag = 1;
+				}
+				break;
+			/* 'm': map info room. */
+			case KEY_m:
+#ifdef TIE_MODERN
+				TieFlightRequest_InfoRoom(1);
+#else
+				screen = (uint16_t)user_inflightinfo(1);
+#endif
+				break;
+			/* 'l': messages info room. */
+			case KEY_l:
+#ifdef TIE_MODERN
+				TieFlightRequest_InfoRoom(2);
+#else
+				screen = (uint16_t)user_inflightinfo(2);
+#endif
+				break;
+			/* 'g': goals info room. */
+			case KEY_g:
+#ifdef TIE_MODERN
+				TieFlightRequest_InfoRoom(0);
+#else
+				screen = (uint16_t)user_inflightinfo(0);
+#endif
+				break;
+			/* 'd': damage info room. */
+			case KEY_d:
+#ifdef TIE_MODERN
+				TieFlightRequest_InfoRoom(3);
+#else
+				screen = (uint16_t)user_inflightinfo(3);
+#endif
+				break;
+			/* 'Z': wingmen info room. */
+			case KEY_Z:
+#ifdef TIE_MODERN
+				TieFlightRequest_InfoRoom(4);
+#else
+				screen = (uint16_t)user_inflightinfo(4);
+#endif
+				break;
+			/* 'k': help info room. */
+			case KEY_k:
+#ifdef TIE_MODERN
+				TieFlightRequest_InfoRoom(5);
+#else
+				screen = (uint16_t)user_inflightinfo(5);
+#endif
+				break;
+			/* In-flight options room. */
+			case KEY_ESCAPE:
+#ifdef TIE_MODERN
+				if (replayviewmode)
+					TieFlightRequest_InfoRoom(6);
+				else
+					TieRuntime_RequestSettingsMenu();
+#else
+				screen = (uint16_t)user_inflightinfo(6);
+#endif
+				break;
+			/* 'H': wingman 'attack starship'. */
+			case KEY_H:
+				if (user_checkradio()) {
+					craftptr = objects[pstate.target_obj_idx].craft_ptr;
+					if (craftptr->current_order != 47 && craftptr->current_order != 53) {
+						craftptr->special_order_flag = 1;
+						if (objects[pstate.target_obj_idx].genus == GENUS_STARSHIP)
+							craftptr->current_order = 53;
+						else
+							craftptr->current_order = 47;
+						pai_setupcraftaivars(pstate.target_obj_idx);
+						pai_initplan(pstate.target_obj_idx);
+					}
+					msg_radiomessage(pstate.target_obj_idx, craftptr, 0x70u, 0);
+				} else {
+					msg_messageprintf(MSG_CRAFT_NOT_RESPONDING);
+				}
+				break;
+			/* 'W': wait in place. */
+			case KEY_W:
+				if (user_checkradio()) {
+					if (craftptr->current_order != 44 && craftptr->current_order != 51 &&
+						craftptr->current_order != 52) {
+						craftptr->saved_current_order = craftptr->current_order;
+						if (objects[pstate.target_obj_idx].genus == GENUS_STARSHIP)
+							craftptr->current_order = 64;
+						else
+							craftptr->current_order = 44;
+						pai_setupcraftaivars(pstate.target_obj_idx);
+						pai_initplan(pstate.target_obj_idx);
+						msg_radiomessage(pstate.target_obj_idx, craftptr, 0x73u, 0);
+					}
+				} else {
+					msg_messageprintf(MSG_CRAFT_NOT_RESPONDING);
+				}
+				break;
+			/* 'G': wingman 'return to base'. */
+			case KEY_G:
+				if (user_checkradio()) {
+					if (craftptr->current_order == 44) {
+						craftptr->current_order = craftptr->saved_current_order;
+						pai_setupcraftaivars(pstate.target_obj_idx);
+						pai_initplan(pstate.target_obj_idx);
+						msg_radiomessage(pstate.target_obj_idx, craftptr, 0x74u, 0);
+					}
+				} else {
+					msg_messageprintf(MSG_CRAFT_NOT_RESPONDING);
+				}
+				break;
+			/* 'E': wingman 'wait'. */
+			case KEY_E:
+				if (user_checkradio()) {
+					if (craftptr->current_order == 44) {
+						craftptr->current_order = craftptr->saved_current_order;
+						pai_setupcraftaivars(pstate.target_obj_idx);
+						pai_initplan(pstate.target_obj_idx);
+					}
+					craftptr->pending_radio_command = 251;
+					msg_radiomessage(pstate.target_obj_idx, craftptr, 0x72u, 0);
+				} else {
+					msg_messageprintf(MSG_CRAFT_NOT_RESPONDING);
+				}
+				break;
+			/* 'C': attack my attacker. */
+			case KEY_C: {
+				uint16_t a = user_findclosestattacker(pstate.object_idx);
+				if (a != 0xFFFF)
+					user_assigntarget(a, 0x71u);
+				break;
+			}
+			/* 'A' (Shift+a): wingmen attack player's target. */
+			case KEY_A:
+				if (pstate.target_obj_idx != 0xFFFF) {
+					if (pstate.target_obj_idx == (uint16_t)pstate.radio_target)
+						pstate.radio_target = -1;
+					user_assigntarget(pstate.target_obj_idx, 0x75u);
+				}
+				break;
+			/* 'I': assign target to group. */
+			case KEY_I:
+				if (pstate.target_obj_idx != 0xFFFF) {
+					pstate.radio_target = pstate.target_obj_idx;
+					user_assigntarget(0xFFu, 0x76u);
+				}
+				break;
+			/* 'R': order report. */
+			case KEY_R:
+				if (pstate.target_obj_idx != 0xFFFF && pstate.target_obj_idx < NUM_ACTIVE_CRAFT_SLOTS &&
+					objects[pstate.target_obj_idx].side == 1) {
+					craftptr = objects[pstate.target_obj_idx].craft_ptr;
+					msg_reportmessage(pstate.target_obj_idx, craftptr,
+									  convertmessage[craftptr->current_order]);
+				}
+				break;
+			/* 'S': reinforce request. */
+			case KEY_S: {
+				uint8_t reinforce_avail;
+				uint16_t i;
+
+				if (pstate.space_confirm_action)
+					break;
+				reinforce_avail = 0;
+				for (i = 0; i < mission_file_header.num_fg; ++i) {
+					/* Arrival condition 20: "reinforced by". */
+					if (fg_array[i].start_cond[0].cond == 20 || fg_array[i].start_cond[1].cond == 20)
+						reinforce_avail = 1;
+				}
+				if (!reinforce_avail) {
+					msg_messageprintf(MSG_NO_REINFORCEMENTS);
+					fsfx_triggervoicesfx(0x66u);
+					fsfx_triggervoicesfx(0x67u);
+					fsfx_triggervoicesfx(0x69u);
+					break;
+				}
+				if (!mission.penalty_flag) {
+					msg_messageprintf(MSG_REINFORCE_PROMPT);
+					timers[TIMER_SPACE_CONFIRM] = 1888;
+					pstate.space_confirm_action = 3;
+				} else {
+					msg_messageprintf(MSG_REINFORCE_ALREADY_USED);
+					fsfx_triggervoicesfx(0x66u);
+					fsfx_triggervoicesfx(0x67u);
+					fsfx_triggervoicesfx(0x69u);
+				}
+				break;
+			}
+			/* 'B': wingman 'go home'. */
+			case KEY_B:
+				if (pstate.target_obj_idx != 0xFFFF && pstate.target_obj_idx < NUM_ACTIVE_CRAFT_SLOTS) {
+					craftptr = objects[pstate.target_obj_idx].craft_ptr;
+					pai_setupcraftaivars(pstate.target_obj_idx);
+					if (craftptr->current_order == 28 && pai_isobjectvalidtarget(pstate.object_idx)) {
+						craftptr->pending_radio_command = pstate.object_idx;
+						pstate.player_craft->throttle_speed = 0;
+						msg_radiomessage(pstate.target_obj_idx, craftptr, 0xC6u, 0);
+					}
+				}
+				break;
+			/* Left/right arrow: roll. */
+			case KEY_LEFT_ARROW:
+			case KEY_RIGHT_ARROW: {
+				uint16_t roll_pct = math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u);
+				int16_t roll;
+
+				roll_pct >>= 1;
+
+				roll = (int16_t)math2_ABoverC32(
+					(int16_t)((((uint16_t)inputkey == KEY_LEFT_ARROW ? 0xD000 : 0x3000) * roll_pct) >> 15),
+					frameticks, 236);
+				objects[pstate.object_idx].roll -= roll;
+				break;
+			}
+		}
+#ifdef TIE_MODERN
+		/* PORT: info rooms never return here in the modern build, so the
+		 * screen only repeats the loop for this frame's own key. */
+		if (frame_key >= 0) {
+			inputkey = (int16_t)frame_key;
+			frame_key = -1;
+			screen = 4;
+		}
+#endif
+	} while (screen == 4);
+
+#ifdef TIE_MODERN
 	/* Orientation update at the end of the per-frame dispatch. */
 	{
 		int16_t x_input;
@@ -3588,4 +3645,140 @@ void user_inputforplane(void) {
 		}
 	}
 	TieUserTiming_ApplyThrottleCommand();
+#else
+	if (!camera.view_camera_control) {
+		int16_t x_input;
+		int16_t y_input;
+		int16_t delta;
+		uint16_t step;
+		uint16_t x_roll_mode;
+
+		/* The axis scale is a 16-bit unsigned product: negative deltas load
+		 * zero-extended, and only the low 16 bits of the result are used. */
+		x_input =
+			(int16_t)(((uint16_t)(math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1) *
+					   (uint16_t)inputdeltax) >>
+					  15);
+		y_input =
+			(int16_t)(((uint16_t)(math2_percentage(pstate.player_craft->pitch_rate_cache, 0x1000u) >> 1) *
+					   (uint16_t)inputdeltay) >>
+					  15);
+		if ((pstate.player_craft->status_flags & 0x20) == 0) {
+			y_input = 0;
+			x_input = 0;
+		}
+		x_roll_mode = 0;
+		if (((uint16_t)inputbuttons & 0xE) == 2)
+			x_roll_mode = 1;
+
+		/* Slew each axis toward its input: snap within 8, otherwise step by
+		 * the whole difference, or by 4 * difference / framerate. */
+		if (pstate.prev_x_roll_mode == x_roll_mode) {
+			delta = (int16_t)(x_input - pstate.axis_x_accum);
+			if (delta) {
+				step = delta;
+				if (delta < 0)
+					step = (int16_t)-delta;
+				if ((int16_t)step < 8) {
+					pstate.axis_x_accum += delta;
+				} else {
+					if (framerate > 4) {
+						step /= framerate;
+						if (!step)
+							step = 1;
+						step <<= 2;
+					}
+					if (delta < 0)
+						pstate.axis_x_accum -= step;
+					else
+						pstate.axis_x_accum += step;
+				}
+			}
+			delta = (int16_t)(y_input - pstate.axis_y_accum);
+			if (delta) {
+				step = delta;
+				if (delta < 0)
+					step = (int16_t)-delta;
+				if ((int16_t)step < 8) {
+					pstate.axis_y_accum += delta;
+				} else {
+					if (framerate > 4) {
+						step /= framerate;
+						if (!step)
+							step = 1;
+						step <<= 2;
+					}
+					if (delta < 0)
+						pstate.axis_y_accum -= step;
+					else
+						pstate.axis_y_accum += step;
+				}
+			}
+		} else {
+			pstate.axis_x_accum = 0;
+			pstate.axis_y_accum = 0;
+		}
+		pstate.prev_x_roll_mode = (int16_t)x_roll_mode;
+
+		x_input = (int16_t)math2_ABoverC32(pstate.axis_x_accum, frameticks, 236);
+		y_input = (int16_t)math2_ABoverC32(pstate.axis_y_accum, frameticks, 236);
+		if ((pstate.player_craft->status_flags & 0x20) == 0) {
+			y_input = 0;
+			x_input = 0;
+		}
+
+		if (x_roll_mode) {
+			if (x_input) {
+				objects[pstate.object_idx].roll -= (int16_t)(2 * x_input);
+				pstate.player->move_dirty = pstate.player->orient_dirty = 1;
+			}
+			/* In roll mode the Y axis nudges the throttle. */
+			if (inputdeltay) {
+				if ((uint16_t)inputdeltay >= 0x8000 && (uint16_t)inputdeltay <= 0xE000) {
+					uint16_t cur = pstate.player_craft->throttle_speed;
+					pstate.player_craft->throttle_speed = (uint16_t)(cur + 0x100);
+					if (cur > pstate.player_craft->throttle_speed)
+						pstate.player_craft->throttle_speed = 0xFFFF;
+				} else if ((uint16_t)inputdeltay <= 0x8000 && (uint16_t)inputdeltay >= 0x2000) {
+					uint16_t cur = pstate.player_craft->throttle_speed;
+					pstate.player_craft->throttle_speed = (uint16_t)(cur - 0x100);
+					if (cur < pstate.player_craft->throttle_speed)
+						pstate.player_craft->throttle_speed = 0;
+				}
+			}
+		} else {
+			if (y_input || x_input) {
+				user_calcdeltapitch(y_input, (int16_t)-x_input, pstate.object_idx, pstate.player_craft);
+				pstate.player->move_dirty = pstate.player->orient_dirty = 1;
+			}
+			/* Bank into the turn. */
+			if (x_input)
+				objects[pstate.object_idx].roll -= x_input;
+		}
+	} else {
+		int16_t up_delta = (int16_t)math2_ABoverC32(inputdeltax, frameticks, 236);
+		int16_t side_delta = (int16_t)math2_ABoverC32(inputdeltay, frameticks, 236);
+		uint16_t zoom_btn;
+
+		camera.up_angle += up_delta;
+		camera.side_angle += side_delta;
+		zoom_btn = inputbuttons & 0xF;
+		if (zoom_btn == 1 || zoom_btn == 2) {
+			camera.view_zoom_rate += 32;
+			if ((uint16_t)camera.view_zoom_rate > 0x400)
+				camera.view_zoom_rate = 0x400;
+			if (zoom_btn == 1) {
+				camera.view_zoom -= (int16_t)math2_ABoverC32(camera.view_zoom_rate, frameticks, 236);
+				if (camera.view_zoom < 48)
+					camera.view_zoom = 48;
+			} else {
+				camera.view_zoom += (int16_t)math2_ABoverC32(camera.view_zoom_rate, frameticks, 236);
+				if (camera.view_zoom > 5120)
+					camera.view_zoom = 5120;
+			}
+		} else {
+			camera.view_zoom_rate = 32;
+		}
+	}
+#endif
 }

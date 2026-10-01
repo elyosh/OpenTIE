@@ -375,11 +375,9 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 // FUNCTION: TIE95 0x2E514
 uint16_t laser_createprojectilefromstatic(uint16_t static_obj_idx, uint16_t shooter_obj_idx) {
 	uint16_t fg_idx = staticobjects[static_obj_idx].fg_idx;
-	uint8_t warhead_kind = fg_array[fg_idx].warhead;
-	uint16_t ptype = warheadconvert[warhead_kind];
+	uint16_t ptype = warheadconvert[(int8_t)fg_array[fg_idx].warhead];
+	uint16_t obj_ref;
 	uint16_t slot;
-	FlightObject* p;
-	unsigned int ptype_idx;
 	int16_t proj_speed;
 	uint16_t wh;
 
@@ -392,56 +390,49 @@ uint16_t laser_createprojectilefromstatic(uint16_t static_obj_idx, uint16_t shoo
 		 * non-warhead same-side occupant to evict. Retaliation
 		 * pre-empts ordinary lasers of the same faction.
 		 * Demo: [44, 76); retail: [48, 80). = NUM_CRAFTS+16..WARHEAD_SLOT_END. */
-		uint8_t want_side = fg_array[fg_idx].side;
 		for (slot = NUM_CRAFTS + 16; slot < WARHEAD_SLOT_END; ++slot) {
-			const uint16_t occupant_species = objects[slot].ship_idx;
-			const unsigned int occupant_projectile_type_idx =
-				(unsigned int)occupant_species - WEAPON_SPECIES_BASE;
 			/* Projectile slots can still contain in-place impact animations. */
-			const uint8_t occupant_is_warhead = occupant_projectile_type_idx < WARHEAD_TYPE_COUNT &&
-												projectile_is_warhead_type[occupant_projectile_type_idx];
-			if (!occupant_is_warhead && objects[slot].side == want_side)
-				break;
+			if (!projectile_is_warhead_type[objects[slot].ship_idx - WEAPON_SPECIES_BASE]) {
+				int occupant_side = objects[slot].side;
+				if (occupant_side == (int8_t)fg_array[fg_idx].side)
+					break;
+			}
 		}
 	}
 	if (slot == WARHEAD_SLOT_END)
 		return 0xFFFF;
 
-	p = &objects[slot];
-	p->category = 1;
-	p->genus = 7; /* GENUS_PROJECTILE_NPC */
-	p->ship_idx = (uint8_t)ptype;
-	p->age_ticks = 1;
+	objects[slot].category = 1;
+	objects[slot].genus = 7; /* GENUS_PROJECTILE_NPC */
+	objects[slot].ship_idx = (uint8_t)ptype;
+	objects[slot].age_ticks = 1;
 
 	/* Tag self_idx with +0x3800 so create_getworldposition (and
 	 * downstream resolvers) route the reference through the static
 	 * table instead of the craft table. */
-	p->self_idx = (int16_t)(static_obj_idx + 0x3800);
-	p->ship_type_override = staticobjects[static_obj_idx].species;
-	p->side = fg_array[fg_idx].side;
-	p->pitch = 0;
-	p->roll = 0;
-	p->heading = 0;
+	obj_ref = static_obj_idx + 0x3800;
+	objects[slot].self_idx = (int16_t)obj_ref;
+	objects[slot].ship_type_override = staticobjects[static_obj_idx].species;
+	objects[slot].side = fg_array[fg_idx].side;
+	objects[slot].pitch = 0;
+	objects[slot].roll = 0;
+	objects[slot].heading = 0;
 
-	ptype_idx = ptype - WEAPON_SPECIES_BASE;
-	proj_speed = (int16_t)projectilevelocity[ptype_idx];
+	proj_speed = (int16_t)projectilevelocity[ptype - WEAPON_SPECIES_BASE];
 	warheads[slot - NUM_CRAFTS].min_speed = (uint16_t)proj_speed;
-	p->collision_radius = (int16_t)projectileweight[ptype_idx];
-	p->death_timer = (int16_t)(236 * projectilelife[ptype_idx]);
-	p->current_speed = proj_speed;
+	objects[slot].collision_radius = (int16_t)projectileweight[ptype - WEAPON_SPECIES_BASE];
+	objects[slot].death_timer = (int16_t)(236 * projectilelife[ptype - WEAPON_SPECIES_BASE]);
+	objects[slot].current_speed = proj_speed;
 
-	create_getworldposition((uint16_t)(static_obj_idx + 0x3800), 0);
-	p->world_x_prev = worldlocx;
-	p->world_y_prev = worldlocy;
-	p->world_z_prev = worldlocz + 384;
-	p->world_x = worldlocx;
-	p->world_y = worldlocy;
-	p->world_z = worldlocz + 384;
+	create_getworldposition(obj_ref, 0);
+	objects[slot].world_x = objects[slot].world_x_prev = worldlocx;
+	objects[slot].world_y = objects[slot].world_y_prev = worldlocy;
+	objects[slot].world_z = objects[slot].world_z_prev = worldlocz + 384;
 
 	wh = slot - NUM_CRAFTS;
 	warheads[wh].homing_tier = (uint8_t)((math2_getrandom() & 3) + 3);
 	warheads[wh].target_obj = shooter_obj_idx;
-	p->craft_ptr = (CraftData*)&warheads[wh];
+	objects[slot].craft_ptr = (CraftData*)&warheads[wh];
 
 	TIE_FLIGHT_TRACE_WEAPON_SPAWN(slot, (uint16_t)(static_obj_idx + OBJ_REF_STATIC_BASE), shooter_obj_idx);
 	laser_warnplayer(wh);
@@ -454,54 +445,48 @@ uint16_t laser_createprojectilefromstatic(uint16_t static_obj_idx, uint16_t shoo
 // FUNCTION: TIE95 0x2DF68
 uint16_t laser_firemissile(uint16_t shooter_obj_idx, uint16_t weapon_slot_idx, uint16_t projectile_type,
 						   uint16_t group_idx) {
-	WeaponSlot* ws = &craftptr->weapon_slots[weapon_slot_idx];
-	uint16_t slot;
-	uint16_t wh;
+	uint16_t wh = 0xFFFF;
 
-	if (ws->type == 0)
-		return 0xFFFF; /* no weapon */
-	if (ws->ammo == 0)
-		return 0xFFFF; /* empty rack */
+	/* Need a loaded weapon rack with ammo left. */
+	if (craftptr->weapon_slots[weapon_slot_idx].type != 0 && craftptr->weapon_slots[weapon_slot_idx].ammo > 0) {
+		wh = laser_createprojectile(shooter_obj_idx, weapon_slot_idx, projectile_type);
+		if (wh != (uint16_t)-1) {
+			/* Left/right tube toggle (only meaningful for group 0/1 racks). */
+			if (group_idx < 2)
+				craftptr->missile_armed[group_idx] ^= 0x80u;
 
-	slot = laser_createprojectile(shooter_obj_idx, weapon_slot_idx, projectile_type);
-	if (slot == 0xFFFF)
-		return 0xFFFF;
+			craftptr->warhead_fired++;
+			if (shooter_obj_idx == pstate.object_idx)
+				pstate.player_warhead_fired++;
 
-	/* Left/right tube toggle (only meaningful for group 0/1 racks). */
-	if (group_idx < 2)
-		craftptr->missile_armed[group_idx] ^= 0x80u;
+			fsfx_triggerlasersfx(wh);
 
-	craftptr->warhead_fired++;
-	if (shooter_obj_idx == pstate.object_idx)
-		pstate.player_warhead_fired++;
+			if (!inflight_unlimited || shooter_obj_idx != pstate.object_idx)
+				craftptr->weapon_slots[weapon_slot_idx].ammo--;
 
-	fsfx_triggerlasersfx(slot);
+			wh -= NUM_CRAFTS;
 
-	if (!inflight_unlimited || shooter_obj_idx != pstate.object_idx)
-		craftptr->weapon_slots[weapon_slot_idx].ammo--;
+			if (group_idx < 2) {
+				/* Homing tier = current lock strength (missile_count_total, a
+				 * frame-accumulated counter) divided by 236 (ticks-per-sec).
+				 * Clamp at 6 tiers. */
+				warheads[wh].homing_tier = (uint8_t)((int16_t)craftptr->missile_count_total / 236);
+				if (warheads[wh].homing_tier > 6)
+					warheads[wh].homing_tier = 6;
+			}
 
-	wh = slot - NUM_CRAFTS;
+			if (shooter_obj_idx == pstate.object_idx) {
+				warheads[wh].target_obj = pstate.target_obj_idx;
+				warheads[wh].sub_obj_idx = (uint16_t)pstate.radar_target1;
+			} else {
+				warheads[wh].target_obj = (uint16_t)craftptr->ai_target_ref;
+				warheads[wh].sub_obj_idx = (uint16_t)craftptr->link_target_2E;
+			}
 
-	if (group_idx < 2) {
-		/* Homing tier = current lock strength (missile_count_total, a
-		 * frame-accumulated counter) divided by 236 (ticks-per-sec).
-		 * Clamp at 6 tiers. */
-		int16_t t = (int16_t)(craftptr->missile_count_total / 236);
-		if (t > 6)
-			t = 6;
-		warheads[wh].homing_tier = (uint8_t)t;
+			TIE_FLIGHT_TRACE_TARGET_CHANGE((uint16_t)(wh + NUM_CRAFTS), 0xFFFFu, warheads[wh].target_obj);
+			laser_warnplayer(wh);
+		}
 	}
-
-	if (shooter_obj_idx == pstate.object_idx) {
-		warheads[wh].target_obj = pstate.target_obj_idx;
-		warheads[wh].sub_obj_idx = (uint16_t)pstate.radar_target1;
-	} else {
-		warheads[wh].target_obj = (uint16_t)craftptr->ai_target_ref;
-		warheads[wh].sub_obj_idx = (uint16_t)craftptr->link_target_2E;
-	}
-
-	TIE_FLIGHT_TRACE_TARGET_CHANGE(slot, 0xFFFFu, warheads[wh].target_obj);
-	laser_warnplayer(wh);
 	return wh;
 }
 
@@ -510,106 +495,81 @@ uint16_t laser_firemissile(uint16_t shooter_obj_idx, uint16_t weapon_slot_idx, u
 /* ================================================================== */
 // FUNCTION: TIE95 0x2D9AC
 void laser_firelasersystem(uint16_t shooter_obj_idx, uint16_t group_idx) {
-	uint8_t species_idx;
-	uint8_t* cfg;
-	uint8_t fire_mode;
-	uint16_t start_slot;
-	uint16_t end_slot;
 	uint16_t slot_stride;
-	int32_t shots_remaining;
-	uint8_t laser_start;
-	uint8_t laser_end;
-	uint16_t shots_fired;
-	uint16_t final_laser_type;
 	uint16_t i;
+	uint16_t end_slot;
+	uint16_t species_idx;
+	uint16_t laser_type;
+	uint16_t shots_remaining;
+	uint16_t start_slot;
+	uint16_t shots_fired;
 
 	craftptr = objects[shooter_obj_idx].craft_ptr;
 	species_idx = craftptr->species_idx;
 	if (craftptr->ai_anim_flags)
 		return; /* craft is locked in animation */
 
-	/* The byte at +0xD5 + group_idx is a fire mode:
-	 *   0 = not firing
-	 *   1 = single-shot
-	 *   2 = alternating
-	 *   3 = full burst
+	/* Fire mode per bank:
+	 *   1 = single-shot (cycle through the bank's hardpoints)
+	 *   2 = alternating (every other hardpoint, flipping parity)
+	 *   3 = full burst (every hardpoint in the bank)
 	 *
 	 * The player cycles it in USER_inputforplane; AI sets it to 1..3.
 	 */
-	cfg = (uint8_t*)craftptr + group_idx; /* + {213,215,217} style */
-	fire_mode = cfg[0xD5];                /* aka laser_owner_player[group_idx] */
-
-	start_slot = 0;
-	end_slot = 0;
-	slot_stride = 1;
-	shots_remaining = 0;
-
-	laser_start = spec_data[species_idx].laser_start[group_idx];
-	laser_end = spec_data[species_idx].laser_end[group_idx];
-
-	if (fire_mode == 1) {
-		/* single-shot: fire laser_first_slot[group], bump/wrap. */
-		start_slot = cfg[0xD9]; /* laser_first_slot[group_idx] */
+	shots_fired = 0;
+	switch (craftptr->laser_owner_player[group_idx]) {
+	case 3:
+		start_slot = spec_data[species_idx].laser_start[group_idx];
+		end_slot = spec_data[species_idx].laser_end[group_idx];
+		shots_remaining = end_slot - start_slot + 1;
+		slot_stride = 1;
+		break;
+	case 1:
+		start_slot = craftptr->laser_first_slot[group_idx];
 		end_slot = start_slot;
-		cfg[0xD9] = (uint8_t)(start_slot + 1);
-		if (cfg[0xD9] > laser_end)
-			cfg[0xD9] = laser_start;
+		if (++craftptr->laser_first_slot[group_idx] > spec_data[species_idx].laser_end[group_idx])
+			craftptr->laser_first_slot[group_idx] = spec_data[species_idx].laser_start[group_idx];
 		shots_remaining = 1;
 		slot_stride = 1;
-	} else if (fire_mode == 2) {
-		/* alternating: flip even/odd and fire every-other. */
-		start_slot = cfg[0xD9];
-		cfg[0xD9] = (uint8_t)(start_slot ^ 1);
-		if (cfg[0xD9] > laser_end)
-			cfg[0xD9] = laser_start;
-		end_slot = laser_end;
-		shots_remaining = (laser_end - laser_start + 1) / 2;
+		break;
+	case 2:
+		start_slot = craftptr->laser_first_slot[group_idx];
+		craftptr->laser_first_slot[group_idx] = (uint8_t)(start_slot ^ 1);
+		if (craftptr->laser_first_slot[group_idx] > spec_data[species_idx].laser_end[group_idx])
+			craftptr->laser_first_slot[group_idx] = spec_data[species_idx].laser_start[group_idx];
+		end_slot = spec_data[species_idx].laser_end[group_idx];
+		shots_remaining = (spec_data[species_idx].laser_end[group_idx] - spec_data[species_idx].laser_start[group_idx] + 1) / 2;
 		slot_stride = 2;
-	} else if (fire_mode == 3) {
-		/* full burst: all slots in the group. */
-		start_slot = laser_start;
-		end_slot = laser_end;
-		shots_remaining = laser_end - start_slot + 1;
-		slot_stride = 1;
-	} else {
-		return; /* mode 0 or unknown -- no fire */
+		break;
 	}
 
-	shots_fired = 0;
-	final_laser_type = 0;
-
 	for (i = start_slot; i <= end_slot; i += slot_stride) {
-		WeaponSlot* ws = &craftptr->weapon_slots[i];
-		uint16_t ltype;
-		uint16_t pslot;
-		uint16_t wh;
+		if (craftptr->weapon_slots[i].type != 0 && (int8_t)craftptr->weapon_slots[i].charge > 0) {
+			uint16_t pslot;
 
-		if (ws->type != 0 && (int8_t)ws->charge > 0) {
-			ltype = spec_data[species_idx].laser_type[group_idx];
-			if (ws->charge >= 64)
-				ltype++; /* charged variant */
-			final_laser_type = ltype;
+			laser_type = spec_data[species_idx].laser_type[group_idx];
+			if ((int8_t)craftptr->weapon_slots[i].charge >= 64)
+				laser_type++; /* charged variant */
 
-			pslot = laser_createprojectile(shooter_obj_idx, i, ltype);
+			pslot = laser_createprojectile(shooter_obj_idx, i, laser_type);
 			if (pslot != 0xFFFF) {
 				if (shooter_obj_idx == pstate.object_idx) {
 					if (!inflight_unlimited)
 						craftptr->weapon_slots[i].charge -= 4;
 				} else {
-					craftptr->weapon_slots[i].charge -= 1;
+					craftptr->weapon_slots[i].charge--;
 				}
-				if ((int8_t)craftptr->weapon_slots[i].charge < 0)
-					craftptr->weapon_slots[i].charge = 0;
 
 				if (shots_fired < 2)
 					fsfx_triggerlasersfx(pslot);
 
-				wh = pslot - NUM_CRAFTS;
-				if (shooter_obj_idx == pstate.object_idx)
-					warheads[wh].target_obj = pstate.target_obj_idx;
-				else
-					warheads[wh].target_obj = (uint16_t)craftptr->ai_target_ref;
+				if ((int8_t)craftptr->weapon_slots[i].charge < 0)
+					craftptr->weapon_slots[i].charge = 0;
 
+				if (shooter_obj_idx == pstate.object_idx)
+					warheads[(uint16_t)(pslot - NUM_CRAFTS)].target_obj = pstate.target_obj_idx;
+				else
+					warheads[(uint16_t)(pslot - NUM_CRAFTS)].target_obj = (uint16_t)craftptr->ai_target_ref;
 				shots_fired++;
 			}
 		}
@@ -617,7 +577,7 @@ void laser_firelasersystem(uint16_t shooter_obj_idx, uint16_t group_idx) {
 			break;
 	}
 
-	if (final_laser_type == 141 || final_laser_type == 142) {
+	if (laser_type == 141 || laser_type == 142) {
 		/* Ion cannon / disruptor types counted as 'missile_fired'. */
 		craftptr->missile_fired += shots_fired;
 		if (shooter_obj_idx == pstate.object_idx)
@@ -755,25 +715,19 @@ void laser_fireplayerweapon(void) {
 /* ================================================================== */
 // FUNCTION: TIE95 0x2CDD0
 void laser_weaponsfire(void) {
-	CraftData* saved_craftptr = craftptr;
-
-	/* ----- Phase 1: missile lock gauge --------------------------- */
 	uint16_t beam_target;
 	uint32_t best_beamdist;
-	int beam_firing_now;
-	CraftData* cp_outer;
+	uint16_t i;
 	uint16_t n;
 	uint16_t s;
 
+	/* ----- Phase 1: missile lock gauge --------------------------- */
 	if (pstate.player_weapon_mode) {
 		uint16_t missile_hp = spec_data[pstate.player_spec_num].missile_start[pstate.player_weapon_group];
-		int has_ammo = (int)(pstate.player_craft->weapon_slots[missile_hp].ammo +
-							 pstate.player_craft->weapon_slots[missile_hp + 1].ammo);
+		uint16_t ammo = pstate.player_craft->weapon_slots[missile_hp].ammo;
+		ammo += pstate.player_craft->weapon_slots[missile_hp + 1].ammo;
 
-		if (pstate.target_obj_idx == 0xFFFF || !has_ammo) {
-			pstate.radar_subtarget_state = 0;
-			pstate.player_craft->missile_count_total = 0;
-		} else {
+		if (pstate.target_obj_idx != 0xFFFF && ammo) {
 			uint32_t lock_range;
 
 			pai_distancebetween(pstate.object_idx, pstate.target_obj_idx);
@@ -781,7 +735,7 @@ void laser_weaponsfire(void) {
 			lock_range = LOCK_RANGE_FIGHTER;
 			if (pstate.target_obj_idx < NUM_CRAFTS) {
 				uint8_t tgenus = objects[pstate.target_obj_idx].genus;
-				if (tgenus == 3 || tgenus == 4 || tgenus == 5)
+				if (tgenus == 4 || tgenus == 5 || tgenus == 3)
 					lock_range = LOCK_RANGE_CAPSHIP;
 			}
 
@@ -790,33 +744,34 @@ void laser_weaponsfire(void) {
 
 				pstate.player_craft->missile_count_total += frameticks;
 
-				thresh = (pstate.player_spec_num == spec_getspecnum(0xC)) ? (uint16_t)590 : (uint16_t)1180;
-				pstate.radar_subtarget_state = (pstate.player_craft->missile_count_total < thresh) ? 1 : 2;
+				thresh = (spec_getspecnum(0xC) == pstate.player_spec_num) ? (uint16_t)590 : (uint16_t)1180;
+				if ((int16_t)pstate.player_craft->missile_count_total >= thresh)
+					pstate.radar_subtarget_state = 2;
+				else
+					pstate.radar_subtarget_state = 1;
 			} else {
 				if ((int16_t)pstate.player_craft->missile_count_total > 0) {
-					int16_t mct = (int16_t)(pstate.player_craft->missile_count_total - frameticks);
-					pstate.player_craft->missile_count_total = mct;
-					if (mct < 0)
+					pstate.player_craft->missile_count_total -= frameticks;
+					if ((int16_t)pstate.player_craft->missile_count_total < 0)
 						pstate.player_craft->missile_count_total = 0;
 				}
 				pstate.radar_subtarget_state = 0;
 			}
+		} else {
+			pstate.radar_subtarget_state = 0;
+			pstate.player_craft->missile_count_total = 0;
 		}
 	}
-	craftptr = saved_craftptr;
 
 	/* ----- Phase 2: beam weapon -------------------------------- */
 	beam_target = 0xFFFF;
 	best_beamdist = 0x20000;
-	beam_firing_now = 0;
 
 	/* Retail also requires status_flags & 0x100 (beam subsystem online —
 	 * cleared when ion-drained or boarded) and !pstate.hyperin_state (post-eject
 	 * the cockpit is gone). Demo had only the inner two checks. */
 	if ((pstate.player_craft->status_flags & 0x100) && (pstate.player_craft->beam_state & 0x80) &&
 		pstate.player_craft->beam_charge > 0 && !pstate.hyperin_state) {
-		uint16_t i;
-
 		if (!timers[TIMER_LASER_BEAM_DRAIN]) {
 			int16_t bc = (int16_t)(pstate.player_craft->beam_charge - 83);
 			timers[TIMER_LASER_BEAM_DRAIN] = 59;
@@ -826,9 +781,7 @@ void laser_weaponsfire(void) {
 		}
 
 		for (i = 0; i < NUM_CRAFTS; ++i) {
-			uint8_t ship_idx = objects[i].ship_idx;
-			craftptr = saved_craftptr;
-			if (!ship_idx || i == pstate.object_idx)
+			if (!objects[i].ship_idx || i == pstate.object_idx)
 				continue;
 
 			objects[i].craft_ptr->beam_state &= 0x80;
@@ -851,157 +804,122 @@ void laser_weaponsfire(void) {
 		} else {
 			bluetarget = 0xFFFF;
 		}
-		beam_firing_now = 1;
+		fsfx_triggerbeamsfx(1);
 	} else {
 		bluetarget = 0xFFFF;
+		fsfx_triggerbeamsfx(0);
 	}
-	craftptr = saved_craftptr;
-	fsfx_triggerbeamsfx(beam_firing_now);
 
 	/* ----- Phase 3: per-second status update -------------------- */
-	cp_outer = craftptr;
 	if (!timers[TIMER_LASER_STATUS]) {
-		uint16_t obj_i;
-
 		timers[TIMER_LASER_STATUS] = 236;
 
-		for (obj_i = 0; obj_i < NUM_CRAFTS; ++obj_i) {
-			uint8_t g;
-			CraftData* c;
-			CraftData* cl;
-
-			craftptr = cp_outer;
-			if (!objects[obj_i].ship_idx)
+		for (i = 0; i < NUM_CRAFTS; ++i) {
+			if (!objects[i].ship_idx)
 				continue;
-			if (objects[obj_i].category)
+			if (objects[i].category)
+				continue;
+			if (objects[i].genus != 0 /* GENUS_FIGHTER */ && objects[i].genus != 1 /* GENUS_TRANSPORT */)
 				continue;
 
-			g = objects[obj_i].genus;
-			if (g != 0 /* GENUS_FIGHTER */ && g != 1 /* GENUS_TRANSPORT */)
-				continue;
+			craftptr = objects[i].craft_ptr;
 
-			c = objects[obj_i].craft_ptr;
-
-			if (obj_i != pstate.object_idx) {
-				int16_t charge_sum;
+			if (i != pstate.object_idx) {
+				uint16_t charge_sum;
 				uint16_t weap_cnt;
 				uint16_t j;
 
-				if (c->subsystem_active & 1) {
-					uint16_t base = (uint16_t)(2 * spec_data[c->species_idx].shield_points);
-					uint8_t pwr;
-					if (c->forward_shield > 0) {
-						int pct = math2_percentage((uint16_t)c->forward_shield, base);
-						if (pct >= 0x4000)
-							pwr = (pct >= 0xFFFF) ? 2 : 3;
+				if (craftptr->subsystem_active & 1) {
+					uint16_t base = (uint16_t)(2 * spec_data[craftptr->species_idx].shield_points);
+					if (craftptr->forward_shield > 0) {
+						uint16_t pct = math2_percentage((uint16_t)craftptr->forward_shield, base);
+						if (pct < 0x4000)
+							craftptr->shield_power = 4;
+						else if (pct < 0xFFFF)
+							craftptr->shield_power = 3;
 						else
-							pwr = 4;
+							craftptr->shield_power = 2;
 					} else {
-						pwr = 4;
+						craftptr->shield_power = 4;
 					}
-					c->shield_power = pwr;
 				}
 
-				/* Charges can be transiently negative (a shot fires by
-				 * driving the byte below 0; regen pulls it back). Retail
-				 * sign-extends each byte (movsx) and divides signed.
-				 * Using uint16_t here would force unsigned division and
-				 * mis-classify drained banks as fully charged. */
 				charge_sum = 0;
 				weap_cnt = 0;
-				for (j = 0; j < (uint16_t)c->weapon_group_cnt; ++j) {
-					WeaponSlot* w = &c->weapon_slots[j];
-					if (w->type) {
+				for (j = 0; j < craftptr->weapon_group_cnt; ++j) {
+					if (craftptr->weapon_slots[j].type) {
 						weap_cnt++;
-						charge_sum += (int8_t)w->charge;
+						charge_sum += (int8_t)craftptr->weapon_slots[j].charge;
 					}
 				}
 				if (weap_cnt) {
-					int16_t avg = (int16_t)(charge_sum / (int16_t)weap_cnt);
-					uint8_t pwr = (avg >= 32) ? ((avg >= 96) ? 2 : 3) : 4;
-					c->laser_power = pwr;
+					int16_t avg = (int16_t)(charge_sum / weap_cnt);
+					if (avg < 32)
+						craftptr->laser_power = 4;
+					else if (avg < 96)
+						craftptr->laser_power = 3;
+					else
+						craftptr->laser_power = 2;
 				}
 			}
-
-			craftptr = c;
 
 			/* Shield regen (if the subsystem bit is set). */
-			if (c->status_flags & 1) {
-				int16_t delta = (int16_t)(20 * (c->shield_power - 2));
+			if (craftptr->status_flags & 1) {
+				int16_t delta = (int16_t)(20 * (craftptr->shield_power - 2));
 				if (delta) {
-					uint16_t shield_side;
-					int16_t shield_delta;
-					if (c->is_player_craft) {
-						if (c->is_player_craft == 2) {
-							/* All to rear. */
-							shield_delta = delta;
-							shield_side = 1;
-						} else {
-							/* Half to front, half to rear. */
-							int16_t half = (int16_t)(delta / 2);
-							laser_chargeshields(obj_i, 0, half);
-							shield_delta = half;
-							shield_side = 1;
-						}
+					if (!craftptr->is_player_craft) {
+						laser_chargeshields(i, 0, delta);
+					} else if (craftptr->is_player_craft == 2) {
+						/* All to rear. */
+						laser_chargeshields(i, 1, delta);
 					} else {
-						shield_delta = delta;
-						shield_side = 0;
+						/* Half to front, half to rear. */
+						int16_t half = (int16_t)(delta / 2);
+						laser_chargeshields(i, 0, half);
+						laser_chargeshields(i, 1, half);
 					}
-					laser_chargeshields(obj_i, shield_side, shield_delta);
 				}
 			}
 
-			cl = craftptr;
-
 			/* Laser-charge regen. */
-			if (cl->status_flags & 0x10) {
+			if (craftptr->status_flags & 0x10) {
 				uint16_t k;
 
-				for (k = 0; k < (uint16_t)cl->weapon_group_cnt; ++k) {
-					uint8_t type = cl->weapon_slots[k].type;
-					int16_t power;
+				for (k = 0; k < craftptr->weapon_group_cnt; ++k) {
 					int16_t step;
-					int8_t before;
-					int8_t after;
 
-					if (!type || type == 2)
+					if (!craftptr->weapon_slots[k].type || craftptr->weapon_slots[k].type == 2)
 						continue;
 
-					power = (int16_t)(cl->laser_power - 2);
-					if (!cl->slam_active)
-						power = (int16_t)(cl->laser_power - 6);
-					step = (int16_t)(2 * power);
+					step = (int16_t)(craftptr->laser_power - 2);
+					if (!craftptr->slam_active)
+						step -= 4;
+					step *= 2;
 
-					before = (int8_t)cl->weapon_slots[k].charge;
-					after = (int8_t)(before + step);
-					cl->weapon_slots[k].charge = (uint8_t)after;
-
-					if (step < 0 && after < 0)
-						cl->weapon_slots[k].charge = 0;
-					if (step > 0 && (cl->weapon_slots[k].charge & 0x80u))
-						cl->weapon_slots[k].charge = 127;
+					craftptr->weapon_slots[k].charge += step;
+					if (step < 0 && (int8_t)craftptr->weapon_slots[k].charge < 0)
+						craftptr->weapon_slots[k].charge = 0;
+					if (step > 0 && (int8_t)craftptr->weapon_slots[k].charge < 0)
+						craftptr->weapon_slots[k].charge = 127;
 				}
 			}
 
 			/* SLAM overdrive: when it's off (==0) and all weapon
 			 * charges have drained, latch it DISENGAGED (-1). */
-			if (!cl->slam_active) {
-				int any = 0;
+			if (!craftptr->slam_active) {
+				int16_t any = 0;
 				uint16_t j;
 
-				for (j = 0; j < (uint16_t)cl->weapon_group_cnt; ++j) {
-					if ((int8_t)cl->weapon_slots[j].charge > 0) {
+				for (j = 0; j < craftptr->weapon_group_cnt; ++j) {
+					if ((int8_t)craftptr->weapon_slots[j].charge > 0)
 						any = 1;
-						break;
-					}
 				}
 				if (!any) {
-					cl->slam_active = SLAM_DISENGAGED;
+					craftptr->slam_active = SLAM_DISENGAGED;
 					msg_messageprintf(MSG_OVERDRIVE_DISENGAGED);
 					fsfx_triggersfx(0x6C, 0xFFFF);
 				}
 			}
-			cp_outer = cl;
 		}
 
 		/* Player beam regen. */
@@ -1018,7 +936,6 @@ void laser_weaponsfire(void) {
 
 	/* ----- Phase 4: per-frame AI fire loop ---------------------- */
 	for (n = 0; n < NUM_CRAFTS; ++n) {
-		CraftData* c;
 		uint16_t g;
 		uint16_t k;
 		uint16_t m;
@@ -1028,66 +945,61 @@ void laser_weaponsfire(void) {
 		if (objects[n].category)
 			continue;
 
-		c = objects[n].craft_ptr;
-		if ((c->beam_state & 2) || c->ion_drain_timer)
+		craftptr = objects[n].craft_ptr;
+		if ((craftptr->beam_state & 2) || craftptr->ion_drain_timer)
 			continue;
 
-		craftptr = c;
-
-		for (g = 0; g < (uint16_t)c->laser_group_cnt; ++g) {
-			const int16_t cooldown_before = (int16_t)c->laser_cooldown[g];
-			int16_t cd = cooldown_before;
+		for (g = 0; g < craftptr->laser_group_cnt; ++g) {
+			int16_t cd = (int16_t)craftptr->laser_cooldown[g];
+#ifdef TIE_MODERN
+			const int16_t cooldown_before = cd;
+#endif
 			bool ready;
 
 			if (cd) {
 				cd -= (int16_t)frameticks;
 				if (cd < 0)
 					cd = 0;
-				c->laser_cooldown[g] = (uint16_t)cd;
+				craftptr->laser_cooldown[g] = (uint16_t)cd;
 			}
+			if (n == pstate.object_idx)
+				continue;
 #ifdef TIE_MODERN
 			if (TieFlightTiming_IsHighRate())
 				ready = cooldown_before <= (int16_t)frameticks;
 			else
 #endif
 				ready = cd < (int16_t)frameticks;
-			if (n != pstate.object_idx && ready && c->laser_owner_player[g]) {
-				if ((c->status_flags & 0x10) && !c->flight_flag)
+			if (ready && craftptr->laser_owner_player[g]) {
+				if ((craftptr->status_flags & 0x10) && !craftptr->flight_flag)
 					laser_firelasersystem(n, g);
-				c = craftptr;
 
-				--c->laser_burst_remaining[g];
+				--craftptr->laser_burst_remaining[g];
 #ifdef TIE_MODERN
 				if (TieFlightTiming_IsHighRate())
-					c->laser_cooldown[g] += 2 * TieFlightTiming_CompatibilityTicks();
+					craftptr->laser_cooldown[g] += 2 * TieFlightTiming_CompatibilityTicks();
 				else
 #endif
-					c->laser_cooldown[g] += 2 * frameticks;
-				if (c->laser_burst_remaining[g] == 0)
-					c->laser_owner_player[g] = 0; /* burst spent: stop AI firing this group */
+					craftptr->laser_cooldown[g] += 2 * frameticks;
+				if (!craftptr->laser_burst_remaining[g])
+					craftptr->laser_owner_player[g] = 0; /* burst spent: stop AI firing this group */
 			}
 		}
 
 		/* Turrets (weapon_slots[k].type == 2). */
-		for (k = 0; k < (uint16_t)c->weapon_group_cnt; ++k) {
-			uint8_t ttype = c->weapon_slots[k].type;
-			craftptr = c;
-			if (ttype == 2) {
-				uint16_t ttarget = c->weapon_slots[k].target_obj;
-				if (ttarget != 0xFFFF)
-					starship_firelasergunner(n, k, ttarget);
-			}
-			c = craftptr;
+		for (k = 0; k < craftptr->weapon_group_cnt; ++k) {
+			if (craftptr->weapon_slots[k].type == 2 && craftptr->weapon_slots[k].target_obj != 0xFFFF)
+				starship_firelasergunner(n, k, craftptr->weapon_slots[k].target_obj);
 		}
 
 		/* Missile cooldown decrement. */
-		for (m = 0; m < (uint16_t)c->missile_group_cnt; ++m) {
-			uint16_t mcd = c->missile_state[m];
+		for (m = 0; m < craftptr->missile_group_cnt; ++m) {
+			int16_t mcd = (int16_t)craftptr->missile_state[m];
 			if (mcd) {
-				int16_t nmcd = (int16_t)(mcd - frameticks);
-				if (nmcd < 0)
-					nmcd = 0;
-				c->missile_state[m] = (uint16_t)nmcd;
+				mcd -= (int16_t)frameticks;
+				if (mcd < 0)
+					mcd = 0;
+				craftptr->missile_state[m] = (uint16_t)mcd;
 			}
 		}
 	}

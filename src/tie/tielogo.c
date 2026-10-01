@@ -354,7 +354,7 @@ static void tielogo_end_View(int32_t frame_num) {
 
 // FUNCTION: TIE95 0x72780
 // FUNCTION: TIE98 0x48F830
-int16_t tielogo_TieLogo(SceneHeadStruct* scene_head) {
+int tielogo_TieLogo(SceneHeadStruct* scene_head) {
 	ResFile* resource;
 	Rect frame;
 

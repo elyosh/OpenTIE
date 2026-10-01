@@ -60,6 +60,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* The original TU calls the library strcpy() rather than the inline form. */
+#ifdef __WATCOMC__
+#pragma function(strcpy)
+#endif
+
 enum {
 	STREAM_BUFFER_SIZE = 128000,
 };
@@ -734,46 +739,88 @@ static void play1_Chain_Scene(void) {
 
 /* ------------------------------------------------------------------ */
 
+#ifdef TIE_MODERN
+/*
+ * Scenes after which retail restores 20fps once the view ends (every
+ * scene whose film case changes the frame rate except 740). The modern
+ * view task takes the answer up front because it runs the view
+ * asynchronously.
+ */
+static bool play1_Scene_Changes_Frame_Rate(int16_t cur) {
+	switch (cur) {
+		case 10:
+		case 30:
+		case 31:
+		case 32:
+		case 50:
+		case 60:
+		case 61:
+		case 70:
+		case 71:
+		case 72:
+		case 500:
+		case 510:
+		case 520:
+		case 530:
+		case 531:
+		case 550:
+		case 560:
+		case 570:
+		case 571:
+		case 572:
+		case 573:
+		case 580:
+		case 581:
+		case 590:
+		case 591:
+		case 600:
+		case 601:
+		case 602:
+		case 603:
+		case 610:
+		case 620:
+		case 621:
+		case 622:
+		case 623:
+		case 700:
+		case 710:
+		case 720:
+		case 730:
+			return true;
+		default:
+			return false;
+	}
+}
+
+#endif
 /*
  * Main cutscene entry. Looks up the scene in play1_cur_scene[], selects
  * resources, film name, frame rate, creates the film, runs the view,
- * and cleans up on exit.
- *
- * The scene switch below was verified against the binary's nested
- * if-else tree. Actions:
- *   (default)  = copy film name, no frame rate change
- *   24fps      = set 24fps + copy film name
- *   20fps      = set 20fps + copy film name
- *   +bridge    = 24fps + film + file2 = "bridge.lfd" (resource[6])
- *   +emperor   = 24fps + film + file2 = "emperor.lfd" (resource[4])
- *   +awards    = copy film + file2 = "awards.lfd" (resource[27])
+ * and cleans up on exit. Scenes that changed the frame rate get 20fps
+ * restored after the view, except 740 which retail leaves at 20fps.
  */
 // FUNCTION: TIE95 0x77CE0
 // FUNCTION: TIE98 0x4682D0
-int16_t play1_Play1(SceneHeadStruct* the_head) {
+int play1_Play1(SceneHeadStruct* the_head) {
 	char name[16];
 	Rect r;
-#ifdef TIE_MODERN
-	LandruSurfaceSet surface_set = LANDRU_SURFACE_VGA;
-#endif
-
-	int i;
+	uint16_t i;
 	int16_t scene;
 	ResFile* file;
 	ResFile* file2;
-	int16_t cur;
-	bool rate_changed;
-
 #ifdef TIE_MODERN
+	LandruSurfaceSet surface_set = LANDRU_SURFACE_VGA;
+
 	TiePlay1_SelectDataSet();
 #endif
+
 	for (i = 0; i < 205; i++)
 		wrap_table[i] = 320 * i;
 	wrap = 312;
 
 	scene = shellext_Get_Cur_Scene();
 	if (scene == SCENE_CUT_900)
-		return 0;
+		return xerror_Get_Landru_Exit();
 
 #ifdef TIE_MODERN
 	/* TIE98 leaves the TOTRAIN and TOCOMBAT transitions on the
@@ -786,42 +833,39 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 	}
 
 #endif
-
-	for (play1_id = 0; scene != play1_cur_scene[play1_id] && play1_cur_scene[play1_id]; play1_id++)
-		;
+	play1_id = 0;
+	while (scene != play1_cur_scene[play1_id] && play1_cur_scene[play1_id])
+		play1_id++;
 	if (!play1_cur_scene[play1_id])
-		return 0;
+		return xerror_Get_Landru_Exit();
 
 	file = shellext_Open_Empire_Resource(play1_resource_str[play1_id]);
-	file2 = NULL;
 	xcanvas_Get_Drawing_Canvas_Bounds(&r);
+	file2 = NULL;
 
-	cur = play1_cur_scene[play1_id];
-	rate_changed = false;
+	switch (play1_cur_scene[play1_id]) {
+		/* Scene 390: secret medal film */
+		case 390:
+			strcpy(name, secret_film_str[shipext_Get_Secret_Medal() - 1]);
+			break;
 
-	switch (cur) {
-		/* 24fps, standard film */
-		case 30:
-		case 31:
-		case 32:
-		case 50:
-		case 70:
-		case 500:
-		case 510:
-		case 530:
-		case 531:
-		case 550:
-		case 560:
-		case 570:
-		case 571:
-		case 572:
-		case 573:
-		case 700:
-		case 710:
-		case 720:
+		/* Scene 270: launch ship resource */
+		case 270:
+			shipext_Get_Launch_Name(name);
+			file2 = file;
+			file = shipext_Open_Launch_Resource();
+			break;
+
+		/* 24fps + file2 = "bridge.lfd" */
+		case 520:
 			xtimer_Set_Frame_Rate(24);
 			strcpy(name, play1_film_str[play1_id]);
-			rate_changed = true;
+			file2 = shellext_Open_Empire_Resource(play1_resource_str[6]);
+			break;
+
+		case 70:
+			xtimer_Set_Frame_Rate(24);
+			strcpy(name, play1_film_str[play1_id]);
 			break;
 
 		/* 20fps, standard film */
@@ -830,52 +874,74 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 		case 61:
 		case 71:
 		case 72:
-		case 600:
-		case 601:
-		case 602:
-		case 603:
 		case 610:
 		case 620:
 		case 621:
 		case 622:
 			xtimer_Set_Frame_Rate(20);
 			strcpy(name, play1_film_str[play1_id]);
-			rate_changed = true;
 			break;
 
-		/* 24fps + file2 = "bridge.lfd" (resource[6]) */
-		case 520:
-		case 581:
+		case 600:
+			xtimer_Set_Frame_Rate(20);
+			strcpy(name, play1_film_str[play1_id]);
+			break;
+
+		case 601:
+			xtimer_Set_Frame_Rate(20);
+			strcpy(name, play1_film_str[play1_id]);
+			break;
+
+		case 602:
+			xtimer_Set_Frame_Rate(20);
+			strcpy(name, play1_film_str[play1_id]);
+			break;
+
+		case 603:
+			xtimer_Set_Frame_Rate(20);
+			strcpy(name, play1_film_str[play1_id]);
+			break;
+
+		/* 24fps, standard film */
+		case 30:
+		case 31:
+		case 32:
+		case 50:
+		case 500:
+		case 510:
+		case 530:
+		case 531:
+		case 550:
+		case 560:
+		case 700:
+		case 710:
+		case 720:
 			xtimer_Set_Frame_Rate(24);
 			strcpy(name, play1_film_str[play1_id]);
-			file2 = shellext_Open_Empire_Resource(play1_resource_str[6]);
-			rate_changed = true;
 			break;
 
-		/* 24fps + file2 = "emperor.lfd" (resource[4]) */
+		/* 24fps + file2 = "emperor.lfd" */
 		case 590:
 		case 591:
 		case 730:
 			xtimer_Set_Frame_Rate(24);
 			strcpy(name, play1_film_str[play1_id]);
 			file2 = shellext_Open_Empire_Resource(play1_resource_str[4]);
-			rate_changed = true;
 			break;
 
-		/* 20fps + file2 = "scene10.lfd" (resource[80]) — retail-only */
-		case 623:
-			xtimer_Set_Frame_Rate(20);
-			strcpy(name, play1_film_str[play1_id]);
-			file2 = shellext_Open_Empire_Resource(play1_resource_str[80]);
-			rate_changed = true;
-			break;
-
-		/* 20fps + file2 = "emperor.lfd" (resource[4]) — retail-only */
+		/* 20fps + file2 = "emperor.lfd" */
 		case 740:
 			xtimer_Set_Frame_Rate(20);
 			strcpy(name, play1_film_str[play1_id]);
 			file2 = shellext_Open_Empire_Resource(play1_resource_str[4]);
-			rate_changed = true;
+			break;
+
+		case 570:
+		case 571:
+		case 572:
+		case 573:
+			xtimer_Set_Frame_Rate(24);
+			strcpy(name, play1_film_str[play1_id]);
 			break;
 
 		/* 24fps + file2 from peer resource */
@@ -883,7 +949,20 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 			xtimer_Set_Frame_Rate(24);
 			strcpy(name, play1_film_str[play1_id]);
 			file2 = shellext_Open_Empire_Resource(play1_resource_str[play1_id - 11]);
-			rate_changed = true;
+			break;
+
+		/* 24fps + file2 = "bridge.lfd" */
+		case 581:
+			xtimer_Set_Frame_Rate(24);
+			strcpy(name, play1_film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(play1_resource_str[6]);
+			break;
+
+		/* 20fps + file2 = "scene10.lfd" */
+		case 623:
+			xtimer_Set_Frame_Rate(20);
+			strcpy(name, play1_film_str[play1_id]);
+			file2 = shellext_Open_Empire_Resource(play1_resource_str[80]);
 			break;
 
 		/* Award scenes 258-263: film + file2 = "awards.lfd" */
@@ -896,20 +975,6 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 			strcpy(name, play1_film_str[play1_id]);
 			file2 = shellext_Open_Empire_Resource(play1_resource_str[27]);
 			break;
-
-		/* Scene 270: launch ship resource */
-		case 270:
-			file2 = file;
-			shipext_Get_Launch_Name(name);
-			file = shipext_Open_Launch_Resource();
-			break;
-
-		/* Scene 390: secret medal film */
-		case 390: {
-			int16_t medal = shipext_Get_Secret_Medal();
-			strcpy(name, secret_film_str[medal - 1]);
-			break;
-		}
 
 		/* Scene 420: mission disk resource swapping. The mission-disk
 		 * arming cutscene uses film "secarm2f" (only present in
@@ -927,7 +992,6 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 			}
 			break;
 
-		/* Default: copy film name, no frame rate change */
 		default:
 			strcpy(name, play1_film_str[play1_id]);
 			break;
@@ -957,14 +1021,16 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 					   play1_stream_str[play1_id][0] ? play1_stream_str[play1_id] : "(none)");
 #endif
 	play1_film = xfilm_Res_Callback_Film(name, &r, 0, 0, 0, play1_film_Callback);
-#ifdef TIE_MODERN
 	if (!play1_film) {
 		if (file2)
 			xres_Close_Resource(file2);
 		xres_Close_Resource(file);
+#ifdef TIE_MODERN
 		xerror_Set_Landru_Exit(play1_next_scene[play1_id]);
-		return 0;
+#endif
+		return play1_next_scene[play1_id];
 	}
+#ifdef TIE_MODERN
 	if (TieMusicPolicy_UsesTie98()) {
 		/* TIE98 plays the cutscene's digital score after creating the film. */
 		switch (scene) {
@@ -1055,22 +1121,66 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 		xcursor_Hide_Cursor();
 
 	/* Start palette cycling for scenes 20 and 25 */
-	if (scene == 20 || scene == 25) {
-		Palette* pal;
+	switch (scene) {
+		case 20:
+		case 25: {
+			Palette* pal;
 
-		for (pal = xpal_Ask_Palette_List(); pal; pal = pal->next) {
-			if (pal->cycle_active)
-				xpal_Start_Cycle(pal);
+			for (pal = xpal_Ask_Palette_List(); pal; pal = pal->next) {
+				if (pal->cycle_count)
+					xpal_Start_Cycle(pal);
+			}
+			break;
 		}
 	}
 #ifdef TIE_MODERN
-	TieFilm_RunView(file, file2, scene, rate_changed, play1_is_streaming != 0, surface_set);
+	TieFilm_RunView(file, file2, scene, play1_Scene_Changes_Frame_Rate(play1_cur_scene[play1_id]), play1_is_streaming != 0, surface_set);
 	return 0;
 #else
 	shellext_Handle_TIE_View();
-	/* Restore frame rate to 20fps for scenes that changed it */
-	if (rate_changed)
-		xtimer_Set_Frame_Rate(20);
+	/* Restore 20fps for scenes whose film changed the frame rate */
+	switch (play1_cur_scene[play1_id]) {
+		case 10:
+		case 30:
+		case 31:
+		case 32:
+		case 50:
+		case 60:
+		case 61:
+		case 70:
+		case 71:
+		case 72:
+		case 500:
+		case 510:
+		case 520:
+		case 530:
+		case 531:
+		case 550:
+		case 560:
+		case 570:
+		case 571:
+		case 572:
+		case 573:
+		case 580:
+		case 581:
+		case 590:
+		case 591:
+		case 600:
+		case 601:
+		case 602:
+		case 603:
+		case 610:
+		case 620:
+		case 621:
+		case 622:
+		case 623:
+		case 700:
+		case 710:
+		case 720:
+		case 730:
+			xtimer_Set_Frame_Rate(20);
+			break;
+	}
 
 	/* Tear down streaming */
 	if (play1_is_streaming) {
@@ -1078,7 +1188,6 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 		play1_is_streaming = 0;
 		if (play1_read_buffer) {
 			xmemhdl_Free_Handle(play1_read_buffer);
-			play1_read_buffer = LANDRU_NULL_HANDLE;
 		}
 		if (play1_last_frame.data)
 			xbm_Free_Bitmap(&play1_last_frame);
@@ -1089,8 +1198,7 @@ int16_t play1_Play1(SceneHeadStruct* the_head) {
 	xview_Clear_View_Update_Function();
 	if (file2)
 		xres_Close_Resource(file2);
-	if (file)
-		xres_Close_Resource(file);
+	xres_Close_Resource(file);
 
 	return xerror_Get_Landru_Exit();
 #endif

@@ -492,73 +492,61 @@ int16_t fsfx_loadvoicelfd(void) {
 
 // FUNCTION: TIE95 0x251B0
 int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id) {
-	/* 0xFFFF = "local / player" sound, max volume. */
 	uint16_t max_dist;
-	uint16_t max_vol;
-	int32_t dx, dy, dz;
 	uint32_t dist;
-	int16_t base;
-	int16_t span;
-	uint32_t denom;
-	int32_t interp;
-	int16_t vol;
+	uint16_t vol;
+	int32_t dx, dy, dz;
+	uint16_t max_vol;
 
-	if (src_obj == 0xFFFF) {
-		return (int16_t)((sound_id < 0x33u) ? fullvolume[sound_id] : 112);
+	/* 0xFFFF = "local / player" sound, max volume. */
+	if (src_obj == (uint16_t)-1) {
+		if (sound_id >= 51)
+			return 112;
+		return fullvolume[sound_id];
 	}
 
-	if (sound_id < 0x33u) {
-		max_dist = sounddist[sound_id];
-		max_vol = fullvolume[sound_id];
-	} else {
+	if (sound_id >= 51) {
 		max_dist = 0x2000;
 		max_vol = 112;
+	} else {
+		max_dist = sounddist[sound_id];
+		max_vol = fullvolume[sound_id];
 	}
 
-	if (src_obj >= OBJ_REF_STATIC_BASE) {
-		/* Non-FlightObject refs (static objects, waypoints) resolve via
-		 * create_getworldposition -> worldlocx/y/z. */
-		create_getworldposition(src_obj, 0);
-		dx = worldlocx - camera.x;
-		dy = worldlocy - camera.y;
-		dz = worldlocz - camera.z;
-	} else {
+	if (src_obj < 0x3800) {
 		/* Previous-frame positions match what the renderer sees this
 		 * frame (the binary uses world_*_prev throughout positional
 		 * audio; see decompile at 0x23F0F). */
 		dx = objects[src_obj].world_x_prev - camera.x;
 		dy = objects[src_obj].world_y_prev - camera.y;
 		dz = objects[src_obj].world_z_prev - camera.z;
+	} else {
+		/* Non-FlightObject refs (static objects, waypoints) resolve via
+		 * create_getworldposition -> worldlocx/y/z. */
+		create_getworldposition(src_obj, 0);
+		dx = worldlocx - camera.x;
+		dy = worldlocy - camera.y;
+		dz = worldlocz - camera.z;
 	}
 
-	dist = (uint32_t)collide_roughdistance3d(dx, dy, dz);
+	dist = collide_roughdistance3d(dx, dy, dz);
 
 	/* 4-tier falloff.
 	 *   dist >= max_dist*4  -> 0        (out of range)
 	 *   dist >= max_dist*2  -> vol / 8  (far)
 	 *   dist >= max_dist    -> vol / 4  (medium)
-	 *   dist <  max_dist    -> linear interpolation, capped at 127 */
-	if ((dist / 4) >= max_dist)
+	 *   dist <  max_dist    -> linear interpolation over 31/32 of the
+	 *                          range, capped at 127 */
+	if (dist / 4 >= max_dist)
 		return 0;
-	if ((dist / 2) >= max_dist)
-		return (int16_t)((int16_t)max_vol >> 3);
+	if (dist / 2 >= max_dist)
+		return max_vol >> 3;
 	if (dist >= max_dist)
-		return (int16_t)((int16_t)max_vol >> 2);
+		return max_vol >> 2;
 
-	base = (int16_t)max_vol >> 2;
-	span = (int16_t)(max_vol - base);
-	/* Denominator is (max_dist - max_dist/32) -- the 31/32 softening
-	 * present in the binary. max_dist is uint16_t so integer promotion
-	 * takes it to a non-negative int; `max_dist >> 5` is safe. */
-	denom = max_dist - (max_dist >> 5);
-	/* Cast the subtract to int32_t so the divide is signed (otherwise
-	 * the uint32_t denominator would drag everything into unsigned
-	 * arithmetic). The `(uint16_t)interp` truncation on the line below
-	 * replicates the binary's `(unsigned __int16)` narrowing before the
-	 * result is added back into base. */
-	interp = span * (int32_t)(max_dist - dist) / (int32_t)denom;
-	vol = (int16_t)(base + (uint16_t)interp);
-	if ((uint16_t)vol > 0x7Fu)
+	vol = (uint16_t)((max_dist - dist) * (max_vol - (max_vol >> 2)) /
+	                 (uint32_t)(max_dist - (max_dist >> 5))) + (max_vol >> 2);
+	if (vol > 127)
 		vol = 127;
 	return vol;
 }
@@ -757,36 +745,30 @@ int8_t fsfx_triggerlasersfx(uint16_t projectile_obj) {
 }
 
 // FUNCTION: TIE95 0x2554C
-int32_t fsfx_triggergunsightsfx(int16_t mode) {
+int32_t fsfx_triggergunsightsfx(uint16_t mode) {
 	if (!sfxenabled)
 		return 0;
 	if (!inflight_sound_vol)
 		return 0;
 
-	if (mode && mode != 1) {
-		uint16_t id;
-		if (mode == 3) {
-			/* Red lock: stop green (35), keep or play red (36). */
-			if (imuse_get_param(im, 35, IM_PARAM_IS_PLAYING))
-				imuse_stop_sound(im, 35);
-			if (imuse_get_param(im, 36, IM_PARAM_IS_PLAYING))
-				return 1;
-			id = 36;
-		} else {
-			/* Green lock: stop red, keep or play green. */
-			if (imuse_get_param(im, 36, IM_PARAM_IS_PLAYING))
-				imuse_stop_sound(im, 36);
-			if (imuse_get_param(im, 35, IM_PARAM_IS_PLAYING))
-				return 1;
-			id = 35;
-		}
-		fsfx_triggersfx(id, 0xFFFF);
+	if (mode == 0 || mode == 1) {
+		/* Stop whichever gunsight channel is active. */
+		if (lolevel_ImGetParam(36, 0x100))
+			lolevel_ImStopSound(36);
+		else if (lolevel_ImGetParam(35, 0x100))
+			lolevel_ImStopSound(35);
+	} else if (mode == 3) {
+		/* Red lock: stop green (35), keep or play red (36). */
+		if (lolevel_ImGetParam(35, 0x100))
+			lolevel_ImStopSound(35);
+		if (!lolevel_ImGetParam(36, 0x100))
+			fsfx_triggersfx(36, 0xFFFF);
 	} else {
-		/* mode 0 or 1: stop whichever gunsight channel is active. */
-		if (imuse_get_param(im, 36, IM_PARAM_IS_PLAYING))
-			imuse_stop_sound(im, 36);
-		else if (imuse_get_param(im, 35, IM_PARAM_IS_PLAYING))
-			imuse_stop_sound(im, 35);
+		/* Green lock: stop red, keep or play green. */
+		if (lolevel_ImGetParam(36, 0x100))
+			lolevel_ImStopSound(36);
+		if (!lolevel_ImGetParam(35, 0x100))
+			fsfx_triggersfx(35, 0xFFFF);
 	}
 	return 1;
 }
@@ -991,85 +973,64 @@ int16_t fsfx_speakeravailable(void) {
  * -------------------------------------------------------------------------- */
 
 // FUNCTION: TIE95 0x25B0C
-int8_t fsfx_speakobjectname(uint16_t obj_idx, uint16_t prefix_voice) {
+void fsfx_speakobjectname(uint16_t obj_idx, uint16_t prefix_voice) {
 	/* Retail bails for obj_idx >= NUM_CRAFTS so warhead-slot CraftData*
 	 * (a WarheadRecord*) is never reinterpreted as a craft. */
 	CraftData* craft;
 	EFGStruct* fg_ptr;
+	const char* ref;
 	uint16_t group_id;
 	uint16_t name_idx;
-	int found;
 	uint16_t wing_num;
-	char ch;
+	int16_t found;
 
-	if (obj_idx >= NUM_CRAFTS)
-		return 0;
-	if (!objects[obj_idx].ship_idx)
-		return 0;
-	if (objects[obj_idx].category != 0)
-		return 0; /* only craft have FG names */
+	if (obj_idx >= NUM_CRAFTS || !objects[obj_idx].ship_idx || objects[obj_idx].category != 0)
+		return; /* only craft have FG names */
 
 	craft = objects[obj_idx].craft_ptr;
-	if (!craft)
-		return 0;
 
 	/* 25% chance to pre-announce the speaking player (recursive call
 	 * with prefix 0) when the enemy callout (prefix 51) is firing. */
-	if (obj_idx != pstate.object_idx && prefix_voice == 51 && (uint16_t)math2_getrandom() < 0x4000u) {
+	if (obj_idx != pstate.object_idx && prefix_voice == 51 && (uint16_t)math2_getrandom() < 0x4000)
 		fsfx_speakobjectname(pstate.object_idx, 0);
-	}
 
 	/* Case-insensitive prefix match against sfxgroupnameptrs[0..4].
 	 * The ASCII '+ 32' trick lets us accept both upper and lower-case
 	 * letters against an UPPER-case reference string. */
 	fg_ptr = &fg_array[objects[obj_idx].fg_idx];
 
-	name_idx = 0;
-	found = 0;
-	for (group_id = 0; group_id < 5u; group_id++) {
-		const char* ref = sfxgroupnameptrs[group_id];
-		name_idx = 0;
+	for (group_id = 0; group_id < 5; group_id++) {
+		ref = sfxgroupnameptrs[group_id];
 		found = 0;
-		while (name_idx < 0xCu) {
-			char fg_ch;
-
+		for (name_idx = 0; name_idx < 12; name_idx++, ref++) {
 			if (!*ref) {
 				found = 1;
 				break;
 			}
-			fg_ch = fg_ptr->name[name_idx];
-			if (fg_ch != *ref && (uint8_t)fg_ch != (uint8_t)*ref + 32)
+			if (fg_ptr->name[name_idx] != *ref && (uint8_t)fg_ptr->name[name_idx] != (uint8_t)*ref + 32)
 				break;
-			name_idx++;
-			ref++;
 		}
 		if (found)
 			break;
 	}
 	if (!found)
-		return 0;
+		return;
 
 	/* Extract wing number from the name suffix. */
-
-	ch = fg_ptr->name[name_idx];
-	if (!ch) {
+	if (!fg_ptr->name[name_idx]) {
 		/* No explicit suffix -- fall back to craft's FG index. */
 		wing_num = (uint16_t)(craft->craft_idx_in_fg + 1);
 	} else {
-		uint8_t digit;
-
-		if (ch == ' ')
+		if (fg_ptr->name[name_idx] == ' ')
 			name_idx++;
-		digit = (uint8_t)fg_ptr->name[name_idx];
-		if (digit < '0' || digit > '9')
-			return 0; /* unrecognised suffix: don't speak */
-		wing_num = (uint16_t)(digit - '0');
+		if ((uint8_t)fg_ptr->name[name_idx] >= '0' && (uint8_t)fg_ptr->name[name_idx] <= '9')
+			wing_num = (uint16_t)((uint8_t)fg_ptr->name[name_idx] - '0');
 	}
 
 	/* Voice clips exist only for wing 1 and wing 2. Anything else
 	 * silently fails (matches the binary). */
-	if (wing_num == 0 || wing_num > 2)
-		return 0;
+	if (wing_num < 1 || wing_num > 2)
+		return;
 
 	/* Emit the sequence:
 	 *   [ "target" (0x33) if prefix==52 ]
@@ -1084,12 +1045,11 @@ int8_t fsfx_speakobjectname(uint16_t obj_idx, uint16_t prefix_voice) {
 		fsfx_triggervoicesfx(prefix_voice);
 	fsfx_triggervoicesfx((uint16_t)(group_id + 53));
 	if (prefix_voice != 52)
-		return fsfx_triggervoicesfx((uint16_t)(wing_num + 57));
-	return (int8_t)prefix_voice;
+		fsfx_triggervoicesfx((uint16_t)(wing_num + 57));
 }
 
 // FUNCTION: TIE95 0x25CDC
-int8_t fsfx_speakcongrats(void) {
+void fsfx_speakcongrats(void) {
 	/* Pick one of 3 kudos clips (76..78). */
 	uint16_t r = (uint16_t)math2_getrandom();
 	uint16_t kudos;
@@ -1117,8 +1077,7 @@ int8_t fsfx_speakcongrats(void) {
 	/* 50% chance to also say the player's object name. */
 	r = (uint16_t)math2_getrandom();
 	if (r > 0x4000)
-		return fsfx_speakobjectname(pstate.object_idx, 0);
-	return (int8_t)r;
+		fsfx_speakobjectname(pstate.object_idx, 0);
 }
 
 // FUNCTION: TIE95 0x25D60

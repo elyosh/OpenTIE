@@ -12,7 +12,7 @@ extern "C" {
 
 extern BitmapStruct tielogo_background;
 
-int16_t tielogo_TieLogo(SceneHeadStruct* scene_head);
+int tielogo_TieLogo(SceneHeadStruct* scene_head);
 
 extern Actor* tie_actor;
 extern Actor* fighter_actor;

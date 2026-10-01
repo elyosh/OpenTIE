@@ -73,7 +73,7 @@ typedef struct {
  * codec helpers below. An EFGStruct embeds 3 of these. */
 typedef struct {
 	uint8_t order;          /* +0x00: order opcode (indexes ordersldr/flw) */
-	uint8_t speed;          /* +0x01: throttle opcode (indexes throttleconvert) */
+	int8_t speed;           /* +0x01: throttle opcode (indexes throttleconvert) */
 	uint8_t var[4];         /* +0x02: order-specific var/param bytes */
 	uint8_t target_type[2]; /* +0x06: primary/secondary target type */
 	uint8_t target_id[2];   /* +0x08: primary/secondary target id */
@@ -341,9 +341,9 @@ void shipext_Close_Ships(void);
 
 /* --- Ship queries --- */
 bool shipext_Is_Ship(int16_t ship_idx);
-bool shipext_Is_Ship_Available(int16_t ship_idx);
-int shipext_Is_Mission_Disk1(void);
-bool shipext_Is_Mission_Disk2(void);
+int16_t shipext_Is_Ship_Available(int16_t ship_idx);
+int16_t shipext_Is_Mission_Disk1(void);
+int16_t shipext_Is_Mission_Disk2(void);
 ResFile* shipext_Open_Ship_Resource(int16_t ship_idx);
 ResFile* shipext_Open_Launch_Resource(void);
 void shipext_Get_Ship_Name(char* out, int16_t ship_idx, int16_t para_type, int16_t para_idx);
@@ -361,7 +361,7 @@ void shipext_Get_Pilot_Name(char* out);
 #endif
 bool shipext_Load_Pilot(const char* name);
 bool shipext_Create_Pilot(const char* name);
-void shipext_Revive_Pilot(char* name);
+int16_t shipext_Revive_Pilot(char* name);
 void shipext_Update_Pilot(void);
 void shipext_Save_Pilot_Data(const char* name);
 void shipext_Backup_Pilot(void);
@@ -384,7 +384,7 @@ int16_t shipext_Get_Mission_Officer(void);
 void shipext_Set_Mission_Name(const char* name);
 const char* shipext_Get_Mission_Name(void);
 bool shipext_Is_Mission_Success(void);
-bool shipext_Is_Combat_Mission_Success(void);
+int16_t shipext_Is_Combat_Mission_Success(void);
 int shipext_Is_Player_OK(void);
 void shipext_Mission_Enter(int16_t mission_type);
 int16_t shipext_Mission_Exit(int16_t mission_type, int16_t exit_code);
@@ -428,7 +428,7 @@ void shipext_Last_Train_Level(void);
 void shipext_Get_Train_Ship_Name(char* out);
 void shipext_Next_Train_Ship(void);
 void shipext_Last_Train_Ship(void);
-uint8_t shipext_Get_Train_Ship(void);
+int16_t shipext_Get_Train_Ship(void);
 void shipext_Init_Train_Ship_Name(void);
 void shipext_Show_Train_Ship_Name(void);
 void shipext_Get_Train_Ship_SHP(void);
@@ -439,7 +439,7 @@ int16_t shipext_Num_Train_Mission_Text_Lines(void);
 
 /* --- Combat --- */
 uint8_t shipext_Get_Combat_Mission(void);
-bool shipext_Is_Combat_Ship_Tour(void);
+int16_t shipext_Is_Combat_Ship_Tour(void);
 void shipext_Next_Combat_Ship(void);
 void shipext_Last_Combat_Ship(void);
 uint8_t shipext_Get_Combat_Ship(void);

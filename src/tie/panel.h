@@ -184,16 +184,16 @@ extern RadarBlip* newleftbliplist;
 
 /* HUD instrument tables. */
 extern HudInstrument instruments[PANEL_NUM_INSTRUMENTS];
-extern int16_t oldinstruments[PANEL_NUM_INSTRUMENTS];
+extern uint16_t oldinstruments[PANEL_NUM_INSTRUMENTS];
 
 /* Transient radar/bracket state. */
 extern int16_t oldbracketx, oldbrackety;
 extern int16_t radary, radarx;
 extern int16_t bracketx, brackety;
-extern int16_t oldleftlistsize, newrightlistsize;
-extern int16_t blipcolor;
-extern int16_t oldrightlistsize, newleftlistsize;
-extern int16_t lasttargetnum;
+extern uint16_t oldleftlistsize, newrightlistsize;
+extern uint16_t blipcolor;
+extern uint16_t oldrightlistsize, newleftlistsize;
+extern uint16_t lasttargetnum;
 extern int16_t lastpilotpaneldraw;
 
 /* Flag bytes. */
@@ -236,7 +236,7 @@ void panel_updateweapons(void);
 void panel_updatehardpoint(uint16_t slot, uint16_t hp_idx, uint16_t flags);
 void panel_updateshields(void);
 void panel_updatebeam(void);
-void panel_updateweaponwarnings(void);
+void panel_updateweaponwarnings(int mode);
 
 /* -- Targeting / CMD -- */
 void panel_updategunsight(void);

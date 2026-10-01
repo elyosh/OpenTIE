@@ -92,14 +92,14 @@ int16_t fmusic_fmUnloadSound(void) { return 1; }
  */
 // FUNCTION: TIE95 0x23A30
 // FUNCTION: TIE98 0x41EE90
-void* fmusic_GetPagedSound(uint16_t track_idx) {
+void* fmusic_GetPagedSound(unsigned int track_idx) {
 	uint16_t i;
 
 	if (track_idx >= (uint16_t)num_music)
 		return NULL;
 
-	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
-		if ((uint32_t)track_idx == (uint32_t)music_page_state[i])
+	for (i = 0; i < 2; i++) {
+		if (music_page_state[i] == track_idx)
 			return (uint8_t*)music_buffer + music_slot_offsets[i];
 	}
 	return NULL;

@@ -196,7 +196,7 @@ void soundext_Close_Post_iMuse(void) {
 
 // FUNCTION: TIE95 0x653BB
 void soundext_Open_Sound_Scene(int16_t scene) {
-	int16_t start, stop;
+	int16_t stop, start;
 
 	if (script_active_gbl) {
 		soundext_Find_Sound_Range(scene, &start, &stop);

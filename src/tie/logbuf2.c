@@ -2,6 +2,7 @@
 #include "landru/vesa.h"
 #include "tie/math2.h"
 #include "tie/render_texture_tie98.h"
+#include "tie/tie.h"
 #include "tie/transfm2.h"
 #include "tie/xtrans2.h"
 
@@ -744,8 +745,8 @@ void logbuf2_drawclippedline_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y
 /* ------------------------------------------------------------------
  * startPIP / finishPIP — save/restore the drawing viewport and the
  * world-to-eye rotation matrix, and swap the XTRANS2 side-buffer
- * pointers. The binary uses -8192 / -16384 for maskbufptr depending on
- * which pair of side-buffers is active; we preserve those literals.
+ * pointers. maskbufptr is the mask-buffer offset into xtransdataptr:
+ * 0xE000 while the PIP side-buffers are active, 0xC000 otherwise.
  * ------------------------------------------------------------------ */
 // FUNCTION: TIE95 0x2EF3C
 void logbuf2_startPIP(uint16_t width, uint16_t depth, int16_t clear_runs, uint32_t dc) {
@@ -762,11 +763,19 @@ void logbuf2_startPIP(uint16_t width, uint16_t depth, int16_t clear_runs, uint32
 	tempC2 = worldeyeC2;
 	tempC3 = worldeyeC3;
 
-	logbuf2_setbufferdimensions(width, depth, dc);
+	pixelswidemin1 = width - 1;
+	pixelswide = width;
+	halfpixelswide = width / 2;
+	pixelsdeepmin1 = depth - 1;
+	pixelsdeep = depth;
+	halfpixelsdeep = depth / 2;
+	displaycorner_lines = dc / screenMemWidth;
+	displaycorner = dc;
+	displaycorner_columns = dc % screenMemWidth;
 
-	maskbufptr = (int16_t)0xE000; /* -8192 */
-	rightside = rightsidedata2;
+	maskbufptr = 0xE000;
 	leftside = leftsidedata2;
+	rightside = rightsidedata2;
 
 	if (clear_runs)
 		xtrans2_clearruntable();
@@ -796,7 +805,7 @@ void logbuf2_finishPIP(void) {
 	displaycorner_lines = smw ? (tempdc / smw) : 0;
 	displaycorner_columns = smw ? (tempdc % smw) : tempdc;
 
-	maskbufptr = (int16_t)0xC000; /* -16384 */
+	maskbufptr = 0xC000;
 	leftside = leftsidedata1;
 	rightside = rightsidedata1;
 }
@@ -825,7 +834,7 @@ void logbuf2_startPIP_tie98(uint16_t width, uint16_t depth, int clear_runs, uint
 	pixelsdeepmin1 = (uint16_t)(depth - 1);
 	halfpixelsdeep = (uint16_t)(depth >> 1);
 	displaycorner = dc;
-	maskbufptr = (int16_t)0xE000;
+	maskbufptr = 0xE000;
 	displaycorner_lines = dc / g_surfacePitch;
 	displaycorner_columns = dc % g_surfacePitch / g_flight16bppBytesPerPixel;
 }
@@ -850,7 +859,7 @@ void logbuf2_finishPIP_tie98(void) {
 	pixelsdeepmin1 = (uint16_t)(temppd - 1);
 	halfpixelsdeep = (uint16_t)(temppd >> 1);
 	displaycorner = tempdc;
-	maskbufptr = (int16_t)0xC000;
+	maskbufptr = 0xC000;
 	displaycorner_lines = tempdc / g_surfacePitch;
 	displaycorner_columns = tempdc % g_surfacePitch / g_flight16bppBytesPerPixel;
 }

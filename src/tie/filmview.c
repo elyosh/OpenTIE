@@ -736,6 +736,7 @@ static void filmview_iuser_Delete_Input(Input* input, int32_t time) {
 // FUNCTION: TIE98 0x41E8B0
 static void filmview_idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	char string[32];
+	int16_t id;
 	if (!refresh)
 		return;
 
@@ -744,7 +745,8 @@ static void filmview_idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int
 	strcat(string, filmview_name);
 	strcat(string, "?");
 
-	if (!input->id) {
+	id = input->id;
+	if (!id) {
 		Rect dr;
 		xrect_Copy_Rect(&dr, r);
 		xpaint_Frame_Clipped_Rect(&dr, 16);

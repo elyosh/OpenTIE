@@ -128,9 +128,9 @@ void gate_setrenderreferenceobject(uint16_t object_index) { gate_render_referenc
 // FUNCTION: TIE95 0x28FD0
 void gate_savegatelastpos(void) {
 	/* Shift rings: [3]=[2], [2]=[1], [1]=[0] (i = 2, 1, 0). */
-	int i;
+	uint16_t i = 3;
 
-	for (i = 2; i >= 0; --i) {
+	while (i--) {
 		gatepreviousx[i + 1] = gatepreviousx[i];
 		gatepreviousy[i + 1] = gatepreviousy[i];
 		gatepreviousz[i + 1] = gatepreviousz[i];
@@ -505,35 +505,33 @@ void gate_createtraininggates(void) {
  * ---------------------------------------------------------------------- */
 // FUNCTION: TIE95 0x297D8
 void gate_settraininglevel(uint16_t level) {
-	uint8_t speed_wing;
 	uint8_t speed_gun;
 	uint8_t speed_pod;
-	CraftData* craft;
+	uint8_t speed_wing;
 	uint16_t obj_idx;
 
 	currentgate = 1;
 	mission.train_gates_remaining = 12;
 	mission.train_gates_passed = 0;
 
-	if (level <= 8) {
+	if (level > 8) {
+		timeleft.minute = 0;
+		timeleft.second = (uint8_t)(60 - 5 * (uint8_t)(level - 8));
+	} else {
 		timeleft.minute = (uint8_t)((10 - level) / 2);
 		timeleft.second = (uint8_t)(30 * (level & 1));
-	} else {
-		timeleft.minute = 0;
-		timeleft.second = (uint8_t)(60 - 5 * (level - 8));
 	}
 
 	speed_wing = (uint8_t)(24 * level);
 	speed_gun = (uint8_t)(2 * level);
 	speed_pod = (uint8_t)(3 * level);
 
-	craft = craftptr;
 	for (obj_idx = 0; obj_idx < NUM_CRAFTS; ++obj_idx) {
 		uint16_t ship_idx = objects[obj_idx].ship_idx;
-		uint16_t mesh_count;
 		uint16_t mesh_idx;
+		ShipModelMesh* mesh;
 
-		if ((uint8_t)ship_idx == 0 || objects[obj_idx].genus != 14 /* GENUS_GATE */)
+		if (ship_idx == 0 || objects[obj_idx].genus != 14 /* GENUS_GATE */)
 			continue;
 
 		craftptr = objects[obj_idx].craft_ptr;
@@ -541,102 +539,85 @@ void gate_settraininglevel(uint16_t level) {
 			modelmesh_require_craft_capacity(ship_idx);
 		else
 			draw_Lockshipfileptrs(ship_idx);
-		craft = craftptr;
 
-		mesh_count =
-			TIE_FLIGHT_EDITION((uint16_t)objectblockptr->num_meshes, (uint16_t)modelmesh_getcount(ship_idx));
-		for (mesh_idx = 0; mesh_idx < mesh_count; ++mesh_idx) {
-			uint16_t mesh_type = TIE_FLIGHT_EDITION(componentblockptr[mesh_idx].mesh_type,
-													(uint16_t)modelmesh_gettype(ship_idx, mesh_idx));
-
+		mesh = componentblockptr;
+		for (mesh_idx = 0;
+			 mesh_idx < TIE_FLIGHT_EDITION(objectblockptr->num_meshes, (uint16_t)modelmesh_getcount(ship_idx));
+			 ++mesh_idx, ++mesh) {
 			if (obj_idx == 1) {
 				/* Gate 1 (course start) is always frozen. */
-				craft->mesh_component_hp[mesh_idx] = (mesh_type == 1 /* MESH_MainHull */) ? 0xFF : 0;
-				craft->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
+				if (TIE_FLIGHT_EDITION(mesh->mesh_type, (uint16_t)modelmesh_gettype(ship_idx, mesh_idx)) == 1 /* MESH_MainHull */)
+					craftptr->mesh_component_hp[mesh_idx] = 0xFF;
+				else
+					craftptr->mesh_component_hp[mesh_idx] = 0;
+				craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
 				continue;
 			}
 
-			/* mesh_type switch follows the binary's cmp chain. */
-			if (mesh_type == 0 /* MESH_Default */) {
-				continue;
-			}
-			if (mesh_type == 1 /* MESH_MainHull */) {
-				craft->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
-				continue;
-			}
-			if (mesh_type == TIE_MESH_WING) {
+			switch (TIE_FLIGHT_EDITION(mesh->mesh_type, (uint16_t)modelmesh_gettype(ship_idx, mesh_idx))) {
+			case 1: /* MESH_MainHull */
+				craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
+				break;
+			case 5: /* MESH_SmallGun */
+				/* No mesh_rotation reset for guns. */
+				craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
+				craftptr->mesh_component_hp[mesh_idx] = speed_gun;
+				break;
+			case TIE_MESH_CARGO_POD:
 				if (TIE_FLIGHT_TIE98) {
 					modelmesh_enableexplosiontype2(ship_idx, mesh_idx);
 					modelmesh_enableexplosiontype1(ship_idx, mesh_idx);
 				} else {
-					componentblockptr[mesh_idx].flags =
-						(int16_t)((uint16_t)componentblockptr[mesh_idx].flags | 3);
-				}
-				if (level < 3) {
-					craft->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
-					craft->mesh_component_hp[mesh_idx] = 0;
-				} else {
-					craft->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-					craft->mesh_rotation[mesh_idx] = 0;
-					craft->mesh_component_hp[mesh_idx] = speed_wing;
-				}
-				continue;
-			}
-			if (mesh_type == 5 /* MESH_SmallGun */) {
-				/* Retail jumps directly to the mesh_component_hp write,
-				 * bypassing the mesh_rotation=0 store the other branches
-				 * use. Leave mesh_rotation untouched here. */
-				craft->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-				craft->mesh_component_hp[mesh_idx] = speed_gun;
-				continue;
-			}
-			if (mesh_type == TIE_MESH_CARGO_POD) {
-				if (TIE_FLIGHT_TIE98) {
-					modelmesh_enableexplosiontype2(ship_idx, mesh_idx);
-					modelmesh_enableexplosiontype1(ship_idx, mesh_idx);
-				} else {
-					componentblockptr[mesh_idx].flags =
-						(int16_t)((uint16_t)componentblockptr[mesh_idx].flags | 3);
+					mesh->flags |= 3;
 				}
 				if (level < 2) {
-					craft->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
-					craft->mesh_component_hp[mesh_idx] = 0;
+					craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
+					craftptr->mesh_component_hp[mesh_idx] = 0;
 				} else {
-					craft->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-					craft->mesh_rotation[mesh_idx] = 0;
-					craft->mesh_component_hp[mesh_idx] = speed_pod;
+					craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
+					craftptr->mesh_rotation[mesh_idx] = 0;
+					craftptr->mesh_component_hp[mesh_idx] = speed_pod;
 				}
-				continue;
-			}
-			if (mesh_type == 18 /* MESH_MiscHull */) {
+				break;
+			case 18: /* MESH_MiscHull */
 				if (level < 5) {
-					craft->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
-					craft->mesh_component_hp[mesh_idx] = 0;
+					craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
+					craftptr->mesh_component_hp[mesh_idx] = 0;
 				} else {
-					craft->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-					craft->mesh_rotation[mesh_idx] = TIE_FLIGHT_EDITION(0, 1);
-					craft->mesh_component_hp[mesh_idx] = 0xFF;
+					craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
+					craftptr->mesh_rotation[mesh_idx] = TIE_FLIGHT_EDITION(0, 1);
+					craftptr->mesh_component_hp[mesh_idx] = 0xFF;
 				}
-				continue;
-			}
-			if (mesh_type == 19 /* MESH_Antenna */) {
-				if (level >= 7) {
-					craft->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-					craft->mesh_rotation[mesh_idx] = 0;
-					craft->mesh_component_hp[mesh_idx] = 0xFF;
+				break;
+			case 19: /* MESH_Antenna */
+				if (level < 7) {
+					craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
+					craftptr->mesh_component_hp[mesh_idx] = 0;
 				} else {
-					craft->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
-					craft->mesh_component_hp[mesh_idx] = 0;
+					craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
+					craftptr->mesh_rotation[mesh_idx] = 0;
+					craftptr->mesh_component_hp[mesh_idx] = 0xFF;
 				}
-				continue;
+				break;
+			case TIE_MESH_WING:
+				if (TIE_FLIGHT_TIE98) {
+					modelmesh_enableexplosiontype2(ship_idx, mesh_idx);
+					modelmesh_enableexplosiontype1(ship_idx, mesh_idx);
+				} else {
+					mesh->flags |= 3;
+				}
+				if (level < 3) {
+					craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
+					craftptr->mesh_component_hp[mesh_idx] = 0;
+				} else {
+					craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
+					craftptr->mesh_rotation[mesh_idx] = 0;
+					craftptr->mesh_component_hp[mesh_idx] = speed_wing;
+				}
+				break;
 			}
-			/* Other mesh types: leave as-is. */
 		}
 	}
-
-	/* Match the binary: craftptr is left pointing at the last gate's craft
-	 * pointer. No caller of settraininglevel reads it immediately. */
-	craftptr = craft;
 
 	if (!replayviewmode)
 		panel_initpanel();
@@ -758,19 +739,29 @@ int gate_checkgateedge(uint16_t obj_idx) {
  * ---------------------------------------------------------------------- */
 // FUNCTION: TIE95 0x2AC74
 void gate_updatebonuspoints(void) {
-	int16_t y, bonus_x, timer_x;
+	int16_t y, timer_x, bonus_x;
 
-	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
-		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
+	switch (flightResolution) {
+	case TIE_FLIGHT_RES_SVGA:
+#if defined(TIE98) || defined(TIE_MODERN)
+	case TIE_FLIGHT_RES_SVGA_16:
+	case TIE_FLIGHT_RES_SVGA_D3D:
+#endif
 		y = 456;
 		bonus_x = 465;
 		timer_x = 360;
-	} else {
-		/* Every other resolution (including the 320x200 default) uses this
-		 * layout -- matches the binary's fall-through. */
+		break;
+	case TIE_FLIGHT_RES_VGA:
 		y = 190;
 		bonus_x = 255;
 		timer_x = 200;
+		break;
+	default:
+		/* Unknown modes fall back to the 320x200 layout. */
+		y = 190;
+		bonus_x = 255;
+		timer_x = 200;
+		break;
 	}
 
 	dropflag = 1;
@@ -1063,31 +1054,41 @@ void gate_updategateanimations(void) {
 // FUNCTION: TIE95 0x2A7CC
 void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 	int16_t side_offset;
-	int16_t y;
-	int16_t level_label_x, level_value_x, score_label_x, block_width;
-	int16_t gates_col_x, score_col_x;
+	int16_t gates_col_x;
+	int16_t score_col_x;
+	int16_t level_label_x;
+	int16_t score_label_x;
+	int16_t block_width;
+	int16_t level_value_x;
 
-	uint32_t spec_plus_1;
-	int draw_right;
-	int16_t crt_x;
-	uint8_t fh;
-	int16_t y_plus_1;
-
-	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
-		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
-		x_origin += 10;
-		y = (int16_t)(y_origin - 10);
+	switch (flightResolution) {
+	case TIE_FLIGHT_RES_SVGA:
+#if defined(TIE98) || defined(TIE_MODERN)
+	case TIE_FLIGHT_RES_SVGA_16:
+	case TIE_FLIGHT_RES_SVGA_D3D:
+#endif
 		side_offset = 16;
 		level_label_x = 52;
 		level_value_x = 106;
 		block_width = 180;
 		score_label_x = 40;
+		x_origin += 10;
+		y_origin -= 10;
 		gates_col_x = 150;
 		score_col_x = 90;
-	} else {
-		/* Both flightResolution == TIE_FLIGHT_RES_VGA and the fall-through default path
-		 * use the 320x200 layout. */
-		y = (int16_t)(y_origin - 6);
+		break;
+	case TIE_FLIGHT_RES_VGA:
+		side_offset = 8;
+		level_label_x = 26;
+		level_value_x = 53;
+		block_width = 90;
+		score_label_x = 20;
+		y_origin -= 6;
+		gates_col_x = 75;
+		score_col_x = 45;
+		break;
+	default:
+		y_origin -= 6;
 		side_offset = 8;
 		level_label_x = 26;
 		level_value_x = 53;
@@ -1095,101 +1096,87 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 		score_label_x = 20;
 		gates_col_x = 75;
 		score_col_x = 45;
+		break;
 	}
 
 	/* Choose left-or-right-of-origin based on the player's ship type. */
-	spec_plus_1 = (uint32_t)pstate.player_spec_num + 1;
-
-	if (spec_plus_1 < 12) {
-		if (spec_plus_1 < 8 || spec_plus_1 > 9)
-			draw_right = 0;
-		else
-			draw_right = 1;
-	} else if (spec_plus_1 <= 12 || pstate.player_spec_num == 15) {
-		draw_right = 1;
+	if (TIE_FLIGHT_TIE98 && flightResolution != TIE_FLIGHT_RES_VGA && pstate.player_spec_num == 4) {
+		/* TIE98 centers the SVGA read-out for this craft. */
 	} else {
-		draw_right = 0;
+		switch (pstate.player_spec_num + 1) {
+		case 8:
+		case 9:
+		case 12:
+		case 16:
+			x_origin += side_offset;
+			break;
+		default:
+			x_origin -= side_offset;
+			break;
+		}
 	}
-
-	if (TIE_FLIGHT_TIE98 &&
-		(flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
-		 flightResolution == TIE_FLIGHT_RES_SVGA_D3D) &&
-		pstate.player_spec_num == 4)
-		crt_x = x_origin;
-	else
-		crt_x = draw_right ? (int16_t)(x_origin + side_offset) : (int16_t)(x_origin - side_offset);
 
 	if (initpanelflag) {
 		/* Static labels. setfontsize(1) updates the global `fontheight`
-		 * (320x200: 5→9, 640x480: 9→21). Retail uses the global directly
-		 * in every Y formula below, so we read it AFTER the setfontsize
-		 * call. Caching the pre-call height left the dynamic-value block
-		 * using the size-2 fontheight, which compressed the value rows
-		 * vertically and ran them up over the static label column. */
-		uint8_t fh;
-
+		 * (320x200: 5→9, 640x480: 9→21), so every Y formula reads it after
+		 * the call. */
 		festring_setfontsize(1);
-		fh = fontheight;
-		festring_setbound((int16_t)(crt_x + side_offset), y, (int16_t)(crt_x + 10 * side_offset),
-						  (int16_t)(y + fh));
+		festring_setbound(x_origin + side_offset, y_origin, x_origin + 10 * side_offset,
+						  y_origin + fontheight);
 		festring_setautofill(1);
 		festring_setbackcolor(0x30);
 		clearwindow();
 
 		festring_settextcolor(0x49);
-		festring_setcursor((int16_t)(crt_x + level_label_x), y);
+		festring_setcursor(x_origin + level_label_x, y_origin);
 		festring_outstring((const uint8_t*)gatelevelstr);
 
 		festring_settextcolor(0x4A);
-		festring_setcursor((int16_t)(crt_x + level_value_x), y);
+		festring_setcursor(x_origin + level_value_x, y_origin);
 		panelrts_outnum(mission.train_level, 2, 2);
 
-		festring_setbound(crt_x, (int16_t)(y + fh + 1), (int16_t)(crt_x + block_width),
-						  (int16_t)(y + 1 + 5 * fh));
+		festring_setbound(x_origin, y_origin + fontheight + 1, x_origin + block_width,
+						  y_origin + 1 + 5 * fontheight);
 
 		festring_settextcolor(0x45);
-		festring_setcursor(crt_x, (int16_t)(y + fh + 1));
+		festring_setcursor(x_origin, y_origin + fontheight + 1);
 		festring_outstring((const uint8_t*)gateremainstr);
 
-		festring_setcursor(crt_x, (int16_t)(y + 1 + 2 * fh));
+		festring_setcursor(x_origin, y_origin + 1 + 2 * fontheight);
 		festring_outstring((const uint8_t*)gatepassedstr);
 
 		festring_settextcolor(0x4D);
-		festring_setcursor(crt_x, (int16_t)(y + 1 + 3 * fh));
+		festring_setcursor(x_origin, y_origin + 1 + 3 * fontheight);
 		festring_outstring((const uint8_t*)targetshitstr);
 
 		festring_settextcolor(0x51);
-		festring_setcursor((int16_t)(crt_x + score_label_x), (int16_t)(y + 1 + 4 * fh));
+		festring_setcursor(x_origin + score_label_x, y_origin + 1 + 4 * fontheight);
 		festring_outstring((const uint8_t*)scorestr);
 	}
 
-	/* Dynamic values (every frame). Re-capture fontheight after the local
-	 * setfontsize(1) so this block doesn't depend on whatever fontsize
-	 * the caller chain left in place. */
+	/* Dynamic values (every frame). */
 	festring_setfontsize(1);
-	fh = fontheight;
-	festring_setbound(crt_x, (int16_t)(y + fh + 1), (int16_t)(crt_x + block_width),
-					  (int16_t)(y + 1 + 5 * fh));
+	festring_setbound(x_origin, y_origin + fontheight + 1, x_origin + block_width,
+					  y_origin + 1 + 5 * fontheight);
 	festring_setautofill(1);
 	festring_setbackcolor(0x30);
 	festring_settextcolor(0x46);
 
-	festring_setcursor((int16_t)(crt_x + gates_col_x), (int16_t)(fh + y + 1));
+	festring_setcursor(x_origin + gates_col_x, y_origin + fontheight + 1);
 	panelrts_outnum((uint16_t)mission.train_gates_remaining, 3, 1);
 	outchar(' ');
 
-	y_plus_1 = (int16_t)(y + 1);
-	festring_setcursor((int16_t)(crt_x + gates_col_x), (int16_t)(y_plus_1 + 2 * fh));
+	festring_setcursor(x_origin + gates_col_x, y_origin + 1 + 2 * fontheight);
 	panelrts_outnum((uint16_t)mission.train_gates_passed, 3, 1);
 	outchar(' ');
 
 	festring_settextcolor(0x4E);
-	festring_setcursor((int16_t)(crt_x + gates_col_x), (int16_t)(y_plus_1 + 3 * fh));
+	festring_setcursor(x_origin + gates_col_x, y_origin + 1 + 3 * fontheight);
 	panelrts_outnum((uint16_t)mission.train_targets, 3, 1);
 	outchar(' ');
 
 	festring_settextcolor(0x52);
-	festring_setcursor((int16_t)(score_col_x + crt_x), (int16_t)(y_plus_1 + 4 * fh));
+	festring_setcursor(x_origin + score_col_x, y_origin + 1 + 4 * fontheight);
 	gate_outdnum(mission.mission_score, 6, 1);
 	outchar(' ');
 

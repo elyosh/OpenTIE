@@ -3,6 +3,7 @@
 
 #include "landru/actor.h"
 #include "landru/fourcc.h"
+#include "landru/memhdl.h"
 #include "landru/rect.h"
 #include "landru/res.h"
 #include "tie/matrix.h"
@@ -34,7 +35,7 @@ extern uint32_t bpflightflag;
  *
  * Layout at the head: [u16 size][ShipModelData...]. The binary stores a
  * 16-bit HANDLE; we keep a malloc'd pointer here. */
-extern void* bpflight_fltobj_data;
+extern LandruHandle bpflight_fltobj_data[2];
 
 /* Currently-highlighted mesh_type for the component-blink effect.
  * Toggles between bp_active_component and -1 every 8/16 frames. */
@@ -86,8 +87,8 @@ void bpflight_Start_Movie_Engine(void);
 void bpflight_Stop_Movie_Engine(void);
 
 /* Load a FOURCC_SHIP resource from an LFD file into fltobj_data[mode].
- *   mode == 0 : primary ship  (fltobj_data)
- *   mode == 1 : training obstacle (fltobj_data_obstacle)
+ *   mode == 0 : primary ship  (fltobj_data[0])
+ *   mode == 1 : training obstacle (fltobj_data[1])
  * The resource name is uppercased in local scratch storage.
  * Always returns 1; on failure objectloadsize stays 0 and the viewer
  * paints a black rect. */
@@ -119,10 +120,10 @@ int bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, const char* name);
  * craftf{1,2,3}, copy craft{S,U}, call fview_calcrotworldeye. */
 void bpflight_Position_Craft(MatrixFrame* frame, int16_t joint_idx);
 
-/* Apply (+) or undo (-) the training/combat per-material color offset
- * to materialcolors[0 .. 39*16-1] using the *roommapping[] table. */
-void bpflight_settraincolors(int16_t apply_forward);
-void bpflight_setcombatcolors(int16_t apply_forward);
+/* Remove (nonzero) or re-apply (zero) the training/combat per-material
+ * color offset to materialcolors[0 .. 39*16-1] using the *roommapping[] table. */
+void bpflight_settraincolors(int16_t remove);
+void bpflight_setcombatcolors(int16_t remove);
 
 /* Swap materialcolors[] with the 720-byte bp_materialcolors[] backup. */
 void bpflight_swapbpmaterials(void);

@@ -276,13 +276,18 @@ static int16_t register_Find_Reg_Dir_Name(char* dst, size_t capacity, int16_t id
 
 // FUNCTION: TIE95 0x7C480
 // FUNCTION: TIE98 0x471F70
-// PORT: capacity parameter supports the wider TIE98 pilot name.
-// HARDENING: validates the output buffer.
-static void register_Get_Reg_String_Button_Name(RegStringButton* btn, char* dst, size_t capacity) {
-	if (!dst || !capacity)
-		return;
-	strncpy(dst, btn->name, capacity - 1);
-	dst[capacity - 1] = 0;
+// HARDENING: modern builds bound the copy to the pilot name buffer callers pass.
+static void register_Get_Reg_String_Button_Name(RegStringButton* btn, char* dst) {
+	int16_t i;
+
+	for (i = 0; btn->name[i]; i++) {
+#ifdef TIE_MODERN
+		if (i >= TIE_PILOT_NAME_MAX)
+			break;
+#endif
+		dst[i] = btn->name[i];
+	}
+	dst[i] = 0;
 }
 
 // FUNCTION: TIE95 0x7C44C
@@ -296,12 +301,12 @@ static void register_Set_Reg_String_Button_Name(RegStringButton* btn, const char
 
 // FUNCTION: TIE95 0x7C408
 // FUNCTION: TIE98 0x471EE0
-static int16_t register_Add_Key_To_Reg_String(RegStringButton* btn, char* s, char c) {
+static int16_t register_Add_Key_To_Reg_String(RegStringButton* btn, char* s, int16_t c) {
 	int16_t len = (int16_t)strlen(s);
 	int16_t max_len = btn->is_filename_mode ? TIE_PILOT_NAME_MAX : 20;
 	if (len >= max_len)
 		return 0;
-	s[len] = c;
+	s[len] = (char)c;
 	s[len + 1] = 0;
 	return 1;
 }
@@ -333,18 +338,26 @@ static RegStringButton* register_Alloc_Input_Reg_String_Button(Input* parent, Re
 // FUNCTION: TIE95 0x7BE54
 // FUNCTION: TIE98 0x471850
 static int16_t register_Read_Pilot_Data(TieFile* f, uint8_t* dst, uint16_t count) {
+	uint16_t failed = 0;
 	uint16_t pos = 0;
 	uint8_t buf[64];
 
-	while (count > 0) {
-		uint16_t chunk = count > 64 ? 64 : count;
-		if (TieStorage_Read(buf, 1, chunk, f) != chunk)
-			return 0;
-		memcpy(dst + pos, buf, chunk);
-		pos += chunk;
+	while (count && !failed) {
+		uint16_t chunk = count;
+		uint16_t i;
+
+		if (chunk > 64)
+			chunk = 64;
+
+		failed |= (uint16_t)TieStorage_Read(buf, 1, chunk, f) != chunk;
+		if (failed)
+			return !failed;
+		xtimer_Often();
+		for (i = 0; i < chunk;)
+			dst[pos++] = buf[i++];
 		count -= chunk;
 	}
-	return 1;
+	return !failed;
 }
 
 // FUNCTION: TIE95 0x7BD28
@@ -449,7 +462,7 @@ static void register_Delete_Pilot_Record(void) {
 static void register_Revive_Pilot_Record(void) {
 	char name_buf[TIE_PILOT_NAME_CAPACITY];
 
-	register_Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
+	register_Get_Reg_String_Button_Name(pilot_name_input, name_buf);
 	shipext_Load_Pilot(name_buf);
 	shipext_Revive_Pilot(name_buf);
 	register_Revive_Pilot_Info();
@@ -638,8 +651,10 @@ static void register_idraw_Reg_String_Button(Input* input, Rect* frame, Rect* cl
 static int16_t register_iupdate_Reg_String_Button(Input* input, Rect* bounds, Rect* clip, int16_t key,
 												  uint8_t left, uint8_t right, int16_t mouse_x,
 												  int16_t mouse_y) {
-	RegStringButton* btn;
-	char work[sizeof(btn->name)];
+	RegStringButton* btn = (RegStringButton*)input;
+	char work[32];
+	int16_t i;
+	int16_t len;
 	int16_t changed;
 
 	(void)bounds;
@@ -648,36 +663,36 @@ static int16_t register_iupdate_Reg_String_Button(Input* input, Rect* bounds, Re
 	(void)right;
 	(void)mouse_x;
 	(void)mouse_y;
-	btn = (RegStringButton*)input;
-	strcpy(work, btn->name);
+	for (i = 0; btn->name[i]; i++)
+		work[i] = btn->name[i];
+	work[i] = 0;
+	len = (int16_t)(strlen)(work);
 	changed = 1;
 
 	if (key) {
-		xio_Set_Mouse_Position(TIE_FRONTEND_EDITION(124, 536), TIE_FRONTEND_EDITION(106, 274));
+		xio_Set_Mouse_Position(TIE_FRONTEND_EDITION(280, 536), TIE_FRONTEND_EDITION(115, 274));
 		if (key == 0x5300 || key == 8) {
 			/* Delete/Backspace */
-			int16_t len = (int16_t)strlen(work);
 			if (len)
 				work[len - 1] = 0;
-		} else if (key < 32 || key >= 127) {
-			changed = 0;
-		} else if (isalpha(key)) {
-			char upper = (char)toupper(key);
-			changed = register_Add_Key_To_Reg_String(btn, work, upper);
-		} else if (btn->is_filename_mode) {
-			if (isdigit(key)) {
-				changed = register_Add_Key_To_Reg_String(btn, work, (char)key);
-			} else if (key == '_' || key == '-') {
-				changed = register_Add_Key_To_Reg_String(btn, work, (char)key);
+		} else if (key >= 32 && key < 127) {
+			if ((isalpha)(key)) {
+				changed = register_Add_Key_To_Reg_String(btn, work, (int16_t)toupper(key));
+			} else if (btn->is_filename_mode) {
+				if ((isdigit)(key))
+					changed = register_Add_Key_To_Reg_String(btn, work, key);
+				else if (key == '_' || key == '-')
+					changed = register_Add_Key_To_Reg_String(btn, work, key);
+				else
+					changed = 0;
 			} else {
-				changed = 0;
+				if (key == ' ' || key == '\'')
+					changed = register_Add_Key_To_Reg_String(btn, work, key);
+				else
+					changed = 0;
 			}
 		} else {
-			if (key == ' ' || key == '\'') {
-				changed = register_Add_Key_To_Reg_String(btn, work, (char)key);
-			} else {
-				changed = 0;
-			}
+			changed = 0;
 		}
 		if (changed) {
 			options_gbl.game_level = 1;
@@ -685,12 +700,14 @@ static int16_t register_iupdate_Reg_String_Button(Input* input, Rect* bounds, Re
 		}
 	}
 
-	strcpy(btn->name, work);
+	for (i = 0; work[i]; i++)
+		btn->name[i] = work[i];
+	btn->name[i] = 0;
 	if (changed) {
 		xinpattr_Refresh_Input(&btn->header);
 		xinpattr_Selected_Input(&btn->header);
 	}
-	return 0;
+	return changed;
 }
 
 /* ================================================================
@@ -711,7 +728,7 @@ static int16_t register_iupdate_Register(Input* input, Rect* bounds, Rect* clip,
 	if (key)
 		return 0;
 
-	register_Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
+	register_Get_Reg_String_Button_Name(pilot_name_input, name_buf);
 
 	if (!strlen(name_buf)) {
 		input->var1 = 3;
@@ -757,7 +774,7 @@ static void register_iuser_Register(Input* input, int32_t time) {
 
 			xerror_Set_Landru_Exit(input->var2);
 
-			register_Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
+			register_Get_Reg_String_Button_Name(pilot_name_input, name_buf);
 			shipext_Set_Pilot_Name(name_buf);
 			if (pilot_active == -1)
 				shipext_Create_Pilot(name_buf);
@@ -934,7 +951,7 @@ static void register_iuser_Pilot_Button(Input* input, int32_t time) {
 				char name_buf[TIE_PILOT_NAME_CAPACITY];
 				char path[TIE_PILOT_NAME_CAPACITY + 5];
 
-				register_Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
+				register_Get_Reg_String_Button_Name(pilot_name_input, name_buf);
 				snprintf(path, sizeof(path), "%s.tfr", name_buf);
 				TieStorage_Remove(TIE_FILE_ROOT_USER, path);
 				register_Delete_Pilot_Record();
@@ -1261,7 +1278,7 @@ static void register_Draw_Pilot_Lines(Rect* frame, int16_t phase, int16_t line2_
 // FUNCTION: TIE98 0x471190
 static void register_Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_phase) {
 	char typed[TIE_PILOT_NAME_CAPACITY];
-	register_Get_Reg_String_Button_Name(pilot_name_input, typed, sizeof(typed));
+	register_Get_Reg_String_Button_Name(pilot_name_input, typed);
 
 	if (phase == 2) {
 		shipext_Init_Pilot();
@@ -1645,7 +1662,7 @@ static void register_idraw_Delete_Input(Input* input, Rect* frame, Rect* clip, i
 	if (!refresh)
 		return;
 
-	register_Get_Reg_String_Button_Name(pilot_name_input, name_buf, sizeof(name_buf));
+	register_Get_Reg_String_Button_Name(pilot_name_input, name_buf);
 	TiePilotName_CopyForDisplay(display_name, sizeof(display_name), name_buf);
 	register_Index_To_Pilot_Record(pilot_active, &shell_pilot);
 
@@ -1966,7 +1983,7 @@ void register_end_View(int32_t phase) {
 
 	/* Per-frame: search for typed name in FPR */
 
-	register_Get_Reg_String_Button_Name(pilot_name_input, typed, sizeof(typed));
+	register_Get_Reg_String_Button_Name(pilot_name_input, typed);
 	xuser_Pilot_Name(typed);
 
 	/* Show/hide delete button */

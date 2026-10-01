@@ -12,7 +12,7 @@ extern "C" {
 struct Sound;
 
 /* Officer/priest talk scene. */
-int16_t talk_Talk(SceneHeadStruct* scene_head);
+int talk_Talk(SceneHeadStruct* scene_head);
 
 /* Officer/priest mood control (0-4). Drives face animation. */
 void talk_Set_Officer_Mood(int16_t mood);

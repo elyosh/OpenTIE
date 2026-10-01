@@ -161,12 +161,19 @@ static uint16_t starship_damagecomponent_tie98(uint16_t obj_idx, int16_t compone
 
 // FUNCTION: TIE95 0x52EC0
 int16_t starship_getcoordvalue(const uint8_t* bsp_coord) {
+#ifdef TIE_MODERN
 	int16_t value;
+#endif
 
 	while (bsp_coord[1] == 0x7F)
 		bsp_coord -= 3 * (int)bsp_coord[0];
+#ifdef TIE_MODERN
+	/* Records are 3 bytes apart, so the coordinate may be unaligned. */
 	memcpy(&value, bsp_coord, sizeof value);
 	return value;
+#else
+	return *(const int16_t*)bsp_coord;
+#endif
 }
 
 /* ---------------------------------------------------------------- *

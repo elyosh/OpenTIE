@@ -106,20 +106,19 @@ int16_t instrumentdisable[] = { 0x200, 0x040, 0x020, 0x006, 0x400,  0x180, 0x010
 /* ---------- 1. collide_makeobjectexplosion ---------- */
 // FUNCTION: TIE95 0x15A24
 char collide_makeobjectexplosion(uint16_t obj_idx, uint8_t ship_variant) {
-	FlightObject* o = &objects[obj_idx];
 	TIE_FLIGHT_TRACE_EXPLOSION(obj_idx, ship_variant);
 
-	o->ship_idx = ship_variant;
-	o->anim_frame = 2;
-	o->genus = GENUS_EXPLOSION;
-	o->damage_state = 0;
-	o->category = 5;
-	o->age_ticks = 0;
-	o->current_speed = 0;
-	o->death_timer = 0;
-	o->roll = 0;
-	o->spin_rate = 0;
-	o->orient_dirty = 1;
+	objects[obj_idx].ship_idx = ship_variant;
+	objects[obj_idx].anim_frame = 2;
+	objects[obj_idx].genus = GENUS_EXPLOSION;
+	objects[obj_idx].damage_state = 0;
+	objects[obj_idx].category = 5;
+	objects[obj_idx].age_ticks = 0;
+	objects[obj_idx].current_speed = 0;
+	objects[obj_idx].death_timer = 0;
+	objects[obj_idx].roll = 0;
+	objects[obj_idx].spin_rate = 0;
+	objects[obj_idx].orient_dirty = 1;
 
 	/* EXPLOSION event fired when a craft or projectile enters its death sequence.
 	 * transitions to an explosion sprite — covers move_moveobjects' death-
@@ -128,6 +127,7 @@ char collide_makeobjectexplosion(uint16_t obj_idx, uint8_t ship_variant) {
 	 * encodes ship_variant so the renderer can pick the right effect. */
 #ifdef TIE_MODERN
 	{
+		FlightObject* o = &objects[obj_idx];
 		TieEvent ev = {
 			.kind     = TIE_EVENT_EXPLOSION,
 			.actor_id = o->idnumber,
@@ -144,7 +144,7 @@ char collide_makeobjectexplosion(uint16_t obj_idx, uint8_t ship_variant) {
 #endif
 
 	/* Random sfx in [19..22] (4 craft-explosion variants). */
-	return fsfx_triggersfx(((uint8_t)math2_getrandom() & 3) + 19, obj_idx);
+	return fsfx_triggersfx((math2_getrandom() & 3) + 19, obj_idx);
 }
 
 /* ---------- 2. collide_roughdistance3du ---------- */
@@ -166,43 +166,58 @@ int32_t collide_roughdistance3d(int32_t dx, int32_t dy, int32_t dz) {
 		dy = -dy;
 	if (dz < 0)
 		dz = -dz;
-	return (int32_t)collide_roughdistance3du((uint32_t)dx, (uint32_t)dy, (uint32_t)dz);
+	if (dx > dy && dx > dz)
+		return dx + (dy >> 2) + (dz >> 2);
+	if (dy > dx && dy > dz)
+		return dy + (dx >> 2) + (dz >> 2);
+	return dz + (dx >> 2) + (dy >> 2);
 }
 
 /* ---------- 4. collide_updatehits ---------- */
 // FUNCTION: TIE95 0x164D0
-CraftData* collide_updatehits(uint16_t projectile_obj_idx) {
+void collide_updatehits(uint16_t projectile_obj_idx, uint16_t hit_count) {
 	uint16_t self_idx = objects[projectile_obj_idx].self_idx;
 	uint16_t ship_idx = objects[projectile_obj_idx].ship_idx;
+	CraftData* craft;
 
 	/* Static shooters use encoded references and have no craft hit counters. */
-	CraftData* result;
-
 	if (self_idx >= NUM_CRAFTS)
-		return NULL;
+		return;
 
-	result = objects[self_idx].craft_ptr;
+	craft = objects[self_idx].craft_ptr;
 
-	if (ship_idx < 0x8Du) {
-		/* Laser projectile (ship_idx 0x89..0x8C). */
-		if (ship_idx >= 0x89u) {
-			result->laser_hit++;
-			if (self_idx == pstate.object_idx)
-				pstate.player_laser_hit++;
-		}
-	} else if (ship_idx <= 0x8Eu) {
-		/* Missile projectile (0x8D, 0x8E). */
-		result->missile_hit++;
+	switch (ship_idx) {
+	case 0x89:
+	case 0x8A:
+	case 0x8B:
+	case 0x8C:
+		/* Laser projectile. */
+		craft->laser_hit++;
+		if (self_idx == pstate.object_idx)
+			pstate.player_laser_hit++;
+		break;
+	case 0x8D:
+	case 0x8E:
+		/* Missile projectile. */
+		craft->missile_hit++;
 		if (self_idx == pstate.object_idx)
 			pstate.player_missile_hit++;
-	} else if (ship_idx <= 0x90u || (ship_idx >= 0x94u && ship_idx <= 0x9Au)) {
-		/* Warhead/torpedo (0x8F, 0x90 or 0x94..0x9A). */
-		result->warhead_hit++;
+		break;
+	case 0x8F:
+	case 0x90:
+	case 0x94:
+	case 0x95:
+	case 0x96:
+	case 0x97:
+	case 0x98:
+	case 0x99:
+	case 0x9A:
+		/* Warhead/torpedo. */
+		craft->warhead_hit++;
 		if (self_idx == pstate.object_idx)
 			pstate.player_warhead_hit++;
+		break;
 	}
-
-	return result;
 }
 
 /* ---------- 5. collide_updatekills ---------- */
@@ -569,15 +584,14 @@ int32_t collide_checkboxcollision(int32_t radius) {
 /* ---------- 7. collide_lasercraftcollide ---------- */
 // FUNCTION: TIE95 0x136C0
 uint16_t collide_lasercraftcollide(uint16_t attacker_obj_idx, uint16_t target_obj_idx) {
-	int32_t abs_dx = laserx - craftx;
-	int32_t abs_dy, abs_dz;
-	int32_t approx;
-	int32_t atk_disp_x, atk_disp_y, atk_disp_z;
-	int32_t tgt_disp_x, tgt_disp_y, tgt_disp_z;
+	int32_t abs_dx, abs_dz, abs_dy;
+	uint32_t approx;
+	int32_t tgt_disp;
 	int32_t bound_hwidth;
-	uint8_t genus;
+	int32_t genus;
 
 	approxdist = 0x40000;
+	abs_dx = laserx - craftx;
 	if (abs_dx < 0)
 		abs_dx = -abs_dx;
 	if (abs_dx > 0x40000)
@@ -595,115 +609,115 @@ uint16_t collide_lasercraftcollide(uint16_t attacker_obj_idx, uint16_t target_ob
 	if (abs_dz > 0x40000)
 		return 0;
 
-	approx = (int32_t)collide_roughdistance3du((uint32_t)abs_dx, (uint32_t)abs_dy, (uint32_t)abs_dz);
-	approxdist = approx;
-	if (approx > 0x40000)
+	approx = collide_roughdistance3du((uint32_t)abs_dx, (uint32_t)abs_dy, (uint32_t)abs_dz);
+	approxdist = (int32_t)approx;
+	if ((int32_t)approx > 0x40000)
 		return 0;
 
 	/* Tighter swept-bound test: combine attacker and target per-axis
 	 * displacement, add bound, compare against approximate distance. */
-	atk_disp_x = laserx - laserxold;
-	if (atk_disp_x < 0)
-		atk_disp_x = -atk_disp_x;
-	atk_disp_y = lasery - laseryold;
-	if (atk_disp_y < 0)
-		atk_disp_y = -atk_disp_y;
-	atk_disp_z = laserz - laserzold;
-	if (atk_disp_z < 0)
-		atk_disp_z = -atk_disp_z;
-	tgt_disp_x = craftx - craftxold;
-	if (tgt_disp_x < 0)
-		tgt_disp_x = -tgt_disp_x;
-	tgt_disp_y = crafty - craftyold;
-	if (tgt_disp_y < 0)
-		tgt_disp_y = -tgt_disp_y;
-	tgt_disp_z = craftz - craftzold;
-	if (tgt_disp_z < 0)
-		tgt_disp_z = -tgt_disp_z;
+	abs_dx = laserx - laserxold;
+	if (abs_dx < 0)
+		abs_dx = -abs_dx;
+	abs_dy = lasery - laseryold;
+	if (abs_dy < 0)
+		abs_dy = -abs_dy;
+	abs_dz = laserz - laserzold;
+	if (abs_dz < 0)
+		abs_dz = -abs_dz;
+	tgt_disp = craftx - craftxold;
+	if (tgt_disp < 0)
+		tgt_disp = -tgt_disp;
+	abs_dx += tgt_disp;
+	tgt_disp = crafty - craftyold;
+	if (tgt_disp < 0)
+		tgt_disp = -tgt_disp;
+	abs_dy += tgt_disp;
+	tgt_disp = craftz - craftzold;
+	if (tgt_disp < 0)
+		tgt_disp = -tgt_disp;
+	abs_dz += tgt_disp;
 
 	bound_hwidth = (int32_t)species_table[objects[target_obj_idx].ship_idx].bound_hwidth;
 	genus = objects[target_obj_idx].genus;
-	if (genus == GENUS_PROJECTILE_PLAYER || genus == GENUS_PROJECTILE_NPC)
+	if (genus == GENUS_PROJECTILE_NPC || genus == GENUS_PROJECTILE_PLAYER)
 		bound_hwidth >>= 1;
 
-	if ((int32_t)collide_roughdistance3du((uint32_t)(atk_disp_x + tgt_disp_x + bound_hwidth),
-										  (uint32_t)(atk_disp_y + tgt_disp_y + bound_hwidth),
-										  (uint32_t)(atk_disp_z + tgt_disp_z + bound_hwidth)) < approx)
+	if (collide_roughdistance3du((uint32_t)(abs_dx + bound_hwidth), (uint32_t)(abs_dy + bound_hwidth),
+								 (uint32_t)(abs_dz + bound_hwidth)) < approx)
 		return 0;
 
-	if (bound_hwidth <= 1400)
-		return (uint16_t)collide_checkboxcollision((bound_hwidth >> 2) + (bound_hwidth >> 3));
-
-	if (targetcomputerflag) {
-		targetcomputerflag = 0;
-		if ((uint16_t)objects[target_obj_idx].current_speed >= 0x28u)
-			return (uint16_t)collide_checkboxcollision((bound_hwidth >> 2) + (bound_hwidth >> 3));
+	if (bound_hwidth > 1400) {
+		if (targetcomputerflag) {
+			targetcomputerflag = 0;
+			if ((uint16_t)objects[target_obj_idx].current_speed < 0x28)
+				return starship_checkstarshiphit(attacker_obj_idx, target_obj_idx);
+		} else {
+			return starship_checkstarshiphit(attacker_obj_idx, target_obj_idx);
+		}
 	}
 
-	return starship_checkstarshiphit(attacker_obj_idx, target_obj_idx);
+	return (uint16_t)collide_checkboxcollision((bound_hwidth >> 3) + (bound_hwidth >> 2));
 }
 
 /* ---------- 8. collide_targetinrange ---------- */
 // FUNCTION: TIE95 0x13E64
-uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx, uint8_t hp_idx) {
-	FlightObject* shooter = &objects[shooter_obj_idx];
+uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx, uint16_t hp_idx) {
+	int16_t lookahead_3frame;
+	int16_t proj_speed;
 	FlightObject* tgt;
+	uint8_t species_idx;
+	uint16_t mph;
+	uint16_t result;
+
 	/* Projectile speed: retail uses player_spec_num and the active
 	 * bank (player_weapon_group). */
-	uint8_t bank = pstate.player_weapon_group;
-	uint16_t laser_species = spec_data[pstate.player_spec_num].laser_type[bank];
-	int16_t proj_speed = (int16_t)projectilevelocity[laser_species - WEAPON_SPECIES_BASE];
-	int16_t lookahead_3frame = 3 * (int16_t)framerate;
-	/* Hardpoint position: retail uses shooter->species_idx and the
+	proj_speed = (int16_t)projectilevelocity[spec_data[pstate.player_spec_num].laser_type[pstate.player_weapon_group] -
+											 WEAPON_SPECIES_BASE];
+	lookahead_3frame = 3 * (int16_t)framerate;
+	laserxold = objects[shooter_obj_idx].world_x;
+	laseryold = objects[shooter_obj_idx].world_y;
+	laserzold = objects[shooter_obj_idx].world_z;
+
+	/* Hardpoint position: retail uses objects[shooter_obj_idx].species_idx and the
 	 * caller-supplied group index, NOT the active bank. Each weapon
 	 * group has its own slot in spec.hp[], so probing a different group
 	 * tests a different physical cannon mouth. */
-	uint8_t species_idx = shooter->craft_ptr->species_idx;
-	int32_t hp_x = spec_data[species_idx].hp[hp_idx].x;
-	int32_t hp_y = spec_data[species_idx].hp[hp_idx].y;
-	int32_t hp_z = spec_data[species_idx].hp[hp_idx].z;
-	int16_t tot_speed;
-	uint16_t shoot_mph;
-	uint16_t tgt_mph;
-
-	laserxold = shooter->world_x;
-	laseryold = shooter->world_y;
-	laserzold = shooter->world_z;
-
-	pai_calcrotatedpoint(shooter, (int16_t)hp_x, (int16_t)hp_y, (int16_t)hp_z);
+	species_idx = objects[shooter_obj_idx].craft_ptr->species_idx;
+	pai_calcrotatedpoint(&objects[shooter_obj_idx], spec_data[species_idx].hp[hp_idx].x, spec_data[species_idx].hp[hp_idx].y,
+						 spec_data[species_idx].hp[hp_idx].z);
 	laserxold += rotatedx;
 	laseryold += rotatedy;
 	laserzold += rotatedz;
 
-	tot_speed = (int16_t)(proj_speed + shooter->current_speed);
-	shoot_mph = math2_mphconvert(tot_speed, framerate);
-	if (shooter->move_dirty)
-		fview_calcrotatemove(shooter->pitch, shooter->heading, shooter);
+	mph = math2_mphconvert((int16_t)(proj_speed + objects[shooter_obj_idx].current_speed), framerate);
+	if (objects[shooter_obj_idx].move_dirty)
+		fview_calcrotatemove(objects[shooter_obj_idx].pitch, objects[shooter_obj_idx].heading, &objects[shooter_obj_idx]);
 
-	/* Watcom unaligned: '*(int*)&move_dirty >>16' = moveX, etc. */
-	laserx = laserxold + lookahead_3frame * ((shoot_mph * shooter->moveX) >> 15);
-	lasery = laseryold + lookahead_3frame * ((shoot_mph * shooter->moveY) >> 15);
-	laserz = laserzold + lookahead_3frame * ((shoot_mph * shooter->moveZ) >> 15);
+	laserx = laserxold + lookahead_3frame * ((mph * objects[shooter_obj_idx].moveX) >> 15);
+	lasery = laseryold + lookahead_3frame * ((mph * objects[shooter_obj_idx].moveY) >> 15);
+	laserz = laserzold + lookahead_3frame * ((mph * objects[shooter_obj_idx].moveZ) >> 15);
 
-	if (target_obj_idx >= 0x3800u)
-		return (uint16_t)static_laserstaticcollide(shooter_obj_idx, target_obj_idx - 0x3800u);
+	if (target_obj_idx < 0x3800) {
+		tgt = &objects[target_obj_idx];
+		craftxold = tgt->world_x;
+		craftyold = tgt->world_y;
+		craftzold = tgt->world_z;
 
-	tgt = &objects[target_obj_idx];
-	craftxold = tgt->world_x;
-	craftyold = tgt->world_y;
-	craftzold = tgt->world_z;
+		mph = math2_mphconvert(tgt->current_speed, framerate);
+		if (tgt->move_dirty)
+			fview_calcrotatemove(tgt->pitch, tgt->heading, tgt);
 
-	/* Watcom unaligned: HIWORD(*(DWORD*)&spin_rate) = current_speed. */
-	tgt_mph = math2_mphconvert(tgt->current_speed, framerate);
-	if (tgt->move_dirty)
-		fview_calcrotatemove(tgt->pitch, tgt->heading, tgt);
+		craftx = craftxold + lookahead_3frame * ((mph * tgt->moveX) >> 15);
+		crafty = craftyold + lookahead_3frame * ((mph * tgt->moveY) >> 15);
+		craftz = craftzold + lookahead_3frame * ((mph * tgt->moveZ) >> 15);
 
-	craftx = craftxold + lookahead_3frame * ((tgt_mph * tgt->moveX) >> 15);
-	crafty = craftyold + lookahead_3frame * ((tgt_mph * tgt->moveY) >> 15);
-	craftz = craftzold + lookahead_3frame * ((tgt_mph * tgt->moveZ) >> 15);
-
-	targetcomputerflag = 1;
-	return collide_lasercraftcollide(shooter_obj_idx, target_obj_idx);
+		targetcomputerflag = 1;
+		result = collide_lasercraftcollide(shooter_obj_idx, target_obj_idx);
+		targetcomputerflag = 0;
+		return result;
+	}
+	return (uint16_t)static_laserstaticcollide(shooter_obj_idx, target_obj_idx - 0x3800);
 }
 
 /* ---------- 9. collide_craftstarshipcollision ---------- */
@@ -1937,7 +1951,7 @@ void collide_collisions(void) {
 						if (hit) {
 							TIE_FLIGHT_TRACE_COLLISION(projectile_idx, i, TIE_TRACE_COLLISION_PROJECTILE,
 													   (int16_t)hit);
-							collide_updatehits(projectile_idx);
+							collide_updatehits(projectile_idx, 1);
 							if (i < NUM_CRAFTS) {
 								collide_laserhitcraft(projectile_idx, i, (int16_t)hit);
 							} else {
@@ -1960,7 +1974,7 @@ void collide_collisions(void) {
 														   (uint16_t)(m + OBJ_REF_STATIC_BASE),
 														   TIE_TRACE_COLLISION_STATIC, -1);
 								static_laserhitstatic(projectile_idx, m);
-								collide_updatehits(projectile_idx);
+								collide_updatehits(projectile_idx, 1);
 								break;
 							}
 						}

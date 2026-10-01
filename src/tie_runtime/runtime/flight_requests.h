@@ -33,6 +33,14 @@ int32_t TieFlightRequest_SubmodalResult(void);
 void TieFlightRequest_InfoRoom(int32_t screen);
 int32_t TieFlightRequest_ConsumeInfoRoom(void);
 
+/* Key left by an info room that closed on the wingmen screen (4), such as
+ * a wingman order chosen there. The original dispatched it again before
+ * the frame continued; the port runs the room as a task, so the info task
+ * records the key and the next user_inputforplane dispatches it before
+ * that frame's own key. Consume returns false when none is pending. */
+void TieFlightRequest_SetRoomKey(int16_t key);
+bool TieFlightRequest_ConsumeRoomKey(int16_t* key);
+
 /* Replay-viewer request from the 'v' key; the flight task consumes it and
  * pushes TieReplaySession_Begin, then posts the RESUMED banner after the
  * viewer pops. */

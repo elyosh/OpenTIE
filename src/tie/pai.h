@@ -50,11 +50,11 @@ uint16_t pai_searchformother(uint16_t fg_idx);
 
 /* Gate: obj_ref is worth attacking AND within engagement range.
  * pursue_hot != 0 extends the radius by 4/3. */
-char pai_checktargetforattack(uint16_t obj_ref, int16_t pursue_hot);
+int16_t pai_checktargetforattack(uint16_t attacker_ref, uint16_t obj_ref, int16_t pursue_hot);
 
 /* Filter: obj_ref is alive, not in a transition mode, and not identical
  * to the scoring craft with impossible shields. */
-char pai_worthytarget(uint16_t obj_ref);
+int16_t pai_worthytarget(uint16_t obj_ref);
 
 /* Proximity test within a skill-tiered combat radius (2560..3520 world
  * units <<8). */
@@ -107,8 +107,8 @@ void pai_targetdistance(void);
 
 /* Closest-available search for a disable target. Returns obj_ref
  * (<0x3800 flight, >=0x3800 static) or 0xFFFF. */
-uint16_t pai_finddisabledingroup(uint8_t group_type1, uint16_t group_id1, int16_t combine_op,
-								 uint8_t group_type2, uint16_t group_id2);
+uint16_t pai_finddisabledingroup(uint16_t group_type1, uint16_t group_id1, uint16_t combine_op,
+								 uint16_t group_type2, uint16_t group_id2);
 
 /* Order-completion test: is the (order_code, ai_entry) sub-goal
  * satisfied? Used by PAIORDER_completegohomeorder. */
@@ -116,7 +116,7 @@ int pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry);
 
 /* Is obj_ref a legal target under the current AI entry's pri/sec and
  * target[0]/target[1] selectors? */
-char pai_isobjectvalidtarget(uint16_t obj_ref);
+int16_t pai_isobjectvalidtarget(uint16_t obj_ref);
 
 /* ---- Active-AI context block -----------------------------------------
  * 52-byte struct at 0xF8F48 (watdbg _ai[52]). Set by pai_setupcraftaivars

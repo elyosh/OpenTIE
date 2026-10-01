@@ -105,7 +105,7 @@ static int16_t tourdesk_draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, in
 static int16_t tourdesk_Draw_Battle_One(Rect* galaxy_rect, int32_t tour_time);
 static void tourdesk_Draw_Battle_Two(Rect* galaxy_rect, int16_t tour_time, Rect* clip_r);
 static void tourdesk_Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t tour_time);
-static void tourdesk_Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int16_t tour_time);
+static int16_t tourdesk_Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int tour_time);
 static int tourdesk_Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time);
 static int16_t tourdesk_draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
 									int16_t refresh);
@@ -447,29 +447,28 @@ static void tourdesk_Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t 
 /* Phase 32-39: reveal actor with vertical wipe */
 // FUNCTION: TIE95 0x742A0
 // FUNCTION: TIE98 0x4916F0
-static void tourdesk_Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int16_t time) {
+static int16_t tourdesk_Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int time) {
 	Actor* art;
 	Rect bounds;
-	int16_t t;
 	(void)galaxy_rect;
-	if (time < 32 || time >= 40)
-		return;
+	if (time >= 32 && time < 40) {
+		time -= 32;
+		art = galaxy_art_actor[pilot_record.cur_battle];
+		xactor_Get_Actor_Bounds(art, &bounds);
+		xrect_Offset_Rect(&bounds, view_r->left, view_r->top);
+		if (TIE_FRONTEND_TIE98)
+			xrect_Clip_Rect(&bounds, clip_r);
 
-	art = galaxy_art_actor[pilot_record.cur_battle];
-	xactor_Get_Actor_Bounds(art, &bounds);
-	xrect_Offset_Rect(&bounds, view_r->left, view_r->top);
-	if (TIE_FRONTEND_TIE98)
-		xrect_Clip_Rect(&bounds, clip_r);
+		if (!xrect_Empty_Rect(&bounds))
+			shade_Draw_Talk_Shade_Rect(&bounds);
 
-	t = time - 32;
-	if (!xrect_Empty_Rect(&bounds))
-		shade_Draw_Talk_Shade_Rect(&bounds);
-
-	bounds.bottom = ((t * (bounds.bottom - bounds.top)) >> 3) + bounds.top;
-	if (xrect_Clip_Rect(&bounds, clip_r)) {
-		xcanvas_Set_Drawing_Canvas_Clip(&bounds);
-		xactdelt_Draw_Delta_Actor(art, view_r, &bounds, view_r->left, view_r->top, 1);
+		bounds.bottom = ((time * (bounds.bottom - bounds.top)) >> 3) + bounds.top;
+		if (xrect_Clip_Rect(&bounds, clip_r)) {
+			xcanvas_Set_Drawing_Canvas_Clip(&bounds);
+			xactdelt_Draw_Delta_Actor(art, view_r, &bounds, view_r->left, view_r->top, 1);
+		}
 	}
+	return 1;
 }
 
 /* Phase 40+: final state — full art + battle info text */

@@ -14,6 +14,8 @@
 
 static int32_t s_submodal_result;
 static int32_t s_info_room_pending = -1;
+static bool s_room_key_pending;
+static int16_t s_room_key;
 static bool s_replay_viewer_pending;
 static bool s_pause_active;
 static int16_t s_pause_saved_vol;
@@ -28,6 +30,19 @@ int32_t TieFlightRequest_ConsumeInfoRoom(void) {
 	int32_t r = s_info_room_pending;
 	s_info_room_pending = -1;
 	return r;
+}
+
+void TieFlightRequest_SetRoomKey(int16_t key) {
+	s_room_key = key;
+	s_room_key_pending = true;
+}
+
+bool TieFlightRequest_ConsumeRoomKey(int16_t* key) {
+	if (!s_room_key_pending)
+		return false;
+	s_room_key_pending = false;
+	*key = s_room_key;
+	return true;
 }
 
 void TieFlightRequest_ReplayViewer(void) { s_replay_viewer_pending = true; }

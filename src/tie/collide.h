@@ -110,7 +110,7 @@ int32_t collide_checkboxcollision(int32_t radius);
  * the active bank gets its own lookahead probe. Called only by
  * panel_updatelasers.
  */
-uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx, uint8_t hp_idx);
+uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx, uint16_t hp_idx);
 
 /*
  * Predict-ahead collision sweep for AI: extrapolate craft_obj_idx's
@@ -198,9 +198,10 @@ void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx);
  * projectile in projectile_obj_idx, classified by ship_idx range.
  * When shooter is the player, also bumps the matching session-stat
  * global (player_laser_hit / player_missile_hit / player_warhead_hit).
- * Returns the shooter's CraftData* (or self's if shooter not a craft).
+ * Callers always pass hit_count = 1; the counters advance by one
+ * regardless of its value.
  */
-CraftData* collide_updatehits(uint16_t projectile_obj_idx);
+void collide_updatehits(uint16_t projectile_obj_idx, uint16_t hit_count);
 
 #ifdef __cplusplus
 }

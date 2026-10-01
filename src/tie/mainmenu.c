@@ -130,19 +130,18 @@ static int16_t mainmenu_iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip,
 	title_actor->var2 = input->id;
 
 	/* Check for mouse click (button state 3 = released) */
-	if (left != 3 && right != 3)
+	if (left != (uint8_t)3 && right != (uint8_t)3)
 		return 1;
 
 	switch (input->id) {
 		case 0: { /* Tour Battle */
-			int16_t ok = shipext_Set_Tour_Battle();
-			if (!ok) {
-				xinpattr_Hide_Input(input);
-				return 1;
+			if (shipext_Set_Tour_Battle()) {
+				input->var2 = SCENE_BRIEF; /* exit_code */
+				input->var1 = 1;           /* exit_pending */
+				break;
 			}
-			input->var2 = SCENE_BRIEF; /* exit_code */
-			input->var1 = 1;           /* exit_pending */
-			break;
+			xinpattr_Hide_Input(input);
+			return 1;
 		}
 #ifdef TIE_MODERN
 		case 2:

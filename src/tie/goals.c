@@ -150,39 +150,29 @@ uint8_t goals_checkidflag(uint16_t fg_index) { return fgstatus[fg_index].cond_id
  * ==================================================================== */
 
 // FUNCTION: TIE95 0x2C6D8
-uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
-	const uint8_t* name_ptr;
-	const uint16_t spec_num = spec_getspecnum(species_idx);
+uint16_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
+	const uint8_t* name;
+	uint16_t spec_num;
+	uint16_t wrap;
 
-	uint8_t wrap;
-
-	if (spec_num == 0xFF) {
-		/* Species not in spec_data[]; fall back to the buoy/navigation
-		 * strings. Only species 70..84 are valid indices into buoystr[15].
-		 * The binary's bounds check (cmp edx,0x46 / cmp edx,0x54) is
-		 * compile-time dead because both jumps land back in the buoystr
-		 * path -- out-of-range species yield undefined reads there. We
-		 * match the shipped behavior verbatim. */
-		name_ptr = (const uint8_t*)(((char**)buoystr)[species_idx - 70]);
-	} else {
+	spec_num = spec_getspecnum(species_idx);
+	if (spec_num != 0xFF) {
 #ifdef TIE_MODERN
-		name_ptr = (const uint8_t*)spec_name_ptrs[spec_num];
+		name = (const uint8_t*)spec_name_ptrs[spec_num];
 #else
-		name_ptr = (const uint8_t*)spec_data[spec_num].name_ptr;
+		name = (const uint8_t*)spec_data[spec_num].name_ptr;
 #endif
+	} else if (species_idx >= 70 || species_idx <= 84) {
+		/* The retail range check uses || and so accepts every species. */
+		name = (const uint8_t*)((char**)buoystr)[species_idx - 70];
 	}
 
 	/* Right-margin wrap check (checkwrap, inlined in retail). */
-	wrap = 0;
-	if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(name_ptr) > screenXRes - 11u) {
-		if (outchar)
-			outchar('\n');
-		festring_setcursor(6, cursory);
-		wrap = fontheight;
-	}
-	festring_outstring(name_ptr);
-	if (outchar)
-		outchar(plural_flag ? 's' : ' ');
+	wrap = cursorx + (uint16_t)sys2_calclength(name) > screenXRes - 11u
+			   ? (outchar('\n'), festring_setcursor(6, cursory), fontheight)
+			   : 0;
+	festring_outstring(name);
+	outchar(plural_flag ? 's' : ' ');
 	return wrap;
 }
 

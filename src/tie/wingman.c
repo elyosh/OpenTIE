@@ -58,20 +58,24 @@ const char** wingmanstrings;
 // FUNCTION: TIE95 0x61F70
 // FUNCTION: TIE98 0x499310
 int32_t wingman_wingmanroom(void) {
-	int16_t selected_idx;
-	int16_t prev_buttons;
-	int16_t ret_delta;
-	int render_again = 1;
+	int16_t selected_idx = 0;
+	int16_t full_redraw = 1;
+	int16_t exit_room = 0;
+	int ret_delta;
+	uint16_t prev_buttons = 0;
+	int16_t redraw;
+	int16_t old_idx = 0;
 #ifdef TIE_MODERN
 	WingmanRoomState* continuation = landru_task_top();
-	selected_idx = continuation->selected_idx;
-	prev_buttons = continuation->prev_buttons;
-	ret_delta = continuation->ret_delta;
-	render_again = continuation->render;
-	if (!continuation->started)
+	if (continuation->started) {
+		/* Each resume redraws every row; the partial redraw is an optimization. */
+		selected_idx = continuation->selected_idx;
+		old_idx = selected_idx;
+		prev_buttons = (uint16_t)continuation->prev_buttons;
+		ret_delta = continuation->ret_delta;
+	} else
 #endif
 	{
-
 		dropflag = 1;
 		festring_setlinewrap(0);
 		festring_setautofill(1);
@@ -79,132 +83,165 @@ int32_t wingman_wingmanroom(void) {
 		festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
 		festring_setbackcolor(COLOR_BG_NORMAL);
 		festring_settextcolor(COLOR_TEXT_DEFAULT);
-
-		selected_idx = 0;
-		prev_buttons = 0;
-		ret_delta = 0;
-
 #ifdef TIE_MODERN
 		continuation->selected_idx = selected_idx;
-		continuation->prev_buttons = prev_buttons;
-		continuation->ret_delta = ret_delta;
+		continuation->prev_buttons = (int16_t)prev_buttons;
+		continuation->ret_delta = 0;
 		continuation->started = true;
 		continuation->render = true;
 		return 0;
 #endif
 	}
-	for (;;) {
-		if (render_again) {
+	do {
+#ifdef TIE_MODERN
+		if (continuation->render)
+#endif
+		{
+			uint16_t y;
+			uint32_t row_spacing;
+			int16_t i;
+
 			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
-			{
-				/* 20-line visible grid in 320x200, 50-line in the 640x480 modes. */
-				const int16_t margin =
-					(flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
-					 flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
-						? 51
-						: 21;
-				const uint32_t row_spacing = (screenYRes - 2 * margin) / NUM_WINGMAN_CMDS;
-
-				int16_t y = margin;
-				int i;
-				for (i = 0; i < NUM_WINGMAN_CMDS; i++) {
-					festring_setbackcolor(
-						(uint16_t)(i == selected_idx ? COLOR_BG_SELECTED : COLOR_BG_NORMAL));
+			/* 20-line visible grid in 320x200, 50-line in the 640x480 modes. */
+			switch (flightResolution) {
+			case TIE_FLIGHT_RES_SVGA:
+#if defined(TIE98) || defined(TIE_MODERN)
+			case TIE_FLIGHT_RES_SVGA_16:
+			case TIE_FLIGHT_RES_SVGA_D3D:
+#endif
+				y = 51;
+				break;
+			case TIE_FLIGHT_RES_VGA:
+			default:
+				y = 21;
+				break;
+			}
+			row_spacing = (screenYRes - y * 2) / NUM_WINGMAN_CMDS;
+			for (i = 0; i < NUM_WINGMAN_CMDS; i++) {
+				festring_setbackcolor(i == selected_idx ? COLOR_BG_SELECTED : COLOR_BG_NORMAL);
+				if (i == selected_idx || i == old_idx || full_redraw) {
 					festring_setcursor(1, y);
 					festring_outstring((const uint8_t*)wingmanstrings[i]);
 					outchar('\n');
-					y = (int16_t)(y + row_spacing);
 				}
+				y += row_spacing;
 			}
 			if (TIE_DISPLAY_DX5) {
 				FlightSurface_Unlock();
 				FrontendDisplay_BlitOffscreenToRenderSurface();
 				FrontendDisplay_PresentFrame();
 			}
+			old_idx = selected_idx;
+			full_redraw = 0;
 #ifdef TIE_MODERN
 			continuation->selected_idx = selected_idx;
-			continuation->prev_buttons = prev_buttons;
-			continuation->ret_delta = ret_delta;
+			continuation->prev_buttons = (int16_t)prev_buttons;
 			continuation->render = false;
 			return 0;
 #endif
 		}
-		{
-			uint16_t key;
-			int mouse_btn;
-			int redraw = 0;
-			int exit_room = 0;
+		redraw = 0;
+		do {
+			uint16_t buttons;
 
 			feinput_getrawinput();
 			feinput_checkinput();
 			feinput_degitterinput();
-			inputdeltay = (int16_t)(inputdeltay * 2);
+			inputdeltay *= 2;
 
-			key = (uint16_t)inputkey;
-
-			if (key == K_LEFT) {
+			switch ((uint16_t)inputkey) {
+			case K_ESC:
+			case K_Q_UPPER:
+			case K_Q_LOWER:
+			case K_Z_UPPER:
+			case K_W_LOWER:
+			case K_F1:
+				exit_room = 1;
+				ret_delta = 2;
+				redraw = 1;
+				break;
+			case K_LEFT:
 				ret_delta = -1;
 				exit_room = 1;
-			} else if (key == K_RIGHT) {
-				ret_delta = 1;
+				redraw = 1;
+				break;
+			case K_RIGHT:
 				exit_room = 1;
-			} else if (key == K_UP || key == K_KP8) {
+				ret_delta = 1;
+				redraw = 1;
+				break;
+			case 'A':
+			case 'B':
+			case 'C':
+			case 'E':
+			case 'G':
+			case 'H':
+			case 'I':
+			case 'R':
+			case 'S':
+			case 'W':
+				/* Direct-select: leave inputkey as the typed letter so the
+				 * caller can dispatch on it (same contract as Enter below). */
+				exit_room = 1;
+				ret_delta = 0;
+				redraw = 1;
+				break;
+			case K_UP:
+			case K_KP8:
 				/* Move up (wrap 0 <-> 9). */
-				selected_idx = (int16_t)(selected_idx ? selected_idx - 1 : NUM_WINGMAN_CMDS - 1);
+				if (selected_idx == 0)
+					selected_idx = NUM_WINGMAN_CMDS - 1;
+				else
+					selected_idx--;
 				redraw = 1;
-			} else if (key == K_DOWN || key == K_KP2) {
+				break;
+			case K_DOWN:
+			case K_KP2:
 				/* Move down (wrap). */
-				selected_idx = (int16_t)((selected_idx + 1) % NUM_WINGMAN_CMDS);
+				if (++selected_idx == NUM_WINGMAN_CMDS)
+					selected_idx = 0;
 				redraw = 1;
-			} else if (key == K_ENTER || key == K_SPACE) {
+				break;
+			case K_ENTER:
+			case K_SPACE:
 				/* Select current row -- forward its hotkey letter. Keyboard
 				 * select uses offset +7 (matches retail's separate keyboard
 				 * hotkey), distinct from the mouse right-click path below
 				 * which uses +6. */
-				inputkey = (int16_t)(int8_t)wingmanstrings[selected_idx][7];
+				inputkey = (signed char)wingmanstrings[selected_idx][7];
+				exit_room = 1;
 				ret_delta = 0;
-				exit_room = 1;
-			} else if (key == K_ESC || key == K_Q_UPPER || key == K_Q_LOWER || key == K_Z_UPPER ||
-					   key == K_W_LOWER || key == K_F1) {
-				ret_delta = 2;
-				exit_room = 1;
-			} else if (((key >= 'A' && key <= 'C') || key == 'E' || (key >= 'G' && key <= 'I') ||
-						key == 'R' || key == 'S' || key == 'W')) {
-				/* Direct-select: leave inputkey as the typed letter so the
-				 * caller can dispatch on it (same contract as Enter above). */
-				ret_delta = 0;
-				exit_room = 1;
+				redraw = 1;
+				break;
 			}
 
 			/* Mouse edge-trigger on release of buttons 1 or 2. */
-			mouse_btn = inputbuttons & 0xF;
-			if ((prev_buttons == 1 || prev_buttons == 2) && mouse_btn == 0) {
+			buttons = inputbuttons & 0xF;
+			if ((prev_buttons == 1 || prev_buttons == 2) && buttons == 0) {
 				if (prev_buttons == 1) {
-					selected_idx = (int16_t)((selected_idx + 1) % NUM_WINGMAN_CMDS);
+					if (++selected_idx == NUM_WINGMAN_CMDS)
+						selected_idx = 0;
 					redraw = 1;
 				} else {
-					inputkey = (int16_t)(int8_t)wingmanstrings[selected_idx][6];
-					ret_delta = 0;
+					inputkey = (signed char)wingmanstrings[selected_idx][6];
 					exit_room = 1;
+					ret_delta = 0;
+					redraw = 1;
 				}
 			}
-			prev_buttons = (int16_t)mouse_btn;
-
-			if (exit_room) {
+			prev_buttons = buttons;
 #ifdef TIE_MODERN
+			if (exit_room) {
 				continuation->finished = true;
-#endif
 				return ret_delta;
 			}
-			render_again = redraw;
-		}
-#ifdef TIE_MODERN
-		continuation->selected_idx = selected_idx;
-		continuation->prev_buttons = prev_buttons;
-		continuation->ret_delta = ret_delta;
-		continuation->render = render_again != 0;
-		return 0;
+			continuation->selected_idx = selected_idx;
+			continuation->prev_buttons = (int16_t)prev_buttons;
+			continuation->render = redraw != 0;
+			return 0;
 #endif
-	}
+		} while (!redraw);
+	} while (!exit_room);
+	return ret_delta;
 }

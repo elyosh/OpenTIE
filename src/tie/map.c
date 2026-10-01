@@ -45,6 +45,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* The original TU calls the library strcat() and strcpy() rather than the inline forms. */
+#ifdef __WATCOMC__
+#pragma function(strcat)
+#pragma function(strcpy)
+#endif
+
 /* ======================================================================
  * Static data
  * ====================================================================== */
@@ -856,24 +862,23 @@ static void map_Get_VR_Debrief_Kill_Title(char* string) {
 static void map_Get_VR_Debrief_Kills(char* string, int16_t craft_idx) {
 	uint16_t count = 0;
 	char name[40], buf[80];
-	if (craft_idx >= (int16_t)NUM_SPEC) {
-		count = pstate.player_total_kills;
-	} else {
+	if (craft_idx < (int16_t)NUM_SPEC) {
 		int16_t j;
 
 		for (j = 0; j < 6; j++) {
 			if (player_Is_Side_Enemy(j))
 				count += mission.kills_losses[j][craft_idx];
 		}
+	} else {
+		count = pstate.player_total_kills;
 	}
 	if (count) {
-		if (craft_idx >= (int16_t)NUM_SPEC) {
-			textext_Get_Ship_Text(name, 84);
-			snprintf(buf, sizeof(buf), "  %s: %d", name, count);
-		} else {
+		if (craft_idx < (int16_t)NUM_SPEC) {
 			textext_Get_Ship_Text(name, craft_idx);
-			snprintf(buf, sizeof(buf), "  %s: %d(%d)", name, count,
-					 pstate.player_kills_per_species[craft_idx]);
+			sprintf(buf, "  %s: %d(%d)", name, count, pstate.player_kills_per_species[craft_idx]);
+		} else {
+			textext_Get_Ship_Text(name, 84);
+			sprintf(buf, "  %s: %d", name, count);
 		}
 		strcpy(string, buf);
 	}
@@ -1282,22 +1287,21 @@ static int16_t map_iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key,
 // FUNCTION: TIE95 0x77C4C
 // FUNCTION: TIE98 0x4513E0
 static void map_Set_Voice_Species_Mission(void) {
-	uint8_t mission_cursor;
+	int16_t* species = &talk_voice_species;
 
 	last_voiced_paragraph = 0;
-	if (map_uses_battle_voice) {
-		uint8_t battle = pilot_record.cur_battle;
-		talk_voice_species = (int16_t)(battle + 1);
-		mission_cursor = pilot_record.battle_cursor[battle];
+	if (!map_uses_battle_voice) {
+		if (pilot_record.cur_combat_ship < NUM_SHIPS) {
+			*species = pilot_record.cur_combat_ship + 1;
+			*species = -*species;
+		} else {
+			*species = pilot_record.cur_combat_ship - (NUM_SHIPS - 1);
+		}
+		talk_voice_mission = pilot_record.combat_course_cursor[pilot_record.cur_combat_ship] + 1;
 	} else {
-		uint8_t ship = pilot_record.cur_combat_ship;
-		if (ship >= NUM_SHIPS)
-			talk_voice_species = (int16_t)(ship - (NUM_SHIPS - 1));
-		else
-			talk_voice_species = (int16_t)(-(ship + 1));
-		mission_cursor = pilot_record.combat_course_cursor[ship];
+		*species = pilot_record.cur_battle + 1;
+		talk_voice_mission = pilot_record.battle_cursor[pilot_record.cur_battle] + 1;
 	}
-	talk_voice_mission = (int16_t)(mission_cursor + 1);
 }
 
 // FUNCTION: TIE95 0x75110
@@ -1557,91 +1561,14 @@ static void map_idraw_Map(Input* input, Rect* r, Rect* clip_r, int16_t refresh) 
 // FUNCTION: TIE95 0x75960
 // FUNCTION: TIE98 0x44EDF0
 static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
-	char buf[64], fmt[32], str1[32];
+	char buf[64], str1[32], fmt[32];
 	Rect tr;
 
 	xrect_Copy_Rect(&tr, r);
 	player_Stars_To_Back(r->top + 1);
 
-	if (shellext_Get_Cur_Scene() == SCENE_TRAIN_MAP) {
-		/* Training stats display */
-		int16_t saved_bold;
-		uint8_t train_ship;
-		uint16_t j;
-
-		xfont_Enable_FontID_Shadow(0);
-		saved_bold = xfont_Get_FontID_Bold_Color(0);
-		xfont_Set_FontID_Bold_Color(0, 231);
-
-		tr.top += 40;
-		tr.bottom = tr.top + 10;
-
-		train_ship = shipext_Get_Train_Ship();
-		shipext_Get_Ship_Name(buf, train_ship, 0, 0);
-		textext_Copy_Text(fmt, txtMapTrainLevel);
-		snprintf(str1, sizeof(str1), fmt, mission.train_level);
-		strcat(buf, str1);
-		xfont_Print_Centered_Text(buf, &tr, 0, 228);
-
-		xrect_Offset_Rect(&tr, 0, 14);
-		xpaint_Horiz_Clipped_Line(tr.left + 48, tr.top - 3, tr.right - tr.left - 96, 231);
-
-		textext_Copy_Text(fmt, txtMapTrainScore);
-		snprintf(buf, sizeof(buf), fmt, mission.mission_score);
-		xfont_Print_Centered_Text(buf, &tr, 0, 228);
-		xrect_Offset_Rect(&tr, 0, 10);
-
-		if (mission.mission_new_rank) {
-			textext_Copy_Text(str1, txtTalkRank);
-			textext_Copy_Text(fmt, mission.mission_new_rank + 1);
-			for (j = 0; str1[j]; j++) {
-				if (str1[j] == '1')
-					str1[j] = 1;
-				if (str1[j] == '2')
-					str1[j] = 2;
-			}
-			snprintf(buf, sizeof(buf), str1, fmt);
-			xfont_Print_Centered_Text(buf, &tr, 0, 228);
-			xrect_Offset_Rect(&tr, 0, 10);
-		}
-
-		if (train_pilot_medal_status) {
-			textext_Copy_Text(buf, txtTalkTrainPatch);
-			for (j = 0; buf[j]; j++) {
-				if (buf[j] == '1')
-					buf[j] = 1;
-				if (buf[j] == '2')
-					buf[j] = 2;
-			}
-			xfont_Print_Centered_Text(buf, &tr, 0, 228);
-			xrect_Offset_Rect(&tr, 0, 10);
-		}
-
-		textext_Copy_Text(fmt, txtMapTrainPassed);
-		snprintf(buf, sizeof(buf), fmt, (uint16_t)mission.train_gates_passed);
-		xfont_Print_Centered_Text(buf, &tr, 0, 228);
-		xrect_Offset_Rect(&tr, 0, 10);
-
-		textext_Copy_Text(fmt, txtMapTrainRemain);
-		snprintf(buf, sizeof(buf), fmt, (uint16_t)mission.train_gates_remaining);
-		xfont_Print_Centered_Text(buf, &tr, 0, 228);
-		xrect_Offset_Rect(&tr, 0, 10);
-
-		textext_Copy_Text(fmt, txtMapTrainTargets);
-		snprintf(buf, sizeof(buf), fmt, (uint16_t)mission.train_targets);
-		xfont_Print_Centered_Text(buf, &tr, 0, 228);
-
-		if (mission.training_badge_earned) {
-			xrect_Offset_Rect(&tr, 0, 10);
-			textext_Copy_Text(buf, txtMapTrainBadge);
-			xfont_Print_Centered_Text(buf, &tr, 0, 228);
-		}
-
-		xfont_Set_FontID_Bold_Color(0, saved_bold);
-		xfont_Disable_FontID_Shadow(0);
-	} else {
+	if (shellext_Get_Cur_Scene() != SCENE_TRAIN_MAP) {
 		/* Combat/briefing talk text display */
-		char page_str[16], of_str[16];
 		int16_t first_line;
 		int16_t saved_bold;
 		int16_t i;
@@ -1655,11 +1582,11 @@ static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 		textext_Copy_Text(fmt, txtMapQuestion);
 		if (shellext_Get_Cur_Scene() == SCENE_COMBAT_MAP_B) {
 			if (cur_talk_question == num_talk_questions - 1)
-				snprintf(str1, sizeof(str1), fmt, 1, num_talk_questions);
+				sprintf(str1, fmt, 1, num_talk_questions);
 			else
-				snprintf(str1, sizeof(str1), fmt, cur_talk_question + 2, num_talk_questions);
+				sprintf(str1, fmt, cur_talk_question + 2, num_talk_questions);
 		} else {
-			snprintf(str1, sizeof(str1), fmt, cur_talk_question + 1, num_talk_questions);
+			sprintf(str1, fmt, cur_talk_question + 1, num_talk_questions);
 		}
 		strcat(buf, str1);
 		xfont_Print_Centered_Text(buf, &tr, 0, 14);
@@ -1674,7 +1601,7 @@ static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 		xrect_Offset_Rect(&tr, 0, 10);
 
 		/* Paragraph text */
-		first_line = max_paragraph_size * cur_talk_paragraph;
+		first_line = cur_talk_paragraph * max_paragraph_size;
 		tr.top += 2;
 		xrect_Inset_Rect(&tr, 46, 0);
 		tr.bottom = tr.top + 78;
@@ -1685,7 +1612,7 @@ static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 		saved_bold = xfont_Get_FontID_Bold_Color(0);
 		xfont_Set_FontID_Bold_Color(0, 231);
 
-		for (i = first_line; i < first_line + max_paragraph_size; i++) {
+		for (i = first_line; i < max_paragraph_size + first_line; i++) {
 			center_line = 0;
 			map_Get_VR_Talk_Paragraph(buf, i);
 			if (center_line)
@@ -1698,14 +1625,86 @@ static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 		xfont_Set_FontID_Bold_Color(0, saved_bold);
 
 		/* Page indicator */
-		strcpy(page_str, textext_Get_Text(txtMapPage));
-		strcpy(of_str, textext_Get_Text(txtMapOf));
-		snprintf(buf, sizeof(buf), "%s %d %s %d", page_str, cur_talk_paragraph + 1, of_str,
-				 num_talk_paragraphs);
+		strcpy(str1, textext_Get_Text(txtMapPage));
+		strcpy(fmt, textext_Get_Text(txtMapOf));
+		sprintf(buf, "%s %d %s %d", str1, cur_talk_paragraph + 1, fmt, num_talk_paragraphs);
 		xfont_Print_Clipped_Text(buf, r->right - 80, r->bottom - 10, 0, 24);
+	} else {
+		/* Training stats display */
+		int16_t saved_bold;
+		int16_t j;
 
-		xfont_Disable_FontID_Shadow(0);
+		xfont_Enable_FontID_Shadow(0);
+		saved_bold = xfont_Get_FontID_Bold_Color(0);
+		xfont_Set_FontID_Bold_Color(0, 231);
+
+		tr.top += 40;
+		tr.bottom = tr.top + 10;
+
+		shipext_Get_Ship_Name(buf, shipext_Get_Train_Ship(), 0, 0);
+		textext_Copy_Text(fmt, txtMapTrainLevel);
+		sprintf(str1, fmt, mission.train_level);
+		strcat(buf, str1);
+		xfont_Print_Centered_Text(buf, &tr, 0, 228);
+
+		xrect_Offset_Rect(&tr, 0, 14);
+		xpaint_Horiz_Clipped_Line(tr.left + 48, tr.top - 3, tr.right - tr.left - 96, 231);
+
+		textext_Copy_Text(fmt, txtMapTrainScore);
+		sprintf(buf, fmt, mission.mission_score);
+		xfont_Print_Centered_Text(buf, &tr, 0, 228);
+		xrect_Offset_Rect(&tr, 0, 10);
+
+		if (mission.mission_new_rank) {
+			textext_Copy_Text(str1, txtTalkRank);
+			textext_Copy_Text(fmt, mission.mission_new_rank + 1);
+			for (j = 0; str1[j]; j++) {
+				if ((int8_t)str1[j] == '1')
+					str1[j] = 1;
+				if ((int8_t)str1[j] == '2')
+					str1[j] = 2;
+			}
+			sprintf(buf, str1, fmt);
+			xfont_Print_Centered_Text(buf, &tr, 0, 228);
+			xrect_Offset_Rect(&tr, 0, 10);
+		}
+
+		if (train_pilot_medal_status) {
+			textext_Copy_Text(buf, txtTalkTrainPatch);
+			for (j = 0; buf[j]; j++) {
+				if ((int8_t)buf[j] == '1')
+					buf[j] = 1;
+				if ((int8_t)buf[j] == '2')
+					buf[j] = 2;
+			}
+			xfont_Print_Centered_Text(buf, &tr, 0, 228);
+			xrect_Offset_Rect(&tr, 0, 10);
+		}
+
+		textext_Copy_Text(fmt, txtMapTrainPassed);
+		sprintf(buf, fmt, (uint16_t)mission.train_gates_passed);
+		xfont_Print_Centered_Text(buf, &tr, 0, 228);
+		xrect_Offset_Rect(&tr, 0, 10);
+
+		textext_Copy_Text(fmt, txtMapTrainRemain);
+		sprintf(buf, fmt, (uint16_t)mission.train_gates_remaining);
+		xfont_Print_Centered_Text(buf, &tr, 0, 228);
+		xrect_Offset_Rect(&tr, 0, 10);
+
+		textext_Copy_Text(fmt, txtMapTrainTargets);
+		sprintf(buf, fmt, (uint16_t)mission.train_targets);
+		xfont_Print_Centered_Text(buf, &tr, 0, 228);
+
+		if (mission.training_badge_earned) {
+			xrect_Offset_Rect(&tr, 0, 10);
+			textext_Copy_Text(buf, txtMapTrainBadge);
+			xfont_Print_Centered_Text(buf, &tr, 0, 228);
+		}
+
+		xfont_Set_FontID_Bold_Color(0, saved_bold);
 	}
+
+	xfont_Disable_FontID_Shadow(0);
 
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip_r);

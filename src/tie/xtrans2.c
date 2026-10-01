@@ -42,7 +42,7 @@ uint8_t* xtrans2_videobaseptr;
  * drawxtrans runs. */
 // GLOBAL: TIE95 0xCDDE6
 // GLOBAL: TIE98 0x4E44B4
-int16_t maskbufptr = (int16_t)0xC000;
+uint16_t maskbufptr = 0xC000;
 
 // GLOBAL: TIE95 0xED210
 int32_t leftsidedata1[480];

@@ -572,71 +572,97 @@ char pai_checkcombatarea(uint16_t obj_ref) {
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x35B3C
-char pai_worthytarget(uint16_t obj_ref) {
-	if (obj_ref == 0xFF || obj_ref == 0xFFFFu)
+int16_t pai_worthytarget(uint16_t obj_ref) {
+	int idx = obj_ref;
+
+	if (idx == 0xFF || idx == 0xFFFF)
 		return 0;
-	if (obj_ref >= 0x3800u) {
-		/* Static slots: species != 0 means the slot is occupied.
-		 * Bound the index — PAI_initplan writes waypoint refs of the form
-		 * (0x80 << 8) | active_waypoint_idx into ai_target_ref for every AI
-		 * craft, and paiorder_breakofforder/lookfordisableorder read it
-		 * back and pass it here. The binary lacks this bound and falls
-		 * through to staticobjects[idx*18] = OOB read. */
-		uint32_t static_idx = (uint32_t)obj_ref - 0x3800u;
-		if (static_idx >= NUM_STATIC_OBJECTS)
+	if (idx < 0x3800) {
+		CraftData* c;
+		uint16_t flag;
+
+		if (!objects[idx].ship_idx)
 			return 0;
-		return staticobjects[static_idx].species != 0;
+		if (idx < NUM_CRAFTS) {
+			c = objects[idx].craft_ptr;
+			/* Hyperspacing in/out. */
+			if (c->mode_byte == 21 && c->mode_subbyte)
+				return 0;
+			flag = c->flight_flag;
+			/* Binary quirk: hull_damage vs hull_max test dereferences the
+			 * SAME craft twice (craftptr vs objects[a1].craft_ptr); treated as
+			 * a no-op "never-trigger" filter on healthy ships. Preserved for
+			 * behavioural parity. */
+			if (flag == 1 || flag == 3 || flag == 4)
+				return 0;
+			if (obj_ref == pstate.object_idx || objects[obj_ref].craft_ptr->hull_max >= c->hull_damage)
+				return 1;
+			return 0;
+		}
+		return 1;
+	} else {
+#ifdef TIE_MODERN
+		/* Static slots: bound the index — PAI_initplan writes waypoint refs
+		 * of the form (0x80 << 8) | active_waypoint_idx into ai_target_ref
+		 * for every AI craft, and paiorder_breakofforder/lookfordisableorder
+		 * read it back and pass it here. The binary lacks this bound and
+		 * reads staticobjects out of range. */
+		if (idx - 0x3800 >= NUM_STATIC_OBJECTS)
+			return 0;
+#endif
+		/* Static slots: species != 0 means the slot is occupied. */
+		if (!staticobjects[idx - 0x3800].species)
+			return 0;
+		return 1;
 	}
-	if (!objects[obj_ref].ship_idx)
-		return 0;
-	if (obj_ref < NUM_CRAFTS) {
-		CraftData* c = objects[obj_ref].craft_ptr;
-		/* Hyperspacing in/out. */
-		if (c->mode_byte == 21 && c->mode_subbyte)
-			return 0;
-		if (c->flight_flag == 1)
-			return 0;
-		if (c->flight_flag == 3 || c->flight_flag == 4)
-			return 0;
-		/* Binary quirk: hull_damage vs hull_max test dereferences the
-		 * SAME craft twice (craftptr vs objects[a1].craft_ptr); treated as
-		 * a no-op "never-trigger" filter on healthy ships. Preserved for
-		 * behavioural parity. */
-		if (obj_ref != pstate.object_idx && c->hull_damage > objects[obj_ref].craft_ptr->hull_max)
-			return 0;
-	}
-	return 1;
 }
 
 // FUNCTION: TIE95 0x35ABC
-char pai_checktargetforattack(uint16_t obj_ref, int16_t pursue_hot) {
+int16_t pai_checktargetforattack(uint16_t attacker_ref, uint16_t obj_ref, int16_t pursue_hot) {
 	int32_t radius;
 
-	if (!pai_worthytarget(obj_ref))
-		return 0;
-	radius = (int32_t)math2_fraction(0x500u, skilltranslate[(uint16_t)ai.skill_tier]) + 2560;
-	if (pursue_hot) {
-		/* +1/3 radius extension for aggressive pursuit (0x5555 ≈ 1/3 of 0x10000). */
-		radius += math2_fraction((uint16_t)radius, 0x5555u);
+	if (pai_worthytarget(obj_ref)) {
+		radius = (int32_t)math2_fraction(0x500u, skilltranslate[(uint16_t)ai.skill_tier]) + 2560;
+		if (pursue_hot) {
+			/* +1/3 radius extension for aggressive pursuit (0x5555 ≈ 1/3 of 0x10000). */
+			radius += math2_fraction((uint16_t)radius, 0x5555u);
+		}
+		if (pai_roughproximitycheck(obj_ref, radius << 8) == 1)
+			return 1;
 	}
-	return (pai_roughproximitycheck(obj_ref, radius << 8) == 1) ? 1 : 0;
+	return 0;
 }
 
 // FUNCTION: TIE95 0x368A8
-char pai_isobjectvalidtarget(uint16_t obj_ref) {
-	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai.ai_entry_count];
+int16_t pai_isobjectvalidtarget(uint16_t obj_ref) {
+	int16_t in_pri;
+	int16_t in_sec;
+	int16_t goal_match;
+	int16_t in_t0;
+	int16_t in_t1;
+	int16_t target_match;
 
-	/* Pair 1: pri / sec selectors. */
-	int in_pri = score_objectmemberofgroup(obj_ref, cur_ai->pri_type, cur_ai->pri_id);
-	int in_sec = score_objectmemberofgroup(obj_ref, cur_ai->sec_type, cur_ai->sec_id);
-	int goal_match = (cur_ai->pri_sec_op == 1) ? (in_pri || in_sec) : (in_pri && in_sec);
+	in_pri = score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].pri_type,
+									   (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].pri_id);
+	in_sec = score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].sec_type,
+									   (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].sec_id);
+	if ((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].pri_sec_op == 1)
+		goal_match = in_pri | in_sec;
+	else
+		goal_match = in_pri & in_sec;
 
-	/* Pair 2: target[0] / target[1] selectors. */
-	int in_t0 = score_objectmemberofgroup(obj_ref, cur_ai->target_type[0], cur_ai->target_id[0]);
-	int in_t1 = score_objectmemberofgroup(obj_ref, cur_ai->target_type[1], cur_ai->target_id[1]);
-	int target_match = (cur_ai->target_op == 1) ? (in_t0 || in_t1) : (in_t0 && in_t1);
+	in_t0 = score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[0],
+									   (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[0]);
+	in_t1 = score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[1],
+									   (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[1]);
+	if ((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_op == 1)
+		target_match = in_t0 | in_t1;
+	else
+		target_match = in_t0 & in_t1;
 
-	return (goal_match || target_match) ? 1 : 0;
+	if (goal_match || target_match)
+		return 1;
+	return 0;
 }
 
 /* ======================================================================
@@ -648,16 +674,16 @@ uint16_t pai_searchformother(uint16_t fg_idx) {
 	uint16_t i;
 
 	for (i = 0; i < NUM_CRAFTS; ++i) {
-		uint8_t ff;
+		int ff;
 
 		if (!objects[i].ship_idx)
 			continue;
 		/* Skip motherships that are themselves departing or hyperspaced
 		 * (flight_flag 3 = leaving, 4 = gone). */
 		ff = objects[i].craft_ptr->flight_flag;
-		if (ff == 3 || ff == 4)
+		if (ff == 4 || ff == 3)
 			continue;
-		if (objects[i].fg_idx != (uint8_t)fg_idx)
+		if (objects[i].fg_idx != fg_idx)
 			continue;
 		if (objects[i].craft_ptr->leader_obj_idx == 0xFFu)
 			return i;
@@ -729,21 +755,21 @@ uint16_t pai_checkfortargetstodisable(uint16_t ai_entry) {
 }
 
 // FUNCTION: TIE95 0x362D4
-uint16_t pai_finddisabledingroup(uint8_t group_type1, uint16_t group_id1, int16_t combine_op,
-								 uint8_t group_type2, uint16_t group_id2) {
+uint16_t pai_finddisabledingroup(uint16_t group_type1, uint16_t group_id1, uint16_t combine_op,
+								 uint16_t group_type2, uint16_t group_id2) {
+	uint16_t b_ref;
+	uint16_t i;
 	uint16_t best_obj = 0xFFFFu;
 	uint32_t best_dist = 0xFFFFFFFFu;
-
-	/* Flight objects: eligibility + closest-available. */
-	uint16_t i;
 	uint16_t sj;
 
+	/* Flight objects: eligibility + closest-available. */
 	for (i = 0; i < NUM_CRAFTS; ++i) {
-		int in1;
-		int in2;
-		int miss;
+		int16_t in1;
+		int16_t in2;
+		int16_t in_group;
 		CraftData* c;
-		int eligible;
+		int16_t eligible;
 		int16_t taken;
 		uint16_t k;
 		uint16_t j;
@@ -753,25 +779,22 @@ uint16_t pai_finddisabledingroup(uint8_t group_type1, uint16_t group_id1, int16_
 
 		in1 = score_objectmemberofgroup(i, group_type1, group_id1);
 		in2 = score_objectmemberofgroup(i, group_type2, group_id2);
-		miss = (combine_op == 1) ? (!in1 && !in2) : (!in1 || !in2);
-		if (miss)
+		if (combine_op == 1)
+			in_group = in1 | in2;
+		else
+			in_group = in1 & in2;
+		if (!in_group)
 			continue;
 
 		c = objects[i].craft_ptr;
-
-		if (c->default_order_ldr <= 2u || objects[i].genus == GENUS_PLATFORM) {
+		eligible = 0;
+		if (c->default_order_ldr <= 2 || objects[i].genus == GENUS_PLATFORM) {
 			eligible = 1;
 		} else if (craftptr->default_order_ldr == 31 || craftptr->default_order_ldr == 32) {
-			eligible = (c->status_flags != 0) ? 0 : 1;
-			if (eligible) {
-				/* fallthrough to common skip block below */
-			}
-		} else if (!c->status_flags) {
+			if (!c->status_flags)
+				eligible = 1;
+		} else if (!c->status_flags || c->mode_byte == 19 || c->mode_byte == 25) {
 			eligible = 1;
-		} else if (c->mode_byte == 19 || c->mode_byte == 25) {
-			eligible = 1;
-		} else {
-			eligible = 0;
 		}
 		if (!eligible)
 			continue;
@@ -785,13 +808,12 @@ uint16_t pai_finddisabledingroup(uint8_t group_type1, uint16_t group_id1, int16_
 			if (!objects[k].ship_idx || k == ai.active_obj_idx)
 				continue;
 			oc = objects[k].craft_ptr;
-			if ((oc->default_order_ldr >= 0x1Cu && oc->default_order_ldr <= 0x22u) ||
-				oc->default_order_ldr == 68) {
+			if ((oc->default_order_ldr >= 0x1C && oc->default_order_ldr <= 0x22) || oc->default_order_ldr == 68) {
 				if ((uint16_t)oc->ai_target_ref == i)
 					++taken;
 			}
 		}
-		for (j = 0; j < (uint16_t)craftptr->capture_count; ++j) {
+		for (j = 0; j < craftptr->capture_count; ++j) {
 			if (craftptr->capture_list[j] == objects[i].idnumber)
 				++taken;
 		}
@@ -805,25 +827,28 @@ uint16_t pai_finddisabledingroup(uint8_t group_type1, uint16_t group_id1, int16_
 		}
 	}
 
-	/* Static slots (0x3800 + j). */
-	for (sj = 0; sj < 0x40u; ++sj) {
-		uint16_t b_ref = 0x3800u + sj;
-		uint8_t sp = staticobjects[sj].species;
-		int in1;
-		int in2;
-		int miss;
+	/* Static slots (0x3800 + sj). */
+	for (sj = 0, b_ref = 0x3800u; sj < 0x40; ++b_ref, ++sj) {
+		uint16_t sp;
+		int16_t in1;
+		int16_t in2;
+		int16_t in_group;
 		int16_t taken;
 		uint16_t k;
 		uint16_t m;
 
+		sp = staticobjects[sj].species;
 		if (!sp)
 			continue;
 		if (!(species_table[sp].side & 2))
 			continue;
 		in1 = score_fgmemberofgroup(staticobjects[sj].fg_idx, group_type1, group_id1);
 		in2 = score_fgmemberofgroup(staticobjects[sj].fg_idx, group_type2, group_id2);
-		miss = (combine_op == 1) ? (!in1 && !in2) : (!in1 || !in2);
-		if (miss)
+		if (combine_op == 1)
+			in_group = in1 | in2;
+		else
+			in_group = in1 & in2;
+		if (!in_group)
 			continue;
 
 		/* Exclusion scan (by flight-object ai_target_ref, re-indexed through
@@ -832,19 +857,18 @@ uint16_t pai_finddisabledingroup(uint8_t group_type1, uint16_t group_id1, int16_
 		taken = 0;
 		for (k = 0; k < NUM_CRAFTS; ++k) {
 			CraftData* oc;
-			unsigned ord;
 
 			if (!staticobjects[k].species || k == ai.active_obj_idx)
 				continue;
 			oc = objects[k].craft_ptr;
-			ord = oc->default_order_ldr;
-			if ((ord >= 0x1Cu && ord <= 0x20u) || ord == 34u || ord == 68u) {
-				if ((uint16_t)oc->ai_target_ref == b_ref)
+			if ((oc->default_order_ldr >= 0x1C && oc->default_order_ldr <= 0x20) || oc->default_order_ldr == 34 ||
+				oc->default_order_ldr == 68) {
+				if ((uint16_t)oc->ai_target_ref == sj + 0x3800)
 					++taken;
 			}
 		}
-		for (m = 0; m < (uint16_t)craftptr->capture_count; ++m) {
-			if (craftptr->capture_list[m] == staticobjects[sj].idnumber)
+		for (m = 0; m < craftptr->capture_count; ++m) {
+			if (staticobjects[sj].idnumber == craftptr->capture_list[m])
 				++taken;
 		}
 		if (taken)
@@ -1143,44 +1167,33 @@ void pai_updateplaneai(void) {
 
 // FUNCTION: TIE95 0x36654
 int pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry) {
-	const EFGStruct* g = &fg_array[ai.fg_idx];
-	const EAIStruct* cur_ai = &g->ai[ai_entry];
+	int done = 0;
 
-	/* Per-AI-entry goal counter (CraftData +0x20..+0x22). */
-	uint8_t counter = craftptr->ai_goal_progress[ai_entry];
-
-	/* Goal-reached threshold bytes come from various offsets in the AI
-	 * record; the binary decodes them via unaligned dword reads but the
-	 * underlying byte is always a real EAIStruct field. */
-
+	/* Compare the per-AI-entry goal counter (CraftData +0x20..+0x22)
+	 * against the signed threshold bytes of the AI record. */
 	switch (order_code) {
-		/* LABEL_30: counter >= ai.var[0] (threshold byte at CraftData+0x68+18*e+2). */
 		case 3:
 		case 5:
-		case 0x27: /* 39 — duplicate LABEL_30 handler */
+		case 0x27: /* 39 */
 		case 0x2A: /* 42 */
 		case 0x2B: /* 43 */
 		case 0x38: /* 56 */
-			return (counter >= cur_ai->var[0]) ? 1 : 0;
+			if (craftptr->ai_goal_progress[ai_entry] >=
+				(int8_t)fg_array[ai.fg_idx].ai[ai_entry].var[0])
+				done = 1;
+			break;
 
-		/* Order 37: counter >= fgstatus[(var[1]-1) & 0xFF].cond[0].count. */
-		case 37: {
-			uint16_t idx = (uint16_t)((int8_t)cur_ai->var[1] - 1);
-			return (counter >= fgstatus[idx].cond[0].count) ? 1 : 0;
-		}
-
-		/* LABEL_32: target-scan (no future targets and all current targets gone). */
+		/* Target scan: no future targets and all current targets gone. */
 		case 7:
 		case 8:
 		case 19:
 		case 0x3E: /* 62 */
 		case 0x3F: /* 63 */
 			if (!paifight_scanfortargetsallgone(ai_entry) &&
-				!(uint16_t)paifight_checkforfuturetargets(ai_entry))
-				return 1;
-			return 0;
+				!paifight_checkforfuturetargets(ai_entry))
+				done = 1;
+			break;
 
-		/* LABEL_35: counter >= ai.var[1] for orders 28..34 and 68. */
 		case 28:
 		case 29:
 		case 30:
@@ -1189,21 +1202,35 @@ int pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry) {
 		case 33:
 		case 0x22: /* 34 */
 		case 68:
-			return (counter >= cur_ai->var[1]) ? 1 : 0;
+			if (craftptr->ai_goal_progress[ai_entry] >=
+				(int8_t)fg_array[ai.fg_idx].ai[ai_entry].var[1])
+				done = 1;
+			break;
 
-		/* Order 58: wait-for-kids subroutine. */
-		case 58:
-			return (uint16_t)paiorder_waitforkidsorder() ? 1 : 0;
-
-		/* Order 59: wait-for-all-create subroutine. */
-		case 0x3B:
-			return (uint16_t)paiorder_waitforallcreateorder() ? 1 : 0;
+		/* Counter reaches the referenced flight group's status count. */
+		case 37:
+			if (craftptr->ai_goal_progress[ai_entry] >=
+				fgstatus[(uint16_t)((int8_t)fg_array[ai.fg_idx].ai[ai_entry].var[1] - 1)].cond[0].count)
+				done = 1;
+			break;
 
 		/* Order 66: maneuver-timer expiry. */
 		case 0x42:
-			return (craftptr->maneuver_timer == 0) ? 1 : 0;
+			if (craftptr->maneuver_timer == 0)
+				done = 1;
+			break;
 
-		default:
-			return 0;
+		/* Order 58: wait-for-kids subroutine. */
+		case 58:
+			if (paiorder_waitforkidsorder())
+				done = 1;
+			break;
+
+		/* Order 59: wait-for-all-create subroutine. */
+		case 0x3B:
+			if (paiorder_waitforallcreateorder())
+				done = 1;
+			break;
 	}
+	return done;
 }

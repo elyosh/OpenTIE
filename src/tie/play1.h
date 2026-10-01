@@ -12,7 +12,7 @@
 extern "C" {
 #endif
 
-int16_t play1_Play1(SceneHeadStruct* the_head);
+int play1_Play1(SceneHeadStruct* the_head);
 extern int16_t play1_is_streaming;
 extern LandruHandle play1_read_buffer;
 extern BitmapStruct play1_last_frame;

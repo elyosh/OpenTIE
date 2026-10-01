@@ -180,6 +180,10 @@ static LandruTaskStepResult user_inflightinfo_task_step(void* self) {
 	int32_t result = user_inflightinfo(task->screen_id);
 	if (task->finished) {
 		TieFlightRequest_SetSubmodalResult(result);
+		/* Closing on the wingmen screen leaves a key to dispatch, as the
+		 * original user_inputforplane loop did. */
+		if (result == 4)
+			TieFlightRequest_SetRoomKey(inputkey);
 		return LANDRU_TASK_STEP_DONE;
 	}
 	return LANDRU_TASK_STEP_CONTINUE;

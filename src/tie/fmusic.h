@@ -16,7 +16,7 @@ int16_t fmusic_loadmusic(const char* filename);
 
 int16_t fmusic_fmLoadSound(const char* name);
 int16_t fmusic_fmUnloadSound(void);
-void* fmusic_GetPagedSound(uint16_t track_idx);
+void* fmusic_GetPagedSound(unsigned int track_idx);
 int16_t fmusic_PageSound(uint16_t track_idx);
 
 #ifdef __cplusplus

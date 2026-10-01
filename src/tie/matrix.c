@@ -87,43 +87,42 @@ void matrix_Free_Matrix(Matrix* m) {
  */
 // FUNCTION: TIE95 0x89174
 int16_t matrix_Get_Matrix_Frame(Matrix* m, MatrixFrame* dest, int16_t frame) {
-	int32_t frame_size;
-	const uint8_t* data;
+	int16_t offset;
 	const int16_t* src;
 	int16_t t, j, r, p;
-	if (frame >= m->frame_count)
-		return 0;
+	if (frame < m->frame_count) {
+		offset = 6 * m->trans_count;
+		offset += 12;
+		offset += 24 * m->matrix_count;
+		offset *= frame;
+		src = (const int16_t*)((const uint8_t*)xmemhdl_Lock_Handle(m->data) + offset);
 
-	frame_size = 12 + 6 * m->trans_count + 24 * m->matrix_count;
-	data = xmemhdl_Lock_Handle(m->data);
-	if (!data)
-		return 0;
-	src = (const int16_t*)(data + frame * frame_size);
+		/* Camera: 6 WORDs */
+		dest->cam_x = *src++;
+		dest->cam_y = *src++;
+		dest->cam_z = *src++;
+		dest->cam_heading = *src++;
+		dest->cam_pitch = *src++;
+		dest->cam_roll = *src++;
 
-	/* Camera: 6 WORDs */
-	dest->cam_x = *src++;
-	dest->cam_y = *src++;
-	dest->cam_z = *src++;
-	dest->cam_heading = *src++;
-	dest->cam_pitch = *src++;
-	dest->cam_roll = *src++;
+		/* Translations: trans_count * 3 WORDs
+		 * Bug-for-bug: always writes to the same dest fields */
+		for (t = 0; t < m->trans_count; t++) {
+			dest->trans_x = *src++;
+			dest->trans_y = *src++;
+			dest->trans_z = *src++;
+		}
 
-	/* Translations: trans_count * 3 WORDs
-	 * Bug-for-bug: always writes to the same dest fields */
-	for (t = 0; t < m->trans_count; t++) {
-		dest->trans_x = *src++;
-		dest->trans_y = *src++;
-		dest->trans_z = *src++;
+		/* Joint matrices: matrix_count * (9 rotation + 3 position) WORDs */
+		for (j = 0; j < m->matrix_count; j++) {
+			for (r = 0; r < 9; r++)
+				dest->joint_rot[j][r] = *src++;
+			for (p = 0; p < 3; p++)
+				dest->joint_pos[j][p] = *src++;
+		}
+
+		xmemhdl_Unlock_Handle(m->data);
+		return 1;
 	}
-
-	/* Joint matrices: matrix_count * (9 rotation + 3 position) WORDs */
-	for (j = 0; j < m->matrix_count; j++) {
-		for (r = 0; r < 9; r++)
-			dest->joint_rot[j][r] = *src++;
-		for (p = 0; p < 3; p++)
-			dest->joint_pos[j][p] = *src++;
-	}
-
-	xmemhdl_Unlock_Handle(m->data);
-	return 1;
+	return 0;
 }

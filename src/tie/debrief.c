@@ -74,7 +74,7 @@ static int16_t debrief_user_Title(Actor* actor, int32_t time);
 static int16_t debrief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								  int16_t refresh);
 static void debrief_user_Door(Actor* actor, int32_t time);
-static void debrief_user_Officer(Actor* actor, int32_t time);
+static int16_t debrief_user_Officer(Actor* actor, int32_t time);
 
 /* ================================================================
  * View update callback
@@ -121,7 +121,7 @@ static int16_t debrief_film_Callback(Film* film, FilmObject* film_object) {
 				case 2:
 					if (shipext_Get_Mission_Officer() == 2)
 						return 1; /* hide if priest-only */
-					xactor_Set_Actor_User_Function(actor, debrief_user_Officer);
+					xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Officer);
 					actor->id = actor->var2;
 					return 0;
 
@@ -134,7 +134,7 @@ static int16_t debrief_film_Callback(Film* film, FilmObject* film_object) {
 				case 4:
 					if (shipext_Get_Mission_Officer() == 1)
 						return 1; /* hide if officer-only */
-					xactor_Set_Actor_User_Function(actor, debrief_user_Officer);
+					xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Officer);
 					actor->id = 3;
 					return 0;
 
@@ -382,20 +382,17 @@ static void debrief_user_Door(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x7063C
 // FUNCTION: TIE98 0x415E70
-static void debrief_user_Officer(Actor* actor, int32_t time) {
-	int16_t char_id, anim_state, zplane;
+static int16_t debrief_user_Officer(Actor* actor, int32_t time) {
+	int16_t anim_state;
 
 	if (!time) {
 		actor->var2 = 0;
 		actor->var1 = 0;
 	}
 
-	char_id = actor->id;
-
-	switch (char_id) {
-		case 0: {                      /* Officer facing */
-			int16_t target_widget = 1; /* officer widget */
-			if (title_actor->var1 && title_actor->var2 == target_widget) {
+	switch (actor->id) {
+		case 0: /* Officer facing */
+			if (title_actor->var1 && title_actor->var2 == 1) {
 				if (actor->var1 < 10)
 					actor->var1++;
 			} else {
@@ -403,18 +400,21 @@ static void debrief_user_Officer(Actor* actor, int32_t time) {
 					actor->var1--;
 			}
 
-			if (actor->var1 <= 5)
-				anim_state = 0;
-			else
+			if (actor->var1 > 5)
 				anim_state = actor->var1 / 2 - 2;
+			else
+				anim_state = 0;
 
-			zplane = anim_state ? 15 : 30;
-			xactor_Set_Actor_ZPlane(actor, zplane);
+			if (anim_state)
+				xactor_Set_Actor_ZPlane(actor, 15);
+			else
+				xactor_Set_Actor_ZPlane(actor, 30);
 			xactor_Set_Actor_State(actor, anim_state, 0);
-			break;
-		}
+			return 1;
 
 		case 1: { /* Officer side */
+			int side_state;
+
 			if (title_actor->var1 && title_actor->var2 == 1) {
 				if (actor->var1 < 10)
 					actor->var1++;
@@ -423,18 +423,18 @@ static void debrief_user_Officer(Actor* actor, int32_t time) {
 					actor->var1--;
 			}
 
-			if (actor->var1 <= 5)
-				anim_state = 0;
+			if (actor->var1 > 5)
+				side_state = actor->var1 / 2 - 2;
 			else
-				anim_state = actor->var1 / 2 - 2;
+				side_state = 0;
 
-			if (anim_state > TIE_FRONTEND_EDITION(2, 3))
-				anim_state = TIE_FRONTEND_EDITION(2, 3);
-			xactor_Set_Actor_State(actor, anim_state, 0);
-			break;
+			if (!TIE_FRONTEND_TIE98 && (int16_t)side_state == 3)
+				side_state = 2;
+			xactor_Set_Actor_State(actor, side_state, 0);
+			return 1;
 		}
 
-		case 2: { /* Priest */
+		case 2: /* Priest */
 			if (title_actor->var1 && title_actor->var2 == 1) {
 				if (actor->var1 < 10)
 					actor->var1++;
@@ -443,16 +443,15 @@ static void debrief_user_Officer(Actor* actor, int32_t time) {
 					actor->var1--;
 			}
 
-			if (actor->var1 >= 4)
-				anim_state = 3;
-			else
+			if (actor->var1 < 4)
 				anim_state = actor->var1;
+			else
+				anim_state = 3;
 
 			xactor_Set_Actor_State(actor, anim_state, 0);
-			break;
-		}
+			return 1;
 
-		case 3: { /* Alternate (priest variant) */
+		case 3: /* Alternate (priest variant) */
 			if (title_actor->var1 && title_actor->var2 == 2) {
 				if (actor->var1 < 1)
 					actor->var1++;
@@ -461,13 +460,11 @@ static void debrief_user_Officer(Actor* actor, int32_t time) {
 					actor->var1--;
 			}
 
-			xactor_Set_Actor_State(actor, actor->var1, 0);
-			break;
-		}
-
-		default:
-			break;
+			anim_state = actor->var1;
+			xactor_Set_Actor_State(actor, anim_state, 0);
+			return 1;
 	}
+	return 1;
 }
 
 /* ================================================================

@@ -277,13 +277,14 @@ int32_t* transfm2_geteyecoordsZ0(const int16_t* source, int32_t* dest) {
 		int32_t y = source[1];
 		int32_t coord;
 
-		dest[0] = objectx + ((rotworldeyeA1 * x + rotworldeyeB1 * y + 0x4000) >> 15);
-		dest[1] = objecty + ((rotworldeyeA2 * x + rotworldeyeB2 * y + 0x4000) >> 15);
+		coord = objectx + ((rotworldeyeA1 * x + rotworldeyeB1 * y + 0x4000) >> 15);
+		*dest++ = coord;
+		coord = objecty + ((rotworldeyeA2 * x + rotworldeyeB2 * y + 0x4000) >> 15);
+		*dest++ = coord;
 		coord = objectz + ((rotworldeyeA3 * x + rotworldeyeB3 * y + 0x4000) >> 15);
 		if (coord >= 0)
 			numeyezpos++;
-		dest[2] = coord;
-		dest += 3;
+		*dest++ = coord;
 		source += 2;
 	}
 	return dest;
@@ -666,50 +667,47 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 
 // FUNCTION: TIE95 0x5B41C
 TRANSFM2_ScreenPoint* transfm2_calclinepts(const uint8_t* source) {
-	uint8_t idx1 = source[2];
-	TRANSFM2_ScreenPoint* dest = calcflag[idx1];
+	TRANSFM2_ScreenPoint* dest;
+	int32_t eyez;
+	int32_t eyex;
+	int32_t* e;
 
-	TRANSFM2_ScreenPoint* dest2;
-	int eyez2;
-	uint8_t idx2;
-
+	dest = calcflag[source[2]];
 	if (!dest) {
-		int eyez;
-
 		dest = (TRANSFM2_ScreenPoint*)newscreenxy;
-		newscreenxy = (int32_t*)(dest + 1);
-		eyez = firsteyexyz[idx1].z;
-
-		if (eyez >= 0) {
-			dest->xy[0] = transfm2_getscreenx(firsteyexyz[idx1].x, eyez);
-			calcflag[idx1] = dest;
-			dest->xy[1] = transfm2_getscreeny(firsteyexyz[idx1].y, eyez);
-		} else {
-			uint8_t idx2 = source[3];
-			if (firsteyexyz[idx2].z < 0)
+		newscreenxy += 2;
+		e = (int32_t*)firsteyexyz + (int16_t)(source[2] * 3);
+		eyez = e[2];
+		eyex = e[0];
+		if (eyez < 0) {
+			if (((int32_t*)firsteyexyz + (int16_t)(source[3] * 3))[2] < 0)
 				return NULL;
-			dest = transfm2_facezintersect(idx1, idx2, &firsteyexyz[idx1], &firsteyexyz[idx2], dest);
+			dest = transfm2_facezintersect(source[2], source[3], (DRAWPOL_EyeVertex*)e, (DRAWPOL_EyeVertex*)((int32_t*)firsteyexyz + (int16_t)(source[3] * 3)), dest);
+		} else {
+			dest->xy[0] = transfm2_getscreenx(eyex, eyez);
+			calcflag[source[2]] = dest;
+			dest->xy[1] = transfm2_getscreeny(((int32_t*)firsteyexyz)[(int16_t)(source[2] * 3) + 1], eyez);
 		}
 	}
 
-	/* DRAWLN2 consumes the first endpoint as its {x, y} pair. */
 	point1ptr = dest->xy;
 
-	idx2 = source[3];
-	if (calcflag[idx2])
-		return calcflag[idx2];
+	dest = calcflag[source[3]];
+	if (dest)
+		return dest;
 
-	dest2 = (TRANSFM2_ScreenPoint*)newscreenxy;
-	newscreenxy = (int32_t*)(dest2 + 1);
-	eyez2 = firsteyexyz[idx2].z;
+	dest = (TRANSFM2_ScreenPoint*)newscreenxy;
+	newscreenxy += 2;
+	e = (int32_t*)firsteyexyz + (int16_t)(source[3] * 3);
+	eyez = e[2];
+	eyex = e[0];
+	if (eyez < 0)
+		return transfm2_facezintersect(source[3], source[2], (DRAWPOL_EyeVertex*)e, (DRAWPOL_EyeVertex*)((int32_t*)firsteyexyz + (int16_t)(source[2] * 3)), dest);
 
-	if (eyez2 < 0)
-		return transfm2_facezintersect(idx2, idx1, &firsteyexyz[idx2], &firsteyexyz[source[2]], dest2);
-
-	dest2->xy[0] = transfm2_getscreenx(firsteyexyz[idx2].x, eyez2);
-	calcflag[idx2] = dest2;
-	dest2->xy[1] = transfm2_getscreeny(firsteyexyz[idx2].y, eyez2);
-	return dest2;
+	dest->xy[0] = transfm2_getscreenx(eyex, eyez);
+	calcflag[source[3]] = dest;
+	dest->xy[1] = transfm2_getscreeny(((int32_t*)firsteyexyz)[(int16_t)(source[3] * 3) + 1], eyez);
+	return dest;
 }
 
 /* ================================================================== */

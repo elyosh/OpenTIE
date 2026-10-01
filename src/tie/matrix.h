@@ -21,9 +21,9 @@ typedef struct {
 typedef struct {
 	int16_t joint_rot[MATRIX_MAX_JOINTS][9]; /* 3x3 rotation per joint */
 	int16_t joint_pos[MATRIX_MAX_JOINTS][3]; /* position per joint */
-	int16_t cam_heading;
-	int16_t cam_pitch;
-	int16_t cam_roll;
+	uint16_t cam_heading;
+	uint16_t cam_pitch;
+	uint16_t cam_roll;
 	int16_t cam_x;
 	int16_t cam_y;
 	int16_t cam_z;

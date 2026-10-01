@@ -129,82 +129,85 @@ int paifight_countattackers(uint16_t target_obj_idx) {
 
 // FUNCTION: TIE95 0x37F64
 int16_t paifight_gethullcomponent(uint16_t target_obj_idx) {
-	uint8_t hull_list[44];
+	uint8_t hull_list[40];
 	uint16_t hull_count = 0;
-
-	uint8_t model_type;
-	uint16_t num_meshes;
 	uint16_t m;
 
+	/* An empty list picks hull_list[0], since create_maxrandom(0) returns 0. */
 	hull_list[0] = 0;
-	if (target_obj_idx >= NUM_CRAFTS)
-		return 0;
-
-	model_type = objects[target_obj_idx].ship_idx;
-	if (!TIE_FLIGHT_TIE98)
-		draw_Lockshipfileptrs(model_type);
-	num_meshes = TIE_FLIGHT_EDITION(objectblockptr->num_meshes, modelmesh_getcount(model_type));
-	for (m = 0; m < num_meshes; ++m) {
-		uint16_t mesh_type =
-			TIE_FLIGHT_EDITION(componentblockptr[m].mesh_type, modelmesh_gettype(model_type, m));
-		if (mesh_type == 1 || mesh_type == 3) {
-			if (hull_count < sizeof(hull_list))
-				hull_list[hull_count] = (uint8_t)m;
-			++hull_count;
+	if (target_obj_idx < NUM_CRAFTS) {
+		if (!TIE_FLIGHT_TIE98)
+			draw_Lockshipfileptrs(objects[target_obj_idx].ship_idx);
+		for (m = 0; m < TIE_FLIGHT_EDITION(objectblockptr->num_meshes,
+										   modelmesh_getcount(objects[target_obj_idx].ship_idx));
+			 ++m) {
+			uint16_t mesh_type = TIE_FLIGHT_EDITION(componentblockptr[m].mesh_type,
+													modelmesh_gettype(objects[target_obj_idx].ship_idx, m));
+			if (mesh_type == 1 || mesh_type == 3) {
+#ifdef TIE_MODERN
+				// HARDENING: models with more than 40 hull meshes would overflow the list.
+				if (hull_count >= sizeof(hull_list))
+					continue;
+#endif
+				hull_list[hull_count++] = (uint8_t)m;
+			}
 		}
+		return hull_list[create_maxrandom(hull_count)];
 	}
-	if (hull_count == 0)
-		return 0;
-	if (hull_count > sizeof(hull_list))
-		hull_count = sizeof(hull_list);
-	return hull_list[create_maxrandom(hull_count)];
+	return 0;
 }
 
 /* searchforclosestingroup -- closest moving or static object in a FG
  * that matches the (pri_type, pri_id)/(sec_type, sec_id) selector under
  * op (1=AND, else OR). Side effect: writes `escortfg`. */
 // FUNCTION: TIE95 0x393CC
-int16_t paifight_searchforclosestingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
-										 uint8_t sec_id) {
+int16_t paifight_searchforclosestingroup(uint16_t pri_type, uint16_t pri_id, uint16_t op, uint16_t sec_type,
+										 uint16_t sec_id) {
+	uint16_t best_obj = 0xFFFF;
 	uint32_t best_dist = 0xFFFFFFFFu;
-	int16_t best_obj = (int16_t)0xFFFF;
-
 	uint16_t fg_scan;
+	uint16_t pri_hit;
+	uint16_t sec_hit;
+	uint16_t hit;
 
-	for (fg_scan = 0; (int16_t)fg_scan < mission_file_header.num_fg; ++fg_scan) {
-		int pri_hit = score_fgmemberofgroup(fg_scan, pri_type, pri_id);
-		int sec_hit = score_fgmemberofgroup(fg_scan, sec_type, sec_id);
+	for (fg_scan = 0; fg_scan < mission_file_header.num_fg; ++fg_scan) {
 		uint16_t obj_slot;
 		uint16_t stat_slot;
 		uint16_t s;
 
-		if (!(op == 1 ? (pri_hit || sec_hit) : (pri_hit && sec_hit)))
+		pri_hit = score_fgmemberofgroup(fg_scan, pri_type, pri_id);
+		sec_hit = score_fgmemberofgroup(fg_scan, sec_type, sec_id);
+		if (op == 1)
+			hit = pri_hit | sec_hit;
+		else
+			hit = pri_hit & sec_hit;
+		if (!hit)
 			continue;
 
 		/* Moving-object scan. */
 		for (obj_slot = 0; obj_slot < NUM_CRAFTS; ++obj_slot) {
 			if (!objects[obj_slot].ship_idx)
 				continue;
-			if (objects[obj_slot].fg_idx != (uint8_t)fg_scan)
+			if (fg_scan != objects[obj_slot].fg_idx)
 				continue;
 			pai_roughdistancebetween(ai.active_obj_idx, obj_slot);
 			if ((uint32_t)roughdistance < best_dist) {
 				best_dist = (uint32_t)roughdistance;
-				best_obj = (int16_t)obj_slot;
+				best_obj = obj_slot;
 				escortfg = (uint8_t)fg_scan;
 			}
 		}
 		/* Static-object scan (obj_ref = 0x3800 + static_idx). */
-		stat_slot = 0x3800u;
-		for (s = 0; s < 0x40u; ++s, ++stat_slot) {
+		stat_slot = 0x3800;
+		for (s = 0; s < 0x40; ++stat_slot, ++s) {
 			if (!staticobjects[s].species)
 				continue;
-			if (staticobjects[s].fg_idx != (uint8_t)fg_scan)
+			if (staticobjects[s].fg_idx != fg_scan)
 				continue;
 			pai_roughdistancebetween(ai.active_obj_idx, stat_slot);
 			if ((uint32_t)roughdistance < best_dist) {
 				best_dist = (uint32_t)roughdistance;
-				best_obj = (int16_t)stat_slot;
+				best_obj = stat_slot;
 				escortfg = (uint8_t)fg_scan;
 			}
 		}
@@ -251,7 +254,7 @@ int16_t paifight_futuretargets(uint8_t pri_type, uint8_t pri_id, int16_t op, uin
 int16_t paifight_findtargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 								   uint8_t sec_id) {
 	uint32_t best_dist = 0xFFFFFFFFu;
-	int16_t best_obj = (int16_t)0xFFFF;
+	uint16_t best_obj = 0xFFFF;
 
 	/* Moving-object pass (NUM_CRAFTS slots). */
 	uint16_t o;
@@ -342,7 +345,7 @@ int16_t paifight_findtargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op,
 int16_t paifight_findescorterofgroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 									 uint8_t sec_id) {
 	uint32_t best_dist = 0xFFFFFFFFu;
-	int16_t best_obj = (int16_t)0xFFFF;
+	uint16_t best_obj = 0xFFFF;
 
 	uint16_t f;
 
@@ -392,7 +395,7 @@ int16_t paifight_findescorterofgroup(uint8_t pri_type, uint8_t pri_id, int16_t o
 int16_t paifight_findattackedtargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
 										   uint8_t sec_id) {
 	uint32_t best_dist = 0xFFFFFFFFu;
-	int16_t best_obj = (int16_t)0xFFFF;
+	uint16_t best_obj = 0xFFFF;
 
 	uint16_t target;
 
@@ -1050,6 +1053,7 @@ int16_t paifight_fightershootorder(void) {
 int16_t paifight_missiledefenseorder(void) {
 	/* Plan slot 8: countermeasure firing. */
 	uint16_t g;
+	uint16_t slot;
 
 	if (craftptr->flight_flag == 3)
 		return 0;
@@ -1059,37 +1063,33 @@ int16_t paifight_missiledefenseorder(void) {
 		return 0;
 
 	for (g = 0; g < craftptr->missile_group_cnt; ++g) {
-		uint16_t slot_end = spec_data[craftptr->species_idx].missile_end[g] + 1u;
-		uint16_t slot;
-
-		for (slot = spec_data[craftptr->species_idx].missile_start[g]; slot < slot_end; ++slot) {
-			uint8_t mesh_comp = spec_data[craftptr->species_idx].hp[slot].component;
+		for (slot = spec_data[craftptr->species_idx].missile_start[g];
+			 slot < spec_data[craftptr->species_idx].missile_end[g] + 1; ++slot) {
 			uint8_t wtype;
-			WeaponSlot* ws;
 			uint16_t best_target;
-			uint32_t best_dist_m;
+			uint32_t best_dist;
 			uint16_t obj;
+			uint16_t wh;
 			uint16_t fire_target;
 			int16_t saved_link;
 			uint16_t new_wh;
 
-			if (craftptr->mesh_state[mesh_comp] != MESH_STATE_VISIBLE)
+			if (craftptr->mesh_state[spec_data[craftptr->species_idx].hp[slot].component] != MESH_STATE_VISIBLE)
 				continue;
 
 			wtype = craftptr->weapon_slots[slot].type;
 			if (wtype != 144 && wtype != 149)
 				continue;
 
-			ws = &craftptr->weapon_slots[slot];
-			if (!ws->ammo)
+			if (!craftptr->weapon_slots[slot].ammo)
 				continue; /* not yet armed */
-			if (ws->_pad_03) {
-				--ws->_pad_03;
+			if (craftptr->weapon_slots[slot]._pad_03) {
+				--craftptr->weapon_slots[slot]._pad_03;
 				continue;
 			}
 
 			/* Arm: clear current target and compute shooter origin. */
-			ws->target_obj = 0xFFFFu;
+			craftptr->weapon_slots[slot].target_obj = 0xFFFFu;
 			shooterx = ai.world_x;
 			shootery = ai.world_y;
 			shooterz = ai.world_z;
@@ -1103,108 +1103,101 @@ int16_t paifight_missiledefenseorder(void) {
 			/* --- Pass A: pick the closest inbound homing missile that
 			 * is not already being targeted by another countermeasure. */
 			best_target = 0xFFFFu;
-			best_dist_m = 0x40000u; /* cap */
-			for (obj = NUM_CRAFTS; obj < WARHEAD_SLOT_END; ++obj) {
-				uint16_t wh = obj - NUM_CRAFTS;
-				int already_shot;
+			best_dist = 0x40000u; /* cap */
+			for (obj = NUM_CRAFTS, wh = 0; obj < WARHEAD_SLOT_END; ++wh, ++obj) {
+				uint16_t already_shot;
 				uint16_t p;
-				uint32_t d;
+				uint16_t wh2;
 
 				if (!objects[obj].ship_idx)
 					continue;
 				if (!warheads[wh].homing_tier)
 					continue;
-				if (ai.active_obj_idx != warheads[wh].target_obj)
+				if (warheads[wh].target_obj != ai.active_obj_idx)
 					continue;
 
 				/* Skip if another missile is already targeting obj with
 				 * homing_tier >= 5. */
 				already_shot = 0;
-				for (p = NUM_CRAFTS; p < WARHEAD_SLOT_END; ++p) {
-					uint16_t wh2 = p - NUM_CRAFTS;
+				for (p = NUM_CRAFTS, wh2 = 0; p < WARHEAD_SLOT_END; ++wh2, ++p) {
 					if (!objects[p].ship_idx)
 						continue;
 					if (obj == p)
 						continue;
 					if (warheads[wh2].homing_tier < 5)
 						continue;
-					if (warheads[wh2].target_obj == obj)
+					if (obj == warheads[wh2].target_obj)
 						++already_shot;
 				}
-				if (already_shot)
+				if (already_shot >= 1)
 					continue;
 
-				d = (uint32_t)collide_roughdistance3d(objects[obj].world_x - shooterx,
-													  objects[obj].world_y - shootery,
-													  objects[obj].world_z - shooterz);
-				roughdistance = (int32_t)d;
-				if (d > 0x4000u && d < best_dist_m) {
+				roughdistance = collide_roughdistance3d(objects[obj].world_x - shooterx,
+														objects[obj].world_y - shootery,
+														objects[obj].world_z - shooterz);
+				if (roughdistance > 0x4000 && roughdistance < best_dist) {
 					best_target = obj;
-					best_dist_m = d;
+					best_dist = roughdistance;
 				}
 			}
 
-			/* --- Pass B: fall back to the closest active craft
-			 * attacking us (mode 12/23 with ai_target_ref==ai.active_obj_idx, or
-			 * attacker_idx==that obj), with <2 existing inbound shots. */
-			if (best_target == 0xFFFFu) {
-				uint32_t best_dist_a = 0x40000u;
+			if (best_target != 0xFFFFu) {
+				craftptr->weapon_slots[slot].target_obj = best_target;
+			} else {
+				/* --- Pass B: fall back to the closest active craft
+				 * attacking us (mode 12/23 with ai_target_ref==ai.active_obj_idx, or
+				 * attacker_idx==that obj), with <2 existing inbound shots. */
+				uint32_t best_dist_a;
 				uint16_t a;
 
+				best_target = 0xFFFFu;
+				best_dist_a = 0x40000u;
 				for (a = 0; a < NUM_CRAFTS; ++a) {
 					CraftData* ac;
-					int targeting_us;
-					int is_attacker;
 					uint16_t inbound;
 					uint16_t p;
-					uint32_t d;
+					uint16_t wh2;
 
 					if (!objects[a].ship_idx)
 						continue;
 					ac = objects[a].craft_ptr;
-
-					targeting_us = (ai.active_obj_idx == (uint16_t)ac->ai_target_ref) &&
-								   (ac->mode_byte == 12 || ac->mode_byte == 23);
-					is_attacker = (a == craftptr->attacker_idx);
-					if (!(targeting_us || is_attacker))
+					if (!(((uint16_t)ac->ai_target_ref == ai.active_obj_idx &&
+						   (ac->mode_byte == 12 || ac->mode_byte == 23)) ||
+						  a == craftptr->attacker_idx))
 						continue;
 
 					if (!pai_worthytarget(a))
 						continue;
-					/* Count homing warheads (homing_tier >= 1) already
-					 * in flight toward this attacker. */
+					/* Count homing warheads already in flight toward
+					 * this attacker. */
 					inbound = 0;
-					for (p = NUM_CRAFTS; p < WARHEAD_SLOT_END; ++p) {
-						uint16_t wh2 = p - NUM_CRAFTS;
+					for (p = NUM_CRAFTS, wh2 = 0; p < WARHEAD_SLOT_END; ++wh2, ++p) {
 						if (!objects[p].ship_idx)
 							continue;
 						if (a == p)
 							continue;
-						if (warheads[wh2].homing_tier < 1)
+						if (!warheads[wh2].homing_tier)
 							continue;
-						if (warheads[wh2].target_obj == a)
+						if (a == warheads[wh2].target_obj)
 							++inbound;
 					}
 					if (inbound >= 2)
 						continue;
 
-					d = (uint32_t)collide_roughdistance3d(objects[a].world_x - shooterx,
-														  objects[a].world_y - shootery,
-														  objects[a].world_z - shooterz);
-					roughdistance = (int32_t)d;
-					if (d < best_dist_a) {
-						best_dist_a = d;
+					roughdistance = collide_roughdistance3d(objects[a].world_x - shooterx,
+															objects[a].world_y - shootery,
+															objects[a].world_z - shooterz);
+					if (roughdistance < best_dist_a) {
+						best_dist_a = roughdistance;
 						best_target = a;
 					}
 				}
-			} else {
-				ws->target_obj = best_target;
 			}
 
 			if (best_target != 0xFFFFu)
-				ws->target_obj = best_target;
+				craftptr->weapon_slots[slot].target_obj = best_target;
 
-			fire_target = ws->target_obj;
+			fire_target = craftptr->weapon_slots[slot].target_obj;
 			if (fire_target == 0xFFFFu)
 				continue;
 
@@ -1215,10 +1208,9 @@ int16_t paifight_missiledefenseorder(void) {
 			craftptr->ai_target_ref = (int16_t)fire_target;
 			craftptr->link_target_2E = paifight_gethullcomponent(fire_target);
 
-			new_wh = laser_firemissile(ai.active_obj_idx, slot, ws->type, 0xFFFFu);
-			if (new_wh != 0xFFFFu) {
+			if ((new_wh = laser_firemissile(ai.active_obj_idx, slot, craftptr->weapon_slots[slot].type, 0xFFFFu)) != 0xFFFFu) {
 				warheads[new_wh].homing_tier = (uint8_t)((math2_getrandom() & 3) + 3);
-				ws->_pad_03 = 20u; /* relock cooldown */
+				craftptr->weapon_slots[slot]._pad_03 = 20u; /* relock cooldown */
 			}
 			craftptr->ai_target_ref = saved_link;
 		}
@@ -1541,7 +1533,7 @@ int16_t paifight_followleadatkorder(void) {
 			int passes_flag = !ai.live_target_only || staticobjects[stat_scan].status_flags;
 			if (passes_flag && !wingman_skip) {
 				if (staticobjects[stat_scan].species && stat_fg == staticobjects[stat_scan].fg_idx) {
-					if (pai_checktargetforattack(stat_ref, 1) && pai_isobjectvalidtarget(stat_ref)) {
+					if (pai_checktargetforattack(ai.active_obj_idx, stat_ref, 1) && pai_isobjectvalidtarget(stat_ref)) {
 						craftptr->ai_target_ref = (int16_t)stat_ref;
 						return 1;
 					}
@@ -1581,7 +1573,7 @@ int16_t paifight_followleadatkorder(void) {
 			continue;
 		}
 		if (objects[scan_obj].ship_idx && seed_fg == objects[scan_obj].fg_idx &&
-			pai_checktargetforattack(scan_obj, 1)) {
+			pai_checktargetforattack(ai.active_obj_idx, scan_obj, 1)) {
 			if (default_order_ldr != 7 && default_order_ldr != 19) {
 				craftptr->ai_target_ref = (int16_t)scan_obj;
 				return 1;

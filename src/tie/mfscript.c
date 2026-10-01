@@ -774,42 +774,53 @@ static void mfscript_ChgJumpOnBeat(void* sound1, void* sound2, int16_t endChunk,
 
 // FUNCTION: TIE95 0x88470
 static void mfscript_DoChange(ChangeRef* cgp, void* sound1, void* sound2) {
-	void* s1 = sound1;
-
-	if (cgp->opcode) {
+	if (!cgp->opcode) {
+		imuse_filelist_unload(im, sound2);
+		return;
+	}
+	{
 		/* Validate sound1 is playing */
-		if (s1 && imuse_get_param(im, TieImuse_SoundId(s1), IM_PARAM_PRIORITY) <= 0)
-			s1 = NULL;
+		if (sound1 && imuse_get_param(im, TieImuse_SoundId(sound1), IM_PARAM_PRIORITY) <= 0) {
+			TieImuse_Printf("ERR: Sound1 not playing...");
+			sound1 = NULL;
+		}
 
-		if (!s1) {
+		if (!sound1) {
 			/* Try to find any playing sound that isn't sound2.
 			 * GetNextSound returns intptr_t; must NOT be narrowed
 			 * through `int` or the 64-bit sound-id truncation
 			 * creates a stable iteration point and the loop hangs. */
 			do {
-				s1 = TieImuse_SoundHandle(imuse_next_sound(im, TieImuse_SoundId(s1)));
-			} while (s1 && TieImuse_SoundId(s1) != -1 && s1 != sound2);
+				sound1 = TieImuse_SoundHandle(imuse_next_sound(im, TieImuse_SoundId(sound1)));
+			} while (TieImuse_SoundId(sound1) > 0 && sound1 != sound2);
 
-			if (s1 == sound2) {
-				imuse_set_hook(im, TieImuse_SoundId(s1), 0);
+			if (sound1 == sound2) {
+				TieImuse_Printf("doChange punt...");
+				imuse_set_hook(im, TieImuse_SoundId(sound2), 0);
 				return;
 			}
-			s1 = NULL;
 			imuse_stop_all_sounds(im);
+			sound1 = NULL;
 		}
 
-		imuse_set_hook(im, TieImuse_SoundId(s1), 0);
+		imuse_set_hook(im, TieImuse_SoundId(sound1), 0);
 		imuse_clear_trigger(im, (intptr_t)-1, -1, -1);
 
 		switch (cgp->opcode) {
 			case 1:
-				mfscript_ChgXfade(s1, sound2, cgp->arg1, cgp->arg2);
+				mfscript_ChgXfade(sound1, sound2, cgp->arg1, cgp->arg2);
 				break;
 			case 2:
-				mfscript_ChgJumpMrk(s1, sound2, cgp->arg1, cgp->arg2, 0);
+				mfscript_ChgJumpMrk(sound1, sound2, cgp->arg1, cgp->arg2, 0);
+				break;
+			case 6:
+				mfscript_ChgJumpMrk(sound1, sound2, cgp->arg1, cgp->arg2, cgp->arg3);
+				break;
+			case 7:
+				mfscript_ChgJumpOnBeat(sound1, sound2, cgp->arg1, cgp->arg2, cgp->arg3);
 				break;
 			case 4:
-				mfscript_ChgXfade(s1, sound2, cgp->arg1, cgp->arg2);
+				mfscript_ChgXfade(sound1, sound2, cgp->arg1, cgp->arg2);
 				{
 					ImuseCmd t_attr = { 0 };
 					t_attr.opcode = IMUSE_CMD_SET_PARAM;
@@ -820,20 +831,16 @@ static void mfscript_DoChange(ChangeRef* cgp, void* sound1, void* sound2) {
 				}
 				break;
 			case 5:
-				imuse_set_param(im, TieImuse_SoundId(s1), IM_PARAM_ATTR, 64);
-				break;
-			case 6:
-				mfscript_ChgJumpMrk(s1, sound2, cgp->arg1, cgp->arg2, cgp->arg3);
-				break;
-			case 7:
-				mfscript_ChgJumpOnBeat(s1, sound2, cgp->arg1, cgp->arg2, cgp->arg3);
+				TieImuse_Printf("resume...");
+				imuse_set_param(im, TieImuse_SoundId(sound1), IM_PARAM_ATTR, 64);
 				break;
 			default:
-				mfscript_ChgXfade(s1, sound2, 100, 0);
+				TieImuse_Printf("Default change!...");
+				mfscript_ChgXfade(sound1, sound2, 100, 0);
 				break;
 		}
+		imuse_filelist_unload(im, sound2);
 	}
-	imuse_filelist_unload(im, sound2);
 }
 
 // FUNCTION: TIE95 0x88638

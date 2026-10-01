@@ -115,17 +115,17 @@ uint16_t framerate = 20; /* populated by the frame-pacer; fallback value avoids 
 uint16_t frameticks;
 
 /* Rendering pipeline scratch (set by pai/fview each frame). */
-// GLOBAL: TIE95 0xEB0E0
-int32_t rotatedx;
 // GLOBAL: TIE95 0xEB0E4
+int32_t rotatedx;
+// GLOBAL: TIE95 0xEB0E0
 int32_t rotatedy;
 // GLOBAL: TIE95 0xEB0E8
 int32_t rotatedz;
-// GLOBAL: TIE95 0xEAC34
-int32_t craftmoveX;
 // GLOBAL: TIE95 0xEAC38
-int32_t craftmoveY;
+int32_t craftmoveX;
 // GLOBAL: TIE95 0xEAC3C
+int32_t craftmoveY;
+// GLOBAL: TIE95 0xEAC34
 int32_t craftmoveZ;
 
 /* spec_data[] lives in spec.c (its watdbg owning module). */
@@ -175,21 +175,21 @@ uint16_t shipdetailpolycnt;
 /* --- World-to-eye rotation matrices. watdbg owner: tie.c. --- */
 // GLOBAL: TIE95 0xEAC0C
 int32_t rotworldeyeA1;
-// GLOBAL: TIE95 0xEAC10
-int32_t rotworldeyeA2;
 // GLOBAL: TIE95 0xEAC14
+int32_t rotworldeyeA2;
+// GLOBAL: TIE95 0xEAC10
 int32_t rotworldeyeA3;
-// GLOBAL: TIE95 0xEABC8
+// GLOBAL: TIE95 0xEAC18
 int32_t rotworldeyeB1;
 // GLOBAL: TIE95 0xEABCC
 int32_t rotworldeyeB2;
-// GLOBAL: TIE95 0xEAC18
+// GLOBAL: TIE95 0xEABC8
 int32_t rotworldeyeB3;
 // GLOBAL: TIE95 0xEABB8
 int32_t rotworldeyeC1;
-// GLOBAL: TIE95 0xEABBC
-int32_t rotworldeyeC2;
 // GLOBAL: TIE95 0xEABC4
+int32_t rotworldeyeC2;
+// GLOBAL: TIE95 0xEABBC
 int32_t rotworldeyeC3;
 
 /* Perspective-projection constants (set by TIE_InitFlightResolution per
@@ -214,15 +214,15 @@ int32_t calcS2;
 int32_t calcS3;
 // GLOBAL: TIE95 0xEABF4
 int32_t calcf1;
-// GLOBAL: TIE95 0xEABF8
-int32_t calcf2;
 // GLOBAL: TIE95 0xEABFC
+int32_t calcf2;
+// GLOBAL: TIE95 0xEABF8
 int32_t calcf3;
 // GLOBAL: TIE95 0xEABDC
 int32_t calcU1;
-// GLOBAL: TIE95 0xEABE0
-int32_t calcU2;
 // GLOBAL: TIE95 0xEABE4
+int32_t calcU2;
+// GLOBAL: TIE95 0xEABE0
 int32_t calcU3;
 
 /* --- Current-craft orientation rows. tie.c. --- */
@@ -258,11 +258,11 @@ int32_t worldlocy;
 int32_t worldlocx;
 // GLOBAL: TIE95 0xEB0D0
 int32_t worldlocz;
-// GLOBAL: TIE95 0xEAC40
+// GLOBAL: TIE95 0xEAC48
 int32_t worldx;
 // GLOBAL: TIE95 0xEAC44
 int32_t worldy;
-// GLOBAL: TIE95 0xEAC48
+// GLOBAL: TIE95 0xEAC40
 int32_t worldz; /* watdbg-owned by tie.c */
 // GLOBAL: TIE95 0xEB72C
 uint16_t yAspect; /* watdbg-owned by tie.c; 0 = square pixels */
@@ -272,30 +272,30 @@ int16_t objectsize;
 // GLOBAL: TIE98 0x5A2748
 uint8_t gouraudflag;
 // GLOBAL: TIE95 0xEAC54
-int32_t objecteyex;
-// GLOBAL: TIE95 0xEAC58
 int32_t objecteyey;
+// GLOBAL: TIE95 0xEAC58
+int32_t objecteyex;
 // GLOBAL: TIE95 0xEAC5C
 int32_t objecteyez;
 
 /* --- Swept-segment globals for collision pipeline. tie.c. --- */
-// GLOBAL: TIE95 0xEAB90
-int32_t laserx;
 // GLOBAL: TIE95 0xEAB94
-int32_t lasery;
+int32_t laserx;
 // GLOBAL: TIE95 0xEAB98
+int32_t lasery;
+// GLOBAL: TIE95 0xEAB90
 int32_t laserz;
-// GLOBAL: TIE95 0xEABD0
-int32_t laserxold;
 // GLOBAL: TIE95 0xEABD4
-int32_t laseryold;
+int32_t laserxold;
 // GLOBAL: TIE95 0xEABD8
+int32_t laseryold;
+// GLOBAL: TIE95 0xEABD0
 int32_t laserzold;
-// GLOBAL: TIE95 0xEAB80
-int32_t craftx;
 // GLOBAL: TIE95 0xEABA8
-int32_t crafty;
+int32_t craftx;
 // GLOBAL: TIE95 0xEABAC
+int32_t crafty;
+// GLOBAL: TIE95 0xEAB80
 int32_t craftz;
 // GLOBAL: TIE95 0xEABB0
 int32_t craftxold;
@@ -444,7 +444,7 @@ int16_t timers[20];
  * for the cockpit REC LED + %-remaining readout. replay.c / replayio.c
  * consume the rest. */
 // GLOBAL: TIE95 0xEB6A6
-int16_t replaypercent;
+uint16_t replaypercent;
 // GLOBAL: TIE95 0xEB6CC
 // GLOBAL: TIE98 0x5A2734
 int16_t recordingreplay;
@@ -473,7 +473,7 @@ uint32_t replaytotalcntdown; /* playback counter (counts up toward replaytotalcn
 // GLOBAL: TIE95 0xEB6AC
 uint16_t replayrandomseed;
 // GLOBAL: TIE95 0xEB6C4
-uint8_t replayviewmode;
+int16_t replayviewmode;
 // GLOBAL: TIE95 0xEB74C
 uint8_t replayspoolflag; /* 1 = auto-spool to disk when buffer fills. */
 // GLOBAL: TIE95 0xEB74F

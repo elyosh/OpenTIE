@@ -57,6 +57,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* The original TU calls the library abs() rather than the inline form. */
+#ifdef __WATCOMC__
+#pragma function(abs)
+#endif
+
 /* Resource names: [0] = LFD file, [1] = first-visit film, [2] = return film. */
 // GLOBAL: TIE95 0xCE58E
 // GLOBAL: TIE98 0x4F3110
@@ -447,16 +452,16 @@ static void train_user_Train_Light(Actor* the_actor, int32_t time) {
 		int16_t countdown;
 		/* "On" phase: random state every other frame */
 		if (time & 1)
-			the_actor->state = rand() % the_actor->arraySize;
+			the_actor->state = abs(rand()) % the_actor->arraySize;
 		countdown = the_actor->var2 & 0x3FFF;
 		if (countdown == 1) {
 			the_actor->var2 = (rand() & 0xF) + 2;
 			return;
 		}
 	} else {
-		/* "Off" phase: random state, check var1 for phase toggle */
-		the_actor->state = rand() % the_actor->arraySize;
-		if (the_actor->var1 == 1) {
+		/* "Off" phase: random state, toggle phase when the countdown expires */
+		the_actor->state = abs(rand()) % the_actor->arraySize;
+		if (the_actor->var2 == 1) {
 			the_actor->var2 = (rand() & 0xF) + 0x4002;
 			return;
 		}

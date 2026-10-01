@@ -17,23 +17,23 @@ extern "C" {
 /* Sine / Cosine lookups */
 uint16_t trig2_getsine(uint16_t angle);
 uint16_t trig2_calcsineofangle(uint16_t angle);
-int16_t trig2_getsignedsin(uint16_t angle);
+int16_t trig2_getsignedsin(int angle);
 uint16_t trig2_getcosine(uint16_t angle);
-int16_t trig2_getsignedcos(int16_t angle);
+int16_t trig2_getsignedcos(int angle);
 
 /* Multiply by trig (16-bit value × sin/cos, returns 16-bit) */
 int16_t trig2_sinewordmult(int16_t val, uint16_t angle);
 int16_t trig2_cosinewordmult(int16_t val, uint16_t angle);
 
 /* Multiply by trig (32-bit value × sin/cos, returns 32-bit) */
-int32_t trig2_sinedwordmult(int32_t val, uint16_t angle);
-int32_t trig2_cosinedwordmult(int32_t val, uint16_t angle);
+int32_t trig2_sinedwordmult(int32_t val, int32_t angle);
+int32_t trig2_cosinedwordmult(int32_t val, int32_t angle);
 
 /* Inverse trig */
 int16_t trig2_arcsin(int16_t val);
 int16_t trig2_arccos(int16_t val);
 int16_t trig2_arctan(int32_t y, int32_t x);
-void trig2_calcarctan(int32_t a, int32_t b, int16_t* out_ratio, int16_t* out_angle);
+void trig2_calcarctan(int32_t a, int32_t b, int16_t* out_angle, int16_t* out_ratio);
 
 /* Polar ↔ Cartesian conversions (operate on globals) */
 void trig2_ptoc3dim(void);

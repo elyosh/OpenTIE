@@ -51,7 +51,7 @@ int32_t sfoiltempB3;
 #include <stdint.h>
 
 // FUNCTION: TIE95 0x263AC
-void fview_calcrotatemove(int16_t pitch, int16_t heading, FlightObject* craft) {
+void fview_calcrotatemove(uint16_t pitch, uint16_t heading, FlightObject* craft) {
 	int16_t neg_heading = -heading;
 	int16_t adj_pitch = -16384 - pitch;
 
@@ -384,8 +384,8 @@ void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, int16_t
 }
 
 // FUNCTION: TIE95 0x26140
-void fview_newcalcview(int16_t roll, int16_t pitch, int16_t heading, int16_t yaw, int16_t side_angle,
-					   int16_t up_angle, FlightObject* craft) {
+void fview_newcalcview(uint16_t roll, uint16_t pitch, uint16_t heading, uint16_t yaw, uint16_t side_angle,
+					   uint16_t up_angle, FlightObject* craft) {
 	int32_t neg_U1, neg_U2, neg_U3;
 
 	fview_calcrotatemove(pitch, heading, craft);
@@ -417,7 +417,7 @@ void fview_newcalcview(int16_t roll, int16_t pitch, int16_t heading, int16_t yaw
 }
 
 // FUNCTION: TIE95 0x26258
-void fview_newcalcrotate(int16_t roll, int16_t pitch, int16_t heading, int16_t yaw, FlightObject* craft) {
+void fview_newcalcrotate(uint16_t roll, uint16_t pitch, uint16_t heading, uint16_t yaw, FlightObject* craft) {
 	if (craft) {
 		if (craft->orient_dirty) {
 			fview_calcrotatemove(pitch, heading, craft);
@@ -476,7 +476,8 @@ void fview_restorerotation(void) {
 // FUNCTION: TIE95 0x269F4
 void fview_sfoilrotation(int16_t angle) {
 	int32_t temp;
-	int32_t sin_a, cos_a, neg_sin;
+	int16_t sin_a, cos_a;
+	int32_t neg_sin;
 
 	sfoiltempA1 = rotworldeyeA1;
 	sfoiltempA2 = rotworldeyeA2;

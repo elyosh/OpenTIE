@@ -396,11 +396,9 @@ void msg_readymessage(void) {
 // FUNCTION: TIE95 0x3371C
 void msg_completemessage(uint16_t msg_type, char last_char) {
 	if (last_char != '?' && last_char != '!' && last_char != ':' && last_char != ' ')
-		if (outchar)
-			outchar('.');
+		outchar('.');
 	festring_setautofill(1);
-	if (outchar)
-		outchar('\n');
+	outchar('\n');
 	festring_setautofill(0);
 
 	if (msg_type == 4) {
@@ -598,7 +596,7 @@ uint16_t msg_addmessageptr(uint16_t slot_idx, char* ptr) {
 	uint16_t tagged;
 
 	messageptrs[slot_idx] = ptr;
-	tagged = (uint16_t)(slot_idx | 0x8000);
+	tagged = (uint16_t)(slot_idx + 0x8000);
 	argtable[slot_idx] = tagged;
 	return tagged;
 }

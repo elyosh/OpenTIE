@@ -58,7 +58,7 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction);
  *   - partial system health             -> "NN%" (color 0x4E)
  * Name is drawn left-justified through systemstrings[id]; value right-justified.
  */
-void damage_outputsystem(SystemStringId system_id, int16_t y);
+void damage_outputsystem(uint16_t system_id, int16_t y);
 
 int32_t damage_damageroom(void);
 

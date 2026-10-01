@@ -34,7 +34,7 @@ int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, ui
  * buoystr[species_idx - 70] for species 70..84. Emits 's' (plural) or ' '
  * (singular) as separator. Returns fontheight if a right-margin wrap
  * occurred, else 0. */
-uint8_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag);
+uint16_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag);
 
 /* Returns fgstatus[fg_index].cond_id[4].detail -- the 'specific craft id'
  * flag that drives craft-number vs '?' in outputgoal. Orphan (inlined) in

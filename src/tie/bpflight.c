@@ -76,14 +76,11 @@ int16_t bpflight_pivotyaw[3];
 // GLOBAL: TIE98 0x6269C0
 int16_t bpflight_pivotroll[3];
 
-/* The original object buffers are a pair of adjacent memory handles
- * indexed by the obstacle flag; the port retypes them to host pointers. */
+/* Object buffers: [0] holds the viewed ship, [1] the optional training
+ * course obstacle (0 when the scene has none). */
 // GLOBAL: TIE95 0xF64C8
 // GLOBAL: TIE98 0x6269A0
-void* bpflight_fltobj_data;
-// GLOBAL: TIE95 0xF64CA
-// GLOBAL: TIE98 0x6269A2
-static void* bpflight_fltobj_data_obstacle;
+LandruHandle bpflight_fltobj_data[2];
 
 // GLOBAL: TIE95 0xD0E1A
 // GLOBAL: TIE98 0x4DF1EC
@@ -186,10 +183,10 @@ static Actor* engine[3];
 // GLOBAL: TIE98 0x4FA654
 static Matrix* matrix;
 
-/* Scanline transform scratch (65000 bytes). HANDLE in the binary. */
+/* Scanline transform scratch (65000 bytes). */
 // GLOBAL: TIE95 0xD0E18
 // GLOBAL: TIE98 0x50A9D0
-static void* xtransdata;
+static LandruHandle xtransdata;
 
 /* Per-viewport camera state arrays (3 slots). Originally 16-bit Q16.0
  * for angles (0x10000 ≈ 360°) and Q16.16 signed for positions. */
@@ -204,22 +201,22 @@ static int32_t bpcameray[3];
 static int32_t bpcameraz[3];
 // GLOBAL: TIE95 0xF653C
 // GLOBAL: TIE98 0x4FA638
-static int16_t bpcamerapitch[3];
+static uint16_t bpcamerapitch[3];
 // GLOBAL: TIE95 0xF6506
 // GLOBAL: TIE98 0x4FA9B0
-static int16_t bpcameraheading[3];
+static uint16_t bpcameraheading[3];
 // GLOBAL: TIE95 0xF655A
 // GLOBAL: TIE98 0x4FA640
-static int16_t bpcameraroll[3];
+static uint16_t bpcameraroll[3];
 // GLOBAL: TIE95 0xF6560
 // GLOBAL: TIE98 0x4FA628
-static int16_t bpcamerayaw[3];
+static uint16_t bpcamerayaw[3];
 // GLOBAL: TIE95 0xF654E
 // GLOBAL: TIE98 0x4FA658
-static int16_t bpcameralookpitch[3];
+static uint16_t bpcameralookpitch[3];
 // GLOBAL: TIE95 0xF650C
 // GLOBAL: TIE98 0x4FA678
-static int16_t bpcameralookclock[3];
+static uint16_t bpcameralookclock[3];
 
 /* Per-viewport runtime state. */
 // GLOBAL: TIE95 0xF6500
@@ -376,7 +373,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	}
 
 	/* XTRANS2 scanline scratch. Big enough for a full-screen viewport. */
-	xtransdata = malloc(65000);
+	xtransdata = xmemhdl_Alloc_Handle(65000, LANDRU_MEMORY_RESOURCE);
 
 	flightbuf_small_handle = xmemhdl_Alloc_Handle((uint32_t)(TRACE2_EDGEINFO_CAP * sizeof(trace2_EdgeInfo)),
 												  LANDRU_MEMORY_RESOURCE);
@@ -388,14 +385,14 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	 *   scene 1        : 15000 bytes + 9000-byte obstacle heap
 	 *   scene 2        : 15000 bytes (no obstacle) */
 	if (scene == 3) {
-		bpflight_fltobj_data = malloc(33000);
-		bpflight_fltobj_data_obstacle = NULL;
+		bpflight_fltobj_data[0] = xmemhdl_Alloc_Handle(33000, LANDRU_MEMORY_RESOURCE);
+		bpflight_fltobj_data[1] = 0;
 	} else {
-		bpflight_fltobj_data = malloc(15000);
+		bpflight_fltobj_data[0] = xmemhdl_Alloc_Handle(15000, LANDRU_MEMORY_RESOURCE);
 		if (scene == 1)
-			bpflight_fltobj_data_obstacle = malloc(9000);
+			bpflight_fltobj_data[1] = xmemhdl_Alloc_Handle(9000, LANDRU_MEMORY_RESOURCE);
 		else
-			bpflight_fltobj_data_obstacle = NULL;
+			bpflight_fltobj_data[1] = 0;
 	}
 
 	/* Kick a SHIP resource into fltobj_data via SHIPEXT; training adds
@@ -415,13 +412,15 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	 *   [1, 0, w_lo]  (width > 0xFF, split into a 0 marker + low byte)
 	 * The writer advances by 2 or 3 bytes per row accordingly. */
 	{
-		uint8_t* mask = (uint8_t*)xtransdata + (uint16_t)maskbufptr;
+		uint8_t* mask;
 		int16_t width = (int16_t)(r.right - r.left);
 		int16_t height = (int16_t)(r.bottom - r.top);
 		uint8_t width_lo = (uint8_t)width;
 		int16_t y;
 		int16_t remaining = width;
 
+		xtransdataptr = xmemhdl_Lock_Handle(xtransdata);
+		mask = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
 		for (y = 0; y < height; ++y) {
 			mask[0] = 1;
 			if (remaining > 0xFF) {
@@ -437,6 +436,7 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 				mask += 2;
 			}
 		}
+		xmemhdl_Unlock_Handle(xtransdata);
 	}
 
 	/* Light direction: symmetric, pointing into +X+Y+Z. 0x49E6 ≈ 0.577
@@ -517,18 +517,17 @@ void bpflight_Close_Flight_Engine(void) {
 	if (TIE_FRONTEND_TIE98)
 		TieFlightRuntime_ReleaseRecoveredResources();
 #endif
-	free(xtransdata);
-	xtransdata = NULL;
-	free(bpflight_fltobj_data);
-	bpflight_fltobj_data = NULL;
-	if (bpflight_fltobj_data_obstacle) {
-		free(bpflight_fltobj_data_obstacle);
-		bpflight_fltobj_data_obstacle = NULL;
-	}
+	xmemhdl_Free_Handle(xtransdata);
 	xmemhdl_Free_Handle(flightbuf_small_handle);
 	xmemhdl_Free_Handle(flightbuf_big_handle);
+	xmemhdl_Free_Handle(bpflight_fltobj_data[0]);
+	if (bpflight_fltobj_data[1])
+		xmemhdl_Free_Handle(bpflight_fltobj_data[1]);
 #ifdef TIE_MODERN
 	/* PORT: clear the released handles so a later release is a no-op. */
+	xtransdata = LANDRU_NULL_HANDLE;
+	bpflight_fltobj_data[0] = LANDRU_NULL_HANDLE;
+	bpflight_fltobj_data[1] = LANDRU_NULL_HANDLE;
 	flightbuf_small_handle = LANDRU_NULL_HANDLE;
 	flightbuf_big_handle = LANDRU_NULL_HANDLE;
 #endif
@@ -717,7 +716,7 @@ static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, 
 						  bpcameralookpitch[id], bpcameralookclock[id], NULL);
 	}
 
-	xtransdataptr = xtransdata;
+	xtransdataptr = xmemhdl_Lock_Handle(xtransdata);
 	bitmap = xcanvas_Get_Current_Canvas_Bitmap();
 	xtrans2_videobaseptr = (uint8_t*)xbm_Lock_Bitmap(bitmap);
 	buffer_ptr = xtrans2_videobaseptr;
@@ -819,6 +818,7 @@ static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, 
 	RenderScene_DrawVisibleFaces();
 	g_flightSurfaceAlreadyLocked = 0;
 	RenderScene_UnlockSceneBuffers_tie98();
+	xmemhdl_Unlock_Handle(xtransdata);
 	deepspacecolor = saved_deepspace_color;
 	xbm_Unlock_Bitmap(bitmap);
 	return 0;
@@ -829,12 +829,14 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 									int16_t refresh) {
 	MatrixFrame frame;
 	BitmapStruct* bm;
-	uint16_t width;
 	uint16_t height;
+	uint16_t width;
+	uint8_t* mask;
+	int16_t row;
 	int16_t object_count;
+	int16_t obj_idx;
+	int16_t use_obstacle;
 	uint8_t saved_deepspace;
-
-	int i;
 
 	if (TIE_FRONTEND_TIE98)
 		return bpflight_draw_Engine_tie98(actor, clip, dest, xoff, yoff, refresh);
@@ -853,26 +855,8 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 	xdirty_Dirty_Rect(clip);
 
 	/* -- Camera setup -- */
-
-	if (actor->id != 0) {
-		/* Secondary/blueprint viewport: copy from per-viewport arrays. */
-		int16_t i = actor->id;
-		scene_camerax = bpcamerax[i];
-		scene_cameray = bpcameray[i];
-		scene_cameraz = bpcameraz[i];
-		scene_camerapitch = bpcamerapitch[i];
-		scene_cameraheading = bpcameraheading[i];
-		scene_cameraroll = bpcameraroll[i];
-		scene_camerayaw = bpcamerayaw[i];
-		scene_cameralookpitch = bpcameralookpitch[i];
-		scene_cameralookclock = bpcameralookclock[i];
-		fview_newcalcview(bpcameraroll[i], bpcamerapitch[i], bpcameraheading[i], bpcamerayaw[i],
-						  bpcameralookpitch[i], bpcameralookclock[i], NULL);
-	} else {
-		/* Primary viewport: pull the current frame from the orbit
-		 * matrix. actor->var1 is the frame cursor (Watcom reads this
-		 * with HIWORD(*(_DWORD*)&actor->yscale) in the binary — the
-		 * unaligned-dword idiom for a +2 byte offset). */
+	if (actor->id == 0) {
+		/* Primary viewport: pull the current frame from the orbit matrix. */
 		matrix_Get_Matrix_Frame(matrix, &frame, actor->var1);
 		scene_camerayaw = 0;
 		scene_cameralookpitch = 0;
@@ -880,193 +864,113 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 		scene_cameralookclock = 0;
 		scene_cameray = frame.cam_y;
 		scene_cameraz = frame.cam_z;
-		scene_camerapitch = frame.cam_pitch;
 		scene_cameraheading = frame.cam_heading;
+		scene_camerapitch = frame.cam_pitch;
 		scene_cameraroll = frame.cam_roll;
 		fview_newcalcview(frame.cam_roll, frame.cam_pitch, frame.cam_heading, 0, 0, 0, NULL);
+	} else {
+		/* Secondary/blueprint viewport: copy from per-viewport arrays. */
+		scene_camerax = bpcamerax[actor->id];
+		scene_cameray = bpcameray[actor->id];
+		scene_cameraz = bpcameraz[actor->id];
+		scene_camerapitch = bpcamerapitch[actor->id];
+		scene_cameraheading = bpcameraheading[actor->id];
+		scene_cameraroll = bpcameraroll[actor->id];
+		scene_camerayaw = bpcamerayaw[actor->id];
+		scene_cameralookpitch = bpcameralookpitch[actor->id];
+		scene_cameralookclock = bpcameralookclock[actor->id];
+		fview_newcalcview(bpcameraroll[actor->id], bpcamerapitch[actor->id], bpcameraheading[actor->id],
+						  bpcamerayaw[actor->id], bpcameralookpitch[actor->id], bpcameralookclock[actor->id], NULL);
 	}
 
 	/* Lock the XTRANS2 scratch + canvas; logbuf picks up videobaseptr. */
-	xtransdataptr = xtransdata;
+	xtransdataptr = xmemhdl_Lock_Handle(xtransdata);
 	bm = xcanvas_Get_Current_Canvas_Bitmap();
 	xtrans2_videobaseptr = (uint8_t*)xbm_Lock_Bitmap(bm);
 	buffer_ptr = xtrans2_videobaseptr;
 
 	/* Re-fill the XTRANS2 mask buffer for this viewport. */
-	width = (uint16_t)(clip->right - clip->left);
 	height = (uint16_t)(clip->bottom - clip->top);
-	{
-		uint8_t* mask = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
-		uint16_t y;
-
-		for (y = 0; y < height; ++y) {
-			mask[0] = 1;
-			if (width > 0xFF) {
-				/* TIE98 BPFLIGHT_draw_Engine 0x405868. */
-				mask[1] = 0;
-				mask[2] = (uint8_t)(width + 1);
-				mask += 3;
-			} else {
-				mask[1] = (uint8_t)width;
-				mask += 2;
-			}
+	width = (uint16_t)(clip->right - clip->left);
+	mask = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
+	for (row = 0; row < height; ++row) {
+		*mask++ = 1;
+		if (width > 0xFF) {
+			*mask++ = 0;
+			*mask++ = (uint8_t)(width - 0x100);
+		} else {
+			*mask++ = (uint8_t)width;
 		}
 	}
 
 	/* Configure LOGBUF2 for this viewport + reset XTRANS2 state. */
-	/* TIE98 BPFLIGHT_draw_Engine 0x405895 selects the canvas stride. */
+#ifdef TIE_MODERN
+	/* The host canvas stride can differ from the retail 320-byte VGA page. */
 	screenMemWidth = bm->w;
 	logbuf2_setbufferdimensions(width, height, (uint32_t)clip->left + (uint32_t)bm->w * clip->top);
+#else
+	logbuf2_setbufferdimensions(width, height, (uint16_t)(clip->top * 320 + clip->left));
+#endif
 	xtrans2_clearruntable();
 	fullupdateflag = 0;
 	xtrans2_initxtrans();
 
-	/* -- Pre-render material swap --
-	 *
-	 * 1) Swap 45×16 bytes between the live materialcolors[] and the
-	 *    720-byte bp_materialcolors[] backup so the viewer temporarily
-	 *    installs its own palette. (In the binary these two arrays are
-	 *    adjacent, so the swap is written as `&bp_active_component +
-	 *    i + 1` base-minus-1 trick — unfolded here to direct indexing.) */
-	for (i = 0; i < 45; ++i) {
-		uint8_t* mc = materialcolors + i * 16;
-		uint8_t* bk = bp_materialcolors + i * 16;
-		int k;
-
-		for (k = 0; k < 16; ++k) {
-			uint8_t tmp = mc[k];
-			mc[k] = bk[k];
-			bk[k] = tmp;
-		}
-	}
-	/* 2) Scene-specific offset: for each of 39 room materials, shift
-	 *    all 16 colour bytes by -trainroommapping[j] (training) or
-	 *    -combatroommapping[j] (combat). Same algorithm as settraincolors
-	 *    with apply_forward==0 (the post-render call negates this). */
-	if (cur_flight_scene == 1) {
-		int j;
-
-		for (j = 0; j < 39; ++j) {
-			uint8_t delta = (uint8_t)(-(int)trainroommapping[j]);
-			uint8_t* mc = materialcolors + j * 16;
-			int k;
-
-			for (k = 0; k < 16; ++k)
-				mc[k] = (uint8_t)(delta + mc[k]);
-		}
-	} else if (cur_flight_scene == 2) {
-		int j;
-
-		for (j = 0; j < 39; ++j) {
-			uint8_t delta = (uint8_t)(-(int)combatroommapping[j]);
-			uint8_t* mc = materialcolors + j * 16;
-			int k;
-
-			for (k = 0; k < 16; ++k)
-				mc[k] = (uint8_t)(delta + mc[k]);
-		}
+	/* Install the viewer palette, then remove the room's material offset. */
+	bpflight_swapbpmaterials();
+	switch (cur_flight_scene) {
+		case 1:
+			bpflight_settraincolors(1);
+			break;
+		case 2:
+			bpflight_setcombatcolors(1);
+			break;
 	}
 
-	/* -- Object draw loop --
-	 *
-	 * Primary viewport animates matrix->matrix_count objects (one per
-	 * joint slot); secondary/blueprint draws a single ship. */
-	object_count = (actor->id != 0) ? 1 : matrix->matrix_count;
+	/* Primary viewport animates one object per matrix joint; the others
+	 * draw a single ship. */
+	if (actor->id == 0)
+		object_count = matrix->matrix_count;
+	else
+		object_count = 1;
 	objectsize = 0x7FFF;
 	transfm2_screenyoffset = 0;
 
-	if (bpshipstate[actor->id] && object_count > 0) {
-		int16_t obj_idx;
+	if (bpshipstate[actor->id]) {
 		for (obj_idx = 0; obj_idx < object_count; ++obj_idx) {
-			int use_obstacle = 0;
-
-			uint8_t* obj_buf;
-			int32_t dx_raw;
-			int32_t dy_raw;
-			int32_t dz_raw;
-			int32_t dx_hi;
-			int32_t dy_hi;
-			int32_t dz_hi;
-			uint16_t scan_dx;
-			uint16_t scan_dy;
-			uint16_t scan_dz;
-			int16_t dx_s;
-			int16_t dy_s;
-			int16_t dz_s;
-			int32_t dot_side;
-			int32_t clamped;
-			int32_t dot_fwd;
-			int32_t dot_up;
-			int16_t* render_start;
-			uint8_t* bsp_base;
-			BSPNode* bsp_root;
-			int16_t cur_scene;
-
 			ShipModelData* smd;
+			int16_t* render_start;
+			uint8_t* bsp_root;
 
-			if (actor->id != 0) {
-				/* Single-object viewports read the ship world pos from
-				 * SHIPEXT (training / combat) or synthesize it from the
-				 * fltobj_data header (blueprint). */
-				if (cur_flight_scene == 1) {
-					shipext_Get_Train_Ship_Pos(&worldx, &worldy, &worldz);
-				} else if (cur_flight_scene == 2) {
-					shipext_Get_Combat_Ship_Pos(&worldx, &worldy, &worldz);
-				} else if (cur_flight_scene == 3) {
-					/* Centre the model on screen, add +30 vertical offset.
-					 * The fltobj header layout is
-					 *   u16 size; ShipModelData data;
-					 * so data starts at +2. Ship height is in data.height
-					 * (offset +0x0A inside ShipModelData → +0x0C from
-					 * buffer start). num_lods is at data+0x1F → buf+0x21.
-					 * mesh table = &data.lod_records[num_lods]. */
-					uint8_t* buf = bpflight_fltobj_data;
-					ShipModelData* smd = (ShipModelData*)(buf + 2);
-					uint16_t bp_height = smd->height;
-					worldx = 0;
-					worldz = 0;
-					transfm2_screenyoffset = -30;
-					worldy = scene_cameray + (bp_height << 8) / 200;
-					objectblockptr = smd;
-					componentblockptr = (ShipModelMesh*)(&smd->lod_records[smd->num_lods]);
+			if (actor->id == 0) {
+				bpflight_Position_Craft(&frame, obj_idx);
+				if (bpflight_fltobj_data[1])
+					use_obstacle = 1;
+				else
+					use_obstacle = 0;
+			} else {
+				switch (cur_flight_scene) {
+					case 3:
+						/* Centre the model on screen with a 30-line offset. */
+						objectblockptr = (ShipModelData*)((uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[0]) + 2);
+						worldx = 0;
+						worldy = scene_cameray + (objectblockptr->length << 8) / 200;
+						worldz = 0;
+						transfm2_screenyoffset = -30;
+						componentblockptr = (ShipModelMesh*)&objectblockptr->lod_records[objectblockptr->num_lods];
+						use_obstacle = 0;
+						xmemhdl_Unlock_Handle(bpflight_fltobj_data[0]);
+						break;
+					case 1:
+						shipext_Get_Train_Ship_Pos(&worldx, &worldy, &worldz);
+						use_obstacle = 0;
+						break;
+					case 2:
+						shipext_Get_Combat_Ship_Pos(&worldx, &worldy, &worldz);
+						use_obstacle = 0;
+						break;
 				}
 				fview_newcalcrotate(bpflight_pivotroll[actor->id], bpflight_pivotpitch[actor->id],
 									bpflight_pivotheading[actor->id], bpflight_pivotyaw[actor->id], NULL);
-			} else {
-				/* Primary viewport: read this object's joint from the
-				 * matrix frame. joint_pos[obj_idx].xyz and
-				 * joint_rot[obj_idx][0..8] (9-short rotation matrix). */
-				const int16_t* rot;
-
-				worldx = frame.joint_pos[obj_idx][0];
-				worldy = frame.joint_pos[obj_idx][1];
-				worldz = frame.joint_pos[obj_idx][2];
-
-				rot = frame.joint_rot[obj_idx];
-				calcf1 = rot[0];
-				calcf2 = rot[1];
-				calcf3 = rot[2];
-				calcS1 = rot[3];
-				calcS2 = rot[4];
-				calcS3 = rot[5];
-				calcU1 = rot[6];
-				calcU2 = rot[7];
-				calcU3 = rot[8];
-
-				/* Forward axis negates because the ship model's +fwd is
-				 * the renderer's -eye-z. Side and up copy verbatim. */
-				craftf1 = -calcf1;
-				craftf2 = -calcf2;
-				craftf3 = -calcf3;
-				craftS1 = calcS1;
-				craftS2 = calcS2;
-				craftS3 = calcS3;
-				craftU1 = calcU1;
-				craftU2 = calcU2;
-				craftU3 = calcU3;
-
-				fview_calcrotworldeye();
-				use_obstacle = (bpflight_fltobj_data_obstacle != NULL);
 			}
 
 			/* World-relative eye-space position (per-object). */
@@ -1077,158 +981,26 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 			objecteyey = transfm2_geteyey(worldx, worldy, worldz);
 			objecteyez = transfm2_geteyez(worldx, worldy, worldz);
 
-			obj_buf = (uint8_t*)(use_obstacle ? bpflight_fltobj_data_obstacle : bpflight_fltobj_data);
-			smd = (ShipModelData*)(obj_buf + 2);
+			smd = (ShipModelData*)((uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[use_obstacle]) + 2);
 			objectblockptr = smd;
+			bpflight_getrelativexyz();
+			componentblockptr = (ShipModelMesh*)&smd->lod_records[objectblockptr->num_lods];
 
-			/* -- Compute relativeshift + relative{x,y,z} --
-			 *
-			 * Find the minimum right-shift so the largest |camera-world|
-			 * delta fits in 15 bits, then project the eye-delta onto
-			 * the craft's local (S, f, U) basis. Matches the binary's
-			 * scan-dy/dz/dx double loop literally. */
-			dx_raw = 2 * (scene_camerax - worldx);
-			dy_raw = 2 * (scene_cameray - worldy);
-			dz_raw = 2 * (scene_cameraz - worldz);
-
-			dx_hi = (int32_t)(int16_t)((scene_camerax - worldx) >> 15);
-			dy_hi = (int32_t)(int16_t)((scene_cameray - worldy) >> 15);
-			dz_hi = (int32_t)(int16_t)((scene_cameraz - worldz) >> 15);
-			if (dx_hi < 0)
-				dx_hi = -dx_hi;
-			if (dy_hi < 0)
-				dy_hi = -dy_hi;
-			if (dz_hi < 0)
-				dz_hi = -dz_hi;
-
-			scan_dx = (uint16_t)(2 * dx_hi);
-			scan_dy = (uint16_t)(2 * dy_hi);
-			scan_dz = (uint16_t)(2 * dz_hi);
-			relativeshift = -1;
-			do {
-				do {
-					scan_dy >>= 1;
-					scan_dz >>= 1;
-					dx_raw >>= 1;
-					dy_raw >>= 1;
-					dz_raw >>= 1;
-					scan_dx >>= 1;
-					++relativeshift;
-				} while (scan_dx);
-			} while (scan_dy || scan_dz);
-
-			dx_s = (int16_t)dx_raw;
-			dy_s = (int16_t)dy_raw;
-			dz_s = (int16_t)dz_raw;
-
-			dot_side = (int32_t)dz_s * craftS3 + (int32_t)dy_s * craftS2 + (int32_t)dx_s * craftS1;
-			clamped = dot_side;
-			if (clamped >= 0x40000000)
-				clamped = 0x3FFF0000;
-			if (clamped <= -0x40000000)
-				clamped = -0x3FFF0000;
-			relativex = (int16_t)(clamped >> 15);
-
-			dot_fwd = (int32_t)dz_s * craftf3 + (int32_t)dy_s * craftf2 + (int32_t)dx_s * craftf1;
-			clamped = dot_fwd;
-			if (clamped >= 0x40000000)
-				clamped = 0x3FFF0000;
-			if (clamped <= -0x40000000)
-				clamped = -0x3FFF0000;
-			relativey = (int16_t)(-(clamped >> 15));
-
-			dot_up = (int32_t)dz_s * craftU3 + (int32_t)dy_s * craftU2 + (int32_t)dx_s * craftU1;
-			clamped = dot_up;
-			if (clamped >= 0x40000000)
-				clamped = 0x3FFF0000;
-			if (clamped <= -0x40000000)
-				clamped = -0x3FFF0000;
-			relativez = (int16_t)(clamped >> 15);
-
-			/* Adjust shift by the model's own LOD shift, compute the
-			 * mesh table start, and locate the BSP tree root. */
-			relativeshift = (int16_t)(relativeshift - smd->model_scale_shift);
-			componentblockptr = (ShipModelMesh*)(&smd->lod_records[smd->num_lods]);
-
-			/* Layout: just past the mesh table sits a u16 self-relative
-			 * offset to the BSP root (+2-byte size prefix). The binary
-			 * computes it as
-			 *     p  = &smd->speed_default + 3 * num_lods + 1   (int16*)
-			 *     p2 = (char*)p + *p                            (base)
-			 *     bsp = p2 + 2                                  (root)
-			 * which expressed in typed form is: */
-			render_start = (int16_t*)((uint8_t*)&smd->speed_default + 6 * smd->num_lods + 2);
-			bsp_base = (uint8_t*)render_start + *render_start;
-			bsp_root = (BSPNode*)(bsp_base + 2);
+			/* Past the mesh table sits a self-relative offset to the BSP
+			 * root, which follows a 2-byte size prefix. */
+			render_start = (int16_t*)&objectblockptr->lod_records[objectblockptr->num_lods - 1];
+			bsp_root = (uint8_t*)render_start + *render_start + 2;
 			parentobject = (uint16_t)(obj_idx + 1);
-
-			cur_scene = shellext_Get_Cur_Scene();
-			if (cur_scene == SCENE_TRAIN_A || cur_scene == SCENE_TRAIN_B) {
-				/* Training: two BSP passes — accessories then MainHull. */
-				bpflight_drawtreeobject(bsp_root, 1, 0);
-				bpflight_drawtreeobject(bsp_root, 1, 1);
-			} else {
-				/* Non-training: inline the BSP walk with pass_gated=0
-				 * (all-meshes filter). Same painter's-order logic as
-				 * bpflight_drawtreeobject: sign of the plane equation
-				 * picks which child to recurse into first. */
-				int16_t has_orbit_pass = 0;
-				int16_t mainhull_pass = 0;
-				BSPNode* n = bsp_root;
-				/* PORT: Watcom emits variable x86 SAR instructions here.
-				 * Masking the count preserves their behavior when
-				 * relativeshift is negative without invoking C UB. */
-				uint16_t bsp_shift = (uint16_t)relativeshift & 31u;
-				int16_t root_mesh_idx;
-				ShipModelMesh* mesh;
-				uint16_t mesh_off;
-				ShipMeshLOD* lods;
-				const uint16_t* poly;
-
-				while (n->left_off != 0) {
-					int32_t delta_x = relativex - (n->center_x >> bsp_shift);
-					int32_t delta_y = relativey - (n->center_y >> bsp_shift);
-					int32_t delta_z = relativez - (n->center_z >> bsp_shift);
-					/* Plane dot-product. The binary clamps to ±0x3FFF0000
-					 * and tests bit 30 via `(v>>15)&0x8000`; since the
-					 * clamp preserves sign, testing < 0 on the raw sum is
-					 * equivalent (we only need the sign here). */
-					int32_t plane_eq = (int32_t)(int16_t)delta_z * (n->normal_z >> bsp_shift) +
-									   (int32_t)(int16_t)delta_y * (n->normal_y >> bsp_shift) +
-									   (int32_t)(int16_t)delta_x * (n->normal_x >> bsp_shift);
-					if (plane_eq < 0) {
-						bpflight_drawtreeobject((uint8_t*)n + n->right_off, has_orbit_pass, mainhull_pass);
-						n = (BSPNode*)((uint8_t*)n + n->left_off);
-					} else {
-						bpflight_drawtreeobject((uint8_t*)n + n->left_off, has_orbit_pass, mainhull_pass);
-						n = (BSPNode*)((uint8_t*)n + n->right_off);
-					}
-				}
-
-				/* Leaf: render the root mesh picked out by right_off. */
-				root_mesh_idx = n->right_off;
-				mesh = &componentblockptr[root_mesh_idx];
-				mesh_off = mesh->render_offset;
-				bluetarget = (uint16_t)-1;
-				lods = (ShipMeshLOD*)((uint8_t*)mesh + mesh_off);
-				if (mesh->mesh_type == (uint16_t)bpflight_cur_component) {
-					currenttargetcomp = root_mesh_idx;
-					highlightcolor = 0;
-					currenttarget = parentobject;
-				} else {
-					currenttarget = 1024;
-				}
-				/* pass_gated==0 statically here → always draw. */
-				poly = draw_getdetailptr(lods, objecteyez);
-				drawpol_drawpolyobject(poly, objecteyex, objecteyey, objecteyez);
-			}
-			/* Obstacle buffer is "unlocked" by... nothing; malloc stays
-			 * live until Close_Flight_Engine. */
+			if (shellext_Get_Cur_Scene() == SCENE_TRAIN_A || shellext_Get_Cur_Scene() == SCENE_TRAIN_B)
+				bpflight_drawtrainobject(bsp_root);
+			else
+				bpflight_drawtreeobject(bsp_root, 0, 0);
+			xmemhdl_Unlock_Handle(bpflight_fltobj_data[use_obstacle]);
 		}
 	}
 
-	/* Temporarily suppress deep-space colour on secondary viewports so
-	 * the background renders as clean zeros. */
+	/* Suppress deep-space colour on secondary viewports so the
+	 * background renders as clean zeros. */
 	saved_deepspace = deepspacecolor;
 	if (actor->id != 0)
 		deepspacecolor = 0;
@@ -1236,60 +1008,33 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 
 	/* Primary viewport adds the skybox + star-field over the edge list. */
 	if (actor->id == 0) {
-		uint16_t star_width = TIE_FRONTEND_EDITION(0x140, 0x280);
-		uint16_t star_height = TIE_FRONTEND_EDITION(0xC8, 0x1E0);
-		uint16_t fullupdate_save;
+		uint16_t saved_fullupdate;
 
 		drawbackdropflag = 0;
 		backdrp2_backdrop();
-		rtsvga2_setvgapointers(xtrans2_videobaseptr, star_width, star_height);
-		fullupdate_save = fullupdateflag;
+		rtsvga2_setvgapointers(xtrans2_videobaseptr, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
+		saved_fullupdate = fullupdateflag;
 		if (fullstarupdate) {
 			fullstarupdate = 0;
 			fullupdateflag = 1;
 		}
 		rtsvga2_drawstars();
-		fullupdateflag = fullupdate_save;
-		rtsvga2_setvgapointers(NULL, star_width, star_height);
+		fullupdateflag = saved_fullupdate;
+		rtsvga2_setvgapointers(NULL, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 	}
 
-	/* -- Post-render material restore (mirror of the pre-render swap) -- */
-	if (cur_flight_scene == 1) {
-		int j;
-
-		for (j = 0; j < 39; ++j) {
-			uint8_t delta = trainroommapping[j];
-			uint8_t* mc = materialcolors + j * 16;
-			int k;
-
-			for (k = 0; k < 16; ++k)
-				mc[k] = (uint8_t)(delta + mc[k]);
-		}
-	} else if (cur_flight_scene == 2) {
-		int j;
-
-		for (j = 0; j < 39; ++j) {
-			uint8_t delta = combatroommapping[j];
-			uint8_t* mc = materialcolors + j * 16;
-			int k;
-
-			for (k = 0; k < 16; ++k)
-				mc[k] = (uint8_t)(delta + mc[k]);
-		}
+	/* Restore the room's material offset and the gameplay palette. */
+	switch (cur_flight_scene) {
+		case 1:
+			bpflight_settraincolors(0);
+			break;
+		case 2:
+			bpflight_setcombatcolors(0);
+			break;
 	}
-	for (i = 0; i < 45; ++i) {
-		uint8_t* mc = materialcolors + i * 16;
-		uint8_t* bk = bp_materialcolors + i * 16;
-		int k;
-
-		for (k = 0; k < 16; ++k) {
-			uint8_t tmp = mc[k];
-			mc[k] = bk[k];
-			bk[k] = tmp;
-		}
-	}
+	bpflight_swapbpmaterials();
 	deepspacecolor = saved_deepspace;
-
+	xmemhdl_Unlock_Handle(xtransdata);
 	xbm_Unlock_Bitmap(bm);
 	return 0;
 }
@@ -1506,13 +1251,6 @@ static void bpflight_Load_Flight_Craft_tie98(const char* lfd_name, const char* o
 // FUNCTION: TIE95 0x7A1FC
 int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16_t mode) {
 	ResFile* rf;
-	void* target;
-	uint8_t* obj_data;
-	int out_offset;
-	uint32_t out_size;
-
-	char name[16];
-	size_t upper;
 
 	if (TIE_FRONTEND_TIE98) {
 		bpflight_Load_Flight_Craft_tie98(lfd_name, shp_name, mode, cur_flight_scene);
@@ -1520,30 +1258,11 @@ int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16
 	}
 
 	rf = shellext_Open_Empire_Resource(lfd_name);
-	if (!rf)
-		return 1;
-
-	target = (mode == 0) ? bpflight_fltobj_data : bpflight_fltobj_data_obstacle;
-	obj_data = (uint8_t*)target;
-
-	for (upper = 0; upper + 1 < sizeof(name) && shp_name[upper]; ++upper)
-		name[upper] = (char)toupper((unsigned char)shp_name[upper]);
-	name[upper] = '\0';
-
-	out_offset = 0;
-	out_size = 0;
-	if (xres_Get_Resource_Offset(rf, FOURCC_SHIP, name, &out_offset, &out_size)) {
-		if (xres_Open_Resource_Data(FOURCC_SHIP, name)) {
-			/* Leading u16 in the resource is the object data size; the
-			 * rest is raw ShipModelData. */
-			uint16_t size = xres_Read_Resource_Word(rf);
-			objectloadsize = (int16_t)size;
-			xres_Read_Resource_Buffer_Data(rf, obj_data, size);
-			xres_Close_Resource_Data(rf);
-		}
+	if (rf) {
+		bpflight_Res_Ship(rf, (uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[mode]), shp_name);
+		xmemhdl_Unlock_Handle(bpflight_fltobj_data[mode]);
+		xres_Close_Resource(rf);
 	}
-
-	xres_Close_Resource(rf);
 	return 1;
 }
 
@@ -1646,11 +1365,11 @@ void bpflight_Position_Craft(MatrixFrame* frame, int16_t joint_idx) {
 
 /* ----- BPFLIGHT_settraincolors (0x7C444) -----
  *
- * Apply (forward) or undo (inverse) the 39×16-byte training-room material
- * offset. apply_forward != 0 adds trainroommapping[j], == 0 subtracts.
+ * Remove or re-apply the 39×16-byte training-room material offset.
+ * remove != 0 subtracts trainroommapping[j], == 0 adds it back.
  * No xrefs in the demo (inlined in draw_Engine). */
 // FUNCTION: TIE95 0x7A3F4
-void bpflight_settraincolors(int16_t apply_forward) {
+void bpflight_settraincolors(int16_t remove) {
 	int j;
 
 	for (j = 0; j < 39; ++j) {
@@ -1658,7 +1377,7 @@ void bpflight_settraincolors(int16_t apply_forward) {
 		uint8_t* mc;
 		int k;
 
-		if (!apply_forward)
+		if (remove)
 			d = (uint8_t)(-(int)d);
 		mc = materialcolors + j * 16;
 		for (k = 0; k < 16; ++k)
@@ -1669,7 +1388,7 @@ void bpflight_settraincolors(int16_t apply_forward) {
 /* ----- BPFLIGHT_setcombatcolors (0x7C4C8) ----- */
 
 // FUNCTION: TIE95 0x7A478
-void bpflight_setcombatcolors(int16_t apply_forward) {
+void bpflight_setcombatcolors(int16_t remove) {
 	int j;
 
 	for (j = 0; j < 39; ++j) {
@@ -1677,7 +1396,7 @@ void bpflight_setcombatcolors(int16_t apply_forward) {
 		uint8_t* mc;
 		int k;
 
-		if (!apply_forward)
+		if (remove)
 			d = (uint8_t)(-(int)d);
 		mc = materialcolors + j * 16;
 		for (k = 0; k < 16; ++k)

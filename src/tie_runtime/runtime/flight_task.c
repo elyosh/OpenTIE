@@ -176,6 +176,11 @@ void TieFlightTask_BeginMission(void) {
 	 * flight task's lifetime; reset by whichever modal pushes next
 	 * (debrief, replay viewer, etc.). */
 	TieSnapshotBuilder_SetSceneKind(TIE_SCENE_FLIGHT);
+	{
+		/* A key left by a room in an earlier session is stale. */
+		int16_t stale_key;
+		(void)TieFlightRequest_ConsumeRoomKey(&stale_key);
+	}
 	(void)landru_task_push(&flight_mission_task_vt);
 }
 

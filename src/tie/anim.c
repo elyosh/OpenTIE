@@ -1,7 +1,7 @@
 /* Animation pattern format (u16 entries):
  *   < 0x8000        -- 3D polymesh component idx (drawn as mesh)
  *   0x8000..0xFEFF  -- bitmap code: bit15 set; bits 7..14 species; bits 0..6 bitmap
- *   0xFF00..0xFFFC  -- jump-to-frame: new index = code & 0xFF
+ *   0xFF00..0xFFFC  -- jump-to-frame: new index = op & 0xFF
  *   0xFFFD          -- reset (animindex := 0)
  *   0xFFFE          -- delay frame (animindex advances by 1, no draw)
  *   0xFFFF          -- kill the parent object
@@ -46,7 +46,7 @@
 
 /* Most patterns
  * open with [DELAY, JUMP(0)] (the 'idle parking state') and spawn at
- * anim_frame = 0; gameplay code bumps anim_frame past the header to arm
+ * anim_frame = 0; gameplay op bumps anim_frame past the header to arm
  * the animation. 'ember' / 'ember2' have no header: they play from frame 0.
  */
 
@@ -345,7 +345,7 @@ void anim_sort_and_draw_bitmaps_tie98(int draw_target) {
 // FUNCTION: TIE95 0x107D4
 int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
 	/* species_packed is the same bitfield emitted by ANIMOP_BITMAP;
-	 * decode with the shared accessors. */
+	 * deop with the shared accessors. */
 	uint8_t species_idx = (uint8_t)((entry->species_packed & 0x7FFFu) >> 7);
 	uint8_t bitmap_idx = (uint8_t)(entry->species_packed & 0x7Fu);
 
@@ -484,7 +484,7 @@ int16_t anim_drawverysimpleobject(uint16_t obj_idx_arg) {
 
 	result = (int16_t)op;
 
-	/* MESH opcode -- draw the polymesh component through DRAWPOL. */
+	/* MESH opop -- draw the polymesh component through DRAWPOL. */
 	if (op < 0x8000u) {
 		uint16_t mesh_ship = ship_type;
 		int32_t saved_eyex;
@@ -525,7 +525,7 @@ int16_t anim_drawverysimpleobject(uint16_t obj_idx_arg) {
 		}
 	}
 
-	/* BITMAP opcode -- billboarded sprite at projected (screen_x, screen_y). */
+	/* BITMAP opop -- billboarded sprite at projected (screen_x, screen_y). */
 	if ((op >= 0x8000u && op < 0xFF00u) && objecteyez >= 0) {
 		/* Pick the world-to-eye axis pair (A or B) most horizontal in
 		 * eye space; its planar atan2 gives the billboard rotation. */
@@ -649,7 +649,7 @@ void anim_drawverysimpleobject_tie98(uint16_t object_index) {
 /* ====================================================================== *
  * anim_updateanimstate -- pattern VM single-step
  * ----------------------------------------------------------------------------
- * Peek the NEXT opcode (animptr[animindex+1]) and decide where animindex
+ * Peek the NEXT opop (animptr[animindex+1]) and decide where animindex
  * ends up after this tick:
  *
  *   KILL   -- zero the parent slot, advance past the KILL opcode.
@@ -662,35 +662,24 @@ void anim_drawverysimpleobject_tie98(uint16_t object_index) {
  * no-op (animindex stays put).
  * ====================================================================== */
 // FUNCTION: TIE95 0x11224
-int16_t anim_updateanimstate(uint16_t obj_or_kind) {
-	uint16_t next;
+void anim_updateanimstate(uint16_t obj_or_kind) {
 	AnimOp op;
+	int code;
 
-	if (!animptr)
-		return 0;
-
-	next = (uint16_t)(animindex + 1);
-	op = animptr[next];
-
-	if (op == ANIMOP_RESET) {
-		animindex = 0;
-		return (int16_t)op;
+	if (animptr) {
+		op = animptr[++animindex];
+		code = op;
+		if (code == ANIMOP_KILL) {
+			if ((obj_or_kind & 0xFF00u) == OBJ_REF_STATIC_BASE)
+				staticobjects[obj_or_kind].species = 0;
+			else
+				objects[obj_or_kind].ship_idx = 0;
+		} else if (code == ANIMOP_RESET) {
+			animindex = 0;
+		} else if (code >= 0xFF00 && code != ANIMOP_DELAY) {
+			animindex = op - 0xFF00;
+		}
 	}
-
-	if (op == ANIMOP_KILL) {
-		uint8_t slot = (uint8_t)obj_or_kind;
-		if ((obj_or_kind & 0xFF00u) == OBJ_REF_STATIC_BASE)
-			staticobjects[slot].species = 0;
-		else
-			objects[slot].ship_idx = 0;
-		/* Fall through: still advance past the KILL. */
-	} else if ((op >= 0xFF00u && op <= 0xFFFCu)) {
-		next = (uint8_t)op;
-	}
-	/* DELAY / MESH / BITMAP: advance, no side effect. */
-
-	animindex = next;
-	return (int16_t)op;
 }
 
 // FUNCTION: TIE98 0x401600

@@ -253,7 +253,7 @@ static int16_t blueprnt_iupdate_Blueprint_Door(Input* input, Rect* draw_rect, Re
 		return 0;
 
 	door_actor->var1 = 1;
-	if (mouseState == 3 || prevMouseState == 3)
+	if (mouseState == (uint8_t)3 || prevMouseState == (uint8_t)3)
 		xinpattr_Selected_Input(input);
 	/* Binary BLUEPRNT_iupdate_Blueprint_Door at 0x6e605 returns 1. */
 	return 1;
@@ -495,9 +495,13 @@ int32_t blueprnt_Flight_Object_Size(void) {
 	} else
 #endif
 	{
-		const uint8_t* data = (const uint8_t*)bpflight_fltobj_data;
-		uint16_t dimension = *(const uint16_t*)(data + 12);
-		uint8_t shift = data[32];
+		const uint8_t* data = (const uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[0]);
+		uint16_t dimension;
+		uint8_t shift;
+
+		xmemhdl_Unlock_Handle(bpflight_fltobj_data[0]);
+		dimension = *(const uint16_t*)(data + 12);
+		shift = data[32];
 		extent = (int32_t)((uint32_t)(dimension / 2) << (shift & 31));
 	}
 #endif

@@ -43,33 +43,33 @@ uint8_t conditiongrouprelated[26] = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1,
  * ==================================================================== */
 
 // FUNCTION: TIE95 0x524F0
-int8_t score_fgmemberofgroup(uint16_t fg_idx, uint8_t group_type, uint16_t group_id) {
+int16_t score_fgmemberofgroup(uint16_t fg_idx, uint16_t group_type, uint16_t group_id) {
 	const EFGStruct* const f = &fg_array[fg_idx];
 	const uint8_t fg_spec = speciesconvert[f->species];
 
 	switch (group_type) {
 		case GTT_FG:
-			return (int8_t)(group_id == fg_idx);
+			return (int16_t)(group_id == fg_idx);
 		case GTT_SPECIES:
 			/* Binary uses byte_D1219 = speciesconvert+1: speciesconvert[gid+1]. */
-			return (int8_t)(speciesconvert[group_id + 1] == fg_spec);
+			return (int16_t)(speciesconvert[group_id + 1] == fg_spec);
 		case GTT_GENUS:
-			return (int8_t)(genusconvert[group_id] == species_table[fg_spec].ship_class);
+			return (int16_t)(genusconvert[group_id] == species_table[fg_spec].ship_class);
 		case GTT_FAMILY:
-			return (int8_t)(familyconvert[group_id] == species_table[fg_spec].category);
+			return (int16_t)(familyconvert[group_id] == species_table[fg_spec].category);
 		case GTT_SIDE:
-			return (int8_t)(group_id == f->side);
+			return (int16_t)(group_id == f->side);
 		case GTT_AI_ORDER:
-			return (int8_t)(group_id == f->ai[0].order);
+			return (int16_t)(group_id == f->ai[0].order);
 		case GTT_CRAFT_ATTR:
 		case GTT_ALL_FG:
 			return 1;
 		case GTT_ALL_IN_SET:
-			return (int8_t)(group_id == f->set);
+			return (int16_t)(group_id == f->set);
 		case GTT_SKILL:
-			return (int8_t)(group_id == f->skill);
+			return (int16_t)(group_id == f->skill);
 		case GTT_VERSION:
-			return (int8_t)(group_id == f->version);
+			return (int16_t)(group_id == f->version);
 		default:
 			return 0;
 	}
@@ -80,7 +80,7 @@ int8_t score_fgmemberofgroup(uint16_t fg_idx, uint8_t group_type, uint16_t group
  * ==================================================================== */
 
 // FUNCTION: TIE95 0x526D0
-int8_t score_objectmemberofgroup(uint16_t obj_idx, uint8_t group_type, uint8_t group_id) {
+int16_t score_objectmemberofgroup(uint16_t obj_idx, uint16_t group_type, uint16_t group_id) {
 	uint16_t fg_idx;
 	CraftData* craft_ptr = NULL;
 
@@ -99,53 +99,53 @@ int8_t score_objectmemberofgroup(uint16_t obj_idx, uint8_t group_type, uint8_t g
 
 	switch (group_type) {
 		case GTT_FG:
-			return (int8_t)(group_id == fg_idx);
+			return (int16_t)(group_id == fg_idx);
 		case GTT_SPECIES:
-			return (int8_t)(speciesconvert[group_id + 1] == fg_spec);
+			return (int16_t)(speciesconvert[group_id + 1] == fg_spec);
 		case GTT_GENUS:
-			return (int8_t)(genusconvert[group_id] == species_table[fg_spec].ship_class);
+			return (int16_t)(genusconvert[group_id] == species_table[fg_spec].ship_class);
 		case GTT_FAMILY:
-			return (int8_t)(familyconvert[group_id] == species_table[fg_spec].category);
+			return (int16_t)(familyconvert[group_id] == species_table[fg_spec].category);
 		case GTT_SIDE:
-			return (int8_t)(group_id == f->side);
+			return (int16_t)(group_id == f->side);
 		case GTT_AI_ORDER:
-			return (int8_t)(group_id == f->ai[0].order);
+			return (int16_t)(group_id == f->ai[0].order);
 		case GTT_CRAFT_ATTR:
 			/* Craft-attribute predicate; only meaningful for regular objects. */
 			if (obj_idx >= 0x3800u || craft_ptr == NULL)
 				return 0;
 			switch (group_id) {
 				case 0:
-					return (int8_t)(craft_ptr->dock_state_flags != 0);
+					return (int16_t)(craft_ptr->dock_state_flags != 0);
 				case 1:
-					return (int8_t)(craft_ptr->inspected != 0);
+					return (int16_t)(craft_ptr->inspected != 0);
 				case 2:
-					return (int8_t)(craft_ptr->board_count != 0);
+					return (int16_t)(craft_ptr->board_count != 0);
 				case 3:
-					return (int8_t)(craft_ptr->capture_count != 0);
+					return (int16_t)(craft_ptr->capture_count != 0);
 				case 4:
-					return (int8_t)(craft_ptr->status_flags == 0);
+					return (int16_t)(craft_ptr->status_flags == 0);
 				case 5:
-					return (int8_t)(craft_ptr->was_hit_flag != 0);
+					return (int16_t)(craft_ptr->was_hit_flag != 0);
 				case 6:
-					return (int8_t)(craft_ptr->hull_damage != 0);
+					return (int16_t)(craft_ptr->hull_damage != 0);
 				case 7:
-					return (int8_t)(craft_ptr->craft_idx_in_fg == f->special_craft);
+					return (int16_t)(craft_ptr->craft_idx_in_fg == f->special_craft);
 				case 8:
-					return (int8_t)(craft_ptr->craft_idx_in_fg != f->special_craft);
+					return (int16_t)(craft_ptr->craft_idx_in_fg != f->special_craft);
 				case 9:
-					return (int8_t)(obj_idx == pstate.object_idx);
+					return (int16_t)(obj_idx == pstate.object_idx);
 				case 10:
-					return (int8_t)(obj_idx != pstate.object_idx);
+					return (int16_t)(obj_idx != pstate.object_idx);
 				default:
 					return 0;
 			}
 		case GTT_ALL_IN_SET:
-			return (int8_t)(group_id == f->set);
+			return (int16_t)(group_id == f->set);
 		case GTT_SKILL:
-			return (int8_t)(group_id == f->skill);
+			return (int16_t)(group_id == f->skill);
 		case GTT_VERSION:
-			return (int8_t)(group_id == f->version);
+			return (int16_t)(group_id == f->version);
 		case GTT_ALL_FG:
 			return 1;
 		default:
@@ -160,49 +160,46 @@ int8_t score_objectmemberofgroup(uint16_t obj_idx, uint8_t group_type, uint8_t g
 // FUNCTION: TIE95 0x52A9C
 void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kind) {
 	uint16_t j;
-	FGStatus* const fs = &fgstatus[fg_idx];
-	const EFGStruct* const f = &fg_array[fg_idx];
-	CraftData* const cd = objects[obj_idx].craft_ptr;
-	const uint8_t special = f->special_craft;
+	CraftData* cd = objects[obj_idx].craft_ptr;
 
 	TIE_FLIGHT_TRACE_FG_EXIT(obj_idx, exit_kind);
 
 	/* Primary bucket (byte-indexed via exit_kind). */
-	((&fs->cond[0].count))[exit_kind]++;
-	if (cd->craft_idx_in_fg == special)
-		((&fs->cond_id[0].count))[exit_kind] = 1;
+	((&fgstatus[fg_idx].cond[0].count))[exit_kind]++;
+	if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
+		((&fgstatus[fg_idx].cond_id[0].count))[exit_kind] = 1;
 
 	/* Conditional buckets: each bumps its own cond[N].count when the
 	 * craft's flag is CLEAR (i.e. the exit qualifies for that bucket). */
 	if (!cd->inspected) {
-		fs->cond[5].count++;
-		if (cd->craft_idx_in_fg == special)
-			fs->cond_id[5].count = 1;
+		fgstatus[fg_idx].cond[5].count++;
+		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
+			fgstatus[fg_idx].cond_id[5].count = 1;
 	}
 	if (!cd->pad_0B6) {
-		fs->cond[8].count++;
-		if (cd->craft_idx_in_fg == special)
-			fs->cond_id[8].count = 1;
+		fgstatus[fg_idx].cond[8].count++;
+		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
+			fgstatus[fg_idx].cond_id[8].count = 1;
 	}
 	if (!cd->dock_state_flags) {
-		fs->cond[4].count++;
-		if (cd->craft_idx_in_fg == special)
-			fs->cond_id[4].count = 1;
+		fgstatus[fg_idx].cond[4].count++;
+		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
+			fgstatus[fg_idx].cond_id[4].count = 1;
 	}
 	if (!cd->was_hit_flag) {
-		fs->cond[3].count++;
-		if (cd->craft_idx_in_fg == special)
-			fs->cond_id[3].count = 1;
+		fgstatus[fg_idx].cond[3].count++;
+		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
+			fgstatus[fg_idx].cond_id[3].count = 1;
 	}
 	if (!cd->board_count) {
-		fs->cond[6].count++;
-		if (cd->craft_idx_in_fg == special)
-			fs->cond_id[6].count = 1;
+		fgstatus[fg_idx].cond[6].count++;
+		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
+			fgstatus[fg_idx].cond_id[6].count = 1;
 	}
 	if (!cd->capture_count) {
-		fs->cond[7].count++;
-		if (cd->craft_idx_in_fg == special)
-			fs->cond_id[7].count = 1;
+		fgstatus[fg_idx].cond[7].count++;
+		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
+			fgstatus[fg_idx].cond_id[7].count = 1;
 	}
 
 	/* Destruction (exit_kind == 2): link-code tick + propagation to other FGs
@@ -210,48 +207,41 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
 	if (exit_kind == 2) {
 		uint16_t i;
 
-		if (f->link_flag) {
-			uint8_t linked = mission.mission_linked_data[f->link_code] + 1;
-			mission.mission_linked_data[f->link_code] = linked;
-			if (linked == 0)
-				mission.mission_linked_data[f->link_code] = 0xFFu; /* -1 */
+		if (fg_array[fg_idx].link_flag) {
+			if (++mission.mission_linked_data[fg_array[fg_idx].link_code] == 0)
+				mission.mission_linked_data[fg_array[fg_idx].link_code] = 0xFFu; /* -1 */
 		}
 
-		for (i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
-			FGStatus* cs;
-			int8_t d_cnt;
-			int8_t d_cid;
+		for (i = 0; i < mission_file_header.num_fg; i++) {
+			uint16_t d_cnt;
+			uint16_t d_cid;
 
 			if (i == fg_idx)
 				continue;
 			if (!fg_array[i].start_fg_used)
 				continue;
-			if (fg_array[i].start_fg != (uint8_t)fg_idx)
+			if ((int8_t)fg_array[i].start_fg != fg_idx)
 				continue;
 
-			cs = &fgstatus[i];
-			d_cnt = (int8_t)(cs->cond[0].count - cs->cond[0].detail);
-			d_cid = (int8_t)(cs->cond_id[0].count - cs->cond_id[0].detail);
+			d_cnt = fgstatus[i].cond[0].count - fgstatus[i].cond[0].detail;
+			d_cid = fgstatus[i].cond_id[0].count - fgstatus[i].cond_id[0].detail;
 
-			/* Propagate both deltas across cond[1/3/4/5/6/8]. The binary
-			 * interleaves the 12 writes; here we emit them in a cleaner
-			 * order -- the end state is identical since none of the reads
-			 * alias any of the writes. */
-			cs->cond[1].count = (uint8_t)(cs->cond[1].count + d_cnt);
-			cs->cond_id[1].count = (uint8_t)(cs->cond_id[1].count + d_cid);
-			cs->cond[3].count = (uint8_t)(cs->cond[3].count + d_cnt);
-			cs->cond_id[3].count = (uint8_t)(cs->cond_id[3].count + d_cid);
-			cs->cond[4].count = (uint8_t)(cs->cond[4].count + d_cnt);
-			cs->cond_id[4].count = (uint8_t)(cs->cond_id[4].count + d_cid);
-			cs->cond[5].count = (uint8_t)(cs->cond[5].count + d_cnt);
-			cs->cond_id[5].count = (uint8_t)(cs->cond_id[5].count + d_cid);
-			cs->cond[6].count = (uint8_t)(cs->cond[6].count + d_cnt);
-			cs->cond_id[6].count = (uint8_t)(cs->cond_id[6].count + d_cid);
-			cs->cond[8].count = (uint8_t)(cs->cond[8].count + d_cnt);
-			cs->cond_id[8].count = (uint8_t)(cs->cond_id[8].count + d_cid);
+			/* Propagate both deltas across cond[1/5/8/4/3/6]. */
+			fgstatus[i].cond[1].count += d_cnt;
+			fgstatus[i].cond_id[1].count += d_cid;
+			fgstatus[i].cond[5].count += d_cnt;
+			fgstatus[i].cond_id[5].count += d_cid;
+			fgstatus[i].cond[8].count += d_cnt;
+			fgstatus[i].cond_id[8].count += d_cid;
+			fgstatus[i].cond[4].count += d_cnt;
+			fgstatus[i].cond_id[4].count += d_cid;
+			fgstatus[i].cond[3].count += d_cnt;
+			fgstatus[i].cond_id[3].count += d_cid;
+			fgstatus[i].cond[6].count += d_cnt;
+			fgstatus[i].cond_id[6].count += d_cid;
 
-			cs->waves_remaining = 0;
-			cs->active = 1;
+			fgstatus[i].active = 1;
+			fgstatus[i].waves_remaining = 0;
 		}
 	}
 
@@ -262,7 +252,7 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
 		if (!objects[j].ship_idx)
 			continue;
 		oc = objects[j].craft_ptr;
-		if (obj_idx == oc->attacker_idx)
+		if (oc->attacker_idx == obj_idx)
 			oc->attacker_idx = 255;
 	}
 }

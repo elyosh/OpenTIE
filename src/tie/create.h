@@ -72,7 +72,7 @@ int create_createstaticobject(uint16_t fg_idx, uint8_t ship_class, uint8_t speci
 
 /* Resolve a 16-bit object reference (see OBJ_REF_* in tie.h) to
  * worldlocx/y/z. */
-void create_getworldposition(uint16_t obj_or_kind, int fg_idx);
+void create_getworldposition(uint16_t obj_or_kind, uint16_t fg_idx);
 
 /* Build random skybox for a new mission: 6 wall counts (front/back/left/
  * right = 4, top/bottom = 3) and 22 packed direction descriptors;

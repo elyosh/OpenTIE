@@ -138,39 +138,31 @@ void festring_farstradd(char c) {
  */
 // FUNCTION: TIE95 0x23820
 void festring_outstring(const uint8_t* s) {
+	uint16_t color;
+
 	if (!*s)
 		return;
 
-	while (1) {
-		uint8_t ch = *s;
-
-		if (ch == 0xFE) {
-			/* Color escape: read next byte as new textcolor */
-			s++;
-			if (*s >= 0x40)
-				textcolor = color_remap_table[*s];
+	do {
+		if (*s == 0xFE) {
+			/* Color escape: next byte sets textcolor */
+			color = *++s;
+			if (color >= 0x40)
+				textcolor = color_remap_table[color];
 			else
-				textcolor = *s;
-			if (!*++s)
-				return;
-			continue;
-		}
-
-		if (ch >= 0x10) {
-			/* Printable character */
-			outchar(ch);
-			if (!*++s)
-				return;
+				textcolor = (uint8_t)color;
+		} else if (*s < 0x10) {
+			/* Inline color code */
+			color = *s;
+			if (color >= 0x40)
+				textcolor = color_remap_table[color];
+			else
+				textcolor = (uint8_t)color;
 		} else {
-			/* Inline color code (0x01-0x0F) */
-			if (ch >= 0x40)
-				textcolor = color_remap_table[ch];
-			else
-				textcolor = ch;
-			if (!*++s)
-				return;
+			/* Printable character */
+			outchar(*s);
 		}
-	}
+	} while (*++s);
 }
 
 // FUNCTION: TIE95 0x238B4

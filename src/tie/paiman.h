@@ -194,10 +194,10 @@ extern const int16_t _escortfwdpos[27];
 /* 12-entry uint16 throttle LUT; maps EAIStruct.speed (0..11) to a
  * 16-bit throttle_speed value (~0..1.0 fixed-point). Used by most
  * inits and by rendezvous/cruise to reload throttle each tick. */
-extern const uint16_t _throttleconvert[12];
+extern const uint16_t throttleconvert[12];
 
 /* Original eleven-entry hyperspace-exit speed table; the maneuver uses phases 0..8. */
-extern const uint16_t _stagevel[11];
+extern const uint16_t stagevel[11];
 
 /* Per-skill-tier hold time between turn-inside / turn-away re-orients
  * (9/6/3 units, scaled ×236 PIT ticks by the callers). */

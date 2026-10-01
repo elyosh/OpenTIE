@@ -40,6 +40,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* The original TU calls the library string routines rather than the inline forms. */
+#ifdef __WATCOMC__
+#pragma function(strcpy)
+#pragma function(strlen)
+#endif
+
 /* ---- Page command opcodes and parameter counts ---- */
 
 /* Parameter count per opcode (indexed by BriefCmd) */
@@ -161,7 +167,8 @@ void player_Next_Beam(void) {
 
 // FUNCTION: TIE95 0x7D918
 void player_Last_Beam(void) {
-	if (--mission.beam_used == 0)
+	mission.beam_used--;
+	if (mission.beam_used < 1)
 		mission.beam_used = beam_level;
 }
 
@@ -176,7 +183,8 @@ void player_Next_Torp(void) {
 
 // FUNCTION: TIE95 0x7D964
 void player_Last_Torp(void) {
-	if (--mission.torp_used == 0)
+	mission.torp_used--;
+	if (mission.torp_used < 1)
 		mission.torp_used = weapon_level;
 }
 
@@ -336,8 +344,9 @@ void player_Step_Page(int16_t flag) {
 	int16_t cmd_index = brief.page.index;
 	int16_t cmd_time = brief.page.commands[cmd_index];
 	int16_t saved_index = cmd_index;
-	int16_t params[4];
-	int16_t sfx_volume = brief_poly_used ? 48 : 70;
+	int16_t params[8];
+	int16_t sfx_volume;
+	int16_t page_time;
 
 	brief.para_off = 0;
 	brief.target_off = 0;
@@ -345,22 +354,30 @@ void player_Step_Page(int16_t flag) {
 	brief.move_on = 0;
 	brief.scale_on = 0;
 	brief.seek_on = 0;
+	if (brief_poly_used)
+		sfx_volume = 48;
+	else
+		sfx_volume = 70;
 
-	while (cmd_time <= brief.page.time) {
+	for (;;) {
 		int16_t opcode;
 		int16_t j;
 
+		page_time = brief.page.time;
+		if (cmd_time > page_time) {
+			brief.page.index = saved_index;
+			brief.page.time = page_time + 1;
+			return;
+		}
+
 		saved_index = cmd_index;
-		cmd_time = brief.page.commands[cmd_index];
-		opcode = brief.page.commands[cmd_index + 1];
-		cmd_index += 2;
+		cmd_time = brief.page.commands[cmd_index++];
+		opcode = brief.page.commands[cmd_index++];
 
 		for (j = 0; j < map_cmd_size[opcode]; j++)
 			params[j] = brief.page.commands[cmd_index++];
 
-		if (cmd_time != brief.page.time)
-			continue;
-
+		if (cmd_time == brief.page.time) {
 		switch (opcode) {
 			case BCMD_SEEK:
 				brief.seek_on = 1;
@@ -386,24 +403,24 @@ void player_Step_Page(int16_t flag) {
 				break;
 			}
 			case BCMD_MOVE:
-				if (cmd_time && !flag) {
+				if (cmd_time == 0 || flag) {
+					map_state.center_x = params[0];
 					map_state.target_x = params[0];
 					map_state.target_y = params[1];
-				} else {
-					map_state.center_x = params[0];
 					map_state.center_y = params[1];
+				} else {
 					map_state.target_x = params[0];
 					map_state.target_y = params[1];
 				}
 				brief.move_on = 1;
 				break;
 			case BCMD_ZOOM:
-				if (cmd_time && !flag) {
+				if (cmd_time == 0 || flag) {
+					map_state.scale_x = params[0];
 					map_state.scale_target_x = params[0];
 					map_state.scale_target_y = params[1];
-				} else {
-					map_state.scale_x = params[0];
 					map_state.scale_y = params[1];
+				} else {
 					map_state.scale_target_x = params[0];
 					map_state.scale_target_y = params[1];
 				}
@@ -430,7 +447,10 @@ void player_Step_Page(int16_t flag) {
 					int16_t side = fgroup.fg[params[0]].side;
 					if (side > 2)
 						side = 2;
-					soundext_Play_SFX(side == 1 ? sfxTarget2 : sfxTarget1, sfx_volume);
+					if (side == 1)
+						soundext_Play_SFX(sfxTarget2, sfx_volume);
+					else
+						soundext_Play_SFX(sfxTarget1, sfx_volume);
 				}
 				slot = opcode - BCMD_SHOW_TARGET0;
 				brief.target_on[slot] = 1;
@@ -457,17 +477,14 @@ void player_Step_Page(int16_t flag) {
 
 				if (!flag) {
 					char text_buf[40];
-					char* src = (char*)xmemhdl_Lock_Handle(brief.text_data[params[0]]);
-					if (src) {
-						int16_t text_len;
+					int16_t text_len;
 
-						strcpy(text_buf, src);
-						xmemhdl_Unlock_Handle(brief.text_data[params[0]]);
-						text_len = (int16_t)strlen(text_buf);
-						if (text_len) {
-							soundext_Play_SFX(sfxText, 0);
-							soundext_Fade_SFX(sfxText, 0, 4 * text_len);
-						}
+					strcpy(text_buf, (char*)xmemhdl_Lock_Handle(brief.text_data[params[0]]));
+					xmemhdl_Unlock_Handle(brief.text_data[params[0]]);
+					text_len = (int16_t)strlen(text_buf);
+					if (text_len) {
+						soundext_Play_SFX(sfxText, 0);
+						soundext_Fade_SFX(sfxText, 0, 4 * text_len);
 					}
 				}
 				slot = opcode - BCMD_SHOW_TEXT0;
@@ -482,10 +499,8 @@ void player_Step_Page(int16_t flag) {
 			default:
 				break;
 		}
+		}
 	}
-
-	brief.page.index = saved_index;
-	brief.page.time++;
 }
 
 // FUNCTION: TIE95 0x7E18C

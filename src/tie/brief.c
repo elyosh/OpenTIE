@@ -50,6 +50,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* The original TU calls the library strcpy() rather than the inline form. */
+#ifdef __WATCOMC__
+#pragma function(strcpy)
+#endif
+
 /* ---- Static globals ---- */
 
 // GLOBAL: TIE95 0xF6038
@@ -89,7 +94,7 @@ static int16_t brief_user_Title(Actor* actor, int32_t time);
 static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								int16_t refresh);
 static int brief_user_Door(Actor* actor, int32_t time);
-static Input* brief_Build_Notice(const char* text);
+static Input* brief_Build_Notice(void);
 static void brief_idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh);
 static void brief_iuser_Notice(Input* input, int32_t time);
 
@@ -107,7 +112,7 @@ void brief_end_View(int32_t frame_num) {
 #ifndef TIE_MODERN
 		/* Modern builds open the notice through the briefing task. */
 		if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
-			Input* notice = brief_Build_Notice(NULL);
+			Input* notice = brief_Build_Notice();
 #ifdef TIE98
 			xio_Set_Mouse_Position(330, 260);
 #else
@@ -294,10 +299,10 @@ static int16_t brief_user_Title(Actor* actor, int32_t time) {
 // FUNCTION: TIE98 0x4068B0
 static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								int16_t refresh) {
-	int16_t offx, offy;
+	int16_t offy, offx;
 	Rect r;
 	char label[32];
-	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
+
 	if (!refresh)
 		return 0;
 
@@ -305,7 +310,7 @@ static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t 
 
 	xactor_Get_Actor_Offset(actor, &offx, &offy);
 
-	xrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
+	xrect_Set_Rect(&r, offx, offy, offx + actor->w, offy + actor->h);
 
 	switch (actor->var2) {
 		case 0:
@@ -323,15 +328,12 @@ static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t 
 		case 4:
 			strcpy(label, textext_Get_Text(txtBriefPriest));
 			break;
-		default:
-			label[0] = 0;
-			break;
 	}
 
 	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, font_id, 16);
+	xfont_Print_Centered_Text(label, &r, TIE_FRONTEND_EDITION(0, 2), 16);
 	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, font_id, 15);
+	xfont_Print_Centered_Text(label, &r, TIE_FRONTEND_EDITION(0, 2), 15);
 	return 1;
 }
 
@@ -365,11 +367,10 @@ static int brief_user_Door(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x73668
 // FUNCTION: TIE98 0x406A70
-static Input* brief_Build_Notice(const char* text) {
+static Input* brief_Build_Notice(void) {
 	Rect r;
 	Input* dlg;
 	PushButton* btn;
-	(void)text;
 
 	xrect_Set_Rect(&r, 0, 0, TIE_FRONTEND_EDITION(180, 280), TIE_FRONTEND_EDITION(40, 60));
 	dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
@@ -545,7 +546,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 #ifdef TIE_MODERN
 
 	if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
-		notice = brief_Build_Notice(NULL);
+		notice = brief_Build_Notice();
 		xio_Set_Mouse_Position(TieProfile_UsesTie98Frontend() ? 330 : 190,
 							   TieProfile_UsesTie98Frontend() ? 260 : 110);
 	}
