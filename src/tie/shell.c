@@ -65,6 +65,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+// GLOBAL: TIE95 0xF56F8
 // GLOBAL: TIE98 0x5F3464
 SceneHeadStruct* sHead_gbl;
 // GLOBAL: TIE95 0xF56FC
