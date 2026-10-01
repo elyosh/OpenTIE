@@ -44,7 +44,7 @@ extern "C" {
 
 /* Title-crawl cap matches title.c's MAX_LINES (18 lines). */
 #define TIE_MAX_TITLE_CRAWL_LINES 18
-#define TIE_TITLE_CRAWL_MAX_CHARS 80 /* mirrors title.c draw_Back stack buffer */
+#define TIE_TITLE_CRAWL_MAX_CHARS 80 /* mirrors title_draw_Back stack buffer */
 
 /* Engine frame plus fractional progress for smooth scene animation.
  * Zero values mean no scene clock is active. */

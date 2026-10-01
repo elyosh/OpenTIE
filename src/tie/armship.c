@@ -68,12 +68,12 @@ ResFile* armship_file;
 static Input* info_input;
 
 /* ======================================================================
- * end_ArmShip_View — cursor show callback
+ * armship_end_ArmShip_View — cursor show callback
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x6ee3c
 // FUNCTION: TIE98 0x402a50
-static void end_ArmShip_View(int32_t refresh) {
+static void armship_end_ArmShip_View(int32_t refresh) {
 	if (refresh)
 		return;
 	if (xcursor_Is_Cursor_Visible())
@@ -82,12 +82,12 @@ static void end_ArmShip_View(int32_t refresh) {
 }
 
 /* ======================================================================
- * user_ArmShip — actor callback for weapon selector highlights
+ * armship_user_ArmShip — actor callback for weapon selector highlights
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x6f208
 // FUNCTION: TIE98 0x402e80
-static void user_ArmShip(Actor* actor, int32_t time) {
+static void armship_user_ArmShip(Actor* actor, int32_t time) {
 	int16_t id = actor->var1;
 	(void)time;
 
@@ -136,12 +136,13 @@ static void user_ArmShip(Actor* actor, int32_t time) {
 }
 
 /* ======================================================================
- * draw_ArmShip — actor draw callback for weapon name labels
+ * armship_draw_ArmShip — actor draw callback for weapon name labels
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x6f340
 // FUNCTION: TIE98 0x402f80
-static int16_t draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+static int16_t armship_draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int16_t x, int16_t y,
+									int16_t refresh) {
 	char line1[32], line2[16];
 	Rect dst;
 	(void)clip_r;
@@ -214,12 +215,12 @@ static int16_t draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int16_t x, 
 }
 
 /* ======================================================================
- * film_ArmShip_Callback — conditional actor visibility
+ * armship_film_ArmShip_Callback — conditional actor visibility
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x6ee68
 // FUNCTION: TIE98 0x402a70
-static int16_t film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
+static int16_t armship_film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
 	Actor* actor;
 	/* Only process actor rewind events (type 3) */
 	if ((int16_t)film_obj->id != 3)
@@ -232,16 +233,16 @@ static int16_t film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
 		case 1: /* Beam selector — skip if no beam equipped */
 			if (!player_Get_Beam_Used())
 				return 1;
-			xactor_Set_Actor_User_Function(actor, user_ArmShip);
+			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
 			return 0;
 		case 2: /* Torpedo selector — skip if no torpedo equipped */
 			if (!player_Get_Torp_Used())
 				return 1;
-			xactor_Set_Actor_User_Function(actor, user_ArmShip);
+			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
 			return 0;
 		case 3: /* Always active — install callback */
 		case 6:
-			xactor_Set_Actor_User_Function(actor, user_ArmShip);
+			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
 			return 0;
 		case 4: /* Beam-only visibility gate — skip if beam equipped */
 			return player_Get_Beam_Used() ? 1 : 0;
@@ -252,13 +253,13 @@ static int16_t film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
 }
 
 /* ======================================================================
- * iupdate_ArmShip — click tracking for weapon buttons
+ * armship_iupdate_ArmShip — click tracking for weapon buttons
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x6eee8
 // FUNCTION: TIE98 0x402b30
-static int16_t iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
-							   int16_t x, int16_t y) {
+static int16_t armship_iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
+									   uint8_t right, int16_t x, int16_t y) {
 	uint8_t button = 0;
 	(void)clip_r;
 
@@ -288,12 +289,12 @@ static int16_t iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int16_t key,
 }
 
 /* ======================================================================
- * iuser_ArmShip — weapon button actions
+ * armship_iuser_ArmShip — weapon button actions
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x6efb4
 // FUNCTION: TIE98 0x402c00
-static void iuser_ArmShip(Input* input, int32_t time) {
+static void armship_iuser_ArmShip(Input* input, int32_t time) {
 	(void)time;
 
 	if (!xinpattr_Get_Input_Selected(input))
@@ -339,24 +340,24 @@ static void iuser_ArmShip(Input* input, int32_t time) {
 }
 
 /* ======================================================================
- * iuser_Arm_Info — info panel init callback
+ * armship_iuser_Arm_Info — info panel init callback
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x6f0a0
 // FUNCTION: TIE98 0x402d20
-static void iuser_Arm_Info(Input* input, int32_t time) {
+static void armship_iuser_Arm_Info(Input* input, int32_t time) {
 	(void)input;
 	if (!time)
 		shade_Build_Shaded_Palette();
 }
 
 /* ======================================================================
- * idraw_Arm_Info — weapon description text panel
+ * armship_idraw_Arm_Info — weapon description text panel
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x6f0ac
 // FUNCTION: TIE98 0x402d30
-static void idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+static void armship_idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	char text_buf[80];
 	Rect dst;
 	int16_t i;
@@ -435,7 +436,7 @@ int16_t armship_ArmShip(SceneHeadStruct* scene_head) {
 
 	xrect_Set_Rect(&frame, 0, 0, 320, 200);
 	shipext_Get_Weapon_Select_Name(name);
-	armship_film = xfilm_Res_Callback_Film(name, &frame, 0, 0, 0, film_ArmShip_Callback);
+	armship_film = xfilm_Res_Callback_Film(name, &frame, 0, 0, 0, armship_film_ArmShip_Callback);
 #ifdef TIE_MODERN
 	if (!armship_film) {
 		TieArmShip_RunView(launch_resource, false);
@@ -485,8 +486,8 @@ int16_t armship_ArmShip(SceneHeadStruct* scene_head) {
 				return 0;
 			}
 #endif
-			xinpattr_Set_Input_Update_Function(button_input[i], iupdate_ArmShip);
-			xinpattr_Set_Input_User_Function(button_input[i], iuser_ArmShip);
+			xinpattr_Set_Input_Update_Function(button_input[i], armship_iupdate_ArmShip);
+			xinpattr_Set_Input_User_Function(button_input[i], armship_iuser_ArmShip);
 			button_input[i]->id = i + 1;
 			button_input[i]->mouseUsage = downMoveUpInput;
 		} else {
@@ -503,8 +504,8 @@ int16_t armship_ArmShip(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_User_Function(info_input, iuser_Arm_Info);
-	xinpattr_Set_Input_Draw_Function(info_input, idraw_Arm_Info);
+	xinpattr_Set_Input_User_Function(info_input, armship_iuser_Arm_Info);
+	xinpattr_Set_Input_Draw_Function(info_input, armship_idraw_Arm_Info);
 	xinpattr_Refreshable_Input(info_input);
 
 	/* Beam name label actor */
@@ -516,7 +517,7 @@ int16_t armship_ArmShip(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xactor_Set_Actor_Draw_Function(beam_name_actor, draw_ArmShip);
+	xactor_Set_Actor_Draw_Function(beam_name_actor, armship_draw_ArmShip);
 	beam_name_actor->id = 10;
 
 	/* Torpedo name label actor */
@@ -528,10 +529,10 @@ int16_t armship_ArmShip(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xactor_Set_Actor_Draw_Function(torp_name_actor, draw_ArmShip);
+	xactor_Set_Actor_Draw_Function(torp_name_actor, armship_draw_ArmShip);
 	torp_name_actor->id = 11;
 
-	xview_Set_View_Update_Function(end_ArmShip_View);
+	xview_Set_View_Update_Function(armship_end_ArmShip_View);
 #ifdef TIE_MODERN
 	TieArmShip_RunView(launch_resource, true);
 	return 0;

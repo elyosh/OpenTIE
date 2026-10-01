@@ -123,7 +123,7 @@ static int16_t title_font;
 
 // FUNCTION: TIE95 0x66B9C
 // FUNCTION: TIE98 0x490340
-static void end_View(int32_t time) {
+static void title_end_View(int32_t time) {
 	int16_t i;
 	(void)time;
 
@@ -166,7 +166,7 @@ static void end_View(int32_t time) {
 /* Normal speed: per-frame scale decrease with deceleration */
 // FUNCTION: TIE95 0x66CB8
 // FUNCTION: TIE98 0x490440
-static void user_StarWars(Actor* actor, int32_t time) {
+static void title_user_StarWars(Actor* actor, int32_t time) {
 	(void)time;
 
 	if (!film_time) {
@@ -214,7 +214,7 @@ static void user_StarWars(Actor* actor, int32_t time) {
 /* Slow system variant: static display, no per-frame scaling */
 // FUNCTION: TIE95 0x66DFC
 // FUNCTION: TIE98 0x490560
-static void user_Slow_StarWars(Actor* actor, int32_t time) {
+static void title_user_Slow_StarWars(Actor* actor, int32_t time) {
 	(void)time;
 
 	if (!film_time) {
@@ -240,7 +240,7 @@ static void user_Slow_StarWars(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x66E80
 // FUNCTION: TIE98 0x4905F0
-static void user_Stars(Actor* actor, int32_t time) {
+static void title_user_Stars(Actor* actor, int32_t time) {
 	(void)time;
 	if (shellext_Get_Cur_Scene() != SCENE_TITLE)
 		return;
@@ -262,7 +262,7 @@ static void user_Stars(Actor* actor, int32_t time) {
 /* Per-frame: advance each active line's Y position with deceleration */
 // FUNCTION: TIE95 0x66EE0
 // FUNCTION: TIE98 0x490650
-static void user_Title(Actor* actor, int32_t time) {
+static void title_user_Title(Actor* actor, int32_t time) {
 	int16_t i;
 	(void)actor;
 	(void)time;
@@ -298,8 +298,8 @@ static void user_Title(Actor* actor, int32_t time) {
 /* Draw: render each active line with perspective horizontal scaling */
 // FUNCTION: TIE95 0x66FD4
 // FUNCTION: TIE98 0x490740
-static int16_t draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
-						  int16_t refresh) {
+static int16_t title_draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
+								int16_t refresh) {
 	char* dataptr;
 	int16_t i;
 	(void)actor;
@@ -352,7 +352,7 @@ static int16_t draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, in
 /* At time 0: initialize 18 text lines with staggered positions */
 // FUNCTION: TIE95 0x67148
 // FUNCTION: TIE98 0x490870
-static void user_Back(Actor* actor, int32_t time) {
+static void title_user_Back(Actor* actor, int32_t time) {
 	int16_t start = 100;
 	int16_t i;
 	(void)actor;
@@ -384,7 +384,8 @@ static void user_Back(Actor* actor, int32_t time) {
 /* Draw: render text lines into background bitmap as they come into view */
 // FUNCTION: TIE95 0x671FC
 // FUNCTION: TIE98 0x490940
-static int16_t draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y, int16_t refresh) {
+static int16_t title_draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
+							   int16_t refresh) {
 	int16_t i;
 	(void)actor;
 	(void)r;
@@ -518,9 +519,9 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 		}
 #endif
 		if (xio_Is_System_Slower_Than(2))
-			xactor_Set_Actor_User_Function(starwars_actor, user_Slow_StarWars);
+			xactor_Set_Actor_User_Function(starwars_actor, title_user_Slow_StarWars);
 		else
-			xactor_Set_Actor_User_Function(starwars_actor, user_StarWars);
+			xactor_Set_Actor_User_Function(starwars_actor, title_user_StarWars);
 	}
 
 	stars_actor = xactdelt_Res_Delta_Actor("stars", &frame, 0, 0, 100);
@@ -530,7 +531,7 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xactor_Set_Actor_User_Function(stars_actor, user_Stars);
+	xactor_Set_Actor_User_Function(stars_actor, title_user_Stars);
 
 	back_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 10);
 #ifdef TIE_MODERN
@@ -539,8 +540,8 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xactor_Set_Actor_User_Function(back_actor, user_Back);
-	xactor_Set_Actor_Draw_Function(back_actor, draw_Back);
+	xactor_Set_Actor_User_Function(back_actor, title_user_Back);
+	xactor_Set_Actor_Draw_Function(back_actor, title_draw_Back);
 
 	title_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 0);
 #ifdef TIE_MODERN
@@ -549,8 +550,8 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xactor_Set_Actor_User_Function(title_actor, user_Title);
-	xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
+	xactor_Set_Actor_User_Function(title_actor, title_user_Title);
+	xactor_Set_Actor_Draw_Function(title_actor, title_draw_Title);
 
 	/* Set palettes */
 	pal = xpal_Res_Palette("title");
@@ -565,7 +566,7 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 
 	/* Start fade and push the modal view task */
 	xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
-	xview_Set_View_Update_Function(end_View);
+	xview_Set_View_Update_Function(title_end_View);
 	xview_Disable_Global_View_Erase();
 #ifdef TIE_MODERN
 	TieTitle_RunView(resource, film_name, true);

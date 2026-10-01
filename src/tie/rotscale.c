@@ -27,7 +27,7 @@
 
 /* --- module-owned globals ---------------------------------------- */
 
-/* Per-aspect tangent ramps used by buildlinedata. Imported verbatim
+/* Per-aspect tangent ramps used by rotscale_buildlinedata. Imported verbatim
  * from the Watcom binary (offsets 0xd67e0 / 0xd68f2 / 0xd6a04). The
  * 91/100/110 suffixes name the aspect-correction rates: 100 = square
  * pixels, 91 / 110 = the two non-square halves around the diagonal.
@@ -85,7 +85,7 @@ static const int16_t tangent110[122] = {
 // GLOBAL: TIE95 0xC7898
 uint16_t reverseflag; /* 1 = horizontal-flip sprite */
 // GLOBAL: TIE95 0xC7880
-uint16_t bSquarePixels; /* set in preparefastdraw / scalesetup */
+uint16_t bSquarePixels; /* set in preparefastdraw / rotscale_scalesetup */
 
 /* paletteconvert state populated by preparecolor.
  *
@@ -107,7 +107,7 @@ static uint8_t paletteconvertlo[256];
 // GLOBAL: TIE98 0x5F75E0
 static uint8_t paletteconvert[256];
 
-/* RLE decode scratch: rotatescale buffers up to ~512 spans per row. */
+/* RLE decode scratch: rotscale_rotatescale buffers up to ~512 spans per row. */
 typedef struct rotscale_run {
 	uint32_t x_start;
 	uint32_t color;
@@ -203,7 +203,7 @@ static int16_t adjustploty;
  * column. Each octant handler interprets the indexing differently.
  *
  * The +9652 'current_row_base' slot doubles as the per-row pDrawBuffer
- * pointer that rotatescale advances each row.
+ * pointer that rotscale_rotatescale advances each row.
  *
  * Total size 16060 bytes per watdbg.
  */
@@ -274,13 +274,13 @@ static rotscale_scale_data ScaleData;
  * ================================================================ */
 
 /*
- * GetUpdateIncrement: per-angle tangent lookup. pos is shifted right
+ * rotscale_GetUpdateIncrement: per-angle tangent lookup. pos is shifted right
  * 6 bits before indexing (the binary packs angles into a wider range
  * before passing here).
  */
 // FUNCTION: TIE95 0x48EF0
 // FUNCTION: TIE98 0x476590
-static int16_t GetUpdateIncrement(uint16_t pos, int16_t rate) {
+static int16_t rotscale_GetUpdateIncrement(uint16_t pos, int16_t rate) {
 	uint16_t idx = (uint16_t)(pos >> 6);
 	if (rate == 91)
 		return tangent091[idx];
@@ -383,10 +383,10 @@ void rotscale_prepare_color(const char* palette_entries) {
 }
 
 /* ===================================================================
- * scalesetup - rebuild ScaleData lookup tables
+ * rotscale_scalesetup - rebuild ScaleData lookup tables
  * ================================================================ */
 // FUNCTION: TIE95 0x48F34
-static void scalesetup(uint16_t scale, rotscale_line_data* line_data, rotscale_scale_data* sd) {
+static void rotscale_scalesetup(uint16_t scale, rotscale_line_data* line_data, rotscale_scale_data* sd) {
 	uint32_t sx;
 	uint32_t sy;
 	uint32_t step;
@@ -435,7 +435,7 @@ static void scalesetup(uint16_t scale, rotscale_line_data* line_data, rotscale_s
 }
 
 /* ===================================================================
- * adjustoffsets - rotate (celoffsetx, celoffsety) into screen space
+ * rotscale_adjustoffsets - rotate (celoffsetx, celoffsety) into screen space
  *
  * Reads sin/cos and quadrant-sign bits from line_data, applies a
  * scaled 2D rotation matrix, and stores the resulting screen-space
@@ -445,7 +445,7 @@ static void scalesetup(uint16_t scale, rotscale_line_data* line_data, rotscale_s
  * flips celoffset signs between calls to walk all 4 corners.
  * ================================================================ */
 // FUNCTION: TIE95 0x4905C
-static void adjustoffsets(rotscale_line_data* line_data, rotscale_scale_data* sd) {
+static void rotscale_adjustoffsets(rotscale_line_data* line_data, rotscale_scale_data* sd) {
 	/* Snapshot the pre-abs sign bits */
 	int16_t saved_cox_sign = celoffsetx;
 	int16_t saved_coy_sign = celoffsety;
@@ -503,11 +503,11 @@ static void adjustoffsets(rotscale_line_data* line_data, rotscale_scale_data* sd
 }
 
 /* ===================================================================
- * buildlinedata - precompute per-angle rotation/DDA tables.
+ * rotscale_buildlinedata - precompute per-angle rotation/DDA tables.
  * Called by preparefastdraw when the cached angle differs.
  * ================================================================ */
 // FUNCTION: TIE95 0x491C4
-static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
+static void rotscale_buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 	int idx;
 	int32_t saved_mem_width = nDrawBufferMemoryWidth;
 
@@ -578,7 +578,7 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 		tan_rate = (bSquarePixels == 1) ? 100 : 91;
 		tan_arg = (uint16_t)quad_angle;
 	}
-	tan_inc = GetUpdateIncrement(tan_arg, tan_rate);
+	tan_inc = rotscale_GetUpdateIncrement(tan_arg, tan_rate);
 
 	/* perpendicular sin */
 	perp_quad = (perp_quad & 0xFFFF00FFu) | ((((perp_quad >> 8) + 64) & 0xFFu) << 8);
@@ -697,7 +697,7 @@ static void buildlinedata(uint16_t angle, rotscale_line_data* line_data) {
 		line_data->perp_case_type = 0;
 		perp_tan_rate = (bSquarePixels == 1) ? 100 : 91;
 	}
-	line_data->perp_update_inc = GetUpdateIncrement((uint16_t)perp_angle, perp_tan_rate);
+	line_data->perp_update_inc = rotscale_GetUpdateIncrement((uint16_t)perp_angle, perp_tan_rate);
 	saved_mem_w_3 = nDrawBufferMemoryWidth;
 	line_data->perp_flag = 0;
 
@@ -808,16 +808,16 @@ void rotscale_prepare_fastdraw(uint16_t angle) {
 	pCurrentLine = &LineData;
 	nDiagonalAngle = (yAspect == 0) ? 0x2000 : 8704;
 	if (angle != pCurrentLine->cached_angle || !rotscale_linedata_built) {
-		buildlinedata(angle, pCurrentLine);
+		rotscale_buildlinedata(angle, pCurrentLine);
 		rotscale_linedata_built = 1;
 	}
 }
 
 /* ===================================================================
- * updateperp - keep startdrawpoint within column bounds across rows
+ * rotscale_updateperp - keep startdrawpoint within column bounds across rows
  * ================================================================ */
 // FUNCTION: TIE95 0x49D98
-static uint16_t updateperp(void) {
+static uint16_t rotscale_updateperp(void) {
 	int16_t new_startdraw = startdrawpoint;
 	uint16_t result = 0;
 	int16_t step = 1;
@@ -900,7 +900,7 @@ static uint16_t updateperp(void) {
 
 /* --- octant 0 : X-major, X-right, Y-down ------------------------- */
 // FUNCTION: TIE95 0x49F9C
-static int setstartcase0(void) {
+static int rotscale_setstartcase0(void) {
 	int16_t plotx_loc = plotx;
 	int16_t ploty_loc = ploty;
 	int16_t row_off = 0;
@@ -941,7 +941,7 @@ static int setstartcase0(void) {
 			/* Sprite is entirely above the screen (lineendy = dy_abs +
 			 * lsy = dy_abs - neg < 0 → lastvispoint = -1 → no render).
 			 * Original at 0x4a06d continues with first_vp = -1 and a
-			 * huge firstyincoffset, then wastes hundreds of updatecase0
+			 * huge firstyincoffset, then wastes hundreds of rotscale_updatecase0
 			 * iterations reading past run_lengths into adjacent BSS
 			 * (silent garbage on the DOS heap, ASAN-trap on tight
 			 * allocators). Short-circuit since nothing is rendered
@@ -987,7 +987,7 @@ static int setstartcase0(void) {
 }
 
 // FUNCTION: TIE95 0x4A1B0
-static int updatecase0(void) {
+static int rotscale_updatecase0(void) {
 	int16_t fvp = firstvispoint;
 	int16_t fyi = firstyincoffset;
 	int16_t ley_local = lineendy;
@@ -1035,7 +1035,7 @@ static int updatecase0(void) {
 
 /* --- octant 1 : X-major, X-right, Y-up --------------------------- */
 // FUNCTION: TIE95 0x4A2C0
-static int setstartcase1(void) {
+static int rotscale_setstartcase1(void) {
 	int16_t plotx_loc = plotx;
 	int16_t ploty_loc = ploty;
 	int16_t row_off = 0;
@@ -1118,7 +1118,7 @@ static int setstartcase1(void) {
 }
 
 // FUNCTION: TIE95 0x4A4E4
-static int updatecase1(void) {
+static int rotscale_updatecase1(void) {
 	int16_t lvp = lastvispoint;
 	int16_t lsy_new;
 	int16_t ley_new;
@@ -1163,7 +1163,7 @@ static int updatecase1(void) {
 
 /* --- octant 2 : X-major, X-left, Y-up --------------------------- */
 // FUNCTION: TIE95 0x4A5D0
-static int setstartcase2(void) {
+static int rotscale_setstartcase2(void) {
 	int16_t plotx_loc = plotx;
 	int16_t ploty_loc = ploty;
 	int16_t row_off = 0;
@@ -1244,7 +1244,7 @@ static int setstartcase2(void) {
 }
 
 // FUNCTION: TIE95 0x4A7EC
-static int updatecase2(void) {
+static int rotscale_updatecase2(void) {
 	int16_t lvp = lastvispoint;
 	int16_t lsy_new = (int16_t)(linestarty - 1);
 	int16_t ley_new;
@@ -1280,7 +1280,7 @@ static int updatecase2(void) {
 
 /* --- octant 3 : X-major, X-left, Y-down ------------------------- */
 // FUNCTION: TIE95 0x4A8EC
-static int setstartcase3(void) {
+static int rotscale_setstartcase3(void) {
 	int16_t plotx_loc = plotx;
 	int16_t ploty_loc = ploty;
 	int16_t row_off = 0;
@@ -1359,7 +1359,7 @@ static int setstartcase3(void) {
 }
 
 // FUNCTION: TIE95 0x4AB04
-static int updatecase3(void) {
+static int rotscale_updatecase3(void) {
 	int16_t fvp = firstvispoint;
 	int16_t fyi = firstyincoffset;
 	int16_t lyi = lastyincoffset;
@@ -1405,7 +1405,7 @@ static int updatecase3(void) {
 
 /* --- octant 4 : Y-major, X-right, Y-down ------------------------ */
 // FUNCTION: TIE95 0x4AC14
-static int setstartcase4(void) {
+static int rotscale_setstartcase4(void) {
 	int16_t ploty_loc = ploty;
 	int16_t plotx_loc = plotx;
 	int16_t row_off = 0;
@@ -1479,7 +1479,7 @@ static int setstartcase4(void) {
 }
 
 // FUNCTION: TIE95 0x4AE2C
-static int updatecase4(void) {
+static int rotscale_updatecase4(void) {
 	int16_t lxi = lastxincoffset;
 	int16_t lvp = lastvispoint;
 	int16_t lsx_new = (int16_t)(linestartx - 1);
@@ -1516,7 +1516,7 @@ static int updatecase4(void) {
 
 /* --- octant 5 : Y-major, X-left, Y-down ------------------------- */
 // FUNCTION: TIE95 0x4AF14
-static int setstartcase5(void) {
+static int rotscale_setstartcase5(void) {
 	int16_t ploty_loc = ploty;
 	int16_t plotx_loc = plotx;
 	int16_t row_off = 0;
@@ -1597,7 +1597,7 @@ static int setstartcase5(void) {
 }
 
 // FUNCTION: TIE95 0x4B150
-static int updatecase5(void) {
+static int rotscale_updatecase5(void) {
 	int16_t fvp = firstvispoint;
 	int16_t fxi = firstxincoffset;
 	int16_t lex = lineendx;
@@ -1610,7 +1610,7 @@ static int updatecase5(void) {
 		fvp = 0;
 	} else if (lsx_new < 0) {
 		fxi = (int16_t)(firstxincoffset - 1);
-		/* Latent OOB in the binary: when setstartcase5 takes the
+		/* Latent OOB in the binary: when rotscale_setstartcase5 takes the
 		 * off-screen-left return (linestartx < 0 && lineendx < 0),
 		 * firstxincoffset is left at its default -1 and the
 		 * decrement here drives run_lengths[] to a negative index.
@@ -1657,7 +1657,7 @@ static int updatecase5(void) {
 
 /* --- octant 6 : Y-major, X-left, Y-up --------------------------- */
 // FUNCTION: TIE95 0x4B26C
-static int setstartcase6(void) {
+static int rotscale_setstartcase6(void) {
 	int16_t ploty_loc = ploty;
 	int16_t plotx_loc = plotx;
 	int16_t row_off = 0;
@@ -1735,7 +1735,7 @@ static int setstartcase6(void) {
 }
 
 // FUNCTION: TIE95 0x4B470
-static int updatecase6(void) {
+static int rotscale_updatecase6(void) {
 	int16_t fvp = firstvispoint;
 	int16_t lvp = lastvispoint;
 	int16_t fxi = firstxincoffset;
@@ -1780,7 +1780,7 @@ static int updatecase6(void) {
 
 /* --- octant 7 : Y-major, X-right, Y-up -------------------------- */
 // FUNCTION: TIE95 0x4B598
-static int setstartcase7(void) {
+static int rotscale_setstartcase7(void) {
 	int16_t ploty_loc = ploty;
 	int16_t plotx_loc = plotx;
 	int16_t row_off = 0;
@@ -1859,7 +1859,7 @@ static int setstartcase7(void) {
 }
 
 // FUNCTION: TIE95 0x4B7C4
-static int updatecase7(void) {
+static int rotscale_updatecase7(void) {
 	int16_t lvp = lastvispoint;
 	int16_t fxi = firstxincoffset;
 	int16_t lsx_new;
@@ -1900,48 +1900,48 @@ static int updatecase7(void) {
 /* --- dispatchers ------------------------------------------------- */
 
 // FUNCTION: TIE95 0x49ECC
-static int setstartvars(void) {
+static int rotscale_setstartvars(void) {
 	switch (pCurrentLine->octant_case) {
 		case 0:
-			return setstartcase0();
+			return rotscale_setstartcase0();
 		case 1:
-			return setstartcase1();
+			return rotscale_setstartcase1();
 		case 2:
-			return setstartcase2();
+			return rotscale_setstartcase2();
 		case 3:
-			return setstartcase3();
+			return rotscale_setstartcase3();
 		case 4:
-			return setstartcase4();
+			return rotscale_setstartcase4();
 		case 5:
-			return setstartcase5();
+			return rotscale_setstartcase5();
 		case 6:
-			return setstartcase6();
+			return rotscale_setstartcase6();
 		case 7:
-			return setstartcase7();
+			return rotscale_setstartcase7();
 		default:
 			return 0;
 	}
 }
 
 // FUNCTION: TIE95 0x49F44
-static int updatecases(void) {
+static int rotscale_updatecases(void) {
 	switch (pCurrentLine->octant_case) {
 		case 0:
-			return updatecase0();
+			return rotscale_updatecase0();
 		case 1:
-			return updatecase1();
+			return rotscale_updatecase1();
 		case 2:
-			return updatecase2();
+			return rotscale_updatecase2();
 		case 3:
-			return updatecase3();
+			return rotscale_updatecase3();
 		case 4:
-			return updatecase4();
+			return rotscale_updatecase4();
 		case 5:
-			return updatecase5();
+			return rotscale_updatecase5();
 		case 6:
-			return updatecase6();
+			return rotscale_updatecase6();
 		case 7:
-			return updatecase7();
+			return rotscale_updatecase7();
 		default:
 			return 0;
 	}
@@ -1959,7 +1959,7 @@ static int updatecases(void) {
  * Runs are repeated according to the fractional Y accumulator while the
  * octant walker advances the rotated destination scanline. */
 // FUNCTION: TIE95 0x4977C
-static int rotatescale(const uint8_t* data, int32_t bit_split) {
+static int rotscale_rotatescale(const uint8_t* data, int32_t bit_split) {
 	uint8_t* buf_base;
 	int32_t mem_w;
 	uint8_t* buf_end;
@@ -1973,7 +1973,7 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 	uint8_t step_hi;
 
 	reverseflag = 1;
-	if (!setstartvars())
+	if (!rotscale_setstartvars())
 		return 0;
 
 	buf_base = (uint8_t*)buffer_ptr;
@@ -2183,9 +2183,9 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 			}
 
 			if (row_count) {
-				if (!updatecases())
+				if (!rotscale_updatecases())
 					return 0;
-				updateperp();
+				rotscale_updateperp();
 			}
 			rem--;
 		} while (rem > 0 && row_count);
@@ -2205,11 +2205,11 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
 }
 
 /* ===================================================================
- * scantoxtrans - palette-convert plotted pixels and register the sprite
+ * rotscale_scantoxtrans - palette-convert plotted pixels and register the sprite
  * as a TRACE2 flat object for depth sorting.
  *
  * Walks the bbox of the 4 corners. In 16-bit mode opaque pixels are
- * those whose +1 byte == 0x80 (the marker rotatescale stamped); the
+ * those whose +1 byte == 0x80 (the marker rotscale_rotatescale stamped); the
  * pixel byte is then remapped via paletteconvertlo/paletteconverthi.
  * In 8-bit mode opaque pixels are those with value < 0x10 (the
  * remapped sprite values); they are remapped via paletteconvert.
@@ -2219,7 +2219,7 @@ static int rotatescale(const uint8_t* data, int32_t bit_split) {
  * registered as one flat object slot.
  * ================================================================ */
 // FUNCTION: TIE95 0x486F8
-static int16_t scantoxtrans(int32_t* quad_corners) {
+static int16_t rotscale_scantoxtrans(int32_t* quad_corners) {
 	trace2_EdgeInfo* p_einfo = trace2_newedgeinfo;
 	trace2_EdgeHeader* p_ehdr = trace2_newedgeheader;
 	int32_t max_y = pixelsdeepmin1;
@@ -2612,16 +2612,16 @@ static int16_t composite_to_tie98_scene(int32_t* quad_corners) {
  *     sub[+0 word]  : celoffsetx for reverseflag == 1 (top-left x)
  *     sub[+4 word]  : celoffsety (negated to get image-top anchor)
  *     sub[+8 word]  : celoffsetx for reverseflag != 1 (top-right x, negated)
- *     sub+0x10      : start of RLE data passed to rotatescale()
+ *     sub+0x10      : start of RLE data passed to rotscale_rotatescale()
  *
  *   image_hdr[+0x10 word] : sprite width  (added to anchor for right edge)
  *   image_hdr[+0x14 word] : sprite height (subtracted for bottom edge; y
  *                           is flipped by the edition-specific completion scan)
- *   image_hdr[+0x20 dword]: bit_split parameter forwarded to rotatescale
+ *   image_hdr[+0x20 dword]: bit_split parameter forwarded to rotscale_rotatescale
  *
- * The four adjustoffsets calls produce the 4 screen-space corners of
+ * The four rotscale_adjustoffsets calls produce the 4 screen-space corners of
  * the rotated bounding box (top-left, top-right, bottom-right,
- * bottom-left) that scantoxtrans uses to walk the sprite region.
+ * bottom-left) that rotscale_scantoxtrans uses to walk the sprite region.
  * ================================================================ */
 // FUNCTION: TIE95 0x48530
 // FUNCTION: TIE98 0x4761A0
@@ -2650,39 +2650,39 @@ int16_t rotscale_rotate_scale_image(int16_t screen_x, int16_t screen_y, uint16_t
 	celoffsetx = cox0;
 	celoffsety = coy0;
 
-	scalesetup(scale, pCurrentLine, &ScaleData);
+	rotscale_scalesetup(scale, pCurrentLine, &ScaleData);
 
 	/* Corner 0: top-left of sprite at (cox0, coy0). */
-	adjustoffsets(pCurrentLine, &ScaleData);
+	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
 	plotx = (int16_t)(adjustplotx + screen_x);
 	ploty = (int16_t)(adjustploty + screen_y);
 	quad[0] = (int16_t)(adjustplotx + screen_x);
 	quad[1] = (int16_t)(adjustploty + screen_y);
 
-	rotatescale(sub + 0x10, (int32_t)bit_split);
+	rotscale_rotatescale(sub + 0x10, (int32_t)bit_split);
 
 	/* Corner 1: top-right, x += sprite_w. */
 	celoffsetx = (int16_t)(cox0 + sprite_w);
 	celoffsety = coy0;
-	adjustoffsets(pCurrentLine, &ScaleData);
+	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
 	quad[2] = screen_x + adjustplotx;
 	quad[3] = screen_y + adjustploty;
 
 	/* Corner 2: bottom-right. */
 	celoffsetx = (int16_t)(cox0 + sprite_w);
 	celoffsety = (int16_t)(coy0 - sprite_h);
-	adjustoffsets(pCurrentLine, &ScaleData);
+	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
 	quad[4] = screen_x + adjustplotx;
 	quad[5] = screen_y + adjustploty;
 
 	/* Corner 3: bottom-left. */
 	celoffsetx = cox0;
 	celoffsety = (int16_t)(coy0 - sprite_h);
-	adjustoffsets(pCurrentLine, &ScaleData);
+	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
 	quad[6] = adjustplotx + screen_x;
 	quad[7] = adjustploty + screen_y;
 
 	if (TIE_FLIGHT_TIE98)
 		return composite_to_tie98_scene(quad);
-	return scantoxtrans(quad);
+	return rotscale_scantoxtrans(quad);
 }

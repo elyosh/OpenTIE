@@ -187,8 +187,8 @@ static uint8_t map_is_post_mission;
 int16_t train_pilot_medal_status;
 
 /* Forward declarations — only for functions called before their definition */
-static int16_t Count_VR_Debrief_Pages(void);
-static void Get_VR_Debrief_Line(char* string, int16_t line);
+static int16_t map_Count_VR_Debrief_Pages(void);
+static void map_Get_VR_Debrief_Line(char* string, int16_t line);
 
 /* ======================================================================
  * View callback
@@ -204,13 +204,13 @@ static int16_t last_voiced_paragraph;
 
 // FUNCTION: TIE95 0x74E48
 // FUNCTION: TIE98 0x44E3A0
-static void end_View(int32_t refresh) {
+static void map_end_View(int32_t refresh) {
 	/* Briefing-map voice path. Retail MAP_end_View does the same:
 	 * when the page id stamped by PLAYER_Step_Page differs from the
 	 * last-voiced id and the officer character is 'i' (info
 	 * briefing), play the corresponding .voc. The talk-mode and
 	 * combat-debrief paths run their voice trigger from
-	 * iuser_Map / Set_VR_Talk_To_Text instead — only 'i' gets the
+	 * map_iuser_Map / map_Set_VR_Talk_To_Text instead — only 'i' gets the
 	 * end-view treatment. */
 	if (last_voiced_paragraph != talk_voice_question && talk_voice_officer == 'i') {
 		talk_Start_Speech_Stream();
@@ -227,7 +227,7 @@ static void end_View(int32_t refresh) {
 
 // FUNCTION: TIE95 0x7581C
 // FUNCTION: TIE98 0x44EC90
-static void user_Map_Panel(Actor* actor, int32_t time) {
+static void map_user_Map_Panel(Actor* actor, int32_t time) {
 	if (actor->id == 0) {
 		actor->y = (time <= 4) ? map_panel_y[time] : map_panel_y[4];
 	} else if (actor->id == 1) {
@@ -240,7 +240,7 @@ static void user_Map_Panel(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x7588C
 // FUNCTION: TIE98 0x44ED10
-static int16_t draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+static int16_t map_draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
 	xactdelt_Draw_Delta_Actor(actor, r, clip_r, x, y, refresh);
 
 	if (map_text != -1) {
@@ -265,12 +265,12 @@ static int16_t draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int
 }
 
 /* ======================================================================
- * Check_VR_Talk_Questions — scan talk data visibility conditions
+ * map_Check_VR_Talk_Questions — scan talk data visibility conditions
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x765B8
 // FUNCTION: TIE98 0x44F9F0
-static void Check_VR_Talk_Questions(void) {
+static void map_Check_VR_Talk_Questions(void) {
 	int16_t i;
 
 	for (i = 0; i < 5; i++) {
@@ -301,7 +301,7 @@ static void Check_VR_Talk_Questions(void) {
 
 // FUNCTION: TIE95 0x762F4
 // FUNCTION: TIE98 0x44F770
-static void Get_VR_Talk_Question(char* string, int16_t question) {
+static void map_Get_VR_Talk_Question(char* string, int16_t question) {
 	int16_t qid;
 	char* data;
 	int16_t out_len;
@@ -334,7 +334,7 @@ static void Get_VR_Talk_Question(char* string, int16_t question) {
 
 // FUNCTION: TIE95 0x76400
 // FUNCTION: TIE98 0x44F860
-static void Get_VR_Talk_Paragraph(char* string, int16_t line) {
+static void map_Get_VR_Talk_Paragraph(char* string, int16_t line) {
 	int16_t bold = 0;
 	int16_t qid;
 	char* data;
@@ -348,7 +348,7 @@ static void Get_VR_Talk_Paragraph(char* string, int16_t line) {
 
 	qid = talk_win_id[cur_talk_question];
 	if (qid == 5) {
-		Get_VR_Debrief_Line(string, line);
+		map_Get_VR_Debrief_Line(string, line);
 		return;
 	}
 
@@ -398,7 +398,7 @@ static void Get_VR_Talk_Paragraph(char* string, int16_t line) {
 
 // FUNCTION: TIE95 0x761C0
 // FUNCTION: TIE98 0x44F660
-static void Set_VR_Talk_Paragraph(void) {
+static void map_Set_VR_Talk_Paragraph(void) {
 	int16_t qid;
 	char* data;
 	int16_t pos;
@@ -409,7 +409,7 @@ static void Set_VR_Talk_Paragraph(void) {
 
 	qid = talk_win_id[cur_talk_question];
 	if (qid == 5) {
-		num_talk_paragraphs = Count_VR_Debrief_Pages();
+		num_talk_paragraphs = map_Count_VR_Debrief_Pages();
 		cur_talk_paragraph = 0;
 		return;
 	}
@@ -439,7 +439,7 @@ static void Set_VR_Talk_Paragraph(void) {
 
 // FUNCTION: TIE95 0x76074
 // FUNCTION: TIE98 0x44F530
-static void Set_VR_Talk_To_Text(int16_t person) {
+static void map_Set_VR_Talk_To_Text(int16_t person) {
 	int16_t i;
 
 	num_talk_questions = 0;
@@ -451,7 +451,7 @@ static void Set_VR_Talk_To_Text(int16_t person) {
 	if (shellext_Get_Cur_Scene() == SCENE_COMBAT_MAP_B)
 		talk_person += 2;
 
-	Check_VR_Talk_Questions();
+	map_Check_VR_Talk_Questions();
 
 	for (i = 0; i < 5; i++) {
 		int16_t show = 0;
@@ -482,15 +482,15 @@ static void Set_VR_Talk_To_Text(int16_t person) {
 		else
 			talk_win_id[num_talk_questions++] = 5;
 		cur_talk_question = num_talk_questions - 1;
-		num_talk_paragraphs = Count_VR_Debrief_Pages();
+		num_talk_paragraphs = map_Count_VR_Debrief_Pages();
 		cur_talk_paragraph = 0;
 	}
 
-	Set_VR_Talk_Paragraph();
+	map_Set_VR_Talk_Paragraph();
 
 	/* Retail MAP_Set_VR_Talk_To_Text fires the current paragraph's
 	 * voice file at the end (gated on officer != 'i' since the
-	 * info-briefing path is driven by end_View instead). Lets the
+	 * info-briefing path is driven by map_end_View instead). Lets the
 	 * combat-sim scenes hear the first phrase on entry. */
 	if (talk_voice_officer != 'i')
 		talk_Start_Speech_Stream();
@@ -502,15 +502,15 @@ static void Set_VR_Talk_To_Text(int16_t person) {
 
 // FUNCTION: TIE95 0x769DC
 // FUNCTION: TIE98 0x44FBE0
-static int16_t Count_VR_Debrief_Header(void) { return 1; }
-/* TIE95 has no separate body: its callers use Count_VR_Debrief_Header's
+static int16_t map_Count_VR_Debrief_Header(void) { return 1; }
+/* TIE95 has no separate body: its callers use map_Count_VR_Debrief_Header's
  * identical code at 0x769DC. */
 // FUNCTION: TIE98 0x450280
-static int16_t Count_VR_Debrief_Goals(void) { return 1; }
+static int16_t map_Count_VR_Debrief_Goals(void) { return 1; }
 
 // FUNCTION: TIE95 0x770BC
 // FUNCTION: TIE98 0x450590
-static int16_t Count_VR_Debrief_Kills(void) {
+static int16_t map_Count_VR_Debrief_Kills(void) {
 	int16_t count = 0;
 	int16_t i;
 
@@ -531,7 +531,7 @@ static int16_t Count_VR_Debrief_Kills(void) {
 
 // FUNCTION: TIE95 0x77378
 // FUNCTION: TIE98 0x4508D0
-static int16_t Count_VR_Debrief_Losses(void) {
+static int16_t map_Count_VR_Debrief_Losses(void) {
 	int16_t count = 0;
 	int16_t i;
 
@@ -550,7 +550,7 @@ static int16_t Count_VR_Debrief_Losses(void) {
 
 // FUNCTION: TIE95 0x775B8
 // FUNCTION: TIE98 0x450B60
-static int16_t Count_VR_Debrief_Captures(void) {
+static int16_t map_Count_VR_Debrief_Captures(void) {
 	int16_t count = 0;
 	int16_t i;
 
@@ -563,16 +563,16 @@ static int16_t Count_VR_Debrief_Captures(void) {
 
 // FUNCTION: TIE95 0x766A4
 // FUNCTION: TIE98 0x44FAB0
-static int16_t Count_VR_Debrief_Pages(void) {
-	return Count_VR_Debrief_Header() + Count_VR_Debrief_Goals() + Count_VR_Debrief_Kills() +
-		   Count_VR_Debrief_Losses() + Count_VR_Debrief_Captures();
+static int16_t map_Count_VR_Debrief_Pages(void) {
+	return map_Count_VR_Debrief_Header() + map_Count_VR_Debrief_Goals() + map_Count_VR_Debrief_Kills() +
+		   map_Count_VR_Debrief_Losses() + map_Count_VR_Debrief_Captures();
 }
 
 /* --- Standard header (shared by header + goals Find functions) --- */
 
 // FUNCTION: TIE95 0x767F8
 // FUNCTION: TIE98 0x44FC40
-static void Get_VR_Standard_Debrief_Header(char* string, int16_t line) {
+static void map_Get_VR_Standard_Debrief_Header(char* string, int16_t line) {
 	char buf[80], fmt[40];
 	uint16_t j;
 
@@ -630,7 +630,7 @@ static void Get_VR_Standard_Debrief_Header(char* string, int16_t line) {
 
 // FUNCTION: TIE95 0x76A50
 // FUNCTION: TIE98 0x44FE80
-static void Get_VR_Debrief_Header(char* string, int16_t line) {
+static void map_Get_VR_Debrief_Header(char* string, int16_t line) {
 	char buf[80], fmt[40], rank_name[40];
 	uint16_t val;
 	uint16_t j;
@@ -715,15 +715,15 @@ static void Get_VR_Debrief_Header(char* string, int16_t line) {
 
 // FUNCTION: TIE95 0x769E4
 // FUNCTION: TIE98 0x44FBF0
-static void Find_VR_Debrief_Header(char* string, int16_t line) {
+static void map_Find_VR_Debrief_Header(char* string, int16_t line) {
 	int16_t skip = line;
 	int16_t i;
 
 	for (i = 0; i < max_paragraph_size; i++) {
 		if (i >= 3)
-			Get_VR_Debrief_Header(string, i);
+			map_Get_VR_Debrief_Header(string, i);
 		else
-			Get_VR_Standard_Debrief_Header(string, i);
+			map_Get_VR_Standard_Debrief_Header(string, i);
 		if (*string) {
 			if (!skip)
 				return;
@@ -737,7 +737,7 @@ static void Find_VR_Debrief_Header(char* string, int16_t line) {
 
 // FUNCTION: TIE95 0x76E10
 // FUNCTION: TIE98 0x4502E0
-static void Get_VR_Debrief_Goals(char* string, int16_t line) {
+static void map_Get_VR_Debrief_Goals(char* string, int16_t line) {
 	char buf[80], fmt[40], count_str[40];
 	int16_t done, fail;
 
@@ -804,15 +804,15 @@ static void Get_VR_Debrief_Goals(char* string, int16_t line) {
 
 // FUNCTION: TIE95 0x76DC0
 // FUNCTION: TIE98 0x450290
-static void Find_VR_Debrief_Goals(char* string, int16_t line) {
+static void map_Find_VR_Debrief_Goals(char* string, int16_t line) {
 	int16_t skip = line;
 	int16_t i;
 
 	for (i = 0; i < max_paragraph_size; i++) {
 		if (i >= 3)
-			Get_VR_Debrief_Goals(string, i);
+			map_Get_VR_Debrief_Goals(string, i);
 		else
-			Get_VR_Standard_Debrief_Header(string, i);
+			map_Get_VR_Standard_Debrief_Header(string, i);
 		if (*string) {
 			if (!skip)
 				return;
@@ -826,7 +826,7 @@ static void Find_VR_Debrief_Goals(char* string, int16_t line) {
 
 // FUNCTION: TIE95 0x771BC
 // FUNCTION: TIE98 0x4506B0
-static void Get_VR_Debrief_Kill_Title(char* string) {
+static void map_Get_VR_Debrief_Kill_Title(char* string) {
 	uint16_t total = 0, player_total = 0;
 	char fmt[40], buf[80];
 	uint16_t i;
@@ -853,7 +853,7 @@ static void Get_VR_Debrief_Kill_Title(char* string) {
 
 // FUNCTION: TIE95 0x772AC
 // FUNCTION: TIE98 0x4507C0
-static void Get_VR_Debrief_Kills(char* string, int16_t craft_idx) {
+static void map_Get_VR_Debrief_Kills(char* string, int16_t craft_idx) {
 	uint16_t count = 0;
 	char name[40], buf[80];
 	if (craft_idx >= (int16_t)NUM_SPEC) {
@@ -881,10 +881,10 @@ static void Get_VR_Debrief_Kills(char* string, int16_t craft_idx) {
 
 // FUNCTION: TIE95 0x77148
 // FUNCTION: TIE98 0x450620
-static void Find_VR_Debrief_Kills(char* string, int16_t page, int16_t line) {
+static void map_Find_VR_Debrief_Kills(char* string, int16_t page, int16_t line) {
 	int16_t in_page = line % max_paragraph_size;
 	if (in_page == 0) {
-		Get_VR_Debrief_Kill_Title(string);
+		map_Get_VR_Debrief_Kill_Title(string);
 	} else if (in_page == 1) {
 		textext_Copy_Text(string, txtTalkDash);
 		center_line = 1;
@@ -893,7 +893,7 @@ static void Find_VR_Debrief_Kills(char* string, int16_t page, int16_t line) {
 		int16_t i;
 
 		for (i = 0; i <= (int16_t)NUM_SPEC; i++) {
-			Get_VR_Debrief_Kills(string, i);
+			map_Get_VR_Debrief_Kills(string, i);
 			if (*string) {
 				if (!skip)
 					return;
@@ -908,7 +908,7 @@ static void Find_VR_Debrief_Kills(char* string, int16_t page, int16_t line) {
 
 // FUNCTION: TIE95 0x77470
 // FUNCTION: TIE98 0x4509E0
-static void Get_VR_Debrief_Loss_Title(char* string) {
+static void map_Get_VR_Debrief_Loss_Title(char* string) {
 	uint16_t total = 0;
 	char fmt[40], buf[80];
 	uint16_t i;
@@ -934,7 +934,7 @@ static void Get_VR_Debrief_Loss_Title(char* string) {
 
 // FUNCTION: TIE95 0x77538
 // FUNCTION: TIE98 0x450AC0
-static void Get_VR_Debrief_Losses(char* string, int16_t craft_idx) {
+static void map_Get_VR_Debrief_Losses(char* string, int16_t craft_idx) {
 	uint16_t count = 0;
 	char name[40], buf[80];
 	if (craft_idx < (int16_t)NUM_SPEC) {
@@ -954,10 +954,10 @@ static void Get_VR_Debrief_Losses(char* string, int16_t craft_idx) {
 
 // FUNCTION: TIE95 0x773F8
 // FUNCTION: TIE98 0x450950
-static void Find_VR_Debrief_Losses(char* string, int16_t page, int16_t line) {
+static void map_Find_VR_Debrief_Losses(char* string, int16_t page, int16_t line) {
 	int16_t in_page = line % max_paragraph_size;
 	if (in_page == 0) {
-		Get_VR_Debrief_Loss_Title(string);
+		map_Get_VR_Debrief_Loss_Title(string);
 	} else if (in_page == 1) {
 		textext_Copy_Text(string, txtTalkDash);
 		center_line = 1;
@@ -966,7 +966,7 @@ static void Find_VR_Debrief_Losses(char* string, int16_t page, int16_t line) {
 		int16_t i;
 
 		for (i = 0; i < (int16_t)NUM_SPEC; i++) {
-			Get_VR_Debrief_Losses(string, i);
+			map_Get_VR_Debrief_Losses(string, i);
 			if (*string) {
 				if (!skip)
 					return;
@@ -981,7 +981,7 @@ static void Find_VR_Debrief_Losses(char* string, int16_t page, int16_t line) {
 
 // FUNCTION: TIE95 0x7766C
 // FUNCTION: TIE98 0x450C20
-static void Get_VR_Debrief_Capture_Title(char* string) {
+static void map_Get_VR_Debrief_Capture_Title(char* string) {
 	uint16_t total = 0;
 	char fmt[40], buf[80];
 	uint16_t i;
@@ -1003,7 +1003,7 @@ static void Get_VR_Debrief_Capture_Title(char* string) {
 
 // FUNCTION: TIE95 0x77708
 // FUNCTION: TIE98 0x450CD0
-static void Get_VR_Debrief_Captures(char* string, int16_t craft_idx) {
+static void map_Get_VR_Debrief_Captures(char* string, int16_t craft_idx) {
 	uint16_t count = mission.captures_by_type[craft_idx];
 	if (count) {
 		char name[40], buf[80];
@@ -1015,10 +1015,10 @@ static void Get_VR_Debrief_Captures(char* string, int16_t craft_idx) {
 
 // FUNCTION: TIE95 0x775F4
 // FUNCTION: TIE98 0x450B90
-static void Find_VR_Debrief_Captures(char* string, int16_t page, int16_t line) {
+static void map_Find_VR_Debrief_Captures(char* string, int16_t page, int16_t line) {
 	int16_t in_page = line % max_paragraph_size;
 	if (in_page == 0) {
-		Get_VR_Debrief_Capture_Title(string);
+		map_Get_VR_Debrief_Capture_Title(string);
 	} else if (in_page == 1) {
 		textext_Copy_Text(string, txtTalkDash);
 		center_line = 1;
@@ -1027,7 +1027,7 @@ static void Find_VR_Debrief_Captures(char* string, int16_t page, int16_t line) {
 		int16_t i;
 
 		for (i = 0; i < (int16_t)NUM_SPEC; i++) {
-			Get_VR_Debrief_Captures(string, i);
+			map_Get_VR_Debrief_Captures(string, i);
 			if (*string) {
 				if (!skip)
 					return;
@@ -1042,7 +1042,7 @@ static void Find_VR_Debrief_Captures(char* string, int16_t page, int16_t line) {
 
 // FUNCTION: TIE95 0x766E0
 // FUNCTION: TIE98 0x44FAE0
-static void Get_VR_Debrief_Line(char* string, int16_t line) {
+static void map_Get_VR_Debrief_Line(char* string, int16_t line) {
 	int16_t abs_line = line;
 	int16_t section_page = line / max_paragraph_size;
 	int16_t s;
@@ -1054,29 +1054,29 @@ static void Get_VR_Debrief_Line(char* string, int16_t line) {
 		int16_t pages;
 		switch (s) {
 			case 0:
-				pages = Count_VR_Debrief_Header();
+				pages = map_Count_VR_Debrief_Header();
 				if (section_page < pages)
-					Find_VR_Debrief_Header(string, abs_line);
+					map_Find_VR_Debrief_Header(string, abs_line);
 				break;
 			case 1:
-				pages = Count_VR_Debrief_Goals();
+				pages = map_Count_VR_Debrief_Goals();
 				if (section_page < pages)
-					Find_VR_Debrief_Goals(string, abs_line);
+					map_Find_VR_Debrief_Goals(string, abs_line);
 				break;
 			case 2:
-				pages = Count_VR_Debrief_Kills();
+				pages = map_Count_VR_Debrief_Kills();
 				if (section_page < pages)
-					Find_VR_Debrief_Kills(string, section_page, abs_line);
+					map_Find_VR_Debrief_Kills(string, section_page, abs_line);
 				break;
 			case 3:
-				pages = Count_VR_Debrief_Losses();
+				pages = map_Count_VR_Debrief_Losses();
 				if (section_page < pages)
-					Find_VR_Debrief_Losses(string, section_page, abs_line);
+					map_Find_VR_Debrief_Losses(string, section_page, abs_line);
 				break;
 			case 4:
-				pages = Count_VR_Debrief_Captures();
+				pages = map_Count_VR_Debrief_Captures();
 				if (section_page < pages)
-					Find_VR_Debrief_Captures(string, section_page, abs_line);
+					map_Find_VR_Debrief_Captures(string, section_page, abs_line);
 				break;
 		}
 		section_page -= pages;
@@ -1091,7 +1091,7 @@ static void Get_VR_Debrief_Line(char* string, int16_t line) {
 /* Retail inlines the training and combat score updates here. */
 // FUNCTION: TIE95 0x77754
 // FUNCTION: TIE98 0x450D50
-static void Update_Debrief_Scores(void) {
+static void map_Update_Debrief_Scores(void) {
 	int16_t scene = shellext_Get_Cur_Scene();
 
 	if (scene == SCENE_TRAIN_MAP) {
@@ -1209,8 +1209,8 @@ static void Update_Debrief_Scores(void) {
 
 // FUNCTION: TIE95 0x74EA8
 // FUNCTION: TIE98 0x44E3F0
-static int16_t iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
-						   int16_t x, int16_t y) {
+static int16_t map_iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
+							   int16_t x, int16_t y) {
 	uint8_t button;
 	PushButton* btn;
 
@@ -1281,7 +1281,7 @@ static int16_t iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key, uin
 
 // FUNCTION: TIE95 0x77C4C
 // FUNCTION: TIE98 0x4513E0
-static void Set_Voice_Species_Mission(void) {
+static void map_Set_Voice_Species_Mission(void) {
 	uint8_t mission_cursor;
 
 	last_voiced_paragraph = 0;
@@ -1302,7 +1302,7 @@ static void Set_Voice_Species_Mission(void) {
 
 // FUNCTION: TIE95 0x75110
 // FUNCTION: TIE98 0x44E5B0
-static void iuser_Map(Input* input, int32_t time) {
+static void map_iuser_Map(Input* input, int32_t time) {
 	/* Briefing mode: offset button position during panel animation */
 	if (shellext_Get_Cur_Scene() == SCENE_BRIEF_MAP && time < 5) {
 		if (time)
@@ -1337,7 +1337,7 @@ static void iuser_Map(Input* input, int32_t time) {
 						cur_talk_question--;
 					else
 						cur_talk_question = num_talk_questions - 1;
-					Set_VR_Talk_Paragraph();
+					map_Set_VR_Talk_Paragraph();
 					if (options_gbl.speech_active)
 						talk_paragraph_timer = time + 264;
 					talk_voice_question = (int16_t)(cur_talk_question + 1);
@@ -1359,7 +1359,7 @@ static void iuser_Map(Input* input, int32_t time) {
 						cur_talk_question = 0;
 					else
 						cur_talk_question++;
-					Set_VR_Talk_Paragraph();
+					map_Set_VR_Talk_Paragraph();
 					if (options_gbl.speech_active)
 						talk_paragraph_timer = time + 264;
 					talk_voice_question = (int16_t)(cur_talk_question + 1);
@@ -1434,7 +1434,7 @@ static void iuser_Map(Input* input, int32_t time) {
 					talk_voice_question = 0;
 					talk_voice_mood = (mission.primary_complete == 1) ? 'd' : 'h';
 				}
-				Set_VR_Talk_To_Text(0);
+				map_Set_VR_Talk_To_Text(0);
 				if (options_gbl.speech_active)
 					talk_paragraph_timer = time + 264;
 			} else if (talk_mode == 2) {
@@ -1446,7 +1446,7 @@ static void iuser_Map(Input* input, int32_t time) {
 					talk_voice_question = 0;
 					talk_voice_mood = (mission.secondary_complete == 1) ? 'd' : 'h';
 				}
-				Set_VR_Talk_To_Text(1);
+				map_Set_VR_Talk_To_Text(1);
 				if (options_gbl.speech_active)
 					talk_paragraph_timer = time + 264;
 			}
@@ -1479,7 +1479,7 @@ static void iuser_Map(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x75684
 // FUNCTION: TIE98 0x44EB20
-static void idraw_Map(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+static void map_idraw_Map(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	PushButton* btn;
 	int16_t down;
 	int16_t x;
@@ -1551,12 +1551,12 @@ static void idraw_Map(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 }
 
 /* ======================================================================
- * idraw_Talk — talk text overlay in MAP mode
+ * map_idraw_Talk — talk text overlay in MAP mode
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x75960
 // FUNCTION: TIE98 0x44EDF0
-static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	char buf[64], fmt[32], str1[32];
 	Rect tr;
 
@@ -1669,7 +1669,7 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 		tr.bottom = tr.top + 10;
 
 		/* Current question text */
-		Get_VR_Talk_Question(buf, cur_talk_question);
+		map_Get_VR_Talk_Question(buf, cur_talk_question);
 		xfont_Print_Centered_Text(buf, &tr, 15, 0);
 		xrect_Offset_Rect(&tr, 0, 10);
 
@@ -1687,7 +1687,7 @@ static void idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 
 		for (i = first_line; i < first_line + max_paragraph_size; i++) {
 			center_line = 0;
-			Get_VR_Talk_Paragraph(buf, i);
+			map_Get_VR_Talk_Paragraph(buf, i);
 			if (center_line)
 				xfont_Print_Centered_Text(buf, &tr, 228, 0);
 			else
@@ -1792,7 +1792,7 @@ int16_t map_Map(SceneHeadStruct* scene_head) {
 #endif
 	}
 
-	Update_Debrief_Scores();
+	map_Update_Debrief_Scores();
 
 	/* Load resources */
 	file = shellext_Open_Empire_Resource(map_str[MAP_LFD]);
@@ -1812,15 +1812,15 @@ int16_t map_Map(SceneHeadStruct* scene_head) {
 		/* xactor_Non_Refreshable_Actor(the_actor); */
 		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG2], &r, 0, 0, 50);
 		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_PANEL], &r, 0, 0, 20);
-		xactor_Set_Actor_User_Function(the_actor, user_Map_Panel);
+		xactor_Set_Actor_User_Function(the_actor, map_user_Map_Panel);
 		the_actor->id = 0;
 		the_actor = xactanim_Res_Anim_Actor(map_str[MAP_PANEL_HANDLE], &r, 0, 0, 20);
-		xactor_Set_Actor_User_Function(the_actor, user_Map_Panel);
+		xactor_Set_Actor_User_Function(the_actor, map_user_Map_Panel);
 		the_actor->id = 1;
 		cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BRIEF_BUTTONS], &r, 0, 12, 0);
 	} else if (scene == SCENE_TRAIN_MAP) {
 		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_OVERLAY], &r, 0, 0, 0);
-		xactor_Set_Actor_Draw_Function(the_actor, draw_Map_Text);
+		xactor_Set_Actor_Draw_Function(the_actor, map_draw_Map_Text);
 		the_actor->id = 1;
 		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_TRAIN_TEXT], &r, 0, 0, 0);
 		xactor_Non_Refreshable_Actor(the_actor);
@@ -1829,7 +1829,7 @@ int16_t map_Map(SceneHeadStruct* scene_head) {
 		xactor_Set_Actor_Time(title_actor, 0, 0);
 	} else {
 		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_TEXT], &r, 0, 0, 0);
-		xactor_Set_Actor_Draw_Function(the_actor, draw_Map_Text);
+		xactor_Set_Actor_Draw_Function(the_actor, map_draw_Map_Text);
 		the_actor->id = 1;
 		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_COMBAT_BG], &r, 0, 0, 0);
 		xactor_Non_Refreshable_Actor(the_actor);
@@ -1846,33 +1846,35 @@ int16_t map_Map(SceneHeadStruct* scene_head) {
 	/* Create buttons (not for training scene) */
 	if (scene != SCENE_TRAIN_MAP) {
 		/* Stop */
-		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index], 0, iuser_Map, NULL, 0);
-		xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-		xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index], 0, map_iuser_Map, NULL, 0);
+		xinpattr_Set_Input_Update_Function(the_input, map_iupdate_Map);
+		xinpattr_Set_Input_Draw_Function(the_input, map_idraw_Map);
 		xinpattr_Refreshable_Input(the_input);
 		the_input->mouseUsage = allInput;
 		stop_input = the_input;
 
 		/* Play */
-		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 1], 0, iuser_Map, NULL, 1);
-		xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-		xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+		the_input =
+			(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 1], 0, map_iuser_Map, NULL, 1);
+		xinpattr_Set_Input_Update_Function(the_input, map_iupdate_Map);
+		xinpattr_Set_Input_Draw_Function(the_input, map_idraw_Map);
 		xinpattr_Refreshable_Input(the_input);
 		the_input->mouseUsage = allInput;
 		play_input = the_input;
 
 		/* Skip */
-		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 2], 0, iuser_Map, NULL, 2);
-		xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-		xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+		the_input =
+			(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 2], 0, map_iuser_Map, NULL, 2);
+		xinpattr_Set_Input_Update_Function(the_input, map_iupdate_Map);
+		xinpattr_Set_Input_Draw_Function(the_input, map_idraw_Map);
 		xinpattr_Refreshable_Input(the_input);
 		the_input->mouseUsage = allInput;
 	}
 
 	/* Exit (always present) */
-	the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 3], 0, iuser_Map, NULL, 5);
-	xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-	xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+	the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 3], 0, map_iuser_Map, NULL, 5);
+	xinpattr_Set_Input_Update_Function(the_input, map_iupdate_Map);
+	xinpattr_Set_Input_Draw_Function(the_input, map_idraw_Map);
 	xinpattr_Refreshable_Input(the_input);
 	the_input->mouseUsage = allInput;
 
@@ -1880,15 +1882,16 @@ int16_t map_Map(SceneHeadStruct* scene_head) {
 	if (scene == SCENE_COMBAT_MAP_A || scene == SCENE_COMBAT_MAP_B) {
 		if (scene == SCENE_COMBAT_MAP_A || !shipext_Get_Mission_Officer()) {
 			the_input =
-				(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 4], 0, iuser_Map, NULL, 3);
-			xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-			xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+				(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 4], 0, map_iuser_Map, NULL, 3);
+			xinpattr_Set_Input_Update_Function(the_input, map_iupdate_Map);
+			xinpattr_Set_Input_Draw_Function(the_input, map_idraw_Map);
 			xinpattr_Refreshable_Input(the_input);
 			the_input->mouseUsage = allInput;
 		}
-		the_input = (Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 5], 0, iuser_Map, NULL, 4);
-		xinpattr_Set_Input_Update_Function(the_input, iupdate_Map);
-		xinpattr_Set_Input_Draw_Function(the_input, idraw_Map);
+		the_input =
+			(Input*)xbtnpush_Alloc_Button(parent, (Rect*)&map_rect[index + 5], 0, map_iuser_Map, NULL, 4);
+		xinpattr_Set_Input_Update_Function(the_input, map_iupdate_Map);
+		xinpattr_Set_Input_Draw_Function(the_input, map_idraw_Map);
 		xinpattr_Refreshable_Input(the_input);
 		the_input->mouseUsage = allInput;
 	}
@@ -1901,7 +1904,7 @@ int16_t map_Map(SceneHeadStruct* scene_head) {
 
 	map_input = xinput_Alloc_Input(parent, &r, 0, 0);
 	talk_input = xinput_Alloc_Input(parent, &r, 0, 0);
-	xinpattr_Set_Input_Draw_Function(talk_input, idraw_Talk);
+	xinpattr_Set_Input_Draw_Function(talk_input, map_idraw_Talk);
 
 	/* Palette setup */
 	if (scene == SCENE_COMBAT_MAP_A) {
@@ -1951,13 +1954,13 @@ int16_t map_Map(SceneHeadStruct* scene_head) {
 	player_Init_Brief_Display(map_input, NULL);
 	talk_brief = player_Fetch_Brief();
 	talk_fgroup = player_Fetch_FGroup();
-	Set_VR_Talk_To_Text(talk_mode == 2 ? 1 : 0);
+	map_Set_VR_Talk_To_Text(talk_mode == 2 ? 1 : 0);
 
 	/* Push the modal view task */
-	xview_Set_View_Update_Function(end_View);
+	xview_Set_View_Update_Function(map_end_View);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
-	Set_Voice_Species_Mission();
+	map_Set_Voice_Species_Mission();
 	talk_Alloc_Speech_Sound();
 	talk_paragraph_timer = 0x7FFFFFFF;
 #ifdef TIE_MODERN

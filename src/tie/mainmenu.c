@@ -81,14 +81,14 @@ static Actor* mainmenu_actor; /* main background delta actor */
 
 /* ---- Forward declarations ---- */
 
-static void end_View(int32_t frame_num);
-static int16_t iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
-								uint8_t right, int16_t mouse_x, int16_t mouse_y);
-static void iuser_MainMenu(Input* input, int32_t time);
-static void user_Title(Actor* actor, int32_t time);
-static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-						  int16_t refresh);
-static void user_Door(Actor* actor, int32_t time);
+static void mainmenu_end_View(int32_t frame_num);
+static int16_t mainmenu_iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+										 uint8_t right, int16_t mouse_x, int16_t mouse_y);
+static void mainmenu_iuser_MainMenu(Input* input, int32_t time);
+static void mainmenu_user_Title(Actor* actor, int32_t time);
+static int16_t mainmenu_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								   int16_t refresh);
+static void mainmenu_user_Door(Actor* actor, int32_t time);
 
 /* ================================================================
  * View update callback
@@ -98,7 +98,7 @@ static void user_Door(Actor* actor, int32_t time);
  * in the binary (JUMPOUT to retn). */
 // FUNCTION: TIE95 0x70c8c
 // FUNCTION: TIE98 0x44d410
-static void end_View(int32_t frame_num) {
+static void mainmenu_end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
 	if (!xcursor_Is_Cursor_Visible())
@@ -112,8 +112,8 @@ static void end_View(int32_t frame_num) {
 /* iupdate: hover highlights door + title, click dispatches scene exit. */
 // FUNCTION: TIE95 0x70cc0
 // FUNCTION: TIE98 0x44d430
-static int16_t iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
-								uint8_t right, int16_t mouse_x, int16_t mouse_y) {
+static int16_t mainmenu_iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+										 uint8_t right, int16_t mouse_x, int16_t mouse_y) {
 	(void)bounds;
 	(void)clip;
 	(void)mouse_x;
@@ -218,7 +218,7 @@ static int16_t iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t 
 /* iuser: when exit_pending, triggers the scene transition. */
 // FUNCTION: TIE95 0x70dd4
 // FUNCTION: TIE98 0x44d550
-static void iuser_MainMenu(Input* input, int32_t time) {
+static void mainmenu_iuser_MainMenu(Input* input, int32_t time) {
 	(void)time;
 	if (!input->var1)
 		return; /* exit_pending */
@@ -238,7 +238,7 @@ static void iuser_MainMenu(Input* input, int32_t time) {
 /* Title overlay: show on hover frame, hide otherwise. */
 // FUNCTION: TIE95 0x70e14
 // FUNCTION: TIE98 0x44d5a0
-static void user_Title(Actor* actor, int32_t time) {
+static void mainmenu_user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
 		if (!xactor_Is_Actor_Visible(actor))
@@ -253,8 +253,8 @@ static void user_Title(Actor* actor, int32_t time) {
 /* Title overlay draw: render the delta actor + centered text label. */
 // FUNCTION: TIE95 0x70e78
 // FUNCTION: TIE98 0x44d5f0
-static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-						  int16_t refresh) {
+static int16_t mainmenu_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								   int16_t refresh) {
 	int16_t offx, offy;
 	Rect r;
 	char label[32];
@@ -354,7 +354,7 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 /* Door animation: open when var1 set (hover), close when cleared. */
 // FUNCTION: TIE95 0x70ff8
 // FUNCTION: TIE98 0x44d7e0
-static void user_Door(Actor* actor, int32_t time) {
+static void mainmenu_user_Door(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1) {
 		/* Opening */
@@ -478,7 +478,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	door[7] = xactor_Find_Actor(FOURCC_ANIM, "m-door-7");
 #endif
 	for (i = 0; i < 8; i++) {
-		xactor_Set_Actor_User_Function(door[i], (xactorCallback)user_Door);
+		xactor_Set_Actor_User_Function(door[i], (xactorCallback)mainmenu_user_Door);
 		door[i]->id = i;
 	}
 
@@ -490,8 +490,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xactor_Set_Actor_User_Function(title_actor, (xactorCallback)user_Title);
-	xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
+	xactor_Set_Actor_User_Function(title_actor, (xactorCallback)mainmenu_user_Title);
+	xactor_Set_Actor_Draw_Function(title_actor, mainmenu_draw_Title);
 
 	/* Create XINPUT button regions */
 	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
@@ -519,8 +519,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 			return 0;
 		}
 #endif
-		xinpattr_Set_Input_Update_Function(tour_input, iupdate_MainMenu);
-		xinpattr_Set_Input_User_Function(tour_input, iuser_MainMenu);
+		xinpattr_Set_Input_Update_Function(tour_input, mainmenu_iupdate_MainMenu);
+		xinpattr_Set_Input_User_Function(tour_input, mainmenu_iuser_MainMenu);
 		tour_input->mouseUsage = allInput;
 		tour_input->id = 0;
 	}
@@ -542,8 +542,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(new_tour_input, iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(new_tour_input, iuser_MainMenu);
+	xinpattr_Set_Input_Update_Function(new_tour_input, mainmenu_iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(new_tour_input, mainmenu_iuser_MainMenu);
 	new_tour_input->mouseUsage = allInput;
 	new_tour_input->id = 2;
 #ifdef TIE_MODERN
@@ -564,8 +564,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(train_input, iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(train_input, iuser_MainMenu);
+	xinpattr_Set_Input_Update_Function(train_input, mainmenu_iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(train_input, mainmenu_iuser_MainMenu);
 	train_input->mouseUsage = allInput;
 	train_input->id = 3;
 #else
@@ -576,8 +576,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(tech_input, iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(tech_input, iuser_MainMenu);
+	xinpattr_Set_Input_Update_Function(tech_input, mainmenu_iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(tech_input, mainmenu_iuser_MainMenu);
 	tech_input->mouseUsage = allInput;
 	tech_input->id = 3;
 #endif
@@ -599,8 +599,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(combat_input, iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(combat_input, iuser_MainMenu);
+	xinpattr_Set_Input_Update_Function(combat_input, mainmenu_iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(combat_input, mainmenu_iuser_MainMenu);
 	combat_input->mouseUsage = allInput;
 	combat_input->id = 4;
 #else
@@ -611,8 +611,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(film_input, iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(film_input, iuser_MainMenu);
+	xinpattr_Set_Input_Update_Function(film_input, mainmenu_iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(film_input, mainmenu_iuser_MainMenu);
 	film_input->mouseUsage = allInput;
 	film_input->id = 4;
 #endif
@@ -633,8 +633,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(reg_desk_input, iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(reg_desk_input, iuser_MainMenu);
+	xinpattr_Set_Input_Update_Function(reg_desk_input, mainmenu_iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(reg_desk_input, mainmenu_iuser_MainMenu);
 	reg_desk_input->mouseUsage = allInput;
 	reg_desk_input->id = 5;
 #ifdef TIE_MODERN
@@ -655,8 +655,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(tech_input, iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(tech_input, iuser_MainMenu);
+	xinpattr_Set_Input_Update_Function(tech_input, mainmenu_iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(tech_input, mainmenu_iuser_MainMenu);
 	tech_input->mouseUsage = allInput;
 	tech_input->id = 6;
 #else
@@ -667,8 +667,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(train_input, iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(train_input, iuser_MainMenu);
+	xinpattr_Set_Input_Update_Function(train_input, mainmenu_iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(train_input, mainmenu_iuser_MainMenu);
 	train_input->mouseUsage = allInput;
 	train_input->id = 6;
 #endif
@@ -690,8 +690,8 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(film_input, iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(film_input, iuser_MainMenu);
+	xinpattr_Set_Input_Update_Function(film_input, mainmenu_iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(film_input, mainmenu_iuser_MainMenu);
 	film_input->mouseUsage = allInput;
 	film_input->id = 7;
 #else
@@ -702,13 +702,13 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xinpattr_Set_Input_Update_Function(combat_input, iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(combat_input, iuser_MainMenu);
+	xinpattr_Set_Input_Update_Function(combat_input, mainmenu_iupdate_MainMenu);
+	xinpattr_Set_Input_User_Function(combat_input, mainmenu_iuser_MainMenu);
 	combat_input->mouseUsage = allInput;
 	combat_input->id = 7;
 #endif
 
-	xview_Set_View_Update_Function(end_View);
+	xview_Set_View_Update_Function(mainmenu_end_View);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 #ifdef TIE_MODERN

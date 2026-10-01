@@ -70,11 +70,11 @@ static Input* officer; /* officer widget (id=1) */
 
 /* ---- Forward declarations ---- */
 
-static void user_Title(Actor* actor, int32_t time);
-static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-						  int16_t refresh);
-static void user_Door(Actor* actor, int32_t time);
-static void user_Officer(Actor* actor, int32_t time);
+static void debrief_user_Title(Actor* actor, int32_t time);
+static int16_t debrief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								  int16_t refresh);
+static void debrief_user_Door(Actor* actor, int32_t time);
+static void debrief_user_Officer(Actor* actor, int32_t time);
 
 /* ================================================================
  * View update callback
@@ -82,7 +82,7 @@ static void user_Officer(Actor* actor, int32_t time);
 
 // FUNCTION: TIE95 0x700E4
 // FUNCTION: TIE98 0x415920
-static void end_View(int32_t frame_num) {
+static void debrief_end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
 	if (!xcursor_Is_Cursor_Visible())
@@ -95,7 +95,7 @@ static void end_View(int32_t frame_num) {
 
 // FUNCTION: TIE95 0x7012C
 // FUNCTION: TIE98 0x415940
-static int16_t film_Callback(Film* film, FilmObject* film_object) {
+static int16_t debrief_film_Callback(Film* film, FilmObject* film_object) {
 	Actor* actor;
 
 	if (film_object->id != 3) /* type_code: 3 = actor */
@@ -110,7 +110,7 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 			return 0;
 
 		case 2: /* Door actor — stored by var2 index */
-			xactor_Set_Actor_User_Function(actor, user_Door);
+			xactor_Set_Actor_User_Function(actor, debrief_user_Door);
 			door_actors[actor->var2] = actor;
 			return 0;
 
@@ -121,7 +121,7 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 				case 2:
 					if (shipext_Get_Mission_Officer() == 2)
 						return 1; /* hide if priest-only */
-					xactor_Set_Actor_User_Function(actor, user_Officer);
+					xactor_Set_Actor_User_Function(actor, debrief_user_Officer);
 					actor->id = actor->var2;
 					return 0;
 
@@ -134,7 +134,7 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 				case 4:
 					if (shipext_Get_Mission_Officer() == 1)
 						return 1; /* hide if officer-only */
-					xactor_Set_Actor_User_Function(actor, user_Officer);
+					xactor_Set_Actor_User_Function(actor, debrief_user_Officer);
 					actor->id = 3;
 					return 0;
 
@@ -177,8 +177,8 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 					return 1;
 			}
 #endif
-			xactor_Set_Actor_User_Function(actor, user_Title);
-			xactor_Set_Actor_Draw_Function(actor, draw_Title);
+			xactor_Set_Actor_User_Function(actor, debrief_user_Title);
+			xactor_Set_Actor_Draw_Function(actor, debrief_draw_Title);
 			title_actor = actor;
 			return 0;
 
@@ -193,8 +193,8 @@ static int16_t film_Callback(Film* film, FilmObject* film_object) {
 
 // FUNCTION: TIE95 0x702AC
 // FUNCTION: TIE98 0x415AA0
-static int16_t iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
-							   uint8_t right, int16_t mouse_x, int16_t mouse_y) {
+static int16_t debrief_iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+									   uint8_t right, int16_t mouse_x, int16_t mouse_y) {
 	int16_t widget_id;
 
 	(void)bounds;
@@ -251,7 +251,7 @@ static int16_t iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, int16_t k
 
 // FUNCTION: TIE95 0x703B4
 // FUNCTION: TIE98 0x415B90
-static void iuser_Debrief(Input* input, int32_t time) {
+static void debrief_iuser_Debrief(Input* input, int32_t time) {
 	int16_t scene;
 
 	(void)time;
@@ -288,7 +288,7 @@ static void iuser_Debrief(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x70440
 // FUNCTION: TIE98 0x415C60
-static void user_Title(Actor* actor, int32_t time) {
+static void debrief_user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
 		if (!xactor_Is_Actor_Visible(actor))
@@ -302,8 +302,8 @@ static void user_Title(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x70494
 // FUNCTION: TIE98 0x415CB0
-static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-						  int16_t refresh) {
+static int16_t debrief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								  int16_t refresh) {
 	int16_t offx, offy;
 	Rect r;
 	char label[32];
@@ -352,7 +352,7 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 
 // FUNCTION: TIE95 0x70598
 // FUNCTION: TIE98 0x415DE0
-static void user_Door(Actor* actor, int32_t time) {
+static void debrief_user_Door(Actor* actor, int32_t time) {
 	if (!time) {
 		actor->var2 = 0;
 		actor->var1 = 0;
@@ -381,7 +381,7 @@ static void user_Door(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x7063C
 // FUNCTION: TIE98 0x415E70
-static void user_Officer(Actor* actor, int32_t time) {
+static void debrief_user_Officer(Actor* actor, int32_t time) {
 	int16_t char_id, anim_state, zplane;
 
 	if (!time) {
@@ -499,7 +499,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 	resource = shellext_Open_Empire_Resource("debrief.lfd");
 	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 
-	debrief_film = xfilm_Res_Callback_Film("debrief", &frame, 0, 0, 0, film_Callback);
+	debrief_film = xfilm_Res_Callback_Film("debrief", &frame, 0, 0, 0, debrief_film_Callback);
 #ifdef TIE_MODERN
 	TieSnapshotBuilder_SetActiveFilm("DEBRIEF", "debrief");
 #endif
@@ -512,8 +512,8 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(133, 298), TIE_FRONTEND_EDITION(56, 129),
 				   TIE_FRONTEND_EDITION(193, 420), TIE_FRONTEND_EDITION(107, 288));
 	brief_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(brief_input, iupdate_Debrief);
-	xinpattr_Set_Input_User_Function(brief_input, iuser_Debrief);
+	xinpattr_Set_Input_Update_Function(brief_input, debrief_iupdate_Debrief);
+	xinpattr_Set_Input_User_Function(brief_input, debrief_iuser_Debrief);
 	brief_input->mouseUsage = allInput;
 	brief_input->id = 0;
 
@@ -522,8 +522,8 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(85, 226), TIE_FRONTEND_EDITION(35, 102),
 					   TIE_FRONTEND_EDITION(133, 296), TIE_FRONTEND_EDITION(150, 322));
 		officer = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(officer, iupdate_Debrief);
-		xinpattr_Set_Input_User_Function(officer, iuser_Debrief);
+		xinpattr_Set_Input_Update_Function(officer, debrief_iupdate_Debrief);
+		xinpattr_Set_Input_User_Function(officer, debrief_iuser_Debrief);
 		officer->mouseUsage = allInput;
 		officer->id = 1;
 	}
@@ -533,8 +533,8 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(248, 500), TIE_FRONTEND_EDITION(51, 134),
 					   TIE_FRONTEND_EDITION(290, 572), TIE_FRONTEND_EDITION(128, 316));
 		priest = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(priest, iupdate_Debrief);
-		xinpattr_Set_Input_User_Function(priest, iuser_Debrief);
+		xinpattr_Set_Input_Update_Function(priest, debrief_iupdate_Debrief);
+		xinpattr_Set_Input_User_Function(priest, debrief_iuser_Debrief);
 		priest->mouseUsage = allInput;
 		priest->id = 2;
 	}
@@ -543,12 +543,12 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(0, 56), TIE_FRONTEND_EDITION(0, 26),
 				   TIE_FRONTEND_EDITION(70, 145), TIE_FRONTEND_EDITION(200, 345));
 	flyagain = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(flyagain, iupdate_Debrief);
-	xinpattr_Set_Input_User_Function(flyagain, iuser_Debrief);
+	xinpattr_Set_Input_Update_Function(flyagain, debrief_iupdate_Debrief);
+	xinpattr_Set_Input_User_Function(flyagain, debrief_iuser_Debrief);
 	flyagain->mouseUsage = allInput;
 	flyagain->id = 3;
 
-	xview_Set_View_Update_Function(end_View);
+	xview_Set_View_Update_Function(debrief_end_View);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 #ifdef TIE_MODERN

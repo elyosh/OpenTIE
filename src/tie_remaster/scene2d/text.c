@@ -467,7 +467,7 @@ void TieScene2dTextRenderer_RecordTitleCrawl(TieScene2dTextRenderer* g, AeronDra
 	const float inv_rt_h = 1.0f / (float)g->title_rt_h;
 
 	/* Three-phase scroll. Phases 1 and 2a mirror the binary's
-	 * user_Title (title.c): linear scroll at 1 classic px / engine
+	 * title_user_Title (title.c): linear scroll at 1 classic px / engine
 	 * frame while off-screen below, then linear deceleration
 	 *   v(t2) = 1 - t2/256,  y(t2) = 200 - t2 + t2²/512
 	 * once past y=200 (line_yvf decays from 4080 in steps of 16).
@@ -512,7 +512,7 @@ void TieScene2dTextRenderer_RecordTitleCrawl(TieScene2dTextRenderer* g, AeronDra
 		if (top_y_c >= 200.0f)
 			continue; /* still off-screen below */
 
-		/* Perspective stretch matches the binary's draw_Title:
+		/* Perspective stretch matches the binary's title_draw_Title:
 		 *   stretch(y) = (y - 40) / 160; vanishing point at y=40,
 		 *   full natural scale at y=200. */
 		float top_stretch = (top_y_c - 40.0f) / 160.0f;

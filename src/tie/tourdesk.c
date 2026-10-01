@@ -91,22 +91,24 @@ static int32_t cur_tour_battle; /* battle at entry (for detecting changes) */
 
 /* ---- Forward declarations ---- */
 
-static void end_View(int32_t frame_num);
-static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
-								uint8_t right, int16_t mouse_x, int16_t mouse_y);
-static void iuser_TourDesk(Input* input, int32_t time);
-static void user_Title(Actor* actor, int32_t time);
-static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-						  int16_t refresh);
-static void user_Door(Actor* actor, int32_t time);
-static void user_Battle(Actor* actor, int32_t time);
-static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh);
-static void Draw_Battle_One(Rect* galaxy_rect, int16_t tour_time);
-static void Draw_Battle_Two(Rect* galaxy_rect, int16_t tour_time, Rect* clip_r);
-static void Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t tour_time);
-static void Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int16_t tour_time);
-static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time);
-static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh);
+static void tourdesk_end_View(int32_t frame_num);
+static int16_t tourdesk_iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+										 uint8_t right, int16_t mouse_x, int16_t mouse_y);
+static void tourdesk_iuser_TourDesk(Input* input, int32_t time);
+static void tourdesk_user_Title(Actor* actor, int32_t time);
+static int16_t tourdesk_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								   int16_t refresh);
+static void tourdesk_user_Door(Actor* actor, int32_t time);
+static void tourdesk_user_Battle(Actor* actor, int32_t time);
+static int16_t tourdesk_draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+										 int16_t refresh);
+static void tourdesk_Draw_Battle_One(Rect* galaxy_rect, int16_t tour_time);
+static void tourdesk_Draw_Battle_Two(Rect* galaxy_rect, int16_t tour_time, Rect* clip_r);
+static void tourdesk_Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t tour_time);
+static void tourdesk_Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int16_t tour_time);
+static int tourdesk_Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time);
+static int16_t tourdesk_draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+									int16_t refresh);
 
 /* ================================================================
  * View update callback
@@ -114,7 +116,7 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
 
 // FUNCTION: TIE95 0x73AF4
 // FUNCTION: TIE98 0x490E40
-static void end_View(int32_t frame_num) {
+static void tourdesk_end_View(int32_t frame_num) {
 	if (frame_num)
 		return;
 	if (TIE_FRONTEND_TIE98)
@@ -129,8 +131,8 @@ static void end_View(int32_t frame_num) {
 
 // FUNCTION: TIE95 0x73B18
 // FUNCTION: TIE98 0x490E70
-static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
-								uint8_t right, int16_t mouse_x, int16_t mouse_y) {
+static int16_t tourdesk_iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+										 uint8_t right, int16_t mouse_x, int16_t mouse_y) {
 	(void)bounds;
 	(void)clip;
 	(void)mouse_x;
@@ -192,7 +194,7 @@ static int16_t iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t 
 
 // FUNCTION: TIE95 0x73CB8
 // FUNCTION: TIE98 0x491010
-static void iuser_TourDesk(Input* input, int32_t time) {
+static void tourdesk_iuser_TourDesk(Input* input, int32_t time) {
 	(void)time;
 	if (!input->var1)
 		return;
@@ -211,7 +213,7 @@ static void iuser_TourDesk(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x73D04
 // FUNCTION: TIE98 0x491060
-static void user_Title(Actor* actor, int32_t time) {
+static void tourdesk_user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
 		if (!xactor_Is_Actor_Visible(actor))
@@ -225,8 +227,8 @@ static void user_Title(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x73D58
 // FUNCTION: TIE98 0x4910B0
-static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-						  int16_t refresh) {
+static int16_t tourdesk_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								   int16_t refresh) {
 	int16_t offx, offy;
 	Rect r;
 	char label[32];
@@ -268,7 +270,7 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 
 // FUNCTION: TIE95 0x73E6C
 // FUNCTION: TIE98 0x491200
-static void user_Door(Actor* actor, int32_t time) {
+static void tourdesk_user_Door(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1) {
 		if (!actor->state)
@@ -287,7 +289,7 @@ static void user_Door(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x73EEC
 // FUNCTION: TIE98 0x491280
-static void user_Battle(Actor* actor, int32_t time) {
+static void tourdesk_user_Battle(Actor* actor, int32_t time) {
 	(void)actor;
 	if (!time) {
 		tour_time = 0;
@@ -303,7 +305,8 @@ static void user_Battle(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x73F0C
 // FUNCTION: TIE98 0x4912B0
-static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+static int16_t tourdesk_draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+										 int16_t refresh) {
 	Rect dst;
 	int16_t line_height, i;
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
@@ -339,7 +342,7 @@ static int16_t draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, 
 /* Phase 0-7: zoom from center to galaxy rect */
 // FUNCTION: TIE95 0x73FA0
 // FUNCTION: TIE98 0x491360
-static void Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
+static void tourdesk_Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
 	Rect dst, ra;
 	char name[64];
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
@@ -385,7 +388,7 @@ static void Draw_Battle_One(Rect* galaxy_rect, int16_t time) {
 /* Phase 8-23: hold at galaxy rect */
 // FUNCTION: TIE95 0x74118
 // FUNCTION: TIE98 0x491500
-static void Draw_Battle_Two(Rect* galaxy_rect, int16_t time, Rect* clip_r) {
+static void tourdesk_Draw_Battle_Two(Rect* galaxy_rect, int16_t time, Rect* clip_r) {
 	Rect dst, ra;
 	char name[64];
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
@@ -418,7 +421,7 @@ static void Draw_Battle_Two(Rect* galaxy_rect, int16_t time, Rect* clip_r) {
 /* Phase 24-31: zoom from galaxy rect to actor bounds */
 // FUNCTION: TIE95 0x741BC
 // FUNCTION: TIE98 0x4915E0
-static void Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t time) {
+static void tourdesk_Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t time) {
 	Actor* art;
 	Rect dst, art_bounds;
 	int16_t t;
@@ -443,7 +446,7 @@ static void Draw_Battle_Three(Rect* galaxy_rect, Rect* view_r, int16_t time) {
 /* Phase 32-39: reveal actor with vertical wipe */
 // FUNCTION: TIE95 0x742A0
 // FUNCTION: TIE98 0x4916F0
-static void Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int16_t time) {
+static void tourdesk_Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int16_t time) {
 	Actor* art;
 	Rect bounds;
 	int16_t t;
@@ -471,7 +474,7 @@ static void Draw_Battle_Four(Rect* galaxy_rect, Rect* view_r, Rect* clip_r, int1
 /* Phase 40+: final state — full art + battle info text */
 // FUNCTION: TIE95 0x7434C
 // FUNCTION: TIE98 0x4917E0
-static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
+static int tourdesk_Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 	int16_t fade, name_color, battle_color, line_height, mission_color;
 	Actor* art;
 	Rect art_bounds, dst;
@@ -539,7 +542,8 @@ static int Draw_Battle_Five(Rect* r, Rect* clip_r, int16_t time) {
 
 // FUNCTION: TIE95 0x74534
 // FUNCTION: TIE98 0x491A30
-static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh) {
+static int16_t tourdesk_draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+									int16_t refresh) {
 	Rect galaxy_rect;
 	int16_t t;
 	(void)actor;
@@ -568,11 +572,11 @@ static int16_t draw_Battle(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16
 
 	t = (int16_t)tour_time;
 
-	Draw_Battle_One(&galaxy_rect, t);
-	Draw_Battle_Two(&galaxy_rect, t, clip_r);
-	Draw_Battle_Three(&galaxy_rect, r, t);
-	Draw_Battle_Four(&galaxy_rect, r, clip_r, t);
-	Draw_Battle_Five(r, clip_r, t);
+	tourdesk_Draw_Battle_One(&galaxy_rect, t);
+	tourdesk_Draw_Battle_Two(&galaxy_rect, t, clip_r);
+	tourdesk_Draw_Battle_Three(&galaxy_rect, r, t);
+	tourdesk_Draw_Battle_Four(&galaxy_rect, r, clip_r, t);
+	tourdesk_Draw_Battle_Five(r, clip_r, t);
 
 	if (TIE_FRONTEND_TIE98) {
 		xactor_Refresh_Actor(tourdesk_actor);
@@ -621,7 +625,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	door[0] = xactor_Find_Actor(FOURCC_ANIM, TIE_FRONTEND_EDITION("lhdoor", "lhdor"));
 	door[1] = xactor_Find_Actor(FOURCC_ANIM, TIE_FRONTEND_EDITION("rhdoor", "rhdor"));
 	for (i = 0; i < 2; i++) {
-		xactor_Set_Actor_User_Function(door[i], (xactorCallback)user_Door);
+		xactor_Set_Actor_User_Function(door[i], (xactorCallback)tourdesk_user_Door);
 		door[i]->id = i;
 	}
 
@@ -634,23 +638,23 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 
 	/* Title label */
 	title_actor = xactdelt_Res_Delta_Actor("title", &frame, 0, 0, 0);
-	xactor_Set_Actor_User_Function(title_actor, (xactorCallback)user_Title);
-	xactor_Set_Actor_Draw_Function(title_actor, draw_Title);
+	xactor_Set_Actor_User_Function(title_actor, (xactorCallback)tourdesk_user_Title);
+	xactor_Set_Actor_Draw_Function(title_actor, tourdesk_draw_Title);
 
 	/* Battle text custom actor */
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(72, 169), TIE_FRONTEND_EDITION(7, 33),
 				   TIE_FRONTEND_EDITION(256, 512), TIE_FRONTEND_EDITION(33, 90));
 	battle_text_actor =
 		xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, TIE_FRONTEND_EDITION(50, 30));
-	xactor_Set_Actor_Draw_Function(battle_text_actor, draw_Battle_Text);
+	xactor_Set_Actor_Draw_Function(battle_text_actor, tourdesk_draw_Battle_Text);
 	battle_text_actor->id = 0;
 
 	/* Galaxy display custom actor */
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(72, 166), TIE_FRONTEND_EDITION(45, 116),
 				   TIE_FRONTEND_EDITION(256, 512), TIE_FRONTEND_EDITION(120, 291));
 	galaxy_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 50);
-	xactor_Set_Actor_User_Function(galaxy_actor, (xactorCallback)user_Battle);
-	xactor_Set_Actor_Draw_Function(galaxy_actor, draw_Battle);
+	xactor_Set_Actor_User_Function(galaxy_actor, (xactorCallback)tourdesk_user_Battle);
+	xactor_Set_Actor_Draw_Function(galaxy_actor, tourdesk_draw_Battle);
 	galaxy_actor->id = 1;
 
 	/* Initialize galaxy art cache */
@@ -671,8 +675,8 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, 0, TIE_FRONTEND_EDITION(92, 229), TIE_FRONTEND_EDITION(54, 137),
 				   TIE_FRONTEND_EDITION(162, 390));
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
-	xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
+	xinpattr_Set_Input_Update_Function(inp, tourdesk_iupdate_TourDesk);
+	xinpattr_Set_Input_User_Function(inp, tourdesk_iuser_TourDesk);
 	inp->mouseUsage = allInput;
 	inp->id = 0;
 
@@ -680,8 +684,8 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(286, 552), TIE_FRONTEND_EDITION(64, 147),
 				   TIE_FRONTEND_EDITION(320, 639), TIE_FRONTEND_EDITION(120, 302));
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
-	xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
+	xinpattr_Set_Input_Update_Function(inp, tourdesk_iupdate_TourDesk);
+	xinpattr_Set_Input_User_Function(inp, tourdesk_iuser_TourDesk);
 	inp->mouseUsage = allInput;
 	inp->id = 1;
 
@@ -689,8 +693,8 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(130, 306), TIE_FRONTEND_EDITION(132, 401),
 				   TIE_FRONTEND_EDITION(180, 338), TIE_FRONTEND_EDITION(164, 434));
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
-	xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
+	xinpattr_Set_Input_Update_Function(inp, tourdesk_iupdate_TourDesk);
+	xinpattr_Set_Input_User_Function(inp, tourdesk_iuser_TourDesk);
 	inp->mouseUsage = allInput;
 	inp->id = 2;
 
@@ -698,14 +702,14 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(130, 307), TIE_FRONTEND_EDITION(164, 436),
 				   TIE_FRONTEND_EDITION(180, 338), TIE_FRONTEND_EDITION(196, 466));
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(inp, iupdate_TourDesk);
-	xinpattr_Set_Input_User_Function(inp, iuser_TourDesk);
+	xinpattr_Set_Input_Update_Function(inp, tourdesk_iupdate_TourDesk);
+	xinpattr_Set_Input_User_Function(inp, tourdesk_iuser_TourDesk);
 	inp->mouseUsage = allInput;
 	inp->id = 3;
 
 	xres_Close_Resource(res_file);
 
-	xview_Set_View_Update_Function(end_View);
+	xview_Set_View_Update_Function(tourdesk_end_View);
 	xviewadd_Clear_View();
 	xview_Disable_All_View_Erase();
 #ifdef TIE_MODERN

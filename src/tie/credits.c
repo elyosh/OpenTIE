@@ -90,7 +90,7 @@ void credits_Credit_Stars_To_Back(void) {
  * calls the actor's draw, copies canvas to buffer. */
 // FUNCTION: TIE95 0x7161C
 // FUNCTION: TIE98 0x414C40
-static void Credit_Actor_To_Buffer(Actor* actor, LandruHandle buffer) {
+static void credits_Credit_Actor_To_Buffer(Actor* actor, LandruHandle buffer) {
 	Rect r;
 	void* pixels;
 	xrect_Set_Rect(&r, 0, 0, 320, 100);
@@ -106,7 +106,7 @@ static void Credit_Actor_To_Buffer(Actor* actor, LandruHandle buffer) {
 /* Initialize credit display state: dirty rect, paragraph count,
  * text hold duration, total film length. */
 // FUNCTION: TIE95 0x71290
-static void Init_Credit_Info(void) {
+static void credits_Init_Credit_Info(void) {
 	xrect_Set_Rect(&credits_dirty_rect, 40, 40, 280, 160);
 	credits_num_credit_lines = xparagrp_Count_Paragraphs(credits_text);
 	credits_text_len = 130;
@@ -120,7 +120,7 @@ static void Init_Credit_Info(void) {
 
 // FUNCTION: TIE95 0x71244
 // FUNCTION: TIE98 0x414850
-static void end_View(int32_t frame_num) {
+static void credits_end_View(int32_t frame_num) {
 	int16_t exit_id;
 	int16_t done = (credits_film_time == credits_film_len) ? 1 : 0;
 	(void)frame_num;
@@ -144,8 +144,8 @@ static void end_View(int32_t frame_num) {
  * color = palette index for the text (ramps 167..239 range).
  * text_y = vertical position for text block. */
 // FUNCTION: TIE95 0x712EC
-static int16_t draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-						   int16_t refresh) {
+static int16_t credits_draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								   int16_t refresh) {
 	int16_t time_offset;
 	int16_t credit_idx = 0;
 	int16_t base_y;
@@ -341,7 +341,7 @@ int16_t credits_Credits(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xactor_Set_Actor_Time(credits_blue_bar, 0, 0);
-	Credit_Actor_To_Buffer(credits_stars_actor, credits_star_buffer);
+	credits_Credit_Actor_To_Buffer(credits_stars_actor, credits_star_buffer);
 
 	credits_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 0);
 #ifdef TIE_MODERN
@@ -351,11 +351,11 @@ int16_t credits_Credits(SceneHeadStruct* scene_head) {
 	}
 #endif
 #ifdef TIE_MODERN
-	xactor_Set_Actor_Draw_Function(credits_actor, tie98 ? credits_draw_Credit_tie98 : draw_Credit);
+	xactor_Set_Actor_Draw_Function(credits_actor, tie98 ? credits_draw_Credit_tie98 : credits_draw_Credit);
 #elif defined(TIE98)
 	xactor_Set_Actor_Draw_Function(credits_actor, credits_draw_Credit_tie98);
 #else
-	xactor_Set_Actor_Draw_Function(credits_actor, draw_Credit);
+	xactor_Set_Actor_Draw_Function(credits_actor, credits_draw_Credit);
 #endif
 	pal = xpal_Res_Palette("colors");
 #ifdef TIE_MODERN
@@ -371,14 +371,14 @@ int16_t credits_Credits(SceneHeadStruct* scene_head) {
 	if (tie98)
 		credits_Init_Credit_Info_tie98();
 	else
-		Init_Credit_Info();
+		credits_Init_Credit_Info();
 #elif defined(TIE98)
 	credits_Init_Credit_Info_tie98();
 #else
-	Init_Credit_Info();
+	credits_Init_Credit_Info();
 #endif
 	xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
-	xview_Set_View_Update_Function(end_View);
+	xview_Set_View_Update_Function(credits_end_View);
 	xview_Disable_Global_View_Erase();
 	xtimer_Set_Frame_Rate(12);
 

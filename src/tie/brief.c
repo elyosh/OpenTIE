@@ -85,13 +85,13 @@ static Film* brief_film;
 
 /* ---- Forward declarations ---- */
 
-static void user_Title(Actor* actor, int32_t time);
-static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-						  int16_t refresh);
-static void user_Door(Actor* actor, int32_t time);
-static Input* Build_Notice(const char* text);
-static void idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh);
-static void iuser_Notice(Input* input, int32_t time);
+static void brief_user_Title(Actor* actor, int32_t time);
+static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								int16_t refresh);
+static void brief_user_Door(Actor* actor, int32_t time);
+static Input* brief_Build_Notice(const char* text);
+static void brief_idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh);
+static void brief_iuser_Notice(Input* input, int32_t time);
 
 /* ================================================================
  * View update callback
@@ -107,7 +107,7 @@ void brief_end_View(int32_t frame_num) {
 #ifndef TIE_MODERN
 		/* Modern builds open the notice through the briefing task. */
 		if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
-			Input* notice = Build_Notice(NULL);
+			Input* notice = brief_Build_Notice(NULL);
 #ifdef TIE98
 			xio_Set_Mouse_Position(330, 260);
 #else
@@ -131,7 +131,7 @@ void brief_end_View(int32_t frame_num) {
 
 // FUNCTION: TIE95 0x731E0
 // FUNCTION: TIE98 0x406580
-static int16_t film_Callback(Film* film, FilmObject* fo) {
+static int16_t brief_film_Callback(Film* film, FilmObject* fo) {
 	Actor* actor;
 	if (fo->id != 3)
 		return 0; /* type_code: 3 = actor */
@@ -155,7 +155,7 @@ static int16_t film_Callback(Film* film, FilmObject* fo) {
 			}
 
 		case 4: /* Door actor */
-			xactor_Set_Actor_User_Function(actor, (xactorCallback)user_Door);
+			xactor_Set_Actor_User_Function(actor, (xactorCallback)brief_user_Door);
 			door[actor->var2] = actor;
 			actor->id = actor->var2;
 			return 0;
@@ -165,8 +165,8 @@ static int16_t film_Callback(Film* film, FilmObject* fo) {
 
 		case 6: /* Title label */
 			title_actor = actor;
-			xactor_Set_Actor_User_Function(actor, (xactorCallback)user_Title);
-			xactor_Set_Actor_Draw_Function(actor, draw_Title);
+			xactor_Set_Actor_User_Function(actor, (xactorCallback)brief_user_Title);
+			xactor_Set_Actor_Draw_Function(actor, brief_draw_Title);
 			return 0;
 
 		case 7: /* Returns 1 when officer != 2 (i.e. show for officer kind 1). */
@@ -186,8 +186,8 @@ static int16_t film_Callback(Film* film, FilmObject* fo) {
 
 // FUNCTION: TIE95 0x7330C
 // FUNCTION: TIE98 0x4066E0
-static int16_t iupdate_Brief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left, uint8_t right,
-							 int16_t mouse_x, int16_t mouse_y) {
+static int16_t brief_iupdate_Brief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+								   uint8_t right, int16_t mouse_x, int16_t mouse_y) {
 	(void)bounds;
 	(void)clip;
 	(void)mouse_x;
@@ -242,7 +242,7 @@ static int16_t iupdate_Brief(Input* input, Rect* bounds, Rect* clip, int16_t key
 
 // FUNCTION: TIE95 0x73410
 // FUNCTION: TIE98 0x4067F0
-static void iuser_Brief(Input* input, int32_t time) {
+static void brief_iuser_Brief(Input* input, int32_t time) {
 	int16_t scene;
 	(void)time;
 
@@ -277,7 +277,7 @@ static void iuser_Brief(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x73480
 // FUNCTION: TIE98 0x406860
-static void user_Title(Actor* actor, int32_t time) {
+static void brief_user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
 		if (!xactor_Is_Actor_Visible(actor))
@@ -291,8 +291,8 @@ static void user_Title(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x734D8
 // FUNCTION: TIE98 0x4068B0
-static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-						  int16_t refresh) {
+static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								int16_t refresh) {
 	int16_t offx, offy;
 	Rect r;
 	char label[32];
@@ -336,7 +336,7 @@ static int16_t draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, 
 
 // FUNCTION: TIE95 0x735D4
 // FUNCTION: TIE98 0x4069E0
-static void user_Door(Actor* actor, int32_t time) {
+static void brief_user_Door(Actor* actor, int32_t time) {
 	if (!time) {
 		actor->var2 = 0;
 		actor->var1 = 0;
@@ -363,7 +363,7 @@ static void user_Door(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x73668
 // FUNCTION: TIE98 0x406A70
-static Input* Build_Notice(const char* text) {
+static Input* brief_Build_Notice(const char* text) {
 	Rect r;
 	Input* dlg;
 	PushButton* btn;
@@ -371,13 +371,13 @@ static Input* Build_Notice(const char* text) {
 
 	xrect_Set_Rect(&r, 0, 0, TIE_FRONTEND_EDITION(180, 280), TIE_FRONTEND_EDITION(40, 60));
 	dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
-	xinpattr_Set_Input_Draw_Function(dlg, idraw_Notice);
+	xinpattr_Set_Input_Draw_Function(dlg, brief_idraw_Notice);
 	xinpattr_Set_Input_Allign(dlg, 1, 1);
 	xinpattr_Start_Input(dlg);
 
 	textext_Copy_Text(notice_str, txtRegProtOK); /* "OK" */
 	xrect_Set_Rect(&r, 0, 4, 80, 20);
-	btn = xbtnpush_Alloc_Button(dlg, &r, 0, iuser_Notice, notice_str, 1);
+	btn = xbtnpush_Alloc_Button(dlg, &r, 0, brief_iuser_Notice, notice_str, 1);
 	xinpattr_Set_Input_Allign(&btn->header, 1, 2);
 
 	return dlg;
@@ -385,7 +385,7 @@ static Input* Build_Notice(const char* text) {
 
 // FUNCTION: TIE95 0x7370C
 // FUNCTION: TIE98 0x406B20
-static void idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh) {
+static void brief_idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh) {
 	Rect tr;
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	if (!refresh)
@@ -405,7 +405,7 @@ static void idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh) {
 
 // FUNCTION: TIE95 0x7377C
 // FUNCTION: TIE98 0x406BB0
-static void iuser_Notice(Input* input, int32_t time) {
+static void brief_iuser_Notice(Input* input, int32_t time) {
 	(void)time;
 	if (xinpattr_Get_Input_Selected(input))
 		xdialog_Set_Dialog_Exit(1);
@@ -473,7 +473,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	 * (notice-dialog branch) and SCENE_BRIEF, since both run the
 	 * same film. Auto-cleared at the next scene transition by
 	 * shell_run_scene_dispatch. */
-	brief_film = xfilm_Res_Callback_Film("brief", &frame, 0, 0, 0, film_Callback);
+	brief_film = xfilm_Res_Callback_Film("brief", &frame, 0, 0, 0, brief_film_Callback);
 #ifdef TIE_MODERN
 	TieSnapshotBuilder_SetActiveFilm(TieProfile_UsesTie98Frontend() ? "BRIEF640" : "BRIEF", "brief");
 #endif
@@ -486,8 +486,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(84, 123), TIE_FRONTEND_EDITION(132, 329),
 				   TIE_FRONTEND_EDITION(122, 184), TIE_FRONTEND_EDITION(172, 459));
 	mainmenu_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(mainmenu_input, iupdate_Brief);
-	xinpattr_Set_Input_User_Function(mainmenu_input, iuser_Brief);
+	xinpattr_Set_Input_Update_Function(mainmenu_input, brief_iupdate_Brief);
+	xinpattr_Set_Input_User_Function(mainmenu_input, brief_iuser_Brief);
 	mainmenu_input->mouseUsage = allInput;
 	mainmenu_input->id = 0;
 
@@ -495,8 +495,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(190, 385), TIE_FRONTEND_EDITION(118, 256),
 				   TIE_FRONTEND_EDITION(248, 448), TIE_FRONTEND_EDITION(138, 350));
 	mission_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(mission_input, iupdate_Brief);
-	xinpattr_Set_Input_User_Function(mission_input, iuser_Brief);
+	xinpattr_Set_Input_Update_Function(mission_input, brief_iupdate_Brief);
+	xinpattr_Set_Input_User_Function(mission_input, brief_iuser_Brief);
 	mission_input->mouseUsage = allInput;
 	mission_input->id = 1;
 
@@ -504,8 +504,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(28, 50), TIE_FRONTEND_EDITION(46, 80),
 				   TIE_FRONTEND_EDITION(128, 230), TIE_FRONTEND_EDITION(124, 290));
 	map_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(map_input, iupdate_Brief);
-	xinpattr_Set_Input_User_Function(map_input, iuser_Brief);
+	xinpattr_Set_Input_Update_Function(map_input, brief_iupdate_Brief);
+	xinpattr_Set_Input_User_Function(map_input, brief_iuser_Brief);
 	map_input->mouseUsage = allInput;
 	map_input->id = 2;
 
@@ -514,8 +514,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(140, 230), TIE_FRONTEND_EDITION(66, 157),
 					   TIE_FRONTEND_EDITION(174, 274), TIE_FRONTEND_EDITION(114, 251));
 		officer_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(officer_input, iupdate_Brief);
-		xinpattr_Set_Input_User_Function(officer_input, iuser_Brief);
+		xinpattr_Set_Input_Update_Function(officer_input, brief_iupdate_Brief);
+		xinpattr_Set_Input_User_Function(officer_input, brief_iuser_Brief);
 		officer_input->mouseUsage = allInput;
 		officer_input->id = 3;
 	}
@@ -525,8 +525,8 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(242, 498), TIE_FRONTEND_EDITION(66, 125),
 					   TIE_FRONTEND_EDITION(314, 604), TIE_FRONTEND_EDITION(102, 220));
 		priest_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(priest_input, iupdate_Brief);
-		xinpattr_Set_Input_User_Function(priest_input, iuser_Brief);
+		xinpattr_Set_Input_Update_Function(priest_input, brief_iupdate_Brief);
+		xinpattr_Set_Input_User_Function(priest_input, brief_iuser_Brief);
 		priest_input->mouseUsage = allInput;
 		priest_input->id = 4;
 	}
@@ -543,7 +543,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 #ifdef TIE_MODERN
 
 	if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
-		notice = Build_Notice(NULL);
+		notice = brief_Build_Notice(NULL);
 		xio_Set_Mouse_Position(TieProfile_UsesTie98Frontend() ? 330 : 190,
 							   TieProfile_UsesTie98Frontend() ? 260 : 110);
 	}

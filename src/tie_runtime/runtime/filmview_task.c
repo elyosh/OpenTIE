@@ -50,7 +50,7 @@ static void after_file_dialog(int16_t result, void* unused) {
 	void (*update)(int32_t) = NULL;
 	(void)unused;
 	close_file_dialog();
-	/* Re-enter the view update callback; its Do_FV_File_Dialog call now
+	/* Re-enter the view update callback; its filmview_Do_FV_File_Dialog call now
 	 * returns the dialog result instead of opening the dialog again. */
 	file_context.result = result;
 	file_context.resumed = true;
@@ -104,7 +104,7 @@ static void after_delete_dialog(int16_t result, void* unused) {
 		delete_context.owner = NULL;
 		return;
 	}
-	/* Re-enter the requesting callback; its Do_Delete_Dialog call now
+	/* Re-enter the requesting callback; its filmview_/register_Do_Delete_Dialog call now
 	 * returns the confirmation result instead of opening the dialog again. */
 	delete_context.result = result;
 	delete_context.resumed = true;

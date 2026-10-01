@@ -289,12 +289,12 @@ static int16_t pilot_info_page = 0;
 static int16_t pilot_info_num_pages = 0;
 
 /* ======================================================================
- * Init_Computer_Medal — scan pilot record, build medal page arrays
+ * computer_Init_Computer_Medal — scan pilot record, build medal page arrays
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x869A4
 // FUNCTION: TIE98 0x410650
-static int16_t Init_Computer_Medal(void) {
+static int16_t computer_Init_Computer_Medal(void) {
 	int16_t count, bits;
 	int16_t i, j;
 
@@ -352,12 +352,12 @@ static int16_t Init_Computer_Medal(void) {
 }
 
 /* ======================================================================
- * Find_Backup_Pilot_Info — read backup pilot rank/score from .tfr file
+ * computer_Find_Backup_Pilot_Info — read backup pilot rank/score from .tfr file
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x86B60
 // FUNCTION: TIE98 0x4107D0
-static int16_t Find_Backup_Pilot_Info(void) {
+static int16_t computer_Find_Backup_Pilot_Info(void) {
 	/* TIE98 stack size; also accommodates the widened runtime pilot name. */
 	char file_name[40];
 	LandruFile* the_file;
@@ -385,12 +385,12 @@ static int16_t Find_Backup_Pilot_Info(void) {
 }
 
 /* ======================================================================
- * Set_Computer_Medal_Palette — crossfade to medal-specific palette
+ * computer_Set_Computer_Medal_Palette — crossfade to medal-specific palette
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x84DD8
 // FUNCTION: TIE98 0x40DFB0
-static int16_t Set_Computer_Medal_Palette(void) {
+static int16_t computer_Set_Computer_Medal_Palette(void) {
 	xpal_Screen_To_Dest_Palette(0, 0, 255);
 
 	switch (pilot_medal_type[pilot_medal_page]) {
@@ -418,7 +418,7 @@ static int16_t Set_Computer_Medal_Palette(void) {
 
 // FUNCTION: TIE95 0x863C8
 // FUNCTION: TIE98 0x40FCC0
-static void draw_Computer_On_Off(Rect* r, int16_t on) {
+static void computer_draw_Computer_On_Off(Rect* r, int16_t on) {
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	Rect tr1, tr2;
 
@@ -444,7 +444,7 @@ static void draw_Computer_On_Off(Rect* r, int16_t on) {
 
 // FUNCTION: TIE95 0x86498
 // FUNCTION: TIE98 0x40FDB0
-static void draw_Computer_Level(Rect* r, int16_t state) {
+static void computer_draw_Computer_Level(Rect* r, int16_t state) {
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	Rect tr1, tr2, tr3;
 
@@ -479,7 +479,7 @@ static void draw_Computer_Level(Rect* r, int16_t state) {
 
 // FUNCTION: TIE95 0x865F4
 // FUNCTION: TIE98 0x40FF90
-static void draw_Computer_Gauge(Rect* r, int16_t amount) {
+static void computer_draw_Computer_Gauge(Rect* r, int16_t amount) {
 	Rect tr;
 	int16_t i;
 
@@ -502,7 +502,7 @@ static void draw_Computer_Gauge(Rect* r, int16_t amount) {
 
 // FUNCTION: TIE95 0x86910
 // FUNCTION: TIE98 0x4105A0
-static void idraw_Exit(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+static void computer_idraw_Exit(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	if (!refresh)
 		return;
 
@@ -516,7 +516,7 @@ static void idraw_Exit(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 
 // FUNCTION: TIE95 0x86968
 // FUNCTION: TIE98 0x410610
-static void iuser_Exit(Input* input, int32_t time) {
+static void computer_iuser_Exit(Input* input, int32_t time) {
 	(void)time;
 
 	if (input->id == 1 && xinpattr_Get_Input_Selected(input))
@@ -527,13 +527,13 @@ static void iuser_Exit(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x867F8
 // FUNCTION: TIE98 0x410350
-static Input* Build_Exit(int16_t id) {
+static Input* computer_Build_Exit(int16_t id) {
 	Rect r;
 	Input* the_input;
 
 	xrect_Set_Rect(&r, 0, 0, TIE_FRONTEND_EDITION(160, 340), TIE_FRONTEND_EDITION(22, 53));
 	the_input = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
-	xinpattr_Set_Input_Draw_Function(the_input, idraw_Exit);
+	xinpattr_Set_Input_Draw_Function(the_input, computer_idraw_Exit);
 	xinpattr_Set_Input_Allign(the_input, 1, 1);
 	xinpattr_Start_Input(the_input);
 
@@ -545,11 +545,11 @@ static Input* Build_Exit(int16_t id) {
 
 	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(80, 180), TIE_FRONTEND_EDITION(3, 7),
 				   TIE_FRONTEND_EDITION(116, 252), TIE_FRONTEND_EDITION(19, 46));
-	xbtnpush_Alloc_Button(the_input, &r, 0, iuser_Exit, comp_exit_str[0], 1);
+	xbtnpush_Alloc_Button(the_input, &r, 0, computer_iuser_Exit, comp_exit_str[0], 1);
 
 	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(120, 260), TIE_FRONTEND_EDITION(3, 7),
 				   TIE_FRONTEND_EDITION(156, 332), TIE_FRONTEND_EDITION(19, 46));
-	xbtnpush_Alloc_Button(the_input, &r, 0, iuser_Exit, comp_exit_str[1], 2);
+	xbtnpush_Alloc_Button(the_input, &r, 0, computer_iuser_Exit, comp_exit_str[1], 2);
 
 	return the_input;
 }
@@ -560,7 +560,7 @@ static Input* Build_Exit(int16_t id) {
 
 // FUNCTION: TIE95 0x86738
 // FUNCTION: TIE98 0x4101F0
-static int16_t Check_Backup_Pilot(void) {
+static int16_t computer_Check_Backup_Pilot(void) {
 	Input* the_input;
 	int16_t retval;
 
@@ -568,7 +568,7 @@ static int16_t Check_Backup_Pilot(void) {
 	if (TieComputer_TakeConfirmResult(&retval))
 		return retval != 2;
 #endif
-	the_input = Build_Exit(txtCompBackupPilot);
+	the_input = computer_Build_Exit(txtCompBackupPilot);
 	xio_Set_Mouse_Position(TIE_FRONTEND_EDITION(189, 365), TIE_FRONTEND_EDITION(104, 240));
 #ifdef TIE_MODERN
 	TieComputer_RunConfirm(the_input);
@@ -583,7 +583,7 @@ static int16_t Check_Backup_Pilot(void) {
 
 // FUNCTION: TIE95 0x86778
 // FUNCTION: TIE98 0x410240
-static int16_t Check_Restore_Pilot(void) {
+static int16_t computer_Check_Restore_Pilot(void) {
 	Input* the_input;
 	int16_t retval;
 
@@ -591,7 +591,7 @@ static int16_t Check_Restore_Pilot(void) {
 	if (TieComputer_TakeConfirmResult(&retval))
 		return retval != 2;
 #endif
-	the_input = Build_Exit(txtCompRestorePilot);
+	the_input = computer_Build_Exit(txtCompRestorePilot);
 	xio_Set_Mouse_Position(TIE_FRONTEND_EDITION(189, 365), TIE_FRONTEND_EDITION(104, 240));
 #ifdef TIE_MODERN
 	TieComputer_RunConfirm(the_input);
@@ -607,7 +607,7 @@ static int16_t Check_Restore_Pilot(void) {
 /* TIE98's Check_Exit_To_DOS (0x4102E0) also services the window-close
  * request, which this body does not model. */
 // FUNCTION: TIE95 0x867B8
-static int16_t Exit_To_DOS(void) {
+static int16_t computer_Exit_To_DOS(void) {
 	Input* the_input;
 	int16_t retval;
 
@@ -615,7 +615,7 @@ static int16_t Exit_To_DOS(void) {
 	if (TieComputer_TakeConfirmResult(&retval))
 		return retval != 2;
 #endif
-	the_input = Build_Exit(txtCompExitDOS);
+	the_input = computer_Build_Exit(txtCompExitDOS);
 	xio_Set_Mouse_Position(TIE_FRONTEND_EDITION(189, 365), TIE_FRONTEND_EDITION(104, 240));
 #ifdef TIE_MODERN
 	TieComputer_RunConfirm(the_input);
@@ -634,7 +634,7 @@ static int16_t Exit_To_DOS(void) {
 
 // FUNCTION: TIE95 0x85974
 // FUNCTION: TIE98 0x40EC80
-static void update_Computer_Prefs(int16_t x, int16_t y) {
+static void computer_update_Computer_Prefs(int16_t x, int16_t y) {
 #ifdef TIE_MODERN
 	const Rect* pref_rect = active_pref_rect;
 #endif
@@ -702,7 +702,7 @@ static void update_Computer_Prefs(int16_t x, int16_t y) {
 
 // FUNCTION: TIE95 0x85CAC
 // FUNCTION: TIE98 0x40F1E0
-static void draw_Computer_Prefs(Rect* r, Rect* clip_r) {
+static void computer_draw_Computer_Prefs(Rect* r, Rect* clip_r) {
 #ifdef TIE_MODERN
 	int16_t font_id = TieProfile_UsesTie98Frontend() ? 2 : 0;
 	const Rect* pref_rect = active_pref_rect;
@@ -727,15 +727,15 @@ static void draw_Computer_Prefs(Rect* r, Rect* clip_r) {
 	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefSub), (Rect*)&pref_rect[12], 15,
 							  TIE_FRONTEND_EDITION(0, 3));
 	xfont_Print_Centered_Text(textext_Get_Text(txtCompPrefGame), (Rect*)&pref_rect[14], 15, font_id);
-	draw_Computer_On_Off((Rect*)&pref_rect[2], options_gbl.music_active);
-	draw_Computer_On_Off((Rect*)&pref_rect[5], options_gbl.sound_active);
-	draw_Computer_On_Off((Rect*)&pref_rect[8], options_gbl.speech_active);
-	draw_Computer_On_Off((Rect*)&pref_rect[11], options_gbl.transition_active);
-	draw_Computer_On_Off((Rect*)&pref_rect[13], options_gbl.text_active);
-	draw_Computer_Level((Rect*)&pref_rect[15], options_gbl.game_level);
-	draw_Computer_Gauge((Rect*)&pref_rect[3], options_gbl.music_volume);
-	draw_Computer_Gauge((Rect*)&pref_rect[6], options_gbl.sound_volume);
-	draw_Computer_Gauge((Rect*)&pref_rect[9], options_gbl.speech_volume);
+	computer_draw_Computer_On_Off((Rect*)&pref_rect[2], options_gbl.music_active);
+	computer_draw_Computer_On_Off((Rect*)&pref_rect[5], options_gbl.sound_active);
+	computer_draw_Computer_On_Off((Rect*)&pref_rect[8], options_gbl.speech_active);
+	computer_draw_Computer_On_Off((Rect*)&pref_rect[11], options_gbl.transition_active);
+	computer_draw_Computer_On_Off((Rect*)&pref_rect[13], options_gbl.text_active);
+	computer_draw_Computer_Level((Rect*)&pref_rect[15], options_gbl.game_level);
+	computer_draw_Computer_Gauge((Rect*)&pref_rect[3], options_gbl.music_volume);
+	computer_draw_Computer_Gauge((Rect*)&pref_rect[6], options_gbl.sound_volume);
+	computer_draw_Computer_Gauge((Rect*)&pref_rect[9], options_gbl.speech_volume);
 }
 
 /* ======================================================================
@@ -744,7 +744,7 @@ static void draw_Computer_Prefs(Rect* r, Rect* clip_r) {
 
 // FUNCTION: TIE95 0x85E64
 // FUNCTION: TIE98 0x40F700
-static void xupdate_Computer_Backup(int16_t x, int16_t y) {
+static void computer_xupdate_Computer_Backup(int16_t x, int16_t y) {
 #ifdef TIE_MODERN
 	const Rect* backup_rect = active_backup_rect;
 #endif
@@ -767,7 +767,7 @@ static void xupdate_Computer_Backup(int16_t x, int16_t y) {
 
 // FUNCTION: TIE95 0x85F20
 // FUNCTION: TIE98 0x40F7A0
-static void iuser_Computer_Backup(Input* input, int32_t time) {
+static void computer_iuser_Computer_Backup(Input* input, int32_t time) {
 	(void)time;
 
 	if (input->id < 3 || input->id > 4)
@@ -779,16 +779,16 @@ static void iuser_Computer_Backup(Input* input, int32_t time) {
 	TieComputer_BeginConfirm(input);
 #endif
 	if (input->id == 3) {
-		if (!Check_Backup_Pilot())
+		if (!computer_Check_Backup_Pilot())
 			return;
 		shipext_Backup_Pilot();
 		backup_pilot_rank = pilot_record.rank;
 		backup_pilot_points = pilot_record.score;
 	} else {
-		if (!Check_Restore_Pilot())
+		if (!computer_Check_Restore_Pilot())
 			return;
 		shipext_Restore_Pilot();
-		Init_Computer_Medal();
+		computer_Init_Computer_Medal();
 		pilot_info_page = 0;
 		restore_pilot = 1;
 		xinpattr_Show_Input(backup_input);
@@ -798,7 +798,7 @@ static void iuser_Computer_Backup(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x85FB4
 // FUNCTION: TIE98 0x40F840
-static void xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
+static void computer_xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 #ifdef TIE_MODERN
 	int16_t font_id = TieProfile_UsesTie98Frontend() ? 2 : 0;
 	const Rect* backup_rect = active_backup_rect;
@@ -898,8 +898,8 @@ static void xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 	textext_Cat_Text(name, txtCompNamePoints);
 	xfont_Print_Centered_Text(name, &tr, 90, font_id);
 
-	draw_Computer_On_Off((Rect*)&backup_rect[2], options_gbl.auto_backup);
-	draw_Computer_On_Off((Rect*)&backup_rect[4], options_gbl.auto_restore);
+	computer_draw_Computer_On_Off((Rect*)&backup_rect[2], options_gbl.auto_backup);
+	computer_draw_Computer_On_Off((Rect*)&backup_rect[4], options_gbl.auto_restore);
 }
 
 /* ======================================================================
@@ -908,7 +908,7 @@ static void xdraw_Computer_Backup(Rect* r, Rect* clip_r) {
 
 // FUNCTION: TIE95 0x84E64
 // FUNCTION: TIE98 0x40E060
-static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color) {
+static void computer_Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color) {
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	char str1[80];
 	char str2[40];
@@ -984,7 +984,7 @@ static void Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t back_color
 
 // FUNCTION: TIE95 0x851E8
 // FUNCTION: TIE98 0x40E470
-static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color) {
+static void computer_Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color) {
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	char str1[80];
 	char str2[40];
@@ -1055,7 +1055,7 @@ static void Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color
 
 // FUNCTION: TIE95 0x854A0
 // FUNCTION: TIE98 0x40E770
-static void Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color) {
+static void computer_Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color) {
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	char str1[80];
 	char str2[40];
@@ -1126,7 +1126,7 @@ static void Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t back_color
 
 // FUNCTION: TIE95 0x857C0
 // FUNCTION: TIE98 0x40EA90
-static void Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color) {
+static void computer_Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color) {
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	char str1[80];
 	Rect page;
@@ -1179,7 +1179,7 @@ static void Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color)
 
 // FUNCTION: TIE95 0x84CFC
 // FUNCTION: TIE98 0x40DEB0
-static void xdraw_Computer_Info(Rect* r, Rect* clip_r) {
+static void computer_xdraw_Computer_Info(Rect* r, Rect* clip_r) {
 	Rect clip_tr, tr;
 	int16_t color = 15;
 	int16_t back_color = 38;
@@ -1195,10 +1195,10 @@ static void xdraw_Computer_Info(Rect* r, Rect* clip_r) {
 	xrect_Offset_Rect(&tr, 0, -TIE_FRONTEND_EDITION(110, 273) * pilot_info_page);
 	start_top = tr.top;
 
-	Draw_Computer_Header_Info(&tr, color, back_color);
-	Draw_Computer_Combat_Info(&tr, color, back_color);
-	Draw_Computer_Battle_Info(&tr, color, back_color);
-	Draw_Computer_Kills_Info(&tr, color, back_color);
+	computer_Draw_Computer_Header_Info(&tr, color, back_color);
+	computer_Draw_Computer_Combat_Info(&tr, color, back_color);
+	computer_Draw_Computer_Battle_Info(&tr, color, back_color);
+	computer_Draw_Computer_Kills_Info(&tr, color, back_color);
 
 	pilot_info_num_pages = (tr.top - start_top) / TIE_FRONTEND_EDITION(110, 273);
 	xcanvas_Set_Drawing_Canvas_Clip(clip_r);
@@ -1210,7 +1210,7 @@ static void xdraw_Computer_Info(Rect* r, Rect* clip_r) {
 
 // FUNCTION: TIE95 0x84B84
 // FUNCTION: TIE98 0x40DD20
-static void iuser_Computer_Info(Input* input, int32_t time) {
+static void computer_iuser_Computer_Info(Input* input, int32_t time) {
 	(void)time;
 
 	if (!xinpattr_Get_Input_Selected(input))
@@ -1228,7 +1228,7 @@ static void iuser_Computer_Info(Input* input, int32_t time) {
 			else
 				pilot_medal_page++;
 		}
-		Set_Computer_Medal_Palette();
+		computer_Set_Computer_Medal_Palette();
 	} else if (computer_mode == COMP_MODE_RECORD) {
 		if (input->id == 1) {
 			if (pilot_info_page)
@@ -1248,7 +1248,7 @@ static void iuser_Computer_Info(Input* input, int32_t time) {
 
 /* Retail TIE95 keeps this callback but never installs it. */
 // FUNCTION: TIE95 0x83DD4
-static void idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+static void computer_idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	PushButton* btn = (PushButton*)input;
 
@@ -1272,7 +1272,7 @@ static void idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, int16_t re
 
 // FUNCTION: TIE95 0x84C88
 // FUNCTION: TIE98 0x40DE30
-static void idraw_Computer_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+static void computer_idraw_Computer_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	PushButton* btn = (PushButton*)input;
 
@@ -1295,12 +1295,12 @@ static void idraw_Computer_Info(Input* input, Rect* r, Rect* clip_r, int16_t ref
 }
 
 /* ======================================================================
- * xdraw_Computer_Medal — medal display rendering (complex)
+ * computer_xdraw_Computer_Medal — medal display rendering (complex)
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x83E7C
 // FUNCTION: TIE98 0x40D220
-static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
+static void computer_xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	char name1[40];
 	char string[40];
@@ -1582,13 +1582,13 @@ static void xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 }
 
 /* ======================================================================
- * iupdate_Computer — main dialog update callback
+ * computer_iupdate_Computer — main dialog update callback
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x83248
 // FUNCTION: TIE98 0x40C4A0
-static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left, uint8_t right,
-								int16_t x, int16_t y) {
+static int16_t computer_iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
+										 uint8_t right, int16_t x, int16_t y) {
 #ifdef TIE_MODERN
 	const Rect* computer_mode_rect = active_mode_rect;
 #endif
@@ -1666,10 +1666,10 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 		/* Same mode: dispatch to mode-specific click handler */
 		switch (computer_mode) {
 			case COMP_MODE_BACKUP:
-				xupdate_Computer_Backup(x + r->left, y + r->top);
+				computer_xupdate_Computer_Backup(x + r->left, y + r->top);
 				break;
 			case COMP_MODE_OPTIONS:
-				update_Computer_Prefs(x + r->left, y + r->top);
+				computer_update_Computer_Prefs(x + r->left, y + r->top);
 				break;
 			default:
 				break;
@@ -1714,7 +1714,7 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 		/* Show new mode's widgets */
 		switch (new_mode) {
 			case COMP_MODE_MEDALS:
-				Set_Computer_Medal_Palette();
+				computer_Set_Computer_Medal_Palette();
 				xinpattr_Show_Input(next_info_input);
 				xinpattr_Show_Input(last_info_input);
 				break;
@@ -1743,12 +1743,12 @@ static int16_t iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key
 }
 
 /* ======================================================================
- * iuser_Computer — main dialog user callback
+ * computer_iuser_Computer — main dialog user callback
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x835A4
 // FUNCTION: TIE98 0x40C950
-static void iuser_Computer(Input* input, int32_t time) {
+static void computer_iuser_Computer(Input* input, int32_t time) {
 	Palette* screen_pal;
 	int16_t i;
 
@@ -1791,7 +1791,7 @@ static void iuser_Computer(Input* input, int32_t time) {
 #ifdef TIE_MODERN
 			TieComputer_BeginConfirm(input);
 #endif
-			if (Exit_To_DOS()) {
+			if (computer_Exit_To_DOS()) {
 				input->var1 = 1;
 				computer_display = 0;
 			}
@@ -1809,12 +1809,12 @@ static void iuser_Computer(Input* input, int32_t time) {
 }
 
 /* ======================================================================
- * idraw_Computer — main dialog draw callback
+ * computer_idraw_Computer — main dialog draw callback
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x836E0
 // FUNCTION: TIE98 0x40CB70
-static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+static void computer_idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 #ifdef TIE_MODERN
 	int16_t font_id = TieProfile_UsesTie98Frontend() ? 2 : 0;
 	const Rect* computer_mode_rect = active_mode_rect;
@@ -2070,16 +2070,16 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 	if (input->id == 0 && computer_display) {
 		switch (computer_mode) {
 			case COMP_MODE_MEDALS:
-				xdraw_Computer_Medal(r, clip_r);
+				computer_xdraw_Computer_Medal(r, clip_r);
 				break;
 			case COMP_MODE_RECORD:
-				xdraw_Computer_Info(r, clip_r);
+				computer_xdraw_Computer_Info(r, clip_r);
 				break;
 			case COMP_MODE_BACKUP:
-				xdraw_Computer_Backup(r, clip_r);
+				computer_xdraw_Computer_Backup(r, clip_r);
 				break;
 			case COMP_MODE_OPTIONS:
-				draw_Computer_Prefs(r, clip_r);
+				computer_draw_Computer_Prefs(r, clip_r);
 				break;
 		}
 
@@ -2114,12 +2114,12 @@ static void idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t refresh)
 }
 
 /* ======================================================================
- * Build_Computer_Dialog — construct the widget tree
+ * computer_Build_Computer_Dialog — construct the widget tree
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x83000
 // FUNCTION: TIE98 0x40C220
-static Input* Build_Computer_Dialog(void) {
+static Input* computer_Build_Computer_Dialog(void) {
 #ifdef TIE_MODERN
 	const Rect* backup_rect = active_backup_rect;
 #endif
@@ -2128,9 +2128,9 @@ static Input* Build_Computer_Dialog(void) {
 
 	xrect_Set_Rect(&r, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
 	parent = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
-	xinpattr_Set_Input_Draw_Function(parent, idraw_Computer);
-	xinpattr_Set_Input_User_Function(parent, iuser_Computer);
-	xinpattr_Set_Input_Update_Function(parent, iupdate_Computer);
+	xinpattr_Set_Input_Draw_Function(parent, computer_idraw_Computer);
+	xinpattr_Set_Input_User_Function(parent, computer_iuser_Computer);
+	xinpattr_Set_Input_Update_Function(parent, computer_iupdate_Computer);
 	xinpattr_Show_Input(parent);
 	parent->mouseUsage = allInput;
 	parent->id = 0;
@@ -2138,32 +2138,32 @@ static Input* Build_Computer_Dialog(void) {
 	/* Next Page button (for medals/record) */
 	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(190, 380), TIE_FRONTEND_EDITION(124, 298),
 				   TIE_FRONTEND_EDITION(266, 532), TIE_FRONTEND_EDITION(136, 326));
-	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Info, NULL, 0);
-	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer_Info);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, computer_iuser_Computer_Info, NULL, 0);
+	xinpattr_Set_Input_Draw_Function(inp, computer_idraw_Computer_Info);
 	xinpattr_Hide_Input(inp);
 	next_info_input = inp;
 
 	/* Last Page button */
 	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(104, 208), TIE_FRONTEND_EDITION(124, 298),
 				   TIE_FRONTEND_EDITION(180, 360), TIE_FRONTEND_EDITION(136, 326));
-	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Info, NULL, 1);
-	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer_Info);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, computer_iuser_Computer_Info, NULL, 1);
+	xinpattr_Set_Input_Draw_Function(inp, computer_idraw_Computer_Info);
 	xinpattr_Hide_Input(inp);
 	last_info_input = inp;
 
 	/* Backup button */
 	xrect_Copy_Rect(&r, (Rect*)&backup_rect[5]);
 	xrect_Inset_Rect(&r, 1, 1);
-	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Backup, NULL, 3);
-	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, computer_iuser_Computer_Backup, NULL, 3);
+	xinpattr_Set_Input_Draw_Function(inp, computer_idraw_Computer);
 	xinpattr_Hide_Input(inp);
 	backup_input = inp;
 
 	/* Restore button */
 	xrect_Copy_Rect(&r, (Rect*)&backup_rect[6]);
 	xrect_Inset_Rect(&r, 1, 1);
-	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer_Backup, NULL, 4);
-	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, computer_iuser_Computer_Backup, NULL, 4);
+	xinpattr_Set_Input_Draw_Function(inp, computer_idraw_Computer);
 	xinpattr_Hide_Input(inp);
 	restore_input = inp;
 
@@ -2173,20 +2173,20 @@ static Input* Build_Computer_Dialog(void) {
 		xrect_Set_Rect(&r, 190, 253, 530, 279);
 	else
 		xrect_Set_Rect(&r, 95, 116, 265, 128);
-	TieComputer_AllocOptionsButton(parent, &r, idraw_Computer);
+	TieComputer_AllocOptionsButton(parent, &r, computer_idraw_Computer);
 #endif
 
 	/* OK button (id=1, Exit to DOS) */
 	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(96, 225), TIE_FRONTEND_EDITION(169, 400),
 				   TIE_FRONTEND_EDITION(152, 302), TIE_FRONTEND_EDITION(194, 466));
-	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer, NULL, 1);
-	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, computer_iuser_Computer, NULL, 1);
+	xinpattr_Set_Input_Draw_Function(inp, computer_idraw_Computer);
 
 	/* Cancel button (id=2, Accept/Save) */
 	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(96, 196), TIE_FRONTEND_EDITION(142, 350),
 				   TIE_FRONTEND_EDITION(152, 302), TIE_FRONTEND_EDITION(168, 402));
-	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, iuser_Computer, NULL, 2);
-	xinpattr_Set_Input_Draw_Function(inp, idraw_Computer);
+	inp = (Input*)xbtnpush_Alloc_Button(parent, &r, 0, computer_iuser_Computer, NULL, 2);
+	xinpattr_Set_Input_Draw_Function(inp, computer_idraw_Computer);
 	cancel_input = inp;
 
 	return parent;
@@ -2241,8 +2241,8 @@ int16_t computer_Do_Computer_Dialog(void) {
 		computer_mode = COMP_MODE_OPTIONS;
 		pilot_info_page = 0;
 		pilot_info_num_pages = 1;
-		Init_Computer_Medal();
-		Find_Backup_Pilot_Info();
+		computer_Init_Computer_Medal();
+		computer_Find_Backup_Pilot_Info();
 		memset(computer_actors, 0, sizeof computer_actors);
 		memset(medal_actor, 0, sizeof medal_actor);
 		memset(medal_actor2, 0, sizeof medal_actor2);
@@ -2405,7 +2405,7 @@ int16_t computer_Do_Computer_Dialog(void) {
 			xres_Close_Resource(res_file);
 		}
 
-		the_dialog = Build_Computer_Dialog();
+		the_dialog = computer_Build_Computer_Dialog();
 #ifdef TIE_MODERN
 		if (!the_dialog) {
 			TieComputer_Fail(NULL, "computer dialog");
