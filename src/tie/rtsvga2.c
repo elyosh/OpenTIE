@@ -1,4 +1,5 @@
 #include "tie/rtsvga2.h"
+#include "landru/pal.h" /* xpal_Set_VGA_Palette */
 #include "landru/vesa.h" /* vesa_buff_gbl — the scanout buffer vgapointer aliases */
 #include "tie/edition.h"
 #include "tie/frontend_display_tie98.h"
@@ -184,16 +185,6 @@ int16_t skipcolorvga;
 /* xtrans2.c owns the 512-entry star hash table. */
 
 /* tie.c-ish: color cycle + blank bitmask (demo watdbg puts them in rts/tie). */
-
-/* ------------------------------------------------------------------ */
-/* External platform stubs                                            */
-/* ------------------------------------------------------------------ */
-
-/* Forward flight palette updates to the shared classic framebuffer. */
-// FUNCTION: TIE95 0x8FE4C
-void XPAL_Set_VGA_Palette(uint16_t count, uint16_t start_idx, const uint8_t* rgb) {
-	TieClassicFramebuffer_SetPalette(rgb, (int)start_idx, (int)count);
-}
 
 /* ------------------------------------------------------------------ */
 /* rtsvga2_setcurrentpage (0x4E5D4)                                   */
@@ -491,10 +482,10 @@ void rtsvga2_applyBrightness(const uint8_t* rgb_src, uint8_t* rgb_dst, uint16_t 
 // FUNCTION: TIE95 0x4BEE8
 // FUNCTION: TIE98 0x47AA30
 void rtsvga2_blankVGA(void) {
-	uint8_t zeroes[768];
+	RGBStruct zeroes[256];
 	memset(zeroes, 0, sizeof zeroes);
 	colorcycleflag = 0;
-	XPAL_Set_VGA_Palette(256, 0, zeroes);
+	xpal_Set_VGA_Palette(zeroes, 0, 256);
 	blankcondition |= 1u;
 }
 
@@ -510,7 +501,7 @@ void rtsvga2_unblankVGA(void) {
 	uint8_t scaled[768];
 	colorcycleflag = 0;
 	rtsvga2_applyBrightness(rtsvga2_vgapalette, scaled, 0, 256);
-	XPAL_Set_VGA_Palette(256, 0, scaled);
+	xpal_Set_VGA_Palette((RGBStruct*)scaled, 0, 256);
 	blankcondition &= ~1u;
 	colorcycleflag = 1;
 }
