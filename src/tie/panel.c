@@ -1062,21 +1062,21 @@ void panel_updateshields(void) {
 	shield_pts = spec_data[pstate.player_spec_num].shield_points;
 	if (!mission.difficulty)
 		shield_pts *= 2;
-	if (shield_hp < shield_pts) {
-		pct = math2_percentage((uint16_t)shield_hp, (uint16_t)shield_pts);
-		hi_leds = 0;
-		lo_leds = math2_fraction(9, pct);
-	} else {
+	if (shield_hp >= shield_pts) {
 		pct = math2_percentage((uint16_t)(shield_hp - shield_pts), (uint16_t)shield_pts);
 		lo_leds = 9;
 		hi_leds = math2_fraction(9, pct);
+	} else {
+		pct = math2_percentage((uint16_t)shield_hp, (uint16_t)shield_pts);
+		hi_leds = 0;
+		lo_leds = math2_fraction(9, pct);
 	}
 	/* Damage flash. */
 	if (timers[TIMER_SHIELD_FLASH] && shieldblink == 0) {
-		if (hi_leds)
-			hi_leds = 10;
-		else
+		if (hi_leds == 0)
 			lo_leds = 10;
+		else
+			hi_leds = 10;
 	}
 	panel_updatemonolever(TIE_HUDI_SHIELD_FWD_NORMAL, (uint16_t)(uint8_t)shieldcolor[lo_leds]);
 	panel_updatemonolever(TIE_HUDI_SHIELD_FWD_OVER, (uint16_t)(uint8_t)shieldcolor[hi_leds]);
@@ -1089,21 +1089,21 @@ void panel_updateshields(void) {
 	shield_pts = spec_data[pstate.player_spec_num].shield_points;
 	if (!mission.difficulty)
 		shield_pts *= 2;
-	if (shield_hp < shield_pts) {
-		pct = math2_percentage((uint16_t)shield_hp, (uint16_t)shield_pts);
-		hi_leds = 0;
-		lo_leds = math2_fraction(9, pct);
-	} else {
+	if (shield_hp >= shield_pts) {
 		pct = math2_percentage((uint16_t)(shield_hp - shield_pts), (uint16_t)shield_pts);
 		lo_leds = 9;
 		hi_leds = math2_fraction(9, pct);
+	} else {
+		pct = math2_percentage((uint16_t)shield_hp, (uint16_t)shield_pts);
+		hi_leds = 0;
+		lo_leds = math2_fraction(9, pct);
 	}
 	/* Damage flash. */
 	if (timers[TIMER_SHIELD_FLASH] && shieldblink == 1) {
-		if (hi_leds)
-			hi_leds = 10;
-		else
+		if (hi_leds == 0)
 			lo_leds = 10;
+		else
+			hi_leds = 10;
 	}
 	panel_updatemonolever(TIE_HUDI_SHIELD_REAR_NORMAL, (uint16_t)(uint8_t)shieldcolor[lo_leds]);
 	panel_updatemonolever(TIE_HUDI_SHIELD_REAR_OVER, (uint16_t)(uint8_t)shieldcolor[hi_leds]);
@@ -1112,11 +1112,10 @@ void panel_updateshields(void) {
 		balance_val = 3;
 	} else {
 		uint16_t third = (uint16_t)(pstate.player_craft->hull_max / 3);
-		if (third == 0) {
-			panel_updatelever(TIE_HUDI_HULL_DAMAGE_LEVER, 2);
-			return;
-		}
-		balance_val = (uint16_t)(2 - pstate.player_craft->hull_damage / third);
+		if (third == 0)
+			balance_val = 2;
+		else
+			balance_val = (uint16_t)(2 - pstate.player_craft->hull_damage / third);
 	}
 	panel_updatelever(TIE_HUDI_HULL_DAMAGE_LEVER, balance_val);
 }
