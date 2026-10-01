@@ -88,7 +88,7 @@ static Film* brief_film;
 static void brief_user_Title(Actor* actor, int32_t time);
 static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								int16_t refresh);
-static void brief_user_Door(Actor* actor, int32_t time);
+static int brief_user_Door(Actor* actor, int32_t time);
 static Input* brief_Build_Notice(const char* text);
 static void brief_idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh);
 static void brief_iuser_Notice(Input* input, int32_t time);
@@ -336,7 +336,7 @@ static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t 
 
 // FUNCTION: TIE95 0x735D4
 // FUNCTION: TIE98 0x4069E0
-static void brief_user_Door(Actor* actor, int32_t time) {
+static int brief_user_Door(Actor* actor, int32_t time) {
 	if (!time) {
 		actor->var2 = 0;
 		actor->var1 = 0;
@@ -355,6 +355,7 @@ static void brief_user_Door(Actor* actor, int32_t time) {
 				soundext_Play_SFX(sfxSmallDoorShut, 80);
 		}
 	}
+	return 1;
 }
 
 /* ================================================================
