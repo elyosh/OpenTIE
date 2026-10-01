@@ -2032,7 +2032,7 @@ static const uint8_t cdmusic_start_sec[4] = { 0, 1, 40, 52 };
 void tie_updatemusic_tie98(void) {
 	uint32_t now;
 	if (inflight_music_vol == 0 || musicenabled == 0) {
-		CDAUDIO_Stop_Track();
+		cdaudio_Stop_Track();
 		cdmusic_ms_remaining = 0;
 		return;
 	}
@@ -2043,8 +2043,8 @@ void tie_updatemusic_tie98(void) {
 		else if (timers[TIMER_PRI_COMPLETE] || timers[TIMER_SEC_COMPLETE])
 			kind = 3;
 		if (kind) {
-			CDAUDIO_Play_Track(kind, 0, 0);
-			cdmusic_ms_remaining = CDAUDIO_Track_Length_Ms(kind);
+			cdaudio_Play_Track(kind, 0, 0);
+			cdmusic_ms_remaining = cdaudio_Track_Length_Ms(kind);
 			cdmusic_kind = kind;
 			cdmusic_switch_latched = 1;
 			return;
@@ -2054,8 +2054,8 @@ void tie_updatemusic_tie98(void) {
 	cdmusic_ms_remaining -= (int32_t)(now - cdmusic_last_ms);
 	cdmusic_last_ms = now;
 	if (cdmusic_ms_remaining <= 0) {
-		CDAUDIO_Play_Track(2, 0, 0);
-		cdmusic_ms_remaining = CDAUDIO_Track_Length_Ms(2);
+		cdaudio_Play_Track(2, 0, 0);
+		cdmusic_ms_remaining = cdaudio_Track_Length_Ms(2);
 		cdmusic_last_ms = TieMusicPolicy_NowMs();
 		cdmusic_kind = 2;
 	}
@@ -2212,7 +2212,7 @@ static bool tie_doframe_tie98(void) {
 		if (blastcount)
 			fsfx_checkblastqueue();
 		fsfx_checktieflyby();
-		FSFX_UpdatePlayerEngineSound();
+		fsfx_UpdatePlayerEngineSound();
 	}
 
 	if (rendered) {
@@ -3038,11 +3038,11 @@ void tie_simulator(int replay_mode) {
 #endif
 			{
 				cdmusic_switch_latched = 0;
-				if (CDAUDIO_Open_Device()) {
+				if (cdaudio_Open_Device()) {
 					const int start = math2_getrandomalt() & 3;
-					CDAUDIO_Set_Volume((uint16_t)(0xFFFF * inflight_music_vol / 16));
-					CDAUDIO_Play_Track(2, cdmusic_start_min[start], cdmusic_start_sec[start]);
-					cdmusic_ms_remaining = CDAUDIO_Track_Length_Ms(2) -
+					cdaudio_Set_Volume((uint16_t)(0xFFFF * inflight_music_vol / 16));
+					cdaudio_Play_Track(2, cdmusic_start_min[start], cdmusic_start_sec[start]);
+					cdmusic_ms_remaining = cdaudio_Track_Length_Ms(2) -
 										   1000 * (cdmusic_start_sec[start] + 60 * cdmusic_start_min[start]);
 					cdmusic_last_ms = TieMusicPolicy_NowMs();
 					cdmusic_kind = 2;
@@ -3068,10 +3068,10 @@ void tie_simulator(int replay_mode) {
 		if (continuation->phase == TIE_SIM_PHASE_AFTER_MISSION) {
 			TIE_FLIGHT_TRACE_END_MISSION();
 			if (TieMusicPolicy_UsesTie98())
-				CDAUDIO_Close_Device();
+				cdaudio_Close_Device();
 #else
 #ifdef TIE98
-		CDAUDIO_Close_Device();
+		cdaudio_Close_Device();
 #endif
 		{
 #endif

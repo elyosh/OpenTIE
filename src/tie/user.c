@@ -1794,7 +1794,7 @@ int32_t user_inflightinfo(int32_t screen_id) {
 		screen = screen_id;
 		if (TIE_FLIGHT_TIE98) {
 			mapflag = 1;
-			FSFX_UpdatePlayerEngineSound();
+			fsfx_UpdatePlayerEngineSound();
 			mapflag = 0;
 		}
 		imuse_set_master_vol(im, 0);

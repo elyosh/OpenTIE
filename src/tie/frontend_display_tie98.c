@@ -1183,7 +1183,7 @@ HRESULT FrontendDisplay_BlitOffscreenToRenderSurface(void) {
 }
 
 // FUNCTION: TIE98 0x49BE50
-HRESULT DDRAW_Present_Landru_Frame(void) {
+HRESULT ddraw_Present_Landru_Frame(void) {
 	Tie98Rect source, destination;
 
 	DDBLTFX effects;

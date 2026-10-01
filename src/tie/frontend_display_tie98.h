@@ -65,7 +65,7 @@ HRESULT FrontendDisplay_PresentFrame(void);
 HRESULT FrontendDisplay_PresentFrontSurface(void);
 HRESULT FrontendDisplay_ClearAndPresentFrame(void);
 HRESULT FrontendDisplay_BlitOffscreenToRenderSurface(void);
-HRESULT DDRAW_Present_Landru_Frame(void);
+HRESULT ddraw_Present_Landru_Frame(void);
 
 #ifdef __cplusplus
 }

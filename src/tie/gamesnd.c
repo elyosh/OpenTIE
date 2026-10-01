@@ -99,7 +99,7 @@ void gamesnd_Set_CD_Volume(int volume) {
 		volume = 0;
 	if (volume > 16)
 		volume = 16;
-	CDAUDIO_Set_Volume((uint32_t)(0xFFFFu * (uint32_t)volume / 16u));
+	cdaudio_Set_Volume((uint32_t)(0xFFFFu * (uint32_t)volume / 16u));
 }
 
 /* Transition the already-initialized iMUSE engine from front-end sound

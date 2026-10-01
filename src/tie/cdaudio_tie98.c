@@ -17,7 +17,7 @@ static int32_t cdaudio_saved_aux_volume = -1;
 static int cdaudio_playing_track;
 
 // FUNCTION: TIE98 0x46F5B0
-int CDAUDIO_Open_Device(void) {
+int cdaudio_Open_Device(void) {
 	MCI_OPEN_PARMSA open_params = { 0 };
 	MCI_SET_PARMS set_params = { 0 };
 	MCI_STATUS_PARMS status = { 0 };
@@ -28,7 +28,7 @@ int CDAUDIO_Open_Device(void) {
 	if (!g_flightWindowHandle)
 		return 0;
 	if (cdaudio_device_id)
-		CDAUDIO_Close_Device();
+		cdaudio_Close_Device();
 	memset(&cdaudio_track_lengths[1], 0, 0x78);
 	cdaudio_track_count = 0;
 	cdaudio_playing_track = 0;
@@ -71,7 +71,7 @@ int CDAUDIO_Open_Device(void) {
 }
 
 // FUNCTION: TIE98 0x46F7A0
-int CDAUDIO_Play_Track(int track, int start_minute, int start_second) {
+int cdaudio_Play_Track(int track, int start_minute, int start_second) {
 	MCI_PLAY_PARMS play = { 0 };
 	uint32_t length;
 	if (!cdaudio_device_id || track < 1 || track > cdaudio_track_count)
@@ -88,7 +88,7 @@ int CDAUDIO_Play_Track(int track, int start_minute, int start_second) {
 }
 
 // FUNCTION: TIE98 0x46F870
-void CDAUDIO_Stop_Track(void) {
+void cdaudio_Stop_Track(void) {
 	if (!cdaudio_device_id || !cdaudio_playing_track)
 		return;
 	mciSendCommandA(cdaudio_device_id, MCI_STOP, 0, 0);
@@ -96,9 +96,9 @@ void CDAUDIO_Stop_Track(void) {
 }
 
 // FUNCTION: TIE98 0x46F8C0
-void CDAUDIO_Close_Device(void) {
+void cdaudio_Close_Device(void) {
 	if (cdaudio_device_id) {
-		CDAUDIO_Stop_Track();
+		cdaudio_Stop_Track();
 		mciSendCommandA(cdaudio_device_id, MCI_CLOSE, MCI_WAIT, 0);
 		cdaudio_device_id = 0;
 	}
@@ -119,7 +119,7 @@ void CDAUDIO_Close_Device(void) {
 }
 
 // FUNCTION: TIE98 0x46F9F0
-int32_t CDAUDIO_Track_Length_Ms(int track) {
+int32_t cdaudio_Track_Length_Ms(int track) {
 	uint32_t length;
 	if (track < 1 || track > cdaudio_track_count)
 		return 0;
@@ -129,7 +129,7 @@ int32_t CDAUDIO_Track_Length_Ms(int track) {
 }
 
 // FUNCTION: TIE98 0x46FA70
-void CDAUDIO_Set_Volume(uint32_t volume) {
+void cdaudio_Set_Volume(uint32_t volume) {
 	uint32_t i;
 
 	if (volume > UINT16_MAX)

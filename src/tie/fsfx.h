@@ -190,7 +190,7 @@ extern const char* sfxgroupnameptrs[5];
 /* TIE98 recovered player-engine controller state and entry point. */
 extern uint8_t g_playerEngineSoundUpdateEnabled;
 extern int32_t g_engineSoundPreviousPlayerSpecies;
-void FSFX_UpdatePlayerEngineSound(void);
+void fsfx_UpdatePlayerEngineSound(void);
 
 #ifdef __cplusplus
 }

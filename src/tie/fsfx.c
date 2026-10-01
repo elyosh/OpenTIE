@@ -141,7 +141,7 @@ enum {
 };
 
 // FUNCTION: TIE98 0x422760
-void FSFX_UpdatePlayerEngineSound(void) {
+void fsfx_UpdatePlayerEngineSound(void) {
 	const TieFlightProfile* profile = TieProfile_Flight();
 	uint16_t sound_id;
 	int16_t species;
@@ -194,8 +194,8 @@ void FSFX_UpdatePlayerEngineSound(void) {
 				previous_id = FSFX_PLAYER_ENGINE_REBEL_ID;
 				break;
 		}
-		if (previous_id != UINT16_MAX && LOLEVEL_ImGetParam(previous_id, 0x100) != 0)
-			(void)LOLEVEL_ImStopSound(previous_id);
+		if (previous_id != UINT16_MAX && lolevel_ImGetParam(previous_id, 0x100) != 0)
+			(void)lolevel_ImStopSound(previous_id);
 		return;
 	}
 
@@ -203,8 +203,8 @@ void FSFX_UpdatePlayerEngineSound(void) {
 	player = &objects[pstate.object_idx];
 	craft = player->craft_ptr;
 	if (!craft || pstate.hyperin_state == 1 || !(craft->status_flags & 0x0040u)) {
-		if (LOLEVEL_ImGetParam(sound_id, 0x100) != 0)
-			(void)LOLEVEL_ImStopSound(sound_id);
+		if (lolevel_ImGetParam(sound_id, 0x100) != 0)
+			(void)lolevel_ImStopSound(sound_id);
 		return;
 	}
 
@@ -218,14 +218,14 @@ void FSFX_UpdatePlayerEngineSound(void) {
 	if (!name)
 		return;
 
-	if (LOLEVEL_ImGetParam(sound_id, 0x100) != 0) {
-		(void)LOLEVEL_ImSetParamByName(name, 0x777, frequency);
+	if (lolevel_ImGetParam(sound_id, 0x100) != 0) {
+		(void)lolevel_ImSetParamByName(name, 0x777, frequency);
 		if (FrontendSound_GetVolume(name) != volume)
-			(void)LOLEVEL_ImSetParamByName(name, 0x600, volume);
+			(void)lolevel_ImSetParamByName(name, 0x600, volume);
 		return;
 	}
 
-	(void)LOLEVEL_ImSetParamByName(name, 0x777, frequency);
+	(void)lolevel_ImSetParamByName(name, 0x777, frequency);
 	(void)FrontendSound_QueueSound(name, 1, 1, 127, volume, 64, 0);
 }
 

@@ -282,7 +282,7 @@ static void TieLandruAdapter_HostVideoUnlock(void* userdata) {
 
 static void TieLandruAdapter_HostVideoCopyToPresentSurface(void* userdata) {
 	(void)userdata;
-	if (DDRAW_Present_Landru_Frame() == DX_DD_OK)
+	if (ddraw_Present_Landru_Frame() == DX_DD_OK)
 		TieClassicFramebuffer_CapturePresentedVga();
 }
 

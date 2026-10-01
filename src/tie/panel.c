@@ -3256,8 +3256,8 @@ void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int c
 }
 
 // FUNCTION: TIE98 0x463400
-// PANEL_Update3DCrtIfVisible
-void PANEL_Update3DCrtIfVisible(void) {
+// panel_Update3DCrtIfVisible
+void panel_Update3DCrtIfVisible(void) {
 	if (pstate.target_obj_idx == 0xffff)
 		return;
 	if (pstate.target_obj_idx >= OBJ_REF_STATIC_BASE) {

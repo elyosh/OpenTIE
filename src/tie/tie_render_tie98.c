@@ -327,7 +327,7 @@ void tie_updatescreen_tie98(void) {
 	if (g_useHardware3D)
 		Renderer_CopyDirtyRectsToHardwareSurface();
 	if (!replayviewmode)
-		PANEL_Update3DCrtIfVisible();
+		panel_Update3DCrtIfVisible();
 	deepspacecolor = 0;
 	final_draw_ticks = (uint16_t)xtimer_time_elapsed();
 	g_flightDrawToOffscreenSurface = 1;

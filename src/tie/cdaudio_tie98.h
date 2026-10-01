@@ -7,12 +7,12 @@
 extern "C" {
 #endif
 
-int CDAUDIO_Open_Device(void);
-int CDAUDIO_Play_Track(int track, int start_minute, int start_second);
-void CDAUDIO_Stop_Track(void);
-void CDAUDIO_Close_Device(void);
-int32_t CDAUDIO_Track_Length_Ms(int track);
-void CDAUDIO_Set_Volume(uint32_t volume);
+int cdaudio_Open_Device(void);
+int cdaudio_Play_Track(int track, int start_minute, int start_second);
+void cdaudio_Stop_Track(void);
+void cdaudio_Close_Device(void);
+int32_t cdaudio_Track_Length_Ms(int track);
+void cdaudio_Set_Volume(uint32_t volume);
 
 #ifdef __cplusplus
 }

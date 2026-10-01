@@ -235,7 +235,7 @@ uint8_t curgenus; /* genus byte cached during anim tick */
 /* Static-ref encoding used by anim_add_bitmap_draw: static refs use
  * OBJ_REF_STATIC_BASE = 0x3800 (high byte 0x38). */
 
-/* lolevel iMUSE -- stop a sound. The binary's LOLEVEL_ImStopSound takes
+/* lolevel iMUSE -- stop a sound. The binary's lolevel_ImStopSound takes
  * the sound 'pointer' as an integer (sound id 48 here). */
 
 /* ====================================================================== *

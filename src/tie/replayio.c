@@ -609,7 +609,7 @@ void replayio_replayscreen(void) {
 		if (TIE_FLIGHT_TIE98) {
 			uint8_t saved_mapflag = mapflag;
 			mapflag = 1;
-			FSFX_UpdatePlayerEngineSound();
+			fsfx_UpdatePlayerEngineSound();
 			mapflag = saved_mapflag;
 		}
 		replayvolume = (int16_t)imuse_get_master_vol(im);
