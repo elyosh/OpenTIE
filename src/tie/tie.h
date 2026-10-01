@@ -1013,8 +1013,6 @@ typedef struct PlayerInFlightState {
 	/* +0x02A */ int16_t prev_x_roll_mode; /* 2 */
 	/* +0x02C */ int16_t axis_x_accum;     /* 2 */
 	/* +0x02E */ int16_t axis_y_accum;     /* 2 */
-	/* Analog roll-axis slew accumulator, independent of x_roll_mode. */
-	int16_t axis_roll_accum;
 	/* +0x030 */ int16_t prev_inputbuttons;             /* 2 */
 	/* +0x032 */ uint16_t double_tap_timer;             /* 2 */
 	/* +0x034 */ int16_t player_laser_fired;            /* 2 */
@@ -1037,7 +1035,13 @@ typedef struct PlayerInFlightState {
 	/* +0x11A */ uint8_t friendly_kill_count;           /* 1 */
 	/* +0x11B */ uint8_t _pad_friendly[7];              /* 7 */
 	/* +0x122 */ int16_t radio_target;                  /* 2 */
-} PlayerInFlightState;                                  /* 0x124 = 292 bytes */
+#ifdef TIE_MODERN
+	/* PORT: analog roll-axis slew accumulator, independent of x_roll_mode.
+	 * Appended after the original 0x124-byte layout; kept in pstate so
+	 * replays capture it. */
+	int16_t axis_roll_accum;
+#endif
+} PlayerInFlightState; /* 0x124 = 292 bytes in the original */
 #ifdef __WATCOMC__
 #pragma pack()
 #else

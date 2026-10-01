@@ -155,7 +155,7 @@ uint32_t savearraysizes[68] = {
 	206, /* [6] DOS retail saved prefix */
 #endif
 	sizeof(mission),                /* [ 7] */
-	sizeof(pstate),                 /* [ 8] = 292 (300 on 64-bit) */
+	sizeof(pstate),                 /* [ 8] = 292; 294 with the port's roll accumulator (302 on 64-bit) */
 	sizeof(music_state),            /* [ 9] = 2 */
 	sizeof(music_intensity),        /* [10] = 2 */
 	sizeof(musicflag),              /* [11] = 1 */

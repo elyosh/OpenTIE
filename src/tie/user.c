@@ -3379,12 +3379,16 @@ void user_inputforplane(void) {
 	{
 		int16_t x_input;
 		int16_t y_input;
+#ifdef TIE_MODERN
 		int16_t roll_input;
+#endif
 		int x_roll_mode;
 		TieUserTimingState* high_rate;
 		int16_t x_per_tick;
 		int16_t y_per_tick;
+#ifdef TIE_MODERN
 		int16_t roll_per_tick;
+#endif
 
 		if (camera.view_camera_control) {
 			TieUserTimingState* high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_User() : NULL;
@@ -3451,16 +3455,21 @@ void user_inputforplane(void) {
 			y_input = (int16_t)(((math2_percentage(pstate.player_craft->pitch_rate_cache, 0x1000u) >> 1) *
 								 (uint16_t)inputdeltay) >>
 								15);
-			/* Analog roll input from the second-stick axis. Uses roll_rate_cache
-			 * like the X-input modifier path so a fully-deflected stick produces
-			 * the same per-tick rotation the held-button roll mode produces. */
+#ifdef TIE_MODERN
+			/* PORT: analog roll input from the second-stick axis. Uses
+			 * roll_rate_cache like the X-input modifier path so a fully-deflected
+			 * stick produces the same per-tick rotation the held-button roll mode
+			 * produces. */
 			roll_input = (int16_t)(((math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1) *
 									(uint16_t)inputdeltaroll) >>
 								   15);
+#endif
 			if ((pstate.player_craft->status_flags & 0x20) == 0) {
 				x_input = 0;
 				y_input = 0;
+#ifdef TIE_MODERN
 				roll_input = 0;
+#endif
 			}
 			x_roll_mode = (inputbuttons & 0xE) == 2;
 
@@ -3478,10 +3487,12 @@ void user_inputforplane(void) {
 			}
 			pstate.prev_x_roll_mode = (int16_t)x_roll_mode;
 
-			/* Roll accumulator slews independently of the modifier-button latch
-			 * — pulling the second stick should respond regardless of whether
-			 * the player is also in held-button X-roll mode. */
+#ifdef TIE_MODERN
+			/* PORT: the roll accumulator slews independently of the modifier-button
+			 * latch, so the second stick responds whether or not the player is
+			 * also in held-button X-roll mode. */
 			pstate.axis_roll_accum = TieUserTiming_SlewAxis(pstate.axis_roll_accum, roll_input, 2);
+#endif
 
 			high_rate = TieFlightTiming_IsHighRate() ? TieFlightTimingState_User() : NULL;
 			x_per_tick = high_rate ? TieUserTiming_ScaleValue(pstate.axis_x_accum,
@@ -3490,13 +3501,17 @@ void user_inputforplane(void) {
 			y_per_tick = high_rate ? TieUserTiming_ScaleValue(pstate.axis_y_accum,
 															  &high_rate->flight_axis_remainder[1])
 								   : (int16_t)math2_ABoverC32(pstate.axis_y_accum, frameticks, 236);
+#ifdef TIE_MODERN
 			roll_per_tick = high_rate ? TieUserTiming_ScaleValue(pstate.axis_roll_accum,
 																 &high_rate->flight_axis_remainder[2])
 									  : (int16_t)math2_ABoverC32(pstate.axis_roll_accum, frameticks, 236);
+#endif
 			if ((pstate.player_craft->status_flags & 0x20) == 0) {
 				x_per_tick = 0;
 				y_per_tick = 0;
+#ifdef TIE_MODERN
 				roll_per_tick = 0;
+#endif
 			}
 
 			if (x_roll_mode) {
@@ -3550,20 +3565,26 @@ void user_inputforplane(void) {
 					pstate.player->orient_dirty = 1;
 					pstate.player->move_dirty = 1;
 				}
-				/* Auto-bank-into-turn: only when the player isn't supplying
-				 * their own analog roll input. Otherwise the auto component
-				 * fights the stick. */
+				/* Auto-bank-into-turn. PORT: suppressed while the player supplies
+				 * analog roll input, so the auto component does not fight the
+				 * stick. */
+#ifdef TIE_MODERN
 				if (x_per_tick && !roll_per_tick)
+#else
+				if (x_per_tick)
+#endif
 					objects[pstate.object_idx].roll -= x_per_tick;
 			}
 
-			/* Apply analog roll on top of either branch (same 2× gain as the
-			 * held-button mode for parity). */
+#ifdef TIE_MODERN
+			/* PORT: apply analog roll on top of either branch (same 2x gain as
+			 * the held-button mode for parity). */
 			if (roll_per_tick) {
 				objects[pstate.object_idx].roll -= (int16_t)(2 * roll_per_tick);
 				pstate.player->orient_dirty = 1;
 				pstate.player->move_dirty = 1;
 			}
+#endif
 		}
 	}
 	TieUserTiming_ApplyThrottleCommand();

@@ -714,7 +714,9 @@ int16_t create_createmission(void) {
 	pstate.prev_x_roll_mode = 0;
 	pstate.axis_x_accum = 0;
 	pstate.axis_y_accum = 0;
+#ifdef TIE_MODERN
 	pstate.axis_roll_accum = 0;
+#endif
 	pstate.prev_inputbuttons = 0;
 	pstate.double_tap_timer = 0;
 

@@ -358,7 +358,12 @@ EFGStruct fg_array[48];
  * pointers make host replay files pointer-width dependent. */
 // GLOBAL: TIE95 0xEB158
 PlayerInFlightState pstate;
+#ifdef TIE_MODERN
+/* The port appends axis_roll_accum after the original 0x124 bytes. */
 typedef char CheckPlayerInFlightStateSize[sizeof(pstate) == 294 + 2 * (sizeof(void*) - 4) ? 1 : -1];
+#else
+typedef char CheckPlayerInFlightStateSize[sizeof(pstate) == 292 + 2 * (sizeof(void*) - 4) ? 1 : -1];
+#endif
 
 // GLOBAL: TIE95 0xE3534
 MissionFile mission_file_header;
