@@ -242,7 +242,8 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 	 * / projectilelife are keyed by (species - WEAPON_SPECIES_BASE).
 	 * Callers guarantee species in [137, 154] — matches retail contract;
 	 * no bounds check. */
-	objects[slot].current_speed = (int16_t)(shooter->current_speed + projectilevelocity[projectile_type - WEAPON_SPECIES_BASE]);
+	objects[slot].current_speed =
+		(int16_t)(shooter->current_speed + projectilevelocity[projectile_type - WEAPON_SPECIES_BASE]);
 
 	/* Cache initial speed into warheads[slot-NUM_CRAFTS].min_speed so
 	 * MOVE's homing floor has a value even before the warhead record is
@@ -274,15 +275,17 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 	objects[slot].world_z_prev = world_z;
 
 	if (projectile_is_warhead_type[projectile_type - WEAPON_SPECIES_BASE] &&
-	    (shooter->genus == 4 || shooter->genus == 3 || shooter->genus == 5)) {
+		(shooter->genus == 4 || shooter->genus == 3 || shooter->genus == 5)) {
 		/* Capship turret branch: hp_y < 0 means the gun is mounted on the
 		 * underside -> projectile points straight down (pitch 0x8000) and
 		 * world_z is offset by -length instead of +length. */
 		if (hp_y >= 0) {
-			world_z += (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE];
+			world_z += (int16_t)TIE_FLIGHT_EDITION(
+				projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE];
 			objects[slot].pitch = 0;
 		} else {
-			world_z -= (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE];
+			world_z -= (int16_t)TIE_FLIGHT_EDITION(
+				projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE];
 			objects[slot].pitch = (int16_t)0x8000;
 		}
 		objects[slot].orient_dirty = 1;
@@ -294,9 +297,18 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 		/* Normal branch: inherit shooter's full rotation basis and
 		 * advance the spawn point by muzzle_length along the forward
 		 * vector (each axis scaled by fwd_component * length / 2^15). */
-		world_x += ((int32_t)(int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE] * shooter->fwd_x) >> 15;
-		world_y += ((int32_t)(int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE] * shooter->fwd_y) >> 15;
-		world_z += ((int32_t)(int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE] * shooter->fwd_z) >> 15;
+		world_x += ((int32_t)(int16_t)TIE_FLIGHT_EDITION(
+						projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE] *
+					shooter->fwd_x) >>
+				   15;
+		world_y += ((int32_t)(int16_t)TIE_FLIGHT_EDITION(
+						projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE] *
+					shooter->fwd_y) >>
+				   15;
+		world_z += ((int32_t)(int16_t)TIE_FLIGHT_EDITION(
+						projectilelength, tie98_projectilelength)[projectile_type - WEAPON_SPECIES_BASE] *
+					shooter->fwd_z) >>
+				   15;
 
 		objects[slot].world_x = world_x;
 		objects[slot].world_z = world_z;
@@ -427,7 +439,8 @@ uint16_t laser_firemissile(uint16_t shooter_obj_idx, uint16_t weapon_slot_idx, u
 	uint16_t wh = 0xFFFF;
 
 	/* Need a loaded weapon rack with ammo left. */
-	if (craftptr->weapon_slots[weapon_slot_idx].type != 0 && craftptr->weapon_slots[weapon_slot_idx].ammo > 0) {
+	if (craftptr->weapon_slots[weapon_slot_idx].type != 0 &&
+		craftptr->weapon_slots[weapon_slot_idx].ammo > 0) {
 		wh = laser_createprojectile(shooter_obj_idx, weapon_slot_idx, projectile_type);
 		if (wh != (uint16_t)-1) {
 			/* Left/right tube toggle (only meaningful for group 0/1 racks). */
@@ -497,29 +510,31 @@ void laser_firelasersystem(uint16_t shooter_obj_idx, uint16_t group_idx) {
 	 */
 	shots_fired = 0;
 	switch (craftptr->laser_owner_player[group_idx]) {
-	case 3:
-		start_slot = spec_data[species_idx].laser_start[group_idx];
-		end_slot = spec_data[species_idx].laser_end[group_idx];
-		shots_remaining = end_slot - start_slot + 1;
-		slot_stride = 1;
-		break;
-	case 1:
-		start_slot = craftptr->laser_first_slot[group_idx];
-		end_slot = start_slot;
-		if (++craftptr->laser_first_slot[group_idx] > spec_data[species_idx].laser_end[group_idx])
-			craftptr->laser_first_slot[group_idx] = spec_data[species_idx].laser_start[group_idx];
-		shots_remaining = 1;
-		slot_stride = 1;
-		break;
-	case 2:
-		start_slot = craftptr->laser_first_slot[group_idx];
-		craftptr->laser_first_slot[group_idx] = (uint8_t)(start_slot ^ 1);
-		if (craftptr->laser_first_slot[group_idx] > spec_data[species_idx].laser_end[group_idx])
-			craftptr->laser_first_slot[group_idx] = spec_data[species_idx].laser_start[group_idx];
-		end_slot = spec_data[species_idx].laser_end[group_idx];
-		shots_remaining = (spec_data[species_idx].laser_end[group_idx] - spec_data[species_idx].laser_start[group_idx] + 1) / 2;
-		slot_stride = 2;
-		break;
+		case 3:
+			start_slot = spec_data[species_idx].laser_start[group_idx];
+			end_slot = spec_data[species_idx].laser_end[group_idx];
+			shots_remaining = end_slot - start_slot + 1;
+			slot_stride = 1;
+			break;
+		case 1:
+			start_slot = craftptr->laser_first_slot[group_idx];
+			end_slot = start_slot;
+			if (++craftptr->laser_first_slot[group_idx] > spec_data[species_idx].laser_end[group_idx])
+				craftptr->laser_first_slot[group_idx] = spec_data[species_idx].laser_start[group_idx];
+			shots_remaining = 1;
+			slot_stride = 1;
+			break;
+		case 2:
+			start_slot = craftptr->laser_first_slot[group_idx];
+			craftptr->laser_first_slot[group_idx] = (uint8_t)(start_slot ^ 1);
+			if (craftptr->laser_first_slot[group_idx] > spec_data[species_idx].laser_end[group_idx])
+				craftptr->laser_first_slot[group_idx] = spec_data[species_idx].laser_start[group_idx];
+			end_slot = spec_data[species_idx].laser_end[group_idx];
+			shots_remaining = (spec_data[species_idx].laser_end[group_idx] -
+							   spec_data[species_idx].laser_start[group_idx] + 1) /
+							  2;
+			slot_stride = 2;
+			break;
 	}
 
 	for (i = start_slot; i <= end_slot; i += slot_stride) {

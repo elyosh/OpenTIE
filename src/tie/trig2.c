@@ -242,9 +242,7 @@ int32_t trig2_sinedwordmult(int32_t val, int32_t angle) {
 }
 
 // FUNCTION: TIE95 0x5BF2C
-int32_t trig2_cosinedwordmult(int32_t val, int32_t angle) {
-	return trig2_sinedwordmult(val, angle + 0x4000);
-}
+int32_t trig2_cosinedwordmult(int32_t val, int32_t angle) { return trig2_sinedwordmult(val, angle + 0x4000); }
 
 /* ------------------------------------------------------------------ */
 
@@ -410,7 +408,9 @@ void trig2_calcarctan(int32_t a, int32_t b, int16_t* out_angle, int16_t* out_rat
 
 	*out_ratio = (int16_t)b;
 	*out_angle = arctantable[(uint16_t)*out_ratio + 1];
-	*out_angle = (int16_t)(((uint32_t)(uint16_t)(*out_angle - arctantable[(uint16_t)*out_ratio]) * (frac & 0xFF00)) >> 16);
+	*out_angle =
+		(int16_t)(((uint32_t)(uint16_t)(*out_angle - arctantable[(uint16_t)*out_ratio]) * (frac & 0xFF00)) >>
+				  16);
 	*out_angle += arctantable[(uint16_t)*out_ratio];
 	if (trig2_signswap) {
 		*out_angle = -*out_angle;

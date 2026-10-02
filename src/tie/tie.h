@@ -40,10 +40,10 @@ typedef struct {
 	 * used by rotscale_preparecolor for this species' bitmap frames.
 	 * For planets, set from planetpalptrs[special_flag] at mission load. */
 	void* bitmap_data;
-	uint8_t side; /* binary +0x12: IFF side (0=hostile, 1=imperial, 2=neutral); TIE98 bit 0x40: per-object
-					 model variant */
-	uint8_t spec_num;  /* binary +0x13: species/spec number */
-	uint8_t lfd_file;  /* binary +0x14: which LFD file (0-2) */
+	uint8_t side;     /* binary +0x12: IFF side (0=hostile, 1=imperial, 2=neutral); TIE98 bit 0x40: per-object
+						 model variant */
+	uint8_t spec_num; /* binary +0x13: species/spec number */
+	uint8_t lfd_file; /* binary +0x14: which LFD file (0-2) */
 	uint8_t lfd_entry; /* binary +0x15: entry index within LFD */
 } SpeciesEntry;
 
@@ -1009,15 +1009,15 @@ typedef struct PlayerInFlightState {
 	 * and by the SPACE-confirm handler in user_space_confirm. Writers:
 	 * laser_warhead_lock, msg_messageupdate-driven prompts. Reads:
 	 * msg.c handler, user.c SPACE handler. */
-	/* +0x028 */ int16_t msg_arg_obj_idx;  /* 2 */
-										   /* +0x02A: previous-frame snapshot of x_roll_mode, kept here so
-											* user_update can detect the frame the player toggles roll-axis
-											* mapping and reset the input slew accumulators. The binary packed
-											* this into the high 16 of msg_dword purely for memory compactness;
-											* splitting clarifies that the two halves are unrelated state. */
-	/* +0x02A */ int16_t prev_x_roll_mode; /* 2 */
-	/* +0x02C */ int16_t axis_x_accum;     /* 2 */
-	/* +0x02E */ int16_t axis_y_accum;     /* 2 */
+	/* +0x028 */ int16_t msg_arg_obj_idx; /* 2 */
+	/* +0x02A: previous-frame snapshot of x_roll_mode, kept here so
+	 * user_update can detect the frame the player toggles roll-axis
+	 * mapping and reset the input slew accumulators. The binary packed
+	 * this into the high 16 of msg_dword purely for memory compactness;
+	 * splitting clarifies that the two halves are unrelated state. */
+	/* +0x02A */ int16_t prev_x_roll_mode;              /* 2 */
+	/* +0x02C */ int16_t axis_x_accum;                  /* 2 */
+	/* +0x02E */ int16_t axis_y_accum;                  /* 2 */
 	/* +0x030 */ int16_t prev_inputbuttons;             /* 2 */
 	/* +0x032 */ uint16_t double_tap_timer;             /* 2 */
 	/* +0x034 */ int16_t player_laser_fired;            /* 2 */

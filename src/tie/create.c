@@ -1603,7 +1603,8 @@ uint16_t create_createcraft(void) {
 				/* +50%. */
 				craftptr->forward_shield += craftptr->forward_shield >> 1;
 			} else if (fgside == 0 || fgside == 4) {
-				craftptr->forward_shield = (int16_t)math2_fraction((uint16_t)craftptr->forward_shield, 0xA000u);
+				craftptr->forward_shield =
+					(int16_t)math2_fraction((uint16_t)craftptr->forward_shield, 0xA000u);
 			}
 		}
 		if (craftptr->forward_shield < 0)
@@ -1751,7 +1752,8 @@ uint16_t create_createcraft(void) {
 	craftptr->slam_active = 0xFFFF;
 	field_0f = spec_data[spec_num].field_0F;
 	craftptr->throttle_speed = throttle;
-	objects[obj_slot].current_speed = (int16_t)math2_fraction((uint16_t)spec_data[spec_num].max_speed, throttle);
+	objects[obj_slot].current_speed =
+		(int16_t)math2_fraction((uint16_t)spec_data[spec_num].max_speed, throttle);
 	objects[obj_slot].speed_remainder = 0;
 
 	if (obj_slot == pstate.object_idx) {
@@ -1864,7 +1866,8 @@ int create_createstaticflightgroup(uint16_t craft_slot) {
 			uint16_t col;
 
 			for (col = 0; col < f->count; col++) {
-				if ((craft_slot == 0xFFFF || craft_slot == obj_seq) && st->cond[0].detail < st->cond[0].count) {
+				if ((craft_slot == 0xFFFF || craft_slot == obj_seq) &&
+					st->cond[0].detail < st->cond[0].count) {
 					staging_static_x = (int16_t)(x_base + col * step_x);
 					staging_static_y = (int16_t)(y_base + y_accum);
 					staging_static_z = (int16_t)(z_base + col * step_z + z_accum);

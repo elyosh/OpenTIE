@@ -196,7 +196,9 @@ int16_t math2_getrandom(void) {
 	}
 
 	for (i = 0; i < 16; i++) {
-		carry_out = ((uint8_t)((((uint16_t)math2_randomseed >> 8) & 0xFF) ^ (uint16_t)((uint8_t)math2_randomseed << 1)) & 0x80) != 0;
+		carry_out = ((uint8_t)((((uint16_t)math2_randomseed >> 8) & 0xFF) ^
+							   (uint16_t)((uint8_t)math2_randomseed << 1)) &
+					 0x80) != 0;
 		seed_sign = ((uint16_t)math2_randomseed & 0x8000) != 0;
 		math2_randomseed = (int16_t)((uint16_t)math2_randomseed * 2 + carry_out);
 		randomnumber = (int16_t)((uint16_t)randomnumber * 2 + seed_sign);

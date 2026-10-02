@@ -651,10 +651,12 @@ int16_t pai_isobjectvalidtarget(uint16_t obj_ref) {
 	else
 		goal_match = in_pri & in_sec;
 
-	in_t0 = score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[0],
-									   (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[0]);
-	in_t1 = score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[1],
-									   (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[1]);
+	in_t0 =
+		score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[0],
+								  (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[0]);
+	in_t1 =
+		score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[1],
+								  (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[1]);
 	if ((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_op == 1)
 		target_match = in_t0 | in_t1;
 	else
@@ -735,9 +737,7 @@ int pai_searchforcraftingroup(uint8_t group_type1, uint16_t group_id1, int16_t c
 }
 
 // FUNCTION: TIE95 0x35DB8
-int16_t pai_lookfordisableswitch(uint16_t fg_idx) {
-	return pai_checkfortargetstodisable(fg_idx) != 0xFFFFu;
-}
+int16_t pai_lookfordisableswitch(uint16_t fg_idx) { return pai_checkfortargetstodisable(fg_idx) != 0xFFFFu; }
 
 // FUNCTION: TIE95 0x35DD4
 uint16_t pai_checkfortargetstodisable(uint16_t ai_entry) {
@@ -808,7 +808,8 @@ uint16_t pai_finddisabledingroup(uint16_t group_type1, uint16_t group_id1, uint1
 			if (!objects[k].ship_idx || k == ai.active_obj_idx)
 				continue;
 			oc = objects[k].craft_ptr;
-			if ((oc->default_order_ldr >= 0x1C && oc->default_order_ldr <= 0x22) || oc->default_order_ldr == 68) {
+			if ((oc->default_order_ldr >= 0x1C && oc->default_order_ldr <= 0x22) ||
+				oc->default_order_ldr == 68) {
 				if ((uint16_t)oc->ai_target_ref == i)
 					++taken;
 			}
@@ -861,8 +862,8 @@ uint16_t pai_finddisabledingroup(uint16_t group_type1, uint16_t group_id1, uint1
 			if (!staticobjects[k].species || k == ai.active_obj_idx)
 				continue;
 			oc = objects[k].craft_ptr;
-			if ((oc->default_order_ldr >= 0x1C && oc->default_order_ldr <= 0x20) || oc->default_order_ldr == 34 ||
-				oc->default_order_ldr == 68) {
+			if ((oc->default_order_ldr >= 0x1C && oc->default_order_ldr <= 0x20) ||
+				oc->default_order_ldr == 34 || oc->default_order_ldr == 68) {
 				if ((uint16_t)oc->ai_target_ref == sj + 0x3800)
 					++taken;
 			}
@@ -1178,8 +1179,7 @@ int pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry) {
 		case 0x2A: /* 42 */
 		case 0x2B: /* 43 */
 		case 0x38: /* 56 */
-			if (craftptr->ai_goal_progress[ai_entry] >=
-				(int8_t)fg_array[ai.fg_idx].ai[ai_entry].var[0])
+			if (craftptr->ai_goal_progress[ai_entry] >= (int8_t)fg_array[ai.fg_idx].ai[ai_entry].var[0])
 				done = 1;
 			break;
 
@@ -1189,8 +1189,7 @@ int pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry) {
 		case 19:
 		case 0x3E: /* 62 */
 		case 0x3F: /* 63 */
-			if (!paifight_scanfortargetsallgone(ai_entry) &&
-				!paifight_checkforfuturetargets(ai_entry))
+			if (!paifight_scanfortargetsallgone(ai_entry) && !paifight_checkforfuturetargets(ai_entry))
 				done = 1;
 			break;
 
@@ -1202,8 +1201,7 @@ int pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry) {
 		case 33:
 		case 0x22: /* 34 */
 		case 68:
-			if (craftptr->ai_goal_progress[ai_entry] >=
-				(int8_t)fg_array[ai.fg_idx].ai[ai_entry].var[1])
+			if (craftptr->ai_goal_progress[ai_entry] >= (int8_t)fg_array[ai.fg_idx].ai[ai_entry].var[1])
 				done = 1;
 			break;
 

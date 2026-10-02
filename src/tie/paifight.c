@@ -1074,7 +1074,8 @@ int16_t paifight_missiledefenseorder(void) {
 			int16_t saved_link;
 			uint16_t new_wh;
 
-			if (craftptr->mesh_state[spec_data[craftptr->species_idx].hp[slot].component] != MESH_STATE_VISIBLE)
+			if (craftptr->mesh_state[spec_data[craftptr->species_idx].hp[slot].component] !=
+				MESH_STATE_VISIBLE)
 				continue;
 
 			wtype = craftptr->weapon_slots[slot].type;
@@ -1132,9 +1133,9 @@ int16_t paifight_missiledefenseorder(void) {
 				if (already_shot >= 1)
 					continue;
 
-				roughdistance = collide_roughdistance3d(objects[obj].world_x - shooterx,
-														objects[obj].world_y - shootery,
-														objects[obj].world_z - shooterz);
+				roughdistance =
+					collide_roughdistance3d(objects[obj].world_x - shooterx, objects[obj].world_y - shootery,
+											objects[obj].world_z - shooterz);
 				if (roughdistance > 0x4000 && roughdistance < best_dist) {
 					best_target = obj;
 					best_dist = roughdistance;
@@ -1184,9 +1185,9 @@ int16_t paifight_missiledefenseorder(void) {
 					if (inbound >= 2)
 						continue;
 
-					roughdistance = collide_roughdistance3d(objects[a].world_x - shooterx,
-															objects[a].world_y - shootery,
-															objects[a].world_z - shooterz);
+					roughdistance =
+						collide_roughdistance3d(objects[a].world_x - shooterx, objects[a].world_y - shootery,
+												objects[a].world_z - shooterz);
 					if (roughdistance < best_dist_a) {
 						best_dist_a = roughdistance;
 						best_target = a;
@@ -1208,7 +1209,8 @@ int16_t paifight_missiledefenseorder(void) {
 			craftptr->ai_target_ref = (int16_t)fire_target;
 			craftptr->link_target_2E = paifight_gethullcomponent(fire_target);
 
-			if ((new_wh = laser_firemissile(ai.active_obj_idx, slot, craftptr->weapon_slots[slot].type, 0xFFFFu)) != 0xFFFFu) {
+			if ((new_wh = laser_firemissile(ai.active_obj_idx, slot, craftptr->weapon_slots[slot].type,
+											0xFFFFu)) != 0xFFFFu) {
 				warheads[new_wh].homing_tier = (uint8_t)((math2_getrandom() & 3) + 3);
 				craftptr->weapon_slots[slot]._pad_03 = 20u; /* relock cooldown */
 			}
@@ -1533,7 +1535,8 @@ int16_t paifight_followleadatkorder(void) {
 			int passes_flag = !ai.live_target_only || staticobjects[stat_scan].status_flags;
 			if (passes_flag && !wingman_skip) {
 				if (staticobjects[stat_scan].species && stat_fg == staticobjects[stat_scan].fg_idx) {
-					if (pai_checktargetforattack(ai.active_obj_idx, stat_ref, 1) && pai_isobjectvalidtarget(stat_ref)) {
+					if (pai_checktargetforattack(ai.active_obj_idx, stat_ref, 1) &&
+						pai_isobjectvalidtarget(stat_ref)) {
 						craftptr->ai_target_ref = (int16_t)stat_ref;
 						return 1;
 					}

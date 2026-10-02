@@ -127,8 +127,7 @@ int16_t fmusic_PageSound(uint16_t track_idx) {
 
 	/* Pass 2: empty slot? */
 	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
-		if (music_page_state[i] == -1)
-		{
+		if (music_page_state[i] == -1) {
 			fmusic_pagemusic(track_idx, i);
 			return i;
 		}
@@ -136,8 +135,7 @@ int16_t fmusic_PageSound(uint16_t track_idx) {
 
 	/* Pass 3: evict LRU (age == 0) */
 	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
-		if (!music_age[i])
-		{
+		if (!music_age[i]) {
 			fmusic_pagemusic(track_idx, i);
 			return i;
 		}

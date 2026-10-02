@@ -626,28 +626,28 @@ static int16_t bpflight_user_Engine(Actor* actor, int32_t time) {
 	/* Animate the active viewport(s). */
 	if (bpshipstate[actor->id]) {
 		switch (actor->id) {
-		case 0:
-			/* Primary: play the orbit matrix, advance the frame cursor. */
-			fview_newcalcview(bpcameraroll[actor->id], bpcamerapitch[actor->id], bpcameraheading[actor->id],
-							  bpcamerayaw[actor->id], bpcameralookpitch[actor->id], bpcameralookclock[actor->id],
-							  NULL);
-			actor->var1 = (int16_t)((actor->var1 + 1) % matrix->frame_count);
-			break;
-		case 1:
-			/* Secondary thumbnail: slow heading drift (+0x400 every
-			 * 16 of 64 frames). */
-			if ((time & 0x3F) < 0x10)
-				bpflight_pivotheading[actor->id] += 0x400;
-			break;
-		case 2:
-			/* Blueprint full-screen: fast heading spin (+0x1F0 / frame)
-			 * and pitch oscillation (+/-64 each 64-frame phase). */
-			bpflight_pivotheading[actor->id] = bpflight_pivotheading[actor->id] + 0x1F0;
-			if (time & 0x40)
-				bpflight_pivotpitch[actor->id] += 64;
-			else
-				bpflight_pivotpitch[actor->id] -= 64;
-			break;
+			case 0:
+				/* Primary: play the orbit matrix, advance the frame cursor. */
+				fview_newcalcview(bpcameraroll[actor->id], bpcamerapitch[actor->id],
+								  bpcameraheading[actor->id], bpcamerayaw[actor->id],
+								  bpcameralookpitch[actor->id], bpcameralookclock[actor->id], NULL);
+				actor->var1 = (int16_t)((actor->var1 + 1) % matrix->frame_count);
+				break;
+			case 1:
+				/* Secondary thumbnail: slow heading drift (+0x400 every
+				 * 16 of 64 frames). */
+				if ((time & 0x3F) < 0x10)
+					bpflight_pivotheading[actor->id] += 0x400;
+				break;
+			case 2:
+				/* Blueprint full-screen: fast heading spin (+0x1F0 / frame)
+				 * and pitch oscillation (+/-64 each 64-frame phase). */
+				bpflight_pivotheading[actor->id] = bpflight_pivotheading[actor->id] + 0x1F0;
+				if (time & 0x40)
+					bpflight_pivotpitch[actor->id] += 64;
+				else
+					bpflight_pivotpitch[actor->id] -= 64;
+				break;
 		}
 	}
 
@@ -880,7 +880,8 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 		scene_cameralookpitch = bpcameralookpitch[actor->id];
 		scene_cameralookclock = bpcameralookclock[actor->id];
 		fview_newcalcview(bpcameraroll[actor->id], bpcamerapitch[actor->id], bpcameraheading[actor->id],
-						  bpcamerayaw[actor->id], bpcameralookpitch[actor->id], bpcameralookclock[actor->id], NULL);
+						  bpcamerayaw[actor->id], bpcameralookpitch[actor->id], bpcameralookclock[actor->id],
+						  NULL);
 	}
 
 	/* Lock the XTRANS2 scratch + canvas; logbuf picks up videobaseptr. */
@@ -951,12 +952,14 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 				switch (cur_flight_scene) {
 					case 3:
 						/* Centre the model on screen with a 30-line offset. */
-						objectblockptr = (ShipModelData*)((uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[0]) + 2);
+						objectblockptr =
+							(ShipModelData*)((uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[0]) + 2);
 						worldx = 0;
 						worldy = scene_cameray + (objectblockptr->length << 8) / 200;
 						worldz = 0;
 						transfm2_screenyoffset = -30;
-						componentblockptr = (ShipModelMesh*)&objectblockptr->lod_records[objectblockptr->num_lods];
+						componentblockptr =
+							(ShipModelMesh*)&objectblockptr->lod_records[objectblockptr->num_lods];
 						use_obstacle = 0;
 						xmemhdl_Unlock_Handle(bpflight_fltobj_data[0]);
 						break;
@@ -1012,7 +1015,8 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 
 		drawbackdropflag = 0;
 		backdrp2_backdrop();
-		rtsvga2_setvgapointers(xtrans2_videobaseptr, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
+		rtsvga2_setvgapointers(xtrans2_videobaseptr, TIE_FRONTEND_EDITION(320, 640),
+							   TIE_FRONTEND_EDITION(200, 480));
 		saved_fullupdate = fullupdateflag;
 		if (fullstarupdate) {
 			fullstarupdate = 0;
@@ -1165,7 +1169,8 @@ void bpflight_drawtreeobject(void* node, int16_t pass_gated, int16_t pass_mainhu
 		dz = relativez - dz;
 		/* Plane dot-product sign selects which child is "far" (draw
 		 * first) and which is "near" (drawn last). */
-		plane_eq = (n->normal_x >> relativeshift) * dx + (n->normal_y >> relativeshift) * dy + (n->normal_z >> relativeshift) * dz;
+		plane_eq = (n->normal_x >> relativeshift) * dx + (n->normal_y >> relativeshift) * dy +
+				   (n->normal_z >> relativeshift) * dz;
 		if (plane_eq >= 0x40000000)
 			plane_eq = 0x3FFF0000;
 		if (plane_eq <= -0x40000000)

@@ -187,36 +187,36 @@ void collide_updatehits(uint16_t projectile_obj_idx, uint16_t hit_count) {
 	craft = objects[self_idx].craft_ptr;
 
 	switch (ship_idx) {
-	case 0x89:
-	case 0x8A:
-	case 0x8B:
-	case 0x8C:
-		/* Laser projectile. */
-		craft->laser_hit++;
-		if (self_idx == pstate.object_idx)
-			pstate.player_laser_hit++;
-		break;
-	case 0x8D:
-	case 0x8E:
-		/* Missile projectile. */
-		craft->missile_hit++;
-		if (self_idx == pstate.object_idx)
-			pstate.player_missile_hit++;
-		break;
-	case 0x8F:
-	case 0x90:
-	case 0x94:
-	case 0x95:
-	case 0x96:
-	case 0x97:
-	case 0x98:
-	case 0x99:
-	case 0x9A:
-		/* Warhead/torpedo. */
-		craft->warhead_hit++;
-		if (self_idx == pstate.object_idx)
-			pstate.player_warhead_hit++;
-		break;
+		case 0x89:
+		case 0x8A:
+		case 0x8B:
+		case 0x8C:
+			/* Laser projectile. */
+			craft->laser_hit++;
+			if (self_idx == pstate.object_idx)
+				pstate.player_laser_hit++;
+			break;
+		case 0x8D:
+		case 0x8E:
+			/* Missile projectile. */
+			craft->missile_hit++;
+			if (self_idx == pstate.object_idx)
+				pstate.player_missile_hit++;
+			break;
+		case 0x8F:
+		case 0x90:
+		case 0x94:
+		case 0x95:
+		case 0x96:
+		case 0x97:
+		case 0x98:
+		case 0x99:
+		case 0x9A:
+			/* Warhead/torpedo. */
+			craft->warhead_hit++;
+			if (self_idx == pstate.object_idx)
+				pstate.player_warhead_hit++;
+			break;
 	}
 }
 
@@ -674,8 +674,9 @@ uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx
 
 	/* Projectile speed: retail uses player_spec_num and the active
 	 * bank (player_weapon_group). */
-	proj_speed = (int16_t)projectilevelocity[spec_data[pstate.player_spec_num].laser_type[pstate.player_weapon_group] -
-											 WEAPON_SPECIES_BASE];
+	proj_speed =
+		(int16_t)projectilevelocity[spec_data[pstate.player_spec_num].laser_type[pstate.player_weapon_group] -
+									WEAPON_SPECIES_BASE];
 	lookahead_3frame = 3 * (int16_t)framerate;
 	laserxold = objects[shooter_obj_idx].world_x;
 	laseryold = objects[shooter_obj_idx].world_y;
@@ -686,15 +687,16 @@ uint16_t collide_targetinrange(uint16_t shooter_obj_idx, uint16_t target_obj_idx
 	 * group has its own slot in spec.hp[], so probing a different group
 	 * tests a different physical cannon mouth. */
 	species_idx = objects[shooter_obj_idx].craft_ptr->species_idx;
-	pai_calcrotatedpoint(&objects[shooter_obj_idx], spec_data[species_idx].hp[hp_idx].x, spec_data[species_idx].hp[hp_idx].y,
-						 spec_data[species_idx].hp[hp_idx].z);
+	pai_calcrotatedpoint(&objects[shooter_obj_idx], spec_data[species_idx].hp[hp_idx].x,
+						 spec_data[species_idx].hp[hp_idx].y, spec_data[species_idx].hp[hp_idx].z);
 	laserxold += rotatedx;
 	laseryold += rotatedy;
 	laserzold += rotatedz;
 
 	mph = math2_mphconvert((int16_t)(proj_speed + objects[shooter_obj_idx].current_speed), framerate);
 	if (objects[shooter_obj_idx].move_dirty)
-		fview_calcrotatemove(objects[shooter_obj_idx].pitch, objects[shooter_obj_idx].heading, &objects[shooter_obj_idx]);
+		fview_calcrotatemove(objects[shooter_obj_idx].pitch, objects[shooter_obj_idx].heading,
+							 &objects[shooter_obj_idx]);
 
 	laserx = laserxold + lookahead_3frame * ((mph * objects[shooter_obj_idx].moveX) >> 15);
 	lasery = laseryold + lookahead_3frame * ((mph * objects[shooter_obj_idx].moveY) >> 15);
@@ -809,8 +811,10 @@ void collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
 			uint8_t friendly_hits = (craftptr->was_hit_flag >> 4) & 7;
 
 			if (friendly_hits < 5) {
-				friendly_hits += (uint8_t)(
-					projectile_is_warhead_type[objects[projectile_obj_idx].ship_idx - WEAPON_SPECIES_BASE] == 0 ? 1 : 4);
+				friendly_hits += (uint8_t)(projectile_is_warhead_type[objects[projectile_obj_idx].ship_idx -
+																	  WEAPON_SPECIES_BASE] == 0
+											   ? 1
+											   : 4);
 				if (friendly_hits > 7)
 					friendly_hits = 7;
 				craftptr->was_hit_flag = (friendly_hits << 4) | (craftptr->was_hit_flag & 0x8F);
@@ -839,7 +843,8 @@ void collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
 		delta_z = (int16_t)(laserz - laserzold);
 		delta_y = (int16_t)(lasery - laseryold);
 		delta_x = (int16_t)(laserx - laserxold);
-		headon_dot = pstate.player->fwd_x * delta_x + pstate.player->fwd_y * delta_y + pstate.player->fwd_z * delta_z;
+		headon_dot =
+			pstate.player->fwd_x * delta_x + pstate.player->fwd_y * delta_y + pstate.player->fwd_z * delta_z;
 		if (headon_dot >= 0x40000000)
 			headon_dot = 0x3FFF0000;
 		if (headon_dot <= -0x40000000)
@@ -912,7 +917,8 @@ void collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
 
 		if (target_obj_idx == pstate.object_idx) {
 			sfx_id = 26;
-		} else if (objects[projectile_obj_idx].ship_idx == 131 || objects[projectile_obj_idx].ship_idx == 132) {
+		} else if (objects[projectile_obj_idx].ship_idx == 131 ||
+				   objects[projectile_obj_idx].ship_idx == 132) {
 			fsfx_triggersfx(25, projectile_obj_idx);
 			return;
 		} else {

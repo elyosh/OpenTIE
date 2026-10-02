@@ -105,17 +105,17 @@ int32_t wingman_wingmanroom(void) {
 				FlightSurface_Lock();
 			/* 20-line visible grid in 320x200, 50-line in the 640x480 modes. */
 			switch (flightResolution) {
-			case TIE_FLIGHT_RES_SVGA:
+				case TIE_FLIGHT_RES_SVGA:
 #if defined(TIE98) || defined(TIE_MODERN)
-			case TIE_FLIGHT_RES_SVGA_16:
-			case TIE_FLIGHT_RES_SVGA_D3D:
+				case TIE_FLIGHT_RES_SVGA_16:
+				case TIE_FLIGHT_RES_SVGA_D3D:
 #endif
-				y = 51;
-				break;
-			case TIE_FLIGHT_RES_VGA:
-			default:
-				y = 21;
-				break;
+					y = 51;
+					break;
+				case TIE_FLIGHT_RES_VGA:
+				default:
+					y = 21;
+					break;
 			}
 			row_spacing = (screenYRes - y * 2) / NUM_WINGMAN_CMDS;
 			for (i = 0; i < NUM_WINGMAN_CMDS; i++) {
@@ -151,69 +151,69 @@ int32_t wingman_wingmanroom(void) {
 			inputdeltay *= 2;
 
 			switch ((uint16_t)inputkey) {
-			case K_ESC:
-			case K_Q_UPPER:
-			case K_Q_LOWER:
-			case K_Z_UPPER:
-			case K_W_LOWER:
-			case K_F1:
-				exit_room = 1;
-				ret_delta = 2;
-				redraw = 1;
-				break;
-			case K_LEFT:
-				ret_delta = -1;
-				exit_room = 1;
-				redraw = 1;
-				break;
-			case K_RIGHT:
-				exit_room = 1;
-				ret_delta = 1;
-				redraw = 1;
-				break;
-			case 'A':
-			case 'B':
-			case 'C':
-			case 'E':
-			case 'G':
-			case 'H':
-			case 'I':
-			case 'R':
-			case 'S':
-			case 'W':
-				/* Direct-select: leave inputkey as the typed letter so the
-				 * caller can dispatch on it (same contract as Enter below). */
-				exit_room = 1;
-				ret_delta = 0;
-				redraw = 1;
-				break;
-			case K_UP:
-			case K_KP8:
-				/* Move up (wrap 0 <-> 9). */
-				if (selected_idx == 0)
-					selected_idx = NUM_WINGMAN_CMDS - 1;
-				else
-					selected_idx--;
-				redraw = 1;
-				break;
-			case K_DOWN:
-			case K_KP2:
-				/* Move down (wrap). */
-				if (++selected_idx == NUM_WINGMAN_CMDS)
-					selected_idx = 0;
-				redraw = 1;
-				break;
-			case K_ENTER:
-			case K_SPACE:
-				/* Select current row -- forward its hotkey letter. Keyboard
-				 * select uses offset +7 (matches retail's separate keyboard
-				 * hotkey), distinct from the mouse right-click path below
-				 * which uses +6. */
-				inputkey = (signed char)wingmanstrings[selected_idx][7];
-				exit_room = 1;
-				ret_delta = 0;
-				redraw = 1;
-				break;
+				case K_ESC:
+				case K_Q_UPPER:
+				case K_Q_LOWER:
+				case K_Z_UPPER:
+				case K_W_LOWER:
+				case K_F1:
+					exit_room = 1;
+					ret_delta = 2;
+					redraw = 1;
+					break;
+				case K_LEFT:
+					ret_delta = -1;
+					exit_room = 1;
+					redraw = 1;
+					break;
+				case K_RIGHT:
+					exit_room = 1;
+					ret_delta = 1;
+					redraw = 1;
+					break;
+				case 'A':
+				case 'B':
+				case 'C':
+				case 'E':
+				case 'G':
+				case 'H':
+				case 'I':
+				case 'R':
+				case 'S':
+				case 'W':
+					/* Direct-select: leave inputkey as the typed letter so the
+					 * caller can dispatch on it (same contract as Enter below). */
+					exit_room = 1;
+					ret_delta = 0;
+					redraw = 1;
+					break;
+				case K_UP:
+				case K_KP8:
+					/* Move up (wrap 0 <-> 9). */
+					if (selected_idx == 0)
+						selected_idx = NUM_WINGMAN_CMDS - 1;
+					else
+						selected_idx--;
+					redraw = 1;
+					break;
+				case K_DOWN:
+				case K_KP2:
+					/* Move down (wrap). */
+					if (++selected_idx == NUM_WINGMAN_CMDS)
+						selected_idx = 0;
+					redraw = 1;
+					break;
+				case K_ENTER:
+				case K_SPACE:
+					/* Select current row -- forward its hotkey letter. Keyboard
+					 * select uses offset +7 (matches retail's separate keyboard
+					 * hotkey), distinct from the mouse right-click path below
+					 * which uses +6. */
+					inputkey = (signed char)wingmanstrings[selected_idx][7];
+					exit_room = 1;
+					ret_delta = 0;
+					redraw = 1;
+					break;
 			}
 
 			/* Mouse edge-trigger on release of buttons 1 or 2. */

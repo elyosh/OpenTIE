@@ -340,21 +340,21 @@ uint16_t feinput_getrawinput(void) {
 // FUNCTION: TIE98 0x41D340
 void feinput_setupgraphics(uint8_t detail_level) {
 	switch (flightResolution) {
-	case TIE_FLIGHT_RES_SVGA_16:
+		case TIE_FLIGHT_RES_SVGA_16:
 #if defined(TIE98) || defined(TIE_MODERN)
-	case TIE_FLIGHT_RES_SVGA_D3D:
+		case TIE_FLIGHT_RES_SVGA_D3D:
 #endif
-		graphicsmode = 2;
-		break;
-	case TIE_FLIGHT_RES_SVGA:
-		graphicsmode = 1;
-		break;
-	case TIE_FLIGHT_RES_VGA:
-		graphicsmode = 0;
-		break;
-	default:
-		graphicsmode = 0;
-		break;
+			graphicsmode = 2;
+			break;
+		case TIE_FLIGHT_RES_SVGA:
+			graphicsmode = 1;
+			break;
+		case TIE_FLIGHT_RES_VGA:
+			graphicsmode = 0;
+			break;
+		default:
+			graphicsmode = 0;
+			break;
 	}
 
 	buffer256flag = 1;

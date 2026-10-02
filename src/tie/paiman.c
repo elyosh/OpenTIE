@@ -1049,39 +1049,40 @@ int16_t paiman_intohyperspacemaneuver(void) {
 	int16_t pax_fg_idx;
 
 	switch (craftptr->mode_subbyte) {
-	case 0:
-		paiman_setflighttotarget(0, 1);
-		if (trig2_polardistance < 0x4000) {
-			craftptr->flight_flag = 5;
-			craftptr->ai_roll_state = 0;
-			craftptr->ai_pitch_state = 0;
-			craftptr->ai_heading_state = 0;
-			craftptr->mode_subbyte = 1;
-			craftptr->ai_plan_state = 944;
-			craftptr->maneuver_timer = 1652;
-		}
-		craftptr->throttle_speed = 0xFFFFu;
-		break;
-	case 1:
-		craftptr->flight_flag = 5;
-		if ((uint16_t)objects[ai.active_obj_idx].current_speed < 0xE10)
+		case 0:
+			paiman_setflighttotarget(0, 1);
+			if (trig2_polardistance < 0x4000) {
+				craftptr->flight_flag = 5;
+				craftptr->ai_roll_state = 0;
+				craftptr->ai_pitch_state = 0;
+				craftptr->ai_heading_state = 0;
+				craftptr->mode_subbyte = 1;
+				craftptr->ai_plan_state = 944;
+				craftptr->maneuver_timer = 1652;
+			}
+			craftptr->throttle_speed = 0xFFFFu;
 			break;
+		case 1:
+			craftptr->flight_flag = 5;
+			if ((uint16_t)objects[ai.active_obj_idx].current_speed < 0xE10)
+				break;
 
-		msg_craftmessage(ai.active_obj_idx, craftptr, 0x61);
-		score_craftexitscoring(ai.active_obj_idx, ai.fg_idx, 3);
-		objects[ai.active_obj_idx].ship_idx = 0;
+			msg_craftmessage(ai.active_obj_idx, craftptr, 0x61);
+			score_craftexitscoring(ai.active_obj_idx, ai.fg_idx, 3);
+			objects[ai.active_obj_idx].ship_idx = 0;
 
-		/* Carry-over passenger (tow_slave_ref) exit bookkeeping. */
-		pax_obj_idx = (uint16_t)craftptr->tow_slave_ref;
-		if (pax_obj_idx != 0xFFFF && pax_obj_idx < 14336) {
-			pax_fg_idx = objects[pax_obj_idx].fg_idx;
-			score_craftexitscoring(pax_obj_idx, pax_fg_idx, 7);
-			++fgstatus[pax_fg_idx].cond[1].detail;
-			if ((int8_t)fg_array[pax_fg_idx].special_craft == objects[pax_obj_idx].craft_ptr->craft_idx_in_fg)
-				fgstatus[pax_fg_idx].cond_id[1].detail = 1;
-			objects[pax_obj_idx].ship_idx = 0;
-		}
-		break;
+			/* Carry-over passenger (tow_slave_ref) exit bookkeeping. */
+			pax_obj_idx = (uint16_t)craftptr->tow_slave_ref;
+			if (pax_obj_idx != 0xFFFF && pax_obj_idx < 14336) {
+				pax_fg_idx = objects[pax_obj_idx].fg_idx;
+				score_craftexitscoring(pax_obj_idx, pax_fg_idx, 7);
+				++fgstatus[pax_fg_idx].cond[1].detail;
+				if ((int8_t)fg_array[pax_fg_idx].special_craft ==
+					objects[pax_obj_idx].craft_ptr->craft_idx_in_fg)
+					fgstatus[pax_fg_idx].cond_id[1].detail = 1;
+				objects[pax_obj_idx].ship_idx = 0;
+			}
+			break;
 	}
 	return 0;
 }
@@ -1135,7 +1136,7 @@ int16_t paiman_outofhyperspacemaneuver(void) {
 			mapped_order = 0;
 		else
 #endif
-		if (craftptr->leader_obj_idx == 0xFFu)
+			if (craftptr->leader_obj_idx == 0xFFu)
 			mapped_order = ordersldr[order];
 		else
 			mapped_order = ordersflw[order];
@@ -1560,7 +1561,8 @@ int16_t paiman_boardmaneuver(void) {
 				}
 				/* Approach point along the target's up axis, above the docking offset. */
 				offset_up += (int16_t)(spec_data[tgt_species].dock_passive_heavy -
-									   spec_data[craftptr->species_idx].dock_active_heavy) * 2;
+									   spec_data[craftptr->species_idx].dock_active_heavy) *
+							 2;
 				if (offset_up < 0)
 					offset_up = 28672;
 
@@ -1614,9 +1616,12 @@ int16_t paiman_boardmaneuver(void) {
 								spec_data[craftptr->species_idx].dock_active_heavy;
 				}
 				pai_calcrotatedpoint(&objects[target_ref], 0, offset_up, dock_fwd);
-				craftptr->push_accum_x = push_x = objects[target_ref].world_x + rotatedx - objects[ai.active_obj_idx].world_x;
-				craftptr->push_accum_y = push_y = objects[target_ref].world_y + rotatedy - objects[ai.active_obj_idx].world_y;
-				craftptr->push_accum_z = push_z = objects[target_ref].world_z + rotatedz - objects[ai.active_obj_idx].world_z;
+				craftptr->push_accum_x = push_x =
+					objects[target_ref].world_x + rotatedx - objects[ai.active_obj_idx].world_x;
+				craftptr->push_accum_y = push_y =
+					objects[target_ref].world_y + rotatedy - objects[ai.active_obj_idx].world_y;
+				craftptr->push_accum_z = push_z =
+					objects[target_ref].world_z + rotatedz - objects[ai.active_obj_idx].world_z;
 				target_roll = objects[target_ref].roll;
 				target_pitch = objects[target_ref].pitch;
 				target_heading = objects[target_ref].heading;
@@ -1931,7 +1936,8 @@ int16_t paiman_boardmaneuver(void) {
 					if (!tgt_cd->inspected) {
 						tgt_cd->inspected = 1;
 						++fgstatus[objects[target_ref].fg_idx].cond[4].detail;
-						if ((int8_t)fg_array[objects[target_ref].fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
+						if ((int8_t)fg_array[objects[target_ref].fg_idx].special_craft ==
+							tgt_cd->craft_idx_in_fg)
 							fgstatus[objects[target_ref].fg_idx].cond_id[4].detail = 1;
 					}
 					fsfx_speakobjectname(ai.active_obj_idx, 0x33);
@@ -1996,9 +2002,12 @@ int16_t paiman_boardmaneuver(void) {
 			}
 			if (target_ref < 0x3800) {
 				pai_calcrotatedpoint(&objects[ai.active_obj_idx], 0, 0x4000, 0);
-				craftptr->push_accum_x = objects[target_ref].world_x + rotatedx - objects[ai.active_obj_idx].world_x;
-				craftptr->push_accum_y = objects[target_ref].world_y + rotatedy - objects[ai.active_obj_idx].world_y;
-				craftptr->push_accum_z = objects[target_ref].world_z + rotatedz - objects[ai.active_obj_idx].world_z;
+				craftptr->push_accum_x =
+					objects[target_ref].world_x + rotatedx - objects[ai.active_obj_idx].world_x;
+				craftptr->push_accum_y =
+					objects[target_ref].world_y + rotatedy - objects[ai.active_obj_idx].world_y;
+				craftptr->push_accum_z =
+					objects[target_ref].world_z + rotatedz - objects[ai.active_obj_idx].world_z;
 			} else {
 				craftptr->push_accum_x = 0;
 				craftptr->push_accum_y = 0;

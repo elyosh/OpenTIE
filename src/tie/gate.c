@@ -538,12 +538,13 @@ void gate_settraininglevel(uint16_t level) {
 			draw_Lockshipfileptrs(ship_idx);
 
 		mesh = componentblockptr;
-		for (mesh_idx = 0;
-			 mesh_idx < TIE_FLIGHT_EDITION(objectblockptr->num_meshes, (uint16_t)modelmesh_getcount(ship_idx));
+		for (mesh_idx = 0; mesh_idx < TIE_FLIGHT_EDITION(objectblockptr->num_meshes,
+														 (uint16_t)modelmesh_getcount(ship_idx));
 			 ++mesh_idx, ++mesh) {
 			if (obj_idx == 1) {
 				/* Gate 1 (course start) is always frozen. */
-				if (TIE_FLIGHT_EDITION(mesh->mesh_type, (uint16_t)modelmesh_gettype(ship_idx, mesh_idx)) == 1 /* MESH_MainHull */)
+				if (TIE_FLIGHT_EDITION(mesh->mesh_type, (uint16_t)modelmesh_gettype(ship_idx, mesh_idx)) ==
+					1 /* MESH_MainHull */)
 					craftptr->mesh_component_hp[mesh_idx] = 0xFF;
 				else
 					craftptr->mesh_component_hp[mesh_idx] = 0;
@@ -552,66 +553,66 @@ void gate_settraininglevel(uint16_t level) {
 			}
 
 			switch (TIE_FLIGHT_EDITION(mesh->mesh_type, (uint16_t)modelmesh_gettype(ship_idx, mesh_idx))) {
-			case 1: /* MESH_MainHull */
-				craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
-				break;
-			case 5: /* MESH_SmallGun */
-				/* No mesh_rotation reset for guns. */
-				craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-				craftptr->mesh_component_hp[mesh_idx] = speed_gun;
-				break;
-			case TIE_MESH_CARGO_POD:
-				if (TIE_FLIGHT_TIE98) {
-					modelmesh_enableexplosiontype2(ship_idx, mesh_idx);
-					modelmesh_enableexplosiontype1(ship_idx, mesh_idx);
-				} else {
-					mesh->flags |= 3;
-				}
-				if (level < 2) {
+				case 1: /* MESH_MainHull */
 					craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
-					craftptr->mesh_component_hp[mesh_idx] = 0;
-				} else {
+					break;
+				case 5: /* MESH_SmallGun */
+					/* No mesh_rotation reset for guns. */
 					craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-					craftptr->mesh_rotation[mesh_idx] = 0;
-					craftptr->mesh_component_hp[mesh_idx] = speed_pod;
-				}
-				break;
-			case 18: /* MESH_MiscHull */
-				if (level < 5) {
-					craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
-					craftptr->mesh_component_hp[mesh_idx] = 0;
-				} else {
-					craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-					craftptr->mesh_rotation[mesh_idx] = TIE_FLIGHT_EDITION(0, 1);
-					craftptr->mesh_component_hp[mesh_idx] = 0xFF;
-				}
-				break;
-			case 19: /* MESH_Antenna */
-				if (level < 7) {
-					craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
-					craftptr->mesh_component_hp[mesh_idx] = 0;
-				} else {
-					craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-					craftptr->mesh_rotation[mesh_idx] = 0;
-					craftptr->mesh_component_hp[mesh_idx] = 0xFF;
-				}
-				break;
-			case TIE_MESH_WING:
-				if (TIE_FLIGHT_TIE98) {
-					modelmesh_enableexplosiontype2(ship_idx, mesh_idx);
-					modelmesh_enableexplosiontype1(ship_idx, mesh_idx);
-				} else {
-					mesh->flags |= 3;
-				}
-				if (level < 3) {
-					craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
-					craftptr->mesh_component_hp[mesh_idx] = 0;
-				} else {
-					craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
-					craftptr->mesh_rotation[mesh_idx] = 0;
-					craftptr->mesh_component_hp[mesh_idx] = speed_wing;
-				}
-				break;
+					craftptr->mesh_component_hp[mesh_idx] = speed_gun;
+					break;
+				case TIE_MESH_CARGO_POD:
+					if (TIE_FLIGHT_TIE98) {
+						modelmesh_enableexplosiontype2(ship_idx, mesh_idx);
+						modelmesh_enableexplosiontype1(ship_idx, mesh_idx);
+					} else {
+						mesh->flags |= 3;
+					}
+					if (level < 2) {
+						craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
+						craftptr->mesh_component_hp[mesh_idx] = 0;
+					} else {
+						craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
+						craftptr->mesh_rotation[mesh_idx] = 0;
+						craftptr->mesh_component_hp[mesh_idx] = speed_pod;
+					}
+					break;
+				case 18: /* MESH_MiscHull */
+					if (level < 5) {
+						craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
+						craftptr->mesh_component_hp[mesh_idx] = 0;
+					} else {
+						craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
+						craftptr->mesh_rotation[mesh_idx] = TIE_FLIGHT_EDITION(0, 1);
+						craftptr->mesh_component_hp[mesh_idx] = 0xFF;
+					}
+					break;
+				case 19: /* MESH_Antenna */
+					if (level < 7) {
+						craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
+						craftptr->mesh_component_hp[mesh_idx] = 0;
+					} else {
+						craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
+						craftptr->mesh_rotation[mesh_idx] = 0;
+						craftptr->mesh_component_hp[mesh_idx] = 0xFF;
+					}
+					break;
+				case TIE_MESH_WING:
+					if (TIE_FLIGHT_TIE98) {
+						modelmesh_enableexplosiontype2(ship_idx, mesh_idx);
+						modelmesh_enableexplosiontype1(ship_idx, mesh_idx);
+					} else {
+						mesh->flags |= 3;
+					}
+					if (level < 3) {
+						craftptr->mesh_state[mesh_idx] = MESH_STATE_HIDDEN;
+						craftptr->mesh_component_hp[mesh_idx] = 0;
+					} else {
+						craftptr->mesh_state[mesh_idx] = MESH_STATE_VISIBLE;
+						craftptr->mesh_rotation[mesh_idx] = 0;
+						craftptr->mesh_component_hp[mesh_idx] = speed_wing;
+					}
+					break;
 			}
 		}
 	}
@@ -739,26 +740,26 @@ void gate_updatebonuspoints(void) {
 	int16_t y, timer_x, bonus_x;
 
 	switch (flightResolution) {
-	case TIE_FLIGHT_RES_SVGA:
+		case TIE_FLIGHT_RES_SVGA:
 #if defined(TIE98) || defined(TIE_MODERN)
-	case TIE_FLIGHT_RES_SVGA_16:
-	case TIE_FLIGHT_RES_SVGA_D3D:
+		case TIE_FLIGHT_RES_SVGA_16:
+		case TIE_FLIGHT_RES_SVGA_D3D:
 #endif
-		y = 456;
-		bonus_x = 465;
-		timer_x = 360;
-		break;
-	case TIE_FLIGHT_RES_VGA:
-		y = 190;
-		bonus_x = 255;
-		timer_x = 200;
-		break;
-	default:
-		/* Unknown modes fall back to the 320x200 layout. */
-		y = 190;
-		bonus_x = 255;
-		timer_x = 200;
-		break;
+			y = 456;
+			bonus_x = 465;
+			timer_x = 360;
+			break;
+		case TIE_FLIGHT_RES_VGA:
+			y = 190;
+			bonus_x = 255;
+			timer_x = 200;
+			break;
+		default:
+			/* Unknown modes fall back to the 320x200 layout. */
+			y = 190;
+			bonus_x = 255;
+			timer_x = 200;
+			break;
 	}
 
 	dropflag = 1;
@@ -1059,41 +1060,41 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 	int16_t level_value_x;
 
 	switch (flightResolution) {
-	case TIE_FLIGHT_RES_SVGA:
+		case TIE_FLIGHT_RES_SVGA:
 #if defined(TIE98) || defined(TIE_MODERN)
-	case TIE_FLIGHT_RES_SVGA_16:
-	case TIE_FLIGHT_RES_SVGA_D3D:
+		case TIE_FLIGHT_RES_SVGA_16:
+		case TIE_FLIGHT_RES_SVGA_D3D:
 #endif
-		side_offset = 16;
-		level_label_x = 52;
-		level_value_x = 106;
-		block_width = 180;
-		score_label_x = 40;
-		x_origin += 10;
-		y_origin -= 10;
-		gates_col_x = 150;
-		score_col_x = 90;
-		break;
-	case TIE_FLIGHT_RES_VGA:
-		side_offset = 8;
-		level_label_x = 26;
-		level_value_x = 53;
-		block_width = 90;
-		score_label_x = 20;
-		y_origin -= 6;
-		gates_col_x = 75;
-		score_col_x = 45;
-		break;
-	default:
-		y_origin -= 6;
-		side_offset = 8;
-		level_label_x = 26;
-		level_value_x = 53;
-		block_width = 90;
-		score_label_x = 20;
-		gates_col_x = 75;
-		score_col_x = 45;
-		break;
+			side_offset = 16;
+			level_label_x = 52;
+			level_value_x = 106;
+			block_width = 180;
+			score_label_x = 40;
+			x_origin += 10;
+			y_origin -= 10;
+			gates_col_x = 150;
+			score_col_x = 90;
+			break;
+		case TIE_FLIGHT_RES_VGA:
+			side_offset = 8;
+			level_label_x = 26;
+			level_value_x = 53;
+			block_width = 90;
+			score_label_x = 20;
+			y_origin -= 6;
+			gates_col_x = 75;
+			score_col_x = 45;
+			break;
+		default:
+			y_origin -= 6;
+			side_offset = 8;
+			level_label_x = 26;
+			level_value_x = 53;
+			block_width = 90;
+			score_label_x = 20;
+			gates_col_x = 75;
+			score_col_x = 45;
+			break;
 	}
 
 	/* Choose left-or-right-of-origin based on the player's ship type. */
@@ -1101,15 +1102,15 @@ void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
 		/* TIE98 centers the SVGA read-out for this craft. */
 	} else {
 		switch (pstate.player_spec_num + 1) {
-		case 8:
-		case 9:
-		case 12:
-		case 16:
-			x_origin += side_offset;
-			break;
-		default:
-			x_origin -= side_offset;
-			break;
+			case 8:
+			case 9:
+			case 12:
+			case 16:
+				x_origin += side_offset;
+				break;
+			default:
+				x_origin -= side_offset;
+				break;
 		}
 	}
 

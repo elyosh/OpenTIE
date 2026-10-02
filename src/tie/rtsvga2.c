@@ -1,5 +1,5 @@
 #include "tie/rtsvga2.h"
-#include "landru/pal.h" /* xpal_Set_VGA_Palette */
+#include "landru/pal.h"  /* xpal_Set_VGA_Palette */
 #include "landru/vesa.h" /* vesa_buff_gbl — the scanout buffer vgapointer aliases */
 #include "tie/edition.h"
 #include "tie/frontend_display_tie98.h"

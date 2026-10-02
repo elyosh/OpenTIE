@@ -341,7 +341,8 @@ void maproom_drawNHIstatus(uint16_t page_idx) {
 	festring_outstringright((const uint8_t*)NHIstatusstrings[neutralflag]);
 
 	/* --- Top-left help string for the active page --- */
-	festring_setbound(0, 0, sys2_calclength((const uint8_t*)maproomhelpstrings[0]) + fontheight, fontheight + 2);
+	festring_setbound(0, 0, sys2_calclength((const uint8_t*)maproomhelpstrings[0]) + fontheight,
+					  fontheight + 2);
 	festring_setbackcolor(MAP_PANEL_BG);
 	clearwindow();
 	festring_setcursor(2, 1);

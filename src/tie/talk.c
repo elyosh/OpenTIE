@@ -1580,7 +1580,8 @@ void talk_Start_Speech_Stream(void) {
 			data = xmemhdl_Lock_Handle(talk_speech_sound->data);
 			memset(data, 0, TALK_SPEECH_BUF_SIZE);
 			xmemhdl_Unlock_Handle(talk_speech_sound->data);
-			bytes_read = xstream_Read_From_Stream_Buffer(0, talk_speech_sound->data, 0, TALK_SPEECH_BUF_SIZE, 1);
+			bytes_read =
+				xstream_Read_From_Stream_Buffer(0, talk_speech_sound->data, 0, TALK_SPEECH_BUF_SIZE, 1);
 			if (bytes_read == TALK_SPEECH_BUF_SIZE)
 				talk_speech_streaming = 1;
 			else

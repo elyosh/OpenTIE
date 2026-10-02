@@ -11,6 +11,8 @@ ColumnLimit: 110
 AccessModifierOffset: -4
 NamespaceIndentation: None
 PointerAlignment: Left
+# Include order can change declarations and macro definitions seen by later headers.
+SortIncludes: Never
 SpaceBeforeParens: ControlStatements
 SpaceAfterCStyleCast: false
 SpaceAfterTemplateKeyword: true

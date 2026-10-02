@@ -379,127 +379,127 @@ void player_Step_Page(int16_t flag) {
 			params[j] = brief.page.commands[cmd_index++];
 
 		if (cmd_time == brief.page.time) {
-		switch (opcode) {
-			case BCMD_SEEK:
-				brief.seek_on = 1;
-				break;
-			case BCMD_CLEAR_PARA: {
-				int16_t k;
-				for (k = 0; k < 2; k++)
-					brief.para_on[k] = 0;
-				brief.para_off = 1;
-				break;
-			}
-			case BCMD_SHOW_PARA0:
-			case BCMD_SHOW_PARA1: {
-				int16_t slot = opcode - BCMD_SHOW_PARA0;
-				brief.para_on[slot] = 1;
-				brief.para_id[slot] = params[0];
-				/* Retail PLAYER_Step_Page case 5 stamps the slot-1
-				 * paragraph id into talk_voice_question. The briefing
-				 * map's end-view callback watches for that to change
-				 * and fires voice/<sp>m<m>/...i<id>.voc each time. */
-				if (slot == 1)
-					talk_voice_question = params[0];
-				break;
-			}
-			case BCMD_MOVE:
-				if (cmd_time == 0 || flag) {
-					map_state.center_x = params[0];
-					map_state.target_x = params[0];
-					map_state.target_y = params[1];
-					map_state.center_y = params[1];
-				} else {
-					map_state.target_x = params[0];
-					map_state.target_y = params[1];
+			switch (opcode) {
+				case BCMD_SEEK:
+					brief.seek_on = 1;
+					break;
+				case BCMD_CLEAR_PARA: {
+					int16_t k;
+					for (k = 0; k < 2; k++)
+						brief.para_on[k] = 0;
+					brief.para_off = 1;
+					break;
 				}
-				brief.move_on = 1;
-				break;
-			case BCMD_ZOOM:
-				if (cmd_time == 0 || flag) {
-					map_state.scale_x = params[0];
-					map_state.scale_target_x = params[0];
-					map_state.scale_target_y = params[1];
-					map_state.scale_y = params[1];
-				} else {
-					map_state.scale_target_x = params[0];
-					map_state.scale_target_y = params[1];
+				case BCMD_SHOW_PARA0:
+				case BCMD_SHOW_PARA1: {
+					int16_t slot = opcode - BCMD_SHOW_PARA0;
+					brief.para_on[slot] = 1;
+					brief.para_id[slot] = params[0];
+					/* Retail PLAYER_Step_Page case 5 stamps the slot-1
+					 * paragraph id into talk_voice_question. The briefing
+					 * map's end-view callback watches for that to change
+					 * and fires voice/<sp>m<m>/...i<id>.voc each time. */
+					if (slot == 1)
+						talk_voice_question = params[0];
+					break;
 				}
-				brief.scale_on = 1;
-				break;
-			case BCMD_CLEAR_TARGET: {
-				int16_t k;
-				for (k = 0; k < 8; k++)
-					brief.target_on[k] = 0;
-				brief.target_off = 1;
-				break;
-			}
-			case BCMD_SHOW_TARGET0:
-			case BCMD_SHOW_TARGET0 + 1:
-			case BCMD_SHOW_TARGET0 + 2:
-			case BCMD_SHOW_TARGET0 + 3:
-			case BCMD_SHOW_TARGET0 + 4:
-			case BCMD_SHOW_TARGET0 + 5:
-			case BCMD_SHOW_TARGET0 + 6:
-			case BCMD_SHOW_TARGET7: {
-				int16_t slot;
-
-				if (!flag) {
-					int16_t side = fgroup.fg[params[0]].side;
-					if (side > 2)
-						side = 2;
-					if (side == 1)
-						soundext_Play_SFX(sfxTarget2, sfx_volume);
-					else
-						soundext_Play_SFX(sfxTarget1, sfx_volume);
-				}
-				slot = opcode - BCMD_SHOW_TARGET0;
-				brief.target_on[slot] = 1;
-				brief.target_state[slot] = flag ? 80 : 0;
-				brief.target_id[slot] = params[0];
-				break;
-			}
-			case BCMD_CLEAR_TEXT: {
-				int16_t k;
-				for (k = 0; k < 8; k++)
-					brief.text_on[k] = 0;
-				brief.text_off = 1;
-				break;
-			}
-			case BCMD_SHOW_TEXT0:
-			case BCMD_SHOW_TEXT0 + 1:
-			case BCMD_SHOW_TEXT0 + 2:
-			case BCMD_SHOW_TEXT0 + 3:
-			case BCMD_SHOW_TEXT0 + 4:
-			case BCMD_SHOW_TEXT0 + 5:
-			case BCMD_SHOW_TEXT0 + 6:
-			case BCMD_SHOW_TEXT7: {
-				int16_t slot;
-
-				if (!flag) {
-					char text_buf[40];
-					int16_t text_len;
-
-					strcpy(text_buf, (char*)xmemhdl_Lock_Handle(brief.text_data[params[0]]));
-					xmemhdl_Unlock_Handle(brief.text_data[params[0]]);
-					text_len = (int16_t)strlen(text_buf);
-					if (text_len) {
-						soundext_Play_SFX(sfxText, 0);
-						soundext_Fade_SFX(sfxText, 0, 4 * text_len);
+				case BCMD_MOVE:
+					if (cmd_time == 0 || flag) {
+						map_state.center_x = params[0];
+						map_state.target_x = params[0];
+						map_state.target_y = params[1];
+						map_state.center_y = params[1];
+					} else {
+						map_state.target_x = params[0];
+						map_state.target_y = params[1];
 					}
+					brief.move_on = 1;
+					break;
+				case BCMD_ZOOM:
+					if (cmd_time == 0 || flag) {
+						map_state.scale_x = params[0];
+						map_state.scale_target_x = params[0];
+						map_state.scale_target_y = params[1];
+						map_state.scale_y = params[1];
+					} else {
+						map_state.scale_target_x = params[0];
+						map_state.scale_target_y = params[1];
+					}
+					brief.scale_on = 1;
+					break;
+				case BCMD_CLEAR_TARGET: {
+					int16_t k;
+					for (k = 0; k < 8; k++)
+						brief.target_on[k] = 0;
+					brief.target_off = 1;
+					break;
 				}
-				slot = opcode - BCMD_SHOW_TEXT0;
-				brief.text_on[slot] = 1;
-				brief.text_state[slot] = flag ? 80 : 0;
-				brief.text_id[slot] = params[0];
-				brief.text_x[slot] = params[1];
-				brief.text_y[slot] = params[2];
-				brief.text_color[slot] = params[3];
-				break;
+				case BCMD_SHOW_TARGET0:
+				case BCMD_SHOW_TARGET0 + 1:
+				case BCMD_SHOW_TARGET0 + 2:
+				case BCMD_SHOW_TARGET0 + 3:
+				case BCMD_SHOW_TARGET0 + 4:
+				case BCMD_SHOW_TARGET0 + 5:
+				case BCMD_SHOW_TARGET0 + 6:
+				case BCMD_SHOW_TARGET7: {
+					int16_t slot;
+
+					if (!flag) {
+						int16_t side = fgroup.fg[params[0]].side;
+						if (side > 2)
+							side = 2;
+						if (side == 1)
+							soundext_Play_SFX(sfxTarget2, sfx_volume);
+						else
+							soundext_Play_SFX(sfxTarget1, sfx_volume);
+					}
+					slot = opcode - BCMD_SHOW_TARGET0;
+					brief.target_on[slot] = 1;
+					brief.target_state[slot] = flag ? 80 : 0;
+					brief.target_id[slot] = params[0];
+					break;
+				}
+				case BCMD_CLEAR_TEXT: {
+					int16_t k;
+					for (k = 0; k < 8; k++)
+						brief.text_on[k] = 0;
+					brief.text_off = 1;
+					break;
+				}
+				case BCMD_SHOW_TEXT0:
+				case BCMD_SHOW_TEXT0 + 1:
+				case BCMD_SHOW_TEXT0 + 2:
+				case BCMD_SHOW_TEXT0 + 3:
+				case BCMD_SHOW_TEXT0 + 4:
+				case BCMD_SHOW_TEXT0 + 5:
+				case BCMD_SHOW_TEXT0 + 6:
+				case BCMD_SHOW_TEXT7: {
+					int16_t slot;
+
+					if (!flag) {
+						char text_buf[40];
+						int16_t text_len;
+
+						strcpy(text_buf, (char*)xmemhdl_Lock_Handle(brief.text_data[params[0]]));
+						xmemhdl_Unlock_Handle(brief.text_data[params[0]]);
+						text_len = (int16_t)strlen(text_buf);
+						if (text_len) {
+							soundext_Play_SFX(sfxText, 0);
+							soundext_Fade_SFX(sfxText, 0, 4 * text_len);
+						}
+					}
+					slot = opcode - BCMD_SHOW_TEXT0;
+					brief.text_on[slot] = 1;
+					brief.text_state[slot] = flag ? 80 : 0;
+					brief.text_id[slot] = params[0];
+					brief.text_x[slot] = params[1];
+					brief.text_y[slot] = params[2];
+					brief.text_color[slot] = params[3];
+					break;
+				}
+				default:
+					break;
 			}
-			default:
-				break;
-		}
 		}
 	}
 }

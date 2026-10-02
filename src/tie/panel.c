@@ -904,7 +904,8 @@ void panel_updatelasers(void) {
 				 * the filled-frame index (1 normal-charge, 2 overcharge,
 				 * 0 = no charge). HD reads both and reproduces the same
 				 * 10-cel paint without re-deriving from `charge`. */
-				TieHudSnapshot_RecordLaserCharge((uint16_t)(g + 3), (int16_t)led_count, (uint8_t)filled_frame);
+				TieHudSnapshot_RecordLaserCharge((uint16_t)(g + 3), (int16_t)led_count,
+												 (uint8_t)filled_frame);
 #endif
 			}
 		}
@@ -916,23 +917,23 @@ void panel_updatelasers(void) {
 			lever = 0;
 		} else if (!pstate.player_weapon_mode && pstate.player_weapon_group == bank) {
 			switch (pstate.player_craft->laser_owner_player[bank]) {
-			case 3:
-				status = 3;
-				break;
-			case 1:
-				if (pstate.player_craft->laser_first_slot[bank] == g)
+				case 3:
 					status = 3;
-				else
-					status = 1;
-				break;
-			case 2:
-				if (pstate.player_craft->laser_first_slot[bank] == g)
-					status = 3;
-				else if (weapon_groups >= 4 && pstate.player_craft->laser_first_slot[bank] + 2 == g)
-					status = 3;
-				else
-					status = 1;
-				break;
+					break;
+				case 1:
+					if (pstate.player_craft->laser_first_slot[bank] == g)
+						status = 3;
+					else
+						status = 1;
+					break;
+				case 2:
+					if (pstate.player_craft->laser_first_slot[bank] == g)
+						status = 3;
+					else if (weapon_groups >= 4 && pstate.player_craft->laser_first_slot[bank] + 2 == g)
+						status = 3;
+					else
+						status = 1;
+					break;
 			}
 			lever = status;
 
@@ -1379,10 +1380,11 @@ void panel_addbliptoradar(uint16_t target_obj) {
 		/* Rotate by player orientation: dot product with (fwd/side/up). */
 		eye_z = (((int32_t)pstate.player->fwd_x * dx) >> 15) + (((int32_t)pstate.player->fwd_y * dy) >> 15) +
 				(((int32_t)pstate.player->fwd_z * dz) >> 15);
-		eye_x = (((int32_t)pstate.player->side_x * dx) >> 15) + (((int32_t)pstate.player->side_y * dy) >> 15) +
-				(((int32_t)pstate.player->side_z * dz) >> 15);
-		eye_y_neg = -((((int32_t)pstate.player->up_x * dx) >> 15) + (((int32_t)pstate.player->up_y * dy) >> 15) +
-					  (((int32_t)pstate.player->up_z * dz) >> 15));
+		eye_x = (((int32_t)pstate.player->side_x * dx) >> 15) +
+				(((int32_t)pstate.player->side_y * dy) >> 15) + (((int32_t)pstate.player->side_z * dz) >> 15);
+		eye_y_neg =
+			-((((int32_t)pstate.player->up_x * dx) >> 15) + (((int32_t)pstate.player->up_y * dy) >> 15) +
+			  (((int32_t)pstate.player->up_z * dz) >> 15));
 	}
 
 	if (eye_z < 0) {
@@ -1576,7 +1578,7 @@ void panel_buildobjectname(uint16_t target_obj, uint16_t flags) {
 				festring_farstradd(0x46);
 			else
 				festring_farstradd(0x56);
-				festring_farstrcat(fg_array[staticobjects[target_obj].fg_idx].name);
+			festring_farstrcat(fg_array[staticobjects[target_obj].fg_idx].name);
 		}
 	} else if (flags & 1) { /* waypoint: ref with high bit set */
 		festring_farstradd((char)0xFE);

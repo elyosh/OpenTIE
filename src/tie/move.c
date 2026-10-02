@@ -170,7 +170,8 @@ void move_moveobjects(void) {
 								draw_Lockshipfileptrs(obj->ship_idx);
 								collide_makeobjectexplosion(i, 130);
 								objects[i].damage_state =
-									(uint8_t)(objectblockptr->length >> (9 - (int8_t)objectblockptr->model_scale_shift));
+									(uint8_t)(objectblockptr->length >>
+											  (9 - (int8_t)objectblockptr->model_scale_shift));
 							}
 						} else {
 							collide_makeobjectexplosion(i, 130);
@@ -518,8 +519,8 @@ void move_moveobjects(void) {
 							else
 								mesh--;
 							ofs_up = (int16_t)(mesh->center_up >> 1);
-							pai_calcrotatedpoint(&objects[target_idx], (int16_t)(mesh->center_side >> 1), ofs_up,
-												 (int16_t)-(mesh->center_fwd >> 1));
+							pai_calcrotatedpoint(&objects[target_idx], (int16_t)(mesh->center_side >> 1),
+												 ofs_up, (int16_t)-(mesh->center_fwd >> 1));
 
 							/* ShipModelData.model_scale_shift scales the rotated
 							 * offsets; the binary's `shl reg, cl` is routed through

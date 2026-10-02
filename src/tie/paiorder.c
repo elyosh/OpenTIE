@@ -710,8 +710,8 @@ int16_t paiorder_mothershiporder(void) {
 int16_t paiorder_lookfordisableorder(void) {
 	uint16_t target;
 
-	if ((uint16_t)craftptr->pending_radio_command != 0xFF
-	    && (uint16_t)craftptr->pending_radio_command != 0xFB) {
+	if ((uint16_t)craftptr->pending_radio_command != 0xFF &&
+		(uint16_t)craftptr->pending_radio_command != 0xFB) {
 		target = craftptr->pending_radio_command;
 		if (pai_worthytarget(target)) {
 			craftptr->ai_target_ref = (int16_t)target;
@@ -918,7 +918,8 @@ int16_t paiorder_avoidhitorder(void) {
 					continue;
 				if (mc->missile_target != active)
 					continue;
-				if (pai_roughproximitycheck(mi, (objects[mi].ship_idx == 144) ? 3 * miss_range : miss_range) == 1) {
+				if (pai_roughproximitycheck(mi, (objects[mi].ship_idx == 144) ? 3 * miss_range
+																			  : miss_range) == 1) {
 					craftptr->attacker_idx = mi;
 					pai_distancebetween(active, mi);
 					if (!approachtable[(uint16_t)(trig2_xyangle - objects[active].heading) >> 13])
@@ -1462,18 +1463,21 @@ int16_t paiorder_mothershipreadyorder(void) {
 	ready = 0;
 	if (docked) {
 		if (fg_array[ai.fg_idx].capture_fg_used) {
-			if (fgstatus[(int8_t)fg_array[ai.fg_idx].capture_fg].cond[0].count == fgstatus[(int8_t)fg_array[ai.fg_idx].capture_fg].cond[0].detail)
+			if (fgstatus[(int8_t)fg_array[ai.fg_idx].capture_fg].cond[0].count ==
+				fgstatus[(int8_t)fg_array[ai.fg_idx].capture_fg].cond[0].detail)
 				ready = 1;
 		}
 	} else {
 		primary_ok = 1;
 		secondary_ok = 1;
 		if (fg_array[ai.fg_idx].pri_stop_fg_used) {
-			if (fgstatus[(int8_t)fg_array[ai.fg_idx].pri_stop_fg].cond[0].count != fgstatus[(int8_t)fg_array[ai.fg_idx].pri_stop_fg].cond[0].detail)
+			if (fgstatus[(int8_t)fg_array[ai.fg_idx].pri_stop_fg].cond[0].count !=
+				fgstatus[(int8_t)fg_array[ai.fg_idx].pri_stop_fg].cond[0].detail)
 				primary_ok = 0;
 		}
 		if (fg_array[ai.fg_idx].sec_stop_fg_used) {
-			if (fgstatus[(int8_t)fg_array[ai.fg_idx].sec_stop_fg].cond[0].count != fgstatus[(int8_t)fg_array[ai.fg_idx].sec_stop_fg].cond[0].detail)
+			if (fgstatus[(int8_t)fg_array[ai.fg_idx].sec_stop_fg].cond[0].count !=
+				fgstatus[(int8_t)fg_array[ai.fg_idx].sec_stop_fg].cond[0].detail)
 				secondary_ok = 0;
 		}
 		ready = primary_ok & secondary_ok;

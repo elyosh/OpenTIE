@@ -1047,7 +1047,9 @@ void shipext_Get_Train_Ship_Pos(int32_t* out_x, int32_t* out_y, int32_t* out_z) 
 /* --- Combat --- */
 
 // FUNCTION: TIE95 0x81448
-void shipext_Get_Combat_Ship_Name(char* out) { shipext_Get_Ship_Name(out, pilot_record.cur_combat_ship, 0, 0); }
+void shipext_Get_Combat_Ship_Name(char* out) {
+	shipext_Get_Ship_Name(out, pilot_record.cur_combat_ship, 0, 0);
+}
 
 // FUNCTION: TIE95 0x81080
 void shipext_Next_Combat_Ship(void) {

@@ -26,10 +26,10 @@ typedef struct RUNTIME_MissionStateStruct {
 	 * Bomber, 8=TIE Advanced, 9=TIE Defender, 12=TIE Defender Mk II,
 	 * 16=Assault Gunboat). Used throughout the engine as the boolean
 	 * "training mission active" predicate. */
-	uint8_t train_craft_type;      /* +0x000 */
-	uint8_t train_craft_type_src;  /* +0x001: source value set by Mission_Enter from the ship switch; copied
-									  into train_craft_type at mission start. */
-	uint8_t train_level;           /* +0x002: training level (set by Mission_Enter) */
+	uint8_t train_craft_type;     /* +0x000 */
+	uint8_t train_craft_type_src; /* +0x001: source value set by Mission_Enter from the ship switch; copied
+									 into train_craft_type at mission start. */
+	uint8_t train_level;          /* +0x002: training level (set by Mission_Enter) */
 #if !defined(TIE98) || defined(TIE_MODERN)
 	/* TIE98 has no byte here: its later fields sit one byte below the
 	 * offsets noted on them. The port keeps the TIE95 layout. */

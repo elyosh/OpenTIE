@@ -2003,9 +2003,8 @@ void tie_updatemusic(void) {
 					if ((primary_total > 3 && primary_killed + 1 == primary_total) ||
 						(secondary_total > 3 && secondary_killed + 1 == secondary_total)) {
 						state = 9;
-					} else if (min_distance < 0x8000 &&
-							   (objects[closest].genus == GENUS_STARSHIP ||
-								objects[closest].genus == GENUS_PLATFORM)) {
+					} else if (min_distance < 0x8000 && (objects[closest].genus == GENUS_STARSHIP ||
+														 objects[closest].genus == GENUS_PLATFORM)) {
 						state = 8; /* outnumbered */
 					} else {
 						uint16_t hostile_score;

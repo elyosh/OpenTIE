@@ -1134,7 +1134,8 @@ int play1_Play1(SceneHeadStruct* the_head) {
 		}
 	}
 #ifdef TIE_MODERN
-	TieFilm_RunView(file, file2, scene, play1_Scene_Changes_Frame_Rate(play1_cur_scene[play1_id]), play1_is_streaming != 0, surface_set);
+	TieFilm_RunView(file, file2, scene, play1_Scene_Changes_Frame_Rate(play1_cur_scene[play1_id]),
+					play1_is_streaming != 0, surface_set);
 	return 0;
 #else
 	shellext_Handle_TIE_View();

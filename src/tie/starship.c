@@ -969,7 +969,9 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	charge_now = (uint8_t)(craftptr->weapon_slots[weapon_slot_idx].charge & 0x7F);
 #ifdef TIE_MODERN
 	{
-		const uint8_t divisor = craftptr->skill_value >= 0xAAAAu ? 2u : craftptr->skill_value >= 0x5555u ? 4u : 6u;
+		const uint8_t divisor = craftptr->skill_value >= 0xAAAAu   ? 2u
+								: craftptr->skill_value >= 0x5555u ? 4u
+																   : 6u;
 		TieTurretTimingState* cooldown =
 			TieFlightTimingState_Turret(craft_obj_idx, weapon_slot_idx, craft->idnumber, divisor);
 		/* Retain sub-unit cooldown time so a four-tick frame can advance
@@ -1110,8 +1112,8 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 		}
 
 		if (mesh->mesh_type == TIE_MESH_ROTARY_GUN_TURRET) {
-			fview_comprotatepoint((int16_t)(craftptr->mesh_rotation[mesh_idx] << 8), mesh, hp_side, -hp_fwd_neg,
-								  hp_up);
+			fview_comprotatepoint((int16_t)(craftptr->mesh_rotation[mesh_idx] << 8), mesh, hp_side,
+								  -hp_fwd_neg, hp_up);
 			hp_side = (int16_t)rotatedx;
 			hp_fwd_neg = (int16_t)rotatedy;
 			hp_fwd_neg = (int16_t)(-hp_fwd_neg);
@@ -1232,9 +1234,18 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 	objects[new_obj].world_x_prev = gun_wx;
 	objects[new_obj].world_y_prev = gun_wy;
 	objects[new_obj].world_z_prev = gun_wz;
-	gun_wx += (craftmoveX * (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_idx - WEAPON_SPECIES_BASE]) >> 15;
-	gun_wy += (craftmoveY * (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_idx - WEAPON_SPECIES_BASE]) >> 15;
-	gun_wz += (craftmoveZ * (int16_t)TIE_FLIGHT_EDITION(projectilelength, tie98_projectilelength)[projectile_idx - WEAPON_SPECIES_BASE]) >> 15;
+	gun_wx +=
+		(craftmoveX * (int16_t)TIE_FLIGHT_EDITION(
+						  projectilelength, tie98_projectilelength)[projectile_idx - WEAPON_SPECIES_BASE]) >>
+		15;
+	gun_wy +=
+		(craftmoveY * (int16_t)TIE_FLIGHT_EDITION(
+						  projectilelength, tie98_projectilelength)[projectile_idx - WEAPON_SPECIES_BASE]) >>
+		15;
+	gun_wz +=
+		(craftmoveZ * (int16_t)TIE_FLIGHT_EDITION(
+						  projectilelength, tie98_projectilelength)[projectile_idx - WEAPON_SPECIES_BASE]) >>
+		15;
 	objects[new_obj].world_x = gun_wx;
 	objects[new_obj].world_y = gun_wy;
 	objects[new_obj].world_z = gun_wz;

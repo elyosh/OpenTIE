@@ -103,7 +103,8 @@ int16_t msgroom_scrollmsgs(int16_t cur_idx, int16_t delta) {
 			msgscrollheight = step;
 			msgscrolloffset = (uint16_t)(msgareabottom - msgareatop - step);
 			rtsvga2_scrollbufferVGA(loadbuffer, step, 1);
-			festring_setbound(0, (uint16_t)(msgareabottom - msgscrollheight), (uint16_t)screenXRes, msgareabottom);
+			festring_setbound(0, (uint16_t)(msgareabottom - msgscrollheight), (uint16_t)screenXRes,
+							  msgareabottom);
 		}
 	} else {
 		festring_setbound(0, msgareatop, (uint16_t)screenXRes, msgareabottom);
