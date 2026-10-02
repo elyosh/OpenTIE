@@ -7,16 +7,17 @@
 extern "C" {
 #endif
 
-int modelbounds_getmaxextent(uint16_t model_type);
-int modelbounds_getminx(uint16_t model_type);
-int modelbounds_getminy(uint16_t model_type);
-int modelbounds_getminz(uint16_t model_type);
-int modelbounds_getmaxx(uint16_t model_type);
-int modelbounds_getmaxy(uint16_t model_type);
-int modelbounds_getmaxz(uint16_t model_type);
-int modelbounds_getsizex(uint16_t model_type);
+void modelbounds_ensurecached(int model_type);
+int modelbounds_getmaxextent(int model_type);
+int modelbounds_getminx(int model_type);
+int modelbounds_getminy(int model_type);
+int modelbounds_getminz(int model_type);
+int modelbounds_getmaxx(int model_type);
+int modelbounds_getmaxy(int model_type);
+int modelbounds_getmaxz(int model_type);
+int modelbounds_getsizex(int model_type);
 int modelbounds_getsizey(uint16_t model_type);
-int modelbounds_getsizez(uint16_t model_type);
+int modelbounds_getsizez(int model_type);
 
 #ifdef __cplusplus
 }

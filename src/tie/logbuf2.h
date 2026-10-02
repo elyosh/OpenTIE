@@ -52,7 +52,7 @@ void logbuf2_outdiffbuffer_tie98(const void* oldbuf, const void* newbuf);
 void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color);
 void logbuf2_drawclippedline16_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color);
 void logbuf2_drawclippedline_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color);
-void logbuf2_startPIP(uint16_t width, uint16_t depth, int16_t clear_runs, uint32_t displaycorner);
+void logbuf2_startPIP(uint16_t width, uint16_t depth, uint16_t clear_runs, uint32_t displaycorner);
 void logbuf2_finishPIP(void);
 void logbuf2_startPIP_tie98(uint16_t width, uint16_t depth, int clear_runs, uint32_t displaycorner);
 void logbuf2_finishPIP_tie98(void);

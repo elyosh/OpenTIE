@@ -128,7 +128,7 @@ void paiman_setflighttotarget(uint16_t heading_bias, int16_t drive_pitch);
 void paiman_setturn(int16_t heading_step);
 
 /* Set throttle_speed directly. */
-void paiman_setpower(uint16_t throttle);
+void paiman_setpower(uint16_t obj_idx, uint16_t throttle);
 
 /* Convert an absolute desired speed to throttle_speed, accounting for
  * the shield/beam/laser power-balance margin and the craft's max_speed_cache. */
@@ -180,9 +180,9 @@ extern ManeuverFunc _manvrfunctionptr;
  * formpos*[6 * craftptr->formation + craftptr->craft_idx_in_fg]. Values
  * are unit offsets scaled by (separation_units × bound_{w,h,d}) by
  * paiman_calcformation and create_createcraft. */
-extern const int16_t _formposx[78];
-extern const int16_t _formposy[78];
-extern const int16_t _formposz[79];
+extern const int16_t _formposx[13][6];
+extern const int16_t _formposy[13][6];
+extern const int16_t _formposz[13][6];
 
 /* Escort position grid. 27 entries = 3×3×3 cells (side, up, fwd) around
  * the escorted leader; indexed by fg[fg].ai[ai_count].var[0] via

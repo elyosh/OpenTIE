@@ -240,443 +240,6 @@ const uint8_t iconysize320[66] = {
 	9, 5, 7, 7, 4, 6, 5, 5, 7, 7, 8, 7, 6, 7, 4, 4, 4, 4, 5, 8, 6, 4, 5, 6, 5, 8, 8, 10, 4, 4, 4, 6, 7,
 };
 
-/* --- maproom_firstingroup ------------------------------------------------- */
-
-// FUNCTION: TIE95 0x31B94
-int32_t maproom_firstingroup(uint16_t idx) {
-	/* Sentinel + boundary cases all return "is first". */
-	uint8_t my_fg;
-	uint16_t i;
-
-	if (idx == 0xFFFF)
-		return 1;
-	if (idx == pstate.object_idx)
-		return 1;
-	if (idx >= NUM_CRAFTS)
-		return 1; /* retail uses 0x20 (32), demo had 28 */
-	if (idx == 0)
-		return 1;
-
-	/* Scan earlier slots; if any earlier object shares this fg_idx, the
-	 * current slot isn't the first member. */
-	my_fg = objects[idx].fg_idx;
-	for (i = 0; i < idx; i++) {
-		if (objects[i].fg_idx == my_fg)
-			return 0;
-	}
-	return 1;
-}
-
-/* --- maproom_setcamerafocus ----------------------------------------------- */
-
-// FUNCTION: TIE95 0x31ABC
-void maproom_setcamerafocus(uint16_t obj_or_kind, int32_t distance) {
-	/* Resolve the focus point (writes worldlocx/y/z). fg_idx=0 is the
-	 * caller's "no fg context" sentinel for create_getworldposition. */
-	int32_t remaining;
-
-	create_getworldposition(obj_or_kind, 0);
-
-	camera.x = worldlocx;
-	camera.y = worldlocy;
-	camera.z = worldlocz;
-
-	/* Walk back along eye->world Z basis vector (worldeyeA3/B3/C3) by
-	 * `distance` units. The binary does this in two phases to avoid
-	 * 16-bit overflow: full-unit chunks (one basis vector subtracted
-	 * each loop) until the remainder fits in a 16-bit signed multiply,
-	 * then a single fractional `(int16)remainder * basis >> 15` step.
-	 *
-	 * Note: the binary uses worldeye* (the camera basis), NOT rotworldeye*
-	 * (which is worldeye composed with the per-craft rotation). */
-	remaining = distance;
-	while (remaining > 0x7FFF) {
-		remaining -= 0x7FFF;
-		camera.x -= worldeyeA3;
-		camera.y -= worldeyeB3;
-		camera.z -= worldeyeC3;
-	}
-	camera.x -= (worldeyeA3 * (int16_t)remaining) >> 15;
-	camera.y -= (worldeyeB3 * (int16_t)remaining) >> 15;
-	camera.z -= (worldeyeC3 * (int16_t)remaining) >> 15;
-}
-
-/* --- maproom_drawNHIstatus ------------------------------------------------ */
-
-// FUNCTION: TIE95 0x31C04
-void maproom_drawNHIstatus(uint16_t page_idx) {
-	/* The status row sits along the bottom of the screen. mapScreenHeight
-	 * is the world-area height (= mapScreenBottom - mapScreenTop) but the
-	 * IDA decompile uses it as the absolute bottom Y; we mirror that. */
-	uint16_t panel_w;
-	uint16_t mid_left;
-
-	/* --- Bottom-left panel: Hostile counter --- */
-	panel_w = screenXRes >> 2;
-	festring_setbound(0, mapScreenHeight - (fontheight + 1), panel_w, mapScreenHeight);
-	festring_setbackcolor(MAP_PANEL_BG);
-	clearwindow();
-	festring_setcursor(2, mapScreenHeight - fontheight);
-	festring_settextcolor(MAP_TC_HOSTILE);
-	festring_outstring((const uint8_t*)hostilestr);
-	festring_outstringright((const uint8_t*)NHIstatusstrings[hostileflag]);
-
-	/* --- Bottom-center panel: Imperial counter --- */
-	mid_left = (screenXRes >> 1) - panel_w / 2;
-	festring_setbound(mid_left, mapScreenHeight - (fontheight + 1), mid_left + panel_w, mapScreenHeight);
-	festring_setbackcolor(MAP_PANEL_BG);
-	clearwindow();
-	festring_setcursor(mid_left + 2, mapScreenHeight - fontheight);
-	festring_settextcolor(MAP_TC_IMPERIAL);
-	festring_outstring((const uint8_t*)imperialstr);
-	festring_outstringright((const uint8_t*)NHIstatusstrings[imperialflag]);
-
-	/* --- Bottom-right panel: Neutral counter --- */
-	festring_setbound(screenXRes - panel_w, mapScreenHeight - (fontheight + 1), screenXRes, mapScreenHeight);
-	festring_setbackcolor(MAP_PANEL_BG);
-	clearwindow();
-	festring_setcursor(screenXRes - panel_w + 2, mapScreenHeight - fontheight);
-	festring_settextcolor(MAP_TC_NEUTRAL);
-	festring_outstring((const uint8_t*)neutralstr);
-	festring_outstringright((const uint8_t*)NHIstatusstrings[neutralflag]);
-
-	/* --- Top-left help string for the active page --- */
-	festring_setbound(0, 0, sys2_calclength((const uint8_t*)maproomhelpstrings[0]) + fontheight,
-					  fontheight + 2);
-	festring_setbackcolor(MAP_PANEL_BG);
-	clearwindow();
-	festring_setcursor(2, 1);
-	festring_settextcolor(MAP_TC_HELP);
-	festring_outstring((const uint8_t*)maproomhelpstrings[page_idx]);
-
-	/* --- Top-right help string (always idx 2) --- */
-	mid_left = screenXRes - (sys2_calclength((const uint8_t*)maproomhelpstrings[2]) + fontheight);
-	festring_setbound(mid_left, 0, screenXRes, fontheight + 2);
-	festring_setbackcolor(MAP_PANEL_BG);
-	clearwindow();
-	festring_setcursor(mid_left + 2, 1);
-	festring_settextcolor(MAP_TC_HELP);
-	festring_outstring((const uint8_t*)maproomhelpstrings[2]);
-}
-
-/* --- maproom_drawmapitem -------------------------------------------------- */
-
-// FUNCTION: TIE95 0x31010
-void maproom_drawmapitem(uint16_t obj_idx, uint16_t selected_obj_ref, char num_label, int32_t z) {
-	/* --- Phase 1: world position lookup --- */
-	int32_t eyex;
-	int32_t eyey;
-	int32_t screen_x;
-	int32_t screen_y;
-	int icon_only;
-	uint16_t color;
-	int16_t side_icon_offset_saved;
-	uint8_t side;
-	uint16_t ship_idx;
-	int32_t ground_screen_x, ground_screen_y;
-	uint16_t base_icon_idx;
-	uint16_t final_icon_idx;
-	int16_t icon_x;
-	int16_t icon_y;
-	int16_t icon_center_x;
-	int16_t icon_bottom_y;
-	uint16_t dist_obj_ref;
-	int16_t two_digit_w;
-	int32_t dist_scaled;
-	uint16_t dist_int;
-	uint16_t dist_int_part;
-
-	if (obj_idx >= MAP_FLIGHT_SLOT_COUNT) {
-		/* Static slot: world coord is int16 / 256, scale up by <<8.
-		 * The binary uses unaligned-dword loads + sar 16 here; we use
-		 * the explicit field accesses since the StaticObject struct is
-		 * pack(1) in C as well. */
-		const uint16_t static_idx = (uint16_t)(obj_idx - MAP_FLIGHT_SLOT_COUNT);
-		worldx = (int32_t)staticobjects[static_idx].world_x * 256;
-		worldy = (int32_t)staticobjects[static_idx].world_y * 256;
-		worldz = (int32_t)staticobjects[static_idx].world_z * 256;
-	} else {
-		worldx = objects[obj_idx].world_x;
-		worldy = objects[obj_idx].world_y;
-		worldz = objects[obj_idx].world_z;
-	}
-
-	/* --- Phase 2: camera-relative + project --- */
-	worldx -= camera.x;
-	worldy -= camera.y;
-	worldz -= camera.z;
-
-	eyex = transfm2_geteyex(worldx, worldy, worldz);
-	eyey = transfm2_geteyey(worldx, worldy, worldz);
-	screen_x = transfm2_getscreenx(eyex, z);
-	screen_y = transfm2_getscreeny(eyey, z);
-
-	festring_settextcolor(MAP_TC_DEFAULT);
-
-	/* --- Phase 3: side dispatch -> background colour + icon offset --- */
-	icon_only = 0;
-	color = 0; /* 0 = no highlight */
-
-	if (obj_idx < MAP_FLIGHT_SLOT_COUNT) {
-		side = objects[obj_idx].side;
-	} else {
-		side = fg_array[staticobjects[obj_idx - MAP_FLIGHT_SLOT_COUNT].fg_idx].side;
-	}
-
-	if (side == 0) {
-		if (hostileflag == 1)
-			icon_only = 1;
-		festring_setbackcolor(MAP_BG_HOSTILE);
-		side_icon_offset_saved = 0;
-	} else if (side == 1 || side == 4) {
-		if (imperialflag == 1)
-			icon_only = 1;
-		festring_setbackcolor(MAP_BG_IMPERIAL);
-		side_icon_offset_saved = (int16_t)(2 * maxMapIcons);
-	} else if (side == 2) {
-		if (neutralflag == 1)
-			icon_only = 1;
-		festring_setbackcolor(MAP_BG_NEUTRAL);
-		side_icon_offset_saved = (int16_t)(3 * maxMapIcons);
-	} else {
-		if (neutralflag == 1)
-			icon_only = 1;
-		festring_setbackcolor(MAP_BG_OTHER);
-		side_icon_offset_saved = (int16_t)maxMapIcons;
-	}
-
-	/* --- Phase 4: ship_idx + selected/target highlight --- */
-
-	if (obj_idx < MAP_FLIGHT_SLOT_COUNT) {
-		ship_idx = objects[obj_idx].ship_idx;
-		if (obj_idx == selected_obj_ref) {
-			festring_setbackcolor(MAP_BG_SELECTED);
-			color = MAP_BG_SELECTED;
-			icon_only = 0;
-		}
-		if (obj_idx == pstate.target_obj_idx) {
-			color = MAP_BG_TARGET;
-			festring_setbackcolor(MAP_BG_TARGET);
-			icon_only = 0;
-		}
-	} else {
-		uint16_t static_obj_ref;
-
-		ship_idx = staticobjects[obj_idx - MAP_FLIGHT_SLOT_COUNT].species;
-		static_obj_ref = (uint16_t)(obj_idx + MAP_STATIC_BIAS);
-		if (static_obj_ref == selected_obj_ref) {
-			festring_setbackcolor(MAP_BG_SELECTED);
-			icon_only = 0;
-			color = MAP_BG_SELECTED;
-		}
-		if (static_obj_ref == pstate.target_obj_idx) {
-			festring_setbackcolor(MAP_BG_TARGET);
-			color = MAP_BG_TARGET;
-			icon_only = 0;
-		}
-	}
-
-	/* --- Phase 5: missile-target indicator (locked target only) --- */
-	if (obj_idx < MAP_FLIGHT_SLOT_COUNT && obj_idx == pstate.target_obj_idx) {
-		/* AI craft (idx>=NUM_CRAFTS, i.e. warhead slots) read missile_target;
-		 * player+wingmen (idx<NUM_CRAFTS) read the ai_target_ref linked-target
-		 * field (per the binary's split). */
-		uint16_t mt;
-		int32_t mx, my;
-
-		if (obj_idx >= NUM_CRAFTS)
-			mt = objects[obj_idx].craft_ptr->missile_target;
-		else
-			mt = (uint16_t)objects[obj_idx].craft_ptr->ai_target_ref;
-
-		create_getworldposition(mt, 0);
-		worldlocx -= camera.x;
-		worldlocy -= camera.y;
-		worldlocz -= camera.z;
-
-		objecteyex = transfm2_geteyex(worldlocx, worldlocy, worldlocz);
-		objecteyey = transfm2_geteyey(worldlocx, worldlocy, worldlocz);
-		objecteyez = transfm2_geteyez(worldlocx, worldlocy, worldlocz);
-		if (objecteyez <= 0)
-			transfm2_clipobjecteyez(eyex, eyey, z);
-		mx = transfm2_getscreenx(objecteyex, objecteyez);
-		my = transfm2_getscreeny(objecteyey, objecteyez);
-		if (TIE_DISPLAY_DX5)
-			logbuf2_drawclippedline_tie98(mx, my, screen_x, screen_y, fontcolors[10]);
-		else
-			logbuf2_drawclippedline(mx, my, screen_x, screen_y, fontcolors[10]);
-	}
-
-	/* --- Phase 6: ground-projection vertical line --- */
-
-	objecteyex = transfm2_geteyex(worldx, worldy, -65536 - camera.z);
-	objecteyey = transfm2_geteyey(worldx, worldy, -65536 - camera.z);
-	objecteyez = transfm2_geteyez(worldx, worldy, -65536 - camera.z);
-	if (objecteyez <= 0)
-		transfm2_clipobjecteyez(eyex, eyey, z);
-	ground_screen_x = transfm2_getscreenx(objecteyex, objecteyez);
-	ground_screen_y = transfm2_getscreeny(objecteyey, objecteyez);
-	if (TIE_DISPLAY_DX5)
-		logbuf2_drawclippedline_tie98(ground_screen_x, ground_screen_y, screen_x, screen_y, backcolor);
-	else
-		logbuf2_drawclippedline(ground_screen_x, ground_screen_y, screen_x, screen_y, backcolor);
-
-	/* --- Phase 7: velocity-vector line (active flight objects only) --- */
-	if (obj_idx < MAP_FLIGHT_SLOT_COUNT) {
-		int32_t mvX;
-		int32_t mvY;
-		uint16_t cs;
-		int32_t vx, vy;
-		int32_t prev_eyex, prev_eyey, prev_eyez;
-
-		if (objects[obj_idx].orient_dirty) {
-			fview_calcrotatemove(objects[obj_idx].pitch, objects[obj_idx].heading, &objects[obj_idx]);
-			fview_calcrotateorient(objects[obj_idx].roll, 0, &objects[obj_idx]);
-		}
-
-		/* Watcom unaligned-load resolution: `*(int*)&move_dirty >> 16`
-		 * reads the moveX field at offset +0x3A, NOT move_dirty (+0x38).
-		 * Likewise `*(int*)&moveX >> 16` reads moveY at +0x3C. */
-		mvX = (int32_t)objects[obj_idx].moveX;
-		mvY = (int32_t)objects[obj_idx].moveY;
-
-		/* Initial nudge: the binary's `<< 8 >> 15` is mathematically
-		 * `>> 7` for sar; rewrite that way to avoid the C UB of
-		 * left-shifting a negative signed int. */
-		worldx += mvX >> 7;
-		worldy += mvY >> 7;
-
-		cs = (uint16_t)objects[obj_idx].current_speed;
-		if (cs < 0x400u) {
-			/* Slow craft: extra step proportional to current_speed. */
-			worldx += (mvX * 32 * (int32_t)cs) >> 15;
-			worldy += (mvY * 32 * (int32_t)cs) >> 15;
-		} else {
-			/* Fast craft: add the raw move vector once. */
-			worldx += mvX;
-			worldy += mvY;
-		}
-
-		/* Clip against the ground point projected above. */
-		prev_eyex = objecteyex;
-		prev_eyey = objecteyey;
-		prev_eyez = objecteyez;
-		objecteyex = transfm2_geteyex(worldx, worldy, -65536 - camera.z);
-		objecteyey = transfm2_geteyey(worldx, worldy, -65536 - camera.z);
-		objecteyez = transfm2_geteyez(worldx, worldy, -65536 - camera.z);
-		if (objecteyez <= 0)
-			transfm2_clipobjecteyez(prev_eyex, prev_eyey, prev_eyez);
-		vx = transfm2_getscreenx(objecteyex, objecteyez);
-		vy = transfm2_getscreeny(objecteyey, objecteyez);
-		if (TIE_DISPLAY_DX5)
-			logbuf2_drawclippedline_tie98(vx, vy, ground_screen_x, ground_screen_y, backcolor);
-		else
-			logbuf2_drawclippedline(vx, vy, ground_screen_x, ground_screen_y, backcolor);
-	}
-
-	/* --- Phase 8: viewport-cull + icon + label + distance --- */
-	festring_setbackcolor(MAP_PANEL_BG);
-
-	if (mapScreenLeft - 32 > screen_x)
-		return;
-	if (mapScreenRight + 32 < screen_x)
-		return;
-	if (mapScreenTop - 32 > screen_y)
-		return;
-	if (mapScreenBottom + 32 < screen_y)
-		return;
-
-	/* Pick the base icon variant; species index > 0x69 falls back to icon 19 (generic). */
-	base_icon_idx = (ship_idx > 0x69u) ? 19 : (uint16_t)species2icon[ship_idx];
-
-	/* Phase 8a: optional name label above the icon (not in icon-only mode). */
-	if (!icon_only) {
-		uint16_t name_obj_ref;
-		int build_name = 1;
-
-		if (obj_idx >= MAP_FLIGHT_SLOT_COUNT) {
-			/* ship_class == 8 = mines: don't print a name (binary clears
-			 * tempstring[0] to skip the label entirely). */
-			if (staticobjects[obj_idx - MAP_FLIGHT_SLOT_COUNT].ship_class == 8) {
-				tempstring[0] = 0;
-				build_name = 0;
-			}
-			name_obj_ref = (uint16_t)(obj_idx + MAP_STATIC_BIAS);
-		} else {
-			name_obj_ref = obj_idx;
-		}
-
-		if (build_name)
-			panel_buildobjectname(name_obj_ref, 2);
-
-		if (tempstring[0]) {
-			/* Optional 1-based digit suffix " (N)": '/' + num_label maps
-			 * num_label=1 -> '0', num_label=2 -> '1', ... matching the
-			 * binary's farstradd(num_label + 47). */
-			int16_t name_y;
-			int16_t name_w;
-
-			if (num_label) {
-				festring_farstradd(' ');
-				festring_farstradd('(');
-				festring_farstradd((char)(num_label + '/'));
-				festring_farstradd(')');
-			}
-			name_y = (int16_t)(screen_y - ((int32_t)iconysize[base_icon_idx] >> 1) - fontheight - 1);
-			name_w = sys2_calclength((const uint8_t*)tempstring);
-			festring_setcursor((int16_t)(screen_x - name_w / 2), name_y);
-			festring_outstring((const uint8_t*)tempstring);
-		}
-	}
-
-	/* Phase 8b: draw the icon (with optional fillbox highlight border). */
-	final_icon_idx = (uint16_t)(base_icon_idx + side_icon_offset_saved);
-	icon_x = (int16_t)((uint16_t)screen_x - ((int32_t)iconxsize[base_icon_idx] >> 1));
-	icon_y = (int16_t)((uint16_t)screen_y - ((int32_t)iconysize[base_icon_idx] >> 1));
-
-	if (color) {
-		festring_setbackcolor((uint8_t)color);
-		fillbox((uint16_t)(icon_x - 1), (uint16_t)(icon_y - 1),
-				(uint16_t)(icon_x + iconxsize[base_icon_idx] + 1),
-				(uint16_t)(icon_y + iconysize[base_icon_idx] + 1));
-	}
-
-	/* Margin clip: don't draw if the icon would cross any margin. */
-	if ((int16_t)icon_x >= leftmargin &&
-		(int16_t)(icon_x + iconxsize[base_icon_idx]) < (int)(uint16_t)rightmargin &&
-		(int16_t)icon_y >= topmargin &&
-		(int16_t)(icon_y + iconysize[base_icon_idx]) < (int)(uint16_t)bottommargin) {
-		drawshape(farbufferptrs[final_icon_idx], (uint16_t)icon_x, (uint16_t)icon_y, 0, 0);
-	}
-
-	/* Phase 8c: distance text below the icon (skipped in icon-only mode). */
-	festring_setbackcolor(MAP_PANEL_BG);
-	if (icon_only)
-		return;
-
-	icon_center_x = (int16_t)(((int32_t)iconxsize[base_icon_idx] >> 1) + (uint16_t)icon_x);
-	icon_bottom_y = (int16_t)(iconysize[base_icon_idx] + (int16_t)icon_y);
-
-	dist_obj_ref = (obj_idx >= MAP_FLIGHT_SLOT_COUNT) ? (uint16_t)(obj_idx + MAP_STATIC_BIAS) : obj_idx;
-	pai_distancebetween(selected_obj_ref, dist_obj_ref);
-
-	/* The "00" string is just a width template (= 2 character widths). */
-	two_digit_w = sys2_calclength((const uint8_t*)"00");
-	festring_setcursor((int16_t)(icon_center_x - two_digit_w), (int16_t)(icon_bottom_y + 1));
-
-	/* trig2_polardistance is the polar distance in raw map units; *161/65536
-	 * scales it into 0.00..99.99 MGLT units (capped at 9999). */
-	trig2_polardistance *= 161;
-	dist_scaled = trig2_polardistance >> 16;
-	if (((uint32_t)trig2_polardistance >> 16) >= 0x2710u)
-		dist_scaled = 9999;
-	dist_int = (uint16_t)dist_scaled;
-	dist_int_part = (uint16_t)(dist_int / 100);
-	panelrts_outnum(dist_int_part, 2, 1);
-	outchar('.');
-	panelrts_outnum((uint16_t)(dist_int - 100 * dist_int_part), 2, 2);
-}
-
 /* --- maproom_maproom ------------------------------------------------------ */
 
 // ORIGINAL_FUNCTION: TIE98 0x451470
@@ -1699,4 +1262,408 @@ int32_t maproom_maproom(void) {
 		return 0;
 #endif
 	}
+}
+
+/* --- maproom_drawmapitem -------------------------------------------------- */
+
+// FUNCTION: TIE95 0x31010
+void maproom_drawmapitem(uint16_t obj_idx, uint16_t selected_obj_ref, char num_label, int32_t z) {
+	int32_t ground_screen_y;
+	uint16_t x;
+	int32_t eyey;
+	int16_t icon_offset;
+	int32_t screen_x;
+	int32_t ground_screen_x;
+	uint16_t side;
+	int32_t eyex;
+	char icon_only;
+	uint16_t color;
+	uint16_t y;
+	uint16_t base_icon_idx;
+	int32_t screen_y;
+	uint16_t ship_idx;
+
+	/* --- Phase 1: world position lookup --- */
+	if (obj_idx < WARHEAD_SLOT_END) {
+		worldx = objects[obj_idx].world_x;
+		worldy = objects[obj_idx].world_y;
+		worldz = objects[obj_idx].world_z;
+	} else {
+		/* Static slot: world coord is stored / 256. */
+		worldx = staticobjects[obj_idx - WARHEAD_SLOT_END].world_x;
+		worldy = staticobjects[obj_idx - WARHEAD_SLOT_END].world_y;
+		worldz = staticobjects[obj_idx - WARHEAD_SLOT_END].world_z;
+		worldx *= 256;
+		worldy *= 256;
+		worldz *= 256;
+	}
+
+	/* --- Phase 2: camera-relative + project --- */
+	worldx -= camera.x;
+	worldy -= camera.y;
+	worldz -= camera.z;
+
+	eyex = transfm2_geteyex(worldx, worldy, worldz);
+	eyey = transfm2_geteyey(worldx, worldy, worldz);
+	screen_x = transfm2_getscreenx(eyex, z);
+	screen_y = transfm2_getscreeny(eyey, z);
+
+	festring_settextcolor(MAP_TC_DEFAULT);
+
+	/* --- Phase 3: side dispatch -> background colour + icon offset --- */
+	icon_only = 0;
+	color = 0; /* 0 = no highlight */
+
+	if (obj_idx >= WARHEAD_SLOT_END)
+		side = (int8_t)fg_array[staticobjects[obj_idx - WARHEAD_SLOT_END].fg_idx].side;
+	else
+		side = objects[obj_idx].side;
+
+	if (side == 0) {
+		if (hostileflag == 1)
+			icon_only = 1;
+		festring_setbackcolor(MAP_BG_HOSTILE);
+		icon_offset = 0;
+	} else if (side == 1 || side == 4) {
+		if (imperialflag == 1)
+			icon_only = 1;
+		festring_setbackcolor(MAP_BG_IMPERIAL);
+		icon_offset = (int16_t)(2 * maxMapIcons);
+	} else {
+		if (neutralflag == 1)
+			icon_only = 1;
+		if (side == 2) {
+			festring_setbackcolor(MAP_BG_NEUTRAL);
+			icon_offset = (int16_t)(3 * maxMapIcons);
+		} else {
+			festring_setbackcolor(MAP_BG_OTHER);
+			icon_offset = (int16_t)maxMapIcons;
+		}
+	}
+
+	/* --- Phase 4: ship_idx + selected/target highlight --- */
+	if (obj_idx >= WARHEAD_SLOT_END) {
+		ship_idx = staticobjects[obj_idx - WARHEAD_SLOT_END].species;
+		if (obj_idx + MAP_STATIC_BIAS == selected_obj_ref) {
+			festring_setbackcolor(MAP_BG_SELECTED);
+			icon_only = 0;
+			color = MAP_BG_SELECTED;
+		}
+		if (obj_idx + MAP_STATIC_BIAS == pstate.target_obj_idx) {
+			festring_setbackcolor(MAP_BG_TARGET);
+			color = MAP_BG_TARGET;
+			icon_only = 0;
+		}
+	} else {
+		ship_idx = objects[obj_idx].ship_idx;
+		if (obj_idx == selected_obj_ref) {
+			festring_setbackcolor(MAP_BG_SELECTED);
+			color = MAP_BG_SELECTED;
+			icon_only = 0;
+		}
+		if (obj_idx == pstate.target_obj_idx) {
+			color = MAP_BG_TARGET;
+			festring_setbackcolor(MAP_BG_TARGET);
+			icon_only = 0;
+		}
+	}
+
+	/* --- Phase 5: missile-target indicator (locked target only) --- */
+	if (obj_idx < WARHEAD_SLOT_END && obj_idx == pstate.target_obj_idx) {
+		/* Player+wingmen (idx<NUM_CRAFTS) read the ai_target_ref linked-target
+		 * field; warhead slots read missile_target. */
+		if (obj_idx < NUM_CRAFTS)
+			create_getworldposition((uint16_t)objects[obj_idx].craft_ptr->ai_target_ref, 0);
+		else
+			create_getworldposition(objects[obj_idx].craft_ptr->missile_target, 0);
+
+		worldlocx -= camera.x;
+		worldlocy -= camera.y;
+		worldlocz -= camera.z;
+
+		objecteyex = transfm2_geteyex(worldlocx, worldlocy, worldlocz);
+		objecteyey = transfm2_geteyey(worldlocx, worldlocy, worldlocz);
+		objecteyez = transfm2_geteyez(worldlocx, worldlocy, worldlocz);
+		if (objecteyez <= 0)
+			transfm2_clipobjecteyez(eyex, eyey, z);
+		if (TIE_DISPLAY_DX5)
+			logbuf2_drawclippedline_tie98(transfm2_getscreenx(objecteyex, objecteyez),
+										  transfm2_getscreeny(objecteyey, objecteyez), screen_x, screen_y,
+										  fontcolors[10]);
+		else
+			logbuf2_drawclippedline(transfm2_getscreenx(objecteyex, objecteyez),
+									transfm2_getscreeny(objecteyey, objecteyez), screen_x, screen_y,
+									fontcolors[10]);
+	}
+
+	/* --- Phase 6: ground-projection vertical line --- */
+	objecteyex = transfm2_geteyex(worldx, worldy, -65536 - camera.z);
+	objecteyey = transfm2_geteyey(worldx, worldy, -65536 - camera.z);
+	objecteyez = transfm2_geteyez(worldx, worldy, -65536 - camera.z);
+	if (objecteyez <= 0)
+		transfm2_clipobjecteyez(eyex, eyey, z);
+	ground_screen_x = transfm2_getscreenx(objecteyex, objecteyez);
+	ground_screen_y = transfm2_getscreeny(objecteyey, objecteyez);
+	if (TIE_DISPLAY_DX5)
+		logbuf2_drawclippedline_tie98(ground_screen_x, ground_screen_y, screen_x, screen_y, backcolor);
+	else
+		logbuf2_drawclippedline(ground_screen_x, ground_screen_y, screen_x, screen_y, backcolor);
+
+	/* --- Phase 7: velocity-vector line (active flight objects only) --- */
+	if (obj_idx < WARHEAD_SLOT_END) {
+		int32_t prev_eyex;
+		int32_t prev_eyey;
+		int32_t prev_eyez;
+
+		if (objects[obj_idx].orient_dirty) {
+			fview_calcrotatemove(objects[obj_idx].pitch, objects[obj_idx].heading, &objects[obj_idx]);
+			fview_calcrotateorient(objects[obj_idx].roll, 0, &objects[obj_idx]);
+		}
+
+		worldx += (MAP_PAN_DELTA * objects[obj_idx].moveX) >> 15;
+		worldy += (MAP_PAN_DELTA * objects[obj_idx].moveY) >> 15;
+
+		if ((uint16_t)objects[obj_idx].current_speed >= 0x400) {
+			/* Fast craft: add the raw move vector once. */
+			worldx += objects[obj_idx].moveX;
+			worldy += objects[obj_idx].moveY;
+		} else {
+			/* Slow craft: extra step proportional to current_speed. */
+			worldx += ((uint16_t)objects[obj_idx].current_speed * 32 * objects[obj_idx].moveX) >> 15;
+			worldy += ((uint16_t)objects[obj_idx].current_speed * 32 * objects[obj_idx].moveY) >> 15;
+		}
+
+		/* Clip against the ground point projected above. */
+		prev_eyex = objecteyex;
+		prev_eyey = objecteyey;
+		prev_eyez = objecteyez;
+		objecteyex = transfm2_geteyex(worldx, worldy, -65536 - camera.z);
+		objecteyey = transfm2_geteyey(worldx, worldy, -65536 - camera.z);
+		objecteyez = transfm2_geteyez(worldx, worldy, -65536 - camera.z);
+		if (objecteyez <= 0)
+			transfm2_clipobjecteyez(prev_eyex, prev_eyey, prev_eyez);
+		if (TIE_DISPLAY_DX5)
+			logbuf2_drawclippedline_tie98(transfm2_getscreenx(objecteyex, objecteyez),
+										  transfm2_getscreeny(objecteyey, objecteyez), ground_screen_x,
+										  ground_screen_y, backcolor);
+		else
+			logbuf2_drawclippedline(transfm2_getscreenx(objecteyex, objecteyez),
+									transfm2_getscreeny(objecteyey, objecteyez), ground_screen_x,
+									ground_screen_y, backcolor);
+	}
+
+	/* --- Phase 8: viewport-cull + icon + label + distance --- */
+	festring_setbackcolor(MAP_PANEL_BG);
+
+	if (mapScreenLeft - 32 > screen_x)
+		return;
+	if (mapScreenRight + 32 < screen_x)
+		return;
+	if (mapScreenTop - 32 > screen_y)
+		return;
+	if (mapScreenBottom + 32 < screen_y)
+		return;
+
+	x = screen_x;
+	y = screen_y;
+
+	/* Pick the base icon variant; species index > 0x69 falls back to icon 19 (generic). */
+	if (ship_idx <= 0x69)
+		base_icon_idx = species2icon[ship_idx];
+	else
+		base_icon_idx = 19;
+
+	/* Phase 8a: optional name label above the icon (not in icon-only mode). */
+	if (!icon_only) {
+		if (obj_idx >= WARHEAD_SLOT_END) {
+			/* ship_class == 8 = mines: don't print a name. */
+			if (staticobjects[obj_idx - WARHEAD_SLOT_END].ship_class != 8)
+				panel_buildobjectname((uint16_t)(obj_idx + MAP_STATIC_BIAS), 2);
+			else
+				tempstring[0] = 0;
+		} else {
+			panel_buildobjectname(obj_idx, 2);
+		}
+
+		if (tempstring[0]) {
+			/* Optional 1-based digit suffix " (N)": num_label=1 -> '0', ... */
+			if (num_label) {
+				festring_farstradd(' ');
+				festring_farstradd('(');
+				festring_farstradd((char)(num_label + '/'));
+				festring_farstradd(')');
+			}
+			festring_setcursor((uint16_t)(x - (uint16_t)sys2_calclength((const uint8_t*)tempstring) / 2),
+							   (uint16_t)(y - iconysize[base_icon_idx] / 2 - fontheight - 1));
+			festring_outstring((const uint8_t*)tempstring);
+		}
+	}
+
+	/* Phase 8b: draw the icon (with optional fillbox highlight border). */
+	icon_offset += base_icon_idx;
+	x -= iconxsize[base_icon_idx] / 2;
+	y -= iconysize[base_icon_idx] / 2;
+
+	if (color) {
+		festring_setbackcolor(color);
+		fillbox(x - 1, y - 1, x + iconxsize[base_icon_idx] + 1, y + iconysize[base_icon_idx] + 1);
+	}
+
+	/* Margin clip: don't draw if the icon would cross any margin. */
+	if ((int16_t)x >= leftmargin && (int16_t)(x + iconxsize[base_icon_idx]) < rightmargin &&
+		(int16_t)y >= topmargin && (int16_t)(y + iconysize[base_icon_idx]) < bottommargin) {
+		drawshape(farbufferptrs[(uint16_t)icon_offset], x, y, 0, 0);
+	}
+
+	/* Phase 8c: distance text below the icon (skipped in icon-only mode). */
+	x += iconxsize[base_icon_idx] / 2;
+	y += iconysize[base_icon_idx];
+	festring_setbackcolor(MAP_PANEL_BG);
+	if (icon_only)
+		return;
+
+	if (obj_idx < WARHEAD_SLOT_END) {
+		pai_distancebetween(selected_obj_ref, obj_idx);
+	} else {
+		obj_idx += MAP_STATIC_BIAS;
+		pai_distancebetween(selected_obj_ref, obj_idx);
+	}
+
+	/* The "00" string is just a width template (= 2 character widths). */
+	festring_setcursor((uint16_t)(x - sys2_calclength((const uint8_t*)"00")), (uint16_t)(y + 1));
+
+	/* trig2_polardistance is the polar distance in raw map units; *161/65536
+	 * scales it into 0.00..99.99 MGLT units (capped at 9999). */
+	trig2_polardistance *= 161;
+	{
+		uint16_t dist;
+		int dist_int_part;
+
+		dist = (uint16_t)(trig2_polardistance >> 16);
+		if (dist >= 10000)
+			dist = 9999;
+		dist_int_part = dist / 100;
+		panelrts_outnum(dist_int_part, 2, 1);
+		outchar('.');
+		panelrts_outnum(dist - dist_int_part * 100, 2, 2);
+	}
+}
+
+/* --- maproom_setcamerafocus ----------------------------------------------- */
+
+// FUNCTION: TIE95 0x31ABC
+void maproom_setcamerafocus(uint16_t obj_or_kind, int32_t distance) {
+	/* Resolve the focus point (writes worldlocx/y/z). fg_idx=0 is the
+	 * caller's "no fg context" sentinel for create_getworldposition. */
+	int32_t remaining;
+
+	create_getworldposition(obj_or_kind, 0);
+
+	camera.x = worldlocx;
+	camera.y = worldlocy;
+	camera.z = worldlocz;
+
+	/* Walk back along eye->world Z basis vector (worldeyeA3/B3/C3) by
+	 * `distance` units. The binary does this in two phases to avoid
+	 * 16-bit overflow: full-unit chunks (one basis vector subtracted
+	 * each loop) until the remainder fits in a 16-bit signed multiply,
+	 * then a single fractional `(int16)remainder * basis >> 15` step.
+	 *
+	 * Note: the binary uses worldeye* (the camera basis), NOT rotworldeye*
+	 * (which is worldeye composed with the per-craft rotation). */
+	remaining = distance;
+	while (remaining > 0x7FFF) {
+		remaining -= 0x7FFF;
+		camera.x -= worldeyeA3;
+		camera.y -= worldeyeB3;
+		camera.z -= worldeyeC3;
+	}
+	camera.x -= (worldeyeA3 * (int16_t)remaining) >> 15;
+	camera.y -= (worldeyeB3 * (int16_t)remaining) >> 15;
+	camera.z -= (worldeyeC3 * (int16_t)remaining) >> 15;
+}
+
+/* --- maproom_firstingroup ------------------------------------------------- */
+
+// FUNCTION: TIE95 0x31B94
+int32_t maproom_firstingroup(uint16_t idx) {
+	/* Sentinel + boundary cases all return "is first". */
+	uint8_t my_fg;
+	uint16_t i;
+
+	if (idx == 0xFFFF)
+		return 1;
+	if (idx == pstate.object_idx)
+		return 1;
+	if (idx >= NUM_CRAFTS)
+		return 1; /* retail uses 0x20 (32), demo had 28 */
+	if (idx == 0)
+		return 1;
+
+	/* Scan earlier slots; if any earlier object shares this fg_idx, the
+	 * current slot isn't the first member. */
+	my_fg = objects[idx].fg_idx;
+	for (i = 0; i < idx; i++) {
+		if (objects[i].fg_idx == my_fg)
+			return 0;
+	}
+	return 1;
+}
+
+/* --- maproom_drawNHIstatus ------------------------------------------------ */
+
+// FUNCTION: TIE95 0x31C04
+void maproom_drawNHIstatus(uint16_t page_idx) {
+	/* The status row sits along the bottom of the screen. mapScreenHeight
+	 * is the world-area height (= mapScreenBottom - mapScreenTop) but the
+	 * IDA decompile uses it as the absolute bottom Y; we mirror that. */
+	uint16_t panel_w;
+	uint16_t mid_left;
+
+	/* --- Bottom-left panel: Hostile counter --- */
+	panel_w = screenXRes >> 2;
+	festring_setbound(0, mapScreenHeight - (fontheight + 1), panel_w, mapScreenHeight);
+	festring_setbackcolor(MAP_PANEL_BG);
+	clearwindow();
+	festring_setcursor(2, mapScreenHeight - fontheight);
+	festring_settextcolor(MAP_TC_HOSTILE);
+	festring_outstring((const uint8_t*)hostilestr);
+	festring_outstringright((const uint8_t*)NHIstatusstrings[hostileflag]);
+
+	/* --- Bottom-center panel: Imperial counter --- */
+	mid_left = (screenXRes >> 1) - panel_w / 2;
+	festring_setbound(mid_left, mapScreenHeight - (fontheight + 1), mid_left + panel_w, mapScreenHeight);
+	festring_setbackcolor(MAP_PANEL_BG);
+	clearwindow();
+	festring_setcursor(mid_left + 2, mapScreenHeight - fontheight);
+	festring_settextcolor(MAP_TC_IMPERIAL);
+	festring_outstring((const uint8_t*)imperialstr);
+	festring_outstringright((const uint8_t*)NHIstatusstrings[imperialflag]);
+
+	/* --- Bottom-right panel: Neutral counter --- */
+	festring_setbound(screenXRes - panel_w, mapScreenHeight - (fontheight + 1), screenXRes, mapScreenHeight);
+	festring_setbackcolor(MAP_PANEL_BG);
+	clearwindow();
+	festring_setcursor(screenXRes - panel_w + 2, mapScreenHeight - fontheight);
+	festring_settextcolor(MAP_TC_NEUTRAL);
+	festring_outstring((const uint8_t*)neutralstr);
+	festring_outstringright((const uint8_t*)NHIstatusstrings[neutralflag]);
+
+	/* --- Top-left help string for the active page --- */
+	festring_setbound(0, 0, sys2_calclength((const uint8_t*)maproomhelpstrings[0]) + fontheight,
+					  fontheight + 2);
+	festring_setbackcolor(MAP_PANEL_BG);
+	clearwindow();
+	festring_setcursor(2, 1);
+	festring_settextcolor(MAP_TC_HELP);
+	festring_outstring((const uint8_t*)maproomhelpstrings[page_idx]);
+
+	/* --- Top-right help string (always idx 2) --- */
+	mid_left = screenXRes - (sys2_calclength((const uint8_t*)maproomhelpstrings[2]) + fontheight);
+	festring_setbound(mid_left, 0, screenXRes, fontheight + 2);
+	festring_setbackcolor(MAP_PANEL_BG);
+	clearwindow();
+	festring_setcursor(mid_left + 2, 1);
+	festring_settextcolor(MAP_TC_HELP);
+	festring_outstring((const uint8_t*)maproomhelpstrings[2]);
 }

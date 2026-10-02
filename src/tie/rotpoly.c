@@ -9,35 +9,38 @@ enum {
 
 // FUNCTION: TIE95 0x87890
 void rotpoly_Build_Ratio(int16_t* dest, int16_t count, int16_t start, int16_t end) {
-	int16_t i, accum, delta;
+	int16_t remaining, accum, delta;
 
-	if (start == end) {
-		for (i = 0; i < count; i++)
-			dest[i] = start;
-		return;
-	}
-
-	if (start < end) {
-		delta = end - start;
-		accum = delta / 2;
-		for (i = 0; i < count; i++) {
-			dest[i] = start;
-			accum += delta;
-			while (accum >= count) {
-				accum -= count;
-				start++;
-			}
-		}
-	} else {
+	if (start > end) {
 		delta = start - end;
-		accum = delta / 2;
-		for (i = 0; i < count; i++) {
-			dest[i] = start;
+		remaining = count;
+		accum = delta >> 1;
+		for (;;) {
+			*dest++ = start;
 			accum += delta;
-			while (accum >= count) {
-				accum -= count;
+			while (accum >= remaining) {
+				accum -= remaining;
 				start--;
 			}
+			if (--count <= 0)
+				break;
+		}
+	} else if (start == end) {
+		for (remaining = count; remaining > 0; remaining--)
+			*dest++ = start;
+	} else {
+		delta = end - start;
+		remaining = count;
+		accum = delta >> 1;
+		for (;;) {
+			*dest++ = start;
+			accum += delta;
+			while (accum >= remaining) {
+				accum -= remaining;
+				start++;
+			}
+			if (--count <= 0)
+				break;
 		}
 	}
 }

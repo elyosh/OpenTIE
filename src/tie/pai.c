@@ -436,6 +436,205 @@ OrderFunc ordersfunctionptrs[47] = {
 };
 
 /* ======================================================================
+ *                        Top-level per-frame tick
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x35640
+void pai_updateplaneai(void) {
+	uint16_t i;
+
+	for (i = 0; i < NUM_CRAFTS; ++i) {
+		CraftData* c;
+
+		if (!objects[i].ship_idx)
+			continue;
+		if (objects[i].category)
+			continue; /* debris / ember / etc. */
+
+		c = objects[i].craft_ptr;
+		/* Set the module-scope craftptr so order handlers see the right
+		 * context. pai_setupcraftaivars below overwrites the rest. */
+		craftptr = c;
+
+		/* Skip craft that are docking / destroyed. */
+		if (c->flight_flag == 3 || c->flight_flag == 4)
+			continue;
+
+		/* Skill-paced: only advance when the per-craft countdown expires.
+		 * The countdown is signed; <= 0 means "time to run the tick". */
+		if ((int16_t)c->ai_update_rate_copy > 0)
+			continue;
+
+		pai_setupcraftaivars(i);
+		TIE_FLIGHT_TRACE_AI_BEFORE(i);
+		pai_updatecraftplan();
+		craftptr->ai_update_rate_copy += craftptr->ai_update_rate;
+		TIE_FLIGHT_TRACE_AI_AFTER(i);
+	}
+}
+
+/* ======================================================================
+ *                           Plan init + VM step
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x356B0
+void pai_initplan(uint16_t obj_idx) {
+	const uint8_t* plan;
+	uint16_t wpt_sel;
+	uint8_t init_mode;
+	unsigned target_ref;
+
+#ifdef TIE_MODERN
+	if (craftptr->current_order >= 69u) {
+		TieDiagnostics_Log(TIE_LOG_INFO,
+						   "[pai] initplan: current_order=%u out of range (defaulting to nullplan)\n",
+						   (unsigned)craftptr->current_order);
+		craftptr->current_order = 0;
+	}
+#endif
+	plan = planptrs[craftptr->current_order];
+	wpt_sel = *plan++;
+
+	/* 0xFF skips waypoint initialization but still starts the plan's
+	 * maneuver and resets its runtime state below. */
+	if (wpt_sel != 0xFF) {
+		if (wpt_sel == 0xFD) {
+			/* home waypoint, guarded by way_used[12]. */
+			if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[12])
+				craftptr->ai_target_ref = (int16_t)0x800C;
+			else
+				craftptr->ai_target_ref = (int16_t)0x8000;
+		} else if (wpt_sel == 0xFE) {
+			/* hyper waypoint, guarded by way_used[13]. */
+			if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[13])
+				craftptr->ai_target_ref = (int16_t)0x800D;
+			else
+				craftptr->ai_target_ref = (int16_t)0x8000;
+		} else if (wpt_sel == 0xF9) {
+			/* unconditional home-waypoint. */
+			craftptr->ai_target_ref = (int16_t)0x800C;
+		} else {
+			/* Use this craft's current active_waypoint_idx if the FG has one. */
+			if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[craftptr->active_waypoint_idx])
+				craftptr->ai_target_ref = (uint16_t)(craftptr->active_waypoint_idx + 0x8000);
+			else
+				craftptr->ai_target_ref = (int16_t)0x8000;
+		}
+
+		/* Resolve the waypoint to a world position for the current tick. */
+		target_ref = (uint16_t)craftptr->ai_target_ref;
+		if (target_ref != 0xFFu) {
+			create_getworldposition(target_ref, objects[ai.active_obj_idx].fg_idx);
+			craftptr->waypoint_x_cache = worldlocx;
+			craftptr->waypoint_y_cache = worldlocy;
+			craftptr->waypoint_z_cache = worldlocz;
+		}
+	}
+
+	craftptr->ai_plan_state = 0;
+	init_mode = *plan;
+	if (init_mode != 0xFF) {
+		craftptr->mode_byte = init_mode;
+		paiman_initmaneuver();
+	}
+	craftptr->attacker_idx = 0xFFu;
+	craftptr->ai_update_rate_copy = craftptr->ai_update_rate;
+}
+
+// FUNCTION: TIE95 0x35870
+void pai_updatecraftplan(void) {
+	uint8_t opcode;
+
+	/* Player-craft escort override: re-evaluate escort targets before
+	 * running the handler loop. */
+	if (ai.active_obj_idx == pstate.object_idx && craftptr->default_order_ldr == 20) {
+		paifight_checkescortorder();
+	}
+
+	while ((opcode = *ai.plan_ptr++) != 0) {
+		OrderFunc handler = ordersfunctionptrs[opcode];
+
+		if (handler() && *ai.plan_ptr) {
+			/* 0x41 is the wildcard next-order = ai.staged_next_order. */
+			if (*ai.plan_ptr == 0x41)
+				craftptr->current_order = ai.staged_next_order;
+			else
+				craftptr->current_order = *ai.plan_ptr;
+			pai_setupcraftaivars(ai.active_obj_idx);
+			pai_initplan(ai.active_obj_idx);
+			TIE_FLIGHT_TRACE_AI_TRANSITION(opcode);
+			return;
+		}
+		/* No transition: skip the next_order byte. */
+		++ai.plan_ptr;
+	}
+}
+
+/* ======================================================================
+ *                        Per-craft context cache
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x3591C
+uint8_t* pai_setupcraftaivars(uint16_t obj_idx) {
+	uint16_t skill_tier;
+
+	ai.active_obj_idx = obj_idx;
+	ai.active_craft = objects[obj_idx].craft_ptr;
+	ai.leader_obj_idx = ai.active_craft->leader_obj_idx;
+#ifdef TIE_MODERN
+	/* leader_obj_idx == 0xFF means "self is leader / no leader". The
+	 * retail binary unconditionally read objects[0xFF].craft_ptr here
+	 * -- a 135-slot OOB read into adjacent DOS BSS -- and stored the
+	 * resulting wild pointer into ai.leader_craft. It worked only
+	 * because every consumer gates on the sentinel before
+	 * dereferencing leader_craft. We fall back to active_craft so any
+	 * unguarded access reads self's data instead of triggering UB. */
+	ai.leader_craft = (ai.leader_obj_idx == 0xFF) ? ai.active_craft : objects[ai.leader_obj_idx].craft_ptr;
+#else
+	ai.leader_craft = objects[ai.leader_obj_idx & 0xFF].craft_ptr;
+#endif
+	ai.fg_idx = objects[obj_idx].fg_idx;
+	ai.ai_entry_count = ai.active_craft->ai_state_1C;
+
+	create_getworldposition(obj_idx, objects[obj_idx].fg_idx);
+	ai.world_x = worldlocx;
+	ai.world_y = worldlocy;
+	ai.world_z = worldlocz;
+
+	/* Skill tier from craft_ptr->skill_value thresholds. */
+	if (ai.active_craft->skill_value < 0x8000)
+		skill_tier = 0;
+	else if (ai.active_craft->skill_value < 0xC000)
+		skill_tier = 1;
+	else
+		skill_tier = 2;
+	ai.skill_tier = skill_tier;
+
+	/* Plan header: [waypoint_selector, order_tag, body...]. order_tag
+	 * (stored in ai.plan_order) is the CraftData.mode_byte value the
+	 * plan implements; handlers such as paifight_scanfortargetorder
+	 * bail when the craft drifts to a different mode. The body pointer
+	 * skips past both header bytes. */
+#ifdef TIE_MODERN
+	if (ai.active_craft->current_order >= 69u) {
+		TieDiagnostics_Log(TIE_LOG_INFO,
+						   "[pai] setupcraftaivars: current_order=%u out of range for obj=%u "
+						   "(defaulting to nullplan)\n",
+						   (unsigned)ai.active_craft->current_order, (unsigned)obj_idx);
+		ai.active_craft->current_order = 0;
+	}
+#endif
+	ai.plan_ptr = (uint8_t*)planptrs[ai.active_craft->current_order];
+	ai.plan_ptr++;
+	ai.plan_order = *ai.plan_ptr++;
+
+	ai.live_target_only = 0;
+	ai.staged_next_order = 0;
+
+	return ai.plan_ptr;
+}
+
+/* ======================================================================
  *                            Leaf helpers
  * ====================================================================== */
 
@@ -450,121 +649,46 @@ int pai_getprof(uint16_t skill) {
 	return 2;
 }
 
-/* Unused getter — hull_max of objects[obj_idx]'s craft. */
-// FUNCTION: TIE95 0x36258
-uint16_t pai_getcraftdoomedlevel(uint16_t obj_idx) { return objects[obj_idx].craft_ptr->hull_max; }
-
 /* ======================================================================
- *                       Distance / proximity helpers
+ *                          Group / FG scans
  * ====================================================================== */
 
-// FUNCTION: TIE95 0x36048
-void pai_distancebetween(uint16_t a_ref, uint16_t b_ref) {
-	int32_t bx, by, bz;
-	create_getworldposition(b_ref, 0);
-	bx = worldlocx;
-	by = worldlocy;
-	bz = worldlocz;
-	create_getworldposition(a_ref, 0);
-	trig2_ctop(bx - worldlocx, by - worldlocy, bz - worldlocz);
-}
+// FUNCTION: TIE95 0x35A58
+uint16_t pai_searchformother(uint16_t fg_idx) {
+	uint16_t i;
 
-// FUNCTION: TIE95 0x360A0
-void pai_roughdistancebetween(uint16_t a_ref, uint16_t b_ref) {
-	int32_t ax, ay, az;
-	int32_t dx, dy, dz;
-	int32_t xy_sum;
+	for (i = 0; i < NUM_CRAFTS; ++i) {
+		int ff;
 
-	create_getworldposition(a_ref, 0);
-	ax = worldlocx;
-	ay = worldlocy;
-	az = worldlocz;
-	create_getworldposition(b_ref, 0);
-	dx = ax - worldlocx;
-	dy = ay - worldlocy;
-	dz = az - worldlocz;
-	if (dx < 0)
-		dx = -dx;
-	if (dy < 0)
-		dy = -dy;
-	if (dz < 0)
-		dz = -dz;
-
-	/* Chebyshev-weighted Manhattan: halve the smaller of (dx, dy), sum,
-	 * then halve the smaller of that sum and dz. */
-	if (dx <= dy)
-		dx >>= 1;
-	else
-		dy >>= 1;
-	xy_sum = dx + dy;
-	if (xy_sum <= dz)
-		xy_sum >>= 1;
-	else
-		dz >>= 1;
-	roughdistance = dz + xy_sum;
-}
-
-// FUNCTION: TIE95 0x3627C
-void pai_targetdistance(void) {
-	trig2_ctop(craftptr->waypoint_x_cache - objects[ai.active_obj_idx].world_x,
-			   craftptr->waypoint_y_cache - objects[ai.active_obj_idx].world_y,
-			   craftptr->waypoint_z_cache - objects[ai.active_obj_idx].world_z);
-}
-
-// FUNCTION: TIE95 0x35E9C
-int16_t pai_roughproximitycheck(uint16_t obj_ref, int32_t radius_24_8) {
-	int32_t tx, ty, tz;
-	int32_t dx, dy, dz;
-	int32_t xy_sum;
-
-	if (obj_ref >= 0x3800u) {
-		/* Static slot: 16-bit world coords scaled up by <<8. Bound the
-		 * range — pai_checkcombatarea reaches here without first filtering
-		 * via pai_worthytarget, so waypoint refs would OOB. */
-		uint32_t static_idx = (uint32_t)obj_ref - 0x3800u;
-		const StaticObject* s;
-
-		if (static_idx >= NUM_STATIC_OBJECTS)
-			return 0;
-		s = &staticobjects[static_idx];
-		tx = (int32_t)s->world_x << 8;
-		ty = (int32_t)s->world_y << 8;
-		tz = (int32_t)s->world_z << 8;
-	} else {
-		/* Flight slot: world coords already 24.8. */
-		tx = objects[obj_ref].world_x;
-		ty = objects[obj_ref].world_y;
-		tz = objects[obj_ref].world_z;
+		if (!objects[i].ship_idx)
+			continue;
+		/* Skip motherships that are themselves departing or hyperspaced
+		 * (flight_flag 3 = leaving, 4 = gone). */
+		ff = objects[i].craft_ptr->flight_flag;
+		if (ff == 4 || ff == 3)
+			continue;
+		if (objects[i].fg_idx != fg_idx)
+			continue;
+		if (objects[i].craft_ptr->leader_obj_idx == 0xFFu)
+			return i;
 	}
-	dx = ai.world_x - tx;
-	dy = ai.world_y - ty;
-	dz = ai.world_z - tz;
-	if (dx < 0)
-		dx = -dx;
-	if (dy < 0)
-		dy = -dy;
-	if (dz < 0)
-		dz = -dz;
-	if (dx <= dy)
-		dx >>= 1;
-	else
-		dy >>= 1;
-	xy_sum = dx + dy;
-	if (xy_sum <= dz)
-		xy_sum >>= 1;
-	else
-		dz >>= 1;
-	roughdistance = dz + xy_sum;
-	return (radius_24_8 > roughdistance) ? 1 : 0;
+	return 0xFFFFu;
 }
 
-// FUNCTION: TIE95 0x35C34
-char pai_checkcombatarea(uint16_t obj_ref) {
-	/* Skill-tiered combat-zone radius:
-	 *   tier 0 -> 2560    tier 1 -> 2880    tier 2 -> 3200    tier 3 -> 3520 */
-	uint16_t skill_bonus = math2_fraction(0x500u, skilltranslate[(uint16_t)ai.skill_tier]);
-	int32_t radius = ((int32_t)skill_bonus + 2560) << 8;
-	return (pai_roughproximitycheck(obj_ref, radius) == 1) ? 1 : 0;
+// FUNCTION: TIE95 0x35ABC
+int16_t pai_checktargetforattack(uint16_t attacker_ref, uint16_t obj_ref, int16_t pursue_hot) {
+	int32_t radius;
+
+	if (pai_worthytarget(obj_ref)) {
+		radius = (int32_t)math2_fraction(0x500u, skilltranslate[(uint16_t)ai.skill_tier]) + 2560;
+		if (pursue_hot) {
+			/* +1/3 radius extension for aggressive pursuit (0x5555 ≈ 1/3 of 0x10000). */
+			radius += math2_fraction((uint16_t)radius, 0x5555u);
+		}
+		if (pai_roughproximitycheck(obj_ref, radius << 8) == 1)
+			return 1;
+	}
+	return 0;
 }
 
 /* ======================================================================
@@ -617,121 +741,57 @@ int16_t pai_worthytarget(uint16_t obj_ref) {
 	}
 }
 
-// FUNCTION: TIE95 0x35ABC
-int16_t pai_checktargetforattack(uint16_t attacker_ref, uint16_t obj_ref, int16_t pursue_hot) {
-	int32_t radius;
+// FUNCTION: TIE95 0x35C34
+int16_t pai_checkcombatarea(uint16_t obj_ref) {
+	/* Skill-tiered combat-zone radius:
+	 *   tier 0 -> 2560    tier 1 -> 2880    tier 2 -> 3200    tier 3 -> 3520 */
+	int32_t radius = math2_fraction(0x500u, skilltranslate[(uint16_t)ai.skill_tier]);
 
-	if (pai_worthytarget(obj_ref)) {
-		radius = (int32_t)math2_fraction(0x500u, skilltranslate[(uint16_t)ai.skill_tier]) + 2560;
-		if (pursue_hot) {
-			/* +1/3 radius extension for aggressive pursuit (0x5555 ≈ 1/3 of 0x10000). */
-			radius += math2_fraction((uint16_t)radius, 0x5555u);
-		}
-		if (pai_roughproximitycheck(obj_ref, radius << 8) == 1)
-			return 1;
-	}
-	return 0;
-}
-
-// FUNCTION: TIE95 0x368A8
-int16_t pai_isobjectvalidtarget(uint16_t obj_ref) {
-	int16_t in_pri;
-	int16_t in_sec;
-	int16_t goal_match;
-	int16_t in_t0;
-	int16_t in_t1;
-	int16_t target_match;
-
-	in_pri = score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].pri_type,
-									   (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].pri_id);
-	in_sec = score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].sec_type,
-									   (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].sec_id);
-	if ((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].pri_sec_op == 1)
-		goal_match = in_pri | in_sec;
-	else
-		goal_match = in_pri & in_sec;
-
-	in_t0 =
-		score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[0],
-								  (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[0]);
-	in_t1 =
-		score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[1],
-								  (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[1]);
-	if ((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_op == 1)
-		target_match = in_t0 | in_t1;
-	else
-		target_match = in_t0 & in_t1;
-
-	if (goal_match || target_match)
-		return 1;
-	return 0;
-}
-
-/* ======================================================================
- *                          Group / FG scans
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x35A58
-uint16_t pai_searchformother(uint16_t fg_idx) {
-	uint16_t i;
-
-	for (i = 0; i < NUM_CRAFTS; ++i) {
-		int ff;
-
-		if (!objects[i].ship_idx)
-			continue;
-		/* Skip motherships that are themselves departing or hyperspaced
-		 * (flight_flag 3 = leaving, 4 = gone). */
-		ff = objects[i].craft_ptr->flight_flag;
-		if (ff == 4 || ff == 3)
-			continue;
-		if (objects[i].fg_idx != fg_idx)
-			continue;
-		if (objects[i].craft_ptr->leader_obj_idx == 0xFFu)
-			return i;
-	}
-	return 0xFFFFu;
+	radius += 2560;
+	radius <<= 8;
+	return pai_roughproximitycheck(obj_ref, radius) == 1;
 }
 
 // FUNCTION: TIE95 0x35C80
-int pai_searchforcraftingroup(uint8_t group_type1, uint16_t group_id1, int16_t combine_op,
-							  uint8_t group_type2, uint16_t group_id2) {
-	/* Flight objects. */
+int16_t pai_searchforcraftingroup(uint16_t group_type1, uint16_t group_id1, uint16_t combine_op,
+								  uint16_t group_type2, uint16_t group_id2) {
 	uint16_t i;
-	uint16_t j;
+	int16_t in1;
+	int16_t found;
 
+	/* Flight objects. */
 	for (i = 0; i < NUM_CRAFTS; ++i) {
-		int in1;
-		int in2;
-		int miss;
+		CraftData* craft;
 
 		if (!objects[i].ship_idx)
 			continue;
 		in1 = score_objectmemberofgroup(i, group_type1, group_id1);
-		in2 = score_objectmemberofgroup(i, group_type2, group_id2);
-		miss = (combine_op == 1) ? (!in1 && !in2) : (!in1 || !in2);
-		if (miss)
+		found = score_objectmemberofgroup(i, group_type2, group_id2);
+		if (combine_op == 1)
+			found |= in1;
+		else
+			found &= in1;
+		if (!found)
 			continue;
-		if (ai.live_target_only && !objects[i].craft_ptr->status_flags)
+		craft = objects[i].craft_ptr;
+		if (ai.live_target_only && !craft->status_flags)
 			continue;
 		return 1;
 	}
 	/* Static slots. */
-	for (j = 0; j < 0x40u; ++j) {
-		int in1;
-		int in2;
-		int miss;
-
-		if (!staticobjects[j].species)
+	for (i = 0; i < 0x40; ++i) {
+		if (!staticobjects[i].species)
 			continue;
-		in1 = score_objectmemberofgroup(j, group_type1, group_id1);
-		in2 = score_objectmemberofgroup(j, group_type2, group_id2);
-		miss = (combine_op == 1) ? (!in1 && !in2) : (!in1 || !in2);
-		if (miss)
-			continue;
-		if (ai.live_target_only && !staticobjects[j].status_flags)
-			continue;
-		return 1;
+		in1 = score_objectmemberofgroup(i, group_type1, group_id1);
+		found = score_objectmemberofgroup(i, group_type2, group_id2);
+		if (combine_op == 1)
+			found |= in1;
+		else
+			found &= in1;
+		if (found) {
+			if (!ai.live_target_only || staticobjects[i].status_flags)
+				return 1;
+		}
 	}
 	return 0;
 }
@@ -741,17 +801,204 @@ int16_t pai_lookfordisableswitch(uint16_t fg_idx) { return pai_checkfortargetsto
 
 // FUNCTION: TIE95 0x35DD4
 uint16_t pai_checkfortargetstodisable(uint16_t ai_entry) {
-	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
+	uint16_t r;
 
 	/* Pass 1: goal selectors (pri/sec) combined by pri_sec_op. */
-	uint16_t r = pai_finddisabledingroup(cur_ai->pri_type, cur_ai->pri_id, (int16_t)cur_ai->pri_sec_op,
-										 cur_ai->sec_type, cur_ai->sec_id);
+	r = pai_finddisabledingroup(
+		fg_array[ai.fg_idx].ai[ai_entry].pri_type, fg_array[ai.fg_idx].ai[ai_entry].pri_id,
+		fg_array[ai.fg_idx].ai[ai_entry].pri_sec_op, fg_array[ai.fg_idx].ai[ai_entry].sec_type,
+		fg_array[ai.fg_idx].ai[ai_entry].sec_id);
 	if (r != 0xFFFFu)
 		return r;
 
 	/* Pass 2: explicit target_type/target_id pair combined by target_op. */
-	return pai_finddisabledingroup(cur_ai->target_type[0], cur_ai->target_id[0], (int16_t)cur_ai->target_op,
-								   cur_ai->target_type[1], cur_ai->target_id[1]);
+	return pai_finddisabledingroup(
+		fg_array[ai.fg_idx].ai[ai_entry].target_type[0], fg_array[ai.fg_idx].ai[ai_entry].target_id[0],
+		fg_array[ai.fg_idx].ai[ai_entry].target_op, fg_array[ai.fg_idx].ai[ai_entry].target_type[1],
+		fg_array[ai.fg_idx].ai[ai_entry].target_id[1]);
+}
+
+// FUNCTION: TIE95 0x35E9C
+int16_t pai_roughproximitycheck(uint16_t obj_ref, int32_t radius_24_8) {
+	int32_t dist;
+	int32_t dx, dy, dz;
+
+	if (obj_ref < 0x3800) {
+		/* Flight slot: world coords already 24.8. */
+		dx = ai.world_x - objects[obj_ref].world_x;
+		dy = ai.world_y - objects[obj_ref].world_y;
+		dz = ai.world_z - objects[obj_ref].world_z;
+	} else {
+		/* Static slot: 16-bit world coords scaled up by <<8. */
+		int32_t tx, ty, tz;
+
+		obj_ref -= 0x3800;
+#ifdef TIE_MODERN
+		/* pai_checkcombatarea reaches here without first filtering via
+		 * pai_worthytarget, so waypoint refs would read out of bounds. */
+		if (obj_ref >= NUM_STATIC_OBJECTS)
+			return 0;
+#endif
+		tx = (int32_t)staticobjects[obj_ref].world_x << 8;
+		ty = (int32_t)staticobjects[obj_ref].world_y << 8;
+		tz = (int32_t)staticobjects[obj_ref].world_z << 8;
+		dx = ai.world_x - tx;
+		dy = ai.world_y - ty;
+		dz = ai.world_z - tz;
+	}
+	if (dx < 0)
+		dx = -dx;
+	if (dy < 0)
+		dy = -dy;
+	if (dz < 0)
+		dz = -dz;
+	if (dx > dy)
+		dy >>= 1;
+	else
+		dx >>= 1;
+	dist = dx + dy;
+	if (dist > dz)
+		dz >>= 1;
+	else
+		dist >>= 1;
+	dist = dz + dist;
+	{
+		int16_t in_range = radius_24_8 > dist;
+
+		roughdistance = dist;
+		return in_range;
+	}
+}
+
+/* ======================================================================
+ *                      AI context + target / formation
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x35F7C
+void pai_settarget(void) {
+	uint16_t obj_idx = ai.active_obj_idx;
+
+	create_getworldposition((uint16_t)craftptr->ai_target_ref, objects[obj_idx].fg_idx);
+	craftptr->waypoint_x_cache = worldlocx;
+	craftptr->waypoint_y_cache = worldlocy;
+	craftptr->waypoint_z_cache = worldlocz;
+}
+
+// FUNCTION: TIE95 0x35FD4
+void pai_setformation(uint16_t leader_obj_idx, uint8_t formation, uint16_t separation) {
+	/* Leader receives the intended (formation, separation). */
+	uint16_t i;
+
+	ai.leader_craft->formation = formation;
+	ai.leader_craft->formation_separation = separation;
+
+	/* Followers in the same FG inherit. Binary quirk: the inner loop
+	 * writes craft->formation = craft->leader_obj_idx (i.e. the compared
+	 * byte still in BL), NOT the formation code. The shipped function has
+	 * no callers, so the bug is preserved verbatim for parity. */
+	for (i = 0; i < NUM_CRAFTS; ++i) {
+		CraftData* c = objects[i].craft_ptr;
+
+		if (objects[i].ship_idx && (uint16_t)c->leader_obj_idx == leader_obj_idx) {
+			c->formation = c->leader_obj_idx; /* binary quirk, not (formation) */
+			c->formation_separation = (uint8_t)separation;
+		}
+	}
+}
+
+/* ======================================================================
+ *                       Distance / proximity helpers
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x36048
+void pai_distancebetween(uint16_t a_ref, uint16_t b_ref) {
+	int32_t bx, by, bz;
+	create_getworldposition(b_ref, 0);
+	bx = worldlocx;
+	by = worldlocy;
+	bz = worldlocz;
+	create_getworldposition(a_ref, 0);
+	trig2_ctop(bx - worldlocx, by - worldlocy, bz - worldlocz);
+}
+
+// FUNCTION: TIE95 0x360A0
+void pai_roughdistancebetween(uint16_t a_ref, uint16_t b_ref) {
+	int32_t dx, dy, dz;
+
+	create_getworldposition(a_ref, 0);
+	dx = worldlocx;
+	dy = worldlocy;
+	dz = worldlocz;
+	create_getworldposition(b_ref, 0);
+	dx -= worldlocx;
+	dy -= worldlocy;
+	dz -= worldlocz;
+	if (dx < 0)
+		dx = -dx;
+	if (dy < 0)
+		dy = -dy;
+	if (dz < 0)
+		dz = -dz;
+
+	/* Chebyshev-weighted Manhattan: halve the smaller of (dx, dy), sum,
+	 * then halve the smaller of that sum and dz. */
+	if (dx > dy)
+		roughdistance = dx + (dy >> 1);
+	else
+		roughdistance = dy + (dx >> 1);
+	if (roughdistance > dz)
+		roughdistance += dz >> 1;
+	else
+		roughdistance = (roughdistance >> 1) + dz;
+}
+
+// FUNCTION: TIE95 0x36134
+void pai_calcrotatedpoint(FlightObject* obj, int16_t side_arg, int16_t up_arg, int16_t fwd_arg) {
+	/* Refresh the local-frame basis from heading/pitch/roll if dirty. */
+	if (obj->orient_dirty) {
+		fview_calcrotatemove(obj->pitch, obj->heading, obj);
+		fview_calcrotateorient(obj->roll, 0, obj);
+	}
+
+	/* Rotate (side_arg, up_arg, fwd_arg) by the 3x3 orientation basis.
+	 * Each product is shifted >>15 *before* summing (matches retail's
+	 * Watcom emit: three independent arithmetic shifts then add). Sum-
+	 * before-shift accumulates rounding loss for negative products. */
+	rotatedx = (((int32_t)obj->side_x * side_arg) >> 15) + (((int32_t)obj->up_x * up_arg) >> 15) +
+			   (((int32_t)obj->fwd_x * fwd_arg) >> 15);
+	rotatedy = (((int32_t)obj->side_y * side_arg) >> 15) + (((int32_t)obj->up_y * up_arg) >> 15) +
+			   (((int32_t)obj->fwd_y * fwd_arg) >> 15);
+	rotatedz = (((int32_t)obj->side_z * side_arg) >> 15) + (((int32_t)obj->up_z * up_arg) >> 15) +
+			   (((int32_t)obj->fwd_z * fwd_arg) >> 15);
+}
+
+// FUNCTION: TIE98 0x45A3C0
+int32_t pai_RotateLocalVectorToWorldScratch(FlightObject* obj, int side_arg, int up_arg, int fwd_arg) {
+	if (obj->orient_dirty) {
+		fview_calcrotatemove(obj->pitch, obj->heading, obj);
+		fview_calcrotateorient(obj->roll, 0, obj);
+	}
+	rotatedx = math2_mul_q15(obj->side_x, side_arg);
+	rotatedx += math2_mul_q15(obj->up_x, up_arg);
+	rotatedx += math2_mul_q15(obj->fwd_x, fwd_arg);
+	rotatedy = math2_mul_q15(obj->side_y, side_arg);
+	rotatedy += math2_mul_q15(obj->up_y, up_arg);
+	rotatedy += math2_mul_q15(obj->fwd_y, fwd_arg);
+	rotatedz = math2_mul_q15(obj->side_z, side_arg);
+	rotatedz += math2_mul_q15(obj->up_z, up_arg);
+	rotatedz += math2_mul_q15(obj->fwd_z, fwd_arg);
+	return rotatedz;
+}
+
+/* Unused getter — hull_max of objects[obj_idx]'s craft. */
+// FUNCTION: TIE95 0x36258
+uint16_t pai_getcraftdoomedlevel(uint16_t obj_idx) { return objects[obj_idx].craft_ptr->hull_max; }
+
+// FUNCTION: TIE95 0x3627C
+void pai_targetdistance(void) {
+	trig2_ctop(craftptr->waypoint_x_cache - objects[ai.active_obj_idx].world_x,
+			   craftptr->waypoint_y_cache - objects[ai.active_obj_idx].world_y,
+			   craftptr->waypoint_z_cache - objects[ai.active_obj_idx].world_z);
 }
 
 // FUNCTION: TIE95 0x362D4
@@ -886,288 +1133,11 @@ uint16_t pai_finddisabledingroup(uint16_t group_type1, uint16_t group_id1, uint1
 }
 
 /* ======================================================================
- *                      AI context + target / formation
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x35F7C
-void pai_settarget(void) {
-	uint16_t obj_idx = ai.active_obj_idx;
-
-	create_getworldposition((uint16_t)craftptr->ai_target_ref, objects[obj_idx].fg_idx);
-	craftptr->waypoint_x_cache = worldlocx;
-	craftptr->waypoint_y_cache = worldlocy;
-	craftptr->waypoint_z_cache = worldlocz;
-}
-
-// FUNCTION: TIE95 0x35FD4
-void pai_setformation(uint16_t leader_obj_idx, uint8_t formation, uint8_t separation) {
-	/* Leader receives the intended (formation, separation). */
-	uint16_t i;
-
-	ai.leader_craft->formation = formation;
-	ai.leader_craft->formation_separation = separation;
-
-	/* Followers in the same FG inherit. Binary quirk: the inner loop
-	 * writes craft->formation = craft->leader_obj_idx (i.e. the compared
-	 * byte still in BL), NOT the formation code. The shipped function has
-	 * no callers, so the bug is preserved verbatim for parity. */
-	for (i = 0; i < NUM_CRAFTS; ++i) {
-		CraftData* c;
-		uint8_t other_leader;
-
-		if (!objects[i].ship_idx)
-			continue;
-		c = objects[i].craft_ptr;
-		other_leader = c->leader_obj_idx;
-		if (other_leader != (uint8_t)leader_obj_idx)
-			continue;
-		c->formation = other_leader; /* Watcom quirk, not (formation) */
-		c->formation_separation = separation;
-	}
-}
-
-// FUNCTION: TIE95 0x36134
-void pai_calcrotatedpoint(FlightObject* obj, int16_t side_arg, int16_t up_arg, int16_t fwd_arg) {
-	/* Refresh the local-frame basis from heading/pitch/roll if dirty. */
-	if (obj->orient_dirty) {
-		fview_calcrotatemove(obj->pitch, obj->heading, obj);
-		fview_calcrotateorient(obj->roll, 0, obj);
-	}
-
-	/* Rotate (side_arg, up_arg, fwd_arg) by the 3x3 orientation basis.
-	 * Each product is shifted >>15 *before* summing (matches retail's
-	 * Watcom emit: three independent arithmetic shifts then add). Sum-
-	 * before-shift accumulates rounding loss for negative products. */
-	rotatedx = (((int32_t)obj->side_x * side_arg) >> 15) + (((int32_t)obj->up_x * up_arg) >> 15) +
-			   (((int32_t)obj->fwd_x * fwd_arg) >> 15);
-	rotatedy = (((int32_t)obj->side_y * side_arg) >> 15) + (((int32_t)obj->up_y * up_arg) >> 15) +
-			   (((int32_t)obj->fwd_y * fwd_arg) >> 15);
-	rotatedz = (((int32_t)obj->side_z * side_arg) >> 15) + (((int32_t)obj->up_z * up_arg) >> 15) +
-			   (((int32_t)obj->fwd_z * fwd_arg) >> 15);
-}
-
-// FUNCTION: TIE98 0x45A3C0
-int32_t pai_RotateLocalVectorToWorldScratch(FlightObject* obj, int side_arg, int up_arg, int fwd_arg) {
-	if (obj->orient_dirty) {
-		fview_calcrotatemove(obj->pitch, obj->heading, obj);
-		fview_calcrotateorient(obj->roll, 0, obj);
-	}
-	rotatedx = math2_mul_q15(obj->side_x, side_arg);
-	rotatedx += math2_mul_q15(obj->up_x, up_arg);
-	rotatedx += math2_mul_q15(obj->fwd_x, fwd_arg);
-	rotatedy = math2_mul_q15(obj->side_y, side_arg);
-	rotatedy += math2_mul_q15(obj->up_y, up_arg);
-	rotatedy += math2_mul_q15(obj->fwd_y, fwd_arg);
-	rotatedz = math2_mul_q15(obj->side_z, side_arg);
-	rotatedz += math2_mul_q15(obj->up_z, up_arg);
-	rotatedz += math2_mul_q15(obj->fwd_z, fwd_arg);
-	return rotatedz;
-}
-
-/* ======================================================================
- *                        Per-craft context cache
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x3591C
-uint8_t* pai_setupcraftaivars(uint16_t obj_idx) {
-	uint16_t co;
-	const uint8_t* plan;
-
-	ai.active_obj_idx = obj_idx;
-	ai.active_craft = objects[obj_idx].craft_ptr;
-	ai.leader_obj_idx = ai.active_craft->leader_obj_idx;
-	/* leader_obj_idx == 0xFF means "self is leader / no leader". The
-	 * retail binary unconditionally read objects[0xFF].craft_ptr here
-	 * -- a 135-slot OOB read into adjacent DOS BSS -- and stored the
-	 * resulting wild pointer into ai.leader_craft. It worked only
-	 * because every consumer gates on the sentinel before
-	 * dereferencing leader_craft. We fall back to active_craft so any
-	 * unguarded access reads self's data instead of triggering UB. */
-	ai.leader_craft = (ai.leader_obj_idx == 0xFF) ? ai.active_craft : objects[ai.leader_obj_idx].craft_ptr;
-	ai.fg_idx = objects[obj_idx].fg_idx;
-	ai.ai_entry_count = ai.active_craft->ai_state_1C;
-
-	create_getworldposition(obj_idx, ai.fg_idx);
-	ai.world_x = worldlocx;
-	ai.world_y = worldlocy;
-	ai.world_z = worldlocz;
-
-	/* Skill tier from craft_ptr->skill_value thresholds. */
-	{
-		uint16_t sv = ai.active_craft->skill_value;
-		if (sv < 0x8000u)
-			ai.skill_tier = 0;
-		else if (sv < 0xC000u)
-			ai.skill_tier = 1;
-		else
-			ai.skill_tier = 2;
-	}
-
-	/* Plan header: [waypoint_selector, order_tag, body...]. order_tag
-	 * (stored in ai.plan_order) is the CraftData.mode_byte value the
-	 * plan implements; handlers such as paifight_scanfortargetorder
-	 * bail when the craft drifts to a different mode. The body pointer
-	 * skips past both header bytes. */
-	co = ai.active_craft->current_order;
-	if (co >= 69u) {
-		TieDiagnostics_Log(TIE_LOG_INFO,
-						   "[pai] setupcraftaivars: current_order=%u out of range for obj=%u "
-						   "(defaulting to nullplan)\n",
-						   (unsigned)co, (unsigned)obj_idx);
-		co = 0;
-		ai.active_craft->current_order = 0;
-	}
-	plan = planptrs[co];
-	ai.plan_order = (uint16_t)plan[1];
-	ai.plan_ptr = (uint8_t*)(plan + 2);
-
-	ai.live_target_only = 0;
-	ai.staged_next_order = 0;
-
-	return ai.plan_ptr;
-}
-
-/* ======================================================================
- *                           Plan init + VM step
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x356B0
-void pai_initplan(uint16_t obj_idx) {
-	const uint8_t* plan;
-	uint16_t wpt_sel;
-	uint8_t init_mode;
-	unsigned target_ref;
-
-#ifdef TIE_MODERN
-	if (craftptr->current_order >= 69u) {
-		TieDiagnostics_Log(TIE_LOG_INFO,
-						   "[pai] initplan: current_order=%u out of range (defaulting to nullplan)\n",
-						   (unsigned)craftptr->current_order);
-		craftptr->current_order = 0;
-	}
-#endif
-	plan = planptrs[craftptr->current_order];
-	wpt_sel = *plan++;
-
-	/* 0xFF skips waypoint initialization but still starts the plan's
-	 * maneuver and resets its runtime state below. */
-	if (wpt_sel != 0xFF) {
-		if (wpt_sel == 0xFD) {
-			/* home waypoint, guarded by way_used[12]. */
-			if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[12])
-				craftptr->ai_target_ref = (int16_t)0x800C;
-			else
-				craftptr->ai_target_ref = (int16_t)0x8000;
-		} else if (wpt_sel == 0xFE) {
-			/* hyper waypoint, guarded by way_used[13]. */
-			if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[13])
-				craftptr->ai_target_ref = (int16_t)0x800D;
-			else
-				craftptr->ai_target_ref = (int16_t)0x8000;
-		} else if (wpt_sel == 0xF9) {
-			/* unconditional home-waypoint. */
-			craftptr->ai_target_ref = (int16_t)0x800C;
-		} else {
-			/* Use this craft's current active_waypoint_idx if the FG has one. */
-			if (fg_array[objects[ai.active_obj_idx].fg_idx].way_used[craftptr->active_waypoint_idx])
-				craftptr->ai_target_ref = (uint16_t)(craftptr->active_waypoint_idx + 0x8000);
-			else
-				craftptr->ai_target_ref = (int16_t)0x8000;
-		}
-
-		/* Resolve the waypoint to a world position for the current tick. */
-		target_ref = (uint16_t)craftptr->ai_target_ref;
-		if (target_ref != 0xFFu) {
-			create_getworldposition(target_ref, objects[ai.active_obj_idx].fg_idx);
-			craftptr->waypoint_x_cache = worldlocx;
-			craftptr->waypoint_y_cache = worldlocy;
-			craftptr->waypoint_z_cache = worldlocz;
-		}
-	}
-
-	craftptr->ai_plan_state = 0;
-	init_mode = *plan;
-	if (init_mode != 0xFF) {
-		craftptr->mode_byte = init_mode;
-		paiman_initmaneuver();
-	}
-	craftptr->attacker_idx = 0xFFu;
-	craftptr->ai_update_rate_copy = craftptr->ai_update_rate;
-}
-
-// FUNCTION: TIE95 0x35870
-void pai_updatecraftplan(void) {
-	uint8_t opcode;
-
-	/* Player-craft escort override: re-evaluate escort targets before
-	 * running the handler loop. */
-	if (ai.active_obj_idx == pstate.object_idx && craftptr->default_order_ldr == 20) {
-		paifight_checkescortorder();
-	}
-
-	while ((opcode = *ai.plan_ptr++) != 0) {
-		OrderFunc handler = ordersfunctionptrs[opcode];
-
-		if (handler() && *ai.plan_ptr) {
-			/* 0x41 is the wildcard next-order = ai.staged_next_order. */
-			if (*ai.plan_ptr == 0x41)
-				craftptr->current_order = ai.staged_next_order;
-			else
-				craftptr->current_order = *ai.plan_ptr;
-			pai_setupcraftaivars(ai.active_obj_idx);
-			pai_initplan(ai.active_obj_idx);
-			TIE_FLIGHT_TRACE_AI_TRANSITION(opcode);
-			return;
-		}
-		/* No transition: skip the next_order byte. */
-		++ai.plan_ptr;
-	}
-}
-
-/* ======================================================================
- *                        Top-level per-frame tick
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x35640
-void pai_updateplaneai(void) {
-	uint16_t i;
-
-	for (i = 0; i < NUM_CRAFTS; ++i) {
-		CraftData* c;
-
-		if (!objects[i].ship_idx)
-			continue;
-		if (objects[i].category)
-			continue; /* debris / ember / etc. */
-
-		c = objects[i].craft_ptr;
-		/* Set the module-scope craftptr so order handlers see the right
-		 * context. pai_setupcraftaivars below overwrites the rest. */
-		craftptr = c;
-
-		/* Skip craft that are docking / destroyed. */
-		if (c->flight_flag == 3 || c->flight_flag == 4)
-			continue;
-
-		/* Skill-paced: only advance when the per-craft countdown expires.
-		 * The countdown is signed; <= 0 means "time to run the tick". */
-		if ((int16_t)c->ai_update_rate_copy > 0)
-			continue;
-
-		pai_setupcraftaivars(i);
-		TIE_FLIGHT_TRACE_AI_BEFORE(i);
-		pai_updatecraftplan();
-		craftptr->ai_update_rate_copy += craftptr->ai_update_rate;
-		TIE_FLIGHT_TRACE_AI_AFTER(i);
-	}
-}
-
-/* ======================================================================
  *                       Order-completion evaluator
  * ====================================================================== */
 
 // FUNCTION: TIE95 0x36654
-int pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry) {
+int16_t pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry) {
 	int done = 0;
 
 	/* Compare the per-AI-entry goal counter (CraftData +0x20..+0x22)
@@ -1231,4 +1201,38 @@ int pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry) {
 			break;
 	}
 	return done;
+}
+
+// FUNCTION: TIE95 0x368A8
+int16_t pai_isobjectvalidtarget(uint16_t obj_ref) {
+	int16_t in_pri;
+	int16_t in_sec;
+	int16_t goal_match;
+	int16_t in_t0;
+	int16_t in_t1;
+	int16_t target_match;
+
+	in_pri = score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].pri_type,
+									   (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].pri_id);
+	in_sec = score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].sec_type,
+									   (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].sec_id);
+	if ((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].pri_sec_op == 1)
+		goal_match = in_pri | in_sec;
+	else
+		goal_match = in_pri & in_sec;
+
+	in_t0 =
+		score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[0],
+								  (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[0]);
+	in_t1 =
+		score_objectmemberofgroup(obj_ref, (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[1],
+								  (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[1]);
+	if ((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_op == 1)
+		target_match = in_t0 | in_t1;
+	else
+		target_match = in_t0 & in_t1;
+
+	if (goal_match || target_match)
+		return 1;
+	return 0;
 }

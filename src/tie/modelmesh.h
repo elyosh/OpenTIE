@@ -50,7 +50,9 @@ enum TieModelMeshType {
 
 int modelmesh_getcount(uint16_t model_type);
 int modelmesh_gettype(uint16_t model_type, int mesh_index);
-int modelmesh_getobjecttypemeshtype(uint16_t model_type, int mesh_index);
+void modelmesh_buildobjecttypemeshcache(void);
+int modelmesh_getobjecttypemeshcount(int model_type);
+int modelmesh_getobjecttypemeshtype(int model_type, int mesh_index);
 int modelmesh_getvertexcount(uint16_t model_type, int mesh_index);
 int modelmesh_getvertexx(uint16_t model_type, int mesh_index, int vertex_index);
 int modelmesh_getvertexy(uint16_t model_type, int mesh_index, int vertex_index);

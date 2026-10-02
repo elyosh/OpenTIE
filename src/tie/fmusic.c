@@ -57,23 +57,28 @@ int16_t num_music; /* number of loaded tracks, -1 = not initialized */
 static uint8_t music_age[FMUSIC_NUM_SLOTS]; /* LRU age bit: 1 = recently used */
 
 /*
+ * Ensure a track is paged into the music buffer.
+ * Three-pass search: (1) already paged, (2) empty slot, (3) LRU eviction.
+ */
+static void fmusic_pagemusic(int track_idx, uint16_t slot);
+/*
  * Look up a music track by name.
  * Returns FMUSIC_ID_BASE + track_index on match, 0 if not found.
  */
 // FUNCTION: TIE95 0x239B0
 // FUNCTION: TIE98 0x41EDF0
-int16_t fmusic_fmLoadSound(const char* name) {
+int fmusic_fmLoadSound(const char* name) {
 	uint16_t idx;
-
-	if (!num_music)
-		return 0;
+	uint16_t i;
 
 	for (idx = 0; idx < (uint16_t)num_music; idx++) {
-		const char* entry = &music_name[9 * idx];
-		uint16_t i;
-		for (i = 0; name[i] && name[i] == entry[i]; i++)
-			;
-		if (!name[i] && !entry[i])
+		i = 0;
+		while (name[i]) {
+			if (name[i] != music_name[idx * 9 + i])
+				break;
+			i++;
+		}
+		if (!name[i] && !music_name[idx * 9 + i])
 			return idx + FMUSIC_ID_BASE;
 	}
 	return 0;
@@ -105,43 +110,35 @@ void* fmusic_GetPagedSound(unsigned int track_idx) {
 	return NULL;
 }
 
-/*
- * Ensure a track is paged into the music buffer. Returns slot index.
- * Three-pass search: (1) already paged, (2) empty slot, (3) LRU eviction.
- */
-static void fmusic_pagemusic(int track_idx, uint16_t slot);
-
 // FUNCTION: TIE95 0x23A7C
 // FUNCTION: TIE98 0x41EEE0
-int16_t fmusic_PageSound(uint16_t track_idx) {
+void fmusic_PageSound(unsigned int track_idx) {
 	uint16_t i;
 
 	if (track_idx >= (uint16_t)num_music)
-		return -1;
+		return;
 
 	/* Pass 1: already paged? */
-	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
-		if ((uint32_t)track_idx == (uint32_t)music_page_state[i])
-			return i;
+	for (i = 0; i < 2; i++) {
+		if (track_idx == music_page_state[i])
+			return;
 	}
 
 	/* Pass 2: empty slot? */
-	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
+	for (i = 0; i < 2; i++) {
 		if (music_page_state[i] == -1) {
 			fmusic_pagemusic(track_idx, i);
-			return i;
+			return;
 		}
 	}
 
 	/* Pass 3: evict LRU (age == 0) */
-	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
+	for (i = 0; i < 2; i++) {
 		if (!music_age[i]) {
 			fmusic_pagemusic(track_idx, i);
-			return i;
+			return;
 		}
 	}
-
-	return -1;
 }
 
 /*
@@ -172,10 +169,10 @@ static void fmusic_pagemusic(int track_idx, uint16_t slot) {
 // FUNCTION: TIE95 0x23B90
 // FUNCTION: TIE98 0x41EFE0
 void fmusic_allocmusicbuffer(void) {
-	int i;
+	int16_t i;
 
 	num_music = 0;
-	for (i = 0; i < FMUSIC_NUM_SLOTS; i++) {
+	for (i = 0; i < 2; i++) {
 		music_page_state[i] = -1;
 		music_age[i] = 0;
 	}
@@ -205,12 +202,10 @@ static LandruHandle fmusic_allocmusic(uint16_t size) {
 // FUNCTION: TIE95 0x23C30
 // FUNCTION: TIE98 0x41F070
 void fmusic_freemusic(void) {
-	while (num_music) {
-		num_music--;
+	while (num_music--) {
 		if (music_handle[(uint16_t)num_music])
 			xmemhdl_Free_Handle(music_handle[(uint16_t)num_music]);
 	}
-	num_music = -1;
 }
 
 /*
@@ -221,33 +216,6 @@ void fmusic_freemusic(void) {
 uint32_t fmusic_swapdword(uint32_t val) {
 	return ((val & 0xFF000000) >> 24) | ((val & 0x00FF0000) >> 8) | ((val & 0x0000FF00) << 8) |
 		   ((val & 0x000000FF) << 24);
-}
-
-/*
- * Read 'total' bytes from file into 'dest' via a 64-byte stack buffer.
- * Returns 1 on success, 0 if any read returned fewer bytes than requested.
- */
-// FUNCTION: TIE95 0x23E44
-// FUNCTION: TIE98 0x41F260
-int16_t fmusic_readfiledata(TieFile* fp, uint8_t* dest, uint16_t total) {
-	uint8_t chunk[FMUSIC_CHUNK_SIZE];
-	uint16_t had_error = 0;
-	uint16_t remaining = total;
-	uint16_t dest_offset = 0;
-
-	while (remaining) {
-		uint16_t chunk_size = remaining;
-		uint16_t i;
-
-		if (chunk_size > FMUSIC_CHUNK_SIZE)
-			chunk_size = FMUSIC_CHUNK_SIZE;
-		had_error |= fediskio_readfileblock(chunk, 1, chunk_size, fp) != (int16_t)chunk_size;
-		for (i = 0; i < chunk_size; i++)
-			dest[dest_offset++] = chunk[i];
-		remaining -= chunk_size;
-	}
-
-	return had_error == 0;
 }
 
 /*
@@ -332,4 +300,31 @@ int16_t fmusic_loadmusic(const char* filename) {
 
 	TieStorage_Close(fp);
 	return track_count;
+}
+
+/*
+ * Read 'total' bytes from file into 'dest' via a 64-byte stack buffer.
+ * Returns 1 on success, 0 if any read returned fewer bytes than requested.
+ */
+// FUNCTION: TIE95 0x23E44
+// FUNCTION: TIE98 0x41F260
+int16_t fmusic_readfiledata(TieFile* fp, uint8_t* dest, uint16_t total) {
+	uint8_t chunk[FMUSIC_CHUNK_SIZE];
+	uint16_t had_error = 0;
+	uint16_t remaining = total;
+	uint16_t dest_offset = 0;
+
+	while (remaining) {
+		uint16_t chunk_size = remaining;
+		uint16_t i;
+
+		if (chunk_size > FMUSIC_CHUNK_SIZE)
+			chunk_size = FMUSIC_CHUNK_SIZE;
+		had_error |= fediskio_readfileblock(chunk, 1, chunk_size, fp) != (int16_t)chunk_size;
+		for (i = 0; i < chunk_size; i++)
+			dest[dest_offset++] = chunk[i];
+		remaining -= chunk_size;
+	}
+
+	return had_error == 0;
 }

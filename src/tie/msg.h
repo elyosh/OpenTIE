@@ -49,7 +49,7 @@ void msg_messagedisplay(void);
  * overwrite messagequeue[0] (preempting) or append to the queue tail
  * (messagecnt++). For msg_type in {1, 2} (radio/event) and when not in
  * replay view, also append to messagehistory ring. */
-void msg_messageprintf(MsgTemplate template_id);
+void msg_messageprintf(uint16_t template_id);
 
 /* Shift messagequeue[0..messagecnt] to [1..messagecnt+1], bump messagecnt.
  * No-op when the current slot has age != 0 or display_count >= 2. */
@@ -95,11 +95,11 @@ void msg_craftmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_
 
 /* Speaker-labeled radio chatter + voice FX. cmdr_mode!=0 uses template 205
  * with fg.name only. cmdr_mode==0 uses template 110/111 with spec.short_name. */
-int8_t msg_radiomessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id, uint16_t cmdr_mode);
+void msg_radiomessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id, uint16_t cmdr_mode);
 
 /* Sitrep-style report. Template 120 (multi) or 121 (single).
  * Uses spec.short_name as speaker. */
-void msg_reportmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id);
+void msg_reportmessage(int obj_idx, CraftData* craft, uint16_t msg_template_id);
 
 /* Build a printable object name into out_buf: species/FG/#N for craft,
  * buoystr[] for buoys, warheadstrings[] for ordnance, buoystr[] for

@@ -99,36 +99,7 @@ enum {
 	VOLUME_CELLS = 16, /* width of a volume bar, in half-font cells */
 };
 
-/* --- Static: volume bar ------------------------------------------------ */
-
-/*
- * Render a 16-cell volume bar for one option row. The track is a clear
- * background (0x40) spanning 16 half-font-height cells right-aligned to
- * (screenXRes - fontheight/2). The first `vol` cells are then over-filled
- * with the highlight colour (0x53). Restores the default text bound
- * before returning so callers don't need to.
- */
-// FUNCTION: TIE95 0x35504
-// FUNCTION: TIE98 0x458BE0
-static void option_outvolumebar(uint16_t vol, int16_t y) {
-	const int half_fh = (int)(int8_t)fontheight >> 1;
-	const int16_t left = (int16_t)(screenXRes - 17 * half_fh);
-	uint16_t cell;
-
-	festring_setbound((int16_t)(left - 1), (int16_t)(y + 1), (int16_t)(screenXRes - half_fh),
-					  (int16_t)(y + fontheight - 1));
-	festring_setbackcolor(0x40);
-	clearwindow();
-
-	for (cell = 0; cell < vol; cell++) {
-		festring_setbound((int16_t)(left + cell * half_fh), (int16_t)(y + 2),
-						  (int16_t)(left + (cell + 1) * half_fh - 1), (int16_t)(y + fontheight - 2));
-		festring_setbackcolor(0x53);
-		clearwindow();
-	}
-
-	festring_setbound(2, 0, (int16_t)(screenXRes - 2), (int16_t)screenYRes);
-}
+static void option_outvolumebar(uint16_t vol, int16_t y);
 
 // FUNCTION: TIE95 0x34C40
 int32_t option_optionsroom(int16_t load_settings) {
@@ -534,4 +505,35 @@ int32_t option_optionsroom(int16_t load_settings) {
 	hilevel_ImSetMusicVol(inflight_music_vol ? inflight_music_vol * 8 - 1 : 0);
 #endif
 	return exit_code;
+}
+
+/* --- Static: volume bar ------------------------------------------------ */
+
+/*
+ * Render a 16-cell volume bar for one option row. The track is a clear
+ * background (0x40) spanning 16 half-font-height cells right-aligned to
+ * (screenXRes - fontheight/2). The first `vol` cells are then over-filled
+ * with the highlight colour (0x53). Restores the default text bound
+ * before returning so callers don't need to.
+ */
+// FUNCTION: TIE95 0x35504
+// FUNCTION: TIE98 0x458BE0
+static void option_outvolumebar(uint16_t vol, int16_t y) {
+	const int half_fh = (int)(int8_t)fontheight >> 1;
+	const int16_t left = (int16_t)(screenXRes - 17 * half_fh);
+	uint16_t cell;
+
+	festring_setbound((int16_t)(left - 1), (int16_t)(y + 1), (int16_t)(screenXRes - half_fh),
+					  (int16_t)(y + fontheight - 1));
+	festring_setbackcolor(0x40);
+	clearwindow();
+
+	for (cell = 0; cell < vol; cell++) {
+		festring_setbound((int16_t)(left + cell * half_fh), (int16_t)(y + 2),
+						  (int16_t)(left + (cell + 1) * half_fh - 1), (int16_t)(y + fontheight - 2));
+		festring_setbackcolor(0x53);
+		clearwindow();
+	}
+
+	festring_setbound(2, 0, (int16_t)(screenXRes - 2), (int16_t)screenYRes);
 }

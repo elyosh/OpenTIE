@@ -75,16 +75,26 @@ uint16_t pending_voice_id;
 uint16_t msg_messageinit(void) {
 	uint16_t prev;
 
-	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
-		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
-		msgLineTop = 456;
-		msgLineBottom = 480;
-		msgLineRight = 596;
-	} else {
-		/* flightResolution == TIE_FLIGHT_RES_VGA (low-res 320x200) or anything else */
-		msgLineTop = 190;
-		msgLineBottom = 200;
-		msgLineRight = 298;
+	switch (flightResolution) {
+		case TIE_FLIGHT_RES_SVGA:
+#if defined(TIE98) || defined(TIE_MODERN)
+		case TIE_FLIGHT_RES_SVGA_16:
+		case TIE_FLIGHT_RES_SVGA_D3D:
+#endif
+			msgLineTop = 456;
+			msgLineBottom = 480;
+			msgLineRight = 596;
+			break;
+		case TIE_FLIGHT_RES_VGA:
+			msgLineTop = 190;
+			msgLineBottom = 200;
+			msgLineRight = 298;
+			break;
+		default:
+			msgLineTop = 190;
+			msgLineBottom = 200;
+			msgLineRight = 298;
+			break;
 	}
 
 	festring_setlinewrap(0);
@@ -94,14 +104,12 @@ uint16_t msg_messageinit(void) {
 	/* 1-pixel separator band above the message area. */
 	festring_setbound(0, (int16_t)(msgLineTop - 1), (int16_t)screenXRes, (int16_t)msgLineTop);
 	festring_setbackcolor(0x2D);
-	if (clearwindow)
-		clearwindow();
+	clearwindow();
 
 	/* Main message band. */
 	festring_setbackcolor(0x2C);
 	festring_setbound(0, (int16_t)msgLineTop, (int16_t)screenXRes, (int16_t)msgLineBottom);
-	if (clearwindow)
-		clearwindow();
+	clearwindow();
 
 	msg_timeout();
 	festring_settextcolor(0x43);
@@ -126,12 +134,12 @@ void msg_messagerestore(void) {
 
 // FUNCTION: TIE95 0x33018
 void msg_messagedisplay(void) {
-	uint8_t type_byte;
 	const char* body;
-	char last_ch;
+	uint8_t type_byte;
+	uint8_t last_ch;
 	uint16_t chars_out;
 
-	if (messagequeue[0].template_idx == 0xFFFF)
+	if (messagequeue[0].template_idx == (uint16_t)0xFFFF)
 		return;
 
 	msg_readymessage();
@@ -141,43 +149,43 @@ void msg_messagedisplay(void) {
 		fsfx_triggervoicesfx(messagequeue[0].voice_id);
 
 	type_byte = (uint8_t)messagequeue[0].body[0];
+	body = messagequeue[0].body;
 
-	if (type_byte >= 8) {
-		festring_settextcolor(0x42);
-		body = messagequeue[0].body;
-	} else {
+	if (type_byte < 8) {
 		festring_settextcolor(fontcolorconvert[type_byte]);
-		body = &messagequeue[0].body[1];
-
+		body++;
 		if (type_byte == 1) {
-			/* Optional '0'..'3' sub-side selector at body[1]. */
-			const uint8_t sub = (uint8_t)*body;
-			if (sub >= '0' && sub <= '3') {
-				festring_settextcolor(radiosidecolors[sub - '0']);
-				body = &messagequeue[0].body[2];
+			/* Optional '0'..'3' sub-side selector after the type byte. */
+			if ((uint8_t)*body >= '0' && (uint8_t)*body <= '3') {
+				festring_settextcolor(radiosidecolors[(uint8_t)*body - '0']);
+				body++;
 			}
 		} else if (type_byte == 2) {
 			festring_settextcolor(eventsidecolors[messagequeue[0].side]);
 		}
+	} else {
+		festring_settextcolor(0x42);
 	}
 
 	/* Walk body chars, honoring '[' dim / ']' brighten nudges, capped at 70. */
-	last_ch = 0;
 	chars_out = 0;
 	while (*body && chars_out < 0x46) {
-		const uint8_t c = (uint8_t)*body;
-		if (c == '[') {
-			textcolor = (textcolor == 0xD4) ? (uint8_t)(textcolor - 1) : (uint8_t)(textcolor + 1);
+		if ((uint8_t)*body == '[') {
+			if (textcolor == 0xD4)
+				textcolor--;
+			else
+				textcolor++;
 			body++;
-		} else if (c == ']') {
-			textcolor = (textcolor == 0xD3) ? (uint8_t)(textcolor + 1) : (uint8_t)(textcolor - 1);
+		} else if ((uint8_t)*body == ']') {
+			if (textcolor == 0xD3)
+				textcolor++;
+			else
+				textcolor--;
 			body++;
 		} else {
-			if (outchar)
-				outchar(c);
-			body++;
+			outchar((uint8_t)*body);
+			last_ch = (uint8_t)*body++;
 			chars_out++;
-			last_ch = (char)c;
 		}
 	}
 
@@ -188,59 +196,53 @@ void msg_messagedisplay(void) {
 /* --- msg_messageprintf -- */
 
 // FUNCTION: TIE95 0x330CC
-void msg_messageprintf(MsgTemplate template_id) {
+void msg_messageprintf(uint16_t template_id) {
 	/* Retail queue and history share this record. */
 	MsgHistoryEntry entry;
-	const uint8_t* message_template;
 	const uint8_t* tpl;
 	uint16_t body_len;
 	uint16_t arg_idx;
-	uint8_t type_raw;
-	int16_t new_type;
-	int append = 0;
-	int preserve_current = 0;
-
-	memset(&entry, 0, sizeof(entry));
+	uint16_t new_type;
 
 	entry.template_idx = template_id;
+	/* Stamp the mission clock. */
+	entry.subsecond = date.subsec;
+	entry.seconds = date.second;
+	entry.minutes = date.minute;
+	entry.hours = date.hour;
+	entry.age = 0;
+	entry.display_count = 0;
+	entry.side = messageside;
 	/* Only the generic radio/objective templates carry a voice cue. */
 	if (template_id == 174 || template_id == 161)
 		entry.voice_id = pending_voice_id;
 	else
 		entry.voice_id = 0;
-	/* Stamp the mission clock. */
-	entry.subsecond = _date.subsec;
-	entry.seconds = _date.second;
-	entry.minutes = _date.minute;
-	entry.hours = _date.hour;
-	entry.side = messageside;
-	entry.age = 0;
-	entry.display_count = 0;
 
 	/* Walk the template string, expanding '*' and '&N' opcodes into body[]. */
-	message_template = template_id == MSG_PAUSED
-						   ? (const uint8_t*)"\006Mission paused. Press your pause key or button to continue."
-						   : (const uint8_t*)messagetable[template_id];
-	tpl = message_template;
-	body_len = 0;
+#ifdef TIE_MODERN
+	if (template_id == MSG_PAUSED)
+		tpl = (const uint8_t*)"\006Mission paused. Press your pause key or button to continue.";
+	else
+#endif
+		tpl = (const uint8_t*)messagetable[template_id];
 	arg_idx = 0;
+	body_len = 0;
 
-	while (*tpl && body_len < 0x46) {
-		const uint8_t op = *tpl;
-		if (op == '*') {
-			uint16_t spec;
+	while (*tpl && body_len < 70) {
+		if (*tpl == '*') {
+			int spec;
 			const char* src;
 
 			tpl++;
 			spec = argtable[arg_idx++];
-
-			if (spec < 0x8000u)
-				src = messagetable[spec];
-			else
+			if (spec >= 0x8000)
 				src = messageptrs[spec & 0x7FFF];
-			while (*src && body_len < 0x46)
+			else
+				src = messagetable[spec];
+			while (*src && body_len < 70)
 				entry.body[body_len++] = *src++;
-		} else if (op == '&') {
+		} else if (*tpl == '&') {
 			uint16_t width;
 			uint16_t value;
 			uint16_t nonzero_seen;
@@ -249,39 +251,46 @@ void msg_messageprintf(MsgTemplate template_id) {
 			width = *tpl++;
 			value = argtable[arg_idx++];
 			nonzero_seen = 0;
-			while (width) {
-				const uint16_t div = placevalue[width];
-				uint16_t digit = (uint16_t)(value / div);
-				char ch;
 
-				value = (uint16_t)(value - digit * div);
+			while (width > 0) {
+				uint16_t div = placevalue[width];
+				uint16_t digit = value / div;
 
-				if (nonzero_seen || width <= 1 || digit) {
+				value -= digit * div;
+				if (!nonzero_seen && (int16_t)width > 1 && digit == 0) {
+					digit = ' ';
+				} else {
 					nonzero_seen = 1;
 					if (digit > 9)
 						digit = 9;
-					ch = (char)('0' + digit);
-				} else {
-					ch = ' ';
+					digit += '0';
 				}
-				if (body_len < 0x46)
-					entry.body[body_len++] = ch;
+#ifdef TIE_MODERN
+				if (body_len < 70)
+#endif
+					entry.body[body_len++] = (char)digit;
 				width--;
 			}
 		} else {
-			tpl++;
-			if (body_len < 0x46)
-				entry.body[body_len++] = (char)op;
+			entry.body[body_len++] = *tpl++;
 		}
 	}
 
-	/* A full 70-byte body has no room for a terminator. */
 	if (body_len < 70)
 		entry.body[body_len] = 0;
+	else
+		entry.body[69] = 0;
 
-	/* msg_type from raw template[0] byte, clamped >=8 -> 6. */
-	type_raw = message_template[0];
-	entry.msg_type = (type_raw >= 8) ? 6 : type_raw;
+	/* msg_type from the raw template prefix byte, clamped >=8 -> 6. */
+#ifdef TIE_MODERN
+	if (template_id == MSG_PAUSED)
+		entry.msg_type = 6;
+	else
+#endif
+		if ((uint8_t)messagetable[template_id][0] < 8)
+		entry.msg_type = (uint8_t)messagetable[template_id][0];
+	else
+		entry.msg_type = 6;
 
 	new_type = entry.msg_type;
 
@@ -289,60 +298,70 @@ void msg_messageprintf(MsgTemplate template_id) {
 	if (!replayviewmode && (new_type == 2 || new_type == 1)) {
 		numhistorymsgs++;
 		lasthistorymsg++;
-		if (lasthistorymsg == MSG_HISTORY_SLOTS)
+		if ((uint16_t)lasthistorymsg == MSG_HISTORY_SLOTS)
 			lasthistorymsg = 0;
 		messagehistory = (MsgHistoryEntry*)xmemhdl_Lock_Handle(messageloghandle);
 		xmemhdl_Unlock_Handle(messageloghandle);
-		memcpy(&messagehistory[lasthistorymsg], &entry, sizeof(MsgHistoryEntry));
+		messagehistory[(uint16_t)lasthistorymsg] = entry;
 	}
 
 	/* Queue dispatch on the currently-displayed message's msg_type. */
-	if (messagequeue[0].template_idx == 0xFFFF) {
+	if (messagequeue[0].template_idx == (uint16_t)0xFFFF) {
 		/* Slot empty -- overwrite and render. */
-		memcpy(&messagequeue[0], &entry, sizeof(MsgHistoryEntry));
+		messagequeue[0] = entry;
 		msg_messagedisplay();
 		return;
 	}
 
 	switch (messagequeue[0].msg_type) {
-		case 1:
-			/* Radio and event messages queue behind an existing radio message. */
-			append = new_type == 1 || new_type == 2;
-			preserve_current = !append;
+		case 3:
+		case 6:
+		case 7:
+			messagequeue[0] = entry;
+			msg_messagedisplay();
 			break;
 		case 2:
 		case 5:
 			/* Only events queue behind an event or briefing message. */
-			append = new_type == 2;
-			preserve_current = !append;
+			if (new_type == 2) {
+				messagequeue[messagecnt + 1] = entry;
+				messagecnt++;
+				if (messagecnt >= 10)
+					messagecnt--;
+			} else {
+				msg_movecurrentmessageinqueue();
+				messagequeue[0] = entry;
+				msg_messagedisplay();
+			}
 			break;
-		case 3:
-		case 6:
-		case 7:
+		case 1:
+			/* Radio and event messages queue behind an existing radio message. */
+			if (new_type == 2 || new_type == 1) {
+				messagequeue[messagecnt + 1] = entry;
+				messagecnt++;
+				if (messagecnt >= 10)
+					messagecnt--;
+			} else {
+				msg_movecurrentmessageinqueue();
+				messagequeue[0] = entry;
+				msg_messagedisplay();
+			}
 			break;
 		case 4:
 			/* Reports discard type 3, queue radio/events, and yield to others. */
 			if (new_type == 3)
-				return;
-			append = new_type == 1 || new_type == 2;
+				break;
+			if (new_type == 2 || new_type == 1) {
+				messagequeue[messagecnt + 1] = entry;
+				messagecnt++;
+				if (messagecnt >= 10)
+					messagecnt--;
+			} else {
+				messagequeue[0] = entry;
+				msg_messagedisplay();
+			}
 			break;
-		default:
-			return;
 	}
-
-	if (append) {
-		uint8_t slot = (uint8_t)(messagecnt + 1);
-		memcpy(&messagequeue[slot], &entry, sizeof(MsgHistoryEntry));
-		messagecnt = slot;
-		if (messagecnt >= 10)
-			messagecnt--;
-		return;
-	}
-
-	if (preserve_current)
-		msg_movecurrentmessageinqueue();
-	memcpy(&messagequeue[0], &entry, sizeof(MsgHistoryEntry));
-	msg_messagedisplay();
 }
 
 /* --- msg_movecurrentmessageinqueue -- */
@@ -350,7 +369,7 @@ void msg_messageprintf(MsgTemplate template_id) {
 // FUNCTION: TIE95 0x33544
 // FUNCTION: TIE98 0x4563E0
 void msg_movecurrentmessageinqueue(void) {
-	int16_t i;
+	uint16_t i;
 
 	if (messagequeue[0].display_count >= 2)
 		return;
@@ -359,8 +378,8 @@ void msg_movecurrentmessageinqueue(void) {
 
 	/* Shift queue[0..messagecnt] to queue[1..messagecnt+1]. */
 
-	for (i = (int16_t)(messagecnt + 1); i > 0; i--) {
-		memcpy(&messagequeue[i], &messagequeue[i - 1], sizeof(MsgHistoryEntry));
+	for (i = (uint16_t)(messagecnt + 1); i > 0; i--) {
+		messagequeue[i] = messagequeue[i - 1];
 	}
 	messagecnt++;
 	if (messagecnt >= 10)
@@ -373,7 +392,7 @@ void msg_getmessagefromqueue(void) {
 	const uint8_t old_cnt = messagecnt;
 	uint16_t i;
 	for (i = 0; i < old_cnt; i++) {
-		memcpy(&messagequeue[i], &messagequeue[i + 1], sizeof(MsgHistoryEntry));
+		messagequeue[i] = messagequeue[i + 1];
 	}
 	messagecnt = (uint8_t)(old_cnt - 1);
 }
@@ -484,7 +503,7 @@ void msg_clearmessagequeue(void) {
 // FUNCTION: TIE95 0x33A00
 // FUNCTION: TIE98 0x4568F0
 void msg_updatemessageage(void) {
-	if (messagequeue[0].template_idx != 0xFFFF)
+	if (messagequeue[0].template_idx != (uint16_t)0xFFFF)
 		messagequeue[0].age++;
 }
 
@@ -605,34 +624,34 @@ uint16_t msg_addmessageptr(uint16_t slot_idx, char* ptr) {
 
 // FUNCTION: TIE95 0x33D10
 void msg_craftmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id) {
-	uint8_t fg_idx;
+	uint16_t fg_idx;
 
 	messageside = objects[obj_idx].side;
-	argtable[0] = 0x8000;
 #ifdef TIE_MODERN
 	messageptrs[0] = (char*)spec_name_ptrs[craft->species_idx];
 #else
 	messageptrs[0] = (char*)spec_data[craft->species_idx].name_ptr;
 #endif
+	argtable[0] = 0x8000;
 	fg_idx = objects[obj_idx].fg_idx;
-	argtable[1] = 0x8001;
 	messageptrs[1] = fg_array[fg_idx].name;
+	argtable[1] = 0x8001;
 
-	if ((int8_t)fg_array[fg_idx].count <= 1) {
-		/* Single craft FG -- no "#N". */
-		argtable[2] = msg_template_id;
-		msg_messageprintf(MSG_CRAFT_REPORT);
-	} else {
+	if ((int8_t)fg_array[fg_idx].count > 1) {
 		argtable[2] = (uint16_t)(craft->craft_idx_in_fg + 1);
 		argtable[3] = msg_template_id;
 		msg_messageprintf(MSG_CRAFT_REPORT_FG);
+	} else {
+		/* Single craft FG -- no "#N". */
+		argtable[2] = msg_template_id;
+		msg_messageprintf(MSG_CRAFT_REPORT);
 	}
 }
 
 /* --- msg_radiomessage -- */
 
 // FUNCTION: TIE95 0x33DD0
-int8_t msg_radiomessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id, uint16_t cmdr_mode) {
+void msg_radiomessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id, uint16_t cmdr_mode) {
 	MsgTemplate tpl;
 	if (cmdr_mode) {
 		const uint8_t fg_idx = objects[obj_idx].fg_idx;
@@ -658,29 +677,27 @@ int8_t msg_radiomessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_templat
 		}
 	}
 	msg_messageprintf(tpl);
-	return fsfx_speakorderack(obj_idx, msg_template_id, cmdr_mode);
+	fsfx_speakorderack(obj_idx, msg_template_id, cmdr_mode);
 }
 
 /* --- msg_reportmessage -- */
 
 // FUNCTION: TIE95 0x33EF4
-void msg_reportmessage(uint16_t obj_idx, CraftData* craft, uint16_t msg_template_id) {
-	uint8_t fg_idx;
+void msg_reportmessage(int obj_idx, CraftData* craft, uint16_t msg_template_id) {
+	uint16_t fg_idx;
 
 	argtable[0] = 0x8000;
 	messageptrs[0] = spec_data[craft->species_idx].short_name;
 	fg_idx = objects[obj_idx].fg_idx;
 	argtable[1] = 0x8001;
-	/* messageptrs[1] points at the FG; char[0..11] inside is fg.name. */
-	messageptrs[1] = (char*)&fg_array[fg_idx];
-
-	if ((int8_t)fg_array[fg_idx].count <= 1) {
-		argtable[2] = msg_template_id;
-		msg_messageprintf(MSG_REPORTING_FG);
-	} else {
+	messageptrs[1] = fg_array[fg_idx].name;
+	if ((int8_t)fg_array[fg_idx].count > 1) {
 		argtable[2] = (uint16_t)(craft->craft_idx_in_fg + 1);
 		argtable[3] = msg_template_id;
 		msg_messageprintf(MSG_REPORTING_FG_INDEXED);
+	} else {
+		argtable[2] = msg_template_id;
+		msg_messageprintf(MSG_REPORTING_FG);
 	}
 }
 

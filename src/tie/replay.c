@@ -110,9 +110,9 @@ int16_t replayvolume;
 int16_t replaymsgtimer;
 
 // GLOBAL: TIE95 0xD5E5A
-uint8_t chasespecies;
+uint16_t chasespecies;
 // GLOBAL: TIE95 0xD5E5E
-uint8_t trackspecies;
+uint16_t trackspecies;
 // GLOBAL: TIE95 0xD5E60
 // GLOBAL: TIE98 0x5FBC40
 uint16_t trackobject;
@@ -126,437 +126,6 @@ uint8_t cameraposstate;
 
 // GLOBAL: TIE95 0xE36FC
 Camera replaycam;
-
-/* --------------------------------------------------------------------------
- * Helpers
- * -------------------------------------------------------------------------- */
-
-/* REPLAY_copybytesinfile — copy `count` bytes from src to dst. Retail
- * chunks the copy into 256-byte blocks via fediskio_readfileblock + fwrite
- * (the demo was per-byte fgetc/fputc). On TIE_EOF / short write both streams
- * are fclosed and 0 is returned. Returns 1 on success (streams left
- * open). */
-// FUNCTION: TIE95 0x454F4
-int replay_copybytesinfile(uint16_t count, TieFile* src, TieFile* dst) {
-	uint8_t buf[256];
-	uint32_t remaining = count;
-	while (remaining > 0) {
-		uint32_t chunk = remaining > 256u ? 256u : remaining;
-		int16_t got = fediskio_readfileblock(buf, 1, chunk, src);
-		if ((uint32_t)got != chunk || TieStorage_Write(buf, 1, got, dst) != (size_t)got) {
-			TieStorage_Close(src);
-			TieStorage_Close(dst);
-			return 0;
-		}
-		remaining -= chunk;
-	}
-	return 1;
-}
-
-/* --------------------------------------------------------------------------
- * Message + widget helpers
- * -------------------------------------------------------------------------- */
-
-/* replay_replaymessage — print a message from messagetable[msg_id] into
- * the in-flight message band. First byte of the template is a color/type
- * tag (< 8 indexes fontcolorconvert[], else default 0x42); '[' / ']'
- * nudge the text color up/down. Appends a '.' unless the final printable
- * character was one of '?','!',':',' '. Arms replaymsgtimer to 944 ticks. */
-// FUNCTION: TIE95 0x475F4
-// FUNCTION: TIE98 0x474BC0
-void replay_replaymessage(uint16_t msg_id) {
-	const unsigned char* p;
-	unsigned char tag;
-	unsigned char last;
-
-	msg_readymessage();
-
-	p = (const unsigned char*)messagetable[msg_id];
-	tag = *p;
-	if (tag < 8) {
-		festring_settextcolor(fontcolorconvert[tag]);
-		++p;
-	} else {
-		festring_settextcolor(0x42);
-	}
-
-	last = 'x';
-	while (*p) {
-		unsigned char c = *p;
-		if (c == '[') {
-			++textcolor;
-			++p;
-		} else if (c == ']') {
-			--textcolor;
-			++p;
-		} else {
-			outchar(c);
-			last = c;
-			++p;
-		}
-	}
-
-	if (last != '?' && last != '!' && last != ':' && last != ' ') {
-		outchar('.');
-	}
-
-	festring_setautofill(1);
-	outchar('\n');
-	festring_setautofill(0);
-	festring_setfontsize(2);
-	replaymsgtimer = 944;
-}
-
-/* replay_drawreplaybutton — repaint one widget of the replay HUD.
- * btn_id 0..0x11 = in-flight cockpit layout, 0..0x25 = stand-alone viewer
- * (same ids with +18 offset). Beyond the basic blit, 6 ids (14/32, 15/33,
- * 16/34, 17/35) toggle the track/chase info windows (name + status).
- *
- * Retail supports VGA and SVGA coordinate sets for both the cockpit and
- * stand-alone layouts. */
-// FUNCTION: TIE95 0x459B8
-void replay_drawreplaybutton(uint16_t btn_id) {
-	uint16_t idx = btn_id;
-	int res = 0; /* 0 = VGA / demo layout */
-	int16_t track_name_y, track_name_h, track_stat_y, track_stat_h;
-	int16_t track_name_left, track_name_right;
-	int16_t track_stat_left, track_stat_right;
-	int16_t chase_name_y, chase_name_h, chase_stat_y, chase_stat_h;
-	int16_t chase_name_left, chase_name_right;
-	int16_t chase_stat_left, chase_stat_right;
-
-	if (maingameflag) {
-		if (flightResolution == TIE_FLIGHT_RES_VGA) {
-			res = 0;
-			track_name_left = 127;
-			track_name_right = 201;
-			track_stat_left = 230;
-			track_stat_right = 268;
-			track_name_y = 181;
-			track_name_h = 186;
-			track_stat_y = 181;
-			track_stat_h = 186;
-			chase_name_left = 127;
-			chase_name_right = 201;
-			chase_stat_left = 230;
-			chase_stat_right = 268;
-			chase_name_y = 167;
-			chase_name_h = 172;
-			chase_stat_y = 167;
-			chase_stat_h = 172;
-		} else {
-			res = 1;
-			track_name_left = 260;
-			track_name_right = 397;
-			track_stat_left = 464;
-			track_stat_right = 532;
-			track_name_y = 436;
-			track_name_h = 445;
-			track_stat_y = 436;
-			track_stat_h = 445;
-			chase_name_left = 260;
-			chase_name_right = 397;
-			chase_stat_left = 464;
-			chase_stat_right = 532;
-			chase_name_y = 402;
-			chase_name_h = 411;
-			chase_stat_y = 402;
-			chase_stat_h = 411;
-		}
-	} else {
-		/* Stand-alone viewer remaps 0..0x11 -> 0x12..0x23. */
-		if (btn_id < 0x12u)
-			idx = btn_id + 18;
-		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
-			flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
-			res = 1;
-			track_name_left = 278;
-			track_name_right = 423;
-			track_stat_left = 484;
-			track_stat_right = 556;
-			track_name_y = 437;
-			track_name_h = 448;
-			track_stat_y = 437;
-			track_stat_h = 448;
-			chase_name_left = 278;
-			chase_name_right = 423;
-			chase_stat_left = 484;
-			chase_stat_right = 556;
-			chase_name_y = 400;
-			chase_name_h = 412;
-			chase_stat_y = 400;
-			chase_stat_h = 412;
-		} else {
-			res = 0;
-			track_name_left = 139;
-			track_name_right = 211;
-			track_stat_left = 241;
-			track_stat_right = 279;
-			track_name_y = 181;
-			track_name_h = 186;
-			track_stat_y = 181;
-			track_stat_h = 186;
-			chase_name_left = 139;
-			chase_name_right = 211;
-			chase_stat_left = 241;
-			chase_stat_right = 279;
-			chase_name_y = 167;
-			chase_name_h = 172;
-			chase_stat_y = 167;
-			chase_stat_h = 172;
-		}
-	}
-
-	/* Only cockpit mode blits the sprite (stand-alone viewer draws its
-	 * HUD from the panel backdrop). */
-	if (maingameflag) {
-		drawshape(farbufferptrs[REPLAY_BUTTON_SHAPE_BASE + idx], replaybuttonleft[idx][res],
-				  replaybuttontop[idx][res], 0, 0);
-	}
-
-	if (idx == 14 || idx == 32) {
-		festring_setbound(track_name_left, track_name_y, track_name_right, track_name_h);
-		festring_setbackcolor(0x40);
-		clearwindow();
-		festring_setbound(track_stat_left, track_stat_y, track_stat_right, track_stat_h);
-		clearwindow();
-	}
-	if (idx == 15 || idx == 33) {
-		uint8_t sp;
-		int st;
-
-		festring_setbound(track_name_left, track_name_y, track_name_right, track_name_h);
-		festring_setbackcolor(0x40);
-		clearwindow();
-		festring_setcursor(track_name_left, track_name_y);
-		replay_outputobjectname(trackobject);
-
-		sp = (trackobject >= 0x3800u) ? staticobjects[trackobject - 14336].species
-									  : objects[trackobject].ship_idx;
-		trackspecies = sp;
-
-		festring_setbound(track_stat_left, track_stat_y, track_stat_right, track_stat_h);
-		clearwindow();
-		festring_setcursor(track_stat_left, track_stat_y);
-		festring_settextcolor(0x4E);
-		st = replay_getstatusnum(trackobject);
-		festring_outstringcenter((const uint8_t*)((const char**)statusstrings)[st]);
-	}
-	if (idx == 16 || idx == 34) {
-		festring_setbound(chase_name_left, chase_name_y, chase_name_right, chase_name_h);
-		festring_setbackcolor(0x40);
-		clearwindow();
-		festring_setbound(chase_stat_left, chase_stat_y, chase_stat_right, chase_stat_h);
-		clearwindow();
-		cameraposstate = 0;
-	}
-	if (idx == 17 || idx == 35) {
-		uint8_t sp;
-		int st;
-
-		festring_setbound(chase_name_left, chase_name_y, chase_name_right, chase_name_h);
-		festring_setbackcolor(0x40);
-		clearwindow();
-		festring_setcursor(chase_name_left, chase_name_y);
-		replay_outputobjectname(pstate.target_obj_idx);
-
-		sp = (pstate.target_obj_idx >= 0x3800u) ? staticobjects[pstate.target_obj_idx - 14336].species
-												: objects[pstate.target_obj_idx].ship_idx;
-		chasespecies = sp;
-
-		festring_setbound(chase_stat_left, chase_stat_y, chase_stat_right, chase_stat_h);
-		clearwindow();
-		festring_setcursor(chase_stat_left, chase_stat_y);
-		festring_settextcolor(0x4E);
-		st = replay_getstatusnum(pstate.target_obj_idx);
-		festring_outstringcenter((const uint8_t*)((const char**)statusstrings)[st]);
-		cameraposstate = 1;
-	}
-}
-
-/* --------------------------------------------------------------------------
- * Object classifier + label formatters
- * -------------------------------------------------------------------------- */
-
-/* replay_getstatusnum — classify obj_id into a "status-bar" code 0..6.
- *    0 = normal (fighter / has shields)
- *    2 = all status flags clear (disabled application)
- *    3 = docking in progress
- *    4 = satellite (species 143/144) without species_idx    (no personnel)
- *    5 = satellite with species_idx                          (boarded)
- *    6 = disabled-and-drained (all shields zero, non-fighter)
- *
- * Static objects (obj_id >= 0x3800) never reach any craft_ptr deref
- * below: staticobjects[].species is in the buoy range (70..84). */
-// FUNCTION: TIE95 0x462BC
-int replay_getstatusnum(uint16_t obj_id) {
-	uint16_t species;
-	CraftData* craft_ptr;
-
-	if (obj_id >= 0x3800u) {
-		uint16_t species = staticobjects[obj_id - 14336].species;
-		if (species == 144 || species == 143)
-			return 4;
-		if (species_table[species].category)
-			return 0;
-		return 0;
-	}
-
-	species = objects[obj_id].ship_idx;
-	craft_ptr = objects[obj_id].craft_ptr;
-
-	if (species == 144 || species == 143) {
-		return craft_ptr->species_idx ? 5 : 4;
-	}
-
-	if (species_table[species].category) {
-		return 0;
-	}
-	if (craft_ptr->dock_state_flags) {
-		return 3;
-	}
-	if (!craft_ptr->status_flags) {
-		return 2;
-	}
-	if ((int32_t)craft_ptr->rear_shield + (int32_t)craft_ptr->forward_shield != 0 ||
-		objects[obj_id].genus == GENUS_FIGHTER) {
-		return 0;
-	}
-	return 6;
-}
-
-/* replay_outputobjectname — format obj_id's display name into tempstring
- * and outstring-center it. Identical to demo. */
-// FUNCTION: TIE95 0x46094
-void replay_outputobjectname(uint16_t obj_id) {
-	CraftData* cp;
-	uint16_t type;
-
-	if (obj_id < 0x3800) {
-		if (objects[obj_id].side == 0)
-			festring_settextcolor('Q');
-		else if (objects[obj_id].side == 1 || objects[obj_id].side == 4)
-			festring_settextcolor('I');
-		else if (objects[obj_id].side == 2)
-			festring_settextcolor('E');
-		else
-			festring_settextcolor('U');
-
-		if (!objects[obj_id].category) {
-			cp = objects[obj_id].craft_ptr;
-			festring_farstrcpy(spec_data[cp->species_idx].short_name);
-			festring_farstradd(':');
-			festring_farstradd(' ');
-			festring_farstradd((char)254);
-
-			if (objects[obj_id].side == 0)
-				festring_farstradd('R');
-			else if (objects[obj_id].side == 1 || objects[obj_id].side == 4)
-				festring_farstradd('J');
-			else if (objects[obj_id].side == 2)
-				festring_farstradd('F');
-			else
-				festring_farstradd('V');
-
-			festring_farstrcat(fg_array[objects[obj_id].fg_idx].name);
-			if ((int8_t)fg_array[objects[obj_id].fg_idx].count > 1) {
-				festring_farstradd(' ');
-				festring_farstradd((char)(cp->craft_idx_in_fg + '1'));
-			}
-		} else {
-			type = objects[obj_id].ship_idx;
-			if (type >= 143 && type <= 154) {
-				festring_farstrcpy(((char**)warheadstrings)[type - 143]);
-			}
-		}
-	} else {
-		festring_settextcolor(0x43);
-		type = staticobjects[obj_id - 14336].species;
-		if (type >= 70 && type <= 84) {
-			festring_farstrcpy(((char**)buoystr)[type - 70]);
-		}
-	}
-	festring_outstringcenter((const uint8_t*)tempstring);
-}
-
-/* replay_outputclipname — paint the current clip name centered in the
- * info strip. Retail added an SVGA cockpit strip (341, 13, 411, 22). */
-// FUNCTION: TIE95 0x463BC
-void replay_outputclipname(void) {
-	int16_t cx, cy;
-
-	festring_setbackcolor(0x40);
-
-	if (maingameflag) {
-		if (flightResolution == TIE_FLIGHT_RES_VGA) {
-			festring_setbound(169, 5, 206, 11);
-			cx = 169;
-			cy = 5;
-		} else {
-			festring_setbound(341, 13, 411, 22);
-			cx = 341;
-			cy = 13;
-		}
-	} else if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
-			   flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
-		festring_setbound(260, 360, 339, 373);
-		cx = 260;
-		cy = 360;
-	} else {
-		festring_setbound(130, 150, 169, 155);
-		cx = 130;
-		cy = 150;
-	}
-	festring_setcursor(cx, cy);
-	clearwindow();
-	festring_settextcolor(0x43);
-	festring_outstringcenter((const uint8_t*)replayclipname);
-}
-
-/* --------------------------------------------------------------------------
- * Playback-state mutators
- * -------------------------------------------------------------------------- */
-
-// FUNCTION: TIE95 0x4596C
-void replay_stopreplay(void) {
-	TieReplayTiming_Reset();
-	updateactionflag = 0;
-	replay_replaymessage(MSG_FILM_END);
-	replay_drawreplaybutton(2);
-	if (replaymusic == 1) {
-		replayvolume = (int16_t)hilevel_ImGetMasterVol();
-		hilevel_ImSetMasterVol(0);
-		lolevel_ImPause();
-		replaymusic = 0;
-	}
-}
-
-// FUNCTION: TIE95 0x458DC
-void replay_rewindreplay(void) {
-	TieReplayTiming_Reset();
-	if (replaymusic == 1) {
-		replayvolume = (int16_t)hilevel_ImGetMasterVol();
-		hilevel_ImSetMasterVol(0);
-		lolevel_ImPause();
-		replaymusic = 0;
-	}
-	replayio_copyfromsave(replaystartfile);
-	replaytotalcntdown = 0;
-	replaypercent = -1;
-	math2_randomseed = (int16_t)replayrandomseed;
-	if (replayspoolflag) {
-		if (!replay_loadreplayinput()) {
-			replaytotalcnt = 0;
-			replaytotalcntdown = 0;
-			replay_stopreplay();
-			return;
-		}
-	}
-	replaybuffercnt = 0;
-	replayptr = replaybufferstart;
-	updateactionflag = 0;
-	replay_drawreplaybutton(2);
-}
 
 /* replay_loadreplayinput — refill one in-memory chunk from inputspoolfile.
  * Reads only the remaining valid records and shows "loading"
@@ -615,101 +184,6 @@ int16_t replay_loadreplayinput(void) {
 	TieStorage_Close(fileptr);
 	fileptr = saved;
 	return 1;
-}
-
-/* --------------------------------------------------------------------------
- * Camera pose
- * -------------------------------------------------------------------------- */
-
-// FUNCTION: TIE95 0x474B4
-void replay_movecambehind(uint16_t obj_id) {
-	uint16_t sp;
-	uint16_t quarter_w;
-	int32_t push_x;
-	int32_t push_y;
-	int32_t push_z;
-
-	create_getworldposition(obj_id, 0);
-	replaycam.x = worldlocx;
-	replaycam.y = worldlocy;
-	replaycam.z = worldlocz;
-
-	sp = (obj_id >= 0x3800u) ? staticobjects[obj_id - 14336].species : objects[obj_id].ship_idx;
-	quarter_w = species_table[sp].bound_hwidth >> 2;
-
-	push_x = ((worldeyeA3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeA3 * (int32_t)quarter_w) >> 15);
-	push_y = ((worldeyeB3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeB3 * (int32_t)quarter_w) >> 15);
-	push_z = ((worldeyeC3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeC3 * (int32_t)quarter_w) >> 15);
-	replaycam.x -= push_x;
-	replaycam.y -= push_y;
-	replaycam.z -= push_z;
-}
-
-// FUNCTION: TIE95 0x47190
-void replay_calcreplayview(void) {
-	uint8_t chase_sp = (pstate.target_obj_idx >= 0x3800u)
-						   ? staticobjects[pstate.target_obj_idx - 14336].species
-						   : objects[pstate.target_obj_idx].ship_idx;
-	if (chase_sp != chasespecies) {
-		pstate.target_obj_idx = pstate.object_idx;
-		replay_drawreplaybutton(0x11);
-	}
-
-	if (replaycam.view_camera_control) {
-		replaycam.view_camera_control = 1;
-		camera.x = replaycam.x;
-		camera.roll = 0;
-		camera.up_angle = 0;
-		camera.y = replaycam.y;
-		camera.z = replaycam.z;
-		camera.side_angle = 0;
-		fview_newcalcview(0, (int16_t)camera.cam_pitch, (int16_t)camera.cam_heading, 0, 0, 0, NULL);
-		TieFlightSnapshot_RecordCameraBasis();
-	} else {
-		uint16_t new_pitch, new_heading;
-		if (pstate.target_obj_idx >= 0x3800u) {
-			replaycam.roll = (int16_t)(staticobjects[pstate.target_obj_idx - 14336].roll_byte << 8);
-			new_heading = (uint16_t)(staticobjects[pstate.target_obj_idx - 14336].heading_byte << 8);
-			new_pitch = (uint16_t)(staticobjects[pstate.target_obj_idx - 14336].pitch_byte << 8);
-		} else {
-			replaycam.roll = objects[pstate.target_obj_idx].roll;
-			new_heading = (uint16_t)objects[pstate.target_obj_idx].heading;
-			new_pitch = (uint16_t)objects[pstate.target_obj_idx].pitch;
-		}
-		camera.cam_pitch = new_pitch;
-		camera.cam_heading = new_heading;
-		camera.roll = replaycam.roll;
-		camera.up_angle = replaycam.up_angle;
-		camera.side_angle = replaycam.side_angle;
-		fview_newcalcview(replaycam.roll, (int16_t)new_pitch, (int16_t)new_heading, 0, replaycam.side_angle,
-						  replaycam.up_angle, NULL);
-		TieFlightSnapshot_RecordCameraBasis();
-		replay_movecambehind(pstate.target_obj_idx);
-		camera.x = replaycam.x;
-		camera.y = replaycam.y;
-		camera.z = replaycam.z;
-	}
-
-	if (trackobject != 0xFFFFu) {
-		uint8_t track_sp = (trackobject >= 0x3800u) ? staticobjects[trackobject - 14336].species
-													: objects[trackobject].ship_idx;
-		if (track_sp == trackspecies) {
-			create_getworldposition(trackobject, 0);
-			trig2_ctop(worldlocx - camera.x, worldlocy - camera.y, worldlocz - camera.z);
-			camera.roll = 0;
-			replaycam.roll = 0;
-			camera.cam_pitch = (uint16_t)trig2_zangle;
-			camera.cam_heading = (uint16_t)trig2_xyangle;
-			camera.up_angle = 0;
-			camera.side_angle = 0;
-			fview_newcalcview(0, trig2_zangle, trig2_xyangle, 0, 0, 0, NULL);
-			TieFlightSnapshot_RecordCameraBasis();
-		} else {
-			trackobject = 0xFFFFu;
-			replay_drawreplaybutton(0xC);
-			replay_drawreplaybutton(0xE);
-		}
-	}
 }
 
 /* --------------------------------------------------------------------------
@@ -995,6 +469,32 @@ uint16_t replay_savereplay(void) {
 #endif
 }
 
+/* --------------------------------------------------------------------------
+ * Helpers
+ * -------------------------------------------------------------------------- */
+
+/* REPLAY_copybytesinfile — copy `count` bytes from src to dst. Retail
+ * chunks the copy into 256-byte blocks via fediskio_readfileblock + fwrite
+ * (the demo was per-byte fgetc/fputc). On TIE_EOF / short write both streams
+ * are fclosed and 0 is returned. Returns 1 on success (streams left
+ * open). */
+// FUNCTION: TIE95 0x454F4
+int replay_copybytesinfile(uint16_t count, TieFile* src, TieFile* dst) {
+	uint8_t buf[256];
+	uint32_t remaining = count;
+	while (remaining > 0) {
+		uint32_t chunk = remaining > 256u ? 256u : remaining;
+		int16_t got = fediskio_readfileblock(buf, 1, chunk, src);
+		if ((uint32_t)got != chunk || TieStorage_Write(buf, 1, got, dst) != (size_t)got) {
+			TieStorage_Close(src);
+			TieStorage_Close(dst);
+			return 0;
+		}
+		remaining -= chunk;
+	}
+	return 1;
+}
+
 // FUNCTION: TIE95 0x455B4
 int replay_loadreplay(void) {
 	char filename[40];
@@ -1097,6 +597,351 @@ int replay_loadreplay(void) {
 	}
 }
 
+// FUNCTION: TIE95 0x458DC
+void replay_rewindreplay(void) {
+	TieReplayTiming_Reset();
+	if (replaymusic == 1) {
+		replayvolume = (int16_t)hilevel_ImGetMasterVol();
+		hilevel_ImSetMasterVol(0);
+		lolevel_ImPause();
+		replaymusic = 0;
+	}
+	replayio_copyfromsave(replaystartfile);
+	replaytotalcntdown = 0;
+	replaypercent = -1;
+	math2_randomseed = (int16_t)replayrandomseed;
+	if (replayspoolflag) {
+		if (!replay_loadreplayinput()) {
+			replaytotalcnt = 0;
+			replaytotalcntdown = 0;
+			replay_stopreplay();
+			return;
+		}
+	}
+	replaybuffercnt = 0;
+	replayptr = replaybufferstart;
+	updateactionflag = 0;
+	replay_drawreplaybutton(2);
+}
+
+/* --------------------------------------------------------------------------
+ * Playback-state mutators
+ * -------------------------------------------------------------------------- */
+
+// FUNCTION: TIE95 0x4596C
+void replay_stopreplay(void) {
+	TieReplayTiming_Reset();
+	updateactionflag = 0;
+	replay_replaymessage(MSG_FILM_END);
+	replay_drawreplaybutton(2);
+	if (replaymusic == 1) {
+		replayvolume = (int16_t)hilevel_ImGetMasterVol();
+		hilevel_ImSetMasterVol(0);
+		lolevel_ImPause();
+		replaymusic = 0;
+	}
+}
+
+/* replay_drawreplaybutton — repaint one widget of the replay HUD.
+ * btn_id 0..0x11 = in-flight cockpit layout, 0..0x25 = stand-alone viewer
+ * (same ids with +18 offset). Beyond the basic blit, 6 ids (14/32, 15/33,
+ * 16/34, 17/35) toggle the track/chase info windows (name + status).
+ *
+ * Retail supports VGA and SVGA coordinate sets for both the cockpit and
+ * stand-alone layouts. */
+// FUNCTION: TIE95 0x459B8
+void replay_drawreplaybutton(uint16_t btn_id) {
+	uint16_t idx = btn_id;
+	int res = 0; /* 0 = VGA / demo layout */
+	int16_t track_name_y, track_name_h, track_stat_y, track_stat_h;
+	int16_t track_name_left, track_name_right;
+	int16_t track_stat_left, track_stat_right;
+	int16_t chase_name_y, chase_name_h, chase_stat_y, chase_stat_h;
+	int16_t chase_name_left, chase_name_right;
+	int16_t chase_stat_left, chase_stat_right;
+
+	if (maingameflag) {
+		if (flightResolution == TIE_FLIGHT_RES_VGA) {
+			res = 0;
+			track_name_left = 127;
+			track_name_right = 201;
+			track_stat_left = 230;
+			track_stat_right = 268;
+			track_name_y = 181;
+			track_name_h = 186;
+			track_stat_y = 181;
+			track_stat_h = 186;
+			chase_name_left = 127;
+			chase_name_right = 201;
+			chase_stat_left = 230;
+			chase_stat_right = 268;
+			chase_name_y = 167;
+			chase_name_h = 172;
+			chase_stat_y = 167;
+			chase_stat_h = 172;
+		} else {
+			res = 1;
+			track_name_left = 260;
+			track_name_right = 397;
+			track_stat_left = 464;
+			track_stat_right = 532;
+			track_name_y = 436;
+			track_name_h = 445;
+			track_stat_y = 436;
+			track_stat_h = 445;
+			chase_name_left = 260;
+			chase_name_right = 397;
+			chase_stat_left = 464;
+			chase_stat_right = 532;
+			chase_name_y = 402;
+			chase_name_h = 411;
+			chase_stat_y = 402;
+			chase_stat_h = 411;
+		}
+	} else {
+		/* Stand-alone viewer remaps 0..0x11 -> 0x12..0x23. */
+		if (btn_id < 0x12u)
+			idx = btn_id + 18;
+		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
+			res = 1;
+			track_name_left = 278;
+			track_name_right = 423;
+			track_stat_left = 484;
+			track_stat_right = 556;
+			track_name_y = 437;
+			track_name_h = 448;
+			track_stat_y = 437;
+			track_stat_h = 448;
+			chase_name_left = 278;
+			chase_name_right = 423;
+			chase_stat_left = 484;
+			chase_stat_right = 556;
+			chase_name_y = 400;
+			chase_name_h = 412;
+			chase_stat_y = 400;
+			chase_stat_h = 412;
+		} else {
+			res = 0;
+			track_name_left = 139;
+			track_name_right = 211;
+			track_stat_left = 241;
+			track_stat_right = 279;
+			track_name_y = 181;
+			track_name_h = 186;
+			track_stat_y = 181;
+			track_stat_h = 186;
+			chase_name_left = 139;
+			chase_name_right = 211;
+			chase_stat_left = 241;
+			chase_stat_right = 279;
+			chase_name_y = 167;
+			chase_name_h = 172;
+			chase_stat_y = 167;
+			chase_stat_h = 172;
+		}
+	}
+
+	/* Only cockpit mode blits the sprite (stand-alone viewer draws its
+	 * HUD from the panel backdrop). */
+	if (maingameflag) {
+		drawshape(farbufferptrs[REPLAY_BUTTON_SHAPE_BASE + idx], replaybuttonleft[idx][res],
+				  replaybuttontop[idx][res], 0, 0);
+	}
+
+	if (idx == 14 || idx == 32) {
+		festring_setbound(track_name_left, track_name_y, track_name_right, track_name_h);
+		festring_setbackcolor(0x40);
+		clearwindow();
+		festring_setbound(track_stat_left, track_stat_y, track_stat_right, track_stat_h);
+		clearwindow();
+	}
+	if (idx == 15 || idx == 33) {
+		uint8_t sp;
+		int st;
+
+		festring_setbound(track_name_left, track_name_y, track_name_right, track_name_h);
+		festring_setbackcolor(0x40);
+		clearwindow();
+		festring_setcursor(track_name_left, track_name_y);
+		replay_outputobjectname(trackobject);
+
+		sp = (trackobject >= 0x3800u) ? staticobjects[trackobject - 14336].species
+									  : objects[trackobject].ship_idx;
+		trackspecies = sp;
+
+		festring_setbound(track_stat_left, track_stat_y, track_stat_right, track_stat_h);
+		clearwindow();
+		festring_setcursor(track_stat_left, track_stat_y);
+		festring_settextcolor(0x4E);
+		st = replay_getstatusnum(trackobject);
+		festring_outstringcenter((const uint8_t*)((const char**)statusstrings)[st]);
+	}
+	if (idx == 16 || idx == 34) {
+		festring_setbound(chase_name_left, chase_name_y, chase_name_right, chase_name_h);
+		festring_setbackcolor(0x40);
+		clearwindow();
+		festring_setbound(chase_stat_left, chase_stat_y, chase_stat_right, chase_stat_h);
+		clearwindow();
+		cameraposstate = 0;
+	}
+	if (idx == 17 || idx == 35) {
+		uint8_t sp;
+		int st;
+
+		festring_setbound(chase_name_left, chase_name_y, chase_name_right, chase_name_h);
+		festring_setbackcolor(0x40);
+		clearwindow();
+		festring_setcursor(chase_name_left, chase_name_y);
+		replay_outputobjectname(replaycam.view_target_obj);
+
+		sp = (replaycam.view_target_obj >= 0x3800u) ? staticobjects[replaycam.view_target_obj - 14336].species
+													: objects[replaycam.view_target_obj].ship_idx;
+		chasespecies = sp;
+
+		festring_setbound(chase_stat_left, chase_stat_y, chase_stat_right, chase_stat_h);
+		clearwindow();
+		festring_setcursor(chase_stat_left, chase_stat_y);
+		festring_settextcolor(0x4E);
+		st = replay_getstatusnum(replaycam.view_target_obj);
+		festring_outstringcenter((const uint8_t*)((const char**)statusstrings)[st]);
+		cameraposstate = 1;
+	}
+}
+
+/* replay_outputobjectname — format obj_id's display name into tempstring
+ * and outstring-center it. Identical to demo. */
+// FUNCTION: TIE95 0x46094
+void replay_outputobjectname(uint16_t obj_id) {
+	CraftData* cp;
+	uint16_t type;
+
+	if (obj_id < 0x3800) {
+		if (objects[obj_id].side == 0)
+			festring_settextcolor('Q');
+		else if (objects[obj_id].side == 1 || objects[obj_id].side == 4)
+			festring_settextcolor('I');
+		else if (objects[obj_id].side == 2)
+			festring_settextcolor('E');
+		else
+			festring_settextcolor('U');
+
+		if (!objects[obj_id].category) {
+			cp = objects[obj_id].craft_ptr;
+			festring_farstrcpy(spec_data[cp->species_idx].short_name);
+			festring_farstradd(':');
+			festring_farstradd(' ');
+			festring_farstradd((char)254);
+
+			if (objects[obj_id].side == 0)
+				festring_farstradd('R');
+			else if (objects[obj_id].side == 1 || objects[obj_id].side == 4)
+				festring_farstradd('J');
+			else if (objects[obj_id].side == 2)
+				festring_farstradd('F');
+			else
+				festring_farstradd('V');
+
+			festring_farstrcat(fg_array[objects[obj_id].fg_idx].name);
+			if ((int8_t)fg_array[objects[obj_id].fg_idx].count > 1) {
+				festring_farstradd(' ');
+				festring_farstradd((char)(cp->craft_idx_in_fg + '1'));
+			}
+		} else {
+			type = objects[obj_id].ship_idx;
+			if (type >= 143 && type <= 154) {
+				festring_farstrcpy(((char**)warheadstrings)[type - 143]);
+			}
+		}
+	} else {
+		festring_settextcolor(0x43);
+		type = staticobjects[obj_id - 14336].species;
+		if (type >= 70 && type <= 84) {
+			festring_farstrcpy(((char**)buoystr)[type - 70]);
+		}
+	}
+	festring_outstringcenter((const uint8_t*)tempstring);
+}
+
+/* --------------------------------------------------------------------------
+ * Object classifier + label formatters
+ * -------------------------------------------------------------------------- */
+
+/* replay_getstatusnum — classify obj_id into a "status-bar" code 0..6.
+ *    0 = normal (fighter / has shields)
+ *    2 = all status flags clear (disabled application)
+ *    3 = docking in progress
+ *    4 = satellite (species 143/144) without species_idx    (no personnel)
+ *    5 = satellite with species_idx                          (boarded)
+ *    6 = disabled-and-drained (all shields zero, non-fighter)
+ *
+ * Static objects (obj_id >= 0x3800) never reach any craft_ptr deref
+ * below: staticobjects[].species is in the buoy range (70..84). */
+// FUNCTION: TIE95 0x462BC
+int replay_getstatusnum(uint16_t obj_id) {
+	uint16_t species;
+	CraftData* craft_ptr;
+	CraftData* sat_craft;
+
+	if (obj_id < 0x3800) {
+		species = objects[obj_id].ship_idx;
+		craft_ptr = objects[obj_id].craft_ptr;
+		sat_craft = craft_ptr;
+	} else {
+		species = staticobjects[obj_id - 0x3800].species;
+	}
+
+	if (species == 144u || species == 143) {
+		if (sat_craft->species_idx)
+			return 5;
+		return 4;
+	}
+	if (!species_table[species].category) {
+		if (craft_ptr->dock_state_flags)
+			return 3;
+		if (!craft_ptr->status_flags)
+			return 2;
+		if ((int32_t)craft_ptr->forward_shield + (int32_t)craft_ptr->rear_shield == 0 &&
+			objects[obj_id].genus != GENUS_FIGHTER)
+			return 6;
+	}
+	return 0;
+}
+
+/* replay_outputclipname — paint the current clip name centered in the
+ * info strip. Retail added an SVGA cockpit strip (341, 13, 411, 22). */
+// FUNCTION: TIE95 0x463BC
+void replay_outputclipname(void) {
+	int16_t cx, cy;
+
+	festring_setbackcolor(0x40);
+
+	if (maingameflag) {
+		if (flightResolution == TIE_FLIGHT_RES_VGA) {
+			festring_setbound(169, 5, 206, 11);
+			cx = 169;
+			cy = 5;
+		} else {
+			festring_setbound(341, 13, 411, 22);
+			cx = 341;
+			cy = 13;
+		}
+	} else if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+			   flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
+		festring_setbound(260, 360, 339, 373);
+		cx = 260;
+		cy = 360;
+	} else {
+		festring_setbound(130, 150, 169, 155);
+		cx = 130;
+		cy = 150;
+	}
+	festring_setcursor(cx, cy);
+	clearwindow();
+	festring_settextcolor(0x43);
+	festring_outstringcenter((const uint8_t*)replayclipname);
+}
+
 // FUNCTION: TIE95 0x4646C
 // FUNCTION: TIE98 0x473AA0
 void replay_doreplayscreen(void) {
@@ -1116,7 +961,7 @@ void replay_doreplayscreen(void) {
 		last_chase_status = 0xFFFF;
 		last_track_status = 0xFFFF;
 
-		pstate.target_obj_idx = pstate.object_idx;
+		replaycam.view_target_obj = pstate.object_idx;
 		replaycam.view_zoom_flag = 1;
 		replaycam.view_zoom = 1280;
 		replaycam.view_camera_control = 0;
@@ -1251,7 +1096,7 @@ void replay_doreplayscreen(void) {
 						cy = 167;
 					}
 					festring_setcursor(cx, cy);
-					st = (uint16_t)replay_getstatusnum(pstate.target_obj_idx);
+					st = (uint16_t)replay_getstatusnum(replaycam.view_target_obj);
 					if (st != last_chase_status) {
 						clearwindow();
 						festring_settextcolor(0x4E);
@@ -1445,16 +1290,16 @@ void replay_replayinput(void) {
 			case KEY_C:
 			case KEY_c: {
 				uint16_t saved = pstate.object_idx;
-				uint16_t cur = pstate.target_obj_idx;
+				uint16_t cur = replaycam.view_target_obj;
 				int32_t dir;
 
 				pstate.object_idx = 0xFFFEu;
 				dir = (inputkey == KEY_C) ? -1 : +1;
-				pstate.target_obj_idx = user_picknexttarget(cur, dir);
+				replaycam.view_target_obj = user_picknexttarget(cur, dir);
 				pstate.object_idx = saved;
 				replay_drawreplaybutton(0x11);
 				if (replaycam.view_camera_control) {
-					replay_movecambehind(pstate.target_obj_idx);
+					replay_movecambehind(replaycam.view_target_obj);
 				}
 			} break;
 
@@ -1475,7 +1320,7 @@ void replay_replayinput(void) {
 					replay_drawreplaybutton(0x11);
 				} else {
 					replaycam.view_camera_control = 1;
-					create_getworldposition(pstate.target_obj_idx, 0);
+					create_getworldposition(replaycam.view_target_obj, 0);
 					trig2_ctop(worldlocx - camera.x, worldlocy - camera.y, worldlocz - camera.z);
 					camera.cam_pitch = (uint16_t)trig2_zangle;
 					camera.cam_heading = (uint16_t)trig2_xyangle;
@@ -1646,6 +1491,168 @@ void replay_replayinput(void) {
 		replaycam.up_angle += user_framerateadjust(inputdeltax);
 		replaycam.side_angle += user_framerateadjust(inputdeltay);
 	}
+}
+
+// FUNCTION: TIE95 0x47190
+void replay_calcreplayview(void) {
+	uint16_t species;
+
+	if (replaycam.view_target_obj < 0x3800)
+		species = objects[replaycam.view_target_obj].ship_idx;
+	else
+		species = staticobjects[replaycam.view_target_obj - 14336].species;
+	if (species != chasespecies) {
+		replaycam.view_target_obj = pstate.object_idx;
+		replay_drawreplaybutton(0x11);
+	}
+
+	if (!replaycam.view_camera_control) {
+		if (replaycam.view_target_obj < 0x3800) {
+			replaycam.roll = objects[replaycam.view_target_obj].roll;
+			replaycam.cam_pitch = (uint16_t)objects[replaycam.view_target_obj].pitch;
+			replaycam.cam_heading = (uint16_t)objects[replaycam.view_target_obj].heading;
+		} else {
+			replaycam.roll = (uint16_t)(staticobjects[replaycam.view_target_obj - 14336].roll_byte << 8);
+			replaycam.cam_pitch =
+				(uint16_t)(staticobjects[replaycam.view_target_obj - 14336].pitch_byte << 8);
+			replaycam.cam_heading =
+				(uint16_t)(staticobjects[replaycam.view_target_obj - 14336].heading_byte << 8);
+		}
+		camera.cam_pitch = replaycam.cam_pitch;
+		camera.cam_heading = replaycam.cam_heading;
+		camera.roll = replaycam.roll;
+		camera.up_angle = replaycam.up_angle;
+		camera.side_angle = replaycam.side_angle;
+		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, camera.side_angle,
+						  camera.up_angle, NULL);
+#ifdef TIE_MODERN
+		TieFlightSnapshot_RecordCameraBasis();
+#endif
+		replay_movecambehind(replaycam.view_target_obj);
+		camera.x = replaycam.x;
+		camera.y = replaycam.y;
+		camera.z = replaycam.z;
+	} else {
+		replaycam.view_camera_control = 1;
+		camera.x = replaycam.x;
+		camera.roll = 0;
+		camera.up_angle = 0;
+		camera.y = replaycam.y;
+		camera.z = replaycam.z;
+		camera.cam_pitch = replaycam.cam_pitch;
+		camera.cam_heading = replaycam.cam_heading;
+		camera.side_angle = 0;
+		fview_newcalcview(0, camera.cam_pitch, camera.cam_heading, 0, 0, 0, NULL);
+#ifdef TIE_MODERN
+		TieFlightSnapshot_RecordCameraBasis();
+#endif
+	}
+
+	if (trackobject != (uint16_t)0xFFFF) {
+		if (trackobject < 0x3800)
+			species = objects[trackobject].ship_idx;
+		else
+			species = staticobjects[trackobject - 14336].species;
+		if (species != trackspecies) {
+			trackobject = 0xFFFFu;
+			replay_drawreplaybutton(0xC);
+			replay_drawreplaybutton(0xE);
+		} else {
+			create_getworldposition(trackobject, 0);
+			trig2_ctop(worldlocx - camera.x, worldlocy - camera.y, worldlocz - camera.z);
+			replaycam.roll = camera.roll = 0;
+			replaycam.cam_pitch = camera.cam_pitch = trig2_zangle;
+			camera.up_angle = 0;
+			camera.side_angle = 0;
+			replaycam.cam_heading = camera.cam_heading = trig2_xyangle;
+			fview_newcalcview(0, camera.cam_pitch, camera.cam_heading, 0, 0, 0, NULL);
+#ifdef TIE_MODERN
+			TieFlightSnapshot_RecordCameraBasis();
+#endif
+		}
+	}
+}
+
+/* --------------------------------------------------------------------------
+ * Camera pose
+ * -------------------------------------------------------------------------- */
+
+// FUNCTION: TIE95 0x474B4
+void replay_movecambehind(uint16_t obj_id) {
+	uint16_t sp;
+	uint16_t quarter_w;
+	int32_t push_x;
+	int32_t push_y;
+	int32_t push_z;
+
+	create_getworldposition(obj_id, 0);
+	replaycam.x = worldlocx;
+	replaycam.y = worldlocy;
+	replaycam.z = worldlocz;
+
+	sp = (obj_id >= 0x3800u) ? staticobjects[obj_id - 14336].species : objects[obj_id].ship_idx;
+	quarter_w = species_table[sp].bound_hwidth >> 2;
+
+	push_x = ((worldeyeA3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeA3 * (int32_t)quarter_w) >> 15);
+	push_y = ((worldeyeB3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeB3 * (int32_t)quarter_w) >> 15);
+	push_z = ((worldeyeC3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeC3 * (int32_t)quarter_w) >> 15);
+	replaycam.x -= push_x;
+	replaycam.y -= push_y;
+	replaycam.z -= push_z;
+}
+
+/* --------------------------------------------------------------------------
+ * Message + widget helpers
+ * -------------------------------------------------------------------------- */
+
+/* replay_replaymessage — print a message from messagetable[msg_id] into
+ * the in-flight message band. First byte of the template is a color/type
+ * tag (< 8 indexes fontcolorconvert[], else default 0x42); '[' / ']'
+ * nudge the text color up/down. Appends a '.' unless the final printable
+ * character was one of '?','!',':',' '. Arms replaymsgtimer to 944 ticks. */
+// FUNCTION: TIE95 0x475F4
+// FUNCTION: TIE98 0x474BC0
+void replay_replaymessage(uint16_t msg_id) {
+	const unsigned char* p;
+	unsigned char tag;
+	unsigned char last;
+
+	msg_readymessage();
+
+	p = (const unsigned char*)messagetable[msg_id];
+	tag = *p;
+	if (tag < 8) {
+		festring_settextcolor(fontcolorconvert[tag]);
+		++p;
+	} else {
+		festring_settextcolor(0x42);
+	}
+
+	last = 'x';
+	while (*p) {
+		unsigned char c = *p;
+		if (c == '[') {
+			++textcolor;
+			++p;
+		} else if (c == ']') {
+			--textcolor;
+			++p;
+		} else {
+			outchar(c);
+			last = c;
+			++p;
+		}
+	}
+
+	if (last != '?' && last != '!' && last != ':' && last != ' ') {
+		outchar('.');
+	}
+
+	festring_setautofill(1);
+	outchar('\n');
+	festring_setautofill(0);
+	festring_setfontsize(2);
+	replaymsgtimer = 944;
 }
 
 // FUNCTION: TIE95 0x476CC

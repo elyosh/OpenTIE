@@ -30,41 +30,6 @@ enum {
 // GLOBAL: TIE98 0x5F3480
 uint8_t shade_palette[256];
 
-/* --- Helpers --- */
-
-/*
- * Find which palette entries are available for shade mapping.
- * Entries in active cycling ranges are marked 0 (locked), all others 1.
- */
-// FUNCTION: TIE95 0x6CA50
-void shade_Find_Shade_Cycles(uint8_t* mask) {
-	int i;
-	Palette* pal;
-
-	for (i = 0; i < 256; i++)
-		mask[i] = 1;
-
-	pal = xpal_Ask_Palette_List();
-	while (pal) {
-		if (pal->cycle_active) {
-			for (i = 0; i < pal->cycle_count; i++) {
-				/* Retail gates on the word at offset 0 of the cycle struct
-				 * (set in Set_Cycle to +/-1 for any defined cycle), NOT on
-				 * the per-Start_Cycle 'active' flag. Match that so cycle
-				 * ranges are reserved at palette load time, before
-				 * Start_Cycle is called. */
-				if (pal->cycles[i].dir) {
-					int c;
-
-					for (c = pal->cycles[i].low; c <= pal->cycles[i].high; c++)
-						mask[c] = 0;
-				}
-			}
-		}
-		pal = pal->next;
-	}
-}
-
 /* --- Public API --- */
 
 // FUNCTION: TIE95 0x6C720
@@ -151,6 +116,40 @@ int shade_Set_Shaded_Palette(uint8_t* pal_data, int16_t intensity, uint16_t targ
 	}
 
 	return 1;
+}
+
+/* --- Helpers --- */
+
+/*
+ * Find which palette entries are available for shade mapping.
+ * Entries in active cycling ranges are marked 0 (locked), all others 1.
+ */
+// FUNCTION: TIE95 0x6CA50
+void shade_Find_Shade_Cycles(uint8_t* mask) {
+	int16_t i;
+	Palette* pal;
+
+	pal = xpal_Ask_Palette_List();
+
+	for (i = 0; i < 256; i++)
+		mask[i] = 1;
+
+	while (pal) {
+		if (pal->cycle_active) {
+			for (i = 0; i < pal->cycle_count; i++) {
+				/* Retail gates on the cycle rate (set at palette load for
+				 * any defined cycle), NOT on the per-Start_Cycle 'active'
+				 * flag, so cycle ranges are reserved before Start_Cycle. */
+				if (pal->cycles[i].rate) {
+					int16_t c;
+
+					for (c = pal->cycles[i].low; c <= pal->cycles[i].high; c++)
+						mask[c] = 0;
+				}
+			}
+		}
+		pal = pal->next;
+	}
 }
 
 // FUNCTION: TIE95 0x6CAC0

@@ -137,8 +137,8 @@ extern int16_t replaymsgtimer;
 
 /* Target / chase-target bookkeeping shared with USER_* (watdbg places them
  * in replay.c's data section). */
-extern uint8_t chasespecies;   /* species of the chase-camera target */
-extern uint8_t trackspecies;   /* species of the track-target (info box) */
+extern uint16_t chasespecies;  /* species of the chase-camera target */
+extern uint16_t trackspecies;  /* species of the track-target (info box) */
 extern uint16_t trackobject;   /* 0xFFFF = no track, else object slot */
 extern uint8_t reentersimflag; /* 1 = return to live sim from viewer */
 extern uint8_t exitflag;       /* 1 = exit current replay loop */

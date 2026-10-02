@@ -35,6 +35,7 @@
 #include "tie/laser.h"
 #include "tie/logbuf2.h"
 #include "tie/math2.h"
+#include "tie/math2_wide.h"
 #include "tie/mission.h"
 #include "tie/modelbounds.h"
 #include "tie/modelmesh.h"
@@ -505,7 +506,7 @@ uint8_t shieldblink;
  * comment in tie.h for the layout and tick semantics. */
 // GLOBAL: TIE95 0xE6384
 // GLOBAL: TIE98 0x596210
-MissionClock _date;
+MissionClock date;
 
 /* Mission time-limit countdown (watdbg _timeleft[8], owned by tie.c).
  * Captured wholesale by the replay state-dump. */
@@ -559,7 +560,7 @@ EMissionGoal cut[4];
 int32_t approxdist;
 
 /* (mission elapsed hr/min/sec previously lived as standalone globals here;
- * they are now `_date.hour` / `_date.minute` / `_date.second`, fields of
+ * they are now `date.hour` / `date.minute` / `date.second`, fields of
  * the single MissionClock storage above.) */
 
 /* (pstate.target_obj_idx: currently-targeted object slot; written by
@@ -1139,8 +1140,8 @@ uint8_t transitions_on;
 // GLOBAL: TIE98 0x58CA58
 uint32_t special_features_flag;
 
-/* (Mission elapsed clock `_date` is defined above as a single
- * MissionClock storage; subsec is `_date.subsec`.) */
+/* (Mission elapsed clock `date` is defined above as a single
+ * MissionClock storage; subsec is `date.subsec`.) */
 
 /* Snapshot of XTIMER tickcounter taken at the top of tie_doframe (live
  * branch). Used to seed framerate / frameticks for this frame. */
@@ -1213,839 +1214,6 @@ uint8_t lastmusicstate;
 /* Forward decls for static helpers. */
 static bool tie_doframe_tie98(void);
 
-/* Configure flight geometry for VGA or the 640x480 modes and select the
- * corresponding CP320/CP640 cockpit asset directory. */
-// FUNCTION: TIE95 0x56048
-// FUNCTION: TIE98 0x48D850
-void tie_InitFlightResolution(void) {
-	/* PORT: display ownership and mode selection happen at the simulator,
-	 * replay or frontend-preview boundary before this recovered geometry setup. */
-	if (flightResolution == TIE_FLIGHT_RES_SVGA_16 || flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
-		bytesPerPixel = 2;
-	else
-		bytesPerPixel = 1;
-
-	/* Disable VESA bank wrapping for the host's linear framebuffer. */
-	{
-		uint16_t* modeinfo = (uint16_t*)xvesa_Get_Vesa_Mode_Struct();
-		(void)modeinfo;
-		vesa_page_size = 0xFFFFFFFFu;
-		vesa_grains_per_page = 1u;
-	}
-
-	if ((uint16_t)flightResolution == TIE_FLIGHT_RES_VGA) {
-		/* 320x200 VGA path. Linear framebuffer -- vesa_page_size stays
-		 * unbounded (see rationale above). */
-		vesa_grains_per_page = 1u;
-		screenXRes = 320;
-		screenYRes = 200;
-		maxPixelsDeep = 189;
-		screenMemWidth = 320;
-		perspFactor = 256;
-		thicknessMultiple = 1;
-		halfPerspFactor = 128;
-		perspShift = 8;
-		yAspect = (uint16_t)-5958; /* 0xE8BA — non-square pixel correction */
-		cockpitdir[2] = '3';       /* 0x33 */
-		cockpitdir[3] = '2';       /* 0x32  -> "CP32" + "0\" */
-		return;
-	}
-
-	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
-		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
-		/* TIE95 mode 0x101 and the three TIE98 640x480 modes share geometry. */
-		screenXRes = 640;
-		screenYRes = 480;
-		maxPixelsDeep = 455; /* RETAIL: was 454 in demo */
-		/* Retail CRTC reg 0x13 = 0x80 widens the logical scan line to
-		 * 1024 bytes so VESA window-banking can hand out aligned pages.
-		 * A linear host framebuffer has no such constraint -- we use a
-		 * tight 640-byte stride (matching vesa_bpsl_gbl) so that rtsvga2
-		 * writes via vgapointer/lineaddressVGA stay inside vesa_buff_gbl.
-		 * Leaving screenMemWidth at 1024 would overrun the 640x480 buffer
-		 * by ~180 KB/frame and clobber whatever follows it on the heap. */
-		rtsvga2_SetVESAScanLineLength(0x400u); /* retained for parity */
-		if (TIE_DISPLAY_DX5)
-			screenMemWidth = (int32_t)g_surfacePitch;
-		else
-			screenMemWidth = 640;
-		perspFactor = 512;
-		halfPerspFactor = 256;
-		thicknessMultiple = 2;
-		cockpitdir[2] = '6'; /* 0x36 */
-		perspShift = 9;
-		yAspect = 0;
-		cockpitdir[3] = '4'; /* 0x34  -> "CP64" + "0\" */
-		return;
-	}
-
-	/* Default: same as 0x13 (some other mode somehow selected). RETAIL
-	 * also re-asserts vesa_page_size in this branch. */
-	vesa_page_size = 0x10000u;
-	vesa_grains_per_page = 1u;
-	screenXRes = 320;
-	screenYRes = 200;
-	maxPixelsDeep = 189;
-	screenMemWidth = 320;
-	perspFactor = 256;
-	thicknessMultiple = 1;
-	halfPerspFactor = 128;
-	perspShift = 8;
-	cockpitdir[2] = '3';
-	yAspect = (uint16_t)-5958;
-	cockpitdir[3] = '2';
-}
-
-/* ----------------------------------------------------------------------------
- * tie_getobjecteyexyz                                            retail 0x57518
- * ----------------------------------------------------------------------------
- * Cache the camera-relative + rotated eye-space coords of objects[obj_idx]
- * into the globals (worldx/y/z, objecteyex/y/z) AND into the craft's
- * eye_{x,y,z}_cache slots. Identical to the demo version (byte-for-byte
- * match after absolute-address normalization). */
-// FUNCTION: TIE95 0x57518
-void tie_getobjecteyexyz(uint16_t obj_idx) {
-	FlightObject* obj = &objects[obj_idx];
-
-	craftptr = obj->craft_ptr;
-	worldx = obj->world_x - camera.x;
-	worldy = obj->world_y - camera.y;
-	worldz = obj->world_z - camera.z;
-
-	objecteyex = transfm2_geteyex(worldx, worldy, worldz);
-	craftptr->eye_x_cache = objecteyex;
-
-	objecteyey = transfm2_geteyey(worldx, worldy, worldz);
-	craftptr->eye_y_cache = objecteyey;
-
-	objecteyez = transfm2_geteyez(worldx, worldy, worldz);
-	craftptr->eye_z_cache = objecteyez;
-}
-
-/* ----------------------------------------------------------------------------
- * tie_checkobjecteyexyz                                          retail 0x575E4
- * ----------------------------------------------------------------------------
- * Eye-space cull test for objects[obj_idx] within a +/-bound box.
- * Returns 1 when visible, 0 when culled. Side-effect: the worldx/y/z and
- * objecteyex/y/z globals are written even when culled (so the caller can
- * still read them after a "not visible" return).
- *
- * Cull conditions:
- *   eye_z + bound          >= 0           (in front of the camera)
- *   (eye_z + bound) >> 8   <= bound       (perspective near-depth limit;
- *                                          ~256*bound max range)
- *   |eye_x| - bound        <= eye_z+bound (within view cone slope 1)
- *   |eye_y| - bound        <= eye_z+bound (within view cone slope 1)
- *
- * Identical to demo. */
-// FUNCTION: TIE95 0x575E4
-int16_t tie_checkobjecteyexyz(uint16_t obj_idx, uint16_t bound) {
-	FlightObject* obj = &objects[obj_idx];
-	int near_far_extent;
-	int abs_x, abs_y;
-
-	worldx = obj->world_x - camera.x;
-	worldy = obj->world_y - camera.y;
-	worldz = obj->world_z - camera.z;
-
-	/* Compute eye_z first because the cheapest reject is the depth-cone. */
-	objecteyez = transfm2_geteyez(worldx, worldy, worldz);
-	near_far_extent = (int)objecteyez + (int)bound;
-	if (near_far_extent < 0)
-		return 0; /* fully behind camera.x */
-	if ((near_far_extent >> 8) > (int)bound)
-		return 0; /* past the depth limit */
-
-	objecteyex = transfm2_geteyex(worldx, worldy, worldz);
-	abs_x = (objecteyex < 0) ? -objecteyex : objecteyex;
-	if (abs_x - (int)bound > near_far_extent)
-		return 0; /* outside left/right cone */
-
-	objecteyey = transfm2_geteyey(worldx, worldy, worldz);
-	abs_y = (objecteyey < 0) ? -objecteyey : objecteyey;
-	return (abs_y - (int)bound <= near_far_extent) ? 1 : 0;
-}
-
-/* ----------------------------------------------------------------------------
- * tie_checkstaticobjecteyexyz                                    retail 0x576E4
- * ----------------------------------------------------------------------------
- * Same cull as tie_checkobjecteyexyz, but for a static-object whose 16-bit
- * world coords are passed directly (each is shifted left by 8 to convert
- * to the engine's 24.8 fixed-point space before subtracting camera).
- * Used by the hyperstar render and the planet/mine static-object loop.
- * The 'bound = 0xFFFF' callers (hyperstars) effectively disable the
- * depth/view-cone tests so the function only computes the eye coords.
- *
- * Identical to demo. */
-// FUNCTION: TIE95 0x576E4
-int16_t tie_checkstaticobjecteyexyz(int16_t wx, int16_t wy, int16_t wz, uint16_t bound) {
-	int near_far_extent;
-	int abs_x, abs_y;
-
-	/* * 256 instead of << 8: same as the binary's `shl 8` but
-	 * well-defined for negative int16 coords. */
-	worldx = (int32_t)wx * 256 - camera.x;
-	worldy = (int32_t)wy * 256 - camera.y;
-	worldz = (int32_t)wz * 256 - camera.z;
-
-	objecteyez = transfm2_geteyez(worldx, worldy, worldz);
-	near_far_extent = (int)objecteyez + (int)bound;
-	if (near_far_extent < 0)
-		return 0;
-	if ((near_far_extent >> 8) > (int)bound)
-		return 0;
-
-	objecteyex = transfm2_geteyex(worldx, worldy, worldz);
-	abs_x = (objecteyex < 0) ? -objecteyex : objecteyex;
-	if (abs_x - (int)bound > near_far_extent)
-		return 0;
-
-	objecteyey = transfm2_geteyey(worldx, worldy, worldz);
-	abs_y = (objecteyey < 0) ? -objecteyey : objecteyey;
-	return (abs_y - (int)bound <= near_far_extent) ? 1 : 0;
-}
-
-/* Build up to eight explosion lights in the source craft's reflected local
- * basis (side, -forward, up). Returns and stores the emitted count. */
-// FUNCTION: TIE95 0x57158
-int tie_MakeLocalLights(int obj_idx) {
-	uint32_t max_distance_sq;
-
-	FlightObject* src_obj = &objects[obj_idx];
-	int model_scale_shift;
-	int src_world_x;
-	int src_world_y;
-	int src_world_z;
-	int light_idx;
-	int light_count;
-	uint16_t scan_idx;
-
-	draw_Lockshipfileptrs(src_obj->ship_idx);
-	model_scale_shift = objectblockptr->model_scale_shift;
-
-	/* Light reach scales with source ship size:
-	 *   model_scale_shift == 0 -> 0x4000  (small craft, short reach).
-	 *   model_scale_shift > 0  -> 0x8000 << (model_scale_shift - 1). */
-	if (model_scale_shift)
-		max_distance_sq = 0x8000u << (model_scale_shift - 1);
-	else
-		max_distance_sq = 0x4000u;
-
-	src_world_x = src_obj->world_x;
-	src_world_y = src_obj->world_y;
-	src_world_z = src_obj->world_z;
-	light_idx = 0;
-	light_count = 0;
-
-	for (scan_idx = 0; scan_idx < NUM_OBJECTS; ++scan_idx) {
-		FlightObject* expl = &objects[scan_idx];
-		int dx, dy, dz;
-		int side_proj, fwd_proj, up_proj;
-		DRAWPOL_LocalLight* out;
-		uint8_t ship_idx;
-
-		if (expl->ship_idx == 0)
-			continue; /* dead slot */
-		if (expl->genus != GENUS_EXPLOSION)
-			continue;
-
-		dx = expl->world_x - src_world_x;
-		dy = expl->world_y - src_world_y;
-		dz = expl->world_z - src_world_z;
-		if ((uint32_t)collide_roughdistance3d(dx, dy, dz) >= max_distance_sq)
-			continue;
-
-		out = &localLights[light_idx];
-
-		/* dot products: source craft's local basis × world delta.
-		 * Coefficients are int16; cast each to int32 first to keep the
-		 * sign during the multiply before summing. */
-		side_proj =
-			(int32_t)src_obj->side_x * dx + (int32_t)src_obj->side_y * dy + (int32_t)src_obj->side_z * dz;
-		if (side_proj >= 0x40000000)
-			side_proj = 0x3FFE0000;
-		if (side_proj <= -0x40000000)
-			side_proj = -0x3FFE0000;
-		out->x = side_proj >> 15;
-
-		fwd_proj = (int32_t)src_obj->fwd_x * dx + (int32_t)src_obj->fwd_y * dy + (int32_t)src_obj->fwd_z * dz;
-		if (fwd_proj >= 0x40000000)
-			fwd_proj = 0x3FFE0000;
-		if (fwd_proj <= -0x40000000)
-			fwd_proj = -0x3FFE0000;
-		/* y axis is FLIPPED: we store -(fwd >> 15) so the local frame
-		 * matches the right-handed eye-space DRAWPOL expects. */
-		out->y = -(fwd_proj >> 15);
-
-		up_proj = (int32_t)src_obj->up_x * dx + (int32_t)src_obj->up_y * dy + (int32_t)src_obj->up_z * dz;
-		if (up_proj >= 0x40000000)
-			up_proj = 0x3FFE0000;
-		if (up_proj <= -0x40000000)
-			up_proj = -0x3FFE0000;
-		out->z = up_proj >> 15;
-
-		/* Distance scale: small ships (model_scale_shift>0) divide by 2^(model_scale_shift-1);
-		 * large ships (model_scale_shift==0) double the position. */
-		if (model_scale_shift) {
-			int8_t shift = (int8_t)(model_scale_shift - 1);
-			out->x >>= shift;
-			out->y >>= shift;
-			out->z >>= shift;
-		} else {
-			out->x *= 2;
-			out->y *= 2;
-			out->z *= 2;
-		}
-
-		out->range = 16;
-		ship_idx = expl->ship_idx;
-
-		if (ship_idx >= 0x7Fu && ship_idx <= 0x82u) {
-			switch (expl->anim_frame) {
-				case 2:
-				case 9:
-					out->range = 192;
-					break;
-				case 3:
-				case 5:
-				case 6:
-				case 7:
-				case 8:
-					out->range = 320;
-					break;
-				case 4:
-					out->range = 480;
-					break;
-				case 10:
-					out->range = 96;
-					break;
-				case 11:
-					out->range = 48;
-					break;
-				default:
-					break;
-			}
-			if (expl->damage_state >= 4)
-				out->range *= ((int)expl->damage_state + 4) >> 2;
-		} else if (ship_idx == 0x83u || ship_idx == 0x84u) {
-			switch (expl->anim_frame) {
-				case 2:
-					out->range = 24;
-					break;
-				case 3:
-					out->range = 48;
-					break;
-				case 4:
-					out->range = 32;
-					break;
-				case 5:
-					out->range = 16;
-					break;
-				default:
-					break;
-			}
-		}
-		++light_idx;
-		++light_count;
-		if (light_idx == 8)
-			break; /* localLights[] is 8 entries */
-	}
-
-	localLightCnt = light_count;
-	return light_count;
-}
-
-// FUNCTION: TIE98 0x48EC60
-// TIE_MakeLocalLights
-int tie_makelocallights_tie98(FlightObject* src_obj) {
-	uint32_t max_distance_sq;
-	int src_world_x;
-	int src_world_y;
-	int src_world_z;
-	int light_idx;
-	int light_count;
-	uint16_t scan_idx;
-
-	localLightCnt = 0;
-	if (!g_localLightsEnabled)
-		return 0;
-
-	max_distance_sq = (uint32_t)species_table[src_obj->ship_idx].bound_hwidth + 0x4000u;
-	src_world_x = src_obj->world_x;
-	src_world_y = src_obj->world_y;
-	src_world_z = src_obj->world_z;
-	light_idx = 0;
-	light_count = 0;
-
-	/* TIE98 0x48EC60 scans every object slot (loop bound 0x4F2A7C = 120 =
-	 * NUM_OBJECTS), not DRAWPOL's per-frame poly-object counter. */
-	for (scan_idx = 0; scan_idx < NUM_OBJECTS; ++scan_idx) {
-		FlightObject* expl = &objects[scan_idx];
-		int dx;
-		int dy;
-		int dz;
-		DRAWPOL_LocalLight* out;
-		int side_proj;
-		int fwd_proj;
-		int up_proj;
-		uint8_t ship_idx;
-
-		if (expl->ship_idx == 0 || expl->genus != GENUS_EXPLOSION)
-			continue;
-
-		dx = expl->world_x - src_world_x;
-		dy = expl->world_y - src_world_y;
-		dz = expl->world_z - src_world_z;
-		if ((uint32_t)collide_roughdistance3d(dx, dy, dz) >= max_distance_sq)
-			continue;
-
-		out = &localLights[light_idx];
-		side_proj =
-			(int32_t)src_obj->side_x * dx + (int32_t)src_obj->side_y * dy + (int32_t)src_obj->side_z * dz;
-		if (side_proj >= 0x40000000)
-			side_proj = 0x3FFFFFFF;
-		if (side_proj <= -0x40000000)
-			side_proj = -0x3FFF0000;
-		out->x = side_proj >> 15;
-
-		fwd_proj = (int32_t)src_obj->fwd_x * dx + (int32_t)src_obj->fwd_y * dy + (int32_t)src_obj->fwd_z * dz;
-		if (fwd_proj >= 0x40000000)
-			fwd_proj = 0x3FFFFFFF;
-		if (fwd_proj <= -0x40000000)
-			fwd_proj = -0x3FFF0000;
-		out->y = -(fwd_proj >> 15);
-
-		up_proj = (int32_t)src_obj->up_x * dx + (int32_t)src_obj->up_y * dy + (int32_t)src_obj->up_z * dz;
-		if (up_proj >= 0x40000000)
-			up_proj = 0x3FFFFFFF;
-		if (up_proj <= -0x40000000)
-			up_proj = -0x3FFF0000;
-		out->z = up_proj >> 15;
-
-		out->range = 16;
-		ship_idx = expl->ship_idx;
-		if (ship_idx >= 0x7Fu && ship_idx <= 0x82u) {
-			switch (expl->anim_frame) {
-				case 2:
-				case 9:
-					out->range = 192;
-					break;
-				case 3:
-				case 5:
-				case 6:
-				case 7:
-				case 8:
-					out->range = 320;
-					break;
-				case 4:
-					out->range = 480;
-					break;
-				case 10:
-					out->range = 96;
-					break;
-				case 11:
-					out->range = 48;
-					break;
-				default:
-					break;
-			}
-			if (mission.train_craft_type)
-				out->range /= 8;
-		} else if (ship_idx == 0x83u || ship_idx == 0x84u) {
-			switch (expl->anim_frame) {
-				case 2:
-					out->range = 48;
-					break;
-				case 3:
-					out->range = 96;
-					break;
-				case 4:
-					out->range = 64;
-					break;
-				case 5:
-					out->range = 32;
-					break;
-				default:
-					break;
-			}
-			if (mission.train_craft_type)
-				out->range /= 8;
-		} else {
-			out->range = (int32_t)brightness_setting - 256;
-		}
-		out->range *= 8;
-
-		++light_idx;
-		++light_count;
-		if (light_idx == 8)
-			break;
-	}
-
-	localLightCnt = light_count;
-	return light_count;
-}
-
-/* Advance global and craft timers, target blinking, mission clock and warning,
- * pilot damage bookkeeping, object ages, and message ages. */
-// FUNCTION: TIE95 0x577F4
-void tie_updatetime(void) {
-	/* systemmask[10] / damagemsg[10] declared in collide.h. */
-	/* Polar distance scratch: trig2_polardistance is set by the binary's
-	 * pai_distancebetween call inside the blink branch and re-read here. */
-
-	/* 1. Per-slot timer decrement. */
-	uint16_t i;
-	uint16_t ai_timer_ticks;
-
-#ifdef TIE_MODERN
-	/* PORT: high-rate flight advances per-craft AI timers on the AI cadence. */
-	ai_timer_ticks = TieFlightCadence_AiTimerTicks();
-#else
-	ai_timer_ticks = frameticks;
-#endif
-
-	for (i = 0; i < 20; ++i) {
-		if (timers[i] != 0) {
-			int16_t v = (int16_t)(timers[i] - frameticks);
-			if (v < 0)
-				v = 0;
-			timers[i] = v;
-		}
-	}
-
-	/* 2. Per-craft AI/plan timer decrement. RETAIL: NUM_CRAFTS = 32. */
-	for (i = 0; i < NUM_CRAFTS; ++i) {
-		FlightObject* obj = &objects[i];
-		CraftData* cp;
-		if (obj->ship_idx == 0)
-			continue;
-		cp = obj->craft_ptr;
-
-		if (ai_timer_ticks && cp->ai_update_rate_copy)
-			cp->ai_update_rate_copy = (uint16_t)(cp->ai_update_rate_copy - ai_timer_ticks);
-
-		if (ai_timer_ticks && cp->maneuver_timer) {
-			int v = cp->maneuver_timer - ai_timer_ticks;
-			cp->maneuver_timer = (v < 0) ? 0 : v;
-		}
-		if (ai_timer_ticks && cp->ai_plan_state) {
-			int16_t v = (int16_t)(cp->ai_plan_state - ai_timer_ticks);
-			cp->ai_plan_state = (uint16_t)((v < 0) ? 0 : v);
-		}
-		if (cp->ion_drain_timer) {
-			uint16_t v = (uint16_t)(cp->ion_drain_timer - frameticks);
-			/* Sign-bit reload pattern: if the subtraction borrowed past 0
-			 * (0x8000 set in the 16-bit result), reset to 0. */
-			cp->ion_drain_timer = (v & 0x8000u) ? 0 : v;
-		}
-	}
-
-	/* 3. HUD target-blink ticker. blinkticks is its own global, not a
-	 * timers[] slot. */
-	{
-
-		blinkticks = (int16_t)(blinkticks - frameticks);
-		if (blinkticks < 0) {
-			uint16_t bound_hwidth = 0; /* see HUD-blink branch below */
-			uint8_t tgt_species = 0;
-
-			/* Toggle the 0x400 bit (= 4 in HIBYTE). */
-			targetblinkstate ^= 0x0400u;
-
-			if (pstate.target_obj_idx != 0xFFFFu) {
-				pai_distancebetween(pstate.target_obj_idx, pstate.object_idx);
-				if (pstate.target_obj_idx >= OBJ_REF_STATIC_BASE)
-					tgt_species = staticobjects[pstate.target_obj_idx - OBJ_REF_STATIC_BASE].species;
-				else
-					tgt_species = objects[pstate.target_obj_idx].ship_idx;
-				trig2_polardistance >>= 5;
-				bound_hwidth = species_table[tgt_species].bound_hwidth;
-			}
-			/* When (targetblinkstate & 0x400) is set we're in the "blink
-			 * on" phase; otherwise "blink off". The size-vs-distance test
-			 * picks 118 (normal cycle) vs 14 (micro-flicker for small targets). */
-			if ((targetblinkstate & 0x0400u) != 0) {
-				if ((int)bound_hwidth > trig2_polardistance)
-					blinkticks = 118; /* big enough to hold steady */
-				else
-					blinkticks = 14; /* small/distant target: flicker */
-			} else if ((int)bound_hwidth <= trig2_polardistance) {
-				blinkticks = 118;
-			} else {
-				blinkticks = 14;
-			}
-		}
-	}
-
-	/* 4. Publish target HUD state and tick the mission clock. */
-	currenttarget = (uint16_t)((uint16_t)targetblinkflag | targetblinkstate | pstate.target_obj_idx);
-	currenttargetcomp = (uint16_t)pstate.radar_target1;
-
-	if (hyperspaceflag != 0)
-		return; /* hyperspace freezes the mission clock */
-
-	/* Per-frame sub-second decrement. On underflow, reload with one
-	 * mission-second worth of ticks (236) and cascade into seconds /
-	 * minutes / hours. The Watcom `xor reg, reg+1` clear trick on the
-	 * 24-hour wrap is preserved literally so replay re-runs match the
-	 * original byte-for-byte. */
-	_date.subsec = (int16_t)(_date.subsec - frameticks);
-	if (_date.subsec > 0)
-		return;
-
-	_date.subsec += 236;
-
-	if ((++_date.second) >= 60u) {
-		_date.second = 0;
-		if ((++_date.minute) >= 60u) {
-			uint8_t pre_inc = (uint8_t)(_date.hour + 1);
-			_date.minute = 0;
-			if ((++_date.hour) >= 24u)
-				_date.hour ^= pre_inc;
-		}
-	}
-
-	/* Mission time-limit countdown. */
-	--timeleft.second;
-	if (timeleft.second == 255u) { /* sec underflowed */
-		timeleft.second = 59;
-		if ((--timeleft.minute) == 255u) { /* min underflowed -> done */
-			timeleft.second = 0;
-			timeleft.minute = 0;
-			if (mission.train_craft_type) { /* training mission */
-				user_checkreplaycamera();
-				mission.end_flag = 1;
-				mission.player_status = 3;
-			}
-		}
-	}
-	/* Last-15-second timer warning beep. */
-	if (mission.train_craft_type && timeleft.minute == 0 && timeleft.second < 15u)
-		fsfx_triggersfx(0x20u, 0xFFFFu);
-
-	/* 5. Repair the highest-priority offline subsystem. Zero health marks
-	 * a system under repair; its timer counts down once per mission second.
-	 * At zero, restore full health and re-enable the subsystem. */
-	{
-		uint16_t best_priority = 0xFFFFu;
-		int16_t repair_slot = -1;
-
-		uint16_t scan;
-		uint16_t slot;
-
-		for (scan = 0; scan < 10; ++scan) {
-			if (pstate.subsystem_health_percent[scan] == 0) {
-				int priority = pstate.subsystem_repair_priority[scan];
-				if ((uint16_t)priority < best_priority) {
-					repair_slot = (int16_t)scan;
-					best_priority = (uint8_t)priority;
-				}
-			}
-		}
-
-		for (slot = 0; slot < 10; ++slot) {
-			int16_t health_percent = (int16_t)pstate.subsystem_health_percent[slot];
-			if (health_percent == 0 && (int16_t)slot == repair_slot) {
-				int16_t repair_seconds = (int16_t)pstate.subsystem_repair_seconds[slot];
-				if (repair_seconds) {
-					pstate.subsystem_repair_seconds[slot] = (uint16_t)(repair_seconds - 1);
-				} else {
-					pstate.subsystem_health_percent[slot] = 100;
-					/* Apply the per-system damage bit and emit the message.
-					 * Binary dereferences player_craft unconditionally; if
-					 * the pointer is NULL here we have a bigger problem. */
-					pstate.player_craft->status_flags |= systemmask[slot];
-					argtable[0] = damagemsg[slot];
-					argtable[1] = 26; /* "repaired" suffix template */
-					msg_messageprintf(MSG_SYSTEM_STATUS);
-				}
-			}
-		}
-	}
-
-	/* 6. Age every live object. RETAIL: NUM_OBJECTS = 120. */
-	for (i = 0; i < NUM_OBJECTS; ++i)
-		if (objects[i].ship_idx)
-			++objects[i].age_ticks;
-
-	/* 7. Tick all queued cockpit messages forward. */
-	msg_updatemessageage();
-}
-
-/* Throttled iMUSE state evaluator. Training progress, objective state,
- * hostile proximity, missile locks, and force balance determine the music
- * state and intensity. */
-// FUNCTION: TIE95 0x57C7C
-void tie_updatemusic(void) {
-	uint16_t ships_per_side[6];
-	uint16_t i;
-	uint32_t min_distance;
-	int16_t state;
-	uint16_t secondary_killed;
-	uint16_t secondary_total;
-	uint16_t closest;
-	uint16_t intensity;
-	uint16_t missile_lock;
-	uint16_t primary_killed;
-	uint16_t primary_total;
-
-	if (!musicenabled || !music_buffer || timers[TIMER_MUSIC_CHANGE] != 0)
-		return;
-	intensity = 0;
-	timers[TIMER_MUSIC_CHANGE] = 59;
-
-	if (mission.train_craft_type != 0) {
-		/* Training: gate progress, or urgency once under 20 seconds. */
-		if (timeleft.minute == 0 && timeleft.second < 20)
-			state = 8;
-		else if ((uint16_t)mission.train_gates_remaining < 2)
-			state = 9;
-		else if ((uint16_t)mission.train_gates_remaining < 3)
-			state = 7;
-		else
-			state = 6;
-	} else if (mission.primary_complete == 2) {
-		state = 10; /* won */
-	} else if (timers[TIMER_PRI_COMPLETE] != 0 || timers[TIMER_SEC_COMPLETE] != 0) {
-		state = 11; /* objective hold */
-	} else {
-		closest = 0xFFFF;
-		min_distance = 0xFFFFFFFFu;
-		for (i = 0; i < 6; ++i)
-			ships_per_side[i] = 0;
-
-		/* Tally ships per side weighted by genus and find the closest
-		 * hostile. RETAIL: scan first NUM_CRAFTS (32) slots. */
-		for (i = 0; i < NUM_CRAFTS; ++i) {
-			if (objects[i].ship_idx == 0)
-				continue;
-			if (objects[i].genus == GENUS_STARSHIP || objects[i].genus == GENUS_PLATFORM)
-				ships_per_side[objects[i].side] += 4;
-			else if (objects[i].genus == GENUS_TRANSPORT || objects[i].genus == GENUS_FREIGHTER)
-				ships_per_side[objects[i].side] += 2;
-			else
-				++ships_per_side[objects[i].side];
-
-			if (objects[i].side != pstate.player->side && objects[i].craft_ptr->status_flags != 0) {
-				pai_roughdistancebetween(i, pstate.object_idx);
-				/* Capital ships and freighters count as closer. */
-				if (objects[i].genus == GENUS_STARSHIP)
-					roughdistance >>= 2;
-				if (objects[i].genus == GENUS_PLATFORM)
-					roughdistance >>= 2;
-				if (objects[i].genus == GENUS_FREIGHTER)
-					roughdistance >>= 1;
-				if (min_distance > (uint32_t)roughdistance) {
-					min_distance = roughdistance;
-					closest = i;
-				}
-			}
-		}
-
-		if (closest == 0xFFFF) {
-			/* No hostile in range. */
-			if (mission.primary_complete == 1)
-				state = 11;
-			else if (!entercombatflag)
-				state = 1;
-			else
-				state = 2;
-		} else {
-			uint32_t combat_thresh;
-
-			/* Hostile present: pick the combat-far vs combat-near threshold. */
-			combat_thresh = !entercombatflag ? 0x20000u : 0x40000u;
-			if (min_distance > combat_thresh) {
-				/* Far away: ramp intensity 5 -> 0 as we go further. */
-				intensity = (uint16_t)(5 - ((min_distance - combat_thresh) >> 15));
-				state = 1;
-				if (intensity >= 0x8000)
-					intensity = 0;
-			} else {
-				/* Within attack range: scan AI fighter slots for a missile
-				 * lock on the player. RETAIL: slots 48..79. */
-				entercombatflag = 1;
-				missile_lock = 0;
-				for (i = 48; i < 80; ++i) {
-					if (objects[i].ship_idx != 0 && objects[i].craft_ptr->species_idx != 0 &&
-						objects[i].craft_ptr->missile_target == pstate.object_idx)
-						missile_lock = 1;
-				}
-				if (missile_lock) {
-					state = 8; /* urgent */
-				} else if (min_distance > 0x10000u) {
-					/* Mid-range default: pick by which sides are alive. */
-					if (ships_per_side[0])
-						state = 3;
-					else if (ships_per_side[4])
-						state = 5;
-					else
-						state = 4;
-				} else {
-					primary_total = 0;
-					primary_killed = 0;
-					secondary_total = 0;
-					secondary_killed = 0;
-
-					/* Detect a big primary or secondary goal with all but
-					 * one flight group done. */
-					for (i = 0; i < mission_file_header.num_fg; ++i) {
-						if (mission.primary_fg[i])
-							++primary_total;
-						if (mission.primary_fg[i] == 1)
-							++primary_killed;
-						if (mission.secondary_fg[i])
-							++secondary_total;
-						if (mission.secondary_fg[i] == 1)
-							++secondary_killed;
-					}
-
-					if ((primary_total > 3 && primary_killed + 1 == primary_total) ||
-						(secondary_total > 3 && secondary_killed + 1 == secondary_total)) {
-						state = 9;
-					} else if (min_distance < 0x8000 && (objects[closest].genus == GENUS_STARSHIP ||
-														 objects[closest].genus == GENUS_PLATFORM)) {
-						state = 8; /* outnumbered */
-					} else {
-						uint16_t hostile_score;
-						uint16_t hostile_pct;
-
-						/* Compare hostile vs ally weighted score. Sides 0/4
-						 * always count; sides 2/3/5 count when their IFF
-						 * name starts with '1'. */
-						hostile_score = ships_per_side[0] + ships_per_side[4];
-						if ((int8_t)mission_file_header.mission.neutral_name[0][0] == '1')
-							hostile_score += ships_per_side[2];
-						if ((int8_t)mission_file_header.mission.neutral_name[1][0] == '1')
-							hostile_score += ships_per_side[3];
-						if ((int8_t)mission_file_header.mission.neutral_name[3][0] == '1')
-							hostile_score += ships_per_side[5];
-
-						if (hostile_score <= ships_per_side[1]) {
-							state = 7; /* winning */
-						} else {
-							hostile_pct = math2_percentage(ships_per_side[1], hostile_score);
-							if (hostile_pct >= 0xE000) /* >= 87.5% */
-								state = 7;
-							else if (hostile_pct >= 0x8000) /* >= 50% */
-								state = 6;
-							else
-								state = 8;
-						}
-					}
-				}
-			}
-		}
-	}
-
-	if (intensity > 5)
-		intensity = 5;
-	lastmusicstate = (uint8_t)state;
-	fscript_MsSetState(state);
-	fscript_MsSetAttribute(0, (int16_t)intensity);
-	fscript_MsRefreshScript();
-}
-
 // GLOBAL: TIE98 0x596B80
 static int cdmusic_kind;
 // GLOBAL: TIE98 0x597180
@@ -2058,714 +1226,6 @@ static uint32_t cdmusic_last_ms;
 static const uint8_t cdmusic_start_min[4] = { 0, 4, 8, 12 };
 // GLOBAL: TIE98 0x4F2B8C
 static const uint8_t cdmusic_start_sec[4] = { 0, 1, 40, 52 };
-
-// FUNCTION: TIE98 0x48F730
-void tie_updatemusic_tie98(void) {
-	uint32_t now;
-	if (inflight_music_vol == 0 || musicenabled == 0) {
-		cdaudio_Stop_Track();
-		cdmusic_ms_remaining = 0;
-		return;
-	}
-	if (cdmusic_kind == 2 && !cdmusic_switch_latched) {
-		int kind = 0;
-		if (mission.primary_global == 2)
-			kind = 4;
-		else if (timers[TIMER_PRI_COMPLETE] || timers[TIMER_SEC_COMPLETE])
-			kind = 3;
-		if (kind) {
-			cdaudio_Play_Track(kind, 0, 0);
-			cdmusic_ms_remaining = cdaudio_Track_Length_Ms(kind);
-			cdmusic_kind = kind;
-			cdmusic_switch_latched = 1;
-			return;
-		}
-	}
-	now = TieMusicPolicy_NowMs();
-	cdmusic_ms_remaining -= (int32_t)(now - cdmusic_last_ms);
-	cdmusic_last_ms = now;
-	if (cdmusic_ms_remaining <= 0) {
-		cdaudio_Play_Track(2, 0, 0);
-		cdmusic_ms_remaining = cdaudio_Track_Length_Ms(2);
-		cdmusic_last_ms = TieMusicPolicy_NowMs();
-		cdmusic_kind = 2;
-	}
-}
-
-/* PORT: returns false until one flight period has accumulated, in place of
- * the original busy-wait, so the flight task can yield to the host. */
-// FUNCTION: TIE98 0x48D9B0
-static bool tie_doframe_tie98(void) {
-	TieFlightCadence ai_cadence;
-	TieFlightCadence animation_cadence;
-	int rendered;
-
-	if (!Tie98Renderer_ApplyPending())
-		return false;
-	if (replayviewmode) {
-		ReplayInputFrame replay_frame;
-		if (!TieReplayTiming_DecodeCurrentInputFrame(&replay_frame)) {
-			replay_stopreplay();
-			return true;
-		}
-		frameticks = replay_frame.frameticks;
-		framerate = (uint16_t)(236 / frameticks);
-		if (framerate == 0)
-			framerate = 1;
-	} else {
-		/* PORT: the original busy-waits until one flight period has
-		 * accumulated. Consume the sampled interval as one bounded frame;
-		 * the task returns to the host before another logical frame runs. */
-		const uint16_t minimum_ticks = TieFlightTiming_StepTicks();
-		tickcounter += (uint16_t)xtimer_Time_Elapsed();
-		if (tickcounter < minimum_ticks)
-			return false;
-		lastcounter = (int16_t)tickcounter;
-		tickcounter = 0;
-		if (calcframerate) {
-			frameticks = (uint16_t)lastcounter;
-			framerate = (uint16_t)(236 / frameticks);
-			if (framerate == 0) {
-				framerate = 1;
-				frameticks = 236;
-			}
-		}
-		calcframerate = 1;
-	}
-
-	mapflag = 0;
-	if (acceleratedtimesetting <= 1u || acceleratedtimectr == 0)
-		user_userinterface();
-#ifdef TIE_MODERN
-	/* PORT: TIE98's pause loop is represented by the host task state. */
-	if (TieFlightPause_IsActive())
-		return true;
-#endif
-	if (mission.end_flag != 0 || mapflag != 0)
-		return true;
-
-	TieFlightTiming_BeginAdvance(frameticks);
-	TIE_FLIGHT_TRACE_BEGIN_FRAME(frameticks, framerate);
-	TieAiLead_Advance(frameticks);
-	ai_cadence = TieFlightTiming_AdvanceAi(frameticks);
-	animation_cadence = TieFlightTiming_AdvanceAnimation(frameticks);
-	TieFlightCadence_SetAiTimerTicks(ai_cadence);
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_TIME);
-	tie_updatetime();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	if (mission.train_craft_type == 0) {
-		TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_FG_STATUS);
-		create_updatefgstatus();
-		TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	}
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_AI);
-	TieFlightCadence_RunPlaneAi(ai_cadence);
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_WEAPONS);
-	laser_weaponsfire();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_DYNAMICS);
-	dynamix_planedynamics();
-
-	rendered = 0;
-	if (replayviewmode) {
-		if (fastforwardflag) {
-			if (frameticks > (uint16_t)fastforwardtimer) {
-				fastforwardtimer += 236;
-				if (acceleratedtimesetting <= 1u) {
-					tie_updatescreen();
-					rendered = 1;
-				} else if (acceleratedtimectr != 0) {
-					tickcounter += (uint16_t)xtimer_Time_Elapsed();
-					tickcounter += frameticks;
-					--acceleratedtimectr;
-				} else {
-					tie_updatescreen();
-					rendered = 1;
-					acceleratedtimectr = acceleratedtimesetting - 1;
-				}
-			}
-			fastforwardtimer -= (int16_t)frameticks;
-		} else if (acceleratedtimesetting <= 1u) {
-			tie_updatescreen();
-			rendered = 1;
-		} else if (acceleratedtimectr != 0) {
-			tickcounter += (uint16_t)xtimer_Time_Elapsed();
-			tickcounter += frameticks;
-			--acceleratedtimectr;
-		} else {
-			tie_updatescreen();
-			rendered = 1;
-			acceleratedtimectr = acceleratedtimesetting - 1;
-		}
-	} else if (acceleratedtimesetting <= 1u) {
-		tie_updatescreen();
-		FlightSurface_Lock();
-		panel_updatepanel();
-		FlightSurface_Unlock();
-		rendered = 1;
-	} else if (acceleratedtimectr != 0) {
-		tickcounter += (uint16_t)xtimer_Time_Elapsed();
-		tickcounter += frameticks;
-		--acceleratedtimectr;
-	} else {
-		tie_updatescreen();
-		FlightSurface_Lock();
-		panel_updatepanel();
-		FlightSurface_Unlock();
-		rendered = 1;
-		acceleratedtimectr = acceleratedtimesetting - 1;
-	}
-
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_RENDER);
-	if (drawdebrisflag && mission.train_craft_type == 0 && TieFlightTiming_LegacyDue())
-		create_checkdebris();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_COLLISION);
-	collide_collisions();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_MOVE);
-	move_moveobjects();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_ANIMATION);
-	TieFlightCadence_RunAnimation(animation_cadence);
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_OBJECTIVES);
-	score_checkobjective();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	msg_messageupdate();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-#ifdef TIE_MODERN
-	TieMusicPolicy_UpdateFlightMusic();
-#else
-	tie_updatemusic_tie98();
-#endif
-	if (blastflag) {
-		FrontendSound_FlushQueuedSounds();
-		if (blastcount)
-			fsfx_checkblastqueue();
-		fsfx_checktieflyby();
-		fsfx_UpdatePlayerEngineSound();
-	}
-
-	if (rendered) {
-		FrontendDisplay_PresentFrame();
-		if (g_useHardware3D)
-			RenderScene_ClearFrameBuffers();
-		else
-			FrontendDisplay_BlitOffscreenToRenderSurface();
-	}
-	TIE_FLIGHT_TRACE_END_FRAME();
-	return true;
-}
-
-// FUNCTION: TIE95 0x56270
-bool tie_doframe(void) {
-	TieFlightCadence ai_cadence;
-	TieFlightCadence animation_cadence;
-	bool rendered;
-
-	if (TIE_FLIGHT_TIE98)
-		return tie_doframe_tie98();
-
-	/* Step 1 — refresh frameticks/framerate. */
-	if (replayviewmode) {
-		ReplayInputFrame replay_frame;
-		if (!TieReplayTiming_DecodeCurrentInputFrame(&replay_frame)) {
-			replay_stopreplay();
-			return true;
-		}
-		frameticks = replay_frame.frameticks;
-		framerate = (uint16_t)(236 / frameticks);
-		if (framerate == 0)
-			framerate = 1;
-	} else {
-		/* xtimer advances between runtime ticks; return until a complete
-		 * simulation period has accumulated. */
-		tickcounter += (uint16_t)xtimer_Time_Elapsed();
-		if (tickcounter < TieFlightTiming_StepTicks())
-			return false;
-
-		lastcounter = (int16_t)tickcounter;
-		tickcounter = 0;
-
-		if (calcframerate) {
-			framerate = (uint16_t)(236 / (uint16_t)lastcounter);
-			frameticks = (uint16_t)lastcounter;
-			if (framerate == 0) {
-				framerate = 1;
-				frameticks = 236;
-			}
-		}
-		calcframerate = 1;
-	}
-
-	/* Step 2 — UI input pass (skipped on fast-time skip frames). */
-	mapflag = 0;
-	if (acceleratedtimesetting <= 1u || acceleratedtimectr == 0)
-		user_userinterface();
-
-#ifdef TIE_MODERN
-	/* The tick budget was consumed even when world work is skipped. */
-	if (TieFlightPause_IsActive())
-		return true;
-#endif
-	if (mission.end_flag != 0 || mapflag != 0)
-		return true;
-
-	TieFlightTiming_BeginAdvance(frameticks);
-	TIE_FLIGHT_TRACE_BEGIN_FRAME(frameticks, framerate);
-	TieAiLead_Advance(frameticks);
-	ai_cadence = TieFlightTiming_AdvanceAi(frameticks);
-	animation_cadence = TieFlightTiming_AdvanceAnimation(frameticks);
-	TieFlightCadence_SetAiTimerTicks(ai_cadence);
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_TIME);
-	tie_updatetime();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	if (mission.train_craft_type == 0) {
-		TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_FG_STATUS);
-		create_updatefgstatus();
-		TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	}
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_AI);
-	TieFlightCadence_RunPlaneAi(ai_cadence);
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_WEAPONS);
-	laser_weaponsfire();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_DYNAMICS);
-	dynamix_planedynamics();
-
-	/* Render gate (with accelerated-time skip): renders once every
-	 * acceleratedtimesetting frames when set > 1. The live branch also
-	 * redraws the cockpit panel. */
-	rendered = false;
-	if (replayviewmode) {
-		if (fastforwardflag) {
-			/* Fast-forward stalls rendering until fastforwardtimer drains
-			 * one mission-second (236 ticks) worth of frame time. */
-			if (frameticks > (uint16_t)fastforwardtimer) {
-				fastforwardtimer += 236;
-				if (acceleratedtimesetting <= 1u) {
-					if (TIE_DISPLAY_DX5)
-						FlightSurface_Lock();
-					tie_updatescreen();
-					if (TIE_DISPLAY_DX5)
-						FlightSurface_Unlock();
-					rendered = true;
-				} else {
-					if (acceleratedtimectr) {
-						/* Skip the render — let the timer catch up. */
-						tickcounter += (uint16_t)xtimer_Time_Elapsed();
-						tickcounter += frameticks;
-					} else {
-						if (TIE_DISPLAY_DX5)
-							FlightSurface_Lock();
-						tie_updatescreen();
-						if (TIE_DISPLAY_DX5)
-							FlightSurface_Unlock();
-						rendered = true;
-						acceleratedtimectr = acceleratedtimesetting;
-					}
-					--acceleratedtimectr;
-				}
-			}
-			fastforwardtimer -= (int16_t)frameticks;
-		} else {
-			if (acceleratedtimesetting <= 1u) {
-				if (TIE_DISPLAY_DX5)
-					FlightSurface_Lock();
-				tie_updatescreen();
-				if (TIE_DISPLAY_DX5)
-					FlightSurface_Unlock();
-				rendered = true;
-			} else {
-				if (acceleratedtimectr) {
-					/* Skip the render — let the timer catch up. */
-					tickcounter += (uint16_t)xtimer_Time_Elapsed();
-					tickcounter += frameticks;
-				} else {
-					if (TIE_DISPLAY_DX5)
-						FlightSurface_Lock();
-					tie_updatescreen();
-					if (TIE_DISPLAY_DX5)
-						FlightSurface_Unlock();
-					rendered = true;
-					acceleratedtimectr = acceleratedtimesetting;
-				}
-				--acceleratedtimectr;
-			}
-		}
-	} else {
-		if (acceleratedtimesetting <= 1u) {
-			if (TIE_DISPLAY_DX5)
-				FlightSurface_Lock();
-			tie_updatescreen();
-			panel_updatepanel();
-			if (TIE_DISPLAY_DX5)
-				FlightSurface_Unlock();
-			rendered = true;
-		} else {
-			if (acceleratedtimectr) {
-				/* Skip the render — let the timer catch up. */
-				tickcounter += (uint16_t)xtimer_Time_Elapsed();
-				tickcounter += frameticks;
-			} else {
-				if (TIE_DISPLAY_DX5)
-					FlightSurface_Lock();
-				tie_updatescreen();
-				panel_updatepanel();
-				if (TIE_DISPLAY_DX5)
-					FlightSurface_Unlock();
-				rendered = true;
-				acceleratedtimectr = acceleratedtimesetting;
-			}
-			--acceleratedtimectr;
-		}
-	}
-
-	/* Post-render world updates. */
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_RENDER);
-	if (drawdebrisflag && mission.train_craft_type == 0 && TieFlightTiming_LegacyDue())
-		create_checkdebris();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_COLLISION);
-	collide_collisions();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_MOVE);
-	move_moveobjects();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_ANIMATION);
-	TieFlightCadence_RunAnimation(animation_cadence);
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_OBJECTIVES);
-	score_checkobjective();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	msg_messageupdate();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-#ifdef TIE_MODERN
-	TieMusicPolicy_UpdateFlightMusic();
-#else
-	tie_updatemusic();
-#endif
-
-	if (blastflag) {
-		if (blastcount)
-			fsfx_checkblastqueue();
-		fsfx_checktieflyby();
-	}
-	if (rendered && TIE_DISPLAY_DX5) {
-		FrontendDisplay_PresentFrame();
-		FrontendDisplay_BlitOffscreenToRenderSurface();
-	}
-	TIE_FLIGHT_TRACE_END_FRAME();
-
-	/* The application uploads vesa_buff_gbl at the end of the tick. */
-	return true;
-}
-
-/* Per-frame world render: camera, flight objects, static objects, rasterizer,
- * bitmap queue, and starfield. */
-// FUNCTION: TIE95 0x56574
-void tie_updatescreen(void) {
-	int16_t obj_iter;
-	int16_t i;
-
-#ifdef TIE_MODERN
-	if (TIE_FLIGHT_TIE98) {
-		/* PORT: keep host-only frame state outside recovered TIE98 TIE_Update_Screen. */
-		TieBillboardCapture_BeginTick();
-		/* PORT: TIE98 rebuilds its hardware palette table when DirectDraw's
-		 * palette changes. The shared framebuffer owns that palette here. */
-		RenderTexture_SyncFlightPalette();
-		tie_updatescreen_tie98();
-		TieFlightSnapshot_RecordCameraBasis();
-		return;
-	}
-#endif
-
-	/* SNAPSHOT-ONLY: reset the per-tick HD billboard capture caches
-	 * here, at the start of every tick that actually renders the 3D
-	 * world. tie_doframe gates this call behind TieFlightPause_IsActive() and
-	 * the accelerated-time skip counter, so paused / skipped frames
-	 * leave the caches frozen on the last-rendered tick — which is
-	 * exactly what the HD billboard pass needs to keep showing the
-	 * frozen sprites while the engine is paused (classic just keeps
-	 * the previous framebuffer; HD pulls a fresh snapshot every host
-	 * tick and would otherwise see an empty billboard array). */
-	TieBillboardCapture_BeginTick();
-
-	/* --- Step 1: pick a camera --------------------------------------- */
-	if (replayviewmode) {
-		replay_calcreplayview();
-	} else if (camera.view_target_obj == 0xFFFFu) {
-		/* No target: aim camera at player via TRIG2_ctop, roll=0. */
-		if (!hyperspaceflag) {
-			trig2_ctop(pstate.player->world_x - camera.x, pstate.player->world_y - camera.y,
-					   pstate.player->world_z - camera.z);
-			camera.roll = 0;
-			camera.cam_pitch = trig2_zangle;
-			camera.cam_heading = trig2_xyangle;
-		}
-		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
-						  (int16_t)camera.up_angle, NULL);
-		TieFlightSnapshot_RecordCameraBasis();
-	} else if ((camera.view_zoom_flag && camera.view_target_tracking == 0) ||
-			   (camera.view_target_tracking != 0 && camera.view_camera_control != 0)) {
-		TieChaseCamera_Update();
-
-		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
-						  (int16_t)camera.up_angle, NULL);
-		TieFlightSnapshot_RecordCameraBasis();
-
-		/* Hyperspace transition phases 4 / 6 zero the camera. */
-		if (hyperspaceflag == 4 || hyperspaceflag == 6) {
-			camera.z = 0;
-			camera.y = 0;
-			camera.x = 0;
-		} else {
-			create_getworldposition(camera.view_target_obj, 0);
-			camera.x = worldlocx;
-			camera.y = worldlocy;
-			camera.z = worldlocz;
-		}
-
-		/* Pull the camera back along the world's Z eye basis by the
-		 * zoom factor (integer offset). Uses worldeye*3 (the global
-		 * world-to-eye basis set per frame by FVIEW_newcalcview), NOT
-		 * rotworldeye*3 (the per-component-rotated basis used during
-		 * ship rendering). Binary TIE_updatescreen 0x568A7/0x568C3/0x568EB. */
-		camera.x -= (worldeyeA3 * camera.view_zoom) >> 15;
-		camera.y -= (worldeyeB3 * camera.view_zoom) >> 15;
-		camera.z -= (worldeyeC3 * camera.view_zoom) >> 15;
-
-		{
-			uint8_t species_idx;
-			uint16_t bound_hwidth;
-			if (camera.view_target_obj >= OBJ_REF_STATIC_BASE)
-				species_idx = staticobjects[camera.view_target_obj - OBJ_REF_STATIC_BASE].species;
-			else
-				species_idx = objects[camera.view_target_obj].ship_idx;
-			bound_hwidth = species_table[species_idx].bound_hwidth;
-			objectsize = (int16_t)(bound_hwidth >> 2);
-			/* Same basis as above. Binary 0x5696F/0x56989/0x569A2. */
-			camera.x -= 4 * ((worldeyeA3 * (uint16_t)objectsize) >> 15);
-			camera.y -= 4 * ((worldeyeB3 * (uint16_t)objectsize) >> 15);
-			camera.z -= 4 * ((worldeyeC3 * (uint16_t)objectsize) >> 15);
-		}
-	} else if (camera.view_target_tracking != 0) {
-		panel_pointcamera(camera.view_target_obj, 0);
-		TieFlightSnapshot_RecordCameraBasis();
-	} else {
-		/* Default: camera follows camera.view_target_obj's exact position+orient. */
-		FlightObject* o = &objects[camera.view_target_obj];
-		camera.roll = o->roll;
-		camera.cam_pitch = o->pitch;
-		camera.cam_heading = o->heading;
-		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, camera.yaw,
-						  (int16_t)camera.side_angle, (int16_t)camera.up_angle, o);
-		TieFlightSnapshot_RecordCameraBasis();
-		camera.x = o->world_x;
-		camera.y = o->world_y;
-		camera.z = o->world_z;
-		if (camera.view_target_obj == pstate.object_idx && hyperspaceflag != 3 && hyperspaceflag != 5) {
-			camera.x += pstate.laser_origin_dx;
-			camera.y += pstate.laser_origin_dy;
-			camera.z += pstate.laser_origin_dz;
-		}
-	}
-
-	/* --- Step 2: full-frame buffer reset ---------------------------- */
-	if (fullupdateflag) {
-		logbuf2_clearbuffer();
-		xtrans2_clearruntable();
-		fullupdateflag = 0;
-	}
-	xtrans2_initxtrans();
-
-	parentobject = 12288; /* 0x3000 — sentinel meaning "no parent" */
-	backdrp2_backdrop();
-	numbitmaps = 0;
-
-	/* --- Step 3: per-object render dispatch. RETAIL: 0..119; skip slot
-	 * DEBRIS_FIRST_SLOT (112) unless we're rendering debris. ----------- */
-	for (obj_iter = 0; obj_iter < (int16_t)NUM_OBJECTS; ++obj_iter) {
-		FlightObject* obj;
-		uint16_t bound;
-		uint8_t genus_v;
-
-		if (obj_iter == DEBRIS_FIRST_SLOT &&
-			!(drawdebrisflag && !hyperspaceflag && mission.train_craft_type == 0))
-			continue;
-
-		if (obj_iter == (int16_t)camera.view_target_obj && camera.view_zoom_flag == 0 && !replayviewmode)
-			continue;
-
-		obj = &objects[obj_iter];
-		if (obj->ship_idx == 0)
-			continue;
-
-		genus_v = obj->genus;
-		bound = species_table[obj->ship_idx].bound_hwidth;
-		objectsize = (int16_t)bound;
-
-		if (genus_v > 0xEu)
-			continue;
-
-		switch (genus_v) {
-			case GENUS_FIGHTER:
-			case GENUS_TRANSPORT:
-			case GENUS_UTILITY:
-			case GENUS_FREIGHTER:
-			case GENUS_STARSHIP:
-			case GENUS_PLATFORM:
-			case GENUS_GATE: { /* 14 */
-				/* Inline cull. NOTE: this is NOT equivalent to
-				 * tie_checkobjecteyexyz even though the math looks similar.
-				 * Boundary comparisons differ:
-				 *   helper    culls when `eye_z + bound <  0`   (strict);
-				 *             passes when `|eye_x| - bound <= eye_z+bound`.
-				 *   inline    gates on `eye_z >> 8 <  bound` first (no
-				 *             near_far term), and culls with STRICT `>=`
-				 *             on the view-cone tests.
-				 * Both match the binary's two separate code paths byte-for-
-				 * byte — keep them in sync if either ever needs updating. */
-				int eye_z;
-				int near_far;
-				int abs_x, abs_y;
-
-				craftptr = obj->craft_ptr;
-				tie_getobjecteyexyz((uint16_t)obj_iter);
-				/* tie_getobjecteyexyz already wrote eye_*_cache too. */
-				eye_z = objecteyez;
-
-				if ((eye_z >> 8) >= (int)bound)
-					break;
-				near_far = (int)bound + eye_z;
-				if (near_far <= 0)
-					break;
-				abs_x = (objecteyex < 0) ? -objecteyex : objecteyex;
-				if (abs_x - (int)bound >= near_far)
-					break;
-				abs_y = (objecteyey < 0) ? -objecteyey : objecteyey;
-				if (abs_y - (int)bound >= near_far)
-					break;
-
-				if (genus_v == GENUS_GATE)
-					lightflag = 0;
-				fview_newcalcrotate(obj->roll, obj->pitch, obj->heading, 0, obj);
-				if (TIE_FLIGHT_TIE98) {
-					/* PORT: native OPT craft are emitted through the snapshot. */
-				} else if (genus_v == GENUS_GATE) {
-					gate_drawtraininggate((uint16_t)obj_iter);
-				} else {
-					tie_MakeLocalLights(obj_iter);
-					draw_drawcomplexobject((uint16_t)obj_iter);
-					localLightCnt = 0;
-				}
-				lightflag = 1;
-				break;
-			}
-
-			case GENUS_PROJECTILE_PLAYER:
-			case GENUS_PROJECTILE_NPC:
-				if (tie_checkobjecteyexyz((uint16_t)obj_iter, bound)) {
-					fview_newcalcrotate(obj->roll, obj->pitch, obj->heading, 0, obj);
-					draw_drawlaser((uint16_t)obj_iter);
-				}
-				break;
-
-			case GENUS_MINE: /* 8 */
-			case 9:
-			case 10:
-			case 12:
-				/* Skipped / handled by the static-object loop or another
-				 * render system. */
-				break;
-
-			case GENUS_DEBRIS:    /* 11 */
-			case GENUS_EXPLOSION: /* 13 */
-				if (tie_checkobjecteyexyz((uint16_t)obj_iter, bound)) {
-					fview_newcalcrotate(obj->roll, obj->pitch, obj->heading, 0, obj);
-					anim_drawverysimpleobject((uint16_t)obj_iter);
-				}
-				break;
-		}
-	}
-
-	/* --- Step 4: static objects + hyperstars ------------------------ */
-	for (i = 0; i < 64; ++i) {
-		if (hyperspaceflag == 3 || hyperspaceflag == 5) {
-			/* Hyperstar render: 4 mirrored stars per slot. */
-			if (hyperspacedetail > i) {
-				StaticObject* s = &staticobjects[i];
-				int16_t wx = s->world_x;
-				int16_t wy = s->world_y;
-				int16_t wz = s->world_z;
-
-				objectsize = -1;
-				tie_checkstaticobjecteyexyz(wx, wy, wz, 0xFFFFu);
-				draw_drawhyperstar(i);
-				tie_checkstaticobjecteyexyz(wx, wy, -wz, (uint16_t)objectsize);
-				draw_drawhyperstar(i);
-				++flatobjnum;
-				if (hyperspacedetail / 2 > i) {
-					int16_t wx2 = (int16_t)((-wx) >> 1);
-					int16_t wz2 = (int16_t)((-wz) >> 1);
-					tie_checkstaticobjecteyexyz(wx2, wy, wz2, (uint16_t)objectsize);
-					draw_drawhyperstar(i);
-					tie_checkstaticobjecteyexyz((int16_t)(wx2 >> 1), wy, (int16_t)((-wz2) >> 1),
-												(uint16_t)objectsize);
-					draw_drawhyperstar(i);
-					++flatobjnum;
-				}
-			}
-			continue;
-		}
-
-		/* Standard static-object render (mines, planets, asteroids,
-		 * backdrops). */
-		if (staticobjects[i].species != 0) {
-			StaticObject* s = &staticobjects[i];
-			uint8_t spec_idx = s->species;
-			uint16_t bound = species_table[spec_idx].bound_hwidth;
-			uint8_t shipcl = s->ship_class;
-			objectsize = (int16_t)bound;
-
-			if (shipcl >= 8u && shipcl <= 0xBu &&
-				tie_checkstaticobjecteyexyz(s->world_x, s->world_y, s->world_z, bound)) {
-				/* Asteroids (species 100..105) tumble per frame. */
-				if (spec_idx >= 100 && spec_idx <= 105 &&
-					(!TieFlightTiming_IsHighRate() || TieFlightTiming_LegacyDue())) {
-					uint16_t f =
-						TieFlightTiming_IsHighRate() ? TieFlightTiming_CompatibilityTicks() : frameticks;
-					s->roll_byte = (uint8_t)((int)s->roll_byte + (((int)f * (i >> 4)) >> 4));
-					s->pitch_byte = (uint8_t)((int)s->pitch_byte + (((int)f * (i >> 3)) >> 5));
-					s->heading_byte = (uint8_t)((int)s->heading_byte + (((int)f * (4 - (i >> 4))) >> 4));
-				}
-				fview_newcalcrotate((int16_t)((uint16_t)s->roll_byte << 8),
-									(int16_t)((uint16_t)s->pitch_byte << 8),
-									(int16_t)((uint16_t)s->heading_byte << 8), 0, NULL);
-				static_drawstaticobject((uint16_t)i);
-			}
-		}
-	}
-
-	/* --- Step 5: flush bitmap queue + XTRANS rasterizer ------------- */
-	anim_sort_and_draw_bitmaps();
-	dxtticks = 0;
-	oxtticks = 0;
-	tickcounter += (uint16_t)xtimer_Time_Elapsed();
-	dxtticks = tickcounter;
-
-	xtrans2_drawxtrans();
-	tickcounter += (uint16_t)xtimer_Time_Elapsed();
-	dxtticks = (uint16_t)(tickcounter - dxtticks);
-
-	deepspacecolor = (uint8_t)-5;
-	if (hyperspaceflag != 3 && hyperspaceflag != 5)
-		rtsvga2_drawstars();
-
-	/* Signal that the application must upload the classic framebuffer. */
-	vesa_dirty_gbl = true;
-}
-
 // FUNCTION: TIE95 0x55A60
 // FUNCTION: TIE98 0x48CF10
 void tie_simulator(int replay_mode) {
@@ -3320,4 +1780,1635 @@ void tie_simulator(int replay_mode) {
 #ifdef TIE_MODERN
 	continuation->next_step = LANDRU_TASK_STEP_DONE;
 #endif
+}
+
+/* Configure flight geometry for VGA or the 640x480 modes and select the
+ * corresponding CP320/CP640 cockpit asset directory. */
+// FUNCTION: TIE95 0x56048
+// FUNCTION: TIE98 0x48D850
+void tie_InitFlightResolution(void) {
+	/* PORT: display ownership and mode selection happen at the simulator,
+	 * replay or frontend-preview boundary before this recovered geometry setup. */
+	if (flightResolution == TIE_FLIGHT_RES_SVGA_16 || flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
+		bytesPerPixel = 2;
+	else
+		bytesPerPixel = 1;
+
+	/* Disable VESA bank wrapping for the host's linear framebuffer. */
+	{
+		uint16_t* modeinfo = (uint16_t*)xvesa_Get_Vesa_Mode_Struct();
+		(void)modeinfo;
+		vesa_page_size = 0xFFFFFFFFu;
+		vesa_grains_per_page = 1u;
+	}
+
+	if ((uint16_t)flightResolution == TIE_FLIGHT_RES_VGA) {
+		/* 320x200 VGA path. Linear framebuffer -- vesa_page_size stays
+		 * unbounded (see rationale above). */
+		vesa_grains_per_page = 1u;
+		screenXRes = 320;
+		screenYRes = 200;
+		maxPixelsDeep = 189;
+		screenMemWidth = 320;
+		perspFactor = 256;
+		thicknessMultiple = 1;
+		halfPerspFactor = 128;
+		perspShift = 8;
+		yAspect = (uint16_t)-5958; /* 0xE8BA — non-square pixel correction */
+		cockpitdir[2] = '3';       /* 0x33 */
+		cockpitdir[3] = '2';       /* 0x32  -> "CP32" + "0\" */
+		return;
+	}
+
+	if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
+		flightResolution == TIE_FLIGHT_RES_SVGA_D3D) {
+		/* TIE95 mode 0x101 and the three TIE98 640x480 modes share geometry. */
+		screenXRes = 640;
+		screenYRes = 480;
+		maxPixelsDeep = 455; /* RETAIL: was 454 in demo */
+		/* Retail CRTC reg 0x13 = 0x80 widens the logical scan line to
+		 * 1024 bytes so VESA window-banking can hand out aligned pages.
+		 * A linear host framebuffer has no such constraint -- we use a
+		 * tight 640-byte stride (matching vesa_bpsl_gbl) so that rtsvga2
+		 * writes via vgapointer/lineaddressVGA stay inside vesa_buff_gbl.
+		 * Leaving screenMemWidth at 1024 would overrun the 640x480 buffer
+		 * by ~180 KB/frame and clobber whatever follows it on the heap. */
+		rtsvga2_SetVESAScanLineLength(0x400u); /* retained for parity */
+		if (TIE_DISPLAY_DX5)
+			screenMemWidth = (int32_t)g_surfacePitch;
+		else
+			screenMemWidth = 640;
+		perspFactor = 512;
+		halfPerspFactor = 256;
+		thicknessMultiple = 2;
+		cockpitdir[2] = '6'; /* 0x36 */
+		perspShift = 9;
+		yAspect = 0;
+		cockpitdir[3] = '4'; /* 0x34  -> "CP64" + "0\" */
+		return;
+	}
+
+	/* Default: same as 0x13 (some other mode somehow selected). RETAIL
+	 * also re-asserts vesa_page_size in this branch. */
+	vesa_page_size = 0x10000u;
+	vesa_grains_per_page = 1u;
+	screenXRes = 320;
+	screenYRes = 200;
+	maxPixelsDeep = 189;
+	screenMemWidth = 320;
+	perspFactor = 256;
+	thicknessMultiple = 1;
+	halfPerspFactor = 128;
+	perspShift = 8;
+	cockpitdir[2] = '3';
+	yAspect = (uint16_t)-5958;
+	cockpitdir[3] = '2';
+}
+
+#ifdef TIE_MODERN
+// FUNCTION: TIE95 0x56270
+bool tie_doframe(void) {
+	TieFlightCadence ai_cadence;
+	TieFlightCadence animation_cadence;
+	bool rendered;
+
+	if (TIE_FLIGHT_TIE98)
+		return tie_doframe_tie98();
+#else
+// FUNCTION: TIE95 0x56270
+void tie_doframe(void) {
+	if (TIE_FLIGHT_TIE98) {
+		tie_doframe_tie98();
+		return;
+	}
+#endif
+
+	/* Step 1 — refresh frameticks/framerate. */
+	if (!replayviewmode) {
+#ifdef TIE_MODERN
+		/* PORT: xtimer advances between runtime ticks; return until a
+		 * complete simulation period has accumulated instead of spinning. */
+		tickcounter += (uint16_t)xtimer_Time_Elapsed();
+		if (tickcounter < TieFlightTiming_StepTicks())
+			return false;
+#else
+		do {
+			tickcounter += xtimer_Time_Elapsed();
+		} while (tickcounter < 4);
+#endif
+
+		lastcounter = (int16_t)tickcounter;
+		tickcounter = 0;
+
+		if (calcframerate) {
+			framerate = (uint16_t)(236 / lastcounter);
+			frameticks = (uint16_t)lastcounter;
+			if (framerate == 0) {
+				framerate = 1;
+				frameticks = 236;
+			}
+		}
+		calcframerate = 1;
+	} else {
+#ifdef TIE_MODERN
+		ReplayInputFrame replay_frame;
+		if (!TieReplayTiming_DecodeCurrentInputFrame(&replay_frame)) {
+			replay_stopreplay();
+			return true;
+		}
+		frameticks = replay_frame.frameticks;
+#else
+		uint16_t* record = (uint16_t*)replayptr;
+		frameticks = record[3] >> 8;
+#endif
+		framerate = (uint16_t)(236 / frameticks);
+		if (framerate == 0)
+			framerate = 1;
+	}
+
+	/* Step 2 — UI input pass (skipped on fast-time skip frames). */
+	mapflag = 0;
+	if (acceleratedtimesetting <= 1 || acceleratedtimectr == 0)
+		user_userinterface();
+
+#ifdef TIE_MODERN
+	/* The tick budget was consumed even when world work is skipped. */
+	if (TieFlightPause_IsActive())
+		return true;
+#endif
+	if (mission.end_flag != 0 || mapflag != 0)
+#ifdef TIE_MODERN
+		return true;
+#else
+		return;
+#endif
+
+#ifdef TIE_MODERN
+	TieFlightTiming_BeginAdvance(frameticks);
+	TIE_FLIGHT_TRACE_BEGIN_FRAME(frameticks, framerate);
+	TieAiLead_Advance(frameticks);
+	ai_cadence = TieFlightTiming_AdvanceAi(frameticks);
+	animation_cadence = TieFlightTiming_AdvanceAnimation(frameticks);
+	TieFlightCadence_SetAiTimerTicks(ai_cadence);
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_TIME);
+#endif
+	tie_updatetime();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	if (mission.train_craft_type == 0) {
+		TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_FG_STATUS);
+		create_updatefgstatus();
+		TIE_FLIGHT_TRACE_OBSERVE_STATE();
+		TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_AI);
+#ifdef TIE_MODERN
+		TieFlightCadence_RunPlaneAi(ai_cadence);
+#else
+		pai_updateplaneai();
+#endif
+		TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	}
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_WEAPONS);
+	laser_weaponsfire();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_DYNAMICS);
+	dynamix_planedynamics();
+
+	/* Render gate (with accelerated-time skip): renders once every
+	 * acceleratedtimesetting frames when set > 1. The live branch also
+	 * redraws the cockpit panel. */
+#ifdef TIE_MODERN
+	rendered = false;
+#endif
+	if (!replayviewmode) {
+		if (acceleratedtimesetting > 1) {
+			if (acceleratedtimectr == 0) {
+				if (TIE_DISPLAY_DX5)
+					FlightSurface_Lock();
+				tie_updatescreen();
+				panel_updatepanel();
+				if (TIE_DISPLAY_DX5)
+					FlightSurface_Unlock();
+#ifdef TIE_MODERN
+				rendered = true;
+#endif
+				acceleratedtimectr = acceleratedtimesetting;
+			} else {
+				/* Skip the render — let the timer catch up. */
+				tickcounter += xtimer_Time_Elapsed();
+				tickcounter += frameticks;
+			}
+			--acceleratedtimectr;
+		} else {
+			if (TIE_DISPLAY_DX5)
+				FlightSurface_Lock();
+			tie_updatescreen();
+			panel_updatepanel();
+			if (TIE_DISPLAY_DX5)
+				FlightSurface_Unlock();
+#ifdef TIE_MODERN
+			rendered = true;
+#endif
+		}
+	} else if (fastforwardflag) {
+		/* Fast-forward stalls rendering until fastforwardtimer drains
+		 * one mission-second (236 ticks) worth of frame time. */
+		if (frameticks > (uint16_t)fastforwardtimer) {
+			fastforwardtimer += 236;
+			if (acceleratedtimesetting > 1) {
+				if (acceleratedtimectr == 0) {
+					if (TIE_DISPLAY_DX5)
+						FlightSurface_Lock();
+					tie_updatescreen();
+					if (TIE_DISPLAY_DX5)
+						FlightSurface_Unlock();
+#ifdef TIE_MODERN
+					rendered = true;
+#endif
+					acceleratedtimectr = acceleratedtimesetting;
+				} else {
+					/* Skip the render — let the timer catch up. */
+					tickcounter += xtimer_Time_Elapsed();
+					tickcounter += frameticks;
+				}
+				--acceleratedtimectr;
+			} else {
+				if (TIE_DISPLAY_DX5)
+					FlightSurface_Lock();
+				tie_updatescreen();
+				if (TIE_DISPLAY_DX5)
+					FlightSurface_Unlock();
+#ifdef TIE_MODERN
+				rendered = true;
+#endif
+			}
+		}
+		fastforwardtimer -= (int16_t)frameticks;
+	} else {
+		if (acceleratedtimesetting > 1) {
+			if (acceleratedtimectr == 0) {
+				if (TIE_DISPLAY_DX5)
+					FlightSurface_Lock();
+				tie_updatescreen();
+				if (TIE_DISPLAY_DX5)
+					FlightSurface_Unlock();
+#ifdef TIE_MODERN
+				rendered = true;
+#endif
+				acceleratedtimectr = acceleratedtimesetting;
+			} else {
+				/* Skip the render — let the timer catch up. */
+				tickcounter += xtimer_Time_Elapsed();
+				tickcounter += frameticks;
+			}
+			--acceleratedtimectr;
+		} else {
+			if (TIE_DISPLAY_DX5)
+				FlightSurface_Lock();
+			tie_updatescreen();
+			if (TIE_DISPLAY_DX5)
+				FlightSurface_Unlock();
+#ifdef TIE_MODERN
+			rendered = true;
+#endif
+		}
+	}
+
+	/* Post-render world updates. */
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_RENDER);
+#ifdef TIE_MODERN
+	if (drawdebrisflag && mission.train_craft_type == 0 && TieFlightTiming_LegacyDue())
+#else
+	if (drawdebrisflag && mission.train_craft_type == 0)
+#endif
+		create_checkdebris();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_COLLISION);
+	collide_collisions();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_MOVE);
+	move_moveobjects();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_ANIMATION);
+#ifdef TIE_MODERN
+	TieFlightCadence_RunAnimation(animation_cadence);
+#else
+	anim_updateanimation();
+#endif
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_OBJECTIVES);
+	score_checkobjective();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	msg_messageupdate();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+#ifdef TIE_MODERN
+	TieMusicPolicy_UpdateFlightMusic();
+#else
+	tie_updatemusic();
+#endif
+
+	if (blastflag) {
+		if (blastcount)
+			fsfx_checkblastqueue();
+		fsfx_checktieflyby();
+	}
+#ifdef TIE_MODERN
+	if (rendered && TIE_DISPLAY_DX5) {
+		FrontendDisplay_PresentFrame();
+		FrontendDisplay_BlitOffscreenToRenderSurface();
+	}
+	TIE_FLIGHT_TRACE_END_FRAME();
+
+	/* The application uploads vesa_buff_gbl at the end of the tick. */
+	return true;
+#endif
+}
+
+/* Per-frame world render: camera, flight objects, static objects, rasterizer,
+ * bitmap queue, and starfield. */
+// FUNCTION: TIE95 0x56574
+void tie_updatescreen(void) {
+	int16_t obj_iter;
+	int16_t i;
+
+#ifdef TIE_MODERN
+	if (TIE_FLIGHT_TIE98) {
+		/* PORT: keep host-only frame state outside recovered TIE98 TIE_Update_Screen. */
+		TieBillboardCapture_BeginTick();
+		/* PORT: TIE98 rebuilds its hardware palette table when DirectDraw's
+		 * palette changes. The shared framebuffer owns that palette here. */
+		RenderTexture_SyncFlightPalette();
+		tie_updatescreen_tie98();
+		TieFlightSnapshot_RecordCameraBasis();
+		return;
+	}
+#endif
+
+	/* SNAPSHOT-ONLY: reset the per-tick HD billboard capture caches
+	 * here, at the start of every tick that actually renders the 3D
+	 * world. tie_doframe gates this call behind TieFlightPause_IsActive() and
+	 * the accelerated-time skip counter, so paused / skipped frames
+	 * leave the caches frozen on the last-rendered tick — which is
+	 * exactly what the HD billboard pass needs to keep showing the
+	 * frozen sprites while the engine is paused (classic just keeps
+	 * the previous framebuffer; HD pulls a fresh snapshot every host
+	 * tick and would otherwise see an empty billboard array). */
+#ifdef TIE_MODERN
+	TieBillboardCapture_BeginTick();
+#endif
+
+	/* --- Step 1: pick a camera --------------------------------------- */
+	if (replayviewmode) {
+		replay_calcreplayview();
+	} else if (camera.view_target_obj == (uint16_t)-1) {
+		/* No target: aim camera at player via TRIG2_ctop, roll=0. */
+		if (!hyperspaceflag) {
+			trig2_ctop(pstate.player->world_x - camera.x, pstate.player->world_y - camera.y,
+					   pstate.player->world_z - camera.z);
+			camera.roll = 0;
+			camera.cam_pitch = trig2_zangle;
+			camera.cam_heading = trig2_xyangle;
+		}
+		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
+						  (int16_t)camera.up_angle, NULL);
+#ifdef TIE_MODERN
+		TieFlightSnapshot_RecordCameraBasis();
+#endif
+	} else if ((camera.view_zoom_flag && camera.view_target_tracking == 0) ||
+			   (camera.view_target_tracking != 0 && camera.view_camera_control != 0)) {
+#ifdef TIE_MODERN
+		TieChaseCamera_Update();
+#else
+		{
+			int16_t history_slot = camera.cam_chase_slot - 5;
+			if (history_slot < 0)
+				history_slot += 60;
+			camera.roll = camera.cam_chase_roll_hist[history_slot];
+			camera.cam_pitch = camera.cam_chase_pitch_hist[history_slot];
+			camera.cam_heading = camera.cam_chase_heading_hist[history_slot];
+		}
+		if (camera.view_target_obj < (int)OBJ_REF_STATIC_BASE) {
+			camera.cam_chase_roll_hist[camera.cam_chase_slot] = objects[camera.view_target_obj].roll;
+			camera.cam_chase_pitch_hist[camera.cam_chase_slot] = objects[camera.view_target_obj].pitch;
+			camera.cam_chase_heading_hist[camera.cam_chase_slot] = objects[camera.view_target_obj].heading;
+		} else {
+			camera.cam_chase_roll_hist[camera.cam_chase_slot] =
+				staticobjects[camera.view_target_obj - OBJ_REF_STATIC_BASE].roll_byte << 8;
+			camera.cam_chase_pitch_hist[camera.cam_chase_slot] =
+				staticobjects[camera.view_target_obj - OBJ_REF_STATIC_BASE].pitch_byte << 8;
+			camera.cam_chase_heading_hist[camera.cam_chase_slot] =
+				staticobjects[camera.view_target_obj - OBJ_REF_STATIC_BASE].heading_byte << 8;
+		}
+		if (++camera.cam_chase_slot == 60)
+			camera.cam_chase_slot = 0;
+#endif
+
+		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, 0, (int16_t)camera.side_angle,
+						  (int16_t)camera.up_angle, NULL);
+#ifdef TIE_MODERN
+		TieFlightSnapshot_RecordCameraBasis();
+#endif
+
+		/* Hyperspace transition phases 4 / 6 zero the camera. */
+		if (hyperspaceflag == 4 || hyperspaceflag == 6) {
+			camera.z = 0;
+			camera.y = 0;
+			camera.x = 0;
+		} else {
+			create_getworldposition(camera.view_target_obj, 0);
+			camera.x = worldlocx;
+			camera.y = worldlocy;
+			camera.z = worldlocz;
+		}
+
+		/* Pull the camera back along the world's Z eye basis by the
+		 * zoom factor (integer offset). Uses worldeye*3 (the global
+		 * world-to-eye basis set per frame by FVIEW_newcalcview), NOT
+		 * rotworldeye*3 (the per-component-rotated basis used during
+		 * ship rendering). Binary TIE_updatescreen 0x568A7/0x568C3/0x568EB. */
+		camera.x -= (camera.view_zoom * worldeyeA3) >> 15;
+		camera.y -= (camera.view_zoom * worldeyeB3) >> 15;
+		camera.z -= (camera.view_zoom * worldeyeC3) >> 15;
+
+		{
+			uint8_t species_idx;
+			if (camera.view_target_obj < (int)OBJ_REF_STATIC_BASE)
+				species_idx = objects[camera.view_target_obj].ship_idx;
+			else
+				species_idx = staticobjects[camera.view_target_obj - OBJ_REF_STATIC_BASE].species;
+			objectsize = species_table[species_idx].bound_hwidth;
+			objectsize = (uint16_t)objectsize >> 2;
+			/* Same basis as above. Binary 0x5696F/0x56989/0x569A2. */
+			camera.x -= 4 * (((uint16_t)objectsize * worldeyeA3) >> 15);
+			camera.y -= 4 * (((uint16_t)objectsize * worldeyeB3) >> 15);
+			camera.z -= 4 * (((uint16_t)objectsize * worldeyeC3) >> 15);
+		}
+	} else if (camera.view_target_tracking != 0) {
+		panel_pointcamera(camera.view_target_obj, 0);
+#ifdef TIE_MODERN
+		TieFlightSnapshot_RecordCameraBasis();
+#endif
+	} else {
+		/* Default: camera follows camera.view_target_obj's exact position+orient. */
+		camera.roll = objects[camera.view_target_obj].roll;
+		camera.cam_pitch = objects[camera.view_target_obj].pitch;
+		camera.cam_heading = objects[camera.view_target_obj].heading;
+		fview_newcalcview(camera.roll, camera.cam_pitch, camera.cam_heading, camera.yaw,
+						  (int16_t)camera.side_angle, (int16_t)camera.up_angle,
+						  &objects[camera.view_target_obj]);
+#ifdef TIE_MODERN
+		TieFlightSnapshot_RecordCameraBasis();
+#endif
+		camera.x = objects[camera.view_target_obj].world_x;
+		camera.y = objects[camera.view_target_obj].world_y;
+		camera.z = objects[camera.view_target_obj].world_z;
+		if (camera.view_target_obj == pstate.object_idx && hyperspaceflag != 3 && hyperspaceflag != 5) {
+			camera.x += pstate.laser_origin_dx;
+			camera.y += pstate.laser_origin_dy;
+			camera.z += pstate.laser_origin_dz;
+		}
+	}
+
+	/* --- Step 2: full-frame buffer reset ---------------------------- */
+	if (fullupdateflag) {
+		logbuf2_clearbuffer();
+		xtrans2_clearruntable();
+		fullupdateflag = 0;
+	}
+	xtrans2_initxtrans();
+
+	parentobject = 12288; /* 0x3000 — sentinel meaning "no parent" */
+	backdrp2_backdrop();
+	numbitmaps = 0;
+
+	/* --- Step 3: per-object render dispatch. RETAIL: 0..119; the debris
+	 * slots DEBRIS_FIRST_SLOT (112) and up are drawn only when debris is
+	 * enabled. ------------------------------------------------------- */
+	for (obj_iter = 0; obj_iter < NUM_OBJECTS; ++obj_iter) {
+		uint16_t species;
+		uint16_t genus;
+
+		if (obj_iter == DEBRIS_FIRST_SLOT &&
+			(!drawdebrisflag || hyperspaceflag || mission.train_craft_type != 0))
+			break;
+
+		if (obj_iter == camera.view_target_obj && camera.view_zoom_flag == 0 && !replayviewmode)
+			continue;
+
+		species = objects[obj_iter].ship_idx;
+		if (species == 0)
+			continue;
+		objectsize = species_table[species].bound_hwidth;
+		genus = objects[obj_iter].genus;
+
+		switch (genus) {
+			case GENUS_FIGHTER:
+			case GENUS_TRANSPORT:
+			case GENUS_UTILITY:
+			case GENUS_FREIGHTER:
+			case GENUS_STARSHIP:
+			case GENUS_PLATFORM:
+			case GENUS_GATE: { /* 14 */
+				/* Inline cull. NOTE: this is NOT equivalent to
+				 * tie_checkobjecteyexyz even though the math looks similar.
+				 * Boundary comparisons differ:
+				 *   helper    culls when `eye_z + bound <  0`   (strict);
+				 *             passes when `|eye_x| - bound <= eye_z+bound`.
+				 *   inline    gates on `eye_z >> 8 <  bound` first (no
+				 *             near_far term), and culls with STRICT `>=`
+				 *             on the view-cone tests.
+				 * Both match the binary's two separate code paths byte-for-
+				 * byte — keep them in sync if either ever needs updating. */
+				int near_far;
+				int abs_x;
+				int abs_y;
+
+				craftptr = objects[obj_iter].craft_ptr;
+				tie_getobjecteyexyz(obj_iter);
+				craftptr->eye_x_cache = objecteyex;
+				craftptr->eye_y_cache = objecteyey;
+				craftptr->eye_z_cache = objecteyez;
+
+				if ((objecteyez >> 8) >= (uint16_t)objectsize)
+					break;
+				near_far = objecteyez + (uint16_t)objectsize;
+				if (near_far <= 0)
+					break;
+				abs_x = objecteyex;
+				if (abs_x < 0)
+					abs_x = -abs_x;
+				if (abs_x - (uint16_t)objectsize >= near_far)
+					break;
+				abs_y = objecteyey;
+				if (abs_y < 0)
+					abs_y = -abs_y;
+				if (abs_y - (uint16_t)objectsize >= near_far)
+					break;
+
+				if (genus == GENUS_GATE)
+					lightflag = 0;
+				fview_newcalcrotate(objects[obj_iter].roll, objects[obj_iter].pitch,
+									objects[obj_iter].heading, 0, &objects[obj_iter]);
+				if (TIE_FLIGHT_TIE98) {
+					/* PORT: native OPT craft are emitted through the snapshot. */
+				} else if (genus == GENUS_GATE) {
+					gate_drawtraininggate(obj_iter);
+				} else {
+					tie_MakeLocalLights(obj_iter);
+					draw_drawcomplexobject((uint16_t)obj_iter);
+					localLightCnt = 0;
+				}
+				lightflag = 1;
+				break;
+			}
+
+			case GENUS_PROJECTILE_PLAYER:
+			case GENUS_PROJECTILE_NPC:
+				if (tie_checkobjecteyexyz(obj_iter, objectsize)) {
+					fview_newcalcrotate(objects[obj_iter].roll, objects[obj_iter].pitch,
+										objects[obj_iter].heading, 0, &objects[obj_iter]);
+					draw_drawlaser(obj_iter);
+				}
+				break;
+
+			case GENUS_DEBRIS: /* 11 */
+				if (tie_checkobjecteyexyz(obj_iter, objectsize)) {
+					fview_newcalcrotate(objects[obj_iter].roll, objects[obj_iter].pitch,
+										objects[obj_iter].heading, 0, &objects[obj_iter]);
+					anim_drawverysimpleobject(obj_iter);
+				}
+				break;
+
+			case GENUS_EXPLOSION: /* 13 */
+				if (tie_checkobjecteyexyz(obj_iter, objectsize)) {
+					fview_newcalcrotate(objects[obj_iter].roll, objects[obj_iter].pitch,
+										objects[obj_iter].heading, 0, &objects[obj_iter]);
+					anim_drawverysimpleobject(obj_iter);
+				}
+				break;
+		}
+	}
+
+	/* --- Step 4: static objects + hyperstars ------------------------ */
+	for (i = 0; i < 64; ++i) {
+		if (hyperspaceflag == 3 || hyperspaceflag == 5) {
+			/* Hyperstar render: 4 mirrored stars per slot. */
+			if ((uint16_t)hyperspacedetail > i) {
+				int16_t wx = staticobjects[i].world_x;
+				int16_t wy = staticobjects[i].world_y;
+				int16_t wz = staticobjects[i].world_z;
+
+				objectsize = -1;
+				tie_checkstaticobjecteyexyz(wx, wy, wz, 0xFFFFu);
+				draw_drawhyperstar(i);
+				wz = -wz;
+				tie_checkstaticobjecteyexyz(wx, wy, wz, objectsize);
+				draw_drawhyperstar(i);
+				++flatobjnum;
+				if ((uint16_t)hyperspacedetail / 2 > i) {
+					wx = -wx >> 1;
+					wz >>= 1;
+					tie_checkstaticobjecteyexyz(wx, wy, wz, objectsize);
+					wz = -wz;
+					draw_drawhyperstar(i);
+					wx >>= 1;
+					wz >>= 1;
+					tie_checkstaticobjecteyexyz(wx, wy, wz, objectsize);
+					draw_drawhyperstar(i);
+					++flatobjnum;
+				}
+			}
+			continue;
+		}
+
+		/* Standard static-object render (mines, planets, asteroids,
+		 * backdrops). */
+		{
+			uint16_t species = staticobjects[i].species;
+			uint16_t ship_class;
+
+			if (species == 0)
+				continue;
+			objectsize = species_table[species].bound_hwidth;
+			ship_class = staticobjects[i].ship_class;
+			if (ship_class < (uint16_t)8 || ship_class > (uint16_t)0xB)
+				continue;
+			if (!tie_checkstaticobjecteyexyz(staticobjects[i].world_x, staticobjects[i].world_y,
+											 staticobjects[i].world_z, objectsize))
+				continue;
+			/* Asteroids (species 100..105) tumble per frame. */
+#ifdef TIE_MODERN
+			if (species >= 100 && species <= 105 &&
+				(!TieFlightTiming_IsHighRate() || TieFlightTiming_LegacyDue())) {
+				uint16_t f = TieFlightTiming_IsHighRate() ? TieFlightTiming_CompatibilityTicks() : frameticks;
+				staticobjects[i].roll_byte += (i >> 4) * f / 16;
+				staticobjects[i].pitch_byte += (i >> 3) * f / 32;
+				staticobjects[i].heading_byte += (4 - (i >> 4)) * f / 16;
+			}
+#else
+			if (species >= 100 && species <= 105) {
+				staticobjects[i].roll_byte += (i >> 4) * frameticks / 16;
+				staticobjects[i].pitch_byte += (i >> 3) * frameticks / 32;
+				staticobjects[i].heading_byte += (4 - (i >> 4)) * frameticks / 16;
+			}
+#endif
+			fview_newcalcrotate((uint16_t)(staticobjects[i].roll_byte << 8),
+								(uint16_t)(staticobjects[i].pitch_byte << 8),
+								(uint16_t)(staticobjects[i].heading_byte << 8), 0, NULL);
+			static_drawstaticobject(i);
+		}
+	}
+
+	/* --- Step 5: flush bitmap queue + XTRANS rasterizer ------------- */
+	anim_sort_and_draw_bitmaps();
+	dxtticks = 0;
+	oxtticks = 0;
+	tickcounter += (uint16_t)xtimer_Time_Elapsed();
+	dxtticks = tickcounter;
+
+	xtrans2_drawxtrans();
+	tickcounter += (uint16_t)xtimer_Time_Elapsed();
+	dxtticks = (uint16_t)(tickcounter - dxtticks);
+
+	deepspacecolor = (uint8_t)-5;
+	if (hyperspaceflag != 3 && hyperspaceflag != 5)
+		rtsvga2_drawstars();
+
+#ifdef TIE_MODERN
+	/* Signal that the application must upload the classic framebuffer. */
+	vesa_dirty_gbl = true;
+#endif
+}
+
+/* Build up to eight explosion lights in the source craft's reflected local
+ * basis (side, -forward, up). Returns and stores the emitted count. */
+// FUNCTION: TIE95 0x57158
+int tie_MakeLocalLights(int obj_idx) {
+	FlightObject* src_obj = &objects[obj_idx];
+	uint32_t max_distance_sq;
+	int model_scale_shift;
+	int src_world_x;
+	int src_world_y;
+	int src_world_z;
+	int light_idx;
+	int light_count;
+	int scan_idx;
+	FlightObject* expl;
+
+	draw_Lockshipfileptrs(src_obj->ship_idx);
+	model_scale_shift = (int8_t)objectblockptr->model_scale_shift;
+
+	/* Light reach scales with source ship size:
+	 *   model_scale_shift == 0 -> 0x4000  (small craft, short reach).
+	 *   model_scale_shift > 0  -> 0x8000 << (model_scale_shift - 1). */
+	if (model_scale_shift == 0)
+		max_distance_sq = 0x4000u;
+	else
+		max_distance_sq = 0x8000u << (model_scale_shift - 1);
+
+	src_world_x = src_obj->world_x;
+	src_world_y = src_obj->world_y;
+	src_world_z = src_obj->world_z;
+	light_idx = 0;
+	light_count = 0;
+
+	for (scan_idx = 0, expl = objects; scan_idx < NUM_OBJECTS; ++scan_idx, ++expl) {
+		int dx, dy, dz;
+		int proj;
+
+		if (expl->ship_idx == 0)
+			continue; /* dead slot */
+		if (expl->genus != GENUS_EXPLOSION)
+			continue;
+
+		dx = expl->world_x - src_world_x;
+		dy = expl->world_y - src_world_y;
+		dz = expl->world_z - src_world_z;
+		if ((uint32_t)collide_roughdistance3d(dx, dy, dz) >= max_distance_sq)
+			continue;
+
+		/* dot products: source craft's local basis x world delta. */
+		proj = math2_dot3(dx, src_obj->side_x, dy, src_obj->side_y, dz, src_obj->side_z);
+		if (proj >= 0x40000000)
+			proj = 0x3FFF0000;
+		if (proj <= -0x40000000)
+			proj = -0x3FFF0000;
+		localLights[light_idx].x = proj >> 15;
+
+		proj = math2_dot3(dx, src_obj->fwd_x, dy, src_obj->fwd_y, dz, src_obj->fwd_z);
+		if (proj >= 0x40000000)
+			proj = 0x3FFF0000;
+		if (proj <= -0x40000000)
+			proj = -0x3FFF0000;
+		/* y axis is FLIPPED: we store -(fwd >> 15) so the local frame
+		 * matches the right-handed eye-space DRAWPOL expects. */
+		localLights[light_idx].y = -(proj >> 15);
+
+		proj = math2_dot3(dx, src_obj->up_x, dy, src_obj->up_y, dz, src_obj->up_z);
+		if (proj >= 0x40000000)
+			proj = 0x3FFF0000;
+		if (proj <= -0x40000000)
+			proj = -0x3FFF0000;
+		localLights[light_idx].z = proj >> 15;
+
+		/* Distance scale: large ships (model_scale_shift==0) double the position;
+		 * others divide by 2^(model_scale_shift-1). */
+		if (model_scale_shift == 0) {
+			localLights[light_idx].x *= 2;
+			localLights[light_idx].y *= 2;
+			localLights[light_idx].z *= 2;
+		} else {
+			localLights[light_idx].x >>= model_scale_shift - 1;
+			localLights[light_idx].y >>= model_scale_shift - 1;
+			localLights[light_idx].z >>= model_scale_shift - 1;
+		}
+
+		localLights[light_idx].range = 16;
+		switch (expl->ship_idx) {
+			case 0x83:
+			case 0x84:
+				switch (expl->anim_frame) {
+					case 2:
+						localLights[light_idx].range = 24;
+						break;
+					case 3:
+						localLights[light_idx].range = 48;
+						break;
+					case 4:
+						localLights[light_idx].range = 32;
+						break;
+					case 5:
+						localLights[light_idx].range = 16;
+						break;
+				}
+				break;
+			case 0x7F:
+			case 0x80:
+			case 0x81:
+			case 0x82:
+				switch (expl->anim_frame) {
+					case 2:
+					case 9:
+						localLights[light_idx].range = 192;
+						break;
+					case 3:
+					case 5:
+					case 6:
+					case 7:
+					case 8:
+						localLights[light_idx].range = 320;
+						break;
+					case 4:
+						localLights[light_idx].range = 480;
+						break;
+					case 10:
+						localLights[light_idx].range = 96;
+						break;
+					case 11:
+						localLights[light_idx].range = 48;
+						break;
+				}
+				if (expl->damage_state >= 4)
+					localLights[light_idx].range *= (expl->damage_state + 4) / 4;
+				break;
+			default:
+				localLights[light_idx].range = 16;
+				break;
+		}
+		++light_count;
+		if (++light_idx == 8)
+			break; /* localLights[] is 8 entries */
+	}
+
+	localLightCnt = light_count;
+	return light_count;
+}
+
+// FUNCTION: TIE98 0x48EC60
+// TIE_MakeLocalLights
+int tie_makelocallights_tie98(FlightObject* src_obj) {
+	uint32_t max_distance_sq;
+	int src_world_x;
+	int src_world_y;
+	int src_world_z;
+	int light_idx;
+	int light_count;
+	uint16_t scan_idx;
+
+	localLightCnt = 0;
+	if (!g_localLightsEnabled)
+		return 0;
+
+	max_distance_sq = (uint32_t)species_table[src_obj->ship_idx].bound_hwidth + 0x4000u;
+	src_world_x = src_obj->world_x;
+	src_world_y = src_obj->world_y;
+	src_world_z = src_obj->world_z;
+	light_idx = 0;
+	light_count = 0;
+
+	/* TIE98 0x48EC60 scans every object slot (loop bound 0x4F2A7C = 120 =
+	 * NUM_OBJECTS), not DRAWPOL's per-frame poly-object counter. */
+	for (scan_idx = 0; scan_idx < NUM_OBJECTS; ++scan_idx) {
+		FlightObject* expl = &objects[scan_idx];
+		int dx;
+		int dy;
+		int dz;
+		DRAWPOL_LocalLight* out;
+		int side_proj;
+		int fwd_proj;
+		int up_proj;
+		uint8_t ship_idx;
+
+		if (expl->ship_idx == 0 || expl->genus != GENUS_EXPLOSION)
+			continue;
+
+		dx = expl->world_x - src_world_x;
+		dy = expl->world_y - src_world_y;
+		dz = expl->world_z - src_world_z;
+		if ((uint32_t)collide_roughdistance3d(dx, dy, dz) >= max_distance_sq)
+			continue;
+
+		out = &localLights[light_idx];
+		side_proj =
+			(int32_t)src_obj->side_x * dx + (int32_t)src_obj->side_y * dy + (int32_t)src_obj->side_z * dz;
+		if (side_proj >= 0x40000000)
+			side_proj = 0x3FFFFFFF;
+		if (side_proj <= -0x40000000)
+			side_proj = -0x3FFF0000;
+		out->x = side_proj >> 15;
+
+		fwd_proj = (int32_t)src_obj->fwd_x * dx + (int32_t)src_obj->fwd_y * dy + (int32_t)src_obj->fwd_z * dz;
+		if (fwd_proj >= 0x40000000)
+			fwd_proj = 0x3FFFFFFF;
+		if (fwd_proj <= -0x40000000)
+			fwd_proj = -0x3FFF0000;
+		out->y = -(fwd_proj >> 15);
+
+		up_proj = (int32_t)src_obj->up_x * dx + (int32_t)src_obj->up_y * dy + (int32_t)src_obj->up_z * dz;
+		if (up_proj >= 0x40000000)
+			up_proj = 0x3FFFFFFF;
+		if (up_proj <= -0x40000000)
+			up_proj = -0x3FFF0000;
+		out->z = up_proj >> 15;
+
+		out->range = 16;
+		ship_idx = expl->ship_idx;
+		if (ship_idx >= 0x7Fu && ship_idx <= 0x82u) {
+			switch (expl->anim_frame) {
+				case 2:
+				case 9:
+					out->range = 192;
+					break;
+				case 3:
+				case 5:
+				case 6:
+				case 7:
+				case 8:
+					out->range = 320;
+					break;
+				case 4:
+					out->range = 480;
+					break;
+				case 10:
+					out->range = 96;
+					break;
+				case 11:
+					out->range = 48;
+					break;
+				default:
+					break;
+			}
+			if (mission.train_craft_type)
+				out->range /= 8;
+		} else if (ship_idx == 0x83u || ship_idx == 0x84u) {
+			switch (expl->anim_frame) {
+				case 2:
+					out->range = 48;
+					break;
+				case 3:
+					out->range = 96;
+					break;
+				case 4:
+					out->range = 64;
+					break;
+				case 5:
+					out->range = 32;
+					break;
+				default:
+					break;
+			}
+			if (mission.train_craft_type)
+				out->range /= 8;
+		} else {
+			out->range = (int32_t)brightness_setting - 256;
+		}
+		out->range *= 8;
+
+		++light_idx;
+		++light_count;
+		if (light_idx == 8)
+			break;
+	}
+
+	localLightCnt = light_count;
+	return light_count;
+}
+
+/* ----------------------------------------------------------------------------
+ * tie_getobjecteyexyz                                            retail 0x57518
+ * ----------------------------------------------------------------------------
+ * Cache the camera-relative + rotated eye-space coords of objects[obj_idx]
+ * into the globals (worldx/y/z, objecteyex/y/z) AND into the craft's
+ * eye_{x,y,z}_cache slots. Identical to the demo version (byte-for-byte
+ * match after absolute-address normalization). */
+// FUNCTION: TIE95 0x57518
+void tie_getobjecteyexyz(uint16_t obj_idx) {
+	FlightObject* obj = &objects[obj_idx];
+
+	craftptr = obj->craft_ptr;
+	worldx = obj->world_x - camera.x;
+	worldy = obj->world_y - camera.y;
+	worldz = obj->world_z - camera.z;
+
+	objecteyex = transfm2_geteyex(worldx, worldy, worldz);
+	craftptr->eye_x_cache = objecteyex;
+
+	objecteyey = transfm2_geteyey(worldx, worldy, worldz);
+	craftptr->eye_y_cache = objecteyey;
+
+	objecteyez = transfm2_geteyez(worldx, worldy, worldz);
+	craftptr->eye_z_cache = objecteyez;
+}
+
+/* ----------------------------------------------------------------------------
+ * tie_checkobjecteyexyz                                          retail 0x575E4
+ * ----------------------------------------------------------------------------
+ * Eye-space cull test for objects[obj_idx] within a +/-bound box.
+ * Returns 1 when visible, 0 when culled. Side-effect: the worldx/y/z and
+ * objecteyex/y/z globals are written even when culled (so the caller can
+ * still read them after a "not visible" return).
+ *
+ * Cull conditions:
+ *   eye_z + bound          >= 0           (in front of the camera)
+ *   (eye_z + bound) >> 8   <= bound       (perspective near-depth limit;
+ *                                          ~256*bound max range)
+ *   |eye_x| - bound        <= eye_z+bound (within view cone slope 1)
+ *   |eye_y| - bound        <= eye_z+bound (within view cone slope 1)
+ *
+ * Identical to demo. */
+// FUNCTION: TIE95 0x575E4
+int16_t tie_checkobjecteyexyz(uint16_t obj_idx, uint16_t bound) {
+	int near_far_extent;
+	int magnitude;
+
+	worldx = objects[obj_idx].world_x - camera.x;
+	worldy = objects[obj_idx].world_y - camera.y;
+	worldz = objects[obj_idx].world_z - camera.z;
+
+	/* Compute eye_z first because the cheapest reject is the depth-cone. */
+	objecteyez = transfm2_geteyez(worldx, worldy, worldz);
+	near_far_extent = (int)objecteyez + (int)bound;
+	if (near_far_extent < 0)
+		return 0; /* fully behind camera.x */
+	if ((near_far_extent >> 8) > (int)bound)
+		return 0; /* past the depth limit */
+
+	objecteyex = transfm2_geteyex(worldx, worldy, worldz);
+	magnitude = objecteyex;
+	if (magnitude < 0)
+		magnitude = -magnitude;
+	if (magnitude - (int)bound > near_far_extent)
+		return 0; /* outside left/right cone */
+
+	objecteyey = transfm2_geteyey(worldx, worldy, worldz);
+	magnitude = objecteyey;
+	if (magnitude < 0)
+		magnitude = -magnitude;
+	if (magnitude - (int)bound > near_far_extent)
+		return 0; /* outside up/down cone */
+	return 1;
+}
+
+// FUNCTION: TIE98 0x48F730
+void tie_updatemusic_tie98(void) {
+	uint32_t now;
+	if (inflight_music_vol == 0 || musicenabled == 0) {
+		cdaudio_Stop_Track();
+		cdmusic_ms_remaining = 0;
+		return;
+	}
+	if (cdmusic_kind == 2 && !cdmusic_switch_latched) {
+		int kind = 0;
+		if (mission.primary_global == 2)
+			kind = 4;
+		else if (timers[TIMER_PRI_COMPLETE] || timers[TIMER_SEC_COMPLETE])
+			kind = 3;
+		if (kind) {
+			cdaudio_Play_Track(kind, 0, 0);
+			cdmusic_ms_remaining = cdaudio_Track_Length_Ms(kind);
+			cdmusic_kind = kind;
+			cdmusic_switch_latched = 1;
+			return;
+		}
+	}
+	now = TieMusicPolicy_NowMs();
+	cdmusic_ms_remaining -= (int32_t)(now - cdmusic_last_ms);
+	cdmusic_last_ms = now;
+	if (cdmusic_ms_remaining <= 0) {
+		cdaudio_Play_Track(2, 0, 0);
+		cdmusic_ms_remaining = cdaudio_Track_Length_Ms(2);
+		cdmusic_last_ms = TieMusicPolicy_NowMs();
+		cdmusic_kind = 2;
+	}
+}
+
+/* PORT: returns false until one flight period has accumulated, in place of
+ * the original busy-wait, so the flight task can yield to the host. */
+// FUNCTION: TIE98 0x48D9B0
+static bool tie_doframe_tie98(void) {
+	TieFlightCadence ai_cadence;
+	TieFlightCadence animation_cadence;
+	int rendered;
+
+	if (!Tie98Renderer_ApplyPending())
+		return false;
+	if (replayviewmode) {
+		ReplayInputFrame replay_frame;
+		if (!TieReplayTiming_DecodeCurrentInputFrame(&replay_frame)) {
+			replay_stopreplay();
+			return true;
+		}
+		frameticks = replay_frame.frameticks;
+		framerate = (uint16_t)(236 / frameticks);
+		if (framerate == 0)
+			framerate = 1;
+	} else {
+		/* PORT: the original busy-waits until one flight period has
+		 * accumulated. Consume the sampled interval as one bounded frame;
+		 * the task returns to the host before another logical frame runs. */
+		const uint16_t minimum_ticks = TieFlightTiming_StepTicks();
+		tickcounter += (uint16_t)xtimer_Time_Elapsed();
+		if (tickcounter < minimum_ticks)
+			return false;
+		lastcounter = (int16_t)tickcounter;
+		tickcounter = 0;
+		if (calcframerate) {
+			frameticks = (uint16_t)lastcounter;
+			framerate = (uint16_t)(236 / frameticks);
+			if (framerate == 0) {
+				framerate = 1;
+				frameticks = 236;
+			}
+		}
+		calcframerate = 1;
+	}
+
+	mapflag = 0;
+	if (acceleratedtimesetting <= 1u || acceleratedtimectr == 0)
+		user_userinterface();
+#ifdef TIE_MODERN
+	/* PORT: TIE98's pause loop is represented by the host task state. */
+	if (TieFlightPause_IsActive())
+		return true;
+#endif
+	if (mission.end_flag != 0 || mapflag != 0)
+		return true;
+
+	TieFlightTiming_BeginAdvance(frameticks);
+	TIE_FLIGHT_TRACE_BEGIN_FRAME(frameticks, framerate);
+	TieAiLead_Advance(frameticks);
+	ai_cadence = TieFlightTiming_AdvanceAi(frameticks);
+	animation_cadence = TieFlightTiming_AdvanceAnimation(frameticks);
+	TieFlightCadence_SetAiTimerTicks(ai_cadence);
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_TIME);
+	tie_updatetime();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	if (mission.train_craft_type == 0) {
+		TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_FG_STATUS);
+		create_updatefgstatus();
+		TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	}
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_AI);
+	TieFlightCadence_RunPlaneAi(ai_cadence);
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_WEAPONS);
+	laser_weaponsfire();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_DYNAMICS);
+	dynamix_planedynamics();
+
+	rendered = 0;
+	if (replayviewmode) {
+		if (fastforwardflag) {
+			if (frameticks > (uint16_t)fastforwardtimer) {
+				fastforwardtimer += 236;
+				if (acceleratedtimesetting <= 1u) {
+					tie_updatescreen();
+					rendered = 1;
+				} else if (acceleratedtimectr != 0) {
+					tickcounter += (uint16_t)xtimer_Time_Elapsed();
+					tickcounter += frameticks;
+					--acceleratedtimectr;
+				} else {
+					tie_updatescreen();
+					rendered = 1;
+					acceleratedtimectr = acceleratedtimesetting - 1;
+				}
+			}
+			fastforwardtimer -= (int16_t)frameticks;
+		} else if (acceleratedtimesetting <= 1u) {
+			tie_updatescreen();
+			rendered = 1;
+		} else if (acceleratedtimectr != 0) {
+			tickcounter += (uint16_t)xtimer_Time_Elapsed();
+			tickcounter += frameticks;
+			--acceleratedtimectr;
+		} else {
+			tie_updatescreen();
+			rendered = 1;
+			acceleratedtimectr = acceleratedtimesetting - 1;
+		}
+	} else if (acceleratedtimesetting <= 1u) {
+		tie_updatescreen();
+		FlightSurface_Lock();
+		panel_updatepanel();
+		FlightSurface_Unlock();
+		rendered = 1;
+	} else if (acceleratedtimectr != 0) {
+		tickcounter += (uint16_t)xtimer_Time_Elapsed();
+		tickcounter += frameticks;
+		--acceleratedtimectr;
+	} else {
+		tie_updatescreen();
+		FlightSurface_Lock();
+		panel_updatepanel();
+		FlightSurface_Unlock();
+		rendered = 1;
+		acceleratedtimectr = acceleratedtimesetting - 1;
+	}
+
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_RENDER);
+	if (drawdebrisflag && mission.train_craft_type == 0 && TieFlightTiming_LegacyDue())
+		create_checkdebris();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_COLLISION);
+	collide_collisions();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_MOVE);
+	move_moveobjects();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_ANIMATION);
+	TieFlightCadence_RunAnimation(animation_cadence);
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_OBJECTIVES);
+	score_checkobjective();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+	msg_messageupdate();
+	TIE_FLIGHT_TRACE_OBSERVE_STATE();
+#ifdef TIE_MODERN
+	TieMusicPolicy_UpdateFlightMusic();
+#else
+	tie_updatemusic_tie98();
+#endif
+	if (blastflag) {
+		FrontendSound_FlushQueuedSounds();
+		if (blastcount)
+			fsfx_checkblastqueue();
+		fsfx_checktieflyby();
+		fsfx_UpdatePlayerEngineSound();
+	}
+
+	if (rendered) {
+		FrontendDisplay_PresentFrame();
+		if (g_useHardware3D)
+			RenderScene_ClearFrameBuffers();
+		else
+			FrontendDisplay_BlitOffscreenToRenderSurface();
+	}
+	TIE_FLIGHT_TRACE_END_FRAME();
+	return true;
+}
+
+/* ----------------------------------------------------------------------------
+ * tie_checkstaticobjecteyexyz                                    retail 0x576E4
+ * ----------------------------------------------------------------------------
+ * Same cull as tie_checkobjecteyexyz, but for a static-object whose 16-bit
+ * world coords are passed directly (each is shifted left by 8 to convert
+ * to the engine's 24.8 fixed-point space before subtracting camera).
+ * Used by the hyperstar render and the planet/mine static-object loop.
+ * The 'bound = 0xFFFF' callers (hyperstars) effectively disable the
+ * depth/view-cone tests so the function only computes the eye coords.
+ *
+ * Identical to demo. */
+// FUNCTION: TIE95 0x576E4
+int16_t tie_checkstaticobjecteyexyz(int16_t wx, int16_t wy, int16_t wz, uint16_t bound) {
+	int near_far_extent;
+	int abs_x, abs_y;
+
+	/* *= 256 instead of <<= 8: same as the binary's `shl 8` but
+	 * well-defined for negative int16 coords. */
+	worldx = wx;
+	worldx *= 256;
+	worldy = wy;
+	worldy *= 256;
+	worldz = wz;
+	worldz *= 256;
+	worldx -= camera.x;
+	worldy -= camera.y;
+	worldz -= camera.z;
+
+	objecteyez = transfm2_geteyez(worldx, worldy, worldz);
+	near_far_extent = (int)objecteyez + (int)bound;
+	if (near_far_extent < 0)
+		return 0;
+	if ((near_far_extent >> 8) > (int)bound)
+		return 0;
+
+	objecteyex = transfm2_geteyex(worldx, worldy, worldz);
+	abs_x = objecteyex;
+	if (abs_x < 0)
+		abs_x = -abs_x;
+	if (abs_x - (int)bound > near_far_extent)
+		return 0;
+
+	objecteyey = transfm2_geteyey(worldx, worldy, worldz);
+	abs_y = objecteyey;
+	if (abs_y < 0)
+		abs_y = -abs_y;
+	if (abs_y - (int)bound > near_far_extent)
+		return 0;
+	return 1;
+}
+
+/* Advance global and craft timers, target blinking, mission clock and warning,
+ * pilot damage bookkeeping, object ages, and message ages. */
+// FUNCTION: TIE95 0x577F4
+void tie_updatetime(void) {
+	uint16_t i;
+	uint16_t tgt_species;
+	uint16_t bound_hwidth = 0;
+	uint16_t best_priority;
+	uint16_t repair_slot;
+#ifdef TIE_MODERN
+	/* PORT: high-rate flight advances per-craft AI timers on the AI cadence. */
+	uint16_t ai_timer_ticks = TieFlightCadence_AiTimerTicks();
+#endif
+
+	/* 1. Per-slot timer decrement. */
+	for (i = 0; i < 20; ++i) {
+		if (timers[i] != 0) {
+			timers[i] -= frameticks;
+			if (timers[i] < 0)
+				timers[i] = 0;
+		}
+	}
+
+	/* 2. Per-craft AI/plan timer decrement. RETAIL: NUM_CRAFTS = 32. */
+	for (i = 0; i < NUM_CRAFTS; ++i) {
+		if (objects[i].ship_idx != 0) {
+			craftptr = objects[i].craft_ptr;
+#ifdef TIE_MODERN
+			if (craftptr->ai_update_rate_copy != 0)
+				craftptr->ai_update_rate_copy -= ai_timer_ticks;
+			if (craftptr->maneuver_timer != 0) {
+				craftptr->maneuver_timer -= ai_timer_ticks;
+				if (craftptr->maneuver_timer < 0)
+					craftptr->maneuver_timer = 0;
+			}
+			if (craftptr->ai_plan_state != 0) {
+				craftptr->ai_plan_state -= ai_timer_ticks;
+				if ((int16_t)craftptr->ai_plan_state < 0)
+					craftptr->ai_plan_state = 0;
+			}
+#else
+			if (craftptr->ai_update_rate_copy != 0)
+				craftptr->ai_update_rate_copy -= frameticks;
+			if (craftptr->maneuver_timer != 0) {
+				craftptr->maneuver_timer -= frameticks;
+				if (craftptr->maneuver_timer < 0)
+					craftptr->maneuver_timer = 0;
+			}
+			if (craftptr->ai_plan_state != 0) {
+				craftptr->ai_plan_state -= frameticks;
+				if ((int16_t)craftptr->ai_plan_state < 0)
+					craftptr->ai_plan_state = 0;
+			}
+#endif
+			if (craftptr->ion_drain_timer != 0) {
+				craftptr->ion_drain_timer -= frameticks;
+				/* Sign bit set: the countdown borrowed past zero. */
+				if (craftptr->ion_drain_timer & 0x8000)
+					craftptr->ion_drain_timer = 0;
+			}
+		}
+	}
+
+	/* 3. HUD target-blink ticker. Toggle the 0x400 bit, then pick 118
+	 * (normal cycle) or 14 (micro-flicker for small/distant targets). */
+	blinkticks -= frameticks;
+	if (blinkticks < 0) {
+		targetblinkstate ^= 0x0400;
+		if (pstate.target_obj_idx != (uint16_t)0xFFFF) {
+			pai_distancebetween(pstate.target_obj_idx, pstate.object_idx);
+			if (pstate.target_obj_idx < 0x3800)
+				tgt_species = objects[pstate.target_obj_idx].ship_idx;
+			else
+				tgt_species = staticobjects[pstate.target_obj_idx - 0x3800].species;
+			trig2_polardistance >>= 5;
+			bound_hwidth = species_table[tgt_species].bound_hwidth;
+		}
+		if (targetblinkstate & 0x0400) {
+			if ((int)bound_hwidth > trig2_polardistance)
+				blinkticks = 118;
+			else
+				blinkticks = 14;
+		} else {
+			if ((int)bound_hwidth > trig2_polardistance)
+				blinkticks = 14;
+			else
+				blinkticks = 118;
+		}
+	}
+
+	/* 4. Publish target HUD state and tick the mission clock. */
+	currenttarget = pstate.target_obj_idx | (targetblinkstate | targetblinkflag);
+	currenttargetcomp = pstate.radar_target1;
+
+	if (hyperspaceflag != 0)
+		return; /* hyperspace freezes the mission clock */
+
+	/* On sub-second underflow, reload with one mission-second worth of
+	 * ticks (236) and cascade into seconds / minutes / hours. */
+	date.subsec -= frameticks;
+	if (date.subsec > 0)
+		return;
+
+	date.subsec += 236;
+	if (++date.second >= 60) {
+		date.second = 0;
+		if (++date.minute >= 60) {
+			date.minute = 0;
+			if (++date.hour >= 24)
+				date.hour = 0;
+		}
+	}
+
+	/* Mission time-limit countdown. */
+	if (--timeleft.second == 255) {
+		timeleft.second = 59;
+		if (--timeleft.minute == 255) {
+			timeleft.second = 0;
+			timeleft.minute = 0;
+			if (mission.train_craft_type) { /* training mission */
+				user_checkreplaycamera();
+				mission.end_flag = 1;
+				mission.player_status = 3;
+			}
+		}
+	}
+	/* Last-15-second timer warning beep. */
+	if (mission.train_craft_type && timeleft.minute == 0 && timeleft.second < 15)
+		fsfx_triggersfx(0x20, 0xFFFF);
+
+	/* 5. Repair the highest-priority offline subsystem. Zero health marks
+	 * a system under repair; its timer counts down once per mission second.
+	 * At zero, restore full health and re-enable the subsystem. */
+	best_priority = 0xFFFF;
+	repair_slot = 0xFFFF;
+	for (i = 0; i < 10; ++i) {
+		if (pstate.subsystem_health_percent[i] == 0 && pstate.subsystem_repair_priority[i] < best_priority) {
+			repair_slot = i;
+			best_priority = pstate.subsystem_repair_priority[i];
+		}
+	}
+
+	for (i = 0; i < 10; ++i) {
+		if (pstate.subsystem_health_percent[i] == 0 && i == repair_slot) {
+			if (pstate.subsystem_repair_seconds[i] == 0) {
+				pstate.subsystem_health_percent[i] = 100;
+				pstate.player_craft->status_flags |= systemmask[i];
+				argtable[0] = damagemsg[i];
+				argtable[1] = 26; /* "repaired" suffix template */
+				msg_messageprintf(MSG_SYSTEM_STATUS);
+			} else {
+				--pstate.subsystem_repair_seconds[i];
+			}
+		}
+	}
+
+	/* 6. Age every live object. RETAIL: NUM_OBJECTS = 120. */
+	for (i = 0; i < NUM_OBJECTS; ++i)
+		if (objects[i].ship_idx)
+			++objects[i].age_ticks;
+
+	/* 7. Tick all queued cockpit messages forward. */
+	msg_updatemessageage();
+}
+
+/* Throttled iMUSE state evaluator. Training progress, objective state,
+ * hostile proximity, missile locks, and force balance determine the music
+ * state and intensity. */
+// FUNCTION: TIE95 0x57C7C
+void tie_updatemusic(void) {
+	uint16_t ships_per_side[6];
+	uint16_t i;
+	uint32_t min_distance;
+	int16_t state;
+	uint16_t secondary_killed;
+	uint16_t secondary_total;
+	uint16_t closest;
+	uint16_t intensity;
+	uint16_t missile_lock;
+	uint16_t primary_killed;
+	uint16_t primary_total;
+
+	if (!musicenabled || !music_buffer || timers[TIMER_MUSIC_CHANGE] != 0)
+		return;
+	intensity = 0;
+	timers[TIMER_MUSIC_CHANGE] = 59;
+
+	if (mission.train_craft_type != 0) {
+		/* Training: gate progress, or urgency once under 20 seconds. */
+		if (timeleft.minute == 0 && timeleft.second < 20)
+			state = 8;
+		else if ((uint16_t)mission.train_gates_remaining < 2)
+			state = 9;
+		else if ((uint16_t)mission.train_gates_remaining < 3)
+			state = 7;
+		else
+			state = 6;
+	} else if (mission.primary_complete == 2) {
+		state = 10; /* won */
+	} else if (timers[TIMER_PRI_COMPLETE] != 0 || timers[TIMER_SEC_COMPLETE] != 0) {
+		state = 11; /* objective hold */
+	} else {
+		closest = 0xFFFF;
+		min_distance = 0xFFFFFFFFu;
+		for (i = 0; i < 6; ++i)
+			ships_per_side[i] = 0;
+
+		/* Tally ships per side weighted by genus and find the closest
+		 * hostile. RETAIL: scan first NUM_CRAFTS (32) slots. */
+		for (i = 0; i < NUM_CRAFTS; ++i) {
+			if (objects[i].ship_idx == 0)
+				continue;
+			if (objects[i].genus == GENUS_STARSHIP || objects[i].genus == GENUS_PLATFORM)
+				ships_per_side[objects[i].side] += 4;
+			else if (objects[i].genus == GENUS_TRANSPORT || objects[i].genus == GENUS_FREIGHTER)
+				ships_per_side[objects[i].side] += 2;
+			else
+				++ships_per_side[objects[i].side];
+
+			if (objects[i].side != pstate.player->side && objects[i].craft_ptr->status_flags != 0) {
+				pai_roughdistancebetween(i, pstate.object_idx);
+				/* Capital ships and freighters count as closer. */
+				if (objects[i].genus == GENUS_STARSHIP)
+					roughdistance >>= 2;
+				if (objects[i].genus == GENUS_PLATFORM)
+					roughdistance >>= 2;
+				if (objects[i].genus == GENUS_FREIGHTER)
+					roughdistance >>= 1;
+				if (min_distance > (uint32_t)roughdistance) {
+					min_distance = roughdistance;
+					closest = i;
+				}
+			}
+		}
+
+		if (closest == 0xFFFF) {
+			/* No hostile in range. */
+			if (mission.primary_complete == 1)
+				state = 11;
+			else if (!entercombatflag)
+				state = 1;
+			else
+				state = 2;
+		} else {
+			uint32_t combat_thresh;
+
+			/* Hostile present: pick the combat-far vs combat-near threshold. */
+			combat_thresh = !entercombatflag ? 0x20000u : 0x40000u;
+			if (min_distance > combat_thresh) {
+				/* Far away: ramp intensity 5 -> 0 as we go further. */
+				intensity = (uint16_t)(5 - ((min_distance - combat_thresh) >> 15));
+				state = 1;
+				if (intensity >= 0x8000)
+					intensity = 0;
+			} else {
+				/* Within attack range: scan AI fighter slots for a missile
+				 * lock on the player. RETAIL: slots 48..79. */
+				entercombatflag = 1;
+				missile_lock = 0;
+				for (i = 48; i < 80; ++i) {
+					if (objects[i].ship_idx != 0 && objects[i].craft_ptr->species_idx != 0 &&
+						objects[i].craft_ptr->missile_target == pstate.object_idx)
+						missile_lock = 1;
+				}
+				if (missile_lock) {
+					state = 8; /* urgent */
+				} else if (min_distance > 0x10000u) {
+					/* Mid-range default: pick by which sides are alive. */
+					if (ships_per_side[0])
+						state = 3;
+					else if (ships_per_side[4])
+						state = 5;
+					else
+						state = 4;
+				} else {
+					primary_total = 0;
+					primary_killed = 0;
+					secondary_total = 0;
+					secondary_killed = 0;
+
+					/* Detect a big primary or secondary goal with all but
+					 * one flight group done. */
+					for (i = 0; i < mission_file_header.num_fg; ++i) {
+						if (mission.primary_fg[i])
+							++primary_total;
+						if (mission.primary_fg[i] == 1)
+							++primary_killed;
+						if (mission.secondary_fg[i])
+							++secondary_total;
+						if (mission.secondary_fg[i] == 1)
+							++secondary_killed;
+					}
+
+					if ((primary_total > 3 && primary_killed + 1 == primary_total) ||
+						(secondary_total > 3 && secondary_killed + 1 == secondary_total)) {
+						state = 9;
+					} else if (min_distance < 0x8000 && (objects[closest].genus == GENUS_STARSHIP ||
+														 objects[closest].genus == GENUS_PLATFORM)) {
+						state = 8; /* outnumbered */
+					} else {
+						uint16_t hostile_score;
+						uint16_t hostile_pct;
+
+						/* Compare hostile vs ally weighted score. Sides 0/4
+						 * always count; sides 2/3/5 count when their IFF
+						 * name starts with '1'. */
+						hostile_score = ships_per_side[0] + ships_per_side[4];
+						if ((int8_t)mission_file_header.mission.neutral_name[0][0] == '1')
+							hostile_score += ships_per_side[2];
+						if ((int8_t)mission_file_header.mission.neutral_name[1][0] == '1')
+							hostile_score += ships_per_side[3];
+						if ((int8_t)mission_file_header.mission.neutral_name[3][0] == '1')
+							hostile_score += ships_per_side[5];
+
+						if (hostile_score <= ships_per_side[1]) {
+							state = 7; /* winning */
+						} else {
+							hostile_pct = math2_percentage(ships_per_side[1], hostile_score);
+							if (hostile_pct >= 0xE000) /* >= 87.5% */
+								state = 7;
+							else if (hostile_pct >= 0x8000) /* >= 50% */
+								state = 6;
+							else
+								state = 8;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if (intensity > 5)
+		intensity = 5;
+	lastmusicstate = (uint8_t)state;
+	fscript_MsSetState(state);
+	fscript_MsSetAttribute(0, (int16_t)intensity);
+	fscript_MsRefreshScript();
 }

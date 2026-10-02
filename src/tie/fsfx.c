@@ -642,6 +642,96 @@ int16_t fsfx_loadvoicelfd(void) {
 }
 
 /* --------------------------------------------------------------------------
+ * Trigger dispatchers.
+ * -------------------------------------------------------------------------- */
+
+// FUNCTION: TIE95 0x24F5C
+int8_t fsfx_triggersfx(uint16_t sound_id, uint16_t src_obj) {
+	int16_t vol_buf;
+	int32_t pan;
+	uint16_t priority;
+
+	if (!sfxenabled)
+		return 0;
+	if (!soundhandles[sound_id])
+		return 0;
+	if (!inflight_sound_vol)
+		return 0;
+
+	vol_buf = fsfx_calcvolume(src_obj, sound_id);
+	if (!vol_buf)
+		return 0;
+
+	/* calcpan may reduce vol_buf further for back-hemisphere sounds. */
+	pan = fsfx_calcpan(src_obj, &vol_buf);
+
+	priority = ((uint16_t)vol_buf < 0x7Eu) ? (uint16_t)vol_buf : 125;
+
+	/* Local-sound bump: sfx emitted by the player's craft (or a
+	 * child object that maps back to it via self_idx) wins the
+	 * priority arbitration. */
+	if (src_obj == 0xFFFF || src_obj == pstate.object_idx ||
+		(src_obj < OBJ_REF_STATIC_BASE && objects[src_obj].self_idx == (int16_t)pstate.object_idx)) {
+		priority = 126;
+	}
+
+	if (lolevel_ImGetParam(sound_id, IM_PARAM_IS_PLAYING)) {
+		/* Looping engine/laser SFX -- don't retrigger while alive. */
+		if (sound_id >= 0x2Au && sound_id <= 0x2Fu)
+			return 0;
+		if (lolevel_ImGetParam(sound_id, IM_PARAM_PRIORITY) > (int)priority)
+			return 0;
+		lolevel_ImStopSound(sound_id);
+	}
+
+	hilevel_ImStartSfx(sound_id, priority);
+	lolevel_ImSetParam(sound_id, IM_PARAM_PRIORITY, priority);
+	lolevel_ImSetParam(sound_id, IM_PARAM_PAN, (int)pan);
+	lolevel_ImSetParam(sound_id, IM_PARAM_VOLUME, (uint16_t)vol_buf);
+	return 1;
+}
+
+// FUNCTION: TIE95 0x25108
+int8_t fsfx_triggerlasersfx(uint16_t projectile_obj) {
+	uint16_t weapon_species;
+
+	if (!sfxenabled)
+		return sfxenabled;
+	if (!inflight_sound_vol)
+		return 0;
+
+	weapon_species = objects[projectile_obj].ship_idx;
+
+	/* Laser / missile weapon-species mapping (ship_idx 0x89..0x9A). */
+	switch (weapon_species) {
+		case 137:
+		case 138:
+		case 139:
+		case 140:
+		case 141:
+		case 142:
+		case 143:
+		case 144:
+		case 145:
+		case 146:
+		case 147:
+			return fsfx_triggersfx((uint16_t)(weapon_species - 133), projectile_obj); /*   4..14 */
+		case 148:
+		case 149:
+			return fsfx_triggersfx((uint16_t)(weapon_species - 138),
+								   projectile_obj); /*  10..11 (intentional reuse) */
+		case 150:
+		case 151:
+			return fsfx_triggersfx((uint16_t)(weapon_species - 135), projectile_obj); /*  15..16 */
+		case 152:
+		case 153:
+		case 154:
+			return fsfx_triggersfx(17, projectile_obj); /* single missile/torp clip */
+	}
+	return (int8_t)weapon_species;
+}
+
+/* --------------------------------------------------------------------------
  * Positional audio math.
  * -------------------------------------------------------------------------- */
 
@@ -804,102 +894,6 @@ int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr) {
 	return pan_out + 64;
 }
 
-/* --------------------------------------------------------------------------
- * Trigger dispatchers.
- * -------------------------------------------------------------------------- */
-
-// FUNCTION: TIE95 0x24F5C
-int8_t fsfx_triggersfx(uint16_t sound_id, uint16_t src_obj) {
-	int16_t vol_buf;
-	int32_t pan;
-	uint16_t priority;
-
-	if (!sfxenabled)
-		return 0;
-	if (!soundhandles[sound_id])
-		return 0;
-	if (!inflight_sound_vol)
-		return 0;
-
-	vol_buf = fsfx_calcvolume(src_obj, sound_id);
-	if (!vol_buf)
-		return 0;
-
-	/* calcpan may reduce vol_buf further for back-hemisphere sounds. */
-	pan = fsfx_calcpan(src_obj, &vol_buf);
-
-	priority = ((uint16_t)vol_buf < 0x7Eu) ? (uint16_t)vol_buf : 125;
-
-	/* Local-sound bump: sfx emitted by the player's craft (or a
-	 * child object that maps back to it via self_idx) wins the
-	 * priority arbitration. */
-	if (src_obj == 0xFFFF || src_obj == pstate.object_idx ||
-		(src_obj < OBJ_REF_STATIC_BASE && objects[src_obj].self_idx == (int16_t)pstate.object_idx)) {
-		priority = 126;
-	}
-
-	if (lolevel_ImGetParam(sound_id, IM_PARAM_IS_PLAYING)) {
-		/* Looping engine/laser SFX -- don't retrigger while alive. */
-		if (sound_id >= 0x2Au && sound_id <= 0x2Fu)
-			return 0;
-		if (lolevel_ImGetParam(sound_id, IM_PARAM_PRIORITY) > (int)priority)
-			return 0;
-		lolevel_ImStopSound(sound_id);
-	}
-
-	hilevel_ImStartSfx(sound_id, priority);
-	lolevel_ImSetParam(sound_id, IM_PARAM_PRIORITY, priority);
-	lolevel_ImSetParam(sound_id, IM_PARAM_PAN, (int)pan);
-	lolevel_ImSetParam(sound_id, IM_PARAM_VOLUME, (uint16_t)vol_buf);
-	return 1;
-}
-
-// FUNCTION: TIE95 0x25108
-int8_t fsfx_triggerlasersfx(uint16_t projectile_obj) {
-	uint8_t weapon_species;
-	uint16_t sfx_id;
-
-	if (!sfxenabled)
-		return 0;
-	if (!inflight_sound_vol)
-		return 0;
-
-	weapon_species = objects[projectile_obj].ship_idx;
-
-	/* Laser / missile weapon-species mapping (ship_idx 0x89..0x9A). */
-	switch (weapon_species) {
-		case 137:
-		case 138:
-		case 139:
-		case 140:
-		case 141:
-		case 142:
-		case 143:
-		case 144:
-		case 145:
-		case 146:
-		case 147:
-			sfx_id = (uint16_t)(weapon_species - 133); /*   4..14 */
-			break;
-		case 148:
-		case 149:
-			sfx_id = (uint16_t)(weapon_species - 138); /*  10..11 (intentional reuse) */
-			break;
-		case 150:
-		case 151:
-			sfx_id = (uint16_t)(weapon_species - 135); /*  15..16 */
-			break;
-		case 152:
-		case 153:
-		case 154:
-			sfx_id = 17; /* single missile/torp clip */
-			break;
-		default:
-			return 0;
-	}
-	return fsfx_triggersfx(sfx_id, projectile_obj);
-}
-
 // FUNCTION: TIE95 0x2554C
 int32_t fsfx_triggergunsightsfx(uint16_t mode) {
 	if (!sfxenabled)
@@ -970,7 +964,7 @@ int8_t fsfx_triggerbeamsfx(int32_t firing) {
 }
 
 // FUNCTION: TIE95 0x25734
-int8_t fsfx_triggervoicesfx(uint16_t voice_id) {
+int16_t fsfx_triggervoicesfx(uint16_t voice_id) {
 	if (!voiceenabled)
 		return 0;
 	if (!soundhandles[voice_id])
@@ -982,8 +976,7 @@ int8_t fsfx_triggervoicesfx(uint16_t voice_id) {
 		/* Voice channel busy or queue non-empty -- preserve order. */
 		if (blastcount == FSFX_BLAST_QUEUE_SIZE)
 			return 0;
-		blastqueue[blastcount] = (uint8_t)voice_id;
-		blastcount++;
+		blastqueue[blastcount++] = (uint8_t)voice_id;
 		return 1;
 	}
 
@@ -1028,7 +1021,7 @@ void fsfx_checkblastqueue(void) {
 }
 
 // FUNCTION: TIE95 0x25950
-int16_t fsfx_checktieflyby(void) {
+void fsfx_checktieflyby(void) {
 	uint16_t i;
 	for (i = 0; i < NUM_CRAFTS; i++) {
 		CraftData* craft;
@@ -1041,9 +1034,9 @@ int16_t fsfx_checktieflyby(void) {
 		if (i == pstate.object_idx)
 			continue;
 
-		craft = objects[i].craft_ptr;
-		if (!craft)
+		if (!objects[i].ship_idx)
 			continue;
+		craft = objects[i].craft_ptr;
 		if (craft->flight_flag)
 			continue; /* not airborne */
 		if (!craft->status_flags)
@@ -1054,6 +1047,17 @@ int16_t fsfx_checktieflyby(void) {
 		species = objects[i].ship_idx;
 		flyby_sound = 0xFFFF;
 		switch (species) {
+			case 5:
+			case 6:
+			case 7:
+			case 8:
+			case 9:
+				flyby_sound = 42;
+				break;
+			case 12:
+			case 16:
+				flyby_sound = 43;
+				break;
 			case 1:
 			case 4:
 			case 14:
@@ -1067,21 +1071,8 @@ int16_t fsfx_checktieflyby(void) {
 			case 13:
 				flyby_sound = 46;
 				break;
-			case 5:
-			case 6:
-			case 7:
-			case 8:
-			case 9:
-				flyby_sound = 42;
-				break;
-			case 12:
-			case 16:
-				flyby_sound = 43;
-				break;
-			default:
-				continue;
 		}
-		if (flyby_sound == 0xFFFF)
+		if (flyby_sound == (uint16_t)-1)
 			continue;
 
 		/* Enter-the-range test: was outside the threshold last frame,
@@ -1101,7 +1092,6 @@ int16_t fsfx_checktieflyby(void) {
 		if (threshold > curr_dist && prev_dist >= threshold)
 			fsfx_triggersfx(flyby_sound, i);
 	}
-	return (int16_t)i;
 }
 
 // FUNCTION: TIE95 0x25AAC
@@ -1290,42 +1280,39 @@ int8_t fsfx_speakobjectives(uint16_t objective_voice) {
 }
 
 // FUNCTION: TIE95 0x25EA4
-int8_t fsfx_speakorderack(int32_t target_idx, int32_t order_char, uint16_t cmdr_mode) {
-	uint16_t target_obj = (uint16_t)target_idx;
+void fsfx_speakorderack(uint16_t target_obj, int32_t order_char, uint16_t cmdr_mode) {
 	uint16_t r = (uint16_t)math2_getrandom();
-
 	uint16_t order_voice;
 
-	if (r >= 36864) {
-		if (r >= 57344) {
-			fsfx_triggervoicesfx(0x63u); /* "acknowledged" */
-		} else {
-			if ((uint16_t)math2_getrandom() > 0x4000u)
-				fsfx_speakobjectname(pstate.object_idx, 0);
-			if (cmdr_mode)
-				fsfx_speakobjectname(pstate.object_idx, 0x34u); /* "target" prefix on self */
-			else
-				fsfx_speakobjectname(target_obj, 0x33u); /* "enemy"  prefix on target */
-		}
-	} else {
-		uint16_t rm = (uint16_t)math2_getrandom();
-		if (rm >= 21845) {
-			uint16_t ack = (rm >= 43690) ? 98 : 97;
-			fsfx_triggervoicesfx(ack);
-			if ((uint16_t)math2_getrandom() > 0x4000u)
-				fsfx_speakobjectname(pstate.object_idx, 0);
-		} else {
-			if ((uint16_t)math2_getrandom() < 0x4000u)
+	if (r < 0x9000) {
+		r = (uint16_t)math2_getrandom();
+		if (r < 0x5555) {
+			if ((uint16_t)math2_getrandom() < 0x4000)
 				fsfx_triggervoicesfx(0x66u); /* "roger" */
 			fsfx_triggervoicesfx(0x68u);     /* "understood" */
 			fsfx_speakobjectname(pstate.object_idx, 0);
+		} else {
+			if (r < 0xAAAA)
+				fsfx_triggervoicesfx(97u);
+			else
+				fsfx_triggervoicesfx(98u);
+			if ((uint16_t)math2_getrandom() > 0x4000)
+				fsfx_speakobjectname(pstate.object_idx, 0);
 		}
+	} else if (r < 0xE000) {
+		if ((uint16_t)math2_getrandom() > 0x4000)
+			fsfx_speakobjectname(pstate.object_idx, 0);
+		if (cmdr_mode)
+			fsfx_speakobjectname(pstate.object_idx, 0x34u); /* "target" prefix on self */
+		else
+			fsfx_speakobjectname(target_obj, 0x33u); /* "enemy"  prefix on target */
+	} else {
+		fsfx_triggervoicesfx(0x63u); /* "acknowledged" */
 	}
 
-	/* Order-specific tail clip. Default returns (order_char - 'p')
-	 * without playing, matching the binary. */
+	/* Order-specific tail clip; unknown orders play nothing. */
 
-	switch ((char)order_char) {
+	switch ((uint16_t)order_char) {
 		case 'p':
 			order_voice = 73;
 			break; /* protect */
@@ -1342,12 +1329,12 @@ int8_t fsfx_speakorderack(int32_t target_idx, int32_t order_char, uint16_t cmdr_
 			order_voice = 69;
 			break; /* unknown */
 		case 'v':
-			order_voice = ((uint16_t)math2_getrandom() >= 0x8000u) ? 100 : 70;
+			order_voice = ((uint16_t)math2_getrandom() < 0x8000) ? 70 : 100;
 			break;
 		default:
-			return (int8_t)((int8_t)order_char - (int8_t)'p');
+			return;
 	}
-	return fsfx_triggervoicesfx(order_voice);
+	fsfx_triggervoicesfx(order_voice);
 }
 
 /* --------------------------------------------------------------------------
@@ -1355,61 +1342,54 @@ int8_t fsfx_speakorderack(int32_t target_idx, int32_t order_char, uint16_t cmdr_
  * -------------------------------------------------------------------------- */
 
 // FUNCTION: TIE95 0x26004
-int32_t fsfx_checkcriticalcraft(int32_t obj_idx_arg, uint16_t action_voice) {
-	uint16_t obj_idx_u16 = (uint16_t)obj_idx_arg;
+int32_t fsfx_checkcriticalcraft(uint16_t obj_idx, uint16_t action_voice) {
+	int16_t is_critical;
 
-	uint8_t pri_win_cond;
-	int32_t is_critical;
-	const ECondStruct* sa;
-	const ECondStruct* sb;
-	uint16_t death_voice;
+	if (mission.primary_complete != 1) {
+		/* Auto-pass when the dead craft's FG has a destroy primary win
+		 * condition. No group match needed for this branch -- the
+		 * condition is "any craft in the FG with this kill-type goal".
+		 * Win-condition codes 7, 9 and 12 count as "destroy / disable"; the
+		 * binary compare chain excludes 10 and 11. */
+		is_critical = 0;
+		switch (fg_array[objects[obj_idx].fg_idx].pri_win_cond) {
+			case 7:
+			case 9:
+			case 12:
+				is_critical = 1;
+				break;
+		}
 
-	if (mission.primary_complete == 1)
-		return 0;
-
-	/* Auto-pass when the dead craft's FG has a destroy primary win
-	 * condition. No group match needed for this branch -- the
-	 * condition is "any craft in the FG with this kill-type goal". */
-	pri_win_cond = fg_array[objects[obj_idx_u16].fg_idx].pri_win_cond;
-	is_critical = 0;
-	/* Win-condition codes 7, 9 and 12 count as "destroy / disable"; the
-	 * binary compare chain excludes 10 and 11. */
-	switch (pri_win_cond) {
-		case 7:
-		case 9:
-		case 12:
-			is_critical = 1;
-			break;
+		/* Match the dead craft against each of the primary goal's two
+		 * subconditions via score_objectmemberofgroup; OR into is_critical. */
+		switch (cut[0].subcond[0].cond) {
+			case 7:
+			case 9:
+			case 12:
+				is_critical |= score_objectmemberofgroup(obj_idx, (int8_t)cut[0].subcond[0].type,
+														 (int8_t)cut[0].subcond[0].id);
+				break;
+		}
+		switch (cut[0].subcond[1].cond) {
+			case 7:
+			case 9:
+			case 12:
+				is_critical |= score_objectmemberofgroup(obj_idx, (int8_t)cut[0].subcond[1].type,
+														 (int8_t)cut[0].subcond[1].id);
+				break;
+		}
+		if (is_critical) {
+			/* Voice the kill: player name + "critical" + platform/craft
+			 * destroyed + caller's action clip. */
+			fsfx_speakobjectname(pstate.object_idx, 0);
+			fsfx_triggervoicesfx(0x55u); /* "critical" */
+			if (objects[obj_idx].genus == GENUS_PLATFORM)
+				fsfx_triggervoicesfx(87);
+			else
+				fsfx_triggervoicesfx(86);
+			fsfx_triggervoicesfx(action_voice);
+			return 1;
+		}
 	}
-
-	/* Match the dead craft against each of the primary goal's two
-	 * subconditions (cut[0].subcond[0] and [1]) via
-	 * score_objectmemberofgroup; OR into is_critical. */
-	sa = &cut[0].subcond[0];
-	sb = &cut[0].subcond[1];
-	switch (sa->cond) {
-		case 7:
-		case 9:
-		case 12:
-			is_critical |= score_objectmemberofgroup(obj_idx_u16, sa->type, sa->id);
-			break;
-	}
-	switch (sb->cond) {
-		case 7:
-		case 9:
-		case 12:
-			is_critical |= score_objectmemberofgroup(obj_idx_u16, sb->type, sb->id);
-			break;
-	}
-	if (!(uint16_t)is_critical)
-		return 0;
-
-	/* Voice the kill: player name + "critical" + platform/craft
-	 * destroyed + caller's action clip. */
-	fsfx_speakobjectname(pstate.object_idx, 0);
-	fsfx_triggervoicesfx(0x55u); /* "critical" */
-	death_voice = (objects[obj_idx_u16].genus == GENUS_PLATFORM) ? 87 : 86;
-	fsfx_triggervoicesfx(death_voice);
-	fsfx_triggervoicesfx(action_voice);
-	return 1;
+	return 0;
 }

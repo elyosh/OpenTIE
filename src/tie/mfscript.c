@@ -475,12 +475,13 @@ static void mfscript_ChgJumpOnBeat(intptr_t sound1, intptr_t sound2, int16_t end
 // FUNCTION: TIE95 0x87BE0
 int16_t mfscript_MfStartScript(void* idp) {
 	(void)idp;
-	currentState = 0;
 	currentSequence = 0;
 	currentCuePoint = -1;
-	/* Seed PRNG from stack addresses (deterministic per run) */
-	rseed1 = TieImuse_AddressSeed(&rseed2);
-	rseed2 = ~TieImuse_AddressSeed(&rseed1);
+	currentState = 0;
+	/* Seed PRNG from the address of the seed itself */
+	rseed2 = (int32_t)(intptr_t)&rseed1;
+	rseed1 = rseed2;
+	rseed2 = ~(int32_t)(intptr_t)&rseed1;
 	return 0;
 }
 
@@ -616,7 +617,26 @@ int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 	if (!sqp)
 		return currentCuePoint;
 
-	if (cuePoint) {
+	if (!cuePoint) {
+		/* Transition from state into sequence (cue 0) */
+		StateRef* srp;
+
+		lolevel_ImPrintf("Trans from state %lx...", (long)currentState);
+		srp = &stateRefs[currentState];
+		cgp = srp->seqChanges;
+		i = 0;
+		while (i < MAX_SEQ_CHANGES && cgp->target != currentSequence && cgp->target) {
+			i++;
+			cgp++;
+		}
+
+		if (cgp->target == currentSequence)
+			sound = srp->sound;
+		else {
+			sound = 0;
+			cgp = mfscript_GetDefaultChangeRef();
+		}
+	} else {
 		/* Advancing within a sequence */
 		if (cuePoint != currentCuePoint + 1)
 			currentCuePoint = cuePoint - 1;
@@ -627,22 +647,6 @@ int16_t mfscript_MfSetCuePoint(int16_t cuePoint) {
 		if (!crp->sound)
 			crp->sound = filelist_ImFindSound(soundNames[crp->nameIndex]);
 		sound = crp->sound;
-	} else {
-		/* Transition from state into sequence (cue 0) */
-		StateRef* srp;
-
-		lolevel_ImPrintf("Trans from state %lx...", (long)currentState);
-		srp = &stateRefs[currentState];
-		cgp = srp->seqChanges;
-		for (i = 0; i < MAX_SEQ_CHANGES && cgp->target != currentSequence && cgp->target; i++)
-			cgp++;
-
-		if (cgp->target == currentSequence)
-			sound = srp->sound;
-		else {
-			sound = 0;
-			cgp = mfscript_GetDefaultChangeRef();
-		}
 	}
 
 	/* Load the next cue's sound */
@@ -863,7 +867,6 @@ static void mfscript_DoJumpStart(ChangeRef* cgp, intptr_t sound) {
 	 * read arg3/arg4 as whole shorts — that produced a 263-chunk
 	 * scan and the "Sq couldn't find chunk 263" sequencer error. */
 	int16_t chunk, meas, jsc, jsm;
-	int16_t thresholdChunk, thresholdMeas;
 
 	if (!cgp->arg3)
 		return;
@@ -875,12 +878,10 @@ static void mfscript_DoJumpStart(ChangeRef* cgp, intptr_t sound) {
 	if (meas < 0)
 		return;
 
-	thresholdChunk = (int16_t)(int8_t)((cgp->arg3 >> 8) & 0xFF);
-	thresholdMeas = (int16_t)(uint8_t)(cgp->arg3 & 0xFF);
-	if (chunk <= thresholdChunk && meas <= thresholdMeas) {
+	if (chunk <= (cgp->arg3 >> 8) && meas <= (cgp->arg3 & 0xFF)) {
 		lolevel_ImSetParam(sound, IM_PARAM_VOLALT, 0);
-		jsc = (int16_t)(int8_t)((cgp->arg4 >> 8) & 0xFF);
-		jsm = (int16_t)(uint8_t)(cgp->arg4 & 0xFF);
+		jsc = cgp->arg4 >> 8;
+		jsm = cgp->arg4 & 0xFF;
 		lolevel_ImPrintf("Scan to chk %lx...", (long)jsc);
 		lolevel_ImPrintf("meas %lx...", (long)jsm);
 		lolevel_ImScanMidi(sound, jsc, jsm, 1, 0);
@@ -951,9 +952,13 @@ static CueRef* mfscript_GetSequence(void) {
 // FUNCTION: TIE95 0x8881C
 // FUNCTION: TIE98 0x4552A0
 static ChangeRef* mfscript_GetDefaultChangeRef(void) {
-	if (currentSequence >= 9 && currentSequence <= 10)
-		return &stateRefs[0].seqChanges[1];
-	return &stateRefs[0].seqChanges[0];
+	switch (currentSequence) {
+		case 9:
+		case 10:
+			return &stateRefs[0].seqChanges[1];
+		default:
+			return &stateRefs[0].seqChanges[0];
+	}
 }
 
 /* Unreferenced in retail. */
@@ -961,17 +966,17 @@ static ChangeRef* mfscript_GetDefaultChangeRef(void) {
 static int16_t mfscript_GetRandom(int16_t lo, int16_t hi) {
 	int i, c;
 
-	uint16_t raw;
-
 	for (i = 0; i < 23; i++) {
-		c = ((rseed2 & 0x20000000) == 0) ^ ((rseed1 & 0x40000000) != 0);
-		rseed1 = rseed1 * 2 + c;
+		c = ((rseed1 & 0x40000000) ? 1 : 0) ^ !(rseed2 & 0x20000000);
+		rseed1 = (int32_t)((uint32_t)rseed1 << 1);
+		rseed1 = (int32_t)((uint32_t)rseed1 + c);
 	}
 	for (i = 0; i < 37; i++) {
-		c = ((rseed1 & 0x20000000) == 0) ^ ((rseed2 & 0x40000000) != 0);
-		rseed2 = rseed2 * 2 + c;
+		c = ((rseed2 & 0x40000000) ? 1 : 0) ^ !(rseed1 & 0x20000000);
+		rseed2 = (int32_t)((uint32_t)rseed2 << 1);
+		rseed2 = (int32_t)((uint32_t)rseed2 + c);
 	}
 
-	raw = (uint16_t)(rseed1 + rseed2);
-	return (int16_t)(((uint32_t)raw * (hi - lo + 1)) >> 16) + lo;
+	return (int16_t)((((uint32_t)(uint16_t)((uint32_t)rseed1 + (uint32_t)rseed2) * (hi - lo + 1)) >> 16) +
+					 lo);
 }

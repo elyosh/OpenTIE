@@ -22,7 +22,7 @@ int8_t FlightInput_GetChar(void);
 /* Three modes with thirteen graphics callbacks each. */
 extern void* graphroutines[39];
 extern int16_t buffer256flag;
-extern int16_t thrustmastertopflag;
+extern uint8_t thrustmastertopflag;
 
 #ifdef __cplusplus
 }

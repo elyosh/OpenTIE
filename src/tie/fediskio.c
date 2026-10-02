@@ -184,208 +184,6 @@ static char* stringdata_base;
 // GLOBAL: TIE98 0x50F858
 static uint8_t tie98_flight_inverse_palette[0x10000];
 
-/* --- File I/O wrappers --- */
-
-// FUNCTION: TIE95 0x226D0
-// FUNCTION: TIE98 0x41C5F0
-int8_t fediskio_displayerror(void) {
-	int16_t saved_cursor_x = cursorx;
-	int16_t saved_cursor_y = cursory;
-	int16_t saved_left = leftmargin;
-	int16_t saved_top = topmargin;
-	int16_t saved_right = rightmargin;
-	int16_t saved_bottom = bottommargin;
-	int16_t saved_line_wrap = lwrapflag;
-	int16_t saved_reserved = flight_text_reserved_flag;
-	int16_t saved_autofill = autofillflag;
-	uint8_t saved_text_color = textcolor;
-	uint8_t saved_back_color = backcolor;
-	uint8_t saved_drop_color = dropcolor;
-	uint8_t saved_drop_flag = dropflag;
-	uint8_t saved_font = fontflag;
-	uint8_t* saved_box;
-	int8_t response;
-
-	if (TIE_DISPLAY_DX5) {
-		FlightSurface_Lock();
-		g_flightDrawToOffscreenSurface = 0;
-	}
-	colorcycleuserflag = 1;
-	festring_setfontsize(1);
-	if (TIE_DISPLAY_DX5) {
-		saved_box = (uint8_t*)newbuf;
-		saved_box += (screenYRes - 4 * fontheight - 1) * g_surfacePitch;
-	} else {
-		saved_box = (uint8_t*)newbuf + screenXRes * screenYRes * bytesPerPixel;
-		saved_box -= (4 * fontheight + 1) * screenXRes * bytesPerPixel;
-	}
-	if (TIE_DISPLAY_DX5)
-		rtsvga2_saveboxVGA_tie98(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
-								 (uint16_t)screenXRes, (uint16_t)(4 * fontheight + 1));
-	else
-		rtsvga2_saveboxVGA(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight), (uint16_t)screenXRes,
-						   (uint16_t)(4 * fontheight + 1));
-	festring_setbound(screenXRes >> 4, (screenYRes >> 1) - 2 * fontheight, screenXRes - (screenXRes >> 4),
-					  (screenYRes >> 1) + 2 * fontheight);
-	backcolor = 0xF9;
-	clearwindow();
-	festring_setbound((screenXRes >> 4) + 1, (screenYRes >> 1) - 2 * fontheight + 1,
-					  screenXRes - (screenXRes >> 4) - 1, (screenYRes >> 1) + 2 * fontheight - 1);
-	backcolor = 0;
-	clearwindow();
-	textcolor = 0xF9;
-	dropcolor = 0;
-	dropflag = 0;
-	festring_setcursor(0, (screenYRes >> 1) - fontheight - 2);
-	festring_outstringcenter((const uint8_t*)flightloadstrings[5]);
-	festring_setcursor(0, (screenYRes >> 1) + 2);
-	festring_outstringcenter((const uint8_t*)flightloadstrings[6]);
-	if (TIE_DISPLAY_DX5) {
-		FlightSurface_Unlock();
-		g_flightDrawToOffscreenSurface = 1;
-		FrontendDisplay_PresentFrame();
-		response = FlightInput_GetChar();
-		FrontendDisplay_PresentFrame();
-	} else {
-#ifdef TIE_MODERN
-		response = (int8_t)TieInput_ReadKey();
-#else
-		response = (int8_t)getch();
-#endif
-	}
-	colorcycleuserflag = 0;
-	if (TIE_DISPLAY_DX5)
-		rtsvga2_restoreboxVGA_tie98(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
-									(uint16_t)screenXRes, (uint16_t)(4 * fontheight + 1));
-	else
-		rtsvga2_restoreboxVGA(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
-							  (uint16_t)screenXRes, (uint16_t)(4 * fontheight + 1));
-	if (TIE_DISPLAY_DX5)
-		memset(newbuf, 0x40, (size_t)screenXRes * screenYRes * g_flight16bppBytesPerPixel);
-	festring_setfontsize(saved_font);
-	cursorx = saved_cursor_x;
-	cursory = saved_cursor_y;
-	leftmargin = saved_left;
-	topmargin = saved_top;
-	rightmargin = saved_right;
-	bottommargin = saved_bottom;
-	lwrapflag = saved_line_wrap;
-	flight_text_reserved_flag = saved_reserved;
-	autofillflag = saved_autofill;
-	textcolor = saved_text_color;
-	backcolor = saved_back_color;
-	dropcolor = saved_drop_color;
-	dropflag = saved_drop_flag;
-	return response;
-}
-
-// FUNCTION: TIE95 0x229CC
-// FUNCTION: TIE98 0x41C910
-int16_t fediskio_tryopenfile(TieFileRoot root, const char* name, const char* mode, int16_t fatal) {
-	int16_t attempt_count = TIE_FLIGHT_EDITION(4, 2);
-
-	int16_t attempt;
-
-	strcpy(openfilename, name);
-	TieStorage_SetOpenFileRoot(root);
-	/* MODERN ADAPTATION: the VFS root replaces TIE98's final
-	 * install-drive pathname attempt. Removable-media retries are obsolete. */
-	for (attempt = 0; attempt < attempt_count; ++attempt) {
-		fileptr = TieStorage_Open(root, name, mode);
-		if (fileptr)
-			return 1;
-	}
-	if (fatal)
-		fediskio_fatalerror(FATAL_ERROR_THE_FOLLOWING_FILE_IS_MISSING_);
-	return 0;
-}
-// FUNCTION: TIE95 0x22BE4
-int16_t fediskio_tryclosefile(int16_t delete_on_error) {
-	int16_t had_error = 0;
-
-	/* MODERN ADAPTATION: the original also failed on ferror(fileptr) and then
-	 * skipped fclose. The storage close reports pending write errors itself. */
-	if (TieStorage_Close(fileptr) == TIE_EOF)
-		had_error = 1;
-
-	if (delete_on_error && had_error)
-		TieStorage_RemoveOpenFile(openfilename);
-
-	return had_error;
-}
-
-// FUNCTION: TIE95 0x22C24
-int16_t fediskio_readfileblock(void* buf, unsigned int size, unsigned int count, TieFile* fp) {
-	int tries = 15;
-	unsigned int requested = count;
-
-	for (;;) {
-		int8_t response;
-
-		do {
-			unsigned int got = (unsigned int)TieStorage_Read(buf, size, count, fp);
-			buf = (uint8_t*)buf + size * got;
-			count -= got;
-			tries--;
-		} while (count && tries);
-		if (!count)
-			break;
-		while (count) {
-			response = fediskio_displayerror();
-			if (response == 'R' || response == 'r') {
-				tries = 5;
-				break;
-			} else if (response == 'F' || response == 'f') {
-				fileerror = 1;
-				fediskio_fatalerror(FATAL_ERROR_THE_FOLLOWING_FILE_IS_MISSING_);
-				return 0;
-			}
-		}
-	}
-	fileerror = 0;
-	return (int16_t)requested;
-}
-
-// FUNCTION: TIE95 0x22D38
-int16_t fediskio_writefileblock(void* buf, unsigned int size, int count, TieFile* fp) {
-	int16_t result = (int16_t)TieStorage_Write(buf, size, count, fp);
-	if (result == count) {
-		fileerror = 0;
-	} else {
-		fileerror = 1;
-		return 0;
-	}
-	return result;
-}
-
-// FUNCTION: TIE95 0x22D60
-void fediskio_fatalerror(uint16_t error_code) {
-	char str[128];
-	const char* message;
-	uint16_t i;
-
-	message = fatalerrstrings[error_code];
-	for (i = 0; i < 128; i++) {
-		str[i] = message[i];
-		if (!str[i])
-			break;
-	}
-
-	if (error_code == FATAL_ERROR_THE_FOLLOWING_FILE_IS_MISSING_) {
-		uint16_t j = 0;
-		while (i < 128) {
-			str[i] = openfilename[j++];
-			if (!str[i])
-				break;
-			i++;
-		}
-		str[i++] = '\n';
-		str[i] = '\0';
-	}
-
-	shell_programexit(str);
-}
-
 /* --- Pilot record I/O --- */
 
 // FUNCTION: TIE95 0x204A0
@@ -407,32 +205,6 @@ void fediskio_initpilotrecord(int16_t clear_name) {
 		*raw++ = 0;
 	((uint8_t*)loadbuffer)[0x000] = 1; /* version */
 	((uint8_t*)loadbuffer)[0x003] = 1; /* game_level */
-}
-
-/* loadbuffer holds the raw disk-format pilot record (two PILOTRECORD_DISK_SIZE
- * slots back-to-back: primary at +0, backup at +PILOTRECORD_DISK_SIZE). The
- * in-memory PilotRecord struct is naturally aligned and 1936 bytes, which
- * differs from the 1928-byte on-disk record -- never raw-cast loadbuffer as
- * `PilotRecord *`. Use PilotRecord_decode / _encode at every access. */
-
-// FUNCTION: TIE95 0x205B8
-int16_t fediskio_readpilotrecord(const char* name) {
-	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, name, "rb", 0))
-		return 0;
-
-	fediskio_readfileblock(loadbuffer, PILOTRECORD_DISK_SIZE, 2, fileptr);
-	fediskio_tryclosefile(0);
-	return 1;
-}
-
-// FUNCTION: TIE95 0x205F8
-int16_t fediskio_writepilotrecord(const char* name) {
-	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, name, "wb", 0))
-		return 0;
-
-	fediskio_writefileblock(loadbuffer, PILOTRECORD_DISK_SIZE, 2, fileptr);
-	fediskio_tryclosefile(0);
-	return 1;
 }
 
 // FUNCTION: TIE95 0x204DC
@@ -484,6 +256,31 @@ void fediskio_createpilotrecord(void) {
 		voice_id_a = pilot->cur_combat_ship;
 		voice_id_b = raw[0x67 + voice_id_a];
 	}
+}
+/* loadbuffer holds the raw disk-format pilot record (two PILOTRECORD_DISK_SIZE
+ * slots back-to-back: primary at +0, backup at +PILOTRECORD_DISK_SIZE). The
+ * in-memory PilotRecord struct is naturally aligned and 1936 bytes, which
+ * differs from the 1928-byte on-disk record -- never raw-cast loadbuffer as
+ * `PilotRecord *`. Use PilotRecord_decode / _encode at every access. */
+
+// FUNCTION: TIE95 0x205B8
+int16_t fediskio_readpilotrecord(const char* name) {
+	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, name, "rb", 0))
+		return 0;
+
+	fediskio_readfileblock(loadbuffer, PILOTRECORD_DISK_SIZE, 2, fileptr);
+	fediskio_tryclosefile(0);
+	return 1;
+}
+
+// FUNCTION: TIE95 0x205F8
+int16_t fediskio_writepilotrecord(const char* name) {
+	if (!fediskio_tryopenfile(TIE_FILE_ROOT_USER, name, "wb", 0))
+		return 0;
+
+	fediskio_writefileblock(loadbuffer, PILOTRECORD_DISK_SIZE, 2, fileptr);
+	fediskio_tryclosefile(0);
+	return 1;
 }
 
 // FUNCTION: TIE95 0x20668
@@ -742,28 +539,6 @@ int16_t fediskio_updatepilotrecord(int16_t exit_status, int16_t ejected) {
 	return 0;
 }
 
-/* --- Buffer loading --- */
-
-// FUNCTION: TIE95 0x20E48
-int fediskio_readfiletofarmemory(TieFileRoot root, const char* filename, void* dest) {
-	uint8_t buf[512];
-	int total = 0;
-
-	fediskio_tryopenfile(root, filename, "rb", 1);
-
-	if (fileptr) {
-		uint16_t nread = 512;
-		while (nread == 512) {
-			nread = (uint16_t)TieStorage_Read(buf, 1, 512, fileptr);
-			memcpy((uint8_t*)dest + total, buf, nread);
-			total += nread;
-		}
-	}
-
-	fediskio_tryclosefile(0);
-	return total;
-}
-
 // FUNCTION: TIE95 0x20D8C
 void fediskio_loadbufferdata(const char* filename, uint16_t buf_index, int16_t num_entries,
 							 uint16_t skip_count) {
@@ -791,6 +566,28 @@ void fediskio_loadbufferdata(const char* filename, uint16_t buf_index, int16_t n
 	}
 
 	fediskio_tryclosefile(0);
+}
+
+/* --- Buffer loading --- */
+
+// FUNCTION: TIE95 0x20E48
+int fediskio_readfiletofarmemory(TieFileRoot root, const char* filename, void* dest) {
+	uint8_t buf[512];
+	int total = 0;
+
+	fediskio_tryopenfile(root, filename, "rb", 1);
+
+	if (fileptr) {
+		uint16_t nread = 512;
+		while (nread == 512) {
+			nread = (uint16_t)TieStorage_Read(buf, 1, 512, fileptr);
+			memcpy((uint8_t*)dest + total, buf, nread);
+			total += nread;
+		}
+	}
+
+	fediskio_tryclosefile(0);
+	return total;
 }
 
 /* --- Flight engine buffer management --- */
@@ -1402,6 +1199,8 @@ void fediskio_loadspecies(void) {
 	}
 
 	fediskio_RelockGlobals();
+	if (TIE_FLIGHT_TIE98)
+		modelmesh_buildobjecttypemeshcache();
 	if (TIE_FLIGHT_TIE98) {
 		uint8_t deep_space_index;
 
@@ -1416,260 +1215,6 @@ void fediskio_loadspecies(void) {
 	/* Hosts refresh per-species caches when the generation changes. */
 	TieRecoveredData_AdvanceMissionLoadGeneration();
 #endif
-}
-
-// FUNCTION: TIE98 0x41BE70
-// FEDISKIO_fillinspec
-// PORT: writes the recovered TIE95 runtime SpecData layout from OPT metadata.
-void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
-	int extent;
-	SpecData* spec;
-	int width;
-	int depth;
-	int height;
-	int shift;
-	int mesh_count;
-	int mesh;
-	uint8_t result;
-
-	int slot;
-
-	modelmesh_require_craft_capacity(model_type);
-	extent = modelbounds_getmaxextent(model_type);
-	species_table[model_type].bound_hwidth = extent;
-	species_table[model_type].bound_qdepth = extent >> 1;
-	if (spec_index == 255)
-		return;
-
-	spec = &spec_data[spec_index];
-	width = modelbounds_getsizex(model_type);
-	depth = modelbounds_getsizey(model_type);
-	height = modelbounds_getsizez(model_type);
-	shift = 0;
-	while (width > 640 || depth > 640 || height > 640) {
-		width >>= 1;
-		depth >>= 1;
-		height >>= 1;
-		++shift;
-	}
-	spec->model_scale_shift = shift;
-	spec->bound_width = width;
-	spec->bound_depth = depth;
-	spec->bound_height = height;
-	if (!spec->dock_active_light) {
-		spec->dock_active_light = modelbounds_getminz(model_type);
-		spec->dock_active_heavy = modelbounds_getminz(model_type);
-	}
-	if (!spec->dock_passive_light) {
-		spec->dock_passive_light = modelbounds_getmaxz(model_type);
-		spec->dock_passive_heavy = modelbounds_getmaxz(model_type);
-	}
-
-	mesh_count = modelmesh_getcount(model_type);
-	for (mesh = 0; mesh < mesh_count; ++mesh) {
-		const int mesh_type = modelmesh_gettype(model_type, mesh);
-		const int hardpoint_count = modelmesh_counthardpoints(model_type, mesh);
-		int hardpoint;
-
-		for (hardpoint = 0; hardpoint < hardpoint_count; ++hardpoint) {
-			int type, x, y, z;
-			int special_hardpoint;
-			uint8_t weapon_type;
-			int known_weapon_type;
-			uint8_t weapon_class;
-
-			int slot;
-
-			modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
-			special_hardpoint = 1;
-			switch (type) {
-				case 25:
-					spec->cockpit_x = x;
-					spec->cockpit_y = z;
-					spec->cockpit_z = y;
-					break;
-				case 26:
-					spec->engine_x = x;
-					spec->engine_y = z;
-					spec->engine_z = y;
-					break;
-				case 27:
-					spec->dock_passive_heavy = z;
-					spec->dock_fwd = y;
-					break;
-				case 28:
-					spec->dock_passive_light = z;
-					spec->dock_fwd = y;
-					break;
-				case 29:
-					spec->dock_active_heavy = z;
-					spec->dock_fwd = y;
-					break;
-				case 30:
-					spec->dock_active_light = z;
-					spec->dock_fwd = y;
-					break;
-				case 31:
-					spec->gun_muzzle_up = z;
-					spec->gun_muzzle_fwd = y;
-					break;
-				default:
-					special_hardpoint = 0;
-					break;
-			}
-			if (special_hardpoint)
-				continue;
-
-			weapon_type = (uint8_t)(type - 120);
-			known_weapon_type = 0;
-			for (slot = 0; slot < 2; ++slot) {
-				if (spec->laser_type[slot] == weapon_type || spec->missile_type[slot] == weapon_type) {
-					known_weapon_type = 1;
-					break;
-				}
-			}
-			if (known_weapon_type)
-				continue;
-
-#ifdef TIE_MODERN
-			/* PORT: retail reads the zero padding and strings after the
-			 * 33-entry table for unknown OPT types; none classify as 1 or 2. */
-			weapon_class = (unsigned int)type < sizeof weaponsystype ? weaponsystype[type] : 0;
-#else
-			weapon_class = weaponsystype[type];
-#endif
-			if (weapon_class == 1) {
-				int slot;
-				for (slot = 0; slot < 2 && spec->laser_type[slot]; ++slot)
-					;
-				if (slot == 2)
-					continue;
-				spec->laser_type[slot] = weapon_type;
-				if (mesh_type == TIE_MESH_GUN_TURRET || mesh_type == TIE_MESH_ROTARY_GUN_TURRET ||
-					mesh_type == TIE_MESH_SMALL_GUN || species_table[model_type].ship_class == 3 ||
-					species_table[model_type].ship_class == 4 || species_table[model_type].ship_class == 5)
-					spec->laser_fire_mode[slot] = 2;
-				else
-					spec->laser_fire_mode[slot] = (type == 5 || type == 16);
-			} else if (weapon_class == 2) {
-				int slot;
-				for (slot = 0; slot < 2 && spec->missile_type[slot]; ++slot)
-					;
-				if (slot < 2)
-					spec->missile_type[slot] = weapon_type;
-			}
-		}
-	}
-
-	/* Build laser hardpoint position tables (up to 16 total). */
-	result = 0;
-	for (slot = 0; slot < 2; ++slot) {
-		int target_type;
-		uint8_t start;
-
-		if (result == 16) {
-			spec->laser_type[slot] = 0;
-			spec->laser_fire_mode[slot] = 0;
-			continue;
-		}
-
-		target_type = (uint8_t)(spec->laser_type[slot] + 120);
-		start = result;
-		for (mesh = 0; mesh < mesh_count; ++mesh) {
-			const int hardpoint_count = modelmesh_counthardpoints(model_type, mesh);
-			int mesh_type;
-			int paired;
-			int hardpoint;
-
-			if (!hardpoint_count)
-				continue;
-			mesh_type = modelmesh_gettype(model_type, mesh);
-			paired = 255;
-			for (hardpoint = 0; hardpoint < hardpoint_count; ++hardpoint) {
-				int type, x, y, z;
-
-				modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
-				if (type != target_type)
-					continue;
-				if (paired == 255) {
-					if (model_type == 53) {
-						x /= 2;
-						y /= 2;
-						z /= 2;
-					}
-					/* Shared SpecData uses flight-local (side, up, forward) order. */
-					spec->hp[result].x = x;
-					spec->hp[result].y = z;
-					spec->hp[result].z = y;
-					spec->hp[result].component = mesh;
-					spec->hp[result].link = -1;
-					if (mesh_type == TIE_MESH_GUN_TURRET || mesh_type == TIE_MESH_ROTARY_GUN_TURRET)
-						paired = result;
-					if (++result == 16)
-						break;
-				} else {
-					spec->hp[paired].link = modelmesh_getalternatehardpointindex(model_type, mesh, hardpoint);
-					paired = 255;
-				}
-			}
-			if (result == 16)
-				break;
-		}
-
-		if (result != start) {
-			spec->laser_start[slot] = start;
-			spec->laser_end[slot] = result - 1;
-			spec->laser_count[slot] = result - start;
-		}
-	}
-
-	/* Build missile/warhead hardpoint position tables. */
-	for (slot = 0; slot < 2; ++slot) {
-		int target_type;
-		uint8_t start;
-
-		if (result == 16) {
-			spec->missile_type[slot] = 0;
-			continue;
-		}
-
-		target_type = (uint8_t)(spec->missile_type[slot] + 120);
-		start = result;
-		for (mesh = 0; mesh < mesh_count; ++mesh) {
-			const int hardpoint_count = modelmesh_counthardpoints(model_type, mesh);
-			int hardpoint;
-
-			if (!hardpoint_count)
-				continue;
-			for (hardpoint = 0; hardpoint < hardpoint_count; ++hardpoint) {
-				int type, x, y, z;
-
-				modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
-				if (type != target_type)
-					continue;
-				if (model_type == 53) {
-					x /= 2;
-					y /= 2;
-					z /= 2;
-				}
-				spec->hp[result].x = x;
-				spec->hp[result].y = z;
-				spec->hp[result].z = y;
-				spec->hp[result].component = mesh;
-				spec->hp[result].link = -1;
-				if (++result == 16)
-					break;
-			}
-			if (result == 16)
-				break;
-		}
-
-		if (result != start) {
-			spec->missile_start[slot] = start;
-			spec->missile_end[slot] = result - 1;
-			spec->missile_count[slot] = result - start;
-		}
-	}
 }
 
 // FUNCTION: TIE95 0x21E48
@@ -1953,4 +1498,461 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 			spec->missile_count[slot] = result - start_hp;
 		}
 	}
+}
+
+/* --- File I/O wrappers --- */
+
+// FUNCTION: TIE95 0x226D0
+// FUNCTION: TIE98 0x41C5F0
+int8_t fediskio_displayerror(void) {
+	int16_t saved_cursor_x = cursorx;
+	int16_t saved_cursor_y = cursory;
+	int16_t saved_left = leftmargin;
+	int16_t saved_top = topmargin;
+	int16_t saved_right = rightmargin;
+	int16_t saved_bottom = bottommargin;
+	int16_t saved_line_wrap = lwrapflag;
+	int16_t saved_reserved = flight_text_reserved_flag;
+	int16_t saved_autofill = autofillflag;
+	uint8_t saved_text_color = textcolor;
+	uint8_t saved_back_color = backcolor;
+	uint8_t saved_drop_color = dropcolor;
+	uint8_t saved_drop_flag = dropflag;
+	uint8_t saved_font = fontflag;
+	uint8_t* saved_box;
+	int8_t response;
+
+	if (TIE_DISPLAY_DX5) {
+		FlightSurface_Lock();
+		g_flightDrawToOffscreenSurface = 0;
+	}
+	colorcycleuserflag = 1;
+	festring_setfontsize(1);
+	if (TIE_DISPLAY_DX5) {
+		saved_box = (uint8_t*)newbuf;
+		saved_box += (screenYRes - 4 * fontheight - 1) * g_surfacePitch;
+	} else {
+		saved_box = (uint8_t*)newbuf + screenXRes * screenYRes * bytesPerPixel;
+		saved_box -= (4 * fontheight + 1) * screenXRes * bytesPerPixel;
+	}
+	if (TIE_DISPLAY_DX5)
+		rtsvga2_saveboxVGA_tie98(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
+								 (uint16_t)screenXRes, (uint16_t)(4 * fontheight + 1));
+	else
+		rtsvga2_saveboxVGA(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight), (uint16_t)screenXRes,
+						   (uint16_t)(4 * fontheight + 1));
+	festring_setbound(screenXRes >> 4, (screenYRes >> 1) - 2 * fontheight, screenXRes - (screenXRes >> 4),
+					  (screenYRes >> 1) + 2 * fontheight);
+	backcolor = 0xF9;
+	clearwindow();
+	festring_setbound((screenXRes >> 4) + 1, (screenYRes >> 1) - 2 * fontheight + 1,
+					  screenXRes - (screenXRes >> 4) - 1, (screenYRes >> 1) + 2 * fontheight - 1);
+	backcolor = 0;
+	clearwindow();
+	textcolor = 0xF9;
+	dropcolor = 0;
+	dropflag = 0;
+	festring_setcursor(0, (screenYRes >> 1) - fontheight - 2);
+	festring_outstringcenter((const uint8_t*)flightloadstrings[5]);
+	festring_setcursor(0, (screenYRes >> 1) + 2);
+	festring_outstringcenter((const uint8_t*)flightloadstrings[6]);
+	if (TIE_DISPLAY_DX5) {
+		FlightSurface_Unlock();
+		g_flightDrawToOffscreenSurface = 1;
+		FrontendDisplay_PresentFrame();
+		response = FlightInput_GetChar();
+		FrontendDisplay_PresentFrame();
+	} else {
+#ifdef TIE_MODERN
+		response = (int8_t)TieInput_ReadKey();
+#else
+		response = (int8_t)getch();
+#endif
+	}
+	colorcycleuserflag = 0;
+	if (TIE_DISPLAY_DX5)
+		rtsvga2_restoreboxVGA_tie98(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
+									(uint16_t)screenXRes, (uint16_t)(4 * fontheight + 1));
+	else
+		rtsvga2_restoreboxVGA(saved_box, 0, (uint16_t)((screenYRes >> 1) - 2 * fontheight),
+							  (uint16_t)screenXRes, (uint16_t)(4 * fontheight + 1));
+	if (TIE_DISPLAY_DX5)
+		memset(newbuf, 0x40, (size_t)screenXRes * screenYRes * g_flight16bppBytesPerPixel);
+	festring_setfontsize(saved_font);
+	cursorx = saved_cursor_x;
+	cursory = saved_cursor_y;
+	leftmargin = saved_left;
+	topmargin = saved_top;
+	rightmargin = saved_right;
+	bottommargin = saved_bottom;
+	lwrapflag = saved_line_wrap;
+	flight_text_reserved_flag = saved_reserved;
+	autofillflag = saved_autofill;
+	textcolor = saved_text_color;
+	backcolor = saved_back_color;
+	dropcolor = saved_drop_color;
+	dropflag = saved_drop_flag;
+	return response;
+}
+
+// FUNCTION: TIE95 0x229CC
+// FUNCTION: TIE98 0x41C910
+int16_t fediskio_tryopenfile(TieFileRoot root, const char* name, const char* mode, int16_t fatal) {
+	int16_t attempt_count = TIE_FLIGHT_EDITION(4, 2);
+
+	int16_t attempt;
+
+	strcpy(openfilename, name);
+	TieStorage_SetOpenFileRoot(root);
+	/* MODERN ADAPTATION: the VFS root replaces TIE98's final
+	 * install-drive pathname attempt. Removable-media retries are obsolete. */
+	for (attempt = 0; attempt < attempt_count; ++attempt) {
+		fileptr = TieStorage_Open(root, name, mode);
+		if (fileptr)
+			return 1;
+	}
+	if (fatal)
+		fediskio_fatalerror(FATAL_ERROR_THE_FOLLOWING_FILE_IS_MISSING_);
+	return 0;
+}
+
+// FUNCTION: TIE95 0x22BE4
+int16_t fediskio_tryclosefile(int16_t delete_on_error) {
+	int16_t had_error = 0;
+
+	/* MODERN ADAPTATION: the original also failed on ferror(fileptr) and then
+	 * skipped fclose. The storage close reports pending write errors itself. */
+	if (TieStorage_Close(fileptr) == TIE_EOF)
+		had_error = 1;
+
+	if (delete_on_error && had_error)
+		TieStorage_RemoveOpenFile(openfilename);
+
+	return had_error;
+}
+
+// FUNCTION: TIE95 0x22C24
+int16_t fediskio_readfileblock(void* buf, unsigned int size, unsigned int count, TieFile* fp) {
+	int tries = 15;
+	unsigned int requested = count;
+
+	for (;;) {
+		int8_t response;
+
+		do {
+			unsigned int got = (unsigned int)TieStorage_Read(buf, size, count, fp);
+			buf = (uint8_t*)buf + size * got;
+			count -= got;
+			tries--;
+		} while (count && tries);
+		if (!count)
+			break;
+		while (count) {
+			response = fediskio_displayerror();
+			if (response == 'R' || response == 'r') {
+				tries = 5;
+				break;
+			} else if (response == 'F' || response == 'f') {
+				fileerror = 1;
+				fediskio_fatalerror(FATAL_ERROR_THE_FOLLOWING_FILE_IS_MISSING_);
+				return 0;
+			}
+		}
+	}
+	fileerror = 0;
+	return (int16_t)requested;
+}
+
+// FUNCTION: TIE95 0x22D38
+int16_t fediskio_writefileblock(void* buf, unsigned int size, int count, TieFile* fp) {
+	int16_t result = (int16_t)TieStorage_Write(buf, size, count, fp);
+	if (result == count) {
+		fileerror = 0;
+	} else {
+		fileerror = 1;
+		return 0;
+	}
+	return result;
+}
+
+// FUNCTION: TIE98 0x41BE70
+// FEDISKIO_fillinspec
+// PORT: writes the recovered TIE95 runtime SpecData layout from OPT metadata.
+void fediskio_fillinspec_tie98(uint8_t spec_index, uint8_t model_type) {
+	int extent;
+	SpecData* spec;
+	int width;
+	int depth;
+	int height;
+	int shift;
+	int mesh_count;
+	int mesh;
+	uint8_t result;
+
+	int slot;
+
+	modelmesh_require_craft_capacity(model_type);
+	extent = modelbounds_getmaxextent(model_type);
+	species_table[model_type].bound_hwidth = extent;
+	species_table[model_type].bound_qdepth = extent >> 1;
+	if (spec_index == 255)
+		return;
+
+	spec = &spec_data[spec_index];
+	width = modelbounds_getsizex(model_type);
+	depth = modelbounds_getsizey(model_type);
+	height = modelbounds_getsizez(model_type);
+	shift = 0;
+	while (width > 640 || depth > 640 || height > 640) {
+		width >>= 1;
+		depth >>= 1;
+		height >>= 1;
+		++shift;
+	}
+	spec->model_scale_shift = shift;
+	spec->bound_width = width;
+	spec->bound_depth = depth;
+	spec->bound_height = height;
+	if (!spec->dock_active_light) {
+		spec->dock_active_light = modelbounds_getminz(model_type);
+		spec->dock_active_heavy = modelbounds_getminz(model_type);
+	}
+	if (!spec->dock_passive_light) {
+		spec->dock_passive_light = modelbounds_getmaxz(model_type);
+		spec->dock_passive_heavy = modelbounds_getmaxz(model_type);
+	}
+
+	mesh_count = modelmesh_getcount(model_type);
+	for (mesh = 0; mesh < mesh_count; ++mesh) {
+		const int mesh_type = modelmesh_gettype(model_type, mesh);
+		const int hardpoint_count = modelmesh_counthardpoints(model_type, mesh);
+		int hardpoint;
+
+		for (hardpoint = 0; hardpoint < hardpoint_count; ++hardpoint) {
+			int type, x, y, z;
+			int special_hardpoint;
+			uint8_t weapon_type;
+			int known_weapon_type;
+			uint8_t weapon_class;
+
+			int slot;
+
+			modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
+			special_hardpoint = 1;
+			switch (type) {
+				case 25:
+					spec->cockpit_x = x;
+					spec->cockpit_y = z;
+					spec->cockpit_z = y;
+					break;
+				case 26:
+					spec->engine_x = x;
+					spec->engine_y = z;
+					spec->engine_z = y;
+					break;
+				case 27:
+					spec->dock_passive_heavy = z;
+					spec->dock_fwd = y;
+					break;
+				case 28:
+					spec->dock_passive_light = z;
+					spec->dock_fwd = y;
+					break;
+				case 29:
+					spec->dock_active_heavy = z;
+					spec->dock_fwd = y;
+					break;
+				case 30:
+					spec->dock_active_light = z;
+					spec->dock_fwd = y;
+					break;
+				case 31:
+					spec->gun_muzzle_up = z;
+					spec->gun_muzzle_fwd = y;
+					break;
+				default:
+					special_hardpoint = 0;
+					break;
+			}
+			if (special_hardpoint)
+				continue;
+
+			weapon_type = (uint8_t)(type - 120);
+			known_weapon_type = 0;
+			for (slot = 0; slot < 2; ++slot) {
+				if (spec->laser_type[slot] == weapon_type || spec->missile_type[slot] == weapon_type) {
+					known_weapon_type = 1;
+					break;
+				}
+			}
+			if (known_weapon_type)
+				continue;
+
+#ifdef TIE_MODERN
+			/* PORT: retail reads the zero padding and strings after the
+			 * 33-entry table for unknown OPT types; none classify as 1 or 2. */
+			weapon_class = (unsigned int)type < sizeof weaponsystype ? weaponsystype[type] : 0;
+#else
+			weapon_class = weaponsystype[type];
+#endif
+			if (weapon_class == 1) {
+				int slot;
+				for (slot = 0; slot < 2 && spec->laser_type[slot]; ++slot)
+					;
+				if (slot == 2)
+					continue;
+				spec->laser_type[slot] = weapon_type;
+				if (mesh_type == TIE_MESH_GUN_TURRET || mesh_type == TIE_MESH_ROTARY_GUN_TURRET ||
+					mesh_type == TIE_MESH_SMALL_GUN || species_table[model_type].ship_class == 3 ||
+					species_table[model_type].ship_class == 4 || species_table[model_type].ship_class == 5)
+					spec->laser_fire_mode[slot] = 2;
+				else
+					spec->laser_fire_mode[slot] = (type == 5 || type == 16);
+			} else if (weapon_class == 2) {
+				int slot;
+				for (slot = 0; slot < 2 && spec->missile_type[slot]; ++slot)
+					;
+				if (slot < 2)
+					spec->missile_type[slot] = weapon_type;
+			}
+		}
+	}
+
+	/* Build laser hardpoint position tables (up to 16 total). */
+	result = 0;
+	for (slot = 0; slot < 2; ++slot) {
+		int target_type;
+		uint8_t start;
+
+		if (result == 16) {
+			spec->laser_type[slot] = 0;
+			spec->laser_fire_mode[slot] = 0;
+			continue;
+		}
+
+		target_type = (uint8_t)(spec->laser_type[slot] + 120);
+		start = result;
+		for (mesh = 0; mesh < mesh_count; ++mesh) {
+			const int hardpoint_count = modelmesh_counthardpoints(model_type, mesh);
+			int mesh_type;
+			int paired;
+			int hardpoint;
+
+			if (!hardpoint_count)
+				continue;
+			mesh_type = modelmesh_gettype(model_type, mesh);
+			paired = 255;
+			for (hardpoint = 0; hardpoint < hardpoint_count; ++hardpoint) {
+				int type, x, y, z;
+
+				modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
+				if (type != target_type)
+					continue;
+				if (paired == 255) {
+					if (model_type == 53) {
+						x /= 2;
+						y /= 2;
+						z /= 2;
+					}
+					/* Shared SpecData uses flight-local (side, up, forward) order. */
+					spec->hp[result].x = x;
+					spec->hp[result].y = z;
+					spec->hp[result].z = y;
+					spec->hp[result].component = mesh;
+					spec->hp[result].link = -1;
+					if (mesh_type == TIE_MESH_GUN_TURRET || mesh_type == TIE_MESH_ROTARY_GUN_TURRET)
+						paired = result;
+					if (++result == 16)
+						break;
+				} else {
+					spec->hp[paired].link = modelmesh_getalternatehardpointindex(model_type, mesh, hardpoint);
+					paired = 255;
+				}
+			}
+			if (result == 16)
+				break;
+		}
+
+		if (result != start) {
+			spec->laser_start[slot] = start;
+			spec->laser_end[slot] = result - 1;
+			spec->laser_count[slot] = result - start;
+		}
+	}
+
+	/* Build missile/warhead hardpoint position tables. */
+	for (slot = 0; slot < 2; ++slot) {
+		int target_type;
+		uint8_t start;
+
+		if (result == 16) {
+			spec->missile_type[slot] = 0;
+			continue;
+		}
+
+		target_type = (uint8_t)(spec->missile_type[slot] + 120);
+		start = result;
+		for (mesh = 0; mesh < mesh_count; ++mesh) {
+			const int hardpoint_count = modelmesh_counthardpoints(model_type, mesh);
+			int hardpoint;
+
+			if (!hardpoint_count)
+				continue;
+			for (hardpoint = 0; hardpoint < hardpoint_count; ++hardpoint) {
+				int type, x, y, z;
+
+				modelmesh_gethardpoint(model_type, mesh, hardpoint, &type, &x, &y, &z);
+				if (type != target_type)
+					continue;
+				if (model_type == 53) {
+					x /= 2;
+					y /= 2;
+					z /= 2;
+				}
+				spec->hp[result].x = x;
+				spec->hp[result].y = z;
+				spec->hp[result].z = y;
+				spec->hp[result].component = mesh;
+				spec->hp[result].link = -1;
+				if (++result == 16)
+					break;
+			}
+			if (result == 16)
+				break;
+		}
+
+		if (result != start) {
+			spec->missile_start[slot] = start;
+			spec->missile_end[slot] = result - 1;
+			spec->missile_count[slot] = result - start;
+		}
+	}
+}
+
+// FUNCTION: TIE95 0x22D60
+void fediskio_fatalerror(uint16_t error_code) {
+	char str[128];
+	const char* message;
+	uint16_t i;
+
+	message = fatalerrstrings[error_code];
+	for (i = 0; i < 128; i++) {
+		str[i] = message[i];
+		if (!str[i])
+			break;
+	}
+
+	if (error_code == FATAL_ERROR_THE_FOLLOWING_FILE_IS_MISSING_) {
+		uint16_t j = 0;
+		while (i < 128) {
+			str[i] = openfilename[j++];
+			if (!str[i])
+				break;
+			i++;
+		}
+		str[i++] = '\n';
+		str[i] = '\0';
+	}
+
+	shell_programexit(str);
 }

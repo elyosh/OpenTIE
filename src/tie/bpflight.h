@@ -99,7 +99,7 @@ int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16
 
 /* Standalone version of the inline world->eye projection block.
  * Returns objectblockptr->model_scale_shift for convenience. */
-uint8_t bpflight_getrelativexyz(void);
+void bpflight_getrelativexyz(void);
 
 /* BSP walker for a single object.
  *   pass_gated == 0        : draw all meshes

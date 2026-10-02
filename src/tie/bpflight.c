@@ -1044,68 +1044,57 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 }
 
 // FUNCTION: TIE95 0x79DEC
-uint8_t bpflight_getrelativexyz(void) {
-	int32_t dx_raw = 2 * (scene_camerax - worldx);
-	int32_t dy_raw = 2 * (scene_cameray - worldy);
-	int32_t dz_raw = 2 * (scene_cameraz - worldz);
+void bpflight_getrelativexyz(void) {
+	int32_t dx, dy, dz;
+	uint16_t hx, hy, hz;
+	int32_t value;
 
-	int32_t dx_hi = (int32_t)(int16_t)((scene_camerax - worldx) >> 15);
-	int32_t dy_hi = (int32_t)(int16_t)((scene_cameray - worldy) >> 15);
-	int32_t dz_hi = (int32_t)(int16_t)((scene_cameraz - worldz) >> 15);
-	uint16_t scan_dx;
-	uint16_t scan_dy;
-	uint16_t scan_dz;
-	int16_t dx, dy, dz;
-	int32_t clamped;
-	uint8_t shift;
-
-	if (dx_hi < 0)
-		dx_hi = -dx_hi;
-	if (dy_hi < 0)
-		dy_hi = -dy_hi;
-	if (dz_hi < 0)
-		dz_hi = -dz_hi;
-
-	scan_dx = (uint16_t)(2 * dx_hi);
-	scan_dy = (uint16_t)(2 * dy_hi);
-	scan_dz = (uint16_t)(2 * dz_hi);
+	dx = (scene_camerax - worldx) * 2;
+	dz = (scene_cameraz - worldz) * 2;
+	dy = (scene_cameray - worldy) * 2;
+	hx = (uint16_t)(dx >> 16);
+	hz = (uint16_t)(dz >> 16);
+	hy = (uint16_t)(dy >> 16);
+	if (hx & 0x8000)
+		hx = -hx;
+	if (hy & 0x8000)
+		hy = -hy;
+	if (hz & 0x8000)
+		hz = -hz;
+	hy *= 2;
+	hz *= 2;
+	hx *= 2;
 	relativeshift = -1;
 	do {
-		do {
-			scan_dy >>= 1;
-			scan_dz >>= 1;
-			dx_raw >>= 1;
-			dy_raw >>= 1;
-			dz_raw >>= 1;
-			scan_dx >>= 1;
-			++relativeshift;
-		} while (scan_dx);
-	} while (scan_dy || scan_dz);
+		hy >>= 1;
+		hz >>= 1;
+		dx >>= 1;
+		dy >>= 1;
+		relativeshift++;
+		dz >>= 1;
+		hx >>= 1;
+	} while (hx || hy || hz);
 
-	dx = (int16_t)dx_raw;
-	dy = (int16_t)dy_raw;
-	dz = (int16_t)dz_raw;
-	clamped = (int32_t)dz * craftS3 + (int32_t)dy * craftS2 + (int32_t)dx * craftS1;
-	if (clamped >= 0x40000000)
-		clamped = 0x3FFF0000;
-	if (clamped <= -0x40000000)
-		clamped = -0x3FFF0000;
-	relativex = (int16_t)(clamped >> 15);
-	clamped = (int32_t)dz * craftf3 + (int32_t)dy * craftf2 + (int32_t)dx * craftf1;
-	if (clamped >= 0x40000000)
-		clamped = 0x3FFF0000;
-	if (clamped <= -0x40000000)
-		clamped = -0x3FFF0000;
-	relativey = (int16_t)(-(clamped >> 15));
-	clamped = (int32_t)dz * craftU3 + (int32_t)dy * craftU2 + (int32_t)dx * craftU1;
-	if (clamped >= 0x40000000)
-		clamped = 0x3FFF0000;
-	if (clamped <= -0x40000000)
-		clamped = -0x3FFF0000;
-	relativez = (int16_t)(clamped >> 15);
-	shift = objectblockptr->model_scale_shift;
-	relativeshift = (int16_t)(relativeshift - shift);
-	return shift;
+	value = craftS1 * (int16_t)dx + craftS2 * (int16_t)dy + craftS3 * (int16_t)dz;
+	if (value >= 0x40000000)
+		value = 0x3FFF0000;
+	if (value <= -0x40000000)
+		value = -0x3FFF0000;
+	relativex = (int16_t)(value >> 15);
+	value = craftf1 * (int16_t)dx + craftf2 * (int16_t)dy + craftf3 * (int16_t)dz;
+	if (value >= 0x40000000)
+		value = 0x3FFF0000;
+	if (value <= -0x40000000)
+		value = -0x3FFF0000;
+	relativey = (int16_t)(value >> 15);
+	relativey = -relativey;
+	value = craftU1 * (int16_t)dx + craftU2 * (int16_t)dy + craftU3 * (int16_t)dz;
+	if (value >= 0x40000000)
+		value = 0x3FFF0000;
+	if (value <= -0x40000000)
+		value = -0x3FFF0000;
+	relativez = (int16_t)(value >> 15);
+	relativeshift -= objectblockptr->model_scale_shift;
 }
 
 /* ----- BPFLIGHT_drawtreeobject (0x7BBA8) ----- */
@@ -1391,25 +1380,6 @@ void bpflight_settraincolors(int16_t remove) {
 	}
 }
 
-/* ----- BPFLIGHT_setcombatcolors (0x7C4C8) ----- */
-
-// FUNCTION: TIE95 0x7A478
-void bpflight_setcombatcolors(int16_t remove) {
-	int j;
-
-	for (j = 0; j < 39; ++j) {
-		uint8_t d = combatroommapping[j];
-		uint8_t* mc;
-		int k;
-
-		if (remove)
-			d = (uint8_t)(-(int)d);
-		mc = materialcolors + j * 16;
-		for (k = 0; k < 16; ++k)
-			mc[k] = (uint8_t)(d + mc[k]);
-	}
-}
-
 /* ----- BPFLIGHT_swapbpmaterials (0x7C488) ----- */
 
 // FUNCTION: TIE95 0x7A438
@@ -1426,5 +1396,24 @@ void bpflight_swapbpmaterials(void) {
 			mc[k] = bk[k];
 			bk[k] = tmp;
 		}
+	}
+}
+
+/* ----- BPFLIGHT_setcombatcolors (0x7C4C8) ----- */
+
+// FUNCTION: TIE95 0x7A478
+void bpflight_setcombatcolors(int16_t remove) {
+	int j;
+
+	for (j = 0; j < 39; ++j) {
+		uint8_t d = combatroommapping[j];
+		uint8_t* mc;
+		int k;
+
+		if (remove)
+			d = (uint8_t)(-(int)d);
+		mc = materialcolors + j * 16;
+		for (k = 0; k < 16; ++k)
+			mc[k] = (uint8_t)(d + mc[k]);
 	}
 }

@@ -149,261 +149,95 @@ static uint16_t g_std3DPaletteScratch16[256];
 static uint16_t g_texConvBuf1555[256];
 // GLOBAL: TIE98 0x58BA98
 static uint16_t g_texConvBuf4444[256];
+static void std3D_CacheListAppend(Std3DTextureSurface* surface);
+static void std3D_CacheListRemove(Std3DTextureSurface* surface);
+static char std3D_QueryTextureVidMem(unsigned int* total_bytes, unsigned int* free_bytes);
+static int std3D_FindClosestFormat(const ColorInfo* match, Std3DTexFmt* formats, unsigned int count);
+static char std3D_SetInitialRenderState(void);
+static char std3D_CreateViewport(unsigned int width, unsigned int height);
+static char std3D_CreateZBuffer(int width, int height);
+static int AERON_DXAPI std3D_EnumDevicesCallback(DxGuid* guid, char* device_description, char* device_name,
+												 D3DDEVICEDESC* hardware, D3DDEVICEDESC* software,
+												 void* argument);
+static int AERON_DXAPI std3D_EnumTextureFormats(DDSURFACEDESC* descriptor, void* argument);
+static char std3D_PackRenderBitDepths(uint32_t flags);
+static char std3D_PackZCmpCaps(uint32_t flags);
+static char std3D_MapZCmpFunc(char caps_mask);
+
 // FUNCTION: TIE98 0x427230
 static IDirectDraw* Renderer_GetDirectDraw(void) { return g_flightDirectDraw; }
 
-// FUNCTION: TIE98 0x4C96C0
-static char std3D_PackRenderBitDepths(uint32_t flags) {
-	char result = (flags & 0x4000) != 0;
-	if (flags & 0x2000)
-		result |= 2;
-	if (flags & 0x1000)
-		result |= 4;
-	if (flags & 0x800)
-		result |= 8;
-	if (flags & 0x400)
-		result |= 0x10;
-	if (flags & 0x200)
-		result |= 0x20;
-	if (flags & 0x100)
-		result |= 0x40;
-	return result;
-}
+// FUNCTION: TIE98 0x42B300
+// Renderer_ClearCockpitCrtZBuffer
+void Renderer_ClearCockpitCrtZBuffer(void) {
+	AeronDx5Rect depth_rect;
 
-// FUNCTION: TIE98 0x4C9750
-static char std3D_PackZCmpCaps(uint32_t flags) {
-	char result = (flags & 1) != 0;
-	if (flags & 4)
-		result |= 4;
-	if (flags & 2)
-		result |= 2;
-	if (flags & 8)
-		result |= 8;
-	if (flags & 0x10)
-		result |= 0x10;
-	if (flags & 0x20)
-		result |= 0x20;
-	if (flags & 0x40)
-		result |= 0x40;
-	if (flags & 0x80)
-		result |= (char)0x80;
-	return result;
-}
+	uint8_t negative_run_fill;
+	uint8_t positive_run_fill;
+	DDSURFACEDESC descriptor;
+	HRESULT result;
 
-// FUNCTION: TIE98 0x4C97A0
-static char std3D_MapZCmpFunc(char caps_mask) {
-	char result = (caps_mask & 1) != 0;
-	if (caps_mask & 4)
-		result |= 3;
-	if (caps_mask & 2)
-		result |= 2;
-	if (caps_mask & 8)
-		result |= 4;
-	if (caps_mask & 0x10)
-		result |= 5;
-	if (caps_mask & 0x20)
-		result |= 6;
-	if (caps_mask & 0x40)
-		result |= 7;
-	if ((unsigned char)caps_mask & 0x80)
-		result |= 8;
-	return result;
-}
+	void* locked_surface;
+	int depth_x;
+	int depth_y;
+	uint8_t* row;
+	const uint8_t* mask;
+	uint16_t y;
 
-// FUNCTION: TIE98 0x4C63D0
-void std3D_BuildRenderTargetDesc(unsigned int width, unsigned int height, int pitch) {
-	g_std3DRenderTargetDesc.width = width;
-	g_std3DRenderTargetDesc.height = height;
-	g_std3DRenderTargetDesc.sizeBytes = height * pitch;
-	g_std3DRenderTargetDesc.pitch = pitch;
-	g_std3DRenderTargetDesc.widthPixels = (unsigned int)pitch / 2;
-	memset(&g_std3DRenderTargetDesc.colorInfo, 0, sizeof g_std3DRenderTargetDesc.colorInfo);
-	g_std3DRenderTargetDesc.colorInfo.colorMode = STDCOLOR_RGB;
-	g_std3DRenderTargetDesc.colorInfo.bpp = 16;
-	g_std3DRenderTargetDesc.colorInfo.redBPP = 5;
-	g_std3DRenderTargetDesc.colorInfo.greenBPP = 6;
-	g_std3DRenderTargetDesc.colorInfo.blueBPP = 5;
-	g_std3DRenderTargetDesc.colorInfo.redPosShift = 11;
-	g_std3DRenderTargetDesc.colorInfo.greenPosShift = 5;
-	g_std3DRenderTargetDesc.colorInfo.bluePosShift = 0;
-	g_std3DRenderTargetDesc.colorInfo.redPosShiftRight = 3;
-	g_std3DRenderTargetDesc.colorInfo.greenPosShiftRight = 2;
-	g_std3DRenderTargetDesc.colorInfo.bluePosShiftRight = 3;
-	g_pStd3DRenderTarget = &g_std3DRenderTargetDesc;
-}
-
-// FUNCTION: TIE98 0x4C6490
-void std3D_SetRenderSurface(IDirectDrawSurface* render_surface) { g_std3DRenderSurface = render_surface; }
-
-// FUNCTION: TIE98 0x4C64A0
-void std3D_ResetUnusedStartupState(int value0, int value1, int value2, int flag) {
-	g_std3DViewportOverlayRed = value0;
-	g_std3DViewportOverlayGreen = value1;
-	g_std3DViewportOverlayBlue = value2;
-	g_std3DViewportOverlayEnabled = flag;
-}
-
-// FUNCTION: TIE98 0x4C9150
-static int AERON_DXAPI std3D_EnumDevicesCallback(DxGuid* guid, char* device_description, char* device_name,
-												 D3DDEVICEDESC* hardware, D3DDEVICEDESC* software,
-												 void* argument) {
-	Std3DDevice* device;
-	D3DDEVICEDESC* descriptor;
-
-	(void)argument;
-	if (g_std3DNumDevices >= STD3D_DEVICE_LIMIT)
-		return 0;
-
-	device = &g_std3DDevices[g_std3DNumDevices];
-	device->guid = *guid;
-	strncpy(device->deviceDescription, device_description, sizeof device->deviceDescription);
-	strncpy(device->deviceName, device_name, sizeof device->deviceName);
-	descriptor = hardware;
-	if (hardware->dcmColorModel != 0) {
-		device->caps.bHardware = 1;
+	if (g_std3DZBufferBitDepth == 16) {
+		negative_run_fill = 0xff;
+		positive_run_fill = 0;
 	} else {
-		descriptor = software;
-		device->caps.bHardware = 0;
+		negative_run_fill = 0;
+		positive_run_fill = 0xff;
 	}
-	memcpy(&device->d3dDesc, descriptor, sizeof device->d3dDesc);
-	device->caps.colorModelFlags = 0;
-	if (descriptor->dcmColorModel & 2)
-		device->caps.colorModelFlags = 2;
-	if (descriptor->dcmColorModel & 1)
-		device->caps.colorModelFlags |= 1;
-	device->caps.bTexturePerspective = (descriptor->dpcTriCaps.dwTextureCaps & 1) != 0;
-	device->caps.bHasZBuffer = descriptor->dwDeviceZBufferBitDepth != 0;
-	device->caps.bSquareOnlyTexture = (descriptor->dpcTriCaps.dwTextureCaps & 0x20) != 0;
-	device->caps.bAlphaTexture = (descriptor->dpcTriCaps.dwTextureCaps & 4) != 0;
-	device->caps.bStippledShade = (descriptor->dpcTriCaps.dwShadeCaps & 0x1000) == 0 &&
-								  (descriptor->dpcTriCaps.dwShadeCaps & 0x2000) != 0;
-	device->caps.bAlphaBlend = ((descriptor->dpcTriCaps.dwTextureBlendCaps & 8) != 0 &&
-								(descriptor->dpcTriCaps.dwShadeCaps & 0x4000) != 0) ||
-							   device->caps.bStippledShade != 0;
-	device->caps.bColorKeyTexture = (descriptor->dpcTriCaps.dwTextureCaps & 8) != 0;
-	device->caps.renderBitDepthMask =
-		(unsigned char)std3D_PackRenderBitDepths(descriptor->dwDeviceRenderBitDepth);
-	device->caps.zCmpCapsMask = (unsigned char)std3D_PackZCmpCaps(descriptor->dpcTriCaps.dwZCmpCaps);
-	device->caps.minTextureWidth = 1;
-	device->caps.minTextureHeight = 1;
-	device->caps.maxTextureWidth = 256;
-	device->caps.maxTextureHeight = 256;
-	device->caps.maxBufferSize = descriptor->dwMaxBufferSize;
-	device->caps.maxVertexCount = descriptor->dwMaxVertexCount;
-	++g_std3DNumDevices;
-	return 1;
-}
 
-// FUNCTION: TIE98 0x4C64D0
-static int std3D_Log2Floor(unsigned int value) {
-	int result = 0;
-	while (value > 1) {
-		value >>= 1;
-		++result;
+	memset(&descriptor, 0, sizeof descriptor);
+	descriptor.dwSize = sizeof descriptor;
+	do {
+		result = g_std3DZBufferSurface->lpVtbl->Lock(g_std3DZBufferSurface, NULL, &descriptor, 0, NULL);
+		if (result != 0 && result != DX_DDERR_WASSTILLDRAWING)
+			return;
+	} while (result != 0);
+
+	locked_surface = descriptor.lpSurface;
+	memset(&descriptor, 0, sizeof descriptor);
+	descriptor.dwSize = sizeof descriptor;
+	g_std3DZBufferSurface->lpVtbl->GetSurfaceDesc(g_std3DZBufferSurface, &descriptor);
+
+	depth_x = displaycorner_columns + ((int)descriptor.dwWidth - (int)g_pStd3DRenderTarget->width) / 2;
+	depth_y = displaycorner_lines + ((int)descriptor.dwHeight - (int)g_pStd3DRenderTarget->height) / 2;
+	row = (uint8_t*)locked_surface + 2 * depth_x + descriptor.lPitch * depth_y;
+	mask = (const uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
+	for (y = 0; y < pixelsdeep; ++y) {
+		uint8_t* destination = row;
+		int8_t run_type = (int8_t)*mask++;
+		uint32_t drawn = 0;
+		if (pixelswide != 0) {
+			do {
+				uint32_t run = *mask++;
+				if (run == 0) {
+					run = *mask++;
+					if (run == 0)
+						run = *mask++ + 256;
+					run += 255;
+				}
+				memset(destination, run_type < 0 ? negative_run_fill : positive_run_fill, 2 * run);
+				destination += 2 * run;
+				drawn += run;
+				run_type = (int8_t)-run_type;
+			} while (drawn < pixelswide);
+		}
+		row += descriptor.lPitch;
 	}
-	return result;
-}
-
-// FUNCTION: TIE98 0x4C93B0
-static int AERON_DXAPI std3D_EnumTextureFormats(DDSURFACEDESC* descriptor, void* argument) {
-	Std3DTexFmt* format;
-	ColorInfo* color;
-
-	(void)argument;
-	if (g_std3DNumTexFormats >= STD3D_TEXTURE_FORMAT_LIMIT)
-		return 0;
-
-	format = &g_std3DTextureFormats[g_std3DNumTexFormats];
-	memcpy(&format->ddsd, descriptor, sizeof format->ddsd);
-	color = &format->colorInfo;
-	if (descriptor->ddpfPixelFormat.dwFlags & 0x20) {
-		color->colorMode = STDCOLOR_PAL;
-		color->bpp = 8;
-		color->redBPP = 0;
-		color->greenBPP = 0;
-		color->blueBPP = 0;
-		color->redPosShift = 0;
-		color->greenPosShift = 0;
-		color->bluePosShift = 0;
-		color->redPosShiftRight = 0;
-		color->greenPosShiftRight = 0;
-		color->bluePosShiftRight = 0;
-		color->alphaBPP = 0;
-		color->alphaPosShift = 0;
-		color->alphaPosShiftRight = 0;
-	} else {
-		uint32_t mask;
-
-		if (descriptor->ddpfPixelFormat.dwFlags & 8)
-			return 1;
-
-		color->colorMode = descriptor->ddpfPixelFormat.dwFlags & 1 ? STDCOLOR_RGBA : STDCOLOR_RGB;
-		color->bpp = (int)descriptor->ddpfPixelFormat.dwRGBBitCount;
-
-		mask = descriptor->ddpfPixelFormat.dwRBitMask;
-		color->redPosShift = 0;
-		while ((mask & 1) == 0) {
-			mask >>= 1;
-			++color->redPosShift;
-		}
-		color->redPosShiftRight =
-			std3D_Log2Floor(0xffu / (descriptor->ddpfPixelFormat.dwRBitMask >> color->redPosShift));
-		color->redBPP = 0;
-		while (mask & 1) {
-			mask >>= 1;
-			++color->redBPP;
-		}
-
-		mask = descriptor->ddpfPixelFormat.dwGBitMask;
-		color->greenPosShift = 0;
-		while ((mask & 1) == 0) {
-			mask >>= 1;
-			++color->greenPosShift;
-		}
-		color->greenPosShiftRight =
-			std3D_Log2Floor(0xffu / (descriptor->ddpfPixelFormat.dwGBitMask >> color->greenPosShift));
-		color->greenBPP = 0;
-		while (mask & 1) {
-			mask >>= 1;
-			++color->greenBPP;
-		}
-
-		mask = descriptor->ddpfPixelFormat.dwBBitMask;
-		color->bluePosShift = 0;
-		while ((mask & 1) == 0) {
-			mask >>= 1;
-			++color->bluePosShift;
-		}
-		color->bluePosShiftRight =
-			std3D_Log2Floor(0xffu / (descriptor->ddpfPixelFormat.dwBBitMask >> color->bluePosShift));
-		color->blueBPP = 0;
-		while (mask & 1) {
-			mask >>= 1;
-			++color->blueBPP;
-		}
-
-		if (color->colorMode == STDCOLOR_RGBA) {
-			mask = descriptor->ddpfPixelFormat.dwRGBAlphaBitMask;
-			color->alphaPosShift = 0;
-			while ((mask & 1) == 0) {
-				mask >>= 1;
-				++color->alphaPosShift;
-			}
-			color->alphaPosShiftRight = std3D_Log2Floor(
-				0xffu / (descriptor->ddpfPixelFormat.dwRGBAlphaBitMask >> color->alphaPosShift));
-			color->alphaBPP = 0;
-			while (mask & 1) {
-				mask >>= 1;
-				++color->alphaBPP;
-			}
-		} else {
-			color->alphaBPP = 0;
-			color->alphaPosShift = 0;
-			color->alphaPosShiftRight = 0;
-		}
-	}
-	++g_std3DNumTexFormats;
-	return 1;
+	g_std3DZBufferSurface->lpVtbl->Unlock(g_std3DZBufferSurface, locked_surface);
+	/* PORT: publish the precise write made through the CPU DirectDraw attachment
+	 * to the Aeron depth target before the PiP scene is submitted. */
+	depth_rect.x = depth_x;
+	depth_rect.y = depth_y;
+	depth_rect.width = pixelswide;
+	depth_rect.height = pixelsdeep;
+	AeronDx5_CommitDepthSurfaceRect(g_std3DZBufferSurface, &depth_rect);
 }
 
 // FUNCTION: TIE98 0x4C5B30
@@ -468,528 +302,6 @@ uint16_t* std3D_ConvertTexTo4444(uint16_t* source, int count) {
 	return g_texConvBuf4444;
 }
 
-// FUNCTION: TIE98 0x4C6530
-static void std3D_BuildColormap16(uint8_t* rgb888, uint16_t* output, ColorInfo* format, uint8_t default_alpha,
-								  int color_key) {
-	int i;
-
-	for (i = 0; i < 256; ++i) {
-		uint16_t color = (uint16_t)((rgb888[0] >> format->redPosShiftRight) << format->redPosShift);
-		uint8_t alpha;
-
-		color |= (uint16_t)((rgb888[1] >> format->greenPosShiftRight) << format->greenPosShift);
-		color |= (uint16_t)((rgb888[2] >> format->bluePosShiftRight) << format->bluePosShift);
-		alpha = color_key ? (uint8_t)-(color != 0) : default_alpha;
-		if (format->alphaBPP == 1)
-			alpha = (uint8_t)(0xff - alpha);
-		if (format->alphaBPP != 0) {
-			color |= (uint16_t)((alpha >> format->alphaPosShiftRight) << format->alphaPosShift);
-		}
-		*output++ = color;
-		rgb888 += 3;
-	}
-}
-
-// FUNCTION: TIE98 0x4C6600
-static void std3D_BuildColormapOpaque(uint8_t* rgb888, uint16_t* output, ColorInfo* format) {
-	std3D_BuildColormap16(rgb888, output, format, 0xff, 0);
-}
-
-// FUNCTION: TIE98 0x4C6620
-static void std3D_BuildColormapColorKey(uint8_t* rgb888, uint16_t* output, ColorInfo* format) {
-	std3D_BuildColormap16(rgb888, output, format, 0xff, 1);
-}
-
-// FUNCTION: TIE98 0x4C6640
-static void std3D_BuildColormapAlpha(uint8_t* rgb888, uint16_t* output, ColorInfo* format, uint8_t alpha) {
-	std3D_BuildColormap16(rgb888, output, format, alpha, 0);
-}
-
-// FUNCTION: TIE98 0x4C6720
-Std3DVBuffer* std3D_AllocVBuffer(Std3DRasterInfo* raster_info) {
-	Std3DVBuffer* vbuffer = malloc(sizeof *vbuffer);
-	memset(vbuffer, 0, sizeof *vbuffer);
-	vbuffer->storageType = 0;
-	vbuffer->raster = *raster_info;
-	vbuffer->pixels =
-		malloc((size_t)raster_info->width * raster_info->height * (raster_info->bitsPerPixel >> 3));
-	vbuffer->raster.rowPitch = raster_info->width * (raster_info->bitsPerPixel >> 3);
-	return vbuffer;
-}
-
-// FUNCTION: TIE98 0x4C6780
-void std3D_FreeVBuffer(Std3DVBuffer* vbuffer) {
-	if (vbuffer->storageType == 1) {
-		if (vbuffer->ddSurface)
-			vbuffer->ddSurface->lpVtbl->Release(vbuffer->ddSurface);
-	} else {
-		free(vbuffer->pixels);
-	}
-	memset(vbuffer, 0, sizeof *vbuffer);
-	free(vbuffer);
-}
-
-// FUNCTION: TIE98 0x4C67C0
-void std3D_LockVBuffer(Std3DVBuffer* vbuffer) {
-	if (vbuffer->storageType == 1 && vbuffer->lockCount == 0) {
-		DDSURFACEDESC descriptor;
-		memset(&descriptor, 0, sizeof descriptor);
-		descriptor.dwSize = sizeof descriptor;
-		if (vbuffer->ddSurface->lpVtbl->Lock(vbuffer->ddSurface, NULL, &descriptor, 1, NULL) != 0)
-			return;
-		vbuffer->pixels = descriptor.lpSurface;
-		vbuffer->raster.rowPitch = (uint32_t)descriptor.lPitch;
-	}
-	++vbuffer->lockCount;
-}
-
-// FUNCTION: TIE98 0x4C68C0
-void std3D_UnlockVBuffer(Std3DVBuffer* vbuffer) {
-	if (vbuffer->lockCount == 0 ||
-		(vbuffer->lockCount == 1 && vbuffer->storageType == 1 &&
-		 vbuffer->ddSurface->lpVtbl->Unlock(vbuffer->ddSurface, vbuffer->pixels) != 0))
-		return;
-	--vbuffer->lockCount;
-}
-
-// FUNCTION: TIE98 0x4C69D0
-void std3D_BlitVBuffer(Std3DVBuffer* destination, Std3DVBuffer* source, int destination_x,
-					   int destination_y) {
-	uint8_t* source_row;
-	uint8_t* destination_row;
-	size_t row_bytes;
-	unsigned int row;
-
-	std3D_LockVBuffer(destination);
-	std3D_LockVBuffer(source);
-	source_row = source->pixels;
-	destination_row = (uint8_t*)destination->pixels + (size_t)destination->raster.rowPitch * destination_y +
-					  (size_t)(destination->raster.bitsPerPixel >> 3) * destination_x;
-	row_bytes = (size_t)(source->raster.bitsPerPixel >> 3) * source->raster.width;
-	for (row = 0; row < source->raster.height; ++row) {
-		memcpy(destination_row, source_row, row_bytes);
-		destination_row += destination->raster.rowPitch;
-		source_row += source->raster.rowPitch;
-	}
-	std3D_UnlockVBuffer(destination);
-	std3D_UnlockVBuffer(source);
-}
-
-// FUNCTION: TIE98 0x4C6B70
-void std3D_FillVBuffer(Std3DVBuffer* vbuffer, int color) {
-	uint8_t* row;
-	unsigned int x, y;
-
-	std3D_LockVBuffer(vbuffer);
-	row = vbuffer->pixels;
-	for (y = 0; y < vbuffer->raster.height; ++y) {
-		switch (vbuffer->raster.bitsPerPixel) {
-			case 8:
-				memset(row, color, vbuffer->raster.width);
-				break;
-			case 16:
-				for (x = 0; x < vbuffer->raster.width; ++x)
-					((uint16_t*)row)[x] = (uint16_t)color;
-				break;
-			case 32:
-				for (x = 0; x < vbuffer->raster.width; ++x)
-					((uint32_t*)row)[x] = (uint32_t)color;
-				break;
-		}
-		row += vbuffer->raster.rowPitch;
-	}
-	std3D_UnlockVBuffer(vbuffer);
-}
-
-// FUNCTION: TIE98 0x4C6840
-uint32_t std3D_GetCapabilityFlags(void) { return g_std3DCapFlags; }
-
-// FUNCTION: TIE98 0x4C6880
-int std3D_SetFogColor8(uint32_t red, uint32_t green, uint32_t blue) {
-	g_std3DFogColorRed8 = (int)red;
-	g_std3DFogColorGreen8 = (int)green;
-	g_std3DFogColorBlue8 = (int)blue;
-	return (int)red;
-}
-
-// FUNCTION: TIE98 0x4C68A0
-int std3D_SetFogTableRangeBits(uint32_t start_bits, uint32_t end_bits) {
-	g_std3DFogTableStartBits = (int)start_bits;
-	g_std3DFogTableEndBits = (int)end_bits;
-	return (int)start_bits;
-}
-
-// FUNCTION: TIE98 0x4C6920
-int std3D_SetTextureSizeCaps(int min_width, int min_height, int max_width, int max_height) {
-	g_std3DMinTextureWidth = (unsigned int)min_width;
-	g_std3DMinTextureHeight = (unsigned int)min_height;
-	g_std3DMaxTextureWidth = (unsigned int)max_width;
-	g_std3DMaxTextureHeight = (unsigned int)max_height;
-	return max_height;
-}
-
-// FUNCTION: TIE98 0x4C7510
-char std3D_SetPaletteConversionSource(const void* palette_rgb888, uint8_t alpha) {
-	memcpy(g_std3DPaletteConversionSourceRgb, palette_rgb888, sizeof g_std3DPaletteConversionSourceRgb);
-	if (g_pFmtRGB565->colorInfo.colorMode == STDCOLOR_RGB && g_pFmtRGB565->colorInfo.bpp == 16) {
-		std3D_BuildColormapOpaque((uint8_t*)palette_rgb888, g_std3DPaletteScratch16,
-								  &g_pFmtRGB565->colorInfo);
-	}
-	if (g_pStd3DCurDevice->caps.colorModelFlags != 0) {
-		if (g_pFmtRGBA1555->colorInfo.colorMode == STDCOLOR_RGBA && g_pFmtRGBA1555->colorInfo.bpp == 16) {
-			std3D_BuildColormapColorKey((uint8_t*)palette_rgb888, g_texConvBuf1555,
-										&g_pFmtRGBA1555->colorInfo);
-		}
-		if (g_pStd3DCurDevice->caps.zCmpCapsMask == 0 &&
-			g_pFmtRGBA4444->colorInfo.colorMode == STDCOLOR_RGBA && g_pFmtRGBA4444->colorInfo.bpp == 16) {
-			std3D_BuildColormapAlpha((uint8_t*)palette_rgb888, g_texConvBuf4444, &g_pFmtRGBA4444->colorInfo,
-									 alpha);
-		}
-	}
-	return 1;
-}
-
-// FUNCTION: TIE98 0x4C75C0
-void std3D_ClampTextureDimensions(uint32_t source_width, uint32_t source_height, uint32_t* output_width,
-								  uint32_t* output_height) {
-	uint32_t width = source_width < 1                        ? 1
-					 : source_width > g_std3DMaxTextureWidth ? g_std3DMaxTextureWidth
-															 : source_width;
-	uint32_t height = source_height < 1                        ? 1
-					  : source_height > g_std3DMaxTextureWidth ? g_std3DMaxTextureWidth
-															   : source_height;
-	if (width < g_std3DMinTextureWidth || height < g_std3DMinTextureHeight ||
-		(g_pStd3DCurDevice->caps.bSquareOnlyTexture && width != height)) {
-		if (g_pStd3DCurDevice->caps.bSquareOnlyTexture && width != height) {
-			width = width > height ? width : height;
-			height = width;
-		} else {
-			if (width < g_std3DMinTextureWidth)
-				width = g_std3DMinTextureWidth;
-			if (height < g_std3DMinTextureHeight)
-				height = g_std3DMinTextureHeight;
-		}
-	}
-	*output_width = width;
-	*output_height = height;
-}
-
-// FUNCTION: TIE98 0x4C83F0
-static int std3D_FindClosestFormat(const ColorInfo* match, Std3DTexFmt* formats, unsigned int count) {
-	int best_index = 0;
-	int best_score = 0;
-	unsigned int i;
-
-	for (i = 0; i < count; ++i) {
-		ColorInfo* format = &formats[i].colorInfo;
-		int score = 0;
-		if (format->colorMode == match->colorMode) {
-			score = 1;
-			if (format->bpp == match->bpp) {
-				score = 2;
-				if (match->colorMode == STDCOLOR_RGBA)
-					score = 3;
-				if (format->redBPP == match->redBPP && format->greenBPP == match->greenBPP &&
-					format->blueBPP == match->blueBPP &&
-					(match->colorMode != STDCOLOR_RGBA || format->alphaBPP == match->alphaBPP))
-					return (int)i;
-			}
-		}
-		if (score > best_score) {
-			best_index = (int)i;
-			best_score = score;
-		}
-	}
-	return best_index;
-}
-
-// FUNCTION: TIE98 0x4C81C0
-static char std3D_QueryTextureVidMem(unsigned int* total_bytes, unsigned int* free_bytes) {
-	DDSCAPS caps = { DDSCAPS_TEXTURE };
-
-	IDirectDraw* direct_draw2 = NULL;
-	if (g_std3DDirectDraw->lpVtbl->QueryInterface(g_std3DDirectDraw, &CLSID_IDirectDraw2,
-												  (void**)&direct_draw2) != 0)
-		return 0;
-	if (direct_draw2->lpVtbl->GetAvailableVidMem(direct_draw2, &caps, total_bytes, free_bytes) != 0)
-		return 0;
-	direct_draw2->lpVtbl->Release(direct_draw2);
-	return 1;
-}
-
-// FUNCTION: TIE98 0x4C80A0
-static void std3D_CacheListAppend(Std3DTextureSurface* surface) {
-	if (g_std3DTextureCacheHead) {
-		g_std3DTextureCacheTail->pNext = surface;
-		surface->pPrev = g_std3DTextureCacheTail;
-		surface->pNext = NULL;
-		g_std3DTextureCacheTail = surface;
-	} else {
-		g_std3DTextureCacheHead = surface;
-		g_std3DTextureCacheTail = surface;
-		surface->pPrev = NULL;
-		surface->pNext = NULL;
-	}
-	++g_std3DTextureSurfaceCount;
-	g_pStd3DCurDevice->availableMemory -= surface->byteSize;
-}
-
-// FUNCTION: TIE98 0x4C8110
-static void std3D_CacheListRemove(Std3DTextureSurface* surface) {
-	if (surface == g_std3DTextureCacheHead) {
-		g_std3DTextureCacheHead = surface->pNext;
-		if (g_std3DTextureCacheHead) {
-			g_std3DTextureCacheHead->pPrev = NULL;
-			if (!g_std3DTextureCacheHead->pNext)
-				g_std3DTextureCacheTail = g_std3DTextureCacheHead;
-		} else {
-			g_std3DTextureCacheTail = NULL;
-		}
-	} else if (surface == g_std3DTextureCacheTail) {
-		g_std3DTextureCacheTail = surface->pPrev;
-		g_std3DTextureCacheTail->pNext = NULL;
-	} else {
-		surface->pPrev->pNext = surface->pNext;
-		surface->pNext->pPrev = surface->pPrev;
-	}
-	--g_std3DTextureSurfaceCount;
-	g_pStd3DCurDevice->availableMemory += surface->byteSize;
-}
-
-// FUNCTION: TIE98 0x4C8020
-void std3D_FlushTextureCache(void) {
-	Std3DTextureSurface* surface = g_std3DTextureCacheHead;
-	while (surface) {
-		Std3DTextureSurface* next = surface->pNext;
-		if (surface->pCachedSurface) {
-			surface->pCachedSurface->lpVtbl->Release(surface->pCachedSurface);
-			surface->pCachedSurface = NULL;
-		}
-		if (surface->pCachedTexture) {
-			surface->pCachedTexture->lpVtbl->Release(surface->pCachedTexture);
-			surface->pCachedTexture = NULL;
-		}
-		surface->bCached = 0;
-		surface->cacheFrameTag = 0;
-		surface->pPrev = NULL;
-		surface->pNext = NULL;
-		surface = next;
-	}
-	g_std3DTextureCacheHead = NULL;
-	g_std3DTextureCacheTail = NULL;
-	g_std3DTextureSurfaceCount = 0;
-	g_pStd3DCurDevice->availableMemory = g_pStd3DCurDevice->totalMemory;
-	g_std3DTextureFrameTag = 1;
-}
-
-// FUNCTION: TIE98 0x4C8230
-void std3D_CacheTextureSurface(Std3DTextureSurface* surface) {
-	surface->cacheFrameTag = g_std3DTextureFrameTag;
-	std3D_CacheListRemove(surface);
-	std3D_CacheListAppend(surface);
-}
-
-// FUNCTION: TIE98 0x4C7660
-char std3D_CreateMipSurface(Std3DVBuffer* source, Std3DTextureSurface* surface, int texture_format_mode,
-							int alpha_mask) {
-	IDirectDrawSurface* source_surface = NULL;
-	IDirectDrawSurface* cached_surface = NULL;
-	IDirect3DTexture* source_texture = NULL;
-	IDirect3DTexture* cached_texture = NULL;
-	Std3DVBuffer* scaled = NULL;
-	Std3DVBuffer* input = source;
-	uint32_t width = source->raster.width;
-	uint32_t height;
-	DDSURFACEDESC descriptor;
-	HRESULT result;
-	DDSURFACEDESC lock;
-	D3DTEXTUREHANDLE handle;
-
-	if (width == 0)
-		width = 1;
-	else if (width > 256)
-		width = 256;
-	height = source->raster.height;
-	if (height == 0)
-		height = 1;
-	else if (height > 256)
-		height = 256;
-
-	if (width < g_std3DMinTextureWidth || height < g_std3DMinTextureHeight ||
-		(g_pStd3DCurDevice->caps.bSquareOnlyTexture && width != height)) {
-		Std3DRasterInfo raster = source->raster;
-		uint32_t target_width;
-		uint32_t target_height;
-		unsigned int x_tiles;
-		unsigned int y_tiles;
-		unsigned int y;
-
-		if (g_pStd3DCurDevice->caps.bSquareOnlyTexture && width != height) {
-			target_width = width > height ? width : height;
-			target_height = target_width;
-		} else {
-			target_width = width < g_std3DMinTextureWidth ? g_std3DMinTextureWidth : width;
-			target_height = height < g_std3DMinTextureHeight ? g_std3DMinTextureHeight : height;
-		}
-		x_tiles = (unsigned int)((double)target_width / (double)(int)width + 0.5);
-		y_tiles = (unsigned int)((double)target_height / (double)(int)height + 0.5);
-		raster.width *= x_tiles;
-		raster.height *= y_tiles;
-		scaled = std3D_AllocVBuffer(&raster);
-		for (y = 0; y < y_tiles; ++y) {
-			unsigned int x;
-
-			for (x = 0; x < x_tiles; ++x) {
-				std3D_BlitVBuffer(scaled, source, (int)(x * width), (int)(y * height));
-			}
-		}
-		input = scaled;
-		width = raster.width;
-		height = raster.height;
-	}
-
-	if (texture_format_mode != 0 && g_pStd3DCurDevice->caps.bAlphaTexture != 0) {
-		surface->usesAlphaFormat = 1;
-		descriptor = alpha_mask ? g_pFmtRGBA4444->ddsd : g_pFmtRGBA1555->ddsd;
-	} else if (alpha_mask) {
-		surface->usesAlphaFormat = 1;
-		descriptor = g_pFmtRGBA4444->ddsd;
-	} else {
-		surface->usesAlphaFormat = 0;
-		descriptor = g_pFmtRGB565->ddsd;
-	}
-	descriptor.dwSize = 108;
-	descriptor.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT;
-	descriptor.dwWidth = width;
-	descriptor.dwHeight = height;
-	descriptor.ddsCaps.dwCaps = DDSCAPS_TEXTURE | DDSCAPS_SYSTEMMEMORY;
-	result = g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor, &source_surface, NULL);
-	if (result == 0) {
-		memset(&lock, 0, sizeof lock);
-		lock.dwSize = 108;
-		result = source_surface->lpVtbl->Lock(source_surface, NULL, &lock, 1, NULL);
-	}
-	if (result == 0) {
-		if (input->raster.sourceType <= 2) {
-			uint32_t y;
-
-			std3D_LockVBuffer(input);
-			for (y = 0; y < height; ++y) {
-				uint8_t* destination = (uint8_t*)lock.lpSurface + (size_t)lock.lPitch * y;
-				uint8_t* source_row = (uint8_t*)input->pixels + (size_t)input->raster.rowPitch * y;
-				if (input->raster.sourceType != 0) {
-					memcpy(destination, source_row, (size_t)width * 2);
-				} else {
-					uint16_t* output = (uint16_t*)destination;
-					uint16_t* palette = g_std3DPaletteScratch16;
-					uint32_t x;
-
-					if (texture_format_mode != 0 && g_pStd3DCurDevice->caps.bAlphaTexture != 0)
-						palette = alpha_mask ? g_texConvBuf4444 : g_texConvBuf1555;
-					else if (alpha_mask)
-						palette = g_texConvBuf4444;
-					for (x = 0; x < width; ++x)
-						output[x] = palette[source_row[x]];
-				}
-			}
-			std3D_UnlockVBuffer(input);
-		}
-		result = source_surface->lpVtbl->Unlock(source_surface, NULL);
-	}
-	if (result == 0) {
-		if (texture_format_mode != 0 && g_pStd3DCurDevice->caps.bAlphaTexture == 0) {
-			DDCOLORKEY key;
-			if (input->raster.sourceType == 0) {
-				key.dwColorSpaceLowValue = g_std3DPaletteScratch16[0];
-				key.dwColorSpaceHighValue = g_std3DPaletteScratch16[0];
-				source_surface->lpVtbl->SetColorKey(source_surface, DDCKEY_SRCBLT, &key);
-			} else if (input->raster.sourceType == 1) {
-				key.dwColorSpaceLowValue = input->transparentColor;
-				key.dwColorSpaceHighValue = input->transparentColor;
-				source_surface->lpVtbl->SetColorKey(source_surface, DDCKEY_SRCBLT, &key);
-			}
-			/* PORT: TIE98 passes an uninitialized key for source type 2. That
-			 * has no source transparency value to preserve, so omit the call. */
-		}
-		result = source_surface->lpVtbl->QueryInterface(source_surface, &IID_IDirect3DTexture_Compat,
-														(void**)&source_texture);
-	}
-	if (result == 0)
-		result = source_surface->lpVtbl->GetSurfaceDesc(source_surface, &descriptor);
-	if (result == 0) {
-		surface->ddsd = descriptor;
-		descriptor.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT;
-		descriptor.ddsCaps.dwCaps = DDSCAPS_TEXTURE | DDSCAPS_VIDEOMEMORY | DDSCAPS_ALLOCONLOAD;
-		result =
-			g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor, &cached_surface, NULL);
-		if (result == DX_DDERR_OUTOFVIDEOMEMORY) {
-			/* Evict textures not used this frame until enough bytes are
-			 * released for a retry; stop when eviction cannot free enough. */
-			Std3DTextureSurface* candidate = g_std3DTextureCacheHead;
-			const unsigned int needed = width * height;
-			unsigned int freed;
-
-			do {
-				freed = 0;
-				while (freed < needed && candidate && candidate->cacheFrameTag != g_std3DTextureFrameTag) {
-					Std3DTextureSurface* next = candidate->pNext;
-					candidate->pCachedSurface->lpVtbl->Release(candidate->pCachedSurface);
-					candidate->pCachedTexture->lpVtbl->Release(candidate->pCachedTexture);
-					freed += candidate->byteSize;
-					candidate->bCached = 0;
-					std3D_CacheListRemove(candidate);
-					candidate = next;
-				}
-				if (freed >= needed)
-					result = g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor,
-																	  &cached_surface, NULL);
-			} while (freed >= needed && result == DX_DDERR_OUTOFVIDEOMEMORY);
-		}
-	}
-	if (result == 0)
-		result = cached_surface->lpVtbl->QueryInterface(cached_surface, &IID_IDirect3DTexture_Compat,
-														(void**)&cached_texture);
-	if (result == 0)
-		result = cached_texture->lpVtbl->Load(cached_texture, source_texture);
-	if (result == 0) {
-		handle = 0;
-		result = cached_texture->lpVtbl->GetHandle(cached_texture, g_d3dDevice, &handle);
-		if (result != 0)
-			handle = 0;
-		source_texture->lpVtbl->Release(source_texture);
-		source_surface->lpVtbl->Release(source_surface);
-		if (scaled)
-			std3D_FreeVBuffer(scaled);
-		surface->pCachedTexture = cached_texture;
-		surface->pCachedSurface = cached_surface;
-		surface->texHandle = handle;
-		surface->width = width;
-		surface->height = height;
-		surface->byteSize = width * height;
-		surface->bCached = 1;
-		surface->cacheFrameTag = g_std3DTextureFrameTag;
-		std3D_CacheListAppend(surface);
-		return 1;
-	}
-
-	if (source_surface)
-		source_surface->lpVtbl->Release(source_surface);
-	if (source_texture)
-		source_texture->lpVtbl->Release(source_texture);
-	if (scaled)
-		std3D_FreeVBuffer(scaled);
-	if (cached_surface)
-		cached_surface->lpVtbl->Release(cached_surface);
-	if (cached_texture)
-		cached_texture->lpVtbl->Release(cached_texture);
-	surface->pCachedTexture = NULL;
-	surface->pCachedSurface = NULL;
-	surface->texHandle = 0;
-	surface->bCached = 0;
-	surface->cacheFrameTag = 0;
-	return 0;
-}
-
 // FUNCTION: TIE98 0x4C5D60
 int std3D_Startup(void) {
 	HRESULT result;
@@ -1015,227 +327,6 @@ void std3D_Shutdown(void) {
 	if (g_lpD3D)
 		g_lpD3D->lpVtbl->Release(g_lpD3D);
 	g_std3DStartupDone = 0;
-}
-
-// FUNCTION: TIE98 0x4C8330
-unsigned int std3D_SelectBestDevice(const Std3DDeviceCaps* required_caps) {
-	unsigned int best_index = 0;
-	int best_score = 0;
-	unsigned int i;
-
-	for (i = 0; i < g_std3DNumDevices; ++i) {
-		const Std3DDeviceCaps* caps = &g_std3DDevices[i].caps;
-		int score = 0;
-		if (!required_caps->bTexturePerspective ||
-			caps->bTexturePerspective == required_caps->bTexturePerspective) {
-			score = 1;
-			if (!required_caps->bHasZBuffer || caps->bHasZBuffer == required_caps->bHasZBuffer) {
-				score = 2;
-				if ((required_caps->colorModelFlags & caps->colorModelFlags) != 0) {
-					score = 3;
-					if (caps->bHardware == required_caps->bHardware)
-						return i;
-				}
-			}
-		}
-		if (score > best_score) {
-			best_index = i;
-			best_score = score;
-		}
-	}
-	return best_index;
-}
-
-// FUNCTION: TIE98 0x4C8F00
-static char std3D_CreateZBuffer(int width, int height) {
-	DDSURFACEDESC descriptor;
-	HRESULT result;
-
-	memset(&descriptor, 0, sizeof descriptor);
-	descriptor.dwSize = 108;
-	descriptor.dwFlags = 71;
-	descriptor.ddsCaps.dwCaps = 0x20000;
-	descriptor.dwWidth = (uint32_t)width;
-	descriptor.dwHeight = (uint32_t)height;
-	if (g_pStd3DCurDevice->caps.bHardware)
-		descriptor.ddsCaps.dwCaps |= 0x4000;
-	else
-		descriptor.ddsCaps.dwCaps |= 0x800;
-	if (g_pStd3DCurDevice->d3dDesc.dwDeviceZBufferBitDepth & 0x100)
-		descriptor.dwZBufferBitDepth = 32;
-	else if (g_pStd3DCurDevice->d3dDesc.dwDeviceZBufferBitDepth & 0x400)
-		descriptor.dwZBufferBitDepth = 16;
-	else if (g_pStd3DCurDevice->d3dDesc.dwDeviceZBufferBitDepth & 0x800)
-		descriptor.dwZBufferBitDepth = 8;
-	else
-		return 0;
-	result = g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor, &g_std3DZBufferSurface,
-													  NULL);
-	if (result != 0)
-		return 0;
-	result = g_std3DRenderSurface->lpVtbl->AddAttachedSurface(g_std3DRenderSurface, g_std3DZBufferSurface);
-	if (result != 0)
-		return 0;
-	return g_std3DZBufferSurface->lpVtbl->GetSurfaceDesc(g_std3DZBufferSurface, &descriptor) == 0;
-}
-
-// FUNCTION: TIE98 0x4C8800
-static void std3D_BuildViewportQuad(const Std3DViewportRect* rect) {
-	g_std3DQuadRect = *rect;
-	memset(g_std3DQuadVerts, 0, sizeof g_std3DQuadVerts);
-	g_std3DQuadVerts[0].sx = (float)rect->x;
-	g_std3DQuadVerts[0].sy = (float)rect->y;
-	g_std3DQuadVerts[1].sx = (float)(rect->x + rect->width);
-	g_std3DQuadVerts[1].sy = g_std3DQuadVerts[0].sy;
-	g_std3DQuadVerts[2].sx = g_std3DQuadVerts[1].sx;
-	g_std3DQuadVerts[2].sy = (float)(rect->y + rect->height);
-	g_std3DQuadVerts[3].sx = g_std3DQuadVerts[0].sx;
-	g_std3DQuadVerts[3].sy = g_std3DQuadVerts[2].sy;
-
-	g_std3DQuadTris[0].v0 = 0;
-	g_std3DQuadTris[0].v1 = 1;
-	g_std3DQuadTris[0].v2 = 2;
-	g_std3DQuadTris[0].flags = 0x8200;
-	g_std3DQuadTris[0].texture = NULL;
-	g_std3DQuadTris[1].v0 = 0;
-	g_std3DQuadTris[1].v1 = 2;
-	g_std3DQuadTris[1].v2 = 3;
-	g_std3DQuadTris[1].flags = 0x8200;
-	g_std3DQuadTris[1].texture = NULL;
-}
-
-// FUNCTION: TIE98 0x4C8D70
-static char std3D_CreateViewport(unsigned int width, unsigned int height) {
-	Std3DViewportRect rect;
-
-	HRESULT result = g_lpD3D->lpVtbl->CreateViewport(g_lpD3D, &g_d3dViewport, NULL);
-	D3DVIEWPORT viewport;
-
-	if (result != 0)
-		return 0;
-	result = g_d3dDevice->lpVtbl->AddViewport(g_d3dDevice, g_d3dViewport);
-	if (result != 0)
-		return 0;
-
-	memset(&viewport, 0, sizeof viewport);
-	viewport.dwSize = sizeof viewport;
-	viewport.dwWidth = width;
-	viewport.dwHeight = height;
-	viewport.dvScaleX = (float)width * 0.5f;
-	viewport.dvScaleY = (float)height * 0.5f;
-	viewport.dvMaxX = (float)width / (viewport.dvScaleX * 2.0f);
-	viewport.dvMaxY = (float)height / (viewport.dvScaleY * 2.0f);
-	if (g_d3dViewport->lpVtbl->SetViewport(g_d3dViewport, &viewport) != 0)
-		return 0;
-	rect.x = 0;
-	rect.y = 0;
-	rect.width = (int)width;
-	rect.height = (int)height;
-	std3D_BuildViewportQuad(&rect);
-	return 1;
-}
-
-// FUNCTION: TIE98 0x4C88F0
-static char std3D_SetInitialRenderState(void) {
-	D3DEXECUTEBUFFERDESC descriptor = { 0 };
-	IDirect3DExecuteBuffer* buffer;
-	uint8_t* base;
-	D3DINSTRUCTION* instruction;
-	D3DSTATE* states;
-	uint32_t instruction_length;
-	D3DEXECUTEDATA data;
-
-	descriptor.dwSize = sizeof descriptor;
-	descriptor.dwFlags = 1;
-	descriptor.dwBufferSize = 4096;
-	buffer = NULL;
-
-	g_d3dDevice->lpVtbl->CreateExecuteBuffer(g_d3dDevice, &descriptor, &buffer, NULL);
-	buffer->lpVtbl->Lock(buffer, &descriptor);
-	memset(descriptor.lpData, 0, descriptor.dwBufferSize);
-
-	base = descriptor.lpData;
-	instruction = (D3DINSTRUCTION*)base;
-	instruction->bOpcode = D3DOP_STATERENDER;
-	instruction->bSize = sizeof(D3DSTATE);
-	instruction->wCount = 25;
-	states = (D3DSTATE*)(instruction + 1);
-	states[0].dwState = D3DRENDERSTATE_TEXTUREPERSPECTIVE;
-	states[0].dwArg = (g_std3DCapFlags & 1) != 0;
-	states[1].dwState = D3DRENDERSTATE_TEXTUREMAG;
-	states[1].dwArg = ((g_std3DCapFlags & 0x80) != 0) + 1;
-	states[2].dwState = D3DRENDERSTATE_TEXTUREMIN;
-	states[2].dwArg = ((g_std3DCapFlags & 0x100) != 0) + 1;
-	states[3].dwState = D3DRENDERSTATE_SUBPIXEL;
-	states[3].dwArg = (g_std3DCapFlags & 0x10) != 0;
-	states[4].dwState = D3DRENDERSTATE_SUBPIXELX;
-	states[4].dwArg = (g_std3DCapFlags & 0x20) != 0;
-	states[5].dwState = D3DRENDERSTATE_WRAPU;
-	states[5].dwArg = 0;
-	states[6].dwState = D3DRENDERSTATE_WRAPV;
-	states[6].dwArg = 0;
-	states[7].dwState = D3DRENDERSTATE_BLENDENABLE;
-	states[7].dwArg = (g_std3DCapFlags & 0x600) != 0;
-	if (g_std3DCapFlags & 0x600) {
-		states[8].dwState = D3DRENDERSTATE_TEXTUREMAPBLEND;
-		states[8].dwArg = (g_std3DCapFlags & 0x400) ? 4u : 2u;
-		states[9].dwState = D3DRENDERSTATE_SRCBLEND;
-		states[9].dwArg = 5;
-		states[10].dwState = D3DRENDERSTATE_DESTBLEND;
-		states[10].dwArg = 6;
-	} else {
-		states[8].dwState = D3DRENDERSTATE_TEXTUREMAPBLEND;
-		states[8].dwArg = 2;
-		states[9].dwState = D3DRENDERSTATE_SRCBLEND;
-		states[9].dwArg = 2;
-		states[10].dwState = D3DRENDERSTATE_DESTBLEND;
-		states[10].dwArg = 1;
-	}
-	states[11].dwState = D3DRENDERSTATE_ALPHATESTENABLE;
-	states[11].dwArg = 1;
-	states[12].dwState = D3DRENDERSTATE_ALPHAFUNC;
-	states[12].dwArg = 6;
-	states[13].dwState = D3DRENDERSTATE_STIPPLEDALPHA;
-	states[13].dwArg = g_pStd3DCurDevice->caps.renderBitDepthMask != 0;
-	states[14].dwState = D3DRENDERSTATE_SHADEMODE;
-	states[14].dwArg = 2;
-	states[15].dwState = D3DRENDERSTATE_MONOENABLE;
-	states[15].dwArg = (g_std3DCapFlags & 0x8000) == 0;
-	states[16].dwState = D3DRENDERSTATE_SPECULARENABLE;
-	states[16].dwArg = (g_std3DCapFlags & 4) != 0;
-	states[17].dwState = D3DRENDERSTATE_FOGENABLE;
-	states[17].dwArg = (g_std3DCapFlags & 0x40) != 0;
-	states[18].dwState = D3DRENDERSTATE_FILLMODE;
-	states[18].dwArg = 3;
-	states[19].dwState = D3DRENDERSTATE_DITHERENABLE;
-	states[19].dwArg = (g_std3DCapFlags & 2) != 0;
-	states[20].dwState = D3DRENDERSTATE_ANTIALIAS;
-	states[20].dwArg = (g_std3DCapFlags & 8) != 0;
-	states[21].dwState = D3DRENDERSTATE_ZENABLE;
-	states[21].dwArg = g_std3DZBufferEnabled != 0;
-	states[22].dwState = D3DRENDERSTATE_ZWRITEENABLE;
-	states[22].dwArg = g_std3DZBufferEnabled != 0;
-	states[23].dwState = D3DRENDERSTATE_ZFUNC;
-	states[23].dwArg = (unsigned char)std3D_MapZCmpFunc(g_std3DZBufferBitDepth);
-	states[24].dwState = D3DRENDERSTATE_CULLMODE;
-	states[24].dwArg = 1;
-	instruction = (D3DINSTRUCTION*)&states[25];
-	instruction->bOpcode = D3DOP_EXIT;
-	instruction->bSize = 0;
-	instruction->wCount = 0;
-	instruction_length = (uint32_t)((uint8_t*)(instruction + 1) - (uint8_t*)descriptor.lpData);
-	buffer->lpVtbl->Unlock(buffer);
-
-	memset(&data, 0, sizeof data);
-	data.dwSize = sizeof data;
-	data.dwInstructionLength = instruction_length;
-	buffer->lpVtbl->SetExecuteData(buffer, &data);
-	g_d3dDevice->lpVtbl->BeginScene(g_d3dDevice);
-	g_d3dDevice->lpVtbl->Execute(g_d3dDevice, buffer, g_d3dViewport, D3DEXECUTE_UNCLIPPED);
-	g_d3dDevice->lpVtbl->EndScene(g_d3dDevice);
-	buffer->lpVtbl->Release(buffer);
-	g_d3dStateFlags = (Std3DRenderStateFlags)g_std3DCapFlags;
-	return 1;
 }
 
 // FUNCTION: TIE98 0x4C5ED0
@@ -1313,6 +404,86 @@ int std3D_CreateDevice(unsigned int device_index, int use_z_buffer) {
 	return 1;
 }
 
+// FUNCTION: TIE98 0x4C63D0
+void std3D_BuildRenderTargetDesc(unsigned int width, unsigned int height, int pitch) {
+	g_std3DRenderTargetDesc.width = width;
+	g_std3DRenderTargetDesc.height = height;
+	g_std3DRenderTargetDesc.sizeBytes = height * pitch;
+	g_std3DRenderTargetDesc.pitch = pitch;
+	g_std3DRenderTargetDesc.widthPixels = (unsigned int)pitch / 2;
+	memset(&g_std3DRenderTargetDesc.colorInfo, 0, sizeof g_std3DRenderTargetDesc.colorInfo);
+	g_std3DRenderTargetDesc.colorInfo.colorMode = STDCOLOR_RGB;
+	g_std3DRenderTargetDesc.colorInfo.bpp = 16;
+	g_std3DRenderTargetDesc.colorInfo.redBPP = 5;
+	g_std3DRenderTargetDesc.colorInfo.greenBPP = 6;
+	g_std3DRenderTargetDesc.colorInfo.blueBPP = 5;
+	g_std3DRenderTargetDesc.colorInfo.redPosShift = 11;
+	g_std3DRenderTargetDesc.colorInfo.greenPosShift = 5;
+	g_std3DRenderTargetDesc.colorInfo.bluePosShift = 0;
+	g_std3DRenderTargetDesc.colorInfo.redPosShiftRight = 3;
+	g_std3DRenderTargetDesc.colorInfo.greenPosShiftRight = 2;
+	g_std3DRenderTargetDesc.colorInfo.bluePosShiftRight = 3;
+	g_pStd3DRenderTarget = &g_std3DRenderTargetDesc;
+}
+
+// FUNCTION: TIE98 0x4C6490
+void std3D_SetRenderSurface(IDirectDrawSurface* render_surface) { g_std3DRenderSurface = render_surface; }
+
+// FUNCTION: TIE98 0x4C64A0
+void std3D_ResetUnusedStartupState(int value0, int value1, int value2, int flag) {
+	g_std3DViewportOverlayRed = value0;
+	g_std3DViewportOverlayGreen = value1;
+	g_std3DViewportOverlayBlue = value2;
+	g_std3DViewportOverlayEnabled = flag;
+}
+
+// FUNCTION: TIE98 0x4C64D0
+static int std3D_Log2Floor(unsigned int value) {
+	int result = 0;
+	while (value > 1) {
+		value >>= 1;
+		++result;
+	}
+	return result;
+}
+
+// FUNCTION: TIE98 0x4C6530
+static void std3D_BuildColormap16(uint8_t* rgb888, uint16_t* output, ColorInfo* format, uint8_t default_alpha,
+								  int color_key) {
+	int i;
+
+	for (i = 0; i < 256; ++i) {
+		uint16_t color = (uint16_t)((rgb888[0] >> format->redPosShiftRight) << format->redPosShift);
+		uint8_t alpha;
+
+		color |= (uint16_t)((rgb888[1] >> format->greenPosShiftRight) << format->greenPosShift);
+		color |= (uint16_t)((rgb888[2] >> format->bluePosShiftRight) << format->bluePosShift);
+		alpha = color_key ? (uint8_t)-(color != 0) : default_alpha;
+		if (format->alphaBPP == 1)
+			alpha = (uint8_t)(0xff - alpha);
+		if (format->alphaBPP != 0) {
+			color |= (uint16_t)((alpha >> format->alphaPosShiftRight) << format->alphaPosShift);
+		}
+		*output++ = color;
+		rgb888 += 3;
+	}
+}
+
+// FUNCTION: TIE98 0x4C6600
+static void std3D_BuildColormapOpaque(uint8_t* rgb888, uint16_t* output, ColorInfo* format) {
+	std3D_BuildColormap16(rgb888, output, format, 0xff, 0);
+}
+
+// FUNCTION: TIE98 0x4C6620
+static void std3D_BuildColormapColorKey(uint8_t* rgb888, uint16_t* output, ColorInfo* format) {
+	std3D_BuildColormap16(rgb888, output, format, 0xff, 1);
+}
+
+// FUNCTION: TIE98 0x4C6640
+static void std3D_BuildColormapAlpha(uint8_t* rgb888, uint16_t* output, ColorInfo* format, uint8_t alpha) {
+	std3D_BuildColormap16(rgb888, output, format, alpha, 0);
+}
+
 // FUNCTION: TIE98 0x4C6660
 void std3D_DestroyDevice(void) {
 	if (!g_std3DDeviceOpen)
@@ -1338,11 +509,108 @@ void std3D_DestroyDevice(void) {
 	g_std3DDeviceOpen = 0;
 }
 
+// FUNCTION: TIE98 0x4C6720
+Std3DVBuffer* std3D_AllocVBuffer(Std3DRasterInfo* raster_info) {
+	Std3DVBuffer* vbuffer = malloc(sizeof *vbuffer);
+	memset(vbuffer, 0, sizeof *vbuffer);
+	vbuffer->storageType = 0;
+	vbuffer->raster = *raster_info;
+	vbuffer->pixels =
+		malloc((size_t)raster_info->width * raster_info->height * (raster_info->bitsPerPixel >> 3));
+	vbuffer->raster.rowPitch = raster_info->width * (raster_info->bitsPerPixel >> 3);
+	return vbuffer;
+}
+
+// FUNCTION: TIE98 0x4C6780
+void std3D_FreeVBuffer(Std3DVBuffer* vbuffer) {
+	if (vbuffer->storageType == 1) {
+		if (vbuffer->ddSurface)
+			vbuffer->ddSurface->lpVtbl->Release(vbuffer->ddSurface);
+	} else {
+		free(vbuffer->pixels);
+	}
+	memset(vbuffer, 0, sizeof *vbuffer);
+	free(vbuffer);
+}
+
+// FUNCTION: TIE98 0x4C67C0
+void std3D_LockVBuffer(Std3DVBuffer* vbuffer) {
+	if (vbuffer->storageType == 1 && vbuffer->lockCount == 0) {
+		DDSURFACEDESC descriptor;
+		memset(&descriptor, 0, sizeof descriptor);
+		descriptor.dwSize = sizeof descriptor;
+		if (vbuffer->ddSurface->lpVtbl->Lock(vbuffer->ddSurface, NULL, &descriptor, 1, NULL) != 0)
+			return;
+		vbuffer->pixels = descriptor.lpSurface;
+		vbuffer->raster.rowPitch = (uint32_t)descriptor.lPitch;
+	}
+	++vbuffer->lockCount;
+}
+
+// FUNCTION: TIE98 0x4C6840
+uint32_t std3D_GetCapabilityFlags(void) { return g_std3DCapFlags; }
+
+// FUNCTION: TIE98 0x4C6880
+int std3D_SetFogColor8(uint32_t red, uint32_t green, uint32_t blue) {
+	g_std3DFogColorRed8 = (int)red;
+	g_std3DFogColorGreen8 = (int)green;
+	g_std3DFogColorBlue8 = (int)blue;
+	return (int)red;
+}
+
+// FUNCTION: TIE98 0x4C68A0
+int std3D_SetFogTableRangeBits(uint32_t start_bits, uint32_t end_bits) {
+	g_std3DFogTableStartBits = (int)start_bits;
+	g_std3DFogTableEndBits = (int)end_bits;
+	return (int)start_bits;
+}
+
+// FUNCTION: TIE98 0x4C68C0
+void std3D_UnlockVBuffer(Std3DVBuffer* vbuffer) {
+	if (vbuffer->lockCount == 0 ||
+		(vbuffer->lockCount == 1 && vbuffer->storageType == 1 &&
+		 vbuffer->ddSurface->lpVtbl->Unlock(vbuffer->ddSurface, vbuffer->pixels) != 0))
+		return;
+	--vbuffer->lockCount;
+}
+
+// FUNCTION: TIE98 0x4C6920
+int std3D_SetTextureSizeCaps(int min_width, int min_height, int max_width, int max_height) {
+	g_std3DMinTextureWidth = (unsigned int)min_width;
+	g_std3DMinTextureHeight = (unsigned int)min_height;
+	g_std3DMaxTextureWidth = (unsigned int)max_width;
+	g_std3DMaxTextureHeight = (unsigned int)max_height;
+	return max_height;
+}
+
 // FUNCTION: TIE98 0x4C6950
 char std3D_StartScene(void) { return (char)g_d3dDevice->lpVtbl->BeginScene(g_d3dDevice); }
 
 // FUNCTION: TIE98 0x4C6990
 char std3D_EndScene(void) { return (char)g_d3dDevice->lpVtbl->EndScene(g_d3dDevice); }
+
+// FUNCTION: TIE98 0x4C69D0
+void std3D_BlitVBuffer(Std3DVBuffer* destination, Std3DVBuffer* source, int destination_x,
+					   int destination_y) {
+	uint8_t* source_row;
+	uint8_t* destination_row;
+	size_t row_bytes;
+	unsigned int row;
+
+	std3D_LockVBuffer(destination);
+	std3D_LockVBuffer(source);
+	source_row = source->pixels;
+	destination_row = (uint8_t*)destination->pixels + (size_t)destination->raster.rowPitch * destination_y +
+					  (size_t)(destination->raster.bitsPerPixel >> 3) * destination_x;
+	row_bytes = (size_t)(source->raster.bitsPerPixel >> 3) * source->raster.width;
+	for (row = 0; row < source->raster.height; ++row) {
+		memcpy(destination_row, source_row, row_bytes);
+		destination_row += destination->raster.rowPitch;
+		source_row += source->raster.rowPitch;
+	}
+	std3D_UnlockVBuffer(destination);
+	std3D_UnlockVBuffer(source);
+}
 
 // FUNCTION: TIE98 0x4C6A80
 char std3D_LockExecuteBuffer(void) {
@@ -1366,6 +634,32 @@ char std3D_AddVertices(D3DTLVERTEX* vertices, int count) {
 	g_d3dWritePtr += (size_t)count * sizeof *vertices;
 	g_d3dBufVertCount += count;
 	return 1;
+}
+
+// FUNCTION: TIE98 0x4C6B70
+void std3D_FillVBuffer(Std3DVBuffer* vbuffer, int color) {
+	uint8_t* row;
+	unsigned int x, y;
+
+	std3D_LockVBuffer(vbuffer);
+	row = vbuffer->pixels;
+	for (y = 0; y < vbuffer->raster.height; ++y) {
+		switch (vbuffer->raster.bitsPerPixel) {
+			case 8:
+				memset(row, color, vbuffer->raster.width);
+				break;
+			case 16:
+				for (x = 0; x < vbuffer->raster.width; ++x)
+					((uint16_t*)row)[x] = (uint16_t)color;
+				break;
+			case 32:
+				for (x = 0; x < vbuffer->raster.width; ++x)
+					((uint32_t*)row)[x] = (uint32_t)color;
+				break;
+		}
+		row += vbuffer->raster.rowPitch;
+	}
+	std3D_UnlockVBuffer(vbuffer);
 }
 
 // FUNCTION: TIE98 0x4C6C90
@@ -1576,6 +870,339 @@ void std3D_SetRenderState(Std3DRenderStateFlags flags) {
 	g_d3dStateFlags = flags;
 }
 
+// FUNCTION: TIE98 0x4C7510
+char std3D_SetPaletteConversionSource(const void* palette_rgb888, uint8_t alpha) {
+	memcpy(g_std3DPaletteConversionSourceRgb, palette_rgb888, sizeof g_std3DPaletteConversionSourceRgb);
+	if (g_pFmtRGB565->colorInfo.colorMode == STDCOLOR_RGB && g_pFmtRGB565->colorInfo.bpp == 16) {
+		std3D_BuildColormapOpaque((uint8_t*)palette_rgb888, g_std3DPaletteScratch16,
+								  &g_pFmtRGB565->colorInfo);
+	}
+	if (g_pStd3DCurDevice->caps.colorModelFlags != 0) {
+		if (g_pFmtRGBA1555->colorInfo.colorMode == STDCOLOR_RGBA && g_pFmtRGBA1555->colorInfo.bpp == 16) {
+			std3D_BuildColormapColorKey((uint8_t*)palette_rgb888, g_texConvBuf1555,
+										&g_pFmtRGBA1555->colorInfo);
+		}
+		if (g_pStd3DCurDevice->caps.zCmpCapsMask == 0 &&
+			g_pFmtRGBA4444->colorInfo.colorMode == STDCOLOR_RGBA && g_pFmtRGBA4444->colorInfo.bpp == 16) {
+			std3D_BuildColormapAlpha((uint8_t*)palette_rgb888, g_texConvBuf4444, &g_pFmtRGBA4444->colorInfo,
+									 alpha);
+		}
+	}
+	return 1;
+}
+
+// FUNCTION: TIE98 0x4C75C0
+void std3D_ClampTextureDimensions(uint32_t source_width, uint32_t source_height, uint32_t* output_width,
+								  uint32_t* output_height) {
+	uint32_t width = source_width < 1                        ? 1
+					 : source_width > g_std3DMaxTextureWidth ? g_std3DMaxTextureWidth
+															 : source_width;
+	uint32_t height = source_height < 1                        ? 1
+					  : source_height > g_std3DMaxTextureWidth ? g_std3DMaxTextureWidth
+															   : source_height;
+	if (width < g_std3DMinTextureWidth || height < g_std3DMinTextureHeight ||
+		(g_pStd3DCurDevice->caps.bSquareOnlyTexture && width != height)) {
+		if (g_pStd3DCurDevice->caps.bSquareOnlyTexture && width != height) {
+			width = width > height ? width : height;
+			height = width;
+		} else {
+			if (width < g_std3DMinTextureWidth)
+				width = g_std3DMinTextureWidth;
+			if (height < g_std3DMinTextureHeight)
+				height = g_std3DMinTextureHeight;
+		}
+	}
+	*output_width = width;
+	*output_height = height;
+}
+
+// FUNCTION: TIE98 0x4C7660
+char std3D_CreateMipSurface(Std3DVBuffer* source, Std3DTextureSurface* surface, int texture_format_mode,
+							int alpha_mask) {
+	IDirectDrawSurface* source_surface = NULL;
+	IDirectDrawSurface* cached_surface = NULL;
+	IDirect3DTexture* source_texture = NULL;
+	IDirect3DTexture* cached_texture = NULL;
+	Std3DVBuffer* scaled = NULL;
+	Std3DVBuffer* input = source;
+	uint32_t width = source->raster.width;
+	uint32_t height;
+	DDSURFACEDESC descriptor;
+	HRESULT result;
+	DDSURFACEDESC lock;
+	D3DTEXTUREHANDLE handle;
+
+	if (width == 0)
+		width = 1;
+	else if (width > 256)
+		width = 256;
+	height = source->raster.height;
+	if (height == 0)
+		height = 1;
+	else if (height > 256)
+		height = 256;
+
+	if (width < g_std3DMinTextureWidth || height < g_std3DMinTextureHeight ||
+		(g_pStd3DCurDevice->caps.bSquareOnlyTexture && width != height)) {
+		Std3DRasterInfo raster = source->raster;
+		uint32_t target_width;
+		uint32_t target_height;
+		unsigned int x_tiles;
+		unsigned int y_tiles;
+		unsigned int y;
+
+		if (g_pStd3DCurDevice->caps.bSquareOnlyTexture && width != height) {
+			target_width = width > height ? width : height;
+			target_height = target_width;
+		} else {
+			target_width = width < g_std3DMinTextureWidth ? g_std3DMinTextureWidth : width;
+			target_height = height < g_std3DMinTextureHeight ? g_std3DMinTextureHeight : height;
+		}
+		x_tiles = (unsigned int)((double)target_width / (double)(int)width + 0.5);
+		y_tiles = (unsigned int)((double)target_height / (double)(int)height + 0.5);
+		raster.width *= x_tiles;
+		raster.height *= y_tiles;
+		scaled = std3D_AllocVBuffer(&raster);
+		for (y = 0; y < y_tiles; ++y) {
+			unsigned int x;
+
+			for (x = 0; x < x_tiles; ++x) {
+				std3D_BlitVBuffer(scaled, source, (int)(x * width), (int)(y * height));
+			}
+		}
+		input = scaled;
+		width = raster.width;
+		height = raster.height;
+	}
+
+	if (texture_format_mode != 0 && g_pStd3DCurDevice->caps.bAlphaTexture != 0) {
+		surface->usesAlphaFormat = 1;
+		descriptor = alpha_mask ? g_pFmtRGBA4444->ddsd : g_pFmtRGBA1555->ddsd;
+	} else if (alpha_mask) {
+		surface->usesAlphaFormat = 1;
+		descriptor = g_pFmtRGBA4444->ddsd;
+	} else {
+		surface->usesAlphaFormat = 0;
+		descriptor = g_pFmtRGB565->ddsd;
+	}
+	descriptor.dwSize = 108;
+	descriptor.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT;
+	descriptor.dwWidth = width;
+	descriptor.dwHeight = height;
+	descriptor.ddsCaps.dwCaps = DDSCAPS_TEXTURE | DDSCAPS_SYSTEMMEMORY;
+	result = g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor, &source_surface, NULL);
+	if (result == 0) {
+		memset(&lock, 0, sizeof lock);
+		lock.dwSize = 108;
+		result = source_surface->lpVtbl->Lock(source_surface, NULL, &lock, 1, NULL);
+	}
+	if (result == 0) {
+		if (input->raster.sourceType <= 2) {
+			uint32_t y;
+
+			std3D_LockVBuffer(input);
+			for (y = 0; y < height; ++y) {
+				uint8_t* destination = (uint8_t*)lock.lpSurface + (size_t)lock.lPitch * y;
+				uint8_t* source_row = (uint8_t*)input->pixels + (size_t)input->raster.rowPitch * y;
+				if (input->raster.sourceType != 0) {
+					memcpy(destination, source_row, (size_t)width * 2);
+				} else {
+					uint16_t* output = (uint16_t*)destination;
+					uint16_t* palette = g_std3DPaletteScratch16;
+					uint32_t x;
+
+					if (texture_format_mode != 0 && g_pStd3DCurDevice->caps.bAlphaTexture != 0)
+						palette = alpha_mask ? g_texConvBuf4444 : g_texConvBuf1555;
+					else if (alpha_mask)
+						palette = g_texConvBuf4444;
+					for (x = 0; x < width; ++x)
+						output[x] = palette[source_row[x]];
+				}
+			}
+			std3D_UnlockVBuffer(input);
+		}
+		result = source_surface->lpVtbl->Unlock(source_surface, NULL);
+	}
+	if (result == 0) {
+		if (texture_format_mode != 0 && g_pStd3DCurDevice->caps.bAlphaTexture == 0) {
+			DDCOLORKEY key;
+			if (input->raster.sourceType == 0) {
+				key.dwColorSpaceLowValue = g_std3DPaletteScratch16[0];
+				key.dwColorSpaceHighValue = g_std3DPaletteScratch16[0];
+				source_surface->lpVtbl->SetColorKey(source_surface, DDCKEY_SRCBLT, &key);
+			} else if (input->raster.sourceType == 1) {
+				key.dwColorSpaceLowValue = input->transparentColor;
+				key.dwColorSpaceHighValue = input->transparentColor;
+				source_surface->lpVtbl->SetColorKey(source_surface, DDCKEY_SRCBLT, &key);
+			}
+			/* PORT: TIE98 passes an uninitialized key for source type 2. That
+			 * has no source transparency value to preserve, so omit the call. */
+		}
+		result = source_surface->lpVtbl->QueryInterface(source_surface, &IID_IDirect3DTexture_Compat,
+														(void**)&source_texture);
+	}
+	if (result == 0)
+		result = source_surface->lpVtbl->GetSurfaceDesc(source_surface, &descriptor);
+	if (result == 0) {
+		surface->ddsd = descriptor;
+		descriptor.dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT;
+		descriptor.ddsCaps.dwCaps = DDSCAPS_TEXTURE | DDSCAPS_VIDEOMEMORY | DDSCAPS_ALLOCONLOAD;
+		result =
+			g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor, &cached_surface, NULL);
+		if (result == DX_DDERR_OUTOFVIDEOMEMORY) {
+			/* Evict textures not used this frame until enough bytes are
+			 * released for a retry; stop when eviction cannot free enough. */
+			Std3DTextureSurface* candidate = g_std3DTextureCacheHead;
+			const unsigned int needed = width * height;
+			unsigned int freed;
+
+			do {
+				freed = 0;
+				while (freed < needed && candidate && candidate->cacheFrameTag != g_std3DTextureFrameTag) {
+					Std3DTextureSurface* next = candidate->pNext;
+					candidate->pCachedSurface->lpVtbl->Release(candidate->pCachedSurface);
+					candidate->pCachedTexture->lpVtbl->Release(candidate->pCachedTexture);
+					freed += candidate->byteSize;
+					candidate->bCached = 0;
+					std3D_CacheListRemove(candidate);
+					candidate = next;
+				}
+				if (freed >= needed)
+					result = g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor,
+																	  &cached_surface, NULL);
+			} while (freed >= needed && result == DX_DDERR_OUTOFVIDEOMEMORY);
+		}
+	}
+	if (result == 0)
+		result = cached_surface->lpVtbl->QueryInterface(cached_surface, &IID_IDirect3DTexture_Compat,
+														(void**)&cached_texture);
+	if (result == 0)
+		result = cached_texture->lpVtbl->Load(cached_texture, source_texture);
+	if (result == 0) {
+		handle = 0;
+		result = cached_texture->lpVtbl->GetHandle(cached_texture, g_d3dDevice, &handle);
+		if (result != 0)
+			handle = 0;
+		source_texture->lpVtbl->Release(source_texture);
+		source_surface->lpVtbl->Release(source_surface);
+		if (scaled)
+			std3D_FreeVBuffer(scaled);
+		surface->pCachedTexture = cached_texture;
+		surface->pCachedSurface = cached_surface;
+		surface->texHandle = handle;
+		surface->width = width;
+		surface->height = height;
+		surface->byteSize = width * height;
+		surface->bCached = 1;
+		surface->cacheFrameTag = g_std3DTextureFrameTag;
+		std3D_CacheListAppend(surface);
+		return 1;
+	}
+
+	if (source_surface)
+		source_surface->lpVtbl->Release(source_surface);
+	if (source_texture)
+		source_texture->lpVtbl->Release(source_texture);
+	if (scaled)
+		std3D_FreeVBuffer(scaled);
+	if (cached_surface)
+		cached_surface->lpVtbl->Release(cached_surface);
+	if (cached_texture)
+		cached_texture->lpVtbl->Release(cached_texture);
+	surface->pCachedTexture = NULL;
+	surface->pCachedSurface = NULL;
+	surface->texHandle = 0;
+	surface->bCached = 0;
+	surface->cacheFrameTag = 0;
+	return 0;
+}
+
+// FUNCTION: TIE98 0x4C8020
+void std3D_FlushTextureCache(void) {
+	Std3DTextureSurface* surface = g_std3DTextureCacheHead;
+	while (surface) {
+		Std3DTextureSurface* next = surface->pNext;
+		if (surface->pCachedSurface) {
+			surface->pCachedSurface->lpVtbl->Release(surface->pCachedSurface);
+			surface->pCachedSurface = NULL;
+		}
+		if (surface->pCachedTexture) {
+			surface->pCachedTexture->lpVtbl->Release(surface->pCachedTexture);
+			surface->pCachedTexture = NULL;
+		}
+		surface->bCached = 0;
+		surface->cacheFrameTag = 0;
+		surface->pPrev = NULL;
+		surface->pNext = NULL;
+		surface = next;
+	}
+	g_std3DTextureCacheHead = NULL;
+	g_std3DTextureCacheTail = NULL;
+	g_std3DTextureSurfaceCount = 0;
+	g_pStd3DCurDevice->availableMemory = g_pStd3DCurDevice->totalMemory;
+	g_std3DTextureFrameTag = 1;
+}
+
+// FUNCTION: TIE98 0x4C80A0
+static void std3D_CacheListAppend(Std3DTextureSurface* surface) {
+	if (g_std3DTextureCacheHead) {
+		g_std3DTextureCacheTail->pNext = surface;
+		surface->pPrev = g_std3DTextureCacheTail;
+		surface->pNext = NULL;
+		g_std3DTextureCacheTail = surface;
+	} else {
+		g_std3DTextureCacheHead = surface;
+		g_std3DTextureCacheTail = surface;
+		surface->pPrev = NULL;
+		surface->pNext = NULL;
+	}
+	++g_std3DTextureSurfaceCount;
+	g_pStd3DCurDevice->availableMemory -= surface->byteSize;
+}
+
+// FUNCTION: TIE98 0x4C8110
+static void std3D_CacheListRemove(Std3DTextureSurface* surface) {
+	if (surface == g_std3DTextureCacheHead) {
+		g_std3DTextureCacheHead = surface->pNext;
+		if (g_std3DTextureCacheHead) {
+			g_std3DTextureCacheHead->pPrev = NULL;
+			if (!g_std3DTextureCacheHead->pNext)
+				g_std3DTextureCacheTail = g_std3DTextureCacheHead;
+		} else {
+			g_std3DTextureCacheTail = NULL;
+		}
+	} else if (surface == g_std3DTextureCacheTail) {
+		g_std3DTextureCacheTail = surface->pPrev;
+		g_std3DTextureCacheTail->pNext = NULL;
+	} else {
+		surface->pPrev->pNext = surface->pNext;
+		surface->pNext->pPrev = surface->pPrev;
+	}
+	--g_std3DTextureSurfaceCount;
+	g_pStd3DCurDevice->availableMemory += surface->byteSize;
+}
+
+// FUNCTION: TIE98 0x4C81C0
+static char std3D_QueryTextureVidMem(unsigned int* total_bytes, unsigned int* free_bytes) {
+	DDSCAPS caps = { DDSCAPS_TEXTURE };
+
+	IDirectDraw* direct_draw2 = NULL;
+	if (g_std3DDirectDraw->lpVtbl->QueryInterface(g_std3DDirectDraw, &CLSID_IDirectDraw2,
+												  (void**)&direct_draw2) != 0)
+		return 0;
+	if (direct_draw2->lpVtbl->GetAvailableVidMem(direct_draw2, &caps, total_bytes, free_bytes) != 0)
+		return 0;
+	direct_draw2->lpVtbl->Release(direct_draw2);
+	return 1;
+}
+
+// FUNCTION: TIE98 0x4C8230
+void std3D_CacheTextureSurface(Std3DTextureSurface* surface) {
+	surface->cacheFrameTag = g_std3DTextureFrameTag;
+	std3D_CacheListRemove(surface);
+	std3D_CacheListAppend(surface);
+}
+
 // FUNCTION: TIE98 0x4C8260
 char std3D_ClearZBuffer(void) {
 	D3DRECT rect = { 0 };
@@ -1594,75 +1221,463 @@ char std3D_ClearZBuffer(void) {
 	}
 }
 
-// FUNCTION: TIE98 0x42B300
-// Renderer_ClearCockpitCrtZBuffer
-void Renderer_ClearCockpitCrtZBuffer(void) {
-	AeronDx5Rect depth_rect;
+// FUNCTION: TIE98 0x4C8330
+unsigned int std3D_SelectBestDevice(const Std3DDeviceCaps* required_caps) {
+	unsigned int best_index = 0;
+	int best_score = 0;
+	unsigned int i;
 
-	uint8_t negative_run_fill;
-	uint8_t positive_run_fill;
+	for (i = 0; i < g_std3DNumDevices; ++i) {
+		const Std3DDeviceCaps* caps = &g_std3DDevices[i].caps;
+		int score = 0;
+		if (!required_caps->bTexturePerspective ||
+			caps->bTexturePerspective == required_caps->bTexturePerspective) {
+			score = 1;
+			if (!required_caps->bHasZBuffer || caps->bHasZBuffer == required_caps->bHasZBuffer) {
+				score = 2;
+				if ((required_caps->colorModelFlags & caps->colorModelFlags) != 0) {
+					score = 3;
+					if (caps->bHardware == required_caps->bHardware)
+						return i;
+				}
+			}
+		}
+		if (score > best_score) {
+			best_index = i;
+			best_score = score;
+		}
+	}
+	return best_index;
+}
+
+// FUNCTION: TIE98 0x4C83F0
+static int std3D_FindClosestFormat(const ColorInfo* match, Std3DTexFmt* formats, unsigned int count) {
+	int best_index = 0;
+	int best_score = 0;
+	unsigned int i;
+
+	for (i = 0; i < count; ++i) {
+		ColorInfo* format = &formats[i].colorInfo;
+		int score = 0;
+		if (format->colorMode == match->colorMode) {
+			score = 1;
+			if (format->bpp == match->bpp) {
+				score = 2;
+				if (match->colorMode == STDCOLOR_RGBA)
+					score = 3;
+				if (format->redBPP == match->redBPP && format->greenBPP == match->greenBPP &&
+					format->blueBPP == match->blueBPP &&
+					(match->colorMode != STDCOLOR_RGBA || format->alphaBPP == match->alphaBPP))
+					return (int)i;
+			}
+		}
+		if (score > best_score) {
+			best_index = (int)i;
+			best_score = score;
+		}
+	}
+	return best_index;
+}
+
+// FUNCTION: TIE98 0x4C8800
+static void std3D_BuildViewportQuad(const Std3DViewportRect* rect) {
+	g_std3DQuadRect = *rect;
+	memset(g_std3DQuadVerts, 0, sizeof g_std3DQuadVerts);
+	g_std3DQuadVerts[0].sx = (float)rect->x;
+	g_std3DQuadVerts[0].sy = (float)rect->y;
+	g_std3DQuadVerts[1].sx = (float)(rect->x + rect->width);
+	g_std3DQuadVerts[1].sy = g_std3DQuadVerts[0].sy;
+	g_std3DQuadVerts[2].sx = g_std3DQuadVerts[1].sx;
+	g_std3DQuadVerts[2].sy = (float)(rect->y + rect->height);
+	g_std3DQuadVerts[3].sx = g_std3DQuadVerts[0].sx;
+	g_std3DQuadVerts[3].sy = g_std3DQuadVerts[2].sy;
+
+	g_std3DQuadTris[0].v0 = 0;
+	g_std3DQuadTris[0].v1 = 1;
+	g_std3DQuadTris[0].v2 = 2;
+	g_std3DQuadTris[0].flags = 0x8200;
+	g_std3DQuadTris[0].texture = NULL;
+	g_std3DQuadTris[1].v0 = 0;
+	g_std3DQuadTris[1].v1 = 2;
+	g_std3DQuadTris[1].v2 = 3;
+	g_std3DQuadTris[1].flags = 0x8200;
+	g_std3DQuadTris[1].texture = NULL;
+}
+
+// FUNCTION: TIE98 0x4C88F0
+static char std3D_SetInitialRenderState(void) {
+	D3DEXECUTEBUFFERDESC descriptor = { 0 };
+	IDirect3DExecuteBuffer* buffer;
+	uint8_t* base;
+	D3DINSTRUCTION* instruction;
+	D3DSTATE* states;
+	uint32_t instruction_length;
+	D3DEXECUTEDATA data;
+
+	descriptor.dwSize = sizeof descriptor;
+	descriptor.dwFlags = 1;
+	descriptor.dwBufferSize = 4096;
+	buffer = NULL;
+
+	g_d3dDevice->lpVtbl->CreateExecuteBuffer(g_d3dDevice, &descriptor, &buffer, NULL);
+	buffer->lpVtbl->Lock(buffer, &descriptor);
+	memset(descriptor.lpData, 0, descriptor.dwBufferSize);
+
+	base = descriptor.lpData;
+	instruction = (D3DINSTRUCTION*)base;
+	instruction->bOpcode = D3DOP_STATERENDER;
+	instruction->bSize = sizeof(D3DSTATE);
+	instruction->wCount = 25;
+	states = (D3DSTATE*)(instruction + 1);
+	states[0].dwState = D3DRENDERSTATE_TEXTUREPERSPECTIVE;
+	states[0].dwArg = (g_std3DCapFlags & 1) != 0;
+	states[1].dwState = D3DRENDERSTATE_TEXTUREMAG;
+	states[1].dwArg = ((g_std3DCapFlags & 0x80) != 0) + 1;
+	states[2].dwState = D3DRENDERSTATE_TEXTUREMIN;
+	states[2].dwArg = ((g_std3DCapFlags & 0x100) != 0) + 1;
+	states[3].dwState = D3DRENDERSTATE_SUBPIXEL;
+	states[3].dwArg = (g_std3DCapFlags & 0x10) != 0;
+	states[4].dwState = D3DRENDERSTATE_SUBPIXELX;
+	states[4].dwArg = (g_std3DCapFlags & 0x20) != 0;
+	states[5].dwState = D3DRENDERSTATE_WRAPU;
+	states[5].dwArg = 0;
+	states[6].dwState = D3DRENDERSTATE_WRAPV;
+	states[6].dwArg = 0;
+	states[7].dwState = D3DRENDERSTATE_BLENDENABLE;
+	states[7].dwArg = (g_std3DCapFlags & 0x600) != 0;
+	if (g_std3DCapFlags & 0x600) {
+		states[8].dwState = D3DRENDERSTATE_TEXTUREMAPBLEND;
+		states[8].dwArg = (g_std3DCapFlags & 0x400) ? 4u : 2u;
+		states[9].dwState = D3DRENDERSTATE_SRCBLEND;
+		states[9].dwArg = 5;
+		states[10].dwState = D3DRENDERSTATE_DESTBLEND;
+		states[10].dwArg = 6;
+	} else {
+		states[8].dwState = D3DRENDERSTATE_TEXTUREMAPBLEND;
+		states[8].dwArg = 2;
+		states[9].dwState = D3DRENDERSTATE_SRCBLEND;
+		states[9].dwArg = 2;
+		states[10].dwState = D3DRENDERSTATE_DESTBLEND;
+		states[10].dwArg = 1;
+	}
+	states[11].dwState = D3DRENDERSTATE_ALPHATESTENABLE;
+	states[11].dwArg = 1;
+	states[12].dwState = D3DRENDERSTATE_ALPHAFUNC;
+	states[12].dwArg = 6;
+	states[13].dwState = D3DRENDERSTATE_STIPPLEDALPHA;
+	states[13].dwArg = g_pStd3DCurDevice->caps.renderBitDepthMask != 0;
+	states[14].dwState = D3DRENDERSTATE_SHADEMODE;
+	states[14].dwArg = 2;
+	states[15].dwState = D3DRENDERSTATE_MONOENABLE;
+	states[15].dwArg = (g_std3DCapFlags & 0x8000) == 0;
+	states[16].dwState = D3DRENDERSTATE_SPECULARENABLE;
+	states[16].dwArg = (g_std3DCapFlags & 4) != 0;
+	states[17].dwState = D3DRENDERSTATE_FOGENABLE;
+	states[17].dwArg = (g_std3DCapFlags & 0x40) != 0;
+	states[18].dwState = D3DRENDERSTATE_FILLMODE;
+	states[18].dwArg = 3;
+	states[19].dwState = D3DRENDERSTATE_DITHERENABLE;
+	states[19].dwArg = (g_std3DCapFlags & 2) != 0;
+	states[20].dwState = D3DRENDERSTATE_ANTIALIAS;
+	states[20].dwArg = (g_std3DCapFlags & 8) != 0;
+	states[21].dwState = D3DRENDERSTATE_ZENABLE;
+	states[21].dwArg = g_std3DZBufferEnabled != 0;
+	states[22].dwState = D3DRENDERSTATE_ZWRITEENABLE;
+	states[22].dwArg = g_std3DZBufferEnabled != 0;
+	states[23].dwState = D3DRENDERSTATE_ZFUNC;
+	states[23].dwArg = (unsigned char)std3D_MapZCmpFunc(g_std3DZBufferBitDepth);
+	states[24].dwState = D3DRENDERSTATE_CULLMODE;
+	states[24].dwArg = 1;
+	instruction = (D3DINSTRUCTION*)&states[25];
+	instruction->bOpcode = D3DOP_EXIT;
+	instruction->bSize = 0;
+	instruction->wCount = 0;
+	instruction_length = (uint32_t)((uint8_t*)(instruction + 1) - (uint8_t*)descriptor.lpData);
+	buffer->lpVtbl->Unlock(buffer);
+
+	memset(&data, 0, sizeof data);
+	data.dwSize = sizeof data;
+	data.dwInstructionLength = instruction_length;
+	buffer->lpVtbl->SetExecuteData(buffer, &data);
+	g_d3dDevice->lpVtbl->BeginScene(g_d3dDevice);
+	g_d3dDevice->lpVtbl->Execute(g_d3dDevice, buffer, g_d3dViewport, D3DEXECUTE_UNCLIPPED);
+	g_d3dDevice->lpVtbl->EndScene(g_d3dDevice);
+	buffer->lpVtbl->Release(buffer);
+	g_d3dStateFlags = (Std3DRenderStateFlags)g_std3DCapFlags;
+	return 1;
+}
+
+// FUNCTION: TIE98 0x4C8D70
+static char std3D_CreateViewport(unsigned int width, unsigned int height) {
+	Std3DViewportRect rect;
+
+	HRESULT result = g_lpD3D->lpVtbl->CreateViewport(g_lpD3D, &g_d3dViewport, NULL);
+	D3DVIEWPORT viewport;
+
+	if (result != 0)
+		return 0;
+	result = g_d3dDevice->lpVtbl->AddViewport(g_d3dDevice, g_d3dViewport);
+	if (result != 0)
+		return 0;
+
+	memset(&viewport, 0, sizeof viewport);
+	viewport.dwSize = sizeof viewport;
+	viewport.dwWidth = width;
+	viewport.dwHeight = height;
+	viewport.dvScaleX = (float)width * 0.5f;
+	viewport.dvScaleY = (float)height * 0.5f;
+	viewport.dvMaxX = (float)width / (viewport.dvScaleX * 2.0f);
+	viewport.dvMaxY = (float)height / (viewport.dvScaleY * 2.0f);
+	if (g_d3dViewport->lpVtbl->SetViewport(g_d3dViewport, &viewport) != 0)
+		return 0;
+	rect.x = 0;
+	rect.y = 0;
+	rect.width = (int)width;
+	rect.height = (int)height;
+	std3D_BuildViewportQuad(&rect);
+	return 1;
+}
+
+// FUNCTION: TIE98 0x4C8F00
+static char std3D_CreateZBuffer(int width, int height) {
 	DDSURFACEDESC descriptor;
 	HRESULT result;
 
-	void* locked_surface;
-	int depth_x;
-	int depth_y;
-	uint8_t* row;
-	const uint8_t* mask;
-	uint16_t y;
+	memset(&descriptor, 0, sizeof descriptor);
+	descriptor.dwSize = 108;
+	descriptor.dwFlags = 71;
+	descriptor.ddsCaps.dwCaps = 0x20000;
+	descriptor.dwWidth = (uint32_t)width;
+	descriptor.dwHeight = (uint32_t)height;
+	if (g_pStd3DCurDevice->caps.bHardware)
+		descriptor.ddsCaps.dwCaps |= 0x4000;
+	else
+		descriptor.ddsCaps.dwCaps |= 0x800;
+	if (g_pStd3DCurDevice->d3dDesc.dwDeviceZBufferBitDepth & 0x100)
+		descriptor.dwZBufferBitDepth = 32;
+	else if (g_pStd3DCurDevice->d3dDesc.dwDeviceZBufferBitDepth & 0x400)
+		descriptor.dwZBufferBitDepth = 16;
+	else if (g_pStd3DCurDevice->d3dDesc.dwDeviceZBufferBitDepth & 0x800)
+		descriptor.dwZBufferBitDepth = 8;
+	else
+		return 0;
+	result = g_std3DDirectDraw->lpVtbl->CreateSurface(g_std3DDirectDraw, &descriptor, &g_std3DZBufferSurface,
+													  NULL);
+	if (result != 0)
+		return 0;
+	result = g_std3DRenderSurface->lpVtbl->AddAttachedSurface(g_std3DRenderSurface, g_std3DZBufferSurface);
+	if (result != 0)
+		return 0;
+	return g_std3DZBufferSurface->lpVtbl->GetSurfaceDesc(g_std3DZBufferSurface, &descriptor) == 0;
+}
 
-	if (g_std3DZBufferBitDepth == 16) {
-		negative_run_fill = 0xff;
-		positive_run_fill = 0;
+// FUNCTION: TIE98 0x4C9150
+static int AERON_DXAPI std3D_EnumDevicesCallback(DxGuid* guid, char* device_description, char* device_name,
+												 D3DDEVICEDESC* hardware, D3DDEVICEDESC* software,
+												 void* argument) {
+	Std3DDevice* device;
+	D3DDEVICEDESC* descriptor;
+
+	(void)argument;
+	if (g_std3DNumDevices >= STD3D_DEVICE_LIMIT)
+		return 0;
+
+	device = &g_std3DDevices[g_std3DNumDevices];
+	device->guid = *guid;
+	strncpy(device->deviceDescription, device_description, sizeof device->deviceDescription);
+	strncpy(device->deviceName, device_name, sizeof device->deviceName);
+	descriptor = hardware;
+	if (hardware->dcmColorModel != 0) {
+		device->caps.bHardware = 1;
 	} else {
-		negative_run_fill = 0;
-		positive_run_fill = 0xff;
+		descriptor = software;
+		device->caps.bHardware = 0;
 	}
+	memcpy(&device->d3dDesc, descriptor, sizeof device->d3dDesc);
+	device->caps.colorModelFlags = 0;
+	if (descriptor->dcmColorModel & 2)
+		device->caps.colorModelFlags = 2;
+	if (descriptor->dcmColorModel & 1)
+		device->caps.colorModelFlags |= 1;
+	device->caps.bTexturePerspective = (descriptor->dpcTriCaps.dwTextureCaps & 1) != 0;
+	device->caps.bHasZBuffer = descriptor->dwDeviceZBufferBitDepth != 0;
+	device->caps.bSquareOnlyTexture = (descriptor->dpcTriCaps.dwTextureCaps & 0x20) != 0;
+	device->caps.bAlphaTexture = (descriptor->dpcTriCaps.dwTextureCaps & 4) != 0;
+	device->caps.bStippledShade = (descriptor->dpcTriCaps.dwShadeCaps & 0x1000) == 0 &&
+								  (descriptor->dpcTriCaps.dwShadeCaps & 0x2000) != 0;
+	device->caps.bAlphaBlend = ((descriptor->dpcTriCaps.dwTextureBlendCaps & 8) != 0 &&
+								(descriptor->dpcTriCaps.dwShadeCaps & 0x4000) != 0) ||
+							   device->caps.bStippledShade != 0;
+	device->caps.bColorKeyTexture = (descriptor->dpcTriCaps.dwTextureCaps & 8) != 0;
+	device->caps.renderBitDepthMask =
+		(unsigned char)std3D_PackRenderBitDepths(descriptor->dwDeviceRenderBitDepth);
+	device->caps.zCmpCapsMask = (unsigned char)std3D_PackZCmpCaps(descriptor->dpcTriCaps.dwZCmpCaps);
+	device->caps.minTextureWidth = 1;
+	device->caps.minTextureHeight = 1;
+	device->caps.maxTextureWidth = 256;
+	device->caps.maxTextureHeight = 256;
+	device->caps.maxBufferSize = descriptor->dwMaxBufferSize;
+	device->caps.maxVertexCount = descriptor->dwMaxVertexCount;
+	++g_std3DNumDevices;
+	return 1;
+}
 
-	memset(&descriptor, 0, sizeof descriptor);
-	descriptor.dwSize = sizeof descriptor;
-	do {
-		result = g_std3DZBufferSurface->lpVtbl->Lock(g_std3DZBufferSurface, NULL, &descriptor, 0, NULL);
-		if (result != 0 && result != DX_DDERR_WASSTILLDRAWING)
-			return;
-	} while (result != 0);
+// FUNCTION: TIE98 0x4C93B0
+static int AERON_DXAPI std3D_EnumTextureFormats(DDSURFACEDESC* descriptor, void* argument) {
+	Std3DTexFmt* format;
+	ColorInfo* color;
 
-	locked_surface = descriptor.lpSurface;
-	memset(&descriptor, 0, sizeof descriptor);
-	descriptor.dwSize = sizeof descriptor;
-	g_std3DZBufferSurface->lpVtbl->GetSurfaceDesc(g_std3DZBufferSurface, &descriptor);
+	(void)argument;
+	if (g_std3DNumTexFormats >= STD3D_TEXTURE_FORMAT_LIMIT)
+		return 0;
 
-	depth_x = displaycorner_columns + ((int)descriptor.dwWidth - (int)g_pStd3DRenderTarget->width) / 2;
-	depth_y = displaycorner_lines + ((int)descriptor.dwHeight - (int)g_pStd3DRenderTarget->height) / 2;
-	row = (uint8_t*)locked_surface + 2 * depth_x + descriptor.lPitch * depth_y;
-	mask = (const uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
-	for (y = 0; y < pixelsdeep; ++y) {
-		uint8_t* destination = row;
-		int8_t run_type = (int8_t)*mask++;
-		uint32_t drawn = 0;
-		if (pixelswide != 0) {
-			do {
-				uint32_t run = *mask++;
-				if (run == 0) {
-					run = *mask++;
-					if (run == 0)
-						run = *mask++ + 256;
-					run += 255;
-				}
-				memset(destination, run_type < 0 ? negative_run_fill : positive_run_fill, 2 * run);
-				destination += 2 * run;
-				drawn += run;
-				run_type = (int8_t)-run_type;
-			} while (drawn < pixelswide);
+	format = &g_std3DTextureFormats[g_std3DNumTexFormats];
+	memcpy(&format->ddsd, descriptor, sizeof format->ddsd);
+	color = &format->colorInfo;
+	if (descriptor->ddpfPixelFormat.dwFlags & 0x20) {
+		color->colorMode = STDCOLOR_PAL;
+		color->bpp = 8;
+		color->redBPP = 0;
+		color->greenBPP = 0;
+		color->blueBPP = 0;
+		color->redPosShift = 0;
+		color->greenPosShift = 0;
+		color->bluePosShift = 0;
+		color->redPosShiftRight = 0;
+		color->greenPosShiftRight = 0;
+		color->bluePosShiftRight = 0;
+		color->alphaBPP = 0;
+		color->alphaPosShift = 0;
+		color->alphaPosShiftRight = 0;
+	} else {
+		uint32_t mask;
+
+		if (descriptor->ddpfPixelFormat.dwFlags & 8)
+			return 1;
+
+		color->colorMode = descriptor->ddpfPixelFormat.dwFlags & 1 ? STDCOLOR_RGBA : STDCOLOR_RGB;
+		color->bpp = (int)descriptor->ddpfPixelFormat.dwRGBBitCount;
+
+		mask = descriptor->ddpfPixelFormat.dwRBitMask;
+		color->redPosShift = 0;
+		while ((mask & 1) == 0) {
+			mask >>= 1;
+			++color->redPosShift;
 		}
-		row += descriptor.lPitch;
+		color->redPosShiftRight =
+			std3D_Log2Floor(0xffu / (descriptor->ddpfPixelFormat.dwRBitMask >> color->redPosShift));
+		color->redBPP = 0;
+		while (mask & 1) {
+			mask >>= 1;
+			++color->redBPP;
+		}
+
+		mask = descriptor->ddpfPixelFormat.dwGBitMask;
+		color->greenPosShift = 0;
+		while ((mask & 1) == 0) {
+			mask >>= 1;
+			++color->greenPosShift;
+		}
+		color->greenPosShiftRight =
+			std3D_Log2Floor(0xffu / (descriptor->ddpfPixelFormat.dwGBitMask >> color->greenPosShift));
+		color->greenBPP = 0;
+		while (mask & 1) {
+			mask >>= 1;
+			++color->greenBPP;
+		}
+
+		mask = descriptor->ddpfPixelFormat.dwBBitMask;
+		color->bluePosShift = 0;
+		while ((mask & 1) == 0) {
+			mask >>= 1;
+			++color->bluePosShift;
+		}
+		color->bluePosShiftRight =
+			std3D_Log2Floor(0xffu / (descriptor->ddpfPixelFormat.dwBBitMask >> color->bluePosShift));
+		color->blueBPP = 0;
+		while (mask & 1) {
+			mask >>= 1;
+			++color->blueBPP;
+		}
+
+		if (color->colorMode == STDCOLOR_RGBA) {
+			mask = descriptor->ddpfPixelFormat.dwRGBAlphaBitMask;
+			color->alphaPosShift = 0;
+			while ((mask & 1) == 0) {
+				mask >>= 1;
+				++color->alphaPosShift;
+			}
+			color->alphaPosShiftRight = std3D_Log2Floor(
+				0xffu / (descriptor->ddpfPixelFormat.dwRGBAlphaBitMask >> color->alphaPosShift));
+			color->alphaBPP = 0;
+			while (mask & 1) {
+				mask >>= 1;
+				++color->alphaBPP;
+			}
+		} else {
+			color->alphaBPP = 0;
+			color->alphaPosShift = 0;
+			color->alphaPosShiftRight = 0;
+		}
 	}
-	g_std3DZBufferSurface->lpVtbl->Unlock(g_std3DZBufferSurface, locked_surface);
-	/* PORT: publish the precise write made through the CPU DirectDraw attachment
-	 * to the Aeron depth target before the PiP scene is submitted. */
-	depth_rect.x = depth_x;
-	depth_rect.y = depth_y;
-	depth_rect.width = pixelswide;
-	depth_rect.height = pixelsdeep;
-	AeronDx5_CommitDepthSurfaceRect(g_std3DZBufferSurface, &depth_rect);
+	++g_std3DNumTexFormats;
+	return 1;
+}
+
+// FUNCTION: TIE98 0x4C96C0
+static char std3D_PackRenderBitDepths(uint32_t flags) {
+	char result = (flags & 0x4000) != 0;
+	if (flags & 0x2000)
+		result |= 2;
+	if (flags & 0x1000)
+		result |= 4;
+	if (flags & 0x800)
+		result |= 8;
+	if (flags & 0x400)
+		result |= 0x10;
+	if (flags & 0x200)
+		result |= 0x20;
+	if (flags & 0x100)
+		result |= 0x40;
+	return result;
+}
+
+// FUNCTION: TIE98 0x4C9750
+static char std3D_PackZCmpCaps(uint32_t flags) {
+	char result = (flags & 1) != 0;
+	if (flags & 4)
+		result |= 4;
+	if (flags & 2)
+		result |= 2;
+	if (flags & 8)
+		result |= 8;
+	if (flags & 0x10)
+		result |= 0x10;
+	if (flags & 0x20)
+		result |= 0x20;
+	if (flags & 0x40)
+		result |= 0x40;
+	if (flags & 0x80)
+		result |= (char)0x80;
+	return result;
+}
+
+// FUNCTION: TIE98 0x4C97A0
+static char std3D_MapZCmpFunc(char caps_mask) {
+	char result = (caps_mask & 1) != 0;
+	if (caps_mask & 4)
+		result |= 3;
+	if (caps_mask & 2)
+		result |= 2;
+	if (caps_mask & 8)
+		result |= 4;
+	if (caps_mask & 0x10)
+		result |= 5;
+	if (caps_mask & 0x20)
+		result |= 6;
+	if (caps_mask & 0x40)
+		result |= 7;
+	if ((unsigned char)caps_mask & 0x80)
+		result |= 8;
+	return result;
 }

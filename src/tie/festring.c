@@ -1,6 +1,7 @@
 #include "tie/festring.h"
 #include "tie/tie.h"
 
+#include "tie/edition.h"
 #include "tie/sys2.h"
 
 #include <string.h>
@@ -168,14 +169,17 @@ void festring_outstring(const uint8_t* s) {
 // FUNCTION: TIE95 0x238B4
 // FUNCTION: TIE98 0x41D6D0
 void festring_outstringcenter(const uint8_t* s) {
-	int16_t center = ((uint16_t)rightmargin + (uint16_t)leftmargin) / 2;
-	int16_t half_len = (uint16_t)sys2_calclength(s) / 2;
-	int16_t x = center - half_len;
+	uint16_t half_len = (uint16_t)sys2_calclength(s) / 2;
+	uint16_t center = (rightmargin + leftmargin) / 2;
+	uint16_t x = center - half_len;
 
-	if ((uint16_t)x < (uint16_t)leftmargin)
+	if (x < leftmargin)
 		x = leftmargin;
 
-	cursorx = x;
+	if (TIE_FLIGHT_TIE98)
+		festring_setcursor(x, cursory);
+	else
+		cursorx = x;
 	festring_outstring(s);
 }
 

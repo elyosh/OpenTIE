@@ -50,29 +50,105 @@ int32_t sfoiltempB3;
 
 #include <stdint.h>
 
+// FUNCTION: TIE95 0x26140
+void fview_newcalcview(uint16_t roll, uint16_t pitch, uint16_t heading, uint16_t yaw, uint16_t side_angle,
+					   uint16_t up_angle, FlightObject* craft) {
+	int32_t neg_U1, neg_U2, neg_U3;
+
+	fview_calcrotatemove(pitch, heading, craft);
+	fview_calcrotateorient(roll, yaw, craft);
+
+	calcf1 = -calcf1;
+	calcf2 = -calcf2;
+	calcf3 = -calcf3;
+	calcU1 = -calcU1;
+	calcU2 = -calcU2;
+	calcU3 = -calcU3;
+
+	neg_U1 = calcU1;
+	neg_U2 = calcU2;
+	neg_U3 = calcU3;
+
+	fview_transformaxes(calcS1, calcS2, calcS3, side_angle);
+	fview_transformaxes(neg_U1, neg_U2, neg_U3, up_angle);
+
+	worldeyeA1 = calcS1;
+	worldeyeB1 = calcS2;
+	worldeyeC1 = calcS3;
+	worldeyeA2 = calcU1;
+	worldeyeB2 = calcU2;
+	worldeyeC2 = calcU3;
+	worldeyeA3 = calcf1;
+	worldeyeB3 = calcf2;
+	worldeyeC3 = calcf3;
+}
+
+// FUNCTION: TIE95 0x26258
+void fview_newcalcrotate(uint16_t roll, uint16_t pitch, uint16_t heading, uint16_t yaw, FlightObject* craft) {
+	if (craft == NULL) {
+		fview_calcrotatemove(pitch, heading, craft);
+		fview_calcrotateorient(roll, yaw, craft);
+	} else if (craft->orient_dirty) {
+		fview_calcrotatemove(pitch, heading, craft);
+		fview_calcrotateorient(roll, yaw, craft);
+		fview_calcrotworldeye();
+		return;
+	} else {
+		/* Read cached orientation from struct */
+		craftf1 = craft->fwd_x;
+		craftf2 = craft->fwd_y;
+		craftf3 = craft->fwd_z;
+		craftS1 = craft->side_x;
+		craftS2 = craft->side_y;
+		craftS3 = craft->side_z;
+		craftU1 = craft->up_x;
+		craftU2 = craft->up_y;
+		craftU3 = craft->up_z;
+		/* Forward is stored negated; negate back for calc */
+		calcf1 = -craftf1;
+		calcf2 = -craftf2;
+		calcf3 = -craftf3;
+		calcS1 = craftS1;
+		calcS2 = craftS2;
+		calcS3 = craftS3;
+		calcU1 = craftU1;
+		calcU2 = craftU2;
+		calcU3 = craftU3;
+	}
+	fview_calcrotworldeye();
+}
+
 // FUNCTION: TIE95 0x263AC
 void fview_calcrotatemove(uint16_t pitch, uint16_t heading, FlightObject* craft) {
-	int16_t neg_heading = -heading;
-	int16_t adj_pitch = -16384 - pitch;
+	int16_t cos_heading, cos_pitch, sin_heading, sin_pitch;
 
-	int16_t cos_heading = trig2_getsignedcos(neg_heading);
-	int16_t cos_pitch = trig2_getsignedcos(adj_pitch);
-	int16_t sin_heading = trig2_getsignedsin(neg_heading);
-	int16_t sin_pitch = trig2_getsignedsin(adj_pitch);
+	heading = -heading;
+	pitch = 0xC000 - pitch;
+
+	cos_heading = trig2_getsignedcos((int16_t)heading);
+	cos_pitch = trig2_getsignedcos((int16_t)pitch);
+	sin_heading = trig2_getsignedsin((int16_t)heading);
+	sin_pitch = trig2_getsignedsin((int16_t)pitch);
 
 	calcS1 = cos_heading;
 	calcS2 = sin_heading;
 	calcS3 = 0;
-	calcf1 = (cos_pitch * -sin_heading) >> 15;
-	calcf2 = (cos_pitch * cos_heading) >> 15;
+	calcf1 = (-calcS2 * cos_pitch) >> 15;
+	calcf2 = (calcS1 * cos_pitch) >> 15;
 	calcf3 = sin_pitch;
-	calcU1 = -((sin_pitch * sin_heading) >> 15);
-	calcU2 = -((sin_pitch * -cos_heading) >> 15);
-	calcU3 = -cos_pitch;
+	calcU1 = (calcS2 * calcf3) >> 15;
+	calcU1 = -calcU1;
+	calcU2 = (-calcS1 * calcf3) >> 15;
+	calcU2 = -calcU2;
+	calcU3 = cos_pitch;
+	calcU3 = -calcU3;
 
-	craftmoveX = -calcf1;
-	craftmoveY = -calcf2;
-	craftmoveZ = -sin_pitch;
+	craftmoveX = calcf1;
+	craftmoveX = -craftmoveX;
+	craftmoveY = calcf2;
+	craftmoveY = -craftmoveY;
+	craftmoveZ = calcf3;
+	craftmoveZ = -craftmoveZ;
 
 	if (craft) {
 		craft->move_dirty = 0;
@@ -195,282 +271,6 @@ void fview_calcrotworldeye(void) {
 	}
 }
 
-// FUNCTION: TIE95 0x287F4
-void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, uint16_t angle) {
-	int32_t temp;
-	int32_t cos_a, sin_a;
-	int32_t rot[9];
-	int32_t new_S1, new_S2, new_U1, new_U2, new_f1, new_f2;
-
-	if (!angle)
-		return;
-
-	cos_a = trig2_getsignedcos((int16_t)angle);
-	sin_a = trig2_getsignedsin((int16_t)angle);
-
-	if (cos_a >= 0) {
-		int32_t one_minus_cos = 0x7FFF - cos_a; /* 1 - cos in Q15 */
-		temp = (cos_a * 32768) + one_minus_cos * ((axis_x * axis_x) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[0] = temp >> 15;
-		temp = ((axis_z * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_y * axis_x) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[1] = temp >> 15;
-		temp = -32768 * ((axis_y * sin_a) >> 15) + one_minus_cos * ((axis_z * axis_x) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[2] = temp >> 15;
-		temp = -32768 * ((axis_z * sin_a) >> 15) + one_minus_cos * ((axis_y * axis_x) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[3] = temp >> 15;
-		temp = (cos_a * 32768) + one_minus_cos * ((axis_y * axis_y) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[4] = temp >> 15;
-		temp = ((axis_x * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_z * axis_y) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[5] = temp >> 15;
-		temp = ((axis_y * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_z * axis_x) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[6] = temp >> 15;
-		temp = -32768 * ((axis_x * sin_a) >> 15) + one_minus_cos * ((axis_z * axis_y) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[7] = temp >> 15;
-		temp = (cos_a * 32768) + one_minus_cos * ((axis_z * axis_z) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[8] = temp >> 15;
-	} else {
-		int32_t neg_cos = -cos_a; /* |cos| */
-		temp = (cos_a * 32768) + axis_x * axis_x + neg_cos * ((axis_x * axis_x) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[0] = temp >> 15;
-		temp = ((axis_z * sin_a) >> 15) * 32768 + axis_y * axis_x + neg_cos * ((axis_y * axis_x) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[1] = temp >> 15;
-		temp = -32768 * ((axis_y * sin_a) >> 15) + axis_z * axis_x + neg_cos * ((axis_z * axis_x) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[2] = temp >> 15;
-		temp = -32768 * ((axis_z * sin_a) >> 15) + axis_y * axis_x + neg_cos * ((axis_y * axis_x) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[3] = temp >> 15;
-		temp = (cos_a * 32768) + axis_y * axis_y + neg_cos * ((axis_y * axis_y) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[4] = temp >> 15;
-		temp = ((axis_x * sin_a) >> 15) * 32768 + axis_z * axis_y + neg_cos * ((axis_z * axis_y) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[5] = temp >> 15;
-		temp = ((axis_y * sin_a) >> 15) * 32768 + axis_z * axis_x + neg_cos * ((axis_z * axis_x) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[6] = temp >> 15;
-		temp = -32768 * ((axis_x * sin_a) >> 15) + axis_z * axis_y + neg_cos * ((axis_z * axis_y) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[7] = temp >> 15;
-		temp = (cos_a * 32768) + axis_z * axis_z + neg_cos * ((axis_z * axis_z) >> 15);
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rot[8] = temp >> 15;
-	}
-	temp = rot[0] * calcS1 + rot[3] * calcS2 + rot[6] * calcS3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_S1 = temp >> 15;
-	temp = rot[1] * calcS1 + rot[4] * calcS2 + rot[7] * calcS3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_S2 = temp >> 15;
-	temp = rot[2] * calcS1 + rot[5] * calcS2 + rot[8] * calcS3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	calcS3 = temp >> 15;
-	calcS1 = new_S1;
-	calcS2 = new_S2;
-	temp = rot[0] * calcU1 + rot[3] * calcU2 + rot[6] * calcU3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_U1 = temp >> 15;
-	temp = rot[1] * calcU1 + rot[4] * calcU2 + rot[7] * calcU3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_U2 = temp >> 15;
-	temp = rot[2] * calcU1 + rot[5] * calcU2 + rot[8] * calcU3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	calcU3 = temp >> 15;
-	calcU1 = new_U1;
-	calcU2 = new_U2;
-	temp = rot[0] * calcf1 + rot[3] * calcf2 + rot[6] * calcf3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_f1 = temp >> 15;
-	temp = rot[1] * calcf1 + rot[4] * calcf2 + rot[7] * calcf3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_f2 = temp >> 15;
-	temp = rot[2] * calcf1 + rot[5] * calcf2 + rot[8] * calcf3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	calcf3 = temp >> 15;
-	calcf1 = new_f1;
-	calcf2 = new_f2;
-}
-
-// FUNCTION: TIE95 0x26140
-void fview_newcalcview(uint16_t roll, uint16_t pitch, uint16_t heading, uint16_t yaw, uint16_t side_angle,
-					   uint16_t up_angle, FlightObject* craft) {
-	int32_t neg_U1, neg_U2, neg_U3;
-
-	fview_calcrotatemove(pitch, heading, craft);
-	fview_calcrotateorient(roll, yaw, craft);
-
-	calcf1 = -calcf1;
-	calcf2 = -calcf2;
-	calcf3 = -calcf3;
-	calcU1 = -calcU1;
-	calcU2 = -calcU2;
-	calcU3 = -calcU3;
-
-	neg_U1 = calcU1;
-	neg_U2 = calcU2;
-	neg_U3 = calcU3;
-
-	fview_transformaxes(calcS1, calcS2, calcS3, side_angle);
-	fview_transformaxes(neg_U1, neg_U2, neg_U3, up_angle);
-
-	worldeyeA1 = calcS1;
-	worldeyeB1 = calcS2;
-	worldeyeC1 = calcS3;
-	worldeyeA2 = calcU1;
-	worldeyeB2 = calcU2;
-	worldeyeC2 = calcU3;
-	worldeyeA3 = calcf1;
-	worldeyeB3 = calcf2;
-	worldeyeC3 = calcf3;
-}
-
-// FUNCTION: TIE95 0x26258
-void fview_newcalcrotate(uint16_t roll, uint16_t pitch, uint16_t heading, uint16_t yaw, FlightObject* craft) {
-	if (craft) {
-		if (craft->orient_dirty) {
-			fview_calcrotatemove(pitch, heading, craft);
-			fview_calcrotateorient(roll, yaw, craft);
-			fview_calcrotworldeye();
-			return;
-		}
-		/* Read cached orientation from struct */
-		craftf1 = craft->fwd_x;
-		craftf2 = craft->fwd_y;
-		craftf3 = craft->fwd_z;
-		craftS1 = craft->side_x;
-		craftS2 = craft->side_y;
-		craftS3 = craft->side_z;
-		craftU1 = craft->up_x;
-		craftU2 = craft->up_y;
-		craftU3 = craft->up_z;
-		/* Forward is stored negated; negate back for calc */
-		calcS1 = craftS1;
-		calcS2 = craftS2;
-		calcS3 = craftS3;
-		calcf1 = -craftf1;
-		calcf2 = -craftf2;
-		calcf3 = -craftf3;
-		calcU1 = craftU1;
-		calcU2 = craftU2;
-		calcU3 = craftU3;
-	} else {
-		fview_calcrotatemove(pitch, heading, NULL);
-		fview_calcrotateorient(roll, yaw, NULL);
-	}
-	fview_calcrotworldeye();
-}
-
-// FUNCTION: TIE95 0x28100
-void fview_restorerotation(void) {
-	rotworldeyeA1 = sfoiltempA1;
-	rotworldeyeA2 = sfoiltempA2;
-	rotworldeyeA3 = sfoiltempA3;
-	rotworldeyeB1 = sfoiltempB1;
-	rotworldeyeB2 = sfoiltempB2;
-	rotworldeyeB3 = sfoiltempB3;
-	rotworldeyeC1 = sfoiltempC1;
-	rotworldeyeC2 = sfoiltempC2;
-	rotworldeyeC3 = sfoiltempC3;
-	rotlightX = sfoiltemplightX;
-	rotlightY = sfoiltemplightY;
-	rotlightZ = sfoiltemplightZ;
-	objecteyex = sfoiltempx;
-	objecteyey = sfoiltempy;
-	objecteyez = sfoiltempz;
-}
-
 /* ---------- ship-specific component rotations ---------- */
 
 // FUNCTION: TIE95 0x269F4
@@ -541,7 +341,7 @@ void fview_sfoilrotation(int16_t angle) {
 // FUNCTION: TIE95 0x26C24
 void fview_corvettegunrotation(int16_t angle) {
 	int32_t temp;
-	int32_t sin_a, cos_a, neg_sin;
+	int16_t sin_a, cos_a, neg_sin;
 
 	sfoiltempA1 = rotworldeyeA1;
 	sfoiltempA2 = rotworldeyeA2;
@@ -559,42 +359,42 @@ void fview_corvettegunrotation(int16_t angle) {
 	sfoiltempy = objecteyey;
 	sfoiltempz = objecteyez;
 
-	sin_a = trig2_getsignedsin((int16_t)angle);
-	cos_a = trig2_getsignedcos((int16_t)angle);
+	sin_a = trig2_getsignedsin(angle);
+	cos_a = trig2_getsignedcos(angle);
 	neg_sin = -sin_a;
 
 	/* Rotate A and B rows around C axis */
-	temp = sfoiltempA1 * cos_a + sfoiltempB1 * neg_sin;
+	temp = cos_a * sfoiltempA1 + neg_sin * sfoiltempB1;
 	if (temp >= 0x40000000)
 		temp = 0x3FFF0000;
 	if (temp <= -0x40000000)
 		temp = -0x3FFF0000;
 	rotworldeyeA1 = temp >> 15;
-	temp = sfoiltempA2 * cos_a + sfoiltempB2 * neg_sin;
+	temp = cos_a * sfoiltempA2 + neg_sin * sfoiltempB2;
 	if (temp >= 0x40000000)
 		temp = 0x3FFF0000;
 	if (temp <= -0x40000000)
 		temp = -0x3FFF0000;
 	rotworldeyeA2 = temp >> 15;
-	temp = sfoiltempA3 * cos_a + sfoiltempB3 * neg_sin;
+	temp = cos_a * sfoiltempA3 + neg_sin * sfoiltempB3;
 	if (temp >= 0x40000000)
 		temp = 0x3FFF0000;
 	if (temp <= -0x40000000)
 		temp = -0x3FFF0000;
 	rotworldeyeA3 = temp >> 15;
-	temp = sfoiltempA1 * sin_a + sfoiltempB1 * cos_a;
+	temp = sin_a * sfoiltempA1 + cos_a * sfoiltempB1;
 	if (temp >= 0x40000000)
 		temp = 0x3FFF0000;
 	if (temp <= -0x40000000)
 		temp = -0x3FFF0000;
 	rotworldeyeB1 = temp >> 15;
-	temp = sfoiltempA2 * sin_a + sfoiltempB2 * cos_a;
+	temp = sin_a * sfoiltempA2 + cos_a * sfoiltempB2;
 	if (temp >= 0x40000000)
 		temp = 0x3FFF0000;
 	if (temp <= -0x40000000)
 		temp = -0x3FFF0000;
 	rotworldeyeB2 = temp >> 15;
-	temp = sfoiltempA3 * sin_a + sfoiltempB3 * cos_a;
+	temp = sin_a * sfoiltempA3 + cos_a * sfoiltempB3;
 	if (temp >= 0x40000000)
 		temp = 0x3FFF0000;
 	if (temp <= -0x40000000)
@@ -1073,6 +873,25 @@ void fview_componentrotation(int16_t angle, const ShipModelMesh* mesh) {
 	rotlightZ = temp >> 15;
 }
 
+// FUNCTION: TIE95 0x28100
+void fview_restorerotation(void) {
+	rotworldeyeA1 = sfoiltempA1;
+	rotworldeyeA2 = sfoiltempA2;
+	rotworldeyeA3 = sfoiltempA3;
+	rotworldeyeB1 = sfoiltempB1;
+	rotworldeyeB2 = sfoiltempB2;
+	rotworldeyeB3 = sfoiltempB3;
+	rotworldeyeC1 = sfoiltempC1;
+	rotworldeyeC2 = sfoiltempC2;
+	rotworldeyeC3 = sfoiltempC3;
+	rotlightX = sfoiltemplightX;
+	rotlightY = sfoiltemplightY;
+	rotlightZ = sfoiltemplightZ;
+	objecteyex = sfoiltempx;
+	objecteyey = sfoiltempy;
+	objecteyez = sfoiltempz;
+}
+
 // FUNCTION: TIE95 0x28198
 void fview_comprotatepoint(int16_t angle, const ShipModelMesh* mesh, int32_t point_x, int32_t point_y,
 						   int32_t point_z) {
@@ -1241,4 +1060,192 @@ void fview_comprotatepoint(int16_t angle, const ShipModelMesh* mesh, int32_t poi
 	rotatedx = pivot_half + rx;
 	rotatedy = pivot_xv + ry;
 	rotatedz = pivot_zv + rz;
+}
+
+// FUNCTION: TIE95 0x287F4
+void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, uint16_t angle) {
+	int32_t temp;
+	int32_t cos_a, sin_a;
+	int32_t rot[9];
+	int32_t new_S1, new_S2, new_U1, new_U2, new_f1, new_f2;
+
+	if (!angle)
+		return;
+
+	cos_a = trig2_getsignedcos((int16_t)angle);
+	sin_a = trig2_getsignedsin((int16_t)angle);
+
+	if (cos_a >= 0) {
+		int32_t one_minus_cos = 0x7FFF - cos_a; /* 1 - cos in Q15 */
+		temp = (cos_a * 32768) + one_minus_cos * ((axis_x * axis_x) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[0] = temp >> 15;
+		temp = ((axis_z * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_y * axis_x) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[1] = temp >> 15;
+		temp = -32768 * ((axis_y * sin_a) >> 15) + one_minus_cos * ((axis_z * axis_x) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[2] = temp >> 15;
+		temp = -32768 * ((axis_z * sin_a) >> 15) + one_minus_cos * ((axis_y * axis_x) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[3] = temp >> 15;
+		temp = (cos_a * 32768) + one_minus_cos * ((axis_y * axis_y) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[4] = temp >> 15;
+		temp = ((axis_x * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_z * axis_y) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[5] = temp >> 15;
+		temp = ((axis_y * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_z * axis_x) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[6] = temp >> 15;
+		temp = -32768 * ((axis_x * sin_a) >> 15) + one_minus_cos * ((axis_z * axis_y) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[7] = temp >> 15;
+		temp = (cos_a * 32768) + one_minus_cos * ((axis_z * axis_z) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[8] = temp >> 15;
+	} else {
+		int32_t neg_cos = -cos_a; /* |cos| */
+		temp = (cos_a * 32768) + axis_x * axis_x + neg_cos * ((axis_x * axis_x) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[0] = temp >> 15;
+		temp = ((axis_z * sin_a) >> 15) * 32768 + axis_y * axis_x + neg_cos * ((axis_y * axis_x) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[1] = temp >> 15;
+		temp = -32768 * ((axis_y * sin_a) >> 15) + axis_z * axis_x + neg_cos * ((axis_z * axis_x) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[2] = temp >> 15;
+		temp = -32768 * ((axis_z * sin_a) >> 15) + axis_y * axis_x + neg_cos * ((axis_y * axis_x) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[3] = temp >> 15;
+		temp = (cos_a * 32768) + axis_y * axis_y + neg_cos * ((axis_y * axis_y) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[4] = temp >> 15;
+		temp = ((axis_x * sin_a) >> 15) * 32768 + axis_z * axis_y + neg_cos * ((axis_z * axis_y) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[5] = temp >> 15;
+		temp = ((axis_y * sin_a) >> 15) * 32768 + axis_z * axis_x + neg_cos * ((axis_z * axis_x) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[6] = temp >> 15;
+		temp = -32768 * ((axis_x * sin_a) >> 15) + axis_z * axis_y + neg_cos * ((axis_z * axis_y) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[7] = temp >> 15;
+		temp = (cos_a * 32768) + axis_z * axis_z + neg_cos * ((axis_z * axis_z) >> 15);
+		if (temp >= 0x40000000)
+			temp = 0x3FFF0000;
+		if (temp <= -0x40000000)
+			temp = -0x3FFF0000;
+		rot[8] = temp >> 15;
+	}
+	temp = rot[0] * calcS1 + rot[3] * calcS2 + rot[6] * calcS3;
+	if (temp >= 0x40000000)
+		temp = 0x3FFF0000;
+	if (temp <= -0x40000000)
+		temp = -0x3FFF0000;
+	new_S1 = temp >> 15;
+	temp = rot[1] * calcS1 + rot[4] * calcS2 + rot[7] * calcS3;
+	if (temp >= 0x40000000)
+		temp = 0x3FFF0000;
+	if (temp <= -0x40000000)
+		temp = -0x3FFF0000;
+	new_S2 = temp >> 15;
+	temp = rot[2] * calcS1 + rot[5] * calcS2 + rot[8] * calcS3;
+	if (temp >= 0x40000000)
+		temp = 0x3FFF0000;
+	if (temp <= -0x40000000)
+		temp = -0x3FFF0000;
+	calcS3 = temp >> 15;
+	calcS1 = new_S1;
+	calcS2 = new_S2;
+	temp = rot[0] * calcU1 + rot[3] * calcU2 + rot[6] * calcU3;
+	if (temp >= 0x40000000)
+		temp = 0x3FFF0000;
+	if (temp <= -0x40000000)
+		temp = -0x3FFF0000;
+	new_U1 = temp >> 15;
+	temp = rot[1] * calcU1 + rot[4] * calcU2 + rot[7] * calcU3;
+	if (temp >= 0x40000000)
+		temp = 0x3FFF0000;
+	if (temp <= -0x40000000)
+		temp = -0x3FFF0000;
+	new_U2 = temp >> 15;
+	temp = rot[2] * calcU1 + rot[5] * calcU2 + rot[8] * calcU3;
+	if (temp >= 0x40000000)
+		temp = 0x3FFF0000;
+	if (temp <= -0x40000000)
+		temp = -0x3FFF0000;
+	calcU3 = temp >> 15;
+	calcU1 = new_U1;
+	calcU2 = new_U2;
+	temp = rot[0] * calcf1 + rot[3] * calcf2 + rot[6] * calcf3;
+	if (temp >= 0x40000000)
+		temp = 0x3FFF0000;
+	if (temp <= -0x40000000)
+		temp = -0x3FFF0000;
+	new_f1 = temp >> 15;
+	temp = rot[1] * calcf1 + rot[4] * calcf2 + rot[7] * calcf3;
+	if (temp >= 0x40000000)
+		temp = 0x3FFF0000;
+	if (temp <= -0x40000000)
+		temp = -0x3FFF0000;
+	new_f2 = temp >> 15;
+	temp = rot[2] * calcf1 + rot[5] * calcf2 + rot[8] * calcf3;
+	if (temp >= 0x40000000)
+		temp = 0x3FFF0000;
+	if (temp <= -0x40000000)
+		temp = -0x3FFF0000;
+	calcf3 = temp >> 15;
+	calcf1 = new_f1;
+	calcf2 = new_f2;
 }

@@ -749,7 +749,7 @@ void logbuf2_drawclippedline_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y
  * 0xE000 while the PIP side-buffers are active, 0xC000 otherwise.
  * ------------------------------------------------------------------ */
 // FUNCTION: TIE95 0x2EF3C
-void logbuf2_startPIP(uint16_t width, uint16_t depth, int16_t clear_runs, uint32_t dc) {
+void logbuf2_startPIP(uint16_t width, uint16_t depth, uint16_t clear_runs, uint32_t dc) {
 	temppw = pixelswide;
 	temppd = pixelsdeep;
 	tempdc = (uint16_t)displaycorner; /* binary truncates to 16 bits */

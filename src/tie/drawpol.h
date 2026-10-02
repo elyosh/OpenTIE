@@ -281,7 +281,7 @@ uint16_t drawpol_checknormal(uint16_t face_idx);
 /* Compute the 8-bit palette color for a face, applying material remap,
  * training-gate overlay, target highlight, per-vertex Gouraud lighting
  * (if gauraudflag && face.flags & 0x40), or flat-face lighting. */
-int16_t drawpol_getlightvalue(int16_t color_byte, uint16_t face_idx);
+int16_t drawpol_getlightvalue(uint16_t color, uint16_t face_idx);
 
 /* Render one wireframe edge (2-vertex face) with perspective-corrected
  * thickness. Reads edge record via firstvertptr, endpoint cache via

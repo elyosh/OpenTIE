@@ -31,6 +31,7 @@
 #include "landru/inpcall.h"
 #include "landru/input.h"
 #include "landru/io.h"
+#include "landru/memhdl.h"
 #include "landru/memptr.h"
 #include "landru/paint.h"
 #include "landru/rect.h"
@@ -58,9 +59,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if !defined(TIE_MODERN) && !defined(TIE98)
+/* DOS-only helpers the modern Landru port does not provide. */
+LandruFile* shellext_Open_Install_File(const char* filename, const char* mode);
+void shellext_Close_Install_File(LandruFile* fp);
+#endif
+
 /* The original TU calls the library abs() rather than the inline form. */
 #ifdef __WATCOMC__
 #pragma function(abs)
+#pragma function(strcpy)
 #endif
 
 /* Resource names: [0] = combat LFD, [1] = train LFD, [2] = film, [3] = unused. */
@@ -120,6 +128,23 @@ static int16_t combat_score_id;
 // GLOBAL: TIE98 0x50AA68
 static int32_t combat_monitor_needs_clear;
 
+#if !defined(TIE_MODERN) && !defined(TIE98)
+/* TIE95 keeps the raw .hgh records in a Landru memory handle. */
+typedef struct CombatScoreEntry {
+	char name[10];
+	int32_t score;
+	int16_t status;
+} CombatScoreEntry;
+
+typedef struct CombatScoreHead {
+	char name[10];
+	CombatScoreEntry scores[8];
+} CombatScoreHead;
+
+// GLOBAL: TIE95 0xF590E
+static LandruHandle combat_score_handle;
+#endif
+
 /* Forward declarations (referenced by film callback) */
 static int16_t combat_draw_Combat_Help(Actor* the_actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
 									   int16_t off_y, int16_t refresh);
@@ -128,41 +153,166 @@ static int16_t combat_draw_Combat_Back(Actor* the_actor, Rect* draw_rect, Rect* 
 static void combat_user_Combat_Light(Actor* the_actor, int32_t time);
 static void combat_user_Combat_Helmet(Actor* the_actor, int32_t time);
 
+static void combat_end_Combat_View(int32_t time);
+static int16_t combat_film_Combat_Callback(Film* the_film, FilmObject* film_object);
+static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
+									 uint8_t mouseState, uint8_t prevMouseState, int16_t key,
+									 int16_t prevKey);
+static void combat_iuser_Combat(Input* input, int32_t time);
+static void combat_idraw_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh);
+static int16_t combat_iupdate_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
+											uint8_t mouseState, uint8_t prevMouseState, int16_t key,
+											int16_t prevKey);
+static void combat_iuser_Combat_Screen(Input* input, int32_t time);
+static void combat_idraw_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh);
+static void combat_Draw_Combat_Screen_Mission(Rect* src);
+static int16_t combat_Draw_Combat_Screen_Score(Rect* src);
+static void combat_Draw_Combat_Screen_Flyby(Rect* src);
+static void combat_Load_Combat_High_Scores(void);
+
 /* ------------------------------------------------------------------ */
 
-/*
- * Load combat high scores for the current ship/battle.
- * Generates filename: ship01-12.hgh or battle01+.hgh.
- * Caches by combat_score_id to avoid redundant loads.
- */
-// FUNCTION: TIE95 0x6DF54
-static void combat_Load_Combat_High_Scores(void) {
-	char filename[16];
+// FUNCTION: TIE95 0x6CB50
+// FUNCTION: TIE98 0x40A320
+int16_t combat_Combat(SceneHeadStruct* the_head) {
+	Rect frame;
+	char mission_name[64];
+	int16_t i;
 
-	int16_t ship = shipext_Get_Combat_Ship();
-	if (ship == combat_score_id)
-		return;
+	xio_Set_Mouse_Position(TIE_FRONTEND_EDITION(268, 536), TIE_FRONTEND_EDITION(152, 354));
 
-	if (ship < 12) {
-		strcpy(filename, "shipxx.hgh");
-		filename[4] = (char)(ship + 1) / 10 + '0';
-		filename[5] = (char)(ship + 1) % 10 + '0';
-	} else {
-		strcpy(filename, "battlexx.hgh");
-		filename[6] = (char)(ship - 11) / 10 + '0';
-		filename[7] = (char)(ship - 11) % 10 + '0';
+#if !defined(TIE_MODERN) && !defined(TIE98)
+	combat_score_handle = LANDRU_NULL_HANDLE;
+#endif
+	combat_score_id = -1;
+	combat_Load_Combat_High_Scores();
+
+#ifdef TIE_MODERN
+	train_file = TieProfile_UsesTie98Frontend() ? NULL : shellext_Open_Empire_Resource(combat_str[1]);
+#elif !defined(TIE98)
+	train_file = shellext_Open_Empire_Resource(combat_str[1]);
+#endif
+	combat_file = shellext_Open_Empire_Resource(combat_str[0]);
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
+
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
+	combat_film = xfilm_Res_Callback_Film(combat_str[2], &frame, 0, 0, 0, combat_film_Combat_Callback);
+	xfilm_Set_Film_Def_Palette(combat_film, the_head->def_palette);
+
+#if defined(TIE98) && !defined(TIE_MODERN)
+	{
+		Actor* monitor_back;
+		xrect_Set_Rect(&frame, 124, 7, 516, 272);
+		monitor_back = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 30);
+		xactor_Set_Actor_Draw_Function(monitor_back, combat_draw_Combat_Back);
+	}
+#endif
+	/* World input */
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
+	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
+
+	/* Monitor screen input */
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(59, 124), TIE_FRONTEND_EDITION(2, 7),
+				   TIE_FRONTEND_EDITION(262, 516), TIE_FRONTEND_EDITION(115, 272));
+	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(monitor_input, combat_iupdate_Combat_Screen);
+	xinpattr_Set_Input_User_Function(monitor_input, combat_iuser_Combat_Screen);
+	xinpattr_Set_Input_Draw_Function(monitor_input, combat_idraw_Combat_Screen);
+	xinpattr_Refreshable_Input(monitor_input);
+	monitor_input->id = 0;
+#ifdef TIE_MODERN
+	if (TieProfile_UsesTie98Frontend()) {
+		Actor* monitor_back = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 30);
+		xactor_Set_Actor_Draw_Function(monitor_back, combat_draw_Combat_Back);
+	}
+#endif
+
+	for (i = 0; i < 8; i++) {
+		switch (i) {
+			case 0:
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(32, 88), TIE_FRONTEND_EDITION(142, 336),
+							   TIE_FRONTEND_EDITION(54, 136), TIE_FRONTEND_EDITION(156, 373));
+				break;
+			case 1:
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(124, 211), TIE_FRONTEND_EDITION(142, 336),
+							   TIE_FRONTEND_EDITION(146, 255), TIE_FRONTEND_EDITION(156, 373));
+				break;
+			case 2:
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(22, 70), TIE_FRONTEND_EDITION(160, 370),
+							   TIE_FRONTEND_EDITION(44, 120), TIE_FRONTEND_EDITION(174, 409));
+				break;
+			case 3:
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(124, 206), TIE_FRONTEND_EDITION(160, 370),
+							   TIE_FRONTEND_EDITION(146, 250), TIE_FRONTEND_EDITION(174, 409));
+				break;
+			case 4:
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(254, 514), TIE_FRONTEND_EDITION(142, 337),
+							   TIE_FRONTEND_EDITION(280, 577), TIE_FRONTEND_EDITION(158, 389));
+				break;
+			case 5:
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(10, 0), TIE_FRONTEND_EDITION(176, 406),
+							   TIE_FRONTEND_EDITION(38, 72), TIE_FRONTEND_EDITION(200, 466));
+				break;
+			case 6:
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(55, 134), TIE_FRONTEND_EDITION(146, 344),
+							   TIE_FRONTEND_EDITION(124, 209), TIE_FRONTEND_EDITION(156, 363));
+				break;
+			case 7:
+				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(47, 128), TIE_FRONTEND_EDITION(164, 378),
+							   TIE_FRONTEND_EDITION(122, 201), TIE_FRONTEND_EDITION(176, 400));
+				break;
+		}
+		button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
+		if (i <= 5) {
+			button_input[i]->mouseUsage = 4;
+			xinpattr_Set_Input_Update_Function(button_input[i], combat_iupdate_Combat);
+			xinpattr_Set_Input_User_Function(button_input[i], combat_iuser_Combat);
+		} else {
+			xinpattr_Set_Input_Draw_Function(button_input[i], combat_idraw_Combat);
+			xinpattr_Refreshable_Input(button_input[i]);
+		}
+		button_input[i]->id = i + 1;
 	}
 
+	combat_time = 0;
+	combat_round = rand() & 3;
+	combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
+
+	shipext_Get_Combat_Mission_Name(mission_name);
+	shipext_Set_Mission_Name(mission_name);
+	shipext_Find_Mission_Ship();
+
+	bpflight_Open_Flight_Engine(2);
+	bpflight_Stop_Movie_Engine();
+	shipext_Show_Combat_Ship_Name();
+	xview_Set_View_Update_Function(combat_end_Combat_View);
+#ifdef TIE_MODERN
+	TieCombat_RunView(combat_file, train_file, TieProfile_UsesTie98Frontend());
+	return 0;
+#else
+	shellext_Handle_TIE_View();
+	xinpcall_Clear_Active_Input();
+	xview_Clear_View_Update_Function();
+	bpflight_Close_Flight_Engine();
+	xview_Enable_All_View_Erase();
+
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
+
+	xres_Close_Resource(combat_file);
+#ifndef TIE98
+	xres_Close_Resource(train_file);
+	if (combat_score_handle)
+		xmemhdl_Free_Handle(combat_score_handle);
+#else
 	if (combat_score_data) {
 		free(combat_score_data);
 		combat_score_data = NULL;
 	}
-	combat_score_data = calloc(COMBAT_MAX_MISSIONS, sizeof(GameScoreHead));
-	combat_num_scores = 0;
-	if (combat_score_data)
-		TieScoreTables_LoadGame(filename, combat_score_data, COMBAT_MAX_MISSIONS, &combat_num_scores);
-
-	combat_score_id = ship;
+#endif
+	return xerror_Get_Landru_Exit();
+#endif
 }
 
 /* ------------------------------------------------------------------ */
@@ -313,33 +463,49 @@ static void combat_iuser_Combat(Input* input, int32_t time) {
 	if (input->id == 5 && time == 4 && shellext_Get_Cur_Scene() == SCENE_COMBAT_A)
 		soundext_Play_SFX(sfxPressureDoor, 64);
 
-	if (!xinpattr_Get_Input_Selected(input) || helmet->var2)
+	if (!xinpattr_Get_Input_Selected(input) || helmet->var2 || !input->id)
 		return;
 
 	switch (input->id) {
 		case 1:
 			shipext_Last_Combat_Ship();
-			combat_time = (combat_time >= 384) ? 0 : 128;
+			if (combat_time < 384)
+				combat_time = 128;
+			else
+				combat_time = 0;
 			bpflight_Stop_Movie_Engine();
-			combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
+			if (TIE_FRONTEND_TIE98)
+				combat_monitor_needs_clear = true;
 			break;
 		case 2:
 			shipext_Next_Combat_Ship();
-			combat_time = (combat_time >= 256) ? 0 : 128;
+			if (combat_time < 256)
+				combat_time = 128;
+			else
+				combat_time = 0;
 			bpflight_Stop_Movie_Engine();
-			combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
+			if (TIE_FRONTEND_TIE98)
+				combat_monitor_needs_clear = true;
 			break;
 		case 3:
 			shipext_Last_Combat_Mission();
-			combat_time = (combat_time >= 256) ? 0 : 128;
+			if (combat_time < 256)
+				combat_time = 128;
+			else
+				combat_time = 0;
 			bpflight_Stop_Movie_Engine();
-			combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
+			if (TIE_FRONTEND_TIE98)
+				combat_monitor_needs_clear = true;
 			break;
 		case 4:
 			shipext_Next_Combat_Mission();
-			combat_time = (combat_time >= 256) ? 0 : 128;
+			if (combat_time < 256)
+				combat_time = 128;
+			else
+				combat_time = 0;
 			bpflight_Stop_Movie_Engine();
-			combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
+			if (TIE_FRONTEND_TIE98)
+				combat_monitor_needs_clear = true;
 			break;
 		case 5:
 			if (!helmet->var2)
@@ -478,6 +644,34 @@ static void combat_iuser_Combat_Screen(Input* input, int32_t time) {
 
 /* ------------------------------------------------------------------ */
 
+// FUNCTION: TIE95 0x6D4CC
+// FUNCTION: TIE98 0x40AD50
+static void combat_idraw_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh) {
+	if (!refresh || helmet->state)
+		return;
+	if (combat_monitor_needs_clear) {
+		xpaint_Paint_Clipped_Rect(draw_rect, 0);
+		combat_monitor_needs_clear = false;
+	}
+
+	switch (combat_mode) {
+		case 0:
+			combat_Draw_Combat_Screen_Mission(draw_rect);
+			break;
+		case 1:
+			combat_Draw_Combat_Screen_Score(draw_rect);
+			break;
+		case 2:
+			combat_Draw_Combat_Screen_Flyby(draw_rect);
+			break;
+	}
+
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip_rect);
+}
+
+/* ------------------------------------------------------------------ */
+
 /* Draw mission description on the combat monitor */
 // FUNCTION: TIE95 0x6D52C
 // FUNCTION: TIE98 0x40ADE0
@@ -573,13 +767,14 @@ static void combat_Draw_Combat_Screen_Mission(Rect* src) {
 /* Draw high score table on the combat monitor */
 // FUNCTION: TIE95 0x6D888
 // FUNCTION: TIE98 0x40B140
-static void combat_Draw_Combat_Screen_Score(Rect* src) {
+static int16_t combat_Draw_Combat_Screen_Score(Rect* src) {
 	const char* mission_name;
-	int16_t mi, t, border, width, name_x, score_x, kills_x, y, displayed_scores, i;
+	int16_t name_x, border, mi, score_x, kills_x, t, i, y;
+	int displayed_scores;
 	uint16_t font_id;
-	GameScoreHead* rec;
+	GameScoreHead* records;
 
-	char fmt[40], string[40], name_buf[16];
+	char string[40], fmt[40], name_buf[16];
 
 	combat_Load_Combat_High_Scores();
 	mission_name = shipext_Get_Mission_Name();
@@ -587,56 +782,74 @@ static void combat_Draw_Combat_Screen_Score(Rect* src) {
 
 	/* Find the mission record matching the current mission name */
 	mi = 0;
-	while (mi < combat_num_scores && combat_score_data[mi].name[0] &&
-		   strcmp(combat_score_data[mi].name, name_buf))
+	records = combat_score_data;
+	while (strcmp(records[mi].name, name_buf) && records[mi].name[0] && mi < combat_num_scores)
 		mi++;
 
-	if (mi >= combat_num_scores || !combat_score_data[mi].name[0]) {
+	if (mi < combat_num_scores && records[mi].name[0]) {
+		t = combat_time - 256;
+		border = (t < 32) ? TIE_FRONTEND_EDITION(130, 260) - TIE_FRONTEND_EDITION(4, 8) * t
+						  : TIE_FRONTEND_EDITION(2, 4);
+
+		/* Horizontal bars */
+		xpaint_Horiz_Clipped_Line(border + src->left, src->top + 6, src->right - src->left - 2 * border, 2);
+		xpaint_Horiz_Clipped_Line(border + src->left, src->bottom - 6, src->right - src->left - 2 * border,
+								  2);
+
+		name_x = src->left + TIE_FRONTEND_EDITION(4, 8);
+		y = src->top + TIE_FRONTEND_EDITION(10, 24);
+		score_x = name_x + TIE_FRONTEND_EDITION(60, 150);
+		kills_x = name_x + TIE_FRONTEND_EDITION(140, 280);
+		font_id = TIE_FRONTEND_EDITION(0, 3);
+
+		displayed_scores = TIE_FRONTEND_EDITION(8, GAME_SCORE_ENTRY_COUNT);
+		for (i = 0; i < displayed_scores && t >= 0; i++, t -= 4) {
+			int16_t fade;
+			char display_name[GAME_SCORE_NAME_CAPACITY];
+
+			fade = t + 16;
+			if (fade > 31)
+				fade = 31;
+#ifdef TIE_MODERN
+			TiePilotName_CopyForDisplay(display_name, sizeof(display_name), records[mi].scores[i].name);
+#else
+			strcpy(display_name, records[mi].scores[i].name);
+#endif
+
+			if (display_name[0]) {
+				int32_t score;
+				int16_t kills;
+
+				xfont_Print_Clipped_Text(display_name, name_x, y, font_id, fade);
+				score = records[mi].scores[i].score;
+				kills = records[mi].scores[i].status;
+				textext_Copy_Text(fmt, txtCombatScore);
+#ifdef TIE_MODERN
+				snprintf(string, sizeof(string), fmt, score);
+#else
+				sprintf(string, fmt, score);
+#endif
+				xfont_Print_Clipped_Text(string, score_x, y, font_id, fade);
+				textext_Copy_Text(fmt, txtCombatKills);
+#ifdef TIE_MODERN
+				snprintf(string, sizeof(string), fmt, kills);
+#else
+				sprintf(string, fmt, kills);
+#endif
+				xfont_Print_Clipped_Text(string, kills_x, y, font_id, fade);
+			}
+
+			if (TIE_FRONTEND_TIE98)
+				y += xfont_Get_FontID_Height(2) + 2;
+			else
+				y += 12;
+		}
+	} else {
 		textext_Copy_Text(string, txtCombatHighScore);
 		xfont_Print_Clipped_Text(string, src->left + TIE_FRONTEND_EDITION(64, 128),
 								 src->top + TIE_FRONTEND_EDITION(10, 24), TIE_FRONTEND_EDITION(0, 2), 31);
-		return;
 	}
-
-	t = combat_time - 256;
-	border = ((t >= 32) ? TIE_FRONTEND_EDITION(2, 4)
-						: TIE_FRONTEND_EDITION(130, 260) - TIE_FRONTEND_EDITION(4, 8) * t);
-	width = (src->right - src->left) - 2 * border;
-
-	/* Horizontal bars */
-	xpaint_Horiz_Clipped_Line(border + src->left, src->top + 6, width, 2);
-	xpaint_Horiz_Clipped_Line(border + src->left, src->bottom - 6, width, 2);
-
-	name_x = src->left + TIE_FRONTEND_EDITION(4, 8);
-	score_x = src->left + TIE_FRONTEND_EDITION(64, 150);
-	kills_x = src->left + TIE_FRONTEND_EDITION(144, 280);
-	y = src->top + TIE_FRONTEND_EDITION(10, 24);
-	font_id = TIE_FRONTEND_EDITION(0, 3);
-
-	rec = &combat_score_data[mi];
-
-	displayed_scores = TIE_FRONTEND_EDITION(8, GAME_SCORE_ENTRY_COUNT);
-	for (i = 0; i < displayed_scores && t >= 0; i++) {
-		int16_t fade = (t + 16 > 31) ? 31 : t + 16;
-		char display_name[GAME_SCORE_NAME_CAPACITY];
-		TiePilotName_CopyForDisplay(display_name, sizeof(display_name), rec->scores[i].name);
-
-		if (display_name[0]) {
-			xfont_Print_Clipped_Text(display_name, name_x, y, font_id, fade);
-			textext_Copy_Text(fmt, txtCombatScore);
-			snprintf(string, sizeof(string), fmt, rec->scores[i].score);
-			xfont_Print_Clipped_Text(string, score_x, y, font_id, fade);
-			textext_Copy_Text(fmt, txtCombatKills);
-			snprintf(string, sizeof(string), fmt, (uint16_t)rec->scores[i].status);
-			xfont_Print_Clipped_Text(string, kills_x, y, font_id, fade);
-		}
-
-		if (TIE_FRONTEND_TIE98)
-			y += xfont_Get_FontID_Height(2) + 2;
-		else
-			y += 12;
-		t -= 4;
-	}
+	return 1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -707,34 +920,6 @@ static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
 	}
 
 	shipext_Set_Blueprint_Ship(old_bp);
-}
-
-/* ------------------------------------------------------------------ */
-
-// FUNCTION: TIE95 0x6D4CC
-// FUNCTION: TIE98 0x40AD50
-static void combat_idraw_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh) {
-	if (!refresh || helmet->state)
-		return;
-	if (combat_monitor_needs_clear) {
-		xpaint_Paint_Clipped_Rect(draw_rect, 0);
-		combat_monitor_needs_clear = false;
-	}
-
-	switch (combat_mode) {
-		case 0:
-			combat_Draw_Combat_Screen_Mission(draw_rect);
-			break;
-		case 1:
-			combat_Draw_Combat_Screen_Score(draw_rect);
-			break;
-		case 2:
-			combat_Draw_Combat_Screen_Flyby(draw_rect);
-			break;
-	}
-
-	if (xinpattr_Is_Input_Dirty(input))
-		xdirty_Dirty_Rect(clip_rect);
 }
 
 /* ------------------------------------------------------------------ */
@@ -846,139 +1031,69 @@ static void combat_user_Combat_Helmet(Actor* the_actor, int32_t time) {
 
 /* ------------------------------------------------------------------ */
 
-// FUNCTION: TIE95 0x6CB50
-// FUNCTION: TIE98 0x40A320
-int16_t combat_Combat(SceneHeadStruct* the_head) {
-	Rect frame;
-	char mission_name[64];
-	int16_t i;
-
-	xio_Set_Mouse_Position(TIE_FRONTEND_EDITION(268, 536), TIE_FRONTEND_EDITION(152, 354));
-
-	combat_score_id = -1;
-	combat_Load_Combat_High_Scores();
-
-#ifdef TIE_MODERN
-	train_file = TieProfile_UsesTie98Frontend() ? NULL : shellext_Open_Empire_Resource(combat_str[1]);
-#elif !defined(TIE98)
-	train_file = shellext_Open_Empire_Resource(combat_str[1]);
+/*
+ * Load combat high scores for the current ship/battle.
+ * Generates filename: ship01-12.hgh or battle01+.hgh.
+ * Caches by combat_score_id to avoid redundant loads.
+ */
+// FUNCTION: TIE95 0x6DF54
+static void combat_Load_Combat_High_Scores(void) {
+	char filename[16];
+	int16_t missions;
+#if !defined(TIE_MODERN) && !defined(TIE98)
+	int16_t num_scores;
+	int16_t buffer_size;
+	CombatScoreHead* records;
+	LandruFile* fp;
 #endif
-	combat_file = shellext_Open_Empire_Resource(combat_str[0]);
-	xviewadd_Clear_View();
-	xview_Disable_All_View_Erase();
 
-	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
-	combat_film = xfilm_Res_Callback_Film(combat_str[2], &frame, 0, 0, 0, combat_film_Combat_Callback);
-	xfilm_Set_Film_Def_Palette(combat_film, the_head->def_palette);
+	int16_t ship = shipext_Get_Combat_Ship();
+	if (ship == combat_score_id)
+		return;
 
-#if defined(TIE98) && !defined(TIE_MODERN)
-	{
-		Actor* monitor_back;
-		xrect_Set_Rect(&frame, 124, 7, 516, 272);
-		monitor_back = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 30);
-		xactor_Set_Actor_Draw_Function(monitor_back, combat_draw_Combat_Back);
+	if (ship >= 12) {
+		strcpy(filename, "battlexx.hgh");
+		filename[6] = (int8_t)(ship - 11) / 10 + '0';
+		filename[7] = (int8_t)(ship - 11) % 10 + '0';
+		missions = COMBAT_MAX_MISSIONS;
+	} else {
+		strcpy(filename, "shipxx.hgh");
+		filename[4] = (int8_t)(ship + 1) / 10 + '0';
+		filename[5] = (int8_t)(ship + 1) % 10 + '0';
+		missions = COMBAT_MAX_MISSIONS;
 	}
-#endif
-	/* World input */
-	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
-	world_input = xinput_Alloc_Input(NULL, &frame, 0, 0);
 
-	/* Monitor screen input */
-	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(59, 124), TIE_FRONTEND_EDITION(2, 7),
-				   TIE_FRONTEND_EDITION(262, 516), TIE_FRONTEND_EDITION(115, 272));
-	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(monitor_input, combat_iupdate_Combat_Screen);
-	xinpattr_Set_Input_User_Function(monitor_input, combat_iuser_Combat_Screen);
-	xinpattr_Set_Input_Draw_Function(monitor_input, combat_idraw_Combat_Screen);
-	xinpattr_Refreshable_Input(monitor_input);
-	monitor_input->id = 0;
-#ifdef TIE_MODERN
-	if (TieProfile_UsesTie98Frontend()) {
-		Actor* monitor_back = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 30);
-		xactor_Set_Actor_Draw_Function(monitor_back, combat_draw_Combat_Back);
-	}
-#endif
+#if !defined(TIE_MODERN) && !defined(TIE98)
+	buffer_size = missions * sizeof(CombatScoreHead);
+	if (combat_score_handle)
+		xmemhdl_Free_Handle(combat_score_handle);
+	combat_score_handle = xmemhdl_Alloc_Clear_Handle(buffer_size, LANDRU_MEMORY_RESOURCE);
 
-	for (i = 0; i < 8; i++) {
-		switch (i) {
-			case 0:
-				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(32, 88), TIE_FRONTEND_EDITION(142, 336),
-							   TIE_FRONTEND_EDITION(54, 136), TIE_FRONTEND_EDITION(156, 373));
-				break;
-			case 1:
-				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(124, 211), TIE_FRONTEND_EDITION(142, 336),
-							   TIE_FRONTEND_EDITION(146, 255), TIE_FRONTEND_EDITION(156, 373));
-				break;
-			case 2:
-				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(22, 70), TIE_FRONTEND_EDITION(160, 370),
-							   TIE_FRONTEND_EDITION(44, 120), TIE_FRONTEND_EDITION(174, 409));
-				break;
-			case 3:
-				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(124, 206), TIE_FRONTEND_EDITION(160, 370),
-							   TIE_FRONTEND_EDITION(146, 250), TIE_FRONTEND_EDITION(174, 409));
-				break;
-			case 4:
-				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(254, 514), TIE_FRONTEND_EDITION(142, 337),
-							   TIE_FRONTEND_EDITION(280, 577), TIE_FRONTEND_EDITION(158, 389));
-				break;
-			case 5:
-				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(10, 0), TIE_FRONTEND_EDITION(176, 406),
-							   TIE_FRONTEND_EDITION(38, 72), TIE_FRONTEND_EDITION(200, 466));
-				break;
-			case 6:
-				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(55, 134), TIE_FRONTEND_EDITION(146, 344),
-							   TIE_FRONTEND_EDITION(124, 209), TIE_FRONTEND_EDITION(156, 363));
-				break;
-			case 7:
-				xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(47, 128), TIE_FRONTEND_EDITION(164, 378),
-							   TIE_FRONTEND_EDITION(122, 201), TIE_FRONTEND_EDITION(176, 400));
-				break;
+	fp = shellext_Open_Install_File(filename, "rb");
+	if (fp) {
+		xfile_Read_Word_From_File(fp, &num_scores);
+		combat_num_scores = num_scores;
+		if (combat_num_scores > missions)
+			combat_num_scores = 0;
+		if (combat_num_scores) {
+			records = xmemhdl_Lock_Handle(combat_score_handle);
+			xres_Resource_Data_To_Buffer(fp, records, combat_num_scores * sizeof(CombatScoreHead));
+			xmemhdl_Unlock_Handle(combat_score_handle);
 		}
-		button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
-		if (i <= 5) {
-			button_input[i]->mouseUsage = 4;
-			xinpattr_Set_Input_Update_Function(button_input[i], combat_iupdate_Combat);
-			xinpattr_Set_Input_User_Function(button_input[i], combat_iuser_Combat);
-		} else {
-			xinpattr_Set_Input_Draw_Function(button_input[i], combat_idraw_Combat);
-			xinpattr_Refreshable_Input(button_input[i]);
-		}
-		button_input[i]->id = i + 1;
+		shellext_Close_Install_File(fp);
+	} else {
+		combat_num_scores = 0;
 	}
-
-	combat_time = 0;
-	combat_round = rand() & 3;
-	combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
-
-	shipext_Get_Combat_Mission_Name(mission_name);
-	shipext_Set_Mission_Name(mission_name);
-	shipext_Find_Mission_Ship();
-
-	bpflight_Open_Flight_Engine(2);
-	bpflight_Stop_Movie_Engine();
-	shipext_Show_Combat_Ship_Name();
-	xview_Set_View_Update_Function(combat_end_Combat_View);
-#ifdef TIE_MODERN
-	TieCombat_RunView(combat_file, train_file, TieProfile_UsesTie98Frontend());
-	return 0;
 #else
-	shellext_Handle_TIE_View();
-	xinpcall_Clear_Active_Input();
-	xview_Clear_View_Update_Function();
-	bpflight_Close_Flight_Engine();
-	xview_Enable_All_View_Erase();
-
-	if (xcursor_Is_Cursor_Visible())
-		xcursor_Hide_Cursor();
-
-	xres_Close_Resource(combat_file);
-#ifndef TIE98
-	xres_Close_Resource(train_file);
-#endif
 	if (combat_score_data) {
 		free(combat_score_data);
 		combat_score_data = NULL;
 	}
-	return xerror_Get_Landru_Exit();
+	combat_score_data = calloc(missions, sizeof(GameScoreHead));
+	combat_num_scores = 0;
+	if (combat_score_data)
+		TieScoreTables_LoadGame(filename, combat_score_data, missions, &combat_num_scores);
 #endif
+
+	combat_score_id = ship;
 }

@@ -32,10 +32,10 @@ Matrix* matrix_Alloc_Matrix(void) {
 
 // FUNCTION: TIE95 0x8905C
 void matrix_Init_Matrix(Matrix* m) {
-	m->frame_count = 0;
 	m->trans_count = 0;
 	m->matrix_count = 0;
 	m->data = LANDRU_NULL_HANDLE;
+	m->frame_count = 0;
 }
 
 // FUNCTION: TIE95 0x89074

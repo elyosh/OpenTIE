@@ -64,205 +64,11 @@ int16_t credits_film_len; /* total animation length */
 // GLOBAL: TIE98 0x50f7d0
 LandruHandle credits_text; /* paragraph data from tietext0.lfd */
 
-/* ================================================================
- * Helpers
- * ================================================================ */
-
-/* Tile the cached star image over the 320x200 credits background. */
-// FUNCTION: TIE95 0x715C0
-// FUNCTION: TIE98 0x414BE0
-void credits_Credit_Stars_To_Back(void) {
-	Rect r;
-	void* pixels = xmemhdl_Lock_Handle(credits_star_buffer);
-	xrect_Set_Rect(&r, 0, 0, 320, 100);
-	stub_Copy_From_Clipped_Buffer(pixels, &r, 0, 0, 320, 100);
-	stub_Copy_From_Clipped_Buffer(pixels, &r, 0, 100, 320, 100);
-
-	xmemhdl_Unlock_Handle(credits_star_buffer);
-#ifdef TIE_MODERN
-	/* Snapshot capture mirrors the two buffer copies without drawing again. */
-	xactor_emit_draw(credits_stars_actor, 0, 0);
-	xactor_emit_draw(credits_stars_actor, 0, 100);
-#endif
-}
-
-/* Render a star actor into the 320x100 star buffer. Fills with black,
- * calls the actor's draw, copies canvas to buffer. */
-// FUNCTION: TIE95 0x7161C
-// FUNCTION: TIE98 0x414C40
-static void credits_Credit_Actor_To_Buffer(Actor* actor, LandruHandle buffer) {
-	Rect r;
-	void* pixels;
-	xrect_Set_Rect(&r, 0, 0, 320, 100);
-	if (actor->draw) {
-		xpaint_Paint_Clipped_Rect(&r, 0);
-		actor->draw(actor, &r, &r, actor->x, actor->y, 1);
-	}
-	pixels = xmemhdl_Lock_Handle(buffer);
-	stub_Copy_To_Clipped_Buffer(pixels, &r, 0, 0, 320, 100);
-	xmemhdl_Unlock_Handle(buffer);
-}
-
-/* Initialize credit display state: dirty rect, paragraph count,
- * text hold duration, total film length. */
-// FUNCTION: TIE95 0x71290
-static void credits_Init_Credit_Info(void) {
-	xrect_Set_Rect(&credits_dirty_rect, 40, 40, 280, 160);
-	credits_num_credit_lines = xparagrp_Count_Paragraphs(credits_text);
-	credits_text_len = 130;
-	credits_film_time = 0;
-	credits_film_len = 90 * (credits_num_credit_lines - 1) + 138;
-}
-
-/* ================================================================
- * View update callback
- * ================================================================ */
-
-// FUNCTION: TIE95 0x71244
-// FUNCTION: TIE98 0x414850
-static void credits_end_View(int32_t frame_num) {
-	int16_t exit_id;
-	int16_t done = credits_film_time == credits_film_len;
-	(void)frame_num;
-	if (shellext_Check_Scene_Exit(&exit_id, credits_next_scene, credits_next_scene, done))
-		xerror_Set_Landru_Exit(exit_id);
-	credits_film_time++;
-}
-
-/* ================================================================
- * Credit draw callback
- * ================================================================ */
-
-/* Each credit paragraph occupies a 130-frame window within the timeline.
- * Paragraphs are spaced 90 frames apart, so they overlap.
- *
- * time_offset 0..59:   fade in  — color ramps from base_y toward target
- * time_offset 60..99:  hold     — red/blue bars animate in
- * time_offset 100..129: fade out — text_y rises, color fades
- *
- * base_y = credits_film_time + 96, decremented by 90 per paragraph.
- * color = palette index for the text (ramps 167..239 range).
- * text_y = vertical position for text block. */
-// FUNCTION: TIE95 0x712EC
+static void credits_end_View(int32_t frame_num);
+static void credits_Init_Credit_Info(void);
 static int16_t credits_draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-								   int16_t refresh) {
-	int16_t time_offset;
-	int16_t credit_idx = 0;
-	int16_t base_y;
-
-	(void)actor;
-	(void)xoff;
-	(void)yoff;
-
-	if (!refresh)
-		return 1;
-
-	/* Film ended: black screen */
-	if (credits_film_len <= credits_film_time) {
-		Rect r;
-		xrect_Set_Rect(&r, 0, 0, 320, 200);
-		xpaint_Paint_Clipped_Rect(&r, 0);
-		xcanvas_Invalid_Screen_Diff();
-		xdirty_Max_Dirty_List();
-		return 1;
-	}
-
-	/* Draw tiled star background */
-	credits_Credit_Stars_To_Back();
-
-	time_offset = credits_film_time;
-	base_y = credits_film_time + 96;
-
-	/* Walk through each credit paragraph */
-	while (credit_idx < credits_num_credit_lines) {
-		if (time_offset < 0)
-			break;
-
-		if (time_offset < credits_text_len) {
-			/* This paragraph is visible */
-			int16_t color;
-			int16_t text_y;
-			int16_t num_strings;
-			int16_t i;
-			Rect text_rect;
-
-			if (time_offset < 60) {
-				/* Fade-in phase */
-				color = base_y;
-				text_y = 140 - time_offset;
-			} else {
-				int16_t hold_time = time_offset - 60;
-				if (hold_time < 40) {
-					/* Hold phase */
-					text_y = 80;
-					if (hold_time >= 31)
-						color = time_offset - 60 + 167;
-					else
-						color = base_y;
-				} else {
-					/* Fade-out phase */
-					color = time_offset - 100 + 207;
-					text_y = 80 - (time_offset - 100);
-					if (color > 239)
-						color = 239;
-				}
-			}
-
-			num_strings = xparagrp_Count_Paragraph_Strings(credits_text, credit_idx);
-
-			/* Draw red/blue bar decorations during hold phase */
-			if (time_offset >= 45) {
-				int16_t bar_width;
-
-				if (time_offset - 45 >= 35) {
-					if (time_offset - 80 < 0) {
-						bar_width = 280;
-					} else {
-						bar_width = 8 * (time_offset - 80 + 35);
-					}
-				} else {
-					bar_width = 8 * (time_offset - 45);
-				}
-
-				if (bar_width != -1) {
-					Rect saved_clip;
-					Rect bar_clip;
-					xactdelt_Draw_Delta_Actor(credits_red_bar, bounds, clip, bar_width - 240, 79, refresh);
-
-					xcanvas_Get_Drawing_Canvas_Clip(&saved_clip);
-
-					xrect_Set_Rect(&bar_clip, 0, 0, 320, 10 * (num_strings - 1) + 93);
-					xrect_Clip_Rect(&bar_clip, clip);
-					xcanvas_Set_Drawing_Canvas_Clip(&bar_clip);
-
-					xactdelt_Draw_Delta_Actor(credits_blue_bar, &bar_clip, &bar_clip, 320 - bar_width, 91,
-											  refresh);
-
-					xcanvas_Set_Drawing_Canvas_Clip(&saved_clip);
-				}
-			}
-
-			/* Draw text lines */
-			xrect_Set_Rect(&text_rect, 0, text_y, 320, text_y + 10);
-
-			for (i = 0; i < num_strings; i++) {
-				char line_buf[80];
-				xparagrp_Get_Paragraph_String(credits_text, line_buf, credit_idx, i);
-				xfont_Print_Centered_Text(line_buf, &text_rect, 0, color);
-
-				xrect_Offset_Rect(&text_rect, 0, i ? 10 : 12);
-			}
-		}
-
-		/* Advance to next paragraph */
-		base_y -= 90;
-		time_offset -= 90;
-		credit_idx++;
-	}
-
-	xdirty_Dirty_Rect(&credits_dirty_rect);
-	return 1;
-}
+								   int16_t refresh);
+static void credits_Credit_Actor_To_Buffer(Actor* actor, LandruHandle buffer);
 
 /* ================================================================
  * Entry point
@@ -396,4 +202,205 @@ int credits_Credits(SceneHeadStruct* scene_head) {
 	xres_Close_Resource(credit_res);
 	return xerror_Get_Landru_Exit();
 #endif
+}
+
+/* ================================================================
+ * View update callback
+ * ================================================================ */
+
+// FUNCTION: TIE95 0x71244
+// FUNCTION: TIE98 0x414850
+static void credits_end_View(int32_t frame_num) {
+	int16_t exit_id;
+	int16_t done = credits_film_time == credits_film_len;
+	(void)frame_num;
+	if (shellext_Check_Scene_Exit(&exit_id, credits_next_scene, credits_next_scene, done))
+		xerror_Set_Landru_Exit(exit_id);
+	credits_film_time++;
+}
+
+/* Initialize credit display state: dirty rect, paragraph count,
+ * text hold duration, total film length. */
+// FUNCTION: TIE95 0x71290
+static void credits_Init_Credit_Info(void) {
+	xrect_Set_Rect(&credits_dirty_rect, 40, 40, 280, 160);
+	credits_num_credit_lines = xparagrp_Count_Paragraphs(credits_text);
+	credits_text_len = 130;
+	credits_film_time = 0;
+	credits_film_len = 90 * (credits_num_credit_lines - 1) + 138;
+}
+
+/* ================================================================
+ * Credit draw callback
+ * ================================================================ */
+
+/* Each credit paragraph occupies a 130-frame window within the timeline.
+ * Paragraphs are spaced 90 frames apart, so they overlap.
+ *
+ * time_offset 0..59:   fade in  — color ramps from base_y toward target
+ * time_offset 60..99:  hold     — red/blue bars animate in
+ * time_offset 100..129: fade out — text_y rises, color fades
+ *
+ * base_y = credits_film_time + 96, decremented by 90 per paragraph.
+ * color = palette index for the text (ramps 167..239 range).
+ * text_y = vertical position for text block. */
+// FUNCTION: TIE95 0x712EC
+static int16_t credits_draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								   int16_t refresh) {
+	int16_t time_offset;
+	int16_t credit_idx;
+	Rect rect;
+	Rect saved_clip;
+
+	(void)actor;
+	(void)xoff;
+	(void)yoff;
+
+	if (!refresh)
+		return 1;
+
+	/* Film ended: black screen */
+	if (credits_film_len <= credits_film_time) {
+		xrect_Set_Rect(&rect, 0, 0, 320, 200);
+		xpaint_Paint_Clipped_Rect(&rect, 0);
+		xcanvas_Invalid_Screen_Diff();
+		xdirty_Max_Dirty_List();
+		return 1;
+	}
+
+	/* Draw tiled star background */
+	credits_Credit_Stars_To_Back();
+
+	time_offset = credits_film_time;
+
+	/* Walk through each credit paragraph */
+	for (credit_idx = 0; credit_idx < credits_num_credit_lines; credit_idx++) {
+		if (time_offset < credits_text_len) {
+			/* This paragraph is visible */
+			int16_t color;
+			int16_t text_y;
+			int16_t num_strings;
+			int16_t bar_time;
+			int16_t i;
+
+			if (time_offset < 0)
+				break;
+
+			if (time_offset < 60) {
+				/* Fade-in phase */
+				text_y = 140 - time_offset;
+				color = time_offset + 96;
+			} else {
+				int16_t hold_time = time_offset - 60;
+				if (hold_time < 40) {
+					/* Hold phase */
+					text_y = 80;
+					if (hold_time < 31)
+						color = time_offset + 96;
+					else if (hold_time < 24)
+						color = 191;
+					else
+						color = hold_time + 167;
+				} else {
+					/* Fade-out phase */
+					hold_time -= 40;
+					text_y = 80 - hold_time;
+					color = hold_time + 207;
+					if (color > 239)
+						color = 239;
+				}
+			}
+
+			num_strings = xparagrp_Count_Paragraph_Strings(credits_text, credit_idx);
+
+			/* Draw red/blue bar decorations during hold phase */
+			bar_time = time_offset - 45;
+			if (bar_time >= 0) {
+				int16_t bar_width;
+
+				if (bar_time < 35) {
+					bar_width = bar_time * 8;
+				} else {
+					bar_time -= 35;
+					if (bar_time < 0)
+						bar_width = 280;
+					else
+						bar_width = (bar_time + 35) * 8;
+				}
+
+				if (bar_width != -1) {
+					xactdelt_Draw_Delta_Actor(credits_red_bar, bounds, clip, bar_width - 240, 79, refresh);
+
+					xcanvas_Get_Drawing_Canvas_Clip(&saved_clip);
+
+					xrect_Set_Rect(&rect, 0, 0, 320, 10 * (num_strings - 1) + 93);
+					xrect_Clip_Rect(&rect, clip);
+					xcanvas_Set_Drawing_Canvas_Clip(&rect);
+
+					xactdelt_Draw_Delta_Actor(credits_blue_bar, &rect, &rect, 320 - bar_width, 91, refresh);
+
+					xcanvas_Set_Drawing_Canvas_Clip(&saved_clip);
+				}
+			}
+
+			/* Draw text lines */
+			xrect_Set_Rect(&rect, 0, text_y, 320, text_y + 10);
+
+			for (i = 0; i < num_strings; i++) {
+				char line_buf[80];
+				xparagrp_Get_Paragraph_String(credits_text, line_buf, credit_idx, i);
+				xfont_Print_Centered_Text(line_buf, &rect, 0, color);
+
+				if (i == 0)
+					xrect_Offset_Rect(&rect, 0, 12);
+				else
+					xrect_Offset_Rect(&rect, 0, 10);
+			}
+		}
+
+		/* Advance to next paragraph */
+		time_offset -= 90;
+	}
+
+	xdirty_Dirty_Rect(&credits_dirty_rect);
+	return 1;
+}
+
+/* ================================================================
+ * Helpers
+ * ================================================================ */
+
+/* Tile the cached star image over the 320x200 credits background. */
+// FUNCTION: TIE95 0x715C0
+// FUNCTION: TIE98 0x414BE0
+void credits_Credit_Stars_To_Back(void) {
+	Rect r;
+	void* pixels = xmemhdl_Lock_Handle(credits_star_buffer);
+	xrect_Set_Rect(&r, 0, 0, 320, 100);
+	stub_Copy_From_Clipped_Buffer(pixels, &r, 0, 0, 320, 100);
+	stub_Copy_From_Clipped_Buffer(pixels, &r, 0, 100, 320, 100);
+
+	xmemhdl_Unlock_Handle(credits_star_buffer);
+#ifdef TIE_MODERN
+	/* Snapshot capture mirrors the two buffer copies without drawing again. */
+	xactor_emit_draw(credits_stars_actor, 0, 0);
+	xactor_emit_draw(credits_stars_actor, 0, 100);
+#endif
+}
+
+/* Render a star actor into the 320x100 star buffer. Fills with black,
+ * calls the actor's draw, copies canvas to buffer. */
+// FUNCTION: TIE95 0x7161C
+// FUNCTION: TIE98 0x414C40
+static void credits_Credit_Actor_To_Buffer(Actor* actor, LandruHandle buffer) {
+	Rect r;
+	void* pixels;
+	xrect_Set_Rect(&r, 0, 0, 320, 100);
+	if (actor->draw) {
+		xpaint_Paint_Clipped_Rect(&r, 0);
+		actor->draw(actor, &r, &r, actor->x, actor->y, 1);
+	}
+	pixels = xmemhdl_Lock_Handle(buffer);
+	stub_Copy_To_Clipped_Buffer(pixels, &r, 0, 0, 320, 100);
+	xmemhdl_Unlock_Handle(buffer);
 }

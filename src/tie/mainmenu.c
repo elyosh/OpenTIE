@@ -1,4 +1,5 @@
 #include "tie/mainmenu.h"
+#include "tie/edition.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/mainmenu_task.h"
 #include "tie_runtime/runtime/profile.h"
@@ -25,6 +26,11 @@
 #include "landru/viewadd.h"
 
 #include <string.h>
+
+/* The original TU calls the library string routines rather than the inline forms. */
+#ifdef __WATCOMC__
+#pragma function(strcpy, strcat)
+#endif
 
 /* ---- Static data ---- */
 
@@ -89,290 +95,6 @@ static int16_t mainmenu_user_Title(Actor* actor, int32_t time);
 static int16_t mainmenu_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								   int16_t refresh);
 static int16_t mainmenu_user_Door(Actor* actor, int32_t time);
-
-/* ================================================================
- * View update callback
- * ================================================================ */
-
-/* On frame 0, shows the cursor if hidden. Shared epilogue with Main_Menu
- * in the binary (JUMPOUT to retn). */
-// FUNCTION: TIE95 0x70c8c
-// FUNCTION: TIE98 0x44d410
-static void mainmenu_end_View(int32_t frame_num) {
-	if (frame_num)
-		return;
-	if (!xcursor_Is_Cursor_Visible())
-		xcursor_Show_Cursor();
-}
-
-/* ================================================================
- * XINPUT callbacks
- * ================================================================ */
-
-/* iupdate: hover highlights door + title, click dispatches scene exit. */
-// FUNCTION: TIE95 0x70cc0
-// FUNCTION: TIE98 0x44d430
-static int16_t mainmenu_iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
-										 uint8_t right, int16_t mouse_x, int16_t mouse_y) {
-	(void)bounds;
-	(void)clip;
-	(void)mouse_x;
-	(void)mouse_y;
-
-	if (key)
-		return 0;
-
-	/* Highlight the door for this menu button */
-	door[input->id]->var1 = 1;
-
-	/* Show the title overlay with this button's text id */
-	title_actor->var1 = 1;
-	title_actor->var2 = input->id;
-
-	/* Check for mouse click (button state 3 = released) */
-	if (left != (uint8_t)3 && right != (uint8_t)3)
-		return 1;
-
-	switch (input->id) {
-		case 0: { /* Tour Battle */
-			if (shipext_Set_Tour_Battle()) {
-				input->var2 = SCENE_BRIEF; /* exit_code */
-				input->var1 = 1;           /* exit_pending */
-				break;
-			}
-			xinpattr_Hide_Input(input);
-			return 1;
-		}
-#ifdef TIE_MODERN
-		case 2:
-		case 3:
-		case 4:
-		case 5:
-		case 6:
-		case 7:
-			input->var2 = active_spec->exit_scene[input->id];
-			input->var1 = 1;
-			if (input->id == active_spec->outcome_input_id)
-				shipext_Set_Mission_Outcome(16);
-			break;
-#elif defined(TIE98)
-		case 2:
-			input->var2 = SCENE_TOUR_DESK;
-			input->var1 = 1;
-			break;
-		case 3:
-			input->var2 = SCENE_TRAIN_TRANSITION;
-			input->var1 = 1;
-			break;
-		case 4:
-			input->var2 = SCENE_COMBAT_TRANSITION;
-			input->var1 = 1;
-			break;
-		case 5:
-			input->var2 = SCENE_EXIT;
-			input->var1 = 1;
-			break;
-		case 6:
-			input->var2 = SCENE_BLUEPRINT;
-			input->var1 = 1;
-			break;
-		case 7:
-			input->var2 = SCENE_FILM_VIEWER;
-			input->var1 = 1;
-			shipext_Set_Mission_Outcome(16);
-			break;
-#else
-		case 2:
-			input->var2 = SCENE_TOUR_DESK;
-			input->var1 = 1;
-			break;
-		case 3:
-			input->var2 = SCENE_BLUEPRINT;
-			input->var1 = 1;
-			break;
-		case 4:
-			input->var1 = 1;
-			input->var2 = SCENE_FILM_VIEWER;
-			shipext_Set_Mission_Outcome(16);
-			break;
-		case 5:
-			input->var2 = SCENE_EXIT;
-			input->var1 = 1;
-			break;
-		case 6:
-			input->var2 = SCENE_TRAIN_TRANSITION;
-			input->var1 = 1;
-			break;
-		case 7:
-			input->var2 = SCENE_COMBAT_TRANSITION;
-			input->var1 = 1;
-			break;
-#endif
-		default:
-			break;
-	}
-	return 1;
-}
-
-/* iuser: when exit_pending, triggers the scene transition. */
-// FUNCTION: TIE95 0x70dd4
-// FUNCTION: TIE98 0x44d550
-static void mainmenu_iuser_MainMenu(Input* input, int32_t time) {
-	(void)time;
-	if (!input->var1)
-		return; /* exit_pending */
-
-	if (input->var2 == 180) { /* exit_code == Tour Battle */
-		char name[64];
-		shipext_Get_Battle_Mission_Name(name);
-		shipext_Set_Mission_Name(name);
-	}
-	xerror_Set_Landru_Exit(input->var2); /* exit_code */
-}
-
-/* ================================================================
- * Actor callbacks
- * ================================================================ */
-
-/* Title overlay: show on hover frame, hide otherwise. */
-// FUNCTION: TIE95 0x70e14
-// FUNCTION: TIE98 0x44d5a0
-static int16_t mainmenu_user_Title(Actor* actor, int32_t time) {
-	(void)time;
-	if (actor->var1 == 1) {
-		if (!xactor_Is_Actor_Visible(actor))
-			xactor_Show_Actor(actor);
-		actor->var1 = 0;
-	} else {
-		if (xactor_Is_Actor_Visible(actor))
-			xactor_Hide_Actor(actor);
-	}
-	return 1;
-}
-
-/* Title overlay draw: render the delta actor + centered text label. */
-// FUNCTION: TIE95 0x70e78
-// FUNCTION: TIE98 0x44d5f0
-static int16_t mainmenu_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-								   int16_t refresh) {
-	int16_t offx, offy;
-	Rect r;
-	char label[32];
-#ifdef TIE_MODERN
-	int16_t font_id = active_spec->title_font;
-#elif defined(TIE98)
-	int16_t font_id = 2;
-#else
-	int16_t font_id = 0;
-#endif
-
-	if (!refresh)
-		return 0;
-
-	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
-
-	xactor_Get_Actor_Offset(actor, &offx, &offy);
-
-	xrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
-
-	switch (actor->var2) {
-		case 0: { /* Continue Battle N */
-			char num[16];
-			textext_Copy_Text(label, txtMainContBattle);
-			strcat(label, " ");
-			textext_Copy_Text(num, (TIEText)(txtMainOne + pilot_record.cur_battle));
-			strcat(label, num);
-			break;
-		}
-		case 1:
-			strcpy(label, textext_Get_Text(txtMainCustom));
-			break;
-		case 2: /* New/Change/View TOD */
-			if (shipext_Find_Battle()) {
-				if (pilot_record.battle_status[pilot_record.cur_battle] == 1)
-					strcpy(label, textext_Get_Text(txtMainChangeBattle));
-				else
-					strcpy(label, textext_Get_Text(txtMainNewBattle));
-			} else {
-				strcpy(label, textext_Get_Text(txtMainViewTOD));
-			}
-			break;
-#ifdef TIE_MODERN
-		case 3:
-		case 4:
-		case 5:
-		case 6:
-		case 7:
-			strcpy(label, textext_Get_Text(active_spec->title_text[actor->var2]));
-			break;
-#elif defined(TIE98)
-		case 3:
-			strcpy(label, textext_Get_Text(txtMainTech));
-			break;
-		case 4:
-			strcpy(label, textext_Get_Text(txtMainFilm));
-			break;
-		case 5:
-			strcpy(label, textext_Get_Text(txtMainRegister));
-			break;
-		case 6:
-			strcpy(label, textext_Get_Text(txtMainTrain));
-			break;
-		case 7:
-			strcpy(label, textext_Get_Text(txtMainCombat));
-			break;
-#else
-		case 3:
-			strcpy(label, textext_Get_Text(txtMainTrain));
-			break;
-		case 4:
-			strcpy(label, textext_Get_Text(txtMainCombat));
-			break;
-		case 5:
-			strcpy(label, textext_Get_Text(txtMainRegister));
-			break;
-		case 6:
-			strcpy(label, textext_Get_Text(txtMainTech));
-			break;
-		case 7:
-			strcpy(label, textext_Get_Text(txtMainFilm));
-			break;
-#endif
-		default:
-			label[0] = 0;
-			break;
-	}
-
-	/* Drop shadow: dark color at (1,1) offset, then bright at (0,0) */
-	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, font_id, 16);
-	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, font_id, 15);
-	return 1;
-}
-
-/* Door animation: open when var1 set (hover), close when cleared. */
-// FUNCTION: TIE95 0x70ff8
-// FUNCTION: TIE98 0x44d7e0
-static int16_t mainmenu_user_Door(Actor* actor, int32_t time) {
-	(void)time;
-	if (actor->var1) {
-		/* Opening */
-		if (!actor->state)
-			soundext_Play_SFX(sfxSmallDoorOpen, door_volume[actor->id]);
-		if (actor->state < actor->arraySize - 1)
-			xactor_Set_Actor_State(actor, actor->state + 1, 0);
-		actor->var1 = 0;
-	} else {
-		/* Closing */
-		if (actor->state > 0) {
-			xactor_Set_Actor_State(actor, actor->state - 1, 0);
-			if (!actor->state)
-				soundext_Play_SFX(sfxSmallDoorShut, door_volume[actor->id]);
-		}
-	}
-	return 1;
-}
 
 /* ================================================================
  * Entry point
@@ -727,4 +449,292 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 #endif
 	return xerror_Get_Landru_Exit();
 #endif
+}
+
+/* ================================================================
+ * View update callback
+ * ================================================================ */
+
+/* On frame 0, shows the cursor if hidden. Shared epilogue with Main_Menu
+ * in the binary (JUMPOUT to retn). */
+// FUNCTION: TIE95 0x70c8c
+// FUNCTION: TIE98 0x44d410
+static void mainmenu_end_View(int32_t frame_num) {
+	if (frame_num)
+		return;
+	if (!xcursor_Is_Cursor_Visible())
+		xcursor_Show_Cursor();
+}
+
+/* ================================================================
+ * XINPUT callbacks
+ * ================================================================ */
+
+/* iupdate: hover highlights door + title, click dispatches scene exit. */
+// FUNCTION: TIE95 0x70cc0
+// FUNCTION: TIE98 0x44d430
+static int16_t mainmenu_iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+										 uint8_t right, int16_t mouse_x, int16_t mouse_y) {
+	(void)bounds;
+	(void)clip;
+	(void)mouse_x;
+	(void)mouse_y;
+
+	if (key)
+		return 0;
+
+	/* Highlight the door for this menu button */
+	door[input->id]->var1 = 1;
+
+	/* Show the title overlay with this button's text id */
+	title_actor->var1 = 1;
+	title_actor->var2 = input->id;
+
+	/* Check for mouse click (button state 3 = released) */
+	if (left != (uint8_t)3 && right != (uint8_t)3)
+		return 1;
+
+	switch (input->id) {
+		case 0: { /* Tour Battle */
+			if (shipext_Set_Tour_Battle()) {
+				input->var2 = SCENE_BRIEF; /* exit_code */
+				input->var1 = 1;           /* exit_pending */
+				break;
+			}
+			xinpattr_Hide_Input(input);
+			return 1;
+		}
+#ifdef TIE_MODERN
+		case 2:
+		case 3:
+		case 4:
+		case 5:
+		case 6:
+		case 7:
+			input->var2 = active_spec->exit_scene[input->id];
+			input->var1 = 1;
+			if (input->id == active_spec->outcome_input_id)
+				shipext_Set_Mission_Outcome(16);
+			break;
+#elif defined(TIE98)
+		case 2:
+			input->var2 = SCENE_TOUR_DESK;
+			input->var1 = 1;
+			break;
+		case 3:
+			input->var2 = SCENE_TRAIN_TRANSITION;
+			input->var1 = 1;
+			break;
+		case 4:
+			input->var2 = SCENE_COMBAT_TRANSITION;
+			input->var1 = 1;
+			break;
+		case 5:
+			input->var2 = SCENE_EXIT;
+			input->var1 = 1;
+			break;
+		case 6:
+			input->var2 = SCENE_BLUEPRINT;
+			input->var1 = 1;
+			break;
+		case 7:
+			input->var2 = SCENE_FILM_VIEWER;
+			input->var1 = 1;
+			shipext_Set_Mission_Outcome(16);
+			break;
+#else
+		case 2:
+			input->var2 = SCENE_TOUR_DESK;
+			input->var1 = 1;
+			break;
+		case 3:
+			input->var2 = SCENE_BLUEPRINT;
+			input->var1 = 1;
+			break;
+		case 4:
+			input->var1 = 1;
+			input->var2 = SCENE_FILM_VIEWER;
+			shipext_Set_Mission_Outcome(16);
+			break;
+		case 5:
+			input->var2 = SCENE_EXIT;
+			input->var1 = 1;
+			break;
+		case 6:
+			input->var2 = SCENE_TRAIN_TRANSITION;
+			input->var1 = 1;
+			break;
+		case 7:
+			input->var2 = SCENE_COMBAT_TRANSITION;
+			input->var1 = 1;
+			break;
+#endif
+		default:
+			break;
+	}
+	return 1;
+}
+
+/* iuser: when exit_pending, triggers the scene transition. */
+// FUNCTION: TIE95 0x70dd4
+// FUNCTION: TIE98 0x44d550
+static void mainmenu_iuser_MainMenu(Input* input, int32_t time) {
+	(void)time;
+	if (!input->var1)
+		return; /* exit_pending */
+
+	if (input->var2 == 180) { /* exit_code == Tour Battle */
+		char name[64];
+		shipext_Get_Battle_Mission_Name(name);
+		shipext_Set_Mission_Name(name);
+	}
+	xerror_Set_Landru_Exit(input->var2); /* exit_code */
+}
+
+/* ================================================================
+ * Actor callbacks
+ * ================================================================ */
+
+/* Title overlay: show on hover frame, hide otherwise. */
+// FUNCTION: TIE95 0x70e14
+// FUNCTION: TIE98 0x44d5a0
+static int16_t mainmenu_user_Title(Actor* actor, int32_t time) {
+	(void)time;
+	if (actor->var1 == 1) {
+		if (!xactor_Is_Actor_Visible(actor))
+			xactor_Show_Actor(actor);
+		actor->var1 = 0;
+	} else {
+		if (xactor_Is_Actor_Visible(actor))
+			xactor_Hide_Actor(actor);
+	}
+	return 1;
+}
+
+/* Title overlay draw: render the delta actor + centered text label. */
+// FUNCTION: TIE95 0x70e78
+// FUNCTION: TIE98 0x44d5f0
+static int16_t mainmenu_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								   int16_t refresh) {
+	int16_t offx, offy;
+	Rect r;
+	char label[32];
+#ifdef TIE_MODERN
+	int16_t font_id = active_spec->title_font;
+#endif
+
+	if (!refresh)
+		return 0;
+
+	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
+
+	xactor_Get_Actor_Offset(actor, &offx, &offy);
+
+	xrect_Set_Rect(&r, offx, offy, offx + actor->w, offy + actor->h);
+
+	switch (actor->var2) {
+		case 0: { /* Continue Battle N */
+			char num[16];
+			textext_Copy_Text(label, txtMainContBattle);
+			strcat(label, " ");
+			textext_Copy_Text(num, (TIEText)(txtMainOne + pilot_record.cur_battle));
+			strcat(label, num);
+			break;
+		}
+		case 1:
+			strcpy(label, textext_Get_Text(txtMainCustom));
+			break;
+		case 2: /* New/Change/View TOD */
+			if (shipext_Find_Battle()) {
+				if (pilot_record.battle_status[pilot_record.cur_battle] == 1)
+					strcpy(label, textext_Get_Text(txtMainChangeBattle));
+				else
+					strcpy(label, textext_Get_Text(txtMainNewBattle));
+			} else {
+				strcpy(label, textext_Get_Text(txtMainViewTOD));
+			}
+			break;
+#ifdef TIE_MODERN
+		case 3:
+		case 4:
+		case 5:
+		case 6:
+		case 7:
+			strcpy(label, textext_Get_Text(active_spec->title_text[actor->var2]));
+			break;
+#elif defined(TIE98)
+		case 3:
+			strcpy(label, textext_Get_Text(txtMainTech));
+			break;
+		case 4:
+			strcpy(label, textext_Get_Text(txtMainFilm));
+			break;
+		case 5:
+			strcpy(label, textext_Get_Text(txtMainRegister));
+			break;
+		case 6:
+			strcpy(label, textext_Get_Text(txtMainTrain));
+			break;
+		case 7:
+			strcpy(label, textext_Get_Text(txtMainCombat));
+			break;
+#else
+		case 3:
+			strcpy(label, textext_Get_Text(txtMainTrain));
+			break;
+		case 4:
+			strcpy(label, textext_Get_Text(txtMainCombat));
+			break;
+		case 5:
+			strcpy(label, textext_Get_Text(txtMainRegister));
+			break;
+		case 6:
+			strcpy(label, textext_Get_Text(txtMainTech));
+			break;
+		case 7:
+			strcpy(label, textext_Get_Text(txtMainFilm));
+			break;
+#endif
+#ifdef TIE_MODERN
+		default:
+			label[0] = 0;
+			break;
+#endif
+	}
+
+	/* Drop shadow: dark color at (1,1) offset, then bright at (0,0) */
+	xrect_Offset_Rect(&r, 1, 1);
+#ifdef TIE_MODERN
+	xfont_Print_Centered_Text(label, &r, font_id, 16);
+	xrect_Offset_Rect(&r, -1, -1);
+	xfont_Print_Centered_Text(label, &r, font_id, 15);
+#else
+	xfont_Print_Centered_Text(label, &r, TIE_FRONTEND_EDITION(0, 2), 16);
+	xrect_Offset_Rect(&r, -1, -1);
+	xfont_Print_Centered_Text(label, &r, TIE_FRONTEND_EDITION(0, 2), 15);
+#endif
+	return 1;
+}
+
+/* Door animation: open when var1 set (hover), close when cleared. */
+// FUNCTION: TIE95 0x70ff8
+// FUNCTION: TIE98 0x44d7e0
+static int16_t mainmenu_user_Door(Actor* actor, int32_t time) {
+	(void)time;
+	if (actor->var1) {
+		/* Opening */
+		if (!actor->state)
+			soundext_Play_SFX(sfxSmallDoorOpen, door_volume[actor->id]);
+		if (actor->state < actor->arraySize - 1)
+			xactor_Set_Actor_State(actor, actor->state + 1, 0);
+		actor->var1 = 0;
+	} else {
+		/* Closing */
+		if (actor->state > 0) {
+			xactor_Set_Actor_State(actor, actor->state - 1, 0);
+			if (!actor->state)
+				soundext_Play_SFX(sfxSmallDoorShut, door_volume[actor->id]);
+		}
+	}
+	return 1;
 }

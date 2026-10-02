@@ -65,7 +65,7 @@ int8_t fsfx_triggerbeamsfx(int32_t firing);
  * immediately at full volume, centered pan, max priority.
  * Returns 1 when the clip is started or queued.
  */
-int8_t fsfx_triggervoicesfx(uint16_t voice_id);
+int16_t fsfx_triggervoicesfx(uint16_t voice_id);
 
 /*
  * Per-frame voice-queue drainer. Called by TIE_doframe. Starts
@@ -79,7 +79,7 @@ void fsfx_checkblastqueue(void);
  * (spec.bound_hwidth + 1024) range of the player. Returns the
  * loop-terminator value (28).
  */
-int16_t fsfx_checktieflyby(void);
+void fsfx_checktieflyby(void);
 
 /*
  * Returns nonzero if an ally (object on the player's side) is
@@ -118,7 +118,7 @@ int8_t fsfx_speakobjectives(uint16_t objective_voice);
  * s->71 strafe, t->72 target, u->69 unknown, v->70 or 100 (50/50).
  * cmdr_mode selects 'target' vs 'enemy' prefix on the final name clip.
  */
-int8_t fsfx_speakorderack(int32_t target_idx, int32_t order_char, uint16_t cmdr_mode);
+void fsfx_speakorderack(uint16_t target_obj, int32_t order_char, uint16_t cmdr_mode);
 
 /*
  * Mission-critical kill announcer. Checks if the destroyed craft
@@ -128,7 +128,7 @@ int8_t fsfx_speakorderack(int32_t target_idx, int32_t order_char, uint16_t cmdr_
  * Suppressed once mission.primary_complete == 1. Returns 1 if
  * the announcement was voiced.
  */
-int32_t fsfx_checkcriticalcraft(int32_t object_idx, uint16_t action_voice);
+int32_t fsfx_checkcriticalcraft(uint16_t object_idx, uint16_t action_voice);
 
 /*
  * FSFX-owned positional audio primitives (also used internally).

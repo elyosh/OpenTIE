@@ -18,10 +18,10 @@ int16_t fmusic_loadmusic(const char* filename);
 uint32_t fmusic_swapdword(uint32_t val);
 int16_t fmusic_readfiledata(TieFile* fp, uint8_t* dest, uint16_t total);
 
-int16_t fmusic_fmLoadSound(const char* name);
+int fmusic_fmLoadSound(const char* name);
 int16_t fmusic_fmUnloadSound(void);
 void* fmusic_GetPagedSound(unsigned int track_idx);
-int16_t fmusic_PageSound(uint16_t track_idx);
+void fmusic_PageSound(unsigned int track_idx);
 
 #ifdef __cplusplus
 }

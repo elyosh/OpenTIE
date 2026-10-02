@@ -6,6 +6,24 @@ float Math3D_Dot3(const float* lhs, const float* rhs) {
 	return rhs[1] * lhs[1] + rhs[2] * lhs[2] + lhs[0] * rhs[0];
 }
 
+// FUNCTION: TIE98 0x420160
+void Math3D_RotateVec3(Vec3f* vec, Matrix3x3* matrix) {
+	float x;
+	float y;
+	float z;
+	float m0;
+	float m6;
+
+	x = vec->x;
+	y = vec->y;
+	z = vec->z;
+	m0 = matrix->m[0];
+	m6 = matrix->m[6];
+	vec->x = (m0 * x + m6 * z) + matrix->m[3] * y;
+	vec->y = matrix->m[7] * z + matrix->m[4] * y + matrix->m[1] * x;
+	vec->z = matrix->m[8] * z + matrix->m[5] * y + matrix->m[2] * x;
+}
+
 // FUNCTION: TIE98 0x4201D0
 float Math3D_RotateVec3X(Vec3f* vec, Matrix3x3* matrix) {
 	return matrix->m[6] * vec->z + vec->y * matrix->m[3] + matrix->m[0] * vec->x;
@@ -153,22 +171,4 @@ Matrix3x3* Math3D_BuildAxisAngleMatrix(Matrix3x3* out, float* axis_angle) {
 	out->m[7] = one_minus_cos * axis_z * axis_y - sin_angle * axis_x;
 	out->m[8] = one_minus_cos * axis_z * axis_z + cos_angle;
 	return out;
-}
-
-// FUNCTION: TIE98 0x420160
-void Math3D_RotateVec3(Vec3f* vec, Matrix3x3* matrix) {
-	float x;
-	float y;
-	float z;
-	float m0;
-	float m6;
-
-	x = vec->x;
-	y = vec->y;
-	z = vec->z;
-	m0 = matrix->m[0];
-	m6 = matrix->m[6];
-	vec->x = (m0 * x + m6 * z) + matrix->m[3] * y;
-	vec->y = matrix->m[7] * z + matrix->m[4] * y + matrix->m[1] * x;
-	vec->z = matrix->m[8] * z + matrix->m[5] * y + matrix->m[2] * x;
 }

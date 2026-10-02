@@ -103,7 +103,7 @@ void rtsvga2_drawshapeVGA(const uint8_t* shape, int16_t x, int16_t y, int16_t sk
 void rtsvga2_drawshapeVGA_tie98(const uint8_t* shape, int16_t x, int16_t y, int16_t skip_color,
 								uint16_t flip_x);
 void rtsvga2_drawmonoshapeVGA(const uint8_t* shape, uint16_t x, uint16_t y, uint16_t skip_color,
-							  uint8_t color);
+							  uint16_t color);
 void rtsvga2__lowdrawshapeVGA(const uint8_t* shape, uint16_t x, uint16_t y, uint16_t skip_color, int flip_x,
 							  char mono_flag);
 void rtsvga2_drawdotVGA(uint16_t x, uint16_t y, uint8_t color);

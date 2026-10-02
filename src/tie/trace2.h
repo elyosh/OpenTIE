@@ -37,7 +37,7 @@ typedef struct trace2_EdgeHeader {
  * FEDISKIO_FreeFlightHandles and the next xtrans2_initxtrans. */
 
 #define TRACE2_EDGEINFO_CAP 30720u   /* flightbuf_small_handle capacity */
-#define TRACE2_EDGEHEADER_CAP 26016u /* flightbuf_big_handle capacity */
+#define TRACE2_EDGEHEADER_CAP 26000u /* flightbuf_big_handle capacity */
 
 extern trace2_EdgeHeader* trace2_rowheaders[480];
 
@@ -90,7 +90,7 @@ void trace2_entervertedge(int16_t topY, int16_t lineCnt, int16_t xCoord, int16_t
 
 /* 8 directional Bresenham tracers (|dy|>=|dx| y-dom, |dx|>|dy| x-dom;
  * direction given by sign of dy in screen space and xdiffsign). */
-void trace2_ydownleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
+void trace2_ydownleft(int32_t ytop, int32_t ytotal, int32_t xval, int32_t slope);
 void trace2_ydownright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
 void trace2_yupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
 void trace2_yupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);

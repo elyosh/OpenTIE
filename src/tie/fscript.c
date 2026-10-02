@@ -382,11 +382,12 @@ int16_t fscript_MsSetSequence(int16_t seq_id) {
 
 // FUNCTION: TIE95 0x240BC
 int16_t fscript_MsSetAttribute(int16_t attr_id, int16_t value) {
-	if (attr_id >= 1)
-		return 0;
-	if (value >= 0)
-		attributes[attr_id] = value;
-	return attributes[attr_id];
+	if (attr_id < 1) {
+		if (value >= 0)
+			attributes[attr_id] = value;
+		return attributes[attr_id];
+	}
+	return 0;
 }
 
 /* ================================================================
@@ -403,56 +404,39 @@ int16_t fscript_MsSetAttribute(int16_t attr_id, int16_t value) {
  */
 // FUNCTION: TIE95 0x240E4
 static void fscript_ChangeState(int new_state) {
-	char* snd_name;
+	SdpRecord* sdp;
 	intptr_t new_handle;
-
-	SdpRecord* chain;
-	SdpRecord* p;
-	SdpRecord* selected;
 
 	if (currentState == 0) {
 		/* Case 1: from idle — enter new state */
-		SdpRecord* chain;
-		SdpRecord* p;
-		SdpRecord* selected;
-		SdpRecord* next_sdp;
-
 		currentState = new_state;
-		chain = sdpArrays[new_state];
-		if (!chain)
-			return;
 
-		/* Walk to end of named records */
-		p = chain;
-		while (p->name[0])
-			p++;
-
-		/* Find first playable or terminal record past the chain end */
-		while (p->sound_name[0] && (uint8_t)p->sound_name[0] != SDP_TERMINAL)
-			p++;
-
-		currentSdp = p;
-		selected = fscript_SelectSdp(p, new_state);
-		currentSdp = selected;
+		/* Walk to end of named records, then to the first playable or
+		 * terminal record */
+		currentSdp = sdpArrays[new_state];
+		while (currentSdp->name[0])
+			currentSdp++;
+		while (currentSdp->sound_name[0] && (int8_t)currentSdp->sound_name[0] != SDP_TERMINAL)
+			currentSdp++;
 
 		/* Load current sound */
-		currentID = filelist_ImLoadSound(selected->sound_name);
+		currentSdp = fscript_SelectSdp(currentSdp, new_state);
+		currentID = filelist_ImLoadSound(currentSdp->sound_name);
 		if (!currentID) {
 			currentState = 0;
 			lolevel_ImPrintf("Unable to load file ");
-			lolevel_ImPrintf(selected->sound_name);
+			lolevel_ImPrintf(currentSdp->sound_name);
 			lolevel_ImPrintf("...");
 			return;
 		}
 
 		/* Select and preload next sound */
-		next_sdp = fscript_SelectSdp(selected, new_state);
-		currentSdp = next_sdp;
-		nextID = filelist_ImLoadSound(next_sdp->sound_name);
+		currentSdp = fscript_SelectSdp(currentSdp, new_state);
+		nextID = filelist_ImLoadSound(currentSdp->sound_name);
 		if (!nextID) {
 			currentState = 0;
 			lolevel_ImPrintf("Unable to load file ");
-			lolevel_ImPrintf(next_sdp->sound_name);
+			lolevel_ImPrintf(currentSdp->sound_name);
 			lolevel_ImPrintf("...");
 			return;
 		}
@@ -470,8 +454,8 @@ static void fscript_ChangeState(int new_state) {
 		/* Case 2: from active to idle — stop everything */
 		lolevel_ImStopAllSounds();
 		filelist_ImUnloadAll();
-		nextID = 0;
 		sequenceID = 0;
+		nextID = 0;
 		currentID = 0;
 		playingState = 0;
 		currentState = 0;
@@ -480,31 +464,31 @@ static void fscript_ChangeState(int new_state) {
 		return;
 	}
 
-	/* Active-state transition: search the new state's chain for the
+	/* Active-state transition: walk to end of named records in the new
+	 * state's chain, then find the transition record matching the
 	 * outgoing state or the generic terminal. */
-	chain = sdpArrays[new_state];
+	sdp = sdpArrays[new_state];
+	while (sdp->name[0])
+		sdp++;
+	for (;;) {
+		int code = (int8_t)sdp->sound_name[0];
 
-	/* Walk to end of named records in the NEW state's chain */
-	p = chain;
-	while (p->name[0])
-		p++;
+		if (code == currentState || code == SDP_TERMINAL)
+			break;
+		sdp++;
+	}
 
-	/* Find transition record matching the OUTGOING state or generic terminal */
-	while ((uint8_t)p->sound_name[0] != (uint8_t)currentState && (uint8_t)p->sound_name[0] != SDP_TERMINAL)
-		p++;
-
-	selected = fscript_SelectSdp(p, new_state);
-	if (selected == currentSdp)
-		selected = fscript_SelectSdp(selected, new_state);
+	sdp = fscript_SelectSdp(sdp, new_state);
+	if (sdp == currentSdp)
+		sdp = fscript_SelectSdp(sdp, new_state);
 
 	/* Load the transition sound */
-	snd_name = selected->sound_name;
-	new_handle = filelist_ImLoadSound(snd_name);
+	new_handle = filelist_ImLoadSound(sdp->sound_name);
 	if (!new_handle) {
 		lolevel_ImStopAllSounds();
 		currentState = 0;
 		lolevel_ImPrintf("Unable to load file ");
-		lolevel_ImPrintf(snd_name);
+		lolevel_ImPrintf(sdp->sound_name);
 		lolevel_ImPrintf("...");
 		return;
 	}
@@ -513,7 +497,7 @@ static void fscript_ChangeState(int new_state) {
 	lolevel_ImPause();
 	filelist_ImUnloadSound(nextID);
 	nextID = new_handle;
-	currentSdp = selected;
+	currentSdp = sdp;
 	currentState = new_state;
 	lolevel_ImResume();
 }
@@ -601,31 +585,31 @@ static void fscript_PlaySequence(int seq_id) {
  */
 // FUNCTION: TIE95 0x244DC
 static SdpRecord* fscript_SelectSdp(SdpRecord* sdp, int state) {
-	int dest_idx;
 	const char* dest_name;
-	SdpRecord* chain;
-	SdpRecord* p;
+	SdpRecord* current = sdp;
+	int i;
 
 	if (!sdp->num_dests) {
 		lolevel_ImPrintf("Script Err: no dest count...");
 		return sdp;
 	}
 
-	dest_idx = fscript_ChooseDest(sdp);
-	dest_name = &sdp->dest_names[dest_idx][0];
+	dest_name = sdp->dest_names[fscript_ChooseDest(sdp)];
 
-	chain = sdpArrays[state];
-	p = chain;
-	while (p->name[0]) {
-		if (strcmp(p->name, dest_name) == 0)
-			return p;
-		p++;
+	sdp = sdpArrays[state];
+	while (sdp->name[0]) {
+		i = 0;
+		while (sdp->name[i] && sdp->name[i] == dest_name[i])
+			i++;
+		if (!sdp->name[i] && !dest_name[i])
+			return sdp;
+		sdp++;
 	}
 
 	lolevel_ImPrintf("Unable to find sdp for ");
 	lolevel_ImPrintf(dest_name);
 	lolevel_ImPrintf("...");
-	return sdp;
+	return current;
 }
 
 /*
@@ -634,11 +618,12 @@ static SdpRecord* fscript_SelectSdp(SdpRecord* sdp, int state) {
  */
 // FUNCTION: TIE95 0x24588
 static char* fscript_SelectSequence(int seq_id) {
-	if (seq_id == SEQ_SMALLWIN) {
-		int idx = fscript_ChooseDest(&smallWin);
-		return smallWin.dest_names[idx];
-	}
-	return sequenceData[seq_id];
+	SdpRecord* sdp;
+
+	if (seq_id != SEQ_SMALLWIN)
+		return sequenceData[seq_id];
+	sdp = &smallWin;
+	return sdp->dest_names[fscript_ChooseDest(sdp)];
 }
 
 /*
@@ -709,19 +694,20 @@ static int16_t fscript_GetRandom(int16_t lo, int16_t hi) {
 	 * with modular wraparound — signed `2 * rseed` is UB once the
 	 * value exceeds INT32_MAX/2, which is reached almost immediately
 	 * because the seeds at init are 32-bit-truncated host pointers. */
-	int i;
+	int i, c;
 	uint16_t raw;
 
-	for (i = 0; i < 23; i++)
-		rseed1 = (int32_t)(2u * (uint32_t)rseed1 +
-						   (uint32_t)(((rseed2 & 0x20000000) == 0) ^ ((rseed1 & 0x40000000) != 0)));
+	for (i = 0; i < 23; i++) {
+		c = ((rseed1 & 0x40000000) != 0) ^ ((rseed2 & 0x20000000) == 0);
+		rseed1 = (int32_t)((uint32_t)rseed1 * 2);
+		rseed1 += c;
+	}
+	for (i = 0; i < 37; i++) {
+		c = ((rseed2 & 0x40000000) != 0) ^ ((rseed1 & 0x20000000) == 0);
+		rseed2 = (int32_t)((uint32_t)rseed2 * 2);
+		rseed2 += c;
+	}
 
-	for (i = 0; i < 37; i++)
-		rseed2 = (int32_t)(2u * (uint32_t)rseed2 +
-						   (uint32_t)(((rseed1 & 0x20000000) == 0) ^ ((rseed2 & 0x40000000) != 0)));
-
-	/* Sum in uint32 -- signed int32+int32 routinely overflows once
-	 * the LFSR has spun. Modular wraparound matches the binary. */
-	raw = (uint16_t)((uint32_t)rseed2 + (uint32_t)rseed1);
-	return (int16_t)(((uint32_t)raw * (hi - lo + 1)) >> 16) + lo;
+	/* Sum the low halves; only 16 bits of the seed sum are used. */
+	return lo + (((uint32_t)(hi - lo + 1) * (uint16_t)((uint16_t)rseed2 + (uint16_t)rseed1)) >> 16);
 }

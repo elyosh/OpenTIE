@@ -1,5 +1,6 @@
 #include "tie/score.h"
 #include "tie/create.h" /* speciesconvert, genusconvert, familyconvert, diffmask, fgdiffmask */
+#include "tie/edition.h"
 #include "tie/fediskio.h"
 #include "tie/fscript.h"
 #include "tie/fsfx.h"
@@ -10,7 +11,6 @@
 #include "tie/shipext.h" /* EFGStruct, EAIStruct */
 #include "tie/tie.h"
 #include "tie/user.h"
-#include "tie_runtime/audio/flight_sound_bank.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
 
 #include <stddef.h>
@@ -31,6 +31,673 @@ int16_t percentcon[5] = { 0, 2, 4, 5, 6 };
 uint8_t conditiongrouprelated[26] = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1,
 									  0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 0 };
 
+/* ====================================================================
+ * score_checkobjective
+ * ==================================================================== */
+
+// FUNCTION: TIE95 0x50A70
+void score_checkobjective(void) {
+	uint16_t r;
+	uint16_t any_sec_goal;
+	uint16_t any_bonus_goal;
+	uint16_t sec_all_ok;
+	uint16_t bonus_all_ok;
+	uint16_t pri_all_ok;
+	uint16_t any_pri_goal;
+	uint16_t i;
+	uint16_t k;
+	uint16_t status;
+
+	if (mission.player_status != 3)
+		return;
+	if (mission.train_craft_type || hyperspaceflag)
+		return;
+
+	pri_all_ok = 1;
+	any_pri_goal = 0;
+	sec_all_ok = 1;
+	any_sec_goal = 0;
+	bonus_all_ok = 1;
+	any_bonus_goal = 0;
+
+	if (!timers[TIMER_PRIMARY_CHECK] || mission.end_flag) {
+		/* --- Phase 1: per-FG evaluation ---------------------------- */
+		for (i = 0; i < mission_file_header.num_fg; i++) {
+			if (diffmask[mission.difficulty] & fgdiffmask[fg_array[i].difficulty]) {
+				/* Primary win */
+				if (fgstatus[i].primary_status == 1 && (int8_t)fg_array[i].pri_win_cond != 9) {
+					any_pri_goal = 1;
+				} else if (fgstatus[i].primary_status == 2) {
+					pri_all_ok = 0;
+					if (!mission.primary_complete)
+						mission.primary_complete = 2;
+				} else if (fgstatus[i].primary_status) {
+					if (!fg_array[i].pri_win_cond || (int8_t)fg_array[i].pri_win_cond == 10) {
+						mission.primary_fg[i] = 0;
+						fgstatus[i].primary_status = 0;
+					} else {
+						any_pri_goal = 1;
+						r = score_checkcondition((int8_t)fg_array[i].pri_win_cond, GTT_FG, i,
+												 percentcon[(int8_t)fg_array[i].pri_win_pct], 0);
+						if (r == 2 && !mission.primary_complete)
+							mission.primary_complete = 2;
+						if (r != 1) {
+							pri_all_ok = 0;
+							mission.primary_fg[i] = 2;
+						} else {
+							mission.primary_fg[i] = 1;
+						}
+						fgstatus[i].primary_status = (uint8_t)r;
+					}
+				}
+
+				/* Secondary win */
+				if (fgstatus[i].secondary_status == 1 && (int8_t)fg_array[i].sec_win_cond != 9) {
+					any_sec_goal = 1;
+				} else if (fgstatus[i].secondary_status == 2) {
+					sec_all_ok = 0;
+					if (!mission.secondary_complete)
+						mission.secondary_complete = 2;
+				} else if (fgstatus[i].secondary_status) {
+					if (!fg_array[i].sec_win_cond || (int8_t)fg_array[i].sec_win_cond == 10) {
+						mission.secondary_fg[i] = 0;
+						fgstatus[i].secondary_status = 0;
+					} else {
+						any_sec_goal = 1;
+						r = score_checkcondition((int8_t)fg_array[i].sec_win_cond, GTT_FG, i,
+												 percentcon[(int8_t)fg_array[i].sec_win_pct], 0);
+						if (r == 2 && !mission.secondary_complete)
+							mission.secondary_complete = 2;
+						if (r != 1) {
+							sec_all_ok = 0;
+							mission.secondary_fg[i] = 2;
+						} else {
+							mission.secondary_fg[i] = 1;
+						}
+						fgstatus[i].secondary_status = (uint8_t)r;
+					}
+				}
+
+				/* Bonus */
+				if (fgstatus[i].fg_complete == 1 && (int8_t)fg_array[i].bonus_cond != 9) {
+					any_bonus_goal = 1;
+				} else if (fgstatus[i].fg_complete == 2) {
+					bonus_all_ok = 0;
+					if (!mission.bonus_complete)
+						mission.bonus_complete = 2;
+				} else if (fgstatus[i].fg_complete) {
+					if (!fg_array[i].bonus_cond || (int8_t)fg_array[i].bonus_cond == 10) {
+						mission.bonus_fg[i] = 0;
+						fgstatus[i].fg_complete = 0;
+					} else {
+						any_bonus_goal = 1;
+						r = score_checkcondition((int8_t)fg_array[i].bonus_cond, GTT_FG, i,
+												 percentcon[(int8_t)fg_array[i].bonus_pct], 0);
+						if (fgstatus[i].fg_complete == 2 && !mission.bonus_complete &&
+							fg_array[i].bonus_points >= 0)
+							mission.bonus_complete = 2;
+						if (r != 1) {
+							if (fg_array[i].bonus_points >= 0)
+								bonus_all_ok = 0;
+							mission.bonus_fg[i] = 2;
+						} else {
+							mission.bonus_fg[i] = 1;
+						}
+						fgstatus[i].fg_complete = (uint8_t)r;
+					}
+				}
+			} else {
+				fgstatus[i].primary_status = 0;
+				fgstatus[i].secondary_status = 0;
+				fgstatus[i].fg_complete = 0;
+			}
+		}
+
+		/* --- Phase 2: mission-level primary aggregate -------------- */
+		if ((int8_t)cut[0].subcond[0].cond != 10 || (int8_t)cut[0].subcond[1].cond != 10) {
+			uint16_t pri_a;
+			uint16_t pri_b;
+
+			any_pri_goal = 1;
+			pri_a = score_checkcondition((int8_t)cut[0].subcond[0].cond, (int8_t)cut[0].subcond[0].type,
+										 (int8_t)cut[0].subcond[0].id, (int8_t)cut[0].subcond[0].pct, 0);
+			pri_b = score_checkcondition((int8_t)cut[0].subcond[1].cond, (int8_t)cut[0].subcond[1].type,
+										 (int8_t)cut[0].subcond[1].id, (int8_t)cut[0].subcond[1].pct, 0);
+			if ((int8_t)cut[0].or_joined == 1) {
+				if ((pri_a | pri_b) & 1)
+					status = 1;
+				else if (pri_a & pri_b & 2)
+					status = 2;
+				else
+					status = 4;
+			} else if (pri_a & pri_b & 1) {
+				status = 1;
+			} else if ((pri_a | pri_b) & 2) {
+				status = 2;
+			} else {
+				status = 4;
+			}
+			mission.primary_global = (uint8_t)status;
+		} else {
+			status = 1;
+			mission.primary_global = 0;
+		}
+		if (status == 2 && !mission.primary_complete)
+			mission.primary_complete = 2;
+		if (status == 1 && pri_all_ok && any_pri_goal) {
+			if (mission.primary_complete != 1) {
+				if (timers[TIMER_PRI_COMPLETE] == 0) {
+					timers[TIMER_PRI_COMPLETE] = 7080;
+					msg_messageprintf(MSG_PRIMARY_COMPLETE);
+					for (k = 0; k < 2; k++) {
+						if (mission_file_header.mission.win_msg1[k][0]) {
+							msg_addmessageptr(0, (char*)mission_file_header.mission.win_msg1[k]);
+							/* The first name-list line carries the edition-specific
+							 * objective voice cue; the second line plays silently. */
+							if (k == 0)
+								pending_voice_id = TIE_FLIGHT_EDITION(FSFX_TIE95_MISSION_VOICE_BASE,
+																	  FSFX_TIE98_MISSION_VOICE_BASE) +
+												   FSFX_MISSION_VOICE_PRIMARY;
+							else
+								pending_voice_id = 0;
+							msg_messageprintf(MSG_GENERIC_STAR);
+						}
+					}
+				}
+				fsfx_speakobjectives(0x5Bu);
+				fscript_MsSetSequence(5);
+			}
+			mission.primary_complete = 1;
+			/* Battle 12 / mission 7: force end-of-mission on primary complete. */
+			if (currentbattle == 12 && currentmission == 7) {
+				user_checkreplaycamera();
+				mission.end_flag = 1;
+				mission.player_status = 3;
+			}
+		}
+
+		/* --- Phase 3: secondary aggregate -------------------------- */
+		{
+			const uint16_t sec_a =
+				score_checkcondition((int8_t)cut[1].subcond[0].cond, (int8_t)cut[1].subcond[0].type,
+									 (int8_t)cut[1].subcond[0].id, (int8_t)cut[1].subcond[0].pct, 0);
+			const uint16_t sec_b =
+				score_checkcondition((int8_t)cut[1].subcond[1].cond, (int8_t)cut[1].subcond[1].type,
+									 (int8_t)cut[1].subcond[1].id, (int8_t)cut[1].subcond[1].pct, 0);
+
+			status = 4;
+			if ((int8_t)cut[1].or_joined == 1) {
+				if ((sec_a | sec_b) & 1)
+					status = 1;
+				else if (sec_a & sec_b & 2)
+					status = 2;
+			} else if (sec_a & sec_b & 1) {
+				status = 1;
+			} else if ((sec_a | sec_b) & 2) {
+				status = 2;
+			}
+		}
+		mission.secondary_global = (uint8_t)status;
+		if (status == 2 && !mission.secondary_complete)
+			mission.secondary_complete = 2;
+		if ((int8_t)cut[1].subcond[0].cond != 10 || (int8_t)cut[1].subcond[1].cond != 10) {
+			any_sec_goal = 1;
+		} else {
+			mission.secondary_global = 0;
+			status = 1;
+		}
+		if (status == 1 && sec_all_ok == 1 && any_sec_goal) {
+			if (mission.secondary_complete != 1) {
+				if (timers[TIMER_SEC_COMPLETE] == 0) {
+					timers[TIMER_SEC_COMPLETE] = 7080;
+					msg_messageprintf(MSG_SECONDARY_COMPLETE);
+					for (k = 0; k < 2; k++) {
+						if (mission_file_header.mission.win_msg2[k][0]) {
+							msg_addmessageptr(0, (char*)mission_file_header.mission.win_msg2[k]);
+							/* The first name-list line carries the edition-specific
+							 * objective voice cue; the second line plays silently. */
+							if (k == 0)
+								pending_voice_id = TIE_FLIGHT_EDITION(FSFX_TIE95_MISSION_VOICE_BASE,
+																	  FSFX_TIE98_MISSION_VOICE_BASE) +
+												   FSFX_MISSION_VOICE_SECONDARY;
+							else
+								pending_voice_id = 0;
+							msg_messageprintf(MSG_GENERIC_STAR);
+						}
+					}
+				}
+				fsfx_speakobjectives(0x5Cu);
+				fscript_MsSetSequence(7);
+			}
+			mission.secondary_complete = 1;
+		}
+
+		/* --- Phase 4: bonus aggregate ------------------------------ */
+		{
+			const uint16_t bonus_a =
+				score_checkcondition((int8_t)cut[2].subcond[0].cond, (int8_t)cut[2].subcond[0].type,
+									 (int8_t)cut[2].subcond[0].id, (int8_t)cut[2].subcond[0].pct, 0);
+			const uint16_t bonus_b =
+				score_checkcondition((int8_t)cut[2].subcond[1].cond, (int8_t)cut[2].subcond[1].type,
+									 (int8_t)cut[2].subcond[1].id, (int8_t)cut[2].subcond[1].pct, 0);
+
+			status = 4;
+			if ((int8_t)cut[2].or_joined == 1) {
+				if ((bonus_a | bonus_b) & 1)
+					status = 1;
+				else if (bonus_a & bonus_b & 2)
+					status = 2;
+			} else if (bonus_a & bonus_b & 1) {
+				status = 1;
+			} else if ((bonus_a | bonus_b) & 2) {
+				status = 2;
+			}
+		}
+		mission.bonus_global = (uint8_t)status;
+		if (status == 2 && !mission.bonus_complete)
+			mission.bonus_complete = 2;
+		if ((int8_t)cut[2].subcond[0].cond != 10 || (int8_t)cut[2].subcond[1].cond != 10) {
+			any_bonus_goal = 1;
+		} else {
+			mission.bonus_global = 0;
+			status = 1;
+		}
+		if (status == 1 && bonus_all_ok == 1 && any_bonus_goal) {
+			if (mission.bonus_complete != 1) {
+				if (timers[TIMER_BONUS_COMPLETE] == 0) {
+					msg_messageprintf(MSG_BONUS_COMPLETE);
+					timers[TIMER_BONUS_COMPLETE] = 14160;
+				}
+				fsfx_speakobjectives(0x5Eu);
+				fscript_MsSetSequence(9);
+			}
+			mission.bonus_complete = 1;
+		}
+
+		/* "Objectives failed" banner when primary fails mid-flight. */
+		if (mission.primary_complete == 2 && !hyperspaceflag && !timers[TIMER_OBJECTIVES_FAILED]) {
+			msg_messageprintf(MSG_OBJECTIVES_FAILED);
+			timers[TIMER_OBJECTIVES_FAILED] = 21240;
+			for (k = 0; k < 2; k++) {
+				if (mission_file_header.mission.loss_msg[k][0]) {
+					msg_addmessageptr(0, (char*)mission_file_header.mission.loss_msg[k]);
+					/* First failure-name line carries the edition-specific
+					 * loss VO loaded by fsfx_loadvoicelfd;
+					 * second line plays silently. */
+					if (k == 0)
+						pending_voice_id =
+							TIE_FLIGHT_EDITION(FSFX_TIE95_MISSION_VOICE_BASE, FSFX_TIE98_MISSION_VOICE_BASE) +
+							FSFX_MISSION_VOICE_LOSS;
+					else
+						pending_voice_id = 0;
+					msg_messageprintf(MSG_GENERIC_STAR);
+				}
+			}
+			fsfx_triggervoicesfx(0x6Au);
+			fscript_MsSetSequence(6);
+		}
+
+		timers[TIMER_PRIMARY_CHECK] = 236;
+	}
+
+	/* --- Phase 5: radio-message trigger poll ---------------------- */
+	if (timers[TIMER_RADIOMSG_POLL] <= 0) {
+		for (i = 0; i < mission_file_header.num_msg; i++) {
+			if (!mission.radiomsg_triggered[i]) {
+				/* Evaluate both subconditions. */
+				const uint16_t sa =
+					score_checkcondition((int8_t)radiomsg[90 * i + 64], (int8_t)radiomsg[90 * i + 65],
+										 (int8_t)radiomsg[90 * i + 66], (int8_t)radiomsg[90 * i + 67], 0);
+				const uint16_t sb =
+					score_checkcondition((int8_t)radiomsg[90 * i + 68], (int8_t)radiomsg[90 * i + 69],
+										 (int8_t)radiomsg[90 * i + 70], (int8_t)radiomsg[90 * i + 71], 0);
+
+				if ((int8_t)radiomsg[90 * i + 89] == 1)
+					status = sa | sb;
+				else
+					status = sa & sb;
+				if (status & 1) {
+					mission.radiomsg_triggered[i] = 1;
+					mission.radiomsg_countdown[i] = radiomsg[90 * i + 88];
+					if (mission.radiomsg_countdown[i] == 0) {
+						msg_addmessageptr(0, (char*)&radiomsg[90 * i]);
+						pending_voice_id =
+							TIE_FLIGHT_EDITION(FSFX_TIE95_MISSION_VOICE_BASE, FSFX_TIE98_MISSION_VOICE_BASE) +
+							i;
+						msg_messageprintf(MSG_GENERIC_STAR_INFO);
+					}
+				}
+			} else {
+				if (mission.radiomsg_countdown[i] && --mission.radiomsg_countdown[i] == 0) {
+					msg_addmessageptr(0, (char*)&radiomsg[90 * i]);
+					/* Pair the radio text with the edition-specific
+					 * per-mission voice cue loaded from the
+					 * <NAME>.LFD by fsfx_loadvoicelfd. */
+					pending_voice_id =
+						TIE_FLIGHT_EDITION(FSFX_TIE95_MISSION_VOICE_BASE, FSFX_TIE98_MISSION_VOICE_BASE) + i;
+					msg_messageprintf(MSG_GENERIC_STAR_INFO);
+				}
+			}
+		}
+		timers[TIMER_RADIOMSG_POLL] = 1180;
+	}
+}
+
+/* ====================================================================
+ * score_checkcondition (body)
+ * ==================================================================== */
+
+// FUNCTION: TIE95 0x51698
+uint16_t score_checkcondition(uint16_t cond, uint16_t target_type, uint16_t target_id, uint16_t amount_op,
+							  int16_t exclude_player) {
+	uint16_t fg_idx;
+	uint16_t total_craft;
+	uint16_t specific_total;
+	uint16_t destroyed_total;
+	uint16_t cond_count;
+	uint16_t cond_specific_total;
+	uint16_t player_matched;
+	uint16_t cond_destroyed_count;
+	uint16_t cond_destroyed_specific;
+	uint16_t result;
+
+	if (conditiongrouprelated[cond]) {
+		if (!target_type)
+			return 2; /* No target -> failed. */
+
+		total_craft = 0;
+		specific_total = 0;
+		destroyed_total = 0;
+		cond_count = 0;
+		cond_specific_total = 0;
+		player_matched = 0;
+		cond_destroyed_count = 0;
+		cond_destroyed_specific = 0;
+
+		for (fg_idx = 0; fg_idx < mission_file_header.num_fg; fg_idx++) {
+			if (!fg_array[fg_idx].species)
+				continue;
+			if (!score_fgmemberofgroup(fg_idx, target_type, target_id))
+				continue;
+
+			total_craft += fgstatus[fg_idx].cond[0].count;
+			specific_total += fgstatus[fg_idx].cond_id[0].count;
+			destroyed_total += fgstatus[fg_idx].cond[0].detail;
+
+			switch (cond) {
+				case 1:
+					cond_count += fgstatus[fg_idx].cond[0].detail;
+					cond_specific_total += fgstatus[fg_idx].cond_id[0].detail;
+					if (pstate.player_fg_idx == fg_idx)
+						player_matched = 1;
+					break;
+				case 2:
+					cond_count += fgstatus[fg_idx].cond[1].count;
+					cond_specific_total += fgstatus[fg_idx].cond_id[1].count;
+					if (exclude_player) {
+						cond_count += fgstatus[fg_idx].cond[1].detail;
+						cond_specific_total += fgstatus[fg_idx].cond_id[1].detail;
+						cond_count += fgstatus[fg_idx].cond[2].count;
+						cond_specific_total += fgstatus[fg_idx].cond_id[2].count;
+					} else {
+						cond_destroyed_count += fgstatus[fg_idx].cond[1].detail;
+						cond_destroyed_specific += fgstatus[fg_idx].cond_id[1].detail;
+						cond_destroyed_count += fgstatus[fg_idx].cond[2].count;
+						cond_destroyed_specific += fgstatus[fg_idx].cond_id[2].count;
+					}
+					break;
+				case 3:
+					cond_count += fgstatus[fg_idx].cond[2].detail;
+					cond_specific_total += fgstatus[fg_idx].cond_id[2].detail;
+					cond_destroyed_count += fgstatus[fg_idx].cond[3].count;
+					cond_destroyed_specific += fgstatus[fg_idx].cond_id[3].count;
+					if (pstate.player_fg_idx == fg_idx && pstate.player_craft->was_hit_flag)
+						player_matched = 1;
+					break;
+				case 4:
+					cond_count += fgstatus[fg_idx].cond[3].detail;
+					cond_specific_total += fgstatus[fg_idx].cond_id[3].detail;
+					cond_destroyed_count += fgstatus[fg_idx].cond[4].count;
+					cond_destroyed_specific += fgstatus[fg_idx].cond_id[4].count;
+					break;
+				case 5:
+					cond_count += fgstatus[fg_idx].cond[4].detail;
+					cond_specific_total += fgstatus[fg_idx].cond_id[4].detail;
+					cond_destroyed_count += fgstatus[fg_idx].cond[5].count;
+					cond_destroyed_specific += fgstatus[fg_idx].cond_id[5].count;
+					break;
+				case 6:
+					cond_count += fgstatus[fg_idx].cond[5].detail;
+					cond_specific_total += fgstatus[fg_idx].cond_id[5].detail;
+					cond_destroyed_count += fgstatus[fg_idx].cond[6].count;
+					cond_destroyed_specific += fgstatus[fg_idx].cond_id[6].count;
+					break;
+				case 7:
+					cond_count += fgstatus[fg_idx].cond[6].detail;
+					cond_specific_total += fgstatus[fg_idx].cond_id[6].detail;
+					cond_destroyed_count += fgstatus[fg_idx].cond[7].count;
+					cond_destroyed_specific += fgstatus[fg_idx].cond_id[7].count;
+					break;
+				case 8:
+					cond_count += fgstatus[fg_idx].cond[7].detail;
+					cond_specific_total += fgstatus[fg_idx].cond_id[7].detail;
+					cond_destroyed_count += fgstatus[fg_idx].cond[8].count;
+					cond_destroyed_specific += fgstatus[fg_idx].cond_id[8].count;
+					break;
+				case 9:
+					/* Survivors: arrived minus destroyed. */
+					cond_count += fgstatus[fg_idx].cond[0].detail - fgstatus[fg_idx].cond[1].count;
+					cond_specific_total +=
+						fgstatus[fg_idx].cond_id[0].detail - fgstatus[fg_idx].cond_id[1].count;
+					cond_destroyed_count += fgstatus[fg_idx].cond[1].count;
+					cond_destroyed_specific += fgstatus[fg_idx].cond_id[1].count;
+					break;
+				case 12:
+					cond_count += fgstatus[fg_idx].cond[1].detail;
+					cond_specific_total += fgstatus[fg_idx].cond_id[1].detail;
+					cond_count += fgstatus[fg_idx].cond[2].count;
+					cond_specific_total += fgstatus[fg_idx].cond_id[2].count;
+					cond_destroyed_count += fgstatus[fg_idx].cond[1].count;
+					cond_destroyed_specific += fgstatus[fg_idx].cond_id[1].count;
+					break;
+				case 21:
+				case 22:
+				case 23:
+				case 24: {
+					/* Scan the FG's live craft and test a per-craft predicate. */
+					uint16_t i;
+
+					for (i = 0; i < NUM_CRAFTS; i++) {
+						CraftData* cd;
+						int16_t failed;
+
+						if (!objects[i].ship_idx || fg_idx != objects[i].fg_idx)
+							continue;
+						cd = objects[i].craft_ptr;
+						failed = 0;
+						if (cond == 21) {
+							/* Watcom emitted unaligned-dword-HIWORD reads on cargo[14] and
+							 * forward_shield, which decode to forward_shield and rear_shield
+							 * respectively (the int16 sitting two bytes past each named field). */
+							if (cd->forward_shield + cd->rear_shield <= 0)
+								failed = 1;
+						} else if (cond == 22) {
+							if (cd->hull_damage > cd->hull_max / 2)
+								failed = 1;
+						} else if (cond == 23) {
+							uint16_t ammo = 0;
+							uint16_t k;
+
+							for (k = 0; k < cd->missile_group_cnt; k++) {
+								ammo += cd->weapon_slots[spec_data[cd->species_idx].missile_start[k]].ammo;
+								ammo += cd->weapon_slots[spec_data[cd->species_idx].missile_end[k]].ammo;
+							}
+							if (!ammo)
+								failed = 1;
+						} else {
+							if (!(cd->status_flags & 0x10))
+								failed = 1;
+						}
+						if (failed) {
+							cond_count++;
+							if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
+								cond_specific_total++;
+							if (i == pstate.object_idx)
+								player_matched++;
+						} else {
+							cond_destroyed_count++;
+							if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
+								cond_destroyed_specific++;
+						}
+					}
+					break;
+				}
+			}
+		}
+
+		result = 4;
+		if (total_craft) {
+			switch (amount_op) {
+				case 0:
+					if (total_craft == cond_count)
+						result = 1;
+					else if (cond_destroyed_count)
+						result = 2;
+					break;
+				case 1:
+					if (math2_percentage(cond_count, total_craft) >= 0xC000)
+						result = 1;
+					else if (math2_percentage(cond_destroyed_count, total_craft) > 0x4000)
+						result = 2;
+					break;
+				case 2:
+					if (math2_percentage(cond_count, total_craft) >= 0x8000)
+						result = 1;
+					else if (math2_percentage(cond_destroyed_count, total_craft) > 0x8000)
+						result = 2;
+					break;
+				case 3:
+					if (math2_percentage(cond_count, total_craft) >= 0x4000)
+						result = 1;
+					else if (math2_percentage(cond_destroyed_count, total_craft) > 0xC000)
+						result = 2;
+					break;
+				case 4:
+				case 14:
+					if (cond_count)
+						result = 1;
+					else if (total_craft == cond_destroyed_count)
+						result = 2;
+					break;
+				case 5:
+					if (cond_count == total_craft - 1)
+						result = 1;
+					else if (cond_destroyed_count >= 2)
+						result = 2;
+					break;
+				case 6:
+					if (specific_total) {
+						if (specific_total == cond_specific_total)
+							result = 1;
+						else if (cond_destroyed_specific)
+							result = 2;
+					}
+					break;
+				case 7:
+					if (total_craft - specific_total == cond_count)
+						result = 1;
+					else if (cond_destroyed_count && !cond_specific_total)
+						result = 2;
+					else if (cond_destroyed_count > 1 && cond_specific_total)
+						result = 2;
+					break;
+				case 8:
+					if (total_craft - player_matched == cond_count)
+						result = 1;
+					break;
+				case 9:
+					if (player_matched)
+						result = 1;
+					break;
+				case 10:
+					if (destroyed_total == cond_count)
+						result = 1;
+					break;
+				case 11:
+					if (math2_percentage(cond_count, destroyed_total) >= 0xC000)
+						result = 1;
+					break;
+				case 12:
+					if (math2_percentage(cond_count, destroyed_total) >= 0x8000)
+						result = 1;
+					break;
+				case 13:
+					if (math2_percentage(cond_count, destroyed_total) >= 0x4000)
+						result = 1;
+					break;
+				case 15:
+					if (cond_count == destroyed_total - 1)
+						result = 1;
+					break;
+			}
+		}
+	} else {
+		/* Mission-level direct check. */
+		result = 4;
+		switch (cond) {
+			case 0:
+				result = 1;
+				break;
+			case 10:
+				result = 0;
+				break;
+			case 13:
+				if (mission.primary_complete == 1)
+					result = 1;
+				else if (mission.primary_complete == 2)
+					result = 2;
+				break;
+			case 14:
+				if (mission.primary_complete == 2)
+					result = 1;
+				else if (mission.primary_complete == 1)
+					result = 2;
+				break;
+			case 15:
+				if (mission.secondary_complete == 1)
+					result = 1;
+				else if (mission.secondary_complete == 2)
+					result = 2;
+				break;
+			case 16:
+				if (mission.secondary_complete == 2)
+					result = 1;
+				else if (mission.secondary_complete == 1)
+					result = 2;
+				break;
+			case 17:
+				if (mission.bonus_complete == 1)
+					result = 1;
+				else if (mission.bonus_complete == 2)
+					result = 2;
+				break;
+			case 18:
+				if (mission.bonus_complete == 2)
+					result = 1;
+				else if (mission.bonus_complete == 1)
+					result = 2;
+				break;
+			case 20:
+				if (mission.penalty_flag)
+					result = 1;
+				else
+					result = 2;
+				break;
+		}
+	}
+	return result;
+}
+
 /* Voiced "objectives complete / failed" announcements pull a matching pair
  * of craft-name strings from the .TIE file header. In the binary these alias
  * into _missionheader as byte_F8366 / byte_F83E6 / byte_F8466, but that
@@ -44,35 +711,57 @@ uint8_t conditiongrouprelated[26] = { 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 1,
 
 // FUNCTION: TIE95 0x524F0
 int16_t score_fgmemberofgroup(uint16_t fg_idx, uint16_t group_type, uint16_t group_id) {
-	const EFGStruct* const f = &fg_array[fg_idx];
-	const uint8_t fg_spec = speciesconvert[f->species];
+	uint16_t fg_spec;
+	int16_t result;
+
+	result = 0;
+	fg_spec = speciesconvert[(int8_t)fg_array[fg_idx].species];
 
 	switch (group_type) {
+		case 0:
+			break;
 		case GTT_FG:
-			return (int16_t)(group_id == fg_idx);
+			if (group_id == fg_idx)
+				result = 1;
+			break;
 		case GTT_SPECIES:
-			/* Binary uses byte_D1219 = speciesconvert+1: speciesconvert[gid+1]. */
-			return (int16_t)(speciesconvert[group_id + 1] == fg_spec);
+			if (speciesconvert[group_id + 1] == fg_spec)
+				result = 1;
+			break;
 		case GTT_GENUS:
-			return (int16_t)(genusconvert[group_id] == species_table[fg_spec].ship_class);
+			if (genusconvert[group_id] == species_table[fg_spec].ship_class)
+				result = 1;
+			break;
 		case GTT_FAMILY:
-			return (int16_t)(familyconvert[group_id] == species_table[fg_spec].category);
+			if (familyconvert[group_id] == species_table[fg_spec].category)
+				result = 1;
+			break;
 		case GTT_SIDE:
-			return (int16_t)(group_id == f->side);
+			if (group_id == (int8_t)fg_array[fg_idx].side)
+				result = 1;
+			break;
 		case GTT_AI_ORDER:
-			return (int16_t)(group_id == f->ai[0].order);
+			if (group_id == (int8_t)fg_array[fg_idx].ai[0].order)
+				result = 1;
+			break;
 		case GTT_CRAFT_ATTR:
-		case GTT_ALL_FG:
-			return 1;
+			break;
 		case GTT_ALL_IN_SET:
-			return (int16_t)(group_id == f->set);
+			if (group_id == (int8_t)fg_array[fg_idx].set)
+				result = 1;
+			break;
 		case GTT_SKILL:
-			return (int16_t)(group_id == f->skill);
+			if (group_id == (int8_t)fg_array[fg_idx].skill)
+				result = 1;
+			break;
 		case GTT_VERSION:
-			return (int16_t)(group_id == f->version);
-		default:
-			return 0;
+			if (group_id == (int8_t)fg_array[fg_idx].version)
+				result = 1;
+			break;
+		case GTT_ALL_FG:
+			result = 1;
 	}
+	return result;
 }
 
 /* ====================================================================
@@ -82,75 +771,118 @@ int16_t score_fgmemberofgroup(uint16_t fg_idx, uint16_t group_type, uint16_t gro
 // FUNCTION: TIE95 0x526D0
 int16_t score_objectmemberofgroup(uint16_t obj_idx, uint16_t group_type, uint16_t group_id) {
 	uint16_t fg_idx;
-	CraftData* craft_ptr = NULL;
+	uint16_t fg_spec;
+	CraftData* craft_ptr;
+	int16_t result;
 
-	const EFGStruct* f;
-	uint8_t fg_spec;
-
-	if (obj_idx >= 0x3800u) {
-		fg_idx = staticobjects[obj_idx - 0x3800u].fg_idx;
-	} else {
+	if (obj_idx < 0x3800) {
 		fg_idx = objects[obj_idx].fg_idx;
 		craft_ptr = objects[obj_idx].craft_ptr;
+	} else {
+		fg_idx = staticobjects[obj_idx - 0x3800].fg_idx;
 	}
 
-	f = &fg_array[fg_idx];
-	fg_spec = speciesconvert[f->species];
+	result = 0;
+	fg_spec = speciesconvert[(int8_t)fg_array[fg_idx].species];
 
 	switch (group_type) {
+		case 0:
+			break;
 		case GTT_FG:
-			return (int16_t)(group_id == fg_idx);
+			if (group_id == fg_idx)
+				result = 1;
+			break;
 		case GTT_SPECIES:
-			return (int16_t)(speciesconvert[group_id + 1] == fg_spec);
+			if (speciesconvert[group_id + 1] == fg_spec)
+				result = 1;
+			break;
 		case GTT_GENUS:
-			return (int16_t)(genusconvert[group_id] == species_table[fg_spec].ship_class);
+			if (genusconvert[group_id] == species_table[fg_spec].ship_class)
+				result = 1;
+			break;
 		case GTT_FAMILY:
-			return (int16_t)(familyconvert[group_id] == species_table[fg_spec].category);
+			if (familyconvert[group_id] == species_table[fg_spec].category)
+				result = 1;
+			break;
 		case GTT_SIDE:
-			return (int16_t)(group_id == f->side);
+			if (obj_idx >= 0x3800) {
+				if (group_id == (int8_t)fg_array[fg_idx].side)
+					result = 1;
+			} else if (group_id == objects[obj_idx].side) {
+				result = 1;
+			}
+			break;
 		case GTT_AI_ORDER:
-			return (int16_t)(group_id == f->ai[0].order);
+			if (group_id == (int8_t)fg_array[fg_idx].ai[0].order)
+				result = 1;
+			break;
 		case GTT_CRAFT_ATTR:
 			/* Craft-attribute predicate; only meaningful for regular objects. */
-			if (obj_idx >= 0x3800u || craft_ptr == NULL)
-				return 0;
+			if (obj_idx >= 0x3800)
+				break;
 			switch (group_id) {
 				case 0:
-					return (int16_t)(craft_ptr->dock_state_flags != 0);
+					if (craft_ptr->dock_state_flags != 0)
+						result = 1;
+					break;
 				case 1:
-					return (int16_t)(craft_ptr->inspected != 0);
+					if (craft_ptr->inspected != 0)
+						result = 1;
+					break;
 				case 2:
-					return (int16_t)(craft_ptr->board_count != 0);
+					if (craft_ptr->board_count != 0)
+						result = 1;
+					break;
 				case 3:
-					return (int16_t)(craft_ptr->capture_count != 0);
+					if (craft_ptr->capture_count != 0)
+						result = 1;
+					break;
 				case 4:
-					return (int16_t)(craft_ptr->status_flags == 0);
+					if (craft_ptr->status_flags == 0)
+						result = 1;
+					break;
 				case 5:
-					return (int16_t)(craft_ptr->was_hit_flag != 0);
+					if (craft_ptr->was_hit_flag != 0)
+						result = 1;
+					break;
 				case 6:
-					return (int16_t)(craft_ptr->hull_damage != 0);
+					if (craft_ptr->hull_damage != 0)
+						result = 1;
+					break;
 				case 7:
-					return (int16_t)(craft_ptr->craft_idx_in_fg == f->special_craft);
+					if (craft_ptr->craft_idx_in_fg == (int8_t)fg_array[fg_idx].special_craft)
+						result = 1;
+					break;
 				case 8:
-					return (int16_t)(craft_ptr->craft_idx_in_fg != f->special_craft);
+					if (craft_ptr->craft_idx_in_fg != (int8_t)fg_array[fg_idx].special_craft)
+						result = 1;
+					break;
 				case 9:
-					return (int16_t)(obj_idx == pstate.object_idx);
+					if (obj_idx == pstate.object_idx)
+						result = 1;
+					break;
 				case 10:
-					return (int16_t)(obj_idx != pstate.object_idx);
-				default:
-					return 0;
+					if (obj_idx != pstate.object_idx)
+						result = 1;
+					break;
 			}
+			break;
 		case GTT_ALL_IN_SET:
-			return (int16_t)(group_id == f->set);
+			if (group_id == (int8_t)fg_array[fg_idx].set)
+				result = 1;
+			break;
 		case GTT_SKILL:
-			return (int16_t)(group_id == f->skill);
+			if (group_id == (int8_t)fg_array[fg_idx].skill)
+				result = 1;
+			break;
 		case GTT_VERSION:
-			return (int16_t)(group_id == f->version);
+			if (group_id == (int8_t)fg_array[fg_idx].version)
+				result = 1;
+			break;
 		case GTT_ALL_FG:
-			return 1;
-		default:
-			return 0;
+			result = 1;
 	}
+	return result;
 }
 
 /* ====================================================================
@@ -255,728 +987,4 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
 		if (oc->attacker_idx == obj_idx)
 			oc->attacker_idx = 255;
 	}
-}
-
-/* ====================================================================
- * score_checkcondition (body)
- * ==================================================================== */
-
-// FUNCTION: TIE95 0x51698
-int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id, uint8_t amount_op,
-							int8_t exclude_player) {
-	uint16_t total_craft;
-	uint16_t destroyed_total;
-	uint16_t specific_total;
-	uint16_t cond_count;
-	uint16_t cond_specific_total;
-	uint16_t cond_destroyed_count;
-	uint16_t cond_destroyed_specific;
-	uint16_t player_matched;
-	uint16_t fg_idx;
-	int8_t INCOMPLETE;
-
-	if (!conditiongrouprelated[cond]) {
-		/* Mission-level direct check. */
-		INCOMPLETE = 4;
-		if (cond < 15u) {
-			if (cond < 10u) {
-				if (cond == 0)
-					return 1; /* 0=true; 1..9=incomplete */
-			} else if (cond == 10u) {
-				return 0; /* always-false */
-			} else if (cond >= 13u) {
-				if (cond == 13u) {
-					if (mission.primary_complete == 1)
-						return 1;
-					if (mission.primary_complete == 2)
-						return 2;
-				} else {
-					/* cond == 14: mirror of 13 with 1/2 swapped. */
-					if (mission.primary_complete == 2)
-						return 1;
-					if (mission.primary_complete == 1)
-						return 2;
-				}
-			}
-			return INCOMPLETE;
-		}
-		if (cond == 15u) {
-			if (mission.secondary_complete == 1)
-				return 1;
-			if (mission.secondary_complete == 2)
-				return 2;
-			return INCOMPLETE;
-		}
-		if (cond == 16u) {
-			if (mission.secondary_complete == 2)
-				return 1;
-			if (mission.secondary_complete == 1)
-				return 2;
-			return INCOMPLETE;
-		}
-		if (cond == 17u) {
-			if (mission.bonus_complete == 1)
-				return 1;
-			if (mission.bonus_complete == 2)
-				return 2;
-			return INCOMPLETE;
-		}
-		if (cond == 18u) {
-			if (mission.bonus_complete == 2)
-				return 1;
-			if (mission.bonus_complete == 1)
-				return 2;
-			return INCOMPLETE;
-		}
-		if (cond != 20u)
-			return INCOMPLETE;
-		return mission.penalty_flag ? 1 : 2;
-	}
-
-	if (!target_type)
-		return 2; /* No target -> failed. */
-
-	/* Accumulators (all uint16 running totals across the FG loop). */
-	total_craft = 0;             /* sum(cond[0].count)    */
-	destroyed_total = 0;         /* sum(cond[0].detail)   */
-	specific_total = 0;          /* sum(cond_id[0].count) */
-	cond_count = 0;              /* cond-specific count bucket */
-	cond_specific_total = 0;     /* parallel cond_id counter   */
-	cond_destroyed_count = 0;    /* "remainder" bucket          */
-	cond_destroyed_specific = 0; /* parallel cond_id remainder  */
-	player_matched = 0;
-
-	for (fg_idx = 0; fg_idx < (uint16_t)mission_file_header.num_fg; fg_idx++) {
-		const EFGStruct* const f = &fg_array[fg_idx];
-		const FGStatus* fs;
-
-		if (!f->species)
-			continue;
-		if (!score_fgmemberofgroup(fg_idx, target_type, target_id))
-			continue;
-
-		fs = &fgstatus[fg_idx];
-		total_craft = (uint16_t)(total_craft + fs->cond[0].count);
-		specific_total = (uint16_t)(specific_total + fs->cond_id[0].count);
-		destroyed_total = (uint16_t)(destroyed_total + fs->cond[0].detail);
-
-		if (cond < 6u) {
-			if (cond < 3u) {
-				if (cond == 0u) {
-					/* Handled by the mission-level check; unreachable here. */
-				} else if (cond == 1u) {
-					/* Captured/disabled: cond[0].detail + cond_id[0].detail;
-					 * also flag player match. */
-					cond_count = (uint16_t)(cond_count + fs->cond[0].detail);
-					cond_specific_total = (uint16_t)(cond_specific_total + fs->cond_id[0].detail);
-					if ((uint16_t)pstate.player_fg_idx == fg_idx)
-						player_matched = 1;
-				} else {
-					/* cond == 2 (destroyed): cond[1].count + cond[1].detail + cond[2].count.
-					 * exclude_player folds into same accumulator pair; else splits. */
-					cond_count = (uint16_t)(cond_count + fs->cond[1].count);
-					cond_specific_total = (uint16_t)(cond_specific_total + fs->cond_id[1].count);
-					if (exclude_player) {
-						cond_count = (uint16_t)(cond_count + fs->cond[1].detail + fs->cond[2].count);
-						cond_specific_total =
-							(uint16_t)(cond_specific_total + fs->cond_id[1].detail + fs->cond_id[2].count);
-					} else {
-						cond_destroyed_count =
-							(uint16_t)(cond_destroyed_count + fs->cond[1].detail + fs->cond[2].count);
-						cond_destroyed_specific = (uint16_t)(cond_destroyed_specific + fs->cond_id[1].detail +
-															 fs->cond_id[2].count);
-					}
-				}
-			} else if (cond == 3u) {
-				cond_count = (uint16_t)(cond_count + fs->cond[2].detail);
-				cond_specific_total = (uint16_t)(cond_specific_total + fs->cond_id[2].detail);
-				cond_destroyed_count = (uint16_t)(cond_destroyed_count + fs->cond[3].count);
-				cond_destroyed_specific = (uint16_t)(cond_destroyed_specific + fs->cond_id[3].count);
-				if ((uint16_t)pstate.player_fg_idx == fg_idx && pstate.player_craft->was_hit_flag)
-					player_matched = 1;
-			} else if (cond == 4u) {
-				cond_count = (uint16_t)(cond_count + fs->cond[3].detail);
-				cond_specific_total = (uint16_t)(cond_specific_total + fs->cond_id[3].detail);
-				cond_destroyed_count = (uint16_t)(cond_destroyed_count + fs->cond[4].count);
-				cond_destroyed_specific = (uint16_t)(cond_destroyed_specific + fs->cond_id[4].count);
-			} else {
-				/* cond == 5 */
-				cond_count = (uint16_t)(cond_count + fs->cond[4].detail);
-				cond_specific_total = (uint16_t)(cond_specific_total + fs->cond_id[4].detail);
-				cond_destroyed_count = (uint16_t)(cond_destroyed_count + fs->cond[5].count);
-				cond_destroyed_specific = (uint16_t)(cond_destroyed_specific + fs->cond_id[5].count);
-			}
-		} else if (cond == 6u) {
-			cond_count = (uint16_t)(cond_count + fs->cond[5].detail);
-			cond_specific_total = (uint16_t)(cond_specific_total + fs->cond_id[5].detail);
-			cond_destroyed_count = (uint16_t)(cond_destroyed_count + fs->cond[6].count);
-			cond_destroyed_specific = (uint16_t)(cond_destroyed_specific + fs->cond_id[6].count);
-		} else if (cond < 9u) {
-			if (cond == 7u) {
-				cond_count = (uint16_t)(cond_count + fs->cond[6].detail);
-				cond_specific_total = (uint16_t)(cond_specific_total + fs->cond_id[6].detail);
-				cond_destroyed_count = (uint16_t)(cond_destroyed_count + fs->cond[7].count);
-				cond_destroyed_specific = (uint16_t)(cond_destroyed_specific + fs->cond_id[7].count);
-			} else {
-				/* cond == 8 */
-				cond_count = (uint16_t)(cond_count + fs->cond[7].detail);
-				cond_specific_total = (uint16_t)(cond_specific_total + fs->cond_id[7].detail);
-				cond_destroyed_count = (uint16_t)(cond_destroyed_count + fs->cond[8].count);
-				cond_destroyed_specific = (uint16_t)(cond_destroyed_specific + fs->cond_id[8].count);
-			}
-		} else if (cond == 9u) {
-			/* cond[0].detail - cond[1].count (survivors), mirrored into cond_id. */
-			cond_count = (uint16_t)(cond_count + fs->cond[0].detail - fs->cond[1].count);
-			cond_specific_total =
-				(uint16_t)(cond_specific_total + fs->cond_id[0].detail - fs->cond_id[1].count);
-			cond_destroyed_count = (uint16_t)(cond_destroyed_count + fs->cond[1].count);
-			cond_destroyed_specific = (uint16_t)(cond_destroyed_specific + fs->cond_id[1].count);
-		} else if (cond < 12u) {
-			/* cond 10, 11: no per-FG accumulation in the original (10 is always-false,
-			 * 11 falls through the goto chain without writes). */
-		} else if (cond == 12u) {
-			cond_count = (uint16_t)(cond_count + fs->cond[1].detail + fs->cond[2].count);
-			cond_specific_total =
-				(uint16_t)(cond_specific_total + fs->cond_id[1].detail + fs->cond_id[2].count);
-			cond_destroyed_count = (uint16_t)(cond_destroyed_count + fs->cond[1].count);
-			cond_destroyed_specific = (uint16_t)(cond_destroyed_specific + fs->cond_id[1].count);
-		} else if (cond >= 21u && cond <= 24u) {
-			/* Scan live craft of this FG, apply a cond-specific predicate.
-			 *
-			 * `alive` is nonzero when the craft passes
-			 * the cond-specific filter (cargo+shield > 0, shield <= max/2,
-			 * ammo > 0, status&0x10 != 0). Retail's predicate-TRUE branch
-			 * (++cond_count + ++player_matched) fires on the OPPOSITE
-			 * condition, so we walk the alive branch into
-			 * cond_destroyed_count and the dead branch into cond_count. */
-			uint16_t i;
-
-			for (i = 0; i < NUM_CRAFTS; i++) {
-				const CraftData* cd;
-				int alive;
-
-				if (!objects[i].ship_idx)
-					continue;
-				if ((uint16_t)objects[i].fg_idx != fg_idx)
-					continue;
-				cd = objects[i].craft_ptr;
-				switch (cond) {
-					case 21:
-						/* Watcom emitted unaligned-dword-HIWORD reads on cargo[14] and
-						 * forward_shield, which decode to forward_shield and rear_shield
-						 * respectively (the int16 sitting two bytes past each named field). */
-						alive = (cd->forward_shield + cd->rear_shield) > 0;
-						break;
-					case 22:
-						alive = cd->hull_damage <= (uint16_t)(cd->hull_max / 2);
-						break;
-					case 23: {
-						uint16_t ammo = 0;
-						int k;
-
-						for (k = 0; k < (int)cd->missile_group_cnt; k++) {
-							ammo =
-								(uint16_t)(ammo +
-										   cd->weapon_slots[spec_data[cd->species_idx].missile_end[k]].ammo +
-										   cd->weapon_slots[spec_data[cd->species_idx].missile_start[k]]
-											   .ammo);
-						}
-						alive = ammo != 0;
-						break;
-					}
-					default: /* cond 24 */
-						alive = (cd->status_flags & 0x10u) != 0;
-						break;
-				}
-				if (!alive) {
-					cond_count++;
-					if (cd->craft_idx_in_fg == f->special_craft)
-						cond_specific_total++;
-					if (i == pstate.object_idx)
-						player_matched++;
-				} else {
-					cond_destroyed_count++;
-					if (cd->craft_idx_in_fg == f->special_craft)
-						cond_destroyed_specific++;
-				}
-			}
-		}
-	}
-
-	INCOMPLETE = 4;
-	if (total_craft == 0)
-		return INCOMPLETE;
-
-	switch (amount_op) {
-		case 0:
-			if (total_craft == cond_count)
-				return 1;
-			if (cond_destroyed_count)
-				return 2;
-			return INCOMPLETE;
-		case 1:
-			if (math2_percentage(cond_count, total_craft) >= 0xC000u)
-				return 1;
-			if (math2_percentage(cond_destroyed_count, total_craft) <= 0x4000u)
-				return INCOMPLETE;
-			return 2;
-		case 2:
-			if (math2_percentage(cond_count, total_craft) >= 0x8000u)
-				return 1;
-			if (math2_percentage(cond_destroyed_count, total_craft) <= 0x8000u)
-				return INCOMPLETE;
-			return 2;
-		case 3:
-			if (math2_percentage(cond_count, total_craft) >= 0x4000u)
-				return 1;
-			if (math2_percentage(cond_destroyed_count, total_craft) <= 0xC000u)
-				return INCOMPLETE;
-			return 2;
-		case 4:
-		case 14:
-			if (cond_count)
-				return 1;
-			if (total_craft != cond_destroyed_count)
-				return INCOMPLETE;
-			return 2;
-		case 5:
-			if (cond_count == (uint16_t)(total_craft - 1))
-				return 1;
-			if (cond_destroyed_count < 2u)
-				return INCOMPLETE;
-			return 2;
-		case 6:
-			if (specific_total == 0)
-				return INCOMPLETE;
-			if (specific_total == cond_specific_total)
-				return 1;
-			if (cond_destroyed_specific == 0)
-				return INCOMPLETE;
-			return 2;
-		case 7:
-			if ((uint16_t)(total_craft - specific_total) == cond_count)
-				return 1;
-			if (cond_destroyed_count && cond_specific_total == 0)
-				return 2;
-			if (cond_destroyed_count <= 1u || cond_specific_total == 0)
-				return INCOMPLETE;
-			return 2;
-		case 8:
-			if ((uint16_t)(total_craft - player_matched) != cond_count)
-				return INCOMPLETE;
-			return 1;
-		case 9:
-			return player_matched ? 1 : INCOMPLETE;
-		case 10:
-			return (destroyed_total == cond_count) ? 1 : INCOMPLETE;
-		case 11:
-			return (math2_percentage(cond_count, destroyed_total) >= 0xC000u) ? 1 : INCOMPLETE;
-		case 12:
-			return (math2_percentage(cond_count, destroyed_total) >= 0x8000u) ? 1 : INCOMPLETE;
-		case 13:
-			return (math2_percentage(cond_count, destroyed_total) >= 0x4000u) ? 1 : INCOMPLETE;
-		case 15:
-			return (cond_count == (uint16_t)(destroyed_total - 1)) ? 1 : INCOMPLETE;
-		default:
-			return INCOMPLETE;
-	}
-}
-
-/* ====================================================================
- * score_checkobjective
- * ==================================================================== */
-
-// FUNCTION: TIE95 0x50A70
-int8_t score_checkobjective(void) {
-	int8_t ret_al = (int8_t)mission.player_status;
-	int16_t pri_all_ok;
-	int16_t any_pri_goal;
-	int16_t sec_all_ok;
-	int16_t any_sec_goal;
-	int16_t bonus_all_ok;
-	int16_t any_bonus_goal;
-
-	if (mission.player_status != 3)
-		return ret_al;
-
-	if (mission.train_craft_type || hyperspaceflag)
-		return ret_al;
-
-	ret_al = 0;
-
-	pri_all_ok = 1;
-	any_pri_goal = 0;
-	sec_all_ok = 1;
-	any_sec_goal = 0;
-	bonus_all_ok = 1;
-	any_bonus_goal = 0;
-
-	if (!timers[TIMER_PRIMARY_CHECK] || mission.end_flag) {
-		/* --- Phase 1: per-FG evaluation ---------------------------- */
-		uint16_t fg_idx;
-		const EMissionGoal* pri;
-		int16_t pri_mission_status;
-		const EMissionGoal* sec;
-		int16_t sec_mission_status;
-		const EMissionGoal* bonus;
-
-		for (fg_idx = 0; fg_idx < (uint16_t)mission_file_header.num_fg; fg_idx++) {
-			const EFGStruct* const f = &fg_array[fg_idx];
-
-			/* Diffmask filter keys off f->difficulty (byte at +0x49), NOT
-			 * link_flag (+0x46). The binary's `*(int *)&fg.link_flag >> 24`
-			 * is the Watcom unaligned-dword + sar 24 idiom that reads the
-			 * fourth byte of the dword (link_flag, link_code, link_unused,
-			 * difficulty), i.e. difficulty. Wrong field made every FG with
-			 * link_flag != difficulty get filtered at medium/hard so its
-			 * primary_win never knocked pri_all_ok down — primary objectives
-			 * fired complete on frame 1 (B1M2FM Hammer cond=1 "arrived"). */
-			if ((diffmask[mission.difficulty] & fgdiffmask[f->difficulty]) == 0) {
-				fgstatus[fg_idx].primary_status = 0;
-				fgstatus[fg_idx].secondary_status = 0;
-				fgstatus[fg_idx].fg_complete = 0;
-				continue;
-			}
-
-			/* Primary win */
-			if (fgstatus[fg_idx].primary_status != 1 || f->pri_win_cond == 9) {
-				const uint8_t pri_status = fgstatus[fg_idx].primary_status;
-				if (pri_status == 2) {
-					pri_all_ok = 0;
-					if (!mission.primary_complete)
-						mission.primary_complete = 2;
-				} else if (pri_status) {
-					if (f->pri_win_cond && f->pri_win_cond != 10) {
-						int8_t r;
-
-						any_pri_goal = 1;
-						r = score_checkcondition(f->pri_win_cond, GTT_FG, (uint8_t)fg_idx,
-												 (uint8_t)percentcon[f->pri_win_pct], 0);
-						if (r == 2 && !mission.primary_complete)
-							mission.primary_complete = 2;
-						if (r == 1) {
-							mission.primary_fg[fg_idx] = 1;
-						} else {
-							pri_all_ok = 0;
-							mission.primary_fg[fg_idx] = 2;
-						}
-						fgstatus[fg_idx].primary_status = (uint8_t)r;
-					} else {
-						mission.primary_fg[fg_idx] = 0;
-						fgstatus[fg_idx].primary_status = 0;
-					}
-				}
-			} else {
-				any_pri_goal = 1;
-			}
-
-			/* Secondary win */
-			if (fgstatus[fg_idx].secondary_status != 1 || f->sec_win_cond == 9) {
-				const uint8_t sec_status = fgstatus[fg_idx].secondary_status;
-				if (sec_status == 2) {
-					sec_all_ok = 0;
-					if (!mission.secondary_complete)
-						mission.secondary_complete = 2;
-				} else if (sec_status) {
-					if (f->sec_win_cond && f->sec_win_cond != 10) {
-						int8_t r;
-
-						any_sec_goal = 1;
-						r = score_checkcondition(f->sec_win_cond, GTT_FG, (uint8_t)fg_idx,
-												 (uint8_t)percentcon[f->sec_win_pct], 0);
-						if (r == 2 && !mission.secondary_complete)
-							mission.secondary_complete = 2;
-						if (r == 1) {
-							mission.secondary_fg[fg_idx] = 1;
-						} else {
-							sec_all_ok = 0;
-							mission.secondary_fg[fg_idx] = 2;
-						}
-						fgstatus[fg_idx].secondary_status = (uint8_t)r;
-					} else {
-						mission.secondary_fg[fg_idx] = 0;
-						fgstatus[fg_idx].secondary_status = 0;
-					}
-				}
-			} else {
-				any_sec_goal = 1;
-			}
-
-			/* Bonus */
-			if (fgstatus[fg_idx].fg_complete != 1 || f->bonus_cond == 9) {
-				const uint8_t fgc = fgstatus[fg_idx].fg_complete;
-				if (fgc == 2) {
-					bonus_all_ok = 0;
-					if (!mission.bonus_complete)
-						mission.bonus_complete = 2;
-				} else if (fgc) {
-					if (f->bonus_cond && f->bonus_cond != 10) {
-						int8_t r;
-
-						any_bonus_goal = 1;
-						r = score_checkcondition(f->bonus_cond, GTT_FG, (uint8_t)fg_idx,
-												 (uint8_t)percentcon[f->bonus_pct], 0);
-						if (fgstatus[fg_idx].fg_complete == 2 && !mission.bonus_complete &&
-							f->bonus_points >= 0)
-							mission.bonus_complete = 2;
-						if (r == 1) {
-							mission.bonus_fg[fg_idx] = 1;
-						} else {
-							if (f->bonus_points >= 0)
-								bonus_all_ok = 0;
-							mission.bonus_fg[fg_idx] = 2;
-						}
-						fgstatus[fg_idx].fg_complete = (uint8_t)r;
-					} else {
-						mission.bonus_fg[fg_idx] = 0;
-					}
-				}
-			} else {
-				any_bonus_goal = 1;
-			}
-		}
-
-		/* --- Phase 2: mission-level primary aggregate -------------- */
-		pri = &cut[0];
-
-		if (pri->subcond[0].cond == 10 && pri->subcond[1].cond == 10) {
-			pri_mission_status = 1;
-			mission.primary_global = 0;
-		} else {
-			int8_t pri_a;
-			int8_t pri_b;
-
-			any_pri_goal = 1;
-			pri_a = score_checkcondition(pri->subcond[0].cond, pri->subcond[0].type, pri->subcond[0].id,
-										 pri->subcond[0].pct, 0);
-			pri_b = score_checkcondition(pri->subcond[1].cond, pri->subcond[1].type, pri->subcond[1].id,
-										 pri->subcond[1].pct, 0);
-			if (pri->or_joined == 1) {
-				if (((pri_a | pri_b) & 1) != 0)
-					pri_mission_status = 1;
-				else if ((pri_a & pri_b & 2) != 0)
-					pri_mission_status = 2;
-				else
-					pri_mission_status = 4;
-			} else if ((pri_a & pri_b & 1) != 0) {
-				pri_mission_status = 1;
-			} else if (((pri_a | pri_b) & 2) != 0) {
-				pri_mission_status = 2;
-			} else {
-				pri_mission_status = 4;
-			}
-			mission.primary_global = (uint8_t)pri_mission_status;
-		}
-		if (pri_mission_status == 2 && !mission.primary_complete)
-			mission.primary_complete = 2;
-		if (pri_mission_status == 1 && pri_all_ok && any_pri_goal) {
-			if (mission.primary_complete != 1) {
-				if (timers[TIMER_PRI_COMPLETE] == 0) {
-					uint16_t k;
-
-					timers[TIMER_PRI_COMPLETE] = 7080;
-					msg_messageprintf(MSG_PRIMARY_COMPLETE);
-					for (k = 0; k < 2u; k++) {
-						const uint8_t* p = (const uint8_t*)mission_file_header.mission.win_msg1[k];
-						if (*p) {
-							msg_addmessageptr(0, (char*)p);
-							/* The first name-list line carries the edition-specific
-							 * objective voice cue; the second line plays silently. */
-							pending_voice_id =
-								(k == 0) ? TieFlightSound_MissionVoiceId(FSFX_MISSION_VOICE_PRIMARY) : 0;
-							msg_messageprintf(MSG_GENERIC_STAR);
-						}
-					}
-				}
-				fsfx_speakobjectives(0x5Bu);
-				fscript_MsSetSequence(5);
-			}
-			mission.primary_complete = 1;
-			/* Battle 12 / mission 7: force end-of-mission on primary complete. */
-			if (currentbattle == 12 && currentmission == 7) {
-				user_checkreplaycamera();
-				mission.end_flag = 1;
-				mission.player_status = 3;
-			}
-		}
-
-		/* --- Phase 3: secondary aggregate -------------------------- */
-		sec = &cut[1];
-
-		{
-			const int8_t sec_a = score_checkcondition(sec->subcond[0].cond, sec->subcond[0].type,
-													  sec->subcond[0].id, sec->subcond[0].pct, 0);
-			const int8_t sec_b = score_checkcondition(sec->subcond[1].cond, sec->subcond[1].type,
-													  sec->subcond[1].id, sec->subcond[1].pct, 0);
-			if (sec->or_joined == 1) {
-				if (((sec_a | sec_b) & 1) != 0)
-					sec_mission_status = 1;
-				else if ((sec_a & sec_b & 2) != 0)
-					sec_mission_status = 2;
-				else
-					sec_mission_status = 4;
-			} else if ((sec_a & sec_b & 1) != 0) {
-				sec_mission_status = 1;
-			} else if (((sec_a | sec_b) & 2) != 0) {
-				sec_mission_status = 2;
-			} else {
-				sec_mission_status = 4;
-			}
-			mission.secondary_global = (uint8_t)sec_mission_status;
-			if (sec_mission_status == 2 && !mission.secondary_complete)
-				mission.secondary_complete = 2;
-			if (sec->subcond[0].cond == 10 && sec->subcond[1].cond == 10) {
-				mission.secondary_global = 0;
-				sec_mission_status = 1;
-			} else {
-				any_sec_goal = 1;
-			}
-			if (sec_mission_status == 1 && sec_all_ok == 1 && any_sec_goal) {
-				if (mission.secondary_complete != 1) {
-					if (timers[TIMER_SEC_COMPLETE] == 0) {
-						uint16_t k;
-
-						timers[TIMER_SEC_COMPLETE] = 7080;
-						msg_messageprintf(MSG_SECONDARY_COMPLETE);
-						for (k = 0; k < 2u; k++) {
-							const uint8_t* p = (const uint8_t*)mission_file_header.mission.win_msg2[k];
-							if (*p) {
-								msg_addmessageptr(0, (char*)p);
-								/* The first name-list line carries the edition-specific
-								 * objective voice cue; the second line plays silently. */
-								pending_voice_id =
-									(k == 0) ? TieFlightSound_MissionVoiceId(FSFX_MISSION_VOICE_SECONDARY)
-											 : 0;
-								msg_messageprintf(MSG_GENERIC_STAR);
-							}
-						}
-					}
-					fsfx_speakobjectives(0x5Cu);
-					fscript_MsSetSequence(7);
-				}
-				mission.secondary_complete = 1;
-			}
-		}
-
-		/* --- Phase 4: bonus aggregate ------------------------------ */
-		bonus = &cut[2];
-		{
-			const int8_t bonus_a = score_checkcondition(bonus->subcond[0].cond, bonus->subcond[0].type,
-														bonus->subcond[0].id, bonus->subcond[0].pct, 0);
-			const int8_t bonus_b = score_checkcondition(bonus->subcond[1].cond, bonus->subcond[1].type,
-														bonus->subcond[1].id, bonus->subcond[1].pct, 0);
-			int16_t bonus_mission_status;
-
-			if (bonus->or_joined == 1) {
-				if (((bonus_a | bonus_b) & 1) != 0)
-					bonus_mission_status = 1;
-				else if ((bonus_a & bonus_b & 2) != 0)
-					bonus_mission_status = 2;
-				else
-					bonus_mission_status = 4;
-			} else if ((bonus_a & bonus_b & 1) != 0) {
-				bonus_mission_status = 1;
-			} else if (((bonus_a | bonus_b) & 2) != 0) {
-				bonus_mission_status = 2;
-			} else {
-				bonus_mission_status = 4;
-			}
-			mission.bonus_global = (uint8_t)bonus_mission_status;
-			if (bonus_mission_status == 2 && !mission.bonus_complete)
-				mission.bonus_complete = 2;
-			if (bonus->subcond[0].cond == 10 && bonus->subcond[1].cond == 10) {
-				mission.bonus_global = 0;
-				bonus_mission_status = 1;
-			} else {
-				any_bonus_goal = 1;
-			}
-			if (bonus_mission_status == 1 && bonus_all_ok == 1 && any_bonus_goal) {
-				if (mission.bonus_complete != 1) {
-					if (timers[TIMER_BONUS_COMPLETE] == 0) {
-						timers[TIMER_BONUS_COMPLETE] = 14160;
-						msg_messageprintf(MSG_BONUS_COMPLETE);
-					}
-					fsfx_speakobjectives(0x5Eu);
-					fscript_MsSetSequence(9);
-				}
-				mission.bonus_complete = 1;
-			}
-		}
-
-		/* "Objectives failed" banner when primary fails mid-flight. */
-		ret_al = (int8_t)mission.primary_complete;
-		if (mission.primary_complete == 2 && !hyperspaceflag && !timers[TIMER_OBJECTIVES_FAILED]) {
-			uint16_t k;
-
-			msg_messageprintf(MSG_OBJECTIVES_FAILED);
-			timers[TIMER_OBJECTIVES_FAILED] = 21240;
-			for (k = 0; k < 2u; k++) {
-				const uint8_t* p = (const uint8_t*)mission_file_header.mission.loss_msg[k];
-				if (*p) {
-					msg_addmessageptr(0, (char*)p);
-					/* First failure-name line carries the edition-specific
-					 * loss VO loaded by fsfx_loadvoicelfd;
-					 * second line plays silently. */
-					pending_voice_id = (k == 0) ? TieFlightSound_MissionVoiceId(FSFX_MISSION_VOICE_LOSS) : 0;
-					msg_messageprintf(MSG_GENERIC_STAR);
-				}
-			}
-			fsfx_triggervoicesfx(0x6Au);
-			ret_al = (int8_t)fscript_MsSetSequence(6);
-		}
-
-		timers[TIMER_PRIMARY_CHECK] = 236;
-	}
-
-	/* --- Phase 5: radio-message trigger poll ---------------------- */
-	if (timers[TIMER_RADIOMSG_POLL] <= 0) {
-		const uint16_t msg_count = (uint16_t)mission_file_header.num_msg;
-		uint16_t j;
-
-		for (j = 0; j < msg_count; j++) {
-			uint8_t* rec;
-			int8_t sa;
-			int8_t sb;
-			int8_t combined;
-			uint8_t cd_seed;
-
-			ret_al = (int8_t)j;
-			rec = &radiomsg[90u * j];
-
-			if (mission.radiomsg_triggered[j]) {
-				uint8_t cur = mission.radiomsg_countdown[j];
-				if (cur) {
-					mission.radiomsg_countdown[j] = (uint8_t)(cur - 1);
-					if (cur == 1) {
-						msg_addmessageptr(0, (char*)rec);
-						/* Pair the radio text with the edition-specific
-						 * per-mission voice cue loaded from the
-						 * <NAME>.LFD by fsfx_loadvoicelfd. */
-						pending_voice_id = TieFlightSound_MissionVoiceId(j);
-						msg_messageprintf(MSG_GENERIC_STAR_INFO);
-					}
-				}
-				continue;
-			}
-
-			/* Evaluate both subconditions. */
-			sa = score_checkcondition(rec[64], rec[65], rec[66], rec[67], 0);
-			sb = score_checkcondition(rec[68], rec[69], rec[70], rec[71], 0);
-			combined = (rec[89] == 1) ? (int8_t)(sb | sa) : (int8_t)(sb & sa);
-			if ((combined & 1) == 0)
-				continue;
-
-			mission.radiomsg_triggered[j] = 1;
-			cd_seed = rec[88];
-			mission.radiomsg_countdown[j] = cd_seed;
-			if (cd_seed == 0) {
-				msg_addmessageptr(0, (char*)rec);
-				pending_voice_id = TieFlightSound_MissionVoiceId(j);
-				msg_messageprintf(MSG_GENERIC_STAR_INFO);
-			}
-		}
-		timers[TIMER_RADIOMSG_POLL] = 1180;
-	}
-
-	return ret_al;
 }

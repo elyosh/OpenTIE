@@ -864,7 +864,7 @@ typedef struct {
 	int16_t cam_chase_roll_hist[60];    /* +0x2E rolling 60-tick chase-cam history */
 	int16_t cam_chase_pitch_hist[60];   /* +0xA6 */
 	int16_t cam_chase_heading_hist[60]; /* +0x11E */
-	int16_t cam_chase_slot;             /* +0x196 ring-buffer write index */
+	uint16_t cam_chase_slot;            /* +0x196 ring-buffer write index */
 } Camera;                               /* sizeof = 0x198 (408) */
 
 extern Camera camera;
@@ -1020,10 +1020,10 @@ typedef struct PlayerInFlightState {
 	/* +0x02E */ int16_t axis_y_accum;                  /* 2 */
 	/* +0x030 */ int16_t prev_inputbuttons;             /* 2 */
 	/* +0x032 */ uint16_t double_tap_timer;             /* 2 */
-	/* +0x034 */ int16_t player_laser_fired;            /* 2 */
-	/* +0x036 */ int16_t player_laser_hit;              /* 2 */
-	/* +0x038 */ int16_t player_missile_fired;          /* 2 */
-	/* +0x03A */ int16_t player_missile_hit;            /* 2 */
+	/* +0x034 */ uint16_t player_laser_fired;           /* 2 */
+	/* +0x036 */ uint16_t player_laser_hit;             /* 2 */
+	/* +0x038 */ uint16_t player_missile_fired;         /* 2 */
+	/* +0x03A */ uint16_t player_missile_hit;           /* 2 */
 	/* +0x03C */ uint8_t player_warhead_fired;          /* 1 */
 	/* +0x03D */ uint8_t player_warhead_hit;            /* 1 */
 	/* +0x03E */ uint16_t player_kills_per_species[69]; /* 138 */
@@ -1319,7 +1319,7 @@ typedef struct ShipModelMesh {
 	uint16_t hardpoint_offset; /* +0x2E: self-relative u16 offset to hardpoint table */
 	uint8_t pad_30[2];         /* +0x30..+0x31: dead bytes; no readers in binary */
 	uint16_t rotation_offset;  /* +0x32: rotation-transform offset (used by FVIEW_componentrotation) */
-	int16_t has_position;      /* +0x34: >0 selects pos_xyz as LOD anchor instead of center_* */
+	uint16_t has_position;     /* +0x34: >0 selects pos_xyz as LOD anchor instead of center_* */
 	/* LFD CRFT mesh position alternate (selected by has_position).
 	 * Stored in the same non-standard side/fwd/up order as center_*
 	 * — i.e. local-frame (X, Z, Y) at offsets +0x36/+0x38/+0x3A. */
@@ -1622,7 +1622,11 @@ void tie_InitFlightResolution(void);
  * driving the flight loop from a task should YIELD on false (the
  * xtimer cursor only advances between tie_ticks; spinning here
  * would never satisfy the budget). */
+#ifdef TIE_MODERN
 bool tie_doframe(void);
+#else
+void tie_doframe(void);
+#endif
 
 void tie_updatescreen(void);
 
@@ -1660,7 +1664,7 @@ extern uint8_t transitions_on;
  * XTIMER_Time_Elapsed until tickcounter >= 4, then snapshots it here. */
 extern int16_t lastcounter;
 
-/* MissionClock — the watdbg `_date[8]` storage at retail 0xE6384..0xE638B,
+/* MissionClock — the watdbg `date[8]` storage at retail 0xE6384..0xE638B,
  * 8 bytes total. Source-level it's a single struct; the Watcom backend
  * emits per-byte / per-dword reads, which IDA labels as `byte_E6387`,
  * `dword_E6388`, etc. — those are *not* separate globals.
@@ -1671,8 +1675,8 @@ extern int16_t lastcounter;
  *     minute and hour; hour wraps at 24.
  *
  * Layout parity with the binary is required: replayio.c serialises the
- * 8-byte block by &_date / sizeof(_date), and the static pointer table
- * at retail 0xC7354 dumps `(start=&_date, end=&_date+8)`. */
+ * 8-byte block by &date / sizeof(date), and the static pointer table
+ * at retail 0xC7354 dumps `(start=&date, end=&date+8)`. */
 #ifdef __WATCOMC__
 #pragma pack(1)
 #else
@@ -1694,10 +1698,14 @@ typedef struct MissionClock {
 #pragma pack(pop)
 #endif
 
-extern MissionClock _date;
+extern MissionClock date;
+#ifdef TIE_MODERN
+/* Runtime tooling outside the game core still spells the clock `_date`. */
+#define _date date
+#endif
 
 /* Mission time-limit countdown (watdbg _timeleft[8], same 8-byte layout as
- * _date): minute/second count down in tie_updatetime; create_loadmission
+ * date): minute/second count down in tie_updatetime; create_loadmission
  * clears hour and seeds minute/second from the mission file. */
 extern MissionClock timeleft;
 

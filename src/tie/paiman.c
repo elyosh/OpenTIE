@@ -35,7 +35,7 @@
  * formposz has a 79th trailing zero preserved for byte-exact layout. */
 // GLOBAL: TIE95 0xC5A86
 // GLOBAL: TIE98 0x4E6578
-const int16_t _formposx[78] = {
+const int16_t _formposx[13][6] = {
 	0, 1, -1, 2, -2, 3,  0,  -2, 4,  5,  -4, -5, 0,  0,  0, 0,  0, 0, 0, 1,  -1, 2, -2, 3, 0, 1,
 	2, 3, 4,  5, 0,  -1, -2, -3, -4, -5, 0,  -1, 0,  -1, 0, -1, 0, 1, 0, -1, 0,  0, 0,  0, 0, 0,
 	0, 0, 0,  1, -1, 1,  -1, 0,  0,  1,  -1, 2,  -2, 3,  0, 0,  0, 0, 0, 0,  0,  0, 0,  0, 0, 0,
@@ -43,7 +43,7 @@ const int16_t _formposx[78] = {
 
 // GLOBAL: TIE95 0xC5B22
 // GLOBAL: TIE98 0x4E6618
-const int16_t _formposy[78] = {
+const int16_t _formposy[13][6] = {
 	0,  -1, -1, -2, -2, -3, 0,  -2, -4, -5, -4, -5, 0,  -1, -2, -3, -4, -5, 0,  0,  0,  0,  0, 0, 0, -1,
 	-2, -3, -4, -5, 0,  -1, -2, -3, -4, -5, 0,  0,  -1, -1, -2, -2, 0,  -1, -2, -1, -1, -1, 0, 0, 0, 0,
 	0,  0,  0,  0,  0,  0,  0,  -1, 0,  1,  1,  2,  2,  3,  0,  -1, -1, -2, -2, -3, 0,  1,  1, 2, 2, 3,
@@ -51,10 +51,10 @@ const int16_t _formposy[78] = {
 
 // GLOBAL: TIE95 0xC5BBE
 // GLOBAL: TIE98 0x4E66B8
-const int16_t _formposz[79] = {
-	0, 0, 0, 0,  0,  0, 0, -1, 2, 1, 3, 2, 0, 1, 2,  3, 4,  5, 0, 0, 0,  0, 0,  0, 0, 0, 0,
-	0, 0, 0, 0,  0,  0, 0, 0,  0, 0, 0, 0, 0, 0, 0,  0, 0,  0, 0, 1, -1, 0, 1,  2, 3, 4, 5,
-	0, 1, 1, -1, -1, 0, 0, 0,  0, 0, 0, 0, 0, 1, -1, 2, -2, 3, 0, 1, -1, 2, -2, 3, 0,
+const int16_t _formposz[13][6] = {
+	0, 0, 0, 0, 0, 0,  0,  -1, 2, 1, 3, 2, 0, 1, 2, 3, 4,  5, 0,  0, 0, 0,  0,  0, 0,  0,
+	0, 0, 0, 0, 0, 0,  0,  0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0,  0, 1, -1, 0,  1, 2,  3,
+	4, 5, 0, 1, 1, -1, -1, 0,  0, 0, 0, 0, 0, 0, 0, 1, -1, 2, -2, 3, 0, 1,  -1, 2, -2, 3,
 };
 
 // GLOBAL: TIE95 0xC58BE
@@ -103,330 +103,97 @@ ManeuverInitFunc initmanvrfunctionptr = 0;
 // GLOBAL: TIE95 0xD506C
 ManeuverFunc _manvrfunctionptr = 0;
 
-/* ---- Helpers ------------------------------------------------------- */
+/* ---- Dispatch tables ----------------------------------------------- */
 
-/* Snap or drive the craft heading toward ai_target_heading. Threshold
- * 0x300 (~4.2°) distinguishes "close enough, snap now" from "rotate
- * over time". */
-// FUNCTION: TIE95 0x3D3B4
-void paiman_setturn(int16_t heading_step) {
-	uint16_t delta = (uint16_t)(objects[ai.active_obj_idx].heading - craftptr->ai_target_heading);
-	if (delta >= 0x8000)
-		delta = (uint16_t)-delta;
+// GLOBAL: TIE95 0xC59F4
+const ManeuverInitFunc initmanvrfunctionptrs[MODE_COUNT] = {
+	(ManeuverInitFunc)paiorder_nullorder, /*  0 None          */
+	paiman_initturninsidemaneuver,        /*  1 TurnInside    */
+	paiman_initsplitsmaneuver,            /*  2 Splits        */
+	paiman_initimmelmannmaneuver,         /*  3 Immelmann     */
+	paiman_initscissorsmaneuver,          /*  4 Scissors      */
+	paiman_initrendezvousmaneuver,        /*  5 Rendezvous    */
+	paiman_initcruisemaneuver,            /*  6 Cruise        */
+	paiman_initheadtowardfullmaneuver,    /* 7 HeadTowardFull */
+	paiman_initrunawaymaneuver,           /*  8 RunAway       */
+	paiman_initheadonattackmaneuver,      /* 9 HeadOnAttack */
+	paiman_initfollowleadermaneuver,      /* 10 FollowLeader */
+	paiman_initsetupattackmaneuver,       /* 11 SetupAttack  */
+	paiman_initsetupattackmaneuver,       /* 12 Attack       */
+	paiman_initzoommaneuver,              /* 13 Zoom          */
+	paiman_initdivemaneuver,              /* 14 Dive          */
+	paiman_initsplitsdivemaneuver,        /* 15 SplitsDive    */
+	paiman_initspeedawaymaneuver,         /* 16 SpeedAway     */
+	paiman_initescortmaneuver,            /* 17 Escort        */
+	paiman_initboardmaneuver,             /* 18 Board         */
+	paiman_initawaitboardmaneuver,        /* 19 AwaitBoard    */
+	paiman_initheadtowardmaneuver,        /* 20 HeadToward    */
+	paiman_initintohyperspacemaneuver,    /* 21 IntoHyperspace */
+	paiman_initoutofhyperspacemaneuver,   /* 22 OutOfHyperspace */
+	paiman_initsetupattackmaneuver,       /* 23 AttackSecondary */
+	paiman_initturnawaymaneuver,          /* 24 TurnAway      */
+	paiman_initawaitboardmaneuver,        /* 25 AwaitBoardAlt */
+	paiman_initoutofhangarmaneuver,       /* 26 OutOfHangar   */
+	paiman_initsplitsdivemaneuver,        /* 27 SplitsDiveAlt */
+	paiman_initavoidstarshipmaneuver,     /* 28 AvoidStarship */
+	paiman_initwaitmaneuver,              /* 29 Wait          */
+	paiman_initawaitboardmaneuver,        /* 30 DropOff       */
+};
+// GLOBAL: TIE95 0xC5978
+const ManeuverFunc _manvrfunctionptrs[MODE_COUNT] = {
+	paiorder_nullorder,             /*  0 None          */
+	paiman_turninsidemaneuver,      /*  1 */
+	paiman_splitsmaneuver,          /*  2 */
+	paiman_immelmannmaneuver,       /*  3 */
+	paiman_scissorsmaneuver,        /*  4 */
+	paiman_rendezvousmaneuver,      /*  5 */
+	paiman_cruisemaneuver,          /*  6 */
+	paiman_headtowardfullmaneuver,  /*  7 */
+	paiman_runawaymaneuver,         /*  8 */
+	paiman_headonattackmaneuver,    /*  9 */
+	paiman_followleadermaneuver,    /* 10 */
+	paiman_setupattackmaneuver,     /* 11 */
+	paiman_attackmaneuver,          /* 12 */
+	paiman_zoommaneuver,            /* 13 */
+	paiman_zoommaneuver,            /* 14 Dive = Zoom body */
+	paiman_splitsdivemaneuver,      /* 15 */
+	paiman_speedawaymaneuver,       /* 16 */
+	paiman_escortmaneuver,          /* 17 */
+	paiman_boardmaneuver,           /* 18 */
+	paiman_awaitboardmaneuver,      /* 19 */
+	paiman_headtowardmaneuver,      /* 20 */
+	paiman_intohyperspacemaneuver,  /* 21 */
+	paiman_outofhyperspacemaneuver, /* 22 */
+	paiman_attackmaneuver,          /* 23 AttackSecondary */
+	paiman_turnawaymaneuver,        /* 24 */
+	paiman_awaitboardmaneuver,      /* 25 */
+	paiman_outofhangarmaneuver,     /* 26 */
+	paiman_splitsdivemaneuver,      /* 27 */
+	paiman_avoidstarshipmaneuver,   /* 28 */
+	paiman_avoidstarshipmaneuver,   /* 29 Wait = null */
+	paiman_dropoffmaneuver,         /* 30 */
+};
+/* ---- Public entry points ------------------------------------------ */
 
-	if (delta <= 0x300) {
-		objects[ai.active_obj_idx].heading = (int16_t)craftptr->ai_target_heading;
-		objects[ai.active_obj_idx].orient_dirty = 1;
-		objects[ai.active_obj_idx].move_dirty = 1;
-		craftptr->ai_heading_state = 3;
-	} else {
-		craftptr->ai_heading_state = 2;
-		craftptr->ai_heading_step = (uint16_t)heading_step;
-	}
-}
-
-/* Write the 16-bit throttle value passed in DX by the binary ABI. */
-// FUNCTION: TIE95 0x3D45C
-void paiman_setpower(uint16_t throttle) { craftptr->throttle_speed = throttle; }
-
-/* Convert absolute desired_speed to throttle_speed, accounting for the
- * shield/beam/laser power-balance margin and the craft's max_speed. */
-// FUNCTION: TIE95 0x3D46C
-void paiman_setspeed(uint16_t obj_idx_param, uint16_t desired_speed) {
-	CraftData* cd = objects[obj_idx_param].craft_ptr;
-	int16_t margin = 6 - (int16_t)(cd->shield_power + cd->beam_power + cd->laser_power);
-	uint16_t adj_max;
-
-	if (margin >= 0) {
-		adj_max = (uint16_t)(cd->max_speed_cache +
-							 math2_fraction((uint16_t)(margin << 13), (uint16_t)cd->max_speed_cache));
-	} else {
-		uint16_t neg = (uint16_t)((-margin) << 13);
-		adj_max = (uint16_t)(cd->max_speed_cache - math2_fraction(neg, (uint16_t)cd->max_speed_cache));
-	}
-
-	if (desired_speed < adj_max)
-		craftptr->throttle_speed = math2_percentage(desired_speed, adj_max);
-	else
-		craftptr->throttle_speed = 0xFFFFu;
-}
-
-/* Point the AI craft's flight vector at craftptr->waypoint_*_cache.
- * Uses the current PAI skill_value to pick turn rate. */
-// FUNCTION: TIE95 0x3CD04
-void paiman_setflighttotarget(uint16_t heading_bias, int16_t drive_pitch) {
+// FUNCTION: TIE95 0x396B0
+void paiman_initmaneuver(void) {
 	CraftData* cd = craftptr;
 
-	trig2_ctop(cd->waypoint_x_cache - objects[ai.active_obj_idx].world_x,
-			   cd->waypoint_y_cache - objects[ai.active_obj_idx].world_y,
-			   cd->waypoint_z_cache - objects[ai.active_obj_idx].world_z);
+	cd->push_accum_x = 0;
+	cd->hit_count = 0;
+	cd->mode_subbyte = 0;
+	cd->push_accum_y = cd->push_accum_x;
+	cd->push_accum_z = cd->push_accum_x;
 
-	cd->ai_target_heading = (uint16_t)(trig2_xyangle + heading_bias);
-	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x4000));
-
-	if (drive_pitch) {
-		cd->ai_pitch_step = 0xFFFFu;
-		cd->ai_pitch_force = 0;
-		cd->ai_target_pitch = (uint16_t)trig2_zangle;
-		cd->ai_climb_state = 0;
-		cd->ai_dive_state = 0;
-		cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
+	initmanvrfunctionptr = initmanvrfunctionptrs[cd->mode_byte];
+#ifdef TIE_MODERN
+	/* The shared zero-return entry has a different prototype from the initializers. */
+	if (initmanvrfunctionptr == (ManeuverInitFunc)paiorder_nullorder) {
+		((ManeuverFunc)initmanvrfunctionptr)();
+		return;
 	}
-}
-
-/* Level-the-wings helper: roll to 0, freeze heading, clear climb/dive,
- * pitch → 0x4000 (level) with short-way direction. */
-// FUNCTION: TIE95 0x3CDC4
-void paiman_controlplane(void) {
-	craftptr->ai_dive_state = 0;
-	craftptr->ai_climb_state = 0;
-	craftptr->ai_target_pitch = 0x4000;
-	craftptr->ai_pitch_step = 0xFFFFu;
-	craftptr->ai_pitch_force = 0;
-
-	if (craftptr->orient_pitch < 0x4000)
-		craftptr->ai_pitch_state = 2;
-	else if (craftptr->orient_pitch > 0x4000)
-		craftptr->ai_pitch_state = 1;
-	else
-		craftptr->ai_pitch_state = 3;
-
-	craftptr->ai_roll_state = 1;
-	craftptr->ai_roll_step = 0xFFFFu;
-	craftptr->ai_target_roll = 0;
-	craftptr->ai_heading_state = 0;
-}
-
-/* Pick a new turn-inside target orientation and hold-timer. */
-// FUNCTION: TIE95 0x39740
-uint16_t paiman_setnewturninside(uint16_t own_obj_idx) {
-	CraftData* cd = craftptr;
-	uint16_t ref_idx = (cd->attacker_idx == 0xFFu) ? own_obj_idx : cd->attacker_idx;
-	uint16_t away_heading = (uint16_t)objects[ref_idx].heading;
-	uint16_t hold_ticks;
-
-	away_heading = (uint16_t)(away_heading + 0x8000u); /* flip 180° */
-	cd->ai_target_heading = away_heading;
-
-	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
-
-	hold_ticks = (uint16_t)(236u * _delayturninside[ai.skill_tier]);
-	cd->ai_plan_state = hold_ticks;
-	return hold_ticks;
-}
-
-/* Pick a new turn-away target orientation: face the attacker's own heading
- * (not flipped), or flip our own heading if there is no attacker. */
-// FUNCTION: TIE95 0x3C8C0
-uint16_t paiman_setnewturnaway(uint16_t own_obj_idx) {
-	CraftData* cd = craftptr;
-	uint16_t new_target_heading;
-	uint16_t hold_ticks;
-
-	if (cd->attacker_idx == 0xFFu) {
-		new_target_heading = (uint16_t)(objects[own_obj_idx].heading + 0x8000u);
-	} else {
-		new_target_heading = (uint16_t)objects[cd->attacker_idx].heading;
-	}
-	cd->ai_target_heading = new_target_heading;
-
-	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
-
-	hold_ticks = (uint16_t)(236u * _delayturninside[ai.skill_tier]);
-	cd->ai_plan_state = hold_ticks;
-	return hold_ticks;
-}
-
-/* Random z-axis jink used by speedaway. */
-// FUNCTION: TIE95 0x3A8D8
-void paiman_setjink(uint16_t self_idx) {
-	CraftData* cd = craftptr;
-	int32_t push_z = (int32_t)(math2_getrandom() & 0x1F) + 50;
-	int32_t heading_off = (int32_t)((uint8_t)math2_getrandom()) + 384;
-
-	/* Flip sign if the previous push was non-negative — alternates dir. */
-	if (cd->push_accum_z >= 0) {
-		push_z = -push_z;
-		heading_off = -heading_off;
-	}
-
-	/* Retail zero-extends the 16-bit value before storing into the
-	 * 32-bit push_accum_z (xor eax,eax / mov ax,dx). For negative
-	 * push_z (the "previous push was non-negative" branch) this
-	 * produces a positive int32 around 65455..65486; apply_push_accum
-	 * reads the field as int32 so the sign matters. */
-	cd->push_accum_z = (int32_t)(uint16_t)push_z;
-	cd->ai_target_heading = (uint16_t)(objects[self_idx].heading + heading_off);
-	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
-	cd->ai_plan_state = 118;
-}
-
-/* Advance to the next waypoint in a cruise/patrol cycle. */
-// FUNCTION: TIE95 0x39D74
-void paiman_gonextwaypoint(void) {
-	CraftData* cd = craftptr;
-	uint8_t next_idx = (uint8_t)(cd->active_waypoint_idx + 1);
-	uint8_t order_ldr = cd->default_order_ldr;
-
-	cd->active_waypoint_idx = next_idx;
-	if (next_idx > 11 || !fg_array[ai.fg_idx].way_used[next_idx]) {
-		cd->active_waypoint_idx = 4;
-		if (order_ldr == 3 || order_ldr == 5 || order_ldr == 56)
-			++cd->ai_goal_progress[ai.ai_entry_count];
-	}
-	cd->ai_target_ref = (int16_t)(((uint16_t)cd->active_waypoint_idx) | 0x8000u);
-	pai_settarget();
-}
-
-/* Compute aim-lead waypoint for target tgt_obj_idx. */
-// FUNCTION: TIE95 0x3CF50
-void paiman_calcplanelead(uint16_t tgt_obj_idx) {
-	CraftData* cd = craftptr;
-	uint32_t lead_ticks = 0;
-	uint16_t tgt_speed = (uint16_t)objects[tgt_obj_idx].current_speed;
-	int32_t dx, dy, dz;
-
-	if (tgt_speed) {
-		uint16_t laser_id;
-		int16_t closing_speed;
-		uint16_t tgt_speed_cap;
-		int32_t heading_delta;
-		uint16_t rel_closing;
-		uint16_t time_scale;
-
-		pai_distancebetween(ai.active_obj_idx, (uint16_t)cd->ai_target_ref);
-
-		/* Pick projectile speed bucket: missile-lock (order 19) always
-		 * uses bucket 141; otherwise clamp laser_type[0] to a minimum
-		 * of 137 (lightest laser). */
-		if (cd->default_order_ldr == 19) {
-			laser_id = 141;
-		} else if (cd->laser_type[0] <= 0x89u) {
-			laser_id = 137;
-		} else {
-			laser_id = cd->laser_type[0];
-		}
-
-		closing_speed = (int16_t)((int16_t)projectilevelocity[laser_id - WEAPON_SPECIES_BASE] +
-								  objects[ai.active_obj_idx].current_speed);
-
-		/* Scale by cos(heading_delta) between our heading and target's. */
-		heading_delta = (uint16_t)(objects[tgt_obj_idx].heading - objects[ai.active_obj_idx].heading);
-		if (heading_delta >= 0x8000u)
-			heading_delta = (uint16_t)-heading_delta;
-
-		tgt_speed_cap = (tgt_speed >= 0x384u) ? 900u : tgt_speed;
-
-		if ((uint16_t)heading_delta >= 0x4000u)
-			rel_closing = (uint16_t)(trig2_cosinewordmult((int16_t)tgt_speed_cap, (uint16_t)heading_delta) +
-									 closing_speed);
-		else
-			rel_closing = (uint16_t)(closing_speed -
-									 trig2_cosinewordmult((int16_t)tgt_speed_cap, (uint16_t)heading_delta));
-
-		/* 18 * rel_closing + rel_closing/5 — Watcom idiom for "× 18.2". */
-		time_scale = (uint16_t)(18u * rel_closing + rel_closing / 5u);
-		if (!time_scale)
-			time_scale = 19;
-
-		lead_ticks =
-			math2_fraction((uint16_t)(framerate * (trig2_polardistance / time_scale)), cd->skill_value);
-	}
-
-	dx = objects[tgt_obj_idx].world_x - objects[tgt_obj_idx].world_x_prev;
-	dy = objects[tgt_obj_idx].world_y - objects[tgt_obj_idx].world_y_prev;
-	dz = objects[tgt_obj_idx].world_z - objects[tgt_obj_idx].world_z_prev;
-	(void)TieAiLead_GetDisplacement(tgt_obj_idx, &dx, &dy, &dz);
-
-	cd->waypoint_x_cache = objects[tgt_obj_idx].world_x + (int32_t)lead_ticks * dx;
-	cd->waypoint_y_cache = objects[tgt_obj_idx].world_y + (int32_t)lead_ticks * dy;
-	cd->waypoint_z_cache = objects[tgt_obj_idx].world_z + (int32_t)lead_ticks * dz;
-}
-
-// FUNCTION: TIE95 0x3D164
-void paiman_calcformation(void) {
-	CraftData* cd = craftptr;
-	uint8_t species_idx = cd->species_idx;
-	int16_t bound_w = spec_data[species_idx].bound_width;
-	int16_t bound_h = spec_data[species_idx].bound_height;
-	int16_t bound_d = spec_data[species_idx].bound_depth;
-	uint8_t craft_idx = cd->craft_idx_in_fg;
-	uint16_t sep_units = (uint16_t)(ai.leader_craft->formation_separation + 1);
-	int16_t form_idx = (int16_t)(6 * cd->formation + craft_idx);
-	int32_t off_x = (int32_t)sep_units * _formposx[form_idx] * bound_w;
-	int32_t off_y = (int32_t)sep_units * _formposy[form_idx] * bound_d;
-	int32_t off_z = (int32_t)sep_units * _formposz[form_idx] * bound_h;
-
-	/* Watcom unaligned-dword load: `*(int*)&unk_D534C[12*F + 2*C] >> 16`
-	 * reads the same element as formpos{x,z,y}[6*F + C], so the "half
-	 * bound" branch doubles as a direct re-read. Resolve to the direct
-	 * access here. */
-	if (sep_units == 1) {
-		off_x += (int32_t)_formposx[form_idx] * (bound_w / 2);
-		off_z += (int32_t)_formposz[form_idx] * (bound_h / 2);
-		off_y += (int32_t)_formposy[form_idx] * (bound_d / 2);
-	}
-
-	pai_calcrotatedpoint(&objects[ai.leader_obj_idx], (int16_t)off_x, (int16_t)off_z, (int16_t)off_y);
-
-	/* Scale the rotated offset for capital-ship leaders (LOD shift).
-	 * Binary emits `shl reg, cl` (sign-agnostic); shifting a negative
-	 * int32_t in C is UB, so route through uint32_t. */
-	if (spec_data[species_idx].model_scale_shift) {
-		const int s = spec_data[species_idx].model_scale_shift;
-		rotatedx = (int32_t)((uint32_t)rotatedx << s);
-		rotatedy = (int32_t)((uint32_t)rotatedy << s);
-		rotatedz = (int32_t)((uint32_t)rotatedz << s);
-	}
-
-	cd->push_accum_x = rotatedx + objects[ai.leader_obj_idx].world_x - objects[ai.active_obj_idx].world_x;
-	cd->push_accum_y = rotatedy + objects[ai.leader_obj_idx].world_y - objects[ai.active_obj_idx].world_y;
-	cd->push_accum_z = rotatedz + objects[ai.leader_obj_idx].world_z - objects[ai.active_obj_idx].world_z;
-}
-
-/* Core attack-target helper. Picks static-vs-live waypoint resolution,
- * computes angle, requests a 180°-class turn (with inverted-upright
- * special case), drives pitch. */
-// FUNCTION: TIE95 0x3A2BC
-void paiman_attacktarget(int16_t heading_bias) {
-	CraftData* cd = craftptr;
-	uint16_t target_ref = (uint16_t)cd->ai_target_ref;
-	uint16_t self_idx = ai.active_obj_idx;
-
-	if (cd->mode_byte == MODE_AttackSecondary || target_ref >= 0x3800u)
-		pai_settarget();
-	else
-		paiman_calcplanelead(target_ref);
-
-	trig2_ctop(cd->waypoint_x_cache - objects[self_idx].world_x,
-			   cd->waypoint_y_cache - objects[self_idx].world_y,
-			   cd->waypoint_z_cache - objects[self_idx].world_z);
-	cd->ai_target_heading = (uint16_t)(trig2_xyangle + heading_bias);
-
-	{
-		bool want_turn = (cd->ai_roll_state != 2);
-		if (!want_turn) {
-			uint16_t heading_delta = (uint16_t)(objects[self_idx].heading - cd->ai_target_heading);
-			if (heading_delta >= 0x8000u)
-				heading_delta = (uint16_t)-heading_delta;
-			want_turn = (heading_delta >= 0x2000u || trig2_polardistance < 0x10000);
-		}
-		if (want_turn)
-			paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
-	}
-
-	if (cd->ai_roll_state == 3)
-		cd->ai_roll_state = 0;
-
-	if ((uint16_t)trig2_zangle != cd->orient_pitch) {
-		cd->ai_pitch_step = 0xFFFFu;
-		cd->throttle_speed = 0xFFFFu;
-		cd->ai_climb_state = 0;
-		cd->ai_target_pitch = (uint16_t)trig2_zangle;
-		cd->ai_dive_state = 0;
-		cd->ai_pitch_force = 0;
-		cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
-	}
+#endif
+	initmanvrfunctionptr();
 }
 
 /* ---- MODE_None (slot 0) — nullmaneuver stub ------------------------ */
@@ -449,6 +216,24 @@ int16_t paiman_turninsidemaneuver(void) {
 	if (!craftptr->ai_plan_state)
 		paiman_setnewturninside(ai.active_obj_idx);
 	return 0;
+}
+
+/* Pick a new turn-inside target orientation and hold-timer. */
+// FUNCTION: TIE95 0x39740
+uint16_t paiman_setnewturninside(uint16_t own_obj_idx) {
+	CraftData* cd = craftptr;
+	uint16_t ref_idx = (cd->attacker_idx == 0xFFu) ? own_obj_idx : cd->attacker_idx;
+	uint16_t away_heading = (uint16_t)objects[ref_idx].heading;
+	uint16_t hold_ticks;
+
+	away_heading = (uint16_t)(away_heading + 0x8000u); /* flip 180° */
+	cd->ai_target_heading = away_heading;
+
+	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
+
+	hold_ticks = (uint16_t)(236u * _delayturninside[ai.skill_tier]);
+	cd->ai_plan_state = hold_ticks;
+	return hold_ticks;
 }
 
 /* ---- MODE_Splits (2) ----------------------------------------------- */
@@ -476,7 +261,7 @@ int16_t paiman_splitsmaneuver(void) {
 // FUNCTION: TIE95 0x39820
 void paiman_initimmelmannmaneuver(void) {
 	CraftData* cd = craftptr;
-	uint16_t cur_pitch;
+	int32_t cur_pitch;
 
 	cd->throttle_speed = 0xFFFFu;
 	cd->ai_roll_state = 1;
@@ -488,43 +273,42 @@ void paiman_initimmelmannmaneuver(void) {
 	cur_pitch = cd->orient_pitch;
 	cd->ai_pitch_force = 0;
 
-	if (cur_pitch < 0x4000u)
+	if (cur_pitch < 0x4000)
 		cd->ai_pitch_state = 2;
-	else if (cur_pitch > 0x4000u)
+	else if (cur_pitch > 0x4000)
 		cd->ai_pitch_state = 1;
 	else
 		cd->ai_pitch_state = 3;
-	cd->maneuver_timer = 0;
+	craftptr->maneuver_timer = 0;
 }
 
 // FUNCTION: TIE95 0x39898
 int16_t paiman_immelmannmaneuver(void) {
 	CraftData* cd = craftptr;
-	uint8_t phase = cd->mode_subbyte;
 
-	if (phase == 0) {
-		if (cd->ai_pitch_state == 3) {
-			cd->ai_pitch_state = 1;
-			cd->ai_pitch_step = 0xFFFFu;
-			cd->ai_pitch_force = 1;
-			cd->ai_target_pitch = 0x4000;
-			cd->mode_subbyte = 1;
-		}
-		return 0;
-	}
-	if (phase == 1) {
-		if (cd->ai_pitch_state == 3) {
-			cd->ai_roll_state = 1;
-			cd->ai_roll_step = 0xFFFFu;
-			cd->ai_target_roll = 0;
-			cd->ai_heading_state = 0;
-			cd->mode_subbyte = 2;
-		}
-		return 0;
-	}
-	if (phase == 2) {
-		if (cd->ai_roll_state == 4 && cd->ai_pitch_state == 3)
-			return 1;
+	switch (cd->mode_subbyte) {
+		case 0:
+			if (cd->ai_pitch_state == 3) {
+				cd->ai_pitch_state = 1;
+				cd->ai_pitch_step = 0xFFFFu;
+				cd->ai_pitch_force = 1;
+				cd->ai_target_pitch = 0x4000;
+				cd->mode_subbyte = 1;
+			}
+			return 0;
+		case 1:
+			if (cd->ai_pitch_state == 3) {
+				cd->ai_roll_state = 1;
+				cd->ai_roll_step = 0xFFFFu;
+				cd->ai_target_roll = 0;
+				cd->ai_heading_state = 0;
+				cd->mode_subbyte = 2;
+			}
+			return 0;
+		case 2:
+			if (cd->ai_roll_state == 4 && cd->ai_pitch_state == 3)
+				return 1;
+			return 0;
 	}
 	return 0;
 }
@@ -559,14 +343,10 @@ int16_t paiman_scissorsmaneuver(void) {
 	}
 	if (!cd->ai_plan_state) {
 		uint16_t flip_heading = cd->ai_target_heading;
-		uint16_t tgt_roll_hi;
 
 		cd->ai_heading_state = 1;
-		flip_heading = (uint16_t)(flip_heading + 0x8000u);
-		cd->ai_target_heading = flip_heading;
-
-		tgt_roll_hi = (uint16_t)(((cd->ai_target_roll >> 8) ^ 0x80u) << 8);
-		cd->ai_target_roll = (uint16_t)((cd->ai_target_roll & 0x00FFu) | tgt_roll_hi);
+		cd->ai_target_heading = (uint16_t)(flip_heading + 0x8000u);
+		cd->ai_target_roll ^= 0x8000u;
 		cd->ai_plan_state = 944;
 	}
 	return 0;
@@ -660,6 +440,23 @@ int16_t paiman_cruisemaneuver(void) {
 	return 0;
 }
 
+/* Advance to the next waypoint in a cruise/patrol cycle. */
+// FUNCTION: TIE95 0x39D74
+void paiman_gonextwaypoint(void) {
+	uint8_t order_ldr;
+	int next_idx;
+
+	next_idx = (uint8_t)++craftptr->active_waypoint_idx;
+	order_ldr = craftptr->default_order_ldr;
+	if (next_idx > 11 || !fg_array[ai.fg_idx].way_used[next_idx]) {
+		craftptr->active_waypoint_idx = 4;
+		if (order_ldr == 3 || order_ldr == 5 || order_ldr == 56)
+			++craftptr->ai_goal_progress[ai.ai_entry_count];
+	}
+	craftptr->ai_target_ref = (uint16_t)((uint16_t)craftptr->active_waypoint_idx + 0x8000);
+	pai_settarget();
+}
+
 /* ---- MODE_HeadTowardFull (7) --------------------------------------- */
 
 // FUNCTION: TIE95 0x39DFC
@@ -700,11 +497,10 @@ int16_t paiman_runawaymaneuver(void) {
 
 // FUNCTION: TIE95 0x39EB8
 void paiman_initheadonattackmaneuver(void) {
-	CraftData* cd = craftptr;
-	cd->ai_target_ref = (int16_t)cd->attacker_idx;
+	craftptr->ai_target_ref = (int16_t)craftptr->attacker_idx;
 	paiman_setflighttotarget(0, 1);
-	cd->throttle_speed = 0xFFFFu;
-	cd->maneuver_timer = 1888;
+	craftptr->throttle_speed = 0xFFFFu;
+	craftptr->maneuver_timer = 1888;
 }
 
 // FUNCTION: TIE95 0x39EEC
@@ -723,9 +519,8 @@ void paiman_initfollowleadermaneuver(void) {}
 
 // FUNCTION: TIE95 0x39F20
 int16_t paiman_followleadermaneuver(void) {
-	CraftData* cd = craftptr;
 	uint16_t self_idx = ai.active_obj_idx;
-	uint8_t leader_idx = cd->leader_obj_idx;
+	uint8_t leader_idx = craftptr->leader_obj_idx;
 
 #ifdef TIE_MODERN
 	/* A newly promoted craft can retain this maneuver until its next plan update. */
@@ -736,91 +531,100 @@ int16_t paiman_followleadermaneuver(void) {
 
 		/* Far from leader: teleport waypoint + full throttle chase. */
 		if (trig2_polardistance > 0x10000) {
-			cd->waypoint_x_cache = objects[leader_idx].world_x;
-			cd->waypoint_y_cache = objects[leader_idx].world_y;
-			cd->waypoint_z_cache = objects[leader_idx].world_z;
+			craftptr->waypoint_x_cache = objects[leader_idx].world_x;
+			craftptr->waypoint_y_cache = objects[leader_idx].world_y;
+			craftptr->waypoint_z_cache = objects[leader_idx].world_z;
 			paiman_setflighttotarget(0, 1);
-			cd->throttle_speed = 0xFFFFu;
+			craftptr->throttle_speed = 0xFFFFu;
 		} else {
+			uint16_t delta;
+
 			/* Match leader's heading. Leader actively turning → use their target;
 			 * otherwise match their current heading. Skip a turn if we're already
 			 * aligned. */
 			if (ai.leader_craft->ai_heading_state == 2) {
-				cd->ai_target_heading = ai.leader_craft->ai_target_heading;
-				paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
+				craftptr->ai_target_heading = ai.leader_craft->ai_target_heading;
+				paiman_setturn((craftptr->skill_value >> 3) + 0x4000);
 			} else if (objects[leader_idx].heading != objects[self_idx].heading) {
-				cd->ai_target_heading = (uint16_t)objects[leader_idx].heading;
-				paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
+				craftptr->ai_target_heading = (uint16_t)objects[leader_idx].heading;
+				paiman_setturn((craftptr->skill_value >> 3) + 0x4000);
 			}
 
 			/* Adjust player-led throttle from the speed difference; mirror NPC throttle. */
-			if (leader_idx == (uint8_t)pstate.object_idx) {
+			if (leader_idx == pstate.object_idx) {
 				uint16_t leader_speed = (uint16_t)objects[leader_idx].current_speed;
 				uint16_t our_speed = (uint16_t)objects[self_idx].current_speed;
-
-				uint16_t previous_throttle = cd->throttle_speed;
+				uint16_t previous_throttle;
 
 				/* Retail narrows the scaled delta and result before detecting wrap. */
 				if (leader_speed > our_speed) {
-					uint16_t bump = (uint16_t)(50u * (uint32_t)(leader_speed - our_speed));
-					cd->throttle_speed = (uint16_t)(previous_throttle + bump);
-					if (cd->throttle_speed < previous_throttle)
-						cd->throttle_speed = 0xFFFFu;
+					previous_throttle = craftptr->throttle_speed;
+					craftptr->throttle_speed =
+						(uint16_t)(previous_throttle + (leader_speed - our_speed) * 50);
+					if (previous_throttle > craftptr->throttle_speed)
+						craftptr->throttle_speed = 0xFFFFu;
 				} else if (leader_speed < our_speed) {
-					uint16_t brake = (uint16_t)(50u * (uint32_t)(our_speed - leader_speed));
-					cd->throttle_speed = (uint16_t)(previous_throttle - brake);
-					if (cd->throttle_speed > previous_throttle)
-						cd->throttle_speed = 0;
+					previous_throttle = craftptr->throttle_speed;
+					craftptr->throttle_speed =
+						(uint16_t)(previous_throttle - (our_speed - leader_speed) * 50);
+					if (previous_throttle < craftptr->throttle_speed)
+						craftptr->throttle_speed = 0;
 				}
 			} else {
-				cd->throttle_speed = ai.leader_craft->throttle_speed;
+				craftptr->throttle_speed = ai.leader_craft->throttle_speed;
 			}
 
 			/* Match pitch (snap if close, else short-way). */
-			{
-				uint16_t pd_delta = (uint16_t)(cd->orient_pitch - ai.leader_craft->orient_pitch);
-				if (pd_delta >= 0x8000u)
-					pd_delta = (uint16_t)-pd_delta;
-				if (pd_delta >= 0x400u) {
-					cd->ai_pitch_step = 0xFFFFu;
-					cd->ai_target_pitch = ai.leader_craft->orient_pitch;
-					cd->ai_pitch_force = 0;
-					cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
-				} else {
-					cd->ai_pitch_state = 0;
-					cd->orient_pitch = ai.leader_craft->orient_pitch;
-				}
+			delta = craftptr->orient_pitch - ai.leader_craft->orient_pitch;
+			if (delta >= 0x8000)
+				delta = -delta;
+			if (delta < 0x400) {
+				craftptr->ai_pitch_state = 0;
+				craftptr->orient_pitch = ai.leader_craft->orient_pitch;
+			} else {
+				craftptr->ai_pitch_step = 0xFFFFu;
+				craftptr->ai_target_pitch = ai.leader_craft->orient_pitch;
+				craftptr->ai_pitch_force = 0;
+				craftptr->ai_pitch_state =
+					(uint8_t)((craftptr->ai_target_pitch > craftptr->orient_pitch) + 1);
 			}
 
 			/* Match roll — but only once leader's spin has settled. */
 			if (ai.leader_craft->spin_done_flag == 0xFFFFu) {
-				uint16_t roll_delta = (uint16_t)(objects[self_idx].roll - objects[ai.leader_obj_idx].roll);
-				if (roll_delta >= 0x8000u)
-					roll_delta = (uint16_t)-roll_delta;
-				if (roll_delta >= 0x400u) {
-					cd->ai_roll_step = 0xFFFFu;
-					cd->ai_roll_state = 1;
-					cd->ai_target_roll = (uint16_t)objects[ai.leader_obj_idx].roll;
-				} else {
+				delta = objects[self_idx].roll - objects[ai.leader_obj_idx].roll;
+				if (delta >= 0x8000)
+					delta = -delta;
+				if (delta < 0x400) {
 					objects[self_idx].roll = objects[ai.leader_obj_idx].roll;
 					objects[self_idx].orient_dirty = 1;
-					cd->ai_roll_state = 0;
+					craftptr->ai_roll_state = 0;
+				} else {
+					craftptr->ai_roll_step = 0xFFFFu;
+					craftptr->ai_roll_state = 1;
+					craftptr->ai_target_roll = (uint16_t)objects[ai.leader_obj_idx].roll;
 				}
 			}
 
 			/* Formation follow. Skip (hold position) when our leader is the
 			 * player and is nearly stationary. */
-			if (cd->leader_obj_idx != (uint8_t)pstate.object_idx ||
-				(uint16_t)pstate.player->current_speed > 0xAu) {
+			{
+				CraftData* cd = craftptr;
+				craftptr = cd;
+			}
+			if (pstate.object_idx != craftptr->leader_obj_idx) {
+				paiman_calcformation();
+				return 0;
+			}
+			if ((uint16_t)pstate.player->current_speed > 10) {
 				paiman_calcformation();
 				return 0;
 			}
 		}
 	}
 
-	cd->push_accum_x = 0;
-	cd->push_accum_y = cd->push_accum_x;
-	cd->push_accum_z = cd->push_accum_x;
+	craftptr->push_accum_x = 0;
+	craftptr->push_accum_y = 0;
+	craftptr->push_accum_z = 0;
 	return 0;
 }
 
@@ -830,6 +634,52 @@ int16_t paiman_followleadermaneuver(void) {
 void paiman_initsetupattackmaneuver(void) {
 	craftptr->throttle_speed = 0xFFFFu;
 	paiman_attacktarget(0);
+}
+
+/* Core attack-target helper. Picks static-vs-live waypoint resolution,
+ * computes angle, requests a 180°-class turn (with inverted-upright
+ * special case), drives pitch. */
+// FUNCTION: TIE95 0x3A2BC
+void paiman_attacktarget(int16_t heading_bias) {
+	int self_idx = ai.active_obj_idx;
+	int target_ref;
+	int32_t dx, dy, dz;
+	uint16_t heading_delta;
+
+	if (craftptr->mode_byte == MODE_AttackSecondary ||
+		(target_ref = (uint16_t)craftptr->ai_target_ref) >= 0x3800)
+		pai_settarget();
+	else
+		paiman_calcplanelead(target_ref);
+
+	dx = craftptr->waypoint_x_cache - objects[self_idx].world_x;
+	dy = craftptr->waypoint_y_cache - objects[self_idx].world_y;
+	dz = craftptr->waypoint_z_cache - objects[self_idx].world_z;
+	trig2_ctop(dx, dy, dz);
+	craftptr->ai_target_heading = trig2_xyangle + heading_bias;
+
+	if (craftptr->ai_roll_state != 2) {
+		paiman_setturn((craftptr->skill_value >> 1) + 0x8000);
+	} else {
+		heading_delta = objects[self_idx].heading - craftptr->ai_target_heading;
+		if (heading_delta > 0x8000)
+			heading_delta = -heading_delta;
+		if (heading_delta >= 0x2000 || trig2_polardistance < 0x10000)
+			paiman_setturn((craftptr->skill_value >> 1) + 0x8000);
+	}
+
+	if (craftptr->ai_roll_state == 3)
+		craftptr->ai_roll_state = 0;
+
+	if ((uint16_t)trig2_zangle != craftptr->orient_pitch) {
+		craftptr->ai_pitch_step = 0xFFFFu;
+		craftptr->throttle_speed = 0xFFFFu;
+		craftptr->ai_climb_state = 0;
+		craftptr->ai_target_pitch = trig2_zangle;
+		craftptr->ai_dive_state = 0;
+		craftptr->ai_pitch_force = 0;
+		craftptr->ai_pitch_state = (craftptr->ai_target_pitch > craftptr->orient_pitch) + 1;
+	}
 }
 
 // FUNCTION: TIE95 0x3A2FC
@@ -847,92 +697,101 @@ int16_t paiman_setupattackmaneuver(void) {
 
 // FUNCTION: TIE95 0x3A364
 int16_t paiman_attackmaneuver(void) {
-	CraftData* cd = craftptr;
-	uint8_t phase = cd->mode_subbyte;
 	uint16_t self_idx = ai.active_obj_idx;
 	int32_t break_radius;
-	uint32_t appr_angle;
-	uint16_t target_ref;
-	uint8_t target_genus;
+	int16_t jink;
+	int16_t pitch_rnd;
+	uint16_t heading_delta;
+	uint16_t pitch_delta;
+	int timer_base;
 
-	if (phase) {
-		return (phase == 1 && !cd->maneuver_timer) ? 1 : 0;
+	switch (craftptr->mode_subbyte) {
+		case 0:
+			/* In approach. Compute the "breaking off" threshold by target
+			 * class and our approach geometry. */
+			pai_distancebetween(self_idx, (uint16_t)craftptr->ai_target_ref);
+			if ((uint16_t)craftptr->ai_target_ref >= NUM_CRAFTS) {
+				/* Static/warhead target: fighter base radius with no
+				 * alignment doubling. */
+				break_radius = 5120;
+			} else if (objects[(uint16_t)craftptr->ai_target_ref].genus == 4 ||
+					   objects[(uint16_t)craftptr->ai_target_ref].genus == 5 ||
+					   objects[(uint16_t)craftptr->ai_target_ref].genus == 3) {
+				/* Capital ship: threshold 0x2000 only when the approach angle
+				 * is off-axis (0x2800..0x5800). */
+				heading_delta =
+					(uint16_t)(trig2_xyangle - objects[(uint16_t)craftptr->ai_target_ref].heading);
+				break_radius = 0x2000;
+				if (heading_delta >= 0x8000)
+					heading_delta = -heading_delta;
+				if (heading_delta < 0x2800 || heading_delta > 0x5800)
+					break_radius *= 2;
+			} else {
+				/* Fighter: threshold 5120 only when in heading and pitch
+				 * alignment. */
+				heading_delta = (uint16_t)(objects[self_idx].heading -
+										   objects[(uint16_t)craftptr->ai_target_ref].heading);
+				break_radius = 5120;
+				if (heading_delta >= 0x8000)
+					heading_delta = -heading_delta;
+				pitch_delta =
+					(uint16_t)(objects[self_idx].pitch - objects[(uint16_t)craftptr->ai_target_ref].pitch);
+				if (pitch_delta >= 0x8000)
+					pitch_delta = -pitch_delta;
+				if (pitch_delta > 0x4000 || heading_delta > 0x4000)
+					break_radius *= 2;
+			}
+
+			if (break_radius > trig2_polardistance ||
+				craftptr->hit_count >= spec_data[craftptr->species_idx].evade_hit_threshold) {
+				/* Break off with a random heading jink of 0x3000..0x6FFF. */
+				jink = (math2_getrandom() & 0x3FFF) + 0x3000;
+				if ((uint16_t)math2_getrandom() >= 0x8000)
+					jink = -jink;
+				craftptr->ai_target_heading = objects[self_idx].heading + jink;
+				paiman_setturn((craftptr->skill_value >> 1) + 0x8000);
+				pitch_rnd = math2_getrandom() & 0x7FFF;
+
+				craftptr->ai_climb_state = 0;
+				craftptr->ai_dive_state = 0;
+				craftptr->ai_pitch_force = 0;
+				craftptr->ai_pitch_step = 0xFFFFu;
+				craftptr->ai_target_pitch = pitch_rnd;
+				craftptr->missile_count = 0;
+				craftptr->missile_count_total = 0;
+				craftptr->ai_pitch_state =
+					(uint8_t)((craftptr->ai_target_pitch > craftptr->orient_pitch) + 1);
+				craftptr->throttle_speed = 0xFFFFu;
+
+				/* Timer: 20..27 s against capitals, 2..5 s against fighters.
+				 * Static/warhead targets use the fighter range. */
+				if ((uint16_t)craftptr->ai_target_ref >= NUM_CRAFTS) {
+					timer_base = (uint16_t)(uint8_t)math2_getrandom() & 3;
+					craftptr->maneuver_timer = 236 * (timer_base + 2);
+				} else {
+					if (objects[(uint16_t)craftptr->ai_target_ref].genus == 4 ||
+						objects[(uint16_t)craftptr->ai_target_ref].genus == 5 ||
+						objects[(uint16_t)craftptr->ai_target_ref].genus == 3)
+						timer_base = ((uint16_t)(uint8_t)math2_getrandom() & 7) + 20;
+					else
+						timer_base = ((uint16_t)(uint8_t)math2_getrandom() & 3) + 2;
+					craftptr->maneuver_timer = 236 * timer_base;
+				}
+				craftptr->mode_subbyte = 1;
+				return 0;
+			}
+			/* Still approaching: hand off to attacktarget. */
+			paiman_attacktarget(0);
+			if (craftptr->mode_byte == MODE_Attack)
+				craftptr->throttle_speed = 0xFFFFu;
+			else
+				craftptr->throttle_speed = 0xC000u;
+			return 0;
+		case 1:
+			if (craftptr->maneuver_timer == 0)
+				return 1;
+			return 0;
 	}
-
-	/* Phase 0 — in approach. Compute "breaking off" threshold by target
-	 * class + our approach geometry. */
-	pai_distancebetween(self_idx, (uint16_t)cd->ai_target_ref);
-	target_ref = (uint16_t)cd->ai_target_ref;
-
-	if (target_ref >= NUM_CRAFTS) {
-		/* Static/warhead target — fall back to the fighter base radius
-		 * with no alignment doubling. Reading objects[target_ref] would
-		 * walk past NUM_CRAFTS into staticobjects/warhead memory. */
-		break_radius = 5120;
-	} else {
-		target_genus = objects[target_ref].genus;
-		if (target_genus == 4 || target_genus == 5 || target_genus == 3) {
-			/* Capital ship: threshold 0x2000 only when approach angle is
-			 * off-axis (0x2800..0x5800). */
-			break_radius = 0x2000;
-			appr_angle = (uint16_t)((int16_t)trig2_xyangle - objects[target_ref].heading);
-			if (appr_angle >= 0x8000u)
-				appr_angle = (uint16_t)-appr_angle;
-			if (!(appr_angle >= 0x2800u && appr_angle <= 0x5800u))
-				break_radius *= 2;
-		} else {
-			/* Fighter: threshold 5120 only when in heading & pitch alignment. */
-			uint32_t heading_delta = (uint16_t)(objects[self_idx].heading - objects[target_ref].heading);
-			uint32_t pitch_delta = (uint16_t)(objects[self_idx].pitch - objects[target_ref].pitch);
-			if (heading_delta >= 0x8000u)
-				heading_delta = (uint16_t)-heading_delta;
-			if (pitch_delta >= 0x8000u)
-				pitch_delta = (uint16_t)-pitch_delta;
-			break_radius = 5120;
-			if (!(pitch_delta <= 0x4000u && heading_delta <= 0x4000u))
-				break_radius *= 2;
-		}
-	}
-
-	if (break_radius <= trig2_polardistance &&
-		cd->hit_count < spec_data[cd->species_idx].evade_hit_threshold) {
-		/* Still approaching: hand off to attacktarget. */
-		paiman_attacktarget(0);
-		cd->throttle_speed = (cd->mode_byte == MODE_Attack) ? 0xFFFFu : 0xC000u;
-		return 0;
-	}
-
-	/* Preserve the low random byte while masking and biasing the high byte. */
-	{
-		uint16_t r1 = (uint16_t)math2_getrandom();
-		int32_t rnd_heading_jink = (int32_t)((((((uint16_t)(r1 >> 8)) & 0x3Fu) + 0x30u) << 8) | (r1 & 0xFFu));
-		int32_t signed_jink = ((uint16_t)math2_getrandom() >= 0x8000u) ? -rnd_heading_jink : rnd_heading_jink;
-		int16_t rnd_pitch = (int16_t)(math2_getrandom() & 0x7FFFu);
-
-		cd->ai_target_heading = (uint16_t)(objects[self_idx].heading + signed_jink);
-		paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
-
-		cd->ai_climb_state = 0;
-		cd->ai_dive_state = 0;
-		cd->ai_pitch_force = 0;
-		cd->ai_pitch_step = 0xFFFFu;
-		cd->ai_target_pitch = (uint16_t)rnd_pitch;
-		cd->missile_count = 0;
-		cd->missile_count_total = 0;
-		cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
-		cd->throttle_speed = 0xFFFFu;
-	}
-
-	/* Timer: 20..27 s against capitals, 2..5 s against fighters.
-	 * Static/warhead targets default to the fighter range. */
-	{
-		uint16_t tref = (uint16_t)cd->ai_target_ref;
-		uint8_t tg = (tref < NUM_CRAFTS) ? objects[tref].genus : 0;
-		uint32_t r = (uint32_t)(math2_getrandom() & ((tg == 4 || tg == 5 || tg == 3) ? 7u : 3u));
-		uint32_t base = (tg == 4 || tg == 5 || tg == 3) ? 20u : 2u;
-		cd->maneuver_timer = 236 * (int32_t)(r + base);
-	}
-	cd->mode_subbyte = 1;
 	return 0;
 }
 
@@ -940,30 +799,17 @@ int16_t paiman_attackmaneuver(void) {
 
 // FUNCTION: TIE95 0x3A6C0
 void paiman_initzoommaneuver(void) {
-	CraftData* cd = craftptr;
-	int16_t up_pitch_rnd;
-	uint16_t timer_mask;
-
-	cd->throttle_speed = 0xFFFFu;
-	cd->ai_roll_state = 3;
-	cd->ai_roll_step = 0xFFFFu;
-	cd->ai_target_roll = (uint16_t)math2_getrandom();
-
-	up_pitch_rnd = math2_getrandom();
-	{
-		uint8_t lo = (uint8_t)up_pitch_rnd;
-		uint8_t hi = (uint8_t)((((uint16_t)up_pitch_rnd >> 8) & 0xF) + 32);
-		uint16_t pitch16 = (uint16_t)((uint16_t)hi << 8) | lo;
-		cd->ai_target_pitch = (uint16_t)(0x4000 - pitch16);
-	}
-
-	timer_mask = (uint16_t)((uint8_t)math2_getrandom()) & 3;
-	cd->ai_climb_state = 0;
-	cd->ai_dive_state = 0;
-	cd->maneuver_timer = 236 * (int32_t)(timer_mask + 3);
-	cd->ai_pitch_force = 0;
-	cd->ai_pitch_step = 0xFFFFu;
-	cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
+	craftptr->throttle_speed = 0xFFFFu;
+	craftptr->ai_roll_state = 3;
+	craftptr->ai_roll_step = 0xFFFFu;
+	craftptr->ai_target_roll = math2_getrandom();
+	craftptr->ai_target_pitch = 0x4000 - ((math2_getrandom() & 0x0FFF) + 0x2000);
+	craftptr->maneuver_timer = 236 * (((uint16_t)(uint8_t)math2_getrandom() & 3) + 3);
+	craftptr->ai_climb_state = 0;
+	craftptr->ai_dive_state = 0;
+	craftptr->ai_pitch_force = 0;
+	craftptr->ai_pitch_state = (craftptr->ai_target_pitch > craftptr->orient_pitch) + 1;
+	craftptr->ai_pitch_step = 0xFFFFu;
 }
 
 // FUNCTION: TIE95 0x3A760
@@ -971,22 +817,18 @@ int16_t paiman_zoommaneuver(void) { return craftptr->maneuver_timer == 0; }
 
 // FUNCTION: TIE95 0x3A770
 void paiman_initdivemaneuver(void) {
-	CraftData* cd = craftptr;
-	int16_t down_pitch_rnd;
+	CraftData* craft;
+	uint16_t pitch_rnd;
 
-	cd->throttle_speed = 0xFFFFu;
-	down_pitch_rnd = math2_getrandom();
-	{
-		uint8_t lo = (uint8_t)down_pitch_rnd;
-		uint8_t hi = (uint8_t)((((uint16_t)down_pitch_rnd >> 8) & 0xF) + 88);
-		down_pitch_rnd = (int16_t)(((uint16_t)hi << 8) | lo);
-	}
-	cd->ai_climb_state = 0;
-	cd->ai_pitch_force = 0;
-	cd->ai_target_pitch = (uint16_t)down_pitch_rnd;
-	cd->ai_pitch_step = 0xFFFFu;
-	cd->maneuver_timer = 1180;
-	cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
+	craftptr->throttle_speed = 0xFFFFu;
+	pitch_rnd = (math2_getrandom() & 0x0FFF) + 0x5800;
+	craft = craftptr;
+	craft->ai_climb_state = 0;
+	craft->ai_pitch_force = 0;
+	craft->ai_target_pitch = pitch_rnd;
+	craft->ai_pitch_step = 0xFFFFu;
+	craft->ai_pitch_state = (craft->ai_target_pitch > craft->orient_pitch) + 1;
+	craft->maneuver_timer = 1180;
 }
 
 /* ---- MODE_SplitsDive (15) / MODE_SplitsDiveAlt (27) ---------------- */
@@ -1033,14 +875,37 @@ int16_t paiman_speedawaymaneuver(void) {
 	return craftptr->maneuver_timer == 0;
 }
 
+/* Random z-axis jink used by speedaway. */
+// FUNCTION: TIE95 0x3A8D8
+void paiman_setjink(uint16_t self_idx) {
+	CraftData* cd = craftptr;
+	int32_t push_z = (int32_t)(math2_getrandom() & 0x1F) + 50;
+	int32_t heading_off = (int32_t)((uint8_t)math2_getrandom()) + 384;
+
+	/* Flip sign if the previous push was non-negative — alternates dir. */
+	if (cd->push_accum_z >= 0) {
+		push_z = -push_z;
+		heading_off = -heading_off;
+	}
+
+	/* Retail zero-extends the 16-bit value before storing into the
+	 * 32-bit push_accum_z (xor eax,eax / mov ax,dx). For negative
+	 * push_z (the "previous push was non-negative" branch) this
+	 * produces a positive int32 around 65455..65486; apply_push_accum
+	 * reads the field as int32 so the sign matters. */
+	cd->push_accum_z = (int32_t)(uint16_t)push_z;
+	cd->ai_target_heading = (uint16_t)(objects[self_idx].heading + heading_off);
+	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
+	cd->ai_plan_state = 118;
+}
+
 /* ---- MODE_IntoHyperspace (21) -------------------------------------- */
 
 // FUNCTION: TIE95 0x3A968
 void paiman_initintohyperspacemaneuver(void) {
-	CraftData* cd = craftptr;
 	paiman_setflighttotarget(0, 1);
-	cd->throttle_speed = 0xFFFFu;
-	cd->mode_subbyte = 0;
+	craftptr->throttle_speed = 0xFFFFu;
+	craftptr->mode_subbyte = 0;
 }
 
 // FUNCTION: TIE95 0x3A98C
@@ -1169,8 +1034,8 @@ void paiman_initescortmaneuver(void) {}
 
 // FUNCTION: TIE95 0x3AD70
 int16_t paiman_escortmaneuver(void) {
-	CraftData* cd = craftptr;
 	uint16_t self_idx = ai.active_obj_idx;
+	uint16_t escortee_fg = craftptr->escortee_fg_idx;
 	uint16_t leader_idx = 0xFFu;
 	uint16_t i;
 	CraftData* leader_cd;
@@ -1178,319 +1043,128 @@ int16_t paiman_escortmaneuver(void) {
 
 	/* (1) Find the escort target FG's leader. */
 	for (i = 0; i < NUM_CRAFTS; ++i) {
-		if (!objects[i].ship_idx)
-			continue;
-		if (objects[i].fg_idx != cd->escortee_fg_idx)
-			continue;
-		if (objects[i].craft_ptr->leader_obj_idx != 0xFFu)
-			continue;
-		leader_idx = i;
-		break;
-	}
-	if (leader_idx == 0xFFu) {
-		paiman_setflighttotarget(0, 1);
-		cd->throttle_speed = 0x8000;
-		return 0;
-	}
-
-	pai_distancebetween(leader_idx, self_idx);
-	leader_cd = objects[leader_idx].craft_ptr;
-
-	/* (2) Far from leader or leader-status-dead: chase mode. */
-	catchup_dist = (species_table[objects[leader_idx].ship_idx].bound_hwidth < 0xBB8u) ? 0x8000u : 0x20000u;
-
-	if ((int32_t)catchup_dist < trig2_polardistance || !leader_cd->status_flags) {
-		cd->waypoint_x_cache = objects[leader_idx].world_x;
-		cd->waypoint_y_cache = objects[leader_idx].world_y;
-		cd->waypoint_z_cache = objects[leader_idx].world_z;
-		paiman_setflighttotarget(leader_cd->status_flags ? 0 : 0x4000, 1);
-		cd->throttle_speed = (trig2_polardistance <= 0x10000) ? 0x4000 : 0xFFFFu;
-		cd->push_accum_x = 0;
-		cd->push_accum_y = 0;
-		cd->push_accum_z = 0;
-		return 0;
-	}
-
-	/* (3) Match leader heading. */
-	if (leader_cd->ai_heading_state == 2) {
-		cd->ai_target_heading = leader_cd->ai_target_heading;
-		paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
-	} else if (objects[leader_idx].heading != objects[self_idx].heading) {
-		cd->ai_target_heading = (uint16_t)objects[leader_idx].heading;
-		paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 3) + 0x4000));
-	}
-
-	/* (4) Throttle: chase leader speed unconditionally. Retail does not
-	 * gate this on leader-is-player; it adjusts by 50*(speed_delta) for
-	 * any leader. */
-	{
-		uint16_t leader_speed = (uint16_t)objects[leader_idx].current_speed;
-		uint16_t our_speed = (uint16_t)objects[self_idx].current_speed;
-
-		uint16_t previous_throttle = cd->throttle_speed;
-
-		if (leader_speed > our_speed) {
-			uint16_t bump = (uint16_t)(50u * (uint32_t)(leader_speed - our_speed));
-			cd->throttle_speed = (uint16_t)(previous_throttle + bump);
-			if (cd->throttle_speed < previous_throttle)
-				cd->throttle_speed = 0xFFFFu;
-		} else if (leader_speed < our_speed) {
-			uint16_t brake = (uint16_t)(50u * (uint32_t)(our_speed - leader_speed));
-			cd->throttle_speed = (uint16_t)(previous_throttle - brake);
-			if (cd->throttle_speed > previous_throttle)
-				cd->throttle_speed = 0;
+		if (objects[i].ship_idx && objects[i].fg_idx == escortee_fg &&
+			objects[i].craft_ptr->leader_obj_idx == 0xFF) {
+			leader_idx = i;
+			break;
 		}
 	}
+	if (leader_idx != 0xFF) {
+		pai_distancebetween(leader_idx, self_idx);
+		leader_cd = objects[leader_idx].craft_ptr;
 
-	/* (5) Match pitch. */
-	{
-		uint16_t pd_delta = (uint16_t)(cd->orient_pitch - leader_cd->orient_pitch);
-		if (pd_delta >= 0x8000u)
-			pd_delta = (uint16_t)-pd_delta;
-		if (pd_delta >= 0x400u) {
-			cd->ai_pitch_step = 0xFFFFu;
-			cd->ai_target_pitch = leader_cd->orient_pitch;
-			cd->ai_pitch_force = 0;
-			cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
-		} else {
-			cd->ai_pitch_state = 0;
-			cd->orient_pitch = leader_cd->orient_pitch;
+		/* (2) Far from leader or leader-status-dead: chase mode. */
+		if (species_table[objects[leader_idx].ship_idx].bound_hwidth >= 3000)
+			catchup_dist = 0x20000;
+		else
+			catchup_dist = 0x8000;
+
+		if (catchup_dist < trig2_polardistance || !leader_cd->status_flags) {
+			craftptr->waypoint_x_cache = objects[leader_idx].world_x;
+			craftptr->waypoint_y_cache = objects[leader_idx].world_y;
+			craftptr->waypoint_z_cache = objects[leader_idx].world_z;
+			if (!leader_cd->status_flags)
+				paiman_setflighttotarget(0x4000, 1);
+			else
+				paiman_setflighttotarget(0, 1);
+			if (trig2_polardistance > 0x10000)
+				craftptr->throttle_speed = 0xFFFF;
+			else
+				craftptr->throttle_speed = 0x4000;
+			craftptr->push_accum_x = 0;
+			craftptr->push_accum_y = 0;
+			craftptr->push_accum_z = 0;
+			return 0;
 		}
-	}
 
-	/* (6) Match roll. */
-	{
-		uint16_t roll_delta = (uint16_t)(objects[self_idx].roll - objects[leader_idx].roll);
-		if (roll_delta >= 0x8000u)
-			roll_delta = (uint16_t)-roll_delta;
-		if (roll_delta >= 0x400u) {
-			cd->ai_roll_step = 0xFFFFu;
-			cd->ai_roll_state = 1;
-			cd->ai_target_roll = (uint16_t)objects[leader_idx].roll;
-		} else {
-			objects[self_idx].roll = objects[leader_idx].roll;
-			objects[self_idx].orient_dirty = 1;
-			cd->ai_roll_state = 0;
+		/* (3) Match leader heading. */
+		if (leader_cd->ai_heading_state == 2) {
+			craftptr->ai_target_heading = leader_cd->ai_target_heading;
+			paiman_setturn((int16_t)(((int32_t)craftptr->skill_value >> 3) + 0x4000));
+		} else if (objects[leader_idx].heading != objects[self_idx].heading) {
+			craftptr->ai_target_heading = objects[leader_idx].heading;
+			paiman_setturn((int16_t)(((int32_t)craftptr->skill_value >> 3) + 0x4000));
 		}
-	}
 
-	/* (7) Positional offset. Escort slot = ai[ai_count].var[0] (0..26). */
-	{
-		uint8_t slot_byte = fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[0];
-		pai_calcrotatedpoint(&objects[leader_idx], _escortsidepos[slot_byte], _escortuppos[slot_byte],
-							 _escortfwdpos[slot_byte]);
+		/* (4) Throttle: chase leader speed. */
+		{
+			uint16_t leader_speed = objects[leader_idx].current_speed;
+			uint16_t our_speed = objects[self_idx].current_speed;
+			uint16_t previous_throttle;
 
-		if (species_table[objects[leader_idx].ship_idx].bound_hwidth >= 0xBB8u) {
+			if (leader_speed > our_speed) {
+				previous_throttle = craftptr->throttle_speed;
+				craftptr->throttle_speed += (leader_speed - our_speed) * 50;
+				if (previous_throttle > craftptr->throttle_speed)
+					craftptr->throttle_speed = 0xFFFF;
+			} else if (leader_speed < our_speed) {
+				previous_throttle = craftptr->throttle_speed;
+				craftptr->throttle_speed -= (our_speed - leader_speed) * 50;
+				if (previous_throttle < craftptr->throttle_speed)
+					craftptr->throttle_speed = 0;
+			}
+		}
+
+		/* (5) Match pitch. */
+		{
+			uint16_t pitch_delta = craftptr->orient_pitch - leader_cd->orient_pitch;
+			if (pitch_delta >= 0x8000)
+				pitch_delta = -pitch_delta;
+			if (pitch_delta < 0x400) {
+				craftptr->ai_pitch_state = 0;
+				craftptr->orient_pitch = leader_cd->orient_pitch;
+			} else {
+				craftptr->ai_pitch_step = 0xFFFF;
+				craftptr->ai_target_pitch = leader_cd->orient_pitch;
+				craftptr->ai_pitch_force = 0;
+				craftptr->ai_pitch_state = (leader_cd->orient_pitch > craftptr->orient_pitch) + 1;
+			}
+		}
+
+		/* (6) Match roll. */
+		{
+			uint16_t roll_delta = objects[self_idx].roll - objects[leader_idx].roll;
+			if (roll_delta >= 0x8000)
+				roll_delta = -roll_delta;
+			if (roll_delta < 0x400) {
+				objects[self_idx].roll = objects[leader_idx].roll;
+				objects[self_idx].orient_dirty = 1;
+				craftptr->ai_roll_state = 0;
+			} else {
+				craftptr->ai_roll_step = 0xFFFF;
+				craftptr->ai_roll_state = 1;
+				craftptr->ai_target_roll = objects[leader_idx].roll;
+			}
+		}
+
+		/* (7) Positional offset. Escort slot = ai[ai_count].var[0] (0..26). */
+		{
+			int8_t slot = (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[0];
+			pai_calcrotatedpoint(&objects[leader_idx], _escortsidepos[slot], _escortuppos[slot],
+								 _escortfwdpos[slot]);
+		}
+
+		if (species_table[objects[leader_idx].ship_idx].bound_hwidth >= 3000) {
 			rotatedx *= 16;
 			rotatedy *= 16;
 			rotatedz *= 16;
 		}
 
-		if (leader_cd->leader_obj_idx == (uint8_t)pstate.object_idx &&
-			(uint16_t)pstate.player->current_speed <= 0xAu) {
-			cd->push_accum_x = 0;
-			cd->push_accum_y = 0;
-			cd->push_accum_z = 0;
+		if (leader_cd->leader_obj_idx == pstate.object_idx && (uint16_t)pstate.player->current_speed <= 10) {
+			craftptr->push_accum_x = 0;
+			craftptr->push_accum_y = 0;
+			craftptr->push_accum_z = 0;
 			return 0;
 		}
 
-		cd->push_accum_x = rotatedx + objects[leader_idx].world_x - objects[self_idx].world_x;
-		cd->push_accum_y = rotatedy + objects[leader_idx].world_y - objects[self_idx].world_y;
-		cd->push_accum_z = rotatedz + objects[leader_idx].world_z - objects[self_idx].world_z;
+		craftptr->push_accum_x = rotatedx + objects[leader_idx].world_x - objects[ai.active_obj_idx].world_x;
+		craftptr->push_accum_y = rotatedy + objects[leader_idx].world_y - objects[ai.active_obj_idx].world_y;
+		craftptr->push_accum_z = rotatedz + objects[leader_idx].world_z - objects[ai.active_obj_idx].world_z;
+		return 0;
 	}
-	return 0;
-}
 
-/* ---- MODE_AwaitBoard (19) / AwaitBoardAlt (25) --------------------- */
-
-// FUNCTION: TIE95 0x3C7FC
-void paiman_initawaitboardmaneuver(void) {
-	CraftData* cd = craftptr;
-	cd->ai_roll_state = 0;
-	cd->ai_pitch_state = 0;
-	cd->ai_heading_state = 0;
-	cd->throttle_speed = 0;
-}
-
-// FUNCTION: TIE95 0x3C81C
-int16_t paiman_awaitboardmaneuver(void) {
-	CraftData* cd = craftptr;
-	cd->ai_roll_state = 0;
-	cd->ai_pitch_state = 0;
-	cd->ai_heading_state = 0;
-	cd->throttle_speed = 0;
-	return 0;
-}
-
-/* ---- MODE_HeadToward (20) ------------------------------------------ */
-
-// FUNCTION: TIE95 0x3C83C
-void paiman_initheadtowardmaneuver(void) { paiman_setflighttotarget(0, 1); }
-
-// FUNCTION: TIE95 0x3C84C
-int16_t paiman_headtowardmaneuver(void) {
-	CraftData* cd = craftptr;
 	paiman_setflighttotarget(0, 1);
-	cd->ai_roll_state = 1;
-	cd->ai_roll_step = 0xFFFFu;
-	cd->ai_target_roll = 0;
-	return 0;
-}
-
-/* ---- MODE_TurnAway (24) -------------------------------------------- */
-
-// FUNCTION: TIE95 0x3C878
-void paiman_initturnawaymaneuver(void) {
-	paiman_setnewturnaway(ai.active_obj_idx);
-	craftptr->maneuver_timer = 3540;
-}
-
-// FUNCTION: TIE95 0x3C894
-int16_t paiman_turnawaymaneuver(void) {
-	if (!craftptr->maneuver_timer)
-		return 1;
-	if (!craftptr->ai_plan_state)
-		paiman_setnewturnaway(ai.active_obj_idx);
-	return paiman_avoidstarshipmaneuver();
-}
-
-// FUNCTION: TIE95 0x3C8BC
-int16_t paiman_avoidstarshipmaneuver(void) { return 0; }
-
-/* ---- MODE_OutOfHangar (26) ----------------------------------------- */
-
-// FUNCTION: TIE95 0x3C94C
-void paiman_initoutofhangarmaneuver(void) { craftptr->maneuver_timer = 2360; }
-
-// FUNCTION: TIE95 0x3C95C
-int16_t paiman_outofhangarmaneuver(void) {
-	CraftData* cd = craftptr;
-	uint8_t mapped_order;
-
-	if (cd->maneuver_timer)
-		return 0;
-
-	/* The plan VM reads exithangarplan[3] as the next order. */
-#ifdef TIE_MODERN
-	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
-	if (fg_array[ai.fg_idx].ai[0].order >= sizeof(ordersldr))
-		mapped_order = 0;
-	else
-		mapped_order = (cd->leader_obj_idx == 0xFFu) ? ordersldr[fg_array[ai.fg_idx].ai[0].order]
-													 : ordersflw[fg_array[ai.fg_idx].ai[0].order];
-#else
-	mapped_order = (cd->leader_obj_idx == 0xFFu) ? ordersldr[fg_array[ai.fg_idx].ai[0].order]
-												 : ordersflw[fg_array[ai.fg_idx].ai[0].order];
-#endif
-	exithangarplan[3] = mapped_order;
-
-	cd->formation_separation = 2;
-	return 1;
-}
-
-/* ---- MODE_AvoidStarship (28) / MODE_Wait (29) ---------------------- */
-
-// FUNCTION: TIE95 0x3C9D0
-void paiman_initavoidstarshipmaneuver(void) {
-	CraftData* cd = craftptr;
-	uint16_t rnd_ticks = (uint16_t)(236u * (uint32_t)((math2_getrandom() & 7) + 15));
-	cd->ai_plan_state = rnd_ticks;
-	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
-	cd->ai_pitch_step = 0xFFFFu;
-	cd->ai_pitch_force = 0;
-	cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
-}
-
-// FUNCTION: TIE95 0x3CA2C
-void paiman_initwaitmaneuver(void) {
-	CraftData* cd = craftptr;
-	uint8_t var0 = fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[0];
-	cd->ai_roll_state = 0;
-	cd->ai_pitch_state = 0;
-	cd->ai_heading_state = 0;
-	cd->throttle_speed = 0;
-	cd->maneuver_timer = 1180 * (int32_t)var0;
-}
-
-/* ---- MODE_DropOff (30) --------------------------------------------- */
-
-// FUNCTION: TIE95 0x3CA94
-int16_t paiman_dropoffmaneuver(void) {
-	CraftData* cd = craftptr;
-	uint8_t active_waypoint_idx;
-	uint16_t anchor_obj = 0xFFu;
-	uint8_t tgt_fg_idx = (uint8_t)((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[1] - 1);
-	uint8_t craft_index = cd->active_waypoint_idx;
-	uint16_t i;
-	int32_t dx, dy, dz;
-
-	uint8_t model_type;
-
-	if (cd->mode_subbyte) {
-		if (!cd->maneuver_timer) {
-			active_waypoint_idx = cd->active_waypoint_idx;
-			cd->mode_subbyte = 0;
-			cd->active_waypoint_idx = (uint8_t)(active_waypoint_idx + 1);
-		}
-		cd->ai_goal_progress[ai.ai_entry_count] = cd->active_waypoint_idx;
-		return 0;
-	}
-
-	/* Scan for the target-FG's leader. */
-	for (i = 0; i < NUM_CRAFTS; ++i) {
-		if (objects[i].ship_idx && objects[i].fg_idx == tgt_fg_idx &&
-			objects[i].craft_ptr->leader_obj_idx == 0xFFu) {
-			anchor_obj = i;
-		}
-	}
-
-	create_getdropposition(tgt_fg_idx, craft_index, anchor_obj);
-	model_type = objects[ai.active_obj_idx].ship_idx;
-	if (!TIE_FLIGHT_TIE98)
-		draw_Lockshipfileptrs(model_type);
-
-	{
-		int32_t shield_hi =
-			TIE_FLIGHT_EDITION((objectblockptr->shield_default >> 16), -modelbounds_getminz(model_type));
-		dx = worldlocx - objects[ai.active_obj_idx].world_x;
-		dy = worldlocy - objects[ai.active_obj_idx].world_y;
-		dz = (worldlocz + (-shield_hi >> 1)) - objects[ai.active_obj_idx].world_z;
-
-		cd->push_accum_x = dx;
-		cd->push_accum_y = dy;
-		cd->push_accum_z = dz;
-
-		trig2_ctop(dx, dy, dz);
-
-		{
-			int32_t ax = dx < 0 ? -dx : dx;
-			int32_t ay = dy < 0 ? -dy : dy;
-			int32_t az = dz < 0 ? -dz : dz;
-
-			if (ay + ax > 256) {
-				if ((uint16_t)trig2_xyangle != (uint16_t)objects[ai.active_obj_idx].heading) {
-					cd->ai_heading_state = 2;
-					cd->ai_heading_step = 0x8000;
-					cd->ai_target_heading = (uint16_t)trig2_xyangle;
-				}
-			}
-
-			if (ax + ay + az < 32) {
-				AiContext saved_ai_ctx;
-				fgcnt = tgt_fg_idx;
-				saved_ai_ctx = ai;
-				leaderflag = (uint8_t)anchor_obj;
-				create_startflightgroup(craft_index);
-				ai = saved_ai_ctx;
-
-				cd->maneuver_timer = 1180;
-				cd->push_accum_z = 1500;
-				cd->mode_subbyte = (uint8_t)(cd->mode_subbyte + 1);
-			}
-		}
-	}
-
-	cd->ai_goal_progress[ai.ai_entry_count] = cd->active_waypoint_idx;
+	craftptr->throttle_speed = 0x8000;
 	return 0;
 }
 
@@ -2018,97 +1692,418 @@ int16_t paiman_boardmaneuver(void) {
 	return 0;
 }
 
-/* ---- Dispatch tables ----------------------------------------------- */
+/* ---- MODE_AwaitBoard (19) / AwaitBoardAlt (25) --------------------- */
 
-// GLOBAL: TIE95 0xC59F4
-const ManeuverInitFunc initmanvrfunctionptrs[MODE_COUNT] = {
-	(ManeuverInitFunc)paiorder_nullorder, /*  0 None          */
-	paiman_initturninsidemaneuver,        /*  1 TurnInside    */
-	paiman_initsplitsmaneuver,            /*  2 Splits        */
-	paiman_initimmelmannmaneuver,         /*  3 Immelmann     */
-	paiman_initscissorsmaneuver,          /*  4 Scissors      */
-	paiman_initrendezvousmaneuver,        /*  5 Rendezvous    */
-	paiman_initcruisemaneuver,            /*  6 Cruise        */
-	paiman_initheadtowardfullmaneuver,    /* 7 HeadTowardFull */
-	paiman_initrunawaymaneuver,           /*  8 RunAway       */
-	paiman_initheadonattackmaneuver,      /* 9 HeadOnAttack */
-	paiman_initfollowleadermaneuver,      /* 10 FollowLeader */
-	paiman_initsetupattackmaneuver,       /* 11 SetupAttack  */
-	paiman_initsetupattackmaneuver,       /* 12 Attack       */
-	paiman_initzoommaneuver,              /* 13 Zoom          */
-	paiman_initdivemaneuver,              /* 14 Dive          */
-	paiman_initsplitsdivemaneuver,        /* 15 SplitsDive    */
-	paiman_initspeedawaymaneuver,         /* 16 SpeedAway     */
-	paiman_initescortmaneuver,            /* 17 Escort        */
-	paiman_initboardmaneuver,             /* 18 Board         */
-	paiman_initawaitboardmaneuver,        /* 19 AwaitBoard    */
-	paiman_initheadtowardmaneuver,        /* 20 HeadToward    */
-	paiman_initintohyperspacemaneuver,    /* 21 IntoHyperspace */
-	paiman_initoutofhyperspacemaneuver,   /* 22 OutOfHyperspace */
-	paiman_initsetupattackmaneuver,       /* 23 AttackSecondary */
-	paiman_initturnawaymaneuver,          /* 24 TurnAway      */
-	paiman_initawaitboardmaneuver,        /* 25 AwaitBoardAlt */
-	paiman_initoutofhangarmaneuver,       /* 26 OutOfHangar   */
-	paiman_initsplitsdivemaneuver,        /* 27 SplitsDiveAlt */
-	paiman_initavoidstarshipmaneuver,     /* 28 AvoidStarship */
-	paiman_initwaitmaneuver,              /* 29 Wait          */
-	paiman_initawaitboardmaneuver,        /* 30 DropOff       */
-};
+// FUNCTION: TIE95 0x3C7FC
+void paiman_initawaitboardmaneuver(void) {
+	CraftData* cd = craftptr;
+	cd->ai_roll_state = 0;
+	cd->ai_pitch_state = 0;
+	cd->ai_heading_state = 0;
+	cd->throttle_speed = 0;
+}
 
-// GLOBAL: TIE95 0xC5978
-const ManeuverFunc _manvrfunctionptrs[MODE_COUNT] = {
-	paiorder_nullorder,             /*  0 None          */
-	paiman_turninsidemaneuver,      /*  1 */
-	paiman_splitsmaneuver,          /*  2 */
-	paiman_immelmannmaneuver,       /*  3 */
-	paiman_scissorsmaneuver,        /*  4 */
-	paiman_rendezvousmaneuver,      /*  5 */
-	paiman_cruisemaneuver,          /*  6 */
-	paiman_headtowardfullmaneuver,  /*  7 */
-	paiman_runawaymaneuver,         /*  8 */
-	paiman_headonattackmaneuver,    /*  9 */
-	paiman_followleadermaneuver,    /* 10 */
-	paiman_setupattackmaneuver,     /* 11 */
-	paiman_attackmaneuver,          /* 12 */
-	paiman_zoommaneuver,            /* 13 */
-	paiman_zoommaneuver,            /* 14 Dive = Zoom body */
-	paiman_splitsdivemaneuver,      /* 15 */
-	paiman_speedawaymaneuver,       /* 16 */
-	paiman_escortmaneuver,          /* 17 */
-	paiman_boardmaneuver,           /* 18 */
-	paiman_awaitboardmaneuver,      /* 19 */
-	paiman_headtowardmaneuver,      /* 20 */
-	paiman_intohyperspacemaneuver,  /* 21 */
-	paiman_outofhyperspacemaneuver, /* 22 */
-	paiman_attackmaneuver,          /* 23 AttackSecondary */
-	paiman_turnawaymaneuver,        /* 24 */
-	paiman_awaitboardmaneuver,      /* 25 */
-	paiman_outofhangarmaneuver,     /* 26 */
-	paiman_splitsdivemaneuver,      /* 27 */
-	paiman_avoidstarshipmaneuver,   /* 28 */
-	paiman_avoidstarshipmaneuver,   /* 29 Wait = null */
-	paiman_dropoffmaneuver,         /* 30 */
-};
+// FUNCTION: TIE95 0x3C81C
+int16_t paiman_awaitboardmaneuver(void) {
+	CraftData* cd = craftptr;
+	cd->ai_roll_state = 0;
+	cd->ai_pitch_state = 0;
+	cd->ai_heading_state = 0;
+	cd->throttle_speed = 0;
+	return 0;
+}
 
-/* ---- Public entry points ------------------------------------------ */
+/* ---- MODE_HeadToward (20) ------------------------------------------ */
 
-// FUNCTION: TIE95 0x396B0
-void paiman_initmaneuver(void) {
+// FUNCTION: TIE95 0x3C83C
+void paiman_initheadtowardmaneuver(void) { paiman_setflighttotarget(0, 1); }
+
+// FUNCTION: TIE95 0x3C84C
+int16_t paiman_headtowardmaneuver(void) {
+	paiman_setflighttotarget(0, 1);
+	craftptr->ai_roll_state = 1;
+	craftptr->ai_roll_step = 0xFFFFu;
+	craftptr->ai_target_roll = 0;
+	return 0;
+}
+
+/* ---- MODE_TurnAway (24) -------------------------------------------- */
+
+// FUNCTION: TIE95 0x3C878
+void paiman_initturnawaymaneuver(void) {
+	paiman_setnewturnaway(ai.active_obj_idx);
+	craftptr->maneuver_timer = 3540;
+}
+
+// FUNCTION: TIE95 0x3C894
+int16_t paiman_turnawaymaneuver(void) {
+	if (!craftptr->maneuver_timer)
+		return 1;
+	if (!craftptr->ai_plan_state)
+		paiman_setnewturnaway(ai.active_obj_idx);
+	return paiman_avoidstarshipmaneuver();
+}
+
+// FUNCTION: TIE95 0x3C8BC
+int16_t paiman_avoidstarshipmaneuver(void) { return 0; }
+
+/* Pick a new turn-away target orientation: face the attacker's own heading
+ * (not flipped), or flip our own heading if there is no attacker. */
+// FUNCTION: TIE95 0x3C8C0
+uint16_t paiman_setnewturnaway(uint16_t own_obj_idx) {
+	CraftData* cd = craftptr;
+	uint16_t new_target_heading;
+	uint16_t hold_ticks;
+
+	if (cd->attacker_idx == 0xFFu) {
+		new_target_heading = (uint16_t)(objects[own_obj_idx].heading + 0x8000u);
+	} else {
+		new_target_heading = (uint16_t)objects[cd->attacker_idx].heading;
+	}
+	cd->ai_target_heading = new_target_heading;
+
+	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
+
+	hold_ticks = (uint16_t)(236u * _delayturninside[ai.skill_tier]);
+	cd->ai_plan_state = hold_ticks;
+	return hold_ticks;
+}
+
+/* ---- MODE_OutOfHangar (26) ----------------------------------------- */
+
+// FUNCTION: TIE95 0x3C94C
+void paiman_initoutofhangarmaneuver(void) { craftptr->maneuver_timer = 2360; }
+
+// FUNCTION: TIE95 0x3C95C
+int16_t paiman_outofhangarmaneuver(void) {
+	if (craftptr->maneuver_timer == 0) {
+		uint16_t order = (int8_t)fg_array[ai.fg_idx].ai[0].order;
+		uint8_t mapped_order;
+
+#ifdef TIE_MODERN
+		// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
+		if (order >= sizeof(ordersldr))
+			mapped_order = 0;
+		else
+#endif
+			if (craftptr->leader_obj_idx == 0xFFu)
+			mapped_order = ordersldr[order];
+		else
+			mapped_order = ordersflw[order];
+
+		craftptr->formation_separation = 2;
+		/* The plan VM reads exithangarplan[3] as the next order. */
+		exithangarplan[3] = mapped_order;
+		return 1;
+	}
+	return 0;
+}
+
+/* ---- MODE_AvoidStarship (28) / MODE_Wait (29) ---------------------- */
+
+// FUNCTION: TIE95 0x3C9D0
+void paiman_initavoidstarshipmaneuver(void) {
+	CraftData* cd = craftptr;
+	uint16_t rnd_ticks = (uint16_t)(236u * (uint32_t)((math2_getrandom() & 7) + 15));
+	cd->ai_plan_state = rnd_ticks;
+	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x8000));
+	cd->ai_pitch_step = 0xFFFFu;
+	cd->ai_pitch_force = 0;
+	cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
+}
+
+// FUNCTION: TIE95 0x3CA2C
+void paiman_initwaitmaneuver(void) {
+	craftptr->maneuver_timer = fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[0];
+	craftptr->maneuver_timer *= 1180;
+	craftptr->ai_roll_state = 0;
+	craftptr->ai_pitch_state = 0;
+	craftptr->ai_heading_state = 0;
+	craftptr->throttle_speed = 0;
+}
+
+/* ---- MODE_DropOff (30) --------------------------------------------- */
+
+// FUNCTION: TIE95 0x3CA94
+int16_t paiman_dropoffmaneuver(void) {
+	uint16_t craft_index;
+	uint16_t tgt_fg_idx;
+	uint16_t anchor_obj;
+	uint16_t i;
+
+	if (!craftptr->mode_subbyte) {
+		craft_index = craftptr->active_waypoint_idx;
+		tgt_fg_idx = (int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[1] - 1;
+		anchor_obj = 0xFFu;
+
+		/* Scan for the target-FG's leader. */
+		for (i = 0; i < NUM_CRAFTS; ++i) {
+			if (objects[i].ship_idx && objects[i].fg_idx == tgt_fg_idx &&
+				objects[i].craft_ptr->leader_obj_idx == 0xFFu) {
+				anchor_obj = i;
+			}
+		}
+
+		create_getdropposition(tgt_fg_idx, craft_index, anchor_obj);
+		if (!TIE_FLIGHT_TIE98)
+			draw_Lockshipfileptrs(objects[ai.active_obj_idx].ship_idx);
+
+		{
+			int32_t dx, dy, dz;
+			int32_t dist_x;
+			int32_t shield_hi = TIE_FLIGHT_EDITION((objectblockptr->shield_default >> 16),
+												   -modelbounds_getminz(objects[ai.active_obj_idx].ship_idx));
+			dist_x = dx = worldlocx - objects[ai.active_obj_idx].world_x;
+			craftptr->push_accum_x = dx;
+			dy = worldlocy - objects[ai.active_obj_idx].world_y;
+			craftptr->push_accum_y = dy;
+			dz = (-shield_hi >> 1) + worldlocz - objects[ai.active_obj_idx].world_z;
+			craftptr->push_accum_z = dz;
+
+			trig2_ctop(dx, dy, dz);
+
+			if (dx < 0)
+				dist_x = -dx;
+			if (dy < 0)
+				dy = -dy;
+			if (dz < 0)
+				dz = -dz;
+
+			if (dist_x + dy > 256) {
+				if ((uint16_t)trig2_xyangle != (uint16_t)objects[ai.active_obj_idx].heading) {
+					craftptr->ai_heading_state = 2;
+					craftptr->ai_heading_step = 0x8000;
+					craftptr->ai_target_heading = (uint16_t)trig2_xyangle;
+				}
+			}
+
+			if (dy + dist_x + dz < 32) {
+				AiContext saved_ai_ctx;
+				CraftData* cd = craftptr;
+				fgcnt = tgt_fg_idx;
+				saved_ai_ctx = ai;
+				leaderflag = (uint8_t)anchor_obj;
+				create_startflightgroup(craft_index);
+				ai = saved_ai_ctx;
+				craftptr = cd;
+
+				craftptr->maneuver_timer = 1180;
+				craftptr->push_accum_z = 1500;
+				craftptr->mode_subbyte++;
+			}
+		}
+	} else if (!craftptr->maneuver_timer) {
+		craftptr->mode_subbyte = 0;
+		craftptr->active_waypoint_idx++;
+	}
+
+	craftptr->ai_goal_progress[ai.ai_entry_count] = craftptr->active_waypoint_idx;
+	return 0;
+}
+
+/* Point the AI craft's flight vector at craftptr->waypoint_*_cache.
+ * Uses the current PAI skill_value to pick turn rate. */
+// FUNCTION: TIE95 0x3CD04
+void paiman_setflighttotarget(uint16_t heading_bias, int16_t drive_pitch) {
 	CraftData* cd = craftptr;
 
-	cd->push_accum_x = 0;
-	cd->hit_count = 0;
-	cd->mode_subbyte = 0;
-	cd->push_accum_y = cd->push_accum_x;
-	cd->push_accum_z = cd->push_accum_x;
+	trig2_ctop(cd->waypoint_x_cache - objects[ai.active_obj_idx].world_x,
+			   cd->waypoint_y_cache - objects[ai.active_obj_idx].world_y,
+			   cd->waypoint_z_cache - objects[ai.active_obj_idx].world_z);
 
-	initmanvrfunctionptr = initmanvrfunctionptrs[cd->mode_byte];
-#ifdef TIE_MODERN
-	/* The shared zero-return entry has a different prototype from the initializers. */
-	if (initmanvrfunctionptr == (ManeuverInitFunc)paiorder_nullorder) {
-		((ManeuverFunc)initmanvrfunctionptr)();
-		return;
+	cd->ai_target_heading = (uint16_t)(trig2_xyangle + heading_bias);
+	paiman_setturn((int16_t)(((int32_t)cd->skill_value >> 1) + 0x4000));
+
+	if (drive_pitch) {
+		cd->ai_pitch_step = 0xFFFFu;
+		cd->ai_pitch_force = 0;
+		cd->ai_target_pitch = (uint16_t)trig2_zangle;
+		cd->ai_climb_state = 0;
+		cd->ai_dive_state = 0;
+		cd->ai_pitch_state = (uint8_t)((cd->ai_target_pitch > cd->orient_pitch) + 1);
 	}
+}
+
+/* Level-the-wings helper: roll to 0, freeze heading, clear climb/dive,
+ * pitch → 0x4000 (level) with short-way direction. */
+// FUNCTION: TIE95 0x3CDC4
+void paiman_controlplane(void) {
+	craftptr->ai_dive_state = 0;
+	craftptr->ai_climb_state = 0;
+	craftptr->ai_target_pitch = 0x4000;
+	craftptr->ai_pitch_step = 0xFFFFu;
+	craftptr->ai_pitch_force = 0;
+
+	if (craftptr->orient_pitch < 0x4000)
+		craftptr->ai_pitch_state = 2;
+	else if (craftptr->orient_pitch > 0x4000)
+		craftptr->ai_pitch_state = 1;
+	else
+		craftptr->ai_pitch_state = 3;
+
+	craftptr->ai_roll_state = 1;
+	craftptr->ai_roll_step = 0xFFFFu;
+	craftptr->ai_target_roll = 0;
+	craftptr->ai_heading_state = 0;
+}
+
+/* Compute aim-lead waypoint for target tgt_obj_idx. */
+// FUNCTION: TIE95 0x3CF50
+void paiman_calcplanelead(uint16_t tgt_obj_idx) {
+	uint16_t lead_ticks = (uint16_t)objects[tgt_obj_idx].current_speed;
+	uint16_t self_idx = ai.active_obj_idx;
+	int32_t dx, dy, dz;
+
+	if (lead_ticks) {
+		uint16_t laser_id;
+		int16_t closing_speed;
+		int16_t heading_delta;
+		uint16_t time_scale;
+
+		pai_distancebetween(self_idx, (uint16_t)craftptr->ai_target_ref);
+
+		/* Pick projectile speed bucket: missile-lock (order 19) always
+		 * uses bucket 141; otherwise clamp laser_type[0] to a minimum
+		 * of 137 (lightest laser). */
+		if (craftptr->default_order_ldr == 19)
+			laser_id = 141;
+		else if (craftptr->laser_type[0] > 0x89)
+			laser_id = craftptr->laser_type[0];
+		else
+			laser_id = 137;
+
+		closing_speed = projectilevelocity[laser_id - WEAPON_SPECIES_BASE] + objects[self_idx].current_speed;
+
+		/* Scale by cos(heading_delta) between our heading and target's. */
+		heading_delta = objects[tgt_obj_idx].heading - objects[self_idx].heading;
+		lead_ticks = objects[tgt_obj_idx].current_speed;
+		if (lead_ticks >= 900)
+			lead_ticks = 900;
+		if ((uint16_t)heading_delta >= 0x8000)
+			heading_delta = -heading_delta;
+
+		if ((uint16_t)heading_delta < 0x4000)
+			closing_speed -= trig2_cosinewordmult((int16_t)lead_ticks, (int16_t)heading_delta);
+		else
+			closing_speed += trig2_cosinewordmult((int16_t)lead_ticks, (int16_t)heading_delta);
+
+		/* 18 * closing_speed + closing_speed/5 — Watcom idiom for "× 18.2". */
+		time_scale = closing_speed * 18 + closing_speed / 5;
+		if (!time_scale)
+			time_scale = 19;
+
+		time_scale = (uint16_t)(trig2_polardistance / time_scale);
+		time_scale *= framerate;
+		lead_ticks = math2_fraction(time_scale, craftptr->skill_value);
+	}
+
+	dx = objects[tgt_obj_idx].world_x - objects[tgt_obj_idx].world_x_prev;
+	dy = objects[tgt_obj_idx].world_y - objects[tgt_obj_idx].world_y_prev;
+	dz = objects[tgt_obj_idx].world_z - objects[tgt_obj_idx].world_z_prev;
+#ifdef TIE_MODERN
+	/* High-rate flight timing scales the per-tick displacement to AI ticks. */
+	(void)TieAiLead_GetDisplacement(tgt_obj_idx, &dx, &dy, &dz);
 #endif
-	initmanvrfunctionptr();
+	craftptr->waypoint_x_cache = dx * lead_ticks + objects[tgt_obj_idx].world_x;
+	craftptr->waypoint_y_cache = dy * lead_ticks + objects[tgt_obj_idx].world_y;
+	craftptr->waypoint_z_cache = dz * lead_ticks + objects[tgt_obj_idx].world_z;
+}
+
+// FUNCTION: TIE95 0x3D164
+void paiman_calcformation(void) {
+	int sep_units;
+	uint16_t species_idx;
+	int16_t bound_w;
+	int16_t bound_h;
+	int16_t bound_d;
+	uint16_t formation;
+	uint8_t craft_idx;
+	int16_t off_x;
+	int16_t off_y;
+	int16_t off_z;
+	uint16_t shift;
+
+	species_idx = craftptr->species_idx;
+	bound_w = spec_data[species_idx].bound_width;
+	bound_h = spec_data[species_idx].bound_height;
+	bound_d = spec_data[species_idx].bound_depth;
+	craft_idx = craftptr->craft_idx_in_fg;
+	formation = craftptr->formation;
+	sep_units = ai.leader_craft->formation_separation + 1;
+
+	off_x = bound_w * (_formposx[formation][craft_idx] * sep_units);
+	off_y = bound_d * (_formposy[formation][craft_idx] * sep_units);
+	off_z = bound_h * (_formposz[formation][craft_idx] * sep_units);
+
+	/* Tight formations sit half a craft width further apart. */
+	if (sep_units == 1) {
+		off_x += _formposx[formation][craft_idx] * (bound_w / 2);
+		off_z += _formposz[formation][craft_idx] * (bound_h / 2);
+		off_y += _formposy[formation][craft_idx] * (bound_d / 2);
+	}
+
+	pai_calcrotatedpoint(&objects[ai.leader_obj_idx], off_x, off_z, off_y);
+
+	/* Scale the rotated offset for capital-ship leaders (LOD shift).
+	 * Binary emits `shl reg, cl` (sign-agnostic); shifting a negative
+	 * int32_t in C is UB, so route through uint32_t. */
+	shift = spec_data[species_idx].model_scale_shift;
+	if (shift) {
+		rotatedx = (int32_t)((uint32_t)rotatedx << shift);
+		rotatedy = (int32_t)((uint32_t)rotatedy << shift);
+		rotatedz = (int32_t)((uint32_t)rotatedz << shift);
+	}
+
+	craftptr->push_accum_x =
+		objects[ai.leader_obj_idx].world_x + rotatedx - objects[ai.active_obj_idx].world_x;
+	craftptr->push_accum_y =
+		objects[ai.leader_obj_idx].world_y + rotatedy - objects[ai.active_obj_idx].world_y;
+	craftptr->push_accum_z =
+		objects[ai.leader_obj_idx].world_z + rotatedz - objects[ai.active_obj_idx].world_z;
+}
+
+/* ---- Helpers ------------------------------------------------------- */
+
+/* Snap or drive the craft heading toward ai_target_heading. Threshold
+ * 0x300 (~4.2°) distinguishes "close enough, snap now" from "rotate
+ * over time". */
+// FUNCTION: TIE95 0x3D3B4
+void paiman_setturn(int16_t heading_step) {
+	uint16_t delta = (uint16_t)(objects[ai.active_obj_idx].heading - craftptr->ai_target_heading);
+	if (delta >= 0x8000)
+		delta = (uint16_t)-delta;
+
+	if (delta <= 0x300) {
+		objects[ai.active_obj_idx].heading = (int16_t)craftptr->ai_target_heading;
+		objects[ai.active_obj_idx].orient_dirty = 1;
+		objects[ai.active_obj_idx].move_dirty = 1;
+		craftptr->ai_heading_state = 3;
+	} else {
+		craftptr->ai_heading_state = 2;
+		craftptr->ai_heading_step = (uint16_t)heading_step;
+	}
+}
+
+/* Write the throttle for the active craft; obj_idx is unused by the original. */
+// FUNCTION: TIE95 0x3D45C
+void paiman_setpower(uint16_t obj_idx, uint16_t throttle) { craftptr->throttle_speed = throttle; }
+
+/* Convert absolute desired_speed to throttle_speed, accounting for the
+ * shield/beam/laser power-balance margin and the craft's max_speed. */
+// FUNCTION: TIE95 0x3D46C
+void paiman_setspeed(uint16_t obj_idx_param, uint16_t desired_speed) {
+	CraftData* cd = objects[obj_idx_param].craft_ptr;
+	uint16_t margin = 6 - (cd->laser_power + (cd->shield_power + cd->beam_power));
+	uint16_t adj_max;
+
+	if (margin >= 0x8000) {
+		adj_max = cd->max_speed_cache - math2_fraction((uint16_t)(-margin << 13), cd->max_speed_cache);
+	} else {
+		adj_max = cd->max_speed_cache + math2_fraction((uint16_t)(margin << 13), cd->max_speed_cache);
+	}
+
+	if (desired_speed >= adj_max)
+		craftptr->throttle_speed = 0xFFFFu;
+	else
+		craftptr->throttle_speed = math2_percentage(desired_speed, adj_max);
 }

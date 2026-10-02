@@ -145,26 +145,22 @@ void trace2_entervertedge(int16_t topY, int16_t lineCnt, int16_t xCoord, int16_t
 /* ================================================================ */
 
 // FUNCTION: TIE95 0x58238
-void trace2_ydownleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
-	int32_t ytotala = (int32_t)ytotal;
+void trace2_ydownleft(int32_t ytop, int32_t ytotal, int32_t xval, int32_t slope) {
 	trace2_EdgeHeader* h;
 	int32_t ltval;
-	int32_t xvala;
 	int32_t ycnt;
-	uint32_t yval;
-	int32_t ytotalb;
-	int32_t xvalb;
+	int32_t frac;
 
 	if (ytop + ytotal > pixelsdeep)
-		ytotala = (int32_t)pixelsdeep - (int32_t)ytop;
-	if (ytotala == 0)
+		ytotal = pixelsdeep - ytop;
+	if (ytotal == 0)
 		return;
 
 	/* Allocate header at rowheaders[ytop]. */
 	h = trace2_newedgeheader;
 	h->next = trace2_rowheaders[ytop];
 	trace2_rowheaders[ytop] = h;
-	h->numscanlines = ytotala;
+	h->numscanlines = ytotal;
 	h->objectid = polyidbyte;
 	h->face1 = facenumber;
 	h->face2 = 0;
@@ -175,40 +171,40 @@ void trace2_ydownleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t sl
 		trace2_newedgeheader = trace2_lastedgeheader;
 
 	ltval = vertlight1;
-	xvala = (int32_t)(xval << 8);
-	ycnt = (int32_t)(slope >> 9);
-	yval = (slope >> 1) & 0xFF;
-	if (ycnt > ytotala)
-		ycnt = ytotala;
-	ytotalb = ytotala - ycnt;
+	xval <<= 8;
+	frac = slope >> 1;
+	ycnt = frac;
+	ycnt >>= 8;
+	frac &= 0xFF;
+	if (ycnt > ytotal)
+		ycnt = ytotal;
+	ytotal -= ycnt;
 
-	/* First run: ycnt scanlines of constant xvala. */
+	/* First run: ycnt scanlines at the starting x. */
 	while (--ycnt != -1) {
-		trace2_newedgeinfo->x = xvala;
+		trace2_newedgeinfo->x = xval;
 		trace2_newedgeinfo->lt = ltval;
 		ltval += lightincy;
 		++trace2_newedgeinfo;
 	}
 
-	/* Subsequent runs: xvalb = xvala - 256, keep stepping -256 each
-	 * time the fractional accumulator overflows. */
-	xvalb = xvala - 256;
-	while (ytotalb > 0) {
-		int32_t ycnta;
-
-		yval += slope;
-		ycnta = (int32_t)(yval >> 8);
-		yval &= 0xFF;
-		if (ycnta > ytotalb)
-			ycnta = ytotalb;
-		ytotalb -= ycnta;
-		while (--ycnta != -1) {
-			trace2_newedgeinfo->x = xvalb;
+	/* Subsequent runs step x left one pixel each time the fractional
+	 * accumulator overflows. */
+	xval -= 256;
+	while (ytotal != 0) {
+		frac += slope;
+		ycnt = frac >> 8;
+		frac &= 0xFF;
+		if (ycnt > ytotal)
+			ycnt = ytotal;
+		ytotal -= ycnt;
+		while (--ycnt != -1) {
+			trace2_newedgeinfo->x = xval;
 			trace2_newedgeinfo->lt = ltval;
 			ltval += lightincy;
 			++trace2_newedgeinfo;
 		}
-		xvalb -= 256;
+		xval -= 256;
 	}
 
 	if (trace2_newedgeinfo > trace2_lastedgeinfo)
@@ -615,89 +611,83 @@ void trace2_xupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slo
 
 // FUNCTION: TIE95 0x58B08
 void trace2_ydomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t slope, uint16_t fraction) {
-	const int32_t pd = (int32_t)pixelsdeep;
+	int16_t t;
 
-	if (y1 >= 0 && y1 < pd) {
-		if (y2 >= 0 && y2 < pd) {
-			if (y2 >= y1) {
+	if (y1 >= 0 && y1 < pixelsdeep) {
+		if (y2 >= 0 && y2 < pixelsdeep) {
+			if (y2 < y1) {
+				trace2_endy = y1;
+				trace2_startx = x2;
+				t = vertlight2;
+				vertlight2 = vertlight1;
+				vertlight1 = t;
+				trace2_starty = y2;
+				xdiffsign = (int8_t)(-xdiffsign);
+			} else {
 				trace2_starty = y1;
 				trace2_startx = x1;
 				trace2_endy = y2;
-			} else {
-				int16_t t;
-
-				trace2_endy = y1;
-				trace2_starty = y2;
-				trace2_startx = x2;
-				t = vertlight1;
-				vertlight1 = vertlight2;
-				vertlight2 = t;
-				xdiffsign = (int8_t)(-xdiffsign);
 			}
 		} else {
 			trace2_starty = y1;
 			trace2_startx = x1;
 			if (y2 < 0)
 				trace2_endy = 0;
-			else if (y2 <= pd)
-				trace2_endy = y2;
+			else if (y2 > pixelsdeep)
+				trace2_endy = pixelsdeep;
 			else
-				trace2_endy = pd;
+				trace2_endy = y2;
 		}
-	} else if (y2 >= 0 && y2 < pd) {
-		int16_t t;
-
-		trace2_starty = y2;
-		trace2_startx = x2;
+	} else if (y2 >= 0 && y2 < pixelsdeep) {
 		t = vertlight1;
-		vertlight1 = vertlight2;
-		vertlight2 = t;
 		xdiffsign = (int8_t)(-xdiffsign);
+		vertlight1 = vertlight2;
+		trace2_startx = x2;
+		trace2_starty = y2;
+		vertlight2 = t;
 		if (y1 < 0)
 			trace2_endy = 0;
-		else if (y1 <= pd)
+		else if (y1 <= pixelsdeep)
 			trace2_endy = y1;
 		else
-			trace2_endy = pd;
+			trace2_endy = pixelsdeep;
 	} else {
-		/* Both endpoints out of range.
-		 * Note: y1c/y1a * lightincy uses unsigned u32 multiplication to match
-		 * the binary's 32-bit imul wrap semantics without tripping C's signed-
-		 * overflow UB. Both operands are cast to u32; the product is cast back
-		 * to i32 and truncated to i16. */
-		int32_t dx_at_clip;
-		int32_t clipped_x;
-		if (y1 >= 0) {
-			/* y1 >= pixelsdeep: clip to bottom. */
-			int32_t y1c = y1 - pd;
-			int32_t lt_delta = (int32_t)((uint32_t)y1c * (uint32_t)(int32_t)lightincy);
-			vertlight1 -= (int16_t)lt_delta;
-			if ((uint32_t)slope <= 0xFFFFu)
-				dx_at_clip =
-					math2_ABoverC32(y1c, 0x10000, (int32_t)((uint32_t)fraction + ((uint32_t)slope << 16)));
+		int32_t dx;
+
+		/* The light delta wraps in 16 bits like the original imul; the
+		 * multiply goes through uint32_t to avoid signed-overflow UB. */
+		if (y1 < 0) {
+			y1 = -y1;
+			vertlight1 += (int16_t)((uint32_t)y1 * (uint32_t)lightincy);
+			if (slope > 0xFFFF)
+				dx = y1 / slope;
 			else
-				dx_at_clip = y1c / slope;
-			clipped_x = (xdiffsign >= 0) ? (dx_at_clip + x1) : (x1 - dx_at_clip);
-			trace2_starty = pd;
-		} else {
-			/* y1 < 0: clip to top. */
-			int32_t y1a = -y1;
-			int32_t lt_delta = (int32_t)((uint32_t)y1a * (uint32_t)(int32_t)lightincy);
-			vertlight1 += (int16_t)lt_delta;
-			if ((uint32_t)slope <= 0xFFFFu)
-				dx_at_clip = math2_ABoverC32(y1a, 0x10000, (int32_t)(fraction + (slope << 16)));
+				dx = math2_ABoverC32(y1, 0x10000, (int32_t)(fraction + ((uint32_t)slope << 16)));
+			if (xdiffsign < 0)
+				x1 -= dx;
 			else
-				dx_at_clip = y1a / slope;
-			clipped_x = (xdiffsign >= 0) ? (dx_at_clip + x1) : (x1 - dx_at_clip);
+				x1 += dx;
 			trace2_starty = 0;
+		} else {
+			y1 -= pixelsdeep;
+			vertlight1 -= (int16_t)((uint32_t)y1 * (uint32_t)lightincy);
+			if (slope > 0xFFFF)
+				dx = y1 / slope;
+			else
+				dx = math2_ABoverC32(y1, 0x10000, (int32_t)(fraction + ((uint32_t)slope << 16)));
+			if (xdiffsign < 0)
+				x1 -= dx;
+			else
+				x1 += dx;
+			trace2_starty = pixelsdeep;
 		}
-		trace2_startx = clipped_x;
+		trace2_startx = x1;
 		if (y2 < 0)
 			trace2_endy = 0;
-		else if (y2 <= pd)
-			trace2_endy = y2;
+		else if (y2 > pixelsdeep)
+			trace2_endy = pixelsdeep;
 		else
-			trace2_endy = pd;
+			trace2_endy = y2;
 	}
 }
 
@@ -735,12 +725,12 @@ void trace2_xdomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t sl
 	} else if (y2 >= 0 && y2 < pd) {
 		int16_t t;
 
-		trace2_starty = y2;
-		trace2_startx = x2;
 		t = vertlight1;
-		vertlight1 = vertlight2;
-		vertlight2 = t;
 		xdiffsign = (int8_t)(-xdiffsign);
+		vertlight1 = vertlight2;
+		trace2_startx = x2;
+		trace2_starty = y2;
+		vertlight2 = t;
 		if (y1 < 0)
 			trace2_endy = 0;
 		else if (y1 <= pd)
@@ -780,94 +770,6 @@ void trace2_xdomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t sl
 		else
 			trace2_endy = pd;
 	}
-}
-
-/* ================================================================ */
-/*  Domain-specific dispatchers (retail variant with clamp)          */
-/* ================================================================ */
-
-// FUNCTION: TIE95 0x59AC0
-void trace2_ydomedge(int32_t slope, uint16_t fraction, int32_t* pt1, int32_t* pt2) {
-	int32_t slopea = slope;
-	int32_t slopeb;
-
-	trace2_ydomclipy(pt1[0], pt1[1], pt2[0], pt2[1], slope, fraction);
-	if (slopea > TRACE2_SLOPE_MAX)
-		slopea = TRACE2_SLOPE_MAX;
-	/* slopea << 8 is done through u32 to avoid signed-shift UB; slopea is
-	 * clamped positive above but a negative `slope` arg would still hit UB
-	 * under signed semantics. */
-	slopeb = ((int32_t)fraction >> 8) + (int32_t)((uint32_t)slopea << 8);
-
-	/* Retail-only: clamp trace2_startx to ±0x7F0000 before dispatch. */
-	if (trace2_startx > TRACE2_STARTX_CLAMP)
-		trace2_startx = TRACE2_STARTX_CLAMP;
-	if (trace2_startx < -TRACE2_STARTX_CLAMP)
-		trace2_startx = -TRACE2_STARTX_CLAMP;
-
-	if (trace2_starty >= trace2_endy) {
-		uint32_t linesa = (uint32_t)(trace2_starty - trace2_endy);
-		if (xdiffsign >= 0)
-			trace2_yupright((uint32_t)trace2_starty, linesa, (uint32_t)trace2_startx, slopeb);
-		else
-			trace2_yupleft((uint32_t)trace2_starty, linesa, (uint32_t)trace2_startx, slopeb);
-	} else {
-		uint32_t lines = (uint32_t)(trace2_endy - trace2_starty);
-		if (xdiffsign >= 0)
-			trace2_ydownright((uint32_t)trace2_starty, lines, (uint32_t)trace2_startx, slopeb);
-		else
-			trace2_ydownleft((uint32_t)trace2_starty, lines, (uint32_t)trace2_startx, slopeb);
-	}
-}
-
-// FUNCTION: TIE95 0x59BB0
-void trace2_xdomedge(int32_t slope, uint16_t fraction, int32_t* pt1, int32_t* pt2) {
-	int32_t slopea = slope;
-	int32_t slopeb;
-
-	trace2_xdomclipy(pt1[0], pt1[1], pt2[0], pt2[1], slope, fraction);
-	if (slopea > TRACE2_SLOPE_MAX)
-		slopea = TRACE2_SLOPE_MAX;
-	/* slopea << 8 is done through u32 to avoid signed-shift UB; slopea is
-	 * clamped positive above but a negative `slope` arg would still hit UB
-	 * under signed semantics. */
-	slopeb = ((int32_t)fraction >> 8) + (int32_t)((uint32_t)slopea << 8);
-
-	if (trace2_startx > TRACE2_STARTX_CLAMP)
-		trace2_startx = TRACE2_STARTX_CLAMP;
-	if (trace2_startx < -TRACE2_STARTX_CLAMP)
-		trace2_startx = -TRACE2_STARTX_CLAMP;
-
-	if (trace2_starty >= trace2_endy) {
-		uint32_t linesa = (uint32_t)(trace2_starty - trace2_endy);
-		if (xdiffsign >= 0)
-			trace2_xupright((uint32_t)trace2_starty, linesa, (uint32_t)trace2_startx, slopeb);
-		else
-			trace2_xupleft((uint32_t)trace2_starty, linesa, (uint32_t)trace2_startx, slopeb);
-	} else {
-		uint32_t lines = (uint32_t)(trace2_endy - trace2_starty);
-		if (xdiffsign >= 0)
-			trace2_xdownright((uint32_t)trace2_starty, lines, (uint32_t)trace2_startx, slopeb);
-		else
-			trace2_xdownleft((uint32_t)trace2_starty, lines, (uint32_t)trace2_startx, slopeb);
-	}
-}
-
-/* ================================================================ */
-/*  findlastedge                                                     */
-/* ================================================================ */
-
-// FUNCTION: TIE95 0x59A78
-void trace2_findlastedge(void) {
-	uint16_t edge = (uint16_t)numedges;
-	uint16_t index = 0;
-	while (edge > 0 && (edgeflags[index] & 0x2A) != 0) {
-		--edge;
-		++index;
-	}
-	if (edge == 0)
-		edge = 1;
-	trace2_lastedge = (uint16_t)((uint16_t)numedges - edge);
 }
 
 /* ================================================================ */
@@ -1314,4 +1216,92 @@ void trace2_drawface(uint16_t numberOfVertices) {
 		trace2_xdomedge(slope, frac, trace2_lastpointPtr->xy, edgePtc->xy);
 	}
 	trace2_lastedge = 0;
+}
+
+/* ================================================================ */
+/*  findlastedge                                                     */
+/* ================================================================ */
+
+// FUNCTION: TIE95 0x59A78
+void trace2_findlastedge(void) {
+	uint16_t edge = (uint16_t)numedges;
+	uint16_t index = 0;
+	while (edge > 0 && (edgeflags[index] & 0x2A) != 0) {
+		--edge;
+		++index;
+	}
+	if (edge == 0)
+		edge = 1;
+	trace2_lastedge = (uint16_t)((uint16_t)numedges - edge);
+}
+
+/* ================================================================ */
+/*  Domain-specific dispatchers (retail variant with clamp)          */
+/* ================================================================ */
+
+// FUNCTION: TIE95 0x59AC0
+void trace2_ydomedge(int32_t slope, uint16_t fraction, int32_t* pt1, int32_t* pt2) {
+	int32_t slopea = slope;
+	int32_t slopeb;
+
+	trace2_ydomclipy(pt1[0], pt1[1], pt2[0], pt2[1], slope, fraction);
+	if (slopea > TRACE2_SLOPE_MAX)
+		slopea = TRACE2_SLOPE_MAX;
+	/* slopea << 8 is done through u32 to avoid signed-shift UB; slopea is
+	 * clamped positive above but a negative `slope` arg would still hit UB
+	 * under signed semantics. */
+	slopeb = ((int32_t)fraction >> 8) + (int32_t)((uint32_t)slopea << 8);
+
+	/* Retail-only: clamp trace2_startx to ±0x7F0000 before dispatch. */
+	if (trace2_startx > TRACE2_STARTX_CLAMP)
+		trace2_startx = TRACE2_STARTX_CLAMP;
+	if (trace2_startx < -TRACE2_STARTX_CLAMP)
+		trace2_startx = -TRACE2_STARTX_CLAMP;
+
+	if (trace2_starty >= trace2_endy) {
+		uint32_t linesa = (uint32_t)(trace2_starty - trace2_endy);
+		if (xdiffsign >= 0)
+			trace2_yupright((uint32_t)trace2_starty, linesa, (uint32_t)trace2_startx, slopeb);
+		else
+			trace2_yupleft((uint32_t)trace2_starty, linesa, (uint32_t)trace2_startx, slopeb);
+	} else {
+		uint32_t lines = (uint32_t)(trace2_endy - trace2_starty);
+		if (xdiffsign >= 0)
+			trace2_ydownright((uint32_t)trace2_starty, lines, (uint32_t)trace2_startx, slopeb);
+		else
+			trace2_ydownleft((uint32_t)trace2_starty, lines, (uint32_t)trace2_startx, slopeb);
+	}
+}
+
+// FUNCTION: TIE95 0x59BB0
+void trace2_xdomedge(int32_t slope, uint16_t fraction, int32_t* pt1, int32_t* pt2) {
+	int32_t slopea = slope;
+	int32_t slopeb;
+
+	trace2_xdomclipy(pt1[0], pt1[1], pt2[0], pt2[1], slope, fraction);
+	if (slopea > TRACE2_SLOPE_MAX)
+		slopea = TRACE2_SLOPE_MAX;
+	/* slopea << 8 is done through u32 to avoid signed-shift UB; slopea is
+	 * clamped positive above but a negative `slope` arg would still hit UB
+	 * under signed semantics. */
+	slopeb = ((int32_t)fraction >> 8) + (int32_t)((uint32_t)slopea << 8);
+
+	if (trace2_startx > TRACE2_STARTX_CLAMP)
+		trace2_startx = TRACE2_STARTX_CLAMP;
+	if (trace2_startx < -TRACE2_STARTX_CLAMP)
+		trace2_startx = -TRACE2_STARTX_CLAMP;
+
+	if (trace2_starty >= trace2_endy) {
+		uint32_t linesa = (uint32_t)(trace2_starty - trace2_endy);
+		if (xdiffsign >= 0)
+			trace2_xupright((uint32_t)trace2_starty, linesa, (uint32_t)trace2_startx, slopeb);
+		else
+			trace2_xupleft((uint32_t)trace2_starty, linesa, (uint32_t)trace2_startx, slopeb);
+	} else {
+		uint32_t lines = (uint32_t)(trace2_endy - trace2_starty);
+		if (xdiffsign >= 0)
+			trace2_xdownright((uint32_t)trace2_starty, lines, (uint32_t)trace2_startx, slopeb);
+		else
+			trace2_xdownleft((uint32_t)trace2_starty, lines, (uint32_t)trace2_startx, slopeb);
+	}
 }

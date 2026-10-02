@@ -1,4 +1,4 @@
-// FLAGS: TIE95 -od
+// FLAGS: TIE95 -d2
 #include "tie/soundext.h"
 #include "tie/shellext.h"
 #include "tie/wavestream_tie98.h"
@@ -447,16 +447,20 @@ void soundext_Action_iMuse(int16_t state, Sound* the_sound, int16_t var1, int16_
 
 	switch (state) {
 		case 1:
+#ifdef TIE_MODERN
 			if (TieMusicPolicy_UsesTie98())
 				FrontendWaveStream_Pause();
+#endif
 			lolevel_ImPause();
 			group_vol_gbl = lolevel_ImSetGroupVol(IMUSE_GROUP_MASTER, 0);
 			break;
 		case 2:
 			lolevel_ImSetGroupVol(IMUSE_GROUP_MASTER, group_vol_gbl);
 			lolevel_ImResume();
+#ifdef TIE_MODERN
 			if (TieMusicPolicy_UsesTie98())
 				FrontendWaveStream_Resume();
+#endif
 			break;
 		case 3:
 			hilevel_ImStartMusic((intptr_t)the_sound, 0);
@@ -487,15 +491,19 @@ void soundext_Action_iMuse(int16_t state, Sound* the_sound, int16_t var1, int16_
 
 // FUNCTION: TIE95 0x65B5A
 void* soundext_TIE_Load_Sound(const char* name) {
-	char low_name[16];
+	signed char low_name[16];
 	Sound* snd;
-	int i;
+	short i;
 
-	for (i = 0; name[i]; i++)
-		low_name[i] = tolower((unsigned char)name[i]);
+	for (i = 0; name[i]; ++i)
+		low_name[i] = tolower((signed char)name[i]);
 	low_name[i] = '\0';
 
-	snd = xsound_Res_Music(low_name);
+	/* Both branches load through the same resource path in the shipped build. */
+	if (low_name[0] == '2')
+		snd = xsound_Res_Music((char*)low_name);
+	else
+		snd = xsound_Res_Music((char*)low_name);
 	xsound_Set_Sound_Keepable(snd);
 	return snd;
 }

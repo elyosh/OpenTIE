@@ -113,9 +113,9 @@ typedef char PanelViewDef_size[(sizeof(PanelViewDef) == 36) ? 1 : -1];
 #endif
 typedef struct {
 	uint16_t handle;
-	void* image;
-	void* mask;
-	void* palette;
+	uint8_t* image;
+	uint8_t* mask;
+	uint8_t* palette;
 } PanelViewPtrs; /* 14 bytes */
 #ifdef __WATCOMC__
 #pragma pack()
@@ -169,7 +169,7 @@ extern char panelfilename[32];
 extern char panelname[32];
 extern PanelViewDef panelviewdefs[PANEL_NUM_VIEWS];
 extern PanelViewPtrs panelviewptrs[PANEL_NUM_VIEWS];
-extern void* temppanelptr;       /* write cursor into the LFD payload buffer */
+extern uint8_t* temppanelptr;    /* write cursor into the LFD payload buffer */
 extern int32_t panelsloadedflag; /* 1 after panel_tryEMSforpanels succeeded */
 
 /* Radar blip ring buffers. */
@@ -253,14 +253,14 @@ void panel_updatethreatweapons(void);
 void panel_loadpaneldata(void);
 void panel_forcenewviewdir(uint16_t view_idx);
 void panel_dosetnewpilotview(uint16_t view_idx);
-void panel_loadcontrolpanel(char* name, void** section_ptrs, uint16_t count);
-void panel_tryEMSforpanels(void);
+void panel_loadcontrolpanel(char* name, uint8_t** section_ptrs, uint16_t count);
+void panel_tryEMSforpanels(int spec_num);
 void panel_loadpanelviewdefs(char* base_name);
 
 /* -- Mask / 3D CRT / camera -- */
 void panel_copymaskdata(char* mask_src, uint16_t width, uint16_t height, uint16_t mirror);
 void panel_clearmaskdata(uint16_t width, uint16_t height);
-void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, int16_t clear_runs);
+void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, uint16_t clear_runs);
 void panel_drawboxinxtrans(int left_x, int top_y, uint16_t width, uint16_t height, uint8_t color);
 void panel_pointcamera(uint16_t obj_idx, int16_t use_hud_size);
 void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int clear_runs);

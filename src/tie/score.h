@@ -56,7 +56,7 @@ enum GoalTargetType_tag {
  * 1=complete, 2=failed) in AL. Bails with the initial player_status value
  * when mission.player_status != 3 or training mode / hyperspace is active.
  */
-int8_t score_checkobjective(void);
+void score_checkobjective(void);
 
 /*
  * Evaluate one goal condition. Two dispatch paths gated by
@@ -89,8 +89,8 @@ int8_t score_checkobjective(void);
  *
  * Returns 1/2/4 per the table above (0 when cond==10).
  */
-int8_t score_checkcondition(uint8_t cond, uint8_t target_type, uint8_t target_id, uint8_t amount_op,
-							int8_t exclude_player);
+uint16_t score_checkcondition(uint16_t cond, uint16_t target_type, uint16_t target_id, uint16_t amount_op,
+							  int16_t exclude_player);
 
 /*
  * Tests whether FG `fg_idx` matches the (group_type, group_id) selector.

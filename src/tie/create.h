@@ -27,7 +27,7 @@ CraftData* create_createhyperin(void);
  * squared for class-8 mines, minus linked-data). Triggers immediate spawn
  * for the player FG and any FG with no arrival condition. Resets HUD/radar
  * globals, message counters, camera view state. */
-int16_t create_createmission(void);
+void create_createmission(void);
 
 /* Activate one flight group. Sets fgstatus[fgcnt].active=1, dispatches to
  * create_createstaticflightgroup (for static-class species) or
@@ -61,14 +61,13 @@ uint16_t create_createcraft(void);
 
 /* Spawn a static FG (mine grid / planet / asteroid cloud). Branches on
  * species.ship_class: 8 = mine grid (count*count cube), 9 = single planet,
- * 10 = count asteroids placed randomly in ±256 cube around waypoint 0.
- * Returns fg_idx * 48 (byte offset to fgstatus row). */
-int create_createstaticflightgroup(uint16_t craft_slot);
+ * 10 = count asteroids placed randomly in ±256 cube around waypoint 0. */
+void create_createstaticflightgroup(uint16_t craft_slot);
 
 /* Create one StaticObject from the staging_static_* globals. Bumps
  * idnumber and fgstatus[fg_idx].cond[0].detail. Returns slot index,
  * or 0xFFFF when the 64-slot table is full. */
-int create_createstaticobject(uint16_t fg_idx, uint8_t ship_class, uint8_t species);
+uint16_t create_createstaticobject(uint16_t fg_idx, uint16_t ship_class, uint8_t species);
 
 /* Resolve a 16-bit object reference (see OBJ_REF_* in tie.h) to
  * worldlocx/y/z. */
@@ -82,9 +81,9 @@ void create_createbackdrop(void);
 
 /* Detach a random un-damaged flag-bit-2 mesh of obj_idx's craft; spawns
  * debris via create_createcomponent, applies random spin/heading/pitch,
- * marks mesh as MESH_STATE_BLOWN_OFF. stop_after_first == 0 means process all such
- * meshes; otherwise stop on first detach (always 1 in shipped code). */
-int16_t create_blowoffcomponent(uint16_t obj_idx, int16_t stop_after_first);
+ * marks mesh as MESH_STATE_BLOWN_OFF. blow_all == 0 stops after the first
+ * detach; otherwise every eligible mesh is blown off. */
+void create_blowoffcomponent(uint16_t obj_idx, int16_t blow_all);
 
 /* Spawn genus-11 mesh-debris FlightObject; clones parent's pose.
  * death_timer = 236 * (rand&7 + 4) ticks. Returns slot or 0xFFFF. */

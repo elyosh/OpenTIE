@@ -75,15 +75,15 @@ typedef struct {
 	uint8_t order;          /* +0x00: order opcode (indexes ordersldr/flw) */
 	int8_t speed;           /* +0x01: throttle opcode (indexes throttleconvert) */
 	uint8_t var[4];         /* +0x02: order-specific var/param bytes */
-	uint8_t target_type[2]; /* +0x06: primary/secondary target type */
-	uint8_t target_id[2];   /* +0x08: primary/secondary target id */
-	uint8_t target_op;      /* +0x0A: primary/secondary target AND/OR */
+	int8_t target_type[2];  /* +0x06: primary/secondary target type */
+	int8_t target_id[2];    /* +0x08: primary/secondary target id */
+	int8_t target_op;       /* +0x0A: primary/secondary target AND/OR */
 	uint8_t target_unused;  /* +0x0B */
-	uint8_t pri_type;       /* +0x0C: tertiary target type */
-	uint8_t pri_id;         /* +0x0D: tertiary target id */
-	uint8_t sec_type;       /* +0x0E: quaternary target type */
-	uint8_t sec_id;         /* +0x0F: quaternary target id */
-	uint8_t pri_sec_op;     /* +0x10: tert/quat AND/OR */
+	int8_t pri_type;        /* +0x0C: tertiary target type */
+	int8_t pri_id;          /* +0x0D: tertiary target id */
+	int8_t sec_type;        /* +0x0E: quaternary target type */
+	int8_t sec_id;          /* +0x0F: quaternary target id */
+	int8_t pri_sec_op;      /* +0x10: tert/quat AND/OR */
 	uint8_t pri_sec_unused; /* +0x11 */
 } EAIStruct;
 
@@ -340,7 +340,7 @@ void shipext_Open_Ships(void);
 void shipext_Close_Ships(void);
 
 /* --- Ship queries --- */
-bool shipext_Is_Ship(int16_t ship_idx);
+int16_t shipext_Is_Ship(int16_t ship_idx);
 int16_t shipext_Is_Ship_Available(int16_t ship_idx);
 int16_t shipext_Is_Mission_Disk1(void);
 int16_t shipext_Is_Mission_Disk2(void);
@@ -360,10 +360,10 @@ void shipext_Get_Pilot_Name(char* out, size_t capacity);
 void shipext_Get_Pilot_Name(char* out);
 #endif
 bool shipext_Load_Pilot(const char* name);
-bool shipext_Create_Pilot(const char* name);
+int16_t shipext_Create_Pilot(const char* name);
 int16_t shipext_Revive_Pilot(char* name);
 void shipext_Update_Pilot(void);
-void shipext_Save_Pilot_Data(const char* name);
+int16_t shipext_Save_Pilot_Data(const char* name);
 void shipext_Backup_Pilot(void);
 void shipext_Restore_Pilot(void);
 int16_t shipext_Write_Temp_Pilot(void);
@@ -383,7 +383,7 @@ void shipext_Set_Mission_Officer(int16_t val);
 int16_t shipext_Get_Mission_Officer(void);
 void shipext_Set_Mission_Name(const char* name);
 const char* shipext_Get_Mission_Name(void);
-bool shipext_Is_Mission_Success(void);
+int16_t shipext_Is_Mission_Success(void);
 int16_t shipext_Is_Combat_Mission_Success(void);
 int shipext_Is_Player_OK(void);
 void shipext_Mission_Enter(int16_t mission_type);
@@ -422,7 +422,7 @@ int16_t shipext_Get_Num_Blueprint_Ship_Lines(void);
 void shipext_Get_Blueprint_Index(int16_t* out_category, int16_t* out_offset);
 
 /* --- Training --- */
-uint8_t shipext_Get_Train_Level(void);
+int16_t shipext_Get_Train_Level(void);
 void shipext_Next_Train_Level(void);
 void shipext_Last_Train_Level(void);
 void shipext_Get_Train_Ship_Name(char* out);
@@ -438,11 +438,11 @@ void shipext_Get_Train_Mission_Text(char* buf, int16_t line);
 int16_t shipext_Num_Train_Mission_Text_Lines(void);
 
 /* --- Combat --- */
-uint8_t shipext_Get_Combat_Mission(void);
+int16_t shipext_Get_Combat_Mission(void);
 int16_t shipext_Is_Combat_Ship_Tour(void);
 void shipext_Next_Combat_Ship(void);
 void shipext_Last_Combat_Ship(void);
-uint8_t shipext_Get_Combat_Ship(void);
+int16_t shipext_Get_Combat_Ship(void);
 void shipext_Init_Combat_Ship_Name(void);
 void shipext_Show_Combat_Ship_Name(void);
 void shipext_Get_Combat_Ship_SHP(void);
@@ -459,9 +459,9 @@ int16_t shipext_Num_Combat_Mission_Text_Lines(void);
 void shipext_Clear_Battle_Cutscenes(void);
 void shipext_Add_Battle_Cutscene(int16_t cutscene_id);
 int16_t shipext_Next_Battle_Cutscene(void);
-uint8_t shipext_Get_Tour_Battle(void);
+int16_t shipext_Get_Tour_Battle(void);
 int16_t shipext_Get_Tour_Battle_Size(int16_t battle);
-bool shipext_Is_Tour_Battle_End(void);
+int16_t shipext_Is_Tour_Battle_End(void);
 void shipext_Refly_Tour_Mission(void);
 int16_t shipext_Set_Tour_Battle(void);
 void shipext_Validate_Tour_Battle(void);

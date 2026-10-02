@@ -10,12 +10,6 @@ RenderObjectListEntryTIE98* g_renderObjectListEntries;
 // GLOBAL: TIE98 0x591E38
 RenderObjectListEntryTIE98* g_renderListHead;
 
-// FUNCTION: TIE98 0x48DD50
-void RenderList_Reset(void) {
-	g_renderObjectListCount = 0;
-	g_renderListHead = NULL;
-}
-
 // FUNCTION: TIE98 0x48DCE0
 void RenderList_QueueObject(int objectIdx, int sortDepth) {
 	RenderObjectListEntryTIE98* entry;
@@ -29,6 +23,12 @@ void RenderList_QueueObject(int objectIdx, int sortDepth) {
 	entry->next = g_renderListHead;
 	g_renderListHead = entry;
 	++g_renderObjectListCount;
+}
+
+// FUNCTION: TIE98 0x48DD50
+void RenderList_Reset(void) {
+	g_renderObjectListCount = 0;
+	g_renderListHead = NULL;
 }
 
 // FUNCTION: TIE98 0x48DE50

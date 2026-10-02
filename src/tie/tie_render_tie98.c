@@ -30,41 +30,8 @@
 // GLOBAL: TIE98 0x592204
 uint16_t g_flightInitialTextureCacheFlushPending;
 
-// FUNCTION: TIE98 0x48EF70
-// TIE_getobjecteyexyz
-static int32_t tie_getobjecteyexyz_tie98(uint16_t object_index) {
-	FlightObject* object = &objects[object_index];
-	worldx = object->world_x - camera.x;
-	worldy = object->world_y - camera.y;
-	worldz = object->world_z - camera.z;
-	if (object_index < NUM_CRAFTS) {
-		craftptr = object->craft_ptr;
-		craftptr->eye_x_cache = transfm2_geteyex(worldx, worldy, worldz);
-		objecteyex = craftptr->eye_x_cache;
-		craftptr->eye_y_cache = transfm2_geteyey(worldx, worldy, worldz);
-		objecteyey = craftptr->eye_y_cache;
-		craftptr->eye_z_cache = transfm2_geteyez(worldx, worldy, worldz);
-		objecteyez = craftptr->eye_z_cache;
-	} else {
-		objecteyex = transfm2_geteyex(worldx, worldy, worldz);
-		objecteyey = transfm2_geteyey(worldx, worldy, worldz);
-		objecteyez = transfm2_geteyez(worldx, worldy, worldz);
-	}
-	return objecteyez;
-}
-
-// FUNCTION: TIE98 0x48F0C0
-// TIE_Get_Static_Object_Eye_Position
-static int tie_getstaticobjecteyeposition(uint16_t static_object_index) {
-	StaticObject* object = &staticobjects[static_object_index];
-	worldx = ((int32_t)object->world_x << 8) - camera.x;
-	worldy = ((int32_t)object->world_y << 8) - camera.y;
-	worldz = ((int32_t)object->world_z << 8) - camera.z;
-	objecteyex = transfm2_geteyex(worldx, worldy, worldz);
-	objecteyey = transfm2_geteyey(worldx, worldy, worldz);
-	objecteyez = transfm2_geteyez(worldx, worldy, worldz);
-	return objecteyez;
-}
+static int32_t tie_getobjecteyexyz_tie98(uint16_t object_index);
+static int tie_getstaticobjecteyeposition(uint16_t static_object_index);
 
 // FUNCTION: TIE98 0x48DF40
 // TIE_Update_Screen
@@ -335,4 +302,40 @@ void tie_updatescreen_tie98(void) {
 	deepspacecolor = (uint8_t)-5;
 	dxtticks = (uint16_t)(tickcounter - dxtticks);
 	vesa_dirty_gbl = true;
+}
+
+// FUNCTION: TIE98 0x48EF70
+// TIE_getobjecteyexyz
+static int32_t tie_getobjecteyexyz_tie98(uint16_t object_index) {
+	FlightObject* object = &objects[object_index];
+	worldx = object->world_x - camera.x;
+	worldy = object->world_y - camera.y;
+	worldz = object->world_z - camera.z;
+	if (object_index < NUM_CRAFTS) {
+		craftptr = object->craft_ptr;
+		craftptr->eye_x_cache = transfm2_geteyex(worldx, worldy, worldz);
+		objecteyex = craftptr->eye_x_cache;
+		craftptr->eye_y_cache = transfm2_geteyey(worldx, worldy, worldz);
+		objecteyey = craftptr->eye_y_cache;
+		craftptr->eye_z_cache = transfm2_geteyez(worldx, worldy, worldz);
+		objecteyez = craftptr->eye_z_cache;
+	} else {
+		objecteyex = transfm2_geteyex(worldx, worldy, worldz);
+		objecteyey = transfm2_geteyey(worldx, worldy, worldz);
+		objecteyez = transfm2_geteyez(worldx, worldy, worldz);
+	}
+	return objecteyez;
+}
+
+// FUNCTION: TIE98 0x48F0C0
+// TIE_Get_Static_Object_Eye_Position
+static int tie_getstaticobjecteyeposition(uint16_t static_object_index) {
+	StaticObject* object = &staticobjects[static_object_index];
+	worldx = ((int32_t)object->world_x << 8) - camera.x;
+	worldy = ((int32_t)object->world_y << 8) - camera.y;
+	worldz = ((int32_t)object->world_z << 8) - camera.z;
+	objecteyex = transfm2_geteyex(worldx, worldy, worldz);
+	objecteyey = transfm2_geteyey(worldx, worldy, worldz);
+	objecteyez = transfm2_geteyez(worldx, worldy, worldz);
+	return objecteyez;
 }

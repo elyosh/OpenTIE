@@ -41,6 +41,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* The original TU calls the library strcpy() rather than the inline form. */
+#ifdef __WATCOMC__
+#pragma function(strcpy)
+#endif
+
 /* ---- Static globals ---- */
 
 // GLOBAL: TIE95 0xF5D68
@@ -75,6 +80,110 @@ static int16_t debrief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_
 								  int16_t refresh);
 static void debrief_user_Door(Actor* actor, int32_t time);
 static int16_t debrief_user_Officer(Actor* actor, int32_t time);
+
+static void debrief_end_View(int32_t frame_num);
+static int16_t debrief_film_Callback(Film* film, FilmObject* film_object);
+static int16_t debrief_iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+									   uint8_t right, int16_t mouse_x, int16_t mouse_y);
+static void debrief_iuser_Debrief(Input* input, int32_t time);
+
+/* ================================================================
+ * Entry point
+ * ================================================================ */
+
+// FUNCTION: TIE95 0x6FE60
+// FUNCTION: TIE98 0x4155F0
+int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
+	Rect frame;
+	ResFile* resource;
+	int16_t mouse_x, mouse_y;
+
+	/* Position mouse based on outcome and officer type */
+	if (shipext_Is_Mission_Success()) {
+		if (shellext_Get_Last_Scene() != SCENE_TALK_DEBRIEF_OFFICER || shipext_Get_Mission_Officer() == 1) {
+			mouse_x = TIE_FRONTEND_EDITION(180, 360);
+			mouse_y = TIE_FRONTEND_EDITION(100, 200);
+		} else {
+			mouse_x = TIE_FRONTEND_EDITION(280, 540);
+			mouse_y = TIE_FRONTEND_EDITION(120, 240);
+		}
+	} else {
+		mouse_x = TIE_FRONTEND_EDITION(74, 108);
+		mouse_y = TIE_FRONTEND_EDITION(100, 200);
+	}
+	xio_Set_Mouse_Position(mouse_x, mouse_y);
+
+	/* Load resources */
+	resource = shellext_Open_Empire_Resource("debrief.lfd");
+	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
+
+	debrief_film = xfilm_Res_Callback_Film("debrief", &frame, 0, 0, 0, debrief_film_Callback);
+#ifdef TIE_MODERN
+	TieSnapshotBuilder_SetActiveFilm("DEBRIEF", "debrief");
+#endif
+	xfilm_Set_Film_Def_Palette(debrief_film, scene_head->def_palette);
+
+	/* Create XINPUT widgets */
+	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
+
+	/* Brief door (id=0) */
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(133, 298), TIE_FRONTEND_EDITION(56, 129),
+				   TIE_FRONTEND_EDITION(193, 420), TIE_FRONTEND_EDITION(107, 288));
+	brief_input = xinput_Alloc_Input(parent, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(brief_input, debrief_iupdate_Debrief);
+	xinpattr_Set_Input_User_Function(brief_input, debrief_iuser_Debrief);
+	brief_input->mouseUsage = allInput;
+	brief_input->id = 0;
+
+	/* Officer door (id=1) — skip if priest only */
+	if (shipext_Get_Mission_Officer() != 2) {
+		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(85, 226), TIE_FRONTEND_EDITION(35, 102),
+					   TIE_FRONTEND_EDITION(133, 296), TIE_FRONTEND_EDITION(150, 322));
+		officer = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(officer, debrief_iupdate_Debrief);
+		xinpattr_Set_Input_User_Function(officer, debrief_iuser_Debrief);
+		officer->mouseUsage = allInput;
+		officer->id = 1;
+	}
+
+	/* Priest door (id=2) — skip if officer only */
+	if (shipext_Get_Mission_Officer() != 1) {
+		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(248, 500), TIE_FRONTEND_EDITION(51, 134),
+					   TIE_FRONTEND_EDITION(290, 572), TIE_FRONTEND_EDITION(128, 316));
+		priest = xinput_Alloc_Input(parent, &frame, 0, 0);
+		xinpattr_Set_Input_Update_Function(priest, debrief_iupdate_Debrief);
+		xinpattr_Set_Input_User_Function(priest, debrief_iuser_Debrief);
+		priest->mouseUsage = allInput;
+		priest->id = 2;
+	}
+
+	/* Fly-again area (id=3) */
+	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(0, 56), TIE_FRONTEND_EDITION(0, 26),
+				   TIE_FRONTEND_EDITION(70, 145), TIE_FRONTEND_EDITION(200, 345));
+	flyagain = xinput_Alloc_Input(parent, &frame, 0, 0);
+	xinpattr_Set_Input_Update_Function(flyagain, debrief_iupdate_Debrief);
+	xinpattr_Set_Input_User_Function(flyagain, debrief_iuser_Debrief);
+	flyagain->mouseUsage = allInput;
+	flyagain->id = 3;
+
+	xview_Set_View_Update_Function(debrief_end_View);
+	xviewadd_Clear_View();
+	xview_Disable_All_View_Erase();
+#ifdef TIE_MODERN
+	TieDebrief_RunView(resource, TieProfile_UsesTie98Frontend());
+	return 0;
+#else
+	shellext_Handle_TIE_View();
+	xview_Enable_All_View_Erase();
+	xview_Clear_View_Update_Function();
+
+	if (xcursor_Is_Cursor_Visible())
+		xcursor_Hide_Cursor();
+
+	xres_Close_Resource(resource);
+	return xerror_Get_Landru_Exit();
+#endif
+}
 
 /* ================================================================
  * View update callback
@@ -305,11 +414,9 @@ static int16_t debrief_user_Title(Actor* actor, int32_t time) {
 // FUNCTION: TIE98 0x415CB0
 static int16_t debrief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								  int16_t refresh) {
-	int16_t offx, offy;
+	int16_t offy, offx;
 	Rect r;
 	char label[32];
-	TIEText text_id;
-	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 
 	if (!refresh)
 		return 0;
@@ -318,12 +425,14 @@ static int16_t debrief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_
 
 	xactor_Get_Actor_Offset(actor, &offx, &offy);
 
-	xrect_Set_Rect(&r, offx, offy, actor->w + offx, actor->h + offy);
+	xrect_Set_Rect(&r, offx, offy, offx + actor->w, offy + actor->h);
 
 	switch (actor->var2) {
 		case 0:
-			text_id = shipext_Is_Tour_Battle_End() ? txtBriefMainMenu : txtDebriefBrief;
-			strcpy(label, textext_Get_Text(text_id));
+			if (shipext_Is_Tour_Battle_End())
+				strcpy(label, textext_Get_Text(txtBriefMainMenu));
+			else
+				strcpy(label, textext_Get_Text(txtDebriefBrief));
 			break;
 		case 1:
 			strcpy(label, textext_Get_Text(txtDebriefOfficer));
@@ -334,16 +443,13 @@ static int16_t debrief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_
 		case 3:
 			strcpy(label, textext_Get_Text(txtDebriefAgain));
 			break;
-		default:
-			label[0] = 0;
-			break;
 	}
 
 	/* Drop shadow */
 	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, font_id, 16);
+	xfont_Print_Centered_Text(label, &r, TIE_FRONTEND_EDITION(0, 2), 16);
 	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, font_id, 15);
+	xfont_Print_Centered_Text(label, &r, TIE_FRONTEND_EDITION(0, 2), 15);
 	return 1;
 }
 
@@ -465,102 +571,4 @@ static int16_t debrief_user_Officer(Actor* actor, int32_t time) {
 			return 1;
 	}
 	return 1;
-}
-
-/* ================================================================
- * Entry point
- * ================================================================ */
-
-// FUNCTION: TIE95 0x6FE60
-// FUNCTION: TIE98 0x4155F0
-int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
-	Rect frame;
-	ResFile* resource;
-	int16_t mouse_x, mouse_y;
-
-	/* Position mouse based on outcome and officer type */
-	if (shipext_Is_Mission_Success()) {
-		if (shellext_Get_Last_Scene() != SCENE_TALK_DEBRIEF_OFFICER || shipext_Get_Mission_Officer() == 1) {
-			mouse_x = TIE_FRONTEND_EDITION(180, 360);
-			mouse_y = TIE_FRONTEND_EDITION(100, 200);
-		} else {
-			mouse_x = TIE_FRONTEND_EDITION(280, 540);
-			mouse_y = TIE_FRONTEND_EDITION(120, 240);
-		}
-	} else {
-		mouse_x = TIE_FRONTEND_EDITION(74, 108);
-		mouse_y = TIE_FRONTEND_EDITION(100, 200);
-	}
-	xio_Set_Mouse_Position(mouse_x, mouse_y);
-
-	/* Load resources */
-	resource = shellext_Open_Empire_Resource("debrief.lfd");
-	xrect_Set_Rect(&frame, 0, 0, TIE_FRONTEND_EDITION(320, 640), TIE_FRONTEND_EDITION(200, 480));
-
-	debrief_film = xfilm_Res_Callback_Film("debrief", &frame, 0, 0, 0, debrief_film_Callback);
-#ifdef TIE_MODERN
-	TieSnapshotBuilder_SetActiveFilm("DEBRIEF", "debrief");
-#endif
-	xfilm_Set_Film_Def_Palette(debrief_film, scene_head->def_palette);
-
-	/* Create XINPUT widgets */
-	parent = xinput_Alloc_Input(NULL, &frame, 0, 0);
-
-	/* Brief door (id=0) */
-	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(133, 298), TIE_FRONTEND_EDITION(56, 129),
-				   TIE_FRONTEND_EDITION(193, 420), TIE_FRONTEND_EDITION(107, 288));
-	brief_input = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(brief_input, debrief_iupdate_Debrief);
-	xinpattr_Set_Input_User_Function(brief_input, debrief_iuser_Debrief);
-	brief_input->mouseUsage = allInput;
-	brief_input->id = 0;
-
-	/* Officer door (id=1) — skip if priest only */
-	if (shipext_Get_Mission_Officer() != 2) {
-		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(85, 226), TIE_FRONTEND_EDITION(35, 102),
-					   TIE_FRONTEND_EDITION(133, 296), TIE_FRONTEND_EDITION(150, 322));
-		officer = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(officer, debrief_iupdate_Debrief);
-		xinpattr_Set_Input_User_Function(officer, debrief_iuser_Debrief);
-		officer->mouseUsage = allInput;
-		officer->id = 1;
-	}
-
-	/* Priest door (id=2) — skip if officer only */
-	if (shipext_Get_Mission_Officer() != 1) {
-		xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(248, 500), TIE_FRONTEND_EDITION(51, 134),
-					   TIE_FRONTEND_EDITION(290, 572), TIE_FRONTEND_EDITION(128, 316));
-		priest = xinput_Alloc_Input(parent, &frame, 0, 0);
-		xinpattr_Set_Input_Update_Function(priest, debrief_iupdate_Debrief);
-		xinpattr_Set_Input_User_Function(priest, debrief_iuser_Debrief);
-		priest->mouseUsage = allInput;
-		priest->id = 2;
-	}
-
-	/* Fly-again area (id=3) */
-	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(0, 56), TIE_FRONTEND_EDITION(0, 26),
-				   TIE_FRONTEND_EDITION(70, 145), TIE_FRONTEND_EDITION(200, 345));
-	flyagain = xinput_Alloc_Input(parent, &frame, 0, 0);
-	xinpattr_Set_Input_Update_Function(flyagain, debrief_iupdate_Debrief);
-	xinpattr_Set_Input_User_Function(flyagain, debrief_iuser_Debrief);
-	flyagain->mouseUsage = allInput;
-	flyagain->id = 3;
-
-	xview_Set_View_Update_Function(debrief_end_View);
-	xviewadd_Clear_View();
-	xview_Disable_All_View_Erase();
-#ifdef TIE_MODERN
-	TieDebrief_RunView(resource, TieProfile_UsesTie98Frontend());
-	return 0;
-#else
-	shellext_Handle_TIE_View();
-	xview_Enable_All_View_Erase();
-	xview_Clear_View_Update_Function();
-
-	if (xcursor_Is_Cursor_Visible())
-		xcursor_Hide_Cursor();
-
-	xres_Close_Resource(resource);
-	return xerror_Get_Landru_Exit();
-#endif
 }

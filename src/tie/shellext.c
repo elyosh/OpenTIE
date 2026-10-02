@@ -1,4 +1,4 @@
-// FLAGS: TIE95 -od
+// FLAGS: TIE95 -d2
 #include "tie/shellext.h"
 #include "tie/asl.h"
 #include "tie/computer.h"

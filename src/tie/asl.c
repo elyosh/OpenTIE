@@ -1,4 +1,4 @@
-// FLAGS: TIE95 -od
+// FLAGS: TIE95 -d2
 #include "tie/asl.h"
 #include "landru/actanim.h"
 #include "landru/actcust.h"

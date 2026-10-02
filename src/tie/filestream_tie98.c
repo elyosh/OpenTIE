@@ -19,6 +19,20 @@ int FrontendFileStream_PopHead(int channel) {
 	return 1;
 }
 
+// FUNCTION: TIE98 0x4C0710
+int FrontendFileStream_RotateToNext(int channel) {
+	char current[TIE_MEDIA_STREAM_PATH_MAX];
+	char next[TIE_MEDIA_STREAM_PATH_MAX];
+	if (channel != 1 || TieMediaStream_Count() == 0)
+		return 0;
+	strcpy(current, TieMediaStream_Path(0));
+	strcpy(next, TieMediaStream_Count() > 1 ? TieMediaStream_Path(1) : TieMediaStream_Path(0));
+	FrontendFileStream_PopHead(channel);
+	if (!FrontendFileStream_QueueFile(channel, current))
+		return 0;
+	return FrontendFileStream_StartNamedFile(channel, next);
+}
+
 // FUNCTION: TIE98 0x4C0840
 int FrontendFileStream_StartNamedFile(int channel, const char* path) {
 	int match;
@@ -38,20 +52,6 @@ int FrontendFileStream_StartNamedFile(int channel, const char* path) {
 	while (match-- > 0)
 		FrontendFileStream_PopHead(channel);
 	return TieMediaStream_OpenHead();
-}
-
-// FUNCTION: TIE98 0x4C0710
-int FrontendFileStream_RotateToNext(int channel) {
-	char current[TIE_MEDIA_STREAM_PATH_MAX];
-	char next[TIE_MEDIA_STREAM_PATH_MAX];
-	if (channel != 1 || TieMediaStream_Count() == 0)
-		return 0;
-	strcpy(current, TieMediaStream_Path(0));
-	strcpy(next, TieMediaStream_Count() > 1 ? TieMediaStream_Path(1) : TieMediaStream_Path(0));
-	FrontendFileStream_PopHead(channel);
-	if (!FrontendFileStream_QueueFile(channel, current))
-		return 0;
-	return FrontendFileStream_StartNamedFile(channel, next);
 }
 
 // FUNCTION: TIE98 0x4C0DE0

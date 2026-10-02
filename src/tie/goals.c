@@ -138,285 +138,6 @@ int32_t goalsCount[3];
 // GLOBAL: TIE98 0x5FE860
 int32_t goalsCompletedCount[3];
 
-/* ====================================================================
- * goals_checkidflag
- * ==================================================================== */
-
-// FUNCTION: TIE95 0x2C6BC
-uint8_t goals_checkidflag(uint16_t fg_index) { return fgstatus[fg_index].cond_id[4].detail; }
-
-/* ====================================================================
- * goals_outputspeciesname
- * ==================================================================== */
-
-// FUNCTION: TIE95 0x2C6D8
-uint16_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
-	const uint8_t* name;
-	uint16_t spec_num;
-	uint16_t wrap;
-
-	spec_num = spec_getspecnum(species_idx);
-	if (spec_num != 0xFF) {
-#ifdef TIE_MODERN
-		name = (const uint8_t*)spec_name_ptrs[spec_num];
-#else
-		name = (const uint8_t*)spec_data[spec_num].name_ptr;
-#endif
-	} else if (species_idx >= 70 || species_idx <= 84) {
-		/* The retail range check uses || and so accepts every species. */
-		name = (const uint8_t*)((char**)buoystr)[species_idx - 70];
-	}
-
-	/* Right-margin wrap check (checkwrap, inlined in retail). */
-	wrap = cursorx + (uint16_t)sys2_calclength(name) > screenXRes - 11u
-			   ? (outchar('\n'), festring_setcursor(6, cursory), fontheight)
-			   : 0;
-	festring_outstring(name);
-	outchar(plural_flag ? 's' : ' ');
-	return wrap;
-}
-
-/* Render one localized goal line for a target, condition, status, and
- * quantifier. Returns the accumulated vertical space added by wrapping. */
-
-// FUNCTION: TIE95 0x2BF50
-int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, uint16_t status, uint16_t op) {
-	int32_t total = fontheight; /* accumulator starts at fontheight */
-	uint16_t tense_offset = 10;
-	uint8_t wrap; /* right-margin checkwrap result, inlined in retail */
-
-	if (op == 4 || op == 14 || op == 9)
-		tense_offset = 0;
-
-	/* ----- target_type == 1: a specific flight group --------------- */
-	if (target_type == 1) {
-		if (op == 6) {
-			/* "species FG_name N" -- craft-specific reference. */
-			int ch;
-
-			total += goals_outputspeciesname(fg_array[target].species, 0);
-			festring_outstring((const uint8_t*)&fg_array[target]);
-			if (outchar)
-				outchar(' ');
-			ch = fgstatus[target].cond_id[4].detail ? (fg_array[target].special_craft + '1') : '?';
-			if (outchar)
-				outchar(ch);
-			tense_offset = 0;
-		} else if (op == 7) {
-			/* "all but species FG_name N". */
-			festring_outstring((const uint8_t*)goal_allbut_string);
-			total += goals_outputspeciesname(fg_array[target].species, 0);
-			festring_outstring((const uint8_t*)&fg_array[target]);
-			if (outchar)
-				outchar(' ');
-			if (fgstatus[target].cond_id[4].detail) {
-				if (outchar)
-					outchar(fg_array[target].special_craft + '1');
-			} else {
-				if (outchar)
-					outchar('?');
-			}
-			/* tense_offset keeps whatever op/default set it to. */
-		} else {
-			/* Generic flight-group reference. Count <= 1 -> single craft,
-			 * just print "species FG_name". Otherwise "X%% of species of
-			 * group FG_name". */
-			const EFGStruct* fg_ptr = &fg_array[target];
-			if (fgstatus[target].cond[0].count <= 1u) {
-				total += goals_outputspeciesname(fg_array[target].species, 0);
-				festring_outstring((const uint8_t*)fg_ptr);
-				tense_offset = 0;
-			} else {
-				festring_outstring(((const uint8_t**)percentstrings)[op]);
-				festring_outstring((const uint8_t*)goal_of_string);
-				total += goals_outputspeciesname(fg_array[target].species, 0);
-				festring_outstring((const uint8_t*)goal_group_string);
-				festring_outstring((const uint8_t*)fg_ptr);
-				tense_offset = (op == 5 || op == 8) ? 10 : 0;
-			}
-		}
-	}
-	/* ----- target_type == 8: all FGs in set = target --------------- */
-	else if (target_type == 8) {
-		uint16_t in_set;
-		uint16_t i;
-		uint16_t j;
-
-		festring_outstring(((const uint8_t**)percentstrings)[op]);
-		festring_outstring((const uint8_t*)goal_of_string);
-		festring_outstring((const uint8_t*)goalallfgstring);
-		if (outchar)
-			outchar(' ');
-
-		/* First pass: count matching FGs to decide " and " placement and
-		 * tense_offset (single match -> 0, multiple -> 10). */
-		in_set = 0;
-		for (i = 0; i < (uint16_t)mission_file_header.num_fg; i++) {
-			if (fg_array[i].set == (uint8_t)target)
-				in_set++;
-		}
-		tense_offset = (in_set == 1) ? 0 : 10;
-
-		/* Second pass: emit each FG, with ", " / " and " separators. */
-		for (j = 0; j < (uint16_t)mission_file_header.num_fg; j++) {
-			if (fg_array[j].set != (uint8_t)target)
-				continue;
-
-			if (fg_array[j].count <= 1) {
-				/* Single-craft FG: "species FG_name". */
-				total += goals_outputspeciesname(fg_array[j].species, 0);
-				wrap = 0;
-				if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength((const uint8_t*)&fg_array[j]) >
-					screenXRes - 11u) {
-					if (outchar)
-						outchar('\n');
-					festring_setcursor(6, cursory);
-					wrap = fontheight;
-				}
-				total += wrap;
-				festring_outstring((const uint8_t*)&fg_array[j]);
-			} else {
-				/* Multi-craft FG: "species group FG_name". */
-				total += goals_outputspeciesname(fg_array[j].species, 0);
-				wrap = 0;
-				if ((uint16_t)cursorx +
-						(uint32_t)(uint16_t)sys2_calclength((const uint8_t*)goal_group_string) >
-					screenXRes - 11u) {
-					if (outchar)
-						outchar('\n');
-					festring_setcursor(6, cursory);
-					wrap = fontheight;
-				}
-				total += wrap;
-				festring_outstring((const uint8_t*)goal_group_string);
-				wrap = 0;
-				if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength((const uint8_t*)&fg_array[j]) >
-					screenXRes - 11u) {
-					if (outchar)
-						outchar('\n');
-					festring_setcursor(6, cursory);
-					wrap = fontheight;
-				}
-				total += wrap;
-				festring_outstring((const uint8_t*)&fg_array[j]);
-				tense_offset = 10;
-			}
-
-			/* Separator between entries: penultimate -> " and " with
-			 * optional leading space when no wrap occurred; preceding ->
-			 * ", "; last (zero remaining) -> nothing. */
-			if (--in_set == 1) {
-				wrap = 0;
-				if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength((const uint8_t*)goal_and_string) >
-					screenXRes - 11u) {
-					if (outchar)
-						outchar('\n');
-					festring_setcursor(6, cursory);
-					wrap = fontheight;
-				}
-				total += wrap;
-				if (wrap == 0 && outchar)
-					outchar(' ');
-				festring_outstring((const uint8_t*)goal_and_string);
-			} else if (in_set > 1) {
-				festring_outstring((const uint8_t*)goal_comma_string);
-			}
-			/* in_set == 0 (last entry): no separator. */
-		}
-	}
-	/* ----- Category targets (species/genus/family/side/ai/skill) --- */
-	else {
-		const uint8_t* cat_name;
-
-		festring_outstring(((const uint8_t**)percentstrings)[op]);
-		festring_outstring((const uint8_t*)goal_ofall_string);
-
-		cat_name = NULL;
-		switch (target_type) {
-			case 2:
-				/* Species-category (plural): species name with trailing 's'. */
-				total += goals_outputspeciesname(target + 1, 1);
-				break;
-			case 3:
-				cat_name = ((const uint8_t**)goalgenusstrings)[genusconvert[target]];
-				break;
-			case 4:
-				cat_name = ((const uint8_t**)goalfamilystrings)[familyconvert[target]];
-				break;
-			case 5:
-				if (target < 2u) {
-					cat_name = ((const uint8_t**)goalsidestrings)[target];
-				} else {
-					/* Third-party side (SIDE >= 2). Each entry in
-					 * mission_file_header.mission.neutral_name is a 12-byte
-					 * string; if the first byte is '1' we skip it. Name is then
-					 * followed by goalsidestrings[2] ("Craft"). */
-					const char* side_name = mission_file_header.mission.neutral_name[target - 2];
-					if ((uint8_t)side_name[0] == '1')
-						side_name++;
-					festring_outstring((const uint8_t*)side_name);
-					cat_name = ((const uint8_t**)goalsidestrings)[2];
-				}
-				break;
-			case 6:
-				cat_name = ((const uint8_t**)goalaistrings)[target];
-				break;
-			case 9:
-				cat_name = ((const uint8_t**)goalskillstrings)[target];
-				break;
-			case 11:
-				cat_name = (const uint8_t*)goalallfgstring;
-				break;
-			case 7:
-			case 8:
-			case 10:
-				/* Empty target: "---" placeholder. */
-				cat_name = (const uint8_t*)condstr0;
-				break;
-			default:
-				break;
-		}
-
-		if (cat_name)
-			festring_outstring(cat_name);
-	}
-
-	/* ----- Common tail: verb + condition clause ------------------- */
-	{
-		const uint32_t verb_idx = (uint32_t)tenseflag[cond] + (uint32_t)status + (uint32_t)tense_offset;
-		const uint8_t* verb = ((const uint8_t**)condverbstrings)[verb_idx];
-
-		wrap = 0;
-		if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(verb) > screenXRes - 11u) {
-			if (outchar)
-				outchar('\n');
-			festring_setcursor(6, cursory);
-			wrap = fontheight;
-		}
-		total += wrap;
-		if (wrap == 0 && outchar)
-			outchar(' ');
-		festring_outstring(verb);
-	}
-
-	{
-		const uint8_t* clause = ((const uint8_t**)condstrings)[cond];
-		wrap = 0;
-		if ((uint16_t)cursorx + (uint32_t)(uint16_t)sys2_calclength(clause) > screenXRes - 11u) {
-			if (outchar)
-				outchar('\n');
-			festring_setcursor(6, cursory);
-			wrap = fontheight;
-		}
-		total += wrap;
-		festring_outstring(clause);
-	}
-
-	if (outchar)
-		outchar('\n');
-	return total;
-}
-
 /* Scrollable primary, secondary, bonus, and flight-group objectives display.
  * Mission-end conditions remain incomplete until end_flag is set. Returns
  * -1/0/+1 for previous mission, exit, or next mission navigation. */
@@ -937,4 +658,234 @@ int32_t goals_missiongoalsroom(void) {
 		return 0;
 #endif
 	}
+}
+
+/* Render one localized goal line for a target, condition, status, and
+ * quantifier. Returns the accumulated vertical space added by wrapping. */
+
+// FUNCTION: TIE95 0x2BF50
+uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, uint16_t status,
+						  uint16_t op) {
+	uint16_t tense_offset = 10;
+	uint16_t total = fontheight;
+	uint16_t wrap; /* right-margin checkwrap result, inlined in retail */
+
+	if (op == 4 || op == 14 || op == 9)
+		tense_offset = 0;
+
+	/* ----- target_type == 1: a specific flight group --------------- */
+	if (target_type == 1) {
+		if (op == 6) {
+			/* "species FG_name N" -- craft-specific reference. */
+			total += goals_outputspeciesname((int8_t)fg_array[target].species, 0);
+			festring_outstring((const uint8_t*)&fg_array[target]);
+			outchar(' ');
+			outchar((uint16_t)fgstatus[target].cond_id[4].detail
+						? (uint8_t)(fg_array[target].special_craft + '1')
+						: '?');
+			tense_offset = 0;
+		} else if (op == 7) {
+			/* "all but species FG_name N". */
+			festring_outstring((const uint8_t*)goal_allbut_string);
+			total += goals_outputspeciesname((int8_t)fg_array[target].species, 0);
+			festring_outstring((const uint8_t*)&fg_array[target]);
+			outchar(' ');
+			if ((uint16_t)fgstatus[target].cond_id[4].detail)
+				outchar((uint8_t)(fg_array[target].special_craft + '1'));
+			else
+				outchar('?');
+			/* tense_offset keeps whatever op/default set it to. */
+		} else {
+			/* Generic flight-group reference. Count <= 1 -> single craft,
+			 * just print "species FG_name". Otherwise "X%% of species of
+			 * group FG_name". */
+			if (fgstatus[target].cond[0].count > 1) {
+				festring_outstring(((const uint8_t**)percentstrings)[op]);
+				festring_outstring((const uint8_t*)goal_of_string);
+				total += goals_outputspeciesname((int8_t)fg_array[target].species, 0);
+				festring_outstring((const uint8_t*)goal_group_string);
+				festring_outstring((const uint8_t*)&fg_array[target]);
+				if (op == 5 || op == 8)
+					tense_offset = 10;
+				else
+					tense_offset = 0;
+			} else {
+				total += goals_outputspeciesname((int8_t)fg_array[target].species, 0);
+				festring_outstring((const uint8_t*)&fg_array[target]);
+				tense_offset = 0;
+			}
+		}
+	}
+	/* ----- target_type == 8: all FGs in set = target --------------- */
+	else if (target_type == 8) {
+		uint16_t in_set;
+		uint16_t i;
+
+		festring_outstring(((const uint8_t**)percentstrings)[op]);
+		festring_outstring((const uint8_t*)goal_of_string);
+		festring_outstring((const uint8_t*)goalallfgstring);
+		in_set = 0;
+		outchar(' ');
+
+		/* First pass: count matching FGs to decide " and " placement and
+		 * tense_offset (single match -> 0, multiple -> 10). */
+		for (i = 0; i < mission_file_header.num_fg; i++) {
+			if ((int8_t)fg_array[i].set == target)
+				in_set++;
+		}
+		if (in_set == 1)
+			tense_offset = 0;
+		else
+			tense_offset = 10;
+
+		/* Second pass: emit each FG, with ", " / " and " separators. */
+		for (i = 0; i < mission_file_header.num_fg; i++) {
+			if ((int8_t)fg_array[i].set != target)
+				continue;
+
+			if ((int8_t)fg_array[i].count > 1) {
+				/* Multi-craft FG: "species group FG_name". */
+				total += goals_outputspeciesname((int8_t)fg_array[i].species, 0);
+				wrap =
+					(uint16_t)sys2_calclength((const uint8_t*)goal_group_string) + cursorx > screenXRes - 11
+						? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
+						: (uint16_t)0;
+				total += wrap;
+				festring_outstring((const uint8_t*)goal_group_string);
+				wrap = cursorx + (uint16_t)sys2_calclength((const uint8_t*)&fg_array[i]) > screenXRes - 11
+						   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
+						   : (uint16_t)0;
+				total += wrap;
+				festring_outstring((const uint8_t*)&fg_array[i]);
+				tense_offset = 10;
+			} else {
+				/* Single-craft FG: "species FG_name". */
+				total += goals_outputspeciesname((int8_t)fg_array[i].species, 0);
+				wrap = cursorx + (uint16_t)sys2_calclength((const uint8_t*)&fg_array[i]) > screenXRes - 11
+						   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
+						   : (uint16_t)0;
+				total += wrap;
+				festring_outstring((const uint8_t*)&fg_array[i]);
+			}
+
+			/* Separator between entries: penultimate -> " and " with
+			 * optional leading space when no wrap occurred; preceding ->
+			 * ", "; last (zero remaining) -> nothing. */
+			if (--in_set == 1) {
+				wrap = cursorx + (uint16_t)sys2_calclength((const uint8_t*)goal_and_string) > screenXRes - 11
+						   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
+						   : (uint16_t)0;
+				total += wrap;
+				if (wrap == 0)
+					outchar(' ');
+				festring_outstring((const uint8_t*)goal_and_string);
+			} else if (in_set > 1) {
+				festring_outstring((const uint8_t*)goal_comma_string);
+			}
+		}
+	}
+	/* ----- Category targets (species/genus/family/side/ai/skill) --- */
+	else {
+		festring_outstring(((const uint8_t**)percentstrings)[op]);
+		festring_outstring((const uint8_t*)goal_ofall_string);
+
+		switch (target_type) {
+			case 2:
+				/* Species-category (plural): species name with trailing 's'. */
+				total += goals_outputspeciesname(target + 1, 1);
+				break;
+			case 3:
+				festring_outstring(((const uint8_t**)goalgenusstrings)[genusconvert[target]]);
+				break;
+			case 4:
+				festring_outstring(((const uint8_t**)goalfamilystrings)[familyconvert[target]]);
+				break;
+			case 5:
+				if (target >= 2) {
+					/* Third-party side (SIDE >= 2). A leading '1' in the
+					 * neutral IFF name is skipped; the name is followed by
+					 * goalsidestrings[2] ("Craft"). */
+					uint16_t skip = (int8_t)mission_file_header.mission.neutral_name[target - 2][0] == '1';
+					festring_outstring(
+						(const uint8_t*)&mission_file_header.mission.neutral_name[target - 2][skip]);
+					festring_outstring(((const uint8_t**)goalsidestrings)[2]);
+				} else {
+					festring_outstring(((const uint8_t**)goalsidestrings)[target]);
+				}
+				break;
+			case 6:
+				festring_outstring(((const uint8_t**)goalaistrings)[target]);
+				break;
+			case 7:
+			case 8:
+			case 10:
+				/* Empty target: "---" placeholder. */
+				festring_outstring((const uint8_t*)condstr0);
+				break;
+			case 9:
+				festring_outstring(((const uint8_t**)goalskillstrings)[target]);
+				break;
+			case 11:
+				festring_outstring((const uint8_t*)goalallfgstring);
+				break;
+		}
+	}
+
+	/* ----- Common tail: verb + condition clause ------------------- */
+	wrap = cursorx + (uint16_t)sys2_calclength(
+						 ((const uint8_t**)condverbstrings)[tenseflag[cond] + status + tense_offset]) >
+				   screenXRes - 11
+			   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
+			   : (uint16_t)0;
+	total += wrap;
+	if (wrap == 0)
+		outchar(' ');
+	festring_outstring(((const uint8_t**)condverbstrings)[tenseflag[cond] + status + tense_offset]);
+
+	wrap = cursorx + (uint16_t)sys2_calclength(((const uint8_t**)condstrings)[cond]) > screenXRes - 11
+			   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
+			   : (uint16_t)0;
+	total += wrap;
+	festring_outstring(((const uint8_t**)condstrings)[cond]);
+
+	outchar('\n');
+	return total;
+}
+
+/* ====================================================================
+ * goals_checkidflag
+ * ==================================================================== */
+
+// FUNCTION: TIE95 0x2C6BC
+uint8_t goals_checkidflag(uint16_t fg_index) { return fgstatus[fg_index].cond_id[4].detail; }
+
+/* ====================================================================
+ * goals_outputspeciesname
+ * ==================================================================== */
+
+// FUNCTION: TIE95 0x2C6D8
+uint16_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
+	const uint8_t* name;
+	uint16_t spec_num;
+	uint16_t wrap;
+
+	spec_num = spec_getspecnum(species_idx);
+	if (spec_num != 0xFF) {
+#ifdef TIE_MODERN
+		name = (const uint8_t*)spec_name_ptrs[spec_num];
+#else
+		name = (const uint8_t*)spec_data[spec_num].name_ptr;
+#endif
+	} else if (species_idx >= 70 || species_idx <= 84) {
+		/* The retail range check uses || and so accepts every species. */
+		name = (const uint8_t*)((char**)buoystr)[species_idx - 70];
+	}
+
+	/* Right-margin wrap check (checkwrap, inlined in retail). */
+	wrap = cursorx + (uint16_t)sys2_calclength(name) > screenXRes - 11u
+			   ? (outchar('\n'), festring_setcursor(6, cursory), fontheight)
+			   : 0;
+	festring_outstring(name);
+	outchar(plural_flag ? 's' : ' ');
+	return wrap;
 }

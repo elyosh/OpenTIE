@@ -58,12 +58,12 @@ int16_t pai_worthytarget(uint16_t obj_ref);
 
 /* Proximity test within a skill-tiered combat radius (2560..3520 world
  * units <<8). */
-char pai_checkcombatarea(uint16_t obj_ref);
+int16_t pai_checkcombatarea(uint16_t obj_ref);
 
 /* Two-group presence probe; returns 1 if any active object matches the
  * (combine_op, group1, group2) selectors. Dead in the shipped binary. */
-int pai_searchforcraftingroup(uint8_t group_type1, uint16_t group_id1, int16_t combine_op,
-							  uint8_t group_type2, uint16_t group_id2);
+int16_t pai_searchforcraftingroup(uint16_t group_type1, uint16_t group_id1, uint16_t combine_op,
+								  uint16_t group_type2, uint16_t group_id2);
 
 /* True if the given FG has any craft currently available to be disabled. */
 int16_t pai_lookfordisableswitch(uint16_t fg_idx);
@@ -83,7 +83,7 @@ void pai_settarget(void);
 
 /* Propagate (formation, separation) to the leader craft and every
  * follower in the FG. Dead in the shipped binary. */
-void pai_setformation(uint16_t leader_obj_idx, uint8_t formation, uint8_t separation);
+void pai_setformation(uint16_t leader_obj_idx, uint8_t formation, uint16_t separation);
 
 /* Exact polar distance between two world references; writes
  * trig2_polardistance / trig2_xyangle / trig2_zangle. */
@@ -112,7 +112,7 @@ uint16_t pai_finddisabledingroup(uint16_t group_type1, uint16_t group_id1, uint1
 
 /* Order-completion test: is the (order_code, ai_entry) sub-goal
  * satisfied? Used by PAIORDER_completegohomeorder. */
-int pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry);
+int16_t pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry);
 
 /* Is obj_ref a legal target under the current AI entry's pri/sec and
  * target[0]/target[1] selectors? */

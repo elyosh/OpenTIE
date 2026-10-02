@@ -71,7 +71,7 @@ void* savearrayptrs[68] = {
 	staticobjects, /* [ 1] StaticObject[...]            */
 	crafts,        /* [ 2] CraftData[NUM_CRAFTS]        */
 	warheads,      /* [ 3] WarheadRecord[...]           */
-	&_date,        /* [ 4] mission clock (8 bytes)      */
+	&date,         /* [ 4] mission clock (8 bytes)      */
 	&timeleft,     /* [ 5] mission time-left (8 bytes)  */
 #ifdef TIE_MODERN
 	TieReplayMissionHeaderImage, /* [6] native encoded mission header */
@@ -147,7 +147,7 @@ uint32_t savearraysizes[68] = {
 	sizeof(staticobjects), /* [ 1] */
 	sizeof(crafts),        /* [ 2] */
 	sizeof(warheads),      /* [ 3] */
-	sizeof(_date),         /* [ 4] = 8 */
+	sizeof(date),          /* [ 4] = 8 */
 	sizeof(timeleft),      /* [ 5] = 8 */
 #ifdef TIE_MODERN
 	sizeof(TieReplayMissionHeaderImage), /* [6] native encoded mission header */
@@ -528,71 +528,6 @@ int replayio_restorereplaybuffer(void) {
 	replaybuffercnt = frame_count;
 	replayptr = (uint8_t*)replaybufferstart + valid_bytes;
 	return 1;
-}
-
-/* --------------------------------------------------------------------------
- * Viewer entry point
- * -------------------------------------------------------------------------- */
-
-/* Build panelname = cockpitdir + infix + ".PNL". */
-
-/* Load the camera-viewer panel.
- *   panel_name is "CAMERA" (cockpit) or "FILM" (stand-alone viewer).
- *   panel_x / panel_y / panel_depth / panel_width drive the viewport.
- * The displaycorner value is derived directly via rtsvga2_calcpositionVGA
- * (= panel_y * screenMemWidth + panel_x). */
-
-/* Resolution-change detection on exit: retail saves flightResolution at
- * viewer entry; on return to sim, if the user changed it (via the
- * viewer's OPTION row hook), re-init graphics + reload scaled fonts. */
-
-/* --------------------------------------------------------------------------
- * replayio_setreturnview -- restore the cockpit when re-entering the live
- * simulator. Unchanged between demo and retail.
- * -------------------------------------------------------------------------- */
-// FUNCTION: TIE95 0x483E4
-void replayio_setreturnview(void) {
-	farbufferptr = (uint8_t*)xmemhdl_Lock_Handle(panelpartshandle);
-	xmemhdl_Unlock_Handle(panelpartshandle);
-	{
-		size_t n = 0;
-		size_t s;
-		const char* pnl;
-
-		while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
-			panelname[n] = cockpitdir[n];
-			++n;
-		}
-		s = 0;
-		while (n + 1 < sizeof(panelname) && parts[s]) {
-			panelname[n++] = parts[s++];
-		}
-		pnl = ".PNL";
-		s = 0;
-		while (n + 1 < sizeof(panelname) && pnl[s]) {
-			panelname[n++] = pnl[s++];
-		}
-		panelname[n] = '\0';
-	}
-	fediskio_loadbufferdata(panelname, 0, parts[9] + (uint8_t)parts[10], 0);
-
-	if (camera.view_zoom_flag) {
-		lastpilotpaneldraw = 0xFFFFu;
-		camera.pilotview = 0xFFu;
-		panelrts_setnewpilotview(0x12);
-	} else if (camera.view_target_obj == pstate.object_idx) {
-		uint16_t v = (uint16_t)camera.pilotview |
-					 (uint16_t)((uint8_t)(pstate.object_idx >> 8) ^ (uint8_t)(camera.view_target_obj >> 8))
-						 << 8;
-		lastpilotpaneldraw = 0xFFFFu;
-		camera.pilotview = 0xFFu;
-		panelrts_setnewpilotview(v);
-	} else {
-		camera.pilotview = 0xFFu;
-		lastpilotpaneldraw = 0xFFFFu;
-		panelrts_setnewpilotview(0x12);
-	}
-	msg_messageinit();
 }
 
 // FUNCTION: TIE95 0x47CF4
@@ -1063,4 +998,69 @@ void replayio_replayscreen(void) {
 		continuation->phase = REPLAYIO_PHASE_VIEW;
 #endif
 	}
+}
+
+/* --------------------------------------------------------------------------
+ * Viewer entry point
+ * -------------------------------------------------------------------------- */
+
+/* Build panelname = cockpitdir + infix + ".PNL". */
+
+/* Load the camera-viewer panel.
+ *   panel_name is "CAMERA" (cockpit) or "FILM" (stand-alone viewer).
+ *   panel_x / panel_y / panel_depth / panel_width drive the viewport.
+ * The displaycorner value is derived directly via rtsvga2_calcpositionVGA
+ * (= panel_y * screenMemWidth + panel_x). */
+
+/* Resolution-change detection on exit: retail saves flightResolution at
+ * viewer entry; on return to sim, if the user changed it (via the
+ * viewer's OPTION row hook), re-init graphics + reload scaled fonts. */
+
+/* --------------------------------------------------------------------------
+ * replayio_setreturnview -- restore the cockpit when re-entering the live
+ * simulator. Unchanged between demo and retail.
+ * -------------------------------------------------------------------------- */
+// FUNCTION: TIE95 0x483E4
+void replayio_setreturnview(void) {
+	farbufferptr = (uint8_t*)xmemhdl_Lock_Handle(panelpartshandle);
+	xmemhdl_Unlock_Handle(panelpartshandle);
+	{
+		size_t n = 0;
+		size_t s;
+		const char* pnl;
+
+		while (n + 1 < sizeof(panelname) && cockpitdir[n]) {
+			panelname[n] = cockpitdir[n];
+			++n;
+		}
+		s = 0;
+		while (n + 1 < sizeof(panelname) && parts[s]) {
+			panelname[n++] = parts[s++];
+		}
+		pnl = ".PNL";
+		s = 0;
+		while (n + 1 < sizeof(panelname) && pnl[s]) {
+			panelname[n++] = pnl[s++];
+		}
+		panelname[n] = '\0';
+	}
+	fediskio_loadbufferdata(panelname, 0, parts[9] + (uint8_t)parts[10], 0);
+
+	if (camera.view_zoom_flag) {
+		lastpilotpaneldraw = 0xFFFFu;
+		camera.pilotview = 0xFFu;
+		panelrts_setnewpilotview(0x12);
+	} else if (camera.view_target_obj == pstate.object_idx) {
+		uint16_t v = (uint16_t)camera.pilotview |
+					 (uint16_t)((uint8_t)(pstate.object_idx >> 8) ^ (uint8_t)(camera.view_target_obj >> 8))
+						 << 8;
+		lastpilotpaneldraw = 0xFFFFu;
+		camera.pilotview = 0xFFu;
+		panelrts_setnewpilotview(v);
+	} else {
+		camera.pilotview = 0xFFu;
+		lastpilotpaneldraw = 0xFFFFu;
+		panelrts_setnewpilotview(0x12);
+	}
+	msg_messageinit();
 }

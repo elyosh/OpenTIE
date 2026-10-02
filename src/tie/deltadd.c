@@ -33,60 +33,83 @@ typedef struct {
 	int16_t bottom;
 } DeltaHeader;
 
-// FUNCTION: TIE95 0x65094
-static void deltadd_Copy_Transparent(uint8_t* dst, const uint8_t* src, int16_t count) {
-	int16_t i;
-	for (i = 0; i < count; i++) {
-		if (src[i])
-			dst[i] = src[i];
-	}
-}
+static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t off_y, uint8_t color,
+								   int16_t clip_left, int16_t clip_top, int16_t clip_right,
+								   int16_t clip_bottom);
+static void deltadd_Copy_Transparent(uint8_t* dst, const uint8_t* src, int16_t count);
+static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t off_y, uint8_t color);
 
 /*
- * Fast unclipped additive delta renderer. Adds color to canvas pixels
- * at each position defined by the delta scanlines.
+ * Actor draw callback for additive delta blending.
+ * Gets the actor's current frame data, checks bounds against the
+ * canvas clip rect, dispatches to unclipped or clipped renderer.
  */
-// FUNCTION: TIE95 0x650B0
-static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t off_y, uint8_t color) {
-	BitmapStruct* bm = xcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* canvas = (uint8_t*)xbm_Lock_Bitmap(bm);
+// FUNCTION: TIE95 0x64C10
+int16_t deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
+									 int16_t off_y, int16_t refresh) {
+	LandruHandle frame_handle;
+	const void* frame_data;
+	uint8_t color;
+	Rect canvas_clip;
+	int16_t clip_left;
+	int16_t clip_top;
+	int16_t clip_w;
+	int16_t clip_h;
+	const uint16_t* hdr;
+	int16_t dest_left;
+	int16_t dest_top;
+	int16_t dest_right;
+	int16_t dest_bottom;
+	const uint16_t* data;
+	int drawn;
 
-	uint16_t length = *data++;
-	while (length) {
-		int16_t scan_x = off_x + (int16_t)*data++;
-		int16_t scan_y = off_y + (int16_t)*data++;
-		uint8_t* row = &canvas[scan_y * SCREEN_WIDTH + scan_x];
+	(void)draw_rect;
+	(void)clip_rect;
 
-		const uint8_t* src = (const uint8_t*)data;
-		int compressed = length & 1;
-		int16_t pixel_count = length >> 1;
-		int16_t i;
+	if (!refresh)
+		return 0;
 
-		if (compressed) {
-			int16_t remaining = pixel_count;
-			while (remaining > 0) {
-				uint8_t pack_byte = *src++;
-				uint8_t pack_len = pack_byte >> 1;
-				if (pack_byte & 1) {
-					src++; /* skip fill byte — unused in additive mode */
-				} else {
-					src += pack_len; /* skip raw bytes */
-				}
-				for (i = 0; i < pack_len; i++)
-					row[i] = row[i] + color;
-				row += pack_len;
-				remaining -= pack_len;
-			}
-		} else {
-			for (i = 0; i < pixel_count; i++)
-				row[i] = row[i] + color;
-			src += pixel_count;
-		}
-		data = (const uint16_t*)src;
-		length = *data++;
+	/* Get the delta image handle for the current animation state */
+	frame_handle = xactor_Get_Actor_Array_Data(actor, actor->state);
+	frame_data = xmemhdl_Lock_Handle(frame_handle);
+	if (!frame_data)
+		return 0;
+
+	color = (uint8_t)actor->foreColor;
+
+	/* Get canvas clip rect */
+	xcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
+	clip_left = canvas_clip.left;
+	clip_top = canvas_clip.top;
+	clip_w = canvas_clip.right - canvas_clip.left;
+	clip_h = canvas_clip.bottom - canvas_clip.top;
+
+	/* Read delta header */
+	hdr = (const uint16_t*)frame_data;
+	dest_left = off_x + (int16_t)hdr[0];
+	dest_top = off_y + (int16_t)hdr[1];
+	dest_right = off_x + (int16_t)hdr[2];
+	dest_bottom = off_y + (int16_t)hdr[3];
+	data = hdr + 4;
+
+	drawn = 1;
+
+	/* Check if fully inside canvas clip */
+	if (clip_left <= dest_left && clip_top <= dest_top && dest_right < clip_left + clip_w &&
+		dest_bottom < clip_top + clip_h) {
+		deltadd_Delta_Add_Image(data, off_x, off_y, color);
+	}
+	/* Check if partially visible */
+	else if (dest_left < clip_left + clip_w && dest_top < clip_top + clip_h && dest_right >= clip_left &&
+			 dest_bottom >= clip_top) {
+		deltadd_Delta_Add_Clip(data, off_x, off_y, color, clip_left, clip_top, clip_left + clip_w - 1,
+							   clip_top + clip_h - 1);
+	} else {
+		drawn = 0;
 	}
 
-	xbm_Unlock_Bitmap(bm);
+	xmemhdl_Unlock_Handle(frame_handle);
+	return drawn;
 }
 
 /*
@@ -166,75 +189,58 @@ static void deltadd_Delta_Add_Clip(const uint16_t* data, int16_t off_x, int16_t 
 	xbm_Unlock_Bitmap(bm);
 }
 
+// FUNCTION: TIE95 0x65094
+static void deltadd_Copy_Transparent(uint8_t* dst, const uint8_t* src, int16_t count) {
+	int16_t i;
+	for (i = 0; i < count; i++) {
+		if (src[i])
+			dst[i] = src[i];
+	}
+}
+
 /*
- * Actor draw callback for additive delta blending.
- * Gets the actor's current frame data, checks bounds against the
- * canvas clip rect, dispatches to unclipped or clipped renderer.
+ * Fast unclipped additive delta renderer. Adds color to canvas pixels
+ * at each position defined by the delta scanlines.
  */
-// FUNCTION: TIE95 0x64C10
-int16_t deltadd_Draw_Delta_Add_Actor(Actor* actor, Rect* draw_rect, Rect* clip_rect, int16_t off_x,
-									 int16_t off_y, int16_t refresh) {
-	LandruHandle frame_handle;
-	const void* frame_data;
-	uint8_t color;
-	Rect canvas_clip;
-	int16_t clip_left;
-	int16_t clip_top;
-	int16_t clip_w;
-	int16_t clip_h;
-	const uint16_t* hdr;
-	int16_t dest_left;
-	int16_t dest_top;
-	int16_t dest_right;
-	int16_t dest_bottom;
-	const uint16_t* data;
-	int drawn;
+// FUNCTION: TIE95 0x650B0
+static void deltadd_Delta_Add_Image(const uint16_t* data, int16_t off_x, int16_t off_y, uint8_t color) {
+	BitmapStruct* bm = xcanvas_Get_Current_Canvas_Bitmap();
+	uint8_t* canvas = (uint8_t*)xbm_Lock_Bitmap(bm);
 
-	(void)draw_rect;
-	(void)clip_rect;
+	uint16_t length = *data++;
+	while (length) {
+		int16_t scan_x = off_x + (int16_t)*data++;
+		int16_t scan_y = off_y + (int16_t)*data++;
+		uint8_t* row = &canvas[scan_y * SCREEN_WIDTH + scan_x];
 
-	if (!refresh)
-		return 0;
+		const uint8_t* src = (const uint8_t*)data;
+		int compressed = length & 1;
+		int16_t pixel_count = length >> 1;
+		int16_t i;
 
-	/* Get the delta image handle for the current animation state */
-	frame_handle = xactor_Get_Actor_Array_Data(actor, actor->state);
-	frame_data = xmemhdl_Lock_Handle(frame_handle);
-	if (!frame_data)
-		return 0;
-
-	color = (uint8_t)actor->foreColor;
-
-	/* Get canvas clip rect */
-	xcanvas_Get_Drawing_Canvas_Clip(&canvas_clip);
-	clip_left = canvas_clip.left;
-	clip_top = canvas_clip.top;
-	clip_w = canvas_clip.right - canvas_clip.left;
-	clip_h = canvas_clip.bottom - canvas_clip.top;
-
-	/* Read delta header */
-	hdr = (const uint16_t*)frame_data;
-	dest_left = off_x + (int16_t)hdr[0];
-	dest_top = off_y + (int16_t)hdr[1];
-	dest_right = off_x + (int16_t)hdr[2];
-	dest_bottom = off_y + (int16_t)hdr[3];
-	data = hdr + 4;
-
-	drawn = 1;
-
-	/* Check if fully inside canvas clip */
-	if (clip_left <= dest_left && clip_top <= dest_top && dest_right < clip_left + clip_w &&
-		dest_bottom < clip_top + clip_h) {
-		deltadd_Delta_Add_Image(data, off_x, off_y, color);
-	}
-	/* Check if partially visible */
-	else if (dest_left < clip_left + clip_w && dest_top < clip_top + clip_h && dest_right >= clip_left &&
-			 dest_bottom >= clip_top) {
-		deltadd_Delta_Add_Clip(data, off_x, off_y, color, clip_left, clip_top, clip_left + clip_w - 1,
-							   clip_top + clip_h - 1);
-	} else {
-		drawn = 0;
+		if (compressed) {
+			int16_t remaining = pixel_count;
+			while (remaining > 0) {
+				uint8_t pack_byte = *src++;
+				uint8_t pack_len = pack_byte >> 1;
+				if (pack_byte & 1) {
+					src++; /* skip fill byte — unused in additive mode */
+				} else {
+					src += pack_len; /* skip raw bytes */
+				}
+				for (i = 0; i < pack_len; i++)
+					row[i] = row[i] + color;
+				row += pack_len;
+				remaining -= pack_len;
+			}
+		} else {
+			for (i = 0; i < pixel_count; i++)
+				row[i] = row[i] + color;
+			src += pixel_count;
+		}
+		data = (const uint16_t*)src;
+		length = *data++;
 	}
 
-	xmemhdl_Unlock_Handle(frame_handle);
-	return drawn;
+	xbm_Unlock_Bitmap(bm);
 }

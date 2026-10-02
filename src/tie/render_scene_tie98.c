@@ -138,12 +138,6 @@ static int g_nodeSwitchIndex;
 // GLOBAL: TIE98 0x5833F8
 static int g_modelSelfOcclusionEnabled;
 
-// FUNCTION: TIE98 0x434BC0
-void FlightModel_ToggleSelfOcclusion(void) { g_modelSelfOcclusionEnabled = !g_modelSelfOcclusionEnabled; }
-
-// FUNCTION: TIE98 0x434BE0
-int FlightModel_GetSelfOcclusion(void) { return g_modelSelfOcclusionEnabled; }
-
 // GLOBAL: TIE98 0x58030C
 int g_powerVrSceneWorkaround;
 // GLOBAL: TIE98 0x4E39C8
@@ -216,13 +210,11 @@ static int g_sw3dSpanUQ8;
 static int g_sw3dSpanVQ8;
 // GLOBAL: TIE98 0x584630
 static uint8_t g_panelBoxSpanScratch[1280];
-
 typedef struct SoftwareLightSampleTIE98 {
 	int stamp;
 	float intensity;
 	float rowDelta;
 } SoftwareLightSampleTIE98;
-
 // GLOBAL: TIE98 0x560150
 static FlightObject* g_swFaceLightCachedObject;
 // GLOBAL: TIE98 0x560158
@@ -237,16 +229,13 @@ static float g_swFaceLightIntensities[8];
 static int g_swFaceLightCount;
 // GLOBAL: TIE98 0x5600D0
 static Vec3f g_swFaceDirectionalLight;
-
 // GLOBAL: TIE98 0x4E43B0
 static const int g_sw3dTextureShiftBySizeDiv16[60] = {
 	3, 4, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8,
 	8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9,
 };
-
 // GLOBAL: TIE98 0x580308
 int g_drawSceneEffects;
-
 // GLOBAL: TIE98 0x580328
 static intptr_t g_modelNodeWalkUnusedScratch0;
 // GLOBAL: TIE98 0x580350
@@ -261,7 +250,6 @@ static intptr_t g_curMeshFlags;
 static int g_curVertexCount;
 // GLOBAL: TIE98 0x580354
 static OptTextureDataTIE98* g_curTextureDesc;
-
 /* Fallback material for OPT nodes drawn before any texture node; its 8x8
  * texels and shade tables follow the header in g_defaultTextureData. */
 // GLOBAL: TIE98 0x580378
@@ -285,141 +273,28 @@ static const uint8_t g_defaultTextureRgb24[8 * 8 * 3] = {
 	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 };
-
 static int FlightModel_IsLightSegmentBlocked(FlightObject* object, const Vec3f* segment_start,
 											 const Vec3f* segment_end);
-
-// FUNCTION: TIE98 0x427990
-static void Math_SetFpuSinglePrecisionMode(void) {
-	// PORT: the original changes x87 precision; supported hosts do not execute x87 arithmetic.
-}
-
-// FUNCTION: TIE98 0x4279C0
-static void Math_SetFpuExtendedPrecisionMode(void) {
-	// PORT: the original changes x87 precision; supported hosts do not execute x87 arithmetic.
-}
-
-// FUNCTION: TIE98 0x42AF00
-static void RenderScene_InitHardwareFrame(void) {
-	int max_vertices;
-	int max_triangles;
-	uint32_t remaining;
-
-	if (g_powerVrSceneWorkaround && g_std3DStartScenePending) {
-		Math_SetFpuExtendedPrecisionMode();
-		std3D_StartScene();
-		Math_SetFpuSinglePrecisionMode();
-		g_std3DStartScenePending = 0;
-	}
-	g_d3dIndexCount = 0;
-	g_d3dVertexCount = 0;
-	g_d3dVertexAlphaStateResetSlot = 0;
-	g_capVertexAlpha = 1;
-	/* PORT: the emulated render surface and display have the same logical
-	 * dimensions, so TIE98's display/surface centering term is zero. */
-	g_flightVpOriginX = (float)displaycorner_columns;
-	g_flightVpOriginY = (float)displaycorner_lines;
-	/* PORT: dynamic host storage replaces the original shared scene-span allocation. */
-	max_vertices = TIE98_SCENE_SPAN_BYTES * TIE98_SCENE_SPAN_MAX / 128;
-	max_triangles = TIE98_SCENE_SPAN_BYTES * TIE98_SCENE_SPAN_MAX / 80;
-	if (max_vertices > (int)g_pStd3DCurDevice->caps.maxVertexCount)
-		max_vertices = (int)g_pStd3DCurDevice->caps.maxVertexCount;
-	if (max_vertices > 256)
-		max_vertices = 256;
-	if (max_triangles > 256)
-		max_triangles = 256;
-	remaining =
-		g_pStd3DCurDevice->caps.maxBufferSize - (uint32_t)(max_vertices * TIE98_EXEC_VERTEX_BUDGET_BYTES);
-	if (max_triangles > (int)(remaining / TIE98_EXEC_TRIANGLE_BUDGET_BYTES))
-		max_triangles = (int)(remaining / TIE98_EXEC_TRIANGLE_BUDGET_BYTES);
-	g_maxBatchVerts = max_vertices;
-	g_maxBatchTris = max_triangles;
-	/* Original TIE98 uses the two halves of its scene-span arena as
-	 * oversized staging buffers; the batch limits are flush thresholds. */
-	if (!g_flightVertexBuffer)
-		g_flightVertexBuffer = malloc((size_t)TIE98_HARDWARE_VERTEX_CAPACITY * sizeof *g_flightVertexBuffer);
-	if (!g_triBuffer)
-		g_triBuffer = malloc((size_t)TIE98_HARDWARE_TRIANGLE_CAPACITY * sizeof *g_triBuffer);
-	if (!g_flightVertexBuffer || !g_triBuffer) {
-		free(g_flightVertexBuffer);
-		free(g_triBuffer);
-		g_flightVertexBuffer = NULL;
-		g_triBuffer = NULL;
-		shell_programexit("Unable to allocate TIE98 hardware staging buffers");
-	}
-}
-
-// FUNCTION: TIE98 0x43D8A0
-void RenderScene_Initialize_tie98(int reset_flag) {
-	g_sw3dCockpitMaskSentinelFace.maxVertW = 1.0e32f;
-	g_sw3dCockpitMaskSentinelFace.minVertW = 1.0e32f;
-	g_sw3dCockpitMaskSentinelFace.gradients[6] = 0.0f;
-	g_sw3dCockpitMaskSentinelFace.gradients[7] = 0.0f;
-	g_sw3dCockpitMaskSentinelFace.gradients[8] = 1.0e32f;
-	if (reset_flag) {
-		int viewport_width;
-		int viewport_height;
-		const uint8_t* mask;
-		int scan_y;
-
-		g_sceneSpanPtrAvail = TIE98_SCENE_SPAN_MAX;
-		g_pSceneSpanDataCur = g_sceneSpanData;
-		g_pSceneSpanDataEnd = &g_sceneSpanData[TIE98_SCENE_SPAN_MAX - 1];
-		g_visFaceDrawStartIndex = 0;
-		g_visFaceCount = 0;
-		g_meshQueueIndex = 0;
-		g_phongSlotIndex = 0;
-
-		viewport_width = (uint16_t)pixelswide;
-		viewport_height = (uint16_t)pixelsdeep;
-		mask = (const uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
-		for (scan_y = 0; scan_y < viewport_height; ++scan_y) {
-			SceneSpanTIE98* previous = NULL;
-			int run_visible;
-			int scan_x;
-
-			g_scanlineSpanHeads[scan_y] = NULL;
-			run_visible = (int8_t)*mask++;
-			scan_x = 0;
-			while (scan_x < viewport_width) {
-				int run_length = *mask++;
-				if (run_length == 0) {
-					run_length = *mask++;
-					if (run_length == 0)
-						run_length = 256 + *mask++;
-					run_length += 255;
-				}
-				if (run_visible < 0) {
-					if (previous)
-						previous->next = g_pSceneSpanDataCur;
-					else
-						g_scanlineSpanHeads[scan_y] = g_pSceneSpanDataCur;
-					previous = g_pSceneSpanDataCur++;
-					previous->startX = scan_x;
-					previous->endX = scan_x + run_length;
-					previous->pFace = &g_sw3dCockpitMaskSentinelFace;
-					previous->next = NULL;
-				}
-				scan_x += run_length;
-				run_visible = -run_visible;
-			}
-		}
-	} else {
-		g_visFaceDrawStartIndex = g_visFaceCount;
-	}
-	g_phongSlotStride = (g_sw3dLightSampleBlockSize + (uint16_t)pixelswide - 1) / g_sw3dLightSampleBlockSize;
-	g_sw3dLightSampleCacheSceneStampBase += (uint16_t)pixelsdeep;
-	g_invProjScale = 1.0f / (float)perspFactor;
-	if (g_useHardware3D)
-		RenderScene_InitHardwareFrame();
-}
-
-// FUNCTION: TIE98 0x43DB90
-// sw3d_UnlockSceneBuffers
-void RenderScene_UnlockSceneBuffers_tie98(void) {
-	/* PORT: the original unlocks its handle-backed scene arrays. The host
-	 * arrays remain directly addressable for their complete lifetime. */
-}
+static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTIE98* face);
+static int RenderScene_EmitFlightVertex(int vertex_index, ProjVertexTIE98* vertices);
+static int RenderScene_CullMeshFacesFromView(SceneMeshTIE98* mesh);
+static void sw3d_ScanConvertFace(SceneFaceTIE98* face);
+static int sw3d_SetupClippedEdge(SceneMeshTIE98* mesh, SceneEdgeTIE98* edge, ProjVertexTIE98* first,
+								 ProjVertexTIE98* second);
+static int sw3d_SetupEdge(SceneEdgeTIE98* edge, ProjVertexTIE98* first, ProjVertexTIE98* second);
+static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, const Tie98OptNode* input_node,
+									  SceneMeshTIE98* mesh);
+static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObject* model,
+												   const Tie98OptNode* input_node, SceneMeshTIE98* mesh,
+												   const Vec3f* segment_start, const Vec3f* segment_end);
+static int FlightModel_TestLightSegmentAgainstFaces(SceneMeshTIE98* mesh, const Vec3f* segment_start,
+													const Vec3f* segment_end);
+static const Tie98OptNode* OptModel_FindNodeByNameInModel(const Tie98OptimizedPolyObject* model,
+														  const char* name);
+static const Tie98OptNode* OptModel_FindNodeByName(const Tie98OptNode* node, const char* name);
+static void sw3d_DrawTexturedShadeSpan(int start_x, int end_x, float start_view_z);
+static void sw3d_CopySpanPixels(const uint8_t* source_base, int start_x, int count);
+static void FlightMap_DrawObjectBoxSpan(int start_x, int end_x, int y, uint8_t color_index);
 
 // FUNCTION: TIE98 0x41F320
 static void RenderScene_ComputeVertexLighting(SceneMeshTIE98* mesh, ProjVertexTIE98* output,
@@ -527,6 +402,160 @@ static void RenderScene_ComputeVertexLighting(SceneMeshTIE98* mesh, ProjVertexTI
 	}
 }
 
+// FUNCTION: TIE98 0x41F7D0
+static void FlightLight_ResetSoftwareFaceSampleCache(void) {
+	g_swFaceLightCachedObject = NULL;
+	g_swFaceLightCachedFace = NULL;
+}
+
+// FUNCTION: TIE98 0x41F7E0
+static float FlightLight_ComputeSoftwareFaceSampleIntensity(SceneFaceTIE98* face, int screen_x, int screen_y,
+															float view_z) {
+	Vec3f position;
+	SceneMeshTIE98* mesh = face->pMesh;
+	float position_z;
+	float screen_scale;
+	float intensity;
+
+	int light_index;
+
+	if (g_swFaceLightCachedObject != mesh->pObject) {
+		int light_index;
+
+		g_swFaceLightCount = tie_makelocallights_tie98(mesh->pObject);
+		g_swFaceLightCachedObject = mesh->pObject;
+		for (light_index = 0; light_index < g_swFaceLightCount; ++light_index) {
+			Vec3f light = {
+				(float)localLights[light_index].x,
+				(float)localLights[light_index].y,
+				(float)localLights[light_index].z,
+			};
+			Math3D_RotateVec3(&light, &mesh->viewOrient);
+			light.x += mesh->viewPos.x;
+			light.y += mesh->viewPos.y;
+			light.z += mesh->viewPos.z;
+			g_swFaceLightPositions[light_index] = light;
+			g_swFaceLightIntensities[light_index] = (float)localLights[light_index].range;
+		}
+		g_swFaceDirectionalLight.x = (float)rotlightX * (1.0f / 32768.0f);
+		g_swFaceDirectionalLight.y = (float)rotlightY * (1.0f / 32768.0f);
+		g_swFaceDirectionalLight.z = (float)rotlightZ * (1.0f / 32768.0f);
+		Math3D_RotateVec3(&g_swFaceDirectionalLight, &mesh->viewOrient);
+	}
+
+	position_z = 1.0f / view_z;
+	screen_scale = position_z * g_invProjScale;
+	position.x = (float)(screen_x - ((uint16_t)pixelswide >> 1)) * screen_scale;
+	position.y = (float)(screen_y - ((uint16_t)pixelsdeep >> 1) - transfm2_screenyoffset) * screen_scale;
+	position.z = position_z;
+	if (g_swFaceLightCachedFace != face) {
+		g_swFaceLightCachedFace = face;
+		g_swFaceLightCachedNormal = mesh->pFaceNormals[face->faceIndex];
+		Math3D_RotateVec3(&g_swFaceLightCachedNormal, &mesh->viewOrient);
+	}
+
+	intensity = 0.0f;
+	if (g_specularLightingEnabled) {
+		Vec3f halfway;
+		const float eye_x = -position.x;
+		const float eye_y = -position.y;
+		const float eye_z = -position.z;
+		const float abs_x = fabsf(eye_x);
+		const float abs_y = fabsf(eye_y);
+		const float abs_z = fabsf(eye_z);
+		float eye_length;
+		float inverse_eye_length;
+		float cosine;
+
+		if (abs_x >= abs_y && abs_x >= abs_z)
+			eye_length = abs_x * 0.9264f + (abs_y + abs_z) * 0.3872f;
+		else if (abs_y >= abs_x && abs_y >= abs_z)
+			eye_length = abs_y * 0.9264f + (abs_x + abs_z) * 0.3872f;
+		else
+			eye_length = abs_z * 0.9264f + (abs_x + abs_y) * 0.3872f;
+		inverse_eye_length = 1.0f / eye_length;
+		halfway.x = eye_x * inverse_eye_length + g_swFaceDirectionalLight.x;
+		halfway.y = eye_y * inverse_eye_length + g_swFaceDirectionalLight.y;
+		halfway.z = eye_z * inverse_eye_length + g_swFaceDirectionalLight.z;
+		cosine = halfway.x * g_swFaceLightCachedNormal.x + halfway.y * g_swFaceLightCachedNormal.y +
+				 halfway.z * g_swFaceLightCachedNormal.z;
+		if (cosine > 0.0f) {
+			const float half_cosine = cosine * 0.5f;
+			const float cosine3 = half_cosine * half_cosine * half_cosine;
+			const float cosine6 = cosine3 * cosine3;
+			const float cosine12 = cosine6 * cosine6;
+			const float cosine24 = cosine12 * cosine12;
+			intensity = cosine24 * cosine24 * 0.7f;
+			if (intensity >= 1.0f)
+				return 1.0f;
+		}
+	}
+
+	for (light_index = 0; light_index < g_swFaceLightCount; ++light_index) {
+		const Vec3f delta = {
+			g_swFaceLightPositions[light_index].x - position.x,
+			g_swFaceLightPositions[light_index].y - position.y,
+			g_swFaceLightPositions[light_index].z - position.z,
+		};
+		const float facing = delta.x * g_swFaceLightCachedNormal.x + delta.y * g_swFaceLightCachedNormal.y +
+							 delta.z * g_swFaceLightCachedNormal.z;
+		float abs_x;
+		float abs_y;
+		float abs_z;
+		float distance;
+		float contribution;
+
+		if (facing <= 0.0f)
+			continue;
+		abs_x = fabsf(delta.x);
+		abs_y = fabsf(delta.y);
+		abs_z = fabsf(delta.z);
+
+		if (abs_x >= abs_y && abs_x >= abs_z)
+			distance = abs_x + (abs_y + abs_z) * 0.2941f;
+		else if (abs_y >= abs_x && abs_y >= abs_z)
+			distance = abs_y + (abs_x + abs_z) * 0.2941f;
+		else
+			distance = abs_z + (abs_x + abs_y) * 0.2941f;
+		contribution = facing / (distance * distance);
+		if (g_specularLightingEnabled) {
+			const Vec3f halfway = {
+				delta.x - position.x,
+				delta.y - position.y,
+				delta.z - position.z,
+			};
+			const float half_x = fabsf(halfway.x);
+			const float half_y = fabsf(halfway.y);
+			const float half_z = fabsf(halfway.z);
+			float half_length;
+			float half_facing;
+
+			if (half_x >= half_y && half_x >= half_z)
+				half_length = half_x * 0.4632f + (half_y + half_z) * 0.1936f;
+			else if (half_y >= half_x && half_y >= half_z)
+				half_length = half_y * 0.4632f + (half_x + half_z) * 0.1936f;
+			else
+				half_length = half_z * 0.4632f + (half_x + half_y) * 0.1936f;
+			half_facing = (halfway.x * g_swFaceLightCachedNormal.x + halfway.y * g_swFaceLightCachedNormal.y +
+						   halfway.z * g_swFaceLightCachedNormal.z) *
+						  0.5f / half_length;
+			if (half_facing >= 0.0f) {
+				const float cosine3 = half_facing * half_facing * half_facing;
+				const float cosine6 = cosine3 * cosine3;
+				const float cosine12 = cosine6 * cosine6;
+				const float cosine24 = cosine12 * cosine12;
+				contribution += cosine24 * cosine24 / half_length;
+			}
+		}
+		if (contribution > 0.0f) {
+			intensity += contribution * g_swFaceLightIntensities[light_index];
+			if (intensity >= 1.0f)
+				return 1.0f;
+		}
+	}
+	return intensity;
+}
+
 // FUNCTION: TIE98 0x41FEF0
 static void RenderScene_TransformFaceTextureGradients(SceneFaceTIE98* face,
 													  const FaceTextureGradientsTIE98* gradients,
@@ -537,45 +566,14 @@ static void RenderScene_TransformFaceTextureGradients(SceneFaceTIE98* face,
 	Math3D_RotateVec3((Vec3f*)&face->gradients[3], &mesh->viewOrient);
 }
 
-// FUNCTION: TIE98 0x430F70
-static int RenderScene_CullMeshFacesFromView(SceneMeshTIE98* mesh) {
-	SceneFaceTIE98* output;
-	int face_index;
+// FUNCTION: TIE98 0x427990
+static void Math_SetFpuSinglePrecisionMode(void) {
+	// PORT: the original changes x87 precision; supported hosts do not execute x87 arithmetic.
+}
 
-	mesh->faceBaseIndex = g_visFaceCount;
-	g_meshEyePos = mesh->pos;
-	if (g_bBackdropMeshMode) {
-		g_meshEyePos.x = 0.0f;
-		g_meshEyePos.y = 0.0f;
-		g_meshEyePos.z = -100000.0f;
-		Math3D_RotateVec3(&g_meshEyePos, &mesh->orient);
-		g_meshEyePos.x += mesh->pos.x;
-		g_meshEyePos.y += mesh->pos.y;
-		g_meshEyePos.z += mesh->pos.z;
-	}
-	output = &g_visFaceList[g_visFaceCount];
-	for (face_index = 0; face_index < mesh->faceCount; ++face_index) {
-		const FaceRecordTIE98* record = &mesh->pFaceGeom[face_index];
-		const Vec3f* vertex = &mesh->pModelVerts[record->vertexIdx[0]];
-		const Vec3f view = {
-			g_meshEyePos.x - vertex->x,
-			g_meshEyePos.y - vertex->y,
-			g_meshEyePos.z - vertex->z,
-		};
-		if (Math3D_Dot3(&view.x, &mesh->pFaceNormals[face_index].x) >= 0.0f) {
-			output->faceIndex = face_index;
-			output->pMesh = mesh;
-			output->pPhongData = &g_scenePhongData[12 * g_phongSlotIndex * (g_phongSlotStride + 1)];
-			if (g_phongSlotIndex < 199)
-				++g_phongSlotIndex;
-			output->packed = face_index + (g_curLayerId << 16);
-			output->pScanEdge = NULL;
-			++output;
-			++g_visFaceCount;
-		}
-	}
-	mesh->visFaceCount = g_visFaceCount - mesh->faceBaseIndex;
-	return mesh->faceBaseIndex;
+// FUNCTION: TIE98 0x4279C0
+static void Math_SetFpuExtendedPrecisionMode(void) {
+	// PORT: the original changes x87 precision; supported hosts do not execute x87 arithmetic.
 }
 
 // FUNCTION: TIE98 0x427E30
@@ -787,6 +785,1023 @@ static int RenderScene_ProjectDistantMeshVertices(SceneMeshTIE98* mesh) {
 	}
 	g_projVertCount += mesh->projVertCursor;
 	return g_projVertCount;
+}
+
+// FUNCTION: TIE98 0x428860
+static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
+	ProjVertexTIE98* vertices = &g_projVertList[mesh->vertBaseIndex];
+	const int projection_end = mesh->vertBaseIndex + mesh->projVertCursor;
+	SceneFaceTIE98* face;
+	const uint8_t* previous_texels;
+	Std3DTextureSurface* opaque;
+	Std3DTextureSurface* color_key;
+	int face_iter;
+	/* PORT: the original reuses g_sceneEdgeList as this per-projection map of
+	 * emitted hardware vertices; the host edge list is sized per mesh, so the
+	 * display runtime owns a separately sized map. */
+	int* emitted_by_projection = Tie98Display_ReserveEmittedVertexMap((size_t)projection_end);
+
+	int i;
+
+	g_clipVertCursor = projection_end;
+	for (i = 0; i < projection_end; ++i)
+		emitted_by_projection[i] = -1;
+	face = &g_visFaceList[mesh->faceBaseIndex];
+	previous_texels = NULL;
+	opaque = NULL;
+	color_key = NULL;
+
+	for (face_iter = 0; face_iter < mesh->visFaceCount; ++face_iter, ++face) {
+		const FaceRecordTIE98* record = &mesh->pFaceGeom[face->faceIndex];
+		float u_scale;
+		float v_scale;
+		int corner;
+		int previous;
+		int triangles_per_pass;
+		int additional_vertices;
+		int additional_triangles;
+
+		int i;
+
+		g_clipCountA = record->edgeIdx[3] != -1 ? 4 : 3;
+		u_scale = 1.0f;
+		v_scale = 1.0f;
+		if (g_pStd3DCurDevice->caps.bSquareOnlyTexture) {
+			int width = mesh->pMaterial->width;
+			int height = mesh->pMaterial->height;
+			if (width > height) {
+				while (height < width) {
+					v_scale *= 0.5f;
+					height *= 2;
+				}
+			} else if (height > width) {
+				while (width < height) {
+					u_scale *= 0.5f;
+					width *= 2;
+				}
+			}
+		}
+		for (corner = 0; corner < g_clipCountA; ++corner) {
+			int projected = g_vertexRemap[record->vertexIdx[corner]];
+			ProjVertexTIE98* vertex;
+			OptTexCoordTIE98 uv;
+
+			g_clipIdxA[corner] = projected;
+			vertex = &vertices[projected];
+			uv = mesh->pUVs[record->uvIdx[corner]];
+			uv.u *= u_scale;
+			uv.v *= v_scale;
+			if (vertex->tu != uv.u || vertex->tv != uv.v) {
+				const int duplicate = g_clipVertCursor++;
+				vertices[duplicate] = *vertex;
+				vertices[duplicate].tu = uv.u;
+				vertices[duplicate].tv = uv.v;
+				g_clipIdxA[corner] = duplicate;
+			}
+		}
+
+		if (face->nearClipState == -1) {
+			memcpy(g_clipIdxB, g_clipIdxA, (size_t)g_clipCountA * sizeof *g_clipIdxA);
+			g_clipCountB = g_clipCountA;
+			g_clipCountA = 0;
+			if (g_clipCountB > 0) {
+				int i;
+
+				previous = g_clipIdxB[g_clipCountB - 1];
+				for (i = 0; i < g_clipCountB; ++i) {
+					const int current = g_clipIdxB[i];
+					RenderClip_ClipPolyNear(previous, current, vertices);
+					previous = current;
+				}
+			}
+		}
+		g_clipCountB = 0;
+		if (g_clipCountA > 0) {
+			int count;
+			int i;
+
+			previous = g_clipIdxA[g_clipCountA - 1];
+			count = g_clipCountA;
+			for (i = 0; i < count; ++i) {
+				const int current = g_clipIdxA[i];
+				RenderClip_ClipPolyTop(previous, current, vertices);
+				previous = current;
+			}
+		}
+		g_clipCountA = 0;
+		if (g_clipCountB > 0) {
+			int count;
+			int i;
+
+			previous = g_clipIdxB[g_clipCountB - 1];
+			count = g_clipCountB;
+			for (i = 0; i < count; ++i) {
+				const int current = g_clipIdxB[i];
+				RenderClip_ClipPolyBottom(previous, current, vertices);
+				previous = current;
+			}
+		}
+		g_clipCountB = 0;
+		if (g_clipCountA > 0) {
+			int count;
+			int i;
+
+			previous = g_clipIdxA[g_clipCountA - 1];
+			count = g_clipCountA;
+			for (i = 0; i < count; ++i) {
+				const int current = g_clipIdxA[i];
+				RenderClip_ClipPolyLeft(previous, current, vertices);
+				previous = current;
+			}
+		}
+		g_clipCountA = 0;
+		if (g_clipCountB > 0) {
+			int count;
+			int i;
+
+			previous = g_clipIdxB[g_clipCountB - 1];
+			count = g_clipCountB;
+			for (i = 0; i < count; ++i) {
+				const int current = g_clipIdxB[i];
+				RenderClip_ClipPolyRight(previous, current, vertices);
+				previous = current;
+			}
+		}
+		face->nearClipState = pixelsdeep;
+		for (i = 0; i < g_clipCountA; ++i) {
+			const int projected = g_clipIdxA[i];
+			int emitted;
+			if (projected < projection_end) {
+				if (emitted_by_projection[projected] == -1)
+					emitted_by_projection[projected] = RenderScene_EmitFlightVertex(projected, vertices);
+				emitted = emitted_by_projection[projected];
+			} else {
+				emitted = RenderScene_EmitFlightVertex(projected, vertices);
+			}
+			if (emitted < 0)
+				return;
+			g_clipIdxA[i] = emitted;
+		}
+
+		if (g_clipCountA > 2) {
+			int texture_width = mesh->pMaterial->width;
+			int texture_height = mesh->pMaterial->height;
+			int texel_offset = 0;
+			int mip = (int)((float)face->mipLevel * g_mipLodScale);
+			uint8_t* texels;
+
+			if (texture_width * texture_height == mesh->pMaterial->textureSize) {
+				while (mip > 256 && texture_width != 8 && texture_height != 8) {
+					mip >>= 2;
+					texel_offset += texture_width * texture_height;
+					texture_width >>= 1;
+					texture_height >>= 1;
+				}
+			}
+			texels = mesh->pTexels + texel_offset;
+			if (texels != previous_texels) {
+				uint16_t* palette;
+
+				previous_texels = texels;
+				palette = (uint16_t*)(mesh->pPalette1 + 4096);
+				opaque = RenderTexture_GetOrCreateOpaque(texture_width, texture_height, palette, texels);
+				color_key = NULL;
+				if (palette[256] != 0) {
+					if (mesh->pObject->genus == GENUS_PROJECTILE_PLAYER ||
+						mesh->pObject->genus == GENUS_PROJECTILE_NPC) {
+						palette[256] = 0;
+					} else if (mesh->textureName && mesh->textureName[0] != '_') {
+						color_key = RenderTexture_GetOrCreateColorKey(texture_width, texture_height,
+																	  (uint16_t*)mesh->pPalette1, texels);
+						if (!color_key && texture_width == mesh->pMaterial->width &&
+							texture_height == mesh->pMaterial->height)
+							*(char*)mesh->textureName = '_';
+					}
+				}
+			}
+		}
+
+		triangles_per_pass = g_clipCountA > 2 ? g_clipCountA - 2 : 0;
+		additional_vertices = color_key ? g_clipCountA : 0;
+		additional_triangles = triangles_per_pass * (color_key ? 2 : 1);
+		/* PORT: bounds the host staging buffers allocated for the batch. */
+		if (additional_vertices < 0 || additional_triangles < 0 ||
+			g_d3dVertexCount > TIE98_HARDWARE_VERTEX_CAPACITY - additional_vertices ||
+			g_d3dIndexCount > TIE98_HARDWARE_TRIANGLE_CAPACITY - additional_triangles)
+			return;
+
+		if (color_key) {
+			int color_key_indices[32];
+			int i;
+
+			for (i = 0; i < g_clipCountA; ++i) {
+				g_flightVertexBuffer[g_d3dVertexCount] = g_flightVertexBuffer[g_clipIdxA[i]];
+				g_flightVertexBuffer[g_d3dVertexCount].color = 0xffffffffu;
+				color_key_indices[i] = g_d3dVertexCount++;
+			}
+			for (i = 2; i < g_clipCountA; ++i) {
+				Std3DRenderTri* triangle = &g_triBuffer[g_d3dIndexCount++];
+				triangle->v0 = color_key_indices[0];
+				triangle->v1 = color_key_indices[i - 1];
+				triangle->v2 = color_key_indices[i];
+				triangle->texture = color_key;
+				triangle->flags = (Std3DRenderStateFlags)(38931 + (g_bilinearEnabled ? 384 : 0) + 512);
+			}
+		}
+		for (i = 2; i < g_clipCountA; ++i) {
+			Std3DRenderTri* triangle = &g_triBuffer[g_d3dIndexCount++];
+			triangle->v0 = g_clipIdxA[0];
+			triangle->v1 = g_clipIdxA[i - 1];
+			triangle->v2 = g_clipIdxA[i];
+			triangle->texture = opaque;
+			triangle->flags =
+				(Std3DRenderStateFlags)(38931 + (g_bilinearEnabled ? 384 : 0) + (g_capVertexAlpha ? 512 : 0));
+			if (g_capVertexAlpha)
+				g_capVertexAlpha = 0;
+		}
+	}
+}
+
+// FUNCTION: TIE98 0x42AD90
+static void RenderScene_DrawMesh(SceneMeshTIE98* mesh) {
+	int saved_visible_face_count;
+	SceneMeshTIE98* queued;
+
+	g_projVertCount = 0;
+	g_sceneEdgeCursor = 0;
+	saved_visible_face_count = g_visFaceCount;
+	if (g_meshQueueIndex == TIE98_MESH_QUEUE_MAX || g_visFaceCount + mesh->faceCount > TIE98_SCENE_FACE_MAX ||
+		mesh->vertexCount > g_projVertCapacity || mesh->edgeCount > g_sceneEdgeCapacity)
+		return;
+	g_meshQueue[g_meshQueueIndex] = *mesh;
+	queued = &g_meshQueue[g_meshQueueIndex];
+	RenderScene_CullMeshFacesFromView(queued);
+	if (queued->visFaceCount != 0) {
+		if (g_d3dVertexCount + 8 * queued->visFaceCount > g_maxBatchVerts ||
+			g_d3dIndexCount + 2 * queued->visFaceCount > g_maxBatchTris) {
+			Math_SetFpuExtendedPrecisionMode();
+			if (!g_powerVrSceneWorkaround)
+				std3D_StartScene();
+			std3D_LockExecuteBuffer();
+			std3D_AddVertices(g_flightVertexBuffer, g_d3dVertexCount);
+			std3D_BeginInstructions();
+			std3D_AddTriangles(g_triBuffer, (unsigned int)g_d3dIndexCount);
+			std3D_ExecuteBuffer();
+			if (!g_powerVrSceneWorkaround)
+				std3D_EndScene();
+			Math_SetFpuSinglePrecisionMode();
+			g_d3dIndexCount = 0;
+			g_d3dVertexCount = 0;
+		}
+		if (g_bBackdropMeshMode)
+			RenderScene_ProjectDistantMeshVertices(queued);
+		else
+			RenderScene_ProjectMeshVertices(queued);
+		RenderScene_DrawMeshFaces(queued);
+		g_visFaceCount = saved_visible_face_count;
+	}
+}
+
+// FUNCTION: TIE98 0x42AF00
+static void RenderScene_InitHardwareFrame(void) {
+	int max_vertices;
+	int max_triangles;
+	uint32_t remaining;
+
+	if (g_powerVrSceneWorkaround && g_std3DStartScenePending) {
+		Math_SetFpuExtendedPrecisionMode();
+		std3D_StartScene();
+		Math_SetFpuSinglePrecisionMode();
+		g_std3DStartScenePending = 0;
+	}
+	g_d3dIndexCount = 0;
+	g_d3dVertexCount = 0;
+	g_d3dVertexAlphaStateResetSlot = 0;
+	g_capVertexAlpha = 1;
+	/* PORT: the emulated render surface and display have the same logical
+	 * dimensions, so TIE98's display/surface centering term is zero. */
+	g_flightVpOriginX = (float)displaycorner_columns;
+	g_flightVpOriginY = (float)displaycorner_lines;
+	/* PORT: dynamic host storage replaces the original shared scene-span allocation. */
+	max_vertices = TIE98_SCENE_SPAN_BYTES * TIE98_SCENE_SPAN_MAX / 128;
+	max_triangles = TIE98_SCENE_SPAN_BYTES * TIE98_SCENE_SPAN_MAX / 80;
+	if (max_vertices > (int)g_pStd3DCurDevice->caps.maxVertexCount)
+		max_vertices = (int)g_pStd3DCurDevice->caps.maxVertexCount;
+	if (max_vertices > 256)
+		max_vertices = 256;
+	if (max_triangles > 256)
+		max_triangles = 256;
+	remaining =
+		g_pStd3DCurDevice->caps.maxBufferSize - (uint32_t)(max_vertices * TIE98_EXEC_VERTEX_BUDGET_BYTES);
+	if (max_triangles > (int)(remaining / TIE98_EXEC_TRIANGLE_BUDGET_BYTES))
+		max_triangles = (int)(remaining / TIE98_EXEC_TRIANGLE_BUDGET_BYTES);
+	g_maxBatchVerts = max_vertices;
+	g_maxBatchTris = max_triangles;
+	/* Original TIE98 uses the two halves of its scene-span arena as
+	 * oversized staging buffers; the batch limits are flush thresholds. */
+	if (!g_flightVertexBuffer)
+		g_flightVertexBuffer = malloc((size_t)TIE98_HARDWARE_VERTEX_CAPACITY * sizeof *g_flightVertexBuffer);
+	if (!g_triBuffer)
+		g_triBuffer = malloc((size_t)TIE98_HARDWARE_TRIANGLE_CAPACITY * sizeof *g_triBuffer);
+	if (!g_flightVertexBuffer || !g_triBuffer) {
+		free(g_flightVertexBuffer);
+		free(g_triBuffer);
+		g_flightVertexBuffer = NULL;
+		g_triBuffer = NULL;
+		shell_programexit("Unable to allocate TIE98 hardware staging buffers");
+	}
+}
+
+// FUNCTION: TIE98 0x42B050
+static void RenderScene_EffectsPass(void) {
+	anim_sort_and_draw_bitmaps_tie98(g_drawSceneEffects != 0);
+	numbitmaps = 0;
+	if (g_d3dVertexCount != 0 && g_d3dIndexCount != 0) {
+		Math_SetFpuExtendedPrecisionMode();
+		if (g_powerVrSceneWorkaround) {
+			if (g_std3DStartScenePending) {
+				std3D_StartScene();
+				g_std3DStartScenePending = 0;
+			}
+		} else {
+			std3D_StartScene();
+		}
+		std3D_LockExecuteBuffer();
+		std3D_AddVertices(g_flightVertexBuffer, g_d3dVertexCount);
+		std3D_BeginInstructions();
+		std3D_AddTriangles(g_triBuffer, (unsigned int)g_d3dIndexCount);
+		std3D_ExecuteBuffer();
+		if (!g_powerVrSceneWorkaround)
+			std3D_EndScene();
+		Math_SetFpuSinglePrecisionMode();
+	}
+	if (g_powerVrSceneWorkaround) {
+		Math_SetFpuExtendedPrecisionMode();
+		std3D_EndScene();
+		g_std3DStartScenePending = 1;
+		Math_SetFpuSinglePrecisionMode();
+	}
+}
+
+// FUNCTION: TIE98 0x42B130
+static int RenderScene_EmitFlightVertex(int vertex_index, ProjVertexTIE98* vertices) {
+	ProjVertexTIE98* source;
+	float w;
+	float depth;
+	D3DTLVERTEX* output;
+	int intensity;
+
+	/* PORT: bounds the host staging buffers allocated for the batch. */
+	if (g_d3dVertexCount > TIE98_HARDWARE_VERTEX_CAPACITY - 1 ||
+		g_d3dIndexCount > TIE98_HARDWARE_TRIANGLE_CAPACITY)
+		return -1;
+	source = &vertices[vertex_index];
+	w = source->w;
+	if (w < 0.0f)
+		w = (float)perspFactor;
+	depth = 1.0f / ((float)perspFactor / w * (1.0f / 2048.0f) + 1.0f);
+	if (g_std3DZBufferBitDepth == 2)
+		depth = 1.0f - depth;
+	output = &g_flightVertexBuffer[g_d3dVertexCount];
+	output->sx = source->sx + g_flightVpOriginX;
+	output->sy = source->sy + g_flightVpOriginY;
+	output->sz = depth;
+	output->rhw = w;
+	output->tu = source->tu;
+	output->tv = source->tv;
+	intensity = 48 + (int)(source->lightIntensity * 320.0f);
+	if (intensity > 255)
+		intensity = 255;
+	output->color = (uint32_t)(65793 * intensity - (g_capVertexAlpha ? 0x2000000 : 0x1000000));
+	output->specular = 0;
+	return g_d3dVertexCount++;
+}
+
+// FUNCTION: TIE98 0x42B980
+void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_t screen_scale,
+								  const uint8_t* texture_level) {
+	ProjVertexTIE98 vertices[32];
+	static const uint32_t explosion_colors[32] = {
+		0xffffffff, 0xe0ffffff, 0xf0ffffff, 0xf0ffffff, 0xe0ffffff, 0xd0ffffff, 0xb0ffffff, 0x90ffffff,
+		0x70ffffff, 0x50ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff,
+		0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff,
+		0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff,
+	};
+	uint32_t color = 0xffffffff;
+	float depth;
+	int source_width;
+	int source_height;
+	int width;
+	int height;
+	float u_max;
+	float v_max;
+	int half_height;
+	int half_width;
+	int screen_y_flipped;
+	int previous;
+	uint32_t pixels_offset;
+	uint32_t palette_offset;
+	int rle_format;
+	Std3DTextureSurface* texture;
+
+	int i;
+
+	if (parentobject < NUM_OBJECTS && objects[parentobject].genus == GENUS_EXPLOSION)
+		color = explosion_colors[objects[parentobject].anim_frame & 0x1f];
+
+	if ((uint32_t)objecteyez <= 0x1000000) {
+		depth = 1.0f / ((float)objecteyez * (1.0f / 2048.0f) + 1.0f);
+		if (g_std3DZBufferBitDepth == 2)
+			depth = 1.0f - depth;
+	} else {
+		color = 0xffffffff;
+		depth = 0.00012205541f;
+		if (g_std3DZBufferBitDepth == 2)
+			depth = 0.99987793f;
+	}
+
+	source_width = *(const int32_t*)(texture_level + 16);
+	source_height = *(const int32_t*)(texture_level + 20);
+	width = 2;
+	while (width < source_width && width < 256)
+		width *= 2;
+	height = 2;
+	while (height < source_height && height < 256)
+		height *= 2;
+	if (g_pStd3DCurDevice->caps.minTextureWidth) {
+		if (width > height)
+			height = width;
+		else if (height > width)
+			width = height;
+	}
+
+	u_max = (float)source_width / (float)width;
+	v_max = (float)source_height / (float)height;
+	half_height = (screen_scale * source_height) >> 9;
+	half_width = (screen_scale * source_width) >> 9;
+	screen_y_flipped = pixelsdeep - screen_y;
+	memset(vertices, 0, sizeof vertices);
+	vertices[0].sx = (float)(screen_x + trig2_cosinedwordmult(half_width, angle) +
+							 trig2_sinedwordmult(half_height, angle));
+	vertices[0].sy = (float)(screen_y_flipped + trig2_cosinedwordmult(half_height, angle) -
+							 trig2_sinedwordmult(half_width, angle));
+	vertices[0].w = depth;
+	vertices[1].sx = (float)(screen_x + trig2_cosinedwordmult(-half_width, angle) +
+							 trig2_sinedwordmult(half_height, angle));
+	vertices[1].sy = (float)(screen_y_flipped + trig2_cosinedwordmult(half_height, angle) -
+							 trig2_sinedwordmult(-half_width, angle));
+	vertices[1].w = depth;
+	vertices[1].tu = u_max;
+	vertices[2].sx = (float)(screen_x + trig2_cosinedwordmult(-half_width, angle) +
+							 trig2_sinedwordmult(-half_height, angle));
+	vertices[2].sy = (float)(screen_y_flipped + trig2_cosinedwordmult(-half_height, angle) -
+							 trig2_sinedwordmult(-half_width, angle));
+	vertices[2].w = depth;
+	vertices[2].tu = u_max;
+	vertices[2].tv = v_max;
+	vertices[3].sx = (float)(screen_x + trig2_cosinedwordmult(half_width, angle) +
+							 trig2_sinedwordmult(-half_height, angle));
+	vertices[3].sy = (float)(screen_y_flipped + trig2_cosinedwordmult(-half_height, angle) -
+							 trig2_sinedwordmult(half_width, angle));
+	vertices[3].w = depth;
+	vertices[3].tv = v_max;
+
+	g_clipCountA = 4;
+	g_clipVertCursor = 4;
+	for (i = 0; i < 4; ++i)
+		g_clipIdxA[i] = i;
+	g_clipCountB = 0;
+	previous = g_clipIdxA[g_clipCountA - 1];
+	for (i = 0; i < g_clipCountA; ++i) {
+		const int current = g_clipIdxA[i];
+		RenderClip_ClipPolyTop(previous, current, vertices);
+		previous = current;
+	}
+	g_clipCountA = 0;
+	if (g_clipCountB > 0) {
+		int count;
+		int i;
+
+		previous = g_clipIdxB[g_clipCountB - 1];
+		count = g_clipCountB;
+		for (i = 0; i < count; ++i) {
+			const int current = g_clipIdxB[i];
+			RenderClip_ClipPolyBottom(previous, current, vertices);
+			previous = current;
+		}
+	}
+	g_clipCountB = 0;
+	if (g_clipCountA > 0) {
+		int count;
+		int i;
+
+		previous = g_clipIdxA[g_clipCountA - 1];
+		count = g_clipCountA;
+		for (i = 0; i < count; ++i) {
+			const int current = g_clipIdxA[i];
+			RenderClip_ClipPolyLeft(previous, current, vertices);
+			previous = current;
+		}
+	}
+	g_clipCountA = 0;
+	if (g_clipCountB > 0) {
+		int count;
+		int i;
+
+		previous = g_clipIdxB[g_clipCountB - 1];
+		count = g_clipCountB;
+		for (i = 0; i < count; ++i) {
+			const int current = g_clipIdxB[i];
+			RenderClip_ClipPolyRight(previous, current, vertices);
+			previous = current;
+		}
+	}
+	if (g_clipCountA < 3)
+		return;
+
+	if (g_clipCountA + g_d3dVertexCount > g_maxBatchVerts ||
+		g_clipCountA + g_d3dIndexCount > g_maxBatchTris) {
+		Math_SetFpuExtendedPrecisionMode();
+		if (!g_powerVrSceneWorkaround)
+			std3D_StartScene();
+		std3D_LockExecuteBuffer();
+		std3D_AddVertices(g_flightVertexBuffer, g_d3dVertexCount);
+		std3D_BeginInstructions();
+		std3D_AddTriangles(g_triBuffer, (unsigned int)g_d3dIndexCount);
+		std3D_ExecuteBuffer();
+		if (!g_powerVrSceneWorkaround)
+			std3D_EndScene();
+		Math_SetFpuSinglePrecisionMode();
+		g_d3dIndexCount = 0;
+		g_d3dVertexCount = 0;
+	}
+	if (g_capVertexAlpha) {
+		color = 0xfeffffff;
+		g_capVertexAlpha = 0;
+	}
+	for (i = 0; i < g_clipCountA; ++i) {
+		const ProjVertexTIE98* source = &vertices[g_clipIdxA[i]];
+		D3DTLVERTEX* destination = &g_flightVertexBuffer[g_d3dVertexCount];
+		destination->sx = source->sx + g_flightVpOriginX;
+		destination->sy = source->sy + g_flightVpOriginY;
+		destination->sz = source->w;
+		destination->rhw = source->w;
+		destination->color = color;
+		destination->specular = 0;
+		destination->tu = source->tu;
+		destination->tv = source->tv;
+		g_clipIdxA[i] = g_d3dVertexCount++;
+	}
+	pixels_offset = *(const uint32_t*)(texture_level + 8);
+	palette_offset = *(const uint32_t*)(texture_level + 12);
+	rle_format = *(const int32_t*)(texture_level + 32);
+	texture = RenderTexture_GetOrCreateBitmap(width, height, (uint16_t*)(texture_level + palette_offset),
+											  texture_level + pixels_offset + 16, rle_format);
+	for (i = 2; i < g_clipCountA; ++i) {
+		Std3DRenderTri* triangle = &g_triBuffer[g_d3dIndexCount++];
+		triangle->v0 = g_clipIdxA[0];
+		triangle->v1 = g_clipIdxA[i - 1];
+		triangle->v2 = g_clipIdxA[i];
+		triangle->texture = texture;
+		triangle->flags = (Std3DRenderStateFlags)(2066 + (g_bilinearEnabled ? 384 : 0) + 512);
+	}
+}
+
+// FUNCTION: TIE98 0x42C190
+int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_index, int depth) {
+	int right;
+	int bottom;
+	int corner_width;
+	int corner_height;
+	const uint8_t* rgb;
+	uint32_t color;
+	float screen_depth;
+	int16_t result;
+	int quad_base;
+	D3DTLVERTEX* quad;
+	Std3DRenderTri* quad_triangles;
+	int quad_vertex;
+
+	if (depth == 1 && width == 4 && height == 4) {
+		int start = x;
+		int end = x + 4;
+		if (start < 0)
+			start = 0;
+		if (end > pixelswide)
+			end = pixelswide;
+		if (start < end) {
+			int row;
+
+			FlightSurface_Lock();
+			for (row = 0; row < 4; ++row) {
+				const int screen_y = y + row;
+				if (screen_y >= 0 && screen_y < pixelsdeep)
+					FlightMap_DrawObjectBoxSpan(start, end, screen_y, color_index);
+			}
+			FlightSurface_Unlock();
+		}
+		return 0;
+	}
+
+	if (g_d3dVertexCount + 32 > g_maxBatchVerts || g_d3dIndexCount + 16 > g_maxBatchTris) {
+		Math_SetFpuExtendedPrecisionMode();
+		if (!g_powerVrSceneWorkaround)
+			std3D_StartScene();
+		std3D_LockExecuteBuffer();
+		std3D_AddVertices(g_flightVertexBuffer, g_d3dVertexCount);
+		std3D_BeginInstructions();
+		std3D_AddTriangles(g_triBuffer, (unsigned int)g_d3dIndexCount);
+		std3D_ExecuteBuffer();
+		if (!g_powerVrSceneWorkaround)
+			std3D_EndScene();
+		Math_SetFpuSinglePrecisionMode();
+		g_d3dIndexCount = 0;
+		g_d3dVertexCount = 0;
+	}
+
+	right = x + width;
+	bottom = y + height;
+	corner_width = width >> 3;
+	corner_height = height >> 3;
+	if (corner_width < 3)
+		corner_width = 3;
+	if (corner_height < 3)
+		corner_height = 3;
+	if (corner_width > width)
+		corner_width = width;
+	if (corner_height > height)
+		corner_height = height;
+	rgb = &rtsvga2_vgapalette[3 * (uint8_t)color_index];
+	color = 0xff000000u | ((uint32_t)rgb[0] << 18) | ((uint32_t)rgb[1] << 10) | ((uint32_t)rgb[2] << 2);
+	if (depth < 1)
+		depth = 1;
+	screen_depth = 1.0f / ((float)depth * (1.0f / 2048.0f) + 1.0f);
+	if (g_std3DZBufferBitDepth == 2)
+		screen_depth = 1.0f - screen_depth;
+
+	result = (int16_t)g_d3dVertexCount;
+	if (y >= 0 && y < pixelsdeep) {
+		int start = x < 0 ? 0 : x;
+		int end = x + corner_width;
+		if (end >= pixelswide)
+			end = pixelswide - 1;
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)start;
+			quad[0].sy = g_flightVpOriginY + (float)y;
+			quad[1].sx = g_flightVpOriginX + (float)end;
+			quad[1].sy = g_flightVpOriginY + (float)y;
+			quad[2].sx = g_flightVpOriginX + (float)end;
+			quad[2].sy = g_flightVpOriginY + (float)(y + 1);
+			quad[3].sx = g_flightVpOriginX + (float)start;
+			quad[3].sy = g_flightVpOriginY + (float)(y + 1);
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
+		start = right - corner_width;
+		end = right;
+		if (start < 0)
+			start = 0;
+		if (end >= pixelswide)
+			end = pixelswide - 1;
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)start;
+			quad[0].sy = g_flightVpOriginY + (float)y;
+			quad[1].sx = g_flightVpOriginX + (float)end;
+			quad[1].sy = g_flightVpOriginY + (float)y;
+			quad[2].sx = g_flightVpOriginX + (float)end;
+			quad[2].sy = g_flightVpOriginY + (float)(y + 1);
+			quad[3].sx = g_flightVpOriginX + (float)start;
+			quad[3].sy = g_flightVpOriginY + (float)(y + 1);
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
+	}
+	if (bottom >= 0 && bottom < pixelsdeep) {
+		int start = x < 0 ? 0 : x;
+		int end = x + corner_width;
+		if (end >= pixelswide)
+			end = pixelswide - 1;
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)start;
+			quad[0].sy = g_flightVpOriginY + (float)bottom;
+			quad[1].sx = g_flightVpOriginX + (float)end;
+			quad[1].sy = g_flightVpOriginY + (float)bottom;
+			quad[2].sx = g_flightVpOriginX + (float)end;
+			quad[2].sy = g_flightVpOriginY + (float)(bottom + 1);
+			quad[3].sx = g_flightVpOriginX + (float)start;
+			quad[3].sy = g_flightVpOriginY + (float)(bottom + 1);
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
+		start = right - corner_width;
+		end = right + 1;
+		if (start < 0)
+			start = 0;
+		if (end >= pixelswide)
+			end = pixelswide - 1;
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)start;
+			quad[0].sy = g_flightVpOriginY + (float)bottom;
+			quad[1].sx = g_flightVpOriginX + (float)end;
+			quad[1].sy = g_flightVpOriginY + (float)bottom;
+			quad[2].sx = g_flightVpOriginX + (float)end;
+			quad[2].sy = g_flightVpOriginY + (float)(bottom + 1);
+			quad[3].sx = g_flightVpOriginX + (float)start;
+			quad[3].sy = g_flightVpOriginY + (float)(bottom + 1);
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
+	}
+	if (x >= 0 && x < pixelswide) {
+		int start = y < 0 ? 0 : y;
+		int end = y + corner_height;
+		if (end >= pixelsdeep)
+			end = pixelsdeep - 1;
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)x;
+			quad[0].sy = g_flightVpOriginY + (float)start;
+			quad[1].sx = g_flightVpOriginX + (float)x;
+			quad[1].sy = g_flightVpOriginY + (float)end;
+			quad[2].sx = g_flightVpOriginX + (float)(x + 1);
+			quad[2].sy = g_flightVpOriginY + (float)end;
+			quad[3].sx = g_flightVpOriginX + (float)(x + 1);
+			quad[3].sy = g_flightVpOriginY + (float)start;
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
+		start = bottom - corner_height;
+		end = bottom;
+		if (start < 0)
+			start = 0;
+		if (end >= pixelsdeep)
+			end = pixelsdeep - 1;
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)x;
+			quad[0].sy = g_flightVpOriginY + (float)start;
+			quad[1].sx = g_flightVpOriginX + (float)x;
+			quad[1].sy = g_flightVpOriginY + (float)end;
+			quad[2].sx = g_flightVpOriginX + (float)(x + 1);
+			quad[2].sy = g_flightVpOriginY + (float)end;
+			quad[3].sx = g_flightVpOriginX + (float)(x + 1);
+			quad[3].sy = g_flightVpOriginY + (float)start;
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
+	}
+	if (right >= 0 && right < pixelswide) {
+		int start = y < 0 ? 0 : y;
+		int end = y + corner_height;
+		if (end >= pixelsdeep)
+			end = pixelsdeep - 1;
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)right;
+			quad[0].sy = g_flightVpOriginY + (float)start;
+			quad[1].sx = g_flightVpOriginX + (float)right;
+			quad[1].sy = g_flightVpOriginY + (float)end;
+			quad[2].sx = g_flightVpOriginX + (float)(right + 1);
+			quad[2].sy = g_flightVpOriginY + (float)end;
+			quad[3].sx = g_flightVpOriginX + (float)(right + 1);
+			quad[3].sy = g_flightVpOriginY + (float)start;
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
+		start = bottom - corner_height;
+		end = bottom;
+		if (start < 0)
+			start = 0;
+		if (end >= pixelsdeep)
+			end = pixelsdeep - 1;
+		if (start < end) {
+			quad_base = g_d3dVertexCount;
+			quad = &g_flightVertexBuffer[quad_base];
+			quad[0].sx = g_flightVpOriginX + (float)right;
+			quad[0].sy = g_flightVpOriginY + (float)start;
+			quad[1].sx = g_flightVpOriginX + (float)right;
+			quad[1].sy = g_flightVpOriginY + (float)end;
+			quad[2].sx = g_flightVpOriginX + (float)(right + 1);
+			quad[2].sy = g_flightVpOriginY + (float)end;
+			quad[3].sx = g_flightVpOriginX + (float)(right + 1);
+			quad[3].sy = g_flightVpOriginY + (float)start;
+			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
+				quad[quad_vertex].sz = screen_depth;
+				quad[quad_vertex].rhw = screen_depth;
+				quad[quad_vertex].color = color;
+				quad[quad_vertex].specular = 0;
+				quad[quad_vertex].tu = 0.0f;
+				quad[quad_vertex].tv = 0.0f;
+			}
+			quad_triangles = &g_triBuffer[g_d3dIndexCount];
+			quad_triangles[0].v0 = quad_base;
+			quad_triangles[0].v1 = quad_base + 1;
+			quad_triangles[0].v2 = quad_base + 2;
+			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[0].texture = NULL;
+			quad_triangles[1].v0 = quad_base;
+			quad_triangles[1].v1 = quad_base + 2;
+			quad_triangles[1].v2 = quad_base + 3;
+			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
+			quad_triangles[1].texture = NULL;
+			g_d3dIndexCount += 2;
+			g_d3dVertexCount += 4;
+			result = (int16_t)g_d3dVertexCount;
+		}
+	}
+	return result;
+}
+
+// FUNCTION: TIE98 0x430F70
+static int RenderScene_CullMeshFacesFromView(SceneMeshTIE98* mesh) {
+	SceneFaceTIE98* output;
+	int face_index;
+
+	mesh->faceBaseIndex = g_visFaceCount;
+	g_meshEyePos = mesh->pos;
+	if (g_bBackdropMeshMode) {
+		g_meshEyePos.x = 0.0f;
+		g_meshEyePos.y = 0.0f;
+		g_meshEyePos.z = -100000.0f;
+		Math3D_RotateVec3(&g_meshEyePos, &mesh->orient);
+		g_meshEyePos.x += mesh->pos.x;
+		g_meshEyePos.y += mesh->pos.y;
+		g_meshEyePos.z += mesh->pos.z;
+	}
+	output = &g_visFaceList[g_visFaceCount];
+	for (face_index = 0; face_index < mesh->faceCount; ++face_index) {
+		const FaceRecordTIE98* record = &mesh->pFaceGeom[face_index];
+		const Vec3f* vertex = &mesh->pModelVerts[record->vertexIdx[0]];
+		const Vec3f view = {
+			g_meshEyePos.x - vertex->x,
+			g_meshEyePos.y - vertex->y,
+			g_meshEyePos.z - vertex->z,
+		};
+		if (Math3D_Dot3(&view.x, &mesh->pFaceNormals[face_index].x) >= 0.0f) {
+			output->faceIndex = face_index;
+			output->pMesh = mesh;
+			output->pPhongData = &g_scenePhongData[12 * g_phongSlotIndex * (g_phongSlotStride + 1)];
+			if (g_phongSlotIndex < 199)
+				++g_phongSlotIndex;
+			output->packed = face_index + (g_curLayerId << 16);
+			output->pScanEdge = NULL;
+			++output;
+			++g_visFaceCount;
+		}
+	}
+	mesh->visFaceCount = g_visFaceCount - mesh->faceBaseIndex;
+	return mesh->faceBaseIndex;
 }
 
 // FUNCTION: TIE98 0x431130
@@ -1067,422 +2082,103 @@ static void sw3d_ProjectMeshVerticesDistant(SceneMeshTIE98* mesh) {
 	g_projVertCount += mesh->projVertCursor;
 }
 
-// FUNCTION: TIE98 0x42B130
-static int RenderScene_EmitFlightVertex(int vertex_index, ProjVertexTIE98* vertices) {
-	ProjVertexTIE98* source;
-	float w;
-	float depth;
-	D3DTLVERTEX* output;
-	int intensity;
-
-	/* PORT: bounds the host staging buffers allocated for the batch. */
-	if (g_d3dVertexCount > TIE98_HARDWARE_VERTEX_CAPACITY - 1 ||
-		g_d3dIndexCount > TIE98_HARDWARE_TRIANGLE_CAPACITY)
-		return -1;
-	source = &vertices[vertex_index];
-	w = source->w;
-	if (w < 0.0f)
-		w = (float)perspFactor;
-	depth = 1.0f / ((float)perspFactor / w * (1.0f / 2048.0f) + 1.0f);
-	if (g_std3DZBufferBitDepth == 2)
-		depth = 1.0f - depth;
-	output = &g_flightVertexBuffer[g_d3dVertexCount];
-	output->sx = source->sx + g_flightVpOriginX;
-	output->sy = source->sy + g_flightVpOriginY;
-	output->sz = depth;
-	output->rhw = w;
-	output->tu = source->tu;
-	output->tv = source->tv;
-	intensity = 48 + (int)(source->lightIntensity * 320.0f);
-	if (intensity > 255)
-		intensity = 255;
-	output->color = (uint32_t)(65793 * intensity - (g_capVertexAlpha ? 0x2000000 : 0x1000000));
-	output->specular = 0;
-	return g_d3dVertexCount++;
-}
-
-// FUNCTION: TIE98 0x428860
-static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
+// FUNCTION: TIE98 0x431F60
+static void sw3d_RasterizeMeshFaces(SceneMeshTIE98* mesh) {
 	ProjVertexTIE98* vertices = &g_projVertList[mesh->vertBaseIndex];
-	const int projection_end = mesh->vertBaseIndex + mesh->projVertCursor;
-	SceneFaceTIE98* face;
-	const uint8_t* previous_texels;
-	Std3DTextureSurface* opaque;
-	Std3DTextureSurface* color_key;
-	int face_iter;
-	/* PORT: the original reuses g_sceneEdgeList as this per-projection map of
-	 * emitted hardware vertices; the host edge list is sized per mesh, so the
-	 * display runtime owns a separately sized map. */
-	int* emitted_by_projection = Tie98Display_ReserveEmittedVertexMap((size_t)projection_end);
+	SceneFaceTIE98* face = &g_visFaceList[mesh->faceBaseIndex];
+	SceneEdgeTIE98* first_edge;
+	SceneEdgeTIE98* output_edge;
+	int edge_index;
+	int face_index;
 
-	int i;
+	mesh->edgeBaseIndex = g_sceneEdgeCursor;
+	mesh->clippedEdgeCount = 0;
+	first_edge = &g_sceneEdgeList[g_sceneEdgeCursor];
+	output_edge = first_edge;
+	for (edge_index = 0; edge_index < mesh->edgeCount; ++edge_index)
+		g_sceneEdgeFlags[edge_index] = -1;
 
-	g_clipVertCursor = projection_end;
-	for (i = 0; i < projection_end; ++i)
-		emitted_by_projection[i] = -1;
-	face = &g_visFaceList[mesh->faceBaseIndex];
-	previous_texels = NULL;
-	opaque = NULL;
-	color_key = NULL;
-
-	for (face_iter = 0; face_iter < mesh->visFaceCount; ++face_iter, ++face) {
+	for (face_index = 0; face_index < mesh->visFaceCount; ++face_index, ++face) {
 		const FaceRecordTIE98* record = &mesh->pFaceGeom[face->faceIndex];
-		float u_scale;
-		float v_scale;
-		int corner;
-		int previous;
-		int triangles_per_pass;
-		int additional_vertices;
-		int additional_triangles;
-
-		int i;
-
-		g_clipCountA = record->edgeIdx[3] != -1 ? 4 : 3;
-		u_scale = 1.0f;
-		v_scale = 1.0f;
-		if (g_pStd3DCurDevice->caps.bSquareOnlyTexture) {
-			int width = mesh->pMaterial->width;
-			int height = mesh->pMaterial->height;
-			if (width > height) {
-				while (height < width) {
-					v_scale *= 0.5f;
-					height *= 2;
-				}
-			} else if (height > width) {
-				while (width < height) {
-					u_scale *= 0.5f;
-					width *= 2;
-				}
-			}
-		}
-		for (corner = 0; corner < g_clipCountA; ++corner) {
-			int projected = g_vertexRemap[record->vertexIdx[corner]];
-			ProjVertexTIE98* vertex;
-			OptTexCoordTIE98 uv;
-
-			g_clipIdxA[corner] = projected;
-			vertex = &vertices[projected];
-			uv = mesh->pUVs[record->uvIdx[corner]];
-			uv.u *= u_scale;
-			uv.v *= v_scale;
-			if (vertex->tu != uv.u || vertex->tv != uv.v) {
-				const int duplicate = g_clipVertCursor++;
-				vertices[duplicate] = *vertex;
-				vertices[duplicate].tu = uv.u;
-				vertices[duplicate].tv = uv.v;
-				g_clipIdxA[corner] = duplicate;
-			}
-		}
-
+		const int corner_count = record->edgeIdx[3] != -1 ? 4 : 3;
+		int output_count = 0;
 		if (face->nearClipState == -1) {
-			memcpy(g_clipIdxB, g_clipIdxA, (size_t)g_clipCountA * sizeof *g_clipIdxA);
-			g_clipCountB = g_clipCountA;
-			g_clipCountA = 0;
-			if (g_clipCountB > 0) {
-				int i;
+			int current_corner;
+			int previous_corner;
 
-				previous = g_clipIdxB[g_clipCountB - 1];
-				for (i = 0; i < g_clipCountB; ++i) {
-					const int current = g_clipIdxB[i];
-					RenderClip_ClipPolyNear(previous, current, vertices);
-					previous = current;
-				}
-			}
-		}
-		g_clipCountB = 0;
-		if (g_clipCountA > 0) {
-			int count;
-			int i;
+			face->nearClipState = (uint16_t)pixelsdeep;
+			g_sw3dClipTop = NULL;
+			g_sw3dClipBottom = NULL;
+			current_corner = 0;
+			for (previous_corner = corner_count - 1; previous_corner >= 0; --previous_corner) {
+				const int source_edge = record->edgeIdx[previous_corner];
+				int existing_edge;
 
-			previous = g_clipIdxA[g_clipCountA - 1];
-			count = g_clipCountA;
-			for (i = 0; i < count; ++i) {
-				const int current = g_clipIdxA[i];
-				RenderClip_ClipPolyTop(previous, current, vertices);
-				previous = current;
-			}
-		}
-		g_clipCountA = 0;
-		if (g_clipCountB > 0) {
-			int count;
-			int i;
-
-			previous = g_clipIdxB[g_clipCountB - 1];
-			count = g_clipCountB;
-			for (i = 0; i < count; ++i) {
-				const int current = g_clipIdxB[i];
-				RenderClip_ClipPolyBottom(previous, current, vertices);
-				previous = current;
-			}
-		}
-		g_clipCountB = 0;
-		if (g_clipCountA > 0) {
-			int count;
-			int i;
-
-			previous = g_clipIdxA[g_clipCountA - 1];
-			count = g_clipCountA;
-			for (i = 0; i < count; ++i) {
-				const int current = g_clipIdxA[i];
-				RenderClip_ClipPolyLeft(previous, current, vertices);
-				previous = current;
-			}
-		}
-		g_clipCountA = 0;
-		if (g_clipCountB > 0) {
-			int count;
-			int i;
-
-			previous = g_clipIdxB[g_clipCountB - 1];
-			count = g_clipCountB;
-			for (i = 0; i < count; ++i) {
-				const int current = g_clipIdxB[i];
-				RenderClip_ClipPolyRight(previous, current, vertices);
-				previous = current;
-			}
-		}
-		face->nearClipState = pixelsdeep;
-		for (i = 0; i < g_clipCountA; ++i) {
-			const int projected = g_clipIdxA[i];
-			int emitted;
-			if (projected < projection_end) {
-				if (emitted_by_projection[projected] == -1)
-					emitted_by_projection[projected] = RenderScene_EmitFlightVertex(projected, vertices);
-				emitted = emitted_by_projection[projected];
-			} else {
-				emitted = RenderScene_EmitFlightVertex(projected, vertices);
-			}
-			if (emitted < 0)
-				return;
-			g_clipIdxA[i] = emitted;
-		}
-
-		if (g_clipCountA > 2) {
-			int texture_width = mesh->pMaterial->width;
-			int texture_height = mesh->pMaterial->height;
-			int texel_offset = 0;
-			int mip = (int)((float)face->mipLevel * g_mipLodScale);
-			uint8_t* texels;
-
-			if (texture_width * texture_height == mesh->pMaterial->textureSize) {
-				while (mip > 256 && texture_width != 8 && texture_height != 8) {
-					mip >>= 2;
-					texel_offset += texture_width * texture_height;
-					texture_width >>= 1;
-					texture_height >>= 1;
-				}
-			}
-			texels = mesh->pTexels + texel_offset;
-			if (texels != previous_texels) {
-				uint16_t* palette;
-
-				previous_texels = texels;
-				palette = (uint16_t*)(mesh->pPalette1 + 4096);
-				opaque = RenderTexture_GetOrCreateOpaque(texture_width, texture_height, palette, texels);
-				color_key = NULL;
-				if (palette[256] != 0) {
-					if (mesh->pObject->genus == GENUS_PROJECTILE_PLAYER ||
-						mesh->pObject->genus == GENUS_PROJECTILE_NPC) {
-						palette[256] = 0;
-					} else if (mesh->textureName && mesh->textureName[0] != '_') {
-						color_key = RenderTexture_GetOrCreateColorKey(texture_width, texture_height,
-																	  (uint16_t*)mesh->pPalette1, texels);
-						if (!color_key && texture_width == mesh->pMaterial->width &&
-							texture_height == mesh->pMaterial->height)
-							*(char*)mesh->textureName = '_';
+				g_sw3dGeneratedClipVertex = NULL;
+				existing_edge = g_sceneEdgeFlags[source_edge];
+				if (existing_edge == -1) {
+					if (sw3d_SetupClippedEdge(
+							mesh, output_edge, &vertices[g_vertexRemap[record->vertexIdx[previous_corner]]],
+							&vertices[g_vertexRemap[record->vertexIdx[current_corner]]]) < 0) {
+						if (!g_sw3dGeneratedClipVertex)
+							g_sceneEdgeFlags[source_edge] = -2;
+					} else {
+						face->edges[output_count++] = output_edge;
+						output_edge->pClipVert = g_sw3dGeneratedClipVertex;
+						g_sceneEdgeFlags[source_edge] = mesh->clippedEdgeCount++;
+						++output_edge;
+					}
+				} else if (existing_edge != -2) {
+					SceneEdgeTIE98* edge = &first_edge[existing_edge];
+					face->edges[output_count++] = edge;
+					if (edge->pClipVert) {
+						g_sw3dClipBottom = g_sw3dClipTop;
+						g_sw3dClipTop = edge->pClipVert;
 					}
 				}
+				current_corner = previous_corner;
+			}
+			if (g_sw3dClipBottom &&
+				sw3d_SetupClippedEdge(mesh, output_edge, g_sw3dClipTop, g_sw3dClipBottom) >= 0) {
+				face->edges[output_count++] = output_edge++;
+				++mesh->clippedEdgeCount;
+			}
+		} else {
+			int current_corner;
+			int previous_corner;
+
+			face->nearClipState = (uint16_t)pixelsdeep;
+			current_corner = 0;
+			for (previous_corner = corner_count - 1; previous_corner >= 0; --previous_corner) {
+				const int source_edge = record->edgeIdx[previous_corner];
+				const int existing_edge = g_sceneEdgeFlags[source_edge];
+				if (existing_edge == -1) {
+					if (sw3d_SetupEdge(output_edge,
+									   &vertices[g_vertexRemap[record->vertexIdx[previous_corner]]],
+									   &vertices[g_vertexRemap[record->vertexIdx[current_corner]]]) < 0) {
+						g_sceneEdgeFlags[source_edge] = -2;
+					} else {
+						face->edges[output_count++] = output_edge;
+						g_sceneEdgeFlags[source_edge] = mesh->clippedEdgeCount++;
+						++output_edge;
+					}
+				} else if (existing_edge != -2) {
+					face->edges[output_count++] = &first_edge[existing_edge];
+				}
+				current_corner = previous_corner;
 			}
 		}
 
-		triangles_per_pass = g_clipCountA > 2 ? g_clipCountA - 2 : 0;
-		additional_vertices = color_key ? g_clipCountA : 0;
-		additional_triangles = triangles_per_pass * (color_key ? 2 : 1);
-		/* PORT: bounds the host staging buffers allocated for the batch. */
-		if (additional_vertices < 0 || additional_triangles < 0 ||
-			g_d3dVertexCount > TIE98_HARDWARE_VERTEX_CAPACITY - additional_vertices ||
-			g_d3dIndexCount > TIE98_HARDWARE_TRIANGLE_CAPACITY - additional_triangles)
-			return;
-
-		if (color_key) {
-			int color_key_indices[32];
-			int i;
-
-			for (i = 0; i < g_clipCountA; ++i) {
-				g_flightVertexBuffer[g_d3dVertexCount] = g_flightVertexBuffer[g_clipIdxA[i]];
-				g_flightVertexBuffer[g_d3dVertexCount].color = 0xffffffffu;
-				color_key_indices[i] = g_d3dVertexCount++;
-			}
-			for (i = 2; i < g_clipCountA; ++i) {
-				Std3DRenderTri* triangle = &g_triBuffer[g_d3dIndexCount++];
-				triangle->v0 = color_key_indices[0];
-				triangle->v1 = color_key_indices[i - 1];
-				triangle->v2 = color_key_indices[i];
-				triangle->texture = color_key;
-				triangle->flags = (Std3DRenderStateFlags)(38931 + (g_bilinearEnabled ? 384 : 0) + 512);
-			}
-		}
-		for (i = 2; i < g_clipCountA; ++i) {
-			Std3DRenderTri* triangle = &g_triBuffer[g_d3dIndexCount++];
-			triangle->v0 = g_clipIdxA[0];
-			triangle->v1 = g_clipIdxA[i - 1];
-			triangle->v2 = g_clipIdxA[i];
-			triangle->texture = opaque;
-			triangle->flags =
-				(Std3DRenderStateFlags)(38931 + (g_bilinearEnabled ? 384 : 0) + (g_capVertexAlpha ? 512 : 0));
-			if (g_capVertexAlpha)
-				g_capVertexAlpha = 0;
+		face->edgeCount = output_count;
+		if (output_count != 0) {
+			sw3d_ScanConvertFace(face);
+		} else {
+			face->yTop = 0;
+			face->yBot = 0;
 		}
 	}
+	g_sceneEdgeCursor += mesh->clippedEdgeCount;
 }
-
-// FUNCTION: TIE98 0x42AD90
-static void RenderScene_DrawMesh(SceneMeshTIE98* mesh) {
-	int saved_visible_face_count;
-	SceneMeshTIE98* queued;
-
-	g_projVertCount = 0;
-	g_sceneEdgeCursor = 0;
-	saved_visible_face_count = g_visFaceCount;
-	if (g_meshQueueIndex == TIE98_MESH_QUEUE_MAX || g_visFaceCount + mesh->faceCount > TIE98_SCENE_FACE_MAX ||
-		mesh->vertexCount > g_projVertCapacity || mesh->edgeCount > g_sceneEdgeCapacity)
-		return;
-	g_meshQueue[g_meshQueueIndex] = *mesh;
-	queued = &g_meshQueue[g_meshQueueIndex];
-	RenderScene_CullMeshFacesFromView(queued);
-	if (queued->visFaceCount != 0) {
-		if (g_d3dVertexCount + 8 * queued->visFaceCount > g_maxBatchVerts ||
-			g_d3dIndexCount + 2 * queued->visFaceCount > g_maxBatchTris) {
-			Math_SetFpuExtendedPrecisionMode();
-			if (!g_powerVrSceneWorkaround)
-				std3D_StartScene();
-			std3D_LockExecuteBuffer();
-			std3D_AddVertices(g_flightVertexBuffer, g_d3dVertexCount);
-			std3D_BeginInstructions();
-			std3D_AddTriangles(g_triBuffer, (unsigned int)g_d3dIndexCount);
-			std3D_ExecuteBuffer();
-			if (!g_powerVrSceneWorkaround)
-				std3D_EndScene();
-			Math_SetFpuSinglePrecisionMode();
-			g_d3dIndexCount = 0;
-			g_d3dVertexCount = 0;
-		}
-		if (g_bBackdropMeshMode)
-			RenderScene_ProjectDistantMeshVertices(queued);
-		else
-			RenderScene_ProjectMeshVertices(queued);
-		RenderScene_DrawMeshFaces(queued);
-		g_visFaceCount = saved_visible_face_count;
-	}
-}
-
-// FUNCTION: TIE98 0x432CE0
-static int sw3d_SetupEdge(SceneEdgeTIE98* edge, ProjVertexTIE98* first, ProjVertexTIE98* second) {
-	int first_y;
-	int second_y;
-	float inverse_height;
-	float first_row_offset;
-
-	if (first->sy < 0.0f) {
-		first_y = 0;
-	} else {
-		first_y = (int)first->sy;
-		if ((float)first_y != first->sy)
-			++first_y;
-	}
-
-	if (second->sy < 0.0f) {
-		second_y = 0;
-	} else {
-		second_y = (int)second->sy;
-		if ((float)second_y != second->sy)
-			++second_y;
-	}
-	if (first_y == second_y)
-		return -1;
-	if (first_y > second_y) {
-		ProjVertexTIE98* swap_vertex = first;
-		int swap_y;
-
-		first = second;
-		second = swap_vertex;
-		swap_y = first_y;
-		first_y = second_y;
-		second_y = swap_y;
-	}
-	if (second_y <= 0 || first_y >= (uint16_t)pixelsdeep)
-		return -1;
-	if (second_y > (uint16_t)pixelsdeep)
-		second_y = (uint16_t)pixelsdeep;
-
-	edge->yEnd = second_y;
-	inverse_height = 1.0f / (second->sy - first->sy);
-	edge->dxdy = (second->sx - first->sx) * inverse_height;
-	edge->dLightIntensityDy = (second->lightIntensity - first->lightIntensity) * inverse_height;
-	edge->pClipVert = NULL;
-	first_row_offset = (float)first_y - first->sy;
-	if (first_y != 0 || first_row_offset <= second->sy) {
-		edge->x = first->sx + first_row_offset * edge->dxdy;
-		edge->lightIntensity = first->lightIntensity + first_row_offset * edge->dLightIntensityDy;
-		edge->yStart = first_y;
-		return first_y;
-	}
-
-	edge->x = second->sx - second->sy * edge->dxdy;
-	edge->lightIntensity = second->lightIntensity - second->sy * edge->dLightIntensityDy;
-	edge->yStart = 0;
-	return 0;
-}
-
-// FUNCTION: TIE98 0x432980
-static int sw3d_SetupClippedEdge(SceneMeshTIE98* mesh, SceneEdgeTIE98* edge, ProjVertexTIE98* first,
-								 ProjVertexTIE98* second) {
-	ProjVertexTIE98* inside;
-	ProjVertexTIE98* outside;
-	if (second->w >= 0.0f) {
-		inside = second;
-		outside = first;
-	} else {
-		if (first->w < 0.0f)
-			return -1;
-		inside = first;
-		outside = second;
-	}
-
-	if (outside->w < 0.0f) {
-		float inside_inverse_w;
-		float inside_x;
-		float inside_y;
-		float inside_z;
-		float t;
-		float clipped_x;
-		float clipped_y;
-
-		g_sw3dClipBottom = g_sw3dClipTop;
-		g_sw3dClipTop = &g_projVertList[mesh->vertBaseIndex + mesh->projVertCursor];
-		g_sw3dGeneratedClipVertex = g_sw3dClipTop;
-		++mesh->projVertCursor;
-		++g_projVertCount;
-
-		inside_inverse_w = 1.0f / inside->w;
-		inside_x = (inside->sx - (float)halfpixelswide) * inside_inverse_w;
-		inside_y = (inside->sy - (float)(transfm2_screenyoffset + halfpixelsdeep)) * inside_inverse_w;
-		inside_z = (float)perspFactor * inside_inverse_w;
-		t = outside->w / (outside->w + 1.0f - inside_z);
-		clipped_x = outside->sx + (inside_x - outside->sx) * t;
-		clipped_y = outside->sy + (inside_y - outside->sy) * t;
-		g_sw3dClipTop->sx = (float)halfpixelswide + clipped_x * (float)perspFactor;
-		g_sw3dClipTop->sy = (float)(transfm2_screenyoffset + halfpixelsdeep) + clipped_y * (float)perspFactor;
-		g_sw3dClipTop->w = (float)perspFactor;
-		g_sw3dClipTop->lightIntensity =
-			outside->lightIntensity + (inside->lightIntensity - outside->lightIntensity) * t;
-		outside = g_sw3dClipTop;
-	}
-
-	return sw3d_SetupEdge(edge, outside, inside);
-}
-
-static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTIE98* face);
 
 // FUNCTION: TIE98 0x432350
 static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
@@ -1662,6 +2358,1175 @@ static void sw3d_ScanConvertFace(SceneFaceTIE98* face) {
 	left->lightIntensity = left_start_light;
 	right->x = right_start_x;
 	right->lightIntensity = right_start_light;
+}
+
+// FUNCTION: TIE98 0x432980
+static int sw3d_SetupClippedEdge(SceneMeshTIE98* mesh, SceneEdgeTIE98* edge, ProjVertexTIE98* first,
+								 ProjVertexTIE98* second) {
+	ProjVertexTIE98* inside;
+	ProjVertexTIE98* outside;
+	if (second->w >= 0.0f) {
+		inside = second;
+		outside = first;
+	} else {
+		if (first->w < 0.0f)
+			return -1;
+		inside = first;
+		outside = second;
+	}
+
+	if (outside->w < 0.0f) {
+		float inside_inverse_w;
+		float inside_x;
+		float inside_y;
+		float inside_z;
+		float t;
+		float clipped_x;
+		float clipped_y;
+
+		g_sw3dClipBottom = g_sw3dClipTop;
+		g_sw3dClipTop = &g_projVertList[mesh->vertBaseIndex + mesh->projVertCursor];
+		g_sw3dGeneratedClipVertex = g_sw3dClipTop;
+		++mesh->projVertCursor;
+		++g_projVertCount;
+
+		inside_inverse_w = 1.0f / inside->w;
+		inside_x = (inside->sx - (float)halfpixelswide) * inside_inverse_w;
+		inside_y = (inside->sy - (float)(transfm2_screenyoffset + halfpixelsdeep)) * inside_inverse_w;
+		inside_z = (float)perspFactor * inside_inverse_w;
+		t = outside->w / (outside->w + 1.0f - inside_z);
+		clipped_x = outside->sx + (inside_x - outside->sx) * t;
+		clipped_y = outside->sy + (inside_y - outside->sy) * t;
+		g_sw3dClipTop->sx = (float)halfpixelswide + clipped_x * (float)perspFactor;
+		g_sw3dClipTop->sy = (float)(transfm2_screenyoffset + halfpixelsdeep) + clipped_y * (float)perspFactor;
+		g_sw3dClipTop->w = (float)perspFactor;
+		g_sw3dClipTop->lightIntensity =
+			outside->lightIntensity + (inside->lightIntensity - outside->lightIntensity) * t;
+		outside = g_sw3dClipTop;
+	}
+
+	return sw3d_SetupEdge(edge, outside, inside);
+}
+
+// FUNCTION: TIE98 0x432CE0
+static int sw3d_SetupEdge(SceneEdgeTIE98* edge, ProjVertexTIE98* first, ProjVertexTIE98* second) {
+	int first_y;
+	int second_y;
+	float inverse_height;
+	float first_row_offset;
+
+	if (first->sy < 0.0f) {
+		first_y = 0;
+	} else {
+		first_y = (int)first->sy;
+		if ((float)first_y != first->sy)
+			++first_y;
+	}
+
+	if (second->sy < 0.0f) {
+		second_y = 0;
+	} else {
+		second_y = (int)second->sy;
+		if ((float)second_y != second->sy)
+			++second_y;
+	}
+	if (first_y == second_y)
+		return -1;
+	if (first_y > second_y) {
+		ProjVertexTIE98* swap_vertex = first;
+		int swap_y;
+
+		first = second;
+		second = swap_vertex;
+		swap_y = first_y;
+		first_y = second_y;
+		second_y = swap_y;
+	}
+	if (second_y <= 0 || first_y >= (uint16_t)pixelsdeep)
+		return -1;
+	if (second_y > (uint16_t)pixelsdeep)
+		second_y = (uint16_t)pixelsdeep;
+
+	edge->yEnd = second_y;
+	inverse_height = 1.0f / (second->sy - first->sy);
+	edge->dxdy = (second->sx - first->sx) * inverse_height;
+	edge->dLightIntensityDy = (second->lightIntensity - first->lightIntensity) * inverse_height;
+	edge->pClipVert = NULL;
+	first_row_offset = (float)first_y - first->sy;
+	if (first_y != 0 || first_row_offset <= second->sy) {
+		edge->x = first->sx + first_row_offset * edge->dxdy;
+		edge->lightIntensity = first->lightIntensity + first_row_offset * edge->dLightIntensityDy;
+		edge->yStart = first_y;
+		return first_y;
+	}
+
+	edge->x = second->sx - second->sy * edge->dxdy;
+	edge->lightIntensity = second->lightIntensity - second->sy * edge->dLightIntensityDy;
+	edge->yStart = 0;
+	return 0;
+}
+
+// FUNCTION: TIE98 0x432E20
+static void RenderScene_DrawSceneMesh(SceneMeshTIE98* mesh) {
+	if (g_useHardware3D) {
+		RenderScene_DrawMesh(mesh);
+	} else {
+		g_projVertCount = 0;
+		g_sceneEdgeCursor = 0;
+		if (g_meshQueueIndex != TIE98_MESH_QUEUE_MAX &&
+			g_visFaceCount + mesh->faceCount <= TIE98_SCENE_FACE_MAX &&
+			mesh->vertexCount <= g_projVertCapacity && mesh->edgeCount <= g_sceneEdgeCapacity) {
+			SceneMeshTIE98* queued;
+
+			g_meshQueue[g_meshQueueIndex] = *mesh;
+			queued = &g_meshQueue[g_meshQueueIndex];
+			RenderScene_CullMeshFacesFromView(queued);
+			if (queued->visFaceCount != 0) {
+				if (g_bBackdropMeshMode)
+					sw3d_ProjectMeshVerticesDistant(queued);
+				else
+					sw3d_ProjectMeshVertices(queued);
+				sw3d_RasterizeMeshFaces(queued);
+				++g_meshQueueIndex;
+			}
+		}
+	}
+}
+
+// FUNCTION: TIE98 0x4333A0
+static void FlightModel_Apply_BWing_Bridge_Rotation(const Tie98OptimizedPolyObject* model,
+													FlightObject* object, SceneMeshTIE98* mesh,
+													int bridge_mesh_index) {
+	Matrix3x3 rotation;
+
+	float axis_angle[4];
+
+	(void)model;
+
+	axis_angle[0] = 0.0f;
+	axis_angle[1] = -1.0f;
+	axis_angle[2] = 0.0f;
+	axis_angle[3] = (float)object->craft_ptr->mesh_rotation[bridge_mesh_index] * 0.024543673f;
+	Math3D_BuildAxisAngleMatrix(&rotation, axis_angle);
+	Math3D_MulMatrix3x3(&mesh->orient, &rotation);
+	Math3D_RotateVec3(&mesh->pos, &rotation);
+	Math3D_MulMatrix3x3T(&mesh->viewOrient, &rotation);
+}
+
+// FUNCTION: TIE98 0x433430
+void FlightModel_Draw_Object(FlightObject* object) {
+	const uint16_t model_type = object->ship_idx;
+	const int model_has_component_state = (species_table[model_type].side & 0x40) != 0;
+	const Tie98OptimizedPolyObject* model;
+	SceneMeshTIE98 mesh;
+	int mesh_ordinal;
+	int root;
+	int row;
+	int column;
+
+	g_nodeSwitchIndex = model_has_component_state ? object->decal_color : 0;
+	model = g_flightModelOverride ? g_flightModelOverride : TieNativeOpt_Acquire(model_type);
+	if (!model)
+		return;
+
+	memset(&mesh, 0, sizeof mesh);
+	mesh.pObject = object;
+	/* PORT: TIE98 reads a compact position overlay from ObjectRecord for
+	 * models without component state. tie_core stores every object in the
+	 * recovered TIE95 full-width layout, so both representations resolve here. */
+	mesh.viewPos.x = (float)(object->world_x - camera.x);
+	mesh.viewPos.y = (float)(object->world_y - camera.y);
+	mesh.viewPos.z = (float)(object->world_z - camera.z);
+	mesh.viewOrient.m[0] = (float)worldeyeA1 / 32768.0f;
+	mesh.viewOrient.m[1] = (float)worldeyeA2 / 32768.0f;
+	mesh.viewOrient.m[2] = (float)worldeyeA3 / 32768.0f;
+	mesh.viewOrient.m[3] = (float)worldeyeB1 / 32768.0f;
+	mesh.viewOrient.m[4] = (float)worldeyeB2 / 32768.0f;
+	mesh.viewOrient.m[5] = (float)worldeyeB3 / 32768.0f;
+	mesh.viewOrient.m[6] = (float)worldeyeC1 / 32768.0f;
+	mesh.viewOrient.m[7] = (float)worldeyeC2 / 32768.0f;
+	mesh.viewOrient.m[8] = (float)worldeyeC3 / 32768.0f;
+	Math3D_RotateVec3(&mesh.viewPos, &mesh.viewOrient);
+
+	mesh.viewOrient.m[0] = (float)rotworldeyeA1 / 32768.0f;
+	mesh.viewOrient.m[1] = (float)rotworldeyeA2 / 32768.0f;
+	mesh.viewOrient.m[2] = (float)rotworldeyeA3 / 32768.0f;
+	mesh.viewOrient.m[3] = (float)rotworldeyeB1 / 32768.0f;
+	mesh.viewOrient.m[4] = (float)rotworldeyeB2 / 32768.0f;
+	mesh.viewOrient.m[5] = (float)rotworldeyeB3 / 32768.0f;
+	mesh.viewOrient.m[6] = (float)rotworldeyeC1 / 32768.0f;
+	mesh.viewOrient.m[7] = (float)rotworldeyeC2 / 32768.0f;
+	mesh.viewOrient.m[8] = (float)rotworldeyeC3 / 32768.0f;
+	for (row = 0; row < 3; ++row)
+		for (column = 0; column < 3; ++column)
+			mesh.orient.m[row * 3 + column] = mesh.viewOrient.m[column * 3 + row];
+	mesh.pos.x = -mesh.viewPos.x;
+	mesh.pos.y = -mesh.viewPos.y;
+	mesh.pos.z = -mesh.viewPos.z;
+	Math3D_RotateVec3(&mesh.pos, &mesh.orient);
+	g_modelNodeWalkUnusedScratch0 = 0;
+	if (!g_defaultMaterialDesc) {
+		g_defaultMaterialDesc = &g_defaultMaterial;
+		g_defaultMaterial.height = 8;
+		g_defaultMaterial.width = 8;
+		g_defaultMaterial.paletteType = 16;
+		g_defaultMaterial.paletteAddress = 256;
+		ModelTexture_BuildPalettedShadeTable(g_defaultTextureData, g_defaultTextureRgb24, 8, 8);
+	}
+	g_modelNodeWalkUnusedScratch1 = 0;
+	g_curTextureDesc = g_defaultMaterialDesc;
+	g_curVertNormals = NULL;
+	g_modelNodeWalkUnusedScratch2 = 0;
+	g_curMeshFlags = 0;
+	g_curVertexCount = 0;
+	mesh_ordinal = 0;
+	for (root = 0; root < model->root_node_count; ++root) {
+		const Tie98OptNode* node = model->root_nodes[root];
+		int restore_mesh;
+		SceneMeshTIE98 saved_mesh;
+
+		mesh.rotAngle = 0.0f;
+		restore_mesh = 0;
+
+		if (node && node->type != TIE98_OPT_NODE_TEXTURE) {
+			++mesh_ordinal;
+			if (object->genus == GENUS_PROJECTILE_PLAYER || object->genus == GENUS_PROJECTILE_NPC) {
+				g_nodeSwitchIndex = 0;
+			} else if (model_has_component_state) {
+				if (object->craft_ptr->mesh_state[mesh_ordinal - 1] != 0)
+					continue;
+				mesh.rotAngle = object->craft_ptr->mesh_rotation[mesh_ordinal - 1] * 0.024543673f;
+			}
+			if (model_type == 4) {
+				if (g_bwingBridgeMeshIndex == -1)
+					g_bwingBridgeMeshIndex = modelmesh_findbridgeindex(model_type);
+				if (g_bwingBridgeMeshIndex != -1 &&
+					object->craft_ptr->mesh_rotation[g_bwingBridgeMeshIndex] != 0) {
+					saved_mesh = mesh;
+					restore_mesh = 1;
+					FlightModel_Apply_BWing_Bridge_Rotation(model, object, &mesh, g_bwingBridgeMeshIndex);
+				}
+			}
+		}
+		++g_curLayerId;
+		FlightModel_Draw_OPT_Node(model, node, &mesh);
+		if (restore_mesh)
+			mesh = saved_mesh;
+	}
+}
+
+// FUNCTION: TIE98 0x433980
+void FlightModel_Draw_Object_Mesh(FlightObject* object, int mesh_index) {
+	uint16_t model_type = object->ship_idx;
+	const Tie98OptimizedPolyObject* model;
+	SceneMeshTIE98 mesh;
+	int root;
+	int row;
+	int column;
+
+	if (model_type == 89)
+		model_type = object->ship_type_override;
+	model = TieNativeOpt_Acquire(model_type);
+	if (!model)
+		return;
+	g_nodeSwitchIndex = object->decal_color;
+
+	memset(&mesh, 0, sizeof mesh);
+	mesh.pObject = object;
+	/* PORT: TIE98 reads a compact position overlay from ObjectRecord for
+	 * models without component state. tie_core stores every object in the
+	 * recovered TIE95 full-width layout, so both representations resolve here. */
+	mesh.viewPos.x = (float)(object->world_x - camera.x);
+	mesh.viewPos.y = (float)(object->world_y - camera.y);
+	mesh.viewPos.z = (float)(object->world_z - camera.z);
+	mesh.viewOrient.m[0] = (float)worldeyeA1 / 32768.0f;
+	mesh.viewOrient.m[1] = (float)worldeyeA2 / 32768.0f;
+	mesh.viewOrient.m[2] = (float)worldeyeA3 / 32768.0f;
+	mesh.viewOrient.m[3] = (float)worldeyeB1 / 32768.0f;
+	mesh.viewOrient.m[4] = (float)worldeyeB2 / 32768.0f;
+	mesh.viewOrient.m[5] = (float)worldeyeB3 / 32768.0f;
+	mesh.viewOrient.m[6] = (float)worldeyeC1 / 32768.0f;
+	mesh.viewOrient.m[7] = (float)worldeyeC2 / 32768.0f;
+	mesh.viewOrient.m[8] = (float)worldeyeC3 / 32768.0f;
+	Math3D_RotateVec3(&mesh.viewPos, &mesh.viewOrient);
+
+	mesh.viewOrient.m[0] = (float)rotworldeyeA1 / 32768.0f;
+	mesh.viewOrient.m[1] = (float)rotworldeyeA2 / 32768.0f;
+	mesh.viewOrient.m[2] = (float)rotworldeyeA3 / 32768.0f;
+	mesh.viewOrient.m[3] = (float)rotworldeyeB1 / 32768.0f;
+	mesh.viewOrient.m[4] = (float)rotworldeyeB2 / 32768.0f;
+	mesh.viewOrient.m[5] = (float)rotworldeyeB3 / 32768.0f;
+	mesh.viewOrient.m[6] = (float)rotworldeyeC1 / 32768.0f;
+	mesh.viewOrient.m[7] = (float)rotworldeyeC2 / 32768.0f;
+	mesh.viewOrient.m[8] = (float)rotworldeyeC3 / 32768.0f;
+	for (row = 0; row < 3; ++row)
+		for (column = 0; column < 3; ++column)
+			mesh.orient.m[row * 3 + column] = mesh.viewOrient.m[column * 3 + row];
+	mesh.pos.x = -mesh.viewPos.x;
+	mesh.pos.y = -mesh.viewPos.y;
+	mesh.pos.z = -mesh.viewPos.z;
+	Math3D_RotateVec3(&mesh.pos, &mesh.orient);
+	g_modelNodeWalkUnusedScratch0 = 0;
+	if (!g_defaultMaterialDesc) {
+		g_defaultMaterialDesc = &g_defaultMaterial;
+		g_defaultMaterial.height = 8;
+		g_defaultMaterial.width = 8;
+		g_defaultMaterial.paletteType = 16;
+		g_defaultMaterial.paletteAddress = 256;
+		ModelTexture_BuildPalettedShadeTable(g_defaultTextureData, g_defaultTextureRgb24, 8, 8);
+	}
+	g_modelNodeWalkUnusedScratch1 = 0;
+	g_curTextureDesc = g_defaultMaterialDesc;
+	g_curVertNormals = NULL;
+	g_modelNodeWalkUnusedScratch2 = 0;
+	g_curMeshFlags = 0;
+	g_curVertexCount = 0;
+	for (root = 0; root < model->root_node_count; ++root) {
+		const Tie98OptNode* node = model->root_nodes[root];
+		if (node && node->type == TIE98_OPT_NODE_TEXTURE) {
+			++g_curLayerId;
+			FlightModel_Draw_OPT_Node(model, node, &mesh);
+			++mesh_index;
+		} else if (root == mesh_index) {
+			++g_curLayerId;
+			FlightModel_Draw_OPT_Node(model, node, &mesh);
+		}
+	}
+}
+
+// FUNCTION: TIE98 0x434330
+static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, const Tie98OptNode* input_node,
+									  SceneMeshTIE98* mesh) {
+	const Tie98OptNode* node = input_node;
+	int selected_lod;
+	int selected_switch;
+	int selected;
+	SceneMeshTIE98 child_mesh;
+	int i;
+
+	if (!node)
+		return;
+	while (node->type == TIE98_OPT_NODE_REFERENCE) {
+		if (node->reference)
+			node = node->reference;
+		else
+			node = OptModel_FindNodeByNameInModel(model, (const char*)node->param2);
+		if (!node)
+			return;
+	}
+
+	selected_lod = 0;
+	selected_switch = 0;
+	if (node->param2) {
+		switch (node->type) {
+			case TIE98_OPT_NODE_FACE_DATA:
+			case TIE98_OPT_NODE_FACE_DATA_15:
+			case TIE98_OPT_NODE_FACE_DATA_16:
+			case TIE98_OPT_NODE_FACE_DATA_17: {
+				const uint8_t* face_data = node->param2;
+				Vec3f* inline_vertex_normals;
+
+				mesh->faceCount = (int)node->param1;
+				memcpy(&mesh->edgeCount, face_data, sizeof mesh->edgeCount);
+				if (mesh->edgeCount * 4 > g_sceneEdgeCapacity) {
+					g_sceneEdgeCapacity = mesh->edgeCount * 4;
+					g_sceneEdgeList =
+						realloc(g_sceneEdgeList, (size_t)g_sceneEdgeCapacity * sizeof *g_sceneEdgeList);
+					g_sceneEdgeFlags =
+						realloc(g_sceneEdgeFlags, (size_t)mesh->edgeCount * sizeof *g_sceneEdgeFlags);
+				}
+				mesh->pFaceGeom = (FaceRecordTIE98*)(face_data + 4);
+				mesh->pFaceNormals = (Vec3f*)(mesh->pFaceGeom + mesh->faceCount);
+				mesh->pFaceTexturing = (FaceTextureGradientsTIE98*)(mesh->pFaceNormals + mesh->faceCount);
+				inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + mesh->faceCount);
+				if (!mesh->pMaterial) {
+					uint8_t* shade_table;
+
+					mesh->pMaterial = g_curTextureDesc;
+					if (g_curTextureDesc == &g_defaultMaterial) {
+						mesh->pTexels = g_defaultTextureData;
+						mesh->pPalette0 = g_defaultTextureData + 64;
+						mesh->pPalette1 = g_defaultTextureData + 64 + 4096;
+					} else {
+						mesh->pTexels = (uint8_t*)g_curTextureDesc + sizeof *g_curTextureDesc;
+						if (g_curTextureDesc->paletteType == 0) {
+							shade_table = (uint8_t*)TieNativeOpt_ResolveAddress(
+								model, g_curTextureDesc->paletteAddress, 1);
+						} else {
+							int base_size;
+
+							shade_table = mesh->pTexels;
+							base_size = g_curTextureDesc->width * g_curTextureDesc->height;
+							if (base_size == g_curTextureDesc->textureSize)
+								shade_table += g_curTextureDesc->dataSize;
+							else
+								shade_table += base_size;
+						}
+						if (g_useHardware3D) {
+							/* pPalette1 carries the runtime-built RGB565 shade tables (analyzed
+							 * level 0, level 8 base palette at +4096, overlay metadata) the
+							 * hardware draw path consumes; pPalette0 keeps the serialized shade
+							 * table and is only read by the software rasterizer. */
+							mesh->pPalette0 = shade_table;
+							mesh->pPalette1 = (uint8_t*)RenderTexture_GetHardwareShadeTables(
+								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
+						} else if (g_flight16bppBytesPerPixel == 1) {
+							mesh->pPalette0 = (uint8_t*)RenderTexture_GetSoftwareShadeTable(
+								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
+							mesh->pPalette1 = mesh->pPalette0 + 4096;
+						} else {
+							/* The 16-bit software span reads the serialized RGB565 shades at
+							 * pPalette0 + 4096, matching OptModel_BuildRuntimeHandle. */
+							mesh->pPalette0 = shade_table;
+							mesh->pPalette1 = shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES;
+						}
+					}
+				}
+				if (mesh->pVertNormals) {
+					RenderScene_DrawSceneMesh(mesh);
+				} else {
+					mesh->pVertNormals = inline_vertex_normals;
+					RenderScene_DrawSceneMesh(mesh);
+					mesh->pVertNormals = NULL;
+				}
+				break;
+			}
+			case TIE98_OPT_NODE_TRANSFORM: {
+				Vec3f* offset = (Vec3f*)node->param2;
+				Matrix3x3* transform = (Matrix3x3*)(offset + 1);
+				Math3D_MulMatrix3x3(&mesh->viewOrient, transform);
+				Math3D_RotateVec3(&mesh->viewPos, transform);
+				mesh->viewPos.x += offset->x;
+				mesh->viewPos.y += offset->y;
+				mesh->viewPos.z += offset->z;
+				Math3D_MulMatrix3x3T(&mesh->orient, transform);
+				mesh->pos.x -= Math3D_RotateVec3X(offset, &mesh->orient);
+				mesh->pos.y -= Math3D_RotateVec3Y(offset, &mesh->orient);
+				mesh->pos.z -= Math3D_RotateVec3Z(offset, &mesh->orient);
+				break;
+			}
+			case TIE98_OPT_NODE_TRANSLATE: {
+				Vec3f* offset = (Vec3f*)node->param2;
+				mesh->viewPos.x += offset->x;
+				mesh->viewPos.y += offset->y;
+				mesh->viewPos.z += offset->z;
+				mesh->pos.x -= Math3D_RotateVec3X(offset, &mesh->orient);
+				mesh->pos.y -= Math3D_RotateVec3Y(offset, &mesh->orient);
+				mesh->pos.z -= Math3D_RotateVec3Z(offset, &mesh->orient);
+				break;
+			}
+			case TIE98_OPT_NODE_MATRIX:
+				Math3D_MulMatrix3x3(&mesh->viewOrient, (Matrix3x3*)node->param2);
+				Math3D_RotateVec3(&mesh->viewPos, (Matrix3x3*)node->param2);
+				Math3D_MulMatrix3x3T(&mesh->orient, (Matrix3x3*)node->param2);
+				break;
+			case TIE98_OPT_NODE_SCALE: {
+				Vec3f* scale = (Vec3f*)node->param2;
+				float inverse_x;
+				float inverse_y;
+				float inverse_z;
+
+				mesh->viewOrient.m[0] *= scale->x;
+				mesh->viewOrient.m[1] *= scale->y;
+				mesh->viewOrient.m[2] *= scale->z;
+				mesh->viewOrient.m[3] *= scale->x;
+				mesh->viewOrient.m[4] *= scale->y;
+				mesh->viewOrient.m[5] *= scale->z;
+				mesh->viewOrient.m[6] *= scale->x;
+				mesh->viewOrient.m[7] *= scale->y;
+				mesh->viewOrient.m[8] *= scale->z;
+				mesh->viewPos.x *= scale->x;
+				mesh->viewPos.y *= scale->y;
+				mesh->viewPos.z *= scale->z;
+				inverse_x = 1.0f / scale->x;
+				inverse_y = 1.0f / scale->y;
+				inverse_z = 1.0f / scale->z;
+				mesh->orient.m[0] *= inverse_x;
+				mesh->orient.m[1] *= inverse_x;
+				mesh->orient.m[2] *= inverse_x;
+				mesh->orient.m[3] *= inverse_y;
+				mesh->orient.m[4] *= inverse_y;
+				mesh->orient.m[5] *= inverse_y;
+				mesh->orient.m[6] *= inverse_z;
+				mesh->orient.m[7] *= inverse_z;
+				mesh->orient.m[8] *= inverse_z;
+				break;
+			}
+			case TIE98_OPT_NODE_MESH_VERTICES:
+				/* PORT: dynamic host storage replaces the original fixed 32-bit
+				 * handle-backed projection arrays. */
+				if ((int)node->param1 > g_modelVertexCapacity) {
+					g_modelVertexCapacity = (int)node->param1;
+					g_projVertCapacity = 4 * (int)node->param1;
+					g_projVertList =
+						realloc(g_projVertList, (size_t)g_projVertCapacity * sizeof *g_projVertList);
+					g_vertexRemap = realloc(g_vertexRemap, (size_t)node->param1 * sizeof *g_vertexRemap);
+				}
+				mesh->vertexCount = (int)node->param1;
+				mesh->pModelVerts = (Vec3f*)node->param2;
+				break;
+			case TIE98_OPT_NODE_VERTEX_NORMALS:
+				g_curVertNormals = (const Vec3f*)node->param2;
+				mesh->pVertNormals = (Vec3f*)node->param2;
+				break;
+			case TIE98_OPT_NODE_TEXTURE_COORDINATES:
+				mesh->pUVs = (OptTexCoordTIE98*)node->param2;
+				break;
+			case TIE98_OPT_NODE_FLAGS:
+				memcpy(mesh->nodeFlags, node->param2, 3 * sizeof mesh->nodeFlags[0]);
+				break;
+			case TIE98_OPT_NODE_TYPE_10:
+				if (node->param1 == 7 || node->param1 == 8)
+					mesh->field_136 = (int)g_curMeshFlags;
+				else if (node->param1 == 5 || node->param1 == 6)
+					mesh->field_156 = (int)g_curMeshFlags;
+				else
+					mesh->nodeFlags[3] = (int)g_curMeshFlags;
+				break;
+			case TIE98_OPT_NODE_TEXTURE: {
+				mesh->textureName = node->name;
+				g_curTextureDesc = (OptTextureDataTIE98*)node->param2;
+				{
+					uint8_t* shade_table;
+
+					mesh->pMaterial = g_curTextureDesc;
+					if (g_curTextureDesc == &g_defaultMaterial) {
+						mesh->pTexels = g_defaultTextureData;
+						mesh->pPalette0 = g_defaultTextureData + 64;
+						mesh->pPalette1 = g_defaultTextureData + 64 + 4096;
+					} else {
+						mesh->pTexels = (uint8_t*)g_curTextureDesc + sizeof *g_curTextureDesc;
+						if (g_curTextureDesc->paletteType == 0) {
+							shade_table = (uint8_t*)TieNativeOpt_ResolveAddress(
+								model, g_curTextureDesc->paletteAddress, 1);
+						} else {
+							int base_size;
+
+							shade_table = mesh->pTexels;
+							base_size = g_curTextureDesc->width * g_curTextureDesc->height;
+							if (base_size == g_curTextureDesc->textureSize)
+								shade_table += g_curTextureDesc->dataSize;
+							else
+								shade_table += base_size;
+						}
+						if (g_useHardware3D) {
+							/* pPalette1 carries the runtime-built RGB565 shade tables (analyzed
+							 * level 0, level 8 base palette at +4096, overlay metadata) the
+							 * hardware draw path consumes; pPalette0 keeps the serialized shade
+							 * table and is only read by the software rasterizer. */
+							mesh->pPalette0 = shade_table;
+							mesh->pPalette1 = (uint8_t*)RenderTexture_GetHardwareShadeTables(
+								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
+						} else if (g_flight16bppBytesPerPixel == 1) {
+							mesh->pPalette0 = (uint8_t*)RenderTexture_GetSoftwareShadeTable(
+								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
+							mesh->pPalette1 = mesh->pPalette0 + 4096;
+						} else {
+							/* The 16-bit software span reads the serialized RGB565 shades at
+							 * pPalette0 + 4096, matching OptModel_BuildRuntimeHandle. */
+							mesh->pPalette0 = shade_table;
+							mesh->pPalette1 = shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES;
+						}
+					}
+				}
+				break;
+			}
+			case TIE98_OPT_NODE_FACE_GROUP: {
+				selected_lod = g_forcedLodLevel;
+				if (objecteyez > 0 && selected_lod == 0) {
+					float threshold = 1.0f;
+					const float* thresholds;
+
+					if (g_lodDistanceScale > 0.0f)
+						threshold = 1.0f / ((float)objecteyez * g_lodDistanceScale);
+					selected_lod = 1;
+					thresholds = node->param2;
+					while (selected_lod <= node->child_count && thresholds[selected_lod - 1] > threshold)
+						++selected_lod;
+					if (selected_lod > node->child_count)
+						selected_lod = -1;
+				} else if (selected_lod == 0) {
+					selected_lod = 1;
+				} else if (selected_lod > node->child_count) {
+					selected_lod = -1;
+				}
+				break;
+			}
+			case TIE98_OPT_NODE_ROTATION_SCALE: {
+				float axis_angle[4];
+				Vec3f* pivot;
+				Vec3f* axis;
+				Matrix3x3 rotation;
+
+				if (mesh->rotAngle == 0.0f)
+					break;
+				pivot = (Vec3f*)node->param2;
+				axis = pivot + 1;
+				mesh->pos.x -= pivot->x;
+				mesh->pos.y -= pivot->y;
+				mesh->pos.z -= pivot->z;
+				mesh->viewPos.x += Math3D_RotateVec3X(pivot, &mesh->viewOrient);
+				mesh->viewPos.y += Math3D_RotateVec3Y(pivot, &mesh->viewOrient);
+				mesh->viewPos.z += Math3D_RotateVec3Z(pivot, &mesh->viewOrient);
+				axis_angle[0] = axis->x * 0.000030517578f;
+				axis_angle[1] = axis->y * 0.000030517578f;
+				axis_angle[2] = axis->z * 0.000030517578f;
+				axis_angle[3] = mesh->rotAngle;
+
+				Math3D_BuildAxisAngleMatrix(&rotation, axis_angle);
+				Math3D_MulMatrix3x3(&mesh->orient, &rotation);
+				Math3D_RotateVec3(&mesh->pos, &rotation);
+				Math3D_MulMatrix3x3T(&mesh->viewOrient, &rotation);
+				mesh->pos.x += pivot->x;
+				mesh->pos.y += pivot->y;
+				mesh->pos.z += pivot->z;
+				mesh->viewPos.x -= Math3D_RotateVec3X(pivot, &mesh->viewOrient);
+				mesh->viewPos.y -= Math3D_RotateVec3Y(pivot, &mesh->viewOrient);
+				mesh->viewPos.z -= Math3D_RotateVec3Z(pivot, &mesh->viewOrient);
+				break;
+			}
+			case TIE98_OPT_NODE_SWITCH:
+				selected_switch = g_nodeSwitchIndex + 1;
+				if (selected_switch > node->child_count)
+					selected_switch = node->child_count;
+				break;
+			default:
+				break;
+		}
+	} else {
+		if (node->type == TIE98_OPT_NODE_TYPE_10) {
+			if (node->param1 == 7 || node->param1 == 8)
+				mesh->field_136 = (int)g_curMeshFlags;
+			else if (node->param1 == 5 || node->param1 == 6)
+				mesh->field_156 = (int)g_curMeshFlags;
+			else
+				mesh->nodeFlags[3] = (int)g_curMeshFlags;
+		} else if (node->type == TIE98_OPT_NODE_SWITCH) {
+			selected_switch = g_nodeSwitchIndex + 1;
+			if (selected_switch > node->child_count)
+				selected_switch = node->child_count;
+		}
+	}
+
+	if (node->child_count == 0)
+		return;
+	selected = selected_switch ? selected_switch : selected_lod;
+	if (selected == -1)
+		return;
+	if (selected != 0) {
+		++g_curLayerId;
+		FlightModel_Draw_OPT_Node(model, node->children[selected - 1], mesh);
+		return;
+	}
+	child_mesh = *mesh;
+	g_modelNodeWalkUnusedScratch0 = 0;
+	g_modelNodeWalkUnusedScratch1 = 0;
+	g_curVertNormals = NULL;
+	g_modelNodeWalkUnusedScratch2 = 0;
+	g_curMeshFlags = 0;
+	g_curVertexCount = 0;
+	for (i = 0; i < node->child_count; ++i) {
+		++g_curLayerId;
+		FlightModel_Draw_OPT_Node(model, node->children[i], &child_mesh);
+	}
+}
+
+// FUNCTION: TIE98 0x434BC0
+void FlightModel_ToggleSelfOcclusion(void) { g_modelSelfOcclusionEnabled = !g_modelSelfOcclusionEnabled; }
+
+// FUNCTION: TIE98 0x434BE0
+int FlightModel_GetSelfOcclusion(void) { return g_modelSelfOcclusionEnabled; }
+
+// FUNCTION: TIE98 0x434BF0
+static int FlightModel_IsLightSegmentBlocked(FlightObject* object, const Vec3f* segment_start,
+											 const Vec3f* segment_end) {
+	const Tie98OptimizedPolyObject* model;
+	SceneMeshTIE98 mesh;
+	int i;
+
+	if (!g_modelSelfOcclusionEnabled)
+		return 0;
+	// PORT: the host supplies the already-adjusted native OPT tree in place of the
+	// original handle unlock/lock and pointer-adjustment sequence.
+	model = TieNativeOpt_Acquire(object->ship_idx);
+	if (!model)
+		return 0;
+
+	memset(&mesh, 0, sizeof mesh);
+	mesh.pObject = object;
+	mesh.viewOrient.m[0] = 1.0f;
+	mesh.viewOrient.m[4] = 1.0f;
+	mesh.viewOrient.m[8] = 1.0f;
+	mesh.orient.m[0] = 1.0f;
+	mesh.orient.m[4] = 1.0f;
+	mesh.orient.m[8] = 1.0f;
+	g_modelNodeWalkUnusedScratch0 = 0;
+	g_modelNodeWalkUnusedScratch1 = 0;
+	g_curVertNormals = NULL;
+	g_modelNodeWalkUnusedScratch2 = 0;
+	g_curMeshFlags = 0;
+	g_curVertexCount = 0;
+	for (i = 0; i < model->root_node_count; ++i) {
+		if (FlightModel_TestLightSegmentAgainstNode(model, model->root_nodes[i], &mesh, segment_start,
+													segment_end))
+			return 1;
+	}
+	return 0;
+}
+
+// FUNCTION: TIE98 0x434D40
+static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObject* model,
+												   const Tie98OptNode* input_node, SceneMeshTIE98* mesh,
+												   const Vec3f* segment_start, const Vec3f* segment_end) {
+	const Tie98OptNode* node = input_node;
+	SceneMeshTIE98 child_mesh;
+	int i;
+
+	if (!node)
+		return 0;
+	while (node->type == TIE98_OPT_NODE_REFERENCE) {
+		node = OptModel_FindNodeByNameInModel(model, (const char*)node->param2);
+		if (!node)
+			return 0;
+	}
+
+	if (node->param2) {
+		switch (node->type) {
+			case TIE98_OPT_NODE_FACE_DATA:
+			case TIE98_OPT_NODE_FACE_DATA_15:
+			case TIE98_OPT_NODE_FACE_DATA_16:
+			case TIE98_OPT_NODE_FACE_DATA_17: {
+				const uint8_t* face_data = node->param2;
+				Vec3f* inline_vertex_normals;
+
+				mesh->faceCount = (int)node->param1;
+				memcpy(&mesh->edgeCount, face_data, sizeof mesh->edgeCount);
+				mesh->pFaceGeom = (FaceRecordTIE98*)(face_data + 4);
+				mesh->pFaceNormals = (Vec3f*)(mesh->pFaceGeom + mesh->faceCount);
+				mesh->pFaceTexturing = (FaceTextureGradientsTIE98*)(mesh->pFaceNormals + mesh->faceCount);
+				inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + mesh->faceCount);
+				if (!mesh->pVertNormals) {
+					int blocked;
+
+					mesh->pVertNormals = inline_vertex_normals;
+					blocked = FlightModel_TestLightSegmentAgainstFaces(mesh, segment_start, segment_end);
+					mesh->pVertNormals = NULL;
+					if (blocked)
+						return 1;
+				} else if (FlightModel_TestLightSegmentAgainstFaces(mesh, segment_start, segment_end)) {
+					return 1;
+				}
+				break;
+			}
+			case TIE98_OPT_NODE_TRANSFORM: {
+				Vec3f* offset = (Vec3f*)node->param2;
+				Matrix3x3* transform = (Matrix3x3*)(offset + 1);
+				Math3D_MulMatrix3x3(&mesh->viewOrient, transform);
+				Math3D_RotateVec3(&mesh->viewPos, transform);
+				mesh->viewPos.x += offset->x;
+				mesh->viewPos.y += offset->y;
+				mesh->viewPos.z += offset->z;
+				Math3D_MulMatrix3x3T(&mesh->orient, transform);
+				mesh->pos.x -= Math3D_RotateVec3X(offset, &mesh->orient);
+				mesh->pos.y -= Math3D_RotateVec3Y(offset, &mesh->orient);
+				mesh->pos.z -= Math3D_RotateVec3Z(offset, &mesh->orient);
+				break;
+			}
+			case TIE98_OPT_NODE_TRANSLATE: {
+				Vec3f* offset = (Vec3f*)node->param2;
+				mesh->viewPos.x += offset->x;
+				mesh->viewPos.y += offset->y;
+				mesh->viewPos.z += offset->z;
+				mesh->pos.x -= Math3D_RotateVec3X(offset, &mesh->orient);
+				mesh->pos.y -= Math3D_RotateVec3Y(offset, &mesh->orient);
+				mesh->pos.z -= Math3D_RotateVec3Z(offset, &mesh->orient);
+				break;
+			}
+			case TIE98_OPT_NODE_MATRIX:
+				Math3D_MulMatrix3x3(&mesh->viewOrient, (Matrix3x3*)node->param2);
+				Math3D_RotateVec3(&mesh->viewPos, (Matrix3x3*)node->param2);
+				Math3D_MulMatrix3x3T(&mesh->orient, (Matrix3x3*)node->param2);
+				break;
+			case TIE98_OPT_NODE_SCALE: {
+				Vec3f* scale = (Vec3f*)node->param2;
+				float inverse_x;
+				float inverse_y;
+				float inverse_z;
+
+				mesh->viewOrient.m[0] *= scale->x;
+				mesh->viewOrient.m[1] *= scale->y;
+				mesh->viewOrient.m[2] *= scale->z;
+				mesh->viewOrient.m[3] *= scale->x;
+				mesh->viewOrient.m[4] *= scale->y;
+				mesh->viewOrient.m[5] *= scale->z;
+				mesh->viewOrient.m[6] *= scale->x;
+				mesh->viewOrient.m[7] *= scale->y;
+				mesh->viewOrient.m[8] *= scale->z;
+				mesh->viewPos.x *= scale->x;
+				mesh->viewPos.y *= scale->y;
+				mesh->viewPos.z *= scale->z;
+				inverse_x = 1.0f / scale->x;
+				inverse_y = 1.0f / scale->y;
+				inverse_z = 1.0f / scale->z;
+				mesh->orient.m[0] *= inverse_x;
+				mesh->orient.m[1] *= inverse_x;
+				mesh->orient.m[2] *= inverse_x;
+				mesh->orient.m[3] *= inverse_y;
+				mesh->orient.m[4] *= inverse_y;
+				mesh->orient.m[5] *= inverse_y;
+				mesh->orient.m[6] *= inverse_z;
+				mesh->orient.m[7] *= inverse_z;
+				mesh->orient.m[8] *= inverse_z;
+				break;
+			}
+			case TIE98_OPT_NODE_MESH_VERTICES:
+				mesh->vertexCount = (int)node->param1;
+				mesh->pModelVerts = (Vec3f*)node->param2;
+				break;
+			case TIE98_OPT_NODE_VERTEX_NORMALS:
+				g_curVertNormals = (const Vec3f*)node->param2;
+				mesh->pVertNormals = (Vec3f*)node->param2;
+				break;
+			default:
+				break;
+		}
+	}
+
+	if (node->child_count == 0)
+		return 0;
+	child_mesh = *mesh;
+	g_modelNodeWalkUnusedScratch0 = 0;
+	g_modelNodeWalkUnusedScratch1 = 0;
+	g_curVertNormals = NULL;
+	g_modelNodeWalkUnusedScratch2 = 0;
+	g_curMeshFlags = 0;
+	g_curVertexCount = 0;
+	for (i = 0; i < node->child_count; ++i) {
+		if (FlightModel_TestLightSegmentAgainstNode(model, node->children[i], &child_mesh, segment_start,
+													segment_end))
+			return 1;
+	}
+	return 0;
+}
+
+// FUNCTION: TIE98 0x435180
+static int FlightModel_TestLightSegmentAgainstFaces(SceneMeshTIE98* mesh, const Vec3f* segment_start,
+													const Vec3f* segment_end) {
+	int face_index;
+
+	for (face_index = 0; face_index < mesh->faceCount; ++face_index) {
+		float start[3];
+		float end[3];
+		const FaceRecordTIE98* face = &mesh->pFaceGeom[face_index];
+		const int vertex_count = face->vertexIdx[3] == -1 ? 3 : 4;
+		float vertices[4][3];
+		int separated;
+		int axis;
+		const Vec3f* normal;
+		float start_distance;
+		float direction_dot;
+		float fraction;
+		int axis_u;
+		int axis_v;
+		float projected_u;
+		float projected_v;
+		float first_cross;
+		int outside;
+		int edge;
+
+		int corner;
+
+		for (corner = 0; corner < vertex_count; ++corner) {
+			const Vec3f* vertex = &mesh->pModelVerts[face->vertexIdx[corner]];
+			vertices[corner][0] = vertex->x;
+			vertices[corner][1] = vertex->y;
+			vertices[corner][2] = vertex->z;
+		}
+
+		start[0] = segment_start->x;
+		start[1] = segment_start->y;
+		start[2] = segment_start->z;
+		end[0] = segment_end->x;
+		end[1] = segment_end->y;
+		end[2] = segment_end->z;
+		separated = 0;
+		for (axis = 0; axis < 3; ++axis) {
+			int all_above = 1;
+			int all_below = 1;
+			int corner;
+
+			for (corner = 0; corner < vertex_count; ++corner) {
+				if (vertices[corner][axis] < start[axis] || vertices[corner][axis] < end[axis])
+					all_above = 0;
+				if (vertices[corner][axis] > start[axis] || vertices[corner][axis] > end[axis])
+					all_below = 0;
+			}
+			if (all_above || all_below) {
+				separated = 1;
+				break;
+			}
+		}
+		if (separated)
+			continue;
+
+		normal = &mesh->pFaceNormals[face_index];
+		start_distance = (start[0] - vertices[0][0]) * normal->x + (start[1] - vertices[0][1]) * normal->y +
+						 (start[2] - vertices[0][2]) * normal->z;
+		direction_dot = (end[0] - start[0]) * normal->x + (end[1] - start[1]) * normal->y +
+						(end[2] - start[2]) * normal->z;
+		if (start_distance < 0.0f) {
+			if (start_distance > -40.0f || direction_dot <= 0.0f)
+				continue;
+		} else if (start_distance < 40.0f || direction_dot >= 0.0f) {
+			continue;
+		}
+
+		fraction = -start_distance / direction_dot;
+
+		if (normal->z > normal->x && normal->z > normal->y) {
+			axis_u = 0;
+			axis_v = 1;
+		} else if (normal->y > normal->x && normal->y > normal->z) {
+			axis_u = 0;
+			axis_v = 2;
+		} else {
+			axis_u = 1;
+			axis_v = 2;
+		}
+		projected_u = start[axis_u] + (end[axis_u] - start[axis_u]) * fraction;
+		projected_v = start[axis_v] + (end[axis_v] - start[axis_v]) * fraction;
+		first_cross = 0.0f;
+		outside = 0;
+		for (edge = 0; edge < vertex_count; ++edge) {
+			const int next = (edge + 1) % vertex_count;
+			const float cross =
+				(projected_u - vertices[edge][axis_u]) * (vertices[next][axis_v] - vertices[edge][axis_v]) -
+				(projected_v - vertices[edge][axis_v]) * (vertices[next][axis_u] - vertices[edge][axis_u]);
+			if (edge == 0) {
+				first_cross = cross;
+			} else if ((first_cross < 0.0f && cross >= 0.0f) || (first_cross >= 0.0f && cross < 0.0f)) {
+				outside = 1;
+				break;
+			}
+		}
+		if (!outside)
+			return 1;
+	}
+	return 0;
+}
+
+// FUNCTION: TIE98 0x43AE80
+static const Tie98OptNode* OptModel_FindNodeByNameInModel(const Tie98OptimizedPolyObject* model,
+														  const char* name) {
+	int i;
+
+	for (i = 0; i < model->root_node_count; ++i) {
+		const Tie98OptNode* result = OptModel_FindNodeByName(model->root_nodes[i], name);
+		if (result)
+			return result;
+	}
+	return NULL;
+}
+
+// FUNCTION: TIE98 0x43AEC0
+static const Tie98OptNode* OptModel_FindNodeByName(const Tie98OptNode* node, const char* name) {
+	int i;
+
+	if (!node)
+		return NULL;
+	if (node->name) {
+		int name_compare;
+#if defined(TIE_MODERN) && !defined(_MSC_VER)
+		name_compare = strcasecmp(node->name, name);
+#else
+		name_compare = _strcmpi(node->name, name);
+#endif
+		if (name_compare == 0)
+			return node;
+	}
+	for (i = 0; i < node->child_count; ++i) {
+		const Tie98OptNode* result = OptModel_FindNodeByName(node->children[i], name);
+		if (result)
+			return result;
+	}
+	return NULL;
+}
+
+// FUNCTION: TIE98 0x43D8A0
+void RenderScene_Initialize_tie98(int reset_flag) {
+	g_sw3dCockpitMaskSentinelFace.maxVertW = 1.0e32f;
+	g_sw3dCockpitMaskSentinelFace.minVertW = 1.0e32f;
+	g_sw3dCockpitMaskSentinelFace.gradients[6] = 0.0f;
+	g_sw3dCockpitMaskSentinelFace.gradients[7] = 0.0f;
+	g_sw3dCockpitMaskSentinelFace.gradients[8] = 1.0e32f;
+	if (reset_flag) {
+		int viewport_width;
+		int viewport_height;
+		const uint8_t* mask;
+		int scan_y;
+
+		g_sceneSpanPtrAvail = TIE98_SCENE_SPAN_MAX;
+		g_pSceneSpanDataCur = g_sceneSpanData;
+		g_pSceneSpanDataEnd = &g_sceneSpanData[TIE98_SCENE_SPAN_MAX - 1];
+		g_visFaceDrawStartIndex = 0;
+		g_visFaceCount = 0;
+		g_meshQueueIndex = 0;
+		g_phongSlotIndex = 0;
+
+		viewport_width = (uint16_t)pixelswide;
+		viewport_height = (uint16_t)pixelsdeep;
+		mask = (const uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
+		for (scan_y = 0; scan_y < viewport_height; ++scan_y) {
+			SceneSpanTIE98* previous = NULL;
+			int run_visible;
+			int scan_x;
+
+			g_scanlineSpanHeads[scan_y] = NULL;
+			run_visible = (int8_t)*mask++;
+			scan_x = 0;
+			while (scan_x < viewport_width) {
+				int run_length = *mask++;
+				if (run_length == 0) {
+					run_length = *mask++;
+					if (run_length == 0)
+						run_length = 256 + *mask++;
+					run_length += 255;
+				}
+				if (run_visible < 0) {
+					if (previous)
+						previous->next = g_pSceneSpanDataCur;
+					else
+						g_scanlineSpanHeads[scan_y] = g_pSceneSpanDataCur;
+					previous = g_pSceneSpanDataCur++;
+					previous->startX = scan_x;
+					previous->endX = scan_x + run_length;
+					previous->pFace = &g_sw3dCockpitMaskSentinelFace;
+					previous->next = NULL;
+				}
+				scan_x += run_length;
+				run_visible = -run_visible;
+			}
+		}
+	} else {
+		g_visFaceDrawStartIndex = g_visFaceCount;
+	}
+	g_phongSlotStride = (g_sw3dLightSampleBlockSize + (uint16_t)pixelswide - 1) / g_sw3dLightSampleBlockSize;
+	g_sw3dLightSampleCacheSceneStampBase += (uint16_t)pixelsdeep;
+	g_invProjScale = 1.0f / (float)perspFactor;
+	if (g_useHardware3D)
+		RenderScene_InitHardwareFrame();
+}
+
+// FUNCTION: TIE98 0x43DB90
+// sw3d_UnlockSceneBuffers
+void RenderScene_UnlockSceneBuffers_tie98(void) {
+	/* PORT: the original unlocks its handle-backed scene arrays. The host
+	 * arrays remain directly addressable for their complete lifetime. */
+}
+
+// FUNCTION: TIE98 0x43DF20
+void RenderScene_DrawVisibleFaces(void) {
+	int face_index;
+
+	if (g_useHardware3D) {
+		RenderScene_EffectsPass();
+		return;
+	}
+	FlightLight_ResetSoftwareFaceSampleCache();
+	if (!g_flightSurfaceAlreadyLocked)
+		FlightSurface_Lock();
+	g_sw3dSpanSceneMesh = NULL;
+	for (face_index = g_visFaceDrawStartIndex; face_index < g_visFaceCount; ++face_index) {
+		int mip_offset = 0;
+		SceneEdgeTIE98 scan_edge;
+		SceneFaceTIE98* face;
+		int texture_width;
+		int texture_height;
+		float scanline_view_z;
+		int scanline;
+
+		g_sw3dCurrentFace = &g_visFaceList[face_index];
+		g_sw3dCurrentScanY = g_sw3dCurrentFace->yTop;
+
+		g_sw3dCurrentFace->pScanEdge = &scan_edge;
+		face = g_sw3dCurrentFace;
+		texture_width = face->pMesh->pMaterial->width;
+		texture_height = face->pMesh->pMaterial->height;
+		if (g_sw3dMipmapEnabled && texture_width * texture_height == face->pMesh->pMaterial->textureSize) {
+			int lod = (int)((float)face->mipLevel * g_mipLodScale);
+			while (lod > 256 && texture_width != 8 && texture_height != 8) {
+				lod >>= 2;
+				mip_offset += texture_width * texture_height;
+				texture_width >>= 1;
+				texture_height >>= 1;
+			}
+		}
+		g_sw3dSpanTextureWidthFloat = (float)texture_width;
+		g_sw3dSpanTextureHeightFloat = (float)texture_height;
+		g_sw3dSpanTextureWidthShift = g_sw3dTextureShiftBySizeDiv16[texture_width >> 4];
+		g_sw3dSpanTextureHeightShift = g_sw3dTextureShiftBySizeDiv16[texture_height >> 4];
+		g_sw3dSpanTexelMask = texture_width * texture_height - 1;
+		g_sw3dSpanShadeTable = face->pMesh->pPalette0;
+		g_sw3dSpanTexels = face->pMesh->pTexels + mip_offset;
+		g_sw3dSpanSceneMesh = face->pMesh;
+		scanline_view_z = (float)(uint32_t)g_sw3dCurrentScanY * face->gradients[7] + face->gradients[8];
+		g_sw3dScanlineByteOffset = g_flight16bppBytesPerPixel * displaycorner_columns +
+								   (int)g_surfacePitch * (g_sw3dCurrentScanY + displaycorner_lines);
+
+		for (scanline = 0; (uint32_t)g_sw3dCurrentScanY < (uint32_t)face->yBot;
+			 ++scanline, ++g_sw3dCurrentScanY) {
+			SceneSpanTIE98* span = face->pSpans[scanline];
+			if (span) {
+				const int sample_subrow = g_sw3dCurrentScanY & g_sw3dLightSampleBlockMask;
+				int start_x;
+				int end_x;
+				int draw_start_x;
+				SceneSpanTIE98* clip_span;
+
+				if (sample_subrow) {
+					g_sw3dLightSampleSubrowFloat = (float)sample_subrow;
+					g_sw3dLightSampleRowsToNextBlockFloat =
+						(float)(g_sw3dLightSampleBlockSize - sample_subrow);
+					g_sw3dLightSampleSubrowLerpT = (float)sample_subrow / (float)g_sw3dLightSampleBlockSize;
+				} else {
+					g_sw3dLightSampleSubrowLerpT = 0.0f;
+					g_sw3dLightSampleSubrowFloat = 0.0f;
+					g_sw3dLightSampleRowsToNextBlockFloat = (float)g_sw3dLightSampleBlockSize;
+				}
+				g_sw3dCurrentLightSampleCacheStamp = g_sw3dLightSampleCacheSceneStampBase +
+													 (g_sw3dCurrentScanY >> g_sw3dLightSampleBlockShift);
+				start_x = span->startX;
+				end_x = span->endX;
+				draw_start_x = start_x;
+				scan_edge.x = (float)draw_start_x;
+				scan_edge.lightIntensity = span->startLightIntensity;
+				face->spanLightIntensityDx = span->dLightIntensityDx;
+				clip_span = span->next;
+				while (clip_span && clip_span->startX < end_x) {
+					if (clip_span->startX > start_x) {
+						sw3d_DrawTexturedShadeSpan(start_x, clip_span->startX,
+												   (float)draw_start_x * face->gradients[6] +
+													   scanline_view_z);
+					}
+					if (start_x < clip_span->endX) {
+						start_x = clip_span->endX;
+						draw_start_x = start_x;
+						if (start_x >= end_x)
+							break;
+					}
+					clip_span = clip_span->next;
+				}
+				if (start_x < end_x) {
+					sw3d_DrawTexturedShadeSpan(start_x, end_x,
+											   (float)draw_start_x * face->gradients[6] + scanline_view_z);
+				}
+			}
+			scanline_view_z += face->gradients[7];
+			g_sw3dScanlineByteOffset += (int)g_surfacePitch;
+		}
+	}
+	if (!g_flightSurfaceAlreadyLocked)
+		FlightSurface_Unlock();
 }
 
 // FUNCTION: TIE98 0x43E2C0
@@ -2262,2147 +4127,6 @@ static void sw3d_InsertSpan(float left_x, float right_x, int scan_y, SceneFaceTI
 	}
 }
 
-// FUNCTION: TIE98 0x431F60
-static void sw3d_RasterizeMeshFaces(SceneMeshTIE98* mesh) {
-	ProjVertexTIE98* vertices = &g_projVertList[mesh->vertBaseIndex];
-	SceneFaceTIE98* face = &g_visFaceList[mesh->faceBaseIndex];
-	SceneEdgeTIE98* first_edge;
-	SceneEdgeTIE98* output_edge;
-	int edge_index;
-	int face_index;
-
-	mesh->edgeBaseIndex = g_sceneEdgeCursor;
-	mesh->clippedEdgeCount = 0;
-	first_edge = &g_sceneEdgeList[g_sceneEdgeCursor];
-	output_edge = first_edge;
-	for (edge_index = 0; edge_index < mesh->edgeCount; ++edge_index)
-		g_sceneEdgeFlags[edge_index] = -1;
-
-	for (face_index = 0; face_index < mesh->visFaceCount; ++face_index, ++face) {
-		const FaceRecordTIE98* record = &mesh->pFaceGeom[face->faceIndex];
-		const int corner_count = record->edgeIdx[3] != -1 ? 4 : 3;
-		int output_count = 0;
-		if (face->nearClipState == -1) {
-			int current_corner;
-			int previous_corner;
-
-			face->nearClipState = (uint16_t)pixelsdeep;
-			g_sw3dClipTop = NULL;
-			g_sw3dClipBottom = NULL;
-			current_corner = 0;
-			for (previous_corner = corner_count - 1; previous_corner >= 0; --previous_corner) {
-				const int source_edge = record->edgeIdx[previous_corner];
-				int existing_edge;
-
-				g_sw3dGeneratedClipVertex = NULL;
-				existing_edge = g_sceneEdgeFlags[source_edge];
-				if (existing_edge == -1) {
-					if (sw3d_SetupClippedEdge(
-							mesh, output_edge, &vertices[g_vertexRemap[record->vertexIdx[previous_corner]]],
-							&vertices[g_vertexRemap[record->vertexIdx[current_corner]]]) < 0) {
-						if (!g_sw3dGeneratedClipVertex)
-							g_sceneEdgeFlags[source_edge] = -2;
-					} else {
-						face->edges[output_count++] = output_edge;
-						output_edge->pClipVert = g_sw3dGeneratedClipVertex;
-						g_sceneEdgeFlags[source_edge] = mesh->clippedEdgeCount++;
-						++output_edge;
-					}
-				} else if (existing_edge != -2) {
-					SceneEdgeTIE98* edge = &first_edge[existing_edge];
-					face->edges[output_count++] = edge;
-					if (edge->pClipVert) {
-						g_sw3dClipBottom = g_sw3dClipTop;
-						g_sw3dClipTop = edge->pClipVert;
-					}
-				}
-				current_corner = previous_corner;
-			}
-			if (g_sw3dClipBottom &&
-				sw3d_SetupClippedEdge(mesh, output_edge, g_sw3dClipTop, g_sw3dClipBottom) >= 0) {
-				face->edges[output_count++] = output_edge++;
-				++mesh->clippedEdgeCount;
-			}
-		} else {
-			int current_corner;
-			int previous_corner;
-
-			face->nearClipState = (uint16_t)pixelsdeep;
-			current_corner = 0;
-			for (previous_corner = corner_count - 1; previous_corner >= 0; --previous_corner) {
-				const int source_edge = record->edgeIdx[previous_corner];
-				const int existing_edge = g_sceneEdgeFlags[source_edge];
-				if (existing_edge == -1) {
-					if (sw3d_SetupEdge(output_edge,
-									   &vertices[g_vertexRemap[record->vertexIdx[previous_corner]]],
-									   &vertices[g_vertexRemap[record->vertexIdx[current_corner]]]) < 0) {
-						g_sceneEdgeFlags[source_edge] = -2;
-					} else {
-						face->edges[output_count++] = output_edge;
-						g_sceneEdgeFlags[source_edge] = mesh->clippedEdgeCount++;
-						++output_edge;
-					}
-				} else if (existing_edge != -2) {
-					face->edges[output_count++] = &first_edge[existing_edge];
-				}
-				current_corner = previous_corner;
-			}
-		}
-
-		face->edgeCount = output_count;
-		if (output_count != 0) {
-			sw3d_ScanConvertFace(face);
-		} else {
-			face->yTop = 0;
-			face->yBot = 0;
-		}
-	}
-	g_sceneEdgeCursor += mesh->clippedEdgeCount;
-}
-
-// FUNCTION: TIE98 0x432E20
-static void RenderScene_DrawSceneMesh(SceneMeshTIE98* mesh) {
-	if (g_useHardware3D) {
-		RenderScene_DrawMesh(mesh);
-	} else {
-		g_projVertCount = 0;
-		g_sceneEdgeCursor = 0;
-		if (g_meshQueueIndex != TIE98_MESH_QUEUE_MAX &&
-			g_visFaceCount + mesh->faceCount <= TIE98_SCENE_FACE_MAX &&
-			mesh->vertexCount <= g_projVertCapacity && mesh->edgeCount <= g_sceneEdgeCapacity) {
-			SceneMeshTIE98* queued;
-
-			g_meshQueue[g_meshQueueIndex] = *mesh;
-			queued = &g_meshQueue[g_meshQueueIndex];
-			RenderScene_CullMeshFacesFromView(queued);
-			if (queued->visFaceCount != 0) {
-				if (g_bBackdropMeshMode)
-					sw3d_ProjectMeshVerticesDistant(queued);
-				else
-					sw3d_ProjectMeshVertices(queued);
-				sw3d_RasterizeMeshFaces(queued);
-				++g_meshQueueIndex;
-			}
-		}
-	}
-}
-
-// FUNCTION: TIE98 0x453B90
-static void FlightMap_DrawObjectBoxSpan(int start_x, int end_x, int y, uint8_t color_index) {
-	uint8_t* row = vgapointer + (size_t)g_surfacePitch * (displaycorner_lines + (uint32_t)y);
-	start_x += (int)displaycorner_columns;
-	end_x += (int)displaycorner_columns;
-	if (g_flight16bppBytesPerPixel == 2) {
-		uint16_t* pixels = (uint16_t*)row;
-		const uint16_t color = g_flightTextPalette[color_index];
-		int x;
-
-		for (x = start_x; x < end_x; ++x)
-			pixels[x] = color;
-	} else {
-		memset(row + start_x, color_index, (size_t)(end_x - start_x));
-	}
-}
-
-// FUNCTION: TIE98 0x453C40
-void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, uint8_t color_index) {
-	const int right = x + width;
-	const int bottom = y + height;
-	int corner_width;
-	int corner_height;
-	int row;
-
-	if (bottom <= 0 || right <= 0 || x >= pixelswide || y >= pixelsdeep || height <= 0 || width <= 0)
-		return;
-
-	corner_width = width >> 3;
-	corner_height = height >> 3;
-	if (corner_width < 3)
-		corner_width = 3;
-	if (corner_height < 3)
-		corner_height = 3;
-	if (corner_width > width)
-		corner_width = width;
-	if (corner_height > height)
-		corner_height = height;
-
-	FlightSurface_Lock();
-
-	if (y >= 0) {
-		int start = x;
-		int end = x + corner_width;
-		if (end > 0 && x < pixelswide) {
-			if (start < 0)
-				start = 0;
-			if (end > pixelswide)
-				end = pixelswide;
-			FlightMap_DrawObjectBoxSpan(start, end, y, color_index);
-		}
-		start = right - corner_width;
-		end = right;
-		if (end > 0 && start < pixelswide) {
-			if (start < 0)
-				start = 0;
-			if (end > pixelswide)
-				end = pixelswide;
-			FlightMap_DrawObjectBoxSpan(start, end, y, color_index);
-		}
-	}
-
-	if (bottom <= pixelsdeep) {
-		int start = x;
-		int end = x + corner_width;
-		if (end > 0 && x < pixelswide) {
-			if (start < 0)
-				start = 0;
-			if (end > pixelswide)
-				end = pixelswide;
-			FlightMap_DrawObjectBoxSpan(start, end, bottom - 1, color_index);
-		}
-		start = right - corner_width;
-		end = right;
-		if (end > 0 && start < pixelswide) {
-			if (start < 0)
-				start = 0;
-			if (end > pixelswide)
-				end = pixelswide;
-			FlightMap_DrawObjectBoxSpan(start, end, bottom - 1, color_index);
-		}
-	}
-
-	for (row = 1; row < corner_height; ++row) {
-		const int screen_y = y + row;
-		if (screen_y < 0 || screen_y >= pixelsdeep)
-			continue;
-		if (x >= 0)
-			FlightMap_DrawObjectBoxSpan(x, x + 1, screen_y, color_index);
-		if (right <= pixelswide)
-			FlightMap_DrawObjectBoxSpan(right - 1, right, screen_y, color_index);
-	}
-	for (row = height - corner_height; row < height - 1; ++row) {
-		const int screen_y = y + row;
-		if (row < corner_height || screen_y < 0 || screen_y >= pixelsdeep)
-			continue;
-		if (x >= 0)
-			FlightMap_DrawObjectBoxSpan(x, x + 1, screen_y, color_index);
-		if (right <= pixelswide)
-			FlightMap_DrawObjectBoxSpan(right - 1, right, screen_y, color_index);
-	}
-
-	FlightSurface_Unlock();
-}
-
-// FUNCTION: TIE98 0x42C190
-int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_index, int depth) {
-	int right;
-	int bottom;
-	int corner_width;
-	int corner_height;
-	const uint8_t* rgb;
-	uint32_t color;
-	float screen_depth;
-	int16_t result;
-	int quad_base;
-	D3DTLVERTEX* quad;
-	Std3DRenderTri* quad_triangles;
-	int quad_vertex;
-
-	if (depth == 1 && width == 4 && height == 4) {
-		int start = x;
-		int end = x + 4;
-		if (start < 0)
-			start = 0;
-		if (end > pixelswide)
-			end = pixelswide;
-		if (start < end) {
-			int row;
-
-			FlightSurface_Lock();
-			for (row = 0; row < 4; ++row) {
-				const int screen_y = y + row;
-				if (screen_y >= 0 && screen_y < pixelsdeep)
-					FlightMap_DrawObjectBoxSpan(start, end, screen_y, color_index);
-			}
-			FlightSurface_Unlock();
-		}
-		return 0;
-	}
-
-	if (g_d3dVertexCount + 32 > g_maxBatchVerts || g_d3dIndexCount + 16 > g_maxBatchTris) {
-		Math_SetFpuExtendedPrecisionMode();
-		if (!g_powerVrSceneWorkaround)
-			std3D_StartScene();
-		std3D_LockExecuteBuffer();
-		std3D_AddVertices(g_flightVertexBuffer, g_d3dVertexCount);
-		std3D_BeginInstructions();
-		std3D_AddTriangles(g_triBuffer, (unsigned int)g_d3dIndexCount);
-		std3D_ExecuteBuffer();
-		if (!g_powerVrSceneWorkaround)
-			std3D_EndScene();
-		Math_SetFpuSinglePrecisionMode();
-		g_d3dIndexCount = 0;
-		g_d3dVertexCount = 0;
-	}
-
-	right = x + width;
-	bottom = y + height;
-	corner_width = width >> 3;
-	corner_height = height >> 3;
-	if (corner_width < 3)
-		corner_width = 3;
-	if (corner_height < 3)
-		corner_height = 3;
-	if (corner_width > width)
-		corner_width = width;
-	if (corner_height > height)
-		corner_height = height;
-	rgb = &rtsvga2_vgapalette[3 * (uint8_t)color_index];
-	color = 0xff000000u | ((uint32_t)rgb[0] << 18) | ((uint32_t)rgb[1] << 10) | ((uint32_t)rgb[2] << 2);
-	if (depth < 1)
-		depth = 1;
-	screen_depth = 1.0f / ((float)depth * (1.0f / 2048.0f) + 1.0f);
-	if (g_std3DZBufferBitDepth == 2)
-		screen_depth = 1.0f - screen_depth;
-
-	result = (int16_t)g_d3dVertexCount;
-	if (y >= 0 && y < pixelsdeep) {
-		int start = x < 0 ? 0 : x;
-		int end = x + corner_width;
-		if (end >= pixelswide)
-			end = pixelswide - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)start;
-			quad[0].sy = g_flightVpOriginY + (float)y;
-			quad[1].sx = g_flightVpOriginX + (float)end;
-			quad[1].sy = g_flightVpOriginY + (float)y;
-			quad[2].sx = g_flightVpOriginX + (float)end;
-			quad[2].sy = g_flightVpOriginY + (float)(y + 1);
-			quad[3].sx = g_flightVpOriginX + (float)start;
-			quad[3].sy = g_flightVpOriginY + (float)(y + 1);
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
-			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
-			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
-		}
-		start = right - corner_width;
-		end = right;
-		if (start < 0)
-			start = 0;
-		if (end >= pixelswide)
-			end = pixelswide - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)start;
-			quad[0].sy = g_flightVpOriginY + (float)y;
-			quad[1].sx = g_flightVpOriginX + (float)end;
-			quad[1].sy = g_flightVpOriginY + (float)y;
-			quad[2].sx = g_flightVpOriginX + (float)end;
-			quad[2].sy = g_flightVpOriginY + (float)(y + 1);
-			quad[3].sx = g_flightVpOriginX + (float)start;
-			quad[3].sy = g_flightVpOriginY + (float)(y + 1);
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
-			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
-			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
-		}
-	}
-	if (bottom >= 0 && bottom < pixelsdeep) {
-		int start = x < 0 ? 0 : x;
-		int end = x + corner_width;
-		if (end >= pixelswide)
-			end = pixelswide - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)start;
-			quad[0].sy = g_flightVpOriginY + (float)bottom;
-			quad[1].sx = g_flightVpOriginX + (float)end;
-			quad[1].sy = g_flightVpOriginY + (float)bottom;
-			quad[2].sx = g_flightVpOriginX + (float)end;
-			quad[2].sy = g_flightVpOriginY + (float)(bottom + 1);
-			quad[3].sx = g_flightVpOriginX + (float)start;
-			quad[3].sy = g_flightVpOriginY + (float)(bottom + 1);
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
-			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
-			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
-		}
-		start = right - corner_width;
-		end = right + 1;
-		if (start < 0)
-			start = 0;
-		if (end >= pixelswide)
-			end = pixelswide - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)start;
-			quad[0].sy = g_flightVpOriginY + (float)bottom;
-			quad[1].sx = g_flightVpOriginX + (float)end;
-			quad[1].sy = g_flightVpOriginY + (float)bottom;
-			quad[2].sx = g_flightVpOriginX + (float)end;
-			quad[2].sy = g_flightVpOriginY + (float)(bottom + 1);
-			quad[3].sx = g_flightVpOriginX + (float)start;
-			quad[3].sy = g_flightVpOriginY + (float)(bottom + 1);
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
-			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
-			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
-		}
-	}
-	if (x >= 0 && x < pixelswide) {
-		int start = y < 0 ? 0 : y;
-		int end = y + corner_height;
-		if (end >= pixelsdeep)
-			end = pixelsdeep - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)x;
-			quad[0].sy = g_flightVpOriginY + (float)start;
-			quad[1].sx = g_flightVpOriginX + (float)x;
-			quad[1].sy = g_flightVpOriginY + (float)end;
-			quad[2].sx = g_flightVpOriginX + (float)(x + 1);
-			quad[2].sy = g_flightVpOriginY + (float)end;
-			quad[3].sx = g_flightVpOriginX + (float)(x + 1);
-			quad[3].sy = g_flightVpOriginY + (float)start;
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
-			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
-			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
-		}
-		start = bottom - corner_height;
-		end = bottom;
-		if (start < 0)
-			start = 0;
-		if (end >= pixelsdeep)
-			end = pixelsdeep - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)x;
-			quad[0].sy = g_flightVpOriginY + (float)start;
-			quad[1].sx = g_flightVpOriginX + (float)x;
-			quad[1].sy = g_flightVpOriginY + (float)end;
-			quad[2].sx = g_flightVpOriginX + (float)(x + 1);
-			quad[2].sy = g_flightVpOriginY + (float)end;
-			quad[3].sx = g_flightVpOriginX + (float)(x + 1);
-			quad[3].sy = g_flightVpOriginY + (float)start;
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
-			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
-			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
-		}
-	}
-	if (right >= 0 && right < pixelswide) {
-		int start = y < 0 ? 0 : y;
-		int end = y + corner_height;
-		if (end >= pixelsdeep)
-			end = pixelsdeep - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)right;
-			quad[0].sy = g_flightVpOriginY + (float)start;
-			quad[1].sx = g_flightVpOriginX + (float)right;
-			quad[1].sy = g_flightVpOriginY + (float)end;
-			quad[2].sx = g_flightVpOriginX + (float)(right + 1);
-			quad[2].sy = g_flightVpOriginY + (float)end;
-			quad[3].sx = g_flightVpOriginX + (float)(right + 1);
-			quad[3].sy = g_flightVpOriginY + (float)start;
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
-			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
-			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
-		}
-		start = bottom - corner_height;
-		end = bottom;
-		if (start < 0)
-			start = 0;
-		if (end >= pixelsdeep)
-			end = pixelsdeep - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)right;
-			quad[0].sy = g_flightVpOriginY + (float)start;
-			quad[1].sx = g_flightVpOriginX + (float)right;
-			quad[1].sy = g_flightVpOriginY + (float)end;
-			quad[2].sx = g_flightVpOriginX + (float)(right + 1);
-			quad[2].sy = g_flightVpOriginY + (float)end;
-			quad[3].sx = g_flightVpOriginX + (float)(right + 1);
-			quad[3].sy = g_flightVpOriginY + (float)start;
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
-			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
-			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
-		}
-	}
-	return result;
-}
-
-// FUNCTION: TIE98 0x44A4D0
-static void sw3d_CopySpanPixels(const uint8_t* source_base, int start_x, int count) {
-	int bytes_per_pixel;
-	const uint8_t* source;
-	uint8_t* destination;
-
-	if (count <= 0)
-		return;
-	bytes_per_pixel = g_flight16bppBytesPerPixel;
-	source = source_base + bytes_per_pixel * start_x;
-	destination = xtrans2_videobaseptr + g_sw3dScanlineByteOffset + bytes_per_pixel * start_x;
-	if (bytes_per_pixel == 2) {
-		do {
-			destination[0] = source[0];
-			destination[1] = source[1];
-			source += 2;
-			destination += 2;
-		} while (--count != 0);
-	} else {
-		do {
-			*destination++ = *source++;
-		} while (--count != 0);
-	}
-}
-
-// FUNCTION: TIE98 0x44A090
-void sw3d_BlitOccludedSpan(const uint8_t* source, int start_x, int end_x, int scan_y, float depth) {
-	const int bytes_per_pixel = g_flight16bppBytesPerPixel;
-	const uint8_t* source_base = source - bytes_per_pixel * start_x;
-	int draw_x = start_x;
-	SceneSpanTIE98* span;
-
-	g_sw3dScanlineByteOffset =
-		bytes_per_pixel * displaycorner_columns + (int)g_surfacePitch * (scan_y + displaycorner_lines);
-
-	span = g_scanlineSpanHeads[scan_y];
-	while (span) {
-		const int span_end = span->endX;
-		SceneFaceTIE98* face;
-
-		if (span_end <= draw_x) {
-			span = span->next;
-			continue;
-		}
-		if (span->startX > draw_x)
-			break;
-
-		face = span->pFace;
-		if (depth <= face->minVertW) {
-			draw_x = span_end;
-			start_x = draw_x;
-			if (span_end >= end_x)
-				return;
-		} else if (depth < face->maxVertW) {
-			float span_depth = (float)scan_y * face->gradients[7] + face->gradients[8];
-			span_depth = (float)start_x * face->gradients[6] + span_depth;
-			if (depth <= span_depth) {
-				if (face->gradients[6] >= 0.0f) {
-					draw_x = span_end;
-					start_x = draw_x;
-					if (span_end >= end_x)
-						return;
-				} else {
-					int limit_x = span_end;
-					int delta_x;
-					float limit_depth;
-
-					if (limit_x >= end_x)
-						limit_x = end_x;
-					delta_x = limit_x - draw_x;
-					limit_depth = (float)delta_x * face->gradients[6] + span_depth;
-					if (depth <= limit_depth) {
-						if (span_end >= end_x)
-							return;
-						draw_x = span_end;
-						start_x = draw_x;
-					} else {
-						draw_x += (int)((float)delta_x - (depth - limit_depth) / -face->gradients[6]);
-						start_x = draw_x;
-						if (draw_x >= end_x)
-							return;
-					}
-				}
-			} else if (face->gradients[6] > 0.0f) {
-				const int limit_x = span_end > end_x ? end_x : span_end;
-				const int delta_x = limit_x - draw_x;
-				const float limit_depth = (float)delta_x * face->gradients[6] + span_depth;
-				if (depth < limit_depth) {
-					end_x = draw_x + (int)((float)delta_x - (depth - limit_depth) / -face->gradients[6]);
-					if (draw_x >= end_x)
-						return;
-				}
-			}
-		}
-		span = span->next;
-	}
-
-	while (span) {
-		const int span_start = span->startX;
-		SceneFaceTIE98* face;
-
-		if (span_start >= end_x)
-			break;
-		face = span->pFace;
-		if (depth <= face->minVertW) {
-			sw3d_CopySpanPixels(source_base, draw_x, span_start - draw_x);
-			draw_x = span->endX;
-			start_x = draw_x;
-			if (draw_x >= end_x)
-				return;
-		} else if (depth < face->maxVertW) {
-			float span_depth = (float)scan_y * face->gradients[7] + face->gradients[8];
-			span_depth = (float)span_start * face->gradients[6] + span_depth;
-			if (depth <= span_depth) {
-				sw3d_CopySpanPixels(source_base, draw_x, span_start - draw_x);
-				draw_x = span->endX;
-				if (face->gradients[6] >= 0.0f) {
-					start_x = draw_x;
-					if (draw_x >= end_x)
-						return;
-				} else if (draw_x >= end_x) {
-					const float limit_depth = (float)(end_x - span_start) * face->gradients[6] + span_depth;
-					if (depth <= limit_depth)
-						return;
-					draw_x = end_x - (int)((depth - limit_depth) / -face->gradients[6]);
-					start_x = draw_x;
-					if (draw_x >= end_x)
-						return;
-				} else {
-					const float limit_depth = (float)(draw_x - span_start) * face->gradients[6] + span_depth;
-					if (depth > limit_depth)
-						draw_x -= (int)((depth - limit_depth) / -face->gradients[6]);
-					start_x = draw_x;
-				}
-			} else if (face->gradients[6] > 0.0f) {
-				const int span_end = span->endX;
-				if (span_end >= end_x) {
-					const float limit_depth = (float)(end_x - span_start) * face->gradients[6] + span_depth;
-					if (depth < limit_depth) {
-						const int count =
-							span_start +
-							(int)((float)(end_x - span_start) - (depth - limit_depth) / -face->gradients[6]) -
-							draw_x;
-						sw3d_CopySpanPixels(source_base, draw_x, count);
-						return;
-					}
-				} else {
-					const float limit_depth =
-						(float)(span_end - span_start) * face->gradients[6] + span_depth;
-					if (depth < limit_depth) {
-						const int count =
-							span_end - (int)((depth - limit_depth) / -face->gradients[6]) - draw_x;
-						sw3d_CopySpanPixels(source_base, draw_x, count);
-						draw_x = span_end;
-						start_x = draw_x;
-					}
-				}
-			}
-		}
-		span = span->next;
-	}
-	sw3d_CopySpanPixels(source_base, draw_x, end_x - draw_x);
-}
-
-// FUNCTION: TIE98 0x44A550
-int16_t Hud_DrawBoxInXTrans(int x, int y, int width, int height, int color_index, int depth) {
-	const int bottom = y + height;
-	int right;
-	int corner_width;
-	int corner_height;
-	uint8_t* span;
-	float span_depth;
-	int row_offset;
-
-	if (bottom <= 0)
-		return 0;
-	right = x + width;
-	if (right <= 0 || x >= pixelswide || y >= pixelsdeep || height <= 0 || width <= 0)
-		return 0;
-	if (g_useHardware3D)
-		return Hud_DrawBoxOverlayHW(x, y, width, height, color_index, depth);
-
-	corner_width = width >> 3;
-	corner_height = height >> 3;
-	if (corner_width < 3)
-		corner_width = 3;
-	if (corner_height < 3)
-		corner_height = 3;
-	if (corner_width > width)
-		corner_width = width;
-	if (corner_height > height)
-		corner_height = height;
-
-	span = g_panelBoxSpanScratch;
-	if (x > 0)
-		span += g_flight16bppBytesPerPixel * x;
-	if (g_flight16bppBytesPerPixel == 2) {
-		const uint16_t color = g_flightTextPalette[(uint8_t)color_index];
-		int i;
-
-		for (i = 0; i < corner_width; ++i)
-			((uint16_t*)span)[i] = color;
-	} else {
-		memset(span, (uint8_t)color_index, (size_t)corner_width);
-	}
-	if (depth < 1)
-		depth = 1;
-	span_depth = (float)(uint32_t)perspFactor / (float)depth;
-	if (!g_flightSurfaceAlreadyLocked)
-		FlightSurface_Lock();
-
-	if (y >= 0) {
-		int span_start = x;
-		int span_end = x + corner_width;
-		if (span_end > 0 && x < pixelswide) {
-			if (span_start < 0)
-				span_start = 0;
-			if (span_end > pixelswide)
-				span_end = pixelswide;
-			sw3d_BlitOccludedSpan(span, span_start, span_end, y, span_depth);
-		}
-		span_end = right;
-		span_start = span_end - corner_width;
-		if (span_end > 0 && span_start < pixelswide) {
-			if (span_start < 0)
-				span_start = 0;
-			if (span_end > pixelswide)
-				span_end = pixelswide;
-			sw3d_BlitOccludedSpan(span, span_start, span_end, y, span_depth);
-		}
-	}
-
-	if (bottom <= pixelsdeep) {
-		int span_start = x;
-		int span_end = x + corner_width;
-		if (span_end > 0 && x < pixelswide) {
-			if (span_start < 0)
-				span_start = 0;
-			if (span_end > pixelswide)
-				span_end = pixelswide;
-			sw3d_BlitOccludedSpan(span, span_start, span_end, bottom - 1, span_depth);
-		}
-		span_end = right;
-		span_start = span_end - corner_width;
-		if (span_end > 0 && span_start < pixelswide) {
-			if (span_start < 0)
-				span_start = 0;
-			if (span_end > pixelswide)
-				span_end = pixelswide;
-			sw3d_BlitOccludedSpan(span, span_start, span_end, bottom - 1, span_depth);
-		}
-	}
-
-	if (corner_height > 1) {
-		int scan_y = y + 1;
-		int remaining = corner_height - 1;
-		do {
-			if (scan_y >= 0 && scan_y < pixelsdeep) {
-				if (x >= 0)
-					sw3d_BlitOccludedSpan(span, x, x + 1, scan_y, span_depth);
-				if (right <= pixelswide)
-					sw3d_BlitOccludedSpan(span, right - 1, right, scan_y, span_depth);
-			}
-			++scan_y;
-		} while (--remaining != 0);
-	}
-
-	row_offset = height - corner_height;
-	if (row_offset < height - 1) {
-		int scan_y = row_offset + y;
-		do {
-			if (row_offset >= corner_height && scan_y >= 0 && scan_y < pixelsdeep) {
-				if (x >= 0)
-					sw3d_BlitOccludedSpan(span, x, x + 1, scan_y, span_depth);
-				if (right <= pixelswide)
-					sw3d_BlitOccludedSpan(span, right - 1, right, scan_y, span_depth);
-			}
-			++row_offset;
-			++scan_y;
-		} while (row_offset < height - 1);
-	}
-
-	if (!g_flightSurfaceAlreadyLocked)
-		FlightSurface_Unlock();
-	return (int16_t)g_flightSurfaceAlreadyLocked;
-}
-
-// FUNCTION: TIE98 0x42B980
-void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_t screen_scale,
-								  const uint8_t* texture_level) {
-	ProjVertexTIE98 vertices[32];
-	static const uint32_t explosion_colors[32] = {
-		0xffffffff, 0xe0ffffff, 0xf0ffffff, 0xf0ffffff, 0xe0ffffff, 0xd0ffffff, 0xb0ffffff, 0x90ffffff,
-		0x70ffffff, 0x50ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff,
-		0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff,
-		0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff, 0x30ffffff,
-	};
-	uint32_t color = 0xffffffff;
-	float depth;
-	int source_width;
-	int source_height;
-	int width;
-	int height;
-	float u_max;
-	float v_max;
-	int half_height;
-	int half_width;
-	int screen_y_flipped;
-	int previous;
-	uint32_t pixels_offset;
-	uint32_t palette_offset;
-	int rle_format;
-	Std3DTextureSurface* texture;
-
-	int i;
-
-	if (parentobject < NUM_OBJECTS && objects[parentobject].genus == GENUS_EXPLOSION)
-		color = explosion_colors[objects[parentobject].anim_frame & 0x1f];
-
-	if ((uint32_t)objecteyez <= 0x1000000) {
-		depth = 1.0f / ((float)objecteyez * (1.0f / 2048.0f) + 1.0f);
-		if (g_std3DZBufferBitDepth == 2)
-			depth = 1.0f - depth;
-	} else {
-		color = 0xffffffff;
-		depth = 0.00012205541f;
-		if (g_std3DZBufferBitDepth == 2)
-			depth = 0.99987793f;
-	}
-
-	source_width = *(const int32_t*)(texture_level + 16);
-	source_height = *(const int32_t*)(texture_level + 20);
-	width = 2;
-	while (width < source_width && width < 256)
-		width *= 2;
-	height = 2;
-	while (height < source_height && height < 256)
-		height *= 2;
-	if (g_pStd3DCurDevice->caps.minTextureWidth) {
-		if (width > height)
-			height = width;
-		else if (height > width)
-			width = height;
-	}
-
-	u_max = (float)source_width / (float)width;
-	v_max = (float)source_height / (float)height;
-	half_height = (screen_scale * source_height) >> 9;
-	half_width = (screen_scale * source_width) >> 9;
-	screen_y_flipped = pixelsdeep - screen_y;
-	memset(vertices, 0, sizeof vertices);
-	vertices[0].sx = (float)(screen_x + trig2_cosinedwordmult(half_width, angle) +
-							 trig2_sinedwordmult(half_height, angle));
-	vertices[0].sy = (float)(screen_y_flipped + trig2_cosinedwordmult(half_height, angle) -
-							 trig2_sinedwordmult(half_width, angle));
-	vertices[0].w = depth;
-	vertices[1].sx = (float)(screen_x + trig2_cosinedwordmult(-half_width, angle) +
-							 trig2_sinedwordmult(half_height, angle));
-	vertices[1].sy = (float)(screen_y_flipped + trig2_cosinedwordmult(half_height, angle) -
-							 trig2_sinedwordmult(-half_width, angle));
-	vertices[1].w = depth;
-	vertices[1].tu = u_max;
-	vertices[2].sx = (float)(screen_x + trig2_cosinedwordmult(-half_width, angle) +
-							 trig2_sinedwordmult(-half_height, angle));
-	vertices[2].sy = (float)(screen_y_flipped + trig2_cosinedwordmult(-half_height, angle) -
-							 trig2_sinedwordmult(-half_width, angle));
-	vertices[2].w = depth;
-	vertices[2].tu = u_max;
-	vertices[2].tv = v_max;
-	vertices[3].sx = (float)(screen_x + trig2_cosinedwordmult(half_width, angle) +
-							 trig2_sinedwordmult(-half_height, angle));
-	vertices[3].sy = (float)(screen_y_flipped + trig2_cosinedwordmult(-half_height, angle) -
-							 trig2_sinedwordmult(half_width, angle));
-	vertices[3].w = depth;
-	vertices[3].tv = v_max;
-
-	g_clipCountA = 4;
-	g_clipVertCursor = 4;
-	for (i = 0; i < 4; ++i)
-		g_clipIdxA[i] = i;
-	g_clipCountB = 0;
-	previous = g_clipIdxA[g_clipCountA - 1];
-	for (i = 0; i < g_clipCountA; ++i) {
-		const int current = g_clipIdxA[i];
-		RenderClip_ClipPolyTop(previous, current, vertices);
-		previous = current;
-	}
-	g_clipCountA = 0;
-	if (g_clipCountB > 0) {
-		int count;
-		int i;
-
-		previous = g_clipIdxB[g_clipCountB - 1];
-		count = g_clipCountB;
-		for (i = 0; i < count; ++i) {
-			const int current = g_clipIdxB[i];
-			RenderClip_ClipPolyBottom(previous, current, vertices);
-			previous = current;
-		}
-	}
-	g_clipCountB = 0;
-	if (g_clipCountA > 0) {
-		int count;
-		int i;
-
-		previous = g_clipIdxA[g_clipCountA - 1];
-		count = g_clipCountA;
-		for (i = 0; i < count; ++i) {
-			const int current = g_clipIdxA[i];
-			RenderClip_ClipPolyLeft(previous, current, vertices);
-			previous = current;
-		}
-	}
-	g_clipCountA = 0;
-	if (g_clipCountB > 0) {
-		int count;
-		int i;
-
-		previous = g_clipIdxB[g_clipCountB - 1];
-		count = g_clipCountB;
-		for (i = 0; i < count; ++i) {
-			const int current = g_clipIdxB[i];
-			RenderClip_ClipPolyRight(previous, current, vertices);
-			previous = current;
-		}
-	}
-	if (g_clipCountA < 3)
-		return;
-
-	if (g_clipCountA + g_d3dVertexCount > g_maxBatchVerts ||
-		g_clipCountA + g_d3dIndexCount > g_maxBatchTris) {
-		Math_SetFpuExtendedPrecisionMode();
-		if (!g_powerVrSceneWorkaround)
-			std3D_StartScene();
-		std3D_LockExecuteBuffer();
-		std3D_AddVertices(g_flightVertexBuffer, g_d3dVertexCount);
-		std3D_BeginInstructions();
-		std3D_AddTriangles(g_triBuffer, (unsigned int)g_d3dIndexCount);
-		std3D_ExecuteBuffer();
-		if (!g_powerVrSceneWorkaround)
-			std3D_EndScene();
-		Math_SetFpuSinglePrecisionMode();
-		g_d3dIndexCount = 0;
-		g_d3dVertexCount = 0;
-	}
-	if (g_capVertexAlpha) {
-		color = 0xfeffffff;
-		g_capVertexAlpha = 0;
-	}
-	for (i = 0; i < g_clipCountA; ++i) {
-		const ProjVertexTIE98* source = &vertices[g_clipIdxA[i]];
-		D3DTLVERTEX* destination = &g_flightVertexBuffer[g_d3dVertexCount];
-		destination->sx = source->sx + g_flightVpOriginX;
-		destination->sy = source->sy + g_flightVpOriginY;
-		destination->sz = source->w;
-		destination->rhw = source->w;
-		destination->color = color;
-		destination->specular = 0;
-		destination->tu = source->tu;
-		destination->tv = source->tv;
-		g_clipIdxA[i] = g_d3dVertexCount++;
-	}
-	pixels_offset = *(const uint32_t*)(texture_level + 8);
-	palette_offset = *(const uint32_t*)(texture_level + 12);
-	rle_format = *(const int32_t*)(texture_level + 32);
-	texture = RenderTexture_GetOrCreateBitmap(width, height, (uint16_t*)(texture_level + palette_offset),
-											  texture_level + pixels_offset + 16, rle_format);
-	for (i = 2; i < g_clipCountA; ++i) {
-		Std3DRenderTri* triangle = &g_triBuffer[g_d3dIndexCount++];
-		triangle->v0 = g_clipIdxA[0];
-		triangle->v1 = g_clipIdxA[i - 1];
-		triangle->v2 = g_clipIdxA[i];
-		triangle->texture = texture;
-		triangle->flags = (Std3DRenderStateFlags)(2066 + (g_bilinearEnabled ? 384 : 0) + 512);
-	}
-}
-
-// FUNCTION: TIE98 0x43AEC0
-static const Tie98OptNode* OptModel_FindNodeByName(const Tie98OptNode* node, const char* name) {
-	int i;
-
-	if (!node)
-		return NULL;
-	if (node->name) {
-		int name_compare;
-#if defined(TIE_MODERN) && !defined(_MSC_VER)
-		name_compare = strcasecmp(node->name, name);
-#else
-		name_compare = _strcmpi(node->name, name);
-#endif
-		if (name_compare == 0)
-			return node;
-	}
-	for (i = 0; i < node->child_count; ++i) {
-		const Tie98OptNode* result = OptModel_FindNodeByName(node->children[i], name);
-		if (result)
-			return result;
-	}
-	return NULL;
-}
-
-// FUNCTION: TIE98 0x43AE80
-static const Tie98OptNode* OptModel_FindNodeByNameInModel(const Tie98OptimizedPolyObject* model,
-														  const char* name) {
-	int i;
-
-	for (i = 0; i < model->root_node_count; ++i) {
-		const Tie98OptNode* result = OptModel_FindNodeByName(model->root_nodes[i], name);
-		if (result)
-			return result;
-	}
-	return NULL;
-}
-
-// FUNCTION: TIE98 0x435180
-static int FlightModel_TestLightSegmentAgainstFaces(SceneMeshTIE98* mesh, const Vec3f* segment_start,
-													const Vec3f* segment_end) {
-	int face_index;
-
-	for (face_index = 0; face_index < mesh->faceCount; ++face_index) {
-		float start[3];
-		float end[3];
-		const FaceRecordTIE98* face = &mesh->pFaceGeom[face_index];
-		const int vertex_count = face->vertexIdx[3] == -1 ? 3 : 4;
-		float vertices[4][3];
-		int separated;
-		int axis;
-		const Vec3f* normal;
-		float start_distance;
-		float direction_dot;
-		float fraction;
-		int axis_u;
-		int axis_v;
-		float projected_u;
-		float projected_v;
-		float first_cross;
-		int outside;
-		int edge;
-
-		int corner;
-
-		for (corner = 0; corner < vertex_count; ++corner) {
-			const Vec3f* vertex = &mesh->pModelVerts[face->vertexIdx[corner]];
-			vertices[corner][0] = vertex->x;
-			vertices[corner][1] = vertex->y;
-			vertices[corner][2] = vertex->z;
-		}
-
-		start[0] = segment_start->x;
-		start[1] = segment_start->y;
-		start[2] = segment_start->z;
-		end[0] = segment_end->x;
-		end[1] = segment_end->y;
-		end[2] = segment_end->z;
-		separated = 0;
-		for (axis = 0; axis < 3; ++axis) {
-			int all_above = 1;
-			int all_below = 1;
-			int corner;
-
-			for (corner = 0; corner < vertex_count; ++corner) {
-				if (vertices[corner][axis] < start[axis] || vertices[corner][axis] < end[axis])
-					all_above = 0;
-				if (vertices[corner][axis] > start[axis] || vertices[corner][axis] > end[axis])
-					all_below = 0;
-			}
-			if (all_above || all_below) {
-				separated = 1;
-				break;
-			}
-		}
-		if (separated)
-			continue;
-
-		normal = &mesh->pFaceNormals[face_index];
-		start_distance = (start[0] - vertices[0][0]) * normal->x + (start[1] - vertices[0][1]) * normal->y +
-						 (start[2] - vertices[0][2]) * normal->z;
-		direction_dot = (end[0] - start[0]) * normal->x + (end[1] - start[1]) * normal->y +
-						(end[2] - start[2]) * normal->z;
-		if (start_distance < 0.0f) {
-			if (start_distance > -40.0f || direction_dot <= 0.0f)
-				continue;
-		} else if (start_distance < 40.0f || direction_dot >= 0.0f) {
-			continue;
-		}
-
-		fraction = -start_distance / direction_dot;
-
-		if (normal->z > normal->x && normal->z > normal->y) {
-			axis_u = 0;
-			axis_v = 1;
-		} else if (normal->y > normal->x && normal->y > normal->z) {
-			axis_u = 0;
-			axis_v = 2;
-		} else {
-			axis_u = 1;
-			axis_v = 2;
-		}
-		projected_u = start[axis_u] + (end[axis_u] - start[axis_u]) * fraction;
-		projected_v = start[axis_v] + (end[axis_v] - start[axis_v]) * fraction;
-		first_cross = 0.0f;
-		outside = 0;
-		for (edge = 0; edge < vertex_count; ++edge) {
-			const int next = (edge + 1) % vertex_count;
-			const float cross =
-				(projected_u - vertices[edge][axis_u]) * (vertices[next][axis_v] - vertices[edge][axis_v]) -
-				(projected_v - vertices[edge][axis_v]) * (vertices[next][axis_u] - vertices[edge][axis_u]);
-			if (edge == 0) {
-				first_cross = cross;
-			} else if ((first_cross < 0.0f && cross >= 0.0f) || (first_cross >= 0.0f && cross < 0.0f)) {
-				outside = 1;
-				break;
-			}
-		}
-		if (!outside)
-			return 1;
-	}
-	return 0;
-}
-
-// FUNCTION: TIE98 0x434D40
-static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObject* model,
-												   const Tie98OptNode* input_node, SceneMeshTIE98* mesh,
-												   const Vec3f* segment_start, const Vec3f* segment_end) {
-	const Tie98OptNode* node = input_node;
-	SceneMeshTIE98 child_mesh;
-	int i;
-
-	if (!node)
-		return 0;
-	while (node->type == TIE98_OPT_NODE_REFERENCE) {
-		node = OptModel_FindNodeByNameInModel(model, (const char*)node->param2);
-		if (!node)
-			return 0;
-	}
-
-	if (node->param2) {
-		switch (node->type) {
-			case TIE98_OPT_NODE_FACE_DATA:
-			case TIE98_OPT_NODE_FACE_DATA_15:
-			case TIE98_OPT_NODE_FACE_DATA_16:
-			case TIE98_OPT_NODE_FACE_DATA_17: {
-				const uint8_t* face_data = node->param2;
-				Vec3f* inline_vertex_normals;
-
-				mesh->faceCount = (int)node->param1;
-				memcpy(&mesh->edgeCount, face_data, sizeof mesh->edgeCount);
-				mesh->pFaceGeom = (FaceRecordTIE98*)(face_data + 4);
-				mesh->pFaceNormals = (Vec3f*)(mesh->pFaceGeom + mesh->faceCount);
-				mesh->pFaceTexturing = (FaceTextureGradientsTIE98*)(mesh->pFaceNormals + mesh->faceCount);
-				inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + mesh->faceCount);
-				if (!mesh->pVertNormals) {
-					int blocked;
-
-					mesh->pVertNormals = inline_vertex_normals;
-					blocked = FlightModel_TestLightSegmentAgainstFaces(mesh, segment_start, segment_end);
-					mesh->pVertNormals = NULL;
-					if (blocked)
-						return 1;
-				} else if (FlightModel_TestLightSegmentAgainstFaces(mesh, segment_start, segment_end)) {
-					return 1;
-				}
-				break;
-			}
-			case TIE98_OPT_NODE_TRANSFORM: {
-				Vec3f* offset = (Vec3f*)node->param2;
-				Matrix3x3* transform = (Matrix3x3*)(offset + 1);
-				Math3D_MulMatrix3x3(&mesh->viewOrient, transform);
-				Math3D_RotateVec3(&mesh->viewPos, transform);
-				mesh->viewPos.x += offset->x;
-				mesh->viewPos.y += offset->y;
-				mesh->viewPos.z += offset->z;
-				Math3D_MulMatrix3x3T(&mesh->orient, transform);
-				mesh->pos.x -= Math3D_RotateVec3X(offset, &mesh->orient);
-				mesh->pos.y -= Math3D_RotateVec3Y(offset, &mesh->orient);
-				mesh->pos.z -= Math3D_RotateVec3Z(offset, &mesh->orient);
-				break;
-			}
-			case TIE98_OPT_NODE_TRANSLATE: {
-				Vec3f* offset = (Vec3f*)node->param2;
-				mesh->viewPos.x += offset->x;
-				mesh->viewPos.y += offset->y;
-				mesh->viewPos.z += offset->z;
-				mesh->pos.x -= Math3D_RotateVec3X(offset, &mesh->orient);
-				mesh->pos.y -= Math3D_RotateVec3Y(offset, &mesh->orient);
-				mesh->pos.z -= Math3D_RotateVec3Z(offset, &mesh->orient);
-				break;
-			}
-			case TIE98_OPT_NODE_MATRIX:
-				Math3D_MulMatrix3x3(&mesh->viewOrient, (Matrix3x3*)node->param2);
-				Math3D_RotateVec3(&mesh->viewPos, (Matrix3x3*)node->param2);
-				Math3D_MulMatrix3x3T(&mesh->orient, (Matrix3x3*)node->param2);
-				break;
-			case TIE98_OPT_NODE_SCALE: {
-				Vec3f* scale = (Vec3f*)node->param2;
-				float inverse_x;
-				float inverse_y;
-				float inverse_z;
-
-				mesh->viewOrient.m[0] *= scale->x;
-				mesh->viewOrient.m[1] *= scale->y;
-				mesh->viewOrient.m[2] *= scale->z;
-				mesh->viewOrient.m[3] *= scale->x;
-				mesh->viewOrient.m[4] *= scale->y;
-				mesh->viewOrient.m[5] *= scale->z;
-				mesh->viewOrient.m[6] *= scale->x;
-				mesh->viewOrient.m[7] *= scale->y;
-				mesh->viewOrient.m[8] *= scale->z;
-				mesh->viewPos.x *= scale->x;
-				mesh->viewPos.y *= scale->y;
-				mesh->viewPos.z *= scale->z;
-				inverse_x = 1.0f / scale->x;
-				inverse_y = 1.0f / scale->y;
-				inverse_z = 1.0f / scale->z;
-				mesh->orient.m[0] *= inverse_x;
-				mesh->orient.m[1] *= inverse_x;
-				mesh->orient.m[2] *= inverse_x;
-				mesh->orient.m[3] *= inverse_y;
-				mesh->orient.m[4] *= inverse_y;
-				mesh->orient.m[5] *= inverse_y;
-				mesh->orient.m[6] *= inverse_z;
-				mesh->orient.m[7] *= inverse_z;
-				mesh->orient.m[8] *= inverse_z;
-				break;
-			}
-			case TIE98_OPT_NODE_MESH_VERTICES:
-				mesh->vertexCount = (int)node->param1;
-				mesh->pModelVerts = (Vec3f*)node->param2;
-				break;
-			case TIE98_OPT_NODE_VERTEX_NORMALS:
-				g_curVertNormals = (const Vec3f*)node->param2;
-				mesh->pVertNormals = (Vec3f*)node->param2;
-				break;
-			default:
-				break;
-		}
-	}
-
-	if (node->child_count == 0)
-		return 0;
-	child_mesh = *mesh;
-	g_modelNodeWalkUnusedScratch0 = 0;
-	g_modelNodeWalkUnusedScratch1 = 0;
-	g_curVertNormals = NULL;
-	g_modelNodeWalkUnusedScratch2 = 0;
-	g_curMeshFlags = 0;
-	g_curVertexCount = 0;
-	for (i = 0; i < node->child_count; ++i) {
-		if (FlightModel_TestLightSegmentAgainstNode(model, node->children[i], &child_mesh, segment_start,
-													segment_end))
-			return 1;
-	}
-	return 0;
-}
-
-// FUNCTION: TIE98 0x434BF0
-static int FlightModel_IsLightSegmentBlocked(FlightObject* object, const Vec3f* segment_start,
-											 const Vec3f* segment_end) {
-	const Tie98OptimizedPolyObject* model;
-	SceneMeshTIE98 mesh;
-	int i;
-
-	if (!g_modelSelfOcclusionEnabled)
-		return 0;
-	// PORT: the host supplies the already-adjusted native OPT tree in place of the
-	// original handle unlock/lock and pointer-adjustment sequence.
-	model = TieNativeOpt_Acquire(object->ship_idx);
-	if (!model)
-		return 0;
-
-	memset(&mesh, 0, sizeof mesh);
-	mesh.pObject = object;
-	mesh.viewOrient.m[0] = 1.0f;
-	mesh.viewOrient.m[4] = 1.0f;
-	mesh.viewOrient.m[8] = 1.0f;
-	mesh.orient.m[0] = 1.0f;
-	mesh.orient.m[4] = 1.0f;
-	mesh.orient.m[8] = 1.0f;
-	g_modelNodeWalkUnusedScratch0 = 0;
-	g_modelNodeWalkUnusedScratch1 = 0;
-	g_curVertNormals = NULL;
-	g_modelNodeWalkUnusedScratch2 = 0;
-	g_curMeshFlags = 0;
-	g_curVertexCount = 0;
-	for (i = 0; i < model->root_node_count; ++i) {
-		if (FlightModel_TestLightSegmentAgainstNode(model, model->root_nodes[i], &mesh, segment_start,
-													segment_end))
-			return 1;
-	}
-	return 0;
-}
-
-// FUNCTION: TIE98 0x4333A0
-static void FlightModel_Apply_BWing_Bridge_Rotation(const Tie98OptimizedPolyObject* model,
-													FlightObject* object, SceneMeshTIE98* mesh,
-													int bridge_mesh_index) {
-	Matrix3x3 rotation;
-
-	float axis_angle[4];
-
-	(void)model;
-
-	axis_angle[0] = 0.0f;
-	axis_angle[1] = -1.0f;
-	axis_angle[2] = 0.0f;
-	axis_angle[3] = (float)object->craft_ptr->mesh_rotation[bridge_mesh_index] * 0.024543673f;
-	Math3D_BuildAxisAngleMatrix(&rotation, axis_angle);
-	Math3D_MulMatrix3x3(&mesh->orient, &rotation);
-	Math3D_RotateVec3(&mesh->pos, &rotation);
-	Math3D_MulMatrix3x3T(&mesh->viewOrient, &rotation);
-}
-
-// FUNCTION: TIE98 0x434330
-static void FlightModel_Draw_OPT_Node(const Tie98OptimizedPolyObject* model, const Tie98OptNode* input_node,
-									  SceneMeshTIE98* mesh) {
-	const Tie98OptNode* node = input_node;
-	int selected_lod;
-	int selected_switch;
-	int selected;
-	SceneMeshTIE98 child_mesh;
-	int i;
-
-	if (!node)
-		return;
-	while (node->type == TIE98_OPT_NODE_REFERENCE) {
-		if (node->reference)
-			node = node->reference;
-		else
-			node = OptModel_FindNodeByNameInModel(model, (const char*)node->param2);
-		if (!node)
-			return;
-	}
-
-	selected_lod = 0;
-	selected_switch = 0;
-	if (node->param2) {
-		switch (node->type) {
-			case TIE98_OPT_NODE_FACE_DATA:
-			case TIE98_OPT_NODE_FACE_DATA_15:
-			case TIE98_OPT_NODE_FACE_DATA_16:
-			case TIE98_OPT_NODE_FACE_DATA_17: {
-				const uint8_t* face_data = node->param2;
-				Vec3f* inline_vertex_normals;
-
-				mesh->faceCount = (int)node->param1;
-				memcpy(&mesh->edgeCount, face_data, sizeof mesh->edgeCount);
-				if (mesh->edgeCount * 4 > g_sceneEdgeCapacity) {
-					g_sceneEdgeCapacity = mesh->edgeCount * 4;
-					g_sceneEdgeList =
-						realloc(g_sceneEdgeList, (size_t)g_sceneEdgeCapacity * sizeof *g_sceneEdgeList);
-					g_sceneEdgeFlags =
-						realloc(g_sceneEdgeFlags, (size_t)mesh->edgeCount * sizeof *g_sceneEdgeFlags);
-				}
-				mesh->pFaceGeom = (FaceRecordTIE98*)(face_data + 4);
-				mesh->pFaceNormals = (Vec3f*)(mesh->pFaceGeom + mesh->faceCount);
-				mesh->pFaceTexturing = (FaceTextureGradientsTIE98*)(mesh->pFaceNormals + mesh->faceCount);
-				inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + mesh->faceCount);
-				if (!mesh->pMaterial) {
-					uint8_t* shade_table;
-
-					mesh->pMaterial = g_curTextureDesc;
-					if (g_curTextureDesc == &g_defaultMaterial) {
-						mesh->pTexels = g_defaultTextureData;
-						mesh->pPalette0 = g_defaultTextureData + 64;
-						mesh->pPalette1 = g_defaultTextureData + 64 + 4096;
-					} else {
-						mesh->pTexels = (uint8_t*)g_curTextureDesc + sizeof *g_curTextureDesc;
-						if (g_curTextureDesc->paletteType == 0) {
-							shade_table = (uint8_t*)TieNativeOpt_ResolveAddress(
-								model, g_curTextureDesc->paletteAddress, 1);
-						} else {
-							int base_size;
-
-							shade_table = mesh->pTexels;
-							base_size = g_curTextureDesc->width * g_curTextureDesc->height;
-							if (base_size == g_curTextureDesc->textureSize)
-								shade_table += g_curTextureDesc->dataSize;
-							else
-								shade_table += base_size;
-						}
-						if (g_useHardware3D) {
-							/* pPalette1 carries the runtime-built RGB565 shade tables (analyzed
-							 * level 0, level 8 base palette at +4096, overlay metadata) the
-							 * hardware draw path consumes; pPalette0 keeps the serialized shade
-							 * table and is only read by the software rasterizer. */
-							mesh->pPalette0 = shade_table;
-							mesh->pPalette1 = (uint8_t*)RenderTexture_GetHardwareShadeTables(
-								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
-						} else if (g_flight16bppBytesPerPixel == 1) {
-							mesh->pPalette0 = (uint8_t*)RenderTexture_GetSoftwareShadeTable(
-								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
-							mesh->pPalette1 = mesh->pPalette0 + 4096;
-						} else {
-							/* The 16-bit software span reads the serialized RGB565 shades at
-							 * pPalette0 + 4096, matching OptModel_BuildRuntimeHandle. */
-							mesh->pPalette0 = shade_table;
-							mesh->pPalette1 = shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES;
-						}
-					}
-				}
-				if (mesh->pVertNormals) {
-					RenderScene_DrawSceneMesh(mesh);
-				} else {
-					mesh->pVertNormals = inline_vertex_normals;
-					RenderScene_DrawSceneMesh(mesh);
-					mesh->pVertNormals = NULL;
-				}
-				break;
-			}
-			case TIE98_OPT_NODE_TRANSFORM: {
-				Vec3f* offset = (Vec3f*)node->param2;
-				Matrix3x3* transform = (Matrix3x3*)(offset + 1);
-				Math3D_MulMatrix3x3(&mesh->viewOrient, transform);
-				Math3D_RotateVec3(&mesh->viewPos, transform);
-				mesh->viewPos.x += offset->x;
-				mesh->viewPos.y += offset->y;
-				mesh->viewPos.z += offset->z;
-				Math3D_MulMatrix3x3T(&mesh->orient, transform);
-				mesh->pos.x -= Math3D_RotateVec3X(offset, &mesh->orient);
-				mesh->pos.y -= Math3D_RotateVec3Y(offset, &mesh->orient);
-				mesh->pos.z -= Math3D_RotateVec3Z(offset, &mesh->orient);
-				break;
-			}
-			case TIE98_OPT_NODE_TRANSLATE: {
-				Vec3f* offset = (Vec3f*)node->param2;
-				mesh->viewPos.x += offset->x;
-				mesh->viewPos.y += offset->y;
-				mesh->viewPos.z += offset->z;
-				mesh->pos.x -= Math3D_RotateVec3X(offset, &mesh->orient);
-				mesh->pos.y -= Math3D_RotateVec3Y(offset, &mesh->orient);
-				mesh->pos.z -= Math3D_RotateVec3Z(offset, &mesh->orient);
-				break;
-			}
-			case TIE98_OPT_NODE_MATRIX:
-				Math3D_MulMatrix3x3(&mesh->viewOrient, (Matrix3x3*)node->param2);
-				Math3D_RotateVec3(&mesh->viewPos, (Matrix3x3*)node->param2);
-				Math3D_MulMatrix3x3T(&mesh->orient, (Matrix3x3*)node->param2);
-				break;
-			case TIE98_OPT_NODE_SCALE: {
-				Vec3f* scale = (Vec3f*)node->param2;
-				float inverse_x;
-				float inverse_y;
-				float inverse_z;
-
-				mesh->viewOrient.m[0] *= scale->x;
-				mesh->viewOrient.m[1] *= scale->y;
-				mesh->viewOrient.m[2] *= scale->z;
-				mesh->viewOrient.m[3] *= scale->x;
-				mesh->viewOrient.m[4] *= scale->y;
-				mesh->viewOrient.m[5] *= scale->z;
-				mesh->viewOrient.m[6] *= scale->x;
-				mesh->viewOrient.m[7] *= scale->y;
-				mesh->viewOrient.m[8] *= scale->z;
-				mesh->viewPos.x *= scale->x;
-				mesh->viewPos.y *= scale->y;
-				mesh->viewPos.z *= scale->z;
-				inverse_x = 1.0f / scale->x;
-				inverse_y = 1.0f / scale->y;
-				inverse_z = 1.0f / scale->z;
-				mesh->orient.m[0] *= inverse_x;
-				mesh->orient.m[1] *= inverse_x;
-				mesh->orient.m[2] *= inverse_x;
-				mesh->orient.m[3] *= inverse_y;
-				mesh->orient.m[4] *= inverse_y;
-				mesh->orient.m[5] *= inverse_y;
-				mesh->orient.m[6] *= inverse_z;
-				mesh->orient.m[7] *= inverse_z;
-				mesh->orient.m[8] *= inverse_z;
-				break;
-			}
-			case TIE98_OPT_NODE_MESH_VERTICES:
-				/* PORT: dynamic host storage replaces the original fixed 32-bit
-				 * handle-backed projection arrays. */
-				if ((int)node->param1 > g_modelVertexCapacity) {
-					g_modelVertexCapacity = (int)node->param1;
-					g_projVertCapacity = 4 * (int)node->param1;
-					g_projVertList =
-						realloc(g_projVertList, (size_t)g_projVertCapacity * sizeof *g_projVertList);
-					g_vertexRemap = realloc(g_vertexRemap, (size_t)node->param1 * sizeof *g_vertexRemap);
-				}
-				mesh->vertexCount = (int)node->param1;
-				mesh->pModelVerts = (Vec3f*)node->param2;
-				break;
-			case TIE98_OPT_NODE_VERTEX_NORMALS:
-				g_curVertNormals = (const Vec3f*)node->param2;
-				mesh->pVertNormals = (Vec3f*)node->param2;
-				break;
-			case TIE98_OPT_NODE_TEXTURE_COORDINATES:
-				mesh->pUVs = (OptTexCoordTIE98*)node->param2;
-				break;
-			case TIE98_OPT_NODE_FLAGS:
-				memcpy(mesh->nodeFlags, node->param2, 3 * sizeof mesh->nodeFlags[0]);
-				break;
-			case TIE98_OPT_NODE_TYPE_10:
-				if (node->param1 == 7 || node->param1 == 8)
-					mesh->field_136 = (int)g_curMeshFlags;
-				else if (node->param1 == 5 || node->param1 == 6)
-					mesh->field_156 = (int)g_curMeshFlags;
-				else
-					mesh->nodeFlags[3] = (int)g_curMeshFlags;
-				break;
-			case TIE98_OPT_NODE_TEXTURE: {
-				mesh->textureName = node->name;
-				g_curTextureDesc = (OptTextureDataTIE98*)node->param2;
-				{
-					uint8_t* shade_table;
-
-					mesh->pMaterial = g_curTextureDesc;
-					if (g_curTextureDesc == &g_defaultMaterial) {
-						mesh->pTexels = g_defaultTextureData;
-						mesh->pPalette0 = g_defaultTextureData + 64;
-						mesh->pPalette1 = g_defaultTextureData + 64 + 4096;
-					} else {
-						mesh->pTexels = (uint8_t*)g_curTextureDesc + sizeof *g_curTextureDesc;
-						if (g_curTextureDesc->paletteType == 0) {
-							shade_table = (uint8_t*)TieNativeOpt_ResolveAddress(
-								model, g_curTextureDesc->paletteAddress, 1);
-						} else {
-							int base_size;
-
-							shade_table = mesh->pTexels;
-							base_size = g_curTextureDesc->width * g_curTextureDesc->height;
-							if (base_size == g_curTextureDesc->textureSize)
-								shade_table += g_curTextureDesc->dataSize;
-							else
-								shade_table += base_size;
-						}
-						if (g_useHardware3D) {
-							/* pPalette1 carries the runtime-built RGB565 shade tables (analyzed
-							 * level 0, level 8 base palette at +4096, overlay metadata) the
-							 * hardware draw path consumes; pPalette0 keeps the serialized shade
-							 * table and is only read by the software rasterizer. */
-							mesh->pPalette0 = shade_table;
-							mesh->pPalette1 = (uint8_t*)RenderTexture_GetHardwareShadeTables(
-								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
-						} else if (g_flight16bppBytesPerPixel == 1) {
-							mesh->pPalette0 = (uint8_t*)RenderTexture_GetSoftwareShadeTable(
-								(const uint16_t*)(shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES));
-							mesh->pPalette1 = mesh->pPalette0 + 4096;
-						} else {
-							/* The 16-bit software span reads the serialized RGB565 shades at
-							 * pPalette0 + 4096, matching OptModel_BuildRuntimeHandle. */
-							mesh->pPalette0 = shade_table;
-							mesh->pPalette1 = shade_table + TIE98_OPT_INDEXED_SHADE_TABLE_BYTES;
-						}
-					}
-				}
-				break;
-			}
-			case TIE98_OPT_NODE_FACE_GROUP: {
-				selected_lod = g_forcedLodLevel;
-				if (objecteyez > 0 && selected_lod == 0) {
-					float threshold = 1.0f;
-					const float* thresholds;
-
-					if (g_lodDistanceScale > 0.0f)
-						threshold = 1.0f / ((float)objecteyez * g_lodDistanceScale);
-					selected_lod = 1;
-					thresholds = node->param2;
-					while (selected_lod <= node->child_count && thresholds[selected_lod - 1] > threshold)
-						++selected_lod;
-					if (selected_lod > node->child_count)
-						selected_lod = -1;
-				} else if (selected_lod == 0) {
-					selected_lod = 1;
-				} else if (selected_lod > node->child_count) {
-					selected_lod = -1;
-				}
-				break;
-			}
-			case TIE98_OPT_NODE_ROTATION_SCALE: {
-				float axis_angle[4];
-				Vec3f* pivot;
-				Vec3f* axis;
-				Matrix3x3 rotation;
-
-				if (mesh->rotAngle == 0.0f)
-					break;
-				pivot = (Vec3f*)node->param2;
-				axis = pivot + 1;
-				mesh->pos.x -= pivot->x;
-				mesh->pos.y -= pivot->y;
-				mesh->pos.z -= pivot->z;
-				mesh->viewPos.x += Math3D_RotateVec3X(pivot, &mesh->viewOrient);
-				mesh->viewPos.y += Math3D_RotateVec3Y(pivot, &mesh->viewOrient);
-				mesh->viewPos.z += Math3D_RotateVec3Z(pivot, &mesh->viewOrient);
-				axis_angle[0] = axis->x * 0.000030517578f;
-				axis_angle[1] = axis->y * 0.000030517578f;
-				axis_angle[2] = axis->z * 0.000030517578f;
-				axis_angle[3] = mesh->rotAngle;
-
-				Math3D_BuildAxisAngleMatrix(&rotation, axis_angle);
-				Math3D_MulMatrix3x3(&mesh->orient, &rotation);
-				Math3D_RotateVec3(&mesh->pos, &rotation);
-				Math3D_MulMatrix3x3T(&mesh->viewOrient, &rotation);
-				mesh->pos.x += pivot->x;
-				mesh->pos.y += pivot->y;
-				mesh->pos.z += pivot->z;
-				mesh->viewPos.x -= Math3D_RotateVec3X(pivot, &mesh->viewOrient);
-				mesh->viewPos.y -= Math3D_RotateVec3Y(pivot, &mesh->viewOrient);
-				mesh->viewPos.z -= Math3D_RotateVec3Z(pivot, &mesh->viewOrient);
-				break;
-			}
-			case TIE98_OPT_NODE_SWITCH:
-				selected_switch = g_nodeSwitchIndex + 1;
-				if (selected_switch > node->child_count)
-					selected_switch = node->child_count;
-				break;
-			default:
-				break;
-		}
-	} else {
-		if (node->type == TIE98_OPT_NODE_TYPE_10) {
-			if (node->param1 == 7 || node->param1 == 8)
-				mesh->field_136 = (int)g_curMeshFlags;
-			else if (node->param1 == 5 || node->param1 == 6)
-				mesh->field_156 = (int)g_curMeshFlags;
-			else
-				mesh->nodeFlags[3] = (int)g_curMeshFlags;
-		} else if (node->type == TIE98_OPT_NODE_SWITCH) {
-			selected_switch = g_nodeSwitchIndex + 1;
-			if (selected_switch > node->child_count)
-				selected_switch = node->child_count;
-		}
-	}
-
-	if (node->child_count == 0)
-		return;
-	selected = selected_switch ? selected_switch : selected_lod;
-	if (selected == -1)
-		return;
-	if (selected != 0) {
-		++g_curLayerId;
-		FlightModel_Draw_OPT_Node(model, node->children[selected - 1], mesh);
-		return;
-	}
-	child_mesh = *mesh;
-	g_modelNodeWalkUnusedScratch0 = 0;
-	g_modelNodeWalkUnusedScratch1 = 0;
-	g_curVertNormals = NULL;
-	g_modelNodeWalkUnusedScratch2 = 0;
-	g_curMeshFlags = 0;
-	g_curVertexCount = 0;
-	for (i = 0; i < node->child_count; ++i) {
-		++g_curLayerId;
-		FlightModel_Draw_OPT_Node(model, node->children[i], &child_mesh);
-	}
-}
-
-// FUNCTION: TIE98 0x433430
-void FlightModel_Draw_Object(FlightObject* object) {
-	const uint16_t model_type = object->ship_idx;
-	const int model_has_component_state = (species_table[model_type].side & 0x40) != 0;
-	const Tie98OptimizedPolyObject* model;
-	SceneMeshTIE98 mesh;
-	int mesh_ordinal;
-	int root;
-	int row;
-	int column;
-
-	g_nodeSwitchIndex = model_has_component_state ? object->decal_color : 0;
-	model = g_flightModelOverride ? g_flightModelOverride : TieNativeOpt_Acquire(model_type);
-	if (!model)
-		return;
-
-	memset(&mesh, 0, sizeof mesh);
-	mesh.pObject = object;
-	/* PORT: TIE98 reads a compact position overlay from ObjectRecord for
-	 * models without component state. tie_core stores every object in the
-	 * recovered TIE95 full-width layout, so both representations resolve here. */
-	mesh.viewPos.x = (float)(object->world_x - camera.x);
-	mesh.viewPos.y = (float)(object->world_y - camera.y);
-	mesh.viewPos.z = (float)(object->world_z - camera.z);
-	mesh.viewOrient.m[0] = (float)worldeyeA1 / 32768.0f;
-	mesh.viewOrient.m[1] = (float)worldeyeA2 / 32768.0f;
-	mesh.viewOrient.m[2] = (float)worldeyeA3 / 32768.0f;
-	mesh.viewOrient.m[3] = (float)worldeyeB1 / 32768.0f;
-	mesh.viewOrient.m[4] = (float)worldeyeB2 / 32768.0f;
-	mesh.viewOrient.m[5] = (float)worldeyeB3 / 32768.0f;
-	mesh.viewOrient.m[6] = (float)worldeyeC1 / 32768.0f;
-	mesh.viewOrient.m[7] = (float)worldeyeC2 / 32768.0f;
-	mesh.viewOrient.m[8] = (float)worldeyeC3 / 32768.0f;
-	Math3D_RotateVec3(&mesh.viewPos, &mesh.viewOrient);
-
-	mesh.viewOrient.m[0] = (float)rotworldeyeA1 / 32768.0f;
-	mesh.viewOrient.m[1] = (float)rotworldeyeA2 / 32768.0f;
-	mesh.viewOrient.m[2] = (float)rotworldeyeA3 / 32768.0f;
-	mesh.viewOrient.m[3] = (float)rotworldeyeB1 / 32768.0f;
-	mesh.viewOrient.m[4] = (float)rotworldeyeB2 / 32768.0f;
-	mesh.viewOrient.m[5] = (float)rotworldeyeB3 / 32768.0f;
-	mesh.viewOrient.m[6] = (float)rotworldeyeC1 / 32768.0f;
-	mesh.viewOrient.m[7] = (float)rotworldeyeC2 / 32768.0f;
-	mesh.viewOrient.m[8] = (float)rotworldeyeC3 / 32768.0f;
-	for (row = 0; row < 3; ++row)
-		for (column = 0; column < 3; ++column)
-			mesh.orient.m[row * 3 + column] = mesh.viewOrient.m[column * 3 + row];
-	mesh.pos.x = -mesh.viewPos.x;
-	mesh.pos.y = -mesh.viewPos.y;
-	mesh.pos.z = -mesh.viewPos.z;
-	Math3D_RotateVec3(&mesh.pos, &mesh.orient);
-	g_modelNodeWalkUnusedScratch0 = 0;
-	if (!g_defaultMaterialDesc) {
-		g_defaultMaterialDesc = &g_defaultMaterial;
-		g_defaultMaterial.height = 8;
-		g_defaultMaterial.width = 8;
-		g_defaultMaterial.paletteType = 16;
-		g_defaultMaterial.paletteAddress = 256;
-		ModelTexture_BuildPalettedShadeTable(g_defaultTextureData, g_defaultTextureRgb24, 8, 8);
-	}
-	g_modelNodeWalkUnusedScratch1 = 0;
-	g_curTextureDesc = g_defaultMaterialDesc;
-	g_curVertNormals = NULL;
-	g_modelNodeWalkUnusedScratch2 = 0;
-	g_curMeshFlags = 0;
-	g_curVertexCount = 0;
-	mesh_ordinal = 0;
-	for (root = 0; root < model->root_node_count; ++root) {
-		const Tie98OptNode* node = model->root_nodes[root];
-		int restore_mesh;
-		SceneMeshTIE98 saved_mesh;
-
-		mesh.rotAngle = 0.0f;
-		restore_mesh = 0;
-
-		if (node && node->type != TIE98_OPT_NODE_TEXTURE) {
-			++mesh_ordinal;
-			if (object->genus == GENUS_PROJECTILE_PLAYER || object->genus == GENUS_PROJECTILE_NPC) {
-				g_nodeSwitchIndex = 0;
-			} else if (model_has_component_state) {
-				if (object->craft_ptr->mesh_state[mesh_ordinal - 1] != 0)
-					continue;
-				mesh.rotAngle = object->craft_ptr->mesh_rotation[mesh_ordinal - 1] * 0.024543673f;
-			}
-			if (model_type == 4) {
-				if (g_bwingBridgeMeshIndex == -1)
-					g_bwingBridgeMeshIndex = modelmesh_findbridgeindex(model_type);
-				if (g_bwingBridgeMeshIndex != -1 &&
-					object->craft_ptr->mesh_rotation[g_bwingBridgeMeshIndex] != 0) {
-					saved_mesh = mesh;
-					restore_mesh = 1;
-					FlightModel_Apply_BWing_Bridge_Rotation(model, object, &mesh, g_bwingBridgeMeshIndex);
-				}
-			}
-		}
-		++g_curLayerId;
-		FlightModel_Draw_OPT_Node(model, node, &mesh);
-		if (restore_mesh)
-			mesh = saved_mesh;
-	}
-}
-
-// FUNCTION: TIE98 0x433980
-void FlightModel_Draw_Object_Mesh(FlightObject* object, int mesh_index) {
-	uint16_t model_type = object->ship_idx;
-	const Tie98OptimizedPolyObject* model;
-	SceneMeshTIE98 mesh;
-	int root;
-	int row;
-	int column;
-
-	if (model_type == 89)
-		model_type = object->ship_type_override;
-	model = TieNativeOpt_Acquire(model_type);
-	if (!model)
-		return;
-	g_nodeSwitchIndex = object->decal_color;
-
-	memset(&mesh, 0, sizeof mesh);
-	mesh.pObject = object;
-	/* PORT: TIE98 reads a compact position overlay from ObjectRecord for
-	 * models without component state. tie_core stores every object in the
-	 * recovered TIE95 full-width layout, so both representations resolve here. */
-	mesh.viewPos.x = (float)(object->world_x - camera.x);
-	mesh.viewPos.y = (float)(object->world_y - camera.y);
-	mesh.viewPos.z = (float)(object->world_z - camera.z);
-	mesh.viewOrient.m[0] = (float)worldeyeA1 / 32768.0f;
-	mesh.viewOrient.m[1] = (float)worldeyeA2 / 32768.0f;
-	mesh.viewOrient.m[2] = (float)worldeyeA3 / 32768.0f;
-	mesh.viewOrient.m[3] = (float)worldeyeB1 / 32768.0f;
-	mesh.viewOrient.m[4] = (float)worldeyeB2 / 32768.0f;
-	mesh.viewOrient.m[5] = (float)worldeyeB3 / 32768.0f;
-	mesh.viewOrient.m[6] = (float)worldeyeC1 / 32768.0f;
-	mesh.viewOrient.m[7] = (float)worldeyeC2 / 32768.0f;
-	mesh.viewOrient.m[8] = (float)worldeyeC3 / 32768.0f;
-	Math3D_RotateVec3(&mesh.viewPos, &mesh.viewOrient);
-
-	mesh.viewOrient.m[0] = (float)rotworldeyeA1 / 32768.0f;
-	mesh.viewOrient.m[1] = (float)rotworldeyeA2 / 32768.0f;
-	mesh.viewOrient.m[2] = (float)rotworldeyeA3 / 32768.0f;
-	mesh.viewOrient.m[3] = (float)rotworldeyeB1 / 32768.0f;
-	mesh.viewOrient.m[4] = (float)rotworldeyeB2 / 32768.0f;
-	mesh.viewOrient.m[5] = (float)rotworldeyeB3 / 32768.0f;
-	mesh.viewOrient.m[6] = (float)rotworldeyeC1 / 32768.0f;
-	mesh.viewOrient.m[7] = (float)rotworldeyeC2 / 32768.0f;
-	mesh.viewOrient.m[8] = (float)rotworldeyeC3 / 32768.0f;
-	for (row = 0; row < 3; ++row)
-		for (column = 0; column < 3; ++column)
-			mesh.orient.m[row * 3 + column] = mesh.viewOrient.m[column * 3 + row];
-	mesh.pos.x = -mesh.viewPos.x;
-	mesh.pos.y = -mesh.viewPos.y;
-	mesh.pos.z = -mesh.viewPos.z;
-	Math3D_RotateVec3(&mesh.pos, &mesh.orient);
-	g_modelNodeWalkUnusedScratch0 = 0;
-	if (!g_defaultMaterialDesc) {
-		g_defaultMaterialDesc = &g_defaultMaterial;
-		g_defaultMaterial.height = 8;
-		g_defaultMaterial.width = 8;
-		g_defaultMaterial.paletteType = 16;
-		g_defaultMaterial.paletteAddress = 256;
-		ModelTexture_BuildPalettedShadeTable(g_defaultTextureData, g_defaultTextureRgb24, 8, 8);
-	}
-	g_modelNodeWalkUnusedScratch1 = 0;
-	g_curTextureDesc = g_defaultMaterialDesc;
-	g_curVertNormals = NULL;
-	g_modelNodeWalkUnusedScratch2 = 0;
-	g_curMeshFlags = 0;
-	g_curVertexCount = 0;
-	for (root = 0; root < model->root_node_count; ++root) {
-		const Tie98OptNode* node = model->root_nodes[root];
-		if (node && node->type == TIE98_OPT_NODE_TEXTURE) {
-			++g_curLayerId;
-			FlightModel_Draw_OPT_Node(model, node, &mesh);
-			++mesh_index;
-		} else if (root == mesh_index) {
-			++g_curLayerId;
-			FlightModel_Draw_OPT_Node(model, node, &mesh);
-		}
-	}
-}
-
-// FUNCTION: TIE98 0x42B050
-static void RenderScene_EffectsPass(void) {
-	anim_sort_and_draw_bitmaps_tie98(g_drawSceneEffects != 0);
-	numbitmaps = 0;
-	if (g_d3dVertexCount != 0 && g_d3dIndexCount != 0) {
-		Math_SetFpuExtendedPrecisionMode();
-		if (g_powerVrSceneWorkaround) {
-			if (g_std3DStartScenePending) {
-				std3D_StartScene();
-				g_std3DStartScenePending = 0;
-			}
-		} else {
-			std3D_StartScene();
-		}
-		std3D_LockExecuteBuffer();
-		std3D_AddVertices(g_flightVertexBuffer, g_d3dVertexCount);
-		std3D_BeginInstructions();
-		std3D_AddTriangles(g_triBuffer, (unsigned int)g_d3dIndexCount);
-		std3D_ExecuteBuffer();
-		if (!g_powerVrSceneWorkaround)
-			std3D_EndScene();
-		Math_SetFpuSinglePrecisionMode();
-	}
-	if (g_powerVrSceneWorkaround) {
-		Math_SetFpuExtendedPrecisionMode();
-		std3D_EndScene();
-		g_std3DStartScenePending = 1;
-		Math_SetFpuSinglePrecisionMode();
-	}
-}
-
-// FUNCTION: TIE98 0x41F7D0
-static void FlightLight_ResetSoftwareFaceSampleCache(void) {
-	g_swFaceLightCachedObject = NULL;
-	g_swFaceLightCachedFace = NULL;
-}
-
-// FUNCTION: TIE98 0x41F7E0
-static float FlightLight_ComputeSoftwareFaceSampleIntensity(SceneFaceTIE98* face, int screen_x, int screen_y,
-															float view_z) {
-	Vec3f position;
-	SceneMeshTIE98* mesh = face->pMesh;
-	float position_z;
-	float screen_scale;
-	float intensity;
-
-	int light_index;
-
-	if (g_swFaceLightCachedObject != mesh->pObject) {
-		int light_index;
-
-		g_swFaceLightCount = tie_makelocallights_tie98(mesh->pObject);
-		g_swFaceLightCachedObject = mesh->pObject;
-		for (light_index = 0; light_index < g_swFaceLightCount; ++light_index) {
-			Vec3f light = {
-				(float)localLights[light_index].x,
-				(float)localLights[light_index].y,
-				(float)localLights[light_index].z,
-			};
-			Math3D_RotateVec3(&light, &mesh->viewOrient);
-			light.x += mesh->viewPos.x;
-			light.y += mesh->viewPos.y;
-			light.z += mesh->viewPos.z;
-			g_swFaceLightPositions[light_index] = light;
-			g_swFaceLightIntensities[light_index] = (float)localLights[light_index].range;
-		}
-		g_swFaceDirectionalLight.x = (float)rotlightX * (1.0f / 32768.0f);
-		g_swFaceDirectionalLight.y = (float)rotlightY * (1.0f / 32768.0f);
-		g_swFaceDirectionalLight.z = (float)rotlightZ * (1.0f / 32768.0f);
-		Math3D_RotateVec3(&g_swFaceDirectionalLight, &mesh->viewOrient);
-	}
-
-	position_z = 1.0f / view_z;
-	screen_scale = position_z * g_invProjScale;
-	position.x = (float)(screen_x - ((uint16_t)pixelswide >> 1)) * screen_scale;
-	position.y = (float)(screen_y - ((uint16_t)pixelsdeep >> 1) - transfm2_screenyoffset) * screen_scale;
-	position.z = position_z;
-	if (g_swFaceLightCachedFace != face) {
-		g_swFaceLightCachedFace = face;
-		g_swFaceLightCachedNormal = mesh->pFaceNormals[face->faceIndex];
-		Math3D_RotateVec3(&g_swFaceLightCachedNormal, &mesh->viewOrient);
-	}
-
-	intensity = 0.0f;
-	if (g_specularLightingEnabled) {
-		Vec3f halfway;
-		const float eye_x = -position.x;
-		const float eye_y = -position.y;
-		const float eye_z = -position.z;
-		const float abs_x = fabsf(eye_x);
-		const float abs_y = fabsf(eye_y);
-		const float abs_z = fabsf(eye_z);
-		float eye_length;
-		float inverse_eye_length;
-		float cosine;
-
-		if (abs_x >= abs_y && abs_x >= abs_z)
-			eye_length = abs_x * 0.9264f + (abs_y + abs_z) * 0.3872f;
-		else if (abs_y >= abs_x && abs_y >= abs_z)
-			eye_length = abs_y * 0.9264f + (abs_x + abs_z) * 0.3872f;
-		else
-			eye_length = abs_z * 0.9264f + (abs_x + abs_y) * 0.3872f;
-		inverse_eye_length = 1.0f / eye_length;
-		halfway.x = eye_x * inverse_eye_length + g_swFaceDirectionalLight.x;
-		halfway.y = eye_y * inverse_eye_length + g_swFaceDirectionalLight.y;
-		halfway.z = eye_z * inverse_eye_length + g_swFaceDirectionalLight.z;
-		cosine = halfway.x * g_swFaceLightCachedNormal.x + halfway.y * g_swFaceLightCachedNormal.y +
-				 halfway.z * g_swFaceLightCachedNormal.z;
-		if (cosine > 0.0f) {
-			const float half_cosine = cosine * 0.5f;
-			const float cosine3 = half_cosine * half_cosine * half_cosine;
-			const float cosine6 = cosine3 * cosine3;
-			const float cosine12 = cosine6 * cosine6;
-			const float cosine24 = cosine12 * cosine12;
-			intensity = cosine24 * cosine24 * 0.7f;
-			if (intensity >= 1.0f)
-				return 1.0f;
-		}
-	}
-
-	for (light_index = 0; light_index < g_swFaceLightCount; ++light_index) {
-		const Vec3f delta = {
-			g_swFaceLightPositions[light_index].x - position.x,
-			g_swFaceLightPositions[light_index].y - position.y,
-			g_swFaceLightPositions[light_index].z - position.z,
-		};
-		const float facing = delta.x * g_swFaceLightCachedNormal.x + delta.y * g_swFaceLightCachedNormal.y +
-							 delta.z * g_swFaceLightCachedNormal.z;
-		float abs_x;
-		float abs_y;
-		float abs_z;
-		float distance;
-		float contribution;
-
-		if (facing <= 0.0f)
-			continue;
-		abs_x = fabsf(delta.x);
-		abs_y = fabsf(delta.y);
-		abs_z = fabsf(delta.z);
-
-		if (abs_x >= abs_y && abs_x >= abs_z)
-			distance = abs_x + (abs_y + abs_z) * 0.2941f;
-		else if (abs_y >= abs_x && abs_y >= abs_z)
-			distance = abs_y + (abs_x + abs_z) * 0.2941f;
-		else
-			distance = abs_z + (abs_x + abs_y) * 0.2941f;
-		contribution = facing / (distance * distance);
-		if (g_specularLightingEnabled) {
-			const Vec3f halfway = {
-				delta.x - position.x,
-				delta.y - position.y,
-				delta.z - position.z,
-			};
-			const float half_x = fabsf(halfway.x);
-			const float half_y = fabsf(halfway.y);
-			const float half_z = fabsf(halfway.z);
-			float half_length;
-			float half_facing;
-
-			if (half_x >= half_y && half_x >= half_z)
-				half_length = half_x * 0.4632f + (half_y + half_z) * 0.1936f;
-			else if (half_y >= half_x && half_y >= half_z)
-				half_length = half_y * 0.4632f + (half_x + half_z) * 0.1936f;
-			else
-				half_length = half_z * 0.4632f + (half_x + half_y) * 0.1936f;
-			half_facing = (halfway.x * g_swFaceLightCachedNormal.x + halfway.y * g_swFaceLightCachedNormal.y +
-						   halfway.z * g_swFaceLightCachedNormal.z) *
-						  0.5f / half_length;
-			if (half_facing >= 0.0f) {
-				const float cosine3 = half_facing * half_facing * half_facing;
-				const float cosine6 = cosine3 * cosine3;
-				const float cosine12 = cosine6 * cosine6;
-				const float cosine24 = cosine12 * cosine12;
-				contribution += cosine24 * cosine24 / half_length;
-			}
-		}
-		if (contribution > 0.0f) {
-			intensity += contribution * g_swFaceLightIntensities[light_index];
-			if (intensity >= 1.0f)
-				return 1.0f;
-		}
-	}
-	return intensity;
-}
-
 // FUNCTION: TIE98 0x43F260
 static void sw3d_DrawTexturedShadeSpan(int start_x, int end_x, float start_view_z) {
 	SceneFaceTIE98* face = g_sw3dCurrentFace;
@@ -4628,107 +4352,394 @@ static void sw3d_DrawTexturedShadeSpan(int start_x, int end_x, float start_view_
 	}
 }
 
-// FUNCTION: TIE98 0x43DF20
-void RenderScene_DrawVisibleFaces(void) {
-	int face_index;
+// FUNCTION: TIE98 0x44A090
+void sw3d_BlitOccludedSpan(const uint8_t* source, int start_x, int end_x, int scan_y, float depth) {
+	const int bytes_per_pixel = g_flight16bppBytesPerPixel;
+	const uint8_t* source_base = source - bytes_per_pixel * start_x;
+	int draw_x = start_x;
+	SceneSpanTIE98* span;
 
-	if (g_useHardware3D) {
-		RenderScene_EffectsPass();
-		return;
+	g_sw3dScanlineByteOffset =
+		bytes_per_pixel * displaycorner_columns + (int)g_surfacePitch * (scan_y + displaycorner_lines);
+
+	span = g_scanlineSpanHeads[scan_y];
+	while (span) {
+		const int span_end = span->endX;
+		SceneFaceTIE98* face;
+
+		if (span_end <= draw_x) {
+			span = span->next;
+			continue;
+		}
+		if (span->startX > draw_x)
+			break;
+
+		face = span->pFace;
+		if (depth <= face->minVertW) {
+			draw_x = span_end;
+			start_x = draw_x;
+			if (span_end >= end_x)
+				return;
+		} else if (depth < face->maxVertW) {
+			float span_depth = (float)scan_y * face->gradients[7] + face->gradients[8];
+			span_depth = (float)start_x * face->gradients[6] + span_depth;
+			if (depth <= span_depth) {
+				if (face->gradients[6] >= 0.0f) {
+					draw_x = span_end;
+					start_x = draw_x;
+					if (span_end >= end_x)
+						return;
+				} else {
+					int limit_x = span_end;
+					int delta_x;
+					float limit_depth;
+
+					if (limit_x >= end_x)
+						limit_x = end_x;
+					delta_x = limit_x - draw_x;
+					limit_depth = (float)delta_x * face->gradients[6] + span_depth;
+					if (depth <= limit_depth) {
+						if (span_end >= end_x)
+							return;
+						draw_x = span_end;
+						start_x = draw_x;
+					} else {
+						draw_x += (int)((float)delta_x - (depth - limit_depth) / -face->gradients[6]);
+						start_x = draw_x;
+						if (draw_x >= end_x)
+							return;
+					}
+				}
+			} else if (face->gradients[6] > 0.0f) {
+				const int limit_x = span_end > end_x ? end_x : span_end;
+				const int delta_x = limit_x - draw_x;
+				const float limit_depth = (float)delta_x * face->gradients[6] + span_depth;
+				if (depth < limit_depth) {
+					end_x = draw_x + (int)((float)delta_x - (depth - limit_depth) / -face->gradients[6]);
+					if (draw_x >= end_x)
+						return;
+				}
+			}
+		}
+		span = span->next;
 	}
-	FlightLight_ResetSoftwareFaceSampleCache();
+
+	while (span) {
+		const int span_start = span->startX;
+		SceneFaceTIE98* face;
+
+		if (span_start >= end_x)
+			break;
+		face = span->pFace;
+		if (depth <= face->minVertW) {
+			sw3d_CopySpanPixels(source_base, draw_x, span_start - draw_x);
+			draw_x = span->endX;
+			start_x = draw_x;
+			if (draw_x >= end_x)
+				return;
+		} else if (depth < face->maxVertW) {
+			float span_depth = (float)scan_y * face->gradients[7] + face->gradients[8];
+			span_depth = (float)span_start * face->gradients[6] + span_depth;
+			if (depth <= span_depth) {
+				sw3d_CopySpanPixels(source_base, draw_x, span_start - draw_x);
+				draw_x = span->endX;
+				if (face->gradients[6] >= 0.0f) {
+					start_x = draw_x;
+					if (draw_x >= end_x)
+						return;
+				} else if (draw_x >= end_x) {
+					const float limit_depth = (float)(end_x - span_start) * face->gradients[6] + span_depth;
+					if (depth <= limit_depth)
+						return;
+					draw_x = end_x - (int)((depth - limit_depth) / -face->gradients[6]);
+					start_x = draw_x;
+					if (draw_x >= end_x)
+						return;
+				} else {
+					const float limit_depth = (float)(draw_x - span_start) * face->gradients[6] + span_depth;
+					if (depth > limit_depth)
+						draw_x -= (int)((depth - limit_depth) / -face->gradients[6]);
+					start_x = draw_x;
+				}
+			} else if (face->gradients[6] > 0.0f) {
+				const int span_end = span->endX;
+				if (span_end >= end_x) {
+					const float limit_depth = (float)(end_x - span_start) * face->gradients[6] + span_depth;
+					if (depth < limit_depth) {
+						const int count =
+							span_start +
+							(int)((float)(end_x - span_start) - (depth - limit_depth) / -face->gradients[6]) -
+							draw_x;
+						sw3d_CopySpanPixels(source_base, draw_x, count);
+						return;
+					}
+				} else {
+					const float limit_depth =
+						(float)(span_end - span_start) * face->gradients[6] + span_depth;
+					if (depth < limit_depth) {
+						const int count =
+							span_end - (int)((depth - limit_depth) / -face->gradients[6]) - draw_x;
+						sw3d_CopySpanPixels(source_base, draw_x, count);
+						draw_x = span_end;
+						start_x = draw_x;
+					}
+				}
+			}
+		}
+		span = span->next;
+	}
+	sw3d_CopySpanPixels(source_base, draw_x, end_x - draw_x);
+}
+
+// FUNCTION: TIE98 0x44A4D0
+static void sw3d_CopySpanPixels(const uint8_t* source_base, int start_x, int count) {
+	int bytes_per_pixel;
+	const uint8_t* source;
+	uint8_t* destination;
+
+	if (count <= 0)
+		return;
+	bytes_per_pixel = g_flight16bppBytesPerPixel;
+	source = source_base + bytes_per_pixel * start_x;
+	destination = xtrans2_videobaseptr + g_sw3dScanlineByteOffset + bytes_per_pixel * start_x;
+	if (bytes_per_pixel == 2) {
+		do {
+			destination[0] = source[0];
+			destination[1] = source[1];
+			source += 2;
+			destination += 2;
+		} while (--count != 0);
+	} else {
+		do {
+			*destination++ = *source++;
+		} while (--count != 0);
+	}
+}
+
+// FUNCTION: TIE98 0x44A550
+int16_t Hud_DrawBoxInXTrans(int x, int y, int width, int height, int color_index, int depth) {
+	const int bottom = y + height;
+	int right;
+	int corner_width;
+	int corner_height;
+	uint8_t* span;
+	float span_depth;
+	int row_offset;
+
+	if (bottom <= 0)
+		return 0;
+	right = x + width;
+	if (right <= 0 || x >= pixelswide || y >= pixelsdeep || height <= 0 || width <= 0)
+		return 0;
+	if (g_useHardware3D)
+		return Hud_DrawBoxOverlayHW(x, y, width, height, color_index, depth);
+
+	corner_width = width >> 3;
+	corner_height = height >> 3;
+	if (corner_width < 3)
+		corner_width = 3;
+	if (corner_height < 3)
+		corner_height = 3;
+	if (corner_width > width)
+		corner_width = width;
+	if (corner_height > height)
+		corner_height = height;
+
+	span = g_panelBoxSpanScratch;
+	if (x > 0)
+		span += g_flight16bppBytesPerPixel * x;
+	if (g_flight16bppBytesPerPixel == 2) {
+		const uint16_t color = g_flightTextPalette[(uint8_t)color_index];
+		int i;
+
+		for (i = 0; i < corner_width; ++i)
+			((uint16_t*)span)[i] = color;
+	} else {
+		memset(span, (uint8_t)color_index, (size_t)corner_width);
+	}
+	if (depth < 1)
+		depth = 1;
+	span_depth = (float)(uint32_t)perspFactor / (float)depth;
 	if (!g_flightSurfaceAlreadyLocked)
 		FlightSurface_Lock();
-	g_sw3dSpanSceneMesh = NULL;
-	for (face_index = g_visFaceDrawStartIndex; face_index < g_visFaceCount; ++face_index) {
-		int mip_offset = 0;
-		SceneEdgeTIE98 scan_edge;
-		SceneFaceTIE98* face;
-		int texture_width;
-		int texture_height;
-		float scanline_view_z;
-		int scanline;
 
-		g_sw3dCurrentFace = &g_visFaceList[face_index];
-		g_sw3dCurrentScanY = g_sw3dCurrentFace->yTop;
-
-		g_sw3dCurrentFace->pScanEdge = &scan_edge;
-		face = g_sw3dCurrentFace;
-		texture_width = face->pMesh->pMaterial->width;
-		texture_height = face->pMesh->pMaterial->height;
-		if (g_sw3dMipmapEnabled && texture_width * texture_height == face->pMesh->pMaterial->textureSize) {
-			int lod = (int)((float)face->mipLevel * g_mipLodScale);
-			while (lod > 256 && texture_width != 8 && texture_height != 8) {
-				lod >>= 2;
-				mip_offset += texture_width * texture_height;
-				texture_width >>= 1;
-				texture_height >>= 1;
-			}
+	if (y >= 0) {
+		int span_start = x;
+		int span_end = x + corner_width;
+		if (span_end > 0 && x < pixelswide) {
+			if (span_start < 0)
+				span_start = 0;
+			if (span_end > pixelswide)
+				span_end = pixelswide;
+			sw3d_BlitOccludedSpan(span, span_start, span_end, y, span_depth);
 		}
-		g_sw3dSpanTextureWidthFloat = (float)texture_width;
-		g_sw3dSpanTextureHeightFloat = (float)texture_height;
-		g_sw3dSpanTextureWidthShift = g_sw3dTextureShiftBySizeDiv16[texture_width >> 4];
-		g_sw3dSpanTextureHeightShift = g_sw3dTextureShiftBySizeDiv16[texture_height >> 4];
-		g_sw3dSpanTexelMask = texture_width * texture_height - 1;
-		g_sw3dSpanShadeTable = face->pMesh->pPalette0;
-		g_sw3dSpanTexels = face->pMesh->pTexels + mip_offset;
-		g_sw3dSpanSceneMesh = face->pMesh;
-		scanline_view_z = (float)(uint32_t)g_sw3dCurrentScanY * face->gradients[7] + face->gradients[8];
-		g_sw3dScanlineByteOffset = g_flight16bppBytesPerPixel * displaycorner_columns +
-								   (int)g_surfacePitch * (g_sw3dCurrentScanY + displaycorner_lines);
-
-		for (scanline = 0; (uint32_t)g_sw3dCurrentScanY < (uint32_t)face->yBot;
-			 ++scanline, ++g_sw3dCurrentScanY) {
-			SceneSpanTIE98* span = face->pSpans[scanline];
-			if (span) {
-				const int sample_subrow = g_sw3dCurrentScanY & g_sw3dLightSampleBlockMask;
-				int start_x;
-				int end_x;
-				int draw_start_x;
-				SceneSpanTIE98* clip_span;
-
-				if (sample_subrow) {
-					g_sw3dLightSampleSubrowFloat = (float)sample_subrow;
-					g_sw3dLightSampleRowsToNextBlockFloat =
-						(float)(g_sw3dLightSampleBlockSize - sample_subrow);
-					g_sw3dLightSampleSubrowLerpT = (float)sample_subrow / (float)g_sw3dLightSampleBlockSize;
-				} else {
-					g_sw3dLightSampleSubrowLerpT = 0.0f;
-					g_sw3dLightSampleSubrowFloat = 0.0f;
-					g_sw3dLightSampleRowsToNextBlockFloat = (float)g_sw3dLightSampleBlockSize;
-				}
-				g_sw3dCurrentLightSampleCacheStamp = g_sw3dLightSampleCacheSceneStampBase +
-													 (g_sw3dCurrentScanY >> g_sw3dLightSampleBlockShift);
-				start_x = span->startX;
-				end_x = span->endX;
-				draw_start_x = start_x;
-				scan_edge.x = (float)draw_start_x;
-				scan_edge.lightIntensity = span->startLightIntensity;
-				face->spanLightIntensityDx = span->dLightIntensityDx;
-				clip_span = span->next;
-				while (clip_span && clip_span->startX < end_x) {
-					if (clip_span->startX > start_x) {
-						sw3d_DrawTexturedShadeSpan(start_x, clip_span->startX,
-												   (float)draw_start_x * face->gradients[6] +
-													   scanline_view_z);
-					}
-					if (start_x < clip_span->endX) {
-						start_x = clip_span->endX;
-						draw_start_x = start_x;
-						if (start_x >= end_x)
-							break;
-					}
-					clip_span = clip_span->next;
-				}
-				if (start_x < end_x) {
-					sw3d_DrawTexturedShadeSpan(start_x, end_x,
-											   (float)draw_start_x * face->gradients[6] + scanline_view_z);
-				}
-			}
-			scanline_view_z += face->gradients[7];
-			g_sw3dScanlineByteOffset += (int)g_surfacePitch;
+		span_end = right;
+		span_start = span_end - corner_width;
+		if (span_end > 0 && span_start < pixelswide) {
+			if (span_start < 0)
+				span_start = 0;
+			if (span_end > pixelswide)
+				span_end = pixelswide;
+			sw3d_BlitOccludedSpan(span, span_start, span_end, y, span_depth);
 		}
 	}
+
+	if (bottom <= pixelsdeep) {
+		int span_start = x;
+		int span_end = x + corner_width;
+		if (span_end > 0 && x < pixelswide) {
+			if (span_start < 0)
+				span_start = 0;
+			if (span_end > pixelswide)
+				span_end = pixelswide;
+			sw3d_BlitOccludedSpan(span, span_start, span_end, bottom - 1, span_depth);
+		}
+		span_end = right;
+		span_start = span_end - corner_width;
+		if (span_end > 0 && span_start < pixelswide) {
+			if (span_start < 0)
+				span_start = 0;
+			if (span_end > pixelswide)
+				span_end = pixelswide;
+			sw3d_BlitOccludedSpan(span, span_start, span_end, bottom - 1, span_depth);
+		}
+	}
+
+	if (corner_height > 1) {
+		int scan_y = y + 1;
+		int remaining = corner_height - 1;
+		do {
+			if (scan_y >= 0 && scan_y < pixelsdeep) {
+				if (x >= 0)
+					sw3d_BlitOccludedSpan(span, x, x + 1, scan_y, span_depth);
+				if (right <= pixelswide)
+					sw3d_BlitOccludedSpan(span, right - 1, right, scan_y, span_depth);
+			}
+			++scan_y;
+		} while (--remaining != 0);
+	}
+
+	row_offset = height - corner_height;
+	if (row_offset < height - 1) {
+		int scan_y = row_offset + y;
+		do {
+			if (row_offset >= corner_height && scan_y >= 0 && scan_y < pixelsdeep) {
+				if (x >= 0)
+					sw3d_BlitOccludedSpan(span, x, x + 1, scan_y, span_depth);
+				if (right <= pixelswide)
+					sw3d_BlitOccludedSpan(span, right - 1, right, scan_y, span_depth);
+			}
+			++row_offset;
+			++scan_y;
+		} while (row_offset < height - 1);
+	}
+
 	if (!g_flightSurfaceAlreadyLocked)
 		FlightSurface_Unlock();
+	return (int16_t)g_flightSurfaceAlreadyLocked;
+}
+
+// FUNCTION: TIE98 0x453B90
+static void FlightMap_DrawObjectBoxSpan(int start_x, int end_x, int y, uint8_t color_index) {
+	uint8_t* row = vgapointer + (size_t)g_surfacePitch * (displaycorner_lines + (uint32_t)y);
+	start_x += (int)displaycorner_columns;
+	end_x += (int)displaycorner_columns;
+	if (g_flight16bppBytesPerPixel == 2) {
+		uint16_t* pixels = (uint16_t*)row;
+		const uint16_t color = g_flightTextPalette[color_index];
+		int x;
+
+		for (x = start_x; x < end_x; ++x)
+			pixels[x] = color;
+	} else {
+		memset(row + start_x, color_index, (size_t)(end_x - start_x));
+	}
+}
+
+// FUNCTION: TIE98 0x453C40
+void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, uint8_t color_index) {
+	const int right = x + width;
+	const int bottom = y + height;
+	int corner_width;
+	int corner_height;
+	int row;
+
+	if (bottom <= 0 || right <= 0 || x >= pixelswide || y >= pixelsdeep || height <= 0 || width <= 0)
+		return;
+
+	corner_width = width >> 3;
+	corner_height = height >> 3;
+	if (corner_width < 3)
+		corner_width = 3;
+	if (corner_height < 3)
+		corner_height = 3;
+	if (corner_width > width)
+		corner_width = width;
+	if (corner_height > height)
+		corner_height = height;
+
+	FlightSurface_Lock();
+
+	if (y >= 0) {
+		int start = x;
+		int end = x + corner_width;
+		if (end > 0 && x < pixelswide) {
+			if (start < 0)
+				start = 0;
+			if (end > pixelswide)
+				end = pixelswide;
+			FlightMap_DrawObjectBoxSpan(start, end, y, color_index);
+		}
+		start = right - corner_width;
+		end = right;
+		if (end > 0 && start < pixelswide) {
+			if (start < 0)
+				start = 0;
+			if (end > pixelswide)
+				end = pixelswide;
+			FlightMap_DrawObjectBoxSpan(start, end, y, color_index);
+		}
+	}
+
+	if (bottom <= pixelsdeep) {
+		int start = x;
+		int end = x + corner_width;
+		if (end > 0 && x < pixelswide) {
+			if (start < 0)
+				start = 0;
+			if (end > pixelswide)
+				end = pixelswide;
+			FlightMap_DrawObjectBoxSpan(start, end, bottom - 1, color_index);
+		}
+		start = right - corner_width;
+		end = right;
+		if (end > 0 && start < pixelswide) {
+			if (start < 0)
+				start = 0;
+			if (end > pixelswide)
+				end = pixelswide;
+			FlightMap_DrawObjectBoxSpan(start, end, bottom - 1, color_index);
+		}
+	}
+
+	for (row = 1; row < corner_height; ++row) {
+		const int screen_y = y + row;
+		if (screen_y < 0 || screen_y >= pixelsdeep)
+			continue;
+		if (x >= 0)
+			FlightMap_DrawObjectBoxSpan(x, x + 1, screen_y, color_index);
+		if (right <= pixelswide)
+			FlightMap_DrawObjectBoxSpan(right - 1, right, screen_y, color_index);
+	}
+	for (row = height - corner_height; row < height - 1; ++row) {
+		const int screen_y = y + row;
+		if (row < corner_height || screen_y < 0 || screen_y >= pixelsdeep)
+			continue;
+		if (x >= 0)
+			FlightMap_DrawObjectBoxSpan(x, x + 1, screen_y, color_index);
+		if (right <= pixelswide)
+			FlightMap_DrawObjectBoxSpan(right - 1, right, screen_y, color_index);
+	}
+
+	FlightSurface_Unlock();
 }

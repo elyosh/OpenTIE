@@ -74,7 +74,7 @@ void transfm2_clipobjecteyez(int32_t x, int32_t y, int32_t z);
  * source[vertex - 1] and source[vertex + 1]. Closed-polygon callers
  * (drawmarkings, drawsurfacepoly) duplicate the last vertex before
  * source[0] and the first vertex after the last one. */
-int32_t* transfm2_clipeyez(const DRAWPOL_EyeVertex* source, int16_t vertex, int32_t* dest);
+int32_t* transfm2_clipeyez(const DRAWPOL_EyeVertex* source, int vertex, int32_t* dest);
 int32_t* transfm2_calczintersect(const DRAWPOL_EyeVertex* source1, const DRAWPOL_EyeVertex* source2,
 								 int32_t* dest);
 TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const DRAWPOL_EyeVertex* source1,

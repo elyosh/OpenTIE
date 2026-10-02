@@ -45,12 +45,11 @@ extern BitmapDrawEntry drawitems[ANIM_DRAWITEMS_MAX];
 /* Enqueue one sprite for drawing this frame. Slot count saturates at
  * ANIM_DRAWITEMS_MAX (further calls overwrite the last slot). */
 void anim_add_bitmap_draw(uint16_t obj_idx, uint16_t species_packed, uint16_t scale_factor, int16_t screen_x,
-						  int16_t screen_y, int32_t eye_z, int16_t angle);
+						  int16_t screen_y, int32_t eye_z, uint16_t angle);
 
 /* Depth-sort drawitems[0..numbitmaps-1] (back-to-front), draw each via
- * anim_draw_bitmap, then paint the target reticle via user_targetonscreen.
- * Returns the value forwarded from user_targetonscreen. */
-int16_t anim_sort_and_draw_bitmaps(void);
+ * anim_draw_bitmap, then paint the target reticle via user_targetonscreen. */
+void anim_sort_and_draw_bitmaps(void);
 void anim_sort_and_draw_bitmaps_tie98(int draw_target);
 void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry);
 

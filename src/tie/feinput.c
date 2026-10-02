@@ -19,6 +19,10 @@
 
 #include <string.h>
 
+#ifndef TIE_MODERN
+#include <conio.h>
+#endif
+
 // FUNCTION: TIE98 0x49A2E0
 int8_t FlightInput_GetChar(void) {
 	/* MODERN ADAPTATION: the application host owns the platform event
@@ -83,7 +87,7 @@ void* graphroutines[39] = {
 // GLOBAL: TIE95 0xD41A4
 int16_t buffer256flag;
 // GLOBAL: TIE95 0xD41A6
-int16_t thrustmastertopflag;
+uint8_t thrustmastertopflag;
 
 /* String table pointers (assigned by loadstringdata, defined here per watdbg) */
 
@@ -136,26 +140,26 @@ void feinput_checkinput(void) {
 
 // FUNCTION: TIE95 0x22EB8
 void feinput_degitterinput(void) {
-	int16_t dx = inputdeltax;
-	int16_t dy = inputdeltay;
-	int16_t dr = inputdeltaroll;
-	int16_t abs_dy, abs_dr;
+	int16_t dy;
+	int16_t dx;
+	int magnitude;
 
-	int16_t abs_dx = dx < 0 ? -dx : dx;
-	if (abs_dx <= 64)
+	dx = inputdeltax;
+	dy = inputdeltay;
+	magnitude = (uint16_t)dx;
+	if (magnitude >= 0x8000)
+		magnitude = -magnitude;
+	if ((int16_t)magnitude <= 64)
 		dx = 0;
 
-	abs_dy = dy < 0 ? -dy : dy;
-	if (abs_dy <= 24)
+	magnitude = (uint16_t)dy;
+	if (magnitude >= 0x8000)
+		magnitude = -magnitude;
+	if ((int16_t)magnitude <= 24)
 		dy = 0;
 
-	abs_dr = dr < 0 ? -dr : dr;
-	if (abs_dr <= 64)
-		dr = 0;
-
-	inputdeltax = dx;
 	inputdeltay = dy;
-	inputdeltaroll = dr;
+	inputdeltax = dx;
 }
 
 // FUNCTION: TIE95 0x22F08
@@ -176,6 +180,23 @@ void feinput_getinput(void) {
 		abs_dy = -abs_dy;
 	if ((int16_t)abs_dy <= 1536)
 		inputdeltay = 0;
+}
+
+// FUNCTION: TIE95 0x22F7C
+void feinput_waitpress(void) {
+	/* Wait for any input (key, joystick button, or mouse button) */
+	do {
+		if (feinput_getrawinput())
+			break;
+		if (joybuttons & 0xF)
+			break;
+	} while (!mousebuttons);
+
+	/* Wait for release */
+	if ((joybuttons & 0xF) || mousebuttons) {
+		while ((joybuttons & 0xF) || mousebuttons)
+			feinput_getinput();
+	}
 }
 
 // FUNCTION: TIE95 0x22FD8
@@ -200,23 +221,6 @@ void feinput_clearinput(void) {
 	}
 }
 
-// FUNCTION: TIE95 0x22F7C
-void feinput_waitpress(void) {
-	/* Wait for any input (key, joystick button, or mouse button) */
-	do {
-		if (feinput_getrawinput())
-			break;
-		if (joybuttons & 0xF)
-			break;
-	} while (!mousebuttons);
-
-	/* Wait for release */
-	if ((joybuttons & 0xF) || mousebuttons) {
-		while ((joybuttons & 0xF) || mousebuttons)
-			feinput_getinput();
-	}
-}
-
 /* --- Device setup --- */
 
 // FUNCTION: TIE95 0x23038
@@ -237,6 +241,12 @@ void feinput_setupinputdevices(void) {
 
 // FUNCTION: TIE95 0x233AC
 uint16_t feinput_getrawinput(void) {
+#ifndef TIE_MODERN
+	/* BIOS data area keyboard shift-state byte (0040:0017). */
+	static uint8_t* keyboardflags = (uint8_t*)0x417;
+	static int setnumlock = 1;
+#endif
+#ifdef TIE_MODERN
 	/* Retail polled DOS INT 16h / mouse INT 33h directly each call; our
 	 * SDL port routes keystrokes through an event queue that only fills
 	 * when the application pumps platform events. Some callers (goals_missiongoalsroom,
@@ -271,63 +281,80 @@ uint16_t feinput_getrawinput(void) {
 		joysticky = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_PITCH]);
 		joystickroll = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_ROLL]);
 	}
+#else
+	mousebuttons = 0;
+	joybuttons = 0;
+	if (joystickflag)
+		joybuttons = xjoy_Joystick_Read(&joystickx, &joysticky, 0);
+#endif
 
 	if (mouseflag) {
-		int32_t sx, sy;
-
 		mousebuttons = mouse2_readmouse(&mousex, &mousey);
 		mouse2_deltamouse(&deltamx, &deltamy);
 
-		/* The binary was tuned for DOS INT 33h, which returned per-frame
-		 * motion in mickeys (~200/inch on the era's hardware) at ~30 FPS.
-		 * Our SDL platform returns pixel deltas at the host's frame rate,
-		 * which on a 60 FPS / 96 DPI display lands at roughly 1/4 the
-		 * per-frame magnitude DOS would have produced for the same hand
-		 * motion. Without compensation, the unsigned-cast slew math in
-		 * USER_inputforplane gets fed values an order of magnitude too
-		 * small and the ship barely banks. The ×4 compensation now lives
-		 * in the application's mouse-motion handler, applied
-		 * BEFORE the float→int floor so finger jitter below 1/4 px stays
-		 * in the fractional carry instead of producing burst pops that
-		 * perturb the steering slew. mouse_dx_acc therefore reaches
-		 * feinput already in 1/4-pixel units; we only re-clamp here. */
+		/* MODERN: the application's mouse-motion handler applies a ×4
+		 * compensation (SDL pixel deltas at host frame rate vs DOS
+		 * mickeys at ~30 FPS) before the float→int floor, so deltamx/y
+		 * arrive here in 1/4-pixel units and only need re-clamping. */
 
-		/* Clamp delta to ±191 / ±127 (matches binary's saturation cap;
-		 * inputdeltax = deltamx << 7 must stay within int16). */
-		sx = (int32_t)deltamx;
-		sy = (int32_t)deltamy;
-		if (sx < -191)
-			sx = -191;
-		if (sx > 191)
-			sx = 191;
-		if (sy < -127)
-			sy = -127;
-		if (sy > 127)
-			sy = 127;
-		deltamx = (int16_t)sx;
-		deltamy = (int16_t)sy;
+		/* Clamp delta to ±191 / ±127 (inputdeltax = deltamx << 7 must
+		 * stay within int16). */
+		if (deltamx <= -192)
+			deltamx = -191;
+		else if (deltamx >= 192)
+			deltamx = 191;
+		if (deltamy <= -128)
+			deltamy = -127;
+		else if (deltamy >= 128)
+			deltamy = 127;
 	}
 
+#ifndef TIE_MODERN
+	/* BIOS keyboard flags: force Caps Lock off, and Num Lock on once. */
+	*keyboardflags &= ~0x40;
+	if (setnumlock) {
+		*keyboardflags |= 0x20;
+		setnumlock = 0;
+	}
+#endif
+
 	keypress = 0;
+#ifdef TIE_MODERN
 	if (TieInput_KeyPending()) {
 		keypress = TieInput_ReadKey();
 		if (!keypress) {
 			/* Extended scan code */
-			uint16_t scan = TieInput_ReadKey();
-
+			keypress = TieInput_ReadKey();
+#else
+	if (kbhit()) {
+		keypress = getch();
+		if (!keypress) {
+			/* Extended scan code */
+			keypress = getch();
+#endif
 			/* Arrows and ctrl-arrows collapse to 1-4 (left/right/up/down);
-			 * any other extended scan code is returned as scan+128. Matches
-			 * FEINPUT_getrawinput at retail 0x233ac. */
-			if (scan == 0x48 || scan == 0x8D) /* Up / Ctrl-Up */
-				keypress = 3;
-			else if (scan == 0x4B || scan == 0x73) /* Left / Ctrl-Left */
-				keypress = 1;
-			else if (scan == 0x4D || scan == 0x74) /* Right / Ctrl-Right */
-				keypress = 2;
-			else if (scan == 0x50 || scan == 0x91) /* Down / Ctrl-Down */
-				keypress = 4;
-			else
-				keypress = scan + 128;
+			 * any other extended scan code is returned as scan+128. */
+			switch ((uint16_t)keypress) {
+				case 0x4B: /* Left */
+				case 0x73: /* Ctrl-Left */
+					keypress = 1;
+					break;
+				case 0x4D: /* Right */
+				case 0x74: /* Ctrl-Right */
+					keypress = 2;
+					break;
+				case 0x48: /* Up */
+				case 0x8D: /* Ctrl-Up */
+					keypress = 3;
+					break;
+				case 0x50: /* Down */
+				case 0x91: /* Ctrl-Down */
+					keypress = 4;
+					break;
+				default:
+					keypress += 128;
+					break;
+			}
 		}
 	}
 

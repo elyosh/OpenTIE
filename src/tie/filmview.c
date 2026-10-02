@@ -77,6 +77,55 @@ static int16_t filmview_iupdate_Delete_Input(Input* input, Rect* r, Rect* clip_r
 static void filmview_iuser_Delete_Input(Input* input, int32_t time);
 static void filmview_idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int16_t refresh);
 
+static void filmview_end_View(int32_t time);
+
+/* ================================================================
+ * Entry point
+ * ================================================================ */
+
+// FUNCTION: TIE95 0x71690
+// FUNCTION: TIE98 0x41D810
+int16_t filmview_FilmView(SceneHeadStruct* scene_head) {
+	ResFile* resource;
+	Rect r;
+	int16_t i;
+
+	cur_page = 0;
+	num_pages = 1;
+	if (scene_head->last_scene == SCENE_MAIN_MENU)
+		replayclipname[0] = 0;
+	resource = shellext_Open_Empire_Resource("filmview.lfd");
+#ifdef TIE_MODERN
+	if (!resource) {
+		TieFilmView_RunView(resource, false);
+		return 0;
+	}
+#endif
+	xrect_Set_Rect(&r, 0, 0, 320, 200);
+	for (i = 0; i < 5; i++) {
+		const char* text = textext_Get_Text((TIEText)(txtFilmDelete + i));
+		strcpy(film_name_str[i], text);
+	}
+	filmview_film = xfilm_Res_Film("filmview", &r, 0, 0, 0);
+#ifdef TIE_MODERN
+	if (!filmview_film) {
+		TieFilmView_RunView(resource, false);
+		return 0;
+	}
+#endif
+	xfilm_Set_Film_Def_Palette(filmview_film, scene_head->def_palette);
+	xview_Set_View_Update_Function(filmview_end_View);
+#ifdef TIE_MODERN
+	TieFilmView_RunView(resource, true);
+	return 0;
+#else
+	shellext_Handle_TIE_View();
+	xview_Clear_View_Update_Function();
+	xres_Close_Resource(resource);
+	return xerror_Get_Landru_Exit();
+#endif
+}
+
 /* ================================================================
  * View update callback
  * ================================================================ */
@@ -88,15 +137,15 @@ static void filmview_end_View(int32_t time) {
 
 	/* Penultimate frame: choose the clip to play. */
 	if (filmview_film->cur_cel == filmview_film->cels - 1) {
-		if (filmview_Do_FV_File_Dialog() && filmview_name[0])
-			strcpy(replayclipname, filmview_name);
-		else
+		if (!filmview_Do_FV_File_Dialog() || !filmview_name[0]) {
 #ifdef TIE_MODERN
 			/* The file dialog runs as a sub-dialog and re-enters this
 			 * callback with its result. */
 			if (!TieFilmView_FileDialogPending())
 #endif
 				xerror_Set_Landru_Exit(SCENE_MAIN_MENU);
+		} else
+			strcpy(replayclipname, filmview_name);
 	}
 
 	/* Last frame: play the clip selected by the Film Room dialog. */
@@ -392,55 +441,63 @@ static void filmview_idraw_FV_File(Input* input, Rect* r, Rect* clip_r, int16_t 
 			break;
 
 		case 1: {
-			FileDialog* the_dialog = (FileDialog*)input->varptr;
+			FileDialog* the_dialog;
+			Directory* dir;
 			const DirEntry* entries;
 			int16_t off_y, off_x, half, count;
 
 			/* File list: two columns of eight entries. */
 			xstyle_Style_Paint_TextField(r);
 			xstyle_Style_Trim_TextField(&dr);
+			the_dialog = (FileDialog*)input->varptr;
+			dir = &the_dialog->the_head;
 			entries = xmemhdl_Lock_Handle(the_dialog->the_head.entries);
+#ifdef TIE_MODERN
 			if (!entries)
 				break;
+#endif
 			off_y = dr.top;
 			off_x = dr.left;
 			half = ((dr.right - dr.left) >> 1) - 1;
 
 			xpaint_Vert_Clipped_Line(dr.left + half, dr.top, dr.bottom - dr.top, 2);
 
-			for (count = the_dialog->name_offset;
-				 count < the_dialog->name_offset + 16 && count < the_dialog->the_head.count; count++) {
-				int16_t color, old_font, width;
-				char size_str[16];
-				if (count == the_dialog->active_name) {
-					Rect dr2;
-					xrect_Set_Rect(&dr2, off_x, off_y, half + off_x, off_y + 7);
-					xpaint_Paint_Clipped_Rect(&dr2, 2);
-					color = 16;
-				} else {
-					color = 15;
+			count = 0;
+			while (count < the_dialog->name_offset + 16 && count < dir->count) {
+				if (count >= the_dialog->name_offset) {
+					int16_t color, old_font, width;
+					char size_str[16];
+					if (count == the_dialog->active_name) {
+						Rect dr2;
+						xrect_Set_Rect(&dr2, off_x, off_y, half + off_x, off_y + 7);
+						xpaint_Paint_Clipped_Rect(&dr2, 2);
+						color = 16;
+					} else {
+						color = 15;
+					}
+
+					xfont_Print_Clipped_Text(entries[count].name, off_x + 4, off_y + 1, 1, color);
+
+					sprintf(size_str, "%uK", (uint16_t)entries[count].size_kb);
+
+					old_font = xfont_Get_Font();
+					xfont_Set_Font(1);
+					width = xfont_Get_String_Width(size_str) + 8;
+					xfont_Set_Font(old_font);
+
+					xfont_Print_Clipped_Text(size_str, half + off_x - width, off_y + 1, 1, color);
+
+					/* After 8th file in left column, switch to right column */
+					if (count == the_dialog->name_offset + 7) {
+						off_y = dr.top;
+						off_x = dr.left + half + 1;
+					} else {
+						off_y += 8;
+					}
 				}
-
-				xfont_Print_Clipped_Text(entries[count].name, off_x + 4, off_y + 1, 1, color);
-
-				snprintf(size_str, sizeof(size_str), "%uK", (unsigned)entries[count].size_kb);
-
-				old_font = xfont_Get_Font();
-				xfont_Set_Font(1);
-				width = xfont_Get_String_Width(size_str) + 8;
-				xfont_Set_Font(old_font);
-
-				xfont_Print_Clipped_Text(size_str, half + off_x - width, off_y + 1, 1, color);
-
-				/* After 8th file in left column, switch to right column */
-				if (count == the_dialog->name_offset + 7) {
-					off_y = dr.top;
-					off_x = half + dr.left + 1;
-				} else {
-					off_y += 8;
-				}
+				count++;
 			}
-			xmemhdl_Unlock_Handle(the_dialog->the_head.entries);
+			xmemhdl_Unlock_Handle(dir->entries);
 			break;
 		}
 
@@ -760,51 +817,4 @@ static void filmview_idraw_Delete_Input(Input* input, Rect* r, Rect* clip_r, int
 
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip_r);
-}
-
-/* ================================================================
- * Entry point
- * ================================================================ */
-
-// FUNCTION: TIE95 0x71690
-// FUNCTION: TIE98 0x41D810
-int16_t filmview_FilmView(SceneHeadStruct* scene_head) {
-	ResFile* resource;
-	Rect r;
-	int16_t i;
-
-	cur_page = 0;
-	num_pages = 1;
-	if (scene_head->last_scene == SCENE_MAIN_MENU)
-		replayclipname[0] = 0;
-	resource = shellext_Open_Empire_Resource("filmview.lfd");
-#ifdef TIE_MODERN
-	if (!resource) {
-		TieFilmView_RunView(resource, false);
-		return 0;
-	}
-#endif
-	xrect_Set_Rect(&r, 0, 0, 320, 200);
-	for (i = 0; i < 5; i++) {
-		const char* text = textext_Get_Text((TIEText)(txtFilmDelete + i));
-		strcpy(film_name_str[i], text);
-	}
-	filmview_film = xfilm_Res_Film("filmview", &r, 0, 0, 0);
-#ifdef TIE_MODERN
-	if (!filmview_film) {
-		TieFilmView_RunView(resource, false);
-		return 0;
-	}
-#endif
-	xfilm_Set_Film_Def_Palette(filmview_film, scene_head->def_palette);
-	xview_Set_View_Update_Function(filmview_end_View);
-#ifdef TIE_MODERN
-	TieFilmView_RunView(resource, true);
-	return 0;
-#else
-	shellext_Handle_TIE_View();
-	xview_Clear_View_Update_Function();
-	xres_Close_Resource(resource);
-	return xerror_Get_Landru_Exit();
-#endif
 }

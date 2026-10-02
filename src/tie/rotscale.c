@@ -274,42 +274,417 @@ typedef struct rotscale_scale_data {
 // GLOBAL: TIE98 0x5FB800
 static rotscale_scale_data ScaleData;
 
-/* ===================================================================
- * Leaf helpers
- * ================================================================ */
+static int16_t rotscale_scantoxtrans(int32_t* quad_corners);
+static void rotscale_scalesetup(uint16_t scale, rotscale_line_data* line_data, rotscale_scale_data* sd);
+static void rotscale_adjustoffsets(rotscale_line_data* line_data, rotscale_scale_data* sd);
+static void rotscale_buildlinedata(uint16_t angle, rotscale_line_data* line_data);
+static int rotscale_rotatescale(const uint8_t* data, int32_t bit_split);
+static uint16_t rotscale_updateperp(void);
+static int rotscale_setstartvars(void);
+static int rotscale_updatecases(void);
+static int rotscale_setstartcase0(void);
+static int rotscale_updatecase0(void);
+static int rotscale_setstartcase1(void);
+static int rotscale_updatecase1(void);
+static int rotscale_setstartcase2(void);
+static int rotscale_updatecase2(void);
+static int rotscale_setstartcase3(void);
+static int rotscale_updatecase3(void);
+static int rotscale_setstartcase4(void);
+static int rotscale_updatecase4(void);
+static int rotscale_setstartcase5(void);
+static int rotscale_updatecase5(void);
+static int rotscale_setstartcase6(void);
+static int rotscale_updatecase6(void);
+static int rotscale_setstartcase7(void);
+static int rotscale_updatecase7(void);
+static int16_t composite_to_tie98_scene(int32_t* quad_corners);
 
-/*
- * rotscale_GetUpdateIncrement: per-angle tangent lookup. pos is shifted right
- * 6 bits before indexing (the binary packs angles into a wider range
- * before passing here).
- */
-// FUNCTION: TIE95 0x48EF0
-// FUNCTION: TIE98 0x476590
-static int16_t rotscale_GetUpdateIncrement(uint16_t pos, int16_t rate) {
-	uint16_t idx = (uint16_t)(pos >> 6);
-	if (rate == 91)
-		return tangent091[idx];
-	if (rate == 110)
-		return tangent110[idx];
-	return tangent100[idx];
+/* ===================================================================
+ * rotatescaleimage - public entry point.
+ *
+ * Retail (ROTSCALE_rotatescaleimage @ 0x48530) parses the sub-header
+ * that image_hdr points into via a relative offset at image_hdr[+8]:
+ *
+ *   sub = image_hdr + *(u32 *)(image_hdr + 8)
+ *     sub[+0 word]  : celoffsetx for reverseflag == 1 (top-left x)
+ *     sub[+4 word]  : celoffsety (negated to get image-top anchor)
+ *     sub[+8 word]  : celoffsetx for reverseflag != 1 (top-right x, negated)
+ *     sub+0x10      : start of RLE data passed to rotscale_rotatescale()
+ *
+ *   image_hdr[+0x10 word] : sprite width  (added to anchor for right edge)
+ *   image_hdr[+0x14 word] : sprite height (subtracted for bottom edge; y
+ *                           is flipped by the edition-specific completion scan)
+ *   image_hdr[+0x20 dword]: bit_split parameter forwarded to rotscale_rotatescale
+ *
+ * The four rotscale_adjustoffsets calls produce the 4 screen-space corners of
+ * the rotated bounding box (top-left, top-right, bottom-right,
+ * bottom-left) that rotscale_scantoxtrans uses to walk the sprite region.
+ * ================================================================ */
+// FUNCTION: TIE95 0x48530
+// FUNCTION: TIE98 0x4761A0
+int16_t rotscale_rotatescaleimage(int16_t screen_x, int16_t screen_y, uint16_t scale,
+								  const uint8_t* image_hdr) {
+	int32_t quad[8];
+	uint32_t sub_off = *(const uint32_t*)(image_hdr + 8);
+	const uint8_t* sub = image_hdr + sub_off;
+
+	int16_t cox0;
+	int16_t coy0;
+	int16_t sprite_w;
+	int16_t sprite_h;
+	uint32_t bit_split;
+
+	if (reverseflag == 1)
+		cox0 = *(const int16_t*)(sub + 0);
+	else
+		cox0 = (int16_t)-(*(const int16_t*)(sub + 8));
+	coy0 = (int16_t)-(*(const int16_t*)(sub + 4));
+
+	sprite_w = *(const int16_t*)(image_hdr + 0x10);
+	sprite_h = *(const int16_t*)(image_hdr + 0x14);
+	bit_split = *(const uint32_t*)(image_hdr + 0x20);
+
+	celoffsetx = cox0;
+	celoffsety = coy0;
+
+	rotscale_scalesetup(scale, pCurrentLine, &ScaleData);
+
+	/* Corner 0: top-left of sprite at (cox0, coy0). */
+	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
+	plotx = (int16_t)(adjustplotx + screen_x);
+	ploty = (int16_t)(adjustploty + screen_y);
+	quad[0] = (int16_t)(adjustplotx + screen_x);
+	quad[1] = (int16_t)(adjustploty + screen_y);
+
+	rotscale_rotatescale(sub + 0x10, (int32_t)bit_split);
+
+	/* Corner 1: top-right, x += sprite_w. */
+	celoffsetx = (int16_t)(cox0 + sprite_w);
+	celoffsety = coy0;
+	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
+	quad[2] = screen_x + adjustplotx;
+	quad[3] = screen_y + adjustploty;
+
+	/* Corner 2: bottom-right. */
+	celoffsetx = (int16_t)(cox0 + sprite_w);
+	celoffsety = (int16_t)(coy0 - sprite_h);
+	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
+	quad[4] = screen_x + adjustplotx;
+	quad[5] = screen_y + adjustploty;
+
+	/* Corner 3: bottom-left. */
+	celoffsetx = cox0;
+	celoffsety = (int16_t)(coy0 - sprite_h);
+	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
+	quad[6] = adjustplotx + screen_x;
+	quad[7] = adjustploty + screen_y;
+
+	if (TIE_FLIGHT_TIE98)
+		return composite_to_tie98_scene(quad);
+	return rotscale_scantoxtrans(quad);
 }
 
-/*
- * rotscale_calcscale: clamp((factor * bound_hwidth / (|depth|>>8)) >> 8, 1024).
- * Near objects -> max clamp 1024. Far objects scale down.
- */
-// FUNCTION: TIE95 0x4B8A4
-int16_t rotscale_calcscale(int32_t depth, uint16_t bound_hwidth, uint16_t factor) {
-	int32_t abs_depth = depth < 0 ? -depth : depth;
-	int32_t ratio = abs_depth >> 8;
-	int32_t scaled;
+/* ===================================================================
+ * rotscale_scantoxtrans - palette-convert plotted pixels and register the sprite
+ * as a TRACE2 flat object for depth sorting.
+ *
+ * Walks the bbox of the 4 corners. In 16-bit mode opaque pixels are
+ * those whose +1 byte == 0x80 (the marker rotscale_rotatescale stamped); the
+ * pixel byte is then remapped via paletteconvertlo/paletteconverthi.
+ * In 8-bit mode opaque pixels are those with value < 0x10 (the
+ * remapped sprite values); they are remapped via paletteconvert.
+ *
+ * For each contiguous opaque run, two TRACE2 edge entries are pushed
+ * into trace2_rowheaders[y] (enter/exit x). The whole bbox is
+ * registered as one flat object slot.
+ * ================================================================ */
+// FUNCTION: TIE95 0x486F8
+static int16_t rotscale_scantoxtrans(int32_t* quad_corners) {
+	trace2_EdgeInfo* p_einfo = trace2_newedgeinfo;
+	trace2_EdgeHeader* p_ehdr = trace2_newedgeheader;
+	int32_t max_y = pixelsdeepmin1;
 
-	if (ratio)
-		ratio = bound_hwidth / ratio;
-	scaled = (factor * ratio) >> 8;
-	if (scaled > 1024)
-		return 1024;
-	return (int16_t)scaled;
+	int i;
+	int16_t result;
+	int32_t ymax_clip;
+	uint8_t* p_pixel;
+	uint16_t obj_id;
+	int32_t row_step;
+	trace2_EdgeInfo* p_einfo_walker;
+	int32_t* p_x;
+	uint16_t next_obj;
+
+	int32_t xmin, xmax;
+	int32_t ymin, ymax;
+	int32_t ymin_clip, ymax_pad;
+	int32_t xmin_clip, xmax_clip;
+
+	/* Invert Y of each corner. */
+	quad_corners[1] = max_y - quad_corners[1];
+	quad_corners[3] = max_y - quad_corners[3];
+	quad_corners[5] = max_y - quad_corners[5];
+	quad_corners[7] = max_y - quad_corners[7];
+
+	xmin = quad_corners[0];
+	xmax = quad_corners[0];
+	ymin = quad_corners[1];
+	ymax = quad_corners[1];
+	for (i = 1; i < 4; ++i) {
+		int32_t x = quad_corners[2 * i];
+		int32_t y = quad_corners[2 * i + 1];
+		if (x < xmin)
+			xmin = x;
+		if (x > xmax)
+			xmax = x;
+		if (y < ymin)
+			ymin = y;
+		if (y > ymax)
+			ymax = y;
+	}
+	ymin_clip = ymin - 2;
+	ymax_pad = ymax + 2;
+	xmin_clip = xmin - 2;
+	xmax_clip = xmax + 2;
+	result = (int16_t)(xmin - 2);
+	if (ymax_pad < 0) {
+		return result;
+	}
+	result = nDrawBufferDepth;
+	if (ymin_clip >= nDrawBufferDepth) {
+		return result;
+	}
+	if (nDrawBufferDepth <= ymax_pad) {
+		result = nDrawBufferDepthMin1;
+		ymax_pad = nDrawBufferDepthMin1;
+	}
+	if (ymin_clip < 0)
+		ymin_clip = 0;
+	if (xmax_clip < 0) {
+		return result;
+	}
+	result = nDrawBufferWidth;
+	if (nDrawBufferWidth <= xmin_clip) {
+		return result;
+	}
+	if (xmax_clip >= nDrawBufferWidth)
+		xmax_clip = nDrawBufferWidthMin1;
+	if (xmin_clip < 0)
+		xmin_clip = 0;
+	ymax_clip = ymax_pad;
+
+	p_pixel = (uint8_t*)buffer_ptr + ymin_clip * nDrawBufferMemoryWidth + bytesPerPixel * xmin_clip;
+
+	obj_id = flatobjnum;
+	row_step = nDrawBufferMemoryWidth - bytesPerPixel * (xmax_clip - xmin_clip);
+
+	flatcolors[flatobjnum] = 0;
+	flatcomponentnum[obj_id] = (uint8_t)objectnum;
+	flatparentobj[obj_id] = parentobject;
+	flatx[obj_id] = (int16_t)(worldx >> 5);
+	flaty[obj_id] = (int16_t)(worldy >> 5);
+	flatz[obj_id] = (int16_t)(worldz >> 5);
+
+	/* Two paired edge headers/infos for the row span (left + right). */
+	p_ehdr->next = trace2_rowheaders[ymin_clip];
+	trace2_rowheaders[ymin_clip] = p_ehdr;
+	p_ehdr->numscanlines = ymax_clip - ymin_clip;
+	p_ehdr->objectid = obj_id + 128;
+	p_ehdr->info = p_einfo;
+	p_ehdr->edgeid = layervalue;
+	++p_ehdr;
+	if (p_ehdr > trace2_lastedgeheader)
+		p_ehdr = trace2_lastedgeheader;
+
+	p_einfo_walker = p_einfo;
+	p_einfo += (ymax_clip - ymin_clip);
+	if (p_einfo > trace2_lastedgeinfo)
+		p_einfo = trace2_lastedgeinfo;
+
+	p_ehdr->next = trace2_rowheaders[ymin_clip];
+	trace2_rowheaders[ymin_clip] = p_ehdr;
+	p_ehdr->numscanlines = ymax_clip - ymin_clip;
+	p_ehdr->objectid = flatobjnum + 128;
+	p_ehdr->info = p_einfo;
+	p_ehdr->edgeid = layervalue;
+	++p_ehdr;
+	if (p_ehdr > trace2_lastedgeheader)
+		p_ehdr = trace2_lastedgeheader;
+
+	p_x = &p_einfo->x;
+	p_einfo += (ymax_clip - ymin_clip);
+	if (p_einfo > trace2_lastedgeinfo)
+		p_einfo = trace2_lastedgeinfo;
+
+	if (bytesPerPixel == 2) {
+		int32_t y;
+
+		for (y = ymin_clip; y < ymax_clip; ++y) {
+			int32_t x = xmin_clip;
+			/* Left edge of first opaque run */
+			while (x < xmax_clip && p_pixel[1] != 0x80) {
+				p_pixel += 2;
+				++x;
+			}
+			p_einfo_walker->x = x << 8;
+			++p_einfo_walker;
+			while (x < xmax_clip && p_pixel[1] == 0x80) {
+				uint8_t lo = paletteconvertlo[*p_pixel];
+				*p_pixel = lo;
+				*(p_pixel + 1) = paletteconverthi[lo];
+				p_pixel += 2;
+				++x;
+			}
+			*p_x = x << 8;
+			p_x += 2;
+			/* Additional opaque runs in this row produce singleton-row edges */
+			while (x < xmax_clip) {
+				trace2_EdgeInfo* e_in;
+
+				while (x < xmax_clip && p_pixel[1] != 0x80) {
+					p_pixel += 2;
+					++x;
+				}
+				if (x == xmax_clip)
+					break;
+				p_ehdr->next = trace2_rowheaders[y];
+				trace2_rowheaders[y] = p_ehdr;
+				p_ehdr->numscanlines = 1;
+				p_ehdr->objectid = flatobjnum + 128;
+				p_ehdr->info = p_einfo;
+				p_ehdr->edgeid = layervalue;
+				++p_ehdr;
+				if (p_ehdr > trace2_lastedgeheader)
+					p_ehdr = trace2_lastedgeheader;
+				e_in = p_einfo + 1;
+				p_einfo->x = x << 8;
+				if (e_in > trace2_lastedgeinfo)
+					e_in = trace2_lastedgeinfo;
+				while (x < xmax_clip && p_pixel[1] == 0x80) {
+					uint8_t lo = paletteconvertlo[*p_pixel];
+					*p_pixel = lo;
+					*(p_pixel + 1) = paletteconverthi[lo];
+					p_pixel += 2;
+					++x;
+				}
+				p_ehdr->next = trace2_rowheaders[y];
+				trace2_rowheaders[y] = p_ehdr;
+				p_ehdr->numscanlines = 1;
+				p_ehdr->objectid = flatobjnum + 128;
+				p_ehdr->info = e_in;
+				p_ehdr->edgeid = layervalue;
+				++p_ehdr;
+				if (p_ehdr > trace2_lastedgeheader)
+					p_ehdr = trace2_lastedgeheader;
+				p_einfo = e_in + 1;
+				e_in->x = x << 8;
+				if (p_einfo > trace2_lastedgeinfo)
+					p_einfo = trace2_lastedgeinfo;
+			}
+			p_pixel += row_step;
+		}
+	} else {
+		/* Retail transparency threshold is 0x40 (supports 64 remappable
+		 * palette entries); the demo used 0x10 (16 entries). Every
+		 * comparison against 0x10 in the original port needs to become
+		 * 0x40 to correctly classify retail bitmap bytes. */
+		int32_t y;
+
+		for (y = ymin_clip; y < ymax_clip; ++y) {
+			int32_t x = xmin_clip;
+			while (x < xmax_clip && *p_pixel >= 0x40) {
+				++p_pixel;
+				++x;
+			}
+			p_einfo_walker->x = x << 8;
+			++p_einfo_walker;
+			while (x < xmax_clip) {
+				uint8_t c = *p_pixel;
+				if (c >= 0x40)
+					break;
+				*p_pixel++ = paletteconvert[c];
+				++x;
+			}
+			*p_x = x << 8;
+			p_x += 2;
+			while (x < xmax_clip) {
+				trace2_EdgeInfo* e_in;
+
+				while (x < xmax_clip && *p_pixel >= 0x40) {
+					++p_pixel;
+					++x;
+				}
+				if (x == xmax_clip)
+					break;
+				p_ehdr->next = trace2_rowheaders[y];
+				trace2_rowheaders[y] = p_ehdr;
+				p_ehdr->numscanlines = 1;
+				p_ehdr->objectid = flatobjnum + 128;
+				p_ehdr->info = p_einfo;
+				p_ehdr->edgeid = layervalue;
+				++p_ehdr;
+				if (p_ehdr > trace2_lastedgeheader)
+					p_ehdr = trace2_lastedgeheader;
+				e_in = p_einfo + 1;
+				p_einfo->x = x << 8;
+				if (e_in > trace2_lastedgeinfo)
+					e_in = trace2_lastedgeinfo;
+				while (x < xmax_clip) {
+					uint8_t c2 = *p_pixel;
+					if (c2 >= 0x40)
+						break;
+					*p_pixel++ = paletteconvert[c2];
+					++x;
+				}
+				p_ehdr->next = trace2_rowheaders[y];
+				trace2_rowheaders[y] = p_ehdr;
+				p_ehdr->numscanlines = 1;
+				p_ehdr->objectid = flatobjnum + 128;
+				p_ehdr->info = e_in;
+				p_ehdr->edgeid = layervalue;
+				++p_ehdr;
+				if (p_ehdr > trace2_lastedgeheader)
+					p_ehdr = trace2_lastedgeheader;
+				p_einfo = e_in + 1;
+				e_in->x = x << 8;
+				if (p_einfo > trace2_lastedgeinfo)
+					p_einfo = trace2_lastedgeinfo;
+			}
+			p_pixel += row_step;
+		}
+	}
+
+	next_obj = (uint16_t)(flatobjnum + 1);
+	result = (int16_t)next_obj;
+	++flatobjnum;
+	if (next_obj >= 0x70u)
+		flatobjnum = (uint16_t)(next_obj - 1);
+
+	trace2_newedgeheader = p_ehdr;
+	trace2_newedgeinfo = p_einfo;
+	return result;
+}
+
+/* ===================================================================
+ * preparefastdraw - install draw target; rebuild line_data on angle change
+ * ================================================================ */
+// FUNCTION: TIE95 0x48D88
+// FUNCTION: TIE98 0x476480
+void rotscale_preparefastdraw(uint16_t angle, int mode) {
+	nDrawBufferWidth = (int16_t)pixelswide;
+	nDrawBufferWidthMin1 = (int16_t)pixelswidemin1;
+	nDrawBufferDepth = (int16_t)pixelsdeep;
+	nDrawBufferDepthMin1 = (int16_t)pixelsdeepmin1;
+	nDrawBufferOrientation = -1;
+	nDrawBufferMemoryWidth = bytesPerPixel * pixelswide;
+	pDrawBuffer = (uint8_t*)buffer_ptr;
+	bSquarePixels = (yAspect == 0) ? 1 : 0;
+	pCurrentLine = &LineData;
+	nDiagonalAngle = (yAspect == 0) ? 0x2000 : 8704;
+	if (angle != pCurrentLine->cached_angle || !rotscale_linedata_built) {
+		rotscale_buildlinedata(angle, pCurrentLine);
+		rotscale_linedata_built = 1;
+	}
 }
 
 /*
@@ -330,27 +705,17 @@ void rotscale_preparecolor(const char* palette_entries) {
 	 *   v1 = *(int32_t *)(a1 + 40)           -- entry count
 	 *   v2 = a1 + *(int32_t *)(a1 + 12)      -- source (offset inside a1)
 	 * and write v1 entries from v2 into the conversion tables. */
-	const uint8_t* hdr = (const uint8_t*)palette_entries;
-	int32_t count = *(const int32_t*)(hdr + 40);
-	const uint8_t* src;
-
-	if (count <= 0)
-		return;
-	if (count > 64)
-		count = 64; /* clamp to table size */
-	src = hdr + *(const int32_t*)(hdr + 12);
+	const uint8_t* src = (const uint8_t*)palette_entries + *(const int32_t*)(palette_entries + 12);
+	int32_t count = *(const int32_t*)(palette_entries + 40);
+	int k;
 
 	if (TIE_FLIGHT_TIE98) {
 		if (g_flight16bppBytesPerPixel == 2) {
-			int k;
-
 			for (k = 0; k < count; ++k) {
 				paletteconvertlo[k] = *src++;
 				paletteconverthi[k] = *src++;
 			}
 		} else {
-			int k;
-
 			for (k = 0; k < count; ++k)
 				paletteconvert[k] = *src++;
 		}
@@ -358,33 +723,44 @@ void rotscale_preparecolor(const char* palette_entries) {
 	}
 
 	if (bytesPerPixel == 2) {
-		/* Retail asm (0x48e94..0x48eca) packs rgb555-ish via partial-
-		 * register arithmetic:
-		 *   ecx  = (R>>1) << 5                           (bits 5..11)
-		 *   ah   = ((B>>1) << 2) & 0xFF                  (bits 2..7 of hi byte)
-		 *   al   = G>>1                                  (bits 0..6)
-		 *   packed = ecx | (ah << 8) | al
-		 * One sprite byte per entry: it serves as BOTH the stored
-		 * index (paletteconvert[k]) AND the vgapalette lookup key. */
-		int k;
-
+		/* One sprite byte per entry: it serves as both the stored index
+		 * and the VGA palette lookup key. The 6-bit VGA components are
+		 * halved and packed into a 16-bit color. */
 		for (k = 0; k < count; ++k) {
 			uint8_t idx = *src++;
-			const uint8_t* rgb = &rtsvga2_vgapalette[3 * idx];
-			uint8_t ah_val = (uint8_t)(((uint8_t)(rgb[2] >> 1)) << 2);
-			uint32_t ecx_v = (uint32_t)(rgb[0] >> 1) << 5;
-			uint16_t eax16 = (uint16_t)(((uint16_t)ah_val << 8) | (rgb[1] >> 1));
-			uint16_t packed = (uint16_t)((ecx_v | eax16) & 0xFFFF);
+			const uint8_t* rgb = &rtsvga2_vgapalette[idx * 3];
+			uint16_t color;
+
 			paletteconvert[k] = idx;
-			paletteconvertlo[k] = (uint8_t)(packed & 0xFF);
-			paletteconverthi[k] = (uint8_t)(packed >> 8);
+			color = (uint16_t)(((uint16_t)(rgb[2] >> 1) << 10) | ((uint16_t)(rgb[0] >> 1) << 5) |
+							   (uint16_t)(rgb[1] >> 1));
+			paletteconvertlo[k] = (uint8_t)color;
+			paletteconverthi[k] = (uint8_t)(color >> 8);
 		}
 	} else {
-		int k;
-
 		for (k = 0; k < count; ++k)
 			paletteconvert[k] = *src++;
 	}
+}
+
+/* ===================================================================
+ * Leaf helpers
+ * ================================================================ */
+
+/*
+ * rotscale_GetUpdateIncrement: per-angle tangent lookup. pos is shifted right
+ * 6 bits before indexing (the binary packs angles into a wider range
+ * before passing here).
+ */
+// FUNCTION: TIE95 0x48EF0
+// FUNCTION: TIE98 0x476590
+static int16_t rotscale_GetUpdateIncrement(uint16_t pos, int16_t rate) {
+	uint16_t idx = (uint16_t)(pos >> 6);
+	if (rate == 91)
+		return tangent091[idx];
+	if (rate == 110)
+		return tangent110[idx];
+	return tangent100[idx];
 }
 
 /* ===================================================================
@@ -796,26 +1172,261 @@ static void rotscale_buildlinedata(uint16_t angle, rotscale_line_data* line_data
 	nDrawBufferMemoryWidth = saved_mem_w_3;
 }
 
-/* ===================================================================
- * preparefastdraw - install draw target; rebuild line_data on angle change
- * ================================================================ */
-// FUNCTION: TIE95 0x48D88
-// FUNCTION: TIE98 0x476480
-void rotscale_preparefastdraw(uint16_t angle, int mode) {
-	nDrawBufferWidth = (int16_t)pixelswide;
-	nDrawBufferWidthMin1 = (int16_t)pixelswidemin1;
-	nDrawBufferDepth = (int16_t)pixelsdeep;
-	nDrawBufferDepthMin1 = (int16_t)pixelsdeepmin1;
-	nDrawBufferOrientation = -1;
-	nDrawBufferMemoryWidth = bytesPerPixel * pixelswide;
-	pDrawBuffer = (uint8_t*)buffer_ptr;
-	bSquarePixels = (yAspect == 0) ? 1 : 0;
-	pCurrentLine = &LineData;
-	nDiagonalAngle = (yAspect == 0) ? 0x2000 : 8704;
-	if (angle != pCurrentLine->cached_angle || !rotscale_linedata_built) {
-		rotscale_buildlinedata(angle, pCurrentLine);
-		rotscale_linedata_built = 1;
+/* Decode a 0xFF-terminated stream of rows whose opcodes end at 0xFE:
+ *
+ *   0xFB : set running base color := data[1]; skip 3 bytes total
+ *   0xFC : extended x-step; index data[1] looks up word_DB854/word_DBA54
+ *          to advance the 24-bit x accumulator without emitting
+ *   0xFD : explicit (run_len, color) = (data[1], data[2]); skip 3 bytes
+ *   else : run_color = base_color + (op >> shift[bit_split])
+ *          run_len   = op & mask[bit_split]
+ *
+ * Runs are repeated according to the fractional Y accumulator while the
+ * octant walker advances the rotated destination scanline. */
+// FUNCTION: TIE95 0x4977C
+static int rotscale_rotatescale(const uint8_t* data, int32_t bit_split) {
+	uint8_t* buf_base;
+	int32_t mem_w;
+	uint8_t* buf_end;
+	int32_t row_step;
+	uint8_t acc_lo;
+	uint8_t acc_mid;
+	uint8_t acc_hi;
+	uint8_t mask_N;
+	uint8_t shift_N;
+	uint8_t step_lo;
+	uint8_t step_hi;
+
+	reverseflag = 1;
+	if (!rotscale_setstartvars())
+		return 0;
+
+	buf_base = (uint8_t*)buffer_ptr;
+	mem_w = nDrawBufferMemoryWidth;
+	buf_end = buf_base + (size_t)mem_w * nDrawBufferDepth;
+
+	if (nDrawBufferOrientation <= 0) {
+		row_step = mem_w;
+		pCurrentLine->current_row_base =
+			pDrawBuffer + mem_w * (nDrawBufferDepthMin1 - linestarty) + bytesPerPixel * linestartx;
+	} else {
+		row_step = -mem_w;
+		pCurrentLine->current_row_base = pDrawBuffer + mem_w * linestarty + bytesPerPixel * linestartx;
 	}
+	pCurrentLine->row_step = row_step;
+	perpendflag = 1;
+	pDrawBuffer = pCurrentLine->current_row_base;
+	perpendfrac = 0;
+
+	/* 3-byte y-fractional accumulator (v65:v66:v67 in the retail asm).
+	 * Stepped per source-row by the eff_scale_y low/high bytes, the
+	 * delta vs. pre-step state gives the row replay count. */
+	acc_lo = 0;
+	acc_mid = 0;
+	acc_hi = 0;
+
+	mask_N = rotscale_run_mask[bit_split];
+	shift_N = rotscale_run_shift[bit_split];
+	step_lo = (uint8_t)(ScaleData.eff_scale_y & 0xFF);
+	step_hi = (uint8_t)(ScaleData.eff_scale_y >> 8);
+
+	while (1) {
+		uint16_t pre_state;
+		uint8_t tmp_lo;
+		uint8_t tmp_mid;
+		uint8_t tmp_hi;
+		uint8_t tmp_mid_before;
+		uint16_t post_state;
+		int16_t row_count;
+		int n_runs;
+		int32_t x_cur;
+		uint16_t x_frac;
+		uint8_t base_color;
+		rotscale_run* p_run;
+		int16_t rem;
+		uint8_t prev_lo;
+		uint8_t prev_mid;
+
+		if (*data == 0xFF)
+			break;
+
+		/* Compute replay count for this source row: integer delta
+		 * between the pre-step and post-step 16-bit fractional state.
+		 * Matches the 498ae..49904 instruction sequence. */
+		pre_state = (uint16_t)((acc_hi << 8) | acc_mid);
+		tmp_lo = (uint8_t)(acc_lo + step_lo);
+		tmp_mid = acc_mid;
+		tmp_hi = acc_hi;
+		if (tmp_lo < acc_lo) {
+			tmp_mid = (uint8_t)(acc_mid + 1);
+			if (acc_mid == 0xFF)
+				tmp_hi = (uint8_t)(acc_hi + 1);
+		}
+		tmp_mid_before = tmp_mid;
+		tmp_mid = (uint8_t)(tmp_mid + step_hi);
+		if (tmp_mid < tmp_mid_before)
+			tmp_hi = (uint8_t)(tmp_hi + 1);
+		post_state = (uint16_t)((tmp_hi << 8) | tmp_mid);
+		row_count = (int16_t)((int32_t)post_state - (int32_t)pre_state);
+
+		/* Parse the row's opcodes into runtable[]. retail's reverseflag
+		 * branch only fires when reverseflag == 1; the other path never
+		 * enters the inner loop (n_runs stays 0). The function's own
+		 * prologue forces reverseflag = 1 so we only model that path. */
+		n_runs = 0;
+		x_cur = 0;
+		x_frac = 0;
+		base_color = 0;
+		p_run = &runtable[0];
+
+		while (1) {
+			uint8_t op = *data;
+			uint8_t run_len;
+			uint8_t run_color;
+			int32_t run_x_start;
+			uint16_t prev_frac;
+
+			if (op == 0xFE) {
+				data++;
+				break;
+			}
+
+			if (op == 0xFB) {
+				base_color = data[1];
+				data += 3;
+				continue;
+			}
+			if (op == 0xFC) {
+				uint8_t idx = data[1];
+				uint16_t prev;
+
+				data += 2;
+				prev = x_frac;
+				x_frac = (uint16_t)(x_frac + ScaleData.x_lookup_lo[idx]);
+				x_cur += ScaleData.x_lookup_hi[idx];
+				if (x_frac < prev)
+					x_cur++;
+				continue;
+			}
+
+			if (op == 0xFD) {
+				run_len = data[1];
+				run_color = data[2];
+				data += 3;
+			} else {
+				run_color = (uint8_t)(base_color + (op >> shift_N));
+				run_len = (uint8_t)(op & mask_N);
+				data += 1;
+			}
+
+			run_x_start = x_cur;
+			prev_frac = x_frac;
+			x_frac = (uint16_t)(x_frac + ScaleData.x_lookup_lo[run_len]);
+			x_cur += ScaleData.x_lookup_hi[run_len];
+			if (x_frac < prev_frac)
+				x_cur++;
+
+			if (n_runs < (int)(sizeof(runtable) / sizeof(runtable[0]))) {
+				p_run->x_start = (uint32_t)run_x_start;
+				p_run->color = run_color;
+				p_run->run_len = (uint32_t)(x_cur - run_x_start + 1);
+				p_run++;
+				n_runs++;
+			}
+		}
+
+		/* Replay the parsed row row_count times. */
+		rem = row_count;
+		do {
+			if (n_runs && lastvispoint >= 0) {
+				int32_t first_end = startdrawpoint + x_cur;
+				int clipped = (first_end < 0) || (first_end >= lastvispoint) || (startdrawpoint < 0) ||
+							  (startdrawpoint < firstvispoint);
+
+				if (!clipped) {
+					if (bytesPerPixel == 2) {
+						rotscale_run* r = &runtable[0];
+						int i;
+
+						for (i = 0; i < n_runs; ++i, ++r) {
+							uint32_t xs = r->x_start + startdrawpoint;
+							uint8_t col = (uint8_t)r->color;
+							uint32_t ln = r->run_len;
+							while (ln--) {
+								uint8_t* plot = pDrawBuffer + pCurrentLine->screen_offset[xs];
+								if (plot >= buf_base && plot < buf_end - 1) {
+									*plot = col;
+									*(plot + 1) = 0x80;
+								}
+								xs++;
+							}
+						}
+					} else {
+						rotscale_run* r = &runtable[0];
+						int i;
+
+						for (i = 0; i < n_runs; ++i, ++r) {
+							uint32_t xs = r->x_start + startdrawpoint;
+							uint8_t col = (uint8_t)r->color;
+							uint32_t ln = r->run_len;
+							while (ln--) {
+								uint8_t* plot = pDrawBuffer + pCurrentLine->screen_offset[xs];
+								*plot = col;
+								xs++;
+							}
+						}
+					}
+				} else {
+					rotscale_run* r = &runtable[0];
+					int i;
+
+					for (i = 0; i < n_runs; ++i, ++r) {
+						int32_t xs = (int32_t)r->x_start + startdrawpoint;
+						uint8_t col = (uint8_t)r->color;
+						int32_t ln = (int32_t)r->run_len;
+						int32_t xe = xs + ln;
+						if (xs < firstvispoint)
+							xs = firstvispoint;
+						if (xs > lastvispoint)
+							continue;
+						if (xe < firstvispoint)
+							continue;
+						if (xe > lastvispoint)
+							xe = lastvispoint + 1;
+						while (xs < xe) {
+							uint8_t* plot = pDrawBuffer + pCurrentLine->screen_offset[xs];
+							if (plot >= buf_base && plot < buf_end &&
+								(bytesPerPixel != 2 || plot < buf_end - 1)) {
+								*plot = col;
+								if (bytesPerPixel == 2)
+									*(plot + 1) = 0x80;
+							}
+							xs++;
+						}
+					}
+				}
+			}
+
+			if (row_count) {
+				if (!rotscale_updatecases())
+					return 0;
+				rotscale_updateperp();
+			}
+			rem--;
+		} while (rem > 0 && row_count);
+
+		/* Commit the fractional step back to (acc_lo, acc_mid, acc_hi).
+		 * Retail asm at 0x49d4f..0x49d83: prev > new signals wrap. */
+		prev_lo = acc_lo;
+		acc_lo = (uint8_t)(acc_lo + step_lo);
+		if (prev_lo > acc_lo)
+			acc_mid = (uint8_t)(acc_mid + 1);
+		prev_mid = acc_mid;
+		acc_mid = (uint8_t)(acc_mid + step_hi);
+		if (prev_mid > acc_mid)
+			acc_hi = (uint8_t)(acc_hi + 1);
+	}
+	return 1;
 }
 
 /* ===================================================================
@@ -885,6 +1496,56 @@ static uint16_t rotscale_updateperp(void) {
 	perpendflag = 1;
 	startdrawpoint = new_startdraw;
 	return result;
+}
+
+/* --- dispatchers ------------------------------------------------- */
+
+// FUNCTION: TIE95 0x49ECC
+static int rotscale_setstartvars(void) {
+	switch (pCurrentLine->octant_case) {
+		case 0:
+			return rotscale_setstartcase0();
+		case 1:
+			return rotscale_setstartcase1();
+		case 2:
+			return rotscale_setstartcase2();
+		case 3:
+			return rotscale_setstartcase3();
+		case 4:
+			return rotscale_setstartcase4();
+		case 5:
+			return rotscale_setstartcase5();
+		case 6:
+			return rotscale_setstartcase6();
+		case 7:
+			return rotscale_setstartcase7();
+		default:
+			return 0;
+	}
+}
+
+// FUNCTION: TIE95 0x49F44
+static int rotscale_updatecases(void) {
+	switch (pCurrentLine->octant_case) {
+		case 0:
+			return rotscale_updatecase0();
+		case 1:
+			return rotscale_updatecase1();
+		case 2:
+			return rotscale_updatecase2();
+		case 3:
+			return rotscale_updatecase3();
+		case 4:
+			return rotscale_updatecase4();
+		case 5:
+			return rotscale_updatecase5();
+		case 6:
+			return rotscale_updatecase6();
+		case 7:
+			return rotscale_updatecase7();
+		default:
+			return 0;
+	}
 }
 
 /* ===================================================================
@@ -1902,593 +2563,6 @@ static int rotscale_updatecase7(void) {
 	return 1;
 }
 
-/* --- dispatchers ------------------------------------------------- */
-
-// FUNCTION: TIE95 0x49ECC
-static int rotscale_setstartvars(void) {
-	switch (pCurrentLine->octant_case) {
-		case 0:
-			return rotscale_setstartcase0();
-		case 1:
-			return rotscale_setstartcase1();
-		case 2:
-			return rotscale_setstartcase2();
-		case 3:
-			return rotscale_setstartcase3();
-		case 4:
-			return rotscale_setstartcase4();
-		case 5:
-			return rotscale_setstartcase5();
-		case 6:
-			return rotscale_setstartcase6();
-		case 7:
-			return rotscale_setstartcase7();
-		default:
-			return 0;
-	}
-}
-
-// FUNCTION: TIE95 0x49F44
-static int rotscale_updatecases(void) {
-	switch (pCurrentLine->octant_case) {
-		case 0:
-			return rotscale_updatecase0();
-		case 1:
-			return rotscale_updatecase1();
-		case 2:
-			return rotscale_updatecase2();
-		case 3:
-			return rotscale_updatecase3();
-		case 4:
-			return rotscale_updatecase4();
-		case 5:
-			return rotscale_updatecase5();
-		case 6:
-			return rotscale_updatecase6();
-		case 7:
-			return rotscale_updatecase7();
-		default:
-			return 0;
-	}
-}
-
-/* Decode a 0xFF-terminated stream of rows whose opcodes end at 0xFE:
- *
- *   0xFB : set running base color := data[1]; skip 3 bytes total
- *   0xFC : extended x-step; index data[1] looks up word_DB854/word_DBA54
- *          to advance the 24-bit x accumulator without emitting
- *   0xFD : explicit (run_len, color) = (data[1], data[2]); skip 3 bytes
- *   else : run_color = base_color + (op >> shift[bit_split])
- *          run_len   = op & mask[bit_split]
- *
- * Runs are repeated according to the fractional Y accumulator while the
- * octant walker advances the rotated destination scanline. */
-// FUNCTION: TIE95 0x4977C
-static int rotscale_rotatescale(const uint8_t* data, int32_t bit_split) {
-	uint8_t* buf_base;
-	int32_t mem_w;
-	uint8_t* buf_end;
-	int32_t row_step;
-	uint8_t acc_lo;
-	uint8_t acc_mid;
-	uint8_t acc_hi;
-	uint8_t mask_N;
-	uint8_t shift_N;
-	uint8_t step_lo;
-	uint8_t step_hi;
-
-	reverseflag = 1;
-	if (!rotscale_setstartvars())
-		return 0;
-
-	buf_base = (uint8_t*)buffer_ptr;
-	mem_w = nDrawBufferMemoryWidth;
-	buf_end = buf_base + (size_t)mem_w * nDrawBufferDepth;
-
-	if (nDrawBufferOrientation <= 0) {
-		row_step = mem_w;
-		pCurrentLine->current_row_base =
-			pDrawBuffer + mem_w * (nDrawBufferDepthMin1 - linestarty) + bytesPerPixel * linestartx;
-	} else {
-		row_step = -mem_w;
-		pCurrentLine->current_row_base = pDrawBuffer + mem_w * linestarty + bytesPerPixel * linestartx;
-	}
-	pCurrentLine->row_step = row_step;
-	perpendflag = 1;
-	pDrawBuffer = pCurrentLine->current_row_base;
-	perpendfrac = 0;
-
-	/* 3-byte y-fractional accumulator (v65:v66:v67 in the retail asm).
-	 * Stepped per source-row by the eff_scale_y low/high bytes, the
-	 * delta vs. pre-step state gives the row replay count. */
-	acc_lo = 0;
-	acc_mid = 0;
-	acc_hi = 0;
-
-	mask_N = rotscale_run_mask[bit_split];
-	shift_N = rotscale_run_shift[bit_split];
-	step_lo = (uint8_t)(ScaleData.eff_scale_y & 0xFF);
-	step_hi = (uint8_t)(ScaleData.eff_scale_y >> 8);
-
-	while (1) {
-		uint16_t pre_state;
-		uint8_t tmp_lo;
-		uint8_t tmp_mid;
-		uint8_t tmp_hi;
-		uint8_t tmp_mid_before;
-		uint16_t post_state;
-		int16_t row_count;
-		int n_runs;
-		int32_t x_cur;
-		uint16_t x_frac;
-		uint8_t base_color;
-		rotscale_run* p_run;
-		int16_t rem;
-		uint8_t prev_lo;
-		uint8_t prev_mid;
-
-		if (*data == 0xFF)
-			break;
-
-		/* Compute replay count for this source row: integer delta
-		 * between the pre-step and post-step 16-bit fractional state.
-		 * Matches the 498ae..49904 instruction sequence. */
-		pre_state = (uint16_t)((acc_hi << 8) | acc_mid);
-		tmp_lo = (uint8_t)(acc_lo + step_lo);
-		tmp_mid = acc_mid;
-		tmp_hi = acc_hi;
-		if (tmp_lo < acc_lo) {
-			tmp_mid = (uint8_t)(acc_mid + 1);
-			if (acc_mid == 0xFF)
-				tmp_hi = (uint8_t)(acc_hi + 1);
-		}
-		tmp_mid_before = tmp_mid;
-		tmp_mid = (uint8_t)(tmp_mid + step_hi);
-		if (tmp_mid < tmp_mid_before)
-			tmp_hi = (uint8_t)(tmp_hi + 1);
-		post_state = (uint16_t)((tmp_hi << 8) | tmp_mid);
-		row_count = (int16_t)((int32_t)post_state - (int32_t)pre_state);
-
-		/* Parse the row's opcodes into runtable[]. retail's reverseflag
-		 * branch only fires when reverseflag == 1; the other path never
-		 * enters the inner loop (n_runs stays 0). The function's own
-		 * prologue forces reverseflag = 1 so we only model that path. */
-		n_runs = 0;
-		x_cur = 0;
-		x_frac = 0;
-		base_color = 0;
-		p_run = &runtable[0];
-
-		while (1) {
-			uint8_t op = *data;
-			uint8_t run_len;
-			uint8_t run_color;
-			int32_t run_x_start;
-			uint16_t prev_frac;
-
-			if (op == 0xFE) {
-				data++;
-				break;
-			}
-
-			if (op == 0xFB) {
-				base_color = data[1];
-				data += 3;
-				continue;
-			}
-			if (op == 0xFC) {
-				uint8_t idx = data[1];
-				uint16_t prev;
-
-				data += 2;
-				prev = x_frac;
-				x_frac = (uint16_t)(x_frac + ScaleData.x_lookup_lo[idx]);
-				x_cur += ScaleData.x_lookup_hi[idx];
-				if (x_frac < prev)
-					x_cur++;
-				continue;
-			}
-
-			if (op == 0xFD) {
-				run_len = data[1];
-				run_color = data[2];
-				data += 3;
-			} else {
-				run_color = (uint8_t)(base_color + (op >> shift_N));
-				run_len = (uint8_t)(op & mask_N);
-				data += 1;
-			}
-
-			run_x_start = x_cur;
-			prev_frac = x_frac;
-			x_frac = (uint16_t)(x_frac + ScaleData.x_lookup_lo[run_len]);
-			x_cur += ScaleData.x_lookup_hi[run_len];
-			if (x_frac < prev_frac)
-				x_cur++;
-
-			if (n_runs < (int)(sizeof(runtable) / sizeof(runtable[0]))) {
-				p_run->x_start = (uint32_t)run_x_start;
-				p_run->color = run_color;
-				p_run->run_len = (uint32_t)(x_cur - run_x_start + 1);
-				p_run++;
-				n_runs++;
-			}
-		}
-
-		/* Replay the parsed row row_count times. */
-		rem = row_count;
-		do {
-			if (n_runs && lastvispoint >= 0) {
-				int32_t first_end = startdrawpoint + x_cur;
-				int clipped = (first_end < 0) || (first_end >= lastvispoint) || (startdrawpoint < 0) ||
-							  (startdrawpoint < firstvispoint);
-
-				if (!clipped) {
-					if (bytesPerPixel == 2) {
-						rotscale_run* r = &runtable[0];
-						int i;
-
-						for (i = 0; i < n_runs; ++i, ++r) {
-							uint32_t xs = r->x_start + startdrawpoint;
-							uint8_t col = (uint8_t)r->color;
-							uint32_t ln = r->run_len;
-							while (ln--) {
-								uint8_t* plot = pDrawBuffer + pCurrentLine->screen_offset[xs];
-								if (plot >= buf_base && plot < buf_end - 1) {
-									*plot = col;
-									*(plot + 1) = 0x80;
-								}
-								xs++;
-							}
-						}
-					} else {
-						rotscale_run* r = &runtable[0];
-						int i;
-
-						for (i = 0; i < n_runs; ++i, ++r) {
-							uint32_t xs = r->x_start + startdrawpoint;
-							uint8_t col = (uint8_t)r->color;
-							uint32_t ln = r->run_len;
-							while (ln--) {
-								uint8_t* plot = pDrawBuffer + pCurrentLine->screen_offset[xs];
-								*plot = col;
-								xs++;
-							}
-						}
-					}
-				} else {
-					rotscale_run* r = &runtable[0];
-					int i;
-
-					for (i = 0; i < n_runs; ++i, ++r) {
-						int32_t xs = (int32_t)r->x_start + startdrawpoint;
-						uint8_t col = (uint8_t)r->color;
-						int32_t ln = (int32_t)r->run_len;
-						int32_t xe = xs + ln;
-						if (xs < firstvispoint)
-							xs = firstvispoint;
-						if (xs > lastvispoint)
-							continue;
-						if (xe < firstvispoint)
-							continue;
-						if (xe > lastvispoint)
-							xe = lastvispoint + 1;
-						while (xs < xe) {
-							uint8_t* plot = pDrawBuffer + pCurrentLine->screen_offset[xs];
-							if (plot >= buf_base && plot < buf_end &&
-								(bytesPerPixel != 2 || plot < buf_end - 1)) {
-								*plot = col;
-								if (bytesPerPixel == 2)
-									*(plot + 1) = 0x80;
-							}
-							xs++;
-						}
-					}
-				}
-			}
-
-			if (row_count) {
-				if (!rotscale_updatecases())
-					return 0;
-				rotscale_updateperp();
-			}
-			rem--;
-		} while (rem > 0 && row_count);
-
-		/* Commit the fractional step back to (acc_lo, acc_mid, acc_hi).
-		 * Retail asm at 0x49d4f..0x49d83: prev > new signals wrap. */
-		prev_lo = acc_lo;
-		acc_lo = (uint8_t)(acc_lo + step_lo);
-		if (prev_lo > acc_lo)
-			acc_mid = (uint8_t)(acc_mid + 1);
-		prev_mid = acc_mid;
-		acc_mid = (uint8_t)(acc_mid + step_hi);
-		if (prev_mid > acc_mid)
-			acc_hi = (uint8_t)(acc_hi + 1);
-	}
-	return 1;
-}
-
-/* ===================================================================
- * rotscale_scantoxtrans - palette-convert plotted pixels and register the sprite
- * as a TRACE2 flat object for depth sorting.
- *
- * Walks the bbox of the 4 corners. In 16-bit mode opaque pixels are
- * those whose +1 byte == 0x80 (the marker rotscale_rotatescale stamped); the
- * pixel byte is then remapped via paletteconvertlo/paletteconverthi.
- * In 8-bit mode opaque pixels are those with value < 0x10 (the
- * remapped sprite values); they are remapped via paletteconvert.
- *
- * For each contiguous opaque run, two TRACE2 edge entries are pushed
- * into trace2_rowheaders[y] (enter/exit x). The whole bbox is
- * registered as one flat object slot.
- * ================================================================ */
-// FUNCTION: TIE95 0x486F8
-static int16_t rotscale_scantoxtrans(int32_t* quad_corners) {
-	trace2_EdgeInfo* p_einfo = trace2_newedgeinfo;
-	trace2_EdgeHeader* p_ehdr = trace2_newedgeheader;
-	int32_t max_y = pixelsdeepmin1;
-
-	int i;
-	int16_t result;
-	int32_t ymax_clip;
-	uint8_t* p_pixel;
-	uint16_t obj_id;
-	int32_t row_step;
-	trace2_EdgeInfo* p_einfo_walker;
-	int32_t* p_x;
-	uint16_t next_obj;
-
-	int32_t xmin, xmax;
-	int32_t ymin, ymax;
-	int32_t ymin_clip, ymax_pad;
-	int32_t xmin_clip, xmax_clip;
-
-	/* Invert Y of each corner. */
-	quad_corners[1] = max_y - quad_corners[1];
-	quad_corners[3] = max_y - quad_corners[3];
-	quad_corners[5] = max_y - quad_corners[5];
-	quad_corners[7] = max_y - quad_corners[7];
-
-	xmin = quad_corners[0];
-	xmax = quad_corners[0];
-	ymin = quad_corners[1];
-	ymax = quad_corners[1];
-	for (i = 1; i < 4; ++i) {
-		int32_t x = quad_corners[2 * i];
-		int32_t y = quad_corners[2 * i + 1];
-		if (x < xmin)
-			xmin = x;
-		if (x > xmax)
-			xmax = x;
-		if (y < ymin)
-			ymin = y;
-		if (y > ymax)
-			ymax = y;
-	}
-	ymin_clip = ymin - 2;
-	ymax_pad = ymax + 2;
-	xmin_clip = xmin - 2;
-	xmax_clip = xmax + 2;
-	result = (int16_t)(xmin - 2);
-	if (ymax_pad < 0) {
-		return result;
-	}
-	result = nDrawBufferDepth;
-	if (ymin_clip >= nDrawBufferDepth) {
-		return result;
-	}
-	if (nDrawBufferDepth <= ymax_pad) {
-		result = nDrawBufferDepthMin1;
-		ymax_pad = nDrawBufferDepthMin1;
-	}
-	if (ymin_clip < 0)
-		ymin_clip = 0;
-	if (xmax_clip < 0) {
-		return result;
-	}
-	result = nDrawBufferWidth;
-	if (nDrawBufferWidth <= xmin_clip) {
-		return result;
-	}
-	if (xmax_clip >= nDrawBufferWidth)
-		xmax_clip = nDrawBufferWidthMin1;
-	if (xmin_clip < 0)
-		xmin_clip = 0;
-	ymax_clip = ymax_pad;
-
-	p_pixel = (uint8_t*)buffer_ptr + ymin_clip * nDrawBufferMemoryWidth + bytesPerPixel * xmin_clip;
-
-	obj_id = flatobjnum;
-	row_step = nDrawBufferMemoryWidth - bytesPerPixel * (xmax_clip - xmin_clip);
-
-	flatcolors[flatobjnum] = 0;
-	flatcomponentnum[obj_id] = (uint8_t)objectnum;
-	flatparentobj[obj_id] = parentobject;
-	flatx[obj_id] = (int16_t)(worldx >> 5);
-	flaty[obj_id] = (int16_t)(worldy >> 5);
-	flatz[obj_id] = (int16_t)(worldz >> 5);
-
-	/* Two paired edge headers/infos for the row span (left + right). */
-	p_ehdr->next = trace2_rowheaders[ymin_clip];
-	trace2_rowheaders[ymin_clip] = p_ehdr;
-	p_ehdr->numscanlines = ymax_clip - ymin_clip;
-	p_ehdr->objectid = obj_id + 128;
-	p_ehdr->info = p_einfo;
-	p_ehdr->edgeid = layervalue;
-	++p_ehdr;
-	if (p_ehdr > trace2_lastedgeheader)
-		p_ehdr = trace2_lastedgeheader;
-
-	p_einfo_walker = p_einfo;
-	p_einfo += (ymax_clip - ymin_clip);
-	if (p_einfo > trace2_lastedgeinfo)
-		p_einfo = trace2_lastedgeinfo;
-
-	p_ehdr->next = trace2_rowheaders[ymin_clip];
-	trace2_rowheaders[ymin_clip] = p_ehdr;
-	p_ehdr->numscanlines = ymax_clip - ymin_clip;
-	p_ehdr->objectid = flatobjnum + 128;
-	p_ehdr->info = p_einfo;
-	p_ehdr->edgeid = layervalue;
-	++p_ehdr;
-	if (p_ehdr > trace2_lastedgeheader)
-		p_ehdr = trace2_lastedgeheader;
-
-	p_x = &p_einfo->x;
-	p_einfo += (ymax_clip - ymin_clip);
-	if (p_einfo > trace2_lastedgeinfo)
-		p_einfo = trace2_lastedgeinfo;
-
-	if (bytesPerPixel == 2) {
-		int32_t y;
-
-		for (y = ymin_clip; y < ymax_clip; ++y) {
-			int32_t x = xmin_clip;
-			/* Left edge of first opaque run */
-			while (x < xmax_clip && p_pixel[1] != 0x80) {
-				p_pixel += 2;
-				++x;
-			}
-			p_einfo_walker->x = x << 8;
-			++p_einfo_walker;
-			while (x < xmax_clip && p_pixel[1] == 0x80) {
-				uint8_t lo = paletteconvertlo[*p_pixel];
-				*p_pixel = lo;
-				*(p_pixel + 1) = paletteconverthi[lo];
-				p_pixel += 2;
-				++x;
-			}
-			*p_x = x << 8;
-			p_x += 2;
-			/* Additional opaque runs in this row produce singleton-row edges */
-			while (x < xmax_clip) {
-				trace2_EdgeInfo* e_in;
-
-				while (x < xmax_clip && p_pixel[1] != 0x80) {
-					p_pixel += 2;
-					++x;
-				}
-				if (x == xmax_clip)
-					break;
-				p_ehdr->next = trace2_rowheaders[y];
-				trace2_rowheaders[y] = p_ehdr;
-				p_ehdr->numscanlines = 1;
-				p_ehdr->objectid = flatobjnum + 128;
-				p_ehdr->info = p_einfo;
-				p_ehdr->edgeid = layervalue;
-				++p_ehdr;
-				if (p_ehdr > trace2_lastedgeheader)
-					p_ehdr = trace2_lastedgeheader;
-				e_in = p_einfo + 1;
-				p_einfo->x = x << 8;
-				if (e_in > trace2_lastedgeinfo)
-					e_in = trace2_lastedgeinfo;
-				while (x < xmax_clip && p_pixel[1] == 0x80) {
-					uint8_t lo = paletteconvertlo[*p_pixel];
-					*p_pixel = lo;
-					*(p_pixel + 1) = paletteconverthi[lo];
-					p_pixel += 2;
-					++x;
-				}
-				p_ehdr->next = trace2_rowheaders[y];
-				trace2_rowheaders[y] = p_ehdr;
-				p_ehdr->numscanlines = 1;
-				p_ehdr->objectid = flatobjnum + 128;
-				p_ehdr->info = e_in;
-				p_ehdr->edgeid = layervalue;
-				++p_ehdr;
-				if (p_ehdr > trace2_lastedgeheader)
-					p_ehdr = trace2_lastedgeheader;
-				p_einfo = e_in + 1;
-				e_in->x = x << 8;
-				if (p_einfo > trace2_lastedgeinfo)
-					p_einfo = trace2_lastedgeinfo;
-			}
-			p_pixel += row_step;
-		}
-	} else {
-		/* Retail transparency threshold is 0x40 (supports 64 remappable
-		 * palette entries); the demo used 0x10 (16 entries). Every
-		 * comparison against 0x10 in the original port needs to become
-		 * 0x40 to correctly classify retail bitmap bytes. */
-		int32_t y;
-
-		for (y = ymin_clip; y < ymax_clip; ++y) {
-			int32_t x = xmin_clip;
-			while (x < xmax_clip && *p_pixel >= 0x40) {
-				++p_pixel;
-				++x;
-			}
-			p_einfo_walker->x = x << 8;
-			++p_einfo_walker;
-			while (x < xmax_clip) {
-				uint8_t c = *p_pixel;
-				if (c >= 0x40)
-					break;
-				*p_pixel++ = paletteconvert[c];
-				++x;
-			}
-			*p_x = x << 8;
-			p_x += 2;
-			while (x < xmax_clip) {
-				trace2_EdgeInfo* e_in;
-
-				while (x < xmax_clip && *p_pixel >= 0x40) {
-					++p_pixel;
-					++x;
-				}
-				if (x == xmax_clip)
-					break;
-				p_ehdr->next = trace2_rowheaders[y];
-				trace2_rowheaders[y] = p_ehdr;
-				p_ehdr->numscanlines = 1;
-				p_ehdr->objectid = flatobjnum + 128;
-				p_ehdr->info = p_einfo;
-				p_ehdr->edgeid = layervalue;
-				++p_ehdr;
-				if (p_ehdr > trace2_lastedgeheader)
-					p_ehdr = trace2_lastedgeheader;
-				e_in = p_einfo + 1;
-				p_einfo->x = x << 8;
-				if (e_in > trace2_lastedgeinfo)
-					e_in = trace2_lastedgeinfo;
-				while (x < xmax_clip) {
-					uint8_t c2 = *p_pixel;
-					if (c2 >= 0x40)
-						break;
-					*p_pixel++ = paletteconvert[c2];
-					++x;
-				}
-				p_ehdr->next = trace2_rowheaders[y];
-				trace2_rowheaders[y] = p_ehdr;
-				p_ehdr->numscanlines = 1;
-				p_ehdr->objectid = flatobjnum + 128;
-				p_ehdr->info = e_in;
-				p_ehdr->edgeid = layervalue;
-				++p_ehdr;
-				if (p_ehdr > trace2_lastedgeheader)
-					p_ehdr = trace2_lastedgeheader;
-				p_einfo = e_in + 1;
-				e_in->x = x << 8;
-				if (p_einfo > trace2_lastedgeinfo)
-					p_einfo = trace2_lastedgeinfo;
-			}
-			p_pixel += row_step;
-		}
-	}
-
-	next_obj = (uint16_t)(flatobjnum + 1);
-	result = (int16_t)next_obj;
-	++flatobjnum;
-	if (next_obj >= 0x70u)
-		flatobjnum = (uint16_t)(next_obj - 1);
-
-	trace2_newedgeheader = p_ehdr;
-	trace2_newedgeinfo = p_einfo;
-	return result;
-}
-
 // FUNCTION: TIE98 0x43DDB0
 static void composite_tie98_sprite_raster(uint8_t* pixel, int row_advance, int32_t xmin, int32_t ymin,
 										  int32_t xmax, int32_t ymax) {
@@ -2607,87 +2681,20 @@ static int16_t composite_to_tie98_scene(int32_t* quad_corners) {
 	return 0;
 }
 
-/* ===================================================================
- * rotatescaleimage - public entry point.
- *
- * Retail (ROTSCALE_rotatescaleimage @ 0x48530) parses the sub-header
- * that image_hdr points into via a relative offset at image_hdr[+8]:
- *
- *   sub = image_hdr + *(u32 *)(image_hdr + 8)
- *     sub[+0 word]  : celoffsetx for reverseflag == 1 (top-left x)
- *     sub[+4 word]  : celoffsety (negated to get image-top anchor)
- *     sub[+8 word]  : celoffsetx for reverseflag != 1 (top-right x, negated)
- *     sub+0x10      : start of RLE data passed to rotscale_rotatescale()
- *
- *   image_hdr[+0x10 word] : sprite width  (added to anchor for right edge)
- *   image_hdr[+0x14 word] : sprite height (subtracted for bottom edge; y
- *                           is flipped by the edition-specific completion scan)
- *   image_hdr[+0x20 dword]: bit_split parameter forwarded to rotscale_rotatescale
- *
- * The four rotscale_adjustoffsets calls produce the 4 screen-space corners of
- * the rotated bounding box (top-left, top-right, bottom-right,
- * bottom-left) that rotscale_scantoxtrans uses to walk the sprite region.
- * ================================================================ */
-// FUNCTION: TIE95 0x48530
-// FUNCTION: TIE98 0x4761A0
-int16_t rotscale_rotatescaleimage(int16_t screen_x, int16_t screen_y, uint16_t scale,
-								  const uint8_t* image_hdr) {
-	int32_t quad[8];
-	uint32_t sub_off = *(const uint32_t*)(image_hdr + 8);
-	const uint8_t* sub = image_hdr + sub_off;
+/*
+ * rotscale_calcscale: clamp((factor * bound_hwidth / (|depth|>>8)) >> 8, 1024).
+ * Near objects -> max clamp 1024. Far objects scale down.
+ */
+// FUNCTION: TIE95 0x4B8A4
+int16_t rotscale_calcscale(int32_t depth, uint16_t bound_hwidth, uint16_t factor) {
+	int32_t abs_depth = depth < 0 ? -depth : depth;
+	int32_t ratio = abs_depth >> 8;
+	int32_t scaled;
 
-	int16_t cox0;
-	int16_t coy0;
-	int16_t sprite_w;
-	int16_t sprite_h;
-	uint32_t bit_split;
-
-	if (reverseflag == 1)
-		cox0 = *(const int16_t*)(sub + 0);
-	else
-		cox0 = (int16_t)-(*(const int16_t*)(sub + 8));
-	coy0 = (int16_t)-(*(const int16_t*)(sub + 4));
-
-	sprite_w = *(const int16_t*)(image_hdr + 0x10);
-	sprite_h = *(const int16_t*)(image_hdr + 0x14);
-	bit_split = *(const uint32_t*)(image_hdr + 0x20);
-
-	celoffsetx = cox0;
-	celoffsety = coy0;
-
-	rotscale_scalesetup(scale, pCurrentLine, &ScaleData);
-
-	/* Corner 0: top-left of sprite at (cox0, coy0). */
-	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
-	plotx = (int16_t)(adjustplotx + screen_x);
-	ploty = (int16_t)(adjustploty + screen_y);
-	quad[0] = (int16_t)(adjustplotx + screen_x);
-	quad[1] = (int16_t)(adjustploty + screen_y);
-
-	rotscale_rotatescale(sub + 0x10, (int32_t)bit_split);
-
-	/* Corner 1: top-right, x += sprite_w. */
-	celoffsetx = (int16_t)(cox0 + sprite_w);
-	celoffsety = coy0;
-	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
-	quad[2] = screen_x + adjustplotx;
-	quad[3] = screen_y + adjustploty;
-
-	/* Corner 2: bottom-right. */
-	celoffsetx = (int16_t)(cox0 + sprite_w);
-	celoffsety = (int16_t)(coy0 - sprite_h);
-	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
-	quad[4] = screen_x + adjustplotx;
-	quad[5] = screen_y + adjustploty;
-
-	/* Corner 3: bottom-left. */
-	celoffsetx = cox0;
-	celoffsety = (int16_t)(coy0 - sprite_h);
-	rotscale_adjustoffsets(pCurrentLine, &ScaleData);
-	quad[6] = adjustplotx + screen_x;
-	quad[7] = adjustploty + screen_y;
-
-	if (TIE_FLIGHT_TIE98)
-		return composite_to_tie98_scene(quad);
-	return rotscale_scantoxtrans(quad);
+	if (ratio)
+		ratio = bound_hwidth / ratio;
+	scaled = (factor * ratio) >> 8;
+	if (scaled > 1024)
+		return 1024;
+	return (int16_t)scaled;
 }

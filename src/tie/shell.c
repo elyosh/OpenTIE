@@ -1,4 +1,4 @@
-// FLAGS: TIE95 -od
+// FLAGS: TIE95 -d2
 #include "tie/shell.h"
 #include "tie/armship.h"
 #include "tie/blueprnt.h"
@@ -76,20 +76,6 @@ int16_t digital_exists;
 // GLOBAL: TIE98 0x5F3460
 uint8_t install_cfg_mode;
 #endif
-
-// FUNCTION: TIE95 0x67EFA
-void shell_programexit(const char* str) {
-	shellext_Close_Landru(0);
-	gamesnd_Close_Pre_iMuse();
-#ifdef TIE_MODERN
-	TieDiagnostics_Log(TIE_LOG_ERROR, "%s", str);
-	TieDiagnostics_Fatal(str);
-	exit(EXIT_FAILURE);
-#else
-	printf(str);
-	exit(0);
-#endif
-}
 
 // FUNCTION: TIE95 0x672D5
 // FUNCTION: TIE98 0x47EF60
@@ -575,4 +561,18 @@ int32_t shell_Shell(int32_t scene, int32_t script) {
 	gamesnd_Close_Pre_iMuse();
 #endif
 	return exit_flag;
+}
+
+// FUNCTION: TIE95 0x67EFA
+void shell_programexit(const char* str) {
+	shellext_Close_Landru(0);
+	gamesnd_Close_Pre_iMuse();
+#ifdef TIE_MODERN
+	TieDiagnostics_Log(TIE_LOG_ERROR, "%s", str);
+	TieDiagnostics_Fatal(str);
+	exit(EXIT_FAILURE);
+#else
+	printf(str);
+	exit(0);
+#endif
 }

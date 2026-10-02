@@ -1,4 +1,4 @@
-// FLAGS: TIE95 -od
+// FLAGS: TIE95 -d2
 #include "tie/gamesnd.h"
 #include "tie/cdaudio_tie98.h"
 #include "tie/fmusic.h"
@@ -35,6 +35,24 @@
 // GLOBAL: TIE95 0xFB620
 // GLOBAL: TIE98 0x625914
 int16_t frontendflag;
+
+/* ===== Public API ===== */
+
+// FUNCTION: TIE95 0x88905
+int16_t gamesnd_Open_Pre_iMuse(void) {
+	/* The runtime session replaces the DOS driver overlay load and
+	 * ImInitialize; GetSoundAddr remains the engine's address resolver. */
+	if (!TieImuseSession_Open(gamesnd_GetSoundAddr))
+		return 0;
+
+	/* The internal wave renderer is always present after I3, so the
+	 * digital sub-system is always available. */
+	digital_exists = 1;
+	return 1;
+}
+
+// FUNCTION: TIE95 0x88BDB
+void gamesnd_Close_Pre_iMuse(void) { TieImuseSession_Close(); }
 
 /* ===== iMUSE callbacks ===== */
 
@@ -84,24 +102,6 @@ void* gamesnd_GetSoundAddr(intptr_t sound) {
 	return fmusic_GetPagedSound(track);
 }
 
-/* ===== Public API ===== */
-
-// FUNCTION: TIE95 0x88905
-int16_t gamesnd_Open_Pre_iMuse(void) {
-	/* The runtime session replaces the DOS driver overlay load and
-	 * ImInitialize; GetSoundAddr remains the engine's address resolver. */
-	if (!TieImuseSession_Open(gamesnd_GetSoundAddr))
-		return 0;
-
-	/* The internal wave renderer is always present after I3, so the
-	 * digital sub-system is always available. */
-	digital_exists = 1;
-	return 1;
-}
-
-// FUNCTION: TIE95 0x88BDB
-void gamesnd_Close_Pre_iMuse(void) { TieImuseSession_Close(); }
-
 // FUNCTION: TIE98 0x42FBA0
 void gamesnd_Set_CD_Volume(int volume) {
 	if (volume < 0)
@@ -109,21 +109,6 @@ void gamesnd_Set_CD_Volume(int volume) {
 	if (volume > 16)
 		volume = 16;
 	cdaudio_Set_Volume((uint32_t)(0xFFFFu * (uint32_t)volume / 16u));
-}
-
-/* Transition the already-initialized iMUSE engine from front-end sound
- * (soundext callbacks) to flight music (fmusic callbacks). Retail's
- * GAMESND_game_Open_iMuse at 0x88EF6 does not re-initialize iMUSE -- that
- * would fail with "system already initialized". It only drains the
- * active sounds and swaps the filelist callback pair. */
-// FUNCTION: TIE95 0x88EF6
-void gamesnd_game_Open_iMuse(void) {
-	lolevel_ImStopAllSounds();
-	filelist_ImUnloadAll();
-	frontendflag = 0;
-	lolevel_ImPause();
-	filelist_ImInitFilelist(TieImuse_LoadFlightMusic, TieImuse_UnloadFlightMusic, NULL, NULL);
-	lolevel_ImResume();
 }
 
 // FUNCTION: TIE95 0x88E47
@@ -144,4 +129,19 @@ void gamesnd_Transition_Sound(void) {
 	filelist_ImUnloadAll();
 	lolevel_ImClearTrigger(-1, -1, -1);
 	frontendflag = 2;
+}
+
+/* Transition the already-initialized iMUSE engine from front-end sound
+ * (soundext callbacks) to flight music (fmusic callbacks). Retail's
+ * GAMESND_game_Open_iMuse at 0x88EF6 does not re-initialize iMUSE -- that
+ * would fail with "system already initialized". It only drains the
+ * active sounds and swaps the filelist callback pair. */
+// FUNCTION: TIE95 0x88EF6
+void gamesnd_game_Open_iMuse(void) {
+	lolevel_ImStopAllSounds();
+	filelist_ImUnloadAll();
+	frontendflag = 0;
+	lolevel_ImPause();
+	filelist_ImInitFilelist(TieImuse_LoadFlightMusic, TieImuse_UnloadFlightMusic, NULL, NULL);
+	lolevel_ImResume();
 }

@@ -22,8 +22,8 @@
 
 /* --- external globals referenced by the module --- */
 
-/* MissionClock `_date` owned by tie.c (declared in tie.h). The hour /
- * minute / second fields are the elapsed wall clock; `_date.subsec` is
+/* MissionClock `date` owned by tie.c (declared in tie.h). The hour /
+ * minute / second fields are the elapsed wall clock; `date.subsec` is
  * the per-second sub-tick counter (refilled with 236 on the seconds
  * boundary, decremented per frame). starship_firelasergunner reads
  * subsec as a cheap "first half of current second" gate for switching
@@ -440,185 +440,160 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
  * ---------------------------------------------------------------- */
 
 // FUNCTION: TIE95 0x534E4
-uint16_t starship_damagecomponent(uint16_t obj_idx_in, int16_t component_plus1, uint16_t damage) {
+uint16_t starship_damagecomponent(uint16_t obj_idx_in, uint16_t component_idx, uint16_t damage) {
 	uint8_t* model_data;
 	ShipModelData* model;
-	ShipModelMesh* meshes_base;
-	uint16_t component_idx;
-	uint8_t hp_current;
-	uint16_t damage_units;
-	uint8_t hp_remaining;
 	ShipModelMesh* mesh;
 	uint16_t new_obj;
-	FlightObject* ember;
-	FlightObject* parent;
 	int16_t center_side_half;
-	int16_t center_up_half;
 	int16_t center_fwd_half;
-	int32_t ds;
+	int16_t center_up_half;
+	int16_t ds;
 
 	if (TIE_FLIGHT_TIE98)
-		return starship_damagecomponent_tie98(obj_idx_in, component_plus1, damage);
+		return starship_damagecomponent_tie98(obj_idx_in, component_idx, damage);
 
-	/* Match the binary's trust model: craftptr is caller-provided (set by
-	 * collide_damagecraft to objects[obj_idx_in].craft_ptr before dispatch)
-	 * and objectblockptr->num_meshes is read from the global below, but the
-	 * ship MODEL itself is re-resolved here from species_table[].model_handle
-	 * so we pick up the correct mesh table even if componentblockptr /
-	 * objectblockptr happen to be parked on a different ship. This mirrors
-	 * the binary's XMEMHDL_Lock_Handle / model_base walk at 0x4FF26..0x4FF6B. */
-	/* Skip the 2-byte file-size prefix — matches retail's v48=a1+2. */
+	/* Re-resolve this ship's model from species_table[].model_handle so the
+	 * mesh table is correct even if componentblockptr / objectblockptr are
+	 * parked on a different ship. Skip the 2-byte file-size prefix. */
 	model_data = (uint8_t*)xmemhdl_Lock_Handle(species_table[objects[obj_idx_in].ship_idx].model_handle);
+	component_idx--;
 	model = (ShipModelData*)(model_data + 2);
 	xmemhdl_Unlock_Handle(species_table[objects[obj_idx_in].ship_idx].model_handle);
-	meshes_base = (ShipModelMesh*)&model->lod_records[model->num_lods];
-
-	component_idx = (uint16_t)(component_plus1 - 1);
+	mesh = (ShipModelMesh*)&model->lod_records[model->num_lods] + component_idx;
 
 	/* HP gate: 0 = already dead, 255 = indestructible. Either way pass the
 	 * damage straight through. */
-	hp_current = craftptr->mesh_component_hp[component_idx];
-	if (hp_current == 0 || hp_current == 255)
+	if (craftptr->mesh_component_hp[component_idx] == 0 || craftptr->mesh_component_hp[component_idx] == 255)
 		return damage;
 
 	/* Damage scaled to 1/16-HP units, clamped up to 1. */
-	damage_units = (uint16_t)(damage >> 4);
-	if (damage_units == 0)
-		damage_units = 1;
+	damage >>= 4;
+	if (damage == 0)
+		damage = 1;
 
-	/* Partial-absorb path: still alive after the hit. */
-	hp_remaining = craftptr->mesh_component_hp[component_idx];
-	if (hp_remaining > damage_units) {
-		craftptr->mesh_component_hp[component_idx] = (uint8_t)(hp_remaining - damage_units);
-		return 0;
-	}
+	if (craftptr->mesh_component_hp[component_idx] <= damage) {
+		/* Killed. Compute overflow damage to propagate. */
+		damage = (uint16_t)(damage - craftptr->mesh_component_hp[component_idx]);
+		damage <<= 4;
+		craftptr->mesh_component_hp[component_idx] = 0;
 
-	/* Killed. Compute overflow damage to propagate. */
-	craftptr->mesh_component_hp[component_idx] = 0;
-	damage = (uint16_t)(16 * (damage_units - hp_remaining));
+		/* This mesh must be explodable to trigger the visual spawn. */
+		if (((uint16_t)mesh->flags & STARSHIP_MESH_FLAG_EXPLODABLE) == 0)
+			return damage;
 
-	/* This mesh must be explodable to trigger the visual spawn. */
-	mesh = &meshes_base[component_idx];
-	if ((mesh->flags & STARSHIP_MESH_FLAG_EXPLODABLE) == 0)
-		return damage;
+		/* Flag mesh as destroyed. */
+		craftptr->mesh_state[component_idx] = MESH_STATE_HIDDEN;
 
-	/* Flag mesh as destroyed. */
-	craftptr->mesh_state[component_idx] = MESH_STATE_HIDDEN;
-
-	/* If radar_target1 was locked on the just-destroyed part of the same
-	 * obj that is currently the target, bump it past dead / invalid meshes. */
-	if (obj_idx_in == pstate.target_obj_idx && component_idx == pstate.radar_target1) {
-		do {
-			const unsigned int nm = objectblockptr->num_meshes;
-			if ((unsigned int)++pstate.radar_target1 >= nm)
-				pstate.radar_target1 = 0;
-		} while ((craftptr->mesh_state[pstate.radar_target1] != MESH_STATE_VISIBLE ||
-				  !user_validcomponent(pstate.radar_target1)) &&
-				 component_idx != pstate.radar_target1);
-	}
-
-	/* Training mode bonuses. */
-	if (mission.train_craft_type) {
-		++mission.train_targets;
-		mission.mission_score += 50;
-		if (craftptr->mesh_rotation[component_idx])
-			mission.mission_score += 50; /* rotating turret = extra 50 */
-		timeleft.second = (uint8_t)(timeleft.second + 2);
-		if (timeleft.second >= 60) {
-			timeleft.second = (uint8_t)(timeleft.second - 60);
-			++timeleft.minute;
+		/* If radar_target1 was locked on the just-destroyed part of the same
+		 * obj that is currently the target, bump it past dead / invalid meshes. */
+		if (obj_idx_in == pstate.target_obj_idx && component_idx == (uint16_t)pstate.radar_target1) {
+			do {
+				if ((uint16_t)++pstate.radar_target1 >= model->num_meshes)
+					pstate.radar_target1 = 0;
+			} while ((craftptr->mesh_state[(uint16_t)pstate.radar_target1] != MESH_STATE_VISIBLE ||
+					  !user_validcomponent(pstate.radar_target1)) &&
+					 component_idx != (uint16_t)pstate.radar_target1);
 		}
-	}
 
-	/* Allocate ember/debris slot (genus 13). */
-	new_obj = create_findslot(13);
-	if (new_obj == 0xFFFF)
-		return damage;
-
-	ember = &objects[new_obj];
-	parent = &objects[obj_idx_in];
-	ember->world_x = parent->world_x;
-	ember->world_y = parent->world_y;
-	ember->world_z = parent->world_z;
-
-	/* The binary reads the mesh center via the Watcom >>17 (=int16 >> 1)
-	 * pattern at (mesh_rec + {14,16,18}), which resolves to center_side,
-	 * center_fwd, center_up each divided by 2. */
-	center_side_half = (int16_t)(mesh->center_side >> 1);
-	center_up_half = (int16_t)(mesh->center_up >> 1);
-	center_fwd_half = (int16_t)(mesh->center_fwd >> 1);
-
-	/* Apply per-mesh rotation in training mode (2D rotation in the side/up
-	 * plane by angle = -256 * mesh_rotation). */
-	if (mission.train_craft_type) {
-		const uint8_t rot_raw = craftptr->mesh_rotation[component_idx];
-		if (rot_raw) {
-			const int16_t rot_angle = (int16_t)(-256 * rot_raw);
-			const int16_t rot_sin = trig2_getsignedsin((uint16_t)rot_angle);
-			const int16_t rot_cos = trig2_getsignedcos(rot_angle);
-
-			int32_t rot_a = (int32_t)center_up_half * -rot_sin + (int32_t)center_side_half * rot_cos;
-			int32_t rot_b = (int32_t)center_up_half * rot_cos + (int32_t)center_side_half * rot_sin;
-
-			if (rot_a >= 0x40000000)
-				rot_a = 1073676288;
-			if (rot_a <= -0x40000000)
-				rot_a = -1073676288;
-			center_side_half = (int16_t)(rot_a >> 15);
-			if (rot_b >= 0x40000000)
-				rot_b = 1073676288;
-			if (rot_b <= -0x40000000)
-				rot_b = -1073676288;
-			center_up_half = (int16_t)(rot_b >> 15);
+		/* Training mode bonuses. */
+		if (mission.train_craft_type) {
+			++mission.train_targets;
+			mission.mission_score += 50;
+			if (craftptr->mesh_rotation[component_idx])
+				mission.mission_score += 50; /* rotating turret = extra 50 */
+			timeleft.second += 2;
+			if (timeleft.second >= 60) {
+				timeleft.second -= 60;
+				++timeleft.minute;
+			}
 		}
+
+		/* Allocate ember/debris slot (genus 13). */
+		new_obj = create_findslot(13);
+		if (new_obj == 0xFFFF)
+			return damage;
+
+		objects[new_obj].world_x = objects[obj_idx_in].world_x;
+		objects[new_obj].world_y = objects[obj_idx_in].world_y;
+		objects[new_obj].world_z = objects[obj_idx_in].world_z;
+
+		center_side_half = (int16_t)(mesh->center_side >> 1);
+		center_fwd_half = (int16_t)(mesh->center_fwd >> 1);
+		center_up_half = (int16_t)(mesh->center_up >> 1);
+
+		/* Apply per-mesh rotation in training mode (2D rotation in the side/up
+		 * plane by angle = -256 * mesh_rotation). */
+		if (mission.train_craft_type) {
+			uint16_t rotation = craftptr->mesh_rotation[component_idx];
+
+			if (rotation) {
+				int16_t angle = (int16_t)-(rotation << 8);
+				int16_t rot_sin = trig2_getsignedsin(angle);
+				int16_t rot_cos = trig2_getsignedcos(angle);
+				int32_t rot_side;
+				int32_t rot_up;
+
+				rot_side = rot_cos * center_side_half + -rot_sin * center_up_half;
+				if (rot_side >= 0x40000000)
+					rot_side = 1073676288;
+				if (rot_side <= -0x40000000)
+					rot_side = -1073676288;
+				rot_side >>= 15;
+				rot_up = rot_sin * center_side_half + rot_cos * center_up_half;
+				if (rot_up >= 0x40000000)
+					rot_up = 1073676288;
+				if (rot_up <= -0x40000000)
+					rot_up = -1073676288;
+				center_up_half = (int16_t)(rot_up >> 15);
+				center_side_half = (int16_t)rot_side;
+			}
+		}
+
+		/* Transform into world frame -- writes rotatedx/y/z. */
+		pai_calcrotatedpoint(&objects[obj_idx_in], center_side_half, center_up_half,
+							 (int16_t)-center_fwd_half);
+
+		/* model_scale_shift scaling. Shift via uint32_t -- the binary emits
+		 * `shl reg, cl`, and a signed left shift of a negative int is UB in C. */
+		if (model->model_scale_shift) {
+			rotatedx = (int32_t)((uint32_t)rotatedx << (int8_t)model->model_scale_shift);
+			rotatedy = (int32_t)((uint32_t)rotatedy << (int8_t)model->model_scale_shift);
+			rotatedz = (int32_t)((uint32_t)rotatedz << (int8_t)model->model_scale_shift);
+		}
+
+		objects[new_obj].world_x += rotatedx;
+		objects[new_obj].world_y += rotatedy;
+		objects[new_obj].world_z += rotatedz;
+		objects[new_obj].category = 5;
+		/* Retail damagecomponent always picks the 129 ember (fixed; no
+		 * randomization). The 127/128 alternation belongs to the smaller
+		 * createstarshipexplo / makestarshipcompexplo embers. */
+		objects[new_obj].ship_idx = 129;
+		objects[new_obj].anim_frame = 2;
+		objects[new_obj].genus = GENUS_EXPLOSION;
+		objects[new_obj].age_ticks = 0;
+		objects[new_obj].death_timer = 0;
+		objects[new_obj].current_speed = objects[obj_idx_in].current_speed;
+		objects[new_obj].pitch = objects[obj_idx_in].pitch;
+		objects[new_obj].heading = objects[obj_idx_in].heading;
+		objects[new_obj].roll = 0;
+		objects[new_obj].orient_dirty = 1;
+		objects[new_obj].move_dirty = 1;
+
+		fsfx_triggersfx((uint16_t)(19 + (math2_getrandom() & 3)), new_obj);
+
+		/* damage_state derived from the per-mesh explosion_scale, clamped to u8. */
+		ds = mesh->explosion_scale >> (9 - (int8_t)model->model_scale_shift);
+		if (ds > 255)
+			ds = 255;
+		objects[new_obj].damage_state = (uint8_t)ds;
+	} else {
+		/* Partial-absorb path: still alive after the hit. */
+		craftptr->mesh_component_hp[component_idx] =
+			(uint8_t)(craftptr->mesh_component_hp[component_idx] - damage);
+		damage = 0;
 	}
-
-	/* Transform into world frame -- writes rotatedx/y/z. */
-	pai_calcrotatedpoint(parent, center_side_half, center_up_half, (int16_t)(-center_fwd_half));
-
-	/* model_scale_shift scaling. The binary reads model_scale_shift via HIBYTE of a dword
-	 * straddling the local objblock's speed_default + 3 (= objblock[30]);
-	 * we read it from the locally-resolved model rather than the global
-	 * objectblockptr to match that "this ship's model, not whatever is
-	 * locked globally" behavior. */
-	if (model->model_scale_shift) {
-		const int shift = model->model_scale_shift;
-		/* Shift via uint32_t — binary emits `shl reg, cl`, which
-		 * is sign-agnostic; signed left shift on a negative int
-		 * is UB in C. */
-		rotatedx = (int32_t)((uint32_t)rotatedx << shift);
-		rotatedy = (int32_t)((uint32_t)rotatedy << shift);
-		rotatedz = (int32_t)((uint32_t)rotatedz << shift);
-	}
-
-	ember->world_x += rotatedx;
-	ember->world_y += rotatedy;
-	ember->world_z += rotatedz;
-
-	ember->craft_ptr = NULL;
-	ember->genus = GENUS_EXPLOSION;
-	/* Retail damagecomponent always picks the 129 ember (fixed; no
-	 * randomization). The 127/128 alternation belongs to the smaller
-	 * createstarshipexplo / makestarshipcompexplo embers. */
-	ember->ship_idx = 129;
-	ember->category = 5;
-	ember->anim_frame = 2;
-	ember->age_ticks = 0;
-	ember->death_timer = 0;
-	ember->current_speed = parent->current_speed;
-	ember->pitch = parent->pitch;
-	ember->heading = parent->heading;
-	ember->roll = 0;
-	ember->orient_dirty = 1;
-	ember->move_dirty = 1;
-
-	fsfx_triggersfx((uint16_t)(19 + (math2_getrandom() & 3)), new_obj);
-
-	/* damage_state derived from the per-mesh explosion_scale u16 (mesh+0x0A). */
-	ds = (int32_t)mesh->explosion_scale >> (9 - model->model_scale_shift);
-	if (ds > 255)
-		ds = -1; /* binary: LOBYTE(ds) = -1 <=> 0xFF */
-	ember->damage_state = (uint8_t)ds;
 
 	return damage;
 }
@@ -679,7 +654,7 @@ static uint16_t starship_makestarshipcompexplo_tie98(FlightObject* craft, uint16
 
 // FUNCTION: TIE98 0x487440
 // STARSHIP_createstarshipexplo
-static void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_ship) {
+void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_ship) {
 	FlightObject* craft;
 	uint16_t model_type;
 	uint16_t num_main_hulls;
@@ -1031,7 +1006,7 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 		int point_x;
 		int point_forward;
 		int point_up;
-		if (link_byte != 0xFF && _date.subsec < 118) {
+		if (link_byte != 0xFF && date.subsec < 118) {
 			int type;
 			modelmesh_gethardpoint(craft->ship_idx, mesh_idx, link_byte, &type, &point_x, &point_forward,
 								   &point_up);
@@ -1068,7 +1043,7 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 		int16_t hp_side;
 		int16_t hp_fwd_neg;
 		int16_t hp_up;
-		if (link_byte != 0xFF && _date.subsec < 118) {
+		if (link_byte != 0xFF && date.subsec < 118) {
 			/* Resolve the hardpoint vertex from the first LOD's polygon
 			 * block: vertices start 17 + header[4] bytes in, 6 bytes each,
 			 * and each coordinate follows the 0x7F back-reference chain. */

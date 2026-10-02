@@ -138,14 +138,6 @@ typedef struct Tie98DirectDrawCaps {
 	uint32_t reserved[87];
 } Tie98DirectDrawCaps;
 
-// FUNCTION: TIE98 0x49A0B0
-void Flight_PumpWindowMessages(void) {
-	/* PORT: the application pumps platform events before TieRuntime_Tick. */
-}
-
-// FUNCTION: TIE98 0x49AA60
-int FrontendDisplay_OnSurfaceRestored(void) { return 1; }
-
 // FUNCTION: TIE98 0x403E70
 int Bitmap_WriteBmp24(const char* file_name, const void* pixels, int width, int height, int pitch,
 					  int bits_per_pixel, int pixel_format_555, const uint8_t* palette_bgra) {
@@ -245,202 +237,6 @@ int Bitmap_WriteBmp24(const char* file_name, const void* pixels, int width, int 
 	return 1;
 }
 
-// FUNCTION: TIE98 0x49CBE0
-int FrontendDisplay_GetPixelFormat555(void) {
-	if (g_hardwarePixelFormatAvailable && g_useHardware3D)
-		return g_pFmtRGB565->colorInfo.greenBPP == 5;
-	return g_displayPixelFormat == 555;
-}
-
-// FUNCTION: TIE98 0x49D180
-HRESULT FrontendDisplay_CaptureScreenshot(void) {
-	int sequence;
-	int index;
-	int lock_count;
-	int saved_offscreen_route;
-	uint16_t saved_maingameflag;
-	HRESULT result;
-
-	char file_name[64];
-	uint8_t palette_bgra[1024];
-
-	return DX_DD_OK;
-
-	sequence = 0;
-	for (;;) {
-		FILE* file;
-
-		sprintf(file_name, "tiescreen%d.bmp", sequence);
-		file = fopen(file_name, "rb");
-		if (file == NULL)
-			break;
-		fclose(file);
-		++sequence;
-	}
-
-	for (index = 0; index < 256; ++index) {
-		palette_bgra[4 * index] = g_directDrawPaletteEntries[index].blue;
-		palette_bgra[4 * index + 1] = g_directDrawPaletteEntries[index].green;
-		palette_bgra[4 * index + 2] = g_directDrawPaletteEntries[index].red;
-		palette_bgra[4 * index + 3] = 0;
-	}
-
-	lock_count = FlightSurface_GetLockCount();
-	for (index = 0; index < lock_count; ++index)
-		FlightSurface_Unlock();
-	FrontendDisplay_PresentFrame();
-
-	saved_offscreen_route = g_flightDrawToOffscreenSurface;
-	saved_maingameflag = maingameflag;
-	g_flightDrawToOffscreenSurface = 0;
-	maingameflag = 1;
-	FlightSurface_Lock();
-	Bitmap_WriteBmp24(file_name, xtrans2_videobaseptr, g_surfaceWidth, g_surfaceHeight, (int)g_surfacePitch,
-					  8 * g_flight16bppBytesPerPixel, FrontendDisplay_GetPixelFormat555(), palette_bgra);
-	FlightSurface_Unlock();
-	g_flightDrawToOffscreenSurface = saved_offscreen_route;
-	maingameflag = saved_maingameflag;
-	result = FrontendDisplay_PresentFrame();
-	for (index = 0; index < lock_count; ++index)
-		FlightSurface_Lock();
-	return result;
-}
-// FUNCTION: TIE98 0x49CC10
-int FrontendDisplay_SaveBackBuffer(void) {
-	if (g_landruSurface != NULL) {
-		const size_t size = 640u * 480u * (size_t)g_flight16bppBytesPerPixel;
-		g_savedBackBufferPixels = malloc(size);
-		if (g_savedBackBufferPixels != NULL) {
-			DDSURFACEDESC descriptor;
-			HRESULT result;
-
-			memset(&descriptor, 0, sizeof descriptor);
-			descriptor.dwSize = 108;
-
-			do {
-				result = g_landruSurface->lpVtbl->Lock(g_landruSurface, NULL, &descriptor, 0, NULL);
-			} while (result == DX_DDERR_WASSTILLDRAWING);
-			if (result != 0) {
-				free(g_savedBackBufferPixels);
-				g_savedBackBufferPixels = NULL;
-				return 0;
-			}
-			memcpy(g_savedBackBufferPixels, descriptor.lpSurface, size);
-			g_landruSurface->lpVtbl->Unlock(g_landruSurface, descriptor.lpSurface);
-		}
-	}
-	return 1;
-}
-
-// FUNCTION: TIE98 0x49CCF0
-int FrontendDisplay_RestoreBackBuffer(void) {
-	if (g_savedBackBufferPixels != NULL) {
-		if (g_landruSurface != NULL) {
-			DDSURFACEDESC descriptor;
-			HRESULT result;
-
-			memset(&descriptor, 0, sizeof descriptor);
-			descriptor.dwSize = 108;
-
-			do {
-				result = g_landruSurface->lpVtbl->Lock(g_landruSurface, NULL, &descriptor, 0, NULL);
-			} while (result == DX_DDERR_WASSTILLDRAWING);
-			if (result == 0) {
-				memcpy(descriptor.lpSurface, g_savedBackBufferPixels,
-					   640u * 480u * (size_t)g_flight16bppBytesPerPixel);
-				g_landruSurface->lpVtbl->Unlock(g_landruSurface, descriptor.lpSurface);
-			}
-		}
-		free(g_savedBackBufferPixels);
-		g_savedBackBufferPixels = NULL;
-	}
-	return 1;
-}
-
-// FUNCTION: TIE98 0x49AA70
-const DxGuid* FrontendDisplay_LoadDriverGuid(void) {
-	FILE* file = fopen("video.cfg", "rb");
-	if (file) {
-		if (fread(&g_configuredDirectDrawDriverGuid, 1, sizeof g_configuredDirectDrawDriverGuid, file) ==
-			sizeof g_configuredDirectDrawDriverGuid) {
-			fclose(file);
-			return &g_configuredDirectDrawDriverGuid;
-		}
-		fclose(file);
-	}
-	return NULL;
-}
-
-// FUNCTION: TIE98 0x49B3E0
-void FrontendDisplay_InitGrayscalePalette(void) {
-	if (!g_grayscalePaletteInitialized) {
-		int index;
-
-		for (index = 0; index < 256; ++index) {
-			g_grayscalePaletteEntries[index].red = (uint8_t)index;
-			g_grayscalePaletteEntries[index].green = (uint8_t)index;
-			g_grayscalePaletteEntries[index].blue = (uint8_t)index;
-		}
-		g_grayscalePaletteInitialized = 1;
-	}
-}
-
-// FUNCTION: TIE98 0x49B430
-void FrontendDisplay_SetPalette(const uint8_t* rgb6, int first_entry, int entry_count) {
-	Tie98PaletteEntry entries[256];
-	int lock_count;
-	int index;
-
-	while (!g_windowActive) {
-		if (g_quitRequested)
-			break;
-		Flight_PumpWindowMessages();
-	}
-	if (g_softwareCursorEnabled)
-		xcursor_Select_Contrast_Colors(rgb6);
-	lock_count = FlightSurface_GetLockCount();
-	for (index = 0; index < lock_count; ++index)
-		FlightSurface_Unlock();
-	for (index = first_entry; index < first_entry + entry_count; ++index) {
-		entries[index].red = (uint8_t)(rgb6[index * 3] << 2);
-		entries[index].green = (uint8_t)(rgb6[index * 3 + 1] << 2);
-		entries[index].blue = (uint8_t)(rgb6[index * 3 + 2] << 2);
-		entries[index].flags = 0;
-	}
-	if (g_ddPalette)
-		g_ddPalette->lpVtbl->SetEntries(g_ddPalette, 0, (uint32_t)first_entry, (uint32_t)entry_count,
-										entries);
-	for (index = 0; index < lock_count; ++index)
-		FlightSurface_Lock();
-}
-
-// FUNCTION: TIE98 0x49B510
-void FrontendDisplay_UpdatePalette(const uint8_t* rgb6, int first_entry, int entry_count) {
-	int lock_count;
-	int index;
-
-	while (!g_windowActive) {
-		if (g_quitRequested)
-			break;
-		Flight_PumpWindowMessages();
-	}
-	if (g_softwareCursorEnabled)
-		xcursor_Select_Contrast_Colors(rgb6);
-	lock_count = FlightSurface_GetLockCount();
-	for (index = 0; index < lock_count; ++index)
-		FlightSurface_Unlock();
-	for (index = first_entry; index < first_entry + entry_count; ++index) {
-		g_directDrawPaletteEntries[index].red = (uint8_t)(rgb6[index * 3] << 2);
-		g_directDrawPaletteEntries[index].green = (uint8_t)(rgb6[index * 3 + 1] << 2);
-		g_directDrawPaletteEntries[index].blue = (uint8_t)(rgb6[index * 3 + 2] << 2);
-	}
-	if (g_ddPalette)
-		g_ddPalette->lpVtbl->SetEntries(g_ddPalette, 0, (uint32_t)first_entry, (uint32_t)entry_count,
-										g_directDrawPaletteEntries);
-	for (index = 0; index < lock_count; ++index)
-		FlightSurface_Lock();
-}
-
 // FUNCTION: TIE98 0x4279F0
 static void Renderer_InitD3DDevice(void) {
 	Std3DDeviceCaps required_caps;
@@ -494,28 +290,25 @@ void Renderer_ReleaseHardwareZBuffer(void) {
 	}
 }
 
-// FUNCTION: TIE98 0x49B5E0
-int FrontendDisplay_ReportDirectDrawInitFailure(int error_code) {
-	/* PORT: the host logger replaces OutputDebugString and MessageBox. */
-	TieDiagnostics_Log(TIE_LOG_ERROR, "Game could not start (DirectDraw initialization error %d)\n",
-					   error_code);
-	if (g_primarySurface) {
-		g_primarySurface->lpVtbl->Release(g_primarySurface);
-		g_primarySurface = NULL;
+// FUNCTION: TIE98 0x49A0B0
+void Flight_PumpWindowMessages(void) {
+	/* PORT: the application pumps platform events before TieRuntime_Tick. */
+}
+
+// FUNCTION: TIE98 0x49AA60
+int FrontendDisplay_OnSurfaceRestored(void) { return 1; }
+// FUNCTION: TIE98 0x49AA70
+const DxGuid* FrontendDisplay_LoadDriverGuid(void) {
+	FILE* file = fopen("video.cfg", "rb");
+	if (file) {
+		if (fread(&g_configuredDirectDrawDriverGuid, 1, sizeof g_configuredDirectDrawDriverGuid, file) ==
+			sizeof g_configuredDirectDrawDriverGuid) {
+			fclose(file);
+			return &g_configuredDirectDrawDriverGuid;
+		}
+		fclose(file);
 	}
-	if (g_ddPalette) {
-		g_ddPalette->lpVtbl->Release(g_ddPalette);
-		g_ddPalette = NULL;
-	}
-	if (g_flightOffscreenSurface) {
-		g_flightOffscreenSurface->lpVtbl->Release(g_flightOffscreenSurface);
-		g_flightOffscreenSurface = NULL;
-	}
-	if (g_landruSurface) {
-		g_landruSurface->lpVtbl->Release(g_landruSurface);
-		g_landruSurface = NULL;
-	}
-	return 0;
+	return NULL;
 }
 
 // FUNCTION: TIE98 0x49AAC0
@@ -731,6 +524,308 @@ int FrontendDisplay_InitSurfaces(void) {
 		Renderer_InitD3DDevice();
 	FrontendDisplay_InitGrayscalePalette();
 	return 1;
+}
+
+// FUNCTION: TIE98 0x49B3E0
+void FrontendDisplay_InitGrayscalePalette(void) {
+	if (!g_grayscalePaletteInitialized) {
+		int index;
+
+		for (index = 0; index < 256; ++index) {
+			g_grayscalePaletteEntries[index].red = (uint8_t)index;
+			g_grayscalePaletteEntries[index].green = (uint8_t)index;
+			g_grayscalePaletteEntries[index].blue = (uint8_t)index;
+		}
+		g_grayscalePaletteInitialized = 1;
+	}
+}
+
+// FUNCTION: TIE98 0x49B430
+void FrontendDisplay_SetPalette(const uint8_t* rgb6, int first_entry, int entry_count) {
+	Tie98PaletteEntry entries[256];
+	int lock_count;
+	int index;
+
+	while (!g_windowActive) {
+		if (g_quitRequested)
+			break;
+		Flight_PumpWindowMessages();
+	}
+	if (g_softwareCursorEnabled)
+		xcursor_Select_Contrast_Colors(rgb6);
+	lock_count = FlightSurface_GetLockCount();
+	for (index = 0; index < lock_count; ++index)
+		FlightSurface_Unlock();
+	for (index = first_entry; index < first_entry + entry_count; ++index) {
+		entries[index].red = (uint8_t)(rgb6[index * 3] << 2);
+		entries[index].green = (uint8_t)(rgb6[index * 3 + 1] << 2);
+		entries[index].blue = (uint8_t)(rgb6[index * 3 + 2] << 2);
+		entries[index].flags = 0;
+	}
+	if (g_ddPalette)
+		g_ddPalette->lpVtbl->SetEntries(g_ddPalette, 0, (uint32_t)first_entry, (uint32_t)entry_count,
+										entries);
+	for (index = 0; index < lock_count; ++index)
+		FlightSurface_Lock();
+}
+
+// FUNCTION: TIE98 0x49B510
+void FrontendDisplay_UpdatePalette(const uint8_t* rgb6, int first_entry, int entry_count) {
+	int lock_count;
+	int index;
+
+	while (!g_windowActive) {
+		if (g_quitRequested)
+			break;
+		Flight_PumpWindowMessages();
+	}
+	if (g_softwareCursorEnabled)
+		xcursor_Select_Contrast_Colors(rgb6);
+	lock_count = FlightSurface_GetLockCount();
+	for (index = 0; index < lock_count; ++index)
+		FlightSurface_Unlock();
+	for (index = first_entry; index < first_entry + entry_count; ++index) {
+		g_directDrawPaletteEntries[index].red = (uint8_t)(rgb6[index * 3] << 2);
+		g_directDrawPaletteEntries[index].green = (uint8_t)(rgb6[index * 3 + 1] << 2);
+		g_directDrawPaletteEntries[index].blue = (uint8_t)(rgb6[index * 3 + 2] << 2);
+	}
+	if (g_ddPalette)
+		g_ddPalette->lpVtbl->SetEntries(g_ddPalette, 0, (uint32_t)first_entry, (uint32_t)entry_count,
+										g_directDrawPaletteEntries);
+	for (index = 0; index < lock_count; ++index)
+		FlightSurface_Lock();
+}
+
+// FUNCTION: TIE98 0x49B5E0
+int FrontendDisplay_ReportDirectDrawInitFailure(int error_code) {
+	/* PORT: the host logger replaces OutputDebugString and MessageBox. */
+	TieDiagnostics_Log(TIE_LOG_ERROR, "Game could not start (DirectDraw initialization error %d)\n",
+					   error_code);
+	if (g_primarySurface) {
+		g_primarySurface->lpVtbl->Release(g_primarySurface);
+		g_primarySurface = NULL;
+	}
+	if (g_ddPalette) {
+		g_ddPalette->lpVtbl->Release(g_ddPalette);
+		g_ddPalette = NULL;
+	}
+	if (g_flightOffscreenSurface) {
+		g_flightOffscreenSurface->lpVtbl->Release(g_flightOffscreenSurface);
+		g_flightOffscreenSurface = NULL;
+	}
+	if (g_landruSurface) {
+		g_landruSurface->lpVtbl->Release(g_landruSurface);
+		g_landruSurface = NULL;
+	}
+	return 0;
+}
+
+// FUNCTION: TIE98 0x49BAD0
+HRESULT FrontendDisplay_PresentFrame(void) {
+	DDSURFACEDESC descriptor;
+	int32_t in_vertical_blank;
+	HRESULT result;
+	while (!g_windowActive && !g_quitRequested)
+		Flight_PumpWindowMessages();
+	if (g_softwareCursorEnabled && xcursor_Get_Display_Count() >= 0) {
+		memset(&descriptor, 0, sizeof descriptor);
+		descriptor.dwSize = 108;
+		if (g_lpRenderSurface->lpVtbl->Lock(g_lpRenderSurface, NULL, &descriptor,
+											DDLOCK_WAIT | DDLOCK_NOSYSLOCK, NULL) == DX_DDERR_SURFACELOST)
+			return FrontendDisplay_RestorePrimarySurface();
+		xcursor_Draw_Software_Cursor_To_Surface((uint8_t*)descriptor.lpSurface, descriptor.lPitch, 480);
+		g_lpRenderSurface->lpVtbl->Unlock(g_lpRenderSurface, descriptor.lpSurface);
+	}
+	if (!g_flightPageFlip)
+		return g_primarySurface->lpVtbl->Blt(g_primarySurface, NULL, g_lpRenderSurface, NULL, DDBLT_WAIT,
+											 NULL);
+	if (g_flightConfFlicker) {
+		if (g_lastVBlankTimeMs) {
+			const int phase =
+				(int)(g_monitorRefreshTimingScale * (TieSimClock_NowMs() - g_lastVBlankTimeMs)) % 100000;
+			if ((phase < g_flickerSyncTolerance || phase > 100000 - g_flickerSyncTolerance) &&
+				g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(g_flightDirectDraw, &in_vertical_blank) ==
+					DX_DD_OK &&
+				!in_vertical_blank) {
+				while (g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(g_flightDirectDraw,
+																		  &in_vertical_blank) == DX_DD_OK &&
+					   !in_vertical_blank) {
+				}
+				g_lastVBlankTimeMs = TieSimClock_NowMs();
+			}
+		} else {
+			if (g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(g_flightDirectDraw, &in_vertical_blank) ==
+				DX_DD_OK) {
+				while (in_vertical_blank && g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(
+												g_flightDirectDraw, &in_vertical_blank) == DX_DD_OK) {
+				}
+				while (!in_vertical_blank && g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(
+												 g_flightDirectDraw, &in_vertical_blank) == DX_DD_OK) {
+				}
+			}
+			g_lastVBlankTimeMs = TieSimClock_NowMs();
+			if (g_flightDirectDraw->lpVtbl->GetMonitorFrequency(g_flightDirectDraw,
+																&g_monitorRefreshTimingScale) != DX_DD_OK) {
+				int blank;
+
+				for (blank = 0; blank < 100; ++blank) {
+					while (in_vertical_blank && g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(
+													g_flightDirectDraw, &in_vertical_blank) == DX_DD_OK) {
+					}
+					while (!in_vertical_blank && g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(
+													 g_flightDirectDraw, &in_vertical_blank) == DX_DD_OK) {
+					}
+				}
+				g_monitorRefreshTimingScale = 10000000 / (int)(TieSimClock_NowMs() - g_lastVBlankTimeMs);
+			}
+		}
+	}
+
+	result = g_primarySurface->lpVtbl->Flip(g_primarySurface, NULL, DDFLIP_WAIT);
+	if (result == DX_DDERR_NOEXCLUSIVEMODE) {
+		if (g_flightDirectDraw->lpVtbl->SetCooperativeLevel(g_flightDirectDraw, g_flightWindowHandle,
+															DDSCL_FULLSCREEN | DDSCL_EXCLUSIVE |
+																DDSCL_ALLOWMODEX) != DX_DD_OK)
+			exit(1);
+		result = g_primarySurface->lpVtbl->Flip(g_primarySurface, NULL, DDFLIP_WAIT);
+		if (result == DX_DDERR_SURFACELOST) {
+			g_primarySurface->lpVtbl->Restore(g_primarySurface);
+			g_lpRenderSurface->lpVtbl->Restore(g_lpRenderSurface);
+			g_rendererAttachedZBufferSurface->lpVtbl->Restore(g_rendererAttachedZBufferSurface);
+			result = g_primarySurface->lpVtbl->Flip(g_primarySurface, NULL, DDFLIP_WAIT);
+		}
+		if (result != DX_DD_OK)
+			exit(1);
+		result = g_flightDirectDraw->lpVtbl->SetCooperativeLevel(g_flightDirectDraw, g_flightWindowHandle,
+																 DDSCL_NORMAL);
+		if (result != DX_DD_OK)
+			exit(1);
+	}
+	if (result == DX_DDERR_SURFACELOST) {
+		result = FrontendDisplay_RestorePrimarySurface();
+		if (result)
+			return FrontendDisplay_OnSurfaceRestored();
+	}
+	return result;
+}
+
+// FUNCTION: TIE98 0x49BDE0
+HRESULT FrontendDisplay_PresentFrontSurface(void) {
+	while (!g_windowActive) {
+		if (g_quitRequested)
+			break;
+		Flight_PumpWindowMessages();
+	}
+	return g_primarySurface->lpVtbl->Blt(g_primarySurface, NULL, g_lpRenderSurface, NULL, DDBLT_WAIT, NULL);
+}
+
+// FUNCTION: TIE98 0x49BE20
+HRESULT FrontendDisplay_ClearAndPresentFrame(void) {
+	while (!g_windowActive) {
+		if (g_quitRequested)
+			break;
+		Flight_PumpWindowMessages();
+	}
+	FrontendDisplay_ClearBackBuffer();
+	return FrontendDisplay_PresentFrame();
+}
+
+// FUNCTION: TIE98 0x49BE50
+HRESULT ddraw_Present_Landru_Frame(void) {
+	Tie98Rect source, destination;
+
+	DDBLTFX effects;
+	HRESULT result;
+
+	while (!g_windowActive) {
+		if (g_quitRequested)
+			break;
+		Flight_PumpWindowMessages();
+	}
+	if (landru_video_flags_gbl & LANDRU_VIDEO_VGA_COMPAT) {
+		DDSURFACEDESC descriptor;
+		memset(&descriptor, 0, sizeof descriptor);
+		descriptor.dwSize = 108;
+		if (g_lpRenderSurface->lpVtbl->Lock(g_lpRenderSurface, NULL, &descriptor,
+											DDLOCK_WAIT | DDLOCK_NOSYSLOCK, NULL) == DX_DDERR_SURFACELOST) {
+			g_vgaCompatBorderClearFrames = 2;
+			return FrontendDisplay_RestorePrimarySurface();
+		}
+		if (g_vgaCompatBorderClearFrames) {
+			uint8_t* upper;
+			uint8_t* lower;
+			int row;
+
+			--g_vgaCompatBorderClearFrames;
+			upper = descriptor.lpSurface;
+			lower = (uint8_t*)descriptor.lpSurface + 440 * g_surfacePitch;
+			for (row = 0; row < 40; ++row) {
+				memset(upper, 0, 640);
+				memset(lower, 0, 640);
+				upper += g_surfacePitch;
+				lower += g_surfacePitch;
+			}
+		}
+		xvideo_Blit_Indexed_Rect(descriptor.lpSurface, descriptor.lPitch, 480, vga_compat_buffer_gbl, 320,
+								 200, 320, 0, 0, landru_video_flags_gbl);
+		return g_lpRenderSurface->lpVtbl->Unlock(g_lpRenderSurface, descriptor.lpSurface);
+	}
+
+	source.left = 0;
+	source.top = 0;
+	source.right = g_surfaceWidth;
+	source.bottom = g_surfaceHeight;
+	destination.left = (g_displayWidth - g_surfaceWidth) >> 1;
+	destination.top = (g_displayHeight - g_surfaceHeight) >> 1;
+	destination.right = (g_displayWidth + g_surfaceWidth) >> 1;
+	destination.bottom = (g_displayHeight + g_surfaceHeight) >> 1;
+
+	effects.dwSize = 100;
+	effects.dwROP = DDROP_SRCCOPY;
+
+	do {
+		result = g_lpRenderSurface->lpVtbl->Blt(g_lpRenderSurface, &destination, g_landruSurface, &source,
+												DDBLT_ROP, &effects);
+		if (result == DX_DDERR_SURFACELOST) {
+			if (!FrontendDisplay_RestorePrimarySurface())
+				return 0;
+			result = FrontendDisplay_OnSurfaceRestored();
+		}
+	} while (result == DX_DDERR_WASSTILLDRAWING);
+	return result;
+}
+
+// FUNCTION: TIE98 0x49C050
+HRESULT FrontendDisplay_BlitOffscreenToRenderSurface(void) {
+	DDBLTFX effects;
+	Tie98Rect source;
+	Tie98Rect destination;
+	HRESULT result;
+	while (!g_windowActive) {
+		if (g_quitRequested)
+			break;
+		Flight_PumpWindowMessages();
+	}
+	effects.dwSize = 100;
+	effects.dwROP = DDROP_SRCCOPY;
+	destination.left = (g_displayWidth - g_surfaceWidth) >> 1;
+	destination.top = (g_displayHeight - g_surfaceHeight) >> 1;
+	destination.right = destination.left + g_surfaceWidth;
+	destination.bottom = destination.top + g_surfaceHeight;
+	source.left = 0;
+	source.top = 0;
+	source.right = g_surfaceWidth;
+	source.bottom = g_surfaceHeight;
+	do {
+		result = g_lpRenderSurface->lpVtbl->Blt(g_lpRenderSurface, &destination, g_flightOffscreenSurface,
+												&source, DDBLT_ROP, &effects);
+		if (result == DX_DDERR_SURFACELOST) {
+			if (!FrontendDisplay_RestorePrimarySurface())
+				return 0;
+			result = FrontendDisplay_OnSurfaceRestored();
+		}
+	} while (result == DX_DDERR_WASSTILLDRAWING);
+	return result;
 }
 
 // FUNCTION: TIE98 0x49C150
@@ -978,6 +1073,29 @@ void FrontendDisplay_SetDisplayMode(uint16_t mode) {
 	FrontendDisplay_InitGrayscalePalette();
 }
 
+// FUNCTION: TIE98 0x49CA90
+HRESULT FrontendDisplay_ClearBackBuffer(void) {
+	DDBLTFX effects;
+	HRESULT result;
+	while (!g_windowActive) {
+		if (g_quitRequested)
+			break;
+		Flight_PumpWindowMessages();
+	}
+	effects.dwSize = 100;
+	effects.dwFillColor = 0;
+	do {
+		result =
+			g_lpRenderSurface->lpVtbl->Blt(g_lpRenderSurface, NULL, NULL, NULL, DDBLT_COLORFILL, &effects);
+		if (result == DX_DDERR_SURFACELOST) {
+			if (!FrontendDisplay_RestorePrimarySurface())
+				return 0;
+			result = FrontendDisplay_OnSurfaceRestored();
+		}
+	} while (result == DX_DDERR_WASSTILLDRAWING);
+	return result;
+}
+
 // FUNCTION: TIE98 0x49CB10
 void FrontendDisplay_ClearSurface(IDirectDrawSurface* surface) {
 	DDBLTFX effects;
@@ -1009,27 +1127,63 @@ int FrontendDisplay_RestorePrimarySurface(void) {
 	return g_primarySurface->lpVtbl->Restore(g_primarySurface) == DX_DD_OK;
 }
 
-// FUNCTION: TIE98 0x49CA90
-HRESULT FrontendDisplay_ClearBackBuffer(void) {
-	DDBLTFX effects;
-	HRESULT result;
-	while (!g_windowActive) {
-		if (g_quitRequested)
-			break;
-		Flight_PumpWindowMessages();
-	}
-	effects.dwSize = 100;
-	effects.dwFillColor = 0;
-	do {
-		result =
-			g_lpRenderSurface->lpVtbl->Blt(g_lpRenderSurface, NULL, NULL, NULL, DDBLT_COLORFILL, &effects);
-		if (result == DX_DDERR_SURFACELOST) {
-			if (!FrontendDisplay_RestorePrimarySurface())
+// FUNCTION: TIE98 0x49CBE0
+int FrontendDisplay_GetPixelFormat555(void) {
+	if (g_hardwarePixelFormatAvailable && g_useHardware3D)
+		return g_pFmtRGB565->colorInfo.greenBPP == 5;
+	return g_displayPixelFormat == 555;
+}
+
+// FUNCTION: TIE98 0x49CC10
+int FrontendDisplay_SaveBackBuffer(void) {
+	if (g_landruSurface != NULL) {
+		const size_t size = 640u * 480u * (size_t)g_flight16bppBytesPerPixel;
+		g_savedBackBufferPixels = malloc(size);
+		if (g_savedBackBufferPixels != NULL) {
+			DDSURFACEDESC descriptor;
+			HRESULT result;
+
+			memset(&descriptor, 0, sizeof descriptor);
+			descriptor.dwSize = 108;
+
+			do {
+				result = g_landruSurface->lpVtbl->Lock(g_landruSurface, NULL, &descriptor, 0, NULL);
+			} while (result == DX_DDERR_WASSTILLDRAWING);
+			if (result != 0) {
+				free(g_savedBackBufferPixels);
+				g_savedBackBufferPixels = NULL;
 				return 0;
-			result = FrontendDisplay_OnSurfaceRestored();
+			}
+			memcpy(g_savedBackBufferPixels, descriptor.lpSurface, size);
+			g_landruSurface->lpVtbl->Unlock(g_landruSurface, descriptor.lpSurface);
 		}
-	} while (result == DX_DDERR_WASSTILLDRAWING);
-	return result;
+	}
+	return 1;
+}
+
+// FUNCTION: TIE98 0x49CCF0
+int FrontendDisplay_RestoreBackBuffer(void) {
+	if (g_savedBackBufferPixels != NULL) {
+		if (g_landruSurface != NULL) {
+			DDSURFACEDESC descriptor;
+			HRESULT result;
+
+			memset(&descriptor, 0, sizeof descriptor);
+			descriptor.dwSize = 108;
+
+			do {
+				result = g_landruSurface->lpVtbl->Lock(g_landruSurface, NULL, &descriptor, 0, NULL);
+			} while (result == DX_DDERR_WASSTILLDRAWING);
+			if (result == 0) {
+				memcpy(descriptor.lpSurface, g_savedBackBufferPixels,
+					   640u * 480u * (size_t)g_flight16bppBytesPerPixel);
+				g_landruSurface->lpVtbl->Unlock(g_landruSurface, descriptor.lpSurface);
+			}
+		}
+		free(g_savedBackBufferPixels);
+		g_savedBackBufferPixels = NULL;
+	}
+	return 1;
 }
 
 // FUNCTION: TIE98 0x49CE80
@@ -1039,210 +1193,56 @@ void FrontendDisplay_ClearPresentationSurfaces(void) {
 	FrontendDisplay_ClearSurface(g_landruSurface);
 }
 
-// FUNCTION: TIE98 0x49BAD0
-HRESULT FrontendDisplay_PresentFrame(void) {
-	DDSURFACEDESC descriptor;
-	int32_t in_vertical_blank;
-	HRESULT result;
-	while (!g_windowActive && !g_quitRequested)
-		Flight_PumpWindowMessages();
-	if (g_softwareCursorEnabled && xcursor_Get_Display_Count() >= 0) {
-		memset(&descriptor, 0, sizeof descriptor);
-		descriptor.dwSize = 108;
-		if (g_lpRenderSurface->lpVtbl->Lock(g_lpRenderSurface, NULL, &descriptor,
-											DDLOCK_WAIT | DDLOCK_NOSYSLOCK, NULL) == DX_DDERR_SURFACELOST)
-			return FrontendDisplay_RestorePrimarySurface();
-		xcursor_Draw_Software_Cursor_To_Surface((uint8_t*)descriptor.lpSurface, descriptor.lPitch, 480);
-		g_lpRenderSurface->lpVtbl->Unlock(g_lpRenderSurface, descriptor.lpSurface);
-	}
-	if (!g_flightPageFlip)
-		return g_primarySurface->lpVtbl->Blt(g_primarySurface, NULL, g_lpRenderSurface, NULL, DDBLT_WAIT,
-											 NULL);
-	if (g_flightConfFlicker) {
-		if (g_lastVBlankTimeMs) {
-			const int phase =
-				(int)(g_monitorRefreshTimingScale * (TieSimClock_NowMs() - g_lastVBlankTimeMs)) % 100000;
-			if ((phase < g_flickerSyncTolerance || phase > 100000 - g_flickerSyncTolerance) &&
-				g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(g_flightDirectDraw, &in_vertical_blank) ==
-					DX_DD_OK &&
-				!in_vertical_blank) {
-				while (g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(g_flightDirectDraw,
-																		  &in_vertical_blank) == DX_DD_OK &&
-					   !in_vertical_blank) {
-				}
-				g_lastVBlankTimeMs = TieSimClock_NowMs();
-			}
-		} else {
-			if (g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(g_flightDirectDraw, &in_vertical_blank) ==
-				DX_DD_OK) {
-				while (in_vertical_blank && g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(
-												g_flightDirectDraw, &in_vertical_blank) == DX_DD_OK) {
-				}
-				while (!in_vertical_blank && g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(
-												 g_flightDirectDraw, &in_vertical_blank) == DX_DD_OK) {
-				}
-			}
-			g_lastVBlankTimeMs = TieSimClock_NowMs();
-			if (g_flightDirectDraw->lpVtbl->GetMonitorFrequency(g_flightDirectDraw,
-																&g_monitorRefreshTimingScale) != DX_DD_OK) {
-				int blank;
-
-				for (blank = 0; blank < 100; ++blank) {
-					while (in_vertical_blank && g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(
-													g_flightDirectDraw, &in_vertical_blank) == DX_DD_OK) {
-					}
-					while (!in_vertical_blank && g_flightDirectDraw->lpVtbl->GetVerticalBlankStatus(
-													 g_flightDirectDraw, &in_vertical_blank) == DX_DD_OK) {
-					}
-				}
-				g_monitorRefreshTimingScale = 10000000 / (int)(TieSimClock_NowMs() - g_lastVBlankTimeMs);
-			}
-		}
-	}
-
-	result = g_primarySurface->lpVtbl->Flip(g_primarySurface, NULL, DDFLIP_WAIT);
-	if (result == DX_DDERR_NOEXCLUSIVEMODE) {
-		if (g_flightDirectDraw->lpVtbl->SetCooperativeLevel(g_flightDirectDraw, g_flightWindowHandle,
-															DDSCL_FULLSCREEN | DDSCL_EXCLUSIVE |
-																DDSCL_ALLOWMODEX) != DX_DD_OK)
-			exit(1);
-		result = g_primarySurface->lpVtbl->Flip(g_primarySurface, NULL, DDFLIP_WAIT);
-		if (result == DX_DDERR_SURFACELOST) {
-			g_primarySurface->lpVtbl->Restore(g_primarySurface);
-			g_lpRenderSurface->lpVtbl->Restore(g_lpRenderSurface);
-			g_rendererAttachedZBufferSurface->lpVtbl->Restore(g_rendererAttachedZBufferSurface);
-			result = g_primarySurface->lpVtbl->Flip(g_primarySurface, NULL, DDFLIP_WAIT);
-		}
-		if (result != DX_DD_OK)
-			exit(1);
-		result = g_flightDirectDraw->lpVtbl->SetCooperativeLevel(g_flightDirectDraw, g_flightWindowHandle,
-																 DDSCL_NORMAL);
-		if (result != DX_DD_OK)
-			exit(1);
-	}
-	if (result == DX_DDERR_SURFACELOST) {
-		result = FrontendDisplay_RestorePrimarySurface();
-		if (result)
-			return FrontendDisplay_OnSurfaceRestored();
-	}
-	return result;
-}
-
-// FUNCTION: TIE98 0x49BDE0
-HRESULT FrontendDisplay_PresentFrontSurface(void) {
-	while (!g_windowActive) {
-		if (g_quitRequested)
-			break;
-		Flight_PumpWindowMessages();
-	}
-	return g_primarySurface->lpVtbl->Blt(g_primarySurface, NULL, g_lpRenderSurface, NULL, DDBLT_WAIT, NULL);
-}
-
-// FUNCTION: TIE98 0x49BE20
-HRESULT FrontendDisplay_ClearAndPresentFrame(void) {
-	while (!g_windowActive) {
-		if (g_quitRequested)
-			break;
-		Flight_PumpWindowMessages();
-	}
-	FrontendDisplay_ClearBackBuffer();
-	return FrontendDisplay_PresentFrame();
-}
-
-// FUNCTION: TIE98 0x49C050
-HRESULT FrontendDisplay_BlitOffscreenToRenderSurface(void) {
-	DDBLTFX effects;
-	Tie98Rect source;
-	Tie98Rect destination;
-	HRESULT result;
-	while (!g_windowActive) {
-		if (g_quitRequested)
-			break;
-		Flight_PumpWindowMessages();
-	}
-	effects.dwSize = 100;
-	effects.dwROP = DDROP_SRCCOPY;
-	destination.left = (g_displayWidth - g_surfaceWidth) >> 1;
-	destination.top = (g_displayHeight - g_surfaceHeight) >> 1;
-	destination.right = destination.left + g_surfaceWidth;
-	destination.bottom = destination.top + g_surfaceHeight;
-	source.left = 0;
-	source.top = 0;
-	source.right = g_surfaceWidth;
-	source.bottom = g_surfaceHeight;
-	do {
-		result = g_lpRenderSurface->lpVtbl->Blt(g_lpRenderSurface, &destination, g_flightOffscreenSurface,
-												&source, DDBLT_ROP, &effects);
-		if (result == DX_DDERR_SURFACELOST) {
-			if (!FrontendDisplay_RestorePrimarySurface())
-				return 0;
-			result = FrontendDisplay_OnSurfaceRestored();
-		}
-	} while (result == DX_DDERR_WASSTILLDRAWING);
-	return result;
-}
-
-// FUNCTION: TIE98 0x49BE50
-HRESULT ddraw_Present_Landru_Frame(void) {
-	Tie98Rect source, destination;
-
-	DDBLTFX effects;
+// FUNCTION: TIE98 0x49D180
+HRESULT FrontendDisplay_CaptureScreenshot(void) {
+	int sequence;
+	int index;
+	int lock_count;
+	int saved_offscreen_route;
+	uint16_t saved_maingameflag;
 	HRESULT result;
 
-	while (!g_windowActive) {
-		if (g_quitRequested)
+	char file_name[64];
+	uint8_t palette_bgra[1024];
+
+	return DX_DD_OK;
+
+	sequence = 0;
+	for (;;) {
+		FILE* file;
+
+		sprintf(file_name, "tiescreen%d.bmp", sequence);
+		file = fopen(file_name, "rb");
+		if (file == NULL)
 			break;
-		Flight_PumpWindowMessages();
-	}
-	if (landru_video_flags_gbl & LANDRU_VIDEO_VGA_COMPAT) {
-		DDSURFACEDESC descriptor;
-		memset(&descriptor, 0, sizeof descriptor);
-		descriptor.dwSize = 108;
-		if (g_lpRenderSurface->lpVtbl->Lock(g_lpRenderSurface, NULL, &descriptor,
-											DDLOCK_WAIT | DDLOCK_NOSYSLOCK, NULL) == DX_DDERR_SURFACELOST) {
-			g_vgaCompatBorderClearFrames = 2;
-			return FrontendDisplay_RestorePrimarySurface();
-		}
-		if (g_vgaCompatBorderClearFrames) {
-			uint8_t* upper;
-			uint8_t* lower;
-			int row;
-
-			--g_vgaCompatBorderClearFrames;
-			upper = descriptor.lpSurface;
-			lower = (uint8_t*)descriptor.lpSurface + 440 * g_surfacePitch;
-			for (row = 0; row < 40; ++row) {
-				memset(upper, 0, 640);
-				memset(lower, 0, 640);
-				upper += g_surfacePitch;
-				lower += g_surfacePitch;
-			}
-		}
-		xvideo_Blit_Indexed_Rect(descriptor.lpSurface, descriptor.lPitch, 480, vga_compat_buffer_gbl, 320,
-								 200, 320, 0, 0, landru_video_flags_gbl);
-		return g_lpRenderSurface->lpVtbl->Unlock(g_lpRenderSurface, descriptor.lpSurface);
+		fclose(file);
+		++sequence;
 	}
 
-	source.left = 0;
-	source.top = 0;
-	source.right = g_surfaceWidth;
-	source.bottom = g_surfaceHeight;
-	destination.left = (g_displayWidth - g_surfaceWidth) >> 1;
-	destination.top = (g_displayHeight - g_surfaceHeight) >> 1;
-	destination.right = (g_displayWidth + g_surfaceWidth) >> 1;
-	destination.bottom = (g_displayHeight + g_surfaceHeight) >> 1;
+	for (index = 0; index < 256; ++index) {
+		palette_bgra[4 * index] = g_directDrawPaletteEntries[index].blue;
+		palette_bgra[4 * index + 1] = g_directDrawPaletteEntries[index].green;
+		palette_bgra[4 * index + 2] = g_directDrawPaletteEntries[index].red;
+		palette_bgra[4 * index + 3] = 0;
+	}
 
-	effects.dwSize = 100;
-	effects.dwROP = DDROP_SRCCOPY;
+	lock_count = FlightSurface_GetLockCount();
+	for (index = 0; index < lock_count; ++index)
+		FlightSurface_Unlock();
+	FrontendDisplay_PresentFrame();
 
-	do {
-		result = g_lpRenderSurface->lpVtbl->Blt(g_lpRenderSurface, &destination, g_landruSurface, &source,
-												DDBLT_ROP, &effects);
-		if (result == DX_DDERR_SURFACELOST) {
-			if (!FrontendDisplay_RestorePrimarySurface())
-				return 0;
-			result = FrontendDisplay_OnSurfaceRestored();
-		}
-	} while (result == DX_DDERR_WASSTILLDRAWING);
+	saved_offscreen_route = g_flightDrawToOffscreenSurface;
+	saved_maingameflag = maingameflag;
+	g_flightDrawToOffscreenSurface = 0;
+	maingameflag = 1;
+	FlightSurface_Lock();
+	Bitmap_WriteBmp24(file_name, xtrans2_videobaseptr, g_surfaceWidth, g_surfaceHeight, (int)g_surfacePitch,
+					  8 * g_flight16bppBytesPerPixel, FrontendDisplay_GetPixelFormat555(), palette_bgra);
+	FlightSurface_Unlock();
+	g_flightDrawToOffscreenSurface = saved_offscreen_route;
+	maingameflag = saved_maingameflag;
+	result = FrontendDisplay_PresentFrame();
+	for (index = 0; index < lock_count; ++index)
+		FlightSurface_Lock();
 	return result;
 }

@@ -42,6 +42,79 @@ int16_t relativey;
 // GLOBAL: TIE95 0xD35E6
 int16_t relativez;
 
+// GLOBAL: TIE98 0x4E3D10
+static Vec3f g_hyperspaceStreakQuadVertices[4] = {
+	{ 64.0f, 0.0f, 0.0f },
+	{ 64.0f, -256.0f, 0.0f },
+	{ -64.0f, -256.0f, 0.0f },
+	{ -64.0f, 0.0f, 0.0f },
+};
+typedef struct HyperspaceStreakFacePayloadTIE98 {
+	int32_t edgeCount;
+	FaceRecordTIE98 face;
+	Vec3f faceNormal;
+	FaceTextureGradientsTIE98 textureGradients;
+} HyperspaceStreakFacePayloadTIE98;
+/* The streak quad's OPT nodes and payloads form one contiguous block, as in
+ * OpenXvT. The face's vertex-normal indices run past the single normal into
+ * the following padding and node, as in the original. */
+typedef struct HyperspaceStreakEmbeddedModelDataTIE98 {
+	Tie98OptNode verticesNode;
+	OptTexCoordTIE98 texCoords[4];
+	Tie98OptNode texCoordsNode;
+	Vec3f normal;
+	int32_t normalNodePadding;
+	Tie98OptNode normalsNode;
+	HyperspaceStreakFacePayloadTIE98 facePayload;
+	Tie98OptNode faceNode;
+	Tie98OptNode* childNodes[4];
+	Tie98OptNode rootNode;
+	Tie98OptNode* rootNodes[1];
+	int32_t trailingPadding;
+} HyperspaceStreakEmbeddedModelDataTIE98;
+// GLOBAL: TIE98 0x4E3D40
+static HyperspaceStreakEmbeddedModelDataTIE98 g_hyperspaceStreakEmbeddedModelData = {
+	{ NULL, TIE98_OPT_NODE_MESH_VERTICES, 0, NULL, { 4 }, g_hyperspaceStreakQuadVertices },
+	{ { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.0f } },
+	{ NULL,
+	  TIE98_OPT_NODE_TEXTURE_COORDINATES,
+	  0,
+	  NULL,
+	  { 4 },
+	  g_hyperspaceStreakEmbeddedModelData.texCoords },
+	{ 0.0f, 0.0f, 1.0f },
+	0,
+	{ NULL, TIE98_OPT_NODE_VERTEX_NORMALS, 0, NULL, { 1 }, &g_hyperspaceStreakEmbeddedModelData.normal },
+	{
+		4,
+		{ { 0, 1, 2, 3 }, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, { 0, 1, 2, 3 } },
+		{ 0.0f, 0.0f, 1.0f },
+		{ { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+	},
+	{ NULL, TIE98_OPT_NODE_FACE_DATA, 0, NULL, { 1 }, &g_hyperspaceStreakEmbeddedModelData.facePayload },
+	{
+		&g_hyperspaceStreakEmbeddedModelData.verticesNode,
+		&g_hyperspaceStreakEmbeddedModelData.texCoordsNode,
+		&g_hyperspaceStreakEmbeddedModelData.normalsNode,
+		&g_hyperspaceStreakEmbeddedModelData.faceNode,
+	},
+	{ NULL,
+	  TIE98_OPT_NODE_GROUP,
+	  4,
+	  g_hyperspaceStreakEmbeddedModelData.childNodes,
+	  { 4 },
+	  g_hyperspaceStreakEmbeddedModelData.childNodes },
+	{ &g_hyperspaceStreakEmbeddedModelData.rootNode },
+	0,
+};
+// GLOBAL: TIE98 0x4E3E68
+static Tie98OptimizedPolyObject g_hyperspaceModelHeaderPatch = {
+	0, 1, g_hyperspaceStreakEmbeddedModelData.rootNodes, NULL, 0, 0,
+};
+// GLOBAL: TIE98 0x591E30
+uint32_t g_hyperspaceStreakLength;
+typedef char CheckLODRecordSize[sizeof(LODRecord) == 6 ? 1 : -1];
+typedef char CheckShipModelMeshSize[sizeof(ShipModelMesh) == 64 ? 1 : -1];
 /* ============================================================================
  * External references (cross-module globals/functions not declared elsewhere).
  * ========================================================================== */
@@ -196,354 +269,6 @@ const uint16_t* draw_getdetailptr(ShipMeshLOD* lod_table, int z_threshold) {
 }
 
 /* ============================================================================
- * draw_drawlaser
- * ----------------------------------------------------------------------------
- * Draw a single laser bolt (FlightObject as a single polygon) from the
- * built-in projectiledataptrs[] model; the lockshipfileptrs fallback
- * covers the NULL slot.
- * ========================================================================== */
-// FUNCTION: TIE95 0x1BAB4
-void draw_drawlaser(uint16_t laser_obj_idx) {
-	uint16_t ship_idx;
-	ShipMeshLOD* poly_table;
-	const uint16_t* poly;
-	int eyex, eyey, eyez;
-
-	parentobject = laser_obj_idx;
-	ship_idx = objects[laser_obj_idx].ship_idx;
-
-	poly_table = (ShipMeshLOD*)projectiledataptrs[ship_idx - WEAPON_SPECIES_BASE];
-	if (!poly_table) {
-		draw_Lockshipfileptrs(ship_idx);
-		poly_table = (ShipMeshLOD*)((uint8_t*)componentblockptr + componentblockptr->render_offset);
-	}
-
-	eyey = objecteyey;
-	eyex = objecteyex;
-	eyez = objecteyez;
-	poly = draw_getdetailptr(poly_table, objecteyez);
-	drawpol_drawpolyobject(poly, eyex, eyey, eyez);
-}
-
-// FUNCTION: TIE98 0x417EC0
-void draw_drawlaser_tie98(uint16_t laser_obj_idx) {
-	FlightObject* object = &objects[laser_obj_idx];
-	int32_t camera_x;
-	int32_t camera_y;
-	int32_t camera_z;
-	int32_t up_dot;
-	int32_t side_dot;
-	int16_t saved_roll;
-
-	parentobject = laser_obj_idx;
-	camera_x = camera.x - object->world_x;
-	camera_y = camera.y - object->world_y;
-	camera_z = camera.z - object->world_z;
-	/* Retail shifts each full product before the wrapping 32-bit sum. */
-	up_dot = (int32_t)((uint32_t)math2_mul_q15(camera_x, object->up_x) +
-					   (uint32_t)math2_mul_q15(camera_y, object->up_y) +
-					   (uint32_t)math2_mul_q15(camera_z, object->up_z));
-	side_dot = (int32_t)((uint32_t)math2_mul_q15(camera_x, object->side_x) +
-						 (uint32_t)math2_mul_q15(camera_y, object->side_y) +
-						 (uint32_t)math2_mul_q15(camera_z, object->side_z));
-	saved_roll = object->roll;
-	object->roll += (int16_t)(trig2_arctan(up_dot, side_dot) - 0x4000);
-	object->orient_dirty = 1;
-	fview_newcalcrotate(object->roll, object->pitch, object->heading, 0, object);
-	FlightModel_Draw_Object(object);
-	object->roll = saved_roll;
-	object->orient_dirty = 1;
-}
-
-/* ============================================================================
- * draw_drawhyperstar
- * ----------------------------------------------------------------------------
- * Hyperspace starburst sprite at eye-space objecteyex/y/z. parentobject is
- * tagged OBJ_REF_STATIC_BASE + star_idx (the "static/flat-poly" slice of
- * the obj-ref namespace; see tie.h). byte_DC3AC = (star_idx & 3) - 4.
- * Saves/restores flatobjnum so the caller's flat-poly ring is unaffected.
- * ========================================================================== */
-// FUNCTION: TIE95 0x1BB28
-void draw_drawhyperstar(int16_t star_idx) {
-	uint16_t saved;
-
-	parentobject = (uint16_t)(star_idx + OBJ_REF_STATIC_BASE);
-	hyperstardata[0x14] = (star_idx & 3) + 0xFC;
-	saved = flatobjnum;
-	drawpol_drawpolyobject((const uint16_t*)hyperstardata, objecteyex, objecteyey, objecteyez);
-	flatobjnum = saved;
-}
-
-// GLOBAL: TIE98 0x4E3D10
-static Vec3f g_hyperspaceStreakQuadVertices[4] = {
-	{ 64.0f, 0.0f, 0.0f },
-	{ 64.0f, -256.0f, 0.0f },
-	{ -64.0f, -256.0f, 0.0f },
-	{ -64.0f, 0.0f, 0.0f },
-};
-
-typedef struct HyperspaceStreakFacePayloadTIE98 {
-	int32_t edgeCount;
-	FaceRecordTIE98 face;
-	Vec3f faceNormal;
-	FaceTextureGradientsTIE98 textureGradients;
-} HyperspaceStreakFacePayloadTIE98;
-
-/* The streak quad's OPT nodes and payloads form one contiguous block, as in
- * OpenXvT. The face's vertex-normal indices run past the single normal into
- * the following padding and node, as in the original. */
-typedef struct HyperspaceStreakEmbeddedModelDataTIE98 {
-	Tie98OptNode verticesNode;
-	OptTexCoordTIE98 texCoords[4];
-	Tie98OptNode texCoordsNode;
-	Vec3f normal;
-	int32_t normalNodePadding;
-	Tie98OptNode normalsNode;
-	HyperspaceStreakFacePayloadTIE98 facePayload;
-	Tie98OptNode faceNode;
-	Tie98OptNode* childNodes[4];
-	Tie98OptNode rootNode;
-	Tie98OptNode* rootNodes[1];
-	int32_t trailingPadding;
-} HyperspaceStreakEmbeddedModelDataTIE98;
-
-// GLOBAL: TIE98 0x4E3D40
-static HyperspaceStreakEmbeddedModelDataTIE98 g_hyperspaceStreakEmbeddedModelData = {
-	{ NULL, TIE98_OPT_NODE_MESH_VERTICES, 0, NULL, { 4 }, g_hyperspaceStreakQuadVertices },
-	{ { 1.0f, 0.0f }, { 1.0f, 1.0f }, { 0.0f, 1.0f }, { 0.0f, 0.0f } },
-	{ NULL,
-	  TIE98_OPT_NODE_TEXTURE_COORDINATES,
-	  0,
-	  NULL,
-	  { 4 },
-	  g_hyperspaceStreakEmbeddedModelData.texCoords },
-	{ 0.0f, 0.0f, 1.0f },
-	0,
-	{ NULL, TIE98_OPT_NODE_VERTEX_NORMALS, 0, NULL, { 1 }, &g_hyperspaceStreakEmbeddedModelData.normal },
-	{
-		4,
-		{ { 0, 1, 2, 3 }, { 0, 1, 2, 3 }, { 0, 0, 0, 0 }, { 0, 1, 2, 3 } },
-		{ 0.0f, 0.0f, 1.0f },
-		{ { 1.0f, 0.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-	},
-	{ NULL, TIE98_OPT_NODE_FACE_DATA, 0, NULL, { 1 }, &g_hyperspaceStreakEmbeddedModelData.facePayload },
-	{
-		&g_hyperspaceStreakEmbeddedModelData.verticesNode,
-		&g_hyperspaceStreakEmbeddedModelData.texCoordsNode,
-		&g_hyperspaceStreakEmbeddedModelData.normalsNode,
-		&g_hyperspaceStreakEmbeddedModelData.faceNode,
-	},
-	{ NULL,
-	  TIE98_OPT_NODE_GROUP,
-	  4,
-	  g_hyperspaceStreakEmbeddedModelData.childNodes,
-	  { 4 },
-	  g_hyperspaceStreakEmbeddedModelData.childNodes },
-	{ &g_hyperspaceStreakEmbeddedModelData.rootNode },
-	0,
-};
-
-// GLOBAL: TIE98 0x4E3E68
-static Tie98OptimizedPolyObject g_hyperspaceModelHeaderPatch = {
-	0, 1, g_hyperspaceStreakEmbeddedModelData.rootNodes, NULL, 0, 0,
-};
-
-// GLOBAL: TIE98 0x591E30
-uint32_t g_hyperspaceStreakLength;
-
-// FUNCTION: TIE98 0x42F990
-// DRAW_drawhyperstar
-void draw_drawhyperstar_tie98(int16_t star_idx) {
-	const int saved_bilinear = g_bilinearEnabled;
-	FlightObject saved_object = objects[0];
-	const Tie98OptimizedPolyObject* saved_model_override = g_flightModelOverride;
-
-	g_hyperspaceStreakQuadVertices[1].y = (float)(g_hyperspaceStreakLength >> 1);
-	g_hyperspaceStreakQuadVertices[2].y = g_hyperspaceStreakQuadVertices[1].y;
-	g_bilinearEnabled = 0;
-
-	objects[0].world_x = (int32_t)staticobjects[star_idx].world_x << 8;
-	objects[0].world_y = (int32_t)staticobjects[star_idx].world_y << 8;
-	objects[0].world_z = (int32_t)staticobjects[star_idx].world_z << 8;
-	parentobject = 0;
-	objects[0].ship_idx = 137;
-	objects[0].genus = GENUS_PROJECTILE_NPC;
-	objects[0].roll =
-		(int16_t)(trig2_arctan(objects[0].world_z - camera.z, objects[0].world_x - camera.x) + 0x4000);
-	objects[0].heading = 0;
-	objects[0].pitch = 0x4000;
-	objects[0].orient_dirty = 1;
-	fview_newcalcrotate(objects[0].roll, 0x4000, 0, 0, &objects[0]);
-	g_flightModelOverride = &g_hyperspaceModelHeaderPatch;
-	FlightModel_Draw_Object(&objects[0]);
-	g_flightModelOverride = saved_model_override;
-	g_bilinearEnabled = saved_bilinear;
-	objects[0] = saved_object;
-}
-
-/* ============================================================================
- * draw_drawbackdropimage
- * ----------------------------------------------------------------------------
- * Rotated/scaled backdrop blit (planet, large-distance ship sprite).
- * Reads species[ship_idx].model_handle for the bitmap blob and
- * species[ship_idx].bitmap_data for the palette remap.
- * ========================================================================== */
-// FUNCTION: TIE95 0x1BB70
-uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
-	const uint8_t* bitmap_base;
-	const uint8_t* image;
-
-	reverseflag = 1;
-	worldz = 0x100000;
-	bitmap_base = (const uint8_t*)xmemhdl_Lock_Handle(species_table[ship_idx].model_handle);
-	xmemhdl_Unlock_Handle(species_table[ship_idx].model_handle);
-
-	/* Retail bitmaps use a two-level offset to their palette and image data. */
-	image = bitmap_base + *(const uint32_t*)(bitmap_base + 16);
-	image = bitmap_base + *(const uint32_t*)image;
-
-	rotscale_preparefastdraw(angle, 2);
-	rotscale_preparecolor((const char*)image);
-	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, image);
-}
-
-// FUNCTION: TIE98 0x417FF0
-// DRAW_drawbackdropimage
-uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
-	LandruHandle handle;
-	const uint8_t* bitmap_base;
-	uint32_t table_offset;
-	uint32_t image_offset;
-	const uint8_t* image;
-
-	reverseflag = 1;
-	worldz = 0x100000;
-	objecteyez = 0x7FFFFFFF;
-	handle = species_table[ship_idx].model_handle;
-	bitmap_base = (const uint8_t*)xmemhdl_Lock_Handle(handle);
-	xmemhdl_Unlock_Handle(handle);
-	if (!bitmap_base)
-		return 0;
-
-	table_offset = *(const uint32_t*)(bitmap_base + 16);
-	image_offset = *(const uint32_t*)(bitmap_base + table_offset);
-	image = bitmap_base + image_offset;
-	if (g_useHardware3D) {
-		RenderQuad_DrawRotatedSprite(angle, screen_x, screen_y, 0x100, image);
-		return 0;
-	}
-	rotscale_preparefastdraw(angle, 2);
-	rotscale_preparecolor((const char*)image);
-	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, image);
-}
-
-/* ============================================================================
- * draw_gettreeorder
- * ----------------------------------------------------------------------------
- * Recursive BSP-tree walk in painter's order (back-to-front).
- *
- * Node layout (18 bytes, used as int16[9]):
- *   [+0]  normal_x  [+2]  normal_y  [+4]  normal_z
- *   [+6]  center_x  [+8]  center_y  [+10] center_z
- *   [+12] left_offset_hi (i16; 0 = leaf)
- *   [+14] right_offset_hi (i16; at leaves, this is the mesh index)
- *
- * Branch step:
- *   1. Compute (relative*) - center_*, with shift correction from
- *      relativeshift (shared exponent).
- *   2. Dot with plane normal. If dot < 0: recurse RIGHT first, walk LEFT.
- *      Else recurse LEFT first, walk RIGHT.
- *
- * Leaf step:
- *   Dereferences componentblockptr[mesh_idx]. Recomputes eyez via
- *   pos_xyz (if has_position). Probes detail header for INT_MAX skip
- *   marker. If eyez <= mesh.draw_distance, appends mesh_idx to comp[].
- * ========================================================================== */
-// FUNCTION: TIE95 0x1B414
-ShipModelMesh* draw_gettreeorder(int* bsp_node) {
-	BSPNode* node = (BSPNode*)bsp_node;
-	BSPNode* leaf_node = node;
-
-	int16_t leaf_mesh_idx;
-	ShipModelMesh* mesh;
-	int comp_eyez;
-
-	while (node->left_off != 0) { /* nonzero = branch */
-		int plane_dot;
-		int next_off;
-
-		int pt_side, pt_fwd, pt_up;
-
-		leaf_node = node;
-
-		if (relativeshift >= 0) {
-			if (relativeshift == 0) {
-				pt_side = (int16_t)(relativex - node->center_x);
-				pt_fwd = (int16_t)(relativey - node->center_y);
-				pt_up = (int16_t)(relativez - node->center_z);
-			} else {
-				pt_side = relativex - (node->center_x >> relativeshift);
-				pt_fwd = relativey - (node->center_y >> relativeshift);
-				pt_up = relativez - (node->center_z >> relativeshift);
-			}
-		} else {
-			int sh = -(int8_t)relativeshift;
-			pt_side = (relativex >> sh) - node->center_x;
-			pt_fwd = (relativey >> sh) - node->center_y;
-			pt_up = (relativez >> sh) - node->center_z;
-		}
-
-		plane_dot = (int16_t)pt_up * node->normal_z + (int16_t)pt_fwd * node->normal_y +
-					(int16_t)pt_side * node->normal_x;
-		if (plane_dot >= 0x40000000)
-			plane_dot = 1073676288;
-		if (plane_dot <= -1073741824)
-			plane_dot = -1073676288;
-
-		if (((plane_dot >> 15) & 0x8000) != 0) {
-			/* Camera on negative side: recurse RIGHT, tail-walk LEFT. */
-			draw_gettreeorder((int*)((uint8_t*)node + node->right_off));
-			next_off = node->left_off;
-		} else {
-			draw_gettreeorder((int*)((uint8_t*)node + node->left_off));
-			next_off = node->right_off;
-		}
-		node = (BSPNode*)((uint8_t*)node + next_off);
-	}
-
-	leaf_node = node;
-	/* At leaves, right_off field holds the mesh index. */
-	leaf_mesh_idx = node->right_off;
-	mesh = &componentblockptr[leaf_mesh_idx];
-	comp_eyez = objecteyez;
-
-	if (mesh->has_position) {
-		int rel =
-			rotworldeyeC3 * mesh->pos_up + rotworldeyeB3 * mesh->pos_fwd + rotworldeyeA3 * mesh->pos_side;
-		if (rel >= 0x40000000)
-			rel = 1073676288;
-		if (rel <= -1073741824)
-			rel = -1073676288;
-		comp_eyez = (rel >> 16) + objecteyez;
-
-		if (shipdetailvalue == 1) {
-			ShipMeshLOD* probe = (ShipMeshLOD*)((uint8_t*)mesh + mesh->render_offset);
-			if (probe->distance == 0x7FFFFFFF) {
-				/* Skip-marker: prune the leaf entirely. */
-				return mesh;
-			}
-		}
-	}
-
-	if (shipdetailvalue == -1)
-		comp_eyez >>= 1;
-
-	if (comp_eyez <= mesh->draw_distance)
-		comp[numberofcomp++] = (uint16_t)leaf_node->right_off;
-	return mesh;
-}
-
-/* ============================================================================
  * draw_drawcomplexobject
  * ----------------------------------------------------------------------------
  * Top-level entry for rendering a multi-mesh BSP-tree object.
@@ -665,6 +390,162 @@ int draw_drawcomplexobject(int obj_idx) {
 	draw_drawcraft(obj_idx_u16, ship_idx, (int16_t)dz_scaled);
 
 	return drawpol_setmarkingcolors(0), 0;
+}
+
+// FUNCTION: TIE98 0x417EC0
+void draw_drawlaser_tie98(uint16_t laser_obj_idx) {
+	FlightObject* object = &objects[laser_obj_idx];
+	int32_t camera_x;
+	int32_t camera_y;
+	int32_t camera_z;
+	int32_t up_dot;
+	int32_t side_dot;
+	int16_t saved_roll;
+
+	parentobject = laser_obj_idx;
+	camera_x = camera.x - object->world_x;
+	camera_y = camera.y - object->world_y;
+	camera_z = camera.z - object->world_z;
+	/* Retail shifts each full product before the wrapping 32-bit sum. */
+	up_dot = (int32_t)((uint32_t)math2_mul_q15(camera_x, object->up_x) +
+					   (uint32_t)math2_mul_q15(camera_y, object->up_y) +
+					   (uint32_t)math2_mul_q15(camera_z, object->up_z));
+	side_dot = (int32_t)((uint32_t)math2_mul_q15(camera_x, object->side_x) +
+						 (uint32_t)math2_mul_q15(camera_y, object->side_y) +
+						 (uint32_t)math2_mul_q15(camera_z, object->side_z));
+	saved_roll = object->roll;
+	object->roll += (int16_t)(trig2_arctan(up_dot, side_dot) - 0x4000);
+	object->orient_dirty = 1;
+	fview_newcalcrotate(object->roll, object->pitch, object->heading, 0, object);
+	FlightModel_Draw_Object(object);
+	object->roll = saved_roll;
+	object->orient_dirty = 1;
+}
+
+/* ============================================================================
+ * draw_gettreeorder
+ * ----------------------------------------------------------------------------
+ * Recursive BSP-tree walk in painter's order (back-to-front).
+ *
+ * Node layout (18 bytes, used as int16[9]):
+ *   [+0]  normal_x  [+2]  normal_y  [+4]  normal_z
+ *   [+6]  center_x  [+8]  center_y  [+10] center_z
+ *   [+12] left_offset_hi (i16; 0 = leaf)
+ *   [+14] right_offset_hi (i16; at leaves, this is the mesh index)
+ *
+ * Branch step:
+ *   1. Compute (relative*) - center_*, with shift correction from
+ *      relativeshift (shared exponent).
+ *   2. Dot with plane normal. If dot < 0: recurse RIGHT first, walk LEFT.
+ *      Else recurse LEFT first, walk RIGHT.
+ *
+ * Leaf step:
+ *   Dereferences componentblockptr[mesh_idx]. Recomputes eyez via
+ *   pos_xyz (if has_position). Probes detail header for INT_MAX skip
+ *   marker. If eyez <= mesh.draw_distance, appends mesh_idx to comp[].
+ * ========================================================================== */
+// FUNCTION: TIE95 0x1B414
+void draw_gettreeorder(int* bsp_node) {
+	BSPNode* node = (BSPNode*)bsp_node;
+
+	for (;;) {
+		BSPNode* current = node;
+
+		if (current->left_off == 0) {
+			/* Leaf: right_off holds the mesh index. */
+			ShipModelMesh* mesh = &componentblockptr[current->right_off];
+			int comp_eyez = objecteyez;
+
+			if (mesh->has_position) {
+				int rel = rotworldeyeA3 * mesh->pos_side + rotworldeyeB3 * mesh->pos_fwd +
+						  rotworldeyeC3 * mesh->pos_up;
+				if (rel >= 0x40000000)
+					rel = 1073676288;
+				if (rel <= -1073741824)
+					rel = -1073676288;
+				rel >>= 15;
+				comp_eyez += rel >> 1;
+
+				if ((uint16_t)shipdetailvalue == 1) {
+					ShipMeshLOD* probe = (ShipMeshLOD*)((uint8_t*)mesh + mesh->render_offset);
+					if (probe->distance == 0x7FFFFFFF) {
+						/* Skip-marker: prune the leaf entirely. */
+						return;
+					}
+				}
+			}
+
+			if (shipdetailvalue == -1)
+				comp_eyez >>= 1;
+
+			if (comp_eyez <= mesh->draw_distance)
+				comp[numberofcomp++] = current->right_off;
+			return;
+		} else {
+			int16_t pt_side, pt_fwd, pt_up;
+			int plane_dot;
+
+			if (relativeshift < 0) {
+				int sh = -relativeshift;
+				pt_side = (relativex >> sh) - current->center_x;
+				pt_fwd = (relativey >> sh) - current->center_y;
+				pt_up = (relativez >> sh) - current->center_z;
+			} else if (relativeshift > 0) {
+				pt_side = relativex - (current->center_x >> relativeshift);
+				pt_fwd = relativey - (current->center_y >> relativeshift);
+				pt_up = relativez - (current->center_z >> relativeshift);
+			} else {
+				pt_side = relativex - current->center_x;
+				pt_fwd = relativey - current->center_y;
+				pt_up = relativez - current->center_z;
+			}
+
+			plane_dot = pt_side * current->normal_x + pt_fwd * current->normal_y + pt_up * current->normal_z;
+			if (plane_dot >= 0x40000000)
+				plane_dot = 1073676288;
+			if (plane_dot <= -1073741824)
+				plane_dot = -1073676288;
+
+			if ((int16_t)(plane_dot >> 15) >= 0) {
+				draw_gettreeorder((int*)((uint8_t*)node + current->left_off));
+				node = (BSPNode*)((uint8_t*)node + current->right_off);
+			} else {
+				/* Camera on negative side: recurse RIGHT, tail-walk LEFT. */
+				draw_gettreeorder((int*)((uint8_t*)node + current->right_off));
+				node = (BSPNode*)((uint8_t*)node + current->left_off);
+			}
+		}
+	}
+}
+
+// FUNCTION: TIE98 0x42F990
+// DRAW_drawhyperstar
+void draw_drawhyperstar_tie98(int16_t star_idx) {
+	const int saved_bilinear = g_bilinearEnabled;
+	FlightObject saved_object = objects[0];
+	const Tie98OptimizedPolyObject* saved_model_override = g_flightModelOverride;
+
+	g_hyperspaceStreakQuadVertices[1].y = (float)(g_hyperspaceStreakLength >> 1);
+	g_hyperspaceStreakQuadVertices[2].y = g_hyperspaceStreakQuadVertices[1].y;
+	g_bilinearEnabled = 0;
+
+	objects[0].world_x = (int32_t)staticobjects[star_idx].world_x << 8;
+	objects[0].world_y = (int32_t)staticobjects[star_idx].world_y << 8;
+	objects[0].world_z = (int32_t)staticobjects[star_idx].world_z << 8;
+	parentobject = 0;
+	objects[0].ship_idx = 137;
+	objects[0].genus = GENUS_PROJECTILE_NPC;
+	objects[0].roll =
+		(int16_t)(trig2_arctan(objects[0].world_z - camera.z, objects[0].world_x - camera.x) + 0x4000);
+	objects[0].heading = 0;
+	objects[0].pitch = 0x4000;
+	objects[0].orient_dirty = 1;
+	fview_newcalcrotate(objects[0].roll, 0x4000, 0, 0, &objects[0]);
+	g_flightModelOverride = &g_hyperspaceModelHeaderPatch;
+	FlightModel_Draw_Object(&objects[0]);
+	g_flightModelOverride = saved_model_override;
+	g_bilinearEnabled = saved_bilinear;
+	objects[0] = saved_object;
 }
 
 /* Draw visible craft components with their articulation, markings, and target
@@ -837,9 +718,114 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
 	return saved_currenttarget;
 }
 
+// FUNCTION: TIE98 0x417FF0
+// DRAW_drawbackdropimage
+uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
+	LandruHandle handle;
+	const uint8_t* bitmap_base;
+	uint32_t table_offset;
+	uint32_t image_offset;
+	const uint8_t* image;
+
+	reverseflag = 1;
+	worldz = 0x100000;
+	objecteyez = 0x7FFFFFFF;
+	handle = species_table[ship_idx].model_handle;
+	bitmap_base = (const uint8_t*)xmemhdl_Lock_Handle(handle);
+	xmemhdl_Unlock_Handle(handle);
+	if (!bitmap_base)
+		return 0;
+
+	table_offset = *(const uint32_t*)(bitmap_base + 16);
+	image_offset = *(const uint32_t*)(bitmap_base + table_offset);
+	image = bitmap_base + image_offset;
+	if (g_useHardware3D) {
+		RenderQuad_DrawRotatedSprite(angle, screen_x, screen_y, 0x100, image);
+		return 0;
+	}
+	rotscale_preparefastdraw(angle, 2);
+	rotscale_preparecolor((const char*)image);
+	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, image);
+}
+
+/* ============================================================================
+ * draw_drawlaser
+ * ----------------------------------------------------------------------------
+ * Draw a single laser bolt (FlightObject as a single polygon) from the
+ * built-in projectiledataptrs[] model; the lockshipfileptrs fallback
+ * covers the NULL slot.
+ * ========================================================================== */
+// FUNCTION: TIE95 0x1BAB4
+void draw_drawlaser(uint16_t laser_obj_idx) {
+	uint16_t ship_idx;
+	ShipMeshLOD* poly_table;
+	const uint16_t* poly;
+	int eyex, eyey, eyez;
+
+	parentobject = laser_obj_idx;
+	ship_idx = objects[laser_obj_idx].ship_idx;
+
+	poly_table = (ShipMeshLOD*)projectiledataptrs[ship_idx - WEAPON_SPECIES_BASE];
+	if (!poly_table) {
+		draw_Lockshipfileptrs(ship_idx);
+		poly_table = (ShipMeshLOD*)((uint8_t*)componentblockptr + componentblockptr->render_offset);
+	}
+
+	eyey = objecteyey;
+	eyex = objecteyex;
+	eyez = objecteyez;
+	poly = draw_getdetailptr(poly_table, objecteyez);
+	drawpol_drawpolyobject(poly, eyex, eyey, eyez);
+}
+
+/* ============================================================================
+ * draw_drawhyperstar
+ * ----------------------------------------------------------------------------
+ * Hyperspace starburst sprite at eye-space objecteyex/y/z. parentobject is
+ * tagged OBJ_REF_STATIC_BASE + star_idx (the "static/flat-poly" slice of
+ * the obj-ref namespace; see tie.h). byte_DC3AC = (star_idx & 3) - 4.
+ * Saves/restores flatobjnum so the caller's flat-poly ring is unaffected.
+ * ========================================================================== */
+// FUNCTION: TIE95 0x1BB28
+void draw_drawhyperstar(uint16_t star_idx) {
+	uint16_t saved;
+
+	parentobject = (uint16_t)(star_idx + OBJ_REF_STATIC_BASE);
+	hyperstardata[0x14] = (star_idx & 3) + 0xFC;
+	saved = flatobjnum;
+	drawpol_drawpolyobject((const uint16_t*)hyperstardata, objecteyex, objecteyey, objecteyez);
+	flatobjnum = saved;
+}
+
+/* ============================================================================
+ * draw_drawbackdropimage
+ * ----------------------------------------------------------------------------
+ * Rotated/scaled backdrop blit (planet, large-distance ship sprite).
+ * Reads species[ship_idx].model_handle for the bitmap blob and
+ * species[ship_idx].bitmap_data for the palette remap.
+ * ========================================================================== */
+// FUNCTION: TIE95 0x1BB70
+uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
+	const uint8_t* bitmap_base;
+	const uint8_t* image;
+
+	reverseflag = 1;
+	worldz = 0x100000;
+	bitmap_base = (const uint8_t*)xmemhdl_Lock_Handle(species_table[ship_idx].model_handle);
+	xmemhdl_Unlock_Handle(species_table[ship_idx].model_handle);
+
+	/* Retail bitmaps use a two-level offset to their palette and image data. */
+	image = bitmap_base + *(const uint32_t*)(bitmap_base + 16);
+	image = bitmap_base + *(const uint32_t*)image;
+
+	rotscale_preparefastdraw(angle, 2);
+	rotscale_preparecolor((const char*)image);
+	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, image);
+}
+
 // FUNCTION: TIE98 0x417C40
 // DRAW_drawcraft
-static void draw_drawcraft_tie98(uint16_t object_ref, uint16_t model_type) {
+static void draw_drawcraft_tie98(int object_ref, int model_type) {
 	const uint16_t saved_current_target = currenttarget;
 	int16_t bolt_angle = 0;
 	int bolt_angle_set = 0;
@@ -923,447 +909,330 @@ static void draw_drawcraft_tie98(uint16_t object_ref, uint16_t model_type) {
 
 // FUNCTION: TIE98 0x417BE0
 void draw_process_object_components_tie98(uint16_t object_ref) {
-	const uint16_t model_type = object_ref >= OBJ_REF_STATIC_BASE
-									? staticobjects[object_ref - OBJ_REF_STATIC_BASE].species
-									: objects[object_ref].ship_idx;
+	uint16_t model_type;
+
+	if (object_ref >= OBJ_REF_STATIC_BASE)
+		model_type = staticobjects[object_ref - OBJ_REF_STATIC_BASE].species;
+	else
+		model_type = objects[object_ref].ship_idx;
 	draw_drawcraft_tie98(object_ref, model_type);
 }
-
-typedef char CheckLODRecordSize[sizeof(LODRecord) == 6 ? 1 : -1];
-typedef char CheckShipModelMeshSize[sizeof(ShipModelMesh) == 64 ? 1 : -1];
 
 /* Resolve ambiguous XTRANS2 depth ordering. Category flags handle fixed
  * priority cases; mesh overlaps compare the camera vector against both
  * polygon planes after resolving 0x7F00 vertex back-references. */
 // FUNCTION: TIE95 0x1BBF4
-uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj_id_field,
-							uint16_t a_parent_category, int a_eyex, int a_eyey, uint16_t b_face_info,
-							uint16_t obj_b, uint16_t b_parent_category, uint16_t b_obj_id_field) {
-	uint16_t result_obj;
-	uint16_t mismatch_obj;
-	int via_special_70;
-	uint16_t a_cat_hi;
-	uint16_t b_cat_hi;
-	CraftData* b_craftptr;
-	int relationship;
-	uint16_t owner_obj_id_field;
+uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_parent_category,
+							uint16_t a_obj_id_field, uint16_t b_face_info, uint16_t obj_b,
+							uint16_t b_parent_category, uint16_t b_obj_id_field) {
+	uint16_t front_obj;
+	uint16_t back_obj;
+	uint8_t a_cat;
+	uint8_t a_slot;
+	uint8_t b_cat;
+	uint8_t b_slot;
+	uint8_t via_special_70;
+	uint8_t norm_shift;
+	uint8_t relationship;
+	uint16_t a_ship_idx;
+	uint16_t b_ship_idx;
+	uint16_t owner_ship_idx;
+	uint16_t a_size;
+	uint16_t b_size;
+	uint16_t face;
+	uint16_t obj_id_field;
+	int a_x, a_y, a_z;
+	int b_x, b_y, b_z;
+	int owner_x, owner_y, owner_z;
+	int other_x, other_y, other_z;
+	int other_dx, other_dy, other_dz;
+	int camera_dx, camera_dy, camera_dz;
+	uint16_t dx_abs, dy_abs, dz_abs;
+	int dot;
+	int other_side, other_fwd, other_up;
+	int cam_side, cam_fwd;
+	int16_t cam_up;
 	FlightObject* owner_obj;
-	int other_dx;
-	int other_dy;
-	int camera_dx;
-	int camera_dy;
-	int other_dz;
-	int camera_dz;
-	int other_dx_abs;
-	int other_dy_abs;
-	int camera_dz_save;
-	int norm_shift;
-	int other_dz_abs;
-	int other_proj_side;
-	int other_proj_side_hi;
-	int other_proj_fwd;
-	int other_proj_fwd_neg_hi;
-	int other_proj_up;
-	int other_proj_up_hi;
-	int cam_proj_side;
-	int cam_proj_side_hi;
-	int cam_proj_fwd;
-	int cam_proj_fwd_neg_hi;
-	int cam_proj_up;
-	int cam_proj_up_hi;
-	int final_shift;
-	ShipModelMesh* b_mesh;
-	int8_t b_detail_marker;
-	const uint8_t* b_detail_ptr;
-	uint8_t b_numpolys;
-	const uint8_t* b_poly_list;
-	uint16_t b_rot_angle;
-	const PolyFace* plane;
-	int16_t plane_normal_x;
-	int16_t plane_normal_y;
-	int16_t plane_normal_z;
-	const uint8_t* edge_list_base;
-	int16_t cam_proj_side_dx;
-	int16_t other_proj_side_dx;
-	int16_t other_proj_fwd_dx;
-	int16_t cam_proj_fwd_dx;
-	int16_t cam_proj_up_dx;
-	int dot_a;
-	int dot_other_hi;
-	int dot_b;
-
-	uint16_t bound_hwidth, a_bound_size;
-	uint16_t loser_ship_idx, a_ship_idx, ship_idx;
-	int b_world_y, b_world_z, b_world_x, a_world_y;
-	int owner_world_x, owner_world_z, owner_world_y;
-	int v_eyex, v_eyey;
-	const int16_t* i;
-	const int16_t* j;
-	const int16_t* k;
-	int16_t edge_pt_x, edge_pt_y, edge_pt_z;
-
-	(void)a_obj_id_field;
-	(void)b_obj_id_field;
+	CraftData* b_craftptr;
 
 	if (bpflightflag)
 		return obj_a;
 
-	result_obj = obj_b;
-	/* Object returned by the mismatch path. */
-	mismatch_obj = obj_a;
+	back_obj = obj_a;
+	front_obj = obj_b;
+	a_cat = a_parent_category >> 8;
+	a_slot = (uint8_t)a_parent_category;
 	via_special_70 = 0;
-	bound_hwidth = 0;
-	a_bound_size = 0;
-	loser_ship_idx = 0;
+	a_size = 0;
+	b_size = 0;
 	a_ship_idx = 0;
-	ship_idx = 0;
-	b_world_y = 0;
-	b_world_z = 0;
-	b_world_x = 0;
-	a_world_y = 0;
-	(void)b_world_y;
-	(void)b_world_z;
-	(void)b_world_x;
-	(void)a_world_y;
+	b_ship_idx = 0;
+	a_x = a_y = a_z = 0;
+	b_x = b_y = b_z = 0;
 
-	a_cat_hi = (uint16_t)(a_parent_category >> 8) & 0xFF;
-	b_cat_hi = (uint16_t)(b_parent_category >> 8) & 0xFF;
-
-	/* --- Step 1: A-side category dispatch + load A's world position. */
-	if (a_cat_hi < 0x30u) {
-		if (a_cat_hi >= 0x10u) {
-			if (a_cat_hi <= 0x10u || a_cat_hi == 0x20u)
-				return result_obj;
-			/* fall through to B-side dispatch (LABEL_21) */
-		} else if (a_cat_hi != 0) {
-			/* fall through to B-side dispatch */
-		} else {
-			/* A is regular mesh -- LABEL_18: load A's world position.
-			 * NOTE: assign the function-scope a_ship_idx (NOT a new
-			 * shadow) so the value survives to the A-wins branch at
-			 * LABEL_68 where it is needed as the OWNER's ship index. */
-			uint16_t a_obj_byte = (uint8_t)a_parent_category;
-			a_world_y = objects[a_obj_byte].world_y;
-			a_ship_idx = objects[a_obj_byte].ship_idx;
-			a_eyex = objects[a_obj_byte].world_x;
-			a_eyey = objects[a_obj_byte].world_z;
-			if (a_ship_idx == 89)
-				a_ship_idx = objects[a_obj_byte].ship_type_override;
-			a_bound_size = species_table[a_ship_idx].bound_hwidth;
-		}
-	} else if (a_cat_hi > 0x30u) {
-		if (a_cat_hi >= 0x70u) {
-			if (a_cat_hi > 0x70u) {
-				if (a_cat_hi == 0x78u)
-					return obj_b;
-				/* fall through */
-			} else {
-				/* a_cat_hi == 0x70: load A position (LABEL_18 path).
-				 * Same shadowing-fix as the regular-mesh branch above:
-				 * assign the function-scope a_ship_idx, not a new local. */
-				uint16_t a_obj_byte = (uint8_t)a_parent_category;
-				a_world_y = objects[a_obj_byte].world_y;
-				a_ship_idx = objects[a_obj_byte].ship_idx;
-				a_eyex = objects[a_obj_byte].world_x;
-				a_eyey = objects[a_obj_byte].world_z;
-				if (a_ship_idx == 89)
-					a_ship_idx = objects[a_obj_byte].ship_type_override;
-				a_bound_size = species_table[a_ship_idx].bound_hwidth;
-			}
-		} else if (a_cat_hi == 0x38u) {
-			/* Static meshes do not participate in craft relationship sorting. */
-			return result_obj;
-		}
-	} else {
-		/* a_cat_hi == 0x30: neither wins. */
-		return result_obj;
+	switch (a_cat) {
+		case 0x00:
+		case 0x70:
+			a_x = objects[a_slot].world_x;
+			a_ship_idx = objects[a_slot].ship_idx;
+			a_y = objects[a_slot].world_y;
+			a_z = objects[a_slot].world_z;
+			if (objects[a_slot].ship_idx == 89)
+				a_ship_idx = objects[a_slot].ship_type_override;
+			a_size = species_table[a_ship_idx].bound_hwidth;
+			break;
+		case 0x10:
+		case 0x20:
+		case 0x30:
+		case 0x38:
+			return front_obj;
+		case 0x78:
+			return obj_b;
 	}
 
-	/* --- Step 2: B-side category dispatch + load B's world position. */
-	if (b_cat_hi < 0x30u) {
-		if (b_cat_hi >= 0x10u) {
-			if (b_cat_hi <= 0x10u || b_cat_hi == 0x20u)
-				return obj_a;
-			/* fall through to overlap test */
-		} else if (b_cat_hi == 0) {
-			uint16_t b_obj_byte = (uint8_t)b_parent_category;
-			uint16_t b_ship_idx;
-
-			b_world_x = objects[b_obj_byte].world_x;
-			b_world_y = objects[b_obj_byte].world_y;
-			b_world_z = objects[b_obj_byte].world_z;
-			b_ship_idx = objects[b_obj_byte].ship_idx;
-			ship_idx = b_ship_idx;
-			if (b_ship_idx == 89)
-				ship_idx = objects[b_obj_byte].ship_type_override;
-			bound_hwidth = species_table[ship_idx].bound_hwidth;
-		}
-	} else if (b_cat_hi <= 0x30u) {
-		return obj_a;
-	} else if (b_cat_hi < 0x70u) {
-		if (b_cat_hi == 0x38u)
-			return obj_a;
-	} else if (b_cat_hi == 0x70u) {
-		/* The original routes category 0x70 through the same object-data
-		 * load as category 0 before continuing with its special scaling. */
-		uint16_t b_obj_byte = (uint8_t)b_parent_category;
-		uint16_t b_ship_idx;
-
-		b_world_x = objects[b_obj_byte].world_x;
-		b_world_y = objects[b_obj_byte].world_y;
-		b_world_z = objects[b_obj_byte].world_z;
-		b_ship_idx = objects[b_obj_byte].ship_idx;
-		ship_idx = b_ship_idx;
-		if (b_ship_idx == 89)
-			ship_idx = objects[b_obj_byte].ship_type_override;
-		bound_hwidth = species_table[ship_idx].bound_hwidth;
-	} else if (b_cat_hi > 0x70u) {
-		if (b_cat_hi == 0x78u)
-			return obj_a;
+	b_cat = b_parent_category >> 8;
+	b_slot = (uint8_t)b_parent_category;
+	switch (b_cat) {
+		case 0x00:
+		case 0x70:
+			b_x = objects[b_slot].world_x;
+			b_y = objects[b_slot].world_y;
+			b_z = objects[b_slot].world_z;
+			b_ship_idx = objects[b_slot].ship_idx;
+			if (objects[b_slot].ship_idx == 89)
+				b_ship_idx = objects[b_slot].ship_type_override;
+			b_size = species_table[b_ship_idx].bound_hwidth;
+			break;
+		case 0x10:
+		case 0x20:
+		case 0x30:
+		case 0x38:
+		case 0x78:
+			return back_obj;
 	}
 
-	/* --- LABEL_37: side selection. Choose which side "wins" the swap. */
-	if (a_cat_hi || (uint8_t)a_parent_category < NUM_CRAFTS) {
-		if (!b_cat_hi && (uint8_t)b_parent_category >= NUM_CRAFTS)
-			bound_hwidth = 0;
-	} else {
-		if (!b_cat_hi && (uint8_t)b_parent_category >= NUM_CRAFTS)
-			return result_obj;
-		a_bound_size = 0;
+	/* Non-craft meshes never win on size. */
+	if (a_cat == 0 && a_slot >= NUM_CRAFTS) {
+		if (b_cat == 0 && b_slot >= NUM_CRAFTS)
+			return front_obj;
+		a_size = 0;
+	} else if (b_cat == 0 && b_slot >= NUM_CRAFTS) {
+		b_size = 0;
 	}
 
-	craftptr = objects[(uint8_t)a_parent_category].craft_ptr;
-	b_craftptr = objects[(uint8_t)b_parent_category].craft_ptr;
+	craftptr = objects[a_slot].craft_ptr;
+	b_craftptr = objects[b_slot].craft_ptr;
 	relationship = 0;
-	if ((uint8_t)a_parent_category < NUM_CRAFTS) {
-		int16_t a_link = craftptr->tow_slave_ref;
-		if (a_link == (uint8_t)b_parent_category || a_link == (int16_t)b_parent_category ||
+	if (a_slot < NUM_CRAFTS) {
+		if ((uint16_t)craftptr->tow_slave_ref == b_slot || craftptr->tow_slave_ref == b_parent_category ||
 			(craftptr->mode_byte == 18 && craftptr->mode_subbyte == 2 &&
-			 craftptr->ai_target_ref == (uint8_t)b_parent_category))
+			 (uint16_t)craftptr->ai_target_ref == b_slot))
 			relationship = 1;
 	}
-	if ((uint8_t)b_parent_category < NUM_CRAFTS) {
-		int16_t b_link = b_craftptr->tow_slave_ref;
-		if (b_link == (uint8_t)a_parent_category || b_link == (int16_t)a_parent_category ||
+	if (b_slot < NUM_CRAFTS) {
+		if ((uint16_t)b_craftptr->tow_slave_ref == a_slot || b_craftptr->tow_slave_ref == a_parent_category ||
 			(b_craftptr->mode_byte == 18 && b_craftptr->mode_subbyte == 2 &&
-			 b_craftptr->ai_target_ref == (uint8_t)a_parent_category))
+			 (uint16_t)b_craftptr->ai_target_ref == a_slot))
 			relationship = 2;
 	}
 
-	owner_world_x = 0;
-	owner_world_z = 0;
-	owner_world_y = 0;
-	owner_obj_id_field = 0;
-	owner_obj = NULL;
-	v_eyex = a_eyex;
-	v_eyey = a_eyey;
-
-	if (relationship == 2 ||
-		(relationship != 1 && a_cat_hi != 0x70u && (a_bound_size <= bound_hwidth || b_cat_hi == 0x70u))) {
-		/* B wins -- swap into the slot. Binary at 0x1BFE9 also reassigns
-		 * var_6C (the face-index slot) from a_face_info to b_face_info;
-		 * without this swap the polygon-plane lookup below indexes B's
-		 * polygon list with A's face index, producing a wrong plane and
-		 * a heap-OOB on the edge_list_base[1]/i chain. */
-		uint16_t b_obj_byte;
-		uint16_t swap_tmp;
-
-		a_face_info = b_face_info;
-		loser_ship_idx = ship_idx;
-		ship_idx = a_ship_idx;
-		b_obj_byte = (uint8_t)b_parent_category;
-		craftptr = objects[b_obj_byte].craft_ptr;
-		owner_obj = &objects[b_obj_byte];
-		owner_world_y = b_world_y;
-		owner_obj_id_field = b_obj_id_field;
-		swap_tmp = obj_a;
-		owner_world_x = b_world_x;
-		owner_world_z = b_world_z;
-		result_obj = swap_tmp;
-		mismatch_obj = obj_b; /* binary: v85 = a8 in B-wins */
-		if (b_cat_hi == 0x70u)
+	if (relationship == 2 || (relationship != 1 && a_cat != 0x70 && (a_size <= b_size || b_cat == 0x70))) {
+		/* B owns the plane test; A is the other object. */
+		owner_ship_idx = b_ship_idx;
+		b_ship_idx = a_ship_idx;
+		face = b_face_info;
+		owner_obj = &objects[b_slot];
+		craftptr = objects[b_slot].craft_ptr;
+		obj_id_field = b_obj_id_field;
+		owner_x = b_x;
+		owner_y = b_y;
+		owner_z = b_z;
+		other_x = a_x;
+		other_y = a_y;
+		other_z = a_z;
+		back_obj = obj_b;
+		front_obj = obj_a;
+		if (b_cat == 0x70)
 			via_special_70 = 1;
 	} else {
-		/* A wins. */
-		owner_world_x = a_eyex;
-		v_eyex = b_world_x;
-		loser_ship_idx = a_ship_idx;
-		owner_world_z = a_eyey;
-		owner_obj_id_field = a_obj_id_field;
-		v_eyey = b_world_z;
-		owner_obj = &objects[(uint8_t)a_parent_category];
-		owner_world_y = a_world_y;
-		a_world_y = b_world_y;
-		if (a_cat_hi == 0x70u)
+		owner_ship_idx = a_ship_idx;
+		face = a_face_info;
+		owner_obj = &objects[a_slot];
+		obj_id_field = a_obj_id_field;
+		owner_x = a_x;
+		owner_y = a_y;
+		owner_z = a_z;
+		other_x = b_x;
+		other_y = b_y;
+		other_z = b_z;
+		if (a_cat == 0x70)
 			via_special_70 = 1;
 	}
 
-	/* --- LABEL_68: relative-vector compute + bit-scaling normalize. */
-	other_dx = v_eyex - owner_world_x;
-	other_dy = a_world_y - owner_world_y;
-	camera_dx = camera.x - owner_world_x;
-	camera_dy = camera.y - owner_world_y;
-	other_dz = v_eyey - owner_world_z;
-	camera_dz = camera.z - owner_world_z;
-	other_dx_abs = other_dx >> 14;
-	other_dy_abs = other_dy >> 14;
-	camera_dz_save = camera_dz;
+	other_dx = other_x - owner_x;
+	camera_dx = camera.x - owner_x;
+	camera_dy = camera.y - owner_y;
+	camera_dz = camera.z - owner_z;
 	norm_shift = 0;
-	other_dz_abs = other_dz >> 14;
-	if ((other_dx_abs & 0x8000) != 0)
-		other_dx_abs = -other_dx_abs;
-	if ((other_dy_abs & 0x8000) != 0)
-		other_dy_abs = -other_dy_abs;
-	if ((other_dz_abs & 0x8000) != 0)
-		other_dz_abs = -other_dz_abs;
+	other_dy = other_y - owner_y;
+	other_dz = other_z - owner_z;
+	dx_abs = other_dx >> 14;
+	dy_abs = other_dy >> 14;
+	dz_abs = other_dz >> 14;
+	if (dx_abs & 0x8000)
+		dx_abs = -dx_abs;
+	if (dy_abs & 0x8000)
+		dy_abs = -dy_abs;
+	if (dz_abs & 0x8000)
+		dz_abs = -dz_abs;
 	do {
-		do {
-			camera_dx >>= 1;
-			other_dy >>= 1;
-			other_dx >>= 1;
-			camera_dy >>= 1;
-			other_dz >>= 1;
-			other_dx_abs = (uint16_t)other_dx_abs >> 1;
-			camera_dz_save >>= 1;
-			other_dy_abs = (uint16_t)other_dy_abs >> 1;
-			other_dz_abs = (uint16_t)other_dz_abs >> 1;
-			++norm_shift;
-		} while ((uint16_t)other_dx_abs);
-	} while ((uint16_t)other_dy_abs || (uint16_t)other_dz_abs);
+		other_dx >>= 1;
+		camera_dx >>= 1;
+		camera_dy >>= 1;
+		other_dy >>= 1;
+		other_dz >>= 1;
+		camera_dz >>= 1;
+		dx_abs >>= 1;
+		dy_abs >>= 1;
+		norm_shift++;
+		dz_abs >>= 1;
+	} while (dx_abs || dy_abs || dz_abs);
 
-	/* Watcom unaligned dword loads in the original decomp:
-	 *   *(int*)&owner_obj->X >> 16 reads the int16 at X+2 (the next field).
-	 * Translated below using the actual field, per CLAUDE.md guidance. */
-	other_proj_side = (int16_t)other_dz * owner_obj->side_z + (int16_t)other_dy * owner_obj->side_y +
-					  (int16_t)other_dx * owner_obj->side_x;
-	if (other_proj_side >= 0x40000000)
-		other_proj_side = 1073676288;
-	if (other_proj_side <= -1073741824)
-		other_proj_side = -1073676288;
-	other_proj_side_hi = other_proj_side >> 15;
+	/* Project both vectors into the owner's local frame. */
+	dot = owner_obj->side_x * (int16_t)other_dx + owner_obj->side_y * (int16_t)other_dy +
+		  owner_obj->side_z * (int16_t)other_dz;
+	if (dot >= 0x40000000)
+		dot = 0x3FFF0000;
+	if (dot <= -0x40000000)
+		dot = -0x3FFF0000;
+	other_side = dot >> 15;
+	dot = owner_obj->fwd_x * (int16_t)other_dx + owner_obj->fwd_y * (int16_t)other_dy +
+		  owner_obj->fwd_z * (int16_t)other_dz;
+	if (dot >= 0x40000000)
+		dot = 0x3FFF0000;
+	if (dot <= -0x40000000)
+		dot = -0x3FFF0000;
+	other_fwd = -(dot >> 15);
+	dot = owner_obj->up_x * (int16_t)other_dx + owner_obj->up_y * (int16_t)other_dy +
+		  owner_obj->up_z * (int16_t)other_dz;
+	if (dot >= 0x40000000)
+		dot = 0x3FFF0000;
+	if (dot <= -0x40000000)
+		dot = -0x3FFF0000;
+	other_up = dot >> 15;
 
-	other_proj_fwd = (int16_t)other_dz * owner_obj->fwd_z + (int16_t)other_dy * owner_obj->fwd_y +
-					 (int16_t)other_dx * owner_obj->fwd_x;
-	if (other_proj_fwd >= 0x40000000)
-		other_proj_fwd = 1073676288;
-	if (other_proj_fwd <= -1073741824)
-		other_proj_fwd = -1073676288;
-	other_proj_fwd_neg_hi = -(other_proj_fwd >> 15);
+	dot = owner_obj->side_x * (int16_t)camera_dx + owner_obj->side_y * (int16_t)camera_dy +
+		  owner_obj->side_z * (int16_t)camera_dz;
+	if (dot >= 0x40000000)
+		dot = 0x3FFF0000;
+	if (dot <= -0x40000000)
+		dot = -0x3FFF0000;
+	cam_side = dot >> 15;
+	dot = owner_obj->fwd_x * (int16_t)camera_dx + owner_obj->fwd_y * (int16_t)camera_dy +
+		  owner_obj->fwd_z * (int16_t)camera_dz;
+	if (dot >= 0x40000000)
+		dot = 0x3FFF0000;
+	if (dot <= -0x40000000)
+		dot = -0x3FFF0000;
+	cam_fwd = -(dot >> 15);
+	dot = owner_obj->up_x * (int16_t)camera_dx + owner_obj->up_y * (int16_t)camera_dy +
+		  owner_obj->up_z * (int16_t)camera_dz;
+	if (dot >= 0x40000000)
+		dot = 0x3FFF0000;
+	if (dot <= -0x40000000)
+		dot = -0x3FFF0000;
+	cam_up = (int16_t)(dot >> 15);
 
-	other_proj_up = (int16_t)other_dz * owner_obj->up_z + (int16_t)other_dy * owner_obj->up_y +
-					(int16_t)other_dx * owner_obj->up_x;
-	if (other_proj_up >= 0x40000000)
-		other_proj_up = 1073676288;
-	if (other_proj_up <= -1073741824)
-		other_proj_up = -1073676288;
-	other_proj_up_hi = other_proj_up >> 15;
+	if (via_special_70)
+		norm_shift--;
+	else
+		norm_shift++;
 
-	cam_proj_side = (int16_t)camera_dz_save * owner_obj->side_z + (int16_t)camera_dy * owner_obj->side_y +
-					(int16_t)camera_dx * owner_obj->side_x;
-	if (cam_proj_side >= 0x40000000)
-		cam_proj_side = 1073676288;
-	if (cam_proj_side <= -1073741824)
-		cam_proj_side = -1073676288;
-	cam_proj_side_hi = cam_proj_side >> 15;
-
-	cam_proj_fwd = (int16_t)camera_dz_save * owner_obj->fwd_z + (int16_t)camera_dy * owner_obj->fwd_y +
-				   (int16_t)camera_dx * owner_obj->fwd_x;
-	if (cam_proj_fwd >= 0x40000000)
-		cam_proj_fwd = 1073676288;
-	if (cam_proj_fwd <= -1073741824)
-		cam_proj_fwd = -1073676288;
-	cam_proj_fwd_neg_hi = -(cam_proj_fwd >> 15);
-
-	cam_proj_up = (int16_t)camera_dz_save * owner_obj->up_z + (int16_t)camera_dy * owner_obj->up_y +
-				  (int16_t)camera_dx * owner_obj->up_x;
-	if (cam_proj_up >= 0x40000000)
-		cam_proj_up = 1073676288;
-	if (cam_proj_up <= -1073741824)
-		cam_proj_up = -1073676288;
-	cam_proj_up_hi = cam_proj_up >> 15;
-
-	final_shift = via_special_70 ? (norm_shift - 1) : (norm_shift + 1);
-
-	/* --- Size-based fast reject if both species satisfy bound check.
-	 * Watcom unaligned dword loads in the original decomp:
-	 *   *(int*)&spec_data[N].dock_fwd >> 16 reads spec_data[N].dock_passive_light (next field).
-	 *   *(int*)&spec_data[N].dock_passive_heavy >> 16 reads spec_data[N].dock_active_light. */
-	if (relationship != 0) {
-		int speed_match;
-
-		draw_Lockshipfileptrs(ship_idx);
-		speed_match =
-			spec_data[spec_getspecnum(ship_idx)].dock_passive_light == (objectblockptr->speed_default >> 17);
-		if (speed_match) {
-			int d2lo_match;
-
-			draw_Lockshipfileptrs(loser_ship_idx);
-			d2lo_match = spec_data[spec_getspecnum(loser_ship_idx)].dock_active_light ==
-						 (objectblockptr->shield_default >> 17);
-			if (d2lo_match) {
-				if (cam_proj_up_hi < (objectblockptr->shield_default >> 16 >> final_shift))
-					return result_obj;
-				return mismatch_obj;
+	/* Docked pairs: compare the camera height against the dock anchor. */
+	if (relationship) {
+		draw_Lockshipfileptrs(b_ship_idx);
+		if (spec_data[spec_getspecnum(b_ship_idx)].dock_passive_light ==
+			objectblockptr->speed_default >> 17) {
+			draw_Lockshipfileptrs(owner_ship_idx);
+			if (spec_data[spec_getspecnum(owner_ship_idx)].dock_active_light ==
+				objectblockptr->shield_default >> 16 >> 1) {
+				if (cam_up < objectblockptr->shield_default >> 16 >> norm_shift)
+					return front_obj;
+				return back_obj;
 			}
 		}
 	}
 
-	/* --- Full polygon-plane test. */
-	draw_Lockshipfileptrs(loser_ship_idx);
-	b_mesh = &componentblockptr[owner_obj_id_field];
-	fview_newcalcrotate(owner_obj->roll, owner_obj->pitch, owner_obj->heading, 0, owner_obj);
-	b_detail_marker = (int8_t)craftptr->mesh_rotation[owner_obj_id_field];
-	if (b_detail_marker && (b_mesh->rotation_offset || mission.train_craft_type))
-		fview_componentrotation((int16_t)((int)b_detail_marker << 8), b_mesh);
+	/* Full polygon-plane test. 0x7F00 vertex entries refer back to an
+	 * earlier vertex component. */
+	{
+		ShipModelMesh* mesh;
+		uint8_t rotation;
+		const uint8_t* detail;
+		uint8_t lod;
+		uint16_t num_polys;
+		const uint8_t* poly_list;
+		const PolyFace* plane;
+		const uint8_t* vlist;
+		int16_t normal_x;
+		int16_t normal_y;
+		int16_t normal_z;
+		const int16_t* vertex;
+		int16_t edge;
+		int16_t other_side_dx, other_fwd_dx, other_up_dx;
+		int16_t cam_side_dx, cam_fwd_dx, cam_up_dx;
+		int other_dot;
 
-	b_detail_ptr = (const uint8_t*)draw_getcompdetailptr(b_mesh, craftptr->eye_z_cache);
-	b_numpolys = b_detail_ptr[4];
-	if (b_numpolys <= a_face_info)
-		a_face_info = (uint16_t)(b_numpolys - 1);
-	b_poly_list = b_detail_ptr + b_numpolys + 17;
-	b_rot_angle = b_detail_ptr[2];
-	plane = (const PolyFace*)(b_poly_list + 8 * a_face_info + 12 * b_rot_angle);
+		draw_Lockshipfileptrs(owner_ship_idx);
+		mesh = &componentblockptr[obj_id_field];
+		fview_newcalcrotate(owner_obj->roll, owner_obj->pitch, owner_obj->heading, 0, owner_obj);
+		rotation = craftptr->mesh_rotation[obj_id_field];
+		if (rotation && (mesh->rotation_offset || mission.train_craft_type))
+			fview_componentrotation((int16_t)(rotation << 8), mesh);
+		detail = (const uint8_t*)draw_getcompdetailptr(mesh, craftptr->eye_z_cache);
+		lod = detail[2];
+		num_polys = detail[4];
+		if (num_polys <= face)
+			face = num_polys - 1;
+		poly_list = detail + num_polys + 17;
+		plane = (const PolyFace*)(poly_list + 12 * lod + 8 * face);
+		normal_x = plane->normal_x;
+		vlist = (const uint8_t*)plane + plane->vlist_offset;
+		normal_y = plane->normal_y;
+		normal_z = plane->normal_z;
 
-	plane_normal_x = plane->normal_x;
-	plane_normal_y = plane->normal_y;
-	plane_normal_z = plane->normal_z;
-	edge_list_base = (const uint8_t*)plane + plane->vlist_offset;
+		for (vertex = (const int16_t*)(poly_list + 6 * vlist[1]); (*vertex & 0xFF00) == 0x7F00;
+			 vertex -= 3 * ((*vertex & 0xFF) >> 1))
+			;
+		edge = *vertex >> norm_shift;
+		other_side_dx = other_side - edge;
+		cam_side_dx = cam_side - edge;
+		for (vertex = (const int16_t*)(poly_list + 6 * vlist[1] + 2); (*vertex & 0xFF00) == 0x7F00;
+			 vertex -= 3 * ((*vertex & 0xFF) >> 1))
+			;
+		edge = *vertex >> norm_shift;
+		other_fwd_dx = other_fwd - edge;
+		cam_fwd_dx = cam_fwd - edge;
+		for (vertex = (const int16_t*)(poly_list + 6 * vlist[1] + 4); (*vertex & 0xFF00) == 0x7F00;
+			 vertex -= 3 * ((*vertex & 0xFF) >> 1))
+			;
+		edge = *vertex >> norm_shift;
+		other_up_dx = other_up - edge;
+		cam_up_dx = cam_up - edge;
 
-	/* 0x7F00 entries refer back to an earlier vertex component. */
-	for (i = (const int16_t*)(b_poly_list + 6 * edge_list_base[1]); (*i & 0xFF00) == 0x7F00;
-		 i -= 3 * ((int)(uint8_t)*i >> 1))
-		;
-	edge_pt_x = (int16_t)((int)*i >> final_shift);
-	for (j = (const int16_t*)(b_poly_list + 6 * edge_list_base[1] + 2); (*j & 0xFF00) == 0x7F00;
-		 j -= 3 * ((int)(uint8_t)*j >> 1))
-		;
-	edge_pt_y = (int16_t)((int)*j >> final_shift);
-	for (k = (const int16_t*)(b_poly_list + 6 * edge_list_base[1] + 4); (*k & 0xFF00) == 0x7F00;
-		 k -= 3 * ((int)(uint8_t)*k >> 1))
-		;
-	edge_pt_z = (int16_t)((int)*k >> final_shift);
-
-	cam_proj_side_dx = (int16_t)(cam_proj_side_hi - edge_pt_x);
-	other_proj_side_dx = (int16_t)(other_proj_side_hi - edge_pt_x);
-	other_proj_fwd_dx = (int16_t)(other_proj_fwd_neg_hi - edge_pt_y);
-	cam_proj_fwd_dx = (int16_t)(cam_proj_fwd_neg_hi - edge_pt_y);
-	cam_proj_up_dx = (int16_t)(cam_proj_up_hi - edge_pt_z);
-
-	dot_a = (int16_t)(other_proj_up_hi - edge_pt_z) * plane_normal_z + other_proj_fwd_dx * plane_normal_y +
-			other_proj_side_dx * plane_normal_x;
-	if (dot_a >= 0x40000000)
-		dot_a = 1073676288;
-	if (dot_a <= -1073741824)
-		dot_a = -1073676288;
-	dot_other_hi = dot_a >> 15;
-	dot_b = cam_proj_up_dx * plane_normal_z + cam_proj_fwd_dx * plane_normal_y +
-			cam_proj_side_dx * plane_normal_x;
-	if (dot_b >= 0x40000000)
-		dot_b = 1073676288;
-	if (dot_b <= -1073741824)
-		dot_b = -1073676288;
-
-	if (((dot_other_hi ^ (dot_b >> 15)) & 0x8000) == 0)
-		return result_obj;
-	return mismatch_obj;
+		dot = normal_x * other_side_dx + normal_y * other_fwd_dx + normal_z * other_up_dx;
+		if (dot >= 0x40000000)
+			dot = 0x3FFF0000;
+		if (dot <= -0x40000000)
+			dot = -0x3FFF0000;
+		other_dot = dot >> 15;
+		dot = normal_x * cam_side_dx + normal_y * cam_fwd_dx + normal_z * cam_up_dx;
+		if (dot >= 0x40000000)
+			dot = 0x3FFF0000;
+		if (dot <= -0x40000000)
+			dot = -0x3FFF0000;
+		if ((int16_t)((dot >> 15) ^ other_dot) >= 0)
+			return front_obj;
+	}
+	return back_obj;
 }

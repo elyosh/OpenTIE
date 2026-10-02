@@ -232,223 +232,6 @@ uint16_t hyperfgnumber; /* mission_file_header.num_fg saved across the warp */
 // GLOBAL: TIE98 0x6269CC
 uint8_t curgenus; /* genus byte cached during anim tick */
 
-/* Static-ref encoding used by anim_add_bitmap_draw: static refs use
- * OBJ_REF_STATIC_BASE = 0x3800 (high byte 0x38). */
-
-/* lolevel iMUSE -- stop a sound. The binary's lolevel_ImStopSound takes
- * the sound 'pointer' as an integer (sound id 48 here). */
-
-/* ====================================================================== *
- * anim_add_bitmap_draw
- * ----------------------------------------------------------------------------
- * Enqueue one sprite into drawitems[]. The queue holds at most 32 entries.
- * The binary (ANIM_add_bitmap_draw @ 0x106bc) writes slot = numbitmaps and
- * only increments numbitmaps while it is < 32 -- so on the 33rd+ call it
- * writes drawitems[32], one past the end. The sort/draw pass only ever reads
- * slots 0..numbitmaps-1 (== 0..31), so that 33rd write is dead in the binary's
- * contiguous data segment. Here drawitems is a tight [32] array, so writing
- * slot 32 corrupts the adjacent global (observed: it partially overwrote the
- * `drawshape` function pointer, crashing the HUD path). Drop the sprite when
- * the queue is full instead -- observably identical (the slot is never drawn).
- * ====================================================================== */
-// FUNCTION: TIE95 0x106BC
-void anim_add_bitmap_draw(uint16_t obj_idx_arg, uint16_t species_packed, uint16_t scale_factor,
-						  int16_t screen_x, int16_t screen_y, int32_t eye_z, int16_t angle) {
-	int16_t slot = numbitmaps;
-
-	if (slot >= ANIM_DRAWITEMS_MAX)
-		return;
-
-	drawitems[slot].obj_idx = obj_idx_arg;
-	drawitems[slot].species_packed = species_packed;
-	drawitems[slot].scale_factor = scale_factor;
-	drawitems[slot].screen_x = screen_x;
-	drawitems[slot].screen_y = screen_y;
-	drawitems[slot].eye_z = eye_z;
-	drawitems[slot].angle = angle;
-
-	numbitmaps = slot + 1;
-}
-
-/* ====================================================================== *
- * anim_sort_and_draw_bitmaps
- * ----------------------------------------------------------------------------
- * Bubble-sort drawitems[0..numbitmaps-1] descending by eye_z (farthest
- * first), drawing the last entry as it's pulled off so the array shrinks
- * each iteration. Then paint the player target reticle.
- *
- * The binary does a 4-DWORD swap of the 16-byte struct; in C a struct copy
- * does the same thing.
- * ====================================================================== */
-// FUNCTION: TIE95 0x10720
-int16_t anim_sort_and_draw_bitmaps(void) {
-	int swapped = 1;
-	while (--numbitmaps != -1) {
-		if (swapped) {
-			uint16_t i;
-
-			swapped = 0;
-			for (i = 0; i < (uint16_t)numbitmaps; ++i) {
-				if (drawitems[i].eye_z > drawitems[i + 1].eye_z) {
-					BitmapDrawEntry tmp = drawitems[i];
-					drawitems[i] = drawitems[i + 1];
-					drawitems[i + 1] = tmp;
-					swapped = 1;
-				}
-			}
-		}
-		anim_draw_bitmap(&drawitems[numbitmaps]);
-	}
-	return user_targetonscreen(pstate.target_obj_idx);
-}
-
-// FUNCTION: TIE98 0x4012F0
-void anim_sort_and_draw_bitmaps_tie98(int draw_target) {
-	int swapped = 1;
-	while (--numbitmaps != -1) {
-		if (swapped) {
-			uint16_t i;
-
-			swapped = 0;
-			for (i = 0; i < (uint16_t)numbitmaps; ++i) {
-				if (drawitems[i].eye_z > drawitems[i + 1].eye_z) {
-					BitmapDrawEntry temporary = drawitems[i];
-					drawitems[i] = drawitems[i + 1];
-					drawitems[i + 1] = temporary;
-					swapped = 1;
-				}
-			}
-		}
-		anim_draw_bitmap_tie98(&drawitems[numbitmaps]);
-	}
-	numbitmaps = 0;
-	if (draw_target)
-		user_targetonscreen_tie98(pstate.target_obj_idx, pstate.radar_target1, 0x3b);
-}
-
-/* ====================================================================== *
- * anim_draw_bitmap
- * ----------------------------------------------------------------------------
- * Render one queued sprite. Two world-position paths:
- *
- *   static obj (high byte 0x38)  -- ADD the static's world coords (<<8 to
- *     match Q24.8) to the existing _worldx/y/z parent offset before
- *     subtracting the camera.
- *   flight obj                   -- write _worldx/y/z = objects[].world_x/y/z
- *     - camera (overwriting whatever was there).
- *
- * In both branches _parentobject is restored to the original packed
- * obj_idx so subsequent rendering (target bracket etc.) can still refer
- * to it.
- *
- * ====================================================================== */
-// FUNCTION: TIE95 0x107D4
-int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
-	/* species_packed is the same bitfield emitted by ANIMOP_BITMAP;
-	 * deop with the shared accessors. */
-	uint8_t species_idx = (uint8_t)((entry->species_packed & 0x7FFFu) >> 7);
-	uint8_t bitmap_idx = (uint8_t)(entry->species_packed & 0x7Fu);
-
-	int16_t scale;
-	LandruHandle handle;
-	const uint8_t* blob;
-	uint32_t tbl_off;
-	uint32_t sub_off;
-	const uint8_t* v12;
-
-	reverseflag = 1;
-	parentobject = entry->obj_idx;
-
-	if ((entry->obj_idx & 0xFF00u) == OBJ_REF_STATIC_BASE) {
-		uint16_t static_slot = (uint16_t)(parentobject - OBJ_REF_STATIC_BASE);
-		int16_t sx = staticobjects[static_slot].world_x;
-		int16_t sy = staticobjects[static_slot].world_y;
-		int16_t sz = staticobjects[static_slot].world_z;
-
-		/* HIBYTE(parentobject) += 56 in the binary -- restore the 0x38
-		 * tag we cleared with the subtract above. parentobject ends up
-		 * back at its original packed value 0x38xx. */
-		parentobject = (uint16_t)(static_slot + OBJ_REF_STATIC_BASE);
-
-		/* Add the static position to the parent offset, then subtract the camera. */
-		worldx = ((int32_t)sx << 8) + worldx - camera.x;
-		worldy = ((int32_t)sy << 8) + worldy - camera.y;
-		worldz = ((int32_t)sz << 8) + worldz - camera.z;
-	} else {
-		uint16_t flight_slot = parentobject;
-		worldx = objects[flight_slot].world_x - camera.x;
-		worldy = objects[flight_slot].world_y - camera.y;
-		worldz = objects[flight_slot].world_z - camera.z;
-	}
-
-	scale = rotscale_calcscale(entry->eye_z, species_table[species_idx].bound_hwidth, entry->scale_factor);
-
-	handle = species_table[species_idx].model_handle;
-	blob = (const uint8_t*)xmemhdl_Lock_Handle(handle);
-	xmemhdl_Unlock_Handle(handle);
-	if (!blob)
-		return 0;
-
-	/* Retail ANIM_draw_bitmap (0x107d4) computes the per-frame image
-	 * pointer via:
-	 *   v12 = blob + *(blob + *(blob + 16) + 4*bitmap_idx)
-	 * Header offset 16 holds a u32 to an offset table; each table entry
-	 * is a u32 byte-offset from `blob` to that frame's sub-image. The
-	 * demo version had a u16 offset table at blob+2; retail moved it to
-	 * u32 entries at blob + header[16]. The same v12 is then passed to
-	 * BOTH preparecolor and rotatescaleimage. */
-	tbl_off = *(const uint32_t*)(blob + 16);
-	sub_off = *(const uint32_t*)(blob + tbl_off + 4 * bitmap_idx);
-	v12 = blob + sub_off;
-
-	rotscale_preparefastdraw((uint16_t)entry->angle, 2);
-	rotscale_preparecolor((const char*)v12);
-
-	return rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, (uint16_t)scale, v12);
-}
-
-// FUNCTION: TIE98 0x401410
-void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
-	const uint8_t species_idx = (uint8_t)((entry->species_packed & 0x7FFFu) >> 7);
-	const uint8_t bitmap_idx = (uint8_t)(entry->species_packed & 0x7Fu);
-	uint16_t scale;
-	LandruHandle handle;
-	const uint8_t* blob;
-	uint32_t table_offset;
-	uint32_t frame_offset;
-
-	reverseflag = 1;
-	parentobject = entry->obj_idx;
-
-	if ((entry->obj_idx & 0xFF00u) == OBJ_REF_STATIC_BASE) {
-		const uint16_t static_slot = (uint16_t)(parentobject - OBJ_REF_STATIC_BASE);
-		parentobject = (uint16_t)(static_slot + OBJ_REF_STATIC_BASE);
-		worldx += ((int32_t)(uint16_t)staticobjects[static_slot].world_x << 8) - camera.x;
-		worldy += ((int32_t)(uint16_t)staticobjects[static_slot].world_y << 8) - camera.y;
-		worldz += ((int32_t)(uint16_t)staticobjects[static_slot].world_z << 8) - camera.z;
-	} else {
-		worldx = objects[parentobject].world_x - camera.x;
-		worldy = objects[parentobject].world_y - camera.y;
-		worldz = objects[parentobject].world_z - camera.z;
-	}
-	objecteyez = entry->eye_z;
-	scale = (uint16_t)rotscale_calcscale(entry->eye_z, species_table[species_idx].bound_hwidth,
-										 entry->scale_factor);
-	handle = species_table[species_idx].model_handle;
-	blob = (const uint8_t*)xmemhdl_Lock_Handle(handle);
-	xmemhdl_Unlock_Handle(handle);
-	table_offset = *(const uint32_t*)(blob + 16);
-	frame_offset = *(const uint32_t*)(blob + table_offset + 4 * bitmap_idx);
-	if (TIE_DISPLAY_DX5 && g_useHardware3D) {
-		RenderQuad_DrawRotatedSprite(entry->angle, entry->screen_x, entry->screen_y, scale,
-									 blob + frame_offset);
-	} else {
-		rotscale_preparefastdraw((uint16_t)entry->angle, 2);
-		rotscale_preparecolor((const char*)(blob + frame_offset));
-		rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, scale, blob + frame_offset);
-	}
-}
-
 /* ====================================================================== *
  * anim_drawverysimpleobject
  * ----------------------------------------------------------------------------
@@ -581,6 +364,224 @@ int16_t anim_drawverysimpleobject(uint16_t obj_idx_arg) {
 	return result;
 }
 
+/* Static-ref encoding used by anim_add_bitmap_draw: static refs use
+ * OBJ_REF_STATIC_BASE = 0x3800 (high byte 0x38). */
+
+/* lolevel iMUSE -- stop a sound. The binary's lolevel_ImStopSound takes
+ * the sound 'pointer' as an integer (sound id 48 here). */
+
+/* ====================================================================== *
+ * anim_add_bitmap_draw
+ * ----------------------------------------------------------------------------
+ * Enqueue one sprite into drawitems[]. The queue holds at most 32 entries.
+ * The binary (ANIM_add_bitmap_draw @ 0x106bc) writes slot = numbitmaps and
+ * only increments numbitmaps while it is < 32 -- so on the 33rd+ call it
+ * writes drawitems[32], one past the end. The sort/draw pass only ever reads
+ * slots 0..numbitmaps-1 (== 0..31), so that 33rd write is dead in the binary's
+ * contiguous data segment. Here drawitems is a tight [32] array, so writing
+ * slot 32 corrupts the adjacent global (observed: it partially overwrote the
+ * `drawshape` function pointer, crashing the HUD path). Drop the sprite when
+ * the queue is full instead under TIE_MODERN -- observably identical (the
+ * slot is never drawn).
+ * ====================================================================== */
+// FUNCTION: TIE95 0x106BC
+void anim_add_bitmap_draw(uint16_t obj_idx_arg, uint16_t species_packed, uint16_t scale_factor,
+						  int16_t screen_x, int16_t screen_y, int32_t eye_z, uint16_t angle) {
+#ifdef TIE_MODERN
+	if (numbitmaps >= ANIM_DRAWITEMS_MAX)
+		return;
+#endif
+	drawitems[numbitmaps].obj_idx = obj_idx_arg;
+	drawitems[numbitmaps].species_packed = species_packed;
+	drawitems[numbitmaps].scale_factor = scale_factor;
+	drawitems[numbitmaps].screen_x = screen_x;
+	drawitems[numbitmaps].screen_y = screen_y;
+	drawitems[numbitmaps].eye_z = eye_z;
+	drawitems[numbitmaps].angle = angle;
+
+	if (numbitmaps < ANIM_DRAWITEMS_MAX)
+		numbitmaps++;
+}
+
+// FUNCTION: TIE98 0x4012F0
+void anim_sort_and_draw_bitmaps_tie98(int draw_target) {
+	int swapped = 1;
+	while (--numbitmaps != -1) {
+		if (swapped) {
+			uint16_t i;
+
+			swapped = 0;
+			for (i = 0; i < (uint16_t)numbitmaps; ++i) {
+				if (drawitems[i].eye_z > drawitems[i + 1].eye_z) {
+					BitmapDrawEntry temporary = drawitems[i];
+					drawitems[i] = drawitems[i + 1];
+					drawitems[i + 1] = temporary;
+					swapped = 1;
+				}
+			}
+		}
+		anim_draw_bitmap_tie98(&drawitems[numbitmaps]);
+	}
+	numbitmaps = 0;
+	if (draw_target)
+		user_targetonscreen_tie98(pstate.target_obj_idx, pstate.radar_target1, 0x3b);
+}
+
+/* ====================================================================== *
+ * anim_sort_and_draw_bitmaps
+ * ----------------------------------------------------------------------------
+ * Bubble-sort drawitems[0..numbitmaps-1] descending by eye_z (farthest
+ * first), drawing the last entry as it's pulled off so the array shrinks
+ * each iteration. Then paint the player target reticle.
+ *
+ * The binary does a 4-DWORD swap of the 16-byte struct; in C a struct copy
+ * does the same thing.
+ * ====================================================================== */
+// FUNCTION: TIE95 0x10720
+void anim_sort_and_draw_bitmaps(void) {
+	int16_t swapped = 1;
+	while (numbitmaps--) {
+		if (swapped) {
+			uint16_t i;
+
+			swapped = 0;
+			for (i = 0; i < numbitmaps; ++i) {
+				if (drawitems[i].eye_z > drawitems[i + 1].eye_z) {
+					BitmapDrawEntry tmp = drawitems[i];
+					drawitems[i] = drawitems[i + 1];
+					drawitems[i + 1] = tmp;
+					swapped = 1;
+				}
+			}
+		}
+		anim_draw_bitmap(&drawitems[numbitmaps]);
+	}
+	user_targetonscreen(pstate.target_obj_idx);
+}
+
+// FUNCTION: TIE98 0x401410
+void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
+	const uint8_t species_idx = (uint8_t)((entry->species_packed & 0x7FFFu) >> 7);
+	const uint8_t bitmap_idx = (uint8_t)(entry->species_packed & 0x7Fu);
+	uint16_t scale;
+	LandruHandle handle;
+	const uint8_t* blob;
+	uint32_t table_offset;
+	uint32_t frame_offset;
+
+	reverseflag = 1;
+	parentobject = entry->obj_idx;
+
+	if ((entry->obj_idx & 0xFF00u) == OBJ_REF_STATIC_BASE) {
+		const uint16_t static_slot = (uint16_t)(parentobject - OBJ_REF_STATIC_BASE);
+		parentobject = (uint16_t)(static_slot + OBJ_REF_STATIC_BASE);
+		worldx += ((int32_t)(uint16_t)staticobjects[static_slot].world_x << 8) - camera.x;
+		worldy += ((int32_t)(uint16_t)staticobjects[static_slot].world_y << 8) - camera.y;
+		worldz += ((int32_t)(uint16_t)staticobjects[static_slot].world_z << 8) - camera.z;
+	} else {
+		worldx = objects[parentobject].world_x - camera.x;
+		worldy = objects[parentobject].world_y - camera.y;
+		worldz = objects[parentobject].world_z - camera.z;
+	}
+	objecteyez = entry->eye_z;
+	scale = (uint16_t)rotscale_calcscale(entry->eye_z, species_table[species_idx].bound_hwidth,
+										 entry->scale_factor);
+	handle = species_table[species_idx].model_handle;
+	blob = (const uint8_t*)xmemhdl_Lock_Handle(handle);
+	xmemhdl_Unlock_Handle(handle);
+	table_offset = *(const uint32_t*)(blob + 16);
+	frame_offset = *(const uint32_t*)(blob + table_offset + 4 * bitmap_idx);
+	if (TIE_DISPLAY_DX5 && g_useHardware3D) {
+		RenderQuad_DrawRotatedSprite(entry->angle, entry->screen_x, entry->screen_y, scale,
+									 blob + frame_offset);
+	} else {
+		rotscale_preparefastdraw((uint16_t)entry->angle, 2);
+		rotscale_preparecolor((const char*)(blob + frame_offset));
+		rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, scale, blob + frame_offset);
+	}
+}
+
+/* ====================================================================== *
+ * anim_draw_bitmap
+ * ----------------------------------------------------------------------------
+ * Render one queued sprite. Two world-position paths:
+ *
+ *   static obj (high byte 0x38)  -- ADD the static's world coords (<<8 to
+ *     match Q24.8) to the existing _worldx/y/z parent offset before
+ *     subtracting the camera.
+ *   flight obj                   -- write _worldx/y/z = objects[].world_x/y/z
+ *     - camera (overwriting whatever was there).
+ *
+ * In both branches _parentobject is restored to the original packed
+ * obj_idx so subsequent rendering (target bracket etc.) can still refer
+ * to it.
+ *
+ * ====================================================================== */
+// FUNCTION: TIE95 0x107D4
+int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
+	/* species_packed is the same bitfield emitted by ANIMOP_BITMAP;
+	 * deop with the shared accessors. */
+	uint8_t species_idx = (uint8_t)((entry->species_packed & 0x7FFFu) >> 7);
+	uint8_t bitmap_idx = (uint8_t)(entry->species_packed & 0x7Fu);
+
+	int16_t scale;
+	LandruHandle handle;
+	const uint8_t* blob;
+	uint32_t tbl_off;
+	uint32_t sub_off;
+	const uint8_t* v12;
+
+	reverseflag = 1;
+	parentobject = entry->obj_idx;
+
+	if ((entry->obj_idx & 0xFF00u) == OBJ_REF_STATIC_BASE) {
+		uint16_t static_slot = (uint16_t)(parentobject - OBJ_REF_STATIC_BASE);
+		int16_t sx = staticobjects[static_slot].world_x;
+		int16_t sy = staticobjects[static_slot].world_y;
+		int16_t sz = staticobjects[static_slot].world_z;
+
+		/* HIBYTE(parentobject) += 56 in the binary -- restore the 0x38
+		 * tag we cleared with the subtract above. parentobject ends up
+		 * back at its original packed value 0x38xx. */
+		parentobject = (uint16_t)(static_slot + OBJ_REF_STATIC_BASE);
+
+		/* Add the static position to the parent offset, then subtract the camera. */
+		worldx = ((int32_t)sx << 8) + worldx - camera.x;
+		worldy = ((int32_t)sy << 8) + worldy - camera.y;
+		worldz = ((int32_t)sz << 8) + worldz - camera.z;
+	} else {
+		uint16_t flight_slot = parentobject;
+		worldx = objects[flight_slot].world_x - camera.x;
+		worldy = objects[flight_slot].world_y - camera.y;
+		worldz = objects[flight_slot].world_z - camera.z;
+	}
+
+	scale = rotscale_calcscale(entry->eye_z, species_table[species_idx].bound_hwidth, entry->scale_factor);
+
+	handle = species_table[species_idx].model_handle;
+	blob = (const uint8_t*)xmemhdl_Lock_Handle(handle);
+	xmemhdl_Unlock_Handle(handle);
+	if (!blob)
+		return 0;
+
+	/* Retail ANIM_draw_bitmap (0x107d4) computes the per-frame image
+	 * pointer via:
+	 *   v12 = blob + *(blob + *(blob + 16) + 4*bitmap_idx)
+	 * Header offset 16 holds a u32 to an offset table; each table entry
+	 * is a u32 byte-offset from `blob` to that frame's sub-image. The
+	 * demo version had a u16 offset table at blob+2; retail moved it to
+	 * u32 entries at blob + header[16]. The same v12 is then passed to
+	 * BOTH preparecolor and rotatescaleimage. */
+	tbl_off = *(const uint32_t*)(blob + 16);
+	sub_off = *(const uint32_t*)(blob + tbl_off + 4 * bitmap_idx);
+	v12 = blob + sub_off;
+
+	rotscale_preparefastdraw((uint16_t)entry->angle, 2);
+	rotscale_preparecolor((const char*)v12);
+
+	return rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, (uint16_t)scale, v12);
+}
+
 // FUNCTION: TIE98 0x401070
 void anim_drawverysimpleobject_tie98(uint16_t object_index) {
 	FlightObject* object = &objects[object_index];
@@ -644,219 +645,6 @@ void anim_drawverysimpleobject_tie98(uint16_t object_index) {
 #ifdef TIE_MODERN
 	TieBillboardCapture_Flight(object_index, frame, objecteyez, scale, angle);
 #endif
-}
-
-/* ====================================================================== *
- * anim_updateanimstate -- pattern VM single-step
- * ----------------------------------------------------------------------------
- * Peek the NEXT opop (animptr[animindex+1]) and decide where animindex
- * ends up after this tick:
- *
- *   KILL   -- zero the parent slot, advance past the KILL opcode.
- *   RESET  -- snap animindex to 0; no advance (do NOT skip past RESET).
- *   JUMP   -- animindex := operand.
- *   DELAY / MESH / BITMAP -- plain advance (animindex += 1).
- *
- * obj_or_kind is needed only by KILL, which uses the high byte to pick
- * staticobjects[] vs objects[]. If animptr is NULL the function is a
- * no-op (animindex stays put).
- * ====================================================================== */
-// FUNCTION: TIE95 0x11224
-void anim_updateanimstate(uint16_t obj_or_kind) {
-	AnimOp op;
-	int code;
-
-	if (animptr) {
-		op = animptr[++animindex];
-		code = op;
-		if (code == ANIMOP_KILL) {
-			if ((obj_or_kind & 0xFF00u) == OBJ_REF_STATIC_BASE)
-				staticobjects[obj_or_kind].species = 0;
-			else
-				objects[obj_or_kind].ship_idx = 0;
-		} else if (code == ANIMOP_RESET) {
-			animindex = 0;
-		} else if (code >= 0xFF00 && code != ANIMOP_DELAY) {
-			animindex = op - 0xFF00;
-		}
-	}
-}
-
-// FUNCTION: TIE98 0x401600
-// ANIM_updateanimation
-void anim_updateanimation_tie98(void) {
-	uint16_t object_index;
-	uint16_t index;
-
-	if (mission.train_craft_type)
-		gate_updategateanimations();
-	if (timers[TIMER_ANIM_UPDATE])
-		return;
-	timers[TIMER_ANIM_UPDATE] = 29;
-	for (object_index = 0; object_index < NUM_OBJECTS; ++object_index) {
-		FlightObject* object = &objects[object_index];
-		if (!object->ship_idx)
-			continue;
-		curgenus = object->genus;
-		animptr = (AnimOp*)species_table[object->ship_idx].draw_data;
-		if (curgenus == GENUS_DEBRIS || curgenus == GENUS_EXPLOSION) {
-			if (object->ship_idx == 89) {
-				object->anim_frame_alt = 0;
-				if ((uint16_t)math2_getrandom() < 0x800u)
-					create_createember(object_index);
-			} else {
-				animindex = object->anim_frame;
-				anim_updateanimstate(object_index);
-				object->anim_frame = (uint8_t)animindex;
-			}
-		} else if (curgenus <= GENUS_PLATFORM) {
-			const uint8_t model_type = object->ship_idx;
-			int mesh_count;
-			int rotary_wing_moved;
-			int mesh;
-
-			craftptr = object->craft_ptr;
-			mesh_count = modelmesh_getcount(model_type);
-			rotary_wing_moved = 0;
-			if (craftptr->status_flags && craftptr->current_order >= 3) {
-				uint16_t weapon;
-
-				for (weapon = 0; weapon < craftptr->weapon_group_cnt; ++weapon) {
-					uint8_t mesh_index;
-					uint16_t target;
-					const TieModelRotationScale* rotation;
-					int32_t local_forward;
-					int32_t local_up;
-					int32_t local_side;
-					int32_t x;
-					int32_t y;
-					int32_t z;
-					int32_t up;
-					int32_t direction;
-
-					if (craftptr->weapon_slots[weapon].type != 2)
-						continue;
-					mesh_index = spec_data[craftptr->species_idx].hp[weapon].component;
-					if (!craftptr->mesh_component_hp[mesh_index] ||
-						modelmesh_gettype(model_type, mesh_index) != TIE_MESH_ROTARY_GUN_TURRET)
-						continue;
-
-					target = craftptr->weapon_slots[weapon].target_obj;
-					if (target == 0xFFFFu) {
-						if (craftptr->mesh_rotation[mesh_index] & 1u)
-							craftptr->mesh_rotation[mesh_index] += 4;
-						else
-							craftptr->mesh_rotation[mesh_index] -= 4;
-						if ((uint16_t)math2_getrandom() < 0x600u)
-							craftptr->mesh_rotation[mesh_index] ^= 1u;
-						continue;
-					}
-
-					rotation = modelmesh_getrotscaledata(model_type, mesh_index);
-					create_getworldposition(target, 0);
-					worldlocx -= object->world_x;
-					worldlocy -= object->world_y;
-					worldlocz -= object->world_z;
-					if (object->orient_dirty) {
-						fview_calcrotatemove(object->pitch, object->heading, object);
-						fview_calcrotateorient(object->roll, 0, object);
-					}
-
-					local_forward = -((uint32_t)math2_mul_q15(object->fwd_y, worldlocy) +
-									  (uint32_t)math2_mul_q15(object->fwd_x, worldlocx) +
-									  (uint32_t)math2_mul_q15(object->fwd_z, worldlocz));
-					local_up = (uint32_t)math2_mul_q15(object->up_x, worldlocy) +
-							   (uint32_t)math2_mul_q15(object->side_z, worldlocx) +
-							   (uint32_t)math2_mul_q15(object->up_y, worldlocz);
-					local_side = (uint32_t)math2_mul_q15(object->side_x, worldlocy) +
-								 (uint32_t)math2_mul_q15(object->fwd_z, worldlocx) +
-								 (uint32_t)math2_mul_q15(object->side_y, worldlocz);
-					x = local_side - (int32_t)rotation->pivot.x;
-					y = local_forward - (int32_t)rotation->pivot.y;
-					z = local_up - (int32_t)rotation->pivot.z;
-					up = (uint32_t)math2_mul_q15(rotation->up_axis.x, x) +
-						 (uint32_t)math2_mul_q15(rotation->up_axis.y, y) +
-						 (uint32_t)math2_mul_q15(rotation->up_axis.z, z);
-					direction = (uint32_t)math2_mul_q15(rotation->direction_axis.x, x) +
-								(uint32_t)math2_mul_q15(rotation->direction_axis.y, y) +
-								(uint32_t)math2_mul_q15(rotation->direction_axis.z, z);
-					craftptr->mesh_rotation[mesh_index] =
-						(uint8_t)((uint16_t)trig2_arctan(up, direction) >> 8);
-				}
-			}
-
-			for (mesh = 0; mesh < mesh_count; ++mesh) {
-				const int mesh_type = modelmesh_gettype(model_type, mesh);
-				if (mesh_type == TIE_MESH_FUSELAGE) {
-					animptr = lightning;
-					animindex = craftptr->mesh_state[mesh_count];
-					anim_updateanimstate(object_index);
-					craftptr->mesh_state[mesh_count] = (uint8_t)animindex;
-				}
-				if (craftptr->flight_flag == 3) {
-					if (species_table[model_type].bound_hwidth <= 0x578u) {
-						create_blowoffcomponent(object_index, 0);
-						if ((uint16_t)math2_getrandom() < 0x1800u)
-							create_createember(object_index);
-					} else {
-						starship_createstarshipexplo(object_index, 0);
-						mesh += 3;
-						continue;
-					}
-				}
-				if (craftptr->status_flags && craftptr->current_order >= 3 &&
-					(mesh_type == TIE_MESH_COMMUNICATIONS || mesh_type == TIE_MESH_ROTARY_COMMUNICATIONS ||
-					 mesh_type == TIE_MESH_BEAM_SYSTEM || mesh_type == TIE_MESH_ROTARY_BEAM_SYSTEM ||
-					 mesh_type == TIE_MESH_COMMAND_BEAM || mesh_type == TIE_MESH_ROTARY_COMMAND_BEAM)) {
-					if (craftptr->mesh_rotation[mesh] & 1u)
-						craftptr->mesh_rotation[mesh] += 4;
-					else
-						craftptr->mesh_rotation[mesh] -= 4;
-					if ((uint16_t)math2_getrandom() < 0x200u)
-						craftptr->mesh_rotation[mesh] ^= 1u;
-				}
-				if (mesh_type == TIE_MESH_ROTARY_WING && (craftptr->ai_anim_flags & 1u)) {
-					uint8_t* angle = &craftptr->mesh_rotation[mesh];
-					if (craftptr->ai_anim_flags & 2u) {
-						if (model_type == 1) {
-							const uint8_t limit = modelmesh_getcenterz(1, mesh) < 0 ? 8 : 12;
-							if (*angle < limit) {
-								++*angle;
-								rotary_wing_moved = 1;
-							}
-						} else if (model_type == 4 && *angle < 0x40u) {
-							*angle += 3;
-							rotary_wing_moved = 1;
-						}
-					} else if (*angle) {
-						*angle -= model_type == 4 ? 3 : 1;
-						rotary_wing_moved = 1;
-					}
-				}
-			}
-			if (craftptr->ai_anim_flags & 1u) {
-				if ((craftptr->ai_anim_flags & 2u) && !rotary_wing_moved) {
-					craftptr->ai_anim_flags = 2;
-					argtable[0] = MSG_SFOIL_CLOSED;
-					msg_messageprintf(MSG_SFOIL_AT_POS);
-				} else if (!(craftptr->ai_anim_flags & 2u) && !rotary_wing_moved) {
-					craftptr->ai_anim_flags = 0;
-					argtable[0] = MSG_SFOIL_OPEN;
-					msg_messageprintf(MSG_SFOIL_AT_POS);
-				}
-			}
-		}
-	}
-	for (index = 0; index < NUM_STATIC_OBJECTS; ++index) {
-		if (!staticobjects[index].species)
-			continue;
-		animptr = (AnimOp*)species_table[staticobjects[index].species].draw_data;
-		if (!animptr)
-			continue;
-		animindex = staticobjects[index].anim_frame;
-		anim_updateanimstate(OBJ_REF_STATIC_BASE | index);
-		staticobjects[index].anim_frame = (uint8_t)animindex;
-	}
 }
 
 /* Timer-gated animation update for turrets, articulated craft meshes, debris,
@@ -1141,20 +929,250 @@ void anim_updateanimation(void) {
 	}
 }
 
+// FUNCTION: TIE98 0x401600
+// ANIM_updateanimation
+void anim_updateanimation_tie98(void) {
+	uint16_t object_index;
+	uint16_t index;
+
+	if (mission.train_craft_type)
+		gate_updategateanimations();
+	if (timers[TIMER_ANIM_UPDATE])
+		return;
+	timers[TIMER_ANIM_UPDATE] = 29;
+	for (object_index = 0; object_index < NUM_OBJECTS; ++object_index) {
+		const uint16_t model_type = objects[object_index].ship_idx;
+		CraftData* craft;
+
+		if (!model_type)
+			continue;
+		curgenus = objects[object_index].genus;
+		animptr = (AnimOp*)species_table[model_type].draw_data;
+		craft = objects[object_index].craft_ptr;
+		switch (curgenus) {
+			case GENUS_FIGHTER:
+			case GENUS_TRANSPORT:
+			case GENUS_UTILITY:
+			case GENUS_FREIGHTER:
+			case GENUS_STARSHIP:
+			case GENUS_PLATFORM: {
+				uint16_t mesh_count;
+				int16_t rotary_wing_moved;
+				uint16_t mesh;
+
+				mesh_count = (uint16_t)modelmesh_getobjecttypemeshcount(model_type);
+				craftptr = objects[object_index].craft_ptr;
+				rotary_wing_moved = 0;
+				if (craftptr->status_flags && craftptr->current_order >= 3) {
+					int weapon;
+
+					for (weapon = 0; weapon < craftptr->weapon_group_cnt; ++weapon) {
+						uint16_t mesh_index;
+						const TieModelRotationScale* rotation;
+						int32_t side;
+						int32_t forward;
+						int32_t up;
+						int32_t pitch;
+						int32_t direction;
+
+						if (craftptr->weapon_slots[weapon].type != 2)
+							continue;
+						mesh_index = spec_data[craftptr->species_idx].hp[weapon].component;
+						if (!craftptr->mesh_component_hp[mesh_index])
+							continue;
+						if (modelmesh_getobjecttypemeshtype(model_type, mesh_index) !=
+							TIE_MESH_ROTARY_GUN_TURRET)
+							continue;
+						if (craftptr->weapon_slots[weapon].target_obj != 0xFFFFu) {
+							rotation = modelmesh_getrotscaledata(model_type, mesh_index);
+							create_getworldposition(craftptr->weapon_slots[weapon].target_obj, 0);
+							worldlocx -= objects[object_index].world_x;
+							worldlocy -= objects[object_index].world_y;
+							worldlocz -= objects[object_index].world_z;
+							if (objects[object_index].orient_dirty) {
+								fview_calcrotatemove(objects[object_index].pitch,
+													 objects[object_index].heading, &objects[object_index]);
+								fview_calcrotateorient(objects[object_index].roll, 0, &objects[object_index]);
+							}
+
+							side = math2_mul_q15(worldlocx, objects[object_index].side_x) +
+								   math2_mul_q15(worldlocy, objects[object_index].side_y) +
+								   math2_mul_q15(worldlocz, objects[object_index].side_z);
+							forward = math2_mul_q15(worldlocx, objects[object_index].fwd_x) +
+									  math2_mul_q15(worldlocy, objects[object_index].fwd_y) +
+									  math2_mul_q15(worldlocz, objects[object_index].fwd_z);
+							up = math2_mul_q15(worldlocx, objects[object_index].up_x) +
+								 math2_mul_q15(worldlocy, objects[object_index].up_y) +
+								 math2_mul_q15(worldlocz, objects[object_index].up_z);
+							worldlocx = side - (int32_t)rotation->pivot.x;
+							worldlocy = -(forward + (int32_t)rotation->pivot.y);
+							worldlocz = up - (int32_t)rotation->pivot.z;
+							pitch = math2_mul_q15(worldlocx, (int32_t)rotation->rotation_axis.x) +
+									math2_mul_q15(worldlocy, (int32_t)rotation->rotation_axis.y) +
+									math2_mul_q15(worldlocz, (int32_t)rotation->rotation_axis.z);
+							direction = math2_mul_q15(worldlocx, (int32_t)rotation->direction_axis.x) +
+										math2_mul_q15(worldlocy, (int32_t)rotation->direction_axis.y) +
+										math2_mul_q15(worldlocz, (int32_t)rotation->direction_axis.z);
+							pitch = math2_mul_q15(worldlocx, (int32_t)rotation->up_axis.x) +
+									math2_mul_q15(worldlocy, (int32_t)rotation->up_axis.y) +
+									math2_mul_q15(worldlocz, (int32_t)rotation->up_axis.z);
+							craftptr->mesh_rotation[mesh_index] =
+								(uint8_t)((uint16_t)trig2_arctan(pitch, direction) >> 8);
+						} else {
+							if (craftptr->mesh_rotation[mesh_index] & 1u)
+								craftptr->mesh_rotation[mesh_index] += 4;
+							else
+								craftptr->mesh_rotation[mesh_index] -= 4;
+							if ((uint16_t)math2_getrandom() < 0x600u)
+								craftptr->mesh_rotation[mesh_index] ^= 1u;
+						}
+					}
+				}
+
+				for (mesh = 0; mesh < mesh_count; ++mesh) {
+					const int mesh_type = modelmesh_getobjecttypemeshtype(model_type, mesh);
+
+					if (mesh_type == TIE_MESH_FUSELAGE) {
+						animptr = lightning;
+						animindex = craft->mesh_state[mesh_count];
+						anim_updateanimstate(object_index);
+						craft->mesh_state[mesh_count] = (uint8_t)animindex;
+					}
+					if (craftptr->flight_flag == 3) {
+						if (species_table[model_type].bound_hwidth > 0x578u) {
+							starship_createstarshipexplo_tie98(object_index, 0);
+							mesh += 3;
+						} else {
+							create_blowoffcomponent(object_index, 0);
+							if ((uint16_t)math2_getrandom() < 0x1800u)
+								create_createember(object_index);
+						}
+					}
+					if (craftptr->status_flags && craftptr->current_order >= 3 &&
+						(mesh_type == TIE_MESH_COMMUNICATIONS ||
+						 mesh_type == TIE_MESH_ROTARY_COMMUNICATIONS || mesh_type == TIE_MESH_BEAM_SYSTEM ||
+						 mesh_type == TIE_MESH_ROTARY_BEAM_SYSTEM || mesh_type == TIE_MESH_COMMAND_BEAM ||
+						 mesh_type == TIE_MESH_ROTARY_COMMAND_BEAM)) {
+						if (craftptr->mesh_rotation[mesh] & 1u)
+							craftptr->mesh_rotation[mesh] += 4;
+						else
+							craftptr->mesh_rotation[mesh] -= 4;
+						if ((uint16_t)math2_getrandom() < 0x200u)
+							craftptr->mesh_rotation[mesh] ^= 1u;
+					}
+					if (mesh_type == TIE_MESH_ROTARY_WING && (craftptr->ai_anim_flags & 1u)) {
+						if (craftptr->ai_anim_flags & 2u) {
+							if (model_type == 1) {
+								const uint16_t limit = modelmesh_getcenterz(1, mesh) < 0 ? 8 : 12;
+								if (craftptr->mesh_rotation[mesh] < limit) {
+									rotary_wing_moved = 1;
+									++craftptr->mesh_rotation[mesh];
+								}
+							} else if (model_type == 4) {
+								if (craftptr->mesh_rotation[mesh] < 0x40u) {
+									rotary_wing_moved = 1;
+									craftptr->mesh_rotation[mesh] += 3;
+								}
+							}
+						} else if (model_type == 1) {
+							if (craftptr->mesh_rotation[mesh] > 0) {
+								--craftptr->mesh_rotation[mesh];
+								rotary_wing_moved = 1;
+							}
+						} else if (model_type == 4) {
+							if (craftptr->mesh_rotation[mesh] > 0) {
+								craftptr->mesh_rotation[mesh] -= 3;
+								rotary_wing_moved = 1;
+							}
+						}
+					}
+				}
+				if (craftptr->ai_anim_flags & 1u) {
+					if (craftptr->ai_anim_flags & 2u) {
+						if (!rotary_wing_moved) {
+							craftptr->ai_anim_flags = 2;
+							argtable[0] = MSG_SFOIL_CLOSED;
+							msg_messageprintf(MSG_SFOIL_AT_POS);
+						}
+					} else if (!rotary_wing_moved) {
+						craftptr->ai_anim_flags = 0;
+						argtable[0] = MSG_SFOIL_OPEN;
+						msg_messageprintf(MSG_SFOIL_AT_POS);
+					}
+				}
+				break;
+			}
+			case GENUS_DEBRIS:
+			case GENUS_EXPLOSION:
+				if (objects[object_index].ship_idx == 89) {
+					objects[object_index].anim_frame_alt = 0;
+					if ((uint16_t)math2_getrandom() < 0x800u)
+						create_createember(object_index);
+				} else {
+					animindex = objects[object_index].anim_frame;
+					anim_updateanimstate(object_index);
+					objects[object_index].anim_frame = (uint8_t)animindex;
+				}
+				break;
+		}
+	}
+	for (index = 0; index < NUM_STATIC_OBJECTS; ++index) {
+		const uint16_t species = staticobjects[index].species;
+
+		if (!species)
+			continue;
+		animptr = (AnimOp*)species_table[species].draw_data;
+		if (!animptr)
+			continue;
+		animindex = staticobjects[index].anim_frame;
+		anim_updateanimstate(OBJ_REF_STATIC_BASE + index);
+		staticobjects[index].anim_frame = (uint8_t)animindex;
+	}
+}
+
+/* ====================================================================== *
+ * anim_updateanimstate -- pattern VM single-step
+ * ----------------------------------------------------------------------------
+ * Peek the NEXT opop (animptr[animindex+1]) and decide where animindex
+ * ends up after this tick:
+ *
+ *   KILL   -- zero the parent slot, advance past the KILL opcode.
+ *   RESET  -- snap animindex to 0; no advance (do NOT skip past RESET).
+ *   JUMP   -- animindex := operand.
+ *   DELAY / MESH / BITMAP -- plain advance (animindex += 1).
+ *
+ * obj_or_kind is needed only by KILL, which uses the high byte to pick
+ * staticobjects[] vs objects[]. If animptr is NULL the function is a
+ * no-op (animindex stays put).
+ * ====================================================================== */
+// FUNCTION: TIE95 0x11224
+void anim_updateanimstate(uint16_t obj_or_kind) {
+	AnimOp op;
+	int code;
+
+	if (animptr) {
+		op = animptr[++animindex];
+		code = op;
+		if (code == ANIMOP_KILL) {
+			if ((obj_or_kind & 0xFF00u) == OBJ_REF_STATIC_BASE)
+				staticobjects[obj_or_kind].species = 0;
+			else
+				objects[obj_or_kind].ship_idx = 0;
+		} else if (code == ANIMOP_RESET) {
+			animindex = 0;
+		} else if (code >= 0xFF00 && code != ANIMOP_DELAY) {
+			animindex = op - 0xFF00;
+		}
+	}
+}
+
 /* Six-phase hyperspace sequence: align and validate the route, replace the
  * scene with stars, stretch streaks, traverse, retract streaks, then settle
  * and complete the mission transition. hyperticks is the absolute phase clock. */
 // FUNCTION: TIE95 0x112EC
 // FUNCTION: TIE98 0x401E80
 void anim_dohyperspace(void) {
-	int16_t tilt_speed;
-
 	hyperticks += frameticks;
-
-	if ((uint8_t)(hyperspaceflag - 1) > 5u)
-		return;
-
-	tilt_speed = (int16_t)(224 * frameticks);
 
 	switch (hyperspaceflag) {
 		case 1: {
@@ -1162,110 +1180,38 @@ void anim_dohyperspace(void) {
 			uint16_t heading = (uint16_t)pstate.player->heading;
 			uint16_t pitch = (uint16_t)pstate.player->pitch;
 
-			if (roll || pitch != 0x4000u || pstate.player->heading != 0) {
+			if (roll || pitch != 0x4000 || heading) {
 				/* Still leveling -- nudge each axis toward its target. */
 				int16_t lvl = (int16_t)(20 * frameticks);
-				int16_t src_roll = pstate.player->roll;
-				int16_t src_heading = pstate.player->heading;
 
-				if (roll >= 0x8000u) {
-					roll = (uint16_t)(roll + lvl);
-					if ((uint16_t)(lvl + src_roll) < 0x8000u)
+				if (roll < 0x8000) {
+					roll -= lvl;
+					if (roll >= 0x8000)
 						roll = 0;
 				} else {
-					roll = (uint16_t)(roll - lvl);
-					if ((uint16_t)(src_roll - lvl) >= 0x8000u)
+					roll += lvl;
+					if (roll < 0x8000)
 						roll = 0;
 				}
-				if (heading >= 0x8000u) {
-					heading = (uint16_t)(heading + lvl);
-					if ((uint16_t)(lvl + src_heading) < 0x8000u)
+				if (heading < 0x8000) {
+					heading -= lvl;
+					if (heading >= 0x8000)
 						heading = 0;
 				} else {
-					heading = (uint16_t)(heading - lvl);
-					if ((uint16_t)(src_heading - lvl) >= 0x8000u)
+					heading += lvl;
+					if (heading < 0x8000)
 						heading = 0;
 				}
-				if (pitch >= 0xC000u || (uint16_t)pstate.player->pitch <= 0x4000u) {
-					if (pitch != 0x4000u) {
-						uint32_t p = (uint16_t)(lvl + pitch);
-						pitch = (uint16_t)p;
-						if ((uint16_t)p > 0x4000u && p < 49152u)
-							pitch = 0x4000u;
-					}
-				} else {
-					pitch = (uint16_t)(pitch - lvl);
-					if ((uint16_t)(pstate.player->pitch - lvl) < 0x4000u)
-						pitch = 0x4000u;
+				if (pitch < 0xC000 && pitch > 0x4000) {
+					pitch -= lvl;
+					if (pitch < 0x4000)
+						pitch = 0x4000;
+				} else if (pitch != 0x4000) {
+					pitch += lvl;
+					if (pitch > 0x4000 && pitch < 0xC000)
+						pitch = 0x4000;
 				}
-			} else if (hyperticks < 0x49Cu) {
-				if (hyperticks >= 0x2C4u) {
-					/* Aligned and inside the launch window -- look for
-					 * blocking objects in the path. */
-					int16_t blocked = 0;
-					uint16_t i;
-
-					for (i = 0; i < NUM_CRAFTS; ++i) {
-						int32_t dx;
-						int32_t dy;
-						int32_t dz;
-						int32_t b_obj;
-						int32_t b_player;
-
-						if (!objects[i].ship_idx)
-							continue;
-						dx = objects[i].world_x - pstate.player->world_x;
-						dy = objects[i].world_y - pstate.player->world_y;
-						dz = objects[i].world_z - pstate.player->world_z;
-						if (dx < 0)
-							dx = -dx;
-						if (dz < 0)
-							dz = -dz;
-						b_obj = species_table[objects[i].ship_idx].bound_hwidth;
-						b_player = species_table[pstate.player->ship_idx].bound_hwidth;
-						if (dx - b_obj < b_player && dz - b_obj < b_player && dy > 0 && dy < 0x40000) {
-							blocked = 1;
-							break;
-						}
-					}
-					if (!blocked) {
-						uint16_t static_packed = OBJ_REF_STATIC_BASE;
-						int16_t i;
-
-						for (i = 0; i < NUM_STATIC_OBJECTS; ++i, ++static_packed) {
-							int32_t dx;
-							int32_t dy;
-							int32_t dz;
-							int32_t b_st;
-							int32_t b_player;
-
-							if (!staticobjects[i].species)
-								continue;
-							create_getworldposition(static_packed, 0);
-							dx = worldlocx - pstate.player->world_x;
-							dy = worldlocy - pstate.player->world_y;
-							dz = worldlocz - pstate.player->world_z;
-							if (dx < 0)
-								dx = -dx;
-							if (dz < 0)
-								dz = -dz;
-							b_st = species_table[staticobjects[i].species].bound_hwidth;
-							b_player = species_table[pstate.player->ship_idx].bound_hwidth;
-							if (dx - b_st < b_player && dz - b_st < b_player && dy > 0 && dy < 0x40000) {
-								blocked = 1;
-								break;
-							}
-						}
-					}
-					if (blocked) {
-						msg_messageprintf(MSG_HYPER_OBJECT_BLOCK);
-						fsfx_triggersfx(0x27u, 0xFFFFu);
-						hyperspaceflag = 0;
-						pstate.player->current_speed = 10;
-					}
-					pstate.player->world_y += 1792 * frameticks;
-				}
-			} else {
+			} else if (hyperticks >= 0x49C) {
 				user_checkreplaycamera();
 				pstate.player->current_speed = 100;
 				if (replayviewmode) {
@@ -1274,6 +1220,70 @@ void anim_dohyperspace(void) {
 					hyperspaceflag = 2;
 					msg_messageprintf(MSG_ENTERING_HYPER_NOW);
 				}
+			} else if (hyperticks >= 0x2C4) {
+				/* Aligned and inside the launch window -- look for
+				 * blocking objects in the path. */
+				int16_t blocked = 0;
+				int16_t i;
+
+				hyperabortflag = 0;
+				for (i = 0; i < NUM_CRAFTS; ++i) {
+					int32_t dx;
+					int32_t dy;
+					int32_t dz;
+
+					if (!objects[i].ship_idx)
+						continue;
+					dx = objects[i].world_x - pstate.player->world_x;
+					dy = objects[i].world_y - pstate.player->world_y;
+					dz = objects[i].world_z - pstate.player->world_z;
+					if (dx < 0)
+						dx = -dx;
+					if (dz < 0)
+						dz = -dz;
+					dx -= species_table[objects[i].ship_idx].bound_hwidth;
+					dz -= species_table[objects[i].ship_idx].bound_hwidth;
+					if (dx < species_table[pstate.player->ship_idx].bound_hwidth &&
+						dz < species_table[pstate.player->ship_idx].bound_hwidth && dy > 0 && dy < 0x40000) {
+						blocked = 1;
+						break;
+					}
+				}
+				if (!blocked) {
+					uint16_t static_packed = OBJ_REF_STATIC_BASE;
+
+					for (i = 0; i < NUM_STATIC_OBJECTS; ++i, ++static_packed) {
+						int32_t dx;
+						int32_t dy;
+						int32_t dz;
+
+						if (!staticobjects[i].species)
+							continue;
+						create_getworldposition(static_packed, 0);
+						dx = worldlocx - pstate.player->world_x;
+						dy = worldlocy - pstate.player->world_y;
+						dz = worldlocz - pstate.player->world_z;
+						if (dx < 0)
+							dx = -dx;
+						if (dz < 0)
+							dz = -dz;
+						dx -= species_table[staticobjects[i].species].bound_hwidth;
+						dz -= species_table[staticobjects[i].species].bound_hwidth;
+						if (dx < species_table[pstate.player->ship_idx].bound_hwidth &&
+							dz < species_table[pstate.player->ship_idx].bound_hwidth && dy > 0 &&
+							dy < 0x40000) {
+							blocked = 1;
+							break;
+						}
+					}
+				}
+				if (blocked) {
+					msg_messageprintf(MSG_HYPER_OBJECT_BLOCK);
+					fsfx_triggersfx(0x27, 0xFFFF);
+					hyperspaceflag = 0;
+					pstate.player->current_speed = 10;
+				}
+				pstate.player->world_y += 1792 * frameticks;
 			}
 
 			pstate.player->orient_dirty = 1;
@@ -1289,15 +1299,15 @@ void anim_dohyperspace(void) {
 			int16_t i;
 			int16_t j;
 			int16_t saved_seed;
-			uint16_t s;
+			int16_t s;
 
 			hyperticks = 1180;
 			for (i = 0; i < (int16_t)NUM_OBJECTS; ++i) {
-				if (i == (int16_t)pstate.object_idx)
-					continue;
-				objects[i].ship_idx = 0;
-				objects[i].age_ticks = 0;
-				objects[i].death_timer = 0;
+				if (i != pstate.object_idx) {
+					objects[i].ship_idx = 0;
+					objects[i].age_ticks = 0;
+					objects[i].death_timer = 0;
+				}
 			}
 			for (j = 0; j < 64; ++j)
 				staticobjects[j].species = 0;
@@ -1313,15 +1323,14 @@ void anim_dohyperspace(void) {
 			saved_seed = math2_randomseed;
 			math2_randomseed = 29287;
 			for (s = 0; s < 64; ++s) {
-				uint16_t r1 = (uint16_t)math2_getrandom();
-				int16_t sx = (int16_t)math2_fraction(r1, pixelswide) - (int16_t)(pixelswide / 2);
-				uint16_t r2 = (uint16_t)math2_getrandom();
-				int16_t sy = (int16_t)(((r2 >> 4) & 0x1F) + 0x100);
-				uint16_t r3 = (uint16_t)math2_getrandom();
-				int16_t sz = (int16_t)math2_fraction(r3, pixelsdeep) - (int16_t)(pixelsdeep / 2);
+				int16_t sx =
+					(int16_t)math2_fraction((uint16_t)math2_getrandom(), pixelswide) - pixelswide / 2;
+				int16_t sy = (((uint16_t)math2_getrandom() >> 4) & 0x1F) + 0x100;
+				int16_t sz =
+					(int16_t)math2_fraction((uint16_t)math2_getrandom(), pixelsdeep) - pixelsdeep / 2;
+				staticobjects[s].world_x = sx;
 				staticobjects[s].world_y = sy;
 				staticobjects[s].world_z = sz;
-				staticobjects[s].world_x = sx;
 				staticobjects[s].species = 0; /* binary clears each slot */
 			}
 			math2_randomseed = saved_seed;
@@ -1343,7 +1352,7 @@ void anim_dohyperspace(void) {
 			pstate.player->world_z = 0;
 			*(int16_t*)&hyperstardata[6] = 32272;
 			*(int16_t*)&hyperstardata[12] = 32256;
-			fsfx_triggersfx(0x30u, 0xFFFFu);
+			fsfx_triggersfx(0x30, 0xFFFF);
 #ifdef TIE_MODERN
 			{
 				/* HYPER_FLASH event on phase 3 entry (jump in).
@@ -1365,46 +1374,44 @@ void anim_dohyperspace(void) {
 		}
 
 		case 3:
-			if (hyperticks < 0x588u) {
-				if (TIE_FLIGHT_TIE98) {
-					g_hyperspaceStreakLength += 224 * (uint32_t)frameticks;
-				} else {
-					/* Clamp the unsigned wrapped endpoint inside (0x7E00, 0x8200). */
-					uint16_t s = (uint16_t)(*(int16_t*)&hyperstardata[12] - tilt_speed);
-					hyperstarlength = s;
-					if (s > 0x7E00u && s < 0x8200u)
-						hyperstarlength = (uint16_t)-32256;
-					*(int16_t*)&hyperstardata[12] = (int16_t)hyperstarlength;
-				}
-			} else {
+			if (hyperticks >= 0x588) {
 				pstate.player->world_y += 224 * frameticks;
 				if (!TIE_FLIGHT_TIE98) {
 					*(int16_t*)&hyperstardata[12] = -32256;
 					*(int16_t*)&hyperstardata[6] = 32272;
 				}
+			} else if (TIE_FLIGHT_TIE98) {
+				g_hyperspaceStreakLength += 224 * (uint32_t)frameticks;
+			} else {
+				/* Clamp the unsigned wrapped endpoint inside (0x7E00, 0x8200). */
+				hyperstarlength = *(int16_t*)&hyperstardata[12];
+				hyperstarlength -= 224 * frameticks;
+				if (hyperstarlength < 0x8200 && hyperstarlength > 0x7E00)
+					hyperstarlength = 0x8200;
+				*(int16_t*)&hyperstardata[12] = (int16_t)hyperstarlength;
 			}
-			if (hyperticks >= 0x674u) {
+			if (hyperticks >= 0x674) {
 				hyperticks = 1652;
-				camera.view_target_obj = 0xFFFFu;
+				camera.view_target_obj = 0xFFFF;
 				camera.x = 128;
 				camera.y = -896;
 				camera.z = 128;
 				camera.view_zoom_flag = 1;
 				pstate.player->world_y = 0;
-				panelrts_setnewpilotview(0x12u);
+				panelrts_setnewpilotview(0x12);
 				camera.side_angle = -2048;
 				camera.up_angle = -2048;
 				hyperspaceflag = 4;
 				lolevel_ImStopSound((intptr_t)48);
-				fsfx_triggersfx(0x31u, 0xFFFFu);
+				fsfx_triggersfx(0x31, 0xFFFF);
 				if (objects[pstate.object_idx].ship_idx == 16)
-					fsfx_triggersfx(0x2Cu, 0xFFFFu);
+					fsfx_triggersfx(0x2C, 0xFFFF);
 			}
 			break;
 
 		case 4:
 			pstate.player->world_y += 224 * frameticks;
-			if (hyperticks >= 0x760u) {
+			if (hyperticks >= 0x760) {
 				camera.view_target_obj = pstate.object_idx;
 				camera.view_zoom_flag = 0;
 				hyperticks = 1888;
@@ -1412,7 +1419,7 @@ void anim_dohyperspace(void) {
 				camera.side_angle = 0;
 				camera.up_angle = 0;
 				hyperspaceflag = 5;
-				fsfx_triggersfx(0x32u, 0xFFFFu);
+				fsfx_triggersfx(0x32, 0xFFFF);
 #ifdef TIE_MODERN
 				{
 					/* HYPER_FLASH event on phase 5 entry (jump out).
@@ -1435,30 +1442,30 @@ void anim_dohyperspace(void) {
 			break;
 
 		case 5:
-			if (hyperticks < 0x84Cu) {
+			if (hyperticks < 0x84C) {
 				pstate.player->world_y -= 224 * frameticks;
 			} else if (TIE_FLIGHT_TIE98) {
 				g_hyperspaceStreakLength -= 224 * (uint32_t)frameticks;
-				if (g_hyperspaceStreakLength < 0x8200u)
-					g_hyperspaceStreakLength = 0x8200u;
+				if (g_hyperspaceStreakLength < 0x8200)
+					g_hyperspaceStreakLength = 0x8200;
 			} else {
 				/* Preserve the unsigned endpoint wrap while retracting the streak. */
-				uint16_t s = (uint16_t)(tilt_speed + *(int16_t*)&hyperstardata[12]);
-				hyperstarlength = s;
-				if (s > 0x7E00u && s < 0x8200u)
-					hyperstarlength = (uint16_t)-32256;
+				hyperstarlength = *(int16_t*)&hyperstardata[12];
+				hyperstarlength += 224 * frameticks;
+				if (hyperstarlength > 0x7E00 && hyperstarlength < 0x8200)
+					hyperstarlength = 0x8200;
 				*(int16_t*)&hyperstardata[12] = (int16_t)hyperstarlength;
 			}
-			if (hyperticks >= 0x938u) {
+			if (hyperticks >= 0x938) {
 				int32_t y;
 
 				hyperticks = 2360;
-				camera.view_target_obj = 0xFFFFu;
+				camera.view_target_obj = 0xFFFF;
 				camera.x = -128;
 				camera.view_zoom_flag = 1;
 				camera.y = 896;
 				camera.z = 128;
-				panelrts_setnewpilotview(0x12u);
+				panelrts_setnewpilotview(0x12);
 				y = pstate.player->world_y;
 				camera.side_angle = -2048;
 				camera.up_angle = 30720;

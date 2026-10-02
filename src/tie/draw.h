@@ -94,7 +94,7 @@ int draw_drawcomplexobject(int obj_idx);
 
 /* Recursive BSP painter's-sort: appends visible mesh indices into comp[]
  * and increments numberofcomp. */
-ShipModelMesh* draw_gettreeorder(int* bsp_node);
+void draw_gettreeorder(int* bsp_node);
 
 /* Draw all meshes in comp[0..numberofcomp-1] for one craft. Handles
  * highlight, damage skip, mesh rotation, decal flag, lightning arc. */
@@ -106,7 +106,7 @@ void draw_drawlaser(uint16_t laser_obj_idx);
 void draw_drawlaser_tie98(uint16_t laser_obj_idx);
 
 /* Hyperspace starburst sprite. */
-void draw_drawhyperstar(int16_t star_idx);
+void draw_drawhyperstar(uint16_t star_idx);
 extern uint32_t g_hyperspaceStreakLength;
 void draw_drawhyperstar_tie98(int16_t star_idx);
 
@@ -115,9 +115,9 @@ uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t scr
 uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle);
 
 /* Polygon-plane depth tie-breaker. Returns obj_a or obj_b (the frontmost). */
-uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_obj_id_field,
-							uint16_t a_parent_category, int a_eyex, int a_eyey, uint16_t b_face_info,
-							uint16_t obj_b, uint16_t b_parent_category, uint16_t b_obj_id_field);
+uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_parent_category,
+							uint16_t a_obj_id_field, uint16_t b_face_info, uint16_t obj_b,
+							uint16_t b_parent_category, uint16_t b_obj_id_field);
 
 #ifdef __cplusplus
 }

@@ -31,94 +31,6 @@ uint16_t g_flightTextPalette[256];
 // GLOBAL: TIE98 0x4F2A80
 uint8_t g_flightColorKeyIndex = 0xFB;
 
-// FUNCTION: TIE98 0x47AEC0
-void Color_BuildRgb565ToPaletteIndexTable(uint8_t* dst, unsigned int first_index, unsigned int end_index) {
-	unsigned int value;
-
-	for (value = 0; value < 0x10000; ++value) {
-		const uint8_t rgb6[3] = {
-			(uint8_t)(2 * ((value >> 11) & 0x1F)),
-			(uint8_t)((value >> 5) & 0x3F),
-			(uint8_t)(2 * (value & 0x1F)),
-		};
-		dst[value] = (uint8_t)rtsvga2_findNearestColor(rgb6, rtsvga2_vgapalette, first_index, end_index);
-	}
-}
-
-// FUNCTION: TIE98 0x42DAE0
-static void RenderTexture_AnalyzeIlluminationShades(uint16_t* shades) {
-	int color;
-
-	/* Rewrites shade level 0 into the self-illumination overlay palette:
-	 * entries that are dark at the darkest level or that shade normally
-	 * across levels become 0 (transparent in the overlay); entries that stay
-	 * constant through levels 0-6 (lit windows, engine glows) take their
-	 * level-10 color. shades[256] receives the first zeroed index (the
-	 * texel-0 remap slot RenderTexture_GetOrCreateColorKey saves through)
-	 * and shades[2304] the overlay-enable flag RenderScene_DrawMeshFaces
-	 * tests as palette[256].
-	 * PORT: the original runs the analysis only when the foption.cfg
-	 * texture-detail option is 2 and stores flag 0 otherwise; the host
-	 * always uses the high-detail path. */
-	int first_zeroed = -1;
-	int zeroed_count = 0;
-	for (color = 0; color < 256; ++color) {
-		uint16_t* entry = &shades[color];
-		const int red = (*entry >> 11) & 0x1F;
-		const int green = (*entry >> 6) & 0x1F;
-		const int blue = *entry & 0x1F;
-		int constant_levels = 1;
-		if (blue * blue + green * green + red * red >= 0x20) {
-			const uint16_t* other = entry + 256;
-			while (constant_levels < 7) {
-				const int delta_blue = (*other & 0x1F) - blue;
-				const int delta_green = ((*other >> 6) & 0x1F) - green;
-				const int delta_red = ((*other >> 11) & 0x1F) - red;
-				if (delta_blue * delta_blue + delta_green * delta_green + delta_red * delta_red > 16)
-					break;
-				other += 256;
-				++constant_levels;
-			}
-			if (constant_levels == 7) {
-				*entry = entry[2560];
-				continue;
-			}
-		}
-		*entry = 0;
-		++zeroed_count;
-		if (first_zeroed == -1)
-			first_zeroed = color;
-	}
-	shades[256] = (uint16_t)first_zeroed;
-	shades[2304] = (uint16_t)(zeroed_count >= 256 ? 0 : zeroed_count);
-}
-
-// FUNCTION: TIE98 0x437EF0
-void RenderTexture_BuildHardwareShadeTables(uint16_t* shades) {
-	int chunk, i;
-
-	/* Illumination analysis first, then the brightness option is baked into
-	 * all 16 levels (including the analyzed level 0 and the metadata words,
-	 * matching the original's transform order). At the default brightness
-	 * the unpack/repack round-trip is exact.
-	 * PORT: only hardware-mode callers reach this cache, so the original's
-	 * g_useHardware3D gate around the analysis is implicit. The original
-	 * converts all 4096 entries in one call; the recovered
-	 * rtsvga2_applyBrightness16_tie98 holds 1024, so convert per level pair. */
-	uint8_t rgb6[3 * 1024];
-
-	RenderTexture_AnalyzeIlluminationShades(shades);
-	for (chunk = 0; chunk < HARDWARE_SHADE_TABLE_ENTRIES; chunk += 1024) {
-		for (i = 0; i < 1024; ++i) {
-			const uint16_t value = shades[chunk + i];
-			rgb6[3 * i] = (uint8_t)(2 * (value >> 11));
-			rgb6[3 * i + 1] = (uint8_t)((value >> 5) & 0x3F);
-			rgb6[3 * i + 2] = (uint8_t)(2 * (value & 0x1F));
-		}
-		rtsvga2_applyBrightness16_tie98(rgb6, shades + chunk, 0, 1024);
-	}
-}
-
 // FUNCTION: TIE98 0x427250
 Std3DTextureSurface* RenderTexture_FindOrAllocateCacheEntry(const void* cache_key) {
 	int slot, count, index;
@@ -158,29 +70,6 @@ Std3DTextureSurface* RenderTexture_FindOrAllocateCacheEntry(const void* cache_ke
 		return &g_renderTextureCache[g_renderTextureCacheCursor];
 	g_renderTextureCacheKeys[slot] = cache_key;
 	return &g_renderTextureCache[slot];
-}
-
-// FUNCTION: TIE98 0x4276D0
-Std3DTextureSurface* RenderTexture_GetOrCreateOpaque(int width, int height, const uint16_t* palette,
-													 const uint8_t* pixels) {
-	Std3DVBuffer source;
-
-	Std3DTextureSurface* surface = RenderTexture_FindOrAllocateCacheEntry(pixels);
-	if (surface->bCached) {
-		std3D_CacheTextureSurface(surface);
-		return surface;
-	}
-
-	memset(&source, 0, sizeof source);
-	source.storageType = 0;
-	source.raster.sourceType = 0;
-	source.pixels = (void*)pixels;
-	source.raster.width = (uint32_t)width;
-	source.raster.height = (uint32_t)height;
-	source.raster.rowPitch = (uint32_t)width;
-	source.raster.bitsPerPixel = 8;
-	std3D_CopyPaletteToScratch16(palette, 256);
-	return std3D_CreateMipSurface(&source, surface, 0, 0) ? surface : NULL;
 }
 
 // FUNCTION: TIE98 0x427340
@@ -280,6 +169,29 @@ Std3DTextureSurface* RenderTexture_GetOrCreateBitmap(int width, int height, uint
 	return created ? surface : NULL;
 }
 
+// FUNCTION: TIE98 0x4276D0
+Std3DTextureSurface* RenderTexture_GetOrCreateOpaque(int width, int height, const uint16_t* palette,
+													 const uint8_t* pixels) {
+	Std3DVBuffer source;
+
+	Std3DTextureSurface* surface = RenderTexture_FindOrAllocateCacheEntry(pixels);
+	if (surface->bCached) {
+		std3D_CacheTextureSurface(surface);
+		return surface;
+	}
+
+	memset(&source, 0, sizeof source);
+	source.storageType = 0;
+	source.raster.sourceType = 0;
+	source.pixels = (void*)pixels;
+	source.raster.width = (uint32_t)width;
+	source.raster.height = (uint32_t)height;
+	source.raster.rowPitch = (uint32_t)width;
+	source.raster.bitsPerPixel = 8;
+	std3D_CopyPaletteToScratch16(palette, 256);
+	return std3D_CreateMipSurface(&source, surface, 0, 0) ? surface : NULL;
+}
+
 // FUNCTION: TIE98 0x4277A0
 Std3DTextureSurface* RenderTexture_GetOrCreateColorKey(int width, int height, uint16_t* palette,
 													   const uint8_t* pixels) {
@@ -332,4 +244,92 @@ Std3DTextureSurface* RenderTexture_GetOrCreateColorKey(int width, int height, ui
 	if (g_pStd3DCurDevice->caps.bColorKeyTexture)
 		g_pStd3DCurDevice->caps.bAlphaTexture = saved_alpha_texture;
 	return created ? surface : NULL;
+}
+
+// FUNCTION: TIE98 0x42DAE0
+static void RenderTexture_AnalyzeIlluminationShades(uint16_t* shades) {
+	int color;
+
+	/* Rewrites shade level 0 into the self-illumination overlay palette:
+	 * entries that are dark at the darkest level or that shade normally
+	 * across levels become 0 (transparent in the overlay); entries that stay
+	 * constant through levels 0-6 (lit windows, engine glows) take their
+	 * level-10 color. shades[256] receives the first zeroed index (the
+	 * texel-0 remap slot RenderTexture_GetOrCreateColorKey saves through)
+	 * and shades[2304] the overlay-enable flag RenderScene_DrawMeshFaces
+	 * tests as palette[256].
+	 * PORT: the original runs the analysis only when the foption.cfg
+	 * texture-detail option is 2 and stores flag 0 otherwise; the host
+	 * always uses the high-detail path. */
+	int first_zeroed = -1;
+	int zeroed_count = 0;
+	for (color = 0; color < 256; ++color) {
+		uint16_t* entry = &shades[color];
+		const int red = (*entry >> 11) & 0x1F;
+		const int green = (*entry >> 6) & 0x1F;
+		const int blue = *entry & 0x1F;
+		int constant_levels = 1;
+		if (blue * blue + green * green + red * red >= 0x20) {
+			const uint16_t* other = entry + 256;
+			while (constant_levels < 7) {
+				const int delta_blue = (*other & 0x1F) - blue;
+				const int delta_green = ((*other >> 6) & 0x1F) - green;
+				const int delta_red = ((*other >> 11) & 0x1F) - red;
+				if (delta_blue * delta_blue + delta_green * delta_green + delta_red * delta_red > 16)
+					break;
+				other += 256;
+				++constant_levels;
+			}
+			if (constant_levels == 7) {
+				*entry = entry[2560];
+				continue;
+			}
+		}
+		*entry = 0;
+		++zeroed_count;
+		if (first_zeroed == -1)
+			first_zeroed = color;
+	}
+	shades[256] = (uint16_t)first_zeroed;
+	shades[2304] = (uint16_t)(zeroed_count >= 256 ? 0 : zeroed_count);
+}
+
+// FUNCTION: TIE98 0x437EF0
+void RenderTexture_BuildHardwareShadeTables(uint16_t* shades) {
+	int chunk, i;
+
+	/* Illumination analysis first, then the brightness option is baked into
+	 * all 16 levels (including the analyzed level 0 and the metadata words,
+	 * matching the original's transform order). At the default brightness
+	 * the unpack/repack round-trip is exact.
+	 * PORT: only hardware-mode callers reach this cache, so the original's
+	 * g_useHardware3D gate around the analysis is implicit. The original
+	 * converts all 4096 entries in one call; the recovered
+	 * rtsvga2_applyBrightness16_tie98 holds 1024, so convert per level pair. */
+	uint8_t rgb6[3 * 1024];
+
+	RenderTexture_AnalyzeIlluminationShades(shades);
+	for (chunk = 0; chunk < HARDWARE_SHADE_TABLE_ENTRIES; chunk += 1024) {
+		for (i = 0; i < 1024; ++i) {
+			const uint16_t value = shades[chunk + i];
+			rgb6[3 * i] = (uint8_t)(2 * (value >> 11));
+			rgb6[3 * i + 1] = (uint8_t)((value >> 5) & 0x3F);
+			rgb6[3 * i + 2] = (uint8_t)(2 * (value & 0x1F));
+		}
+		rtsvga2_applyBrightness16_tie98(rgb6, shades + chunk, 0, 1024);
+	}
+}
+
+// FUNCTION: TIE98 0x47AEC0
+void Color_BuildRgb565ToPaletteIndexTable(uint8_t* dst, unsigned int first_index, unsigned int end_index) {
+	unsigned int value;
+
+	for (value = 0; value < 0x10000; ++value) {
+		const uint8_t rgb6[3] = {
+			(uint8_t)(2 * ((value >> 11) & 0x1F)),
+			(uint8_t)((value >> 5) & 0x3F),
+			(uint8_t)(2 * (value & 0x1F)),
+		};
+		dst[value] = (uint8_t)rtsvga2_findNearestColor(rgb6, rtsvga2_vgapalette, first_index, end_index);
+	}
 }

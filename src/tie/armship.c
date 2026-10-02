@@ -67,339 +67,16 @@ ResFile* armship_file;
 // GLOBAL: TIE98 0x4fa4a4
 static Input* info_input;
 
-/* ======================================================================
- * armship_end_ArmShip_View — cursor show callback
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x6ee3c
-// FUNCTION: TIE98 0x402a50
-static void armship_end_ArmShip_View(int32_t refresh) {
-	if (refresh)
-		return;
-	if (xcursor_Is_Cursor_Visible())
-		return;
-	xcursor_Show_Cursor();
-}
-
-/* ======================================================================
- * armship_user_ArmShip — actor callback for weapon selector highlights
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x6f208
-// FUNCTION: TIE98 0x402e80
-static void armship_user_ArmShip(Actor* actor, int32_t time) {
-	int16_t id = actor->var1;
-	(void)time;
-
-	switch (id) {
-		case 1: /* Beam selector: state = beam type + 6 */
-			xactor_Set_Actor_State(actor, player_Get_Beam_Used() + 6, 0);
-			return;
-		case 2: /* Torpedo selector: state from lookup table */
-			xactor_Set_Actor_State(actor, torp_state[player_Get_Torp_Used() - 1], 0);
-			return;
-		case 3: { /* Button hover highlight (beam/torp buttons 0-3) */
-			int16_t hover = 0;
-			int16_t i;
-			for (i = 0; i < 4; i++) {
-				if (button_input[i] && xinpattr_Is_Input_Flag1(button_input[i])) {
-					hover = i + 1;
-					break;
-				}
-			}
-			if (hover) {
-				xactor_Set_Actor_State(actor, hover - 1, 0);
-				xactor_Show_Actor(actor);
-			} else {
-				xactor_Hide_Actor(actor);
-			}
-			return;
-		}
-		case 6: { /* Enter/exit button hover (buttons 4-5) */
-			int16_t hover = 0;
-			int16_t i;
-			for (i = 0; i < 2; i++) {
-				if (button_input[i + 4] && xinpattr_Is_Input_Flag1(button_input[i + 4])) {
-					hover = i + 1;
-					break;
-				}
-			}
-			if (hover) {
-				xactor_Set_Actor_State(actor, hover - 1, 0);
-				xactor_Show_Actor(actor);
-			} else {
-				xactor_Hide_Actor(actor);
-			}
-			return;
-		}
-	}
-}
-
-/* ======================================================================
- * armship_draw_ArmShip — actor draw callback for weapon name labels
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x6f340
-// FUNCTION: TIE98 0x402f80
-static int16_t armship_draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int16_t x, int16_t y,
-									int16_t refresh) {
-	char line1[32], line2[16];
-	Rect dst;
-	(void)clip_r;
-	(void)x;
-	(void)y;
-
-	if (!refresh)
-		return 1;
-
-	xrect_Copy_Rect(&dst, frame);
-	line1[0] = '\0';
-	line2[0] = '\0';
-
-	if (actor->id == 10) {
-		/* Beam name label */
-		switch (player_Get_Beam_Used()) {
-			case 1:
-				textext_Copy_Text(line1, txtArmTractor);
-				textext_Copy_Text(line2, txtArmBeam);
-				break;
-			case 2:
-				textext_Copy_Text(line1, txtArmJamming);
-				textext_Copy_Text(line2, txtArmBeam);
-				break;
-		}
-	} else {
-		/* Torpedo name label */
-		int16_t torp = player_Get_Torp_Used();
-		switch (torp) {
-			case 1:
-				textext_Copy_Text(line1, txtArmHeavy);
-				textext_Copy_Text(line2, txtArmBomb);
-				break;
-			case 2:
-				textext_Copy_Text(line1, txtArmHeavy);
-				textext_Copy_Text(line2, txtArmRocket);
-				break;
-			case 3:
-				textext_Copy_Text(line1, txtArmMissile);
-				break;
-			case 4:
-				textext_Copy_Text(line1, txtArmTorpedo);
-				break;
-			case 5:
-				textext_Copy_Text(line1, txtArmAdvanced);
-				textext_Copy_Text(line2, txtArmMissile);
-				break;
-			case 6:
-				textext_Copy_Text(line1, txtArmAdvanced);
-				textext_Copy_Text(line2, txtArmTorpedo);
-				break;
-			case 7:
-				textext_Copy_Text(line1, txtArmIon);
-				textext_Copy_Text(line2, txtArmTorpedo);
-				break;
-		}
-	}
-
-	if (line2[0]) {
-		/* Retail derives bottom from the original top, so the
-		 * resulting bottom is new_top + 6, not new_top + 7. */
-		int16_t top = dst.top;
-		dst.top = top + 1;
-		dst.bottom = top + 7;
-	}
-	xfont_Print_Centered_Text(line1, &dst, 1, 15);
-	if (line2[0]) {
-		xrect_Offset_Rect(&dst, 0, 6);
-		xfont_Print_Centered_Text(line2, &dst, 1, 15);
-	}
-	return 1;
-}
-
-/* ======================================================================
- * armship_film_ArmShip_Callback — conditional actor visibility
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x6ee68
-// FUNCTION: TIE98 0x402a70
-static int16_t armship_film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
-	Actor* actor;
-	/* Only process actor rewind events (type 3) */
-	if ((int16_t)film_obj->id != 3)
-		return 0;
-
-	xfilm_Rewind_Actor_Film(film, film_obj, (char*)film_obj + sizeof(FilmObject));
-	actor = (Actor*)film_obj->object;
-
-	switch (actor->var1) {
-		case 1: /* Beam selector — skip if no beam equipped */
-			if (!player_Get_Beam_Used())
-				return 1;
-			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
-			return 0;
-		case 2: /* Torpedo selector — skip if no torpedo equipped */
-			if (!player_Get_Torp_Used())
-				return 1;
-			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
-			return 0;
-		case 3: /* Always active — install callback */
-		case 6:
-			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
-			return 0;
-		case 4: /* Beam-only visibility gate — skip if beam equipped */
-			return player_Get_Beam_Used() ? 1 : 0;
-		case 5: /* Torpedo-only visibility gate — skip if torpedo equipped */
-			return player_Get_Torp_Used() ? 1 : 0;
-	}
-	return 0;
-}
-
-/* ======================================================================
- * armship_iupdate_ArmShip — click tracking for weapon buttons
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x6eee8
-// FUNCTION: TIE98 0x402b30
+static void armship_end_ArmShip_View(int32_t refresh);
+static int16_t armship_film_ArmShip_Callback(Film* film, FilmObject* film_obj);
 static int16_t armship_iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
-									   uint8_t right, int16_t x, int16_t y) {
-	uint8_t button = 0;
-	(void)clip_r;
-
-	if (key)
-		return 0;
-
-	if (left)
-		button = left;
-	if (right)
-		button = right;
-
-	if (button == 1) {
-		xinpattr_Set_Input_Flag1(input);
-		soundext_Play_SFX(sfxButton, 80);
-	} else if (button == 2) {
-		if (xrect_Point_In_Rect(r, r->left + x, r->top + y))
-			xinpattr_Set_Input_Flag1(input);
-		else
-			xinpattr_Clear_Input_Flag1(input);
-	} else if (button == 3) {
-		if (xinpattr_Is_Input_Flag1(input)) {
-			xinpattr_Clear_Input_Flag1(input);
-			xinpattr_Selected_Input(input);
-		}
-	}
-	return 1;
-}
-
-/* ======================================================================
- * armship_iuser_ArmShip — weapon button actions
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x6efb4
-// FUNCTION: TIE98 0x402c00
-static void armship_iuser_ArmShip(Input* input, int32_t time) {
-	(void)time;
-
-	if (!xinpattr_Get_Input_Selected(input))
-		return;
-
-	switch (input->id) {
-		case 1:
-			player_Last_Beam();
-			break;
-		case 2:
-			player_Next_Beam();
-			break;
-		case 3:
-			player_Last_Torp();
-			break;
-		case 4:
-			player_Next_Torp();
-			break;
-		case 5: /* Enter mission */
-			if (shellext_Get_Last_Scene() == SCENE_DEBRIEF)
-				shipext_Update_Pilot();
-			if (shipext_Is_Mission_Launch())
-				xerror_Set_Landru_Exit(SCENE_CUT_BATTLE_270);
-			else
-				xerror_Set_Landru_Exit(SCENE_FLIGHT_BATTLE);
-			break;
-		case 6: { /* Exit */
-			if (shellext_Get_Last_Scene() == SCENE_DEBRIEF) {
-				char name[36];
-				xerror_Set_Landru_Exit(SCENE_DEBRIEF);
-#ifdef TIE_MODERN
-				shipext_Get_Pilot_Name(name, sizeof(name));
-#else
-				shipext_Get_Pilot_Name(name);
-#endif
-				shipext_Load_Pilot(name);
-			} else {
-				xerror_Set_Landru_Exit(SCENE_BRIEF);
-			}
-			break;
-		}
-	}
-}
-
-/* ======================================================================
- * armship_iuser_Arm_Info — info panel init callback
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x6f0a0
-// FUNCTION: TIE98 0x402d20
-static void armship_iuser_Arm_Info(Input* input, int32_t time) {
-	(void)input;
-	if (!time)
-		shade_Build_Shaded_Palette();
-}
-
-/* ======================================================================
- * armship_idraw_Arm_Info — weapon description text panel
- * ====================================================================== */
-
-// FUNCTION: TIE95 0x6f0ac
-// FUNCTION: TIE98 0x402d30
-static void armship_idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
-	char text_buf[80];
-	Rect dst;
-	int16_t i;
-
-	(void)input;
-	(void)clip_r;
-
-	if (!refresh)
-		return;
-
-	/* Beam description (top half) */
-	if (player_Get_Beam_Used()) {
-		xrect_Copy_Rect(&dst, r);
-		dst.bottom = dst.top + 34;
-		shade_Draw_Talk_Shade_Rect(&dst);
-		dst.bottom = dst.top + 12;
-		dst.top += 2;
-		for (i = 0; i < 3; i++) {
-			int16_t beam = player_Get_Beam_Used();
-			textext_Get_Weapon_Select_Text(text_buf, 3 * (beam + 6) + i);
-			xfont_Print_Centered_Text(text_buf, &dst, 0, 15);
-			xrect_Offset_Rect(&dst, 0, 10);
-		}
-	}
-
-	/* Torpedo description (bottom half) */
-	if (player_Get_Torp_Used()) {
-		xrect_Copy_Rect(&dst, r);
-		dst.top = dst.bottom - 34;
-		shade_Draw_Talk_Shade_Rect(&dst);
-		dst.bottom = dst.top + 12;
-		dst.top += 2;
-		for (i = 0; i < 3; i++) {
-			int16_t torp = player_Get_Torp_Used();
-			textext_Get_Weapon_Select_Text(text_buf, 3 * (torp - 1) + i);
-			xfont_Print_Centered_Text(text_buf, &dst, 0, 15);
-			xrect_Offset_Rect(&dst, 0, 10);
-		}
-	}
-}
+									   uint8_t right, int16_t x, int16_t y);
+static void armship_iuser_ArmShip(Input* input, int32_t time);
+static void armship_iuser_Arm_Info(Input* input, int32_t time);
+static void armship_idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh);
+static void armship_user_ArmShip(Actor* actor, int32_t time);
+static int16_t armship_draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int16_t x, int16_t y,
+									int16_t refresh);
 
 /* ======================================================================
  * armship_ArmShip — main entry point
@@ -549,4 +226,342 @@ int armship_ArmShip(SceneHeadStruct* scene_head) {
 	xres_Close_Resource(armship_file);
 	return xerror_Get_Landru_Exit();
 #endif
+}
+
+/* ======================================================================
+ * armship_end_ArmShip_View — cursor show callback
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x6ee3c
+// FUNCTION: TIE98 0x402a50
+static void armship_end_ArmShip_View(int32_t refresh) {
+	if (refresh)
+		return;
+	if (xcursor_Is_Cursor_Visible())
+		return;
+	xcursor_Show_Cursor();
+}
+
+/* ======================================================================
+ * armship_film_ArmShip_Callback — conditional actor visibility
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x6ee68
+// FUNCTION: TIE98 0x402a70
+static int16_t armship_film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
+	Actor* actor;
+	/* Only process actor rewind events (type 3) */
+	if ((int16_t)film_obj->id != 3)
+		return 0;
+
+	xfilm_Rewind_Actor_Film(film, film_obj, (char*)film_obj + sizeof(FilmObject));
+	actor = (Actor*)film_obj->object;
+
+	switch (actor->var1) {
+		case 1: /* Beam selector — skip if no beam equipped */
+			if (!player_Get_Beam_Used())
+				return 1;
+			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
+			return 0;
+		case 2: /* Torpedo selector — skip if no torpedo equipped */
+			if (!player_Get_Torp_Used())
+				return 1;
+			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
+			return 0;
+		case 3: /* Always active — install callback */
+		case 6:
+			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
+			return 0;
+		case 4: /* Beam-only visibility gate — skip if beam equipped */
+			return player_Get_Beam_Used() ? 1 : 0;
+		case 5: /* Torpedo-only visibility gate — skip if torpedo equipped */
+			return player_Get_Torp_Used() ? 1 : 0;
+	}
+	return 0;
+}
+
+/* ======================================================================
+ * armship_iupdate_ArmShip — click tracking for weapon buttons
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x6eee8
+// FUNCTION: TIE98 0x402b30
+static int16_t armship_iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
+									   uint8_t right, int16_t x, int16_t y) {
+	uint8_t button = 0;
+	(void)clip_r;
+
+	if (key)
+		return 0;
+
+	if (left)
+		button = left;
+	if (right)
+		button = right;
+
+	if (button == 1) {
+		xinpattr_Set_Input_Flag1(input);
+		soundext_Play_SFX(sfxButton, 80);
+	} else if (button == 2) {
+		if (xrect_Point_In_Rect(r, r->left + x, r->top + y))
+			xinpattr_Set_Input_Flag1(input);
+		else
+			xinpattr_Clear_Input_Flag1(input);
+	} else if (button == 3) {
+		if (xinpattr_Is_Input_Flag1(input)) {
+			xinpattr_Clear_Input_Flag1(input);
+			xinpattr_Selected_Input(input);
+		}
+	}
+	return 1;
+}
+
+/* ======================================================================
+ * armship_iuser_ArmShip — weapon button actions
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x6efb4
+// FUNCTION: TIE98 0x402c00
+static void armship_iuser_ArmShip(Input* input, int32_t time) {
+	(void)time;
+
+	if (!xinpattr_Get_Input_Selected(input) || !input->id)
+		return;
+
+	switch (input->id) {
+		case 1:
+			player_Last_Beam();
+			break;
+		case 2:
+			player_Next_Beam();
+			break;
+		case 3:
+			player_Last_Torp();
+			break;
+		case 4:
+			player_Next_Torp();
+			break;
+		case 5: /* Enter mission */
+			if (shellext_Get_Last_Scene() == SCENE_DEBRIEF)
+				shipext_Update_Pilot();
+			if (shipext_Is_Mission_Launch())
+				xerror_Set_Landru_Exit(SCENE_CUT_BATTLE_270);
+			else
+				xerror_Set_Landru_Exit(SCENE_FLIGHT_BATTLE);
+			break;
+		case 6: { /* Exit */
+			if (shellext_Get_Last_Scene() == SCENE_DEBRIEF) {
+#if defined(TIE98) || defined(TIE_MODERN)
+				char name[40];
+#else
+				char name[32];
+#endif
+				xerror_Set_Landru_Exit(SCENE_DEBRIEF);
+#ifdef TIE_MODERN
+				shipext_Get_Pilot_Name(name, sizeof(name));
+#else
+				shipext_Get_Pilot_Name(name);
+#endif
+				shipext_Load_Pilot(name);
+			} else {
+				xerror_Set_Landru_Exit(SCENE_BRIEF);
+			}
+			break;
+		}
+	}
+}
+
+/* ======================================================================
+ * armship_iuser_Arm_Info — info panel init callback
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x6f0a0
+// FUNCTION: TIE98 0x402d20
+static void armship_iuser_Arm_Info(Input* input, int32_t time) {
+	(void)input;
+	if (!time)
+		shade_Build_Shaded_Palette();
+}
+
+/* ======================================================================
+ * armship_idraw_Arm_Info — weapon description text panel
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x6f0ac
+// FUNCTION: TIE98 0x402d30
+static void armship_idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
+	char text_buf[80];
+	Rect dst;
+	int16_t i;
+
+	(void)input;
+	(void)clip_r;
+
+	if (!refresh)
+		return;
+
+	/* Beam description (top half) */
+	if (player_Get_Beam_Used()) {
+		xrect_Copy_Rect(&dst, r);
+		dst.bottom = dst.top + 34;
+		shade_Draw_Talk_Shade_Rect(&dst);
+		dst.bottom = dst.top + 12;
+		dst.top += 2;
+		for (i = 0; i < 3; i++) {
+			int16_t beam = player_Get_Beam_Used();
+			textext_Get_Weapon_Select_Text(text_buf, 3 * (beam + 6) + i);
+			xfont_Print_Centered_Text(text_buf, &dst, 0, 15);
+			xrect_Offset_Rect(&dst, 0, 10);
+		}
+	}
+
+	/* Torpedo description (bottom half) */
+	if (player_Get_Torp_Used()) {
+		xrect_Copy_Rect(&dst, r);
+		dst.top = dst.bottom - 34;
+		shade_Draw_Talk_Shade_Rect(&dst);
+		dst.bottom = dst.top + 12;
+		dst.top += 2;
+		for (i = 0; i < 3; i++) {
+			int16_t torp = player_Get_Torp_Used();
+			textext_Get_Weapon_Select_Text(text_buf, 3 * (torp - 1) + i);
+			xfont_Print_Centered_Text(text_buf, &dst, 0, 15);
+			xrect_Offset_Rect(&dst, 0, 10);
+		}
+	}
+}
+
+/* ======================================================================
+ * armship_user_ArmShip — actor callback for weapon selector highlights
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x6f208
+// FUNCTION: TIE98 0x402e80
+static void armship_user_ArmShip(Actor* actor, int32_t time) {
+	int16_t id = actor->var1;
+	(void)time;
+
+	switch (id) {
+		case 1: /* Beam selector: state = beam type + 6 */
+			xactor_Set_Actor_State(actor, player_Get_Beam_Used() + 6, 0);
+			return;
+		case 2: /* Torpedo selector: state from lookup table */
+			xactor_Set_Actor_State(actor, torp_state[player_Get_Torp_Used() - 1], 0);
+			return;
+		case 3: { /* Button hover highlight (beam/torp buttons 0-3) */
+			int16_t hover = 0;
+			int16_t i;
+			for (i = 0; i < 4; i++) {
+				if (button_input[i] && xinpattr_Is_Input_Flag1(button_input[i])) {
+					hover = i + 1;
+					break;
+				}
+			}
+			if (hover) {
+				xactor_Set_Actor_State(actor, hover - 1, 0);
+				xactor_Show_Actor(actor);
+			} else {
+				xactor_Hide_Actor(actor);
+			}
+			return;
+		}
+		case 6: { /* Enter/exit button hover (buttons 4-5) */
+			int16_t hover = 0;
+			int16_t i;
+			for (i = 0; i < 2; i++) {
+				if (button_input[i + 4] && xinpattr_Is_Input_Flag1(button_input[i + 4])) {
+					hover = i + 1;
+					break;
+				}
+			}
+			if (hover) {
+				xactor_Set_Actor_State(actor, hover - 1, 0);
+				xactor_Show_Actor(actor);
+			} else {
+				xactor_Hide_Actor(actor);
+			}
+			return;
+		}
+	}
+}
+
+/* ======================================================================
+ * armship_draw_ArmShip — actor draw callback for weapon name labels
+ * ====================================================================== */
+
+// FUNCTION: TIE95 0x6f340
+// FUNCTION: TIE98 0x402f80
+static int16_t armship_draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int16_t x, int16_t y,
+									int16_t refresh) {
+	char line1[32], line2[16];
+	Rect dst;
+	(void)clip_r;
+	(void)x;
+	(void)y;
+
+	if (!refresh)
+		return 1;
+
+	xrect_Copy_Rect(&dst, frame);
+	line1[0] = '\0';
+	line2[0] = '\0';
+
+	if (actor->id == 10) {
+		/* Beam name label */
+		switch (player_Get_Beam_Used()) {
+			case 1:
+				textext_Copy_Text(line1, txtArmTractor);
+				textext_Copy_Text(line2, txtArmBeam);
+				break;
+			case 2:
+				textext_Copy_Text(line1, txtArmJamming);
+				textext_Copy_Text(line2, txtArmBeam);
+				break;
+		}
+	} else {
+		/* Torpedo name label */
+		int16_t torp = player_Get_Torp_Used();
+		switch (torp) {
+			case 1:
+				textext_Copy_Text(line1, txtArmHeavy);
+				textext_Copy_Text(line2, txtArmBomb);
+				break;
+			case 2:
+				textext_Copy_Text(line1, txtArmHeavy);
+				textext_Copy_Text(line2, txtArmRocket);
+				break;
+			case 3:
+				textext_Copy_Text(line1, txtArmMissile);
+				break;
+			case 4:
+				textext_Copy_Text(line1, txtArmTorpedo);
+				break;
+			case 5:
+				textext_Copy_Text(line1, txtArmAdvanced);
+				textext_Copy_Text(line2, txtArmMissile);
+				break;
+			case 6:
+				textext_Copy_Text(line1, txtArmAdvanced);
+				textext_Copy_Text(line2, txtArmTorpedo);
+				break;
+			case 7:
+				textext_Copy_Text(line1, txtArmIon);
+				textext_Copy_Text(line2, txtArmTorpedo);
+				break;
+		}
+	}
+
+	if (line2[0]) {
+		/* Retail derives bottom from the original top, so the
+		 * resulting bottom is new_top + 6, not new_top + 7. */
+		int16_t top = dst.top;
+		dst.top = top + 1;
+		dst.bottom = top + 7;
+	}
+	xfont_Print_Centered_Text(line1, &dst, 1, 15);
+	if (line2[0]) {
+		xrect_Offset_Rect(&dst, 0, 6);
+		xfont_Print_Centered_Text(line2, &dst, 1, 15);
+	}
+	return 1;
 }

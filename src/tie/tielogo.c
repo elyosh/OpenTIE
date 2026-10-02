@@ -100,257 +100,17 @@ static Film* tielogo_film;
 // GLOBAL: TIE98 0x58a2d8
 static int16_t fight_count;
 
-/* Stamp an actor into the off-screen bitmap and restore the drawing canvas. */
-// FUNCTION: TIE95 0x729e8
-// FUNCTION: TIE98 0x48fb20
-static int16_t tielogo_film_Actor_To_Background(Actor* actor) {
-	Rect canvas_bounds, clip;
-	int result = 0;
-
-	xcanvas_Get_Drawing_Canvas_Bounds(&canvas_bounds);
-	xcanvas_Push_Canvas(&tielogo_background);
-	if (actor->draw) {
-		xrect_Copy_Rect(&clip, &actor->frame);
-		xcanvas_Set_Drawing_Canvas_Clip(&clip);
-		result = actor->draw(actor, &canvas_bounds, &clip, actor->x, actor->y, 1);
-		xcanvas_Max_Drawing_Canvas_Clip();
-	}
-	xcanvas_Pop_Canvas();
-	return result;
-}
-
-/* ---- Actor draw/user callbacks ---- */
-
-/* Draw callback: copy the entire background bitmap to the canvas.
- * Replaces the normal draw for actors composited into the background. */
-// FUNCTION: TIE95 0x72a50
-// FUNCTION: TIE98 0x48fba0
+static void tielogo_end_View(int32_t frame_num);
+static int16_t tielogo_film_Callback(Film* film, FilmObject* film_object);
+static int16_t tielogo_film_Actor_To_Background(Actor* actor);
 static int16_t tielogo_draw_Backdrop(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
-									 int16_t refresh) {
-	Rect ra;
-	(void)actor;
-	(void)r;
-	(void)clip_r;
-	(void)x;
-	(void)y;
-	if (!refresh)
-		return 0;
-
-	xrect_Set_Rect(&ra, 0, 0, 320, 200);
-	xcanvas_Copy_Bitmap_Portion_To_Canvas(&tielogo_background, &ra, 0, 0);
-	return 1;
-}
-
-/* User callback for the close/cleanup actor. When the film finishes,
- * hides the backdrop and sets var1 to trigger canvas erase. */
-// FUNCTION: TIE95 0x72a94
-// FUNCTION: TIE98 0x48fbf0
-static void tielogo_user_Close(Actor* actor, int32_t time) {
-	(void)time;
-	if (tielogo_film->cur_cel == tielogo_film->cels) {
-		xactor_Hide_Actor(backdrop);
-		actor->var1 = 1;
-	} else {
-		actor->var1 = 0;
-	}
-}
-
-/* Draw callback for the close actor. When var1 is set (film finished),
- * erases the canvas and maxes the dirty list for the scene transition. */
-// FUNCTION: TIE95 0x72ac0
-// FUNCTION: TIE98 0x48fc30
-static int16_t tielogo_draw_Close(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
-								  int16_t refresh) {
-	(void)r;
-	(void)clip_r;
-	(void)x;
-	(void)y;
-	(void)refresh;
-	if (actor->var1) {
-		xcanvas_Erase_Canvas();
-		xdirty_Max_Dirty_List();
-		xcanvas_Invalid_Screen_Diff();
-	}
-	return 1;
-}
-
-/* User callback for the TIE text actor. Waits for the animation to
- * reach its penultimate frame, then stamps the actor into the background
- * and hides it on the next frame. */
-// FUNCTION: TIE95 0x72ae0
-// FUNCTION: TIE98 0x48fc50
-static void tielogo_user_Tie(Actor* actor, int32_t time) {
-	(void)time;
-	if (!xactor_Is_Actor_Visible(actor))
-		return;
-
-	if (tie_actor->id) {
-#ifdef TIE_MODERN
-		TieLogoSnapshot_Stamp(actor);
-#endif
-		tielogo_film_Actor_To_Background(actor);
-		xactor_Hide_Actor(actor);
-	} else if (tie_actor->state == tie_actor->arraySize - 1) {
-		tie_actor->id++;
-	}
-}
-
-/* Draw callback for the fighter particle system. Draws all active
- * fighter slots at their current positions. */
-// FUNCTION: TIE95 0x72d90
-// FUNCTION: TIE98 0x48ff00
+									 int16_t refresh);
+static void tielogo_user_Close(Actor* actor, int32_t time);
+static int16_t tielogo_draw_Close(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh);
+static void tielogo_user_Tie(Actor* actor, int32_t time);
+static void tielogo_user_Fighter(Actor* actor, int32_t time);
 static int16_t tielogo_draw_Fighter(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
-									int16_t refresh) {
-	int16_t i;
-	if (!refresh)
-		return 1;
-
-	for (i = 0; i < 32; i++) {
-		if (tielogo_fight_state[i] >= 0) {
-			xactor_Set_Actor_State(actor, i, 0);
-			xactanim_Draw_Anim_Actor(actor, r, clip_r, tielogo_fight_x[i] + x, tielogo_fight_y[i] + y,
-									 refresh);
-		}
-	}
-	return 1;
-}
-
-/* User callback for the fighter fly-by. Manages the 32-slot particle
- * system: initialization, launch timing, movement, and stamp-to-background. */
-// FUNCTION: TIE95 0x72b20
-// FUNCTION: TIE98 0x48fca0
-static void tielogo_user_Fighter(Actor* actor, int32_t time) {
-	int16_t i;
-	int16_t slot_idx;
-	int32_t launch_frame;
-	int16_t accum_time;
-
-	/* Frame 0: initialize all slots and compute total frame count */
-	if (!time) {
-		fight_count = 0;
-		for (i = 0; i < 32; i++) {
-			tielogo_fight_state[i] = -1;
-			fight_count += 140 / (20 - fight_vel[i]);
-		}
-		xactor_Hide_Actor(actor);
-		return;
-	}
-
-	/* Play sfxKaWhoosh at predefined times */
-	for (i = 0;; i++) {
-		int32_t sfx_time = fight_sfx[i] + 24;
-		if (sfx_time > time)
-			break;
-		if (sfx_time == time)
-			soundext_Play_SFX(sfxKaWhoosh, 64);
-	}
-
-	/* Frame rate control */
-	if (time == 52)
-		xtimer_Set_Frame_Rate(4);
-	if (time == 200)
-		xtimer_Set_Frame_Rate(20);
-
-	/* Outside active window: hide actor when visible */
-	if (time < 52 || time >= fight_count + 52) {
-		if (time == fight_count + 52)
-			xtimer_Set_Frame_Rate(20);
-		if (xactor_Is_Actor_Visible(actor))
-			xactor_Hide_Actor(actor);
-		return;
-	}
-
-	/* Inside active window */
-	if (!xactor_Is_Actor_Visible(actor))
-		xactor_Show_Actor(actor);
-
-	launch_frame = time - 52;
-	accum_time = 0;
-
-	for (slot_idx = 0; slot_idx < 32; slot_idx++) {
-		if (accum_time == launch_frame) {
-			/* Launch this slot */
-			int16_t fighter_idx = slot_idx >> 1;
-			int16_t speed, steps, travel;
-			if (slot_idx & 1)
-				fighter_idx = 32 - (fighter_idx + 1);
-
-			speed = 16 - fight_vel[fighter_idx];
-			steps = 180 / speed;
-			travel = speed * (steps + 1);
-
-			tielogo_fight_state[fighter_idx] = steps;
-			tielogo_fight_x[fighter_idx] = travel * fight_xv[fighter_idx];
-			tielogo_fight_y[fighter_idx] = travel * fight_yv[fighter_idx];
-			tielogo_fight_xadd[fighter_idx] = speed * -fight_xv[fighter_idx];
-			tielogo_fight_yadd[fighter_idx] = -fight_yv[fighter_idx] * speed;
-		} else {
-			int16_t steps_left = tielogo_fight_state[slot_idx];
-			if (steps_left > 0) {
-				/* Move fighter toward center */
-				tielogo_fight_state[slot_idx] = steps_left - 1;
-				tielogo_fight_x[slot_idx] += tielogo_fight_xadd[slot_idx];
-				tielogo_fight_y[slot_idx] += tielogo_fight_yadd[slot_idx];
-			} else if (steps_left == 0) {
-				/* Fighter arrived: stamp into background */
-				xactor_Set_Actor_State(fighter_actor, slot_idx, 0);
-#ifdef TIE_MODERN
-				TieLogoSnapshot_Stamp(fighter_actor);
-#endif
-				tielogo_film_Actor_To_Background(fighter_actor);
-				tielogo_fight_state[slot_idx] = -1;
-			}
-		}
-		accum_time += fight_vel[slot_idx];
-	}
-}
-
-/* Film per-frame callback. For actor objects (type_code 3): rewinds
- * the actor film, then if var1 == 20 captures the frame into the
- * background. If var2 == 1, replaces draw with tielogo_draw_Backdrop. */
-// FUNCTION: TIE95 0x72988
-// FUNCTION: TIE98 0x48fac0
-static int16_t tielogo_film_Callback(Film* film, FilmObject* film_object) {
-	int16_t should_stop = 0;
-	Actor* actor;
-
-	if (film_object->id != 3)
-		return 0;
-
-	xfilm_Rewind_Actor_Film(film, film_object, (void*)((char*)film_object + sizeof(FilmObject)));
-	actor = film_object->object;
-
-	if (actor->var1 != 20)
-		return 0;
-
-#ifdef TIE_MODERN
-	/* The backdrop remains live; only hidden/stamped actors need sticky poses. */
-	if (actor->var2 != 1)
-		TieLogoSnapshot_Stamp(actor);
-#endif
-	tielogo_film_Actor_To_Background(actor);
-
-	if (actor->var2 == 1) {
-		xactor_Set_Actor_Draw_Function(actor, tielogo_draw_Backdrop);
-		backdrop = actor;
-	}
-
-	should_stop = (actor->var2 == 0) ? 1 : 0;
-	return should_stop;
-}
-
-/* View update callback. On frame 0, maxes the dirty list.
- * Checks for scene exit (film finished = cur_cel == cels). */
-// FUNCTION: TIE95 0x72938
-// FUNCTION: TIE98 0x48fa70
-static void tielogo_end_View(int32_t frame_num) {
-	int16_t exit_id;
-	int16_t film_done = (tielogo_film->cur_cel == tielogo_film->cels) ? 1 : 0;
-	if (!frame_num)
-		xdirty_Max_Dirty_List();
-	if (shellext_Check_Scene_Exit(&exit_id, 90, 100, film_done))
-		xerror_Set_Landru_Exit(exit_id);
-}
+									int16_t refresh);
 
 // FUNCTION: TIE95 0x72780
 // FUNCTION: TIE98 0x48F830
@@ -447,4 +207,247 @@ int tielogo_TieLogo(SceneHeadStruct* scene_head) {
 	xtimer_Set_Frame_Rate(20);
 	return xerror_Get_Landru_Exit();
 #endif
+}
+
+/* View update callback. On frame 0, maxes the dirty list.
+ * Checks for scene exit (film finished = cur_cel == cels). */
+// FUNCTION: TIE95 0x72938
+// FUNCTION: TIE98 0x48fa70
+static void tielogo_end_View(int32_t frame_num) {
+	int16_t exit_id;
+
+	if (!frame_num)
+		xdirty_Max_Dirty_List();
+	if (shellext_Check_Scene_Exit(&exit_id, 90, 100, tielogo_film->cur_cel == tielogo_film->cels))
+		xerror_Set_Landru_Exit(exit_id);
+}
+
+/* Film per-frame callback. For actor objects (type_code 3): rewinds
+ * the actor film, then if var1 == 20 captures the frame into the
+ * background. If var2 == 1, replaces draw with tielogo_draw_Backdrop. */
+// FUNCTION: TIE95 0x72988
+// FUNCTION: TIE98 0x48fac0
+static int16_t tielogo_film_Callback(Film* film, FilmObject* film_object) {
+	int16_t should_stop = 0;
+	Actor* actor;
+
+	if (film_object->id != 3)
+		return 0;
+
+	xfilm_Rewind_Actor_Film(film, film_object, (void*)((char*)film_object + sizeof(FilmObject)));
+	actor = film_object->object;
+
+	if (actor->var1 != 20)
+		return 0;
+
+#ifdef TIE_MODERN
+	/* The backdrop remains live; only hidden/stamped actors need sticky poses. */
+	if (actor->var2 != 1)
+		TieLogoSnapshot_Stamp(actor);
+#endif
+	tielogo_film_Actor_To_Background(actor);
+
+	if (actor->var2 == 1) {
+		xactor_Set_Actor_Draw_Function(actor, tielogo_draw_Backdrop);
+		backdrop = actor;
+	}
+
+	should_stop = (actor->var2 == 0) ? 1 : 0;
+	return should_stop;
+}
+
+/* Stamp an actor into the off-screen bitmap and restore the drawing canvas. */
+// FUNCTION: TIE95 0x729e8
+// FUNCTION: TIE98 0x48fb20
+static int16_t tielogo_film_Actor_To_Background(Actor* actor) {
+	Rect canvas_bounds, clip;
+	int result = 0;
+
+	xcanvas_Get_Drawing_Canvas_Bounds(&canvas_bounds);
+	xcanvas_Push_Canvas(&tielogo_background);
+	if (actor->draw) {
+		xrect_Copy_Rect(&clip, &actor->frame);
+		xcanvas_Set_Drawing_Canvas_Clip(&clip);
+		result = actor->draw(actor, &canvas_bounds, &clip, actor->x, actor->y, 1);
+		xcanvas_Max_Drawing_Canvas_Clip();
+	}
+	xcanvas_Pop_Canvas();
+	return result;
+}
+
+/* ---- Actor draw/user callbacks ---- */
+
+/* Draw callback: copy the entire background bitmap to the canvas.
+ * Replaces the normal draw for actors composited into the background. */
+// FUNCTION: TIE95 0x72a50
+// FUNCTION: TIE98 0x48fba0
+static int16_t tielogo_draw_Backdrop(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+									 int16_t refresh) {
+	Rect ra;
+	(void)actor;
+	(void)r;
+	(void)clip_r;
+	(void)x;
+	(void)y;
+	if (!refresh)
+		return 0;
+
+	xrect_Set_Rect(&ra, 0, 0, 320, 200);
+	xcanvas_Copy_Bitmap_Portion_To_Canvas(&tielogo_background, &ra, 0, 0);
+	return 1;
+}
+
+/* User callback for the close/cleanup actor. When the film finishes,
+ * hides the backdrop and sets var1 to trigger canvas erase. */
+// FUNCTION: TIE95 0x72a94
+// FUNCTION: TIE98 0x48fbf0
+static void tielogo_user_Close(Actor* actor, int32_t time) {
+	(void)time;
+	if (tielogo_film->cur_cel == tielogo_film->cels) {
+		xactor_Hide_Actor(backdrop);
+		actor->var1 = 1;
+	} else {
+		actor->var1 = 0;
+	}
+}
+
+/* Draw callback for the close actor. When var1 is set (film finished),
+ * erases the canvas and maxes the dirty list for the scene transition. */
+// FUNCTION: TIE95 0x72ac0
+// FUNCTION: TIE98 0x48fc30
+static int16_t tielogo_draw_Close(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+								  int16_t refresh) {
+	(void)r;
+	(void)clip_r;
+	(void)x;
+	(void)y;
+	(void)refresh;
+	if (actor->var1) {
+		xcanvas_Erase_Canvas();
+		xdirty_Max_Dirty_List();
+		xcanvas_Invalid_Screen_Diff();
+	}
+	return 1;
+}
+
+/* User callback for the TIE text actor. Waits for the animation to
+ * reach its penultimate frame, then stamps the actor into the background
+ * and hides it on the next frame. */
+// FUNCTION: TIE95 0x72ae0
+// FUNCTION: TIE98 0x48fc50
+static void tielogo_user_Tie(Actor* actor, int32_t time) {
+	(void)time;
+	if (!xactor_Is_Actor_Visible(actor))
+		return;
+
+	if (tie_actor->id) {
+#ifdef TIE_MODERN
+		TieLogoSnapshot_Stamp(actor);
+#endif
+		tielogo_film_Actor_To_Background(actor);
+		xactor_Hide_Actor(actor);
+	} else if (tie_actor->state == tie_actor->arraySize - 1) {
+		tie_actor->id++;
+	}
+}
+
+/* User callback for the fighter fly-by. Manages the 32-slot particle
+ * system: initialization, launch timing, movement, and stamp-to-background. */
+// FUNCTION: TIE95 0x72b20
+// FUNCTION: TIE98 0x48fca0
+static void tielogo_user_Fighter(Actor* actor, int32_t time) {
+	int16_t i;
+	int16_t slot_idx;
+	int16_t speed;
+	int16_t accum_time;
+
+	/* Frame 0: initialize all slots and compute total frame count */
+	if (!time) {
+		fight_count = 0;
+		for (i = 0; i < 32; i++) {
+			tielogo_fight_state[i] = -1;
+			speed = 20 - fight_vel[i];
+			fight_count += 140 / speed;
+		}
+		xactor_Hide_Actor(actor);
+		return;
+	}
+
+	/* Play sfxKaWhoosh at predefined times */
+	for (i = 0; fight_sfx[i] + 24 <= time; i++) {
+		if (fight_sfx[i] + 24 == time)
+			soundext_Play_SFX(sfxKaWhoosh, 64);
+	}
+
+	/* Frame rate control */
+	if (time == 52)
+		xtimer_Set_Frame_Rate(4);
+	if (time == 200)
+		xtimer_Set_Frame_Rate(20);
+
+	if (time >= 52 && time < fight_count + 52) {
+		/* Inside active window */
+		if (!xactor_Is_Actor_Visible(actor))
+			xactor_Show_Actor(actor);
+
+		for (slot_idx = 0, accum_time = 0; slot_idx < 32; slot_idx++) {
+			if (accum_time == time - 52) {
+				/* Launch this slot */
+				int16_t fighter_idx;
+				if (slot_idx & 1)
+					fighter_idx = 32 - ((slot_idx >> 1) + 1);
+				else
+					fighter_idx = slot_idx >> 1;
+
+				speed = 16 - fight_vel[fighter_idx];
+				tielogo_fight_state[fighter_idx] = 180 / speed;
+				tielogo_fight_x[fighter_idx] =
+					speed * (tielogo_fight_state[fighter_idx] + 1) * fight_xv[fighter_idx];
+				tielogo_fight_y[fighter_idx] =
+					speed * (tielogo_fight_state[fighter_idx] + 1) * fight_yv[fighter_idx];
+				tielogo_fight_xadd[fighter_idx] = -fight_xv[fighter_idx] * speed;
+				tielogo_fight_yadd[fighter_idx] = -fight_yv[fighter_idx] * speed;
+			} else if (tielogo_fight_state[slot_idx] > 0) {
+				/* Move fighter toward center */
+				tielogo_fight_state[slot_idx]--;
+				tielogo_fight_x[slot_idx] += tielogo_fight_xadd[slot_idx];
+				tielogo_fight_y[slot_idx] += tielogo_fight_yadd[slot_idx];
+			} else if (tielogo_fight_state[slot_idx] == 0) {
+				/* Fighter arrived: stamp into background */
+				xactor_Set_Actor_State(fighter_actor, slot_idx, 0);
+#ifdef TIE_MODERN
+				TieLogoSnapshot_Stamp(fighter_actor);
+#endif
+				tielogo_film_Actor_To_Background(fighter_actor);
+				tielogo_fight_state[slot_idx] = -1;
+			}
+			accum_time += fight_vel[slot_idx];
+		}
+	} else {
+		/* Outside active window: hide actor when visible */
+		if (time == fight_count + 52)
+			xtimer_Set_Frame_Rate(20);
+		if (xactor_Is_Actor_Visible(actor))
+			xactor_Hide_Actor(actor);
+	}
+}
+
+/* Draw callback for the fighter particle system. Draws all active
+ * fighter slots at their current positions. */
+// FUNCTION: TIE95 0x72d90
+// FUNCTION: TIE98 0x48ff00
+static int16_t tielogo_draw_Fighter(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
+									int16_t refresh) {
+	int16_t i;
+	if (!refresh)
+		return 1;
+
+	for (i = 0; i < 32; i++) {
+		if (tielogo_fight_state[i] >= 0) {
+			xactor_Set_Actor_State(actor, i, 0);
+			xactanim_Draw_Anim_Actor(actor, r, clip_r, tielogo_fight_x[i] + x, tielogo_fight_y[i] + y,
+									 refresh);
+		}
+	}
+	return 1;
 }

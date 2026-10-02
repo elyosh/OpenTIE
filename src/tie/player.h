@@ -108,7 +108,7 @@ int player_Toggle_Map_Play(void);
 /* Init / Free */
 void player_Init_Brief_Display(Input* input, void* poly);
 EBriefStruct* player_Init_Brief_For_Talk(void);
-void player_Free_Brief_Display(void);
+int player_Free_Brief_Display(void);
 void player_Init_Display_Map(void);
 void player_Free_Display_Map(void);
 void player_Load_Display_Map(void);
@@ -128,7 +128,7 @@ int16_t player_Update_Display_Map(Rect* bounds, Rect* clip, uint8_t left, uint8_
 								  int16_t mouse_y);
 
 int16_t player_Draw_Display_Map(Rect* view_rect, Rect* clip_rect, int16_t refresh);
-void player_Draw_Display_Grid(Rect* clip);
+void player_Draw_Display_Grid(Rect* clip, Rect* draw_clip);
 void player_Draw_Display_Ship(Rect* clip, Rect* dest);
 void player_Draw_Map_Paragraph(Rect* clip, LandruHandle handle, int16_t flag);
 void player_Draw_Double_Readout_Text(const char* text, int16_t font, int16_t screen_x, int16_t screen_y,

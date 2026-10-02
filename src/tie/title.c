@@ -118,303 +118,16 @@ LandruHandle title_text; /* paragraph data */
 // GLOBAL: TIE98 0x58A6B0
 static int16_t title_font;
 
-/* ================================================================
- * View update callback
- * ================================================================ */
-
-// FUNCTION: TIE95 0x66B9C
-// FUNCTION: TIE98 0x490340
-static void title_end_View(int32_t time) {
-	int16_t i;
-	int16_t scene;
-	Rect r;
-	(void)time;
-
-	/* Scene 8: check for exit at time 690 */
-	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
-		if (shellext_Check_Scene_Exit(&scene, 10, 100, film_time == TIE_FRONTEND_EDITION(690, 694)))
-			xerror_Set_Landru_Exit(scene);
-	}
-
-	/* At time 100: reset view frame for the text crawl */
-	if (film_time == TIE_FRONTEND_EDITION(100, 104)) {
-		xrect_Set_Rect(&r, 0, 0, 320, 200);
-		xview_Set_View_Frame(0, &r);
-		xview_Set_View_Pos(0, r.left, r.top);
-	}
-
-	/* Fade out: increment base_color every other frame after time 620 */
-	if (film_time >= TIE_FRONTEND_EDITION(620, 624) && (film_time & 1))
-		base_color++;
-
-	/* Time 689: clear all lines before loop */
-	if (film_time == TIE_FRONTEND_EDITION(689, 693)) {
-		for (i = 0; i < title_num_lines; i++)
-			line_used[i] = 0;
-	}
-
-	/* Advance time; skip ahead on slow systems */
-	if (++film_time == TIE_FRONTEND_EDITION(40, 44)) {
-		if (xio_Is_System_Slower_Than(2))
-			film_time = TIE_FRONTEND_EDITION(64, 68);
-	}
-}
-
-/* ================================================================
- * Star Wars logo zoom callbacks
- * ================================================================ */
-
-/* Normal speed: per-frame scale decrease with deceleration */
-// FUNCTION: TIE95 0x66CB8
-// FUNCTION: TIE98 0x490440
-static void title_user_StarWars(Actor* actor, int32_t time) {
-	(void)time;
-
-	if (!film_time) {
-		xactor_Hide_Actor(actor);
-		return;
-	}
-
-	/* At time 84: capture palette and start fade to black */
-	if (film_time == TIE_FRONTEND_EDITION(84, 88)) {
-		xpal_Screen_To_Src_Palette(0, 0, 255);
-		xpal_Screen_To_Dest_Palette(0, 0, 255);
-		xpal_Set_Dest_Pal_Color(81, 96, 0, 0, 0);
-		xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_PAL_TO_PAL, 1, 0, 0);
-	}
-
-	/* At time 39: show and set initial scale */
-	if (film_time == TIE_FRONTEND_EDITION(39, 43)) {
-		xactor_Show_Actor(actor);
-		xactor_Set_Actor_Scale(actor, 460, 460);
-	}
-
-	/* Decrease scale each frame */
-	xactor_Set_Actor_Scale(actor, actor->xscale - scale_amount, actor->yscale - scale_amount);
-
-	/* Clamp to minimum 1 */
-	if (actor->xscale < 1)
-		actor->xscale = 1;
-	if (actor->yscale < 1)
-		actor->yscale = 1;
-
-	/* Decelerate scale speed between times 39-100 */
-	if (film_time > TIE_FRONTEND_EDITION(39, 43) && film_time < TIE_FRONTEND_EDITION(100, 104)) {
-		scale_amount_f += 48;
-		if (scale_amount_f >= 256) {
-			scale_amount_f -= 256;
-			scale_amount--;
-		}
-	}
-
-	/* At time 100: hide */
-	if (film_time == TIE_FRONTEND_EDITION(100, 104))
-		xactor_Hide_Actor(actor);
-}
-
-/* Slow system variant: static display, no per-frame scaling */
-// FUNCTION: TIE95 0x66DFC
-// FUNCTION: TIE98 0x490560
-static void title_user_Slow_StarWars(Actor* actor, int32_t time) {
-	(void)time;
-
-	if (!film_time) {
-		xactor_Hide_Actor(actor);
-		return;
-	}
-
-	if (film_time == TIE_FRONTEND_EDITION(39, 43))
-		xactor_Show_Actor(actor);
-
-	if (film_time == TIE_FRONTEND_EDITION(84, 88)) {
-		xpal_Screen_To_Src_Palette(0, 0, 255);
-		xpal_Screen_To_Dest_Palette(0, 0, 255);
-		xpal_Set_Dest_Pal_Color(81, 96, 0, 0, 0);
-		xfade_Start_Full_Fade(FADE_WIPE_SNAP_OFF, FADE_COLOR_PAL_TO_PAL, 1, 0, 1);
-		xactor_Hide_Actor(actor);
-	}
-}
-
-/* ================================================================
- * Stars background callback
- * ================================================================ */
-
-// FUNCTION: TIE95 0x66E80
-// FUNCTION: TIE98 0x4905F0
-static void title_user_Stars(Actor* actor, int32_t time) {
-	(void)time;
-	if (shellext_Get_Cur_Scene() != SCENE_TITLE)
-		return;
-
-	if (!film_time) {
-		xactor_Hide_Actor(actor);
-	} else {
-		if (film_time == TIE_FRONTEND_EDITION(38, 42))
-			xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
-		if (film_time == TIE_FRONTEND_EDITION(39, 43))
-			xactor_Show_Actor(actor);
-	}
-}
-
-/* ================================================================
- * Text line animation
- * ================================================================ */
-
-/* Per-frame: advance each active line's Y position with deceleration */
-// FUNCTION: TIE95 0x66EE0
-// FUNCTION: TIE98 0x490650
-static void title_user_Title(Actor* actor, int32_t time) {
-	int16_t i;
-	(void)actor;
-	(void)time;
-
-	for (i = 0; i < title_num_lines; i++) {
-		if (!line_used[i])
-			continue;
-
-		/* Accumulate fractional velocity */
-		line_yf[i] += line_yvf[i];
-		if (line_yf[i] >= 4096) {
-			line_yf[i] -= 4096;
-			line_y[i]--;
-		}
-
-		/* Move line upward */
-		line_y[i] -= line_yv[i];
-
-		/* Decelerate when line is on screen */
-		if (line_y[i] < 200) {
-			line_yvf[i] -= 16;
-			if (line_yvf[i] < 0) {
-				line_yvf[i] += 4096;
-				if (line_yv[i] <= 0)
-					line_used[i] = 0;
-				else
-					line_yv[i]--;
-			}
-		}
-	}
-}
-
-/* Draw: render each active line with perspective horizontal scaling */
-// FUNCTION: TIE95 0x66FD4
-// FUNCTION: TIE98 0x490740
+static void title_end_View(int32_t time);
+static void title_user_StarWars(Actor* actor, int32_t time);
+static void title_user_Slow_StarWars(Actor* actor, int32_t time);
+static void title_user_Stars(Actor* actor, int32_t time);
+static void title_user_Title(Actor* actor, int32_t time);
 static int16_t title_draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
-								int16_t refresh) {
-	char* dataptr;
-	int16_t i;
-	(void)actor;
-	(void)r;
-	(void)clip_r;
-	(void)off_x;
-	(void)off_y;
-
-	if (!refresh)
-		return 1;
-
-	dataptr = (char*)xbm_Lock_Bitmap(&title_background);
-
-	for (i = 0; i < title_num_lines; i++) {
-		int16_t y, by, yf, j;
-		if (!line_used[i])
-			continue;
-
-		y = line_y[i];
-		by = buff_y[i];
-		yf = 2 * (y - 40);
-		if (line_yf[i] >= 2048)
-			yf--;
-
-		for (j = 0; j < 20; j++) {
-			if (scale_table[j] <= yf) {
-				int16_t w = 320 - 2 * (200 - y);
-				int16_t color = ((y - 40) >> 1) + 96 - base_color;
-				if (color < 96)
-					color = 96;
-
-				if (y < 200 && w > 0) {
-					int16_t x = 160 - (w >> 1);
-					slant_Scale_Line(dataptr, 0, by, scale_skip[w], scale_skipf[w], x, y, w, (uint8_t)color);
-				}
-				y++;
-			}
-			by++;
-		}
-	}
-
-	xbm_Unlock_Bitmap(&title_background);
-	return 1;
-}
-
-/* ================================================================
- * Background text preparer
- * ================================================================ */
-
-/* At time 0: initialize 18 text lines with staggered positions */
-// FUNCTION: TIE95 0x67148
-// FUNCTION: TIE98 0x490870
-static void title_user_Back(Actor* actor, int32_t time) {
-	int16_t start = TIE_FRONTEND_EDITION(100, 104);
-	int16_t i;
-	(void)actor;
-	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
-		if (xio_Is_System_Slower_Than(2))
-			start = TIE_FRONTEND_EDITION(60, 64);
-	} else {
-		start = 1;
-	}
-
-	if (time)
-		return;
-
-	title_num_lines = MAX_LINES;
-	for (i = 0; i < title_num_lines; i++) {
-		buff_y[i] = 20 * (i % 10);
-		line_y[i] = start + 28 * i + 200;
-#ifdef TIE_MODERN
-		TieTitleSnapshot_SetOrigin(i, line_y[i]);
-#endif
-		line_yf[i] = 0;
-		line_yv[i] = 1;
-		line_yvf[i] = 0;
-		line_used[i] = 1;
-		line_drawn[i] = 0;
-	}
-}
-
-/* Draw: render text lines into background bitmap as they come into view */
-// FUNCTION: TIE95 0x671FC
-// FUNCTION: TIE98 0x490940
+								int16_t refresh);
+static void title_user_Back(Actor* actor, int32_t time);
 static int16_t title_draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
-							   int16_t refresh) {
-	int16_t i;
-	(void)actor;
-	(void)r;
-	(void)clip_r;
-	(void)off_x;
-	(void)off_y;
-
-	if (!refresh)
-		return 1;
-
-	xcanvas_Push_Canvas(&title_background);
-
-	for (i = 0; i < title_num_lines; i++) {
-		if (!line_drawn[i] && line_y[i] <= 200) {
-			Rect tr;
-			char string[64];
-			xrect_Set_Rect(&tr, 0, buff_y[i], 320, buff_y[i] + 20);
-			xpaint_Paint_Clipped_Rect(&tr, 0);
-
-			xparagrp_Get_Paragraph_String(title_text, string, 0, i);
-			xfont_Print_Centered_Text(string, &tr, title_font, 15);
-			line_drawn[i] = 1;
-		}
-	}
-
-	xcanvas_Pop_Canvas();
-	return 1;
-}
+							   int16_t refresh);
 
 // FUNCTION: TIE95 0x668A0
 // FUNCTION: TIE98 0x48FF80
@@ -586,4 +299,304 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 	xview_Set_View_Pos(0, 0, 0);
 	return xerror_Get_Landru_Exit();
 #endif
+}
+
+/* ================================================================
+ * View update callback
+ * ================================================================ */
+
+// FUNCTION: TIE95 0x66B9C
+// FUNCTION: TIE98 0x490340
+static void title_end_View(int32_t time) {
+	int16_t i;
+	int16_t scene;
+	Rect r;
+	(void)time;
+
+	/* Scene 8: check for exit at time 690 */
+	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
+		if (shellext_Check_Scene_Exit(&scene, 10, 100, film_time == TIE_FRONTEND_EDITION(690, 694)))
+			xerror_Set_Landru_Exit(scene);
+	}
+
+	/* At time 100: reset view frame for the text crawl */
+	if (film_time == TIE_FRONTEND_EDITION(100, 104)) {
+		xrect_Set_Rect(&r, 0, 0, 320, 200);
+		xview_Set_View_Frame(0, &r);
+		xview_Set_View_Pos(0, r.left, r.top);
+	}
+
+	/* Fade out: increment base_color every other frame after time 620 */
+	if (film_time >= TIE_FRONTEND_EDITION(620, 624) && (film_time & 1))
+		base_color++;
+
+	/* Time 689: clear all lines before loop */
+	if (film_time == TIE_FRONTEND_EDITION(689, 693)) {
+		for (i = 0; i < title_num_lines; i++)
+			line_used[i] = 0;
+	}
+
+	/* Advance time; skip ahead on slow systems */
+	if (++film_time == TIE_FRONTEND_EDITION(40, 44)) {
+		if (xio_Is_System_Slower_Than(2))
+			film_time = TIE_FRONTEND_EDITION(64, 68);
+	}
+}
+
+/* ================================================================
+ * Star Wars logo zoom callbacks
+ * ================================================================ */
+
+/* Normal speed: per-frame scale decrease with deceleration */
+// FUNCTION: TIE95 0x66CB8
+// FUNCTION: TIE98 0x490440
+static void title_user_StarWars(Actor* actor, int32_t time) {
+	(void)time;
+
+	if (!film_time) {
+		xactor_Hide_Actor(actor);
+		return;
+	}
+
+	/* At time 84: capture palette and start fade to black */
+	if (film_time == TIE_FRONTEND_EDITION(84, 88)) {
+		xpal_Screen_To_Src_Palette(0, 0, 255);
+		xpal_Screen_To_Dest_Palette(0, 0, 255);
+		xpal_Set_Dest_Pal_Color(81, 96, 0, 0, 0);
+		xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_PAL_TO_PAL, 1, 0, 0);
+	}
+
+	/* At time 39: show and set initial scale */
+	if (film_time == TIE_FRONTEND_EDITION(39, 43)) {
+		xactor_Show_Actor(actor);
+		xactor_Set_Actor_Scale(actor, 460, 460);
+	}
+
+	/* Decrease scale each frame */
+	xactor_Set_Actor_Scale(actor, actor->xscale - scale_amount, actor->yscale - scale_amount);
+
+	/* Clamp to minimum 1 */
+	if (actor->xscale < 1)
+		actor->xscale = 1;
+	if (actor->yscale < 1)
+		actor->yscale = 1;
+
+	/* Decelerate scale speed between times 39-100 */
+	if (film_time > TIE_FRONTEND_EDITION(39, 43) && film_time < TIE_FRONTEND_EDITION(100, 104)) {
+		scale_amount_f += 48;
+		if (scale_amount_f >= 256) {
+			scale_amount_f -= 256;
+			scale_amount--;
+		}
+	}
+
+	/* At time 100: hide */
+	if (film_time == TIE_FRONTEND_EDITION(100, 104))
+		xactor_Hide_Actor(actor);
+}
+
+/* Slow system variant: static display, no per-frame scaling */
+// FUNCTION: TIE95 0x66DFC
+// FUNCTION: TIE98 0x490560
+static void title_user_Slow_StarWars(Actor* actor, int32_t time) {
+	(void)time;
+
+	if (!film_time) {
+		xactor_Hide_Actor(actor);
+		return;
+	}
+
+	if (film_time == TIE_FRONTEND_EDITION(39, 43))
+		xactor_Show_Actor(actor);
+
+	if (film_time == TIE_FRONTEND_EDITION(84, 88)) {
+		xpal_Screen_To_Src_Palette(0, 0, 255);
+		xpal_Screen_To_Dest_Palette(0, 0, 255);
+		xpal_Set_Dest_Pal_Color(81, 96, 0, 0, 0);
+		xfade_Start_Full_Fade(FADE_WIPE_SNAP_OFF, FADE_COLOR_PAL_TO_PAL, 1, 0, 1);
+		xactor_Hide_Actor(actor);
+	}
+}
+
+/* ================================================================
+ * Stars background callback
+ * ================================================================ */
+
+// FUNCTION: TIE95 0x66E80
+// FUNCTION: TIE98 0x4905F0
+static void title_user_Stars(Actor* actor, int32_t time) {
+	(void)time;
+	if (shellext_Get_Cur_Scene() != SCENE_TITLE)
+		return;
+
+	if (!film_time) {
+		xactor_Hide_Actor(actor);
+	} else {
+		if (film_time == TIE_FRONTEND_EDITION(38, 42))
+			xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
+		if (film_time == TIE_FRONTEND_EDITION(39, 43))
+			xactor_Show_Actor(actor);
+	}
+}
+
+/* ================================================================
+ * Text line animation
+ * ================================================================ */
+
+/* Per-frame: advance each active line's Y position with deceleration */
+// FUNCTION: TIE95 0x66EE0
+// FUNCTION: TIE98 0x490650
+static void title_user_Title(Actor* actor, int32_t time) {
+	int16_t i, step;
+	(void)actor;
+	(void)time;
+
+	for (i = 0; i < title_num_lines; i++) {
+		if (!line_used[i])
+			continue;
+
+		for (step = 0; step < 1; step++) {
+			/* Accumulate fractional velocity */
+			line_yf[i] += line_yvf[i];
+			if (line_yf[i] >= 4096) {
+				line_yf[i] -= 4096;
+				line_y[i] += 0xFFFF;
+			}
+
+			/* Move line upward */
+			line_y[i] -= line_yv[i];
+
+			/* Decelerate when line is on screen */
+			if (line_y[i] < 200) {
+				line_yvf[i] -= 16;
+				if (line_yvf[i] < 0) {
+					line_yvf[i] += 4096;
+					if (line_yv[i] > 0)
+						line_yv[i] += 0xFFFF;
+					else
+						line_used[i] = 0;
+				}
+			}
+		}
+	}
+}
+
+/* Draw: render each active line with perspective horizontal scaling */
+// FUNCTION: TIE95 0x66FD4
+// FUNCTION: TIE98 0x490740
+static int16_t title_draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
+								int16_t refresh) {
+	char* dataptr;
+	int16_t i;
+	(void)actor;
+	(void)r;
+	(void)clip_r;
+	(void)off_x;
+	(void)off_y;
+
+	if (!refresh)
+		return 1;
+
+	dataptr = (char*)xbm_Lock_Bitmap(&title_background);
+
+	for (i = 0; i < title_num_lines; i++) {
+		int16_t y, by, yf, j;
+		if (!line_used[i])
+			continue;
+
+		y = line_y[i];
+		by = buff_y[i];
+		yf = 2 * (y - 40);
+		if (line_yf[i] >= 2048)
+			yf--;
+
+		for (j = 0; j < 20; j++) {
+			if (scale_table[j] <= yf) {
+				int16_t w = 320 - 2 * (200 - y);
+				int16_t color = ((y - 40) >> 1) + 96 - base_color;
+				if (color < 96)
+					color = 96;
+
+				if (y < 200 && w > 0) {
+					int16_t x = 160 - (w >> 1);
+					slant_Scale_Line(dataptr, 0, by, scale_skip[w], scale_skipf[w], x, y, w, (uint8_t)color);
+				}
+				y++;
+			}
+			by++;
+		}
+	}
+
+	xbm_Unlock_Bitmap(&title_background);
+	return 1;
+}
+
+/* ================================================================
+ * Background text preparer
+ * ================================================================ */
+
+/* At time 0: initialize 18 text lines with staggered positions */
+// FUNCTION: TIE95 0x67148
+// FUNCTION: TIE98 0x490870
+static void title_user_Back(Actor* actor, int32_t time) {
+	int16_t start = TIE_FRONTEND_EDITION(100, 104);
+	int16_t i;
+	(void)actor;
+	if (shellext_Get_Cur_Scene() == SCENE_TITLE) {
+		if (xio_Is_System_Slower_Than(2))
+			start = TIE_FRONTEND_EDITION(60, 64);
+	} else {
+		start = 1;
+	}
+
+	if (time)
+		return;
+
+	title_num_lines = MAX_LINES;
+	for (i = 0; i < title_num_lines; i++) {
+		buff_y[i] = 20 * (i % 10);
+		line_y[i] = start + 28 * i + 200;
+#ifdef TIE_MODERN
+		TieTitleSnapshot_SetOrigin(i, line_y[i]);
+#endif
+		line_yf[i] = 0;
+		line_yv[i] = 1;
+		line_yvf[i] = 0;
+		line_used[i] = 1;
+		line_drawn[i] = 0;
+	}
+}
+
+/* Draw: render text lines into background bitmap as they come into view */
+// FUNCTION: TIE95 0x671FC
+// FUNCTION: TIE98 0x490940
+static int16_t title_draw_Back(Actor* actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
+							   int16_t refresh) {
+	int16_t i;
+	(void)actor;
+	(void)r;
+	(void)clip_r;
+	(void)off_x;
+	(void)off_y;
+
+	if (!refresh)
+		return 1;
+
+	xcanvas_Push_Canvas(&title_background);
+
+	for (i = 0; i < title_num_lines; i++) {
+		if (!line_drawn[i] && line_y[i] <= 200) {
+			Rect tr;
+			char string[64];
+			xrect_Set_Rect(&tr, 0, buff_y[i], 320, buff_y[i] + 20);
+			xpaint_Paint_Clipped_Rect(&tr, 0);
+
+			xparagrp_Get_Paragraph_String(title_text, string, 0, i);
+			xfont_Print_Centered_Text(string, &tr, title_font, 15);
+			line_drawn[i] = 1;
+		}
+	}
+
+	xcanvas_Pop_Canvas();
+	return 1;
 }

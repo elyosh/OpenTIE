@@ -28,7 +28,7 @@ extern "C" {
  * including any added wrap lines and returns that total so callers can
  * advance cursor_y. See the implementation comment for `op` / `cond` /
  * `status` semantics. */
-int32_t goals_outputgoal(uint16_t target, uint16_t cond, int16_t target_type, uint16_t status, uint16_t op);
+uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, uint16_t status, uint16_t op);
 
 /* Print the display name of species `species_idx`. Falls back to
  * buoystr[species_idx - 70] for species 70..84. Emits 's' (plural) or ' '

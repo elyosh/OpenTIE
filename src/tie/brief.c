@@ -98,321 +98,10 @@ static Input* brief_Build_Notice(void);
 static void brief_idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh);
 static void brief_iuser_Notice(Input* input, int32_t time);
 
-/* ================================================================
- * View update callback
- * ================================================================ */
-
-/* On the first view update, show the cursor and the pilot-restored notice. */
-// FUNCTION: TIE95 0x7316C
-// FUNCTION: TIE98 0x406520
-void brief_end_View(int32_t frame_num) {
-	if (frame_num == 0) {
-		if (!xcursor_Is_Cursor_Visible())
-			xcursor_Show_Cursor();
-#ifndef TIE_MODERN
-		/* Modern builds open the notice through the briefing task. */
-		if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
-			Input* notice = brief_Build_Notice();
-#ifdef TIE98
-			xio_Set_Mouse_Position(330, 260);
-#else
-			xio_Set_Mouse_Position(190, 110);
-#endif
-			xdialog_Handle_Dialog_View(notice);
-			xdialog_Clear_Dialog_Exit();
-#ifdef TIE98
-			xio_Set_Mouse_Position(416, 302);
-#else
-			xio_Set_Mouse_Position(218, 126);
-#endif
-		}
-#endif
-	}
-}
-
-/* ================================================================
- * Film callback
- * ================================================================ */
-
-// FUNCTION: TIE95 0x731E0
-// FUNCTION: TIE98 0x406580
-static int16_t brief_film_Callback(Film* film, FilmObject* fo) {
-	Actor* actor;
-	if (fo->id != 3)
-		return 0; /* type_code: 3 = actor */
-
-	xfilm_Rewind_Actor_Film(film, fo, (void*)((char*)fo + sizeof(FilmObject)));
-	actor = (Actor*)fo->object;
-
-	switch (actor->var1) {
-		case 1: /* Hide if officer type is not 1 (officer-only actor) */
-			return (shipext_Get_Mission_Officer() != 1) ? 0 : 1;
-
-		case 2: /* Background — non-refreshable */
-			xactor_Non_Refreshable_Actor(actor);
-			return 0;
-
-		case 3: /* Officer/priest filter by var2 */
-			if (shipext_Get_Mission_Officer() == 1) {
-				return actor->var2 ? 0 : 1;
-			} else {
-				return actor->var2 ? 1 : 0;
-			}
-
-		case 4: /* Door actor */
-			xactor_Set_Actor_User_Function(actor, (xactorCallback)brief_user_Door);
-			door[actor->var2] = actor;
-			actor->id = actor->var2;
-			return 0;
-
-		case 5: /* Hide if officer type is not 2 (priest-only actor) */
-			return (shipext_Get_Mission_Officer() != 2) ? 0 : 1;
-
-		case 6: /* Title label */
-			title_actor = actor;
-			xactor_Set_Actor_User_Function(actor, (xactorCallback)brief_user_Title);
-			xactor_Set_Actor_Draw_Function(actor, brief_draw_Title);
-			return 0;
-
-		case 7: /* Returns 1 when officer != 2 (i.e. show for officer kind 1). */
-			return shipext_Get_Mission_Officer() != 2;
-
-		case 8: /* Additional TIE98 officer-room actor variant. */
-			return TIE_FRONTEND_EDITION(0, shipext_Get_Mission_Officer() != 2);
-
-		default:
-			return 0;
-	}
-}
-
-/* ================================================================
- * XINPUT callbacks
- * ================================================================ */
-
-// FUNCTION: TIE95 0x7330C
-// FUNCTION: TIE98 0x4066E0
+static int16_t brief_film_Callback(Film* film, FilmObject* fo);
 static int16_t brief_iupdate_Brief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
-								   uint8_t right, int16_t mouse_x, int16_t mouse_y) {
-	(void)bounds;
-	(void)clip;
-	(void)mouse_x;
-	(void)mouse_y;
-	if (key)
-		return 0;
-
-	/* Open door for ids 0 (mainmenu) and 1 (mission) */
-	if (input->id < 2)
-		door[input->id]->var1 = 1;
-
-	/* Show title label */
-	title_actor->var1 = 1;
-	title_actor->var2 = input->id;
-
-	/* Check for click */
-	if (left != 3 && right != 3)
-		return 1;
-
-	switch (input->id) {
-		case 0: /* Main Menu */
-			input->var2 = SCENE_MAIN_MENU;
-			input->var1 = 1;
-			break;
-		case 1: /* Enter Mission */
-			input->var1 = 1;
-			if (player_Get_Torp_Used() || player_Get_Beam_Used()) {
-				input->var2 = SCENE_ARM_SHIP;
-			} else if (shipext_Is_Mission_Launch()) {
-				input->var2 = SCENE_CUT_BATTLE_270;
-			} else {
-				input->var2 = SCENE_FLIGHT_BATTLE;
-			}
-			break;
-		case 2: /* Map */
-			input->var2 = SCENE_BRIEF_MAP;
-			input->var1 = 1;
-			break;
-		case 3: /* Officer */
-			input->var2 = SCENE_TALK_BRIEF_OFFICER;
-			input->var1 = 1;
-			break;
-		case 4: /* Priest */
-			input->var2 = SCENE_TALK_BRIEF_PRIEST;
-			input->var1 = 1;
-			break;
-		default:
-			break;
-	}
-	return 1;
-}
-
-// FUNCTION: TIE95 0x73410
-// FUNCTION: TIE98 0x4067F0
-static void brief_iuser_Brief(Input* input, int32_t time) {
-	int16_t scene;
-	(void)time;
-
-	/* Map widget (id=2) drives the briefing map animation */
-	if (input->id == 2) {
-		player_Move_Display_Map();
-		player_Step_Display_Map();
-		TieMapSnapshot_Capture();
-	}
-
-	if (!input->var1)
-		return; /* exit_pending */
-
-	scene = input->var2; /* exit_code */
-
-	/* Scenes 270, 4, 275: save pilot state before launching */
-	if (scene == SCENE_CUT_BATTLE_270 || scene == SCENE_FLIGHT_BATTLE || scene == SCENE_ARM_SHIP) {
-		if (options_gbl.auto_backup)
-			shipext_Backup_Pilot();
-		else
-			shipext_Update_Pilot();
-		shipext_Write_Temp_Pilot();
-	}
-
-	soundext_Stop_SFX(sfxText);
-	xerror_Set_Landru_Exit(scene);
-}
-
-/* ================================================================
- * Actor callbacks
- * ================================================================ */
-
-// FUNCTION: TIE95 0x73480
-// FUNCTION: TIE98 0x406860
-static int16_t brief_user_Title(Actor* actor, int32_t time) {
-	(void)time;
-	if (actor->var1 == 1) {
-		if (!xactor_Is_Actor_Visible(actor))
-			xactor_Show_Actor(actor);
-		actor->var1 = 0;
-	} else {
-		if (xactor_Is_Actor_Visible(actor))
-			xactor_Hide_Actor(actor);
-	}
-	return 1;
-}
-
-// FUNCTION: TIE95 0x734D8
-// FUNCTION: TIE98 0x4068B0
-static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
-								int16_t refresh) {
-	int16_t offy, offx;
-	Rect r;
-	char label[32];
-
-	if (!refresh)
-		return 0;
-
-	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
-
-	xactor_Get_Actor_Offset(actor, &offx, &offy);
-
-	xrect_Set_Rect(&r, offx, offy, offx + actor->w, offy + actor->h);
-
-	switch (actor->var2) {
-		case 0:
-			strcpy(label, textext_Get_Text(txtBriefMainMenu));
-			break;
-		case 1:
-			strcpy(label, textext_Get_Text(txtBriefEnter));
-			break;
-		case 2:
-			strcpy(label, textext_Get_Text(txtBriefMap));
-			break;
-		case 3:
-			strcpy(label, textext_Get_Text(txtBriefOfficer));
-			break;
-		case 4:
-			strcpy(label, textext_Get_Text(txtBriefPriest));
-			break;
-	}
-
-	xrect_Offset_Rect(&r, 1, 1);
-	xfont_Print_Centered_Text(label, &r, TIE_FRONTEND_EDITION(0, 2), 16);
-	xrect_Offset_Rect(&r, -1, -1);
-	xfont_Print_Centered_Text(label, &r, TIE_FRONTEND_EDITION(0, 2), 15);
-	return 1;
-}
-
-// FUNCTION: TIE95 0x735D4
-// FUNCTION: TIE98 0x4069E0
-static int brief_user_Door(Actor* actor, int32_t time) {
-	if (!time) {
-		actor->var2 = 0;
-		actor->var1 = 0;
-	}
-
-	if (actor->var1) {
-		if (!actor->state)
-			soundext_Play_SFX(sfxSmallDoorOpen, 80);
-		if (actor->state < actor->arraySize - 1)
-			xactor_Set_Actor_State(actor, actor->state + 1, 0);
-		actor->var1 = 0;
-	} else {
-		if (actor->state > 0) {
-			xactor_Set_Actor_State(actor, actor->state - 1, 0);
-			if (!actor->state)
-				soundext_Play_SFX(sfxSmallDoorShut, 80);
-		}
-	}
-	return 1;
-}
-
-/* ================================================================
- * Notice dialog ("Your pilot has been restored!")
- * ================================================================ */
-
-// FUNCTION: TIE95 0x73668
-// FUNCTION: TIE98 0x406A70
-static Input* brief_Build_Notice(void) {
-	Rect r;
-	Input* dlg;
-	PushButton* btn;
-
-	xrect_Set_Rect(&r, 0, 0, TIE_FRONTEND_EDITION(180, 280), TIE_FRONTEND_EDITION(40, 60));
-	dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
-	xinpattr_Set_Input_Draw_Function(dlg, brief_idraw_Notice);
-	xinpattr_Set_Input_Allign(dlg, 1, 1);
-	xinpattr_Start_Input(dlg);
-
-	textext_Copy_Text(notice_str, txtRegProtOK); /* "OK" */
-	xrect_Set_Rect(&r, 0, 4, 80, 20);
-	btn = xbtnpush_Alloc_Button(dlg, &r, 0, brief_iuser_Notice, notice_str, 1);
-	xinpattr_Set_Input_Allign(&btn->header, 1, 2);
-
-	return dlg;
-}
-
-// FUNCTION: TIE95 0x7370C
-// FUNCTION: TIE98 0x406B20
-static void brief_idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh) {
-	Rect tr;
-	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
-	if (!refresh)
-		return;
-
-	xrect_Copy_Rect(&tr, r);
-	xstyle_Style_Paint_Border(r, 0);
-	tr.bottom = tr.top + TIE_FRONTEND_EDITION(20, 30);
-
-	xfont_Enable_FontID_Shadow(font_id);
-	xfont_Print_Centered_Text(textext_Get_Text(txtBriefRestore), &tr, font_id, 15);
-	xfont_Disable_FontID_Shadow(font_id);
-
-	if (xinpattr_Is_Input_Dirty(input))
-		xdirty_Dirty_Rect(clip);
-}
-
-// FUNCTION: TIE95 0x7377C
-// FUNCTION: TIE98 0x406BB0
-static void brief_iuser_Notice(Input* input, int32_t time) {
-	(void)time;
-	if (xinpattr_Get_Input_Selected(input))
-		xdialog_Set_Dialog_Exit(1);
-}
+								   uint8_t right, int16_t mouse_x, int16_t mouse_y);
+static void brief_iuser_Brief(Input* input, int32_t time);
 
 /* ================================================================
  * Entry point
@@ -565,4 +254,323 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 		xcursor_Hide_Cursor();
 	return xerror_Get_Landru_Exit();
 #endif
+}
+
+/* ================================================================
+ * View update callback
+ * ================================================================ */
+
+/* On the first view update, show the cursor and the pilot-restored notice. */
+// FUNCTION: TIE95 0x7316C
+// FUNCTION: TIE98 0x406520
+void brief_end_View(int32_t frame_num) {
+	if (frame_num == 0) {
+		if (!xcursor_Is_Cursor_Visible())
+			xcursor_Show_Cursor();
+#ifndef TIE_MODERN
+		/* Modern builds open the notice through the briefing task. */
+		if (shellext_Get_Cur_Scene() == SCENE_BRIEF_PRE) {
+			Input* notice = brief_Build_Notice();
+#ifdef TIE98
+			xio_Set_Mouse_Position(330, 260);
+#else
+			xio_Set_Mouse_Position(190, 110);
+#endif
+			xdialog_Handle_Dialog_View(notice);
+			xdialog_Clear_Dialog_Exit();
+#ifdef TIE98
+			xio_Set_Mouse_Position(416, 302);
+#else
+			xio_Set_Mouse_Position(218, 126);
+#endif
+		}
+#endif
+	}
+}
+
+/* ================================================================
+ * Film callback
+ * ================================================================ */
+
+// FUNCTION: TIE95 0x731E0
+// FUNCTION: TIE98 0x406580
+static int16_t brief_film_Callback(Film* film, FilmObject* fo) {
+	Actor* actor;
+	if (fo->id != 3)
+		return 0; /* type_code: 3 = actor */
+
+	xfilm_Rewind_Actor_Film(film, fo, (void*)((char*)fo + sizeof(FilmObject)));
+	actor = (Actor*)fo->object;
+
+	switch (actor->var1) {
+		case 1: /* Hide if officer type is not 1 (officer-only actor) */
+			return (shipext_Get_Mission_Officer() != 1) ? 0 : 1;
+
+		case 2: /* Background — non-refreshable */
+			xactor_Non_Refreshable_Actor(actor);
+			return 0;
+
+		case 3: /* Officer/priest filter by var2 */
+			if (shipext_Get_Mission_Officer() == 1) {
+				return actor->var2 ? 0 : 1;
+			} else {
+				return actor->var2 ? 1 : 0;
+			}
+
+		case 4: /* Door actor */
+			xactor_Set_Actor_User_Function(actor, (xactorCallback)brief_user_Door);
+			door[actor->var2] = actor;
+			actor->id = actor->var2;
+			return 0;
+
+		case 5: /* Hide if officer type is not 2 (priest-only actor) */
+			return (shipext_Get_Mission_Officer() != 2) ? 0 : 1;
+
+		case 6: /* Title label */
+			title_actor = actor;
+			xactor_Set_Actor_User_Function(actor, (xactorCallback)brief_user_Title);
+			xactor_Set_Actor_Draw_Function(actor, brief_draw_Title);
+			return 0;
+
+		case 7: /* Returns 1 when officer != 2 (i.e. show for officer kind 1). */
+			return shipext_Get_Mission_Officer() != 2;
+
+		case 8: /* Additional TIE98 officer-room actor variant. */
+			return TIE_FRONTEND_EDITION(0, shipext_Get_Mission_Officer() != 2);
+
+		default:
+			return 0;
+	}
+}
+
+/* ================================================================
+ * XINPUT callbacks
+ * ================================================================ */
+
+// FUNCTION: TIE95 0x7330C
+// FUNCTION: TIE98 0x4066E0
+static int16_t brief_iupdate_Brief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
+								   uint8_t right, int16_t mouse_x, int16_t mouse_y) {
+	(void)bounds;
+	(void)clip;
+	(void)mouse_x;
+	(void)mouse_y;
+	if (key)
+		return 0;
+
+	/* Open door for ids 0 (mainmenu) and 1 (mission) */
+	if (input->id < 2)
+		door[input->id]->var1 = 1;
+
+	/* Show title label */
+	title_actor->var1 = 1;
+	title_actor->var2 = input->id;
+
+	/* Check for click */
+	if (left != 3 && right != 3)
+		return 1;
+
+	switch (input->id) {
+		case 0: /* Main Menu */
+			input->var2 = SCENE_MAIN_MENU;
+			input->var1 = 1;
+			break;
+		case 1: /* Enter Mission */
+			input->var1 = 1;
+			if (player_Get_Torp_Used() || player_Get_Beam_Used()) {
+				input->var2 = SCENE_ARM_SHIP;
+			} else if (shipext_Is_Mission_Launch()) {
+				input->var2 = SCENE_CUT_BATTLE_270;
+			} else {
+				input->var2 = SCENE_FLIGHT_BATTLE;
+			}
+			break;
+		case 2: /* Map */
+			input->var2 = SCENE_BRIEF_MAP;
+			input->var1 = 1;
+			break;
+		case 3: /* Officer */
+			input->var2 = SCENE_TALK_BRIEF_OFFICER;
+			input->var1 = 1;
+			break;
+		case 4: /* Priest */
+			input->var2 = SCENE_TALK_BRIEF_PRIEST;
+			input->var1 = 1;
+			break;
+		default:
+			break;
+	}
+	return 1;
+}
+
+// FUNCTION: TIE95 0x73410
+// FUNCTION: TIE98 0x4067F0
+static void brief_iuser_Brief(Input* input, int32_t time) {
+	(void)time;
+
+	/* Map widget (id=2) drives the briefing map animation */
+	if (input->id == 2) {
+		player_Move_Display_Map();
+		player_Step_Display_Map();
+#ifdef TIE_MODERN
+		TieMapSnapshot_Capture();
+#endif
+	}
+
+	if (!input->var1)
+		return; /* exit_pending */
+
+	/* Scenes 270, 4, 275: save pilot state before launching */
+	switch (input->var2) {
+		case SCENE_CUT_BATTLE_270:
+		case SCENE_FLIGHT_BATTLE:
+		case SCENE_ARM_SHIP:
+			if (options_gbl.auto_backup)
+				shipext_Backup_Pilot();
+			else
+				shipext_Update_Pilot();
+			shipext_Write_Temp_Pilot();
+			break;
+	}
+
+	soundext_Stop_SFX(sfxText);
+	xerror_Set_Landru_Exit(input->var2);
+}
+
+/* ================================================================
+ * Actor callbacks
+ * ================================================================ */
+
+// FUNCTION: TIE95 0x73480
+// FUNCTION: TIE98 0x406860
+static int16_t brief_user_Title(Actor* actor, int32_t time) {
+	(void)time;
+	if (actor->var1 == 1) {
+		if (!xactor_Is_Actor_Visible(actor))
+			xactor_Show_Actor(actor);
+		actor->var1 = 0;
+	} else {
+		if (xactor_Is_Actor_Visible(actor))
+			xactor_Hide_Actor(actor);
+	}
+	return 1;
+}
+
+// FUNCTION: TIE95 0x734D8
+// FUNCTION: TIE98 0x4068B0
+static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
+								int16_t refresh) {
+	int16_t offy, offx;
+	Rect r;
+	char label[32];
+
+	if (!refresh)
+		return 0;
+
+	xactdelt_Draw_Delta_Actor(actor, bounds, clip, xoff, yoff, refresh);
+
+	xactor_Get_Actor_Offset(actor, &offx, &offy);
+
+	xrect_Set_Rect(&r, offx, offy, offx + actor->w, offy + actor->h);
+
+	switch (actor->var2) {
+		case 0:
+			strcpy(label, textext_Get_Text(txtBriefMainMenu));
+			break;
+		case 1:
+			strcpy(label, textext_Get_Text(txtBriefEnter));
+			break;
+		case 2:
+			strcpy(label, textext_Get_Text(txtBriefMap));
+			break;
+		case 3:
+			strcpy(label, textext_Get_Text(txtBriefOfficer));
+			break;
+		case 4:
+			strcpy(label, textext_Get_Text(txtBriefPriest));
+			break;
+	}
+
+	xrect_Offset_Rect(&r, 1, 1);
+	xfont_Print_Centered_Text(label, &r, TIE_FRONTEND_EDITION(0, 2), 16);
+	xrect_Offset_Rect(&r, -1, -1);
+	xfont_Print_Centered_Text(label, &r, TIE_FRONTEND_EDITION(0, 2), 15);
+	return 1;
+}
+
+// FUNCTION: TIE95 0x735D4
+// FUNCTION: TIE98 0x4069E0
+static int brief_user_Door(Actor* actor, int32_t time) {
+	if (!time) {
+		actor->var2 = 0;
+		actor->var1 = 0;
+	}
+
+	if (actor->var1) {
+		if (!actor->state)
+			soundext_Play_SFX(sfxSmallDoorOpen, 80);
+		if (actor->state < actor->arraySize - 1)
+			xactor_Set_Actor_State(actor, actor->state + 1, 0);
+		actor->var1 = 0;
+	} else {
+		if (actor->state > 0) {
+			xactor_Set_Actor_State(actor, actor->state - 1, 0);
+			if (!actor->state)
+				soundext_Play_SFX(sfxSmallDoorShut, 80);
+		}
+	}
+	return 1;
+}
+
+/* ================================================================
+ * Notice dialog ("Your pilot has been restored!")
+ * ================================================================ */
+
+// FUNCTION: TIE95 0x73668
+// FUNCTION: TIE98 0x406A70
+static Input* brief_Build_Notice(void) {
+	Rect r;
+	Input* dlg;
+	PushButton* btn;
+
+	xrect_Set_Rect(&r, 0, 0, TIE_FRONTEND_EDITION(180, 280), TIE_FRONTEND_EDITION(40, 60));
+	dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
+	xinpattr_Set_Input_Draw_Function(dlg, brief_idraw_Notice);
+	xinpattr_Set_Input_Allign(dlg, 1, 1);
+	xinpattr_Start_Input(dlg);
+
+	textext_Copy_Text(notice_str, txtRegProtOK); /* "OK" */
+	xrect_Set_Rect(&r, 0, 4, 80, 20);
+	btn = xbtnpush_Alloc_Button(dlg, &r, 0, brief_iuser_Notice, notice_str, 1);
+	xinpattr_Set_Input_Allign(&btn->header, 1, 2);
+
+	return dlg;
+}
+
+// FUNCTION: TIE95 0x7370C
+// FUNCTION: TIE98 0x406B20
+static void brief_idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh) {
+	Rect tr;
+	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
+	if (!refresh)
+		return;
+
+	xrect_Copy_Rect(&tr, r);
+	xstyle_Style_Paint_Border(r, 0);
+	tr.bottom = tr.top + TIE_FRONTEND_EDITION(20, 30);
+
+	xfont_Enable_FontID_Shadow(font_id);
+	xfont_Print_Centered_Text(textext_Get_Text(txtBriefRestore), &tr, font_id, 15);
+	xfont_Disable_FontID_Shadow(font_id);
+
+	if (xinpattr_Is_Input_Dirty(input))
+		xdirty_Dirty_Rect(clip);
+}
+
+// FUNCTION: TIE95 0x7377C
+// FUNCTION: TIE98 0x406BB0
+static void brief_iuser_Notice(Input* input, int32_t time) {
+	(void)time;
+	if (xinpattr_Get_Input_Selected(input))
+		xdialog_Set_Dialog_Exit(1);
 }

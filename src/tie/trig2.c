@@ -154,6 +154,9 @@ int16_t trig2_angleplane;
 // GLOBAL: TIE95 0xEC1F8
 int16_t trig2_zangle;
 
+// FUNCTION: TIE95 0x5BBE0
+uint16_t trig2_getsine(uint16_t angle) { return trig2_calcsineofangle(angle); }
+
 /* ------------------------------------------------------------------ */
 
 /* Core sine lookup with linear interpolation within the quarter-wave table */
@@ -172,9 +175,6 @@ uint16_t trig2_calcsineofangle(uint16_t angle) {
 	return base + interp;
 }
 
-// FUNCTION: TIE95 0x5BBE0
-uint16_t trig2_getsine(uint16_t angle) { return trig2_calcsineofangle(angle); }
-
 // FUNCTION: TIE95 0x5BC58
 int16_t trig2_getsignedsin(int angle) {
 	/* Binary does `shr ax,1; or edx,0FFFEh; and eax,edx`. The or/and masks
@@ -188,61 +188,6 @@ int16_t trig2_getsignedsin(int angle) {
 		result = -result;
 	return result;
 }
-
-// FUNCTION: TIE95 0x5BE94
-uint16_t trig2_getcosine(uint16_t angle) { return trig2_calcsineofangle(angle + 0x4000); }
-
-// FUNCTION: TIE95 0x5BEA4
-int16_t trig2_getsignedcos(int angle) {
-	/* Same even-sin bit-clear mask as getsignedsin (see comment there). */
-	int16_t shifted = angle + 0x4000;
-	uint16_t val = trig2_calcsineofangle((uint16_t)shifted);
-	int16_t result = (int16_t)((val >> 1) & (val | 0xFFFE));
-	if (shifted < 0)
-		result = -result;
-	return result;
-}
-
-/* ------------------------------------------------------------------ */
-
-/* Multiply 16-bit value by sine of angle, returns 16-bit fixed-point */
-// FUNCTION: TIE95 0x5BDDC
-int16_t trig2_sinewordmult(int16_t val, uint16_t angle) {
-	uint16_t abs_val = (val < 0) ? -val : val;
-	int16_t sign = (val & 0x8000) ^ (angle & 0x8000);
-	uint16_t idx = ((angle >> 5) & 0x3FE) >> 1; /* binary uses 0x3FE to reach sintable[256] at 90° */
-	uint32_t result = (uint32_t)sintable[idx] * abs_val + 0x8000;
-	if (sign)
-		result = -(int32_t)result;
-	return (int16_t)(result >> 16);
-}
-
-// FUNCTION: TIE95 0x5BED0
-int16_t trig2_cosinewordmult(int16_t val, uint16_t angle) { return trig2_sinewordmult(val, angle + 0x4000); }
-
-/* Multiply 32-bit value by sine of angle, returns 32-bit */
-// FUNCTION: TIE95 0x5BE34
-int32_t trig2_sinedwordmult(int32_t val, int32_t angle) {
-	int16_t sign = 0;
-	uint16_t idx;
-	uint16_t s;
-	int32_t result;
-
-	if (val < 0) {
-		sign = (int16_t)0x8000;
-		val = -val;
-	}
-	sign ^= (angle & 0x8000);
-	idx = ((angle >> 5) & 0x3FE) >> 1; /* binary uses 0x3FE to reach sintable[256] at 90° */
-	s = sintable[idx];
-	result = (int32_t)((uint16_t)(val >> 16)) * s + (int32_t)(((uint32_t)s * (uint16_t)val + 0x8000) >> 16);
-	if (sign)
-		result = -result;
-	return result;
-}
-
-// FUNCTION: TIE95 0x5BF2C
-int32_t trig2_cosinedwordmult(int32_t val, int32_t angle) { return trig2_sinedwordmult(val, angle + 0x4000); }
 
 /* ------------------------------------------------------------------ */
 
@@ -357,6 +302,203 @@ int16_t trig2_arccos(int16_t val) {
 
 /* ------------------------------------------------------------------ */
 
+/* Multiply 16-bit value by sine of angle, returns 16-bit fixed-point */
+// FUNCTION: TIE95 0x5BDDC
+int16_t trig2_sinewordmult(int16_t val, uint16_t angle) {
+	uint16_t abs_val = (val < 0) ? -val : val;
+	int16_t sign = (val & 0x8000) ^ (angle & 0x8000);
+	uint16_t idx = ((angle >> 5) & 0x3FE) >> 1; /* binary uses 0x3FE to reach sintable[256] at 90° */
+	uint32_t result = (uint32_t)sintable[idx] * abs_val + 0x8000;
+	if (sign)
+		result = -(int32_t)result;
+	return (int16_t)(result >> 16);
+}
+
+/* Multiply 32-bit value by sine of angle, returns 32-bit */
+// FUNCTION: TIE95 0x5BE34
+int32_t trig2_sinedwordmult(int32_t val, int32_t angle) {
+	int16_t sign = 0;
+	uint16_t idx;
+	uint16_t s;
+	int32_t result;
+
+	if (val < 0) {
+		sign = (int16_t)0x8000;
+		val = -val;
+	}
+	sign ^= (angle & 0x8000);
+	idx = ((angle >> 5) & 0x3FE) >> 1; /* binary uses 0x3FE to reach sintable[256] at 90° */
+	s = sintable[idx];
+	result = (int32_t)((uint16_t)(val >> 16)) * s + (int32_t)(((uint32_t)s * (uint16_t)val + 0x8000) >> 16);
+	if (sign)
+		result = -result;
+	return result;
+}
+
+// FUNCTION: TIE95 0x5BE94
+uint16_t trig2_getcosine(uint16_t angle) { return trig2_calcsineofangle(angle + 0x4000); }
+
+// FUNCTION: TIE95 0x5BEA4
+int16_t trig2_getsignedcos(int angle) {
+	/* Same even-sin bit-clear mask as getsignedsin (see comment there). */
+	int16_t shifted = angle + 0x4000;
+	uint16_t val = trig2_calcsineofangle((uint16_t)shifted);
+	int16_t result = (int16_t)((val >> 1) & (val | 0xFFFE));
+	if (shifted < 0)
+		result = -result;
+	return result;
+}
+
+// FUNCTION: TIE95 0x5BED0
+int16_t trig2_cosinewordmult(int16_t val, uint16_t angle) {
+	uint16_t abs_val = (val < 0) ? -val : val;
+	int16_t sign;
+	uint16_t idx;
+	uint32_t result;
+	angle += 0x4000;
+	sign = (val & 0x8000) ^ (angle & 0x8000);
+	idx = ((angle >> 5) & 0x3FE) >> 1;
+	result = (uint32_t)sintable[idx] * abs_val + 0x8000;
+	if (sign)
+		result = -(int32_t)result;
+	return (int16_t)(result >> 16);
+}
+
+// FUNCTION: TIE95 0x5BF2C
+int32_t trig2_cosinedwordmult(int32_t val, int32_t angle) {
+	int16_t sign = 0;
+	uint16_t idx;
+	uint16_t s;
+	int32_t result;
+
+	if (val < 0) {
+		sign = (int16_t)0x8000;
+		val = -val;
+	}
+	angle += 0x4000;
+	sign ^= (angle & 0x8000);
+	idx = ((angle >> 5) & 0x3FE) >> 1;
+	s = sintable[idx];
+	result = (int32_t)((uint16_t)(val >> 16)) * s + (int32_t)(((uint32_t)s * (uint16_t)val + 0x8000) >> 16);
+	if (sign)
+		result = -result;
+	return result;
+}
+
+// FUNCTION: TIE95 0x5BF90
+void trig2_ptoc3dim(void) {
+	trig2_zoffset = trig2_sinedwordmult(trig2_rho, trig2_phi);
+	trig2_xoffset = trig2_cosinedwordmult(trig2_zoffset, trig2_theta);
+	trig2_yoffset = trig2_sinedwordmult(trig2_zoffset, trig2_theta);
+	trig2_zoffset = trig2_cosinedwordmult(trig2_rho, trig2_phi);
+}
+
+// FUNCTION: TIE95 0x5BFF0
+void trig2_ptoc2dim(void) {
+	trig2_cartesianxoffset = trig2_cosinedwordmult(trig2_distanceplane, trig2_angleplane);
+	trig2_cartesianyoffset = trig2_sinedwordmult(trig2_distanceplane, trig2_angleplane);
+}
+
+// FUNCTION: TIE95 0x5C024
+void trig2_movexyz(uint16_t distance, int16_t heading, uint16_t pitch) {
+	trig2_rho = distance;
+	trig2_theta = heading - 0x4000;
+	trig2_theta = -trig2_theta;
+	trig2_phi = pitch;
+	/* ptoc3dim body, expanded in place in the retail function. */
+	trig2_zoffset = trig2_sinedwordmult(trig2_rho, trig2_phi);
+	trig2_xoffset = trig2_cosinedwordmult(trig2_zoffset, trig2_theta);
+	trig2_yoffset = trig2_sinedwordmult(trig2_zoffset, trig2_theta);
+	trig2_zoffset = trig2_cosinedwordmult(trig2_rho, trig2_phi);
+	trig2_xmovedist = trig2_xoffset;
+	trig2_ymovedist = trig2_yoffset;
+	trig2_zmovedist = trig2_zoffset;
+}
+
+// FUNCTION: TIE95 0x5C0BC
+void trig2_ctop(int32_t x, int32_t y, int32_t z) {
+	trig2_signx = (x < 0) ? 1 : 0;
+	if (x < 0)
+		x = -x;
+	trig2_xoffset = x;
+
+	trig2_signy = (y < 0) ? 1 : 0;
+	if (y < 0)
+		y = -y;
+	trig2_yoffset = y;
+
+	trig2_signz = (z < 0) ? 1 : 0;
+	if (z < 0)
+		z = -z;
+	trig2_zoffset = z;
+
+	/* XY-plane angle */
+	trig2_ctoptwodim(trig2_xoffset, trig2_yoffset);
+	trig2_xyangle = trig2_angleplane;
+	if (trig2_signy)
+		trig2_xyangle = -trig2_angleplane;
+	if (trig2_signx) {
+		trig2_xyangle = -trig2_xyangle;
+		trig2_xyangle += (int16_t)0x8000;
+	}
+	trig2_xyangle = -trig2_xyangle + 0x4000;
+
+	/* Z-elevation angle */
+	trig2_ctoptwodim(trig2_polardistance, trig2_zoffset);
+	trig2_zangle = trig2_angleplane;
+	if (trig2_signz)
+		trig2_zangle = -trig2_angleplane;
+	trig2_zangle = -trig2_zangle + 0x4000;
+}
+
+// FUNCTION: TIE95 0x5C1D0
+void trig2_ctop2dim(int32_t x, int32_t y) {
+	int16_t angle;
+
+	trig2_signx = 0;
+	if (x < 0) {
+		x = -x;
+		trig2_signx = 1;
+	}
+	trig2_signy = 0;
+	if (y < 0) {
+		y = -y;
+		trig2_signy = 1;
+	}
+
+	trig2_ctoptwodim(x, y);
+
+	angle = trig2_angleplane;
+	if (trig2_signy)
+		angle = -angle;
+	if (trig2_signx) {
+		angle = -angle;
+		angle += (int16_t)0x8000;
+	}
+	angle = -angle + 0x4000;
+	trig2_xyangle = angle;
+}
+
+/* ------------------------------------------------------------------ */
+
+/* 2D cartesian to polar using calcarctan + square root table */
+// FUNCTION: TIE95 0x5C258
+void trig2_ctoptwodim(int32_t a, int32_t b) {
+	int16_t ratio, angle;
+	uint16_t sqrt_val;
+
+	trig2_calcarctan(a, b, &angle, &ratio);
+	trig2_angleplane = angle;
+
+	/* Distance = divisorhilo * sqrt(1 + (ratio/256)²) */
+	sqrt_val = squarerootable[(uint16_t)ratio];
+	trig2_polardistance = trig2_divisorhilo +
+						  (int32_t)((uint32_t)sqrt_val * (uint16_t)trig2_divisorhilo + 0x8000) / 65536 +
+						  (int32_t)sqrt_val * (trig2_divisorhilo >> 16);
+}
+
+/* ------------------------------------------------------------------ */
+
 /* Core arctangent with table lookup and 8-bit linear interpolation.
  * Sets trig2_divisorhilo and trig2_signswap; returns ratio and angle.
  *
@@ -442,116 +584,4 @@ int16_t trig2_arctan(int32_t y, int32_t x) {
 		angle += (int16_t)0x8000;
 	}
 	return angle;
-}
-
-/* ------------------------------------------------------------------ */
-
-/* 2D cartesian to polar using calcarctan + square root table */
-// FUNCTION: TIE95 0x5C258
-void trig2_ctoptwodim(int32_t a, int32_t b) {
-	int16_t ratio, angle;
-	uint16_t sqrt_val;
-
-	trig2_calcarctan(a, b, &angle, &ratio);
-	trig2_angleplane = angle;
-
-	/* Distance = divisorhilo * sqrt(1 + (ratio/256)²) */
-	sqrt_val = squarerootable[(uint16_t)ratio];
-	trig2_polardistance = trig2_divisorhilo +
-						  (int32_t)((uint32_t)sqrt_val * (uint16_t)trig2_divisorhilo + 0x8000) / 65536 +
-						  (int32_t)sqrt_val * (trig2_divisorhilo >> 16);
-}
-
-// FUNCTION: TIE95 0x5BF90
-void trig2_ptoc3dim(void) {
-	trig2_zoffset = trig2_sinedwordmult(trig2_rho, trig2_phi);
-	trig2_xoffset = trig2_cosinedwordmult(trig2_zoffset, trig2_theta);
-	trig2_yoffset = trig2_sinedwordmult(trig2_zoffset, trig2_theta);
-	trig2_zoffset = trig2_cosinedwordmult(trig2_rho, trig2_phi);
-}
-
-// FUNCTION: TIE95 0x5BFF0
-void trig2_ptoc2dim(void) {
-	trig2_cartesianxoffset = trig2_cosinedwordmult(trig2_distanceplane, trig2_angleplane);
-	trig2_cartesianyoffset = trig2_sinedwordmult(trig2_distanceplane, trig2_angleplane);
-}
-
-// FUNCTION: TIE95 0x5C024
-void trig2_movexyz(uint16_t distance, int16_t heading, uint16_t pitch) {
-	trig2_rho = distance;
-	trig2_theta = heading - 0x4000;
-	trig2_theta = -trig2_theta;
-	trig2_phi = pitch;
-	/* ptoc3dim body, expanded in place in the retail function. */
-	trig2_zoffset = trig2_sinedwordmult(trig2_rho, trig2_phi);
-	trig2_xoffset = trig2_cosinedwordmult(trig2_zoffset, trig2_theta);
-	trig2_yoffset = trig2_sinedwordmult(trig2_zoffset, trig2_theta);
-	trig2_zoffset = trig2_cosinedwordmult(trig2_rho, trig2_phi);
-	trig2_xmovedist = trig2_xoffset;
-	trig2_ymovedist = trig2_yoffset;
-	trig2_zmovedist = trig2_zoffset;
-}
-
-// FUNCTION: TIE95 0x5C1D0
-void trig2_ctop2dim(int32_t x, int32_t y) {
-	int16_t angle;
-
-	trig2_signx = 0;
-	if (x < 0) {
-		x = -x;
-		trig2_signx = 1;
-	}
-	trig2_signy = 0;
-	if (y < 0) {
-		y = -y;
-		trig2_signy = 1;
-	}
-
-	trig2_ctoptwodim(x, y);
-
-	angle = trig2_angleplane;
-	if (trig2_signy)
-		angle = -angle;
-	if (trig2_signx) {
-		angle = -angle;
-		angle += (int16_t)0x8000;
-	}
-	angle = -angle + 0x4000;
-	trig2_xyangle = angle;
-}
-
-// FUNCTION: TIE95 0x5C0BC
-void trig2_ctop(int32_t x, int32_t y, int32_t z) {
-	trig2_signx = (x < 0) ? 1 : 0;
-	if (x < 0)
-		x = -x;
-	trig2_xoffset = x;
-
-	trig2_signy = (y < 0) ? 1 : 0;
-	if (y < 0)
-		y = -y;
-	trig2_yoffset = y;
-
-	trig2_signz = (z < 0) ? 1 : 0;
-	if (z < 0)
-		z = -z;
-	trig2_zoffset = z;
-
-	/* XY-plane angle */
-	trig2_ctoptwodim(trig2_xoffset, trig2_yoffset);
-	trig2_xyangle = trig2_angleplane;
-	if (trig2_signy)
-		trig2_xyangle = -trig2_angleplane;
-	if (trig2_signx) {
-		trig2_xyangle = -trig2_xyangle;
-		trig2_xyangle += (int16_t)0x8000;
-	}
-	trig2_xyangle = -trig2_xyangle + 0x4000;
-
-	/* Z-elevation angle */
-	trig2_ctoptwodim(trig2_polardistance, trig2_zoffset);
-	trig2_zangle = trig2_angleplane;
-	if (trig2_signz)
-		trig2_zangle = -trig2_angleplane;
-	trig2_zangle = -trig2_zangle + 0x4000;
 }

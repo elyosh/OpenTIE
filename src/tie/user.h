@@ -145,6 +145,15 @@ typedef enum {
 	KEY_ALT_1 = 248, /* scan 0x78 | 0x80 */
 } UserKey;
 
+/* TIE98 meta-key codes that differ from the DOS scan-code encoding
+ * (Alt+letter = 0x80 + letter index). */
+enum {
+	KEY98_ALT_B = 129,
+	KEY98_ALT_P = 143,
+	KEY98_ALT_V = 149,
+	KEY98_SHIFT_F10 = 216, /* joystick chord-11 release */
+};
+
 /*
  * USER -- in-flight player input + view + replay-camera dispatcher.
  *
@@ -218,7 +227,7 @@ int16_t user_targetincross(uint16_t obj_idx, int32_t strict);
 /* Paint the target bracket around the currently-targeted object. Called
  * from anim_sort_and_draw_bitmaps each frame. Returns the
  * rotatescaleimage result (or 0 if off-screen / invalid). */
-int16_t user_targetonscreen(uint16_t obj_or_kind);
+void user_targetonscreen(uint16_t obj_or_kind);
 void user_targetonscreen_tie98(uint16_t object_reference, int16_t mesh_index, uint8_t color_index);
 
 /* Lock player_craft's target on new_obj. Plays the target-acquired beep,
@@ -267,7 +276,7 @@ void user_ejectcamera(void);
 /* Map a CraftData.warhead_type byte into the argtable[N] substitution
  * id used by the 'out of X' status banner. Unknown warhead types
  * return default_msg unchanged. */
-int32_t user_mapmissiletomessage(uint8_t warhead_type, int32_t default_msg);
+int32_t user_mapmissiletomessage(uint16_t warhead_type);
 
 /* Filter out hidden/helper meshes when advancing radar_target1 past a
  * destroyed component. */

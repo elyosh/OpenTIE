@@ -298,158 +298,6 @@ static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, 
 /* ------------------------------------------------------------------ */
 
 /*
- * View update callback. Each frame, checks if the film has finished
- * and handles scene exit. Scene 7 checks for lobo.lfd (expansion pack);
- * scene 910 redirects to the next battle cutscene.
- */
-// FUNCTION: TIE95 0x78500
-static void play1_end_View(int32_t time) {
-	int16_t next_scene;
-	int16_t skip_scene;
-	int16_t scene;
-	bool at_end;
-
-	(void)time;
-	next_scene = play1_next_scene[play1_id];
-	skip_scene = play1_skip_scene[play1_id];
-
-	/* Retail skips scene 7. */
-	if (next_scene == 7) {
-#ifdef TIE_MODERN
-		/* PORT: demo data enters scene 7 only when LOBO.LFD exists. */
-		if (TiePlay1_UsesDemoData()) {
-			LandruFile* f = xfile_Open_File(LANDRU_FILE_ROOT_ASSET, "resource\\lobo.lfd", "rb");
-			if (f)
-				xfile_Close_File(f);
-			else
-				next_scene = 8;
-		} else {
-			next_scene = 8;
-		}
-#else
-		next_scene = 8;
-#endif
-	}
-
-	at_end = (play1_film->cur_cel == play1_film->cels);
-	if (shellext_Check_Scene_Exit(&scene, next_scene, skip_scene, at_end)) {
-		if (scene == 910)
-			scene = shipext_Next_Battle_Cutscene();
-		xerror_Set_Landru_Exit(scene);
-	}
-}
-
-/* ------------------------------------------------------------------ */
-
-/*
- * Film object callback. Processes actor objects (id == 3):
- * - var2 == 25: convert delta frames to literal format
- * - var1 == 15: additive blending with scene-dependent color offset
- * - var1 == 1, scene 420: install medal arm user callback
- * - var1 == 123: set up CD streaming actor
- * Returns 1 to suppress the actor.
- */
-// FUNCTION: TIE95 0x78580
-static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
-	int16_t retval = 0;
-
-	Actor* the_actor;
-	int16_t cur_scene;
-
-	if (film_object->id != 3)
-		return retval;
-
-	xfilm_Rewind_Actor_Film(the_film, film_object, (void*)(film_object + 1));
-	the_actor = (Actor*)film_object->object;
-
-	if (the_actor->var2 == 25)
-		play1_Make_Literal_Actor(the_actor);
-
-	cur_scene = shellext_Get_Cur_Scene();
-
-	if (cur_scene == SCENE_COMBAT_TRANSITION) {
-		if (the_actor->var1 == 15) {
-			xactor_Set_Actor_Draw_Function(the_actor, deltadd_Draw_Delta_Add_Actor);
-			xactor_Set_Actor_Color(the_actor, 112, 0);
-		}
-	} else if (cur_scene == SCENE_CUT_BATTLE_270) {
-		if (the_actor->var1 == 15) {
-			xactor_Set_Actor_Draw_Function(the_actor, deltadd_Draw_Delta_Add_Actor);
-			xactor_Set_Actor_Color(the_actor, 160, 0);
-		}
-	} else if (cur_scene == SCENE_CUT_420) {
-		if (the_actor->var1) {
-			if (the_actor->var1 == 1) {
-				xactor_Set_Actor_User_Function(the_actor, play1_user_Play_Arm);
-			} else if (shipext_Get_Secret_Medal() - 2 < the_actor->var1) {
-				retval = 1;
-			}
-		}
-	}
-
-	if (the_actor->var1 == 123) {
-		int16_t ok;
-
-		if (!play1_stream_str[play1_id][0] || !use_chain_successful)
-			return 1;
-
-		play1_read_buffer = xmemhdl_Alloc_Handle(STREAM_BUFFER_SIZE, LANDRU_MEMORY_DEFAULT);
-		if (!play1_read_buffer)
-			return 1;
-
-		xbm_Init_Bitmap(&play1_last_frame);
-		xbm_Init_Bitmap(&play1_current_frame);
-
-		ok = xbm_Alloc_Bitmap(&play1_last_frame, 320, 200);
-		if (ok)
-			ok = xbm_Alloc_Bitmap(&play1_current_frame, 320, 200);
-
-		if (!ok) {
-			xmemhdl_Free_Handle(play1_read_buffer);
-			play1_read_buffer = LANDRU_NULL_HANDLE;
-			xbm_Free_Bitmap(&play1_last_frame);
-			xbm_Free_Bitmap(&play1_current_frame);
-			return 1;
-		}
-
-		xbm_Erase_Bitmap(&play1_last_frame);
-		xbm_Erase_Bitmap(&play1_current_frame);
-		xactor_Set_Actor_Update_Function(the_actor, (xactorUpdateFunc)play1_Update_Stream_Actor);
-		xactor_Set_Actor_Draw_Function(the_actor, play1_Draw_Stream_Actor);
-		xactor_Set_Actor_ZPlane(the_actor, 12700);
-		xpal_Set_Screen_RGB(0, 255, 0, 0, 0);
-		xcanvas_Erase_Canvas();
-#ifdef TIE_MODERN
-		xrect_Clear_Rect(&textext_bounds);
-#endif
-		play1_is_streaming = 1;
-		read_state = 0;
-	}
-
-	return retval;
-}
-
-/* ------------------------------------------------------------------ */
-
-/*
- * Actor user callback for the secret medal arm on scene 420.
- * On the first frame (time == 0), sets the actor state to
- * (secret_medal - 1), capped at state 2.
- */
-// FUNCTION: TIE95 0x787C4
-static void play1_user_Play_Arm(Actor* the_actor, int32_t time) {
-	if (time == 0) {
-		int16_t medal = shipext_Get_Secret_Medal();
-		if (medal > 3)
-			xactor_Set_Actor_State(the_actor, 2, 0);
-		else
-			xactor_Set_Actor_State(the_actor, medal - 1, 0);
-	}
-}
-
-/* ------------------------------------------------------------------ */
-
-/*
  * Convert an actor's delta-encoded frames to literal (uncompressed)
  * format. Uses the canvas bitmap as a 64000-byte scratch buffer.
  *
@@ -457,342 +305,11 @@ static void play1_user_Play_Arm(Actor* the_actor, int32_t time) {
  * expansion if 0 < literal_size < 48000. Avoids wasting memory when
  * the literal would be larger than the original delta encoding.
  */
-enum {
-	LITERAL_MAX_SIZE = 48000,
-};
+static void play1_end_View(int32_t time);
+static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object);
+static bool play1_Scene_Changes_Frame_Rate(int16_t cur);
+static void play1_Chain_Scene(void);
 
-// FUNCTION: TIE95 0x78800
-static void play1_Make_Literal_Actor(Actor* the_actor) {
-	BitmapStruct* canvas_bm = xcanvas_Get_Current_Canvas_Bitmap();
-	uint8_t* temp_buffer = (uint8_t*)xbm_Lock_Bitmap(canvas_bm);
-	memset(temp_buffer, 0, 64000);
-
-	if (the_actor->res_type == FOURCC_DELT) {
-		if (the_actor->data) {
-			const uint8_t* image = xmemhdl_Lock_Handle(the_actor->data);
-			int size = play1_Literal_Image(temp_buffer, image);
-			xmemhdl_Unlock_Handle(the_actor->data);
-
-			if (size > 0 && size < LITERAL_MAX_SIZE) {
-				LandruHandle new_data = xmemhdl_Data_To_Handle(temp_buffer, size, LANDRU_MEMORY_DEFAULT);
-				if (new_data) {
-					xmemhdl_Free_Handle(the_actor->data);
-					the_actor->data = new_data;
-				}
-			}
-		}
-		memset(temp_buffer, 0, 64000);
-	} else {
-		int16_t num_frames = the_actor->arraySize;
-		if (the_actor->array) {
-			LandruHandle* arr = xmemhdl_Lock_Handle(the_actor->array);
-			int16_t i;
-
-			for (i = 0; i < num_frames; i++) {
-				const uint8_t* image;
-				int size;
-				LandruHandle new_data;
-
-				if (!arr[i])
-					continue;
-
-				image = xmemhdl_Lock_Handle(arr[i]);
-				size = play1_Literal_Image(temp_buffer, image);
-				xmemhdl_Unlock_Handle(arr[i]);
-
-				if (size <= 0 || size >= LITERAL_MAX_SIZE) {
-					memset(temp_buffer, 0, 64000);
-					continue;
-				}
-
-				new_data = xmemhdl_Data_To_Handle(temp_buffer, size, LANDRU_MEMORY_DEFAULT);
-				if (!new_data) {
-					memset(temp_buffer, 0, 64000);
-					break;
-				}
-
-				xmemhdl_Free_Handle(arr[i]);
-				arr[i] = new_data;
-				memset(temp_buffer, 0, 64000);
-			}
-			xmemhdl_Unlock_Handle(the_actor->array);
-		}
-	}
-
-	xbm_Unlock_Bitmap(canvas_bm);
-}
-
-/* ------------------------------------------------------------------ */
-
-/*
- * Delta-to-literal image decompressor. Copies the 8-byte header, then
- * processes scanlines. Each has a 2-byte length (low bit = compressed),
- * then 2+2 bytes of x/y data. Compressed: RLE packets (odd byte = fill,
- * even = copy). Uncompressed: raw pixel data. Strips compression bit
- * from the output length. 63000-byte overflow guard.
- */
-// FUNCTION: TIE95 0x78A28
-static int play1_Literal_Image(uint8_t* buffer, const uint8_t* image) {
-	int32_t index, bindex;
-
-	int16_t length;
-
-	for (index = 0; index < 8; index++)
-		buffer[index] = image[index];
-
-	length = *(const int16_t*)(image + 8);
-	buffer[index] = image[8] & 0xFE;
-	buffer[index + 1] = image[9];
-	bindex = 10;
-	index += 2;
-
-	while (length && (63000 - length) > index) {
-		/* Copy 2-byte x position */
-		buffer[index] = image[bindex];
-		buffer[index + 1] = image[bindex + 1];
-		bindex += 2;
-		index += 2;
-		/* Copy 2-byte y position */
-		buffer[index] = image[bindex];
-		buffer[index + 1] = image[bindex + 1];
-		bindex += 2;
-		index += 2;
-
-		if (length & 1) {
-			int16_t remaining = length >> 1;
-			while (remaining) {
-				uint8_t pack_byte = image[bindex++];
-				uint8_t pack_len = pack_byte >> 1;
-				if (pack_byte & 1) {
-					uint8_t color = image[bindex++];
-					memset(&buffer[index], color, pack_len);
-				} else {
-					memcpy(&buffer[index], &image[bindex], pack_len);
-					bindex += pack_len;
-				}
-				index += pack_len;
-				remaining -= pack_len;
-			}
-		} else {
-			int16_t half_len = length >> 1;
-			memcpy(&buffer[index], &image[bindex], half_len);
-			bindex += half_len;
-			index += half_len;
-		}
-
-		length = *(const int16_t*)(image + bindex);
-		buffer[index] = image[bindex] & 0xFE;
-		buffer[index + 1] = image[bindex + 1];
-		bindex += 2;
-		index += 2;
-	}
-
-	return index;
-}
-
-/* ------------------------------------------------------------------ */
-
-/*
- * Stream actor update callback for CD FMV playback.
- * State 0: read 16-byte chunk header (frame count at WORD offset 2).
- * State 1: read frames (4-byte size + data), decode via
- * drawstrm_Convert_Frame_To_Palette.
- */
-// FUNCTION: TIE95 0x78B70
-static void play1_Update_Stream_Actor(Actor* the_actor) {
-	uint32_t size;
-	void* prev_pixels;
-	void* cur_pixels;
-
-	uint8_t* data;
-
-	if (!xactor_Is_Actor_Visible(the_actor))
-		return;
-	if (!play1_is_streaming)
-		return;
-	if (xfilm_Is_Film_Fade())
-		return;
-
-	if (read_state == 0) {
-		const uint8_t* data;
-
-		if (xstream_Read_From_Stream_Buffer(0, play1_read_buffer, 0, 16, 1) != 16) {
-			read_state = 0;
-			xactor_Deactivate_Actor(the_actor);
-			return;
-		}
-		data = xmemhdl_Lock_Handle(play1_read_buffer);
-		stream_actor_frames_to_go = br_i16le(data + 2);
-		xmemhdl_Unlock_Handle(play1_read_buffer);
-		read_state = 1;
-	}
-
-	if (read_state != 1)
-		return;
-
-	if (stream_actor_frames_to_go <= 0) {
-		xactor_Deactivate_Actor(the_actor);
-		read_state = 0;
-		return;
-	}
-
-	if (xstream_Read_From_Stream_Buffer(0, play1_read_buffer, 0, 4, 1) != 4) {
-		read_state = 0;
-		xactor_Deactivate_Actor(the_actor);
-		return;
-	}
-	data = xmemhdl_Lock_Handle(play1_read_buffer);
-	size = br_u32le(data);
-	xmemhdl_Unlock_Handle(play1_read_buffer);
-
-	if (size == 0 || size > STREAM_BUFFER_SIZE ||
-		xstream_Read_From_Stream_Buffer(0, play1_read_buffer, 0, size, 1) != (int32_t)size) {
-		read_state = 0;
-		xactor_Deactivate_Actor(the_actor);
-		return;
-	}
-
-	prev_pixels = xbm_Lock_Bitmap(&play1_last_frame);
-	cur_pixels = xbm_Lock_Bitmap(&play1_current_frame);
-	data = xmemhdl_Lock_Handle(play1_read_buffer);
-	drawstrm_Convert_Frame_To_Palette(prev_pixels, data, cur_pixels);
-	xmemhdl_Unlock_Handle(play1_read_buffer);
-	xbm_Unlock_Bitmap(&play1_last_frame);
-	xbm_Unlock_Bitmap(&play1_current_frame);
-	stream_actor_frames_to_go--;
-}
-
-/* ------------------------------------------------------------------ */
-
-/* Stream actor draw callback. Copies play1_current_frame to canvas. */
-// FUNCTION: TIE95 0x78D2C
-static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
-									   int16_t refresh) {
-	(void)the_actor;
-	(void)r;
-	(void)clip_r;
-	(void)off_x;
-	(void)off_y;
-	if (!refresh)
-		return 0;
-	xcanvas_Copy_Bitmap_To_Canvas(&play1_current_frame, 0, 0);
-	xdirty_Max_Dirty_List();
-	return 1;
-}
-
-/* ------------------------------------------------------------------ */
-
-/*
- * Prepare CD streaming for the current and next scene. Tries Use first;
- * falls back to Chain+Use. Then pre-chains the next scene's stream.
- */
-// FUNCTION: TIE95 0x78D54
-static void play1_Chain_Scene(void) {
-	char name[24];
-	int16_t next_id;
-	int16_t target;
-	int16_t i;
-
-	use_chain_successful = 0;
-
-#ifdef TIE_MODERN
-	/* PORT: stream files resolve relative to the installed data, like the
-	 * hard-drive install (install_cfg_mode 2). */
-	strcpy(name, play1_stream_str[play1_id] + 1);
-#else
-	if (install_cfg_mode <= 1)
-		strcpy(name, play1_stream_str[play1_id]);
-	else if (install_cfg_mode == 2)
-		strcpy(name, play1_stream_str[play1_id] + 1);
-#endif
-	if (name[0]) {
-		if (xstream_Use_Stream_File(0, name)) {
-			use_chain_successful = 1;
-		} else if (xstream_Chain_Stream_File(0, name) && xstream_Use_Stream_File(0, name)) {
-			use_chain_successful = 1;
-		}
-	}
-
-	/* Look up the next scene's index in cur_scene[]. Loop is bounded by
-	 * cur_scene's 0 sentinel; retail bounded by next_scene[i] which has
-	 * no sentinel and only terminated by accident of adjacent-global
-	 * memory layout (ASan redzones break that coincidence). */
-	next_id = 0;
-	target = play1_next_scene[play1_id];
-	for (i = 0; play1_cur_scene[i]; i++) {
-		if (play1_cur_scene[i] == target) {
-			next_id = i;
-			break;
-		}
-	}
-#ifdef TIE_MODERN
-	strcpy(name, play1_stream_str[next_id] + 1);
-#else
-	if (install_cfg_mode <= 1)
-		strcpy(name, play1_stream_str[next_id]);
-	else if (install_cfg_mode == 2)
-		strcpy(name, play1_stream_str[next_id] + 1);
-#endif
-	if (name[0])
-		xstream_Chain_Stream_File(0, name);
-}
-
-/* ------------------------------------------------------------------ */
-
-#ifdef TIE_MODERN
-/*
- * Scenes after which retail restores 20fps once the view ends (every
- * scene whose film case changes the frame rate except 740). The modern
- * view task takes the answer up front because it runs the view
- * asynchronously.
- */
-static bool play1_Scene_Changes_Frame_Rate(int16_t cur) {
-	switch (cur) {
-		case 10:
-		case 30:
-		case 31:
-		case 32:
-		case 50:
-		case 60:
-		case 61:
-		case 70:
-		case 71:
-		case 72:
-		case 500:
-		case 510:
-		case 520:
-		case 530:
-		case 531:
-		case 550:
-		case 560:
-		case 570:
-		case 571:
-		case 572:
-		case 573:
-		case 580:
-		case 581:
-		case 590:
-		case 591:
-		case 600:
-		case 601:
-		case 602:
-		case 603:
-		case 610:
-		case 620:
-		case 621:
-		case 622:
-		case 623:
-		case 700:
-		case 710:
-		case 720:
-		case 730:
-			return true;
-		default:
-			return false;
-	}
-}
-
-#endif
 /*
  * Main cutscene entry. Looks up the scene in play1_cur_scene[], selects
  * resources, film name, frame rate, creates the film, runs the view,
@@ -1203,4 +720,494 @@ int play1_Play1(SceneHeadStruct* the_head) {
 
 	return xerror_Get_Landru_Exit();
 #endif
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * View update callback. Each frame, checks if the film has finished
+ * and handles scene exit. Scene 7 checks for lobo.lfd (expansion pack);
+ * scene 910 redirects to the next battle cutscene.
+ */
+// FUNCTION: TIE95 0x78500
+static void play1_end_View(int32_t time) {
+	int16_t next_scene;
+	int16_t skip_scene;
+	int16_t scene;
+	bool at_end;
+
+	(void)time;
+	next_scene = play1_next_scene[play1_id];
+	skip_scene = play1_skip_scene[play1_id];
+
+	/* Retail skips scene 7. */
+	if (next_scene == 7) {
+#ifdef TIE_MODERN
+		/* PORT: demo data enters scene 7 only when LOBO.LFD exists. */
+		if (TiePlay1_UsesDemoData()) {
+			LandruFile* f = xfile_Open_File(LANDRU_FILE_ROOT_ASSET, "resource\\lobo.lfd", "rb");
+			if (f)
+				xfile_Close_File(f);
+			else
+				next_scene = 8;
+		} else {
+			next_scene = 8;
+		}
+#else
+		next_scene = 8;
+#endif
+	}
+
+	at_end = (play1_film->cur_cel == play1_film->cels);
+	if (shellext_Check_Scene_Exit(&scene, next_scene, skip_scene, at_end)) {
+		if (scene == 910)
+			scene = shipext_Next_Battle_Cutscene();
+		xerror_Set_Landru_Exit(scene);
+	}
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * Film object callback. Processes actor objects (id == 3):
+ * - var2 == 25: convert delta frames to literal format
+ * - var1 == 15: additive blending with scene-dependent color offset
+ * - var1 == 1, scene 420: install medal arm user callback
+ * - var1 == 123: set up CD streaming actor
+ * Returns 1 to suppress the actor.
+ */
+// FUNCTION: TIE95 0x78580
+static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
+	int16_t retval = 0;
+
+	Actor* the_actor;
+	int16_t cur_scene;
+
+	if (film_object->id != 3)
+		return retval;
+
+	xfilm_Rewind_Actor_Film(the_film, film_object, (void*)(film_object + 1));
+	the_actor = (Actor*)film_object->object;
+
+	if (the_actor->var2 == 25)
+		play1_Make_Literal_Actor(the_actor);
+
+	cur_scene = shellext_Get_Cur_Scene();
+
+	if (cur_scene == SCENE_COMBAT_TRANSITION) {
+		if (the_actor->var1 == 15) {
+			xactor_Set_Actor_Draw_Function(the_actor, deltadd_Draw_Delta_Add_Actor);
+			xactor_Set_Actor_Color(the_actor, 112, 0);
+		}
+	} else if (cur_scene == SCENE_CUT_BATTLE_270) {
+		if (the_actor->var1 == 15) {
+			xactor_Set_Actor_Draw_Function(the_actor, deltadd_Draw_Delta_Add_Actor);
+			xactor_Set_Actor_Color(the_actor, 160, 0);
+		}
+	} else if (cur_scene == SCENE_CUT_420) {
+		if (the_actor->var1) {
+			if (the_actor->var1 == 1) {
+				xactor_Set_Actor_User_Function(the_actor, play1_user_Play_Arm);
+			} else if (shipext_Get_Secret_Medal() - 2 < the_actor->var1) {
+				retval = 1;
+			}
+		}
+	}
+
+	if (the_actor->var1 == 123) {
+		int16_t ok;
+
+		if (!play1_stream_str[play1_id][0] || !use_chain_successful)
+			return 1;
+
+		play1_read_buffer = xmemhdl_Alloc_Handle(STREAM_BUFFER_SIZE, LANDRU_MEMORY_DEFAULT);
+		if (!play1_read_buffer)
+			return 1;
+
+		xbm_Init_Bitmap(&play1_last_frame);
+		xbm_Init_Bitmap(&play1_current_frame);
+
+		ok = xbm_Alloc_Bitmap(&play1_last_frame, 320, 200);
+		if (ok)
+			ok = xbm_Alloc_Bitmap(&play1_current_frame, 320, 200);
+
+		if (!ok) {
+			xmemhdl_Free_Handle(play1_read_buffer);
+			play1_read_buffer = LANDRU_NULL_HANDLE;
+			xbm_Free_Bitmap(&play1_last_frame);
+			xbm_Free_Bitmap(&play1_current_frame);
+			return 1;
+		}
+
+		xbm_Erase_Bitmap(&play1_last_frame);
+		xbm_Erase_Bitmap(&play1_current_frame);
+		xactor_Set_Actor_Update_Function(the_actor, (xactorUpdateFunc)play1_Update_Stream_Actor);
+		xactor_Set_Actor_Draw_Function(the_actor, play1_Draw_Stream_Actor);
+		xactor_Set_Actor_ZPlane(the_actor, 12700);
+		xpal_Set_Screen_RGB(0, 255, 0, 0, 0);
+		xcanvas_Erase_Canvas();
+#ifdef TIE_MODERN
+		xrect_Clear_Rect(&textext_bounds);
+#endif
+		play1_is_streaming = 1;
+		read_state = 0;
+	}
+
+	return retval;
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * Actor user callback for the secret medal arm on scene 420.
+ * On the first frame (time == 0), sets the actor state to
+ * (secret_medal - 1), capped at state 2.
+ */
+// FUNCTION: TIE95 0x787C4
+static void play1_user_Play_Arm(Actor* the_actor, int32_t time) {
+	if (time == 0) {
+		int16_t medal = shipext_Get_Secret_Medal();
+		if (medal > 3)
+			xactor_Set_Actor_State(the_actor, 2, 0);
+		else
+			xactor_Set_Actor_State(the_actor, medal - 1, 0);
+	}
+}
+
+// FUNCTION: TIE95 0x78800
+static void play1_Make_Literal_Actor(Actor* the_actor) {
+	BitmapStruct* canvas_bm = xcanvas_Get_Current_Canvas_Bitmap();
+	uint8_t* temp_buffer = (uint8_t*)xbm_Lock_Bitmap(canvas_bm);
+	memset(temp_buffer, 0, 64000);
+
+	if (the_actor->res_type == FOURCC_DELT) {
+		if (the_actor->data) {
+			int size = play1_Literal_Image(temp_buffer, xmemhdl_Lock_Handle(the_actor->data));
+			xmemhdl_Unlock_Handle(the_actor->data);
+
+			if (size < 48000 && size > 0) {
+				LandruHandle new_data;
+
+				xbm_Unlock_Bitmap(canvas_bm);
+				new_data = xmemhdl_Alloc_Handle(size, LANDRU_MEMORY_DEFAULT);
+				temp_buffer = (uint8_t*)xbm_Lock_Bitmap(canvas_bm);
+				if (new_data) {
+					memmove(xmemhdl_Lock_Handle(new_data), temp_buffer, size);
+					xmemhdl_Unlock_Handle(new_data);
+					xmemhdl_Free_Handle(the_actor->data);
+					the_actor->data = new_data;
+				}
+			}
+		}
+		memset(temp_buffer, 0, 64000);
+	} else {
+		int16_t num_frames = the_actor->arraySize;
+		int16_t i;
+
+		if (the_actor->array) {
+			for (i = 0; i < num_frames; i++) {
+				LandruHandle* frames = xmemhdl_Lock_Handle(the_actor->array);
+				int size;
+
+				if (!frames[i])
+					continue;
+
+				size = play1_Literal_Image(temp_buffer, xmemhdl_Lock_Handle(frames[i]));
+				xmemhdl_Unlock_Handle(frames[i]);
+				xmemhdl_Unlock_Handle(the_actor->array);
+
+				if (size < 48000 && size > 0) {
+					LandruHandle new_data;
+
+					xbm_Unlock_Bitmap(canvas_bm);
+					new_data = xmemhdl_Alloc_Handle(size, LANDRU_MEMORY_DEFAULT);
+					temp_buffer = (uint8_t*)xbm_Lock_Bitmap(canvas_bm);
+					if (!new_data) {
+						memset(temp_buffer, 0, 64000);
+						break;
+					}
+					memmove(xmemhdl_Lock_Handle(new_data), temp_buffer, size);
+					xmemhdl_Unlock_Handle(new_data);
+					frames = xmemhdl_Lock_Handle(the_actor->array);
+					xmemhdl_Free_Handle(frames[i]);
+					frames[i] = new_data;
+					xmemhdl_Unlock_Handle(the_actor->array);
+				}
+				memset(temp_buffer, 0, 64000);
+			}
+		}
+	}
+
+	xbm_Unlock_Bitmap(canvas_bm);
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * Delta-to-literal image decompressor. Copies the 8-byte header, then
+ * processes scanlines. Each has a 2-byte length (low bit = compressed),
+ * then 2+2 bytes of x/y data. Compressed: RLE packets (odd byte = fill,
+ * even = copy). Uncompressed: raw pixel data. Strips compression bit
+ * from the output length. 63000-byte overflow guard.
+ */
+// FUNCTION: TIE95 0x78A28
+static int play1_Literal_Image(uint8_t* buffer, const uint8_t* image) {
+	int32_t index, bindex;
+
+	int16_t length;
+
+	for (index = 0; index < 8; index++)
+		buffer[index] = image[index];
+
+	length = *(const int16_t*)(image + 8);
+	buffer[index] = image[8] & 0xFE;
+	buffer[index + 1] = image[9];
+	bindex = 10;
+	index += 2;
+
+	while (length && (63000 - length) > index) {
+		/* Copy 2-byte x position */
+		buffer[index] = image[bindex];
+		buffer[index + 1] = image[bindex + 1];
+		bindex += 2;
+		index += 2;
+		/* Copy 2-byte y position */
+		buffer[index] = image[bindex];
+		buffer[index + 1] = image[bindex + 1];
+		bindex += 2;
+		index += 2;
+
+		if (length & 1) {
+			int16_t remaining = length >> 1;
+			while (remaining) {
+				uint8_t pack_byte = image[bindex++];
+				uint8_t pack_len = pack_byte >> 1;
+				if (pack_byte & 1) {
+					uint8_t color = image[bindex++];
+					memset(&buffer[index], color, pack_len);
+				} else {
+					memcpy(&buffer[index], &image[bindex], pack_len);
+					bindex += pack_len;
+				}
+				index += pack_len;
+				remaining -= pack_len;
+			}
+		} else {
+			int16_t half_len = length >> 1;
+			memcpy(&buffer[index], &image[bindex], half_len);
+			bindex += half_len;
+			index += half_len;
+		}
+
+		length = *(const int16_t*)(image + bindex);
+		buffer[index] = image[bindex] & 0xFE;
+		buffer[index + 1] = image[bindex + 1];
+		bindex += 2;
+		index += 2;
+	}
+
+	return index;
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * Stream actor update callback for CD FMV playback.
+ * State 0: read 16-byte chunk header (frame count at WORD offset 2).
+ * State 1: read frames (4-byte size + data), decode via
+ * drawstrm_Convert_Frame_To_Palette.
+ */
+// FUNCTION: TIE95 0x78B70
+static void play1_Update_Stream_Actor(Actor* the_actor) {
+	uint32_t size;
+	void* prev_pixels;
+	void* cur_pixels;
+
+	uint8_t* data;
+
+	if (!xactor_Is_Actor_Visible(the_actor))
+		return;
+	if (!play1_is_streaming)
+		return;
+	if (xfilm_Is_Film_Fade())
+		return;
+
+	if (read_state == 0) {
+		const uint8_t* data;
+
+		if (xstream_Read_From_Stream_Buffer(0, play1_read_buffer, 0, 16, 1) != 16) {
+			read_state = 0;
+			xactor_Deactivate_Actor(the_actor);
+			return;
+		}
+		data = xmemhdl_Lock_Handle(play1_read_buffer);
+		stream_actor_frames_to_go = br_i16le(data + 2);
+		xmemhdl_Unlock_Handle(play1_read_buffer);
+		read_state = 1;
+	}
+
+	if (read_state != 1)
+		return;
+
+	if (stream_actor_frames_to_go <= 0) {
+		xactor_Deactivate_Actor(the_actor);
+		read_state = 0;
+		return;
+	}
+
+	if (xstream_Read_From_Stream_Buffer(0, play1_read_buffer, 0, 4, 1) != 4) {
+		read_state = 0;
+		xactor_Deactivate_Actor(the_actor);
+		return;
+	}
+	data = xmemhdl_Lock_Handle(play1_read_buffer);
+	size = br_u32le(data);
+	xmemhdl_Unlock_Handle(play1_read_buffer);
+
+	if (size == 0 || size > STREAM_BUFFER_SIZE ||
+		xstream_Read_From_Stream_Buffer(0, play1_read_buffer, 0, size, 1) != (int32_t)size) {
+		read_state = 0;
+		xactor_Deactivate_Actor(the_actor);
+		return;
+	}
+
+	prev_pixels = xbm_Lock_Bitmap(&play1_last_frame);
+	cur_pixels = xbm_Lock_Bitmap(&play1_current_frame);
+	data = xmemhdl_Lock_Handle(play1_read_buffer);
+	drawstrm_Convert_Frame_To_Palette(prev_pixels, data, cur_pixels);
+	xmemhdl_Unlock_Handle(play1_read_buffer);
+	xbm_Unlock_Bitmap(&play1_last_frame);
+	xbm_Unlock_Bitmap(&play1_current_frame);
+	stream_actor_frames_to_go--;
+}
+
+/* ------------------------------------------------------------------ */
+
+/* Stream actor draw callback. Copies play1_current_frame to canvas. */
+// FUNCTION: TIE95 0x78D2C
+static int16_t play1_Draw_Stream_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t off_x, int16_t off_y,
+									   int16_t refresh) {
+	(void)the_actor;
+	(void)r;
+	(void)clip_r;
+	(void)off_x;
+	(void)off_y;
+	if (!refresh)
+		return 0;
+	xcanvas_Copy_Bitmap_To_Canvas(&play1_current_frame, 0, 0);
+	xdirty_Max_Dirty_List();
+	return 1;
+}
+
+/* ------------------------------------------------------------------ */
+
+#ifdef TIE_MODERN
+/*
+ * Scenes after which retail restores 20fps once the view ends (every
+ * scene whose film case changes the frame rate except 740). The modern
+ * view task takes the answer up front because it runs the view
+ * asynchronously.
+ */
+static bool play1_Scene_Changes_Frame_Rate(int16_t cur) {
+	switch (cur) {
+		case 10:
+		case 30:
+		case 31:
+		case 32:
+		case 50:
+		case 60:
+		case 61:
+		case 70:
+		case 71:
+		case 72:
+		case 500:
+		case 510:
+		case 520:
+		case 530:
+		case 531:
+		case 550:
+		case 560:
+		case 570:
+		case 571:
+		case 572:
+		case 573:
+		case 580:
+		case 581:
+		case 590:
+		case 591:
+		case 600:
+		case 601:
+		case 602:
+		case 603:
+		case 610:
+		case 620:
+		case 621:
+		case 622:
+		case 623:
+		case 700:
+		case 710:
+		case 720:
+		case 730:
+			return true;
+		default:
+			return false;
+	}
+}
+
+#endif
+/* ------------------------------------------------------------------ */
+
+/*
+ * Prepare CD streaming for the current and next scene. Tries Use first;
+ * falls back to Chain+Use. Then pre-chains the next scene's stream.
+ */
+// FUNCTION: TIE95 0x78D54
+static void play1_Chain_Scene(void) {
+	char name[24];
+	int16_t next_id;
+	int16_t target;
+	int16_t i;
+
+	use_chain_successful = 0;
+
+#ifdef TIE_MODERN
+	/* PORT: stream files resolve relative to the installed data, like the
+	 * hard-drive install (install_cfg_mode 2). */
+	strcpy(name, play1_stream_str[play1_id] + 1);
+#else
+	if (install_cfg_mode <= 1)
+		strcpy(name, play1_stream_str[play1_id]);
+	else if (install_cfg_mode == 2)
+		strcpy(name, play1_stream_str[play1_id] + 1);
+#endif
+	if (name[0]) {
+		if (xstream_Use_Stream_File(0, name)) {
+			use_chain_successful = 1;
+		} else if (xstream_Chain_Stream_File(0, name) && xstream_Use_Stream_File(0, name)) {
+			use_chain_successful = 1;
+		}
+	}
+
+	/* Look up the next scene's index in cur_scene[]. Loop is bounded by
+	 * cur_scene's 0 sentinel; retail bounded by next_scene[i] which has
+	 * no sentinel and only terminated by accident of adjacent-global
+	 * memory layout (ASan redzones break that coincidence). */
+	next_id = 0;
+	target = play1_next_scene[play1_id];
+	for (i = 0; play1_cur_scene[i]; i++) {
+		if (play1_cur_scene[i] == target) {
+			next_id = i;
+			break;
+		}
+	}
+#ifdef TIE_MODERN
+	strcpy(name, play1_stream_str[next_id] + 1);
+#else
+	if (install_cfg_mode <= 1)
+		strcpy(name, play1_stream_str[next_id]);
+	else if (install_cfg_mode == 2)
+		strcpy(name, play1_stream_str[next_id] + 1);
+#endif
+	if (name[0])
+		xstream_Chain_Stream_File(0, name);
 }

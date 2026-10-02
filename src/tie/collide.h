@@ -141,8 +141,8 @@ void collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
  *
  * Returns 1 if cosmetic-only (cockpit-update flag), 0 if death scheduled.
  */
-char collide_damagecraft(uint16_t target_obj_idx, int16_t component_idx, uint16_t attacker_obj_idx,
-						 uint16_t weapon_group);
+char collide_damagecraft(uint16_t target_obj_idx, uint16_t component_idx, uint16_t attacker_obj_idx,
+						 uint16_t shield_side);
 
 /*
  * Convert FlightObject obj_idx into a generic explosion: sets
@@ -188,9 +188,10 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
  * (random gated by win-cond severity), and triggers MSG_FRIENDLY_KILL
  * if victim is on player's side. victim_obj_idx==0xFFFF means 'kill
  * not attributed to a specific FlightObject' (still bumps total_kills
- * + mission.kills_losses).
+ * + mission.kills_losses). The third argument is ignored by the callee;
+ * every retail caller passes 1.
  */
-void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx);
+void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx, int unused);
 
 /*
  * Increment the shooter's per-craft hit counter

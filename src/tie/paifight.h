@@ -47,17 +47,17 @@ extern const uint8_t frwdgunnerbursts[4];
  *    single-byte fields (GoalTargetType selectors). op is a sign-
  *    extended byte from the EAI stream; 1 = AND, else OR. */
 
-int16_t paifight_findtargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
-								   uint8_t sec_id);
+int16_t paifight_findtargetingroup(uint16_t pri_type, uint16_t pri_id, uint16_t op, uint16_t sec_type,
+								   uint16_t sec_id);
 
-int16_t paifight_findescorterofgroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
-									 uint8_t sec_id);
+int16_t paifight_findescorterofgroup(uint16_t pri_type, uint16_t pri_id, uint16_t op, uint16_t sec_type,
+									 uint16_t sec_id);
 
-int16_t paifight_findattackedtargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
-										   uint8_t sec_id);
+int16_t paifight_findattackedtargetingroup(uint16_t pri_type, uint16_t pri_id, uint16_t op, uint16_t sec_type,
+										   uint16_t sec_id);
 
-uint16_t paifight_findgunnertargetingroup(uint8_t pri_type, uint8_t pri_id, int16_t op, uint8_t sec_type,
-										  uint8_t sec_id);
+int16_t paifight_findgunnertargetingroup(uint16_t pri_type, uint16_t pri_id, uint16_t op, uint16_t sec_type,
+										 uint16_t sec_id);
 
 int16_t paifight_searchforclosestingroup(uint16_t pri_type, uint16_t pri_id, uint16_t op, uint16_t sec_type,
 										 uint16_t sec_id);
@@ -84,7 +84,7 @@ int16_t paifight_scanfortargetsallgone(uint16_t ai_entry); /* PAI_aicompletionch
  * another AI to pile in?". Counts active objects whose ai_target_ref ==
  * target_obj_idx in modes 11/12/23, compares to a cap that depends on
  * target genus / side / mission.difficulty when target is the player. */
-int paifight_countattackers(uint16_t target_obj_idx);
+int16_t paifight_countattackers(uint16_t target_obj_idx);
 
 /* Pick a random hull-type mesh (mesh_type 1 or 3) on target_obj_idx's
  * ship. Returns the mesh index, or 0 when target is out of range. */

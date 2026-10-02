@@ -80,31 +80,6 @@ enum {
 };
 
 /* ------------------------------------------------------------------ */
-/* move_updatexyz                                                      */
-/* ------------------------------------------------------------------ */
-
-// FUNCTION: TIE95 0x32E48
-void move_updatexyz(FlightObject* obj) {
-	obj->world_x += trig2_xmovedist;
-	if (obj->world_x < WORLD_CLAMP_NEG)
-		obj->world_x = WORLD_CLAMP_NEG;
-	if (obj->world_x > WORLD_CLAMP_POS)
-		obj->world_x = WORLD_CLAMP_POS;
-
-	obj->world_y += trig2_ymovedist;
-	if (obj->world_y < WORLD_CLAMP_NEG)
-		obj->world_y = WORLD_CLAMP_NEG;
-	if (obj->world_y > WORLD_CLAMP_POS)
-		obj->world_y = WORLD_CLAMP_POS;
-
-	obj->world_z += trig2_zmovedist;
-	if (obj->world_z < WORLD_CLAMP_NEG)
-		obj->world_z = WORLD_CLAMP_NEG;
-	if (obj->world_z > WORLD_CLAMP_POS)
-		obj->world_z = WORLD_CLAMP_POS;
-}
-
-/* ------------------------------------------------------------------ */
 /* move_moveobjects                                                    */
 /* ------------------------------------------------------------------ */
 
@@ -681,4 +656,29 @@ void move_moveobjects(void) {
 	if (TieFlightTiming_LegacyDue())
 		TieFlightIntegration_SeparateFriendly();
 #endif
+}
+
+/* ------------------------------------------------------------------ */
+/* move_updatexyz                                                      */
+/* ------------------------------------------------------------------ */
+
+// FUNCTION: TIE95 0x32E48
+void move_updatexyz(FlightObject* obj) {
+	obj->world_x += trig2_xmovedist;
+	if (obj->world_x < WORLD_CLAMP_NEG)
+		obj->world_x = WORLD_CLAMP_NEG;
+	if (obj->world_x > WORLD_CLAMP_POS)
+		obj->world_x = WORLD_CLAMP_POS;
+
+	obj->world_y += trig2_ymovedist;
+	if (obj->world_y < WORLD_CLAMP_NEG)
+		obj->world_y = WORLD_CLAMP_NEG;
+	if (obj->world_y > WORLD_CLAMP_POS)
+		obj->world_y = WORLD_CLAMP_POS;
+
+	obj->world_z += trig2_zmovedist;
+	if (obj->world_z < WORLD_CLAMP_NEG)
+		obj->world_z = WORLD_CLAMP_NEG;
+	if (obj->world_z > WORLD_CLAMP_POS)
+		obj->world_z = WORLD_CLAMP_POS;
 }
