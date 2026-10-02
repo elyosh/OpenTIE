@@ -812,6 +812,16 @@ uint16_t laser_createprojectile(uint16_t shooter_obj_idx, uint16_t hp_idx, uint1
 	hp_y = spec_data[spec_num].hp[hp_idx].y;
 	hp_z = spec_data[spec_num].hp[hp_idx].z;
 	pai_calcrotatedpoint((struct FlightObject*)shooter, hp_x, hp_y, hp_z);
+#ifdef TIE_MODERN
+	/* PORT: TIE98 stores model 53 (ISD) hardpoints halved; the original
+	 * spawns the projectile at the halved offset, inside the hull. Restore
+	 * the full offset. */
+	if (TIE_FLIGHT_TIE98 && shooter->ship_idx == 53) {
+		rotatedx = (int32_t)((uint32_t)rotatedx << 1);
+		rotatedy = (int32_t)((uint32_t)rotatedy << 1);
+		rotatedz = (int32_t)((uint32_t)rotatedz << 1);
+	}
+#endif
 
 	world_x += rotatedx;
 	world_y += rotatedy;

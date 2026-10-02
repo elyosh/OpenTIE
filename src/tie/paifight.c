@@ -872,6 +872,16 @@ int16_t paifight_missiledefenseorder(void) {
 			pai_calcrotatedpoint(&objects[ai.active_obj_idx], spec_data[craftptr->species_idx].hp[slot].x,
 								 spec_data[craftptr->species_idx].hp[slot].y,
 								 spec_data[craftptr->species_idx].hp[slot].z);
+#ifdef TIE_MODERN
+			/* PORT: TIE98 stores model 53 (ISD) hardpoints halved; the original
+			 * measures the countermeasure origin from the halved offset.
+			 * Restore the full offset. */
+			if (TIE_FLIGHT_TIE98 && objects[ai.active_obj_idx].ship_idx == 53) {
+				rotatedx = (int32_t)((uint32_t)rotatedx << 1);
+				rotatedy = (int32_t)((uint32_t)rotatedy << 1);
+				rotatedz = (int32_t)((uint32_t)rotatedz << 1);
+			}
+#endif
 			shooterx += rotatedx;
 			shootery += rotatedy;
 			shooterz += rotatedz;
@@ -1029,6 +1039,16 @@ int16_t paifight_gunnerselfdefenseorder(void) {
 		pai_calcrotatedpoint(&objects[ai.active_obj_idx], spec_data[craftptr->species_idx].hp[g].x,
 							 spec_data[craftptr->species_idx].hp[g].y,
 							 spec_data[craftptr->species_idx].hp[g].z);
+#ifdef TIE_MODERN
+		/* PORT: TIE98 stores model 53 (ISD) hardpoints halved; the original
+		 * measures the gunner range from the halved offset. Restore the full
+		 * offset. */
+		if (TIE_FLIGHT_TIE98 && objects[ai.active_obj_idx].ship_idx == 53) {
+			rotatedx = (int32_t)((uint32_t)rotatedx << 1);
+			rotatedy = (int32_t)((uint32_t)rotatedy << 1);
+			rotatedz = (int32_t)((uint32_t)rotatedz << 1);
+		}
+#endif
 		shooterx += rotatedx;
 		shootery += rotatedy;
 		shooterz += rotatedz;
@@ -1129,6 +1149,16 @@ int16_t paifight_gunneroffenseorder(void) {
 		pai_calcrotatedpoint(&objects[ai.active_obj_idx], spec_data[craftptr->species_idx].hp[g].x,
 							 spec_data[craftptr->species_idx].hp[g].y,
 							 spec_data[craftptr->species_idx].hp[g].z);
+#ifdef TIE_MODERN
+		/* PORT: TIE98 stores model 53 (ISD) hardpoints halved; the original
+		 * measures the gunner range from the halved offset. Restore the full
+		 * offset. */
+		if (TIE_FLIGHT_TIE98 && objects[ai.active_obj_idx].ship_idx == 53) {
+			rotatedx = (int32_t)((uint32_t)rotatedx << 1);
+			rotatedy = (int32_t)((uint32_t)rotatedy << 1);
+			rotatedz = (int32_t)((uint32_t)rotatedz << 1);
+		}
+#endif
 		shooterx += rotatedx;
 		ai.search_x = shooterx;
 		shootery += rotatedy;

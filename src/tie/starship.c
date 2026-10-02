@@ -1039,6 +1039,18 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 			}
 		}
 		pai_calcrotatedpoint(craft, point_x, point_up, point_forward);
+#ifdef TIE_MODERN
+		/* PORT: model 53 (ISD) hardpoints are halved to fit the 16-bit
+		 * rotation inputs, and the original never doubles the result. Each
+		 * muzzle then lies at half its offset, inside the hull, and the
+		 * own-hull line-of-sight test below blocks nearly every shot. Restore
+		 * the full offset, as MOVE and PANEL already do for this model. */
+		if (craft->ship_idx == 53) {
+			rotatedx = (int32_t)((uint32_t)rotatedx << 1);
+			rotatedy = (int32_t)((uint32_t)rotatedy << 1);
+			rotatedz = (int32_t)((uint32_t)rotatedz << 1);
+		}
+#endif
 	} else {
 		int16_t hp_side;
 		int16_t hp_fwd_neg;
