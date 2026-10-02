@@ -48,7 +48,7 @@ extern char** systemstrings;
  * filter by subsystem_active -- the caller re-calls until a present one is
  * reached.
  */
-uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction);
+int16_t damage_nextsystem(uint16_t cur_sys, uint16_t direction);
 
 /*
  * Print one row for `system_id` at vertical position `y`:
@@ -58,9 +58,9 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction);
  *   - partial system health             -> "NN%" (color 0x4E)
  * Name is drawn left-justified through systemstrings[id]; value right-justified.
  */
-void damage_outputsystem(uint16_t system_id, int16_t y);
+void damage_outputsystem(uint16_t system_id, uint16_t y);
 
-int32_t damage_damageroom(void);
+int16_t damage_damageroom(void);
 
 #ifdef __cplusplus
 }

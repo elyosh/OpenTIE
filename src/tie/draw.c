@@ -6,7 +6,6 @@
 #include "tie/fview.h"
 #include "tie/laser.h"   /* WEAPON_SPECIES_COUNT, WEAPON_SPECIES_BASE */
 #include "tie/logbuf2.h" /* pixelsdeep */
-#include "tie/math2_wide.h"
 #include "tie/mission.h"
 #include "tie/modelmesh.h"
 #include "tie/render_scene_tie98.h"
@@ -16,7 +15,8 @@
 #include "tie/tie.h"
 #include "tie/transfm2.h"
 #include "tie/trig2.h"
-#include "tie/xtrans2.h"                              /* flatobjnum */
+#include "tie/xtrans2.h" /* flatobjnum */
+#include "tie_runtime/runtime/wide_arithmetic.h"
 #include "tie_runtime/snapshot/snapshot_billboards.h" /* SNAPSHOT-ONLY billboard capture */
 
 #include <stddef.h>
@@ -288,108 +288,127 @@ const uint16_t* draw_getdetailptr(ShipMeshLOD* lod_table, int z_threshold) {
  * 10. Restore decal palette.
  * ========================================================================== */
 // FUNCTION: TIE95 0x1B12C
-int draw_drawcomplexobject(int obj_idx) {
-	uint16_t obj_idx_u16 = (uint16_t)obj_idx;
-	uint16_t ship_idx;
-
-	LODRecord* lod;
+void draw_drawcomplexobject(uint16_t obj_idx) {
 	uint8_t* bsp_root;
+	uint16_t num_lods;
+	LODRecord* lod;
 	uint16_t i;
-	int dx_scaled;
-	int dy_scaled;
-	int dz_scaled;
+	int dy;
+	int dx;
+	uint16_t ship_idx;
+	int dz;
 	int dx_abs;
 	int dy_abs;
 	int dz_abs;
-	uint16_t dx_abs_w;
-	uint16_t dy_abs_w;
-	uint16_t dz_abs_w;
-	int rel_side;
-	int rel_fwd;
-	int rel_up;
+	uint16_t dx_bits;
+	uint16_t dy_bits;
+	uint16_t dz_bits;
+	int sign;
+	int sx;
+	int sy;
+	int sz;
+	int rel;
 
-	if (obj_idx_u16 < OBJ_REF_STATIC_BASE) {
-		ship_idx = objects[obj_idx_u16].ship_idx;
-		drawpol_setmarkingcolors(objects[obj_idx_u16].decal_color);
+	if (obj_idx >= (int)OBJ_REF_STATIC_BASE) {
+#ifdef TIE_MODERN
+		if (obj_idx - OBJ_REF_STATIC_BASE >= NUM_STATIC_OBJECTS)
+			ship_idx = 0;
+		else
+#endif
+			ship_idx = staticobjects[obj_idx - OBJ_REF_STATIC_BASE].species;
 	} else {
-		/* Static slot: decode via (ref - OBJ_REF_STATIC_BASE). */
-		uint16_t static_idx = obj_idx_u16 - OBJ_REF_STATIC_BASE;
-		ship_idx = (static_idx < NUM_STATIC_OBJECTS) ? staticobjects[static_idx].species : 0;
+		ship_idx = objects[obj_idx].ship_idx;
+		drawpol_setmarkingcolors(objects[obj_idx].decal_color);
 	}
 	draw_Lockshipfileptrs(ship_idx);
 
-	if (!objectblockptr || objecteyez >= objectblockptr->render_distance)
-		return drawpol_setmarkingcolors(0), 0;
+#ifdef TIE_MODERN
+	if (!objectblockptr) {
+		drawpol_setmarkingcolors(0);
+		return;
+	}
+#endif
+	if (objecteyez < objectblockptr->render_distance) {
+		/* Walk the ship-level LOD dispatch table picking the BSP root for
+		 * the current eye-z distance. Each LODRecord is 6 bytes. */
+		lod = objectblockptr->lod_records;
+		num_lods = objectblockptr->num_lods;
+		bsp_root = (uint8_t*)lod;
+		for (i = 0; i < num_lods; ++i) {
+			bsp_root = (uint8_t*)&lod[i] + lod[i].bsp_offset;
+			if (objecteyez > (int32_t)lod[i].z_max)
+				break;
+		}
 
-	/* Walk the ship-level LOD dispatch table picking the BSP root for
-	 * the current eye-z distance. Each LODRecord is 6 bytes. */
-	lod = objectblockptr->lod_records;
-	bsp_root = (uint8_t*)lod;
-	for (i = 0; i < objectblockptr->num_lods; ++i) {
-		bsp_root = (uint8_t*)&lod[i] + lod[i].bsp_offset;
-		if ((int32_t)lod[i].z_max < objecteyez)
-			break;
+		create_getworldposition(obj_idx, 0);
+
+		dx = camera.x - worldlocx;
+		dy = camera.y - worldlocy;
+		dz = camera.z - worldlocz;
+		dx <<= 1;
+		dy <<= 1;
+		dz <<= 1;
+
+		dx_abs = dx >> 16;
+		dy_abs = dy >> 16;
+		dz_abs = dz >> 16;
+		sign = dx_abs & 0x8000;
+		if ((int)(uint16_t)sign)
+			dx_abs = -dx_abs;
+		sign = dy_abs & 0x8000;
+		if ((int)(uint16_t)sign)
+			dy_abs = -dy_abs;
+		sign = dz_abs & 0x8000;
+		if ((int)(uint16_t)sign)
+			dz_abs = -dz_abs;
+
+		dx_bits = 2 * dx_abs;
+		dy_bits = 2 * dy_abs;
+		dz_bits = 2 * dz_abs;
+		relativeshift = -1;
+		do {
+			dx_bits >>= 1;
+			dy_bits >>= 1;
+			dz_bits >>= 1;
+			dx >>= 1;
+			dy >>= 1;
+			dz >>= 1;
+			++relativeshift;
+		} while (dx_bits || dy_bits || dz_bits);
+
+		sz = (int16_t)dz;
+		sy = (int16_t)dy;
+		sx = (int16_t)dx;
+
+		rel = math2_dot3(craftS1, sx, craftS2, sy, craftS3, sz);
+		if (rel >= 0x40000000)
+			rel = 1073676288;
+		if (rel <= -1073741824)
+			rel = -1073676288;
+		relativex = rel >> 15;
+
+		rel = math2_dot3(craftf1, sx, craftf2, sy, craftf3, sz);
+		if (rel >= 0x40000000)
+			rel = 1073676288;
+		if (rel <= -1073741824)
+			rel = -1073676288;
+		relativey = rel >> 15;
+		relativey = -relativey;
+
+		rel = math2_dot3(craftU1, sx, craftU2, sy, craftU3, sz);
+		if (rel >= 0x40000000)
+			rel = 1073676288;
+		if (rel <= -1073741824)
+			rel = -1073676288;
+		relativez = rel >> 15;
+
+		relativeshift -= (int8_t)objectblockptr->model_scale_shift;
+		numberofcomp = 0;
+		draw_gettreeorder((int*)(bsp_root + 2));
+		draw_drawcraft(obj_idx, ship_idx);
 	}
 
-	create_getworldposition(obj_idx_u16, 0);
-
-	dx_scaled = 2 * (camera.x - worldlocx);
-	dy_scaled = 2 * (camera.y - worldlocy);
-	dz_scaled = 2 * (camera.z - worldlocz);
-
-	dx_abs = (int16_t)((camera.x - worldlocx) >> 15);
-	dy_abs = (int16_t)((camera.y - worldlocy) >> 15);
-	dz_abs = (int16_t)((camera.z - worldlocz) >> 15);
-	if ((((camera.x - worldlocx) >> 15) & 0x8000) != 0)
-		dx_abs = -dx_abs;
-	if ((dy_abs & 0x8000) != 0)
-		dy_abs = -dy_abs;
-	if ((dz_abs & 0x8000) != 0)
-		dz_abs = -dz_abs;
-
-	dx_abs_w = (uint16_t)(2 * dx_abs);
-	dy_abs_w = (uint16_t)(2 * dy_abs);
-	dz_abs_w = (uint16_t)(2 * dz_abs);
-	relativeshift = -1;
-	do {
-		do {
-			dx_abs_w >>= 1;
-			dy_abs_w >>= 1;
-			dz_abs_w >>= 1;
-			dx_scaled >>= 1;
-			dy_scaled >>= 1;
-			dz_scaled >>= 1;
-			++relativeshift;
-		} while (dx_abs_w);
-	} while (dy_abs_w || dz_abs_w);
-
-	rel_side = (int16_t)dz_scaled * craftS3 + (int16_t)dy_scaled * craftS2 + (int16_t)dx_scaled * craftS1;
-	if (rel_side >= 0x40000000)
-		rel_side = 1073676288;
-	if (rel_side <= -1073741824)
-		rel_side = -1073676288;
-	relativex = (int16_t)(rel_side >> 15);
-
-	rel_fwd = (int16_t)dz_scaled * craftf3 + (int16_t)dy_scaled * craftf2 + (int16_t)dx_scaled * craftf1;
-	if (rel_fwd >= 0x40000000)
-		rel_fwd = 1073676288;
-	if (rel_fwd <= -1073741824)
-		rel_fwd = -1073676288;
-	relativey = -(int16_t)(rel_fwd >> 15);
-
-	rel_up = (int16_t)dz_scaled * craftU3 + (int16_t)dy_scaled * craftU2 + (int16_t)dx_scaled * craftU1;
-	if (rel_up >= 0x40000000)
-		rel_up = 1073676288;
-	if (rel_up <= -1073741824)
-		rel_up = -1073676288;
-	relativez = (int16_t)(rel_up >> 15);
-
-	relativeshift -= (int16_t)(int8_t)objectblockptr->model_scale_shift;
-	numberofcomp = 0;
-	draw_gettreeorder((int*)(bsp_root + 2));
-	draw_drawcraft(obj_idx_u16, ship_idx, (int16_t)dz_scaled);
-
-	return drawpol_setmarkingcolors(0), 0;
+	drawpol_setmarkingcolors(0);
 }
 
 // FUNCTION: TIE98 0x417EC0
@@ -457,13 +476,8 @@ void draw_gettreeorder(int* bsp_node) {
 			int comp_eyez = objecteyez;
 
 			if (mesh->has_position) {
-				int rel = rotworldeyeA3 * mesh->pos_side + rotworldeyeB3 * mesh->pos_fwd +
-						  rotworldeyeC3 * mesh->pos_up;
-				if (rel >= 0x40000000)
-					rel = 1073676288;
-				if (rel <= -1073741824)
-					rel = -1073676288;
-				rel >>= 15;
+				int rel = math2_dot3_q15_clamped(rotworldeyeA3, rotworldeyeB3, rotworldeyeC3, mesh->pos_side,
+												 mesh->pos_fwd, mesh->pos_up);
 				comp_eyez += rel >> 1;
 
 				if ((uint16_t)shipdetailvalue == 1) {
@@ -500,13 +514,10 @@ void draw_gettreeorder(int* bsp_node) {
 				pt_up = relativez - current->center_z;
 			}
 
-			plane_dot = pt_side * current->normal_x + pt_fwd * current->normal_y + pt_up * current->normal_z;
-			if (plane_dot >= 0x40000000)
-				plane_dot = 1073676288;
-			if (plane_dot <= -1073741824)
-				plane_dot = -1073676288;
+			plane_dot = math2_dot3_q15_clamped(pt_side, pt_fwd, pt_up, current->normal_x, current->normal_y,
+											   current->normal_z);
 
-			if ((int16_t)(plane_dot >> 15) >= 0) {
+			if ((int16_t)plane_dot >= 0) {
 				draw_gettreeorder((int*)((uint8_t*)node + current->left_off));
 				node = (BSPNode*)((uint8_t*)node + current->right_off);
 			} else {
@@ -552,7 +563,7 @@ void draw_drawhyperstar_tie98(int16_t star_idx) {
  * highlighting. Critically damaged fuselages may also emit a lightning
  * billboard. Restores currenttarget before returning its saved value. */
 // FUNCTION: TIE95 0x1B690
-int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez) {
+int draw_drawcraft(int obj_idx, uint32_t ship_flag) {
 	uint16_t obj_idx_u16 = (uint16_t)obj_idx;
 	int saved_currenttarget = currenttarget;
 	int16_t bolt_angle_cached = 0;
@@ -1099,49 +1110,19 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_par
 	} while (dx_abs || dy_abs || dz_abs);
 
 	/* Project both vectors into the owner's local frame. */
-	dot = owner_obj->side_x * (int16_t)other_dx + owner_obj->side_y * (int16_t)other_dy +
-		  owner_obj->side_z * (int16_t)other_dz;
-	if (dot >= 0x40000000)
-		dot = 0x3FFF0000;
-	if (dot <= -0x40000000)
-		dot = -0x3FFF0000;
-	other_side = dot >> 15;
-	dot = owner_obj->fwd_x * (int16_t)other_dx + owner_obj->fwd_y * (int16_t)other_dy +
-		  owner_obj->fwd_z * (int16_t)other_dz;
-	if (dot >= 0x40000000)
-		dot = 0x3FFF0000;
-	if (dot <= -0x40000000)
-		dot = -0x3FFF0000;
-	other_fwd = -(dot >> 15);
-	dot = owner_obj->up_x * (int16_t)other_dx + owner_obj->up_y * (int16_t)other_dy +
-		  owner_obj->up_z * (int16_t)other_dz;
-	if (dot >= 0x40000000)
-		dot = 0x3FFF0000;
-	if (dot <= -0x40000000)
-		dot = -0x3FFF0000;
-	other_up = dot >> 15;
+	other_side = math2_dot3_q15_clamped(owner_obj->side_x, owner_obj->side_y, owner_obj->side_z,
+										(int16_t)other_dx, (int16_t)other_dy, (int16_t)other_dz);
+	other_fwd = -math2_dot3_q15_clamped(owner_obj->fwd_x, owner_obj->fwd_y, owner_obj->fwd_z,
+										(int16_t)other_dx, (int16_t)other_dy, (int16_t)other_dz);
+	other_up = math2_dot3_q15_clamped(owner_obj->up_x, owner_obj->up_y, owner_obj->up_z, (int16_t)other_dx,
+									  (int16_t)other_dy, (int16_t)other_dz);
 
-	dot = owner_obj->side_x * (int16_t)camera_dx + owner_obj->side_y * (int16_t)camera_dy +
-		  owner_obj->side_z * (int16_t)camera_dz;
-	if (dot >= 0x40000000)
-		dot = 0x3FFF0000;
-	if (dot <= -0x40000000)
-		dot = -0x3FFF0000;
-	cam_side = dot >> 15;
-	dot = owner_obj->fwd_x * (int16_t)camera_dx + owner_obj->fwd_y * (int16_t)camera_dy +
-		  owner_obj->fwd_z * (int16_t)camera_dz;
-	if (dot >= 0x40000000)
-		dot = 0x3FFF0000;
-	if (dot <= -0x40000000)
-		dot = -0x3FFF0000;
-	cam_fwd = -(dot >> 15);
-	dot = owner_obj->up_x * (int16_t)camera_dx + owner_obj->up_y * (int16_t)camera_dy +
-		  owner_obj->up_z * (int16_t)camera_dz;
-	if (dot >= 0x40000000)
-		dot = 0x3FFF0000;
-	if (dot <= -0x40000000)
-		dot = -0x3FFF0000;
-	cam_up = (int16_t)(dot >> 15);
+	cam_side = math2_dot3_q15_clamped(owner_obj->side_x, owner_obj->side_y, owner_obj->side_z,
+									  (int16_t)camera_dx, (int16_t)camera_dy, (int16_t)camera_dz);
+	cam_fwd = -math2_dot3_q15_clamped(owner_obj->fwd_x, owner_obj->fwd_y, owner_obj->fwd_z,
+									  (int16_t)camera_dx, (int16_t)camera_dy, (int16_t)camera_dz);
+	cam_up = (int16_t)math2_dot3_q15_clamped(owner_obj->up_x, owner_obj->up_y, owner_obj->up_z,
+											 (int16_t)camera_dx, (int16_t)camera_dy, (int16_t)camera_dz);
 
 	if (via_special_70)
 		norm_shift--;
@@ -1220,18 +1201,10 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_par
 		other_up_dx = other_up - edge;
 		cam_up_dx = cam_up - edge;
 
-		dot = normal_x * other_side_dx + normal_y * other_fwd_dx + normal_z * other_up_dx;
-		if (dot >= 0x40000000)
-			dot = 0x3FFF0000;
-		if (dot <= -0x40000000)
-			dot = -0x3FFF0000;
-		other_dot = dot >> 15;
-		dot = normal_x * cam_side_dx + normal_y * cam_fwd_dx + normal_z * cam_up_dx;
-		if (dot >= 0x40000000)
-			dot = 0x3FFF0000;
-		if (dot <= -0x40000000)
-			dot = -0x3FFF0000;
-		if ((int16_t)((dot >> 15) ^ other_dot) >= 0)
+		other_dot =
+			math2_dot3_q15_clamped(normal_x, normal_y, normal_z, other_side_dx, other_fwd_dx, other_up_dx);
+		dot = math2_dot3_q15_clamped(normal_x, normal_y, normal_z, cam_side_dx, cam_fwd_dx, cam_up_dx);
+		if ((int16_t)(dot ^ other_dot) >= 0)
 			return front_obj;
 	}
 	return back_obj;

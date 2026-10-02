@@ -35,7 +35,6 @@
 #include "tie/laser.h"
 #include "tie/logbuf2.h"
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/mission.h"
 #include "tie/modelbounds.h"
 #include "tie/modelmesh.h"
@@ -76,6 +75,7 @@
 #include "tie_runtime/runtime/inflight_state.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/runtime/runtime.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 #include "tie_runtime/snapshot/snapshot_billboards.h" /* SNAPSHOT-ONLY billboard capture drain */
 #include "tie_runtime/snapshot/snapshot_flight.h"
 #include "tie_runtime/storage/storage.h"
@@ -196,10 +196,13 @@ int32_t rotworldeyeC3;
 /* Perspective-projection constants (set by TIE_InitFlightResolution per
  * selected flight resolution). */
 // GLOBAL: TIE95 0xEB771
+// GLOBAL: TIE98 0x5926D4
 uint8_t perspShift;
 // GLOBAL: TIE95 0xEB13C
+// GLOBAL: TIE98 0x5A272C
 int32_t perspFactor;
 // GLOBAL: TIE95 0xEB140
+// GLOBAL: TIE98 0x590AF8
 int32_t halfPerspFactor;
 
 /* Master enable for the skybox backdrop renderer. */
@@ -2510,7 +2513,6 @@ int tie_MakeLocalLights(int obj_idx) {
 
 	for (scan_idx = 0, expl = objects; scan_idx < NUM_OBJECTS; ++scan_idx, ++expl) {
 		int dx, dy, dz;
-		int proj;
 
 		if (expl->ship_idx == 0)
 			continue; /* dead slot */
@@ -2524,28 +2526,16 @@ int tie_MakeLocalLights(int obj_idx) {
 			continue;
 
 		/* dot products: source craft's local basis x world delta. */
-		proj = math2_dot3(dx, src_obj->side_x, dy, src_obj->side_y, dz, src_obj->side_z);
-		if (proj >= 0x40000000)
-			proj = 0x3FFF0000;
-		if (proj <= -0x40000000)
-			proj = -0x3FFF0000;
-		localLights[light_idx].x = proj >> 15;
+		localLights[light_idx].x =
+			math2_dot3_q15_clamped(dx, dy, dz, src_obj->side_x, src_obj->side_y, src_obj->side_z);
 
-		proj = math2_dot3(dx, src_obj->fwd_x, dy, src_obj->fwd_y, dz, src_obj->fwd_z);
-		if (proj >= 0x40000000)
-			proj = 0x3FFF0000;
-		if (proj <= -0x40000000)
-			proj = -0x3FFF0000;
 		/* y axis is FLIPPED: we store -(fwd >> 15) so the local frame
 		 * matches the right-handed eye-space DRAWPOL expects. */
-		localLights[light_idx].y = -(proj >> 15);
+		localLights[light_idx].y =
+			-math2_dot3_q15_clamped(dx, dy, dz, src_obj->fwd_x, src_obj->fwd_y, src_obj->fwd_z);
 
-		proj = math2_dot3(dx, src_obj->up_x, dy, src_obj->up_y, dz, src_obj->up_z);
-		if (proj >= 0x40000000)
-			proj = 0x3FFF0000;
-		if (proj <= -0x40000000)
-			proj = -0x3FFF0000;
-		localLights[light_idx].z = proj >> 15;
+		localLights[light_idx].z =
+			math2_dot3_q15_clamped(dx, dy, dz, src_obj->up_x, src_obj->up_y, src_obj->up_z);
 
 		/* Distance scale: large ships (model_scale_shift==0) double the position;
 		 * others divide by 2^(model_scale_shift-1). */
@@ -2650,9 +2640,6 @@ int tie_makelocallights_tie98(FlightObject* src_obj) {
 		int dy;
 		int dz;
 		DRAWPOL_LocalLight* out;
-		int side_proj;
-		int fwd_proj;
-		int up_proj;
 		uint8_t ship_idx;
 
 		if (expl->ship_idx == 0 || expl->genus != GENUS_EXPLOSION)
@@ -2665,27 +2652,14 @@ int tie_makelocallights_tie98(FlightObject* src_obj) {
 			continue;
 
 		out = &localLights[light_idx];
-		side_proj =
-			(int32_t)src_obj->side_x * dx + (int32_t)src_obj->side_y * dy + (int32_t)src_obj->side_z * dz;
-		if (side_proj >= 0x40000000)
-			side_proj = 0x3FFFFFFF;
-		if (side_proj <= -0x40000000)
-			side_proj = -0x3FFF0000;
-		out->x = side_proj >> 15;
+		out->x = math2_dot3_q15_clamped(dx, dy, dz, (int32_t)src_obj->side_x, (int32_t)src_obj->side_y,
+										(int32_t)src_obj->side_z);
 
-		fwd_proj = (int32_t)src_obj->fwd_x * dx + (int32_t)src_obj->fwd_y * dy + (int32_t)src_obj->fwd_z * dz;
-		if (fwd_proj >= 0x40000000)
-			fwd_proj = 0x3FFFFFFF;
-		if (fwd_proj <= -0x40000000)
-			fwd_proj = -0x3FFF0000;
-		out->y = -(fwd_proj >> 15);
+		out->y = -math2_dot3_q15_clamped(dx, dy, dz, (int32_t)src_obj->fwd_x, (int32_t)src_obj->fwd_y,
+										 (int32_t)src_obj->fwd_z);
 
-		up_proj = (int32_t)src_obj->up_x * dx + (int32_t)src_obj->up_y * dy + (int32_t)src_obj->up_z * dz;
-		if (up_proj >= 0x40000000)
-			up_proj = 0x3FFFFFFF;
-		if (up_proj <= -0x40000000)
-			up_proj = -0x3FFF0000;
-		out->z = up_proj >> 15;
+		out->z = math2_dot3_q15_clamped(dx, dy, dz, (int32_t)src_obj->up_x, (int32_t)src_obj->up_y,
+										(int32_t)src_obj->up_z);
 
 		out->range = 16;
 		ship_idx = expl->ship_idx;

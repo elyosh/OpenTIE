@@ -8,9 +8,9 @@
  */
 
 #include "tie/fview.h"
-#include "tie/math2_wide.h"
 #include "tie/transfm2.h"
 #include "tie/trig2.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 
 /* Saved rotation state for component rotations. */
 // GLOBAL: TIE95 0xD4AC0
@@ -189,81 +189,20 @@ void fview_calcrotateorient(uint16_t roll, uint16_t yaw, FlightObject* craft) {
 
 // FUNCTION: TIE95 0x265F8
 void fview_calcrotworldeye(void) {
-	int32_t temp;
-	temp = worldeyeA1 * calcS1 + worldeyeB1 * calcS2 + worldeyeC1 * calcS3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeA1 = temp >> 15;
-	temp = worldeyeA2 * calcS1 + worldeyeB2 * calcS2 + worldeyeC2 * calcS3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeA2 = temp >> 15;
-	temp = worldeyeA3 * calcS1 + worldeyeB3 * calcS2 + worldeyeC3 * calcS3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeA3 = temp >> 15;
-	temp = worldeyeA1 * calcf1 + worldeyeB1 * calcf2 + worldeyeC1 * calcf3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeB1 = temp >> 15;
-	temp = worldeyeA2 * calcf1 + worldeyeB2 * calcf2 + worldeyeC2 * calcf3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeB2 = temp >> 15;
-	temp = worldeyeA3 * calcf1 + worldeyeB3 * calcf2 + worldeyeC3 * calcf3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeB3 = temp >> 15;
-	temp = worldeyeA1 * calcU1 + worldeyeB1 * calcU2 + worldeyeC1 * calcU3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeC1 = temp >> 15;
-	temp = worldeyeA2 * calcU1 + worldeyeB2 * calcU2 + worldeyeC2 * calcU3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeC2 = temp >> 15;
-	temp = worldeyeA3 * calcU1 + worldeyeB3 * calcU2 + worldeyeC3 * calcU3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeC3 = temp >> 15;
+	rotworldeyeA1 = math2_dot3_q15_clamped(calcS1, calcS2, calcS3, worldeyeA1, worldeyeB1, worldeyeC1);
+	rotworldeyeA2 = math2_dot3_q15_clamped(calcS1, calcS2, calcS3, worldeyeA2, worldeyeB2, worldeyeC2);
+	rotworldeyeA3 = math2_dot3_q15_clamped(calcS1, calcS2, calcS3, worldeyeA3, worldeyeB3, worldeyeC3);
+	rotworldeyeB1 = math2_dot3_q15_clamped(calcf1, calcf2, calcf3, worldeyeA1, worldeyeB1, worldeyeC1);
+	rotworldeyeB2 = math2_dot3_q15_clamped(calcf1, calcf2, calcf3, worldeyeA2, worldeyeB2, worldeyeC2);
+	rotworldeyeB3 = math2_dot3_q15_clamped(calcf1, calcf2, calcf3, worldeyeA3, worldeyeB3, worldeyeC3);
+	rotworldeyeC1 = math2_dot3_q15_clamped(calcU1, calcU2, calcU3, worldeyeA1, worldeyeB1, worldeyeC1);
+	rotworldeyeC2 = math2_dot3_q15_clamped(calcU1, calcU2, calcU3, worldeyeA2, worldeyeB2, worldeyeC2);
+	rotworldeyeC3 = math2_dot3_q15_clamped(calcU1, calcU2, calcU3, worldeyeA3, worldeyeB3, worldeyeC3);
 
 	if (lightflag) {
-		temp = lightX * calcS1 + lightY * calcS2 + lightZ * calcS3;
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rotlightX = temp >> 15;
-		temp = lightX * calcf1 + lightY * calcf2 + lightZ * calcf3;
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rotlightY = temp >> 15;
-		temp = lightX * calcU1 + lightY * calcU2 + lightZ * calcU3;
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		rotlightZ = temp >> 15;
+		rotlightX = math2_dot3_q15_clamped(calcS1, calcS2, calcS3, lightX, lightY, lightZ);
+		rotlightY = math2_dot3_q15_clamped(calcf1, calcf2, calcf3, lightX, lightY, lightZ);
+		rotlightZ = math2_dot3_q15_clamped(calcU1, calcU2, calcU3, lightX, lightY, lightZ);
 	} else {
 		rotlightX = lightX;
 		rotlightY = lightY;
@@ -403,14 +342,12 @@ void fview_corvettegunrotation(int16_t angle) {
 }
 
 // FUNCTION: TIE95 0x26E54
-void fview_bwingrotation(int16_t angle, uint16_t part_id) {
+void fview_bwingrotation(uint16_t angle, uint16_t part_id) {
 	int32_t temp;
 	int32_t cos_a, sin_a, neg_sin;
-	int32_t lat_offset, vert_offset;
-	int32_t x_fwd, z_side;
-	int32_t pivot_lat, pivot_z;
-	int32_t rot_fwd, adj_z;
-	int32_t dot;
+	int32_t lat, fwd;
+	int32_t pivot_lat, pivot_fwd;
+	int32_t x, y, z;
 
 	sfoiltempA1 = rotworldeyeA1;
 	sfoiltempA2 = rotworldeyeA2;
@@ -430,39 +367,25 @@ void fview_bwingrotation(int16_t angle, uint16_t part_id) {
 
 	if (angle == 0x4000) {
 		/* 90-degree special case — hardcoded offsets */
+		y = 0;
 		if (part_id == 5) {
-			lat_offset = -92;
-			vert_offset = -8;
+			lat = -92;
+			fwd = -8;
 		} else if (part_id == 4) {
-			lat_offset = 92;
-			vert_offset = -8;
+			lat = 92;
+			fwd = -8;
 		} else {
-			lat_offset = 0;
-			vert_offset = 0;
+			lat = 0;
+			fwd = 0;
 		}
 
-		x_fwd = vert_offset - 170;
-		z_side = 170 - lat_offset;
+		x = fwd - 170;
+		z = -lat + 170;
 
-		/* Translate objecteye via A and C columns */
-		temp = rotworldeyeA1 * x_fwd + rotworldeyeC1 * z_side;
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		objecteyex += temp >> 15;
-		temp = rotworldeyeA2 * x_fwd + rotworldeyeC2 * z_side;
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		objecteyey += temp >> 15;
-		temp = rotworldeyeA3 * x_fwd + rotworldeyeC3 * z_side;
-		if (temp >= 0x40000000)
-			temp = 0x3FFF0000;
-		if (temp <= -0x40000000)
-			temp = -0x3FFF0000;
-		objecteyez += temp >> 15;
+		/* Translate objecteye */
+		objecteyex += math2_dot3_q15_clamped(x, y, z, rotworldeyeA1, rotworldeyeB1, rotworldeyeC1);
+		objecteyey += math2_dot3_q15_clamped(x, y, z, rotworldeyeA2, rotworldeyeB2, rotworldeyeC2);
+		objecteyez += math2_dot3_q15_clamped(x, y, z, rotworldeyeA3, rotworldeyeB3, rotworldeyeC3);
 
 		if (part_id == 5) {
 			/* Identity — no rotation change */
@@ -490,81 +413,72 @@ void fview_bwingrotation(int16_t angle, uint16_t part_id) {
 	sin_a = trig2_getsignedsin((int16_t)angle);
 	cos_a = trig2_getsignedcos((int16_t)angle);
 	neg_sin = -sin_a;
+	y = 0;
 
 	if (part_id == 5) {
-		temp = -50 * sin_a + 42 * cos_a;
+		pivot_lat = 42;
+		pivot_fwd = 50;
+		temp = pivot_fwd * neg_sin + pivot_lat * cos_a;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		dot = temp >> 15;
-		temp = 50 * cos_a + 42 * sin_a;
+		lat = temp >> 15;
+		temp = pivot_lat * -neg_sin + pivot_fwd * cos_a;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		pivot_z = (temp >> 15) - 50;
-		pivot_lat = dot - 42;
+		fwd = (temp >> 15) - 50;
+		lat -= 42;
 	} else if (part_id == 4) {
-		temp = 50 * sin_a - 42 * cos_a;
+		pivot_lat = -42;
+		pivot_fwd = 50;
+		temp = pivot_fwd * sin_a + pivot_lat * cos_a;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		dot = temp >> 15;
-		temp = 50 * cos_a + 42 * sin_a;
+		lat = temp >> 15;
+		temp = neg_sin * pivot_lat + cos_a * pivot_fwd;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		pivot_z = (temp >> 15) - 50;
-		pivot_lat = dot + 42;
+		fwd = (temp >> 15) - 50;
+		lat += 42;
 	} else {
-		pivot_z = 0;
-		pivot_lat = 0;
+		fwd = 0;
+		lat = 0;
 	}
 
-	adj_z = pivot_z - 170;
-	temp = adj_z * sin_a + pivot_lat * cos_a;
+	fwd -= 170;
+	temp = sin_a * fwd + cos_a * lat;
 	if (temp >= 0x40000000)
 		temp = 0x3FFF0000;
 	if (temp <= -0x40000000)
 		temp = -0x3FFF0000;
-	rot_fwd = temp >> 15;
-	temp = adj_z * cos_a + pivot_lat * neg_sin;
+	x = temp >> 15;
+	temp = lat * neg_sin + fwd * cos_a;
 	if (temp >= 0x40000000)
 		temp = 0x3FFF0000;
 	if (temp <= -0x40000000)
 		temp = -0x3FFF0000;
-	adj_z = (temp >> 15) + 170;
+	z = (temp >> 15) + 170;
 
-	/* Translate objecteye via A and C columns */
-	temp = rotworldeyeA1 * rot_fwd + rotworldeyeC1 * adj_z;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	objecteyex += temp >> 15;
-	temp = rotworldeyeA2 * rot_fwd + rotworldeyeC2 * adj_z;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	objecteyey += temp >> 15;
-	temp = rotworldeyeA3 * rot_fwd + rotworldeyeC3 * adj_z;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	objecteyez += temp >> 15;
+	/* Translate objecteye */
+	objecteyex += math2_dot3_q15_clamped(x, y, z, rotworldeyeA1, rotworldeyeB1, rotworldeyeC1);
+	objecteyey += math2_dot3_q15_clamped(x, y, z, rotworldeyeA2, rotworldeyeB2, rotworldeyeC2);
+	objecteyez += math2_dot3_q15_clamped(x, y, z, rotworldeyeA3, rotworldeyeB3, rotworldeyeC3);
 
 	if (part_id == 5) {
 		/* No rotation change */
 	} else {
 		if (part_id == 4) {
 			/* Use double angle for the rotation matrix */
-			sin_a = trig2_getsignedsin(2 * angle);
-			cos_a = trig2_getsignedcos(2 * angle);
+			angle *= 2;
+			sin_a = trig2_getsignedsin((int16_t)angle);
+			cos_a = trig2_getsignedcos((int16_t)angle);
 			neg_sin = -sin_a;
 		}
 		/* Rotate A and C rows */
@@ -580,7 +494,7 @@ void fview_bwingrotation(int16_t angle, uint16_t part_id) {
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
 		rotworldeyeA2 = temp >> 15;
-		temp = sfoiltempA3 * cos_a + sfoiltempC3 * neg_sin;
+		temp = sfoiltempC3 * neg_sin + sfoiltempA3 * cos_a;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
@@ -598,7 +512,7 @@ void fview_bwingrotation(int16_t angle, uint16_t part_id) {
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
 		rotworldeyeC2 = temp >> 15;
-		temp = sfoiltempA3 * sin_a + sfoiltempC3 * cos_a;
+		temp = sfoiltempC3 * cos_a + sfoiltempA3 * sin_a;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
@@ -781,96 +695,33 @@ void fview_componentrotation(int16_t angle, const ShipModelMesh* mesh) {
 	}
 
 	/* Compute pivot displacement: disp = pivot + R * (-pivot) */
-	disp_a = pivot_raw + math2_mul_q15(rot[0], -pivot_raw) + math2_mul_q15(rot[3], -pivot_x) +
-			 math2_mul_q15(rot[6], -pivot_z);
-	disp_b = pivot_x + math2_mul_q15(rot[1], -pivot_raw) + math2_mul_q15(rot[4], -pivot_x) +
-			 math2_mul_q15(rot[7], -pivot_z);
-	disp_c = pivot_z + math2_mul_q15(rot[2], -pivot_raw) + math2_mul_q15(rot[5], -pivot_x) +
-			 math2_mul_q15(rot[8], -pivot_z);
+	disp_a = math2_dot3_q15(-pivot_raw, rot[0], -pivot_x, rot[3], -pivot_z, rot[6]) + pivot_raw;
+	disp_b = math2_dot3_q15(-pivot_raw, rot[1], -pivot_x, rot[4], -pivot_z, rot[7]) + pivot_x;
+	disp_c = math2_dot3_q15(-pivot_raw, rot[2], -pivot_x, rot[5], -pivot_z, rot[8]) + pivot_z;
 
 	/* Translate objecteye through rotworldeye */
-	objecteyex += math2_mul_q15(rotworldeyeA1, disp_a) + math2_mul_q15(rotworldeyeB1, disp_b) +
-				  math2_mul_q15(rotworldeyeC1, disp_c);
-	objecteyey += math2_mul_q15(rotworldeyeA2, disp_a) + math2_mul_q15(rotworldeyeB2, disp_b) +
-				  math2_mul_q15(rotworldeyeC2, disp_c);
-	objecteyez += math2_mul_q15(rotworldeyeA3, disp_a) + math2_mul_q15(rotworldeyeB3, disp_b) +
-				  math2_mul_q15(rotworldeyeC3, disp_c);
+	objecteyex += math2_dot3_q15(disp_a, rotworldeyeA1, disp_b, rotworldeyeB1, disp_c, rotworldeyeC1);
+	objecteyey += math2_dot3_q15(disp_a, rotworldeyeA2, disp_b, rotworldeyeB2, disp_c, rotworldeyeC2);
+	objecteyez += math2_dot3_q15(disp_a, rotworldeyeA3, disp_b, rotworldeyeB3, disp_c, rotworldeyeC3);
 
 	/* Rotate rotworldeye = saved * R */
-	temp = sfoiltempA1 * rot[0] + sfoiltempB1 * rot[1] + sfoiltempC1 * rot[2];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeA1 = temp >> 15;
-	temp = sfoiltempA2 * rot[0] + sfoiltempB2 * rot[1] + sfoiltempC2 * rot[2];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeA2 = temp >> 15;
-	temp = sfoiltempA3 * rot[0] + sfoiltempB3 * rot[1] + sfoiltempC3 * rot[2];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeA3 = temp >> 15;
-	temp = sfoiltempA1 * rot[3] + sfoiltempB1 * rot[4] + sfoiltempC1 * rot[5];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeB1 = temp >> 15;
-	temp = sfoiltempA2 * rot[3] + sfoiltempB2 * rot[4] + sfoiltempC2 * rot[5];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeB2 = temp >> 15;
-	temp = sfoiltempA3 * rot[3] + sfoiltempB3 * rot[4] + sfoiltempC3 * rot[5];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeB3 = temp >> 15;
-	temp = sfoiltempA1 * rot[6] + sfoiltempB1 * rot[7] + sfoiltempC1 * rot[8];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeC1 = temp >> 15;
-	temp = sfoiltempA2 * rot[6] + sfoiltempB2 * rot[7] + sfoiltempC2 * rot[8];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeC2 = temp >> 15;
-	temp = sfoiltempA3 * rot[6] + sfoiltempB3 * rot[7] + sfoiltempC3 * rot[8];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotworldeyeC3 = temp >> 15;
+	rotworldeyeA1 = math2_dot3_q15_clamped(rot[0], rot[1], rot[2], sfoiltempA1, sfoiltempB1, sfoiltempC1);
+	rotworldeyeA2 = math2_dot3_q15_clamped(rot[0], rot[1], rot[2], sfoiltempA2, sfoiltempB2, sfoiltempC2);
+	rotworldeyeA3 = math2_dot3_q15_clamped(rot[0], rot[1], rot[2], sfoiltempA3, sfoiltempB3, sfoiltempC3);
+	rotworldeyeB1 = math2_dot3_q15_clamped(rot[3], rot[4], rot[5], sfoiltempA1, sfoiltempB1, sfoiltempC1);
+	rotworldeyeB2 = math2_dot3_q15_clamped(rot[3], rot[4], rot[5], sfoiltempA2, sfoiltempB2, sfoiltempC2);
+	rotworldeyeB3 = math2_dot3_q15_clamped(rot[3], rot[4], rot[5], sfoiltempA3, sfoiltempB3, sfoiltempC3);
+	rotworldeyeC1 = math2_dot3_q15_clamped(rot[6], rot[7], rot[8], sfoiltempA1, sfoiltempB1, sfoiltempC1);
+	rotworldeyeC2 = math2_dot3_q15_clamped(rot[6], rot[7], rot[8], sfoiltempA2, sfoiltempB2, sfoiltempC2);
+	rotworldeyeC3 = math2_dot3_q15_clamped(rot[6], rot[7], rot[8], sfoiltempA3, sfoiltempB3, sfoiltempC3);
 
 	/* Rotate light direction */
-	temp = sfoiltemplightX * rot[0] + sfoiltemplightY * rot[1] + sfoiltemplightZ * rot[2];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotlightX = temp >> 15;
-	temp = sfoiltemplightX * rot[3] + sfoiltemplightY * rot[4] + sfoiltemplightZ * rot[5];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotlightY = temp >> 15;
-	temp = sfoiltemplightX * rot[6] + sfoiltemplightY * rot[7] + sfoiltemplightZ * rot[8];
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rotlightZ = temp >> 15;
+	rotlightX =
+		math2_dot3_q15_clamped(rot[0], rot[1], rot[2], sfoiltemplightX, sfoiltemplightY, sfoiltemplightZ);
+	rotlightY =
+		math2_dot3_q15_clamped(rot[3], rot[4], rot[5], sfoiltemplightX, sfoiltemplightY, sfoiltemplightZ);
+	rotlightZ =
+		math2_dot3_q15_clamped(rot[6], rot[7], rot[8], sfoiltemplightX, sfoiltemplightY, sfoiltemplightZ);
 }
 
 // FUNCTION: TIE95 0x28100
@@ -892,16 +743,51 @@ void fview_restorerotation(void) {
 	objecteyez = sfoiltempz;
 }
 
+/* Rodrigues rotation-matrix element: clamp(term * 1.0 + (a * b) * scale)
+ * in Q15, with the same saturation as math2_dot3_q15_clamped. For a
+ * negative cosine, `scale` is -cos and the a * b product is added back in
+ * full (1 - cos = 1 + |cos|). TIE95 inlines both forms at every use; their
+ * names are not known. Other toolchains compute the same values in C. */
+#ifdef __WATCOMC__
+int32_t fview_rotelement(int32_t a, int32_t b, int32_t scale, int32_t term);
+#pragma aux fview_rotelement =                                                                               \
+	"imul eax, ebx"                                                                                          \
+	"sar eax, 15"                                                                                            \
+	"imul eax, ecx"                                                                                          \
+	"shl edx, 15"                                                                                            \
+	"add eax, edx"                                                                                           \
+	"cmp eax, 40000000h"                                                                                     \
+	"jl re_positive_ok"                                                                                      \
+	"mov eax, 3fff0000h"                                                                                     \
+	"re_positive_ok: cmp eax, 0c0000000h"                                                                    \
+	"jg re_negative_ok"                                                                                      \
+	"mov eax, 0c0010000h"                                                                                    \
+	"re_negative_ok: sar eax, 15" parm[eax][ebx][ecx][edx] value[eax] modify exact[eax ecx edx];
+int32_t fview_rotelementneg(int32_t a, int32_t b, int32_t scale, int32_t term);
+#pragma aux fview_rotelementneg =                                                                            \
+	"imul eax, ebx"                                                                                          \
+	"mov ebx, eax"                                                                                           \
+	"sar eax, 15"                                                                                            \
+	"imul eax, ecx"                                                                                          \
+	"shl edx, 15"                                                                                            \
+	"add eax, ebx"                                                                                           \
+	"add eax, edx"                                                                                           \
+	"cmp eax, 40000000h"                                                                                     \
+	"jl rn_positive_ok"                                                                                      \
+	"mov eax, 3fff0000h"                                                                                     \
+	"rn_positive_ok: cmp eax, 0c0000000h"                                                                    \
+	"jg rn_negative_ok"                                                                                      \
+	"mov eax, 0c0010000h"                                                                                    \
+	"rn_negative_ok: sar eax, 15" parm[eax][ebx][ecx][edx] value[eax] modify exact[eax ebx ecx edx];
+#endif
+
 // FUNCTION: TIE95 0x28198
 void fview_comprotatepoint(int16_t angle, const ShipModelMesh* mesh, int32_t point_x, int32_t point_y,
 						   int32_t point_z) {
-	int32_t temp;
-	int32_t cos_a, sin_a;
-	const ComponentRotData* rd;
 	int32_t axis_x, axis_y, axis_z;
-	int32_t rot[9];
-	int32_t pivot_half, pivot_xv, pivot_zv;
-	int32_t rel_x, rel_y, rel_z;
+	const ComponentRotData* rd;
+	int32_t cos_a, sin_a;
+	int32_t m0, m1, m2, m3, m4, m5, m6, m7, m8;
 	int32_t rx, ry, rz;
 
 	rd = (const ComponentRotData*)((const uint8_t*)mesh + mesh->rotation_offset);
@@ -910,164 +796,176 @@ void fview_comprotatepoint(int16_t angle, const ShipModelMesh* mesh, int32_t poi
 	axis_x = rd->axis_x;
 	axis_z = rd->axis_z;
 
-	cos_a = trig2_getsignedcos((int16_t)angle);
-	sin_a = trig2_getsignedsin((int16_t)angle);
+	cos_a = trig2_getsignedcos(angle);
+	sin_a = trig2_getsignedsin(angle);
 
 	if (cos_a >= 0) {
 		int32_t one_minus_cos = 0x7FFF - cos_a; /* 1 - cos in Q15 */
-		temp = (cos_a * 32768) + one_minus_cos * ((axis_y * axis_y) >> 15);
+#ifdef __WATCOMC__
+		m0 = fview_rotelement(axis_y, axis_y, one_minus_cos, cos_a);
+		m1 = fview_rotelement(axis_y, axis_x, one_minus_cos, math2_mul16_q15(sin_a, axis_z));
+		m2 = fview_rotelement(axis_y, axis_z, one_minus_cos, -math2_mul16_q15(sin_a, axis_x));
+		m3 = fview_rotelement(axis_y, axis_x, one_minus_cos, -math2_mul16_q15(sin_a, axis_z));
+		m4 = fview_rotelement(axis_x, axis_x, one_minus_cos, cos_a);
+		m5 = fview_rotelement(axis_x, axis_z, one_minus_cos, math2_mul16_q15(sin_a, axis_y));
+		m6 = fview_rotelement(axis_y, axis_z, one_minus_cos, math2_mul16_q15(sin_a, axis_x));
+		m7 = fview_rotelement(axis_x, axis_z, one_minus_cos, -math2_mul16_q15(sin_a, axis_y));
+		m8 = fview_rotelement(axis_z, axis_z, one_minus_cos, cos_a);
+#else
+		int32_t temp;
+
+		temp = (cos_a << 15) + math2_mul16_q15(axis_y, axis_y) * one_minus_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[0] = temp >> 15;
-		temp = ((axis_z * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_x * axis_y) >> 15);
+		m0 = temp >> 15;
+		temp = math2_mul16_q15(sin_a, axis_z) * 32768 + math2_mul16_q15(axis_y, axis_x) * one_minus_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[1] = temp >> 15;
-		temp = -32768 * ((axis_x * sin_a) >> 15) + one_minus_cos * ((axis_z * axis_y) >> 15);
+		m1 = temp >> 15;
+		temp = -math2_mul16_q15(sin_a, axis_x) * 32768 + math2_mul16_q15(axis_y, axis_z) * one_minus_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[2] = temp >> 15;
-		temp = -32768 * ((axis_z * sin_a) >> 15) + one_minus_cos * ((axis_x * axis_y) >> 15);
+		m2 = temp >> 15;
+		temp = -math2_mul16_q15(sin_a, axis_z) * 32768 + math2_mul16_q15(axis_y, axis_x) * one_minus_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[3] = temp >> 15;
-		temp = (cos_a * 32768) + one_minus_cos * ((axis_x * axis_x) >> 15);
+		m3 = temp >> 15;
+		temp = (cos_a << 15) + math2_mul16_q15(axis_x, axis_x) * one_minus_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[4] = temp >> 15;
-		temp = ((axis_y * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_z * axis_x) >> 15);
+		m4 = temp >> 15;
+		temp = math2_mul16_q15(sin_a, axis_y) * 32768 + math2_mul16_q15(axis_x, axis_z) * one_minus_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[5] = temp >> 15;
-		temp = ((axis_x * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_z * axis_y) >> 15);
+		m5 = temp >> 15;
+		temp = math2_mul16_q15(sin_a, axis_x) * 32768 + math2_mul16_q15(axis_y, axis_z) * one_minus_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[6] = temp >> 15;
-		temp = -32768 * ((axis_y * sin_a) >> 15) + one_minus_cos * ((axis_z * axis_x) >> 15);
+		m6 = temp >> 15;
+		temp = -math2_mul16_q15(sin_a, axis_y) * 32768 + math2_mul16_q15(axis_x, axis_z) * one_minus_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[7] = temp >> 15;
-		temp = (cos_a * 32768) + one_minus_cos * ((axis_z * axis_z) >> 15);
+		m7 = temp >> 15;
+		temp = (cos_a << 15) + math2_mul16_q15(axis_z, axis_z) * one_minus_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[8] = temp >> 15;
+		m8 = temp >> 15;
+#endif
 	} else {
 		int32_t neg_cos = -cos_a; /* |cos| */
-		temp = (cos_a * 32768) + axis_y * axis_y + neg_cos * ((axis_y * axis_y) >> 15);
+#ifdef __WATCOMC__
+		m0 = fview_rotelementneg(axis_y, axis_y, neg_cos, cos_a);
+		m1 = fview_rotelementneg(axis_y, axis_x, neg_cos, math2_mul16_q15(sin_a, axis_z));
+		m2 = fview_rotelementneg(axis_y, axis_z, neg_cos, -math2_mul16_q15(sin_a, axis_x));
+		m3 = fview_rotelementneg(axis_y, axis_x, neg_cos, -math2_mul16_q15(sin_a, axis_z));
+		m4 = fview_rotelementneg(axis_x, axis_x, neg_cos, cos_a);
+		m5 = fview_rotelementneg(axis_x, axis_z, neg_cos, math2_mul16_q15(sin_a, axis_y));
+		m6 = fview_rotelementneg(axis_y, axis_z, neg_cos, math2_mul16_q15(sin_a, axis_x));
+		m7 = fview_rotelementneg(axis_x, axis_z, neg_cos, -math2_mul16_q15(sin_a, axis_y));
+		m8 = fview_rotelementneg(axis_z, axis_z, neg_cos, cos_a);
+#else
+		int32_t temp;
+
+		temp = (cos_a << 15) + axis_y * axis_y + ((axis_y * axis_y) >> 15) * neg_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[0] = temp >> 15;
-		temp = ((axis_z * sin_a) >> 15) * 32768 + axis_x * axis_y + neg_cos * ((axis_x * axis_y) >> 15);
+		m0 = temp >> 15;
+		temp = ((sin_a * axis_z) >> 15) * 32768 + axis_y * axis_x + ((axis_y * axis_x) >> 15) * neg_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[1] = temp >> 15;
-		temp = -32768 * ((axis_x * sin_a) >> 15) + axis_z * axis_y + neg_cos * ((axis_z * axis_y) >> 15);
+		m1 = temp >> 15;
+		temp = -((sin_a * axis_x) >> 15) * 32768 + axis_y * axis_z + ((axis_y * axis_z) >> 15) * neg_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[2] = temp >> 15;
-		temp = -32768 * ((axis_z * sin_a) >> 15) + axis_x * axis_y + neg_cos * ((axis_x * axis_y) >> 15);
+		m2 = temp >> 15;
+		temp = -((sin_a * axis_z) >> 15) * 32768 + axis_y * axis_x + ((axis_y * axis_x) >> 15) * neg_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[3] = temp >> 15;
-		temp = (cos_a * 32768) + axis_x * axis_x + neg_cos * ((axis_x * axis_x) >> 15);
+		m3 = temp >> 15;
+		temp = (cos_a << 15) + axis_x * axis_x + ((axis_x * axis_x) >> 15) * neg_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[4] = temp >> 15;
-		temp = ((axis_y * sin_a) >> 15) * 32768 + axis_z * axis_x + neg_cos * ((axis_z * axis_x) >> 15);
+		m4 = temp >> 15;
+		temp = ((sin_a * axis_y) >> 15) * 32768 + axis_x * axis_z + ((axis_x * axis_z) >> 15) * neg_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[5] = temp >> 15;
-		temp = ((axis_x * sin_a) >> 15) * 32768 + axis_z * axis_y + neg_cos * ((axis_z * axis_y) >> 15);
+		m5 = temp >> 15;
+		temp = ((sin_a * axis_x) >> 15) * 32768 + axis_y * axis_z + ((axis_y * axis_z) >> 15) * neg_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[6] = temp >> 15;
-		temp = -32768 * ((axis_y * sin_a) >> 15) + axis_z * axis_x + neg_cos * ((axis_z * axis_x) >> 15);
+		m6 = temp >> 15;
+		temp = -((sin_a * axis_y) >> 15) * 32768 + axis_x * axis_z + ((axis_x * axis_z) >> 15) * neg_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[7] = temp >> 15;
-		temp = (cos_a * 32768) + axis_z * axis_z + neg_cos * ((axis_z * axis_z) >> 15);
+		m7 = temp >> 15;
+		temp = (cos_a << 15) + axis_z * axis_z + ((axis_z * axis_z) >> 15) * neg_cos;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[8] = temp >> 15;
+		m8 = temp >> 15;
+#endif
 	}
 
-	pivot_half = rd->pivot_value >> 1;
-	pivot_xv = rd->pivot_x >> 1;
-	pivot_zv = rd->pivot_z >> 1;
+	/* Rotate the point about the component pivot */
+	point_x -= rd->pivot_value >> 1;
+	point_y -= rd->pivot_x >> 1;
+	point_z -= rd->pivot_z >> 1;
 
-	/* Relative point = point - pivot */
-	rel_x = point_x - pivot_half;
-	rel_y = point_y - pivot_xv;
-	rel_z = point_z - pivot_zv;
+	rx = math2_dot3_q15_clamped(point_x, point_y, point_z, m0, m3, m6);
+	ry = math2_dot3_q15_clamped(point_x, point_y, point_z, m1, m4, m7);
+	rz = math2_dot3_q15_clamped(point_x, point_y, point_z, m2, m5, m8);
 
-	/* Rotate relative point by R */
-	temp = rot[0] * rel_x + rot[3] * rel_y + rot[6] * rel_z;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rx = temp >> 15;
-	temp = rot[1] * rel_x + rot[4] * rel_y + rot[7] * rel_z;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	ry = temp >> 15;
-	temp = rot[2] * rel_x + rot[5] * rel_y + rot[8] * rel_z;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	rz = temp >> 15;
+	point_x = rx + (rd->pivot_value >> 1);
+	point_y = ry + (rd->pivot_x >> 1);
+	point_z = rz + (rd->pivot_z >> 1);
 
-	/* Result = rotated + pivot */
-	rotatedx = pivot_half + rx;
-	rotatedy = pivot_xv + ry;
-	rotatedz = pivot_zv + rz;
+	rotatedx = point_x;
+	rotatedy = point_y;
+	rotatedz = point_z;
 }
 
 // FUNCTION: TIE95 0x287F4
 void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, uint16_t angle) {
 	int32_t temp;
-	int32_t cos_a, sin_a;
-	int32_t rot[9];
+	int16_t cos_a, sin_a;
+	int32_t rot0, rot1, rot2, rot3, rot4, rot5, rot6, rot7, rot8;
 	int32_t new_S1, new_S2, new_U1, new_U2, new_f1, new_f2;
+	int32_t sine_term;
 
 	if (!angle)
 		return;
@@ -1076,176 +974,147 @@ void fview_transformaxes(int32_t axis_x, int32_t axis_y, int32_t axis_z, uint16_
 	sin_a = trig2_getsignedsin((int16_t)angle);
 
 	if (cos_a >= 0) {
-		int32_t one_minus_cos = 0x7FFF - cos_a; /* 1 - cos in Q15 */
-		temp = (cos_a * 32768) + one_minus_cos * ((axis_x * axis_x) >> 15);
+		int32_t cosine = cos_a;
+		int32_t sine = sin_a;
+		int32_t one_minus_cos = 0x7FFF - cosine; /* 1 - cos in Q15 */
+		temp = ((axis_x * axis_x) >> 15) * one_minus_cos + (cosine * 32768);
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[0] = temp >> 15;
-		temp = ((axis_z * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_y * axis_x) >> 15);
+		rot0 = temp >> 15;
+		sine_term = (sine * axis_z) >> 15;
+		temp = ((axis_x * axis_y) >> 15) * one_minus_cos + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[1] = temp >> 15;
-		temp = -32768 * ((axis_y * sin_a) >> 15) + one_minus_cos * ((axis_z * axis_x) >> 15);
+		rot1 = temp >> 15;
+		sine_term = -((sine * axis_y) >> 15);
+		temp = ((axis_x * axis_z) >> 15) * one_minus_cos + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[2] = temp >> 15;
-		temp = -32768 * ((axis_z * sin_a) >> 15) + one_minus_cos * ((axis_y * axis_x) >> 15);
+		rot2 = temp >> 15;
+		sine_term = -((sine * axis_z) >> 15);
+		temp = ((axis_x * axis_y) >> 15) * one_minus_cos + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[3] = temp >> 15;
-		temp = (cos_a * 32768) + one_minus_cos * ((axis_y * axis_y) >> 15);
+		rot3 = temp >> 15;
+		temp = ((axis_y * axis_y) >> 15) * one_minus_cos + (cosine * 32768);
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[4] = temp >> 15;
-		temp = ((axis_x * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_z * axis_y) >> 15);
+		rot4 = temp >> 15;
+		sine_term = (sine * axis_x) >> 15;
+		temp = ((axis_y * axis_z) >> 15) * one_minus_cos + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[5] = temp >> 15;
-		temp = ((axis_y * sin_a) >> 15) * 32768 + one_minus_cos * ((axis_z * axis_x) >> 15);
+		rot5 = temp >> 15;
+		sine_term = (sine * axis_y) >> 15;
+		temp = ((axis_x * axis_z) >> 15) * one_minus_cos + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[6] = temp >> 15;
-		temp = -32768 * ((axis_x * sin_a) >> 15) + one_minus_cos * ((axis_z * axis_y) >> 15);
+		rot6 = temp >> 15;
+		sine_term = -((sine * axis_x) >> 15);
+		temp = ((axis_y * axis_z) >> 15) * one_minus_cos + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[7] = temp >> 15;
-		temp = (cos_a * 32768) + one_minus_cos * ((axis_z * axis_z) >> 15);
+		rot7 = temp >> 15;
+		temp = ((axis_z * axis_z) >> 15) * one_minus_cos + (cosine * 32768);
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[8] = temp >> 15;
+		rot8 = temp >> 15;
 	} else {
-		int32_t neg_cos = -cos_a; /* |cos| */
-		temp = (cos_a * 32768) + axis_x * axis_x + neg_cos * ((axis_x * axis_x) >> 15);
+		int32_t cosine = cos_a;
+		int32_t sine = sin_a;
+		int32_t neg_cos = -cosine; /* |cos| */
+		temp = ((axis_x * axis_x) >> 15) * neg_cos + axis_x * axis_x + (cosine * 32768);
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[0] = temp >> 15;
-		temp = ((axis_z * sin_a) >> 15) * 32768 + axis_y * axis_x + neg_cos * ((axis_y * axis_x) >> 15);
+		rot0 = temp >> 15;
+		sine_term = (sine * axis_z) >> 15;
+		temp = ((axis_x * axis_y) >> 15) * neg_cos + axis_x * axis_y + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[1] = temp >> 15;
-		temp = -32768 * ((axis_y * sin_a) >> 15) + axis_z * axis_x + neg_cos * ((axis_z * axis_x) >> 15);
+		rot1 = temp >> 15;
+		sine_term = -((sine * axis_y) >> 15);
+		temp = ((axis_x * axis_z) >> 15) * neg_cos + axis_x * axis_z + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[2] = temp >> 15;
-		temp = -32768 * ((axis_z * sin_a) >> 15) + axis_y * axis_x + neg_cos * ((axis_y * axis_x) >> 15);
+		rot2 = temp >> 15;
+		sine_term = -((sine * axis_z) >> 15);
+		temp = ((axis_x * axis_y) >> 15) * neg_cos + axis_x * axis_y + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[3] = temp >> 15;
-		temp = (cos_a * 32768) + axis_y * axis_y + neg_cos * ((axis_y * axis_y) >> 15);
+		rot3 = temp >> 15;
+		temp = ((axis_y * axis_y) >> 15) * neg_cos + axis_y * axis_y + (cosine * 32768);
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[4] = temp >> 15;
-		temp = ((axis_x * sin_a) >> 15) * 32768 + axis_z * axis_y + neg_cos * ((axis_z * axis_y) >> 15);
+		rot4 = temp >> 15;
+		sine_term = (sine * axis_x) >> 15;
+		temp = ((axis_y * axis_z) >> 15) * neg_cos + axis_y * axis_z + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[5] = temp >> 15;
-		temp = ((axis_y * sin_a) >> 15) * 32768 + axis_z * axis_x + neg_cos * ((axis_z * axis_x) >> 15);
+		rot5 = temp >> 15;
+		sine_term = (sine * axis_y) >> 15;
+		temp = ((axis_x * axis_z) >> 15) * neg_cos + axis_x * axis_z + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[6] = temp >> 15;
-		temp = -32768 * ((axis_x * sin_a) >> 15) + axis_z * axis_y + neg_cos * ((axis_z * axis_y) >> 15);
+		rot6 = temp >> 15;
+		sine_term = -((sine * axis_x) >> 15);
+		temp = ((axis_y * axis_z) >> 15) * neg_cos + axis_y * axis_z + sine_term * 32768;
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[7] = temp >> 15;
-		temp = (cos_a * 32768) + axis_z * axis_z + neg_cos * ((axis_z * axis_z) >> 15);
+		rot7 = temp >> 15;
+		temp = ((axis_z * axis_z) >> 15) * neg_cos + axis_z * axis_z + (cosine * 32768);
 		if (temp >= 0x40000000)
 			temp = 0x3FFF0000;
 		if (temp <= -0x40000000)
 			temp = -0x3FFF0000;
-		rot[8] = temp >> 15;
+		rot8 = temp >> 15;
 	}
-	temp = rot[0] * calcS1 + rot[3] * calcS2 + rot[6] * calcS3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_S1 = temp >> 15;
-	temp = rot[1] * calcS1 + rot[4] * calcS2 + rot[7] * calcS3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_S2 = temp >> 15;
-	temp = rot[2] * calcS1 + rot[5] * calcS2 + rot[8] * calcS3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	calcS3 = temp >> 15;
+	new_S1 = math2_dot3_q15_clamped(calcS1, calcS2, calcS3, rot0, rot3, rot6);
+	new_S2 = math2_dot3_q15_clamped(calcS1, calcS2, calcS3, rot1, rot4, rot7);
+	calcS3 = math2_dot3_q15_clamped(calcS1, calcS2, calcS3, rot2, rot5, rot8);
 	calcS1 = new_S1;
 	calcS2 = new_S2;
-	temp = rot[0] * calcU1 + rot[3] * calcU2 + rot[6] * calcU3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_U1 = temp >> 15;
-	temp = rot[1] * calcU1 + rot[4] * calcU2 + rot[7] * calcU3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_U2 = temp >> 15;
-	temp = rot[2] * calcU1 + rot[5] * calcU2 + rot[8] * calcU3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	calcU3 = temp >> 15;
+	new_U1 = math2_dot3_q15_clamped(calcU1, calcU2, calcU3, rot0, rot3, rot6);
+	new_U2 = math2_dot3_q15_clamped(calcU1, calcU2, calcU3, rot1, rot4, rot7);
+	calcU3 = math2_dot3_q15_clamped(calcU1, calcU2, calcU3, rot2, rot5, rot8);
 	calcU1 = new_U1;
 	calcU2 = new_U2;
-	temp = rot[0] * calcf1 + rot[3] * calcf2 + rot[6] * calcf3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_f1 = temp >> 15;
-	temp = rot[1] * calcf1 + rot[4] * calcf2 + rot[7] * calcf3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	new_f2 = temp >> 15;
-	temp = rot[2] * calcf1 + rot[5] * calcf2 + rot[8] * calcf3;
-	if (temp >= 0x40000000)
-		temp = 0x3FFF0000;
-	if (temp <= -0x40000000)
-		temp = -0x3FFF0000;
-	calcf3 = temp >> 15;
+	new_f1 = math2_dot3_q15_clamped(calcf1, calcf2, calcf3, rot0, rot3, rot6);
+	new_f2 = math2_dot3_q15_clamped(calcf1, calcf2, calcf3, rot1, rot4, rot7);
+	calcf3 = math2_dot3_q15_clamped(calcf1, calcf2, calcf3, rot2, rot5, rot8);
 	calcf1 = new_f1;
 	calcf2 = new_f2;
 }

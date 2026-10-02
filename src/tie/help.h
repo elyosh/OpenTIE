@@ -20,7 +20,7 @@ extern int32_t helpBottom;
 extern char** helpkeystrings;
 extern char** helpscreenstrings;
 
-int32_t help_helproom(int32_t start_right_col);
+int32_t help_helproom(int16_t start_right_col);
 
 #ifdef __cplusplus
 }

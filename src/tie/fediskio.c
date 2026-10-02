@@ -1222,12 +1222,11 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 	/* Skip the 2-byte file-size prefix so struct offsets line up with
 	 * retail FEDISKIO_fillinspec's `v48 = a1 + 2` convention. */
 	ShipModelData* model = (ShipModelData*)((uint8_t*)data + 2);
-	SpecData* spec;
 	uint16_t half_width, half_height, half_depth;
 	int16_t extra_shift, total_shift;
 	ShipModelMesh* cur_mesh;
 	uint8_t result;
-	int i;
+	uint16_t i;
 
 	/* Set species bounding half-length */
 	uint16_t half_length = model->length >> 1;
@@ -1235,8 +1234,7 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 
 	species_table[species_idx].bound_hwidth = half_length;
 	if (model->model_scale_shift) {
-		species_table[species_idx].bound_hwidth = species_table[species_idx].bound_hwidth
-												  << model->model_scale_shift;
+		species_table[species_idx].bound_hwidth <<= (int8_t)model->model_scale_shift;
 	}
 	species_table[species_idx].bound_qdepth = model->length >> 2;
 
@@ -1247,16 +1245,15 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 	 * (spec_data has only NUM_SPECIES==69 elements). */
 	if (lfd_idx == 255)
 		return;
-	spec = &spec_data[lfd_idx];
 
 	/* Compute dimensions with LOD scaling */
 	half_width = model->width >> 1;
-	half_height = model->height >> 1;
 	half_depth = model->depth >> 1;
+	half_height = model->height >> 1;
 	cur_mesh = (ShipModelMesh*)&model->lod_records[model->num_lods];
 	extra_shift = 0;
 
-	while (half_width > 640 || half_depth > 640 || half_height > 640) {
+	while (half_width > 640 || half_height > 640 || half_depth > 640) {
 		half_width >>= 1;
 		half_height >>= 1;
 		half_depth >>= 1;
@@ -1264,7 +1261,7 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 	}
 
 	total_shift = extra_shift + (int8_t)model->model_scale_shift;
-	spec->model_scale_shift = total_shift;
+	spec_data[lfd_idx].model_scale_shift = total_shift;
 	/* Retail writes (model+8)>>1 to spec+0xE8 and (model+6)>>1 to spec+0xEA
 	 * (FEDISKIO_fillinspec: v9 and i). We currently label spec+0xE8
 	 * bound_height and spec+0xEA bound_depth, and ShipModelData+6/+8
@@ -1273,18 +1270,18 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 	 * pairs is mislabeled (the field at +0xE8 is not really "height"); the
 	 * physical axis identities are unverified. The cross-assignment below is
 	 * what matters; revisit the names once the axes are pinned down. */
-	spec->bound_width = half_width;
-	spec->bound_height = half_depth;
-	spec->bound_depth = half_height;
+	spec_data[lfd_idx].bound_width = half_width;
+	spec_data[lfd_idx].bound_depth = half_height;
+	spec_data[lfd_idx].bound_height = half_depth;
 
 	/* Default active-dock ranges from shields and passive ranges from speed. */
-	if (!spec->dock_active_light) {
-		spec->dock_active_light = model->shield_default >> 17;
-		spec->dock_active_heavy = model->shield_default >> 17;
+	if (!spec_data[lfd_idx].dock_active_light) {
+		spec_data[lfd_idx].dock_active_light = model->shield_default >> 17;
+		spec_data[lfd_idx].dock_active_heavy = model->shield_default >> 17;
 	}
-	if (!spec->dock_passive_light) {
-		spec->dock_passive_light = model->speed_default >> 17;
-		spec->dock_passive_heavy = model->speed_default >> 17;
+	if (!spec_data[lfd_idx].dock_passive_light) {
+		spec_data[lfd_idx].dock_passive_light = model->speed_default >> 17;
+		spec_data[lfd_idx].dock_passive_heavy = model->speed_default >> 17;
 	}
 
 	/* Walk mesh components, extract hardpoints and reference points */
@@ -1298,41 +1295,41 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 				int16_t matched = 0;
 
 				switch (hp->type) {
-					case 0x19: /* cockpit position: v0=X, v1=Y, v2=Z */
-						spec->cockpit_x = hp->local_x >> 1;
-						spec->cockpit_y = hp->local_y >> 1;
-						spec->cockpit_z = hp->local_z >> 1;
-						matched = 1;
-						break;
-					case 0x1A: /* engine position: v0=X, v1=Y, v2=Z */
-						spec->engine_x = hp->local_x >> 1;
-						spec->engine_y = hp->local_y >> 1;
-						spec->engine_z = hp->local_z >> 1;
-						matched = 1;
-						break;
-					case 0x1B:
-						spec->dock_passive_heavy = hp->local_y >> 1;
-						spec->dock_fwd = hp->local_z >> 1;
-						matched = 1;
-						break;
 					case 0x1C:
-						spec->dock_passive_light = hp->local_y >> 1;
-						spec->dock_fwd = hp->local_z >> 1;
-						matched = 1;
-						break;
-					case 0x1D:
-						spec->dock_active_heavy = hp->local_y >> 1;
-						spec->dock_fwd = hp->local_z >> 1;
+						spec_data[lfd_idx].dock_passive_light = hp->local_y >> 1;
+						spec_data[lfd_idx].dock_fwd = hp->local_z >> 1;
 						matched = 1;
 						break;
 					case 0x1E:
-						spec->dock_active_light = hp->local_y >> 1;
-						spec->dock_fwd = hp->local_z >> 1;
+						spec_data[lfd_idx].dock_active_light = hp->local_y >> 1;
+						spec_data[lfd_idx].dock_fwd = hp->local_z >> 1;
+						matched = 1;
+						break;
+					case 0x1B:
+						spec_data[lfd_idx].dock_passive_heavy = hp->local_y >> 1;
+						spec_data[lfd_idx].dock_fwd = hp->local_z >> 1;
+						matched = 1;
+						break;
+					case 0x1D:
+						spec_data[lfd_idx].dock_active_heavy = hp->local_y >> 1;
+						spec_data[lfd_idx].dock_fwd = hp->local_z >> 1;
+						matched = 1;
+						break;
+					case 0x19: /* cockpit position: v0=X, v1=Y, v2=Z */
+						spec_data[lfd_idx].cockpit_x = hp->local_x >> 1;
+						spec_data[lfd_idx].cockpit_y = hp->local_y >> 1;
+						spec_data[lfd_idx].cockpit_z = hp->local_z >> 1;
+						matched = 1;
+						break;
+					case 0x1A: /* engine position: v0=X, v1=Y, v2=Z */
+						spec_data[lfd_idx].engine_x = hp->local_x >> 1;
+						spec_data[lfd_idx].engine_y = hp->local_y >> 1;
+						spec_data[lfd_idx].engine_z = hp->local_z >> 1;
 						matched = 1;
 						break;
 					case 0x1F: /* turret position */
-						spec->gun_muzzle_up = hp->local_y >> 1;
-						spec->gun_muzzle_fwd = hp->local_z >> 1;
+						spec_data[lfd_idx].gun_muzzle_up = hp->local_y >> 1;
+						spec_data[lfd_idx].gun_muzzle_fwd = hp->local_z >> 1;
 						matched = 1;
 						break;
 				}
@@ -1340,53 +1337,52 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 				if (!matched) {
 					/* Weapon hardpoint — classify type.
 					 * weapon_id MUST stay uint8_t: hp->type is in [1..18]
-					 * for real weapons, so (hp->type - 120) is always
+					 * for real weapons, so (hp->type + 136) is always
 					 * negative. A signed char here would sign-extend in the
 					 * dedup compares below while the uint8_t array entries
 					 * zero-extend, so no two equal weapon ids ever match. */
 					uint16_t scan;
-					uint8_t weapon_id = (uint8_t)(hp->type - 120);
+					uint8_t weapon_id = hp->type + 136;
 
 					/* Check if this weapon type already has a laser slot */
-					for (scan = 0; scan < 2 && weapon_id != spec->laser_type[scan]; scan++)
-						;
+					for (scan = 0; scan < 2; scan++)
+						if (weapon_id == spec_data[lfd_idx].laser_type[scan])
+							break;
 					if (scan >= 2) {
 						/* Check missile slots */
-						for (scan = 0; scan < 2 && weapon_id != spec->missile_type[scan]; scan++)
-							;
+						for (scan = 0; scan < 2; scan++)
+							if (weapon_id == spec_data[lfd_idx].missile_type[scan])
+								break;
 						if (scan >= 2) {
 							int ws_type = weaponsystype[hp->type];
 							if (ws_type == 1) {
 								/* Laser — find free slot */
 								uint16_t free_slot;
-								for (free_slot = 0; free_slot < 2 && spec->laser_type[free_slot]; free_slot++)
-									;
+								for (free_slot = 0; free_slot < 2; free_slot++)
+									if (!spec_data[lfd_idx].laser_type[free_slot])
+										break;
 								if (free_slot < 2) {
-									uint16_t mesh_type;
-									uint8_t craft_class;
-
-									spec->laser_type[free_slot] = weapon_id;
-									mesh_type = cur_mesh->mesh_type;
-									craft_class = species_table[species_idx].ship_class;
-									if (mesh_type == 4 || mesh_type == 21 || mesh_type == 5 ||
-										craft_class == 5 || craft_class == 4) {
-										spec->laser_fire_mode[free_slot] = 2;
+									spec_data[lfd_idx].laser_type[free_slot] = weapon_id;
+									if (cur_mesh->mesh_type == 4 || cur_mesh->mesh_type == 21 ||
+										cur_mesh->mesh_type == 5 ||
+										species_table[species_idx].ship_class == 5 ||
+										species_table[species_idx].ship_class == 4) {
+										spec_data[lfd_idx].laser_fire_mode[free_slot] = 2;
 									} else {
-										int8_t wid = (int8_t)hp->type;
-										if (wid == 5 || wid == 16)
-											spec->laser_fire_mode[free_slot] = 1;
+										if (hp->type == 5 || hp->type == 16)
+											spec_data[lfd_idx].laser_fire_mode[free_slot] = 1;
 										else
-											spec->laser_fire_mode[free_slot] = 0;
+											spec_data[lfd_idx].laser_fire_mode[free_slot] = 0;
 									}
 								}
 							} else if (ws_type == 2) {
 								/* Missile — find free slot */
 								uint16_t free_slot;
-								for (free_slot = 0; free_slot < 2 && spec->missile_type[free_slot];
-									 free_slot++)
-									;
+								for (free_slot = 0; free_slot < 2; free_slot++)
+									if (!spec_data[lfd_idx].missile_type[free_slot])
+										break;
 								if (free_slot < 2)
-									spec->missile_type[free_slot] = weapon_id;
+									spec_data[lfd_idx].missile_type[free_slot] = weapon_id;
 							}
 						}
 					}
@@ -1405,38 +1401,38 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 		uint16_t mi;
 
 		if (result == 16) {
-			spec->laser_type[slot] = 0;
-			spec->laser_fire_mode[slot] = 0;
+			spec_data[lfd_idx].laser_type[slot] = 0;
+			spec_data[lfd_idx].laser_fire_mode[slot] = 0;
 			continue;
 		}
 
+		target_id = spec_data[lfd_idx].laser_type[slot] - 136;
 		mesh = (ShipModelMesh*)&model->lod_records[model->num_lods];
-		target_id = spec->laser_type[slot] + 120;
 		start_hp = result;
 
 		for (mi = 0; mi < model->num_meshes; mi++) {
 			if (mesh->num_hardpoints) {
-				int16_t paired = 255;
+				uint16_t paired = 255;
 				ShipModelHardpoint* hp = (ShipModelHardpoint*)((uint8_t*)mesh + mesh->hardpoint_offset);
 
 				uint16_t hp_idx;
 
-				for (hp_idx = 0; hp_idx < mesh->num_hardpoints; hp_idx++, hp++) {
-					if (hp->type != target_id)
+				for (hp_idx = 0; mesh->num_hardpoints > hp_idx; hp_idx++, hp++) {
+					if (target_id != hp->type)
 						continue;
 					if (paired == 255) {
 						/* Weapon hardpoint coords: v0=X, v1=Y, v2=Z. */
-						spec->hp[result].x = hp->local_x >> 1;
-						spec->hp[result].y = hp->local_y >> 1;
-						spec->hp[result].z = hp->local_z >> 1;
-						spec->hp[result].component = mi;
-						spec->hp[result].link = -1;
+						spec_data[lfd_idx].hp[result].x = hp->local_x >> 1;
+						spec_data[lfd_idx].hp[result].z = hp->local_z >> 1;
+						spec_data[lfd_idx].hp[result].y = hp->local_y >> 1;
+						spec_data[lfd_idx].hp[result].component = mi;
+						spec_data[lfd_idx].hp[result].link = -1;
 						if (mesh->mesh_type == 4 || mesh->mesh_type == 21)
 							paired = result;
 						if (++result == 16)
 							break;
 					} else {
-						spec->hp[paired].link = hp->link;
+						spec_data[lfd_idx].hp[paired].link = hp->link;
 						paired = 255;
 					}
 				}
@@ -1447,9 +1443,9 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 		}
 
 		if (result != start_hp) {
-			spec->laser_start[slot] = start_hp;
-			spec->laser_end[slot] = result - 1;
-			spec->laser_count[slot] = result - start_hp;
+			spec_data[lfd_idx].laser_start[slot] = start_hp;
+			spec_data[lfd_idx].laser_end[slot] = result - 1;
+			spec_data[lfd_idx].laser_count[slot] = result - start_hp;
 		}
 	}
 
@@ -1461,12 +1457,12 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 		uint16_t mi;
 
 		if (result == 16) {
-			spec->missile_type[slot] = 0;
+			spec_data[lfd_idx].missile_type[slot] = 0;
 			continue;
 		}
 
+		target_id = spec_data[lfd_idx].missile_type[slot] - 136;
 		mesh = (ShipModelMesh*)&model->lod_records[model->num_lods];
-		target_id = spec->missile_type[slot] + 120;
 		start_hp = result;
 
 		for (mi = 0; mi < model->num_meshes; mi++) {
@@ -1479,10 +1475,10 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 					if (hp->type != target_id)
 						continue;
 					/* Missile hardpoint coords: v0=X, v1=Y, v2=Z. */
-					spec->hp[result].x = hp->local_x >> 1;
-					spec->hp[result].y = hp->local_y >> 1;
-					spec->hp[result].z = hp->local_z >> 1;
-					spec->hp[result].component = mi;
+					spec_data[lfd_idx].hp[result].x = hp->local_x >> 1;
+					spec_data[lfd_idx].hp[result].z = hp->local_z >> 1;
+					spec_data[lfd_idx].hp[result].y = hp->local_y >> 1;
+					spec_data[lfd_idx].hp[result].component = mi;
 					if (++result == 16)
 						break;
 				}
@@ -1493,9 +1489,9 @@ void fediskio_fillinspec(void* data, uint8_t lfd_idx, uint8_t species_idx) {
 		}
 
 		if (result != start_hp) {
-			spec->missile_start[slot] = start_hp;
-			spec->missile_end[slot] = result - 1;
-			spec->missile_count[slot] = result - start_hp;
+			spec_data[lfd_idx].missile_start[slot] = start_hp;
+			spec_data[lfd_idx].missile_end[slot] = result - 1;
+			spec_data[lfd_idx].missile_count[slot] = result - start_hp;
 		}
 	}
 }

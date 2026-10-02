@@ -28,6 +28,7 @@
 #include "tie_runtime/flight_assets/native_opt.h"
 #include "tie_runtime/flight_assets/service.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 
 #include "landru/actcust.h"
 #include "landru/actor.h"
@@ -1075,25 +1076,13 @@ void bpflight_getrelativexyz(void) {
 		hx >>= 1;
 	} while (hx || hy || hz);
 
-	value = craftS1 * (int16_t)dx + craftS2 * (int16_t)dy + craftS3 * (int16_t)dz;
-	if (value >= 0x40000000)
-		value = 0x3FFF0000;
-	if (value <= -0x40000000)
-		value = -0x3FFF0000;
-	relativex = (int16_t)(value >> 15);
-	value = craftf1 * (int16_t)dx + craftf2 * (int16_t)dy + craftf3 * (int16_t)dz;
-	if (value >= 0x40000000)
-		value = 0x3FFF0000;
-	if (value <= -0x40000000)
-		value = -0x3FFF0000;
-	relativey = (int16_t)(value >> 15);
+	value = math2_dot3_q15_clamped(craftS1, craftS2, craftS3, (int16_t)dx, (int16_t)dy, (int16_t)dz);
+	relativex = (int16_t)value;
+	value = math2_dot3_q15_clamped(craftf1, craftf2, craftf3, (int16_t)dx, (int16_t)dy, (int16_t)dz);
+	relativey = (int16_t)value;
 	relativey = -relativey;
-	value = craftU1 * (int16_t)dx + craftU2 * (int16_t)dy + craftU3 * (int16_t)dz;
-	if (value >= 0x40000000)
-		value = 0x3FFF0000;
-	if (value <= -0x40000000)
-		value = -0x3FFF0000;
-	relativez = (int16_t)(value >> 15);
+	value = math2_dot3_q15_clamped(craftU1, craftU2, craftU3, (int16_t)dx, (int16_t)dy, (int16_t)dz);
+	relativez = (int16_t)value;
 	relativeshift -= objectblockptr->model_scale_shift;
 }
 

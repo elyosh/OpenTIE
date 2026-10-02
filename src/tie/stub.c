@@ -177,8 +177,6 @@ void stub_Map_Clipped_Image(void* src_data, int16_t* dst_poly, Rect* src_rect, i
 	int16_t diff;
 	int16_t s;
 
-	(void)map_mode; /* passed through to Map_Image but never read there */
-
 	/* Access dst_poly as a Poly: x[0..3] at offsets 0..3, y[0..3] at offsets 4..7 */
 	poly_x = dst_poly;
 	poly_y = dst_poly + 4;
@@ -270,5 +268,5 @@ void stub_Map_Clipped_Image(void* src_data, int16_t* dst_poly, Rect* src_rect, i
 		right_table = table_a;
 	}
 
-	rotpoly_Map_Image(src_data, left_table, src_stride, right_table, num_scanlines, start_y);
+	rotpoly_Map_Image(src_data, left_table, right_table, src_stride, map_mode, num_scanlines, start_y);
 }

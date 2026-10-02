@@ -12,7 +12,6 @@
 #include "tie/laser.h" /* WarheadRecord, projectile_is_warhead_type — for PIP missile name path */
 #include "tie/logbuf2.h"
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/modelmesh.h"
 #include "tie/msg.h"
 #include "tie/msg_templates.h"
@@ -41,6 +40,7 @@
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/panel_view_buffers.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 #include "tie_runtime/snapshot/snapshot_hud.h"
 #include "tie_runtime/storage/storage.h"
 #include "util/binio.h"
@@ -1778,22 +1778,13 @@ void panel_updatethrottle(void) {
  */
 // FUNCTION: TIE95 0x41FBC
 void panel_updateclock(void) {
-	uint8_t min_v, sec_v;
+	uint16_t total_secs;
 
-	int16_t total_secs;
-	uint8_t clock_color;
-	int16_t glyph_w;
-	int16_t x_bump;
+	if (mission.train_craft_type)
+		total_secs = (uint16_t)(60 * timeleft.minute + timeleft.second);
+	else
+		total_secs = (uint16_t)(date.minute * 60 + date.second);
 
-	if (mission.train_craft_type) {
-		min_v = timeleft.minute;
-		sec_v = timeleft.second;
-	} else {
-		min_v = date.minute;
-		sec_v = date.second;
-	}
-
-	total_secs = (int16_t)(60 * min_v + sec_v);
 	if (total_secs == oldinstruments[TIE_HUDI_CLOCK_DIGITS])
 		return;
 	oldinstruments[TIE_HUDI_CLOCK_DIGITS] = total_secs;
@@ -1803,21 +1794,32 @@ void panel_updateclock(void) {
 	festring_setbackcolor(0x40);
 	/* VGA uses palette index 77 (0x4D) for the clock digits; SVGA's 8-bit
 	 * paletted mode shifts everything by 1 and uses 78 (0x4E). */
-	clock_color = (flightResolution == TIE_FLIGHT_RES_VGA) ? 0x4D : 0x4E;
-	festring_settextcolor(clock_color);
+	if (flightResolution == (int16_t)TIE_FLIGHT_RES_VGA)
+		festring_settextcolor(0x4D);
+	else
+		festring_settextcolor(0x4E);
 	dropflag = 0;
 
 	festring_setcursor((int16_t)instruments[TIE_HUDI_CLOCK_DIGITS].x,
 					   (int16_t)instruments[TIE_HUDI_CLOCK_DIGITS].y);
-	panelrts_outnum((int32_t)min_v, 2, 1);
+	if (mission.train_craft_type)
+		panelrts_outnum(timeleft.minute, 2, 1);
+	else
+		panelrts_outnum(date.minute, 2, 1);
 
 	/* SVGA needs a 1-pixel x-bump after the colon glyph; VGA's narrower
 	 * font already lands the SS digits flush with the colon. */
-	glyph_w = sys2_calclength((uint8_t*)"00:");
-	x_bump = (flightResolution == TIE_FLIGHT_RES_VGA) ? 0 : 1;
-	festring_setcursor((int16_t)(instruments[TIE_HUDI_CLOCK_DIGITS].x + glyph_w + x_bump),
-					   (int16_t)instruments[TIE_HUDI_CLOCK_DIGITS].y);
-	panelrts_outnum((int32_t)sec_v, 2, 2);
+	if (flightResolution == (int16_t)TIE_FLIGHT_RES_VGA)
+		festring_setcursor((int16_t)(sys2_calclength((uint8_t*)"00:") + instruments[TIE_HUDI_CLOCK_DIGITS].x),
+						   (int16_t)instruments[TIE_HUDI_CLOCK_DIGITS].y);
+	else
+		festring_setcursor(
+			(int16_t)(sys2_calclength((uint8_t*)"00:") + instruments[TIE_HUDI_CLOCK_DIGITS].x + 1),
+			(int16_t)instruments[TIE_HUDI_CLOCK_DIGITS].y);
+	if (mission.train_craft_type)
+		panelrts_outnum(timeleft.second, 2, 2);
+	else
+		panelrts_outnum(date.second, 2, 2);
 }
 
 /*
@@ -3584,26 +3586,14 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 	 * +90 deg offset), so the bearing-to-target the binary feeds in is
 	 * (side, fwd, up) -- not (fwd, side, up). Swapping these two
 	 * rotates the PIP camera 90 deg around the player's up axis. */
-	side_proj = ez * pstate.player->side_z + ey * pstate.player->side_y + ex * pstate.player->side_x;
-	if (side_proj >= 0x40000000)
-		side_proj = 0x3FFF0000;
-	if (side_proj <= -0x40000000)
-		side_proj = -0x3FFF0000;
-	side_proj >>= 15;
+	side_proj = math2_dot3_q15_clamped(ez, ey, ex, pstate.player->side_z, pstate.player->side_y,
+									   pstate.player->side_x);
 
-	fwd_proj = ez * pstate.player->fwd_z + ey * pstate.player->fwd_y + ex * pstate.player->fwd_x;
-	if (fwd_proj >= 0x40000000)
-		fwd_proj = 0x3FFF0000;
-	if (fwd_proj <= -0x40000000)
-		fwd_proj = -0x3FFF0000;
-	fwd_proj >>= 15;
+	fwd_proj =
+		math2_dot3_q15_clamped(ez, ey, ex, pstate.player->fwd_z, pstate.player->fwd_y, pstate.player->fwd_x);
 
-	up_proj = ez * pstate.player->up_z + ey * pstate.player->up_y + ex * pstate.player->up_x;
-	if (up_proj >= 0x40000000)
-		up_proj = 0x3FFF0000;
-	if (up_proj <= -0x40000000)
-		up_proj = -0x3FFF0000;
-	up_proj >>= 15;
+	up_proj =
+		math2_dot3_q15_clamped(ez, ey, ex, pstate.player->up_z, pstate.player->up_y, pstate.player->up_x);
 
 	trig2_ctop(side_proj, fwd_proj, up_proj);
 
@@ -3662,7 +3652,7 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
  */
 // FUNCTION: TIE95 0x44E00
 uint16_t panel_AdjustXForRes(uint16_t x) {
-	if (flightResolution == TIE_FLIGHT_RES_VGA)
+	if (flightResolution == (int16_t)TIE_FLIGHT_RES_VGA)
 		return x;
 	return (uint16_t)(x + x / 2);
 }

@@ -23,7 +23,7 @@ uint16_t math2_calcratio(uint16_t a, uint16_t b, uint16_t c);
 int32_t math2_convertwdw(uint16_t val);
 uint32_t math2_divide32u(uint32_t a, uint32_t b);
 void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz);
-int16_t math2_halfplane(int32_t x1, int32_t y1, int32_t x2, int32_t y2);
+int math2_halfplane(int32_t x1, int32_t y1, int32_t x2, int32_t y2);
 
 extern int16_t math2_remainder;
 extern int16_t math2_randomseed;

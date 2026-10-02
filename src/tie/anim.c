@@ -20,7 +20,6 @@
 #include "tie/gate.h"
 #include "tie/logbuf2.h"
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/modelmesh.h"
 #include "tie/msg.h"
 #include "tie/msg_templates.h"
@@ -34,6 +33,7 @@
 #include "tie/transfm2.h"
 #include "tie/trig2.h"
 #include "tie/user.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_billboards.h" /* SNAPSHOT-ONLY billboard capture */
@@ -648,290 +648,13 @@ void anim_drawverysimpleobject_tie98(uint16_t object_index) {
 }
 
 /* Timer-gated animation update for turrets, articulated craft meshes, debris,
- * explosions, and static objects. Static animation references use the packed
- * OBJ_REF_STATIC_BASE namespace. */
+ * explosions, and static objects. Both editions share the routine; TIE95 reads
+ * the locked CFT component blocks and TIE98 queries the OPT object-type mesh
+ * cache. Static animation references use the packed OBJ_REF_STATIC_BASE
+ * namespace. */
 // FUNCTION: TIE95 0x109BC
-void anim_updateanimation(void) {
-	uint16_t obj;
-	uint16_t static_packed;
-	uint16_t s;
-
-	if (TIE_FLIGHT_TIE98) {
-		anim_updateanimation_tie98();
-		return;
-	}
-	if (mission.train_craft_type)
-		gate_updategateanimations();
-
-	if (timers[TIMER_ANIM_UPDATE])
-		return;
-	timers[TIMER_ANIM_UPDATE] = 29;
-
-	for (obj = 0; obj < NUM_OBJECTS; ++obj) {
-		uint8_t ship_idx_b = objects[obj].ship_idx;
-		CraftData* cd;
-		uint16_t num_meshes;
-		int16_t rotwing_animated;
-		uint16_t w;
-		ShipModelMesh* mesh_iter;
-		uint16_t i;
-
-		if (!ship_idx_b)
-			continue;
-
-		curgenus = objects[obj].genus;
-		animptr = (AnimOp*)species_table[ship_idx_b].draw_data;
-		cd = objects[obj].craft_ptr;
-
-		if (curgenus >= GENUS_DEBRIS) {
-			/* genus 11+13 -- debris / embers. Other genera ignored. */
-			if (curgenus > GENUS_DEBRIS && curgenus != GENUS_EXPLOSION)
-				continue;
-
-			if (objects[obj].ship_idx == 89) {
-				animindex = objects[obj].anim_frame_alt;
-				animptr = sparks2;
-				anim_updateanimstate(obj);
-				objects[obj].anim_frame_alt = (uint8_t)animindex;
-				if ((uint16_t)math2_getrandom() < 0x800u)
-					create_createember(obj);
-			} else {
-				animindex = objects[obj].anim_frame;
-				anim_updateanimstate(obj);
-				objects[obj].anim_frame = (uint8_t)animindex;
-			}
-			continue;
-		}
-
-		/* genus <= 5 -- real ship (fighter through platform). */
-		if (curgenus > GENUS_PLATFORM)
-			continue;
-
-		draw_Lockshipfileptrs(ship_idx_b);
-		num_meshes = objectblockptr->num_meshes;
-		rotwing_animated = 0;
-		craftptr = objects[obj].craft_ptr;
-
-		/* --- Turret-aim pass: every weapon slot of type 2. ----------- */
-		for (w = 0; w < craftptr->weapon_group_cnt; ++w) {
-			uint8_t mesh_idx;
-			uint16_t target;
-
-			if (craftptr->weapon_slots[w].type != 2)
-				continue;
-
-			mesh_idx = spec_data[craftptr->species_idx].hp[w].component;
-			if (!craftptr->mesh_component_hp[mesh_idx])
-				continue;
-
-			target = craftptr->weapon_slots[w].target_obj;
-			if (target == 0xFFFFu) {
-				/* Idle sweep. mesh_rotation[idx] += 4 or -= 4 based on
-				 * bit 0 (toggles direction); ~9% chance/tick to flip. */
-				if (craftptr->mesh_rotation[mesh_idx] & 1u)
-					craftptr->mesh_rotation[mesh_idx] += 4;
-				else
-					craftptr->mesh_rotation[mesh_idx] -= 4;
-				if ((uint16_t)math2_getrandom() < 0x600u)
-					craftptr->mesh_rotation[mesh_idx] ^= 1u;
-			} else {
-				/* Aim turret: transform target world pos into the parent
-				 * craft's local frame, then through the mesh's
-				 * rotation_offset block, then atan2 -> mesh_rotation byte. */
-				FlightObject* parent = &objects[obj];
-				ShipModelMesh* mesh = &componentblockptr[mesh_idx];
-				const TurretRotData* rot =
-					(const TurretRotData*)((const uint8_t*)mesh + mesh->rotation_offset);
-
-				int32_t rel_y;
-				int32_t fwd_x;
-				int32_t fwd_y;
-				int32_t fwd_z;
-				int32_t side_x;
-				int32_t side_y;
-				int32_t side_z;
-				int32_t up_x;
-				int32_t up_y;
-				int32_t rel_z_eye;
-				int32_t eye_y;
-				int32_t local_y;
-				int32_t aim_x;
-				int32_t aim_y;
-
-				create_getworldposition(target, 0);
-
-				/* Position relative to parent (we'll need this in the
-				 * local frame next). */
-				worldlocx -= parent->world_x;
-				rel_y = worldlocy - parent->world_y;
-				worldlocz -= parent->world_z;
-				worldlocy = rel_y;
-
-				if (parent->orient_dirty) {
-					fview_calcrotatemove(parent->pitch, parent->heading, parent);
-					fview_calcrotateorient(parent->roll, 0, parent);
-				}
-
-				/* Parent's orient matrix entries (Watcom emitted
-				 * unaligned-dword-HIWORD reads starting at orient_dirty;
-				 * each one decodes to the next int16 field). */
-				fwd_x = parent->fwd_x;
-				fwd_y = parent->fwd_y;
-				fwd_z = parent->fwd_z;
-				side_x = parent->side_x;
-				side_y = parent->side_y;
-				side_z = parent->side_z;
-				up_x = parent->up_x;
-				up_y = parent->up_y;
-
-				rel_z_eye =
-					-((uint32_t)math2_mul_q15(fwd_y, worldlocy) + (uint32_t)math2_mul_q15(fwd_x, worldlocx) +
-					  (uint32_t)math2_mul_q15(fwd_z, worldlocz));
-				eye_y = (uint32_t)math2_mul_q15(up_x, worldlocy) +
-						(uint32_t)math2_mul_q15(side_z, worldlocx) + (uint32_t)math2_mul_q15(up_y, worldlocz);
-				worldlocx = (uint32_t)math2_mul_q15(side_x, worldlocy) +
-							(uint32_t)math2_mul_q15(fwd_z, worldlocx) +
-							(uint32_t)math2_mul_q15(side_y, worldlocz) - (rot->origin_x_q15 >> 1);
-
-				local_y = rel_z_eye - (rot->origin_y_q15 >> 1);
-				worldlocz = eye_y - (rot->origin_z_q15 >> 1);
-				worldlocy = local_y;
-
-				/* 2x3 projection matrix at +0xC..+0x17 maps the turret-
-				 * local point to (aim_x, aim_y); trig2_arctan -> heading. */
-				aim_x = (uint32_t)math2_mul_q15(rot->aim_x_ly, local_y) +
-						(uint32_t)math2_mul_q15(rot->aim_x_wx, worldlocx) +
-						(uint32_t)math2_mul_q15(rot->aim_x_wz, worldlocz);
-				aim_y = (uint32_t)math2_mul_q15(rot->aim_y_ly, local_y) +
-						(uint32_t)math2_mul_q15(rot->aim_y_wx, worldlocx) +
-						(uint32_t)math2_mul_q15(rot->aim_y_wz, worldlocz);
-				craftptr->mesh_rotation[mesh_idx] = (uint8_t)((uint16_t)trig2_arctan(aim_y, aim_x) >> 8);
-			}
-		}
-
-		/* --- Per-mesh pass: lightning, explosions, idle sweep, S-foils. */
-		mesh_iter = componentblockptr;
-		for (i = 0; i < num_meshes; ++i, ++mesh_iter) {
-			uint16_t mt;
-
-			if (mesh_iter->mesh_type == 3 /* MESH_Fuselage */) {
-				/* Lightning anim slot for this fuselage uses
-				 * mesh_state[num_meshes] (one PAST the per-mesh state
-				 * range; 40-byte array gives room). */
-				animptr = lightning;
-				animindex = cd->mesh_state[num_meshes];
-				anim_updateanimstate(obj);
-				cd->mesh_state[num_meshes] = (uint8_t)animindex;
-			}
-
-			if (craftptr->flight_flag == 3 /* DEAD */) {
-				if (species_table[ship_idx_b].bound_hwidth <= 0x578u) {
-					/* Small ship: pop a random component, sometimes
-					 * spawn an ember. */
-					create_blowoffcomponent(obj, 0);
-					if ((uint16_t)math2_getrandom() < 0x1800u)
-						create_createember(obj);
-				} else {
-					/* Starship: trigger explosion macro and skip 3
-					 * mesh slots ahead. */
-					i += 3;
-					mesh_iter += 3;
-					starship_createstarshipexplo(obj, 0);
-				}
-			}
-
-			mt = mesh_iter->mesh_type;
-			if (mt == 11 /*CommSys*/ || mt == 23 /*RotCommSys*/ || mt == 12 /*BeamSys*/ ||
-				mt == 24 /*RotBeamSys*/ || mt == 13 /*CmdVBeam*/ || mt == 25 /*RotCmdBeam*/) {
-				/* Idle antenna/dish sweep, identical pattern to the
-				 * idle turret branch above. */
-				if (craftptr->mesh_rotation[i] & 1u)
-					craftptr->mesh_rotation[i] += 4;
-				else
-					craftptr->mesh_rotation[i] -= 4;
-				if ((uint16_t)math2_getrandom() < 0x200u)
-					craftptr->mesh_rotation[i] ^= 1u;
-			}
-
-			if (mesh_iter->mesh_type == 20 /* MESH_RotWing */ && (craftptr->ai_anim_flags & 1u)) {
-				/* S-foils opening or closing. bit 1 of ai_anim_flags
-				 * picks direction: set = closing (mesh_rotation
-				 * INCREASES toward limit), clear = opening (decreases
-				 * toward 0). */
-				if (craftptr->ai_anim_flags & 2u) {
-					/* Moving toward closed. Per-ship limit. */
-					if (ship_idx_b == 1) {
-						/* X-Wing: top wing closes to 12, bottom to 8.
-						 * mesh.center_up sign picks top vs bottom. */
-						uint16_t limit = (mesh_iter->center_up >= 0) ? 12u : 8u;
-						uint8_t pos = craftptr->mesh_rotation[i];
-						if (pos < limit) {
-							rotwing_animated = 1;
-							craftptr->mesh_rotation[i] = (uint8_t)(pos + 1);
-						}
-					} else if (ship_idx_b == 4) {
-						/* Y-Wing: closes to 0x40, step 3. */
-						uint8_t pos = craftptr->mesh_rotation[i];
-						if (pos < 0x40u) {
-							rotwing_animated = 1;
-							craftptr->mesh_rotation[i] = (uint8_t)(pos + 3);
-						}
-					}
-				} else {
-					/* Moving toward open (rotation -> 0). */
-					if (ship_idx_b == 1) {
-						uint8_t pos = craftptr->mesh_rotation[i];
-						if (pos) {
-							rotwing_animated = 1;
-							craftptr->mesh_rotation[i] = (uint8_t)(pos - 1);
-						}
-					} else if (ship_idx_b == 4) {
-						uint8_t pos = craftptr->mesh_rotation[i];
-						if (pos) {
-							rotwing_animated = 1;
-							craftptr->mesh_rotation[i] = (uint8_t)(pos - 3);
-						}
-					}
-				}
-			}
-		}
-
-		/* When the S-foil animation completes (no motion this tick),
-		 * clear bit 0 (in-motion), keep bit 1 set if we just reached
-		 * closed (or clear all if we reached open), then announce the
-		 * new resting state. */
-		if (craftptr->ai_anim_flags & 1u) {
-			if (craftptr->ai_anim_flags & 2u) {
-				if (!rotwing_animated) {
-					craftptr->ai_anim_flags = 2;
-					argtable[0] = MSG_SFOIL_CLOSED;
-					msg_messageprintf(MSG_SFOIL_AT_POS);
-				}
-			} else if (!rotwing_animated) {
-				craftptr->ai_anim_flags = 0;
-				argtable[0] = MSG_SFOIL_OPEN;
-				msg_messageprintf(MSG_SFOIL_AT_POS);
-			}
-		}
-	}
-
-	/* --- Static-object frame advance ------------------------------- */
-	static_packed = OBJ_REF_STATIC_BASE;
-	for (s = 0; s < NUM_STATIC_OBJECTS; ++s, ++static_packed) {
-		if (!staticobjects[s].species)
-			continue;
-		animptr = (AnimOp*)species_table[staticobjects[s].species].draw_data;
-		if (!animptr)
-			continue;
-		animindex = staticobjects[s].anim_frame;
-		anim_updateanimstate(static_packed);
-		staticobjects[s].anim_frame = (uint8_t)animindex;
-	}
-}
-
 // FUNCTION: TIE98 0x401600
-// ANIM_updateanimation
-void anim_updateanimation_tie98(void) {
+void anim_updateanimation(void) {
 	uint16_t object_index;
 	uint16_t index;
 
@@ -956,23 +679,32 @@ void anim_updateanimation_tie98(void) {
 			case GENUS_FREIGHTER:
 			case GENUS_STARSHIP:
 			case GENUS_PLATFORM: {
+				const ShipModelMesh* component = NULL;
 				uint16_t mesh_count;
 				int16_t rotary_wing_moved;
 				uint16_t mesh;
 
-				mesh_count = (uint16_t)modelmesh_getobjecttypemeshcount(model_type);
+				if (TIE_FLIGHT_TIE98) {
+					mesh_count = (uint16_t)modelmesh_getobjecttypemeshcount(model_type);
+				} else {
+					draw_Lockshipfileptrs(model_type);
+					mesh_count = objectblockptr->num_meshes;
+					component = componentblockptr;
+				}
 				craftptr = objects[object_index].craft_ptr;
 				rotary_wing_moved = 0;
+
+				/* Turret aim: rotary gun turrets track their gunner target,
+				 * or sweep while idle. */
 				if (craftptr->status_flags && craftptr->current_order >= 3) {
 					int weapon;
 
 					for (weapon = 0; weapon < craftptr->weapon_group_cnt; ++weapon) {
 						uint16_t mesh_index;
-						const TieModelRotationScale* rotation;
 						int32_t side;
-						int32_t forward;
+						int32_t aft;
 						int32_t up;
-						int32_t pitch;
+						int32_t up_projection;
 						int32_t direction;
 
 						if (craftptr->weapon_slots[weapon].type != 2)
@@ -980,96 +712,149 @@ void anim_updateanimation_tie98(void) {
 						mesh_index = spec_data[craftptr->species_idx].hp[weapon].component;
 						if (!craftptr->mesh_component_hp[mesh_index])
 							continue;
-						if (modelmesh_getobjecttypemeshtype(model_type, mesh_index) !=
+						if (TIE_FLIGHT_EDITION(component[mesh_index].mesh_type,
+											   modelmesh_getobjecttypemeshtype(model_type, mesh_index)) !=
 							TIE_MESH_ROTARY_GUN_TURRET)
 							continue;
 						if (craftptr->weapon_slots[weapon].target_obj != 0xFFFFu) {
-							rotation = modelmesh_getrotscaledata(model_type, mesh_index);
+							const TieModelRotationScale* rotation = NULL;
+							const TurretRotData* turret = NULL;
+							FlightObject* object;
+
+							if (TIE_FLIGHT_TIE98)
+								rotation = modelmesh_getrotscaledata(model_type, mesh_index);
+							else
+								turret = (const TurretRotData*)((const uint8_t*)&component[mesh_index] +
+																component[mesh_index].rotation_offset);
+							object = &objects[object_index];
 							create_getworldposition(craftptr->weapon_slots[weapon].target_obj, 0);
-							worldlocx -= objects[object_index].world_x;
-							worldlocy -= objects[object_index].world_y;
-							worldlocz -= objects[object_index].world_z;
-							if (objects[object_index].orient_dirty) {
-								fview_calcrotatemove(objects[object_index].pitch,
-													 objects[object_index].heading, &objects[object_index]);
-								fview_calcrotateorient(objects[object_index].roll, 0, &objects[object_index]);
+							worldlocx -= object->world_x;
+							worldlocy -= object->world_y;
+							worldlocz -= object->world_z;
+							if (object->orient_dirty) {
+								fview_calcrotatemove(object->pitch, object->heading, object);
+								fview_calcrotateorient(object->roll, 0, object);
 							}
 
-							side = math2_mul_q15(worldlocx, objects[object_index].side_x) +
-								   math2_mul_q15(worldlocy, objects[object_index].side_y) +
-								   math2_mul_q15(worldlocz, objects[object_index].side_z);
-							forward = math2_mul_q15(worldlocx, objects[object_index].fwd_x) +
-									  math2_mul_q15(worldlocy, objects[object_index].fwd_y) +
-									  math2_mul_q15(worldlocz, objects[object_index].fwd_z);
-							up = math2_mul_q15(worldlocx, objects[object_index].up_x) +
-								 math2_mul_q15(worldlocy, objects[object_index].up_y) +
-								 math2_mul_q15(worldlocz, objects[object_index].up_z);
-							worldlocx = side - (int32_t)rotation->pivot.x;
-							worldlocy = -(forward + (int32_t)rotation->pivot.y);
-							worldlocz = up - (int32_t)rotation->pivot.z;
-							pitch = math2_mul_q15(worldlocx, (int32_t)rotation->rotation_axis.x) +
-									math2_mul_q15(worldlocy, (int32_t)rotation->rotation_axis.y) +
-									math2_mul_q15(worldlocz, (int32_t)rotation->rotation_axis.z);
-							direction = math2_mul_q15(worldlocx, (int32_t)rotation->direction_axis.x) +
-										math2_mul_q15(worldlocy, (int32_t)rotation->direction_axis.y) +
-										math2_mul_q15(worldlocz, (int32_t)rotation->direction_axis.z);
-							pitch = math2_mul_q15(worldlocx, (int32_t)rotation->up_axis.x) +
-									math2_mul_q15(worldlocy, (int32_t)rotation->up_axis.y) +
-									math2_mul_q15(worldlocz, (int32_t)rotation->up_axis.z);
+							/* Target relative to the turret pivot in the
+							 * craft's (side, aft, up) model frame. */
+							side = math2_dot3_q15(worldlocx, object->side_x, worldlocy, object->side_y,
+												  worldlocz, object->side_z);
+							aft = -math2_dot3_q15(worldlocx, object->fwd_x, worldlocy, object->fwd_y,
+												  worldlocz, object->fwd_z);
+							up = math2_dot3_q15(worldlocx, object->up_x, worldlocy, object->up_y, worldlocz,
+												object->up_z);
+							/* Both originals also project onto the rotation
+							 * axis and discard the result. */
+							if (TIE_FLIGHT_TIE98) {
+								worldlocx = side - (int32_t)rotation->pivot.x;
+								worldlocy = aft - (int32_t)rotation->pivot.y;
+								worldlocz = up - (int32_t)rotation->pivot.z;
+								up_projection = math2_dot3_q15(worldlocx, (int32_t)rotation->rotation_axis.x,
+															   worldlocy, (int32_t)rotation->rotation_axis.y,
+															   worldlocz, (int32_t)rotation->rotation_axis.z);
+								direction = math2_dot3_q15(worldlocx, (int32_t)rotation->direction_axis.x,
+														   worldlocy, (int32_t)rotation->direction_axis.y,
+														   worldlocz, (int32_t)rotation->direction_axis.z);
+								up_projection = math2_dot3_q15(worldlocx, (int32_t)rotation->up_axis.x,
+															   worldlocy, (int32_t)rotation->up_axis.y,
+															   worldlocz, (int32_t)rotation->up_axis.z);
+							} else {
+								/* CFT pivots carry one extra fractional bit. */
+								worldlocx = side - (turret->pivot_x >> 1);
+								worldlocy = aft - (turret->pivot_y >> 1);
+								worldlocz = up - (turret->pivot_z >> 1);
+								up_projection = math2_dot3_q15(worldlocx, turret->rotation_axis_x, worldlocy,
+															   turret->rotation_axis_y, worldlocz,
+															   turret->rotation_axis_z);
+								direction =
+									math2_dot3_q15(worldlocx, turret->direction_x, worldlocy,
+												   turret->direction_y, worldlocz, turret->direction_z);
+								up_projection = math2_dot3_q15(worldlocx, turret->up_x, worldlocy,
+															   turret->up_y, worldlocz, turret->up_z);
+							}
 							craftptr->mesh_rotation[mesh_index] =
-								(uint8_t)((uint16_t)trig2_arctan(pitch, direction) >> 8);
+								(uint8_t)((uint16_t)trig2_arctan(up_projection, direction) >> 8);
 						} else {
 							if (craftptr->mesh_rotation[mesh_index] & 1u)
 								craftptr->mesh_rotation[mesh_index] += 4;
 							else
 								craftptr->mesh_rotation[mesh_index] -= 4;
-							if ((uint16_t)math2_getrandom() < 0x600u)
+							if ((uint16_t)math2_getrandom() < 0x600)
 								craftptr->mesh_rotation[mesh_index] ^= 1u;
 						}
 					}
 				}
 
+				/* Per-mesh pass: lightning, wreck explosions, antenna sweep,
+				 * S-foils. */
 				for (mesh = 0; mesh < mesh_count; ++mesh) {
-					const int mesh_type = modelmesh_getobjecttypemeshtype(model_type, mesh);
+					/* TIE98 queries each mesh type once; TIE95 re-reads the
+					 * component, which the wreck branch may advance. */
+					int mesh_type = 0;
 
-					if (mesh_type == TIE_MESH_FUSELAGE) {
+					if (TIE_FLIGHT_TIE98)
+						mesh_type = modelmesh_getobjecttypemeshtype(model_type, mesh);
+					if (TIE_FLIGHT_EDITION(component->mesh_type, mesh_type) == TIE_MESH_FUSELAGE) {
+						/* The lightning state lives one past the per-mesh
+						 * state range. */
 						animptr = lightning;
 						animindex = craft->mesh_state[mesh_count];
 						anim_updateanimstate(object_index);
 						craft->mesh_state[mesh_count] = (uint8_t)animindex;
 					}
 					if (craftptr->flight_flag == 3) {
-						if (species_table[model_type].bound_hwidth > 0x578u) {
-							starship_createstarshipexplo_tie98(object_index, 0);
-							mesh += 3;
+						if (species_table[model_type].bound_hwidth > 0x578) {
+							/* Starship: explosion macro, then skip 3 meshes. */
+							if (TIE_FLIGHT_TIE98) {
+								starship_createstarshipexplo_tie98(object_index, 0);
+								mesh += 3;
+							} else {
+								mesh += 3;
+								component += 3;
+								starship_createstarshipexplo(object_index, 0);
+							}
 						} else {
 							create_blowoffcomponent(object_index, 0);
-							if ((uint16_t)math2_getrandom() < 0x1800u)
+							if ((uint16_t)math2_getrandom() < 0x1800)
 								create_createember(object_index);
 						}
 					}
-					if (craftptr->status_flags && craftptr->current_order >= 3 &&
-						(mesh_type == TIE_MESH_COMMUNICATIONS ||
-						 mesh_type == TIE_MESH_ROTARY_COMMUNICATIONS || mesh_type == TIE_MESH_BEAM_SYSTEM ||
-						 mesh_type == TIE_MESH_ROTARY_BEAM_SYSTEM || mesh_type == TIE_MESH_COMMAND_BEAM ||
-						 mesh_type == TIE_MESH_ROTARY_COMMAND_BEAM)) {
-						if (craftptr->mesh_rotation[mesh] & 1u)
-							craftptr->mesh_rotation[mesh] += 4;
-						else
-							craftptr->mesh_rotation[mesh] -= 4;
-						if ((uint16_t)math2_getrandom() < 0x200u)
-							craftptr->mesh_rotation[mesh] ^= 1u;
+					if (craftptr->status_flags && craftptr->current_order >= 3) {
+						const int sweep_type = TIE_FLIGHT_EDITION(component->mesh_type, mesh_type);
+
+						if (sweep_type == TIE_MESH_COMMUNICATIONS ||
+							sweep_type == TIE_MESH_ROTARY_COMMUNICATIONS ||
+							sweep_type == TIE_MESH_BEAM_SYSTEM || sweep_type == TIE_MESH_ROTARY_BEAM_SYSTEM ||
+							sweep_type == TIE_MESH_COMMAND_BEAM ||
+							sweep_type == TIE_MESH_ROTARY_COMMAND_BEAM) {
+							/* Idle antenna/dish sweep. */
+							if (craftptr->mesh_rotation[mesh] & 1u)
+								craftptr->mesh_rotation[mesh] += 4;
+							else
+								craftptr->mesh_rotation[mesh] -= 4;
+							if ((uint16_t)math2_getrandom() < 0x200)
+								craftptr->mesh_rotation[mesh] ^= 1u;
+						}
 					}
-					if (mesh_type == TIE_MESH_ROTARY_WING && (craftptr->ai_anim_flags & 1u)) {
+					if (TIE_FLIGHT_EDITION(component->mesh_type, mesh_type) == TIE_MESH_ROTARY_WING &&
+						(craftptr->ai_anim_flags & 1u)) {
+						/* S-foils moving: bit 1 set closes (rotation rises
+						 * to the X-wing/Y-wing limit), clear opens (falls to
+						 * 0). */
 						if (craftptr->ai_anim_flags & 2u) {
 							if (model_type == 1) {
-								const uint16_t limit = modelmesh_getcenterz(1, mesh) < 0 ? 8 : 12;
+								/* X-wing: top wings close to 12, bottom to 8. */
+								const uint16_t limit = TIE_FLIGHT_EDITION(component->center_up,
+																		  modelmesh_getcenterz(1, mesh)) < 0
+														   ? 8
+														   : 12;
 								if (craftptr->mesh_rotation[mesh] < limit) {
 									rotary_wing_moved = 1;
 									++craftptr->mesh_rotation[mesh];
 								}
 							} else if (model_type == 4) {
-								if (craftptr->mesh_rotation[mesh] < 0x40u) {
+								if (craftptr->mesh_rotation[mesh] < 0x40) {
 									rotary_wing_moved = 1;
 									craftptr->mesh_rotation[mesh] += 3;
 								}
@@ -1086,7 +871,12 @@ void anim_updateanimation_tie98(void) {
 							}
 						}
 					}
+					if (!TIE_FLIGHT_TIE98)
+						++component;
 				}
+
+				/* S-foils at rest: settle ai_anim_flags and announce the
+				 * new position. */
 				if (craftptr->ai_anim_flags & 1u) {
 					if (craftptr->ai_anim_flags & 2u) {
 						if (!rotary_wing_moved) {
@@ -1106,7 +896,7 @@ void anim_updateanimation_tie98(void) {
 			case GENUS_EXPLOSION:
 				if (objects[object_index].ship_idx == 89) {
 					objects[object_index].anim_frame_alt = 0;
-					if ((uint16_t)math2_getrandom() < 0x800u)
+					if ((uint16_t)math2_getrandom() < 0x800)
 						create_createember(object_index);
 				} else {
 					animindex = objects[object_index].anim_frame;

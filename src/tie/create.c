@@ -692,74 +692,26 @@ void create_updatefgstatus(void) {
 
 // FUNCTION: TIE95 0x17460
 int create_createflightgroup(uint16_t craft_slot) {
-	EFGStruct* f = &fg_array[fgcnt];
+	uint16_t species_idx;
+	uint16_t carrier_fg;
+	uint16_t j;
+	uint16_t found;
+	uint16_t anchor;
 	uint8_t mission_clock_started;
-	uint8_t form_spacing;
+	uint16_t adjust_if_hostile;
 
+	/* Arriving FGs run their hyperspace-in / hangar-launch animation
+	 * only once the mission clock has started (any of hour, minute or
+	 * second non-zero), so the initial wave at mission load is placed
+	 * directly. */
+	mission_clock_started = date.hour | date.minute | date.second;
 	fghyperspace = 0;
 	fghangar = 0;
 
-	/* Binary's `dword_E6388 | byte_E6387 | BYTE1(dword_E6388)` test:
-	 * any byte of the wall-clock cluster non-zero. The cluster is the
-	 * hour/minute/second/subsec fields of MissionClock — once
-	 * tie_updatetime has rolled the sub-second counter once, this is
-	 * true forever. Semantic: arriving FGs run their hyperspace-in /
-	 * hangar-launch animation only after the mission clock has started
-	 * (i.e. not on the very first frame). */
-	mission_clock_started =
-		(uint8_t)(date.hour | date.minute | date.second | (uint8_t)date.subsec | (uint8_t)(date.subsec >> 8));
-
-	/* Branch 1: carrier-spawn via a fleet leader FG (hangar launch). */
-	if (f->start_fg_used && mission_clock_started && !mission.train_craft_type && craft_slot == 0xFFFF) {
-		const int16_t carrier_fg = (int16_t)(int8_t)f->start_fg;
-		uint16_t anchor = -1;
-		uint16_t j;
-		FlightObject* ao;
-		uint16_t sidx;
-		const SpecData* sp;
-
-		for (j = 0; j < NUM_CRAFTS; j++) {
-			if (!objects[j].ship_idx)
-				continue;
-			craftptr = objects[j].craft_ptr;
-			if (objects[j].fg_idx == carrier_fg && craftptr->leader_obj_idx == 255) {
-				anchor = j;
-				break;
-			}
-		}
-		if (anchor == 0xFFFF)
-			return 0;
-
-		ao = &objects[anchor];
-		sidx = ao->craft_ptr->species_idx;
-		sp = &spec_data[sidx];
-		craftptr = ao->craft_ptr;
-
-		/* Two rotated points relative to the carrier: drop anchor
-		 * (cockpit_x, cockpit_y, cockpit_z) and approach vector
-		 * (engine_x, engine_y, engine_z). Difference feeds heading.
-		 * Retail's HIWORD reads on dword_C7B8A/C7B8E/C7B92 resolve to
-		 * the i16 fields TWO bytes after the named base (the unaligned
-		 * dword load pattern), so the cockpit/engine fields are the
-		 * right ones here, not dock_active_heavy. */
-		pai_calcrotatedpoint(ao, sp->cockpit_x, sp->cockpit_y, sp->cockpit_z);
-		fglocx = rotatedx + ao->world_x;
-		fglocy = rotatedy + ao->world_y;
-		fglocz = rotatedz + ao->world_z;
-		pai_calcrotatedpoint(ao, sp->engine_x, sp->engine_y, sp->engine_z);
-		worldlocx = rotatedx + ao->world_x;
-		worldlocy = rotatedy + ao->world_y;
-		worldlocz = rotatedz + ao->world_z;
-		trig2_ctop(worldlocx - fglocx, worldlocy - fglocy, worldlocz - fglocz);
-		fgheadingxy = trig2_xyangle;
-		fgheadingz = trig2_zangle;
-
-		fghangar = 1;
-		fgformation = (f->count > 3) ? 6 : 0;
-		form_spacing = 0;
-	} else {
-		/* Branch 2: waypoint-anchored spawn. Use waypoint 0 (live) and
-		 * heading derived from waypoint 4 when set; else default heading. */
+	if (!fg_array[fgcnt].start_fg_used || !mission_clock_started || mission.train_craft_type ||
+		craft_slot != (uint16_t)-1) {
+		/* Waypoint-anchored spawn. Use waypoint 0 (live) and heading
+		 * derived from waypoint 4 when set; else default heading. */
 		int16_t z_angle;
 
 		create_getworldposition(OBJ_REF_WAYPOINT_BASE, fgcnt);
@@ -767,7 +719,7 @@ int create_createflightgroup(uint16_t craft_slot) {
 		fglocy = worldlocy;
 		fglocz = worldlocz;
 
-		if (f->way_used[4]) {
+		if (fg_array[fgcnt].way_used[4]) {
 			create_getworldposition(0x8004, fgcnt);
 			trig2_ctop(worldlocx - fglocx, worldlocy - fglocy, worldlocz - fglocz);
 			fgheadingxy = trig2_xyangle;
@@ -780,13 +732,14 @@ int create_createflightgroup(uint16_t craft_slot) {
 		}
 		fgheadingz = z_angle;
 
-		/* First-frame "hyper-in" arrival: step 8x further behind the FG
-		 * along the reversed approach vector so the jump-in animation has
+		/* Later "hyper-in" arrival: step 8x further behind the FG along
+		 * the reversed approach vector so the jump-in animation has
 		 * travel distance. */
-		if (!mission.train_craft_type && !f->start_fg_used && mission_clock_started && craft_slot == 0xFFFF) {
-			trig2_xyangle = (int16_t)(trig2_xyangle + 0x8000);
-			trig2_zangle = (int16_t)(0x8000 - trig2_zangle);
-			trig2_movexyz(0xFFFF, trig2_xyangle, (uint16_t)trig2_zangle);
+		if (!mission.train_craft_type && !fg_array[fgcnt].start_fg_used && mission_clock_started &&
+			craft_slot == (uint16_t)-1) {
+			trig2_xyangle += 0x8000;
+			trig2_zangle = 0x8000 - trig2_zangle;
+			trig2_movexyz(0xFFFF, trig2_xyangle, trig2_zangle);
 			trig2_xmovedist *= 8;
 			trig2_ymovedist *= 8;
 			trig2_zmovedist *= 8;
@@ -795,32 +748,76 @@ int create_createflightgroup(uint16_t craft_slot) {
 			fglocz += trig2_zmovedist;
 			fghyperspace = 1;
 		}
-		form_spacing = f->form_spacing;
-		fgformation = f->formation;
+		fgformation = fg_array[fgcnt].formation;
+		fgseparation = fg_array[fgcnt].form_spacing;
+	} else {
+		/* Carrier-spawn via a fleet leader FG (hangar launch). */
+		carrier_fg = (int8_t)fg_array[fgcnt].start_fg;
+		found = 0;
+		for (j = 0; j < NUM_CRAFTS; j++) {
+			if (objects[j].ship_idx) {
+				craftptr = objects[j].craft_ptr;
+				if (carrier_fg == objects[j].fg_idx && craftptr->leader_obj_idx == 255) {
+					found = 1;
+					anchor = j;
+					break;
+				}
+			}
+		}
+		if (!found)
+			return 0;
+
+		species_idx = objects[anchor].craft_ptr->species_idx;
+		craftptr = objects[anchor].craft_ptr;
+
+		/* Two rotated points relative to the carrier: drop anchor
+		 * (cockpit_x, cockpit_y, cockpit_z) and approach vector
+		 * (engine_x, engine_y, engine_z). Difference feeds heading. */
+		pai_calcrotatedpoint(&objects[anchor], spec_data[craftptr->species_idx].cockpit_x,
+							 spec_data[craftptr->species_idx].cockpit_y,
+							 spec_data[craftptr->species_idx].cockpit_z);
+		fglocx = objects[anchor].world_x + rotatedx;
+		fglocy = objects[anchor].world_y + rotatedy;
+		fglocz = objects[anchor].world_z + rotatedz;
+		pai_calcrotatedpoint(&objects[anchor], spec_data[species_idx].engine_x,
+							 spec_data[species_idx].engine_y, spec_data[species_idx].engine_z);
+		worldlocx = objects[anchor].world_x + rotatedx;
+		worldlocy = objects[anchor].world_y + rotatedy;
+		worldlocz = objects[anchor].world_z + rotatedz;
+		trig2_ctop(worldlocx - fglocx, worldlocy - fglocy, worldlocz - fglocz);
+		fgheadingxy = trig2_xyangle;
+		fgheadingz = trig2_zangle;
+
+		fghangar = 1;
+		if ((int8_t)fg_array[fgcnt].count <= 3)
+			fgformation = 0;
+		else
+			fgformation = 6;
+		fgseparation = 0;
 	}
 
-	fgseparation = form_spacing;
-	fgside = f->side;
-	fgversion = f->version;
+	fgside = fg_array[fgcnt].side;
+	fgversion = fg_array[fgcnt].version;
 	fgflightflag = 0;
-	fggenus = species_table[speciesconvert[f->species]].ship_class;
-	fgskill = f->skill;
+	fggenus = species_table[speciesconvert[(int8_t)fg_array[fgcnt].species]].ship_class;
+	fgskill = fg_array[fgcnt].skill;
 
 	/* Easy-mode friendly-side skill bump and hostile-craft skill dock.
-	 * Fighter (gen 0) orders 19 (rendezvous) skip the dock. */
+	 * Fighter orders that map to plan 19 (rendezvous) skip the dock. */
 	if (!mission.difficulty) {
-		int adjust_if_hostile = 1;
 		if (fggenus == GENUS_STARSHIP || fggenus == GENUS_PLATFORM) {
 			adjust_if_hostile = 1;
 		} else if (fggenus == GENUS_FIGHTER) {
-			int k;
+			uint16_t k;
 
+			adjust_if_hostile = 1;
 			for (k = 0; k < 3; k++) {
 #ifdef TIE_MODERN
 				// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
-				if (f->ai[k].order < sizeof(ordersldr) && ordersldr[f->ai[k].order] == 19)
+				if (fg_array[fgcnt].ai[k].order < sizeof(ordersldr) &&
+					ordersldr[(int8_t)fg_array[fgcnt].ai[k].order] == 19)
 #else
-				if (ordersldr[f->ai[k].order] == 19)
+				if (ordersldr[(int8_t)fg_array[fgcnt].ai[k].order] == 19)
 #endif
 					adjust_if_hostile = 0;
 			}
@@ -829,55 +826,57 @@ int create_createflightgroup(uint16_t craft_slot) {
 			fgskill++;
 			if (fgskill >= 5)
 				fgskill = 4;
-		} else if (adjust_if_hostile && (fgside == 0 || fgside == 4) && fgskill && fgskill < 5) {
+		} else if (adjust_if_hostile && (fgside == 0 || fgside == 4) && fgskill > 0 && fgskill < 5) {
 			fgskill--;
 		}
 	}
 
 	/* Spawn loop: either the whole FG, or just one craft index. */
-	if (craft_slot == 0xFFFF) {
+	if (craft_slot == (uint16_t)-1) {
 		leaderflag = 0xFF;
-		for (craftcnt = 0; craftcnt < f->count; craftcnt++) {
-			FGStatus* st = &fgstatus[fgcnt];
-			if (st->counts[FG_COUNT_ARRIVED] >= st->counts[FG_COUNT_TOTAL])
-				continue;
-			if (create_createcraft() == 0xFFFF)
-				return 0;
-			st->counts[FG_COUNT_ARRIVED]++;
-			if (craftcnt == f->special_craft)
-				st->special_counts[FG_COUNT_ARRIVED]++;
+		for (craftcnt = 0; craftcnt < (int8_t)fg_array[fgcnt].count; craftcnt++) {
+			if (fgstatus[fgcnt].counts[FG_COUNT_ARRIVED] < fgstatus[fgcnt].counts[FG_COUNT_TOTAL]) {
+				if (create_createcraft() == 0xFFFF)
+					return 0;
+				fgstatus[fgcnt].counts[FG_COUNT_ARRIVED]++;
+				if ((int8_t)fg_array[fgcnt].special_craft == craftcnt)
+					fgstatus[fgcnt].special_counts[FG_COUNT_ARRIVED]++;
+			}
 		}
-	} else {
-		FGStatus* st = &fgstatus[fgcnt];
-		if (st->counts[FG_COUNT_ARRIVED] < st->counts[FG_COUNT_TOTAL]) {
-			craftcnt = craft_slot;
-			if (create_createcraft() == 0xFFFF)
-				return 0;
-			st->counts[FG_COUNT_ARRIVED]++;
-			if (craftcnt == f->special_craft)
-				st->special_counts[FG_COUNT_ARRIVED]++;
-		}
+	} else if (fgstatus[fgcnt].counts[FG_COUNT_ARRIVED] < fgstatus[fgcnt].counts[FG_COUNT_TOTAL]) {
+		craftcnt = craft_slot;
+		if (create_createcraft() == 0xFFFF)
+			return 0;
+		fgstatus[fgcnt].counts[FG_COUNT_ARRIVED]++;
+		if (craftcnt == (int8_t)fg_array[fgcnt].special_craft)
+			fgstatus[fgcnt].special_counts[FG_COUNT_ARRIVED]++;
 	}
 
 	fgstatus[fgcnt].counts[FG_COUNT_SLOT_17] = 0;
 
 	/* Reinforcement chatter: radio report + MS sequence selector fires
-	 * for FGs that arrive AFTER the mission has been running for at
-	 * least one frame, so the initial-wave spawns at mission load are
-	 * silent and only later arrivals are announced. */
-	if (mission_clock_started && craft_slot == 0xFFFF) {
-		const uint16_t spec_num = spec_getspecnum(fgspecies);
+	 * for FGs that arrive after the mission clock has started, so the
+	 * initial-wave spawns at mission load are silent. */
+	if (mission_clock_started && craft_slot == (uint16_t)-1) {
 		int16_t seq;
 
-		msg_reportfgcreation(fgcnt, spec_num);
+		msg_reportfgcreation(fgcnt, spec_getspecnum(fgspecies));
 
-		if (fgsidecreated) {
-			if (fgsidecreated == 1 || fgsidecreated == 4)
-				seq = (fggenus == GENUS_STARSHIP) ? 10 : 11;
+		if (!fgsidecreated) {
+			if (fggenus != GENUS_STARSHIP)
+				seq = 13;
 			else
-				seq = (fggenus == GENUS_STARSHIP) ? 14 : 15;
+				seq = 12;
+		} else if (fgsidecreated == 1 || fgsidecreated == 4) {
+			if (fggenus != GENUS_STARSHIP)
+				seq = 11;
+			else
+				seq = 10;
 		} else {
-			seq = (fggenus == GENUS_STARSHIP) ? 12 : 13;
+			if (fggenus != GENUS_STARSHIP)
+				seq = 15;
+			else
+				seq = 14;
 		}
 		fscript_MsSetSequence(seq);
 	}

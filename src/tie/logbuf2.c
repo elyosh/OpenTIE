@@ -228,7 +228,7 @@ void logbuf2_outdiffbuffer_tie98(const void* oldbuf, const void* newbuf) {
  * ------------------------------------------------------------------ */
 // FUNCTION: TIE95 0x2EAF8
 void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color) {
-	int32_t dx, dy, t, len, err, steps, i;
+	int32_t dy, dx, t, err, steps;
 	uint8_t* p;
 
 #ifdef TIE_MODERN
@@ -238,18 +238,18 @@ void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uin
 
 	dx = x2 - x1;
 	if (dx < 0) {
+		dx = -dx;
 		t = x1;
 		x1 = x2;
 		x2 = t;
 		t = y1;
 		y1 = y2;
 		y2 = t;
-		dx = -dx;
 	} else if (dx == 0) {
 		/* Vertical line. */
 		if (x1 < 0 || x1 >= pixelswide)
 			return;
-		if (y1 > y2) {
+		if (y2 < y1) {
 			t = y1;
 			y1 = y2;
 			y2 = t;
@@ -258,13 +258,13 @@ void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uin
 			y1 = 0;
 		if (y2 >= pixelsdeep)
 			y2 = pixelsdeepmin1;
-		len = y2 - y1;
-		if (len > 0) {
-			p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
-			for (i = 0; i < len; ++i) {
-				*p = color;
-				p += pixelswide;
-			}
+		y2 -= y1;
+		if (y2 <= 0)
+			return;
+		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+		while (y2--) {
+			*p = color;
+			p += pixelswide;
 		}
 		return;
 	}
@@ -273,75 +273,7 @@ void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uin
 		return;
 
 	dy = y2 - y1;
-	if (dy >= 0) {
-		if (dy == 0) {
-			/* Horizontal line. */
-			if (y1 < 0 || y1 >= pixelsdeep)
-				return;
-			if (x1 < 0)
-				x1 = 0;
-			if (x2 >= pixelswide)
-				x2 = pixelswidemin1;
-			len = x2 - x1;
-			if (len > 0) {
-				p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
-				for (i = 0; i < len; ++i)
-					*p++ = color;
-			}
-			return;
-		}
-
-		/* Downward line. */
-		if (y1 >= pixelsdeep || y2 < 0)
-			return;
-		if (y1 < 0) {
-			x1 += math2_ABoverC32(-y1, dx, dy);
-			if (x1 >= pixelswide)
-				return;
-			y1 = 0;
-		}
-		if (x1 < 0) {
-			y1 += math2_ABoverC32(-x1, dy, dx);
-			if (y1 >= pixelsdeep)
-				return;
-			x1 = 0;
-		}
-		if (x2 >= pixelswide)
-			x2 = pixelswidemin1;
-		if (y2 >= pixelsdeep)
-			y2 = pixelsdeepmin1;
-		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
-		if (dx < dy) {
-			steps = x2 - x1 + 1;
-			err = dy >> 1;
-			len = y2 - y1;
-			for (i = 0; i < len; ++i) {
-				*p = color;
-				p += pixelswide;
-				err -= dx;
-				if (err < 0) {
-					err += dy;
-					if (--steps == 0)
-						return;
-					++p;
-				}
-			}
-		} else {
-			steps = y2 - y1 + 1;
-			err = dx >> 1;
-			len = x2 - x1;
-			for (i = 0; i < len; ++i) {
-				*p++ = color;
-				err -= dy;
-				if (err < 0) {
-					err += dx;
-					if (--steps == 0)
-						return;
-					p += pixelswide;
-				}
-			}
-		}
-	} else {
+	if (dy < 0) {
 		/* Upward line. */
 		dy = -dy;
 		if (y1 < 0 || y2 >= pixelsdeep)
@@ -353,7 +285,8 @@ void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uin
 			y1 = pixelsdeepmin1;
 		}
 		if (x1 < 0) {
-			y1 -= math2_ABoverC32(-x1, dy, dx);
+			x1 = -x1;
+			y1 -= math2_ABoverC32(x1, dy, dx);
 			if (y1 < 0)
 				return;
 			x1 = 0;
@@ -363,26 +296,13 @@ void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uin
 		if (y2 < 0)
 			y2 = 0;
 		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
-		if (dx < dy) {
-			steps = x2 - x1 + 1;
-			err = dy >> 1;
-			len = y1 - y2;
-			for (i = 0; i < len; ++i) {
-				*p = color;
-				p -= pixelswide;
-				err -= dx;
-				if (err < 0) {
-					err += dy;
-					if (--steps == 0)
-						return;
-					++p;
-				}
-			}
-		} else {
-			steps = y1 - y2 + 1;
+		if (dx >= dy) {
+			int32_t count;
+
+			count = x2 - x1;
 			err = dx >> 1;
-			len = x2 - x1;
-			for (i = 0; i < len; ++i) {
+			steps = y1 - y2 + 1;
+			while (count--) {
 				*p++ = color;
 				err -= dy;
 				if (err < 0) {
@@ -392,7 +312,95 @@ void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uin
 					p -= pixelswide;
 				}
 			}
+		} else {
+			int32_t count;
+
+			count = y1 - y2;
+			err = dy >> 1;
+			steps = x2 - x1 + 1;
+			while (count--) {
+				*p = color;
+				err -= dx;
+				p -= pixelswide;
+				if (err < 0) {
+					err += dy;
+					if (--steps == 0)
+						return;
+					++p;
+				}
+			}
 		}
+	} else if (dy > 0) {
+		/* Downward line. */
+		if (y1 >= pixelsdeep || y2 < 0)
+			return;
+		if (y1 < 0) {
+			y1 = -y1;
+			x1 += math2_ABoverC32(y1, dx, dy);
+			if (x1 >= pixelswide)
+				return;
+			y1 = 0;
+		}
+		if (x1 < 0) {
+			x1 = -x1;
+			y1 += math2_ABoverC32(x1, dy, dx);
+			if (y1 >= pixelsdeep)
+				return;
+			x1 = 0;
+		}
+		if (x2 >= pixelswide)
+			x2 = pixelswidemin1;
+		if (y2 >= pixelsdeep)
+			y2 = pixelsdeepmin1;
+		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+		if (dx >= dy) {
+			int32_t count;
+
+			count = x2 - x1;
+			err = dx >> 1;
+			steps = y2 - y1 + 1;
+			while (count--) {
+				*p++ = color;
+				err -= dy;
+				if (err < 0) {
+					err += dx;
+					if (--steps == 0)
+						return;
+					p += pixelswide;
+				}
+			}
+		} else {
+			int32_t count;
+
+			count = y2 - y1;
+			err = dy >> 1;
+			steps = x2 - x1 + 1;
+			while (count--) {
+				*p = color;
+				err -= dx;
+				p += pixelswide;
+				if (err < 0) {
+					err += dy;
+					if (--steps == 0)
+						return;
+					++p;
+				}
+			}
+		}
+	} else {
+		/* Horizontal line. */
+		if (y1 < 0 || y1 >= pixelsdeep)
+			return;
+		if (x1 < 0)
+			x1 = 0;
+		if (x2 >= pixelswide)
+			x2 = pixelswidemin1;
+		x2 -= x1;
+		if (x2 <= 0)
+			return;
+		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
+		while (x2--)
+			*p++ = color;
 	}
 }
 

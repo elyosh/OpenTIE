@@ -1382,7 +1382,7 @@ typedef struct ShipModelMesh {
 #pragma pack(push, 2)
 #endif
 typedef struct {
-	uint8_t type;      /* +0x00: 0x19..0x1F = component, else weapon_id + 120 */
+	int8_t type;       /* +0x00: 0x19..0x1F = component, else weapon_id + 120 */
 	uint8_t pad_01;    /* +0x01: unread */
 	int16_t local_x;   /* +0x02: side coord, 16.1 fixed-point */
 	int16_t local_y;   /* +0x04: up coord,   16.1 fixed-point */

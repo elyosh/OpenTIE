@@ -9,7 +9,6 @@
 #include "tie/gate.h"
 #include "tie/laser.h"
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/modelmesh.h"
 #include "tie/msg.h"
 #include "tie/msg_templates.h"
@@ -25,6 +24,7 @@
 #include "tie/user.h"
 #include "tie_runtime/diagnostics/flight_trace.h"
 #include "tie_runtime/runtime/inflight_state.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/snapshot/snapshot.h"
 #include "tie_runtime/snapshot/snapshot_internal.h"
@@ -1058,13 +1058,9 @@ void collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
 		delta_z = (int16_t)(laserz - laserzold);
 		delta_y = (int16_t)(lasery - laseryold);
 		delta_x = (int16_t)(laserx - laserxold);
-		headon_dot =
-			pstate.player->fwd_x * delta_x + pstate.player->fwd_y * delta_y + pstate.player->fwd_z * delta_z;
-		if (headon_dot >= 0x40000000)
-			headon_dot = 0x3FFF0000;
-		if (headon_dot <= -0x40000000)
-			headon_dot = -0x3FFF0000;
-		if ((int16_t)(headon_dot >> 15) < 0)
+		headon_dot = math2_dot3_q15_clamped(pstate.player->fwd_x, pstate.player->fwd_y, pstate.player->fwd_z,
+											delta_x, delta_y, delta_z);
+		if ((int16_t)headon_dot < 0)
 			head_on_flag = 0;
 		else
 			head_on_flag = 1;
@@ -1702,148 +1698,137 @@ int32_t collide_roughdistance3d(int32_t dx, int32_t dy, int32_t dz) {
 // FUNCTION: TIE95 0x15B38
 uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t y1, int32_t z1, int32_t x2,
 								  int32_t y2, int32_t z2, int32_t return_first_hit) {
-	const uint8_t* base = mesh_data;
-	uint32_t face_count = base[4];
-	uint32_t vert_count = base[2];
-	const int32_t* bbox_p = (const int32_t*)(base + face_count + 5);
+	uint32_t face_count = mesh_data[4];
+	uint32_t vert_count = mesh_data[2];
+	const int16_t* bbox;
 	const int16_t* vert_array;
-	const int32_t* face_iter;
+	const int16_t* face_hdr;
 	uint32_t face_idx;
-	uint32_t i_min = 0x7FFFFFFFu;
+	uint32_t i_min;
 
-	/* AABB Manhattan reject. Bounding box layout is 6 int16: min triplet
-	 * (X, Y, Z) followed by max triplet (X, Y, Z). Binary uses Watcom
-	 * unaligned dword loads here too; the int16-array form is equivalent. */
-	{
-		const int16_t* bb = (const int16_t*)bbox_p;
-		if (bb[0] > x1 && bb[0] > x2)
-			return 0; /* min_x */
-		if (bb[1] > y1 && bb[1] > y2)
-			return 0; /* min_y */
-		if (bb[2] > z1 && bb[2] > z2)
-			return 0; /* min_z */
-		if (bb[3] < x1 && bb[3] < x2)
-			return 0; /* max_x */
-		if (bb[4] < y1 && bb[4] < y2)
-			return 0; /* max_y */
-		if (bb[5] < z1 && bb[5] < z2)
-			return 0; /* max_z */
-	}
+	mesh_data += face_count + 5;
+	bbox = (const int16_t*)mesh_data;
 
-	vert_array = (const int16_t*)(bbox_p + 3);
-	face_iter = bbox_p + 3 + 3 * (int32_t)vert_count;
+	/* AABB reject: 6 int16, min triplet (X, Y, Z) then max triplet. */
+	if (bbox[0] > x1 && bbox[0] > x2)
+		return 0;
+	if (bbox[1] > y1 && bbox[1] > y2)
+		return 0;
+	if (bbox[2] > z1 && bbox[2] > z2)
+		return 0;
+	if (bbox[3] < x1 && bbox[3] < x2)
+		return 0;
+	if (bbox[4] < y1 && bbox[4] < y2)
+		return 0;
+	if (bbox[5] < z1 && bbox[5] < z2)
+		return 0;
+
+	mesh_data += 12;
+	vert_array = (const int16_t*)mesh_data;
+	mesh_data += vert_count * 12;
+	face_hdr = (const int16_t*)mesh_data;
+	i_min = 0x7FFFFFFFu;
 
 	for (face_idx = 0; face_idx < face_count; face_idx++) {
-		/* Each face record is 4 int16: nx, nz, ny, byte-offset-to-vid-table.
-		 * Binary uses Watcom unaligned dword loads to extract them; the
-		 * straight int16-array form below is bit-for-bit equivalent. */
-		const int16_t* face_hdr = (const int16_t*)face_iter;
+		/* Face record: int16 nx, nz, ny, byte offset to the vertex-id table. */
 		int32_t face_nx = face_hdr[0];
 		int32_t face_nz = face_hdr[1];
 		int32_t face_ny = face_hdr[2];
-		const uint8_t* face_record = (const uint8_t*)face_iter + face_hdr[3];
-		int32_t remaining_edges = *face_record & 0x3F;
-		int32_t vx0, vy0, vz0;
-		int32_t side1, side2;
-		uint32_t t_param = 0;
-		int32_t isect_a = 0, isect_b = 0;
-		int32_t first_a, first_b;
-		int inside_flag = 1;
-		const uint8_t* vert_byte_p;
+		const uint8_t* vert_ids = (const uint8_t*)face_hdr + face_hdr[3];
+		uint32_t remaining_edges = (uint8_t)(*vert_ids & 0x3F);
 		const int16_t* vp;
-		int axis_a_pick;
-		int axis_b_pick;
+		int32_t vx, vy, vz;
+		int32_t rel_x1, rel_y1, rel_z1;
+		int32_t rel_x2, rel_y2, rel_z2;
+		int32_t side1, side2, sides_xor;
+		int32_t hit_x, hit_y, hit_z;
+		uint32_t t_param;
+		int axis_b, axis_a;
+		int32_t first_a, first_b;
+		int32_t edge_a, edge_b;
+		int32_t prev_a, prev_b;
 		int half_first;
+		int inside_flag;
 
-		int32_t x_isect, y_isect, z_isect;
-
-		face_iter += 2;
+		face_hdr += 4;
 		if (remaining_edges == 2)
 			continue;
 
-		for (vp = vert_array + 3 * face_record[1]; (*vp & 0xFF00) == 0x7F00;
-			 vp -= 3 * ((int)(uint8_t)*vp >> 1))
-			;
-		vx0 = *vp;
-		for (vp = vert_array + 3 * face_record[1] + 1; (*vp & 0xFF00) == 0x7F00;
-			 vp -= 3 * ((int)(uint8_t)*vp >> 1))
-			;
-		vy0 = *vp;
-		for (vp = vert_array + 3 * face_record[1] + 2; (*vp & 0xFF00) == 0x7F00;
-			 vp -= 3 * ((int)(uint8_t)*vp >> 1))
-			;
-		vz0 = *vp;
+		/* Vertex coords of 0x7Fxx are back-references 3 * (low >> 1)
+		 * int16 slots earlier; follow them to the real coordinate. */
+		vp = vert_array + 3 * vert_ids[1];
+		while ((*vp & 0xFF00) == 0x7F00)
+			vp -= 3 * ((int16_t)(*vp & 0xFF) >> 1);
+		vx = *vp;
+		rel_x1 = x1 - vx;
+		rel_x2 = x2 - vx;
 
-		side1 = math2_mul_q15(x1 - vx0, face_nx);
-		side1 += math2_mul_q15(y1 - vy0, face_nz);
-		side1 += math2_mul_q15(z1 - vz0, face_ny);
+		vp = vert_array + 3 * vert_ids[1] + 1;
+		while ((*vp & 0xFF00) == 0x7F00)
+			vp -= 3 * ((int16_t)(*vp & 0xFF) >> 1);
+		vy = *vp;
+		rel_y1 = y1 - vy;
+		rel_y2 = y2 - vy;
+
+		vp = vert_array + 3 * vert_ids[1] + 2;
+		while ((*vp & 0xFF00) == 0x7F00)
+			vp -= 3 * ((int16_t)(*vp & 0xFF) >> 1);
+		vz = *vp;
+		rel_z1 = z1 - vz;
+		rel_z2 = z2 - vz;
+
+		side1 = math2_dot3_q15(face_nx, rel_x1, face_nz, rel_y1, face_ny, rel_z1);
 		if (side1 > -10 && side1 < 10)
 			side1 = 0;
 
-		side2 = math2_mul_q15(x2 - vx0, face_nx);
-		side2 += math2_mul_q15(y2 - vy0, face_nz);
-		side2 += math2_mul_q15(z2 - vz0, face_ny);
+		side2 = math2_dot3_q15(face_nx, rel_x2, face_nz, rel_y2, face_ny, rel_z2);
 		if (side2 > -10 && side2 < 10)
 			side2 = 0;
 
-		{
-			int32_t sides_xor = side1 ^ side2;
-			if (!side1 || !side2)
-				sides_xor = -1;
-			if (sides_xor >= 0)
-				continue;
-		}
+		sides_xor = side1 ^ side2;
+		if (!side1 || !side2)
+			sides_xor = -1;
+		if (sides_xor >= 0)
+			continue;
 
-		/* Compute parametric t = side1 / (side1 - side2) in 15-bit fp,
-		 * then interpolate the full 3D intersection point in world
-		 * coords. Retail computes all three components and lets the
-		 * dominant-normal axis picker below choose two of them
-		 * (v29/v56/v80 at 0x15edb..0x15f0c, swap at 0x15f51..0x15f8b). */
+		rel_x1 += vx;
+		rel_x2 += vx;
+		rel_y1 += vy;
+		rel_y2 += vy;
+		rel_z1 += vz;
+		rel_z2 += vz;
 
-		if (side1) {
-			if (side2) {
-				int32_t num, den;
-				/* num = side2 << 15, negated on the side1>=0 branch.
-				 * Retail emits `shl edx,0Fh` (+ `neg`), a 32-bit op that
-				 * truncates/wraps; the shifted dot product can exceed
-				 * 32 bits since the segment endpoints are clamped to
-				 * +-Q30 then doubled. Do the shift in uint32 so the wrap
-				 * is defined rather than signed-overflow UB. */
-				uint32_t shifted = (uint32_t)side2 << 15;
-				if (side1 >= 0) {
-					num = (int32_t)(0u - shifted);
-					den = side1 - side2;
-				} else {
-					num = (int32_t)shifted;
-					den = side2 - side1;
-				}
-				t_param = (uint32_t)(num / den);
-				/* Retail interpolates with `imul reg32,reg32; sar eax,0Fh`:
-				 * the product is truncated to 32 bits before the arithmetic
-				 * shift, and likewise wraps for large deltas. Reproduce the
-				 * exact low-32-bit result via an unsigned multiply. */
-				x_isect = x2 + ((int32_t)(t_param * (uint32_t)(x1 - x2)) >> 15);
-				y_isect = y2 + ((int32_t)(t_param * (uint32_t)(y1 - y2)) >> 15);
-				z_isect = z2 + ((int32_t)(t_param * (uint32_t)(z1 - z2)) >> 15);
-			} else {
-				t_param = 0;
-				x_isect = x2;
-				y_isect = y2;
-				z_isect = z2;
-			}
-		} else {
+		/* Segment crosses the face plane: t = side1 / (side1 - side2) in Q15,
+		 * measured from endpoint 2. Retail shifts and multiplies in 32 bits
+		 * and lets the result wrap, so do those steps unsigned. */
+		if (!side1) {
+			hit_x = rel_x1;
+			hit_y = rel_y1;
+			hit_z = rel_z1;
 			t_param = 0x7FFF;
-			x_isect = x1;
-			y_isect = y1;
-			z_isect = z1;
+		} else if (!side2) {
+			hit_x = rel_x2;
+			hit_y = rel_y2;
+			hit_z = rel_z2;
+			t_param = 0;
+		} else {
+			int32_t num, den;
+			if (side1 < 0) {
+				num = (int32_t)((uint32_t)side2 << 15);
+				den = side2 - side1;
+			} else {
+				num = (int32_t)(0u - ((uint32_t)side2 << 15));
+				den = side1 - side2;
+			}
+			t_param = (uint32_t)(num / den);
+			hit_x = rel_x2 + ((int32_t)((uint32_t)(rel_x1 - rel_x2) * t_param) >> 15);
+			hit_y = rel_y2 + ((int32_t)((uint32_t)(rel_y1 - rel_y2) * t_param) >> 15);
+			hit_z = rel_z2 + ((int32_t)((uint32_t)(rel_z1 - rel_z2) * t_param) >> 15);
 		}
 
-		/* Pick dominant face-normal axis for 2D point-in-poly. The
-		 * vertex offset 0/1/2 in the mesh blob corresponds to world
-		 * X/Y/Z respectively (face_hdr[0/1/2] = nx, "nz", "ny" in the
-		 * misnamed retail header layout), so the axis pick simultaneously
-		 * selects which vertex offsets to read AND which world isect
-		 * components to use. */
+		/* Project onto the plane that drops the dominant normal axis; the
+		 * 2D point ends up in (hit_y, hit_z) and axis_a/axis_b select the
+		 * matching vertex components. */
 		if (face_nx < 0)
 			face_nx = -face_nx;
 		if (face_nz < 0)
@@ -1851,90 +1836,76 @@ uint32_t collide_checkhitpolygons(const uint8_t* mesh_data, int32_t x1, int32_t 
 		if (face_ny < 0)
 			face_ny = -face_ny;
 
-		vert_byte_p = face_record + 1;
-		if (face_ny < face_nz || face_ny < face_nx) {
-			if (face_nz < face_nx || face_nz < face_ny) {
-				/* face_nx largest -> drop X, project onto (Y, Z). */
-				axis_a_pick = 1;
-				axis_b_pick = 2;
-				isect_a = y_isect;
-				isect_b = z_isect;
-			} else {
-				/* face_nz largest -> drop Y, project onto (X, Z). */
-				axis_a_pick = 0;
-				axis_b_pick = 2;
-				isect_a = x_isect;
-				isect_b = z_isect;
-			}
+		vert_ids++;
+		if (face_ny >= face_nz && face_ny >= face_nx) {
+			/* Drop Z: (X, Y). */
+			axis_a = 0;
+			axis_b = 1;
+			hit_z = hit_y;
+			hit_y = hit_x;
+		} else if (face_nz >= face_nx && face_nz >= face_ny) {
+			/* Drop Y: (X, Z). */
+			hit_y = hit_x;
+			axis_a = 0;
+			axis_b = 2;
 		} else {
-			/* face_ny largest -> drop Z, project onto (X, Y). */
-			axis_a_pick = 0;
-			axis_b_pick = 1;
-			isect_a = x_isect;
-			isect_b = y_isect;
+			/* Drop X: (Y, Z). */
+			axis_a = 1;
+			axis_b = 2;
 		}
 
-		/* Walk vertex list around the face, requiring all
-		 * MATH2_halfplane signs to match the first edge. */
-		for (vp = vert_array + 3 * vert_byte_p[0] + axis_a_pick; (*vp & 0xFF00) == 0x7F00;
-			 vp -= 3 * ((int)(uint8_t)*vp >> 1))
-			;
+		/* Every edge must put the hit point on the same side as the first. */
+		vp = vert_array + 3 * vert_ids[0] + axis_a;
+		while ((*vp & 0xFF00) == 0x7F00)
+			vp -= 3 * ((int16_t)(*vp & 0xFF) >> 1);
 		first_a = *vp;
-		for (vp = vert_array + 3 * vert_byte_p[0] + axis_b_pick; (*vp & 0xFF00) == 0x7F00;
-			 vp -= 3 * ((int)(uint8_t)*vp >> 1))
-			;
+		vp = vert_array + 3 * vert_ids[0] + axis_b;
+		while ((*vp & 0xFF00) == 0x7F00)
+			vp -= 3 * ((int16_t)(*vp & 0xFF) >> 1);
 		first_b = *vp;
-		{
-			int32_t edge_a;
-			int32_t edge_b;
-			for (vp = vert_array + 3 * vert_byte_p[2] + axis_a_pick; (*vp & 0xFF00) == 0x7F00;
-				 vp -= 3 * ((int)(uint8_t)*vp >> 1))
-				;
-			edge_a = *vp;
-			for (vp = vert_array + 3 * vert_byte_p[2] + axis_b_pick; (*vp & 0xFF00) == 0x7F00;
-				 vp -= 3 * ((int)(uint8_t)*vp >> 1))
-				;
-			edge_b = *vp;
-			half_first =
-				math2_halfplane(isect_a - first_a, edge_b - first_b, isect_b - first_b, edge_a - first_a);
+		vp = vert_array + 3 * vert_ids[2] + axis_a;
+		while ((*vp & 0xFF00) == 0x7F00)
+			vp -= 3 * ((int16_t)(*vp & 0xFF) >> 1);
+		edge_a = *vp;
+		vp = vert_array + 3 * vert_ids[2] + axis_b;
+		while ((*vp & 0xFF00) == 0x7F00)
+			vp -= 3 * ((int16_t)(*vp & 0xFF) >> 1);
+		edge_b = *vp;
+		half_first = math2_halfplane(hit_y - first_a, edge_b - first_b, hit_z - first_b, edge_a - first_a);
 
-			while (1) {
-				int32_t prev_a = edge_a;
-				int32_t prev_b = edge_b;
-				int half_test;
-				for (vp = vert_array + 3 * vert_byte_p[4] + axis_a_pick; (*vp & 0xFF00) == 0x7F00;
-					 vp -= 3 * ((int)(uint8_t)*vp >> 1))
-					;
-				edge_a = *vp;
-				for (vp = vert_array + 3 * vert_byte_p[4] + axis_b_pick; (*vp & 0xFF00) == 0x7F00;
-					 vp -= 3 * ((int)(uint8_t)*vp >> 1))
-					;
-				edge_b = *vp;
-				half_test =
-					math2_halfplane(isect_a - prev_a, edge_b - prev_b, isect_b - prev_b, edge_a - prev_a);
-				if (half_test != half_first) {
-					inside_flag = 0;
-					break;
-				}
-				vert_byte_p += 2;
-				if (--remaining_edges == 0)
-					break;
+		inside_flag = 1;
+		do {
+			prev_a = edge_a;
+			prev_b = edge_b;
+			vp = vert_array + 3 * vert_ids[4] + axis_a;
+			while ((*vp & 0xFF00) == 0x7F00)
+				vp -= 3 * ((int16_t)(*vp & 0xFF) >> 1);
+			edge_a = *vp;
+			vp = vert_array + 3 * vert_ids[4] + axis_b;
+			while ((*vp & 0xFF00) == 0x7F00)
+				vp -= 3 * ((int16_t)(*vp & 0xFF) >> 1);
+			edge_b = *vp;
+			if (math2_halfplane(hit_y - prev_a, edge_b - prev_b, hit_z - prev_b, edge_a - prev_a) !=
+				half_first) {
+				inside_flag = 0;
+				break;
 			}
-		}
+			vert_ids += 2;
+		} while (--remaining_edges);
 
 		if (mission.train_craft_type && return_first_hit)
-			return (uint32_t)((t_param & ~0xFFu) | ((t_param | 1u) & 0xFFu));
+			return t_param | 1;
 
 		if (inside_flag) {
-			t_param = (t_param & ~0xFFu) | ((t_param | 1u) & 0xFFu);
+			t_param |= 1;
 			if (t_param < i_min)
 				i_min = t_param;
 		}
 	}
 
-	if (i_min == 0x7FFFFFFFu)
-		return 0;
-	return i_min;
+	if (i_min != 0x7FFFFFFFu)
+		return i_min;
+	return 0;
 }
 
 /* ---------- 5. collide_updatekills ---------- */

@@ -22,11 +22,11 @@
 #include "tie/laser.h"
 #include "tie/logbuf2.h" /* pixelsdeep */
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/modelmesh.h"
 #include "tie/pai.h" /* ai.live_target_only */
 #include "tie/paifight.h"
 #include "tie/render_scene_tie98.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 
 #include "tie/shipext.h" /* EFGStruct / EAIStruct layout */
 #include "tie/tie.h"
@@ -314,7 +314,6 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 
 	if (bound_hwidth > 0x578u) {
 		/* Large-object path: rotate endpoints into local frame. */
-		int32_t dot;
 		int32_t x_loc;
 		int32_t y_loc;
 		int32_t heading;
@@ -349,51 +348,16 @@ int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot
 		craftf2 = -craftf2;
 		craftf3 = -craftf3;
 
-		/* Transform the two endpoints into the static's local frame and
-		 * saturate to ±Q30 before the final >>15 normalisation. */
-		dot = math2_dot3(craftS1, gatex1, craftS2, gatey1, craftS3, gatez1);
-		if (dot >= 0x40000000)
-			dot = 0x3FFF0000;
-		if (dot <= -0x40000000)
-			dot = -0x3FFF0000;
-		dot >>= 15;
-		x_loc = dot;
-		dot = math2_dot3(craftU1, gatex1, craftU2, gatey1, craftU3, gatez1);
-		if (dot >= 0x40000000)
-			dot = 0x3FFF0000;
-		if (dot <= -0x40000000)
-			dot = -0x3FFF0000;
-		dot >>= 15;
-		y_loc = dot;
-		dot = math2_dot3(craftf1, gatex1, craftf2, gatey1, craftf3, gatez1);
-		if (dot >= 0x40000000)
-			dot = 0x3FFF0000;
-		if (dot <= -0x40000000)
-			dot = -0x3FFF0000;
-		gatez1 = dot >> 15;
+		/* Transform the two endpoints into the static's local frame. */
+		x_loc = math2_dot3_q15_clamped(craftS1, craftS2, craftS3, gatex1, gatey1, gatez1);
+		y_loc = math2_dot3_q15_clamped(craftU1, craftU2, craftU3, gatex1, gatey1, gatez1);
+		gatez1 = math2_dot3_q15_clamped(craftf1, craftf2, craftf3, gatex1, gatey1, gatez1);
 		gatex1 = x_loc;
 		gatey1 = y_loc;
 
-		dot = math2_dot3(craftS1, gatex2, craftS2, gatey2, craftS3, gatez2);
-		if (dot >= 0x40000000)
-			dot = 0x3FFF0000;
-		if (dot <= -0x40000000)
-			dot = -0x3FFF0000;
-		dot >>= 15;
-		x_loc = dot;
-		dot = math2_dot3(craftU1, gatex2, craftU2, gatey2, craftU3, gatez2);
-		if (dot >= 0x40000000)
-			dot = 0x3FFF0000;
-		if (dot <= -0x40000000)
-			dot = -0x3FFF0000;
-		dot >>= 15;
-		y_loc = dot;
-		dot = math2_dot3(craftf1, gatex2, craftf2, gatey2, craftf3, gatez2);
-		if (dot >= 0x40000000)
-			dot = 0x3FFF0000;
-		if (dot <= -0x40000000)
-			dot = -0x3FFF0000;
-		gatez2 = dot >> 15;
+		x_loc = math2_dot3_q15_clamped(craftS1, craftS2, craftS3, gatex2, gatey2, gatez2);
+		y_loc = math2_dot3_q15_clamped(craftU1, craftU2, craftU3, gatex2, gatey2, gatez2);
+		gatez2 = math2_dot3_q15_clamped(craftf1, craftf2, craftf3, gatex2, gatey2, gatez2);
 		gatex2 = x_loc;
 		gatey2 = y_loc;
 

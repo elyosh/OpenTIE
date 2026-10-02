@@ -23,6 +23,7 @@
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/inflight_state.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 #include "tie_runtime/storage/storage.h"
 
 #include <imuse/hilevel.h>
@@ -648,7 +649,7 @@ int16_t fsfx_loadvoicelfd(void) {
 // FUNCTION: TIE95 0x24F5C
 int8_t fsfx_triggersfx(uint16_t sound_id, uint16_t src_obj) {
 	int16_t vol_buf;
-	int32_t pan;
+	int16_t pan;
 	uint16_t priority;
 
 	if (!sfxenabled)
@@ -798,100 +799,69 @@ int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id) {
 }
 
 // FUNCTION: TIE95 0x2530C
-int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr) {
-	int32_t dx;
+int16_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr) {
 	int32_t dy;
+	int32_t eye;
+	int16_t pan;
+	int16_t eye_x;
+	int16_t eye_z;
+	int32_t dx;
 	int32_t dz;
-	int32_t eye_x;
-	int16_t eye_x_red;
-	int32_t eye_z;
-	int16_t eye_z_red;
-	int16_t pan_angle;
-	int32_t pan_out;
 
-	if (src_obj == 0xFFFF)
+	if ((int16_t)src_obj == -1)
 		return 64;
 
 	dx = objects[src_obj].world_x_prev - camera.x;
 	dy = objects[src_obj].world_y_prev - camera.y;
 	dz = objects[src_obj].world_z_prev - camera.z;
 
-	/* Rotate into eye space. The matrix rows are stored as 32-bit
-	 * Q16.16 values; the binary narrows dx/dy/dz to int16 before
-	 * multiplying, which clamps large world deltas to the near
-	 * quadrant. Result ends up in a 32-bit space with ~30 bits of
-	 * usable range. */
-	eye_x = worldeyeC1 * (int16_t)dz + worldeyeB1 * (int16_t)dy + worldeyeA1 * (int16_t)dx;
-	if (eye_x >= 0x40000000)
-		eye_x = 1073676288;
-	if (eye_x <= -0x40000000)
-		eye_x = -1073676288;
-	eye_x_red = (int16_t)(eye_x >> 15);
+	/* Rotate into eye space; the deltas are narrowed to 16 bits before
+	 * multiplying by the Q16.16 matrix rows, then clamped and reduced. */
+	eye_x = math2_dot3_q15_clamped((int16_t)dz, (int16_t)dy, (int16_t)dx, worldeyeC1, worldeyeB1, worldeyeA1);
 
-	eye_z = worldeyeC3 * (int16_t)dz + worldeyeB3 * (int16_t)dy + worldeyeA3 * (int16_t)dx;
-	if (eye_z >= 0x40000000)
-		eye_z = 1073676288;
-	if (eye_z <= -0x40000000)
-		eye_z = -1073676288;
-	eye_z_red = (int16_t)(eye_z >> 15);
+	eye_z = math2_dot3_q15_clamped((int16_t)dz, (int16_t)dy, (int16_t)dx, worldeyeC3, worldeyeB3, worldeyeA3);
 
-	pan_angle = trig2_arctan((int32_t)eye_x_red, (int32_t)eye_z_red);
-	pan_out = pan_angle;
+	pan = trig2_arctan(eye_x, eye_z);
 
-	/* Back-hemisphere: |pan_angle| >= 0x4000 ( >= 90 deg). Derive a
-	 * 2D "distance from directly behind" attenuation factor and
-	 * subtract it from *volume_ptr, then mirror pan_angle to the
-	 * front quadrant so the stereo image lands left/right instead of
-	 * flipped. */
-	if (pan_angle >= 0x4000 || pan_angle <= -16384) {
-		int32_t eye_y = worldeyeC2 * (int16_t)dz + worldeyeB2 * (int16_t)dy + worldeyeA2 * (int16_t)dx;
-		int16_t vert_angle;
-		int32_t vert_dist_180;
-		int32_t pan_dist_180;
-		int16_t a;
-		int16_t b;
-		int16_t prod;
-		int16_t factor;
+	/* Back hemisphere (|pan| >= 90 deg): attenuate the volume by how far
+	 * the source is from directly behind, and mirror the pan to the
+	 * front so the stereo image lands left/right instead of flipped. */
+	if (pan >= 0x4000 || pan <= -0x4000) {
+		int16_t vert;
+		int16_t behind_vert;
+		int16_t behind_pan;
 		int16_t atten;
-		int16_t hi;
-		int16_t scaled;
 
-		if (eye_y >= 0x40000000)
-			eye_y = 1073676288;
-		if (eye_y <= -0x40000000)
-			eye_y = -1073676288;
-		vert_angle = trig2_arctan((int32_t)(eye_y >> 15), (int32_t)eye_z_red);
+		eye =
+			math2_dot3_q15_clamped((int16_t)dz, (int16_t)dy, (int16_t)dx, worldeyeC2, worldeyeB2, worldeyeA2);
+		vert = trig2_arctan((int16_t)eye, eye_z);
 
-		vert_dist_180 = 0x8000 - (int32_t)vert_angle;
-		pan_dist_180 = 0x8000 - pan_out;
-		pan_out = (uint16_t)(0x8000 - pan_out); /* mirror in LOWORD space */
-		if (vert_dist_180 & 0x8000)
-			vert_dist_180 = -vert_dist_180;
-		if (pan_dist_180 & 0x8000)
-			pan_dist_180 = -pan_dist_180;
+		behind_vert = 0x8000 - vert;
+		pan = 0x8000 - pan;
+		behind_pan = pan;
+		if (behind_vert < 0)
+			behind_vert = -behind_vert;
+		if (behind_pan < 0)
+			behind_pan = -behind_pan;
 
-		/* a,b each in [-64, 64] after the >>8. */
-		a = (int16_t)(((int16_t)(0x4000 - (int16_t)vert_dist_180)) >> 8);
-		b = (int16_t)(((int16_t)(0x4000 - (int16_t)pan_dist_180)) >> 8);
-		prod = (int16_t)((int32_t)a * (int32_t)b);
-
-		/* Watcom emits a toward-zero division by 64 / 128. Match it
-		 * exactly: `prod - (prod >> 15 << N)` adds 2^N back when prod
-		 * is negative so the arithmetic right shift rounds toward 0. */
-		factor = (int16_t)((prod - (int16_t)((prod >> 15) << 6)) >> 6);
-		atten = (int16_t)((int32_t)(*volume_ptr) * (int32_t)factor);
-		hi = (int16_t)(((uint32_t)atten) >> 16);
-		(void)hi;
-		scaled = (int16_t)((atten - (int16_t)((atten >> 15) << 7)) >> 7);
-		*volume_ptr = (int16_t)(*volume_ptr - scaled);
+		behind_vert = 0x4000 - behind_vert;
+		behind_vert >>= 8;
+		behind_pan = 0x4000 - behind_pan;
+		behind_pan >>= 8;
+		atten = behind_vert * behind_pan;
+		atten /= 64;
+		atten *= *volume_ptr;
+		atten /= 128;
+		*volume_ptr -= atten;
 	}
 
-	pan_out = (int32_t)(int16_t)((int16_t)pan_out >> 7);
-	if ((int16_t)pan_out < -64)
-		pan_out = -64;
-	if ((int16_t)pan_out > 63)
-		pan_out = 63;
-	return pan_out + 64;
+	pan >>= 7;
+	if (pan < -64)
+		pan = -64;
+	if (pan > 63)
+		pan = 63;
+	pan += 64;
+	return pan;
 }
 
 // FUNCTION: TIE95 0x2554C

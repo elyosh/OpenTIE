@@ -46,26 +46,26 @@ typedef struct ComponentRotData {
 	int16_t axis_z;
 } ComponentRotData;
 
-/* Turret-aim variant of the rotation block referenced from a turret
- * mesh's rotation_offset. First 6 bytes overlap ComponentRotData's
- * pivot triplet (the local-frame origin offset, Q15 with one extra
- * fractional bit -- callers extract via `>> 1`). Bytes +6..+11 are
- * not read by the turret-aim path. The trailing 12 bytes hold a 2x3
- * projection matrix (Q15 int16) mapping the turret-local point
- * (worldlocx, local_y, worldlocz) to the (aim_x, aim_y) screen-plane
- * vector consumed by trig2_arctan -> mesh_rotation byte. */
+/* Turret rotation block referenced from a turret mesh's rotation_offset,
+ * laid out like the TIE98 OPT RotationScale: pivot, rotation axis, then the
+ * direction and up axes that ANIM_updateanimation projects the target onto
+ * before trig2_arctan. Pivot values carry one extra fractional bit (callers
+ * use `>> 1`); axes are Q15. The first 6 bytes overlap ComponentRotData's
+ * pivot triplet. */
 typedef struct TurretRotData {
-	int16_t origin_x_q15;   /* +0x00 */
-	int16_t origin_y_q15;   /* +0x02 */
-	int16_t origin_z_q15;   /* +0x04 */
-	int16_t reserved_06[3]; /* +0x06..+0x0B */
-	int16_t aim_x_wx;       /* +0x0C: factor for worldlocx in aim_x */
-	int16_t aim_x_ly;       /* +0x0E: factor for local_y in aim_x */
-	int16_t aim_x_wz;       /* +0x10: factor for worldlocz in aim_x */
-	int16_t aim_y_wx;       /* +0x12 */
-	int16_t aim_y_ly;       /* +0x14 */
-	int16_t aim_y_wz;       /* +0x16 */
-} TurretRotData;            /* 24 bytes */
+	int16_t pivot_x;         /* +0x00 */
+	int16_t pivot_y;         /* +0x02 */
+	int16_t pivot_z;         /* +0x04 */
+	int16_t rotation_axis_x; /* +0x06 */
+	int16_t rotation_axis_y; /* +0x08 */
+	int16_t rotation_axis_z; /* +0x0A */
+	int16_t direction_x;     /* +0x0C */
+	int16_t direction_y;     /* +0x0E */
+	int16_t direction_z;     /* +0x10 */
+	int16_t up_x;            /* +0x12 */
+	int16_t up_y;            /* +0x14 */
+	int16_t up_z;            /* +0x16 */
+} TurretRotData;             /* 24 bytes */
 
 /* Articulated component rotation. `mesh` points at the on-disk ship-
  * model mesh entry; comp_rotation_offset locates the ComponentRotData
@@ -86,7 +86,7 @@ void fview_sfoilrotation(int16_t angle);
 void fview_corvettegunrotation(int16_t angle);
 
 /* B-wing cockpit rotation */
-void fview_bwingrotation(int16_t angle, uint16_t part_id);
+void fview_bwingrotation(uint16_t angle, uint16_t part_id);
 
 /* Saved rotation matrix (Q15 fixed-point) */
 extern int32_t sfoiltempA1, sfoiltempA2, sfoiltempA3;

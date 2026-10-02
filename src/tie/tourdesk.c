@@ -294,45 +294,49 @@ static int16_t tourdesk_iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip,
 	title_actor->var2 = input->id;
 
 	/* Check for click */
-	if (left != 3 && right != 3) {
+	if (left == (uint8_t)3 || right == (uint8_t)3) {
+		switch (input->id) {
+			case 0: /* Main Menu */
+				input->var2 = SCENE_MAIN_MENU;
+				input->var1 = 1;
+				break;
+			case 1: /* Join/Cutscene */
+				input->var1 = 1;
+				input->var2 = shipext_Set_Tourdesk_Cutscene();
+				break;
+			case 2: /* Next battle */
+				xactor_Set_Actor_State(buttons, 1, 0);
+				soundext_Play_SFX(sfxButton, 80);
+				shipext_Next_Battle();
+				tour_time = 0;
+				if (!galaxy_art_actor[pilot_record.cur_battle])
+					galaxy_art_actor[pilot_record.cur_battle] = shipext_Get_Battle_Galaxy_Image();
+				break;
+			case 3: /* Previous battle */
+				xactor_Set_Actor_State(TIE_FRONTEND_EDITION(buttons, down_button), TIE_FRONTEND_EDITION(1, 0),
+									   0);
+				soundext_Play_SFX(sfxButton, 80);
+				shipext_Last_Battle();
+				tour_time = 0;
+				if (!galaxy_art_actor[pilot_record.cur_battle])
+					galaxy_art_actor[pilot_record.cur_battle] = shipext_Get_Battle_Galaxy_Image();
+				break;
+			default:
+				break;
+		}
+	} else if (left || right) {
 		/* Button hover state for next/prev arrows */
-		if (left || right) {
-			if (input->id == 2)
+		switch (input->id) {
+			case 2:
 				xactor_Set_Actor_State(buttons, TIE_FRONTEND_EDITION(2, 0), 0);
-			else if (input->id == 3)
+				break;
+			case 3:
 				xactor_Set_Actor_State(TIE_FRONTEND_EDITION(buttons, down_button), TIE_FRONTEND_EDITION(0, 1),
 									   0);
+				break;
+			default:
+				break;
 		}
-		return 1;
-	}
-
-	switch (input->id) {
-		case 0: /* Main Menu */
-			input->var2 = SCENE_MAIN_MENU;
-			input->var1 = 1;
-			break;
-		case 1: /* Join/Cutscene */
-			input->var1 = 1;
-			input->var2 = shipext_Set_Tourdesk_Cutscene();
-			break;
-		case 2: /* Next battle */
-			xactor_Set_Actor_State(buttons, 1, 0);
-			soundext_Play_SFX(sfxButton, 80);
-			shipext_Next_Battle();
-			tour_time = 0;
-			if (!galaxy_art_actor[pilot_record.cur_battle])
-				galaxy_art_actor[pilot_record.cur_battle] = shipext_Get_Battle_Galaxy_Image();
-			break;
-		case 3: /* Previous battle */
-			xactor_Set_Actor_State(TIE_FRONTEND_EDITION(buttons, down_button), TIE_FRONTEND_EDITION(1, 0), 0);
-			soundext_Play_SFX(sfxButton, 80);
-			shipext_Last_Battle();
-			tour_time = 0;
-			if (!galaxy_art_actor[pilot_record.cur_battle])
-				galaxy_art_actor[pilot_record.cur_battle] = shipext_Get_Battle_Galaxy_Image();
-			break;
-		default:
-			break;
 	}
 	return 1;
 }

@@ -5,7 +5,6 @@
 #include "tie/frontend_display_tie98.h"
 #include "tie/logbuf2.h" /* pixelswide / pixelsdeep / halfpixels / displaycorner / deepspacecolor */
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/panel.h" /* RadarBlip (x, y, color) */
 #include "tie/render_texture_tie98.h"
 #include "tie/tie.h"
@@ -21,6 +20,7 @@
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -492,7 +492,15 @@ void rtsvga2_buildpaletteVGA(const uint8_t* rgb_src, uint16_t start_idx, uint16_
 /* Snapshot the full in-memory palette (256 triplets = 768 bytes) into
  * rgb_dst. */
 // FUNCTION: TIE95 0x4BFD0
-void rtsvga2_savepaletteVGA(uint8_t* rgb_dst) { memcpy(rgb_dst, rtsvga2_vgapalette, 768); }
+void rtsvga2_savepaletteVGA(uint8_t* rgb_dst) {
+	uint16_t i;
+
+	for (i = 0; i < 256; ++i, rgb_dst += 3) {
+		rgb_dst[0] = rtsvga2_vgapalette[3 * i];
+		rgb_dst[1] = rtsvga2_vgapalette[3 * i + 1];
+		rgb_dst[2] = rtsvga2_vgapalette[3 * i + 2];
+	}
+}
 
 /* ------------------------------------------------------------------ */
 /* rtsvga2_restorepaletteVGA (0x4C00C)                                */
@@ -1264,16 +1272,16 @@ void rtsvga2_fillboxVGA(uint16_t left, uint16_t top, uint16_t right, uint16_t bo
 	leftfill = (int16_t)left;
 	topfill = (int16_t)top;
 	rightfill = (int16_t)right;
-	if (left < (uint16_t)leftmargin)
-		leftfill = leftmargin;
-	if (right > (uint16_t)rightmargin)
-		rightfill = rightmargin;
-	if (top < (uint16_t)topmargin)
-		topfill = topmargin;
-	if (bottom > (uint16_t)bottommargin)
-		bottom = (uint16_t)bottommargin;
 	bottomfill = (int16_t)bottom;
-	if (bottom > (uint16_t)topfill && (uint16_t)rightfill > (uint16_t)leftfill)
+	if ((uint16_t)leftfill < leftmargin)
+		leftfill = leftmargin;
+	if ((uint16_t)rightfill > rightmargin)
+		rightfill = rightmargin;
+	if ((uint16_t)topfill < topmargin)
+		topfill = topmargin;
+	if ((uint16_t)bottomfill > bottommargin)
+		bottomfill = bottommargin;
+	if ((uint16_t)bottomfill > (uint16_t)topfill && (uint16_t)rightfill > (uint16_t)leftfill)
 		rtsvga2_fillrectangleVGA();
 }
 
@@ -1780,251 +1788,309 @@ void rtsvga2_removecross(uint16_t x, uint16_t y) {
  *      whose offset is not in the hash. */
 // FUNCTION: TIE95 0x4D9F8
 void rtsvga2_drawstars(void) {
-	int32_t* new_cursor;
-	int32_t* prev_old;
-	int32_t base_x;
-	int32_t base_y;
-	int32_t base_z;
-	int32_t base_x_saved;
-	int32_t base_y_saved;
-	int32_t base_z_saved;
-	uint32_t* hash32;
-	int32_t* m;
-	int s;
+	int32_t star_offsets[768];
+	uint8_t star_colors[768];
+	int32_t* cursor;
 	int32_t eye_x, eye_y, eye_z;
-	int32_t abs_x, abs_y;
-	uint32_t q;
-	int32_t sx, sy;
-	int screen_x, screen_y;
-	int32_t pix_off;
-	uint8_t* dst;
-	uint8_t shade;
-	uint16_t h;
+	int32_t base_x_a, base_y_a, base_z_a;
+	int32_t base_x_b, base_y_b, base_z_b;
+	int32_t base_x_c, base_y_c, base_z_c;
+	int32_t origin_x, origin_y, origin_z;
+	int star_count;
+	int outer_a, inner_a, star_a;
+	int outer_b, inner_b, star_b;
+	int outer_c, inner_c, star_c;
+	int page_count;
+	int page;
+	int i;
 
-	int A_outer, A_star_off;
-	int B_outer, B_star_off;
-	int32_t base_xB, base_yB, base_zB;
-	int C_outer, C_star_off;
-	int32_t base_xC, base_yC, base_zC;
+	star_count = 0;
+	for (i = 0; i < 512; ++i)
+		starhashtable[i] = 0;
 
-	memset(starhashtable, 0, 2048);
-	hash32 = (uint32_t*)starhashtable;
-
-	new_cursor = oldstarptr;
-	prev_old = oldstarptr;
+	cursor = oldstarptr;
 	oldstarptr = newstarptr;
-	newstarptr = prev_old;
+	newstarptr = cursor;
 
 	if (fullupdateflag)
 		*oldstarptr = -1;
 
 	/* Cube-origin eye-space coords = sum of (negated) eye-basis rows shifted. */
-	base_x = (-worldeyeA1 - worldeyeB1 - worldeyeC1) >> 2;
-	base_y = (-worldeyeA2 - worldeyeB2 - worldeyeC2) >> 2;
-	base_z = (-worldeyeA3 - worldeyeB3 - worldeyeC3) >> 2;
-
-	base_x_saved = base_x;
-	base_y_saved = base_y;
-	base_z_saved = base_z;
+	base_x_a = -worldeyeA1;
+	base_x_a -= worldeyeB1;
+	base_x_a -= worldeyeC1;
+	base_x_a >>= 2;
+	origin_x = base_x_a;
+	base_y_a = -worldeyeA2;
+	base_y_a -= worldeyeB2;
+	base_y_a -= worldeyeC2;
+	base_y_a >>= 2;
+	origin_y = base_y_a;
+	base_z_a = -worldeyeA3;
+	base_z_a -= worldeyeB3;
+	base_z_a -= worldeyeC3;
+	base_z_a >>= 2;
+	origin_z = base_z_a;
 
 	/* Lobe A: inner shiftA, outer shiftB. */
-	A_outer = 0;
-	A_star_off = 0;
+	star_a = 0;
+	outer_a = 0;
 	do {
-		int i;
+		for (inner_a = 0; inner_a < 16; star_a += 2, inner_a += stardetaillevel) {
+			uint8_t shade;
+			uint8_t s;
 
-		for (i = 0; i < 16; i += stardetaillevel) {
-			s = stars[A_star_off];
-			eye_x = stareyex[s] + shiftA1mul[i] + base_x;
-			eye_y = stareyey[s] + shiftA2mul[i] + base_y;
-			eye_z = stareyez[s] + shiftA3mul[i] + base_z;
+			eye_x = base_x_a + shiftA1mul[inner_a];
+			eye_y = base_y_a + shiftA2mul[inner_a];
+			eye_z = base_z_a + shiftA3mul[inner_a];
+			s = stars[star_a];
+			eye_x += stareyex[s];
+			eye_y += stareyey[s];
+			eye_z += stareyez[s];
 			/* Mirror camera space so z >= 0. */
 			if (eye_z < 0) {
 				eye_x = -eye_x;
 				eye_y = -eye_y;
 				eye_z = -eye_z;
 			}
-			abs_x = (eye_x < 0) ? -eye_x : eye_x;
-			abs_y = (eye_y < 0) ? -eye_y : eye_y;
-			if (abs_x <= eye_z && abs_y <= eye_z) {
-				q = math2_project_u32((uint32_t)abs_x, perspShift, halfPerspFactor, (uint32_t)eye_z);
-				sx = (int32_t)(eye_x < 0 ? 0u - q : q);
-				q = math2_project_u32((uint32_t)abs_y, perspShift, halfPerspFactor, (uint32_t)eye_z);
-				sy = (int32_t)(eye_y < 0 ? 0u - q : q);
-				screen_x = halfpixelswide + sx;
-				screen_y = transfm2_screenyoffset + halfpixelsdeep + sy;
-				if (screen_x >= 0 && screen_x < (int)pixelswide && screen_y >= 0 &&
-					screen_y < (int)pixelsdeep) {
-					pix_off = lineaddressVGA[displaycorner_lines + screen_y] + (int)displaycorner_columns +
-							  screen_x;
-					dst = vgapointer + (uint32_t)pix_off;
-					if (*dst >= deepspacecolor) {
-						/* stars[] is stride-2: [2k]=index, [2k+1]=palette delta. */
-						shade = (uint8_t)(starcol1 + stars[A_star_off + 1]);
-						if (shade > 3)
-							shade = 3;
-						*dst = (uint8_t)(shade - 4);
-
-						/* Linear-probe into starhashtable (512 dwords, mask 0x1FF). */
-						h = (uint16_t)pix_off;
-						do {
-							h = (h + 1) & 0x1FF;
-						} while (hash32[h]);
-						hash32[h] = (uint32_t)pix_off;
-
-						*new_cursor++ = pix_off;
-					}
-				}
+			if (eye_x < 0) {
+				eye_x = -eye_x;
+				if (eye_x > eye_z)
+					continue;
+				eye_x = (int32_t)(0u - math2_project_persp((uint32_t)eye_x, (uint32_t)eye_z));
+			} else {
+				if (eye_x > eye_z)
+					continue;
+				eye_x = (int32_t)math2_project_persp((uint32_t)eye_x, (uint32_t)eye_z);
 			}
-			A_star_off += 2;
+			if (eye_y < 0) {
+				eye_y = -eye_y;
+				if (eye_y > eye_z)
+					continue;
+				eye_y = (int32_t)(0u - math2_project_persp((uint32_t)eye_y, (uint32_t)eye_z));
+			} else {
+				if (eye_y > eye_z)
+					continue;
+				eye_y = (int32_t)math2_project_persp((uint32_t)eye_y, (uint32_t)eye_z);
+			}
+			eye_x += halfpixelswide;
+			if (eye_x < 0 || eye_x >= (int)pixelswide)
+				continue;
+			eye_y = eye_y + halfpixelsdeep + transfm2_screenyoffset;
+			if (eye_y < 0 || eye_y >= (int)pixelsdeep)
+				continue;
+			eye_x = eye_x + displaycorner_columns + lineaddressVGA[eye_y + displaycorner_lines];
+			/* stars[] is stride-2: [2k]=index, [2k+1]=palette delta. */
+			shade = (uint8_t)(stars[star_a + 1] + starcol1);
+			if (shade > 3)
+				shade = 3;
+			star_colors[star_count] = (uint8_t)(shade + 0xFC);
+			star_offsets[star_count] = eye_x;
+			++star_count;
 		}
-		base_x = shiftB1mul[A_outer] + base_x_saved;
-		base_y = shiftB2mul[A_outer] + base_y_saved;
-		base_z = shiftB3mul[A_outer] + base_z_saved;
-		A_outer += stardetaillevel;
-	} while (A_outer < 16);
+		base_x_a = origin_x + shiftB1mul[outer_a];
+		base_y_a = origin_y + shiftB2mul[outer_a];
+		base_z_a = origin_z + shiftB3mul[outer_a];
+		outer_a += stardetaillevel;
+	} while (outer_a < 16);
 
 	/* Lobe B: inner shiftA, outer shiftC. */
-	B_outer = 0;
-	B_star_off = 0;
-	base_xB = base_x_saved;
-	base_yB = base_y_saved;
-	base_zB = base_z_saved;
+	star_b = 0;
+	base_x_b = origin_x;
+	base_y_b = origin_y;
+	base_z_b = origin_z;
+	outer_b = 0;
 	do {
-		int j;
+		for (inner_b = 0; inner_b < 16; star_b += 2, inner_b += stardetaillevel) {
+			uint8_t shade;
+			uint8_t s;
 
-		for (j = 0; j < 16; j += stardetaillevel) {
-			s = stars[B_star_off];
-			eye_x = stareyex[s] + shiftA1mul[j] + base_xB;
-			eye_y = stareyey[s] + shiftA2mul[j] + base_yB;
-			eye_z = stareyez[s] + shiftA3mul[j] + base_zB;
+			eye_x = base_x_b + shiftA1mul[inner_b];
+			eye_y = base_y_b + shiftA2mul[inner_b];
+			eye_z = base_z_b + shiftA3mul[inner_b];
+			s = stars[star_b];
+			eye_x += stareyex[s];
+			eye_y += stareyey[s];
+			eye_z += stareyez[s];
 			/* Mirror camera space so z >= 0. */
 			if (eye_z < 0) {
 				eye_x = -eye_x;
 				eye_y = -eye_y;
 				eye_z = -eye_z;
 			}
-			abs_x = (eye_x < 0) ? -eye_x : eye_x;
-			abs_y = (eye_y < 0) ? -eye_y : eye_y;
-			if (abs_x <= eye_z && abs_y <= eye_z) {
-				q = math2_project_u32((uint32_t)abs_x, perspShift, halfPerspFactor, (uint32_t)eye_z);
-				sx = (int32_t)(eye_x < 0 ? 0u - q : q);
-				q = math2_project_u32((uint32_t)abs_y, perspShift, halfPerspFactor, (uint32_t)eye_z);
-				sy = (int32_t)(eye_y < 0 ? 0u - q : q);
-				screen_x = halfpixelswide + sx;
-				screen_y = transfm2_screenyoffset + halfpixelsdeep + sy;
-				if (screen_x >= 0 && screen_x < (int)pixelswide && screen_y >= 0 &&
-					screen_y < (int)pixelsdeep) {
-					pix_off = lineaddressVGA[displaycorner_lines + screen_y] + (int)displaycorner_columns +
-							  screen_x;
-					dst = vgapointer + (uint32_t)pix_off;
-					if (*dst >= deepspacecolor) {
-						/* stars[] is stride-2: [2k]=index, [2k+1]=palette delta. */
-						shade = (uint8_t)(starcol1 + stars[B_star_off + 1]);
-						if (shade > 3)
-							shade = 3;
-						*dst = (uint8_t)(shade - 4);
-
-						/* Linear-probe into starhashtable (512 dwords, mask 0x1FF). */
-						h = (uint16_t)pix_off;
-						do {
-							h = (h + 1) & 0x1FF;
-						} while (hash32[h]);
-						hash32[h] = (uint32_t)pix_off;
-
-						*new_cursor++ = pix_off;
-					}
-				}
+			if (eye_x < 0) {
+				eye_x = -eye_x;
+				if (eye_x > eye_z)
+					continue;
+				eye_x = (int32_t)(0u - math2_project_persp((uint32_t)eye_x, (uint32_t)eye_z));
+			} else {
+				if (eye_x > eye_z)
+					continue;
+				eye_x = (int32_t)math2_project_persp((uint32_t)eye_x, (uint32_t)eye_z);
 			}
-			B_star_off += 2;
+			if (eye_y < 0) {
+				eye_y = -eye_y;
+				if (eye_y > eye_z)
+					continue;
+				eye_y = (int32_t)(0u - math2_project_persp((uint32_t)eye_y, (uint32_t)eye_z));
+			} else {
+				if (eye_y > eye_z)
+					continue;
+				eye_y = (int32_t)math2_project_persp((uint32_t)eye_y, (uint32_t)eye_z);
+			}
+			eye_x += halfpixelswide;
+			if (eye_x < 0 || eye_x >= (int)pixelswide)
+				continue;
+			eye_y = eye_y + halfpixelsdeep + transfm2_screenyoffset;
+			if (eye_y < 0 || eye_y >= (int)pixelsdeep)
+				continue;
+			eye_x = eye_x + displaycorner_columns + lineaddressVGA[eye_y + displaycorner_lines];
+			/* stars[] is stride-2: [2k]=index, [2k+1]=palette delta. */
+			shade = (uint8_t)(stars[star_b + 1] + starcol1);
+			if (shade > 3)
+				shade = 3;
+			star_colors[star_count] = (uint8_t)(shade + 0xFC);
+			star_offsets[star_count] = eye_x;
+			++star_count;
 		}
-		base_xB = shiftC1mul[B_outer] + base_x_saved;
-		base_yB = shiftC2mul[B_outer] + base_y_saved;
-		base_zB = shiftC3mul[B_outer] + base_z_saved;
-		B_outer += stardetaillevel;
-	} while (B_outer < 16);
+		base_x_b = origin_x + shiftC1mul[outer_b];
+		base_y_b = origin_y + shiftC2mul[outer_b];
+		base_z_b = origin_z + shiftC3mul[outer_b];
+		outer_b += stardetaillevel;
+	} while (outer_b < 16);
 
 	/* Lobe C: inner shiftB, outer shiftC. */
-	C_outer = 0;
-	C_star_off = 0;
-	base_xC = base_x_saved;
-	base_yC = base_y_saved;
-	base_zC = base_z_saved;
+	star_c = 0;
+	base_x_c = origin_x;
+	base_y_c = origin_y;
+	base_z_c = origin_z;
+	outer_c = 0;
 	do {
-		int k;
+		for (inner_c = 0; inner_c < 16; star_c += 2, inner_c += stardetaillevel) {
+			uint8_t shade;
+			uint8_t s;
 
-		for (k = 0; k < 16; k += stardetaillevel) {
-			s = stars[C_star_off];
-			eye_x = stareyex[s] + shiftB1mul[k] + base_xC;
-			eye_y = stareyey[s] + shiftB2mul[k] + base_yC;
-			eye_z = stareyez[s] + shiftB3mul[k] + base_zC;
+			eye_x = base_x_c + shiftB1mul[inner_c];
+			eye_y = base_y_c + shiftB2mul[inner_c];
+			eye_z = base_z_c + shiftB3mul[inner_c];
+			s = stars[star_c];
+			eye_x += stareyex[s];
+			eye_y += stareyey[s];
+			eye_z += stareyez[s];
 			/* Mirror camera space so z >= 0. */
 			if (eye_z < 0) {
 				eye_x = -eye_x;
 				eye_y = -eye_y;
 				eye_z = -eye_z;
 			}
-			abs_x = (eye_x < 0) ? -eye_x : eye_x;
-			abs_y = (eye_y < 0) ? -eye_y : eye_y;
-			if (abs_x <= eye_z && abs_y <= eye_z) {
-				q = math2_project_u32((uint32_t)abs_x, perspShift, halfPerspFactor, (uint32_t)eye_z);
-				sx = (int32_t)(eye_x < 0 ? 0u - q : q);
-				q = math2_project_u32((uint32_t)abs_y, perspShift, halfPerspFactor, (uint32_t)eye_z);
-				sy = (int32_t)(eye_y < 0 ? 0u - q : q);
-				screen_x = halfpixelswide + sx;
-				screen_y = transfm2_screenyoffset + halfpixelsdeep + sy;
-				if (screen_x >= 0 && screen_x < (int)pixelswide && screen_y >= 0 &&
-					screen_y < (int)pixelsdeep) {
-					pix_off = lineaddressVGA[displaycorner_lines + screen_y] + (int)displaycorner_columns +
-							  screen_x;
-					dst = vgapointer + (uint32_t)pix_off;
-					if (*dst >= deepspacecolor) {
-						/* stars[] is stride-2: [2k]=index, [2k+1]=palette delta. */
-						shade = (uint8_t)(starcol1 + stars[C_star_off + 1]);
-						if (shade > 3)
-							shade = 3;
-						*dst = (uint8_t)(shade - 4);
-
-						/* Linear-probe into starhashtable (512 dwords, mask 0x1FF). */
-						h = (uint16_t)pix_off;
-						do {
-							h = (h + 1) & 0x1FF;
-						} while (hash32[h]);
-						hash32[h] = (uint32_t)pix_off;
-
-						*new_cursor++ = pix_off;
-					}
-				}
+			if (eye_x < 0) {
+				eye_x = -eye_x;
+				if (eye_x > eye_z)
+					continue;
+				eye_x = (int32_t)(0u - math2_project_persp((uint32_t)eye_x, (uint32_t)eye_z));
+			} else {
+				if (eye_x > eye_z)
+					continue;
+				eye_x = (int32_t)math2_project_persp((uint32_t)eye_x, (uint32_t)eye_z);
 			}
-			C_star_off += 2;
+			if (eye_y < 0) {
+				eye_y = -eye_y;
+				if (eye_y > eye_z)
+					continue;
+				eye_y = (int32_t)(0u - math2_project_persp((uint32_t)eye_y, (uint32_t)eye_z));
+			} else {
+				if (eye_y > eye_z)
+					continue;
+				eye_y = (int32_t)math2_project_persp((uint32_t)eye_y, (uint32_t)eye_z);
+			}
+			eye_x += halfpixelswide;
+			if (eye_x < 0 || eye_x >= (int)pixelswide)
+				continue;
+			eye_y = eye_y + halfpixelsdeep + transfm2_screenyoffset;
+			if (eye_y < 0 || eye_y >= (int)pixelsdeep)
+				continue;
+			eye_x = eye_x + displaycorner_columns + lineaddressVGA[eye_y + displaycorner_lines];
+			/* stars[] is stride-2: [2k]=index, [2k+1]=palette delta. */
+			shade = (uint8_t)(stars[star_c + 1] + starcol1);
+			if (shade > 3)
+				shade = 3;
+			star_colors[star_count] = (uint8_t)(shade + 0xFC);
+			star_offsets[star_count] = eye_x;
+			++star_count;
 		}
-		base_xC = shiftC1mul[C_outer] + base_x_saved;
-		base_yC = shiftC2mul[C_outer] + base_y_saved;
-		base_zC = shiftC3mul[C_outer] + base_z_saved;
-		C_outer += stardetaillevel;
-	} while (C_outer < 16);
+		base_x_c = origin_x + shiftC1mul[outer_c];
+		base_y_c = origin_y + shiftC2mul[outer_c];
+		base_z_c = origin_z + shiftC3mul[outer_c];
+		outer_c += stardetaillevel;
+	} while (outer_c < 16);
 
-	*new_cursor = -1;
+	/* Paint pass. Banked SVGA (vgapointer at the real-mode VGA window)
+	 * walks every VESA page and only paints the stars that land in it. */
+	page_count = 1;
+	if ((uint16_t)flightResolution != TIE_FLIGHT_RES_VGA && (uintptr_t)vgapointer == 0xA0000)
+		page_count = screenYRes * screenMemWidth / vesa_page_size;
+	for (page = 0; page < page_count; ++page) {
+		if ((uint16_t)flightResolution != TIE_FLIGHT_RES_VGA && (uintptr_t)vgapointer == 0xA0000) {
+			rtsvga2_SetCurrentPage(vesa_window, (uint16_t)page);
+			rtsvga2_SetCurrentPage(1, (uint16_t)page);
+		}
+		for (i = 0; i < star_count; ++i) {
+			uint32_t offset = star_offsets[i];
+			int32_t key = star_offsets[i];
+			uint8_t* dst;
+
+			if ((uint16_t)flightResolution != TIE_FLIGHT_RES_VGA && (uintptr_t)vgapointer == 0xA0000) {
+				if (offset / vesa_page_size != (uint32_t)page)
+					continue;
+				offset %= vesa_page_size;
+			}
+			dst = &vgapointer[offset];
+			/* Only paint over deep space (don't overwrite the HUD). */
+			if (*dst >= deepspacecolor) {
+				int h;
+
+				*dst = star_colors[i];
+				/* Linear-probe into starhashtable (mask 0x1FF). */
+				h = key;
+				do {
+					h = (h + 1) & 0x1FF;
+				} while (starhashtable[h]);
+				starhashtable[h] = key;
+				*cursor = key;
+				++cursor;
+			}
+		}
+	}
+	*cursor = -1;
 
 	/* Erase pass: anything in the old list whose pixel is still a star
 	 * colour and isn't found in this frame's hashtable gets overwritten
 	 * with deepspacecolor. */
-	m = oldstarptr;
-	while (*m != -1) {
-		int32_t key = *m;
+	cursor = oldstarptr;
+	while (*cursor != -1) {
+		uint32_t offset = *cursor;
+		int32_t key = *cursor++;
+		uint8_t* dst;
 
-		++m;
-		dst = vgapointer + (uint32_t)key;
+		if ((uint16_t)flightResolution != TIE_FLIGHT_RES_VGA && (uintptr_t)vgapointer == 0xA0000) {
+			uint16_t erase_page = (uint16_t)(offset / vesa_page_size);
+
+			offset %= vesa_page_size;
+			rtsvga2_SetCurrentPage(vesa_window, erase_page);
+			rtsvga2_SetCurrentPage(1, erase_page);
+		}
+		dst = &vgapointer[offset];
 		if (*dst > deepspacecolor) {
-			h = (uint16_t)key;
+			int h = key;
+
 			for (;;) {
-				uint32_t v;
+				int32_t entry;
 
 				h = (h + 1) & 0x1FF;
-				v = hash32[h];
-				if ((int32_t)v == key)
+				entry = starhashtable[h];
+				if (entry == key)
 					break;
-				if (!v) {
+				if (!entry) {
 					*dst = deepspacecolor;
 					break;
 				}

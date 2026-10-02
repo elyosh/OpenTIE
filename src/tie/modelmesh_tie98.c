@@ -1,6 +1,7 @@
-#include "tie/math2_wide.h"
 #include "tie/modelmesh.h"
+#include "tie_runtime/flight_assets/native_opt.h"
 #include "tie_runtime/flight_assets/service.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 
 #include "tie/shell.h"
 #include "tie/tie.h"
@@ -12,21 +13,18 @@
 // FUNCTION: TIE98 0x423FC0
 // ModelMesh_ApplyAnimatedMeshRotationToPoint; same name in OpenXWA.
 void modelmesh_applyanimatedmeshrotationtopoint(int angle, uint16_t model_type, int mesh_index, int x, int y,
-												int z, int* out_x, int* out_y, int* out_z) {
+												int z) {
 	const TieModelRotationScale* rotation;
 	int32_t ax, ay, az;
 	int32_t cosine, sine;
-	uint32_t sine_axis[3];
-	int32_t matrix[3][3];
-	int32_t axis[3];
-	int32_t point[3];
-	int32_t result[3];
-	int32_t clamped;
-	int row, column;
+	int32_t versine;
+	int32_t rx, ry, rz;
+	int32_t m00, m01, m02, m10, m11, m12, m20, m21, m22;
+	int32_t value;
 
-	*out_x = x;
-	*out_y = y;
-	*out_z = z;
+	rotatedx = x;
+	rotatedy = y;
+	rotatedz = z;
 	rotation = modelmesh_getrotscaledata(model_type, mesh_index);
 	if (!rotation)
 		return;
@@ -34,65 +32,165 @@ void modelmesh_applyanimatedmeshrotationtopoint(int angle, uint16_t model_type, 
 	ax = (int32_t)rotation->rotation_axis.x;
 	ay = (int32_t)rotation->rotation_axis.y;
 	az = (int32_t)rotation->rotation_axis.z;
-	cosine = trig2_getsignedcos((int16_t)angle);
-	sine = trig2_getsignedsin((uint16_t)angle);
-	axis[0] = ax;
-	axis[1] = ay;
-	axis[2] = az;
-	/* The sine terms are truncated to Q15 before being combined with
-	 * the Q30 axis products. All sums retain the original low 32 bits. */
-	for (row = 0; row < 3; ++row)
-		sine_axis[row] = (uint32_t)math2_mul_q15(sine, axis[row]) << 15;
+	cosine = trig2_getsignedcos(angle);
+	sine = trig2_getsignedsin(angle);
+	if (cosine >= 0) {
+		int32_t term;
 
-	for (row = 0; row < 3; ++row) {
-		for (column = 0; column < 3; ++column) {
-			const int32_t product = (int32_t)((uint32_t)axis[row] * (uint32_t)axis[column]);
-			uint32_t value;
+		versine = 0x7FFF - cosine;
+		value = (int32_t)((uint32_t)(((ax * ax) >> 15) * versine) + ((uint32_t)cosine << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m00 = value >> 15;
+		term = math2_mul_q15(sine, az);
+		value = (int32_t)((uint32_t)(((ax * ay) >> 15) * versine) + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m01 = value >> 15;
+		term = -math2_mul_q15(sine, ay);
+		value = (int32_t)((uint32_t)(((ax * az) >> 15) * versine) + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m02 = value >> 15;
+		term = -math2_mul_q15(sine, az);
+		value = (int32_t)((uint32_t)(((ax * ay) >> 15) * versine) + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m10 = value >> 15;
+		value = (int32_t)((uint32_t)(((ay * ay) >> 15) * versine) + ((uint32_t)cosine << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m11 = value >> 15;
+		term = math2_mul_q15(sine, ax);
+		value = (int32_t)((uint32_t)(((ay * az) >> 15) * versine) + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m12 = value >> 15;
+		term = math2_mul_q15(sine, ay);
+		value = (int32_t)((uint32_t)(((ax * az) >> 15) * versine) + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m20 = value >> 15;
+		term = -math2_mul_q15(sine, ax);
+		value = (int32_t)((uint32_t)(((ay * az) >> 15) * versine) + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m21 = value >> 15;
+		value = (int32_t)((uint32_t)(((az * az) >> 15) * versine) + ((uint32_t)cosine << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m22 = value >> 15;
+	} else {
+		int32_t term;
 
-			if (cosine < 0)
-				value = (uint32_t)product + (uint32_t)(-cosine) * (uint32_t)(product >> 15);
-			else
-				value = (uint32_t)(0x7FFF - cosine) * (uint32_t)(product >> 15);
-			if (row == column)
-				value += (uint32_t)cosine << 15;
-			if (row == 0 && column == 1)
-				value -= sine_axis[2];
-			if (row == 0 && column == 2)
-				value += sine_axis[1];
-			if (row == 1 && column == 0)
-				value += sine_axis[2];
-			if (row == 1 && column == 2)
-				value -= sine_axis[0];
-			if (row == 2 && column == 0)
-				value -= sine_axis[1];
-			if (row == 2 && column == 1)
-				value += sine_axis[0];
-			clamped = (int32_t)value;
-			if (clamped >= 0x40000000)
-				clamped = 0x3FFFFFFF;
-			else if (clamped <= -0x40000000)
-				clamped = -0x3FFF0000;
-			matrix[row][column] = clamped >> 15;
-		}
+		versine = -cosine;
+		value = ax * ax;
+		value = (int32_t)((uint32_t)value + (uint32_t)(value >> 15) * (uint32_t)versine +
+						  ((uint32_t)cosine << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m00 = value >> 15;
+		term = math2_mul_q15(sine, az);
+		value = ax * ay;
+		value =
+			(int32_t)((uint32_t)value + (uint32_t)(value >> 15) * (uint32_t)versine + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m01 = value >> 15;
+		term = -math2_mul_q15(sine, ay);
+		value = ax * az;
+		value =
+			(int32_t)((uint32_t)value + (uint32_t)(value >> 15) * (uint32_t)versine + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m02 = value >> 15;
+		term = -math2_mul_q15(sine, az);
+		value = ax * ay;
+		value =
+			(int32_t)((uint32_t)value + (uint32_t)(value >> 15) * (uint32_t)versine + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m10 = value >> 15;
+		value = ay * ay;
+		value = (int32_t)((uint32_t)value + (uint32_t)(value >> 15) * (uint32_t)versine +
+						  ((uint32_t)cosine << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m11 = value >> 15;
+		term = math2_mul_q15(sine, ax);
+		value = ay * az;
+		value =
+			(int32_t)((uint32_t)value + (uint32_t)(value >> 15) * (uint32_t)versine + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m12 = value >> 15;
+		term = math2_mul_q15(sine, ay);
+		value = ax * az;
+		value =
+			(int32_t)((uint32_t)value + (uint32_t)(value >> 15) * (uint32_t)versine + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m20 = value >> 15;
+		term = -math2_mul_q15(sine, ax);
+		value = ay * az;
+		value =
+			(int32_t)((uint32_t)value + (uint32_t)(value >> 15) * (uint32_t)versine + ((uint32_t)term << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m21 = value >> 15;
+		value = az * az;
+		value = (int32_t)((uint32_t)value + (uint32_t)(value >> 15) * (uint32_t)versine +
+						  ((uint32_t)cosine << 15));
+		if (value >= 0x40000000)
+			value = 0x3FFFFFFF;
+		if (value <= -0x40000000)
+			value = -0x3FFF0000;
+		m22 = value >> 15;
 	}
 
-	point[0] = (int32_t)((uint32_t)x - (uint32_t)(int32_t)rotation->pivot.x);
-	point[1] = (int32_t)((uint32_t)y + (uint32_t)(int32_t)rotation->pivot.y);
-	point[2] = (int32_t)((uint32_t)z - (uint32_t)(int32_t)rotation->pivot.z);
-	for (row = 0; row < 3; ++row) {
-		const uint32_t value = (uint32_t)matrix[row][0] * (uint32_t)point[0] +
-							   (uint32_t)matrix[row][1] * (uint32_t)point[1] +
-							   (uint32_t)matrix[row][2] * (uint32_t)point[2];
-		clamped = (int32_t)value;
-		if (clamped >= 0x40000000)
-			clamped = 0x3FFFFFFF;
-		else if (clamped <= -0x40000000)
-			clamped = -0x3FFF0000;
-		result[row] = clamped >> 15;
-	}
-	*out_x = (int32_t)((uint32_t)(int32_t)rotation->pivot.x + (uint32_t)result[0]);
-	*out_y = (int32_t)((uint32_t)result[1] - (uint32_t)(int32_t)rotation->pivot.y);
-	*out_z = (int32_t)((uint32_t)(int32_t)rotation->pivot.z + (uint32_t)result[2]);
+	x -= (int32_t)rotation->pivot.x;
+	y += (int32_t)rotation->pivot.y;
+	z -= (int32_t)rotation->pivot.z;
+	rx = math2_dot3_q15_clamped(x, y, z, m00, m10, m20);
+	ry = math2_dot3_q15_clamped(x, y, z, m01, m11, m21);
+	rz = math2_dot3_q15_clamped(x, y, z, m02, m12, m22);
+	rotatedy = ry - (int32_t)rotation->pivot.y;
+	rotatedz = rz + (int32_t)rotation->pivot.z;
+	rotatedx = rx + (int32_t)rotation->pivot.x;
 }
 
 // FUNCTION: TIE98 0x43B5E0
@@ -103,6 +201,27 @@ int modelmesh_getcount(uint16_t model_type) {
 	if ((species_table[model_type].load_flags & 1) == 0)
 		return 0;
 	return modelmesh_require_model(model_type)->mesh_count;
+}
+
+// FUNCTION: TIE98 0x43BB50
+// ModelMesh_FindDescriptorNodeRecursive (inferred).
+static const int32_t* modelmesh_finddescriptor(const Tie98OptNode* node,
+											   const Tie98OptimizedPolyObject* model) {
+	const int32_t* descriptor;
+	int child;
+
+	if (!node)
+		return NULL;
+	if (node->type == TIE98_OPT_NODE_MESH_DESCRIPTOR)
+		return node->param2;
+	for (child = 0; child < node->child_count; child++) {
+		if (node->children[child]) {
+			descriptor = modelmesh_finddescriptor(node->children[child], model);
+			if (descriptor)
+				return descriptor;
+		}
+	}
+	return NULL;
 }
 
 // FUNCTION: TIE98 0x43BC40
@@ -564,22 +683,31 @@ int modelmesh_hasexplosiontype1(uint16_t model_type, int mesh_index) {
 
 // FUNCTION: TIE98 0x43C990
 // ModelMesh_EnableExplosionType2
-void modelmesh_enableexplosiontype2(uint16_t model_type, int mesh_index) {
-	const TieFlightModelView* model;
-	const TieModelMeshView* mesh;
-	int mesh_slot;
+int modelmesh_enableexplosiontype2(int model_type, int mesh_index) {
+	const Tie98OptimizedPolyObject* model;
+	const int32_t* descriptor;
+	int root;
 
-	mesh = NULL;
-	if (mesh_index >= 0 && (species_table[model_type].load_flags & 1) != 0) {
-		model = modelmesh_require_model(model_type);
-		mesh_slot = mesh_index;
-		if (mesh_slot >= model->mesh_count)
-			mesh_slot = model->mesh_count - 1;
-		if (model->mesh_count)
-			mesh = &model->meshes[mesh_slot];
-	}
-	if (mesh && mesh->has_descriptor)
+	if (mesh_index < 0)
+		return 0;
+	if ((species_table[model_type].load_flags & 1) == 0)
+		return 0;
+	/* PORT: the native OPT cache replaces the original handle lock, pointer
+	 * relocation and unlock of g_loaded_model_handles[model_type]. */
+	model = TieNativeOpt_Acquire(model_type);
+#ifdef TIE_MODERN
+	if (!model || !model->root_node_count || !model->root_nodes[0])
+		return 0;
+#endif
+	root = mesh_index;
+	if (model->root_nodes[0]->type == TIE98_OPT_NODE_TEXTURE)
+		root++;
+	if (root >= model->root_node_count)
+		root = model->root_node_count - 1;
+	descriptor = modelmesh_finddescriptor(model->root_nodes[root], model);
+	if (descriptor)
 		TieFlightAssets_EnableMeshExplosionType(model_type, mesh_index, 2);
+	return 1;
 }
 
 // FUNCTION: TIE98 0x43CA20
@@ -679,10 +807,28 @@ void modelmesh_gethardpoint(uint16_t model_type, int mesh_index, int hardpoint_i
 
 // FUNCTION: TIE98 0x43D4A0
 // ModelMesh_FindBridgeIndex; same name in OpenXWA.
-int modelmesh_findbridgeindex(uint16_t model_type) {
-	if ((species_table[model_type].load_flags & 1) == 0)
-		return -1;
-	return modelmesh_require_model(model_type)->bridge_mesh_index;
+int modelmesh_findbridgeindex(const Tie98OptimizedPolyObject* model) {
+	const int32_t* descriptor;
+	int mesh_index;
+	int root;
+
+	mesh_index = 0;
+	for (root = 0; root < model->root_node_count; root++) {
+#ifdef TIE_MODERN
+		/* PORT: the native OPT cache leaves empty root slots NULL. */
+		if (!model->root_nodes[root])
+			continue;
+#endif
+		if (model->root_nodes[root]->type != TIE98_OPT_NODE_TEXTURE) {
+			descriptor = modelmesh_finddescriptor(model->root_nodes[root], model);
+			if (descriptor && *descriptor == TIE_MESH_BRIDGE)
+				break;
+			mesh_index++;
+		}
+	}
+	if (root < model->root_node_count)
+		return mesh_index;
+	return -1;
 }
 
 /* Per-object-type mesh data snapshotted after the species models load.

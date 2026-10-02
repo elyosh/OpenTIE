@@ -68,7 +68,7 @@ extern int8_t ydiffsign;
 extern int32_t trace2_startx;
 extern int32_t trace2_starty;
 extern int32_t trace2_endy;
-extern uint16_t trace2_lastedge;
+extern int16_t trace2_lastedge;
 extern uint16_t trace2_znegflag;
 
 extern TRANSFM2_ScreenPoint* trace2_lastpointPtr;

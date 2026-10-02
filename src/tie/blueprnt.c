@@ -39,6 +39,7 @@
 #include "tie/shipext.h"
 #include "tie/soundext.h"
 #include "tie/textext.h"
+#include "tie/tie.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/profile.h"
 #endif
@@ -396,21 +397,19 @@ static int16_t blueprnt_iuser_Blueprint_Door(Input* input, int32_t time) {
  */
 // FUNCTION: TIE95 0x6E62C
 static void blueprnt_user_Blueprint_Projector(Actor* the_actor, int32_t time) {
-	int16_t new_state;
+	int16_t current_pos;
 
 	if (time == 0) {
-		new_state = 11 * the_actor->var2;
+		xactor_Set_Actor_State(the_actor, 11 * the_actor->var2, 0);
 	} else {
-		int16_t current_pos = the_actor->state % 11;
-		int16_t target_pos = shipext_Get_Blueprint_Ship() % 11;
-		if (current_pos == target_pos)
+		current_pos = the_actor->state % 11;
+		if (current_pos == shipext_Get_Blueprint_Ship() % 11)
 			return;
-		if (current_pos >= target_pos)
-			new_state = the_actor->state - 1;
+		if (current_pos < shipext_Get_Blueprint_Ship() % 11)
+			xactor_Set_Actor_State(the_actor, the_actor->state + 1, 0);
 		else
-			new_state = the_actor->state + 1;
+			xactor_Set_Actor_State(the_actor, the_actor->state - 1, 0);
 	}
-	xactor_Set_Actor_State(the_actor, new_state, 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -482,12 +481,12 @@ static int16_t blueprnt_draw_Blueprint_Text(Actor* the_actor, Rect* draw_rect, R
 static void blueprnt_user_Blueprint_Info(Actor* the_actor, int32_t time) {
 	(void)the_actor;
 
-	if (time && blueprint_info_ship == shipext_Get_Blueprint_Ship()) {
-		blueprint_info_time = (blueprint_info_time + 1) % 320;
-	} else {
+	if (!time || shipext_Get_Blueprint_Ship() != blueprint_info_ship) {
 		blueprint_info_ship = shipext_Get_Blueprint_Ship();
 		blueprint_info_time = 0;
 		blueprint_info_size = blueprnt_Flight_Object_Size();
+	} else {
+		blueprint_info_time = (blueprint_info_time + 1) % 320;
 	}
 }
 
@@ -603,30 +602,33 @@ static int16_t blueprnt_draw_Blueprint_Title(Actor* the_actor, Rect* draw_rect, 
 // FUNCTION: TIE95 0x6EAB4
 // FUNCTION: TIE98 0x404D00
 int32_t blueprnt_Flight_Object_Size(void) {
-	int32_t extent;
 	int32_t size;
 #if !defined(TIE_MODERN) && defined(TIE98)
-	extent = modelbounds_getmaxextent(0);
+	size = modelbounds_getmaxextent(0) * SIZE_SCALE_FACTOR >> 16;
+	if (size >= 100)
+		return 50 * ((size + 25) / 50);
+	return 5 * ((size + 2) / 5);
 #else
 #ifdef TIE_MODERN
 	if (TieProfile_UsesTie98Frontend()) {
-		extent = tie98_preview_primary_model_max_extent();
-	} else
-#endif
-	{
-		const uint8_t* data = (const uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[0]);
-		uint16_t dimension;
-		uint8_t shift;
-
-		xmemhdl_Unlock_Handle(bpflight_fltobj_data[0]);
-		dimension = *(const uint16_t*)(data + 12);
-		shift = data[32];
-		extent = (int32_t)((uint32_t)(dimension / 2) << (shift & 31));
+		size = (int32_t)((uint32_t)tie98_preview_primary_model_max_extent() * SIZE_SCALE_FACTOR) >> 16;
+		if (size >= 100)
+			return 50 * ((size + 25) / 50);
+		return 5 * ((size + 2) / 5);
 	}
 #endif
-	/* Retail keeps the low 32 bits of the product before the signed shift. */
-	size = (int32_t)((uint32_t)extent * SIZE_SCALE_FACTOR) >> 16;
-	if (size < 100)
-		return 5 * ((size + 2) / 5);
-	return 50 * ((size + 25) / 50);
+	{
+		const ShipModelData* model =
+			(const ShipModelData*)((const uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[0]) + 2);
+
+		size =
+			(int32_t)(((model->length >> 1) << (int8_t)model->model_scale_shift) * SIZE_SCALE_FACTOR) >> 16;
+		if (size >= 100)
+			size = 50 * ((size + 25) / 50);
+		else
+			size = 5 * ((size + 2) / 5);
+		xmemhdl_Unlock_Handle(bpflight_fltobj_data[0]);
+		return size;
+	}
+#endif
 }

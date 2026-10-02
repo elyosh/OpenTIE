@@ -161,18 +161,27 @@ uint16_t trig2_getsine(uint16_t angle) { return trig2_calcsineofangle(angle); }
 
 /* Core sine lookup with linear interpolation within the quarter-wave table */
 // FUNCTION: TIE95 0x5BBE8
-uint16_t trig2_calcsineofangle(uint16_t angle) {
+int trig2_calcsineofangle(uint16_t angle) {
 	/* The 0x3FE mask covers both halves of the quarter-wave table. `diff`
 	 * points from the current sample to the next. */
-	uint16_t idx = ((angle >> 5) & 0x3FE) >> 1; /* 0..511 */
-	uint16_t base = sintable[idx];
-	int16_t diff = (int16_t)(sintable[idx + 1] - sintable[idx]);
-	int16_t abs_diff = (diff < 0) ? -diff : diff;
-	uint16_t frac = (angle & 0x3F) << 10; /* 6-bit fraction scaled to 16-bit */
-	uint16_t interp = (uint16_t)(((uint32_t)frac * abs_diff) >> 16);
+	uint16_t idx = angle;
+	int16_t diff;
+	int16_t sign;
+	int step;
+	idx >>= 5;
+	idx &= 0x3FE;
+	idx >>= 1; /* 0..511 */
+	diff = sintable[idx];
+	diff -= sintable[idx + 1];
+	diff = -diff;
+	sign = diff;
 	if (diff < 0)
-		interp = (uint16_t)(-(int16_t)interp);
-	return base + interp;
+		diff = -diff;
+	/* 6-bit fraction scaled to 16-bit */
+	step = ((uint32_t)(uint16_t)((angle & 0x3F) << 10) * (uint16_t)diff) >> 16;
+	if (sign < 0)
+		step = -step;
+	return sintable[idx] + step;
 }
 
 // FUNCTION: TIE95 0x5BC58
@@ -191,57 +200,44 @@ int16_t trig2_getsignedsin(int angle) {
 
 /* ------------------------------------------------------------------ */
 
-/* Inverse sine — binary search through sintable.
+/* Inverse sine — linear search through sintable.
  *
- * Note on the binary: TRIG2_arcsin at 0x5BC80 has zero callers in
- * the binary and is structurally buggy:
- *  - anchors at sintable[idx-2] (`mov ax, word_CD1FC[edx]` at
- *    0x5BCB6) instead of the natural sintable[idx-1], producing
- *    results that are one step (= 64 angle units) too high;
- *  - reads sintable[-1] and sintable[-2] for idx<2, which point
- *    at unrelated globals (0xCD1FE = 40960, 0xCD1FC = 256), so
- *    arcsin(0) returns 63 in the binary instead of 0;
- *  - the `mov edi, eax; shr di, 8` pattern drops the carry into
- *    bit 16 of the quotient when target lands on a sintable entry
- *    exactly, costing a full step at the boundary.
- *
- * We don't replicate any of these bugs since the function is
- * unused. This implementation does correct math: anchor at
- * sintable[idx-1] (the lower bound of the bracket
- * sintable[idx-1] < target <= sintable[idx]), span over the
- * current interval, low-byte fraction taken at 32-bit width so
- * the boundary case target == sintable[idx] (quotient = 65536)
- * propagates a full step. */
+ * TRIG2_arcsin at 0x5BC80 has zero callers in the binary. The original
+ * anchors its interpolation at sintable[idx-2] and spans to
+ * sintable[idx-1], which is one step past the natural bracket; this is
+ * reproduced since it is the shipped behavior. For idx < 2 the binary
+ * reads before the start of the table (bytes of replayclipname and
+ * padding); those reads are replaced by a zero result here. */
 // FUNCTION: TIE95 0x5BC80
 int16_t trig2_arcsin(int16_t val) {
-	int16_t abs_val = (val < 0) ? -val : val;
-	uint16_t target = 2 * abs_val;
+	uint16_t target = val;
 	int16_t idx = 0;
-	int16_t remaining = 256;
-	uint16_t base;
-	uint16_t span;
-	uint32_t low_byte;
-	uint32_t pre;
-	int16_t result;
+	int16_t remaining;
+	uint16_t frac = 0;
+	uint16_t result;
 
-	while (remaining > 0 && target > sintable[idx]) {
+	if (val < 0)
+		target = -target;
+	remaining = 256;
+	target *= 2;
+	while (target > sintable[idx]) {
 		remaining--;
 		idx++;
+		if (remaining <= 0)
+			break;
+	}
+	if (idx < 2)
+		return 0;
+
+	remaining--;
+	target -= sintable[idx - 2];
+	if (target != 0) {
+		frac = ((int32_t)target << 16) / (uint16_t)(sintable[idx - 1] - sintable[idx - 2]);
+		frac >>= 8;
 	}
 
-	if (idx == 0)
-		return 0; /* arcsin(0) = 0 */
-
-	base = sintable[idx - 1];
-	span = (uint16_t)(sintable[idx] - base);
-	low_byte = 0;
-	if (span && target > base) {
-		uint32_t quot = ((uint32_t)(target - base) << 16) / span;
-		low_byte = quot >> 8;
-	}
-
-	pre = ((uint32_t)(255 - remaining) << 8) + low_byte;
-	result = (int16_t)(pre / 4);
+	result = ((255 - remaining) << 8) + frac;
+	result >>= 2;
 	if (val < 0)
 		result = -result;
 	return result;
@@ -250,53 +246,44 @@ int16_t trig2_arcsin(int16_t val) {
 /* Inverse cosine — search sintable from 90° downward */
 // FUNCTION: TIE95 0x5BD0C
 int16_t trig2_arccos(int16_t val) {
-	int16_t abs_val = (val < 0) ? -val : val;
-	uint16_t target = 2 * abs_val;
 	int16_t idx = 256;
+	uint16_t target = val;
 	int16_t remaining = 256;
-	uint16_t base;
-	int16_t diff;
-	uint16_t low_byte;
-	uint16_t low16;
-	int16_t result;
+	uint16_t frac = 0;
+	uint16_t result;
 
-	while (remaining > 0 && target < sintable[idx]) {
+	if (val < 0)
+		target = -target;
+	target *= 2;
+	while (target < sintable[idx]) {
 		remaining--;
 		idx++;
 		if (remaining <= 0) {
-			/* Extrapolate from the final nonzero table entry and return directly. */
-			uint16_t divisor = sintable[idx - 1];
-			uint32_t quot = ((uint32_t)target << 16) / divisor;
-			uint16_t v = ((uint16_t)quot) >> 8; /* mov edx,eax; shr dx,8 */
-			v = (uint16_t)(-(int16_t)v);        /* neg edx (low 16 bits) */
-			if (v == 0)
-				return 0x4000;          /* exactly 90° */
-			result = (int16_t)(v >> 2); /* shr dx, 2 (unsigned) */
+			/* Extrapolate from the final nonzero table entry. */
+			result = (uint16_t)(((int32_t)target << 16) / sintable[idx - 1]) >> 8;
+			result = -result;
+			if (result == 0)
+				result = 0x4000; /* exactly 90° */
+			else
+				result >>= 2;
 			if (val < 0)
-				result = (int16_t)((uint16_t)(-result) + 0x8000u);
+				result = -result + 0x8000;
 			return result;
 		}
 	}
 
-	/* Interpolate from the previous interval with a signed delta. */
-	remaining--; /* `dec ebx` at 0x5BD8C */
-	base = sintable[idx - 1];
-	diff = (int16_t)(target - base);
+	/* Interpolate from the previous interval. */
+	remaining--;
+	target -= sintable[idx - 1];
+	if (target != 0)
+		frac = (uint16_t)(((int32_t)target << 16) / (uint16_t)(sintable[idx - 2] - sintable[idx - 1])) >> 8;
+	else
+		frac = 0;
 
-	low_byte = 0;
-	if (diff != 0) {
-		uint16_t span = (uint16_t)(sintable[idx - 2] - base);
-		if (span) {
-			int32_t signed_dividend = (int32_t)diff * 65536;
-			int32_t quot = signed_dividend / (int32_t)span;
-			low_byte = ((uint16_t)quot) >> 8; /* `shr di, 8` */
-		}
-	}
-
-	low16 = (uint16_t)(((255 - remaining) << 8) - low_byte);
-	result = (int16_t)(low16 >> 2); /* `shr ax, 2` */
+	result = ((255 - remaining) << 8) - frac;
+	result >>= 2;
 	if (val < 0)
-		result = (int16_t)((uint16_t)(-result) + 0x8000u);
+		result = -result + 0x8000;
 	return result;
 }
 
@@ -400,7 +387,7 @@ void trig2_ptoc2dim(void) {
 }
 
 // FUNCTION: TIE95 0x5C024
-void trig2_movexyz(uint16_t distance, int16_t heading, uint16_t pitch) {
+void trig2_movexyz(uint16_t distance, uint16_t heading, uint16_t pitch) {
 	trig2_rho = distance;
 	trig2_theta = heading - 0x4000;
 	trig2_theta = -trig2_theta;

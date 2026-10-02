@@ -7,7 +7,6 @@
 #include "tie/frontend_display_tie98.h"
 #include "tie/fsfx.h"
 #include "tie/fview.h"
-#include "tie/math2_wide.h"
 #include "tie/mission.h"
 #include "tie/modelbounds.h"
 #include "tie/modelmesh.h"
@@ -20,6 +19,7 @@
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/runtime/bonus_countdown_task.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 #ifdef TIE_MODERN
 #include <landru/task.h>
 #endif
@@ -625,8 +625,8 @@ void gate_settraininglevel(uint16_t level) {
 // FUNCTION: TIE95 0x29AB4
 // FUNCTION: TIE98 0x426020
 void gate_updategateanimations(void) {
-	uint16_t tickbudget = 0;
 #ifdef TIE_MODERN
+	uint16_t tickbudget = 0;
 	BonusCountdownTask* continuation = NULL;
 	if (bonus_countdown_active) {
 		continuation = landru_task_top();
@@ -635,163 +635,124 @@ void gate_updategateanimations(void) {
 	} else
 #endif
 	{
-		int16_t delta_cargopod = 0;
-		int16_t delta_wing = 0;
-		int16_t delta_antenna = 0;
-		int16_t* deltas[3];
-
-		CraftData* saved_craft = craftptr;
+		int16_t delta[3];
+		uint16_t i;
+		uint16_t j;
+		uint16_t next_gate;
 
 		/* Phase 1: timers. */
-		uint16_t timer_idx;
-		uint16_t j;
-
-		deltas[0] = &delta_cargopod;
-		deltas[1] = &delta_wing;
-		deltas[2] = &delta_antenna;
-		for (timer_idx = 0; timer_idx < 3; ++timer_idx) {
-			int16_t new_timer = (int16_t)(gatetimer[timer_idx] - (int16_t)frameticks);
-			uint16_t period;
-			int16_t negated;
-			int16_t steps;
-
-			gatetimer[timer_idx] = new_timer;
-			if (new_timer >= 0) {
-				*deltas[timer_idx] = 0;
-				continue;
-			}
-
-			if (timer_idx == 2) {
-				/* Binary uses *((word*)&off_D4C28 + train_level + 1), which
-				 * evaluates to gatespeed[train_level - 1] since off_D4C28
-				 * happens to sit 4 bytes before gatespeed in the data segment.
-				 * Clamp to avoid an under-flow read at train_level == 0
-				 * (antennas only actually animate at train_level >= 6 so this
-				 * is a defensive bound, not a gameplay change). */
-				uint8_t tl = mission.train_level;
-				period = (tl >= 1) ? gatespeed[tl - 1] : gatespeed[0];
+		for (i = 0; i < 3; ++i) {
+			gatetimer[i] -= frameticks;
+			if (gatetimer[i] < 0) {
+				uint16_t speed = gatespeed[mission.train_level];
+				if (i == 2) {
+#ifdef TIE_MODERN
+					/* The original reads gatespeed[-1] at train_level 0. */
+					if (mission.train_level != 0)
+#endif
+						speed = gatespeed[mission.train_level - 1];
+				}
+				delta[i] = -gatetimer[i] / speed + 1;
+				gatetimer[i] += speed * delta[i];
 			} else {
-				period = gatespeed[mission.train_level];
+				delta[i] = 0;
 			}
-			if (period == 0)
-				period = 1; /* defensive guard, unreachable on shipped data */
-
-			/* The binary's `-(*(int*)((char*)&gatepassedstr + 2*i + 2) >> 16)`
-			 * is just the post-decrement value of gatetimer[timer_idx]: the
-			 * Watcom compiler emitted a load-base pattern that made the memory
-			 * read overlap with gatetimer through the preceding string
-			 * pointers. Resolved directly here. */
-			negated = (int16_t)(-new_timer);
-			steps = (int16_t)((uint16_t)negated / period + 1);
-			gatetimer[timer_idx] = (int16_t)(gatetimer[timer_idx] + (int16_t)(steps * period));
-			*deltas[timer_idx] = steps;
 		}
 
 		/* Phase 2: apply deltas to each gate's meshes. */
 		for (j = 1; j < 13; ++j) {
-			uint16_t ship_idx = objects[j].ship_idx;
-			CraftData* craft;
 			uint16_t num_meshes;
 			uint16_t mesh_idx;
+#if !defined(TIE_MODERN) && !defined(TIE98)
+			ShipModelMesh* mesh;
+#endif
 
-			craftptr = saved_craft;
 #ifdef TIE_MODERN
 			if (!TIE_FLIGHT_TIE98)
-				draw_Lockshipfileptrs(ship_idx);
-#elif defined(TIE95)
-			draw_Lockshipfileptrs(ship_idx);
-#endif
-
-			craft = objects[j].craft_ptr;
-#ifdef TIE_MODERN
+				draw_Lockshipfileptrs(objects[j].ship_idx);
 			num_meshes = TIE_FLIGHT_EDITION((uint16_t)objectblockptr->num_meshes,
-											(uint16_t)modelmesh_getcount(ship_idx));
+											(uint16_t)modelmesh_getobjecttypemeshcount(objects[j].ship_idx));
 #elif defined(TIE98)
-			num_meshes = (uint16_t)modelmesh_getcount(ship_idx);
+			num_meshes = (uint16_t)modelmesh_getobjecttypemeshcount(objects[j].ship_idx);
 #else
-			num_meshes = (uint16_t)objectblockptr->num_meshes;
+			draw_Lockshipfileptrs(objects[j].ship_idx);
+			mesh = componentblockptr;
+			num_meshes = objectblockptr->num_meshes;
 #endif
+			craftptr = objects[j].craft_ptr;
 
 			for (mesh_idx = 0; mesh_idx < num_meshes; ++mesh_idx) {
 #ifdef TIE_MODERN
-				uint16_t mesh_type = TIE_FLIGHT_EDITION(componentblockptr[mesh_idx].mesh_type,
-														(uint16_t)modelmesh_gettype(ship_idx, mesh_idx));
+				switch (TIE_FLIGHT_EDITION(componentblockptr[mesh_idx].mesh_type,
+										   modelmesh_getobjecttypemeshtype(objects[j].ship_idx, mesh_idx))) {
 #elif defined(TIE98)
-				uint16_t mesh_type = (uint16_t)modelmesh_gettype(ship_idx, mesh_idx);
+				switch (modelmesh_getobjecttypemeshtype(objects[j].ship_idx, mesh_idx)) {
 #else
-				uint16_t mesh_type = componentblockptr[mesh_idx].mesh_type;
+				switch (mesh->mesh_type) {
 #endif
-				int16_t delta = 0;
-
-				if (mesh_type == 17 /* MESH_CargoPod */) {
-					if (mission.train_level < 3)
-						continue;
-					delta = delta_cargopod;
-				} else if (mesh_type == 2 /* MESH_Wing */) {
-					if (mission.train_level < 4)
-						continue;
-					delta = delta_wing;
-				} else if (mesh_type == 18 || mesh_type == 19 /* MESH_Antenna */) {
-					if (mission.train_level < 6)
-						continue;
-					delta = delta_antenna;
-				} else {
-					continue;
+					case 2: /* MESH_Wing */
+						if (mission.train_level >= 4)
+							craftptr->mesh_rotation[mesh_idx] += delta[1];
+						break;
+					case 18: /* MESH_MiscHull */
+					case 19: /* MESH_Antenna */
+						if (mission.train_level >= 6)
+							craftptr->mesh_rotation[mesh_idx] += delta[2];
+						break;
+					case 17: /* MESH_CargoPod */
+						if (mission.train_level >= 3)
+							craftptr->mesh_rotation[mesh_idx] += delta[0];
+						break;
 				}
-
-				craft->mesh_rotation[mesh_idx] = (uint8_t)(craft->mesh_rotation[mesh_idx] + (uint8_t)delta);
+#if !defined(TIE_MODERN) && !defined(TIE98)
+				++mesh;
+#endif
 			}
-			saved_craft = craft;
 		}
 
 		/* Phase 3: check the next gate. */
-		craftptr = saved_craft;
-
 #ifdef TIE_MODERN
 		gate_updatecourseprogress();
 		return;
 #else
-		{
-			uint16_t next_gate = (currentgate == 12) ? 1 : (uint16_t)(currentgate + 1);
+		if (currentgate == 12)
+			next_gate = 1;
+		else
+			next_gate = currentgate + 1;
+		if (!gate_checkgateedge(next_gate))
+			return;
 
-			int crossed = gate_checkgateedge(next_gate);
-			if (!crossed)
-				return;
+		currentgate = next_gate;
+		++mission.train_gates_passed;
+		--mission.train_gates_remaining;
 
-			currentgate = next_gate;
-			++mission.train_gates_passed;
-			--mission.train_gates_remaining;
+		if (next_gate != 1)
+			return;
 
-			if (next_gate != 1)
-				return;
-
-			/* Convert the remaining time into the level-completion bonus. */
-			msg_messageprintf(MSG_LEVEL_COMPLETED);
-			mission.train_bonus = 0;
-			if (TIE_DISPLAY_DX5) {
-				g_flightDrawToOffscreenSurface = 0;
-				FlightSurface_Lock();
-				gate_updatebonuspoints();
-				FlightSurface_Unlock();
-				g_flightDrawToOffscreenSurface = 1;
-				FrontendDisplay_PresentFrontSurface();
-				FrontendDisplay_PresentFrame();
-			} else {
-				gate_updatebonuspoints();
-			}
+		/* Convert the remaining time into the level-completion bonus. */
+		if (TIE_DISPLAY_DX5)
+			g_flightDrawToOffscreenSurface = 0;
+		msg_messageprintf(MSG_LEVEL_COMPLETED);
+		mission.train_bonus = 0;
+		if (TIE_DISPLAY_DX5) {
+			FlightSurface_Lock();
+			gate_updatebonuspoints();
+			FlightSurface_Unlock();
+			g_flightDrawToOffscreenSurface = 1;
+			FrontendDisplay_PresentFrontSurface();
+			FrontendDisplay_PresentFrame();
+		} else {
+			gate_updatebonuspoints();
 		}
 #endif
 	}
+#ifdef TIE_MODERN
 	while (timeleft.minute || timeleft.second) {
 		tickbudget = (uint16_t)(tickbudget + (uint16_t)xtimer_Time_Elapsed());
 		if (tickbudget < 4) {
-#ifdef TIE_MODERN
 			continuation->tickbudget = tickbudget;
 			continuation->waiting = true;
 			return;
-#else
-			continue;
-#endif
 		}
 		tickbudget = 0;
 		if (timeleft.second) {
@@ -814,16 +775,43 @@ void gate_updategateanimations(void) {
 		} else {
 			gate_updatebonuspoints();
 		}
-#ifdef TIE_MODERN
 		continuation->tickbudget = tickbudget;
 		return;
-#endif
 	}
+#else
+	while (timeleft.minute || timeleft.second) {
+		if (timeleft.second) {
+			--timeleft.second;
+		} else {
+			timeleft.second = 59;
+			--timeleft.minute;
+		}
+		mission.mission_score += 10;
+		mission.train_bonus += 10;
+		if ((mission.mission_score % 100) == 0)
+			fsfx_triggersfx(0x21, 0xFFFF);
+		if (!TIE_DISPLAY_DX5)
+			gate_updatebonuspoints();
+		do {
+			tickcounter += xtimer_Time_Elapsed();
+		} while (tickcounter < 4);
+		tickcounter = 0;
+		if (TIE_DISPLAY_DX5) {
+			g_flightDrawToOffscreenSurface = 0;
+			FlightSurface_Lock();
+			gate_updatebonuspoints();
+			FlightSurface_Unlock();
+			g_flightDrawToOffscreenSurface = 1;
+			FrontendDisplay_PresentFrame();
+		}
+	}
+#endif
 	argtable[0] = (uint16_t)mission.train_bonus;
 	msg_messageprintf(MSG_BONUS_AWARDED);
+	++mission.train_level;
 	if (TIE_DISPLAY_DX5)
 		FlightSurface_Lock();
-	gate_settraininglevel(++mission.train_level);
+	gate_settraininglevel(mission.train_level);
 	if (TIE_DISPLAY_DX5)
 		FlightSurface_Unlock();
 #ifdef TIE_MODERN
@@ -905,23 +893,10 @@ int gate_checkgateedge(uint16_t obj_idx) {
 		prev_signed = math2_mul_q15(obj->fwd_x, dx_prev) + math2_mul_q15(obj->fwd_y, dy_prev) +
 					  math2_mul_q15(obj->fwd_z, dz_prev);
 	} else {
-		int32_t dot;
-
-		/* Clamp the Q30 dot product to +/-0x3FFF0000 before the >> 15. */
-		dot =
-			math2_dot3((int16_t)dx_cur, obj->fwd_x, (int16_t)dy_cur, obj->fwd_y, (int16_t)dz_cur, obj->fwd_z);
-		if (dot >= 0x40000000)
-			dot = 0x3FFF0000;
-		if (dot <= -0x40000000)
-			dot = -0x3FFF0000;
-		cur_signed = dot >> 15;
-		dot = math2_dot3((int16_t)dx_prev, obj->fwd_x, (int16_t)dy_prev, obj->fwd_y, (int16_t)dz_prev,
-						 obj->fwd_z);
-		if (dot >= 0x40000000)
-			dot = 0x3FFF0000;
-		if (dot <= -0x40000000)
-			dot = -0x3FFF0000;
-		prev_signed = dot >> 15;
+		cur_signed = math2_dot3_q15_clamped((int16_t)dx_cur, (int16_t)dy_cur, (int16_t)dz_cur, obj->fwd_x,
+											obj->fwd_y, obj->fwd_z);
+		prev_signed = math2_dot3_q15_clamped((int16_t)dx_prev, (int16_t)dy_prev, (int16_t)dz_prev, obj->fwd_x,
+											 obj->fwd_y, obj->fwd_z);
 	}
 
 	/* A crossing puts the two ticks on opposite sides of (or on) the plane. */

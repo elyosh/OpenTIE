@@ -12,8 +12,8 @@
 
 #include "tie/transfm2.h"
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/xtrans2.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 
 /* ---- Module-owned globals (from watdbg "static") ---- */
 
@@ -112,17 +112,17 @@ void transfm2_clipobjecteyez(int32_t x, int32_t y, int32_t z) {
 
 // FUNCTION: TIE95 0x59D20
 int32_t transfm2_geteyex(int32_t x, int32_t y, int32_t z) {
-	return math2_mul_q15(x, worldeyeA1) + math2_mul_q15(y, worldeyeB1) + math2_mul_q15(z, worldeyeC1);
+	return math2_dot3_q15(worldeyeA1, x, worldeyeB1, y, worldeyeC1, z);
 }
 
 // FUNCTION: TIE95 0x59D68
 int32_t transfm2_geteyey(int32_t x, int32_t y, int32_t z) {
-	return math2_mul_q15(x, worldeyeA2) + math2_mul_q15(y, worldeyeB2) + math2_mul_q15(z, worldeyeC2);
+	return math2_dot3_q15(worldeyeA2, x, worldeyeB2, y, worldeyeC2, z);
 }
 
 // FUNCTION: TIE95 0x59DB0
 int32_t transfm2_geteyez(int32_t x, int32_t y, int32_t z) {
-	return math2_mul_q15(x, worldeyeA3) + math2_mul_q15(y, worldeyeB3) + math2_mul_q15(z, worldeyeC3);
+	return math2_dot3_q15(worldeyeA3, x, worldeyeB3, y, worldeyeC3, z);
 }
 
 /* ================================================================== */
@@ -808,13 +808,13 @@ int32_t* transfm2_getscreencoords(const DRAWPOL_EyeVertex* source, int32_t* dest
  * the screen-center offset). */
 // FUNCTION: TIE95 0x5ACC4
 int32_t transfm2_getscreenx(int32_t eyex, int32_t eyez) {
-	bool neg = (eyex < 0);
-	uint32_t mag = neg ? -(uint32_t)eyex : (uint32_t)eyex;
+	int32_t screenx;
 
-	uint32_t result = math2_project_u32(mag, perspShift, halfPerspFactor, (uint32_t)eyez);
-	if (neg)
-		result = -result;
-	return (int32_t)(halfpixelswide + result);
+	if (eyex < 0)
+		screenx = (int32_t)(0u - math2_project_persp(0u - (uint32_t)eyex, (uint32_t)eyez));
+	else
+		screenx = (int32_t)math2_project_persp((uint32_t)eyex, (uint32_t)eyez);
+	return (int32_t)((uint32_t)screenx + halfpixelswide);
 }
 
 // FUNCTION: TIE95 0x5AD28
@@ -831,19 +831,20 @@ void transfm2_doxminmax(int32_t screenx, int32_t* ptr) {
 
 // FUNCTION: TIE95 0x5AD60
 int32_t transfm2_getscreeny(int32_t eyey, int32_t eyez) {
-	bool neg = (eyey < 0);
-	uint32_t mag = neg ? -(uint32_t)eyey : (uint32_t)eyey;
+	int32_t screeny;
 
-	uint32_t result = math2_project_u32(mag, perspShift, halfPerspFactor, (uint32_t)eyez);
-	if (neg)
-		result = -result;
+	if (eyey < 0)
+		screeny = (int32_t)(0u - math2_project_persp(0u - (uint32_t)eyey, (uint32_t)eyez));
+	else
+		screeny = (int32_t)math2_project_persp((uint32_t)eyey, (uint32_t)eyez);
 
 	if (yAspect) {
-		int32_t r = (int32_t)result;
-		r = (r >= 0) ? math2_longfraction(r, yAspect) : -math2_longfraction(-r, yAspect);
-		result = (uint32_t)r;
+		if (screeny < 0)
+			screeny = -math2_longfraction(-screeny, yAspect);
+		else
+			screeny = math2_longfraction(screeny, yAspect);
 	}
-	return (int32_t)((uint32_t)transfm2_screenyoffset + halfpixelsdeep + result);
+	return (int32_t)((uint32_t)screeny + halfpixelsdeep + (uint32_t)transfm2_screenyoffset);
 }
 
 // FUNCTION: TIE95 0x5ADF8
@@ -860,23 +861,18 @@ void transfm2_doyminmax(int32_t screeny, int32_t* ptr) {
 
 // FUNCTION: TIE95 0x5AE30
 int32_t* transfm2_clipeyez(const DRAWPOL_EyeVertex* source, int vertex, int32_t* dest) {
-	int32_t* result = dest;
+	const DRAWPOL_EyeVertex* current = source + vertex;
 
 	numpoints--;
-
-	/* Previous ring vertex */
-	if (source[vertex - 1].z >= 0) {
+	if ((source + vertex - 1)->z >= 0) {
 		numpoints++;
-		result = transfm2_calczintersect(&source[vertex], &source[vertex - 1], dest);
+		dest = transfm2_calczintersect(current, source + vertex - 1, dest);
 	}
-
-	/* Next ring vertex */
-	if (source[vertex + 1].z >= 0) {
+	if ((source + vertex + 1)->z >= 0) {
 		numpoints++;
-		return transfm2_calczintersect(&source[vertex], &source[vertex + 1], result);
+		dest = transfm2_calczintersect(current, source + vertex + 1, dest);
 	}
-
-	return result;
+	return dest;
 }
 
 /* ================================================================== */
@@ -1005,12 +1001,8 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 
 		if ((int16_t)vertexlight[negV] == -1) {
 			PolyVert* norm = &firstvertnorm[negV];
-			int32_t dot = rotlightX * norm->x + rotlightY * norm->y + rotlightZ * norm->z;
-			if (dot >= 0x40000000)
-				dot = 0x3FFF0000;
-			if (dot <= -0x40000000)
-				dot = (int32_t)0xC0010000;
-			vertexlight[negV] = (uint16_t)(dot >> 15);
+			int32_t dot = math2_dot3_q15_clamped(norm->x, norm->y, norm->z, rotlightX, rotlightY, rotlightZ);
+			vertexlight[negV] = (uint16_t)dot;
 			if ((int16_t)vertexlight[negV] < 0 &&
 				firstvertptr[-1] != (DRAWPOL_FACE_TWOSIDED | DRAWPOL_FACE_GOURAUD | 2))
 				vertexlight[negV] = 0;
@@ -1019,12 +1011,8 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 		/* Compute lighting for posV if not cached */
 		if ((int16_t)vertexlight[posV] == -1) {
 			PolyVert* norm = &firstvertnorm[posV];
-			int32_t dot = rotlightX * norm->x + rotlightY * norm->y + rotlightZ * norm->z;
-			if (dot >= 0x40000000)
-				dot = 0x3FFF0000;
-			if (dot <= -0x40000000)
-				dot = (int32_t)0xC0010000;
-			vertexlight[posV] = (uint16_t)(dot >> 15);
+			int32_t dot = math2_dot3_q15_clamped(norm->x, norm->y, norm->z, rotlightX, rotlightY, rotlightZ);
+			vertexlight[posV] = (uint16_t)dot;
 			if ((int16_t)vertexlight[posV] < 0 &&
 				firstvertptr[-1] != (DRAWPOL_FACE_TWOSIDED | DRAWPOL_FACE_GOURAUD | 2))
 				vertexlight[posV] = 0;

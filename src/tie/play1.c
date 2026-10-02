@@ -953,50 +953,50 @@ static void play1_Make_Literal_Actor(Actor* the_actor) {
 // FUNCTION: TIE95 0x78A28
 static int play1_Literal_Image(uint8_t* buffer, const uint8_t* image) {
 	int32_t index, bindex;
-
 	int16_t length;
 
-	for (index = 0; index < 8; index++)
+	index = 0;
+	while (index < 8) {
 		buffer[index] = image[index];
+		index++;
+	}
 
-	length = *(const int16_t*)(image + 8);
-	buffer[index] = image[8] & 0xFE;
-	buffer[index + 1] = image[9];
-	bindex = 10;
-	index += 2;
+	bindex = 8;
+	length = *(const int16_t*)(image + bindex);
+	buffer[index] = image[bindex] & 0xFE;
+	buffer[index + 1] = image[bindex + 1];
+	index = bindex = 10;
 
-	while (length && (63000 - length) > index) {
-		/* Copy 2-byte x position */
+	while (length && index < 63000 - length) {
+		/* Copy 2-byte x and y positions */
 		buffer[index] = image[bindex];
 		buffer[index + 1] = image[bindex + 1];
-		bindex += 2;
-		index += 2;
-		/* Copy 2-byte y position */
-		buffer[index] = image[bindex];
-		buffer[index + 1] = image[bindex + 1];
-		bindex += 2;
-		index += 2;
+		buffer[index + 2] = image[bindex + 2];
+		buffer[index + 3] = image[bindex + 3];
+		bindex += 4;
+		index += 4;
 
 		if (length & 1) {
-			int16_t remaining = length >> 1;
-			while (remaining) {
-				uint8_t pack_byte = image[bindex++];
-				uint8_t pack_len = pack_byte >> 1;
-				if (pack_byte & 1) {
-					uint8_t color = image[bindex++];
-					memset(&buffer[index], color, pack_len);
+			length >>= 1;
+			while (length) {
+				uint8_t pack_len = image[bindex++];
+				if (pack_len & 1) {
+					pack_len >>= 1;
+					memset(&buffer[index], image[bindex++], pack_len);
+					index += pack_len;
 				} else {
-					memcpy(&buffer[index], &image[bindex], pack_len);
+					pack_len >>= 1;
+					memmove(&buffer[index], &image[bindex], pack_len);
+					index += pack_len;
 					bindex += pack_len;
 				}
-				index += pack_len;
-				remaining -= pack_len;
+				length -= pack_len;
 			}
 		} else {
-			int16_t half_len = length >> 1;
-			memcpy(&buffer[index], &image[bindex], half_len);
-			bindex += half_len;
-			index += half_len;
+			length >>= 1;
+			bindex += length;
+			memmove(&buffer[index], &image[bindex - length], length);
+			index += length;
 		}
 
 		length = *(const int16_t*)(image + bindex);

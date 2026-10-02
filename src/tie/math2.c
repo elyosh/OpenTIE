@@ -8,11 +8,11 @@
  */
 
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/panel.h" /* radarx / radary */
 #include "tie/tie.h"
 #include "tie/trig2.h"
 #include "tie/user.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -334,4 +334,4 @@ void math2_getradarcoord(int32_t dx, int32_t dy, int32_t dz) {
 }
 
 // FUNCTION: TIE95 0x32394
-int16_t math2_halfplane(int32_t x1, int32_t y1, int32_t x2, int32_t y2) { return (x2 * y2 - y1 * x1) >= 0; }
+int math2_halfplane(int32_t x1, int32_t y1, int32_t x2, int32_t y2) { return (x2 * y2 - y1 * x1) >= 0; }

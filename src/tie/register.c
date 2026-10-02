@@ -2091,40 +2091,44 @@ static int16_t register_Do_Delete_Dialog(void) {
 static Input* register_Build_Delete_Dialog(void) {
 	Rect r;
 	Input* dlg;
-	char label[32];
-	PushButton* del;
-	PushButton* cancel;
+	PushButton* button;
 
 	xrect_Set_Rect(&r, 0, 0, TIE_FRONTEND_EDITION(180, 360), TIE_FRONTEND_EDITION(46, 110));
 	dlg = xinput_Alloc_Dialog_Input(NULL, &r, 0, 0);
+#ifdef TIE_MODERN
 	if (!dlg)
 		return NULL;
+#endif
 	xinpattr_Set_Input_Update_Function(dlg, register_iupdate_Delete_Input);
 	xinpattr_Set_Input_Draw_Function(dlg, register_idraw_Delete_Input);
 	xinpattr_Set_Input_Allign(dlg, 1, 1);
 	xinpattr_Show_Input(dlg);
 
+	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(4, 8), TIE_FRONTEND_EDITION(4, 10), TIE_FRONTEND_EDITION(54, 108),
+				   TIE_FRONTEND_EDITION(20, 48));
+	strcpy(reg_btn_name + 48, textext_Get_Text(txtRegBtnDelete));
+	button = xbtnpush_Alloc_Button(dlg, &r, 0, register_iuser_Delete_Input, reg_btn_name + 48, 1);
+#ifdef TIE_MODERN
+	if (!button) {
+		xinput_Free_Inputs(dlg);
+		return NULL;
+	}
+#endif
+	xinpattr_Set_Input_Allign(&button->header, 0, 2);
+
 	register_Index_To_Pilot_Record(pilot_active, &shell_pilot);
 
 	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(4, 8), TIE_FRONTEND_EDITION(4, 10), TIE_FRONTEND_EDITION(54, 108),
 				   TIE_FRONTEND_EDITION(20, 48));
-	strcpy(label, textext_Get_Text(txtRegBtnDelete));
-	del = xbtnpush_Alloc_Button(dlg, &r, 0, register_iuser_Delete_Input, label, 1);
-	if (!del) {
+	strcpy(reg_btn_name + 80, textext_Get_Text(txtRegBtnCancel));
+	button = xbtnpush_Alloc_Button(dlg, &r, 0, register_iuser_Delete_Input, reg_btn_name + 80, 2);
+#ifdef TIE_MODERN
+	if (!button) {
 		xinput_Free_Inputs(dlg);
 		return NULL;
 	}
-	xinpattr_Set_Input_Allign(&del->header, 0, 2);
-
-	xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(4, 8), TIE_FRONTEND_EDITION(4, 10), TIE_FRONTEND_EDITION(54, 108),
-				   TIE_FRONTEND_EDITION(20, 48));
-	strcpy(label, textext_Get_Text(txtRegBtnCancel));
-	cancel = xbtnpush_Alloc_Button(dlg, &r, 0, register_iuser_Delete_Input, label, 2);
-	if (!cancel) {
-		xinput_Free_Inputs(dlg);
-		return NULL;
-	}
-	xinpattr_Set_Input_Allign(&cancel->header, 2, 2);
+#endif
+	xinpattr_Set_Input_Allign(&button->header, 2, 2);
 
 	return dlg;
 }

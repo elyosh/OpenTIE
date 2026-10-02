@@ -74,18 +74,19 @@ int modelmesh_getcomponentmaxextent(uint16_t model_type, int mesh_index);
 int modelmesh_isobjecttypemeshdamageable(uint16_t model_type, int mesh_index);
 int modelmesh_hasexplosiontype1(uint16_t model_type, int mesh_index);
 void modelmesh_enableexplosiontype1(uint16_t model_type, int mesh_index);
-void modelmesh_enableexplosiontype2(uint16_t model_type, int mesh_index);
+int modelmesh_enableexplosiontype2(int model_type, int mesh_index);
 const TieModelRotationScale* modelmesh_getrotscaledata(uint16_t model_type, int mesh_index);
 int modelmesh_counthardpoints(uint16_t model_type, int mesh_index);
 int modelmesh_getalternatehardpointindex(uint16_t model_type, int mesh_index, int hardpoint_index);
 /* Original TIE98 getter order: (OPT X, -OPT Y, OPT Z), not (side, up, forward). */
 void modelmesh_gethardpoint(uint16_t model_type, int mesh_index, int hardpoint_index, int* type, int* x,
 							int* y, int* z);
-int modelmesh_findbridgeindex(uint16_t model_type);
+int modelmesh_findbridgeindex(const Tie98OptimizedPolyObject* model);
 
-/* Point coordinates use the ModelMesh_GetHardpoint order above. */
+/* Point coordinates use the ModelMesh_GetHardpoint order above. The result
+ * is written to rotatedx, rotatedy and rotatedz. */
 void modelmesh_applyanimatedmeshrotationtopoint(int angle, uint16_t model_type, int mesh_index, int x, int y,
-												int z, int* out_x, int* out_y, int* out_z);
+												int z);
 
 #ifdef __cplusplus
 }

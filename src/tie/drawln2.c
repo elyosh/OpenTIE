@@ -4,8 +4,8 @@
                         * TRACE2_{x,y}domedge, TRACE2_entervertedge */
 #include "tie/drawpol.h"
 #include "tie/math2.h"
-#include "tie/math2_wide.h" /* math2_ABoverC32 */
-#include "tie/xtrans2.h"    /* flatobjnum */
+#include "tie/xtrans2.h"                         /* flatobjnum */
+#include "tie_runtime/runtime/wide_arithmetic.h" /* math2_mul_div_u32 */
 
 #include <stdint.h>
 

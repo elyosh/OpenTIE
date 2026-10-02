@@ -154,16 +154,11 @@ void shade_Find_Shade_Cycles(uint8_t* mask) {
 
 // FUNCTION: TIE95 0x6CAC0
 void shade_Draw_Talk_Shade_Rect(Rect* r) {
-	int16_t w;
-	int16_t h;
-
 	xpaint_Frame_Clipped_Rect(r, 16);
 
-	w = r->right - r->left;
-	h = r->bottom - r->top;
-
-	if (w > 2 && h > 2) {
-		shade_Shadow_Line_List(shade_palette, r->left + 1, r->top + 1, w - 2, h - 2);
+	if (r->right - r->left > 2 && r->bottom - r->top > 2) {
+		shade_Shadow_Line_List(shade_palette, r->left + 1, r->top + 1, r->right - r->left - 2,
+							   r->bottom - r->top - 2);
 
 #ifdef TIE_MODERN
 		/* Emit a TIE_PAINT_SHADE_RECT for the HD overlay. The classic
@@ -194,8 +189,8 @@ void shade_Draw_Talk_Shade_Rect(Rect* r) {
 				out->target = xcanvas_Render_Emit_Target();
 				out->x = r->left + 1;
 				out->y = r->top + 1;
-				out->w = w - 2;
-				out->h = h - 2;
+				out->w = r->right - r->left - 2;
+				out->h = r->bottom - r->top - 2;
 
 				xcanvas_Get_Drawing_Canvas_Clip(&cc);
 				out->clip_left = cc.left;

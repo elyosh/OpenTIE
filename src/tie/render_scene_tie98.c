@@ -2599,7 +2599,7 @@ void FlightModel_Draw_Object(FlightObject* object) {
 			}
 			if (model_type == 4) {
 				if (g_bwingBridgeMeshIndex == -1)
-					g_bwingBridgeMeshIndex = modelmesh_findbridgeindex(model_type);
+					g_bwingBridgeMeshIndex = modelmesh_findbridgeindex(model);
 				if (g_bwingBridgeMeshIndex != -1 &&
 					object->craft_ptr->mesh_rotation[g_bwingBridgeMeshIndex] != 0) {
 					saved_mesh = mesh;

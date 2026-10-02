@@ -1590,12 +1590,20 @@ void replay_movecambehind(uint16_t obj_id) {
 	replaycam.y = worldlocy;
 	replaycam.z = worldlocz;
 
-	sp = (obj_id >= 0x3800u) ? staticobjects[obj_id - 14336].species : objects[obj_id].ship_idx;
-	quarter_w = species_table[sp].bound_hwidth >> 2;
+	if ((int)obj_id < 0x3800) {
+		sp = objects[obj_id].ship_idx;
+	} else {
+		sp = staticobjects[obj_id - 0x3800].species;
+	}
+	quarter_w = species_table[sp].bound_hwidth;
+	quarter_w >>= 2;
 
-	push_x = ((worldeyeA3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeA3 * (int32_t)quarter_w) >> 15);
-	push_y = ((worldeyeB3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeB3 * (int32_t)quarter_w) >> 15);
-	push_z = ((worldeyeC3 * replaycam.view_zoom) >> 15) + 4 * ((worldeyeC3 * (int32_t)quarter_w) >> 15);
+	push_x = 4 * ((quarter_w * worldeyeA3) >> 15);
+	push_y = 4 * ((quarter_w * worldeyeB3) >> 15);
+	push_z = 4 * ((quarter_w * worldeyeC3) >> 15);
+	push_x += (replaycam.view_zoom * worldeyeA3) >> 15;
+	push_y += (replaycam.view_zoom * worldeyeB3) >> 15;
+	push_z += (replaycam.view_zoom * worldeyeC3) >> 15;
 	replaycam.x -= push_x;
 	replaycam.y -= push_y;
 	replaycam.z -= push_z;

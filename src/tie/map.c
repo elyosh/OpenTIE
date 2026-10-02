@@ -213,7 +213,7 @@ static int16_t map_iupdate_Map(Input* input, Rect* r, Rect* clip_r, int16_t key,
 							   int16_t x, int16_t y);
 static void map_iuser_Map(Input* input, int32_t time);
 static void map_idraw_Map(Input* input, Rect* r, Rect* clip_r, int16_t refresh);
-static void map_user_Map_Panel(Actor* actor, int32_t time);
+static int16_t map_user_Map_Panel(Actor* actor, int32_t time);
 static int16_t map_draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y, int16_t refresh);
 static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh);
 static void map_Set_VR_Talk_To_Text(int16_t person);
@@ -342,10 +342,10 @@ int16_t map_Map(SceneHeadStruct* scene_head) {
 		/* xactor_Non_Refreshable_Actor(the_actor); */
 		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG2], &r, 0, 0, 50);
 		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_PANEL], &r, 0, 0, 20);
-		xactor_Set_Actor_User_Function(the_actor, map_user_Map_Panel);
+		xactor_Set_Actor_User_Function(the_actor, (xactorCallback)map_user_Map_Panel);
 		the_actor->id = 0;
 		the_actor = xactanim_Res_Anim_Actor(map_str[MAP_PANEL_HANDLE], &r, 0, 0, 20);
-		xactor_Set_Actor_User_Function(the_actor, map_user_Map_Panel);
+		xactor_Set_Actor_User_Function(the_actor, (xactorCallback)map_user_Map_Panel);
 		the_actor->id = 1;
 		cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BRIEF_BUTTONS], &r, 0, 12, 0);
 	} else if (scene == SCENE_TRAIN_MAP) {
@@ -881,15 +881,28 @@ static void map_idraw_Map(Input* input, Rect* r, Rect* clip_r, int16_t refresh) 
 
 // FUNCTION: TIE95 0x7581C
 // FUNCTION: TIE98 0x44EC90
-static void map_user_Map_Panel(Actor* actor, int32_t time) {
-	if (actor->id == 0) {
-		actor->y = (time <= 4) ? map_panel_y[time] : map_panel_y[4];
-	} else if (actor->id == 1) {
-		int16_t y_val = (time <= 4) ? map_panel_hdl_y[time] : map_panel_hdl_y[4];
-		int16_t cel_val = (time <= 4) ? map_panel_hdl_cel[time] : map_panel_hdl_cel[4];
-		actor->y = y_val;
-		xactor_Set_Actor_State(actor, cel_val, 0);
+static int16_t map_user_Map_Panel(Actor* actor, int32_t time) {
+	switch (actor->id) {
+		case 0:
+			actor->y = (time > 4) ? map_panel_y[4] : map_panel_y[time];
+			break;
+		case 1: {
+			int16_t y;
+			int16_t cel;
+
+			if (time > 4) {
+				cel = map_panel_hdl_cel[4];
+				y = map_panel_hdl_y[4];
+			} else {
+				cel = map_panel_hdl_cel[time];
+				y = map_panel_hdl_y[time];
+			}
+			actor->y = y;
+			xactor_Set_Actor_State(actor, cel, 0);
+			break;
+		}
 	}
+	return 1;
 }
 
 // FUNCTION: TIE95 0x7588C
@@ -1185,8 +1198,7 @@ static void map_Set_VR_Talk_Paragraph(void) {
 // FUNCTION: TIE95 0x762F4
 // FUNCTION: TIE98 0x44F770
 static void map_Get_VR_Talk_Question(char* string, int16_t question) {
-	int16_t qid;
-	char* data;
+	int8_t* data;
 	int16_t out_len;
 	int16_t i;
 
@@ -1194,25 +1206,25 @@ static void map_Get_VR_Talk_Question(char* string, int16_t question) {
 	if (question < 0 || question >= num_talk_questions)
 		return;
 
-	qid = talk_win_id[question];
-	if (qid == 5) {
-		textext_Copy_Text(string, txtTalkDebrief);
-		return;
-	}
+	if (talk_win_id[question] != 5) {
+		if (!talk_brief->talk_data[5 * talk_person + talk_win_id[question]])
+			return;
 
-	data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
-	if (!data)
-		return;
-
-	out_len = 0;
-	for (i = 0; data[i] && data[i] != '\n'; i++) {
-		if (data[i] == 4 || data[i] == 5)
+		data = (int8_t*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_person + talk_win_id[question]]);
+		out_len = 0;
+		i = 0;
+		while (data[i] && data[i] != '\n') {
+			if (data[i] == 4 || data[i] == 5)
+				i++;
+			else
+				string[out_len++] = data[i];
 			i++;
-		else
-			string[out_len++] = data[i];
+		}
+		string[out_len] = '\0';
+		xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + talk_win_id[question]]);
+	} else {
+		textext_Copy_Text(string, txtTalkDebrief);
 	}
-	string[out_len] = '\0';
-	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
 }
 
 // FUNCTION: TIE95 0x76400
@@ -1569,63 +1581,91 @@ static void map_Get_VR_Debrief_Goals(char* string, int16_t line) {
 	char buf[80], fmt[40], count_str[40];
 	int16_t done, fail;
 
-	if (line == 3) {
-		done = (uint16_t)goalsCompletedCount[0];
-		fail = (uint16_t)((uint16_t)goalsCount[0] - (uint16_t)goalsCompletedCount[0]);
-		if (!done && !fail) {
-			*string = '\0';
-			return;
-		}
-		if (mission.primary_complete == 1) {
-			textext_Copy_Text(string, txtTalkAllPri);
-		} else {
-			if (done) {
-				textext_Copy_Text(fmt, txtTalkOf);
-				snprintf(count_str, sizeof(count_str), fmt, done, done + fail);
+	switch (line) {
+		case 3:
+			done = goalsCompletedCount[0];
+			fail = goalsCount[0] - done;
+			if (done || fail) {
+				if (mission.primary_complete == 1) {
+					textext_Copy_Text(string, txtTalkAllPri);
+				} else {
+					if (!done)
+						textext_Copy_Text(count_str, txtTalkNo);
+					else {
+						textext_Copy_Text(fmt, txtTalkOf);
+#ifdef TIE_MODERN
+						snprintf(count_str, sizeof(count_str), fmt, done, done + fail);
+#else
+						sprintf(count_str, fmt, done, done + fail);
+#endif
+					}
+					textext_Copy_Text(fmt, txtTalkSomePri);
+#ifdef TIE_MODERN
+					snprintf(buf, sizeof(buf), fmt, count_str);
+#else
+					sprintf(buf, fmt, count_str);
+#endif
+					strcpy(string, buf);
+				}
 			} else
-				textext_Copy_Text(count_str, txtTalkNo);
-			textext_Copy_Text(fmt, txtTalkSomePri);
-			snprintf(buf, sizeof(buf), fmt, count_str);
-			strcpy(string, buf);
-		}
-	} else if (line == 4) {
-		done = (uint16_t)goalsCompletedCount[1];
-		fail = (uint16_t)((uint16_t)goalsCount[1] - (uint16_t)goalsCompletedCount[1]);
-		if (!done && !fail) {
-			*string = '\0';
-			return;
-		}
-		if (mission.secondary_complete == 1) {
-			textext_Copy_Text(string, txtTalkAllSec);
-		} else {
-			if (done) {
-				textext_Copy_Text(fmt, txtTalkOf);
-				snprintf(count_str, sizeof(count_str), fmt, done, done + fail);
+				*string = '\0';
+			break;
+		case 4:
+			done = goalsCompletedCount[1];
+			fail = goalsCount[1] - done;
+			if (done || fail) {
+				if (mission.secondary_complete == 1) {
+					textext_Copy_Text(string, txtTalkAllSec);
+				} else {
+					if (!done)
+						textext_Copy_Text(count_str, txtTalkNo);
+					else {
+						textext_Copy_Text(fmt, txtTalkOf);
+#ifdef TIE_MODERN
+						snprintf(count_str, sizeof(count_str), fmt, done, done + fail);
+#else
+						sprintf(count_str, fmt, done, done + fail);
+#endif
+					}
+					textext_Copy_Text(fmt, txtTalkSomeSec);
+#ifdef TIE_MODERN
+					snprintf(buf, sizeof(buf), fmt, count_str);
+#else
+					sprintf(buf, fmt, count_str);
+#endif
+					strcpy(string, buf);
+				}
 			} else
-				textext_Copy_Text(count_str, txtTalkNo);
-			textext_Copy_Text(fmt, txtTalkSomeSec);
-			snprintf(buf, sizeof(buf), fmt, count_str);
-			strcpy(string, buf);
-		}
-	} else if (line == 5) {
-		done = (uint16_t)goalsCompletedCount[2];
-		fail = (uint16_t)((uint16_t)goalsCount[2] - (uint16_t)goalsCompletedCount[2]);
-		if (!done && !fail) {
-			*string = '\0';
-			return;
-		}
-		if (mission.bonus_complete == 1) {
-			textext_Copy_Text(string, txtTalkAllBonus);
-		} else {
-			if (done) {
-				textext_Copy_Text(fmt, txtTalkOf);
-				snprintf(count_str, sizeof(count_str), fmt, done, done + fail);
+				*string = '\0';
+			break;
+		case 5:
+			done = goalsCompletedCount[2];
+			fail = goalsCount[2] - done;
+			if (done || fail) {
+				if (mission.bonus_complete == 1) {
+					textext_Copy_Text(string, txtTalkAllBonus);
+				} else {
+					if (!done)
+						textext_Copy_Text(count_str, txtTalkNo);
+					else {
+						textext_Copy_Text(fmt, txtTalkOf);
+#ifdef TIE_MODERN
+						snprintf(count_str, sizeof(count_str), fmt, done, done + fail);
+#else
+						sprintf(count_str, fmt, done, done + fail);
+#endif
+					}
+					textext_Copy_Text(fmt, txtTalkSomeBonus);
+#ifdef TIE_MODERN
+					snprintf(buf, sizeof(buf), fmt, count_str);
+#else
+					sprintf(buf, fmt, count_str);
+#endif
+					strcpy(string, buf);
+				}
 			} else
-				textext_Copy_Text(count_str, txtTalkNo);
-			textext_Copy_Text(fmt, txtTalkSomeBonus);
-			snprintf(buf, sizeof(buf), fmt, count_str);
-			strcpy(string, buf);
-		}
+				*string = '\0';
+			break;
 	}
 	center_line = 1;
 }

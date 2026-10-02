@@ -120,7 +120,7 @@ void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_ship);
  * Returns the new object's FlightObject slot (0xFFFF on allocation failure).
  */
 uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_idx, uint16_t size,
-										int16_t use_bsp_random);
+										uint16_t random_vertex);
 
 /* Advance one capital-ship turret slot. Skill controls its fractional
  * cooldown rate; hardpoint position, range, self-occlusion, and target lead

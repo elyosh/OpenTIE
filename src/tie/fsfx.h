@@ -148,7 +148,7 @@ int16_t fsfx_calcvolume(uint16_t src_obj, uint16_t sound_id);
  * deg) reduces *volume_ptr using a 2D "distance-from-180"
  * attenuation, then mirrors the pan back to the front quadrant.
  */
-int32_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr);
+int16_t fsfx_calcpan(uint16_t src_obj, int16_t* volume_ptr);
 
 /* FSFX-owned handle table and voice queue state. */
 #define FSFX_NUM_SOUND_HANDLES 131

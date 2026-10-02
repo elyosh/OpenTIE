@@ -4,8 +4,8 @@
 #include "tie/drawpol.h"
 #include "tie/logbuf2.h"
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/xtrans2.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -46,7 +46,7 @@ int16_t vertlight2;
 // GLOBAL: TIE95 0xEBF1C
 uint16_t objectedgeword;
 // GLOBAL: TIE95 0xEBF1E
-uint16_t trace2_lastedge;
+int16_t trace2_lastedge;
 // GLOBAL: TIE95 0xEBF20
 uint16_t trace2_znegflag;
 // GLOBAL: TIE95 0xEBF22
@@ -82,6 +82,27 @@ enum {
 	TRACE2_SLOPE_EQ = 2,
 	TRACE2_SLOPE_INF = 0x7FFFFFFF,
 };
+
+/* Edge slope as a 16.16 quotient: *slope = dividend / divisor and *frac the
+ * high 16 bits of the remainder's 32-bit fraction. A zero divisor yields
+ * TRACE2_SLOPE_INF with a zero fraction. drawface inlines this at every use;
+ * other toolchains compute the same values with math2_mul_div_u32. */
+#ifdef __WATCOMC__
+void trace2_slopediv(uint32_t dividend, uint32_t divisor, int32_t* slope, uint16_t* frac);
+#pragma aux trace2_slopediv = "or ebx, ebx"                                                                  \
+							  "jnz sd_divide"                                                                \
+							  "mov dword ptr [esi], 7FFFFFFFh"                                               \
+							  "mov [edi], bx"                                                                \
+							  "jmp sd_done"                                                                  \
+							  "sd_divide: xor edx, edx"                                                      \
+							  "div ebx"                                                                      \
+							  "mov [esi], eax"                                                               \
+							  "xor eax, eax"                                                                 \
+							  "div ebx"                                                                      \
+							  "shr eax, 16"                                                                  \
+							  "mov [edi], ax"                                                                \
+							  "sd_done:" parm[eax][ebx][esi][edi] modify exact[eax edx];
+#endif
 
 /* ================================================================ */
 /*  Flat-polygon entry points                                        */
@@ -778,138 +799,134 @@ void trace2_xdomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t sl
 
 // FUNCTION: TIE95 0x58F4C
 void trace2_drawscreencoords(void) {
-	const int32_t pd = (int32_t)pixelsdeep;
-	const int32_t pw = (int32_t)pixelswide;
-
-	/* Early-exit on full-screen AABB miss. */
-	uint16_t slot;
+	int32_t* first;
+	int32_t slope;
+	int16_t slot;
+	uint16_t frac;
 	int32_t* last;
 
+	/* Early-exit on full-screen AABB miss. */
 	if (maxscreeny[1] < 0)
 		return;
 	if (maxscreenx[0] < 0)
 		return;
-	if (pd <= minscreeny[1])
+	if ((int32_t)pixelsdeep <= minscreeny[1])
 		return;
-	if (pw <= minscreenx[0])
-		return;
-
-	if (flatobjnum == 111)
+	if ((int32_t)pixelswide <= minscreenx[0])
 		return;
 
-	slot = flatobjnum;
+	slot = (int16_t)flatobjnum;
+	if (slot == 111)
+		return;
+
 	flatcolors[slot] = color;
 	flatcomponentnum[slot] = (uint8_t)objectnum;
 	flatparentobj[slot] = parentobject;
 	flatz[slot] = -32767;
-	flatobjnum += 1;
+	flatobjnum = (uint16_t)(slot + 1);
 
-	polyidbyte = slot + 0x80;
+	slot += 0x80;
+	polyidbyte = (uint8_t)slot;
 	edgeidbyte = layervalue;
-	objectedgeword = (uint16_t)((edgeidbyte & 0xFF) | ((polyidbyte & 0xFF) << 8));
+	objectedgeword = (uint16_t)(((uint8_t)slot << 8) + edgeidbyte);
 
 	if (numpoints == samexcnt) {
 		/* Vertical-line degenerate: two 1-px vertical edges spanning y-range. */
-		int16_t y0 = 0;
 		int16_t y1;
 		int16_t ydelta;
-		int16_t x0;
 
+		frac = 0;
 		if (minscreeny[1] >= 0)
-			y0 = (int16_t)minscreeny[1];
-		y1 = (int16_t)pd;
-		if (maxscreeny[1] >= 0 && pd > maxscreeny[1])
+			frac = (uint16_t)minscreeny[1];
+		y1 = (int16_t)pixelsdeep;
+		if (maxscreeny[1] >= 0 && (int32_t)pixelsdeep > maxscreeny[1])
 			y1 = (int16_t)maxscreeny[1];
-		ydelta = (int16_t)(y1 - y0);
-		x0 = (int16_t)maxscreeny[1];
-		trace2_entervertedge(y0, ydelta, (int16_t)(uint8_t)x0, x0);
-		trace2_entervertedge(y0, ydelta, (int16_t)(uint8_t)(x0 + 1), (int16_t)(x0 + 1));
+		slot = (int16_t)maxscreeny[1];
+		ydelta = (int16_t)(y1 - frac);
+		trace2_entervertedge(frac, ydelta, (uint8_t)slot, slot);
+		slot++;
+		trace2_entervertedge(frac, ydelta, (uint8_t)slot, slot);
 		return;
 	}
 
 	if (numpoints == sameycnt) {
 		/* Horizontal-line degenerate. */
-		trace2_entervertedge((int16_t)(minscreeny[1]), 1, (int16_t)minscreenx[0], 0);
-		trace2_entervertedge((int16_t)(minscreeny[1]), 1, (int16_t)maxscreenx[0], 0);
+		trace2_entervertedge((int16_t)minscreeny[1], 1, (int16_t)minscreenx[0], 0);
+		trace2_entervertedge((int16_t)minscreeny[1], 1, (int16_t)maxscreenx[0], 0);
 		return;
 	}
 
 	/* General: walk the vertex ring, classify each edge, dispatch. */
 	last = minscreeny;
-	for (;;) {
-		int32_t* first = last;
+	do {
+		/* Retail uses wrapping 32-bit sub/neg here. Projected endpoints can
+		 * sit near opposite INT32 limits, so express those operations unsigned. */
 		uint32_t ydiff;
-		int skip;
+		uint32_t xdiff;
 
+		first = last;
 		last = first + 2;
 		if (last == lastscreenxy)
 			last = firstscreenxy;
 
-		/* Retail uses wrapping 32-bit sub/neg here. Projected endpoints can
-		 * sit near opposite INT32 limits, so express those operations unsigned. */
 		ydiffsign = 1;
 		ydiff = (uint32_t)last[1] - (uint32_t)first[1];
-		skip = 0;
 		if ((int32_t)ydiff < 0) {
 			ydiffsign = -1;
 			ydiff = -ydiff;
-			if (first[1] < 0 || pd <= last[1])
-				skip = 1;
+			if (first[1] < 0)
+				continue;
+			if ((int32_t)pixelsdeep <= last[1])
+				continue;
 		} else {
-			if (ydiff == 0 || last[1] < 0 || pd <= first[1])
-				skip = 1;
+			if (ydiff == 0)
+				continue;
+			if (last[1] < 0)
+				continue;
+			if ((int32_t)pixelsdeep <= first[1])
+				continue;
 		}
 
-		if (!skip) {
-			uint32_t xdiff;
-			int32_t half_ydiff;
+		xdiffsign = 1;
+		xdiff = (uint32_t)last[0] - (uint32_t)first[0];
+		if ((int32_t)xdiff < 0) {
+			xdiffsign = -1;
+			xdiff = -xdiff;
+		}
 
-			xdiffsign = 1;
-			xdiff = (uint32_t)last[0] - (uint32_t)first[0];
-			if ((int32_t)xdiff < 0) {
-				xdiffsign = -1;
-				xdiff = -xdiff;
-			}
-
-			half_ydiff = (int32_t)ydiff >> 1;
-			if (half_ydiff > (int32_t)xdiff) {
-				/* y-dominant: slope = ydiff/xdiff */
-				int32_t slope;
-				uint16_t frac;
-				if (xdiff != 0) {
-					uint32_t rem;
-
-					slope = (int32_t)(ydiff / xdiff);
-					rem = ydiff % xdiff;
-					frac = (uint16_t)math2_mul_div_u32(rem, 0x10000u, xdiff);
-				} else {
-					slope = TRACE2_SLOPE_INF;
-					frac = 0;
-				}
-				trace2_ydomedge(slope, frac, first, last);
-			} else if (half_ydiff == (int32_t)xdiff) {
-				trace2_ydomedge(TRACE2_SLOPE_EQ, 0, first, last);
+		slope = (int32_t)ydiff >> 1;
+		if ((int32_t)xdiff < slope) {
+			/* y-dominant: slope = ydiff/xdiff */
+#ifdef __WATCOMC__
+			trace2_slopediv(ydiff, xdiff, &slope, &frac);
+#else
+			if (xdiff != 0) {
+				slope = (int32_t)(ydiff / xdiff);
+				frac = (uint16_t)math2_mul_div_u32(ydiff % xdiff, 0x10000u, xdiff);
 			} else {
-				/* x-dominant: slope = xdiff/ydiff */
-				int32_t slope;
-				uint16_t frac;
-				if (ydiff != 0) {
-					uint32_t rem;
-
-					slope = (int32_t)(xdiff / ydiff);
-					rem = xdiff % ydiff;
-					frac = (uint16_t)math2_mul_div_u32(rem, 0x10000u, ydiff);
-				} else {
-					slope = TRACE2_SLOPE_INF;
-					frac = 0;
-				}
-				trace2_xdomedge(slope, frac, first, last);
+				slope = TRACE2_SLOPE_INF;
+				frac = 0;
 			}
+#endif
+			trace2_ydomedge(slope, frac, first, last);
+		} else if ((int32_t)xdiff > slope) {
+			/* x-dominant: slope = xdiff/ydiff */
+#ifdef __WATCOMC__
+			trace2_slopediv(xdiff, ydiff, &slope, &frac);
+#else
+			if (ydiff != 0) {
+				slope = (int32_t)(xdiff / ydiff);
+				frac = (uint16_t)math2_mul_div_u32(xdiff % ydiff, 0x10000u, ydiff);
+			} else {
+				slope = TRACE2_SLOPE_INF;
+				frac = 0;
+			}
+#endif
+			trace2_xdomedge(slope, frac, first, last);
+		} else {
+			trace2_ydomedge(TRACE2_SLOPE_EQ, 0, first, last);
 		}
-
-		if (last == minscreeny)
-			return;
-	}
+	} while (last != minscreeny);
 }
 
 /* ================================================================ */
@@ -918,31 +935,29 @@ void trace2_drawscreencoords(void) {
 
 // FUNCTION: TIE95 0x59278
 void trace2_drawface(uint16_t numberOfVertices) {
-	int32_t slope;
+	int16_t edge;
 	uint16_t frac;
-	uint16_t vertexIndex;
-	uint16_t vi;
+	int16_t vertexIndex;
+	int32_t xdiff;
+	int32_t slope;
+	int16_t vi;
 	TRANSFM2_ScreenPoint* edgePtc;
-	uint32_t ydiff;
-	uint32_t xdiff;
+	int32_t ydiff;
 
 	trace2_znegflag = 0;
 
 	vertexIndex = 0;
-	counter = (int16_t)(uint8_t)numberOfVertices;
-	while (counter > 0) {
-		const uint8_t vtx1 = firstvertptr[vertexIndex];
-		const uint8_t edgeIdx = firstvertptr[vertexIndex + 1];
-		const uint8_t vtx2 = firstvertptr[vertexIndex + 2];
+	for (counter = (uint8_t)numberOfVertices; counter > 0; --counter) {
 		TRANSFM2_ScreenPoint* edgePt;
-		uint8_t pt;
+		int16_t flags;
 
-		vertlight1 = (int16_t)vertexlight[vtx1];
-		vertlight2 = (int16_t)vertexlight[vtx2];
+		edge = firstvertptr[vertexIndex + 1];
+		vertlight2 = (int16_t)vertexlight[firstvertptr[vertexIndex + 2]];
+		vertlight1 = (int16_t)vertexlight[firstvertptr[vertexIndex]];
 
 		/* Swap lights if this face walks the edge in the reverse direction. */
-		edgePt = calcflag[vtx1];
-		if (edgePt == edgept2[edgeIdx]) {
+		edgePt = calcflag[firstvertptr[vertexIndex]];
+		if (edgePt == edgept2[firstvertptr[vertexIndex + 1]]) {
 			int16_t t = vertlight1;
 			vertlight1 = vertlight2;
 			vertlight2 = t;
@@ -950,40 +965,39 @@ void trace2_drawface(uint16_t numberOfVertices) {
 		if (edgePt == NULL)
 			++trace2_znegflag;
 
-		polyidbyte = objectnum;
-		edgeidbyte = edgeIdx;
-		objectedgeword = (uint16_t)(edgeIdx | ((objectnum & 0xFF) << 8));
+		polyidbyte = (uint8_t)objectnum;
+		edgeidbyte = (uint8_t)edge;
+		objectedgeword = (uint16_t)((polyidbyte << 8) + (uint8_t)edge);
 
-		pt = edgeflags[edgeIdx];
-		if (pt == XTRANS2_EDGEFLAG_YDOM || pt == (XTRANS2_EDGEFLAG_HAS_HEADER | XTRANS2_EDGEFLAG_YDOM) ||
-			(pt & XTRANS2_EDGEFLAG_DEGEN) != 0) {
+		flags = edgeflags[edge];
+		if (flags == XTRANS2_EDGEFLAG_YDOM ||
+			flags == (XTRANS2_EDGEFLAG_HAS_HEADER | XTRANS2_EDGEFLAG_YDOM) ||
+			(flags & XTRANS2_EDGEFLAG_DEGEN) != 0) {
 			/* Off-right sentinel (0x80 alone), already-headered, or degenerate.
 			 * Just remember as lastedge candidate for z-clip synthesis. */
-			if ((pt & XTRANS2_EDGEFLAG_HAS_HEADER) == 0)
-				trace2_lastedge = edgeIdx;
-		} else if ((pt & XTRANS2_EDGEFLAG_HAS_HEADER) != 0) {
+			if ((flags & XTRANS2_EDGEFLAG_HAS_HEADER) == 0)
+				trace2_lastedge = edge;
+		} else if ((flags & XTRANS2_EDGEFLAG_HAS_HEADER) != 0) {
 			/* Second face touching this edge — fill face2 on cached header. */
-			trace2_EdgeHeader* h = (trace2_EdgeHeader*)edgeflagptr[edgeIdx];
-			if (edgeidbyte == h->edgeid)
+			trace2_EdgeHeader* h = (trace2_EdgeHeader*)edgeflagptr[edge];
+			if ((uint8_t)edge == h->edgeid)
 				h->face2 = facenumber;
 		} else {
 			/* New edge: install header + cache slope, then dispatch. */
-			edgeflags[edgeIdx] |= XTRANS2_EDGEFLAG_HAS_HEADER;
-			edgeflagptr[edgeIdx] = trace2_newedgeheader;
+			edgeflags[edge] = (uint8_t)(flags | XTRANS2_EDGEFLAG_HAS_HEADER);
+			edgeflagptr[edge] = trace2_newedgeheader;
 			++edgeindex;
 
-			if ((pt & XTRANS2_EDGEFLAG_UNUSED_10) != 0) {
+			if ((flags & XTRANS2_EDGEFLAG_UNUSED_10) != 0) {
 				/* DEAD CODE: bit 0x10 is never set by TRANSFM2_classifyedges
 				 * or anywhere else in demo or retail. The adjacent-face
 				 * orientation flip that this branch was presumably intended
 				 * for is actually performed inside classifyedges itself
 				 * (flips signs + swaps edgept1/edgept2 in place when a
-				 * cached flag is seen). Preserved bit-literal to match
-				 * the binary exactly. */
-				/* Retail `not word ptr edgept1[i]` / `edgept2[i]`: complement the
-				 * low word of each stored pointer in place. */
-				uint16_t* lo1 = (uint16_t*)&edgept1[edgeIdx];
-				uint16_t* lo2 = (uint16_t*)&edgept2[edgeIdx];
+				 * cached flag is seen). Retail complements the low word of
+				 * each stored pointer in place. */
+				uint16_t* lo1 = (uint16_t*)&edgept1[edge];
+				uint16_t* lo2 = (uint16_t*)&edgept2[edge];
 
 				*lo1 = (uint16_t)~*lo1;
 				*lo2 = (uint16_t)~*lo2;
@@ -991,91 +1005,92 @@ void trace2_drawface(uint16_t numberOfVertices) {
 
 			if (gauraudflag) {
 				/* Gouraud gradient: lightincy = 2 * |dlight| / ydiff, signed
-				 * by (edgeysign XOR -sign_flag) high bit. */
-				int16_t dlt_raw = vertlight2 - vertlight1;
-				int sign_flag = 0;
-				int16_t dlt_half;
-				int32_t div;
+				 * by (edgeysign XOR -sign_flag). */
+				int16_t dlt = vertlight2 - vertlight1;
+				int sign_flag;
+				int32_t div = 0;
 
-				if (dlt_raw < 0) {
+				if (dlt < 0) {
 					sign_flag = 1;
-					dlt_raw = -dlt_raw;
+					dlt = -dlt;
+				} else {
+					sign_flag = 0;
 				}
-				dlt_half = dlt_raw >> 1;
-				div = 0;
-				if (dlt_half > edgeydiff[edgeIdx]) {
-					if (edgeydiff[edgeIdx] != 0)
-						div = dlt_half / edgeydiff[edgeIdx];
+				dlt >>= 1;
+				if (dlt > edgeydiff[edge]) {
+					if (edgeydiff[edge] != 0)
+						div = dlt / edgeydiff[edge];
 					if (div > 255)
 						div &= 0xFFFE;
-					if (((edgeysign[edgeIdx] ^ (uint16_t)(-sign_flag)) & 0x8000u) != 0)
+					if ((int16_t)(-sign_flag ^ edgeysign[edge]) < 0)
 						div = -div;
 				}
-				lightincy = (int16_t)(2 * div);
+				lightincy = (int16_t)(div + div);
 			}
-			xdiffsign = edgexsign[edgeIdx];
-			ydiffsign = edgeysign[edgeIdx];
+			xdiffsign = edgexsign[edge];
+			ydiffsign = edgeysign[edge];
 
-			if ((edgeflags[edgeIdx] & XTRANS2_EDGEFLAG_SLOPE_CACHED) == 0) {
+			if ((edgeflags[edge] & XTRANS2_EDGEFLAG_SLOPE_CACHED) != 0) {
+				frac = edgeslopefrac[edge];
+				slope = (uint32_t)(uint16_t)edgeslopehi[edge] << 16;
+				slope |= (uint16_t)edgeslopelo[edge];
+			} else {
 				uint32_t dy;
 				uint32_t dx;
-				int32_t slope;
-				uint16_t frac;
 
-				edgeflags[edgeIdx] |= XTRANS2_EDGEFLAG_SLOPE_CACHED;
-
-				dy = (uint32_t)edgeydiff[edgeIdx];
-				dx = (uint32_t)edgexdiff[edgeIdx];
-
-				if ((dy / 2) > dx) {
-					/* y-dominant */
+				edgeflags[edge] |= XTRANS2_EDGEFLAG_SLOPE_CACHED;
+				dy = (uint32_t)edgeydiff[edge];
+				dx = (uint32_t)edgexdiff[edge];
+				if ((dy >> 1) > dx) {
+#ifdef __WATCOMC__
+					trace2_slopediv(dy, dx, &slope, &frac);
+#else
 					if (dx != 0) {
-						uint32_t rem;
-
-						slope = (int32_t)(dy / dx);
-						rem = dy % dx;
-						frac = (uint16_t)math2_mul_div_u32(rem, 0x10000u, dx);
+						slope = (int32_t)((uint32_t)dy / (uint32_t)dx);
+						frac =
+							(uint16_t)math2_mul_div_u32((uint32_t)dy % (uint32_t)dx, 0x10000u, (uint32_t)dx);
 					} else {
 						slope = TRACE2_SLOPE_INF;
 						frac = 0;
 					}
-					edgeslopefrac[edgeIdx] = (int16_t)frac;
-					edgeslopelo[edgeIdx] = (int16_t)slope;
-					edgeslopehi[edgeIdx] = (int16_t)(slope >> 16);
-					edgeflags[edgeIdx] |= XTRANS2_EDGEFLAG_YDOM;
-				} else if ((dy / 2) == dx) {
+#endif
+					edgeslopefrac[edge] = frac;
+					edgeslopelo[edge] = (int16_t)slope;
+					edgeflags[edge] |= XTRANS2_EDGEFLAG_YDOM;
+					edgeslopehi[edge] = (int16_t)((uint32_t)slope >> 16);
+				} else if ((dy >> 1) < dx) {
+#ifdef __WATCOMC__
+					trace2_slopediv(dx, dy, &slope, &frac);
+#else
+					if (dy != 0) {
+						slope = (int32_t)((uint32_t)dx / (uint32_t)dy);
+						frac =
+							(uint16_t)math2_mul_div_u32((uint32_t)dx % (uint32_t)dy, 0x10000u, (uint32_t)dy);
+					} else {
+						slope = TRACE2_SLOPE_INF;
+						frac = 0;
+					}
+#endif
+					edgeslopefrac[edge] = frac;
+					edgeslopelo[edge] = (int16_t)slope;
+					edgeslopehi[edge] = (int16_t)((uint32_t)slope >> 16);
+				} else {
 					slope = TRACE2_SLOPE_EQ;
 					frac = 0;
-					edgeslopefrac[edgeIdx] = 0;
-					edgeslopelo[edgeIdx] = TRACE2_SLOPE_EQ;
-					edgeslopehi[edgeIdx] = 0;
-					edgeflags[edgeIdx] |= XTRANS2_EDGEFLAG_YDOM;
-				} else {
-					/* x-dominant */
-					if (dy != 0) {
-						uint32_t rem;
-
-						slope = (int32_t)(dx / dy);
-						rem = dx % dy;
-						frac = (uint16_t)math2_mul_div_u32(rem, 0x10000u, dy);
-					} else {
-						slope = TRACE2_SLOPE_INF;
-						frac = 0;
-					}
-					edgeslopefrac[edgeIdx] = (int16_t)frac;
-					edgeslopelo[edgeIdx] = (int16_t)slope;
-					edgeslopehi[edgeIdx] = (int16_t)(slope >> 16);
+					edgeslopefrac[edge] = 0;
+					edgeslopelo[edge] = TRACE2_SLOPE_EQ;
+					edgeslopehi[edge] = 0;
+					edgeflags[edge] |= XTRANS2_EDGEFLAG_YDOM;
 				}
 
-				if ((edgeflags[edgeIdx] & XTRANS2_EDGEFLAG_YDOM) != 0)
-					trace2_ydomedge(slope, frac, edgept1[edgeIdx]->xy, edgept2[edgeIdx]->xy);
+				if ((edgeflags[edge] & XTRANS2_EDGEFLAG_YDOM) != 0)
+					trace2_ydomedge(slope, frac, edgept1[edge]->xy, edgept2[edge]->xy);
 				else
-					trace2_xdomedge(slope, frac, edgept1[edgeIdx]->xy, edgept2[edgeIdx]->xy);
+					trace2_xdomedge(slope, frac, edgept1[edge]->xy, edgept2[edge]->xy);
 			}
 		}
 
 		vertexIndex += 2;
-		--counter;
 	}
 
 	/* --- Z-clip repair. When 0 < znegflag < numverts, synthesise a
@@ -1084,45 +1099,54 @@ void trace2_drawface(uint16_t numberOfVertices) {
 		return;
 
 	vi = 0;
-	edgePtc = NULL;
-
 	if (calcflag[firstvertptr[0]]) {
 		/* First vertex visible. Walk forward until we lose visibility. */
-		TRANSFM2_ScreenPoint* cf_prev;
-		TRANSFM2_ScreenPoint* cf_here;
+		TRANSFM2_ScreenPoint* cf;
+		int16_t e;
 
 		do {
 			vi += 2;
 		} while (calcflag[firstvertptr[vi]]);
-		cf_prev = calcflag[firstvertptr[vi - 2]];
-		trace2_lastpointPtr = (cf_prev == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
-																		 : edgept1[firstvertptr[vi - 1]];
+		cf = calcflag[firstvertptr[vi - 2]];
+		e = firstvertptr[vi - 1];
+		if (cf == edgept1[e])
+			trace2_lastpointPtr = edgept2[e];
+		else
+			trace2_lastpointPtr = edgept1[e];
 
 		do {
 			vi += 2;
-			cf_here = calcflag[firstvertptr[vi]];
-		} while (!cf_here);
-		edgePtc = (cf_here == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
-															 : edgept1[firstvertptr[vi - 1]];
+			cf = calcflag[firstvertptr[vi]];
+		} while (!cf);
+		e = firstvertptr[vi - 1];
+		if (cf == edgept1[e])
+			edgePtc = edgept2[e];
+		else
+			edgePtc = edgept1[e];
 	} else {
 		/* First vertex invisible. Skip to first visible, then lose-and-regain. */
-		TRANSFM2_ScreenPoint* cf_here;
-		TRANSFM2_ScreenPoint* edgePta;
-		TRANSFM2_ScreenPoint* cf_prev;
+		TRANSFM2_ScreenPoint* cf;
+		int16_t e;
 
 		do {
 			vi += 2;
-			cf_here = calcflag[firstvertptr[vi]];
-		} while (!cf_here);
-		edgePta = (cf_here == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
-															 : edgept1[firstvertptr[vi - 1]];
-		trace2_lastpointPtr = edgePta;
+			cf = calcflag[firstvertptr[vi]];
+		} while (!cf);
+		e = firstvertptr[vi - 1];
+		if (cf == edgept1[e])
+			trace2_lastpointPtr = edgept2[e];
+		else
+			trace2_lastpointPtr = edgept1[e];
+
 		do {
 			vi += 2;
 		} while (calcflag[firstvertptr[vi]]);
-		cf_prev = calcflag[firstvertptr[vi - 2]];
-		edgePtc = (cf_prev == edgept1[firstvertptr[vi - 1]]) ? edgept2[firstvertptr[vi - 1]]
-															 : edgept1[firstvertptr[vi - 1]];
+		cf = calcflag[firstvertptr[vi - 2]];
+		e = firstvertptr[vi - 1];
+		if (cf == edgept1[e])
+			edgePtc = edgept2[e];
+		else
+			edgePtc = edgept1[e];
 	}
 
 	/* Both repair endpoints are near-plane clip points: each is the endpoint
@@ -1131,10 +1155,9 @@ void trace2_drawface(uint16_t numberOfVertices) {
 	vertlight1 = trace2_lastpointPtr->light;
 	vertlight2 = edgePtc->light;
 
-	/* Same wrapping sub/neg sequence as the original x86 near-plane repair. */
 	ydiffsign = 1;
-	ydiff = (uint32_t)edgePtc->xy[1] - (uint32_t)trace2_lastpointPtr->xy[1];
-	if ((int32_t)ydiff < 0) {
+	ydiff = edgePtc->xy[1] - trace2_lastpointPtr->xy[1];
+	if (ydiff < 0) {
 		ydiffsign = -1;
 		ydiff = -ydiff;
 		if (trace2_lastpointPtr->xy[1] < 0 || (int32_t)pixelsdeep <= edgePtc->xy[1])
@@ -1145,8 +1168,8 @@ void trace2_drawface(uint16_t numberOfVertices) {
 	}
 
 	xdiffsign = 1;
-	xdiff = (uint32_t)edgePtc->xy[0] - (uint32_t)trace2_lastpointPtr->xy[0];
-	if ((int32_t)xdiff < 0) {
+	xdiff = edgePtc->xy[0] - trace2_lastpointPtr->xy[0];
+	if (xdiff < 0) {
 		xdiffsign = -1;
 		xdiff = -xdiff;
 	}
@@ -1154,66 +1177,70 @@ void trace2_drawface(uint16_t numberOfVertices) {
 	if (trace2_lastedge == 0)
 		trace2_findlastedge();
 
-	edgeidbyte = trace2_lastedge;
-	objectedgeword = (uint16_t)((trace2_lastedge & 0xFF) | (polyidbyte << 8));
+	edgeidbyte = (uint8_t)trace2_lastedge;
+	objectedgeword = (uint16_t)((polyidbyte << 8) + (uint8_t)trace2_lastedge);
 
 	if (gauraudflag) {
 		/* Z-clip Gouraud: same formula as main loop but uses the locally
 		 * computed ydiff/ydiffsign instead of edgeydiff[]/edgeysign[]. */
-		int16_t dlt_raw = vertlight2 - vertlight1;
-		int sign_flag = 0;
-		int16_t dlt_half;
-		int32_t div;
+		int16_t dlt = vertlight2 - vertlight1;
+		int sign_flag;
+		int32_t div = 0;
 
-		if (dlt_raw < 0) {
+		if (dlt < 0) {
 			sign_flag = 1;
-			dlt_raw = -dlt_raw;
+			dlt = -dlt;
+		} else {
+			sign_flag = 0;
 		}
-		dlt_half = dlt_raw >> 1;
-		div = 0;
-		if (dlt_half > (int32_t)ydiff) {
+		dlt >>= 1;
+		if (dlt > ydiff) {
 			if (ydiff != 0)
-				div = dlt_half / (int32_t)ydiff;
-			if ((div & 0xFF00) != 0)
-				div &= 0xFFFE; /* BYTE1(div) != 0 */
-			if (((ydiffsign ^ (uint16_t)(-sign_flag)) & 0x8000u) != 0)
+				div = dlt / ydiff;
+			if ((uint8_t)(div >> 8) != 0)
+				div &= 0xFFFE;
+			if ((int16_t)(-sign_flag ^ ydiffsign) < 0)
 				div = -div;
 		}
-		lightincy = (int16_t)(2 * div);
+		lightincy = (int16_t)(div + div);
 	}
 
-	if ((ydiff >> 1) > xdiff) {
+	if (((uint32_t)ydiff >> 1) > (uint32_t)xdiff) {
+#ifdef __WATCOMC__
+		trace2_slopediv(ydiff, xdiff, &slope, &frac);
+#else
 		if (xdiff != 0) {
-			uint32_t rem;
-
-			slope = (int32_t)(ydiff / xdiff);
-			rem = ydiff % xdiff;
-			frac = (uint16_t)math2_mul_div_u32(rem, 0x10000u, xdiff);
+			slope = (int32_t)((uint32_t)ydiff / (uint32_t)xdiff);
+			frac = (uint16_t)math2_mul_div_u32((uint32_t)ydiff % (uint32_t)xdiff, 0x10000u, (uint32_t)xdiff);
 		} else {
 			slope = TRACE2_SLOPE_INF;
 			frac = 0;
 		}
+#endif
 		edgeflags[trace2_lastedge] |= XTRANS2_EDGEFLAG_HAS_HEADER;
 		edgeflagptr[trace2_lastedge] = trace2_newedgeheader;
 		trace2_ydomedge(slope, frac, trace2_lastpointPtr->xy, edgePtc->xy);
-	} else if ((ydiff >> 1) == xdiff) {
-		edgeflags[trace2_lastedge] |= XTRANS2_EDGEFLAG_HAS_HEADER;
-		edgeflagptr[trace2_lastedge] = trace2_newedgeheader;
-		trace2_ydomedge(TRACE2_SLOPE_EQ, 0, trace2_lastpointPtr->xy, edgePtc->xy);
-	} else {
+	} else if (((uint32_t)ydiff >> 1) < (uint32_t)xdiff) {
+#ifdef __WATCOMC__
+		trace2_slopediv(xdiff, ydiff, &slope, &frac);
+#else
 		if (ydiff != 0) {
-			uint32_t rem;
-
-			slope = (int32_t)(xdiff / ydiff);
-			rem = xdiff % ydiff;
-			frac = (uint16_t)math2_mul_div_u32(rem, 0x10000u, ydiff);
+			slope = (int32_t)((uint32_t)xdiff / (uint32_t)ydiff);
+			frac = (uint16_t)math2_mul_div_u32((uint32_t)xdiff % (uint32_t)ydiff, 0x10000u, (uint32_t)ydiff);
 		} else {
 			slope = TRACE2_SLOPE_INF;
 			frac = 0;
 		}
+#endif
 		edgeflags[trace2_lastedge] |= XTRANS2_EDGEFLAG_HAS_HEADER;
 		edgeflagptr[trace2_lastedge] = trace2_newedgeheader;
 		trace2_xdomedge(slope, frac, trace2_lastpointPtr->xy, edgePtc->xy);
+	} else {
+		slope = TRACE2_SLOPE_EQ;
+		frac = 0;
+		edgeflags[trace2_lastedge] |= XTRANS2_EDGEFLAG_HAS_HEADER;
+		edgeflagptr[trace2_lastedge] = trace2_newedgeheader;
+		trace2_ydomedge(slope, frac, trace2_lastpointPtr->xy, edgePtc->xy);
 	}
 	trace2_lastedge = 0;
 }

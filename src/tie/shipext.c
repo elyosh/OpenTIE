@@ -548,7 +548,7 @@ int16_t shipext_Write_Temp_Pilot(void) {
 }
 
 // FUNCTION: TIE95 0x806A8
-bool shipext_Read_Temp_Pilot(void) {
+int16_t shipext_Read_Temp_Pilot(void) {
 	LandruFile* fp;
 
 	pilot_record.game_level = options_gbl.game_level;
@@ -565,15 +565,15 @@ bool shipext_Read_Temp_Pilot(void) {
 			xfile_Close_File(fp);
 			strcpy(name_buf, pilot_name);
 			shipext_Load_Pilot(name_buf);
-			return false;
+			return 0;
 		}
 #ifdef TIE_MODERN
 		PilotRecord_decode(&pilot_record, buf);
 #endif
 		xfile_Close_File(fp);
-		return true;
+		return 1;
 	}
-	return false;
+	return 0;
 }
 
 // FUNCTION: TIE95 0x80714
@@ -607,7 +607,9 @@ void shipext_Link_Pilot(void) {
 }
 
 // FUNCTION: TIE95 0x80768
-void shipext_Get_Launch_Name(char* out) { xparagrp_Get_Paragraph_String(ship_info[mission_ship], out, 4, 0); }
+void shipext_Get_Launch_Name(char* out) {
+	xparagrp_Get_Paragraph_String(ship_info[shipext_Get_Mission_Ship()], out, 4, 0);
+}
 
 // FUNCTION: TIE95 0x80790
 void shipext_Get_Weapon_Select_Name(char* out) {
@@ -886,7 +888,8 @@ void shipext_Init_Train_Ship_Name(void) {
 // FUNCTION: TIE95 0x80EFC
 void shipext_Show_Train_Ship_Name(void) {
 	Rect bounds;
-	int16_t i, cur;
+	int16_t i;
+	ResFile* res;
 	char name[16];
 
 	xcanvas_Get_Drawing_Canvas_Bounds(&bounds);
@@ -894,16 +897,19 @@ void shipext_Show_Train_Ship_Name(void) {
 		if (ship_name_actors[i])
 			xactor_Hide_Actor(ship_name_actors[i]);
 
-	cur = pilot_record.cur_train_ship;
-	if (ship_name_actors[cur]) {
-		xactor_Show_Actor(ship_name_actors[cur]);
+	if (ship_name_actors[pilot_record.cur_train_ship]) {
+		xactor_Show_Actor(ship_name_actors[pilot_record.cur_train_ship]);
 	} else {
-		ResFile* res = shipext_Open_Ship_Resource(cur);
+		res = shipext_Open_Ship_Resource(pilot_record.cur_train_ship);
 		if (res) {
-			snprintf(name, sizeof(name), "train%d", cur + 1);
-			ship_name_actors[cur] = xactdelt_Res_Delta_Actor(name, &bounds, 1, 0, 14);
-			xactor_Set_Actor_Time(ship_name_actors[cur], -1, -1);
-			xactor_Show_Actor(ship_name_actors[cur]);
+#ifdef TIE_MODERN
+			snprintf(name, sizeof(name), "train%d", pilot_record.cur_train_ship + 1);
+#else
+			sprintf(name, "train%d", pilot_record.cur_train_ship + 1);
+#endif
+			ship_name_actors[pilot_record.cur_train_ship] = xactdelt_Res_Delta_Actor(name, &bounds, 1, 0, 14);
+			xactor_Set_Actor_Time(ship_name_actors[pilot_record.cur_train_ship], -1, -1);
+			xactor_Show_Actor(ship_name_actors[pilot_record.cur_train_ship]);
 			xres_Close_Resource(res);
 		}
 	}
@@ -1375,10 +1381,10 @@ int16_t shipext_Is_Tour_Battle_End(void) {
 }
 
 // FUNCTION: TIE95 0x81DFC
-void shipext_Refly_Tour_Mission(void) {
+int16_t shipext_Refly_Tour_Mission(void) {
 	pilot_record.battle_cursor[pilot_record.cur_battle]--;
-	if (pilot_name[0])
-		shipext_Save_Pilot_Data(pilot_name);
+	shipext_Update_Pilot();
+	return 1;
 }
 
 // FUNCTION: TIE95 0x81E14

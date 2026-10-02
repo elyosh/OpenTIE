@@ -2,7 +2,6 @@
 #include "tie/create.h"
 #include "tie/fview.h"
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/paifight.h"
 #include "tie/paiman.h"   /* paiman_initmaneuver */
 #include "tie/paiorder.h" /* paiorder_waitfor*order */
@@ -18,6 +17,7 @@
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 #include "tie_runtime/storage/storage.h"
 
 #include <stddef.h>
@@ -960,16 +960,17 @@ void pai_calcrotatedpoint(FlightObject* obj, int16_t side_arg, int16_t up_arg, i
 		fview_calcrotateorient(obj->roll, 0, obj);
 	}
 
-	/* Rotate (side_arg, up_arg, fwd_arg) by the 3x3 orientation basis.
-	 * Each product is shifted >>15 *before* summing (matches retail's
-	 * Watcom emit: three independent arithmetic shifts then add). Sum-
-	 * before-shift accumulates rounding loss for negative products. */
-	rotatedx = (((int32_t)obj->side_x * side_arg) >> 15) + (((int32_t)obj->up_x * up_arg) >> 15) +
-			   (((int32_t)obj->fwd_x * fwd_arg) >> 15);
-	rotatedy = (((int32_t)obj->side_y * side_arg) >> 15) + (((int32_t)obj->up_y * up_arg) >> 15) +
-			   (((int32_t)obj->fwd_y * fwd_arg) >> 15);
-	rotatedz = (((int32_t)obj->side_z * side_arg) >> 15) + (((int32_t)obj->up_z * up_arg) >> 15) +
-			   (((int32_t)obj->fwd_z * fwd_arg) >> 15);
+	/* Rotate (side_arg, up_arg, fwd_arg) by the 3x3 orientation basis,
+	 * accumulating each Q15 product into the global in turn. */
+	rotatedx = math2_mul16_q15(side_arg, obj->side_x);
+	rotatedx += math2_mul16_q15(up_arg, obj->up_x);
+	rotatedx += math2_mul16_q15(fwd_arg, obj->fwd_x);
+	rotatedy = math2_mul16_q15(side_arg, obj->side_y);
+	rotatedy += math2_mul16_q15(up_arg, obj->up_y);
+	rotatedy += math2_mul16_q15(fwd_arg, obj->fwd_y);
+	rotatedz = math2_mul16_q15(side_arg, obj->side_z);
+	rotatedz += math2_mul16_q15(up_arg, obj->up_z);
+	rotatedz += math2_mul16_q15(fwd_arg, obj->fwd_z);
 }
 
 // FUNCTION: TIE98 0x45A3C0

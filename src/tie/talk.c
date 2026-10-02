@@ -1088,17 +1088,19 @@ static int16_t talk_Count_Debrief_Header(void) { return 1; }
 // FUNCTION: TIE95 0x69A16
 // FUNCTION: TIE98 0x48AB20
 static void talk_Find_Debrief_Header(char* string, int16_t line) {
-	int16_t skip = line;
 	int16_t i;
 
-	for (i = 0; i < max_paragraph_size; i++) {
+	i = 0;
+	while (i < max_paragraph_size) {
 		talk_Get_Debrief_Header(string, i);
 		if (*string) {
-			if (!skip)
-				return;
-			skip--;
-			*string = '\0';
+			if (line) {
+				*string = '\0';
+				--line;
+			} else
+				break;
 		}
+		++i;
 	}
 }
 
@@ -1233,17 +1235,19 @@ static int16_t talk_Count_Debrief_Goals(void) { return 1; }
 // FUNCTION: TIE95 0x6A04F
 // FUNCTION: TIE98 0x48B050
 static void talk_Find_Debrief_Goals(char* string, int16_t line) {
-	int16_t skip = line;
 	int16_t i;
 
-	for (i = 0; i < max_paragraph_size; i++) {
+	i = 0;
+	while (i < max_paragraph_size) {
 		talk_Get_Debrief_Goals(string, i);
 		if (*string) {
-			if (!skip)
-				return;
-			skip--;
-			*string = '\0';
+			if (line) {
+				*string = '\0';
+				--line;
+			} else
+				break;
 		}
+		++i;
 	}
 }
 
@@ -1391,25 +1395,29 @@ static int16_t talk_Count_Debrief_Kills(void) {
 // FUNCTION: TIE95 0x6A61B
 // FUNCTION: TIE98 0x48B590
 static void talk_Find_Debrief_Kills(char* string, int16_t page, int16_t line) {
-	int16_t line_in_page = line % max_paragraph_size;
+	int16_t craft;
 
-	if (line_in_page == 0) {
-		talk_Get_Debrief_Kill_Title(string);
-	} else if (line_in_page == 1) {
-		textext_Copy_Text(string, txtTalkDash);
-		center_line = 1;
+	if (line % max_paragraph_size < 2) {
+		if (line % max_paragraph_size) {
+			textext_Copy_Text(string, txtTalkDash);
+			center_line = 1;
+		} else {
+			talk_Get_Debrief_Kill_Title(string);
+		}
 	} else {
-		int16_t skip = line - 2 * (page + 1);
-		int16_t craft;
-
-		for (craft = 0; craft <= 69; craft++) {
+		line -= 2 * (page + 1);
+		craft = 0;
+		while (craft <= 69) {
 			talk_Get_Debrief_Kills(string, craft);
 			if (*string) {
-				if (!skip)
-					return;
-				skip--;
-				*string = '\0';
+				if (line) {
+					*string = '\0';
+					line -= 1;
+				} else {
+					break;
+				}
 			}
+			++craft;
 		}
 	}
 }
@@ -1504,25 +1512,29 @@ static int16_t talk_Count_Debrief_Losses(void) {
 // FUNCTION: TIE95 0x6A9F9
 // FUNCTION: TIE98 0x48B8C0
 static void talk_Find_Debrief_Losses(char* string, int16_t page, int16_t line) {
-	int16_t line_in_page = line % max_paragraph_size;
+	int16_t craft;
 
-	if (line_in_page == 0) {
-		talk_Get_Debrief_Loss_Title(string);
-	} else if (line_in_page == 1) {
-		textext_Copy_Text(string, txtTalkDash);
-		center_line = 1;
+	if (line % max_paragraph_size < 2) {
+		if (line % max_paragraph_size) {
+			textext_Copy_Text(string, txtTalkDash);
+			center_line = 1;
+		} else {
+			talk_Get_Debrief_Loss_Title(string);
+		}
 	} else {
-		int16_t skip = line - 2 * (page + 1);
-		int16_t craft;
-
-		for (craft = 0; craft < 69; craft++) {
+		line -= 2 * (page + 1);
+		craft = 0;
+		while (craft < 69) {
 			talk_Get_Debrief_Losses(string, craft);
 			if (*string) {
-				if (!skip)
-					return;
-				skip--;
-				*string = '\0';
+				if (line) {
+					*string = '\0';
+					line -= 1;
+				} else {
+					break;
+				}
 			}
+			++craft;
 		}
 	}
 }
@@ -1593,25 +1605,29 @@ static int16_t talk_Count_Debrief_Captures(void) {
 // FUNCTION: TIE95 0x6AD10
 // FUNCTION: TIE98 0x48BB00
 static void talk_Find_Debrief_Captures(char* string, int16_t page, int16_t line) {
-	int16_t line_in_page = line % max_paragraph_size;
+	int16_t craft;
 
-	if (line_in_page == 0) {
-		talk_Get_Debrief_Capture_Title(string);
-	} else if (line_in_page == 1) {
-		textext_Copy_Text(string, txtTalkDash);
-		center_line = 1;
+	if (line % max_paragraph_size < 2) {
+		if (line % max_paragraph_size) {
+			textext_Copy_Text(string, txtTalkDash);
+			center_line = 1;
+		} else {
+			talk_Get_Debrief_Capture_Title(string);
+		}
 	} else {
-		int16_t skip = line - 2 * (page + 1);
-		int16_t craft;
-
-		for (craft = 0; craft < 69; craft++) {
+		line -= 2 * (page + 1);
+		craft = 0;
+		while (craft < 69) {
 			talk_Get_Debrief_Captures(string, craft);
 			if (*string) {
-				if (!skip)
-					return;
-				skip--;
-				*string = '\0';
+				if (line) {
+					*string = '\0';
+					line -= 1;
+				} else {
+					break;
+				}
 			}
+			++craft;
 		}
 	}
 }

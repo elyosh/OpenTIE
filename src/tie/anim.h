@@ -133,7 +133,6 @@ void anim_updateanimstate(uint16_t obj_or_kind);
  * it to 29 ticks. TIE_updatetime decrements the slot every frame.
  */
 void anim_updateanimation(void);
-void anim_updateanimation_tie98(void);
 
 /* ====================================================================== *
  * Hyperspace state machine

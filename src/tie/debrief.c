@@ -85,7 +85,7 @@ static void debrief_end_View(int32_t frame_num);
 static int16_t debrief_film_Callback(Film* film, FilmObject* film_object);
 static int16_t debrief_iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 									   uint8_t right, int16_t mouse_x, int16_t mouse_y);
-static void debrief_iuser_Debrief(Input* input, int32_t time);
+static int16_t debrief_iuser_Debrief(Input* input, int32_t time);
 
 /* ================================================================
  * Entry point
@@ -131,7 +131,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(193, 420), TIE_FRONTEND_EDITION(107, 288));
 	brief_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(brief_input, debrief_iupdate_Debrief);
-	xinpattr_Set_Input_User_Function(brief_input, debrief_iuser_Debrief);
+	xinpattr_Set_Input_User_Function(brief_input, (InputUserFunc)debrief_iuser_Debrief);
 	brief_input->mouseUsage = allInput;
 	brief_input->id = 0;
 
@@ -141,7 +141,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 					   TIE_FRONTEND_EDITION(133, 296), TIE_FRONTEND_EDITION(150, 322));
 		officer = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(officer, debrief_iupdate_Debrief);
-		xinpattr_Set_Input_User_Function(officer, debrief_iuser_Debrief);
+		xinpattr_Set_Input_User_Function(officer, (InputUserFunc)debrief_iuser_Debrief);
 		officer->mouseUsage = allInput;
 		officer->id = 1;
 	}
@@ -152,7 +152,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 					   TIE_FRONTEND_EDITION(290, 572), TIE_FRONTEND_EDITION(128, 316));
 		priest = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(priest, debrief_iupdate_Debrief);
-		xinpattr_Set_Input_User_Function(priest, debrief_iuser_Debrief);
+		xinpattr_Set_Input_User_Function(priest, (InputUserFunc)debrief_iuser_Debrief);
 		priest->mouseUsage = allInput;
 		priest->id = 2;
 	}
@@ -162,7 +162,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(70, 145), TIE_FRONTEND_EDITION(200, 345));
 	flyagain = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(flyagain, debrief_iupdate_Debrief);
-	xinpattr_Set_Input_User_Function(flyagain, debrief_iuser_Debrief);
+	xinpattr_Set_Input_User_Function(flyagain, (InputUserFunc)debrief_iuser_Debrief);
 	flyagain->mouseUsage = allInput;
 	flyagain->id = 3;
 
@@ -360,35 +360,37 @@ static int16_t debrief_iupdate_Debrief(Input* input, Rect* bounds, Rect* clip, i
 
 // FUNCTION: TIE95 0x703B4
 // FUNCTION: TIE98 0x415B90
-static void debrief_iuser_Debrief(Input* input, int32_t time) {
+static int16_t debrief_iuser_Debrief(Input* input, int32_t time) {
 	int16_t scene;
 
 	(void)time;
-	if (!input->var1)
-		return; /* exit_pending */
-
-	scene = input->var2; /* exit_code */
-
-	if (scene == SCENE_BRIEF) {
-		/* Tour battle — commit and check if done */
-		if (!shipext_Set_Tour_Battle())
-			scene = SCENE_MAIN_MENU;
-	} else if (scene == SCENE_CUT_BATTLE_270 || scene == SCENE_FLIGHT_BATTLE) {
-		/* Refly / simulator */
-		if (shipext_Is_Mission_Success()) {
-			if (!shipext_Read_Temp_Pilot()) {
-				shipext_Refly_Tour_Mission();
-			} else {
-				shipext_Update_Pilot();
-			}
+	if (input->var1) {       /* exit_pending */
+		scene = input->var2; /* exit_code */
+		switch (scene) {
+			case SCENE_BRIEF:
+				/* Tour battle — commit and check if done */
+				if (!shipext_Set_Tour_Battle())
+					scene = SCENE_MAIN_MENU;
+				break;
+			case SCENE_CUT_BATTLE_270:
+			case SCENE_FLIGHT_BATTLE:
+				/* Refly / simulator */
+				if (shipext_Is_Mission_Success()) {
+					if (shipext_Read_Temp_Pilot())
+						shipext_Update_Pilot();
+					else
+						shipext_Refly_Tour_Mission();
+				}
+				break;
+			case SCENE_ARM_SHIP:
+				/* Alternative refly */
+				if (shipext_Is_Mission_Success() && !shipext_Read_Temp_Pilot())
+					shipext_Refly_Tour_Mission();
+				break;
 		}
-	} else if (scene == SCENE_ARM_SHIP) {
-		/* Alternative refly */
-		if (shipext_Is_Mission_Success() && !shipext_Read_Temp_Pilot())
-			shipext_Refly_Tour_Mission();
+		xerror_Set_Landru_Exit(scene);
 	}
-
-	xerror_Set_Landru_Exit(scene);
+	return 1;
 }
 
 /* ================================================================

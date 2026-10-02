@@ -53,7 +53,6 @@
 #include "tie/laser.h"
 #include "tie/logbuf2.h" /* pixelswide, pixelsdeep */
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/modelbounds.h"
 #include "tie/modelmesh.h"
 #include "tie/msg.h"
@@ -70,6 +69,7 @@
 #include "tie/trig2.h"
 #include "tie_runtime/audio/music_policy.h"
 #include "tie_runtime/runtime/profile.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 #include "tie_runtime/timing/chase_camera.h"
 #include "tie_runtime/timing/replay_recording.h"
 #include "tie_runtime/timing/replay_timing.h"
@@ -3276,18 +3276,8 @@ void user_calcdeltapitch(uint16_t dpitch, uint16_t dyaw, uint16_t obj_idx, Craft
 	m22 = cos_p;
 
 	/* Rotate each of the three basis vectors (S, U, f) by the new Euler. */
-	t = math2_dot3(calcS1, m00, calcS2, m01, calcS3, m02);
-	if (t >= 0x40000000)
-		t = 0x3FFF0000;
-	if (t <= -0x40000000)
-		t = -0x3FFF0000;
-	S1 = t >> 15;
-	t = math2_dot3(calcS1, m10, calcS2, m11, calcS3, m12);
-	if (t >= 0x40000000)
-		t = 0x3FFF0000;
-	if (t <= -0x40000000)
-		t = -0x3FFF0000;
-	S2 = t >> 15;
+	S1 = math2_dot3_q15_clamped(calcS1, calcS2, calcS3, m00, m01, m02);
+	S2 = math2_dot3_q15_clamped(calcS1, calcS2, calcS3, m10, m11, m12);
 	t = math2_dot3(calcS1, m20, calcS2, m21, calcS3, m22);
 	if (t >= 0x40000000)
 		t = 0x3FFF0000;
@@ -3297,18 +3287,8 @@ void user_calcdeltapitch(uint16_t dpitch, uint16_t dyaw, uint16_t obj_idx, Craft
 	calcS2 = (int16_t)S2;
 	calcS3 = (int16_t)(t >> 15);
 
-	t = math2_dot3(calcU1, m00, calcU2, m01, calcU3, m02);
-	if (t >= 0x40000000)
-		t = 0x3FFF0000;
-	if (t <= -0x40000000)
-		t = -0x3FFF0000;
-	U1 = t >> 15;
-	t = math2_dot3(calcU1, m10, calcU2, m11, calcU3, m12);
-	if (t >= 0x40000000)
-		t = 0x3FFF0000;
-	if (t <= -0x40000000)
-		t = -0x3FFF0000;
-	U2 = t >> 15;
+	U1 = math2_dot3_q15_clamped(calcU1, calcU2, calcU3, m00, m01, m02);
+	U2 = math2_dot3_q15_clamped(calcU1, calcU2, calcU3, m10, m11, m12);
 	t = math2_dot3(calcU1, m20, calcU2, m21, calcU3, m22);
 	if (t >= 0x40000000)
 		t = 0x3FFF0000;
@@ -3318,18 +3298,8 @@ void user_calcdeltapitch(uint16_t dpitch, uint16_t dyaw, uint16_t obj_idx, Craft
 	calcU2 = (int16_t)U2;
 	calcU3 = (int16_t)(t >> 15);
 
-	t = math2_dot3(calcf1, m00, calcf2, m01, calcf3, m02);
-	if (t >= 0x40000000)
-		t = 0x3FFF0000;
-	if (t <= -0x40000000)
-		t = -0x3FFF0000;
-	F1 = t >> 15;
-	t = math2_dot3(calcf1, m10, calcf2, m11, calcf3, m12);
-	if (t >= 0x40000000)
-		t = 0x3FFF0000;
-	if (t <= -0x40000000)
-		t = -0x3FFF0000;
-	F2 = t >> 15;
+	F1 = math2_dot3_q15_clamped(calcf1, calcf2, calcf3, m00, m01, m02);
+	F2 = math2_dot3_q15_clamped(calcf1, calcf2, calcf3, m10, m11, m12);
 	t = math2_dot3(calcf1, m20, calcf2, m21, calcf3, m22);
 	if (t >= 0x40000000)
 		t = 0x3FFF0000;

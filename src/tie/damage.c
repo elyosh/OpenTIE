@@ -66,21 +66,33 @@ enum {
 
 // FUNCTION: TIE95 0x1A600
 // FUNCTION: TIE98 0x414CC0
-int32_t damage_damageroom(void) {
+int16_t damage_damageroom(void) {
+	uint8_t priority_to_system[NUM_SYSTEMS];
+	uint16_t y;
+	uint32_t line_step;
+	int16_t i;
 	int16_t sel_sys;
-	int16_t mouse_prev;
+	int16_t drawn_sys;
+	int16_t full_redraw;
+	int16_t changed;
+	int16_t done;
 	int16_t ret_dir;
-	int render_again = 1;
+	uint16_t mouse_prev = 0;
+	int16_t mouse_btn;
+	uint8_t top_priority;
 #ifdef TIE_MODERN
 	DamageRoomState* continuation = landru_task_top();
-	sel_sys = continuation->sel_sys;
-	mouse_prev = continuation->mouse_prev;
-	ret_dir = continuation->ret_dir;
-	render_again = continuation->render;
-	if (!continuation->started)
+
+	if (continuation->started) {
+		sel_sys = continuation->sel_sys;
+		drawn_sys = sel_sys;
+		mouse_prev = (uint16_t)continuation->mouse_prev;
+		ret_dir = continuation->ret_dir;
+		full_redraw = 1;
+		done = 0;
+	} else
 #endif
 	{
-
 		dropflag = 1;
 		festring_setlinewrap(0);
 		festring_setautofill(1);
@@ -90,90 +102,105 @@ int32_t damage_damageroom(void) {
 		festring_settextcolor(COLOR_TEXT_NAME);
 
 		sel_sys = -1; /* no selection yet; set on first present row */
-		mouse_prev = 0;
-		ret_dir = 0;
-
+		full_redraw = 1;
+		done = 0;
 #ifdef TIE_MODERN
 		continuation->sel_sys = sel_sys;
-		continuation->mouse_prev = mouse_prev;
-		continuation->ret_dir = ret_dir;
+		continuation->mouse_prev = (int16_t)mouse_prev;
+		continuation->ret_dir = 0;
 		continuation->started = true;
 		continuation->render = true;
 		return 0;
 #endif
 	}
-	for (;;) {
-		if (render_again) {
+	do {
+#ifdef TIE_MODERN
+		if (continuation->render)
+#endif
+		{
 			if (TIE_DISPLAY_DX5)
 				FlightSurface_Lock();
-			{
-				uint8_t priority_to_system[NUM_SYSTEMS];
-				int16_t y;
-				uint32_t line_step;
-				int i;
+			for (i = 0; i < NUM_SYSTEMS; i++)
+				priority_to_system[pstate.subsystem_repair_priority[i]] = (uint8_t)i;
 
-				{
-					int i;
+			/* 20-line layout in 320x200, 50-line in 640x480; line spacing
+			 * derived from remaining vertical space. */
+			switch (flightResolution) {
+				case TIE_FLIGHT_RES_VGA:
+					y = 21;
+					break;
+				case TIE_FLIGHT_RES_SVGA:
+#if defined(TIE98) || defined(TIE_MODERN)
+				case TIE_FLIGHT_RES_SVGA_16:
+				case TIE_FLIGHT_RES_SVGA_D3D:
+#endif
+					y = 51;
+					break;
+				default:
+					y = 21;
+					break;
+			}
+			line_step = (screenYRes - 2 * y) / NUM_SYSTEMS;
 
-					for (i = 0; i < NUM_SYSTEMS; i++)
-						priority_to_system[pstate.subsystem_repair_priority[i]] = (uint8_t)i;
-				}
+			/* Only the rows whose highlight changed are redrawn unless a
+			 * reorder requested a full redraw. */
 
-				/* 20-line layout in 320x200, 50-line in 640x480; line spacing
-				 * derived from remaining vertical space. */
-				y = (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
-					 flightResolution == TIE_FLIGHT_RES_SVGA_D3D)
-						? 51
-						: 21;
-				line_step = (screenYRes - 2 * y) / NUM_SYSTEMS;
-
-				/* -- Draw group A: present and under repair (health == 0). ---- */
-				for (i = 0; i < NUM_SYSTEMS; i++) {
-					const uint8_t sys = priority_to_system[i];
-					if (pstate.subsystem_health_percent[sys])
-						continue;
-					if ((systemmask[sys] & pstate.player_craft->subsystem_active) == 0)
-						continue;
-
+			/* -- Draw group A: present and under repair (health == 0). ---- */
+			for (i = 0; i < NUM_SYSTEMS; i++) {
+				if (!pstate.subsystem_health_percent[priority_to_system[i]] &&
+					(pstate.player_craft->subsystem_active & (uint16_t)systemmask[priority_to_system[i]]) !=
+						0) {
 					festring_setcursor(1, y);
-					if (sel_sys == -1)
-						sel_sys = (int16_t)sys;
-					festring_setbackcolor(
-						(uint16_t)(sel_sys == (int16_t)sys ? COLOR_BG_SELECTED : COLOR_BG_NORMAL));
-					damage_outputsystem(sys, y);
-					y = (int16_t)(y + line_step);
+					if (sel_sys == (int16_t)0xFFFF) {
+						sel_sys = priority_to_system[i];
+						drawn_sys = sel_sys;
+					}
+					if (sel_sys == priority_to_system[i])
+						festring_setbackcolor(COLOR_BG_SELECTED);
+					else
+						festring_setbackcolor(COLOR_BG_NORMAL);
+					if (full_redraw || priority_to_system[i] == sel_sys || priority_to_system[i] == drawn_sys)
+						damage_outputsystem(priority_to_system[i], y);
+					y += line_step;
 				}
+			}
 
-				/* -- Draw group B: present and operational (health != 0). ---- */
-				for (i = 0; i < NUM_SYSTEMS; i++) {
-					const uint8_t sys = priority_to_system[i];
-					if (!pstate.subsystem_health_percent[sys])
-						continue;
-					if ((systemmask[sys] & pstate.player_craft->subsystem_active) == 0)
-						continue;
-
+			/* -- Draw group B: present and operational (health != 0). ---- */
+			for (i = 0; i < NUM_SYSTEMS; i++) {
+				if (pstate.subsystem_health_percent[priority_to_system[i]] &&
+					(pstate.player_craft->subsystem_active & (uint16_t)systemmask[priority_to_system[i]]) !=
+						0) {
 					festring_setcursor(1, y);
-					if (sel_sys == -1)
-						sel_sys = (int16_t)sys;
-					festring_setbackcolor(
-						(uint16_t)(sel_sys == (int16_t)sys ? COLOR_BG_SELECTED : COLOR_BG_NORMAL));
-					damage_outputsystem(sys, y);
-					y = (int16_t)(y + line_step);
+					if (sel_sys == (int16_t)0xFFFF) {
+						sel_sys = priority_to_system[i];
+						drawn_sys = sel_sys;
+					}
+					if (sel_sys == priority_to_system[i])
+						festring_setbackcolor(COLOR_BG_SELECTED);
+					else
+						festring_setbackcolor(COLOR_BG_NORMAL);
+					if (full_redraw || priority_to_system[i] == sel_sys || priority_to_system[i] == drawn_sys)
+						damage_outputsystem(priority_to_system[i], y);
+					y += line_step;
 				}
+			}
 
-				/* -- Draw group C: subsystem not installed. ----------------- */
-				for (i = 0; i < NUM_SYSTEMS; i++) {
-					const uint8_t sys = priority_to_system[i];
-					if ((systemmask[sys] & pstate.player_craft->subsystem_active) != 0)
-						continue;
-
+			/* -- Draw group C: subsystem not installed. ----------------- */
+			for (i = 0; i < NUM_SYSTEMS; i++) {
+				if (((uint16_t)systemmask[priority_to_system[i]] & pstate.player_craft->subsystem_active) ==
+					0) {
 					festring_setcursor(1, y);
-					if (sel_sys == -1)
-						sel_sys = (int16_t)sys;
-					festring_setbackcolor(
-						(uint16_t)(sel_sys == (int16_t)sys ? COLOR_BG_SELECTED : COLOR_BG_NORMAL));
-					damage_outputsystem(sys, y);
-					y = (int16_t)(y + line_step);
+					if (sel_sys == (int16_t)0xFFFF) {
+						sel_sys = priority_to_system[i];
+						drawn_sys = sel_sys;
+					}
+					if (sel_sys == priority_to_system[i])
+						festring_setbackcolor(COLOR_BG_SELECTED);
+					else
+						festring_setbackcolor(COLOR_BG_NORMAL);
+					if (full_redraw || priority_to_system[i] == sel_sys || priority_to_system[i] == drawn_sys)
+						damage_outputsystem(priority_to_system[i], y);
+					y += line_step;
 				}
 			}
 			if (TIE_DISPLAY_DX5) {
@@ -183,143 +210,114 @@ int32_t damage_damageroom(void) {
 			}
 #ifdef TIE_MODERN
 			continuation->sel_sys = sel_sys;
-			continuation->mouse_prev = mouse_prev;
+			continuation->mouse_prev = (int16_t)mouse_prev;
 			continuation->ret_dir = ret_dir;
 			continuation->render = false;
 			return 0;
 #endif
 		}
-		{
-			enum { ACT_NONE, ACT_NEXT, ACT_PREV, ACT_TOP, ACT_EXIT } action;
-			uint16_t key;
-			int redraw;
-			int mouse_btn;
-
+		full_redraw = 0;
+		drawn_sys = sel_sys;
+		changed = 0;
+		do {
 			feinput_getrawinput();
 			feinput_checkinput();
 			feinput_degitterinput();
-			inputdeltay = (int16_t)(inputdeltay * 2);
+			inputdeltay *= 2;
 
-			key = (uint16_t)inputkey;
-			action = ACT_NONE;
-			redraw = 0;
-
-			switch (key) {
-				case K_LEFT:
-					ret_dir = -1;
-					{
-#ifdef TIE_MODERN
-						continuation->finished = true;
-#endif
-						return ret_dir;
-					}
-				case K_RIGHT:
-					ret_dir = 1;
-					{
-#ifdef TIE_MODERN
-						continuation->finished = true;
-#endif
-						return ret_dir;
-					}
-				case K_UP:
-				case K_KP8:
-					action = ACT_PREV;
-					break;
-				case K_DOWN:
-				case K_KP2:
-					action = ACT_NEXT;
-					break;
-				case K_ENTER:
-				case K_SPACE:
-					action = ACT_TOP;
-					break;
+			switch ((uint16_t)inputkey) {
 				case K_ESC:
 				case K_Q_UPPER:
 				case K_Q_LOWER:
 				case K_D_LOWER:
 				case K_F1:
-					action = ACT_EXIT;
+					done = 1;
+					ret_dir = 0;
+					changed = 1;
 					break;
-				default:
+				case K_LEFT:
+					done = 1;
+					ret_dir = -1;
+					changed = 1;
 					break;
-			}
-
-			switch (action) {
-				case ACT_PREV:
+				case K_RIGHT:
+					done = 1;
+					ret_dir = 1;
+					changed = 1;
+					break;
+				case K_UP:
+				case K_KP8:
 					do {
-						sel_sys = damage_nextsystem((uint16_t)sel_sys, (int16_t)0xFFFF);
-					} while ((systemmask[sel_sys] & pstate.player_craft->subsystem_active) == 0);
-					redraw = 1;
+						sel_sys = damage_nextsystem(sel_sys, 0xFFFF);
+					} while ((pstate.player_craft->subsystem_active & (uint16_t)systemmask[sel_sys]) == 0);
+					changed = 1;
 					break;
-				case ACT_NEXT:
+				case K_DOWN:
+				case K_KP2:
 					do {
-						sel_sys = damage_nextsystem((uint16_t)sel_sys, 1);
-					} while ((systemmask[sel_sys] & pstate.player_craft->subsystem_active) == 0);
-					redraw = 1;
+						sel_sys = damage_nextsystem(sel_sys, 1);
+					} while ((pstate.player_craft->subsystem_active & (uint16_t)systemmask[sel_sys]) == 0);
+					changed = 1;
 					break;
-				case ACT_TOP: {
-					const uint8_t selected_priority = pstate.subsystem_repair_priority[sel_sys];
-					int i;
-
+				case K_ENTER:
+				case K_SPACE:
+					/* Promote the selection to the top of the repair queue. */
+					top_priority = pstate.subsystem_repair_priority[sel_sys];
 					for (i = 0; i < NUM_SYSTEMS; i++) {
-						const uint8_t priority = pstate.subsystem_repair_priority[i];
-						if (selected_priority > priority)
-							pstate.subsystem_repair_priority[i] = (uint8_t)(priority + 1);
+						if (top_priority > pstate.subsystem_repair_priority[i])
+							pstate.subsystem_repair_priority[i]++;
 					}
 					pstate.subsystem_repair_priority[sel_sys] = 0;
-				}
 					inputbuttons = 0; /* clear so the mouse-release edge below doesn't retrigger */
-					redraw = 1;
-					break;
-				case ACT_EXIT:
-					ret_dir = 0;
-					{
-#ifdef TIE_MODERN
-						continuation->finished = true;
-#endif
-						return ret_dir;
-					}
-				case ACT_NONE:
+					full_redraw = 1;
+					changed = 1;
 					break;
 			}
 
-			/* Mouse fallback: edge-triggered on release of btn 1 or 2 that
-			 * was held last frame. Binary semantics:
-			 *   LMB released -> next system (like '2'/Left)
-			 *   RMB released -> promote to top (like Enter/Space) */
+			/* Mouse fallback: edge-triggered on release of a button held
+			 * last frame. LMB selects the next system, RMB promotes it. */
 			mouse_btn = inputbuttons & 0xF;
 			if ((mouse_prev == 1 || mouse_prev == 2) && mouse_btn == 0) {
 				if (mouse_prev == 1) {
 					do {
-						sel_sys = damage_nextsystem((uint16_t)sel_sys, 1);
-					} while ((systemmask[sel_sys] & pstate.player_craft->subsystem_active) == 0);
+						sel_sys = damage_nextsystem(sel_sys, 1);
+					} while ((pstate.player_craft->subsystem_active & (uint16_t)systemmask[sel_sys]) == 0);
+					changed = 1;
 				} else {
-					{
-						const uint8_t selected_priority = pstate.subsystem_repair_priority[sel_sys];
-						int i;
-
-						for (i = 0; i < NUM_SYSTEMS; i++) {
-							const uint8_t priority = pstate.subsystem_repair_priority[i];
-							if (selected_priority > priority)
-								pstate.subsystem_repair_priority[i] = (uint8_t)(priority + 1);
-						}
-						pstate.subsystem_repair_priority[sel_sys] = 0;
+					top_priority = pstate.subsystem_repair_priority[sel_sys];
+					for (i = 0; i < NUM_SYSTEMS; i++) {
+						if (top_priority > pstate.subsystem_repair_priority[i])
+							pstate.subsystem_repair_priority[i]++;
 					}
+					pstate.subsystem_repair_priority[sel_sys] = 0;
+					full_redraw = 1;
+					changed = 1;
 				}
-				redraw = 1;
 			}
-			mouse_prev = (int16_t)mouse_btn;
-
-			render_again = redraw;
-		}
+			mouse_prev = mouse_btn;
 #ifdef TIE_MODERN
-		continuation->sel_sys = sel_sys;
-		continuation->mouse_prev = mouse_prev;
-		continuation->ret_dir = ret_dir;
-		continuation->render = render_again != 0;
-		return 0;
+			if (!changed) {
+				continuation->sel_sys = sel_sys;
+				continuation->mouse_prev = (int16_t)mouse_prev;
+				continuation->ret_dir = ret_dir;
+				return 0;
+			}
 #endif
-	}
+		} while (!changed);
+#ifdef TIE_MODERN
+		if (!done) {
+			continuation->sel_sys = sel_sys;
+			continuation->mouse_prev = (int16_t)mouse_prev;
+			continuation->ret_dir = ret_dir;
+			continuation->render = true;
+			return 0;
+		}
+#endif
+	} while (!done);
+#ifdef TIE_MODERN
+	continuation->finished = true;
+#endif
+	return ret_dir;
 }
 
 /* --- damage_nextsystem --- */
@@ -343,7 +341,7 @@ int32_t damage_damageroom(void) {
  */
 
 // FUNCTION: TIE95 0x1ABB4
-uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
+int16_t damage_nextsystem(uint16_t cur_sys, uint16_t direction) {
 	int k;
 	uint8_t priority_to_system[NUM_SYSTEMS];
 	int16_t last_repair;
@@ -371,7 +369,7 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
 		}
 
 		/* Matched cur_sys inside pass 1. */
-		if ((uint16_t)direction == 0xFFFF) {
+		if (direction == 0xFFFF) {
 			/* Backward. */
 			int k;
 
@@ -418,7 +416,7 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
 		}
 
 		/* Matched cur_sys inside pass 2. */
-		if ((uint16_t)direction == 0xFFFF) {
+		if (direction == 0xFFFF) {
 			/* Backward. */
 			if (last_operational != -1)
 				return (uint8_t)last_operational;
@@ -449,7 +447,7 @@ uint8_t damage_nextsystem(uint16_t cur_sys, int16_t direction) {
 /* --- damage_outputsystem --- */
 
 // FUNCTION: TIE95 0x1AD94
-void damage_outputsystem(uint16_t system_id, int16_t y) {
+void damage_outputsystem(uint16_t system_id, uint16_t y) {
 	char buf[6];
 
 	if ((pstate.player_craft->subsystem_active & (uint16_t)systemmask[system_id]) == 0) {

@@ -17,6 +17,7 @@
 #include "tie_runtime/storage/storage.h"
 
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 /* ============================================================================
@@ -120,13 +121,13 @@ void* objectminedgeptr[128];
 uint16_t objheap[128];
 
 // GLOBAL: TIE95 0xF1C90
-uint8_t dithercolors[9984];
+uint32_t dithercolors[39][16][4];
 // GLOBAL: TIE95 0xF0910
 uint8_t materialrgbhi[2496];
 // GLOBAL: TIE95 0xF12D0
 uint8_t materialrgblo[2496];
 // GLOBAL: TIE95 0xECA10
-uint8_t starhashtable[2048];
+int32_t starhashtable[512];
 // GLOBAL: TIE95 0xF4490
 int32_t eyexyzdata[384]; /* 1536 bytes; stored int32 (3/vtx = 12B) */
 
@@ -159,17 +160,17 @@ uint32_t edgeid;
 // GLOBAL: TIE95 0xF4FB8
 uint32_t pixdeepshft24;
 // GLOBAL: TIE95 0xF4FD8
-void* tempptr;
+trace2_EdgeHeader* tempptr;
 // GLOBAL: TIE95 0xF4FDC
-void* currptr;
+trace2_EdgeHeader* currptr;
 // GLOBAL: TIE95 0xF4FE0
-void* currptr2;
+trace2_EdgeHeader* currptr2;
 // GLOBAL: TIE95 0xF4FE4
-void* currentedgeptr;
+trace2_EdgeHeader* currentedgeptr;
 // GLOBAL: TIE95 0xF4FE8
-void* lastptr;
+trace2_EdgeHeader* lastptr;
 // GLOBAL: TIE95 0xF4FEC
-void* headerlist;
+trace2_EdgeHeader* headerlist;
 
 // GLOBAL: TIE95 0xF4FFA
 int16_t numlastrow;
@@ -222,81 +223,69 @@ uint8_t xtflagvalue;
  * ========================================================================== */
 // FUNCTION: TIE95 0x622D0
 void xtrans2_clearruntable(void) {
-	int mat_base, step;
-	int dither_out_base;
-	int out_off;
+	int i, j;
 	int row;
 
 	if (!xtrans2_dithercolorinitflag) {
-		dither_out_base = 0;
-		/* 39 materials × 16 steps × 16 bytes = 9984. */
-		for (mat_base = 0; mat_base != 624; mat_base += 16) {
-			int mat_idx = mat_base;
-			int dither_off = dither_out_base;
-			for (step = 0; step < 16; ++step) {
-				uint8_t cur_col = materialcolors[mat_idx];
-				uint8_t nxt_col = (step == 15) ? materialcolors[mat_idx] : materialcolors[mat_idx + 1];
-				uint32_t c = cur_col;
-				uint32_t c_sh8 = (uint32_t)cur_col << 8;
+		/* 39 materials x 16 steps x 4 dither permutations of the step
+		 * colour and its successor, packed one byte per pixel. */
+		for (i = 0; i < 39; ++i) {
+			for (j = 0; j < 16; ++j) {
+				uint8_t c = materialcolors[i * 16 + j];
+				uint8_t d;
 
-				/* The 4 permutations of (cur,nxt) bytes packed into
-				 * one dword per permutation. */
-				*(uint32_t*)&dithercolors[dither_off + 0] = c | ((c | ((c | c_sh8) << 8)) << 8);
-				*(uint32_t*)&dithercolors[dither_off + 4] = c | ((nxt_col | ((c | c_sh8) << 8)) << 8);
-				*(uint32_t*)&dithercolors[dither_off + 8] = nxt_col | ((c | ((nxt_col | c_sh8) << 8)) << 8);
-				*(uint32_t*)&dithercolors[dither_off + 12] =
-					c | ((nxt_col | ((c | ((uint32_t)nxt_col << 8)) << 8)) << 8);
-
-				++mat_idx;
-				dither_off += 16;
+				if (j == 15) {
+					d = c;
+				} else {
+					d = materialcolors[i * 16 + j + 1];
+				}
+				dithercolors[i][j][0] = ((((c << 8) | c) << 8 | c) << 8) | c;
+				dithercolors[i][j][1] = ((((c << 8) | c) << 8 | d) << 8) | c;
+				dithercolors[i][j][2] = ((((c << 8) | d) << 8 | c) << 8) | d;
+				dithercolors[i][j][3] = ((((d << 8) | c) << 8 | d) << 8) | c;
 			}
-			dither_out_base += 256;
 		}
 		xtrans2_dithercolorinitflag = 1;
 	}
 
 	if (!xtrans2_materialrgbinitflag) {
-		int mat_offs = 0;
-		int rgb_out_base = 0;
-		do {
-			/* Read current material's palette entry (RGB 0..63) and pack
-			 * into RGB565. */
-			uint8_t* pal_cur = &rtsvga2_vgapalette[3 * materialcolors[mat_offs]];
-			uint16_t rgb565_cur = ((pal_cur[0] >> 1) << 11) | ((pal_cur[1]) << 5) | ((pal_cur[2] >> 1));
+		/* 39 materials x 64 blend steps from the ramp's first colour to
+		 * its last, interpolated in RGB565 space. */
+		for (i = 0; i < 39; ++i) {
+			uint8_t* pal;
+			unsigned rgb1, rgb2;
+			uint8_t r1, g1, b1, r2, g2, b2;
 
-			/* And the neighbour material (offset +15 in the table = next
-			 * ramp base). */
-			uint8_t* pal_nxt = &rtsvga2_vgapalette[3 * materialcolors[mat_offs + 15]];
-			uint16_t rgb565_nxt = ((pal_nxt[0] >> 1) << 11) | ((pal_nxt[1]) << 5) | ((pal_nxt[2] >> 1));
+			pal = &rtsvga2_vgapalette[3 * materialcolors[i * 16]];
+			rgb1 = (uint16_t)((uint16_t)((pal[0] >> 1) << 11) | (uint16_t)(pal[1] << 5) |
+							  (uint16_t)(pal[2] >> 1));
+			pal = &rtsvga2_vgapalette[3 * materialcolors[i * 16 + 15]];
+			rgb2 = (uint16_t)((uint16_t)((pal[0] >> 1) << 11) | (uint16_t)(pal[1] << 5) |
+							  (uint16_t)(pal[2] >> 1));
+			r1 = (rgb1 >> 11) & 0x1F;
+			r2 = (rgb2 >> 11) & 0x1F;
+			g1 = (rgb1 >> 5) & 0x3F;
+			g2 = (rgb2 >> 5) & 0x3F;
+			b1 = rgb1 & 0x1F;
+			b2 = rgb2 & 0x1F;
+			r1 *= 2;
+			r2 *= 2;
+			b1 *= 2;
+			b2 *= 2;
+			for (j = 0; j < 64; ++j) {
+				uint8_t r = r1 + (((r2 - r1) * j) >> 6);
+				uint8_t g = g1 + (((g2 - g1) * j) >> 6);
+				uint8_t b = b1 + (((b2 - b1) * j) >> 6);
+				uint8_t hi, lo;
 
-			uint8_t r_cur = (rgb565_cur >> 11) & 0x1F;
-			uint8_t g_cur = (rgb565_cur >> 5) & 0x3F;
-			uint8_t b_cur2 = 2 * (rgb565_cur & 0x1F);
-			uint8_t r_cur2 = 2 * r_cur;
-
-			uint8_t r_nxt2 = 2 * ((rgb565_nxt >> 11) & 0x1F);
-			uint8_t g_nxt = (rgb565_nxt >> 5) & 0x3F;
-			uint8_t b_nxt2 = 2 * (rgb565_nxt & 0x1F);
-
-			int blend_step;
-
-			out_off = rgb_out_base;
-
-			for (blend_step = 0; blend_step < 64; ++blend_step) {
-				uint8_t g_interp = (uint8_t)(((blend_step * (g_nxt - g_cur)) >> 6) + g_cur);
-				uint8_t r_interp = (uint8_t)(((blend_step * (r_nxt2 - r_cur2)) >> 6) + r_cur2);
-				uint8_t b_interp = (uint8_t)(((blend_step * (b_nxt2 - b_cur2)) >> 6) + b_cur2);
-
-				uint8_t hi_byte = (uint8_t)(((g_interp >> 3)) + 4 * (r_interp & 0x3E));
-				uint8_t lo_byte = (uint8_t)((b_interp >> 1) + 32 * (g_interp & 7));
-
-				materialrgbhi[out_off] = hi_byte;
-				materialrgblo[out_off] = lo_byte;
-				++out_off;
+				hi = (r & 0x3E) << 2;
+				hi += g >> 3;
+				lo = (g & 7) << 5;
+				lo += b >> 1;
+				materialrgbhi[i * 64 + j] = hi;
+				materialrgblo[i * 64 + j] = lo;
 			}
-			mat_offs += 16;
-			rgb_out_base += 64;
-		} while (mat_offs != 624);
+		}
 		xtrans2_materialrgbinitflag = 1;
 	}
 
@@ -372,552 +361,389 @@ void xtrans2_initxtrans(void) {
  * ========================================================================== */
 // FUNCTION: TIE95 0x626C0
 void xtrans2_drawxtrans(void) {
-	/* Running locals mirroring the decompiler's register spills for
-	 * tempptr / currptr / maskptr. These are written back to the matching
-	 * globals at points where callees read them. */
-	void* saved_tempptr;
-	void* saved_currptr;
-	uint8_t* mask_cursor;
-	uint32_t vesa_page;
-	int32_t delta;
+	uint32_t page;
+	int i;
 
 	headerlist = NULL;
 	lastheap = 0;
-	vesa_page = ((uint32_t)screenMemWidth * displaycorner_lines + displaycorner_columns) / vesa_page_size;
-	videoypos = ((uint32_t)screenMemWidth * displaycorner_lines + displaycorner_columns) % vesa_page_size;
-	rtsvga2_SetCurrentPage(vesa_window, (uint16_t)vesa_page);
-	numlastrow = 0;
+	page = (displaycorner_lines * screenMemWidth + displaycorner_columns) / vesa_page_size;
+	videoypos = (displaycorner_lines * screenMemWidth + displaycorner_columns) % vesa_page_size;
+	if (flightResolution != (int16_t)0x13)
+		rtsvga2_SetCurrentPage(vesa_window, (uint16_t)page);
 	logbufbaseptr = (uint8_t*)buffer_ptr;
-	markcnt = 0;
 	logbufypos = 0;
 	xtflagvalue = 0;
-	memset(objflag, 0, 256);
-	memset(objectcount, 0, 128);
-	currentypos = 0;
+	numlastrow = 0;
+	markcnt = 0;
+	for (i = 0; i < 256; ++i)
+		objflag[i] = 0;
+	for (i = 0; i < 128; ++i)
+		objectcount[i] = 0;
+	maskptr = (uint8_t*)xtransdataptr + maskbufptr;
 
-	mask_cursor = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
-
-	while ((int32_t)pixelsdeep > currentypos) {
-		uint8_t* mask_cur;
-		trace2_EdgeHeader* row_edge;
-		int8_t mask_first;
-		int32_t cur_x;
-		int done_flag;
-		int row_done;
-
-		maskptr = mask_cursor;
+	for (currentypos = 0; currentypos < pixelsdeep;
+		 videoypos += screenMemWidth, logbufypos += bytesPerPixel * pixelswide, ++currentypos) {
+		uint16_t run;
 
 		if (videoypos >= vesa_page_size) {
-			++vesa_page;
+			++page;
 			videoypos -= vesa_page_size;
-			rtsvga2_SetCurrentPage(vesa_window, (uint16_t)vesa_page);
+			rtsvga2_SetCurrentPage(vesa_window, (uint16_t)page);
 		}
 
-		saved_tempptr = tempptr;
-		saved_currptr = NULL; /* matches "currptr = row_edge" init */
-		mask_cur = maskptr;
-
-		/* --- 2. Age active-edge list. */
-		{
-			trace2_EdgeHeader* walk = (trace2_EdgeHeader*)headerlist;
-			/* Drop dead head(s). */
-			while (walk && --walk->numscanlines == 0) {
-				walk = walk->next;
-				headerlist = walk;
-			}
-			if (walk) {
-				trace2_EdgeHeader* nxt;
-
-				/* Advance head's info ptr by one. */
-				++walk->info;
-				headerlist = walk;
-				lastptr = walk;
-				nxt = walk->next;
-				while (nxt) {
-					if (--nxt->numscanlines) {
-						++nxt->info;
-						lastptr = nxt;
-						nxt = nxt->next;
+		/* Age the active edges, dropping the ones that end on this line. */
+		currptr = headerlist;
+		while (currptr) {
+			if (--currptr->numscanlines != 0) {
+				++currptr->info;
+				headerlist = currptr;
+				lastptr = currptr;
+				currptr = currptr->next;
+				while (currptr) {
+					if (--currptr->numscanlines != 0) {
+						++currptr->info;
+						lastptr = currptr;
+						currptr = currptr->next;
 					} else {
-						nxt = nxt->next;
-						((trace2_EdgeHeader*)lastptr)->next = nxt;
+						currptr = currptr->next;
+						lastptr->next = currptr;
 					}
 				}
+				break;
 			}
+			currptr = currptr->next;
+			headerlist = currptr;
 		}
 
-		/* --- 3. Bubble-sort remaining edges by info->x. */
-		if (headerlist && ((trace2_EdgeHeader*)headerlist)->next) {
+		/* Bubble-sort the active edges by x. */
+		if (headerlist && headerlist->next) {
 			int swapped;
+
 			do {
-				trace2_EdgeHeader* sort_cur;
-
+				tempptr = NULL;
 				swapped = 0;
-				saved_tempptr = NULL;
-				sort_cur = ((trace2_EdgeHeader*)headerlist)->next;
-				lastptr = (trace2_EdgeHeader*)headerlist;
-				while (sort_cur) {
-					trace2_EdgeHeader* sort_last = (trace2_EdgeHeader*)lastptr;
-					trace2_EdgeHeader* sort_save = sort_cur;
-
-					if (sort_cur->info->x >= ((trace2_EdgeHeader*)lastptr)->info->x) {
-						sort_cur = sort_cur->next;
-						saved_tempptr = lastptr;
-						lastptr = ((trace2_EdgeHeader*)lastptr)->next;
-					} else {
+				currptr = headerlist->next;
+				lastptr = headerlist;
+				while (currptr) {
+					if (currptr->info->x < lastptr->info->x) {
 						swapped = 1;
-						if (saved_tempptr) {
-							((trace2_EdgeHeader*)saved_tempptr)->next = sort_cur;
-							sort_last->next = sort_cur->next;
-							sort_cur->next = sort_last;
-							saved_tempptr = sort_cur;
-							sort_cur = sort_last->next;
+						if (tempptr) {
+							tempptr->next = currptr;
+							lastptr->next = currptr->next;
+							currptr->next = lastptr;
+							tempptr = currptr;
+							currptr = lastptr->next;
 						} else {
-							trace2_EdgeHeader* nxt;
-
-							headerlist = sort_cur;
-							nxt = sort_cur->next;
-							saved_tempptr = sort_cur;
-							((trace2_EdgeHeader*)lastptr)->next = nxt;
-							sort_cur = nxt;
-							sort_save->next = sort_last;
+							headerlist = currptr;
+							tempptr = currptr;
+							lastptr->next = currptr->next;
+							currptr = currptr->next;
+							tempptr->next = lastptr;
 						}
+					} else {
+						currptr = currptr->next;
+						tempptr = lastptr;
+						lastptr = lastptr->next;
 					}
 				}
 			} while (swapped);
 		}
 
-		/* --- 4. Merge rowheaders[y] in sorted order. */
-		row_edge = trace2_rowheaders[currentypos];
-		while (row_edge) {
-			trace2_EdgeHeader* rcur = (trace2_EdgeHeader*)headerlist;
+		/* Merge in the edges starting on this line. */
+		currptr = trace2_rowheaders[currentypos];
+		while (currptr) {
+			currptr2 = headerlist;
 			lastptr = NULL;
-
-			if (headerlist) {
-				trace2_EdgeHeader* re_save = row_edge;
-				trace2_EdgeHeader* after;
-
-				while (rcur && rcur->info->x < row_edge->info->x) {
-					lastptr = rcur;
-					rcur = rcur->next;
-				}
-
-				if (rcur) {
+			while (currptr2) {
+				if (currptr2->info->x >= currptr->info->x) {
 					if (lastptr) {
-						after = ((trace2_EdgeHeader*)lastptr)->next;
-						((trace2_EdgeHeader*)lastptr)->next = row_edge;
-						rcur = row_edge;
+						tempptr = lastptr->next;
+						lastptr->next = currptr;
+						currptr2 = currptr;
+						currptr = currptr->next;
+						currptr2->next = tempptr;
 					} else {
-						after = (trace2_EdgeHeader*)headerlist;
-						headerlist = row_edge;
+						tempptr = headerlist;
+						headerlist = currptr;
+						currptr = currptr->next;
+						headerlist->next = tempptr;
 					}
-					row_edge = row_edge->next;
-					re_save->next = after;
-					continue;
+					break;
 				}
+				lastptr = currptr2;
+				currptr2 = currptr2->next;
 			}
-			if (!rcur) {
-				trace2_EdgeHeader* tmp = row_edge;
-				if (lastptr)
-					((trace2_EdgeHeader*)lastptr)->next = row_edge;
-				else
-					headerlist = row_edge;
-				row_edge = row_edge->next;
-				tmp->next = NULL;
+			if (!currptr2) {
+				if (lastptr) {
+					lastptr->next = currptr;
+					tempptr = currptr;
+					currptr = currptr->next;
+					tempptr->next = NULL;
+				} else {
+					headerlist = currptr;
+					currptr = currptr->next;
+					headerlist->next = NULL;
+				}
 			}
 		}
 
-		/* --- 5. Read first mask run for this scanline. */
-		mask_first = (int8_t)*mask_cur;
+		/* Read the first mask run of the line. */
 		lastheap = 0;
 		curobjid = 0;
+		maskflag = *maskptr++;
+		maskx = *maskptr++;
 		popflag = 0;
-		maskflag = mask_first;
-		mask_cursor = mask_cur + 1;
-		delta = *mask_cursor++;
-		if (delta == 0) {
-			delta = *mask_cursor++;
-			if (delta == 0)
-				delta = *mask_cursor++ + 511;
-			else
-				delta += 255;
+		if (maskx == 0) {
+			maskx = *maskptr++;
+			if (maskx == 0)
+				maskx = *maskptr++ + 256;
+			maskx += 255;
 		}
-		cur_x = delta;
-		done_flag = 0;
-		row_done = 0;
 
-		if (maskflag >= 0 || (startx_mod_54 = cur_x, (int32_t)pixelswide > cur_x)) {
-			/* --- Left-edge skip: advance past runs entirely to the left
-			 * of headerlist's first active edge's x. */
+		if (maskflag >= 0 || (startx_mod_54 = maskx) < pixelswide) {
 			if (headerlist) {
-				int32_t left_val;
-
-				runx = ((trace2_EdgeHeader*)headerlist)->info->x >> 8;
-				left_val = leftside[currentypos];
-				if (runx <= left_val || (int32_t)pixelswide <= left_val) {
-					if ((int32_t)pixelswide < runx)
+				runx = headerlist->info->x;
+				runx >>= 8;
+				if (runx > leftside[currentypos] && leftside[currentypos] < pixelswide) {
+					startx_mod_54 = leftside[currentypos];
+					while (startx_mod_54 >= maskx) {
+						run = *maskptr++;
+						maskflag = -maskflag;
+						if (run == 0) {
+							run = *maskptr++;
+							if (run == 0)
+								run = *maskptr++ + 256;
+							run += 255;
+						}
+						maskx += run;
+					}
+					if (maskflag < 0) {
+						startx_mod_54 = maskx;
+						if (pixelswide <= maskx)
+							continue;
+					}
+					while (runx >= maskx) {
+						if (maskx >= pixelswide) {
+							runx = pixelswide;
+							break;
+						}
+						if (maskflag < 0) {
+							startx_mod_54 = maskx;
+						} else {
+							endx = maskx;
+							xtrans2_outputxt();
+						}
+						maskflag = -maskflag;
+						run = *maskptr++;
+						if (run == 0) {
+							run = *maskptr++;
+							if (run == 0)
+								run = *maskptr++ + 256;
+							run += 255;
+						}
+						maskx += run;
+					}
+					if (maskflag < 0) {
+						startx_mod_54 = maskx;
+					} else {
+						endx = runx;
+						xtrans2_outputxt();
+					}
+					if (startx_mod_54 >= pixelswide)
+						continue;
+				} else {
+					if (runx > pixelswide)
 						runx = pixelswide;
 					if (runx < 0)
 						runx = 0;
-				} else {
-					startx_mod_54 = left_val;
-					/* Skip runs ending before left_val. */
-					if (left_val >= cur_x) {
-						do {
-							maskflag = (int8_t)-maskflag;
-							delta = *mask_cursor++;
-							if (delta == 0) {
-								delta = *mask_cursor++;
-								if (delta == 0)
-									delta = *mask_cursor++ + 511;
-								else
-									delta += 255;
-							}
-							cur_x += delta;
-						} while (startx_mod_54 >= cur_x);
-					}
-					if (maskflag < 0) {
-						startx_mod_54 = cur_x;
-						if ((int32_t)pixelswide <= cur_x)
-							row_done = 1;
-					}
-					if (!row_done) {
-						/* Emit runs up to runx. */
-						while (runx >= cur_x) {
-							if (cur_x >= (int32_t)pixelswide) {
-								runx = pixelswide;
-								break;
-							}
-							maskptr = mask_cursor;
-							currptr = row_edge;
-							tempptr = saved_tempptr;
-							if (maskflag >= 0) {
-								endx = cur_x;
-								maskx = cur_x;
-								xtrans2_outputxt();
-								cur_x = maskx;
-							} else {
-								startx_mod_54 = cur_x;
-							}
-							saved_tempptr = tempptr;
-							maskflag = (int8_t)-maskflag;
-							row_edge = (trace2_EdgeHeader*)currptr;
-							mask_cursor = maskptr;
-							delta = *mask_cursor++;
-							if (delta == 0) {
-								delta = *mask_cursor++;
-								if (delta == 0)
-									delta = *mask_cursor++ + 511;
-								else
-									delta += 255;
-							}
-							cur_x += delta;
-						}
-						maskptr = mask_cursor;
-						maskx = cur_x;
-						currptr = row_edge;
-						tempptr = saved_tempptr;
-						if (maskflag >= 0) {
-							endx = runx;
-							xtrans2_outputxt();
-						} else {
-							startx_mod_54 = cur_x;
-						}
-						saved_tempptr = tempptr;
-						row_edge = (trace2_EdgeHeader*)currptr;
-						cur_x = maskx;
-						mask_cursor = maskptr;
-						if ((int32_t)pixelswide <= startx_mod_54)
-							row_done = 1;
-					}
 				}
-				if (!row_done)
-					leftside[currentypos] = runx;
+				leftside[currentypos] = runx;
 			}
 
-			if (!row_done) {
-				/* --- Walk past any runs <= leftside[currentypos] (bait-catch
-				 * for the first headerless scan). */
-				for (startx_mod_54 = leftside[currentypos]; startx_mod_54 >= cur_x;) {
-					maskflag = (int8_t)-maskflag;
-					delta = *mask_cursor++;
-					if (delta == 0) {
-						delta = *mask_cursor++;
-						if (delta == 0)
-							delta = *mask_cursor++ + 511;
-						else
-							delta += 255;
+			for (startx_mod_54 = leftside[currentypos]; startx_mod_54 >= maskx; maskx += run) {
+				run = *maskptr++;
+				maskflag = -maskflag;
+				if (run == 0) {
+					run = *maskptr++;
+					if (run == 0)
+						run = *maskptr++ + 256;
+					run += 255;
+				}
+			}
+
+			if (maskflag >= 0 || (startx_mod_54 = maskx) < pixelswide) {
+				int done = 0;
+
+				for (currentedgeptr = headerlist; currentedgeptr; currentedgeptr = currentedgeptr->next) {
+					objid = currentedgeptr->objectid;
+					edgeid = currentedgeptr->edgeid;
+					face1 = currentedgeptr->face1;
+					face2 = currentedgeptr->face2;
+					endx = currentedgeptr->info->x;
+					endx >>= 8;
+					newx = endx;
+					newlt = currentedgeptr->info->lt >> 1;
+					runx = endx;
+					while (runx >= maskx) {
+						maskflag = -maskflag;
+						if (maskflag < 0) {
+							endx = maskx;
+							xtrans2_outputxt();
+							if (maskx >= pixelswide) {
+								done = 1;
+								break;
+							}
+							run = *maskptr++;
+							if (run == 0) {
+								run = *maskptr++;
+								if (run == 0)
+									run = *maskptr++ + 256;
+								run += 255;
+							}
+							startx_mod_54 += run;
+							maskx += run;
+							if (maskx >= pixelswide) {
+								done = 1;
+								break;
+							}
+						} else {
+							if (curobjid == (uint16_t)0xFFFF)
+								curobjid = xtrans2_findnearest();
+							objflag[curobjid] = 0xFF;
+							run = *maskptr++;
+							if (run == 0) {
+								run = *maskptr++;
+								if (run == 0)
+									run = *maskptr++ + 256;
+								run += 255;
+							}
+							maskx += run;
+						}
 					}
-					cur_x += delta;
+					if (done)
+						break;
+					endx = runx;
+					xtrans2_processedge();
 				}
 
-				if (maskflag >= 0 || (startx_mod_54 = cur_x, (int32_t)pixelswide > cur_x)) {
-					int32_t cur_mx2;
-
-					maskptr = mask_cursor;
-					maskx = cur_x;
-					currptr = row_edge;
-					tempptr = saved_tempptr;
-					done_flag = 0;
-
-					/* --- 6a. Main per-edge loop. */
-					for (currentedgeptr = (trace2_EdgeHeader*)headerlist; currentedgeptr;
-						 currentedgeptr = ((trace2_EdgeHeader*)currentedgeptr)->next) {
-						trace2_EdgeHeader* ce = (trace2_EdgeHeader*)currentedgeptr;
-						int32_t left_x;
-						int32_t left_lt;
-						int32_t cur_mx;
-
-						objid = ce->objectid;
-						edgeid = ce->edgeid;
-						face1 = ce->face1;
-						face2 = ce->face2;
-
-						left_x = ce->info->x;
-						left_lt = ce->info->lt;
-						endx = left_x >> 8;
-						newx = endx;
-						newlt = left_lt >> 1;
-						cur_mx = maskx;
-						runx = endx;
-
-						/* Catch up mask stream to the edge's x. */
-						while (runx >= cur_mx) {
-							maskptr = mask_cursor;
-							currptr = row_edge;
-							tempptr = saved_tempptr;
-							maskflag = (int8_t)-maskflag;
-							if (maskflag >= 0) {
-								maskx = cur_mx;
-								if (curobjid == 0xFFFF)
-									curobjid = xtrans2_findnearest();
-								objflag[curobjid] = 0xFF;
-								saved_tempptr = tempptr;
-								delta = *mask_cursor++;
-								if (delta == 0) {
-									delta = *mask_cursor++;
-									if (delta == 0)
-										delta = *mask_cursor++ + 511;
-									else
-										delta += 255;
-								}
-								cur_mx = delta + maskx;
-							} else {
-								endx = cur_mx;
-								maskx = cur_mx;
-								xtrans2_outputxt();
-								cur_mx = maskx;
-								if (maskx >= (int32_t)pixelswide) {
-									done_flag = 1;
-									saved_tempptr = tempptr;
-									mask_cursor = maskptr;
-									break;
-								}
-								saved_tempptr = tempptr;
-								delta = *mask_cursor++;
-								if (delta == 0) {
-									delta = *mask_cursor++;
-									if (delta == 0)
-										delta = *mask_cursor++ + 511;
-									else
-										delta += 255;
-								}
-								startx_mod_54 += delta;
-								cur_mx = delta + maskx;
-								if (cur_mx >= (int32_t)pixelswide) {
-									done_flag = 1;
-									break;
-								}
-							}
+				if (done) {
+					rightside[currentypos] = pixelswide;
+				} else {
+					objid = 0;
+					while (maskx < pixelswide) {
+						if (maskflag < 0) {
+							startx_mod_54 = maskx;
+						} else {
+							if (curobjid == (uint16_t)0xFFFF)
+								curobjid = xtrans2_findnearest();
+							if (curobjid == 0)
+								break;
+							endx = maskx;
+							xtrans2_outputxt();
 						}
-						maskptr = mask_cursor;
-						maskx = cur_mx;
-						currptr = row_edge;
-						tempptr = saved_tempptr;
-						if (done_flag)
-							break;
-						endx = runx;
-						xtrans2_processedge();
+						maskflag = -maskflag;
+						run = *maskptr++;
+						if (run == 0) {
+							run = *maskptr++;
+							if (run == 0)
+								run = *maskptr++ + 256;
+							run += 255;
+						}
+						maskx += run;
 					}
-					saved_tempptr = tempptr;
-					saved_currptr = currptr;
-					cur_mx2 = maskx;
-
-					/* --- 6b. Tail: scanline end. */
-					if (done_flag) {
+					if (maskflag < 0) {
 						rightside[currentypos] = pixelswide;
 					} else {
-						objid = 0;
-						while (1) {
-							maskptr = mask_cursor;
-							currptr = saved_currptr;
-							tempptr = saved_tempptr;
-							if (cur_mx2 >= (int32_t)pixelswide)
-								break;
-							if (maskflag >= 0) {
-								maskx = cur_mx2;
-								if (curobjid == 0xFFFF)
-									curobjid = xtrans2_findnearest();
-								cur_mx2 = maskx;
-								if (!curobjid)
-									break;
-								endx = maskx;
-								xtrans2_outputxt();
-								cur_mx2 = maskx;
-							} else {
-								startx_mod_54 = cur_mx2;
+						if (curobjid == (uint16_t)0xFFFF)
+							curobjid = xtrans2_findnearest();
+						if (curobjid == 0) {
+							runx = rightside[currentypos];
+							rightside[currentypos] = startx_mod_54;
+							while (maskx < pixelswide) {
+								if (maskflag < 0) {
+									startx_mod_54 = maskx;
+								} else if (maskx < runx) {
+									endx = maskx;
+									xtrans2_outputxt();
+								} else if (startx_mod_54 < runx) {
+									endx = runx;
+									xtrans2_outputxt();
+								}
+								run = *maskptr++;
+								maskflag = -maskflag;
+								if (run == 0) {
+									run = *maskptr++;
+									if (run == 0)
+										run = *maskptr++ + 256;
+									run += 255;
+								}
+								maskx += run;
 							}
-							saved_tempptr = tempptr;
-							maskflag = (int8_t)-maskflag;
-							saved_currptr = currptr;
-							delta = *mask_cursor++;
-							if (delta == 0) {
-								delta = *mask_cursor++;
-								if (delta == 0)
-									delta = *mask_cursor++ + 511;
-								else
-									delta += 255;
+							if (maskflag > 0) {
+								if (maskx < runx) {
+									endx = maskx;
+									xtrans2_outputxt();
+								} else if (runx > startx_mod_54) {
+									endx = runx;
+									xtrans2_outputxt();
+								}
 							}
-							cur_mx2 += delta;
-						}
-
-						if (maskflag < 0) {
-							rightside[currentypos] = pixelswide;
-							maskx = cur_mx2;
 						} else {
-							maskx = cur_mx2;
-							if (curobjid == 0xFFFF)
-								curobjid = xtrans2_findnearest();
-							if (curobjid) {
-								endx = pixelswide;
-								xtrans2_outputxt();
-								rightside[currentypos] = pixelswide;
-							} else {
-								int32_t* rs_p = &rightside[currentypos];
-								int32_t runx_snap = *rs_p;
-								*rs_p = startx_mod_54;
-								while (cur_mx2 < (int32_t)pixelswide) {
-									if (maskflag >= 0) {
-										maskptr = mask_cursor;
-										currptr = saved_currptr;
-										tempptr = saved_tempptr;
-										if (cur_mx2 >= runx_snap) {
-											maskx = cur_mx2;
-											if (startx_mod_54 < runx_snap) {
-												endx = runx_snap;
-												xtrans2_outputxt();
-											}
-										} else {
-											endx = cur_mx2;
-											maskx = cur_mx2;
-											xtrans2_outputxt();
-										}
-									} else {
-										startx_mod_54 = cur_mx2;
-										maskptr = mask_cursor;
-										maskx = cur_mx2;
-										currptr = saved_currptr;
-										tempptr = saved_tempptr;
-									}
-									saved_tempptr = tempptr;
-									saved_currptr = currptr;
-									maskflag = (int8_t)-maskflag;
-									delta = *mask_cursor++;
-									if (delta == 0) {
-										delta = *mask_cursor++;
-										if (delta == 0)
-											delta = *mask_cursor++ + 511;
-										else
-											delta += 255;
-									}
-									cur_mx2 = delta + maskx;
-								}
-								maskptr = mask_cursor;
-								maskx = cur_mx2;
-								currptr = saved_currptr;
-								tempptr = saved_tempptr;
-								if (maskflag > 0) {
-									if (cur_mx2 >= runx_snap) {
-										if (runx_snap > startx_mod_54) {
-											endx = runx_snap;
-											xtrans2_outputxt();
-										}
-									} else {
-										endx = cur_mx2;
-										xtrans2_outputxt();
-									}
-								}
-							}
+							endx = pixelswide;
+							xtrans2_outputxt();
+							rightside[currentypos] = pixelswide;
 						}
 					}
+				}
 
-					saved_tempptr = tempptr;
-					row_edge = (trace2_EdgeHeader*)currptr;
-					cur_x = maskx;
-					mask_cursor = maskptr;
+				/* Restore the marking records touched on this line. */
+				if (markcnt) {
+					int mark;
 
-					/* --- 7. Clear marking records dirtied this scanline. */
-					if (markcnt) {
-						int mark_i;
+					markcnt = 0;
+					for (mark = nummarks; mark != 0; --mark) {
+						if (markingnumber[mark]) {
+							uint8_t* record;
+							uint8_t* object;
+							uint8_t slot;
+							uint8_t swap;
 
-						markcnt = 0;
-						mark_i = nummarks;
-						if (nummarks) {
-							int mark_i2 = nummarks;
-							do {
-								if (markingnumber[mark_i]) {
-									uint8_t* mp;
-									uint8_t cb;
-									int j;
-									uint8_t* rec;
-									uint8_t* swap_src;
-									uint8_t tmp;
-
-									markingnumber[mark_i] = 0;
-									mp = (uint8_t*)xtransdataptr + markingptr[mark_i2];
-									cb = mp[18];
-									/* Clear eight words at mp+18..mp+32. */
-									for (j = 9; j <= 16; ++j)
-										((uint16_t*)mp)[j] = 0;
-									rec = (uint8_t*)xtransdataptr + 2 * mp[1] + objectptrs[mp[0]];
-									swap_src = &mp[cb];
-									tmp = swap_src[1];
-									swap_src[1] = rec[534];
-									rec[534] = tmp;
-								}
-								--mark_i2;
-								--mark_i;
-							} while (mark_i);
+							markingnumber[mark] = 0;
+							record = (uint8_t*)xtransdataptr + markingptr[mark];
+							slot = record[18];
+							((uint16_t*)record)[9] = 0;
+							((uint16_t*)record)[10] = 0;
+							((uint16_t*)record)[11] = 0;
+							((uint16_t*)record)[12] = 0;
+							((uint16_t*)record)[13] = 0;
+							((uint16_t*)record)[14] = 0;
+							((uint16_t*)record)[15] = 0;
+							((uint16_t*)record)[16] = 0;
+							object = (uint8_t*)xtransdataptr + objectptrs[record[0]] + 2 * record[1];
+							swap = record[slot + 1];
+							record[slot + 1] = object[534];
+							object[534] = swap;
 						}
 					}
+				}
 
-					/* Reset curobjid state. */
-					if (curobjid != 0xFFFF) {
-						objflag[curobjid] = 0;
-						if (curobjid < 0x80)
-							objectcount[curobjid] = 0;
-					}
-					/* Drain heap clearing any residual flags. */
-					while (lastheap) {
-						uint16_t h = objheap[lastheap];
-						objflag[h] = 0;
-						if (h < 128)
-							objectcount[h] = 0;
-						--lastheap;
-					}
+				if (curobjid != (uint16_t)0xFFFF) {
+					objflag[curobjid] = 0;
+					if (curobjid < 0x80)
+						objectcount[curobjid] = 0;
+				}
+				while (lastheap) {
+					objflag[objheap[lastheap]] = 0;
+					if (objheap[lastheap] < 0x80)
+						objectcount[objheap[lastheap]] = 0;
+					--lastheap;
 				}
 			}
 		}
-
-		videoypos += (uint32_t)screenMemWidth;
-		logbufypos += bytesPerPixel * pixelswide;
-		maskx = cur_x;
-		currptr = row_edge;
-		tempptr = saved_tempptr;
-		++currentypos;
 	}
 
-	maskptr = mask_cursor;
+	xmemhdl_Unlock_Handle(flightbuf_small_handle);
+	xmemhdl_Unlock_Handle(flightbuf_big_handle);
 }
 
 /* ============================================================================
@@ -1434,18 +1260,10 @@ void xtrans2_openobject(void) {
  * ========================================================================== */
 // FUNCTION: TIE95 0x64088
 void xtrans2_outputxt(void) {
-	trace2_EdgeHeader* right_edge = (trace2_EdgeHeader*)currptr2;
-
 	uint8_t c;
-	int solid_fill;
 
-	if (endx <= startx_mod_54) {
-		currptr2 = right_edge;
+	if (endx <= startx_mod_54)
 		return;
-	}
-
-	c = 0;
-	solid_fill = 1;
 
 	if (curobjid == 0) {
 		c = deepspacecolor;
@@ -1453,105 +1271,113 @@ void xtrans2_outputxt(void) {
 		/* byte_20A2C8 in the binary = flatcolors - 128. */
 		c = flatcolors[curobjid - 128];
 	} else {
-		xtrans2_ObjectRecord* rec = (xtrans2_ObjectRecord*)((uint8_t*)xtransdataptr + objectptrs[curobjid]);
 		/* Binary reads at offset (obj + 0x216 + 2*minface). face_flags is
 		 * declared at +0x218, so the actual slot for 1-indexed facenumber
 		 * N is face_flags[2*(N-1)]. Matches the 0x216-based write in
 		 * xtrans2_processedge's marking-swap logic. */
-		c = rec->face_flags[2 * (objectminface[curobjid] - 1)];
-		if (c < 0x40)
-			solid_fill = 0;
-	}
+		c = ((xtrans2_ObjectRecord*)((uint8_t*)xtransdataptr + objectptrs[curobjid]))
+				->face_flags[2 * (objectminface[curobjid] - 1)];
+		if (c < 0x40) {
+			/* --- Gouraud path. */
+			trace2_EdgeHeader* left_edge = (trace2_EdgeHeader*)objectminedgeptr[curobjid];
+			int32_t right_lt, right_x;
+			int32_t dx_span;
+			int32_t left_x;
+			int32_t inv_left_lt;
+			int32_t lt_cursor;
+			int32_t dlt;
+			int32_t odd_row;
+			uint8_t* shade;
+			uint8_t* vga_dst;
+			uint8_t* vga_end;
 
-	if (!solid_fill) {
-		/* --- Gouraud path. */
-		trace2_EdgeHeader* left_edge = (trace2_EdgeHeader*)objectminedgeptr[curobjid];
-
-		int32_t right_lt, right_x;
-
-		int32_t left_x_fixed;
-		int32_t left_lt_raw;
-		int32_t dx_span;
-		int32_t left_x;
-		int32_t inv_left_lt;
-		int32_t lt_cursor;
-		int32_t dlt;
-		uint8_t* vga_dst;
-		uint8_t* vga_end;
-		int32_t odd_row;
-
-		if (curobjid == (uint16_t)objid &&
-			(objectminface[curobjid] == face1 || objectminface[curobjid] == face2)) {
-			right_lt = newlt;
-			right_x = newx;
-		} else {
-			right_edge = left_edge->rightedge;
-			if (right_edge && !right_edge->numscanlines)
-				right_edge = NULL;
-			if (!right_edge) {
-				for (right_edge = (trace2_EdgeHeader*)currentedgeptr; right_edge;
-					 right_edge = right_edge->next) {
-					uint32_t chain_obj = right_edge->objectid;
-					if (curobjid == chain_obj) {
-						uint32_t mf = objectminface[chain_obj];
-						if (mf == right_edge->face1 || mf == right_edge->face2)
+			if (curobjid == objid && (objectminface[curobjid] == face1 || objectminface[curobjid] == face2)) {
+				right_lt = newlt;
+				right_x = newx;
+			} else {
+				currptr2 = left_edge->rightedge;
+				if (currptr2 && !currptr2->numscanlines)
+					currptr2 = NULL;
+				if (!currptr2) {
+					for (currptr2 = (trace2_EdgeHeader*)currentedgeptr; currptr2; currptr2 = currptr2->next) {
+						if (curobjid == currptr2->objectid &&
+							(objectminface[currptr2->objectid] == currptr2->face1 ||
+							 objectminface[currptr2->objectid] == currptr2->face2))
 							break;
 					}
+					left_edge->rightedge = currptr2;
 				}
-				left_edge->rightedge = right_edge;
-			}
-			if (right_edge) {
-				right_lt = right_edge->info->lt >> 1;
-				right_x = right_edge->info->x >> 8;
-			} else {
-				right_x = screenXRes;
-				right_lt = left_edge->info->lt >> 1;
-			}
-		}
-
-		left_x_fixed = left_edge->info->x;
-		left_lt_raw = left_edge->info->lt;
-		dx_span = right_x - (left_x_fixed >> 8);
-		left_x = left_x_fixed >> 8;
-		inv_left_lt = (63 - ((left_lt_raw >> 9) & 0x3F)) << 9;
-		lt_cursor = inv_left_lt;
-		dlt = ((63 - ((right_lt >> 8) & 0x3F)) << 9) - inv_left_lt;
-
-		vga_dst = xtrans2_videobaseptr + videoypos + startx_mod_54;
-		vga_end = xtrans2_videobaseptr + videoypos + endx;
-		odd_row = currentypos & 1;
-
-#if 0
-		/* PIP-bounds probe: log any run that escapes [0, pixelswide) on x
-		 * or strays into the bottom-of-cockpit area. Rate-limited via a
-		 * static counter so a long bad frame doesn't flood stderr. */
-		{
-			static int dbg_oob = 0;
-			if (dbg_oob < 20) {
-				if (startx_mod_54 < 0 || endx > (int32_t)pixelswide ||
-				    endx < startx_mod_54) {
-					dbg_oob++;
-					TieDiagnostics_Log(TIE_LOG_INFO,
-					        "[xt-oob] cy=%d videoypos=%u "
-					        "startx=%d endx=%d (pixelswide=%u pixelsdeep=%u)\n",
-					        (int)currentypos, videoypos,
-					        (int)startx_mod_54, (int)endx,
-					        (unsigned)pixelswide, (unsigned)pixelsdeep);
+				if (!currptr2) {
+					right_x = screenXRes;
+					right_lt = left_edge->info->lt >> 1;
+					if (special_features_flag)
+						printf("Error! Unmatched Edge!\n");
+				} else {
+					right_lt = currptr2->info->lt >> 1;
+					right_x = currptr2->info->x >> 8;
 				}
 			}
-		}
-#endif
 
-		if (bytesPerPixel == 2) {
-			int rgb_base = (int)c * 64 - 64;
-			uint8_t* lo_base = &materialrgblo[rgb_base];
-			uint8_t* hi_base = &materialrgbhi[rgb_base];
-			uint8_t* vp = vga_dst + startx_mod_54;
-			uint8_t* ve = vga_end + endx;
+			left_x = left_edge->info->x >> 8;
+			dx_span = right_x - left_x;
+			inv_left_lt = (63 - ((left_edge->info->lt >> 9) & 0x3F)) << 9;
+			lt_cursor = inv_left_lt;
+			dlt = ((63 - ((right_lt >> 8) & 0x3F)) << 9) - inv_left_lt;
+			odd_row = currentypos & 1;
+			shade = &materialcolors[16 * c - 16];
+			vga_dst = xtrans2_videobaseptr + videoypos + startx_mod_54;
+			vga_end = xtrans2_videobaseptr + videoypos + endx;
 
-			if (dlt) {
-				uint8_t saved_lo;
-				uint8_t saved_hi;
+			if (bytesPerPixel == 2) {
+				uint8_t* lo_base = &materialrgblo[64 * c - 64];
+				uint8_t* hi_base = &materialrgbhi[64 * c - 64];
+
+				vga_dst += startx_mod_54;
+				vga_end += endx;
+				if (dlt) {
+					uint8_t saved_lo;
+					uint8_t saved_hi;
+					int32_t dith;
+
+					if (dx_span)
+						dlt /= dx_span;
+					if (left_x < startx_mod_54)
+						lt_cursor = dlt * (startx_mod_54 - left_x) + inv_left_lt;
+
+					/* The inner loop can compute index 64 when lt_cursor
+					 * exits at the top step; stash slot 63 into slot 64
+					 * for the run. */
+					saved_lo = lo_base[64];
+					lo_base[64] = lo_base[63];
+					saved_hi = hi_base[64];
+					hi_base[64] = hi_base[63];
+
+					for (dith = (currentypos & 1) << 8; vga_dst < vga_end; lt_cursor += dlt) {
+						int32_t idx = (lt_cursor + dith) >> 9;
+						dith = (lt_cursor + dith) & 0x1FF;
+						*vga_dst++ = lo_base[idx];
+						*vga_dst++ = hi_base[idx];
+					}
+					lo_base[64] = saved_lo;
+					hi_base[64] = saved_hi;
+				} else if ((inv_left_lt >> 9) == 63 || (inv_left_lt & 0x1FF) == 0) {
+					uint8_t pix_lo = lo_base[lt_cursor >> 9];
+					uint8_t pix_hi = hi_base[lt_cursor >> 9];
+					while (vga_dst < vga_end) {
+						*vga_dst++ = pix_lo;
+						*vga_dst++ = pix_hi;
+					}
+				} else {
+					int32_t dith = odd_row << 8;
+					while (vga_dst < vga_end) {
+						int32_t idx = (lt_cursor + dith) >> 9;
+						dith = (lt_cursor + dith) & 0x1FF;
+						*vga_dst++ = lo_base[idx];
+						*vga_dst++ = hi_base[idx];
+					}
+				}
+			} else if (dlt) {
+				uint16_t saved;
 				int32_t dith;
 
 				if (dx_span)
@@ -1559,93 +1385,46 @@ void xtrans2_outputxt(void) {
 				if (left_x < startx_mod_54)
 					lt_cursor = dlt * (startx_mod_54 - left_x) + inv_left_lt;
 
-				/* Guard against a 64-step index spill: the inner loop
-				 * can compute index 64 when lt_cursor exits at the top
-				 * step; stash slot 63 into slot 64 for the run. */
-				saved_lo = lo_base[64];
-				saved_hi = hi_base[64];
-				lo_base[64] = lo_base[63];
-				hi_base[64] = hi_base[63];
-
-				dith = odd_row << 8;
-				while (vp < ve) {
-					int32_t idx = (lt_cursor + dith) >> 9;
-					dith = (uint16_t)(lt_cursor + dith) & 0x1FF;
-					vp[0] = lo_base[idx];
-					vp[1] = hi_base[idx];
-					vp += 2;
-					lt_cursor += dlt;
-				}
-				lo_base[64] = saved_lo;
-				hi_base[64] = saved_hi;
-			} else if (((inv_left_lt >> 9) != 63) && ((inv_left_lt & 0x1FF) != 0)) {
-				int32_t dith = odd_row << 8;
-				while (vp < ve) {
-					int32_t idx = (lt_cursor + dith) >> 9;
-					dith = (uint16_t)(lt_cursor + dith) & 0x1FF;
-					vp[0] = lo_base[idx];
-					vp[1] = hi_base[idx];
-					vp += 2;
-				}
-			} else {
-				uint8_t pix_lo = lo_base[inv_left_lt >> 9];
-				uint8_t pix_hi = hi_base[inv_left_lt >> 9];
-				while (vp < ve) {
-					vp[0] = pix_lo;
-					vp[1] = pix_hi;
-					vp += 2;
-				}
-			}
-		} else {
-			/* 1 byte per pixel. */
-			uint8_t* shade = &materialcolors[16 * c - 16];
-
-			if (dlt) {
-				int32_t dith;
-
-				if (dx_span)
-					dlt /= dx_span;
-				if (left_x < startx_mod_54)
-					lt_cursor = dlt * (startx_mod_54 - left_x) + inv_left_lt;
-				currptr2 = right_edge;
-
-				/* Inner-loop index `comb >> 11` lands in [0, 16] -- the
-				 * upper bound of 16 is reached when lt_cursor sits at the
-				 * brightest end of its range (inv_left_lt = 63<<9) plus
-				 * a maxed dither accumulator. The binary handles this
-				 * with a save/modify/restore on materialcolors[16*c] so
-				 * shade[16] reads as shade[15] for the duration of the
-				 * loop. We achieve the same per-pixel result by clamping
-				 * the index here -- avoids the 1-byte OOB write when
-				 * c == 45 (the brightest highlight-remap output). */
-				dith = odd_row << 10;
-				while (vga_dst < vga_end) {
+				/* The inner-loop index reaches 16 at the brightest end of
+				 * the ramp; shade[16] reads as shade[15] for the run. */
+				saved = shade[16];
+#ifdef TIE_MODERN
+				/* c == 45 would write one past materialcolors; clamp
+				 * the index instead. */
+				for (dith = (currentypos & 1) << 10; vga_dst < vga_end; ++vga_dst) {
 					int32_t comb = lt_cursor + dith;
-					int32_t idx;
-
-					dith = comb & 0x7FF;
-					idx = comb >> 11;
-					*vga_dst = shade[idx > 15 ? 15 : idx];
-					++vga_dst;
 					lt_cursor += dlt;
+					dith = comb & 0x7FF;
+					*vga_dst = shade[(comb >> 11) > 15 ? 15 : comb >> 11];
 				}
-				right_edge = (trace2_EdgeHeader*)currptr2;
-			} else if (((inv_left_lt >> 11) != 15) && ((inv_left_lt & 0x7FF) != 0)) {
+#else
+				shade[16] = shade[15];
+				for (dith = (currentypos & 1) << 10; vga_dst < vga_end; ++vga_dst) {
+					int32_t comb = lt_cursor + dith;
+					lt_cursor += dlt;
+					dith = comb & 0x7FF;
+					*vga_dst = shade[comb >> 11];
+				}
+				shade[16] = (uint8_t)saved;
+#endif
+			} else if ((inv_left_lt >> 11) == 15 || (inv_left_lt & 0x7FF) == 0) {
+				uint8_t fill = shade[lt_cursor >> 11];
+				while (vga_dst < vga_end)
+					*vga_dst++ = fill;
+			} else {
 				int32_t dith = odd_row << 10;
 				while (vga_dst < vga_end) {
-					*vga_dst = shade[(lt_cursor + dith) >> 11];
-					dith = (uint16_t)(lt_cursor + dith) & 0x7FF;
-					++vga_dst;
-				}
-			} else {
-				uint8_t fill = shade[inv_left_lt >> 11];
-				while (vga_dst < vga_end) {
-					*vga_dst++ = fill;
+					*vga_dst++ = shade[(lt_cursor + dith) >> 11];
+					dith = (lt_cursor + dith) & 0x7FF;
 				}
 			}
+			startx_mod_54 = endx;
+			return;
 		}
-	} else {
-		/* --- Solid-fill / background path. */
+	}
+
+	/* --- Solid-fill / background path. */
+	{
 		int run_span = endx - startx_mod_54;
 		uint8_t* base = xtrans2_videobaseptr + videoypos + startx_mod_54;
 
@@ -1685,7 +1464,6 @@ void xtrans2_outputxt(void) {
 	}
 
 	startx_mod_54 = endx;
-	currptr2 = right_edge;
 }
 
 /* ============================================================================

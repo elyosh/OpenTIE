@@ -22,7 +22,7 @@ extern "C" {
  *     compute camera-relative position with shared exponent in relative*
  *     draw_gettreeorder(bsp_root)                  -- BSP painter sort,
  *                                                     fills comp[]
- *     draw_drawcraft(obj_idx, ship_flag, eyez)     -- per-mesh emit loop
+ *     draw_drawcraft(obj_idx, ship_flag)           -- per-mesh emit loop
  *
  * draw_polydepthsort is the polygon-plane tie-breaker called by
  * XTRANS2_getinfront when bbox separation fails.
@@ -90,7 +90,7 @@ const uint16_t* draw_getcompdetailptr(ShipModelMesh* comp, int base_z);
 const uint16_t* draw_getdetailptr(ShipMeshLOD* lod_table, int z_threshold);
 
 /* Top-level entry for rendering a multi-mesh BSP-tree object. */
-int draw_drawcomplexobject(int obj_idx);
+void draw_drawcomplexobject(uint16_t obj_idx);
 
 /* Recursive BSP painter's-sort: appends visible mesh indices into comp[]
  * and increments numberofcomp. */
@@ -98,7 +98,7 @@ void draw_gettreeorder(int* bsp_node);
 
 /* Draw all meshes in comp[0..numberofcomp-1] for one craft. Handles
  * highlight, damage skip, mesh rotation, decal flag, lightning arc. */
-int draw_drawcraft(int obj_idx, uint32_t ship_flag, int eyez);
+int draw_drawcraft(int obj_idx, uint32_t ship_flag);
 void draw_process_object_components_tie98(uint16_t object_ref);
 
 /* Single-polygon draw for a laser bolt. */

@@ -163,9 +163,9 @@ static void combat_idraw_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, 
 static int16_t combat_iupdate_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 											uint8_t mouseState, uint8_t prevMouseState, int16_t key,
 											int16_t prevKey);
-static void combat_iuser_Combat_Screen(Input* input, int32_t time);
+static int16_t combat_iuser_Combat_Screen(Input* input, int32_t time);
 static void combat_idraw_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh);
-static void combat_Draw_Combat_Screen_Mission(Rect* src);
+static int16_t combat_Draw_Combat_Screen_Mission(Rect* src);
 static int16_t combat_Draw_Combat_Screen_Score(Rect* src);
 static void combat_Draw_Combat_Screen_Flyby(Rect* src);
 static void combat_Load_Combat_High_Scores(void);
@@ -217,7 +217,7 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 				   TIE_FRONTEND_EDITION(262, 516), TIE_FRONTEND_EDITION(115, 272));
 	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(monitor_input, combat_iupdate_Combat_Screen);
-	xinpattr_Set_Input_User_Function(monitor_input, combat_iuser_Combat_Screen);
+	xinpattr_Set_Input_User_Function(monitor_input, (InputUserFunc)combat_iuser_Combat_Screen);
 	xinpattr_Set_Input_Draw_Function(monitor_input, combat_idraw_Combat_Screen);
 	xinpattr_Refreshable_Input(monitor_input);
 	monitor_input->id = 0;
@@ -596,7 +596,7 @@ static int16_t combat_iupdate_Combat_Screen(Input* input, Rect* draw_rect, Rect*
  */
 // FUNCTION: TIE95 0x6D3A4
 // FUNCTION: TIE98 0x40AC40
-static void combat_iuser_Combat_Screen(Input* input, int32_t time) {
+static int16_t combat_iuser_Combat_Screen(Input* input, int32_t time) {
 	(void)time;
 
 	if (xinpattr_Get_Input_Selected(input)) {
@@ -606,40 +606,43 @@ static void combat_iuser_Combat_Screen(Input* input, int32_t time) {
 			combat_time = 384;
 		else if (combat_time > 0)
 			combat_time = 256;
+		else if (combat_time > 0)
+			combat_time = 0;
 	}
 
-	if (combat_time == 0) {
-		combat_time = 1;
-		combat_mode = 0;
-		combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
-		return;
-	}
+	switch (combat_time) {
+		case 0:
+			combat_time++;
+			combat_mode = 0;
+			if (TIE_FRONTEND_TIE98)
+				combat_monitor_needs_clear = true;
+			break;
+		case 256:
+			combat_time++;
+			combat_mode = 1;
+			if (TIE_FRONTEND_TIE98)
+				combat_monitor_needs_clear = true;
+			break;
+		case 384: {
+			char matrix_name[16];
 
-	if (combat_time == 256) {
-		combat_time++;
-		combat_mode = 1;
-		combat_monitor_needs_clear = TIE_FRONTEND_EDITION(false, true);
-		return;
+			bpflight_Start_Movie_Engine();
+			sprintf(matrix_name, "cmbtfly%d", combat_round + 1);
+			bpflight_Open_New_Matrix(matrix_name);
+			combat_mode = 2;
+			combat_time++;
+			break;
+		}
+		case 639:
+			bpflight_Stop_Movie_Engine();
+			combat_time = 0;
+			combat_round = (combat_round + 1) & 3;
+			break;
+		default:
+			combat_time++;
+			break;
 	}
-
-	if (combat_time == 384) {
-		char matrix_name[16];
-		bpflight_Start_Movie_Engine();
-		snprintf(matrix_name, sizeof(matrix_name), "cmbtfly%d", combat_round + 1);
-		bpflight_Open_New_Matrix(matrix_name);
-		combat_mode = 2;
-		combat_time++;
-		return;
-	}
-
-	if (combat_time == 639) {
-		bpflight_Stop_Movie_Engine();
-		combat_time = 0;
-		combat_round = (combat_round + 1) & 3;
-		return;
-	}
-
-	combat_time++;
+	return 1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -675,91 +678,93 @@ static void combat_idraw_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip
 /* Draw mission description on the combat monitor */
 // FUNCTION: TIE95 0x6D52C
 // FUNCTION: TIE98 0x40ADE0
-static void combat_Draw_Combat_Screen_Mission(Rect* src) {
-	int16_t t, num_lines, line_height, text_x, text_y, max_width, text_left;
-	int16_t full_bar, half_bar, bar_step, header_x, header_w, bar_y;
-	int16_t line_idx, text_line, i;
-	uint16_t font_id;
-	const char* mission_label;
-
+static int16_t combat_Draw_Combat_Screen_Mission(Rect* src) {
+	int16_t t, text_x, num_lines, text_y, max_width, line_idx, i, bt, fade;
 	Rect dst;
-	char string[48], buf[48], name[48];
+	char string[48], buf[48];
+#ifdef TIE_MODERN
+	char name[48];
+#endif
 
 	xrect_Copy_Rect(&dst, src);
 	t = combat_time;
 	num_lines = shipext_Num_Combat_Mission_Text_Lines();
-
-	font_id = TIE_FRONTEND_EDITION(0, 2);
-	line_height = TIE_FRONTEND_EDITION(10, (int16_t)xfont_Get_FontID_Height(font_id));
-	dst.top += (dst.bottom - dst.top - (line_height * num_lines + 18)) >> 1;
+	dst.top +=
+		(dst.bottom - dst.top - (TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2)) * num_lines + 18)) >> 1;
 
 	text_x = dst.left + TIE_FRONTEND_EDITION(2, 4);
 	text_y = dst.top + 10;
-	dst.bottom = dst.top + (TIE_FRONTEND_EDITION(18, 9 + line_height));
+	dst.bottom = dst.top + TIE_FRONTEND_EDITION(18, 9 + xfont_Get_FontID_Height(2));
 
 	max_width = 0;
 	for (i = 0; i < num_lines; i++) {
 		int16_t old_font, w;
 		shipext_Get_Combat_Mission_Text(string, i);
 		old_font = xfont_Get_Font();
-		xfont_Set_Font(font_id);
+		xfont_Set_Font(TIE_FRONTEND_EDITION(0, 2));
 		w = xfont_Get_String_Width(string);
 		xfont_Set_Font(old_font);
 		if (w > max_width)
 			max_width = w;
 	}
-	text_left = ((dst.right - dst.left - max_width) >> 1) + text_x;
-	full_bar = TIE_FRONTEND_EDITION(195, 390);
-	half_bar = TIE_FRONTEND_EDITION(99, 198);
-	bar_step = TIE_FRONTEND_EDITION(6, 12);
+	max_width = (dst.right - dst.left - max_width) >> 1;
 
-	/* Animated horizontal bars: header strip is framed by two parallel bars
-	 * (top of header at dst.top+1, bottom of header at dst.bottom-1). Both
-	 * grow outward from the centre as `t` ramps 0..16, then snap full at 195. */
-	if (t >= 16) {
-		header_x = dst.left + TIE_FRONTEND_EDITION(3, 6);
-		header_w = full_bar;
+	/* Animated horizontal bars framing the header: they grow outward from the
+	 * centre as `t` ramps 0..16, then snap to full width. */
+	if (t < 16) {
+		int width = TIE_FRONTEND_EDITION(12, 24) * t + 3;
+		int step = TIE_FRONTEND_EDITION(6, 12) * t;
+		xpaint_Horiz_Clipped_Line(dst.left + TIE_FRONTEND_EDITION(99, 198) - step, dst.top + 1, width, 2);
+		xpaint_Horiz_Clipped_Line(dst.left + TIE_FRONTEND_EDITION(99, 198) - step, dst.bottom - 1, width, 2);
 	} else {
-		header_x = dst.left + half_bar - bar_step * t;
-		header_w = 2 * bar_step * t + 3;
+		xpaint_Horiz_Clipped_Line(dst.left + TIE_FRONTEND_EDITION(3, 6), dst.top + 1,
+								  TIE_FRONTEND_EDITION(195, 390), 2);
+		xpaint_Horiz_Clipped_Line(dst.left + TIE_FRONTEND_EDITION(3, 6), dst.bottom - 1,
+								  TIE_FRONTEND_EDITION(195, 390), 2);
 	}
-	xpaint_Horiz_Clipped_Line(header_x, dst.top + 1, header_w, 2);
-	xpaint_Horiz_Clipped_Line(header_x, dst.bottom - 1, header_w, 2);
 
-	bar_y = dst.bottom + line_height * num_lines + 2;
-	if (t >= line_height * num_lines) {
-		xpaint_Horiz_Clipped_Line(dst.left + TIE_FRONTEND_EDITION(3, 6), bar_y, full_bar, 2);
-	} else {
-		int16_t bt = t - (line_height * num_lines - 16);
+	/* Bottom bar grows once the text has scrolled in. */
+	if (t < TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2)) * num_lines) {
+		bt = t - (TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2)) * num_lines - 16);
 		if (bt >= 0)
-			xpaint_Horiz_Clipped_Line(dst.left + half_bar - bar_step * bt, bar_y, 2 * bar_step * bt + 3, 2);
+			xpaint_Horiz_Clipped_Line(
+				dst.left + TIE_FRONTEND_EDITION(99, 198) - TIE_FRONTEND_EDITION(6, 12) * bt,
+				dst.bottom + TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2)) * num_lines + 2,
+				TIE_FRONTEND_EDITION(12, 24) * bt + 3, 2);
+	} else {
+		xpaint_Horiz_Clipped_Line(dst.left + TIE_FRONTEND_EDITION(3, 6),
+								  dst.bottom +
+									  TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2)) * num_lines + 2,
+								  TIE_FRONTEND_EDITION(195, 390), 2);
 	}
 
 	/* Header + mission text lines */
-	line_idx = 0;
-	text_line = -1;
-	mission_label = textext_Get_Text(txtCombatMission);
-	while (t >= 0) {
-		int16_t fade = (t <= 7) ? 2 * t + 16 : 31;
+	for (line_idx = 0; line_idx <= num_lines && t >= 0; line_idx++) {
+		if (t > 7)
+			fade = 31;
+		else
+			fade = 2 * t + 16;
 
 		if (line_idx == 0) {
-			shipext_Get_Combat_Ship_Name(name);
+			strcpy(string, textext_Get_Text(txtCombatMission));
 			/* Header format: ship name, mission label, and one-based mission number. */
-			snprintf(buf, sizeof(buf), "%s %s %d", name, mission_label, shipext_Get_Combat_Mission() + 1);
-			xfont_Print_Centered_Text(buf, &dst, font_id, fade);
+#ifdef TIE_MODERN
+			shipext_Get_Combat_Ship_Name(name);
+			snprintf(buf, sizeof(buf), "%s %s %d", name, string, shipext_Get_Combat_Mission() + 1);
+#else
+			shipext_Get_Combat_Ship_Name(buf);
+			sprintf(buf, "%s %s %d", buf, string, shipext_Get_Combat_Mission() + 1);
+#endif
+			xfont_Print_Centered_Text(buf, &dst, TIE_FRONTEND_EDITION(0, 2), fade);
 		} else {
-			shipext_Get_Combat_Mission_Text(string, text_line);
-			xfont_Print_Clipped_Text(string, text_left, text_y, font_id, fade);
+			shipext_Get_Combat_Mission_Text(string, line_idx - 1);
+			xfont_Print_Clipped_Text(string, text_x + max_width, text_y, TIE_FRONTEND_EDITION(0, 2), fade);
 		}
 
 		t -= 8;
-		line_idx++;
-		text_y += line_height;
-		text_line++;
-
-		if (line_idx > num_lines)
-			break;
+		text_y += TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2));
 	}
+	return 1;
 }
 
 /* ------------------------------------------------------------------ */

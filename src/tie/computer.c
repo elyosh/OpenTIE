@@ -748,6 +748,11 @@ static Input* computer_Build_Computer_Dialog(void) {
  * computer_iupdate_Computer — main dialog update callback
  * ====================================================================== */
 
+#if defined(TIE95) && !defined(TIE_MODERN)
+int16_t xio_Is_Joystick_Callibrate(void);
+void xdlgjoy_Do_Joystick_Callibrate(void);
+#endif
+
 // FUNCTION: TIE95 0x83248
 // FUNCTION: TIE98 0x40C4A0
 static int16_t computer_iupdate_Computer(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
@@ -764,142 +769,142 @@ static int16_t computer_iupdate_Computer(Input* input, Rect* r, Rect* clip_r, in
 	(void)clip_r;
 
 	if (key) {
-		/* ESC → select cancel button */
-		if (key == 27) {
-			xinpattr_Selected_Input(cancel_input);
-			return 1;
-		}
-		/* TIE98 consumes other keys while its options page is active. */
-		if (TIE_FRONTEND_TIE98 && computer_mode == COMP_MODE_OPTIONS)
-			return 1;
-		return 0;
+#if defined(TIE95) && !defined(TIE_MODERN)
+		/* Alt-C opens the joystick calibration dialog. */
+		if (xio_Is_Joystick_Input() && xio_Is_Joystick_Callibrate() && key == 0x2E00) {
+			xsound_Resume_Sounds();
+			xdlgjoy_Do_Joystick_Callibrate();
+			xsound_Pause_Sounds();
+			xdialog_Clear_Dialog_Exit();
+		} else
+#endif
+			/* ESC → select cancel button */
+			if (key == 27) {
+				xinpattr_Selected_Input(cancel_input);
+			} else if (!TIE_FRONTEND_TIE98 || computer_mode != COMP_MODE_OPTIONS) {
+				/* TIE98 consumes other keys while its options page is active. */
+				return 0;
+			}
+		return 1;
 	}
 
 	/* Mouse handling */
 	button = left ? left : right;
 
-	if (!button) {
-		/* Hover: check if mouse is in the left panel for exit animation trigger */
-		if (x <= TIE_FRONTEND_EDITION(76, 119) && y >= TIE_FRONTEND_EDITION(88, 130))
-			input->var2 = 1;
+	switch (button) {
+		case MOUSE_NO_PRESS:
+			/* Hover: check if mouse is in the left panel for exit animation trigger */
+			if (x <= TIE_FRONTEND_EDITION(76, 119) && y >= TIE_FRONTEND_EDITION(88, 130))
+				input->var2 = 1;
 
-		/* Medal hover text detection */
-		new_mode = 0;
-		if (computer_mode == COMP_MODE_MEDALS && pilot_medal_type[pilot_medal_page] == 2) {
-			if (pilot_medal_status[pilot_medal_page]) {
-				xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(92, 196), TIE_FRONTEND_EDITION(37, 100),
-							   TIE_FRONTEND_EDITION(132, 266), TIE_FRONTEND_EDITION(103, 238));
-				if (xrect_Point_In_Rect(&tr, x, y))
-					new_mode = 1;
-			}
-			if (pilot_medal_bonus_status[pilot_medal_page]) {
-				xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(223, 456), TIE_FRONTEND_EDITION(37, 100),
-							   TIE_FRONTEND_EDITION(263, 523), TIE_FRONTEND_EDITION(103, 238));
-				if (xrect_Point_In_Rect(&tr, x, y))
-					new_mode = 2;
-			}
-		}
-		if (new_mode != pilot_medal_text) {
-			pilot_medal_text = new_mode;
-			xview_Refresh_View();
-		}
-		return 1;
-	}
-
-	if (button != MOUSE_DOWN)
-		return 1;
-
-	/* Click: check tab switching */
-	new_mode = computer_mode;
-	for (i = 0; i < 4; i++) {
-		if (xrect_Point_In_Rect((Rect*)&computer_mode_rect[i], x + r->left, y + r->top)) {
-#ifdef TIE_MODERN
-			shipext_Get_Pilot_Name(name, sizeof(name));
-#else
-			shipext_Get_Pilot_Name(name);
-#endif
-			if (i == 3 || name[0])
-				new_mode = i;
-			if (i == 0 && !pilot_medal_num_pages)
-				new_mode = computer_mode;
-		}
-	}
-
-	if (new_mode == computer_mode) {
-		/* Same mode: dispatch to mode-specific click handler */
-		switch (computer_mode) {
-			case COMP_MODE_BACKUP:
-				computer_xupdate_Computer_Backup(x + r->left, y + r->top);
-				break;
-			case COMP_MODE_OPTIONS:
-				computer_update_Computer_Prefs(x + r->left, y + r->top);
-				break;
-			default:
-				break;
-		}
-	} else {
-		/* Tab switch: hide old mode's widgets */
-		switch (computer_mode) {
-			case COMP_MODE_MEDALS:
-				xpal_Screen_To_Dest_Palette(0, 0, 255);
-				if (TIE_FRONTEND_TIE98) {
-					for (i = 0; i < 4; i++)
-						xpal_Set_Dest_Palette(computer_palettes[i]);
-				} else {
-					for (i = 0; i < 5; i++) {
-						if (i != 1)
-							xpal_Set_Dest_Palette(computer_palettes[i]);
-					}
+			/* Medal hover text detection */
+			new_mode = 0;
+			if (computer_mode == COMP_MODE_MEDALS && pilot_medal_type[pilot_medal_page] == 2) {
+				if (pilot_medal_status[pilot_medal_page]) {
+					xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(92, 196), TIE_FRONTEND_EDITION(37, 100),
+								   TIE_FRONTEND_EDITION(132, 266), TIE_FRONTEND_EDITION(103, 238));
+					if (xrect_Point_In_Rect(&tr, x, y))
+						new_mode = 1;
 				}
-				xfade_Start_Full_Fade(FADE_WIPE_INSTANT, FADE_COLOR_CROSSFADE, 1, 0, 0);
-				xinpattr_Hide_Input(next_info_input);
-				xinpattr_Hide_Input(last_info_input);
-				break;
-			case COMP_MODE_RECORD:
-				xinpattr_Hide_Input(next_info_input);
-				xinpattr_Hide_Input(last_info_input);
-				break;
-			case COMP_MODE_BACKUP:
-				xinpattr_Hide_Input(backup_input);
-				xinpattr_Hide_Input(restore_input);
-				break;
+				if (pilot_medal_bonus_status[pilot_medal_page]) {
+					xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(223, 456), TIE_FRONTEND_EDITION(37, 100),
+								   TIE_FRONTEND_EDITION(263, 523), TIE_FRONTEND_EDITION(103, 238));
+					if (xrect_Point_In_Rect(&tr, x, y))
+						new_mode = 2;
+				}
+			}
+			if (new_mode != pilot_medal_text) {
+				pilot_medal_text = new_mode;
+				xview_Refresh_View();
+			}
+			break;
+
+		case MOUSE_DOWN:
+			/* Click: check tab switching */
+			new_mode = computer_mode;
+			for (i = 0; i < 4; i++) {
+				if (xrect_Point_In_Rect((Rect*)&computer_mode_rect[i], r->left + x, r->top + y)) {
 #ifdef TIE_MODERN
-			case COMP_MODE_OPTIONS:
-				TieComputer_ShowOptionsButton(false);
-				break;
+					shipext_Get_Pilot_Name(name, sizeof(name));
+#else
+					shipext_Get_Pilot_Name(name);
 #endif
-			default:
-				break;
-		}
+					if (i == 3 || name[0])
+						new_mode = i;
+					if (i == 0 && !pilot_medal_num_pages)
+						new_mode = computer_mode;
+				}
+			}
 
-		computer_mode = new_mode;
-
-		/* Show new mode's widgets */
-		switch (new_mode) {
-			case COMP_MODE_MEDALS:
-				computer_Set_Computer_Medal_Palette();
-				xinpattr_Show_Input(next_info_input);
-				xinpattr_Show_Input(last_info_input);
-				break;
-			case COMP_MODE_RECORD:
-				xinpattr_Show_Input(next_info_input);
-				xinpattr_Show_Input(last_info_input);
-				break;
-			case COMP_MODE_BACKUP:
-				if (!pilot_record.exit_status)
-					xinpattr_Show_Input(backup_input);
-				xinpattr_Show_Input(restore_input);
-				break;
+			if (new_mode != computer_mode) {
+				/* Tab switch: hide old mode's widgets */
+				switch (computer_mode) {
+					case COMP_MODE_MEDALS:
+						xpal_Screen_To_Dest_Palette(0, 0, 255);
+						if (TIE_FRONTEND_TIE98) {
+							for (i = 0; i < 4; i++)
+								xpal_Set_Dest_Palette(computer_palettes[i]);
+						} else {
+							for (i = 0; i < 5; i++) {
+								if (i != 1)
+									xpal_Set_Dest_Palette(computer_palettes[i]);
+							}
+						}
+						xfade_Start_Full_Fade(FADE_WIPE_INSTANT, FADE_COLOR_CROSSFADE, 1, 0, 0);
+					case COMP_MODE_RECORD:
+						xinpattr_Hide_Input(next_info_input);
+						xinpattr_Hide_Input(last_info_input);
+						break;
+					case COMP_MODE_BACKUP:
+						xinpattr_Hide_Input(backup_input);
+						xinpattr_Hide_Input(restore_input);
+						break;
+					case COMP_MODE_OPTIONS:
 #ifdef TIE_MODERN
-			case COMP_MODE_OPTIONS:
-				TieComputer_ShowOptionsButton(true);
-				break;
+						TieComputer_ShowOptionsButton(false);
 #endif
-			default:
-				break;
-		}
+						break;
+				}
 
-		xview_Refresh_View();
+				computer_mode = new_mode;
+
+				/* Show new mode's widgets */
+				switch (new_mode) {
+					case COMP_MODE_MEDALS:
+						computer_Set_Computer_Medal_Palette();
+					case COMP_MODE_RECORD:
+						xinpattr_Show_Input(next_info_input);
+						xinpattr_Show_Input(last_info_input);
+						break;
+					case COMP_MODE_BACKUP:
+						if (!pilot_record.exit_status)
+							xinpattr_Show_Input(backup_input);
+						xinpattr_Show_Input(restore_input);
+						break;
+					case COMP_MODE_OPTIONS:
+#ifdef TIE_MODERN
+						TieComputer_ShowOptionsButton(true);
+#endif
+						break;
+				}
+
+				xview_Refresh_View();
+			} else {
+				/* Same mode: dispatch to mode-specific click handler */
+				switch (computer_mode) {
+					case COMP_MODE_MEDALS:
+						break;
+					case COMP_MODE_RECORD:
+						break;
+					case COMP_MODE_BACKUP:
+						computer_xupdate_Computer_Backup(r->left + x, r->top + y);
+						break;
+					case COMP_MODE_OPTIONS:
+						computer_update_Computer_Prefs(r->left + x, r->top + y);
+						break;
+				}
+			}
+			break;
 	}
 
 	return 1;
@@ -1828,19 +1833,22 @@ static void computer_Draw_Computer_Header_Info(Rect* r, int16_t color, int16_t b
 // FUNCTION: TIE95 0x851E8
 // FUNCTION: TIE98 0x40E470
 static void computer_Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t back_color) {
-	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	char str1[80];
 	char str2[40];
 	int16_t ship_info[12];
-	int16_t num_ships = 0;
+	Rect page;
+	int num_ships = 0;
 	int16_t count;
 	int16_t i, j;
+
+	if (TIE_FRONTEND_TIE98)
+		xrect_Copy_Rect(&page, r);
 
 	for (i = 0; i < 12; i++) {
 		count = 0;
 		if (shipext_Is_Ship(i)) {
 			if (pilot_record.train_score[i])
-				count++;
+				count = 1;
 			for (j = 0; j < 8; j++) {
 				if (pilot_record.combat_score[i][j])
 					count++;
@@ -1858,41 +1866,46 @@ static void computer_Draw_Computer_Combat_Info(Rect* r, int16_t color, int16_t b
 		return;
 
 	for (i = 0; i < 12; i++) {
-		Rect page;
-
 		if (!ship_info[i])
 			continue;
-		xrect_Copy_Rect(&page, r);
 
 		shipext_Get_Ship_Name(str1, i, 0, 0);
-		xfont_Print_Centered_Text(str1, r, font_id, color);
+		xfont_Print_Centered_Text(str1, r, TIE_FRONTEND_EDITION(0, 2), color);
 		xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
-		xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id) + 2));
+		xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2) + 2));
 
 		if (pilot_record.train_score[i]) {
-			if (pilot_record.train_max_level[i] < 4)
-				textext_Copy_Text(str2, txtCompInfoTrainIncomplete);
-			else
+			if (pilot_record.train_max_level[i] >= 4) {
 				textext_Copy_Text(str2, txtCompInfoTrainComplete);
-			snprintf(str1, sizeof(str1), str2, pilot_record.train_score[i]);
-			xfont_Print_Centered_Text(str1, r, font_id, color);
-			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
+				sprintf(str1, str2, pilot_record.train_score[i]);
+			} else {
+				textext_Copy_Text(str2, txtCompInfoTrainIncomplete);
+				sprintf(str1, str2, pilot_record.train_score[i]);
+			}
+			xfont_Print_Centered_Text(str1, r, TIE_FRONTEND_EDITION(0, 2), color);
+			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2)));
 		}
 
 		for (j = 0; j < 8; j++) {
 			if (pilot_record.combat_score[i][j]) {
-				if (pilot_record.combat_complete[i][j])
+				if (pilot_record.combat_complete[i][j]) {
 					textext_Copy_Text(str2, txtCompInfoCombatComplete);
-				else
+					sprintf(str1, str2, j + 1, pilot_record.combat_score[i][j]);
+				} else {
 					textext_Copy_Text(str2, txtCompInfoCombatIncomplete);
-				snprintf(str1, sizeof(str1), str2, j + 1, pilot_record.combat_score[i][j]);
-				xfont_Print_Centered_Text(str1, r, font_id, color);
-				xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
+					sprintf(str1, str2, j + 1, pilot_record.combat_score[i][j]);
+				}
+				xfont_Print_Centered_Text(str1, r, TIE_FRONTEND_EDITION(0, 2), color);
+				xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2)));
 			}
 		}
 
-		xrect_Offset_Rect(&page, 0, TIE_FRONTEND_EDITION(110, 273));
-		xrect_Copy_Rect(r, &page);
+		if (TIE_FRONTEND_TIE98) {
+			xrect_Offset_Rect(&page, 0, 273);
+			xrect_Copy_Rect(r, &page);
+		} else {
+			xrect_Offset_Rect(r, 0, (10 - ship_info[i]) * 10);
+		}
 	}
 }
 

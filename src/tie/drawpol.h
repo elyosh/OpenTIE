@@ -142,7 +142,7 @@ extern int16_t numedges;
 extern uint16_t edgeindex;
 extern int16_t samexcnt;
 extern int16_t sameycnt;
-extern int16_t counter;
+extern uint16_t counter;
 extern uint8_t color;
 extern uint16_t facenumber;
 extern uint16_t objectnum;

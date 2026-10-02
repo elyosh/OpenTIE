@@ -8,7 +8,6 @@
 #include "tie/fview.h"
 #include "tie/laser.h"
 #include "tie/math2.h"
-#include "tie/math2_wide.h"
 #include "tie/modelbounds.h"
 #include "tie/modelmesh.h"
 #include "tie/pai.h"
@@ -16,6 +15,7 @@
 #include "tie/species.h"
 #include "tie/tie.h"
 #include "tie/trig2.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/timing/flight_timing_state.h"
 #endif
@@ -213,17 +213,17 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 	craft = &objects[target_obj_idx];
 	craftptr = craft->craft_ptr;
 
-	world_x = craft->world_x;
-	world_y = craft->world_y;
-	world_z = craft->world_z;
 	ship_idx = craft->ship_idx;
 
 	/* Laser segment relative to the craft's world origin */
+	world_x = craft->world_x;
 	dx = laserx - world_x;
-	dy = lasery - world_y;
-	dz = laserz - world_z;
 	dxold = laserxold - world_x;
+	world_y = craft->world_y;
+	dy = lasery - world_y;
 	dyold = laseryold - world_y;
+	world_z = craft->world_z;
+	dz = laserz - world_z;
 	dzold = laserzold - world_z;
 
 	/* Rebuild local orientation matrix if dirty */
@@ -232,24 +232,16 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 		fview_calcrotateorient(craft->roll, 0, craft);
 	}
 
-	/* Dot-project (dx, dy, dz) and (dxold, dyold, dzold) onto the craft's
-	 * local (side, -fwd, up) axes. The binary packs each dot via the Watcom
-	 * unaligned-dword trick; the translated form below is a plain Q15 dot
-	 * product against the craft's orientation vectors. The fwd axis result
-	 * is stored negated (matches the Watcom pipeline convention used by
-	 * PAI_calcrotatedpoint). */
-	side_cur = math2_mul_q15(dx, craft->side_x) + math2_mul_q15(dy, craft->side_y) +
-			   math2_mul_q15(dz, craft->side_z);
-	fwd_cur = -(math2_mul_q15(dx, craft->fwd_x) + math2_mul_q15(dy, craft->fwd_y) +
-				math2_mul_q15(dz, craft->fwd_z));
-	up_cur = math2_mul_q15(dx, craft->up_x) + math2_mul_q15(dy, craft->up_y) + math2_mul_q15(dz, craft->up_z);
+	/* Project (dx, dy, dz) and (dxold, dyold, dzold) onto the craft's local
+	 * (side, -fwd, up) axes. The fwd result is stored negated, matching the
+	 * convention used by PAI_calcrotatedpoint. */
+	side_cur = math2_dot3_q15(craft->side_x, dx, craft->side_y, dy, craft->side_z, dz);
+	fwd_cur = -math2_dot3_q15(craft->fwd_x, dx, craft->fwd_y, dy, craft->fwd_z, dz);
+	up_cur = math2_dot3_q15(craft->up_x, dx, craft->up_y, dy, craft->up_z, dz);
 
-	side_prev = math2_mul_q15(dxold, craft->side_x) + math2_mul_q15(dyold, craft->side_y) +
-				math2_mul_q15(dzold, craft->side_z);
-	fwd_prev = -(math2_mul_q15(dxold, craft->fwd_x) + math2_mul_q15(dyold, craft->fwd_y) +
-				 math2_mul_q15(dzold, craft->fwd_z));
-	up_prev = math2_mul_q15(dxold, craft->up_x) + math2_mul_q15(dyold, craft->up_y) +
-			  math2_mul_q15(dzold, craft->up_z);
+	side_prev = math2_dot3_q15(craft->side_x, dxold, craft->side_y, dyold, craft->side_z, dzold);
+	fwd_prev = -math2_dot3_q15(craft->fwd_x, dxold, craft->fwd_y, dyold, craft->fwd_z, dzold);
+	up_prev = math2_dot3_q15(craft->up_x, dxold, craft->up_y, dyold, craft->up_z, dzold);
 
 	/* Scale by 2^(model_scale_shift - 1). model_scale_shift == 0 means the ship has no LOD
 	 * and the laser coords are left-shifted one bit (same effect as
@@ -776,56 +768,58 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 
 // FUNCTION: TIE95 0x53BFC
 uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_idx, uint16_t size,
-										int16_t use_bsp_random) {
+										uint16_t random_vertex) {
+	int16_t c_fwd, c_up;
 	ShipModelMesh* mesh;
-	int16_t c_side, c_fwd, c_up;
 	uint16_t new_obj;
-	int model_scale_shift;
-	FlightObject* ember;
 
 	if (TIE_FLIGHT_TIE98)
-		return starship_makestarshipcompexplo_tie98(craft, component_idx, size, use_bsp_random);
+		return starship_makestarshipcompexplo_tie98(craft, component_idx, size, random_vertex);
 
+	draw_Lockshipfileptrs(craft->ship_idx);
 	mesh = &componentblockptr[component_idx];
 
-	if (use_bsp_random) {
+	if (!random_vertex) {
+		c_fwd = mesh->center_fwd;
+		new_obj = mesh->center_side;
+		c_up = mesh->center_up;
+	} else {
 		/* Walk into the mesh's first-LOD polygon block, pick a random
 		 * vertex, and resolve each of its 3 int16 coords via the back-ref
-		 * chain.
+		 * chain: a coord whose high byte is 0x7F refers back
+		 * (low byte / 2) vertices.
 		 *
 		 * bsp_hdr = mesh + render_offset + lod[0].offset
-		 *   (the binary reaches lod[0].offset via an unaligned int read of
-		 *    `&mesh->flags + render_offset` shifted >> 16 because Watcom
-		 *    uses a dword load whose upper half is the u16 offset field.)
 		 * num_vertices = byte at bsp_hdr+2
-		 * vertex_array = bsp_hdr + 17 + byte_at(bsp_hdr+4)
-		 * pick vertex at 6 * (rand % num_vertices) */
-		const uint8_t* mesh_bytes = (const uint8_t*)mesh;
-		const ShipMeshLOD* lod0 = (const ShipMeshLOD*)(mesh_bytes + mesh->render_offset);
-		const uint8_t* bsp_hdr = mesh_bytes + mesh->render_offset + lod0->offset;
-		const unsigned int num_vertices = bsp_hdr[2];
+		 * vertex_array = bsp_hdr + 17 + byte_at(bsp_hdr+4) */
+		const uint8_t* poly = (const uint8_t*)mesh + mesh->render_offset;
+		const int16_t* vertex;
+		const int16_t* coord;
+		int num_vertices;
 
-		const unsigned int pick = (unsigned int)((uint16_t)math2_getrandom() % num_vertices);
-		const uint8_t* vertex_base = bsp_hdr + 17 + bsp_hdr[4] + 6 * pick;
-		const uint8_t* coord;
+		poly += (int16_t)((const ShipMeshLOD*)poly)->offset;
+		num_vertices = poly[2];
+		/* The parameter is reused as the picked vertex index; a pick of
+		 * vertex 0 later selects the same ember sprite as the center path. */
+		random_vertex = (uint16_t)((int)(uint16_t)math2_getrandom() % num_vertices);
+		poly += poly[4] + 17;
+		vertex = (const int16_t*)poly + 3 * random_vertex;
 
-		coord = vertex_base;
-		while (coord[1] == 0x7F)
-			coord -= 3 * (int)coord[0];
-		memcpy(&c_side, coord, sizeof c_side);
-		coord = vertex_base + 2;
-		while (coord[1] == 0x7F)
-			coord -= 3 * (int)coord[0];
-		memcpy(&c_fwd, coord, sizeof c_fwd);
-		coord = vertex_base + 4;
-		while (coord[1] == 0x7F)
-			coord -= 3 * (int)coord[0];
-		memcpy(&c_up, coord, sizeof c_up);
-
-		pai_calcrotatedpoint(craft, c_side, c_up, (int16_t)(-c_fwd));
-	} else {
-		pai_calcrotatedpoint(craft, mesh->center_side, mesh->center_up, (int16_t)(-mesh->center_fwd));
+		coord = vertex;
+		while ((*coord & 0xFF00) == 0x7F00)
+			coord -= ((int16_t)(*coord & 0xFF) >> 1) * 3;
+		new_obj = *coord;
+		coord = vertex + 1;
+		while ((*coord & 0xFF00) == 0x7F00)
+			coord -= ((int16_t)(*coord & 0xFF) >> 1) * 3;
+		c_fwd = *coord;
+		coord = vertex + 2;
+		while ((*coord & 0xFF00) == 0x7F00)
+			coord -= ((int16_t)(*coord & 0xFF) >> 1) * 3;
+		c_up = *coord;
 	}
+
+	pai_calcrotatedpoint(craft, new_obj, c_up, (int16_t)(-c_fwd));
 
 	new_obj = create_findslot(13);
 	if (new_obj == 0xFFFF)
@@ -833,42 +827,39 @@ uint16_t starship_makestarshipcompexplo(FlightObject* craft, uint16_t component_
 
 	/* Scale the rotated offset by 2^(model_scale_shift - 1): left-shift when
 	 * model_scale_shift >= 2, half when model_scale_shift == 0, identity when == 1. */
-	model_scale_shift = objectblockptr->model_scale_shift;
-	if (model_scale_shift <= 1) {
-		if (model_scale_shift == 0) {
-			rotatedx >>= 1;
-			rotatedy >>= 1;
-			rotatedz >>= 1;
-		}
-		/* model_scale_shift == 1 -> no scaling */
-	} else {
-		const int shift = model_scale_shift - 1;
+	if ((int8_t)objectblockptr->model_scale_shift > 1) {
+		const int shift = (int8_t)objectblockptr->model_scale_shift - 1;
 		rotatedx = (int32_t)((uint32_t)rotatedx << shift);
 		rotatedy = (int32_t)((uint32_t)rotatedy << shift);
 		rotatedz = (int32_t)((uint32_t)rotatedz << shift);
+	} else if (objectblockptr->model_scale_shift == 0) {
+		rotatedx >>= 1;
+		rotatedy >>= 1;
+		rotatedz >>= 1;
 	}
 
-	ember = &objects[new_obj];
-	ember->world_x = rotatedx + craft->world_x;
-	ember->world_y = rotatedy + craft->world_y;
-	ember->world_z = rotatedz + craft->world_z;
-	ember->craft_ptr = NULL;
+	objects[new_obj].world_x = craft->world_x + rotatedx;
+	objects[new_obj].world_y = craft->world_y + rotatedy;
+	objects[new_obj].world_z = craft->world_z + rotatedz;
 
-	ember->genus = GENUS_EXPLOSION;
-	ember->ship_idx = (uint8_t)(127 + (math2_getrandom() & 1));
-	ember->category = 5;
-	ember->anim_frame = 2;
-	ember->age_ticks = 0;
-	ember->death_timer = 0;
-	ember->roll = 0;
+	if (!random_vertex)
+		objects[new_obj].ship_idx = 129;
+	else
+		objects[new_obj].ship_idx = (uint8_t)(127 + (math2_getrandom() & 1));
+	objects[new_obj].genus = GENUS_EXPLOSION;
+	objects[new_obj].category = 5;
+	objects[new_obj].anim_frame = 2;
+	objects[new_obj].age_ticks = 0;
+	objects[new_obj].death_timer = 0;
 	/* damage_state = size >> (6 - model_scale_shift): small/tight explosion on
 	 * heavily-LOD'd ships, big blast on non-LOD ships. */
-	ember->damage_state = (uint8_t)((int32_t)size >> (6 - model_scale_shift));
-	ember->current_speed = 0;
-	ember->pitch = 0;
-	ember->heading = 0;
-	ember->orient_dirty = 1;
-	ember->move_dirty = 1;
+	objects[new_obj].damage_state = (uint8_t)((int)size >> (6 - (int8_t)objectblockptr->model_scale_shift));
+	objects[new_obj].current_speed = 0;
+	objects[new_obj].pitch = 0;
+	objects[new_obj].heading = 0;
+	objects[new_obj].roll = 0;
+	objects[new_obj].orient_dirty = 1;
+	objects[new_obj].move_dirty = 1;
 
 	return new_obj;
 }
@@ -1031,7 +1022,10 @@ void starship_firelasergunner(uint16_t craft_obj_idx, uint16_t weapon_slot_idx, 
 			}
 			modelmesh_applyanimatedmeshrotationtopoint((int16_t)(craftptr->mesh_rotation[mesh_idx] << 8),
 													   craft->ship_idx, mesh_idx, point_x, point_forward,
-													   point_up, &point_x, &point_forward, &point_up);
+													   point_up);
+			point_x = rotatedx;
+			point_forward = rotatedy;
+			point_up = rotatedz;
 			if (craft->ship_idx == 53) {
 				point_x /= 2;
 				point_forward /= 2;

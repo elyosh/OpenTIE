@@ -186,12 +186,12 @@ extern void* objectminedgeptr[128];
 extern uint16_t objheap[128];
 
 /* Dither / material blending tables (lazy-filled by clearruntable). */
-extern uint8_t dithercolors[9984];  /* 39 mats * 16 steps * 4 perms * 4 B */
+extern uint32_t dithercolors[39][16][4]; /* 39 mats * 16 steps * 4 perms * 4 B */
 extern uint8_t materialrgbhi[2496]; /* 39 mats * 64 blend steps */
 extern uint8_t materialrgblo[2496];
 
 /* Starburst hash storage. */
-extern uint8_t starhashtable[2048];
+extern int32_t starhashtable[512];
 
 /* Eye-space vertex ring shared with TRANSFM2/TRACE2/DRAWPOL.
  * 1536 bytes = 128 vertices * 12 bytes (3*int32 per DRAWPOL_EyeVertex).
@@ -218,12 +218,12 @@ extern int32_t runx;           /* current edge's pixel column (x>>8) */
 extern int32_t endx;           /* run end column for outputxt */
 extern uint32_t edgeid;        /* current edge id */
 extern uint32_t pixdeepshft24; /* pixelsdeep << 24 */
-extern void* tempptr;          /* reusable temporary */
-extern void* currptr;          /* reusable temporary */
-extern void* currptr2;         /* reusable temporary — outputxt right-edge cache */
-extern void* currentedgeptr;   /* current edge under processing */
-extern void* lastptr;          /* reusable temporary */
-extern void* headerlist;       /* active-edge list head for current scanline */
+extern struct trace2_EdgeHeader* tempptr;  /* reusable temporary */
+extern struct trace2_EdgeHeader* currptr;  /* reusable temporary */
+extern struct trace2_EdgeHeader* currptr2; /* reusable temporary — outputxt right-edge cache */
+extern struct trace2_EdgeHeader* currentedgeptr; /* current edge under processing */
+extern struct trace2_EdgeHeader* lastptr;        /* reusable temporary */
+extern struct trace2_EdgeHeader* headerlist;     /* active-edge list head for current scanline */
 
 extern int16_t numlastrow;
 extern uint16_t curobjid; /* frontmost object id (0xFFFF = needs resort) */

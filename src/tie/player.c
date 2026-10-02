@@ -343,19 +343,32 @@ void player_Last_Torp(void) {
 // FUNCTION: TIE95 0x7D99C
 // FUNCTION: TIE98 0x469A40
 int16_t player_Is_Side_Enemy(int16_t side) {
+	int enemy;
+
+#ifdef TIE_MODERN
+	/* PORT: both originals return the uninitialized local for a side
+	 * outside 0..5; callers only pass 0..5. */
+	enemy = 0;
+#endif
 	switch (side) {
 		case 0:
 		case 4:
-			return 1;
+			enemy = 1;
+			break;
 		case 1:
-			return 0;
+			enemy = 0;
+			break;
 		case 2:
 		case 3:
 		case 5:
-			return fgroup.mission.neutral_name[side - 2][0] == '1';
-		default:
-			return 0;
+			/* Watcom char is unsigned; the original compares the signed byte. */
+			if ((signed char)fgroup.mission.neutral_name[side - 2][0] == '1')
+				enemy = 1;
+			else
+				enemy = 0;
+			break;
 	}
+	return enemy;
 }
 
 /* ================================================================
@@ -1631,48 +1644,46 @@ void player_Draw_Readout_Text(const char* text, int16_t font, int16_t screen_x, 
 
 	base_ramp = 8 * state + 224;
 
-	if (index >= str_len + 2) {
-		int16_t final_color;
-
-		strcpy(str, text);
-
-		if (index >= str_len + 5)
-			final_color = base_ramp + 4;
-		else
-			final_color = base_ramp + 9 - (index - str_len);
-		xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, font, final_color);
-	} else {
+	if (index < str_len + 2) {
 		int16_t char_count = index;
-		int16_t ramp_steps;
 		int16_t ramp_color;
 		int16_t saved_font;
 		int16_t text_width;
 		Rect r;
 
-		if (str_len < index)
-			char_count = str_len;
-		else
+		if (index <= str_len)
 			str[index] = 0;
+		else
+			char_count = str_len;
 
-		ramp_steps = index;
-		if (ramp_steps > 3)
-			ramp_steps = 3;
-		ramp_color = base_ramp + 6 - 2 * ramp_steps;
+		ramp_color = index;
+		if (ramp_color > 3)
+			ramp_color = 3;
+		ramp_color = base_ramp + 6 - ramp_color * 2;
 
 		saved_font = xfont_Get_Font();
 		xfont_Set_Font(font);
 		text_width = xfont_Get_String_Width((const char*)str);
 		xfont_Set_Font(saved_font);
 
-		while (ramp_color <= base_ramp + 6 && char_count > 0) {
-			int16_t loop_color = ramp_color++;
+		for (; ramp_color <= base_ramp + 6 && char_count > 0; ramp_color++) {
 			str[char_count--] = 0;
-			xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, font, loop_color);
+			xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, font, ramp_color);
 		}
 
-		xrect_Set_Rect(&r, text_width + screen_x + 2, screen_y, text_width + screen_x + 8, screen_y + 6);
+		xrect_Set_Rect(&r, screen_x + text_width + 2, screen_y, screen_x + text_width + 8, screen_y + 6);
 		if (index < str_len)
 			xpaint_Paint_Clipped_Rect(&r, base_ramp + 7);
+	} else {
+		int16_t final_color;
+
+		strcpy(str, text);
+
+		if (index < str_len + 5)
+			final_color = base_ramp + 9 - (index - str_len);
+		else
+			final_color = base_ramp + 4;
+		xfont_Print_Clipped_Text((const char*)str, screen_x, screen_y, font, final_color);
 	}
 }
 

@@ -24,12 +24,12 @@
 #include "tie/drawln2.h"  /* drawln2_tracelineedges */
 #include "tie/dynamix.h"  /* pspecnum (dynamix-owned) */
 #include "tie/logbuf2.h"
-#include "tie/math2_wide.h"
 #include "tie/spec.h"     /* spec_getspecnum */
 #include "tie/tie.h"      /* world-camera, objecteye*, worldz, currenttarget, spec_data, etc. */
 #include "tie/trace2.h"   /* trace2_drawface, trace2_drawscreencoords */
 #include "tie/transfm2.h" /* TRANSFM2 transforms */
 #include "tie/xtrans2.h"  /* flatx/y/z, edgept1/2, eyexyzdata, edgeflags (xtrans2-owned) */
+#include "tie_runtime/runtime/wide_arithmetic.h"
 
 #include <stdint.h>
 #include <string.h>
@@ -143,7 +143,7 @@ uint16_t edgeindex;
 // GLOBAL: TIE95 0xD4030
 uint16_t objectnum;
 // GLOBAL: TIE95 0xD4032
-int16_t counter;
+uint16_t counter;
 // GLOBAL: TIE95 0xD4034
 int16_t samexcnt;
 // GLOBAL: TIE95 0xD4036
@@ -380,25 +380,24 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 	int i;
 	const uint8_t* data = (const uint8_t*)poly_data;
 
-	uint8_t header_byte;
 	int use_bsp_tree;
 	PolyMeshHeader* header;
 	uint16_t* odef;
 	uint8_t* obytes;
-	int j;
+	unsigned int j;
 	PolyVert* pts_ptr;
-	int32_t min_x;
-	int32_t max_x;
-	int32_t min_y;
-	int32_t max_y;
-	int32_t min_z;
 	int32_t max_z;
 	/* Retail points newscreenxy at stack memory owned by this call; every
 	 * consumer runs before drawpolyobject returns. Face points are carved
 	 * as TRANSFM2_ScreenPoint records: at most one per vertex (128) plus two
 	 * near-plane clip points per edge (256), 640 * 12 bytes, leaving room
-	 * for the line and marking scratch pairs written past the cursor. */
+	 * for the line and marking scratch pairs written past the cursor.
+	 * Retail reserves only 390 words. */
+#ifdef TIE_MODERN
 	int32_t screenxy_buf[4096];
+#else
+	int32_t screenxy_buf[390];
+#endif
 
 	objectx = obj_x;
 	objecty = obj_y;
@@ -406,58 +405,15 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 	objectxlo = (int16_t)obj_x;
 	objectylo = (int16_t)obj_y;
 	objectzlo = (int16_t)obj_z;
-	objectxhi = (int16_t)(obj_x >> 16);
-	objectyhi = (int16_t)(obj_y >> 16);
-	objectzhi = (int16_t)(obj_z >> 16);
-
-	header_byte = data[0];
-
-	/* --- Billboard/sprite path --- */
-	if (header_byte == 0xFF) {
-		uint8_t scale = data[3];
-		int32_t* eye_end;
-		int16_t* src;
-		int32_t eye_buf[16];
-		int32_t screenxy[8] = { 0 };
-
-		numpoints = data[2];
-		numeyezpos = 0;
-
-		src = (int16_t*)(data + 4);
-
-		switch (scale) {
-			case 0:
-				eye_end = transfm2_geteyecoordsZ0(src, eye_buf);
-				break;
-			case 8:
-				eye_end = transfm2_geteyecoordsZ0s8(src, eye_buf);
-				break;
-			case 16:
-				eye_end = transfm2_geteyecoordsZ0s16(src, eye_buf);
-				break;
-			default:
-				return;
-		}
-		if (!numeyezpos)
-			return;
-
-		firstscreenxy = screenxy;
-		minscreenx = firstscreenxy;
-		maxscreenx = firstscreenxy;
-		minscreeny = firstscreenxy;
-		maxscreeny = firstscreenxy;
-		sameycnt = 0;
-		samexcnt = 0;
-		counter = numpoints;
-		lastscreenxy = transfm2_getscreencoords((DRAWPOL_EyeVertex*)eye_buf, firstscreenxy);
-		(void)eye_end;
-		trace2_drawscreencoords();
-		return;
-	}
+	objectxhi = (int16_t)((obj_x >> 16) & 0xFFFF);
+	objectyhi = (int16_t)((obj_y >> 16) & 0xFFFF);
+	objectzhi = (int16_t)((obj_z >> 16) & 0xFFFF);
 
 	/* threedflag = type & 1; if clear, copy world->eye matrix for the
 	 * precomputed-local path (rotworldeye* used directly). */
-	if (header_byte & 1) {
+	if (data[0] == 0xFF) {
+		/* Billboards are drawn in the eye plane. */
+	} else if (data[0] & 1) {
 		threedflag = 1;
 	} else {
 		rotworldeyeA1 = worldeyeA1;
@@ -472,18 +428,55 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 		threedflag = 0;
 	}
 
+	/* --- Billboard/sprite path --- */
+	if (data[0] == 0xFF) {
+		uint8_t scale = data[3];
+		int32_t* eye_end;
+
+		numpoints = data[2];
+		numeyezpos = 0;
+		/* Eye vertices start one record in, past the screen-xy head, so
+		 * the polygon can be closed on both sides below. */
+		if (scale == 0)
+			eye_end = transfm2_geteyecoordsZ0((int16_t*)(data + 4), &screenxy_buf[5]);
+		else if (scale == 8)
+			eye_end = transfm2_geteyecoordsZ0s8((int16_t*)(data + 4), &screenxy_buf[5]);
+		else if (scale == 16)
+			eye_end = transfm2_geteyecoordsZ0s16((int16_t*)(data + 4), &screenxy_buf[5]);
+		else
+			return;
+		if (!numeyezpos)
+			return;
+
+		firstscreenxy = screenxy_buf;
+		for (i = 0; i < 3; ++i)
+			eye_end[i] = screenxy_buf[5 + i];
+		for (i = 0; i < 3; ++i)
+			screenxy_buf[2 + i] = eye_end[i - 3];
+		minscreenx = firstscreenxy;
+		maxscreenx = firstscreenxy;
+		minscreeny = firstscreenxy;
+		maxscreeny = firstscreenxy;
+		sameycnt = 0;
+		samexcnt = 0;
+		counter = numpoints;
+		lastscreenxy = transfm2_getscreencoords((DRAWPOL_EyeVertex*)&screenxy_buf[5], firstscreenxy);
+		trace2_drawscreencoords();
+		return;
+	}
+
 	/* --- Line-object path --- */
-	if (header_byte < 0x80) {
+	if (data[0] < 0x80) {
 		int i;
 		uint8_t* edge;
 
-		if (header_byte != 0x40 && header_byte != 0x41)
+		if (data[0] != 0x40 && data[0] != 0x41)
 			return;
 		numedges = data[3];
 		numpoints = data[2];
-		for (i = 0; i < numpoints; ++i) {
+		for (i = 0; i < (uint16_t)numpoints; ++i) {
 			calcflag[i] = NULL;
-			vertexlight[i] = 0xFFFF;
+			vertexlight[i] = -1;
 		}
 		firstpointoff = (PolyVert*)(data + 4);
 		edgeflags[0] = 0;
@@ -498,7 +491,7 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 
 		newscreenxy = screenxy_buf;
 		/* Edges sit immediately after numpoints PolyVerts. */
-		edge = (uint8_t*)&firstpointoff[numpoints];
+		edge = (uint8_t*)&firstpointoff[(uint16_t)numpoints];
 		/* firstvertptr follows each edge record one byte in, as for a face
 		 * body, so transfm2_facezintersect tests the record's first byte
 		 * (thickness low byte) as the face header's lighting flag (0x40 bit).
@@ -510,7 +503,9 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 		 * the lighting-branch read lands inside the points array (valid
 		 * memory; the resulting lightVal is unused for line draws). */
 		firstvertptr = edge + 1;
+#ifdef TIE_MODERN
 		firstvertnorm = firstpointoff;
+#endif
 		facenumber = numedges;
 		do {
 			TRANSFM2_ScreenPoint* pts = transfm2_calclinepts(edge);
@@ -532,9 +527,9 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 				edgeidbyte = layervalue;
 				objectedgeword = (uint16_t)((uint8_t)layervalue | (polyidbyte << 8));
 				thick = (uint16_t)(thicknessMultiple * *(uint16_t*)edge);
-				avgz = ((firsteyexyz[edge[3]].z >> 1) + (firsteyexyz[edge[2]].z >> 1)) >> 8;
+				avgz = ((firsteyexyz[edge[2]].z >> 1) + (firsteyexyz[edge[3]].z >> 1)) >> 8;
 				if (avgz > 0)
-					thick = thick / (uint16_t)avgz;
+					thick = thick / avgz;
 				dst = newscreenxy;
 				dst[0] = pts->xy[0];
 				dst[1] = pts->xy[1];
@@ -554,21 +549,21 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 	}
 
 	/* --- 3D mesh path (0x80..0x83) --- */
-	if (header_byte > 0x83)
+	if (data[0] > 0x83)
 		return;
-	use_bsp_tree = (header_byte >= 0x82);
+	use_bsp_tree = (data[0] >= 0x82);
 	if (objectnum >= 0x7F)
 		return;
 
 	header = (PolyMeshHeader*)data;
 	polyidbyte = objectnum;
-	objectedgeword = (uint16_t)((uint8_t)edgeidbyte | ((uint8_t)objectnum << 8));
+	objectedgeword = (uint16_t)(((uint8_t)objectnum << 8) + edgeidbyte);
 	polycnt = 0;
 	numfaces = header->numfaces;
 	numedges = header->numedges;
 	numpoints = header->numpoints;
 
-	if (newobjectdef + 2 * header->numfaces + 4 * header->numedges + 536 > 0xC000)
+	if (newobjectdef + (2 * header->numfaces + 4 * header->numedges + 536) > 0xC000U)
 		return;
 
 	odef = (uint16_t*)((uint8_t*)xtransdataptr + newobjectdef);
@@ -585,14 +580,14 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 	odef[7] = solidindex;
 	odef[8] = (uint16_t)numfaces;
 	/* Face indices are one-based, so initialize the inclusive sentinel range. */
-	for (i = 0; i <= numfaces; ++i)
-		*(uint32_t*)&odef[2 * i + 12] = 0xFFFFFFFF;
+	for (j = 0; j <= (uint16_t)numfaces; ++j)
+		*(uint32_t*)&odef[2 * j + 12] = 0xFFFFFFFF;
 	/* Per-vertex init. */
-	for (i = 0; i < numpoints; ++i) {
-		calcflag[i] = NULL;
-		vertexlight[i] = 0xFFFF;
+	for (j = 0; j < (uint16_t)numpoints; ++j) {
+		calcflag[j] = NULL;
+		vertexlight[j] = -1;
 	}
-	for (j = 0; j < numedges; ++j)
+	for (j = 0; j < (uint16_t)numedges; ++j)
 		edgeflags[j] = 0;
 
 	/* One-shot dedup: resolve 0x7F00 continuation markers in the vertex
@@ -602,25 +597,22 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 	 * vstream hold a 2-point bbox (min XYZ + max XYZ as int16 triples)
 	 * used by transfm2_geteyeminmax before the vertex transform. */
 	if (header->dedup_flag) {
-		uint16_t* vstream;
-		uint16_t* w;
-		int v;
+		int16_t* vstream;
+		int16_t* w;
+		unsigned int v;
 
+		vstream = (int16_t*)((uint8_t*)header + (uint16_t)numfaces + 17);
 		header->dedup_flag = 0;
-		vstream = (uint16_t*)((uint8_t*)header + numfaces + 17);
 		w = vstream;
-		for (v = 0; v < numpoints; ++v) {
-			int k;
-
-			for (k = 0; k < 3; ++k) {
-				if ((w[k] & 0xFF00) == 0x7F00) {
-					/* Binary: xor ah,ah; sar ax,1 -- zeros high byte then
-					 * arithmetic-shifts. Net effect on the low byte is
-					 * unsigned div-by-2, back in [0..127]. */
-					int back = (w[k] & 0xFF) >> 1;
-					w[k] = vstream[3 * v + k - 3 * back];
-				}
-			}
+		/* A 0x7Fnn coordinate repeats the same coordinate nn / 2 vertices
+		 * back. */
+		for (v = 0; v < (uint16_t)numpoints; ++v) {
+			if ((w[0] & 0xFF00) == 0x7F00)
+				w[0] = vstream[(int)(3 * v) - (int16_t)(((w[0] & 0xFF) >> 1) * 3)];
+			if ((w[1] & 0xFF00) == 0x7F00)
+				w[1] = vstream[(int)(3 * v + 1) - (int16_t)(((w[1] & 0xFF) >> 1) * 3)];
+			if ((w[2] & 0xFF00) == 0x7F00)
+				w[2] = vstream[(int)(3 * v + 2) - (int16_t)(((w[2] & 0xFF) >> 1) * 3)];
 			w += 3;
 		}
 	}
@@ -633,96 +625,96 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 	someznegflag = 0;
 	firstpointoff = pts_ptr;
 
-	if (parentobject < 0x5000)
-		transfm2_geteyeminmax((int16_t*)pts_ptr, eyexyzdata);
-	else
+	if (parentobject >= 0x5000)
 		transfm2_geteyeminmaxS2((int16_t*)pts_ptr, eyexyzdata);
+	else
+		transfm2_geteyeminmax((int16_t*)pts_ptr, eyexyzdata);
 
 	/* eyexyzdata[0..5] = {min_x, max_x, min_y, max_y, min_z, max_z}.
 	 * The buffer will be overwritten with vertex data by geteyecoords below. */
-	min_x = eyexyzdata[0];
-	max_x = eyexyzdata[1];
-	min_y = eyexyzdata[2];
-	max_y = eyexyzdata[3];
-	min_z = eyexyzdata[4];
-	max_z = eyexyzdata[5];
-
-	if ((min_z >> 2) >= 0) {
-		if ((min_z >> 2) < (int)(uint16_t)objectsize)
-			closerthansizeflag++;
-	} else {
+	if ((eyexyzdata[4] >> 2) < 0) {
 		closerthansizeflag++;
 		someznegflag++;
+	} else if ((eyexyzdata[4] >> 2) < (int)(uint16_t)objectsize) {
+		closerthansizeflag++;
 	}
 
+	max_z = eyexyzdata[5];
 	if (max_z >= 0) {
 		/* Frustum cull: FOV=45 slope 1:1 -- |x| must be <= z inside. */
 		int16_t* odf;
 		PolyVert* verts;
-		int k;
+		unsigned int k;
 
-		if (max_x >= 0) {
-			if (max_z <= min_x)
+		if (eyexyzdata[1] < 0) {
+			if (-eyexyzdata[1] >= max_z)
 				return;
-		} else if (-max_x >= max_z) {
+		} else if (max_z <= eyexyzdata[0]) {
 			return;
 		}
-		if (max_y >= 0) {
-			if (max_z <= min_y)
+		if (eyexyzdata[3] < 0) {
+			if (-eyexyzdata[3] >= max_z)
 				return;
-		} else if (-max_y >= max_z) {
+		} else if (max_z <= eyexyzdata[2]) {
 			return;
 		}
 
 		/* World-bbox at objectdef[0..5]. */
 		odf = (int16_t*)objectdef;
-		odf[0] = odf[3] = (int16_t)(worldx >> 5);
-		odf[1] = odf[4] = (int16_t)(worldy >> 5);
-		odf[2] = odf[5] = (int16_t)(worldz >> 5);
+		odf[3] = odf[0] = (int16_t)(worldx >> 5);
+		odf[4] = odf[1] = (int16_t)(worldy >> 5);
+		odf[5] = odf[2] = (int16_t)(worldz >> 5);
 		if (threedflag) {
-			if (parentobject < 0x5000)
-				transfm2_getworldminmax((int16_t*)firstpointoff, odf);
-			else
+			if (parentobject >= 0x5000)
 				transfm2_getworldminmaxS2((int16_t*)firstpointoff, odf);
+			else
+				transfm2_getworldminmax((int16_t*)firstpointoff, odf);
 		} else {
 			/* Point-wise world-bbox: translate the 2-PolyVert poly-local
 			 * bbox (firstpointoff[0] = min corner, firstpointoff[1] = max)
-			 * into world coords by shifting each component right by 6
-			 * (parent<0x5000) or 4 (parent>=0x5000) and adding to the
-			 * world-position-shifted odf slots. All 6 components use the
-			 * same shift -- the binary's apparent shift_lo/shift_hi mix
-			 * was just a Watcom int32-load trick for high-word extraction. */
-			int shift = (parentobject < 0x5000) ? 6 : 4;
-			odf[0] += firstpointoff[0].x >> shift;
-			odf[1] += firstpointoff[0].y >> shift;
-			odf[2] += firstpointoff[0].z >> shift;
-			odf[3] += firstpointoff[1].x >> shift;
-			odf[4] += firstpointoff[1].y >> shift;
-			odf[5] += firstpointoff[1].z >> shift;
+			 * into world coords by shifting each component right by 4
+			 * (parent>=0x5000) or 6 (parent<0x5000) and adding to the
+			 * world-position-shifted odf slots. */
+			if (parentobject >= 0x5000) {
+				odf[0] += firstpointoff[0].x >> 4;
+				odf[1] += firstpointoff[0].y >> 4;
+				odf[2] += firstpointoff[0].z >> 4;
+				odf[3] += firstpointoff[1].x >> 4;
+				odf[4] += firstpointoff[1].y >> 4;
+				odf[5] += firstpointoff[1].z >> 4;
+			} else {
+				odf[0] += firstpointoff[0].x >> 6;
+				odf[1] += firstpointoff[0].y >> 6;
+				odf[2] += firstpointoff[0].z >> 6;
+				odf[3] += firstpointoff[1].x >> 6;
+				odf[4] += firstpointoff[1].y >> 6;
+				odf[5] += firstpointoff[1].z >> 6;
+			}
 		}
 
 		/* Skip the 2-PolyVert bbox; actual vertices start at firstpointoff[2]. */
 		verts = firstpointoff + 2;
 		firsteyexyz = (DRAWPOL_EyeVertex*)eyexyzdata;
 		firstpointoff = verts;
-		if (parentobject < 0x5000)
-			transfm2_geteyecoords((int16_t*)verts, eyexyzdata);
-		else
+		if (parentobject >= 0x5000)
 			transfm2_geteyecoordsS2((int16_t*)verts, eyexyzdata);
+		else
+			transfm2_geteyecoords((int16_t*)verts, eyexyzdata);
 
 		newscreenxy = screenxy_buf;
 		/* Normals sit immediately after the vertex array; faces after normals. */
-		firstvertnorm = firstpointoff + numpoints;
-		firstfaceoff = (PolyFace*)(firstpointoff + 2 * numpoints);
+		firstvertnorm = firstpointoff;
+		firstvertnorm += (uint16_t)numpoints;
+		firstfaceoff = (PolyFace*)(firstvertnorm + (uint16_t)numpoints);
 		facenumber = numfaces;
-		firstvertptr = (uint8_t*)&firstfaceoff[numfaces];
+		firstvertptr = (uint8_t*)&firstfaceoff[(uint16_t)numfaces];
 
-		for (k = 0; k < numfaces; ++k) {
+		for (k = 0; k < (uint16_t)numfaces; ++k) {
 			uint8_t vis;
 			uint8_t face_onscreen;
 
 			doublesideflag = *firstvertptr++;
-			vis = (uint8_t)(drawpol_checknormal((uint16_t)k) >> 1);
+			vis = (uint8_t)drawpol_checknormal((uint16_t)k) >> 1;
 			if (vis) {
 				facevisflag[k] = vis;
 			} else {
@@ -768,21 +760,21 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 			uint16_t saved_optr;
 
 			objectptrs[objectnum] = newobjectdef;
-			newobjectdef = (uint16_t)(newobjectdef + 2 * numfaces + 4 * numedges + 536);
+			newobjectdef += 2 * numfaces + 4 * numedges + 536;
 			farmarkingptr[0] = firstvertptr;
 			if (use_bsp_tree)
 				farmarkingptr[0] += 3 * (uint16_t)numfaces;
 
 			if (drawmarkingsflag) {
-				int mcount = *(int16_t*)farmarkingptr[0];
-				if (mcount && mcount + (int)nummarks < 0x80) {
+				unsigned int mcount = *(int16_t*)farmarkingptr[0];
+				if (mcount && mcount + nummarks < 0x80) {
 					int16_t* link = (int16_t*)(farmarkingptr[0] + 3);
 					uint8_t* ent = farmarkingptr[0] + 2;
-					while (--mcount != -1) {
-						uint16_t nm = ++nummarks;
-						farmarkingptr[nm] = ent;
-						markingnumber[*ent] = nm;
-						farmarkingptr[nm] = &ent[*link];
+					while (--mcount != (unsigned int)-1) {
+						++nummarks;
+						farmarkingptr[nummarks] = ent;
+						markingnumber[*ent] = (uint8_t)nummarks;
+						farmarkingptr[nummarks] = &ent[*link];
 						link = (int16_t*)((uint8_t*)link + 3);
 						ent += 3;
 					}
@@ -793,9 +785,9 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 			if (use_bsp_tree) {
 				drawpol_dobsptree(firstvertptr);
 			} else {
-				int face_i;
+				unsigned int face_i;
 
-				for (face_i = 0; face_i < numfaces; ++face_i) {
+				for (face_i = 0; face_i < (uint16_t)numfaces; ++face_i) {
 					uint8_t color_val;
 					uint8_t vcount;
 					uint16_t* slot;
@@ -803,37 +795,33 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 
 					if (!(facevisflag[face_i] & 4))
 						continue;
-					firstvertptr = (uint8_t*)&firstfaceoff[face_i] + firstfaceoff[face_i].vlist_offset;
+					firstvertptr = (uint8_t*)&firstfaceoff[face_i];
+					firstvertptr += firstfaceoff[face_i].vlist_offset;
 
-					if (!(facevisflag[face_i] & 1)) {
-						if (facevisflag[face_i] & 0x10) {
-							if (!(firstvertptr[0] & DRAWPOL_FACE_TWOSIDED))
-								continue;
-							rotlightY = -rotlightY;
-							rotlightZ = -rotlightZ;
-							rotlightX = -rotlightX;
-							color_val = drawpol_getlightvalue(firstcoloroff[face_i], face_i);
-							rotlightX = -rotlightX;
-							rotlightY = -rotlightY;
-							rotlightZ = -rotlightZ;
-						} else if (!drawpol_checknormal(face_i)) {
-							uint8_t base_c;
-
-							if (!(firstvertptr[0] & DRAWPOL_FACE_TWOSIDED))
-								continue;
-							base_c = firstcoloroff[face_i];
-							rotlightX = -rotlightX;
-							rotlightY = -rotlightY;
-							rotlightZ = -rotlightZ;
-							color_val = drawpol_getlightvalue(base_c, face_i);
-							rotlightX = -rotlightX;
-							rotlightY = -rotlightY;
-							rotlightZ = -rotlightZ;
-						} else {
-							color_val = drawpol_getlightvalue(firstcoloroff[face_i], face_i);
-						}
-					} else {
+					if (facevisflag[face_i] & 1) {
 						color_val = drawpol_getlightvalue(firstcoloroff[face_i], face_i);
+					} else if (facevisflag[face_i] & 0x10) {
+						if (!(firstvertptr[0] & DRAWPOL_FACE_TWOSIDED))
+							continue;
+						rotlightX = -rotlightX;
+						rotlightY = -rotlightY;
+						rotlightZ = -rotlightZ;
+						color_val = drawpol_getlightvalue(firstcoloroff[face_i], face_i);
+						rotlightX = -rotlightX;
+						rotlightY = -rotlightY;
+						rotlightZ = -rotlightZ;
+					} else if (drawpol_checknormal(face_i)) {
+						color_val = drawpol_getlightvalue(firstcoloroff[face_i], face_i);
+					} else {
+						if (!(firstvertptr[0] & DRAWPOL_FACE_TWOSIDED))
+							continue;
+						rotlightX = -rotlightX;
+						rotlightY = -rotlightY;
+						rotlightZ = -rotlightZ;
+						color_val = drawpol_getlightvalue(firstcoloroff[face_i], face_i);
+						rotlightX = -rotlightX;
+						rotlightY = -rotlightY;
+						rotlightZ = -rotlightZ;
 					}
 					vcount = *firstvertptr++ & DRAWPOL_FACE_COUNT_MASK;
 					slot = objectdef + 268;
@@ -852,10 +840,10 @@ void drawpol_drawpolyobject(const uint16_t* poly_data, int32_t obj_x, int32_t ob
 
 			/* Clear staged markingnumber[face] entries. */
 			if (drawmarkingsflag) {
-				int mcount = *(int16_t*)farmarkingptr[0];
+				unsigned int mcount = *(int16_t*)farmarkingptr[0];
 				if (mcount) {
 					uint8_t* ent = farmarkingptr[0] + 2;
-					while (--mcount != -1) {
+					while (--mcount != (unsigned int)-1) {
 						markingnumber[*ent] = 0;
 						ent += 3;
 					}
@@ -1000,33 +988,15 @@ uint16_t drawpol_checknormal(uint16_t face_idx) {
 	vtx = ((uint8_t*)face)[face->vlist_offset + 3];
 	v = &firsteyexyz[vtx];
 
-	/* Clamp each rotated Q30 normal component to +/-0x40000000 before
-	 * shifting down to Q15. */
-	nx = math2_dot3(rotworldeyeA1, face->normal_x, rotworldeyeB1, face->normal_y, rotworldeyeC1,
-					face->normal_z);
-	if (nx >= 0x40000000)
-		nx = 0x3FFF0000;
-	if (nx <= -0x40000000)
-		nx = -0x3FFF0000;
-	nx >>= 15;
-	ny = math2_dot3(rotworldeyeA2, face->normal_x, rotworldeyeB2, face->normal_y, rotworldeyeC2,
-					face->normal_z);
-	if (ny >= 0x40000000)
-		ny = 0x3FFF0000;
-	if (ny <= -0x40000000)
-		ny = -0x3FFF0000;
-	ny >>= 15;
-	nz = math2_dot3(rotworldeyeA3, face->normal_x, rotworldeyeB3, face->normal_y, rotworldeyeC3,
-					face->normal_z);
-	if (nz >= 0x40000000)
-		nz = 0x3FFF0000;
-	if (nz <= -0x40000000)
-		nz = -0x3FFF0000;
-	nz >>= 15;
+	/* Rotate the face normal into eye space. */
+	nx = math2_dot3_q15_clamped(rotworldeyeA1, rotworldeyeB1, rotworldeyeC1, face->normal_x, face->normal_y,
+								face->normal_z);
+	ny = math2_dot3_q15_clamped(rotworldeyeA2, rotworldeyeB2, rotworldeyeC2, face->normal_x, face->normal_y,
+								face->normal_z);
+	nz = math2_dot3_q15_clamped(rotworldeyeA3, rotworldeyeB3, rotworldeyeC3, face->normal_x, face->normal_y,
+								face->normal_z);
 
-	/* The original adds the shifted products in a wrapping 32-bit accumulator. */
-	if ((int32_t)((uint32_t)math2_mul_q15(nx, v->x) + (uint32_t)math2_mul_q15(ny, v->y) +
-				  (uint32_t)math2_mul_q15(nz, v->z)) >= 0)
+	if (math2_dot3_q15(nx, v->x, ny, v->y, nz, v->z) >= 0)
 		return 2;
 	return 0;
 }
@@ -1093,13 +1063,8 @@ int16_t drawpol_getlightvalue(uint16_t color, uint16_t face_idx) {
 
 			/* Compute unless cached (flag bit 0x80 forces recompute). */
 			if ((flag_byte & 0x80) || vertexlight[vtx_idx] == (uint16_t)0xFFFF) {
-				dot = math2_dot3(firstvertnorm[vtx_idx].x, rotlightX, firstvertnorm[vtx_idx].y, rotlightY,
-								 firstvertnorm[vtx_idx].z, rotlightZ);
-				if (dot >= 0x40000000)
-					dot = 0x3FFF0000;
-				if (dot <= -0x40000000)
-					dot = -0x3FFF0000;
-				dot >>= 15;
+				dot = math2_dot3_q15_clamped(firstvertnorm[vtx_idx].x, firstvertnorm[vtx_idx].y,
+											 firstvertnorm[vtx_idx].z, rotlightX, rotlightY, rotlightZ);
 				vertexlight[vtx_idx] = (uint16_t)dot;
 				if ((int16_t)dot < 0 && flag_byte != 194)
 					vertexlight[vtx_idx] = 0;
@@ -1129,12 +1094,7 @@ int16_t drawpol_getlightvalue(uint16_t color, uint16_t face_idx) {
 					dx = (int32_t)((uint32_t)dx << 15) / d;
 					dy = (int32_t)((uint32_t)dy << 15) / d;
 					dz = (int32_t)((uint32_t)dz << 15) / d;
-					n_dot = math2_dot3(vn->x, dx, vn->y, dy, vn->z, dz);
-					if (n_dot >= 0x40000000)
-						n_dot = 0x3FFF0000;
-					if (n_dot <= -0x40000000)
-						n_dot = -0x3FFF0000;
-					n_dot >>= 15;
+					n_dot = math2_dot3_q15_clamped(vn->x, vn->y, vn->z, dx, dy, dz);
 					gain = n_dot + 0x8000;
 					if (gain <= 0)
 						continue;
@@ -1154,13 +1114,8 @@ int16_t drawpol_getlightvalue(uint16_t color, uint16_t face_idx) {
 	}
 
 	/* Flat-face lighting path. */
-	face_dot = math2_dot3(firstfaceoff[face_idx].normal_x, rotlightX, firstfaceoff[face_idx].normal_y,
-						  rotlightY, firstfaceoff[face_idx].normal_z, rotlightZ);
-	if (face_dot >= 0x40000000)
-		face_dot = 0x3FFF0000;
-	if (face_dot <= -0x40000000)
-		face_dot = -0x3FFF0000;
-	face_dot >>= 15;
+	face_dot = math2_dot3_q15_clamped(firstfaceoff[face_idx].normal_x, firstfaceoff[face_idx].normal_y,
+									  firstfaceoff[face_idx].normal_z, rotlightX, rotlightY, rotlightZ);
 
 	/* Binary indexes via `materialcolors_base1` (= materialcolors - 1),
 	 * a classic Watcom pre-decremented-pointer trick. The index is always
