@@ -431,11 +431,9 @@ static void encode_fg_state(uint8_t* dst, uint8_t fg_idx, const FGStatus* state)
 	dst[3] = state->arrival_triggered;
 	put_u16(dst + 4, state->arrival_delay);
 	put_u16(dst + 6, state->world_position);
-	for (unsigned int i = 0; i < 9; ++i) {
-		dst[8 + i * 2] = state->cond[i].count;
-		dst[9 + i * 2] = state->cond[i].detail;
-		dst[26 + i * 2] = state->cond_id[i].count;
-		dst[27 + i * 2] = state->cond_id[i].detail;
+	for (unsigned int i = 0; i < FG_COUNT_SLOTS; ++i) {
+		dst[8 + i] = state->counts[i];
+		dst[26 + i] = state->special_counts[i];
 	}
 	dst[44] = state->primary_status;
 	dst[45] = state->secondary_status;
@@ -527,10 +525,10 @@ static uint32_t world_hash(void) {
 		hash_u32(&hash, (uint32_t)fg->active | ((uint32_t)fg->waves_remaining << 8) |
 							((uint32_t)fg->arrival_triggered << 16));
 		hash_u32(&hash, (uint32_t)fg->arrival_delay | ((uint32_t)fg->world_position << 16));
-		for (unsigned int j = 0; j < 9; ++j)
-			hash_u32(&hash, (uint32_t)fg->cond[j].count | ((uint32_t)fg->cond[j].detail << 8) |
-								((uint32_t)fg->cond_id[j].count << 16) |
-								((uint32_t)fg->cond_id[j].detail << 24));
+		for (unsigned int j = 0; j < FG_COUNT_SLOTS; j += 2)
+			hash_u32(&hash, (uint32_t)fg->counts[j] | ((uint32_t)fg->counts[j + 1] << 8) |
+								((uint32_t)fg->special_counts[j] << 16) |
+								((uint32_t)fg->special_counts[j + 1] << 24));
 		hash_u32(&hash, (uint32_t)fg->primary_status | ((uint32_t)fg->secondary_status << 8) |
 							((uint32_t)fg->fg_complete << 16));
 	}

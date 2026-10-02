@@ -420,85 +420,86 @@ uint16_t score_checkcondition(uint16_t cond, uint16_t target_type, uint16_t targ
 			if (!score_fgmemberofgroup(fg_idx, target_type, target_id))
 				continue;
 
-			total_craft += fgstatus[fg_idx].cond[0].count;
-			specific_total += fgstatus[fg_idx].cond_id[0].count;
-			destroyed_total += fgstatus[fg_idx].cond[0].detail;
+			total_craft += fgstatus[fg_idx].counts[FG_COUNT_TOTAL];
+			specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_TOTAL];
+			destroyed_total += fgstatus[fg_idx].counts[FG_COUNT_ARRIVED];
 
 			switch (cond) {
 				case 1:
-					cond_count += fgstatus[fg_idx].cond[0].detail;
-					cond_specific_total += fgstatus[fg_idx].cond_id[0].detail;
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_ARRIVED];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_ARRIVED];
 					if (pstate.player_fg_idx == fg_idx)
 						player_matched = 1;
 					break;
 				case 2:
-					cond_count += fgstatus[fg_idx].cond[1].count;
-					cond_specific_total += fgstatus[fg_idx].cond_id[1].count;
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_DESTROYED];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_DESTROYED];
 					if (exclude_player) {
-						cond_count += fgstatus[fg_idx].cond[1].detail;
-						cond_specific_total += fgstatus[fg_idx].cond_id[1].detail;
-						cond_count += fgstatus[fg_idx].cond[2].count;
-						cond_specific_total += fgstatus[fg_idx].cond_id[2].count;
+						cond_count += fgstatus[fg_idx].counts[FG_COUNT_HYPERSPACED];
+						cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_HYPERSPACED];
+						cond_count += fgstatus[fg_idx].counts[FG_COUNT_HANGAR];
+						cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_HANGAR];
 					} else {
-						cond_destroyed_count += fgstatus[fg_idx].cond[1].detail;
-						cond_destroyed_specific += fgstatus[fg_idx].cond_id[1].detail;
-						cond_destroyed_count += fgstatus[fg_idx].cond[2].count;
-						cond_destroyed_specific += fgstatus[fg_idx].cond_id[2].count;
+						cond_destroyed_count += fgstatus[fg_idx].counts[FG_COUNT_HYPERSPACED];
+						cond_destroyed_specific += fgstatus[fg_idx].special_counts[FG_COUNT_HYPERSPACED];
+						cond_destroyed_count += fgstatus[fg_idx].counts[FG_COUNT_HANGAR];
+						cond_destroyed_specific += fgstatus[fg_idx].special_counts[FG_COUNT_HANGAR];
 					}
 					break;
 				case 3:
-					cond_count += fgstatus[fg_idx].cond[2].detail;
-					cond_specific_total += fgstatus[fg_idx].cond_id[2].detail;
-					cond_destroyed_count += fgstatus[fg_idx].cond[3].count;
-					cond_destroyed_specific += fgstatus[fg_idx].cond_id[3].count;
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_ATTACKED];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_ATTACKED];
+					cond_destroyed_count += fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNATTACKED];
+					cond_destroyed_specific += fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNATTACKED];
 					if (pstate.player_fg_idx == fg_idx && pstate.player_craft->was_hit_flag)
 						player_matched = 1;
 					break;
 				case 4:
-					cond_count += fgstatus[fg_idx].cond[3].detail;
-					cond_specific_total += fgstatus[fg_idx].cond_id[3].detail;
-					cond_destroyed_count += fgstatus[fg_idx].cond[4].count;
-					cond_destroyed_specific += fgstatus[fg_idx].cond_id[4].count;
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_CAPTURED];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_CAPTURED];
+					cond_destroyed_count += fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNCAPTURED];
+					cond_destroyed_specific += fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNCAPTURED];
 					break;
 				case 5:
-					cond_count += fgstatus[fg_idx].cond[4].detail;
-					cond_specific_total += fgstatus[fg_idx].cond_id[4].detail;
-					cond_destroyed_count += fgstatus[fg_idx].cond[5].count;
-					cond_destroyed_specific += fgstatus[fg_idx].cond_id[5].count;
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_INSPECTED];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_INSPECTED];
+					cond_destroyed_count += fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNINSPECTED];
+					cond_destroyed_specific += fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNINSPECTED];
 					break;
 				case 6:
-					cond_count += fgstatus[fg_idx].cond[5].detail;
-					cond_specific_total += fgstatus[fg_idx].cond_id[5].detail;
-					cond_destroyed_count += fgstatus[fg_idx].cond[6].count;
-					cond_destroyed_specific += fgstatus[fg_idx].cond_id[6].count;
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_BOARDED];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_BOARDED];
+					cond_destroyed_count += fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNBOARDED];
+					cond_destroyed_specific += fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNBOARDED];
 					break;
 				case 7:
-					cond_count += fgstatus[fg_idx].cond[6].detail;
-					cond_specific_total += fgstatus[fg_idx].cond_id[6].detail;
-					cond_destroyed_count += fgstatus[fg_idx].cond[7].count;
-					cond_destroyed_specific += fgstatus[fg_idx].cond_id[7].count;
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_DOCKED];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_DOCKED];
+					cond_destroyed_count += fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNDOCKED];
+					cond_destroyed_specific += fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNDOCKED];
 					break;
 				case 8:
-					cond_count += fgstatus[fg_idx].cond[7].detail;
-					cond_specific_total += fgstatus[fg_idx].cond_id[7].detail;
-					cond_destroyed_count += fgstatus[fg_idx].cond[8].count;
-					cond_destroyed_specific += fgstatus[fg_idx].cond_id[8].count;
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_DISABLED];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_DISABLED];
+					cond_destroyed_count += fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNDISABLED];
+					cond_destroyed_specific += fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNDISABLED];
 					break;
 				case 9:
 					/* Survivors: arrived minus destroyed. */
-					cond_count += fgstatus[fg_idx].cond[0].detail - fgstatus[fg_idx].cond[1].count;
-					cond_specific_total +=
-						fgstatus[fg_idx].cond_id[0].detail - fgstatus[fg_idx].cond_id[1].count;
-					cond_destroyed_count += fgstatus[fg_idx].cond[1].count;
-					cond_destroyed_specific += fgstatus[fg_idx].cond_id[1].count;
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_ARRIVED] -
+								  fgstatus[fg_idx].counts[FG_COUNT_DESTROYED];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_ARRIVED] -
+										   fgstatus[fg_idx].special_counts[FG_COUNT_DESTROYED];
+					cond_destroyed_count += fgstatus[fg_idx].counts[FG_COUNT_DESTROYED];
+					cond_destroyed_specific += fgstatus[fg_idx].special_counts[FG_COUNT_DESTROYED];
 					break;
 				case 12:
-					cond_count += fgstatus[fg_idx].cond[1].detail;
-					cond_specific_total += fgstatus[fg_idx].cond_id[1].detail;
-					cond_count += fgstatus[fg_idx].cond[2].count;
-					cond_specific_total += fgstatus[fg_idx].cond_id[2].count;
-					cond_destroyed_count += fgstatus[fg_idx].cond[1].count;
-					cond_destroyed_specific += fgstatus[fg_idx].cond_id[1].count;
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_HYPERSPACED];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_HYPERSPACED];
+					cond_count += fgstatus[fg_idx].counts[FG_COUNT_HANGAR];
+					cond_specific_total += fgstatus[fg_idx].special_counts[FG_COUNT_HANGAR];
+					cond_destroyed_count += fgstatus[fg_idx].counts[FG_COUNT_DESTROYED];
+					cond_destroyed_specific += fgstatus[fg_idx].special_counts[FG_COUNT_DESTROYED];
 					break;
 				case 21:
 				case 22:
@@ -896,42 +897,41 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
 
 	TIE_FLIGHT_TRACE_FG_EXIT(obj_idx, exit_kind);
 
-	/* Primary bucket (byte-indexed via exit_kind). */
-	((&fgstatus[fg_idx].cond[0].count))[exit_kind]++;
+	/* exit_kind is the FG_COUNT_* slot for this exit. */
+	fgstatus[fg_idx].counts[exit_kind]++;
 	if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
-		((&fgstatus[fg_idx].cond_id[0].count))[exit_kind] = 1;
+		fgstatus[fg_idx].special_counts[exit_kind] = 1;
 
-	/* Conditional buckets: each bumps its own cond[N].count when the
-	 * craft's flag is CLEAR (i.e. the exit qualifies for that bucket). */
+	/* FG_COUNT_LEFT_* slots: the craft left without the matching event. */
 	if (!cd->inspected) {
-		fgstatus[fg_idx].cond[5].count++;
+		fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNINSPECTED]++;
 		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
-			fgstatus[fg_idx].cond_id[5].count = 1;
+			fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNINSPECTED] = 1;
 	}
 	if (!cd->pad_0B6) {
-		fgstatus[fg_idx].cond[8].count++;
+		fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNDISABLED]++;
 		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
-			fgstatus[fg_idx].cond_id[8].count = 1;
+			fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNDISABLED] = 1;
 	}
 	if (!cd->dock_state_flags) {
-		fgstatus[fg_idx].cond[4].count++;
+		fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNCAPTURED]++;
 		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
-			fgstatus[fg_idx].cond_id[4].count = 1;
+			fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNCAPTURED] = 1;
 	}
 	if (!cd->was_hit_flag) {
-		fgstatus[fg_idx].cond[3].count++;
+		fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNATTACKED]++;
 		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
-			fgstatus[fg_idx].cond_id[3].count = 1;
+			fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNATTACKED] = 1;
 	}
 	if (!cd->board_count) {
-		fgstatus[fg_idx].cond[6].count++;
+		fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNBOARDED]++;
 		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
-			fgstatus[fg_idx].cond_id[6].count = 1;
+			fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNBOARDED] = 1;
 	}
 	if (!cd->capture_count) {
-		fgstatus[fg_idx].cond[7].count++;
+		fgstatus[fg_idx].counts[FG_COUNT_LEFT_UNDOCKED]++;
 		if ((int8_t)fg_array[fg_idx].special_craft == cd->craft_idx_in_fg)
-			fgstatus[fg_idx].cond_id[7].count = 1;
+			fgstatus[fg_idx].special_counts[FG_COUNT_LEFT_UNDOCKED] = 1;
 	}
 
 	/* Destruction (exit_kind == 2): link-code tick + propagation to other FGs
@@ -955,22 +955,23 @@ void score_craftexitscoring(uint16_t obj_idx, uint16_t fg_idx, uint16_t exit_kin
 			if ((int8_t)fg_array[i].start_fg != fg_idx)
 				continue;
 
-			d_cnt = fgstatus[i].cond[0].count - fgstatus[i].cond[0].detail;
-			d_cid = fgstatus[i].cond_id[0].count - fgstatus[i].cond_id[0].detail;
+			d_cnt = fgstatus[i].counts[FG_COUNT_TOTAL] - fgstatus[i].counts[FG_COUNT_ARRIVED];
+			d_cid = fgstatus[i].special_counts[FG_COUNT_TOTAL] - fgstatus[i].special_counts[FG_COUNT_ARRIVED];
 
-			/* Propagate both deltas across cond[1/5/8/4/3/6]. */
-			fgstatus[i].cond[1].count += d_cnt;
-			fgstatus[i].cond_id[1].count += d_cid;
-			fgstatus[i].cond[5].count += d_cnt;
-			fgstatus[i].cond_id[5].count += d_cid;
-			fgstatus[i].cond[8].count += d_cnt;
-			fgstatus[i].cond_id[8].count += d_cid;
-			fgstatus[i].cond[4].count += d_cnt;
-			fgstatus[i].cond_id[4].count += d_cid;
-			fgstatus[i].cond[3].count += d_cnt;
-			fgstatus[i].cond_id[3].count += d_cid;
-			fgstatus[i].cond[6].count += d_cnt;
-			fgstatus[i].cond_id[6].count += d_cid;
+			/* Craft that will no longer arrive count as destroyed and as never
+			 * attacked, captured, inspected, boarded or disabled. */
+			fgstatus[i].counts[FG_COUNT_DESTROYED] += d_cnt;
+			fgstatus[i].special_counts[FG_COUNT_DESTROYED] += d_cid;
+			fgstatus[i].counts[FG_COUNT_LEFT_UNINSPECTED] += d_cnt;
+			fgstatus[i].special_counts[FG_COUNT_LEFT_UNINSPECTED] += d_cid;
+			fgstatus[i].counts[FG_COUNT_LEFT_UNDISABLED] += d_cnt;
+			fgstatus[i].special_counts[FG_COUNT_LEFT_UNDISABLED] += d_cid;
+			fgstatus[i].counts[FG_COUNT_LEFT_UNCAPTURED] += d_cnt;
+			fgstatus[i].special_counts[FG_COUNT_LEFT_UNCAPTURED] += d_cid;
+			fgstatus[i].counts[FG_COUNT_LEFT_UNATTACKED] += d_cnt;
+			fgstatus[i].special_counts[FG_COUNT_LEFT_UNATTACKED] += d_cid;
+			fgstatus[i].counts[FG_COUNT_LEFT_UNBOARDED] += d_cnt;
+			fgstatus[i].special_counts[FG_COUNT_LEFT_UNBOARDED] += d_cid;
 
 			fgstatus[i].active = 1;
 			fgstatus[i].waves_remaining = 0;

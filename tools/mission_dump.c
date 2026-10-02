@@ -159,7 +159,7 @@ static const char* const formation_names[] = {
 };
 
 /* Win/loss/bonus condition codes (ECondStruct.cond). Mapping derived
- * from where each fgstatus.cond[N].detail bucket is bumped in the
+ * from where each fgstatus.counts[FG_COUNT_*] slot is bumped in the
  * engine (collide.c, paiman.c, create.c, score_craftexitscoring) and
  * which bucket score_checkcondition reads per cond code. NOT the
  * Mission_TIE95.txt off-by-one mapping — that one mislabels several
@@ -167,18 +167,18 @@ static const char* const formation_names[] = {
  * "Warning! Illegal cargo" (cond=5 fires on inspection of Onece 3). */
 static const char* const cond_names[] = {
 	"always true",                   /*  0 */
-	"arrived",                       /*  1 cond[0].detail (spawn)             */
-	"destroyed",                     /*  2 cond[1].count (exit_kind=2)        */
-	"attacked",                      /*  3 cond[2].detail (was_hit_flag)      */
-	"captured",                      /*  4 cond[3].detail (paiman case 0x1F)  */
-	"inspected",                     /*  5 cond[4].detail (proximity / board) */
-	"boarded",                       /*  6 cond[5].detail (board_count 0->1)  */
-	"docked",                        /*  7 cond[6].detail (capture_count 0->1)*/
-	"disabled",                      /*  8 cond[7].detail (systems-down)      */
-	"identified/survived",           /*  9 cond[0].detail - cond[1].count     */
+	"arrived",                       /*  1 counts[FG_COUNT_ARRIVED] (spawn)             */
+	"destroyed",                     /*  2 counts[FG_COUNT_DESTROYED] (exit_kind=2)        */
+	"attacked",                      /*  3 counts[FG_COUNT_ATTACKED] (was_hit_flag)      */
+	"captured",                      /*  4 counts[FG_COUNT_CAPTURED] (paiman case 0x1F)  */
+	"inspected",                     /*  5 counts[FG_COUNT_INSPECTED] (proximity / board) */
+	"boarded",                       /*  6 counts[FG_COUNT_BOARDED] (board_count 0->1)  */
+	"docked",                        /*  7 counts[FG_COUNT_DOCKED] (capture_count 0->1)*/
+	"disabled",                      /*  8 counts[FG_COUNT_DISABLED] (systems-down)      */
+	"identified/survived",           /*  9 counts[FG_COUNT_ARRIVED] - counts[FG_COUNT_DESTROYED]     */
 	"always false",                  /* 10 */
 	"resistance",                    /* 11 (no per-FG accumulation)           */
-	"come and go",                   /* 12 cond[1].detail + cond[2].count     */
+	"come and go",                   /* 12 counts[FG_COUNT_HYPERSPACED] + counts[FG_COUNT_HANGAR]     */
 	"unused (13)",                   /* 13 */
 	"primary objectives complete",   /* 14 mission-level                      */
 	"primary objectives failed",     /* 15 */

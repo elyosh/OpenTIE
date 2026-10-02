@@ -290,10 +290,10 @@ void collide_collisions(void) {
 							lasttargetnum = -3;
 							fg_i = objects[target_idx].fg_idx;
 							mission.kills_by_type[craftptr->species_idx]++;
-							fgstatus[objects[target_idx].fg_idx].cond[4].detail++;
+							fgstatus[objects[target_idx].fg_idx].counts[FG_COUNT_INSPECTED]++;
 							if ((int8_t)fg_array[objects[target_idx].fg_idx].special_craft ==
 								craftptr->craft_idx_in_fg)
-								fgstatus[fg_i].cond_id[4].detail = 1;
+								fgstatus[fg_i].special_counts[FG_COUNT_INSPECTED] = 1;
 							msg_craftmessage(target_idx, craftptr, 0xAB);
 						}
 					}
@@ -1006,9 +1006,9 @@ void collide_laserhitcraft(uint16_t projectile_obj_idx, uint16_t target_obj_idx,
 
 		craftptr->was_hit_flag |= 1;
 		fg_idx = objects[target_obj_idx].fg_idx;
-		fgstatus[fg_idx].cond[2].detail++;
+		fgstatus[fg_idx].counts[FG_COUNT_ATTACKED]++;
 		if ((int8_t)fg_array[fg_idx].special_craft == craftptr->craft_idx_in_fg)
-			fgstatus[fg_idx].cond_id[2].detail = 1;
+			fgstatus[fg_idx].special_counts[FG_COUNT_ATTACKED] = 1;
 		fsfx_checkcriticalcraft(target_obj_idx, 0x58);
 	}
 	if (self_idx == pstate.object_idx)
@@ -1303,12 +1303,12 @@ char collide_damagecraft(uint16_t target_obj_idx, uint16_t component_idx, uint16
 								}
 							}
 						}
-						/* All systems disabled -> mark as 'systems-down' on FG cond[7]. */
+						/* All systems disabled -> mark as 'systems-down' in FG_COUNT_DISABLED. */
 						{
 							uint16_t fg_idx = objects[target_obj_idx].fg_idx;
-							fgstatus[fg_idx].cond[7].detail++;
+							fgstatus[fg_idx].counts[FG_COUNT_DISABLED]++;
 							if ((int8_t)fg_array[fg_idx].special_craft == craftptr->craft_idx_in_fg)
-								fgstatus[fg_idx].cond_id[7].detail = 1;
+								fgstatus[fg_idx].special_counts[FG_COUNT_DISABLED] = 1;
 						}
 						{
 							if (objects[target_obj_idx].ship_idx >= 5 &&

@@ -356,9 +356,9 @@ int16_t paiorder_enterhangarorder(void) {
 
 			score_craftexitscoring(link, linked_fg, 7);
 			linked = objects[link].craft_ptr;
-			++fgstatus[linked_fg].cond[2].count;
+			++fgstatus[linked_fg].counts[FG_COUNT_HANGAR];
 			if (linked->craft_idx_in_fg == (int8_t)fg_array[linked_fg].special_craft)
-				fgstatus[linked_fg].cond_id[2].count = 1;
+				fgstatus[linked_fg].special_counts[FG_COUNT_HANGAR] = 1;
 			objects[link].ship_idx = 0;
 		}
 	}
@@ -1361,7 +1361,7 @@ int16_t paiorder_completefolloworder(void) {
 // FUNCTION: TIE95 0x3F844
 int16_t paiorder_dropoffdestorder(void) {
 	uint16_t drop_fg = (uint16_t)((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[1] - 1);
-	if (fgstatus[drop_fg].cond[0].detail)
+	if (fgstatus[drop_fg].counts[FG_COUNT_ARRIVED])
 		return 0;
 
 	create_getdropposition(drop_fg, 0, 0xFFFF);
@@ -1407,21 +1407,21 @@ int16_t paiorder_mothershipreadyorder(void) {
 	ready = 0;
 	if (docked) {
 		if (fg_array[ai.fg_idx].capture_fg_used) {
-			if (fgstatus[(int8_t)fg_array[ai.fg_idx].capture_fg].cond[0].count ==
-				fgstatus[(int8_t)fg_array[ai.fg_idx].capture_fg].cond[0].detail)
+			if (fgstatus[(int8_t)fg_array[ai.fg_idx].capture_fg].counts[FG_COUNT_TOTAL] ==
+				fgstatus[(int8_t)fg_array[ai.fg_idx].capture_fg].counts[FG_COUNT_ARRIVED])
 				ready = 1;
 		}
 	} else {
 		primary_ok = 1;
 		secondary_ok = 1;
 		if (fg_array[ai.fg_idx].pri_stop_fg_used) {
-			if (fgstatus[(int8_t)fg_array[ai.fg_idx].pri_stop_fg].cond[0].count !=
-				fgstatus[(int8_t)fg_array[ai.fg_idx].pri_stop_fg].cond[0].detail)
+			if (fgstatus[(int8_t)fg_array[ai.fg_idx].pri_stop_fg].counts[FG_COUNT_TOTAL] !=
+				fgstatus[(int8_t)fg_array[ai.fg_idx].pri_stop_fg].counts[FG_COUNT_ARRIVED])
 				primary_ok = 0;
 		}
 		if (fg_array[ai.fg_idx].sec_stop_fg_used) {
-			if (fgstatus[(int8_t)fg_array[ai.fg_idx].sec_stop_fg].cond[0].count !=
-				fgstatus[(int8_t)fg_array[ai.fg_idx].sec_stop_fg].cond[0].detail)
+			if (fgstatus[(int8_t)fg_array[ai.fg_idx].sec_stop_fg].counts[FG_COUNT_TOTAL] !=
+				fgstatus[(int8_t)fg_array[ai.fg_idx].sec_stop_fg].counts[FG_COUNT_ARRIVED])
 				secondary_ok = 0;
 		}
 		ready = primary_ok & secondary_ok;

@@ -515,13 +515,13 @@ void static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
 		/* Ion/disruptor on a regular static: offline-kill and tally the
 		 * ion-disable counter. Retail uses 132 here too. */
 		staticobjects[target_slot].status_flags = 0;
-		fgstatus[staticobjects[target_slot].fg_idx].cond[7].detail++;
+		fgstatus[staticobjects[target_slot].fg_idx].counts[FG_COUNT_DISABLED]++;
 		explosion_ship_idx = 132;
 	} else {
 		/* Conventional kill. */
 		fg_idx = staticobjects[target_slot].fg_idx;
 		TIE_FLIGHT_TRACE_FG_EXIT((uint16_t)(target_slot + OBJ_REF_STATIC_BASE), TIE_TRACE_EXIT_DESTROYED);
-		fgstatus[fg_idx].cond[1].count++;
+		fgstatus[fg_idx].counts[FG_COUNT_DESTROYED]++;
 		explosion_ship_idx = 129;
 
 		if (staticobjects[target_slot].species == 77) {

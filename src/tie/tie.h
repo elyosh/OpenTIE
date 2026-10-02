@@ -319,7 +319,7 @@ typedef struct {
 								  * proximity scan and by PAIMAN board
 								  * phase 2. Drives the "unknown" vs cargo
 								  * string in the HUD readout (PANEL_*),
-								  * the cond[4].detail "inspected" bucket
+								  * the counts[FG_COUNT_INSPECTED] "inspected" bucket
 								  * (score-cond=5), and the GTT_CRAFT_ATTR
 								  * sub-case 1 predicate. The previous
 								  * name `friendly_to_player` came from
@@ -654,14 +654,37 @@ extern uint16_t targetblinkstate;
 extern uint8_t hyperspaceflag;
 extern uint8_t hyperabortflag; /* 1 = hyperspace entry aborted mid-warp */
 /*
- * FGCondPair — condition counter pair (count + sub-count per condition type).
- * The 9 condition types map to: total exits, hypered, docked, disabled,
- * captured, boarded, and various destruction/damage categories.
+ * Per-flight-group craft counters (FGStatus.counts / special_counts).
+ * Odd slots 1..15 count the event tested by mission condition codes 1..8
+ * (score_checkcondition reads slot 2 * cond - 1). Even slots 6..16 count
+ * craft that left the mission without that event, so the condition can no
+ * longer be met for them. score_craftexitscoring takes its exit kind as a
+ * slot index (2 destroyed, 3 hyperspace, 4 hangar, 7 towed away captured).
+ * X-Wing keeps the same counters as named single bytes (OpenXW
+ * MissionFlightGroupState); TIE splits them into the whole-group array and
+ * a parallel array for the FG's special craft.
  */
-typedef struct {
-	uint8_t count;  /* total count for this condition */
-	uint8_t detail; /* sub-count (cause-specific: hypered, disabled, boarded, etc.) */
-} FGCondPair;
+enum {
+	FG_COUNT_TOTAL = 0,             /* craft to create across all waves */
+	FG_COUNT_ARRIVED = 1,           /* craft created (condition 1) */
+	FG_COUNT_DESTROYED = 2,         /* exit kind 2 (condition 2) */
+	FG_COUNT_HYPERSPACED = 3,       /* exit kind 3: left through hyperspace */
+	FG_COUNT_HANGAR = 4,            /* exit kind 4: entered a hangar */
+	FG_COUNT_ATTACKED = 5,          /* condition 3 */
+	FG_COUNT_LEFT_UNATTACKED = 6,   /* exited with was_hit_flag clear */
+	FG_COUNT_CAPTURED = 7,          /* condition 4; exit kind 7 for towed craft */
+	FG_COUNT_LEFT_UNCAPTURED = 8,   /* exited with dock_state_flags clear */
+	FG_COUNT_INSPECTED = 9,         /* condition 5 */
+	FG_COUNT_LEFT_UNINSPECTED = 10, /* exited with inspected clear */
+	FG_COUNT_BOARDED = 11,          /* condition 6 */
+	FG_COUNT_LEFT_UNBOARDED = 12,   /* exited with board_count clear */
+	FG_COUNT_DOCKED = 13,           /* condition 7 */
+	FG_COUNT_LEFT_UNDOCKED = 14,    /* exited with capture_count clear */
+	FG_COUNT_DISABLED = 15,         /* condition 8 */
+	FG_COUNT_LEFT_UNDISABLED = 16,  /* exited with pad_0B6 clear */
+	FG_COUNT_SLOT_17 = 17,          /* cleared after each FG spawn; no reader found */
+	FG_COUNT_SLOTS = 18
+};
 
 /*
  * FGStatus — per-flight-group runtime status.
@@ -676,19 +699,19 @@ typedef struct {
 #pragma pack(push, 1)
 #endif
 typedef struct {
-	uint8_t active;            /* +0x00: FG spawned/alive (0=not yet, 1=active) */
-	uint8_t waves_remaining;   /* +0x01: reinforcement waves left */
-	uint16_t arrival_delay;    /* +0x02: countdown ticks to next spawn */
-	uint8_t arrival_triggered; /* +0x04: arrival condition met */
-	uint8_t _pad_05;           /* +0x05: unused */
-	uint16_t world_position;   /* +0x06: used by CREATE_getworldposition */
-	FGCondPair cond[9];        /* +0x08: per-condition exit counters (18 bytes) */
-	FGCondPair cond_id[9];     /* +0x1A: per-condition ID-match flags (18 bytes) */
-	uint8_t primary_status;    /* +0x2C: primary goal status */
-	uint8_t secondary_status;  /* +0x2D: secondary goal status */
-	uint8_t fg_complete;       /* +0x2E: bonus/completion status (1=complete) */
-	uint8_t _pad_2F;           /* +0x2F: unused */
-} FGStatus;                    /* 48 bytes (0x30) */
+	uint8_t active;                         /* +0x00: FG spawned/alive (0=not yet, 1=active) */
+	uint8_t waves_remaining;                /* +0x01: reinforcement waves left */
+	uint16_t arrival_delay;                 /* +0x02: countdown ticks to next spawn */
+	uint8_t arrival_triggered;              /* +0x04: arrival condition met */
+	uint8_t _pad_05;                        /* +0x05: unused */
+	uint16_t world_position;                /* +0x06: used by CREATE_getworldposition */
+	uint8_t counts[FG_COUNT_SLOTS];         /* +0x08: FG_COUNT_* craft counters */
+	uint8_t special_counts[FG_COUNT_SLOTS]; /* +0x1A: same counters for the special craft */
+	uint8_t primary_status;                 /* +0x2C: primary goal status */
+	uint8_t secondary_status;               /* +0x2D: secondary goal status */
+	uint8_t fg_complete;                    /* +0x2E: bonus/completion status (1=complete) */
+	uint8_t _pad_2F;                        /* +0x2F: unused */
+} FGStatus;                                 /* 48 bytes (0x30) */
 #ifdef __WATCOMC__
 #pragma pack()
 #else

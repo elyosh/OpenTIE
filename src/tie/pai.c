@@ -1178,7 +1178,8 @@ int16_t pai_aicompletioncheck(uint16_t order_code, uint16_t ai_entry) {
 		/* Counter reaches the referenced flight group's status count. */
 		case 37:
 			if (craftptr->ai_goal_progress[ai_entry] >=
-				fgstatus[(uint16_t)((int8_t)fg_array[ai.fg_idx].ai[ai_entry].var[1] - 1)].cond[0].count)
+				fgstatus[(uint16_t)((int8_t)fg_array[ai.fg_idx].ai[ai_entry].var[1] - 1)]
+					.counts[FG_COUNT_TOTAL])
 				done = 1;
 			break;
 

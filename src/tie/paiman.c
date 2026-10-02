@@ -941,10 +941,10 @@ int16_t paiman_intohyperspacemaneuver(void) {
 			if (pax_obj_idx != 0xFFFF && pax_obj_idx < 14336) {
 				pax_fg_idx = objects[pax_obj_idx].fg_idx;
 				score_craftexitscoring(pax_obj_idx, pax_fg_idx, 7);
-				++fgstatus[pax_fg_idx].cond[1].detail;
+				++fgstatus[pax_fg_idx].counts[FG_COUNT_HYPERSPACED];
 				if ((int8_t)fg_array[pax_fg_idx].special_craft ==
 					objects[pax_obj_idx].craft_ptr->craft_idx_in_fg)
-					fgstatus[pax_fg_idx].cond_id[1].detail = 1;
+					fgstatus[pax_fg_idx].special_counts[FG_COUNT_HYPERSPACED] = 1;
 				objects[pax_obj_idx].ship_idx = 0;
 			}
 			break;
@@ -1525,9 +1525,9 @@ int16_t paiman_boardmaneuver(void) {
 						CraftData* cd_prev;
 
 						tgt_cd->dock_state_flags = ai.fg_idx | 0x80u;
-						++fgstatus[tgt_fg_idx].cond[3].detail;
+						++fgstatus[tgt_fg_idx].counts[FG_COUNT_CAPTURED];
 						if ((int8_t)fg_array[tgt_fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
-							fgstatus[tgt_fg_idx].cond_id[3].detail = 1;
+							fgstatus[tgt_fg_idx].special_counts[FG_COUNT_CAPTURED] = 1;
 						objects[target_ref].side = objects[ai.active_obj_idx].side;
 						if (objects[ai.active_obj_idx].side == 1 && objects[target_ref].ship_idx < 0x45u)
 							++mission.captures_by_type[tgt_cd->species_idx];
@@ -1579,14 +1579,14 @@ int16_t paiman_boardmaneuver(void) {
 							++mission.captures_by_type[tgt_cd->species_idx];
 						objects[target_ref].side = objects[ai.active_obj_idx].side;
 						if ((int8_t)fg_array[tgt_fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
-							fgstatus[tgt_fg_idx].cond_id[3].detail = 1;
+							fgstatus[tgt_fg_idx].special_counts[FG_COUNT_CAPTURED] = 1;
 					} else {
 						/* Static anchor: bump status and null the species to mark
 						 * the slot retrieved. */
-						++fgstatus[staticobjects[target_ref - 0x3800].fg_idx].cond[3].detail;
+						++fgstatus[staticobjects[target_ref - 0x3800].fg_idx].counts[FG_COUNT_CAPTURED];
 						staticobjects[target_ref - 0x3800].species = 0;
 					}
-					++fgstatus[tgt_fg_idx].cond[3].detail;
+					++fgstatus[tgt_fg_idx].counts[FG_COUNT_CAPTURED];
 					break;
 				case 0x22: /* Deliver passenger. */
 					if (target_ref < 0x3800)
@@ -1609,10 +1609,10 @@ int16_t paiman_boardmaneuver(void) {
 				if (objects[ai.active_obj_idx].side == pstate.player->side) {
 					if (!tgt_cd->inspected) {
 						tgt_cd->inspected = 1;
-						++fgstatus[objects[target_ref].fg_idx].cond[4].detail;
+						++fgstatus[objects[target_ref].fg_idx].counts[FG_COUNT_INSPECTED];
 						if ((int8_t)fg_array[objects[target_ref].fg_idx].special_craft ==
 							tgt_cd->craft_idx_in_fg)
-							fgstatus[objects[target_ref].fg_idx].cond_id[4].detail = 1;
+							fgstatus[objects[target_ref].fg_idx].special_counts[FG_COUNT_INSPECTED] = 1;
 					}
 					fsfx_speakobjectname(ai.active_obj_idx, 0x33);
 					/* Operation-completed voice: same cascade as phase 1 but with
@@ -1646,14 +1646,14 @@ int16_t paiman_boardmaneuver(void) {
 			if (++craftptr->capture_count >= 10)
 				--craftptr->capture_count;
 			if (craftptr->capture_count == 1) {
-				++fgstatus[ai.fg_idx].cond[6].detail;
+				++fgstatus[ai.fg_idx].counts[FG_COUNT_DOCKED];
 				if ((int8_t)fg_array[ai.fg_idx].special_craft == craftptr->craft_idx_in_fg)
-					fgstatus[ai.fg_idx].cond_id[6].detail = 1;
+					fgstatus[ai.fg_idx].special_counts[FG_COUNT_DOCKED] = 1;
 			}
 			if (target_ref < 0x3800 && !tgt_cd->board_count) {
-				++fgstatus[tgt_fg_idx].cond[5].detail;
+				++fgstatus[tgt_fg_idx].counts[FG_COUNT_BOARDED];
 				if ((int8_t)fg_array[tgt_fg_idx].special_craft == tgt_cd->craft_idx_in_fg)
-					fgstatus[tgt_fg_idx].cond_id[5].detail = 1;
+					fgstatus[tgt_fg_idx].special_counts[FG_COUNT_BOARDED] = 1;
 			}
 
 			craftptr->mode_subbyte = 3;

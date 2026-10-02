@@ -443,8 +443,8 @@ int32_t goals_missiongoalsroom(void) {
 								fg_pct = fg_array[fg_idx].bonus_pct;
 							}
 
-							if (fg_cond == 9 &&
-								fgstatus[fg_idx].cond[1].detail != fgstatus[fg_idx].cond[0].count) {
+							if (fg_cond == 9 && fgstatus[fg_idx].counts[FG_COUNT_HYPERSPACED] !=
+													fgstatus[fg_idx].counts[FG_COUNT_TOTAL]) {
 								if (cat_complete_cache == 1 || fg_status != 1) {
 									if (cat_complete_cache == 1)
 										fg_status = 1;
@@ -680,7 +680,7 @@ uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, 
 			total += goals_outputspeciesname((int8_t)fg_array[target].species, 0);
 			festring_outstring((const uint8_t*)&fg_array[target]);
 			outchar(' ');
-			outchar((uint16_t)fgstatus[target].cond_id[4].detail
+			outchar((uint16_t)fgstatus[target].special_counts[FG_COUNT_INSPECTED]
 						? (uint8_t)(fg_array[target].special_craft + '1')
 						: '?');
 			tense_offset = 0;
@@ -690,7 +690,7 @@ uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, 
 			total += goals_outputspeciesname((int8_t)fg_array[target].species, 0);
 			festring_outstring((const uint8_t*)&fg_array[target]);
 			outchar(' ');
-			if ((uint16_t)fgstatus[target].cond_id[4].detail)
+			if ((uint16_t)fgstatus[target].special_counts[FG_COUNT_INSPECTED])
 				outchar((uint8_t)(fg_array[target].special_craft + '1'));
 			else
 				outchar('?');
@@ -699,7 +699,7 @@ uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, 
 			/* Generic flight-group reference. Count <= 1 -> single craft,
 			 * just print "species FG_name". Otherwise "X%% of species of
 			 * group FG_name". */
-			if (fgstatus[target].cond[0].count > 1) {
+			if (fgstatus[target].counts[FG_COUNT_TOTAL] > 1) {
 				festring_outstring(((const uint8_t**)percentstrings)[op]);
 				festring_outstring((const uint8_t*)goal_of_string);
 				total += goals_outputspeciesname((int8_t)fg_array[target].species, 0);
@@ -857,7 +857,7 @@ uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, 
  * ==================================================================== */
 
 // FUNCTION: TIE95 0x2C6BC
-uint8_t goals_checkidflag(uint16_t fg_index) { return fgstatus[fg_index].cond_id[4].detail; }
+uint8_t goals_checkidflag(uint16_t fg_index) { return fgstatus[fg_index].special_counts[FG_COUNT_INSPECTED]; }
 
 /* ====================================================================
  * goals_outputspeciesname

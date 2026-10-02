@@ -472,20 +472,20 @@ void create_createmission(void) {
 		}
 
 		if (diffmask[mission.difficulty] & fgdiffmask[fg_array[fgcnt].difficulty]) {
-			fgstatus[fgcnt].cond[0].count = (uint8_t)((fg_array[fgcnt].waves + 1) * count);
+			fgstatus[fgcnt].counts[FG_COUNT_TOTAL] = (uint8_t)((fg_array[fgcnt].waves + 1) * count);
 			if (fg_array[fgcnt].special_flag ||
 				(int8_t)fg_array[fgcnt].special_craft < (int8_t)fg_array[fgcnt].count)
-				fgstatus[fgcnt].cond_id[0].count = (uint8_t)(fg_array[fgcnt].waves + 1);
+				fgstatus[fgcnt].special_counts[FG_COUNT_TOTAL] = (uint8_t)(fg_array[fgcnt].waves + 1);
 			else
-				fgstatus[fgcnt].cond_id[0].count = 0;
+				fgstatus[fgcnt].special_counts[FG_COUNT_TOTAL] = 0;
 		} else {
-			fgstatus[fgcnt].cond[0].count = 0;
-			fgstatus[fgcnt].cond_id[0].count = 0;
+			fgstatus[fgcnt].counts[FG_COUNT_TOTAL] = 0;
+			fgstatus[fgcnt].special_counts[FG_COUNT_TOTAL] = 0;
 		}
-		/* Clear spawned-craft progress from the previous mission. */
-		for (j = 1; j < 9; j++) {
-			fgstatus[fgcnt].cond[j].count = 0;
-			fgstatus[fgcnt].cond_id[j].count = 0;
+		/* Clear the previous mission's counters; slot 0 is the total set above. */
+		for (j = 1; j < FG_COUNT_SLOTS; j++) {
+			fgstatus[fgcnt].counts[j] = 0;
+			fgstatus[fgcnt].special_counts[j] = 0;
 		}
 
 		fgstatus[fgcnt].primary_status = 4;
@@ -495,7 +495,7 @@ void create_createmission(void) {
 		/* Immediate-spawn test: active, in-difficulty, no arrival trigger. */
 		if (fg_array[fgcnt].species &&
 			(fgdiffmask[fg_array[fgcnt].difficulty] & diffmask[mission.difficulty]) &&
-			fgstatus[fgcnt].cond[0].count && !fg_array[fgcnt].start_cond[0].cond &&
+			fgstatus[fgcnt].counts[FG_COUNT_TOTAL] && !fg_array[fgcnt].start_cond[0].cond &&
 			!fg_array[fgcnt].start_delay_min && !fg_array[fgcnt].start_delay_sec) {
 			create_startflightgroup(-1);
 		}
@@ -632,7 +632,7 @@ void create_updatefgstatus(void) {
 
 				if ((fgdiffmask[fg_array[fgcnt].difficulty] & diffmask[mission.difficulty]) == 0)
 					continue;
-				if (fgstatus[fgcnt].cond[0].count == 0)
+				if (fgstatus[fgcnt].counts[FG_COUNT_TOTAL] == 0)
 					continue;
 				ok0 = score_checkcondition(
 					(int8_t)fg_array[fgcnt].start_cond[0].cond, (int8_t)fg_array[fgcnt].start_cond[0].type,
@@ -656,7 +656,7 @@ void create_updatefgstatus(void) {
 
 				if (fgstatus[fgcnt].waves_remaining == 0)
 					continue;
-				if (fgstatus[fgcnt].cond[0].count == 0)
+				if (fgstatus[fgcnt].counts[FG_COUNT_TOTAL] == 0)
 					continue;
 				all_dead = 1;
 				for (j = 0; j < NUM_CRAFTS; j++) {
@@ -839,27 +839,27 @@ int create_createflightgroup(uint16_t craft_slot) {
 		leaderflag = 0xFF;
 		for (craftcnt = 0; craftcnt < f->count; craftcnt++) {
 			FGStatus* st = &fgstatus[fgcnt];
-			if (st->cond[0].detail >= st->cond[0].count)
+			if (st->counts[FG_COUNT_ARRIVED] >= st->counts[FG_COUNT_TOTAL])
 				continue;
 			if (create_createcraft() == 0xFFFF)
 				return 0;
-			st->cond[0].detail++;
+			st->counts[FG_COUNT_ARRIVED]++;
 			if (craftcnt == f->special_craft)
-				st->cond_id[0].detail++;
+				st->special_counts[FG_COUNT_ARRIVED]++;
 		}
 	} else {
 		FGStatus* st = &fgstatus[fgcnt];
-		if (st->cond[0].detail < st->cond[0].count) {
+		if (st->counts[FG_COUNT_ARRIVED] < st->counts[FG_COUNT_TOTAL]) {
 			craftcnt = craft_slot;
 			if (create_createcraft() == 0xFFFF)
 				return 0;
-			st->cond[0].detail++;
+			st->counts[FG_COUNT_ARRIVED]++;
 			if (craftcnt == f->special_craft)
-				st->cond_id[0].detail++;
+				st->special_counts[FG_COUNT_ARRIVED]++;
 		}
 	}
 
-	fgstatus[fgcnt].cond[8].detail = 0;
+	fgstatus[fgcnt].counts[FG_COUNT_SLOT_17] = 0;
 
 	/* Reinforcement chatter: radio report + MS sequence selector fires
 	 * for FGs that arrive AFTER the mission has been running for at
@@ -1183,9 +1183,9 @@ uint16_t create_createcraft(void) {
 	 * inspection counter. */
 	if (objects[obj_slot].side == playerside || objects[obj_slot].genus == GENUS_FIGHTER) {
 		craftptr->inspected = 1;
-		fgstatus[fgcnt].cond[4].detail++;
+		fgstatus[fgcnt].counts[FG_COUNT_INSPECTED]++;
 		if (craftcnt == fg_array[fgcnt].special_craft)
-			fgstatus[fgcnt].cond_id[4].detail++;
+			fgstatus[fgcnt].special_counts[FG_COUNT_INSPECTED]++;
 	} else {
 		craftptr->inspected = 0;
 	}
@@ -1416,7 +1416,7 @@ uint16_t create_createcraft(void) {
 void create_createstaticflightgroup(uint16_t craft_slot) {
 	uint8_t species_idx;
 
-	if (!fgstatus[fgcnt].cond[0].count)
+	if (!fgstatus[fgcnt].counts[FG_COUNT_TOTAL])
 		return;
 
 	species_idx = speciesconvert[(int8_t)fg_array[fgcnt].species];
@@ -1477,7 +1477,8 @@ void create_createstaticflightgroup(uint16_t craft_slot) {
 				for (row = 0; row < (int8_t)fg_array[fgcnt].count; row++) {
 					for (col = 0; col < (int8_t)fg_array[fgcnt].count; col++) {
 						if ((craft_slot == (uint16_t)-1 || craft_slot == obj_seq) &&
-							fgstatus[fgcnt].cond[0].detail < fgstatus[fgcnt].cond[0].count) {
+							fgstatus[fgcnt].counts[FG_COUNT_ARRIVED] <
+								fgstatus[fgcnt].counts[FG_COUNT_TOTAL]) {
 							staging_static_x = x_base + col_x * col + row_x * row;
 							staging_static_y = y_base + col_y * col + row_y * row;
 							staging_static_z = z_base + col_z * col + row_z * row;
@@ -1559,7 +1560,7 @@ uint16_t create_createstaticobject(uint16_t fg_idx, uint16_t ship_class, uint8_t
 		staticobjects[slot].species = species_idx;
 
 		idnumber++;
-		fgstatus[fg_idx].cond[0].detail++;
+		fgstatus[fg_idx].counts[FG_COUNT_ARRIVED]++;
 	}
 	return slot;
 }

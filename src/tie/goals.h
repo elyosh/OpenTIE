@@ -36,7 +36,7 @@ uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, 
  * occurred, else 0. */
 uint16_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag);
 
-/* Returns fgstatus[fg_index].cond_id[4].detail -- the 'specific craft id'
+/* Returns fgstatus[fg_index].special_counts[FG_COUNT_INSPECTED] -- the 'specific craft id'
  * flag that drives craft-number vs '?' in outputgoal. Orphan (inlined) in
  * the demo build; body preserved for source-level callers. */
 uint8_t goals_checkidflag(uint16_t fg_index);

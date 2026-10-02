@@ -64,13 +64,13 @@ void score_checkobjective(void);
  *   0 -- mission-level direct check (reads mission.{pri,sec,bonus}_complete
  *        or penalty_flag depending on cond).
  *   1 -- iterate every FG that passes score_fgmemberofgroup(fg, target_type,
- *        target_id) and aggregate fgstatus[].cond[]/cond_id[] buckets; final
+ *        target_id) and aggregate fgstatus[].counts[]/special_counts[]; final
  *        result picked by amount_op (see below).
  *
  * Params:
  *   cond         -- condition code 0..25.
  *                     0            : always-met (returns 1)
- *                     1..9, 11, 12 : specific cond[] bucket aggregator (see .c)
+ *                     1..9, 11, 12 : FG_COUNT_* slot aggregator (see .c)
  *                     10           : always-not-met (returns 0)
  *                     13..18,20,25 : mission-level state check
  *                     19, 21..24   : FG iter + per-craft live-state predicate
@@ -112,20 +112,20 @@ int16_t score_fgmemberofgroup(uint16_t fg_idx, uint16_t group_type, uint16_t gro
 int16_t score_objectmemberofgroup(uint16_t obj_idx, uint16_t group_type, uint16_t group_id);
 
 /*
- * Credit craft `obj_idx`'s exit to its FG's cond[]/cond_id[] tally buckets.
+ * Credit craft `obj_idx`'s exit to its FG's counts[]/special_counts[].
  *
- * `exit_kind` is used as a RAW BYTE OFFSET into
- * fgstatus[fg_idx].cond[0].count (not as an array index), so
- *   0 -> cond[0].count   1 -> cond[0].detail   2 -> cond[1].count   etc.
- * Simultaneously bumps the six conditional bucket pairs 3..8 based on
- * craft attribute flags (inspected, pad_0B6, dock_state_flags,
- * was_hit_flag, board_count, capture_count).
+ * `exit_kind` is the FG_COUNT_* slot to bump (FG_COUNT_DESTROYED,
+ * FG_COUNT_HYPERSPACED, FG_COUNT_HANGAR, or FG_COUNT_CAPTURED for towed
+ * craft). Also bumps the six FG_COUNT_LEFT_* slots whose craft flag is
+ * still clear (inspected, pad_0B6, dock_state_flags, was_hit_flag,
+ * board_count, capture_count).
  *
  * When exit_kind==2 (destroyed):
  *   - bumps mission.mission_linked_data[fg.link_code] if fg.link_flag set
  *     (wraps to -1 on overflow);
- *   - propagates a (cond[0].count - cond[0].detail) delta across cond[1/3/
- *     4/5/6/8] of every OTHER FG whose start_fg==fg_idx, marking them
+ *   - adds the not-yet-arrived count (FG_COUNT_TOTAL - FG_COUNT_ARRIVED)
+ *     to FG_COUNT_DESTROYED and five FG_COUNT_LEFT_* slots of every OTHER
+ *     FG whose start_fg==fg_idx, marking them
  *     active=1 / waves_remaining=0 (fires their arrival trigger);
  *   - finally clears any craft's attacker_idx that pointed at the exiting
  *     obj_idx.

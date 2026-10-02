@@ -23,7 +23,7 @@ int16_t create_loadmission(const char* filename);
 CraftData* create_createhyperin(void);
 
 /* Per-mission initialization run after loadmission. Zeros fgstatus entries,
- * computes each FG's cond[0].count (arrival quota = wave_count * (waves+1),
+ * computes each FG's counts[FG_COUNT_TOTAL] (arrival quota = wave_count * (waves+1),
  * squared for class-8 mines, minus linked-data). Triggers immediate spawn
  * for the player FG and any FG with no arrival condition. Resets HUD/radar
  * globals, message counters, camera view state. */
@@ -65,7 +65,7 @@ uint16_t create_createcraft(void);
 void create_createstaticflightgroup(uint16_t craft_slot);
 
 /* Create one StaticObject from the staging_static_* globals. Bumps
- * idnumber and fgstatus[fg_idx].cond[0].detail. Returns slot index,
+ * idnumber and fgstatus[fg_idx].counts[FG_COUNT_ARRIVED]. Returns slot index,
  * or 0xFFFF when the 64-slot table is full. */
 uint16_t create_createstaticobject(uint16_t fg_idx, uint16_t ship_class, uint8_t species);
 
