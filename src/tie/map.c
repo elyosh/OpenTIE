@@ -1776,14 +1776,15 @@ static int16_t map_Count_VR_Debrief_Losses(void) {
 	int16_t i;
 
 	for (i = 0; i < (int16_t)NUM_SPEC; i++) {
+		int16_t found = 0;
 		int16_t j;
 
 		for (j = 0; j < 6; j++) {
-			if (!player_Is_Side_Enemy(j) && mission.kills_losses[j][i]) {
-				count++;
-				break;
-			}
+			if (!player_Is_Side_Enemy(j) && mission.kills_losses[j][i])
+				found = 1;
 		}
+		if (found)
+			count++;
 	}
 	return (count + max_paragraph_size - 3) / (max_paragraph_size - 2);
 }

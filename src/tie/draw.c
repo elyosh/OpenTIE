@@ -113,6 +113,8 @@ static Tie98OptimizedPolyObject g_hyperspaceModelHeaderPatch = {
 };
 // GLOBAL: TIE98 0x591E30
 uint32_t g_hyperspaceStreakLength;
+// GLOBAL: TIE98 0x6268F4
+uint16_t draw_object_mesh_count;
 typedef char CheckLODRecordSize[sizeof(LODRecord) == 6 ? 1 : -1];
 typedef char CheckShipModelMeshSize[sizeof(ShipModelMesh) == 64 ? 1 : -1];
 /* ============================================================================
@@ -822,84 +824,107 @@ uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t scr
 
 // FUNCTION: TIE98 0x417C40
 // DRAW_drawcraft
-static void draw_drawcraft_tie98(int object_ref, int model_type) {
-	const uint16_t saved_current_target = currenttarget;
-	int16_t bolt_angle = 0;
-	int bolt_angle_set = 0;
+static void draw_drawcraft_tie98(int object_arg, int model_arg) {
+	const uint16_t object_ref = (uint16_t)object_arg;
+	const uint16_t model_type = (uint16_t)model_arg;
+	uint16_t saved_current_target;
+	int16_t bolt_angle;
+	int16_t bolt_angle_set;
+	uint16_t mesh_index;
 
-	int mesh_count;
-	int mesh_index;
-
+#ifdef TIE_MODERN
+	/* PORT: TIE98 never clears the cached-bolt-angle flag. */
+	bolt_angle_set = 0;
+#endif
 	parentobject = object_ref;
 	highlightcolor = 0;
+	saved_current_target = currenttarget;
 	if (object_ref == bluetarget) {
 		currenttarget = object_ref;
 		highlightcolor = 1;
 	}
 
-	mesh_count = modelmesh_getcount(model_type);
-	for (mesh_index = 0; mesh_index < mesh_count; ++mesh_index) {
-		int mesh_type;
-		CraftData* craft;
-		AnimOp lightning_op;
-		uint32_t screen_x;
-		int screen_x_high;
-		uint32_t screen_y;
-		int screen_y_high;
-		int half_height;
-		int16_t rotation;
-		uint8_t bitmap_species;
-		uint16_t bound_hwidth;
-		uint16_t pixel_scale;
+	draw_object_mesh_count = (uint16_t)modelmesh_getobjecttypemeshcount(model_type);
+	for (mesh_index = 0; mesh_index < draw_object_mesh_count; ++mesh_index) {
+		uint16_t mesh_type;
 
-		solidindex = (int16_t)mesh_index;
-		mesh_type = modelmesh_gettype(model_type, mesh_index);
+		solidindex = mesh_index;
+		mesh_type = (uint16_t)modelmesh_getobjecttypemeshtype(model_type, mesh_index);
 		if (highlightcolor == 2)
 			highlightcolor = 0;
 		if (currenttargetcomp == mesh_index && highlightcolor == 0)
 			highlightcolor = 2;
 
-		if (object_ref >= NUM_CRAFTS)
-			continue;
-		craft = objects[object_ref].craft_ptr;
-		if (craft->mesh_state[mesh_index] != MESH_STATE_VISIBLE || mesh_type != TIE_MESH_FUSELAGE)
-			continue;
-
-		lightning_op = lightning[craft->mesh_state[mesh_count]];
-		if (!(lightning_op >= 0x8000u && lightning_op < 0xFF00u))
-			continue;
-		if (!bolt_angle_set) {
-			int axis_x;
-			int axis_y;
-			const int abs_a3 = rotworldeyeA3 < 0 ? -rotworldeyeA3 : rotworldeyeA3;
-			const int abs_b3 = rotworldeyeB3 < 0 ? -rotworldeyeB3 : rotworldeyeB3;
-			if (abs_a3 >= abs_b3) {
-				axis_x = rotworldeyeB1;
-				axis_y = rotworldeyeB2;
-			} else {
-				axis_x = rotworldeyeA1;
-				axis_y = rotworldeyeA2;
-			}
-			bolt_angle = axis_x >= 0 ? (int16_t)-trig2_arctan(axis_y, axis_x) : trig2_arctan(axis_y, -axis_x);
-			bolt_angle_set = 1;
+		if (object_ref < NUM_CRAFTS) {
+			uint16_t mesh_state = 0;
+			if (objects[object_ref].craft_ptr)
+				mesh_state = objects[object_ref].craft_ptr->mesh_state[mesh_index];
+			if (mesh_state != MESH_STATE_VISIBLE)
+				continue;
 		}
 
-		screen_x = (uint32_t)transfm2_getscreenx(objecteyex, objecteyez);
-		screen_x_high = (int32_t)screen_x >> 16;
-		if (screen_x_high > 0 || screen_x_high < -1)
-			continue;
-		screen_y = (uint32_t)transfm2_getscreeny(objecteyey, objecteyez);
-		screen_y_high = (int32_t)screen_y >> 16;
-		if (screen_y_high > 0 || screen_y_high < -1)
-			continue;
-		half_height = pixelsdeep >> 1;
-		rotation = (int16_t)(objects[object_ref].roll + bolt_angle);
-		anim_add_bitmap_draw(parentobject, lightning_op, 0x100, (int16_t)screen_x,
-							 (int16_t)(2 * half_height - (int32_t)screen_y), objecteyez, rotation);
-		bitmap_species = (uint8_t)((lightning_op & 0x7FFFu) >> 7);
-		bound_hwidth = species_table[bitmap_species].bound_hwidth;
-		pixel_scale = (uint16_t)rotscale_calcscale(objecteyez, bound_hwidth, 0x100);
-		TieBillboardCapture_Lightning(object_ref, lightning_op, pixel_scale, bound_hwidth, rotation);
+		if (mesh_type == TIE_MESH_FUSELAGE && object_ref < NUM_CRAFTS) {
+			uint16_t lightning_slot = draw_object_mesh_count;
+			uint16_t lightning_frame = 0;
+			AnimOp lightning_op;
+			int32_t screen_x;
+			int32_t screen_y;
+			int half_height;
+
+			if (objects[object_ref].craft_ptr)
+				lightning_frame = objects[object_ref].craft_ptr->mesh_state[lightning_slot];
+#ifdef TIE_MODERN
+			if (lightning_frame >= 25)
+				continue;
+#endif
+			lightning_op = lightning[lightning_frame];
+			if (lightning_op < 0x8000 || lightning_op >= 0xFF00)
+				continue;
+			if (!bolt_angle_set) {
+				int32_t arc_dx, arc_dy;
+				int16_t angle;
+				int32_t abs_a3 = rotworldeyeA3;
+				int32_t abs_b3 = rotworldeyeB3;
+				if (abs_a3 < 0)
+					abs_a3 = -abs_a3;
+				if (abs_b3 < 0)
+					abs_b3 = -abs_b3;
+				if (abs_a3 < abs_b3) {
+					arc_dx = rotworldeyeA1;
+					arc_dy = rotworldeyeA2;
+				} else {
+					arc_dx = rotworldeyeB1;
+					arc_dy = rotworldeyeB2;
+				}
+				if (arc_dx < 0)
+					angle = trig2_arctan(arc_dy, -arc_dx);
+				else
+					angle = -trig2_arctan(arc_dy, arc_dx);
+				bolt_angle = angle;
+				bolt_angle_set = 1;
+			}
+			/* The roll accumulates into the cached angle each emit. */
+			bolt_angle += objects[object_ref].roll;
+			screen_x = transfm2_getscreenx(objecteyex, objecteyez);
+			if ((screen_x & ~0xFFFF) > 0 || (screen_x & ~0xFFFF) < -0x10000)
+				continue;
+			screen_y = transfm2_getscreeny(objecteyey, objecteyez);
+			if ((screen_y & ~0xFFFF) > 0 || (screen_y & ~0xFFFF) < -0x10000)
+				continue;
+			half_height = pixelsdeep >> 1;
+			anim_add_bitmap_draw(parentobject, lightning_op, 0x100, (int16_t)screen_x,
+								 (int16_t)(2 * half_height - screen_y), objecteyez, bolt_angle);
+#ifdef TIE_MODERN
+			{
+				/* SNAPSHOT capture — does NOT affect classic render. */
+				uint8_t bitmap_species = (uint8_t)((lightning_op & 0x7FFFu) >> 7);
+				uint16_t bound_hwidth = species_table[bitmap_species].bound_hwidth;
+				uint16_t pixel_scale = (uint16_t)rotscale_calcscale(objecteyez, bound_hwidth, 0x100);
+				TieBillboardCapture_Lightning(object_ref, lightning_op, pixel_scale, bound_hwidth,
+											  bolt_angle);
+			}
+#endif
+		}
 	}
 	currenttarget = saved_current_target;
 }

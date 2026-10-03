@@ -764,14 +764,14 @@ int16_t paiman_attackmaneuver(void) {
 				/* Timer: 20..27 s against capitals, 2..5 s against fighters.
 				 * Static/warhead targets use the fighter range. */
 				if ((uint16_t)cd->ai_target_ref >= NUM_CRAFTS) {
-					craftptr->maneuver_timer = 236 * (((uint16_t)(uint8_t)math2_getrandom() & 3) + 2);
+					craftptr->maneuver_timer = 236 * (((uint16_t)math2_getrandom() & 3) + 2);
 				} else {
 					if (objects[(uint16_t)cd->ai_target_ref].genus == 4 ||
 						objects[(uint16_t)cd->ai_target_ref].genus == 5 ||
 						objects[(uint16_t)cd->ai_target_ref].genus == 3)
-						timer_base = ((uint16_t)(uint8_t)math2_getrandom() & 7) + 20;
+						timer_base = ((uint16_t)math2_getrandom() & 7) + 20;
 					else
-						timer_base = ((uint16_t)(uint8_t)math2_getrandom() & 3) + 2;
+						timer_base = ((uint16_t)math2_getrandom() & 3) + 2;
 					craftptr->maneuver_timer = 236 * timer_base;
 				}
 				craftptr->mode_subbyte = 1;
