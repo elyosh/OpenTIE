@@ -498,10 +498,17 @@ int16_t paiorder_abortatkorder(void) {
 int16_t paiorder_leaderdeadorder(void) {
 	uint8_t leader_idx = craftptr->leader_obj_idx;
 	uint8_t leader_gone = 0;
-	CraftData* leader = objects[leader_idx].craft_ptr;
+	CraftData* leader;
 	uint8_t new_leader;
 	uint16_t i;
 
+#ifdef TIE_MODERN
+	/* PORT: the original reads the leader's craft pointer before rejecting
+	 * 0xFF (no leader), indexing past objects[]. */
+	leader = leader_idx < NUM_CRAFTS ? objects[leader_idx].craft_ptr : NULL;
+#else
+	leader = objects[leader_idx].craft_ptr;
+#endif
 	if (leader_idx == 0xFF)
 		return 0;
 	if (leader_idx >= NUM_CRAFTS)
