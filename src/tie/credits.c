@@ -375,12 +375,9 @@ static int16_t credits_draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16
 // FUNCTION: TIE98 0x414BE0
 void credits_Credit_Stars_To_Back(void) {
 	Rect r;
-	void* pixels = xmemhdl_Lock_Handle(credits_star_buffer);
 	xrect_Set_Rect(&r, 0, 0, 320, 100);
-	stub_Copy_From_Clipped_Buffer(pixels, &r, 0, 0, 320, 100);
-	stub_Copy_From_Clipped_Buffer(pixels, &r, 0, 100, 320, 100);
-
-	xmemhdl_Unlock_Handle(credits_star_buffer);
+	stub_Copy_From_Clipped_Buffer(credits_star_buffer, &r, 0, 0, 320, 100);
+	stub_Copy_From_Clipped_Buffer(credits_star_buffer, &r, 0, 100, 320, 100);
 #ifdef TIE_MODERN
 	/* Snapshot capture mirrors the two buffer copies without drawing again. */
 	xactor_emit_draw(credits_stars_actor, 0, 0);
@@ -394,13 +391,10 @@ void credits_Credit_Stars_To_Back(void) {
 // FUNCTION: TIE98 0x414C40
 static void credits_Credit_Actor_To_Buffer(Actor* actor, LandruHandle buffer) {
 	Rect r;
-	void* pixels;
 	xrect_Set_Rect(&r, 0, 0, 320, 100);
 	if (actor->draw) {
 		xpaint_Paint_Clipped_Rect(&r, 0);
 		actor->draw(actor, &r, &r, actor->x, actor->y, 1);
 	}
-	pixels = xmemhdl_Lock_Handle(buffer);
-	stub_Copy_To_Clipped_Buffer(pixels, &r, 0, 0, 320, 100);
-	xmemhdl_Unlock_Handle(buffer);
+	stub_Copy_To_Clipped_Buffer(buffer, &r, 0, 0, 320, 100);
 }

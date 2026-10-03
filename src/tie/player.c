@@ -1456,15 +1456,12 @@ void player_Draw_Display_Ship(Rect* clip, Rect* dest) {
 // FUNCTION: TIE98 0x46B3E0
 void player_Actor_To_Buffer(Actor* actor, LandruHandle buffer) {
 	Rect r;
-	void* pixels;
 	xrect_Set_Rect(&r, 0, 0, 320, 150);
 	if (actor->draw) {
 		xpaint_Paint_Clipped_Rect(&r, actor->var1);
 		actor->draw(actor, &r, &r, actor->x, actor->y, 1);
 	}
-	pixels = xmemhdl_Lock_Handle(buffer);
-	stub_Copy_To_Clipped_Buffer(pixels, &r, 0, 0, 320, 150);
-	xmemhdl_Unlock_Handle(buffer);
+	stub_Copy_To_Clipped_Buffer(buffer, &r, 0, 0, 320, 150);
 }
 
 // FUNCTION: TIE95 0x7F5D0
@@ -1472,11 +1469,8 @@ void player_Actor_To_Buffer(Actor* actor, LandruHandle buffer) {
 void player_Stars_To_Back(int16_t screen_y) {
 	if (star_buffer) {
 		Rect r;
-		void* pixels;
 		xrect_Set_Rect(&r, 0, 0, 320, 150);
-		pixels = xmemhdl_Lock_Handle(star_buffer);
-		stub_Copy_From_Clipped_Buffer(pixels, &r, 0, screen_y, 320, 150);
-		xmemhdl_Unlock_Handle(star_buffer);
+		stub_Copy_From_Clipped_Buffer(star_buffer, &r, 0, screen_y, 320, 150);
 	}
 }
 

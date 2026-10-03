@@ -88,7 +88,7 @@ void rtsvga2_savepaletteVGA_tie98(uint8_t* rgb_dst);
 void rtsvga2_restorepaletteVGA_tie98(const uint8_t* rgb_src);
 
 /* Retail-only palette helpers */
-void rtsvga2_applyBrightness(const uint8_t* rgb_src, uint8_t* rgb_dst, uint16_t start_idx, uint16_t count);
+void rtsvga2_applyBrightness(const uint8_t* rgb_src, uint8_t* rgb_dst, int start_idx, int count);
 uint32_t rtsvga2_findNearestColor(const uint8_t* rgb_target, const uint8_t* palette, uint32_t start_idx,
 								  uint32_t end_idx);
 void rtsvga2_remapRGBImage(uint32_t* image_header);

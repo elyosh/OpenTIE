@@ -1373,52 +1373,42 @@ void drawpol_drawmarkings(uint16_t face_idx) {
  * ================================================================== */
 // FUNCTION: TIE95 0x1F328
 void drawpol_drawlineface(void) {
-	uint8_t edge_idx = firstvertptr[4];
-	uint8_t vtx1_idx = firstvertptr[2];
-	uint8_t vtx2_idx = firstvertptr[3];
-	uint16_t base = *(uint16_t*)firstvertptr;
-
-	/* Reset the first endpoint before copying this edge's screen coordinates. */
-	int32_t* point2_start;
+	TRANSFM2_ScreenPoint* point2;
 	int32_t avg_z;
-	uint16_t thick_val;
-	int32_t scale_z;
 	int32_t* dst;
-	int32_t p1a;
-	int32_t p1b;
-	int16_t saved_flatobj;
+	uint16_t saved_flatobj;
 
-	point1ptr = edgept1[edge_idx]->xy;
-	point2_start = edgept2[edge_idx]->xy;
+	point1ptr = edgept1[firstvertptr[4]]->xy;
+	point2 = edgept2[firstvertptr[4]];
 
-	linelight1 = vertexlight[vtx1_idx];
-	linelight2 = vertexlight[vtx2_idx];
+	linelight1 = vertexlight[firstvertptr[2]];
+	linelight2 = vertexlight[firstvertptr[3]];
 
-	avg_z = (firsteyexyz[vtx1_idx].z / 2) + (firsteyexyz[vtx2_idx].z / 2);
+	/* Average z of the two endpoints perspective-scales thickness. */
+	avg_z = (firsteyexyz[firstvertptr[2]].z / 2) + (firsteyexyz[firstvertptr[3]].z / 2);
+	thickness = *(uint16_t*)firstvertptr;
+	thickness *= thicknessMultiple;
+	if (avg_z > 0) {
+		avg_z >>= 8;
+		if (avg_z > 0)
+			thickness /= (uint16_t)avg_z;
+	}
 
-	thick_val = (uint16_t)(thicknessMultiple * base);
-	scale_z = avg_z >> 8;
-	if (scale_z > 0)
-		thick_val = thick_val / (uint16_t)scale_z;
-
-	/* Polyobject lines take color from the object's face flags. */
 	polyidbyte = objectnum;
-	edgeidbyte = edge_idx;
-	objectedgeword = (uint16_t)(edge_idx | ((uint8_t)objectnum << 8));
+	edgeidbyte = firstvertptr[4];
+	objectedgeword = edgeidbyte + (polyidbyte << 8);
 
+	/* Copy both endpoints into the scratch buffer: point2 first, then point1. */
 	dst = newscreenxy;
-	dst[0] = point2_start[0];
-	dst[1] = point2_start[1];
-	p1a = point1ptr[0];
-	p1b = point1ptr[1];
-	point1ptr = dst + 2;
-	dst[2] = p1a;
-	dst[3] = p1b;
+	dst[0] = point2->xy[0];
+	dst[1] = point2->xy[1];
+	dst[2] = point1ptr[0];
+	dst[3] = point1ptr[1];
+	point1ptr = dst;
+	thickness++;
 
-	thickness = (uint16_t)(thick_val + 1);
-
-	saved_flatobj = (int16_t)flatobjnum;
-	drawln2_tracelineedges(dst);
+	saved_flatobj = flatobjnum;
+	drawln2_tracelineedges(dst + 2);
 	flatobjnum = saved_flatobj;
 }
 
@@ -1433,23 +1423,22 @@ void drawpol_drawlineface(void) {
 // FUNCTION: TIE95 0x1F454
 void drawpol_drawsurfacepoly(int32_t* scratch, char color_code) {
 	/* Duplicate vertex data into the slots expected by getscreencoords. */
+	color = (uint8_t)(color_code + 0xB0);
 	scratch[17] = scratch[5];
 	scratch[18] = scratch[6];
 	scratch[19] = scratch[7];
 	scratch[2] = scratch[14];
 	scratch[3] = scratch[15];
 	scratch[4] = scratch[16];
-
 	firstscreenxy = scratch;
-	minscreenx = scratch;
 	minscreeny = scratch;
-	maxscreenx = scratch;
+	minscreenx = scratch;
 	maxscreeny = scratch;
-	color = (uint8_t)(color_code - 80);
-	sameycnt = 0;
-	samexcnt = 0;
+	maxscreenx = scratch;
 	numpoints = 4;
 	counter = 4;
+	sameycnt = 0;
+	samexcnt = 0;
 
 	/* scratch[2..4] is the ring's previous-vertex slot, scratch[5..16] the four
 	 * eye vertices and scratch[17..19] the closing copy of the first vertex. */

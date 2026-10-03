@@ -416,13 +416,10 @@ static int16_t textext_draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, 
 		 * the per-tick subtitle records instead. Without this gate
 		 * the lfont hook would double-emit on redraw frames. */
 		if (text_buffer) {
-			void* pixels;
 			xrect_Copy_Rect(&br, &textext_bounds);
 			xrect_Origin_Rect(&br);
-			pixels = xmemhdl_Lock_Handle(text_buffer);
-			stub_Copy_To_Clipped_Buffer(pixels, &br, textext_bounds.left, textext_bounds.top,
+			stub_Copy_To_Clipped_Buffer(text_buffer, &br, textext_bounds.left, textext_bounds.top,
 										br.right - br.left, br.bottom - br.top);
-			xmemhdl_Unlock_Handle(text_buffer);
 		}
 
 #ifdef TIE_MODERN
@@ -442,13 +439,10 @@ static int16_t textext_draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, 
 	} else {
 		/* Restore actor: put saved background back */
 		if (text_buffer) {
-			void* pixels;
 			xrect_Copy_Rect(&br, &prev_text_bounds);
 			xrect_Origin_Rect(&br);
-			pixels = xmemhdl_Lock_Handle(text_buffer);
-			stub_Copy_From_Clipped_Buffer(pixels, &br, prev_text_bounds.left, prev_text_bounds.top,
+			stub_Copy_From_Clipped_Buffer(text_buffer, &br, prev_text_bounds.left, prev_text_bounds.top,
 										  br.right - br.left, br.bottom - br.top);
-			xmemhdl_Unlock_Handle(text_buffer);
 			xdirty_Dirty_Rect(&prev_text_bounds);
 		}
 	}

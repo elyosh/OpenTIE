@@ -70,7 +70,7 @@ typedef struct TurretRotData {
 /* Articulated component rotation. `mesh` points at the on-disk ship-
  * model mesh entry; comp_rotation_offset locates the ComponentRotData
  * relative to it. */
-void fview_componentrotation(int16_t angle, const ShipModelMesh* mesh);
+void fview_componentrotation(uint16_t angle, const ShipModelMesh* mesh);
 
 /* Restore rotworldeye/light/objecteye from saved state */
 void fview_restorerotation(void);

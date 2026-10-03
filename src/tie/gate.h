@@ -102,7 +102,7 @@ void gate_setrenderreferenceobject(uint16_t object_index);
  * the CRT swaps sides of the crosshair for different player_spec_num
  * values.
  */
-void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin);
+void gate_trainingupdatecrt(uint16_t x_origin, uint16_t y_origin);
 
 /*
  * Redraw the HUD overlay (MM:SS timer and 5-digit train_bonus). Position

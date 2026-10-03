@@ -228,7 +228,7 @@ static int16_t bpshipstate[3]; /* 1 = draw the ship this frame */
 static int16_t bpused[3]; /* 1 = viewport is active */
 // GLOBAL: TIE95 0xF6548
 // GLOBAL: TIE98 0x4FA990
-static int16_t bpid[3]; /* mode tag copied into actor->id */
+static uint16_t bpid[3]; /* mode tag copied into actor->id */
 
 /* Save / restore + per-frame scratch. */
 // GLOBAL: TIE95 0xF64F0
@@ -286,91 +286,96 @@ static void bpflight_Load_Flight_Craft_tie98(const char* lfd_name, const char* o
 
 // FUNCTION: TIE95 0x78E70
 // FUNCTION: TIE98 0x404D60
-Actor* bpflight_Open_Flight_Engine(int16_t scene) {
+void bpflight_Open_Flight_Engine(int16_t scene) {
 	Rect r;
+	int16_t i;
+	int16_t j;
 
 	/* Save + overwrite the per-screen resolution selector, then reinit
 	 * the perspective/projection constants for flight mode. */
-	int i;
-	int j;
-
 	flightResolution = frontResolution;
 	tie_InitFlightResolution();
 	matrix = NULL;
 	cur_flight_scene = scene;
 
-	if (scene == 1) {
-		/* Training room: primary + small thumbnail viewport, loads the
-		 * orbit matrix from matrix.lfd entry "trnfly1". */
-		ResFile* rf = shellext_Open_Empire_Resource("matrix.lfd");
-		matrix = matrix_Res_Matrix(rf, "trnfly1");
-		xres_Close_Resource(rf);
+	switch (scene) {
+		case 3:
+			/* Blueprint viewer: single full-area viewport, no orbit matrix.
+			 * Z plane 20 places it above the UI chrome. */
+			xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(131, 222), TIE_FRONTEND_EDITION(30, 75),
+						   TIE_FRONTEND_EDITION(278, 570), TIE_FRONTEND_EDITION(200, 310));
+			engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 20);
+			xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
+			xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
+			engine[0]->id = 2;
+			bpid[2] = 2;
+			bpused[2] = 1;
+			bpused[1] = 0;
+			bpused[0] = 0;
+			bpflight_cur_component = -1;
+			bpflight_active_component = -1;
+			break;
+		case 1: {
+			/* Training room: primary + small thumbnail viewport, loads the
+			 * orbit matrix from matrix.lfd entry "trnfly1". */
+			ResFile* rf = shellext_Open_Empire_Resource("matrix.lfd");
+			matrix = matrix_Res_Matrix(rf, "trnfly1");
+			xres_Close_Resource(rf);
 
-		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(62, 144), TIE_FRONTEND_EDITION(4, 60),
-					   TIE_FRONTEND_EDITION(256, 500), TIE_FRONTEND_EDITION(116, 300));
-		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-		xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
-		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
-		engine[0]->id = 0;
-		bpused[0] = 1;
-		bpid[0] = 0;
+			xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(62, 144), TIE_FRONTEND_EDITION(4, 60),
+						   TIE_FRONTEND_EDITION(256, 500), TIE_FRONTEND_EDITION(116, 300));
+			engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
+			xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
+			xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
+			engine[0]->id = 0;
+			bpid[0] = 0;
+			bpused[0] = 1;
 
-		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(85, 176), TIE_FRONTEND_EDITION(131, 340),
-					   TIE_FRONTEND_EDITION(182, 358), TIE_FRONTEND_EDITION(178, 449));
-		engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-		xactor_Set_Actor_User_Function(engine[1], (xactorCallback)bpflight_user_Engine);
-		xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
-		engine[1]->id = 1;
-		bpid[1] = 1;
-		bpused[1] = 1;
-		bpused[2] = 0;
+			xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(85, 176), TIE_FRONTEND_EDITION(131, 340),
+						   TIE_FRONTEND_EDITION(182, 358), TIE_FRONTEND_EDITION(178, 449));
+			engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
+			xactor_Set_Actor_User_Function(engine[1], (xactorCallback)bpflight_user_Engine);
+			xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
+			engine[1]->id = 1;
+			bpid[1] = 1;
+			bpused[1] = 1;
+			bpused[2] = 0;
 
-		shipext_Init_Train_Ship_Name();
-		bpflight_cur_component = -1;
-		bpflight_active_component = -1;
-	} else if (scene == 2) {
-		/* Combat room: primary + thumbnail, "cmbtfly1" orbit. */
-		ResFile* rf = shellext_Open_Empire_Resource("matrix.lfd");
-		matrix = matrix_Res_Matrix(rf, "cmbtfly1");
-		xres_Close_Resource(rf);
+			shipext_Init_Train_Ship_Name();
+			bpflight_cur_component = -1;
+			bpflight_active_component = -1;
+			break;
+		}
+		case 2: {
+			/* Combat room: primary + thumbnail, "cmbtfly1" orbit. */
+			ResFile* rf = shellext_Open_Empire_Resource("matrix.lfd");
+			matrix = matrix_Res_Matrix(rf, "cmbtfly1");
+			xres_Close_Resource(rf);
 
-		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(59, 124), TIE_FRONTEND_EDITION(2, 7),
-					   TIE_FRONTEND_EDITION(260, 516), TIE_FRONTEND_EDITION(115, 272));
-		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-		xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
-		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
-		engine[0]->id = 0;
-		bpid[0] = 0;
-		bpused[0] = 1;
+			xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(59, 124), TIE_FRONTEND_EDITION(2, 7),
+						   TIE_FRONTEND_EDITION(260, 516), TIE_FRONTEND_EDITION(115, 272));
+			engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
+			xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
+			xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
+			engine[0]->id = 0;
+			bpid[0] = 0;
+			bpused[0] = 1;
 
-		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(146, 297), TIE_FRONTEND_EDITION(130, 313),
-					   TIE_FRONTEND_EDITION(247, 485), TIE_FRONTEND_EDITION(179, 440));
-		engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-		xactor_Set_Actor_User_Function(engine[1], (xactorCallback)bpflight_user_Engine);
-		xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
-		engine[1]->id = 1;
-		bpid[1] = 1;
-		bpused[1] = 1;
-		bpused[2] = 0;
+			xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(146, 297), TIE_FRONTEND_EDITION(130, 313),
+						   TIE_FRONTEND_EDITION(247, 485), TIE_FRONTEND_EDITION(179, 440));
+			engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
+			xactor_Set_Actor_User_Function(engine[1], (xactorCallback)bpflight_user_Engine);
+			xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
+			engine[1]->id = 1;
+			bpid[1] = 1;
+			bpused[1] = 1;
+			bpused[2] = 0;
 
-		shipext_Init_Combat_Ship_Name();
-		bpflight_cur_component = -1;
-		bpflight_active_component = -1;
-	} else if (scene == 3) {
-		/* Blueprint viewer: single full-area viewport, no orbit matrix.
-		 * Z plane 20 places it above the UI chrome. */
-		xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(131, 222), TIE_FRONTEND_EDITION(30, 75),
-					   TIE_FRONTEND_EDITION(278, 570), TIE_FRONTEND_EDITION(200, 310));
-		engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 20);
-		xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
-		xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
-		engine[0]->id = 2;
-		bpid[2] = 2;
-		bpused[2] = 1;
-		bpused[1] = 0;
-		bpused[0] = 0;
-		bpflight_cur_component = -1;
-		bpflight_active_component = -1;
+			shipext_Init_Combat_Ship_Name();
+			bpflight_cur_component = -1;
+			bpflight_active_component = -1;
+			break;
+		}
 	}
 
 	/* XTRANS2 scanline scratch. Big enough for a full-screen viewport. */
@@ -398,44 +403,37 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 
 	/* Kick a SHIP resource into fltobj_data via SHIPEXT; training adds
 	 * the course obstacle. */
-	if (scene == 1) {
-		shipext_Get_Train_Ship_SHP();
-		shipext_Get_Train_Course_SHP();
-	} else if (scene == 2) {
-		shipext_Get_Combat_Ship_SHP();
-	} else if (scene == 3) {
-		shipext_Get_Blueprint_Ship_SHP();
+	switch (scene) {
+		case 3:
+			shipext_Get_Blueprint_Ship_SHP();
+			break;
+		case 1:
+			shipext_Get_Train_Ship_SHP();
+			shipext_Get_Train_Course_SHP();
+			break;
+		case 2:
+			shipext_Get_Combat_Ship_SHP();
+			break;
 	}
 
-	/* Pre-fill XTRANS2's per-scanline mask. For each row of the
-	 * (rightmost viewport's) vertical span, emit one of:
-	 *   [1, w]        (width fits in one byte, w <= 0xFF)
-	 *   [1, 0, w_lo]  (width > 0xFF, split into a 0 marker + low byte)
-	 * The writer advances by 2 or 3 bytes per row accordingly. */
+	/* Pre-fill XTRANS2's span mask from the last viewport rect: one
+	 * entry per row, [1, w] when the width fits in a byte, otherwise
+	 * [1, 0, w - overflow]. */
 	{
 		uint8_t* mask;
-		int16_t width = (int16_t)(r.right - r.left);
-		int16_t height = (int16_t)(r.bottom - r.top);
-		uint8_t width_lo = (uint8_t)width;
 		int16_t y;
-		int16_t remaining = width;
+		int16_t width;
 
 		xtransdataptr = xmemhdl_Lock_Handle(xtransdata);
+		width = r.right - r.left;
 		mask = (uint8_t*)xtransdataptr + (uint16_t)maskbufptr;
-		for (y = 0; y < height; ++y) {
-			mask[0] = 1;
-			if (remaining > 0xFF) {
-				/* Watcom fills only the first overflow row this way
-				 * then keeps writing the reduced remaining width for
-				 * the rest — matches the binary literally. */
-				remaining -= 0x100;
-				mask[1] = 0;
-				mask[2] = width_lo;
-				mask += 3;
-			} else {
-				mask[1] = (uint8_t)remaining;
-				mask += 2;
+		for (y = r.top; y < r.bottom; ++y) {
+			*mask++ = 1;
+			if (width > 0xFF) {
+				*mask++ = 0;
+				width -= TIE_FRONTEND_EDITION(0x100, 0xFF);
 			}
+			*mask++ = (uint8_t)width;
 		}
 		xmemhdl_Unlock_Handle(xtransdata);
 	}
@@ -459,8 +457,6 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	 *   id==1/2 override: y=-2048, pitch=0x4000; id==2 uses pitch=19456
 	 *   (≈107°), id==1 starts with heading 0x6000 (≈135°). */
 	for (j = 0; j < 3; ++j) {
-		int16_t mode;
-
 		if (!bpused[j])
 			continue;
 		bpcamerapitch[j] = 0x4000;
@@ -473,11 +469,10 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 		bpcameray[j] = -4096;
 		bpcameraz[j] = 0;
 
-		mode = bpid[j];
-		if (mode != 0) {
+		if (bpid[j] != 0) {
 			bpcameray[j] = -2048;
 			bpflight_pivotpitch[j] = 0x4000;
-			if (mode == 2)
+			if (bpid[j] == 2)
 				bpflight_pivotpitch[j] = 19456;
 			else
 				bpflight_pivotheading[j] = 24576;
@@ -485,27 +480,20 @@ Actor* bpflight_Open_Flight_Engine(int16_t scene) {
 	}
 
 	/* Per-frame render flags. */
+	if (!TIE_FRONTEND_TIE98)
+		fullupdateflag = 1;
+	starshipdetail = 4;
 	if (TIE_FRONTEND_TIE98)
 		g_flightInitialTextureCacheFlushPending = 1;
-	stardetaillevel = 1;
-	drawmarkingsflag = 1;
-	fullupdateflag = 1;
 	fullstarupdate = 1;
 	bpflightflag = 1;
-	starshipdetail = 4;
-	shipdetailvalue = 0;
+	stardetaillevel = 1;
+	shipdetailvalue = TIE_FRONTEND_EDITION(0, -1);
 	shipdetailpolycnt = 16;
-	bpshipstate[0] = 1;
+	drawmarkingsflag = 1;
 	gouraudflag = 64;
-	bpshipstate[2] = 1;
-	bpshipstate[1] = 1;
 	lightflag = 1;
-
-	/* Reset matrix-frame cursor on the primary viewport. */
-	if (engine[0] && engine[0]->id == 0)
-		engine[0]->var1 = 0;
-
-	return engine[0];
+	bpflight_Start_Movie_Engine();
 }
 
 /* ----- BPFLIGHT_Close_Flight_Engine (0x7A948) ----- */
@@ -1243,7 +1231,7 @@ int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16
 
 	rf = shellext_Open_Empire_Resource(lfd_name);
 	if (rf) {
-		bpflight_Res_Ship(rf, (uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[mode]), shp_name);
+		bpflight_Res_Ship(rf, (uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[mode]), (char*)shp_name);
 		xmemhdl_Unlock_Handle(bpflight_fltobj_data[mode]);
 		xres_Close_Resource(rf);
 	}
@@ -1255,30 +1243,22 @@ int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16
  * Thinner variant of Load_Flight_Craft: caller supplies the ResFile and
  * the buffer. No xrefs in the demo. */
 // FUNCTION: TIE95 0x7A244
-int bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, const char* name) {
-	char up[16];
-	size_t upper;
-	int out_offset;
-	uint32_t out_size;
-	int ok;
+void bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, char* name) {
+	int16_t i;
+	int resource_offset;
+	int resource_size;
 
-	for (upper = 0; upper + 1 < sizeof(up) && name[upper]; ++upper)
-		up[upper] = (char)toupper((unsigned char)name[upper]);
-	up[upper] = '\0';
+	for (i = 0; name[i]; ++i)
+		name[i] = (char)toupper((int8_t)name[i]);
 
-	out_offset = 0;
-	out_size = 0;
-	ok = 0;
-	if (xres_Get_Resource_Offset(rf, FOURCC_SHIP, up, &out_offset, &out_size)) {
-		if (xres_Open_Resource_Data(FOURCC_SHIP, up)) {
-			uint16_t size = xres_Read_Resource_Word(rf);
-			objectloadsize = (int16_t)size;
-			xres_Read_Resource_Buffer_Data(rf, buffer, size);
+	if (xres_Get_Resource_Offset(rf, FOURCC_SHIP, name, &resource_offset, &resource_size)) {
+		if (xres_Open_Resource_Data(FOURCC_SHIP, name)) {
+			resource_size = (int16_t)xres_Read_Resource_Word(rf);
+			objectloadsize = resource_size;
+			xres_Read_Resource_Buffer_Data(rf, buffer, resource_size);
 			xres_Close_Resource_Data(rf);
-			ok = 1;
 		}
 	}
-	return ok;
 }
 
 /* ----- BPFLIGHT_Position_Craft (0x7C314) -----
@@ -1374,16 +1354,14 @@ void bpflight_settraincolors(int16_t remove) {
 // FUNCTION: TIE95 0x7A438
 void bpflight_swapbpmaterials(void) {
 	int i;
+	int k;
+	uint8_t tmp;
 
 	for (i = 0; i < 45; ++i) {
-		uint8_t* mc = materialcolors + i * 16;
-		uint8_t* bk = bp_materialcolors + i * 16;
-		int k;
-
 		for (k = 0; k < 16; ++k) {
-			uint8_t tmp = mc[k];
-			mc[k] = bk[k];
-			bk[k] = tmp;
+			tmp = materialcolors[i * 16 + k];
+			materialcolors[i * 16 + k] = bp_materialcolors[i * 16 + k];
+			bp_materialcolors[i * 16 + k] = tmp;
 		}
 	}
 }

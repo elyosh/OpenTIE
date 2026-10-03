@@ -465,12 +465,12 @@ int16_t paifight_scanfortargetswitch(uint16_t ai_entry) {
 
 // FUNCTION: TIE95 0x37624
 int16_t paifight_scanfortargetsallgone(uint16_t ai_entry) {
-	const EAIStruct* cur_ai = &fg_array[ai.fg_idx].ai[ai_entry];
 #ifdef TIE_MODERN
 	// HARDENING: orders past the 33-entry tables (retail HI1W.TIE uses 35) take the null plan.
-	uint8_t order_class = cur_ai->order < sizeof(ordersldr) ? ordersldr[cur_ai->order] : 0;
+	uint8_t order = fg_array[ai.fg_idx].ai[ai_entry].order;
+	uint16_t order_class = order < sizeof(ordersldr) ? ordersldr[order] : 0;
 #else
-	uint8_t order_class = ordersldr[cur_ai->order];
+	uint16_t order_class = ordersldr[(int8_t)fg_array[ai.fg_idx].ai[ai_entry].order];
 #endif
 
 	int16_t result;
@@ -1393,7 +1393,7 @@ int16_t paifight_followleadatkorder(void) {
 				continue;
 			if (iter == (uint16_t)pstate.radio_target)
 				continue;
-			if (pstate.object_idx != cp->attacker_idx)
+			if (cp->attacker_idx != pstate.object_idx)
 				continue;
 			if (objects[iter].side == pstate.player->side)
 				continue;
@@ -1442,11 +1442,11 @@ int16_t paifight_followleadatkorder(void) {
 				if (++target >= NUM_CRAFTS)
 					target = 0;
 			}
-			return 0;
 		} else {
 			/* Static-object pass: only advance the scan slot past entries
 			 * that pass the gate. */
 			uint16_t fg;
+			uint16_t obj_ref;
 
 			target -= 0x3800;
 			fg = staticobjects[target].fg_idx;
@@ -1456,14 +1456,16 @@ int16_t paifight_followleadatkorder(void) {
 			for (iter = 0; iter < 0x40; ++iter) {
 				if (ai.live_target_only && !staticobjects[target].status_flags)
 					continue;
-				if (objects[pstate.object_idx].fg_idx == objects[ai.active_obj_idx].fg_idx &&
+				if (objects[ai.active_obj_idx].fg_idx == objects[pstate.object_idx].fg_idx &&
 					target + 0x3800 == (uint16_t)pstate.radio_target)
 					continue;
 				if (staticobjects[target].species && fg == staticobjects[target].fg_idx &&
-					pai_checktargetforattack(ai.active_obj_idx, target + 0x3800, 1) &&
-					pai_isobjectvalidtarget(target + 0x3800)) {
-					craftptr->ai_target_ref = target + 0x3800;
-					return 1;
+					pai_checktargetforattack(ai.active_obj_idx, target + 0x3800u, 1)) {
+					obj_ref = target + 0x3800;
+					if (pai_isobjectvalidtarget(obj_ref)) {
+						craftptr->ai_target_ref = obj_ref;
+						return 1;
+					}
 				}
 				if (++target >= 0x40)
 					target = 0;

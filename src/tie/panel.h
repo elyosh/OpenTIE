@@ -263,7 +263,7 @@ void panel_clearmaskdata(uint16_t width, uint16_t height);
 void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, uint16_t clear_runs);
 void panel_drawboxinxtrans(int left_x, int top_y, uint16_t width, uint16_t height, uint8_t color);
 void panel_pointcamera(uint16_t obj_idx, int16_t use_hud_size);
-void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int clear_runs);
+void panel_update3Dcrt_tie98(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, int clear_runs);
 void panel_Update3DCrtIfVisible(void);
 int16_t panel_drawboxinxtrans_tie98(int x, int y, int width, int height, uint8_t color);
 void panel_pointcamera_tie98(uint16_t obj_idx, int16_t use_hud_size);

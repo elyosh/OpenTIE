@@ -118,38 +118,41 @@ void trace2_enterflatvertical(int16_t xCoord, int16_t topY, int16_t lineCnt) {
 
 // FUNCTION: TIE95 0x5818C
 void trace2_entervertedge(int16_t topY, int16_t lineCnt, int16_t xCoord, int16_t lightVal) {
+	trace2_EdgeInfo* info;
 	trace2_EdgeHeader* h;
-	int32_t xpacked;
-	int16_t i;
+	int32_t x;
+	int32_t lt;
 
+	info = trace2_newedgeinfo;
 	if (lineCnt == 0)
 		return;
 
 	/* Link a new EdgeHeader at rowheaders[topY]. */
 	h = trace2_newedgeheader;
-	h->next = trace2_rowheaders[(uint16_t)topY];
-	trace2_rowheaders[(uint16_t)topY] = h;
+	h->next = trace2_rowheaders[topY];
+	trace2_rowheaders[topY] = h;
 	h->numscanlines = lineCnt;
 	h->objectid = polyidbyte;
 	h->face1 = facenumber;
 	h->face2 = 0;
 	h->rightedge = NULL;
 	h->edgeid = edgeidbyte;
-	h->info = trace2_newedgeinfo;
+	h->info = info;
 	if (++trace2_newedgeheader > trace2_lastedgeheader)
 		trace2_newedgeheader = trace2_lastedgeheader;
 
 	/* Fill lineCnt EdgeInfo entries with constant (x = xCoord<<8, lt = lightVal). */
-	xpacked = (int32_t)((uint32_t)(int32_t)xCoord << 8);
-	i = lineCnt;
-	while (--i != -1) {
-		trace2_newedgeinfo->x = xpacked;
-		trace2_newedgeinfo->lt = lightVal;
-		++trace2_newedgeinfo;
+	x = (int32_t)xCoord << 8;
+	lt = lightVal;
+	while (lineCnt-- != 0) {
+		info->x = x;
+		info->lt = lt;
+		info++;
 	}
 
-	if (trace2_newedgeinfo > trace2_lastedgeinfo)
-		trace2_newedgeinfo = trace2_lastedgeinfo;
+	if (info > trace2_lastedgeinfo)
+		info = trace2_lastedgeinfo;
+	trace2_newedgeinfo = info;
 }
 
 /* ================================================================ */
@@ -300,74 +303,72 @@ void trace2_ydownright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t s
 }
 
 // FUNCTION: TIE95 0x584B0
-void trace2_yupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
-	int32_t ytopa = (int32_t)(ytop - ytotal);
-	int32_t ytotala = (int32_t)ytotal;
-	trace2_EdgeHeader* h;
-	int32_t row;
+void trace2_yupleft(int32_t ytop, int32_t ytotal, int32_t xval, int32_t slope) {
+	trace2_EdgeInfo* info;
 	int32_t ltval;
-	int32_t xvala;
 	int32_t ycnt;
-	uint32_t yval;
-	int32_t ytotalb;
-	int32_t xvalb;
+	int32_t frac;
+	int32_t ystart;
 
-	if (ytopa < 0) {
-		ytotala = ytotala + ytopa; /* equals ytop */
-		ytopa = 0;
+	ystart = ytop - ytotal;
+	if (ystart < 0) {
+		ytotal += ystart; /* equals ytop */
+		ystart = 0;
 	}
-	if (ytotala == 0)
+	if (ytotal == 0)
 		return;
 
-	h = trace2_newedgeheader;
-	h->next = trace2_rowheaders[ytopa];
-	trace2_rowheaders[ytopa] = h;
-	h->numscanlines = ytotala;
-	h->objectid = polyidbyte;
-	h->face1 = facenumber;
-	h->face2 = 0;
-	h->rightedge = NULL;
-	h->edgeid = edgeidbyte;
-	h->info = trace2_newedgeinfo;
+	/* Allocate header at rowheaders[ystart]. */
+	trace2_newedgeheader->next = trace2_rowheaders[ystart];
+	trace2_rowheaders[ystart] = trace2_newedgeheader;
+	trace2_newedgeheader->numscanlines = ytotal;
+	trace2_newedgeheader->objectid = polyidbyte;
+	trace2_newedgeheader->face1 = facenumber;
+	trace2_newedgeheader->face2 = 0;
+	trace2_newedgeheader->rightedge = NULL;
+	trace2_newedgeheader->edgeid = edgeidbyte;
+	trace2_newedgeheader->info = trace2_newedgeinfo;
 	if (++trace2_newedgeheader > trace2_lastedgeheader)
 		trace2_newedgeheader = trace2_lastedgeheader;
 
-	/* Allocate ytotala slots forward, then fill backwards. */
-	trace2_newedgeinfo += ytotala;
-	row = ytotala;
-
+	/* Allocate ytotal slots forward, then fill backwards. */
 	ltval = vertlight1;
-	xvala = (int32_t)(xval << 8);
-	ycnt = (int32_t)(slope >> 9);
-	yval = (slope >> 1) & 0xFF;
-	if (ycnt > ytotala)
-		ycnt = ytotala;
-	ytotalb = ytotala - ycnt;
+	xval <<= 8;
+	frac = slope >> 1;
+	info = trace2_newedgeinfo + ytotal - 1;
+	trace2_newedgeinfo += ytotal;
+	ycnt = frac;
+	ycnt >>= 8;
+	frac &= 0xFF;
+	if (ycnt > ytotal)
+		ycnt = ytotal;
+	ytotal -= ycnt;
 
+	/* First run: ycnt scanlines at the starting x. */
 	while (--ycnt != -1) {
-		--row;
-		h->info[row].x = xvala;
-		h->info[row].lt = ltval;
+		info->x = xval;
+		info->lt = ltval;
 		ltval -= lightincy;
+		--info;
 	}
 
-	xvalb = xvala - 256;
-	while (ytotalb > 0) {
-		int32_t ycnta;
-
-		yval += slope;
-		ycnta = (int32_t)(yval >> 8);
-		yval &= 0xFF;
-		if (ycnta > ytotalb)
-			ycnta = ytotalb;
-		ytotalb -= ycnta;
-		while (--ycnta != -1) {
-			--row;
-			h->info[row].x = xvalb;
-			h->info[row].lt = ltval;
+	/* Subsequent runs step x left one pixel each time the fractional
+	 * accumulator overflows. */
+	xval -= 256;
+	while (ytotal != 0) {
+		frac += slope;
+		ycnt = frac >> 8;
+		frac &= 0xFF;
+		if (ycnt > ytotal)
+			ycnt = ytotal;
+		ytotal -= ycnt;
+		while (--ycnt != -1) {
+			info->x = xval;
+			info->lt = ltval;
 			ltval -= lightincy;
+			--info;
 		}
-		xvalb -= 256;
+		xval -= 256;
 	}
 
 	if (trace2_newedgeinfo > trace2_lastedgeinfo)
@@ -375,73 +376,72 @@ void trace2_yupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slop
 }
 
 // FUNCTION: TIE95 0x58614
-void trace2_yupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
-	int32_t ytopa = (int32_t)(ytop - ytotal);
-	int32_t ytotala = (int32_t)ytotal;
-	trace2_EdgeHeader* h;
-	int32_t row;
+void trace2_yupright(int32_t ytop, int32_t ytotal, int32_t xval, int32_t slope) {
+	trace2_EdgeInfo* info;
 	int32_t ltval;
-	int32_t xvala;
 	int32_t ycnt;
-	uint32_t yval;
-	int32_t ytotalb;
-	int32_t xvalb;
+	int32_t frac;
+	int32_t ystart;
 
-	if (ytopa < 0) {
-		ytotala = ytotala + ytopa;
-		ytopa = 0;
+	ystart = ytop - ytotal;
+	if (ystart < 0) {
+		ytotal += ystart; /* equals ytop */
+		ystart = 0;
 	}
-	if (ytotala == 0)
+	if (ytotal == 0)
 		return;
 
-	h = trace2_newedgeheader;
-	h->next = trace2_rowheaders[ytopa];
-	trace2_rowheaders[ytopa] = h;
-	h->numscanlines = ytotala;
-	h->objectid = polyidbyte;
-	h->face1 = facenumber;
-	h->face2 = 0;
-	h->rightedge = NULL;
-	h->edgeid = edgeidbyte;
-	h->info = trace2_newedgeinfo;
+	/* Allocate header at rowheaders[ystart]. */
+	trace2_newedgeheader->next = trace2_rowheaders[ystart];
+	trace2_rowheaders[ystart] = trace2_newedgeheader;
+	trace2_newedgeheader->numscanlines = ytotal;
+	trace2_newedgeheader->objectid = polyidbyte;
+	trace2_newedgeheader->face1 = facenumber;
+	trace2_newedgeheader->face2 = 0;
+	trace2_newedgeheader->rightedge = NULL;
+	trace2_newedgeheader->edgeid = edgeidbyte;
+	trace2_newedgeheader->info = trace2_newedgeinfo;
 	if (++trace2_newedgeheader > trace2_lastedgeheader)
 		trace2_newedgeheader = trace2_lastedgeheader;
 
-	trace2_newedgeinfo += ytotala;
-	row = ytotala;
-
+	/* Allocate ytotal slots forward, then fill backwards. */
 	ltval = vertlight1;
-	xvala = (int32_t)(xval << 8);
-	ycnt = (int32_t)(slope >> 9);
-	yval = (slope >> 1) & 0xFF;
-	if (ycnt > ytotala)
-		ycnt = ytotala;
-	ytotalb = ytotala - ycnt;
+	xval <<= 8;
+	frac = slope >> 1;
+	info = trace2_newedgeinfo + ytotal - 1;
+	trace2_newedgeinfo += ytotal;
+	ycnt = frac;
+	ycnt >>= 8;
+	frac &= 0xFF;
+	if (ycnt > ytotal)
+		ycnt = ytotal;
+	ytotal -= ycnt;
 
+	/* First run: ycnt scanlines at the starting x. */
 	while (--ycnt != -1) {
-		--row;
-		h->info[row].x = xvala;
-		h->info[row].lt = ltval;
+		info->x = xval;
+		info->lt = ltval;
 		ltval -= lightincy;
+		--info;
 	}
 
-	xvalb = xvala + 256;
-	while (ytotalb > 0) {
-		int32_t ycnta;
-
-		yval += slope;
-		ycnta = (int32_t)(yval >> 8);
-		yval &= 0xFF;
-		if (ycnta > ytotalb)
-			ycnta = ytotalb;
-		ytotalb -= ycnta;
-		while (--ycnta != -1) {
-			--row;
-			h->info[row].x = xvalb;
-			h->info[row].lt = ltval;
+	/* Subsequent runs step x right one pixel each time the fractional
+	 * accumulator overflows. */
+	xval += 256;
+	while (ytotal != 0) {
+		frac += slope;
+		ycnt = frac >> 8;
+		frac &= 0xFF;
+		if (ycnt > ytotal)
+			ycnt = ytotal;
+		ytotal -= ycnt;
+		while (--ycnt != -1) {
+			info->x = xval;
+			info->lt = ltval;
 			ltval -= lightincy;
+			--info;
 		}
-		xvalb += 256;
+		xval += 256;
 	}
 
 	if (trace2_newedgeinfo > trace2_lastedgeinfo)
@@ -582,9 +582,11 @@ void trace2_xupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slop
 
 // FUNCTION: TIE95 0x58A24
 void trace2_xupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope) {
+	trace2_EdgeInfo* info = trace2_newedgeinfo;
 	int32_t ytopa = (int32_t)(ytop - ytotal);
 	int32_t ytotala = (int32_t)ytotal;
 	trace2_EdgeHeader* h;
+	trace2_EdgeInfo* last;
 	int32_t row;
 	int32_t xvala;
 	int32_t ltval;
@@ -605,25 +607,25 @@ void trace2_xupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slo
 	h->face2 = 0;
 	h->rightedge = NULL;
 	h->edgeid = edgeidbyte;
-	h->info = trace2_newedgeinfo;
+	h->info = info;
 	if (++trace2_newedgeheader > trace2_lastedgeheader)
 		trace2_newedgeheader = trace2_lastedgeheader;
 
-	trace2_newedgeinfo += ytotala;
-	row = ytotala;
-
 	xvala = ((int32_t)slope >> 1) + (int32_t)(xval << 8);
 	ltval = vertlight1 - (lightincy >> 1);
+	last = info + ytotala;
+	row = ytotala;
 	while (--ytotala != -1) {
 		--row;
-		h->info[row].x = xvala;
-		h->info[row].lt = ltval;
+		info[row].x = xvala;
+		info[row].lt = ltval;
 		ltval -= lightincy;
 		xvala += (int32_t)slope;
 	}
 
-	if (trace2_newedgeinfo > trace2_lastedgeinfo)
-		trace2_newedgeinfo = trace2_lastedgeinfo;
+	if (last > trace2_lastedgeinfo)
+		last = trace2_lastedgeinfo;
+	trace2_newedgeinfo = last;
 }
 
 /* ================================================================ */
@@ -714,15 +716,9 @@ void trace2_ydomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t sl
 
 // FUNCTION: TIE95 0x58D4C
 void trace2_xdomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t slope, uint16_t fraction) {
-	const int32_t pd = (int32_t)pixelsdeep;
-
-	if (y1 >= 0 && y1 < pd) {
-		if (y2 >= 0 && y2 < pd) {
-			if (y2 >= y1) {
-				trace2_starty = y1;
-				trace2_startx = x1;
-				trace2_endy = y2;
-			} else {
+	if (y1 >= 0 && y1 < pixelsdeep) {
+		if (y2 >= 0 && y2 < pixelsdeep) {
+			if (y2 < y1) {
 				int16_t t;
 
 				trace2_endy = y1;
@@ -732,64 +728,70 @@ void trace2_xdomclipy(int32_t x1, int32_t y1, int32_t x2, int32_t y2, int32_t sl
 				vertlight1 = vertlight2;
 				vertlight2 = t;
 				xdiffsign = (int8_t)(-xdiffsign);
+			} else {
+				trace2_starty = y1;
+				trace2_startx = x1;
+				trace2_endy = y2;
 			}
 		} else {
 			trace2_starty = y1;
 			trace2_startx = x1;
 			if (y2 < 0)
 				trace2_endy = 0;
-			else if (y2 <= pd)
-				trace2_endy = y2;
+			else if (y2 > pixelsdeep)
+				trace2_endy = pixelsdeep;
 			else
-				trace2_endy = pd;
+				trace2_endy = y2;
 		}
-	} else if (y2 >= 0 && y2 < pd) {
+	} else if (y2 >= 0 && y2 < pixelsdeep) {
 		int16_t t;
 
-		t = vertlight1;
-		xdiffsign = (int8_t)(-xdiffsign);
-		vertlight1 = vertlight2;
 		trace2_startx = x2;
+		t = vertlight1;
+		vertlight1 = vertlight2;
 		trace2_starty = y2;
 		vertlight2 = t;
+		xdiffsign = (int8_t)(-xdiffsign);
 		if (y1 < 0)
 			trace2_endy = 0;
-		else if (y1 <= pd)
-			trace2_endy = y1;
+		else if (y1 > pixelsdeep)
+			trace2_endy = pixelsdeep;
 		else
-			trace2_endy = pd;
+			trace2_endy = y1;
 	} else {
-		/* Note: slope * y1c and y1c * lightincy both use unsigned u32
-		 * multiplication to match the binary's 32-bit imul wrap semantics
-		 * without tripping C's signed-overflow UB. slope can be as large as
-		 * 0x7FFFFF and y1c up to several hundred, so the product easily
-		 * exceeds INT32_MAX. */
-		int32_t dx_at_clip;
-		int32_t clipped_x;
-		if (y1 >= 0) {
-			int32_t y1c = y1 - pd;
-			int32_t lt_delta = (int32_t)((uint32_t)y1c * (uint32_t)(int32_t)lightincy);
-			int32_t slope_delta = (int32_t)((uint32_t)slope * (uint32_t)y1c);
-			vertlight1 -= (int16_t)lt_delta;
-			dx_at_clip = math2_longfraction(y1c, fraction) + slope_delta;
-			clipped_x = (xdiffsign >= 0) ? (dx_at_clip + x1) : (x1 - dx_at_clip);
-			trace2_starty = pd;
-		} else {
-			int32_t y1a = -y1;
-			int32_t lt_delta = (int32_t)((uint32_t)y1a * (uint32_t)(int32_t)lightincy);
-			int32_t slope_delta = (int32_t)((uint32_t)slope * (uint32_t)y1a);
-			vertlight1 += (int16_t)lt_delta;
-			dx_at_clip = math2_longfraction(y1a, fraction) + slope_delta;
-			clipped_x = (xdiffsign >= 0) ? (dx_at_clip + x1) : (x1 - dx_at_clip);
+		int32_t dy;
+		int32_t dx;
+
+		/* The slope product wraps like the original imul; it goes
+		 * through uint32_t to avoid signed-overflow UB. */
+		if (y1 < 0) {
+			dy = -y1;
+			vertlight1 += dy * lightincy;
+			slope = (int32_t)((uint32_t)slope * (uint32_t)dy);
+			dx = slope + math2_longfraction(dy, fraction);
+			if (xdiffsign < 0)
+				x1 -= dx;
+			else
+				x1 += dx;
 			trace2_starty = 0;
+		} else {
+			dy = y1 - pixelsdeep;
+			slope = (int32_t)((uint32_t)slope * (uint32_t)dy);
+			vertlight1 -= dy * lightincy;
+			dx = slope + math2_longfraction(dy, fraction);
+			if (xdiffsign < 0)
+				x1 -= dx;
+			else
+				x1 += dx;
+			trace2_starty = pixelsdeep;
 		}
-		trace2_startx = clipped_x;
+		trace2_startx = x1;
 		if (y2 < 0)
 			trace2_endy = 0;
-		else if (y2 <= pd)
-			trace2_endy = y2;
+		else if (y2 > pixelsdeep)
+			trace2_endy = pixelsdeep;
 		else
-			trace2_endy = pd;
+			trace2_endy = y2;
 	}
 }
 

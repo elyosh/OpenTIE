@@ -1361,24 +1361,23 @@ int16_t paiorder_completefolloworder(void) {
 // FUNCTION: TIE95 0x3F844
 int16_t paiorder_dropoffdestorder(void) {
 	uint16_t drop_fg = (uint16_t)((int8_t)fg_array[ai.fg_idx].ai[ai.ai_entry_count].var[1] - 1);
-	if (fgstatus[drop_fg].counts[FG_COUNT_ARRIVED])
-		return 0;
+	if (!fgstatus[drop_fg].counts[FG_COUNT_ARRIVED]) {
+		create_getdropposition(drop_fg, 0, 0xFFFF);
+		craftptr->waypoint_x_cache = worldlocx;
+		craftptr->waypoint_y_cache = worldlocy;
+		craftptr->waypoint_z_cache = worldlocz + 932;
 
-	create_getdropposition(drop_fg, 0, 0xFFFF);
-	craftptr->waypoint_x_cache = worldlocx;
-	craftptr->waypoint_y_cache = worldlocy;
-	craftptr->waypoint_z_cache = worldlocz + 932;
-
-	pai_targetdistance();
-	if (trig2_polardistance < 0x4000)
-		paiman_setpower(ai.active_obj_idx, 0xC000u);
-	if (trig2_polardistance < 0x1000)
-		paiman_setpower(ai.active_obj_idx, 0x6000u);
-	if (trig2_polardistance >= 0x800)
-		return 0;
-
-	craftptr->active_waypoint_idx = 0;
-	return 1;
+		pai_targetdistance();
+		if (trig2_polardistance < 0x4000)
+			paiman_setpower(ai.active_obj_idx, 0xC000u);
+		if (trig2_polardistance < 0x1000)
+			paiman_setpower(ai.active_obj_idx, 0x6000u);
+		if (trig2_polardistance < 0x800) {
+			craftptr->active_waypoint_idx = 0;
+			return 1;
+		}
+	}
+	return 0;
 }
 
 /* Retail sub_3F934 — the unnamed 47th entry in ordersfunctionptrs (slot 46).

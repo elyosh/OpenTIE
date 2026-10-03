@@ -3,6 +3,9 @@
 #include "tie_runtime/runtime/computer_task.h"
 #endif
 #include "tie/edition.h"
+#if defined(TIE98) && !defined(TIE_MODERN)
+#include "tie/frontend_display_tie98.h"
+#endif
 #include "tie/register.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
@@ -240,6 +243,11 @@ static Input* cancel_input;
  * shortcuts. */
 // GLOBAL: TIE98 0x50F588
 static Input* exit_yes_input;
+#if defined(TIE98) && !defined(TIE_MODERN)
+/* TIE98: set by the preferences page to reset the joystick button keys. */
+// GLOBAL: TIE98 0x50F59C
+static int32_t joystick_reset_requested;
+#endif
 // GLOBAL: TIE95 0xFB4A0
 // GLOBAL: TIE98 0x50F590
 static char comp_exit_str[2][6];
@@ -316,7 +324,12 @@ static void computer_draw_Computer_Level(Rect* r, int16_t state);
 static void computer_draw_Computer_Gauge(Rect* r, int16_t amount);
 static int16_t computer_Check_Backup_Pilot(void);
 static int16_t computer_Check_Restore_Pilot(void);
+#if defined(TIE98) && !defined(TIE_MODERN)
+static int16_t computer_Check_Reset_Joystick(void);
+static int16_t computer_Check_Exit_To_DOS(void);
+#else
 static int16_t computer_Exit_To_DOS(void);
+#endif
 static Input* computer_Build_Exit(int16_t id);
 static void computer_idraw_Exit(Input* input, Rect* r, Rect* clip_r, int16_t refresh);
 static void computer_iuser_Exit(Input* input, int32_t time);
@@ -919,60 +932,122 @@ static int16_t computer_iupdate_Computer(Input* input, Rect* r, Rect* clip_r, in
 static void computer_iuser_Computer(Input* input, int32_t time) {
 	Palette* screen_pal;
 	int16_t i;
+#if defined(TIE98) && !defined(TIE_MODERN)
+	int16_t button_count;
+#endif
 
-	if (input->id == 0) {
-		/* Parent dialog: exit animation */
-		if (input->var2) {
-			if (input->var1 < 120) {
-				input->var1 += 60;
+	switch (input->id) {
+		case 0:
+			/* Parent dialog: exit animation */
+			if (input->var2) {
+				if (input->var1 < 120) {
+					input->var1 += 60;
+					xview_Refresh_View();
+				}
+				input->var2 = 0;
+			} else if (input->var1) {
+				input->var1 -= 60;
 				xview_Refresh_View();
 			}
-			input->var2 = 0;
-		} else if (input->var1) {
-			input->var1 -= 60;
-			xview_Refresh_View();
-		}
-		return;
-	}
-
-	if (input->id > 2)
-		return;
-
-	/* OK/Cancel buttons: restore palette on button-down with id 2 (cancel) */
-	if (time == 1 && input->id == 2) {
-		screen_pal = xpal_Get_Screen_Palette();
-		xpal_Copy_Palette(screen_pal, computer_palette, 0, 32, 0);
-		xpal_Put_Screen_Pal_Range(0, 32);
-		if (TIE_FRONTEND_TIE98) {
-			for (i = 0; i < 4; i++)
-				xpal_Set_Screen_Palette(computer_palettes[i]);
-		} else {
-			for (i = 0; i < 5; i++) {
-				if (i != 1)
-					xpal_Set_Screen_Palette(computer_palettes[i]);
+#if defined(TIE98) && !defined(TIE_MODERN)
+			if (joystick_reset_requested) {
+				joystick_reset_requested = 0;
+				button_count = computer_Check_Reset_Joystick();
+				if (button_count) {
+					button_count = Flight_GetJoystickButtonCount();
+					for (i = 0; i < button_count && i < 28; i++) {
+						switch (i) {
+							case 0:
+								options_gbl.joystick_keys[0] = 0x9C;
+								break;
+							case 1:
+								options_gbl.joystick_keys[1] = 0x9D;
+								break;
+							case 2:
+								options_gbl.joystick_keys[2] = 'r';
+								break;
+							case 3:
+								options_gbl.joystick_keys[3] = '.';
+								break;
+							case 4:
+								options_gbl.joystick_keys[4] = 'e';
+								break;
+							case 5:
+								options_gbl.joystick_keys[5] = 'i';
+								break;
+							case 6:
+								options_gbl.joystick_keys[6] = '[';
+								break;
+							case 7:
+								options_gbl.joystick_keys[7] = '\b';
+								break;
+							case 8:
+								options_gbl.joystick_keys[8] = '\r';
+								break;
+							case 9:
+								options_gbl.joystick_keys[9] = ']';
+								break;
+						}
+					}
+				}
+				xinpattr_Refresh_Input(input);
 			}
-		}
-	}
-
-	if (xinpattr_Get_Input_Selected(input)) {
-		if (input->id == 1) {
-#ifdef TIE_MODERN
-			TieComputer_BeginConfirm(input);
 #endif
-			if (computer_Exit_To_DOS()) {
+			break;
+		case 1:
+		case 2:
+			/* OK/Cancel buttons: restore palette on button-down with id 2 (cancel) */
+			if (time == 1 && input->id == 2) {
+				screen_pal = xpal_Get_Screen_Palette();
+				xpal_Copy_Palette(screen_pal, computer_palette, 0, 32, 0);
+				xpal_Put_Screen_Pal_Range(0, 32);
+				if (TIE_FRONTEND_TIE98) {
+					for (i = 0; i < 4; i++)
+						xpal_Set_Screen_Palette(computer_palettes[i]);
+				} else {
+					for (i = 0; i < 5; i++) {
+						if (i != 1)
+							xpal_Set_Screen_Palette(computer_palettes[i]);
+					}
+				}
+			}
+
+#if defined(TIE98) && !defined(TIE_MODERN)
+			/* Window close: confirm, then leave the dialog */
+			if (g_closeRequested && g_closeRequestFrames >= 2) {
+				computer_Check_Exit_To_DOS();
 				input->var1 = 1;
 				computer_display = 0;
+				xdialog_Set_Dialog_Exit(input->id);
+				break;
 			}
-		} else {
-			/* Accept */
-			input->var1 = 1;
-			computer_display = 0;
-		}
-		xview_Refresh_View();
-	} else if (input->var1 == 1) {
-		/* Post-selection cleanup: restore palette, signal dialog exit */
-		xpal_Set_Screen_Palette(computer_palette);
-		xdialog_Set_Dialog_Exit(input->id);
+#endif
+
+			if (xinpattr_Get_Input_Selected(input)) {
+				if (input->id == 1) {
+#ifdef TIE_MODERN
+					TieComputer_BeginConfirm(input);
+#endif
+#if defined(TIE98) && !defined(TIE_MODERN)
+					if (computer_Check_Exit_To_DOS()) {
+#else
+					if (computer_Exit_To_DOS()) {
+#endif
+						input->var1 = 1;
+						computer_display = 0;
+					}
+				} else {
+					/* Accept */
+					input->var1 = 1;
+					computer_display = 0;
+				}
+				xview_Refresh_View();
+			} else if (input->var1 == 1) {
+				/* Post-selection cleanup: restore palette, signal dialog exit */
+				xpal_Set_Screen_Palette(computer_palette);
+				xdialog_Set_Dialog_Exit(input->id);
+			}
+			break;
 	}
 }
 
@@ -1983,15 +2058,15 @@ static void computer_Draw_Computer_Battle_Info(Rect* r, int16_t color, int16_t b
 // FUNCTION: TIE95 0x857C0
 // FUNCTION: TIE98 0x40EA90
 static void computer_Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t back_color) {
-	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	char str1[80];
 	Rect page;
 	int16_t num_craft = 0;
-	int16_t craft_count = 0;
-	int16_t count = 0;
+	int16_t craft_count;
+	int16_t count;
 	int16_t i;
 
-	xrect_Copy_Rect(&page, r);
+	if (TIE_FRONTEND_TIE98)
+		xrect_Copy_Rect(&page, r);
 
 	for (i = 0; i < NUM_SPEC; i++) {
 		if (pilot_record.kills_by_ship_type[i])
@@ -2001,32 +2076,42 @@ static void computer_Draw_Computer_Kills_Info(Rect* r, int16_t color, int16_t ba
 	if (!num_craft)
 		return;
 
+	count = 0;
+	craft_count = 0;
 	for (i = 0; i < NUM_SPEC && craft_count < num_craft; i++) {
 		if (!(count % TIE_FRONTEND_EDITION(11, 14))) {
-			if (count) {
+			if (TIE_FRONTEND_TIE98 && count) {
 				xrect_Offset_Rect(&page, 0, TIE_FRONTEND_EDITION(110, 273));
 				xrect_Copy_Rect(r, &page);
 			}
 			textext_Copy_Text(str1, txtCompInfoVictories);
-			xfont_Print_Centered_Text(str1, r, font_id, color);
+			xfont_Print_Centered_Text(str1, r, TIE_FRONTEND_EDITION(0, 2), color);
 			xpaint_Horiz_Clipped_Line(r->left + 10, r->bottom - 1, r->right - r->left - 20, back_color);
-			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id) + 2));
+			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2) + 2));
 			count++;
 		}
 
 		if (pilot_record.kills_by_ship_type[i]) {
 			textext_Get_Ship_Text(str1, i);
-			xfont_Print_Clipped_Text(str1, r->left + 8, r->top + 1, font_id, color);
-			snprintf(str1, sizeof(str1), "%d", pilot_record.kills_by_ship_type[i]);
-			xfont_Print_Clipped_Text(str1, r->right - 30, r->top + 1, font_id, color);
-			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(font_id)));
+			xfont_Print_Clipped_Text(str1, r->left + 8, r->top + 1, TIE_FRONTEND_EDITION(0, 2), color);
+			sprintf(str1, "%d", pilot_record.kills_by_ship_type[i]);
+			xfont_Print_Clipped_Text(str1, r->right - 30, r->top + 1, TIE_FRONTEND_EDITION(0, 2), color);
+			xrect_Offset_Rect(r, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2)));
 			count++;
 			craft_count++;
 		}
 	}
 
-	xrect_Offset_Rect(&page, 0, TIE_FRONTEND_EDITION(110, 273));
-	xrect_Copy_Rect(r, &page);
+	if (TIE_FRONTEND_TIE98) {
+		xrect_Offset_Rect(&page, 0, 273);
+		xrect_Copy_Rect(r, &page);
+	} else {
+		/* TIE95 pads the column out to a whole page of ten rows. */
+		int16_t remainder = num_craft % 10;
+
+		if (remainder)
+			xrect_Offset_Rect(r, 0, (10 - remainder) * 10);
+	}
 }
 
 /* ======================================================================
@@ -2437,8 +2522,39 @@ static int16_t computer_Check_Restore_Pilot(void) {
 #endif
 }
 
-/* TIE98's Check_Exit_To_DOS (0x4102E0) also services the window-close
- * request, which this body does not model. */
+#if defined(TIE98) && !defined(TIE_MODERN)
+// FUNCTION: TIE98 0x410290
+static int16_t computer_Check_Reset_Joystick(void) {
+	Input* the_input;
+	int16_t retval;
+
+	the_input = computer_Build_Exit(336);
+	xio_Set_Mouse_Position(365, 240);
+	retval = xdialog_Handle_Dialog_View(the_input);
+	xinput_Free_Inputs(the_input);
+	xdialog_Clear_Dialog_Exit();
+	return retval != 2;
+}
+
+/* TIE98 also services the window-close request: once the close has been
+ * pending for three dialog frames the confirmation is not shown again. */
+// FUNCTION: TIE98 0x4102E0
+static int16_t computer_Check_Exit_To_DOS(void) {
+	Input* the_input;
+	int16_t retval = 0;
+
+	the_input = computer_Build_Exit(txtCompExitDOS);
+	xio_Set_Mouse_Position(365, 240);
+	if (g_closeRequestFrames < 3)
+		retval = xdialog_Handle_Dialog_View(the_input);
+	xinput_Free_Inputs(the_input);
+	xdialog_Clear_Dialog_Exit();
+	if (retval != 2)
+		return 1;
+	g_closeRequested = 0;
+	return 0;
+}
+#else
 // FUNCTION: TIE95 0x867B8
 static int16_t computer_Exit_To_DOS(void) {
 	Input* the_input;
@@ -2460,6 +2576,8 @@ static int16_t computer_Exit_To_DOS(void) {
 	return retval != 2;
 #endif
 }
+
+#endif
 
 // FUNCTION: TIE95 0x867F8
 // FUNCTION: TIE98 0x410350

@@ -3328,7 +3328,7 @@ void user_setdetaillevel(uint16_t level) {
 	drawdebrisflag = (uint8_t)debrisdtl[level];
 	shipdetailvalue = polydtl[level];
 	shipdetailpolycnt = numpolydtl[level];
-	drawmarkingsflag = (uint8_t)markdtl[level];
+	drawmarkingsflag = markdtl[level];
 	lightflag = 1;
 }
 

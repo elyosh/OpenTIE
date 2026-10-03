@@ -185,14 +185,17 @@ void festring_outstringcenter(const uint8_t* s) {
 
 // FUNCTION: TIE95 0x23914
 void festring_outstringright(const uint8_t* s) {
-	uint16_t x = rightmargin - (sys2_calclength(s) + 2);
+	uint16_t width = sys2_calclength(s) + 2;
+	uint16_t x = rightmargin;
 
-	if (x >= 0x8000u)
+	x -= width;
+
+	if (x >= 0x8000)
 		x = 0;
-	if (x < (uint16_t)leftmargin)
-		x = leftmargin;
-
-	cursorx = x;
+	if (x < leftmargin)
+		cursorx = leftmargin;
+	else
+		cursorx = x;
 	festring_outstring(s);
 }
 

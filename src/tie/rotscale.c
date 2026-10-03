@@ -426,10 +426,8 @@ static int16_t rotscale_scantoxtrans(int32_t* quad_corners) {
 	quad_corners[5] = max_y - quad_corners[5];
 	quad_corners[7] = max_y - quad_corners[7];
 
-	xmin = quad_corners[0];
-	xmax = quad_corners[0];
-	ymin = quad_corners[1];
-	ymax = quad_corners[1];
+	xmin = xmax = quad_corners[0];
+	ymax = ymin = quad_corners[1];
 	for (i = 1; i < 4; ++i) {
 		int32_t x = quad_corners[2 * i];
 		int32_t y = quad_corners[2 * i + 1];
@@ -2627,57 +2625,63 @@ static void composite_tie98_sprite_raster(uint8_t* pixel, int row_advance, int32
  * compositing against the software renderer's scene spans. */
 // FUNCTION: TIE98 0x476340
 static int16_t composite_to_tie98_scene(int32_t* quad_corners) {
-	const int32_t max_y = pixelsdeepmin1;
-	int32_t xmin;
 	int32_t xmax;
+	int32_t xmin;
 	int32_t ymin;
 	int32_t ymax;
-	int index;
-	int bytes_per_pixel;
-	uint8_t* pixel;
-	int row_advance;
 
-	quad_corners[1] = max_y - quad_corners[1];
-	quad_corners[3] = max_y - quad_corners[3];
-	quad_corners[5] = max_y - quad_corners[5];
-	quad_corners[7] = max_y - quad_corners[7];
+	quad_corners[1] = pixelsdeepmin1 - quad_corners[1];
+	quad_corners[3] = pixelsdeepmin1 - quad_corners[3];
+	quad_corners[5] = pixelsdeepmin1 - quad_corners[5];
+	quad_corners[7] = pixelsdeepmin1 - quad_corners[7];
 
-	xmin = quad_corners[0];
-	xmax = quad_corners[0];
-	ymin = quad_corners[1];
-	ymax = quad_corners[1];
-	for (index = 1; index < 4; ++index) {
-		const int32_t x = quad_corners[2 * index];
-		const int32_t y = quad_corners[2 * index + 1];
-		if (x < xmin)
-			xmin = x;
-		if (x > xmax)
-			xmax = x;
-		if (y < ymin)
-			ymin = y;
-		if (y > ymax)
-			ymax = y;
-	}
+	xmin = xmax = quad_corners[0];
+	ymax = ymin = quad_corners[1];
+	if (quad_corners[2] < xmin)
+		xmin = quad_corners[2];
+	if (quad_corners[4] < xmin)
+		xmin = quad_corners[4];
+	if (quad_corners[6] < xmin)
+		xmin = quad_corners[6];
+	if (quad_corners[2] > xmax)
+		xmax = quad_corners[2];
+	if (quad_corners[4] > xmax)
+		xmax = quad_corners[4];
+	if (quad_corners[6] > xmax)
+		xmax = quad_corners[6];
+	if (quad_corners[3] < ymin)
+		ymin = quad_corners[3];
+	if (quad_corners[5] < ymin)
+		ymin = quad_corners[5];
+	if (quad_corners[7] < ymin)
+		ymin = quad_corners[7];
+	if (quad_corners[3] > ymax)
+		ymax = quad_corners[3];
+	if (quad_corners[5] > ymax)
+		ymax = quad_corners[5];
+	if (quad_corners[7] > ymax)
+		ymax = quad_corners[7];
 
 	xmin -= 2;
-	xmax += 2;
 	ymin -= 2;
+	xmax += 2;
 	ymax += 2;
-	if (ymax < 0 || ymin >= nDrawBufferDepth || xmax < 0 || xmin >= nDrawBufferWidth)
+	if (ymax < 0 || ymin >= nDrawBufferDepth)
 		return 0;
 	if (ymax >= nDrawBufferDepth)
 		ymax = nDrawBufferDepthMin1;
 	if (ymin < 0)
 		ymin = 0;
+	if (xmax < 0 || xmin >= nDrawBufferWidth)
+		return 0;
 	if (xmax >= nDrawBufferWidth)
 		xmax = nDrawBufferWidthMin1;
 	if (xmin < 0)
 		xmin = 0;
 
-	bytes_per_pixel = g_flight16bppBytesPerPixel;
-	pixel = (uint8_t*)buffer_ptr + ymin * nDrawBufferMemoryWidth + bytes_per_pixel * xmin;
-	row_advance = nDrawBufferMemoryWidth - bytes_per_pixel * (xmax - xmin);
-	composite_tie98_sprite_raster(pixel, row_advance, xmin, ymin, xmax, ymax);
+	composite_tie98_sprite_raster(
+		(uint8_t*)buffer_ptr + xmin * g_flight16bppBytesPerPixel + ymin * nDrawBufferMemoryWidth,
+		nDrawBufferMemoryWidth - (xmax - xmin) * g_flight16bppBytesPerPixel, xmin, ymin, xmax, ymax);
 	return 0;
 }
 

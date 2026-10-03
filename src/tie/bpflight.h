@@ -63,9 +63,9 @@ extern int16_t bpflight_pivotroll[3];
  * Allocates the viewport actor(s), 65000-byte xtransdata scratch, the
  * object heap (15000 or 33000 bytes), optional 9000-byte obstacle heap
  * (training only), loads a camera orbit matrix where applicable, seeds
- * 256 random stars, and sets the per-frame render flags. Returns the
- * primary viewport's Actor*. */
-Actor* bpflight_Open_Flight_Engine(int16_t scene);
+ * 256 random stars, sets the per-frame render flags, and starts the
+ * movie engine. */
+void bpflight_Open_Flight_Engine(int16_t scene);
 
 /* Shut down the viewer. Frees xtransdata, fltobj_data, optional obstacle
  * heap, the orbit Matrix, rebuilds flightResolution from the f_res preference, and
@@ -113,7 +113,7 @@ void bpflight_drawtreeobject(void* node, int16_t pass_gated, int16_t pass_mainhu
 void bpflight_drawtrainobject(void* node);
 
 /* Read a FOURCC_SHIP resource and store its payload size in objectloadsize. */
-int bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, const char* name);
+void bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, char* name);
 
 /* Extract per-joint world pos + rotation from a MatrixFrame into the
  * render globals (worldx/y/z, calc{f,S,U}{1..3}), negate fwd into

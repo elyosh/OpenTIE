@@ -183,29 +183,28 @@ int16_t starship_getcoordvalue(const uint8_t* bsp_coord) {
 // FUNCTION: TIE95 0x52EDC
 uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj_idx) {
 	FlightObject* craft;
-	int32_t world_x;
-	int32_t world_y;
-	int32_t world_z;
-	uint8_t ship_idx;
+	unsigned int ship_idx;
 	int32_t dx;
+	int32_t dxold;
 	int32_t dy;
 	int32_t dz;
-	int32_t dxold;
-	int32_t dyold;
+	int32_t up_prev;
+	unsigned int num_meshes;
 	int32_t dzold;
 	int32_t side_cur;
 	int32_t fwd_cur;
 	int32_t up_cur;
-	int32_t side_prev;
 	int32_t fwd_prev;
-	int32_t up_prev;
-	int32_t base_side_cur, base_up_cur, base_side_prev, base_up_prev;
-	int32_t scaled_fwd_cur, scaled_fwd_prev;
+	int32_t dyold;
+	int32_t base_side_cur;
+	int32_t base_up_cur;
+	int32_t base_side_prev;
+	int32_t base_up_prev;
 	ShipModelMesh* mesh;
-	unsigned int num_meshes;
 	uint16_t hit_component;
 	int32_t best_frac;
 	unsigned int i;
+	int32_t side_prev;
 
 	if (TIE_FLIGHT_TIE98)
 		return collide_checksweptmodelcollision(shooter_obj_idx, target_obj_idx);
@@ -216,15 +215,12 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 	ship_idx = craft->ship_idx;
 
 	/* Laser segment relative to the craft's world origin */
-	world_x = craft->world_x;
-	dx = laserx - world_x;
-	dxold = laserxold - world_x;
-	world_y = craft->world_y;
-	dy = lasery - world_y;
-	dyold = laseryold - world_y;
-	world_z = craft->world_z;
-	dz = laserz - world_z;
-	dzold = laserzold - world_z;
+	dx = laserx - craft->world_x;
+	dxold = laserxold - craft->world_x;
+	dy = lasery - craft->world_y;
+	dyold = laseryold - craft->world_y;
+	dz = laserz - craft->world_z;
+	dzold = laserzold - craft->world_z;
 
 	/* Rebuild local orientation matrix if dirty */
 	if (craft->orient_dirty) {
@@ -236,39 +232,37 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 	 * (side, -fwd, up) axes. The fwd result is stored negated, matching the
 	 * convention used by PAI_calcrotatedpoint. */
 	side_cur = math2_dot3_q15(craft->side_x, dx, craft->side_y, dy, craft->side_z, dz);
-	fwd_cur = -math2_dot3_q15(craft->fwd_x, dx, craft->fwd_y, dy, craft->fwd_z, dz);
+	fwd_cur = math2_dot3_q15(craft->fwd_x, dx, craft->fwd_y, dy, craft->fwd_z, dz);
+	fwd_cur = -fwd_cur;
 	up_cur = math2_dot3_q15(craft->up_x, dx, craft->up_y, dy, craft->up_z, dz);
 
 	side_prev = math2_dot3_q15(craft->side_x, dxold, craft->side_y, dyold, craft->side_z, dzold);
-	fwd_prev = -math2_dot3_q15(craft->fwd_x, dxold, craft->fwd_y, dyold, craft->fwd_z, dzold);
+	fwd_prev = math2_dot3_q15(craft->fwd_x, dxold, craft->fwd_y, dyold, craft->fwd_z, dzold);
+	fwd_prev = -fwd_prev;
 	up_prev = math2_dot3_q15(craft->up_x, dxold, craft->up_y, dyold, craft->up_z, dzold);
-
-	/* Scale by 2^(model_scale_shift - 1). model_scale_shift == 0 means the ship has no LOD
-	 * and the laser coords are left-shifted one bit (same effect as
-	 * model_scale_shift == 1 taking the default, but the branch exists in the binary
-	 * so we reproduce it). */
-
-	if (objectblockptr->model_scale_shift) {
-		const int shift = objectblockptr->model_scale_shift - 1;
-		base_side_cur = side_cur >> shift;
-		base_up_cur = up_cur >> shift;
-		scaled_fwd_cur = fwd_cur >> shift;
-		base_side_prev = side_prev >> shift;
-		base_up_prev = up_prev >> shift;
-		scaled_fwd_prev = fwd_prev >> shift;
-	} else {
-		base_side_cur = 2 * side_cur;
-		base_up_cur = 2 * up_cur;
-		scaled_fwd_cur = 2 * fwd_cur;
-		base_side_prev = 2 * side_prev;
-		base_up_prev = 2 * up_prev;
-		scaled_fwd_prev = 2 * fwd_prev;
-	}
 
 	/* Make sure componentblockptr / objectblockptr / num_meshes reflect
 	 * this craft's model. The caller (collide_lasercraftcollide) hasn't
 	 * necessarily locked our ship; do it here. */
 	draw_Lockshipfileptrs(ship_idx);
+
+	/* Scale by 2^(model_scale_shift - 1); model_scale_shift == 0 doubles. */
+	if (!objectblockptr->model_scale_shift) {
+		base_side_cur = 2 * side_cur;
+		fwd_cur *= 2;
+		base_up_cur = 2 * up_cur;
+		base_side_prev = 2 * side_prev;
+		fwd_prev *= 2;
+		base_up_prev = 2 * up_prev;
+	} else {
+		const int shift = (int8_t)objectblockptr->model_scale_shift - 1;
+		base_side_cur = side_cur >> shift;
+		fwd_cur >>= shift;
+		base_up_cur = up_cur >> shift;
+		base_side_prev = side_prev >> shift;
+		fwd_prev >>= shift;
+		base_up_prev = up_prev >> shift;
+	}
 
 	mesh = componentblockptr;
 	num_meshes = objectblockptr->num_meshes;
@@ -277,24 +271,19 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 	best_frac = 0x7FFFFFFF;
 
 	for (i = 0; i < num_meshes; ++i, ++mesh) {
-		int32_t side_cur_r;
-		int32_t up_cur_r;
-		int32_t side_prev_r;
-		int32_t up_prev_r;
-		int32_t is_main_hull_ship98;
-		uint8_t rot;
-		int32_t bbox_min_side;
-		int32_t bbox_min_fwd;
 		int32_t bbox_max_fwd;
-		int32_t bbox_min_up;
+		int32_t up_prev_r;
 		int32_t bbox_max_up;
-		int32_t bbox_max_side;
-		int in_bbox;
-		const uint8_t* lod_bytes;
-		int32_t distance;
-		uint16_t final_offset;
-		const uint8_t* poly_hdr;
+		int32_t up_cur_r;
+		int32_t bbox_min_side;
+		int32_t side_prev_r;
+		ShipMeshLOD* lod;
+		int32_t bbox_min_fwd;
+		int32_t is_main_hull_ship98;
 		int32_t hit_frac;
+		int32_t bbox_max_side;
+		int32_t bbox_min_up;
+		int32_t side_cur_r;
 
 		if (!craftptr->mesh_component_hp[i])
 			continue;
@@ -315,110 +304,103 @@ uint16_t starship_checkstarshiphit(uint16_t shooter_obj_idx, uint16_t target_obj
 		 *     entirely (avoids self-hit on the spinning Y-wing
 		 *     centerpiece etc.). Otherwise fall through and collide with
 		 *     unrotated coords. */
-		rot = craftptr->mesh_rotation[i];
 		if (mission.train_craft_type) {
-			if (rot) {
-				const uint16_t angle = (uint16_t)(rot << 8);
-				const int16_t rot_sin = trig2_getsignedsin(angle);
-				const int16_t rot_cos = trig2_getsignedcos((int16_t)angle);
-				int32_t temp;
+			int rot = craftptr->mesh_rotation[i];
 
-				temp = base_up_cur * -rot_sin + base_side_cur * rot_cos;
-				if (temp >= 0x40000000)
-					temp = 1073676288;
-				if (temp <= -0x40000000)
-					temp = -1073676288;
-				side_cur_r = (temp >> 15);
-				temp = base_up_cur * rot_cos + base_side_cur * rot_sin;
-				if (temp >= 0x40000000)
-					temp = 1073676288;
-				if (temp <= -0x40000000)
-					temp = -1073676288;
-				up_cur_r = (temp >> 15);
-				temp = base_up_prev * -rot_sin + base_side_prev * rot_cos;
-				if (temp >= 0x40000000)
-					temp = 1073676288;
-				if (temp <= -0x40000000)
-					temp = -1073676288;
-				side_prev_r = (temp >> 15);
-				temp = base_up_prev * rot_cos + base_side_prev * rot_sin;
-				if (temp >= 0x40000000)
-					temp = 1073676288;
-				if (temp <= -0x40000000)
-					temp = -1073676288;
-				up_prev_r = (temp >> 15);
+			if (rot) {
+				int rot_sin;
+				int rot_cos;
+				int32_t rotated;
+
+				rot = (int16_t)(rot << 8);
+				rot_sin = trig2_getsignedsin(rot);
+				rot_cos = trig2_getsignedcos(rot);
+
+				rotated = (int32_t)((uint32_t)base_up_cur * (0u - (uint32_t)rot_sin) +
+									(uint32_t)base_side_cur * (uint32_t)rot_cos);
+				if (rotated >= 0x40000000)
+					rotated = 0x3fff0000;
+				if (rotated <= -0x40000000)
+					rotated = -0x3fff0000;
+				side_cur_r = rotated >> 15;
+				rotated = (int32_t)((uint32_t)base_up_cur * (uint32_t)rot_cos +
+									(uint32_t)base_side_cur * (uint32_t)rot_sin);
+				if (rotated >= 0x40000000)
+					rotated = 0x3fff0000;
+				if (rotated <= -0x40000000)
+					rotated = -0x3fff0000;
+				up_cur_r = rotated >> 15;
+				rotated = (int32_t)((uint32_t)base_up_prev * (0u - (uint32_t)rot_sin) +
+									(uint32_t)base_side_prev * (uint32_t)rot_cos);
+				if (rotated >= 0x40000000)
+					rotated = 0x3fff0000;
+				if (rotated <= -0x40000000)
+					rotated = -0x3fff0000;
+				side_prev_r = rotated >> 15;
+				rotated = (int32_t)((uint32_t)base_up_prev * (uint32_t)rot_cos +
+									(uint32_t)base_side_prev * (uint32_t)rot_sin);
+				if (rotated >= 0x40000000)
+					rotated = 0x3fff0000;
+				if (rotated <= -0x40000000)
+					rotated = -0x3fff0000;
+				up_prev_r = rotated >> 15;
 			}
-			if (mesh->mesh_type == 1 /* MESH_MainHull */ && ship_idx == 98) {
+			if (mesh->mesh_type == 1 /* MESH_MainHull */ && ship_idx == 98)
 				is_main_hull_ship98 = 1;
-			}
-		} else if (rot && shooter_obj_idx == pstate.object_idx) {
+		} else if (craftptr->mesh_rotation[i] && shooter_obj_idx == pstate.object_idx) {
 			continue;
 		}
 
-		/* Mesh AABB reject. The binary reads the bbox via unaligned-dword
-		 * loads at (field_addr - 2) >> 16; those resolve to the direct
-		 * field_{min,max}_{side,fwd,up} values (see top-of-file note). */
+		/* Mesh AABB reject: skip unless the segment's endpoints straddle
+		 * or overlap the box on every axis. */
 		bbox_min_side = mesh->bbox_min_side;
 		bbox_min_fwd = mesh->bbox_min_fwd;
-		bbox_max_fwd = mesh->bbox_max_fwd;
 		bbox_min_up = mesh->bbox_min_up;
-		bbox_max_up = mesh->bbox_max_up;
 		bbox_max_side = mesh->bbox_max_side;
-
-		in_bbox = (bbox_min_side <= side_cur_r || bbox_min_side <= side_prev_r) &&
-				  (bbox_min_fwd <= scaled_fwd_cur || bbox_min_fwd <= scaled_fwd_prev) &&
-				  (up_cur_r >= bbox_min_up || up_prev_r >= bbox_min_up) &&
-				  (bbox_max_side >= side_cur_r || bbox_max_side >= side_prev_r) &&
-				  (scaled_fwd_cur <= bbox_max_fwd || bbox_max_fwd >= scaled_fwd_prev) &&
-				  (up_cur_r <= bbox_max_up || up_prev_r <= bbox_max_up);
-		if (!in_bbox)
+		bbox_max_fwd = mesh->bbox_max_fwd;
+		bbox_max_up = mesh->bbox_max_up;
+		if (side_cur_r < bbox_min_side && side_prev_r < bbox_min_side)
+			continue;
+		if (fwd_cur < bbox_min_fwd && fwd_prev < bbox_min_fwd)
+			continue;
+		if (up_cur_r < bbox_min_up && up_prev_r < bbox_min_up)
+			continue;
+		if (side_cur_r > bbox_max_side && side_prev_r > bbox_max_side)
+			continue;
+		if (fwd_cur > bbox_max_fwd && fwd_prev > bbox_max_fwd)
+			continue;
+		if (up_cur_r > bbox_max_up && up_prev_r > bbox_max_up)
 			continue;
 
-		/* Walk the mesh's LOD dispatch chain. Each record is 6 bytes
-		 * (int32 distance + u16 offset). The "budget" byte at
-		 * polygon_header[4] (four bytes into the polygon block this LOD
-		 * points at) must drop below 0x10 (or 0x18 for ship_idx == 28,
-		 * the Super Star Destroyer) for this LOD to be selected;
-		 * otherwise advance 6 bytes to the next record. The chain
-		 * terminates with distance = 0x7FFFFFFF. */
-		lod_bytes = (const uint8_t*)mesh + mesh->render_offset;
+		/* Walk the mesh's LOD dispatch chain. The "budget" byte four bytes
+		 * into the polygon block each LOD points at must drop below 0x10
+		 * (or 0x18 for ship_idx == 28, the Super Star Destroyer) for this
+		 * LOD to be selected; species 66 always uses the first LOD. The
+		 * chain terminates with distance = 0x7FFFFFFF. */
+		lod = (ShipMeshLOD*)((uint8_t*)mesh + mesh->render_offset);
+		while (lod->distance != 0x7FFFFFFF) {
+			int budget = ((uint8_t*)lod + (int16_t)lod->offset)[4];
 
-		memcpy(&distance, lod_bytes, sizeof distance);
-		if (distance != 0x7FFFFFFF) {
-			for (;;) {
-				uint16_t offset;
-				uint8_t budget;
-
-				memcpy(&offset, lod_bytes + 4, sizeof offset);
-				budget = lod_bytes[offset + 4];
-				if (budget < 0x10u)
-					break;
-				if (ship_idx == 28 && budget < 0x18u)
-					break;
-				/* Species 66 always uses the first LOD. */
-				if (ship_idx == 66)
-					break;
-
-				lod_bytes += 6;
-				memcpy(&distance, lod_bytes, sizeof distance);
-				if (distance == 0x7FFFFFFF)
-					break;
-			}
+			if (budget < 0x10)
+				break;
+			if (ship_idx == 28 && budget < 0x18)
+				break;
+			if (ship_idx == 66)
+				break;
+			lod++;
 		}
 
-		/* polygon data starts at (current LOD record) + offset */
-
-		memcpy(&final_offset, lod_bytes + 4, sizeof final_offset);
-		poly_hdr = lod_bytes + final_offset;
-
-		hit_frac =
-			(int32_t)collide_checkhitpolygons(poly_hdr, side_cur_r, scaled_fwd_cur, up_cur_r, side_prev_r,
-											  scaled_fwd_prev, up_prev_r, is_main_hull_ship98);
+		hit_frac = (int32_t)collide_checkhitpolygons((uint8_t*)lod + (int16_t)lod->offset, side_cur_r,
+													 fwd_cur, up_cur_r, side_prev_r, fwd_prev, up_prev_r,
+													 is_main_hull_ship98);
 
 		if (hit_frac && hit_frac < best_frac) {
-			collidexoff = math2_mul_q15((laserx - laserxold), hit_frac);
-			collideyoff = math2_mul_q15((lasery - laseryold), hit_frac);
-			collidezoff = math2_mul_q15((laserz - laserzold), hit_frac);
+			collidexoff = laserx - laserxold;
+			collideyoff = lasery - laseryold;
+			collidezoff = laserz - laserzold;
+			collidexoff = math2_mul16_q15(hit_frac, collidexoff);
+			collideyoff = math2_mul16_q15(hit_frac, collideyoff);
+			collidezoff = math2_mul16_q15(hit_frac, collidezoff);
 			best_frac = hit_frac;
 			hit_component = (uint16_t)(i + 1);
 		}
@@ -692,14 +674,12 @@ void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_ship) {
 
 // FUNCTION: TIE95 0x53A3C
 void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
-	uint16_t roll;
+	uint8_t main_hull_slots[16];
+	uint16_t ship_idx;
 	FlightObject* craft;
 	uint16_t num_main_hull;
+	uint16_t i;
 	ShipModelMesh* mesh;
-	unsigned int num_meshes;
-	unsigned int i;
-
-	uint8_t main_hull_slots[16];
 
 	if (TIE_FLIGHT_TIE98) {
 		starship_createstarshipexplo_tie98(obj_idx_in, full_ship);
@@ -709,52 +689,46 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 	/* Two gate conditions: full explosion forces through, otherwise the
 	 * RNG must be below starshipexplodetail (0x1000..0x7FFF depending on
 	 * the chosen detail level). */
-	roll = (uint16_t)math2_getrandom();
-	if (roll >= starshipexplodetail && !full_ship)
+	if ((uint16_t)math2_getrandom() >= starshipexplodetail && !full_ship)
 		return;
 
 	craft = &objects[obj_idx_in];
 	craftptr = craft->craft_ptr;
+	ship_idx = craft->ship_idx;
 
 	if (craft->orient_dirty) {
 		fview_newcalcrotate(craft->roll, craft->pitch, craft->heading, 0, craft);
 	}
 
-	draw_Lockshipfileptrs(craft->ship_idx);
+	draw_Lockshipfileptrs(ship_idx);
 
 	/* Scan meshes for MESH_MainHull entries; record up to 16 indices. */
-
 	num_main_hull = 0;
 	mesh = componentblockptr;
-	num_meshes = objectblockptr->num_meshes;
-
-	for (i = 0; i < num_meshes; ++i, ++mesh) {
-		if (mesh->mesh_type == 1 /* MESH_MainHull */) {
+	for (i = 0; i < objectblockptr->num_meshes; ++i, ++mesh) {
+		if (mesh->mesh_type == 1 /* MESH_MainHull */)
 			main_hull_slots[num_main_hull++] = (uint8_t)i;
-			if (num_main_hull == 16)
-				break;
-		}
+		if (num_main_hull == 16)
+			break;
 	}
 
 	if (full_ship) {
-		/* Retail only zeroes the head slot (the loop iterates exactly
-		 * once). The remaining big-explosion slots get reseeded by the
-		 * per-mesh explosions below. */
+		/* Retail only zeroes the head slot (the loop iterates exactly once). */
+		uint16_t slot = genus_table[13].start;
 		uint16_t k;
 
-		objects[genus_table[13].start].ship_idx = 0;
+		for (k = 0; k < 1; ++k)
+			objects[slot++].ship_idx = 0;
 
-		for (k = 0; k < num_main_hull; ++k) {
-			starship_makestarshipcompexplo(craft, main_hull_slots[k],
-										   componentblockptr[main_hull_slots[k]].explosion_scale, 0);
-		}
+		starship_makestarshipcompexplo(craft, main_hull_slots[0], objectblockptr->length, 0);
 		fsfx_triggersfx(0x12u, obj_idx_in);
-	} else if (num_main_hull) {
-		const uint16_t pick = (uint16_t)math2_getrandom() % num_main_hull;
-		const uint8_t idx = main_hull_slots[pick];
+	} else {
+		const uint8_t idx = main_hull_slots[(uint16_t)math2_getrandom() % num_main_hull];
 		if (craftptr->mesh_component_hp[idx]) {
-			const uint16_t size = (uint16_t)(species_table[craft->ship_idx].bound_hwidth >> 6);
-			const uint16_t new_obj = starship_makestarshipcompexplo(craft, idx, size, 1);
+			uint16_t size = species_table[ship_idx].bound_hwidth;
+			uint16_t new_obj;
+			size >>= 6;
+			new_obj = starship_makestarshipcompexplo(craft, idx, size, 1);
 			if (new_obj != 0xFFFF) {
 				fsfx_triggersfx((uint16_t)(19 + (math2_getrandom() & 3)), new_obj);
 			}

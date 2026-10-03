@@ -142,6 +142,7 @@ static Input* monitor_input;
 // GLOBAL: TIE95 0xF5790
 static Actor* arrow_actor;
 // GLOBAL: TIE95 0xF5780
+// GLOBAL: TIE98 0x58AB30
 static Actor* button[6]; /* TIE98 stores one actor for each input. */
 // GLOBAL: TIE95 0xF57A0
 static Actor* helmet;
@@ -363,7 +364,6 @@ static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object
 // FUNCTION: TIE98 0x491FF0
 static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 								   uint8_t mouseState, uint8_t prevMouseState, int16_t key, int16_t prevKey) {
-	int16_t id;
 	(void)draw_rect;
 	(void)clip_rect;
 	(void)key;
@@ -374,75 +374,54 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 
 	train_help = input->id;
 
-	if (!mouseState && !prevMouseState)
-		return 1;
-
-	id = input->id;
-
-#if defined(TIE_MODERN) || defined(TIE98)
-#ifdef TIE_MODERN
-	if (TIE_FRONTEND_TIE98) {
-#else
-	{
-#endif
-		Actor* input_actor;
-
-		if (id == 5)
-			input_actor = button[0];
-		else if (id == 6)
-			input_actor = button[1];
-		else
-			input_actor = button[id + 1];
-
-		if (mouseState == 3 || prevMouseState == 3) {
-			xactor_Set_Actor_State(input_actor, 0, 0);
-			xinpattr_Selected_Input(input);
-		} else {
-			if (mouseState == 1 || prevMouseState == 1)
-				soundext_Play_SFX(sfxButton, id <= 4 ? 95 : 80);
-			xactor_Set_Actor_State(input_actor, 1, 0);
-		}
-		return 1;
-	}
-#endif
-
-#ifndef TIE98
-	if (id == 5) {
-		/* Start training button */
-		if (mouseState == 3 || prevMouseState == 3) {
-			xactor_Set_Actor_State(button[0], 2, 0);
-			xinpattr_Selected_Input(input);
-		} else {
-			if (mouseState == 1 || prevMouseState == 1)
-				soundext_Play_SFX(sfxButton, 80);
-			xactor_Set_Actor_State(button[0], 3, 0);
-		}
-	} else if (id == 6) {
-		/* Exit door button */
-		if (mouseState == 3 || prevMouseState == 3) {
-			xactor_Set_Actor_State(button[1], 0, 0);
-			xinpattr_Selected_Input(input);
-		} else {
-			if (mouseState == 1 || prevMouseState == 1)
-				soundext_Play_SFX(sfxButton, 80);
-			xactor_Set_Actor_State(button[1], 1, 0);
-		}
-	} else {
-		/* Nav buttons 1-4 */
-		if (mouseState == 3 || prevMouseState == 3) {
-			xinpattr_Clear_Input_Flag1(input);
-			xinpattr_Selected_Input(input);
-			xactor_Hide_Actor(arrow_actor);
-		}
-		if (mouseState == 1 || prevMouseState == 1) {
-			xinpattr_Set_Input_Flag1(input);
-			xactor_Show_Actor(arrow_actor);
-			xactor_Set_Actor_State(arrow_actor, 2 * (input->id - 1), 0);
-			soundext_Play_SFX(sfxButton, 95);
+	if (mouseState || prevMouseState) {
+		switch (input->id) {
+			case 5:
+				/* Start training button */
+				if (mouseState == (uint8_t)3 || prevMouseState == (uint8_t)3) {
+					xactor_Set_Actor_State(button[0], TIE_FRONTEND_EDITION(2, 0), 0);
+					xinpattr_Selected_Input(input);
+				} else {
+					if (mouseState == (uint8_t)1 || prevMouseState == (uint8_t)1)
+						soundext_Play_SFX(sfxButton, 80);
+					xactor_Set_Actor_State(button[0], TIE_FRONTEND_EDITION(3, 1), 0);
+				}
+				break;
+			case 6:
+				/* Exit door button */
+				if (mouseState == (uint8_t)3 || prevMouseState == (uint8_t)3) {
+					xactor_Set_Actor_State(button[1], 0, 0);
+					xinpattr_Selected_Input(input);
+				} else {
+					if (mouseState == (uint8_t)1 || prevMouseState == (uint8_t)1)
+						soundext_Play_SFX(sfxButton, 80);
+					xactor_Set_Actor_State(button[1], 1, 0);
+				}
+				break;
+			default:
+				/* Nav buttons 1-4 */
+				if (mouseState == (uint8_t)3 || prevMouseState == (uint8_t)3) {
+					xinpattr_Clear_Input_Flag1(input);
+					xinpattr_Selected_Input(input);
+					if (TIE_FRONTEND_TIE98)
+						xactor_Set_Actor_State(button[input->id + 1], 0, 0);
+					else
+						xactor_Hide_Actor(arrow_actor);
+				}
+				if (mouseState == (uint8_t)1 || prevMouseState == (uint8_t)1) {
+					xinpattr_Set_Input_Flag1(input);
+					if (TIE_FRONTEND_TIE98) {
+						xactor_Set_Actor_State(button[input->id + 1], 1, 0);
+					} else {
+						xactor_Show_Actor(arrow_actor);
+						xactor_Set_Actor_State(arrow_actor, 2 * (input->id - 1), 0);
+					}
+					soundext_Play_SFX(sfxButton, 95);
+				}
+				break;
 		}
 	}
 	return 1;
-#endif
 }
 
 /* ------------------------------------------------------------------ */

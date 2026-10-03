@@ -338,7 +338,7 @@ uint16_t currenttarget;
 uint16_t currenttargetcomp;
 // GLOBAL: TIE95 0xEB732
 // GLOBAL: TIE98 0x5A2744
-uint8_t drawmarkingsflag;
+int16_t drawmarkingsflag;
 
 /* --- Sound/input flags --- */
 

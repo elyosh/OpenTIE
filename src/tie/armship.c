@@ -250,34 +250,41 @@ static void armship_end_ArmShip_View(int32_t refresh) {
 // FUNCTION: TIE98 0x402a70
 static int16_t armship_film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
 	Actor* actor;
+	int16_t result = 0;
+
 	/* Only process actor rewind events (type 3) */
-	if ((int16_t)film_obj->id != 3)
-		return 0;
+	if (film_obj->id == 3) {
+		xfilm_Rewind_Actor_Film(film, film_obj, (char*)film_obj + sizeof(FilmObject));
+		actor = (Actor*)film_obj->object;
 
-	xfilm_Rewind_Actor_Film(film, film_obj, (char*)film_obj + sizeof(FilmObject));
-	actor = (Actor*)film_obj->object;
-
-	switch (actor->var1) {
-		case 1: /* Beam selector — skip if no beam equipped */
-			if (!player_Get_Beam_Used())
-				return 1;
-			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
-			return 0;
-		case 2: /* Torpedo selector — skip if no torpedo equipped */
-			if (!player_Get_Torp_Used())
-				return 1;
-			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
-			return 0;
-		case 3: /* Always active — install callback */
-		case 6:
-			xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
-			return 0;
-		case 4: /* Beam-only visibility gate — skip if beam equipped */
-			return player_Get_Beam_Used() ? 1 : 0;
-		case 5: /* Torpedo-only visibility gate — skip if torpedo equipped */
-			return player_Get_Torp_Used() ? 1 : 0;
+		switch (actor->var1) {
+			case 1: /* Beam selector — skip if no beam equipped */
+				if (!player_Get_Beam_Used())
+					result = 1;
+				else
+					xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
+				break;
+			case 2: /* Torpedo selector — skip if no torpedo equipped */
+				if (!player_Get_Torp_Used())
+					result = 1;
+				else
+					xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
+				break;
+			case 3: /* Always active — install callback */
+			case 6:
+				xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
+				break;
+			case 4: /* Beam-only visibility gate — skip if beam equipped */
+				if (player_Get_Beam_Used())
+					result = 1;
+				break;
+			case 5: /* Torpedo-only visibility gate — skip if torpedo equipped */
+				if (player_Get_Torp_Used())
+					result = 1;
+				break;
+		}
 	}
-	return 0;
+	return result;
 }
 
 /* ======================================================================
@@ -288,7 +295,7 @@ static int16_t armship_film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
 // FUNCTION: TIE98 0x402b30
 static int16_t armship_iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
 									   uint8_t right, int16_t x, int16_t y) {
-	uint8_t button = 0;
+	uint8_t button;
 	(void)clip_r;
 
 	if (key)
@@ -299,19 +306,23 @@ static int16_t armship_iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int1
 	if (right)
 		button = right;
 
-	if (button == 1) {
-		xinpattr_Set_Input_Flag1(input);
-		soundext_Play_SFX(sfxButton, 80);
-	} else if (button == 2) {
-		if (xrect_Point_In_Rect(r, r->left + x, r->top + y))
+	switch (button) {
+		case 1:
 			xinpattr_Set_Input_Flag1(input);
-		else
-			xinpattr_Clear_Input_Flag1(input);
-	} else if (button == 3) {
-		if (xinpattr_Is_Input_Flag1(input)) {
-			xinpattr_Clear_Input_Flag1(input);
-			xinpattr_Selected_Input(input);
-		}
+			soundext_Play_SFX(sfxButton, 80);
+			break;
+		case 2:
+			if (xrect_Point_In_Rect(r, x + r->left, y + r->top))
+				xinpattr_Set_Input_Flag1(input);
+			else
+				xinpattr_Clear_Input_Flag1(input);
+			break;
+		case 3:
+			if (xinpattr_Is_Input_Flag1(input)) {
+				xinpattr_Clear_Input_Flag1(input);
+				xinpattr_Selected_Input(input);
+			}
+			break;
 	}
 	return 1;
 }

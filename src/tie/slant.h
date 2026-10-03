@@ -13,7 +13,7 @@ extern "C" {
  * output pixel with fractional accumulator skipf. Non-zero source pixels
  * are written as 'color'; transparent (0) pixels are skipped. */
 void slant_Scale_Line(void* bitmap_data, int16_t src_x, int16_t src_y, int16_t skip, int16_t skipf,
-					  int16_t dst_x, int16_t dst_y, int16_t width, uint8_t color);
+					  int16_t dst_x, int16_t dst_y, int16_t width, int16_t color);
 
 #ifdef __cplusplus
 }

@@ -125,7 +125,7 @@ void paiman_setflighttotarget(uint16_t heading_bias, int16_t drive_pitch);
 /* Drive or snap objects[ai.active_obj_idx].heading toward ai_target_heading.
  * Small residual (|delta| <= 0x300): snap immediately (heading_state=3).
  * Large residual: heading_state=2 + heading_step=arg. */
-void paiman_setturn(int16_t heading_step);
+void paiman_setturn(int32_t heading_step);
 
 /* Set throttle_speed directly. */
 void paiman_setpower(uint16_t obj_idx, uint16_t throttle);
@@ -155,8 +155,8 @@ void paiman_attacktarget(int16_t heading_bias);
 
 /* Turn-inside / turn-away sub-helpers: reload ai_plan_state countdown
  * with a per-skill-tier delay and aim 180° from the attacker. */
-uint16_t paiman_setnewturninside(uint16_t own_obj_idx);
-uint16_t paiman_setnewturnaway(uint16_t own_obj_idx);
+void paiman_setnewturninside(uint16_t own_obj_idx);
+void paiman_setnewturnaway(uint16_t own_obj_idx);
 
 /* Random ±Z jink for speed-away — sets push_accum_z, offsets target
  * heading, and kicks a turn. */
@@ -201,7 +201,7 @@ extern const uint16_t stagevel[11];
 
 /* Per-skill-tier hold time between turn-inside / turn-away re-orients
  * (9/6/3 units, scaled ×236 PIT ticks by the callers). */
-extern const uint16_t _delayturninside[3];
+extern const uint16_t delayturninside[3];
 
 #ifdef __cplusplus
 }

@@ -533,79 +533,76 @@ void msg_timeout(void) {
 void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 	/* Locate the FG's lead object (leader_obj_idx == 255) or fall back to
 	 * CREATE_getworldposition(0x8000, fg_idx) anchor. */
-	int32_t dist;
-	int32_t clicks;
+	uint16_t clicks;
 	uint16_t count;
-	uint8_t side;
-	uint16_t abbrev_flag;
-	MsgTemplate tpl;
+	uint16_t tpl;
 
-	if (fg_array[fg_idx].start_fg_used) {
+	if (!fg_array[fg_idx].start_fg_used) {
+		create_getworldposition(0x8000, fg_idx);
+	} else {
 		uint16_t i;
 
 		for (i = 0; i < NUM_CRAFTS; i++) {
-			if (objects[i].ship_idx && objects[i].fg_idx == fg_idx && objects[i].craft_ptr &&
-				objects[i].craft_ptr->leader_obj_idx == 255) {
-				create_getworldposition(i, fg_idx);
-				break;
+			if (objects[i].ship_idx) {
+				CraftData* craft = objects[i].craft_ptr;
+
+				if (objects[i].fg_idx == fg_idx && craft->leader_obj_idx == 255) {
+					create_getworldposition(i, fg_idx);
+					break;
+				}
 			}
 		}
-	} else {
-		create_getworldposition(0x8000, fg_idx);
 	}
 
 	/* Convert world delta to polar, distance in game "clicks". */
 	trig2_ctop(worldlocx - pstate.player->world_x, worldlocy - pstate.player->world_y,
 			   worldlocz - pstate.player->world_z);
-	dist = trig2_polardistance * 161;
-	clicks = ((dist >> 16) + 50) / 100;
-	if ((int16_t)clicks == 0)
+	trig2_polardistance *= 161;
+	clicks = ((uint16_t)(trig2_polardistance >> 16) + 50) / 100;
+	if (clicks == 0)
 		clicks = 1;
 
-	count = fg_array[fg_idx].count;
-	side = fg_array[fg_idx].side; /* Watcom read byte+3 of DWORD at version */
-	abbrev_flag = 0x8000;         /* ptr to messageptrs[0] */
-
+	count = (int8_t)fg_array[fg_idx].count;
 	argtable[0] = count;
 
-	if (side == 1) {
-		/* Friendly/blue report. */
-		if (count == 1) {
-			messageptrs[1] = fg_array[fg_idx].name;
-			argtable[2] = (uint16_t)clicks;
-#ifdef TIE_MODERN
-			messageptrs[0] = (char*)spec_name_ptrs[species_idx];
-#else
-			messageptrs[0] = (char*)spec_data[species_idx].name_ptr;
-#endif
-			argtable[0] = abbrev_flag;      /* overwrite the count */
-			argtable[1] = (uint16_t)0x8001; /* ptr to messageptrs[1] */
-			msg_messageprintf(MSG_CRAFT_ENTERING_AT);
-			return;
-		}
-		messageptrs[2] = fg_array[fg_idx].name;
-		argtable[3] = (uint16_t)clicks;
-		argtable[2] = (uint16_t)0x8002; /* ptr to messageptrs[2] */
-#ifdef TIE_MODERN
-		messageptrs[1] = (char*)spec_name_ptrs[species_idx];
-#else
-		messageptrs[1] = (char*)spec_data[species_idx].name_ptr;
-#endif
-		argtable[1] = (uint16_t)0x8001;
-		tpl = MSG_CRAFT_GROUP_ENTERING_AT;
-	} else {
+	if ((int8_t)fg_array[fg_idx].side != 1) {
 		/* Hostile sighting -- color line by side via messageside. */
-		messageside = side;
+		messageside = (int8_t)fg_array[fg_idx].side;
 #ifdef TIE_MODERN
 		messageptrs[1] = (char*)spec_name_ptrs[species_idx];
 #else
 		messageptrs[1] = (char*)spec_data[species_idx].name_ptr;
 #endif
 		argtable[1] = (uint16_t)0x8001;
-		argtable[2] = (uint16_t)clicks;
-		tpl = (count == 1) ? MSG_NEW_CRAFT_ALERT : MSG_NEW_CRAFT_ALERT_PLURAL;
+		argtable[2] = clicks;
+		if (count == 1)
+			msg_messageprintf(MSG_NEW_CRAFT_ALERT);
+		else
+			msg_messageprintf(MSG_NEW_CRAFT_ALERT_PLURAL);
+	} else if (count == 1) {
+		/* Friendly/blue report. */
+#ifdef TIE_MODERN
+		messageptrs[0] = (char*)spec_name_ptrs[species_idx];
+#else
+		messageptrs[0] = (char*)spec_data[species_idx].name_ptr;
+#endif
+		argtable[0] = (uint16_t)0x8000; /* overwrite the count */
+		messageptrs[1] = fg_array[fg_idx].name;
+		argtable[2] = clicks;
+		argtable[1] = (uint16_t)0x8001;
+		msg_messageprintf(MSG_CRAFT_ENTERING_AT);
+	} else {
+		messageptrs[2] = fg_array[fg_idx].name;
+		argtable[3] = clicks;
+		argtable[2] = (uint16_t)0x8002;
+#ifdef TIE_MODERN
+		messageptrs[1] = (char*)spec_name_ptrs[species_idx];
+#else
+		messageptrs[1] = (char*)spec_data[species_idx].name_ptr;
+#endif
+		argtable[1] = (uint16_t)0x8001;
+		msg_messageprintf(MSG_CRAFT_GROUP_ENTERING_AT);
 	}
-	msg_messageprintf(tpl);
 }
 
 /* --- msg_addmessageptr -- */

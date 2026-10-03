@@ -28,8 +28,10 @@ uint16_t halfpixelsdeep;
 // GLOBAL: TIE95 0xD4C08
 uint32_t displaycorner;
 // GLOBAL: TIE95 0xD4C00
+// GLOBAL: TIE98 0x5FD284
 uint32_t displaycorner_lines;
 // GLOBAL: TIE95 0xD4C04
+// GLOBAL: TIE98 0x5FD288
 uint32_t displaycorner_columns;
 // GLOBAL: TIE95 0xD4C0C
 void* buffer_ptr;

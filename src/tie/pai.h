@@ -50,7 +50,7 @@ uint16_t pai_searchformother(uint16_t fg_idx);
 
 /* Gate: obj_ref is worth attacking AND within engagement range.
  * pursue_hot != 0 extends the radius by 4/3. */
-int16_t pai_checktargetforattack(uint16_t attacker_ref, uint16_t obj_ref, int16_t pursue_hot);
+int16_t pai_checktargetforattack(uint16_t attacker_ref, uint32_t obj_ref, int16_t pursue_hot);
 
 /* Filter: obj_ref is alive, not in a transition mode, and not identical
  * to the scoring craft with impossible shields. */

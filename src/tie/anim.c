@@ -273,7 +273,7 @@ int16_t anim_drawverysimpleobject(uint16_t obj_idx_arg) {
 		int32_t saved_eyex;
 		int32_t saved_eyey;
 		int32_t saved_eyez;
-		uint8_t saved_marks;
+		int16_t saved_marks;
 		ShipMeshLOD* lod;
 
 		if (ship_type == 89)

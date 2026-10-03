@@ -1588,24 +1588,18 @@ void maproom_setcamerafocus(uint16_t obj_or_kind, int32_t distance) {
 // FUNCTION: TIE95 0x31B94
 int32_t maproom_firstingroup(uint16_t idx) {
 	/* Sentinel + boundary cases all return "is first". */
-	uint8_t my_fg;
+	uint16_t my_fg;
 	uint16_t i;
 
-	if (idx == 0xFFFF)
-		return 1;
-	if (idx == pstate.object_idx)
-		return 1;
-	if (idx >= NUM_CRAFTS)
-		return 1; /* retail uses 0x20 (32), demo had 28 */
-	if (idx == 0)
-		return 1;
-
-	/* Scan earlier slots; if any earlier object shares this fg_idx, the
-	 * current slot isn't the first member. */
-	my_fg = objects[idx].fg_idx;
-	for (i = 0; i < idx; i++) {
-		if (objects[i].fg_idx == my_fg)
-			return 0;
+	/* retail uses 0x20 (32), demo had 28 */
+	if (idx != (uint16_t)-1 && idx != pstate.object_idx && idx < NUM_CRAFTS) {
+		/* Scan earlier slots; if any earlier object shares this fg_idx,
+		 * the current slot isn't the first member. */
+		my_fg = objects[idx].fg_idx;
+		for (i = 0; i < idx; i++) {
+			if (objects[i].fg_idx == my_fg)
+				return 0;
+		}
 	}
 	return 1;
 }

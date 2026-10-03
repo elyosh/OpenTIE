@@ -965,7 +965,7 @@ void gate_updatecourseprogress(void) {
  * ---------------------------------------------------------------------- */
 
 // FUNCTION: TIE95 0x2A7CC
-void gate_trainingupdatecrt(int16_t x_origin, int16_t y_origin) {
+void gate_trainingupdatecrt(uint16_t x_origin, uint16_t y_origin) {
 	int16_t side_offset;
 	int16_t gates_col_x;
 	int16_t score_col_x;

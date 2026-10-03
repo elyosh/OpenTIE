@@ -92,8 +92,8 @@ void trace2_entervertedge(int16_t topY, int16_t lineCnt, int16_t xCoord, int16_t
  * direction given by sign of dy in screen space and xdiffsign). */
 void trace2_ydownleft(int32_t ytop, int32_t ytotal, int32_t xval, int32_t slope);
 void trace2_ydownright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
-void trace2_yupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
-void trace2_yupright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
+void trace2_yupleft(int32_t ytop, int32_t ytotal, int32_t xval, int32_t slope);
+void trace2_yupright(int32_t ytop, int32_t ytotal, int32_t xval, int32_t slope);
 void trace2_xdownleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
 void trace2_xdownright(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);
 void trace2_xupleft(uint32_t ytop, uint32_t ytotal, uint32_t xval, uint32_t slope);

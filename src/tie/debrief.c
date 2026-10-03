@@ -206,9 +206,10 @@ static void debrief_end_View(int32_t frame_num) {
 // FUNCTION: TIE98 0x415940
 static int16_t debrief_film_Callback(Film* film, FilmObject* film_object) {
 	Actor* actor;
+	int16_t hide = 0;
 
 	if (film_object->id != 3) /* type_code: 3 = actor */
-		return 0;
+		return hide;
 
 	xfilm_Rewind_Actor_Film(film, film_object, (void*)((char*)film_object + sizeof(FilmObject)));
 	actor = (Actor*)film_object->object;
@@ -216,84 +217,79 @@ static int16_t debrief_film_Callback(Film* film, FilmObject* film_object) {
 	switch (actor->var1) {
 		case 1: /* Background */
 			xactor_Non_Refreshable_Actor(actor);
-			return 0;
+			break;
 
 		case 2: /* Door actor — stored by var2 index */
 			xactor_Set_Actor_User_Function(actor, debrief_user_Door);
 			door_actors[actor->var2] = actor;
-			return 0;
+			break;
 
 		case 3: /* Officer/priest character */
 			switch (actor->var2) {
 				case 0:
 				case 1:
 				case 2:
-					if (shipext_Get_Mission_Officer() == 2)
-						return 1; /* hide if priest-only */
-					xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Officer);
-					actor->id = actor->var2;
-					return 0;
+					if (shipext_Get_Mission_Officer() != 2) {
+						xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Officer);
+						actor->id = actor->var2;
+					} else {
+						hide = 1; /* hide if priest-only */
+					}
+					break;
 
 				case 3:
 				case 7:
-					if (shipext_Get_Mission_Officer() != 2)
-						return 0; /* keep if officer present */
-					return 1;
+					if (shipext_Get_Mission_Officer() == 2)
+						hide = 1;
+					break;
 
 				case 4:
+					if (shipext_Get_Mission_Officer() != 1) {
+						xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Officer);
+						actor->id = 3;
+					} else {
+						hide = 1; /* hide if officer-only */
+					}
+					break;
+
+				case 8:
 					if (shipext_Get_Mission_Officer() == 1)
-						return 1; /* hide if officer-only */
-					xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Officer);
-					actor->id = 3;
-					return 0;
+						hide = 1;
+					break;
 
 				case 5:
 					/* TIE98 reverses the officer-specific door variants 5 and 6. */
-					return (shipext_Get_Mission_Officer() == 2) ? TIE_FRONTEND_EDITION(0, 1)
-																: TIE_FRONTEND_EDITION(1, 0);
+					if (TIE_FRONTEND_EDITION(shipext_Get_Mission_Officer() != 2,
+											 shipext_Get_Mission_Officer() == 2))
+						hide = 1;
+					break;
 
 				case 6:
-					/* TIE95 hides this variant when the mission is officer-only. */
-					if (TIE_FRONTEND_TIE98)
-						return (shipext_Get_Mission_Officer() == 1) ? 1 : 0;
-					return (shipext_Get_Mission_Officer() != 1) ? 1 : 0;
-
-				case 8:
-					/* Binary @ 0x7021F: hide when mission_officer == 1. */
-					return (shipext_Get_Mission_Officer() != 1) ? 0 : 1;
-
-				default:
-					return 0;
+					if (TIE_FRONTEND_EDITION(shipext_Get_Mission_Officer() != 1,
+											 shipext_Get_Mission_Officer() == 1))
+						hide = 1;
+					break;
 			}
+			break;
 
 		case 4: /* Title label */
-#ifdef TIE_MODERN
-			if (!TieProfile_UsesTie98Frontend()) {
+			/* TIE95 shows only the title variant matching the mission's officer. */
+			if (!TIE_FRONTEND_TIE98) {
 				if (shipext_Get_Mission_Officer() == 2) {
 					if (!actor->var2)
-						return 1;
-				} else {
-					if (actor->var2)
-						return 1;
+						hide = 1;
+				} else if (actor->var2) {
+					hide = 1;
 				}
 			}
-#elif !defined(TIE98)
-			if (shipext_Get_Mission_Officer() == 2) {
-				if (!actor->var2)
-					return 1;
-			} else {
-				if (actor->var2)
-					return 1;
+			if (!hide) {
+				xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Title);
+				xactor_Set_Actor_Draw_Function(actor, debrief_draw_Title);
+				title_actor = actor;
 			}
-#endif
-			xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Title);
-			xactor_Set_Actor_Draw_Function(actor, debrief_draw_Title);
-			title_actor = actor;
-			return 0;
-
-		default:
-			return 0;
+			break;
 	}
+	return hide;
 }
 
 /* ================================================================

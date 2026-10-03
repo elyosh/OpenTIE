@@ -1865,14 +1865,14 @@ LandruFile* shipext_Open_Pilot_File(char* name, char* mode) {
 
 // FUNCTION: TIE95 0x828BC
 void shipext_Find_Mission_Ship(void) {
+	int16_t num_fgs;
 	char path[64];
 	LandruFile* fp;
-	int16_t num_fgs, fg_idx;
-	int16_t mothership_fg = -1;
+	int16_t fg_idx;
+	int16_t mothership_fg;
 	EMissionStruct mission_data;
 	EFGStruct fg;
 	int16_t header_word;
-	int16_t dummy;
 
 #ifdef TIE_MODERN
 	uint8_t mis_buf[EMISSIONSTRUCT_DISK_SIZE];
@@ -1888,13 +1888,19 @@ void shipext_Find_Mission_Ship(void) {
 	 * If negative → TIE format (next word = num_flight_groups).
 	 * If positive → old X-Wing format (this word IS num_flight_groups). */
 	xfile_Read_Word_From_File(fp, &header_word);
-	if (header_word < 0) {
-		xfile_Read_Word_From_File(fp, &num_fgs);
-	} else {
+	if (header_word >= 0) {
 		num_fgs = header_word;
+		header_word = 0;
+	} else {
+		xfile_Read_Word_From_File(fp, &num_fgs);
 	}
-	xfile_Read_Word_From_File(fp, &dummy); /* num_messages */
-	xfile_Read_Word_From_File(fp, &dummy); /* unknown */
+	{
+		int16_t num_messages;
+		int16_t unknown;
+
+		xfile_Read_Word_From_File(fp, &num_messages);
+		xfile_Read_Word_From_File(fp, &unknown);
+	}
 
 	/* Read 450-byte mission global data */
 
@@ -1905,9 +1911,10 @@ void shipext_Find_Mission_Ship(void) {
 	xfile_Read_Data_From_File(fp, &mission_data, EMISSIONSTRUCT_DISK_SIZE);
 #endif
 
-	mission_ship = 0;
-	mission_launch = 1;
-	mission_officer = mission_data.win_type - 1;
+	shipext_Set_Mission_Officer(mission_data.win_type - 1);
+	shipext_Set_Mission_Ship(0);
+	shipext_Set_Mission_Launch(1);
+	mothership_fg = -1;
 
 	/* Scan flight groups to find the player's FG. Each on-disk record is
 	 * EFGSTRUCT_DISK_SIZE bytes; sizeof(EFGStruct) is host-dependent and
@@ -1928,30 +1935,31 @@ void shipext_Find_Mission_Ship(void) {
 		 * Only Imperial flyable ships appear in missions as player craft. */
 		switch (fg.species) {
 			case CRAFT_TIE_FIGHTER:
-				mission_ship = 0;
+				shipext_Set_Mission_Ship(0);
 				break;
 			case CRAFT_TIE_INTERCEPTOR:
-				mission_ship = 1;
+				shipext_Set_Mission_Ship(1);
 				break;
 			case CRAFT_TIE_BOMBER:
-				mission_ship = 2;
+				shipext_Set_Mission_Ship(2);
 				break;
 			case CRAFT_TIE_ADVANCED:
-				mission_ship = 3;
-				break;
-			case CRAFT_ASSAULT_GUNBOAT:
-				mission_ship = 4;
+				shipext_Set_Mission_Ship(3);
 				break;
 			case CRAFT_TIE_DEFENDER:
-				mission_ship = 5;
+				shipext_Set_Mission_Ship(5);
+				break;
+			case CRAFT_ASSAULT_GUNBOAT:
+				shipext_Set_Mission_Ship(4);
 				break;
 			case CRAFT_MISSILE_BOAT:
-				mission_ship = 6;
+				shipext_Set_Mission_Ship(6);
 				break;
-			default:
-				/* Fallback for unknown/unused craft types (10, 11, 13 in binary) */
-				if (fg.species >= 10 && fg.species <= 13)
-					mission_ship = fg.species - 3;
+			case 10:
+			case 11:
+			case 13:
+				/* Unused craft types map past the flyable ship slots */
+				shipext_Set_Mission_Ship(fg.species - 3);
 				break;
 		}
 
@@ -1966,14 +1974,12 @@ void shipext_Find_Mission_Ship(void) {
 
 	/* If a mothership FG was found, read it to check if it's a capital ship.
 	 * Capital ships (types 0x3C..0x45) mean the player launches from a hangar. */
-	if (mothership_fg != -1) {
-		int32_t seek_count;
-		if (mothership_fg > fg_idx)
-			seek_count = mothership_fg - fg_idx - 1;
-		else
-			seek_count = mothership_fg - fg_idx + 1;
-
-		xfile_Seek_File(fp, (int32_t)EFGSTRUCT_DISK_SIZE * seek_count, 1); /* TIE_SEEK_CUR */
+	if (mothership_fg != 0xFFFF) {
+		/* Seek relative to the current position (TIE_SEEK_CUR) */
+		if (mothership_fg <= fg_idx)
+			xfile_Seek_File(fp, (int32_t)EFGSTRUCT_DISK_SIZE * (mothership_fg - fg_idx + 1), 1);
+		else if (mothership_fg > fg_idx)
+			xfile_Seek_File(fp, (int32_t)EFGSTRUCT_DISK_SIZE * (mothership_fg - fg_idx - 1), 1);
 
 #ifdef TIE_MODERN
 		if (xfile_Read_Data_From_File(fp, fg_buf, EFGSTRUCT_DISK_SIZE)) {
@@ -1982,7 +1988,7 @@ void shipext_Find_Mission_Ship(void) {
 		if (xfile_Read_Data_From_File(fp, &fg, EFGSTRUCT_DISK_SIZE)) {
 #endif
 			if (fg.species >= CRAFT_CAPITAL_FIRST && fg.species <= CRAFT_CAPITAL_LAST)
-				mission_launch = 0; /* player launches from capital ship */
+				shipext_Set_Mission_Launch(0); /* player launches from capital ship */
 		}
 	}
 

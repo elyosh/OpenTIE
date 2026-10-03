@@ -4,7 +4,7 @@
 
 // FUNCTION: TIE95 0x877E0
 void slant_Scale_Line(void* bitmap_data, int16_t src_x, int16_t src_y, int16_t skip, int16_t skipf,
-					  int16_t dst_x, int16_t dst_y, int16_t width, uint8_t color) {
+					  int16_t dst_x, int16_t dst_y, int16_t width, int16_t color) {
 	BitmapStruct* canvas_bm = xcanvas_Get_Current_Canvas_Bitmap();
 	uint8_t* canvas_pixels = (uint8_t*)xbm_Lock_Bitmap(canvas_bm);
 

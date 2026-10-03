@@ -695,29 +695,33 @@ void panel_addbliptoradar(uint16_t target_obj) {
 
 	if (TIE_FLIGHT_TIE98) {
 		int32_t dx_world, dy_world, dz_world;
-		FlightObject* pl = pstate.player;
-		if (target_obj < 0x3800u) {
-			dx_world = objects[target_obj].world_x - pl->world_x;
-			dy_world = objects[target_obj].world_y - pl->world_y;
-			dz_world = objects[target_obj].world_z - pl->world_z;
+
+		if (target_obj >= 0x3800) {
+			dx_world = (int32_t)staticobjects[target_obj - 0x3800].world_x << 8;
+			dy_world = (int32_t)staticobjects[target_obj - 0x3800].world_y << 8;
+			dz_world = (int32_t)staticobjects[target_obj - 0x3800].world_z << 8;
 		} else {
-			uint16_t si = target_obj - 14336;
-			dx_world = (int32_t)staticobjects[si].world_x * 256 - pl->world_x;
-			dy_world = (int32_t)staticobjects[si].world_y * 256 - pl->world_y;
-			dz_world = (int32_t)staticobjects[si].world_z * 256 - pl->world_z;
+			dx_world = objects[target_obj].world_x;
+			dy_world = objects[target_obj].world_y;
+			dz_world = objects[target_obj].world_z;
+		}
+		dx_world -= pstate.player->world_x;
+		dy_world -= pstate.player->world_y;
+		dz_world -= pstate.player->world_z;
+
+		if (pstate.player->orient_dirty) {
+			fview_calcrotatemove(pstate.player->pitch, pstate.player->heading, pstate.player);
+			fview_calcrotateorient(pstate.player->roll, 0, pstate.player);
 		}
 
-		if (pl->orient_dirty) {
-			fview_calcrotatemove(pl->pitch, pl->heading, pl);
-			fview_calcrotateorient(pl->roll, 0, pl);
-		}
-
-		eye_z = math2_mul_q15(pl->fwd_x, dx_world) + math2_mul_q15(pl->fwd_y, dy_world) +
-				math2_mul_q15(pl->fwd_z, dz_world);
-		eye_x = math2_mul_q15(pl->side_x, dx_world) + math2_mul_q15(pl->side_y, dy_world) +
-				math2_mul_q15(pl->side_z, dz_world);
-		eye_y_neg = -(math2_mul_q15(pl->up_x, dx_world) + math2_mul_q15(pl->up_y, dy_world) +
-					  math2_mul_q15(pl->up_z, dz_world));
+		eye_z = math2_mul_q15(dx_world, pstate.player->fwd_x) +
+				math2_mul_q15(dy_world, pstate.player->fwd_y) + math2_mul_q15(dz_world, pstate.player->fwd_z);
+		eye_x = math2_mul_q15(dx_world, pstate.player->side_x) +
+				math2_mul_q15(dy_world, pstate.player->side_y) +
+				math2_mul_q15(dz_world, pstate.player->side_z);
+		eye_y_neg =
+			-(math2_mul_q15(dx_world, pstate.player->up_x) + math2_mul_q15(dy_world, pstate.player->up_y) +
+			  math2_mul_q15(dz_world, pstate.player->up_z));
 	} else if (target_obj < NUM_CRAFTS) {
 		/* Eye-space (camera-space) position cached every frame by
 		 * tie_getobjecteyexyz via tie_updatescreen. */
@@ -725,7 +729,7 @@ void panel_addbliptoradar(uint16_t target_obj) {
 		eye_y_neg = objects[target_obj].craft_ptr->eye_y_cache;
 		eye_z = objects[target_obj].craft_ptr->eye_z_cache;
 	} else {
-		int16_t dx, dy, dz;
+		int16_t dy, dx, dz;
 
 		if (target_obj >= 0x3800) {
 			dx = staticobjects[target_obj - 0x3800].world_x;
@@ -746,13 +750,12 @@ void panel_addbliptoradar(uint16_t target_obj) {
 		}
 
 		/* Rotate by player orientation: dot product with (fwd/side/up). */
-		eye_z = (((int32_t)pstate.player->fwd_x * dx) >> 15) + (((int32_t)pstate.player->fwd_y * dy) >> 15) +
-				(((int32_t)pstate.player->fwd_z * dz) >> 15);
-		eye_x = (((int32_t)pstate.player->side_x * dx) >> 15) +
-				(((int32_t)pstate.player->side_y * dy) >> 15) + (((int32_t)pstate.player->side_z * dz) >> 15);
-		eye_y_neg =
-			-((((int32_t)pstate.player->up_x * dx) >> 15) + (((int32_t)pstate.player->up_y * dy) >> 15) +
-			  (((int32_t)pstate.player->up_z * dz) >> 15));
+		eye_z = math2_mul16_q15(dx, pstate.player->fwd_x) + math2_mul16_q15(dy, pstate.player->fwd_y) +
+				math2_mul16_q15(dz, pstate.player->fwd_z);
+		eye_x = math2_mul16_q15(dx, pstate.player->side_x) + math2_mul16_q15(dy, pstate.player->side_y) +
+				math2_mul16_q15(dz, pstate.player->side_z);
+		eye_y_neg = -(math2_mul16_q15(dx, pstate.player->up_x) + math2_mul16_q15(dy, pstate.player->up_y) +
+					  math2_mul16_q15(dz, pstate.player->up_z));
 	}
 
 	if (eye_z < 0) {
@@ -857,18 +860,31 @@ void panel_addbliptoradar(uint16_t target_obj) {
  */
 // FUNCTION: TIE95 0x40530
 void panel_updatecmd(void) {
-	int16_t force_redraw;
-	int16_t text_width, name_width;
-	CraftData* tgt;
+	uint16_t focus;
 	uint16_t shield_pct;
+	int name_width;
+	uint16_t shield_max;
+	const uint8_t* cargo_str;
+	uint16_t model_type;
+	int text_width;
+	CraftData* tgt;
+	uint16_t alive;
 	uint16_t hull_pct;
 	uint16_t sys_pct;
 	int16_t cargo_kind;
-	const uint8_t* cargo_str;
+	uint16_t shield_avg;
+	uint16_t capable;
+	uint16_t x;
+	int force_redraw;
+	uint16_t sum;
+	uint16_t cap_mask;
+	uint16_t y;
+	uint16_t stat_mask;
+	uint16_t b;
 
 	dropflag = 0;
 	if (mission.train_craft_type) {
-		gate_trainingupdatecrt((int16_t)instruments[2].x, (int16_t)instruments[2].y);
+		gate_trainingupdatecrt(instruments[2].x, instruments[2].y);
 		return;
 	}
 
@@ -877,16 +893,19 @@ void panel_updatecmd(void) {
 
 	force_redraw = 0;
 
-	if (flightResolution == TIE_FLIGHT_RES_VGA) {
-		text_width = 40;
-		name_width = 80;
-	} else {
-		text_width = 70;
-		name_width = 160;
+	switch (flightResolution) {
+		case TIE_FLIGHT_RES_VGA:
+			text_width = 40;
+			name_width = 80;
+			break;
+		default:
+			text_width = 70;
+			name_width = 160;
+			break;
 	}
 
-	if (lasttargetnum != (int16_t)pstate.target_obj_idx) {
-		int16_t prev_target = lasttargetnum;
+	if (lasttargetnum != pstate.target_obj_idx) {
+		uint16_t prev_target = lasttargetnum;
 		oldinstruments[45] = -1;
 		oldinstruments[58] = -1;
 		oldinstruments[59] = -1;
@@ -895,108 +914,111 @@ void panel_updatecmd(void) {
 		oldinstruments[62] = -1;
 		oldinstruments[63] = -1;
 		oldinstruments[64] = -1;
-		lasttargetnum = (int16_t)pstate.target_obj_idx;
+		lasttargetnum = pstate.target_obj_idx;
 		oldinstruments[65] = -1;
 		festring_setfontsize(2);
 		festring_setbackcolor(0x30);
 		festring_setautofill(1);
 		force_redraw = 1;
 
-		if (prev_target == (int16_t)0xFFFF) {
+		if (prev_target == 0xFFFF) {
 			/* Paint static labels. Engine picks color 0x45 (VGA) or
 			 * 0x46 (SVGA) — see PANEL_updatecmd at 0x40696. The two
 			 * remap to different physical palette entries so SVGA
 			 * fidelity needs the 0x46 branch. */
-			uint8_t label_color;
-			TieHudInstrument* hi;
-
-			festring_setbound(0, 0, (int16_t)screenXRes, (int16_t)screenYRes);
-			festring_setcursor((int16_t)instruments[88].x, (int16_t)instruments[88].y);
-			label_color = (flightResolution == TIE_FLIGHT_RES_VGA) ? 0x45 : 0x46;
-			festring_settextcolor(label_color);
+			festring_setbound(0, 0, (uint16_t)screenXRes, (uint16_t)screenYRes);
+			festring_setcursor(instruments[88].x, instruments[88].y);
+			if (flightResolution == (int16_t)TIE_FLIGHT_RES_VGA)
+				festring_settextcolor(0x45);
+			else
+				festring_settextcolor(0x46);
 			festring_outstring((const uint8_t*)shieldstring);
-			festring_setcursor((int16_t)(instruments[61].x + sys2_calclength((uint8_t*)"   ")),
-							   (int16_t)instruments[61].y);
+			festring_setcursor(instruments[61].x + sys2_calclength((uint8_t*)"   "), instruments[61].y);
 			outchar('%');
 
-			festring_setcursor((int16_t)instruments[89].x, (int16_t)instruments[89].y);
+			festring_setcursor(instruments[89].x, instruments[89].y);
 			festring_outstring((const uint8_t*)hullstring);
-			festring_setcursor((int16_t)(instruments[62].x + sys2_calclength((uint8_t*)"   ")),
-							   (int16_t)instruments[62].y);
+			festring_setcursor(instruments[62].x + sys2_calclength((uint8_t*)"   "), instruments[62].y);
 			outchar('%');
 
-			festring_setcursor((int16_t)instruments[87].x, (int16_t)instruments[87].y);
+			festring_setcursor(instruments[87].x, instruments[87].y);
 			festring_outstring((const uint8_t*)diststring);
-			festring_setcursor((int16_t)(instruments[59].x + sys2_calclength((uint8_t*)"  ")),
-							   (int16_t)instruments[59].y);
+			festring_setcursor(instruments[59].x + sys2_calclength((uint8_t*)"  "), instruments[59].y);
 			outchar('.');
 
-			festring_setcursor((int16_t)instruments[86].x, (int16_t)instruments[86].y);
+			festring_setcursor(instruments[86].x, instruments[86].y);
 			festring_outstring((const uint8_t*)sysstring);
-			festring_setcursor((int16_t)(instruments[58].x + sys2_calclength((uint8_t*)"   ")),
-							   (int16_t)instruments[58].y);
+			festring_setcursor(instruments[58].x + sys2_calclength((uint8_t*)"   "), instruments[58].y);
 			outchar('%');
 
-			hi = TieSnapshotBuilder_HudMut()->instruments;
-			hi[86].color = label_color;
-			hi[87].color = label_color;
-			hi[88].color = label_color;
-			hi[89].color = label_color;
-			/* Engine leaves textcolor at label_color for the target-name
-			 * paint at instrument[90]; 0xFE escapes in the name override
-			 * per-glyph, this is the fallback base. */
-			hi[90].color = label_color;
+#ifdef TIE_MODERN
+			{
+				uint8_t label_color = (flightResolution == (int16_t)TIE_FLIGHT_RES_VGA) ? 0x45 : 0x46;
+				TieHudInstrument* hi = TieSnapshotBuilder_HudMut()->instruments;
+				hi[86].color = label_color;
+				hi[87].color = label_color;
+				hi[88].color = label_color;
+				hi[89].color = label_color;
+				/* Engine leaves textcolor at label_color for the target-name
+				 * paint at instrument[90]; 0xFE escapes in the name override
+				 * per-glyph, this is the fallback base. */
+				hi[90].color = label_color;
+			}
+#endif
 		}
 
-		if (pstate.target_obj_idx == 0xFFFF) {
-			panel_updatelever(TIE_HUDI_DAMAGE_CRACK_FIRST, 0);
-		} else {
+		if (pstate.target_obj_idx != 0xFFFF) {
+			if (pstate.target_obj_idx < 0x3800)
+				model_type = objects[pstate.target_obj_idx].ship_idx;
+			else
+				model_type = staticobjects[pstate.target_obj_idx - 0x3800].species;
+
 			/* Target-name field. */
-			festring_setbound((int16_t)instruments[90].x, (int16_t)instruments[90].y,
-							  (int16_t)(instruments[90].x + name_width),
-							  (int16_t)(instruments[90].y + fontheight + 1));
+			x = instruments[90].x;
+			y = instruments[90].y;
+			festring_setbound(x, y, x + name_width, y + fontheight + 1);
 			clearwindow();
 			panel_buildobjectname(pstate.target_obj_idx, 3);
-			festring_setcursor((int16_t)instruments[90].x, (int16_t)instruments[90].y);
+			festring_setcursor(x, y);
 			festring_outstringcenter((const uint8_t*)tempstring);
 
-			/* Missile and warhead targets show their current target in the
+			/* Warhead targets show their current target in the
 			 * component-name field.
-			 *   - homing missile aimed at someone else → that target's
+			 *   - homing warhead aimed at someone else → that target's
 			 *     FG name via panel_buildobjectname(target, 2)
-			 *   - homing missile aimed at the player    → `ourstring`
+			 *   - homing warhead aimed at the player    → `ourstring`
 			 *     (the "us" string)
-			 *   - non-homing missile                    → componentnames[32]
+			 *   - non-homing warhead                    → componentnames[32]
 			 *     (the same fallback the cargo line uses) */
-			if (pstate.target_obj_idx >= NUM_CRAFTS && pstate.target_obj_idx < NUM_OBJECTS) {
-				const uint8_t mship_idx = objects[pstate.target_obj_idx].ship_idx;
-				if (mship_idx >= WEAPON_SPECIES_BASE &&
-					mship_idx < WEAPON_SPECIES_BASE + WEAPON_SPECIES_COUNT &&
-					projectile_is_warhead_type[mship_idx - WEAPON_SPECIES_BASE]) {
-					const WarheadRecord* wh = (const WarheadRecord*)objects[pstate.target_obj_idx].craft_ptr;
-					if (wh->homing_tier) {
-						if (wh->target_obj != pstate.object_idx)
-							panel_buildobjectname(wh->target_obj, 2);
-						else
-							festring_farstrcpy((const char*)ourstring);
-					} else {
-						festring_farstrcpy((const char*)((char**)componentnames)[32]);
-					}
-					festring_setbound((int16_t)instruments[65].x, (int16_t)instruments[65].y,
-									  (int16_t)(instruments[65].x + text_width),
-									  (int16_t)(instruments[65].y + fontheight + 1));
-					clearwindow();
-					festring_setcursor((int16_t)instruments[65].x, (int16_t)instruments[65].y);
-					festring_settextcolor(0x4E);
-					festring_outstringright((const uint8_t*)tempstring);
-					{
-						TieHudState* hud = TieSnapshotBuilder_HudMut();
-						TieHudSnapshot_CopyText(hud->target_subsystem_text, sizeof hud->target_subsystem_text,
-												(const uint8_t*)tempstring);
-						hud->instruments[65].color = 0x4E;
-					}
+			if (pstate.target_obj_idx >= NUM_CRAFTS && pstate.target_obj_idx < WARHEAD_SLOT_END &&
+				projectile_is_warhead_type[model_type - WEAPON_SPECIES_BASE]) {
+				const WarheadRecord* wh = (const WarheadRecord*)objects[pstate.target_obj_idx].craft_ptr;
+				if (wh->homing_tier) {
+					if (wh->target_obj == pstate.object_idx)
+						festring_farstrcpy((const char*)ourstring);
+					else
+						panel_buildobjectname(wh->target_obj, 2);
+				} else {
+					festring_farstrcpy((const char*)((char**)componentnames)[32]);
 				}
+				x = instruments[65].x;
+				y = instruments[65].y;
+				festring_setbound(x, y, x + text_width, y + fontheight + 1);
+				clearwindow();
+				festring_setcursor(x, y);
+				festring_settextcolor(0x4E);
+				festring_outstringright((const uint8_t*)tempstring);
+#ifdef TIE_MODERN
+				{
+					TieHudState* hud = TieSnapshotBuilder_HudMut();
+					TieHudSnapshot_CopyText(hud->target_subsystem_text, sizeof hud->target_subsystem_text,
+											(const uint8_t*)tempstring);
+					hud->instruments[65].color = 0x4E;
+				}
+#endif
 			}
+		} else {
+			panel_updatelever(TIE_HUDI_DAMAGE_CRACK_FIRST, 0);
 		}
 	}
 
@@ -1010,58 +1032,59 @@ void panel_updatecmd(void) {
 						  force_redraw);
 	}
 
-	tgt = (pstate.target_obj_idx < 0x3800u) ? objects[pstate.target_obj_idx].craft_ptr : NULL;
+	tgt = (pstate.target_obj_idx < 0x3800) ? objects[pstate.target_obj_idx].craft_ptr : NULL;
 
-	/* Shield % (0x3D). */
-	shield_pct = 0;
-	if (pstate.target_obj_idx < NUM_CRAFTS && tgt) {
-		uint16_t sum = (uint16_t)(tgt->rear_shield + tgt->forward_shield);
-		uint16_t sp = (uint16_t)(2 * spec_data[tgt->species_idx].shield_points);
+	/* Shield % (0x3D). Easy difficulty: side 1 gets 3x shield points,
+	 * sides 0/4 get 1.25x. */
+	if (pstate.target_obj_idx < NUM_CRAFTS) {
+		sum = tgt->forward_shield + tgt->rear_shield;
+		shield_max = 2 * spec_data[tgt->species_idx].shield_points;
+		shield_avg = sum;
+
+		shield_avg >>= 1;
 		if (!mission.difficulty) {
-			uint8_t side = objects[pstate.target_obj_idx].side;
-			if (side == 1) {
-				/* Enemy side 1 on easy: `(dword>>17) + (dword>>16)` at
-				 * spec.field_10 => 1.5*shield_points; *2 outside => 3*. */
-				int shield_pts = spec_data[tgt->species_idx].shield_points;
-				sp = (uint16_t)(3 * shield_pts);
-			} else if (side == 0 || side == 4) {
-				int16_t adj = math2_fraction((uint16_t)spec_data[tgt->species_idx].shield_points, 0xC000u);
-				sp = (uint16_t)(2 * adj);
+			if (objects[pstate.target_obj_idx].side == 1) {
+				int shield_points = spec_data[tgt->species_idx].shield_points;
+				shield_max = 2 * (shield_points + (shield_points >> 1));
+			} else if (objects[pstate.target_obj_idx].side == 0 || objects[pstate.target_obj_idx].side == 4) {
+				shield_max = math2_fraction(2 * spec_data[tgt->species_idx].shield_points, 0xA000u);
 			}
 		}
-		if (sp) {
-			shield_pct = (uint16_t)(2 * (math2_percentage((uint16_t)(sum >> 1), sp) / 0x28Fu));
+		if (shield_max) {
+			shield_pct = math2_percentage(shield_avg, shield_max);
+			shield_pct /= 0x28F;
+			shield_pct *= 2;
 			if (sum && !shield_pct)
 				shield_pct = 1;
+		} else {
+			shield_pct = 0;
 		}
+	} else {
+		shield_pct = 0;
 	}
 	panel_updatevalue(TIE_HUDI_TARGET_SHIELD_PCT, shield_pct, 1);
 
 	/* Hull % (0x3E). */
-
-	if (pstate.target_obj_idx >= NUM_CRAFTS) {
-		hull_pct = 100;
-	} else if (tgt && tgt->hull_damage <= tgt->hull_max) {
-		hull_pct = math2_percentage((uint16_t)(tgt->hull_max - tgt->hull_damage), tgt->hull_max) / 0x28Fu;
-		if (!hull_pct)
+	if (pstate.target_obj_idx < NUM_CRAFTS) {
+		if (tgt->hull_damage > tgt->hull_max) {
 			hull_pct = 1;
+		} else {
+			hull_pct = math2_percentage(tgt->hull_max - tgt->hull_damage, tgt->hull_max);
+			hull_pct /= 0x28F;
+			if (!hull_pct)
+				hull_pct = 1;
+		}
 	} else {
-		hull_pct = 1;
+		hull_pct = 100;
 	}
 	panel_updatevalue(TIE_HUDI_TARGET_HULL_PCT, hull_pct, 1);
 
 	/* Subsystem % (0x3A). */
-
-	if (pstate.target_obj_idx >= NUM_CRAFTS) {
-		sys_pct =
-			(pstate.target_obj_idx < 0x3800u || staticobjects[pstate.target_obj_idx - 14336].status_flags)
-				? 100
-				: 0;
-	} else if (tgt) {
-		uint16_t capable = 0, alive = 0;
-		uint16_t cap_mask = tgt->subsystem_active;
-		uint16_t stat_mask = tgt->status_flags;
-		int b;
+	if (pstate.target_obj_idx < NUM_CRAFTS) {
+		capable = 0;
+		alive = 0;
+		cap_mask = tgt->subsystem_active;
+		stat_mask = tgt->status_flags;
 
 		for (b = 0; b < 16; ++b) {
 			if (cap_mask & 1)
@@ -1071,9 +1094,14 @@ void panel_updatecmd(void) {
 			cap_mask >>= 1;
 			stat_mask >>= 1;
 		}
-		sys_pct = capable ? (uint16_t)(100 * alive / capable) : 0;
+		if (!capable)
+			sys_pct = 0;
+		else
+			sys_pct = 100 * alive / capable;
 		if (sys_pct > 25 && tgt->ion_drain_timer)
 			sys_pct = 25;
+	} else if (pstate.target_obj_idx < 0x3800 || staticobjects[pstate.target_obj_idx - 0x3800].status_flags) {
+		sys_pct = 100;
 	} else {
 		sys_pct = 0;
 	}
@@ -1087,72 +1115,79 @@ void panel_updatecmd(void) {
 	 * if-body overrides for craft targets only. */
 	cargo_kind = 2;
 	cargo_str = (const uint8_t*)((char**)componentnames)[32];
-	if (pstate.target_obj_idx < NUM_CRAFTS && !objects[pstate.target_obj_idx].category && tgt) {
+	if (pstate.target_obj_idx < NUM_CRAFTS && !objects[pstate.target_obj_idx].category) {
 		if (tgt->inspected) {
 			cargo_str = (const uint8_t*)tgt->cargo;
 			cargo_kind = 1;
-			if (!tgt->cargo[0]) {
+			if (!cargo_str[0]) {
 				cargo_kind = 2;
 				cargo_str = (const uint8_t*)nonestring;
 			}
 		} else {
-
 			cargo_str = (const uint8_t*)unknownstring;
 			cargo_kind = 0;
 		}
 	}
-	if (cargo_kind != oldinstruments[63]) {
+	if (cargo_kind != (int16_t)oldinstruments[63]) {
 		oldinstruments[63] = cargo_kind;
-		festring_setbound((int16_t)instruments[63].x, (int16_t)instruments[63].y,
-						  (int16_t)(instruments[63].x + text_width),
-						  (int16_t)(instruments[63].y + fontheight + 1));
+		x = instruments[63].x;
+		y = instruments[63].y;
+		festring_setbound(x, y, x + text_width, y + fontheight + 1);
 		clearwindow();
-		festring_setcursor((int16_t)instruments[63].x, (int16_t)instruments[63].y);
+		festring_setcursor(x, y);
 		festring_settextcolor(0x46);
 		festring_outstringright(cargo_str);
+#ifdef TIE_MODERN
 		{
 			TieHudState* hud = TieSnapshotBuilder_HudMut();
 			TieHudSnapshot_CopyText(hud->target_cargo, sizeof hud->target_cargo, cargo_str);
 			hud->instruments[63].color = 0x46;
 		}
+#endif
 	}
 
 	/* Subsystem focus (instrument[65]). */
-	if (pstate.target_obj_idx < NUM_CRAFTS || pstate.target_obj_idx >= 0x3800u) {
-		int16_t focus = (pstate.target_obj_idx >= NUM_CRAFTS) ? 40 : pstate.radar_target1;
-		festring_settextcolor(0x4E);
-		if (focus != oldinstruments[65]) {
-			const uint8_t* s;
+	if (pstate.target_obj_idx >= NUM_CRAFTS && pstate.target_obj_idx < 0x3800)
+		return;
 
-			oldinstruments[65] = focus;
-			festring_setbound((int16_t)instruments[65].x, (int16_t)instruments[65].y,
-							  (int16_t)(instruments[65].x + text_width),
-							  (int16_t)(instruments[65].y + fontheight + 1));
-			clearwindow();
-			festring_setcursor((int16_t)instruments[65].x, (int16_t)instruments[65].y);
+	if (pstate.target_obj_idx < NUM_CRAFTS)
+		focus = pstate.radar_target1;
+	else
+		focus = 40;
+	festring_settextcolor(0x4E);
+	if (focus != oldinstruments[65]) {
+		const uint8_t* s;
 
-			if (focus == 40) {
-				s = ((const uint8_t**)componentnames)[32];
-			} else {
-				const uint8_t model_type = objects[pstate.target_obj_idx].ship_idx;
-				uint16_t mt;
+		oldinstruments[65] = focus;
+		x = instruments[65].x;
+		y = instruments[65].y;
+		festring_setbound(x, y, x + text_width, y + fontheight + 1);
+		clearwindow();
+		festring_setcursor(x, y);
 
-				if (!TIE_FLIGHT_TIE98)
-					draw_Lockshipfileptrs(model_type);
-				mt = TIE_FLIGHT_EDITION(componentblockptr[(uint16_t)pstate.radar_target1].mesh_type,
-										modelmesh_gettype(model_type, pstate.radar_target1));
-				/* Fighters display mesh type 7 with component label 26. */
-				if (objects[pstate.target_obj_idx].genus == GENUS_FIGHTER && mt == 7)
-					mt = 26;
-				s = ((const uint8_t**)componentnames)[mt];
-			}
-			festring_outstringright(s);
-			{
-				TieHudState* hud = TieSnapshotBuilder_HudMut();
-				TieHudSnapshot_CopyText(hud->target_subsystem_text, sizeof hud->target_subsystem_text, s);
-				hud->instruments[65].color = 0x4E;
-			}
+		if (focus == 40) {
+			s = ((const uint8_t**)componentnames)[32];
+		} else {
+			uint16_t mt;
+
+			if (!TIE_FLIGHT_TIE98)
+				draw_Lockshipfileptrs(objects[pstate.target_obj_idx].ship_idx);
+			mt = TIE_FLIGHT_EDITION(
+				componentblockptr[(uint16_t)pstate.radar_target1].mesh_type,
+				modelmesh_gettype(objects[pstate.target_obj_idx].ship_idx, pstate.radar_target1));
+			/* Fighters display mesh type 7 with component label 26. */
+			if (objects[pstate.target_obj_idx].genus == GENUS_FIGHTER && mt == 7)
+				mt = 26;
+			s = ((const uint8_t**)componentnames)[mt];
 		}
+		festring_outstringright(s);
+#ifdef TIE_MODERN
+		{
+			TieHudState* hud = TieSnapshotBuilder_HudMut();
+			TieHudSnapshot_CopyText(hud->target_subsystem_text, sizeof hud->target_subsystem_text, s);
+			hud->instruments[65].color = 0x4E;
+		}
+#endif
 	}
 }
 
@@ -1765,7 +1800,7 @@ void panel_updatethrottle(void) {
 	if ((pstate.player_craft->working_subsystems & 0x40) == 0)
 		return;
 	festring_setbackcolor(0x40);
-	raw = (uint16_t)(pstate.player_craft->throttle_speed / 655u);
+	raw = pstate.player_craft->throttle_speed / 655;
 	if (!pstate.player_craft->slam_active)
 		raw *= 2;
 	panel_updatevalue(TIE_HUDI_THROTTLE_DIGITS, raw, 1);
@@ -3094,7 +3129,7 @@ void panel_update3Dcrt(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, u
 
 // FUNCTION: TIE98 0x467570
 // PANEL_update3Dcrt
-void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int clear_runs) {
+void panel_update3Dcrt_tie98(uint16_t x, uint16_t y, uint16_t width, uint16_t depth, int clear_runs) {
 	int32_t save_screenyoffset = transfm2_screenyoffset;
 	int32_t save_camera_x = camera.x;
 	int32_t save_camera_y = camera.y;
@@ -3107,7 +3142,7 @@ void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int c
 	int32_t target_world_z;
 
 	transfm2_screenyoffset = 0;
-	position = rtsvga2_calcpositionVGA_tie98((uint16_t)x, (uint16_t)y);
+	position = rtsvga2_calcpositionVGA_tie98(x, y);
 	logbuf2_startPIP_tie98(width, depth, clear_runs, position);
 
 	if ((uint16_t)clear_runs != 0) {
@@ -3271,20 +3306,21 @@ void panel_update3Dcrt_tie98(int x, int y, uint16_t width, uint16_t depth, int c
 void panel_Update3DCrtIfVisible(void) {
 	if (pstate.target_obj_idx == 0xffff)
 		return;
-	if (pstate.target_obj_idx >= OBJ_REF_STATIC_BASE) {
-		StaticObject* object = &staticobjects[pstate.target_obj_idx - OBJ_REF_STATIC_BASE];
-		if (object->species == 0 || object->ship_class == 13)
+	if (pstate.target_obj_idx < OBJ_REF_STATIC_BASE) {
+		if (objects[pstate.target_obj_idx].ship_idx == 0 ||
+			objects[pstate.target_obj_idx].genus == GENUS_EXPLOSION)
+			return;
+		if (objects[pstate.target_obj_idx].category == 0 &&
+			(objects[pstate.target_obj_idx].craft_ptr->flight_flag == 3 ||
+			 objects[pstate.target_obj_idx].craft_ptr->flight_flag == 4))
 			return;
 	} else {
-		FlightObject* object = &objects[pstate.target_obj_idx];
-		if (object->ship_idx == 0 || object->genus == GENUS_EXPLOSION)
-			return;
-		if (object->category == 0 &&
-			(object->craft_ptr->flight_flag == 3 || object->craft_ptr->flight_flag == 4))
+		if (staticobjects[pstate.target_obj_idx - OBJ_REF_STATIC_BASE].species == 0 ||
+			staticobjects[pstate.target_obj_idx - OBJ_REF_STATIC_BASE].ship_class == 13)
 			return;
 	}
 	if ((pstate.player_craft->status_flags & 4) != 0 && pstate.hyperin_state == 0 && mission.end_flag == 0 &&
-		camera.pilotview == 0 && (pstate.player_craft->working_subsystems & 1) != 0) {
+		camera.pilotview == 0 && (objects[pstate.object_idx].craft_ptr->working_subsystems & 1) != 0) {
 		panel_update3Dcrt_tie98(instruments[2].x, instruments[2].y, instruments[2].param1,
 								instruments[2].param2, 1);
 	}
@@ -3385,141 +3421,120 @@ void panel_drawboxinxtrans(int left_x, int top_y, uint16_t width, uint16_t heigh
 // FUNCTION: TIE98 0x467D10
 // PANEL_pointcamera
 void panel_pointcamera_tie98(uint16_t target_obj, int16_t use_hud_size) {
-	FlightObject* player = pstate.player;
-	uint32_t dot;
-	int32_t value;
-	int32_t delta_x;
-	int32_t delta_y;
-	int32_t delta_z;
-	int32_t magnitude_x;
-	int32_t magnitude_y;
-	int32_t magnitude_z;
-	int16_t x;
-	int16_t y;
-	int16_t z;
-	int32_t side;
-	int32_t forward;
-	int32_t up;
+	int32_t dx;
+	int32_t dy;
+	int32_t dz;
+	uint16_t hx;
+	uint16_t hy;
+	uint16_t hz;
+	int16_t ex;
+	int16_t ey;
+	int16_t ez;
+	int32_t side_proj;
+	int32_t fwd_proj;
+	int32_t up_proj;
 	uint32_t bound_hwidth;
-	uint16_t pixels;
-	uint32_t distance;
-	uint8_t shift;
-	int32_t offset_x;
-	int32_t offset_y;
-	int32_t offset_z;
+	uint16_t species;
+	uint16_t pix;
+	uint16_t z;
+	uint16_t shift;
+	int target_idx;
 
-	create_getworldposition(target_obj, 0);
+	target_idx = target_obj;
+	create_getworldposition(target_idx, 0);
 
-	delta_x = (int32_t)(((uint32_t)worldlocx - (uint32_t)player->world_x) << 1);
-	delta_y = (int32_t)(((uint32_t)worldlocy - (uint32_t)player->world_y) << 1);
-	delta_z = (int32_t)(((uint32_t)worldlocz - (uint32_t)player->world_z) << 1);
-	magnitude_x = (int16_t)((uint32_t)delta_x >> 16);
-	magnitude_y = (int16_t)((uint32_t)delta_y >> 16);
-	magnitude_z = (int16_t)((uint32_t)delta_z >> 16);
-	if (magnitude_x < 0)
-		magnitude_x = -magnitude_x;
-	if (magnitude_y < 0)
-		magnitude_y = -magnitude_y;
-	if (magnitude_z < 0)
-		magnitude_z = -magnitude_z;
+	dx = worldlocx - pstate.player->world_x;
+	dy = worldlocy - pstate.player->world_y;
+	dz = worldlocz - pstate.player->world_z;
+	dx *= 2;
+	dy *= 2;
+	dz *= 2;
+
+	/* Track the high-word magnitude of each axis while reducing the vector. */
+	hx = (uint16_t)(dx >> 16);
+	hy = (uint16_t)(dy >> 16);
+	hz = (uint16_t)(dz >> 16);
+	if (hx & 0x8000)
+		hx = -hx;
+	if (hy & 0x8000)
+		hy = -hy;
+	if (hz & 0x8000)
+		hz = -hz;
 	do {
-		do {
-			magnitude_y = (uint16_t)magnitude_y >> 1;
-			magnitude_z = (uint16_t)magnitude_z >> 1;
-			magnitude_x = (uint16_t)magnitude_x >> 1;
-			delta_x >>= 1;
-			delta_y >>= 1;
-			delta_z >>= 1;
-		} while ((uint16_t)magnitude_x != 0);
-	} while ((uint16_t)magnitude_y != 0 || (uint16_t)magnitude_z != 0);
+		hx >>= 1;
+		hy >>= 1;
+		hz >>= 1;
+		dx >>= 1;
+		dy >>= 1;
+		dz >>= 1;
+	} while (hx || hy || hz);
 
-	x = (int16_t)(delta_x >> 1);
-	y = (int16_t)(delta_y >> 1);
-	z = (int16_t)(delta_z >> 1);
-	if (player->orient_dirty) {
-		fview_calcrotatemove(player->pitch, player->heading, player);
-		fview_calcrotateorient(player->roll, 0, player);
+	dx >>= 1;
+	dy >>= 1;
+	dz >>= 1;
+	ex = (int16_t)dx;
+	ey = (int16_t)dy;
+	ez = (int16_t)dz;
+
+	if (objects[pstate.object_idx].orient_dirty) {
+		fview_calcrotatemove(objects[pstate.object_idx].pitch, objects[pstate.object_idx].heading,
+							 &objects[pstate.object_idx]);
+		fview_calcrotateorient(objects[pstate.object_idx].roll, 0, &objects[pstate.object_idx]);
 	}
-	dot = (uint32_t)((int32_t)player->side_z * z);
-	dot += (uint32_t)((int32_t)player->side_y * y);
-	dot += (uint32_t)((int32_t)player->side_x * x);
-	value = (int32_t)dot;
-	if (value >= 0x40000000)
-		value = 0x3fffffff;
-	if (value <= -0x40000000)
-		value = -0x3fff0000;
-	if (value >= 0)
-		side = value / 0x8000;
-	else
-		side = -((-value + 0x7fff) / 0x8000);
-	dot = (uint32_t)((int32_t)player->fwd_z * z);
-	dot += (uint32_t)((int32_t)player->fwd_y * y);
-	dot += (uint32_t)((int32_t)player->fwd_x * x);
-	value = (int32_t)dot;
-	if (value >= 0x40000000)
-		value = 0x3fffffff;
-	if (value <= -0x40000000)
-		value = -0x3fff0000;
-	if (value >= 0)
-		forward = value / 0x8000;
-	else
-		forward = -((-value + 0x7fff) / 0x8000);
-	dot = (uint32_t)((int32_t)player->up_z * z);
-	dot += (uint32_t)((int32_t)player->up_y * y);
-	dot += (uint32_t)((int32_t)player->up_x * x);
-	value = (int32_t)dot;
-	if (value >= 0x40000000)
-		value = 0x3fffffff;
-	if (value <= -0x40000000)
-		value = -0x3fff0000;
-	if (value >= 0)
-		up = value / 0x8000;
-	else
-		up = -((-value + 0x7fff) / 0x8000);
-	trig2_ctop(side, forward, up);
-	fview_newcalcview(player->roll, player->pitch, player->heading, 0, (int16_t)(0x4000 - trig2_zangle),
-					  trig2_xyangle, NULL);
 
-	if (target_obj >= OBJ_REF_STATIC_BASE) {
-		bound_hwidth = species_table[staticobjects[target_obj - OBJ_REF_STATIC_BASE].species].bound_hwidth;
-	} else {
-		SpecData* spec = &spec_data[objects[target_obj].craft_ptr->species_idx];
-		const int16_t bound_x = spec->bound_width;
-		const int16_t bound_up = spec->bound_height;
-		const int16_t bound_forward = spec->bound_depth;
-		if (bound_up >= bound_x) {
-			if (bound_x <= bound_forward) {
-				bound_hwidth = (uint32_t)(bound_up + bound_forward) >> 1;
-			} else if (bound_up > bound_x) {
-				bound_hwidth = (uint32_t)(bound_up + bound_x) >> 1;
-			} else if (bound_up > bound_forward) {
-				bound_hwidth = (uint32_t)(bound_up + bound_x) >> 1;
-			} else {
-				bound_hwidth = (uint32_t)(bound_x + bound_forward) >> 1;
-			}
-		} else if (bound_up > bound_forward) {
-			bound_hwidth = (uint32_t)(bound_up + bound_x) >> 1;
+	/* Project the player->target delta onto the player's body axes. */
+	side_proj = math2_dot3_q15_clamped(ex, ey, ez, pstate.player->side_x, pstate.player->side_y,
+									   pstate.player->side_z);
+	fwd_proj =
+		math2_dot3_q15_clamped(ex, ey, ez, pstate.player->fwd_x, pstate.player->fwd_y, pstate.player->fwd_z);
+	up_proj =
+		math2_dot3_q15_clamped(ex, ey, ez, pstate.player->up_x, pstate.player->up_y, pstate.player->up_z);
+
+	trig2_ctop(side_proj, fwd_proj, up_proj);
+
+	fview_newcalcview(pstate.player->roll, pstate.player->pitch, pstate.player->heading, 0,
+					  (int16_t)(0x4000 - trig2_zangle), trig2_xyangle, NULL);
+
+	if (target_obj < OBJ_REF_STATIC_BASE) {
+		species = objects[target_obj].craft_ptr->species_idx;
+		if (spec_data[species].bound_width <= spec_data[species].bound_depth &&
+			spec_data[species].bound_width <= spec_data[species].bound_height) {
+			bound_hwidth = (uint32_t)(spec_data[species].bound_height + spec_data[species].bound_depth) >>
+						   1 << spec_data[species].model_scale_shift;
+		} else if (spec_data[species].bound_depth <= spec_data[species].bound_width &&
+				   spec_data[species].bound_depth <= spec_data[species].bound_height) {
+			bound_hwidth = (uint32_t)(spec_data[species].bound_height + spec_data[species].bound_width) >>
+						   1 << spec_data[species].model_scale_shift;
 		} else {
-			bound_hwidth = (uint32_t)(bound_x + bound_forward) >> 1;
+			bound_hwidth = (uint32_t)(spec_data[species].bound_width + spec_data[species].bound_depth) >>
+						   1 << spec_data[species].model_scale_shift;
 		}
-		bound_hwidth <<= spec->model_scale_shift;
+	} else {
+		bound_hwidth = species_table[staticobjects[target_idx - OBJ_REF_STATIC_BASE].species].bound_hwidth;
 	}
 
-	pixels = use_hud_size ? instruments[2].param2 : flightResolution == TIE_FLIGHT_RES_VGA ? 60 : 144;
-	distance = (bound_hwidth << perspShift) / pixels;
+	if (use_hud_size)
+		pix = instruments[2].param2;
+	else
+		pix = flightResolution == TIE_FLIGHT_RES_VGA ? 60 : 144;
+
+	bound_hwidth = (bound_hwidth << perspShift) / pix;
 	shift = 0;
-	while (distance > 0x3fff) {
-		distance >>= 1;
+	while (bound_hwidth > 0x3fff) {
+		bound_hwidth >>= 1;
 		++shift;
 	}
+	z = (uint16_t)bound_hwidth;
 	if (flightResolution != TIE_FLIGHT_RES_VGA)
-		distance += distance >> 2;
-	offset_x = math2_mul_q15(worldeyeA3, distance);
-	offset_y = math2_mul_q15(worldeyeB3, distance);
-	offset_z = math2_mul_q15(worldeyeC3, distance);
-	camera.x = worldlocx - (int32_t)((uint32_t)offset_x << shift);
-	camera.y = worldlocy - (int32_t)((uint32_t)offset_y << shift);
-	camera.z = worldlocz - (int32_t)((uint32_t)offset_z << shift);
+		z += z >> 2;
+
+	/* Back-step along the world-space camera Z basis. */
+	camera.x = math2_mul_q15(z, worldeyeA3);
+	camera.y = math2_mul_q15(z, worldeyeB3);
+	camera.z = math2_mul_q15(z, worldeyeC3);
+	camera.x = worldlocx - (int32_t)((uint32_t)camera.x << shift);
+	camera.y = worldlocy - (int32_t)((uint32_t)camera.y << shift);
+	camera.z = worldlocz - (int32_t)((uint32_t)camera.z << shift);
 }
 
 /*
@@ -3534,9 +3549,9 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 	uint16_t hx;
 	uint16_t hy;
 	uint16_t hz;
-	int32_t ex;
-	int32_t ey;
-	int32_t ez;
+	int16_t ex;
+	int16_t ey;
+	int16_t ez;
 	int32_t side_proj;
 	int32_t fwd_proj;
 	int32_t up_proj;
@@ -3577,23 +3592,21 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 	dx >>= 1;
 	dy >>= 1;
 	dz >>= 1;
-	ex = (int16_t)dx;
-	ey = (int16_t)dy;
 	ez = (int16_t)dz;
+	ey = (int16_t)dy;
+	ex = (int16_t)dx;
 
 	/* Project the player->target delta onto the player's body axes.
 	 * trig2_ctop(x, y, z) computes xyangle = atan2(x, y) (with a fixed
 	 * +90 deg offset), so the bearing-to-target the binary feeds in is
 	 * (side, fwd, up) -- not (fwd, side, up). Swapping these two
 	 * rotates the PIP camera 90 deg around the player's up axis. */
-	side_proj = math2_dot3_q15_clamped(ez, ey, ex, pstate.player->side_z, pstate.player->side_y,
-									   pstate.player->side_x);
-
+	side_proj = math2_dot3_q15_clamped(ex, ey, ez, pstate.player->side_x, pstate.player->side_y,
+									   pstate.player->side_z);
 	fwd_proj =
-		math2_dot3_q15_clamped(ez, ey, ex, pstate.player->fwd_z, pstate.player->fwd_y, pstate.player->fwd_x);
-
+		math2_dot3_q15_clamped(ex, ey, ez, pstate.player->fwd_x, pstate.player->fwd_y, pstate.player->fwd_z);
 	up_proj =
-		math2_dot3_q15_clamped(ez, ey, ex, pstate.player->up_z, pstate.player->up_y, pstate.player->up_x);
+		math2_dot3_q15_clamped(ex, ey, ez, pstate.player->up_x, pstate.player->up_y, pstate.player->up_z);
 
 	trig2_ctop(side_proj, fwd_proj, up_proj);
 
@@ -3603,17 +3616,14 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 	if (target_obj < 0x3800) {
 		species = objects[target_obj].craft_ptr->species_idx;
 		if (spec_data[species].bound_width <= spec_data[species].bound_depth &&
-			spec_data[species].bound_width <= spec_data[species].bound_height) {
-			bound_hwidth = (uint32_t)(spec_data[species].bound_height + spec_data[species].bound_depth) >>
-						   1 << (uint16_t)spec_data[species].model_scale_shift;
-		} else if (spec_data[species].bound_depth <= spec_data[species].bound_width &&
-				   spec_data[species].bound_depth <= spec_data[species].bound_height) {
-			bound_hwidth = (uint32_t)(spec_data[species].bound_height + spec_data[species].bound_width) >>
-						   1 << (uint16_t)spec_data[species].model_scale_shift;
-		} else {
-			bound_hwidth = (uint32_t)(spec_data[species].bound_width + spec_data[species].bound_depth) >>
-						   1 << (uint16_t)spec_data[species].model_scale_shift;
-		}
+			spec_data[species].bound_width <= spec_data[species].bound_height)
+			bound_hwidth = spec_data[species].bound_depth + spec_data[species].bound_height;
+		else if (spec_data[species].bound_depth <= spec_data[species].bound_width &&
+				 spec_data[species].bound_depth <= spec_data[species].bound_height)
+			bound_hwidth = spec_data[species].bound_width + spec_data[species].bound_height;
+		else
+			bound_hwidth = spec_data[species].bound_depth + spec_data[species].bound_width;
+		bound_hwidth = bound_hwidth >> 1 << (uint16_t)spec_data[species].model_scale_shift;
 	} else {
 		// SPECIES0
 		bound_hwidth = species_table[staticobjects[target_obj - 0x3800].species].bound_hwidth;
@@ -3636,9 +3646,9 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 
 	/* Back-step along the world-space camera Z basis. Shift in the
 	 * unsigned domain so a negative offset stays well-defined. */
-	camera.x = (z * worldeyeA3) >> 15;
-	camera.y = (z * worldeyeB3) >> 15;
-	camera.z = (z * worldeyeC3) >> 15;
+	camera.x = math2_mul16_q15(z, worldeyeA3);
+	camera.y = math2_mul16_q15(z, worldeyeB3);
+	camera.z = math2_mul16_q15(z, worldeyeC3);
 	camera.x = (int32_t)((uint32_t)camera.x << shift);
 	camera.y = (int32_t)((uint32_t)camera.y << shift);
 	camera.z = (int32_t)((uint32_t)camera.z << shift);

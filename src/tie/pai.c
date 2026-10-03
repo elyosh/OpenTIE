@@ -676,7 +676,7 @@ uint16_t pai_searchformother(uint16_t fg_idx) {
 }
 
 // FUNCTION: TIE95 0x35ABC
-int16_t pai_checktargetforattack(uint16_t attacker_ref, uint16_t obj_ref, int16_t pursue_hot) {
+int16_t pai_checktargetforattack(uint16_t attacker_ref, uint32_t obj_ref, int16_t pursue_hot) {
 	int32_t radius;
 
 	if (pai_worthytarget(obj_ref)) {

@@ -151,7 +151,9 @@ typedef struct {
 	uint8_t saved_current_order;   /* +0x026: USER_inputforplane stashes current_order
 									*         here when issuing a radio command, then
 									*         restores it on the next radio toggle. */
+#if !defined(TIE98) || defined(TIE_MODERN)
 	uint8_t pad_027;               /* +0x027: unused (no readers/writers in binary) */
+#endif
 	uint16_t ai_update_rate;       /* +0x028: aiupdatetranslate[skill] */
 	uint16_t ai_update_rate_copy;  /* +0x02A: PAI_initplan copies update_rate here */
 	int16_t ai_target_ref;         /* +0x02C: active AI pursuit target as an
@@ -194,7 +196,9 @@ typedef struct {
 	 *   PAIFIGHT_escorttargetorder:   reads to pick attackers of this FG.
 	 *   PAIMAN_escortmaneuver:        reads to find the escortee leader to follow. */
 	uint8_t escortee_fg_idx;    /* +0x040 */
+#if !defined(TIE98) || defined(TIE_MODERN)
 	uint8_t pad_041;            /* +0x041: struct padding; never accessed */
+#endif
 	uint16_t attacker_idx;      /* +0x042: obj_idx of last/active attacker;
 								 * 0x00FF = none (sentinel set by PAI_initplan).
 								 * Set by COLLIDE_laserhitcraft to shooter's
@@ -218,7 +222,9 @@ typedef struct {
 	uint8_t capture_count;      /* +0x04A: # entries in capture_list (0..10).
 								 * PAIMAN_boardmaneuver appends and increments, clamps at 10;
 								 * PAI_finddisabledingroup uses as loop bound. */
+#if !defined(TIE98) || defined(TIE_MODERN)
 	uint8_t pad_04B;            /* +0x04B: padding for u16 alignment of capture_list */
+#endif
 	uint16_t capture_list[10];  /* +0x04C..+0x05F: idnumbers of already-boarded objects,
 								 * used by PAI_finddisabledingroup to skip re-targeting.
 								 * Slot [0] is transiently reused as scratch for saved
@@ -228,7 +234,9 @@ typedef struct {
 	uint8_t mode_byte;    /* +0x061: PAI maneuver opcode (set by PAI_initplan from plan stream); polydepthsort
 							 gates ai_target_ref check on ==18 */
 	uint8_t mode_subbyte; /* +0x062: polydepthsort gates same check on ==2 */
+#if !defined(TIE98) || defined(TIE_MODERN)
 	uint8_t pad_063;      /* +0x063: unused (no readers in any craft module) */
+#endif
 	int32_t maneuver_timer;  /* +0x064: dword tick-count set by PAIMAN_init*
 							  *         (durations 0x0DD4, 0x1270, 0x49C, …);
 							  *         PAI_aicompletioncheck mode 0x42 and
@@ -254,20 +262,26 @@ typedef struct {
 	int16_t roll_rate_cache; /* +0x07A: cached spec.roll_rate */
 	int16_t ai_target_c;     /* +0x07C: roll pacing scale (init 0xFFFF) */
 	uint8_t ai_roll_state;   /* +0x07E: 0=idle, 1..3=active, 4=settled */
+#if !defined(TIE98) || defined(TIE_MODERN)
 	uint8_t pad_07F;         /* +0x07F: single pad byte */
+#endif
 	uint16_t ai_target_roll; /* +0x080: target roll angle (objects[i].roll goal) */
 	uint16_t ai_roll_step;   /* +0x082: 0..0xFFFF scale into per-tick step */
 	/* Heading autopilot. */
 	int16_t heading_rate_cache;   /* +0x084: cached spec.heading_rate */
 	int16_t ai_target_d;          /* +0x086: heading pacing scale (init 0xFFFF) */
 	uint8_t ai_heading_state;     /* +0x088: 0=idle, nonzero=active, 3=reached */
+#if !defined(TIE98) || defined(TIE_MODERN)
 	uint8_t pad_089;              /* +0x089: single pad byte */
+#endif
 	uint16_t ai_target_heading;   /* +0x08A: target heading angle */
 	uint16_t ai_heading_step;     /* +0x08C: 0..0xFFFF scale into per-tick step */
 	uint8_t formation;            /* +0x08E: = fgformation */
 	uint8_t formation_separation; /* +0x08F: = fgseparation (cleared if hangar-spawn) */
 	uint8_t craft_idx_in_fg;      /* +0x090: = craftcnt (this craft's index 0..count-1 within FG) */
+#if !defined(TIE98) || defined(TIE_MODERN)
 	uint8_t pad_091;              /* +0x091: dead byte; no readers or writers in binary */
+#endif
 	int32_t push_accum_x; /* +0x092: external-push velocity accumulator (X). Decays toward 0 each tick, adds
 							 to xmovedist. */
 	int32_t push_accum_y; /* +0x096: same for Y */
@@ -488,14 +502,23 @@ enum Genus {
  */
 #ifdef __WATCOMC__
 #pragma pack(2)
+#elif defined(TIE98) && !defined(TIE_MODERN)
+/* TIE98 packs the object byte-aligned (86 bytes, craft_ptr at +0x52). */
+#pragma pack(push, 1)
 #else
 #pragma pack(push, 2)
 #endif
 typedef struct FlightObject {
-	uint16_t idnumber;     /* +0x00: per-craft monotonic id */
+	uint16_t idnumber; /* +0x00: per-craft monotonic id */
+#if defined(TIE98) && !defined(TIE_MODERN)
+	uint8_t genus;    /* +0x02: fggenus */
+	uint8_t ship_idx; /* +0x03: species index (ship class) */
+	uint8_t category; /* +0x04: species.category */
+#else
 	uint8_t category;      /* +0x02: species.category */
 	uint8_t genus;         /* +0x03: fggenus */
 	uint8_t ship_idx;      /* +0x04: species index (ship class) */
+#endif
 	uint8_t damage_state;  /* +0x05: damage anim byte read by ANIM, written by COLLIDE/STARSHIP/STATIC after
 							  hits */
 	int32_t world_x;       /* +0x06: current world position X (Q16.16) */
@@ -920,7 +943,7 @@ extern int32_t collidexoff, collideyoff, collidezoff;
 extern uint16_t bluetarget;
 extern uint16_t currenttarget;
 extern uint16_t currenttargetcomp;
-extern uint8_t drawmarkingsflag;
+extern int16_t drawmarkingsflag;
 
 /* --- FESTRING text output state (defined in tie.c) --- */
 

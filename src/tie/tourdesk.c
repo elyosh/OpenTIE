@@ -104,7 +104,7 @@ static int tourdesk_user_Title(Actor* actor, int32_t time);
 static int16_t tourdesk_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								   int16_t refresh);
 static void tourdesk_user_Door(Actor* actor, int32_t time);
-static void tourdesk_user_Battle(Actor* actor, int32_t time);
+static int16_t tourdesk_user_Battle(Actor* actor, int32_t time);
 static int16_t tourdesk_draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
 										 int16_t refresh);
 static int16_t tourdesk_Draw_Battle_One(Rect* galaxy_rect, int32_t tour_time);
@@ -442,7 +442,7 @@ static void tourdesk_user_Door(Actor* actor, int32_t time) {
 
 // FUNCTION: TIE95 0x73EEC
 // FUNCTION: TIE98 0x491280
-static void tourdesk_user_Battle(Actor* actor, int32_t time) {
+static int16_t tourdesk_user_Battle(Actor* actor, int32_t time) {
 	(void)actor;
 	if (!time) {
 		tour_time = 0;
@@ -450,6 +450,7 @@ static void tourdesk_user_Battle(Actor* actor, int32_t time) {
 	} else {
 		tour_time++;
 	}
+	return 1;
 }
 
 /* ================================================================

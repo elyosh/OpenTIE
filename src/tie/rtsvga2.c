@@ -306,126 +306,127 @@ void rtsvga2_setvgapointers(void* vga_ptr, uint16_t mem_width, uint16_t num_line
 
 /* Retail-only. For each of `count` RGB triplets (stride 3) starting at
  * start_idx, copies rgb_src into rgb_dst with the Value channel of HSV
- * scaled by (brightness_setting / 256). brightness_setting == 256 takes
- * a straight memcpy fast path. */
+ * scaled by (brightness_setting / 256) and clamped to 63.
+ * brightness_setting == 256 takes a straight copy fast path. */
 // FUNCTION: TIE95 0x4BAF0
-void rtsvga2_applyBrightness(const uint8_t* rgb_src, uint8_t* rgb_dst, uint16_t start_idx, uint16_t count) {
-	const uint8_t* s = rgb_src + 3 * start_idx;
-	uint8_t* d = rgb_dst + 3 * start_idx;
-
-	uint16_t i;
-
+void rtsvga2_applyBrightness(const uint8_t* rgb_src, uint8_t* rgb_dst, int start_idx, int count) {
 	if (brightness_setting == 256) {
-		memcpy(d, s, (size_t)count * 3);
+		while (count--) {
+			rgb_dst[start_idx * 3 + 0] = rgb_src[start_idx * 3 + 0];
+			rgb_dst[start_idx * 3 + 1] = rgb_src[start_idx * 3 + 1];
+			rgb_dst[start_idx * 3 + 2] = rgb_src[start_idx * 3 + 2];
+			start_idx++;
+		}
 		return;
 	}
 
-	for (i = 0; i < count; ++i, s += 3, d += 3) {
-		uint8_t r = s[0], g = s[1], b = s[2];
-
-		/* v_max = max(r, g, b) */
+	while (count--) {
+		uint8_t r = rgb_src[start_idx * 3 + 0], g = rgb_src[start_idx * 3 + 1],
+				b = rgb_src[start_idx * 3 + 2];
+		uint8_t value;
 		uint8_t v_max;
 		uint8_t v_min;
-		uint8_t hsv_s;
-		uint8_t hue_frac;
-		uint8_t hue_sext;
-		uint32_t v_scaled32;
-		uint8_t v_scaled;
+		uint8_t sector;
+		uint8_t sat;
+		uint8_t hue;
 
-		uint8_t out_r, out_g, out_b;
-
-		if (r < g || r < b)
-			v_max = (g < r || g < b) ? b : g;
-		else
+		if (r >= g && r >= b)
 			v_max = r;
-
-		/* v_min = min(r, g, b) */
-
-		if (r > g || r > b)
-			v_min = (g > r || g > b) ? b : g;
+		else if (g >= r && g >= b)
+			v_max = g;
 		else
+			v_max = b;
+
+		if (r <= g && r <= b)
 			v_min = r;
+		else if (g <= r && g <= b)
+			v_min = g;
+		else
+			v_min = b;
 
-		hsv_s = v_max ? (uint8_t)(63u * (v_max - v_min) / v_max) : 0;
-		hue_frac = 0;
-		hue_sext = 0;
+		value = v_max;
+		if (value != 0)
+			sat = (value - v_min) * 63 / value;
+		else
+			sat = 0;
 
-		if (hsv_s) {
+		if (sat != 0) {
 			if (r == v_max) {
-				if (g < b) {
-					hue_frac = (uint8_t)(63u - 63u * (b - g) / (r - v_min));
-					hue_sext = 5;
+				if (g >= b) {
+					hue = (g - b) * 63 / (r - v_min);
+					sector = 0;
 				} else {
-					hue_frac = (uint8_t)(63u * (g - b) / (r - v_min));
-					hue_sext = 0;
+					hue = 63 - (b - g) * 63 / (r - v_min);
+					sector = 5;
 				}
 			} else if (g == v_max) {
-				if (b < r) {
-					hue_frac = (uint8_t)(63u - 63u * (r - b) / (g - v_min));
-					hue_sext = 1;
+				if (b >= r) {
+					hue = (b - r) * 63 / (g - v_min);
+					sector = 2;
 				} else {
-					hue_frac = (uint8_t)(63u * (b - r) / (g - v_min));
-					hue_sext = 2;
+					hue = 63 - (r - b) * 63 / (g - v_min);
+					sector = 1;
 				}
-			} else if (r < g) {
-				hue_frac = (uint8_t)(63u - 63u * (g - r) / (v_max - v_min));
-				hue_sext = 3;
+			} else if (r >= g) {
+				hue = (r - g) * 63 / (v_max - v_min);
+				sector = 4;
 			} else {
-				hue_frac = (uint8_t)(63u * (r - g) / (v_max - v_min));
-				hue_sext = 4;
+				hue = 63 - (g - r) * 63 / (v_max - v_min);
+				sector = 3;
 			}
 		}
 
-		v_scaled32 = (brightness_setting * v_max) >> 8;
-		v_scaled = (v_scaled32 > 0x3F) ? 63 : (uint8_t)v_scaled32;
+		value = (value * brightness_setting) >> 8;
+		if (value > 63)
+			value = 63;
 
-		if (hsv_s) {
-			/* Intermediate: fall-off term for the "mid" channel. */
-			uint32_t mid_hi = (63u - (uint32_t)hsv_s * (63u - hue_frac) / 63u) * v_scaled / 63u;
-			uint32_t mid_lo = v_scaled * (63u - hsv_s) / 63u;
-			uint32_t mid_sub = (63u - (uint32_t)hue_frac * hsv_s / 63u) * v_scaled / 63u;
-			switch (hue_sext) {
+		if (sat != 0) {
+			uint8_t lo = (63 - sat) * value / 63;
+			uint8_t falling = value * (63 - sat * hue / 63) / 63;
+			uint8_t rising = value * (63 - sat * (63 - hue) / 63) / 63;
+
+			switch (sector) {
 				case 0:
-					out_r = v_scaled;
-					out_g = (uint8_t)mid_hi;
-					out_b = (uint8_t)mid_lo;
+					r = value;
+					g = rising;
+					b = lo;
 					break;
 				case 1:
-					out_r = (uint8_t)mid_sub;
-					out_g = v_scaled;
-					out_b = (uint8_t)mid_lo;
+					r = falling;
+					g = value;
+					b = lo;
 					break;
 				case 2:
-					out_r = (uint8_t)mid_lo;
-					out_g = v_scaled;
-					out_b = (uint8_t)mid_hi;
+					r = lo;
+					g = value;
+					b = rising;
 					break;
 				case 3:
-					out_r = (uint8_t)mid_lo;
-					out_g = (uint8_t)mid_sub;
-					out_b = v_scaled;
+					r = lo;
+					g = falling;
+					b = value;
 					break;
 				case 4:
-					out_r = (uint8_t)mid_hi;
-					out_g = (uint8_t)mid_lo;
-					out_b = v_scaled;
+					r = rising;
+					g = lo;
+					b = value;
 					break;
 				case 5:
-					out_r = v_scaled;
-					out_g = (uint8_t)mid_lo;
-					out_b = (uint8_t)mid_sub;
-					break;
-				default:
-					out_r = out_g = out_b = v_scaled;
+					r = value;
+					g = lo;
+					b = falling;
 					break;
 			}
 		} else {
-			out_r = out_g = out_b = v_scaled;
+			r = value;
+			g = value;
+			b = value;
 		}
 
-		d[0] = out_r;
-		d[1] = out_g;
-		d[2] = out_b;
+		rgb_dst[start_idx * 3 + 0] = r;
+		rgb_dst[start_idx * 3 + 1] = g;
+		rgb_dst[start_idx * 3 + 2] = b;
+		start_idx++;
 	}
 }
 
@@ -650,7 +651,7 @@ void rtsvga2_applyBrightness16_tie98(const uint8_t* rgb6, uint16_t* output, uint
 
 	uint32_t i;
 
-	rtsvga2_applyBrightness(rgb6, adjusted, (uint16_t)start_idx, (uint16_t)count);
+	rtsvga2_applyBrightness(rgb6, adjusted, (int)start_idx, (int)count);
 	for (i = start_idx; i < start_idx + count; ++i) {
 		const uint8_t* color = &adjusted[3 * i];
 		if (FrontendDisplay_GetPixelFormat555()) {
@@ -1748,13 +1749,24 @@ static void rtsvga2_removebracket_tie98(void) {
 /* Erase the previously-drawn cross at (x, y) using crosssave. */
 // FUNCTION: TIE95 0x4D938
 void rtsvga2_removecross(uint16_t x, uint16_t y) {
-	int i;
+	uint16_t j;
+	uint16_t n;
+	uint16_t i;
 
-	for (i = 0; i < 7; ++i) {
-		int8_t dx = crossdef[2 * i];
-		int8_t dy = crossdef[2 * i + 1];
-		uint32_t off = lineaddressVGA[(uint16_t)(y + dy)] + (uint16_t)(x + dx);
+	i = 0;
+	j = 0;
+	for (n = 7; n > 0; --n) {
+		uint32_t off = lineaddressVGA[crossdef[j + 1] + y] + (crossdef[j] + x);
+
+		if (flightResolution != (int16_t)TIE_FLIGHT_RES_VGA && (uintptr_t)vgapointer == 0xA0000) {
+			uint16_t page = (uint16_t)(off / vesa_page_size);
+
+			off %= vesa_page_size;
+			rtsvga2_SetCurrentPage(vesa_window, page);
+		}
 		vgapointer[off] = crosssave[i];
+		i++;
+		j += 2;
 	}
 }
 

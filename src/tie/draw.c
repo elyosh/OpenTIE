@@ -561,20 +561,23 @@ void draw_drawhyperstar_tie98(int16_t star_idx) {
 
 /* Draw visible craft components with their articulation, markings, and target
  * highlighting. Critically damaged fuselages may also emit a lightning
- * billboard. Restores currenttarget before returning its saved value. */
+ * billboard. Restores currenttarget before returning. */
 // FUNCTION: TIE95 0x1B690
-int draw_drawcraft(int obj_idx, uint32_t ship_flag) {
-	uint16_t obj_idx_u16 = (uint16_t)obj_idx;
-	int saved_currenttarget = currenttarget;
-	int16_t bolt_angle_cached = 0;
-	int bolt_angle_set = 0;
-
+void draw_drawcraft(uint16_t obj_idx, uint16_t ship_flag) {
+	uint16_t saved_currenttarget;
+	int16_t bolt_angle_set;
+	int16_t bolt_angle;
 	uint16_t comp_iter;
 
-	parentobject = obj_idx_u16;
+	parentobject = obj_idx;
+	saved_currenttarget = currenttarget;
+#ifdef TIE_MODERN
+	/* The original never clears this flag before its first test. */
+	bolt_angle_set = 0;
+#endif
 	highlightcolor = 0;
-	if (obj_idx_u16 == bluetarget) {
-		currenttarget = obj_idx_u16;
+	if (obj_idx == bluetarget) {
+		currenttarget = obj_idx;
 		highlightcolor = 1;
 	}
 
@@ -583,24 +586,20 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag) {
 	 * (>> 14 instead of >> 16, 4× eye-space contribution) by pushing
 	 * parentobject's HIBYTE past 0x50 — see drawpol.c:1265/1331-1334.
 	 * Capital-class ships (e.g. VSD) ship with this value. */
-	if (objectblockptr && (int8_t)objectblockptr->model_scale_shift == 2) {
-		parentobject = (parentobject & 0x00FF) | ((parentobject + 0x7000) & 0xFF00);
+	if ((int8_t)objectblockptr->model_scale_shift == 2) {
+		parentobject += 0x7000;
 		if (mission.train_craft_type)
-			currenttarget = (currenttarget & 0x00FF) | ((currenttarget + 0x7000) & 0xFF00);
+			currenttarget += 0x7000;
 	}
 
 	for (comp_iter = 0; comp_iter < numberofcomp; ++comp_iter) {
 		uint16_t comp_idx = comp[comp_iter];
 		ShipModelMesh* mesh = &componentblockptr[comp_idx];
-		int16_t mesh_type = (int16_t)mesh->mesh_type;
+		uint16_t mesh_type = mesh->mesh_type;
+		int16_t saved_drawmarkingsflag;
 		int16_t rot_angle;
-		uint8_t saved_drawmarkingsflag;
-		uint16_t saved_polycnt;
 		uint16_t saved_curtarget;
-		int eyez_arg;
-		int eyey_arg;
-		int eyex_arg;
-		const uint16_t* poly;
+		uint16_t saved_polycnt;
 
 		solidindex = comp_idx;
 
@@ -611,24 +610,27 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag) {
 		if (comp_idx == currenttargetcomp) {
 			if (!highlightcolor)
 				highlightcolor = 2;
-		} else if (currenttargetcomp < (int)objectblockptr->num_meshes) {
+		} else if (currenttargetcomp < (int16_t)objectblockptr->num_meshes) {
 			if (mesh->has_position > 1 || (mesh->has_position == 1 && mesh_type == 1 /*MESH_MainHull*/)) {
 				ShipModelMesh* tgt_comp = &componentblockptr[currenttargetcomp];
-				if (mesh->has_position == tgt_comp->has_position &&
-					mesh_type == (int16_t)tgt_comp->mesh_type && !highlightcolor) {
+				if (mesh->has_position == tgt_comp->has_position && mesh_type == tgt_comp->mesh_type &&
+					!highlightcolor) {
 					highlightcolor = 2;
 				}
 			}
 		}
-		rot_angle = 0;
-		if (obj_idx_u16 < NUM_CRAFTS) {
-			if (craftptr->mesh_state[comp_idx] != MESH_STATE_VISIBLE)
+		if (obj_idx < NUM_CRAFTS) {
+			if ((uint16_t)craftptr->mesh_state[comp_idx] != MESH_STATE_VISIBLE)
 				continue; /* hidden / blown off -- skip */
 			rot_angle = craftptr->mesh_rotation[comp_idx];
-			if ((mesh->rotation_offset || mission.train_craft_type) && rot_angle)
-				fview_componentrotation((int16_t)(rot_angle << 8), mesh);
-			else
+			if (mesh->rotation_offset || mission.train_craft_type) {
+				if (rot_angle)
+					fview_componentrotation((uint16_t)(rot_angle << 8), mesh);
+			} else {
 				rot_angle = 0;
+			}
+		} else {
+			rot_angle = 0;
 		}
 
 		saved_drawmarkingsflag = drawmarkingsflag;
@@ -636,8 +638,12 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag) {
 		 * craft. Binary @0x1b884: `a2 == 17` where a2 is ship_flag
 		 * (second arg, DX). Mirrors the parallel override in
 		 * ANIM_drawverysimpleobject at anim.c:407. */
-		if (ship_flag == 17 && mesh_type == 2 /*MESH_Wing*/ && obj_idx_u16 < OBJ_REF_STATIC_BASE)
-			drawmarkingsflag = (objects[obj_idx_u16].side == 0);
+		if (ship_flag == 17 && mesh->mesh_type == 2 /*MESH_Wing*/ && obj_idx < 0x3800) {
+			if (objects[obj_idx].side == 0)
+				drawmarkingsflag = 1;
+			else
+				drawmarkingsflag = 0;
+		}
 
 		saved_polycnt = shipdetailpolycnt;
 		saved_curtarget = currenttarget;
@@ -645,11 +651,7 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag) {
 			currenttarget = parentobject;
 		}
 
-		eyez_arg = objecteyez;
-		eyey_arg = objecteyey;
-		eyex_arg = objecteyex;
-		poly = draw_getcompdetailptr(mesh, objecteyez);
-		drawpol_drawpolyobject(poly, eyex_arg, eyey_arg, eyez_arg);
+		drawpol_drawpolyobject(draw_getcompdetailptr(mesh, objecteyez), objecteyex, objecteyey, objecteyez);
 
 		shipdetailpolycnt = saved_polycnt;
 		drawmarkingsflag = saved_drawmarkingsflag;
@@ -659,74 +661,74 @@ int draw_drawcraft(int obj_idx, uint32_t ship_flag) {
 			fview_restorerotation();
 
 		/* Lightning arc on Fuselage (mesh_type==3) for live craft. */
-		if (mesh_type == 3 /*MESH_Fuselage*/ && obj_idx_u16 < NUM_CRAFTS) {
+		if (mesh_type == 3 /*MESH_Fuselage*/ && obj_idx < NUM_CRAFTS) {
 			/* mesh_state[num_meshes] is the byte just past the per-mesh
 			 * state range; the binary overlays it as the lightning anim
 			 * frame index (0..24 indexes lightning[25]). */
-			uint8_t last_state = craftptr->mesh_state[objectblockptr->num_meshes];
+			uint8_t lightning_frame = craftptr->mesh_state[objectblockptr->num_meshes];
 			AnimOp lightning_obj;
-			int16_t roll_val;
-			uint32_t screen_x_full;
-			int16_t screen_x_w;
-			int screen_x_h;
-			int16_t bolt_angle;
+			int32_t screen_x;
+			int32_t screen_y;
+			int half_pd;
 
-			if (last_state >= 25)
+#ifdef TIE_MODERN
+			if (lightning_frame >= 25)
 				continue;
-			lightning_obj = lightning[last_state];
-			if (!(lightning_obj >= 0x8000u && lightning_obj < 0xFF00u))
+#endif
+			lightning_obj = lightning[lightning_frame];
+			if (lightning_obj < 0x8000 || lightning_obj >= 0xFF00)
 				continue; /* on a header/jump frame -- no bolt this tick */
 			if (!bolt_angle_set) {
-				int A3_abs = rotworldeyeA3 < 0 ? -rotworldeyeA3 : rotworldeyeA3;
-				int B3_abs = rotworldeyeB3 < 0 ? -rotworldeyeB3 : rotworldeyeB3;
-				int arc_dx, arc_dy;
-				if (A3_abs >= B3_abs) {
-					arc_dx = rotworldeyeB1;
-					arc_dy = rotworldeyeB2;
-				} else {
+				int32_t arc_dx, arc_dy;
+				int32_t abs_b3 = rotworldeyeB3;
+				int32_t abs_a3 = rotworldeyeA3;
+				if (abs_a3 < 0)
+					abs_a3 = -abs_a3;
+				if (abs_b3 < 0)
+					abs_b3 = -abs_b3;
+				if (abs_a3 < abs_b3) {
 					arc_dx = rotworldeyeA1;
 					arc_dy = rotworldeyeA2;
+				} else {
+					arc_dx = rotworldeyeB1;
+					arc_dy = rotworldeyeB2;
 				}
-				if (arc_dx >= 0)
-					bolt_angle_cached = -trig2_arctan(arc_dy, arc_dx);
+				if (arc_dx < 0)
+					bolt_angle = trig2_arctan(arc_dy, -arc_dx);
 				else
-					bolt_angle_cached = trig2_arctan(arc_dy, -arc_dx);
+					bolt_angle = -trig2_arctan(arc_dy, arc_dx);
 				bolt_angle_set = 1;
 			}
-			roll_val = objects[obj_idx_u16].roll;
-			screen_x_full = transfm2_getscreenx(objecteyex, objecteyez);
-			screen_x_w = (int16_t)screen_x_full;
-			screen_x_h = (int)screen_x_full >> 16;
-			bolt_angle = (int16_t)(roll_val + bolt_angle_cached);
-			if (screen_x_h <= 0 && screen_x_h >= -1) {
-				uint32_t screen_y_full = transfm2_getscreeny(objecteyey, objecteyez);
-				int sy_h = (int)screen_y_full >> 16;
-				if (sy_h <= 0 && sy_h >= -1) {
-					int half_pd = (int)pixelsdeep >> 1;
-					uint8_t lb_sp;
-					uint16_t lb_bw;
-					uint16_t lb_psc;
-
-					anim_add_bitmap_draw(parentobject, lightning_obj, 256, screen_x_w,
-										 (int16_t)(half_pd - ((int)screen_y_full - half_pd)), objecteyez,
-										 bolt_angle);
-					/* SNAPSHOT capture — does NOT affect classic render.
-					 * Same calcscale call the engine's anim_draw_bitmap
-					 * would do (with damage_factor = 256 since lightning
-					 * passes a fixed scale to anim_add_bitmap_draw).
-					 * Bolt is anchored at parent craft world origin in
-					 * anim_draw_bitmap; emit reads world_*_prev. */
-					lb_sp = (uint8_t)((lightning_obj & 0x7FFFu) >> 7);
-					lb_bw = species_table[lb_sp].bound_hwidth;
-					lb_psc = (uint16_t)rotscale_calcscale(objecteyez, lb_bw, 256);
-					TieBillboardCapture_Lightning(obj_idx_u16, lightning_obj, lb_psc, lb_bw, bolt_angle);
-				}
+			/* The roll accumulates into the cached angle each emit. */
+			bolt_angle += objects[obj_idx].roll;
+			screen_x = transfm2_getscreenx(objecteyex, objecteyez);
+			if ((screen_x >> 16) > 0 || (screen_x >> 16) < -1)
+				continue;
+			screen_y = transfm2_getscreeny(objecteyey, objecteyez);
+			if ((screen_y >> 16) > 0 || (screen_y >> 16) < -1)
+				continue;
+			half_pd = pixelsdeep >> 1;
+			half_pd -= screen_y - half_pd;
+			anim_add_bitmap_draw(parentobject, lightning_obj, 256, (int16_t)screen_x, (int16_t)half_pd,
+								 objecteyez, bolt_angle);
+#ifdef TIE_MODERN
+			{
+				/* SNAPSHOT capture — does NOT affect classic render.
+				 * Same calcscale call the engine's anim_draw_bitmap
+				 * would do (with damage_factor = 256 since lightning
+				 * passes a fixed scale to anim_add_bitmap_draw).
+				 * Bolt is anchored at parent craft world origin in
+				 * anim_draw_bitmap; emit reads world_*_prev. */
+				uint8_t lb_sp = (uint8_t)((lightning_obj & 0x7FFFu) >> 7);
+				uint16_t lb_bw = species_table[lb_sp].bound_hwidth;
+				uint16_t lb_psc = (uint16_t)rotscale_calcscale(objecteyez, lb_bw, 256);
+				TieBillboardCapture_Lightning(obj_idx, lightning_obj, lb_psc, lb_bw, bolt_angle);
 			}
+#endif
 		}
 	}
 
 	currenttarget = saved_currenttarget;
-	return saved_currenttarget;
 }
 
 // FUNCTION: TIE98 0x417FF0
@@ -1148,7 +1150,7 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_par
 	 * earlier vertex component. */
 	{
 		ShipModelMesh* mesh;
-		uint8_t rotation;
+		uint16_t rotation;
 		const uint8_t* detail;
 		uint8_t lod;
 		uint16_t num_polys;
@@ -1169,7 +1171,7 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_par
 		fview_newcalcrotate(owner_obj->roll, owner_obj->pitch, owner_obj->heading, 0, owner_obj);
 		rotation = craftptr->mesh_rotation[obj_id_field];
 		if (rotation && (mesh->rotation_offset || mission.train_craft_type))
-			fview_componentrotation((int16_t)(rotation << 8), mesh);
+			fview_componentrotation((uint16_t)(rotation << 8), mesh);
 		detail = (const uint8_t*)draw_getcompdetailptr(mesh, craftptr->eye_z_cache);
 		lod = detail[2];
 		num_polys = detail[4];

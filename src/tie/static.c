@@ -580,9 +580,8 @@ void static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot) {
  * orientation, and spawns a homing projectile. */
 // FUNCTION: TIE95 0x55278
 void static_updatemineguns(uint16_t slot_idx) {
-	int32_t half_ticks;
-	int32_t cooldown;
 #ifdef TIE_MODERN
+	int32_t half_ticks;
 	TieStaticWeaponTimingState* high_rate;
 #endif
 	int32_t sx;
@@ -604,6 +603,7 @@ void static_updatemineguns(uint16_t slot_idx) {
 	uint16_t proj_slot;
 	uint16_t proj_ship;
 	uint16_t wh_idx;
+	uint8_t cooldown;
 
 	if (staticobjects[slot_idx].status_flags == 0)
 		return;
@@ -618,12 +618,17 @@ void static_updatemineguns(uint16_t slot_idx) {
 		half_ticks = numerator / 2;
 		high_rate->remainder = (uint8_t)(numerator % 2u);
 	} else
-#endif
 		half_ticks = frameticks / 2;
+#endif
 
 	cooldown = staticobjects[slot_idx].mine_cooldown;
+#ifdef TIE_MODERN
 	if (cooldown > half_ticks) {
 		staticobjects[slot_idx].mine_cooldown = (uint8_t)(cooldown - half_ticks);
+#else
+	if (cooldown > frameticks / 2) {
+		staticobjects[slot_idx].mine_cooldown = (uint8_t)(cooldown - frameticks / 2);
+#endif
 		return;
 	}
 
@@ -634,9 +639,12 @@ void static_updatemineguns(uint16_t slot_idx) {
 		high_rate->remainder = 0;
 #endif
 
-	sx = (int32_t)staticobjects[slot_idx].world_x << 8;
-	sy = (int32_t)staticobjects[slot_idx].world_y << 8;
-	sz = (int32_t)staticobjects[slot_idx].world_z << 8;
+	sx = staticobjects[slot_idx].world_x;
+	sy = staticobjects[slot_idx].world_y;
+	sx <<= 8;
+	sy <<= 8;
+	sz = staticobjects[slot_idx].world_z;
+	sz <<= 8;
 	shooterx = sx;
 	shootery = sy;
 	shooterz = sz;
@@ -664,7 +672,7 @@ void static_updatemineguns(uint16_t slot_idx) {
 	if (collide_roughdistance3d(tx - sx, ty - sy, tz - sz) >= 0x10000u)
 		return;
 
-	if (tgt < OBJ_REF_STATIC_BASE) {
+	if (tgt < 0x3800) {
 		uint16_t lead;
 
 		/* Lead the target by its per-tick motion over the flight time. */
@@ -675,9 +683,9 @@ void static_updatemineguns(uint16_t slot_idx) {
 		else
 			trig2_polardistance >>= 14;
 		lead = (uint16_t)trig2_polardistance + (math2_getrandom() & 3) - 1;
-		aim_x = objects[tgt].world_x + (objects[tgt].world_x - objects[tgt].world_x_prev) * lead;
-		aim_y = objects[tgt].world_y + (objects[tgt].world_y - objects[tgt].world_y_prev) * lead;
-		aim_z = objects[tgt].world_z + (objects[tgt].world_z - objects[tgt].world_z_prev) * lead;
+		aim_x = (objects[tgt].world_x - objects[tgt].world_x_prev) * lead + objects[tgt].world_x;
+		aim_y = (objects[tgt].world_y - objects[tgt].world_y_prev) * lead + objects[tgt].world_y;
+		aim_z = (objects[tgt].world_z - objects[tgt].world_z_prev) * lead + objects[tgt].world_z;
 	} else {
 		aim_x = tx;
 		aim_y = ty;
@@ -688,7 +696,7 @@ void static_updatemineguns(uint16_t slot_idx) {
 	pitch = trig2_zangle;
 
 	/* Offset the muzzle toward the aim direction. */
-	off = staticobjects[slot_idx].species > 76 ? 170 : 150;
+	off = staticobjects[slot_idx].species <= 76 ? 150 : 170;
 	if (pitch < 0x2000) {
 		sz += off;
 	} else if (pitch > 0x6000) {
@@ -708,10 +716,10 @@ void static_updatemineguns(uint16_t slot_idx) {
 
 	/* Accuracy falls off with distance and with fast-moving targets. */
 	inv_dist = ~(trig2_polardistance >= 0x10000 ? 0xFFFF : (uint16_t)trig2_polardistance);
-	hit_prob = math2_fraction(inv_dist, tgt >= OBJ_REF_STATIC_BASE ? 0xFFFF
-										: objects[tgt].current_speed < 188
+	hit_prob = math2_fraction(inv_dist, tgt >= 0x3800 ? 0xFFFF
+										: (uint16_t)objects[tgt].current_speed < 188
 											? 0xFFFF
-											: 0xFFFF - ((objects[tgt].current_speed - 188) << 7));
+											: 0xFFFF - (((uint16_t)objects[tgt].current_speed - 188u) << 7));
 	if ((uint16_t)math2_getrandom() > hit_prob) {
 		/* Miss: scatter both aim angles by up to ~4/256 of a turn. */
 		int16_t scatter;
@@ -723,11 +731,11 @@ void static_updatemineguns(uint16_t slot_idx) {
 		scatter = (math2_getrandom() + 0x300) & 0x3FF;
 		if ((uint16_t)math2_getrandom() >= 0x8000) {
 			pitch -= scatter;
-			if ((int16_t)pitch < 0)
+			if (pitch & 0x8000)
 				pitch = 0;
 		} else {
 			pitch += scatter;
-			if ((int16_t)pitch < 0)
+			if (pitch & 0x8000)
 				pitch = 0x7FFF;
 		}
 	}
@@ -740,7 +748,7 @@ void static_updatemineguns(uint16_t slot_idx) {
 	objects[proj_slot].genus = GENUS_PROJECTILE_NPC;
 	if (staticobjects[slot_idx].species == 76)
 		proj_ship = 142;
-	else if (fg_array[fg_idx].version == 1 || fg_array[fg_idx].version == 4)
+	else if ((int8_t)fg_array[fg_idx].side == 1 || (int8_t)fg_array[fg_idx].side == 4)
 		proj_ship = 140;
 	else
 		proj_ship = 138;

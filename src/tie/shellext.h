@@ -142,6 +142,11 @@ typedef struct {
 	int16_t game_level;
 	int16_t auto_backup;
 	int16_t auto_restore;
+#if defined(TIE98) && !defined(TIE_MODERN)
+	int16_t brightness;
+	int16_t texture_detail;
+	uint8_t joystick_keys[32];
+#endif
 } FrontOptionsStruct;
 
 typedef struct {

@@ -202,7 +202,7 @@ static int16_t register_iupdate_Delete_Input(Input* input, Rect* bounds, Rect* c
 											 uint8_t left, uint8_t right, int16_t mouse_x, int16_t mouse_y);
 static void register_iuser_Delete_Input(Input* input, int32_t time);
 static void register_idraw_Delete_Input(Input* input, Rect* frame, Rect* clip, int16_t refresh);
-static int16_t register_Find_Reg_Dir_Name(char* dst, size_t capacity, int16_t idx);
+static int16_t register_Find_Reg_Dir_Name(Directory* dir, char* dst, int16_t idx);
 static Input* register_Build_Protect_Dialog(void);
 static int16_t register_iupdate_Protect_Input(Input* input, Rect* bounds, Rect* clip, int16_t key,
 											  uint8_t left, uint8_t right, int16_t mouse_x, int16_t mouse_y);
@@ -859,7 +859,7 @@ static int16_t register_iupdate_Pilot_List(Input* input, Rect* bounds, Rect* cli
 	if (!register_Index_To_Pilot(wanted, &slot))
 		return 1;
 
-	if (!register_Find_Reg_Dir_Name(dir_name, sizeof(dir_name), slot))
+	if (!register_Find_Reg_Dir_Name(&register_directory, dir_name, slot))
 		return 1;
 
 	shipext_Set_Pilot_Name("");
@@ -883,37 +883,40 @@ static void register_idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int
 
 	xrect_Copy_Rect(&dst, frame);
 	dst.left++;
-	dst.bottom = dst.top + xfont_Get_FontID_Height(TIE_FRONTEND_EDITION(1, 3)) + 3;
 	dst.top += 2;
+	dst.bottom = dst.top + TIE_FRONTEND_EDITION(7, xfont_Get_FontID_Height(3) + 1);
 
 	xfont_Enable_FontID_Shadow(TIE_FRONTEND_EDITION(1, 3));
 
 	for (row = 0; row < TIE_FRONTEND_EDITION(10, 12); row++) {
-		int16_t wanted = pilot_offset + row;
 		int16_t slot;
 		char dir_name[TIE_PILOT_NAME_CAPACITY];
+#ifdef TIE_MODERN
 		char display_name[TIE_PILOT_NAME_CAPACITY];
+#endif
 		FastPilotRecord fpr;
 		int16_t color;
 
-		if (!register_Index_To_Pilot(wanted, &slot))
+		if (!register_Index_To_Pilot(pilot_offset + row, &slot))
 			break;
 
-		if (!register_Find_Reg_Dir_Name(dir_name, sizeof(dir_name), slot))
-			break;
-
-		TiePilotName_CopyForDisplay(display_name, sizeof(display_name), dir_name);
-
-		color = 15;
-		if (register_Index_To_Pilot_Record(wanted, &fpr)) {
+		if (register_Find_Reg_Dir_Name(&register_directory, dir_name, slot)) {
+#ifdef TIE_MODERN
+			TiePilotName_CopyForDisplay(display_name, sizeof(display_name), dir_name);
+#endif
+			register_Index_To_Pilot_Record(pilot_offset + row, &fpr);
+			color = 15;
 			if (fpr.lost_status)
 				color = 4;
+			if (pilot_offset + row == pilot_active)
+				color = 14;
+#ifdef TIE_MODERN
+			xfont_Print_Clipped_Text(display_name, dst.left + 1, dst.top, TIE_FRONTEND_EDITION(1, 3), color);
+#else
+			xfont_Print_Clipped_Text(dir_name, dst.left + 1, dst.top, TIE_FRONTEND_EDITION(1, 3), color);
+#endif
 		}
-		if (pilot_active == wanted)
-			color = 14;
-
-		xfont_Print_Clipped_Text(display_name, dst.left + 1, dst.top, TIE_FRONTEND_EDITION(1, 3), color);
-		xrect_Offset_Rect(&dst, 0, xfont_Get_FontID_Height(TIE_FRONTEND_EDITION(1, 3)) + 1);
+		xrect_Offset_Rect(&dst, 0, TIE_FRONTEND_EDITION(7, xfont_Get_FontID_Height(3) + 1));
 	}
 
 	xfont_Disable_FontID_Shadow(TIE_FRONTEND_EDITION(1, 3));
@@ -1034,7 +1037,7 @@ static void xuser_Pilot_Name(const char* search_name) {
 			break;
 
 		if (register_Index_To_Pilot(i, &slot) &&
-			register_Find_Reg_Dir_Name(dir_name, sizeof(dir_name), slot) && !strcmp(dir_name, search_name))
+			register_Find_Reg_Dir_Name(&register_directory, dir_name, slot) && !strcmp(dir_name, search_name))
 			matched = i;
 	}
 
@@ -1288,7 +1291,7 @@ static void register_Draw_Pilot_Name(Rect* frame, int16_t phase, int16_t inner_p
 			int16_t slot;
 			char dir_name[TIE_PILOT_NAME_CAPACITY];
 			if (register_Index_To_Pilot(pilot_active, &slot) &&
-				register_Find_Reg_Dir_Name(dir_name, sizeof(dir_name), slot)) {
+				register_Find_Reg_Dir_Name(&register_directory, dir_name, slot)) {
 				if (!shipext_Load_Pilot(dir_name)) {
 					pilot_active = -1;
 					typed[0] = 0;
@@ -1609,7 +1612,7 @@ static void register_Build_Fast_Pilot_Record(void) {
 
 		rec->name[0] = 0;
 
-		if (!register_Find_Reg_Dir_Name(dst, sizeof(dst), i))
+		if (!register_Find_Reg_Dir_Name(&register_directory, dst, i))
 			continue;
 
 		snprintf(name, sizeof(name), "%s.tfr", dst);
@@ -1748,7 +1751,7 @@ static void register_iuser_Pilot_Name(Input* input, int32_t time) {
 			break;
 
 		if (register_Index_To_Pilot(i, &slot) &&
-			register_Find_Reg_Dir_Name(dir_name, sizeof(dir_name), slot) && !strcmp(dir_name, btn->name))
+			register_Find_Reg_Dir_Name(&register_directory, dir_name, slot) && !strcmp(dir_name, btn->name))
 			matched = i;
 	}
 
@@ -2215,19 +2218,19 @@ static void register_idraw_Delete_Input(Input* input, Rect* frame, Rect* clip, i
 /* Copy the idx-th register_directory entry name into dst. */
 // FUNCTION: TIE95 0x7C770
 // FUNCTION: TIE98 0x472390
-// PORT: capacity parameter supports the wider TIE98 pilot name.
-// HARDENING: validates the destination and register_directory storage.
-static int16_t register_Find_Reg_Dir_Name(char* dst, size_t capacity, int16_t idx) {
+// PORT: bounds the copy by the wider TIE98 pilot name capacity.
+// HARDENING: validates the destination and directory storage.
+static int16_t register_Find_Reg_Dir_Name(Directory* dir, char* dst, int16_t idx) {
 	const DirEntry* entries;
 
-	if (!dst || !capacity || !register_directory.entries || idx < 0 || idx >= register_directory.count)
+	if (!dst || !dir->entries || idx < 0 || idx >= dir->count)
 		return 0;
-	entries = xmemhdl_Lock_Handle(register_directory.entries);
+	entries = xmemhdl_Lock_Handle(dir->entries);
 	if (!entries)
 		return 0;
-	strncpy(dst, entries[idx].name, capacity - 1);
-	dst[capacity - 1] = 0;
-	xmemhdl_Unlock_Handle(register_directory.entries);
+	strncpy(dst, entries[idx].name, TIE_PILOT_NAME_CAPACITY - 1);
+	dst[TIE_PILOT_NAME_CAPACITY - 1] = 0;
+	xmemhdl_Unlock_Handle(dir->entries);
 	return 1;
 }
 

@@ -524,7 +524,7 @@ void fview_bwingrotation(uint16_t angle, uint16_t part_id) {
 /* ---------- general component rotation ---------- */
 
 // FUNCTION: TIE95 0x2759C
-void fview_componentrotation(int16_t angle, const ShipModelMesh* mesh) {
+void fview_componentrotation(uint16_t angle, const ShipModelMesh* mesh) {
 	int32_t temp;
 	int32_t cos_a, sin_a;
 	int32_t axis_x, axis_y, axis_z;

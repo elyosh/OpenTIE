@@ -291,7 +291,7 @@ int16_t trig2_arccos(int16_t val) {
 
 /* Multiply 16-bit value by sine of angle, returns 16-bit fixed-point */
 // FUNCTION: TIE95 0x5BDDC
-int16_t trig2_sinewordmult(int16_t val, uint16_t angle) {
+int16_t trig2_sinewordmult(int val, int angle) {
 	uint16_t abs_val = (val < 0) ? -val : val;
 	int16_t sign = (val & 0x8000) ^ (angle & 0x8000);
 	uint16_t idx = ((angle >> 5) & 0x3FE) >> 1; /* binary uses 0x3FE to reach sintable[256] at 90° */
@@ -337,15 +337,17 @@ int16_t trig2_getsignedcos(int angle) {
 }
 
 // FUNCTION: TIE95 0x5BED0
-int16_t trig2_cosinewordmult(int16_t val, uint16_t angle) {
-	uint16_t abs_val = (val < 0) ? -val : val;
-	int16_t sign;
-	uint16_t idx;
+int16_t trig2_cosinewordmult(int val, int angle) {
+	int16_t sign = val & 0x8000;
+	uint16_t abs_val = val;
+	uint16_t shifted;
 	uint32_t result;
-	angle += 0x4000;
-	sign = (val & 0x8000) ^ (angle & 0x8000);
-	idx = ((angle >> 5) & 0x3FE) >> 1;
-	result = (uint32_t)sintable[idx] * abs_val + 0x8000;
+
+	if (sign)
+		abs_val = -val;
+	shifted = angle + 0x4000;
+	sign ^= shifted & 0x8000;
+	result = (uint32_t)sintable[((shifted >> 5) & 0x3FE) >> 1] * abs_val + 0x8000;
 	if (sign)
 		result = -(int32_t)result;
 	return (int16_t)(result >> 16);

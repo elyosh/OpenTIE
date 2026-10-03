@@ -122,7 +122,7 @@ void FlightModel_Draw_Object(FlightObject* object);
 void FlightModel_Draw_Object_Mesh(FlightObject* object, int mesh_index);
 void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_t screen_scale,
 								  const uint8_t* texture_level);
-int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_index, int depth);
+void Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_index, int depth);
 int16_t Hud_DrawBoxInXTrans(int x, int y, int width, int height, int color_index, int depth);
 void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, uint8_t color_index);
 

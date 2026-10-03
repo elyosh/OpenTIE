@@ -92,7 +92,7 @@ static Actor* stars_actor;
 static int16_t line_yvf[MAX_LINES];
 // GLOBAL: TIE95 0xF5180
 // GLOBAL: TIE98 0x58A6E8
-static int16_t scale_skipf[321];
+static uint16_t scale_skipf[321];
 // GLOBAL: TIE95 0xF5402
 // GLOBAL: TIE98 0x58A428
 static int16_t scale_skip[321];
@@ -187,7 +187,7 @@ int16_t title_Title(SceneHeadStruct* scene_head) {
 	for (i = 0; i <= 320; i++) {
 		if (i) {
 			scale_skip[i] = 320 / i - 1;
-			scale_skipf[i] = (int16_t)(((320 % i) << 16) / i);
+			scale_skipf[i] = (uint16_t)(((320 % i) << 16) / i);
 		} else {
 			scale_skip[0] = 0;
 			scale_skipf[0] = 0;
@@ -500,7 +500,7 @@ static int16_t title_draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off
 	dataptr = (char*)xbm_Lock_Bitmap(&title_background);
 
 	for (i = 0; i < title_num_lines; i++) {
-		int16_t y, by, yf, j;
+		int16_t y, j, by, yf;
 		if (!line_used[i])
 			continue;
 
@@ -512,15 +512,16 @@ static int16_t title_draw_Title(Actor* actor, Rect* r, Rect* clip_r, int16_t off
 
 		for (j = 0; j < 20; j++) {
 			if (scale_table[j] <= yf) {
-				int16_t w = 320 - 2 * (200 - y);
-				int16_t color = ((y - 40) >> 1) + 96 - base_color;
+				int16_t w, x, color;
+				w = 200 - y;
+				w = 320 - (w + w);
+				x = 160 - (w >> 1);
+				color = ((y - 40) >> 1) + 96 - base_color;
 				if (color < 96)
 					color = 96;
 
-				if (y < 200 && w > 0) {
-					int16_t x = 160 - (w >> 1);
-					slant_Scale_Line(dataptr, 0, by, scale_skip[w], scale_skipf[w], x, y, w, (uint8_t)color);
-				}
+				if (y < 200 && w != 0)
+					slant_Scale_Line(dataptr, 0, by, scale_skip[w], scale_skipf[w], x, y, w, color);
 				y++;
 			}
 			by++;

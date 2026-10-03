@@ -210,7 +210,7 @@ static int16_t talk_iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t 
 								   uint8_t right, int16_t x, int16_t y);
 static void talk_iuser_Answer(Input* input, int32_t time);
 static void talk_idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refresh);
-static int talk_user_Talk_Eyes(Actor* actor, int32_t time);
+static int16_t talk_user_Talk_Eyes(Actor* actor, int32_t time);
 static void talk_Check_Talk_Questions(void);
 static int16_t talk_Count_Debrief_Pages(void);
 static void talk_Get_Debrief_Line(char* string, int16_t line);
@@ -406,6 +406,7 @@ static void talk_end_View(int32_t refresh) {
 static int16_t talk_iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
 								 uint8_t right, int16_t x, int16_t y) {
 	uint8_t button;
+	int16_t hover;
 
 	(void)r;
 	(void)clip_r;
@@ -413,36 +414,39 @@ static int16_t talk_iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t ke
 	if (key)
 		return 0;
 
-	button = left ? left : right;
+	button = left;
+	if (!button)
+		button = right;
 
-	if (button <= 2) {
-		int16_t hover;
-		if (y < 0 || y >= 10 * (num_talk_questions + 1))
-			hover = -1;
-		else
-			hover = y / 10;
-		if (hover != active_talk_question) {
-			active_talk_question = hover;
-			xinpattr_Refresh_Input(input);
-			xinpattr_Refresh_Input(answer);
-			if (button) {
-				input->var1 = 1;
-				input->var2 = 1;
-				return 1;
+	switch (button) {
+		case 0:
+		case 1:
+		case 2:
+			if (y >= 0 && y < 10 * (num_talk_questions + 1))
+				hover = y / 10;
+			else
+				hover = -1;
+			if (hover != active_talk_question) {
+				active_talk_question = hover;
+				xinpattr_Refresh_Input(input);
+				xinpattr_Refresh_Input(answer);
+				if (button)
+					input->var1 = 1;
 			}
-		}
-	} else if (button == 3) {
-		if (active_talk_question != -1) {
-			if (cur_talk_question == active_talk_question) {
-				xinpattr_Selected_Input(answer);
-				answer->var2 = (right == 3);
-			} else {
-				xinpattr_Selected_Input(input);
+			break;
+		case 3:
+			if (active_talk_question != -1) {
+				if (active_talk_question == cur_talk_question) {
+					xinpattr_Selected_Input(answer);
+					answer->var2 = (button == right);
+				} else {
+					xinpattr_Selected_Input(input);
+				}
+				xinpattr_Refresh_Input(input);
+				xinpattr_Refresh_Input(answer);
 			}
-			xinpattr_Refresh_Input(input);
-			xinpattr_Refresh_Input(answer);
-		}
-		input->var1 = 0;
+			input->var1 = 0;
+			break;
 	}
 	input->var2 = 1;
 	return 1;
@@ -667,7 +671,7 @@ static void talk_idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refre
 
 // FUNCTION: TIE95 0x68BC8
 // FUNCTION: TIE98 0x48A140
-static int talk_user_Talk_Eyes(Actor* actor, int32_t time) {
+static int16_t talk_user_Talk_Eyes(Actor* actor, int32_t time) {
 	int16_t eye;
 	int16_t blink;
 	int16_t mouth_st;
@@ -1030,15 +1034,17 @@ static int16_t talk_Count_Debrief_Pages(void) {
 // FUNCTION: TIE95 0x69868
 // FUNCTION: TIE98 0x48A9F0
 static void talk_Get_Debrief_Line(char* string, int16_t line) {
+	int16_t a;
 	int16_t section_page;
 	int16_t section_pages;
-	int section;
+	int16_t section;
+	int16_t b, c, d, e;
 
 	*string = '\0';
 	center_line = 0;
 	section_page = line / max_paragraph_size;
 
-	for (section = 0; section < 5 && section_page >= 0; section++) {
+	for (section = 0; section < 5 && section_page >= 0; ++section) {
 		switch (section) {
 			case 0:
 				section_pages = talk_Count_Debrief_Header();
@@ -1073,7 +1079,7 @@ static void talk_Get_Debrief_Line(char* string, int16_t line) {
 				break;
 		}
 		section_page -= section_pages;
-		line -= section_pages * max_paragraph_size;
+		line -= max_paragraph_size * section_pages;
 	}
 }
 
@@ -1854,32 +1860,17 @@ void talk_Start_Speech_Stream(void) {
 }
 
 /* Allocate the talk-speech Sound + 2 MB streaming buffer. Mirrors
- * retail TALK_Alloc_Speech_Sound (sub_6B363). Idempotent — already
- * allocated returns the existing sound. */
+ * retail TALK_Alloc_Speech_Sound (sub_6B363). */
 // FUNCTION: TIE95 0x6B363
 void talk_Alloc_Speech_Sound(void) {
-	LandruHandle data;
-
-	if (talk_speech_sound)
-		return;
-
-	data = xmemhdl_Alloc_Clear_Handle(TALK_SPEECH_BUF_SIZE, LANDRU_MEMORY_DEFAULT);
-	if (!data)
-		return;
-	talk_speech_sound = xsound_Alloc_Sound(data, 0, 0);
-	if (!talk_speech_sound) {
-		xmemhdl_Free_Handle(data);
-		return;
-	}
-
-	/* Retail TALK_Alloc_Speech_Sound writes 0x564F4943 (= FOURCC_VOIC as
-	 * a little-endian DWORD). Use the same FOURCC so anything that
-	 * looks at the sound list by res_type matches. */
-	talk_speech_sound->res_type = FOURCC_VOIC;
+	talk_speech_sound = xsound_Alloc_Sound(LANDRU_NULL_HANDLE, 0, 0);
 	talk_speech_sound->type = digitalSound;
-	talk_speech_sound->size = 0;
+	/* Retail writes 0x564F4943 (= FOURCC_VOIC as a little-endian DWORD)
+	 * so anything that looks at the sound list by res_type matches. */
+	talk_speech_sound->res_type = FOURCC_VOIC;
 	talk_speech_pos = 0;
 	talk_speech_streaming = 0;
+	talk_speech_sound->data = xmemhdl_Alloc_Clear_Handle(TALK_SPEECH_BUF_SIZE, LANDRU_MEMORY_DEFAULT);
 
 	/* Match retail flag clears so the sound is freed normally on
 	 * scene shutdown rather than being held alive. */

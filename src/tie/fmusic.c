@@ -1,4 +1,5 @@
 #include "tie/fmusic.h"
+#include "tie/edition.h"
 #include "tie/fediskio.h"
 #include "tie_runtime/audio/config.h"
 #include "tie_runtime/diagnostics/diagnostics.h"
@@ -23,6 +24,14 @@ enum {
 	FMUSIC_CHUNK_SIZE = 64,
 	FMUSIC_ID_BASE = 500,
 };
+
+/* 16-byte GMD record: master header (size = directory data size) or
+ * track record (big-endian tag, name, size = track data size). */
+typedef struct FmusicRecord {
+	int32_t tag;
+	uint8_t name[8];
+	int32_t size;
+} FmusicRecord;
 
 /* Paging slot offsets into music_buffer (initialized data in the binary) */
 // GLOBAL: TIE95 0xC1F48
@@ -213,9 +222,14 @@ void fmusic_freemusic(void) {
  */
 // FUNCTION: TIE95 0x23C7C
 // FUNCTION: TIE98 0x41F0C0
-uint32_t fmusic_swapdword(uint32_t val) {
-	return ((val & 0xFF000000) >> 24) | ((val & 0x00FF0000) >> 8) | ((val & 0x0000FF00) << 8) |
-		   ((val & 0x000000FF) << 24);
+uint32_t fmusic_swapdword(int32_t val) {
+	uint32_t result;
+
+	result = (uint32_t)(val & 0x000000FF) << 24;
+	result |= (val & 0x0000FF00) << 8;
+	result |= (val & 0x00FF0000) >> 8;
+	result |= (val & 0xFF000000) >> 24;
+	return result;
 }
 
 /*
@@ -233,7 +247,7 @@ uint32_t fmusic_swapdword(uint32_t val) {
 // FUNCTION: TIE95 0x23CB0
 // FUNCTION: TIE98 0x41F0F0
 int16_t fmusic_loadmusic(const char* filename) {
-	uint8_t header[16];
+	FmusicRecord record;
 	TieFile* fp;
 	uint16_t track_count;
 	uint16_t loaded;
@@ -247,46 +261,42 @@ int16_t fmusic_loadmusic(const char* filename) {
 	}
 	fp = fileptr;
 
-	/* Read 16-byte master header. Bytes 12-15 are the directory data size;
-	 * fseek uses the full 32-bit value, the track count only the low word. */
-	fediskio_readfileblock(header, 1, 16, fp);
-	{
-		int32_t data_size;
-
-		memcpy(&data_size, &header[12], 4);
-		TieStorage_Seek(fp, data_size, TIE_SEEK_CUR);
-		track_count = (uint16_t)data_size >> 4;
-	}
-	if (!track_count) {
-		TieStorage_Close(fp);
-		return 0;
-	}
+	/* Master header: size is the directory data size; fseek uses the full
+	 * 32-bit value, the track count only the low word. */
+	fediskio_readfileblock(&record, 1, 16, fp);
+	TieStorage_Seek(fp, record.size, TIE_SEEK_CUR);
+	track_count = (uint16_t)record.size / 16;
 
 	for (loaded = 0; loaded < track_count; loaded++) {
-		uint32_t tag;
 		uint16_t c;
-		uint16_t track_size;
 		LandruHandle handle;
+		uint8_t* data;
 
-		/* Read 16-byte track record:
-		 * [4B big-endian tag] [8B name] [2B data size] [2B unused] */
-		fediskio_readfileblock(header, 1, 16, fp);
+		fediskio_readfileblock(&record, 1, 16, fp);
 
-		/* The tag is byte-swapped in place but never consumed. */
-		memcpy(&tag, &header[0], 4);
-		tag = fmusic_swapdword(tag);
-		memcpy(&header[0], &tag, 4);
+		/* The tag is byte-swapped in place but never consumed. TIE95 expands
+		 * the swap inline; TIE98 calls the helper. */
+		if (TIE_FLIGHT_TIE98) {
+			record.tag = fmusic_swapdword(record.tag);
+		} else {
+			uint32_t swapped;
+
+			swapped = (uint32_t)(record.tag & 0x000000FF) << 24;
+			swapped |= (record.tag & 0x0000FF00) << 8;
+			swapped |= (record.tag & 0x00FF0000) >> 8;
+			swapped |= (record.tag & 0xFF000000) >> 24;
+			record.tag = swapped;
+		}
 
 		/* Copy 8-byte name, lowercasing A-Z */
 		for (c = 0; c < 8; c++) {
-			if (header[4 + c] >= 'A' && header[4 + c] <= 'Z')
-				header[4 + c] += 32;
-			music_name[c + 9 * (uint16_t)num_music] = (char)header[4 + c];
+			if (record.name[c] >= 'A' && record.name[c] <= 'Z')
+				record.name[c] += 32;
+			music_name[c + (uint16_t)num_music * 9] = (char)record.name[c];
 		}
 		music_name[9 * (uint16_t)num_music + 8] = '\0';
 
-		memcpy(&track_size, &header[12], 2);
-		handle = fmusic_allocmusic(track_size);
+		handle = fmusic_allocmusic(record.size);
 		if (!handle) {
 			TieStorage_Close(fp);
 			music_buffer = NULL;
@@ -294,7 +304,8 @@ int16_t fmusic_loadmusic(const char* filename) {
 		}
 
 		/* Read track data directly into the locked handle */
-		fmusic_readfiledata(fp, xmemhdl_Lock_Handle(handle), track_size);
+		data = xmemhdl_Lock_Handle(handle);
+		fmusic_readfiledata(fp, data, record.size);
 		xmemhdl_Unlock_Handle(handle);
 	}
 

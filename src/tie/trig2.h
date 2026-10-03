@@ -22,8 +22,8 @@ uint16_t trig2_getcosine(uint16_t angle);
 int16_t trig2_getsignedcos(int angle);
 
 /* Multiply by trig (16-bit value × sin/cos, returns 16-bit) */
-int16_t trig2_sinewordmult(int16_t val, uint16_t angle);
-int16_t trig2_cosinewordmult(int16_t val, uint16_t angle);
+int16_t trig2_sinewordmult(int val, int angle);
+int16_t trig2_cosinewordmult(int val, int angle);
 
 /* Multiply by trig (32-bit value × sin/cos, returns 32-bit) */
 int32_t trig2_sinedwordmult(int32_t val, int32_t angle);

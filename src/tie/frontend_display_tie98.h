@@ -35,6 +35,9 @@ extern int32_t g_displayHeight;
 extern int32_t g_flightPrimaryPitch;
 extern int g_windowActive;
 extern int g_quitRequested;
+extern int g_closeRequested;
+/* Dialog frames run while g_closeRequested is pending. */
+extern int g_closeRequestFrames;
 extern int g_hardwarePixelFormatAvailable;
 extern int g_frontendDisplayWndProcMode;
 extern int g_windowReactivated;
@@ -43,6 +46,7 @@ extern int g_flightFullscreen;
 extern IDirectDrawSurface* g_unusedFrontendSurfaceAlias;
 
 void Flight_PumpWindowMessages(void);
+int Flight_GetJoystickButtonCount(void);
 void Renderer_ReleaseHardwareZBuffer(void);
 const DxGuid* FrontendDisplay_LoadDriverGuid(void);
 

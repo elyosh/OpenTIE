@@ -484,103 +484,108 @@ void transfm2_geteyeminmaxS2(const int16_t* source, int32_t* dest) {
 // FUNCTION: TIE95 0x5A608
 void transfm2_getworldminmax(const int16_t* source, int16_t* dest) {
 	int32_t x1 = source[0];
+	int32_t y1 = -source[1];
+	int32_t y2 = -source[4];
 	int32_t z1 = source[2];
 	int32_t x2 = source[3];
 	int32_t z2 = source[5];
-	int32_t y1 = -source[1];
-	int32_t y2 = -source[4];
-
-	int32_t mn, mx, a, b;
+	int32_t mx, mn;
 
 	/* Row 1: craftS1, craftf1, craftU1 */
-	a = craftS1 * x1;
-	b = craftS1 * x2;
-	if (b < a) {
-		mn = b;
-		mx = a;
-	} else {
-		mn = a;
-		mx = b;
+	mn = x1 * craftS1;
+	mx = x2 * craftS1;
+	if (mx < mn) {
+		int32_t t = mn;
+		mn = mx;
+		mx = t;
 	}
-	a = craftf1 * y1;
-	b = craftf1 * y2;
-	if (b < a) {
-		mn += b;
-		mx += a;
-	} else {
-		mn += a;
-		mx += b;
+	{
+		int32_t a = y1 * craftf1;
+		int32_t b = y2 * craftf1;
+		if (b < a) {
+			mn += b;
+			mx += a;
+		} else {
+			mn += a;
+			mx += b;
+		}
 	}
-	a = craftU1 * z1;
-	b = craftU1 * z2;
-	if (b < a) {
-		mn += b;
-		mx += a;
-	} else {
-		mn += a;
-		mx += b;
+	{
+		int32_t a = z1 * craftU1;
+		int32_t b = z2 * craftU1;
+		if (b < a) {
+			mn += b;
+			mx += a;
+		} else {
+			mn += a;
+			mx += b;
+		}
 	}
 	dest[0] += (int16_t)((mn + 0x100000) >> 21);
 	dest[3] += (int16_t)((mx - 0x100000) >> 21);
 
 	/* Row 2: craftS2, craftf2, craftU2 */
-	a = craftS2 * x1;
-	b = craftS2 * x2;
-	if (b < a) {
-		mn = b;
-		mx = a;
-	} else {
-		mn = a;
-		mx = b;
+	mn = x1 * craftS2;
+	mx = x2 * craftS2;
+	if (mx < mn) {
+		int32_t t = mn;
+		mn = mx;
+		mx = t;
 	}
-	a = craftf2 * y1;
-	b = craftf2 * y2;
-	if (b < a) {
-		mn += b;
-		mx += a;
-	} else {
-		mn += a;
-		mx += b;
+	{
+		int32_t a = y1 * craftf2;
+		int32_t b = y2 * craftf2;
+		if (b < a) {
+			mn += b;
+			mx += a;
+		} else {
+			mn += a;
+			mx += b;
+		}
 	}
-	a = craftU2 * z1;
-	b = craftU2 * z2;
-	if (b < a) {
-		mn += b;
-		mx += a;
-	} else {
-		mn += a;
-		mx += b;
+	{
+		int32_t a = z1 * craftU2;
+		int32_t b = z2 * craftU2;
+		if (b < a) {
+			mn += b;
+			mx += a;
+		} else {
+			mn += a;
+			mx += b;
+		}
 	}
 	dest[1] += (int16_t)((mn + 0x100000) >> 21);
 	dest[4] += (int16_t)((mx - 0x100000) >> 21);
 
 	/* Row 3: craftS3, craftf3, craftU3 */
-	a = craftS3 * x1;
-	b = craftS3 * x2;
-	if (b < a) {
-		mn = b;
-		mx = a;
-	} else {
-		mn = a;
-		mx = b;
+	mn = x1 * craftS3;
+	mx = x2 * craftS3;
+	if (mx < mn) {
+		int32_t t = mn;
+		mn = mx;
+		mx = t;
 	}
-	a = craftf3 * y1;
-	b = craftf3 * y2;
-	if (b < a) {
-		mn += b;
-		mx += a;
-	} else {
-		mn += a;
-		mx += b;
+	{
+		int32_t a = y1 * craftf3;
+		int32_t b = y2 * craftf3;
+		if (b < a) {
+			mn += b;
+			mx += a;
+		} else {
+			mn += a;
+			mx += b;
+		}
 	}
-	a = craftU3 * z1;
-	b = craftU3 * z2;
-	if (b < a) {
-		mn += b;
-		mx += a;
-	} else {
-		mn += a;
-		mx += b;
+	{
+		int32_t a = z1 * craftU3;
+		int32_t b = z2 * craftU3;
+		if (b < a) {
+			mn += b;
+			mx += a;
+		} else {
+			mn += a;
+			mx += b;
+		}
 	}
 	dest[2] += (int16_t)((mn + 0x100000) >> 21);
 	dest[5] += (int16_t)((mx - 0x100000) >> 21);
@@ -973,19 +978,19 @@ int32_t* transfm2_calczintersect(const DRAWPOL_EyeVertex* source1, const DRAWPOL
 // FUNCTION: TIE95 0x5B090
 TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const DRAWPOL_EyeVertex* source1,
 											  const DRAWPOL_EyeVertex* source2, TRANSFM2_ScreenPoint* dest) {
-	int16_t lightVal;
 	int32_t zneg;
 	int32_t ztotal;
 	int32_t diff;
 	int32_t interp;
 	int32_t val;
 	int32_t limit;
-	int32_t screen;
+	int32_t clamp;
+	int32_t lightVal;
 
 	/* Z-ratio for linear interpolation between two vertices straddling
 	 * the z=0 plane. */
 	zneg = -source1->z;
-	ztotal = source2->z - source1->z;
+	ztotal = source2->z + zneg;
 	while (zneg & 0xFFFF0000) {
 		zneg >>= 1;
 		ztotal >>= 1;
@@ -996,10 +1001,7 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 	lightVal = 0;
 	if (firstvertptr[-1] & DRAWPOL_FACE_GOURAUD) {
 		/* Compute lighting for negV if not cached */
-		int16_t negLight;
-		int16_t posLight;
-
-		if ((int16_t)vertexlight[negV] == -1) {
+		if (vertexlight[negV] == (uint16_t)0xFFFF) {
 			PolyVert* norm = &firstvertnorm[negV];
 			int32_t dot = math2_dot3_q15_clamped(norm->x, norm->y, norm->z, rotlightX, rotlightY, rotlightZ);
 			vertexlight[negV] = (uint16_t)dot;
@@ -1009,7 +1011,7 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 		}
 
 		/* Compute lighting for posV if not cached */
-		if ((int16_t)vertexlight[posV] == -1) {
+		if (vertexlight[posV] == (uint16_t)0xFFFF) {
 			PolyVert* norm = &firstvertnorm[posV];
 			int32_t dot = math2_dot3_q15_clamped(norm->x, norm->y, norm->z, rotlightX, rotlightY, rotlightZ);
 			vertexlight[posV] = (uint16_t)dot;
@@ -1019,9 +1021,9 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 		}
 
 		/* Interpolate lighting at clip point */
-		negLight = (int16_t)vertexlight[negV];
-		posLight = (int16_t)vertexlight[posV];
-		lightVal = negLight + (int16_t)(((int32_t)(zratio >> 1) * (posLight - negLight)) >> 15);
+		diff = (int16_t)(vertexlight[posV] - vertexlight[negV]);
+		diff = (diff * ((int16_t)zratio >> 1)) >> 15;
+		lightVal = vertexlight[negV] + diff;
 	}
 
 	dest->light = lightVal;
@@ -1041,17 +1043,18 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 
 	limit = 0x7FFFFFFF >> perspShift;
 
+	clamp = 0x7FFFFFFF - perspFactor;
 	if (val > limit)
-		screen = 0x7FFFFFFF - perspFactor;
+		val = clamp;
 	else if (val < -limit)
-		screen = perspFactor - 0x7FFFFFFF;
+		val = -clamp;
 	else
 		/* Retail emits `shl eax, cl` (logical bit-shift, sign-agnostic).
 		 * C signed left-shift of a negative value is UB even when the
 		 * result fits — go through uint32 to match the asm exactly. */
-		screen = (int32_t)((uint32_t)val << perspShift);
+		val = (int32_t)((uint32_t)val << perspShift);
 
-	dest->xy[0] = halfpixelswide + screen;
+	dest->xy[0] = val + halfpixelswide;
 
 	eyeysign = 0;
 	diff = source2->y - source1->y;
@@ -1077,14 +1080,15 @@ TRANSFM2_ScreenPoint* transfm2_facezintersect(int16_t negV, int16_t posV, const 
 
 	limit = 0x7FFFFFFF >> perspShift;
 
+	clamp = 0x7FFFFFFF - perspFactor;
 	if (val > limit)
-		screen = 0x7FFFFFFF - perspFactor;
+		val = clamp;
 	else if (val < -limit)
-		screen = perspFactor - 0x7FFFFFFF;
+		val = -clamp;
 	else
-		screen = (int32_t)((uint32_t)val << perspShift);
+		val = (int32_t)((uint32_t)val << perspShift);
 
-	dest->xy[1] = transfm2_screenyoffset + halfpixelsdeep + screen;
+	dest->xy[1] = val + halfpixelsdeep + transfm2_screenyoffset;
 
 	return dest;
 }

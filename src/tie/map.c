@@ -1153,42 +1153,38 @@ static int16_t map_Count_VR_Debrief_Goals(void) { return 1; }
 // FUNCTION: TIE95 0x761C0
 // FUNCTION: TIE98 0x44F660
 static void map_Set_VR_Talk_Paragraph(void) {
-	int16_t qid;
-	char* data;
+	int8_t* data;
 	int16_t pos;
 	int16_t line_count;
 
 	if (cur_talk_question < 0 || cur_talk_question >= num_talk_questions)
 		return;
 
-	qid = talk_win_id[cur_talk_question];
-	if (qid == 5) {
-		num_talk_paragraphs = map_Count_VR_Debrief_Pages();
-		cur_talk_paragraph = 0;
-		return;
-	}
+	if (talk_win_id[cur_talk_question] != 5) {
+		data = (int8_t*)xmemhdl_Lock_Handle(
+			talk_brief->talk_data[5 * talk_person + talk_win_id[cur_talk_question]]);
+		line_count = 0;
 
-	data = (char*)xmemhdl_Lock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
-	if (!data)
-		return;
-
-	pos = 0;
-	while (data[pos] && data[pos] != '\n')
-		pos++;
-	pos++;
-
-	line_count = 0;
-	while (data[pos]) {
+		pos = 0;
 		while (data[pos] && data[pos] != '\n')
 			pos++;
-		if (data[pos])
-			pos++;
-		line_count++;
-	}
+		pos++;
 
-	num_talk_paragraphs = (max_paragraph_size + line_count - 1) / max_paragraph_size;
-	cur_talk_paragraph = 0;
-	xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + qid]);
+		while (data[pos]) {
+			while (data[pos] && data[pos] != '\n')
+				pos++;
+			if (data[pos])
+				pos++;
+			line_count++;
+		}
+
+		xmemhdl_Unlock_Handle(talk_brief->talk_data[5 * talk_person + talk_win_id[cur_talk_question]]);
+		num_talk_paragraphs = (max_paragraph_size + line_count - 1) / max_paragraph_size;
+		cur_talk_paragraph = 0;
+	} else {
+		num_talk_paragraphs = map_Count_VR_Debrief_Pages();
+		cur_talk_paragraph = 0;
+	}
 }
 
 /* ======================================================================
@@ -1678,13 +1674,14 @@ static int16_t map_Count_VR_Debrief_Kills(void) {
 
 	for (i = 0; i < (int16_t)NUM_SPEC; i++) {
 		int16_t j;
+		int16_t found = 0;
 
 		for (j = 0; j < 6; j++) {
-			if (player_Is_Side_Enemy(j) && mission.kills_losses[j][i]) {
-				count++;
-				break;
-			}
+			if (player_Is_Side_Enemy(j) && mission.kills_losses[j][i])
+				found = 1;
 		}
+		if (found)
+			count++;
 	}
 	if (pstate.player_total_kills)
 		count++;
@@ -1794,25 +1791,29 @@ static int16_t map_Count_VR_Debrief_Losses(void) {
 // FUNCTION: TIE95 0x773F8
 // FUNCTION: TIE98 0x450950
 static void map_Find_VR_Debrief_Losses(char* string, int16_t page, int16_t line) {
-	int16_t in_page = line % max_paragraph_size;
-	if (in_page == 0) {
-		map_Get_VR_Debrief_Loss_Title(string);
-	} else if (in_page == 1) {
-		textext_Copy_Text(string, txtTalkDash);
-		center_line = 1;
-	} else {
-		int16_t skip = line - 2 * (page + 1);
-		int16_t i;
+	int in_page = line % max_paragraph_size;
+	int16_t i;
 
-		for (i = 0; i < (int16_t)NUM_SPEC; i++) {
-			map_Get_VR_Debrief_Losses(string, i);
-			if (*string) {
-				if (!skip)
-					return;
-				skip--;
-				*string = '\0';
-			}
+	if (in_page < 2) {
+		if (in_page != 0) {
+			textext_Copy_Text(string, txtTalkDash);
+			center_line = 1;
+		} else {
+			map_Get_VR_Debrief_Loss_Title(string);
 		}
+		return;
+	}
+	i = 0;
+	line -= 2 * (page + 1);
+	while (i < NUM_SPEC) {
+		map_Get_VR_Debrief_Losses(string, i);
+		if (*string) {
+			if (!line)
+				return;
+			line--;
+			*string = '\0';
+		}
+		i++;
 	}
 }
 
@@ -1880,25 +1881,29 @@ static int16_t map_Count_VR_Debrief_Captures(void) {
 // FUNCTION: TIE95 0x775F4
 // FUNCTION: TIE98 0x450B90
 static void map_Find_VR_Debrief_Captures(char* string, int16_t page, int16_t line) {
-	int16_t in_page = line % max_paragraph_size;
-	if (in_page == 0) {
-		map_Get_VR_Debrief_Capture_Title(string);
-	} else if (in_page == 1) {
-		textext_Copy_Text(string, txtTalkDash);
-		center_line = 1;
-	} else {
-		int16_t skip = line - 2 * (page + 1);
-		int16_t i;
+	int in_page = line % max_paragraph_size;
+	int16_t i;
 
-		for (i = 0; i < (int16_t)NUM_SPEC; i++) {
-			map_Get_VR_Debrief_Captures(string, i);
-			if (*string) {
-				if (!skip)
-					return;
-				skip--;
-				*string = '\0';
-			}
+	if (in_page < 2) {
+		if (in_page != 0) {
+			textext_Copy_Text(string, txtTalkDash);
+			center_line = 1;
+		} else {
+			map_Get_VR_Debrief_Capture_Title(string);
 		}
+		return;
+	}
+	i = 0;
+	line -= 2 * (page + 1);
+	while (i < NUM_SPEC) {
+		map_Get_VR_Debrief_Captures(string, i);
+		if (*string) {
+			if (!line)
+				return;
+			*string = '\0';
+			line--;
+		}
+		i++;
 	}
 }
 

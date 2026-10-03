@@ -42,7 +42,6 @@ void matrix_Init_Matrix(Matrix* m) {
 Matrix* matrix_Res_Matrix(ResFile* rf, const char* name) {
 	ResFile* stream;
 	Matrix* m;
-	int32_t frame_size, data_size;
 	int offset;
 	uint32_t total_size;
 	if (!xres_Get_Resource_Offset(rf, FOURCC_MTRX, name, &offset, &total_size))
@@ -62,10 +61,12 @@ Matrix* matrix_Res_Matrix(ResFile* rf, const char* name) {
 	m->trans_count = xres_Read_Resource_Word(rf);
 	m->matrix_count = xres_Read_Resource_Word(rf);
 
-	frame_size = 12 + 6 * m->trans_count + 24 * m->matrix_count;
-	data_size = frame_size * m->frame_count;
+	total_size = 12;
+	total_size += 6 * m->trans_count;
+	total_size += 24 * m->matrix_count;
+	total_size *= m->frame_count;
 
-	m->data = xres_Read_Resource_Data(rf, data_size, LANDRU_MEMORY_DEFAULT);
+	m->data = xres_Read_Resource_Data(rf, total_size, LANDRU_MEMORY_DEFAULT);
 	xres_Close_Resource_Data(rf);
 
 	return m;

@@ -1,6 +1,7 @@
 #ifndef TIE_STUB_H
 #define TIE_STUB_H
 
+#include "landru/memhdl.h"
 #include "landru/rect.h"
 
 #include <stdint.h>
@@ -14,7 +15,7 @@ extern "C" {
  * src_rect defines which portion of the buffer to read.
  * (screen_x, screen_y) is the destination position on the canvas.
  * Clips against the current canvas clip rect. */
-int stub_Copy_From_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, int16_t screen_y,
+int stub_Copy_From_Clipped_Buffer(LandruHandle buffer, Rect* src_rect, int16_t screen_x, int16_t screen_y,
 								  int16_t buf_w, int16_t buf_h);
 
 /* Copy a rectangular region FROM the drawing canvas TO a flat buffer.
@@ -22,7 +23,7 @@ int stub_Copy_From_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x
  * src_rect defines which portion of the buffer to write into.
  * (screen_x, screen_y) is the source position on the canvas.
  * Clips against the current canvas clip rect. */
-int stub_Copy_To_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, int16_t screen_y,
+int stub_Copy_To_Clipped_Buffer(LandruHandle buffer, Rect* src_rect, int16_t screen_x, int16_t screen_y,
 								int16_t buf_w, int16_t buf_h);
 
 /* Texture-map a source image onto a rotated quadrilateral.

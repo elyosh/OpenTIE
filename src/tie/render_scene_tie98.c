@@ -1,6 +1,7 @@
 #include "tie/render_scene_tie98.h"
 #include "tie/anim.h"
 #include "tie/drawpol.h"
+#include "tie/festring.h"
 #include "tie/flight_surface_tie98.h"
 #include "tie/logbuf2.h"
 #include "tie/model_texture_tie98.h"
@@ -1368,39 +1369,34 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 }
 
 // FUNCTION: TIE98 0x42C190
-int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_index, int depth) {
+void Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_index, int depth) {
+	float screen_depth;
 	int right;
 	int bottom;
 	int corner_width;
 	int corner_height;
-	const uint8_t* rgb;
-	uint32_t color;
-	float screen_depth;
-	int16_t result;
-	int quad_base;
-	D3DTLVERTEX* quad;
-	Std3DRenderTri* quad_triangles;
-	int quad_vertex;
+	int color;
+	int start;
+	int end;
+	int top;
+	int bottom_edge;
+	int i;
 
 	if (depth == 1 && width == 4 && height == 4) {
-		int start = x;
-		int end = x + 4;
-		if (start < 0)
-			start = 0;
-		if (end > pixelswide)
-			end = pixelswide;
-		if (start < end) {
-			int row;
+		int saved_color;
 
-			FlightSurface_Lock();
-			for (row = 0; row < 4; ++row) {
-				const int screen_y = y + row;
-				if (screen_y >= 0 && screen_y < pixelsdeep)
-					FlightMap_DrawObjectBoxSpan(start, end, screen_y, color_index);
-			}
-			FlightSurface_Unlock();
-		}
-		return 0;
+		FlightSurface_Lock();
+		saved_color = backcolor;
+		backcolor = (uint8_t)color_index;
+		x += displaycorner_columns;
+		y += displaycorner_lines;
+		festring_setbound((uint16_t)displaycorner_columns, (uint16_t)displaycorner_lines,
+						  (uint16_t)(displaycorner_columns + pixelswide),
+						  (uint16_t)(displaycorner_lines + pixelsdeep));
+		fillbox((uint16_t)x, (uint16_t)y, (uint16_t)(x + 4), (uint16_t)(y + 4));
+		backcolor = (uint8_t)saved_color;
+		FlightSurface_Unlock();
+		return;
 	}
 
 	if (g_d3dVertexCount + 32 > g_maxBatchVerts || g_d3dIndexCount + 16 > g_maxBatchTris) {
@@ -1419,6 +1415,10 @@ int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_inde
 		g_d3dVertexCount = 0;
 	}
 
+	color_index *= 3;
+	color = ((((rtsvga2_vgapalette[color_index] - 64) << 8) + rtsvga2_vgapalette[color_index + 1]) << 8) +
+			rtsvga2_vgapalette[color_index + 2];
+	color <<= 2;
 	right = x + width;
 	bottom = y + height;
 	corner_width = width >> 3;
@@ -1431,53 +1431,49 @@ int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_inde
 		corner_width = width;
 	if (corner_height > height)
 		corner_height = height;
-	rgb = &rtsvga2_vgapalette[3 * (uint8_t)color_index];
-	color = 0xff000000u | ((uint32_t)rgb[0] << 18) | ((uint32_t)rgb[1] << 10) | ((uint32_t)rgb[2] << 2);
 	if (depth < 1)
 		depth = 1;
-	screen_depth = 1.0f / ((float)depth * (1.0f / 2048.0f) + 1.0f);
+	screen_depth = 1.0f / ((float)depth / 2048.0f - (-1.0f));
 	if (g_std3DZBufferBitDepth == 2)
 		screen_depth = 1.0f - screen_depth;
 
-	result = (int16_t)g_d3dVertexCount;
 	if (y >= 0 && y < pixelsdeep) {
-		int start = x < 0 ? 0 : x;
-		int end = x + corner_width;
+		start = x;
+		end = x + corner_width;
+		if (start < 0)
+			start = 0;
 		if (end >= pixelswide)
 			end = pixelswide - 1;
 		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)start;
-			quad[0].sy = g_flightVpOriginY + (float)y;
-			quad[1].sx = g_flightVpOriginX + (float)end;
-			quad[1].sy = g_flightVpOriginY + (float)y;
-			quad[2].sx = g_flightVpOriginX + (float)end;
-			quad[2].sy = g_flightVpOriginY + (float)(y + 1);
-			quad[3].sx = g_flightVpOriginX + (float)start;
-			quad[3].sy = g_flightVpOriginY + (float)(y + 1);
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
+			g_flightVertexBuffer[g_d3dVertexCount].sx = g_flightVpOriginX + (float)start;
+			g_flightVertexBuffer[g_d3dVertexCount].sy = g_flightVpOriginY + (float)y;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sx = g_flightVpOriginX + (float)end;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sy = g_flightVpOriginY + (float)y;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sx = g_flightVpOriginX + (float)end;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sy = g_flightVpOriginY + (float)(y + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sx = g_flightVpOriginX + (float)start;
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sy = g_flightVpOriginY + (float)(y + 1);
+			for (i = 0; i < 4; ++i) {
+				g_flightVertexBuffer[g_d3dVertexCount + i].sz = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].rhw = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tu = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tv = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].color = color;
+				g_flightVertexBuffer[g_d3dVertexCount + i].specular = 0;
 			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 1;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 3;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
 			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
 		}
 		start = right - corner_width;
 		end = right;
@@ -1486,78 +1482,74 @@ int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_inde
 		if (end >= pixelswide)
 			end = pixelswide - 1;
 		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)start;
-			quad[0].sy = g_flightVpOriginY + (float)y;
-			quad[1].sx = g_flightVpOriginX + (float)end;
-			quad[1].sy = g_flightVpOriginY + (float)y;
-			quad[2].sx = g_flightVpOriginX + (float)end;
-			quad[2].sy = g_flightVpOriginY + (float)(y + 1);
-			quad[3].sx = g_flightVpOriginX + (float)start;
-			quad[3].sy = g_flightVpOriginY + (float)(y + 1);
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
+			g_flightVertexBuffer[g_d3dVertexCount].sx = g_flightVpOriginX + (float)start;
+			g_flightVertexBuffer[g_d3dVertexCount].sy = g_flightVpOriginY + (float)y;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sx = g_flightVpOriginX + (float)end;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sy = g_flightVpOriginY + (float)y;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sx = g_flightVpOriginX + (float)end;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sy = g_flightVpOriginY + (float)(y + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sx = g_flightVpOriginX + (float)start;
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sy = g_flightVpOriginY + (float)(y + 1);
+			for (i = 0; i < 4; ++i) {
+				g_flightVertexBuffer[g_d3dVertexCount + i].sz = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].rhw = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tu = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tv = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].color = color;
+				g_flightVertexBuffer[g_d3dVertexCount + i].specular = 0;
 			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 1;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 3;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
 			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
 		}
 	}
 	if (bottom >= 0 && bottom < pixelsdeep) {
-		int start = x < 0 ? 0 : x;
-		int end = x + corner_width;
+		start = x;
+		end = x + corner_width;
+		if (start < 0)
+			start = 0;
 		if (end >= pixelswide)
 			end = pixelswide - 1;
 		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)start;
-			quad[0].sy = g_flightVpOriginY + (float)bottom;
-			quad[1].sx = g_flightVpOriginX + (float)end;
-			quad[1].sy = g_flightVpOriginY + (float)bottom;
-			quad[2].sx = g_flightVpOriginX + (float)end;
-			quad[2].sy = g_flightVpOriginY + (float)(bottom + 1);
-			quad[3].sx = g_flightVpOriginX + (float)start;
-			quad[3].sy = g_flightVpOriginY + (float)(bottom + 1);
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
+			g_flightVertexBuffer[g_d3dVertexCount].sx = g_flightVpOriginX + (float)start;
+			g_flightVertexBuffer[g_d3dVertexCount].sy = g_flightVpOriginY + (float)bottom;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sx = g_flightVpOriginX + (float)end;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sy = g_flightVpOriginY + (float)bottom;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sx = g_flightVpOriginX + (float)end;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sy = g_flightVpOriginY + (float)(bottom + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sx = g_flightVpOriginX + (float)start;
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sy = g_flightVpOriginY + (float)(bottom + 1);
+			for (i = 0; i < 4; ++i) {
+				g_flightVertexBuffer[g_d3dVertexCount + i].sz = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].rhw = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tu = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tv = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].color = color;
+				g_flightVertexBuffer[g_d3dVertexCount + i].specular = 0;
 			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 1;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 3;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
 			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
 		}
 		start = right - corner_width;
 		end = right + 1;
@@ -1566,201 +1558,189 @@ int16_t Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_inde
 		if (end >= pixelswide)
 			end = pixelswide - 1;
 		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)start;
-			quad[0].sy = g_flightVpOriginY + (float)bottom;
-			quad[1].sx = g_flightVpOriginX + (float)end;
-			quad[1].sy = g_flightVpOriginY + (float)bottom;
-			quad[2].sx = g_flightVpOriginX + (float)end;
-			quad[2].sy = g_flightVpOriginY + (float)(bottom + 1);
-			quad[3].sx = g_flightVpOriginX + (float)start;
-			quad[3].sy = g_flightVpOriginY + (float)(bottom + 1);
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
+			g_flightVertexBuffer[g_d3dVertexCount].sx = g_flightVpOriginX + (float)start;
+			g_flightVertexBuffer[g_d3dVertexCount].sy = g_flightVpOriginY + (float)bottom;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sx = g_flightVpOriginX + (float)end;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sy = g_flightVpOriginY + (float)bottom;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sx = g_flightVpOriginX + (float)end;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sy = g_flightVpOriginY + (float)(bottom + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sx = g_flightVpOriginX + (float)start;
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sy = g_flightVpOriginY + (float)(bottom + 1);
+			for (i = 0; i < 4; ++i) {
+				g_flightVertexBuffer[g_d3dVertexCount + i].sz = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].rhw = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tu = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tv = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].color = color;
+				g_flightVertexBuffer[g_d3dVertexCount + i].specular = 0;
 			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 1;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 3;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
 			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
 		}
 	}
 	if (x >= 0 && x < pixelswide) {
-		int start = y < 0 ? 0 : y;
-		int end = y + corner_height;
-		if (end >= pixelsdeep)
-			end = pixelsdeep - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)x;
-			quad[0].sy = g_flightVpOriginY + (float)start;
-			quad[1].sx = g_flightVpOriginX + (float)x;
-			quad[1].sy = g_flightVpOriginY + (float)end;
-			quad[2].sx = g_flightVpOriginX + (float)(x + 1);
-			quad[2].sy = g_flightVpOriginY + (float)end;
-			quad[3].sx = g_flightVpOriginX + (float)(x + 1);
-			quad[3].sy = g_flightVpOriginY + (float)start;
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
+		top = y;
+		bottom_edge = y + corner_height;
+		if (top < 0)
+			top = 0;
+		if (bottom_edge >= pixelsdeep)
+			bottom_edge = pixelsdeep - 1;
+		if (top < bottom_edge) {
+			g_flightVertexBuffer[g_d3dVertexCount].sx = g_flightVpOriginX + (float)x;
+			g_flightVertexBuffer[g_d3dVertexCount].sy = g_flightVpOriginY + (float)top;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sx = g_flightVpOriginX + (float)x;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sy = g_flightVpOriginY + (float)bottom_edge;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sx = g_flightVpOriginX + (float)(x + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sy = g_flightVpOriginY + (float)bottom_edge;
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sx = g_flightVpOriginX + (float)(x + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sy = g_flightVpOriginY + (float)top;
+			for (i = 0; i < 4; ++i) {
+				g_flightVertexBuffer[g_d3dVertexCount + i].sz = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].rhw = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tu = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tv = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].color = color;
+				g_flightVertexBuffer[g_d3dVertexCount + i].specular = 0;
 			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 1;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 3;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
 			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
 		}
-		start = bottom - corner_height;
-		end = bottom;
-		if (start < 0)
-			start = 0;
-		if (end >= pixelsdeep)
-			end = pixelsdeep - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)x;
-			quad[0].sy = g_flightVpOriginY + (float)start;
-			quad[1].sx = g_flightVpOriginX + (float)x;
-			quad[1].sy = g_flightVpOriginY + (float)end;
-			quad[2].sx = g_flightVpOriginX + (float)(x + 1);
-			quad[2].sy = g_flightVpOriginY + (float)end;
-			quad[3].sx = g_flightVpOriginX + (float)(x + 1);
-			quad[3].sy = g_flightVpOriginY + (float)start;
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
+		top = bottom - corner_height;
+		bottom_edge = bottom;
+		if (top < 0)
+			top = 0;
+		if (bottom_edge >= pixelsdeep)
+			bottom_edge = pixelsdeep - 1;
+		if (top < bottom_edge) {
+			g_flightVertexBuffer[g_d3dVertexCount].sx = g_flightVpOriginX + (float)x;
+			g_flightVertexBuffer[g_d3dVertexCount].sy = g_flightVpOriginY + (float)top;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sx = g_flightVpOriginX + (float)x;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sy = g_flightVpOriginY + (float)bottom_edge;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sx = g_flightVpOriginX + (float)(x + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sy = g_flightVpOriginY + (float)bottom_edge;
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sx = g_flightVpOriginX + (float)(x + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sy = g_flightVpOriginY + (float)top;
+			for (i = 0; i < 4; ++i) {
+				g_flightVertexBuffer[g_d3dVertexCount + i].sz = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].rhw = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tu = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tv = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].color = color;
+				g_flightVertexBuffer[g_d3dVertexCount + i].specular = 0;
 			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 1;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 3;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
 			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
 		}
 	}
 	if (right >= 0 && right < pixelswide) {
-		int start = y < 0 ? 0 : y;
-		int end = y + corner_height;
-		if (end >= pixelsdeep)
-			end = pixelsdeep - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)right;
-			quad[0].sy = g_flightVpOriginY + (float)start;
-			quad[1].sx = g_flightVpOriginX + (float)right;
-			quad[1].sy = g_flightVpOriginY + (float)end;
-			quad[2].sx = g_flightVpOriginX + (float)(right + 1);
-			quad[2].sy = g_flightVpOriginY + (float)end;
-			quad[3].sx = g_flightVpOriginX + (float)(right + 1);
-			quad[3].sy = g_flightVpOriginY + (float)start;
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
+		top = y;
+		bottom_edge = y + corner_height;
+		if (top < 0)
+			top = 0;
+		if (bottom_edge >= pixelsdeep)
+			bottom_edge = pixelsdeep - 1;
+		if (top < bottom_edge) {
+			g_flightVertexBuffer[g_d3dVertexCount].sx = g_flightVpOriginX + (float)right;
+			g_flightVertexBuffer[g_d3dVertexCount].sy = g_flightVpOriginY + (float)top;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sx = g_flightVpOriginX + (float)right;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sy = g_flightVpOriginY + (float)bottom_edge;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sx = g_flightVpOriginX + (float)(right + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sy = g_flightVpOriginY + (float)bottom_edge;
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sx = g_flightVpOriginX + (float)(right + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sy = g_flightVpOriginY + (float)top;
+			for (i = 0; i < 4; ++i) {
+				g_flightVertexBuffer[g_d3dVertexCount + i].sz = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].rhw = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tu = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tv = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].color = color;
+				g_flightVertexBuffer[g_d3dVertexCount + i].specular = 0;
 			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 1;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 3;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
 			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
 		}
-		start = bottom - corner_height;
-		end = bottom;
-		if (start < 0)
-			start = 0;
-		if (end >= pixelsdeep)
-			end = pixelsdeep - 1;
-		if (start < end) {
-			quad_base = g_d3dVertexCount;
-			quad = &g_flightVertexBuffer[quad_base];
-			quad[0].sx = g_flightVpOriginX + (float)right;
-			quad[0].sy = g_flightVpOriginY + (float)start;
-			quad[1].sx = g_flightVpOriginX + (float)right;
-			quad[1].sy = g_flightVpOriginY + (float)end;
-			quad[2].sx = g_flightVpOriginX + (float)(right + 1);
-			quad[2].sy = g_flightVpOriginY + (float)end;
-			quad[3].sx = g_flightVpOriginX + (float)(right + 1);
-			quad[3].sy = g_flightVpOriginY + (float)start;
-			for (quad_vertex = 0; quad_vertex < 4; ++quad_vertex) {
-				quad[quad_vertex].sz = screen_depth;
-				quad[quad_vertex].rhw = screen_depth;
-				quad[quad_vertex].color = color;
-				quad[quad_vertex].specular = 0;
-				quad[quad_vertex].tu = 0.0f;
-				quad[quad_vertex].tv = 0.0f;
+		top = bottom - corner_height;
+		bottom_edge = bottom;
+		if (top < 0)
+			top = 0;
+		if (bottom_edge >= pixelsdeep)
+			bottom_edge = pixelsdeep - 1;
+		if (top < bottom_edge) {
+			g_flightVertexBuffer[g_d3dVertexCount].sx = g_flightVpOriginX + (float)right;
+			g_flightVertexBuffer[g_d3dVertexCount].sy = g_flightVpOriginY + (float)top;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sx = g_flightVpOriginX + (float)right;
+			g_flightVertexBuffer[g_d3dVertexCount + 1].sy = g_flightVpOriginY + (float)bottom_edge;
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sx = g_flightVpOriginX + (float)(right + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 2].sy = g_flightVpOriginY + (float)bottom_edge;
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sx = g_flightVpOriginX + (float)(right + 1);
+			g_flightVertexBuffer[g_d3dVertexCount + 3].sy = g_flightVpOriginY + (float)top;
+			for (i = 0; i < 4; ++i) {
+				g_flightVertexBuffer[g_d3dVertexCount + i].sz = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].rhw = screen_depth;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tu = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].tv = 0.0f;
+				g_flightVertexBuffer[g_d3dVertexCount + i].color = color;
+				g_flightVertexBuffer[g_d3dVertexCount + i].specular = 0;
 			}
-			quad_triangles = &g_triBuffer[g_d3dIndexCount];
-			quad_triangles[0].v0 = quad_base;
-			quad_triangles[0].v1 = quad_base + 1;
-			quad_triangles[0].v2 = quad_base + 2;
-			quad_triangles[0].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[0].texture = NULL;
-			quad_triangles[1].v0 = quad_base;
-			quad_triangles[1].v1 = quad_base + 2;
-			quad_triangles[1].v2 = quad_base + 3;
-			quad_triangles[1].flags = (Std3DRenderStateFlags)38912;
-			quad_triangles[1].texture = NULL;
-			g_d3dIndexCount += 2;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 1;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
+			g_triBuffer[g_d3dIndexCount].v0 = g_d3dVertexCount;
+			g_triBuffer[g_d3dIndexCount].v1 = g_d3dVertexCount + 2;
+			g_triBuffer[g_d3dIndexCount].v2 = g_d3dVertexCount + 3;
+			g_triBuffer[g_d3dIndexCount].texture = NULL;
+			g_triBuffer[g_d3dIndexCount].flags = (Std3DRenderStateFlags)0x9800;
+			++g_d3dIndexCount;
 			g_d3dVertexCount += 4;
-			result = (int16_t)g_d3dVertexCount;
 		}
 	}
-	return result;
 }
 
 // FUNCTION: TIE98 0x430F70
@@ -3212,105 +3192,168 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 // FUNCTION: TIE98 0x435180
 static int FlightModel_TestLightSegmentAgainstFaces(SceneMeshTIE98* mesh, const Vec3f* segment_start,
 													const Vec3f* segment_end) {
+	Vec3f start;
+	Vec3f end;
+	const float* coords;
+	const FaceRecordTIE98* faces;
+	const Vec3f* normals;
 	int face_index;
 
+	start = *segment_start;
+	end = *segment_end;
+	faces = mesh->pFaceGeom;
+	normals = mesh->pFaceNormals;
+	coords = &mesh->pModelVerts->x;
 	for (face_index = 0; face_index < mesh->faceCount; ++face_index) {
-		float start[3];
-		float end[3];
-		const FaceRecordTIE98* face = &mesh->pFaceGeom[face_index];
-		const int vertex_count = face->vertexIdx[3] == -1 ? 3 : 4;
-		float vertices[4][3];
-		int separated;
-		int axis;
-		const Vec3f* normal;
+		const FaceRecordTIE98* face = faces++;
+		const Vec3f* normal = normals++;
+		/* Coordinate indices of the face corners; the fourth is -3 for triangles. */
+		int a = face->vertexIdx[0] * 3;
+		int b = face->vertexIdx[1] * 3;
+		int c = face->vertexIdx[2] * 3;
+		int d = face->vertexIdx[3] * 3;
+		float start_x;
+		float start_y;
+		float start_z;
+		float end_x;
+		float end_y;
+		float end_z;
 		float start_distance;
-		float direction_dot;
-		float fraction;
-		int axis_u;
-		int axis_v;
+		float end_distance;
+		double fraction;
 		float projected_u;
 		float projected_v;
 		float first_cross;
-		int outside;
-		int edge;
+		float cross;
+		int av;
+		int bv;
+		int cv;
+		int dv;
 
-		int corner;
-
-		for (corner = 0; corner < vertex_count; ++corner) {
-			const Vec3f* vertex = &mesh->pModelVerts[face->vertexIdx[corner]];
-			vertices[corner][0] = vertex->x;
-			vertices[corner][1] = vertex->y;
-			vertices[corner][2] = vertex->z;
-		}
-
-		start[0] = segment_start->x;
-		start[1] = segment_start->y;
-		start[2] = segment_start->z;
-		end[0] = segment_end->x;
-		end[1] = segment_end->y;
-		end[2] = segment_end->z;
-		separated = 0;
-		for (axis = 0; axis < 3; ++axis) {
-			int all_above = 1;
-			int all_below = 1;
-			int corner;
-
-			for (corner = 0; corner < vertex_count; ++corner) {
-				if (vertices[corner][axis] < start[axis] || vertices[corner][axis] < end[axis])
-					all_above = 0;
-				if (vertices[corner][axis] > start[axis] || vertices[corner][axis] > end[axis])
-					all_below = 0;
-			}
-			if (all_above || all_below) {
-				separated = 1;
-				break;
-			}
-		}
-		if (separated)
-			continue;
-
-		normal = &mesh->pFaceNormals[face_index];
-		start_distance = (start[0] - vertices[0][0]) * normal->x + (start[1] - vertices[0][1]) * normal->y +
-						 (start[2] - vertices[0][2]) * normal->z;
-		direction_dot = (end[0] - start[0]) * normal->x + (end[1] - start[1]) * normal->y +
-						(end[2] - start[2]) * normal->z;
-		if (start_distance < 0.0f) {
-			if (start_distance > -40.0f || direction_dot <= 0.0f)
+		if (coords[a] <= start.x && coords[a] <= end.x) {
+			if (coords[b] <= start.x && coords[b] <= end.x && coords[c] <= start.x && coords[c] <= end.x &&
+				(d == -3 || (coords[d] <= start.x && coords[d] <= end.x)))
 				continue;
-		} else if (start_distance < 40.0f || direction_dot >= 0.0f) {
+		} else if (coords[a] >= start.x && coords[a] >= end.x && coords[b] >= start.x && coords[b] >= end.x &&
+				   coords[c] >= start.x && coords[c] >= end.x &&
+				   (d == -3 || (coords[d] >= start.x && coords[d] >= end.x))) {
+			continue;
+		}
+		++a;
+		++b;
+		++c;
+		++d;
+		if (coords[a] <= start.y && coords[a] <= end.y) {
+			if (coords[b] <= start.y && coords[b] <= end.y && coords[c] <= start.y && coords[c] <= end.y &&
+				(d == -2 || (coords[d] <= start.y && coords[d] <= end.y)))
+				continue;
+		} else if (coords[a] >= start.y && coords[a] >= end.y && coords[b] >= start.y && coords[b] >= end.y &&
+				   coords[c] >= start.y && coords[c] >= end.y &&
+				   (d == -2 || (coords[d] >= start.y && coords[d] >= end.y))) {
+			continue;
+		}
+		++a;
+		++b;
+		++c;
+		++d;
+		if (coords[a] <= start.z && coords[a] <= end.z) {
+			if (coords[b] <= start.z && coords[b] <= end.z && coords[c] <= start.z && coords[c] <= end.z &&
+				(d == -1 || (coords[d] <= start.z && coords[d] <= end.z)))
+				continue;
+		} else if (coords[a] >= start.z && coords[a] >= end.z && coords[b] >= start.z && coords[b] >= end.z &&
+				   coords[c] >= start.z && coords[c] >= end.z &&
+				   (d == -1 || (coords[d] >= start.z && coords[d] >= end.z))) {
 			continue;
 		}
 
-		fraction = -start_distance / direction_dot;
-
-		if (normal->z > normal->x && normal->z > normal->y) {
-			axis_u = 0;
-			axis_v = 1;
-		} else if (normal->y > normal->x && normal->y > normal->z) {
-			axis_u = 0;
-			axis_v = 2;
-		} else {
-			axis_u = 1;
-			axis_v = 2;
+		start_z = start.z - coords[a];
+		end_z = end.z - coords[a];
+		--a;
+		start_y = start.y - coords[a];
+		end_y = end.y - coords[a];
+		--a;
+		start_x = start.x - coords[a];
+		end_x = end.x - coords[a];
+		start_distance = start_x * normal->x + start_y * normal->y + start_z * normal->z;
+		end_distance = end_x * normal->x + end_y * normal->y + end_z * normal->z;
+		if (start_distance >= 0.0f) {
+			if (start_distance < 40.0f || end_distance >= 0.0f)
+				continue;
+		} else if (start_distance > -40.0f || end_distance <= 0.0f) {
+			continue;
 		}
-		projected_u = start[axis_u] + (end[axis_u] - start[axis_u]) * fraction;
-		projected_v = start[axis_v] + (end[axis_v] - start[axis_v]) * fraction;
-		first_cross = 0.0f;
-		outside = 0;
-		for (edge = 0; edge < vertex_count; ++edge) {
-			const int next = (edge + 1) % vertex_count;
-			const float cross =
-				(projected_u - vertices[edge][axis_u]) * (vertices[next][axis_v] - vertices[edge][axis_v]) -
-				(projected_v - vertices[edge][axis_v]) * (vertices[next][axis_u] - vertices[edge][axis_u]);
-			if (edge == 0) {
-				first_cross = cross;
-			} else if ((first_cross < 0.0f && cross >= 0.0f) || (first_cross >= 0.0f && cross < 0.0f)) {
-				outside = 1;
-				break;
+
+		fraction = -start_distance / end_distance;
+		if (normal->z > normal->x && normal->z > normal->y) {
+			projected_u = (end.x - start.x) * fraction + start.x;
+			projected_v = (end.y - start.y) * fraction + start.y;
+			b -= 2;
+			c -= 2;
+			d -= 2;
+			av = a + 1;
+			bv = b + 1;
+			cv = c + 1;
+			dv = d + 1;
+		} else if (normal->y > normal->x && normal->y > normal->z) {
+			projected_u = (end.x - start.x) * fraction + start.x;
+			projected_v = (end.z - start.z) * fraction + start.z;
+			b -= 2;
+			c -= 2;
+			d -= 2;
+			av = a + 2;
+			bv = b + 2;
+			cv = c + 2;
+			dv = d + 2;
+		} else {
+			projected_u = (end.y - start.y) * fraction + start.y;
+			projected_v = (end.z - start.z) * fraction + start.z;
+			++a;
+			--b;
+			--c;
+			--d;
+			av = a + 1;
+			bv = b + 1;
+			cv = c + 1;
+			dv = d + 1;
+		}
+
+		first_cross = (projected_u - coords[a]) * (coords[bv] - coords[av]) -
+					  (projected_v - coords[av]) * (coords[b] - coords[a]);
+		cross = (projected_u - coords[b]) * (coords[cv] - coords[bv]) -
+				(projected_v - coords[bv]) * (coords[c] - coords[b]);
+		if (first_cross < 0.0f) {
+			if (cross >= 0.0f)
+				continue;
+		} else if (cross < 0.0f) {
+			continue;
+		}
+		if (d < 0) {
+			cross = (projected_u - coords[c]) * (coords[av] - coords[cv]) -
+					(projected_v - coords[cv]) * (coords[a] - coords[c]);
+			if (first_cross < 0.0f) {
+				if (cross < 0.0f)
+					return 1;
+			} else if (cross >= 0.0f) {
+				return 1;
+			}
+		} else {
+			cross = (projected_u - coords[c]) * (coords[dv] - coords[cv]) -
+					(projected_v - coords[cv]) * (coords[d] - coords[c]);
+			if (first_cross < 0.0f) {
+				if (cross >= 0.0f)
+					continue;
+			} else if (cross < 0.0f) {
+				continue;
+			}
+			cross = (projected_u - coords[d]) * (coords[av] - coords[dv]) -
+					(projected_v - coords[dv]) * (coords[a] - coords[d]);
+			if (first_cross < 0.0f) {
+				if (cross < 0.0f)
+					return 1;
+			} else if (cross >= 0.0f) {
+				return 1;
 			}
 		}
-		if (!outside)
-			return 1;
 	}
 	return 0;
 }
@@ -4531,8 +4574,10 @@ int16_t Hud_DrawBoxInXTrans(int x, int y, int width, int height, int color_index
 	right = x + width;
 	if (right <= 0 || x >= pixelswide || y >= pixelsdeep || height <= 0 || width <= 0)
 		return 0;
-	if (g_useHardware3D)
-		return Hud_DrawBoxOverlayHW(x, y, width, height, color_index, depth);
+	if (g_useHardware3D) {
+		Hud_DrawBoxOverlayHW(x, y, width, height, color_index, depth);
+		return 0;
+	}
 
 	corner_width = width >> 3;
 	corner_height = height >> 3;

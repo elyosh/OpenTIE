@@ -1161,83 +1161,52 @@ void xtrans2_closeobject(void) {
  * ========================================================================== */
 // FUNCTION: TIE95 0x63E78
 void xtrans2_openobject(void) {
-	uint16_t cur = curobjid;
-
-	/* Empty heap — first object in. */
-	uint32_t new_id;
-	uint16_t new_pos;
-
-	if (cur == 0) {
+	if (curobjid == 0) {
+		/* Empty heap — first object in. */
 		objflag[0] = 0;
 		if (maskflag >= 0)
 			xtrans2_outputxt();
-		cur = (uint16_t)objid;
-		objflag[objid] = 0xFF;
-		curobjid = cur;
+		curobjid = (uint16_t)objid;
+		objflag[curobjid] = 0xFF;
 		return;
 	}
 
-	/* Resolve the front via getinfront unless the front is pending. */
-	if (cur != 0xFFFF) {
-		uint16_t frontmost = xtrans2_getinfront((uint16_t)objid, cur);
-		cur = curobjid;
-		if (frontmost == (uint16_t)objid) {
-			/* Newcomer wins — push old front onto the heap. */
-			uint16_t heap_pos = (uint16_t)(lastheap + 1);
-			uint8_t saved_popflag = popflag;
-			objheap[heap_pos] = curobjid;
-			lastheap = heap_pos;
-			objflag[cur] = (uint8_t)heap_pos;
-			popflag = (uint8_t)(saved_popflag + 1);
-			if (maskflag >= 0)
-				xtrans2_outputxt();
-			objflag[objid] = 0xFF;
-			curobjid = (uint16_t)objid;
-			return;
-		}
+	if (curobjid != (uint16_t)0xFFFF && xtrans2_getinfront((uint16_t)objid, curobjid) == objid) {
+		/* Newcomer wins — push old front onto the heap. */
+		objheap[++lastheap] = curobjid;
+		objflag[curobjid] = (uint8_t)lastheap;
+		++popflag;
+		if (maskflag >= 0)
+			xtrans2_outputxt();
+		curobjid = (uint16_t)objid;
+		objflag[curobjid] = 0xFF;
+		return;
 	}
 
 	/* Newcomer stays behind: push it onto the heap. */
-	new_id = objid;
-	new_pos = (uint16_t)(lastheap + 1);
-	lastheap = new_pos;
+	++lastheap;
 	popflag = 0;
-	objflag[new_id] = (uint8_t)new_pos;
-	objheap[new_pos] = (uint16_t)new_id;
+	objflag[objid] = (uint8_t)lastheap;
+	objheap[lastheap] = (uint16_t)objid;
 
-	/* Special case: flat-poly marker (id == 128) with something already
-	 * in front — findnearest + getinfront re-evaluates in case the flat
-	 * should demote the current front. */
-	if (new_id == 128 && new_pos != 1 && cur != 0xFFFF) {
-		uint16_t demoted;
-		uint16_t fwin;
-		uint16_t pos2;
-
-		curobjid = cur;
+	/* Flat-poly marker (id 128) with something already in front:
+	 * re-evaluate in case the flat should demote the current front. */
+	if (objid == 128 && lastheap != 1 && curobjid != (uint16_t)0xFFFF) {
 		popflag = 0;
-		demoted = xtrans2_findnearest();
-		objid = demoted;
-		fwin = xtrans2_getinfront(demoted, curobjid);
-		cur = curobjid;
-		pos2 = (uint16_t)(lastheap + 1);
-		if (fwin != (uint16_t)objid) {
-			++lastheap;
-			objflag[objid] = (uint8_t)pos2;
-			objheap[pos2] = (uint16_t)objid;
-			curobjid = cur;
+		objid = xtrans2_findnearest();
+		if (xtrans2_getinfront((uint16_t)objid, curobjid) == objid) {
+			objheap[++lastheap] = curobjid;
+			objflag[curobjid] = (uint8_t)lastheap;
+			if (maskflag >= 0)
+				xtrans2_outputxt();
+			curobjid = (uint16_t)objid;
+			objflag[curobjid] = 0xFF;
 			return;
 		}
 		++lastheap;
-		objheap[pos2] = curobjid;
-		objflag[cur] = (uint8_t)lastheap;
-		if (maskflag >= 0)
-			xtrans2_outputxt();
-		objflag[objid] = 0xFF;
-		curobjid = (uint16_t)objid;
-		return;
+		objflag[objid] = (uint8_t)lastheap;
+		objheap[lastheap] = (uint16_t)objid;
 	}
-
-	curobjid = cur;
 }
 
 /* ============================================================================
@@ -1476,40 +1445,26 @@ void xtrans2_outputxt(void) {
  * ========================================================================== */
 // FUNCTION: TIE95 0x64668
 uint16_t xtrans2_findnearest(void) {
-	uint16_t new_lastheap = lastheap;
+	uint16_t i;
 	uint16_t result;
 
-	uint16_t lh;
-	uint16_t winner_pos16;
-
-	if (lastheap == 0) {
-		lastheap = new_lastheap;
+	if (lastheap == 0)
 		return 0;
-	}
 
 	result = objheap[lastheap];
-	if (lastheap != 1) {
-		uint16_t i = lastheap - 1;
-		do {
-			result = xtrans2_getinfront(result, objheap[i]);
-			--i;
-		} while (i != 0);
+	for (i = lastheap - 1; i != 0; --i)
+		result = xtrans2_getinfront(result, objheap[i]);
+
+	i = objflag[result];
+	if (i != lastheap) {
+		objheap[i] = objheap[lastheap];
+		objflag[objheap[i]] = (uint8_t)i;
+		popflag = 0;
+	} else if (popflag > 0) {
+		--popflag;
 	}
 
-	lh = lastheap;
-	winner_pos16 = objflag[result]; /* unsigned byte, widened */
-
-	if ((uint8_t)winner_pos16 == (uint8_t)lastheap) {
-		if (popflag)
-			--popflag;
-	} else {
-		uint16_t top_obj = objheap[lastheap];
-		objheap[objflag[result]] = top_obj;
-		popflag = (uint8_t)(winner_pos16 >> 8);
-		objflag[top_obj] = (uint8_t)winner_pos16;
-	}
-
-	lastheap = (uint16_t)(lh - 1);
+	--lastheap;
 	return result;
 }
 
@@ -1529,193 +1484,174 @@ uint16_t xtrans2_findnearest(void) {
 uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b) {
 	xtrans2_ObjectRecord* ra;
 	xtrans2_ObjectRecord* rb;
-	int i;
-	int16_t b_xmax;
-	int16_t a_xmax;
-	int16_t b_ymax;
-	int16_t a_ymin;
-	int16_t b_ymin;
-	int16_t a_ymax;
-	int16_t b_zmax;
-	int16_t a_zmin;
-	int16_t b_zmin;
-	int16_t a_zmax;
-	uint16_t a_face_info;
-	uint16_t b_face_info;
-	uint16_t winner;
+	xtrans2_ObjectRecord* rec;
+	uint8_t* a_face;
+	uint8_t* b_face;
+	uint16_t mesh_obj;
+	uint16_t flat_idx;
 
 	if (obj_a == 128)
 		return obj_b;
 	if (obj_b == 128)
 		return obj_a;
 
-	if (obj_a >= 0x80 || obj_b >= 0x80) {
-		/* Mixed mesh/flat, or two flats, or two 'special' objects. */
-		uint16_t mesh_obj;
-		uint16_t flat_idx;
+	if (obj_a < 0x80 && obj_b < 0x80) {
+		/* Two meshes. */
+		ra = (xtrans2_ObjectRecord*)((uint8_t*)xtransdataptr + objectptrs[obj_a]);
+		rb = (xtrans2_ObjectRecord*)((uint8_t*)xtransdataptr + objectptrs[obj_b]);
 
-		xtrans2_ObjectRecord* rec;
-		int16_t fx;
+		if (ra->parent_category == rb->parent_category) {
+			if (obj_a < obj_b)
+				return obj_a;
+			return obj_b;
+		}
 
-		if (obj_a <= 0x80) {
-			if (obj_b > 0x80) {
-				mesh_obj = obj_a;
-				flat_idx = (uint16_t)(obj_b - 128);
-			} else {
-				/* Both below 0x80 can't happen here, short path safe. */
-				return (obj_a < obj_b) ? obj_a : obj_b;
+		/* face_covers cache: ids whose bbox is known to be occluded by
+		 * this one. */
+		if (obj_a == rb->face_covers[0])
+			return obj_b;
+		if (obj_a == rb->face_covers[1])
+			return obj_b;
+		if (obj_a == rb->face_covers[2])
+			return obj_b;
+		if (obj_a == rb->face_covers[3])
+			return obj_b;
+		if (obj_a == rb->face_covers[4])
+			return obj_b;
+		if (ra->face_covers[0] == obj_b)
+			return obj_a;
+		if (ra->face_covers[1] == obj_b)
+			return obj_a;
+		if (ra->face_covers[2] == obj_b)
+			return obj_a;
+		if (ra->face_covers[3] == obj_b)
+			return obj_a;
+		if (ra->face_covers[4] == obj_b)
+			return obj_a;
+
+		/* Six axis-aligned separating-plane tests. */
+		if (rb->bbox_xmax <= ra->bbox_xmin) {
+			if (ra->bbox_xmin < 0)
+				return obj_a;
+			if (rb->bbox_xmax >= 0)
+				return obj_b;
+		}
+		if (rb->bbox_xmin >= ra->bbox_xmax) {
+			if (ra->bbox_xmax >= 0)
+				return obj_a;
+			if (rb->bbox_xmin < 0)
+				return obj_b;
+		}
+		if (rb->bbox_ymax <= ra->bbox_ymin) {
+			if (ra->bbox_ymin < 0)
+				return obj_a;
+			if (rb->bbox_ymax >= 0)
+				return obj_b;
+		}
+		if (rb->bbox_ymin >= ra->bbox_ymax) {
+			if (ra->bbox_ymax >= 0)
+				return obj_a;
+			if (rb->bbox_ymin < 0)
+				return obj_b;
+		}
+		if (rb->bbox_zmax <= ra->bbox_zmin) {
+			if (ra->bbox_zmin < 0)
+				return obj_a;
+			if (rb->bbox_zmax >= 0)
+				return obj_b;
+		}
+		if (rb->bbox_zmin >= ra->bbox_zmax) {
+			if (ra->bbox_zmax >= 0)
+				return obj_a;
+			if (rb->bbox_zmin < 0)
+				return obj_b;
+		}
+
+		/* Tie: fall back to per-polygon depth sort.
+		 * NOTE: binary reads at offset (obj + 0x217 + 2*facenum), one byte
+		 * before face_flags (declared at +0x218): 1-indexed facenumber N
+		 * maps to face_flags[2*N - 1], the [1] byte of face N-1. Processedge
+		 * writes via the same base, so they stay coherent. */
+		a_face = &ra->face_flags[2 * objectminface[obj_a] - 1];
+		b_face = &rb->face_flags[2 * objectminface[obj_b] - 1];
+		if (draw_polydepthsort(*a_face, obj_a, ra->parent_category, ra->obj_id_field, *b_face, obj_b,
+							   rb->parent_category, rb->obj_id_field) == obj_a)
+			return obj_a;
+		return obj_b;
+	}
+
+	if (obj_a > 0x80) {
+		if (obj_b > 0x80) {
+			/* Two flat-polys. objflag[128] marks a recent flat-poly
+			 * "demoted" by openobject — when set, flatparentobj's 0x1000
+			 * sentinel overrides the natural id ordering. */
+			if (objflag[128]) {
+				if (flatparentobj[obj_b - 128] == 0x1000)
+					return obj_a;
+				if (flatparentobj[obj_a - 128] == 0x1000)
+					return obj_b;
 			}
-		} else {
-			if (obj_b > 0x80) {
-				/* Two flat-polys. */
-				/* objflag[128] (= byte_204BC8 in the binary) marks a
-				 * recent flat-poly "demoted" by openobject — when set,
-				 * consult flatparentobj[obj-128] for the 0x1000 sentinel
-				 * that overrides the natural id ordering. */
-				if (objflag[128]) {
-					if (flatparentobj[obj_b - 128] == 4096)
-						return obj_a;
-					if (flatparentobj[obj_a - 128] == 4096)
-						return obj_b;
-				}
-				return (obj_a < obj_b) ? obj_b : obj_a;
-			}
-			mesh_obj = obj_b;
-			flat_idx = (uint16_t)(obj_a - 128);
+			if (obj_a >= obj_b)
+				return obj_a;
+			return obj_b;
 		}
+		flat_idx = obj_a - 128;
+		mesh_obj = obj_b;
+	} else if (obj_b > 0x80) {
+		flat_idx = obj_b - 128;
+		mesh_obj = obj_a;
+	}
 
-		/* flatz of INT16_MIN means "unresolved" — mesh wins. */
-		if (flatz[flat_idx] == (int16_t)0x8000)
+	/* flatz of INT16_MIN means "unresolved" — mesh wins. */
+	if (flatz[flat_idx] == (int16_t)0x8000)
+		return mesh_obj;
+
+	rec = (xtrans2_ObjectRecord*)((uint8_t*)xtransdataptr + objectptrs[mesh_obj]);
+
+	/* High byte of parent_category is the mesh's category flag. */
+	if (objflag[128] && (rec->parent_category & 0xFF00) == 0x1000)
+		return flat_idx + 128;
+
+	if (flatz[flat_idx] == (int16_t)0x8001)
+		return mesh_obj;
+
+	/* Flat belongs to this parent mesh: component index decides. */
+	if (flatparentobj[flat_idx] == rec->parent_category) {
+		if (mesh_obj < flatcomponentnum[flat_idx])
 			return mesh_obj;
+		return flat_idx + 128;
+	}
 
-		rec = (xtrans2_ObjectRecord*)((uint8_t*)xtransdataptr + objectptrs[mesh_obj]);
-
-		if (objflag[128]) {
-			/* Upper byte of parent_category is the mesh's category flag;
-			 * if masking-out the id-lane gives 0x1000, flat-poly wins. */
-			uint16_t cat_masked = (uint16_t)(rec->parent_category & 0xFF00);
-			if (cat_masked == 0x1000)
-				return (uint16_t)(flat_idx + 128);
-		}
-
-		if (flatz[flat_idx] == -32767)
+	/* Axis-aligned containment tests against the mesh bbox. */
+	if (flatx[flat_idx] <= rec->bbox_xmin) {
+		if (rec->bbox_xmin < 0)
 			return mesh_obj;
-
-		/* Flat belongs to this parent mesh → component index decides. */
-		if (flatparentobj[flat_idx] == rec->parent_category) {
-			if (mesh_obj < (uint16_t)flatcomponentnum[flat_idx])
-				return mesh_obj;
-			return (uint16_t)(flat_idx + 128);
-		}
-
-		/* Axis-aligned containment tests against the mesh bbox. */
-		fx = flatx[flat_idx];
-		if (fx > rec->bbox_xmin) {
-			int16_t xmax = rec->bbox_xmax;
-			if (fx < xmax) {
-				int16_t fy = flaty[flat_idx];
-				int16_t ymin = rec->bbox_ymin;
-				if (fy > ymin) {
-					int16_t ymax = rec->bbox_ymax;
-					if (fy < ymax) {
-						int16_t zmin = rec->bbox_zmin;
-						if (flatz[flat_idx] > zmin) {
-							int16_t zmax = rec->bbox_zmax;
-							if (flatz[flat_idx] < zmax || zmax < 0)
-								return (uint16_t)(flat_idx + 128);
-						} else if (zmin >= 0) {
-							return (uint16_t)(flat_idx + 128);
-						}
-						return mesh_obj;
-					}
-					if (ymax < 0)
-						return (uint16_t)(flat_idx + 128);
-				} else if (ymin >= 0) {
-					return (uint16_t)(flat_idx + 128);
-				}
-				return mesh_obj;
-			}
-			if (xmax >= 0)
-				return mesh_obj;
-		} else if (rec->bbox_xmin < 0) {
+		return flat_idx + 128;
+	}
+	if (flatx[flat_idx] >= rec->bbox_xmax) {
+		if (rec->bbox_xmax < 0)
+			return flat_idx + 128;
+		return mesh_obj;
+	}
+	if (flaty[flat_idx] <= rec->bbox_ymin) {
+		if (rec->bbox_ymin < 0)
 			return mesh_obj;
-		}
-		return (uint16_t)(flat_idx + 128);
+		return flat_idx + 128;
 	}
-
-	/* Two meshes. */
-	ra = (xtrans2_ObjectRecord*)((uint8_t*)xtransdataptr + objectptrs[obj_a]);
-	rb = (xtrans2_ObjectRecord*)((uint8_t*)xtransdataptr + objectptrs[obj_b]);
-
-	if (ra->parent_category == rb->parent_category)
-		return (obj_a < obj_b) ? obj_a : obj_b;
-
-	/* face_covers cache: a 5-slot list of ids whose bbox is known to
-	 * entirely occlude / be occluded by this one. */
-	for (i = 0; i < 5; ++i)
-		if ((uint16_t)rb->face_covers[i] == obj_a)
-			return obj_b;
-	for (i = 0; i < 5; ++i)
-		if ((uint16_t)ra->face_covers[i] == obj_b)
-			return obj_a;
-
-	/* Six axis-aligned separating-plane tests. */
-	b_xmax = rb->bbox_xmax;
-	if (b_xmax <= ra->bbox_xmin) {
-		if (ra->bbox_xmin < 0)
-			return obj_a;
-		if (b_xmax >= 0)
-			return obj_b;
+	if (flaty[flat_idx] >= rec->bbox_ymax) {
+		if (rec->bbox_ymax < 0)
+			return flat_idx + 128;
+		return mesh_obj;
 	}
-	a_xmax = ra->bbox_xmax;
-	if (rb->bbox_xmin >= a_xmax) {
-		if (a_xmax >= 0)
-			return obj_a;
-		if (rb->bbox_xmin < 0)
-			return obj_b;
+	if (flatz[flat_idx] <= rec->bbox_zmin) {
+		if (rec->bbox_zmin < 0)
+			return mesh_obj;
+		return flat_idx + 128;
 	}
-	b_ymax = rb->bbox_ymax;
-	a_ymin = ra->bbox_ymin;
-	if (b_ymax <= a_ymin) {
-		if (a_ymin < 0)
-			return obj_a;
-		if (b_ymax >= 0)
-			return obj_b;
+	if (flatz[flat_idx] >= rec->bbox_zmax) {
+		if (rec->bbox_zmax < 0)
+			return flat_idx + 128;
+		return mesh_obj;
 	}
-	b_ymin = rb->bbox_ymin;
-	a_ymax = ra->bbox_ymax;
-	if (b_ymin >= a_ymax) {
-		if (a_ymax >= 0)
-			return obj_a;
-		if (b_ymin < 0)
-			return obj_b;
-	}
-	b_zmax = rb->bbox_zmax;
-	a_zmin = ra->bbox_zmin;
-	if (b_zmax <= a_zmin) {
-		if (a_zmin < 0)
-			return obj_a;
-		if (b_zmax >= 0)
-			return obj_b;
-	}
-	b_zmin = rb->bbox_zmin;
-	a_zmax = ra->bbox_zmax;
-	if (b_zmin >= a_zmax) {
-		if (a_zmax >= 0)
-			return obj_a;
-		if (b_zmin < 0)
-			return obj_b;
-	}
-
-	/* Tie: fall back to per-polygon depth sort.
-	 * NOTE: binary reads at offset (obj + 0x216 + 2*facenum), which is
-	 * TWO BYTES BEFORE face_flags (declared at +0x218). The effective slot
-	 * for 1-indexed facenumber N is face_flags[2*(N-1)]. Same base-1 trick
-	 * as materialcolors. Processedge writes via the same 0x216 base, so
-	 * they stay coherent; the read here must use (minface - 1). */
-	a_face_info = ra->face_flags[2 * (objectminface[obj_a] - 1) + 1];
-	b_face_info = rb->face_flags[2 * (objectminface[obj_b] - 1) + 1];
-	winner = draw_polydepthsort(a_face_info, obj_a, ra->parent_category, ra->obj_id_field, b_face_info, obj_b,
-								rb->parent_category, rb->obj_id_field);
-	return (winner != obj_a) ? obj_b : winner;
+	return flat_idx + 128;
 }

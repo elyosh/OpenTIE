@@ -231,28 +231,23 @@ static int16_t tielogo_film_Callback(Film* film, FilmObject* film_object) {
 	int16_t should_stop = 0;
 	Actor* actor;
 
-	if (film_object->id != 3)
-		return 0;
-
-	xfilm_Rewind_Actor_Film(film, film_object, (void*)((char*)film_object + sizeof(FilmObject)));
-	actor = film_object->object;
-
-	if (actor->var1 != 20)
-		return 0;
-
+	if (film_object->id == 3) {
+		xfilm_Rewind_Actor_Film(film, film_object, (void*)((char*)film_object + sizeof(FilmObject)));
+		actor = film_object->object;
+		if (actor->var1 == 20) {
 #ifdef TIE_MODERN
-	/* The backdrop remains live; only hidden/stamped actors need sticky poses. */
-	if (actor->var2 != 1)
-		TieLogoSnapshot_Stamp(actor);
+			/* The backdrop remains live; only hidden/stamped actors need sticky poses. */
+			if (actor->var2 != 1)
+				TieLogoSnapshot_Stamp(actor);
 #endif
-	tielogo_film_Actor_To_Background(actor);
-
-	if (actor->var2 == 1) {
-		xactor_Set_Actor_Draw_Function(actor, tielogo_draw_Backdrop);
-		backdrop = actor;
+			tielogo_film_Actor_To_Background(actor);
+			if (actor->var2 == 1) {
+				xactor_Set_Actor_Draw_Function(actor, tielogo_draw_Backdrop);
+				backdrop = actor;
+			}
+			should_stop = (int)(actor->var2 == 0) & 0xff;
+		}
 	}
-
-	should_stop = (actor->var2 == 0) ? 1 : 0;
 	return should_stop;
 }
 

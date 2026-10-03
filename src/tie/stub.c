@@ -3,6 +3,7 @@
 
 #include "landru/bitmap.h"
 #include "landru/canvas.h"
+#include "landru/memhdl.h"
 #include "landru/rect.h"
 
 /*
@@ -20,7 +21,7 @@
  */
 
 // FUNCTION: TIE95 0x870F0
-int stub_Copy_From_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, int16_t screen_y,
+int stub_Copy_From_Clipped_Buffer(LandruHandle buffer, Rect* src_rect, int16_t screen_x, int16_t screen_y,
 								  int16_t buf_w, int16_t buf_h) {
 	BitmapStruct bm;
 	Rect canvas_clip;
@@ -75,15 +76,16 @@ int stub_Copy_From_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x
 	bm.flags = 0;
 	bm.type = 0;
 	bm.offset = 0;
-	bm.data = buffer;
+	bm.data = xmemhdl_Lock_Handle(buffer);
 
 	xrect_Set_Rect(&copy_rect, buf_left, buf_top, copy_w + buf_left, buf_top + copy_h);
 	xcanvas_Copy_Bitmap_Portion_To_Canvas(&bm, &copy_rect, dest_x, dest_y);
+	xmemhdl_Unlock_Handle(buffer);
 	return 1;
 }
 
 // FUNCTION: TIE95 0x872C8
-int stub_Copy_To_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, int16_t screen_y,
+int stub_Copy_To_Clipped_Buffer(LandruHandle buffer, Rect* src_rect, int16_t screen_x, int16_t screen_y,
 								int16_t buf_w, int16_t buf_h) {
 	BitmapStruct bm;
 	Rect canvas_clip;
@@ -138,10 +140,11 @@ int stub_Copy_To_Clipped_Buffer(void* buffer, Rect* src_rect, int16_t screen_x, 
 	bm.flags = 0;
 	bm.type = 0;
 	bm.offset = 0;
-	bm.data = buffer;
+	bm.data = xmemhdl_Lock_Handle(buffer);
 
 	xrect_Set_Rect(&copy_rect, buf_left, buf_top, copy_w + buf_left, buf_top + copy_h);
 	xcanvas_Copy_Canvas_Portion_To_Bitmap(&bm, &copy_rect, src_x, src_y);
+	xmemhdl_Unlock_Handle(buffer);
 	return 1;
 }
 

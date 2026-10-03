@@ -167,7 +167,7 @@ static int16_t combat_iuser_Combat_Screen(Input* input, int32_t time);
 static void combat_idraw_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh);
 static int16_t combat_Draw_Combat_Screen_Mission(Rect* src);
 static int16_t combat_Draw_Combat_Screen_Score(Rect* src);
-static void combat_Draw_Combat_Screen_Flyby(Rect* src);
+static int16_t combat_Draw_Combat_Screen_Flyby(Rect* src);
 static void combat_Load_Combat_High_Scores(void);
 
 /* ------------------------------------------------------------------ */
@@ -389,8 +389,6 @@ static int16_t combat_draw_Combat_Back(Actor* the_actor, Rect* draw_rect, Rect* 
 static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 									 uint8_t mouseState, uint8_t prevMouseState, int16_t key,
 									 int16_t prevKey) {
-	int16_t id, tie98_button_index;
-
 	(void)draw_rect;
 	(void)clip_rect;
 	(void)key;
@@ -404,52 +402,61 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 	if (!mouseState && !prevMouseState)
 		return 1;
 
-	id = input->id;
 	/* TIE98 film actor indices are zero-based; combat input IDs are one-based. */
-	tie98_button_index = id - 1;
-
-	if (id == 5) {
-		/* Start button */
-		if (mouseState == 3 || prevMouseState == 3) {
-			xactor_Set_Actor_State(button[TIE_FRONTEND_EDITION(1, tie98_button_index)],
-								   TIE_FRONTEND_EDITION(2, 0), 0);
-			xinpattr_Selected_Input(input);
-		} else {
-			if (mouseState == 1 || prevMouseState == 1)
-				soundext_Play_SFX(sfxButton, 80);
-			xactor_Set_Actor_State(button[TIE_FRONTEND_EDITION(1, tie98_button_index)],
-								   TIE_FRONTEND_EDITION(3, 1), 0);
-		}
-	} else if (id == 6) {
-		/* Exit door */
-		if (mouseState == 3 || prevMouseState == 3) {
-			xactor_Set_Actor_State(button[TIE_FRONTEND_EDITION(0, tie98_button_index)], 0, 0);
-			xinpattr_Selected_Input(input);
-		} else {
-			if (mouseState == 1 || prevMouseState == 1)
-				soundext_Play_SFX(sfxButton, 80);
-			xactor_Set_Actor_State(button[TIE_FRONTEND_EDITION(0, tie98_button_index)], 1, 0);
-		}
-	} else {
-		/* Nav buttons 1-4 */
-		if (mouseState == 3 || prevMouseState == 3) {
-			xinpattr_Clear_Input_Flag1(input);
-			xinpattr_Selected_Input(input);
-			if (TIE_FRONTEND_TIE98)
-				xactor_Set_Actor_State(button[tie98_button_index], 0, 0);
-			else
-				xactor_Hide_Actor(arrow_actor);
-		}
-		if (mouseState == 1 || prevMouseState == 1) {
-			soundext_Play_SFX(sfxButton, 80);
-			xinpattr_Set_Input_Flag1(input);
-			if (TIE_FRONTEND_TIE98) {
-				xactor_Set_Actor_State(button[tie98_button_index], 1, 0);
+	switch (input->id) {
+		case 5:
+			/* Start button */
+			if (mouseState == 3 || prevMouseState == 3) {
+				xactor_Set_Actor_State(button[TIE_FRONTEND_EDITION(1, 4)], TIE_FRONTEND_EDITION(2, 0), 0);
+				xinpattr_Selected_Input(input);
+			} else if (TIE_FRONTEND_TIE98) {
+				if (mouseState == 1 || prevMouseState == 1) {
+					soundext_Play_SFX(sfxButton, 80);
+					xactor_Set_Actor_State(button[input->id - 1], 1, 0);
+				}
 			} else {
-				xactor_Show_Actor(arrow_actor);
-				xactor_Set_Actor_State(arrow_actor, 2 * (input->id - 1) + 1, 0);
+				if (mouseState == 1 || prevMouseState == 1)
+					soundext_Play_SFX(sfxButton, 80);
+				xactor_Set_Actor_State(button[1], 3, 0);
 			}
-		}
+			break;
+		case 6:
+			/* Exit door */
+			if (mouseState == 3 || prevMouseState == 3) {
+				xactor_Set_Actor_State(button[TIE_FRONTEND_EDITION(0, 5)], 0, 0);
+				xinpattr_Selected_Input(input);
+			} else if (TIE_FRONTEND_TIE98) {
+				if (mouseState == 1 || prevMouseState == 1) {
+					soundext_Play_SFX(sfxButton, 80);
+					xactor_Set_Actor_State(button[input->id - 1], 1, 0);
+				}
+			} else {
+				if (mouseState == 1 || prevMouseState == 1)
+					soundext_Play_SFX(sfxButton, 80);
+				xactor_Set_Actor_State(button[0], 1, 0);
+			}
+			break;
+		default:
+			/* Nav buttons 1-4 */
+			if (mouseState == 3 || prevMouseState == 3) {
+				xinpattr_Clear_Input_Flag1(input);
+				xinpattr_Selected_Input(input);
+				if (TIE_FRONTEND_TIE98)
+					xactor_Set_Actor_State(button[input->id - 1], 0, 0);
+				else
+					xactor_Hide_Actor(arrow_actor);
+			}
+			if (mouseState == 1 || prevMouseState == 1) {
+				soundext_Play_SFX(sfxButton, 80);
+				xinpattr_Set_Input_Flag1(input);
+				if (TIE_FRONTEND_TIE98) {
+					xactor_Set_Actor_State(button[input->id - 1], 1, 0);
+				} else {
+					xactor_Show_Actor(arrow_actor);
+					xactor_Set_Actor_State(arrow_actor, 2 * (input->id - 1) + 1, 0);
+				}
+			}
+			break;
 	}
 	return 1;
 }
@@ -873,58 +880,58 @@ static int16_t combat_Draw_Combat_Screen_Score(Rect* src) {
  */
 // FUNCTION: TIE95 0x6DBB0
 // FUNCTION: TIE98 0x40B480
-static void combat_Draw_Combat_Screen_Flyby(Rect* src) {
-	uint16_t font_id;
-	int16_t fade, ship, old_bp;
-
+static int16_t combat_Draw_Combat_Screen_Flyby(Rect* src) {
+	int16_t fade, old_bp;
 	Rect dst;
 	char str[48];
-	int16_t t = combat_time - 384;
+	int16_t t;
 
 	xrect_Copy_Rect(&dst, src);
 	dst.top = dst.bottom - TIE_FRONTEND_EDITION(24, 58);
 	dst.bottom = dst.top + TIE_FRONTEND_EDITION(10, 24);
-	font_id = TIE_FRONTEND_EDITION(0, 2);
+	t = combat_time - 384;
 
-	/* Name fade: hidden outside [16..207]; ramps in 16..47, hold 48..191,
+	/* Name fade: hidden outside [32..207]; ramps in 32..47, hold 48..191,
 	 * ramps out 192..207. */
-	if (t < 32 || t >= 208)
-		fade = 16;
-	else if (t < 48)
-		fade = combat_time - 400;
-	else if (t >= 192)
-		fade = (207 - t) + 16;
-	else
-		fade = 31;
-
-	if (fade == 16)
-		return;
-
-	ship = shipext_Get_Mission_Ship();
-	shipext_Get_Ship_Name(str, ship, 0, 0);
-	xfont_Print_Centered_Text(str, &dst, font_id, fade);
-
-	old_bp = shipext_Get_Blueprint_Ship();
-	shipext_Set_Blueprint_Ship(ship);
-	xrect_Offset_Rect(&dst, 0, xfont_Get_FontID_Height(font_id));
-
-	if (t >= 64 && t < 192) {
-		int16_t line_idx = (t - 64) >> 5;
-		if (line_idx < shipext_Get_Num_Blueprint_Ship_Lines()) {
-			int16_t sub_t = t & 0x1F;
-			int16_t sub_fade;
-			shipext_Get_Blueprint_Ship_Line(str, line_idx);
-			if (sub_t < 8)
-				sub_fade = 2 * sub_t + 16;
-			else if (sub_t < 24)
-				sub_fade = 31;
+	if (t >= 32 && t < 208) {
+		if (t >= 48) {
+			if (t < 192)
+				fade = 31;
 			else
-				sub_fade = 2 * (31 - sub_t) + 16;
-			xfont_Print_Centered_Text(str, &dst, font_id, sub_fade);
+				fade = (207 - t) + 16;
+		} else {
+			fade = t - 16;
 		}
+	} else {
+		fade = 16;
 	}
 
-	shipext_Set_Blueprint_Ship(old_bp);
+	if (fade != 16) {
+		shipext_Get_Ship_Name(str, shipext_Get_Mission_Ship(), 0, 0);
+		xfont_Print_Centered_Text(str, &dst, TIE_FRONTEND_EDITION(0, 2), fade);
+
+		old_bp = shipext_Get_Blueprint_Ship();
+		shipext_Set_Blueprint_Ship(shipext_Get_Mission_Ship());
+		xrect_Offset_Rect(&dst, 0, TIE_FRONTEND_EDITION(10, xfont_Get_FontID_Height(2)));
+
+		if (t >= 64 && t < 192) {
+			fade = (t - 64) >> 5;
+			if (fade < shipext_Get_Num_Blueprint_Ship_Lines()) {
+				int16_t sub_t = t & 0x1F;
+				shipext_Get_Blueprint_Ship_Line(str, fade);
+				if (sub_t < 8)
+					fade = 2 * sub_t + 16;
+				else if (sub_t >= 24)
+					fade = 2 * (31 - sub_t) + 16;
+				else
+					fade = 31;
+				xfont_Print_Centered_Text(str, &dst, TIE_FRONTEND_EDITION(0, 2), fade);
+			}
+		}
+
+		shipext_Set_Blueprint_Ship(old_bp);
+	}
+	return 1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -997,31 +1004,38 @@ static void combat_user_Combat_Light(Actor* the_actor, int32_t time) {
 // FUNCTION: TIE95 0x6DE40
 // FUNCTION: TIE98 0x40B740
 static void combat_user_Combat_Helmet(Actor* the_actor, int32_t time) {
+	int32_t frame;
+	int16_t next_state;
+	int16_t cur_scene;
+
 	if (the_actor->var2) {
 		/* Entering combat — close visor */
-		if (!xactor_Is_Actor_Visible(the_actor)) {
-			xactor_Show_Actor(the_actor);
-			xactor_Set_Actor_State(the_actor, 0, 0);
-			soundext_Play_SFX(sfxVisor, 80);
-		} else {
-			int16_t next_state = the_actor->state + 1;
+		if (xactor_Is_Actor_Visible(the_actor)) {
+			next_state = the_actor->state + 1;
 			if (next_state == the_actor->arraySize) {
 				xerror_Set_Landru_Exit(SCENE_COMBAT_MAP_A);
 				shipext_Find_Mission_Ship();
 				soundext_Stop_SFX(sfxVisor);
 				soundext_Play_SFX(sfxVisorClick, 80);
+				if (TIE_FRONTEND_TIE98)
+					combat_monitor_needs_clear = true;
 			} else {
 				xactor_Set_Actor_State(the_actor, next_state, 0);
 			}
+		} else {
+			xactor_Show_Actor(the_actor);
+			xactor_Set_Actor_State(the_actor, 0, 0);
+			soundext_Play_SFX(sfxVisor, 80);
 		}
 	} else {
-		int16_t cur_scene = shellext_Get_Cur_Scene();
-		if (time < the_actor->arraySize && cur_scene == SCENE_COMBAT_B) {
+		cur_scene = shellext_Get_Cur_Scene();
+		frame = time;
+		if (frame < the_actor->arraySize && cur_scene == SCENE_COMBAT_B) {
 			if (!xactor_Is_Actor_Visible(the_actor)) {
 				xactor_Show_Actor(the_actor);
 				soundext_Play_SFX(sfxVisor, 80);
 			}
-			xactor_Set_Actor_State(the_actor, the_actor->arraySize - (time + 1), 0);
+			xactor_Set_Actor_State(the_actor, the_actor->arraySize - (frame + 1), 0);
 		} else {
 			/* Idle: nothing to refresh if visor is already hidden. */
 			if (!xactor_Is_Actor_Visible(the_actor))
@@ -1029,6 +1043,8 @@ static void combat_user_Combat_Helmet(Actor* the_actor, int32_t time) {
 			soundext_Stop_SFX(sfxVisor);
 			soundext_Play_SFX(sfxVisorClick, 80);
 			xactor_Hide_Actor(the_actor);
+			if (TIE_FRONTEND_TIE98)
+				combat_monitor_needs_clear = true;
 		}
 		xview_Refresh_View();
 	}
