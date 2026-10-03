@@ -3143,7 +3143,7 @@ void panel_update3Dcrt_tie98(uint16_t x, uint16_t y, uint16_t width, uint16_t de
 
 	transfm2_screenyoffset = 0;
 	position = rtsvga2_calcpositionVGA(x, y);
-	logbuf2_startPIP_tie98(width, depth, clear_runs, position);
+	logbuf2_startPIP(width, depth, clear_runs, position);
 
 	if ((uint16_t)clear_runs != 0) {
 		const uint8_t* source;
@@ -3292,7 +3292,7 @@ void panel_update3Dcrt_tie98(uint16_t x, uint16_t y, uint16_t width, uint16_t de
 	}
 	sw3d_UnlockSceneBuffers();
 	deepspacecolor = (uint8_t)-5;
-	logbuf2_finishPIP_tie98();
+	logbuf2_finishPIP();
 
 	currenttarget = save_currenttarget;
 	camera.x = save_camera_x;

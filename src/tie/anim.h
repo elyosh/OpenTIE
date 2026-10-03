@@ -51,12 +51,11 @@ void anim_add_bitmap_draw(uint16_t obj_idx, uint16_t species_packed, uint16_t sc
  * anim_draw_bitmap, then paint the target reticle via user_targetonscreen. */
 void anim_sort_and_draw_bitmaps(void);
 void anim_sort_and_draw_bitmaps_tie98(int draw_target);
-void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry);
 
 /* Render one queued sprite. Static-object obj_idx (high byte == 0x38) takes
  * the alternate world-position path that adds the static's world coords to
  * the existing _worldx/_worldy/_worldz globals before subtracting camera. */
-int16_t anim_draw_bitmap(const BitmapDrawEntry* entry);
+void anim_draw_bitmap(const BitmapDrawEntry* entry);
 
 /* ====================================================================== *
  * Frame-list animation patterns and tick

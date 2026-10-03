@@ -420,7 +420,7 @@ void anim_sort_and_draw_bitmaps_tie98(int draw_target) {
 				}
 			}
 		}
-		anim_draw_bitmap_tie98(&drawitems[numbitmaps]);
+		anim_draw_bitmap(&drawitems[numbitmaps]);
 	}
 	numbitmaps = 0;
 	if (draw_target)
@@ -459,48 +459,6 @@ void anim_sort_and_draw_bitmaps(void) {
 	user_targetonscreen(pstate.target_obj_idx);
 }
 
-// FUNCTION: TIE98 0x401410
-void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
-	const uint8_t species_idx = (uint8_t)((entry->species_packed & 0x7FFFu) >> 7);
-	const uint8_t bitmap_idx = (uint8_t)(entry->species_packed & 0x7Fu);
-	uint16_t scale;
-	LandruHandle handle;
-	const uint8_t* blob;
-	uint32_t table_offset;
-	uint32_t frame_offset;
-
-	reverseflag = 1;
-	parentobject = entry->obj_idx;
-
-	if ((entry->obj_idx & 0xFF00u) == OBJ_REF_STATIC_BASE) {
-		const uint16_t static_slot = (uint16_t)(parentobject - OBJ_REF_STATIC_BASE);
-		parentobject = (uint16_t)(static_slot + OBJ_REF_STATIC_BASE);
-		worldx += ((int32_t)(uint16_t)staticobjects[static_slot].world_x << 8) - camera.x;
-		worldy += ((int32_t)(uint16_t)staticobjects[static_slot].world_y << 8) - camera.y;
-		worldz += ((int32_t)(uint16_t)staticobjects[static_slot].world_z << 8) - camera.z;
-	} else {
-		worldx = objects[parentobject].world_x - camera.x;
-		worldy = objects[parentobject].world_y - camera.y;
-		worldz = objects[parentobject].world_z - camera.z;
-	}
-	objecteyez = entry->eye_z;
-	scale = (uint16_t)rotscale_calcscale(entry->eye_z, species_table[species_idx].bound_hwidth,
-										 entry->scale_factor);
-	handle = species_table[species_idx].model_handle;
-	blob = (const uint8_t*)xmemhdl_Lock_Handle(handle);
-	xmemhdl_Unlock_Handle(handle);
-	table_offset = *(const uint32_t*)(blob + 16);
-	frame_offset = *(const uint32_t*)(blob + table_offset + 4 * bitmap_idx);
-	if (TIE_DISPLAY_DX5 && g_useHardware3D) {
-		RenderQuad_DrawRotatedSprite(entry->angle, entry->screen_x, entry->screen_y, scale,
-									 blob + frame_offset);
-	} else {
-		rotscale_preparefastdraw((uint16_t)entry->angle, 2);
-		rotscale_preparecolor((const char*)(blob + frame_offset));
-		rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, scale, blob + frame_offset);
-	}
-}
-
 /* ====================================================================== *
  * anim_draw_bitmap
  * ----------------------------------------------------------------------------
@@ -518,7 +476,8 @@ void anim_draw_bitmap_tie98(const BitmapDrawEntry* entry) {
  *
  * ====================================================================== */
 // FUNCTION: TIE95 0x107D4
-int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
+// FUNCTION: TIE98 0x401410
+void anim_draw_bitmap(const BitmapDrawEntry* entry) {
 	/* species_packed is the same bitfield emitted by ANIMOP_BITMAP;
 	 * deop with the shared accessors. */
 	uint8_t species_idx = (uint8_t)((entry->species_packed & 0x7FFFu) >> 7);
@@ -556,30 +515,34 @@ int16_t anim_draw_bitmap(const BitmapDrawEntry* entry) {
 		worldz = objects[flight_slot].world_z - camera.z;
 	}
 
+	if (TIE_FLIGHT_TIE98)
+		objecteyez = entry->eye_z;
 	scale = rotscale_calcscale(entry->eye_z, species_table[species_idx].bound_hwidth, entry->scale_factor);
 
 	handle = species_table[species_idx].model_handle;
 	blob = (const uint8_t*)xmemhdl_Lock_Handle(handle);
 	xmemhdl_Unlock_Handle(handle);
+#ifdef TIE_MODERN
+	/* PORT: neither original checks for a missing bitmap blob. */
 	if (!blob)
-		return 0;
+		return;
+#endif
 
-	/* Retail ANIM_draw_bitmap (0x107d4) computes the per-frame image
-	 * pointer via:
-	 *   v12 = blob + *(blob + *(blob + 16) + 4*bitmap_idx)
-	 * Header offset 16 holds a u32 to an offset table; each table entry
-	 * is a u32 byte-offset from `blob` to that frame's sub-image. The
-	 * demo version had a u16 offset table at blob+2; retail moved it to
-	 * u32 entries at blob + header[16]. The same v12 is then passed to
-	 * BOTH preparecolor and rotatescaleimage. */
+	/* Header offset 16 holds a u32 to an offset table; each table entry
+	 * is a u32 byte-offset from `blob` to that frame's sub-image. */
 	tbl_off = *(const uint32_t*)(blob + 16);
 	sub_off = *(const uint32_t*)(blob + tbl_off + 4 * bitmap_idx);
 	v12 = blob + sub_off;
 
+#if defined(TIE98) || defined(TIE_MODERN)
+	if (TIE_DISPLAY_DX5 && g_useHardware3D) {
+		RenderQuad_DrawRotatedSprite(entry->angle, entry->screen_x, entry->screen_y, (uint16_t)scale, v12);
+		return;
+	}
+#endif
 	rotscale_preparefastdraw((uint16_t)entry->angle, 2);
 	rotscale_preparecolor((const char*)v12);
-
-	return rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, (uint16_t)scale, v12);
+	rotscale_rotatescaleimage(entry->screen_x, entry->screen_y, (uint16_t)scale, v12);
 }
 
 // FUNCTION: TIE98 0x401070

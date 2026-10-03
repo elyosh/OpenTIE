@@ -67,7 +67,6 @@ void gate_updatecourseprogress(void);
  * rather than a ship. Called per visible gate by tie_updatescreen.
  */
 void gate_drawtraininggate(uint16_t obj_idx);
-void gate_drawtraininggate_tie98(uint16_t obj_idx);
 
 /*
  * Test whether the player's swept segment (world_xyz_prev -> world_xyz)

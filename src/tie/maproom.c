@@ -766,10 +766,7 @@ int32_t maproom_maproom(void) {
 					sx_top = transfm2_getscreenx(top_ex, top_ez);
 					sy_base = transfm2_getscreeny(objecteyey, objecteyez);
 					sx_base = transfm2_getscreenx(objecteyex, objecteyez);
-					if (TIE_DISPLAY_DX5)
-						logbuf2_drawclippedline_tie98(sx_base, sy_base, sx_top, sy_top, MAP_AXIS_LINE);
-					else
-						logbuf2_drawclippedline(sx_base, sy_base, sx_top, sy_top, MAP_AXIS_LINE);
+					logbuf2_drawclippedline(sx_base, sy_base, sx_top, sy_top, MAP_AXIS_LINE);
 				}
 				origin_x = worldlocx - 0x100000;
 				origin_y = worldlocy - 0x100000;
@@ -824,10 +821,7 @@ int32_t maproom_maproom(void) {
 					sx_top = transfm2_getscreenx(top_ex, top_ez);
 					sy_base = transfm2_getscreeny(objecteyey, objecteyez);
 					sx_base = transfm2_getscreenx(objecteyex, objecteyez);
-					if (TIE_DISPLAY_DX5)
-						logbuf2_drawclippedline_tie98(sx_base, sy_base, sx_top, sy_top, MAP_AXIS_LINE);
-					else
-						logbuf2_drawclippedline(sx_base, sy_base, sx_top, sy_top, MAP_AXIS_LINE);
+					logbuf2_drawclippedline(sx_base, sy_base, sx_top, sy_top, MAP_AXIS_LINE);
 				}
 
 				/* Forward pass: paints items on the SAME side of the ground
@@ -1371,14 +1365,9 @@ void maproom_drawmapitem(uint16_t obj_idx, uint16_t selected_obj_ref, char num_l
 		objecteyez = transfm2_geteyez(worldlocx, worldlocy, worldlocz);
 		if (objecteyez <= 0)
 			transfm2_clipobjecteyez(eyex, eyey, z);
-		if (TIE_DISPLAY_DX5)
-			logbuf2_drawclippedline_tie98(transfm2_getscreenx(objecteyex, objecteyez),
-										  transfm2_getscreeny(objecteyey, objecteyez), screen_x, screen_y,
-										  fontcolors[10]);
-		else
-			logbuf2_drawclippedline(transfm2_getscreenx(objecteyex, objecteyez),
-									transfm2_getscreeny(objecteyey, objecteyez), screen_x, screen_y,
-									fontcolors[10]);
+		logbuf2_drawclippedline(transfm2_getscreenx(objecteyex, objecteyez),
+								transfm2_getscreeny(objecteyey, objecteyez), screen_x, screen_y,
+								fontcolors[10]);
 	}
 
 	/* --- Phase 6: ground-projection vertical line --- */
@@ -1389,10 +1378,7 @@ void maproom_drawmapitem(uint16_t obj_idx, uint16_t selected_obj_ref, char num_l
 		transfm2_clipobjecteyez(eyex, eyey, z);
 	ground_screen_x = transfm2_getscreenx(objecteyex, objecteyez);
 	ground_screen_y = transfm2_getscreeny(objecteyey, objecteyez);
-	if (TIE_DISPLAY_DX5)
-		logbuf2_drawclippedline_tie98(ground_screen_x, ground_screen_y, screen_x, screen_y, backcolor);
-	else
-		logbuf2_drawclippedline(ground_screen_x, ground_screen_y, screen_x, screen_y, backcolor);
+	logbuf2_drawclippedline(ground_screen_x, ground_screen_y, screen_x, screen_y, backcolor);
 
 	/* --- Phase 7: velocity-vector line (active flight objects only) --- */
 	if (obj_idx < WARHEAD_SLOT_END) {
@@ -1427,14 +1413,9 @@ void maproom_drawmapitem(uint16_t obj_idx, uint16_t selected_obj_ref, char num_l
 		objecteyez = transfm2_geteyez(worldx, worldy, -65536 - camera.z);
 		if (objecteyez <= 0)
 			transfm2_clipobjecteyez(prev_eyex, prev_eyey, prev_eyez);
-		if (TIE_DISPLAY_DX5)
-			logbuf2_drawclippedline_tie98(transfm2_getscreenx(objecteyex, objecteyez),
-										  transfm2_getscreeny(objecteyey, objecteyez), ground_screen_x,
-										  ground_screen_y, backcolor);
-		else
-			logbuf2_drawclippedline(transfm2_getscreenx(objecteyex, objecteyez),
-									transfm2_getscreeny(objecteyey, objecteyez), ground_screen_x,
-									ground_screen_y, backcolor);
+		logbuf2_drawclippedline(transfm2_getscreenx(objecteyex, objecteyez),
+								transfm2_getscreeny(objecteyey, objecteyez), ground_screen_x, ground_screen_y,
+								backcolor);
 	}
 
 	/* --- Phase 8: viewport-cull + icon + label + distance --- */

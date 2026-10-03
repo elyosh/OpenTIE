@@ -225,9 +225,17 @@ void logbuf2_outdiffbuffer(const void* oldbuf, const void* newbuf) {
  * Off-screen endpoints are clipped with math2_ABoverC32.
  * ------------------------------------------------------------------ */
 // FUNCTION: TIE95 0x2EAF8
+// FUNCTION: TIE98 0x44C470
 void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color) {
 	int32_t dy, dx, t, err, steps;
 	uint8_t* p;
+
+#if defined(TIE98) || defined(TIE_MODERN)
+	if (TIE_DISPLAY_DX5 && g_flight16bppBytesPerPixel == 2) {
+		logbuf2_drawclippedline16_tie98(x1, y1, x2, y2, color);
+		return;
+	}
+#endif
 
 #ifdef TIE_MODERN
 	if (!buffer_ptr)
@@ -574,180 +582,6 @@ void logbuf2_drawclippedline16_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t
 	}
 }
 
-// FUNCTION: TIE98 0x44C470
-// LOGBUF2_drawclippedline
-void logbuf2_drawclippedline_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color) {
-	int32_t dx, dy, t, len, err, steps, i;
-	uint8_t* p;
-
-	if (g_flight16bppBytesPerPixel == 2) {
-		logbuf2_drawclippedline16_tie98(x1, y1, x2, y2, color);
-		return;
-	}
-#ifdef TIE_MODERN
-	if (!buffer_ptr)
-		return;
-#endif
-
-	dx = x2 - x1;
-	if (dx < 0) {
-		t = x1;
-		x1 = x2;
-		x2 = t;
-		t = y1;
-		y1 = y2;
-		y2 = t;
-		dx = -dx;
-	} else if (dx == 0) {
-		/* Vertical line. */
-		if (x1 < 0 || x1 >= pixelswide)
-			return;
-		if (y1 > y2) {
-			t = y1;
-			y1 = y2;
-			y2 = t;
-		}
-		if (y1 < 0)
-			y1 = 0;
-		if (y2 >= pixelsdeep)
-			y2 = pixelsdeepmin1;
-		len = y2 - y1;
-		if (len > 0) {
-			p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
-			for (i = 0; i < len; ++i) {
-				*p = color;
-				p += pixelswide;
-			}
-		}
-		return;
-	}
-
-	if (x1 >= pixelswide || x2 < 0)
-		return;
-
-	dy = y2 - y1;
-	if (dy >= 0) {
-		if (dy == 0) {
-			/* Horizontal line. */
-			if (y1 < 0 || y1 >= pixelsdeep)
-				return;
-			if (x1 < 0)
-				x1 = 0;
-			if (x2 >= pixelswide)
-				x2 = pixelswidemin1;
-			len = x2 - x1;
-			if (len > 0) {
-				p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
-				memset(p, color, (size_t)len);
-			}
-			return;
-		}
-
-		/* Downward line. */
-		if (y1 >= pixelsdeep || y2 < 0)
-			return;
-		if (y1 < 0) {
-			x1 += math2_ABoverC32(-y1, dx, dy);
-			if (x1 >= pixelswide)
-				return;
-			y1 = 0;
-		}
-		if (x1 < 0) {
-			y1 += math2_ABoverC32(-x1, dy, dx);
-			if (y1 >= pixelsdeep)
-				return;
-			x1 = 0;
-		}
-		if (x2 >= pixelswide)
-			x2 = pixelswidemin1;
-		if (y2 >= pixelsdeep)
-			y2 = pixelsdeepmin1;
-		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
-		if (dx < dy) {
-			steps = x2 - x1 + 1;
-			err = dy >> 1;
-			len = y2 - y1;
-			for (i = 0; i < len; ++i) {
-				*p = color;
-				p += pixelswide;
-				err -= dx;
-				if (err < 0) {
-					err += dy;
-					if (--steps == 0)
-						return;
-					++p;
-				}
-			}
-		} else {
-			steps = y2 - y1 + 1;
-			err = dx >> 1;
-			len = x2 - x1;
-			for (i = 0; i < len; ++i) {
-				*p++ = color;
-				err -= dy;
-				if (err < 0) {
-					err += dx;
-					if (--steps == 0)
-						return;
-					p += pixelswide;
-				}
-			}
-		}
-	} else {
-		/* Upward line. */
-		dy = -dy;
-		if (y1 < 0 || y2 >= pixelsdeep)
-			return;
-		if (y1 >= pixelsdeep) {
-			x1 += math2_ABoverC32(y1 - pixelsdeepmin1, dx, dy);
-			if (x1 >= pixelswide)
-				return;
-			y1 = pixelsdeepmin1;
-		}
-		if (x1 < 0) {
-			y1 -= math2_ABoverC32(-x1, dy, dx);
-			if (y1 < 0)
-				return;
-			x1 = 0;
-		}
-		if (x2 >= pixelswide)
-			x2 = pixelswidemin1;
-		if (y2 < 0)
-			y2 = 0;
-		p = (uint8_t*)buffer_ptr + x1 + y1 * pixelswide;
-		if (dx < dy) {
-			steps = x2 - x1 + 1;
-			err = dy >> 1;
-			len = y1 - y2;
-			for (i = 0; i < len; ++i) {
-				*p = color;
-				p -= pixelswide;
-				err -= dx;
-				if (err < 0) {
-					err += dy;
-					if (--steps == 0)
-						return;
-					++p;
-				}
-			}
-		} else {
-			steps = y1 - y2 + 1;
-			err = dx >> 1;
-			len = x2 - x1;
-			for (i = 0; i < len; ++i) {
-				*p++ = color;
-				err -= dy;
-				if (err < 0) {
-					err += dx;
-					if (--steps == 0)
-						return;
-					p -= pixelswide;
-				}
-			}
-		}
-	}
-}
-
 /* ------------------------------------------------------------------
  * startPIP / finishPIP — save/restore the drawing viewport and the
  * world-to-eye rotation matrix, and swap the XTRANS2 side-buffer
@@ -755,6 +589,7 @@ void logbuf2_drawclippedline_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y
  * 0xE000 while the PIP side-buffers are active, 0xC000 otherwise.
  * ------------------------------------------------------------------ */
 // FUNCTION: TIE95 0x2EF3C
+// FUNCTION: TIE98 0x44CCB0
 void logbuf2_startPIP(uint16_t width, uint16_t depth, uint16_t clear_runs, uint32_t dc) {
 	temppw = pixelswide;
 	temppd = pixelsdeep;
@@ -769,12 +604,19 @@ void logbuf2_startPIP(uint16_t width, uint16_t depth, uint16_t clear_runs, uint3
 	tempC2 = worldeyeC2;
 	tempC3 = worldeyeC3;
 
-	pixelswidemin1 = width - 1;
 	pixelswide = width;
+	pixelswidemin1 = width - 1;
 	halfpixelswide = width / 2;
-	pixelsdeepmin1 = depth - 1;
 	pixelsdeep = depth;
+	pixelsdeepmin1 = depth - 1;
 	halfpixelsdeep = depth / 2;
+	if (TIE_DISPLAY_DX5) {
+		displaycorner = dc;
+		maskbufptr = 0xE000;
+		displaycorner_lines = dc / g_surfacePitch;
+		displaycorner_columns = dc % g_surfacePitch / g_flight16bppBytesPerPixel;
+		return;
+	}
 	displaycorner_lines = dc / screenMemWidth;
 	displaycorner = dc;
 	displaycorner_columns = dc % screenMemWidth;
@@ -788,6 +630,7 @@ void logbuf2_startPIP(uint16_t width, uint16_t depth, uint16_t clear_runs, uint3
 }
 
 // FUNCTION: TIE95 0x2F070
+// FUNCTION: TIE98 0x44CDC0
 void logbuf2_finishPIP(void) {
 	uint32_t smw;
 	worldeyeA1 = tempA1;
@@ -808,64 +651,16 @@ void logbuf2_finishPIP(void) {
 	pixelsdeepmin1 = (uint16_t)(temppd - 1);
 	halfpixelsdeep = (uint16_t)(temppd / 2);
 	displaycorner = tempdc;
+	if (TIE_DISPLAY_DX5) {
+		maskbufptr = 0xC000;
+		displaycorner_lines = tempdc / g_surfacePitch;
+		displaycorner_columns = tempdc % g_surfacePitch / g_flight16bppBytesPerPixel;
+		return;
+	}
 	displaycorner_lines = smw ? (tempdc / smw) : 0;
 	displaycorner_columns = smw ? (tempdc % smw) : tempdc;
 
 	maskbufptr = 0xC000;
 	leftside = leftsidedata1;
 	rightside = rightsidedata1;
-}
-
-// FUNCTION: TIE98 0x44CCB0
-// LOGBUF2_startPIP
-void logbuf2_startPIP_tie98(uint16_t width, uint16_t depth, int clear_runs, uint32_t dc) {
-	(void)clear_runs;
-	temppw = pixelswide;
-	temppd = pixelsdeep;
-	tempdc = (uint16_t)displaycorner;
-	tempA1 = worldeyeA1;
-	tempA2 = worldeyeA2;
-	tempA3 = worldeyeA3;
-	tempB1 = worldeyeB1;
-	tempB2 = worldeyeB2;
-	tempB3 = worldeyeB3;
-	tempC1 = worldeyeC1;
-	tempC2 = worldeyeC2;
-	tempC3 = worldeyeC3;
-
-	pixelswide = width;
-	pixelswidemin1 = (uint16_t)(width - 1);
-	halfpixelswide = (uint16_t)(width >> 1);
-	pixelsdeep = depth;
-	pixelsdeepmin1 = (uint16_t)(depth - 1);
-	halfpixelsdeep = (uint16_t)(depth >> 1);
-	displaycorner = dc;
-	maskbufptr = 0xE000;
-	displaycorner_lines = dc / g_surfacePitch;
-	displaycorner_columns = dc % g_surfacePitch / g_flight16bppBytesPerPixel;
-}
-
-// FUNCTION: TIE98 0x44CDC0
-// LOGBUF2_finishPIP
-void logbuf2_finishPIP_tie98(void) {
-	worldeyeA1 = tempA1;
-	worldeyeA2 = tempA2;
-	worldeyeA3 = tempA3;
-	worldeyeB1 = tempB1;
-	worldeyeB2 = tempB2;
-	worldeyeB3 = tempB3;
-	worldeyeC1 = tempC1;
-	worldeyeC2 = tempC2;
-	worldeyeC3 = tempC3;
-
-	pixelswide = temppw;
-	pixelswidemin1 = (uint16_t)(temppw - 1);
-	halfpixelswide = (uint16_t)(temppw >> 1);
-	pixelsdeep = temppd;
-	pixelsdeepmin1 = (uint16_t)(temppd - 1);
-	halfpixelsdeep = (uint16_t)(temppd >> 1);
-	displaycorner = tempdc;
-	maskbufptr = 0xC000;
-	displaycorner_lines = tempdc / g_surfacePitch;
-	displaycorner_columns = tempdc % g_surfacePitch / g_flight16bppBytesPerPixel;
 }

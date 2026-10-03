@@ -181,6 +181,7 @@ void gate_savegatelastpos(void) {
  * once per visible gate by tie_updatescreen.
  * ---------------------------------------------------------------------- */
 // FUNCTION: TIE95 0x29088
+// FUNCTION: TIE98 0x425590
 void gate_drawtraininggate(uint16_t obj_idx) {
 	ShipModelMesh* mesh;
 	uint16_t i;
@@ -189,25 +190,40 @@ void gate_drawtraininggate(uint16_t obj_idx) {
 
 	int16_t saved_target;
 
-	if (obj_idx == currentgate || obj_idx == currentgate + 1) {
+	if (obj_idx == TIE_FLIGHT_EDITION(currentgate, gate_render_reference_object) ||
+		obj_idx == TIE_FLIGHT_EDITION(currentgate, gate_render_reference_object) + 1) {
 		/* Binary has a `if (obj_idx < currentgate) bluetarget = obj_idx;`
 		 * here; given the outer condition that branch is unreachable
 		 * (CSE artifact). Preserved as a dead conditional below. */
 		if (obj_idx < currentgate)
 			bluetarget = obj_idx;
-		draw_drawcomplexobject(obj_idx);
+		if (TIE_FLIGHT_TIE98) {
+			draw_drawcomplexobject_tie98(obj_idx);
+			FlightModel_Draw_Object(&objects[obj_idx]);
+		} else {
+			draw_drawcomplexobject(obj_idx);
+		}
 	} else {
-		draw_Lockshipfileptrs(objects[obj_idx].ship_idx);
+		if (!TIE_FLIGHT_TIE98)
+			draw_Lockshipfileptrs(objects[obj_idx].ship_idx);
 		/* Tag the parent-object with 0x7000 so the draw/pick pipeline
 		 * recognises it as a training gate rather than a regular ship. */
 		parentobject = (uint16_t)(obj_idx + 0x7000);
 	}
 
 	/* Find the MESH_MainHull (value 1) within the current ship's mesh list. */
-	mesh = componentblockptr;
-	for (i = 0; i < objectblockptr->num_meshes - 1; i++, mesh++) {
-		if (mesh->mesh_type == 1)
-			break;
+	if (TIE_FLIGHT_TIE98) {
+		const int mesh_count = modelmesh_getcount(objects[obj_idx].ship_idx);
+
+		i = 0;
+		while (i < mesh_count - 1 && modelmesh_gettype(objects[obj_idx].ship_idx, i) != TIE_MESH_MAIN_HULL)
+			++i;
+	} else {
+		mesh = componentblockptr;
+		for (i = 0; i < objectblockptr->num_meshes - 1; i++, mesh++) {
+			if (mesh->mesh_type == 1)
+				break;
+		}
 	}
 	solidindex = (int16_t)i;
 
@@ -218,11 +234,15 @@ void gate_drawtraininggate(uint16_t obj_idx) {
 		highlightcolor = 1;
 	}
 
-	eye_z = objecteyez;
-	eye_y = objecteyey;
-	eye_x = objecteyex;
-	poly_detail = draw_getcompdetailptr(mesh, objecteyez);
-	drawpol_drawpolyobject(poly_detail, eye_x, eye_y, eye_z);
+	if (TIE_FLIGHT_TIE98) {
+		FlightModel_Draw_Object_Mesh(&objects[obj_idx], i);
+	} else {
+		eye_z = objecteyez;
+		eye_y = objecteyey;
+		eye_x = objecteyex;
+		poly_detail = draw_getcompdetailptr(mesh, objecteyez);
+		drawpol_drawpolyobject(poly_detail, eye_x, eye_y, eye_z);
+	}
 
 	currenttarget = (uint16_t)saved_target;
 }
@@ -444,39 +464,6 @@ void gate_createtraininggates(void) {
 		objects[gate_idx].world_y_prev = objects[gate_idx].world_y;
 		objects[gate_idx].world_z_prev = objects[gate_idx].world_z;
 	}
-}
-
-// FUNCTION: TIE98 0x425590
-void gate_drawtraininggate_tie98(uint16_t object_index) {
-	FlightObject* object = &objects[object_index];
-	uint16_t main_hull_mesh_index;
-	int mesh_count;
-	uint16_t saved_current_target;
-
-	if (object_index == gate_render_reference_object ||
-		object_index == (uint16_t)(gate_render_reference_object + 1)) {
-		if (object_index < currentgate)
-			bluetarget = object_index;
-		draw_drawcomplexobject_tie98(object_index);
-		FlightModel_Draw_Object(object);
-	} else {
-		parentobject = (uint16_t)(object_index + 0x7000);
-	}
-
-	main_hull_mesh_index = 0;
-	mesh_count = modelmesh_getcount(object->ship_idx);
-	while (main_hull_mesh_index < mesh_count - 1 &&
-		   modelmesh_gettype(object->ship_idx, main_hull_mesh_index) != TIE_MESH_MAIN_HULL)
-		++main_hull_mesh_index;
-
-	saved_current_target = currenttarget;
-	solidindex = (int16_t)main_hull_mesh_index;
-	if (object_index < currentgate) {
-		highlightcolor = 1;
-		currenttarget = parentobject;
-	}
-	FlightModel_Draw_Object_Mesh(object, main_hull_mesh_index);
-	currenttarget = saved_current_target;
 }
 
 /* -------------------------------------------------------------------------

@@ -231,7 +231,7 @@ void tie_updatescreen_tie98(void) {
 						lightflag = 0;
 					fview_newcalcrotate(object->roll, object->pitch, object->heading, 0, object);
 					if (object->genus == GENUS_GATE) {
-						gate_drawtraininggate_tie98(object_index);
+						gate_drawtraininggate(object_index);
 					} else {
 						tie_makelocallights_tie98(object);
 						draw_drawcomplexobject_tie98(object_index);
