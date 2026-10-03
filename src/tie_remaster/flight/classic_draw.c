@@ -34,8 +34,8 @@ void TieFlightRenderer_ClassicDrawPass(TieFlightRenderer* g, AeronCommandBuffer*
 	Aeron_BindGraphicsPipeline(pass, initial_mesh_pp);
 	Aeron_BindStorageBuffer(pass, AERON_SHADER_STAGE_VERTEX, 0, g->classic_mesh_tables.buffer);
 	/* Mesh FS samplers: materialcolors LUT + palette. */
-	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 0, g->materialcolors_tex, g->sampler_linear);
-	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 1, g->palette_tex, g->sampler_linear);
+	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 0, g->materialcolors_tex, g->sampler);
+	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 1, g->palette_tex, g->sampler);
 
 	/* Per-pass FS uniforms. marking_state_offset is rewritten
 	 * per-craft below from fl->decal_color. */
@@ -209,8 +209,8 @@ void TieFlightRenderer_ClassicDrawSingle(TieFlightRenderer* g, AeronCommandBuffe
 	Aeron_BindGraphicsPipeline(pass, g->classic_pip_mesh_pipeline);
 	Aeron_BindStorageBuffer(pass, AERON_SHADER_STAGE_VERTEX, 0, g->classic_mesh_tables.buffer);
 
-	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 0, g->materialcolors_tex, g->sampler_linear);
-	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 1, g->palette_tex, g->sampler_linear);
+	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 0, g->materialcolors_tex, g->sampler);
+	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 1, g->palette_tex, g->sampler);
 
 	TieFlightMeshPixelUniforms ps_u = { 0 };
 	{

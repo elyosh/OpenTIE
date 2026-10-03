@@ -3,19 +3,17 @@
  *
  * Reproduces `drawpol_getlightvalue` (drawpol.c:498-617) end-to-end:
  * decal walk, marking-state animation, target-highlight remap, the
- * unlit branch, and the materialcolors → palette LUT chain.
+ * unlit branch, and the materialcolors → palette LUT chain. All ramp
+ * and palette accesses are discrete; Gouraud shading blends resolved
+ * ramp colours in place of the original span dither.
  *
  * Texture / sampler slots:
  *
  *   t0 space2 = g_materialcolors (R8_UNORM, 16 × 45 — palette INDICES)
- *   t1 space2 = g_palette        (BGRA8_UNORM, 256 × 1 — live VGA palette)
+ *   t1 space2 = g_palette        (BGRA8_SRGB, 256 × 1 — live VGA palette)
  *   t2 space2 = g_decals         (StructuredBuffer<FlightDecal>)
  *   t3 space2 = g_decal_verts    (StructuredBuffer<FlightDecalVert>)
- *   s0 space2 = g_sampler        (linear; bilinear-sampling
- *                                  materialcolors gives a smooth shade
- *                                  ramp, palette taps clamp + share
- *                                  the same sampler since both wrap
- *                                  modes are identical).
+ *   s0 space2 = g_sampler        (nearest; every access is a Load).
  *
  * Cbuffer:
  *   b0 space3 = MeshPSUniforms (marking_state_offset, line thickness
@@ -116,17 +114,26 @@ int resolve_material_index(int v_mat_raw, float v_highlight)
     return clamp(mapped_lo7 - 1, 0, 44);
 }
 
-/* Engine LUT chain: bilinear-sample materialcolors at (shade, material)
- * to recover a fractional palette index (0..255), then nearest-sample
- * the palette at that index. */
-float4 palette_lookup(float shade_f, int material)
+uint ramp_index(int row, int entry)
 {
-    float2 mc_uv = float2((shade_f + 0.5f) / 16.0f,
-                          ((float)material + 0.5f) / 45.0f);
-    float mc_f      = g_materialcolors.SampleLevel(g_sampler, mc_uv, 0);
-    float pal_idx_f = mc_f * 255.0f;
-    float pal_uv    = (pal_idx_f + 0.5f) / 256.0f;
-    return g_palette.SampleLevel(g_sampler, float2(pal_uv, 0.5f), 0);
+    return (uint)round(g_materialcolors.Load(int3(clamp(entry, 0, 15), row, 0)) * 255.0f);
+}
+float3 palette_color(uint index)
+{
+    return g_palette.Load(int3(index & 0xFFu, 0, 0)).rgb;
+}
+float3 smooth_ramp(int row, float shade)
+{
+    int entry = (int)floor(shade);
+    float t = frac(shade), t2 = t * t, t3 = t2 * t, inverse = 1 - t;
+    /* Cubic B-spline weights smooth repeated shades without colour overshoot.
+     * Palette loads resolve to linear RGB; taps stay within this material row. */
+    float4 weights = float4(inverse * inverse * inverse, 4 - 6 * t2 + 3 * t3,
+                            1 + 3 * t + 3 * t2 - 3 * t3, t3) / 6.0f;
+    return palette_color(ramp_index(row, entry - 1)) * weights.x
+         + palette_color(ramp_index(row, entry)) * weights.y
+         + palette_color(ramp_index(row, entry + 1)) * weights.z
+         + palette_color(ramp_index(row, entry + 2)) * weights.w;
 }
 
 /* Resolved per-fragment shading inputs after decal walk + highlight
@@ -233,7 +240,7 @@ ShadingPrep prepare_shading(
 }
 
 float4 main(float4 pos          : SV_Position,
-            float  raw_dot      : TEXCOORD2,
+            noperspective float raw_dot : TEXCOORD2,
             float  v_color      : COLOR0,
             float  v_material   : COLOR1,
             float  v_highlight  : COLOR2,
@@ -249,6 +256,7 @@ float4 main(float4 pos          : SV_Position,
              * additively on top of the palette colour so explosion
              * tints still appear over classic shading. */
             float3 local_rgb    : COLOR4,
+            nointerpolation float v_gouraud : TEXCOORD8,
             bool   is_front     : SV_IsFrontFace) : SV_Target0
 {
     ShadingPrep sp = prepare_shading(pos, v_color, v_material, v_highlight,
@@ -256,13 +264,12 @@ float4 main(float4 pos          : SV_Position,
                                      decal_offset, decal_count,
                                      v_markings_enabled);
 
-    float4 rgb;
+    float4 rgb = float4(0.0f, 0.0f, 0.0f, 1.0f);
 
     /* Unlit branch — `drawpol_drawlineface` (xtrans2.c:1096) consumes
      * edge[4] colour directly as a palette index. */
     if (sp.is_unlit) {
-        float pal_uv = ((float)sp.color_byte + 0.5f) / 256.0f;
-        rgb = g_palette.SampleLevel(g_sampler, float2(pal_uv, 0.5f), 0);
+        rgb.rgb = palette_color((uint)sp.color_byte);
     } else {
         /* Back-face lambert flip: engine's two-sided face path
          * (drawpol.c:962-964) negates rotlight when rendering the
@@ -270,36 +277,42 @@ float4 main(float4 pos          : SV_Position,
          * cull_mode = NONE we draw both sides, so reproduce the
          * negation per-fragment from SV_IsFrontFace. */
         float side_sign = is_front ? 1.0f : -1.0f;
-
-        /* Engine raw_dot interpolated by the rasterizer. Flat-shaded
-         * faces: the converter wrote the same face normal to all 3
-         * vertices so the value is constant. Gouraud-eligible faces:
-         * VS used the per-vertex normal and the rasterizer
-         * interpolates the SCALAR lambert — matches classic's
-         * per-scanline vertexlight[] interpolation. */
         float lambert = saturate(side_sign * raw_dot);
 
-        /* Continuous shade-row coordinate — float analogue of the
-         * engine's `shade_idx = 15 - lightval` where
-         * lightval = floor(lambert * 16). Row 0 = brightest. */
-        float shade_f = clamp(15.0f - lambert * 16.0f, 0.0f, 15.0f);
+        /* Gouraud faces store markings unshaded (drawpol.c:1325); the
+         * span renderer draws colours >= 0x40 directly and shades the
+         * rest along the material ramp. Target highlights take the flat
+         * marking path. */
+        bool gouraud = v_gouraud > 0.5f;
+        bool highlighted = (int)round(v_highlight) != 0;
+        int row = sp.material;
+        bool interpolated = gouraud && !sp.is_marking;
+        bool direct = false;
+        uint color = (uint)sp.color_byte;
+        if (gouraud && sp.is_marking && !highlighted) {
+            if ((color & 0x3Fu) == 14u)
+                color = (color + (uint)(int)marking_state_offset) & 0xFFu;
+            direct = color >= 0x40u;
+            interpolated = !direct;
+            row = max((int)color - 1, 0);
+        }
 
-        if (sp.is_marking) {
-            /* Marking path. Bits 6+7 of v_color carry the 0..3
-             * brightness offset for marking vertices; face vertices
-             * have those bits masked off by the converter, so the
-             * is_marking gate keeps face shading from picking up the
-             * subtract. */
-            float2 mc_uv    = float2((shade_f + 0.5f) / 16.0f,
-                                     ((float)sp.material + 0.5f) / 45.0f);
-            float  mc_f     = g_materialcolors.SampleLevel(g_sampler, mc_uv, 0);
-            float  pal_idx_f = mc_f * 255.0f
-                            - (float)((sp.color_byte >> 6) & 3);
-            pal_idx_f       = max(pal_idx_f, 0.0f);
-            float pal_uv    = (pal_idx_f + 0.5f) / 256.0f;
-            rgb = g_palette.SampleLevel(g_sampler, float2(pal_uv, 0.5f), 0);
+        if (direct) {
+            rgb.rgb = palette_color(color);
+        } else if (interpolated) {
+            /* Keep the original 63-light ramp coordinate fractional
+             * (xtrans2_outputxt). Palette indices themselves are discrete. */
+            float shade = clamp((63.0f - lambert * 64.0f) * 0.25f, 0.0f, 15.0f);
+            rgb.rgb = smooth_ramp(row, shade);
         } else {
-            rgb = palette_lookup(shade_f, sp.material);
+            /* Flat shade = 15 - (face_dot >> 11). Row 0 = brightest. */
+            int entry = 15 - min(15, (int)floor(lambert * 16.0f));
+            uint index = ramp_index(row, entry);
+            /* Marking colour bits 6-7 subtract a 0..3 brightness offset;
+             * face vertices have those bits masked off by the converter. */
+            if (sp.is_marking)
+                index -= (uint)((sp.color_byte >> 6) & 3);
+            rgb.rgb = palette_color(index);
         }
     }
 

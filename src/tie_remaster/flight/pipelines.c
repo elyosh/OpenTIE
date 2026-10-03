@@ -160,7 +160,7 @@ typedef struct {
 
 static uint32_t TieFlightRenderer_MeshVertexInput(AeronVertexAttributeDesc attrs[12],
 												  AeronVertexBufferLayoutDesc* vbd);
-static uint32_t TieFlightRenderer_LineVertexInput(AeronVertexAttributeDesc attrs[9],
+static uint32_t TieFlightRenderer_LineVertexInput(AeronVertexAttributeDesc attrs[10],
 												  AeronVertexBufferLayoutDesc* vbd);
 
 static AeronGraphicsPipeline*
@@ -288,9 +288,9 @@ AeronGraphicsPipeline* TieFlightRenderer_CreateMeshPipeline(AeronShader* vs, Aer
 	return TieFlightPipelines_CreateGraphicsPipeline(vs, ps, &d);
 }
 
-/* TieFlightLineVertex layout (9 attributes), shared by the line and bolt
+/* TieFlightLineVertex layout (10 attributes), shared by the line and bolt
  * pipelines. Keep in sync with flight_line.vert.hlsl. */
-static uint32_t TieFlightRenderer_LineVertexInput(AeronVertexAttributeDesc attrs[9],
+static uint32_t TieFlightRenderer_LineVertexInput(AeronVertexAttributeDesc attrs[10],
 												  AeronVertexBufferLayoutDesc* vbd) {
 	attrs[0] = (AeronVertexAttributeDesc) { .location = 0,
 											.buffer_slot = 0,
@@ -329,12 +329,16 @@ static uint32_t TieFlightRenderer_LineVertexInput(AeronVertexAttributeDesc attrs
 											.buffer_slot = 0,
 											.format = AERON_VERTEX_FORMAT_FLOAT,
 											.offset = (uint32_t)offsetof(TieFlightLineVertex, mesh_index) };
+	attrs[9] = (AeronVertexAttributeDesc) { .location = 9,
+											.buffer_slot = 0,
+											.format = AERON_VERTEX_FORMAT_FLOAT,
+											.offset = (uint32_t)offsetof(TieFlightLineVertex, face_flags) };
 	*vbd = (AeronVertexBufferLayoutDesc) {
 		.slot = 0,
 		.stride = (uint32_t)sizeof(TieFlightLineVertex),
 		.per_instance = 0,
 	};
-	return 9;
+	return 10;
 }
 
 /* Line pipeline — TieFlightLineVertex layout, TRIANGLELIST, no cull. */

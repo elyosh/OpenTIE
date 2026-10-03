@@ -71,6 +71,7 @@ struct VSIn
     float  material_id    : COLOR3;
     float  thickness_base : COLOR4;
     float  mesh_index     : COLOR5;
+    float  face_flags     : COLOR6;  /* bit 0: Gouraud-eligible lit line */
 };
 
 struct VSOut
@@ -78,8 +79,8 @@ struct VSOut
     float4 position     : SV_Position;
     /* Signed scalar lambert — same contract as flight_mesh.vert.hlsl
      * so the shared FS can consume one interpolant regardless of
-     * pipeline. Lines are flat-shaded (no Gouraud-eligibility). */
-    float  raw_dot      : TEXCOORD2;
+     * pipeline. Gouraud lines interpolate it between endpoints. */
+    noperspective float raw_dot : TEXCOORD2;
     float  v_color      : COLOR0;
     float  v_material   : COLOR1;
     float  v_highlight  : COLOR2;
@@ -101,6 +102,8 @@ struct VSOut
      * for the directional dot, and there's no local-light loop on the
      * line path) — ship 0 for layout parity with the mesh VS. */
     float3 local_rgb    : COLOR4;
+    /* 1.0 when the engine takes the Gouraud path for this face. */
+    nointerpolation float v_gouraud : TEXCOORD8;
 };
 
 VSOut main(VSIn v)
@@ -127,6 +130,7 @@ VSOut main(VSIn v)
         hidden.v_markings_enabled = 0.0f;
         hidden.v_emissive   = 1.0f;
         hidden.local_rgb    = float3(0.0f, 0.0f, 0.0f);
+        hidden.v_gouraud    = 0.0f;
         return hidden;
     }
 
@@ -210,5 +214,7 @@ VSOut main(VSIn v)
     o.v_emissive = flight_mesh_table_scalar(mesh_table_index,
                                             AERON_MESH_EMISSIVE_OFFSET, mi);
     o.local_rgb    = float3(0.0f, 0.0f, 0.0f);
+    o.v_gouraud    = (gouraud_enabled > 0.5f &&
+                      ((int)round(v.face_flags) & 1) != 0) ? 1.0f : 0.0f;
     return o;
 }

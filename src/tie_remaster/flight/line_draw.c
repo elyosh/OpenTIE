@@ -63,8 +63,8 @@ void TieFlightRenderer_LinesDrawPass(TieFlightRenderer* g, AeronCommandBuffer* c
 
 	/* Classic FS samplers — both line + bolt pipelines share
 	 * mesh_classic_lut_ps, which reads materialcolors LUT + palette. */
-	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 0, g->materialcolors_tex, g->sampler_linear);
-	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 1, g->palette_tex, g->sampler_linear);
+	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 0, g->materialcolors_tex, g->sampler);
+	Aeron_BindTextureSampler(pass, AERON_SHADER_STAGE_FRAGMENT, 1, g->palette_tex, g->sampler);
 
 	/* TieFlightMeshPixelUniforms (FS slot 0) — same fields the mesh FS reads. */
 	TieFlightMeshPixelUniforms ps_u = { 0 };

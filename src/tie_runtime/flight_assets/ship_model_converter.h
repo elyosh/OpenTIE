@@ -102,7 +102,8 @@ typedef struct TieFlightLineVertex {
 	float mesh_index;     /* same role as TieFlightVertex.mesh_index —
 						   * antennas attached to a rotating turret
 						   * rotate along with it. */
-} TieFlightLineVertex;    /* 60 bytes */
+	float face_flags;     /* bit 0: Gouraud-eligible lit line */
+} TieFlightLineVertex;    /* 64 bytes */
 
 /* Decals use face-local coordinates and are composited by the parent face's
  * fragment shader. This confines them to the face without depth bias. Line

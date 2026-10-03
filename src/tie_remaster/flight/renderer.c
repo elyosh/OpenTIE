@@ -338,8 +338,8 @@ TieFlightRenderer* TieFlightRenderer_Init(int rt_w, int rt_h, AeronTextureFormat
 		.max_lod = 0.0f,
 	});
 
-	/* Linear-filter sampler (palette/materialcolors LUT + present RT
-	 * binds; the sky-cube sample uses the scene's own sampler now). */
+	/* Linear-filter sampler for present RT binds; the sky-cube sample
+	 * uses the scene's own sampler. */
 	g->sampler_linear = Aeron_CreateSampler(&(AeronSamplerDesc) {
 		.min_filter = AERON_FILTER_LINEAR,
 		.mag_filter = AERON_FILTER_LINEAR,

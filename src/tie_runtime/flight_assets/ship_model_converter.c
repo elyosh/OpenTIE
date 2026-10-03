@@ -842,6 +842,7 @@ static bool TieShipModelConverter_ExtractMeshPolys(
 				lv.material_id = (float)material;
 				lv.thickness_base = (float)thickness_base;
 				lv.mesh_index = (float)mesh_index;
+				lv.face_flags = line_is_gouraud ? 1.0f : 0.0f;
 				if (!TieShipModelConverter_LinevertbufPush(lvb, &lv))
 					return false;
 			}
@@ -1527,6 +1528,7 @@ static bool TieShipModelConverter_AppendLaserLod(const uint8_t* base, size_t blo
 			lv.material_id = (float)material;
 			lv.thickness_base = (float)thickness_base;
 			lv.mesh_index = 0.0f; /* single static mesh */
+			lv.face_flags = 0.0f;
 			if (!TieShipModelConverter_LinevertbufPush(lvb, &lv))
 				return false;
 		}

@@ -89,8 +89,8 @@ struct VSOut
      * correct two-sided lighting (back-facing fragments whose
      * outward normal faces away from L are LIT on the inward side).
      * Linear scalar interpolation matches the engine's vertexlight[]
-     * cross-scanline interpolation. */
-    float  raw_dot      : TEXCOORD2;
+     * screen-space cross-scanline interpolation. */
+    noperspective float raw_dot : TEXCOORD2;
     float  v_color      : COLOR0;
     float  v_material   : COLOR1;
     /* Per-mesh highlight value (see MeshTableUniforms.mesh_highlight).
@@ -119,6 +119,8 @@ struct VSOut
      * way to the framebuffer. HDR: can exceed 1.0 when several
      * lights stack — bloom catches it. */
     float3 local_rgb    : COLOR4;
+    /* 1.0 when the engine takes the Gouraud path for this face. */
+    nointerpolation float v_gouraud : TEXCOORD8;
 };
 
 VSOut main(VSIn v)
@@ -145,6 +147,7 @@ VSOut main(VSIn v)
         hidden.v_markings_enabled = 0.0f;
         hidden.v_emissive   = 1.0f;
         hidden.local_rgb    = float3(0.0f, 0.0f, 0.0f);
+        hidden.v_gouraud    = 0.0f;
         return hidden;
     }
 
@@ -253,5 +256,6 @@ VSOut main(VSIn v)
     o.v_emissive = flight_mesh_table_scalar(
         mesh_table_index, AERON_MESH_EMISSIVE_OFFSET, mi);
     o.local_rgb    = local_rgb;
+    o.v_gouraud    = use_vnorm ? 1.0f : 0.0f;
     return o;
 }
