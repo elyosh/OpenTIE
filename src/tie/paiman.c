@@ -518,6 +518,10 @@ void paiman_initfollowleadermaneuver(void) {}
 int16_t paiman_followleadermaneuver(void) {
 	uint16_t self_idx = ai.active_obj_idx;
 	uint8_t leader_idx = craftptr->leader_obj_idx;
+	uint16_t leader_speed;
+	uint16_t our_speed;
+	uint16_t previous_throttle;
+	uint16_t delta;
 
 #ifdef TIE_MODERN
 	/* A newly promoted craft can retain this maneuver until its next plan update. */
@@ -537,8 +541,6 @@ int16_t paiman_followleadermaneuver(void) {
 			craftptr->push_accum_y = 0;
 			craftptr->push_accum_z = 0;
 		} else {
-			uint16_t delta;
-
 			/* Match leader's heading. Leader actively turning → use their target;
 			 * otherwise match their current heading. Skip a turn if we're already
 			 * aligned. */
@@ -552,21 +554,20 @@ int16_t paiman_followleadermaneuver(void) {
 
 			/* Adjust player-led throttle from the speed difference; mirror NPC throttle. */
 			if (leader_idx == pstate.object_idx) {
-				uint16_t leader_speed = (uint16_t)objects[leader_idx].current_speed;
-				uint16_t our_speed = (uint16_t)objects[self_idx].current_speed;
-				uint16_t previous_throttle;
+				leader_speed = objects[leader_idx].current_speed;
+				our_speed = objects[self_idx].current_speed;
 
 				/* Retail narrows the scaled delta and result before detecting wrap. */
 				if (leader_speed > our_speed) {
+					delta = leader_speed - our_speed;
 					previous_throttle = craftptr->throttle_speed;
-					craftptr->throttle_speed =
-						(uint16_t)(previous_throttle + (leader_speed - our_speed) * 50);
+					craftptr->throttle_speed += delta * 50;
 					if (previous_throttle > craftptr->throttle_speed)
 						craftptr->throttle_speed = 0xFFFFu;
 				} else if (leader_speed < our_speed) {
+					delta = our_speed - leader_speed;
 					previous_throttle = craftptr->throttle_speed;
-					craftptr->throttle_speed =
-						(uint16_t)(previous_throttle - (our_speed - leader_speed) * 50);
+					craftptr->throttle_speed -= delta * 50;
 					if (previous_throttle < craftptr->throttle_speed)
 						craftptr->throttle_speed = 0;
 				}
@@ -579,14 +580,14 @@ int16_t paiman_followleadermaneuver(void) {
 			if (delta >= 0x8000)
 				delta = -delta;
 			if (delta < 0x400) {
-				craftptr->ai_pitch_state = 0;
 				craftptr->orient_pitch = ai.leader_craft->orient_pitch;
+				craftptr->ai_pitch_state = 0;
 			} else {
 				craftptr->ai_pitch_step = 0xFFFFu;
 				craftptr->ai_target_pitch = ai.leader_craft->orient_pitch;
-				craftptr->ai_pitch_force = 0;
 				craftptr->ai_pitch_state =
 					(uint8_t)((ai.leader_craft->orient_pitch > craftptr->orient_pitch) + 1);
+				craftptr->ai_pitch_force = 0;
 			}
 
 			/* Match roll — but only once leader's spin has settled. */
@@ -599,15 +600,15 @@ int16_t paiman_followleadermaneuver(void) {
 					objects[self_idx].orient_dirty = 1;
 					craftptr->ai_roll_state = 0;
 				} else {
+					craftptr->ai_target_roll = (uint16_t)objects[ai.leader_obj_idx].roll;
 					craftptr->ai_roll_step = 0xFFFFu;
 					craftptr->ai_roll_state = 1;
-					craftptr->ai_target_roll = (uint16_t)objects[ai.leader_obj_idx].roll;
 				}
 			}
 
 			/* Formation follow. Skip (hold position) when our leader is the
 			 * player and is nearly stationary. */
-			if (pstate.object_idx != craftptr->leader_obj_idx) {
+			if (craftptr->leader_obj_idx != pstate.object_idx) {
 				paiman_calcformation();
 			} else if ((uint16_t)pstate.player->current_speed > 10) {
 				paiman_calcformation();
