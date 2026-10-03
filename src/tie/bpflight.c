@@ -1222,6 +1222,9 @@ static void bpflight_Load_Flight_Craft_tie98(const char* lfd_name, const char* o
 // FUNCTION: TIE95 0x7A1FC
 int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16_t mode) {
 	ResFile* rf;
+#ifdef TIE_MODERN
+	char ship_name[16];
+#endif
 
 	if (TIE_FRONTEND_TIE98) {
 		bpflight_Load_Flight_Craft_tie98(lfd_name, shp_name, mode, cur_flight_scene);
@@ -1230,7 +1233,16 @@ int bpflight_Load_Flight_Craft(const char* lfd_name, const char* shp_name, int16
 
 	rf = shellext_Open_Empire_Resource(lfd_name);
 	if (rf) {
+#ifdef TIE_MODERN
+		/* PORT: bpflight_Res_Ship upper-cases the name in place, which DOS
+		 * permitted even for the string literal passed by
+		 * shipext_Get_Train_Course_SHP. Hand it a writable copy instead. */
+		strncpy(ship_name, shp_name, sizeof(ship_name) - 1);
+		ship_name[sizeof(ship_name) - 1] = '\0';
+		bpflight_Res_Ship(rf, (uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[mode]), ship_name);
+#else
 		bpflight_Res_Ship(rf, (uint8_t*)xmemhdl_Lock_Handle(bpflight_fltobj_data[mode]), (char*)shp_name);
+#endif
 		xmemhdl_Unlock_Handle(bpflight_fltobj_data[mode]);
 		xres_Close_Resource(rf);
 	}
