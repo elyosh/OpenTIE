@@ -222,7 +222,7 @@ static int16_t register_iupdate_Pilot_List(Input* input, Rect* bounds, Rect* cli
 static void register_idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int16_t refresh);
 static void register_iuser_Pilot_Button(Input* input, int32_t time);
 static void register_idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, int16_t refresh);
-static void xuser_Pilot_Name(const char* search_name);
+static void register_xuser_Pilot_Name(const char* search_name);
 static void register_idraw_Pilot_Name(Input* input, Rect* frame, Rect* clip, int16_t refresh);
 static void register_iuser_Pilot_Info(Input* input, int32_t time);
 static void register_idraw_Pilot_Info(Input* input, Rect* frame, Rect* clip, int16_t refresh);
@@ -616,7 +616,7 @@ void register_end_View(int32_t phase) {
 	/* Per-frame: search for typed name in FPR */
 
 	register_Get_Reg_String_Button_Name(pilot_name_input, typed);
-	xuser_Pilot_Name(typed);
+	register_xuser_Pilot_Name(typed);
 
 	/* Show/hide delete button */
 	if (typed[0]) {
@@ -1024,7 +1024,7 @@ static void register_idraw_Pilot_Button(Input* input, Rect* frame, Rect* clip, i
 
 // FUNCTION: TIE95 0x7B2CC
 // FUNCTION: TIE98 0x470BE0
-static void xuser_Pilot_Name(const char* search_name) {
+static void register_xuser_Pilot_Name(const char* search_name) {
 	int16_t matched = -1;
 
 	int16_t i;
@@ -1729,49 +1729,17 @@ static void register_Delete_Pilot_Record(void) {
  * Pilot name callbacks
  * ================================================================ */
 
+// FUNCTION: TIE95 0x7B270
 // FUNCTION: TIE98 0x470B70
 static void register_iuser_Pilot_Name(Input* input, int32_t time) {
-	RegStringButton* btn;
-	int16_t matched;
-	int16_t i;
+	RegStringButton* btn = (RegStringButton*)input;
 
 	(void)time;
-	btn = (RegStringButton*)input;
 	if (!xinpattr_Get_Input_Selected(&btn->header))
 		return;
 
-	matched = -1;
 	shipext_Set_Pilot_Name("");
-
-	for (i = 0; i < num_pilots; i++) {
-		int16_t slot;
-		char dir_name[TIE_PILOT_NAME_CAPACITY];
-
-		if (matched != -1)
-			break;
-
-		if (register_Index_To_Pilot(i, &slot) &&
-			register_Find_Reg_Dir_Name(&register_directory, dir_name, slot) && !strcmp(dir_name, btn->name))
-			matched = i;
-	}
-
-	if (matched == -1) {
-		if (pilot_active != -1) {
-			xinpattr_Refresh_Input(pilot_list);
-			pilot_active = -1;
-		}
-	} else if (matched != pilot_active) {
-		int16_t page;
-
-		xinpattr_Refresh_Input(pilot_list);
-		pilot_active = matched;
-		page = matched / TIE_FRONTEND_EDITION(10, 12);
-		if (page != cur_page) {
-			cur_page = page;
-			pilot_offset = TIE_FRONTEND_EDITION(10, 12) * page;
-		}
-	}
-
+	register_xuser_Pilot_Name(btn->name);
 	if (strlen(btn->name)) {
 		pilot_info->var1 = 1;
 	} else {
