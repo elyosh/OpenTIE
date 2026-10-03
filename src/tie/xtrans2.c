@@ -1298,14 +1298,24 @@ void xtrans2_outputxt(void) {
 			vga_end = xtrans2_videobaseptr + videoypos + endx;
 
 			if (bytesPerPixel == 2) {
+#ifdef TIE_MODERN
+				/* PORT: the RGB tables hold 39 materials but the shade ramps
+				 * hold 45; the original reads past the tables for the
+				 * highlight materials 40..45. Use the last row instead. */
+				uint8_t* lo_base = &materialrgblo[64 * (c > 39 ? 39 : c) - 64];
+				uint8_t* hi_base = &materialrgbhi[64 * (c > 39 ? 39 : c) - 64];
+#else
 				uint8_t* lo_base = &materialrgblo[64 * c - 64];
 				uint8_t* hi_base = &materialrgbhi[64 * c - 64];
+#endif
 
 				vga_dst += startx_mod_54;
 				vga_end += endx;
 				if (dlt) {
+#ifndef TIE_MODERN
 					uint8_t saved_lo;
 					uint8_t saved_hi;
+#endif
 					int32_t dith;
 
 					if (dx_span)
@@ -1314,8 +1324,20 @@ void xtrans2_outputxt(void) {
 						lt_cursor = dlt * (startx_mod_54 - left_x) + inv_left_lt;
 
 					/* The inner loop can compute index 64 when lt_cursor
-					 * exits at the top step; stash slot 63 into slot 64
-					 * for the run. */
+					 * exits at the top step; slot 64 must read as slot 63. */
+#ifdef TIE_MODERN
+					/* PORT: slot 64 lies past the row, and past the table
+					 * for the last material; clamp the index instead of
+					 * patching it. */
+					for (dith = (currentypos & 1) << 8; vga_dst < vga_end; lt_cursor += dlt) {
+						int32_t idx = (lt_cursor + dith) >> 9;
+						dith = (lt_cursor + dith) & 0x1FF;
+						if (idx > 63)
+							idx = 63;
+						*vga_dst++ = lo_base[idx];
+						*vga_dst++ = hi_base[idx];
+					}
+#else
 					saved_lo = lo_base[64];
 					lo_base[64] = lo_base[63];
 					saved_hi = hi_base[64];
@@ -1329,6 +1351,7 @@ void xtrans2_outputxt(void) {
 					}
 					lo_base[64] = saved_lo;
 					hi_base[64] = saved_hi;
+#endif
 				} else if ((inv_left_lt >> 9) == 63 || (inv_left_lt & 0x1FF) == 0) {
 					uint8_t pix_lo = lo_base[lt_cursor >> 9];
 					uint8_t pix_hi = hi_base[lt_cursor >> 9];
@@ -1346,7 +1369,9 @@ void xtrans2_outputxt(void) {
 					}
 				}
 			} else if (dlt) {
+#ifndef TIE_MODERN
 				uint16_t saved;
+#endif
 				int32_t dith;
 
 				if (dx_span)
@@ -1356,7 +1381,6 @@ void xtrans2_outputxt(void) {
 
 				/* The inner-loop index reaches 16 at the brightest end of
 				 * the ramp; shade[16] reads as shade[15] for the run. */
-				saved = shade[16];
 #ifdef TIE_MODERN
 				/* c == 45 would write one past materialcolors; clamp
 				 * the index instead. */
@@ -1367,6 +1391,7 @@ void xtrans2_outputxt(void) {
 					*vga_dst = shade[(comb >> 11) > 15 ? 15 : comb >> 11];
 				}
 #else
+				saved = shade[16];
 				shade[16] = shade[15];
 				for (dith = (currentypos & 1) << 10; vga_dst < vga_end; ++vga_dst) {
 					int32_t comb = lt_cursor + dith;
