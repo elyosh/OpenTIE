@@ -99,7 +99,7 @@ void draw_gettreeorder(int* bsp_node);
 /* Draw all meshes in comp[0..numberofcomp-1] for one craft. Handles
  * highlight, damage skip, mesh rotation, decal flag, lightning arc. */
 void draw_drawcraft(uint16_t obj_idx, uint16_t ship_flag);
-void draw_process_object_components_tie98(uint16_t object_ref);
+void draw_drawcomplexobject_tie98(uint16_t object_ref);
 
 /* Single-polygon draw for a laser bolt. */
 void draw_drawlaser(uint16_t laser_obj_idx);

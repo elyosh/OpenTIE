@@ -115,7 +115,7 @@ typedef struct SceneMeshTIE98 {
 } SceneMeshTIE98;
 
 void RenderScene_Initialize_tie98(int reset_flag);
-void RenderScene_UnlockSceneBuffers_tie98(void);
+void sw3d_UnlockSceneBuffers(void);
 void RenderScene_DrawVisibleFaces(void);
 void sw3d_BlitOccludedSpan(const uint8_t* source, int start_x, int end_x, int scan_y, float depth);
 void FlightModel_Draw_Object(FlightObject* object);

@@ -805,7 +805,7 @@ static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, 
 	g_flightSurfaceAlreadyLocked = 1;
 	RenderScene_DrawVisibleFaces();
 	g_flightSurfaceAlreadyLocked = 0;
-	RenderScene_UnlockSceneBuffers_tie98();
+	sw3d_UnlockSceneBuffers();
 	xmemhdl_Unlock_Handle(xtransdata);
 	deepspacecolor = saved_deepspace_color;
 	xbm_Unlock_Bitmap(bitmap);

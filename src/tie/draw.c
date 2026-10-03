@@ -905,7 +905,7 @@ static void draw_drawcraft_tie98(int object_ref, int model_type) {
 }
 
 // FUNCTION: TIE98 0x417BE0
-void draw_process_object_components_tie98(uint16_t object_ref) {
+void draw_drawcomplexobject_tie98(uint16_t object_ref) {
 	uint16_t model_type;
 
 	if (object_ref >= OBJ_REF_STATIC_BASE)

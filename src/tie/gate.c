@@ -457,7 +457,7 @@ void gate_drawtraininggate_tie98(uint16_t object_index) {
 		object_index == (uint16_t)(gate_render_reference_object + 1)) {
 		if (object_index < currentgate)
 			bluetarget = object_index;
-		draw_process_object_components_tie98(object_index);
+		draw_drawcomplexobject_tie98(object_index);
 		FlightModel_Draw_Object(object);
 	} else {
 		parentobject = (uint16_t)(object_index + 0x7000);

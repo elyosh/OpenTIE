@@ -64,7 +64,7 @@ void static_drawstaticobject(uint16_t slot_idx) {
 		if (TIE_FLIGHT_TIE98) {
 			if (staticobjects[slot_idx].anim_frame != 0)
 				return;
-			draw_process_object_components_tie98(parentobject);
+			draw_drawcomplexobject_tie98(parentobject);
 #ifdef TIE_MODERN
 			FlightModel_Draw_Object(TieFlightAssets_StaticRenderObject(slot_idx));
 #else

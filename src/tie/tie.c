@@ -2129,7 +2129,7 @@ void tie_updatescreen(void) {
 
 #ifdef TIE_MODERN
 	if (TIE_FLIGHT_TIE98) {
-		/* PORT: keep host-only frame state outside recovered TIE98 TIE_Update_Screen. */
+		/* PORT: keep host-only frame state outside recovered tie_updatescreen_tie98. */
 		TieBillboardCapture_BeginTick();
 		/* PORT: TIE98 rebuilds its hardware palette table when DirectDraw's
 		 * palette changes. The shared framebuffer owns that palette here. */

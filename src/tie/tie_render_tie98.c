@@ -34,7 +34,6 @@ static int32_t tie_getobjecteyexyz_tie98(uint16_t object_index);
 static int tie_getstaticobjecteyeposition(uint16_t static_object_index);
 
 // FUNCTION: TIE98 0x48DF40
-// TIE_Update_Screen
 void tie_updatescreen_tie98(void) {
 	RenderObjectListEntryTIE98* entry;
 	uint16_t final_draw_ticks;
@@ -235,7 +234,7 @@ void tie_updatescreen_tie98(void) {
 						gate_drawtraininggate_tie98(object_index);
 					} else {
 						tie_makelocallights_tie98(object);
-						draw_process_object_components_tie98(object_index);
+						draw_drawcomplexobject_tie98(object_index);
 						FlightModel_Draw_Object(object);
 						localLightCnt = 0;
 					}
@@ -290,7 +289,7 @@ void tie_updatescreen_tie98(void) {
 	oxtticks = 0;
 	tickcounter += (uint16_t)xtimer_Time_Elapsed();
 	dxtticks = tickcounter;
-	RenderScene_UnlockSceneBuffers_tie98();
+	sw3d_UnlockSceneBuffers();
 	if (g_useHardware3D)
 		Renderer_CopyDirtyRectsToHardwareSurface();
 	if (!replayviewmode)
@@ -328,7 +327,6 @@ static int32_t tie_getobjecteyexyz_tie98(uint16_t object_index) {
 }
 
 // FUNCTION: TIE98 0x48F0C0
-// TIE_Get_Static_Object_Eye_Position
 static int tie_getstaticobjecteyeposition(uint16_t static_object_index) {
 	StaticObject* object = &staticobjects[static_object_index];
 	worldx = ((int32_t)object->world_x << 8) - camera.x;

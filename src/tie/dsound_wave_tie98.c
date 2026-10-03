@@ -29,8 +29,8 @@ static const int32_t g_directSoundVolumeTable[128] = {
 static int DirectSound_VolumeToMillibels(int volume);
 
 // FUNCTION: TIE98 0x4189D0
-IDirectSoundBuffer* DirectSound_LoadWaveBuffer(IDirectSound* device, const char* path,
-											   int alternate_capabilities) {
+IDirectSoundBuffer* DirectSound_LoadWaveFile(IDirectSound* device, const char* path,
+											 int alternate_capabilities) {
 	DSBufferDesc desc = { 0 };
 	TieFile* file;
 	IDirectSoundBuffer* buffer;
@@ -247,11 +247,11 @@ int DirectSound_CreateStreamingWaveBuffer(IDirectSoundBuffer** out_buffer, uint3
 }
 
 // FUNCTION: TIE98 0x419800
-IDirectSoundBuffer* DirectSound_LoadWaveBufferIntoPtr(IDirectSoundBuffer** out_buffer, const char* path,
-													  int alternate_capabilities) {
+IDirectSoundBuffer* DirectSound_CreateStaticBufferFromWaveFile(IDirectSoundBuffer** out_buffer,
+															   const char* path, int alternate_capabilities) {
 	if (!out_buffer)
 		return NULL;
-	*out_buffer = DirectSound_LoadWaveBuffer(direct_sound, path, alternate_capabilities);
+	*out_buffer = DirectSound_LoadWaveFile(direct_sound, path, alternate_capabilities);
 	return *out_buffer;
 }
 

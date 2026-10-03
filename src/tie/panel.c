@@ -1026,7 +1026,7 @@ void panel_updatecmd(void) {
 		return;
 
 	festring_setbackcolor(0x30);
-	/* TIE98 renders the CRT later from TIE_Update_Screen for both backends. */
+	/* TIE98 renders the CRT later from tie_updatescreen_tie98 for both backends. */
 	if (!TIE_FLIGHT_TIE98) {
 		panel_update3Dcrt(instruments[2].x, instruments[2].y, instruments[2].param1, instruments[2].param2,
 						  force_redraw);
@@ -3265,7 +3265,7 @@ void panel_update3Dcrt_tie98(uint16_t x, uint16_t y, uint16_t width, uint16_t de
 			case GENUS_PLATFORM:
 				craftptr = object->craft_ptr;
 				fview_newcalcrotate(object->roll, object->pitch, object->heading, 0, object);
-				draw_process_object_components_tie98(pstate.target_obj_idx);
+				draw_drawcomplexobject_tie98(pstate.target_obj_idx);
 				FlightModel_Draw_Object(object);
 				break;
 			case GENUS_PROJECTILE_PLAYER:
@@ -3290,7 +3290,7 @@ void panel_update3Dcrt_tie98(uint16_t x, uint16_t y, uint16_t width, uint16_t de
 		screen_y = transfm2_getscreeny(objecteyey, objecteyez);
 		panel_drawboxinxtrans_tie98(screen_x - 2, screen_y - 2, 4, 4, 0xce);
 	}
-	RenderScene_UnlockSceneBuffers_tie98();
+	sw3d_UnlockSceneBuffers();
 	deepspacecolor = (uint8_t)-5;
 	logbuf2_finishPIP_tie98();
 

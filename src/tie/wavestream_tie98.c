@@ -82,7 +82,7 @@ int FrontendWaveStream_PlayWaveFile(const char* path, int loop) {
 		return 0;
 	}
 	if (file_size <= WAVE_STREAM_STATIC_LIMIT) {
-		DirectSound_LoadWaveBufferIntoPtr(&g_waveStreamBuffer, path, 0);
+		DirectSound_CreateStaticBufferFromWaveFile(&g_waveStreamBuffer, path, 0);
 		g_waveStreamFilling = 0;
 		g_waveStreamIsStreaming = 0;
 		if (!g_waveStreamBuffer) {

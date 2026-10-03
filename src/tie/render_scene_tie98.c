@@ -3461,8 +3461,7 @@ void RenderScene_Initialize_tie98(int reset_flag) {
 }
 
 // FUNCTION: TIE98 0x43DB90
-// sw3d_UnlockSceneBuffers
-void RenderScene_UnlockSceneBuffers_tie98(void) {
+void sw3d_UnlockSceneBuffers(void) {
 	/* PORT: the original unlocks its handle-backed scene arrays. The host
 	 * arrays remain directly addressable for their complete lifetime. */
 }

@@ -15,10 +15,10 @@ int DirectSound_ParseWaveHeader(const void* riff_data, DSWaveFormat** out_format
 
 int DirectSound_CreateWaveBuffer(IDirectSoundBuffer** out_buffer, uint32_t buffer_bytes, DSWaveFormat* format,
 								 int alternate_capabilities);
-IDirectSoundBuffer* DirectSound_LoadWaveBuffer(IDirectSound* device, const char* path,
-											   int alternate_capabilities);
-IDirectSoundBuffer* DirectSound_LoadWaveBufferIntoPtr(IDirectSoundBuffer** out_buffer, const char* path,
-													  int alternate_capabilities);
+IDirectSoundBuffer* DirectSound_LoadWaveFile(IDirectSound* device, const char* path,
+											 int alternate_capabilities);
+IDirectSoundBuffer* DirectSound_CreateStaticBufferFromWaveFile(IDirectSoundBuffer** out_buffer,
+															   const char* path, int alternate_capabilities);
 int DirectSound_CopyWaveDataToBuffer(IDirectSoundBuffer* buffer, const void* samples, uint32_t bytes);
 int DirectSound_CreateStreamingWaveBuffer(IDirectSoundBuffer** out_buffer, uint32_t buffer_bytes,
 										  uint32_t* data_offset, int file_stream_channel);
