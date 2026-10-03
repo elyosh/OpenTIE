@@ -278,7 +278,6 @@ static int16_t bpflight_draw_Engine(Actor* actor, Rect* clip, Rect* dest, int16_
 									int16_t refresh);
 static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, int16_t xoff, int16_t yoff,
 										  int16_t refresh);
-static void bpflight_Position_Craft_tie98(const MatrixFrame* frame, int16_t joint_idx);
 static void bpflight_Load_Flight_Craft_tie98(const char* lfd_name, const char* opt_name, int16_t model_slot,
 											 int scene);
 
@@ -739,7 +738,7 @@ static int16_t bpflight_draw_Engine_tie98(Actor* actor, Rect* clip, Rect* dest, 
 			const Tie98OptimizedPolyObject* saved_model_override;
 
 			if (actor->id == 0) {
-				bpflight_Position_Craft_tie98(&frame, object_index);
+				bpflight_Position_Craft(&frame, object_index);
 				model_slot = TieFlightAssets_PreviewModel(1) != NULL;
 			} else {
 				switch (cur_flight_scene) {
@@ -1265,38 +1264,9 @@ void bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, char* name) {
  *
  * Extracts a joint pose + rotation from a MatrixFrame and folds it into
  * the shared craft{f,S,U}{1,2,3} basis. No xrefs in the demo (inlined). */
-// FUNCTION: TIE98 0x405F00
-// BPFLIGHT_Position_Craft
-static void bpflight_Position_Craft_tie98(const MatrixFrame* frame, int16_t joint_idx) {
-	const int16_t* rotation;
-
-	worldx = frame->joint_pos[joint_idx][0];
-	worldy = frame->joint_pos[joint_idx][1];
-	worldz = frame->joint_pos[joint_idx][2];
-	rotation = frame->joint_rot[joint_idx];
-	calcf1 = rotation[0];
-	calcf2 = rotation[1];
-	calcf3 = rotation[2];
-	calcS1 = rotation[3];
-	calcS2 = rotation[4];
-	calcS3 = rotation[5];
-	calcU1 = rotation[6];
-	calcU2 = rotation[7];
-	calcU3 = rotation[8];
-	craftf1 = -calcf1;
-	craftf2 = -calcf2;
-	craftf3 = -calcf3;
-	craftS1 = calcS1;
-	craftS2 = calcS2;
-	craftS3 = calcS3;
-	craftU1 = calcU1;
-	craftU2 = calcU2;
-	craftU3 = calcU3;
-	fview_calcrotworldeye();
-}
-
 // FUNCTION: TIE95 0x7A2C4
-void bpflight_Position_Craft(MatrixFrame* frame, int16_t joint_idx) {
+// FUNCTION: TIE98 0x405F00
+void bpflight_Position_Craft(const MatrixFrame* frame, int16_t joint_idx) {
 	const int16_t* rot;
 
 	worldx = frame->joint_pos[joint_idx][0];
@@ -1314,14 +1284,14 @@ void bpflight_Position_Craft(MatrixFrame* frame, int16_t joint_idx) {
 	calcU2 = rot[7];
 	calcU3 = rot[8];
 
-	craftS1 = calcS1;
 	craftf1 = -calcf1;
+	craftf2 = -calcf2;
+	craftf3 = -calcf3;
+	craftS1 = calcS1;
 	craftS2 = calcS2;
 	craftS3 = calcS3;
-	craftf2 = -calcf2;
 	craftU1 = calcU1;
 	craftU2 = calcU2;
-	craftf3 = -calcf3;
 	craftU3 = calcU3;
 
 	fview_calcrotworldeye();

@@ -731,36 +731,6 @@ void draw_drawcraft(uint16_t obj_idx, uint16_t ship_flag) {
 	currenttarget = saved_currenttarget;
 }
 
-// FUNCTION: TIE98 0x417FF0
-// DRAW_drawbackdropimage
-uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
-	LandruHandle handle;
-	const uint8_t* bitmap_base;
-	uint32_t table_offset;
-	uint32_t image_offset;
-	const uint8_t* image;
-
-	reverseflag = 1;
-	worldz = 0x100000;
-	objecteyez = 0x7FFFFFFF;
-	handle = species_table[ship_idx].model_handle;
-	bitmap_base = (const uint8_t*)xmemhdl_Lock_Handle(handle);
-	xmemhdl_Unlock_Handle(handle);
-	if (!bitmap_base)
-		return 0;
-
-	table_offset = *(const uint32_t*)(bitmap_base + 16);
-	image_offset = *(const uint32_t*)(bitmap_base + table_offset);
-	image = bitmap_base + image_offset;
-	if (g_useHardware3D) {
-		RenderQuad_DrawRotatedSprite(angle, screen_x, screen_y, 0x100, image);
-		return 0;
-	}
-	rotscale_preparefastdraw(angle, 2);
-	rotscale_preparecolor((const char*)image);
-	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, image);
-}
-
 /* ============================================================================
  * draw_drawlaser
  * ----------------------------------------------------------------------------
@@ -818,19 +788,33 @@ void draw_drawhyperstar(uint16_t star_idx) {
  * species[ship_idx].bitmap_data for the palette remap.
  * ========================================================================== */
 // FUNCTION: TIE95 0x1BB70
+// FUNCTION: TIE98 0x417FF0
 uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle) {
 	const uint8_t* bitmap_base;
 	const uint8_t* image;
 
 	reverseflag = 1;
 	worldz = 0x100000;
+	if (TIE_FLIGHT_TIE98)
+		objecteyez = 0x7FFFFFFF;
 	bitmap_base = (const uint8_t*)xmemhdl_Lock_Handle(species_table[ship_idx].model_handle);
 	xmemhdl_Unlock_Handle(species_table[ship_idx].model_handle);
+#ifdef TIE_MODERN
+	/* PORT: neither original checks for a missing backdrop bitmap. */
+	if (!bitmap_base)
+		return 0;
+#endif
 
 	/* Retail bitmaps use a two-level offset to their palette and image data. */
 	image = bitmap_base + *(const uint32_t*)(bitmap_base + 16);
 	image = bitmap_base + *(const uint32_t*)image;
 
+#if defined(TIE98) || defined(TIE_MODERN)
+	if (TIE_DISPLAY_DX5 && g_useHardware3D) {
+		RenderQuad_DrawRotatedSprite(angle, screen_x, screen_y, 0x100, image);
+		return 0;
+	}
+#endif
 	rotscale_preparefastdraw(angle, 2);
 	rotscale_preparecolor((const char*)image);
 	return rotscale_rotatescaleimage(screen_x, screen_y, 0x100, image);

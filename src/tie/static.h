@@ -10,7 +10,6 @@ extern "C" {
 #endif
 
 void static_drawstaticobject(uint16_t slot_idx);
-void static_drawstaticobject_tie98(uint16_t slot_idx);
 
 int16_t static_laserstaticcollide(uint16_t shooter_obj_idx, uint16_t target_slot);
 void static_laserhitstatic(uint16_t proj_idx, uint16_t target_slot);

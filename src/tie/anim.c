@@ -807,7 +807,7 @@ void anim_updateanimation(void) {
 						if (species_table[model_type].bound_hwidth > 0x578) {
 							/* Starship: explosion macro, then skip 3 meshes. */
 							if (TIE_FLIGHT_TIE98) {
-								starship_createstarshipexplo_tie98(object_index, 0);
+								starship_createstarshipexplo(object_index, 0);
 								mesh += 3;
 							} else {
 								mesh += 3;

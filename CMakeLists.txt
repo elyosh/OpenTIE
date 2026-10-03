@@ -189,8 +189,6 @@ set(TIE_RECOVERED_SOURCES
         src/tie/mainmenu.h
         src/tie/credits.c
         src/tie/credits.h
-        src/tie/credits_internal.h
-        src/tie/credits_tie98.c
         src/tie/filmview.c
         src/tie/filmview.h
         src/tie/debrief.c

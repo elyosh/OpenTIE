@@ -81,11 +81,8 @@ void rtsvga2_clearflightdisplay(void);
 void rtsvga2_buildpaletteVGA(const uint8_t* rgb_src, uint16_t start_idx, uint16_t count);
 void rtsvga2_savepaletteVGA(uint8_t* rgb_dst);
 void rtsvga2_restorepaletteVGA(const uint8_t* rgb_src);
-void rtsvga2_buildpaletteVGA_tie98(const uint8_t* rgb_src, uint16_t start_idx, uint16_t count);
 void rtsvga2_applyBrightness16_tie98(const uint8_t* rgb6, uint16_t* output, uint32_t start_idx,
 									 uint32_t count);
-void rtsvga2_savepaletteVGA_tie98(uint8_t* rgb_dst);
-void rtsvga2_restorepaletteVGA_tie98(const uint8_t* rgb_src);
 
 /* Retail-only palette helpers */
 void rtsvga2_applyBrightness(const uint8_t* rgb_src, uint8_t* rgb_dst, int start_idx, int count);
@@ -96,7 +93,6 @@ void rtsvga2_remapRGBImage_tie98(uint32_t* image_header);
 
 /* Position helper */
 uint32_t rtsvga2_calcpositionVGA(uint16_t x, uint16_t y);
-uint32_t rtsvga2_calcpositionVGA_tie98(uint16_t x, uint16_t y);
 
 /* Shape blitter */
 void rtsvga2_drawshapeVGA(const uint8_t* shape, int16_t x, int16_t y, int16_t skip_color, uint16_t flip_x);

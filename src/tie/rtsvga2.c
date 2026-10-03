@@ -472,6 +472,7 @@ void rtsvga2_unblankVGA(void) {
  * into rtsvga2_vgapalette[start_idx..start_idx+count]. In-memory only
  * -- the caller pushes to hardware via XPAL/unblank. */
 // FUNCTION: TIE95 0x4BF88
+// FUNCTION: TIE98 0x47AAE0
 void rtsvga2_buildpaletteVGA(const uint8_t* rgb_src, uint16_t start_idx, uint16_t count) {
 	uint16_t i;
 
@@ -482,8 +483,27 @@ void rtsvga2_buildpaletteVGA(const uint8_t* rgb_src, uint16_t start_idx, uint16_
 		rtsvga2_vgapalette[off + 2] = rgb_src[2];
 	}
 
+#if defined(TIE98) || defined(TIE_MODERN)
+	/* TIE98 16bpp modes also rebuild the RGB565/555 lookup; the first 64
+	 * entries map the deep-space colour to transparent. */
+	if (TIE_DISPLAY_DX5 && g_flight16bppBytesPerPixel == 2) {
+		rtsvga2_applyBrightness16_tie98(rtsvga2_vgapalette, g_flightTextPalette, start_idx, count);
+		if (start_idx == 0 && count == 64) {
+			const uint16_t transparent_color = g_flightTextPalette[deepspacecolor];
+			uint16_t index;
+
+			for (index = 0; index < 64; ++index) {
+				if (g_flightTextPalette[index] == transparent_color)
+					g_flightTextPalette[index] = 0;
+			}
+		}
+		return;
+	}
+#endif
+#ifdef TIE_MODERN
 	/* Publish immediately because the first flight frame may precede unblankVGA. */
 	TieClassicFramebuffer_SetPalette(&rtsvga2_vgapalette[3u * start_idx], (int)start_idx, (int)count);
+#endif
 }
 
 /* ------------------------------------------------------------------ */
@@ -493,6 +513,7 @@ void rtsvga2_buildpaletteVGA(const uint8_t* rgb_src, uint16_t start_idx, uint16_
 /* Snapshot the full in-memory palette (256 triplets = 768 bytes) into
  * rgb_dst. */
 // FUNCTION: TIE95 0x4BFD0
+// FUNCTION: TIE98 0x47AB90
 void rtsvga2_savepaletteVGA(uint8_t* rgb_dst) {
 	uint16_t i;
 
@@ -509,6 +530,7 @@ void rtsvga2_savepaletteVGA(uint8_t* rgb_dst) {
 
 /* Replace the full in-memory palette with `rgb_src`. */
 // FUNCTION: TIE95 0x4C00C
+// FUNCTION: TIE98 0x47ABC0
 void rtsvga2_restorepaletteVGA(const uint8_t* rgb_src) { rtsvga2_buildpaletteVGA(rgb_src, 0, 256); }
 
 // FUNCTION: TIE98 0x47A500
@@ -614,7 +636,11 @@ uint32_t rtsvga2_findNearestColor(const uint8_t* rgb_target, const uint8_t* pale
 
 /* Compute framebuffer byte offset for (x, y) = y * screenMemWidth + x. */
 // FUNCTION: TIE95 0x4C208
-uint32_t rtsvga2_calcpositionVGA(uint16_t x, uint16_t y) { return (uint32_t)screenMemWidth * y + x; }
+// FUNCTION: TIE98 0x47AF20
+uint32_t rtsvga2_calcpositionVGA(uint16_t x, uint16_t y) {
+	return TIE_DISPLAY_EDITION((uint32_t)screenMemWidth * y + x,
+							   g_surfacePitch * y + g_flight16bppBytesPerPixel * x);
+}
 
 /* ------------------------------------------------------------------ */
 /* rtsvga2_drawshapeVGA (0x4C224)                                     */
@@ -662,38 +688,6 @@ void rtsvga2_applyBrightness16_tie98(const uint8_t* rgb6, uint16_t* output, uint
 				(uint16_t)(((uint16_t)(color[0] >> 1) << 11) | ((uint16_t)color[1] << 5) | (color[2] >> 1));
 		}
 	}
-}
-
-// FUNCTION: TIE98 0x47AAE0
-void rtsvga2_buildpaletteVGA_tie98(const uint8_t* rgb_src, uint16_t start_idx, uint16_t count) {
-	uint16_t palette_index;
-	for (palette_index = start_idx; palette_index < start_idx + count; ++palette_index) {
-		rtsvga2_vgapalette[3 * palette_index] = *rgb_src++;
-		rtsvga2_vgapalette[3 * palette_index + 1] = *rgb_src++;
-		rtsvga2_vgapalette[3 * palette_index + 2] = *rgb_src++;
-	}
-	if (g_flight16bppBytesPerPixel == 2) {
-		rtsvga2_applyBrightness16_tie98(rtsvga2_vgapalette, g_flightTextPalette, start_idx, count);
-		if (start_idx == 0 && count == 64) {
-			const uint16_t transparent_color = g_flightTextPalette[deepspacecolor];
-			uint16_t index;
-
-			for (index = 0; index < 64; ++index) {
-				if (g_flightTextPalette[index] == transparent_color)
-					g_flightTextPalette[index] = 0;
-			}
-		}
-	}
-}
-
-// FUNCTION: TIE98 0x47AB90
-void rtsvga2_savepaletteVGA_tie98(uint8_t* rgb_dst) {
-	memcpy(rgb_dst, rtsvga2_vgapalette, sizeof rtsvga2_vgapalette);
-}
-
-// FUNCTION: TIE98 0x47ABC0
-void rtsvga2_restorepaletteVGA_tie98(const uint8_t* rgb_src) {
-	rtsvga2_buildpaletteVGA_tie98(rgb_src, 0, 256);
 }
 
 // FUNCTION: TIE98 0x47ABE0
@@ -879,12 +873,6 @@ void rtsvga2__lowdrawshapeVGA(const uint8_t* shape, uint16_t x, uint16_t y, uint
 		/* 0xFE or others: end-of-line. */
 		++drawshapey;
 	}
-}
-
-// FUNCTION: TIE98 0x47AF20
-// RTSVGA2_calcpositionVGA
-uint32_t rtsvga2_calcpositionVGA_tie98(uint16_t x, uint16_t y) {
-	return g_flight16bppBytesPerPixel * x + g_surfacePitch * y;
 }
 
 /* ------------------------------------------------------------------ */

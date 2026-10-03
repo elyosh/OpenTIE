@@ -97,7 +97,6 @@ uint16_t starship_damagecomponent(uint16_t obj_idx, uint16_t component_plus1, ui
  *     - spawn one component explosion with SFX 19..22 (random)
  */
 void starship_createstarshipexplo(uint16_t obj_idx, int16_t full_ship);
-void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_ship);
 
 /*
  * Spawn a single component-explosion FlightObject. Called by

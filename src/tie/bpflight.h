@@ -118,7 +118,7 @@ void bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, char* name);
 /* Extract per-joint world pos + rotation from a MatrixFrame into the
  * render globals (worldx/y/z, calc{f,S,U}{1..3}), negate fwd into
  * craftf{1,2,3}, copy craft{S,U}, call fview_calcrotworldeye. */
-void bpflight_Position_Craft(MatrixFrame* frame, int16_t joint_idx);
+void bpflight_Position_Craft(const MatrixFrame* frame, int16_t joint_idx);
 
 /* Remove (nonzero) or re-apply (zero) the training/combat per-material
  * color offset to materialcolors[0 .. 39*16-1] using the *roommapping[] table. */

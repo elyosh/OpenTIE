@@ -112,7 +112,6 @@ void draw_drawhyperstar_tie98(int16_t star_idx);
 
 /* Rotated/scaled backdrop blit (planet/big-ship sprite). */
 uint16_t draw_drawbackdropimage(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle);
-uint16_t draw_drawbackdropimage_tie98(uint16_t ship_idx, int16_t screen_x, int16_t screen_y, uint16_t angle);
 
 /* Polygon-plane depth tie-breaker. Returns obj_a or obj_b (the frontmost). */
 uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_parent_category,

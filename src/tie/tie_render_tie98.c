@@ -84,7 +84,7 @@ void tie_updatescreen_tie98(void) {
 		camera.y -= (worldeyeB3 * (uint16_t)objectsize) >> 15;
 		camera.z -= (worldeyeC3 * (uint16_t)objectsize) >> 15;
 	} else if (camera.view_target_tracking != 0) {
-		panel_pointcamera_tie98(camera.view_target_obj, 0);
+		panel_pointcamera(camera.view_target_obj, 0);
 	} else {
 		FlightObject* object = &objects[camera.view_target_obj];
 		camera.roll = object->roll;
@@ -264,7 +264,7 @@ void tie_updatescreen_tie98(void) {
 				fview_newcalcrotate((int16_t)((uint16_t)object->roll_byte << 8),
 									(int16_t)((uint16_t)object->pitch_byte << 8),
 									(int16_t)((uint16_t)object->heading_byte << 8), 0, NULL);
-				static_drawstaticobject_tie98(static_index);
+				static_drawstaticobject(static_index);
 				localLightCnt = 0;
 			}
 		}

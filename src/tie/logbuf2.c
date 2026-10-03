@@ -1,5 +1,6 @@
 #include "tie/logbuf2.h"
 #include "landru/vesa.h"
+#include "tie/edition.h"
 #include "tie/math2.h"
 #include "tie/render_texture_tie98.h"
 #include "tie/tie.h"
@@ -128,62 +129,58 @@ void logbuf2_setbufferdimensions_tie98(uint16_t width, uint16_t depth, int unuse
 }
 
 // FUNCTION: TIE95 0x2E870
+// FUNCTION: TIE98 0x44C330
 void logbuf2_clearbuffer(void) {
+#ifdef TIE_MODERN
+	/* PORT: neither original checks for an unselected buffer. */
 	if (!buffer_ptr)
 		return;
+#endif
+#if defined(TIE98) || defined(TIE_MODERN)
+	if (TIE_DISPLAY_DX5 && g_flight16bppBytesPerPixel == 2) {
+		uint16_t* dst = buffer_ptr;
+		const uint16_t color = g_flightTextPalette[deepspacecolor];
+		const size_t count = (size_t)pixelswide * pixelsdeep;
+		size_t i;
+
+		for (i = 0; i < count; ++i)
+			dst[i] = color;
+		return;
+	}
+#endif
 	memset(buffer_ptr, deepspacecolor, (size_t)pixelswide * pixelsdeep);
 }
 
-// FUNCTION: TIE98 0x44C330
-void logbuf2_clearbuffer_tie98(void) {
-	uint16_t* dst;
-	uint16_t color;
-	size_t count, i;
-	if (!buffer_ptr)
-		return;
-	if (g_flight16bppBytesPerPixel != 2) {
-		logbuf2_clearbuffer();
-		return;
-	}
-
-	dst = buffer_ptr;
-	color = g_flightTextPalette[deepspacecolor];
-	count = (size_t)pixelswide * pixelsdeep;
-	for (i = 0; i < count; ++i)
-		dst[i] = color;
-}
-
 // FUNCTION: TIE95 0x2E89C
+// FUNCTION: TIE98 0x44C3B0
 void logbuf2_outbuffer(const void* src) {
 	uint16_t line;
 	uint8_t* dst = vesa_buff_gbl + displaycorner;
 	const uint8_t* s = src;
-	const uint16_t w = pixelswide;
-	const uint16_t h = pixelsdeep;
-	const int32_t pitch = vesa_bpsl_gbl;
 
-	for (line = 0; line < h; ++line) {
-		memcpy(dst, s, w);
-		s += w;
-		dst += pitch;
-	}
-}
+	if (TIE_DISPLAY_DX5) {
+		const size_t row_bytes = (size_t)g_flight16bppBytesPerPixel * pixelswide;
 
-// FUNCTION: TIE98 0x44C3B0
-void logbuf2_outbuffer_tie98(const void* src) {
-	uint16_t line;
-	uint8_t* dst = vesa_buff_gbl + displaycorner;
-	const uint8_t* s = src;
-	const size_t row_bytes = (size_t)g_flight16bppBytesPerPixel * pixelswide;
+		for (line = 0; line < pixelsdeep; ++line) {
+			memcpy(dst, s, row_bytes);
+			s += row_bytes;
+			dst += g_surfacePitch;
+		}
+	} else {
+		const uint16_t w = pixelswide;
+		const uint16_t h = pixelsdeep;
+		const int32_t pitch = vesa_bpsl_gbl;
 
-	for (line = 0; line < pixelsdeep; ++line) {
-		memcpy(dst, s, row_bytes);
-		s += row_bytes;
-		dst += g_surfacePitch;
+		for (line = 0; line < h; ++line) {
+			memcpy(dst, s, w);
+			s += w;
+			dst += pitch;
+		}
 	}
 }
 
 // FUNCTION: TIE95 0x2E978
+// FUNCTION: TIE98 0x44C460
 void logbuf2_outdiffbuffer(const void* oldbuf, const void* newbuf) {
 	uint16_t line;
 	uint8_t* dst;
@@ -192,6 +189,12 @@ void logbuf2_outdiffbuffer(const void* oldbuf, const void* newbuf) {
 	int32_t pitch;
 	/* Callers mirror newbuf into oldbuf after this copy. */
 	(void)oldbuf;
+
+	/* TIE98 always copies the whole buffer. */
+	if (TIE_DISPLAY_DX5) {
+		logbuf2_outbuffer(newbuf);
+		return;
+	}
 
 	dst = vesa_buff_gbl + displaycorner;
 	s = newbuf;
@@ -204,13 +207,6 @@ void logbuf2_outdiffbuffer(const void* oldbuf, const void* newbuf) {
 		s += w;
 		dst += pitch;
 	}
-}
-
-// FUNCTION: TIE98 0x44C460
-// LOGBUF2_outdiffbuffer
-void logbuf2_outdiffbuffer_tie98(const void* oldbuf, const void* newbuf) {
-	(void)oldbuf;
-	logbuf2_outbuffer_tie98(newbuf);
 }
 
 /* ------------------------------------------------------------------

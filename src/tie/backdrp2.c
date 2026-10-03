@@ -313,8 +313,5 @@ void backdrp2_backdrawbitmap(int32_t x, int32_t y, int32_t z, uint16_t angle, in
 
 	x = (int32_t)((uint32_t)x + halfpixelswide);
 	y = (int32_t)(pixelsdeep - ((uint32_t)y + halfpixelsdeep + (uint32_t)transfm2_screenyoffset));
-	if (TIE_FLIGHT_TIE98)
-		draw_drawbackdropimage_tie98(backdropspecies[tile_idx - 1], (int16_t)x, (int16_t)y, angle);
-	else
-		draw_drawbackdropimage(backdropspecies[tile_idx - 1], (int16_t)x, (int16_t)y, angle);
+	draw_drawbackdropimage(backdropspecies[tile_idx - 1], (int16_t)x, (int16_t)y, angle);
 }

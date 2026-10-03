@@ -51,6 +51,7 @@
  *                               < 0x80.. = poly model (common path).
  * ========================================================================== */
 // FUNCTION: TIE95 0x54710
+// FUNCTION: TIE98 0x487F20
 void static_drawstaticobject(uint16_t slot_idx) {
 	uint16_t species = staticobjects[slot_idx].species;
 	const AnimOp* frame_tab = (const AnimOp*)species_table[staticobjects[slot_idx].species].draw_data;
@@ -59,9 +60,18 @@ void static_drawstaticobject(uint16_t slot_idx) {
 
 	if (frame_tab == NULL) {
 		parentobject = self_idx;
-		if (TIE_FLIGHT_TIE98)
+		/* Complex mesh: anim_frame != 0 hides the mesh. */
+		if (TIE_FLIGHT_TIE98) {
+			if (staticobjects[slot_idx].anim_frame != 0)
+				return;
+			draw_process_object_components_tie98(parentobject);
+#ifdef TIE_MODERN
+			FlightModel_Draw_Object(TieFlightAssets_StaticRenderObject(slot_idx));
+#else
+			FlightModel_Draw_Object((FlightObject*)&staticobjects[slot_idx]);
+#endif
 			return;
-		/* Complex BSP mesh: anim_frame != 0 hides the mesh. */
+		}
 		if (staticobjects[slot_idx].anim_frame == 0)
 			draw_drawcomplexobject(self_idx);
 		return;
@@ -80,8 +90,15 @@ void static_drawstaticobject(uint16_t slot_idx) {
 		int32_t eyez = objecteyez;
 		int32_t eyey = objecteyey;
 		int32_t eyex = objecteyex;
-		if (TIE_FLIGHT_TIE98)
+		if (TIE_FLIGHT_TIE98) {
+			/* PORT: TIE98 passes the StaticObject itself as the draw object. */
+#ifdef TIE_MODERN
+			FlightModel_Draw_Object_Mesh(TieFlightAssets_StaticRenderObject(slot_idx), 0);
+#else
+			FlightModel_Draw_Object_Mesh((FlightObject*)&staticobjects[slot_idx], 0);
+#endif
 			return;
+		}
 		drawpol_drawpolyobject(
 			draw_getdetailptr(
 				draw_getcomponentptr(xmemhdl_Lock_Handle(species_table[species].model_handle), 0), eyez),
@@ -148,86 +165,6 @@ void static_drawstaticobject(uint16_t slot_idx) {
 		anim_add_bitmap_draw(parentobject, frame_code, 256, (int16_t)sx_raw, (int16_t)y_flipped, objecteyez,
 							 billboard_angle);
 	}
-}
-
-// FUNCTION: TIE98 0x487F20
-void static_drawstaticobject_tie98(uint16_t slot_idx) {
-	const AnimOp* draw_data = (const AnimOp*)species_table[staticobjects[slot_idx].species].draw_data;
-	AnimOp frame;
-	uint16_t frame_index;
-	int16_t billboard_angle;
-	int32_t screen_x;
-	int32_t screen_y;
-	int32_t axis_horz, axis_vert;
-	int32_t abs_A3, abs_B3;
-	int32_t half;
-
-	if (draw_data == NULL) {
-		parentobject = (uint16_t)(slot_idx + OBJ_REF_STATIC_BASE);
-		if (staticobjects[slot_idx].anim_frame != 0)
-			return;
-		draw_process_object_components_tie98(parentobject);
-#ifdef TIE_MODERN
-		FlightModel_Draw_Object(TieFlightAssets_StaticRenderObject(slot_idx));
-#else
-		FlightModel_Draw_Object((FlightObject*)&staticobjects[slot_idx]);
-#endif
-		return;
-	}
-
-	parentobject = (uint16_t)(slot_idx + OBJ_REF_STATIC_BASE);
-	frame_index = staticobjects[slot_idx].anim_frame;
-	frame = draw_data[frame_index];
-	if (frame >= 0xFF00u)
-		return;
-
-	if (frame < 0x8000u) {
-		/* PORT: TIE98 passes the StaticObject itself as the draw object. */
-#ifdef TIE_MODERN
-		FlightModel_Draw_Object_Mesh(TieFlightAssets_StaticRenderObject(slot_idx), 0);
-#else
-		FlightModel_Draw_Object_Mesh((FlightObject*)&staticobjects[slot_idx], 0);
-#endif
-		return;
-	}
-
-	/* Billboard sprite. Reject if behind the camera. */
-	if (objecteyez < 0)
-		return;
-
-	abs_A3 = rotworldeyeA3;
-	abs_B3 = rotworldeyeB3;
-	if (abs_A3 < 0)
-		abs_A3 = -abs_A3;
-	if (abs_B3 < 0)
-		abs_B3 = -abs_B3;
-	if (abs_A3 < abs_B3) {
-		axis_horz = rotworldeyeA1;
-		axis_vert = rotworldeyeA2;
-	} else {
-		axis_horz = rotworldeyeB1;
-		axis_vert = rotworldeyeB2;
-	}
-
-	if (axis_horz < 0) {
-		billboard_angle = trig2_arctan(axis_vert, -axis_horz);
-	} else {
-		billboard_angle = trig2_arctan(axis_vert, axis_horz);
-		billboard_angle = -billboard_angle;
-	}
-
-	screen_x = transfm2_getscreenx(objecteyex, objecteyez);
-	if ((int32_t)(screen_x & 0xFFFF0000) > 0 || (int32_t)(screen_x & 0xFFFF0000) < (int32_t)0xFFFF0000)
-		return;
-
-	screen_y = transfm2_getscreeny(objecteyey, objecteyez);
-	if ((int32_t)(screen_y & 0xFFFF0000) > 0 || (int32_t)(screen_y & 0xFFFF0000) < (int32_t)0xFFFF0000)
-		return;
-
-	half = pixelsdeep >> 1;
-
-	anim_add_bitmap_draw(parentobject, frame, 256, (int16_t)screen_x, (int16_t)(2 * half - screen_y),
-						 objecteyez, billboard_angle);
 }
 
 /* ============================================================================

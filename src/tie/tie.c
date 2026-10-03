@@ -1214,9 +1214,6 @@ uint8_t deadflag_EB774;
 // GLOBAL: TIE95 0xEB747
 uint8_t lastmusicstate;
 
-/* Forward decls for static helpers. */
-static bool tie_doframe_tie98(void);
-
 // GLOBAL: TIE98 0x596B80
 static int cdmusic_kind;
 // GLOBAL: TIE98 0x597180
@@ -1870,20 +1867,22 @@ void tie_InitFlightResolution(void) {
 
 #ifdef TIE_MODERN
 // FUNCTION: TIE95 0x56270
+// FUNCTION: TIE98 0x48D9B0
 bool tie_doframe(void) {
 	TieFlightCadence ai_cadence;
 	TieFlightCadence animation_cadence;
 	bool rendered;
 
-	if (TIE_FLIGHT_TIE98)
-		return tie_doframe_tie98();
+	/* PORT: apply a renderer switch requested by the host between frames. */
+	if (TIE_FLIGHT_TIE98 && !Tie98Renderer_ApplyPending())
+		return false;
 #else
 // FUNCTION: TIE95 0x56270
+// FUNCTION: TIE98 0x48D9B0
 void tie_doframe(void) {
-	if (TIE_FLIGHT_TIE98) {
-		tie_doframe_tie98();
-		return;
-	}
+#ifdef TIE98
+	int rendered;
+#endif
 #endif
 
 	/* Step 1 — refresh frameticks/framerate. */
@@ -1897,7 +1896,7 @@ void tie_doframe(void) {
 #else
 		do {
 			tickcounter += xtimer_Time_Elapsed();
-		} while (tickcounter < 4);
+		} while (tickcounter < TIE_FLIGHT_EDITION(4, 7));
 #endif
 
 		lastcounter = (int16_t)tickcounter;
@@ -1977,20 +1976,21 @@ void tie_doframe(void) {
 	/* Render gate (with accelerated-time skip): renders once every
 	 * acceleratedtimesetting frames when set > 1. The live branch also
 	 * redraws the cockpit panel. */
-#ifdef TIE_MODERN
-	rendered = false;
+#if defined(TIE98) || defined(TIE_MODERN)
+	rendered = 0;
 #endif
 	if (!replayviewmode) {
 		if (acceleratedtimesetting > 1) {
 			if (acceleratedtimectr == 0) {
-				if (TIE_DISPLAY_DX5)
-					FlightSurface_Lock();
 				tie_updatescreen();
+				/* TIE98 locks the flight surface only for the panel. */
+				if (TIE_FLIGHT_TIE98)
+					FlightSurface_Lock();
 				panel_updatepanel();
-				if (TIE_DISPLAY_DX5)
+				if (TIE_FLIGHT_TIE98)
 					FlightSurface_Unlock();
-#ifdef TIE_MODERN
-				rendered = true;
+#if defined(TIE98) || defined(TIE_MODERN)
+				rendered = 1;
 #endif
 				acceleratedtimectr = acceleratedtimesetting;
 			} else {
@@ -2000,14 +2000,15 @@ void tie_doframe(void) {
 			}
 			--acceleratedtimectr;
 		} else {
-			if (TIE_DISPLAY_DX5)
-				FlightSurface_Lock();
 			tie_updatescreen();
+			/* TIE98 locks the flight surface only for the panel. */
+			if (TIE_FLIGHT_TIE98)
+				FlightSurface_Lock();
 			panel_updatepanel();
-			if (TIE_DISPLAY_DX5)
+			if (TIE_FLIGHT_TIE98)
 				FlightSurface_Unlock();
-#ifdef TIE_MODERN
-			rendered = true;
+#if defined(TIE98) || defined(TIE_MODERN)
+			rendered = 1;
 #endif
 		}
 	} else if (fastforwardflag) {
@@ -2017,13 +2018,9 @@ void tie_doframe(void) {
 			fastforwardtimer += 236;
 			if (acceleratedtimesetting > 1) {
 				if (acceleratedtimectr == 0) {
-					if (TIE_DISPLAY_DX5)
-						FlightSurface_Lock();
 					tie_updatescreen();
-					if (TIE_DISPLAY_DX5)
-						FlightSurface_Unlock();
-#ifdef TIE_MODERN
-					rendered = true;
+#if defined(TIE98) || defined(TIE_MODERN)
+					rendered = 1;
 #endif
 					acceleratedtimectr = acceleratedtimesetting;
 				} else {
@@ -2033,13 +2030,9 @@ void tie_doframe(void) {
 				}
 				--acceleratedtimectr;
 			} else {
-				if (TIE_DISPLAY_DX5)
-					FlightSurface_Lock();
 				tie_updatescreen();
-				if (TIE_DISPLAY_DX5)
-					FlightSurface_Unlock();
-#ifdef TIE_MODERN
-				rendered = true;
+#if defined(TIE98) || defined(TIE_MODERN)
+				rendered = 1;
 #endif
 			}
 		}
@@ -2047,13 +2040,9 @@ void tie_doframe(void) {
 	} else {
 		if (acceleratedtimesetting > 1) {
 			if (acceleratedtimectr == 0) {
-				if (TIE_DISPLAY_DX5)
-					FlightSurface_Lock();
 				tie_updatescreen();
-				if (TIE_DISPLAY_DX5)
-					FlightSurface_Unlock();
-#ifdef TIE_MODERN
-				rendered = true;
+#if defined(TIE98) || defined(TIE_MODERN)
+				rendered = 1;
 #endif
 				acceleratedtimectr = acceleratedtimesetting;
 			} else {
@@ -2063,13 +2052,9 @@ void tie_doframe(void) {
 			}
 			--acceleratedtimectr;
 		} else {
-			if (TIE_DISPLAY_DX5)
-				FlightSurface_Lock();
 			tie_updatescreen();
-			if (TIE_DISPLAY_DX5)
-				FlightSurface_Unlock();
-#ifdef TIE_MODERN
-			rendered = true;
+#if defined(TIE98) || defined(TIE_MODERN)
+			rendered = 1;
 #endif
 		}
 	}
@@ -2103,19 +2088,31 @@ void tie_doframe(void) {
 #ifdef TIE_MODERN
 	TieMusicPolicy_UpdateFlightMusic();
 #else
-	tie_updatemusic();
+	if (TIE_FLIGHT_TIE98)
+		tie_updatemusic_tie98();
+	else
+		tie_updatemusic();
 #endif
 
+	if (TIE_FLIGHT_TIE98)
+		FrontendSound_FlushQueuedSounds();
 	if (blastflag) {
 		if (blastcount)
 			fsfx_checkblastqueue();
 		fsfx_checktieflyby();
+		if (TIE_FLIGHT_TIE98)
+			fsfx_UpdatePlayerEngineSound();
 	}
-#ifdef TIE_MODERN
-	if (rendered && TIE_DISPLAY_DX5) {
+#if defined(TIE98) || defined(TIE_MODERN)
+	if (TIE_FLIGHT_TIE98 && rendered) {
 		FrontendDisplay_PresentFrame();
-		FrontendDisplay_BlitOffscreenToRenderSurface();
+		if (g_useHardware3D)
+			RenderScene_ClearFrameBuffers();
+		else
+			FrontendDisplay_BlitOffscreenToRenderSurface();
 	}
+#endif
+#ifdef TIE_MODERN
 	TIE_FLIGHT_TRACE_END_FRAME();
 
 	/* The application uploads vesa_buff_gbl at the end of the tick. */
@@ -2830,171 +2827,6 @@ void tie_updatemusic_tie98(void) {
 		cdmusic_last_ms = TieMusicPolicy_NowMs();
 		cdmusic_kind = 2;
 	}
-}
-
-/* PORT: returns false until one flight period has accumulated, in place of
- * the original busy-wait, so the flight task can yield to the host. */
-// FUNCTION: TIE98 0x48D9B0
-static bool tie_doframe_tie98(void) {
-	TieFlightCadence ai_cadence;
-	TieFlightCadence animation_cadence;
-	int rendered;
-
-	if (!Tie98Renderer_ApplyPending())
-		return false;
-	if (replayviewmode) {
-		ReplayInputFrame replay_frame;
-		if (!TieReplayTiming_DecodeCurrentInputFrame(&replay_frame)) {
-			replay_stopreplay();
-			return true;
-		}
-		frameticks = replay_frame.frameticks;
-		framerate = (uint16_t)(236 / frameticks);
-		if (framerate == 0)
-			framerate = 1;
-	} else {
-		/* PORT: the original busy-waits until one flight period has
-		 * accumulated. Consume the sampled interval as one bounded frame;
-		 * the task returns to the host before another logical frame runs. */
-		const uint16_t minimum_ticks = TieFlightTiming_StepTicks();
-		tickcounter += (uint16_t)xtimer_Time_Elapsed();
-		if (tickcounter < minimum_ticks)
-			return false;
-		lastcounter = (int16_t)tickcounter;
-		tickcounter = 0;
-		if (calcframerate) {
-			frameticks = (uint16_t)lastcounter;
-			framerate = (uint16_t)(236 / frameticks);
-			if (framerate == 0) {
-				framerate = 1;
-				frameticks = 236;
-			}
-		}
-		calcframerate = 1;
-	}
-
-	mapflag = 0;
-	if (acceleratedtimesetting <= 1u || acceleratedtimectr == 0)
-		user_userinterface();
-#ifdef TIE_MODERN
-	/* PORT: TIE98's pause loop is represented by the host task state. */
-	if (TieFlightPause_IsActive())
-		return true;
-#endif
-	if (mission.end_flag != 0 || mapflag != 0)
-		return true;
-
-	TieFlightTiming_BeginAdvance(frameticks);
-	TIE_FLIGHT_TRACE_BEGIN_FRAME(frameticks, framerate);
-	TieAiLead_Advance(frameticks);
-	ai_cadence = TieFlightTiming_AdvanceAi(frameticks);
-	animation_cadence = TieFlightTiming_AdvanceAnimation(frameticks);
-	TieFlightCadence_SetAiTimerTicks(ai_cadence);
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_TIME);
-	tie_updatetime();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	if (mission.train_craft_type == 0) {
-		TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_FG_STATUS);
-		create_updatefgstatus();
-		TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	}
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_AI);
-	TieFlightCadence_RunPlaneAi(ai_cadence);
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_WEAPONS);
-	laser_weaponsfire();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_DYNAMICS);
-	dynamix_planedynamics();
-
-	rendered = 0;
-	if (replayviewmode) {
-		if (fastforwardflag) {
-			if (frameticks > (uint16_t)fastforwardtimer) {
-				fastforwardtimer += 236;
-				if (acceleratedtimesetting <= 1u) {
-					tie_updatescreen();
-					rendered = 1;
-				} else if (acceleratedtimectr != 0) {
-					tickcounter += (uint16_t)xtimer_Time_Elapsed();
-					tickcounter += frameticks;
-					--acceleratedtimectr;
-				} else {
-					tie_updatescreen();
-					rendered = 1;
-					acceleratedtimectr = acceleratedtimesetting - 1;
-				}
-			}
-			fastforwardtimer -= (int16_t)frameticks;
-		} else if (acceleratedtimesetting <= 1u) {
-			tie_updatescreen();
-			rendered = 1;
-		} else if (acceleratedtimectr != 0) {
-			tickcounter += (uint16_t)xtimer_Time_Elapsed();
-			tickcounter += frameticks;
-			--acceleratedtimectr;
-		} else {
-			tie_updatescreen();
-			rendered = 1;
-			acceleratedtimectr = acceleratedtimesetting - 1;
-		}
-	} else if (acceleratedtimesetting <= 1u) {
-		tie_updatescreen();
-		FlightSurface_Lock();
-		panel_updatepanel();
-		FlightSurface_Unlock();
-		rendered = 1;
-	} else if (acceleratedtimectr != 0) {
-		tickcounter += (uint16_t)xtimer_Time_Elapsed();
-		tickcounter += frameticks;
-		--acceleratedtimectr;
-	} else {
-		tie_updatescreen();
-		FlightSurface_Lock();
-		panel_updatepanel();
-		FlightSurface_Unlock();
-		rendered = 1;
-		acceleratedtimectr = acceleratedtimesetting - 1;
-	}
-
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_RENDER);
-	if (drawdebrisflag && mission.train_craft_type == 0 && TieFlightTiming_LegacyDue())
-		create_checkdebris();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_COLLISION);
-	collide_collisions();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_MOVE);
-	move_moveobjects();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_ANIMATION);
-	TieFlightCadence_RunAnimation(animation_cadence);
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	TIE_FLIGHT_TRACE_PHASE(TIE_TRACE_PHASE_OBJECTIVES);
-	score_checkobjective();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-	msg_messageupdate();
-	TIE_FLIGHT_TRACE_OBSERVE_STATE();
-#ifdef TIE_MODERN
-	TieMusicPolicy_UpdateFlightMusic();
-#else
-	tie_updatemusic_tie98();
-#endif
-	if (blastflag) {
-		FrontendSound_FlushQueuedSounds();
-		if (blastcount)
-			fsfx_checkblastqueue();
-		fsfx_checktieflyby();
-		fsfx_UpdatePlayerEngineSound();
-	}
-
-	if (rendered) {
-		FrontendDisplay_PresentFrame();
-		if (g_useHardware3D)
-			RenderScene_ClearFrameBuffers();
-		else
-			FrontendDisplay_BlitOffscreenToRenderSurface();
-	}
-	TIE_FLIGHT_TRACE_END_FRAME();
-	return true;
 }
 
 /* ----------------------------------------------------------------------------

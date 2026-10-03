@@ -626,53 +626,8 @@ static uint16_t starship_makestarshipcompexplo_tie98(FlightObject* craft, uint16
 	return new_obj;
 }
 
-// FUNCTION: TIE98 0x487440
-// STARSHIP_createstarshipexplo
-void starship_createstarshipexplo_tie98(uint16_t obj_idx, int16_t full_ship) {
-	FlightObject* craft;
-	uint16_t model_type;
-	uint16_t num_main_hulls;
-	int mesh_count;
-	int i;
-
-	uint8_t main_hull_slots[16];
-
-	if ((uint16_t)math2_getrandom() >= starshipexplodetail && !full_ship)
-		return;
-
-	craft = &objects[obj_idx];
-	craftptr = craft->craft_ptr;
-	if (craft->orient_dirty)
-		fview_newcalcrotate(craft->roll, craft->pitch, craft->heading, 0, craft);
-
-	model_type = craft->ship_idx;
-
-	num_main_hulls = 0;
-	mesh_count = modelmesh_getcount(model_type);
-	for (i = 0; i < mesh_count; ++i) {
-		if (modelmesh_gettype(model_type, i) == TIE_MESH_MAIN_HULL)
-			main_hull_slots[num_main_hulls++] = (uint8_t)i;
-		if (num_main_hulls == 16)
-			break;
-	}
-
-	if (full_ship) {
-		objects[genus_table[13].start].ship_idx = 0;
-		starship_makestarshipcompexplo_tie98(craft, main_hull_slots[0],
-											 (uint32_t)modelbounds_getmaxextent(model_type), 0);
-		fsfx_triggersfx(18, obj_idx);
-	} else {
-		const uint16_t component_idx = main_hull_slots[(uint16_t)math2_getrandom() % num_main_hulls];
-		if (craftptr->mesh_component_hp[component_idx]) {
-			const uint16_t new_obj = starship_makestarshipcompexplo_tie98(
-				craft, component_idx, (uint32_t)modelbounds_getmaxextent(model_type) >> 6, 1);
-			if (new_obj != 0xFFFF)
-				fsfx_triggersfx((uint16_t)((math2_getrandom() & 3) + 19), new_obj);
-		}
-	}
-}
-
 // FUNCTION: TIE95 0x53A3C
+// FUNCTION: TIE98 0x487440
 void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 	uint8_t main_hull_slots[16];
 	uint16_t ship_idx;
@@ -680,11 +635,6 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 	uint16_t num_main_hull;
 	uint16_t i;
 	ShipModelMesh* mesh;
-
-	if (TIE_FLIGHT_TIE98) {
-		starship_createstarshipexplo_tie98(obj_idx_in, full_ship);
-		return;
-	}
 
 	/* Two gate conditions: full explosion forces through, otherwise the
 	 * RNG must be below starshipexplodetail (0x1000..0x7FFF depending on
@@ -700,16 +650,24 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 		fview_newcalcrotate(craft->roll, craft->pitch, craft->heading, 0, craft);
 	}
 
-	draw_Lockshipfileptrs(ship_idx);
-
 	/* Scan meshes for MESH_MainHull entries; record up to 16 indices. */
 	num_main_hull = 0;
-	mesh = componentblockptr;
-	for (i = 0; i < objectblockptr->num_meshes; ++i, ++mesh) {
-		if (mesh->mesh_type == 1 /* MESH_MainHull */)
-			main_hull_slots[num_main_hull++] = (uint8_t)i;
-		if (num_main_hull == 16)
-			break;
+	if (TIE_FLIGHT_TIE98) {
+		for (i = 0; i < modelmesh_getcount(ship_idx); ++i) {
+			if (modelmesh_gettype(ship_idx, i) == TIE_MESH_MAIN_HULL)
+				main_hull_slots[num_main_hull++] = (uint8_t)i;
+			if (num_main_hull == 16)
+				break;
+		}
+	} else {
+		draw_Lockshipfileptrs(ship_idx);
+		mesh = componentblockptr;
+		for (i = 0; i < objectblockptr->num_meshes; ++i, ++mesh) {
+			if (mesh->mesh_type == 1 /* MESH_MainHull */)
+				main_hull_slots[num_main_hull++] = (uint8_t)i;
+			if (num_main_hull == 16)
+				break;
+		}
 	}
 
 	if (full_ship) {
@@ -720,7 +678,11 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 		for (k = 0; k < 1; ++k)
 			objects[slot++].ship_idx = 0;
 
-		starship_makestarshipcompexplo(craft, main_hull_slots[0], objectblockptr->length, 0);
+		if (TIE_FLIGHT_TIE98)
+			starship_makestarshipcompexplo_tie98(craft, main_hull_slots[0],
+												 (uint32_t)modelbounds_getmaxextent(ship_idx), 0);
+		else
+			starship_makestarshipcompexplo(craft, main_hull_slots[0], objectblockptr->length, 0);
 		fsfx_triggersfx(0x12u, obj_idx_in);
 	} else {
 		const uint8_t idx = main_hull_slots[(uint16_t)math2_getrandom() % num_main_hull];
@@ -728,7 +690,10 @@ void starship_createstarshipexplo(uint16_t obj_idx_in, int16_t full_ship) {
 			uint16_t size = species_table[ship_idx].bound_hwidth;
 			uint16_t new_obj;
 			size >>= 6;
-			new_obj = starship_makestarshipcompexplo(craft, idx, size, 1);
+			if (TIE_FLIGHT_TIE98)
+				new_obj = starship_makestarshipcompexplo_tie98(craft, idx, size, 1);
+			else
+				new_obj = starship_makestarshipcompexplo(craft, idx, size, 1);
 			if (new_obj != 0xFFFF) {
 				fsfx_triggersfx((uint16_t)(19 + (math2_getrandom() & 3)), new_obj);
 			}

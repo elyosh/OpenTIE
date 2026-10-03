@@ -3142,7 +3142,7 @@ void panel_update3Dcrt_tie98(uint16_t x, uint16_t y, uint16_t width, uint16_t de
 	int32_t target_world_z;
 
 	transfm2_screenyoffset = 0;
-	position = rtsvga2_calcpositionVGA_tie98(x, y);
+	position = rtsvga2_calcpositionVGA(x, y);
 	logbuf2_startPIP_tie98(width, depth, clear_runs, position);
 
 	if ((uint16_t)clear_runs != 0) {
@@ -3195,7 +3195,7 @@ void panel_update3Dcrt_tie98(uint16_t x, uint16_t y, uint16_t width, uint16_t de
 
 	if (g_useHardware3D)
 		Renderer_ClearCockpitCrtZBuffer();
-	panel_pointcamera_tie98(pstate.target_obj_idx, 1);
+	panel_pointcamera(pstate.target_obj_idx, 1);
 	TieHudSnapshot_RecordPipCamera(pstate.target_obj_idx);
 	if (pstate.radar_enable)
 		currenttarget |= 0x0200u;
@@ -3252,7 +3252,7 @@ void panel_update3Dcrt_tie98(uint16_t x, uint16_t y, uint16_t width, uint16_t de
 								(int16_t)((uint16_t)object->pitch_byte << 8),
 								(int16_t)((uint16_t)object->heading_byte << 8), 0, NULL);
 			lightflag = 1;
-			static_drawstaticobject_tie98(static_index);
+			static_drawstaticobject(static_index);
 		}
 	} else {
 		FlightObject* object = &objects[pstate.target_obj_idx];
@@ -3418,130 +3418,12 @@ void panel_drawboxinxtrans(int left_x, int top_y, uint16_t width, uint16_t heigh
 	++flatobjnum;
 }
 
-// FUNCTION: TIE98 0x467D10
-// PANEL_pointcamera
-void panel_pointcamera_tie98(uint16_t target_obj, int16_t use_hud_size) {
-	int32_t dx;
-	int32_t dy;
-	int32_t dz;
-	uint16_t hx;
-	uint16_t hy;
-	uint16_t hz;
-	int16_t ex;
-	int16_t ey;
-	int16_t ez;
-	int32_t side_proj;
-	int32_t fwd_proj;
-	int32_t up_proj;
-	uint32_t bound_hwidth;
-	uint16_t species;
-	uint16_t pix;
-	uint16_t z;
-	uint16_t shift;
-	int target_idx;
-
-	target_idx = target_obj;
-	create_getworldposition(target_idx, 0);
-
-	dx = worldlocx - pstate.player->world_x;
-	dy = worldlocy - pstate.player->world_y;
-	dz = worldlocz - pstate.player->world_z;
-	dx *= 2;
-	dy *= 2;
-	dz *= 2;
-
-	/* Track the high-word magnitude of each axis while reducing the vector. */
-	hx = (uint16_t)(dx >> 16);
-	hy = (uint16_t)(dy >> 16);
-	hz = (uint16_t)(dz >> 16);
-	if (hx & 0x8000)
-		hx = -hx;
-	if (hy & 0x8000)
-		hy = -hy;
-	if (hz & 0x8000)
-		hz = -hz;
-	do {
-		hx >>= 1;
-		hy >>= 1;
-		hz >>= 1;
-		dx >>= 1;
-		dy >>= 1;
-		dz >>= 1;
-	} while (hx || hy || hz);
-
-	dx >>= 1;
-	dy >>= 1;
-	dz >>= 1;
-	ex = (int16_t)dx;
-	ey = (int16_t)dy;
-	ez = (int16_t)dz;
-
-	if (objects[pstate.object_idx].orient_dirty) {
-		fview_calcrotatemove(objects[pstate.object_idx].pitch, objects[pstate.object_idx].heading,
-							 &objects[pstate.object_idx]);
-		fview_calcrotateorient(objects[pstate.object_idx].roll, 0, &objects[pstate.object_idx]);
-	}
-
-	/* Project the player->target delta onto the player's body axes. */
-	side_proj = math2_dot3_q15_clamped(ex, ey, ez, pstate.player->side_x, pstate.player->side_y,
-									   pstate.player->side_z);
-	fwd_proj =
-		math2_dot3_q15_clamped(ex, ey, ez, pstate.player->fwd_x, pstate.player->fwd_y, pstate.player->fwd_z);
-	up_proj =
-		math2_dot3_q15_clamped(ex, ey, ez, pstate.player->up_x, pstate.player->up_y, pstate.player->up_z);
-
-	trig2_ctop(side_proj, fwd_proj, up_proj);
-
-	fview_newcalcview(pstate.player->roll, pstate.player->pitch, pstate.player->heading, 0,
-					  (int16_t)(0x4000 - trig2_zangle), trig2_xyangle, NULL);
-
-	if (target_obj < OBJ_REF_STATIC_BASE) {
-		species = objects[target_obj].craft_ptr->species_idx;
-		if (spec_data[species].bound_width <= spec_data[species].bound_depth &&
-			spec_data[species].bound_width <= spec_data[species].bound_height) {
-			bound_hwidth = (uint32_t)(spec_data[species].bound_height + spec_data[species].bound_depth) >>
-						   1 << spec_data[species].model_scale_shift;
-		} else if (spec_data[species].bound_depth <= spec_data[species].bound_width &&
-				   spec_data[species].bound_depth <= spec_data[species].bound_height) {
-			bound_hwidth = (uint32_t)(spec_data[species].bound_height + spec_data[species].bound_width) >>
-						   1 << spec_data[species].model_scale_shift;
-		} else {
-			bound_hwidth = (uint32_t)(spec_data[species].bound_width + spec_data[species].bound_depth) >>
-						   1 << spec_data[species].model_scale_shift;
-		}
-	} else {
-		bound_hwidth = species_table[staticobjects[target_idx - OBJ_REF_STATIC_BASE].species].bound_hwidth;
-	}
-
-	if (use_hud_size)
-		pix = instruments[2].param2;
-	else
-		pix = flightResolution == TIE_FLIGHT_RES_VGA ? 60 : 144;
-
-	bound_hwidth = (bound_hwidth << perspShift) / pix;
-	shift = 0;
-	while (bound_hwidth > 0x3fff) {
-		bound_hwidth >>= 1;
-		++shift;
-	}
-	z = (uint16_t)bound_hwidth;
-	if (flightResolution != TIE_FLIGHT_RES_VGA)
-		z += z >> 2;
-
-	/* Back-step along the world-space camera Z basis. */
-	camera.x = math2_mul_q15(z, worldeyeA3);
-	camera.y = math2_mul_q15(z, worldeyeB3);
-	camera.z = math2_mul_q15(z, worldeyeC3);
-	camera.x = worldlocx - (int32_t)((uint32_t)camera.x << shift);
-	camera.y = worldlocy - (int32_t)((uint32_t)camera.y << shift);
-	camera.z = worldlocz - (int32_t)((uint32_t)camera.z << shift);
-}
-
 /*
  * panel_pointcamera -- position the 3D CRT's camera to frame the target
  * with auto-zoom sized on bound_hwidth.
  */
 // FUNCTION: TIE95 0x4499C
+// FUNCTION: TIE98 0x467D10
 void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 	int32_t dx;
 	int32_t dy;
@@ -3596,6 +3478,13 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 	ey = (int16_t)dy;
 	ex = (int16_t)dx;
 
+	/* TIE98 refreshes a stale player orientation before projecting. */
+	if (TIE_FLIGHT_TIE98 && objects[pstate.object_idx].orient_dirty) {
+		fview_calcrotatemove(objects[pstate.object_idx].pitch, objects[pstate.object_idx].heading,
+							 &objects[pstate.object_idx]);
+		fview_calcrotateorient(objects[pstate.object_idx].roll, 0, &objects[pstate.object_idx]);
+	}
+
 	/* Project the player->target delta onto the player's body axes.
 	 * trig2_ctop(x, y, z) computes xyangle = atan2(x, y) (with a fixed
 	 * +90 deg offset), so the bearing-to-target the binary feeds in is
@@ -3636,19 +3525,41 @@ void panel_pointcamera(uint16_t target_obj, int16_t use_hud_size) {
 	else
 		pix = 144;
 
-	/* Species 52 uses tighter framing. */
 	bound_hwidth = (bound_hwidth << perspShift) / pix;
-	shift = (species == 52) + 4;
-	z = (uint16_t)(bound_hwidth >> shift);
-	/* 640x480 shifts the framing back another 1.25x. */
-	if (flightResolution == (int16_t)TIE_FLIGHT_RES_SVGA)
-		z += z >> 2;
+	if (!TIE_FLIGHT_TIE98) {
+		/* Species 52 uses tighter framing. */
+		shift = (species == 52) + 4;
+		z = (uint16_t)(bound_hwidth >> shift);
+		/* 640x480 shifts the framing back another 1.25x. */
+		if (flightResolution == (int16_t)TIE_FLIGHT_RES_SVGA)
+			z += z >> 2;
+	}
+#if defined(TIE98) || defined(TIE_MODERN)
+	else {
+		/* Normalize the framing distance into 14 bits. */
+		shift = 0;
+		while (bound_hwidth > 0x3fff) {
+			bound_hwidth >>= 1;
+			++shift;
+		}
+		z = (uint16_t)bound_hwidth;
+		/* Every high-resolution mode shifts the framing back another 1.25x. */
+		if (flightResolution != (int16_t)TIE_FLIGHT_RES_VGA)
+			z += z >> 2;
+	}
+#endif
 
 	/* Back-step along the world-space camera Z basis. Shift in the
 	 * unsigned domain so a negative offset stays well-defined. */
-	camera.x = math2_mul16_q15(z, worldeyeA3);
-	camera.y = math2_mul16_q15(z, worldeyeB3);
-	camera.z = math2_mul16_q15(z, worldeyeC3);
+	if (TIE_FLIGHT_TIE98) {
+		camera.x = math2_mul_q15(z, worldeyeA3);
+		camera.y = math2_mul_q15(z, worldeyeB3);
+		camera.z = math2_mul_q15(z, worldeyeC3);
+	} else {
+		camera.x = math2_mul16_q15(z, worldeyeA3);
+		camera.y = math2_mul16_q15(z, worldeyeB3);
+		camera.z = math2_mul16_q15(z, worldeyeC3);
+	}
 	camera.x = (int32_t)((uint32_t)camera.x << shift);
 	camera.y = (int32_t)((uint32_t)camera.y << shift);
 	camera.z = (int32_t)((uint32_t)camera.z << shift);

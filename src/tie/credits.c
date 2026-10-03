@@ -1,9 +1,8 @@
 #include "tie/credits.h"
 #ifdef TIE_MODERN
 #include "tie_runtime/runtime/credits_task.h"
-#include "tie_runtime/runtime/profile.h"
 #endif
-#include "tie/credits_internal.h"
+#include "tie/edition.h"
 #include "tie/shellext.h"
 #include "tie/shipext.h"
 
@@ -66,6 +65,7 @@ LandruHandle credits_text; /* paragraph data from tietext0.lfd */
 
 static void credits_end_View(int32_t frame_num);
 static void credits_Init_Credit_Info(void);
+void credits_Credit_Stars_To_Back(void);
 static int16_t credits_draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								   int16_t refresh);
 static void credits_Credit_Actor_To_Buffer(Actor* actor, LandruHandle buffer);
@@ -81,7 +81,6 @@ int credits_Credits(SceneHeadStruct* scene_head) {
 	ResFile* credit_res;
 #ifdef TIE_MODERN
 	ResFile* text_res = NULL;
-	bool tie98 = TieProfile_UsesTie98Frontend();
 #else
 	ResFile* text_res;
 #endif
@@ -156,13 +155,7 @@ int credits_Credits(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-#ifdef TIE_MODERN
-	xactor_Set_Actor_Draw_Function(credits_actor, tie98 ? credits_draw_Credit_tie98 : credits_draw_Credit);
-#elif defined(TIE98)
-	xactor_Set_Actor_Draw_Function(credits_actor, credits_draw_Credit_tie98);
-#else
 	xactor_Set_Actor_Draw_Function(credits_actor, credits_draw_Credit);
-#endif
 	pal = xpal_Res_Palette("colors");
 #ifdef TIE_MODERN
 	if (!pal) {
@@ -173,16 +166,7 @@ int credits_Credits(SceneHeadStruct* scene_head) {
 	xpal_Set_Dest_Palette(pal);
 	xpal_Set_Dest_Palette(scene_head->def_palette);
 
-#ifdef TIE_MODERN
-	if (tie98)
-		credits_Init_Credit_Info_tie98();
-	else
-		credits_Init_Credit_Info();
-#elif defined(TIE98)
-	credits_Init_Credit_Info_tie98();
-#else
 	credits_Init_Credit_Info();
-#endif
 	xfade_Start_Full_Fade(FADE_WIPE_SNAP_ON, FADE_COLOR_TWO_PHASE, 1, 0, 1);
 	xview_Set_View_Update_Function(credits_end_View);
 	xview_Disable_Global_View_Erase();
@@ -222,8 +206,10 @@ static void credits_end_View(int32_t frame_num) {
 /* Initialize credit display state: dirty rect, paragraph count,
  * text hold duration, total film length. */
 // FUNCTION: TIE95 0x71290
+// FUNCTION: TIE98 0x4148A0
 static void credits_Init_Credit_Info(void) {
-	xrect_Set_Rect(&credits_dirty_rect, 40, 40, 280, 160);
+	xrect_Set_Rect(&credits_dirty_rect, TIE_FRONTEND_EDITION(40, 20), 40, TIE_FRONTEND_EDITION(280, 300),
+				   160);
 	credits_num_credit_lines = xparagrp_Count_Paragraphs(credits_text);
 	credits_text_len = 130;
 	credits_film_time = 0;
@@ -245,6 +231,7 @@ static void credits_Init_Credit_Info(void) {
  * color = palette index for the text (ramps 167..239 range).
  * text_y = vertical position for text block. */
 // FUNCTION: TIE95 0x712EC
+// FUNCTION: TIE98 0x414900
 static int16_t credits_draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								   int16_t refresh) {
 	int16_t time_offset;
@@ -362,7 +349,10 @@ static int16_t credits_draw_Credit(Actor* actor, Rect* bounds, Rect* clip, int16
 		time_offset -= 90;
 	}
 
-	xdirty_Dirty_Rect(&credits_dirty_rect);
+	if (TIE_FRONTEND_TIE98)
+		xdirty_Max_Dirty_List();
+	else
+		xdirty_Dirty_Rect(&credits_dirty_rect);
 	return 1;
 }
 

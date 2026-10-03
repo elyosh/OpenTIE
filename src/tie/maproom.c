@@ -677,10 +677,7 @@ int32_t maproom_maproom(void) {
 				}
 
 				/* Render-buffer fill. */
-				if (TIE_DISPLAY_DX5)
-					logbuf2_clearbuffer_tie98();
-				else
-					logbuf2_clearbuffer();
+				logbuf2_clearbuffer();
 				buffer_stride =
 					(uint16_t)(mapScreenWidth * TIE_DISPLAY_EDITION(1u, g_flight16bppBytesPerPixel));
 				rtsvga2_setvgapointers(buffer_toggle ? newbuf : xtransdataptr, buffer_stride,
@@ -859,33 +856,21 @@ int32_t maproom_maproom(void) {
 
 				if (fullupdateflag) {
 					if (buffer_toggle) {
-						if (TIE_DISPLAY_DX5)
-							logbuf2_outbuffer_tie98(newbuf);
-						else
-							logbuf2_outbuffer(newbuf);
+						logbuf2_outbuffer(newbuf);
 						logbuf2_selectbuffer(xtransdataptr);
 						buffer_toggle = 0;
 					} else {
-						if (TIE_DISPLAY_DX5)
-							logbuf2_outbuffer_tie98(xtransdataptr);
-						else
-							logbuf2_outbuffer(xtransdataptr);
+						logbuf2_outbuffer(xtransdataptr);
 						logbuf2_selectbuffer(newbuf);
 						buffer_toggle = 1;
 					}
 					fullupdateflag = 0;
 				} else if (buffer_toggle) {
-					if (TIE_DISPLAY_DX5)
-						logbuf2_outdiffbuffer_tie98(xtransdataptr, newbuf);
-					else
-						logbuf2_outdiffbuffer(xtransdataptr, newbuf);
+					logbuf2_outdiffbuffer(xtransdataptr, newbuf);
 					logbuf2_selectbuffer(xtransdataptr);
 					buffer_toggle = 0;
 				} else {
-					if (TIE_DISPLAY_DX5)
-						logbuf2_outdiffbuffer_tie98(newbuf, xtransdataptr);
-					else
-						logbuf2_outdiffbuffer(newbuf, xtransdataptr);
+					logbuf2_outdiffbuffer(newbuf, xtransdataptr);
 					logbuf2_selectbuffer(newbuf);
 					buffer_toggle = 1;
 				}
