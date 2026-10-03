@@ -66,6 +66,8 @@
 extern uint8_t install_drive_ok; /* CD drive letter, 0 when absent */
 extern char cd_check_filename[];
 
+void shellext_Delete_Install_File(const char* filename);
+
 /* Filedir drive helpers the modern Landru port does not provide. */
 void xfiledir_Set_Current_Drive(Directory* dir, int drive);
 void xfiledir_Restore_Default_Dir(void);
@@ -938,16 +940,20 @@ static void register_iuser_Pilot_Button(Input* input, int32_t time) {
 	btn = (PushButton*)input;
 	id = btn->header.id;
 
-	/* TIE98 0x470950 shares the page-button actor. The TIE95 branch
-	 * below uses three distinct actor state formulas. */
-	if (TIE_FRONTEND_TIE98)
-		xactor_Set_Actor_State(reg_button[id == 0 ? 0 : 1], btn->pressed, 0);
-	else if (id == 0)
-		xactor_Set_Actor_State(reg_button[0], 2 * btn->pressed, 0);
-	else if (id == 1)
-		xactor_Set_Actor_State(reg_button[1], 2 * btn->pressed + 1, 0);
-	else if (id == 2)
-		xactor_Set_Actor_State(reg_button[2], btn->pressed + 4, 0);
+	switch (id) {
+		case 0:
+			xactor_Set_Actor_State(reg_button[0], TIE_FRONTEND_EDITION(2 * btn->pressed, btn->pressed), 0);
+			break;
+		case 1:
+			xactor_Set_Actor_State(reg_button[1], TIE_FRONTEND_EDITION(2 * btn->pressed + 1, btn->pressed),
+								   0);
+			break;
+		case 2:
+			/* TIE98 drives the delete button through the next-page actor. */
+			xactor_Set_Actor_State(reg_button[TIE_FRONTEND_EDITION(2, 1)],
+								   TIE_FRONTEND_EDITION(btn->pressed + 4, btn->pressed), 0);
+			break;
+	}
 
 	if (!xinpattr_Get_Input_Selected(&btn->header))
 		return;
@@ -957,40 +963,53 @@ static void register_iuser_Pilot_Button(Input* input, int32_t time) {
 #endif
 		soundext_Play_SFX(sfxButton, 64);
 
-	if (id == 0) {
-		/* Previous page */
-		if (cur_page <= 0)
-			cur_page = num_pages - 1;
-		else
-			cur_page--;
-		pilot_offset = TIE_FRONTEND_EDITION(10, 12) * cur_page;
-	} else if (id == 1) {
-		/* Next page */
-		if (cur_page >= num_pages - 1)
-			cur_page = 0;
-		else
-			cur_page++;
-		pilot_offset = TIE_FRONTEND_EDITION(10, 12) * cur_page;
-	} else if (id == 2) {
-		int16_t result;
+	switch (btn->header.id) {
+		case 0:
+			/* Previous page */
+			if (cur_page > 0)
+				cur_page--;
+			else
+				cur_page = num_pages - 1;
+			pilot_offset = TIE_FRONTEND_EDITION(10, 12) * cur_page;
+			break;
+		case 1:
+			/* Next page */
+			if (cur_page < num_pages - 1)
+				cur_page++;
+			else
+				cur_page = 0;
+			pilot_offset = TIE_FRONTEND_EDITION(10, 12) * cur_page;
+			break;
+		case 2: {
+			int16_t result;
 
 #ifdef TIE_MODERN
 		TieRegister_BeginDelete(input);
 #endif
 		result = register_Do_Delete_Dialog();
-		if (result != 2) {
-			if (result == 1) {
-				char name_buf[TIE_PILOT_NAME_CAPACITY];
-				char path[TIE_PILOT_NAME_CAPACITY + 5];
+		if (result == 2)
+			break;
+		if (result == 1) {
+#ifdef TIE_MODERN
+			char name_buf[TIE_PILOT_NAME_CAPACITY];
+			char path[TIE_PILOT_NAME_CAPACITY + 5];
 
-				register_Get_Reg_String_Button_Name(pilot_name_input, name_buf);
-				snprintf(path, sizeof(path), "%s.tfr", name_buf);
-				TieStorage_Remove(TIE_FILE_ROOT_USER, path);
-				register_Delete_Pilot_Record();
-			} else {
-				register_Revive_Pilot_Record();
-			}
-			xview_Refresh_View();
+			register_Get_Reg_String_Button_Name(pilot_name_input, name_buf);
+			snprintf(path, sizeof(path), "%s.tfr", name_buf);
+			TieStorage_Remove(TIE_FILE_ROOT_USER, path);
+#else
+			char path[TIE_FRONTEND_EDITION(16, 40)];
+
+			register_Get_Reg_String_Button_Name(pilot_name_input, path);
+			strcat(path, ".tfr");
+			shellext_Delete_Install_File(path);
+#endif
+			register_Delete_Pilot_Record();
+		} else {
+			register_Revive_Pilot_Record();
+		}
+		xview_Refresh_View();
+		break;
 		}
 	}
 }

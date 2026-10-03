@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-uint16_t collide_checksweptmodelcollision(uint16_t source_object_index, uint16_t target_object_index);
+int collide_checksweptmodelcollision(uint16_t source_object_index, uint16_t target_object_index);
 
 int collide_checksweptmodelmeshcollision(int model_type, int mesh_index, int32_t start_x, int32_t start_y,
 										 int32_t start_z, int32_t end_x, int32_t end_y, int32_t end_z);

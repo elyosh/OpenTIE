@@ -405,17 +405,17 @@ void anim_add_bitmap_draw(uint16_t obj_idx_arg, uint16_t species_packed, uint16_
 
 // FUNCTION: TIE98 0x4012F0
 void anim_sort_and_draw_bitmaps_tie98(int draw_target) {
-	int swapped = 1;
-	while (--numbitmaps != -1) {
+	int16_t swapped = 1;
+	while (numbitmaps--) {
 		if (swapped) {
 			uint16_t i;
 
 			swapped = 0;
-			for (i = 0; i < (uint16_t)numbitmaps; ++i) {
+			for (i = 0; i < numbitmaps; ++i) {
 				if (drawitems[i].eye_z > drawitems[i + 1].eye_z) {
-					BitmapDrawEntry temporary = drawitems[i];
+					BitmapDrawEntry tmp = drawitems[i];
 					drawitems[i] = drawitems[i + 1];
-					drawitems[i + 1] = temporary;
+					drawitems[i + 1] = tmp;
 					swapped = 1;
 				}
 			}

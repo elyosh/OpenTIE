@@ -84,6 +84,7 @@ typedef struct TieAppConfig {
 	TieFlightUpdateRate requested_flight_update_rate;
 	TieFlightModelSource requested_model_source;
 	bool player_engine_sound_enabled; /* requested YAML preference */
+	bool fix_axis_input_bias;         /* YAML-only; see TieAxisInputHook */
 	float flight_model_smooth_angle_degrees;
 	float flight_model_opt_emissive_strength;
 	float flight_model_opt_projectile_emissive_strength;

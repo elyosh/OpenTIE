@@ -180,7 +180,7 @@ static bool TieAppConfig_ValidateSchemaKeys(const AeronConfigFile* document, boo
 	VALIDATE_KEYS(document, "ui", warn, "font");
 	VALIDATE_KEYS(document, "frontend", warn, "version", "aspect_correct_legacy_scenes");
 	VALIDATE_KEYS(document, "flight", warn, "version", "original_renderer", "update_rate",
-				  "player_engine_sound", "models");
+				  "player_engine_sound", "fix_axis_input_bias", "models");
 	VALIDATE_KEYS(document, "flight.models", warn, "source", "smooth_angle_degrees", "opt_emissive_strength",
 				  "opt_projectile_emissive_strength");
 	VALIDATE_KEYS(document, "input", warn, "controllers", "gamepad_defaults", "keyboard");
@@ -526,7 +526,9 @@ static bool TieAppConfig_ParseComplete(const AeronConfigFile* document,
 								&out->flight_model_opt_projectile_emissive_strength, error, capacity))
 		return false;
 	if (!TieAppConfig_ReadBool(document, "flight.player_engine_sound", &out->player_engine_sound_enabled,
-							   error, capacity))
+							   error, capacity) ||
+		!TieAppConfig_ReadBool(document, "flight.fix_axis_input_bias", &out->fix_axis_input_bias, error,
+							   capacity))
 		return false;
 	const bool parsed = TieControllerConfig_Read(document, &out->controller, error, capacity) &&
 						TieKeyboardConfig_Read(document, &out->keyboard, error, capacity) &&

@@ -222,7 +222,7 @@ uint16_t user_picknexttarget(uint16_t start, int32_t step);
 /* Reticle hit test: does obj_idx project inside the gunsight this frame?
  * strict=1 uses the pixel-accurate reticle; strict=0 triples the
  * tolerance for the auto-target scanner. Side effect: writes screendist. */
-int16_t user_targetincross(uint16_t obj_idx, int32_t strict);
+int16_t user_targetincross(uint16_t obj_idx, int16_t strict);
 
 /* Paint the target bracket around the currently-targeted object. Called
  * from anim_sort_and_draw_bitmaps each frame. Returns the

@@ -532,6 +532,7 @@ const char _appendmode[3] = { 'a', 'b', '\0' };
 // GLOBAL: TIE95 0xEB154
 int32_t maxPixelsDeep;
 // GLOBAL: TIE95 0xEB6A8
+// GLOBAL: TIE98 0x591C24
 int16_t numbitmaps;
 // GLOBAL: TIE95 0xEB74A
 uint8_t lightflag;

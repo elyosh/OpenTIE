@@ -502,6 +502,8 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/audio/output.h
     src/tie_runtime/audio/direct_sound.c
     src/tie_runtime/audio/direct_sound.h
+    src/tie_runtime/hooks/axis_input.c
+    src/tie_runtime/hooks/axis_input.h
     src/tie_runtime/hooks/orientation.c
     src/tie_runtime/hooks/orientation.h)
 

@@ -1386,9 +1386,8 @@ static void computer_idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, i
 // FUNCTION: TIE95 0x83E7C
 // FUNCTION: TIE98 0x40D220
 static void computer_xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
-	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
-	char name1[40];
 	char string[40];
+	char name1[40];
 	char fmt[40];
 	Rect tr;
 	int16_t type, id, status, bonus;
@@ -1402,267 +1401,289 @@ static void computer_xdraw_Computer_Medal(Rect* r, Rect* clip_r) {
 	name1[0] = '\0';
 	string[0] = '\0';
 
-	if (type == 0) {
-		/* Training certificate */
-		textext_Copy_Text(name1, txtCompCertificate);
-		xactdelt_Draw_Delta_Actor(medal_actor[12], r, clip_r, r->left, r->top, 1);
+	switch (type) {
+		case 0:
+			/* Training certificate */
+			textext_Copy_Text(name1, txtCompCertificate);
+			xactdelt_Draw_Delta_Actor(medal_actor[12], r, clip_r, r->left, r->top, 1);
 
-		for (i = 0; i < 6; i++) {
-			if (pilot_record.train_max_level[i] >= 4) {
-				page = i;
-				if (i == 3)
-					page = 4;
-				else if (page == 4)
-					page = 3;
-				xactor_Set_Actor_State(medal_actor[0], page, 0);
-				xactanim_Draw_Anim_Actor(medal_actor[0], r, clip_r, r->left, r->top, 1);
+			for (i = 0; i < 6; i++) {
+				if (pilot_record.train_max_level[i] >= 4) {
+					page = i;
+					if (i == 3)
+						page = 4;
+					else if (page == 4)
+						page = 3;
+					xactor_Set_Actor_State(medal_actor[0], page, 0);
+					xactanim_Draw_Anim_Actor(medal_actor[0], r, clip_r, r->left, r->top, 1);
+				}
 			}
-		}
 
-		/* Expansion pack training patch */
-		k = -1;
-		if (shipext_Is_Mission_Disk2())
-			k = 5;
-		else if (shipext_Is_Mission_Disk1())
-			k = 0;
+			/* Expansion pack training patch */
+			k = -1;
+			if (shipext_Is_Mission_Disk2())
+				k = 5;
+			else if (shipext_Is_Mission_Disk1())
+				k = 0;
 
-		if (k >= 0) {
-			if (pilot_record.train_max_level[6] < 4) {
-				xactor_Set_Actor_State(medal_actor2[k], 1, 0);
-			} else {
-				xactor_Set_Actor_State(medal_actor2[k], 0, 0);
+			if (k >= 0) {
+				if (pilot_record.train_max_level[6] >= 4) {
+					xactor_Set_Actor_State(medal_actor2[k], 0, 0);
+					xactanim_Draw_Anim_Actor(medal_actor2[k], r, clip_r, r->left, r->top, 1);
+				} else {
+					xactor_Set_Actor_State(medal_actor2[k], 1, 0);
+					xactanim_Draw_Anim_Actor(medal_actor2[k], r, clip_r, r->left, r->top, 1);
+				}
 			}
-			xactanim_Draw_Anim_Actor(medal_actor2[k], r, clip_r, r->left, r->top, 1);
-		}
-	} else if (type == 1) {
-		/* Ship combat medal */
-		if (id < 7)
-			shipext_Get_Ship_Name(name1, id, 0, 0);
-		textext_Copy_Text(string, status + txtCompBronze);
+			break;
+		case 1:
+			/* Ship combat medal */
+			if (id < 7)
+				shipext_Get_Ship_Name(name1, id, 0, 0);
+			textext_Copy_Text(string, status + txtCompBronze);
 
-		if (id < 6) {
-			xactor_Set_Actor_State(medal_actor[7], id, 0);
-			xactanim_Draw_Anim_Actor(medal_actor[7], r, clip_r, r->left + TIE_FRONTEND_EDITION(34, 68),
-									 r->top - TIE_FRONTEND_EDITION(50, 120), 1);
-		} else {
-			if (shipext_Is_Mission_Disk1()) {
-				xactor_Set_Actor_State(medal_actor2[3], 0, 0);
-				xactanim_Draw_Anim_Actor(medal_actor2[3], r, clip_r, r->left + TIE_FRONTEND_EDITION(34, 68),
+			if (id < 6) {
+				xactor_Set_Actor_State(medal_actor[7], id, 0);
+				xactanim_Draw_Anim_Actor(medal_actor[7], r, clip_r, r->left + TIE_FRONTEND_EDITION(34, 68),
 										 r->top - TIE_FRONTEND_EDITION(50, 120), 1);
-			}
-			if (shipext_Is_Mission_Disk2()) {
-				xactor_Set_Actor_State(medal_actor2[8], 0, 0);
-				xactanim_Draw_Anim_Actor(medal_actor2[8], r, clip_r, r->left + TIE_FRONTEND_EDITION(34, 68),
-										 r->top - TIE_FRONTEND_EDITION(50, 120), 1);
-			}
-		}
-	} else if (type == 2) {
-		/* Battle completion medal */
-		if (pilot_medal_text == 1) {
-			textext_Copy_Text(name1, txtCompSecGoal1);
-			textext_Copy_Text(fmt, txtCompSecGoal2);
-			snprintf(string, sizeof(string), fmt, pilot_medal_status[pilot_medal_page],
-					 pilot_medal_id[pilot_medal_page] + 1);
-		} else if (pilot_medal_text == 2) {
-			textext_Copy_Text(name1, txtCompBonGoal1);
-			textext_Copy_Text(fmt, txtCompBonGoal2);
-			snprintf(string, sizeof(string), fmt, pilot_medal_bonus_status[pilot_medal_page],
-					 pilot_medal_id[pilot_medal_page] + 1);
-		} else {
-			/* Battle name and status */
-			textext_Copy_Text(string, txtCompInfoBattle);
-			snprintf(name1, sizeof(name1), string, id + 1);
-			if (pilot_record.battle_status[id] == 3) {
-				if (id < 7)
-					textext_Copy_Text(string, id + txtCompMedal1);
-				else if (id < 13)
-					textext_Copy_Text(string, id + txtComp2Medal8 - 7);
-				else
-					string[0] = '\0';
 			} else {
-				string[0] = '\0';
-			}
-		}
-
-		/* Draw the battle medal actor */
-		x = TIE_FRONTEND_EDITION(22, 44);
-		y = -TIE_FRONTEND_EDITION(28, 67);
-
-		/* Determine medal page/variant */
-		if (id < 2) {
-			page = id ? 6 : 0;
-		} else if (id == 2) {
-			page = 3;
-		} else if (id == 3) {
-			page = 2;
-		} else if (id < 6) {
-			page = id;
-		} else if (id == 6) {
-			page = 1;
-		} else if (id <= 12) {
-			page = id;
-		} else {
-			page = id;
-		}
-
-		if (pilot_record.battle_status[id] == 3) {
-			if (page <= 6) {
-				/* Base game battle medals */
-				if (page != 4) {
-					xactor_Set_Actor_Flip(medal_actor[1], 1, 0);
-					xactor_Set_Actor_State(medal_actor[1], 3 * page, 0);
-					xactanim_Draw_Anim_Actor(medal_actor[1], r, clip_r, TIE_FRONTEND_EDITION(14, 28), y, 1);
-				}
-				xactor_Set_Actor_Flip(medal_actor[1], 0, 0);
-				xactor_Set_Actor_State(medal_actor[1], 3 * page, 0);
-				xactanim_Draw_Anim_Actor(medal_actor[1], r, clip_r, x, y, 1);
-
-				/* Special overlays for specific pages */
-				if (page == 2) {
-					xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(167, 334), TIE_FRONTEND_EDITION(77, 185),
-								   TIE_FRONTEND_EDITION(195, 390), TIE_FRONTEND_EDITION(102, 245));
-					xrect_Clip_Rect(&tr, clip_r);
-					xcanvas_Set_Drawing_Canvas_Clip(&tr);
-					xactor_Set_Actor_State(medal_actor[3], 4, 0);
-					xactor_Set_Actor_State(medal_actor[4], 0, 0);
-					xactdelt_Draw_Delta_Actor(medal_actor[8], r, &tr, TIE_FRONTEND_EDITION(16, 32),
-											  -TIE_FRONTEND_EDITION(31, 74), 1);
-					xactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, -TIE_FRONTEND_EDITION(11, 22),
-											 TIE_FRONTEND_EDITION(22, 53), 1);
-					xactanim_Draw_Anim_Actor(medal_actor[3], r, &tr, -TIE_FRONTEND_EDITION(10, 20),
-											 TIE_FRONTEND_EDITION(22, 53), 1);
-					xactdelt_Draw_Delta_Actor(medal_actor[10], r, &tr, TIE_FRONTEND_EDITION(22, 44),
-											  -TIE_FRONTEND_EDITION(28, 67), 1);
-				}
-				if (page == 3) {
-					xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(165, 334), TIE_FRONTEND_EDITION(77, 185),
-								   TIE_FRONTEND_EDITION(197, 390), TIE_FRONTEND_EDITION(108, 259));
-					xrect_Clip_Rect(&tr, clip_r);
-					xcanvas_Set_Drawing_Canvas_Clip(&tr);
-					xactdelt_Draw_Delta_Actor(medal_actor[8], r, &tr, TIE_FRONTEND_EDITION(16, 32),
-											  -TIE_FRONTEND_EDITION(31, 74), 1);
-					xactor_Set_Actor_State(medal_actor[4], 1, 0);
-					xactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, -TIE_FRONTEND_EDITION(37, 74),
-											 TIE_FRONTEND_EDITION(31, 75), 1);
-					xactor_Set_Actor_State(medal_actor[4], 0, 0);
-					xactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, -TIE_FRONTEND_EDITION(14, 26),
-											 TIE_FRONTEND_EDITION(29, 70), 1);
-					xactdelt_Draw_Delta_Actor(medal_actor[11], r, &tr, TIE_FRONTEND_EDITION(23, 46),
-											  -TIE_FRONTEND_EDITION(25, 60), 1);
-					xactdelt_Draw_Delta_Actor(medal_actor[9], r, &tr, TIE_FRONTEND_EDITION(22, 44),
-											  -TIE_FRONTEND_EDITION(28, 67), 1);
-				}
-				if (page == 1) {
-					xactdelt_Draw_Delta_Actor(medal_actor[13], r, clip_r, x, y, 1);
-				}
-			} else if (page <= 9) {
-				/* Expansion pack 1 medals */
 				if (shipext_Is_Mission_Disk1()) {
-					page -= 7;
-					xactor_Set_Actor_Flip(medal_actor2[1], 1, 0);
-					xactor_Set_Actor_State(medal_actor2[1], page, 0);
-					xactanim_Draw_Anim_Actor(medal_actor2[1], r, clip_r, -TIE_FRONTEND_EDITION(5, 9), y, 1);
-					xactor_Set_Actor_Flip(medal_actor2[1], 0, 0);
-					xactor_Set_Actor_State(medal_actor2[1], page, 0);
-					xactanim_Draw_Anim_Actor(medal_actor2[1], r, clip_r, x, y, 1);
-
-					if (page == 0) {
-						xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(167, 334), TIE_FRONTEND_EDITION(77, 185),
-									   TIE_FRONTEND_EDITION(195, 390), TIE_FRONTEND_EDITION(102, 245));
-						xrect_Clip_Rect(&tr, clip_r);
-						xactor_Set_Actor_State(medal_actor2[2], 0, 0);
-						xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, -TIE_FRONTEND_EDITION(28, 67),
-												 1);
-						xactor_Set_Actor_State(medal_actor2[2], 2, 0);
-						xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, -TIE_FRONTEND_EDITION(28, 67),
-												 1);
-					} else if (page == 1) {
-						xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(167, 334), TIE_FRONTEND_EDITION(77, 185),
-									   TIE_FRONTEND_EDITION(195, 390), TIE_FRONTEND_EDITION(102, 245));
-						xrect_Clip_Rect(&tr, clip_r);
-						xactor_Set_Actor_State(medal_actor2[2], 3, 0);
-						xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, -TIE_FRONTEND_EDITION(28, 67),
-												 1);
-					} else if (page == 2) {
-						xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(167, 334), TIE_FRONTEND_EDITION(77, 185),
-									   TIE_FRONTEND_EDITION(195, 390), TIE_FRONTEND_EDITION(102, 245));
-						xrect_Clip_Rect(&tr, clip_r);
-						xactor_Set_Actor_State(medal_actor2[2], 1, 0);
-						xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, -TIE_FRONTEND_EDITION(28, 57),
-												 1);
-					}
+					xactor_Set_Actor_State(medal_actor2[3], 0, 0);
+					xactanim_Draw_Anim_Actor(medal_actor2[3], r, clip_r,
+											 r->left + TIE_FRONTEND_EDITION(34, 68),
+											 r->top - TIE_FRONTEND_EDITION(50, 120), 1);
 				}
-			} else if (page <= 12) {
-				/* Expansion pack 2 medals */
 				if (shipext_Is_Mission_Disk2()) {
-					page -= 10;
-					xactor_Set_Actor_Flip(medal_actor2[6], 1, 0);
-					xactor_Set_Actor_State(medal_actor2[6], page, 0);
-					xactanim_Draw_Anim_Actor(medal_actor2[6], r, clip_r, -TIE_FRONTEND_EDITION(11, 21), y, 1);
-					xactor_Set_Actor_Flip(medal_actor2[6], 0, 0);
-					xactor_Set_Actor_State(medal_actor2[6], page, 0);
-					xactanim_Draw_Anim_Actor(medal_actor2[6], r, clip_r, x, y, 1);
+					xactor_Set_Actor_State(medal_actor2[8], 0, 0);
+					xactanim_Draw_Anim_Actor(medal_actor2[8], r, clip_r,
+											 r->left + TIE_FRONTEND_EDITION(34, 68),
+											 r->top - TIE_FRONTEND_EDITION(50, 120), 1);
+				}
+			}
+			break;
+		case 2:
+			/* Battle completion medal */
+			switch (pilot_medal_text) {
+				case 1:
+					textext_Copy_Text(name1, txtCompSecGoal1);
+					textext_Copy_Text(fmt, txtCompSecGoal2);
+					sprintf(string, fmt, pilot_medal_status[pilot_medal_page],
+							pilot_medal_id[pilot_medal_page] + 1);
+					break;
+				case 2:
+					textext_Copy_Text(name1, txtCompBonGoal1);
+					textext_Copy_Text(fmt, txtCompBonGoal2);
+					sprintf(string, fmt, pilot_medal_bonus_status[pilot_medal_page],
+							pilot_medal_id[pilot_medal_page] + 1);
+					break;
+				default:
+					/* Battle name and status */
+					textext_Copy_Text(string, txtCompInfoBattle);
+					sprintf(name1, string, id + 1);
+					if (pilot_record.battle_status[id] == 3) {
+						if (id < 7)
+							textext_Copy_Text(string, id + txtCompMedal1);
+						else if (id < 13)
+							textext_Copy_Text(string, id + txtComp3Medal8 - 7);
+					} else {
+						string[0] = '\0';
+					}
+					break;
+			}
 
+			/* Draw the battle medal actor */
+			y = -TIE_FRONTEND_EDITION(28, 67);
+			x = TIE_FRONTEND_EDITION(22, 44);
+
+			/* Determine medal page/variant */
+			switch (id) {
+				case 0:
+					page = 0;
+					break;
+				case 1:
+					page = 6;
+					break;
+				case 2:
+					page = 3;
+					break;
+				case 3:
+					page = 2;
+					break;
+				case 6:
+					page = 1;
+					break;
+				case 7:
+				case 8:
+				case 9:
+				case 10:
+				case 11:
+				case 12:
+					page = id;
+					break;
+				default:
+					page = id;
+					break;
+			}
+
+			if (pilot_record.battle_status[id] == 3) {
+				if (page <= 6) {
+					/* Base game battle medals */
+					if (page != 4) {
+						xactor_Set_Actor_Flip(medal_actor[1], 1, 0);
+						xactor_Set_Actor_State(medal_actor[1], 3 * page, 0);
+						xactanim_Draw_Anim_Actor(medal_actor[1], r, clip_r, x + TIE_FRONTEND_EDITION(-8, -16),
+												 y, 1);
+					}
+					xactor_Set_Actor_Flip(medal_actor[1], 0, 0);
+					xactor_Set_Actor_State(medal_actor[1], 3 * page, 0);
+					xactanim_Draw_Anim_Actor(medal_actor[1], r, clip_r, x, y, 1);
+
+					/* Special overlays for specific pages */
 					if (page == 2) {
 						xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(167, 334), TIE_FRONTEND_EDITION(77, 185),
 									   TIE_FRONTEND_EDITION(195, 390), TIE_FRONTEND_EDITION(102, 245));
 						xrect_Clip_Rect(&tr, clip_r);
-						xactor_Set_Actor_State(medal_actor2[7], 0, 0);
-						xactanim_Draw_Anim_Actor(medal_actor2[7], r, &tr, x, y, 1);
+						xcanvas_Set_Drawing_Canvas_Clip(&tr);
+						xactor_Set_Actor_State(medal_actor[3], 4, 0);
+						xactor_Set_Actor_State(medal_actor[4], 0, 0);
+						xactdelt_Draw_Delta_Actor(medal_actor[8], r, &tr, x + TIE_FRONTEND_EDITION(-6, -12),
+												  y + TIE_FRONTEND_EDITION(-3, -7), 1);
+						xactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, x + TIE_FRONTEND_EDITION(-33, -66),
+												 y + TIE_FRONTEND_EDITION(50, 120), 1);
+						xactanim_Draw_Anim_Actor(medal_actor[3], r, &tr, x + TIE_FRONTEND_EDITION(-32, -64),
+												 y + TIE_FRONTEND_EDITION(50, 120), 1);
+						xactdelt_Draw_Delta_Actor(medal_actor[10], r, &tr, x, y, 1);
+					}
+					if (page == 3) {
+						xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(165, 334), TIE_FRONTEND_EDITION(77, 185),
+									   TIE_FRONTEND_EDITION(197, 390), TIE_FRONTEND_EDITION(108, 259));
+						xrect_Clip_Rect(&tr, clip_r);
+						xcanvas_Set_Drawing_Canvas_Clip(&tr);
+						xactdelt_Draw_Delta_Actor(medal_actor[8], r, &tr, x + TIE_FRONTEND_EDITION(-6, -12),
+												  y + TIE_FRONTEND_EDITION(-3, -7), 1);
+						xactor_Set_Actor_State(medal_actor[4], 1, 0);
+						xactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, x + TIE_FRONTEND_EDITION(-59, -118),
+												 y + TIE_FRONTEND_EDITION(59, 142), 1);
+						xactor_Set_Actor_State(medal_actor[4], 0, 0);
+						xactanim_Draw_Anim_Actor(medal_actor[4], r, &tr, x + TIE_FRONTEND_EDITION(-36, -70),
+												 y + TIE_FRONTEND_EDITION(57, 137), 1);
+						xactdelt_Draw_Delta_Actor(medal_actor[11], r, &tr, x + TIE_FRONTEND_EDITION(1, 2),
+												  y + TIE_FRONTEND_EDITION(3, 7), 1);
+						xactdelt_Draw_Delta_Actor(medal_actor[9], r, &tr, x, y, 1);
+					}
+					if (page == 1) {
+						xactdelt_Draw_Delta_Actor(medal_actor[13], r, clip_r, x, y, 1);
+					}
+				} else if (page <= 9) {
+					/* Expansion pack 1 medals */
+					if (shipext_Is_Mission_Disk1()) {
+						page -= 7;
+						xactor_Set_Actor_Flip(medal_actor2[1], 1, 0);
+						xactor_Set_Actor_State(medal_actor2[1], page, 0);
+						xactanim_Draw_Anim_Actor(medal_actor2[1], r, clip_r,
+												 x + TIE_FRONTEND_EDITION(-27, -53), y, 1);
+						xactor_Set_Actor_Flip(medal_actor2[1], 0, 0);
+						xactor_Set_Actor_State(medal_actor2[1], page, 0);
+						xactanim_Draw_Anim_Actor(medal_actor2[1], r, clip_r, x, y, 1);
+
+						switch (page) {
+							case 0:
+								xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(167, 334),
+											   TIE_FRONTEND_EDITION(77, 185), TIE_FRONTEND_EDITION(195, 390),
+											   TIE_FRONTEND_EDITION(102, 245));
+								xrect_Clip_Rect(&tr, clip_r);
+								xactor_Set_Actor_State(medal_actor2[2], 0, 0);
+								xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, y, 1);
+								xactor_Set_Actor_State(medal_actor2[2], 2, 0);
+								xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, y, 1);
+								break;
+							case 1:
+								xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(167, 334),
+											   TIE_FRONTEND_EDITION(77, 185), TIE_FRONTEND_EDITION(195, 390),
+											   TIE_FRONTEND_EDITION(102, 245));
+								xrect_Clip_Rect(&tr, clip_r);
+								xactor_Set_Actor_State(medal_actor2[2], 3, 0);
+								xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x, y, 1);
+								break;
+							case 2:
+								xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(167, 334),
+											   TIE_FRONTEND_EDITION(77, 185), TIE_FRONTEND_EDITION(195, 390),
+											   TIE_FRONTEND_EDITION(102, 245));
+								xrect_Clip_Rect(&tr, clip_r);
+								xactor_Set_Actor_State(medal_actor2[2], 1, 0);
+								xactanim_Draw_Anim_Actor(medal_actor2[2], r, &tr, x,
+														 y + TIE_FRONTEND_EDITION(0, 10), 1);
+								break;
+						}
+					}
+				} else if (page <= 12) {
+					/* Expansion pack 2 medals */
+					if (shipext_Is_Mission_Disk2()) {
+						page -= 10;
+						xactor_Set_Actor_Flip(medal_actor2[6], 1, 0);
+						xactor_Set_Actor_State(medal_actor2[6], page, 0);
+						xactanim_Draw_Anim_Actor(medal_actor2[6], r, clip_r,
+												 x + TIE_FRONTEND_EDITION(-33, -65), y, 1);
+						xactor_Set_Actor_Flip(medal_actor2[6], 0, 0);
+						xactor_Set_Actor_State(medal_actor2[6], page, 0);
+						xactanim_Draw_Anim_Actor(medal_actor2[6], r, clip_r, x, y, 1);
+
+						switch (page) {
+							case 2:
+								xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(167, 334),
+											   TIE_FRONTEND_EDITION(77, 185), TIE_FRONTEND_EDITION(195, 390),
+											   TIE_FRONTEND_EDITION(102, 245));
+								xrect_Clip_Rect(&tr, clip_r);
+								xactor_Set_Actor_State(medal_actor2[7], 0, 0);
+								xactanim_Draw_Anim_Actor(medal_actor2[7], r, &tr, x, y, 1);
+								break;
+						}
 					}
 				}
 			}
-		}
 
-		xcanvas_Set_Drawing_Canvas_Clip(clip_r);
+			xcanvas_Set_Drawing_Canvas_Clip(clip_r);
 
-		/* Draw mission completion pips */
-		x = -TIE_FRONTEND_EDITION(34, 68);
-		y = -TIE_FRONTEND_EDITION(80, 192);
-		xactor_Set_Actor_State(medal_actor[2], 2, 0);
-		for (i = 0; i < status; i++) {
-			if (i >= 4)
-				xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, -TIE_FRONTEND_EDITION(54, 108),
-										 y + TIE_FRONTEND_EDITION(16, 36) * (i - 4), 1);
-			else
-				xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, x, y + TIE_FRONTEND_EDITION(16, 36) * i, 1);
-		}
+			/* Draw mission completion pips */
+			x = -TIE_FRONTEND_EDITION(34, 68);
+			y = -TIE_FRONTEND_EDITION(80, 192);
+			xactor_Set_Actor_State(medal_actor[2], 2, 0);
+			for (i = 0; i < status; i++) {
+				if (i < 4)
+					xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, x, y + TIE_FRONTEND_EDITION(16, 36) * i,
+											 1);
+				else
+					xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, x - TIE_FRONTEND_EDITION(20, 40),
+											 y + TIE_FRONTEND_EDITION(16, 36) * (i - 4), 1);
+			}
 
-		x = TIE_FRONTEND_EDITION(76, 152);
-		y = -TIE_FRONTEND_EDITION(80, 192);
-		xactor_Set_Actor_State(medal_actor[2], 0, 0);
-		for (i = 0; i < bonus; i++) {
-			if (i >= 4)
-				xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, TIE_FRONTEND_EDITION(96, 192),
-										 y + TIE_FRONTEND_EDITION(16, 36) * (i - 4), 1);
-			else
-				xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, x, y + TIE_FRONTEND_EDITION(16, 36) * i, 1);
-		}
+			x = TIE_FRONTEND_EDITION(76, 152);
+			y = -TIE_FRONTEND_EDITION(80, 192);
+			xactor_Set_Actor_State(medal_actor[2], 0, 0);
+			for (i = 0; i < bonus; i++) {
+				if (i < 4)
+					xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, x, y + TIE_FRONTEND_EDITION(16, 36) * i,
+											 1);
+				else
+					xactanim_Draw_Anim_Actor(medal_actor[2], r, &tr, x + TIE_FRONTEND_EDITION(20, 40),
+											 y + TIE_FRONTEND_EDITION(16, 36) * (i - 4), 1);
+			}
 	}
 
 	/* Print medal name and description */
 	if (name1[0]) {
-		int16_t text_height;
-		int16_t text_step;
-
 		xrect_Set_Rect(&tr, TIE_FRONTEND_EDITION(92, 178), TIE_FRONTEND_EDITION(7, 17),
 					   TIE_FRONTEND_EDITION(273, 547), TIE_FRONTEND_EDITION(117, 290));
 		/* TIE95 uses fixed 8/9-pixel spacing; TIE98 advances by font height. */
-		if (TIE_FRONTEND_TIE98) {
-			text_height = xfont_Get_FontID_Height(font_id);
-			text_step = text_height;
-		} else {
-			text_height = 8;
-			text_step = 9;
-		}
-		tr.bottom = tr.top + text_height;
-		xfont_Enable_FontID_Shadow(font_id);
-		xfont_Print_Centered_Text(name1, &tr, font_id, 15);
+		tr.bottom = tr.top + TIE_FRONTEND_EDITION(8, xfont_Get_FontID_Height(TIE_FRONTEND_EDITION(0, 2)));
+		xfont_Enable_FontID_Shadow(TIE_FRONTEND_EDITION(0, 2));
+		xfont_Print_Centered_Text(name1, &tr, TIE_FRONTEND_EDITION(0, 2), 15);
 		if (string[0]) {
-			xrect_Offset_Rect(&tr, 0, text_step);
-			xfont_Print_Centered_Text(string, &tr, font_id, 15);
+			xrect_Offset_Rect(&tr, 0,
+							  TIE_FRONTEND_EDITION(9, xfont_Get_FontID_Height(TIE_FRONTEND_EDITION(0, 2))));
+			xfont_Print_Centered_Text(string, &tr, TIE_FRONTEND_EDITION(0, 2), 15);
 		}
-		xfont_Disable_FontID_Shadow(font_id);
+		xfont_Disable_FontID_Shadow(TIE_FRONTEND_EDITION(0, 2));
 	}
 }
 

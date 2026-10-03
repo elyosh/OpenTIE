@@ -29,6 +29,10 @@ flight:
   original_renderer: d3d
   update_rate: unlocked
   player_engine_sound: true
+  # Scale flight-stick and mouse deltas as signed values. The original games
+  # add a large bias to negative pitch on craft with a low pitch rate, making
+  # Assault Gunboat pitch-down far more sensitive than pitch-up.
+  fix_axis_input_bias: true
   models:
     source: original
     smooth_angle_degrees: 90

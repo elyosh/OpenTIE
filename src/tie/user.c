@@ -24,6 +24,7 @@
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/display/classic_framebuffer.h"
 #include "tie_runtime/flight_assets/model_types.h"
+#include "tie_runtime/hooks/axis_input.h"
 #include "tie_runtime/hooks/orientation.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/runtime/exports.h"
@@ -2197,29 +2198,28 @@ void user_inputforplane(void) {
 			}
 		} else {
 
-			/* Watcom emits `xor eax,eax; mov ax,inputdeltax; imul eax,ebx; sar eax,15`
-			 * for both axes — i.e. the inputdelta is unsigned-loaded to a 32-bit reg.
-			 * For negative inputdelta the int32 result has bit-15 set, so the LOW 16
-			 * bits, reinterpreted as int16, carry the correctly signed slew target.
-			 * The binary's slew arithmetic at 0x5F886+ then operates only on the low
-			 * 16 (sub bx,ax / test bx,bx / movsx edx,ax), discarding the poisoned
-			 * upper half. Using the full int32 here would feed values up to 65533
-			 * into a slew toward an int16 axis_*_accum, overshooting and wrapping
-			 * every few frames — the "mouse-left banks right + flicker" symptom. */
-			x_input = (int16_t)(((math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1) *
-								 (uint16_t)inputdeltax) >>
-								15);
-			y_input = (int16_t)(((math2_percentage(pstate.player_craft->pitch_rate_cache, 0x1000u) >> 1) *
-								 (uint16_t)inputdeltay) >>
-								15);
+			/* Both original builds load each inputdelta unsigned (TIE95 `xor eax,eax;
+			 * mov ax,inputdeltay; imul eax,ebx; sar eax,15`) and the slew at 0x5F886+
+			 * uses only the low 16 bits. A negative delta therefore yields
+			 * 2 * scale - |delta| * scale / 32768, which is the signed product only
+			 * when scale is near 0x8000 (rate >= the 0x1000 / 0x3000 divisor). The
+			 * Assault Gunboat's 0x0F00 pitch rate gives scale 0x7800 and a -4096 bias
+			 * on every pitch-down input. PORT: TieAxisInputHook_Scale scales signed
+			 * unless flight.fix_axis_input_bias is disabled. */
+			x_input = TieAxisInputHook_Scale(
+				(uint16_t)(math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1),
+				inputdeltax);
+			y_input = TieAxisInputHook_Scale(
+				(uint16_t)(math2_percentage(pstate.player_craft->pitch_rate_cache, 0x1000u) >> 1),
+				inputdeltay);
 #ifdef TIE_MODERN
 			/* PORT: analog roll input from the second-stick axis. Uses
 			 * roll_rate_cache like the X-input modifier path so a fully-deflected
 			 * stick produces the same per-tick rotation the held-button roll mode
 			 * produces. */
-			roll_input = (int16_t)(((math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1) *
-									(uint16_t)inputdeltaroll) >>
-								   15);
+			roll_input = TieAxisInputHook_Scale(
+				(uint16_t)(math2_percentage(pstate.player_craft->roll_rate_cache, 0x3000u) >> 1),
+				inputdeltaroll);
 #endif
 			if ((pstate.player_craft->status_flags & 0x20) == 0) {
 				x_input = 0;
@@ -2728,115 +2728,122 @@ uint16_t user_picknexttarget(uint16_t start, int32_t step) {
 	return iter;
 }
 
+/* Screen-space projection used by user_targetincross: (magnitude << 8) /
+ * eye_z, saturating to 0x7FFFFF00 when the quotient would not fit in 32
+ * bits. TIE95 inlines it at every use; its name is not known. Other
+ * toolchains compute it with math2_mul_div_u32. */
+#ifdef __WATCOMC__
+uint32_t user_projectcross(uint32_t magnitude, uint32_t eye_z);
+#pragma aux user_projectcross = "xor edx, edx"                                                               \
+								"shld edx, eax, 8"                                                           \
+								"shl eax, 8"                                                                 \
+								"cmp edx, ebx"                                                               \
+								"jb pc_divide"                                                               \
+								"mov eax, 7fffff00h"                                                         \
+								"jmp pc_done"                                                                \
+								"pc_divide: div ebx"                                                         \
+								"pc_done:" parm[eax][ebx] value[eax] modify exact[eax edx];
+#endif
+
 /*
  * user_targetincross -- does obj_idx project inside the gunsight?
- * Writes screendist. strict=1 -> pixel-accurate reticle; strict=0 ->
- * triples tolerance (auto-target scan). Binary 0x5E0D8.
- *
- * Demo (0x5E371) had a bug here: the Y-axis off-screen reject compared
- * |screen_x| against pixelsdeep/2 instead of |screen_y|. The 1995
- * Collector's CD-ROM retail build (USER_targetincross @ 0x60080) fixes
- * this and additionally adds an aspect-ratio correction on the Y
- * component (multiplier 59578/65536 ≈ 0.909). We apply both retail
- * fixes unconditionally because the demo behaviour was provably wrong
- * (false negatives at the horizontal edges, false positives above/below
- * the screen).
- *
- * Watcom unaligned-dword-load idioms on player->{orient_dirty, fwd_*,
- * side_*, up_*} are rewritten as explicit field accesses.
+ * Projects the target's offset from the player onto the player's view
+ * axes, rejects it when it is behind the eye, beyond 0x20000 forward, or
+ * more than 160/100 screen units off-centre, then compares the screen
+ * offset against the target's projected half-size. The vertical offset
+ * gets the 320x200 aspect correction (59578/65536). strict=1 ->
+ * pixel-accurate reticle; strict=0 -> triples tolerance with a minimum
+ * of 9 (auto-target scan). Writes screendist.
  */
 // FUNCTION: TIE95 0x60080
-int16_t user_targetincross(uint16_t obj_idx, int32_t strict) {
-	FlightObject* pl = pstate.player;
-	int32_t delta_x, delta_y, delta_z;
-	int8_t dist_shift;
+int16_t user_targetincross(uint16_t obj_idx, int16_t strict) {
+	int16_t delta_x, delta_y, delta_z;
+	int32_t dist_shift;
 	int32_t eye_z;
-	int32_t half_wide;
-	int32_t eye_side_dot;
-	int32_t screen_x_rel;
-	int32_t screen_dx_abs;
-	int32_t eye_up_dot;
-	int32_t screen_y_rel;
-	int32_t screen_dy_abs;
-	int32_t bound_hwidth;
+	int32_t dot;
+	int32_t screen_x;
+	int32_t screen_y;
 	int32_t reticle;
 
 	screendist = 0xFFFF;
 	pai_roughdistancebetween(obj_idx, pstate.object_idx);
-
-	if (roughdistance >= 0xA0000) {
+	if (roughdistance < 0xA0000) {
 		create_getworldposition(obj_idx, 0);
-		delta_x = (worldlocx - pl->world_x) >> 8;
-		delta_y = (worldlocy - pl->world_y) >> 8;
-		delta_z = (worldlocz - pl->world_z) >> 8;
-		dist_shift = 8;
+		delta_x = (worldlocx - pstate.player->world_x) >> 4;
+		delta_y = (worldlocy - pstate.player->world_y) >> 4;
+		delta_z = (worldlocz - pstate.player->world_z) >> 4;
+		dist_shift = 4;
 	} else {
 		create_getworldposition(obj_idx, 0);
-		delta_x = (worldlocx - pl->world_x) >> 4;
-		delta_y = (worldlocy - pl->world_y) >> 4;
-		delta_z = (worldlocz - pl->world_z) >> 4;
-		dist_shift = 4;
+		delta_x = (worldlocx - pstate.player->world_x) >> 8;
+		delta_y = (worldlocy - pstate.player->world_y) >> 8;
+		delta_z = (worldlocz - pstate.player->world_z) >> 8;
+		dist_shift = 8;
 	}
 
-	if (pl->orient_dirty) {
-		fview_calcrotatemove(pl->pitch, pl->heading, pl);
-		fview_calcrotateorient(pl->roll, 0, pl);
+	if (pstate.player->orient_dirty) {
+		fview_calcrotatemove(pstate.player->pitch, pstate.player->heading, pstate.player);
+		fview_calcrotateorient(pstate.player->roll, 0, pstate.player);
 	}
 
-	eye_z = ((pl->fwd_z * (int16_t)delta_z) >> 15) + ((pl->fwd_y * (int16_t)delta_y) >> 15) +
-			((pl->fwd_x * (int16_t)delta_x) >> 15);
+	eye_z = math2_mul16_q15(delta_x, pstate.player->fwd_x) + math2_mul16_q15(delta_y, pstate.player->fwd_y) +
+			math2_mul16_q15(delta_z, pstate.player->fwd_z);
 	if (eye_z <= 0 || eye_z > 0x20000)
 		return 0;
 	if (eye_z < 0x2000)
 		++dist_shift;
 
-	half_wide = pixelswide / 2;
-	eye_side_dot = ((pl->side_z * (int16_t)delta_z) >> 15) + ((pl->side_y * (int16_t)delta_y) >> 15) +
-				   ((pl->side_x * (int16_t)delta_x) >> 15);
-	screen_x_rel = transfm2_getscreenx(eye_side_dot, eye_z) - half_wide;
-
-	screen_dx_abs = (int32_t)(int16_t)screen_x_rel;
-	if (screen_dx_abs & 0x8000)
-		screen_dx_abs = -(int32_t)(int16_t)screen_x_rel;
-	if ((int16_t)screen_dx_abs > (int32_t)pixelswide / 2)
+	dot = math2_mul16_q15(delta_x, pstate.player->side_x) + math2_mul16_q15(delta_y, pstate.player->side_y) +
+		  math2_mul16_q15(delta_z, pstate.player->side_z);
+	if (dot < 0)
+		dot = -dot;
+#ifdef __WATCOMC__
+	screen_x = user_projectcross(dot, eye_z);
+#else
+	screen_x = math2_mul_div_u32(dot, 0x100u, eye_z);
+#endif
+	if (screen_x > 160)
 		return 0;
 
-	eye_up_dot = ((pl->up_z * (int16_t)delta_z) >> 15) + ((pl->up_y * (int16_t)delta_y) >> 15) +
-				 ((pl->up_x * (int16_t)delta_x) >> 15);
-	screen_y_rel = transfm2_getscreeny(eye_up_dot, eye_z) - (pixelsdeep / 2) - transfm2_screenyoffset;
-
-	screen_dy_abs = (int32_t)(int16_t)screen_y_rel;
-	if (screen_dy_abs & 0x8000)
-		screen_dy_abs = -(int32_t)(int16_t)screen_y_rel;
-	/* Retail fix: compare |screen_y| against the vertical half-extent, and
-	 * apply aspect-ratio correction (59578/65536 ≈ 0.909) to make the
-	 * reticle circular on 320x200 VGA (non-square pixels). */
-	screen_dy_abs = (screen_dy_abs * 59578) >> 16;
-	if ((int16_t)screen_dy_abs > (int32_t)pixelsdeep / 2)
+	dot = math2_mul16_q15(delta_x, pstate.player->up_x) + math2_mul16_q15(delta_y, pstate.player->up_y) +
+		  math2_mul16_q15(delta_z, pstate.player->up_z);
+	if (dot < 0)
+		dot = -dot;
+#ifdef __WATCOMC__
+	screen_y = user_projectcross(dot, eye_z);
+#else
+	screen_y = math2_mul_div_u32(dot, 0x100u, eye_z);
+#endif
+	if (screen_y > 100)
 		return 0;
+	screen_y = (screen_y * 59578) >> 16;
 
-	if (obj_idx >= NUM_ACTIVE_CRAFT_SLOTS) {
-		int species =
-			(obj_idx >= 0x3800u) ? staticobjects[obj_idx - 14336].species : objects[obj_idx].ship_idx;
-		bound_hwidth = species_table[species].bound_hwidth;
+	if (obj_idx < NUM_ACTIVE_CRAFT_SLOTS) {
+		int species = objects[obj_idx].craft_ptr->species_idx;
+		reticle = (int16_t)((int16_t)(spec_data[species].bound_width + spec_data[species].bound_depth +
+									  spec_data[species].bound_height) /
+							3)
+				  << spec_data[species].model_scale_shift;
 	} else {
-		int sp = objects[obj_idx].craft_ptr->species_idx;
-		bound_hwidth =
-			(((int16_t)(spec_data[sp].bound_height + spec_data[sp].bound_depth + spec_data[sp].bound_width) /
-			  3)
-			 << spec_data[sp].model_scale_shift);
+		int species =
+			(obj_idx < 0x3800) ? objects[obj_idx].ship_idx : staticobjects[obj_idx - 0x3800].species;
+		reticle = species_table[species].bound_hwidth;
 	}
 
-	reticle = ((bound_hwidth >> dist_shift) << 8) / eye_z;
-	if ((int16_t)reticle <= 0)
+#ifdef __WATCOMC__
+	reticle = user_projectcross(reticle >> dist_shift, eye_z);
+#else
+	reticle = math2_mul_div_u32(reticle >> dist_shift, 0x100u, eye_z);
+#endif
+	if (reticle <= 0)
 		reticle = 1;
 	if (!strict) {
-		reticle = 3 * (int16_t)reticle;
-		if ((int16_t)reticle < 9)
+		reticle *= 3;
+		if (reticle < 10)
 			reticle = 9;
 	}
-	screendist = (uint16_t)((int16_t)screen_dy_abs + (int16_t)screen_dx_abs);
-	return ((int16_t)screen_dx_abs < (int16_t)reticle && (int16_t)screen_dy_abs < (int16_t)reticle);
+	screendist = screen_x + screen_y;
+	return screen_x < reticle && screen_y < reticle;
 }
 
 // FUNCTION: TIE98 0x4974A0

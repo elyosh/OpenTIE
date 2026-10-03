@@ -30,6 +30,11 @@ extern "C" {
  *                    rotscale_calcscale's depth input.
  *   angle          : 16-bit rotation key passed to rotscale_preparefastdraw.
  */
+#ifdef __WATCOMC__
+#pragma pack(1)
+#else
+#pragma pack(push, 1)
+#endif
 typedef struct BitmapDrawEntry {
 	uint16_t obj_idx;
 	uint16_t species_packed;
@@ -39,6 +44,11 @@ typedef struct BitmapDrawEntry {
 	int32_t eye_z;
 	int16_t angle;
 } BitmapDrawEntry;
+#ifdef __WATCOMC__
+#pragma pack()
+#else
+#pragma pack(pop)
+#endif
 
 extern BitmapDrawEntry drawitems[ANIM_DRAWITEMS_MAX];
 

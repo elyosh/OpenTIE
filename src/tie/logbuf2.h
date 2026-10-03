@@ -45,7 +45,7 @@ void logbuf2_setbufferdimensions(uint16_t width, uint16_t depth, uint32_t displa
 void logbuf2_setbufferdimensions_tie98(uint16_t width, uint16_t depth, int unused, uint32_t displaycorner);
 void logbuf2_clearbuffer(void);
 void logbuf2_outbuffer(const void* src);
-void logbuf2_outdiffbuffer(const void* oldbuf, const void* newbuf);
+void logbuf2_outdiffbuffer(const uint8_t* oldbuf, const uint8_t* newbuf);
 void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color);
 void logbuf2_drawclippedline16_tie98(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color);
 void logbuf2_drawclippedline(int32_t x1, int32_t y1, int32_t x2, int32_t y2, uint8_t color);

@@ -28,6 +28,7 @@
 #include "tie_app/ui.h"
 #include "tie_remaster/remaster.h"
 #include "tie_runtime/flight_assets/service.h"
+#include "tie_runtime/hooks/axis_input.h"
 #include "tie_runtime/input/actions.h"
 #include "tie_runtime/input/controller_mapping.h"
 #include "tie_runtime/input/input.h"
@@ -174,6 +175,7 @@ int TieApplication_Run(const TieLaunchOptions* launch) {
 						  "configuration v6.");
 		TieKeyboardMapping_Install(&app_config.requested.keyboard);
 		TieControllerMapping_SetOptions(&app_config.requested.controller);
+		TieAxisInputHook_SetEnabled(app_config.requested.fix_axis_input_bias);
 		if (!Aeron_SetFullscreen(app_config.requested.video.fullscreen))
 			Aeron_LogWarn("tie.config", "could not apply fullscreen setting");
 	}

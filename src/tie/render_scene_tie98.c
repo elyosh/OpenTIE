@@ -3060,6 +3060,7 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 												   const Vec3f* segment_start, const Vec3f* segment_end) {
 	const Tie98OptNode* node = input_node;
 	SceneMeshTIE98 child_mesh;
+	const void* data;
 	int i;
 
 	if (!node)
@@ -3070,36 +3071,11 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 			return 0;
 	}
 
-	if (node->param2) {
+	data = node->param2;
+	if (data) {
 		switch (node->type) {
-			case TIE98_OPT_NODE_FACE_DATA:
-			case TIE98_OPT_NODE_FACE_DATA_15:
-			case TIE98_OPT_NODE_FACE_DATA_16:
-			case TIE98_OPT_NODE_FACE_DATA_17: {
-				const uint8_t* face_data = node->param2;
-				Vec3f* inline_vertex_normals;
-
-				mesh->faceCount = (int)node->param1;
-				memcpy(&mesh->edgeCount, face_data, sizeof mesh->edgeCount);
-				mesh->pFaceGeom = (FaceRecordTIE98*)(face_data + 4);
-				mesh->pFaceNormals = (Vec3f*)(mesh->pFaceGeom + mesh->faceCount);
-				mesh->pFaceTexturing = (FaceTextureGradientsTIE98*)(mesh->pFaceNormals + mesh->faceCount);
-				inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + mesh->faceCount);
-				if (!mesh->pVertNormals) {
-					int blocked;
-
-					mesh->pVertNormals = inline_vertex_normals;
-					blocked = FlightModel_TestLightSegmentAgainstFaces(mesh, segment_start, segment_end);
-					mesh->pVertNormals = NULL;
-					if (blocked)
-						return 1;
-				} else if (FlightModel_TestLightSegmentAgainstFaces(mesh, segment_start, segment_end)) {
-					return 1;
-				}
-				break;
-			}
 			case TIE98_OPT_NODE_TRANSFORM: {
-				Vec3f* offset = (Vec3f*)node->param2;
+				Vec3f* offset = (Vec3f*)data;
 				Matrix3x3* transform = (Matrix3x3*)(offset + 1);
 				Math3D_MulMatrix3x3(&mesh->viewOrient, transform);
 				Math3D_RotateVec3(&mesh->viewPos, transform);
@@ -3113,7 +3089,7 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 				break;
 			}
 			case TIE98_OPT_NODE_TRANSLATE: {
-				Vec3f* offset = (Vec3f*)node->param2;
+				Vec3f* offset = (Vec3f*)data;
 				mesh->viewPos.x += offset->x;
 				mesh->viewPos.y += offset->y;
 				mesh->viewPos.z += offset->z;
@@ -3122,16 +3098,16 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 				mesh->pos.z -= Math3D_RotateVec3Z(offset, &mesh->orient);
 				break;
 			}
-			case TIE98_OPT_NODE_MATRIX:
-				Math3D_MulMatrix3x3(&mesh->viewOrient, (Matrix3x3*)node->param2);
-				Math3D_RotateVec3(&mesh->viewPos, (Matrix3x3*)node->param2);
-				Math3D_MulMatrix3x3T(&mesh->orient, (Matrix3x3*)node->param2);
+			case TIE98_OPT_NODE_MATRIX: {
+				Matrix3x3* transform = (Matrix3x3*)data;
+				Math3D_MulMatrix3x3(&mesh->viewOrient, transform);
+				Math3D_RotateVec3(&mesh->viewPos, transform);
+				Math3D_MulMatrix3x3T(&mesh->orient, transform);
 				break;
+			}
 			case TIE98_OPT_NODE_SCALE: {
-				Vec3f* scale = (Vec3f*)node->param2;
-				float inverse_x;
-				float inverse_y;
-				float inverse_z;
+				Vec3f* scale = (Vec3f*)data;
+				float inverse;
 
 				mesh->viewOrient.m[0] *= scale->x;
 				mesh->viewOrient.m[1] *= scale->y;
@@ -3145,28 +3121,51 @@ static int FlightModel_TestLightSegmentAgainstNode(const Tie98OptimizedPolyObjec
 				mesh->viewPos.x *= scale->x;
 				mesh->viewPos.y *= scale->y;
 				mesh->viewPos.z *= scale->z;
-				inverse_x = 1.0f / scale->x;
-				inverse_y = 1.0f / scale->y;
-				inverse_z = 1.0f / scale->z;
-				mesh->orient.m[0] *= inverse_x;
-				mesh->orient.m[1] *= inverse_x;
-				mesh->orient.m[2] *= inverse_x;
-				mesh->orient.m[3] *= inverse_y;
-				mesh->orient.m[4] *= inverse_y;
-				mesh->orient.m[5] *= inverse_y;
-				mesh->orient.m[6] *= inverse_z;
-				mesh->orient.m[7] *= inverse_z;
-				mesh->orient.m[8] *= inverse_z;
+				inverse = 1.0f / scale->x;
+				mesh->orient.m[0] *= inverse;
+				mesh->orient.m[1] *= inverse;
+				mesh->orient.m[2] *= inverse;
+				inverse = 1.0f / scale->y;
+				mesh->orient.m[3] *= inverse;
+				mesh->orient.m[4] *= inverse;
+				mesh->orient.m[5] *= inverse;
+				inverse = 1.0f / scale->z;
+				mesh->orient.m[6] *= inverse;
+				mesh->orient.m[7] *= inverse;
+				mesh->orient.m[8] *= inverse;
 				break;
 			}
 			case TIE98_OPT_NODE_MESH_VERTICES:
 				mesh->vertexCount = (int)node->param1;
-				mesh->pModelVerts = (Vec3f*)node->param2;
+				mesh->pModelVerts = (Vec3f*)data;
 				break;
 			case TIE98_OPT_NODE_VERTEX_NORMALS:
 				g_curVertNormals = (const Vec3f*)node->param2;
-				mesh->pVertNormals = (Vec3f*)node->param2;
+				mesh->pVertNormals = (Vec3f*)data;
 				break;
+			case TIE98_OPT_NODE_FACE_DATA:
+			case TIE98_OPT_NODE_FACE_DATA_15:
+			case TIE98_OPT_NODE_FACE_DATA_16:
+			case TIE98_OPT_NODE_FACE_DATA_17: {
+				const uint8_t* face_data = data;
+				Vec3f* inline_vertex_normals;
+
+				mesh->faceCount = (int)node->param1;
+				memcpy(&mesh->edgeCount, face_data, sizeof mesh->edgeCount);
+				mesh->pFaceGeom = (FaceRecordTIE98*)(face_data + 4);
+				mesh->pFaceNormals = (Vec3f*)(mesh->pFaceGeom + node->param1);
+				mesh->pFaceTexturing = (FaceTextureGradientsTIE98*)(mesh->pFaceNormals + node->param1);
+				inline_vertex_normals = (Vec3f*)(mesh->pFaceTexturing + node->param1);
+				if (!mesh->pVertNormals) {
+					mesh->pVertNormals = inline_vertex_normals;
+					if (FlightModel_TestLightSegmentAgainstFaces(mesh, segment_start, segment_end))
+						return 1;
+					mesh->pVertNormals = NULL;
+				} else if (FlightModel_TestLightSegmentAgainstFaces(mesh, segment_start, segment_end)) {
+					return 1;
+				}
+				break;
+			}
 			default:
 				break;
 		}
