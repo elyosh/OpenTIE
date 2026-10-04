@@ -30,28 +30,35 @@ enum {
 };
 
 /* iMUSE log sink. The library pre-formats messages and tags each with a
- * level; a matching prefix keeps diagnostics grep-friendly. */
+ * level; forwarding that level lets the default log priority filter the
+ * per-event traces, and a matching prefix keeps diagnostics grep-friendly. */
 static void TieImuseSession_Log(void* user, ImuseLogLevel level, const char* msg) {
+	TieLogLevel tie_level;
 	const char* tag;
 	(void)user;
 	switch (level) {
 		case IMUSE_LOG_TRACE:
+			tie_level = TIE_LOG_TRACE;
 			tag = "trace";
 			break;
 		case IMUSE_LOG_INFO:
+			tie_level = TIE_LOG_INFO;
 			tag = "info";
 			break;
 		case IMUSE_LOG_WARN:
+			tie_level = TIE_LOG_WARN;
 			tag = "warn";
 			break;
 		case IMUSE_LOG_ERROR:
+			tie_level = TIE_LOG_ERROR;
 			tag = "error";
 			break;
 		default:
+			tie_level = TIE_LOG_INFO;
 			tag = "?";
 			break;
 	}
-	TieDiagnostics_Log(TIE_LOG_INFO, "[imuse %s] %s\n", tag, msg);
+	TieDiagnostics_Log(tie_level, "[imuse %s] %s\n", tag, msg);
 }
 
 static void TieImuseSession_Render(void* userdata, int16_t* frames, size_t frame_count) {
