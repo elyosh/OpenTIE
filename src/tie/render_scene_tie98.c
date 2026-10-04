@@ -4704,7 +4704,7 @@ static void FlightMap_DrawObjectBoxSpan(int start_x, int end_x, int y, uint8_t c
 }
 
 // FUNCTION: TIE98 0x453C40
-void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, uint8_t color_index) {
+void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, int color_index) {
 	const int right = x + width;
 	const int bottom = y + height;
 	int corner_width;

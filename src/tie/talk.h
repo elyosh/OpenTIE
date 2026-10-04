@@ -37,7 +37,7 @@ extern int32_t talk_paragraph_timer; /* INT32_MAX = auto-advance off */
 extern int16_t talk_voice_species;   /* >0 numeric, <0 char-encoded */
 extern int16_t talk_voice_mission;
 extern int16_t talk_voice_question; /* 1-based paragraph index */
-extern uint8_t talk_voice_officer;  /* filename char: 'o','p','i' */
+extern int8_t talk_voice_officer;   /* filename char: 'o','p','i' */
 extern int8_t talk_voice_mood;      /* filename char: 'b','d','h','o' */
 
 void talk_Alloc_Speech_Sound(void);

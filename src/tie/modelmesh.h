@@ -70,7 +70,7 @@ int modelmesh_gettargetid(uint16_t model_type, int mesh_index);
 int modelmesh_getcomponentfocusx(uint16_t model_type, int mesh_index);
 int modelmesh_getcomponentfocusy(uint16_t model_type, int mesh_index);
 int modelmesh_getcomponentfocusz(uint16_t model_type, int mesh_index);
-int modelmesh_getcomponentmaxextent(uint16_t model_type, int mesh_index);
+int modelmesh_getcomponentmaxextent(int model_type, int mesh_index);
 int modelmesh_isobjecttypemeshdamageable(uint16_t model_type, int mesh_index);
 int modelmesh_hasexplosiontype1(uint16_t model_type, int mesh_index);
 void modelmesh_enableexplosiontype1(uint16_t model_type, int mesh_index);

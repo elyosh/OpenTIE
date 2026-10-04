@@ -124,7 +124,7 @@ void RenderQuad_DrawRotatedSprite(int angle, int screen_x, int screen_y, uint16_
 								  const uint8_t* texture_level);
 void Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_index, int depth);
 int16_t Hud_DrawBoxInXTrans(int x, int y, int width, int height, int color_index, int depth);
-void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, uint8_t color_index);
+void FlightMap_DrawObjectBoxCorners(int x, int y, int width, int height, int color_index);
 
 extern int g_drawSceneEffects;
 extern int g_useHardware3D;

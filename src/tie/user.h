@@ -228,7 +228,7 @@ int16_t user_targetincross(uint16_t obj_idx, int16_t strict);
  * from anim_sort_and_draw_bitmaps each frame. Returns the
  * rotatescaleimage result (or 0 if off-screen / invalid). */
 void user_targetonscreen(uint16_t obj_or_kind);
-void user_targetonscreen_tie98(uint16_t object_reference, int16_t mesh_index, uint8_t color_index);
+void user_targetonscreen_tie98(uint16_t object_reference, uint16_t mesh_index, uint8_t color_index);
 
 /* Lock player_craft's target on new_obj. Plays the target-acquired beep,
  * primes radar_target1 on the first MainHull/Engines mesh, and emits a

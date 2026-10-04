@@ -184,7 +184,7 @@ int16_t talk_voice_mission = 0;
 int16_t talk_voice_question = 0;
 // GLOBAL: TIE95 0xF575A
 // GLOBAL: TIE98 0x5A2754
-uint8_t talk_voice_officer = 0; /* 'o', 'p', 'i' */
+int8_t talk_voice_officer = 0; /* 'o', 'p', 'i' */
 // GLOBAL: TIE95 0xF575B
 // GLOBAL: TIE98 0x5A276A
 int8_t talk_voice_mood = 0; /* 'b', 'd', 'h', 'o', etc. */
@@ -465,11 +465,16 @@ static int16_t talk_iuser_Talk(Input* input, int32_t time) {
 	if (xinpattr_Get_Input_Selected(input)) {
 		if (active_talk_question == num_talk_questions) {
 			/* Exit selected */
-			int16_t scene = shellext_Get_Cur_Scene();
-			if (scene == SCENE_TALK_BRIEF_OFFICER || scene == SCENE_TALK_BRIEF_PRIEST)
-				xerror_Set_Landru_Exit(SCENE_BRIEF);
-			else if (scene == SCENE_TALK_DEBRIEF_OFFICER || scene == SCENE_TALK_DEBRIEF_PRIEST)
-				xerror_Set_Landru_Exit(SCENE_DEBRIEF);
+			switch (shellext_Get_Cur_Scene()) {
+				case SCENE_TALK_BRIEF_OFFICER:
+				case SCENE_TALK_BRIEF_PRIEST:
+					xerror_Set_Landru_Exit(SCENE_BRIEF);
+					break;
+				case SCENE_TALK_DEBRIEF_OFFICER:
+				case SCENE_TALK_DEBRIEF_PRIEST:
+					xerror_Set_Landru_Exit(SCENE_DEBRIEF);
+					break;
+			}
 		} else {
 			cur_talk_question = active_talk_question;
 			/* Voice-over: kick off the .voc for this question and arm
@@ -1694,24 +1699,26 @@ static void talk_Get_Debrief_Captures(char* string, int16_t craft_idx) {
 // FUNCTION: TIE95 0x6AF31
 // FUNCTION: TIE98 0x48BCC0
 void talk_Set_Voice_Species_Mission(void) {
-	uint8_t cur = pilot_record.cur_battle;
-	talk_voice_species = (int16_t)(cur + 1);
-	talk_voice_mission = (int16_t)(pilot_record.battle_cursor[cur] + 1);
+	int16_t battle;
+	(void)battle; /* unused local; keeps the TIE95 Watcom stack frame */
 
-	if (talk_voice_mood == 'b')
-		return; /* Briefing — no failure-mood patch */
+	talk_voice_species = pilot_record.cur_battle;
+	talk_voice_mission = (int16_t)(pilot_record.battle_cursor[talk_voice_species] + 1);
 
-	if (talk_voice_officer == 'o') {
-		if (shipext_Is_Mission_Success())
-			talk_voice_mission = (int16_t)pilot_record.battle_cursor[cur];
-		else
-			talk_voice_mood = 'h';
-	} else {
-		if (shipext_Is_Mission_Success())
-			talk_voice_mission = (int16_t)pilot_record.battle_cursor[cur];
-		if (mission.secondary_complete != 1)
-			talk_voice_mood = 'h';
+	if (talk_voice_mood != 'b') { /* Briefing — no failure-mood patch */
+		if (talk_voice_officer == 'o') {
+			if (shipext_Is_Mission_Success())
+				talk_voice_mission = pilot_record.battle_cursor[talk_voice_species];
+			else
+				talk_voice_mood = 'h';
+		} else {
+			if (shipext_Is_Mission_Success())
+				talk_voice_mission = pilot_record.battle_cursor[talk_voice_species];
+			if (mission.secondary_complete != 1)
+				talk_voice_mood = 'h';
+		}
 	}
+	talk_voice_species++;
 }
 
 /* Stop any running speech, build the next .voc filename, chain it on

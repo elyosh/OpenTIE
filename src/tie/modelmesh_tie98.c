@@ -605,7 +605,7 @@ int modelmesh_getcomponentfocusz(uint16_t model_type, int mesh_index) {
 
 // FUNCTION: TIE98 0x43C780
 // ModelMesh_GetComponentMaxExtent; same name in OpenXWA.
-int modelmesh_getcomponentmaxextent(uint16_t model_type, int mesh_index) {
+int modelmesh_getcomponentmaxextent(int model_type, int mesh_index) {
 	const TieFlightModelView* model;
 	const TieModelMeshView* mesh;
 	int extent;

@@ -2848,11 +2848,11 @@ int16_t user_targetincross(uint16_t obj_idx, int16_t strict) {
 }
 
 // FUNCTION: TIE98 0x4974A0
-static int32_t user_gettargetdisplayextent_tie98(uint16_t object_reference) {
+static int32_t user_gettargetdisplayextent_tie98(int object_reference) {
 	FlightObject* object;
 	uint16_t spec_index;
 
-	if (object_reference >= OBJ_REF_STATIC_BASE) {
+	if (object_reference >= (int)OBJ_REF_STATIC_BASE) {
 		const uint8_t model_type = staticobjects[object_reference - OBJ_REF_STATIC_BASE].species;
 		return species_table[model_type].bound_hwidth;
 	}
@@ -2870,8 +2870,8 @@ static int32_t user_gettargetdisplayextent_tie98(uint16_t object_reference) {
 }
 
 // FUNCTION: TIE98 0x497590
-static int user_projectobjectmeshcenter_tie98(uint16_t object_reference, int16_t mesh_index,
-											  int32_t* screen_x, int32_t* screen_y, int32_t* depth) {
+static int user_projectobjectmeshcenter_tie98(int object_reference, int mesh_index, int32_t* screen_x,
+											  int32_t* screen_y, int32_t* depth) {
 	int32_t world_x;
 	int32_t world_y;
 	int32_t world_z;
@@ -2883,9 +2883,9 @@ static int user_projectobjectmeshcenter_tie98(uint16_t object_reference, int16_t
 	world_x = worldlocx;
 	world_y = worldlocy;
 	world_z = worldlocz;
-	if (mesh_index != -1 && object_reference < OBJ_REF_STATIC_BASE) {
+	if (mesh_index != 0xffff && object_reference < (int)OBJ_REF_STATIC_BASE) {
 		FlightObject* object = &objects[object_reference];
-		const uint16_t spec_index = object->craft_ptr->species_idx;
+		const unsigned int spec_index = object->craft_ptr->species_idx;
 		if (object->genus != 0 && (object->genus != 3 || spec_data[spec_index].max_speed != 0) &&
 			(object->genus != 1 || object->ship_idx == 19 || object->ship_idx == 20)) {
 			pai_RotateLocalVectorToWorldScratch(object, modelmesh_getcenterx(object->ship_idx, mesh_index),
@@ -2913,7 +2913,7 @@ static int user_projectobjectmeshcenter_tie98(uint16_t object_reference, int16_t
 }
 
 // FUNCTION: TIE98 0x4971A0
-void user_targetonscreen_tie98(uint16_t object_reference, int16_t mesh_index, uint8_t color_index) {
+void user_targetonscreen_tie98(uint16_t object_reference, uint16_t mesh_index, uint8_t color_index) {
 	int32_t screen_x;
 	int32_t screen_y;
 	int32_t depth;
@@ -2921,41 +2921,43 @@ void user_targetonscreen_tie98(uint16_t object_reference, int16_t mesh_index, ui
 	int minimum;
 	int size;
 	int maximum;
-	int outer_size;
+	int width;
+	int height;
 
 	if (object_reference == 0xffff || replayviewmode || !pstate.radar_enable)
 		return;
 
 	user_projectobjectmeshcenter_tie98(object_reference, mesh_index, &screen_x, &screen_y, &depth);
 	if (depth > 0) {
-		int32_t extent;
-		int minimum;
-		int size;
-		int maximum;
-
-		if (object_reference < OBJ_REF_STATIC_BASE && mesh_index != -1) {
-			FlightObject* object = &objects[object_reference];
-			const uint16_t spec_index = object->craft_ptr->species_idx;
-			if (object->genus != 0 && (object->genus != 3 || spec_data[spec_index].max_speed != 0) &&
-				(object->genus != 1 || object->ship_idx == 19 || object->ship_idx == 20))
-				extent = modelmesh_getcomponentmaxextent(object->ship_idx, mesh_index);
+		if (object_reference < OBJ_REF_STATIC_BASE) {
+			const unsigned int spec_index = objects[object_reference].craft_ptr->species_idx;
+			if (mesh_index != 0xffff && objects[object_reference].genus != 0 &&
+				(objects[object_reference].genus != 3 || spec_data[spec_index].max_speed != 0) &&
+				(objects[object_reference].genus != 1 || objects[object_reference].ship_idx == 19 ||
+				 objects[object_reference].ship_idx == 20))
+				extent = modelmesh_getcomponentmaxextent(objects[object_reference].ship_idx, mesh_index);
 			else
 				extent = user_gettargetdisplayextent_tie98(object_reference);
 		} else {
 			extent = user_gettargetdisplayextent_tie98(object_reference);
 		}
-		minimum = flightResolution == TIE_FLIGHT_RES_VGA ? 4 : 8;
 		size = (int)((uint32_t)perspFactor * (uint32_t)extent / (uint32_t)depth);
+		minimum = 4;
+		if (flightResolution != TIE_FLIGHT_RES_VGA)
+			minimum = 8;
+		maximum = screenXRes / 2 + screenXRes / 4;
 		if (size < minimum)
 			size = minimum;
-		maximum = screenXRes / 2 + screenXRes / 4;
 		if (size > maximum)
 			size = maximum;
-		size += 4;
+		width = size + 4;
+		height = size + 4;
 		if (mapflag) {
-			FlightMap_DrawObjectBoxCorners(screen_x - size / 2, screen_y - size / 2, size, size, color_index);
+			FlightMap_DrawObjectBoxCorners(screen_x - width / 2, screen_y - height / 2, width, height,
+										   color_index);
 		} else {
-			Hud_DrawBoxInXTrans(screen_x - size / 2, screen_y - size / 2, size, size, color_index, depth);
+			Hud_DrawBoxInXTrans(screen_x - width / 2, screen_y - height / 2, width, height, color_index,
+								depth);
 		}
 	}
 	if (bluetarget == 0xffff)
@@ -2964,25 +2966,26 @@ void user_targetonscreen_tie98(uint16_t object_reference, int16_t mesh_index, ui
 	if (depth <= 0)
 		return;
 	extent = user_gettargetdisplayextent_tie98(bluetarget);
-	minimum = flightResolution == TIE_FLIGHT_RES_VGA ? 4 : 8;
-	size = (int)((uint32_t)perspFactor * (uint32_t)extent / (uint32_t)depth) -
-		   (extent - minimum) / (blinkticks + 1);
+	size = (int)((uint32_t)perspFactor * (uint32_t)extent / (uint32_t)depth);
+	minimum = 4;
+	if (flightResolution != TIE_FLIGHT_RES_VGA)
+		minimum = 8;
+	maximum = screenXRes / 2 + screenXRes / 4;
+	size -= (extent - minimum) / (blinkticks + 1);
 	if (size < minimum)
 		size = minimum;
-	maximum = screenXRes / 2 + screenXRes / 4;
 	if (size > maximum)
 		size = maximum;
-	outer_size = size + 2;
+	width = size + 2;
+	height = size + 2;
 	if (mapflag) {
-		FlightMap_DrawObjectBoxCorners(screen_x - outer_size / 2, screen_y - outer_size / 2, outer_size,
-									   outer_size, 50);
+		FlightMap_DrawObjectBoxCorners(screen_x - width / 2, screen_y - height / 2, width, height, 50);
 	} else {
-		Hud_DrawBoxInXTrans(screen_x - outer_size / 2 + 2, screen_y - outer_size / 2 + 2, size - 2, size - 2,
-							50, depth);
-		Hud_DrawBoxInXTrans(screen_x - outer_size / 2 + 1, screen_y - outer_size / 2 + 1, size, size, 50,
+		Hud_DrawBoxInXTrans(screen_x - width / 2 + 2, screen_y - height / 2 + 2, width - 4, height - 4, 50,
 							depth);
-		Hud_DrawBoxInXTrans(screen_x - outer_size / 2, screen_y - outer_size / 2, outer_size, outer_size, 51,
+		Hud_DrawBoxInXTrans(screen_x - width / 2 + 1, screen_y - height / 2 + 1, width - 2, height - 2, 50,
 							depth);
+		Hud_DrawBoxInXTrans(screen_x - width / 2, screen_y - height / 2, width, height, 51, depth);
 	}
 }
 
