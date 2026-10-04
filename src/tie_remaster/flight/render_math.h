@@ -104,6 +104,14 @@ void TieRenderMath_BuildCamera(TieFlightCamera* out, const struct TieCameraState
 void TieRenderMath_BuildCameraAtOrigin(TieFlightCamera* out, const struct TieCameraState* cam,
 									   const int32_t origin_world[3], int rt_w, int rt_h);
 
+/* Jittered view-projection for at-infinity sky layers. The classic star and
+ * backdrop projections omit yAspect, so the vertical tangent is scaled by
+ * `y_aspect`. Both projections share the scene's view and w row, so the
+ * scene's temporal jitter (jittered - unjittered) carries over exactly. */
+void TieRenderMath_BuildSkyViewProj(const TieFlightCamera* fcam, float y_aspect,
+									const float scene_view_proj[16], const float scene_jittered_view_proj[16],
+									float out[16]);
+
 /* Build the PIP camera position + view matrix without losing precision:
  *
  *   cam_pos_centered = target_pos - |back_step| × quat_row2

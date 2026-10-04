@@ -335,7 +335,9 @@ static bool TieAppConfig_ParseRender(const AeronConfigFile* document,
 	starfield_style = AeronConfigFile_GetString(document, "render.starfield_style", NULL);
 	if (!starfield_style)
 		return TieAppConfig_ConfigError(error, capacity, "missing render.starfield_style");
-	if (strcmp(starfield_style, "tie95") == 0)
+	if (strcmp(starfield_style, "auto") == 0)
+		out->starfield_style = TIE_FLIGHT_STARFIELD_STYLE_AUTO;
+	else if (strcmp(starfield_style, "tie95") == 0)
 		out->starfield_style = TIE_FLIGHT_STARFIELD_STYLE_TIE95;
 	else if (strcmp(starfield_style, "tie98") == 0)
 		out->starfield_style = TIE_FLIGHT_STARFIELD_STYLE_TIE98;
@@ -971,7 +973,7 @@ static bool TieAppConfig_SetVideoOverrides(AeronConfigFile* document, const TieA
 										   const TieAppVideoConfig* video, AeronConfigError* error) {
 	static const char* const temporal_modes[] = { "off", "native_aa", "quality", "balanced", "performance" };
 	static const char* const gamma_names[] = { "2.2", "2.4", "srgb" };
-	static const char* const starfield_styles[] = { "tie95", "tie98" };
+	static const char* const starfield_styles[] = { "auto", "tie95", "tie98" };
 	const int temporal_mode =
 		video->output.msaa_samples > 1 ? TIE_FLIGHT_TEMPORAL_OFF : video->output.fsr_mode;
 	const int default_temporal_mode =
@@ -979,9 +981,9 @@ static bool TieAppConfig_SetVideoOverrides(AeronConfigFile* document, const TieA
 	if (temporal_mode < TIE_FLIGHT_TEMPORAL_OFF || temporal_mode > TIE_FLIGHT_TEMPORAL_PERFORMANCE ||
 		default_temporal_mode < TIE_FLIGHT_TEMPORAL_OFF ||
 		default_temporal_mode > TIE_FLIGHT_TEMPORAL_PERFORMANCE ||
-		video->output.starfield_style < TIE_FLIGHT_STARFIELD_STYLE_TIE95 ||
+		video->output.starfield_style < TIE_FLIGHT_STARFIELD_STYLE_AUTO ||
 		video->output.starfield_style > TIE_FLIGHT_STARFIELD_STYLE_TIE98 ||
-		defaults->output.starfield_style < TIE_FLIGHT_STARFIELD_STYLE_TIE95 ||
+		defaults->output.starfield_style < TIE_FLIGHT_STARFIELD_STYLE_AUTO ||
 		defaults->output.starfield_style > TIE_FLIGHT_STARFIELD_STYLE_TIE98)
 		return false;
 	if (!TieAppConfig_SetBoolOverride(document, "video.fullscreen", video->fullscreen, defaults->fullscreen,

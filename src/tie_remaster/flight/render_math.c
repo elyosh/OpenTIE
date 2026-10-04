@@ -277,6 +277,20 @@ void TieRenderMath_BuildCameraAtOrigin(TieFlightCamera* out, const struct TieCam
 	AeronScene_ComputeViewProj(&out->camera, out->view_proj);
 }
 
+void TieRenderMath_BuildSkyViewProj(const TieFlightCamera* fcam, float y_aspect,
+									const float scene_view_proj[16], const float scene_jittered_view_proj[16],
+									float out[16]) {
+	if (!(y_aspect > 0.0f) || y_aspect == 1.0f) {
+		memcpy(out, scene_jittered_view_proj, 16 * sizeof out[0]);
+		return;
+	}
+	AeronSceneCamera camera = fcam->camera;
+	camera.v_half_rad = atanf(tanf(camera.v_half_rad) * y_aspect);
+	AeronScene_ComputeViewProj(&camera, out);
+	for (int i = 0; i < 16; ++i)
+		out[i] += scene_jittered_view_proj[i] - scene_view_proj[i];
+}
+
 void TieRenderMath_BuildPipCamera(float out_cam_pos[3], float out_view[16], const int32_t pip_back_step[3],
 								  const float pip_cam_ori[4]) {
 	float r3[9];

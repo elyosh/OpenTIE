@@ -549,7 +549,7 @@ bool TieFlightRenderer_ApplyQuality(TieFlightRenderer* g, int ssao_quality, bool
 }
 
 void TieFlightRenderer_SetStarfieldStyle(TieFlightRenderer* g, int style) {
-	if (g && style >= TIE_FLIGHT_STARFIELD_STYLE_TIE95 && style <= TIE_FLIGHT_STARFIELD_STYLE_TIE98)
+	if (g && style >= TIE_FLIGHT_STARFIELD_STYLE_AUTO && style <= TIE_FLIGHT_STARFIELD_STYLE_TIE98)
 		g->starfield_style = (TieFlightStarfieldStyle)style;
 }
 

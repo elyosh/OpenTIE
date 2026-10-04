@@ -11,8 +11,10 @@ typedef enum TieFlightTemporalMode {
 	TIE_FLIGHT_TEMPORAL_PERFORMANCE,
 } TieFlightTemporalMode;
 
+/* AUTO follows the flight edition that produced the snapshot. */
 typedef enum TieFlightStarfieldStyle {
-	TIE_FLIGHT_STARFIELD_STYLE_TIE95 = 0,
+	TIE_FLIGHT_STARFIELD_STYLE_AUTO = 0,
+	TIE_FLIGHT_STARFIELD_STYLE_TIE95,
 	TIE_FLIGHT_STARFIELD_STYLE_TIE98,
 } TieFlightStarfieldStyle;
 

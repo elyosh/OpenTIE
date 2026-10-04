@@ -13,7 +13,8 @@ typedef struct TieSnapshot TieSnapshot;
 TieFlightStars* TieFlightStars_Create(AeronTextureFormat rt_format);
 void TieFlightStars_Destroy(TieFlightStars* stars);
 
-/* Uploads the direction list before the scene render pass opens. */
+/* Uploads the direction list before the scene render pass opens. AUTO
+ * selects the style of the snapshot's flight edition. */
 bool TieFlightStars_Prepare(TieFlightStars* stars, AeronCommandBuffer* cmd, const TieSnapshot* snapshot,
 							TieFlightStarfieldStyle style);
 

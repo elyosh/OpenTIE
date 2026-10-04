@@ -118,6 +118,13 @@ bool TieFlightBackdrop_Submit(TieFlightBackdrop* b, AeronScene3D* scene, AeronCo
 	if (classic_viewport_w <= 0.0f || classic_viewport_h <= 0.0f)
 		return false;
 	const bool mirror_u = convention == TIE_FLIGHT_LEGACY_RENDER_TIE98_D3D;
+	/* backdrp2_backdrawbitmap projects tile centers without yAspect, while
+	 * the scene's projection includes it. Dividing eye Y by yAspect places
+	 * each center where the classic renderer does; sprites keep native size. */
+	const float y_aspect = snap->camera.y_aspect;
+	const bool sky_center = y_aspect > 0.0f && y_aspect != 1.0f;
+	float world_to_eye[9];
+	TieRenderMath_QuaternionToMat3(snap->camera.ori, world_to_eye);
 
 	int submitted = 0;
 	int slot = 0;
@@ -154,7 +161,24 @@ bool TieFlightBackdrop_Submit(TieFlightBackdrop* b, AeronScene3D* scene, AeronCo
 			const float dl = sqrtf(dir[0] * dir[0] + dir[1] * dir[1] + dir[2] * dir[2]);
 			if (dl < 1e-6f)
 				continue;
-			const float n[3] = { dir[0] / dl, dir[1] / dl, dir[2] / dl };
+			float n[3] = { dir[0] / dl, dir[1] / dl, dir[2] / dl };
+			if (sky_center) {
+				float eye[3];
+				for (int row = 0; row < 3; ++row) {
+					eye[row] = world_to_eye[row * 3 + 0] * n[0] + world_to_eye[row * 3 + 1] * n[1] +
+							   world_to_eye[row * 3 + 2] * n[2];
+				}
+				eye[1] /= y_aspect;
+				float length = 0.0f;
+				for (int axis = 0; axis < 3; ++axis) {
+					n[axis] = world_to_eye[0 * 3 + axis] * eye[0] + world_to_eye[1 * 3 + axis] * eye[1] +
+							  world_to_eye[2 * 3 + axis] * eye[2];
+					length += n[axis] * n[axis];
+				}
+				length = sqrtf(length);
+				for (int axis = 0; axis < 3; ++axis)
+					n[axis] /= length;
+			}
 
 			/* Per-face billboard frame. The engine aligns each tile's sprite
 			 * image-right to a fixed world axis R (world X for front/back/top/

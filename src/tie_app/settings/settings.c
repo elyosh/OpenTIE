@@ -394,9 +394,9 @@ static void TieSettings_VideoPage(AeronUiContext* ui) {
 	}
 	AeronUi_Spacer(ui, 8.0f);
 	AeronUi_Header(ui, "Flight Rendering");
-	static const char* const starfield_labels[] = { "TIE95", "TIE98" };
+	static const char* const starfield_labels[] = { "Auto", "TIE95", "TIE98" };
 	int starfield_style = options.output.starfield_style;
-	if (AeronUi_Selector(ui, "Starfield Style", &starfield_style, starfield_labels, 2)) {
+	if (AeronUi_Selector(ui, "Starfield Style", &starfield_style, starfield_labels, 3)) {
 		options.output.starfield_style = (TieFlightStarfieldStyle)starfield_style;
 		changed = true;
 	}

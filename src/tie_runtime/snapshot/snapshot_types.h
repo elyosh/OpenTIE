@@ -682,6 +682,10 @@ typedef struct TieCameraState {
 	 * loses the cockpit-viewport aspect and shifts apparent scale. */
 	float fov_h_half_rad;
 	float fov_v_half_rad;
+	/* yAspect as a factor (1 for square pixels) included in
+	 * fov_v_half_rad. rtsvga2_drawstars and backdrp2_backdrawbitmap
+	 * project without it, so the sky uses tan(v) × y_aspect. */
+	float y_aspect;
 	uint16_t target_obj_slot; /* 0xFFFF = free cam */
 	uint8_t pilotview;        /* 0..21 cockpit view selector */
 	uint8_t zoom_active;      /* nonzero when zoom is engaged */

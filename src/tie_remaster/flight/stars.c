@@ -204,6 +204,11 @@ void TieFlightStars_Destroy(TieFlightStars* stars) {
 
 bool TieFlightStars_Prepare(TieFlightStars* stars, AeronCommandBuffer* cmd, const TieSnapshot* snapshot,
 							TieFlightStarfieldStyle style) {
+	if (style == TIE_FLIGHT_STARFIELD_STYLE_AUTO && snapshot) {
+		style = snapshot->legacy_render_convention == TIE_FLIGHT_LEGACY_RENDER_TIE95
+					? TIE_FLIGHT_STARFIELD_STYLE_TIE95
+					: TIE_FLIGHT_STARFIELD_STYLE_TIE98;
+	}
 	if (!stars || !cmd || !snapshot || snapshot->star_count == 0 || snapshot->star_count > TIE_MAX_STARS ||
 		(style != TIE_FLIGHT_STARFIELD_STYLE_TIE95 && style != TIE_FLIGHT_STARFIELD_STYLE_TIE98)) {
 		if (stars)
@@ -270,7 +275,7 @@ void TieFlightStars_DrawInPass(TieFlightStars* stars, AeronCommandBuffer* cmd, A
 	}
 	uniforms.half_size_px[0] = 0.5f * camera->fit_w / reference_width;
 	uniforms.half_size_px[1] = 0.5f * camera->fit_h / reference_height;
-	uniforms.style = (uint32_t)stars->pending_style;
+	uniforms.style = stars->pending_style == TIE_FLIGHT_STARFIELD_STYLE_TIE98 ? 1u : 0u;
 	for (int slot = 0; slot < 4; ++slot) {
 		TieScene2dSrgb_PalToLinearRgb(snapshot->palette[252 + slot], &uniforms.colors[slot][0],
 									  &uniforms.colors[slot][1], &uniforms.colors[slot][2]);

@@ -525,9 +525,11 @@ static void TieFlightSnapshot_CaptureFrameState(void) {
 		 * (e.g. 0xE8BA → 0.909). Zero means square pixels (no scale). */
 		const float y_aspect_factor = yAspect ? (float)(uint16_t)yAspect * (1.0f / 65536.0f) : 1.0f;
 		cam->fov_v_half_rad = atanf((float)halfpixelsdeep / ((float)perspFactor * y_aspect_factor));
+		cam->y_aspect = y_aspect_factor;
 	} else {
 		cam->fov_h_half_rad = 0.5586f;
 		cam->fov_v_half_rad = 0.3f;
+		cam->y_aspect = 1.0f;
 	}
 	cam->target_obj_slot = camera.view_target_obj;
 	cam->pilotview = camera.pilotview;

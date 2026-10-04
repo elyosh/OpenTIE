@@ -20,7 +20,7 @@ static bool TieVideoOptions_VideoOptionsValid(const TieAppVideoConfig* options) 
 	const TieVideoOptions* output = &options->output;
 	return output->sdr_content_gamma >= TIE_SDR_CONTENT_GAMMA_2_2 &&
 		   output->sdr_content_gamma <= TIE_SDR_CONTENT_GAMMA_SRGB &&
-		   output->starfield_style >= TIE_FLIGHT_STARFIELD_STYLE_TIE95 &&
+		   output->starfield_style >= TIE_FLIGHT_STARFIELD_STYLE_AUTO &&
 		   output->starfield_style <= TIE_FLIGHT_STARFIELD_STYLE_TIE98 &&
 		   (output->paper_white_auto ||
 			(isfinite(output->paper_white_nits) && output->paper_white_nits > 0.0f));

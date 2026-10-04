@@ -317,8 +317,10 @@ static void TieFlightRenderer_SceneHookBeforeOpaque(AeronCommandBuffer* cmd, Aer
 	(void)rt_h;
 
 	if (fr->stars_ready) {
-		const float* view_proj = AeronScene_JitteredViewProj(g->scene);
-		TieFlightStars_DrawInPass(g->stars, cmd, pass, fr->curr, &fr->fcam, view_proj);
+		float sky_view_proj[16];
+		TieRenderMath_BuildSkyViewProj(&fr->fcam, fr->curr->camera.y_aspect, AeronScene_ViewProj(g->scene),
+									   AeronScene_JitteredViewProj(g->scene), sky_view_proj);
+		TieFlightStars_DrawInPass(g->stars, cmd, pass, fr->curr, &fr->fcam, sky_view_proj);
 	}
 
 	if (!g->scene_model_backend) {
