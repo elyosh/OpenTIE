@@ -147,12 +147,12 @@ typedef struct {
 	uint8_t current_order;     /* +0x023: AI plan opcode (50=hangar, 52=hyperspace, else order_ldr/order_flw);
 								  indexes planptrs[] */
 	uint8_t default_order_ldr; /* +0x024: leader's default order code */
-	uint8_t active_waypoint_idx;   /* +0x025: PAI_initplan way_used[] index; init=4 */
-	uint8_t saved_current_order;   /* +0x026: USER_inputforplane stashes current_order
-									*         here when issuing a radio command, then
-									*         restores it on the next radio toggle. */
+	uint8_t active_waypoint_idx; /* +0x025: PAI_initplan way_used[] index; init=4 */
+	uint8_t saved_current_order; /* +0x026: USER_inputforplane stashes current_order
+								  *         here when issuing a radio command, then
+								  *         restores it on the next radio toggle. */
 #if !defined(TIE98) || defined(TIE_MODERN)
-	uint8_t pad_027;               /* +0x027: unused (no readers/writers in binary) */
+	uint8_t pad_027; /* +0x027: unused (no readers/writers in binary) */
 #endif
 	uint16_t ai_update_rate;       /* +0x028: aiupdatetranslate[skill] */
 	uint16_t ai_update_rate_copy;  /* +0x02A: PAI_initplan copies update_rate here */
@@ -195,9 +195,9 @@ typedef struct {
 	 *   PAIFIGHT_findescorterofgroup: reads to filter "who is escorting FG X?".
 	 *   PAIFIGHT_escorttargetorder:   reads to pick attackers of this FG.
 	 *   PAIMAN_escortmaneuver:        reads to find the escortee leader to follow. */
-	uint8_t escortee_fg_idx;    /* +0x040 */
+	uint8_t escortee_fg_idx; /* +0x040 */
 #if !defined(TIE98) || defined(TIE_MODERN)
-	uint8_t pad_041;            /* +0x041: struct padding; never accessed */
+	uint8_t pad_041; /* +0x041: struct padding; never accessed */
 #endif
 	uint16_t attacker_idx;      /* +0x042: obj_idx of last/active attacker;
 								 * 0x00FF = none (sentinel set by PAI_initplan).
@@ -223,19 +223,19 @@ typedef struct {
 								 * PAIMAN_boardmaneuver appends and increments, clamps at 10;
 								 * PAI_finddisabledingroup uses as loop bound. */
 #if !defined(TIE98) || defined(TIE_MODERN)
-	uint8_t pad_04B;            /* +0x04B: padding for u16 alignment of capture_list */
+	uint8_t pad_04B; /* +0x04B: padding for u16 alignment of capture_list */
 #endif
-	uint16_t capture_list[10];  /* +0x04C..+0x05F: idnumbers of already-boarded objects,
-								 * used by PAI_finddisabledingroup to skip re-targeting.
-								 * Slot [0] is transiently reused as scratch for saved
-								 * ai_update_rate during PAIMAN_initoutofhyperspacemaneuver /
-								 * outofhyperspacemaneuver (restored on hyperspace exit). */
-	uint8_t flight_flag;        /* +0x060: = fgflightflag */
+	uint16_t capture_list[10]; /* +0x04C..+0x05F: idnumbers of already-boarded objects,
+								* used by PAI_finddisabledingroup to skip re-targeting.
+								* Slot [0] is transiently reused as scratch for saved
+								* ai_update_rate during PAIMAN_initoutofhyperspacemaneuver /
+								* outofhyperspacemaneuver (restored on hyperspace exit). */
+	uint8_t flight_flag;       /* +0x060: = fgflightflag */
 	uint8_t mode_byte;    /* +0x061: PAI maneuver opcode (set by PAI_initplan from plan stream); polydepthsort
 							 gates ai_target_ref check on ==18 */
 	uint8_t mode_subbyte; /* +0x062: polydepthsort gates same check on ==2 */
 #if !defined(TIE98) || defined(TIE_MODERN)
-	uint8_t pad_063;      /* +0x063: unused (no readers in any craft module) */
+	uint8_t pad_063; /* +0x063: unused (no readers in any craft module) */
 #endif
 	int32_t maneuver_timer;  /* +0x064: dword tick-count set by PAIMAN_init*
 							  *         (durations 0x0DD4, 0x1270, 0x49C, …);
@@ -263,16 +263,16 @@ typedef struct {
 	int16_t ai_target_c;     /* +0x07C: roll pacing scale (init 0xFFFF) */
 	uint8_t ai_roll_state;   /* +0x07E: 0=idle, 1..3=active, 4=settled */
 #if !defined(TIE98) || defined(TIE_MODERN)
-	uint8_t pad_07F;         /* +0x07F: single pad byte */
+	uint8_t pad_07F; /* +0x07F: single pad byte */
 #endif
 	uint16_t ai_target_roll; /* +0x080: target roll angle (objects[i].roll goal) */
 	uint16_t ai_roll_step;   /* +0x082: 0..0xFFFF scale into per-tick step */
 	/* Heading autopilot. */
-	int16_t heading_rate_cache;   /* +0x084: cached spec.heading_rate */
-	int16_t ai_target_d;          /* +0x086: heading pacing scale (init 0xFFFF) */
-	uint8_t ai_heading_state;     /* +0x088: 0=idle, nonzero=active, 3=reached */
+	int16_t heading_rate_cache; /* +0x084: cached spec.heading_rate */
+	int16_t ai_target_d;        /* +0x086: heading pacing scale (init 0xFFFF) */
+	uint8_t ai_heading_state;   /* +0x088: 0=idle, nonzero=active, 3=reached */
 #if !defined(TIE98) || defined(TIE_MODERN)
-	uint8_t pad_089;              /* +0x089: single pad byte */
+	uint8_t pad_089; /* +0x089: single pad byte */
 #endif
 	uint16_t ai_target_heading;   /* +0x08A: target heading angle */
 	uint16_t ai_heading_step;     /* +0x08C: 0..0xFFFF scale into per-tick step */
@@ -280,7 +280,7 @@ typedef struct {
 	uint8_t formation_separation; /* +0x08F: = fgseparation (cleared if hangar-spawn) */
 	uint8_t craft_idx_in_fg;      /* +0x090: = craftcnt (this craft's index 0..count-1 within FG) */
 #if !defined(TIE98) || defined(TIE_MODERN)
-	uint8_t pad_091;              /* +0x091: dead byte; no readers or writers in binary */
+	uint8_t pad_091; /* +0x091: dead byte; no readers or writers in binary */
 #endif
 	int32_t push_accum_x; /* +0x092: external-push velocity accumulator (X). Decays toward 0 each tick, adds
 							 to xmovedist. */
@@ -515,9 +515,9 @@ typedef struct FlightObject {
 	uint8_t ship_idx; /* +0x03: species index (ship class) */
 	uint8_t category; /* +0x04: species.category */
 #else
-	uint8_t category;      /* +0x02: species.category */
-	uint8_t genus;         /* +0x03: fggenus */
-	uint8_t ship_idx;      /* +0x04: species index (ship class) */
+	uint8_t category; /* +0x02: species.category */
+	uint8_t genus;    /* +0x03: fggenus */
+	uint8_t ship_idx; /* +0x04: species index (ship class) */
 #endif
 	uint8_t damage_state;  /* +0x05: damage anim byte read by ANIM, written by COLLIDE/STARSHIP/STATIC after
 							  hits */
@@ -1055,19 +1055,19 @@ typedef struct PlayerInFlightState {
 	 * and by the SPACE-confirm handler in user_space_confirm. Writers:
 	 * laser_warhead_lock, msg_messageupdate-driven prompts. Reads:
 	 * msg.c handler, user.c SPACE handler. */
-	/* +0x028 */ int16_t msg_arg_obj_idx; /* 2 */
-	/* +0x02A: previous-frame snapshot of x_roll_mode, kept here so
-	 * user_update can detect the frame the player toggles roll-axis
-	 * mapping and reset the input slew accumulators. The binary packed
-	 * this into the high 16 of msg_dword purely for memory compactness;
-	 * splitting clarifies that the two halves are unrelated state. */
-	/* +0x02A */ int16_t prev_x_roll_mode;              /* 2 */
-	/* +0x02C */ int16_t axis_x_accum;                  /* 2 */
-	/* +0x02E */ int16_t axis_y_accum;                  /* 2 */
-	/* +0x030 */ int16_t prev_inputbuttons;             /* 2 */
-	/* +0x032 */ uint16_t double_tap_timer;             /* 2 */
-	/* +0x034 */ uint16_t player_laser_fired;           /* 2 */
-	/* +0x036 */ uint16_t player_laser_hit;             /* 2 */
+	/* +0x028 */ int16_t msg_arg_obj_idx;     /* 2 */
+											  /* +0x02A: previous-frame snapshot of x_roll_mode, kept here so
+											   * user_update can detect the frame the player toggles roll-axis
+											   * mapping and reset the input slew accumulators. The binary packed
+											   * this into the high 16 of msg_dword purely for memory compactness;
+											   * splitting clarifies that the two halves are unrelated state. */
+	/* +0x02A */ int16_t prev_x_roll_mode;    /* 2 */
+	/* +0x02C */ int16_t axis_x_accum;        /* 2 */
+	/* +0x02E */ int16_t axis_y_accum;        /* 2 */
+	/* +0x030 */ int16_t prev_inputbuttons;   /* 2 */
+	/* +0x032 */ uint16_t double_tap_timer;   /* 2 */
+	/* +0x034 */ uint16_t player_laser_fired; /* 2 */
+	/* +0x036 */ uint16_t player_laser_hit;   /* 2 */
 	/* +0x038 */ uint16_t player_missile_fired;         /* 2 */
 	/* +0x03A */ uint16_t player_missile_hit;           /* 2 */
 	/* +0x03C */ uint8_t player_warhead_fired;          /* 1 */

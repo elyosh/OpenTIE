@@ -187,7 +187,7 @@ extern uint16_t objheap[128];
 
 /* Dither / material blending tables (lazy-filled by clearruntable). */
 extern uint32_t dithercolors[39][16][4]; /* 39 mats * 16 steps * 4 perms * 4 B */
-extern uint8_t materialrgbhi[2496]; /* 39 mats * 64 blend steps */
+extern uint8_t materialrgbhi[2496];      /* 39 mats * 64 blend steps */
 extern uint8_t materialrgblo[2496];
 
 /* Starburst hash storage. */
@@ -203,24 +203,24 @@ extern int32_t eyexyzdata[384];
 
 /* Per-scanline working state. These live in contiguous BSS and are used
  * as single scalars (not arrays). */
-extern int32_t newx;           /* next edge's x (pixel col) */
-extern uint8_t* maskptr;       /* mask-RLE cursor into xtransdataptr */
-extern uint32_t videoypos;     /* byte offset within VESA window */
-extern int32_t startx_mod_54;  /* binary-level 'startx' — renamed to
-								* avoid collision with TRACE2's startx */
-extern int32_t newlt;          /* next edge's lighting value */
-extern uint32_t objid;         /* current edge's object id */
-extern uint32_t face2;         /* current edge's second face id */
-extern uint32_t face1;         /* current edge's first face id */
-extern int32_t maskx;          /* current mask-run x transition */
-extern int32_t currentypos;    /* current scanline index */
-extern int32_t runx;           /* current edge's pixel column (x>>8) */
-extern int32_t endx;           /* run end column for outputxt */
-extern uint32_t edgeid;        /* current edge id */
-extern uint32_t pixdeepshft24; /* pixelsdeep << 24 */
-extern struct trace2_EdgeHeader* tempptr;  /* reusable temporary */
-extern struct trace2_EdgeHeader* currptr;  /* reusable temporary */
-extern struct trace2_EdgeHeader* currptr2; /* reusable temporary — outputxt right-edge cache */
+extern int32_t newx;                             /* next edge's x (pixel col) */
+extern uint8_t* maskptr;                         /* mask-RLE cursor into xtransdataptr */
+extern uint32_t videoypos;                       /* byte offset within VESA window */
+extern int32_t startx_mod_54;                    /* binary-level 'startx' — renamed to
+												  * avoid collision with TRACE2's startx */
+extern int32_t newlt;                            /* next edge's lighting value */
+extern uint32_t objid;                           /* current edge's object id */
+extern uint32_t face2;                           /* current edge's second face id */
+extern uint32_t face1;                           /* current edge's first face id */
+extern int32_t maskx;                            /* current mask-run x transition */
+extern int32_t currentypos;                      /* current scanline index */
+extern int32_t runx;                             /* current edge's pixel column (x>>8) */
+extern int32_t endx;                             /* run end column for outputxt */
+extern uint32_t edgeid;                          /* current edge id */
+extern uint32_t pixdeepshft24;                   /* pixelsdeep << 24 */
+extern struct trace2_EdgeHeader* tempptr;        /* reusable temporary */
+extern struct trace2_EdgeHeader* currptr;        /* reusable temporary */
+extern struct trace2_EdgeHeader* currptr2;       /* reusable temporary — outputxt right-edge cache */
 extern struct trace2_EdgeHeader* currentedgeptr; /* current edge under processing */
 extern struct trace2_EdgeHeader* lastptr;        /* reusable temporary */
 extern struct trace2_EdgeHeader* headerlist;     /* active-edge list head for current scanline */

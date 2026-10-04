@@ -986,32 +986,32 @@ static void register_iuser_Pilot_Button(Input* input, int32_t time) {
 			int16_t result;
 
 #ifdef TIE_MODERN
-		TieRegister_BeginDelete(input);
+			TieRegister_BeginDelete(input);
 #endif
-		result = register_Do_Delete_Dialog();
-		if (result == 2)
-			break;
-		if (result == 1) {
+			result = register_Do_Delete_Dialog();
+			if (result == 2)
+				break;
+			if (result == 1) {
 #ifdef TIE_MODERN
-			char name_buf[TIE_PILOT_NAME_CAPACITY];
-			char path[TIE_PILOT_NAME_CAPACITY + 5];
+				char name_buf[TIE_PILOT_NAME_CAPACITY];
+				char path[TIE_PILOT_NAME_CAPACITY + 5];
 
-			register_Get_Reg_String_Button_Name(pilot_name_input, name_buf);
-			snprintf(path, sizeof(path), "%s.tfr", name_buf);
-			TieStorage_Remove(TIE_FILE_ROOT_USER, path);
+				register_Get_Reg_String_Button_Name(pilot_name_input, name_buf);
+				snprintf(path, sizeof(path), "%s.tfr", name_buf);
+				TieStorage_Remove(TIE_FILE_ROOT_USER, path);
 #else
-			char path[TIE_FRONTEND_EDITION(16, 40)];
+				char path[TIE_FRONTEND_EDITION(16, 40)];
 
-			register_Get_Reg_String_Button_Name(pilot_name_input, path);
-			strcat(path, ".tfr");
-			shellext_Delete_Install_File(path);
+				register_Get_Reg_String_Button_Name(pilot_name_input, path);
+				strcat(path, ".tfr");
+				shellext_Delete_Install_File(path);
 #endif
-			register_Delete_Pilot_Record();
-		} else {
-			register_Revive_Pilot_Record();
-		}
-		xview_Refresh_View();
-		break;
+				register_Delete_Pilot_Record();
+			} else {
+				register_Revive_Pilot_Record();
+			}
+			xview_Refresh_View();
+			break;
 		}
 	}
 }
