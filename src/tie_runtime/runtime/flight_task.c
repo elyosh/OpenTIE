@@ -97,13 +97,23 @@ typedef struct FlightTask {
 	uint8_t rebase_pending;
 } FlightTask;
 
+/* tie_doframe returns false when its PIT-tick budget hasn't landed yet —
+ * yield so the next TieRuntime_Tick advances xtimer.
+ * PORT: an accelerated-time skip frame preloads tickcounter with its own
+ * frameticks so the original loop ran the next frame immediately, without
+ * presenting. Keep stepping inside this host tick until a frame renders. */
+static LandruTaskStepResult flight_step_frame(void) {
+	if (!tie_doframe())
+		return LANDRU_TASK_STEP_YIELD;
+	return tickcounter >= TieFlightTiming_StepTicks() ? LANDRU_TASK_STEP_CONTINUE
+													  : LANDRU_TASK_STEP_FRAME_COMPLETE;
+}
+
 static LandruTaskStepResult flight_hyper_step(void* self) {
 	(void)self;
 	if (!hyperspaceflag)
 		return LANDRU_TASK_STEP_DONE;
-	/* tie_doframe returns false when its PIT-tick budget hasn't
-	 * landed yet — yield so the next TieRuntime_Tick advances xtimer. */
-	return tie_doframe() ? LANDRU_TASK_STEP_FRAME_COMPLETE : LANDRU_TASK_STEP_YIELD;
+	return flight_step_frame();
 }
 
 static LandruTaskStepResult flight_mission_step(void* self) {
@@ -146,9 +156,7 @@ static LandruTaskStepResult flight_mission_step(void* self) {
 		return LANDRU_TASK_STEP_CONTINUE;
 	}
 
-	/* See flight_hyper_step — yield when tie_doframe couldn't
-	 * consume its PIT-tick budget yet this TieRuntime_Tick. */
-	return tie_doframe() ? LANDRU_TASK_STEP_FRAME_COMPLETE : LANDRU_TASK_STEP_YIELD;
+	return flight_step_frame();
 }
 
 static uint64_t flight_task_next_wake_delay_us(const void* self) {
