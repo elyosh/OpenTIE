@@ -626,7 +626,7 @@ int16_t paifight_fightershootorder(void) {
 		/* The original leaves burst_count unset when no burst is due. */
 		burst_count = 0;
 #endif
-		if (xy_delta < 0x800 && z_delta < 0x800 && aim_range > trig2_polardistance) {
+		if (xy_delta < 0x800 && z_delta < 0x800 && aim_range > (uint32_t)trig2_polardistance) {
 			if (trig2_polardistance < 0x2000)
 				burst_tier = 3;
 			else if (trig2_polardistance < 0x4000)
@@ -749,7 +749,7 @@ int16_t paifight_fightershootorder(void) {
 		/* --- Lock accumulator. Out-of-angle / out-of-range: decay the lock
 		 * counter. In-window: accumulate at ai_update_rate scaled by 0xC000
 		 * and fire once it reaches 236 * (2*skill_tier + 2). --- */
-		if (xy_delta < 0x300 && z_delta < 0x300 && max_engage_range > trig2_polardistance) {
+		if (xy_delta < 0x300 && z_delta < 0x300 && max_engage_range > (uint32_t)trig2_polardistance) {
 			craftptr->missile_count_total += math2_fraction(craftptr->ai_update_rate, 0xC000u);
 			if ((int16_t)craftptr->missile_count_total < (uint16_t)(236 * (2 * ai.skill_tier + 2)))
 				return 0;
@@ -921,7 +921,7 @@ int16_t paifight_missiledefenseorder(void) {
 				roughdistance =
 					collide_roughdistance3d(objects[obj].world_x - shooterx, objects[obj].world_y - shootery,
 											objects[obj].world_z - shooterz);
-				if (roughdistance > 0x4000 && roughdistance < best_dist) {
+				if (roughdistance > 0x4000 && (uint32_t)roughdistance < best_dist) {
 					best_target = obj;
 					best_dist = roughdistance;
 				}
@@ -973,7 +973,7 @@ int16_t paifight_missiledefenseorder(void) {
 					roughdistance =
 						collide_roughdistance3d(objects[a].world_x - shooterx, objects[a].world_y - shootery,
 												objects[a].world_z - shooterz);
-					if (roughdistance < best_dist_a) {
+					if ((uint32_t)roughdistance < best_dist_a) {
 						best_dist_a = roughdistance;
 						best_target = a;
 					}
@@ -1190,7 +1190,7 @@ int16_t paifight_gunneroffenseorder(void) {
 												 fg_array[ai.fg_idx].ai[ai.ai_entry_count].pri_sec_op,
 												 fg_array[ai.fg_idx].ai[ai.ai_entry_count].sec_type,
 												 fg_array[ai.fg_idx].ai[ai.ai_entry_count].sec_id);
-		if (found != 0xFFFF) {
+		if ((int32_t)found != 0xFFFF) {
 			craftptr->weapon_slots[g].target_obj = found;
 			if (craftptr->default_order_ldr == 63 || craftptr->default_order_ldr == 19)
 				craftptr->weapon_slots[g].ammo = 1; /* arm flag */
@@ -1200,7 +1200,7 @@ int16_t paifight_gunneroffenseorder(void) {
 													 fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_op,
 													 fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_type[1],
 													 fg_array[ai.fg_idx].ai[ai.ai_entry_count].target_id[1]);
-			if (found != 0xFFFF) {
+			if ((int32_t)found != 0xFFFF) {
 				craftptr->weapon_slots[g].target_obj = found;
 				if (craftptr->default_order_ldr == 63 || craftptr->default_order_ldr == 19)
 					craftptr->weapon_slots[g].ammo = 1; /* arm flag */

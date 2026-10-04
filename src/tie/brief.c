@@ -93,7 +93,7 @@ static Film* brief_film;
 static int16_t brief_user_Title(Actor* actor, int32_t time);
 static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								int16_t refresh);
-static int brief_user_Door(Actor* actor, int32_t time);
+static int16_t brief_user_Door(Actor* actor, int32_t time);
 static Input* brief_Build_Notice(void);
 static void brief_idraw_Notice(Input* input, Rect* r, Rect* clip, int16_t refresh);
 static void brief_iuser_Notice(Input* input, int32_t time);
@@ -101,7 +101,7 @@ static void brief_iuser_Notice(Input* input, int32_t time);
 static int16_t brief_film_Callback(Film* film, FilmObject* fo);
 static int16_t brief_iupdate_Brief(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 								   uint8_t right, int16_t mouse_x, int16_t mouse_y);
-static void brief_iuser_Brief(Input* input, int32_t time);
+static int16_t brief_iuser_Brief(Input* input, int32_t time);
 
 /* ================================================================
  * Entry point
@@ -179,7 +179,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(122, 184), TIE_FRONTEND_EDITION(172, 459));
 	mainmenu_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(mainmenu_input, brief_iupdate_Brief);
-	xinpattr_Set_Input_User_Function(mainmenu_input, brief_iuser_Brief);
+	xinpattr_Set_Input_User_Function(mainmenu_input, (InputUserFunc)(void (*)(void))brief_iuser_Brief);
 	mainmenu_input->mouseUsage = allInput;
 	mainmenu_input->id = 0;
 
@@ -188,7 +188,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(248, 448), TIE_FRONTEND_EDITION(138, 350));
 	mission_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(mission_input, brief_iupdate_Brief);
-	xinpattr_Set_Input_User_Function(mission_input, brief_iuser_Brief);
+	xinpattr_Set_Input_User_Function(mission_input, (InputUserFunc)(void (*)(void))brief_iuser_Brief);
 	mission_input->mouseUsage = allInput;
 	mission_input->id = 1;
 
@@ -197,7 +197,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(128, 230), TIE_FRONTEND_EDITION(124, 290));
 	map_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(map_input, brief_iupdate_Brief);
-	xinpattr_Set_Input_User_Function(map_input, brief_iuser_Brief);
+	xinpattr_Set_Input_User_Function(map_input, (InputUserFunc)(void (*)(void))brief_iuser_Brief);
 	map_input->mouseUsage = allInput;
 	map_input->id = 2;
 
@@ -207,7 +207,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 					   TIE_FRONTEND_EDITION(174, 274), TIE_FRONTEND_EDITION(114, 251));
 		officer_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(officer_input, brief_iupdate_Brief);
-		xinpattr_Set_Input_User_Function(officer_input, brief_iuser_Brief);
+		xinpattr_Set_Input_User_Function(officer_input, (InputUserFunc)(void (*)(void))brief_iuser_Brief);
 		officer_input->mouseUsage = allInput;
 		officer_input->id = 3;
 	}
@@ -218,7 +218,7 @@ int16_t brief_Brief(SceneHeadStruct* scene_head) {
 					   TIE_FRONTEND_EDITION(314, 604), TIE_FRONTEND_EDITION(102, 220));
 		priest_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(priest_input, brief_iupdate_Brief);
-		xinpattr_Set_Input_User_Function(priest_input, brief_iuser_Brief);
+		xinpattr_Set_Input_User_Function(priest_input, (InputUserFunc)(void (*)(void))brief_iuser_Brief);
 		priest_input->mouseUsage = allInput;
 		priest_input->id = 4;
 	}
@@ -318,7 +318,7 @@ static int16_t brief_film_Callback(Film* film, FilmObject* fo) {
 			}
 
 		case 4: /* Door actor */
-			xactor_Set_Actor_User_Function(actor, (xactorCallback)brief_user_Door);
+			xactor_Set_Actor_User_Function(actor, (xactorCallback)(void (*)(void))brief_user_Door);
 			door[actor->var2] = actor;
 			actor->id = actor->var2;
 			return 0;
@@ -328,7 +328,7 @@ static int16_t brief_film_Callback(Film* film, FilmObject* fo) {
 
 		case 6: /* Title label */
 			title_actor = actor;
-			xactor_Set_Actor_User_Function(actor, (xactorCallback)brief_user_Title);
+			xactor_Set_Actor_User_Function(actor, (xactorCallback)(void (*)(void))brief_user_Title);
 			xactor_Set_Actor_Draw_Function(actor, brief_draw_Title);
 			return 0;
 
@@ -405,7 +405,7 @@ static int16_t brief_iupdate_Brief(Input* input, Rect* bounds, Rect* clip, int16
 
 // FUNCTION: TIE95 0x73410
 // FUNCTION: TIE98 0x4067F0
-static void brief_iuser_Brief(Input* input, int32_t time) {
+static int16_t brief_iuser_Brief(Input* input, int32_t time) {
 	(void)time;
 
 	/* Map widget (id=2) drives the briefing map animation */
@@ -418,7 +418,7 @@ static void brief_iuser_Brief(Input* input, int32_t time) {
 	}
 
 	if (!input->var1)
-		return; /* exit_pending */
+		return 1; /* exit_pending */
 
 	/* Scenes 270, 4, 275: save pilot state before launching */
 	switch (input->var2) {
@@ -435,6 +435,7 @@ static void brief_iuser_Brief(Input* input, int32_t time) {
 
 	soundext_Stop_SFX(sfxText);
 	xerror_Set_Landru_Exit(input->var2);
+	return 1;
 }
 
 /* ================================================================
@@ -500,7 +501,7 @@ static int16_t brief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t 
 
 // FUNCTION: TIE95 0x735D4
 // FUNCTION: TIE98 0x4069E0
-static int brief_user_Door(Actor* actor, int32_t time) {
+static int16_t brief_user_Door(Actor* actor, int32_t time) {
 	if (!time) {
 		actor->var2 = 0;
 		actor->var1 = 0;

@@ -1235,6 +1235,7 @@ void player_Draw_Display_Grid(Rect* clip, Rect* draw_clip) {
 	int16_t ci;
 	int16_t x;
 	int16_t y;
+	(void)draw_clip;
 
 	major_color = 234;
 	xrect_Copy_Rect(&clip_rect, clip);

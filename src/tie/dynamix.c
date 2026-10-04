@@ -459,7 +459,6 @@ void dynamix_addvelocity(uint16_t obj_idx, uint16_t accel) {
 void dynamix_subvelocity(uint16_t obj_idx, uint16_t decel) {
 	FlightObject* obj = &objects[obj_idx];
 	int16_t dv;
-	uint16_t dv_rem;
 	uint16_t old_rem;
 
 #ifdef TIE_MODERN

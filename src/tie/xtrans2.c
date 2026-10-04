@@ -1515,6 +1515,9 @@ uint16_t xtrans2_getinfront(uint16_t obj_a, uint16_t obj_b) {
 	uint16_t mesh_obj;
 	uint16_t flat_idx;
 
+#ifdef TIE_MODERN
+	flat_idx = 0;
+#endif
 	if (obj_a == 128)
 		return obj_b;
 	if (obj_b == 128)

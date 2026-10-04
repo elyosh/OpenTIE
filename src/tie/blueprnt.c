@@ -176,7 +176,8 @@ int16_t blueprnt_Blueprint(SceneHeadStruct* the_head) {
 		}
 		button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(button_input[i], blueprnt_iupdate_Blueprint);
-		xinpattr_Set_Input_User_Function(button_input[i], (InputUserFunc)blueprnt_iuser_Blueprint);
+		xinpattr_Set_Input_User_Function(button_input[i],
+										 (InputUserFunc)(void (*)(void))blueprnt_iuser_Blueprint);
 		button_input[i]->id = i + 1;
 	}
 
@@ -185,7 +186,8 @@ int16_t blueprnt_Blueprint(SceneHeadStruct* the_head) {
 				   TIE_FRONTEND_EDITION(116, 296));
 	door_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(door_input, blueprnt_iupdate_Blueprint_Door);
-	xinpattr_Set_Input_User_Function(door_input, (InputUserFunc)blueprnt_iuser_Blueprint_Door);
+	xinpattr_Set_Input_User_Function(door_input,
+									 (InputUserFunc)(void (*)(void))blueprnt_iuser_Blueprint_Door);
 	door_input->mouseUsage = 4;
 
 	/* Ship name text actor */

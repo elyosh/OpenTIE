@@ -606,7 +606,7 @@ void static_updatemineguns(uint16_t slot_idx) {
 	tx = worldlocx;
 	ty = worldlocy;
 	tz = worldlocz;
-	if (collide_roughdistance3d(tx - sx, ty - sy, tz - sz) >= 0x10000u)
+	if ((uint32_t)collide_roughdistance3d(tx - sx, ty - sy, tz - sz) >= 0x10000u)
 		return;
 
 	if (tgt < 0x3800) {

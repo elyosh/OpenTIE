@@ -193,7 +193,7 @@ static LandruHandle text_buffer;
 /* --- Internal helpers --- */
 
 static void textext_Find_Text_Range(int16_t scene, int16_t* pstart, int16_t* pstop);
-static void textext_user_Text_Actor(Actor* the_actor, int32_t time);
+static int16_t textext_user_Text_Actor(Actor* the_actor, int32_t time);
 static int16_t textext_draw_Text_Actor(Actor* the_actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
 									   int16_t refresh);
 
@@ -261,7 +261,8 @@ void textext_Open_Text_Ext_Scene(int16_t scene) {
 	restore_text_actor->id = 0;
 	display_text_actor->id = 1;
 
-	xactor_Set_Actor_User_Function(display_text_actor, textext_user_Text_Actor);
+	xactor_Set_Actor_User_Function(display_text_actor,
+								   (xactorCallback)(void (*)(void))textext_user_Text_Actor);
 	xactor_Set_Actor_Draw_Function(restore_text_actor, textext_draw_Text_Actor);
 	xactor_Set_Actor_Draw_Function(display_text_actor, textext_draw_Text_Actor);
 }
@@ -287,7 +288,7 @@ void textext_Close_Text_Ext_Scene(int16_t scene) {
  * time window includes the current frame, computes position and fade color.
  */
 // FUNCTION: TIE95 0x6F6B4
-static void textext_user_Text_Actor(Actor* the_actor, int32_t time) {
+static int16_t textext_user_Text_Actor(Actor* the_actor, int32_t time) {
 	char str[80];
 	Rect r;
 	int16_t resource, start, stop, x, y;
@@ -385,6 +386,7 @@ static void textext_user_Text_Actor(Actor* the_actor, int32_t time) {
 		else
 			xactor_Hide_Actor(restore_text_actor);
 	}
+	return 1;
 }
 
 /*

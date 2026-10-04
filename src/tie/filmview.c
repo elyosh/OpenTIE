@@ -685,6 +685,7 @@ static void filmview_Set_Active_FV_File(FileDialog* the_dialog, int16_t file, in
 		xinpattr_Refresh_Input(the_dialog->dialog);
 }
 
+#ifndef TIE_MODERN
 // FUNCTION: TIE95 0x724A8
 static int16_t filmview_Clip_Active_FV_File(FileDialog* the_dialog) {
 	int16_t value = the_dialog->active_name;
@@ -694,6 +695,7 @@ static int16_t filmview_Clip_Active_FV_File(FileDialog* the_dialog) {
 		return the_dialog->name_offset + 15;
 	return value;
 }
+#endif
 
 /* ================================================================
  * Delete confirmation dialog

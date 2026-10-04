@@ -324,7 +324,9 @@ int32_t msgroom_messageroom(void) {
 // FUNCTION: TIE95 0x34A54
 int16_t msgroom_scrollmsgs(int16_t cur_idx, int16_t delta) {
 	int16_t old_cur_idx;
+#if !defined(TIE_MODERN)
 	int16_t step;
+#endif
 
 	if (numhistorymsgs == 0 || lasthistorymsg == (int16_t)-1)
 		return cur_idx;

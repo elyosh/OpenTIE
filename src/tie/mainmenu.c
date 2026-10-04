@@ -90,7 +90,7 @@ static Actor* mainmenu_actor; /* main background delta actor */
 static void mainmenu_end_View(int32_t frame_num);
 static int16_t mainmenu_iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 										 uint8_t right, int16_t mouse_x, int16_t mouse_y);
-static void mainmenu_iuser_MainMenu(Input* input, int32_t time);
+static int16_t mainmenu_iuser_MainMenu(Input* input, int32_t time);
 static int16_t mainmenu_user_Title(Actor* actor, int32_t time);
 static int16_t mainmenu_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								   int16_t refresh);
@@ -201,7 +201,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	door[7] = xactor_Find_Actor(FOURCC_ANIM, "m-door-7");
 #endif
 	for (i = 0; i < 8; i++) {
-		xactor_Set_Actor_User_Function(door[i], (xactorCallback)mainmenu_user_Door);
+		xactor_Set_Actor_User_Function(door[i], (xactorCallback)(void (*)(void))mainmenu_user_Door);
 		door[i]->id = i;
 	}
 
@@ -213,7 +213,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xactor_Set_Actor_User_Function(title_actor, (xactorCallback)mainmenu_user_Title);
+	xactor_Set_Actor_User_Function(title_actor, (xactorCallback)(void (*)(void))mainmenu_user_Title);
 	xactor_Set_Actor_Draw_Function(title_actor, mainmenu_draw_Title);
 
 	/* Create XINPUT button regions */
@@ -243,7 +243,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 		}
 #endif
 		xinpattr_Set_Input_Update_Function(tour_input, mainmenu_iupdate_MainMenu);
-		xinpattr_Set_Input_User_Function(tour_input, mainmenu_iuser_MainMenu);
+		xinpattr_Set_Input_User_Function(tour_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 		tour_input->mouseUsage = allInput;
 		tour_input->id = 0;
 	}
@@ -266,7 +266,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(new_tour_input, mainmenu_iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(new_tour_input, mainmenu_iuser_MainMenu);
+	xinpattr_Set_Input_User_Function(new_tour_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 	new_tour_input->mouseUsage = allInput;
 	new_tour_input->id = 2;
 #ifdef TIE_MODERN
@@ -288,7 +288,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(train_input, mainmenu_iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(train_input, mainmenu_iuser_MainMenu);
+	xinpattr_Set_Input_User_Function(train_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 	train_input->mouseUsage = allInput;
 	train_input->id = 3;
 #else
@@ -300,7 +300,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(tech_input, mainmenu_iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(tech_input, mainmenu_iuser_MainMenu);
+	xinpattr_Set_Input_User_Function(tech_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 	tech_input->mouseUsage = allInput;
 	tech_input->id = 3;
 #endif
@@ -323,7 +323,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(combat_input, mainmenu_iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(combat_input, mainmenu_iuser_MainMenu);
+	xinpattr_Set_Input_User_Function(combat_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 	combat_input->mouseUsage = allInput;
 	combat_input->id = 4;
 #else
@@ -335,7 +335,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(film_input, mainmenu_iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(film_input, mainmenu_iuser_MainMenu);
+	xinpattr_Set_Input_User_Function(film_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 	film_input->mouseUsage = allInput;
 	film_input->id = 4;
 #endif
@@ -357,7 +357,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(reg_desk_input, mainmenu_iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(reg_desk_input, mainmenu_iuser_MainMenu);
+	xinpattr_Set_Input_User_Function(reg_desk_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 	reg_desk_input->mouseUsage = allInput;
 	reg_desk_input->id = 5;
 #ifdef TIE_MODERN
@@ -379,7 +379,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(tech_input, mainmenu_iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(tech_input, mainmenu_iuser_MainMenu);
+	xinpattr_Set_Input_User_Function(tech_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 	tech_input->mouseUsage = allInput;
 	tech_input->id = 6;
 #else
@@ -391,7 +391,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(train_input, mainmenu_iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(train_input, mainmenu_iuser_MainMenu);
+	xinpattr_Set_Input_User_Function(train_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 	train_input->mouseUsage = allInput;
 	train_input->id = 6;
 #endif
@@ -414,7 +414,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(film_input, mainmenu_iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(film_input, mainmenu_iuser_MainMenu);
+	xinpattr_Set_Input_User_Function(film_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 	film_input->mouseUsage = allInput;
 	film_input->id = 7;
 #else
@@ -426,7 +426,7 @@ int16_t mainmenu_Main_Menu(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(combat_input, mainmenu_iupdate_MainMenu);
-	xinpattr_Set_Input_User_Function(combat_input, mainmenu_iuser_MainMenu);
+	xinpattr_Set_Input_User_Function(combat_input, (InputUserFunc)(void (*)(void))mainmenu_iuser_MainMenu);
 	combat_input->mouseUsage = allInput;
 	combat_input->id = 7;
 #endif
@@ -578,10 +578,10 @@ static int16_t mainmenu_iupdate_MainMenu(Input* input, Rect* bounds, Rect* clip,
 /* iuser: when exit_pending, triggers the scene transition. */
 // FUNCTION: TIE95 0x70dd4
 // FUNCTION: TIE98 0x44d550
-static void mainmenu_iuser_MainMenu(Input* input, int32_t time) {
+static int16_t mainmenu_iuser_MainMenu(Input* input, int32_t time) {
 	(void)time;
 	if (!input->var1)
-		return; /* exit_pending */
+		return 1; /* exit_pending */
 
 	if (input->var2 == 180) { /* exit_code == Tour Battle */
 		char name[64];
@@ -589,6 +589,7 @@ static void mainmenu_iuser_MainMenu(Input* input, int32_t time) {
 		shipext_Set_Mission_Name(name);
 	}
 	xerror_Set_Landru_Exit(input->var2); /* exit_code */
+	return 1;
 }
 
 /* ================================================================

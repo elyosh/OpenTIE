@@ -470,7 +470,7 @@ void TieCockpitRenderer_SetFlightRenderer(TieCockpitRenderer* cg, struct TieFlig
 		cg->flight_gpu = fg;
 }
 
-static void TieCockpitRenderer_ReleaseEntry(TieCockpitRenderer* cg, TieCockpitRendererEntry* entry) {
+static void TieCockpitRenderer_ReleaseEntry(TieCockpitRendererEntry* entry) {
 	if (entry->base_tex)
 		Aeron_DestroyTexture(entry->base_tex);
 	if (entry->original_assets)
@@ -491,7 +491,7 @@ static void TieCockpitRenderer_ReleaseEntry(TieCockpitRenderer* cg, TieCockpitRe
  * bake (its composite embeds base_tex). */
 static void TieCockpitRenderer_CockpitReloadCaches(TieCockpitRenderer* cg) {
 	for (int i = 0; i < cg->entry_count; ++i)
-		TieCockpitRenderer_ReleaseEntry(cg, &cg->entries[i]);
+		TieCockpitRenderer_ReleaseEntry(&cg->entries[i]);
 	cg->entry_count = 0;
 	cg->pending_entry = NULL;
 
@@ -520,7 +520,7 @@ void TieCockpitRenderer_Shutdown(TieCockpitRenderer* cg) {
 	if (!cg)
 		return;
 	for (int i = 0; i < cg->entry_count; ++i)
-		TieCockpitRenderer_ReleaseEntry(cg, &cg->entries[i]);
+		TieCockpitRenderer_ReleaseEntry(&cg->entries[i]);
 	for (int i = 0; i < cg->crt_mask_count; ++i)
 		if (cg->crt_masks[i].tex)
 			Aeron_DestroyTexture(cg->crt_masks[i].tex);
@@ -558,7 +558,7 @@ static TieCockpitRendererEntry* TieCockpitRenderer_FindOrAllocEntry(TieCockpitRe
 	/* Eviction moves entries, so a cached pointer cannot identify the previous bake. */
 	cg->chrome_valid = false;
 	if (cg->entry_count >= COCKPIT_MAX_CACHED) {
-		TieCockpitRenderer_ReleaseEntry(cg, &cg->entries[0]);
+		TieCockpitRenderer_ReleaseEntry(&cg->entries[0]);
 		for (int i = 1; i < cg->entry_count; ++i)
 			cg->entries[i - 1] = cg->entries[i];
 		cg->entry_count--;
@@ -2499,9 +2499,8 @@ typedef struct {
 /* color_tex × mask_tex's alpha into the cockpit RT rect, in cockpit-
  * coord space. Mask was baked at the PIP RT's native resolution so
  * a full (0..1, 0..1) UV is correct. */
-static void TieCockpitRenderer_DrawPipCompose(TieCockpitRenderer* cg, AeronCommandBuffer* cmd,
-											  AeronRenderPass* pass, AeronTexture* color_tex,
-											  AeronTexture* mask_tex, int coord_w, int coord_h, float dst_x,
+static void TieCockpitRenderer_DrawPipCompose(TieCockpitRenderer* cg, AeronRenderPass* pass,
+											  AeronTexture* color_tex, AeronTexture* mask_tex, float dst_x,
 											  float dst_y, float dst_w, float dst_h) {
 	if (!cg->pip_pipeline || !color_tex || !mask_tex)
 		return;
@@ -2532,9 +2531,8 @@ static void TieCockpitRenderer_DrawPipCompose(TieCockpitRenderer* cg, AeronComma
  * rect through the per-spec cutout mask. Engine analogue:
  * panel_update3Dcrt's xtrans2 path (panel.c:2497). A snapshot without
  * a live PIP target leaves the cockpit bitmap's CRT bezel visible. */
-static void TieCockpitRenderer_Draw3dcrt(TieCockpitRenderer* cg, AeronCommandBuffer* cmd,
-										 AeronRenderPass* pass, const TieCockpitRendererEntry* entry,
-										 int coord_w, int coord_h, const TieSnapshot* snap) {
+static void TieCockpitRenderer_Draw3dcrt(TieCockpitRenderer* cg, AeronRenderPass* pass,
+										 const TieCockpitRendererEntry* entry, const TieSnapshot* snap) {
 	const TieHudInstrument* ins = &snap->hud.instruments[2];
 	float dst_x, dst_y, dst_w, dst_h;
 	TieCockpitRenderer_ResolvePipRect(entry, snap, ins->x, ins->y, ins->param1, ins->param2, &dst_x, &dst_y,
@@ -2555,8 +2553,7 @@ static void TieCockpitRenderer_Draw3dcrt(TieCockpitRenderer* cg, AeronCommandBuf
 		TieCockpitRenderer_CrtMaskLookup(cg, snap->cockpit.mask_variant, snap->cockpit.classic_w);
 	if (!mask_tex)
 		return;
-	TieCockpitRenderer_DrawPipCompose(cg, cmd, pass, pip_texture, mask_tex, coord_w, coord_h, dst_x, dst_y,
-									  dst_w, dst_h);
+	TieCockpitRenderer_DrawPipCompose(cg, pass, pip_texture, mask_tex, dst_x, dst_y, dst_w, dst_h);
 }
 
 /* PIP subsystem target box (engine: panel.c:2683 inside
@@ -2756,7 +2753,7 @@ static void TieCockpitRenderer_DrawWidgetsForView(TieCockpitRenderer* cg, AeronC
 				TieCockpitRenderer_DrawLaserLedRow(cg, cmd, pass, entry, coord_w, coord_h, idx, snap);
 				break;
 			case HUD_W_3DCRT:
-				TieCockpitRenderer_Draw3dcrt(cg, cmd, pass, entry, coord_w, coord_h, snap);
+				TieCockpitRenderer_Draw3dcrt(cg, pass, entry, snap);
 				break;
 			case HUD_W_VERT_SLIDER:
 				TieCockpitRenderer_DrawVertSlider(cg, cmd, pass, entry, coord_w, coord_h, idx, snap);
@@ -3063,8 +3060,7 @@ void TieCockpitRenderer_RenderInPass(TieCockpitRenderer* cg, AeronCommandBuffer*
 	TieCockpitRendererHudWidgetKind kind = (TieCockpitRendererHudWidgetKind)hud_widget_kind[2];
 	if (cg->pending_entry && TieCockpitCommon_InstrumentActive(pip) &&
 		TieCockpitRenderer_ViewAllowsWidget(snap->cockpit.view_idx, 2, kind)) {
-		TieCockpitRenderer_Draw3dcrt(cg, cmd, pass, cg->pending_entry, cg->pending_space.coord_w,
-									 cg->pending_space.coord_h, snap);
+		TieCockpitRenderer_Draw3dcrt(cg, pass, cg->pending_entry, snap);
 	}
 
 	AeronDrawList_RenderIntoPass(cg->after_pip_list, cmd, pass, target);

@@ -288,7 +288,7 @@ BitmapStruct play1_last_frame;
 BitmapStruct play1_current_frame;
 
 /* Forward declarations */
-static void play1_user_Play_Arm(Actor* the_actor, int32_t time);
+static int16_t play1_user_Play_Arm(Actor* the_actor, int32_t time);
 static void play1_Make_Literal_Actor(Actor* the_actor);
 static int play1_Literal_Image(uint8_t* buffer, const uint8_t* image);
 static void play1_Update_Stream_Actor(Actor* the_actor);
@@ -807,7 +807,8 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
 	} else if (cur_scene == SCENE_CUT_420) {
 		if (the_actor->var1) {
 			if (the_actor->var1 == 1) {
-				xactor_Set_Actor_User_Function(the_actor, play1_user_Play_Arm);
+				xactor_Set_Actor_User_Function(the_actor,
+											   (xactorCallback)(void (*)(void))play1_user_Play_Arm);
 			} else if (shipext_Get_Secret_Medal() - 2 < the_actor->var1) {
 				retval = 1;
 			}
@@ -864,7 +865,7 @@ static int16_t play1_film_Callback(Film* the_film, FilmObject* film_object) {
  * (secret_medal - 1), capped at state 2.
  */
 // FUNCTION: TIE95 0x787C4
-static void play1_user_Play_Arm(Actor* the_actor, int32_t time) {
+static int16_t play1_user_Play_Arm(Actor* the_actor, int32_t time) {
 	if (time == 0) {
 		int16_t medal = shipext_Get_Secret_Medal();
 		if (medal > 3)
@@ -872,6 +873,7 @@ static void play1_user_Play_Arm(Actor* the_actor, int32_t time) {
 		else
 			xactor_Set_Actor_State(the_actor, medal - 1, 0);
 	}
+	return 1;
 }
 
 // FUNCTION: TIE95 0x78800

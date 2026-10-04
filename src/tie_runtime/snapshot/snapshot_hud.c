@@ -307,7 +307,7 @@ static void TieHudSnapshot_CaptureHud(void) {
 		hud->instruments[i].y = instruments[i].y;
 		hud->instruments[i].param1 = instruments[i].param1;
 		hud->instruments[i].param2 = instruments[i].param2;
-		if (oldinstruments[i] != -2)
+		if (oldinstruments[i] != 0xFFFE)
 			hud->instruments[i].value = oldinstruments[i];
 	}
 	const uint8_t clock_minutes = mission.train_craft_type ? timeleft.minute : _date.minute;

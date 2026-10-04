@@ -695,7 +695,6 @@ static int16_t fscript_GetRandom(int16_t lo, int16_t hi) {
 	 * value exceeds INT32_MAX/2, which is reached almost immediately
 	 * because the seeds at init are 32-bit-truncated host pointers. */
 	int i, c;
-	uint16_t raw;
 
 	for (i = 0; i < 23; i++) {
 		c = ((rseed1 & 0x40000000) != 0) ^ ((rseed2 & 0x20000000) == 0);

@@ -1098,6 +1098,9 @@ void fsfx_speakobjectname(uint16_t obj_idx, uint16_t prefix_voice) {
 	uint16_t wing_num;
 	int16_t found;
 
+#ifdef TIE_MODERN
+	wing_num = 0;
+#endif
 	if (obj_idx >= NUM_CRAFTS || !objects[obj_idx].ship_idx || objects[obj_idx].category != 0)
 		return; /* only craft have FG names */
 

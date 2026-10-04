@@ -100,10 +100,10 @@ static void tourdesk_end_View(int32_t frame_num);
 static int16_t tourdesk_iupdate_TourDesk(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 										 uint8_t right, int16_t mouse_x, int16_t mouse_y);
 static int16_t tourdesk_iuser_TourDesk(Input* input, int32_t time);
-static int tourdesk_user_Title(Actor* actor, int32_t time);
+static int16_t tourdesk_user_Title(Actor* actor, int32_t time);
 static int16_t tourdesk_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								   int16_t refresh);
-static void tourdesk_user_Door(Actor* actor, int32_t time);
+static int16_t tourdesk_user_Door(Actor* actor, int32_t time);
 static int16_t tourdesk_user_Battle(Actor* actor, int32_t time);
 static int16_t tourdesk_draw_Battle_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x, int16_t y,
 										 int16_t refresh);
@@ -154,7 +154,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	door[0] = xactor_Find_Actor(FOURCC_ANIM, TIE_FRONTEND_EDITION("lhdoor", "lhdor"));
 	door[1] = xactor_Find_Actor(FOURCC_ANIM, TIE_FRONTEND_EDITION("rhdoor", "rhdor"));
 	for (i = 0; i < 2; i++) {
-		xactor_Set_Actor_User_Function(door[i], (xactorCallback)tourdesk_user_Door);
+		xactor_Set_Actor_User_Function(door[i], (xactorCallback)(void (*)(void))tourdesk_user_Door);
 		door[i]->id = i;
 	}
 
@@ -167,7 +167,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 
 	/* Title label */
 	title_actor = xactdelt_Res_Delta_Actor("title", &frame, 0, 0, 0);
-	xactor_Set_Actor_User_Function(title_actor, (xactorCallback)tourdesk_user_Title);
+	xactor_Set_Actor_User_Function(title_actor, (xactorCallback)(void (*)(void))tourdesk_user_Title);
 	xactor_Set_Actor_Draw_Function(title_actor, tourdesk_draw_Title);
 
 	/* Battle text custom actor */
@@ -182,7 +182,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, TIE_FRONTEND_EDITION(72, 166), TIE_FRONTEND_EDITION(45, 116),
 				   TIE_FRONTEND_EDITION(256, 512), TIE_FRONTEND_EDITION(120, 291));
 	galaxy_actor = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &frame, 0, 0, 50);
-	xactor_Set_Actor_User_Function(galaxy_actor, (xactorCallback)tourdesk_user_Battle);
+	xactor_Set_Actor_User_Function(galaxy_actor, (xactorCallback)(void (*)(void))tourdesk_user_Battle);
 	xactor_Set_Actor_Draw_Function(galaxy_actor, tourdesk_draw_Battle);
 	galaxy_actor->id = 1;
 
@@ -205,7 +205,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(162, 390));
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(inp, tourdesk_iupdate_TourDesk);
-	xinpattr_Set_Input_User_Function(inp, (InputUserFunc)tourdesk_iuser_TourDesk);
+	xinpattr_Set_Input_User_Function(inp, (InputUserFunc)(void (*)(void))tourdesk_iuser_TourDesk);
 	inp->mouseUsage = allInput;
 	inp->id = 0;
 
@@ -214,7 +214,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(320, 639), TIE_FRONTEND_EDITION(120, 302));
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(inp, tourdesk_iupdate_TourDesk);
-	xinpattr_Set_Input_User_Function(inp, (InputUserFunc)tourdesk_iuser_TourDesk);
+	xinpattr_Set_Input_User_Function(inp, (InputUserFunc)(void (*)(void))tourdesk_iuser_TourDesk);
 	inp->mouseUsage = allInput;
 	inp->id = 1;
 
@@ -223,7 +223,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(180, 338), TIE_FRONTEND_EDITION(164, 434));
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(inp, tourdesk_iupdate_TourDesk);
-	xinpattr_Set_Input_User_Function(inp, (InputUserFunc)tourdesk_iuser_TourDesk);
+	xinpattr_Set_Input_User_Function(inp, (InputUserFunc)(void (*)(void))tourdesk_iuser_TourDesk);
 	inp->mouseUsage = allInput;
 	inp->id = 2;
 
@@ -232,7 +232,7 @@ int16_t tourdesk_TourDesk(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(180, 338), TIE_FRONTEND_EDITION(196, 466));
 	inp = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(inp, tourdesk_iupdate_TourDesk);
-	xinpattr_Set_Input_User_Function(inp, (InputUserFunc)tourdesk_iuser_TourDesk);
+	xinpattr_Set_Input_User_Function(inp, (InputUserFunc)(void (*)(void))tourdesk_iuser_TourDesk);
 	inp->mouseUsage = allInput;
 	inp->id = 3;
 
@@ -363,7 +363,7 @@ static int16_t tourdesk_iuser_TourDesk(Input* input, int32_t time) {
 
 // FUNCTION: TIE95 0x73D04
 // FUNCTION: TIE98 0x491060
-static int tourdesk_user_Title(Actor* actor, int32_t time) {
+static int16_t tourdesk_user_Title(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1 == 1) {
 		if (!xactor_Is_Actor_Visible(actor))
@@ -423,7 +423,7 @@ static int16_t tourdesk_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16
 
 // FUNCTION: TIE95 0x73E6C
 // FUNCTION: TIE98 0x491200
-static void tourdesk_user_Door(Actor* actor, int32_t time) {
+static int16_t tourdesk_user_Door(Actor* actor, int32_t time) {
 	(void)time;
 	if (actor->var1) {
 		if (!actor->state)
@@ -438,6 +438,7 @@ static void tourdesk_user_Door(Actor* actor, int32_t time) {
 				soundext_Play_SFX(sfxLargeDoorShut, 90);
 		}
 	}
+	return 1;
 }
 
 // FUNCTION: TIE95 0x73EEC

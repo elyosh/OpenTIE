@@ -502,6 +502,9 @@ void trig2_calcarctan(int32_t a, int32_t b, int16_t* out_angle, int16_t* out_rat
 	int32_t larger;
 	uint32_t frac;
 
+#ifdef TIE_MODERN
+	frac = 0;
+#endif
 	trig2_signswap = 0;
 	if (a != b) {
 		larger = a;

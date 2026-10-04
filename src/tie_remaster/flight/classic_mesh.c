@@ -22,7 +22,7 @@
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
 
-void TieFlightRenderer_ReleaseSpeciesMesh(TieFlightRenderer* g, TieFlightSpeciesMesh* m) {
+void TieFlightRenderer_ReleaseSpeciesMesh(TieFlightSpeciesMesh* m) {
 	if (m->owns_resources) {
 		if (m->vbo)
 			Aeron_DestroyBuffer(m->vbo);

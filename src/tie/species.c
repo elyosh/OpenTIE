@@ -338,7 +338,7 @@ SpeciesEntry species_table[NUM_SPECIES] = {
 	/* 160 */ { 0x01, 0x00, 1, 7, 2048, 256, 0, NULL, NULL, 0x00, 255, 2, 0 },
 };
 // GLOBAL: TIE95 0xCBBC0
-static uint8_t speciesentrysize[4] = { 22, 0, 166, 219 };
+uint8_t speciesentrysize[4] = { 22, 0, 166, 219 };
 
 /* Projectile model data: six 183-byte laser variants and four 186-byte
  * warhead variants. */

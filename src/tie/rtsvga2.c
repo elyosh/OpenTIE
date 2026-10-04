@@ -226,7 +226,7 @@ void rtsvga2_initgraphVGA(void) {
 	if (TIE_DISPLAY_DX5) {
 		uint32_t y;
 
-		for (y = 0; y < screenYRes; ++y)
+		for (y = 0; (uint32_t)y < screenYRes; ++y)
 			lineaddressVGA[y] = (int32_t)g_surfacePitch * y;
 		memset(vgapointer, 0, (size_t)screenYRes * g_surfacePitch);
 		if (flightResolution == TIE_FLIGHT_RES_SVGA || flightResolution == TIE_FLIGHT_RES_SVGA_16 ||
@@ -243,7 +243,7 @@ void rtsvga2_initgraphVGA(void) {
 	{
 		int32_t mem_width = screenMemWidth;
 		uint32_t y;
-		for (y = 0; y < screenYRes; ++y)
+		for (y = 0; (uint32_t)y < screenYRes; ++y)
 			lineaddressVGA[y] = mem_width * y;
 	}
 
@@ -295,7 +295,7 @@ void rtsvga2_setvgapointers(void* vga_ptr, uint16_t mem_width, uint16_t num_line
 		int16_t y;
 
 		vgapointer = vesa_buff_gbl;
-		for (y = 0; y < screenYRes; ++y)
+		for (y = 0; (uint32_t)y < screenYRes; ++y)
 			lineaddressVGA[y] = screenMemWidth * y;
 	}
 }

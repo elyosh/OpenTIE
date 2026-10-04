@@ -78,7 +78,7 @@ static Input* officer; /* officer widget (id=1) */
 static int16_t debrief_user_Title(Actor* actor, int32_t time);
 static int16_t debrief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 								  int16_t refresh);
-static void debrief_user_Door(Actor* actor, int32_t time);
+static int16_t debrief_user_Door(Actor* actor, int32_t time);
 static int16_t debrief_user_Officer(Actor* actor, int32_t time);
 
 static void debrief_end_View(int32_t frame_num);
@@ -131,7 +131,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(193, 420), TIE_FRONTEND_EDITION(107, 288));
 	brief_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(brief_input, debrief_iupdate_Debrief);
-	xinpattr_Set_Input_User_Function(brief_input, (InputUserFunc)debrief_iuser_Debrief);
+	xinpattr_Set_Input_User_Function(brief_input, (InputUserFunc)(void (*)(void))debrief_iuser_Debrief);
 	brief_input->mouseUsage = allInput;
 	brief_input->id = 0;
 
@@ -141,7 +141,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 					   TIE_FRONTEND_EDITION(133, 296), TIE_FRONTEND_EDITION(150, 322));
 		officer = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(officer, debrief_iupdate_Debrief);
-		xinpattr_Set_Input_User_Function(officer, (InputUserFunc)debrief_iuser_Debrief);
+		xinpattr_Set_Input_User_Function(officer, (InputUserFunc)(void (*)(void))debrief_iuser_Debrief);
 		officer->mouseUsage = allInput;
 		officer->id = 1;
 	}
@@ -152,7 +152,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 					   TIE_FRONTEND_EDITION(290, 572), TIE_FRONTEND_EDITION(128, 316));
 		priest = xinput_Alloc_Input(parent, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(priest, debrief_iupdate_Debrief);
-		xinpattr_Set_Input_User_Function(priest, (InputUserFunc)debrief_iuser_Debrief);
+		xinpattr_Set_Input_User_Function(priest, (InputUserFunc)(void (*)(void))debrief_iuser_Debrief);
 		priest->mouseUsage = allInput;
 		priest->id = 2;
 	}
@@ -162,7 +162,7 @@ int16_t debrief_Debrief(SceneHeadStruct* scene_head) {
 				   TIE_FRONTEND_EDITION(70, 145), TIE_FRONTEND_EDITION(200, 345));
 	flyagain = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(flyagain, debrief_iupdate_Debrief);
-	xinpattr_Set_Input_User_Function(flyagain, (InputUserFunc)debrief_iuser_Debrief);
+	xinpattr_Set_Input_User_Function(flyagain, (InputUserFunc)(void (*)(void))debrief_iuser_Debrief);
 	flyagain->mouseUsage = allInput;
 	flyagain->id = 3;
 
@@ -220,7 +220,7 @@ static int16_t debrief_film_Callback(Film* film, FilmObject* film_object) {
 			break;
 
 		case 2: /* Door actor — stored by var2 index */
-			xactor_Set_Actor_User_Function(actor, debrief_user_Door);
+			xactor_Set_Actor_User_Function(actor, (xactorCallback)(void (*)(void))debrief_user_Door);
 			door_actors[actor->var2] = actor;
 			break;
 
@@ -230,7 +230,8 @@ static int16_t debrief_film_Callback(Film* film, FilmObject* film_object) {
 				case 1:
 				case 2:
 					if (shipext_Get_Mission_Officer() != 2) {
-						xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Officer);
+						xactor_Set_Actor_User_Function(actor,
+													   (xactorCallback)(void (*)(void))debrief_user_Officer);
 						actor->id = actor->var2;
 					} else {
 						hide = 1; /* hide if priest-only */
@@ -245,7 +246,8 @@ static int16_t debrief_film_Callback(Film* film, FilmObject* film_object) {
 
 				case 4:
 					if (shipext_Get_Mission_Officer() != 1) {
-						xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Officer);
+						xactor_Set_Actor_User_Function(actor,
+													   (xactorCallback)(void (*)(void))debrief_user_Officer);
 						actor->id = 3;
 					} else {
 						hide = 1; /* hide if officer-only */
@@ -283,7 +285,7 @@ static int16_t debrief_film_Callback(Film* film, FilmObject* film_object) {
 				}
 			}
 			if (!hide) {
-				xactor_Set_Actor_User_Function(actor, (xactorCallback)debrief_user_Title);
+				xactor_Set_Actor_User_Function(actor, (xactorCallback)(void (*)(void))debrief_user_Title);
 				xactor_Set_Actor_Draw_Function(actor, debrief_draw_Title);
 				title_actor = actor;
 			}
@@ -457,7 +459,7 @@ static int16_t debrief_draw_Title(Actor* actor, Rect* bounds, Rect* clip, int16_
 
 // FUNCTION: TIE95 0x70598
 // FUNCTION: TIE98 0x415DE0
-static void debrief_user_Door(Actor* actor, int32_t time) {
+static int16_t debrief_user_Door(Actor* actor, int32_t time) {
 	if (!time) {
 		actor->var2 = 0;
 		actor->var1 = 0;
@@ -478,6 +480,7 @@ static void debrief_user_Door(Actor* actor, int32_t time) {
 				soundext_Play_SFX(sfxSmallDoorShut, 80);
 		}
 	}
+	return 1;
 }
 
 /* ================================================================

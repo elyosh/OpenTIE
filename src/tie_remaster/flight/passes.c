@@ -624,7 +624,7 @@ static bool TieFlightRenderer_WarmFlightSpecies(TieFlightRenderer* g, AeronComma
 		AeronCommandBufferUploadUsage upload_after = { 0 };
 		(void)Aeron_CommandBufferGetUploadUsage(cmd, &upload_before);
 		for (uint16_t species = 0; species < TIE_FLIGHT_MAX_SPECIES; ++species) {
-			TieFlightRenderer_ReleaseSpeciesMesh(g, &g->meshes[species]);
+			TieFlightRenderer_ReleaseSpeciesMesh(&g->meshes[species]);
 			TieFlightRenderer_ReleaseSceneSpeciesShip(g, &g->scene_ships[species]);
 		}
 		char error[768];

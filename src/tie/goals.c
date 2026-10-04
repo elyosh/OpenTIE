@@ -746,13 +746,14 @@ uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, 
 			if ((int8_t)fg_array[i].count > 1) {
 				/* Multi-craft FG: "species group FG_name". */
 				total += goals_outputspeciesname((int8_t)fg_array[i].species, 0);
-				wrap =
-					(uint16_t)sys2_calclength((const uint8_t*)goal_group_string) + cursorx > screenXRes - 11
-						? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
-						: (uint16_t)0;
+				wrap = (uint32_t)((uint16_t)sys2_calclength((const uint8_t*)goal_group_string) + cursorx) >
+							   screenXRes - 11
+						   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
+						   : (uint16_t)0;
 				total += wrap;
 				festring_outstring((const uint8_t*)goal_group_string);
-				wrap = cursorx + (uint16_t)sys2_calclength((const uint8_t*)&fg_array[i]) > screenXRes - 11
+				wrap = (uint32_t)(cursorx + (uint16_t)sys2_calclength((const uint8_t*)&fg_array[i])) >
+							   screenXRes - 11
 						   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
 						   : (uint16_t)0;
 				total += wrap;
@@ -761,7 +762,8 @@ uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, 
 			} else {
 				/* Single-craft FG: "species FG_name". */
 				total += goals_outputspeciesname((int8_t)fg_array[i].species, 0);
-				wrap = cursorx + (uint16_t)sys2_calclength((const uint8_t*)&fg_array[i]) > screenXRes - 11
+				wrap = (uint32_t)(cursorx + (uint16_t)sys2_calclength((const uint8_t*)&fg_array[i])) >
+							   screenXRes - 11
 						   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
 						   : (uint16_t)0;
 				total += wrap;
@@ -772,7 +774,8 @@ uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, 
 			 * optional leading space when no wrap occurred; preceding ->
 			 * ", "; last (zero remaining) -> nothing. */
 			if (--in_set == 1) {
-				wrap = cursorx + (uint16_t)sys2_calclength((const uint8_t*)goal_and_string) > screenXRes - 11
+				wrap = (uint32_t)(cursorx + (uint16_t)sys2_calclength((const uint8_t*)goal_and_string)) >
+							   screenXRes - 11
 						   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
 						   : (uint16_t)0;
 				total += wrap;
@@ -832,8 +835,9 @@ uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, 
 	}
 
 	/* ----- Common tail: verb + condition clause ------------------- */
-	wrap = cursorx + (uint16_t)sys2_calclength(
-						 ((const uint8_t**)condverbstrings)[tenseflag[cond] + status + tense_offset]) >
+	wrap = (uint32_t)(cursorx +
+					  (uint16_t)sys2_calclength(
+						  ((const uint8_t**)condverbstrings)[tenseflag[cond] + status + tense_offset])) >
 				   screenXRes - 11
 			   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
 			   : (uint16_t)0;
@@ -842,7 +846,8 @@ uint16_t goals_outputgoal(uint16_t target, uint16_t cond, uint16_t target_type, 
 		outchar(' ');
 	festring_outstring(((const uint8_t**)condverbstrings)[tenseflag[cond] + status + tense_offset]);
 
-	wrap = cursorx + (uint16_t)sys2_calclength(((const uint8_t**)condstrings)[cond]) > screenXRes - 11
+	wrap = (uint32_t)(cursorx + (uint16_t)sys2_calclength(((const uint8_t**)condstrings)[cond])) >
+				   screenXRes - 11
 			   ? (outchar('\n'), festring_setcursor(6, cursory), (uint16_t)fontheight)
 			   : (uint16_t)0;
 	total += wrap;
@@ -869,6 +874,9 @@ uint16_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 	uint16_t spec_num;
 	uint16_t wrap;
 
+#ifdef TIE_MODERN
+	name = NULL;
+#endif
 	spec_num = spec_getspecnum(species_idx);
 	if (spec_num != 0xFF) {
 #ifdef TIE_MODERN
@@ -876,13 +884,13 @@ uint16_t goals_outputspeciesname(uint16_t species_idx, int16_t plural_flag) {
 #else
 		name = (const uint8_t*)spec_data[spec_num].name_ptr;
 #endif
-	} else if (species_idx >= 70 || species_idx <= 84) {
+	} else if (species_idx >= 70 || (int32_t)species_idx <= 84) {
 		/* The retail range check uses || and so accepts every species. */
 		name = (const uint8_t*)((char**)buoystr)[species_idx - 70];
 	}
 
 	/* Right-margin wrap check (checkwrap, inlined in retail). */
-	wrap = cursorx + (uint16_t)sys2_calclength(name) > screenXRes - 11u
+	wrap = (uint32_t)(cursorx + (uint16_t)sys2_calclength(name)) > screenXRes - 11u
 			   ? (outchar('\n'), festring_setcursor(6, cursory), fontheight)
 			   : 0;
 	festring_outstring(name);

@@ -1974,7 +1974,7 @@ void shipext_Find_Mission_Ship(void) {
 
 	/* If a mothership FG was found, read it to check if it's a capital ship.
 	 * Capital ships (types 0x3C..0x45) mean the player launches from a hangar. */
-	if (mothership_fg != 0xFFFF) {
+	if ((int32_t)mothership_fg != 0xFFFF) {
 		/* Seek relative to the current position (TIE_SEEK_CUR) */
 		if (mothership_fg <= fg_idx)
 			xfile_Seek_File(fp, (int32_t)EFGSTRUCT_DISK_SIZE * (mothership_fg - fg_idx + 1), 1);

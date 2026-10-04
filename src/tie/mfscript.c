@@ -459,7 +459,9 @@ static int16_t currentState;
 
 /* --- Internal helpers --- */
 
+#ifndef TIE_MODERN
 static int16_t mfscript_GetRandom(int16_t lo, int16_t hi);
+#endif
 static CueRef* mfscript_GetSequence(void);
 static ChangeRef* mfscript_GetDefaultChangeRef(void);
 static void mfscript_DoChange(ChangeRef* cgp, intptr_t sound1, intptr_t sound2);
@@ -961,6 +963,7 @@ static ChangeRef* mfscript_GetDefaultChangeRef(void) {
 	}
 }
 
+#ifndef TIE_MODERN
 /* Unreferenced in retail. */
 // FUNCTION: TIE95 0x8883C
 static int16_t mfscript_GetRandom(int16_t lo, int16_t hi) {
@@ -980,3 +983,4 @@ static int16_t mfscript_GetRandom(int16_t lo, int16_t hi) {
 	return (int16_t)((((uint32_t)(uint16_t)((uint32_t)rseed1 + (uint32_t)rseed2) * (hi - lo + 1)) >> 16) +
 					 lo);
 }
+#endif

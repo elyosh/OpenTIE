@@ -437,7 +437,7 @@ AeronGraphicsPipeline* TieFlightRenderer_CreateBoltLinePipeline(AeronShader* vs,
 bool TieFlightRenderer_EnsureSpeciesMesh(struct TieFlightRenderer* g, AeronCommandBuffer* cmd,
 										 uint16_t species_idx, const void* blob, size_t blob_size,
 										 bool is_laser);
-void TieFlightRenderer_ReleaseSpeciesMesh(struct TieFlightRenderer* g, TieFlightSpeciesMesh* m);
+void TieFlightRenderer_ReleaseSpeciesMesh(TieFlightSpeciesMesh* m);
 
 /* scene_mesh.c: prepare a retained scene mesh from the selected provider. */
 bool TieFlightRenderer_EnsureSceneSpeciesShip(struct TieFlightRenderer* g, AeronCommandBuffer* cmd,

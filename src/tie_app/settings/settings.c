@@ -597,7 +597,6 @@ static void TieSettings_DrawPathPicker(AeronUiContext* ui) {
 static void TieSettings_GamePage(AeronUiContext* ui) {
 	static const char* const versions[] = { "TIE95", "TIE98" };
 	static const char* const renderers[] = { "Software", "Direct3D" };
-	static const char* const model_sources[] = { "Original", "Remastered" };
 	static const char* const update_rates[] = { "Native", "TIE95", "Unlocked" };
 	static const char* const off_on[] = { "Off", "On" };
 	static const char* const vulnerability[] = { "Vulnerable", "Invulnerable" };
@@ -625,7 +624,6 @@ static void TieSettings_GamePage(AeronUiContext* ui) {
 	AeronUi_Header(ui, "Version Selection");
 	int frontend = launch.frontend_version;
 	int flight_version = launch.flight_version;
-	int model_source = launch.model_source;
 	int renderer = flight.tie98_original_renderer;
 	int update_rate = flight.update_rate;
 	launch_changed |= AeronUi_Selector(ui, "Cutscenes and Menus", &frontend, versions, 2);
@@ -655,8 +653,12 @@ static void TieSettings_GamePage(AeronUiContext* ui) {
 			flight.tie98_original_renderer = (Tie98OriginalRenderer)renderer;
 			flight_changed = true;
 		}
-		/*launch_changed |= AeronUi_Selector(ui, "Flight Models", &model_source, model_sources, 2);
-		launch.model_source = (TieFlightModelSource)model_source;*/
+#if 0
+		static const char* const model_sources[] = { "Original", "Remastered" };
+		int model_source = launch.model_source;
+		launch_changed |= AeronUi_Selector(ui, "Flight Models", &model_source, model_sources, 2);
+		launch.model_source = (TieFlightModelSource)model_source;
+#endif
 	}
 	if (AeronUi_Selector(ui, "Update Rate", &update_rate, update_rates, 3)) {
 		flight.update_rate = (TieFlightUpdateRate)update_rate;

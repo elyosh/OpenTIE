@@ -174,7 +174,7 @@ static void train_end_Train_View(int32_t time);
 static int16_t train_film_Train_Callback(Film* the_film, FilmObject* film_object);
 static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 								   uint8_t mouseState, uint8_t prevMouseState, int16_t key, int16_t prevKey);
-static void train_iuser_Train(Input* input, int32_t time);
+static int16_t train_iuser_Train(Input* input, int32_t time);
 static int16_t train_iupdate_Train_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 										  uint8_t mouseState, uint8_t prevMouseState, int16_t key,
 										  int16_t prevKey);
@@ -224,7 +224,7 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 				   TIE_FRONTEND_EDITION(254, 500), TIE_FRONTEND_EDITION(116, 300));
 	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(monitor_input, train_iupdate_Train_Screen);
-	xinpattr_Set_Input_User_Function(monitor_input, (InputUserFunc)train_iuser_Train_Screen);
+	xinpattr_Set_Input_User_Function(monitor_input, (InputUserFunc)(void (*)(void))train_iuser_Train_Screen);
 	xinpattr_Set_Input_Draw_Function(monitor_input, train_idraw_Train_Screen);
 	xinpattr_Refreshable_Input(monitor_input);
 	monitor_input->id = 0;
@@ -259,7 +259,7 @@ int16_t train_Train(SceneHeadStruct* the_head) {
 		}
 		button_input[i] = xinput_Alloc_Input(world_input, &frame, 0, 0);
 		xinpattr_Set_Input_Update_Function(button_input[i], train_iupdate_Train);
-		xinpattr_Set_Input_User_Function(button_input[i], train_iuser_Train);
+		xinpattr_Set_Input_User_Function(button_input[i], (InputUserFunc)(void (*)(void))train_iuser_Train);
 		button_input[i]->mouseUsage = 4;
 		button_input[i]->id = i + 1;
 	}
@@ -428,11 +428,11 @@ static int16_t train_iupdate_Train(Input* input, Rect* draw_rect, Rect* clip_rec
 
 // FUNCTION: TIE95 0x6BA58
 // FUNCTION: TIE98 0x492150
-static void train_iuser_Train(Input* input, int32_t time) {
+static int16_t train_iuser_Train(Input* input, int32_t time) {
 	(void)time;
 
 	if (!xinpattr_Get_Input_Selected(input) || helmet->var2)
-		return;
+		return 1;
 
 	switch (input->id) {
 		case 1:
@@ -440,24 +440,32 @@ static void train_iuser_Train(Input* input, int32_t time) {
 			train_mode = 0;
 			train_time = 80;
 			bpflight_Stop_Movie_Engine();
+			if (TIE_FRONTEND_TIE98)
+				train_monitor_needs_clear = 1;
 			break;
 		case 2:
 			shipext_Next_Train_Ship();
 			train_mode = 0;
 			train_time = 80;
 			bpflight_Stop_Movie_Engine();
+			if (TIE_FRONTEND_TIE98)
+				train_monitor_needs_clear = 1;
 			break;
 		case 3:
 			shipext_Last_Train_Level();
 			train_mode = 0;
 			train_time = 80;
 			bpflight_Stop_Movie_Engine();
+			if (TIE_FRONTEND_TIE98)
+				train_monitor_needs_clear = 1;
 			break;
 		case 4:
 			shipext_Next_Train_Level();
 			train_mode = 0;
 			train_time = 80;
 			bpflight_Stop_Movie_Engine();
+			if (TIE_FRONTEND_TIE98)
+				train_monitor_needs_clear = 1;
 			break;
 		case 5:
 			helmet->var2 = 1;
@@ -467,12 +475,12 @@ static void train_iuser_Train(Input* input, int32_t time) {
 			break;
 	}
 
-	if (TIE_FRONTEND_TIE98 && input->id <= 4)
-		train_monitor_needs_clear = 1;
+	return 1;
 }
 
 /* ------------------------------------------------------------------ */
 
+#ifndef TIE_MODERN
 // FUNCTION: TIE95 0x6BB60
 static void train_idraw_Train(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh) {
 	int16_t color, id, i;
@@ -516,6 +524,7 @@ static void train_idraw_Train(Input* input, Rect* draw_rect, Rect* clip_rect, in
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip_rect);
 }
+#endif
 
 /* ------------------------------------------------------------------ */
 

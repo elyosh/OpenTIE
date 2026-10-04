@@ -425,6 +425,7 @@ void panel_updateweaponwarnings(int mode) {
 	int16_t best_count;
 	uint16_t k;
 	uint16_t v44_val;
+	(void)mode;
 
 	for (i = 0; i < NUM_CRAFTS; ++i) {
 		CraftData* cp;
@@ -1430,6 +1431,9 @@ void panel_updatelasers(void) {
 		uint16_t empty_frame;
 		uint16_t filled_frame;
 
+#ifdef TIE_MODERN
+		filled_frame = 0;
+#endif
 		if (!(x0 + y0))
 			continue;
 
@@ -2685,6 +2689,7 @@ void panel_tryEMSforpanels(int spec_num) {
 	/* Binary: XMEMHDL_Alloc_Handle -> malloc; Lock/Unlock -> no-op.
 	 * handle field repurposed as a "loaded" flag (1 = loaded, 0 = empty). */
 	uint16_t i;
+	(void)spec_num;
 
 	for (i = 0; i < PANEL_NUM_VIEWS; ++i) {
 		panelviewptrs[i].handle = 0;

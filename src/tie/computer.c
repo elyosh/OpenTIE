@@ -1356,6 +1356,7 @@ static void computer_idraw_Computer(Input* input, Rect* r, Rect* clip_r, int16_t
 	}
 }
 
+#ifndef TIE_MODERN
 /* Retail TIE95 keeps this callback but never installs it. */
 // FUNCTION: TIE95 0x83DD4
 static void computer_idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
@@ -1378,6 +1379,7 @@ static void computer_idraw_Computer_Medal(Input* input, Rect* r, Rect* clip_r, i
 	if (xinpattr_Is_Input_Dirty(input))
 		xdirty_Dirty_Rect(clip_r);
 }
+#endif
 
 /* ======================================================================
  * computer_xdraw_Computer_Medal — medal display rendering (complex)
@@ -1766,7 +1768,6 @@ static int16_t computer_iupdate_Exit_No(Input* input, Rect* r, Rect* clip_r, int
 // FUNCTION: TIE95 0x84C88
 // FUNCTION: TIE98 0x40DE30
 static void computer_idraw_Computer_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
-	int16_t font_id = TIE_FRONTEND_EDITION(0, 2);
 	PushButton* btn = (PushButton*)input;
 
 	if (!refresh)

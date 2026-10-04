@@ -535,7 +535,6 @@ void msg_reportfgcreation(uint16_t fg_idx, uint16_t species_idx) {
 	 * CREATE_getworldposition(0x8000, fg_idx) anchor. */
 	uint16_t clicks;
 	uint16_t count;
-	uint16_t tpl;
 
 	if (!fg_array[fg_idx].start_fg_used) {
 		create_getworldposition(0x8000, fg_idx);

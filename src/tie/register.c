@@ -213,12 +213,12 @@ static void register_idraw_Protect_Input(Input* input, Rect* frame, Rect* clip, 
 
 static int16_t register_film_Callback(Film* film, FilmObject* fo);
 static int16_t register_user_Door(Actor* door, int32_t time);
-static void register_user_Troop(Actor* troop, int32_t time);
+static int16_t register_user_Troop(Actor* troop, int32_t time);
 static int16_t register_draw_Register_Back(Actor* actor, Rect* bounds, Rect* clip, int16_t xoff, int16_t yoff,
 										   int16_t refresh);
 static int16_t register_iupdate_Register(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 										 uint8_t right, int16_t mouse_x, int16_t mouse_y);
-static void register_iuser_Register(Input* input, int32_t time);
+static int16_t register_iuser_Register(Input* input, int32_t time);
 static int16_t register_iupdate_Pilot_List(Input* input, Rect* bounds, Rect* clip, int16_t key, uint8_t left,
 										   uint8_t right, int16_t mouse_x, int16_t mouse_y);
 static void register_idraw_Pilot_List(Input* input, Rect* frame, Rect* clip, int16_t refresh);
@@ -377,7 +377,7 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xactor_Set_Actor_User_Function(reg_door, (xactorCallback)register_user_Door);
+	xactor_Set_Actor_User_Function(reg_door, (xactorCallback)(void (*)(void))register_user_Door);
 
 #ifdef TIE_MODERN
 	reg_troop = xactor_Find_Actor(FOURCC_ANIM, "reg-trpa");
@@ -390,7 +390,7 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 		return 0;
 	}
 #endif
-	xactor_Set_Actor_User_Function(reg_troop, (xactorCallback)register_user_Troop);
+	xactor_Set_Actor_User_Function(reg_troop, (xactorCallback)(void (*)(void))register_user_Troop);
 
 	/* Init register_directory and symbol actor */
 	xfiledir_Init_Directory(&register_directory, ".tfr", 0);
@@ -441,7 +441,7 @@ int16_t register_Register(SceneHeadStruct* scene_head) {
 	}
 #endif
 	xinpattr_Set_Input_Update_Function(door_input, register_iupdate_Register);
-	xinpattr_Set_Input_User_Function(door_input, register_iuser_Register);
+	xinpattr_Set_Input_User_Function(door_input, (InputUserFunc)(void (*)(void))register_iuser_Register);
 	door_input->mouseUsage = allInput;
 	door_input->id = 0;
 
@@ -701,7 +701,7 @@ static int16_t register_user_Door(Actor* door, int32_t time) {
 
 // FUNCTION: TIE95 0x7AC10
 // FUNCTION: TIE98 0x470450
-static void register_user_Troop(Actor* troop, int32_t time) {
+static int16_t register_user_Troop(Actor* troop, int32_t time) {
 	(void)time;
 	if (troop->var1) {
 		if (troop->state == 3)
@@ -713,6 +713,7 @@ static void register_user_Troop(Actor* troop, int32_t time) {
 		if (troop->state > 0)
 			xactor_Set_Actor_State(troop, troop->state - 1, 0);
 	}
+	return 1;
 }
 
 // FUNCTION: TIE95 0x7AC80
@@ -794,7 +795,7 @@ static int16_t register_iupdate_Register(Input* input, Rect* bounds, Rect* clip,
 
 // FUNCTION: TIE95 0x7AE3C
 // FUNCTION: TIE98 0x470680
-static void register_iuser_Register(Input* input, int32_t time) {
+static int16_t register_iuser_Register(Input* input, int32_t time) {
 	int16_t state;
 
 	(void)time;
@@ -821,6 +822,7 @@ static void register_iuser_Register(Input* input, int32_t time) {
 		default:
 			break;
 	}
+	return 1;
 }
 
 /* ================================================================

@@ -158,7 +158,7 @@ static int16_t combat_film_Combat_Callback(Film* the_film, FilmObject* film_obje
 static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 									 uint8_t mouseState, uint8_t prevMouseState, int16_t key,
 									 int16_t prevKey);
-static void combat_iuser_Combat(Input* input, int32_t time);
+static int16_t combat_iuser_Combat(Input* input, int32_t time);
 static void combat_idraw_Combat(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t refresh);
 static int16_t combat_iupdate_Combat_Screen(Input* input, Rect* draw_rect, Rect* clip_rect, int16_t active,
 											uint8_t mouseState, uint8_t prevMouseState, int16_t key,
@@ -217,7 +217,8 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 				   TIE_FRONTEND_EDITION(262, 516), TIE_FRONTEND_EDITION(115, 272));
 	monitor_input = xinput_Alloc_Input(world_input, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(monitor_input, combat_iupdate_Combat_Screen);
-	xinpattr_Set_Input_User_Function(monitor_input, (InputUserFunc)combat_iuser_Combat_Screen);
+	xinpattr_Set_Input_User_Function(monitor_input,
+									 (InputUserFunc)(void (*)(void))combat_iuser_Combat_Screen);
 	xinpattr_Set_Input_Draw_Function(monitor_input, combat_idraw_Combat_Screen);
 	xinpattr_Refreshable_Input(monitor_input);
 	monitor_input->id = 0;
@@ -267,7 +268,8 @@ int16_t combat_Combat(SceneHeadStruct* the_head) {
 		if (i <= 5) {
 			button_input[i]->mouseUsage = 4;
 			xinpattr_Set_Input_Update_Function(button_input[i], combat_iupdate_Combat);
-			xinpattr_Set_Input_User_Function(button_input[i], combat_iuser_Combat);
+			xinpattr_Set_Input_User_Function(button_input[i],
+											 (InputUserFunc)(void (*)(void))combat_iuser_Combat);
 		} else {
 			xinpattr_Set_Input_Draw_Function(button_input[i], combat_idraw_Combat);
 			xinpattr_Refreshable_Input(button_input[i]);
@@ -465,13 +467,13 @@ static int16_t combat_iupdate_Combat(Input* input, Rect* draw_rect, Rect* clip_r
 
 // FUNCTION: TIE95 0x6D0E8
 // FUNCTION: TIE98 0x40A970
-static void combat_iuser_Combat(Input* input, int32_t time) {
+static int16_t combat_iuser_Combat(Input* input, int32_t time) {
 	/* Pressure door SFX on button 5 at entry scene A with time == 4 */
 	if (input->id == 5 && time == 4 && shellext_Get_Cur_Scene() == SCENE_COMBAT_A)
 		soundext_Play_SFX(sfxPressureDoor, 64);
 
 	if (!xinpattr_Get_Input_Selected(input) || helmet->var2 || !input->id)
-		return;
+		return 1;
 
 	switch (input->id) {
 		case 1:
@@ -522,6 +524,7 @@ static void combat_iuser_Combat(Input* input, int32_t time) {
 			xerror_Set_Landru_Exit(SCENE_MAIN_MENU);
 			break;
 	}
+	return 1;
 }
 
 /* ------------------------------------------------------------------ */

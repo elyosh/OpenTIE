@@ -301,10 +301,10 @@ void collide_collisions(void) {
 
 				/* Tractor prompt (date.minute >= 2 = late mission phase). */
 				if (date.minute >= 2 &&
-					(fg_array[pstate.player_fg_idx].pri_stop_fg_used &&
-						 (int8_t)fg_array[pstate.player_fg_idx].pri_stop_fg == objects[target_idx].fg_idx ||
-					 fg_array[pstate.player_fg_idx].sec_stop_fg_used &&
-						 (int8_t)fg_array[pstate.player_fg_idx].sec_stop_fg == objects[target_idx].fg_idx)) {
+					((fg_array[pstate.player_fg_idx].pri_stop_fg_used &&
+					  (int8_t)fg_array[pstate.player_fg_idx].pri_stop_fg == objects[target_idx].fg_idx) ||
+					 (fg_array[pstate.player_fg_idx].sec_stop_fg_used &&
+					  (int8_t)fg_array[pstate.player_fg_idx].sec_stop_fg == objects[target_idx].fg_idx))) {
 					CraftData* tc = objects[target_idx].craft_ptr;
 					craftptr = tc;
 					if (!tc->flight_flag) {
@@ -1914,6 +1914,7 @@ void collide_updatekills(uint16_t shooter_obj_idx, uint16_t victim_obj_idx, int 
 	CraftData* shooter_craft;
 	uint16_t victim_specnum;
 	uint16_t voice_threshold;
+	(void)unused;
 
 	if (shooter_obj_idx >= NUM_CRAFTS)
 		return;
@@ -2009,6 +2010,7 @@ void collide_updatehits(uint16_t projectile_obj_idx, uint16_t hit_count) {
 	uint16_t self_idx = objects[projectile_obj_idx].self_idx;
 	uint16_t ship_idx = objects[projectile_obj_idx].ship_idx;
 	CraftData* craft;
+	(void)hit_count;
 
 	/* Static shooters use encoded references and have no craft hit counters. */
 	if (self_idx >= NUM_CRAFTS)

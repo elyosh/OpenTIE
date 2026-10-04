@@ -342,10 +342,10 @@ int16_t map_Map(SceneHeadStruct* scene_head) {
 		/* xactor_Non_Refreshable_Actor(the_actor); */
 		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_BG2], &r, 0, 0, 50);
 		the_actor = xactdelt_Res_Delta_Actor(map_str[MAP_BRIEF_PANEL], &r, 0, 0, 20);
-		xactor_Set_Actor_User_Function(the_actor, (xactorCallback)map_user_Map_Panel);
+		xactor_Set_Actor_User_Function(the_actor, (xactorCallback)(void (*)(void))map_user_Map_Panel);
 		the_actor->id = 0;
 		the_actor = xactanim_Res_Anim_Actor(map_str[MAP_PANEL_HANDLE], &r, 0, 0, 20);
-		xactor_Set_Actor_User_Function(the_actor, (xactorCallback)map_user_Map_Panel);
+		xactor_Set_Actor_User_Function(the_actor, (xactorCallback)(void (*)(void))map_user_Map_Panel);
 		the_actor->id = 1;
 		cmbticons = xactanim_Res_Anim_Actor(map_str[MAP_BRIEF_BUTTONS], &r, 0, 12, 0);
 	} else if (scene == SCENE_TRAIN_MAP) {
@@ -940,6 +940,7 @@ static int16_t map_draw_Map_Text(Actor* actor, Rect* r, Rect* clip_r, int16_t x,
 static void map_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh) {
 	char buf[64], str1[32], fmt[32];
 	Rect tr;
+	(void)refresh;
 
 	xrect_Copy_Rect(&tr, r);
 	player_Stars_To_Back(r->top + 1);

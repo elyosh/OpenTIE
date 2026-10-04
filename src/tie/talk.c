@@ -204,11 +204,11 @@ static uint8_t talk_speech_streaming = 0;
 static void talk_end_View(int32_t refresh);
 static int16_t talk_iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
 								 uint8_t right, int16_t x, int16_t y);
-static void talk_iuser_Talk(Input* input, int32_t time);
+static int16_t talk_iuser_Talk(Input* input, int32_t time);
 static void talk_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh);
 static int16_t talk_iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
 								   uint8_t right, int16_t x, int16_t y);
-static void talk_iuser_Answer(Input* input, int32_t time);
+static int16_t talk_iuser_Answer(Input* input, int32_t time);
 static void talk_idraw_Answer(Input* input, Rect* r, Rect* clip_r, int16_t refresh);
 static int16_t talk_user_Talk_Eyes(Actor* actor, int32_t time);
 static void talk_Check_Talk_Questions(void);
@@ -305,14 +305,14 @@ int talk_Talk(SceneHeadStruct* scene_head) {
 		case SCENE_TALK_DEBRIEF_OFFICER:
 			eye_actor = xactor_Find_Actor(FOURCC_ANIM, talk_str[5]);
 			mouth_actor = xactor_Find_Actor(FOURCC_ANIM, talk_str[15]);
-			xactor_Set_Actor_User_Function(eye_actor, (xactorCallback)talk_user_Talk_Eyes);
+			xactor_Set_Actor_User_Function(eye_actor, (xactorCallback)(void (*)(void))talk_user_Talk_Eyes);
 			eye_actor->id = 0;
 			break;
 		case SCENE_TALK_BRIEF_PRIEST:
 		case SCENE_TALK_DEBRIEF_PRIEST:
 			eye_actor = xactor_Find_Actor(FOURCC_ANIM, talk_str[6]);
 			mouth_actor = NULL;
-			xactor_Set_Actor_User_Function(eye_actor, (xactorCallback)talk_user_Talk_Eyes);
+			xactor_Set_Actor_User_Function(eye_actor, (xactorCallback)(void (*)(void))talk_user_Talk_Eyes);
 			eye_actor->id = 1;
 			break;
 	}
@@ -323,7 +323,7 @@ int talk_Talk(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, 122, 116 - 10 * (max_paragraph_size + 1), 318, 116);
 	answer = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(answer, talk_iupdate_Answer);
-	xinpattr_Set_Input_User_Function(answer, talk_iuser_Answer);
+	xinpattr_Set_Input_User_Function(answer, (InputUserFunc)(void (*)(void))talk_iuser_Answer);
 	xinpattr_Set_Input_Draw_Function(answer, talk_idraw_Answer);
 	xinpattr_Refreshable_Input(answer);
 	answer->mouseUsage = allInput;
@@ -332,7 +332,7 @@ int talk_Talk(SceneHeadStruct* scene_head) {
 	xrect_Set_Rect(&frame, 122, 135, 318, 195);
 	talk_input = xinput_Alloc_Input(parent, &frame, 0, 0);
 	xinpattr_Set_Input_Update_Function(talk_input, talk_iupdate_Talk);
-	xinpattr_Set_Input_User_Function(talk_input, talk_iuser_Talk);
+	xinpattr_Set_Input_User_Function(talk_input, (InputUserFunc)(void (*)(void))talk_iuser_Talk);
 	xinpattr_Set_Input_Draw_Function(talk_input, talk_idraw_Talk);
 	xinpattr_Refreshable_Input(talk_input);
 	talk_input->mouseUsage = allInput;
@@ -410,6 +410,7 @@ static int16_t talk_iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t ke
 
 	(void)r;
 	(void)clip_r;
+	(void)x;
 
 	if (key)
 		return 0;
@@ -454,7 +455,7 @@ static int16_t talk_iupdate_Talk(Input* input, Rect* r, Rect* clip_r, int16_t ke
 
 // FUNCTION: TIE95 0x6855A
 // FUNCTION: TIE98 0x489B50
-static void talk_iuser_Talk(Input* input, int32_t time) {
+static int16_t talk_iuser_Talk(Input* input, int32_t time) {
 	if (!time) {
 		shade_Build_Shaded_Palette();
 		xinpattr_Show_Input(talk_input);
@@ -497,6 +498,7 @@ static void talk_iuser_Talk(Input* input, int32_t time) {
 		xinpattr_Refresh_Input(input);
 		xinpattr_Refresh_Input(answer);
 	}
+	return 1;
 }
 
 // FUNCTION: TIE95 0x686D5
@@ -541,11 +543,12 @@ static void talk_idraw_Talk(Input* input, Rect* r, Rect* clip_r, int16_t refresh
 static int16_t talk_iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
 								   uint8_t right, int16_t x, int16_t y) {
 	uint8_t button;
-	int16_t result;
+	int16_t frame_pad;
 
 	(void)r;
 	(void)clip_r;
 	(void)x;
+	(void)frame_pad;
 	(void)y;
 
 	if (key)
@@ -575,7 +578,7 @@ static int16_t talk_iupdate_Answer(Input* input, Rect* r, Rect* clip_r, int16_t 
 
 // FUNCTION: TIE95 0x688E2
 // FUNCTION: TIE98 0x489E50
-static void talk_iuser_Answer(Input* input, int32_t time) {
+static int16_t talk_iuser_Answer(Input* input, int32_t time) {
 	/* Auto-advance: when armed (talk_paragraph_timer < INT32_MAX) the
 	 * paragraph advances each time the current time exceeds the
 	 * threshold; the threshold bumps by 264 ms per page. */
@@ -610,6 +613,7 @@ static void talk_iuser_Answer(Input* input, int32_t time) {
 			}
 		}
 	}
+	return 1;
 }
 
 // FUNCTION: TIE95 0x689DF
@@ -740,12 +744,13 @@ int16_t talk_Get_Officer_Mood(void) { return officer_mood; }
 void talk_Set_Talk_To_Text(void) {
 	char question_buf[80];
 	Rect r;
-	int16_t unused;
+	int16_t frame_pad;
 	int16_t max_w;
 	int16_t total_h;
 	int16_t w;
 	int16_t i;
 	int16_t saved_font;
+	(void)frame_pad;
 
 	num_talk_questions = 0;
 	active_talk_question = -1;
@@ -878,9 +883,10 @@ void talk_Set_Talk_Paragraph(void) {
 // FUNCTION: TIE98 0x48A5F0
 void talk_Get_Talk_Question(char* out, int16_t id) {
 	signed char* data;
-	int16_t unused;
+	int16_t frame_pad;
 	int16_t i;
 	int16_t buf_len;
+	(void)frame_pad;
 
 	if (id >= 0 && id < num_talk_questions) {
 		if (talk_win_id[id] != 5) {
@@ -1034,12 +1040,17 @@ static int16_t talk_Count_Debrief_Pages(void) {
 // FUNCTION: TIE95 0x69868
 // FUNCTION: TIE98 0x48A9F0
 static void talk_Get_Debrief_Line(char* string, int16_t line) {
-	int16_t a;
+	int16_t frame_pad0;
 	int16_t section_page;
 	int16_t section_pages;
 	int16_t section;
-	int16_t b, c, d, e;
+	int16_t frame_pad1, frame_pad2, frame_pad3, frame_pad4;
 
+	(void)frame_pad0;
+	(void)frame_pad1;
+	(void)frame_pad2;
+	(void)frame_pad3;
+	(void)frame_pad4;
 	*string = '\0';
 	center_line = 0;
 	section_page = line / max_paragraph_size;
@@ -1124,13 +1135,13 @@ static void talk_Get_Debrief_Header(char* string, int16_t line_idx) {
 
 	switch (line_idx) {
 		case 0:
-			shipext_Get_Battle_Ship_Name(buf);
-			strcpy(string, buf);
+			shipext_Get_Battle_Ship_Name((char*)buf);
+			strcpy(string, (char*)buf);
 			textext_Cat_Text(string, mission.difficulty + txtTalkEasy);
 			center_line = 1;
 			break;
 		case 1:
-			textext_Copy_Text(fmt, txtTalkBattle);
+			textext_Copy_Text((char*)fmt, txtTalkBattle);
 			for (i = 0; fmt[i]; ++i) {
 				if (fmt[i] == '1')
 					fmt[i] = 1;
@@ -1138,19 +1149,19 @@ static void talk_Get_Debrief_Header(char* string, int16_t line_idx) {
 					fmt[i] = 2;
 			}
 			if (shipext_Is_Mission_Success())
-				sprintf(buf, fmt, cur_battle + 1, pilot_record.battle_cursor[cur_battle]);
+				sprintf((char*)buf, (char*)fmt, cur_battle + 1, pilot_record.battle_cursor[cur_battle]);
 			else
-				sprintf(buf, fmt, cur_battle + 1, pilot_record.battle_cursor[cur_battle] + 1);
-			strcpy(string, buf);
-			textext_Copy_Text(fmt, txtTalkScore);
+				sprintf((char*)buf, (char*)fmt, cur_battle + 1, pilot_record.battle_cursor[cur_battle] + 1);
+			strcpy(string, (char*)buf);
+			textext_Copy_Text((char*)fmt, txtTalkScore);
 			for (i = 0; fmt[i]; ++i) {
 				if (fmt[i] == '1')
 					fmt[i] = 1;
 				if (fmt[i] == '2')
 					fmt[i] = 2;
 			}
-			sprintf(buf, fmt, mission.mission_score);
-			strcat(string, buf);
+			sprintf((char*)buf, (char*)fmt, mission.mission_score);
+			strcat(string, (char*)buf);
 			center_line = 1;
 			break;
 		case 2:
@@ -1159,42 +1170,42 @@ static void talk_Get_Debrief_Header(char* string, int16_t line_idx) {
 			break;
 		case 3:
 			if (shipext_Is_Mission_Success())
-				textext_Copy_Text(buf, txtTalkSuccess);
+				textext_Copy_Text((char*)buf, txtTalkSuccess);
 			else
-				textext_Copy_Text(buf, txtTalkFailure);
+				textext_Copy_Text((char*)buf, txtTalkFailure);
 			for (i = 0; buf[i]; ++i) {
 				if (buf[i] == '1')
 					buf[i] = 1;
 				if (buf[i] == '2')
 					buf[i] = 2;
 			}
-			strcpy(string, buf);
+			strcpy(string, (char*)buf);
 			break;
 		case 4:
 			if (mission.mission_new_rank) {
-				textext_Copy_Text(fmt, txtTalkRank);
-				textext_Copy_Text(rank_name, mission.mission_new_rank + 1);
+				textext_Copy_Text((char*)fmt, txtTalkRank);
+				textext_Copy_Text((char*)rank_name, mission.mission_new_rank + 1);
 				for (i = 0; fmt[i]; ++i) {
 					if (fmt[i] == '1')
 						fmt[i] = 1;
 					if (fmt[i] == '2')
 						fmt[i] = 2;
 				}
-				sprintf(buf, fmt, rank_name);
-				strcpy(string, buf);
+				sprintf((char*)buf, (char*)fmt, rank_name);
+				strcpy(string, (char*)buf);
 				break;
 			}
 			/* fall through */
 		case 5:
 			if (shipext_Get_TOD_Medal()) {
-				textext_Copy_Text(buf, txtTalkMedal);
+				textext_Copy_Text((char*)buf, txtTalkMedal);
 				for (i = 0; buf[i]; ++i) {
 					if (buf[i] == '1')
 						buf[i] = 1;
 					if (buf[i] == '2')
 						buf[i] = 2;
 				}
-				strcpy(string, buf);
+				strcpy(string, (char*)buf);
 				break;
 			}
 			/* fall through */
@@ -1207,18 +1218,18 @@ static void talk_Get_Debrief_Header(char* string, int16_t line_idx) {
 				pct = 100 * pstate.player_laser_hit / pstate.player_laser_fired;
 			else
 				pct = 0;
-			textext_Copy_Text(fmt, txtCompInfoLaser);
-			sprintf(buf, fmt, pstate.player_laser_hit, pstate.player_laser_fired, pct);
-			strcpy(string, buf);
+			textext_Copy_Text((char*)fmt, txtCompInfoLaser);
+			sprintf((char*)buf, (char*)fmt, pstate.player_laser_hit, pstate.player_laser_fired, pct);
+			strcpy(string, (char*)buf);
 			break;
 		case 8:
 			if (pstate.player_missile_hit)
 				pct = 100 * pstate.player_missile_hit / pstate.player_missile_fired;
 			else
 				pct = 0;
-			textext_Copy_Text(fmt, txtCompInfoIon);
-			sprintf(buf, fmt, pstate.player_missile_hit, pstate.player_missile_fired, pct);
-			strcpy(string, buf);
+			textext_Copy_Text((char*)fmt, txtCompInfoIon);
+			sprintf((char*)buf, (char*)fmt, pstate.player_missile_hit, pstate.player_missile_fired, pct);
+			strcpy(string, (char*)buf);
 			break;
 		case 9:
 			if (pstate.player_warhead_hit > pstate.player_warhead_fired)
@@ -1227,9 +1238,9 @@ static void talk_Get_Debrief_Header(char* string, int16_t line_idx) {
 				pct = 100 * pstate.player_warhead_hit / pstate.player_warhead_fired;
 			else
 				pct = 0;
-			textext_Copy_Text(fmt, txtCompInfoRocket);
-			sprintf(buf, fmt, pstate.player_warhead_hit, pstate.player_warhead_fired, pct);
-			strcpy(string, buf);
+			textext_Copy_Text((char*)fmt, txtCompInfoRocket);
+			sprintf((char*)buf, (char*)fmt, pstate.player_warhead_hit, pstate.player_warhead_fired, pct);
+			strcpy(string, (char*)buf);
 			break;
 	}
 }
@@ -1437,7 +1448,8 @@ static void talk_Find_Debrief_Kills(char* string, int16_t page, int16_t line) {
 static void talk_Get_Debrief_Kill_Title(char* string) {
 	signed char fmt[40], buf[80];
 	uint16_t total_kills, player_total;
-	uint16_t craft, side, i;
+	uint16_t craft, side, frame_pad;
+	(void)frame_pad;
 
 	player_total = total_kills = 0;
 	for (craft = 0; craft < 69; ++craft) {
@@ -1447,7 +1459,7 @@ static void talk_Get_Debrief_Kill_Title(char* string) {
 		}
 		player_total += pstate.player_kills_per_species[craft];
 	}
-	textext_Copy_Text(fmt, txtTalkDestroyed);
+	textext_Copy_Text((char*)fmt, txtTalkDestroyed);
 	for (craft = 0; fmt[craft]; ++craft) {
 		if (fmt[craft] == '1')
 			fmt[craft] = 1;
@@ -1455,11 +1467,11 @@ static void talk_Get_Debrief_Kill_Title(char* string) {
 			fmt[craft] = 2;
 	}
 #ifdef TIE_MODERN
-	snprintf(buf, sizeof(buf), fmt, total_kills, player_total);
+	snprintf((char*)buf, sizeof(buf), (char*)fmt, total_kills, player_total);
 #else
 	sprintf(buf, fmt, total_kills, player_total);
 #endif
-	strcpy(string, buf);
+	strcpy(string, (char*)buf);
 	center_line = 1;
 }
 
@@ -1756,7 +1768,7 @@ void talk_Start_Speech_Stream(void) {
 	if (talk_voice_officer == 'i') {
 		/* Briefing-officer voiceover: no mood character. Missions whose
 		 * name ends in 'w' use a one-shorter voice list. */
-		char* mission_name = shipext_Get_Mission_Name();
+		const char* mission_name = shipext_Get_Mission_Name();
 		if (mission_name[strlen(mission_name) - 1] == 'w')
 			sprintf(path, "\\voice\\%sm%d\\%sm%d%c%d.voc", sp, talk_voice_mission, sp, talk_voice_mission,
 					talk_voice_officer, talk_voice_question - 1);

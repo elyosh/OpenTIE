@@ -304,7 +304,7 @@ void bpflight_Open_Flight_Engine(int16_t scene) {
 			xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(131, 222), TIE_FRONTEND_EDITION(30, 75),
 						   TIE_FRONTEND_EDITION(278, 570), TIE_FRONTEND_EDITION(200, 310));
 			engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 20);
-			xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
+			xactor_Set_Actor_User_Function(engine[0], (xactorCallback)(void (*)(void))bpflight_user_Engine);
 			xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
 			engine[0]->id = 2;
 			bpid[2] = 2;
@@ -324,7 +324,7 @@ void bpflight_Open_Flight_Engine(int16_t scene) {
 			xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(62, 144), TIE_FRONTEND_EDITION(4, 60),
 						   TIE_FRONTEND_EDITION(256, 500), TIE_FRONTEND_EDITION(116, 300));
 			engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-			xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
+			xactor_Set_Actor_User_Function(engine[0], (xactorCallback)(void (*)(void))bpflight_user_Engine);
 			xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
 			engine[0]->id = 0;
 			bpid[0] = 0;
@@ -333,7 +333,7 @@ void bpflight_Open_Flight_Engine(int16_t scene) {
 			xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(85, 176), TIE_FRONTEND_EDITION(131, 340),
 						   TIE_FRONTEND_EDITION(182, 358), TIE_FRONTEND_EDITION(178, 449));
 			engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-			xactor_Set_Actor_User_Function(engine[1], (xactorCallback)bpflight_user_Engine);
+			xactor_Set_Actor_User_Function(engine[1], (xactorCallback)(void (*)(void))bpflight_user_Engine);
 			xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
 			engine[1]->id = 1;
 			bpid[1] = 1;
@@ -354,7 +354,7 @@ void bpflight_Open_Flight_Engine(int16_t scene) {
 			xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(59, 124), TIE_FRONTEND_EDITION(2, 7),
 						   TIE_FRONTEND_EDITION(260, 516), TIE_FRONTEND_EDITION(115, 272));
 			engine[0] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-			xactor_Set_Actor_User_Function(engine[0], (xactorCallback)bpflight_user_Engine);
+			xactor_Set_Actor_User_Function(engine[0], (xactorCallback)(void (*)(void))bpflight_user_Engine);
 			xactor_Set_Actor_Draw_Function(engine[0], bpflight_draw_Engine);
 			engine[0]->id = 0;
 			bpid[0] = 0;
@@ -363,7 +363,7 @@ void bpflight_Open_Flight_Engine(int16_t scene) {
 			xrect_Set_Rect(&r, TIE_FRONTEND_EDITION(146, 297), TIE_FRONTEND_EDITION(130, 313),
 						   TIE_FRONTEND_EDITION(247, 485), TIE_FRONTEND_EDITION(179, 440));
 			engine[1] = xactcust_Alloc_Custom_Actor(LANDRU_NULL_HANDLE, &r, 0, 0, 10);
-			xactor_Set_Actor_User_Function(engine[1], (xactorCallback)bpflight_user_Engine);
+			xactor_Set_Actor_User_Function(engine[1], (xactorCallback)(void (*)(void))bpflight_user_Engine);
 			xactor_Set_Actor_Draw_Function(engine[1], bpflight_draw_Engine);
 			engine[1]->id = 1;
 			bpid[1] = 1;
@@ -1262,7 +1262,7 @@ void bpflight_Res_Ship(ResFile* rf, uint8_t* buffer, char* name) {
 	for (i = 0; name[i]; ++i)
 		name[i] = (char)toupper((int8_t)name[i]);
 
-	if (xres_Get_Resource_Offset(rf, FOURCC_SHIP, name, &resource_offset, &resource_size)) {
+	if (xres_Get_Resource_Offset(rf, FOURCC_SHIP, name, &resource_offset, (uint32_t*)&resource_size)) {
 		if (xres_Open_Resource_Data(FOURCC_SHIP, name)) {
 			resource_size = (int16_t)xres_Read_Resource_Word(rf);
 			objectloadsize = resource_size;

@@ -71,10 +71,10 @@ static void armship_end_ArmShip_View(int32_t refresh);
 static int16_t armship_film_ArmShip_Callback(Film* film, FilmObject* film_obj);
 static int16_t armship_iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int16_t key, uint8_t left,
 									   uint8_t right, int16_t x, int16_t y);
-static void armship_iuser_ArmShip(Input* input, int32_t time);
+static int16_t armship_iuser_ArmShip(Input* input, int32_t time);
 static void armship_iuser_Arm_Info(Input* input, int32_t time);
 static void armship_idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t refresh);
-static void armship_user_ArmShip(Actor* actor, int32_t time);
+static int16_t armship_user_ArmShip(Actor* actor, int32_t time);
 static int16_t armship_draw_ArmShip(Actor* actor, Rect* frame, Rect* clip_r, int16_t x, int16_t y,
 									int16_t refresh);
 
@@ -166,7 +166,8 @@ int armship_ArmShip(SceneHeadStruct* scene_head) {
 			}
 #endif
 			xinpattr_Set_Input_Update_Function(button_input[i], armship_iupdate_ArmShip);
-			xinpattr_Set_Input_User_Function(button_input[i], armship_iuser_ArmShip);
+			xinpattr_Set_Input_User_Function(button_input[i],
+											 (InputUserFunc)(void (*)(void))armship_iuser_ArmShip);
 			button_input[i]->id = i + 1;
 			button_input[i]->mouseUsage = downMoveUpInput;
 		} else {
@@ -262,17 +263,19 @@ static int16_t armship_film_ArmShip_Callback(Film* film, FilmObject* film_obj) {
 				if (!player_Get_Beam_Used())
 					result = 1;
 				else
-					xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
+					xactor_Set_Actor_User_Function(actor,
+												   (xactorCallback)(void (*)(void))armship_user_ArmShip);
 				break;
 			case 2: /* Torpedo selector — skip if no torpedo equipped */
 				if (!player_Get_Torp_Used())
 					result = 1;
 				else
-					xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
+					xactor_Set_Actor_User_Function(actor,
+												   (xactorCallback)(void (*)(void))armship_user_ArmShip);
 				break;
 			case 3: /* Always active — install callback */
 			case 6:
-				xactor_Set_Actor_User_Function(actor, armship_user_ArmShip);
+				xactor_Set_Actor_User_Function(actor, (xactorCallback)(void (*)(void))armship_user_ArmShip);
 				break;
 			case 4: /* Beam-only visibility gate — skip if beam equipped */
 				if (player_Get_Beam_Used())
@@ -333,11 +336,11 @@ static int16_t armship_iupdate_ArmShip(Input* input, Rect* r, Rect* clip_r, int1
 
 // FUNCTION: TIE95 0x6efb4
 // FUNCTION: TIE98 0x402c00
-static void armship_iuser_ArmShip(Input* input, int32_t time) {
+static int16_t armship_iuser_ArmShip(Input* input, int32_t time) {
 	(void)time;
 
 	if (!xinpattr_Get_Input_Selected(input) || !input->id)
-		return;
+		return 1;
 
 	switch (input->id) {
 		case 1:
@@ -380,6 +383,7 @@ static void armship_iuser_ArmShip(Input* input, int32_t time) {
 			break;
 		}
 	}
+	return 1;
 }
 
 /* ======================================================================
@@ -448,17 +452,17 @@ static void armship_idraw_Arm_Info(Input* input, Rect* r, Rect* clip_r, int16_t 
 
 // FUNCTION: TIE95 0x6f208
 // FUNCTION: TIE98 0x402e80
-static void armship_user_ArmShip(Actor* actor, int32_t time) {
+static int16_t armship_user_ArmShip(Actor* actor, int32_t time) {
 	int16_t id = actor->var1;
 	(void)time;
 
 	switch (id) {
 		case 1: /* Beam selector: state = beam type + 6 */
 			xactor_Set_Actor_State(actor, player_Get_Beam_Used() + 6, 0);
-			return;
+			break;
 		case 2: /* Torpedo selector: state from lookup table */
 			xactor_Set_Actor_State(actor, torp_state[player_Get_Torp_Used() - 1], 0);
-			return;
+			break;
 		case 3: { /* Button hover highlight (beam/torp buttons 0-3) */
 			int16_t hover = 0;
 			int16_t i;
@@ -474,7 +478,7 @@ static void armship_user_ArmShip(Actor* actor, int32_t time) {
 			} else {
 				xactor_Hide_Actor(actor);
 			}
-			return;
+			break;
 		}
 		case 6: { /* Enter/exit button hover (buttons 4-5) */
 			int16_t hover = 0;
@@ -491,9 +495,10 @@ static void armship_user_ArmShip(Actor* actor, int32_t time) {
 			} else {
 				xactor_Hide_Actor(actor);
 			}
-			return;
+			break;
 		}
 	}
+	return 1;
 }
 
 /* ======================================================================

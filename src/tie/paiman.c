@@ -36,25 +36,29 @@
 // GLOBAL: TIE95 0xC5A86
 // GLOBAL: TIE98 0x4E6578
 const int16_t _formposx[13][6] = {
-	0, 1, -1, 2, -2, 3,  0,  -2, 4,  5,  -4, -5, 0,  0,  0, 0,  0, 0, 0, 1,  -1, 2, -2, 3, 0, 1,
-	2, 3, 4,  5, 0,  -1, -2, -3, -4, -5, 0,  -1, 0,  -1, 0, -1, 0, 1, 0, -1, 0,  0, 0,  0, 0, 0,
-	0, 0, 0,  1, -1, 1,  -1, 0,  0,  1,  -1, 2,  -2, 3,  0, 0,  0, 0, 0, 0,  0,  0, 0,  0, 0, 0,
+	{ 0, 1, -1, 2, -2, 3 }, { 0, -2, 4, 5, -4, -5 },   { 0, 0, 0, 0, 0, 0 },    { 0, 1, -1, 2, -2, 3 },
+	{ 0, 1, 2, 3, 4, 5 },   { 0, -1, -2, -3, -4, -5 }, { 0, -1, 0, -1, 0, -1 }, { 0, 1, 0, -1, 0, 0 },
+	{ 0, 0, 0, 0, 0, 0 },   { 0, 1, -1, 1, -1, 0 },    { 0, 1, -1, 2, -2, 3 },  { 0, 0, 0, 0, 0, 0 },
+	{ 0, 0, 0, 0, 0, 0 },
 };
 
 // GLOBAL: TIE95 0xC5B22
 // GLOBAL: TIE98 0x4E6618
 const int16_t _formposy[13][6] = {
-	0,  -1, -1, -2, -2, -3, 0,  -2, -4, -5, -4, -5, 0,  -1, -2, -3, -4, -5, 0,  0,  0,  0,  0, 0, 0, -1,
-	-2, -3, -4, -5, 0,  -1, -2, -3, -4, -5, 0,  0,  -1, -1, -2, -2, 0,  -1, -2, -1, -1, -1, 0, 0, 0, 0,
-	0,  0,  0,  0,  0,  0,  0,  -1, 0,  1,  1,  2,  2,  3,  0,  -1, -1, -2, -2, -3, 0,  1,  1, 2, 2, 3,
+	{ 0, -1, -1, -2, -2, -3 }, { 0, -2, -4, -5, -4, -5 }, { 0, -1, -2, -3, -4, -5 },
+	{ 0, 0, 0, 0, 0, 0 },      { 0, -1, -2, -3, -4, -5 }, { 0, -1, -2, -3, -4, -5 },
+	{ 0, 0, -1, -1, -2, -2 },  { 0, -1, -2, -1, -1, -1 }, { 0, 0, 0, 0, 0, 0 },
+	{ 0, 0, 0, 0, 0, -1 },     { 0, 1, 1, 2, 2, 3 },      { 0, -1, -1, -2, -2, -3 },
+	{ 0, 1, 1, 2, 2, 3 },
 };
 
 // GLOBAL: TIE95 0xC5BBE
 // GLOBAL: TIE98 0x4E66B8
 const int16_t _formposz[13][6] = {
-	0, 0, 0, 0, 0, 0,  0,  -1, 2, 1, 3, 2, 0, 1, 2, 3, 4,  5, 0,  0, 0, 0,  0,  0, 0,  0,
-	0, 0, 0, 0, 0, 0,  0,  0,  0, 0, 0, 0, 0, 0, 0, 0, 0,  0, 0,  0, 1, -1, 0,  1, 2,  3,
-	4, 5, 0, 1, 1, -1, -1, 0,  0, 0, 0, 0, 0, 0, 0, 1, -1, 2, -2, 3, 0, 1,  -1, 2, -2, 3,
+	{ 0, 0, 0, 0, 0, 0 },   { 0, -1, 2, 1, 3, 2 },  { 0, 1, 2, 3, 4, 5 }, { 0, 0, 0, 0, 0, 0 },
+	{ 0, 0, 0, 0, 0, 0 },   { 0, 0, 0, 0, 0, 0 },   { 0, 0, 0, 0, 0, 0 }, { 0, 0, 0, 0, 1, -1 },
+	{ 0, 1, 2, 3, 4, 5 },   { 0, 1, 1, -1, -1, 0 }, { 0, 0, 0, 0, 0, 0 }, { 0, 1, -1, 2, -2, 3 },
+	{ 0, 1, -1, 2, -2, 3 },
 };
 
 // GLOBAL: TIE95 0xC58BE
@@ -1061,7 +1065,7 @@ int16_t paiman_escortmaneuver(void) {
 		else
 			catchup_dist = 0x8000;
 
-		if (catchup_dist < trig2_polardistance || !leader_cd->status_flags) {
+		if (catchup_dist < (uint32_t)trig2_polardistance || !leader_cd->status_flags) {
 			craftptr->waypoint_x_cache = objects[leader_idx].world_x;
 			craftptr->waypoint_y_cache = objects[leader_idx].world_y;
 			craftptr->waypoint_z_cache = objects[leader_idx].world_z;
@@ -2090,7 +2094,10 @@ void paiman_setturn(int32_t heading_step) {
 
 /* Write the throttle for the active craft; obj_idx is unused by the original. */
 // FUNCTION: TIE95 0x3D45C
-void paiman_setpower(uint16_t obj_idx, uint16_t throttle) { craftptr->throttle_speed = throttle; }
+void paiman_setpower(uint16_t obj_idx, uint16_t throttle) {
+	(void)obj_idx;
+	craftptr->throttle_speed = throttle;
+}
 
 /* Convert absolute desired_speed to throttle_speed, accounting for the
  * shield/beam/laser power-balance margin and the craft's max_speed. */

@@ -388,7 +388,7 @@ void TieFlightRenderer_ReleaseMissionAssets(TieFlightRenderer* g) {
 	if (!g)
 		return;
 	for (int i = 0; i < TIE_FLIGHT_MAX_SPECIES; ++i) {
-		TieFlightRenderer_ReleaseSpeciesMesh(g, &g->meshes[i]);
+		TieFlightRenderer_ReleaseSpeciesMesh(&g->meshes[i]);
 		TieFlightRenderer_ReleaseSceneSpeciesShip(g, &g->scene_ships[i]);
 	}
 	TieFlightSpriteCache_ReleaseMissionAssets(g->sprites);

@@ -321,6 +321,10 @@ void gate_createtraininggates(void) {
 		int16_t up_advance;
 		int32_t dx, dy, dz;
 
+#ifdef TIE_MODERN
+		side_step = fwd_advance = up_advance = 0;
+#endif
+
 		objects[gate_idx].ship_idx = (uint8_t)ship_idx;
 		objects[gate_idx].spin_rate = 0;
 		objects[gate_idx].current_speed = 0;
@@ -625,7 +629,9 @@ void gate_updategateanimations(void) {
 		int16_t delta[3];
 		uint16_t i;
 		uint16_t j;
+#ifndef TIE_MODERN
 		uint16_t next_gate;
+#endif
 
 		/* Phase 1: timers. */
 		for (i = 0; i < 3; ++i) {

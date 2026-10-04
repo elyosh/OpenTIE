@@ -113,7 +113,7 @@ void* fmusic_GetPagedSound(unsigned int track_idx) {
 		return NULL;
 
 	for (i = 0; i < 2; i++) {
-		if (music_page_state[i] == track_idx)
+		if ((unsigned)music_page_state[i] == track_idx)
 			return (uint8_t*)music_buffer + music_slot_offsets[i];
 	}
 	return NULL;
@@ -129,7 +129,7 @@ void fmusic_PageSound(unsigned int track_idx) {
 
 	/* Pass 1: already paged? */
 	for (i = 0; i < 2; i++) {
-		if (track_idx == music_page_state[i])
+		if (track_idx == (unsigned)music_page_state[i])
 			return;
 	}
 

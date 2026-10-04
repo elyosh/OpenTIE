@@ -669,6 +669,7 @@ static int16_t rotscale_scantoxtrans(int32_t* quad_corners) {
 // FUNCTION: TIE95 0x48D88
 // FUNCTION: TIE98 0x476480
 void rotscale_preparefastdraw(uint16_t angle, int mode) {
+	(void)mode;
 	nDrawBufferWidth = (int16_t)pixelswide;
 	nDrawBufferWidthMin1 = (int16_t)pixelswidemin1;
 	nDrawBufferDepth = (int16_t)pixelsdeep;

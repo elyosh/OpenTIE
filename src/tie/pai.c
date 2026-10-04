@@ -483,6 +483,7 @@ void pai_initplan(uint16_t obj_idx) {
 	uint16_t wpt_sel;
 	uint8_t init_mode;
 	unsigned target_ref;
+	(void)obj_idx;
 
 #ifdef TIE_MODERN
 	if (craftptr->current_order >= 69u) {
@@ -678,6 +679,7 @@ uint16_t pai_searchformother(uint16_t fg_idx) {
 // FUNCTION: TIE95 0x35ABC
 int16_t pai_checktargetforattack(uint16_t attacker_ref, uint32_t obj_ref, int16_t pursue_hot) {
 	int32_t radius;
+	(void)attacker_ref;
 
 	if (pai_worthytarget(obj_ref)) {
 		radius = (int32_t)math2_fraction(0x500u, skilltranslate[(uint16_t)ai.skill_tier]) + 2560;

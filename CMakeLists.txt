@@ -691,7 +691,7 @@ if(CLANG_FORMAT)
         "${CMAKE_SOURCE_DIR}/src/*.c"      "${CMAKE_SOURCE_DIR}/src/*.h"
         "${CMAKE_SOURCE_DIR}/tools/*.c"    "${CMAKE_SOURCE_DIR}/tools/*.h"
         "${CMAKE_SOURCE_DIR}/examples/*.c" "${CMAKE_SOURCE_DIR}/examples/*.h")
-    list(FILTER TIE_FORMAT_FILES EXCLUDE REGEX "/src/(third_party|landru)/")
+    list(FILTER TIE_FORMAT_FILES EXCLUDE REGEX "/third_party/|/src/landru/")
 
     add_custom_target(format
         COMMAND ${CLANG_FORMAT} --Wno-error=unknown -i ${TIE_FORMAT_FILES}
