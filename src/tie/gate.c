@@ -519,7 +519,7 @@ void gate_settraininglevel(uint16_t level) {
 		mesh = componentblockptr;
 		for (mesh_idx = 0; mesh_idx < TIE_FLIGHT_EDITION(objectblockptr->num_meshes,
 														 (uint16_t)modelmesh_getcount(ship_idx));
-			 ++mesh_idx, ++mesh) {
+			 ++mesh_idx, mesh = TIE_FLIGHT_EDITION(mesh + 1, mesh)) {
 			if (obj_idx == 1) {
 				/* Gate 1 (course start) is always frozen. */
 				if (TIE_FLIGHT_EDITION(mesh->mesh_type, (uint16_t)modelmesh_gettype(ship_idx, mesh_idx)) ==

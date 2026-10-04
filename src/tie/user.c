@@ -1565,11 +1565,11 @@ void user_inputforplane(void) {
 						continue;
 					if (objects[i].side == objects[pstate.object_idx].side)
 						continue;
-					if (objects[i].side == 2 && mission_file_header.mission.neutral_name[0][0] != '1')
+					if (objects[i].side == 2 && (int8_t)mission_file_header.mission.neutral_name[0][0] != '1')
 						continue;
-					if (objects[i].side == 3 && mission_file_header.mission.neutral_name[1][0] != '1')
+					if (objects[i].side == 3 && (int8_t)mission_file_header.mission.neutral_name[1][0] != '1')
 						continue;
-					if (objects[i].side == 5 && mission_file_header.mission.neutral_name[3][0] != '1')
+					if (objects[i].side == 5 && (int8_t)mission_file_header.mission.neutral_name[3][0] != '1')
 						continue;
 					g = objects[i].genus;
 					if (g == 4 || g == 3 || g == 5)
@@ -1591,7 +1591,7 @@ void user_inputforplane(void) {
 				/* Pass 2: static mine-gun turrets (ship_class == 8). */
 				k = 14336;
 				for (m = 0; m < 64; ++k, ++m) {
-					uint8_t fg_side;
+					int8_t fg_side;
 
 					if (!staticobjects[m].species)
 						continue;
@@ -1599,7 +1599,7 @@ void user_inputforplane(void) {
 						continue;
 					if (!staticobjects[m].status_flags)
 						continue;
-					fg_side = fg_array[staticobjects[m].fg_idx].side;
+					fg_side = (int8_t)fg_array[staticobjects[m].fg_idx].side;
 					if (fg_side == objects[pstate.object_idx].side)
 						continue;
 
@@ -1781,10 +1781,10 @@ void user_inputforplane(void) {
 					sec_stop_obj = 0xFFFF;
 					for (obj = 0; obj < NUM_ACTIVE_CRAFT_SLOTS; ++obj) {
 						if (fg_array[pstate.player_fg_idx].pri_stop_fg_used && objects[obj].ship_idx &&
-							objects[obj].fg_idx == fg_array[pstate.player_fg_idx].pri_stop_fg)
+							objects[obj].fg_idx == (int8_t)fg_array[pstate.player_fg_idx].pri_stop_fg)
 							pri_stop_obj = obj;
 						if (fg_array[pstate.player_fg_idx].sec_stop_fg_used && objects[obj].ship_idx &&
-							objects[obj].fg_idx == fg_array[pstate.player_fg_idx].sec_stop_fg)
+							objects[obj].fg_idx == (int8_t)fg_array[pstate.player_fg_idx].sec_stop_fg)
 							sec_stop_obj = obj;
 					}
 					if (pri_stop_obj != 0xFFFF && sec_stop_obj != 0xFFFF) {
@@ -2072,7 +2072,8 @@ void user_inputforplane(void) {
 				reinforce_avail = 0;
 				for (i = 0; i < mission_file_header.num_fg; ++i) {
 					/* Arrival condition 20: "reinforced by". */
-					if (fg_array[i].start_cond[0].cond == 20 || fg_array[i].start_cond[1].cond == 20)
+					if ((int8_t)fg_array[i].start_cond[0].cond == 20 ||
+						(int8_t)fg_array[i].start_cond[1].cond == 20)
 						reinforce_avail = 1;
 				}
 				if (!reinforce_avail) {

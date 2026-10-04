@@ -1126,16 +1126,31 @@ void bpflight_drawtreeobject(void* node, int16_t pass_gated, int16_t pass_mainhu
 		dx = n->center_x;
 		dy = n->center_y;
 		dz = n->center_z;
+#ifdef TIE_MODERN
+		/* PORT: relativeshift goes negative when the camera is close to a
+		 * scaled model. The original's sar keeps the low five bits of the
+		 * count, so -1 shifts by 31 and collapses centers and normals to
+		 * their sign; reproduce that masking. */
+		dx >>= relativeshift & 31;
+		dy >>= relativeshift & 31;
+		dz >>= relativeshift & 31;
+#else
 		dx >>= relativeshift;
 		dy >>= relativeshift;
 		dz >>= relativeshift;
+#endif
 		dx = relativex - dx;
 		dy = relativey - dy;
 		dz = relativez - dz;
 		/* Plane dot-product sign selects which child is "far" (draw
 		 * first) and which is "near" (drawn last). */
+#ifdef TIE_MODERN
+		plane_eq = (n->normal_x >> (relativeshift & 31)) * dx + (n->normal_y >> (relativeshift & 31)) * dy +
+				   (n->normal_z >> (relativeshift & 31)) * dz;
+#else
 		plane_eq = (n->normal_x >> relativeshift) * dx + (n->normal_y >> relativeshift) * dy +
 				   (n->normal_z >> relativeshift) * dz;
+#endif
 		if (plane_eq >= 0x40000000)
 			plane_eq = 0x3FFF0000;
 		if (plane_eq <= -0x40000000)

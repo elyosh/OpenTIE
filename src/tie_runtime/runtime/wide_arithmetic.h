@@ -252,6 +252,16 @@ int32_t math2_dot3_q15_clamped(int32_t a1, int32_t a2, int32_t a3, int32_t b1, i
 	parm [eax] [ebx] [ecx] [edx] [esi] [edi] value [eax] modify exact [eax ebx ecx];
 #endif
 
+/* Float to int conversion through VC5's __ftol, which truncates to a 64-bit
+ * integer and keeps the low dword, so values outside the int range wrap
+ * instead of saturating. TIE98 calls __ftol for every (int) cast of a float;
+ * native builds reproduce it where a recovered value can leave the range. */
+#if defined(TIE_MODERN)
+static inline int32_t math2_ftol(float value) { return (int32_t)(uint32_t)(int64_t)value; }
+#else
+static inline int32_t math2_ftol(float value) { return (int32_t)value; }
+#endif
+
 // clang-format on
 
 #ifdef __cplusplus

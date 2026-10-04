@@ -430,7 +430,15 @@ void move_moveobjects(void) {
 				WarheadRecord* wh = (WarheadRecord*)obj->craft_ptr;
 				uint16_t idx = wh->homing_tier;
 
-				if (idx != 0 && wh->target_obj != 0xFFFF) {
+				if (idx != 0 &&
+#ifdef TIE_MODERN
+					/* PORT: a warhead whose death timer expired above is already
+					 * explosion 129 but still lands here through the cached genus;
+					 * the original then reads homingindex[-8] and steers it with
+					 * out-of-table rates. Skip the homing step for it. */
+					obj->genus != GENUS_EXPLOSION &&
+#endif
+					wh->target_obj != 0xFFFF) {
 					uint16_t target_idx;
 					uint16_t sub_obj;
 					int16_t heading_delta;
@@ -485,28 +493,43 @@ void move_moveobjects(void) {
 							int16_t ofs_up;
 							int shift;
 
-							draw_Lockshipfileptrs(objects[target_idx].ship_idx);
-							/* 0xFFFF selects the record slot immediately before the
-							 * component table (retail `sub ebx, 40h`). */
-							mesh = componentblockptr;
-							if (sub_obj != 0xFFFF)
-								mesh += sub_obj;
-							else
-								mesh--;
-							ofs_up = (int16_t)(mesh->center_up >> 1);
-							pai_calcrotatedpoint(&objects[target_idx], (int16_t)(mesh->center_side >> 1),
-												 ofs_up, (int16_t)-(mesh->center_fwd >> 1));
+#ifdef TIE_MODERN
+							/* PORT: a target that just exploded keeps its slot as an
+							 * explosion species, whose resource is an image, not a
+							 * ShipModelData. The original reads mesh centers and the
+							 * scale shift from the image bytes; aim at the target
+							 * origin instead, as TIE98's ModelMesh lookups do for
+							 * species without a 3D model. */
+							if ((species_table[objects[target_idx].ship_idx].load_flags & 1) == 0) {
+								rotatedx = worldlocx;
+								rotatedy = worldlocy;
+								rotatedz = worldlocz;
+							} else
+#endif
+							{
+								draw_Lockshipfileptrs(objects[target_idx].ship_idx);
+								/* 0xFFFF selects the record slot immediately before the
+								 * component table (retail `sub ebx, 40h`). */
+								mesh = componentblockptr;
+								if (sub_obj != 0xFFFF)
+									mesh += sub_obj;
+								else
+									mesh--;
+								ofs_up = (int16_t)(mesh->center_up >> 1);
+								pai_calcrotatedpoint(&objects[target_idx], (int16_t)(mesh->center_side >> 1),
+													 ofs_up, (int16_t)-(mesh->center_fwd >> 1));
 
-							/* ShipModelData.model_scale_shift scales the rotated
-							 * offsets; the binary's `shl reg, cl` is routed through
-							 * uint32_t to avoid shifting a negative int32_t. */
-							shift = (int8_t)objectblockptr->model_scale_shift;
-							rotatedx = (int32_t)((uint32_t)rotatedx << shift);
-							rotatedy = (int32_t)((uint32_t)rotatedy << shift);
-							rotatedz = (int32_t)((uint32_t)rotatedz << shift);
-							rotatedx += worldlocx;
-							rotatedy += worldlocy;
-							rotatedz += worldlocz;
+								/* ShipModelData.model_scale_shift scales the rotated
+								 * offsets; the binary's `shl reg, cl` is routed through
+								 * uint32_t to avoid shifting a negative int32_t. */
+								shift = (int8_t)objectblockptr->model_scale_shift;
+								rotatedx = (int32_t)((uint32_t)rotatedx << shift);
+								rotatedy = (int32_t)((uint32_t)rotatedy << shift);
+								rotatedz = (int32_t)((uint32_t)rotatedz << shift);
+								rotatedx += worldlocx;
+								rotatedy += worldlocy;
+								rotatedz += worldlocz;
+							}
 						}
 					} else {
 						rotatedx = worldlocx;

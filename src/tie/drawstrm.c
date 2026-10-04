@@ -489,20 +489,20 @@ void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void
 											dst[2] = color;
 											dst[0] = color;
 										} else if (n == 4) {
-											*(uint32_t*)dst =
-												(color << 8) + color + (((color << 8) + color) << 16);
+											*(uint32_t*)dst = ((uint32_t)color << 8) + color +
+															  ((((uint32_t)color << 8) + color) << 16);
 										} else if (n == 5) {
-											*(uint32_t*)(dst + 1) =
-												(color << 8) + color + (((color << 8) + color) << 16);
+											*(uint32_t*)(dst + 1) = ((uint32_t)color << 8) + color +
+																	((((uint32_t)color << 8) + color) << 16);
 											dst[0] = color;
 										} else if (n == 6) {
-											*(uint32_t*)(dst + 1) =
-												(color << 8) + color + (((color << 8) + color) << 16);
+											*(uint32_t*)(dst + 1) = ((uint32_t)color << 8) + color +
+																	((((uint32_t)color << 8) + color) << 16);
 											dst[0] = color;
 											dst[5] = color;
 										} else {
-											*(uint32_t*)(dst + 3) =
-												(color << 8) + color + (((color << 8) + color) << 16);
+											*(uint32_t*)(dst + 3) = ((uint32_t)color << 8) + color +
+																	((((uint32_t)color << 8) + color) << 16);
 											dst[0] = color;
 											dst[1] = color;
 											dst[2] = color;
@@ -518,28 +518,28 @@ void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void
 											dst[2] = color;
 											dst[0] = color;
 										} else if (n == 4) {
-											*(uint32_t*)dst =
-												(color << 8) + color + (((color << 8) + color) << 16);
+											*(uint32_t*)dst = ((uint32_t)color << 8) + color +
+															  ((((uint32_t)color << 8) + color) << 16);
 										} else if (n == 5) {
-											*(uint32_t*)dst =
-												(color << 8) + color + (((color << 8) + color) << 16);
+											*(uint32_t*)dst = ((uint32_t)color << 8) + color +
+															  ((((uint32_t)color << 8) + color) << 16);
 											dst[4] = color;
 										} else if (n == 6) {
-											*(uint32_t*)dst =
-												(color << 8) + color + (((color << 8) + color) << 16);
+											*(uint32_t*)dst = ((uint32_t)color << 8) + color +
+															  ((((uint32_t)color << 8) + color) << 16);
 											dst[4] = color;
 											dst[5] = color;
 										} else if (n == 7) {
-											*(uint32_t*)dst =
-												(color << 8) + color + (((color << 8) + color) << 16);
+											*(uint32_t*)dst = ((uint32_t)color << 8) + color +
+															  ((((uint32_t)color << 8) + color) << 16);
 											dst[4] = color;
 											dst[5] = color;
 											dst[6] = color;
 										} else {
-											*(uint32_t*)dst =
-												(color << 8) + color + (((color << 8) + color) << 16);
-											*(uint32_t*)(dst + 4) =
-												(color << 8) + color + (((color << 8) + color) << 16);
+											*(uint32_t*)dst = ((uint32_t)color << 8) + color +
+															  ((((uint32_t)color << 8) + color) << 16);
+											*(uint32_t*)(dst + 4) = ((uint32_t)color << 8) + color +
+																	((((uint32_t)color << 8) + color) << 16);
 										}
 									}
 								}
@@ -566,28 +566,34 @@ void drawstrm_Convert_Frame_To_Palette(void* prev_frame, void* stream_data, void
 								dst[2] = (uint8_t)value;
 								dst[0] = (uint8_t)value;
 							} else if (count == 4) {
-								*(uint32_t*)dst = ((uint8_t)value << 8) + (uint8_t)value +
-												  ((((uint8_t)value << 8) + (uint8_t)value) << 16);
+								*(uint32_t*)dst =
+									((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value +
+									((((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value) << 16);
 							} else if (count == 5) {
-								*(uint32_t*)dst = ((uint8_t)value << 8) + (uint8_t)value +
-												  ((((uint8_t)value << 8) + (uint8_t)value) << 16);
+								*(uint32_t*)dst =
+									((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value +
+									((((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value) << 16);
 								dst[4] = (uint8_t)value;
 							} else if (count == 6) {
-								*(uint32_t*)dst = ((uint8_t)value << 8) + (uint8_t)value +
-												  ((((uint8_t)value << 8) + (uint8_t)value) << 16);
+								*(uint32_t*)dst =
+									((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value +
+									((((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value) << 16);
 								dst[4] = (uint8_t)value;
 								dst[5] = (uint8_t)value;
 							} else if (count == 7) {
-								*(uint32_t*)dst = ((uint8_t)value << 8) + (uint8_t)value +
-												  ((((uint8_t)value << 8) + (uint8_t)value) << 16);
+								*(uint32_t*)dst =
+									((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value +
+									((((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value) << 16);
 								dst[4] = (uint8_t)value;
 								dst[5] = (uint8_t)value;
 								dst[6] = (uint8_t)value;
 							} else {
-								*(uint32_t*)dst = ((uint8_t)value << 8) + (uint8_t)value +
-												  ((((uint8_t)value << 8) + (uint8_t)value) << 16);
-								*(uint32_t*)(dst + 4) = ((uint8_t)value << 8) + (uint8_t)value +
-														((((uint8_t)value << 8) + (uint8_t)value) << 16);
+								*(uint32_t*)dst =
+									((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value +
+									((((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value) << 16);
+								*(uint32_t*)(dst + 4) =
+									((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value +
+									((((uint32_t)(uint8_t)value << 8) + (uint32_t)(uint8_t)value) << 16);
 							}
 						}
 						dst += count;

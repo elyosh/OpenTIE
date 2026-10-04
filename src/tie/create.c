@@ -1655,7 +1655,7 @@ void create_blowoffcomponent(uint16_t obj_idx, int16_t blow_all) {
 
 	cp = objects[obj_idx].craft_ptr;
 
-	for (mi = 0; mi < num_meshes; ++mi, ++comp) {
+	for (mi = 0; mi < num_meshes; ++mi, comp = TIE_FLIGHT_EDITION(comp + 1, comp)) {
 		uint16_t debris;
 		int16_t dheading;
 		int16_t dpitch;

@@ -239,10 +239,10 @@ void xtrans2_clearruntable(void) {
 				} else {
 					d = materialcolors[i * 16 + j + 1];
 				}
-				dithercolors[i][j][0] = ((((c << 8) | c) << 8 | c) << 8) | c;
-				dithercolors[i][j][1] = ((((c << 8) | c) << 8 | d) << 8) | c;
-				dithercolors[i][j][2] = ((((c << 8) | d) << 8 | c) << 8) | d;
-				dithercolors[i][j][3] = ((((d << 8) | c) << 8 | d) << 8) | c;
+				dithercolors[i][j][0] = (((((uint32_t)c << 8) | c) << 8 | c) << 8) | c;
+				dithercolors[i][j][1] = (((((uint32_t)c << 8) | c) << 8 | d) << 8) | c;
+				dithercolors[i][j][2] = (((((uint32_t)c << 8) | d) << 8 | c) << 8) | d;
+				dithercolors[i][j][3] = (((((uint32_t)d << 8) | c) << 8 | d) << 8) | c;
 			}
 		}
 		xtrans2_dithercolorinitflag = 1;

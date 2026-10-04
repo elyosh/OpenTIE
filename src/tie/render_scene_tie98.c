@@ -15,6 +15,7 @@
 #include "tie/trig2.h"
 #include "tie/xtrans2.h"
 #include "tie_runtime/display/tie98_display.h"
+#include "tie_runtime/runtime/wide_arithmetic.h"
 
 #include <math.h>
 #include <stdlib.h>
@@ -717,8 +718,8 @@ static int RenderScene_ProjectMeshVertices(SceneMeshTIE98* mesh) {
 				area = -area;
 			corner_count = record->vertexIdx[3] == -1 ? 3.0f : 4.0f;
 			lod_scale = corner_count / face_w_total * (float)perspFactor;
-			face->mipLevel = (int)((float)((mesh->pMaterial->width * mesh->pMaterial->height) << 8) *
-								   (lod_scale * lod_scale * area));
+			face->mipLevel = math2_ftol((float)((mesh->pMaterial->width * mesh->pMaterial->height) << 8) *
+										(lod_scale * lod_scale * area));
 		}
 	}
 	g_projVertCount += mesh->projVertCursor;
@@ -948,7 +949,7 @@ static void RenderScene_DrawMeshFaces(SceneMeshTIE98* mesh) {
 			int texture_width = mesh->pMaterial->width;
 			int texture_height = mesh->pMaterial->height;
 			int texel_offset = 0;
-			int mip = (int)((float)face->mipLevel * g_mipLodScale);
+			int mip = math2_ftol((float)face->mipLevel * g_mipLodScale);
 			uint8_t* texels;
 
 			if (texture_width * texture_height == mesh->pMaterial->textureSize) {
@@ -1416,9 +1417,11 @@ void Hud_DrawBoxOverlayHW(int x, int y, int width, int height, int color_index, 
 	}
 
 	color_index *= 3;
-	color = ((((rtsvga2_vgapalette[color_index] - 64) << 8) + rtsvga2_vgapalette[color_index + 1]) << 8) +
-			rtsvga2_vgapalette[color_index + 2];
-	color <<= 2;
+	color =
+		(int)(((((uint32_t)(rtsvga2_vgapalette[color_index] - 64) << 8) + rtsvga2_vgapalette[color_index + 1])
+			   << 8) +
+			  rtsvga2_vgapalette[color_index + 2]);
+	color = (int)((uint32_t)color << 2);
 	right = x + width;
 	bottom = y + height;
 	corner_width = width >> 3;
@@ -1774,7 +1777,7 @@ static int RenderScene_CullMeshFacesFromView(SceneMeshTIE98* mesh) {
 			output->pPhongData = &g_scenePhongData[12 * g_phongSlotIndex * (g_phongSlotStride + 1)];
 			if (g_phongSlotIndex < 199)
 				++g_phongSlotIndex;
-			output->packed = face_index + (g_curLayerId << 16);
+			output->packed = face_index + (int)((uint32_t)g_curLayerId << 16);
 			output->pScanEdge = NULL;
 			++output;
 			++g_visFaceCount;
@@ -1924,8 +1927,8 @@ static void sw3d_ProjectMeshVertices(SceneMeshTIE98* mesh) {
 				area = -area;
 			corner_count = record->vertexIdx[3] == -1 ? 3.0f : 4.0f;
 			lod_scale = corner_count / face_w_total * (float)perspFactor;
-			face->mipLevel = (int)((float)((mesh->pMaterial->width * mesh->pMaterial->height) << 8) *
-								   (lod_scale * lod_scale * area));
+			face->mipLevel = math2_ftol((float)((mesh->pMaterial->width * mesh->pMaterial->height) << 8) *
+										(lod_scale * lod_scale * area));
 		}
 	}
 	g_projVertCount += mesh->projVertCursor;
@@ -2056,7 +2059,8 @@ static void sw3d_ProjectMeshVerticesDistant(SceneMeshTIE98* mesh) {
 				mip_x = -mip_x;
 			if (mip_y < 0.0f)
 				mip_y = -mip_y;
-			face->mipLevel = (int)(texture_area * mip_x) + (int)(texture_area * mip_y);
+			face->mipLevel = (int)((uint32_t)math2_ftol(texture_area * mip_x) +
+								   (uint32_t)math2_ftol(texture_area * mip_y));
 		}
 	}
 	g_projVertCount += mesh->projVertCursor;
@@ -3494,7 +3498,7 @@ void RenderScene_DrawVisibleFaces(void) {
 		texture_width = face->pMesh->pMaterial->width;
 		texture_height = face->pMesh->pMaterial->height;
 		if (g_sw3dMipmapEnabled && texture_width * texture_height == face->pMesh->pMaterial->textureSize) {
-			int lod = (int)((float)face->mipLevel * g_mipLodScale);
+			int lod = math2_ftol((float)face->mipLevel * g_mipLodScale);
 			while (lod > 256 && texture_width != 8 && texture_height != 8) {
 				lod >>= 2;
 				mip_offset += texture_width * texture_height;

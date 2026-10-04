@@ -195,7 +195,7 @@ void trace2_ydownleft(int32_t ytop, int32_t ytotal, int32_t xval, int32_t slope)
 		trace2_newedgeheader = trace2_lastedgeheader;
 
 	ltval = vertlight1;
-	xval <<= 8;
+	xval = (int32_t)((uint32_t)xval << 8);
 	frac = slope >> 1;
 	ycnt = frac;
 	ycnt >>= 8;
@@ -333,7 +333,7 @@ void trace2_yupleft(int32_t ytop, int32_t ytotal, int32_t xval, int32_t slope) {
 
 	/* Allocate ytotal slots forward, then fill backwards. */
 	ltval = vertlight1;
-	xval <<= 8;
+	xval = (int32_t)((uint32_t)xval << 8);
 	frac = slope >> 1;
 	info = trace2_newedgeinfo + ytotal - 1;
 	trace2_newedgeinfo += ytotal;
@@ -406,7 +406,7 @@ void trace2_yupright(int32_t ytop, int32_t ytotal, int32_t xval, int32_t slope) 
 
 	/* Allocate ytotal slots forward, then fill backwards. */
 	ltval = vertlight1;
-	xval <<= 8;
+	xval = (int32_t)((uint32_t)xval << 8);
 	frac = slope >> 1;
 	info = trace2_newedgeinfo + ytotal - 1;
 	trace2_newedgeinfo += ytotal;

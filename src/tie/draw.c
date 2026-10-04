@@ -347,9 +347,9 @@ void draw_drawcomplexobject(uint16_t obj_idx) {
 		dx = camera.x - worldlocx;
 		dy = camera.y - worldlocy;
 		dz = camera.z - worldlocz;
-		dx <<= 1;
-		dy <<= 1;
-		dz <<= 1;
+		dx = (int32_t)((uint32_t)dx << 1);
+		dy = (int32_t)((uint32_t)dy << 1);
+		dz = (int32_t)((uint32_t)dz << 1);
 
 		dx_abs = dx >> 16;
 		dy_abs = dy >> 16;
@@ -542,9 +542,9 @@ void draw_drawhyperstar_tie98(int16_t star_idx) {
 	g_hyperspaceStreakQuadVertices[2].y = g_hyperspaceStreakQuadVertices[1].y;
 	g_bilinearEnabled = 0;
 
-	objects[0].world_x = (int32_t)staticobjects[star_idx].world_x << 8;
-	objects[0].world_y = (int32_t)staticobjects[star_idx].world_y << 8;
-	objects[0].world_z = (int32_t)staticobjects[star_idx].world_z << 8;
+	objects[0].world_x = (int32_t)((uint32_t)staticobjects[star_idx].world_x << 8);
+	objects[0].world_y = (int32_t)((uint32_t)staticobjects[star_idx].world_y << 8);
+	objects[0].world_z = (int32_t)((uint32_t)staticobjects[star_idx].world_z << 8);
 	parentobject = 0;
 	objects[0].ship_idx = 137;
 	objects[0].genus = GENUS_PROJECTILE_NPC;
@@ -1192,6 +1192,14 @@ uint16_t draw_polydepthsort(uint16_t a_face_info, uint16_t obj_a, uint16_t a_par
 		vlist = (const uint8_t*)plane + plane->vlist_offset;
 		normal_y = plane->normal_y;
 		normal_z = plane->normal_z;
+#ifdef TIE_MODERN
+		/* PORT: a two-vertex line face stores its endpoints at [3] and [4]
+		 * (see transfm2_calclinepts); [1] is a line attribute. The original
+		 * reads it as a vertex index and can run past the model data, as
+		 * with the Y-wing's farthest LOD. Start from the first endpoint. */
+		if ((vlist[0] & 0x3F) == 2)
+			vlist += 2;
+#endif
 
 		for (vertex = (const int16_t*)(poly_list + 6 * vlist[1]); (*vertex & 0xFF00) == 0x7F00;
 			 vertex -= 3 * ((*vertex & 0xFF) >> 1))

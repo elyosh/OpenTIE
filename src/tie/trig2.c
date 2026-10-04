@@ -519,11 +519,11 @@ void trig2_calcarctan(int32_t a, int32_t b, int16_t* out_angle, int16_t* out_rat
 			b = 0;
 		} else {
 			if (!(larger & 0xFF000000)) {
-				larger <<= 8;
-				b <<= 8;
+				larger = (int32_t)((uint32_t)larger << 8);
+				b = (int32_t)((uint32_t)b << 8);
 				if (!(larger & 0xFF000000)) {
-					larger <<= 8;
-					b <<= 8;
+					larger = (int32_t)((uint32_t)larger << 8);
+					b = (int32_t)((uint32_t)b << 8);
 				}
 			}
 			if (larger == b) {
