@@ -32,6 +32,19 @@ if (ENABLE_ASAN AND NOT MSVC)
 endif()
 
 set(TIE_VERSION "0.0.0-dev" CACHE STRING "OpenTIE application version")
+# Display version: an explicit TIE_VERSION, or the git checkout for local builds.
+set(TIE_DISPLAY_VERSION "${TIE_VERSION}")
+if(TIE_VERSION STREQUAL "0.0.0-dev")
+    execute_process(COMMAND git describe --tags --always --dirty
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE TIE_GIT_DESCRIBE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE TIE_GIT_RESULT
+        ERROR_QUIET)
+    if(TIE_GIT_RESULT EQUAL 0)
+        string(REGEX REPLACE "^v" "" TIE_DISPLAY_VERSION "${TIE_GIT_DESCRIBE}")
+    endif()
+endif()
 option(TIE_BUILD_TOOLS "Build TIE and Aeron asset tools" ON)
 
 add_library(tie_libm INTERFACE)
@@ -533,7 +546,7 @@ add_library(tie_core STATIC ${TIE_RECOVERED_SOURCES} ${TIE_RUNTIME_SOURCES})
 target_include_directories(tie_core PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_compile_definitions(tie_core PUBLIC TIE_MODERN)
 target_compile_definitions(tie_core PRIVATE
-    TIE_VERSION_STRING="${TIE_VERSION}"
+    TIE_VERSION_STRING="${TIE_DISPLAY_VERSION}"
     $<$<CONFIG:Debug>:TIE_ENABLE_FLIGHT_TRACE=1>)
 if(NOT MSVC)
     # Recovered code retains aliasing patterns that are unsafe to optimize.

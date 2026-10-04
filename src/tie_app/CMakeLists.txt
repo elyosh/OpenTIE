@@ -47,7 +47,7 @@ target_link_libraries(tie PRIVATE
     tie_remaster)
 target_compile_definitions(tie PRIVATE
     TIE_SHADER_RELATIVE_DIR="${TIE_SHADER_RELATIVE_DIR}"
-    TIE_VERSION_STRING="${TIE_VERSION}")
+    TIE_VERSION_STRING="${TIE_DISPLAY_VERSION}")
 if(TIE_GPU_DEBUG_LABELS)
     target_compile_definitions(tie PRIVATE TIE_GPU_DEBUG_LABELS=1)
 else()

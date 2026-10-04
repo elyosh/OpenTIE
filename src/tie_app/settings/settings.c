@@ -924,7 +924,7 @@ void TieSettings_Frame(const AeronInputSnapshot* input, float dt_seconds) {
 	TieControllerSettings_Discover(&g_settings.controller, g_settings.ui, input,
 								   &g_settings.config->gamepad_defaults);
 	AeronUiWindowDesc window = { .width_ref = 980.0f, .height_ref = 1000.0f, .centered = 1 };
-	if (AeronUi_BeginWindow(g_settings.ui, "OpenTIE SETTINGS", &window)) {
+	if (AeronUi_BeginWindow(g_settings.ui, "OpenTIE Settings - v" TIE_VERSION_STRING, &window)) {
 		const int previous_page = g_settings.page;
 		AeronUi_BeginTabBar(g_settings.ui, "pages", pages, sizeof pages / sizeof pages[0], &g_settings.page);
 		if (previous_page != g_settings.page) {
