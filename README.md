@@ -79,8 +79,9 @@ displays, providing smoother motion and more responsive controls. The original
 TIE95 and TIE98 timing modes remain available when their exact behavior is
 preferred.
 
-Modern gamepads and joysticks are supported and can be configured from
-OpenTIE's settings.
+Flight can be played with a mouse and keyboard, gamepad, or joystick. Mouse
+flight offers both classic controls and a virtual stick, with adjustable
+sensitivity and Y-axis inversion.
 
 ## Getting started
 

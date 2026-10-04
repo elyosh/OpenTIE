@@ -4,6 +4,8 @@
 #include "tie_runtime/display/classic_display.h"
 #include "tie_runtime/input/controller_mapping.h"
 #include "tie_runtime/input/keyboard_mapping.h"
+#include "tie_runtime/input/mouse_flight.h"
+#include "tie_runtime/runtime/flight_requests.h"
 #include "tie_runtime/snapshot/snapshot.h"
 
 #include "aeron/aeron.h"
@@ -13,8 +15,6 @@
 #include <math.h>
 #include <stdint.h>
 #include <string.h>
-
-enum { TIE_FLIGHT_MOUSE_REFERENCE_INTERVAL_US = 16000 };
 
 /* Port-owned analog roll axis and absolute throttle command consumed by the
  * recovered FEINPUT/USER/REPLAY code (declared in tie/tie.h). */
@@ -195,7 +195,7 @@ int TieInput_ModifierKeys(void) {
  *
  * Frontend and pointer-driven flight screens map the absolute OS pointer
  * into the classic surface, then adapt it to Landru's delta interface.
- * Captured flight consumes relative motion with sub-pixel scaling.
+ * Captured flight consumes relative motion through mouse_flight.
  * ================================================================ */
 
 static float cursor_fb_x = 160.0f, cursor_fb_y = 100.0f;
@@ -212,10 +212,9 @@ static int frames_since_mouse_motion;
 static int layout_log_w = 1920, layout_log_h = 1080;
 static int layout_classic_x = 240, layout_classic_y;
 static int layout_classic_w = 1440, layout_classic_h = 1080;
-static float relative_motion_x, relative_motion_y;
-static float relative_drain_fraction_x, relative_drain_fraction_y;
-static uint64_t relative_motion_interval_us;
 static int capture_active;
+/* The cockpit ignores the mouse while mouse flight control is disabled. */
+static int mouse_flight_blocked;
 static int absolute_cursor_active;
 static int skip_absolute_frame;
 static int engine_cursor_valid;
@@ -251,7 +250,7 @@ void TieInput_GetMousePosition(int16_t* buttons, int16_t* x, int16_t* y) {
 	const AeronInputSnapshot* in = Aeron_InputSnapshot();
 	int16_t btn = 0;
 
-	if (in && !eat_mouse_buttons) {
+	if (in && !eat_mouse_buttons && !mouse_flight_blocked) {
 		/* input bridge order: bit 0 = left, bit 1 = right, bit 2 = middle. */
 		if (in->mouse.buttons & AERON_MOUSE_BUTTON_LEFT)
 			btn |= 1;
@@ -275,21 +274,8 @@ void TieInput_GetMousePosition(int16_t* buttons, int16_t* x, int16_t* y) {
 }
 
 void TieInput_GetMouseMovement(int16_t* dx, int16_t* dy) {
-	if (capture_active && relative_motion_interval_us) {
-		/* Preserve the existing TIE95 four-PIT-tick mouse tuning while
-		 * consuming motion gathered across an arbitrary host interval. */
-		const float scale =
-			(float)TIE_FLIGHT_MOUSE_REFERENCE_INTERVAL_US / (float)relative_motion_interval_us;
-		const float scaled_x = relative_motion_x * scale + relative_drain_fraction_x;
-		const float scaled_y = relative_motion_y * scale + relative_drain_fraction_y;
-		const int32_t value_x = (int32_t)scaled_x;
-		const int32_t value_y = (int32_t)scaled_y;
-		relative_drain_fraction_x = scaled_x - (float)value_x;
-		relative_drain_fraction_y = scaled_y - (float)value_y;
-		if (dx)
-			*dx = (int16_t)(value_x < INT16_MIN ? INT16_MIN : value_x > INT16_MAX ? INT16_MAX : value_x);
-		if (dy)
-			*dy = (int16_t)(value_y < INT16_MIN ? INT16_MIN : value_y > INT16_MAX ? INT16_MAX : value_y);
+	if (capture_active) {
+		TieMouseFlight_ReadMovement(dx, dy);
 	} else {
 		if (dx)
 			*dx = mouse_dx_acc;
@@ -299,9 +285,10 @@ void TieInput_GetMouseMovement(int16_t* dx, int16_t* dy) {
 	mouse_dx_acc = 0;
 	mouse_dy_acc = 0;
 	absolute_motion_pending = false;
-	relative_motion_x = 0.0f;
-	relative_motion_y = 0.0f;
-	relative_motion_interval_us = 0;
+}
+
+bool TieInput_ReadMouseStick(int16_t* x, int16_t* y) {
+	return capture_active && TieMouseFlight_ReadStick(x, y);
 }
 
 void TieInput_SetMousePosition(int16_t x, int16_t y) {
@@ -351,14 +338,22 @@ static bool TieInput_FlightScreenUsesRelativeInput(TieFlightScreen screen) {
 	}
 }
 
-void TieInput_UpdateCapture(const TieSnapshot* snapshot, bool settings_open) {
+static bool TieInput_CockpitScreen(const TieSnapshot* snapshot) {
+	return snapshot && snapshot->scene_kind == TIE_SCENE_FLIGHT &&
+		   snapshot->flight_screen == TIE_FLIGHT_SCREEN_NORMAL;
+}
+
+static void TieInput_UpdateRelativeCapture(const TieSnapshot* snapshot, bool settings_open) {
 	const AeronInputSnapshot* in = Aeron_InputSnapshot();
 	eat_mouse_buttons = 0;
+	mouse_flight_blocked = 0;
 	if (!in)
 		return;
 
+	const bool mouse_flight_disabled = TieInput_CockpitScreen(snapshot) && !TieMouseFlight_Options()->enabled;
+	mouse_flight_blocked = mouse_flight_disabled && !cursor_visible_for_engine;
 	const bool relative_input_screen =
-		snapshot && snapshot->scene_kind == TIE_SCENE_FLIGHT &&
+		snapshot && snapshot->scene_kind == TIE_SCENE_FLIGHT && !mouse_flight_disabled &&
 		TieInput_FlightScreenUsesRelativeInput((TieFlightScreen)snapshot->flight_screen);
 	if (snapshot) {
 		engine_cursor_x = snapshot->cursor.x;
@@ -387,8 +382,8 @@ void TieInput_UpdateCapture(const TieSnapshot* snapshot, bool settings_open) {
 
 	const int desired = relative_input_screen && !cursor_visible_for_engine && in->has_focus &&
 						!settings_open && !manual_release;
-	absolute_cursor_active =
-		!desired && (!relative_input_screen || cursor_visible_for_engine) && !settings_open;
+	absolute_cursor_active = !desired && (!relative_input_screen || cursor_visible_for_engine) &&
+							 !settings_open && !mouse_flight_blocked;
 	if (desired == capture_active)
 		return;
 
@@ -399,11 +394,7 @@ void TieInput_UpdateCapture(const TieSnapshot* snapshot, bool settings_open) {
 	/* Aeron hides the host cursor after every relative-mode transition. */
 	system_cursor_visible = 0;
 	capture_active = desired;
-	relative_motion_x = 0.0f;
-	relative_motion_y = 0.0f;
-	relative_drain_fraction_x = 0.0f;
-	relative_drain_fraction_y = 0.0f;
-	relative_motion_interval_us = 0;
+	TieMouseFlight_Reset();
 	mouse_dx_acc = 0;
 	mouse_dy_acc = 0;
 	absolute_motion_pending = false;
@@ -411,6 +402,14 @@ void TieInput_UpdateCapture(const TieSnapshot* snapshot, bool settings_open) {
 	 * captured, so its absolute coordinates are not current until the next
 	 * host frame. */
 	skip_absolute_frame = was_captured && !capture_active;
+}
+
+void TieInput_UpdateCapture(const TieSnapshot* snapshot, bool settings_open) {
+	TieInput_UpdateRelativeCapture(snapshot, settings_open);
+	/* Flight options apply to live cockpit and external views, not to the map
+	 * or replay cameras that share relative capture. */
+	TieMouseFlight_SetFlightActive(capture_active && TieInput_CockpitScreen(snapshot) &&
+								   snapshot->replay_mode != 2 && !TieFlightPause_IsActive());
 }
 
 void TieInput_SyncSystemCursor(bool settings_open) {
@@ -528,8 +527,7 @@ void TieInput_SetFramebufferSize(int w, int h) {
 	}
 	fb_w = w;
 	fb_h = h;
-	relative_drain_fraction_x = 0.0f;
-	relative_drain_fraction_y = 0.0f;
+	TieMouseFlight_ClearFraction();
 }
 
 /* Application-consumed primary keys stay suppressed until release. */
@@ -621,7 +619,7 @@ void TieInput_BeginFrame(int32_t delta_us) {
 	 * edges until Landru or the flight input path reads the button state. */
 	pending_mouse_presses &= (int16_t)~observed_mouse_presses;
 	observed_mouse_presses = 0;
-	if (eat_mouse_buttons) {
+	if (eat_mouse_buttons || mouse_flight_blocked) {
 		/* The press that restored flight capture must not become a shot. */
 		pending_mouse_presses = 0;
 	} else if (in->has_focus) {
@@ -634,17 +632,8 @@ void TieInput_BeginFrame(int32_t delta_us) {
 	} else {
 		pending_mouse_presses = 0;
 	}
-	if (capture_active) {
-		if (!in->has_focus || delta_us <= 0 || delta_us > 250000) {
-			relative_motion_x = 0.0f;
-			relative_motion_y = 0.0f;
-			relative_drain_fraction_x = 0.0f;
-			relative_drain_fraction_y = 0.0f;
-			relative_motion_interval_us = 0;
-		} else {
-			relative_motion_interval_us += (uint32_t)delta_us;
-		}
-	}
+	if (capture_active)
+		TieMouseFlight_Collect(in, delta_us);
 
 	TieControllerMapping_Update(in);
 
@@ -684,18 +673,6 @@ void TieInput_BeginFrame(int32_t delta_us) {
 		new_y = TieInput_Clamp(new_y, min_y, max_y);
 		cursor_fb_x = new_x;
 		cursor_fb_y = new_y;
-
-		/* Flight path (cursor hidden): pre-scale by TIE_FLIGHT_DELTA_SUBPX
-		 * before the integer floor so mouse_dx_acc carries 1/4-pixel
-		 * resolution (see the sdl3 application for the slow-pan pop
-		 * derivation). */
-#define TIE_FLIGHT_DELTA_SUBPX 4
-		float engine_dx_f = rel_fx * (float)TIE_FLIGHT_DELTA_SUBPX;
-		float engine_dy_f = rel_fy * (float)TIE_FLIGHT_DELTA_SUBPX;
-#undef TIE_FLIGHT_DELTA_SUBPX
-
-		relative_motion_x += engine_dx_f;
-		relative_motion_y += engine_dy_f;
 	} else if (absolute_cursor_active) {
 		if (skip_absolute_frame) {
 			skip_absolute_frame = 0;

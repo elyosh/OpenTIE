@@ -11,6 +11,7 @@
 #include <string.h>
 
 static TieAppConfigState* g_current_config;
+static const char* const mouse_modes[] = { "virtual_stick", "classic" };
 
 static bool TieAppConfig_ConfigError(char* error, size_t capacity, const char* format, ...) {
 	va_list arguments;
@@ -183,7 +184,8 @@ static bool TieAppConfig_ValidateSchemaKeys(const AeronConfigFile* document, boo
 				  "player_engine_sound", "fix_axis_input_bias", "models");
 	VALIDATE_KEYS(document, "flight.models", warn, "source", "smooth_angle_degrees", "opt_emissive_strength",
 				  "opt_projectile_emissive_strength");
-	VALIDATE_KEYS(document, "input", warn, "controllers", "gamepad_defaults", "keyboard");
+	VALIDATE_KEYS(document, "input", warn, "controllers", "gamepad_defaults", "keyboard", "mouse_flight",
+				  "mouse_mode", "mouse_sensitivity", "mouse_invert_y");
 	VALIDATE_KEYS(document, "video", warn, "fullscreen", "hdr", "sdr_content_gamma", "paper_white_nits");
 	VALIDATE_KEYS(document, "render", warn, "anisotropy", "ssao", "temporal_upscaling", "shadows", "tonemap",
 				  "motion_blur", "msaa_samples", "starfield_style");
@@ -531,6 +533,20 @@ static bool TieAppConfig_ParseComplete(const AeronConfigFile* document,
 							   error, capacity) ||
 		!TieAppConfig_ReadBool(document, "flight.fix_axis_input_bias", &out->fix_axis_input_bias, error,
 							   capacity))
+		return false;
+	const char* mouse_mode = AeronConfigFile_GetString(document, "input.mouse_mode", NULL);
+	if (!mouse_mode)
+		return TieAppConfig_ConfigError(error, capacity, "missing input.mouse_mode");
+	if (strcmp(mouse_mode, mouse_modes[TIE_MOUSE_VIRTUAL_STICK]) == 0)
+		out->mouse.mode = TIE_MOUSE_VIRTUAL_STICK;
+	else if (strcmp(mouse_mode, mouse_modes[TIE_MOUSE_CLASSIC]) == 0)
+		out->mouse.mode = TIE_MOUSE_CLASSIC;
+	else
+		return TieAppConfig_ConfigError(error, capacity, "invalid input.mouse_mode '%s'", mouse_mode);
+	if (!TieAppConfig_ReadBool(document, "input.mouse_flight", &out->mouse.enabled, error, capacity) ||
+		!TieAppConfig_ReadInt(document, "input.mouse_sensitivity", TIE_MOUSE_SENSITIVITY_MIN,
+							  TIE_MOUSE_SENSITIVITY_MAX, &out->mouse.sensitivity, error, capacity) ||
+		!TieAppConfig_ReadBool(document, "input.mouse_invert_y", &out->mouse.invert_y, error, capacity))
 		return false;
 	const bool parsed = TieControllerConfig_Read(document, &out->controller, error, capacity) &&
 						TieKeyboardConfig_Read(document, &out->keyboard, error, capacity) &&
@@ -1098,6 +1114,32 @@ bool TieAppConfig_SetController(TieAppConfigState* state, const TieControllerOpt
 		return false;
 	if (!AeronConfigFile_Clone(state->user_document, &candidate, &aeron_error) ||
 		!TieControllerConfig_Write(candidate, controller, &aeron_error)) {
+		AeronConfigFile_Destroy(candidate);
+		return TieAppConfig_LogAeronError(&aeron_error, error, capacity);
+	}
+	if (!TieAppConfig_ReplaceUserCandidate(state, candidate, error, capacity)) {
+		AeronConfigFile_Destroy(candidate);
+		return false;
+	}
+	return true;
+}
+
+bool TieAppConfig_SetMouse(TieAppConfigState* state, const TieMouseFlightOptions* mouse, char* error,
+						   size_t capacity) {
+	AeronConfigFile* candidate = NULL;
+	AeronConfigError aeron_error = { 0 };
+	if (!state || !TieMouseFlight_OptionsValid(mouse))
+		return TieAppConfig_ConfigError(error, capacity, "invalid mouse settings");
+	const TieMouseFlightOptions* defaults = &state->defaults.mouse;
+	if (!AeronConfigFile_Clone(state->user_document, &candidate, &aeron_error) ||
+		!TieAppConfig_SetBoolOverride(candidate, "input.mouse_flight", mouse->enabled, defaults->enabled,
+									  &aeron_error) ||
+		!TieAppConfig_SetStringOverride(candidate, "input.mouse_mode", mouse_modes[mouse->mode],
+										mouse_modes[defaults->mode], &aeron_error) ||
+		!TieAppConfig_SetIntOverride(candidate, "input.mouse_sensitivity", mouse->sensitivity,
+									 defaults->sensitivity, &aeron_error) ||
+		!TieAppConfig_SetBoolOverride(candidate, "input.mouse_invert_y", mouse->invert_y, defaults->invert_y,
+									  &aeron_error)) {
 		AeronConfigFile_Destroy(candidate);
 		return TieAppConfig_LogAeronError(&aeron_error, error, capacity);
 	}

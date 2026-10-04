@@ -17,6 +17,7 @@
 #include "tie_runtime/flight_assets/service.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/presentation/classic_layer.h"
+#include "tie_runtime/presentation/flight_marker.h"
 #include "tie_runtime/presentation/presentation.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/runtime/runtime.h"
@@ -96,6 +97,7 @@ static void TieFrameLoop_SubmitGameLayers(TieClassicOutputKind* previous_output_
 	else if (!suppress_classic && corrected_vga)
 		TieClassicLayer_Submit(corrected_vga);
 	TieRemaster_Frame(snapshot, delta_us, paused);
+	TieFlightMarker_Submit(snapshot);
 }
 
 static void TieFrameLoop_DiscoverControllers(const AeronInputSnapshot* input) {

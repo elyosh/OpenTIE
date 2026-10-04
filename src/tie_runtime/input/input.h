@@ -50,6 +50,8 @@ int TieInput_ReadKey(void);
 int TieInput_ModifierKeys(void);
 void TieInput_GetMousePosition(int16_t* buttons, int16_t* x, int16_t* y);
 void TieInput_GetMouseMovement(int16_t* dx, int16_t* dy);
+/* Virtual-stick yaw/pitch in joystick units while it owns captured flight motion. */
+bool TieInput_ReadMouseStick(int16_t* x, int16_t* y);
 void TieInput_SetMousePosition(int16_t x, int16_t y);
 void TieInput_ShowCursor(bool show);
 int TieInput_JoystickPresent(void);

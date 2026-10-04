@@ -18,6 +18,7 @@
 #include "tie_runtime/input/controller_mapping.h"
 #include "tie_runtime/input/input.h"
 #include "tie_runtime/input/keyboard_mapping.h"
+#include "tie_runtime/input/mouse_flight.h"
 #include "tie_runtime/runtime/exports.h"
 #include "tie_runtime/runtime/profile.h"
 #include "tie_runtime/storage/storage.h"
@@ -90,6 +91,7 @@ typedef struct TieAppConfig {
 	float flight_model_opt_projectile_emissive_strength;
 	TieControllerOptions controller;
 	TieKeyboardBindings keyboard;
+	TieMouseFlightOptions mouse;
 	TieAppVideoConfig video;
 	TieFlightRenderConfig render;
 	TieFlightPbrConfig pbr;
@@ -138,6 +140,8 @@ bool TieAppConfig_RestoreVideo(TieAppConfigState* state, char* error, size_t err
 bool TieAppConfig_SetKeyboard(TieAppConfigState* state, const TieKeyboardBindings* keyboard, char* error,
 							  size_t capacity);
 bool TieAppConfig_RestoreKeyboard(TieAppConfigState* state, char* error, size_t capacity);
+bool TieAppConfig_SetMouse(TieAppConfigState* state, const TieMouseFlightOptions* mouse, char* error,
+						   size_t error_capacity);
 bool TieAppConfig_SetController(TieAppConfigState* state, const TieControllerOptions* controller, char* error,
 								size_t error_capacity);
 

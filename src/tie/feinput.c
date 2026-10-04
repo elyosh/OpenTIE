@@ -281,6 +281,19 @@ uint16_t feinput_getrawinput(void) {
 		joysticky = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_PITCH]);
 		joystickroll = TieInput_MapAxis(raw, 3, mapping->axes[TIE_INPUT_AXIS_ROLL]);
 	}
+	{
+		/* The mouse virtual stick deflects yaw and pitch through the joystick
+		 * gains, overriding each controller axis it moves. */
+		int16_t stick_x;
+		int16_t stick_y;
+		if (TieInput_ReadMouseStick(&stick_x, &stick_y)) {
+			joystickflag = 1;
+			if (stick_x)
+				joystickx = stick_x;
+			if (stick_y)
+				joysticky = stick_y;
+		}
+	}
 #else
 	mousebuttons = 0;
 	joybuttons = 0;
@@ -292,10 +305,11 @@ uint16_t feinput_getrawinput(void) {
 		mousebuttons = mouse2_readmouse(&mousex, &mousey);
 		mouse2_deltamouse(&deltamx, &deltamy);
 
-		/* MODERN: the application's mouse-motion handler applies a ×4
-		 * compensation (SDL pixel deltas at host frame rate vs DOS
-		 * mickeys at ~30 FPS) before the float→int floor, so deltamx/y
-		 * arrive here in 1/4-pixel units and only need re-clamping. */
+		/* MODERN: the captured mouse adapter applies a ×4 compensation
+		 * (SDL pixel deltas at host frame rate vs DOS mickeys at ~30 FPS),
+		 * the flight sensitivity and Y polarity before the float→int floor,
+		 * so deltamx/y only need re-clamping. They are zero while the
+		 * virtual stick owns the motion. */
 
 		/* Clamp delta to ±191 / ±127 (inputdeltax = deltamx << 7 must
 		 * stay within int16). */

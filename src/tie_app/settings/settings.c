@@ -15,6 +15,7 @@
 #include "tie_app/settings/inflight_options.h"
 #include "tie_app/settings/keyboard_page.h"
 #include "tie_app/settings/launch_options.h"
+#include "tie_app/settings/mouse_options.h"
 #include "tie_app/settings/video_options.h"
 #include "tie_app/setup/installation_ui.h"
 #include "tie_remaster/remaster.h"
@@ -39,6 +40,7 @@ enum {
 	SETTINGS_PAGE_AUDIO,
 	SETTINGS_PAGE_CONTROLLER,
 	SETTINGS_PAGE_KEYBOARD,
+	SETTINGS_PAGE_MOUSE,
 };
 
 static struct {
@@ -193,6 +195,22 @@ static bool TieSettings_ApplyAudioOptions(const TieAppLiveAudioOptions* previous
 	return false;
 }
 
+static bool TieSettings_ApplyMouseOptions(const TieMouseFlightOptions* previous,
+										  const TieMouseFlightOptions* requested, void* user, char* error,
+										  size_t error_capacity) {
+	(void)previous;
+	(void)user;
+	(void)error;
+	(void)error_capacity;
+	TieMouseFlight_SetOptions(requested);
+	return true;
+}
+
+static bool TieSettings_PersistMouseOptions(const TieMouseFlightOptions* options, void* user, char* error,
+											size_t error_capacity) {
+	return TieAppConfig_SetMouse((TieAppConfigState*)user, options, error, error_capacity);
+}
+
 static bool TieSettings_PersistAudioOptions(const TieAppLiveAudioOptions* options, void* user, char* error,
 											size_t error_capacity) {
 	return TieAppConfig_SetLiveAudioOptions((TieAppConfigState*)user, options, error, error_capacity);
@@ -246,12 +264,15 @@ bool TieSettings_Init(TieUi* ui, TieAppConfigState* config, bool has_tie95, bool
 									config) ||
 		!TieAudioOptions_Configure(&audio, TieSettings_ApplyAudioOptions, TieSettings_PersistAudioOptions,
 								   config) ||
+		!TieMouseOptions_Configure(&config->requested.mouse, TieSettings_ApplyMouseOptions,
+								   TieSettings_PersistMouseOptions, config) ||
 		!TieInflightSettings_Configure(&inflight) ||
 		!TieLaunchOptions_Configure(&launch, TieSettings_PersistLaunchOptions, config)) {
 		snprintf(error, error_capacity, "could not configure modern settings state");
 		TieVideoOptions_Shutdown();
 		TieFlightOptions_Shutdown();
 		TieAudioOptions_Shutdown();
+		TieMouseOptions_Shutdown();
 		TieInflightSettings_Shutdown();
 		TieLaunchOptions_Shutdown();
 		AeronUiFilePicker_Destroy(g_settings.path_picker);
@@ -271,6 +292,7 @@ void TieSettings_Shutdown(void) {
 	TieVideoOptions_Shutdown();
 	TieFlightOptions_Shutdown();
 	TieAudioOptions_Shutdown();
+	TieMouseOptions_Shutdown();
 	TieInflightSettings_Shutdown();
 	TieLaunchOptions_Shutdown();
 	AeronUiFilePicker_Destroy(g_settings.path_picker);
@@ -284,8 +306,8 @@ bool TieSettings_CapturesKeyboard(void) { return g_settings.open && g_settings.c
 
 bool TieSettings_Flush(char* error, size_t error_capacity) {
 	if (!TieVideoOptions_Flush(error, error_capacity) || !TieFlightOptions_Flush(error, error_capacity) ||
-		!TieAudioOptions_Flush(error, error_capacity) || !TieInflightSettings_Flush(error, error_capacity) ||
-		!TieLaunchOptions_Flush(error, error_capacity))
+		!TieAudioOptions_Flush(error, error_capacity) || !TieMouseOptions_Flush(error, error_capacity) ||
+		!TieInflightSettings_Flush(error, error_capacity) || !TieLaunchOptions_Flush(error, error_capacity))
 		return false;
 	return !g_settings.open ||
 		   (TieControllerSettings_Commit(&g_settings.controller, g_settings.config, error, error_capacity) &&
@@ -710,6 +732,47 @@ static void TieSettings_GamePage(AeronUiContext* ui) {
 	}
 }
 
+/* Follows OpenXW's mouse page with TIE's button behavior. */
+static void TieSettings_MousePage(AeronUiContext* ui) {
+	static const char* const modes[] = { "Virtual Stick", "Classic" };
+	TieMouseFlightOptions mouse;
+	TieMouseOptions_Get(&mouse);
+	const TieMouseFlightOptions previous = mouse;
+	AeronUi_Header(ui, "Mouse Flight Control");
+	int enabled = mouse.enabled;
+	if (AeronUi_Toggle(ui, "Mouse Flight Control", &enabled))
+		mouse.enabled = enabled != 0;
+	int mode = mouse.mode;
+	if (AeronUi_Selector(ui, "Control Mode", &mode, modes, 2))
+		mouse.mode = (TieMouseFlightMode)mode;
+	if (mouse.mode == TIE_MOUSE_CLASSIC)
+		AeronUi_Help(ui, "Move the mouse to turn. Stop moving to let the turn settle back to zero.");
+	else
+		AeronUi_Help(ui, "Mouse movement deflects a virtual stick. Move it back to center to stop turning.");
+	AeronUi_SliderInt(ui, "Sensitivity", &mouse.sensitivity, TIE_MOUSE_SENSITIVITY_MIN,
+					  TIE_MOUSE_SENSITIVITY_MAX, 1, "%d");
+	int invert_y = mouse.invert_y;
+	if (AeronUi_Toggle(ui, "Invert Y", &invert_y))
+		mouse.invert_y = invert_y != 0;
+	AeronUi_Help(ui, "Mouse up pitches up; with Invert Y enabled, mouse up pitches down.");
+	if (mouse.mode == TIE_MOUSE_CLASSIC)
+		AeronUi_Help(ui, "Enable Invert Y for the original mouse direction.");
+	AeronUi_Help(ui, "Left button: fire.");
+	AeronUi_Help(ui, "Right button: tap to target under the crosshair, hold to roll.");
+	AeronUi_Help(ui, "Middle button: target nearest fighter.");
+	AeronUi_Help(ui,
+				 "Ctrl+Alt+M releases or captures the pointer. Click in the flight view to recapture it.");
+	AeronUi_Spacer(ui, 8.0f);
+	if (AeronUi_Button(ui, "Restore Defaults"))
+		mouse = g_settings.config->defaults.mouse;
+	if (mouse.enabled != previous.enabled || mouse.mode != previous.mode ||
+		mouse.sensitivity != previous.sensitivity || mouse.invert_y != previous.invert_y) {
+		char error[512];
+		if (!TieMouseOptions_Set(&mouse, error, sizeof error))
+			TieSettings_SettingsReportError(error);
+	}
+}
+
 static void TieSettings_AudioPage(AeronUiContext* ui) {
 	static const char* const music_sources[] = { "iMUSE", "CD Music" };
 	static const TieMidiBackendChoice all_midi_backends[] = {
@@ -851,7 +914,7 @@ static void TieSettings_DrawExitConfirmation(AeronUiContext* ui) {
 }
 
 void TieSettings_Frame(const AeronInputSnapshot* input, float dt_seconds) {
-	static const char* const pages[] = { "Game", "Video", "Audio", "Controller", "Keyboard" };
+	static const char* const pages[] = { "Game", "Video", "Audio", "Controller", "Keyboard", "Mouse" };
 	if (!g_settings.available || !g_settings.open || !input)
 		return;
 	AeronUi_BeginFrame(g_settings.ui, &(AeronUiFrameDesc) {
@@ -890,7 +953,8 @@ void TieSettings_Frame(const AeronInputSnapshot* input, float dt_seconds) {
 			AeronUi_PushId(g_settings.ui, SETTINGS_PAGE_KEYBOARD);
 			TieKeyboardSettings_Draw(&g_settings.keyboard, g_settings.ui);
 			AeronUi_PopId(g_settings.ui);
-		}
+		} else if (g_settings.page == SETTINGS_PAGE_MOUSE)
+			TieSettings_MousePage(g_settings.ui);
 		AeronUi_EndTabBar(g_settings.ui);
 		if (g_settings.page != SETTINGS_PAGE_VIDEO && g_settings.error[0])
 			AeronUi_Error(g_settings.ui, g_settings.error);

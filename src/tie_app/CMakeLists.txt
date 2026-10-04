@@ -13,6 +13,7 @@ add_executable(tie
     config/controller_config.c
     settings/flight_options.c
 	settings/audio_options.c
+    settings/mouse_options.c
     settings/inflight_options.c
     settings/launch_options.c
     settings/video_options.c

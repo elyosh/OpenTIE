@@ -40,6 +40,10 @@ flight:
     opt_projectile_emissive_strength: 5.0
 
 input:
+  mouse_flight: true
+  mouse_mode: classic
+  mouse_sensitivity: 5
+  mouse_invert_y: true
   controllers: []
   gamepad_defaults:
     axes:

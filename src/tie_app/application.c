@@ -32,6 +32,8 @@
 #include "tie_runtime/input/actions.h"
 #include "tie_runtime/input/controller_mapping.h"
 #include "tie_runtime/input/input.h"
+#include "tie_runtime/input/mouse_flight.h"
+#include "tie_runtime/presentation/flight_marker.h"
 #include "tie_runtime/presentation/presentation.h"
 #ifdef AERON_DEBUG_UI
 #include "tie_remaster/debug/debug_tools.h"
@@ -104,6 +106,7 @@ static void TieApplication_Shutdown(AeronVfs* vfs, TieAppConfigState* config,
 #ifdef AERON_DEBUG_UI
 	TieDebugTools_Shutdown();
 #endif
+	TieFlightMarker_Shutdown();
 	TieRemaster_Shutdown();
 	TiePresentation_Shutdown();
 	TieRuntime_Shutdown();
@@ -175,6 +178,7 @@ int TieApplication_Run(const TieLaunchOptions* launch) {
 						  "configuration v6.");
 		TieKeyboardMapping_Install(&app_config.requested.keyboard);
 		TieControllerMapping_SetOptions(&app_config.requested.controller);
+		TieMouseFlight_SetOptions(&app_config.requested.mouse);
 		TieAxisInputHook_SetEnabled(app_config.requested.fix_axis_input_bias);
 		if (!Aeron_SetFullscreen(app_config.requested.video.fullscreen))
 			Aeron_LogWarn("tie.config", "could not apply fullscreen setting");
@@ -402,6 +406,8 @@ int TieApplication_Run(const TieLaunchOptions* launch) {
 		!Aeron_FatalErrorRequested()) {
 		Aeron_RequestFatalRendererError("remaster initialization");
 	}
+	if (!Aeron_FatalErrorRequested() && !TieFlightMarker_Init(startup_cmd))
+		Aeron_RequestFatalRendererError("flight marker initialization");
 	if (!Aeron_FatalErrorRequested()) {
 		char settings_error[768];
 		if (!TieSettings_Init(&app_ui, &app_config, installations.has_tie95, installations.has_tie98,
@@ -421,6 +427,7 @@ int TieApplication_Run(const TieLaunchOptions* launch) {
 
 	if (Aeron_FatalErrorRequested()) {
 		TieSettings_Shutdown();
+		TieFlightMarker_Shutdown();
 		TieRemaster_Shutdown();
 		TiePresentation_Shutdown();
 		TieRuntime_Shutdown();

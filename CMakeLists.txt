@@ -417,6 +417,8 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/presentation/presentation.h
     src/tie_runtime/presentation/classic_layer.c
     src/tie_runtime/presentation/classic_layer.h
+    src/tie_runtime/presentation/flight_marker.c
+    src/tie_runtime/presentation/flight_marker.h
     src/tie_runtime/presentation/pilot_name.c
     src/tie_runtime/presentation/pilot_name.h
     src/tie_runtime/input/keyboard_mapping.c
@@ -424,6 +426,8 @@ set(TIE_RUNTIME_SOURCES
     src/tie_runtime/input/actions.h
     src/tie_runtime/input/input.c
     src/tie_runtime/input/input.h
+    src/tie_runtime/input/mouse_flight.c
+    src/tie_runtime/input/mouse_flight.h
     src/tie_runtime/input/controller_mapping.c
     src/tie_runtime/input/controller_mapping.h
     src/tie_runtime/input/transform.c
