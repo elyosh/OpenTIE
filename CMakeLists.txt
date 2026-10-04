@@ -539,6 +539,10 @@ endif()
 
 target_link_libraries(tie_core PUBLIC landru::landru imuse::imuse PRIVATE tie_formats)
 tie_enable_warnings(tie_core)
+# Apple SDKs deprecate sprintf, which recovered code retains for matching.
+if(APPLE AND CMAKE_C_COMPILER_ID MATCHES "Clang")
+    target_compile_options(tie_core PRIVATE -Wno-deprecated-declarations)
+endif()
 
 # Aeron loads all compiled shaders from one executable-relative directory.
 set(TIE_SHADER_BINARY_DIR "${CMAKE_BINARY_DIR}/shaders")
