@@ -1741,6 +1741,8 @@ void tie_simulator(int replay_mode) {
 	}
 #ifdef TIE_MODERN
 	TieFlightTiming_EndSession();
+	/* Flight snapshots must not read the resources released below. */
+	TieSnapshotBuilder_SetSceneKind(TIE_SCENE_FRONTEND);
 #endif
 	lolevel_ImStopAllSounds();
 	filelist_ImUnloadAll();
